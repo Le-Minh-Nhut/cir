@@ -122,8 +122,23 @@ def _file_sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def _tme_inputs(config, contract: dict) -> dict | None:
-    from workbench.backend.fashioniq_layout import CATEGORIES
+def _tme_directory_identity(root: Path) -> dict[str, int | str]:
+    digest = hashlib.sha256()
+    size = 0
+    for path in sorted(item for item in root.rglob("*") if item.is_file()):
+        relative = path.relative_to(root).as_posix().encode("utf-8")
+        digest.update(len(relative).to_bytes(8, "big"))
+        digest.update(relative)
+        size += path.stat().st_size
+        digest.update(bytes.fromhex(_file_sha256(path)))
+    return {"size_bytes": size, "sha256": digest.hexdigest()}
+
+
+def _tme_inputs(config, contract: dict, model: dict | None = None) -> dict | None:
+    if model is None:
+        from workbench.backend.registry import model_by_id
+        model = model_by_id("tme")
+    from workbench.backend.fashioniq_layout import CATEGORIES, image_extension_for_layout
 
     parameters = next(item["parameters"] for item in contract["generated_artifacts"]
                       if item.get("generator") == TME_FEATURE_GENERATOR)
@@ -133,26 +148,60 @@ def _tme_inputs(config, contract: dict) -> dict | None:
                 / f"cap.{category}.{parameters['split']}.json" for category in CATEGORIES]
     if any(not path.is_file() for path in (*files.values(), *captions)):
         return None
-    from workbench.replay.common import fashioniq_image_binding_blockers
-
-    image_blockers = fashioniq_image_binding_blockers(config.FASHIONIQ_ROOT, parameters["split"])
+    extension = image_extension_for_layout(model["fashioniq_layout"], model.get("fashioniq_image_extensions"))
+    image_blockers = fashioniq_image_binding_blockers(
+        config.FASHIONIQ_ROOT, parameters["split"], image_source="images", image_extension=extension)
     if image_blockers:
         return None
     try:
         if any(not isinstance(json.loads(path.read_text(encoding="utf-8")), list)
                for path in captions):
             return None
+        from workbench.backend.registry import (admitted_asset_statuses, asset_admission_status,
+                                                external_asset_statuses, required_runtime_assets)
+        assets = {asset["name"]: asset for asset in required_runtime_assets(model)}
+        statuses = {status["name"]: status for status in external_asset_statuses(model)}
+        base_assets = {}
+        for name, asset in assets.items():
+            status = statuses[name]
+            if asset.get("location_type") == "directory":
+                from workbench.backend.registry import cache_asset_blocker
+                if cache_asset_blocker(asset, status):
+                    return None
+                base_assets[name] = {"size_bytes": None, **_tme_directory_identity(Path(status["path"]))}
+            else:
+                admission = asset_admission_status(asset, status)
+                if not admitted_asset_statuses(admission):
+                    return None
+                base_assets[name] = {"size_bytes": status.get("actual_size_bytes"),
+                                     "sha256": status.get("actual_sha256"),
+                                     "expected_sha256": asset.get("expected_sha256"),
+                                     "expected_sha256_prefix": asset.get("expected_sha256_prefix")}
+        from workbench.replay.common import fashioniq_gallery_digests
+        checkout = config.WORKBENCH_THIRD_PARTY_ROOT / model["source_dir"]
+        script = checkout / parameters["source_script"]
+        if not script.is_file():
+            return None
         return {"dataset_root": str(config.FASHIONIQ_ROOT.resolve()),
-                "split_files": {category: _file_sha256(path) for category, path in files.items()}}
-    except (OSError, ValueError, TypeError):
+                "split_files": {category: _file_sha256(path) for category, path in files.items()},
+                "gallery_images": fashioniq_gallery_digests(config.FASHIONIQ_ROOT, parameters["split"], extension),
+                "base_assets": base_assets,
+                "recipe": {"source_commit": model["upstream_commit_sha"],
+                           "source_script": parameters["source_script"],
+                           "source_script_sha256": _file_sha256(script),
+                           "target_ratio": 1.25, "transform_dim": 224,
+                           "batch_size": parameters["batch_size"],
+                           "workers": parameters["workers"]}}
+    except (OSError, ValueError, TypeError, KeyError):
         return None
 
-
-def _tme_dataset_root(config):
+def _tme_dataset_root(config, model: dict):
+    from workbench.backend.fashioniq_layout import image_extension_for_layout
     from workbench.replay.common import isolated_cache_root
 
+    extension = image_extension_for_layout(model["fashioniq_layout"], model.get("fashioniq_image_extensions"))
     return isolated_cache_root(config.FASHIONIQ_ROOT, directory_names=("captions", "image_splits"),
-                               image_source="resized_image")
+                               image_source="images", image_extension=extension)
 
 
 def _tme_validate(feature_root: Path, parameters: dict, inputs: dict,
@@ -172,6 +221,8 @@ def _tme_validate(feature_root: Path, parameters: dict, inputs: dict,
                 or declared.get("split") != parameters["split"]
                 or declared.get("batch_size") != parameters["batch_size"]
                 or declared.get("workers") != parameters["workers"]):
+            return False
+        if declared.get("inputs") != inputs:
             return False
         import torch
 
@@ -205,7 +256,7 @@ def tme_features_complete(config, model: dict, contract: dict) -> bool | None:
 
     checkout = config.WORKBENCH_THIRD_PARTY_ROOT / model["source_dir"]
     clean, commit, _ = source_clean_and_pinned(model, checkout)
-    inputs = _tme_inputs(config, contract)
+    inputs = _tme_inputs(config, contract, model)
     if not clean or not commit or inputs is None:
         return False
     _, output = _tme_artifact(config, checkout, contract)
@@ -239,10 +290,13 @@ def _run_tme_precompute(config, model: dict, contract: dict, *, dry_run: bool,
     clean, commit, reason = source_clean_and_pinned(model, checkout)
     if not clean or not commit:
         return False, f"pinned TME source unavailable: {reason or 'source is not clean and pinned'}"
-    image_blockers = fashioniq_image_binding_blockers(config.FASHIONIQ_ROOT, parameters["split"])
+    inputs = _tme_inputs(config, contract, model)
+    from workbench.backend.fashioniq_layout import image_extension_for_layout
+    image_extension = image_extension_for_layout(model["fashioniq_layout"], model.get("fashioniq_image_extensions"))
+    image_blockers = fashioniq_image_binding_blockers(
+        config.FASHIONIQ_ROOT, parameters["split"], image_source="images", image_extension=image_extension)
     if image_blockers:
         return False, image_blockers[0]
-    inputs = _tme_inputs(config, contract)
     if inputs is None:
         return False, f"TME caption or validation split input is missing or malformed under {config.FASHIONIQ_ROOT}"
     receipt = tme_receipt_path(config, checkout, contract)
@@ -286,7 +340,7 @@ def _run_tme_precompute(config, model: dict, contract: dict, *, dry_run: bool,
     if blockers:
         return False, f"TME native generator prerequisite blocked: {blockers[0]}"
     output.mkdir(parents=True, exist_ok=True)
-    with _tme_dataset_root(config) as staged_root:
+    with _tme_dataset_root(config, model) as staged_root:
         command = _tme_command(interpreter, checkout, staged_root, parameters)
         try:
             result = subprocess.run(command, cwd=checkout, check=False)

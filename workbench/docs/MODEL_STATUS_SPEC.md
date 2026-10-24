@@ -6,7 +6,7 @@ service, database hay dashboard mới.
 
 ## Current closure snapshot — 2026-10-24
 
-This table supersedes the dated status snapshots below; it records current registry/source/readiness evidence, not a claim that GPU inference occurred. `30c68ed` (`30c68ed59a7b5383247fc4a3c290ffa68efed074`) is the revision whose checks ran; `git rev-parse HEAD` on the branch tip (the docs-only successor) is the final head, which differs only in documentation. Production bytes are identical between them. Source pins below match clean local pinned checkouts. `VERIFIED_METADATA` means source metadata binds checkpoint identity; it does not mean a local file is present or loaded. Local availability is from this host's configured checkpoint root. Training/evaluation noise values are registry conditions; unknown training values remain unknown. The encoder row records a REAL full three-category GPU evaluation (see below); no other model has GPU inference, target-GPU validation or a live Docker run recorded in this snapshot; last real validation command/revision/artifact is **not established here** (historical reports/artifacts below remain historical).
+This table supersedes the dated status snapshots below; it records current registry/source/readiness evidence. Most rows record inventory, not inference — but **one row does record a completed GPU evaluation**: `encoder` ran all three FashionIQ categories on a real GPU and its aggregate report, completion proof and verifier output exist (see that row, and the host-capacity section below for its measured limits). No other model has GPU evaluation evidence. `30c68ed` (`30c68ed59a7b5383247fc4a3c290ffa68efed074`) is the revision whose checks ran; `git rev-parse HEAD` on the branch tip (the docs-only successor) is the final head, which differs only in documentation. Production bytes are identical between them. Source pins below match clean local pinned checkouts. `VERIFIED_METADATA` means source metadata binds checkpoint identity; it does not mean a local file is present or loaded. Local availability is from this host's configured checkpoint root. Training/evaluation noise values are registry conditions; unknown training values remain unknown. The encoder row records a REAL full three-category GPU evaluation, corroborated from its own artifacts (aggregate report, completion proof, verifier JSON and the GPU capability receipt); no other model has GPU inference, target-GPU validation or a live Docker run recorded in this snapshot. A reader must not read this table as "no GPU work was ever done" — read it as "exactly one model has GPU evidence, and this page says which".
 
 
 
@@ -604,6 +604,29 @@ run record cũ đọc được thay vì lỗi.
 Shirt **56.43/74.44**, Toptee **59.31/78.94**, Average **55.15/75.02**, AVG **65.09**.
 
 > **Historical R19 TME evidence:** the detailed measurements and commands below are preserved as historical audit text. Current asset contract requires both BLIP-2 and EVA-ViT-g; acquire them using `python -m workbench.scripts.download_auxiliary_assets --model tme`, which stages under `workbench/third_party/TME/weight/`. The older claim that BLIP-2 is optional, and the `WORKBENCH_TME_ASSET_EVA_VIT_G` / `mkdir weight` setup commands, are superseded. TME cache generation requires the separate CUDA preparation permission and ~10.47 GiB.
+
+## 4c-bis. Năm lỗi vòng đời TME đã sửa (R21, 2026-10-24)
+
+Tất cả **sửa ở nguyên nhân dùng chung**, không vá từng caller. Nguồn: audit R21 trên `0e63d97`, đối
+chiếu lại từng điểm với source hiện tại trước khi sửa.
+
+| ID | Triệu chứng quan sát được | Nguyên nhân gốc | Sửa ở đâu |
+|---|---|---|---|
+| R21-01 | Cùng một file: admission ngoài nhận `LOCALLY_RECORDED_ASSET`, nhưng `model_requirements` lại báo blocker "unverified", và `download_auxiliary_assets --verify-only` trả 1 | `validate_auxiliary_asset` từ chối vô điều kiện `provenance != "VERIFIED"` **sau** khi đã qua hết kiểm tra thực chất (size/sha256/schema/split-ids) | Cả hai tầng dùng chung một quyết định; file do tác giả liên kết mà tác giả không công bố digest → nhận kèm nhãn `LOCALLY_RECORDED_ASSET`. File **không có nguồn tác giả** (ví dụ caption do operator tự đặt) **vẫn bị từ chối** |
+| R21-02 | Cold run fail ở preparation, rồi mới tải asset ⇒ prerequisite tải xong không được dùng trong cùng lượt | `all_stages()` xếp `preparation` **trước** `checkpoint`/`auxiliary-assets`/`gpu-verification`; `Stage.dependencies` chỉ SKIP chứ không sắp thứ tự | Đổi thứ tự append thành prerequisite-trước (`sync → environment → auxiliary-assets → gpu-verification → checkpoint → preparation → runtime-preflight → evaluation`) **và** thêm cạnh phụ thuộc thật. Không thêm DAG framework |
+| R21-02b | Controller báo "tokenizer cache unusable" dù cache đúng | `cache_asset_blocker` import `transformers` **trong interpreter của controller** (image không cài), mà cache lại chỉ được nạp bởi interpreter của model | Kiểm layout vẫn giữ; khi controller không import được thì báo "layout verified; load-test thuộc model environment" như một ghi chú, **không** biến thành blocker |
+| R21-03 | Chọn TME đơn lẻ vẫn đòi `resized_image/` của model khác, và native đọc ảnh vuông JPEG đã mã hoá lại thay vì ảnh canonical | `isolated_cache_root(..., image_source="resized_image")` ở **cả** preparation và replay | Bind ảnh canonical theo **extension mà layout khai báo** (TME = `fashioniq_standard` → `.png`), symlink tên `<id>.jpg` → bytes PNG canonical. PIL nhận định dạng theo **nội dung**, nên native nhận đúng bytes gốc: **không resize, không mã hoá lại** |
+| R21-04 | Sau khi generation chạy xong, source integrity báo `undeclared files present in checkout` | Native `src/precompute.py` luôn tạo `log_TME/other/<name>.log` trong checkout, nhưng `_declared_runtime_artifacts` không khai nó | Khai **hẹp đúng** đường dẫn runtime đó qua authority sẵn có; sửa một file `.py` thật **vẫn bị từ chối** |
+| R21-05 | Ghi lại pixel của một ảnh (giữ nguyên id) xong, cache cũ vẫn `_tme_validate() == True` | `_tme_inputs()` chỉ ghi digest của split-file; `_tme_validate()` không so `declared["inputs"]` với inputs hiện tại; replay cũng thiếu danh tính ảnh | Bind **ảnh gallery thật + danh tính base asset + recipe/source** vào receipt, và so lại khi validate. Receipt cũ **không có** digest ảnh bị coi là không kiểm chứng được (từ chối tái dùng trừ khi regenerate tường minh), **không** được tự động hợp thức hoá |
+
+**Chưa giải quyết (nêu thẳng):** `destination_path: hub/models--bert-base-uncased/vocab.txt` của
+tokenizer vẫn chỉ materialize **một file**, trong khi kiểm tra layout cần `snapshots/<rev>/`. Không có
+đường sẵn có nào tạo layout đó, và việc này **không thể** sửa mà không thêm cơ chế mới — nên nó được
+giữ nguyên và ghi nhận là hạn chế, thay vì nới lỏng kiểm tra.
+
+TME vẫn giữ nguyên mọi quyết định khoa học: FashionIQ 0% là mặc định, 20% là
+`CHECKPOINT_UNAVAILABLE`, CIRR 0% tách riêng, và metric gần paper **không** được dùng để tuyên bố
+mapping checkpoint ↔ paper là đã xác minh.
 
 ## 4d. TME — số đo thật (R19, 2026-10-24)
 

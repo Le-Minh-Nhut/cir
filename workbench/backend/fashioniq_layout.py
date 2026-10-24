@@ -89,6 +89,25 @@ _LAYOUT_IMAGE_DIRECTORY = {
 }
 
 
+_LAYOUT_IMAGE_EXTENSION = {
+    "fashioniq_standard": ".png",
+    "fashioniq_ilearn_resized": ".jpg",
+    "fashioniq_ilearn_resized_training": ".jpg",
+    "fashioniq_clvc_resized": ".jpg",
+    "fashioniq_dcnet": ".jpg",
+}
+
+
+def image_extension_for_layout(layout: str, declared_extensions: list[str] | None = None) -> str:
+    """Return layout's image suffix, preferring an explicit model declaration."""
+    if declared_extensions:
+        return declared_extensions[0]
+    try:
+        return _LAYOUT_IMAGE_EXTENSION[layout]
+    except KeyError as error:
+        raise ValueError(f"unknown FashionIQ layout: {layout}") from error
+
+
 def image_extension_problems(root: Path, extension: str,
                              layout: str | None = None) -> list[str]:
     """Every gallery image referenced by the validation splits must exist with *extension*.

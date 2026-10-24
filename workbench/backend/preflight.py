@@ -41,6 +41,12 @@ def model_requirements(
         blocks.extend(f"FashionIQ {layout} requirement missing: {path}" for path in raw_missing)
     image_problems = [problem for extension in model.get("fashioniq_image_extensions") or ()
                       for problem in image_extension_problems(root, extension, model.get("fashioniq_layout"))]
+    if model["model_id"] == "tme":
+        from workbench.backend.fashioniq_layout import image_extension_for_layout
+        from workbench.replay.common import fashioniq_image_binding_blockers
+        extension = image_extension_for_layout(layout, model.get("fashioniq_image_extensions"))
+        image_problems.extend(fashioniq_image_binding_blockers(
+            root, "val", image_source="images", image_extension=extension))
     blocks.extend(f"FashionIQ image extension requirement: {problem}" for problem in image_problems)
 
     # A checkout repaired by an approved patch is an approved variant, not official parity: the run
@@ -74,6 +80,8 @@ def model_requirements(
             blocks.append(f"{prefix}{asset['family']} missing: {path}")
             if asset["family"] == "COT_ours2 captions":
                 blocks.append("required COT_ours2 captions have no verified automatic acquisition source")
+        elif res.ok and res.status == "LOCALLY_RECORDED_ASSET":
+            notes.append(f"{prefix}{asset['family']} locally recorded; author digest unavailable")
         elif not res.ok:
             if res.status == "OPERATOR_SUPPLIED_UNVERIFIED":
                 # An unverified asset that the workbench itself staged from a declared alias is a
@@ -133,8 +141,10 @@ def model_requirements(
                 blocks.append(f"external runtime asset cache unusable: {item['name']} "
                               f"({reason})")
             else:
-                notes.append(f"external runtime asset {item['name']} loaded from its cache"
-                             + (f" ({item['path']})" if item["path"] else ""))
+                note = item.get("admission_note") or (
+                    f"external runtime asset {item['name']} cache layout verified; "
+                    "load-test belongs to the model environment (not author-checksum-verified)")
+                notes.append(note + (f" ({item['path']})" if item["path"] else ""))
             continue
         admission = asset_admission_status(declaration, item)
         if admitted_asset_statuses(admission):

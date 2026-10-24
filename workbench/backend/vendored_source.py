@@ -95,6 +95,8 @@ def _declared_runtime_artifacts(model: dict[str, Any]) -> set[str]:
                 relative = Path(str(path))
                 if not relative.is_absolute() and ".." not in relative.parts:
                     declared.add(relative.as_posix())
+        if model.get("model_id") == "tme":
+            declared.add("log_TME")
     return declared
 
 

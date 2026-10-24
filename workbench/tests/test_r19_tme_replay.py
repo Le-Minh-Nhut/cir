@@ -56,12 +56,16 @@ def _workspace(tmp_path: Path, monkeypatch, *, with_features: bool):
     dataset_root = tmp_path / "FashionIQ"
     (dataset_root / "captions").mkdir(parents=True)
     (dataset_root / "image_splits").mkdir()
+    (dataset_root / "images").mkdir()
     image_names = {category: [f"{category}_image"] for category in CATEGORIES}
     for category in CATEGORIES:
         (dataset_root / "captions" / f"cap.{category}.val.json").write_text("[]")
-        resized = dataset_root / "resized_image" / category
-        resized.mkdir(parents=True)
-        Image.new("RGB", (2, 2), (120, 40, 20)).save(resized / f"{image_names[category][0]}.jpg")
+        # CANONICAL images at the model's own declared layout (`fashioniq_standard` -> `.png`).
+        # This fixture used to build `resized_image/<cat>/<id>.jpg` instead, which is iLearn-family
+        # derived data: TME does not declare generating it and its own preprocess expects the
+        # canonical bytes, so a fixture that required it was testing the wrong dependency.
+        Image.new("RGB", (2, 2), (120, 40, 20)).save(
+            dataset_root / "images" / f"{image_names[category][0]}.png")
         (dataset_root / "image_splits" / f"split.{category}.val.json").write_text(
             json.dumps(image_names[category]))
 

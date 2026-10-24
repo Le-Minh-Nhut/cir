@@ -43,6 +43,7 @@ from workbench.backend.registry import (
 )
 from workbench.replay.common import (
     ReplayResult,
+    fashioniq_image_binding_blockers,
     isolated_cache_root,
     macro_aggregate,
     sha256_file,
@@ -197,12 +198,12 @@ def preflight(checkout: Path, dataset_root: Path, checkpoint_root: Path,
     feature_parameters = next(
         artifact["parameters"] for artifact in contract["generated_artifacts"]
         if artifact["generator"] == "tme_precompute_features")
-    from workbench.replay.common import fashioniq_image_binding_blockers
-
-    blockers.extend(f"TME native gallery input missing: {problem.removeprefix('native replay resized FashionIQ image missing: ')}"
-                    if problem.startswith("native replay resized FashionIQ image missing:")
-                    else f"TME {problem}"
-                    for problem in fashioniq_image_binding_blockers(dataset_root, feature_parameters["split"]))
+    from workbench.backend.fashioniq_layout import image_extension_for_layout
+    image_extension = image_extension_for_layout(MODEL["fashioniq_layout"], MODEL.get("fashioniq_image_extensions"))
+    blockers.extend(f"TME native gallery input missing: {problem}"
+                    for problem in fashioniq_image_binding_blockers(
+                        dataset_root, feature_parameters["split"], image_source="images",
+                        image_extension=image_extension))
     # The scope decides the root: this artifact is `evaluator_cwd`, so it resolves against the
     # CHECKOUT, not the dataset root. Passing the dataset root here is what made the shared preflight
     # and this check disagree about which path they were talking about.
@@ -263,13 +264,11 @@ def _prior_feature_provenance(config=None) -> dict[str, Any] | None:
             raise ValueError("receipt does not match TME source or feature contract")
         dataset_root = config.FASHIONIQ_ROOT.resolve()
         inputs = declared["inputs"]
-        if inputs.get("dataset_root") != str(dataset_root):
-            raise ValueError("dataset root changed")
-        gallery = {category: sha256_file(dataset_root / "image_splits"
-                                         / f"split.{category}.{parameters['split']}.json")
-                   for category in CATEGORIES}
-        if inputs.get("split_files") != gallery:
-            raise ValueError("validation split files changed")
+        from workbench.scripts.prepare_model import _tme_inputs
+        current_inputs = _tme_inputs(config, contract, MODEL)
+        if current_inputs is None or inputs != current_inputs:
+            raise ValueError("TME generation inputs changed or receipt lacks image identity")
+        gallery = inputs["gallery_images"]
         checkout = config.WORKBENCH_THIRD_PARTY_ROOT / MODEL["source_dir"]
         feature_root = preparation_paths(contract, dataset_root, "generated_artifacts",
                                          evaluator_root=checkout)[0]
@@ -344,10 +343,12 @@ def _evaluate_categories(checkout: Path, dataset_root: Path, checkpoint_root: Pa
     if not feature_path.is_file() or not mapping_path.is_file():
         raise FileNotFoundError(
             f"TME native feature cache missing: {feature_path} and/or {mapping_path}")
+    from workbench.backend.fashioniq_layout import image_extension_for_layout
 
     preprocess = targetpad_transform(target_ratio=1.25, dim=224)
+    image_extension = image_extension_for_layout(MODEL["fashioniq_layout"], MODEL.get("fashioniq_image_extensions"))
     with isolated_cache_root(dataset_root, directory_names=("captions", "image_splits"),
-                             image_source="resized_image") as cache_root:
+                             image_source="images", image_extension=image_extension) as cache_root:
         tme_data.FashioniqPath = str(cache_root).rstrip("/") + "/"
         dataset = tme_data.get_dataset(DATASET_LABEL, preprocess, parameters["split"])
         if hasattr(dataset, "load_image_features"):

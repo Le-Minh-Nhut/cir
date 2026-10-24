@@ -339,7 +339,24 @@ def test_declared_tme_runtime_artifacts_keep_the_checkout_pinned(tmp_path) -> No
     assert source_provenance(model, checkout)["verified"] is False
 
 
-def test_vendored_checkout_is_verified_evidence_for_resume(monkeypatch) -> None:
+def _controlled_encoder_tree(root: Path) -> Path:
+    """A third_party tree holding the real vendored checkout under a controlled config root.
+
+    The regression is about HOW the fingerprint judges a vendored checkout, so the CHECKOUT must be
+    the real one (it carries the real `provenance.json` the authority reads). Everything else is
+    disposable: the dataset and checkpoint roots are empty directories under `root`, so this case
+    means the same thing on a clean clone as it does on a host that happens to hold the dataset.
+    """
+    source = REPO / "workbench" / "third_party"
+    third_party = root / "third_party"
+    third_party.mkdir(parents=True, exist_ok=True)
+    checkout = third_party / "ENCODER"
+    shutil.copytree(source / "ENCODER", checkout, ignore=shutil.ignore_patterns(".git"))
+    assert (checkout / "provenance.json").is_file()
+    return checkout
+
+
+def test_vendored_checkout_is_verified_evidence_for_resume(tmp_path: Path) -> None:
     """A vendored checkout must not make a stage's fingerprint weak.
 
     The vendored layout deliberately has no nested `.git` (the pinned tree is committed in this
@@ -347,26 +364,98 @@ def test_vendored_checkout_is_verified_evidence_for_resume(monkeypatch) -> None:
     model's fingerprint weak, so `workbench/run.sh autopilot --resume` refused every completed stage
     that depends on source. The check is now the provenance authority's own answer, so it cannot
     drift from it: a clean vendored pin is content-verified evidence, and a dirty one is not.
+
+    Controlled inputs, not the host's: nothing here needs the laptop's dataset or checkpoints.
     """
     from workbench.backend.registry import model_by_id
-    from workbench.backend.vendored_source import source_provenance
     from workbench.tests.test_doctor_vendored_source_and_selection import config as fixture_config
 
-    config = resolve_config()
+    checkout = _controlled_encoder_tree(tmp_path)
+    config = fixture_config(tmp_path)
     model = model_by_id("encoder")
-    checkout = config.WORKBENCH_THIRD_PARTY_ROOT / model["source_dir"]
+    assert model["source_dir"] == "ENCODER"
     assert not (checkout / ".git").exists(), "this regression is about the VENDORED layout"
-    provenance = source_provenance(model, checkout)
-    assert provenance["verified"] is True and provenance["dirty"] is False, provenance.get("error")
+    assert config.WORKBENCH_THIRD_PARTY_ROOT / "ENCODER" == checkout
 
     args = _autopilot_args(["encoder"], {"encoder": ["fashioniq"]}, config, model="encoder",
                            selected_model_ids=["encoder"], allow_preparation=True)
     stages = pipeline.all_stages(args, config)
     evaluation = _stage(stages, "evaluation", "encoder")
     info = pipeline.stage_input_fingerprint_info(evaluation, config)
+
+    # The assertion that matters, and the one that was false before the fix: the checkout is judged
+    # by its recorded provenance, so a clean pin is strong evidence rather than an unreadable one.
+    # A directory is judged by its tree category, which is why the production predicate ORs the two
+    # vocabularies -- `_is_verified_entry` alone answers for a FILE, not for a tree.
     assert info["source_provenance"]["category"] == "CONTENT_VERIFIED", info["source_provenance"]
-    assert info["weak"] is False, [
-        item for item in info["inputs"] if not pipeline._is_verified_entry(item["category"])]
+    assert info["source_provenance"]["provenance_digest"], info["source_provenance"]
+    tree = [item for item in info["inputs"] if item["path"].endswith("ENCODER")]
+    assert len(tree) == 1, tree
+    assert tree[0]["category"] == "TREE_CONTENT_VERIFIED", tree[0]
+    assert (pipeline._is_verified_entry(tree[0]["category"])
+            or tree[0]["category"] in pipeline.VERIFIED_TREE_CATEGORIES), tree[0]
+
+    # The whole point, stated against the verdict `--resume` actually reads: the SOURCE must not be
+    # what makes the fingerprint weak. This controlled root deliberately has no dataset and no
+    # checkpoint, and the checkpoint's declared digest cannot be forged -- so `weak is True` is the
+    # correct verdict here and the honest assertion is that every unverifiable input is one of those
+    # absent files, never the vendored checkout. Before the fix the checkout itself was in this list
+    # as `UNREADABLE`, which is what refused every completed source-dependent stage.
+    unverifiable = [
+        item["path"] for item in info["inputs"]
+        if not pipeline._is_verified_entry(item["category"])
+        and item["category"] not in pipeline.VERIFIED_TREE_CATEGORIES
+    ]
+    assert unverifiable, "the absent dataset and checkpoint must still be reported"
+    assert not any(path.endswith("ENCODER") for path in unverifiable), unverifiable
+    assert all(item["category"] == "MISSING" for item in info["inputs"]
+               if not pipeline._is_verified_entry(item["category"])
+               and item["category"] not in pipeline.VERIFIED_TREE_CATEGORIES), \
+        [item for item in info["inputs"] if item["category"] != "MISSING"
+         and not pipeline._is_verified_entry(item["category"])
+         and item["category"] not in pipeline.VERIFIED_TREE_CATEGORIES]
+
+    # And the safety half: "verified" must keep meaning verified. An edit inside the checkout is a
+    # real modification of a pinned tree, so it must still refuse the well-evidenced verdict -- a
+    # fingerprint that stays CONTENT_VERIFIED after someone edits the source is worse than useless.
+    target = next(path for path in checkout.rglob("*.py") if path.is_file())
+    target.write_text(target.read_text() + "\n# unauthorized edit\n", encoding="utf-8")
+    from workbench.backend.vendored_source import source_provenance
+
+    provenance = source_provenance(model, checkout)
+    assert provenance["verified"] is False or provenance["dirty"] is True, provenance
+    dirty_info = pipeline.stage_input_fingerprint_info(evaluation, config)
+    assert dirty_info["source_provenance"]["category"] != "CONTENT_VERIFIED", \
+        dirty_info["source_provenance"]
+    assert dirty_info["weak"] is True
+
+
+def test_missing_bound_inputs_never_become_valid_resume_evidence(tmp_path: Path) -> None:
+    """The other half of the same seam: absent inputs must not be upgraded to verified.
+
+    A weak verdict is what stops `--resume` from reusing a stage whose inputs cannot be shown to be
+    the ones it ran on. The controlled tree has no dataset and no checkpoints on purpose.
+    """
+    from workbench.backend.registry import model_by_id
+
+    checkout = _controlled_encoder_tree(tmp_path)
+    from workbench.tests.test_doctor_vendored_source_and_selection import config as fixture_config
+
+    config = fixture_config(tmp_path)
+    assert model_by_id("encoder")["source_dir"] == checkout.name
+    for expected_missing in (config.FASHIONIQ_ROOT, config.WORKBENCH_CHECKPOINT_ROOT):
+        assert not expected_missing.exists()
+
+    args = _autopilot_args(["encoder"], {"encoder": ["fashioniq"]}, config, model="encoder",
+                           selected_model_ids=["encoder"], allow_preparation=True)
+    stages = pipeline.all_stages(args, config)
+    info = pipeline.stage_input_fingerprint_info(_stage(stages, "evaluation", "encoder"), config)
+    weak_inputs = [item for item in info["inputs"]
+                   if not pipeline._is_verified_entry(item["category"])
+                   and item["category"] not in pipeline.VERIFIED_TREE_CATEGORIES]
+    assert info["weak"] is True, weak_inputs
+    assert weak_inputs, "a weak verdict must name at least one input it could not verify"
+
 
 
 def test_every_registry_model_keeps_a_consistent_declared_command() -> None:

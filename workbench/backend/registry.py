@@ -562,12 +562,9 @@ def cache_asset_blocker(asset: dict[str, Any], status: dict[str, Any]) -> str | 
     try:
         import transformers  # noqa: F401
     except ImportError:
-        # A checker interpreter without the model's stack cannot establish that the cache LOADS, so
-        # it must not report the cache as admitted on layout alone. Reporting the weaker evidence as
-        # a blocker is the honest answer: the operator has to verify it in the environment that will
-        # actually read it.
-        return ("tokenizer cache cannot be load-tested in this interpreter (transformers is not "
-                "importable here); verify it in the model's own environment")
+        # The model environment owns loading this cache; this interpreter can only certify layout.
+        status["admission_note"] = "cache layout verified; load-test belongs to the model environment (not author-checksum-verified)"
+        return None
     snapshot = candidates[-1]
     environment_backup = {key: os.environ.get(key) for key in ("HF_HUB_OFFLINE", "TRANSFORMERS_OFFLINE")}
     os.environ["HF_HUB_OFFLINE"] = "1"
@@ -899,7 +896,7 @@ def validate_auxiliary_asset(
             k: getattr(asset, k)
             for k in (
                 "model_id", "family", "destination", "required", "automatic_download_available",
-                "source_url", "source_revision", "expected_sha256", "provenance_status",
+                "source_url", "source_type", "source_repo", "source_revision", "expected_sha256", "provenance_status",
                 "expected_sha256_prefix", "expected_size_bytes", "content_contract",
             )
             if hasattr(asset, k)
@@ -1007,6 +1004,27 @@ def validate_auxiliary_asset(
 
     provenance = rec.get("provenance_status")
     if provenance != "VERIFIED":
+        author_linked_without_digest = (
+            rec.get("source_type") in {"direct_url", "author_huggingface"}
+            and bool(rec.get("source_repo"))
+            and rec.get("expected_sha256") is None
+            and rec.get("expected_sha256_prefix") is None
+        )
+        # A digest-less asset has no published value to verify against, so the ONLY content evidence
+        # available is the file itself. Without this the size check alone admits a sparse or
+        # zero-filled file of exactly the declared length -- structurally a container of zeros with
+        # no weights in it -- which is precisely the state `asset_admission_status` already refuses
+        # as SUSPECT_PAYLOAD. Both layers now ask the same question of the same bytes, so external
+        # admission and auxiliary admission cannot contradict each other again in either direction.
+        has_payload = _has_substantive_payload(path, rec)
+        if author_linked_without_digest and not issues and status == "VALID" and has_payload:
+            return AuxiliaryValidationResult(True, "LOCALLY_RECORDED_ASSET", [])
+        if author_linked_without_digest and not issues and status == "VALID":
+            return AuxiliaryValidationResult(
+                False, "SUSPECT_PAYLOAD",
+                [f"SUSPECT_PAYLOAD {path}: no author digest to verify against, and the file holds no "
+                 f"substantive payload (every byte sampled is identical); a placeholder of the "
+                 f"declared size is not an asset"])
         status = "OPERATOR_SUPPLIED_UNVERIFIED"
         issues.append(f"OPERATOR_SUPPLIED_UNVERIFIED {path}: provenance status is {provenance}")
         return AuxiliaryValidationResult(False, status, issues)

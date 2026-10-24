@@ -1646,127 +1646,6 @@ def all_stages(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage]
             required_capabilities=({"allow_env_install", "allow_network"} if will_create_env else frozenset()),
         ))
 
-        prep_link = canonical_dataset_link_path(m, config.WORKBENCH_THIRD_PARTY_ROOT)
-        prep_owner = next((candidate["model_id"] for candidate in selected_models
-                           if prep_link and canonical_dataset_link_path(
-                               candidate, config.WORKBENCH_THIRD_PARTY_ROOT) == prep_link), None)
-        target_root = dataset_root(args, config)
-        is_link_valid = False
-        if prep_link and prep_link.is_symlink():
-            try:
-                is_link_valid = prep_link.resolve() == target_root.resolve()
-            except (OSError, RuntimeError):
-                is_link_valid = False
-        prep_cmd = ["--model", mid, "--dataset-root", str(target_root)]
-        # Preparation owns two kinds of work: the fixed dataset link a pinned evaluator derives for
-        # itself, and the artifacts a preparation contract declares as generable (a source-shipped
-        # dictionary, a documented resize). Gating it on the link alone meant a model like LIMN,
-        # which declares no link but does declare a resize and a dictionary, never had its
-        # preparation attempted at all.
-        from workbench.backend.registry import preparation_contract_for_model
-        from workbench.scripts import prepare_model
-        prep_contract = preparation_contract_for_model(m)
-        executable_artifacts = [a for a in (prep_contract or {}).get("generated_artifacts", [])
-                                if a.get("generator") in ("pinned_source_file", "fashioniq_resize_images",
-                                                          prepare_model.TME_FEATURE_GENERATOR)]
-        # A resize is complete only when its receipt exists, so the receipt -- not the directory --
-        # is what the stage declares. Otherwise an interrupted run leaves a partially filled
-        # directory, the directory check passes on any child file, and the stage resumes as done.
-        # Anchored to `target_root`, the dataset the preparation command is actually given: a CLI
-        # `--dataset-root` override would otherwise make the stage look for its outputs under the
-        # configured root, fail permanently, and break resume.
-        prep_dataset_root = target_root
-        prep_artifacts: list[Path] = []
-        for artifact in executable_artifacts:
-            generator = artifact.get("generator")
-            if generator == "fashioniq_resize_images":
-                layout = (artifact.get("parameters") or {}).get("layout")
-                if layout:
-                    prep_artifacts.append(prepare_model.resize_receipt_path(
-                        replace(config, FASHIONIQ_ROOT=prep_dataset_root), layout))
-            elif generator == prepare_model.TME_FEATURE_GENERATOR:
-                # An `evaluator_cwd` artifact lives inside the model CHECKOUT, not the dataset root,
-                # and the files it names are 10.47 GiB of derived tensors. The stage therefore
-                # declares the RECEIPT (written under the configured artifacts root) rather than the
-                # directory: a directory check passes on any child file, so an interrupted generation
-                # would resume as done. `tme_features_complete` below still verifies the files the
-                # receipt names, so an emptied cache re-owes the stage.
-                tme_checkout = config.WORKBENCH_THIRD_PARTY_ROOT / (m.get("source_dir") or "")
-                prep_artifacts.append(prepare_model.tme_receipt_path(config, tme_checkout, prep_contract))
-            else:
-                prep_artifacts.extend(prep_dataset_root / relative for relative in artifact["paths"])
-        owed_artifacts = tuple(p for p in prep_artifacts if not p.is_file())
-        if not owed_artifacts and prep_contract:
-            # A receipt can outlive the files it promised, so a declared resize is only satisfied
-            # when its receipt AND the images it recorded are still present. Without this a resumed
-            # run would skip preparation over a dataset whose resized set had been emptied. The same
-            # rule applies to the TME feature cache, whose receipt also binds the split files it was
-            # derived from.
-            if prepare_model.resize_is_complete(replace(config, FASHIONIQ_ROOT=prep_dataset_root),
-                                                m, prep_contract) is False:
-                owed_artifacts = prep_artifacts
-            elif prepare_model.tme_features_complete(config, m, prep_contract) is False:
-                owed_artifacts = prep_artifacts
-        link_is_owed = bool(prep_link) and prep_owner == mid and not is_link_valid
-
-        # The command is built from the DECLARATION, never from whether work happens to be owed: the
-        # command string is part of the stage fingerprint, so a command that gained `--execute` on
-        # the second run invalidated its own stage and every dependent, rerunning the whole
-        # evaluation instead of resuming it. Whether to execute is the per-run authorization
-        # decision, and the runner already skips a completed stage whose fingerprint matches.
-        declares_preparation = bool(prep_link) and prep_owner == mid or bool(executable_artifacts)
-        # `--apply` is a property of the invocation, constant across a workflow's runs, whereas
-        # whether work is owed changes as soon as the first run produces it. Keying the command on
-        # `--apply` therefore gives the identical string on every run, which is what resume needs;
-        # `--execute` on a read-only invocation would still be refused by the runner for lacking the
-        # capability, but a plan run must not claim to execute anything at all.
-        if declares_preparation and getattr(args, "apply", False):
-            prep_cmd.extend(["--execute", "--allow-preparation"])
-        prep_deps = ["dataset", sync_dep]
-        # The TME generator is a CUDA-only job that produces ~10.47 GiB of derived features, so it
-        # carries its own capability rather than riding on `allow_preparation`. Whether the operator
-        # granted it is a fact about THIS invocation, not about the model: the command string must
-        # stay identical between runs (it is part of the stage fingerprint) and the DECISION is made
-        # by the runner, which refuses a stage whose capability was not authorized and reports the
-        # missing permission by name. The `environment:{mid}` edge orders the environment stage --
-        # which resolves the pinned TME interpreter -- before preparation; whether that interpreter
-        # really has CUDA is established by the handler at run time, not guessed here.
-        tme_generator = bool(prep_contract) and any(
-            artifact.get("generator") == prepare_model.TME_FEATURE_GENERATOR
-            for artifact in prep_contract.get("generated_artifacts", []))
-        if tme_generator:
-            from workbench.backend.model_settings import setting as _setting
-
-            tme_interpreter = (m.get("environment") or {}).get("python_env_var")
-            if tme_interpreter and (_setting(tme_interpreter) or m.get("environment_required")):
-                prep_deps.append(f"environment:{mid}")
-            if getattr(args, "apply", False):
-                # Same rule as `--execute` above: `--apply` is a property of the invocation, so the
-                # string stays identical between the runs of one workflow; a read-only plan must
-                # claim no capability and plan no execution at all.
-                prep_cmd.append("--allow-gpu-preparation")
-        if prep_owner and prep_owner != mid:
-            prep_deps.append(f"preparation:{prep_owner}")
-        # A model whose declared preparation is owed cannot be prepared without authorization, so an
-        # `--apply` run that lacks it is refused as unauthorized rather than allowed to reach the
-        # read-only verify step, exit nonzero, and surface as an unexplained stage failure.
-        needs_preparation = declares_preparation and (link_is_owed or bool(owed_artifacts)) and getattr(args, "apply", False)
-        prep_capabilities: set[str] = {"allow_preparation"} if needs_preparation else set()
-        if tme_generator and getattr(args, "apply", False):
-            # Declared for a model that owns the CUDA-only generator: the runner refuses the stage
-            # when the operator did not authorize it and reports the exact missing permission, which
-            # is a better outcome than silently skipping a declared preparation. A read-only plan
-            # claims nothing, so an unauthorized dry run is still permitted to describe itself.
-            prep_capabilities.add("allow_gpu_preparation")
-        prep_outputs = (prep_link,) if prep_link and prep_owner == mid else tuple(prep_artifacts)
-        stages.append(run_stage(
-            "preparation",
-            command("prepare_model.py", *prep_cmd),
-            model_id=mid,
-            dependencies=tuple(prep_deps),
-            output_paths=tuple(prep_outputs),
-            required_capabilities=frozenset(prep_capabilities),
-        ))
 
         selected_checkpoints = _checkpoint_ids(args, mid, m)
         forced_args = _checkpoint_args(args, mid, m)
@@ -1851,13 +1730,175 @@ def all_stages(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage]
         gpu_cmd = [sys.executable, "-c",
                    "import sys, workbench.scripts.pipeline as p; sys.exit(p.probe_gpu_capability(sys.argv[1]))",
                    mid]
+        # Whether this stage needs `allow_gpu_eval` is only true when no verified capability is
+        # cached. Kept in a variable because the PREPARATION stage later decides whether it may
+        # depend on this stage, and that decision must use the exact requirement recorded here
+        # rather than recompute (and possibly disagree with) it.
+        gpu_verification_caps = ({"allow_gpu_eval"} if (gpu_required and not has_valid_gpu)
+                                 else frozenset())
         stages.append(run_stage(
             "gpu-verification",
             gpu_cmd,
             model_id=mid,
             dependencies=(f"environment:{mid}",),
-            required_capabilities={"allow_gpu_eval"} if (gpu_required and not has_valid_gpu) else frozenset(),
+            required_capabilities=gpu_verification_caps,
             receipt=True,
+        ))
+        prep_link = canonical_dataset_link_path(m, config.WORKBENCH_THIRD_PARTY_ROOT)
+        prep_owner = next((candidate["model_id"] for candidate in selected_models
+                           if prep_link and canonical_dataset_link_path(
+                               candidate, config.WORKBENCH_THIRD_PARTY_ROOT) == prep_link), None)
+        target_root = dataset_root(args, config)
+        is_link_valid = False
+        if prep_link and prep_link.is_symlink():
+            try:
+                is_link_valid = prep_link.resolve() == target_root.resolve()
+            except (OSError, RuntimeError):
+                is_link_valid = False
+        prep_cmd = ["--model", mid, "--dataset-root", str(target_root)]
+        # Preparation owns two kinds of work: the fixed dataset link a pinned evaluator derives for
+        # itself, and the artifacts a preparation contract declares as generable (a source-shipped
+        # dictionary, a documented resize). Gating it on the link alone meant a model like LIMN,
+        # which declares no link but does declare a resize and a dictionary, never had its
+        # preparation attempted at all.
+        from workbench.backend.registry import preparation_contract_for_model
+        from workbench.scripts import prepare_model
+        prep_contract = preparation_contract_for_model(m)
+        executable_artifacts = [a for a in (prep_contract or {}).get("generated_artifacts", [])
+                                if a.get("generator") in ("pinned_source_file", "fashioniq_resize_images",
+                                                          prepare_model.TME_FEATURE_GENERATOR)]
+        # A resize is complete only when its receipt exists, so the receipt -- not the directory --
+        # is what the stage declares. Otherwise an interrupted run leaves a partially filled
+        # directory, the directory check passes on any child file, and the stage resumes as done.
+        # Anchored to `target_root`, the dataset the preparation command is actually given: a CLI
+        # `--dataset-root` override would otherwise make the stage look for its outputs under the
+        # configured root, fail permanently, and break resume.
+        prep_dataset_root = target_root
+        prep_artifacts: list[Path] = []
+        for artifact in executable_artifacts:
+            generator = artifact.get("generator")
+            if generator == "fashioniq_resize_images":
+                layout = (artifact.get("parameters") or {}).get("layout")
+                if layout:
+                    prep_artifacts.append(prepare_model.resize_receipt_path(
+                        replace(config, FASHIONIQ_ROOT=prep_dataset_root), layout))
+            elif generator == prepare_model.TME_FEATURE_GENERATOR:
+                # An `evaluator_cwd` artifact lives inside the model CHECKOUT, not the dataset root,
+                # and the files it names are 10.47 GiB of derived tensors. The stage therefore
+                # declares the RECEIPT (written under the configured artifacts root) rather than the
+                # directory: a directory check passes on any child file, so an interrupted generation
+                # would resume as done. `tme_features_complete` below still verifies the files the
+                # receipt names, so an emptied cache re-owes the stage.
+                tme_checkout = config.WORKBENCH_THIRD_PARTY_ROOT / (m.get("source_dir") or "")
+                prep_artifacts.append(prepare_model.tme_receipt_path(config, tme_checkout, prep_contract))
+            else:
+                prep_artifacts.extend(prep_dataset_root / relative for relative in artifact["paths"])
+        owed_artifacts = tuple(p for p in prep_artifacts if not p.is_file())
+        if not owed_artifacts and prep_contract:
+            # A receipt can outlive the files it promised, so a declared resize is only satisfied
+            # when its receipt AND the images it recorded are still present. Without this a resumed
+            # run would skip preparation over a dataset whose resized set had been emptied. The same
+            # rule applies to the TME feature cache, whose receipt also binds the split files it was
+            # derived from.
+            if prepare_model.resize_is_complete(replace(config, FASHIONIQ_ROOT=prep_dataset_root),
+                                                m, prep_contract) is False:
+                owed_artifacts = prep_artifacts
+            elif prepare_model.tme_features_complete(config, m, prep_contract) is False:
+                owed_artifacts = prep_artifacts
+        link_is_owed = bool(prep_link) and prep_owner == mid and not is_link_valid
+
+        # The command is built from the DECLARATION, never from whether work happens to be owed: the
+        # command string is part of the stage fingerprint, so a command that gained `--execute` on
+        # the second run invalidated its own stage and every dependent, rerunning the whole
+        # evaluation instead of resuming it. Whether to execute is the per-run authorization
+        # decision, and the runner already skips a completed stage whose fingerprint matches.
+        declares_preparation = bool(prep_link) and prep_owner == mid or bool(executable_artifacts)
+        # `--apply` is a property of the invocation, constant across a workflow's runs, whereas
+        # whether work is owed changes as soon as the first run produces it. Keying the command on
+        # `--apply` therefore gives the identical string on every run, which is what resume needs;
+        # `--execute` on a read-only invocation would still be refused by the runner for lacking the
+        # capability, but a plan run must not claim to execute anything at all.
+        prep_deps = ["dataset", sync_dep]
+        if declares_preparation and getattr(args, "apply", False):
+            prep_cmd.extend(["--execute", "--allow-preparation"])
+        # NO `checkpoint:{mid}` edge. No declared preparation generator CONSUMES a checkpoint:
+        # every generator in `prepare_model.py` reads the dataset (resize, TME feature precompute)
+        # or the pinned source, and none of them opens a weight file. An edge to a stage this stage
+        # does not use is not a harmless ordering nicety -- it is a capability trap. `checkpoint`
+        # carries `allow_large_downloads`/`allow_network`, so an operator who authorizes PREPARATION
+        # without authorizing a download would have had their preparation refused as
+        # SKIPPED_DEPENDENCY, i.e. a permission they deliberately withheld would cancel work they
+        # explicitly authorized. Ordering is expressed by the append order in `all_stages`.
+        #
+        # `auxiliary-assets` IS a real prerequisite, but only for a model whose CONTRACT declares an
+        # external asset as `required_for_preparation`: that is the declaration that says generation
+        # cannot run before the asset is staged. Gating it on the asset being auxiliary-declared is
+        # what keeps the edge honest in both directions -- a model with a preparation-required asset
+        # that is NOT an auxiliary asset (dcnet's contract-declared ones) must not gain an edge to a
+        # stage that does not exist for it, and a model whose auxiliary assets are only needed for
+        # EVALUATION (TME's BLIP-2 and EVA-ViT-g, both `required_for_preparation: false`) must not
+        # be cancelled because an evaluation-only download failed.
+        prep_asset_owed = any(
+            asset.get("required_for_preparation")
+            for asset in (prep_contract or {}).get("external_assets", []))
+        if prep_asset_owed and any(stage.name == "auxiliary-assets" and stage.model_id == mid
+                                   for stage in stages):
+            prep_deps.append(f"auxiliary-assets:{mid}")
+        # The TME generator is a CUDA-only job that produces ~10.47 GiB of derived features, so it
+        # carries its own capability rather than riding on `allow_preparation`. Whether the operator
+        # granted it is a fact about THIS invocation, not about the model: the command string must
+        # stay identical between runs (it is part of the stage fingerprint) and the DECISION is made
+        # by the runner, which refuses a stage whose capability was not authorized and reports the
+        # missing permission by name. The `environment:{mid}` edge orders the environment stage --
+        # which resolves the pinned TME interpreter -- before preparation; whether that interpreter
+        # really has CUDA is established by the handler at run time, not guessed here.
+        tme_generator = bool(prep_contract) and any(
+            artifact.get("generator") == prepare_model.TME_FEATURE_GENERATOR
+            for artifact in prep_contract.get("generated_artifacts", []))
+        if tme_generator:
+            from workbench.backend.model_settings import setting as _setting
+
+            tme_interpreter = (m.get("environment") or {}).get("python_env_var")
+            if tme_interpreter and (_setting(tme_interpreter) or m.get("environment_required")):
+                prep_deps.append(f"environment:{mid}")
+            if getattr(args, "apply", False):
+                # Same rule as `--execute` above: `--apply` is a property of the invocation, so the
+                # string stays identical between the runs of one workflow; a read-only plan must
+                # claim no capability and plan no execution at all.
+                prep_cmd.append("--allow-gpu-preparation")
+        if prep_owner and prep_owner != mid:
+            prep_deps.append(f"preparation:{prep_owner}")
+        # A model whose declared preparation is owed cannot be prepared without authorization, so an
+        # `--apply` run that lacks it is refused as unauthorized rather than allowed to reach the
+        # read-only verify step, exit nonzero, and surface as an unexplained stage failure.
+        needs_preparation = declares_preparation and (link_is_owed or bool(owed_artifacts)) and getattr(args, "apply", False)
+        prep_capabilities: set[str] = {"allow_preparation"} if needs_preparation else set()
+        if tme_generator and getattr(args, "apply", False):
+            # Declared for a model that owns the CUDA-only generator: the runner refuses the stage
+            # when the operator did not authorize it and reports the exact missing permission, which
+            # is a better outcome than silently skipping a declared preparation. A read-only plan
+            # claims nothing, so an unauthorized dry run is still permitted to describe itself.
+            prep_capabilities.add("allow_gpu_preparation")
+        if "allow_gpu_preparation" in prep_capabilities and (
+                not gpu_verification_caps or getattr(args, "allow_gpu_eval", False)):
+            # The edge is only sound when the GPU stage cannot be refused for lack of a capability.
+            # `BLOCKED_AUTHORIZATION_REQUIRED` counts as an UNUSABLE dependency, so depending on a
+            # stage the operator did not authorize would cancel preparation with
+            # SKIPPED_DEPENDENCY -- an ungranted EVALUATION permission silently killing
+            # preparation the operator explicitly authorized with `--allow-preparation
+            # --allow-gpu-preparation`. Two authorizations, both naming preparation, must be
+            # enough; demanding `allow_gpu_eval` as a third would be a permission this stage does
+            # not use. When the operator DID authorize it, the edge is kept and the verified
+            # capability is ordered before the CUDA-only generation, which is the point.
+            prep_deps.append(f"gpu-verification:{mid}")
+        prep_outputs = (prep_link,) if prep_link and prep_owner == mid else tuple(prep_artifacts)
+        stages.append(run_stage(
+            "preparation",
+            command("prepare_model.py", *prep_cmd),
+            model_id=mid,
+            dependencies=tuple(prep_deps),
+            output_paths=tuple(prep_outputs),
+            required_capabilities=frozenset(prep_capabilities),
         ))
 
         # The auxiliary assets are declared inputs of this model's official evaluation, so they

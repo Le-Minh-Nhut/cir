@@ -8,7 +8,6 @@ from dataclasses import replace
 from pathlib import Path
 
 import torch
-from PIL import Image
 
 from workbench.backend.operator_config import resolve_config
 from workbench.backend.registry import load_registry, preparation_contract_for_model
@@ -21,7 +20,7 @@ PARAMETERS = next(item["parameters"] for item in CONTRACT["generated_artifacts"]
                   if item["generator"] == prepare_model.TME_FEATURE_GENERATOR)
 
 
-def _fixture(tmp_path: Path):
+def _fixture(tmp_path: Path, monkeypatch):
     checkout = tmp_path / "TME"
     script = checkout / PARAMETERS["source_script"]
     script.parent.mkdir(parents=True)
@@ -36,14 +35,14 @@ def _fixture(tmp_path: Path):
         (dataset / "captions" / f"cap.{category}.val.json").write_text("[]")
         (dataset / "images").mkdir(exist_ok=True)
         (dataset / "images" / f"{image_name}.png").write_bytes(b"raw png stand-in")
-        resized = dataset / "resized_image" / category
-        resized.mkdir(parents=True, exist_ok=True)
-        Image.new("RGB", (2, 2), (20, 30, 40)).save(resized / f"{image_name}.jpg")
     config = replace(resolve_config(), FASHIONIQ_ROOT=dataset,
                      WORKBENCH_THIRD_PARTY_ROOT=tmp_path / "third_party",
                      WORKBENCH_ARTIFACTS_ROOT=tmp_path / "artifacts")
     config.WORKBENCH_THIRD_PARTY_ROOT.mkdir()
     (config.WORKBENCH_THIRD_PARTY_ROOT / MODEL["source_dir"]).symlink_to(checkout, target_is_directory=True)
+    from workbench.backend import registry
+    monkeypatch.setattr(registry, "required_runtime_assets", lambda _: [])
+    monkeypatch.setattr(registry, "external_asset_statuses", lambda _: [])
     contract = json.loads(json.dumps(CONTRACT))
     # Tiny tensor dims keep the receipt boundary real without allocating the 257x1408 cache.
     artifact = next(a for a in contract["generated_artifacts"]
@@ -61,7 +60,7 @@ def _write_valid_cache(config, checkout, contract, parameters, monkeypatch):
     mapping = feature_root / "val_name_to_idx.json"
     torch.save(features, feature)
     mapping.write_text(json.dumps({name: index for index, name in enumerate(names)}))
-    inputs = prepare_model._tme_inputs(config, contract)
+    inputs = prepare_model._tme_inputs(config, contract, MODEL)
     files = {"features": {"size_bytes": feature.stat().st_size,
                           "sha256": prepare_model._file_sha256(feature)},
              "name_to_idx": {"size_bytes": mapping.stat().st_size,
@@ -88,7 +87,7 @@ def _stub_verified_source(monkeypatch, checkout):
 
 
 def test_cpu_dispatch_reaches_cuda_blocker_before_native_command(tmp_path, monkeypatch, capsys):
-    config, checkout, _, _, _ = _fixture(tmp_path)
+    config, checkout, _, _, _ = _fixture(tmp_path, monkeypatch)
     monkeypatch.setattr(prepare_model, "resolve_config", lambda: config)
     monkeypatch.setattr(prepare_model, "_stage_source_assets", lambda *args, **kwargs: True)
     _stub_verified_source(monkeypatch, checkout)
@@ -111,7 +110,7 @@ def test_cpu_dispatch_reaches_cuda_blocker_before_native_command(tmp_path, monke
 
 
 def test_valid_receipt_cache_reuses_without_native_generator(tmp_path, monkeypatch):
-    config, checkout, _, contract, parameters = _fixture(tmp_path)
+    config, checkout, _, contract, parameters = _fixture(tmp_path, monkeypatch)
     _stub_verified_source(monkeypatch, checkout)
     feature_root, _, _, _ = _write_valid_cache(config, checkout, contract, parameters, monkeypatch)
     assert prepare_model.tme_features_complete(config, MODEL, contract) is True
@@ -125,7 +124,7 @@ def test_valid_receipt_cache_reuses_without_native_generator(tmp_path, monkeypat
 
 
 def test_partial_cache_and_changed_split_never_validate_or_reuse(tmp_path, monkeypatch):
-    config, checkout, dataset, contract, parameters = _fixture(tmp_path)
+    config, checkout, dataset, contract, parameters = _fixture(tmp_path, monkeypatch)
     _stub_verified_source(monkeypatch, checkout)
     feature_root, feature, mapping, receipt = _write_valid_cache(config, checkout, contract, parameters, monkeypatch)
     assert prepare_model.tme_features_complete(config, MODEL, contract) is True
@@ -138,7 +137,7 @@ def test_partial_cache_and_changed_split_never_validate_or_reuse(tmp_path, monke
     assert prepare_model.tme_features_complete(config, MODEL, contract) is True
     split = dataset / "image_splits" / "split.dress.val.json"
     split.write_text('["changed"]')
-    Image.new("RGB", (2, 2), (80, 90, 100)).save(dataset / "resized_image" / "dress" / "changed.jpg")
+    (dataset / "images" / "changed.png").write_bytes(b"changed raw image")
     assert prepare_model.tme_features_complete(config, MODEL, contract) is False
     ok, reason = prepare_model._run_tme_precompute(config, MODEL, contract, dry_run=False)
     assert not ok and "--force-regenerate-unknown-cache" in reason

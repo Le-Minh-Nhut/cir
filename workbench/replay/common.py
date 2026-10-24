@@ -154,7 +154,8 @@ def reusable_cache_root(dataset_root: Path, cache_root: Path,
 @contextmanager
 def isolated_cache_root(dataset_root: Path,
                         directory_names: tuple[str, ...] = ("captions", "image_splits", "resized_image"),
-                        *, image_source: str | None = None) -> Iterator[Path]:
+                        *, image_source: str | None = None,
+                        image_extension: str = ".jpg") -> Iterator[Path]:
     """Use a fresh temp root, symlinking immutable inputs; optionally expose category images flat."""
     with tempfile.TemporaryDirectory(prefix="cir-replay-cache-") as temporary:
         cache_root = Path(temporary)
@@ -169,10 +170,10 @@ def isolated_cache_root(dataset_root: Path,
                 raise FileNotFoundError(f"native replay image input missing: {source_root}")
             images = cache_root / "images"
             images.mkdir()
-            if image_source == "resized_image":
-                from workbench.backend.fashioniq_layout import CATEGORIES
+            from workbench.backend.fashioniq_layout import CATEGORIES
 
-                names = []
+            names = []
+            if image_source == "resized_image":
                 for category in CATEGORIES:
                     split = dataset_root / "image_splits" / f"split.{category}.val.json"
                     if not split.is_file():
@@ -184,18 +185,33 @@ def isolated_cache_root(dataset_root: Path,
                 for name in dict.fromkeys(names):
                     if not isinstance(name, str) or not name or "/" in name or "\\" in name:
                         raise ValueError(f"unusable FashionIQ image identifier in split: {name!r}")
-                    candidates = [source_root / category / f"{name}.jpg" for category in CATEGORIES]
+                    candidates = [source_root / category / f"{name}{image_extension}" for category in CATEGORIES]
                     source = next((path for path in candidates if path.is_file()), None)
                     if source is None:
                         raise FileNotFoundError(
-                            f"native replay resized FashionIQ image missing: {source_root}/<category>/{name}.jpg")
+                            f"native replay resized FashionIQ image missing: {source_root}/<category>/{name}{image_extension}")
+                    (images / f"{name}.jpg").symlink_to(source.resolve())
+            elif image_source == "images":
+                for category in CATEGORIES:
+                    split = dataset_root / "image_splits" / f"split.{category}.val.json"
+                    if not split.is_file():
+                        raise FileNotFoundError(f"native replay split input missing: {split}")
+                    names.extend(json.loads(split.read_text(encoding="utf-8")))
+                for name in dict.fromkeys(names):
+                    if not isinstance(name, str) or not name or "/" in name or "\\" in name:
+                        raise ValueError(f"unusable FashionIQ image identifier in split: {name!r}")
+                    source = source_root / f"{name}{image_extension}"
+                    if not source.is_file():
+                        raise FileNotFoundError(f"native replay canonical FashionIQ image missing: {source}")
                     (images / f"{name}.jpg").symlink_to(source.resolve())
             else:
                 raise ValueError(f"unsupported native image source: {image_source}")
         yield cache_root
 
+
 def fashioniq_image_binding_blockers(dataset_root: Path, split: str = "val",
-                                     image_source: str = "resized_image") -> list[str]:
+                                     image_source: str = "resized_image",
+                                     image_extension: str = ".jpg") -> list[str]:
     """Check that FashionIQ gallery names resolve through TME's flat `images/<id>.jpg` view."""
     from workbench.backend.fashioniq_layout import CATEGORIES
 
@@ -206,9 +222,13 @@ def fashioniq_image_binding_blockers(dataset_root: Path, split: str = "val",
         if not split_path.is_file():
             blockers.append(f"native replay split input missing: {split_path}")
             continue
-        category_root = root / category
-        if not category_root.is_dir():
-            blockers.append(f"native replay resized images missing: {category_root}")
+        if image_source == "resized_image":
+            category_root = root / category
+            if not category_root.is_dir():
+                blockers.append(f"native replay resized images missing: {category_root}")
+                continue
+        elif not root.is_dir():
+            blockers.append(f"native replay canonical images missing: {root}")
             continue
         try:
             names = json.loads(split_path.read_text(encoding="utf-8"))
@@ -221,9 +241,34 @@ def fashioniq_image_binding_blockers(dataset_root: Path, split: str = "val",
         for name in names:
             if not isinstance(name, str) or not name or "/" in name or "\\" in name or name in {".", ".."}:
                 blockers.append(f"unusable FashionIQ image identifier in {split_path}: {name!r}")
-            elif not any((root / item / f"{name}.jpg").is_file() for item in CATEGORIES):
-                blockers.append(f"native replay resized FashionIQ image missing: {root}/<category>/{name}.jpg")
+            elif image_source == "resized_image":
+                if not any((root / item / f"{name}{image_extension}").is_file() for item in CATEGORIES):
+                    blockers.append(f"native replay resized FashionIQ image missing: {root}/<category>/{name}{image_extension}")
+            elif not (root / f"{name}{image_extension}").is_file():
+                blockers.append(f"native replay canonical FashionIQ image missing: {root}/{name}{image_extension}")
     return blockers
+
+
+def fashioniq_gallery_digests(dataset_root: Path, split: str, image_extension: str) -> dict[str, str]:
+    """Hash actual gallery bytes in native per-category file order."""
+    from workbench.backend.fashioniq_layout import CATEGORIES
+
+    result = {}
+    for category in CATEGORIES:
+        names = json.loads((dataset_root / "image_splits" / f"split.{category}.{split}.json")
+                           .read_text(encoding="utf-8"))
+        digest = hashlib.sha256()
+        for name in names:
+            path = dataset_root / "images" / f"{name}{image_extension}"
+            encoded = name.encode("utf-8")
+            digest.update(len(encoded).to_bytes(8, "big"))
+            digest.update(encoded)
+            with path.open("rb") as image:
+                for block in iter(lambda: image.read(1 << 20), b""):
+                    digest.update(block)
+        result[category] = digest.hexdigest()
+    return result
+
 
 
 def constructor_input_blockers(dataset_root: Path, message: Callable[[Path], str],

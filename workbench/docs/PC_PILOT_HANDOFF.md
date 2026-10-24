@@ -28,10 +28,10 @@ source/environment/command nhưng thiếu dung lượng đĩa cho cache native (
 feature cache) — xem §"TME: số đo thật" bên dưới.
 Ma trận đầy đủ: `workbench/docs/MODEL_STATUS_SPEC.md` §2.
 
-**Trạng thái 16 model (bảng chuẩn, bằng chứng + điều kiện chuyển trạng thái):**
+**Trạng thái 17 model (bảng chuẩn, bằng chứng + điều kiện chuyển trạng thái):**
 [`workbench/docs/MODEL_STATUS_SPEC.md`](MODEL_STATUS_SPEC.md)
 
-**SHA ĐÃ KIỂM THỬ (nguồn sản xuất): `30c68ed`** (`30c68edb6dae18e4b195cd7f6e584df952652db1`) — mọi test, acceptance, mutation và release_verify mô
+**SHA ĐÃ KIỂM THỬ (nguồn sản xuất): `30c68ed`** (`30c68ed59a7b5383247fc4a3c290ffa68efed074`) — mọi test, acceptance, mutation và release_verify mô
 tả trên trang này đã chạy trên đúng cây đó (xem §Kết quả test ở cuối trang cho số đo trên đúng cây đó). `119df5f` đã bị **thay thế**: lượt R9 sửa production (DCNet binding và
 thứ tự category, tập patch CSMCIR, tập input của constructor, processor BLIP-2), nên số test và kết
 quả gate ghi ở các bản trước không còn mô tả cây này.
@@ -73,7 +73,7 @@ Nhánh này sẽ tiếp tục tiến lên. Mốc bất biến để đối chi�
 `FINAL_PC_RELEASE_VERDICT.md`; commit sau mốc đó chỉ được phép sửa tài liệu, và một test so sánh
 cây nguồn sản xuất theo từng byte sẽ thất bại nếu điều đó không còn đúng.
 
-Bản đầy đủ của lượt review cuối (ma trận 16 model, coverage, sổ lỗi, đối chiếu độc lập, verdict) nằm
+Bản đầy đủ của lượt review cuối (ma trận model, coverage, sổ lỗi, đối chiếu độc lập, verdict) nằm
 trong `workbench/docs/reviews/FINAL_*.md` và `workbench/docs/reviews/r8/R8_FINAL_REPORT.md` (báo cáo
 của lượt R8: git state, đóng lỗi, kết quả test, phán quyết).
 
@@ -262,7 +262,7 @@ python -m workbench.scripts.validate_results --all --strict-real
 curl -sS -X POST http://127.0.0.1:8000/api/index/rebuild
 ```
 
-**Lượt chạy của mô hình aggregate-only** (15/16 model) **không** xuất hiện trong `/api/runs`: chỉ mục
+**Lượt chạy của mô hình aggregate-only** (15 trong 17 model) **không** xuất hiện trong `/api/runs`: chỉ mục
 chỉ chứa bản ghi per-query canonical, mà chỉ LIMN có observer. Lượt chạy của chúng nằm ở
 `/api/benchmark-runs` và hiển thị trong UI ở tab **Models**. Đây là đúng theo thiết kế, không phải lỗi;
 `./pc.sh` báo `AGGREGATE_ONLY_VERIFIED` cho tình huống này và **không** đòi một artifact per-query

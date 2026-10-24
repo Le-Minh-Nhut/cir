@@ -1,0 +1,91 @@
+# PC cohort profile — the authorized 20%-cohort research configuration.
+#
+# Use this on the PC. It is NOT a copy of `pc_autopilot.example.yaml`: that file is a minimal,
+# fully-locked example (selects nothing runnable under `strict_clean`, authorizes no download, no
+# environment creation, no preparation and no GPU), so copying it and editing six paths produces a
+# profile that can only parse its own config. This profile states the REAL selection, the real
+# checkpoint policy, the resolved overrides, a budget derived from the registry, and the
+# capabilities a cohort run actually needs.
+#
+# Copy it outside the repository and set ALL SIX `paths` keys to absolute paths for the PC.
+# Relative values here are resolved against this file's own directory.
+#
+#   cp workbench/configs/pc_autopilot.pc_cohort.yaml ~/cir_pc.yaml
+#   $EDITOR ~/cir_pc.yaml          # the six paths below
+#   ./workbench/run.sh autopilot --config ~/cir_pc.yaml --dry-run     # inspect the plan
+#   ./workbench/run.sh autopilot --config ~/cir_pc.yaml --apply --resume
+#
+# Model environments are provisioned by this workbench, not copied: `allow_env_install: true` lets
+# the planner create each group's prefix under `artifacts`. Never copy a laptop virtualenv to the PC.
+# Checkpoints, datasets and feature caches transfer SEPARATELY from Git (see
+# `docs/PC_REPRODUCTION_HANDOFF.md`); `git fetch` moves source only.
+
+schema_version: 1
+selected_models: all_registered
+
+# LIMN's upstream repository publishes no training-condition label for its checkpoints, so
+# `strict_clean` would leave LIMN ambiguous between its three variants and blocked. This policy is
+# what makes the cohort runnable while every flagged run is still badged with the condition the
+# registry records.
+checkpoint_policy: include_flagged_conditions
+
+# The authorized cohort, resolved by hand from the registry. Each entry below exists for a stated
+# reason, and every surface that presents the run is expected to show the recorded condition rather
+# than presenting these as clean runs.
+checkpoint_overrides:
+  # HABIT, INTENT and ConeSep publish only noise-trained FashionIQ weights, so the policy alone still
+  # leaves each one ambiguous between its 20/50/80 variants. Exactly one variant per model is the
+  # authorized 20% selection: a resolved operator choice, not a guess among siblings.
+  habit: [fiq_n02]
+  intent: [fiq_n02]
+  conesep: [fiq_n02]
+  # PTHA+MTST declares the author's released CIRR checkpoint as a named cross-dataset TRANSFER. What
+  # runs is the exploratory CIRR -> FashionIQ experiment, never the paper's FashionIQ row.
+  ptha_mtst: [cirr_transfer]
+  # ENCODER's official FashionIQ checkpoint: the one model whose GPU evaluation is ALREADY verified
+  # end-to-end on this project's host (RTX 3050 sm86, all three categories, macro R@10 56.06 /
+  # R@50 77.58 against the paper's 56.13 / 77.59, gate PASS_METRICS_ONLY_MAPPING_UNVERIFIED).
+  encoder: [fashioniq]
+# Air-Know is deliberately absent: its verified public checkpoints are 50% and 80% only, and naming
+# one of those would silently substitute a condition the operator did not authorize. It stays
+# deferred until a verified 20% checkpoint exists. TME needs no override: its registry declaration
+# names the FashionIQ 0% weight as the workflow default, so the CIRR weight cannot silently become
+# the FashionIQ checkpoint (a requested TME 20% stays CHECKPOINT_UNAVAILABLE without an author
+# release).
+
+paths:
+  # SET ABSOLUTE ON THE PC. All six.
+  registry: ../registry/models.yaml
+  dataset_root: ../../data/FashionIQ
+  artifacts: ../artifacts
+  checkpoints: ../artifacts/checkpoints
+  results: ../artifacts/results
+  third_party: ../third_party
+
+budgets:
+  # Finite, and derived from the registry rather than guessed. The cost of a variant is the bytes
+  # that actually stream: `archive_size_bytes` when the endpoint serves a container, otherwise
+  # `expected_size_bytes` — charging TME the extracted member size understated a transfer that holds
+  # both objects at once. Arithmetic for every VERIFIED selectable variant in the cohort:
+  #   LIMN bundle (3 x 1,792,010,157) + HABIT + INTENT + ConeSep + CSMCIR + HINT + ENCODER
+  #   + TME FashionIQ container + TME CIRR container + PTHA CIRR = 35,601,160,762 bytes.
+  # 35 GiB covers that with headroom for auxiliary assets (BLIP-2 746,998,955 + EVA-ViT-g
+  # 2,025,249,237 per family that needs them). A selection that exceeds this is refused BEFORE any
+  # byte is fetched, which is the point of a finite budget: raise it only after re-checking the
+  # registry sizes, never to "unlimited".
+  max_download_bytes: 37580963840
+  max_models: 32
+  top_k: 200
+
+permissions:
+  allow_network: true
+  allow_large_downloads: true
+  # The planner creates each model group's own prefix; it never touches an environment it did not
+  # create. This is also how the PC gets its model interpreters without a copied venv.
+  allow_env_install: true
+  allow_preparation: true
+  allow_gpu_eval: true
+  # Authorizes the CUDA-only preparation generators. TME's validation image features are 10.47 GiB
+  # and cannot be produced on CPU, so a TME-inclusive cohort needs this.
+  allow_gpu_preparation: true
+  allow_index_write: true

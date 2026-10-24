@@ -41,7 +41,8 @@ class Asset:
     #: COT_ours2 captions point at the author's Qwen captions). Absent means the asset has no
     #: compatible stand-in and stays strictly unattainable.
     caption_alias_from: dict[str, Any] | None = None
-
+    source_type: str | None = None
+    source_repo: str | None = None
 
 def assets(model_ids: set[str], third_party_root: Path, fashioniq_root: Path) -> tuple[Asset, ...]:
     return tuple(
@@ -60,6 +61,8 @@ def assets(model_ids: set[str], third_party_root: Path, fashioniq_root: Path) ->
             asset.get("expected_size_bytes"),
             asset.get("content_contract"),
             asset.get("caption_alias_from"),
+            asset.get("source_type"),
+            asset.get("source_repo"),
         )
         for model_id in model_ids
         for asset in auxiliary_assets_for_model(model_id)
