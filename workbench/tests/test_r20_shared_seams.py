@@ -344,9 +344,9 @@ def test_vendored_checkout_is_verified_evidence_for_resume(monkeypatch) -> None:
 
     The vendored layout deliberately has no nested `.git` (the pinned tree is committed in this
     repository). Probing `.git` and treating its absence as an I/O failure marked EVERY vendored
-    model's fingerprint weak, so `--run.sh autopilot --resume` refused every completed stage that
-    depends on source. The check is now the provenance authority's own answer, so it cannot drift
-    from it: a clean pin is content-verified evidence, and a dirty one is not.
+    model's fingerprint weak, so `workbench/run.sh autopilot --resume` refused every completed stage
+    that depends on source. The check is now the provenance authority's own answer, so it cannot
+    drift from it: a clean vendored pin is content-verified evidence, and a dirty one is not.
     """
     from workbench.backend.registry import model_by_id
     from workbench.backend.vendored_source import source_provenance
