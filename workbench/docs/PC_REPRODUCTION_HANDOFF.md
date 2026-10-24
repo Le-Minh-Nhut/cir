@@ -2,7 +2,7 @@
 
 Primary operator path: [AUTOPILOT_GUIDE.md](AUTOPILOT_GUIDE.md). Use the checked-in example profile only for read-only planning; copy it to a private PC-specific YAML and configure dataset, persistent paths, model selection, checkpoint policy, budgets, and permissions before any real run. [MODEL_STATUS_SPEC.md](MODEL_STATUS_SPEC.md) records per-model source, checkpoint, assets, capability, and blockers.
 
-**Revision identity:** `3627991` (`3627991c4fdaea80f7c4d7df3e7073c45311f3fe`) is the revision whose checks ran; `git rev-parse HEAD` on the branch tip (the docs-only successor) is the final head, which differs only in documentation. Production bytes are identical between them.
+**Revision identity:** `874ddcc` (`874ddccd7e3b869884b7f4ed25f7b9003d6b792d`) is the revision whose checks ran; `git rev-parse HEAD` on the branch tip (the docs-only successor) is the final head, which differs only in documentation. Production bytes are identical between them.
 
 ## Read-only host checks
 
