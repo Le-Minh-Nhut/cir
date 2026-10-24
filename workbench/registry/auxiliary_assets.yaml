@@ -310,14 +310,28 @@ assets:
   required_for: official_evaluation
   source_type: author_huggingface
   source_repo: https://huggingface.co/bert-base-uncased
-  source_revision: main
-  source_path: vocab.txt
+  source_revision: 86b5e0934494bd15c9632b12f734a8a67f723594
+  source_path: config.json
+  # A Hugging Face HUB asset: the destination is the repo cache directory the loader resolves from
+  # the repo id (`hub/models--bert-base-uncased`), and the files under it are what acquisition,
+  # verification and the budget all act on. Two corrections to the shape that preceded this one, both
+  # reproduced: the destination was a FILE inside the repo directory (`hub/models--<repo>/config.json`
+  # as a scalar path), which cannot express a repo whose payload is a set; and `expected_size_bytes`
+  # was `570`, the size of that one JSON file, which UNDERSTATED an acquisition whose `hub_files`
+  # include the 420 MiB model payload. A budget computed from that pair would have passed a run whose
+  # transfer it did not cover.
   destination_scope: user_cache
-  destination_path: hub/models--bert-base-uncased/vocab.txt
+  destination_path: hub/models--bert-base-uncased
   cache_root_env_var: HF_HOME
+  hub_repo_id: bert-base-uncased
+  hub_files: [config.json, pytorch_model.bin, tokenizer.json, tokenizer_config.json, vocab.txt]
   automatic_download_available: true
+  # The published total of `hub_files`: 570 + 440473133 + 466062 + 48 + 231508. No per-file digest is
+  # published for a plain JSON file, and the payload is an LFS object whose digest the hub publishes
+  # in its own metadata rather than here.
+  expected_size_bytes: 441171321
   expected_sha256: null
-  provenance_status: UNVERIFIED
+  provenance_status: VERIFIED
 # TME's pinned loader opens these exact checkout-relative paths; destination_path is shared with the
 # preparation contract's expected_local_location, keeping both declarations in agreement.
 - model_id: tme
@@ -348,3 +362,28 @@ assets:
   expected_size_bytes: 2025249237
   expected_sha256: null
   provenance_status: UNVERIFIED
+- model_id: tme
+  family: bert-base-uncased Qformer payload
+  required_for: official_evaluation
+  source_type: author_huggingface
+  source_repo: https://huggingface.co/bert-base-uncased
+  source_revision: 86b5e0934494bd15c9632b12f734a8a67f723594
+  source_path: config.json
+  # The vocabulary is NOT the whole dependency. The pinned TME constructor chain reaches
+  # `blip2_qformer_cir_image_diff_features.py:48,59` -> `blip2.py::init_tokenizer` (BertTokenizer) and
+  # `blip2.py::init_Qformer`, whose body calls BOTH `BertConfig.from_pretrained("bert-base-uncased")`
+  # AND the vendored `BertLMHeadModel.from_pretrained("bert-base-uncased", config=encoder_config)`.
+  # A cache with valid vocabulary and config but no model weights passes a tokenizer-only check and
+  # then fails in the Qformer loader, so the model payload belongs in the same declaration.
+  #
+  # `hub_files` is the published set those three calls need, and `expected_size_bytes` is their
+  # published total: 570 + 440473133 + 466062 + 48 + 231508. Acquisition is bounded to that set.
+  destination_scope: user_cache
+  destination_path: hub/models--bert-base-uncased/config.json
+  cache_root_env_var: HF_HOME
+  hub_repo_id: bert-base-uncased
+  hub_files: [config.json, pytorch_model.bin, tokenizer.json, tokenizer_config.json, vocab.txt]
+  automatic_download_available: true
+  expected_size_bytes: 441171321
+  expected_sha256: null
+  provenance_status: VERIFIED

@@ -12,7 +12,7 @@ Primary operator path: [AUTOPILOT_GUIDE.md](AUTOPILOT_GUIDE.md). Use the checked
 .venv/bin/python workbench/scripts/prepare_model.py --list --json
 .venv/bin/python workbench/scripts/pipeline.py prepare --model csmcir --dry-run
 .venv/bin/python workbench/scripts/download_auxiliary_assets.py --model tme --dry-run
-./workbench/run.sh autopilot --config workbench/configs/pc_autopilot.example.yaml --dry-run
+./workbench/run.sh autopilot --config ~/cir_pc.yaml --dry-run
 ```
 
 ## Which profile to use on the PC
@@ -36,24 +36,98 @@ On the configured target GPU PC, use the same profile for the initial run and fo
 
 ```bash
 # 1. Source only. This moves NO dataset, NO checkpoint, NO environment.
+#    A bare `fetch` + `checkout` does NOT advance an existing stale local branch, so the update is
+#    an explicit fast-forward. `--ff-only` refuses rather than merging: divergent local work is never
+#    discarded, it is reported.
 git fetch origin research/cir-failure-workbench
-git checkout research/cir-failure-workbench     # the branch tip, not a pinned old revision
+git checkout research/cir-failure-workbench
+git merge --ff-only origin/research/cir-failure-workbench
+git rev-parse HEAD          # must print the delivered SHA recorded in MODEL_STATUS_SPEC.md
 
-# 2. The cohort profile, with all six paths set absolute for the PC.
+# 1b. No local branch yet (fresh clone or another machine):
+#     git clone git@github.com:Le-Minh-Nhut/cir.git && cd cir
+#     git checkout -b research/cir-failure-workbench origin/research/cir-failure-workbench
+
+# 2. Controller interpreter. `workbench/run.sh` prefers the repository's own `./.venv/bin/python`
+#    when it exists and falls back to `python3` from PATH, so there is nothing to arrange -- but run
+#    the read-only doctor below before a real run, because it reports missing controller imports by
+#    name. Model interpreters stay SEPARATE and are provisioned per model; never put a model
+#    environment on PATH this way.
+.venv/bin/python workbench/scripts/doctor.py --scope workbench --json
+
+# 3. The cohort profile, with all six paths set absolute for the PC, kept outside the repository.
 cp workbench/configs/pc_autopilot.pc_cohort.yaml ~/cir_pc.yaml
 $EDITOR ~/cir_pc.yaml
 
-# 3. Read-only plan first. This resolves selection actually (all 17 entries) but persists nothing.
+# 3b. Local per-model settings that are NOT paths: the interpreter for each model's own environment
+#     and the operational batch for TME's CUDA feature generator. Copy the example and edit it; a
+#     value here behaves exactly like the same variable exported into the process environment.
+cp workbench/config/workbench.env.example workbench/config/workbench.env
+$EDITOR workbench/config/workbench.env
+
+# 4. Read-only plan first. This resolves selection actually (all 17 entries) but persists nothing.
 ./workbench/run.sh autopilot --config ~/cir_pc.yaml --dry-run
 
-# 4. Cold run, then the same command to resume: `--resume` reuses every stage whose inputs are
+# 5. Cold run, then the same command to resume: `--resume` reuses every stage whose inputs are
 #    unchanged and re-runs only what a changed input invalidated.
 ./workbench/run.sh autopilot --config ~/cir_pc.yaml --apply --resume
+
+# 6. Verifier. All four flags are REQUIRED by its parser; a run cannot be verified without them.
+#    Take RUN_ID/CHECKPOINT/PROTOCOL from the run's own row in
+#    `<paths.artifacts>/reports/autopilot_results.csv` (or the aggregate report file name), not from
+#    memory: the verifier refuses a run whose recorded identity differs from the one requested.
+.venv/bin/python workbench/scripts/verify_run.py \
+    --run-id <RUN_ID> --model <MODEL_ID> --checkpoint <CHECKPOINT_ID> --protocol <PROTOCOL>
 ```
+
+**This route does not need Docker.** `run.sh autopilot` calls the pipeline directly, and the
+autopilot pins `serve=False`: no container, no API, no UI, no port. Requesting the optional
+index/UI surface is what engages the container stack (`pc.sh`, `docker compose`, `serve_workbench.py`),
+and nothing in the research run above depends on it. Do not treat an unverified Docker deployment as
+a blocker for a standalone research run, and do not claim Docker readiness without running it.
+
+On a Blackwell target, also set the runtime adaptation in the same file (step 3b):
+
+```bash
+# One operator setting, in the file whose precedence the guide documents:
+#     `WORKBENCH_RUNTIME_ADAPTATION=sm_120`
+# In `workbench/config/workbench.env`, or exported into the process environment (which wins).
+export WORKBENCH_RUNTIME_ADAPTATION=sm_120
+```
+
+Models that declare a matching `adapted_runtime` profile are provisioned with it and record it as
+`variant_provenance.runtime_adaptation`; every other model keeps its historical author pins
+unchanged. An adaptation value no model declares is refused, not ignored.
 
 Per-model interpreters are PROVISIONED by the run, not copied: `allow_env_install: true` in the
 cohort profile lets the planner create each model group's own prefix under `artifacts`. Never copy a
 laptop virtualenv to the PC; the interpreter fingerprint is part of the model environment's identity.
+
+A preflight that refuses a run is reporting a prerequisite, not failing: the refusal names the exact
+item to fix (a missing permission by its flag, a missing asset by its path, an unverified
+interpreter by its environment variable). Fix that one thing and re-run the same command with
+`--resume`.
+
+## Resume, and what invalidates a finished stage
+
+`--resume` skips a stage whose INPUT fingerprint still matches the one recorded when it completed, so
+a second identical invocation computes nothing and downloads nothing:
+
+| Change one of these | What becomes owed again |
+|---|---|
+| a canonical image's bytes, the split JSON for a category, or a caption file | the affected stage's fingerprint, and everything downstream of it |
+| the resolved `WORKBENCH_TME_BATCH_SIZE`, the pinned source commit, or a base weight | TME feature generation only (the resolved batch is bound into the precompute receipt and compared on reuse) |
+| a checkpoint file, a model interpreter's content, or the registry declaration | that model's checkpoint/preparation/evaluation, not the other models' |
+| `permissions` in the profile, or the selected model list | nothing by itself: the plan is re-derived, but completed stages keep their state |
+| `paths.artifacts` | everything, because the recorded state lives under that root |
+
+An interrupted acquisition leaves a `.part` file, never a published one, so re-running fetches only
+what is still missing. A cache that arrived partially is refused by name rather than used (TME's hub
+cache reports the exact missing declared files).
+
+Two states are deliberately NOT resumable: an evaluation whose environment was rewritten (the
+dependency fingerprint changed) and a receipt that no longer binds its inputs. Both report the reason
+instead of silently reusing weaker evidence.
 
 A preflight that refuses a run is reporting a prerequisite, not failing: the refusal names the exact
 item to fix (a missing permission by its flag, a missing asset by its path, an unverified
@@ -65,8 +139,12 @@ driver, canonical FashionIQ inputs, a verified selected checkpoint, provisioned 
 sufficient storage, and explicit permissions for each requested side effect. The capability gates
 are per-invocation and named: preparation needs `allow_preparation`; TME's CUDA-only feature
 generation additionally needs `allow_gpu_preparation`; evaluation needs `allow_gpu_eval`; downloads
-need `allow_network` and `allow_large_downloads`. Withholding one gate refuses only the work that
-needs it -- it never silently cancels work you authorized without it. Live Docker deployment is also
+need `allow_network` and `allow_large_downloads`. Withholding a gate refuses the work that needs it,
+and any work whose DECLARED prerequisite that stage provides: TME's feature generation genuinely
+consumes its base weights and the Qformer cache, so a run that withholds downloads refuses TME
+preparation by name (`SKIPPED_DEPENDENCY`), while every model whose prerequisites are untouched keeps
+running. Nothing is cancelled silently, and an unrelated model's failure never cancels a valid one.
+Live Docker deployment is also
 unexecuted; it requires Docker Engine/Compose, configured GPU passthrough where used, and the
 deployment stack.
 

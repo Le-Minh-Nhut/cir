@@ -31,6 +31,17 @@ from pathlib import Path
 def _declared_names() -> frozenset[str]:
     names: set[str] = set()
     try:
+        # The operator's runtime-adaptation selector is a workbench setting in the same sense as an
+        # interpreter path: the file must accept it, or the documented "put it in workbench.env" is
+        # false for the one variable that switches a whole cohort onto sm_120-capable wheels.
+        from workbench.backend.runtime import ADAPTATION_ENV
+
+        names.add(ADAPTATION_ENV)
+    except Exception:
+        # `runtime` imports this module's registry, so a cycle here must degrade to "not declared"
+        # rather than break every settings lookup.
+        pass
+    try:
         from workbench.backend.registry import load_registry
 
         for model in load_registry()["models"]:
@@ -50,6 +61,13 @@ def _declared_names() -> frozenset[str]:
                 value = asset.get("location_env_var")
                 if isinstance(value, str) and value:
                     names.add(value)
+            for artifact in contract.get("generated_artifacts", []):
+                # A generator parameter an operator may override (the TME batch, which decides
+                # whether the job fits the card) is declared alongside the parameter it replaces,
+                # so the file parser accepts it for the same reason it accepts an interpreter path.
+                for key, value in (artifact.get("parameters") or {}).items():
+                    if key.endswith("_override_env_var") and isinstance(value, str) and value:
+                        names.add(value)
     except Exception:
         pass
     return frozenset(names)

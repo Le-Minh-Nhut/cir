@@ -105,7 +105,50 @@ def _tme_artifact(config, checkout: Path, contract: dict) -> tuple[dict, Path]:
                     if item.get("generator") == TME_FEATURE_GENERATOR)
     paths = preparation_paths(contract, config.FASHIONIQ_ROOT, "generated_artifacts",
                               evaluator_root=checkout)
+    # `batch_size` is an OPERATIONAL setting, not a preprocessing semantic: it decides how many
+    # gallery images share one forward pass and therefore whether the job fits the card. The pinned
+    # default is 512, which needs more memory than any consumer GPU this workbench supports -- a
+    # 3.68 GiB device OOMs at 512 and at 80. The batch is BOUND in the receipt and compared on
+    # reuse, so a cache is never silently reused under a different batch than it was produced with.
+    artifact = {**artifact, "parameters": tme_generation_parameters(artifact["parameters"])}
     return artifact, paths[0]
+
+
+def tme_generation_parameters(pinned: dict) -> dict:
+    """The generation parameters this run will actually use: the pinned ones, plus operator overrides.
+
+    ONE resolver, because the value has to be identical in three places or the receipt stops
+    describing its own cache: the command the generator is launched with, the `recipe` recorded in
+    the receipt inputs, and the comparison that decides whether a cache may be reused.
+    """
+    name = pinned.get("batch_size_override_env_var")
+    batch = _tme_setting(name) if isinstance(name, str) and name else None
+    if batch is None:
+        return {**pinned}
+    return {**pinned, "batch_size": batch}
+
+
+def _tme_setting(name: str) -> int | None:
+    """An operator override for one TME generation parameter, or None to keep the pinned value.
+
+    Read through the same settings reader as every other registry-declared name, so a value in the
+    workbench env file behaves exactly like one in the process environment. An unusable value is an
+    operator error, not a silent fallback: the pinned default is a real setting with real memory
+    consequences, and substituting it would produce a cache whose receipt does not describe the run
+    that was requested.
+    """
+    from workbench.backend.model_settings import setting
+
+    raw = setting(name)
+    if raw is None or not str(raw).strip():
+        return None
+    try:
+        value = int(str(raw).strip())
+    except (TypeError, ValueError) as error:
+        raise ValueError(f"{name} must be an integer, got {raw!r}") from error
+    if value < 1:
+        raise ValueError(f"{name} must be positive, got {value}")
+    return value
 
 
 def tme_receipt_path(config, checkout: Path, contract: dict) -> Path:
@@ -134,14 +177,79 @@ def _tme_directory_identity(root: Path) -> dict[str, int | str]:
     return {"size_bytes": size, "sha256": digest.hexdigest()}
 
 
+def tme_input_blocker(config, contract: dict, model: dict | None = None) -> str | None:
+    """The FIRST unmet prerequisite of TME feature generation, named precisely, or None.
+
+    `_tme_inputs` answers one question — "are the generation inputs complete and identical to what a
+    receipt recorded?" — and answers it with a single `None`. That is the right return type for a
+    comparison, and the wrong one for an operator: a missing base asset produced the same `None` as a
+    malformed caption, so the run told the operator to repair valid caption and split data while the
+    real prerequisite (an absent base weight or an unresolvable Qformer cache) went unnamed.
+
+    A COMPLETE identity is still obtained before this runs, and the returned string is the operator's
+    actionable line: each prerequisite reports the file, variable or cache state that is actually
+    wrong, in the order the native generator needs them.
+    """
+    if model is None:
+        from workbench.backend.registry import model_by_id
+        model = model_by_id("tme")
+    from workbench.backend.fashioniq_layout import CATEGORIES, image_extension_for_layout
+    from workbench.backend.registry import (admitted_asset_statuses, asset_admission_status,
+                                            cache_asset_blocker, external_asset_statuses,
+                                            required_runtime_assets)
+
+    parameters = tme_generation_parameters(
+        next(item["parameters"] for item in contract["generated_artifacts"]
+             if item.get("generator") == TME_FEATURE_GENERATOR))
+    files = {category: config.FASHIONIQ_ROOT / "image_splits"
+             / f"split.{category}.{parameters['split']}.json" for category in CATEGORIES}
+    captions = [config.FASHIONIQ_ROOT / "captions"
+                / f"cap.{category}.{parameters['split']}.json" for category in CATEGORIES]
+    missing = [path for path in (*files.values(), *captions) if not path.is_file()]
+    if missing:
+        return (f"TME validation split or caption input is missing under {config.FASHIONIQ_ROOT}: "
+                + ", ".join(str(path) for path in missing))
+
+    extension = image_extension_for_layout(model["fashioniq_layout"], model.get("fashioniq_image_extensions"))
+    image_blockers = fashioniq_image_binding_blockers(
+        config.FASHIONIQ_ROOT, parameters["split"], image_source="images", image_extension=extension)
+    if image_blockers:
+        return f"TME gallery image input is not usable: {image_blockers[0]}"
+
+    for path in captions:
+        try:
+            if not isinstance(json.loads(path.read_text(encoding="utf-8")), list):
+                return f"TME caption input is malformed (expected a JSON list): {path}"
+        except (OSError, ValueError) as error:
+            return f"TME caption input is unreadable ({type(error).__name__}): {path}"
+
+    statuses = {status["name"]: status for status in external_asset_statuses(model)}
+    for name, asset in ((a["name"], a) for a in required_runtime_assets(model)):
+        status = statuses.get(name)
+        if status is None:
+            return f"TME prerequisite {name!r} has no resolvable local location"
+        if asset.get("location_type") == "directory":
+            problem = cache_asset_blocker(asset, status)
+            if problem:
+                return (f"TME prerequisite {name!r} is not usable: {problem} "
+                        f"({status.get('path')})")
+            continue
+        admission = asset_admission_status(asset, status)
+        if not admitted_asset_statuses(admission):
+            return (f"TME prerequisite {name!r} is not admitted: {status.get('status')} "
+                    f"({status.get('path')})")
+    return None
+
+
 def _tme_inputs(config, contract: dict, model: dict | None = None) -> dict | None:
     if model is None:
         from workbench.backend.registry import model_by_id
         model = model_by_id("tme")
     from workbench.backend.fashioniq_layout import CATEGORIES, image_extension_for_layout
 
-    parameters = next(item["parameters"] for item in contract["generated_artifacts"]
-                      if item.get("generator") == TME_FEATURE_GENERATOR)
+    parameters = tme_generation_parameters(
+        next(item["parameters"] for item in contract["generated_artifacts"]
+             if item.get("generator") == TME_FEATURE_GENERATOR))
     files = {category: config.FASHIONIQ_ROOT / "image_splits"
              / f"split.{category}.{parameters['split']}.json" for category in CATEGORIES}
     captions = [config.FASHIONIQ_ROOT / "captions"
@@ -298,7 +406,11 @@ def _run_tme_precompute(config, model: dict, contract: dict, *, dry_run: bool,
     if image_blockers:
         return False, image_blockers[0]
     if inputs is None:
-        return False, f"TME caption or validation split input is missing or malformed under {config.FASHIONIQ_ROOT}"
+        # Name the prerequisite that is actually missing. The generic caption/split message sent the
+        # operator to repair valid data whenever a base weight or the Qformer cache was the real
+        # blocker, which is the failure this branch exists to stop repeating.
+        return False, (tme_input_blocker(config, contract, model) or
+                       f"TME caption or validation split input is missing or malformed under {config.FASHIONIQ_ROOT}")
     receipt = tme_receipt_path(config, checkout, contract)
     if _tme_validate(output, parameters, inputs, commit, receipt):
         return True, f"reusing validated TME feature cache at {output}"

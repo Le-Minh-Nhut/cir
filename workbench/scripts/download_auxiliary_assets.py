@@ -18,7 +18,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from workbench.backend.operator_config import resolve_config
 from workbench.backend.registry import (
     auxiliary_assets_for_model, auxiliary_destination, auxiliary_model_ids,
-    auxiliary_source_url, sha256_file, validate_auxiliary_asset,
+    auxiliary_source_url, hf_hub_repo_dir, sha256_file, validate_auxiliary_asset,
 )
 
 @dataclass(frozen=True)
@@ -43,6 +43,14 @@ class Asset:
     caption_alias_from: dict[str, Any] | None = None
     source_type: str | None = None
     source_repo: str | None = None
+    #: Set for an asset whose destination is a Hugging Face HUB cache directory: the repo id the
+    #: loader resolves. Acquisition then happens through the same library the loader uses, and the
+    #: per-file download path below must not touch it (its destination is a directory, not a file).
+    hub_repo_id: str | None = None
+    #: The only files of that repo the run needs. A hub repo publishes several frameworks' weights
+    #: and a card; fetching the whole repository is both slower and larger than the declaration the
+    #: budget was computed from.
+    hub_files: tuple[str, ...] | None = None
 
 def assets(model_ids: set[str], third_party_root: Path, fashioniq_root: Path) -> tuple[Asset, ...]:
     return tuple(
@@ -63,6 +71,8 @@ def assets(model_ids: set[str], third_party_root: Path, fashioniq_root: Path) ->
             asset.get("caption_alias_from"),
             asset.get("source_type"),
             asset.get("source_repo"),
+            asset.get("hub_repo_id"),
+            tuple(asset["hub_files"]) if asset.get("hub_files") else None,
         )
         for model_id in model_ids
         for asset in auxiliary_assets_for_model(model_id)
@@ -84,10 +94,15 @@ def save_manifest(path: Path, entries: list[dict]) -> None:
 
 def report(items: tuple[Asset, ...]) -> None:
     for asset in items:
-        state = "present" if asset.destination.is_file() else "missing"
+        if asset.hub_repo_id:
+            problem = hub_cache_layout_problem(asset.hub_repo_id)
+            state = "present" if problem is None else "missing"
+            source_unverified = asset.provenance_status != "VERIFIED"
+        else:
+            state = "present" if asset.destination.is_file() else "missing"
+            prefix = getattr(asset, "expected_sha256_prefix", None)
+            source_unverified = asset.provenance_status != "VERIFIED" or (asset.expected_sha256 is None and prefix is None)
         source = asset.source_url or "unverified author download source"
-        prefix = getattr(asset, "expected_sha256_prefix", None)
-        source_unverified = asset.provenance_status != "VERIFIED" or (asset.expected_sha256 is None and prefix is None)
         print(
             f"{asset.family}: destination={asset.destination} state={state} "
             f"required={str(asset.required).lower()} "
@@ -97,6 +112,13 @@ def report(items: tuple[Asset, ...]) -> None:
         )
 
 def verify(asset: Asset, *, fashioniq_root: Path | None = None) -> bool:
+    if asset.hub_repo_id:
+        problem = hub_cache_layout_problem(asset.hub_repo_id)
+        if problem:
+            print(f"{asset.family}: {problem}")
+            return False
+        print(f"{asset.family}: cache layout verified")
+        return True
     res = validate_auxiliary_asset(asset, asset.destination, fashioniq_root=fashioniq_root)
     if res.status == "MISSING":
         print(f"MISSING {asset.destination}")
@@ -124,6 +146,87 @@ def verify(asset: Asset, *, fashioniq_root: Path | None = None) -> bool:
         ):
             print(issue)
     return res.ok
+
+def hub_cache_layout_problem(repo_id: str) -> str | None:
+    """The registry's own hub-layout diagnosis, imported rather than duplicated.
+
+    One definition answers this for the checker, the downloader and the bootstrap; a second copy
+    here could disagree with the one the readiness report prints.
+    """
+    from workbench.backend.registry import hub_cache_layout_problem as _problem
+
+    return _problem(repo_id)
+
+
+def hub_cache_missing_files(asset: "Asset") -> list[str]:
+    """The declared payload files of this asset's hub repo that its active snapshot is missing.
+
+    Layout resolution and payload completeness are two questions: a cache whose `refs/` resolve and
+    whose model weights are present can still be missing `config.json`, and a plan that asks only the
+    first question schedules a download for a cache the download would then consider complete.
+    """
+    from workbench.backend.registry import hub_cache_missing_files as _missing
+
+    return _missing({"hub_repo_id": asset.hub_repo_id, "hub_files": list(asset.hub_files or []),
+                     "cache_root_env_var": "HF_HOME"})
+
+
+def bootstrap_hub_asset(asset: "Asset") -> tuple[bool, str]:
+    """Acquire a Hugging Face hub asset into the cache the loader reads, bounded to its declaration.
+
+    Uses the pinned `transformers`/`huggingface_hub` in THIS interpreter — the model environment
+    owns the loader, and the same library writes the layout it will later read. Only the files the
+    registry declares are fetched, so the transfer is bounded by a stated byte count rather than by
+    whatever the repository happens to contain.
+    """
+    repo_id = asset.hub_repo_id
+    assert repo_id is not None
+    from huggingface_hub import snapshot_download
+
+    allow = list(asset.hub_files or [])
+    limit = asset.expected_size_bytes if type(asset.expected_size_bytes) is int and asset.expected_size_bytes > 0 else None
+    # The destination is resolved from the WORKBENCH root below, and the library must write into
+    # exactly that root. `snapshot_download` reads `HF_HOME` from its own environment, which
+    # `hf_hub_cache_root()` already answers through the shared settings reader, so the two agree by
+    # construction. Passing `cache_dir` instead was tried and REVERTED after it was reproduced
+    # splitting a cache in two (`<dir>/hub/…` for snapshot symlinks, `<dir>/refs` for ref
+    # bookkeeping), which staged 421 MB whose own verification then refused it.
+    try:
+        path = snapshot_download(repo_id=repo_id,
+                                 revision=asset.source_revision or None,
+                                 allow_patterns=allow or None)
+    except Exception as error:
+        return False, f"hub bootstrap failed for {repo_id}: {type(error).__name__}: {error}"
+    repo = hf_hub_repo_dir(repo_id)
+    # `blobs/` holds the bytes; `snapshots/` holds symlinks into it. Counting `rglob` would follow
+    # those links and report every file twice, which is how a correct acquisition appears to exceed
+    # its own bound.
+    used = sum(path_file.stat().st_size for path_file in repo.rglob("*")
+               if path_file.is_file() and not path_file.is_symlink())
+    # PUBLISH the reference. `snapshot_download(revision=<sha>)` writes `snapshots/<sha>/` and NO
+    # `refs/<rev>` entry, and a snapshot no ref names cannot be reached by the repo-id lookup the
+    # pinned loader performs -- so without this step the acquisition would produce a cache that its
+    # own verification refuses, which is exactly what happened the first time this ran. The ref is
+    # written only after the payload is present, so an interrupted download leaves the cache
+    # unreferenced and therefore visibly incomplete rather than silently usable.
+    if asset.source_revision:
+        refs = repo / "refs"
+        refs.mkdir(parents=True, exist_ok=True)
+        ref = refs / "main"
+        if not ref.exists() or ref.read_text(encoding="utf-8").strip() != asset.source_revision:
+            ref.write_text(asset.source_revision, encoding="utf-8")
+    if limit is not None and used > limit:
+        # Bounded acquisition, checked AFTER the fact because the library does not report the
+        # transfer size up front. Reported rather than silently accepted: a hub repo that grew past
+        # its declaration is a fact the operator needs before the run budgets on it.
+        return False, (f"hub bootstrap for {repo_id} wrote {used} bytes, above the declared bound "
+                       f"of {limit} bytes")
+    problem = hub_cache_layout_problem(repo_id)
+    if problem:
+        return False, problem
+    print(f"STAGED HUB CACHE {repo} ({used} bytes, files: {', '.join(sorted(allow)) or 'all'})")
+    return True, str(path)
+
 
 #: Alias staging is opt-in. The registry names an alias source only for an asset with no verified
 #: provenance (CSMCIR's COT_ours2 captions), and even then the run must ask for it: see
@@ -323,9 +426,17 @@ def main(argv: list[str] | None = None) -> int:
     config = resolve_config()
     model_ids = {args.model} if args.model else auxiliary_model_ids()
     items = assets(model_ids, config.WORKBENCH_THIRD_PARTY_ROOT, config.FASHIONIQ_ROOT)
+    # A Hugging Face HUB asset is a DIRECTORY-shaped cache, not a file to fetch at one URL. Its
+    # consumer (`transformers`) resolves the repo id to `hub/models--<repo>/` and reads `refs/<rev>`
+    # to find the active `snapshots/<rev>/` directory; a single file written at any other level is a
+    # file the loader never opens. It is therefore acquired by the same library the loader uses,
+    # offline-verifiable afterwards, and split out of the per-file path below.
+    hub_items = tuple(asset for asset in items if asset.hub_repo_id)
+    file_items = tuple(asset for asset in items if not asset.hub_repo_id)
     report(items)
-    downloadable = tuple(asset for asset in items if asset.automatic_download_available)
-    unavailable = tuple(asset for asset in items if asset.required and not asset.automatic_download_available)
+    downloadable = tuple(asset for asset in file_items if asset.automatic_download_available)
+    unavailable = tuple(asset for asset in file_items if asset.required and not asset.automatic_download_available)
+    hub_downloadable = tuple(asset for asset in hub_items if asset.automatic_download_available)
     if args.list:
         return 0
     if args.verify_only:
@@ -376,16 +487,36 @@ def main(argv: list[str] | None = None) -> int:
         return bool(prefix) and not digest.startswith(prefix)
 
     selected = tuple(asset for asset in downloadable if _needs_replacement(asset))
+    # A hub cache is incomplete when ANY declared payload file is absent, not only when its model
+    # weights are: `hub_cache_layout_problem` answers the narrower question "can the loader resolve
+    # MODEL weights here", so gating acquisition on it alone left a cache missing `config.json` or
+    # `tokenizer.json` unrepaired -- the plan would schedule the download form and the download would
+    # then no-op, exiting 0 with the cache still incomplete.
+    hub_selected = tuple(asset for asset in hub_items
+                         if asset.automatic_download_available
+                         and (hub_cache_layout_problem(asset.hub_repo_id) is not None
+                              or hub_cache_missing_files(asset)))
     repaired = tuple(asset for asset in selected if asset.destination.is_file())
     if args.dry_run:
         for asset in selected:
             action = "REPLACE corrupt" if asset in repaired else "download"
             print(f"DRY RUN: {action} {asset.source_url} -> {asset.destination}")
+        for asset in hub_selected:
+            # A hub asset's destination is a directory the loader resolves, not one URL, so the
+            # planned action names the repo and the two things resolution needs: the revision its
+            # ref must point at, and the payload files this run actually requires.
+            print(f"DRY RUN: hub bootstrap {asset.hub_repo_id}@{asset.source_revision or 'default'} "
+                  f"files={list(asset.hub_files or ['all'])} -> {hf_hub_repo_dir(asset.hub_repo_id)}")
         for asset in unavailable:
             if not asset.destination.is_file():
                 print(f"{asset.family}: BLOCKED — required asset has no verified automatic acquisition source")
         print("DRY RUN: no network request and no filesystem mutation.")
         return 0
+    for asset in hub_selected:
+        ok, message = bootstrap_hub_asset(asset)
+        if not ok:
+            print(f"BLOCKED: {asset.family}: {message}", file=sys.stderr)
+            return 1
     entries = manifest
     for asset in selected:
         assert asset.source_url is not None

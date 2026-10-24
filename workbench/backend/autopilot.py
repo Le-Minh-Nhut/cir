@@ -284,7 +284,8 @@ def _enforce_download_budget(config: AutopilotConfig, rows: list[dict[str, Any]]
     """
     from workbench.backend.registry import (
         auxiliary_assets_for_model, auxiliary_destination, checkpoint_is_present,
-        checkpoint_path, sha256_file,
+        checkpoint_path, hub_cache_layout_problem, hub_cache_missing_files, is_hub_cache_asset,
+        sha256_file,
     )
 
     models = {model["model_id"]: model for model in config.registry["models"]}
@@ -338,10 +339,37 @@ def _enforce_download_budget(config: AutopilotConfig, rows: list[dict[str, Any]]
                 for asset in auxiliary_assets_for_model(row["model_id"]):
                     if not asset.get("automatic_download_available"):
                         continue
+                    if is_hub_cache_asset(asset):
+                        # A hub cache is acquired by the same budget rule as a checkpoint: what is
+                        # already RESOLVABLE costs nothing, what is not costs its declared file set.
+                        # The question is the loader's, not the directory's: a cache whose refs
+                        # resolve and whose declared payload is complete is free, while a partial or
+                        # orphaned one is charged in full, because acquisition re-fetches its files.
+                        missing = hub_cache_missing_files(asset)
+                        if not missing and hub_cache_layout_problem(asset["hub_repo_id"]) is None:
+                            continue
+                        size = asset.get("expected_size_bytes")
+                        if type(size) is not int or size < 0:
+                            unknown = True
+                            unknown_reason = ("download budget cannot be verified: hub cache "
+                                              f"{asset['hub_repo_id']} size unknown")
+                            break
+                        required += size
+                        continue
                     dest = auxiliary_destination(asset, config.paths["third_party"], config.paths["dataset_root"])
                     if dest.is_file() and not dest.is_symlink() and dest.stat().st_size > 0:
+                        # Only a file whose bytes MATCH its declaration is free. A present file the
+                        # workbench cannot verify is one it may have to re-download -- an
+                        # operator-supplied copy of unknown content, or a file that merely matches
+                        # no digest at all. Waiving it here let the budget under-count exactly the
+                        # assets the acquisition step then fetched, so the recorded budget did not
+                        # cover the recorded transfer.
                         exp_sha = asset.get("expected_sha256")
-                        if not exp_sha or sha256_file(dest) == exp_sha:
+                        exp_prefix = asset.get("expected_sha256_prefix")
+                        if not exp_sha and not exp_prefix:
+                            continue
+                        digest = sha256_file(dest)
+                        if (exp_sha and digest == exp_sha) or (exp_prefix and digest.startswith(exp_prefix)):
                             continue
                     size = asset.get("expected_size_bytes")
                     if type(size) is not int or size < 0:
@@ -349,8 +377,13 @@ def _enforce_download_budget(config: AutopilotConfig, rows: list[dict[str, Any]]
                         unknown_reason = "download budget cannot be verified: auxiliary asset size unknown"
                         break
                     required += size
-            except Exception:
-                pass
+            except Exception as error:
+                # Swallowing this made an unverifiable budget look verified: a caller could not tell
+                # "every asset is sized" from "the sizing pass raised and was ignored". The budget is
+                # a precondition for spending, so a failure to compute it blocks rather than passes.
+                unknown = True
+                unknown_reason = (f"download budget cannot be verified: "
+                                  f"{type(error).__name__}: {error}")
 
         if unknown:
             row.update(status="BLOCKED_CHECKPOINT", blockers=[unknown_reason or "download budget cannot be verified: checkpoint size unknown"])
@@ -503,6 +536,15 @@ def _execute(config: AutopilotConfig, plan: dict[str, Any], *, resume: bool, for
         protocol=None, top_k=config.budgets["top_k"], continue_on_error=True,
         allow_env_install=config.permissions["allow_env_install"],
         allow_preparation=config.permissions["allow_preparation"], apply=True,
+        # `pipeline.all_stages` consults `allow_gpu_eval` to decide whether a preparation may depend
+        # on the GPU-verification stage, and `run_stages` consults it as the authorized capability
+        # set. Omitting it here meant a profile that grants it still planned and ran as if it were
+        # withheld, so the ordering edge the operator authorized was never built.
+        allow_gpu_eval=config.permissions["allow_gpu_eval"],
+        allow_gpu_preparation=config.permissions["allow_gpu_preparation"],
+        allow_network=config.permissions["allow_network"],
+        allow_large_downloads=config.permissions["allow_large_downloads"],
+        allow_index_write=config.permissions["allow_index_write"],
         verify_gpu=False, sync_sources=True, download_checkpoints=True,
         download_auxiliary_assets=False, evaluate=True, rebuild_index=True, serve=False,
     )

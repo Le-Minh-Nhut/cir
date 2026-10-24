@@ -162,6 +162,18 @@ def test_native_tme_log_is_declared_but_python_edits_remain_dirty(tmp_path: Path
     (checkout / "src" / "__pycache__" / "precompute.pyc").write_bytes(b"bytecode")
     assert source_provenance(model, checkout)["verified"] is True
 
+    # The declaration names the log FILE the native generator writes, not the directory tree around
+    # it. Admitting the whole `log_TME` subtree hid every file below it, so an injected executable
+    # sitting next to the log was indistinguishable from the log line and no consumer could see it.
+    injected = native_log.parent / "injected.py"
+    injected.write_text("import os; os.system('echo injected')\n", encoding="utf-8")
+    result = source_provenance(model, checkout)
+    assert result["verified"] is False, (
+        "an added .py under the log directory must be visible to the source gate")
+    assert "injected.py" in (result.get("error") or "") or "injected.py" in json.dumps(result)
+    injected.unlink()
+    assert source_provenance(model, checkout)["verified"] is True
+
     script.write_text(script.read_text(encoding="utf-8") + "# unauthorized edit\n", encoding="utf-8")
     result = source_provenance(model, checkout)
     assert result["verified"] is False
@@ -288,3 +300,80 @@ def test_tme_receipt_reuses_unchanged_inputs_and_rejects_changed_inputs(tmp_path
 
     (output / "val_name_to_idx.json").unlink()
     assert not _tme_validate(output, parameters, inputs, model["upstream_commit_sha"], receipt)
+
+
+def test_tme_replay_provenance_verifies_an_unchanged_cache_through_the_emitted_output(tmp_path: Path, monkeypatch) -> None:
+    """Reader-not-None is not a verified run: the assertion belongs on the emitted provenance.
+
+    What an operator consumes is the provenance that ships with the replay results, so this drives
+    the real `evaluate_categories` and reads the verdict out of its rows. Only the native gallery
+    loader and the metric function are stubbed; the receipt, the prior-run half, the comparison and
+    the emitted fields are the production path.
+
+    Reproduces the defect directly: the receipt side recorded ordered gallery IMAGE digests under
+    `feature_gallery_sha256` while the replay side put split-JSON digests in that same field, so an
+    unchanged cache could never match itself and every run emitted UNVERIFIED naming a difference
+    that did not exist.
+    """
+    import torch
+    from workbench.backend.fashioniq_layout import CATEGORIES
+    from workbench.replay.common import fashioniq_gallery_digests
+    import workbench.replay.tme as replay_tme
+    from workbench.scripts.prepare_model import _tme_inputs
+
+    model, config, contract, _ = _tme_input_fixture(tmp_path, monkeypatch)
+    monkeypatch.setattr(replay_tme, "preparation_contract_for_model", lambda _: contract)
+    parameters = contract["generated_artifacts"][0]["parameters"]
+
+    inputs = _tme_inputs(config, contract, model)
+    assert inputs is not None
+    assert _write_tme_receipt(tmp_path, model, config, contract, inputs).is_file()
+    prior = replay_tme._prior_feature_provenance(config)
+    assert prior is not None, "a receipt bound to current inputs must be readable"
+
+    # The real replay-side builder, on the real fixture: the model and the metric are not involved in
+    # this verdict, the comparison is.
+    output = config.WORKBENCH_THIRD_PARTY_ROOT / "TME" / "features" / "FashionIQ"
+    feature = output / "val_images.pt"
+    mapping = output / "val_name_to_idx.json"
+    names = [name for category in CATEGORIES
+             for name in json.loads((config.FASHIONIQ_ROOT / "image_splits"
+                                     / f"split.{category}.val.json").read_text(encoding="utf-8"))]
+    features = torch.load(feature, weights_only=True)
+    provenance, verdict, differences = replay_tme.feature_cache_provenance(
+        config.FASHIONIQ_ROOT, ".png", parameters, feature, mapping, features, prior)
+
+    assert verdict == "VERIFIED_PRIOR_RUN", (
+        f"an unchanged cache must verify; reported {differences}")
+    assert differences == []
+    # One meaning per field on BOTH sides: the emitted gallery identity is the ordered image bytes
+    # the receipt recorded, and each side computes that same quantity from the dataset itself.
+    assert provenance["feature_gallery_sha256"] == inputs["gallery_images"]
+    assert provenance["feature_gallery_sha256"] == fashioniq_gallery_digests(
+        config.FASHIONIQ_ROOT, parameters["split"], ".png")
+    # The split-file digests remain a SEPARATE, still-emitted identity: separating the names must not
+    # have deleted the second check.
+    assert set(provenance["feature_split_files_sha256"]) == set(CATEGORIES)
+    assert provenance["feature_split_files_sha256"] != provenance["feature_gallery_sha256"]
+
+    # Genuine mutations still refuse to bind, under both identities.
+    split = config.FASHIONIQ_ROOT / "image_splits" / "split.dress.val.json"
+    original = split.read_text(encoding="utf-8")
+    (config.FASHIONIQ_ROOT / "images" / "dress2.png").write_bytes(b"image-dress2")
+    split.write_text(json.dumps(["dress2", "dress1"]), encoding="utf-8")
+    try:
+        assert replay_tme._prior_feature_provenance(config) is None, (
+            "a reordered gallery must stop the receipt from binding")
+    finally:
+        split.write_text(original, encoding="utf-8")
+
+    image = config.FASHIONIQ_ROOT / "images" / "dress1.png"
+    pixels = image.read_bytes()
+    image.write_bytes(b"different pixels for the same id")
+    try:
+        assert replay_tme._prior_feature_provenance(config) is None, (
+            "changed image bytes must stop the receipt from binding")
+    finally:
+        image.write_bytes(pixels)
+    assert replay_tme._prior_feature_provenance(config) is not None, (
+        "restoring the original bytes must let the receipt bind again")

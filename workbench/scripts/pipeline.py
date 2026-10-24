@@ -1689,12 +1689,28 @@ def all_stages(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage]
 
         if mid in auxiliary_model_ids():
             aux_outs = tuple(auxiliary_destination(a, config.WORKBENCH_THIRD_PARTY_ROOT, config.FASHIONIQ_ROOT) for a in auxiliary_assets_for_model(mid))
+            from workbench.backend.registry import hub_cache_snapshot
             from workbench.scripts.download_auxiliary_assets import assets as get_aux_assets, verify as verify_aux_asset
             aux_items = get_aux_assets({mid}, config.WORKBENCH_THIRD_PARTY_ROOT, config.FASHIONIQ_ROOT)
+
+            def _satisfied(item) -> bool:
+                """Whether this already-staged asset is one the run can consume without a download.
+
+                A hub cache asks the loader's question rather than the directory's: the repo's refs
+                must resolve to a snapshot holding the DECLARED payload. Testing only "the directory
+                resolves" made a cache missing a declared file select the permission-free
+                verification command, so the fix for a half-arrived cache would have been reported as
+                a failed stage instead of the download it actually owed.
+                """
+                if item.hub_repo_id:
+                    snapshot = hub_cache_snapshot(item.destination)
+                    if snapshot is None:
+                        return False
+                    return all((snapshot / name).is_file() for name in (item.hub_files or ()))
+                return item.destination.is_file() and verify_aux_asset(item)
+
             all_aux_verified = bool(aux_items) and all(
-                not item.required or (item.destination.is_file() and verify_aux_asset(item))
-                for item in aux_items
-            )
+                not item.required or _satisfied(item) for item in aux_items)
             if all_aux_verified:
                 stages.append(run_stage(
                     "auxiliary-assets",

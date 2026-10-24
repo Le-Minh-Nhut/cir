@@ -16,7 +16,19 @@ Offline reuse: a source repository, checkpoint, or auxiliary asset that is alrea
 
 ## 2. Set dataset, artifact, checkpoint, results, and upstream roots
 
-Copy `workbench/configs/pc_autopilot.example.yaml` to a PC-specific YAML and edit it. `paths` requires exactly `registry`, `dataset_root`, `artifacts`, `checkpoints`, `results`, and `third_party`; unknown keys are rejected. Relative paths resolve from the config file's directory. `registry` must name an existing file and `dataset_root` an existing directory; other paths need an existing directory parent. Optional `permissions.allow_gpu_preparation` defaults to `false`.
+Start from `workbench/configs/pc_autopilot.pc_cohort.yaml` — **the profile to run on the PC**: all 17
+registry entries, `include_flagged_conditions`, the authorized 20% overrides resolved, a budget
+derived from the registry, and every capability a cold cohort run needs. Copy it OUTSIDE the
+repository and edit it.
+
+`workbench/configs/pc_autopilot.example.yaml` is a different thing: a minimal, fully-locked example
+used here only to show the required key set. Under `strict_clean` it leaves the noise-trained cohort
+blocked, and it authorizes nothing a cold run needs, so copying it produces a profile that can only
+parse its own config. `paths` requires exactly `registry`, `dataset_root`, `artifacts`, `checkpoints`,
+`results`, and `third_party`; unknown keys are rejected. Relative paths resolve from the config
+file's directory. `registry` must name an existing file and `dataset_root` an existing directory;
+other paths need an existing directory parent. Optional `permissions.allow_gpu_preparation` defaults
+to `false`; `permissions.allow_gpu_eval` is required.
 
 Set `paths.dataset_root` to the FashionIQ root itself, not `images/` or `captions/`. Set `paths.artifacts` to persistent storage; it owns run state, reports, evidence ledger, completion proofs, GPU capability records, environment plans, `environment_assignment.json`, and the derived DuckDB index. Set `paths.checkpoints` and `paths.results` in persistent storage too. Set `paths.third_party` to the location for pinned upstream checkouts. Upstream requirement files are read from this configured upstream root (`paths.third_party`), never a hardcoded default. The CIR code checkout is `CIR_REPO_ROOT`; it supplies workbench code and registry defaults, separate from the configured upstream-clone root.
 
@@ -43,9 +55,14 @@ permissions:
   allow_large_downloads: true
   allow_env_install: true
   allow_preparation: true
-  allow_gpu_preparation: false # Optional; defaults to false. TME CUDA cache generation only.
+  allow_gpu_eval: true          # Required. Authorizes the GPU capability probe and native evaluation.
+  allow_gpu_preparation: false  # Optional; defaults to false. TME CUDA cache generation only.
   allow_index_write: true
 ```
+
+`allow_gpu_eval` is REQUIRED, not optional: the real config loader refuses a permissions block that
+omits it (`missing permissions key(s): allow_gpu_eval`). An earlier revision of this example left it
+out, and copying the example verbatim then failed after the operator had supplied every path.
 
 `selected_models` accepts `all_registered` or a non-empty list of exact registry IDs. Prefer an explicit list of models whose evidence and prerequisites you reviewed. `all_registered` includes blocked entries; it does not make them runnable. `max_models` must cover the selection. Keep selected IDs unchanged after execution starts so resume can use existing state.
 
@@ -119,13 +136,15 @@ Only `RUNTIME_VERIFIED` assignments permit evaluation. Model interpreter resolut
 
 ## 10. Plan, run, and resume
 
-Use this single primary setup/run/resume path. First inspect a read-only plan:
+Use this single primary setup/run/resume path. First copy the cohort profile out of the repository,
+set its paths and arrange the controller interpreter (section 2), then inspect a read-only plan:
 
 ```bash
-./workbench/run.sh autopilot --config workbench/configs/pc_autopilot.example.yaml --dry-run
+./workbench/run.sh autopilot --config ~/cir_pc.yaml --dry-run
 ```
 
-On a configured GPU PC, replace the example profile with your edited PC profile and authorize execution with `--apply --resume`. Live GPU evaluation requires a supported CUDA host, verified per-model environment, checkpoint and dataset; this host did not run it.
+On a configured GPU PC, run the SAME profile with `--apply --resume`. Live GPU evaluation requires a
+supported CUDA host, verified per-model environment, checkpoint and dataset.
 
 ## 11. Read reports and handle blockers
 
@@ -137,7 +156,7 @@ The following examples inspect help, status, or a plan without authorizing downl
 
 ```bash
 ./workbench/run.sh autopilot --help
-./workbench/run.sh autopilot --config workbench/configs/pc_autopilot.example.yaml --dry-run
+./workbench/run.sh autopilot --config ~/cir_pc.yaml --dry-run
 .venv/bin/python workbench/scripts/doctor.py --scope workbench --json
 .venv/bin/python workbench/scripts/prepare_model.py --list --json
 .venv/bin/python workbench/scripts/pipeline.py prepare --model csmcir --dry-run

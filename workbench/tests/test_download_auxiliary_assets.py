@@ -559,7 +559,11 @@ def test_csmcir_auxiliary_backbones_resolve_to_user_cache_paths(monkeypatch, tmp
     expected = {
         "LAVIS BLIP-2 pretrain weights": tmp_path / "xdg/lavis/blip2_pretrained.pth",
         "EVA-ViT-g backbone weights": tmp_path / "torch/hub/checkpoints/eva_vit_g.pth",
-        "bert-base-uncased tokenizer": tmp_path / "hf/hub/models--bert-base-uncased/vocab.txt",
+        # The hub REPO DIRECTORY, not a file inside it: `from_pretrained` resolves the repo id to
+        # `hub/models--bert-base-uncased/` and reads `refs/` and `snapshots/` below that, so writing
+        # a bare `vocab.txt` at this path produced a cache the loader never opens. A configured
+        # `HF_HOME` is the cache ROOT; the repo directory is one level down and includes `hub/`.
+        "bert-base-uncased tokenizer": tmp_path / "hf/hub/models--bert-base-uncased",
     }
 
     for family, path in expected.items():
@@ -987,14 +991,37 @@ def test_tme_auxiliary_destinations_match_preparation_contract(tmp_path: Path, m
     contract_assets = preparation_contract_for_model(model)["external_assets"]
     statuses = {status["name"]: Path(status["path"]) for status in external_asset_statuses(model)}
     registered = auxiliary_assets_for_model("tme")
-    assert len(registered) == 2
+    # Two CHECKOUT-RELATIVE assets (the base weights the pinned loader opens by literal cwd path)
+    # plus the Hugging Face hub cache, whose destination is the repo directory `from_pretrained`
+    # resolves from the repo id rather than a file this contract names.
+    checkout_assets = [asset for asset in registered if not asset.get("hub_repo_id")]
+    hub_assets = [asset for asset in registered if asset.get("hub_repo_id")]
+    assert len(checkout_assets) == 2
+    assert len(hub_assets) == 1
 
-    for asset in registered:
+    for asset in checkout_assets:
         contract_asset = next(item for item in contract_assets if item["name"] == asset["family"])
         expected = (third_party / model["source_dir"] / contract_asset["expected_local_location"]).resolve()
         destination = auxiliary_destination(asset, third_party, tmp_path / "FashionIQ")
         assert destination == expected
         assert statuses[contract_asset["name"]] == expected
+
+    # The hub cache destination must be the directory the loader resolves AND the directory the
+    # checker inspects: one resolver answers both, so a cache staged at one level cannot be
+    # reported missing while the loader reads another.
+    from workbench.backend.registry import hf_hub_repo_dir
+
+    # The auxiliary registry names the family `bert-base-uncased Qformer payload` while the contract
+    # keeps `bert-base-uncased tokenizer`, because that string is the KEY this asset takes inside the
+    # TME precompute receipt's `base_assets` map. Renaming the contract entry to match a label would
+    # invalidate a valid feature cache without any feature input having changed, so the two are
+    # joined by what they point at -- the hub repo id -- rather than by string equality.
+    hub_asset = hub_assets[0]
+    contract_asset = next(item for item in contract_assets
+                          if hub_asset["hub_repo_id"] in str(item.get("cache_path_suffix") or ""))
+    destination = auxiliary_destination(hub_asset, third_party, tmp_path / "FashionIQ")
+    assert destination == hf_hub_repo_dir(hub_asset["hub_repo_id"])
+    assert statuses[contract_asset["name"]] == destination
 
 
 def test_tme_model_source_destination_cannot_escape_checkout(tmp_path: Path) -> None:
@@ -1033,3 +1060,110 @@ def test_auxiliary_model_ids_include_tme() -> None:
     from workbench.backend.registry import auxiliary_model_ids
 
     assert "tme" in auxiliary_model_ids()
+
+
+def test_tme_hub_cache_offline_verification_and_pipeline_selection(monkeypatch, tmp_path: Path, capsys) -> None:
+    module = load_module()
+    from types import SimpleNamespace
+    from workbench.backend import runtime
+    from workbench.backend.operator_config import resolve_config
+    from workbench.scripts import pipeline
+
+    hf_home = tmp_path / "hf_home"
+    monkeypatch.setenv("HF_HOME", str(hf_home))
+    monkeypatch.setattr(module, "sha256_file", lambda _: "f" * 64)
+    monkeypatch.setattr(module, "bootstrap_hub_asset", lambda *_: (_ for _ in ()).throw(AssertionError("unexpected network bootstrap")))
+    monkeypatch.setattr(runtime, "verify_environment", lambda *a, **kw: SimpleNamespace())
+    monkeypatch.setattr(runtime, "_cached_gpu_capability", lambda *a, **kw: None)
+    monkeypatch.setattr("workbench.scripts.download_checkpoints.verify", lambda *a, **kw: True)
+
+    repo_dir = hf_home / "hub" / "models--bert-base-uncased"
+
+    # (a) missing / orphaned cache refused by --verify-only and reported with destination=
+    assert module.main(["--model", "tme", "--verify-only"]) == 1
+    out_missing = capsys.readouterr().out
+    assert f"bert-base-uncased Qformer payload: destination={repo_dir}" in out_missing
+    assert "no hub cache directory at" in out_missing
+
+    (repo_dir / "refs").mkdir(parents=True)
+    assert module.main(["--model", "tme", "--verify-only"]) == 1
+    out_orphaned = capsys.readouterr().out
+    assert f"bert-base-uncased Qformer payload: destination={repo_dir}" in out_orphaned
+    assert "holds no active revision under refs/" in out_orphaned
+
+    # (b) otherwise-valid but ref-less snapshot (files present, no refs/<rev>) is still refused
+    (repo_dir / "refs").rmdir()
+    snapshot_dir = repo_dir / "snapshots" / "rev123"
+    snapshot_dir.mkdir(parents=True)
+    (snapshot_dir / "pytorch_model.bin").write_bytes(b"dummy payload")
+    assert module.main(["--model", "tme", "--verify-only"]) == 1
+    out_ref_less = capsys.readouterr().out
+    assert "holds no active revision under refs/" in out_ref_less
+
+    # (c) cache with active ref and payload is accepted. The DECLARED payload, not one file: the
+    # selection decision now asks whether every file the loader opens is present, so a fixture that
+    # writes only `pytorch_model.bin` models a tokenizer-less cache -- which the pinned constructor
+    # would fail on -- and must not be presented as a complete one.
+    refs_dir = repo_dir / "refs"
+    refs_dir.mkdir(parents=True)
+    (refs_dir / "main").write_text("rev123\n", encoding="utf-8")
+    tme_asset = next(item for item in module.assets({"tme"}, Path("/tmp"), Path("/tmp"))
+                     if item.hub_repo_id)
+    for name in tme_asset.hub_files or ():
+        (snapshot_dir / name).write_bytes(b"dummy payload")
+    assert module.main(["--model", "tme", "--verify-only"]) == 0
+    out_valid = capsys.readouterr().out
+    assert "cache layout verified" in out_valid
+    assert "state=present" in out_valid
+
+    # (d) equivalent all_stages() selection is permission-free --verify-only command once cache resolves
+    cfg = resolve_config()
+    args = pipeline.parser_for().parse_args(["all", "--model", "tme"])
+    stages = pipeline.all_stages(args, cfg)
+    aux_stage = next(s for s in stages if s.name == "auxiliary-assets" and s.model_id == "tme")
+    assert aux_stage.required_capabilities == frozenset()
+    assert "--verify-only" in aux_stage.commands[0]
+
+
+def test_hub_bootstrap_publishes_the_ref_the_loader_resolves(monkeypatch, tmp_path: Path) -> None:
+    """A bootstrap must produce a cache its own verification accepts, not only the bytes.
+
+    Reproduced against `huggingface_hub`: `snapshot_download(revision=<sha>)` writes
+    `snapshots/<sha>/` and NO `refs/<rev>` entry, and a snapshot no ref names cannot be reached by
+    the repo-id lookup the pinned loader performs. The first real bootstrap therefore staged 421 MB
+    of correct files and was then refused by the same function that staged them -- a software gap
+    that would have read as a missing author artifact. The ref is what makes the two ends agree.
+    """
+    import huggingface_hub
+
+    module = load_module()
+    hf_home = tmp_path / "hf_home"
+    monkeypatch.setenv("HF_HOME", str(hf_home))
+    revision = "86b5e0934494bd15c9632b12f734a8a67f723594"
+    files = ["config.json", "pytorch_model.bin", "tokenizer.json", "tokenizer_config.json", "vocab.txt"]
+    repo_dir = hf_home / "hub" / "models--bert-base-uncased"
+    snapshot_dir = repo_dir / "snapshots" / revision
+
+    def fake_snapshot_download(*, repo_id, revision=None, allow_patterns=None, **kwargs):
+        # The real library's observable effect for this call: bytes in `snapshots/<sha>/`, and no
+        # ref. Writing exactly that is what makes this test fail if the bootstrap stops writing one.
+        snapshot_dir.mkdir(parents=True)
+        for name in allow_patterns or files:
+            (snapshot_dir / name).write_bytes(b"payload " + name.encode())
+        return str(snapshot_dir)
+
+    monkeypatch.setattr(huggingface_hub, "snapshot_download", fake_snapshot_download)
+    asset = module.Asset(
+        model_id="tme", family="bert-base-uncased Qformer payload",
+        filename="config.json", destination=repo_dir, required=True,
+        automatic_download_available=True, source_url=None, source_revision=revision,
+        expected_sha256=None, provenance_status="VERIFIED", expected_size_bytes=None,
+        hub_repo_id="bert-base-uncased", hub_files=tuple(files))
+
+    ok, message = module.bootstrap_hub_asset(asset)
+    assert ok, message
+    assert (repo_dir / "refs" / "main").read_text(encoding="utf-8") == revision
+    from workbench.backend.registry import hub_cache_layout_problem
+
+    assert hub_cache_layout_problem("bert-base-uncased", hf_home) is None
+    assert module.hub_cache_layout_problem("bert-base-uncased") is None

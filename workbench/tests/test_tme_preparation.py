@@ -48,7 +48,11 @@ def _fixture(tmp_path: Path, monkeypatch):
     artifact = next(a for a in contract["generated_artifacts"]
                     if a["generator"] == prepare_model.TME_FEATURE_GENERATOR)
     artifact["parameters"].update(tokens_per_image=2, feature_width=3, feature_dtype="float16")
-    return config, checkout, dataset, contract, artifact["parameters"]
+    # RESOLVED parameters, not the raw declaration: the receipt must record the batch the generator
+    # is actually launched with, and an operator's `WORKBENCH_TME_BATCH_SIZE` legitimately changes
+    # it. A fixture that wrote the pinned 512 built a receipt no environment with an override can
+    # match, so the reuse path was untested exactly where the override is configured.
+    return config, checkout, dataset, contract, prepare_model.tme_generation_parameters(artifact["parameters"])
 
 
 def _write_valid_cache(config, checkout, contract, parameters, monkeypatch):
@@ -94,8 +98,14 @@ def test_cpu_dispatch_reaches_cuda_blocker_before_native_command(tmp_path, monke
     calls = []
 
     def probe_only(command, **kwargs):
+        if not (len(command) > 2 and command[1] == "-c" and "torch.cuda.is_available()" in command[2]):
+            # The interpreter-IDENTITY probe (`-I -S`) is a different question asked of the same
+            # binary, and this stub answers only the CUDA one. Treating every call as the CUDA probe
+            # made the test depend on an earlier blocker short-circuiting before identity was ever
+            # resolved: with a valid operator `workbench.env` the run reached identity resolution and
+            # the stub failed on a call it was never meant to classify.
+            return subprocess.CompletedProcess(command, 0, "", "")
         calls.append(command)
-        assert command[1] == "-c" and "torch.cuda.is_available()" in command[2]
         return subprocess.CompletedProcess(command, 0, "False\n", "")
 
     monkeypatch.setattr(prepare_model.subprocess, "run", probe_only)

@@ -909,7 +909,13 @@ def runtime_adaptation(model: dict[str, Any], *, undeclared_is_error: bool = Tru
     unrelated models, but a model that DECLARES an adaptation must never silently verify
     against a different, unknown target.
     """
-    requested = os.environ.get(ADAPTATION_ENV, "").strip()
+    from workbench.backend.model_settings import setting as _setting
+
+    # Read through the shared settings reader so the operator's local `workbench.env` behaves like
+    # the process environment, which is what the guide and the file's own documentation promise for
+    # every registry-declared name. Reading `os.environ` here made that promise false for the one
+    # variable that switches a cohort onto sm_120-capable wheels.
+    requested = (_setting(ADAPTATION_ENV) or "").strip()
     if not requested:
         return None
     declared = (model.get("environment") or {}).get("adapted_runtime") or {}

@@ -308,20 +308,38 @@ def external_asset_statuses(model: dict[str, Any]) -> list[dict[str, Any]]:
         from workbench.backend.model_settings import setting as _setting
 
         configured = _setting(env_var) if env_var else None
-        location = configured if configured else asset.get("expected_local_location")
-        if location is None and asset.get("cache_path_suffix"):
+        # A cache-shaped asset resolves BELOW the cache root, whichever way the root was named.
+        # `location_env_var` for the tokenizer is `HF_HOME` itself, and the loader turns the repo id
+        # into `hub/models--<repo>/` under that root, so reading the configured value as the asset
+        # directory pointed the checker at the cache root and left `refs`/`snapshots` unexamined.
+        cache_shaped = bool(asset.get("cache_path_suffix"))
+        location = None if cache_shaped else (configured if configured else asset.get("expected_local_location"))
+        if location is None and cache_shaped:
             # `cache_root_env_var` names the variable that RELOCATES this cache, and its default is the
             # one the consumer itself uses. The tokenizer is read by Hugging Face's loader, whose root
             # is `HF_HOME` (default `~/.cache/huggingface`), NOT `~/.cache/torch` -- resolving it under
             # the torch root made a correctly populated cache report as missing.
+            #
+            # A HUB asset resolves one level below any cache root: the loader turns the repo id into
+            # `hub/models--<repo>/` itself, so a configured `HF_HOME` (or `location_env_var: HF_HOME`)
+            # is the CACHE ROOT, not the asset directory. Returning the bare root for a
+            # `cache_path_suffix` ending in a repo directory made the checker inspect a directory the
+            suffix = str(asset["cache_path_suffix"])
             root_var = asset.get("cache_root_env_var") or "TORCH_HOME"
-            cache_root = os.environ.get(root_var)
-            if cache_root and cache_root.strip():
-                root = Path(cache_root.strip()).expanduser()
+            # Read through the same settings reader as `location_env_var` above: an operator who
+            # advertised `HF_HOME` in the local workbench env file must get the same root here as
+            # everywhere else, or the checker and the loader disagree about where the cache is.
+            configured_root = _setting(root_var)
+            if configured_root and configured_root.strip():
+                root = Path(configured_root.strip()).expanduser()
             else:
                 root = Path(os.environ.get("XDG_CACHE_HOME") or "~/.cache").expanduser()
                 root = root / ("huggingface" if root_var == "HF_HOME" else "torch")
-            location = str(root / asset["cache_path_suffix"])
+            hub_prefix, _, repo_segment = suffix.partition("models--")
+            if hub_prefix == "hub/" and repo_segment:
+                location = str(hf_hub_repo_dir(repo_segment.replace("--", "/"), root))
+            else:
+                location = str(root / suffix)
         expected_sha = asset.get("expected_sha256")
         expected_prefix = asset.get("expected_sha256_prefix")
         if location is None:
@@ -342,21 +360,40 @@ def external_asset_statuses(model: dict[str, Any]) -> list[dict[str, Any]]:
             path = (root / relative) if (relative and root is not None) else (_repo_root() / path)
         path = path.resolve()
         if asset.get("location_type") == "directory":
-            # A directory-shaped asset (a hub repo cache) has no single file to size or hash. Its
-            # presence is the directory existing and holding something: an empty directory is a
-            # half-finished download, not a usable cache, so it is reported as a placeholder rather
-            # than accepted.
+            # A directory-shaped asset (a hub repo cache) has no single file to size or hash. What
+            # makes it usable is the resolution its CONSUMER performs: a revision through the cache's
+            # refs, and the payload below that revision. Reporting "the directory exists and holds
+            # something" was wrong in both directions -- an orphan snapshot no ref names read as
+            # present, and a repo holding only a vocabulary read as complete while the loader that
+            # opens the model weights would still fail.
+            missing: list[str] = []
+            snapshot = None
+            if is_hub_cache_asset(asset):
+                identity = hub_cache_identity(asset)
+                snapshot = identity["snapshot"]
+                missing = hub_cache_missing_files(asset)
+            elif path.is_dir():
+                snapshot = hub_cache_snapshot(path)
             if not path.exists():
                 status = "CONFIGURED_MISSING"
             elif not path.is_dir():
                 status = "INVALID_FILE_TYPE"
             elif not any(path.iterdir()):
                 status = "EMPTY_PLACEHOLDER"
+            elif snapshot is None:
+                # Populated, but nothing in it resolves: the R22-03 shape, where a snapshot with a
+                # vocabulary and no active ref passed a directory check and then failed a repo-id
+                # lookup. Named separately from "missing" because the remedy is different.
+                status = "UNRESOLVED_REF"
+            elif missing:
+                status = "INCOMPLETE_CACHE"
             else:
                 status = "EXISTS_UNVERIFIED_CHECKSUM"
             statuses.append({"name": asset["name"], "status": status, "path": str(path),
                              "expected_sha256": None, "expected_sha256_prefix": None,
-                             "actual_sha256": None})
+                             "actual_sha256": None,
+                             "cache_snapshot": str(snapshot) if snapshot is not None else None,
+                             "cache_missing_files": missing})
             continue
         status = "CONFIGURED_MISSING"
         actual_sha = None
@@ -539,42 +576,88 @@ def cache_asset_blocker(asset: dict[str, Any], status: dict[str, Any]) -> str | 
     """Why a cache-shaped asset is unusable, or None when it can actually be loaded.
 
     A populated directory is not a usable Hugging Face cache. The pinned LAVIS loader calls
-    `BertTokenizer.from_pretrained("bert-base-uncased")`, which needs a resolved snapshot holding the
-    tokenizer files, so the shared admission asks the real question in two steps: the cache layout
-    must contain a revision snapshot with a tokenizer vocabulary, and -- when `transformers` is
-    importable in the checking interpreter -- the tokenizer must actually load OFFLINE from that
-    cache. A random non-empty directory fails the first step; a partial or corrupted download fails
-    the second. Neither check downloads anything, so a readiness report never reaches the network.
+    `BertTokenizer.from_pretrained("bert-base-uncased")` and then builds the Qformer with
+    `BertLMHeadModel.from_pretrained("bert-base-uncased", config=...)`, and BOTH resolve the repo id
+    through the cache. So the shared admission asks the loader's own question in two steps: the
+    cache must resolve a REPOSITORY the way the loader resolves it -- a `refs/<revision>` entry
+    naming an existing snapshot that holds the declared payload -- and, when `transformers` is
+    importable in the checking interpreter, the tokenizer must actually load OFFLINE from that cache
+    root.
+
+    Two corrections to the earlier check, both reproduced against the real loader:
+
+    * a repository cache is looked up by REPO ID, so a snapshot no ref names cannot be reached
+      however complete it looks (R22-03), and
+    * a directory holding only a snapshot cannot be reached at all: the loader reads
+      `<root>/hub/models--<owner>--<name>/`, so a check that accepts a bare `snapshots/` directory
+      certifies a layout the loader never produces.
+
+    Neither step downloads anything: a readiness report never reaches the network.
     """
     if not (asset.get("cache_path_suffix") and status.get("path")):
         return None
     path = Path(status["path"])
-    snapshots = path / "snapshots"
-    if not snapshots.is_dir():
-        return "cache has no `snapshots/` revision directory"
-    candidates = [
-        child for child in sorted(snapshots.iterdir())
-        if child.is_dir() and any((child / name).is_file()
-                                  for name in ("vocab.txt", "tokenizer.json", "spiece.model"))
-    ]
-    if not candidates:
-        return "cache holds no revision snapshot with tokenizer files (vocab.txt/tokenizer.json)"
+
+    if is_hub_cache_asset(asset):
+        repo = path
+        refs = repo / "refs"
+        if not repo.is_dir():
+            return f"no hub cache directory at {repo}"
+        if not refs.is_dir() or not any(refs.iterdir()):
+            return (f"{repo} holds no active revision under refs/ (a snapshot no ref names cannot "
+                    f"be resolved by repo id)")
+        snapshot = hub_cache_snapshot(repo)
+        if snapshot is None:
+            return f"no ref under {refs} names an existing snapshot"
+        missing = hub_cache_missing_files(asset)
+        if missing:
+            return (f"{snapshot} is missing the declared payload {', '.join(missing)} "
+                    f"(a tokenizer without the model weights fails in the Qformer loader)")
+        status["cache_snapshot"] = str(snapshot)
+    else:
+        snapshots = path / "snapshots"
+        if not snapshots.is_dir():
+            return "cache has no `snapshots/` revision directory"
+        candidates = [
+            child for child in sorted(snapshots.iterdir())
+            if child.is_dir() and any((child / name).is_file()
+                                      for name in ("vocab.txt", "tokenizer.json", "spiece.model"))
+        ]
+        if not candidates:
+            return "cache holds no revision snapshot with tokenizer files (vocab.txt/tokenizer.json)"
+        snapshot = candidates[-1]
+
     try:
         import transformers  # noqa: F401
     except ImportError:
         # The model environment owns loading this cache; this interpreter can only certify layout.
-        status["admission_note"] = "cache layout verified; load-test belongs to the model environment (not author-checksum-verified)"
+        status["admission_note"] = ("cache layout verified; load-test belongs to the model "
+                                    "environment (not author-checksum-verified)")
         return None
-    snapshot = candidates[-1]
-    environment_backup = {key: os.environ.get(key) for key in ("HF_HUB_OFFLINE", "TRANSFORMERS_OFFLINE")}
+
+    # The load-test resolves the REPO ID through this cache root, offline, which is exactly what the
+    # pinned constructor does. Loading a snapshot DIRECTORY instead would test a different question:
+    # it passes on a cache the native repo-id lookup cannot find, which is how a tokenizer-only
+    # cache came to be certified for a run that then failed in `BertLMHeadModel.from_pretrained`.
+    repo_id = hub_cache_repo_id(asset) if is_hub_cache_asset(asset) else ""
+    root = hub_cache_root(asset) if is_hub_cache_asset(asset) else path.parent.parent
+    target = repo_id if repo_id else str(snapshot)
+    environment_backup = {key: os.environ.get(key)
+                          for key in ("HF_HOME", "HF_HUB_OFFLINE", "TRANSFORMERS_OFFLINE")}
+    os.environ["HF_HOME"] = str(root)
     os.environ["HF_HUB_OFFLINE"] = "1"
     os.environ["TRANSFORMERS_OFFLINE"] = "1"
     try:
         from transformers import AutoTokenizer
 
-        AutoTokenizer.from_pretrained(str(snapshot))
+        # The exact call the pinned constructor makes. Loading it by REPO ID is what proves the cache
+        # is resolvable the way the loader resolves it; nothing further is asserted about which files
+        # the installed library happened to read, because `AutoTokenizer` prefers a fast tokenizer and
+        # would then demand `tokenizer.json`, which the pinned slow-only path never opens -- an
+        # over-strict check that refused a cache the real loader accepts (reproduced).
+        AutoTokenizer.from_pretrained(target)
     except Exception as error:  # a cache the loader cannot read is a blocker, not a warning
-        return f"tokenizer does not load offline from {snapshot}: {type(error).__name__}: {error}"
+        return f"tokenizer does not load offline from {target} under {root}: {type(error).__name__}: {error}"
     finally:
         for key, value in environment_backup.items():
             if value is None:
@@ -582,7 +665,6 @@ def cache_asset_blocker(asset: dict[str, Any], status: dict[str, Any]) -> str | 
             else:
                 os.environ[key] = value
     return None
-
 
 #: Digest cache for the availability view only. `checkpoint_availability` runs on every
 #: `/api/models` request and hashes whole checkpoints (LIMN's three are 1.79 GB each), which
@@ -830,6 +912,181 @@ def auxiliary_assets_for_model(model_id: str) -> list[dict[str, Any]]:
     return [asset for asset in load_auxiliary_assets() if asset["model_id"] == model_id]
 
 
+#: The canonical Hugging Face hub directory a repo id resolves to. `transformers` builds it from
+#: the repo id (`models--<owner>--<name>`) and then reads `refs/<rev>` to find the active
+#: `snapshots/<rev>/` directory, so a cache holding files directly at `hub/models--<repo>/` is NOT
+#: a cache the loader can read. One function answers "where does a repo id live" for the checker,
+#: the auxiliary downloader and the offline bootstrap step, so those three cannot disagree about
+#: the directory a real loader consults.
+def hf_hub_cache_root() -> Path:
+    """The Hugging Face cache ROOT: `HF_HOME`, else the XDG default.
+
+    Read through the shared settings reader, so the operator's local `workbench.env` behaves like the
+    process environment -- which is what that file documents for every registry-declared name. The
+    configured value is the ROOT, never the asset directory: the loader resolves a repo id to
+    `<root>/hub/models--<owner>--<name>/`, so a consumer that stops at the configured value inspects
+    a directory the loader never opens (R22-02).
+    """
+    try:
+        from workbench.backend.model_settings import setting as _setting
+
+        configured = _setting("HF_HOME")
+    except Exception:
+        configured = os.environ.get("HF_HOME")
+    if configured and configured.strip():
+        return Path(configured.strip()).expanduser()
+    return Path(os.environ.get("XDG_CACHE_HOME", "~/.cache")).expanduser() / "huggingface"
+
+
+def hf_hub_repo_dir(repo_id: str, root: Path | None = None) -> Path:
+    return (root or hf_hub_cache_root()) / "hub" / ("models--" + repo_id.replace("/", "--"))
+
+
+def hub_cache_snapshot(repo: Path) -> Path | None:
+    """The snapshot a repo directory's refs point at, or None when no ref resolves to one.
+
+    The loader finds a revision through `refs/<rev>`; a snapshot directory no ref names cannot be
+    reached by a repo-id lookup however complete it looks, so it is not a candidate -- which is why
+    the check for "is this cache usable" is not "does a snapshots/ child look plausible".
+    """
+    refs = repo / "refs"
+    if not refs.is_dir():
+        return None
+    for ref in sorted(refs.iterdir()):
+        if not ref.is_file():
+            continue
+        snapshot = repo / "snapshots" / ref.read_text(encoding="utf-8").strip()
+        if snapshot.is_dir():
+            return snapshot
+    return None
+
+
+def hub_cache_layout_problem(repo_id: str, root: Path | None = None) -> str | None:
+    """Why a Hugging Face hub cache directory cannot be resolved by the loader, or None.
+
+    Reproduces the loader's own resolution in three steps without importing it: the repo directory
+    must exist, `refs/<revision>` must name a snapshot, and that snapshot must hold the payload. A
+    cache missing any of the three is one the loader cannot read -- an unreferenced snapshot fails a
+    repo-id lookup however complete it looks, and vocabulary plus config without weights still dies
+    in `BertLMHeadModel.from_pretrained`. Layout is all this answers: loading the files is the model
+    environment's job (`cache_asset_blocker`), so the two levels stay distinguishable.
+    """
+    repo = hf_hub_repo_dir(repo_id, root)
+    if not repo.is_dir():
+        return f"no hub cache directory at {repo}"
+    refs = repo / "refs"
+    if not refs.is_dir() or not any(refs.iterdir()):
+        return (f"{repo} holds no active revision under refs/ "
+                "(a snapshot no ref points at cannot be resolved by repo id)")
+    for ref in sorted(refs.iterdir()):
+        if not ref.is_file():
+            continue
+        snapshot = repo / "snapshots" / ref.read_text(encoding="utf-8").strip()
+        if not snapshot.is_dir():
+            return f"ref {ref.name} names a snapshot that is not present: {snapshot}"
+        if not any((snapshot / name).is_file()
+                   for name in ("pytorch_model.bin", "model.safetensors", "tf_model.h5")):
+            return f"{snapshot} holds no model payload (pytorch_model.bin/model.safetensors)"
+    return None
+
+
+def is_hub_cache_asset(asset: dict[str, Any]) -> bool:
+    """True for an asset whose destination is a Hugging Face HUB repo cache directory.
+
+    SHAPE, not declaration source, and the shape is read from two registries that describe the same
+    cache from different sides:
+
+    * an AUXILIARY asset names the repo (`hub_repo_id`) because acquisition needs it, and
+    * a PREPARATION-CONTRACT asset describes the same cache as the loader sees it, through
+      `location_type: directory` plus `cache_path_suffix: hub/models--<owner>--<name>`.
+
+    A predicate that accepted only `hub_repo_id` therefore answered `False` for every consumer that
+    passes a contract asset -- the readiness check, `cache_asset_blocker`, the TME input blocker and
+    the TME preflight all do -- so those paths silently fell back to the pre-fix behaviour: an orphan
+    snapshot read as present, and the declared payload was never required.
+    """
+    if asset.get("hub_repo_id"):
+        return True
+    suffix = str(asset.get("cache_path_suffix") or "")
+    prefix, _, repo_segment = suffix.partition("models--")
+    return bool(repo_segment) and prefix == "hub/" and (
+        asset.get("location_type") == "directory" or bool(asset.get("cache_root_env_var")))
+
+
+def hub_cache_repo_id(asset: dict[str, Any]) -> str:
+    """The repo id a hub asset resolves, from either registry's declaration of it.
+
+    The auxiliary registry names it directly; a preparation contract describes the same cache by its
+    loader-visible path (`hub/models--<owner>--<name>`), and the two must yield one id or the checker
+    and the downloader end up inspecting different directories.
+    """
+    declared = asset.get("hub_repo_id")
+    if declared:
+        return str(declared)
+    _, _, repo_segment = str(asset.get("cache_path_suffix") or "").partition("models--")
+    return repo_segment.replace("--", "/")
+
+
+def hub_cache_root(asset: dict[str, Any]) -> Path:
+    """The cache ROOT a hub asset resolves below.
+
+    `cache_root_env_var` names the variable that relocates this cache (Hugging Face's loader uses
+    `HF_HOME`), and a configured value is the ROOT, not the repo directory: an operator who sets
+    `HF_HOME=<dir>` gets `<dir>/hub/models--<repo>/`. Reading it as the asset directory was the
+    R22-02 defect, so there is ONE resolver and the checker, the readiness report, the budget, the
+    acquisition plan and the downloader all call it.
+    """
+    from workbench.backend.model_settings import setting as _setting
+
+    variable = asset.get("cache_root_env_var") or "HF_HOME"
+    if variable != "HF_HOME":
+        configured = _setting(variable)
+        if configured and configured.strip():
+            return Path(configured.strip()).expanduser()
+    return hf_hub_cache_root()
+
+
+def hub_cache_repo_dir(asset: dict[str, Any]) -> Path:
+    """The repo cache directory a hub asset resolves to, under its own cache root."""
+    return hf_hub_repo_dir(hub_cache_repo_id(asset), hub_cache_root(asset))
+
+
+def hub_cache_identity(asset: dict[str, Any]) -> dict[str, Any]:
+    """The resolved identity of a hub cache asset: where it lives and what is in it.
+
+    One record for four consumers that must not disagree -- the readiness report, the budget, the
+    acquisition plan and the downloader's verification. `files` counts the payload the LOADER reads
+    (the snapshot's real filenames, followed through the symlinks the hub lays down), while
+    `size_bytes` sums only the blobs actually stored, so a correct cache is never reported as
+    exceeding twice its own declaration.
+    """
+    repo_id = hub_cache_repo_id(asset)
+    repo = hf_hub_repo_dir(repo_id, hub_cache_root(asset))
+    snapshot = hub_cache_snapshot(repo)
+    files: list[str] = []
+    size = 0
+    if snapshot is not None:
+        for name in sorted(asset.get("hub_files") or []):
+            entry = snapshot / name
+            if entry.is_file():
+                files.append(name)
+                try:
+                    size += entry.stat().st_size
+                except OSError:
+                    pass
+    return {"repo_id": repo_id, "path": repo, "snapshot": snapshot, "present": repo.is_dir(),
+            "files": files, "size_bytes": size}
+
+
+def hub_cache_missing_files(asset: dict[str, Any]) -> list[str]:
+    """The declared payload files of a hub repo that its active snapshot is missing."""
+    identity = hub_cache_identity(asset)
+    declared = [str(name) for name in (asset.get("hub_files") or [])]
+    if identity["snapshot"] is None:
+        return declared
+    return [name for name in declared if name not in set(identity["files"])]
+
+
 def _guard_auxiliary_destination(root: Path, path: str) -> Path:
     resolved_root = root.resolve()
     destination = (root / path).resolve()
@@ -848,6 +1105,16 @@ def auxiliary_destination(asset: dict[str, Any], third_party_root: Path, fashion
         fixed = asset.get("cache_root_fixed")
         if fixed:
             root = Path(fixed).expanduser()
+        elif asset["destination_path"].startswith("hub/models--") and asset.get("cache_root_env_var") in {"HF_HOME", None}:
+            # A Hugging Face HUB asset, not a file under a cache root. The loader resolves the repo
+            # id to `hub/models--<owner>--<name>/` and then reads `refs/` and `snapshots/` inside it;
+            # a file written to any other level of the cache is one the loader never opens. Routing
+            # through the shared resolver keeps this destination equal to the directory the checker
+            # inspects and the bootstrap writes.
+            parts = PurePosixPath(asset["destination_path"]).parts
+            repo = parts[1][len("models--"):].replace("--", "/") if len(parts) > 1 else ""
+            return _guard_auxiliary_destination(
+                hf_hub_cache_root(), str(hf_hub_repo_dir(repo).relative_to(hf_hub_cache_root())))
         else:
             env_var = asset["cache_root_env_var"]
             root = Path(os.environ[env_var]).expanduser() if os.environ.get(env_var) else Path(os.environ.get("XDG_CACHE_HOME", "~/.cache")).expanduser()
@@ -898,6 +1165,7 @@ def validate_auxiliary_asset(
                 "model_id", "family", "destination", "required", "automatic_download_available",
                 "source_url", "source_type", "source_repo", "source_revision", "expected_sha256", "provenance_status",
                 "expected_sha256_prefix", "expected_size_bytes", "content_contract",
+                "hub_repo_id", "hub_files", "cache_root_env_var",
             )
             if hasattr(asset, k)
         }
@@ -907,6 +1175,31 @@ def validate_auxiliary_asset(
     if path is None:
         return AuxiliaryValidationResult(False, "MISSING", ["no path specified for asset validation"])
     path = Path(path)
+
+    if is_hub_cache_asset(rec):
+        # A hub cache is a DIRECTORY the loader resolves, not a file to size or hash. Without this
+        # branch the directory fell into the "is it a file?" test below and every correctly staged
+        # cache was reported MISSING -- which is how a complete cache, and the budget derived from
+        # the same asset, both went wrong. What makes the cache usable is the resolution its consumer
+        # performs: `refs/<rev>` must name a snapshot and that snapshot must hold the declared
+        # payload. Layout only: loading the files belongs to the model environment.
+        if not path.exists():
+            return AuxiliaryValidationResult(False, "MISSING", [f"MISSING {path}"])
+        if not path.is_dir():
+            return AuxiliaryValidationResult(False, "INVALID_FILE_TYPE", [f"NOT A DIRECTORY {path}"])
+        snapshot = hub_cache_snapshot(path)
+        if snapshot is None:
+            return AuxiliaryValidationResult(
+                False, "UNRESOLVED_REF",
+                [f"UNRESOLVED_REF {path}: holds no revision ref resolving to a snapshot "
+                 f"(a snapshot no ref names cannot be reached by a repo-id lookup)"])
+        missing = hub_cache_missing_files(rec)
+        if missing:
+            return AuxiliaryValidationResult(
+                False, "INCOMPLETE_CACHE",
+                [f"INCOMPLETE_CACHE {snapshot}: missing declared payload "
+                 f"{', '.join(missing)}"])
+        return AuxiliaryValidationResult(True, "VERIFIED", [])
 
     if not path.is_file():
         return AuxiliaryValidationResult(False, "MISSING", [f"MISSING {path}"])

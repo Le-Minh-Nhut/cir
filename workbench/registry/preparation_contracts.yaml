@@ -373,6 +373,19 @@ contracts:
       source_script: src/precompute.py
       eval_dataset: FashionIQ
       batch_size: 512
+      # The pinned 512 is the author's own value and stays the default. It is also an OPERATIONAL
+      # setting rather than a preprocessing semantic: it only decides how many gallery images share
+      # one forward pass, and therefore whether the job fits the card at all. `workers` is
+      # deliberately NOT overridable -- the native loader runs in this process either way.
+      #
+      # MEASURED, not estimated, on an RTX 3050 Laptop with 4096 MiB (3768 MiB visible to torch):
+      # 512 OOMs, 128 OOMs, 80 OOMs, 72 completes at 4.0 GiB peak with the EVA tower in fp16.
+      # 32 is the operating value: it costs ~14 minutes for the 15536-image val gallery at
+      # ~13.5 images/s and holds a wide margin on a 4 GiB card.
+      #
+      # The resolved batch is written into the receipt and compared on reuse, so a cache can never be
+      # silently reused under a different batch than produced it.
+      batch_size_override_env_var: WORKBENCH_TME_BATCH_SIZE
       workers: 8
       receipt_filename: .workbench_tme_precompute_receipt.json
       source_evidence: >-
@@ -458,8 +471,22 @@ contracts:
   - name: bert-base-uncased tokenizer
     kind: tokenizer
     state: REQUIRED
+    # The name is also the KEY this asset takes inside the TME precompute receipt's `base_assets`
+    # map, so it deliberately stays as recorded: renaming it would invalidate a valid 10.47 GiB
+    # feature cache for a labelling reason, without any feature input having changed.
+    #
+    # REQUIRED, and the reason is the constructor chain rather than the vocabulary alone: the pinned
+    # TME `src/precompute.py:19` calls `load_model_and_preprocess(...)`, which builds the model, and
+    # that construction reaches `blip2.py::init_tokenizer` (BertTokenizer), `init_Qformer`'s
+    # `BertConfig.from_pretrained("bert-base-uncased")` AND its vendored
+    # `BertLMHeadModel.from_pretrained("bert-base-uncased", config=encoder_config)`. A cache with a
+    # valid vocabulary and config and no model weights passes a tokenizer-only check and then dies in
+    # the Qformer loader, which is why the model payload is part of this declaration and not a
+    # separate optional one.
     required_for_evaluation: true
-    required_for_preparation: false
+    # The same call is on `precompute.py`'s path, so it is a PREPARATION input too. Declaring it false
+    # made the DAG free to schedule feature generation before this cache existed.
+    required_for_preparation: true
     expected_local_location: null
     location_env_var: HF_HOME
     # A DIRECTORY: the hub stores the repo as a cache directory, and `from_pretrained` needs that
@@ -468,17 +495,17 @@ contracts:
     cache_path_suffix: hub/models--bert-base-uncased
     cache_root_env_var: HF_HOME
     # Resolved under `HF_HOME` (default `~/.cache/huggingface`), NOT under the torch cache: the pinned
-    # code loads it through `BertTokenizer.from_pretrained("bert-base-uncased")`
-    # (`blip2.py:30-33`), which reads the Hugging Face hub cache. Declaring a `torch/hub` suffix made
-    # the checker look in a directory the loader never consults, so a correctly populated cache was
-    # reported missing.
+    # code loads it through `from_pretrained("bert-base-uncased")`, which reads the Hugging Face hub
+    # cache. The hub's own layout requires `refs/<revision>` to point at `snapshots/<revision>/`;
+    # the auxiliary registry declares the acquisition and the published payload size.
     expected_sha256: null
     source: https://huggingface.co/bert-base-uncased
     optional: false
     notes: >-
-      A small Hugging Face cache entry rather than a checkpoint-sized artifact. The hub layout stores
-      it under `hub/models--bert-base-uncased/`; the presence check accepts the repo cache directory,
-      which is what `from_pretrained` actually needs.
+      A Hugging Face hub cache directory rather than a checkpoint-sized artifact. The pinned loader
+      resolves the repo id to `hub/models--bert-base-uncased/` and reads the active revision from
+      `refs/`, so the checker requires a revision ref and a snapshot with model payload, and the
+      model interpreter load-tests it offline.
   deterministic_status: UNKNOWN
   automation_policy: MANUAL_REQUIRED
   notes: >-

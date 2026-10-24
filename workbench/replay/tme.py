@@ -43,6 +43,7 @@ from workbench.backend.registry import (
 )
 from workbench.replay.common import (
     ReplayResult,
+    fashioniq_gallery_digests,
     fashioniq_image_binding_blockers,
     isolated_cache_root,
     macro_aggregate,
@@ -269,6 +270,11 @@ def _prior_feature_provenance(config=None) -> dict[str, Any] | None:
         if current_inputs is None or inputs != current_inputs:
             raise ValueError("TME generation inputs changed or receipt lacks image identity")
         gallery = inputs["gallery_images"]
+        # The receipt records two different gallery identities, so the prior-run half carries both
+        # under the names the replay half computes them with. `split_files` is the same quantity as
+        # the replay side's `feature_split_files_sha256` (sha256 of each split JSON), and a receipt
+        # that predates either key refuses below rather than silently comparing against `None`.
+        split_files = inputs["split_files"]
         checkout = config.WORKBENCH_THIRD_PARTY_ROOT / MODEL["source_dir"]
         feature_root = preparation_paths(contract, dataset_root, "generated_artifacts",
                                          evaluator_root=checkout)[0]
@@ -286,6 +292,7 @@ def _prior_feature_provenance(config=None) -> dict[str, Any] | None:
             "feature_cache_sha256": recorded_files["features"]["sha256"],
             "feature_name_to_idx_sha256": recorded_files["name_to_idx"]["sha256"],
             "feature_gallery_sha256": gallery,
+            "feature_split_files_sha256": split_files,
             "feature_shape": declared["feature_shape"],
             "feature_dtype": declared["feature_dtype"],
         }
@@ -294,6 +301,42 @@ def _prior_feature_provenance(config=None) -> dict[str, Any] | None:
             print("[WARNING] TME feature cache preparation receipt does not bind current inputs; "
                   "cache origin remains UNVERIFIED", file=sys.stderr)
         return None
+def feature_cache_provenance(dataset_root: Path, image_extension: str, parameters: dict,
+                             feature_path: Path, mapping_path: Path,
+                             features, prior_provenance: dict[str, Any] | None,
+                             ) -> tuple[dict[str, Any], str, list[str]]:
+    """The replay half of the feature-cache provenance, and its verdict against the receipt half.
+
+    Kept as one named function because the contract is pairwise: every key here has to mean the SAME
+    quantity as the key of that name in `_prior_feature_provenance`, or the comparison below reports
+    a difference that does not exist. Two identities of the gallery are therefore named for what they
+    hash — the ordered IMAGE BYTES the cache was generated from, and the split JSON files that say
+    which images are in the gallery — rather than sharing one name between two different digests.
+    """
+    provenance = {
+        "dataset_root": str(dataset_root.resolve()),
+        "feature_split": parameters["split"],
+        "feature_backbone": f"{MODEL_NAME}:{MODEL_TYPE}@{MODEL['upstream_commit_sha']}",
+        "source_commit": MODEL["upstream_commit_sha"],
+        "feature_cache_sha256": sha256_file(feature_path),
+        "feature_name_to_idx_sha256": sha256_file(mapping_path),
+        # Both computed HERE, from the dataset, rather than copied from the receipt: copying one side
+        # into the other would make every comparison a tautology.
+        "feature_gallery_sha256": fashioniq_gallery_digests(dataset_root, parameters["split"], image_extension),
+        "feature_split_files_sha256": {
+            category: sha256_file(dataset_root / f"image_splits/split.{category}.val.json")
+            for category in CATEGORIES
+        },
+        "feature_shape": list(features.shape),
+        "feature_dtype": str(features.dtype),
+    }
+    differences = ([key for key in sorted(provenance) if prior_provenance.get(key) != provenance[key]]
+                   if prior_provenance is not None else ["no prior run provenance"])
+    verdict = ("VERIFIED_PRIOR_RUN"
+               if prior_provenance is not None and not differences else "UNVERIFIED")
+    return provenance, verdict, differences
+
+
 def _evaluate_categories(checkout: Path, dataset_root: Path, checkpoint_root: Path,
                          categories: tuple[str, ...], checkpoint_id: str | None,
                          prior_provenance: dict[str, Any] | None,
@@ -371,25 +414,9 @@ def _evaluate_categories(checkout: Path, dataset_root: Path, checkpoint_root: Pa
             raise RuntimeError(
                 f"TME feature cache dtype mismatch: expected {expected_dtype}, got {features.dtype}")
 
-        provenance = {
-            "dataset_root": str(dataset_root.resolve()),
-            "feature_split": parameters["split"],
-            "feature_backbone": f"{MODEL_NAME}:{MODEL_TYPE}@{MODEL['upstream_commit_sha']}",
-            "source_commit": MODEL["upstream_commit_sha"],
-            "feature_cache_sha256": sha256_file(feature_path),
-            "feature_name_to_idx_sha256": sha256_file(mapping_path),
-            "feature_gallery_sha256": {
-                category: sha256_file(dataset_root / f"image_splits/split.{category}.val.json")
-                for category in CATEGORIES
-            },
-            "feature_shape": list(features.shape),
-            "feature_dtype": str(features.dtype),
-        }
-        differences = ([key for key in sorted(provenance)
-                       if prior_provenance.get(key) != provenance[key]]
-                       if prior_provenance is not None else ["no prior run provenance"])
-        cache_provenance = ("VERIFIED_PRIOR_RUN"
-                            if prior_provenance is not None and not differences else "UNVERIFIED")
+        provenance, cache_provenance, differences = feature_cache_provenance(
+            dataset_root, image_extension, parameters, feature_path, mapping_path,
+            features, prior_provenance)
         if cache_provenance == "UNVERIFIED":
             print("[WARNING] TME feature cache provenance UNVERIFIED for this run: "
                   + ", ".join(differences), file=sys.stderr)

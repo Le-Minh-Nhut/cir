@@ -96,7 +96,14 @@ def _declared_runtime_artifacts(model: dict[str, Any]) -> set[str]:
                 if not relative.is_absolute() and ".." not in relative.parts:
                     declared.add(relative.as_posix())
         if model.get("model_id") == "tme":
-            declared.add("log_TME")
+            # The native generator's ONLY runtime output under this directory is a log FILE whose
+            # name the native parser supplies (`src/precompute.py:72-73`,
+            # `log_TME/other/<log_file_name>.log`, default `precomputation`). Admitting the whole
+            # `log_TME` tree was too broad: it hid every file below it, so an injected `.py` was
+            # indistinguishable from a log line and an added executable could not be detected by any
+            # consumer. An entry here is a PATH, not a subtree, and `_is_excluded` therefore treats
+            # exactly these files as declared -- never a directory's contents.
+            declared.add("log_TME/other/precomputation.log")
     return declared
 
 
@@ -152,7 +159,9 @@ def _is_excluded(path: Path, relative: str, declared: set[str]) -> bool:
         return True
     if relative in declared:
         return True
-    # A declared artifact may be a directory (an asset root); exclude its whole subtree.
+    # A declared artifact may be a directory (an asset root) or an exact file path; either way the
+    # prefix form below only ever matches what the declaration NAMES. `log_TME` is declared as the
+    # single log file the native generator writes, so a sibling `.py` there is not covered by it.
     return any(relative.startswith(f"{entry}/") for entry in declared)
 
 
