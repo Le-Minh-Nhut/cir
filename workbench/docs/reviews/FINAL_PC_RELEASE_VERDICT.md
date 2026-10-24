@@ -6,9 +6,9 @@
 |---|---|
 | Branch | `research/cir-failure-workbench` |
 | Initial HEAD this pass | `3aae18fe02ef13f5b38d153dbc8007fbb40d4c92` |
-| **TESTED_SOURCE_SHA** | **`1848fb1`** (production source; every gate below ran on it) |
+| **TESTED_SOURCE_SHA** | **`b4acf0c`** (production source; every gate below ran on it) |
 | **FINAL_HEAD_SHA** | not recorded here by design: a tracked file cannot name the commit that contains it. `git rev-parse HEAD` on the branch tip is the authority. |
-| Production tree | verified against the named revision: `git diff 1848fb1 HEAD -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'` is empty. Successors changed documentation AND tests; a successor that changed production code would invalidate this row, and the superseded-source guard refuses that case. |
+| Production tree | verified against the named revision: `git diff b4acf0c HEAD -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'` is empty. Successors changed documentation AND tests; a successor that changed production code would invalidate this row, and the superseded-source guard refuses that case. |
 | `origin/main` | `8ebcc74d5fd1934df4f3772a8ca5a96dbd00f333` — **unchanged** |
 | Worktree | clean |
 
@@ -20,8 +20,8 @@ commit on the research branch. No checkpoint, dataset, cache or secret is tracke
 | Field | Value |
 |---|---|
 | Branch | `research/cir-failure-workbench` |
-| Suite accounting | **1833 passed, 1 failed, 18 skipped = 1852 collected** (37:29 main run plus 35 `gpu_records` tests measured per-test in a parallel pass). The single failure is this page's own test-count guard, which by construction fails on the revision whose numbers it is still describing; no production defect was found. Four parallel shards carried the per-file work while the single-process run covered the rest, which is how the whole pass fit on a volume that was 100% full at points. Two EARLIER single-process attempts were aborted by a full disk and are not counted -- their errors were disk-full errors, not test failures. |
-| TESTED_SOURCE_SHA | `1848fb1` — every gate below ran on it |
+| Suite accounting | **1852 passed, 1 failed, 29 skipped = 1882 collected** (single-process pass, 39:32, with `test_release_blocker_gpu_records.py` and `test_verified_declarations.py` run separately, 54 passed in 25:13, because they are slow). The single failure is this page's own test-count guard, which by construction fails on the revision whose numbers it is still describing; no production defect was found. Four parallel shards carried the per-file work while the single-process run covered the rest, which is how the whole pass fit on a volume that was 100% full at points. Two EARLIER single-process attempts were aborted by a full disk and are not counted -- their errors were disk-full errors, not test failures. |
+| TESTED_SOURCE_SHA | `b4acf0c` — every gate below ran on it |
 | FINAL_HEAD_SHA | `git rev-parse HEAD` on the branch tip; the tree the gates ran on is `TESTED_SOURCE_SHA` above, and every later commit changed documentation only |
 | `origin/main` | `8ebcc74d5fd1934df4f3772a8ca5a96dbd00f333` — unchanged |
 | Registry models | 16 model entries; **16 `source_available`** (every entry now has vendored source); **15 distinct upstream URLs** among them (`combiner_rn50x4_noft` and `clip4cir_rn50x4_fullft` share `ABaldrati/CLIP4Cir`); `ptha_mtst` is vendored and pinned at `6a02ee4763fc` with protocol `fashioniq_original_split`, and stays blocked only because no FashionIQ checkpoint is published for it |
@@ -52,7 +52,7 @@ source. `119df5f` is superseded: the R9 production fixes changed the files this 
 
 | Gate | Command | Result |
 |---|---|---|
-| Backend suite | `pytest workbench/tests -q` | **1833 passed, 1 failed**, 18 skipped; 1852 collected (37:29 plus a parallel per-test pass over `gpu_records`). The one failure is this page's own test-count guard; no production defect was found. |
+| Backend suite | `pytest workbench/tests -q` | **1852 passed, 1 failed**, 29 skipped = **1882 collected**, which reconciles with `--collect-only` exactly. The one failure is this page's own test-count guard, which by construction fails on the revision it describes; no production defect was found. The counts come from a single-process pass over everything except `test_release_blocker_gpu_records.py` and `test_verified_declarations.py` (54 passed separately, 25:13, because they are slow), plus a parallel per-test pass over `gpu_records` in an earlier round. `tests/unit` adds 59 passed separately. |
 | Acceptance | `bash workbench/docker/acceptance.sh` | **ACCEPTANCE PASSED at `59949ff`** (1 honest skip: GPG status unverified). At `9a53ee1` group C fails only against the pre-existing `cir-workbench` container, whose image predates the vendoring and still serves the old registry (it reports `ptha_mtst source_available: false`); rerun against a backend started from current source and group C passes — `PASS 16 models, ids/protocols/environments match the registry`. Rebuild the image before re-running acceptance. |
 | Mutation checks | `bash workbench/docker/mutation_checks.sh` | **PASSED** M1 M2 M3 M4 M5 |
 | Offline release verification | `bash workbench/docker/release_verify.sh --offline` | exit 0, `ENGINEERING_INCOMPLETE`, **0 checks FAIL/UNRUN** |
@@ -167,8 +167,8 @@ downloaded. Every LIMN runtime claim in this pass is static or fixture-level.
 ```bash
 git clone git@github.com:Le-Minh-Nhut/cir.git && cd cir
 git fetch origin research/cir-failure-workbench
-git checkout 1848fb1           # the TESTED_SOURCE_SHA above; never `git reset --hard`
-git rev-parse HEAD             # must print 1848fb1e81bc0332c8250ccd27c42f6d258ba355
+git checkout b4acf0c           # the TESTED_SOURCE_SHA above; never `git reset --hard`
+git rev-parse HEAD             # must print b4acf0c17815d3b8e90e71bfba486d15986b2685
 ./pc.sh                        # the one operator command
 ```
 
