@@ -9,7 +9,7 @@ Phạm vi: 10 finding của audit độc lập trước khi chuyển sang PC
 
 | Mục | Giá trị |
 |---|---|
-| Revision production đã kiểm thử | `1848fb1` (production tree; verify bằng `git diff <rev> HEAD -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'`) |
+| Revision production đã kiểm thử | `4dd827f` (production tree; verify bằng `git diff <rev> HEAD -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'`) |
 | `main` | `8ebcc74` — **không đổi** |
 | Baseline R19 | `afe18fa` (audit độc lập kiểm), production tree khi đó = `ca10235` |
 | Working tree | chỉ còn `src/train_cirr.py` + `uv.lock` (untracked, **không phải** việc của R19) |
@@ -223,7 +223,7 @@ không phải một blocker giả.
 |---|---|
 | Test R19 mới | **38 passed** (4 file) |
 | `tests/unit` | **59 passed** |
-| Toàn bộ suite, 4 shard song song | **1919 passed, 6 failed, 16 skipped = 1941**; 5/6 failure đã sửa và verify lại; failure thứ 6 là guard SHA/số test của chính trang docs, được cập nhật theo số thật |
+| Toàn bộ suite `workbench/tests` | **1852 passed, 1 failed, 29 skipped = 1882** — khớp tuyệt đối `--collect-only`. Failure duy nhất là guard đếm test của chính trang docs, theo thiết kế fail trên chính revision nó mô tả. Số đo: một lượt single-process 39:32 cho mọi file trừ hai file chậm, cộng `test_release_blocker_gpu_records.py` + `test_verified_declarations.py` đo riêng (54 passed, 25:13). 4 shard song song trước đó cho 1919 passed / 6 failed, nhưng 10 case fail dưới shard đã pass trong lượt single-process ⇒ đó là tranh chấp tài nguyên, **không** tính là failure |
 | Frontend production build | PASS; bundle chỉ còn **3 protocol**, id đã xoá **vắng mặt** |
 | `pc.sh --self-check` | PASS |
 | `acceptance.sh` | **ACCEPTANCE PASSED** (4 live check SKIP, không có server) |
@@ -282,9 +282,41 @@ Chưa có bước nào được xác minh trên GPU đích. Laptop là `sm_86`; 
 | `ArchiveInstall` | `cx/gpt-6-luna` **xhigh** | R19-06 | extract + verify + publish atomic; ship kèm **một regression `import urllib.request` bị xoá** mà tôi phát hiện khi tải thật và đã sửa + yêu cầu test phủ đường thật |
 | `AggregateParser` | `cx/gpt-6-luna` **xhigh** | R19-08 | tự phát hiện `EvaluationPlan` dùng field `.protocol` (không phải `.protocol_id`) và báo lại |
 | `ProtocolDedup` | `cx/gpt-6-luna` **xhigh** | R19-10 | xác nhận cohort trùng nhau từ source; cập nhật schema/API theo registry |
+| `ScienceReview` | `reviewer` `cx/gpt-6-luna` **xhigh** | nhãn khoa học, protocol, test bị nới | **bác** kết luận BLIP-2 của tôi (đúng), xác nhận cohort trùng nhau và xác nhận không test nào bị nới |
+| `WiringReview` | `reviewer` `cx/gpt-6-luna` **xhigh** | wiring operator, fake readiness, asset thiếu | **5 finding CONFIRMED**: allowlist env, scope cache, path tokenizer, BLIP-2, `click` |
 
 Không dùng Gemini, không dùng `ag/...`. Tôi tự kiểm từng kết luận, tự sửa 3 lỗi của chính subagent và
 2 lỗi metadata của chính mình.
+
+## 8b. Năm lỗi review độc lập tìm thêm — đã sửa
+
+Hai reviewer (`reviewer`, `cx/gpt-6-luna` xhigh) đọc source đã đổi đối chiếu native code và trả **5 kết luận
+CONFIRMED**. Mỗi cái đã sửa và commit riêng:
+
+1. **Env var asset không tới được tiến trình con.** `_evaluator_environment` dựng env theo allowlist **cố
+   định**, nên `WORKBENCH_TME_ASSET_EVA_VIT_G` resolve được ở parent nhưng tới child lại unset, và check asset
+   của child chặn một run mà operator **đã** cấp input. Nay allowlist forward thêm tên do **registry khai**
+   (`python_env_var` + `location_env_var` của từng asset bắt buộc).
+2. **Feature cache khai sai scope.** Khai dưới dataset root trong khi native loader mở theo **cwd của
+   evaluator**. Readiness kiểm path mà run không hề mở ⇒ input thiếu vẫn pass. Nay `preparation_paths`
+   resolve theo `scope` đã khai (`fashioniq_root` / `evaluator_cwd`).
+3. **Tokenizer trỏ sai chỗ.** `~/.cache/torch/hub/...` là path loader **không** dùng; `BertTokenizer.from_pretrained`
+   đọc `HF_HOME` (mặc định `~/.cache/huggingface`), và đó là **thư mục**, không phải file. Nay khai
+   `location_type: directory` + hub suffix; checker chấp nhận thư mục có nội dung.
+4. **BLIP-2 BẮT BUỘC — kết luận cũ của chính tôi SAI.** `blip2_pretrain.yaml` đặt `load_finetuned: False`
+   **và** khai `pretrained` URL ⇒ `load_checkpoint_from_config` đi nhánh `load_pretrained` và **thật sự
+   gọi** `load_from_pretrained`. Phép kiểm thực nghiệm trước đó bị **đọc sai**: dựng model thiếu base weight
+   chết **trước tiên** ở `weight/eva_vit_g.pth` vì `create_eva_vit_g` chạy sớm hơn. Chết ở EVA không chứng
+   minh file BLIP-2 không dùng. Cả hai nay khai đúng path cwd-relative mà native mở.
+5. **`click` thiếu trong env declaration.** LAVIS pinned import `spacy`, mà CLI của spacy làm
+   `from click import NoSuchOption`, nên chặn click làm `import lavis.models` fail. Khai vì code cần, không
+   vì requirements của tác giả có.
+
+Reviewer khoa học cũng **bác** kết luận protocol của tôi: alias `fashioniq_val_split_ref_included` chỉ
+resolve ở phía **evaluator**; một result document đã persist mang id cũ vẫn bị `RunMetadata` từ chối. Comment
+đã sửa để nói đúng phạm vi đó thay vì nói quá rằng artefact cũ "đọc được".
+
+Sửa xong: **193 test** trên các file liên quan + `tests/unit` pass.
 
 ## 9. Blocker ngoài
 
