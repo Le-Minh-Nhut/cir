@@ -24,7 +24,7 @@
     "2025-CVPR-TME/pipeline.jpg": "9ca0c86889467715972f839e98cf2a44bd7e47cb199487d1bcafed2f55ff72fe",
     "README.md": "6217499b7be66e04faa9e39fc8c621d97493492e5a949455dd2c5f1aea8b9ad3",
     "evalution.sh": "ca8b8398ac26f2053ad85fecaf083829ea316a7f1c23f8da9f2d408bde466602",
-    "precompute.sh": "32bfd7ea52af9d5a17880d77300b61fbb62a203d5eb7a6d9f077533a62443a5f",
+    "precompute.sh": "ccf16712e8b4d9cdceb78570add73c7806e42199e5150802d0bec6c39d70a0b9",
     "requirements.txt": "5f1564e1703f53b51c714308e68aaccd83dd7d997df398f0c435018ed00c6123",
     "src/data.py": "8ce310c082155c14d012cec6af918f5c5b0a64c98bf649ff3256e621fa7fac39",
     "src/lavis/__init__.py": "6ad1f5f087ec8ff32c3a3ec50431026d45a0e3f6d0c9332e206a576b44b40d86",
@@ -366,8 +366,23 @@
     "src/precompute_evaluation.py": "0f6a0573bc82e5a8e34de8bd78d1da8970c21b917e1784a44be6781b7a5581f3",
     "src/precompute_test.py": "c8bb0a055d4ebe27edd70756a4f12ff84e3ae6c594e471c29bb702f4801dfdd9",
     "src/precompute_train.py": "b9ca46dc3162ff87efecb670e98f1104a1fdba1e5f1af9e0cd4662f8b4b252e0",
-    "src/utility.py": "6c467eadfdfa4fd76e6a3951838cb1f5241265908d59b2a2a4abf95562cd9e61",
+    "src/utility.py": "3d2c92dba91f2bbf104fd4fb91e6ae256f0c28615ef645652fe369cb8e1a34ba",
     "train.sh": "4ce5df018d8298bc7cec3754e193222fbd02a9f7008c02929146bb5d439097fe"
   },
-  "local_fixes": []
+  "local_fixes": [
+    {
+      "path": "precompute.sh",
+      "origin": "coordinator",
+      "justification": "Removed upstream's stray background CIRR nohup command; the documented foreground precompute command is explicit and cannot outlive its caller.",
+      "upstream_sha256": "32bfd7ea52af9d5a17880d77300b61fbb62a203d5eb7a6d9f077533a62443a5f",
+      "delivered_sha256": "ccf16712e8b4d9cdceb78570add73c7806e42199e5150802d0bec6c39d70a0b9"
+    },
+    {
+      "path": "src/utility.py",
+      "origin": "coordinator",
+      "justification": "Check CUDA availability before selecting a device and fail with an explicit CUDA prerequisite instead of invoking set_device on CPU-only hosts.",
+      "upstream_sha256": "6c467eadfdfa4fd76e6a3951838cb1f5241265908d59b2a2a4abf95562cd9e61",
+      "delivered_sha256": "3d2c92dba91f2bbf104fd4fb91e6ae256f0c28615ef645652fe369cb8e1a34ba"
+    }
+  ]
 }

@@ -1170,15 +1170,18 @@ def _host_identity() -> dict[str, str]:
 def resolve_model_interpreter(model: dict[str, Any], config: Any | None = None) -> str | None:
     """The interpreter path this model's environment currently resolves to.
 
-    Checks the declared environment variable first. If unset, falls back to the persisted
-    provisioning assignment (`environment_assignment.json`) under this operator's artifacts root,
-    provided the record is RUNTIME_VERIFIED and located within this artifacts root.
+    Checks the declared environment variable first -- process environment, then the operator's local
+    `workbench.env`, with the documented precedence -- and if both are unset falls back to the
+    persisted provisioning assignment (`environment_assignment.json`) under this operator's artifacts
+    root, provided the record is RUNTIME_VERIFIED and located within this artifacts root.
     """
+    from workbench.backend.model_settings import setting as _setting
+
     env = model.get("environment") or {}
     variable = env.get("python_env_var")
     if not variable:
         return None
-    configured = os.environ.get(variable)
+    configured = _setting(variable)
     if configured:
         return configured
     try:
@@ -1876,7 +1879,10 @@ def _cache_key(model: dict[str, Any], require_cuda: bool,
     happened to be verified first in this process.
     """
     env = model.get("environment") or {}
-    configured = os.environ.get(env.get("python_env_var") or "", "")
+    from workbench.backend.model_settings import setting as _setting
+
+    declared_variable = env.get("python_env_var")
+    configured = (_setting(declared_variable) or "") if declared_variable else ""
     host = hashlib.sha256(
         json.dumps(_host_identity(), sort_keys=True).encode("utf-8")).hexdigest()
     root = ""

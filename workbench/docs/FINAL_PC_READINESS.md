@@ -1,27 +1,27 @@
 # Final PC readiness -- Release B (GPU host)
 
-Everything below is the software state at the commit named here. Real checkpoint inference, real
-FashionIQ evaluation, numerical parity with the papers and real CUDA capability belong to the GPU
-host: none of them has been executed on the laptop, and nothing in this document claims otherwise.
+> **Current handoff:** use [AUTOPILOT_GUIDE.md](AUTOPILOT_GUIDE.md) for the single setup/run/resume path and [MODEL_STATUS_SPEC.md](MODEL_STATUS_SPEC.md) for current evidence. The checklist below preserves its earlier release snapshot; its pilot model/readiness claims are historical, not current. TME weights require `python -m workbench.scripts.download_auxiliary_assets --model tme`; its CUDA-only validation feature cache needs explicit `--allow-gpu-preparation` and about 10.47 GiB. Live GPU evaluation, target-device validation and Docker are not executed on this host.
+
+**Revision identity:** `<PRODUCTION_REVISION>` is the production revision whose checks ran; `<FINAL_HEAD>` is the branch tip, differing only in documentation. Production bytes are identical between them. The base commit below is historical authorship, not the current tested revision.
 
 ## 1. Commit and command
 
 - Branch: `research/cir-failure-workbench`
-- Base commit for this document: `70851dd3d9481053c29082d37fbb18983516253d`
+- Historical base commit for this document: `70851dd3d9481053c29082d37fbb18983516253d`
 - `main` remains `8ebcc74d5fd1934df4f3772a8ca5a96dbd00f333`
 
-One command, after the configuration file exists:
+The single setup/run/resume path is described in [AUTOPILOT_GUIDE.md](AUTOPILOT_GUIDE.md). After copying
+`workbench/configs/pc_autopilot.example.yaml` to a PC-specific config and supplying verified paths,
+model selection, and permissions, run:
 
 ```bash
-./workbench/run.sh autopilot \
-    --config workbench/configs/pc_autopilot.pilot_limn.yaml \
-    --apply \
-    --resume
+./workbench/run.sh autopilot --config /path/to/pc_autopilot.yaml --apply --resume
 ```
 
-`--resume` is safe on a first invocation. Use without `--apply` to plan only, `--dry-run` to plan
-without side effects, `--status` / `--report` to read saved state. Every other command in this
-document is a diagnostic.
+This live GPU command is not executable on this host: it requires a configured CUDA GPU/driver,
+canonical FashionIQ data, selected model interpreter and checkpoint, persistent storage, and explicit
+authorization for side effects. `--resume` is safe on first invocation. Use `--dry-run` to plan;
+`--status` / `--report` read saved state.
 
 ## 2. Host prerequisites
 
@@ -93,8 +93,13 @@ Two ready-made profiles are provided:
 | index rebuild | `allow_index_write` |
 
 A stage whose declared capability is not granted is refused as `BLOCKED_AUTHORIZATION_REQUIRED`. A
-missing permission is never treated as permission to download.
-
+missing permission is never treated as permission to download. `permissions.allow_gpu_preparation` is
+optional and defaults to `false`; TME validation-feature generation needs it in addition to
+`allow_preparation`. The CUDA-only cache is about 10.47 GiB and was not generated here. Obtain both
+TME EVA-ViT-g and BLIP-2 weights through
+`python -m workbench.scripts.download_auxiliary_assets --model tme`; making `weight/` or setting
+`WORKBENCH_TME_ASSET_EVA_VIT_G` does not install assets. `doctor.py` accepts
+`--checkpoint-policy {strict_clean,include_flagged_conditions}`; Autopilot checks its selected checkpoint.
 ## 5. Budgets
 
 `max_download_bytes` must cover the selected checkpoint variants plus required auxiliary downloads,

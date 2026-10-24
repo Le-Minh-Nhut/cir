@@ -1,18 +1,20 @@
 """PTHA+MTST preflight and explicitly labelled CIRR-to-FashionIQ transfer replay."""
 from __future__ import annotations
 
+import importlib
 import json
 import os
 import sys
 from argparse import ArgumentParser
+from contextlib import ExitStack, contextmanager
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from workbench.backend.fashioniq_layout import CATEGORIES
 from workbench.backend.registry import model_by_id
-from workbench.replay.common import source_pin_status, sha256_file
+from workbench.replay.common import isolated_cache_root, source_pin_status, sha256_file
 
 MODEL = model_by_id("ptha_mtst")
 RAW_INPUTS = tuple(
@@ -116,6 +118,39 @@ def preflight(
     return blockers
 
 
+@contextmanager
+def _fashioniq_dataset_binding(dataset_root: Path) -> Iterator[Any]:
+    """Bind MTST's literal dataset path to this requested root for one evaluation."""
+    previous_env = os.environ.get("MTST_DATA_ROOT")
+    previous_module = sys.modules.get("data_utils")
+    previous_base_path = getattr(previous_module, "base_path", None)
+    with ExitStack() as stack:
+        if dataset_root.name == "fashionIQ_dataset":
+            data_root = dataset_root.parent
+        else:
+            data_root = stack.enter_context(isolated_cache_root(dataset_root, directory_names=()))
+            (data_root / "fashionIQ_dataset").symlink_to(
+                dataset_root.resolve(), target_is_directory=True
+            )
+        os.environ["MTST_DATA_ROOT"] = str(data_root)
+        try:
+            data_utils = importlib.import_module("data_utils")
+            restore_base_path = (
+                previous_base_path if data_utils is previous_module
+                else Path(previous_env) if previous_env else Path("path_to_data_dir")
+            )
+            data_utils.base_path = data_root
+            try:
+                yield data_utils
+            finally:
+                data_utils.base_path = restore_base_path
+        finally:
+            if previous_env is None:
+                os.environ.pop("MTST_DATA_ROOT", None)
+            else:
+                os.environ["MTST_DATA_ROOT"] = previous_env
+
+
 def _state_dict_report(model_state: dict[str, Any], checkpoint_state: dict[str, Any]) -> dict[str, Any]:
     expected = set(model_state)
     supplied = set(checkpoint_state)
@@ -146,7 +181,6 @@ def evaluate_transfer(
 
     src = source_tree(source_root) / "src"
     sys.path.insert(0, str(src))
-    os.environ["MTST_DATA_ROOT"] = str(dataset_root.parent)
 
     checkpoint_sha256 = sha256_file(checkpoint)
     payload = torch.load(checkpoint, map_location="cpu", weights_only=True)
@@ -156,9 +190,6 @@ def evaluate_transfer(
     from omegaconf import OmegaConf
     from lavis.common.registry import registry
     from lavis.models import load_preprocess
-    from data_utils import FashionIQDataset, targetpad_transform
-    from utils import extract_index_blip_features
-    from validate_blip import compute_fiq_val_metrics
 
     checkpoint_models = {
         "Blip2QformerCirCat": ("blip2_cir_cat", "pretrain"),
@@ -196,15 +227,22 @@ def evaluate_transfer(
     model = model.cuda().eval()
 
     _vis_processors, text_processors = load_preprocess(config.preprocess)
-    transform = targetpad_transform(1.25, 224)
-    category_metrics: dict[str, dict[str, float]] = {}
-    for category in CATEGORIES:
-        relative = FashionIQDataset("val", [category], "relative", transform)
-        classic = FashionIQDataset("val", [category], "classic", transform)
-        index_features, index_names = extract_index_blip_features(classic, model)
-        r10, r50 = compute_fiq_val_metrics(relative, model, index_features, index_names, text_processors)
-        category_metrics[category] = {"r10": r10, "r50": r50}
-        torch.cuda.empty_cache()
+    with _fashioniq_dataset_binding(dataset_root) as data_utils:
+        from utils import extract_index_blip_features
+        from validate_blip import compute_fiq_val_metrics
+
+        FashionIQDataset = data_utils.FashionIQDataset
+        targetpad_transform = data_utils.targetpad_transform
+        transform = targetpad_transform(1.25, 224)
+        category_metrics: dict[str, dict[str, float]] = {}
+        for category in CATEGORIES:
+            relative = FashionIQDataset("val", [category], "relative", transform)
+            classic = FashionIQDataset("val", [category], "classic", transform)
+            index_features, index_names = extract_index_blip_features(classic, model)
+            r10, r50 = compute_fiq_val_metrics(relative, model, index_features, index_names, text_processors)
+            category_metrics[category] = {"r10": r10, "r50": r50}
+            torch.cuda.empty_cache()
+
 
     r10 = sum(values["r10"] for values in category_metrics.values()) / len(category_metrics)
     r50 = sum(values["r50"] for values in category_metrics.values()) / len(category_metrics)

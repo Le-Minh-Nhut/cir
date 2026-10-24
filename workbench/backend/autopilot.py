@@ -17,7 +17,8 @@ from workbench.backend.operator_config import WorkbenchConfig, resolve_config
 from workbench.backend.registry import load_registry
 
 REPOSITORY = Path(__file__).resolve().parents[2]
-PERMISSIONS = {"allow_network", "allow_large_downloads", "allow_env_install", "allow_preparation", "allow_gpu_eval", "allow_index_write"}
+PERMISSIONS = {"allow_network", "allow_large_downloads", "allow_env_install", "allow_preparation",
+               "allow_gpu_eval", "allow_gpu_preparation", "allow_index_write"}
 PATH_KEYS = {"registry", "dataset_root", "artifacts", "checkpoints", "results", "third_party"}
 BUDGET_KEYS = {"max_download_bytes", "max_models", "top_k"}
 CHECKPOINT_POLICIES = ("strict_clean", "include_flagged_conditions")
@@ -88,7 +89,9 @@ def load_config(path: Path, *, registry: dict[str, Any] | None = None) -> Autopi
         if type(value) is not int or value < 0 or (name != "max_download_bytes" and value < 1):
             raise ValueError(f"budgets.{name} must be a {'non-negative' if name == 'max_download_bytes' else 'positive'} integer")
     permissions = raw["permissions"]
-    _mapping(permissions, PERMISSIONS, "permissions")
+    _mapping(permissions, PERMISSIONS, "permissions",
+             optional={"allow_gpu_preparation"})
+    permissions.setdefault("allow_gpu_preparation", False)
     if any(type(value) is not bool for value in permissions.values()):
         raise ValueError("every permissions value must be boolean")
     registry = registry if registry is not None else load_registry(paths["registry"])

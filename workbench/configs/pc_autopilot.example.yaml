@@ -42,4 +42,5 @@ permissions:
   allow_env_install: false
   allow_preparation: false
   allow_gpu_eval: false
+  allow_gpu_preparation: false
   allow_index_write: false

@@ -8,6 +8,7 @@ import importlib.util
 import sys
 from pathlib import Path
 
+import pytest
 from workbench.backend.operator_config import WorkbenchConfig
 
 
@@ -968,3 +969,67 @@ def test_preflight_rejects_a_manifest_alias_whose_bytes_changed(tmp_path: Path, 
     reqs = model_requirements(model, cfg)
     assert any("COT_ours2 captions" in block for block in reqs["blocks"]), reqs["blocks"]
     assert not any("source-compatible caption alias" in w for w in reqs["warnings"])
+
+def test_tme_auxiliary_destinations_match_preparation_contract(tmp_path: Path, monkeypatch) -> None:
+    from dataclasses import replace
+    from workbench.backend.operator_config import resolve_config
+    from workbench.backend.registry import (
+        auxiliary_assets_for_model, auxiliary_destination, external_asset_statuses,
+        load_registry, preparation_contract_for_model,
+    )
+
+    third_party = tmp_path / "third_party"
+    monkeypatch.setattr(
+        "workbench.backend.operator_config.resolve_config",
+        lambda: replace(resolve_config(), WORKBENCH_THIRD_PARTY_ROOT=third_party),
+    )
+    model = next(model for model in load_registry()["models"] if model["model_id"] == "tme")
+    contract_assets = preparation_contract_for_model(model)["external_assets"]
+    statuses = {status["name"]: Path(status["path"]) for status in external_asset_statuses(model)}
+    registered = auxiliary_assets_for_model("tme")
+    assert len(registered) == 2
+
+    for asset in registered:
+        contract_asset = next(item for item in contract_assets if item["name"] == asset["family"])
+        expected = (third_party / model["source_dir"] / contract_asset["expected_local_location"]).resolve()
+        destination = auxiliary_destination(asset, third_party, tmp_path / "FashionIQ")
+        assert destination == expected
+        assert statuses[contract_asset["name"]] == expected
+
+
+def test_tme_model_source_destination_cannot_escape_checkout(tmp_path: Path) -> None:
+    from workbench.backend.registry import auxiliary_assets_for_model, auxiliary_destination
+
+    asset = dict(auxiliary_assets_for_model("tme")[0], destination_path="../outside.pth")
+    with pytest.raises(ValueError, match="escapes root") as error:
+        auxiliary_destination(asset, tmp_path / "third_party", tmp_path / "FashionIQ")
+    assert str(tmp_path / "third_party" / "outside.pth") in str(error.value)
+
+
+def test_tme_verify_reports_expected_size_and_rejects_wrong_size(monkeypatch, tmp_path: Path, capsys) -> None:
+    module = load_module()
+    config = config_at(tmp_path)
+    item = next(asset for asset in module.assets({"tme"}, config.WORKBENCH_THIRD_PARTY_ROOT,
+                                                 config.FASHIONIQ_ROOT)
+                if asset.family == "BLIP-2 pretrain weights")
+    monkeypatch.setattr(module, "sha256_file", lambda _: "a" * 64)
+    item.destination.parent.mkdir(parents=True)
+    item.destination.touch()
+    with item.destination.open("r+b") as handle:
+        handle.truncate(item.expected_size_bytes)
+
+    assert not module.verify(item)
+    output = capsys.readouterr().out
+    assert "UNRESOLVED REQUIRED PROVENANCE" in output
+    assert "expected " not in output
+
+    with item.destination.open("r+b") as handle:
+        handle.truncate(item.expected_size_bytes - 1)
+    assert not module.verify(item)
+    assert f"expected {item.expected_size_bytes} bytes" in capsys.readouterr().out
+
+
+def test_auxiliary_model_ids_include_tme() -> None:
+    from workbench.backend.registry import auxiliary_model_ids
+
+    assert "tme" in auxiliary_model_ids()

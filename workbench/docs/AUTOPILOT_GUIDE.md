@@ -1,6 +1,10 @@
 # Autopilot operator guide
 
-Primary GPU-PC runbook for guarded FashionIQ reproduction. Autopilot orchestrates pinned-source sync, checkpoint acquisition, preparation, environment planning and provisioning, GPU capability verification, evaluation, validation, and index rebuild. It does not make a blocked registry entry runnable, invent assets, or claim paper parity.
+Primary GPU-PC guide for guarded FashionIQ reproduction. Use the local operator env file and a PC-specific autopilot YAML for paths, model selection, checkpoint policy, budgets, and permissions. The workbench does not make blocked registry entries runnable or claim paper parity.
+
+**Revision identity:** `<PRODUCTION_REVISION>` is the revision whose checks ran; `<FINAL_HEAD>` is the branch tip, which differs only in documentation. Production bytes are identical between them.
+
+## 1. Prerequisites and configuration
 
 ## 1. GPU-PC prerequisites
 
@@ -12,7 +16,7 @@ Offline reuse: a source repository, checkpoint, or auxiliary asset that is alrea
 
 ## 2. Set dataset, artifact, checkpoint, results, and upstream roots
 
-Create PC-specific YAML from `workbench/configs/pc_autopilot.example.yaml`. `paths` requires exactly `registry`, `dataset_root`, `artifacts`, `checkpoints`, `results`, and `third_party`; unknown keys are rejected. Relative paths resolve from the config file's directory. `registry` must name an existing file and `dataset_root` an existing directory; other paths need an existing directory parent.
+Copy `workbench/configs/pc_autopilot.example.yaml` to a PC-specific YAML and edit it. `paths` requires exactly `registry`, `dataset_root`, `artifacts`, `checkpoints`, `results`, and `third_party`; unknown keys are rejected. Relative paths resolve from the config file's directory. `registry` must name an existing file and `dataset_root` an existing directory; other paths need an existing directory parent. Optional `permissions.allow_gpu_preparation` defaults to `false`.
 
 Set `paths.dataset_root` to the FashionIQ root itself, not `images/` or `captions/`. Set `paths.artifacts` to persistent storage; it owns run state, reports, evidence ledger, completion proofs, GPU capability records, environment plans, `environment_assignment.json`, and the derived DuckDB index. Set `paths.checkpoints` and `paths.results` in persistent storage too. Set `paths.third_party` to the location for pinned upstream checkouts. Upstream requirement files are read from this configured upstream root (`paths.third_party`), never a hardcoded default. The CIR code checkout is `CIR_REPO_ROOT`; it supplies workbench code and registry defaults, separate from the configured upstream-clone root.
 
@@ -39,11 +43,13 @@ permissions:
   allow_large_downloads: true
   allow_env_install: true
   allow_preparation: true
-  allow_gpu_eval: true
+  allow_gpu_preparation: false # Optional; defaults to false. TME CUDA cache generation only.
   allow_index_write: true
 ```
 
 `selected_models` accepts `all_registered` or a non-empty list of exact registry IDs. Prefer an explicit list of models whose evidence and prerequisites you reviewed. `all_registered` includes blocked entries; it does not make them runnable. `max_models` must cover the selection. Keep selected IDs unchanged after execution starts so resume can use existing state.
+
+Copy `workbench/config/workbench.env.example` to `workbench/config/workbench.env` for local roots, ports, and registry-declared per-model interpreter and asset-location settings. For these model-specific values, precedence is process environment, then `workbench.env`, then a `RUNTIME_VERIFIED` provisioning assignment under the artifacts root. Empty values mean unset. Every registry-declared name is accepted, including `WORKBENCH_TME_PYTHON` and `WORKBENCH_PTHA_MTST_PYTHON`.
 
 ## 3. Install or point at conda or mamba
 
@@ -78,22 +84,67 @@ The config supports two optional checkpoint keys: `checkpoint_policy` and `check
 
 Checkpoint downloads verify size and SHA-256 on a temporary file (`.part`) and only publish via atomic replacement once verified. A rejected or interrupted download never leaves a partial file that blocks recovery.
 
-Do not describe registry-blocked models as runnable:
+The previous per-model prose was a dated snapshot, not current readiness. See [MODEL_STATUS_SPEC.md](MODEL_STATUS_SPEC.md) for the current 17-model evidence and blocker table. Readiness and runtime-preflight remain authoritative; never treat a registered checkpoint as runnable solely because it can be downloaded.
 
-- `ptha_mtst`: no verified FashionIQ fine-tuned checkpoint and no eligible source integration.
-- `tgcir`: no source replay CLI; ViT-B/16 and preparation/cache requirements unresolved.
-- `pair`: official FashionIQ mapping of variants unverified.
-- `clvc_net`: no standalone replay entrypoint; checkpoint mapping and ResNet-50 asset unresolved.
-- `sprc`: checkpoint/backbone mapping unresolved.
-- Air-Know, ConeSep, HABIT, INTENT: registered weights are noise-trained, not clean-trained; no audited official command constructor.
-- `hint`: checkpoint evidence exists; official command constructor remains unaudited.
-- `encoder`: direct checkpoint file URL/hash unresolved and pinned source imports missing `datasets1.py`; OpenCLIP binary also required.
-- `dcnet`: checkpoint mapping/hash, author-generated PKLs, and ResNet-50 asset unresolved.
-- Combiner and CLIP4Cir: checkpoint mapping/pairing and RN50x4 base asset unresolved.
-- `limn`: replay implemented, but three checkpoints, resized images, correction dictionaries, and verified environment must pass preflight.
-- `csmcir`: required Qwen and `COT_ours2/fashioniq` captions must be present before autopilot. COT author source remains unverified; preserve provenance and do not substitute.
+## 6. Select the GPU and authorize TME preparation
 
-These are current known blockers, not a readiness guarantee for other models. Actual preflight remains authoritative.
+Set the PC process environment's `CUDA_VISIBLE_DEVICES` to the intended device(s) before launch. Keep visibility unchanged between capability verification and evaluation. GPU verification is an authorized autopilot stage using the assigned model interpreter; a still-valid capability is reused, while stale capability is refused and re-probed.
+
+TME validation-image features are a separate CUDA-only preparation step. `pipeline.py` accepts `--allow-gpu-preparation`; autopilot config accepts optional `permissions.allow_gpu_preparation`, default `false`. It must be explicitly authorized in addition to `allow_preparation`. The generator requires a CUDA-capable TME interpreter and about 10.47 GiB free for derived features. This host did not generate that cache. Creating its directory does not create features.
+
+TME's required EVA-ViT-g and BLIP-2 weights use the registered acquisition route:
+
+```bash
+.venv/bin/python -m workbench.scripts.download_auxiliary_assets --model tme --dry-run
+```
+
+Run without `--dry-run` only after authorizing the downloads on the target machine. The assets stage in `workbench/third_party/TME/weight/`; no TME asset-location environment variable is declared.
+
+## 7. Choose checkpoint policy
+
+`checkpoint_policy` controls handling of recorded training conditions:
+
+- `strict_clean` selects only weights whose training condition is exactly 0%;
+- `include_flagged_conditions` permits explicitly reported non-clean conditions, but does not resolve ambiguous mappings or make a checkpoint runnable.
+
+`doctor.py` accepts `--checkpoint-policy {strict_clean,include_flagged_conditions}`. Autopilot runtime-preflight checks the checkpoint selection resolved for that run. TME 20% remains `CHECKPOINT_UNAVAILABLE`; Air-Know 20% is not substituted with 50%.
+
+## 8. Configure the HMAC ledger key
+
+Before a real run, provide a stable high-entropy `WORKBENCH_LEDGER_KEY` via PC secret manager or process environment. Keep it outside repository, config, artifacts, logs, and model environments. Reuse the same key across resumes. Without an environment key, the documented private config-file fallback is used. See [AUTOMATION_RUNBOOK.md](AUTOMATION_RUNBOOK.md) for trust boundaries.
+
+## 9. Environment grouping and provisioning
+
+Only `RUNTIME_VERIFIED` assignments permit evaluation. Model interpreter resolution is process environment, local `workbench.env`, then the persisted `RUNTIME_VERIFIED` assignment. Provisioning and environment creation remain separately permission-gated.
+
+## 10. Plan, run, and resume
+
+Use this single primary setup/run/resume path. First inspect a read-only plan:
+
+```bash
+./workbench/run.sh autopilot --config workbench/configs/pc_autopilot.example.yaml --dry-run
+```
+
+On a configured GPU PC, replace the example profile with your edited PC profile and authorize execution with `--apply --resume`. Live GPU evaluation requires a supported CUDA host, verified per-model environment, checkpoint and dataset; this host did not run it.
+
+## 11. Read reports and handle blockers
+
+Inspect the per-model rows and blocker report under `<paths.artifacts>/reports/`. Runtime-preflight tests the selected checkpoint rather than treating another checkpoint's readiness as transferable. Fix only verified local causes. Keep unresolved assets, mappings, entrypoints, or host checks blocked; see [MODEL_STATUS_SPEC.md](MODEL_STATUS_SPEC.md).
+
+## 12. Read-only command examples
+
+The following examples inspect help, status, or a plan without authorizing downloads, evaluation, or index writes:
+
+```bash
+./workbench/run.sh autopilot --help
+./workbench/run.sh autopilot --config workbench/configs/pc_autopilot.example.yaml --dry-run
+.venv/bin/python workbench/scripts/doctor.py --scope workbench --json
+.venv/bin/python workbench/scripts/prepare_model.py --list --json
+.venv/bin/python workbench/scripts/pipeline.py prepare --model csmcir --dry-run
+.venv/bin/python workbench/scripts/download_auxiliary_assets.py --model tme --dry-run
+```
+
+GPU evaluation is not executed on this host. It requires the target CUDA device, model-specific verified interpreter and checkpoint, canonical FashionIQ inputs, and sufficient derived-cache space where required.
 
 ## 6. Select the GPU
 
@@ -230,8 +281,7 @@ These commands inspect parser options, saved state, or interpreter readiness; no
 # Optional diagnostic: resolve plan without mutations or subprocesses.
 ./workbench/run.sh autopilot --config /path/to/pc_autopilot.yaml --dry-run
 
-# Optional diagnostic: inspect registered model interpreter readiness.
-python workbench/scripts/manage_environment.py --list --json
+./.venv/bin/python workbench/scripts/manage_environment.py --list --json
 ```
 
 For research status and protocol definitions, see [../README.md](../README.md), [UPSTREAM_AUDIT.md](UPSTREAM_AUDIT.md), and [RESULT_SCHEMA.md](RESULT_SCHEMA.md).

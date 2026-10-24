@@ -47,7 +47,9 @@ def _interpreter_from_env_var(model: dict) -> str | None:
     var = env.get("python_env_var")
     if not var:
         return None
-    return os.environ.get(var)
+    from workbench.backend.model_settings import setting
+
+    return setting(var)
 
 
 def _interpreter_status(model: dict, source_root: Path) -> dict:

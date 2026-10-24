@@ -1002,10 +1002,12 @@ def _solve(solver: Callable | None, command: str | None, constraints: dict) -> t
 
 
 def _reusable_interpreter(members: list[str], by_id: dict[str, dict], specs: dict[str, dict]) -> str | None:
+    from workbench.backend.model_settings import setting as _setting
+
     paths = []
     for mid in members:
         variable = (by_id[mid].get("environment") or {}).get("python_env_var")
-        path = os.environ.get(variable or "")
+        path = (_setting(variable) or "") if variable else ""
         if not path or _is_staging_path(path):
             return None
         paths.append(path)
@@ -1082,11 +1084,13 @@ def _runtime_model(model: dict, spec: dict) -> dict:
 
 
 def _group_status(group: dict, models: dict[str, dict], specs: dict[str, dict], solver_status: str):
+    from workbench.backend.model_settings import setting as _setting
+
     paths, reports = [], []
     for mid in group["members"]:
         model = models[mid]
         variable = (model.get("environment") or {}).get("python_env_var")
-        path = os.environ.get(variable or "")
+        path = (_setting(variable) or "") if variable else ""
         if not path:
             continue
         paths.append(path)
@@ -2141,8 +2145,10 @@ def _operator_declared_interpreter(model: dict, interpreter: Path) -> bool:
     symlink chain ending at a shared base binary, so resolving both sides made an unrelated model
     look like it matched a system interpreter.
     """
+    from workbench.backend.model_settings import setting as _setting
+
     variable = (model.get("environment") or {}).get("python_env_var")
-    configured = os.environ.get(variable) if variable else None
+    configured = _setting(variable) if variable else None
     if not configured:
         return False
     try:

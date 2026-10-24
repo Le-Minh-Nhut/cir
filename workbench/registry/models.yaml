@@ -615,7 +615,15 @@ models:
     reported_r10: 56.13
     reported_r50: 77.59
     reported_mean: 66.86
-    reproduction_status: NOT_RUN
+    # A real FULL three-category GPU evaluation ran on 2026-10-24 through the workbench operator path
+    # (`evaluate_models.py --model encoder --checkpoint fashioniq --verify-gpu`; RTX 3050 Laptop,
+    # sm 8.6, driver 580.178.04, torch 1.13.1+cu117): macro R@10 56.06 / R@50 77.58 against the
+    # paper's 56.13 / 77.59, and `verify_run.py` returned `verified=true,
+    # is_research_evidence=true`. The benchmark gate is `PASS_METRICS_ONLY_MAPPING_UNVERIFIED`: the
+    # metrics agree within 5%, but the checkpoint MAPPING is unverified, so this is a measured
+    # metric comparison and NOT a certified official reproduction. The status records that
+    # distinction so it travels with the model rather than living only in a report.
+    reproduction_status: METRICS_MEASURED_MAPPING_UNVERIFIED
     # The runtime computes this field (checkpoint_selection.select_checkpoints) and returns False:
     # the variant has no author-linked download URL and no local artifact, so no obtainable
     # checkpoint exists. The old `true` was a pre-download wish that contradicted the computation.

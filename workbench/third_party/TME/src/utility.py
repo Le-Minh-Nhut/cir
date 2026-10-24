@@ -47,11 +47,10 @@ def generate_randomized_fiq_caption(flattened_captions: List[str]) -> List[str]:
 
 def set_device(i):
     global device
+    if not torch.cuda.is_available():
+        raise RuntimeError("TME requires CUDA for feature generation; CPU execution is unsupported")
     torch.cuda.set_device(f"cuda:{i}")
-    if torch.cuda.is_available():
-        device = torch.device(f'cuda:{i}')
-    else:
-        device = torch.device('cpu')
+    device = torch.device(f"cuda:{i}")
     
 
 def get_closs(i2t, target, loss_name=None):

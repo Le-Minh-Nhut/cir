@@ -2,17 +2,17 @@
 
 Local tooling for FashionIQ composed-image-retrieval failure analysis. Official upstream evaluators remain authoritative; the workbench records pinned-source/checkpoint facts, guards execution, validates canonical artifacts, builds a local DuckDB serving index, and presents evidence in a browser. It does not implement or substitute CIR models.
 
-> **Status boundary:** no official model evaluation or reproduction has run in this checkout. Paper metrics are registry sanity references, never local metrics. Mock artifacts are development data, never research evidence.
+> **Status boundary:** no real evaluation, checkpoint inference, or target-PC GPU validation has run on this host. Existing LIMN and ENCODER reports document earlier measured runs on an RTX 3050 Laptop (`sm_86`), not this current checkout's release status or an `sm_120` PC run. Paper metrics are registry sanity references, never local metrics. Mock artifacts are development data, never research evidence.
 
 ## Moving to the GPU PC
 
 | Document | What it answers |
 | --- | --- |
-| [docs/FINAL_PC_READINESS.md](docs/FINAL_PC_READINESS.md) | what this commit supports, the prerequisites, the one command, and what a run produces |
-| [docs/PC_TRANSFER_CHECKLIST.md](docs/PC_TRANSFER_CHECKLIST.md) | what to copy, what to rebuild, and each permission's effect |
-| [docs/AUXILIARY_ASSET_AUDIT.md](docs/AUXILIARY_ASSET_AUDIT.md) | every external asset each model needs, its source line, and its precise blocker |
-| [docs/AUTOMATED_DATA_PREPARATION.md](docs/AUTOMATED_DATA_PREPARATION.md) | what the workbench prepares by itself, and the rule that decides |
-| [docs/READINESS_MATRIX.md](docs/READINESS_MATRIX.md) | the current per-model state, generated from the registry |
+| [docs/FINAL_PC_READINESS.md](docs/FINAL_PC_READINESS.md) | prerequisites, the single setup/run/resume path, and what a run produces |
+| [docs/PC_TRANSFER_CHECKLIST.md](docs/PC_TRANSFER_CHECKLIST.md) | what to copy, rebuild, and authorize |
+| [docs/AUTOPILOT_GUIDE.md](docs/AUTOPILOT_GUIDE.md) | primary operator guide and supported commands |
+| [docs/MODEL_STATUS_SPEC.md](docs/MODEL_STATUS_SPEC.md) | current 17-model evidence, capability, and blocker table |
+| [docs/AUTOMATION_RUNBOOK.md](docs/AUTOMATION_RUNBOOK.md) | automation, resume, and evidence contract |
 
 ## Operating rules
 
@@ -42,10 +42,10 @@ CSMCIR consumes standard FashionIQ `images`; iLearn model sources use `resized_i
 
 ## Environment policy
 
-The workbench keeps upstream model environments isolated from the workbench environment. Autopilot plans and PROVISIONS shared conda environments when authorized (`allow_env_install: true`), allocating one prefix per compatible group under the artifacts root, reading source requirements from the configured upstream root (`paths.third_party`), and recording four distinct states (`CONSTRAINTS_COMPATIBLE`, `SOLVER_COMPATIBLE`, `INSTALLED`, `RUNTIME_VERIFIED`). Only `RUNTIME_VERIFIED` permits evaluation, and existing verified environments are reused without reinstall. Authoritative assignments are recorded in `environment_assignment.json`. See [Autopilot Operator Guide](docs/AUTOPILOT_GUIDE.md).
+The workbench keeps upstream model environments isolated from the workbench environment. Autopilot provisions shared conda environments when authorized (`allow_env_install: true`) and records `CONSTRAINTS_COMPATIBLE`, `SOLVER_COMPATIBLE`, `INSTALLED`, and `RUNTIME_VERIFIED`; only `RUNTIME_VERIFIED` permits evaluation. Existing verified environments are reused. See [Autopilot Operator Guide](docs/AUTOPILOT_GUIDE.md).
 ## Local configuration
 
-`workbench/config/workbench.env.example` documents local service/path defaults. Explicit CLI settings take precedence over process environment, local env file, and built-in default. Relative paths resolve against `CIR_REPO_ROOT`. Do not put secrets in this file.
+Copy `workbench/config/workbench.env.example` to `workbench/config/workbench.env`. Explicit CLI settings take precedence for paths and ports. For per-model interpreter and asset-location settings, process environment wins over `workbench.env`; absent an override, runtime uses a `RUNTIME_VERIFIED` provisioning assignment where available. Every registry-declared setting name is accepted, including `WORKBENCH_TME_PYTHON` and `WORKBENCH_PTHA_MTST_PYTHON`. Relative paths resolve against `CIR_REPO_ROOT`. Do not put secrets in this file.
 
 For GPU-PC reproduction, use dedicated autopilot YAML config. It owns FashionIQ, artifact, checkpoint, result, registry, and upstream roots; do not confuse the CIR code checkout (`CIR_REPO_ROOT`) with the configured upstream-clone root. The complete setup and schema are in [Autopilot Operator Guide](docs/AUTOPILOT_GUIDE.md).
 
@@ -59,17 +59,19 @@ For GPU-PC reproduction, use dedicated autopilot YAML config. It owns FashionIQ,
 
 This command is accepted by the autopilot parser. Keep config, selected models, artifact roots, GPU visibility, and HMAC ledger key stable when resuming. Autopilot orchestrates stages in order (doctor, dataset, sync, environment, preparation, checkpoint, auxiliary-assets, environment-plan, gpu-verification, runtime-preflight, evaluation, validation-index), executes GPU verification as an explicit authorized stage, and writes consolidated summary, CSV, and blocker reports with real aggregate metrics (Recall@10/@50 across dress/shirt/toptee, macro, protocol, checkpoint provenance, duration, and completion-proof references). Successful process exit does not imply every selected model completed. Never run individual stage scripts as an alternative reproduction workflow.
 
-The registry marks `ptha_mtst` blocked for lack of a verified FashionIQ checkpoint/source integration; `tgcir` lacks a replay CLI and required assets; `pair`, `clvc_net`, `dcnet`, Combiner/CLIP4Cir, and `sprc` have unresolved checkpoint mappings/assets; `encoder` has unresolved checkpoint acquisition and missing pinned-source module; Air-Know, ConeSep, HABIT, and INTENT have noise-trained variants rather than clean-trained weights and no audited command constructor; HINT's command is unaudited; LIMN still needs checkpoints, resized images, dictionaries, and verified environment; CSMCIR still needs provenance-verified COT captions. These are blockers, not runnable model claims. Current status: [docs/UPSTREAM_AUDIT.md](docs/UPSTREAM_AUDIT.md).
+Use `doctor.py --checkpoint-policy {strict_clean,include_flagged_conditions}` to inspect readiness under a chosen checkpoint policy. Autopilot runtime-preflight checks the checkpoint selection the run actually resolved; it does not treat a different registered condition as a substitute. Read the current per-model capability and blocker table in [docs/MODEL_STATUS_SPEC.md](docs/MODEL_STATUS_SPEC.md), then use [docs/FINAL_PC_READINESS.md](docs/FINAL_PC_READINESS.md) for the single setup/run/resume workflow.
+
+TME's EVA-ViT-g and BLIP-2 weights are acquired through `python -m workbench.scripts.download_auxiliary_assets --model tme`, which stages them under `workbench/third_party/TME/weight/`. Creating that directory or setting an undeclared asset environment variable does not install either weight. TME's optional validation-feature cache is generated only by authorized CUDA preparation (`--allow-gpu-preparation`, or autopilot `allow_gpu_preparation: true`) and needs about 10.47 GiB; this host did not generate it.
 ### Optional diagnostics
 
 These inspect CLI help or saved autopilot status; they do not replace the primary command.
 
 ```bash
-# Optional diagnostic: inspect accepted autopilot options.
+# Show accepted commands/options. Same parser is used by the dispatcher.
 ./workbench/run.sh autopilot --help
 
-# Optional diagnostic: read saved autopilot state as JSON.
-./workbench/run.sh autopilot --config /path/to/pc_autopilot.yaml --status --json
+# Read-only plan with the checked-in example profile.
+./workbench/run.sh autopilot --config workbench/configs/pc_autopilot.example.yaml --dry-run
 ```
 
 ## Mock and manually imported artifacts

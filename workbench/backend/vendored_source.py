@@ -62,7 +62,8 @@ def _declared_runtime_artifacts(model: dict[str, Any]) -> set[str]:
     if isinstance(source_dir, str) and source_dir:
         # Imported here, not at module scope: registry.py owns the asset declarations and this
         # module is imported by runtime.py, which registry.py already depends on.
-        from workbench.backend.registry import auxiliary_assets_for_model
+        from workbench.backend.registry import (auxiliary_assets_for_model,
+                                                evaluator_relative_asset_paths)
 
         for asset in auxiliary_assets_for_model(model.get("model_id", "")):
             if asset.get("destination_scope") != "model_source":
@@ -70,6 +71,30 @@ def _declared_runtime_artifacts(model: dict[str, Any]) -> set[str]:
             destination = asset.get("destination_path")
             if isinstance(destination, str) and destination:
                 declared.add(destination)
+        # An external asset whose declared location IS a path inside the evaluator's checkout (the
+        # pinned loader opens it by a literal relative name and no variable can redirect it) is
+        # installed by preparing, not by editing source. Without this the four files authorized
+        # preparation creates for TME -- the two base weights and the two feature-cache files --
+        # made the checkout report `verified=False, dirty=True` with every one of them listed as
+        # unauthorized, which blocked the source gate BEFORE any model loader ran and made an
+        # authorized preparation look like tampering.
+        #
+        # Narrow on purpose: these are exactly the declared assets and generated artifacts of this
+        # model's own contract, not the `features`, `weight`, `checkout` or `third_party` tree at
+        # large. A real source edit and an undeclared executable are still reported.
+        declared.update(evaluator_relative_asset_paths(model))
+        from workbench.backend.registry import preparation_contract_for_model, preparation_paths
+
+        contract = preparation_contract_for_model(model)
+        if contract:
+            # `generated_artifacts` declared under the `evaluator_cwd` scope are, by definition,
+            # files inside this checkout. Resolving them against a placeholder root yields the
+            # checkout-relative path without needing the configured third-party root here.
+            for path in preparation_paths(contract, Path("."), "generated_artifacts",
+                                          evaluator_root=Path(".")):
+                relative = Path(str(path))
+                if not relative.is_absolute() and ".." not in relative.parts:
+                    declared.add(relative.as_posix())
     return declared
 
 

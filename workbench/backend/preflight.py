@@ -112,13 +112,40 @@ def model_requirements(
 
     asset_statuses = external_asset_statuses(model)
     paths.extend(Path(item["path"]) for item in asset_statuses if item["path"])
-    messages = {"UNRESOLVED_PROVENANCE": "provenance unresolved", "UNCONFIGURED_LOCATION": "local location unconfigured",
-                "CONFIGURED_MISSING": "file missing", "INVALID_FILE_TYPE": "expected regular file, found non-file",
-                "EMPTY_PLACEHOLDER": "empty placeholder file", "CHECKSUM_MISMATCH": "checksum mismatch",
-                "EXISTS_UNVERIFIED_CHECKSUM": "file exists but no verified checksum is available"}
-    blocks.extend(f"external runtime asset {messages[item['status']]}: {item['name']}" +
-                  (f" ({item['path']})" if item["path"] else "")
-                  for item in asset_statuses if item["status"] != "VERIFIED_LOCAL_ASSET")
+    # One admission decision, shared with `external_asset_blockers` and the TME wrapper: an
+    # author-linked asset whose author publishes no digest is admitted as a LOCALLY RECORDED asset
+    # (visible in `warnings`), while missing, malformed, mismatched and unresolved-provenance assets
+    # still block. Deciding this independently here is what made readiness and the wrapper disagree
+    # on identical bytes.
+    from workbench.backend.registry import (_ASSET_BLOCKER_MESSAGES, admitted_asset_statuses,
+                                           asset_admission_detail, asset_admission_status,
+                                           cache_asset_blocker, is_cache_asset,
+                                           required_runtime_assets)
+
+    declarations = {asset["name"]: asset for asset in required_runtime_assets(model)}
+    for item in asset_statuses:
+        declaration = declarations.get(item["name"], {})
+        if is_cache_asset(declaration):
+            # A cache is judged by whether its consumer can load it, so the shared cache check is the
+            # admission decision for both this preflight and `external_asset_blockers`.
+            reason = cache_asset_blocker(declaration, item)
+            if reason:
+                blocks.append(f"external runtime asset cache unusable: {item['name']} "
+                              f"({reason})")
+            else:
+                notes.append(f"external runtime asset {item['name']} loaded from its cache"
+                             + (f" ({item['path']})" if item["path"] else ""))
+            continue
+        admission = asset_admission_status(declaration, item)
+        if admitted_asset_statuses(admission):
+            if admission == "LOCALLY_RECORDED_ASSET":
+                detail = asset_admission_detail(declaration, item)
+                notes.append(f"external runtime asset {item['name']} {detail}"
+                             + (f" ({item['path']})" if item["path"] else ""))
+            continue
+        blocks.append(f"external runtime asset "
+                      f"{_ASSET_BLOCKER_MESSAGES.get(admission, asset_admission_detail(declaration, item))}: "
+                      f"{item['name']}" + (f" ({item['path']})" if item["path"] else ""))
     return {"paths": list(dict.fromkeys(paths)), "blocks": list(dict.fromkeys(blocks)),
             "warnings": list(dict.fromkeys(notes)),
             "evidence": {"raw_inputs_missing": [str(path) for path in raw_missing],

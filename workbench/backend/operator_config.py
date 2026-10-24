@@ -39,7 +39,23 @@ _KEYS = {
     "WORKBENCH_TGCIR_PYTHON",
     "WORKBENCH_SPRC_PYTHON",
     "WORKBENCH_LIMN_PYTHON",
+    "WORKBENCH_TME_PYTHON",
+    "WORKBENCH_PTHA_MTST_PYTHON",
 }
+
+def _permitted_keys() -> set[str]:
+    """Every name this file may set.
+
+    The path/port/host keys are this module's own; the per-model interpreter and asset-location names
+    are the operator settings the registry declares. Deriving them from the same declarations the
+    consumers use keeps the file schema from rejecting a setting the workbench itself advertises:
+    `WORKBENCH_TME_PYTHON` and `WORKBENCH_PTHA_MTST_PYTHON` are registry-declared and were absent from
+    `_KEYS`, so a `workbench.env` line naming either raised `ValueError: unknown setting` even though
+    the setting itself was otherwise supported.
+    """
+    from workbench.backend.model_settings import declared_setting_names
+
+    return set(_KEYS) | set(declared_setting_names())
 
 
 @dataclass(frozen=True)
@@ -61,10 +77,21 @@ class WorkbenchConfig:
                                self.CIR_REPO_ROOT / "workbench" / "artifacts")
 
 
+def read_env_file(path: Path | None = None) -> dict[str, str]:
+    """Parse an operator environment file. `_read_env` keeps its name for existing callers.
+
+    The path is resolved at CALL time, not captured as a default: a default argument would bind the
+    module constant once and keep reading the original file even after the constant is repointed,
+    which is exactly how a test (or a future multi-workspace caller) would silently read the wrong
+    file.
+    """
+    return _read_env(path if path is not None else _CONFIG_PATH)
+
 def _read_env(path: Path) -> dict[str, str]:
     values: dict[str, str] = {}
     if not path.is_file():
         return values
+    permitted = _permitted_keys()
     for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
         stripped = line.strip()
         if not stripped or stripped.startswith("#"):
@@ -72,7 +99,7 @@ def _read_env(path: Path) -> dict[str, str]:
         key, separator, value = stripped.partition("=")
         if not separator or not key.strip() or any(char.isspace() for char in key):
             raise ValueError(f"malformed {path}:{line_number}: expected KEY=VALUE")
-        if key not in _KEYS:
+        if key not in permitted:
             raise ValueError(f"unknown setting {path}:{line_number}: {key}")
         values[key] = value.strip()
     return values

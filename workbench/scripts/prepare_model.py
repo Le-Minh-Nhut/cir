@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Inspect model preparation status. Never executes preparation scripts without explicit authorization.
 
-Default: read-only status from preparation_contracts.yaml. Use --execute --allow-preparation
-to run only the one verified automated CSMCIR dataset link step. All other preparation is manual.
+Default: read-only status from preparation_contracts.yaml. Use --execute --allow-preparation to
+run verified preparation steps; CUDA-only generators also require --allow-gpu-preparation.
 
 Dataset separation contract (DATA-02):
 Three-way separation of dataset paths:
@@ -35,6 +35,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from workbench.backend.operator_config import resolve_config
 from workbench.backend.preflight import model_requirements, preflight_blockers
 from workbench.backend.registry import load_registry, preparation_contract_for_model
+from workbench.replay.common import fashioniq_image_binding_blockers
 
 def status(model: dict, config) -> dict:
     blockers = preflight_blockers(model, config, canonical_root=config.FASHIONIQ_ROOT)
@@ -92,6 +93,239 @@ RESIZE_GENERATOR = "fashioniq_resize_images"
 RESAMPLING = "LANCZOS"
 #: Name of the receipt a completed resize leaves behind; the pipeline validates it as the output.
 RESIZE_RECEIPT_NAME = ".workbench_resize_receipt.json"
+#: Marker used by the TME contract for its native FashionIQ feature cache.
+TME_FEATURE_GENERATOR = "tme_precompute_features"
+TME_RECEIPT_NAME = ".workbench_tme_precompute_receipt.json"
+
+
+def _tme_artifact(config, checkout: Path, contract: dict) -> tuple[dict, Path]:
+    from workbench.backend.registry import preparation_paths
+
+    artifact = next(item for item in contract.get("generated_artifacts", [])
+                    if item.get("generator") == TME_FEATURE_GENERATOR)
+    paths = preparation_paths(contract, config.FASHIONIQ_ROOT, "generated_artifacts",
+                              evaluator_root=checkout)
+    return artifact, paths[0]
+
+
+def tme_receipt_path(config, checkout: Path, contract: dict) -> Path:
+    artifact, output = _tme_artifact(config, checkout, contract)
+    return (config.WORKBENCH_ARTIFACTS_ROOT / output.relative_to(checkout)
+            / artifact["parameters"].get("receipt_filename", TME_RECEIPT_NAME))
+
+
+def _file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for block in iter(lambda: handle.read(1 << 20), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def _tme_inputs(config, contract: dict) -> dict | None:
+    from workbench.backend.fashioniq_layout import CATEGORIES
+
+    parameters = next(item["parameters"] for item in contract["generated_artifacts"]
+                      if item.get("generator") == TME_FEATURE_GENERATOR)
+    files = {category: config.FASHIONIQ_ROOT / "image_splits"
+             / f"split.{category}.{parameters['split']}.json" for category in CATEGORIES}
+    captions = [config.FASHIONIQ_ROOT / "captions"
+                / f"cap.{category}.{parameters['split']}.json" for category in CATEGORIES]
+    if any(not path.is_file() for path in (*files.values(), *captions)):
+        return None
+    from workbench.replay.common import fashioniq_image_binding_blockers
+
+    image_blockers = fashioniq_image_binding_blockers(config.FASHIONIQ_ROOT, parameters["split"])
+    if image_blockers:
+        return None
+    try:
+        if any(not isinstance(json.loads(path.read_text(encoding="utf-8")), list)
+               for path in captions):
+            return None
+        return {"dataset_root": str(config.FASHIONIQ_ROOT.resolve()),
+                "split_files": {category: _file_sha256(path) for category, path in files.items()}}
+    except (OSError, ValueError, TypeError):
+        return None
+
+
+def _tme_dataset_root(config):
+    from workbench.replay.common import isolated_cache_root
+
+    return isolated_cache_root(config.FASHIONIQ_ROOT, directory_names=("captions", "image_splits"),
+                               image_source="resized_image")
+
+
+def _tme_validate(feature_root: Path, parameters: dict, inputs: dict,
+                  source_commit: str, receipt: Path) -> bool:
+    feature = feature_root / f"{parameters['split']}_images.pt"
+    mapping = feature_root / f"{parameters['split']}_name_to_idx.json"
+    if not feature.is_file() or not mapping.is_file() or not receipt.is_file():
+        return False
+    try:
+        declared = json.loads(receipt.read_text(encoding="utf-8"))
+        if (declared.get("kind") != "workbench_tme_precompute_receipt"
+                or declared.get("model_id") != "tme"
+                or declared.get("generator") != TME_FEATURE_GENERATOR
+                or declared.get("source_script") != parameters["source_script"]
+                or declared.get("source_commit") != source_commit
+                or declared.get("dataset") != parameters["eval_dataset"]
+                or declared.get("split") != parameters["split"]
+                or declared.get("batch_size") != parameters["batch_size"]
+                or declared.get("workers") != parameters["workers"]):
+            return False
+        import torch
+
+        features = torch.load(feature, map_location="cpu", weights_only=True)
+        names = []
+        for category in inputs["split_files"]:
+            split_path = Path(inputs["dataset_root"]) / "image_splits" / f"split.{category}.{parameters['split']}.json"
+            names.extend(json.loads(split_path.read_text(encoding="utf-8")))
+        expected = {name: index for index, name in enumerate(names)}
+        actual = json.loads(mapping.read_text(encoding="utf-8"))
+        shape = [len(names), parameters["tokens_per_image"], parameters["feature_width"]]
+        dtype = {"float16": torch.float16, "float32": torch.float32,
+                 "float64": torch.float64}[parameters["feature_dtype"]]
+        files = {"features": {"size_bytes": feature.stat().st_size, "sha256": _file_sha256(feature)},
+                 "name_to_idx": {"size_bytes": mapping.stat().st_size, "sha256": _file_sha256(mapping)}}
+        return (isinstance(features, torch.Tensor) and list(features.shape) == shape
+                and features.dtype == dtype and isinstance(actual, dict)
+                and list(actual.items()) == list(expected.items())
+                and declared.get("files") == files and declared.get("feature_shape") == shape
+                and declared.get("feature_dtype") == str(dtype))
+    except Exception:
+        return False
+
+
+def tme_features_complete(config, model: dict, contract: dict) -> bool | None:
+    recipe = next((item for item in contract.get("generated_artifacts", [])
+                   if item.get("generator") == TME_FEATURE_GENERATOR), None)
+    if recipe is None:
+        return None
+    from workbench.backend.runtime import source_clean_and_pinned
+
+    checkout = config.WORKBENCH_THIRD_PARTY_ROOT / model["source_dir"]
+    clean, commit, _ = source_clean_and_pinned(model, checkout)
+    inputs = _tme_inputs(config, contract)
+    if not clean or not commit or inputs is None:
+        return False
+    _, output = _tme_artifact(config, checkout, contract)
+    return _tme_validate(output, recipe["parameters"], inputs, commit,
+                         tme_receipt_path(config, checkout, contract))
+
+
+def _tme_command(interpreter: str, checkout: Path, dataset_root: Path,
+                 parameters: dict) -> list[str]:
+    shim = ("import runpy,sys; from pathlib import Path; "
+            "sys.path.insert(0,str(Path(sys.argv[1]).parent)); import data; "
+            "data.FashioniqPath=sys.argv[2]; sys.argv=[sys.argv[1],*sys.argv[3:]]; "
+            "runpy.run_path(sys.argv[0],run_name='__main__')")
+    script = checkout / parameters["source_script"]
+    return [interpreter, "-c", shim, str(script), str(dataset_root), "--dataset",
+            parameters["eval_dataset"], "--split", parameters["split"], "--batch_size",
+            str(parameters["batch_size"]), "--num_works", str(parameters["workers"])]
+
+
+def _run_tme_precompute(config, model: dict, contract: dict, *, dry_run: bool,
+                        force_regenerate_unknown_cache: bool = False) -> tuple[bool, str]:
+    from workbench.backend.registry import external_asset_blockers
+    from workbench.backend.runtime import require_verified_model_interpreter, source_clean_and_pinned
+
+    checkout = config.WORKBENCH_THIRD_PARTY_ROOT / model["source_dir"]
+    recipe, output = _tme_artifact(config, checkout, contract)
+    parameters = recipe["parameters"]
+    script = checkout / parameters["source_script"]
+    if not checkout.is_dir() or not script.is_file():
+        return False, f"pinned TME checkout or generator missing: {checkout} ({script})"
+    clean, commit, reason = source_clean_and_pinned(model, checkout)
+    if not clean or not commit:
+        return False, f"pinned TME source unavailable: {reason or 'source is not clean and pinned'}"
+    image_blockers = fashioniq_image_binding_blockers(config.FASHIONIQ_ROOT, parameters["split"])
+    if image_blockers:
+        return False, image_blockers[0]
+    inputs = _tme_inputs(config, contract)
+    if inputs is None:
+        return False, f"TME caption or validation split input is missing or malformed under {config.FASHIONIQ_ROOT}"
+    receipt = tme_receipt_path(config, checkout, contract)
+    if _tme_validate(output, parameters, inputs, commit, receipt):
+        return True, f"reusing validated TME feature cache at {output}"
+    files = [output / f"{parameters['split']}_images.pt",
+             output / f"{parameters['split']}_name_to_idx.json"]
+    existing = [path for path in files if path.exists()]
+    if existing and not force_regenerate_unknown_cache:
+        message = ("TME cache bytes have no valid receipt or no longer match bound inputs; refusing to overwrite: "
+                   f"{', '.join(map(str, existing))}. To explicitly replace these unknown/stale bytes, rerun with "
+                   "--force-regenerate-unknown-cache after reviewing the cache.")
+        print(f"[WARNING] {message}", file=sys.stderr)
+        return False, message
+    if receipt.is_file() and not existing:
+        print(f"[WARNING] TME receipt is stale; cache must be regenerated because source commit or "
+              f"dataset root/split digests changed: {receipt}", file=sys.stderr)
+    try:
+        interpreter = require_verified_model_interpreter(model, config=config)
+    except RuntimeError as error:
+        if not dry_run:
+            return False, f"TME model interpreter is unverified: {error}"
+        interpreter = "<verified TME interpreter>"
+        print(f"[BLOCKED] TME interpreter not verified: {error}", file=sys.stderr)
+    if dry_run:
+        import shlex
+        command = _tme_command(interpreter, checkout, config.FASHIONIQ_ROOT, parameters)
+        print(f"[DRY-RUN] Native generator command: {shlex.join(command)}")
+        return True, "dry-run; native generator not launched"
+    try:
+        probe = subprocess.run([interpreter, "-c", "import torch; print(torch.cuda.is_available())"],
+                               capture_output=True, text=True, check=False)
+    except OSError as error:
+        return False, f"cannot check CUDA with verified TME interpreter {interpreter}: {error}"
+    if probe.returncode != 0:
+        return False, f"cannot check CUDA with verified TME interpreter {interpreter}: {probe.stderr.strip()}"
+    if probe.stdout.strip().splitlines()[-1].lower() != "true":
+        return False, ("TME feature generation requires a CUDA-capable GPU; verified interpreter reports "
+                       "torch.cuda.is_available() == False. No CPU fallback is supported.")
+    blockers = external_asset_blockers(model)
+    if blockers:
+        return False, f"TME native generator prerequisite blocked: {blockers[0]}"
+    output.mkdir(parents=True, exist_ok=True)
+    with _tme_dataset_root(config) as staged_root:
+        command = _tme_command(interpreter, checkout, staged_root, parameters)
+        try:
+            result = subprocess.run(command, cwd=checkout, check=False)
+        except OSError as error:
+            return False, f"could not launch pinned TME generator {script}: {error}"
+        if result.returncode != 0:
+            return False, f"pinned TME generator failed with exit code {result.returncode}; no receipt written"
+        if not all(path.is_file() for path in files):
+            return False, f"pinned TME generator omitted required output; regenerate {', '.join(map(str, files))}"
+    try:
+        import torch
+        features = torch.load(files[0], map_location="cpu", weights_only=True)
+        names = []
+        for category in ("dress", "shirt", "toptee"):
+            names.extend(json.loads((Path(inputs["dataset_root"]) / "image_splits"
+                                     / f"split.{category}.{parameters['split']}.json").read_text(encoding="utf-8")))
+        mapping = json.loads(files[1].read_text(encoding="utf-8"))
+        expected = {name: index for index, name in enumerate(names)}
+        shape = [len(expected), parameters["tokens_per_image"], parameters["feature_width"]]
+        dtype = {"float16": torch.float16, "float32": torch.float32,
+                 "float64": torch.float64}[parameters["feature_dtype"]]
+        if (not isinstance(features, torch.Tensor) or list(features.shape) != shape
+                or features.dtype != dtype or list(mapping.items()) != list(expected.items())):
+            return False, "TME output shape/dtype/gallery order invalid; feature cache must be regenerated"
+        payload = {"kind": "workbench_tme_precompute_receipt", "model_id": model["model_id"],
+                   "generator": TME_FEATURE_GENERATOR, "source_script": parameters["source_script"],
+                   "source_commit": commit, "dataset": parameters["eval_dataset"], "split": parameters["split"],
+                   "inputs": inputs, "batch_size": parameters["batch_size"], "workers": parameters["workers"],
+                   "files": {"features": {"size_bytes": files[0].stat().st_size, "sha256": _file_sha256(files[0])},
+                             "name_to_idx": {"size_bytes": files[1].stat().st_size, "sha256": _file_sha256(files[1])}},
+                   "feature_shape": shape, "feature_dtype": str(features.dtype),
+                   "interpreter": str(Path(interpreter).resolve())}
+        receipt.parent.mkdir(parents=True, exist_ok=True)
+        temporary = receipt.with_name(f".{receipt.name}.{os.getpid()}.tmp")
+        temporary.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        os.replace(temporary, receipt)
+    except (OSError, ValueError, TypeError, RuntimeError, ImportError) as error:
+        return False, f"TME output validation failed; no receipt written and cache must be regenerated: {error}"
+    return True, f"generated and validated native TME feature cache at {output}"
 
 
 def resize_receipt_path(config, layout: str) -> Path:
@@ -675,7 +909,11 @@ def main(argv: list[str] | None = None) -> int:
                         help="execute preparation for the one verified automated step (CSMCIR symlink only)")
     parser.add_argument("--allow-preparation", action="store_true",
                         help="authorize dataset-link creation; required with --execute")
+    parser.add_argument("--allow-gpu-preparation", action="store_true",
+                        help="authorize explicitly declared CUDA-only model preparation")
     parser.add_argument("--dry-run", action="store_true", help="show planned operations without changes")
+    parser.add_argument("--force-regenerate-unknown-cache", action="store_true",
+                        help="allow replacing TME cache files without a valid matching preparation receipt")
     parser.add_argument("--json", action="store_true", help="emit machine-readable status")
     args = parser.parse_args(argv)
 
@@ -719,6 +957,22 @@ def main(argv: list[str] | None = None) -> int:
             ok = _fixed_link(config, model["model_id"], args.dry_run, check_only=False) and ok
             performed.append("dataset-link")
         contract = preparation_contract_for_model(model)
+        if contract:
+            tme_requested = any(a.get("generator") == TME_FEATURE_GENERATOR
+                                for a in contract.get("generated_artifacts", []))
+            if tme_requested and not args.dry_run and not args.allow_gpu_preparation:
+                reason = "CUDA preparation requires --allow-gpu-preparation"
+                performed.append(f"tme-precompute({reason})")
+                print(f"[BLOCKED] {model['model_id']}: {reason}", file=sys.stderr)
+                ok = False
+            elif tme_requested:
+                recipe_ok, reason = _run_tme_precompute(
+                    config, model, contract, dry_run=args.dry_run,
+                    force_regenerate_unknown_cache=args.force_regenerate_unknown_cache)
+                performed.append(f"tme-precompute({reason})")
+                if not recipe_ok:
+                    print(f"[BLOCKED] {model['model_id']}: {reason}", file=sys.stderr)
+                    ok = False
         if contract:
             ok = _stage_source_assets(config, model, contract, dry_run=args.dry_run) and ok
             if any(a.get("generator") == BUNDLED_ASSET_GENERATOR for a in contract.get("generated_artifacts", [])):

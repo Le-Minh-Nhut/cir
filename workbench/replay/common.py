@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import hashlib
 import inspect
 import os
@@ -151,8 +152,10 @@ def reusable_cache_root(dataset_root: Path, cache_root: Path,
 
 
 @contextmanager
-def isolated_cache_root(dataset_root: Path, directory_names: tuple[str, ...] = ("captions", "image_splits", "resized_image")) -> Iterator[Path]:
-    """Use native caches in a fresh temp root, symlinking immutable inputs only."""
+def isolated_cache_root(dataset_root: Path,
+                        directory_names: tuple[str, ...] = ("captions", "image_splits", "resized_image"),
+                        *, image_source: str | None = None) -> Iterator[Path]:
+    """Use a fresh temp root, symlinking immutable inputs; optionally expose category images flat."""
     with tempfile.TemporaryDirectory(prefix="cir-replay-cache-") as temporary:
         cache_root = Path(temporary)
         for name in directory_names:
@@ -160,7 +163,67 @@ def isolated_cache_root(dataset_root: Path, directory_names: tuple[str, ...] = (
             if not source.exists():
                 raise FileNotFoundError(f"native replay input missing: {source}")
             (cache_root / name).symlink_to(source.resolve(), target_is_directory=source.is_dir())
+        if image_source is not None:
+            source_root = dataset_root / image_source
+            if not source_root.is_dir():
+                raise FileNotFoundError(f"native replay image input missing: {source_root}")
+            images = cache_root / "images"
+            images.mkdir()
+            if image_source == "resized_image":
+                from workbench.backend.fashioniq_layout import CATEGORIES
+
+                names = []
+                for category in CATEGORIES:
+                    split = dataset_root / "image_splits" / f"split.{category}.val.json"
+                    if not split.is_file():
+                        raise FileNotFoundError(f"native replay split input missing: {split}")
+                    names.extend(json.loads(split.read_text(encoding="utf-8")))
+                    category_root = source_root / category
+                    if not category_root.is_dir():
+                        raise FileNotFoundError(f"native replay resized images missing: {category_root}")
+                for name in dict.fromkeys(names):
+                    if not isinstance(name, str) or not name or "/" in name or "\\" in name:
+                        raise ValueError(f"unusable FashionIQ image identifier in split: {name!r}")
+                    candidates = [source_root / category / f"{name}.jpg" for category in CATEGORIES]
+                    source = next((path for path in candidates if path.is_file()), None)
+                    if source is None:
+                        raise FileNotFoundError(
+                            f"native replay resized FashionIQ image missing: {source_root}/<category>/{name}.jpg")
+                    (images / f"{name}.jpg").symlink_to(source.resolve())
+            else:
+                raise ValueError(f"unsupported native image source: {image_source}")
         yield cache_root
+
+def fashioniq_image_binding_blockers(dataset_root: Path, split: str = "val",
+                                     image_source: str = "resized_image") -> list[str]:
+    """Check that FashionIQ gallery names resolve through TME's flat `images/<id>.jpg` view."""
+    from workbench.backend.fashioniq_layout import CATEGORIES
+
+    root = dataset_root / image_source
+    blockers = []
+    for category in CATEGORIES:
+        split_path = dataset_root / "image_splits" / f"split.{category}.{split}.json"
+        if not split_path.is_file():
+            blockers.append(f"native replay split input missing: {split_path}")
+            continue
+        category_root = root / category
+        if not category_root.is_dir():
+            blockers.append(f"native replay resized images missing: {category_root}")
+            continue
+        try:
+            names = json.loads(split_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            blockers.append(f"native replay split file unreadable: {split_path}")
+            continue
+        if not isinstance(names, list):
+            blockers.append(f"native replay split is not an image list: {split_path}")
+            continue
+        for name in names:
+            if not isinstance(name, str) or not name or "/" in name or "\\" in name or name in {".", ".."}:
+                blockers.append(f"unusable FashionIQ image identifier in {split_path}: {name!r}")
+            elif not any((root / item / f"{name}.jpg").is_file() for item in CATEGORIES):
+                blockers.append(f"native replay resized FashionIQ image missing: {root}/<category>/{name}.jpg")
+    return blockers
 
 
 def constructor_input_blockers(dataset_root: Path, message: Callable[[Path], str],

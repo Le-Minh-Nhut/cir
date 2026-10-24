@@ -4,7 +4,7 @@ import hashlib
 import json
 import os
 from pathlib import Path, PurePosixPath
-from typing import Any
+from typing import Any, Callable
 
 import yaml
 
@@ -243,16 +243,72 @@ def required_runtime_assets(model: dict[str, Any]) -> list[dict[str, Any]]:
     return [asset for asset in contract["external_assets"] if asset["required_for_evaluation"] and not asset["optional"]]
 
 
+def _repo_root() -> Path:
+    return Path(__file__).resolve().parents[2]
+
+def evaluator_root(model: dict[str, Any]) -> Path | None:
+    """The working directory the pinned evaluator runs in, or None when it has no checkout.
+
+    This is the root an external asset declared `evaluator_cwd` must resolve against, and it is the
+    SAME directory the runner chdirs into (`evaluate_models.source_cwd`, and the replay wrappers'
+    own `os.chdir`). Deriving it from the configured third-party root rather than from the repository
+    root is what keeps a checker, a preparation step and an evaluator pointed at one set of bytes
+    when the operator relocates that root (`WORKBENCH_THIRD_PARTY_ROOT`) or mounts it differently in
+    a container.
+    """
+    from workbench.backend.operator_config import resolve_config
+
+    source_dir = model.get("source_dir")
+    if not source_dir:
+        return None
+    return resolve_config().WORKBENCH_THIRD_PARTY_ROOT / source_dir
+
+def asset_location_key(asset: dict[str, Any]) -> tuple[str | None, str] | None:
+    """The (environment variable, relative path) an asset's local location is keyed by.
+
+    One identity for "where this asset lives", so an admission decision, a preparation step and the
+    evaluator's own loader cannot disagree about which file they mean. `None` when the asset declares
+    neither a location variable nor a path -- i.e. when its location is derived some other way (the
+    tokenizer cache entry).
+    """
+    env_var = asset.get("location_env_var")
+    location = asset.get("expected_local_location")
+    if not env_var and not location:
+        return None
+    return (env_var, str(location)) if location else (env_var, "")
+
+def evaluator_relative_asset_paths(model: dict[str, Any]) -> dict[str, str]:
+    """`{asset name: path the evaluator loader opens}` for assets its OWN code opens by a literal.
+
+    An asset whose only declaration is a repository-relative path cannot be relocated by an
+    environment variable without editing pinned source, so the asset's real identity is the checkout
+    it lives in: `<evaluator root>/<relative path>`. The declaration stays the
+    single registry fact; this is how it is READ. Used both to resolve the asset and to tell the
+    source authority which files inside the checkout legitimate preparation may create.
+    """
+    contract = preparation_contract_for_model(model)
+    resolved: dict[str, str] = {}
+    for asset in (contract or {}).get("external_assets", []):
+        location = asset.get("expected_local_location")
+        if not location or asset.get("location_env_var"):
+            continue
+        resolved[asset["name"]] = str(location)
+    return resolved
+
 def external_asset_statuses(model: dict[str, Any]) -> list[dict[str, Any]]:
     statuses: list[dict[str, Any]] = []
+    checkout_relative = evaluator_relative_asset_paths(model)
+    root = evaluator_root(model)
     for asset in required_runtime_assets(model):
         # `location_env_var` is optional in the contract schema and is legitimately absent for an
         # asset that has no override variable (the tokenizer cache entry). Reading it with a default
         # only covered a MISSING key; an explicit `null` reached `os.environ.get(None)`, which raises
         # `TypeError: str expected, not NoneType` instead of reporting the asset's state.
         env_var = asset.get("location_env_var")
-        configured = os.environ.get(env_var) if env_var else None
-        location = configured.strip() if configured and configured.strip() else asset.get("expected_local_location")
+        from workbench.backend.model_settings import setting as _setting
+
+        configured = _setting(env_var) if env_var else None
+        location = configured if configured else asset.get("expected_local_location")
         if location is None and asset.get("cache_path_suffix"):
             # `cache_root_env_var` names the variable that RELOCATES this cache, and its default is the
             # one the consumer itself uses. The tokenizer is read by Hugging Face's loader, whose root
@@ -277,7 +333,13 @@ def external_asset_statuses(model: dict[str, Any]) -> list[dict[str, Any]]:
             continue
         path = Path(location).expanduser()
         if not path.is_absolute():
-            path = Path(__file__).resolve().parents[2] / path
+            relative = checkout_relative.get(asset["name"])
+            # A path the model's own pinned code opens from its working directory belongs to the
+            # CHECKOUT. Joining it to the repository root put TME's `weight/eva_vit_g.pth` one
+            # directory above the file the loader reads, so a correctly staged asset was reported
+            # missing and a wrongly staged one would have been accepted by the check the evaluator
+            # never performs.
+            path = (root / relative) if (relative and root is not None) else (_repo_root() / path)
         path = path.resolve()
         if asset.get("location_type") == "directory":
             # A directory-shaped asset (a hub repo cache) has no single file to size or hash. Its
@@ -303,6 +365,12 @@ def external_asset_statuses(model: dict[str, Any]) -> list[dict[str, Any]]:
                 status = "INVALID_FILE_TYPE"
             elif path.stat().st_size == 0:
                 status = "EMPTY_PLACEHOLDER"
+            elif (asset.get("expected_size_bytes") is not None
+                  and path.stat().st_size != asset["expected_size_bytes"]):
+                # A declared size the local file does not match is a fact about the FILE, and saying
+                # "file missing" for a file that is present and wrong sends an operator looking for
+                # something to download when what they have is something to replace.
+                status = "SIZE_MISMATCH"
             else:
                 actual_sha = sha256_file(path)
                 if expected_sha and actual_sha != expected_sha:
@@ -315,24 +383,208 @@ def external_asset_statuses(model: dict[str, Any]) -> list[dict[str, Any]]:
                     status = "EXISTS_UNVERIFIED_CHECKSUM"
         statuses.append({"name": asset["name"], "status": status, "path": str(path),
                          "expected_sha256": expected_sha, "expected_sha256_prefix": expected_prefix,
-                         "actual_sha256": actual_sha})
+                         "actual_sha256": actual_sha, "expected_size_bytes": asset.get("expected_size_bytes"),
+                         "actual_size_bytes": (path.stat().st_size if path.is_file() else None)})
     return statuses
 
 
-def external_asset_blockers(model: dict[str, Any]) -> list[str]:
-    messages = {
-        "UNRESOLVED_PROVENANCE": "provenance unresolved",
-        "UNCONFIGURED_LOCATION": "local location unconfigured",
-        "CONFIGURED_MISSING": "file missing",
-        "INVALID_FILE_TYPE": "expected regular file, found non-file",
-        "EMPTY_PLACEHOLDER": "empty placeholder file",
-        "CHECKSUM_MISMATCH": "checksum mismatch",
-        "EXISTS_UNVERIFIED_CHECKSUM": "file exists but no verified checksum is available",
-    }
+#: One wording per unadmitted state, shared by every consumer so readiness, doctor, the API and a
+#: replay wrapper cannot describe the same file differently.
+_ASSET_BLOCKER_MESSAGES = {
+    "UNRESOLVED_PROVENANCE": "provenance unresolved",
+    "UNCONFIGURED_LOCATION": "local location unconfigured",
+    "CONFIGURED_MISSING": "file missing",
+    "INVALID_FILE_TYPE": "expected regular file, found non-file",
+    "EMPTY_PLACEHOLDER": "empty placeholder file",
+    "CHECKSUM_MISMATCH": "checksum mismatch",
+    "SIZE_MISMATCH": "size mismatch against the declared byte count",
+    "SUSPECT_PAYLOAD": "content is not a plausible payload (uniform bytes across the whole file)",
+    "EXISTS_UNVERIFIED_CHECKSUM": "file exists but no verified checksum is available",
+}
+
+#: Statuses no operator action can fix, and which therefore block every consumer.
+UNADMITTED_ASSET_STATUSES = (
+    "UNRESOLVED_PROVENANCE",
+    "UNCONFIGURED_LOCATION",
+    "CONFIGURED_MISSING",
+    "INVALID_FILE_TYPE",
+    "EMPTY_PLACEHOLDER",
+    "CHECKSUM_MISMATCH",
+    "SIZE_MISMATCH",
+)
+
+def _has_substantive_payload(path: Path, asset: dict[str, Any]) -> bool:
+    """Whether a file declared without an author digest actually contains a plausible payload.
+
+    The size check catches a truncated download, but NOT a file that is exactly the declared length
+    yet contains nothing: a sparse or zero-filled allocation has the right size and no weights, and
+    admitting it would let a model be launched against a file that is structurally a container of
+    zeros. When no author digest exists, this is the only content evidence the workbench can obtain
+    without loading the asset, so a file whose entire length is a single repeated byte is refused.
+    The check reads at most a bounded prefix and a bounded suffix, so it costs nothing on a 2 GB
+    weight file.
+    """
+    try:
+        size = path.stat().st_size
+        if size == 0:
+            return False
+        block = 1 << 20
+        with path.open("rb") as handle:
+            head = handle.read(min(block, size))
+            if not head:
+                return False
+            if any(byte != head[0] for byte in head):
+                return True
+            if size > block:
+                handle.seek(max(0, size - block))
+                tail = handle.read(block)
+                if any(byte != head[0] for byte in tail):
+                    return True
+        return False
+    except OSError:
+        return False
+
+def asset_admission_status(asset: dict[str, Any], status: dict[str, Any]) -> str:
+    """The one admission decision every consumer of an external asset makes.
+
+    Three states, because there are three genuinely different situations:
+
+    * `VERIFIED_LOCAL_ASSET` -- an author-published digest was declared and the local bytes match it.
+    * `LOCALLY_RECORDED_ASSET` -- the asset is author-linked and complete (present, non-empty, right
+      size) but the author publishes no digest to compare against. The workbench records the local
+      digest and says plainly it is not an author verification. Refusing this state made the shared
+      preflight and the TME wrapper contradict each other on the same bytes: the wrapper admitted
+      them with a warning and its own evidence, while `external_asset_blockers` and
+      `preflight.model_requirements` rejected them, so a correctly staged asset blocked readiness.
+      The gap this closes is a policy disagreement, not a checksum gap: no published value exists to
+      verify against, and inventing one would be worse than admitting the gap.
+    * anything else -- reject. Missing, malformed, mismatched, placeholder or
+      unresolved-provenance assets are never admitted, by any caller.
+
+    A `cache`-derived asset (a tokenizer cache whose readiness the loader itself must establish, not
+    its parent directory's contents) is NOT admitted here; it stays an explicit rejection so its own
+    consumer decides, with a real load.
+    """
+    state = status["status"]
+    if state == "VERIFIED_LOCAL_ASSET":
+        return state
+    if state == "EXISTS_UNVERIFIED_CHECKSUM" and not asset.get("cache_path_suffix"):
+        # Digest-less admission is evidence-based: an author-linked file whose bytes are not
+        # uniform and whose size matches the declaration is recorded as a LOCAL asset, and said to
+        # be exactly that. A file that fails the content check is not a recorded asset, it is an
+        # unusable artifact.
+        path = status.get("path")
+        if path and not _has_substantive_payload(Path(path), asset):
+            return "SUSPECT_PAYLOAD"
+        return "LOCALLY_RECORDED_ASSET"
+    return state
+
+def admitted_asset_statuses(status: str) -> bool:
+    return status in {"VERIFIED_LOCAL_ASSET", "LOCALLY_RECORDED_ASSET"}
+
+def is_cache_asset(asset: dict[str, Any]) -> bool:
+    """True for an asset whose local location is a CACHE its consumer must load.
+
+    Shape, not location: `cache_path_suffix` is also used to compose a default FILENAME for a
+    plain file asset (DCNet's ResNet-50 weights), and treating those as caches made the blocker text
+    claim a `.pth` file had "no snapshots/ revision directory". The declaration that marks a
+    directory-shaped cache is `location_type: directory`.
+    """
+    return asset.get("location_type") == "directory" and bool(asset.get("cache_path_suffix"))
+
+def asset_admission_detail(asset: dict[str, Any], status: dict[str, Any]) -> str:
+    """How the admission decision was reached, in the words the operator sees."""
+    if is_cache_asset(asset):
+        reason = cache_asset_blocker(asset, status)
+        if reason:
+            return f"cache unusable: {reason}"
+        return "cache layout verified; loaded by its consumer, not author-checksum-verified"
+    admission = asset_admission_status(asset, status)
+    if admission == "VERIFIED_LOCAL_ASSET":
+        return "verified against the published digest"
+    if admission == "LOCALLY_RECORDED_ASSET":
+        return ("author digest unavailable; local digest recorded, not verified against a "
+                "published value")
+    return _ASSET_BLOCKER_MESSAGES.get(admission, f"state {admission}")
+
+def _asset_admitted(asset: dict[str, Any], status: dict[str, Any]) -> bool:
+    if is_cache_asset(asset):
+        # A cache-shaped location is judged by whether its consumer can actually load it, not by
+        # whether the directory has something in it.
+        return cache_asset_blocker(asset, status) is None
+    return admitted_asset_statuses(asset_admission_status(asset, status))
+
+def external_asset_blockers(model: dict[str, Any], contract_asset: Callable[[str], dict[str, Any] | None] | None = None) -> list[str]:
+    """Every required evaluation asset this workbench will not admit.
+
+    `contract_asset` lets a caller that already holds the declaration map (the TME wrapper does) use
+    its own view of the same facts; the default reads the contract itself.
+    """
+    lookup = contract_asset or (lambda name: _asset_declaration(model, name))
     return [
-        f"external runtime asset {messages[item['status']]}: {item['name']}" + (f" ({item['path']})" if item["path"] else "")
-        for item in external_asset_statuses(model) if item["status"] != "VERIFIED_LOCAL_ASSET"
+        f"external runtime asset {asset_admission_detail(lookup(item['name']) or {}, item)}: "
+        f"{item['name']}" + (f" ({item['path']})" if item["path"] else "")
+        for item in external_asset_statuses(model)
+        if not _asset_admitted(lookup(item["name"]) or {}, item)
     ]
+
+def _asset_declaration(model: dict[str, Any], name: str) -> dict[str, Any] | None:
+    contract = preparation_contract_for_model(model)
+    for asset in (contract or {}).get("external_assets", []):
+        if asset["name"] == name:
+            return asset
+    return None
+
+def cache_asset_blocker(asset: dict[str, Any], status: dict[str, Any]) -> str | None:
+    """Why a cache-shaped asset is unusable, or None when it can actually be loaded.
+
+    A populated directory is not a usable Hugging Face cache. The pinned LAVIS loader calls
+    `BertTokenizer.from_pretrained("bert-base-uncased")`, which needs a resolved snapshot holding the
+    tokenizer files, so the shared admission asks the real question in two steps: the cache layout
+    must contain a revision snapshot with a tokenizer vocabulary, and -- when `transformers` is
+    importable in the checking interpreter -- the tokenizer must actually load OFFLINE from that
+    cache. A random non-empty directory fails the first step; a partial or corrupted download fails
+    the second. Neither check downloads anything, so a readiness report never reaches the network.
+    """
+    if not (asset.get("cache_path_suffix") and status.get("path")):
+        return None
+    path = Path(status["path"])
+    snapshots = path / "snapshots"
+    if not snapshots.is_dir():
+        return "cache has no `snapshots/` revision directory"
+    candidates = [
+        child for child in sorted(snapshots.iterdir())
+        if child.is_dir() and any((child / name).is_file()
+                                  for name in ("vocab.txt", "tokenizer.json", "spiece.model"))
+    ]
+    if not candidates:
+        return "cache holds no revision snapshot with tokenizer files (vocab.txt/tokenizer.json)"
+    try:
+        import transformers  # noqa: F401
+    except ImportError:
+        # A checker interpreter without the model's stack cannot establish that the cache LOADS, so
+        # it must not report the cache as admitted on layout alone. Reporting the weaker evidence as
+        # a blocker is the honest answer: the operator has to verify it in the environment that will
+        # actually read it.
+        return ("tokenizer cache cannot be load-tested in this interpreter (transformers is not "
+                "importable here); verify it in the model's own environment")
+    snapshot = candidates[-1]
+    environment_backup = {key: os.environ.get(key) for key in ("HF_HUB_OFFLINE", "TRANSFORMERS_OFFLINE")}
+    os.environ["HF_HUB_OFFLINE"] = "1"
+    os.environ["TRANSFORMERS_OFFLINE"] = "1"
+    try:
+        from transformers import AutoTokenizer
+
+        AutoTokenizer.from_pretrained(str(snapshot))
+    except Exception as error:  # a cache the loader cannot read is a blocker, not a warning
+        return f"tokenizer does not load offline from {snapshot}: {type(error).__name__}: {error}"
+    finally:
+        for key, value in environment_backup.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
+    return None
 
 
 #: Digest cache for the availability view only. `checkpoint_availability` runs on every
@@ -581,6 +833,14 @@ def auxiliary_assets_for_model(model_id: str) -> list[dict[str, Any]]:
     return [asset for asset in load_auxiliary_assets() if asset["model_id"] == model_id]
 
 
+def _guard_auxiliary_destination(root: Path, path: str) -> Path:
+    resolved_root = root.resolve()
+    destination = (root / path).resolve()
+    if not destination.is_relative_to(resolved_root):
+        raise ValueError(f"auxiliary destination escapes root: {destination}")
+    return destination
+
+
 def auxiliary_destination(asset: dict[str, Any], third_party_root: Path, fashioniq_root: Path) -> Path:
     if asset["destination_scope"] == "user_cache":
         # Some consumers hard-code their cache directory instead of honouring an environment
@@ -590,16 +850,18 @@ def auxiliary_destination(asset: dict[str, Any], third_party_root: Path, fashion
         # weights where the evaluator would not look and left it downloading them itself.
         fixed = asset.get("cache_root_fixed")
         if fixed:
-            return Path(fixed).expanduser() / asset["destination_path"]
-        env_var = asset["cache_root_env_var"]
-        root = Path(os.environ[env_var]).expanduser() if os.environ.get(env_var) else Path(os.environ.get("XDG_CACHE_HOME", "~/.cache")).expanduser()
-        if env_var in {"TORCH_HOME", "HF_HOME"} and not os.environ.get(env_var):
-            root /= "torch" if env_var == "TORCH_HOME" else "huggingface"
-        return root / asset["destination_path"]
+            root = Path(fixed).expanduser()
+        else:
+            env_var = asset["cache_root_env_var"]
+            root = Path(os.environ[env_var]).expanduser() if os.environ.get(env_var) else Path(os.environ.get("XDG_CACHE_HOME", "~/.cache")).expanduser()
+            if env_var in {"TORCH_HOME", "HF_HOME"} and not os.environ.get(env_var):
+                root /= "torch" if env_var == "TORCH_HOME" else "huggingface"
+        return _guard_auxiliary_destination(root, asset["destination_path"])
     if asset["destination_scope"] == "fashioniq_root":
-        return fashioniq_root / asset["destination_path"]
+        return _guard_auxiliary_destination(fashioniq_root, asset["destination_path"])
     if asset["destination_scope"] == "model_source":
-        return third_party_root / model_by_id(asset["model_id"])["source_dir"] / asset["destination_path"]
+        root = third_party_root / model_by_id(asset["model_id"])["source_dir"]
+        return _guard_auxiliary_destination(root, asset["destination_path"])
     raise ValueError(f"unknown auxiliary destination scope: {asset['destination_scope']}")
 
 

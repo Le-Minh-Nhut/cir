@@ -19,7 +19,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from workbench.backend.vendored_source import source_provenance
 from workbench.backend.adapters.models import ADAPTERS, OfficialScriptAdapter
 from workbench.backend.operator_config import WorkbenchConfig, resolve_config
-from workbench.backend.checkpoint_selection import INCLUDE_FLAGGED_CONDITIONS, select_checkpoints
+from workbench.backend.checkpoint_selection import INCLUDE_FLAGGED_CONDITIONS, POLICIES, select_checkpoints
 from workbench.backend.runtime import environment_blockers, environment_status
 from workbench.backend.registry import (auxiliary_assets_for_model, auxiliary_destination,
                                         checkpoint_bundle_missing_paths, checkpoint_missing_paths,
@@ -140,7 +140,8 @@ def writable_path_check(name: str, path: Path) -> dict[str, Any]:
 
 def model_checks(model: dict[str, Any], config: WorkbenchConfig,
                  allow_gpu_pending: bool = False,
-                 requested_checkpoints: list[str] | None = None) -> list[dict[str, Any]]:
+                 requested_checkpoints: list[str] | None = None,
+                 checkpoint_policy: str | None = None) -> list[dict[str, Any]]:
     model_id = model["model_id"]
     state = source_state(model, config.WORKBENCH_THIRD_PARTY_ROOT)
     source_ok = state["state"] == "clean" and (not state["pin"] or state["head"] == state["pin"])
@@ -190,7 +191,13 @@ def model_checks(model: dict[str, Any], config: WorkbenchConfig,
                     "interpreter": env_state["interpreter"], "runtime_verified": env_state["verified"],
                     "gpu_deferred": env_state["gpu_deferred"], "reason": env_state["reason"]}
     incomplete_bundles = checkpoint_bundle_missing_paths(model, config.WORKBENCH_CHECKPOINT_ROOT)
-    selection = select_checkpoints(model, policy=INCLUDE_FLAGGED_CONDITIONS,
+    # The policy the RUN uses, not doctor's own default. A caller that resolved a selection under
+    # `strict_clean` (the autopilot default) was previously audited against
+    # `INCLUDE_FLAGGED_CONDITIONS`, so LIMN -- whose variants record no training condition and which
+    # the run correctly resolves to its three-category bundle -- was inspected as an ambiguous
+    # multi-variant model and the preflight and the run disagreed about what would execute.
+    effective_policy = checkpoint_policy if checkpoint_policy in POLICIES else INCLUDE_FLAGGED_CONDITIONS
+    selection = select_checkpoints(model, policy=effective_policy,
                                    requested=requested_checkpoints,
                                    checkpoint_root=config.WORKBENCH_CHECKPOINT_ROOT)
     selected_ids = set(selection.checkpoint_ids) if requested_checkpoints else None
@@ -234,7 +241,11 @@ def model_checks(model: dict[str, Any], config: WorkbenchConfig,
                             "registry_status": registry_status,
                             "readiness": "UNAVAILABLE" if unavailable else "BLOCKED" if reasons else "RUNNABLE",
                             "runtime_blockers": reasons, "command_ready": not reasons})
-    if requested_checkpoints is not None and selection.blocked:
+    if selection.blocked and (requested_checkpoints is not None or checkpoint_policy is not None):
+        # A caller that stated the run's policy gets that policy's answer: when it refuses the
+        # model's selection, the model is not runnable under it, whatever its individual variants
+        # happen to look like. Without this, a `strict_clean` run reported every variant as
+        # inspected-and-fine while the run itself could not choose one.
         checkpoints.append({"checkpoint_id": None, "readiness": "UNAVAILABLE",
                             "runtime_blockers": [selection.reason], "command_ready": False})
     runnable = bool(checkpoints) and all(item["command_ready"] for item in checkpoints) and all(item["complete"] for item in bundle_reports)
@@ -268,7 +279,7 @@ def workbench_checks(config: WorkbenchConfig, serving: bool = False) -> list[dic
     return checks
 
 
-def collect(config: WorkbenchConfig | None = None, model_id: str | None = None, all_models: bool = False, scope: str = "workbench", serving: bool = False, allow_gpu_pending: bool = False, requested_checkpoints: list[str] | None = None) -> dict[str, Any]:
+def collect(config: WorkbenchConfig | None = None, model_id: str | None = None, all_models: bool = False, scope: str = "workbench", serving: bool = False, allow_gpu_pending: bool = False, requested_checkpoints: list[str] | None = None, checkpoint_policy: str | None = None) -> dict[str, Any]:
     config = config or resolve_config()
     scope = "real" if scope == "workbench" and (model_id or all_models) else scope
     checks = workbench_checks(config, serving)
@@ -288,7 +299,8 @@ def collect(config: WorkbenchConfig | None = None, model_id: str | None = None, 
             return {"overall": "BLOCKED", "checks": checks + [record("selection", "BLOCKED", f"unknown model: {model_id}")]}
     for model in models if (all_models or model_id or scope == "real") else []:
         checks.extend(model_checks(model, config, allow_gpu_pending=allow_gpu_pending,
-                                   requested_checkpoints=requested_checkpoints))
+                                   requested_checkpoints=requested_checkpoints,
+                                   checkpoint_policy=checkpoint_policy))
     overall = "BLOCKED" if any(item["status"] == "BLOCKED" for item in checks) else "WARNING" if any(item["status"] == "WARNING" for item in checks) else "READY"
     return {"overall": overall, "checks": checks}
 
@@ -304,6 +316,8 @@ def parser_for() -> argparse.ArgumentParser:
     parser.add_argument("--json", action="store_true")
     parser.add_argument("--checkpoint", action="append", default=None,
                         help="inspect selected checkpoint ID(s); may be repeated")
+    parser.add_argument("--checkpoint-policy", choices=POLICIES, default=None,
+                        help="selection policy the run uses; defaults to doctor's own permissive view")
     parser.add_argument("--allow-gpu-pending", action="store_true")
     return parser
 
@@ -314,11 +328,13 @@ def main(argv: list[str] | None = None) -> int:
         config = replace(resolve_config(), FASHIONIQ_ROOT=args.dataset_root.resolve())
         report = collect(config, model_id=args.model, all_models=args.all, scope=args.scope,
                          serving=args.serve, allow_gpu_pending=args.allow_gpu_pending,
-                         requested_checkpoints=args.checkpoint)
+                         requested_checkpoints=args.checkpoint,
+                         checkpoint_policy=args.checkpoint_policy)
     else:
         report = collect(model_id=args.model, all_models=args.all, scope=args.scope,
                          serving=args.serve, allow_gpu_pending=args.allow_gpu_pending,
-                         requested_checkpoints=args.checkpoint)
+                         requested_checkpoints=args.checkpoint,
+                         checkpoint_policy=args.checkpoint_policy)
     if args.json:
         print(json.dumps(report, sort_keys=True))
     else:

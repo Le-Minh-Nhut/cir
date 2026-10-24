@@ -869,7 +869,9 @@ def _execution_identity(model: dict, config: WorkbenchConfig) -> dict:
 
     env = model.get("environment") or {}
     variable = env.get("python_env_var")
-    configured = os.environ.get(variable or "")
+    from workbench.backend.model_settings import setting as _setting
+
+    configured = (_setting(variable) or "") if variable else ""
     interpreter = configured or (sys.executable if not variable and not model.get("environment_required")
                                  else "UNCONFIGURED")
     digest.update(f"INTERPRETER:{interpreter}\0".encode("utf-8"))
@@ -1079,8 +1081,15 @@ def _bundle_anchor_for_selection(model_dict: dict[str, Any] | None, selected: Se
             return bundle_id
     return None
 
-def evaluated_checkpoint_ids(model_dict: dict, args: argparse.Namespace) -> list[str]:
-    """The checkpoint ids evaluate_models.py will actually evaluate for this model and args."""
+def evaluated_checkpoint_ids(model_dict: dict, args: argparse.Namespace,
+                             checkpoint_root: Path | None = None) -> list[str]:
+    """The checkpoint ids evaluate_models.py will actually evaluate for this model and args.
+
+    `checkpoint_root` is accepted for callers that already hold a configuration; selection here is
+    registry-fact based, so it does not change the answer. Kept in the signature because the two
+    callers that resolve a selection from a workspace pass it, and a second, subtly different
+    resolver is what this helper exists to prevent.
+    """
     selection = _checkpoint_ids(args, model_dict["model_id"], model_dict)
     if selection is not None:
         if not selection:
@@ -1164,7 +1173,7 @@ def evaluation_evidence(model_dict: dict, args: argparse.Namespace, config: Work
     if checkpoint_id is not None:
         cids = [checkpoint_id]
     else:
-        cids = evaluated_checkpoint_ids(model_dict, args)
+        cids = evaluated_checkpoint_ids(model_dict, args, config.WORKBENCH_CHECKPOINT_ROOT)
 
     if not cids:
         cid = resolved_checkpoint_id(model_dict, args)
@@ -1209,7 +1218,7 @@ def model_eval_outputs(model_dict: dict, args: argparse.Namespace, config: Workb
     if checkpoint_id is not None:
         cids = [checkpoint_id]
     else:
-        cids = evaluated_checkpoint_ids(model_dict, args)
+        cids = evaluated_checkpoint_ids(model_dict, args, config.WORKBENCH_CHECKPOINT_ROOT)
     return tuple(_artifacts_root(config) / "reports" / f"{mid}_{cid}_latest_successful.json" for cid in cids)
 def real_stages(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage]:
     from workbench.backend.fashioniq_layout import canonical_dataset_link_path
@@ -1657,7 +1666,8 @@ def all_stages(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage]
         from workbench.scripts import prepare_model
         prep_contract = preparation_contract_for_model(m)
         executable_artifacts = [a for a in (prep_contract or {}).get("generated_artifacts", [])
-                                if a.get("generator") in ("pinned_source_file", "fashioniq_resize_images")]
+                                if a.get("generator") in ("pinned_source_file", "fashioniq_resize_images",
+                                                          prepare_model.TME_FEATURE_GENERATOR)]
         # A resize is complete only when its receipt exists, so the receipt -- not the directory --
         # is what the stage declares. Otherwise an interrupted run leaves a partially filled
         # directory, the directory check passes on any child file, and the stage resumes as done.
@@ -1667,20 +1677,34 @@ def all_stages(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage]
         prep_dataset_root = target_root
         prep_artifacts: list[Path] = []
         for artifact in executable_artifacts:
-            if artifact.get("generator") == "fashioniq_resize_images":
+            generator = artifact.get("generator")
+            if generator == "fashioniq_resize_images":
                 layout = (artifact.get("parameters") or {}).get("layout")
                 if layout:
                     prep_artifacts.append(prepare_model.resize_receipt_path(
                         replace(config, FASHIONIQ_ROOT=prep_dataset_root), layout))
+            elif generator == prepare_model.TME_FEATURE_GENERATOR:
+                # An `evaluator_cwd` artifact lives inside the model CHECKOUT, not the dataset root,
+                # and the files it names are 10.47 GiB of derived tensors. The stage therefore
+                # declares the RECEIPT (written under the configured artifacts root) rather than the
+                # directory: a directory check passes on any child file, so an interrupted generation
+                # would resume as done. `tme_features_complete` below still verifies the files the
+                # receipt names, so an emptied cache re-owes the stage.
+                tme_checkout = config.WORKBENCH_THIRD_PARTY_ROOT / (m.get("source_dir") or "")
+                prep_artifacts.append(prepare_model.tme_receipt_path(config, tme_checkout, prep_contract))
             else:
                 prep_artifacts.extend(prep_dataset_root / relative for relative in artifact["paths"])
         owed_artifacts = tuple(p for p in prep_artifacts if not p.is_file())
         if not owed_artifacts and prep_contract:
             # A receipt can outlive the files it promised, so a declared resize is only satisfied
             # when its receipt AND the images it recorded are still present. Without this a resumed
-            # run would skip preparation over a dataset whose resized set had been emptied.
+            # run would skip preparation over a dataset whose resized set had been emptied. The same
+            # rule applies to the TME feature cache, whose receipt also binds the split files it was
+            # derived from.
             if prepare_model.resize_is_complete(replace(config, FASHIONIQ_ROOT=prep_dataset_root),
                                                 m, prep_contract) is False:
+                owed_artifacts = prep_artifacts
+            elif prepare_model.tme_features_complete(config, m, prep_contract) is False:
                 owed_artifacts = prep_artifacts
         link_is_owed = bool(prep_link) and prep_owner == mid and not is_link_valid
 
@@ -1698,12 +1722,41 @@ def all_stages(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage]
         if declares_preparation and getattr(args, "apply", False):
             prep_cmd.extend(["--execute", "--allow-preparation"])
         prep_deps = ["dataset", sync_dep]
+        # The TME generator is a CUDA-only job that produces ~10.47 GiB of derived features, so it
+        # carries its own capability rather than riding on `allow_preparation`. Whether the operator
+        # granted it is a fact about THIS invocation, not about the model: the command string must
+        # stay identical between runs (it is part of the stage fingerprint) and the DECISION is made
+        # by the runner, which refuses a stage whose capability was not authorized and reports the
+        # missing permission by name. The `environment:{mid}` edge orders the environment stage --
+        # which resolves the pinned TME interpreter -- before preparation; whether that interpreter
+        # really has CUDA is established by the handler at run time, not guessed here.
+        tme_generator = bool(prep_contract) and any(
+            artifact.get("generator") == prepare_model.TME_FEATURE_GENERATOR
+            for artifact in prep_contract.get("generated_artifacts", []))
+        if tme_generator:
+            from workbench.backend.model_settings import setting as _setting
+
+            tme_interpreter = (m.get("environment") or {}).get("python_env_var")
+            if tme_interpreter and (_setting(tme_interpreter) or m.get("environment_required")):
+                prep_deps.append(f"environment:{mid}")
+            if getattr(args, "apply", False):
+                # Same rule as `--execute` above: `--apply` is a property of the invocation, so the
+                # string stays identical between the runs of one workflow; a read-only plan must
+                # claim no capability and plan no execution at all.
+                prep_cmd.append("--allow-gpu-preparation")
         if prep_owner and prep_owner != mid:
             prep_deps.append(f"preparation:{prep_owner}")
         # A model whose declared preparation is owed cannot be prepared without authorization, so an
         # `--apply` run that lacks it is refused as unauthorized rather than allowed to reach the
         # read-only verify step, exit nonzero, and surface as an unexplained stage failure.
         needs_preparation = declares_preparation and (link_is_owed or bool(owed_artifacts)) and getattr(args, "apply", False)
+        prep_capabilities: set[str] = {"allow_preparation"} if needs_preparation else set()
+        if tme_generator and getattr(args, "apply", False):
+            # Declared for a model that owns the CUDA-only generator: the runner refuses the stage
+            # when the operator did not authorize it and reports the exact missing permission, which
+            # is a better outcome than silently skipping a declared preparation. A read-only plan
+            # claims nothing, so an unauthorized dry run is still permitted to describe itself.
+            prep_capabilities.add("allow_gpu_preparation")
         prep_outputs = (prep_link,) if prep_link and prep_owner == mid else tuple(prep_artifacts)
         stages.append(run_stage(
             "preparation",
@@ -1711,7 +1764,7 @@ def all_stages(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage]
             model_id=mid,
             dependencies=tuple(prep_deps),
             output_paths=tuple(prep_outputs),
-            required_capabilities=({"allow_preparation"} if needs_preparation else frozenset()),
+            required_capabilities=frozenset(prep_capabilities),
         ))
 
         selected_checkpoints = _checkpoint_ids(args, mid, m)
@@ -1818,15 +1871,26 @@ def all_stages(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage]
             # The evaluation stage that follows carries --verify-gpu, so a GPU whose
             # authorized probe has not run yet is the state this workflow is about to change.
             preflight_args.append("--allow-gpu-pending")
-        # Only the model the operator named can carry an explicit checkpoint selection, and its
-        # registry record has to be looked up HERE: `model_obj` is bound in `real_stages`, not in
-        # this one, so referencing it made every preflight stage raise `NameError` on the paths that
-        # reach this line.
-        if mid == getattr(args, "model", None):
-            selected_model = next((item for item in load_registry()["models"]
-                                   if item["model_id"] == mid), None)
-            if selected_model is not None:
-                preflight_args.extend(_checkpoint_args(args, mid, selected_model))
+        # The runtime preflight must inspect the SAME selection the run executes. Gating this on
+        # `mid == args.model` dropped the selection on every autopilot invocation (which passes
+        # `selected_model_ids` + `checkpoint_ids` and `model=None`), so doctor fell back to "inspect
+        # every registered variant" and refused a run whose selected variant was the only one
+        # installed: TME's unselected CIRR weight, HABIT's and INTENT's 50%/80% variants, and LIMN's
+        # bundle members all blocked evaluations that had nothing to do with them. A missing SELECTED
+        # variant must still block -- that is what the doctor stage checks -- so the rule is
+        # "forward the resolved selection whenever there is one", not "forward it for one model".
+        preflight_selection = _checkpoint_ids(args, mid, m)
+        if preflight_selection is None:
+            # No explicit selection means the run derives one: a declared bundle anchor, or the
+            # model's own preference. The preflight inspects THAT derived set rather than every
+            # registered variant -- and when the run resolves nothing at all (a policy that refuses
+            # the model), nothing is forwarded and doctor reports the refusal from the same policy.
+            preflight_selection = evaluated_checkpoint_ids(m, args, config.WORKBENCH_CHECKPOINT_ROOT) or None
+        if preflight_selection:
+            for value in preflight_selection:
+                preflight_args.extend(["--checkpoint", value])
+        if getattr(args, "checkpoint_policy", None):
+            preflight_args.extend(["--checkpoint-policy", args.checkpoint_policy])
         stages.append(run_stage(
             "runtime-preflight",
             command("doctor.py", *preflight_args),
@@ -2286,6 +2350,8 @@ def parser_for() -> argparse.ArgumentParser:
     parser.add_argument("--allow-env-install", action="store_true", help="authorize environment creation and package installation")
     parser.add_argument("--allow-preparation", action="store_true", help="authorize model-specific preparation execution")
     parser.add_argument("--allow-gpu-eval", action="store_true", help="authorize model evaluation subprocess execution")
+    parser.add_argument("--allow-gpu-preparation", action="store_true",
+                        help="authorize the CUDA-only preparation generators (TME validation image features)")
     parser.add_argument("--verify-gpu", action="store_true",
                         help="run the authorized GPU capability probe before evaluating (GPU hosts only)")
     parser.add_argument("--allow-index-write", action="store_true", help="authorize rebuilding the derived DuckDB index")
@@ -2330,6 +2396,8 @@ def main(argv: list[str] | None = None) -> int:
         authorized_caps.add("allow_preparation")
     if args.allow_gpu_eval:
         authorized_caps.add("allow_gpu_eval")
+    if getattr(args, "allow_gpu_preparation", False):
+        authorized_caps.add("allow_gpu_preparation")
     if args.allow_index_write:
         authorized_caps.add("allow_index_write")
     if args.mode == "mock":

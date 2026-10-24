@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 
 import pytest
+from PIL import Image
 import torch
 
 from workbench.backend.fashioniq_layout import CATEGORIES
@@ -58,6 +59,9 @@ def _workspace(tmp_path: Path, monkeypatch, *, with_features: bool):
     image_names = {category: [f"{category}_image"] for category in CATEGORIES}
     for category in CATEGORIES:
         (dataset_root / "captions" / f"cap.{category}.val.json").write_text("[]")
+        resized = dataset_root / "resized_image" / category
+        resized.mkdir(parents=True)
+        Image.new("RGB", (2, 2), (120, 40, 20)).save(resized / f"{image_names[category][0]}.jpg")
         (dataset_root / "image_splits" / f"split.{category}.val.json").write_text(
             json.dumps(image_names[category]))
 
@@ -134,16 +138,28 @@ def test_tme_preflight_checks_unverified_assets_against_registry_size_and_digest
                 "expected_sha256_prefix": None}
     asset_path = tmp_path / "tiny-asset.bin"
     if size is not None:
-        asset_path.write_bytes(b"x" * size)
+        # Non-uniform bytes: a file whose entire length is one repeated byte is refused by the
+        # payload check, so a single-byte fixture would exercise the wrong rule.
+        asset_path.write_bytes(bytes(range(1, size + 1)))
     # Every OTHER declared asset is supplied as genuinely available so these cases are about the
     # SELECTED asset and cannot pass or fail because an unrelated asset was missing. Their declared
     # size/digest are cleared for the stand-in: they are only a few bytes here, and an unrelated size
     # mismatch would mask the case under test. A `location_type: directory` asset needs a POPULATED
     # DIRECTORY, not a file - substituting a file for the tokenizer cache reproduced the very defect
-    # the check exists to catch.
+    # the check exists to catch - and it must be a cache its consumer can actually LOAD: an empty
+    # `refs/` file is exactly the "populated directory that is not a cache" the shared check now
+    # refuses, so the stand-in carries a real minimal BertTokenizer snapshot.
     populated = tmp_path / "hf-cache"
-    populated.mkdir()
-    (populated / "refs").write_text("main")
+    snapshot = populated / "snapshots" / "rev1"
+    snapshot.mkdir(parents=True)
+    (populated / "refs").mkdir()
+    (populated / "refs" / "main").write_text("rev1")
+    (snapshot / "vocab.txt").write_text(
+        "[PAD]\n[UNK]\n[CLS]\n[SEP]\n[MASK]\nhello\nworld\n", encoding="utf-8")
+    (snapshot / "tokenizer_config.json").write_text(
+        '{"tokenizer_class":"BertTokenizer","do_lower_case":true}', encoding="utf-8")
+    (snapshot / "config.json").write_text(
+        '{"model_type":"bert","vocab_size":7}', encoding="utf-8")
     others: list[dict] = []
     statuses = [_asset_status(selected, asset_path, state, digest)]
     for other in assets:

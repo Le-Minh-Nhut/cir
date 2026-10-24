@@ -5,6 +5,8 @@ Ngày: 2026-10-24. Nhánh `research/cir-failure-workbench`.
 Phạm vi: 10 finding của audit độc lập trước khi chuyển sang PC
 (`CIR_R19_PC_READINESS_AUDIT_2026-10-24.md`), cộng phần bàn giao PC và phần "còn lại của registry".
 
+> **Lưu ý lịch sử / bàn giao hiện tại:** Phần hướng dẫn PC ở mục 7 phản ánh trạng thái tại thời điểm báo cáo R19, không còn là hướng dẫn thao tác hiện tại. Lệnh `doctor.py --verify-only` và checkout `1848fb1` đã lỗi thời; biến `WORKBENCH_TME_ASSET_EVA_VIT_G` và `mkdir weight` không tải hay cài asset. Không sửa lại lịch sử đo kiểm trong báo cáo này. Dùng [AUTOPILOT_GUIDE.md](../AUTOPILOT_GUIDE.md) cho quy trình hiện tại, [FINAL_PC_READINESS.md](../FINAL_PC_READINESS.md) cho một đường setup/run/resume, và [MODEL_STATUS_SPEC.md](../MODEL_STATUS_SPEC.md) cho bảng trạng thái, bằng chứng và blocker hiện tại. TME weights phải lấy qua `python -m workbench.scripts.download_auxiliary_assets --model tme`; cache feature validation cần bước CUDA riêng.
+
 ## 1. Revision, delivery
 
 | Mục | Giá trị |

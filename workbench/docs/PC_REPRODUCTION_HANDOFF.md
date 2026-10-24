@@ -1,58 +1,34 @@
-# PC Reproduction Handoff (Release B)
+# PC reproduction handoff
 
-Release B runs on a provisioned GPU PC only. Start with the [Autopilot Operator Guide](AUTOPILOT_GUIDE.md): it is the primary runbook for paths, permissions, environment grouping and provisioning, checkpoint policy, GPU selection, budgets, ledger key, launch, resume, reports, and blockers.
+Primary operator path: [AUTOPILOT_GUIDE.md](AUTOPILOT_GUIDE.md). Use the checked-in example profile only for read-only planning; copy it to a private PC-specific YAML and configure dataset, persistent paths, model selection, checkpoint policy, budgets, and permissions before any real run. [MODEL_STATUS_SPEC.md](MODEL_STATUS_SPEC.md) records per-model source, checkpoint, assets, capability, and blockers.
 
-## One primary execution command
+**Revision identity:** `<PRODUCTION_REVISION>` is the revision whose checks ran; `<FINAL_HEAD>` is the branch tip, which differs only in documentation. Production bytes are identical between them.
 
-After configuring the PC-specific YAML and explicitly granting the capabilities required by its selected stages, run:
+## Read-only host checks
+
+```bash
+./workbench/run.sh autopilot --help
+.venv/bin/python workbench/scripts/doctor.py --scope workbench --json
+.venv/bin/python workbench/scripts/prepare_model.py --list --json
+.venv/bin/python workbench/scripts/pipeline.py prepare --model csmcir --dry-run
+.venv/bin/python workbench/scripts/download_auxiliary_assets.py --model tme --dry-run
+./workbench/run.sh autopilot --config workbench/configs/pc_autopilot.example.yaml --dry-run
+```
+
+A workbench-scope doctor may exit 2 when local dependencies are pending; its JSON is readiness evidence, not model evaluation. The checked-in example autopilot profile selects zero models, so its dry-run only confirms CLI/config parsing.
+
+On this host the workbench-scope doctor returned 0, while `prepare_model.py --list --json` returned 1 because models have blockers; `manage_environment.py --list --json` likewise returned 1 because model interpreters are unconfigured. Those exit codes accompany valid read-only JSON diagnostics, not failed execution.
+
+## One run/resume path
+
+On the configured target GPU PC, use same profile for initial run and resume:
 
 ```bash
 ./workbench/run.sh autopilot --config /path/to/pc_autopilot.yaml --apply --resume
 ```
 
-Use same config, artifact roots, selected models, GPU visibility, and HMAC key on resume. Do not run individual stage scripts as an alternative reproduction workflow: autopilot orchestrates doctor, dataset, sync, environment, preparation, checkpoint, auxiliary-assets, environment-plan, gpu-verification, runtime-preflight, evaluation, and validation-index stages under explicit capability guards. Full reproduction is not guaranteed by laptop-side engineering; reports distinguish completed, blocked, and failed models.
+This live run was not executed here. Preconditions: configured CUDA-capable target and compatible driver, canonical FashionIQ inputs, verified selected checkpoint and model interpreter, sufficient storage, and explicit permissions for each requested side effect. Missing registered assets may require network permission. Live Docker deployment is also unexecuted; it requires Docker Engine/Compose, configured GPU passthrough where used, and the deployment stack.
 
-## PC-only acceptance still owed
+TME's EVA-ViT-g and BLIP-2 weights use `download_auxiliary_assets --model tme` (or the authorized Autopilot auxiliary-assets stage), staging under `workbench/third_party/TME/weight/`. `mkdir` does not install them, and `WORKBENCH_TME_ASSET_EVA_VIT_G` is undeclared. Validation-feature generation is separate CUDA-only preparation: authorize `allow_preparation` and `allow_gpu_preparation` (optional Autopilot config key, default `false`); reserve about 10.47 GiB. This cache was not generated here.
 
-- Real checkpoint loading and official evaluator execution.
-- Official Recall reproduction against paper-reported values; reported values remain sanity references.
-- Verified model-specific environment and GPU capability on the actual host/device selection.
-- Per-query instrumentation remains unavailable; aggregate evaluation alone does not produce schema-v2 per-query result JSON.
-
-## Registry blockers
-
-These are registry/evidence blockers, not tasks Autopilot can bypass:
-
-| Model(s) | Current blocker |
-|---|---|
-| `ptha_mtst` | No verified FashionIQ fine-tuned checkpoint and no source integration. The registry also commits two `VERIFIED` paper rows that bind the same condition (Table III with-FashionIQ_MTST vs without it), so no run of it can be judged until the rows carry a selectable condition that separates them; selection refuses with the ambiguity named rather than guessing a row. |
-| `combiner_rn50x4_noft` | The authors published no FashionIQ row for this configuration, so the model has no publishable comparison: a run of it is reported as `NO_PUBLISHED_COMPARISON` (permanent) rather than as a failed or forged result. || `tgcir` | No source replay CLI; required ViT-B/16 and preparation assets unresolved. |
-| `pair` | FashionIQ mapping for `pair-B1.pt` / `pair-B2.pt` unresolved. |
-| `clvc_net` | No standalone replay entrypoint; checkpoint mapping and ResNet-50 asset unresolved. |
-| `sprc` | Checkpoint/backbone mapping unresolved. |
-| `dcnet` | Checkpoint mapping/hash, author-generated PKLs, and ResNet-50 asset remain unresolved. |
-| Combiner / CLIP4Cir | Checkpoint mapping/pairing and RN50x4 base asset unresolved. |
-| `encoder` | Direct FashionIQ checkpoint URL/hash unresolved; pinned evaluator imports missing `datasets1.py`; OpenCLIP binary required. |
-| Air-Know, ConeSep, HABIT, INTENT | Registered checkpoints are noise-trained, not clean-trained; no audited official command constructor. |
-| `hint` | Checkpoint evidence exists; official command constructor remains unaudited. |
-| `limn` | Replay implemented, but three checkpoint files, resized images, correction dictionaries, and verified CUDA environment must pass preflight. |
-| `csmcir` | Pinned command exists; required COT captions lack verified author source. Registered Qwen captions are acquired only when `allow_network` + `allow_large_downloads` are granted. |
-
-Do not describe these entries as runnable until their recorded blockers are resolved with authoritative evidence. A model blocked in reports stays blocked; do not substitute a checkpoint or invent a command.
-
-## Optional diagnostics
-
-These commands inspect state/readiness only; neither replaces the primary execution command.
-
-```bash
-# Optional diagnostic: show accepted autopilot options.
-./workbench/run.sh autopilot --help
-
-# Optional diagnostic: inspect latest autopilot report as JSON.
-./workbench/run.sh autopilot --config /path/to/pc_autopilot.yaml --report --json
-
-# Optional diagnostic: inspect configured model interpreters.
-python workbench/scripts/manage_environment.py --list --json
-```
-
-Do not mistake interpreter readiness for model readiness. See [AUTOMATION_RUNBOOK.md](AUTOMATION_RUNBOOK.md) for proof/ledger guarantees and trust boundaries.
+`doctor.py` accepts `--checkpoint-policy {strict_clean,include_flagged_conditions}`. Runtime-preflight checks the checkpoint the run selected. TME 20% remains `CHECKPOINT_UNAVAILABLE`; do not substitute Air-Know 50% for the 20% condition. Per-model unresolved facts and next actions remain in [MODEL_STATUS_SPEC.md](MODEL_STATUS_SPEC.md).

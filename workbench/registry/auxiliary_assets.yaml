@@ -318,3 +318,33 @@ assets:
   automatic_download_available: true
   expected_sha256: null
   provenance_status: UNVERIFIED
+# TME's pinned loader opens these exact checkout-relative paths; destination_path is shared with the
+# preparation contract's expected_local_location, keeping both declarations in agreement.
+- model_id: tme
+  family: BLIP-2 pretrain weights
+  required_for: official_evaluation
+  source_type: direct_url
+  source_repo: https://storage.googleapis.com/sfr-vision-language-research/LAVIS/models/BLIP2/blip2_pretrained.pth
+  source_revision: null
+  source_path: null
+  destination_scope: model_source
+  destination_path: weight/blip2_pretrained.pth
+  automatic_download_available: true
+  # The author publishes no digest.
+  expected_size_bytes: 746998955
+  expected_sha256: null
+  provenance_status: UNVERIFIED
+- model_id: tme
+  family: EVA-ViT-g backbone weights
+  required_for: official_evaluation
+  source_type: direct_url
+  source_repo: https://storage.googleapis.com/sfr-vision-language-research/LAVIS/models/BLIP2/eva_vit_g.pth
+  source_revision: null
+  source_path: null
+  destination_scope: model_source
+  destination_path: weight/eva_vit_g.pth
+  automatic_download_available: true
+  # The author publishes no digest.
+  expected_size_bytes: 2025249237
+  expected_sha256: null
+  provenance_status: UNVERIFIED

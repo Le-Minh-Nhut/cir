@@ -364,6 +364,10 @@ contracts:
     cwd: evaluator
     parameters:
       source_script: src/precompute.py
+      eval_dataset: FashionIQ
+      batch_size: 512
+      workers: 8
+      receipt_filename: .workbench_tme_precompute_receipt.json
       source_evidence: >-
         the pinned `data.py:250-255` `load_image_features()` opens
         `./features/FashionIQ/<split>_images.pt` and `./features/FashionIQ/<split>_name_to_idx.json`
@@ -404,8 +408,12 @@ contracts:
     required_for_evaluation: true
     required_for_preparation: false
     # The same redirect names a literal cwd-relative path, and the wrapper chdirs to the checkout, so
-    # this artifact also has exactly one valid location.
-    expected_local_location: third_party/TME/weight/blip2_pretrained.pth
+    # this artifact also has exactly one valid location: `weight/blip2_pretrained.pth` INSIDE that
+    # checkout. The declaration is the evaluator-relative path because that is the path the loader
+    # opens and the path the asset checker now resolves; declaring it repository-relative
+    # (`third_party/TME/weight/...`) made the checker look one directory above the loader's file, so a
+    # correctly staged asset was reported missing.
+    expected_local_location: weight/blip2_pretrained.pth
     location_env_var: null
     expected_sha256: null
     # Observed on the live object with a HEAD request this round.
@@ -423,10 +431,11 @@ contracts:
     required_for_preparation: false
     # The native constructor opens this file by a literal cwd-relative path
     # (`eva_vit.py:446`: `torch.load('weight/eva_vit_g.pth', ...)`) and the wrapper chdirs to the
-    # checkout, so the artifact has exactly ONE valid location. Declaring the path — rather than
-    # accepting any file the operator names — is what makes preflight check the file the loader
-    # actually opens instead of a file that merely exists somewhere.
-    expected_local_location: third_party/TME/weight/eva_vit_g.pth
+    # checkout, so the artifact has exactly ONE valid location: `weight/eva_vit_g.pth` inside that
+    # checkout. Declaring the path — rather than accepting any file the operator names — is what makes
+    # preflight check the file the loader actually opens instead of a file that merely exists
+    # somewhere.
+    expected_local_location: weight/eva_vit_g.pth
     location_env_var: null
     expected_sha256: null
     # Same source of truth as the BLIP-2 row above: the object's own HEAD response.
@@ -467,7 +476,6 @@ contracts:
   automation_policy: MANUAL_REQUIRED
   notes: >-
     TME's native gallery is the complete ordered `image_splits/split.<category>.val.json` with the
-    reference eligible, and its evaluation additionally requires the precomputed validation image
-    features. Preflight reports the feature files and the base weights as explicit blockers instead
-    of letting a run reach a long forward pass and die there; the wrapper generates the features
-    through the pinned `src/precompute.py` path.
+    reference eligible. The authorized preparation dispatcher runs the pinned `src/precompute.py`
+    script to generate validation features; this native path requires a CUDA-capable GPU and refuses
+    CPU fallback. Preflight reports missing feature files and base weights as explicit blockers.

@@ -1,5 +1,7 @@
 # CIR Failure Analysis Workbench — Automation Runbook
 
+> **Current handoff:** use [AUTOPILOT_GUIDE.md](AUTOPILOT_GUIDE.md) for the single setup/run/resume workflow and its current permissions. This runbook preserves an older standalone-stage/operator snapshot; its historical commands and model table are not current readiness claims. Current per-model evidence: [MODEL_STATUS_SPEC.md](MODEL_STATUS_SPEC.md). New TME preparation uses `--allow-gpu-preparation` / `permissions.allow_gpu_preparation` (default `false`) in addition to `--allow-preparation`; see the current guide for CUDA and ~10.47 GiB preconditions. TME EVA/BLIP weights download via `python -m workbench.scripts.download_auxiliary_assets --model tme`; `mkdir` or `WORKBENCH_TME_ASSET_EVA_VIT_G` does not install them.
+
 Operator guide for running, resuming, troubleshooting, and verifying CIR model reproduction workflows.
 
 ## Principles

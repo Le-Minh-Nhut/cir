@@ -94,4 +94,6 @@ permissions:
   allow_env_install: true
   allow_preparation: true
   allow_gpu_eval: true
+  # Authorizes the CUDA-only preparation generators (TME validation image features, 10.47 GiB).
+  allow_gpu_preparation: true
   allow_index_write: true

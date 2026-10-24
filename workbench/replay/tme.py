@@ -93,8 +93,20 @@ def _runtime_asset_check() -> tuple[list[str], list[dict[str, Any]]]:
                     blockers.append(
                         f"TME runtime asset {asset['name']} is not a populated directory{detail}")
                     continue
+                # A populated directory is not a usable cache. The shared cache check is the same
+                # decision readiness makes, so the wrapper cannot call a cache ready that the
+                # preflight refuses -- or vice versa, which is what happened when this branch
+                # admitted any non-empty directory while the shared check required a loadable
+                # revision snapshot.
+                from workbench.backend.registry import cache_asset_blocker
+
+                cache_reason = cache_asset_blocker(asset, status)
+                if cache_reason:
+                    blockers.append(
+                        f"TME runtime asset {asset['name']} cache unusable{detail}: {cache_reason}")
+                    continue
                 evidence.append({"name": asset["name"], "status": state, "path": str(path),
-                                 "verification": "directory cache present"})
+                                 "verification": "cache layout verified; loaded by its consumer"})
                 continue
             if not path.is_file():
                 blockers.append(f"TME runtime asset {asset['name']} unreadable or not a file{detail}")
@@ -109,6 +121,15 @@ def _runtime_asset_check() -> tuple[list[str], list[dict[str, Any]]]:
                 blockers.append(
                     f"TME runtime asset {asset['name']} size mismatch{detail}: "
                     f"expected {expected_size} bytes, got {actual_size}")
+                continue
+            # Same admission decision readiness makes, so a file with the right size but no
+            # plausible content cannot be treated as a usable weight by the run either.
+            from workbench.backend.registry import asset_admission_status
+
+            admission = asset_admission_status(asset, status)
+            if admission == "SUSPECT_PAYLOAD":
+                blockers.append(
+                    f"TME runtime asset {asset['name']} content is not a plausible payload{detail}")
                 continue
         expected_digest = asset.get("expected_sha256") or asset.get("expected_sha256_prefix")
         if state == "EXISTS_UNVERIFIED_CHECKSUM" and not expected_digest:
@@ -176,6 +197,12 @@ def preflight(checkout: Path, dataset_root: Path, checkpoint_root: Path,
     feature_parameters = next(
         artifact["parameters"] for artifact in contract["generated_artifacts"]
         if artifact["generator"] == "tme_precompute_features")
+    from workbench.replay.common import fashioniq_image_binding_blockers
+
+    blockers.extend(f"TME native gallery input missing: {problem.removeprefix('native replay resized FashionIQ image missing: ')}"
+                    if problem.startswith("native replay resized FashionIQ image missing:")
+                    else f"TME {problem}"
+                    for problem in fashioniq_image_binding_blockers(dataset_root, feature_parameters["split"]))
     # The scope decides the root: this artifact is `evaluator_cwd`, so it resolves against the
     # CHECKOUT, not the dataset root. Passing the dataset root here is what made the shared preflight
     # and this check disagree about which path they were talking about.
@@ -214,22 +241,60 @@ def preflight(checkout: Path, dataset_root: Path, checkpoint_root: Path,
     blockers.extend(asset_blockers)
     return blockers
 
-def _prior_feature_provenance() -> dict[str, Any] | None:
-    logs = Path(__file__).resolve().parents[1] / "artifacts" / "logs"
-    for path in sorted(logs.glob("tme__*/stdout.log"), reverse=True):
-        try:
-            output = path.read_text(encoding="utf-8")
-            start = output.rfind('{"model_id":')
-            if start < 0:
-                continue
-            payload, _ = json.JSONDecoder().raw_decode(output[start:])
-        except (OSError, ValueError):
-            continue
-        for row in payload.get("results", []):
-            provenance = row.get("provenance")
-            if isinstance(provenance, dict) and "feature_cache_sha256" in provenance:
-                return provenance
-    return None
+
+def _prior_feature_provenance(config=None) -> dict[str, Any] | None:
+    from workbench.backend.operator_config import resolve_config
+
+    config = config if config is not None else resolve_config()
+    contract = preparation_contract_for_model(MODEL)
+    artifact = next(item for item in contract["generated_artifacts"]
+                    if item.get("generator") == "tme_precompute_features")
+    parameters = artifact["parameters"]
+    receipt = (config.WORKBENCH_ARTIFACTS_ROOT / artifact["paths"][0]
+               / parameters["receipt_filename"])
+    try:
+        declared = json.loads(receipt.read_text(encoding="utf-8"))
+        if (declared.get("kind") != "workbench_tme_precompute_receipt"
+                or declared.get("model_id") != MODEL["model_id"]
+                or declared.get("generator") != artifact["generator"]
+                or declared.get("source_commit") != MODEL["upstream_commit_sha"]
+                or declared.get("dataset") != parameters["eval_dataset"]
+                or declared.get("split") != parameters["split"]):
+            raise ValueError("receipt does not match TME source or feature contract")
+        dataset_root = config.FASHIONIQ_ROOT.resolve()
+        inputs = declared["inputs"]
+        if inputs.get("dataset_root") != str(dataset_root):
+            raise ValueError("dataset root changed")
+        gallery = {category: sha256_file(dataset_root / "image_splits"
+                                         / f"split.{category}.{parameters['split']}.json")
+                   for category in CATEGORIES}
+        if inputs.get("split_files") != gallery:
+            raise ValueError("validation split files changed")
+        checkout = config.WORKBENCH_THIRD_PARTY_ROOT / MODEL["source_dir"]
+        feature_root = preparation_paths(contract, dataset_root, "generated_artifacts",
+                                         evaluator_root=checkout)[0]
+        feature = feature_root / f"{parameters['split']}_images.pt"
+        mapping = feature_root / f"{parameters['split']}_name_to_idx.json"
+        recorded_files = declared["files"]
+        if (sha256_file(feature) != recorded_files["features"]["sha256"]
+                or sha256_file(mapping) != recorded_files["name_to_idx"]["sha256"]):
+            raise ValueError("feature cache bytes changed")
+        return {
+            "dataset_root": str(dataset_root),
+            "feature_split": parameters["split"],
+            "feature_backbone": f"{MODEL_NAME}:{MODEL_TYPE}@{MODEL['upstream_commit_sha']}",
+            "source_commit": MODEL["upstream_commit_sha"],
+            "feature_cache_sha256": recorded_files["features"]["sha256"],
+            "feature_name_to_idx_sha256": recorded_files["name_to_idx"]["sha256"],
+            "feature_gallery_sha256": gallery,
+            "feature_shape": declared["feature_shape"],
+            "feature_dtype": declared["feature_dtype"],
+        }
+    except (KeyError, OSError, ValueError, TypeError):
+        if receipt.exists():
+            print("[WARNING] TME feature cache preparation receipt does not bind current inputs; "
+                  "cache origin remains UNVERIFIED", file=sys.stderr)
+        return None
 def _evaluate_categories(checkout: Path, dataset_root: Path, checkpoint_root: Path,
                          categories: tuple[str, ...], checkpoint_id: str | None,
                          prior_provenance: dict[str, Any] | None,
@@ -281,9 +346,10 @@ def _evaluate_categories(checkout: Path, dataset_root: Path, checkpoint_root: Pa
             f"TME native feature cache missing: {feature_path} and/or {mapping_path}")
 
     preprocess = targetpad_transform(target_ratio=1.25, dim=224)
-    with isolated_cache_root(dataset_root, directory_names=("captions", "image_splits")) as cache_root:
+    with isolated_cache_root(dataset_root, directory_names=("captions", "image_splits"),
+                             image_source="resized_image") as cache_root:
         tme_data.FashioniqPath = str(cache_root).rstrip("/") + "/"
-        dataset = tme_data.get_dataset(DATASET_LABEL, preprocess, "val")
+        dataset = tme_data.get_dataset(DATASET_LABEL, preprocess, parameters["split"])
         if hasattr(dataset, "load_image_features"):
             dataset.load_image_features()
         names = dataset.current_image_names
@@ -377,13 +443,20 @@ def _evaluate_categories(checkout: Path, dataset_root: Path, checkpoint_root: Pa
 def evaluate_categories(checkout: Path, dataset_root: Path, checkpoint_root: Path,
                         categories: tuple[str, ...] = CATEGORIES,
                         checkpoint_id: str | None = None,
-                        runtime_asset_evidence: list[dict[str, Any]] | None = None) -> tuple[list[ReplayResult], dict[str, Any]]:
-    source = source_root_for(checkout)
+                        runtime_asset_evidence: list[dict[str, Any]] | None = None,
+                        config=None) -> tuple[list[ReplayResult], dict[str, Any]]:
+    from workbench.backend.operator_config import resolve_config
+
+    config = config if config is not None else resolve_config()
     original_cwd = Path.cwd()
+    checkout = Path(checkout).resolve()
+    dataset_root = Path(dataset_root).resolve()
+    checkpoint_root = Path(checkpoint_root).resolve()
+    source = source_root_for(checkout)
     os.chdir(source)
     try:
         return _evaluate_categories(checkout, dataset_root, checkpoint_root, categories,
-                                    checkpoint_id, _prior_feature_provenance(),
+                                    checkpoint_id, _prior_feature_provenance(config),
                                     runtime_asset_evidence or [])
     finally:
         os.chdir(original_cwd)
