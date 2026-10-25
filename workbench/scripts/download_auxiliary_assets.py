@@ -11,6 +11,7 @@ import urllib.error
 import urllib.request
 from dataclasses import dataclass
 from datetime import datetime, timezone
+import hashlib
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
@@ -18,7 +19,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from workbench.backend.operator_config import resolve_config
 from workbench.backend.registry import (
     auxiliary_assets_for_model, auxiliary_destination, auxiliary_model_ids,
-    auxiliary_source_url, hf_hub_repo_dir, sha256_file, validate_auxiliary_asset,
+    auxiliary_source_url, expected_asset_size, hf_hub_cache_root, hf_hub_repo_dir,
+    hub_cache_snapshot, sha256_file, validate_auxiliary_asset,
 )
 
 @dataclass(frozen=True)
@@ -66,7 +68,7 @@ def assets(model_ids: set[str], third_party_root: Path, fashioniq_root: Path) ->
             asset["expected_sha256"],
             asset["provenance_status"],
             asset.get("expected_sha256_prefix"),
-            asset.get("expected_size_bytes"),
+            expected_asset_size(asset),
             asset.get("content_contract"),
             asset.get("caption_alias_from"),
             asset.get("source_type"),
@@ -133,6 +135,14 @@ def verify(asset: Asset, *, fashioniq_root: Path | None = None) -> bool:
         if problem:
             print(f"{asset.family}: {problem}")
             return False
+        repo = hf_hub_repo_dir(asset.hub_repo_id)
+        snapshot = hub_cache_snapshot(repo)
+        if snapshot is None:
+            print(f"{asset.family}: ref main names no snapshot under {repo / 'snapshots'}")
+            return False
+        if asset.source_revision and snapshot.name != asset.source_revision:
+            print(f"{asset.family}: ref main points to snapshot {snapshot.name}, expected pinned revision {asset.source_revision}")
+            return False
         missing = hub_cache_missing_files(asset)
         if missing:
             print(f"{asset.family}: declared payload missing: {', '.join(missing)}")
@@ -191,13 +201,34 @@ def hub_cache_missing_files(asset: "Asset") -> list[str]:
                      "cache_root_env_var": "HF_HOME"})
 
 
+def hub_cache_payload_bytes(snapshot: Path, declared_files: list[str] | tuple[str, ...] | None = None) -> int:
+    """The total byte size of declared payload files at a snapshot, deduplicating shared blobs."""
+    if not snapshot.is_dir():
+        return 0
+    seen_real_paths: set[Path] = set()
+    total = 0
+    targets = declared_files if declared_files is not None else [f.name for f in snapshot.iterdir()]
+    for name in targets:
+        file_path = snapshot / name
+        if not file_path.exists():
+            continue
+        try:
+            real_path = file_path.resolve()
+            if real_path not in seen_real_paths and real_path.is_file():
+                seen_real_paths.add(real_path)
+                total += real_path.stat().st_size
+        except OSError:
+            pass
+    return total
+
+
 def bootstrap_hub_asset(asset: "Asset") -> tuple[bool, str]:
     """Acquire a Hugging Face hub asset into the cache the loader reads, bounded to its declaration.
 
-    Uses the pinned `transformers`/`huggingface_hub` in THIS interpreter — the model environment
-    owns the loader, and the same library writes the layout it will later read. Only the files the
-    registry declares are fetched, so the transfer is bounded by a stated byte count rather than by
-    whatever the repository happens to contain.
+    Uses the controller environment interpreter — acquisition runs under the controller
+    interpreter (with huggingface_hub declared in controller requirements), writing into the
+    shared cache directory. Only the files the registry declares are fetched, so the transfer is
+    bounded by a stated byte count rather than by whatever the repository happens to contain.
     """
     repo_id = asset.hub_repo_id
     assert repo_id is not None
@@ -205,46 +236,44 @@ def bootstrap_hub_asset(asset: "Asset") -> tuple[bool, str]:
 
     allow = list(asset.hub_files or [])
     limit = asset.expected_size_bytes if type(asset.expected_size_bytes) is int and asset.expected_size_bytes > 0 else None
-    # The destination is resolved from the WORKBENCH root below, and the library must write into
-    # exactly that root. `snapshot_download` reads `HF_HOME` from its own environment, which
-    # `hf_hub_cache_root()` already answers through the shared settings reader, so the two agree by
-    # construction. Passing `cache_dir` instead was tried and REVERTED after it was reproduced
-    # splitting a cache in two (`<dir>/hub/…` for snapshot symlinks, `<dir>/refs` for ref
-    # bookkeeping), which staged 421 MB whose own verification then refused it.
+    root = hf_hub_cache_root()
+    # `cache_dir` is explicit; do not mutate the controller's environment as a side effect.
+    cache_dir = root / "hub"
     try:
         path = snapshot_download(repo_id=repo_id,
                                  revision=asset.source_revision or None,
-                                 allow_patterns=allow or None)
+                                 allow_patterns=allow or None,
+                                 cache_dir=str(cache_dir))
     except Exception as error:
         return False, f"hub bootstrap failed for {repo_id}: {type(error).__name__}: {error}"
-    repo = hf_hub_repo_dir(repo_id)
-    # `blobs/` holds the bytes; `snapshots/` holds symlinks into it. Counting `rglob` would follow
-    # those links and report every file twice, which is how a correct acquisition appears to exceed
-    # its own bound.
-    used = sum(path_file.stat().st_size for path_file in repo.rglob("*")
-               if path_file.is_file() and not path_file.is_symlink())
-    # PUBLISH the reference. `snapshot_download(revision=<sha>)` writes `snapshots/<sha>/` and NO
-    # `refs/<rev>` entry, and a snapshot no ref names cannot be reached by the repo-id lookup the
-    # pinned loader performs -- so without this step the acquisition would produce a cache that its
-    # own verification refuses, which is exactly what happened the first time this ran. The ref is
-    # written only after the payload is present, so an interrupted download leaves the cache
-    # unreferenced and therefore visibly incomplete rather than silently usable.
+    repo = hf_hub_repo_dir(repo_id, root)
+    snapshot = Path(path)
+    payload_bytes = hub_cache_payload_bytes(snapshot, allow)
+    missing = [name for name in allow if not (snapshot / name).is_file()]
+    if missing:
+        return False, (f"hub bootstrap for {repo_id} wrote snapshot missing declared payload: "
+                       f"{', '.join(missing)}")
+    if asset.expected_size_bytes is not None and payload_bytes != asset.expected_size_bytes:
+        return False, (f"PAYLOAD_SIZE_MISMATCH {snapshot}: declared payload has {payload_bytes} bytes, "
+                       f"registry declares {asset.expected_size_bytes} bytes")
+    # PUBLISH the reference atomically AFTER payload is verified.
     if asset.source_revision:
         refs = repo / "refs"
         refs.mkdir(parents=True, exist_ok=True)
         ref = refs / "main"
-        if not ref.exists() or ref.read_text(encoding="utf-8").strip() != asset.source_revision:
-            ref.write_text(asset.source_revision, encoding="utf-8")
-    if limit is not None and used > limit:
-        # Bounded acquisition, checked AFTER the fact because the library does not report the
-        # transfer size up front. Reported rather than silently accepted: a hub repo that grew past
-        # its declaration is a fact the operator needs before the run budgets on it.
-        return False, (f"hub bootstrap for {repo_id} wrote {used} bytes, above the declared bound "
-                       f"of {limit} bytes")
+        rev_content = asset.source_revision
+        if not ref.is_file() or ref.read_text(encoding="utf-8").strip() != rev_content:
+            tmp_ref = ref.with_suffix(f".tmp.{os.getpid()}")
+            tmp_ref.write_text(rev_content, encoding="utf-8")
+            tmp_ref.replace(ref)
     problem = hub_cache_layout_problem(repo_id)
     if problem:
         return False, problem
-    print(f"STAGED HUB CACHE {repo} ({used} bytes, files: {', '.join(sorted(allow)) or 'all'})")
+    config = resolve_config()
+    manifest = manifest_path(config.WORKBENCH_ARTIFACTS_ROOT)
+    entries = record_hub_download(load_manifest(manifest), asset, snapshot, repo)
+    save_manifest(manifest, entries)
+    print(f"STAGED HUB CACHE {repo} ({payload_bytes} bytes, files: {', '.join(sorted(allow)) or 'all'})")
     return True, str(path)
 
 
@@ -421,6 +450,95 @@ def record_download(entries: list[dict], asset: Asset) -> list[dict]:
     )
     return remaining
 
+def record_hub_download(entries: list[dict], asset: Asset, snapshot: Path, repo: Path) -> list[dict]:
+    records = []
+    seen: set[Path] = set()
+    total = 0
+    for name in sorted(asset.hub_files or ()):
+        path = snapshot / name
+        size = path.stat().st_size
+        digest = sha256_file(path)
+        records.append({"name": name, "size_bytes": size, "sha256": digest})
+        resolved = path.resolve()
+        if resolved not in seen:
+            seen.add(resolved)
+            total += size
+    payload = json.dumps({"hub_repo_id": asset.hub_repo_id,
+                          "source_revision": snapshot.name,
+                          "hub_file_records": records}, sort_keys=True, separators=(",", ":"))
+    entry = {
+        "model_id": asset.model_id,
+        "asset_family": asset.family,
+        "filename": repo.name,
+        "destination": str(repo.resolve()),
+        "source_url": asset.source_url,
+        "source_revision": snapshot.name,
+        "downloaded_sha256": hashlib.sha256(payload.encode("utf-8")).hexdigest(),
+        "size_bytes": total,
+        "downloaded_at": datetime.now(timezone.utc).isoformat(),
+        "official_hash_available": False,
+        "official_sha256": None,
+        "hub_repo_id": asset.hub_repo_id,
+        "hub_file_records": records,
+    }
+    return [item for item in entries if item.get("destination") != entry["destination"]] + [entry]
+
+
+def auxiliary_asset_needs_acquisition(
+    asset: Asset,
+    *,
+    managed_manifest: dict[str, str] | None = None,
+    force_redownload: bool = False,
+) -> bool:
+    """Side-effect-free decision: does this asset need acquisition or repair?
+
+    Shared between download_auxiliary_assets (which files to download/repair) and
+    pipeline.all_stages (whether the auxiliary-assets stage owes work and needs
+    network capabilities).
+    """
+    if force_redownload:
+        return True
+    if asset.hub_repo_id:
+        if hub_cache_layout_problem(asset.hub_repo_id) is not None:
+            return True
+        if hub_cache_missing_files(asset):
+            return True
+        if asset.source_revision:
+            repo = hf_hub_repo_dir(asset.hub_repo_id)
+            snapshot = hub_cache_snapshot(repo)
+            if snapshot is None or snapshot.name != asset.source_revision:
+                return True
+        return False
+
+    dest = asset.destination
+    if not dest.is_file():
+        return True
+    try:
+        if dest.stat().st_size == 0:
+            return True
+    except OSError:
+        return True
+
+    # Not in the manifest means the workbench did not download it: it is the operator's file.
+    # Operator-owned non-empty files are never replaced.
+    if managed_manifest is not None and str(dest) not in managed_manifest:
+        return False
+
+    if managed_manifest is not None:
+        try:
+            digest = sha256_file(dest)
+        except OSError:
+            return False
+        if digest != managed_manifest[str(dest)]:
+            return True
+        if asset.expected_sha256 and digest != asset.expected_sha256:
+            return True
+        prefix = getattr(asset, "expected_sha256_prefix", None)
+        if prefix and not digest.startswith(prefix):
+            return True
+
+    return False
+
 
 def parser_for() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
@@ -481,40 +599,12 @@ def main(argv: list[str] | None = None) -> int:
     manifest = load_manifest(manifest_path(config.WORKBENCH_ARTIFACTS_ROOT))
     recorded_digest = {entry["destination"]: entry.get("downloaded_sha256") for entry in manifest}
 
-    def _needs_replacement(asset) -> bool:
-        if args.force_redownload:
-            return True
-        if not asset.destination.is_file():
-            return True
-        if asset.destination.stat().st_size == 0:
-            return True
-        # Not in the manifest means the workbench did not download it: it is the operator's file.
-        if str(asset.destination) not in recorded_digest:
-            return False
-        try:
-            digest = sha256_file(asset.destination)
-        except OSError:
-            return False
-        # A managed file is replaced when it no longer matches what the workbench recorded, or the
-        # published hash the registry declares. Either mismatch means the bytes on disk are not the
-        # bytes that were verified at acquisition.
-        if digest != recorded_digest[str(asset.destination)]:
-            return True
-        if asset.expected_sha256:
-            return digest != asset.expected_sha256
-        prefix = getattr(asset, "expected_sha256_prefix", None)
-        return bool(prefix) and not digest.startswith(prefix)
-
-    selected = tuple(asset for asset in downloadable if _needs_replacement(asset))
-    # A hub cache is incomplete when ANY declared payload file is absent, not only when its model
-    # weights are: `hub_cache_layout_problem` answers the narrower question "can the loader resolve
-    # MODEL weights here", so gating acquisition on it alone left a cache missing `config.json` or
-    # `tokenizer.json` unrepaired -- the plan would schedule the download form and the download would
-    # then no-op, exiting 0 with the cache still incomplete.
+    selected = tuple(asset for asset in downloadable
+                     if auxiliary_asset_needs_acquisition(asset, managed_manifest=recorded_digest,
+                                                          force_redownload=args.force_redownload))
     hub_selected = tuple(asset for asset in hub_items
                          if asset.automatic_download_available
-                         and (hub_cache_layout_problem(asset.hub_repo_id) is not None
-                              or hub_cache_missing_files(asset)))
+                         and auxiliary_asset_needs_acquisition(asset, force_redownload=args.force_redownload))
     repaired = tuple(asset for asset in selected if asset.destination.is_file())
     if args.dry_run:
         for asset in selected:

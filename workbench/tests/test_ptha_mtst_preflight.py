@@ -129,7 +129,7 @@ def test_the_nested_source_layout_resolves_to_the_directory_holding_src() -> Non
     assert ptha_mtst.evaluator_path(real) == tree / "src" / "validate_blip.py"
 
 
-def test_a_transfer_run_needs_the_explicit_opt_in(tmp_path: Path) -> None:
+def test_a_transfer_run_needs_the_explicit_opt_in(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """The CIRR checkpoint must never be evaluated on FashionIQ by default.
 
     The refused message names the reason (the author publishes no FashionIQ fine-tune), so an operator
@@ -143,6 +143,7 @@ def test_a_transfer_run_needs_the_explicit_opt_in(tmp_path: Path) -> None:
     if not source.is_dir():
         return pytest.skip("vendored MTST_PTHA checkout is not present")
     dataset = tmp_path / "FashionIQ"
+    (dataset / "images").mkdir(parents=True, exist_ok=True)
     for relative in ptha_mtst.RAW_INPUTS:
         (dataset / relative).parent.mkdir(parents=True, exist_ok=True)
         (dataset / relative).write_text("[]")
@@ -153,6 +154,12 @@ def test_a_transfer_run_needs_the_explicit_opt_in(tmp_path: Path) -> None:
     checkpoint_root.mkdir(parents=True)
     (checkpoint_root / ptha_mtst.PUBLISHED_CIRR_WEIGHT).write_bytes(b"weights")
 
+    torch_home = tmp_path / "torch"
+    eva = torch_home / "hub/checkpoints/eva_vit_g.pth"
+    eva.parent.mkdir(parents=True)
+    eva.write_bytes(b"eva")
+    monkeypatch.setenv("TORCH_HOME", str(torch_home))
+    monkeypatch.setenv("WORKBENCH_TEST_ASSET_SIZE_EVA_VIT_G_PTH", "3")
     assert ptha_mtst.preflight(source, dataset, checkpoint_root,
                                transfer_cirr_to_fashioniq=True) == []
     refused = ptha_mtst.preflight(source, dataset, checkpoint_root,

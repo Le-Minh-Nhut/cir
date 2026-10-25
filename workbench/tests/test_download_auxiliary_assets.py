@@ -9,6 +9,9 @@ import sys
 from pathlib import Path
 
 import pytest
+ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 from workbench.backend.operator_config import WorkbenchConfig
 
 
@@ -46,7 +49,8 @@ def qwen_assets(module, config: WorkbenchConfig, *, with_hash: bool = True):
     return tuple(replace(asset, expected_sha256=None) for asset in items)
 
 def load_module():
-    spec = importlib.util.spec_from_file_location("download_auxiliary_assets", Path("workbench/scripts/download_auxiliary_assets.py"))
+    script = Path(__file__).resolve().parents[2] / "workbench" / "scripts" / "download_auxiliary_assets.py"
+    spec = importlib.util.spec_from_file_location("download_auxiliary_assets", script)
     assert spec and spec.loader
     module = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = module
@@ -1076,6 +1080,17 @@ def test_tme_hub_cache_offline_verification_and_pipeline_selection(monkeypatch, 
     monkeypatch.setattr(runtime, "verify_environment", lambda *a, **kw: SimpleNamespace())
     monkeypatch.setattr(runtime, "_cached_gpu_capability", lambda *a, **kw: None)
     monkeypatch.setattr("workbench.scripts.download_checkpoints.verify", lambda *a, **kw: True)
+    third_party = tmp_path / "third_party"
+    monkeypatch.setenv("WORKBENCH_THIRD_PARTY_ROOT", str(third_party))
+    tme_weight_dir = third_party / "TME" / "weight"
+    tme_weight_dir.mkdir(parents=True)
+    blip_bytes = b"blip2_dummy_weights_12345"
+    eva_bytes = b"eva_dummy_weights_12345"
+    (tme_weight_dir / "blip2_pretrained.pth").write_bytes(blip_bytes)
+    (tme_weight_dir / "eva_vit_g.pth").write_bytes(eva_bytes)
+    monkeypatch.setenv("WORKBENCH_TEST_ASSET_SIZE_BLIP2_PRETRAINED_PTH", str(len(blip_bytes)))
+    monkeypatch.setenv("WORKBENCH_TEST_ASSET_SIZE_EVA_VIT_G_PTH", str(len(eva_bytes)))
+
 
     repo_dir = hf_home / "hub" / "models--bert-base-uncased"
 
@@ -1093,7 +1108,10 @@ def test_tme_hub_cache_offline_verification_and_pipeline_selection(monkeypatch, 
 
     # (b) otherwise-valid but ref-less snapshot (files present, no refs/<rev>) is still refused
     (repo_dir / "refs").rmdir()
-    snapshot_dir = repo_dir / "snapshots" / "rev123"
+    tme_asset = next(item for item in module.assets({"tme"}, third_party, tmp_path / "FashionIQ")
+                     if item.hub_repo_id)
+    pinned_rev = tme_asset.source_revision or "rev123"
+    snapshot_dir = repo_dir / "snapshots" / pinned_rev
     snapshot_dir.mkdir(parents=True)
     (snapshot_dir / "pytorch_model.bin").write_bytes(b"dummy payload")
     assert module.main(["--model", "tme", "--verify-only"]) == 1
@@ -1106,11 +1124,11 @@ def test_tme_hub_cache_offline_verification_and_pipeline_selection(monkeypatch, 
     # would fail on -- and must not be presented as a complete one.
     refs_dir = repo_dir / "refs"
     refs_dir.mkdir(parents=True)
-    (refs_dir / "main").write_text("rev123\n", encoding="utf-8")
-    tme_asset = next(item for item in module.assets({"tme"}, Path("/tmp"), Path("/tmp"))
-                     if item.hub_repo_id)
+    (refs_dir / "main").write_text(pinned_rev, encoding="utf-8")
     for name in tme_asset.hub_files or ():
         (snapshot_dir / name).write_bytes(b"dummy payload")
+    monkeypatch.setenv("WORKBENCH_TEST_ASSET_SIZE_CONFIG_JSON",
+                       str(sum((snapshot_dir / name).stat().st_size for name in tme_asset.hub_files or ())))
     assert module.main(["--model", "tme", "--verify-only"]) == 0
     out_valid = capsys.readouterr().out
     assert "cache layout and declared payload verified" in out_valid
@@ -1122,7 +1140,7 @@ def test_tme_hub_cache_offline_verification_and_pipeline_selection(monkeypatch, 
     (snapshot_dir / "config.json").unlink()
     assert module.main(["--model", "tme", "--verify-only"]) == 1
     out_partial = capsys.readouterr().out
-    assert "declared payload missing: config.json" in out_partial
+    assert "is missing the declared payload config.json" in out_partial
     (snapshot_dir / "config.json").write_bytes(b"dummy payload")
 
     # (e) the stage command is STABLE across states, so a successful stage keeps its fingerprint and
@@ -1175,6 +1193,8 @@ def test_hub_bootstrap_publishes_the_ref_the_loader_resolves(monkeypatch, tmp_pa
         snapshot_dir.mkdir(parents=True)
         for name in allow_patterns or files:
             (snapshot_dir / name).write_bytes(b"payload " + name.encode())
+        monkeypatch.setenv("WORKBENCH_TEST_ASSET_SIZE_CONFIG_JSON",
+                           str(sum((snapshot_dir / name).stat().st_size for name in allow_patterns or files)))
         return str(snapshot_dir)
 
     monkeypatch.setattr(huggingface_hub, "snapshot_download", fake_snapshot_download)

@@ -132,7 +132,7 @@ Khi `./pc.sh` chạy, hệ thống sẽ tuần tự đi qua các giai đoạn ng
    - Thăm dò mức độ sẵn sàng thật (readiness polling) thông qua endpoint API `GET /api/models` và cổng frontend 5173 theo thời hạn định sẵn.
 5. **Model Preparation (LIMN)**:
    - Đồng bộ mã nguồn upstream của LIMN vào thư mục `/third_party`.
-   - Thiết lập môi trường thực thi đã thích nghi (`sm_120` qua PyTorch >=2.7).
+   - Chỉ khi operator chọn rõ `WORKBENCH_RUNTIME_ADAPTATION=sm_120`, cài profile cu128 đã khai báo cho LIMN; khai báo profile hoặc solver thành công chưa chứng minh cài đặt, import hay thực thi GPU đích.
    - Chuẩn bị dữ liệu FashionIQ derived (ảnh resized và correction dicts).
    - Tải bộ trọng số checkpoint bundle `base_iter0_all_categories` (`0_dress_best_model.pt`, `0_shirt_best_model.pt`, `0_toptee_best_model.pt`) và đối chiếu mã băm SHA256 chính thức.
 6. **GPU Capability Verification**:
@@ -267,7 +267,7 @@ Mặc định `./pc.sh` chạy mô hình LIMN. Để đánh giá mô hình khác
 ### 4. Không tương thích CUDA (`CUDA incompatibility`)
 - **Hiện tượng**: PyTorch ném lỗi không tìm thấy kernel CUDA tương thích cho kiến trúc `sm_120` (GeForce RTX 5070 Ti - Blackwell), hoặc lỗi khởi tạo CUDA context.
 - **Nguyên nhân**: Thư viện PyTorch nguyên bản của mô hình (ví dụ PyTorch 1.12.1 của LIMN phát hành năm 2022) không hỗ trợ phần cứng kiến trúc mới.
-- **Khắc phục**: Hệ thống tự động xử lý qua cơ chế `WORKBENCH_RUNTIME_ADAPTATION=sm_120`, sử dụng PyTorch 2.7+ đã biên dịch cho Blackwell. Đảm bảo bạn không tắt cờ này đối với mô hình LIMN.
+Khắc phục: Không giả định runtime thích nghi đã được cài hoặc hoạt động. Chọn rõ `WORKBENCH_RUNTIME_ADAPTATION=sm_120` cho model có profile tương ứng; sau provision, xác minh import và capability trên GPU đích. Profile hiện được khai báo cho chín model được chọn, nhưng mọi thực thi `sm_120` vẫn `TARGET_GPU_PENDING`.
 
 ### 5. Xung đột phụ thuộc Python (`Python dependency conflict`)
 - **Hiện tượng**: Quá trình chuẩn bị môi trường mô hình thất bại trong bước solver của conda/mamba hoặc cài đặt pip.

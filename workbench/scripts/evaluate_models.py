@@ -656,6 +656,8 @@ def _evaluator_environment(identity: dict[str, object],
         if any(name == prefix or name.startswith(prefix)
                for prefix in _EVALUATOR_ENV_DENY_PREFIXES):
             child_env.pop(name, None)
+    from workbench.backend.registry import hf_hub_cache_root
+    child_env["HF_HOME"] = str(hf_hub_cache_root())
     # The run identity is the operator's own contract with the evaluator, so it is set last and
     # cannot be shadowed by an inherited name.
     child_env.update({key: str(value) for key, value in identity.items()})

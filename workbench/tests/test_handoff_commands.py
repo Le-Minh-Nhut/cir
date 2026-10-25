@@ -258,9 +258,13 @@ def test_every_documented_command_parses_and_pipeline_has_required_authorization
                     assert re.search(rf"^\s*{re.escape(flag)}\)", help_text, re.M), \
                         f"{location}: pc.sh does not accept {flag}"
                 continue
+            if tokens and (Path(tokens[0]).name in {"python", "python3"} or tokens[0] in {"python", "python3"}):
+                tokens = ["python", *tokens[1:]]
             if tokens[:2] == ["python", "-m"]:
                 assert len(tokens) > 2, location
                 module_path = tokens[2]
+                if module_path == "pip":
+                    continue
                 if module_path in {"pytest", "compileall"}:
                     assert importlib.util.find_spec(module_path) is not None, location
                     continue
@@ -278,7 +282,7 @@ def test_every_documented_command_parses_and_pipeline_has_required_authorization
                 assert len(tokens) > 2, location
                 continue
             script_at = next((index for index, token in enumerate(tokens)
-                              if token.startswith("workbench/scripts/") and token.endswith(".py")), None)
+                              if token.removeprefix("./").startswith("workbench/scripts/") and token.endswith(".py")), None)
             if script_at is not None:
                 script = Path(tokens[script_at]).stem
                 arguments = tokens[script_at + 1:]

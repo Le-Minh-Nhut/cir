@@ -25,6 +25,7 @@ did not observe.
 """
 from __future__ import annotations
 
+import argparse
 import ast
 import json
 import sys
@@ -53,8 +54,27 @@ def declared_configs(class_file: Path) -> dict[str, str]:
     raise SystemExit(f"no PRETRAINED_MODEL_CONFIG_DICT in {class_file}")
 
 
-def main(argv: list[str]) -> int:
-    selected = argv or sorted(CHECKOUTS)
+def parser_for() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "models",
+        nargs="*",
+        metavar="MODEL",
+        help=f"LAVIS model(s) to verify (valid: {', '.join(sorted(CHECKOUTS))}; default: all)",
+    )
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = parser_for()
+    args = parser.parse_args(argv)
+    selected = [m.lower() for m in args.models] if args.models else sorted(CHECKOUTS)
+    invalid = [m for m in selected if m not in CHECKOUTS]
+    if invalid:
+        sys.stderr.write(
+            f"unknown model(s): {', '.join(invalid)}. Valid choices: {', '.join(sorted(CHECKOUTS))}\n"
+        )
+        return 2
     from workbench.replay import lavis_processors
 
     report: dict[str, object] = {}
@@ -85,4 +105,4 @@ def main(argv: list[str]) -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main(sys.argv[1:]))
+    raise SystemExit(main())

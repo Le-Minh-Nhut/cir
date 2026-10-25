@@ -266,7 +266,7 @@ def workbench_checks(config: WorkbenchConfig, serving: bool = False) -> list[dic
     dirty = git(config.CIR_REPO_ROOT, "status", "--porcelain")
     checks.append(record("repository", "OK", "repository information", root=str(config.CIR_REPO_ROOT), branch=branch, dirty=bool(dirty)))
     checks.append(record("python", "OK", platform.python_version(), executable=sys.executable))
-    for name in ("fastapi", "uvicorn", "duckdb", "pydantic", "yaml"):
+    for name in ("fastapi", "uvicorn", "duckdb", "pydantic", "yaml", "packaging", "huggingface_hub", "numpy", "PIL", "torch"):
         present = importlib.util.find_spec(name) is not None
         checks.append(record(f"import:{name}", "OK" if present else "BLOCKED", "available" if present else "missing", module=name))
     checks.append(writable_path_check("results", config.WORKBENCH_RESULTS_ROOT))

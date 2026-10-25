@@ -6,8 +6,9 @@ import json
 import subprocess
 import sys
 from pathlib import Path
-
 REPO = Path(__file__).resolve().parents[2]
+if str(REPO) not in sys.path:
+    sys.path.insert(0, str(REPO))
 from types import SimpleNamespace
 
 
@@ -17,7 +18,7 @@ from workbench.backend.registry import load_registry
 
 
 def load_module():
-    spec = importlib.util.spec_from_file_location("evaluate_models", Path("workbench/scripts/evaluate_models.py"))
+    spec = importlib.util.spec_from_file_location("evaluate_models", REPO / "workbench/scripts/evaluate_models.py")
     assert spec and spec.loader
     module = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = module
@@ -324,9 +325,8 @@ def test_dcnet_audited_command_reports_non_command_blockers() -> None:
     assert model["native_protocol"] == "fashioniq_full_gallery_ref_excluded"
     assert plan is None
     assert not any(reason.startswith("SKIPPED:") for reason in reasons)
-    assert "checkpoint mapping unresolved" in reasons or True  # mapping verified for encoder; see restatement
-    assert any(reason.startswith("external runtime asset file missing: torchvision ResNet-50 ImageNet weights (") for reason in reasons)
-
+    assert any(reason.startswith("external runtime asset file missing: torchvision ResNet-50 ImageNet weights (")
+               for reason in reasons)
 
 def test_dcnet_command_uses_configured_model_interpreter(tmp_path: Path, monkeypatch) -> None:
     import sys
@@ -575,19 +575,9 @@ def test_encoder_complete_layout_and_import_still_blocks_openclip(monkeypatch, t
 
     assert plan is None
     backbone = str(source / "open_clip_pytorch_model.bin")
-    assert any("missing" in reason.lower() and backbone in reason for reason in reasons), reasons or True  # mapping verified for encoder; see restatement
-
+    assert any("missing" in reason.lower() and backbone in reason for reason in reasons), reasons
 
 def test_encoder_complete_prerequisites_produce_a_plan_because_the_mapping_is_verified(monkeypatch, tmp_path: Path) -> None:
-    """A complete local install plus a verified mapping must yield a plan, not a refusal.
-
-    This test previously asserted the opposite — that every filesystem prerequisite satisfied still
-    left the mapping UNVERIFIED, so the model stayed blocked. That was true while nothing author-linked
-    bound a Drive file to the paper's variant. The variant is now bound by an author Hub revision, a
-    published size, and the file's own LFS oid, so the honest assertion is that the plan is produced.
-    The fail-closed rule it was protecting is still tested: `test_an_unverified_mapping_is_refused_
-    even_when_the_bytes_are_in_hand` covers a mapping that is genuinely unresolved.
-    """
     module = load_module()
     model = records()["encoder"]
     source, _, settings = prepare_source(monkeypatch, module, tmp_path, model)
@@ -604,21 +594,46 @@ def test_encoder_complete_prerequisites_produce_a_plan_because_the_mapping_is_ve
     assert plan.checkpoint_mapping_verified is True
     assert reasons == []
 
+def test_encoder_replay_preserves_upstream_trailing_root_separator(tmp_path: Path, monkeypatch) -> None:
+    import torch
+    from types import SimpleNamespace
+    from workbench.replay import encoder
 
-def test_encoder_replay_preserves_upstream_trailing_root_separator(tmp_path: Path) -> None:
-    """The native encoder dataset CONCATENATES the root, so it must end with a separator.
+    dataset_root = tmp_path / "FashionIQ"
+    for name in ("captions", "image_splits", "resized_image"):
+        (dataset_root / name).mkdir(parents=True)
+    checkpoint_root = tmp_path / "checkpoints"
+    checkpoint_root.mkdir()
+    source_root = tmp_path / "ENCODER"
+    source_root.mkdir()
+    paths = []
 
-    `datasets.py:67-69` does `self.image_dir = self.path + 'resized_image'` — not a join — so a root
-    lacking its trailing separator builds `.../FashionIQresized_image` and reads nothing. The flag
-    that used to carry the separator to the legacy script is gone (that script reads `args` at module
-    scope and cannot be launched), so the guarantee now lives in the replay wrapper, which is what
-    runs. This asserts it there rather than on a command path that no longer exists.
-    """
-    source = (REPO / "workbench" / "replay" / "encoder.py").read_text()
-    assert 'rstrip("/") + "/"' in source, (
-        "the wrapper must terminate the dataset root with a separator for the native dataset")
-    assert "isolated_cache_root" in source, (
-        "and it must materialize the dataset in an isolated root, or a stale cache is reused")
+    class Model:
+        def __init__(self, **_kwargs):
+            pass
+        def to(self, _device):
+            return self
+
+        def eval(self):
+            return None
+
+    class Dataset:
+        def FashionIQ(self, *, path, **_kwargs):
+            paths.append(path)
+            return object()
+
+    fake_open_clip = SimpleNamespace(create_model_and_transforms=lambda *_a, **_k: (None, None, None))
+    fake_model = SimpleNamespace(Encoder=Model)
+    monkeypatch.setattr(encoder, "_load_replay_modules",
+                        lambda _root: (torch, fake_open_clip, Dataset(), SimpleNamespace(), fake_model))
+    monkeypatch.setattr(torch, "load", lambda *_a, **_k: Model())
+    monkeypatch.delenv("WORKBENCH_REPLAY_CACHE_ROOT", raising=False)
+
+    encoder.evaluate_categories(checkpoint_root, dataset_root, source_root, categories=(), device="cpu")
+
+    assert len(paths) == 1
+    assert paths[0].endswith("/")
+    assert Path(paths[0].rstrip("/")) != dataset_root
 
 
 def test_sprc_command_selects_the_registered_model_and_a_matching_backbone(tmp_path: Path) -> None:
@@ -1483,3 +1498,19 @@ def test_a_per_query_artifact_that_disagrees_with_the_aggregate_is_refused(monke
         f"a disagreeing artifact must be refused by the aggregate agreement check; reason={reason!r}")
     assert report["per_query_export_available"] is False
     assert report.get("per_query_artifact_digest") is None
+
+
+def test_evaluator_environment_resolves_hf_home_from_workbench_env(monkeypatch, tmp_path: Path):
+    module = load_module()
+    configured = tmp_path / "model-cache"
+    monkeypatch.delenv("HF_HOME", raising=False)
+    monkeypatch.setattr("workbench.backend.model_settings.file_settings",
+                        lambda: {"HF_HOME": str(configured)})
+
+    child_env = module._evaluator_environment({}, "tme")
+    assert child_env["HF_HOME"] == str(configured)
+    result = subprocess.run(
+        [sys.executable, "-c", "import os; print(os.environ['HF_HOME'])"],
+        env=child_env, capture_output=True, text=True, check=True)
+    assert result.stdout.strip() == str(configured)
+    assert "HF_HOME" not in __import__("os").environ

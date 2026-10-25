@@ -202,9 +202,12 @@ def test_system_python_is_never_a_planned_environment_target():
     assert "/artifacts/environments/" in group["interpreter"]
 
 
-def test_source_requirements_and_registry_declarations_are_read_from_real_checkouts():
+def test_source_requirements_and_registry_declarations_are_read_from_real_checkouts(monkeypatch: pytest.MonkeyPatch):
+    from workbench.backend import model_settings
+    monkeypatch.delenv("WORKBENCH_RUNTIME_ADAPTATION", raising=False)
+    monkeypatch.setattr(model_settings, "file_settings",
+                        lambda: {k: v for k, v in model_settings.file_settings().items() if k != "WORKBENCH_RUNTIME_ADAPTATION"})
     from workbench.backend.registry import load_registry
-
     models = {item["model_id"]: item for item in load_registry()["models"]}
     limn = planner.model_constraints(models["limn"])
     assert limn["torch"] == "1.12.1"

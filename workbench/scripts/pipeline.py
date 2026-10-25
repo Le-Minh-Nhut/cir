@@ -42,6 +42,7 @@ class Stage:
     receipt: bool = False
     run_id: str | None = None
     evidence: Callable[[dict | None], tuple[bool, str | None, dict | None]] | None = None
+    resume_refusal_reason: str | None = None
     checkpoint_policy: str | None = None
     checkpoint_selection: tuple[str, ...] = ()
     checkpoint_overrides: tuple[tuple[str, tuple[str, ...]], ...] = ()
@@ -763,6 +764,12 @@ def new_run_id() -> str:
 
 
 def command(script: str, *arguments: str | Path) -> list[str]:
+    """Launch a workbench operator script under the controller interpreter (sys.executable).
+
+    Auxiliary asset acquisition (download_auxiliary_assets.py) executes under this controller
+    interpreter rather than model interpreters, so shared multi-model assets are acquired and
+    verified before model-specific environments are provisioned.
+    """
     return [sys.executable, str(SCRIPTS / script), *(str(argument) for argument in arguments)]
 
 
@@ -784,6 +791,7 @@ def run_stage(
     receipt: bool = False,
     run_id: str | None = None,
     evidence: Callable[[dict | None], tuple[bool, str | None, dict | None]] | None = None,
+    resume_refusal_reason: str | None = None,
 ) -> Stage:
     caps = frozenset(required_capabilities)
     if required_capability:
@@ -804,6 +812,7 @@ def run_stage(
         receipt=receipt,
         run_id=run_id,
         evidence=evidence,
+        resume_refusal_reason=resume_refusal_reason,
     )
 
 
@@ -993,13 +1002,13 @@ def model_eval_inputs(model_dict: dict, args: argparse.Namespace, config: Workbe
     inputs: list[Path] = []
     mid = model_dict["model_id"]
 
-    # 1. Checkpoints: the selected variants.
+    # Checkpoint inputs must match what the evaluator resolves when no selection is explicit.
     ckpts = model_dict.get("checkpoint_variants") or []
-    selected_ckpt_ids: list[str] | None = _checkpoint_ids(args, mid, model_dict) if checkpoint_ids is None else _expand_selection(model_dict, list(checkpoint_ids))
-
-    if selected_ckpt_ids is not None:
-        selected_set = set(selected_ckpt_ids)
-        ckpts = [c for c in ckpts if c["checkpoint_id"] in selected_set]
+    selected_ckpt_ids = _expand_selection(
+        model_dict, list(checkpoint_ids) if checkpoint_ids is not None
+        else evaluated_checkpoint_ids(model_dict, args, config.WORKBENCH_CHECKPOINT_ROOT))
+    selected_set = set(selected_ckpt_ids)
+    ckpts = [c for c in ckpts if c["checkpoint_id"] in selected_set]
     for variant in ckpts:
         inputs.append(checkpoint_path(mid, variant, config.WORKBENCH_CHECKPOINT_ROOT))
     # 2. The FashionIQ inputs this model's layout declares. `fashioniq_required_paths` already
@@ -1255,7 +1264,6 @@ def real_stages(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage
             if forced_ids:
                 ckpts = [c for c in ckpts if c["checkpoint_id"] in forced_ids]
         ckpt_outputs = tuple(checkpoint_path(args.model, c, config.WORKBENCH_CHECKPOINT_ROOT) for c in ckpts)
-
     if not args.download_checkpoints:
         checkpoints = Stage("checkpoint", skipped="pass --download-checkpoints")
     elif not ckpt_outputs:
@@ -1319,7 +1327,7 @@ def real_stages(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage
             evaluation_args.append("--verify-gpu")
         if args.continue_on_error:
             evaluation_args.append("--continue-on-error")
-        eval_selection = _checkpoint_ids(args, args.model, model_obj)
+        eval_selection = evaluated_checkpoint_ids(model_obj, args, config.WORKBENCH_CHECKPOINT_ROOT) if model_obj else None
         if eval_selection is not None and not eval_selection:
             evaluation = Stage(
                 "evaluation",
@@ -1703,17 +1711,18 @@ def all_stages(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage]
             # not fingerprinted, so an offline run over an already-complete asset set still runs the
             # same command with no permission required, while a run that must fetch something is
             # refused by name rather than silently skipping.
-            def _satisfied(item) -> bool:
-                if item.hub_repo_id:
-                    from workbench.backend.registry import hub_cache_snapshot
-                    snapshot = hub_cache_snapshot(item.destination)
-                    return snapshot is not None and all(
-                        (snapshot / name).is_file() for name in (item.hub_files or ()))
-                return item.destination.is_file()
+            from workbench.scripts.download_auxiliary_assets import (
+                auxiliary_asset_needs_acquisition,
+                load_manifest,
+                manifest_path,
+            )
+            manifest = load_manifest(manifest_path(config.WORKBENCH_ARTIFACTS_ROOT))
+            managed_digest = {entry["destination"]: entry.get("downloaded_sha256") for entry in manifest}
 
             owed = [item for item in aux_items if item.required and item.automatic_download_available
-                    and not _satisfied(item)]
+                    and auxiliary_asset_needs_acquisition(item, managed_manifest=managed_digest)]
             capability = {"allow_network", "allow_large_downloads"} if owed else frozenset()
+            # Auxiliary asset acquisition runs under controller sys.executable via command().
             stages.append(run_stage(
                 "auxiliary-assets",
                 command("download_auxiliary_assets.py", "--model", mid),
@@ -1803,6 +1812,7 @@ def all_stages(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage]
             else:
                 prep_artifacts.extend(prep_dataset_root / relative for relative in artifact["paths"])
         owed_artifacts = tuple(p for p in prep_artifacts if not p.is_file())
+        tme_completion = None
         if not owed_artifacts and prep_contract:
             # A receipt can outlive the files it promised, so a declared resize is only satisfied
             # when its receipt AND the images it recorded are still present. Without this a resumed
@@ -1812,8 +1822,14 @@ def all_stages(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage]
             if prepare_model.resize_is_complete(replace(config, FASHIONIQ_ROOT=prep_dataset_root),
                                                 m, prep_contract) is False:
                 owed_artifacts = prep_artifacts
-            elif prepare_model.tme_features_complete(config, m, prep_contract) is False:
+            else:
+                tme_completion = prepare_model.tme_features_complete(config, m, prep_contract)
+            if tme_completion is False:
                 owed_artifacts = prep_artifacts
+        resume_refusal_reason = (
+            "preparation self-check failed: TME feature receipt does not bind current source, "
+            "gallery bytes, or resolved generation parameters"
+            if tme_completion is False else None)
         link_is_owed = bool(prep_link) and prep_owner == mid and not is_link_valid
 
         # The command is built from the DECLARATION, never from whether work happens to be owed: the
@@ -1908,6 +1924,7 @@ def all_stages(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage]
             dependencies=tuple(prep_deps),
             output_paths=tuple(prep_outputs),
             required_capabilities=frozenset(prep_capabilities),
+            resume_refusal_reason=resume_refusal_reason,
         ))
 
         # The auxiliary assets are declared inputs of this model's official evaluation, so they
@@ -1960,7 +1977,7 @@ def all_stages(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage]
             eval_args.extend([
                 "--dataset-root", str(dataset_root(args, config)),
             ])
-        eval_selection = _checkpoint_ids(args, mid, m)
+        eval_selection = evaluated_checkpoint_ids(m, args, config.WORKBENCH_CHECKPOINT_ROOT)
         if eval_selection is not None and not eval_selection:
             stages.append(Stage(
                 "evaluation",
@@ -2073,7 +2090,11 @@ def stages_for(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage]
 
 def run_command(argv: list[str]) -> int:
     try:
-        return subprocess.run(argv, cwd=REPOSITORY, check=False).returncode
+        from workbench.backend.registry import hf_hub_cache_root
+
+        env = os.environ.copy()
+        env["HF_HOME"] = str(hf_hub_cache_root())
+        return subprocess.run(argv, cwd=REPOSITORY, env=env, check=False).returncode
     except OSError as error:
         print(f"[BLOCKED] cannot start {argv[1]}: {error}", file=sys.stderr)
         return 127
@@ -2232,11 +2253,13 @@ def run_stages(
 
             # Resume check
             can_skip = False
+            resume_block_reason = stage.resume_refusal_reason
             if resume and not dep_invalidated and (not force_set or (stage.name not in force_set and skey not in force_set)):
                 prev = stage_records.get(skey) or stage_records.get(stage.name)
                 if prev and prev.get("status") == "COMPLETE" and not fingerprint_info["weak"]:
                     if prev.get("fingerprint") == fingerprint:
-                        if validate_stage_outputs(stage, prev.get("output_fingerprints"), config=cfg, record=prev):
+                        if not resume_block_reason and validate_stage_outputs(
+                                stage, prev.get("output_fingerprints"), config=cfg, record=prev):
                             can_skip = True
 
             # Report every input that is *not* verified evidence, using the same vocabulary the
@@ -2254,8 +2277,9 @@ def run_stages(
                 # The checkout is also a declared input; do not report the same path twice.
                 if not any(line.startswith(str(source.get("path", ""))) for line in weak_categories):
                     weak_categories.append(provenance_line)
-            resume_block_reason = (f"weak_input_fingerprint: {', '.join(weak_categories)}"
-                                   if fingerprint_info["weak"] else None)
+            if not resume_block_reason:
+                resume_block_reason = (f"weak_input_fingerprint: {', '.join(weak_categories)}"
+                                       if fingerprint_info["weak"] else None)
             if resume and not can_skip and resume_block_reason:
                 print(f"  [INFO] resume refused: {resume_block_reason}")
             if can_skip:

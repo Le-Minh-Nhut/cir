@@ -500,6 +500,7 @@ contracts:
     # the auxiliary registry declares the acquisition and the published payload size.
     expected_sha256: null
     source: https://huggingface.co/bert-base-uncased
+    source_revision: 86b5e0934494bd15c9632b12f734a8a67f723594
     optional: false
     notes: >-
       A Hugging Face hub cache directory rather than a checkpoint-sized artifact. The pinned loader
@@ -513,3 +514,56 @@ contracts:
     reference eligible. The authorized preparation dispatcher runs the pinned `src/precompute.py`
     script to generate validation features; this native path requires a CUDA-capable GPU and refuses
     CPU fallback. Preflight reports missing feature files and base weights as explicit blockers.
+- preparation_id: ptha_mtst_fashioniq
+  source_family: PTHA + MTST
+  raw_inputs:
+  - name: FashionIQ validation captions, splits, and canonical PNG images
+    kind: raw_benchmark
+    scope: fashioniq_root
+    paths:
+    - images
+    - captions/cap.dress.val.json
+    - captions/cap.shirt.val.json
+    - captions/cap.toptee.val.json
+    - image_splits/split.dress.val.json
+    - image_splits/split.shirt.val.json
+    - image_splits/split.toptee.val.json
+  generated_artifacts: []
+  external_assets:
+  - name: EVA-ViT-g backbone weights
+    kind: model_weight
+    state: REQUIRED
+    required_for_evaluation: true
+    required_for_preparation: false
+    expected_local_location: null
+    location_env_var: null
+    cache_path_suffix: hub/checkpoints/eva_vit_g.pth
+    cache_root_env_var: TORCH_HOME
+    expected_sha256: null
+    expected_size_bytes: 2025249237
+    source: https://storage.googleapis.com/sfr-vision-language-research/LAVIS/models/BLIP2/eva_vit_g.pth
+    optional: false
+    notes: >-
+      Downloaded and cached by timm_hub.download_cached_file in eva_vit.py:443.
+  - name: bert-base-uncased tokenizer
+    kind: tokenizer
+    state: REQUIRED
+    required_for_evaluation: true
+    required_for_preparation: false
+    expected_local_location: null
+    location_env_var: HF_HOME
+    location_type: directory
+    cache_path_suffix: hub/models--bert-base-uncased
+    cache_root_env_var: HF_HOME
+    expected_sha256: null
+    source: https://huggingface.co/bert-base-uncased
+    source_revision: 86b5e0934494bd15c9632b12f734a8a67f723594
+    optional: false
+    notes: >-
+      A Hugging Face hub cache directory containing tokenizer, config, and Qformer weights.
+  deterministic_status: UNKNOWN
+  automation_policy: MANUAL_REQUIRED
+  notes: >-
+    PTHA exploratory cross-dataset transfer from CIRR to FashionIQ. Native constructors
+    Blip2QformerCirCat and Blip2Qformer4TGIRCESIM reach the EVA-ViT-g checkpoint and the
+    bert-base-uncased Hugging Face hub cache.

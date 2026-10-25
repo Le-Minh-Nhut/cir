@@ -387,3 +387,33 @@ assets:
   expected_size_bytes: 441171321
   expected_sha256: null
   provenance_status: VERIFIED
+- model_id: ptha_mtst
+  family: EVA-ViT-g backbone weights
+  required_for: official_evaluation
+  source_type: direct_url
+  source_repo: https://storage.googleapis.com/sfr-vision-language-research/LAVIS/models/BLIP2/eva_vit_g.pth
+  source_revision: null
+  source_path: null
+  destination_scope: user_cache
+  destination_path: hub/checkpoints/eva_vit_g.pth
+  cache_root_env_var: TORCH_HOME
+  automatic_download_available: true
+  expected_size_bytes: 2025249237
+  expected_sha256: null
+  provenance_status: UNVERIFIED
+- model_id: ptha_mtst
+  family: bert-base-uncased tokenizer
+  required_for: official_evaluation
+  source_type: author_huggingface
+  source_repo: https://huggingface.co/bert-base-uncased
+  source_revision: 86b5e0934494bd15c9632b12f734a8a67f723594
+  source_path: config.json
+  destination_scope: user_cache
+  destination_path: hub/models--bert-base-uncased
+  cache_root_env_var: HF_HOME
+  hub_repo_id: bert-base-uncased
+  hub_files: [config.json, pytorch_model.bin, tokenizer.json, tokenizer_config.json, vocab.txt]
+  automatic_download_available: true
+  expected_size_bytes: 441171321
+  expected_sha256: null
+  provenance_status: VERIFIED

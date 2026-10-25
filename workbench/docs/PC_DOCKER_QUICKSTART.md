@@ -61,8 +61,10 @@ kết quả GPU.
 
 ## 4. Runtime thích nghi cho Blackwell (sm_120)
 
-Pin lịch sử của LIMN (torch 1.12.1) không có kernel sm_120. Registry khai báo
-`adapted_runtime` (torch >=2.7,<3 cu128, torchvision >=0.22,<1, open_clip_torch >=2.24).
+Pin lịch sử của LIMN (torch 1.12.1) không có kernel sm_120. Chín model được chọn hiện khai báo
+`adapted_runtime` với torch `>=2.8,<2.9`, torchvision `>=0.23,<0.24` và index cu128; nghiệm solver
+đã giải ra `torch==2.8.0+cu128` / `torchvision==0.23.0+cu128`, nhưng chưa có môi trường nào được cài
+hoặc chạy trên GPU đích. Khai báo và nghiệm solver không chứng minh import hay thực thi CUDA.
 Chỉ hoạt động khi operator chọn rõ ràng:
 
 ```bash

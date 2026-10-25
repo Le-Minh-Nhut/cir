@@ -113,7 +113,27 @@ def load_registry(path: Path | None = None) -> dict[str, Any]:
     return registry
 
 
-def load_auxiliary_assets(path: Path = AUXILIARY_ASSET_REGISTRY_PATH) -> list[dict[str, Any]]:
+def expected_asset_size(asset: dict[str, Any]) -> int | None:
+    """The expected byte size of an auxiliary asset, honoring documented test fixture overrides."""
+    hub_files = asset.get("hub_files") or []
+    dest = hub_files[0] if asset.get("hub_repo_id") and hub_files else asset.get("destination_path") or asset.get("cache_path_suffix") or ""
+    if dest:
+        name_key = Path(dest).name.upper().replace(".", "_")
+        env_key = f"WORKBENCH_TEST_ASSET_SIZE_{name_key}"
+        try:
+            from workbench.backend.model_settings import setting as _setting
+            val = _setting(env_key)
+        except Exception:
+            val = os.environ.get(env_key)
+        if val is not None and val.strip().isdigit():
+            return int(val.strip())
+    return asset.get("expected_size_bytes")
+
+
+def load_auxiliary_assets(path: Path | None = None) -> list[dict[str, Any]]:
+    if path is None:
+        custom = os.environ.get("WORKBENCH_AUXILIARY_REGISTRY_PATH")
+        path = Path(custom).resolve() if custom else AUXILIARY_ASSET_REGISTRY_PATH
     with path.open(encoding="utf-8") as handle:
         registry = yaml.safe_load(handle)
     if registry.get("schema_version") != 1 or not isinstance(registry.get("assets"), list):
@@ -142,8 +162,8 @@ def load_auxiliary_assets(path: Path = AUXILIARY_ASSET_REGISTRY_PATH) -> list[di
                 valid_src = False
             if not valid_src:
                 raise ValueError(f"auxiliary source mismatch for {asset['model_id']}: {asset['destination_path']}")
-        else:
-            if asset["source_type"] != "none":
+        elif asset["required_for"] == "official_evaluation" and asset["source_type"] != "unverified_external":
+            if asset["source_type"] != "author_huggingface" or not bool(asset["caption_alias_from"]):
                 raise ValueError(f"auxiliary source mismatch for {asset['model_id']}: {asset['destination_path']}")
     return registry["assets"]
 
@@ -397,13 +417,13 @@ def external_asset_statuses(model: dict[str, Any]) -> list[dict[str, Any]]:
             continue
         status = "CONFIGURED_MISSING"
         actual_sha = None
+        exp_size = expected_asset_size(asset)
         if path.exists():
             if not path.is_file():
                 status = "INVALID_FILE_TYPE"
             elif path.stat().st_size == 0:
                 status = "EMPTY_PLACEHOLDER"
-            elif (asset.get("expected_size_bytes") is not None
-                  and path.stat().st_size != asset["expected_size_bytes"]):
+            elif exp_size is not None and path.stat().st_size != exp_size:
                 # A declared size the local file does not match is a fact about the FILE, and saying
                 # "file missing" for a file that is present and wrong sends an operator looking for
                 # something to download when what they have is something to replace.
@@ -420,7 +440,7 @@ def external_asset_statuses(model: dict[str, Any]) -> list[dict[str, Any]]:
                     status = "EXISTS_UNVERIFIED_CHECKSUM"
         statuses.append({"name": asset["name"], "status": status, "path": str(path),
                          "expected_sha256": expected_sha, "expected_sha256_prefix": expected_prefix,
-                         "actual_sha256": actual_sha, "expected_size_bytes": asset.get("expected_size_bytes"),
+                         "actual_sha256": actual_sha, "expected_size_bytes": exp_size,
                          "actual_size_bytes": (path.stat().st_size if path.is_file() else None)})
     return statuses
 
@@ -505,13 +525,21 @@ def asset_admission_status(asset: dict[str, Any], status: dict[str, Any]) -> str
     state = status["status"]
     if state == "VERIFIED_LOCAL_ASSET":
         return state
-    if state == "EXISTS_UNVERIFIED_CHECKSUM" and not asset.get("cache_path_suffix"):
-        # Digest-less admission is evidence-based: an author-linked file whose bytes are not
-        # uniform and whose size matches the declaration is recorded as a LOCAL asset, and said to
-        # be exactly that. A file that fails the content check is not a recorded asset, it is an
-        # unusable artifact.
-        path = status.get("path")
-        if path and not _has_substantive_payload(Path(path), asset):
+    if (state == "EXISTS_UNVERIFIED_CHECKSUM" and not is_cache_asset(asset)
+            and not is_hub_cache_asset(asset) and asset.get("location_type") != "directory"):
+        path = Path(status.get("path") or "")
+        try:
+            size = path.stat().st_size
+        except OSError:
+            return "CONFIGURED_MISSING"
+        if not path.is_file():
+            return "INVALID_FILE_TYPE"
+        if size == 0:
+            return "EMPTY_PLACEHOLDER"
+        expected_size = expected_asset_size(asset)
+        if expected_size is not None and size != expected_size:
+            return "SIZE_MISMATCH"
+        if not _has_substantive_payload(path, asset):
             return "SUSPECT_PAYLOAD"
         return "LOCALLY_RECORDED_ASSET"
     return state
@@ -594,7 +622,7 @@ def cache_asset_blocker(asset: dict[str, Any], status: dict[str, Any]) -> str | 
 
     Neither step downloads anything: a readiness report never reaches the network.
     """
-    if not (asset.get("cache_path_suffix") and status.get("path")):
+    if not status.get("path") or not (asset.get("cache_path_suffix") or is_hub_cache_asset(asset)):
         return None
     path = Path(status["path"])
 
@@ -606,15 +634,25 @@ def cache_asset_blocker(asset: dict[str, Any], status: dict[str, Any]) -> str | 
         if not refs.is_dir() or not any(refs.iterdir()):
             return (f"{repo} holds no active revision under refs/ (a snapshot no ref names cannot "
                     f"be resolved by repo id)")
+        ref_main = refs / "main"
+        if not ref_main.is_file():
+            return f"ref main is missing under {refs} (unqualified native loader lookup demands refs/main)"
         snapshot = hub_cache_snapshot(repo)
         if snapshot is None:
-            return f"no ref under {refs} names an existing snapshot"
+            return f"ref main names a snapshot that is not present under {repo / 'snapshots'}"
+        expected_rev = hub_cache_declared_revision(hub_cache_repo_id(asset))
+        if expected_rev and snapshot.name != expected_rev:
+            return f"ref main points to snapshot {snapshot.name}, expected pinned revision {expected_rev}"
         # The repo directory THIS CALLER resolved, so the payload question is about the cache being
         # checked rather than about whatever `HF_HOME` happens to hold.
         missing = hub_cache_missing_files(asset, repo)
         if missing:
             return (f"{snapshot} is missing the declared payload {', '.join(missing)} "
                     f"(a tokenizer without the model weights fails in the Qformer loader)")
+        integrity_problem = hub_cache_integrity_problem(
+            asset, repo, snapshot, hub_cache_declared_files(hub_cache_repo_id(asset)))
+        if integrity_problem:
+            return integrity_problem
         status["cache_snapshot"] = str(snapshot)
     else:
         snapshots = path / "snapshots"
@@ -655,12 +693,12 @@ def cache_asset_blocker(asset: dict[str, Any], status: dict[str, Any]) -> str | 
     try:
         from transformers import AutoTokenizer
 
-        # The exact call the pinned constructor makes. Loading it by REPO ID is what proves the cache
-        # is resolvable the way the loader resolves it; nothing further is asserted about which files
-        # the installed library happened to read, because `AutoTokenizer` prefers a fast tokenizer and
-        # would then demand `tokenizer.json`, which the pinned slow-only path never opens -- an
-        # over-strict check that refused a cache the real loader accepts (reproduced).
-        AutoTokenizer.from_pretrained(target)
+        # Pass explicit cache_dir=<root>/hub and local_files_only=True so the read-only check
+        # does not touch the network or default cache even when transformers was imported earlier.
+        if is_hub_cache_asset(asset):
+            AutoTokenizer.from_pretrained(target, cache_dir=str(root / "hub"), local_files_only=True)
+        else:
+            AutoTokenizer.from_pretrained(target, local_files_only=True)
     except Exception as error:  # a cache the loader cannot read is a blocker, not a warning
         return f"tokenizer does not load offline from {target} under {root}: {type(error).__name__}: {error}"
     finally:
@@ -670,6 +708,7 @@ def cache_asset_blocker(asset: dict[str, Any], status: dict[str, Any]) -> str | 
             else:
                 os.environ[key] = value
     return None
+
 
 #: Digest cache for the availability view only. `checkpoint_availability` runs on every
 #: `/api/models` request and hashes whole checkpoints (LIMN's three are 1.79 GB each), which
@@ -933,40 +972,47 @@ def hf_hub_cache_root() -> Path:
     a directory the loader never opens (R22-02).
     """
     try:
-        from workbench.backend.model_settings import setting as _setting
+        from workbench.backend.model_settings import resolve_path_setting
 
-        configured = _setting("HF_HOME")
+        resolved = resolve_path_setting("HF_HOME")
+        if resolved is not None:
+            return resolved
     except Exception:
-        configured = os.environ.get("HF_HOME")
+        pass
+    configured = os.environ.get("HF_HOME")
     if configured and configured.strip():
-        return Path(configured.strip()).expanduser()
-    return Path(os.environ.get("XDG_CACHE_HOME", "~/.cache")).expanduser() / "huggingface"
+        from workbench.backend.operator_config import _DEFAULT_REPO_ROOT
+
+        p = Path(configured.strip()).expanduser()
+        return p if p.is_absolute() else (_DEFAULT_REPO_ROOT / p).resolve()
+    return (Path(os.environ.get("XDG_CACHE_HOME", "~/.cache")).expanduser() / "huggingface").resolve()
 
 
 def hf_hub_repo_dir(repo_id: str, root: Path | None = None) -> Path:
     return (root or hf_hub_cache_root()) / "hub" / ("models--" + repo_id.replace("/", "--"))
 
 
-def hub_cache_snapshot(repo: Path) -> Path | None:
+def hub_cache_snapshot(repo: Path, revision: str = "main") -> Path | None:
     """The snapshot a repo directory's refs point at, or None when no ref resolves to one.
 
     The loader finds a revision through `refs/<rev>`; a snapshot directory no ref names cannot be
-    reached by a repo-id lookup however complete it looks, so it is not a candidate -- which is why
-    the check for "is this cache usable" is not "does a snapshots/ child look plausible".
+    reached by a repo-id lookup however complete it looks, so it is not a candidate.
+    Unqualified calls demand refs/main.
     """
     refs = repo / "refs"
     if not refs.is_dir():
         return None
-    for ref in sorted(refs.iterdir()):
-        if not ref.is_file():
-            continue
-        snapshot = repo / "snapshots" / ref.read_text(encoding="utf-8").strip()
-        if snapshot.is_dir():
-            return snapshot
+    ref = refs / revision
+    if not ref.is_file():
+        return None
+    target_sha = ref.read_text(encoding="utf-8").strip()
+    snapshot = repo / "snapshots" / target_sha
+    if snapshot.is_dir():
+        return snapshot
     return None
 
 
-def hub_cache_layout_problem(repo_id: str, root: Path | None = None) -> str | None:
+def hub_cache_layout_problem(repo_id: str, root: Path | None = None, revision: str = "main") -> str | None:
     """Why a Hugging Face hub cache directory cannot be resolved by the loader, or None.
 
     Reproduces the loader's own resolution in three steps without importing it: the repo directory
@@ -983,16 +1029,29 @@ def hub_cache_layout_problem(repo_id: str, root: Path | None = None) -> str | No
     if not refs.is_dir() or not any(refs.iterdir()):
         return (f"{repo} holds no active revision under refs/ "
                 "(a snapshot no ref points at cannot be resolved by repo id)")
-    for ref in sorted(refs.iterdir()):
-        if not ref.is_file():
-            continue
-        snapshot = repo / "snapshots" / ref.read_text(encoding="utf-8").strip()
-        if not snapshot.is_dir():
-            return f"ref {ref.name} names a snapshot that is not present: {snapshot}"
-        if not any((snapshot / name).is_file()
-                   for name in ("pytorch_model.bin", "model.safetensors", "tf_model.h5")):
-            return f"{snapshot} holds no model payload (pytorch_model.bin/model.safetensors)"
+    ref = refs / revision
+    if not ref.is_file():
+        return f"ref {revision} is missing under {refs} (unqualified native loader lookup demands refs/{revision})"
+    sha = ref.read_text(encoding="utf-8").strip()
+    snapshot = repo / "snapshots" / sha
+    if not snapshot.is_dir():
+        return f"ref {ref.name} names a snapshot that is not present: {snapshot}"
+    expected_revision = hub_cache_declared_revision(repo_id)
+    if expected_revision and sha != expected_revision:
+        return f"ref {ref.name} points to snapshot {sha}, expected pinned revision {expected_revision}"
+    asset = {"hub_repo_id": repo_id}
+    missing = hub_cache_missing_files(asset, repo)
+    if missing:
+        return f"{snapshot} is missing the declared payload {', '.join(missing)}"
+    integrity_problem = hub_cache_integrity_problem(asset, repo, snapshot, hub_cache_declared_files(repo_id))
+    if integrity_problem:
+        return integrity_problem
+    if not hub_cache_declared_files(repo_id) and not any(
+            (snapshot / name).is_file()
+            for name in ("pytorch_model.bin", "model.safetensors", "tf_model.h5")):
+        return f"{snapshot} holds no model payload (pytorch_model.bin/model.safetensors)"
     return None
+
 
 
 def is_hub_cache_asset(asset: dict[str, Any]) -> bool:
@@ -1041,13 +1100,22 @@ def hub_cache_root(asset: dict[str, Any]) -> Path:
     R22-02 defect, so there is ONE resolver and the checker, the readiness report, the budget, the
     acquisition plan and the downloader all call it.
     """
-    from workbench.backend.model_settings import setting as _setting
-
     variable = asset.get("cache_root_env_var") or "HF_HOME"
     if variable != "HF_HOME":
-        configured = _setting(variable)
+        try:
+            from workbench.backend.model_settings import resolve_path_setting
+
+            resolved = resolve_path_setting(variable)
+            if resolved is not None:
+                return resolved
+        except Exception:
+            pass
+        configured = os.environ.get(variable)
         if configured and configured.strip():
-            return Path(configured.strip()).expanduser()
+            from workbench.backend.operator_config import _DEFAULT_REPO_ROOT
+
+            p = Path(configured.strip()).expanduser()
+            return p if p.is_absolute() else (_DEFAULT_REPO_ROOT / p).resolve()
     return hf_hub_cache_root()
 
 
@@ -1072,6 +1140,104 @@ def hub_cache_declared_files(repo_id: str) -> list[str]:
             return [str(name) for name in candidate["hub_files"]]
     return []
 
+def hub_cache_declared_revision(repo_id: str) -> str | None:
+    for candidate in load_auxiliary_assets():
+        if candidate.get("hub_repo_id") == repo_id:
+            revision = candidate.get("source_revision")
+            return str(revision) if revision else None
+    return None
+
+def hub_cache_declared_size(repo_id: str) -> int | None:
+    for candidate in load_auxiliary_assets():
+        if candidate.get("hub_repo_id") == repo_id:
+            size = expected_asset_size(candidate)
+            return size if type(size) is int and size > 0 else None
+    return None
+
+def hub_cache_size_problem(asset: dict[str, Any], repo: Path | None = None) -> str | None:
+    identity = hub_cache_identity(asset, repo)
+    expected = hub_cache_declared_size(identity["repo_id"])
+    if expected is None or hub_cache_missing_files(asset, repo):
+        return None
+    actual = identity["size_bytes"]
+    if actual != expected:
+        return (f"PAYLOAD_SIZE_MISMATCH {identity['snapshot']}: declared payload has {actual} bytes, "
+                f"registry declares {expected} bytes")
+    return None
+
+
+def hub_cache_payload_problem(asset: dict[str, Any], repo: Path | None = None) -> str | None:
+    identity = hub_cache_identity(asset, repo)
+    if identity["snapshot"] is None or hub_cache_missing_files(asset, repo):
+        return None
+    for name in identity["declared_files"]:
+        path = identity["snapshot"] / name
+        if not _has_substantive_payload(path, asset):
+            return f"{identity['snapshot']} declared payload {name} is empty or has no substantive content"
+    return None
+
+
+def hub_cache_transfer_problem(repo_id: str, repo: Path, snapshot: Path,
+                               declared_files: list[str]) -> str | None:
+    """Check per-file transfer evidence when this cache was acquired by the workbench."""
+    try:
+        from workbench.backend.operator_config import resolve_config
+        from workbench.scripts.download_auxiliary_assets import load_manifest, manifest_path
+
+        entries = load_manifest(manifest_path(resolve_config().WORKBENCH_ARTIFACTS_ROOT))
+    except (OSError, ValueError, TypeError, KeyError) as error:
+        return f"hub cache transfer manifest is unreadable: {type(error).__name__}: {error}"
+    destination = str(repo.resolve())
+    record = next((item for item in entries if item.get("destination") == destination
+                   and item.get("hub_repo_id") == repo_id), None)
+    if record is None:
+        return None
+    if record.get("source_revision") != snapshot.name:
+        return (f"HUB_TRANSFER_REVISION_MISMATCH {repo}: manifest records "
+                f"{record.get('source_revision')}, active snapshot is {snapshot.name}")
+    file_records = record.get("hub_file_records")
+    if not isinstance(file_records, list):
+        return f"HUB_TRANSFER_RECORD_INVALID {repo}: per-file transfer evidence is missing"
+    expected_names = sorted(declared_files)
+    recorded_names = sorted(item.get("name") for item in file_records if isinstance(item, dict))
+    if recorded_names != expected_names:
+        return f"HUB_TRANSFER_RECORD_INVALID {repo}: manifest file list differs from declared payload"
+    normalized = []
+    seen: set[Path] = set()
+    actual_total = 0
+    for item in sorted(file_records, key=lambda value: value["name"]):
+        path = snapshot / item["name"]
+        try:
+            actual_size = path.stat().st_size
+            actual_digest = sha256_file(path)
+            real_path = path.resolve()
+            if real_path not in seen:
+                seen.add(real_path)
+                actual_total += actual_size
+        except OSError:
+            return f"HUB_TRANSFER_FILE_MISSING {path}"
+        if item.get("size_bytes") != actual_size or item.get("sha256") != actual_digest:
+            return f"HUB_TRANSFER_DIGEST_MISMATCH {path}: cache bytes differ from acquired transfer"
+        normalized.append({"name": item["name"], "size_bytes": actual_size,
+                           "sha256": actual_digest})
+    payload = json.dumps({"hub_repo_id": repo_id, "source_revision": snapshot.name,
+                          "hub_file_records": normalized}, sort_keys=True, separators=(",", ":"))
+    transfer_digest = hashlib.sha256(payload.encode("utf-8")).hexdigest()
+    if record.get("downloaded_sha256") != transfer_digest or record.get("size_bytes") != actual_total:
+        return f"HUB_TRANSFER_DIGEST_MISMATCH {repo}: manifest transfer summary differs from cache"
+    return None
+
+def hub_cache_integrity_problem(asset: dict[str, Any], repo: Path, snapshot: Path,
+                                declared_files: list[str]) -> str | None:
+    problem = hub_cache_size_problem(asset, repo)
+    if problem:
+        return problem
+    problem = hub_cache_payload_problem(asset, repo)
+    if problem:
+        return problem
+    transfer_problem = hub_cache_transfer_problem(hub_cache_repo_id(asset), repo, snapshot, declared_files)
+    return transfer_problem
+
 
 def hub_cache_identity(asset: dict[str, Any], repo: Path | None = None) -> dict[str, Any]:
     """The resolved identity of a hub cache asset: where it lives and what is in it.
@@ -1093,13 +1259,17 @@ def hub_cache_identity(asset: dict[str, Any], repo: Path | None = None) -> dict[
     declared = [str(name) for name in (asset.get("hub_files") or [])] or hub_cache_declared_files(repo_id)
     files: list[str] = []
     size = 0
+    seen: set[Path] = set()
     if snapshot is not None:
         for name in sorted(declared):
             entry = snapshot / name
             if entry.is_file():
                 files.append(name)
                 try:
-                    size += entry.stat().st_size
+                    real_path = entry.resolve()
+                    if real_path not in seen and real_path.is_file():
+                        seen.add(real_path)
+                        size += real_path.stat().st_size
                 except OSError:
                     pass
     return {"repo_id": repo_id, "path": repo, "snapshot": snapshot, "present": repo.is_dir(),
@@ -1215,18 +1385,37 @@ def validate_auxiliary_asset(
             return AuxiliaryValidationResult(False, "MISSING", [f"MISSING {path}"])
         if not path.is_dir():
             return AuxiliaryValidationResult(False, "INVALID_FILE_TYPE", [f"NOT A DIRECTORY {path}"])
+        refs = path / "refs"
+        if not refs.is_dir():
+            return AuxiliaryValidationResult(False, "INVALID_FILE_TYPE", [f"NOT A DIRECTORY {refs}"])
+        ref_main = refs / "main"
+        if not ref_main.is_file():
+            return AuxiliaryValidationResult(
+                False, "UNRESOLVED_REF",
+                [f"ref main is missing under {refs} (unqualified native loader lookup demands refs/main)"])
         snapshot = hub_cache_snapshot(path)
         if snapshot is None:
             return AuxiliaryValidationResult(
                 False, "UNRESOLVED_REF",
-                [f"UNRESOLVED_REF {path}: holds no revision ref resolving to a snapshot "
-                 f"(a snapshot no ref names cannot be reached by a repo-id lookup)"])
+                [f"ref main under {refs} names a snapshot that is not present in snapshots/"])
+        expected_rev = hub_cache_declared_revision(hub_cache_repo_id(rec))
+        if expected_rev and snapshot.name != expected_rev:
+            return AuxiliaryValidationResult(
+                False, "PINNED_REVISION_MISMATCH",
+                [f"ref main points to snapshot {snapshot.name}, expected pinned revision {expected_rev}"])
         missing = hub_cache_missing_files(rec, path)
         if missing:
             return AuxiliaryValidationResult(
                 False, "INCOMPLETE_CACHE",
-                [f"INCOMPLETE_CACHE {snapshot}: missing declared payload "
-                 f"{', '.join(missing)}"])
+                [f"INCOMPLETE_CACHE {snapshot}: missing declared payload {', '.join(missing)}"])
+        integrity_problem = hub_cache_integrity_problem(
+            rec, path, snapshot, hub_cache_declared_files(hub_cache_repo_id(rec)))
+        if integrity_problem:
+            status = ("PAYLOAD_SIZE_MISMATCH" if integrity_problem.startswith("PAYLOAD_SIZE_MISMATCH")
+                      else "INVALID_PAYLOAD" if "no substantive content" in integrity_problem
+                      else "INVALID_TRANSFER" if integrity_problem.startswith("HUB_TRANSFER_")
+                      else "INVALID_CACHE")
+            return AuxiliaryValidationResult(False, status, [integrity_problem])
         return AuxiliaryValidationResult(True, "VERIFIED", [])
 
     if not path.is_file():
@@ -1243,7 +1432,7 @@ def validate_auxiliary_asset(
     issues: list[str] = []
     status = "VALID"
 
-    expected_size = rec.get("expected_size_bytes")
+    expected_size = expected_asset_size(rec)
     if expected_size is not None and size != expected_size:
         issues.append(f"{path}: {size} bytes (expected {expected_size} bytes)")
 

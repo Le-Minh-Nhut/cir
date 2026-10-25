@@ -116,7 +116,7 @@ def _which(name: str) -> str | None:
 # ----------------------------------------------------------------------------------- R11-02
 
 @pytest.mark.parametrize("model_id", ALL_MODELS)
-def test_the_planned_packages_satisfy_what_the_verifier_requires(model_id: str) -> None:
+def test_the_planned_packages_satisfy_what_the_verifier_requires(monkeypatch: pytest.MonkeyPatch, model_id: str) -> None:
     """The boundary the SPRC defect crossed: plan and verification must agree.
 
     The planner preferred the checkout's `requirements.txt` while the runtime verifier read the
@@ -125,6 +125,10 @@ def test_the_planned_packages_satisfy_what_the_verifier_requires(model_id: str) 
     reach `DEPENDENCIES_OK`. This asserts the property directly, over every declared pin, so the two
     can never drift apart again.
     """
+    from workbench.backend import model_settings
+    monkeypatch.delenv("WORKBENCH_RUNTIME_ADAPTATION", raising=False)
+    monkeypatch.setattr(model_settings, "file_settings",
+                        lambda: {k: v for k, v in model_settings.file_settings().items() if k != "WORKBENCH_RUNTIME_ADAPTATION"})
     model = model_by_id(model_id)
     environment = model.get("environment")
     if not environment:

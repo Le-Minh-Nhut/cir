@@ -367,9 +367,9 @@ def tme_features_complete(config, model: dict, contract: dict) -> bool | None:
     inputs = _tme_inputs(config, contract, model)
     if not clean or not commit or inputs is None:
         return False
-    _, output = _tme_artifact(config, checkout, contract)
-    return _tme_validate(output, recipe["parameters"], inputs, commit,
-                         tme_receipt_path(config, checkout, contract))
+    resolved_recipe, output = _tme_artifact(config, checkout, contract)
+    return _tme_validate(output, resolved_recipe["parameters"], inputs, commit,
+                          tme_receipt_path(config, checkout, contract))
 
 
 def _tme_command(interpreter: str, checkout: Path, dataset_root: Path,
@@ -455,7 +455,10 @@ def _run_tme_precompute(config, model: dict, contract: dict, *, dry_run: bool,
     with _tme_dataset_root(config, model) as staged_root:
         command = _tme_command(interpreter, checkout, staged_root, parameters)
         try:
-            result = subprocess.run(command, cwd=checkout, check=False)
+            from workbench.backend.registry import hf_hub_cache_root
+            child_env = os.environ.copy()
+            child_env["HF_HOME"] = str(hf_hub_cache_root())
+            result = subprocess.run(command, cwd=checkout, env=child_env, check=False)
         except OSError as error:
             return False, f"could not launch pinned TME generator {script}: {error}"
         if result.returncode != 0:

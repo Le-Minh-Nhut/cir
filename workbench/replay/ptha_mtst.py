@@ -72,11 +72,15 @@ def preflight(
     if not evaluator.is_file():
         blockers.append(f"pinned evaluator missing at {evaluator}")
 
+    if not (dataset_root / "images").is_dir():
+        blockers.append(f"FashionIQ raw input missing: {dataset_root / 'images'}")
     blockers.extend(
         f"FashionIQ raw input missing: {dataset_root / path}"
         for path in RAW_INPUTS
         if not (dataset_root / path).is_file()
     )
+    from workbench.replay.common import fashioniq_image_binding_blockers
+    blockers.extend(fashioniq_image_binding_blockers(dataset_root, "val", "images", ".png"))
 
     checkpoint = next(
         (item for item in MODEL["checkpoint_variants"] if item["checkpoint_id"] == checkpoint_id),
@@ -103,6 +107,8 @@ def preflight(
             blockers.append(f"PTHA+MTST CIRR checkpoint missing: {path}")
         elif path.stat().st_size == 0:
             blockers.append(f"PTHA+MTST CIRR checkpoint is an empty placeholder: {path}")
+        from workbench.backend.registry import external_asset_blockers
+        blockers.extend(external_asset_blockers(MODEL))
     elif is_cirr_transfer:
         blockers.append(
             f"PTHA+MTST FashionIQ fine-tuned checkpoint missing: author repository "

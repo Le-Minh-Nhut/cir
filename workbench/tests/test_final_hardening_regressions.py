@@ -28,8 +28,11 @@ def test_planner_constraints_follow_the_selected_adaptation(monkeypatch, limn_mo
     only, so an operator-selected adaptation planned torch 1.12.1 on a GPU that cannot
     run it. The resolved contract must replace the historical pins."""
     from workbench.backend import environment_planner as planner
+    from workbench.backend import model_settings
 
     monkeypatch.delenv("WORKBENCH_RUNTIME_ADAPTATION", raising=False)
+    monkeypatch.setattr(model_settings, "file_settings",
+                        lambda: {k: v for k, v in model_settings.file_settings().items() if k != "WORKBENCH_RUNTIME_ADAPTATION"})
     historical = planner.model_constraints(dict(limn_model))
     assert "1.12.1" in str(historical["torch"])
 
@@ -37,7 +40,7 @@ def test_planner_constraints_follow_the_selected_adaptation(monkeypatch, limn_mo
     adapted = planner.model_constraints(dict(limn_model))
     adapted_torch = str(adapted["torch"])
     assert "1.12.1" not in adapted_torch
-    assert "2.7" in adapted_torch
+    assert "2.8" in adapted_torch
     # The two contracts must never share an environment id.
     assert historical != adapted
 

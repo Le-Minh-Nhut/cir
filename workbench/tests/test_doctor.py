@@ -7,9 +7,11 @@ from pathlib import Path
 from workbench.backend.operator_config import WorkbenchConfig
 from workbench.backend.registry import load_registry
 
+ROOT = Path(__file__).resolve().parents[2]
+
 
 def load_doctor():
-    path = Path("workbench/scripts/doctor.py")
+    path = ROOT / "workbench" / "scripts" / "doctor.py"
     spec = importlib.util.spec_from_file_location("doctor", path)
     assert spec and spec.loader
     module = importlib.util.module_from_spec(spec)

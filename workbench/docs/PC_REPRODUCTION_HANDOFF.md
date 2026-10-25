@@ -2,18 +2,34 @@
 
 Primary operator path: [AUTOPILOT_GUIDE.md](AUTOPILOT_GUIDE.md). Use the checked-in example profile only for read-only planning; copy it to a private PC-specific YAML and configure dataset, persistent paths, model selection, checkpoint policy, budgets, and permissions before any real run. [MODEL_STATUS_SPEC.md](MODEL_STATUS_SPEC.md) records per-model source, checkpoint, assets, capability, and blockers.
 
-**Revision identity:** `eb04fcc` (`eb04fcc7ecbbe25cd8a119ff173e514a52ab2f26`) is the revision whose suite run this handoff documents (`workbench/tests tests/unit`: 1964 passed, 0 failed, 11 skipped = 1975 collected, 31:48 wall at 16 workers; `workbench/tests` alone is 1905 passed, 11 skipped). A clean run, because the release-metadata guard only requires the named revision's production tree to match the one on disk -- the guard re-derives that identity, so a mismatch fails loudly instead of passing silently). It is also the SHA `git rev-parse HEAD` prints on the branch tip at the time of writing; the guards in `test_handoff_commands.py` re-derive that identity from the documents, so a drift between them fails the suite rather than passing silently.
+**Revision identity:** delivered revision: `<!-- FILL: delivered SHA -->`. Suite accounting: `<!-- FILL: suite counts -->`. Last audited revision: `18b6a509f4cd0f50fef7f9ccef2bc7e80c2fa073`. This round ran without target-PC access: host RTX 3050 Laptop (`sm_86`), no model environment installed and no real weights downloaded. Every target-GPU execution remains `TARGET_GPU_PENDING`.
 
-## Read-only host checks
+Run these checks first after preparing the controller `.venv`, before authorizing model downloads, environment installation, preparation, or evaluation. The status commands inspect local inputs; `--dry-run` and `--verify-only` make no changes and do not use network. `prepare_model --model ptha_mtst --json` names missing validation image IDs. Some status commands return nonzero when they report blockers; read their JSON rather than treating the report itself as a failed check.
 
 ```bash
 ./workbench/run.sh autopilot --help
 .venv/bin/python workbench/scripts/doctor.py --scope workbench --json
+.venv/bin/python -m pip check
 .venv/bin/python workbench/scripts/prepare_model.py --list --json
+.venv/bin/python workbench/scripts/prepare_model.py --model ptha_mtst --json
+.venv/bin/python workbench/scripts/manage_environment.py --list --json
+.venv/bin/python workbench/scripts/download_auxiliary_assets.py --all --verify-only
 .venv/bin/python workbench/scripts/pipeline.py prepare --model csmcir --dry-run
 .venv/bin/python workbench/scripts/download_auxiliary_assets.py --model tme --dry-run
 ./workbench/run.sh autopilot --config ~/cir_pc.yaml --dry-run
 ```
+
+The controller install route below matches the manifests: `workbench/backend/requirements.txt` supplies `packaging` and `huggingface-hub`; installing the root project `.` supplies `torch`, `torchvision`, `numpy`, `pillow`, and `packaging`. The reported fresh-venv check installed both, started 14 CLI `--help` entrypoints, and passed `pip check`; no output artifact is retained. `test_controller_installation.py` checks declared dependencies, doctor coverage (ten modules), and CLI startup. Install only after reviewing the target's Python >=3.11/controller requirements; keep model interpreters separate.
+
+## What changed this round / what remains PC-only
+
+| Item | Established this round | Still requires target PC |
+|---|---|---|
+| Nine adapted profiles | Solver resolution only: each selected model resolves `torch==2.8.0+cu128` / `torchvision==0.23.0+cu128` from cu128 index; no environment was installed | Install each selected model's declared cu128 wheel set in its target interpreter, then import-check it and run a real CUDA capability check. Profile declaration or solver success is not installation, import success, or GPU execution; historical profiles remain default reproduction contracts. |
+| PTHA and declared assets | R23 declares EVA-ViT-g, `bert-base-uncased`, validation split inputs, and exact missing PNG-ID diagnostics; no real weights downloaded | Stage pinned assets and convert/stage canonical upstream `.jpg` images as `fashionIQ_dataset/images/{image_name}.png`; re-run `prepare_model --model ptha_mtst --json` before evaluation. This CIRR→FashionIQ transfer is not a FashionIQ reproduction. |
+| Evaluation | No R23 target execution; all such claims remain `TARGET_GPU_PENDING` | Run each authorized model/checkpoint under its declared protocol; keep aggregate-only and per-query evidence distinct. |
+| Run verification | No R23 target run to verify | Run `verify_run.py` with `--run-id`, `--model`, `--checkpoint`, and `--protocol` for each completed run. |
+| Unchanged resume | No target resume performed | Repeat same `autopilot --apply --resume` command with unchanged inputs and confirm completed stages reuse their state without downloads or reevaluation. |
 
 ## Which profile to use on the PC
 
@@ -48,11 +64,12 @@ git rev-parse HEAD          # must print the delivered SHA recorded in MODEL_STA
 #     git clone git@github.com:Le-Minh-Nhut/cir.git && cd cir
 #     git checkout -b research/cir-failure-workbench origin/research/cir-failure-workbench
 
-# 2. Controller interpreter. `workbench/run.sh` prefers the repository's own `./.venv/bin/python`
-#    when it exists and falls back to `python3` from PATH, so there is nothing to arrange -- but run
-#    the read-only doctor below before a real run, because it reports missing controller imports by
-#    name. Model interpreters stay SEPARATE and are provisioned per model; never put a model
-#    environment on PATH this way.
+# 2. Controller interpreter. Install the controller requirements AND the root project into .venv:
+#    `python3 -m venv .venv && .venv/bin/pip install -r workbench/backend/requirements.txt .`
+#    (or uv: `uv venv .venv && uv pip install -r workbench/backend/requirements.txt . --python .venv/bin/python`).
+#    The root project (`.`) provides core dependencies (torch, torchvision, numpy, pillow, packaging),
+#    while requirements.txt supplies controller CLIs and Hub acquisition. Model interpreters stay
+#    SEPARATE and are provisioned per model; never put a model environment on PATH. Run doctor:
 .venv/bin/python workbench/scripts/doctor.py --scope workbench --json
 
 # 3. The cohort profile, with all six paths set absolute for the PC, kept outside the repository.

@@ -6,6 +6,7 @@ import subprocess
 import sys
 from dataclasses import replace
 from pathlib import Path
+import pytest
 
 import torch
 
@@ -154,6 +155,81 @@ def test_partial_cache_and_changed_split_never_validate_or_reuse(tmp_path, monke
     assert feature.is_file() and receipt.is_file()
 
 
+@pytest.mark.parametrize("change, expected_calls", [("none", 0), ("image", 1), ("batch", 1)])
+def test_production_tme_preparation_resume_binds_gallery_and_batch(
+        tmp_path, monkeypatch, capsys, change, expected_calls):
+    from workbench.backend import runtime
+    from workbench.backend import registry
+    from workbench.scripts import pipeline
+
+    monkeypatch.setenv("WORKBENCH_TME_BATCH_SIZE", "32")
+    config, checkout, dataset, contract, parameters = _fixture(tmp_path, monkeypatch)
+    _stub_verified_source(monkeypatch, checkout)
+    monkeypatch.setattr(prepare_model, "resolve_config", lambda: config)
+    monkeypatch.setattr(registry, "preparation_contract_for_model", lambda model: contract)
+    monkeypatch.setattr(runtime, "source_provenance", lambda model, source: {
+        "actual_commit": MODEL["upstream_commit_sha"], "dirty": False,
+        "provenance_digest": "fixture-source"})
+    monkeypatch.setattr(runtime, "verify_environment", lambda *args, **kwargs: object())
+    monkeypatch.setattr(runtime, "_cached_gpu_capability", lambda *args, **kwargs: None)
+    _, _, _, receipt = _write_valid_cache(config, checkout, contract, parameters, monkeypatch)
+
+    if change == "image":
+        (dataset / "images" / "dress_0.png").write_bytes(b"changed canonical gallery bytes")
+    elif change == "batch":
+        monkeypatch.setenv("WORKBENCH_TME_BATCH_SIZE", "9")
+
+    args = pipeline.parser_for().parse_args([
+        "all", "--model", "tme", "--apply", "--allow-preparation", "--allow-gpu-preparation"])
+    prep = next(stage for stage in pipeline.all_stages(args, config)
+                if stage.name == "preparation" and stage.model_id == "tme")
+    state_path = tmp_path / "pipeline_state.json"
+    initial = pipeline.stage_input_fingerprint_info(prep, config, {"stages": {}})
+    state_path.write_text(json.dumps({"stages": {pipeline.stage_key(prep): {
+        "stage_id": pipeline.stage_key(prep), "name": "preparation", "model_id": "tme",
+        "status": "COMPLETE", "fingerprint": initial["digest"],
+        "output_fingerprints": pipeline.compute_stage_output_fingerprints(prep)}}}))
+    if change != "none":
+        legacy_calls = []
+        monkeypatch.setattr(pipeline, "run_command", lambda command: legacy_calls.append(command) or 1)
+        legacy_result = pipeline.run_stages(
+            [replace(prep, resume_refusal_reason=None)], apply=True, resume=True,
+            authorized_capabilities={"allow_preparation", "allow_gpu_preparation"},
+            config=config, mode="all", state_path=state_path)
+        legacy_output = capsys.readouterr().out
+        print(f"D1_LEGACY_CASE={change} return={legacy_result} command_invocations={len(legacy_calls)} "
+              f"output={legacy_output!r}")
+        assert legacy_result == 0 and not legacy_calls
+        assert "[SKIP] resume: already completed" in legacy_output
+        capsys.readouterr()
+
+    calls = []
+
+    def execute(command):
+        calls.append(command)
+        return 1
+
+    monkeypatch.setattr(pipeline, "run_command", execute)
+    result = pipeline.run_stages(
+        [prep], apply=True, resume=True,
+        authorized_capabilities={"allow_preparation", "allow_gpu_preparation"},
+        config=config, mode="all", state_path=state_path)
+    output = capsys.readouterr().out
+    print(f"D1_CASE={change} return={result} command_invocations={len(calls)} "
+          f"receipt={receipt.is_file()} output={output!r}")
+
+    assert len(calls) == expected_calls
+    if change == "none":
+        assert result == 0
+        assert "[SKIP] resume: already completed" in output
+    else:
+        assert result == 1
+        assert "[INFO] resume refused: preparation self-check failed: TME feature receipt does not bind current source, gallery bytes, or resolved generation parameters" in output
+        assert "[RUN]" in output
+        assert "[SKIP] resume: already completed" not in output
+        assert receipt.is_file()
+
+
 def test_relative_cli_paths_match_absolute_preflight(tmp_path):
     checkout = tmp_path / "TME"
     (checkout / "src").mkdir(parents=True)
@@ -192,3 +268,33 @@ def test_relative_cli_paths_match_absolute_preflight(tmp_path):
     assert "feature cache file missing" not in absolute.stderr
     assert "checkpoint missing" not in relative.stderr
     assert "feature cache file missing" not in relative.stderr
+
+
+def test_tme_generator_child_gets_workbench_hf_home(tmp_path, monkeypatch):
+    config, checkout, _, contract, parameters = _fixture(tmp_path, monkeypatch)
+    _stub_verified_source(monkeypatch, checkout)
+    from workbench.backend import model_settings, registry
+
+    cache_root = tmp_path / "configured-hf"
+    monkeypatch.delenv("HF_HOME", raising=False)
+    monkeypatch.setattr(model_settings, "file_settings", lambda: {"HF_HOME": str(cache_root)})
+    monkeypatch.setattr(registry, "external_asset_blockers", lambda *args, **kwargs: [])
+    output_root, output = prepare_model._tme_artifact(config, checkout, contract)
+    names = [f"{category}_0" for category in ("dress", "shirt", "toptee")]
+    calls = []
+
+    def launch(command, **kwargs):
+        calls.append(kwargs)
+        if "torch.cuda.is_available()" in command[-1]:
+            return subprocess.CompletedProcess(command, 0, "True\n", "")
+        assert kwargs["env"]["HF_HOME"] == str(cache_root)
+        output.mkdir(parents=True, exist_ok=True)
+        torch.save(torch.zeros((3, 2, 3), dtype=torch.float16), output / "val_images.pt")
+        (output / "val_name_to_idx.json").write_text(json.dumps({name: i for i, name in enumerate(names)}))
+        return subprocess.CompletedProcess(command, 0, "", "")
+
+    monkeypatch.setattr(prepare_model.subprocess, "run", launch)
+    ok, reason = prepare_model._run_tme_precompute(config, MODEL, contract, dry_run=False)
+    assert ok, reason
+    assert len(calls) == 2
+    assert "HF_HOME" not in os.environ

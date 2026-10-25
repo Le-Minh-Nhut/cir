@@ -153,26 +153,33 @@ def test_tme_preflight_checks_unverified_assets_against_registry_size_and_digest
     # the check exists to catch - and it must be a cache its consumer can actually LOAD: an empty
     # `refs/` file is exactly the "populated directory that is not a cache" the shared check now
     # refuses, so the stand-in carries a real minimal BertTokenizer snapshot.
-    populated = tmp_path / "hf-cache"
-    snapshot = populated / "snapshots" / "rev1"
+    populated = tmp_path / "hf-cache" / "hub" / "models--bert-base-uncased"
+    tokenizer_asset = next((a for a in assets if a.get("location_type") == "directory"), {})
+    pinned_rev = tokenizer_asset.get("source_revision") or "86b5e0934494bd15c9632b12f734a8a67f723594"
+    snapshot = populated / "snapshots" / pinned_rev
     snapshot.mkdir(parents=True)
     (populated / "refs").mkdir()
-    (populated / "refs" / "main").write_text("rev1")
+    (populated / "refs" / "main").write_text(pinned_rev)
     (snapshot / "vocab.txt").write_text(
         "[PAD]\n[UNK]\n[CLS]\n[SEP]\n[MASK]\nhello\nworld\n", encoding="utf-8")
     (snapshot / "tokenizer_config.json").write_text(
         '{"tokenizer_class":"BertTokenizer","do_lower_case":true}', encoding="utf-8")
     (snapshot / "config.json").write_text(
         '{"model_type":"bert","vocab_size":7}', encoding="utf-8")
-    # The DECLARED payload, not a hand-picked subset: the repository declares a file set (the pinned
-    # constructor opens the vocabulary, the tokenizer config AND the Qformer's `config.json` plus
-    # `pytorch_model.bin`), and a stand-in missing any of them is exactly the cache this check exists
-    # to refuse. Writing the declared list keeps the fixture honest as that declaration moves.
+    tok_data = ('{"version":"1.0","truncation":null,"padding":null,"added_tokens":[],'
+                '"normalizer":{"type":"BertNormalizer","clean_text":true,"handle_chinese_chars":true,'
+                '"strip_accents":null,"lowercase":true},"pre_tokenizer":{"type":"BertPreTokenizer"},'
+                '"post_processor":null,"decoder":null,"model":{"type":"WordPiece","unk_token":"[UNK]",'
+                '"continuing_subword_prefix":"##","max_input_chars_per_word":100,'
+                '"vocab":{"[PAD]":0,"[UNK]":1,"[CLS]":2,"[SEP]":3,"[MASK]":4,"hello":5,"world":6}}}')
+    (snapshot / "tokenizer.json").write_text(tok_data, encoding="utf-8")
     from workbench.backend.registry import hub_cache_declared_files
 
     for name in hub_cache_declared_files("bert-base-uncased"):
         if not (snapshot / name).is_file():
             (snapshot / name).write_bytes(b"stand-in payload for " + name.encode())
+    payload_size = sum((snapshot / name).stat().st_size for name in hub_cache_declared_files("bert-base-uncased"))
+    monkeypatch.setenv("WORKBENCH_TEST_ASSET_SIZE_CONFIG_JSON", str(payload_size))
     others: list[dict] = []
     statuses = [_asset_status(selected, asset_path, state, digest)]
     for other in assets:

@@ -394,20 +394,203 @@ def test_empty_checkpoint_selection_excludes_all_checkpoint_inputs() -> None:
     assert not set(checkpoint_paths) & set(inputs), "explicit empty selection must not include any checkpoint paths"
 
 
-def test_no_checkpoint_selection_includes_every_registered_variant() -> None:
+def test_default_multicheckpoint_resume_ignores_unselected_variants(tmp_path: Path, monkeypatch, capsys) -> None:
+    from dataclasses import replace
+    import json
+
+    pipeline = load_pipeline()
+    from workbench.backend import registry, runtime
+    from workbench.backend.operator_config import resolve_config
+    from workbench.backend.registry import checkpoint_path, model_by_id
+    from workbench.scripts import evaluate_models
+    previous_run_id = "previous-invocation"
+    valid_run_ids = {previous_run_id}
+
+    def validate_completion(*args, **kwargs):
+        def validate(record):
+            run_id = record.get("run_id") if record else None
+            return run_id in valid_run_ids, "run identity mismatch", {"run_id": run_id}
+        return validate
+
+    monkeypatch.setattr(evaluate_models, "completion_validator", validate_completion)
+    monkeypatch.setattr(runtime, "source_provenance", lambda model, source: {
+        "actual_commit": model.get("upstream_commit_sha"), "dirty": False,
+        "provenance_digest": "fixture-source", "error": None,
+    })
+    monkeypatch.setattr(pipeline, "_execution_identity", lambda *args, **kwargs: {"digest": "fixture-execution"})
+    monkeypatch.setattr(runtime, "verify_environment", lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("offline")))
+    monkeypatch.setattr(registry, "external_asset_statuses", lambda model: [])
+    monkeypatch.setattr(registry, "auxiliary_assets_for_model", lambda model_id: [])
+
+    for mid in ("tme", "habit", "intent"):
+        model = model_by_id(mid)
+        root = tmp_path / mid
+        cfg = replace(
+            resolve_config(),
+            FASHIONIQ_ROOT=root / "FashionIQ",
+            WORKBENCH_CHECKPOINT_ROOT=root / "checkpoints",
+            WORKBENCH_RESULTS_ROOT=root / "results",
+            WORKBENCH_THIRD_PARTY_ROOT=root / "third_party",
+            WORKBENCH_ARTIFACTS_ROOT=root / "artifacts",
+        )
+        checkout = cfg.WORKBENCH_THIRD_PARTY_ROOT / model["source_dir"]
+        checkout.mkdir(parents=True)
+        (checkout / "source.py").write_text("fixture", encoding="utf-8")
+        args = SimpleNamespace(
+            mode="all", model=mid, selected_model_ids=[mid], dataset_root=None,
+            checkpoint=None, checkpoint_ids=None, checkpoint_policy=None, checkpoint_overrides={},
+            protocol=None, top_k=200, continue_on_error=True, verify_gpu=False,
+            sync_sources=False, download_checkpoints=False, download_auxiliary_assets=False,
+            evaluate=True, rebuild_index=False,
+        )
+        stages = pipeline.all_stages(args, cfg)
+        evaluation = next(s for s in stages if s.name == "evaluation" and s.model_id == mid)
+        # Keep production commands and run-bound evidence; fixture proves only prior invocation.
+        stage = evaluation
+        authorized = set(stage.required_capabilities)
+        selected_ids = pipeline.evaluated_checkpoint_ids(model, args, cfg.WORKBENCH_CHECKPOINT_ROOT)
+        selected_paths = {
+            checkpoint_path(mid, variant, cfg.WORKBENCH_CHECKPOINT_ROOT)
+            for variant in model["checkpoint_variants"]
+            if variant["checkpoint_id"] in selected_ids
+        }
+        all_paths = {
+            checkpoint_path(mid, variant, cfg.WORKBENCH_CHECKPOINT_ROOT)
+            for variant in model["checkpoint_variants"]
+        }
+        assert len(selected_paths) == 1
+        assert set(stage.input_paths) & all_paths == selected_paths
+        acquisition = next(s for s in stages if s.name == "checkpoint" and s.model_id == mid)
+        acquisition_ids = {path for path in acquisition.output_paths}
+        assert acquisition_ids == selected_paths
+
+        real_args = pipeline.parser_for().parse_args(["real", "--model", mid, "--evaluate", "--download-checkpoints"])
+        real_stages = pipeline.real_stages(real_args, cfg)
+        real_evaluation = next(s for s in real_stages if s.name == "evaluation" and s.model_id == mid)
+        assert set(real_evaluation.input_paths) & all_paths == selected_paths
+        real_acquisition = next(s for s in real_stages if s.name == "checkpoint" and s.model_id == mid)
+        assert set(real_acquisition.output_paths) == selected_paths
+
+        for path in stage.input_paths:
+            if path in all_paths or path.exists():
+                continue
+            if path.suffix == ".json":
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text("{}", encoding="utf-8")
+            elif path.suffix:
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(b"fixture")
+            else:
+                path.mkdir(parents=True, exist_ok=True)
+        for path in stage.input_paths:
+            if path not in all_paths and path.is_dir() and not any(path.iterdir()):
+                (path / "fixture").write_bytes(b"fixture")
+
+        selected_path = next(iter(selected_paths))
+        selected_path.parent.mkdir(parents=True, exist_ok=True)
+        selected_path.write_bytes(b"selected checkpoint")
+        stage_key = pipeline.stage_key(stage)
+        prior_state = {"stages": {
+            dependency: {"status": "COMPLETE", "fingerprint": "fixture-runtime-preflight"}
+            for dependency in stage.dependencies
+        }}
+        evidence = pipeline.stage_input_fingerprint_info(stage, cfg, prior_state)
+        assert evidence["weak"] is False
+        new_invocation = replace(stage, run_id=f"current-invocation-{mid}")
+        assert new_invocation.run_id != previous_run_id
+        assert pipeline.stage_input_fingerprint_info(new_invocation, cfg, prior_state)["digest"] == evidence["digest"]
+        assert new_invocation.evidence({"run_id": previous_run_id})[0]
+        assert not new_invocation.evidence({"run_id": new_invocation.run_id})[0]
+        state_path = root / "pipeline_state.json"
+        prior_state["stages"][stage_key] = {
+            "status": "COMPLETE", "fingerprint": evidence["digest"],
+            "run_id": previous_run_id,
+        }
+        state_path.write_text(json.dumps(prior_state), encoding="utf-8")
+        calls: list[list[str]] = []
+        def complete_invocation(command):
+            calls.append(command)
+            if "--run-id" in command:
+                valid_run_ids.add(command[command.index("--run-id") + 1])
+            return 0
+
+        monkeypatch.setattr(pipeline, "run_command", complete_invocation)
+
+        assert pipeline.run_stages(
+            [new_invocation], resume=True, state_path=state_path, config=cfg,
+            apply=True, authorized_capabilities=authorized,
+        ) == 0
+        assert calls == []
+        assert "[SKIP] resume: already completed" in capsys.readouterr().out
+
+        # An unselected artifact must not affect fingerprint, even if it appears or changes.
+        assert all_paths - selected_paths
+        unselected_path = next(iter(all_paths - selected_paths))
+        unselected_path.parent.mkdir(parents=True, exist_ok=True)
+        unselected_path.write_bytes(b"unselected checkpoint")
+        assert pipeline.stage_input_fingerprint_info(stage, cfg, prior_state)["digest"] == evidence["digest"]
+
+        selected_path.unlink()
+        missing = pipeline.stage_input_fingerprint_info(stage, cfg, prior_state)
+        assert missing["weak"] is True
+        assert pipeline.run_stages(
+            [stage], resume=True, state_path=state_path, config=cfg,
+            apply=True, authorized_capabilities=authorized,
+        ) == 0
+        refused = capsys.readouterr().out
+        assert "resume refused: weak_input_fingerprint" in refused
+        assert f"{selected_path} (MISSING)" in refused
+        assert "[SKIP] resume: already completed" not in refused
+        assert len(calls) == 1
+
+        # Changed selected bytes invalidate original fingerprint on a new invocation.
+        selected_path.write_bytes(b"changed selected checkpoint")
+        assert pipeline.stage_input_fingerprint_info(new_invocation, cfg, prior_state)["weak"] is False
+        prior_state["stages"][stage_key] = {
+            "status": "COMPLETE", "fingerprint": evidence["digest"],
+            "run_id": previous_run_id,
+        }
+        state_path.write_text(json.dumps(prior_state), encoding="utf-8")
+        assert pipeline.run_stages(
+            [new_invocation], resume=True, state_path=state_path, config=cfg,
+            apply=True, authorized_capabilities=authorized,
+        ) == 0
+        changed = capsys.readouterr().out
+        assert "[SKIP] resume: already completed" not in changed
+        assert "resume refused: weak_input_fingerprint" not in changed
+        assert len(calls) == 2
+
+    # Single-checkpoint model still declares its only evaluated checkpoint.
+    csmcir = model_by_id("csmcir")
+    cfg = resolve_config()
+    csmcir_inputs = pipeline.model_eval_inputs(
+        csmcir, SimpleNamespace(checkpoint=None, dataset_root=None), cfg)
+    csmcir_paths = {
+        checkpoint_path("csmcir", variant, cfg.WORKBENCH_CHECKPOINT_ROOT)
+        for variant in csmcir["checkpoint_variants"]
+    }
+    assert len(csmcir_paths) == 1
+    assert set(csmcir_inputs) & csmcir_paths == csmcir_paths
+def test_no_checkpoint_selection_includes_evaluator_default_checkpoint() -> None:
     pipeline = load_pipeline()
     from workbench.backend.operator_config import resolve_config
-    from workbench.backend.registry import checkpoint_path, load_registry
+    from workbench.backend.registry import checkpoint_path, model_by_id
 
-    model = next(m for m in load_registry()["models"] if m["model_id"] == "airknow")
+    model = model_by_id("airknow")
     cfg = resolve_config()
     args = SimpleNamespace(checkpoint=None, checkpoint_ids=None, dataset_root=None)
-
+    selected = pipeline.evaluated_checkpoint_ids(model, args, cfg.WORKBENCH_CHECKPOINT_ROOT)
     inputs = pipeline.model_eval_inputs(model, args, cfg)
-    checkpoint_paths = [checkpoint_path("airknow", variant, cfg.WORKBENCH_CHECKPOINT_ROOT)
-                        for variant in model["checkpoint_variants"]]
-    assert set(checkpoint_paths) <= set(inputs), "no-selection regression: every registered checkpoint path must be fingerprinted"
-
+    declared = {
+        checkpoint_path("airknow", variant, cfg.WORKBENCH_CHECKPOINT_ROOT)
+        for variant in model["checkpoint_variants"]
+    }
+    expected = {
+        checkpoint_path("airknow", variant, cfg.WORKBENCH_CHECKPOINT_ROOT)
+        for variant in model["checkpoint_variants"]
+        if variant["checkpoint_id"] in selected
+    }
+    assert set(inputs) & declared == expected
 
 def test_autopilot_checkpoint_selection_controls_resolved_output() -> None:
     pipeline = load_pipeline()

@@ -210,7 +210,37 @@ def test_evaluation_listing_and_dry_run_never_execute_models(monkeypatch: pytest
     import workbench.backend.runtime as runtime
 
     monkeypatch.setattr(runtime, "source_clean_and_pinned", lambda model, _: (True, model["upstream_commit_sha"], None))
-    monkeypatch.setattr(evaluate.subprocess, "run", lambda *args, **kwargs: pytest.fail("model command must not run"))
+    real_run = evaluate.subprocess.run
+    real_popen = evaluate.subprocess.Popen
+
+    def _is_model_cmd(cmd) -> bool:
+        cmd_list = [str(x) for x in cmd] if isinstance(cmd, (list, tuple)) else str(cmd).split()
+        if not cmd_list:
+            return False
+        if any("evaluate_models.py" in str(arg) for arg in cmd_list):
+            return True
+        exe = Path(cmd_list[0]).name
+        if not exe.startswith("python"):
+            return False
+        if "-c" in cmd_list:
+            return False
+        if len(cmd_list) >= 3 and cmd_list[1] == "-m" and cmd_list[2] == "pip":
+            return False
+        return True
+
+    def guarded_run(*args, **kwargs):
+        cmd = args[0] if args else kwargs.get("args", [])
+        if _is_model_cmd(cmd):
+            pytest.fail("model command must not run")
+        return real_run(*args, **kwargs)
+
+    def guarded_popen(*args, **kwargs):
+        cmd = args[0] if args else kwargs.get("args", [])
+        if _is_model_cmd(cmd):
+            pytest.fail("model command must not run")
+        return real_popen(*args, **kwargs)
+    monkeypatch.setattr(evaluate.subprocess, "run", guarded_run)
+    monkeypatch.setattr(evaluate.subprocess, "Popen", guarded_popen)
 
     assert evaluate.main(arguments) == expected
 
