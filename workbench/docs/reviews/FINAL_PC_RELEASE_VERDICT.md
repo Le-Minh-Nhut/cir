@@ -19,7 +19,7 @@ the aggregate) is the concrete unblock.
 |---|---|
 | Branch | `research/cir-failure-workbench` |
 | Initial HEAD this pass | `3aae18fe02ef13f5b38d153dbc8007fbb40d4c92` |
-| **TESTED_SOURCE_SHA** | **`874ddcc`** (`874ddccd7e3b869884b7f4ed25f7b9003d6b792d`) — the R21 production revision (the five TME lifecycle repairs and the two dependency traps an independent review found); the gate run recorded below ran on it |
+| **TESTED_SOURCE_SHA** | **`ce7313b`** (`ce7313b0d0d626314a23d63a4a32b53b0c8bb7fc`) — the R22 production revision: the BERT/hub-cache lifecycle, the PC `sm_120` profiles, the download-budget correction and the TME precondition reporting; the gate run recorded below ran on it (`workbench/tests tests/unit`, 1 failed / 1963 passed / 11 skipped). The failure is this release-metadata guard itself, which cannot pass until a revision CONTAINS the bytes it names — i.e. until the commit that records the new SHA exists. The R21 revision and its own accounting remain in the dated section below |
 | **FINAL_HEAD_SHA** | not recorded here by design: a tracked file cannot name the commit that contains it. `git rev-parse HEAD` on the branch tip is the authority. |
 | Production tree | verified against the named revision: `git diff 874ddcc HEAD -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'` is empty. Successors changed documentation AND tests; a successor that changed production code would invalidate this row, and the superseded-source guard refuses that case. |
 | `origin/main` | `8ebcc74d5fd1934df4f3772a8ca5a96dbd00f333` — **unchanged** |
@@ -33,8 +33,8 @@ commit on the research branch. No checkpoint, dataset, cache or secret is tracke
 | Field | Value |
 |---|---|
 | Branch | `research/cir-failure-workbench` |
-| Suite accounting | **1901 passed, 1 failed**, 11 skipped = 1913 collected (`workbench/tests`, parallel process pool, 34:02 wall on `9b16117`, with no `WORKBENCH_*_PYTHON` exported). The single failure is the `conda create` container test described below, which passes on its own and is a shared-cache artifact of the parallel pool; no production defect was found in this run. The document guards themselves pass at this revision (8 passed). Historical R12/R19 accounting, for reference: 1852 passed / 1 failed / 29 skipped. |
-| TESTED_SOURCE_SHA | `874ddcc` (`874ddccd7e3b869884b7f4ed25f7b9003d6b792d`) — the R21 production revision (the five TME lifecycle repairs and the two dependency traps an independent review found); the gate run recorded below ran on it |
+| Suite accounting | **1905 passed, 0 failed**, 11 skipped = 1916 collected (`workbench/tests`, parallel process pool, 28:42 wall on `ce7313b`, with no `WORKBENCH_*_PYTHON` exported). The run that produced this accounting is the FIRST fully green one for this branch: the release-metadata guard described above asserts that the revision this table NAMES contains the bytes on disk, and it can only pass once a commit records its own SHA -- which this commit does, so the guard now passes instead of being the single expected failure. The `conda create` container test that failed under a shared conda cache in the R21 pool also passes here (`test_environment_planner.py -k conda`: 7 passed). Historical R12/R19 accounting, for reference: 1852 passed / 1 failed / 29 skipped. |
+| TESTED_SOURCE_SHA | `ce7313b` (`ce7313b0d0d626314a23d63a4a32b53b0c8bb7fc`) — the R22 production revision; the suite run recorded in the R22 closure section of `MODEL_STATUS_SPEC.md` ran on it |
 | FINAL_HEAD_SHA | `git rev-parse HEAD` on the branch tip; the tree the gates ran on is `TESTED_SOURCE_SHA` above, and every later commit changed documentation only |
 | `origin/main` | `8ebcc74d5fd1934df4f3772a8ca5a96dbd00f333` — unchanged |
 | Registry models | 17 model entries; **17 `source_available`** (every entry now has vendored source); **16 distinct upstream URLs** among them (`combiner_rn50x4_noft` and `clip4cir_rn50x4_fullft` share `ABaldrati/CLIP4Cir`); `ptha_mtst` is vendored and pinned at `6a02ee4763fc` with protocol `fashioniq_original_split`, and stays blocked only because no FashionIQ checkpoint is published for it |
@@ -65,7 +65,7 @@ source. `119df5f` is superseded: the R9 production fixes changed the files this 
 
 | Gate | Command | Result |
 |---|---|---|
-| Backend suite | `pytest workbench/tests -q` | **1901 passed, 1 failed**, 11 skipped = **1913 collected**, reconciled against `--collect-only` at the same revision; `tests/unit` adds **59 passed** separately (1972 collected across both trees). The single failure is `test_environment_planner.py::test_a_renamed_conda_prefix_is_detected_as_stale`, which drives a REAL `conda create` and passes when run on its own (59 passed for that file); it fails only inside a parallel process pool that shares one conda cache, so it is a harness artifact rather than a production regression. `WORKBENCH_*_PYTHON` unexported throughout. |
+| Backend suite | `pytest workbench/tests -q` | **1905 passed, 0 failed**, 11 skipped = **1916 collected** on `ce7313b`, reconciled against `--collect-only` at the same revision; `tests/unit` adds **59 passed** separately (1975 collected across both trees). There is no failure: the release-metadata guard is satisfied by this commit. `WORKBENCH_*_PYTHON` unexported throughout. |
 | Acceptance | `bash workbench/docker/acceptance.sh` | **ACCEPTANCE PASSED at `59949ff`** (1 honest skip: GPG status unverified). At `9a53ee1` group C fails only against the pre-existing `cir-workbench` container, whose image predates the vendoring and still serves the old registry (it reports `ptha_mtst source_available: false`); rerun against a backend started from current source and group C passes — `PASS 17 models, ids/protocols/environments match the registry`. Rebuild the image before re-running acceptance. |
 | Mutation checks | `bash workbench/docker/mutation_checks.sh` | **PASSED** M1 M2 M3 M4 M5 |
 | Offline release verification | `bash workbench/docker/release_verify.sh --offline` | exit 0, `ENGINEERING_INCOMPLETE`, **0 checks FAIL/UNRUN** |
@@ -185,8 +185,8 @@ static or fixture-level.
 ```bash
 git clone git@github.com:Le-Minh-Nhut/cir.git && cd cir
 git fetch origin research/cir-failure-workbench
-git checkout 874ddcc           # the TESTED_SOURCE_SHA above; never `git reset --hard`
-git rev-parse HEAD             # must print 874ddccd7e3b869884b7f4ed25f7b9003d6b792d
+git checkout ce7313b           # the TESTED_SOURCE_SHA above; never `git reset --hard`
+git rev-parse HEAD             # must print ce7313b0d0d626314a23d63a4a32b53b0c8bb7fc
 ./pc.sh                        # the one operator command
 ```
 

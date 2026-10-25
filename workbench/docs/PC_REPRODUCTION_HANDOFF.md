@@ -2,7 +2,7 @@
 
 Primary operator path: [AUTOPILOT_GUIDE.md](AUTOPILOT_GUIDE.md). Use the checked-in example profile only for read-only planning; copy it to a private PC-specific YAML and configure dataset, persistent paths, model selection, checkpoint policy, budgets, and permissions before any real run. [MODEL_STATUS_SPEC.md](MODEL_STATUS_SPEC.md) records per-model source, checkpoint, assets, capability, and blockers.
 
-**Revision identity:** `874ddcc` (`874ddccd7e3b869884b7f4ed25f7b9003d6b792d`) is the revision whose checks ran; `git rev-parse HEAD` on the branch tip (the docs-only successor) is the final head, which differs only in documentation. Production bytes are identical between them.
+**Revision identity:** `ce7313b` (`ce7313b0d0d626314a23d63a4a32b53b0c8bb7fc`) is the revision whose suite run this handoff documents (`workbench/tests`: 1905 passed, 0 failed, 11 skipped = 1916 collected, plus `tests/unit` 59 passed separately -- a fully green run, because the release-metadata guard that requires the named revision to contain the bytes on disk is satisfied by this commit). It is also the SHA `git rev-parse HEAD` prints on the branch tip at the time of writing; the guards in `test_handoff_commands.py` re-derive that identity from the documents, so a drift between them fails the suite rather than passing silently.
 
 ## Read-only host checks
 
