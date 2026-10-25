@@ -1266,5 +1266,18 @@ def main(argv: list[str] | None = None) -> int:
     if args.json or mode in {"status", "report"}:
         print(json.dumps(result["summary"], indent=2))
     else:
-        print(f"autopilot {result['summary'].get('status', 'NOT_RUN')}: {len(result['summary'].get('models', []))} model(s)")
+        summary = result["summary"]
+        if mode == "dry-run":
+            # A dry run resolves the PLAN and persists nothing, so it has no execution status to
+            # report: its model rows live under `plan`. Printing the status line alone said
+            # "NOT_RUN: 0 model(s)" for a selection of seventeen, which reads as a failure to select
+            # anything rather than a plan the operator can inspect.
+            rows = (summary.get("plan") or {}).get("models") or []
+            blocked = sum(1 for row in rows if row.get("status") != "NOT_RUN")
+            print(f"autopilot DRY RUN: {len(rows)} model(s) planned, "
+                  f"{blocked} with a pre-execution blocker; nothing was persisted "
+                  f"(use --json for the plan)")
+        else:
+            print(f"autopilot {summary.get('status', 'NOT_RUN')}: "
+                  f"{len(summary.get('models', []))} model(s)")
     return result["exit_code"]

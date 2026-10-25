@@ -1689,46 +1689,39 @@ def all_stages(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage]
 
         if mid in auxiliary_model_ids():
             aux_outs = tuple(auxiliary_destination(a, config.WORKBENCH_THIRD_PARTY_ROOT, config.FASHIONIQ_ROOT) for a in auxiliary_assets_for_model(mid))
-            from workbench.backend.registry import hub_cache_snapshot
-            from workbench.scripts.download_auxiliary_assets import assets as get_aux_assets, verify as verify_aux_asset
+            from workbench.scripts.download_auxiliary_assets import assets as get_aux_assets
             aux_items = get_aux_assets({mid}, config.WORKBENCH_THIRD_PARTY_ROOT, config.FASHIONIQ_ROOT)
-
+            # ONE command, always, and let the script decide what to do with the state it finds. The
+            # command string is part of the stage fingerprint (`_stage_input_fingerprint_evidence`),
+            # so choosing `--verify-only` once everything was staged while a cold run chose the
+            # downloading form meant the fingerprint CHANGED the moment the stage succeeded -- and a
+            # changed fingerprint refuses a verified resume, so this stage re-ran on every
+            # invocation. A script that has nothing to fetch already does nothing and costs no
+            # capability: its own `main()` reports every asset and only acquires what is missing.
+            # Whether the RUNNER may execute this stage is a per-invocation decision about work that
+            # is actually owed, and it is deliberately not part of the command: the capability is
+            # not fingerprinted, so an offline run over an already-complete asset set still runs the
+            # same command with no permission required, while a run that must fetch something is
+            # refused by name rather than silently skipping.
             def _satisfied(item) -> bool:
-                """Whether this already-staged asset is one the run can consume without a download.
-
-                A hub cache asks the loader's question rather than the directory's: the repo's refs
-                must resolve to a snapshot holding the DECLARED payload. Testing only "the directory
-                resolves" made a cache missing a declared file select the permission-free
-                verification command, so the fix for a half-arrived cache would have been reported as
-                a failed stage instead of the download it actually owed.
-                """
                 if item.hub_repo_id:
+                    from workbench.backend.registry import hub_cache_snapshot
                     snapshot = hub_cache_snapshot(item.destination)
-                    if snapshot is None:
-                        return False
-                    return all((snapshot / name).is_file() for name in (item.hub_files or ()))
-                return item.destination.is_file() and verify_aux_asset(item)
+                    return snapshot is not None and all(
+                        (snapshot / name).is_file() for name in (item.hub_files or ()))
+                return item.destination.is_file()
 
-            all_aux_verified = bool(aux_items) and all(
-                not item.required or _satisfied(item) for item in aux_items)
-            if all_aux_verified:
-                stages.append(run_stage(
-                    "auxiliary-assets",
-                    command("download_auxiliary_assets.py", "--model", mid, "--verify-only"),
-                    model_id=mid,
-                    output_paths=aux_outs,
-                    receipt=True,
-                    required_capabilities=frozenset(),
-                ))
-            else:
-                stages.append(run_stage(
-                    "auxiliary-assets",
-                    command("download_auxiliary_assets.py", "--model", mid),
-                    model_id=mid,
-                    output_paths=aux_outs,
-                    receipt=True,
-                    required_capabilities={"allow_network", "allow_large_downloads"},
-                ))
+            owed = [item for item in aux_items if item.required and item.automatic_download_available
+                    and not _satisfied(item)]
+            capability = {"allow_network", "allow_large_downloads"} if owed else frozenset()
+            stages.append(run_stage(
+                "auxiliary-assets",
+                command("download_auxiliary_assets.py", "--model", mid),
+                model_id=mid,
+                output_paths=aux_outs,
+                receipt=True,
+                required_capabilities=capability,
+            ))
 
         gpu = (m.get("environment") or {}).get("cuda")
         gpu_required = gpu is not None and str(gpu).upper() != "UNKNOWN"

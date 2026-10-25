@@ -369,9 +369,9 @@ def external_asset_statuses(model: dict[str, Any]) -> list[dict[str, Any]]:
             missing: list[str] = []
             snapshot = None
             if is_hub_cache_asset(asset):
-                identity = hub_cache_identity(asset)
+                identity = hub_cache_identity(asset, path)
                 snapshot = identity["snapshot"]
-                missing = hub_cache_missing_files(asset)
+                missing = hub_cache_missing_files(asset, path)
             elif path.is_dir():
                 snapshot = hub_cache_snapshot(path)
             if not path.exists():
@@ -609,7 +609,9 @@ def cache_asset_blocker(asset: dict[str, Any], status: dict[str, Any]) -> str | 
         snapshot = hub_cache_snapshot(repo)
         if snapshot is None:
             return f"no ref under {refs} names an existing snapshot"
-        missing = hub_cache_missing_files(asset)
+        # The repo directory THIS CALLER resolved, so the payload question is about the cache being
+        # checked rather than about whatever `HF_HOME` happens to hold.
+        missing = hub_cache_missing_files(asset, repo)
         if missing:
             return (f"{snapshot} is missing the declared payload {', '.join(missing)} "
                     f"(a tokenizer without the model weights fails in the Qformer loader)")
@@ -639,8 +641,11 @@ def cache_asset_blocker(asset: dict[str, Any], status: dict[str, Any]) -> str | 
     # pinned constructor does. Loading a snapshot DIRECTORY instead would test a different question:
     # it passes on a cache the native repo-id lookup cannot find, which is how a tokenizer-only
     # cache came to be certified for a run that then failed in `BertLMHeadModel.from_pretrained`.
+    # The load-test also runs against the cache this caller RESOLVED: `path` is the repo directory
+    # for a hub asset, so its cache root is that directory's grandparent, and pointing the library
+    # at the host's `HF_HOME` instead tested a directory nobody asked about.
     repo_id = hub_cache_repo_id(asset) if is_hub_cache_asset(asset) else ""
-    root = hub_cache_root(asset) if is_hub_cache_asset(asset) else path.parent.parent
+    root = (path.parent.parent if is_hub_cache_asset(asset) else path.parent.parent)
     target = repo_id if repo_id else str(snapshot)
     environment_backup = {key: os.environ.get(key)
                           for key in ("HF_HOME", "HF_HUB_OFFLINE", "TRANSFORMERS_OFFLINE")}
@@ -1051,8 +1056,30 @@ def hub_cache_repo_dir(asset: dict[str, Any]) -> Path:
     return hf_hub_repo_dir(hub_cache_repo_id(asset), hub_cache_root(asset))
 
 
-def hub_cache_identity(asset: dict[str, Any]) -> dict[str, Any]:
+def hub_cache_declared_files(repo_id: str) -> list[str]:
+    """The payload files a hub repo is declared to need, from ONE declaration.
+
+    Two registries describe the same repository: the auxiliary one names what acquisition must fetch
+    (`hub_files`), and a preparation contract names the same cache by the path its loader opens.
+    Reading the file list only from the asset in hand therefore produced an EMPTY set for every
+    contract asset -- so an incomplete cache passed every payload check, and a cache holding nothing
+    but a vocabulary was certified for a run whose Qformer loader then failed on the absent weights.
+    Looking the repo up in the auxiliary registry keeps the two in step without a second copy of the
+    list.
+    """
+    for candidate in load_auxiliary_assets():
+        if candidate.get("hub_repo_id") == repo_id and candidate.get("hub_files"):
+            return [str(name) for name in candidate["hub_files"]]
+    return []
+
+
+def hub_cache_identity(asset: dict[str, Any], repo: Path | None = None) -> dict[str, Any]:
     """The resolved identity of a hub cache asset: where it lives and what is in it.
+
+    `repo` overrides where the cache is LOOKED FOR. A caller that already resolved a destination (the
+    auxiliary validator, whose `path` argument exists precisely so a caller can point at one cache)
+    must be able to ask about THAT directory; re-deriving it from `HF_HOME` instead made an isolated
+    fixture describe the host's cache, which is both wrong and untestable.
 
     One record for four consumers that must not disagree -- the readiness report, the budget, the
     acquisition plan and the downloader's verification. `files` counts the payload the LOADER reads
@@ -1061,12 +1088,13 @@ def hub_cache_identity(asset: dict[str, Any]) -> dict[str, Any]:
     exceeding twice its own declaration.
     """
     repo_id = hub_cache_repo_id(asset)
-    repo = hf_hub_repo_dir(repo_id, hub_cache_root(asset))
+    repo = repo if repo is not None else hf_hub_repo_dir(repo_id, hub_cache_root(asset))
     snapshot = hub_cache_snapshot(repo)
+    declared = [str(name) for name in (asset.get("hub_files") or [])] or hub_cache_declared_files(repo_id)
     files: list[str] = []
     size = 0
     if snapshot is not None:
-        for name in sorted(asset.get("hub_files") or []):
+        for name in sorted(declared):
             entry = snapshot / name
             if entry.is_file():
                 files.append(name)
@@ -1075,16 +1103,16 @@ def hub_cache_identity(asset: dict[str, Any]) -> dict[str, Any]:
                 except OSError:
                     pass
     return {"repo_id": repo_id, "path": repo, "snapshot": snapshot, "present": repo.is_dir(),
-            "files": files, "size_bytes": size}
+            "files": files, "size_bytes": size,
+            "declared_files": declared}
 
 
-def hub_cache_missing_files(asset: dict[str, Any]) -> list[str]:
+def hub_cache_missing_files(asset: dict[str, Any], repo: Path | None = None) -> list[str]:
     """The declared payload files of a hub repo that its active snapshot is missing."""
-    identity = hub_cache_identity(asset)
-    declared = [str(name) for name in (asset.get("hub_files") or [])]
+    identity = hub_cache_identity(asset, repo)
     if identity["snapshot"] is None:
-        return declared
-    return [name for name in declared if name not in set(identity["files"])]
+        return list(identity["declared_files"])
+    return [name for name in identity["declared_files"] if name not in set(identity["files"])]
 
 
 def _guard_auxiliary_destination(root: Path, path: str) -> Path:
@@ -1193,7 +1221,7 @@ def validate_auxiliary_asset(
                 False, "UNRESOLVED_REF",
                 [f"UNRESOLVED_REF {path}: holds no revision ref resolving to a snapshot "
                  f"(a snapshot no ref names cannot be reached by a repo-id lookup)"])
-        missing = hub_cache_missing_files(rec)
+        missing = hub_cache_missing_files(rec, path)
         if missing:
             return AuxiliaryValidationResult(
                 False, "INCOMPLETE_CACHE",

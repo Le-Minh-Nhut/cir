@@ -1113,16 +1113,41 @@ def test_tme_hub_cache_offline_verification_and_pipeline_selection(monkeypatch, 
         (snapshot_dir / name).write_bytes(b"dummy payload")
     assert module.main(["--model", "tme", "--verify-only"]) == 0
     out_valid = capsys.readouterr().out
-    assert "cache layout verified" in out_valid
+    assert "cache layout and declared payload verified" in out_valid
     assert "state=present" in out_valid
 
-    # (d) equivalent all_stages() selection is permission-free --verify-only command once cache resolves
+    # (d) the same cache missing ONE declared file is refused, and no acquisition is attempted:
+    # a verification that accepted it would have told the operator the asset is ready while the
+    # download path considered it owed.
+    (snapshot_dir / "config.json").unlink()
+    assert module.main(["--model", "tme", "--verify-only"]) == 1
+    out_partial = capsys.readouterr().out
+    assert "declared payload missing: config.json" in out_partial
+    (snapshot_dir / "config.json").write_bytes(b"dummy payload")
+
+    # (e) the stage command is STABLE across states, so a successful stage keeps its fingerprint and
+    # a resume does not re-run it; only the capability depends on work actually being owed.
     cfg = resolve_config()
     args = pipeline.parser_for().parse_args(["all", "--model", "tme"])
-    stages = pipeline.all_stages(args, cfg)
-    aux_stage = next(s for s in stages if s.name == "auxiliary-assets" and s.model_id == "tme")
-    assert aux_stage.required_capabilities == frozenset()
-    assert "--verify-only" in aux_stage.commands[0]
+
+    def aux_stage():
+        return next(s for s in pipeline.all_stages(args, cfg)
+                    if s.name == "auxiliary-assets" and s.model_id == "tme")
+
+    # With the file-shaped assets staged but the cache pointed at an EMPTY root, work IS owed: the
+    # command stays the same and the capability says the run needs a download.
+    monkeypatch.setenv("HF_HOME", str(tmp_path / "empty-hf"))
+    owed_stage = aux_stage()
+    assert owed_stage.required_capabilities == frozenset({"allow_network", "allow_large_downloads"})
+
+    # With everything staged, the COMMAND is byte-identical (the fingerprint covers it, so a state
+    # change must not change it) and no capability is required.
+    monkeypatch.setenv("HF_HOME", str(hf_home))
+    staged_stage = aux_stage()
+    assert staged_stage.commands == owed_stage.commands, (
+        "the auxiliary command must not depend on staging state: it is part of the stage "
+        "fingerprint, and a fingerprint that changes when the stage succeeds refuses its own resume")
+    assert staged_stage.required_capabilities == frozenset()
 
 
 def test_hub_bootstrap_publishes_the_ref_the_loader_resolves(monkeypatch, tmp_path: Path) -> None:

@@ -95,14 +95,28 @@ def save_manifest(path: Path, entries: list[dict]) -> None:
 def report(items: tuple[Asset, ...]) -> None:
     for asset in items:
         if asset.hub_repo_id:
+            # Layout AND payload: a cache whose refs resolve and whose weights are present can still
+            # be missing `config.json`, and reporting that as "present" sent the operator away from
+            # the one thing that would fix it.
             problem = hub_cache_layout_problem(asset.hub_repo_id)
-            state = "present" if problem is None else "missing"
-            source_unverified = asset.provenance_status != "VERIFIED"
-        else:
-            state = "present" if asset.destination.is_file() else "missing"
-            prefix = getattr(asset, "expected_sha256_prefix", None)
-            source_unverified = asset.provenance_status != "VERIFIED" or (asset.expected_sha256 is None and prefix is None)
+            missing = hub_cache_missing_files(asset)
+            if problem:
+                state, detail = "missing", problem
+            elif missing:
+                state, detail = "incomplete", f"declared payload missing: {', '.join(missing)}"
+            else:
+                state, detail = "present", ""
+            print(f"{asset.family}: destination={asset.destination} state={state} "
+                  f"required={str(asset.required).lower()} "
+                  f"automatic_download_available={str(asset.automatic_download_available).lower()} "
+                  f"source_unverified={str(asset.provenance_status != 'VERIFIED').lower()} "
+                  f"source={asset.source_url or 'unverified author download source'}"
+                  + (f" ({detail})" if detail else ""))
+            continue
+        state = "present" if asset.destination.is_file() else "missing"
         source = asset.source_url or "unverified author download source"
+        prefix = getattr(asset, "expected_sha256_prefix", None)
+        source_unverified = asset.provenance_status != "VERIFIED" or (asset.expected_sha256 is None and prefix is None)
         print(
             f"{asset.family}: destination={asset.destination} state={state} "
             f"required={str(asset.required).lower()} "
@@ -113,11 +127,17 @@ def report(items: tuple[Asset, ...]) -> None:
 
 def verify(asset: Asset, *, fashioniq_root: Path | None = None) -> bool:
     if asset.hub_repo_id:
+        # The same two questions the acquisition and the plan ask, so `--verify-only` cannot exit 0
+        # for a cache the download path would have repaired.
         problem = hub_cache_layout_problem(asset.hub_repo_id)
         if problem:
             print(f"{asset.family}: {problem}")
             return False
-        print(f"{asset.family}: cache layout verified")
+        missing = hub_cache_missing_files(asset)
+        if missing:
+            print(f"{asset.family}: declared payload missing: {', '.join(missing)}")
+            return False
+        print(f"{asset.family}: cache layout and declared payload verified")
         return True
     res = validate_auxiliary_asset(asset, asset.destination, fashioniq_root=fashioniq_root)
     if res.status == "MISSING":
@@ -435,8 +455,7 @@ def main(argv: list[str] | None = None) -> int:
     file_items = tuple(asset for asset in items if not asset.hub_repo_id)
     report(items)
     downloadable = tuple(asset for asset in file_items if asset.automatic_download_available)
-    unavailable = tuple(asset for asset in file_items if asset.required and not asset.automatic_download_available)
-    hub_downloadable = tuple(asset for asset in hub_items if asset.automatic_download_available)
+    unavailable = tuple(asset for asset in items if asset.required and not asset.automatic_download_available)
     if args.list:
         return 0
     if args.verify_only:

@@ -164,6 +164,15 @@ def test_tme_preflight_checks_unverified_assets_against_registry_size_and_digest
         '{"tokenizer_class":"BertTokenizer","do_lower_case":true}', encoding="utf-8")
     (snapshot / "config.json").write_text(
         '{"model_type":"bert","vocab_size":7}', encoding="utf-8")
+    # The DECLARED payload, not a hand-picked subset: the repository declares a file set (the pinned
+    # constructor opens the vocabulary, the tokenizer config AND the Qformer's `config.json` plus
+    # `pytorch_model.bin`), and a stand-in missing any of them is exactly the cache this check exists
+    # to refuse. Writing the declared list keeps the fixture honest as that declaration moves.
+    from workbench.backend.registry import hub_cache_declared_files
+
+    for name in hub_cache_declared_files("bert-base-uncased"):
+        if not (snapshot / name).is_file():
+            (snapshot / name).write_bytes(b"stand-in payload for " + name.encode())
     others: list[dict] = []
     statuses = [_asset_status(selected, asset_path, state, digest)]
     for other in assets:
