@@ -7,7 +7,17 @@ service, database hay dashboard mới.
 
 ## Closure snapshot bổ sung — 2026-10-25 (R23 fix round)
 
-R23 fixes verified against the working-tree source. Last audited revision: `18b6a509f4cd0f50fef7f9ccef2bc7e80c2fa073`; delivered revision: `1b890b759bc6663e838c374484092eabb73133b2`. Suite accounting: Hai lần chạy xdist trên cùng cây đóng băng 4c73d962: (1) 1998/2013 thực thi — 1986 passed, 11 skipped, 1 failed (guard SHA, dự kiến trước commit), 0 errors, abort do đĩa ở 840s; (2) 1722/2013 thực thi — 1715 passed, 5 skipped, 2 failed (cùng guard SHA + một xdist lock race đã chứng minh pass khi chạy riêng), 0 errors, abort do đĩa ở 540s. KHÔNG có lần chạy đầy đủ một lượt: đĩa máy chủ (/ còn ~3.7 GB, /tmp ~1.9 GB, ba project dùng chung) không đủ cho ~4 GB basetemp. Phần chưa thực thi của hai lần chạy bù nhau, nhưng không có log để chứng minh hợp (union) nên không claim "full suite green". No target-PC access this round: host RTX 3050 Laptop (`sm_86`), no target `sm_120` execution, no model environment installed and no real weights downloaded this round. Every target-GPU execution remains `TARGET_GPU_PENDING`.
+R23 fixes verified against the working-tree source. Last audited revision: `18b6a509f4cd0f50fef7f9ccef2bc7e80c2fa073`; delivered revision: `1b890b759bc6663e838c374484092eabb73133b2`. Suite accounting: Bốn invocation pytest TUẦN TỰ trên cùng cây production đóng băng, KHÔNG phải một lượt chạy duy nhất; `TESTED_SOURCE_SHA` là `1b890b7`, production tree không đổi qua các successor chỉ sửa docs đến branch tip ghi nhận `5afec61`. Phân hoạch deterministic: `chunks.json` tổng 2,013 ID; bốn file `chunk-q<N>.txt` khớp chính xác manifest, không ID trùng; `--collect-only` độc lập cũng thu thập 2,013.
+
+| Chunk | Collected | Passed | Failed | Skipped | Errors | Wall |
+|---|---:|---:|---:|---:|---:|---:|
+| q1 | 504 | 503 | 0 | 1 | 0 | 743.42 s |
+| q2 | 503 | 503 | 0 | 0 | 0 | 344.61 s |
+| q3 | 503 | 493 | 0 | 10 | 0 | 572.85 s |
+| q4 | 503 | 503 | 0 | 0 | 0 | 784.71 s |
+| **Total** | **2,013** | **2,002** | **0** | **11** | **0** | **2,445.59 s (~41 min)** |
+
+**2,013 collected = 2,002 passed + 11 skipped + 0 failed + 0 errors.** Mỗi chunk chạy `OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 NUMEXPR_NUM_THREADS=1 .venv/bin/python -m pytest @.scratch-tmp/chunk-q<N>.txt -n 2 --dist=loadfile --basetemp=.scratch-tmp/chunk-q<N> -p no:cacheprovider`; mỗi `basetemp` đặt trên `/` dưới `.scratch-tmp/chunk-q<N>` và đã xóa sau chunk. Chunking là bắt buộc: ổ 173 GB dùng chung với ba project đang hoạt động; một lượt toàn suite cần ~4 GB `basetemp` tạm thời. Hai lượt toàn suite trước đó đều abort vì disk floor: 1998/2013 khi `/` còn 1.30 GB và 1722/2013 khi còn 0.87 GB; mỗi chunk cần ≤~2 GB peak, mức trống thấp nhất của `/` trong lượt chunk là 1.44 GB (q1). Guard `test_no_release_document_points_at_a_superseded_source_sha` đã PASS trong các lượt này: docs ghi revision có production tree được kiểm; failure SHA dự kiến trước đây đã hết. 11 skip là environment/host-state skip thuộc skip set đã biết và không đổi trên host (q1: 1, q3: 10); lý do chưa phân loại trong logs và không điều tra thêm. Bằng chứng: `.scratch-tmp/chunks.json`, `chunk-q1.txt`…`chunk-q4.txt`, `chunk-q1.log`…`chunk-q4.log`, `chunk-q<N>-meta.json`, `suite-attempts.jsonl`; `.scratch-tmp/chunk-q1-partial.log` giữ lại phần chạy dở cũ để truy nguyên. No target-PC access this round: host RTX 3050 Laptop (`sm_86`), no target `sm_120` execution, no model environment installed and no real weights downloaded this round. Every target-GPU execution remains `TARGET_GPU_PENDING`.
 
 | Finding | Confirmed cause | Affected consumers | Repair | Evidence run | Remaining dependency |
 |---|---|---|---|---|---|
@@ -41,10 +51,10 @@ Không có backend status service mới, không đổi protocol, không đổi t
 
 Hai hạng mục dưới đây là guard **theo thiết kế**, không phải lỗi chưa sửa:
 
-* `test_no_release_document_points_at_a_superseded_source_sha` FAIL trên working tree: nó bắt buộc SHA
-  trong `FINAL_PC_RELEASE_VERDICT.md` phải chứa mọi byte production đang có trên đĩa. Đây là guard viết
-  đúng: bản R21 trước đó cũng ở trạng thái này (1309 test fail vì lý do tương tự trong lượt chạy sạch).
-  Sau khi commit bản này và cập nhật `TESTED_SOURCE_SHA` sang SHA mới, guard chuyển sang PASS.
+* `test_no_release_document_points_at_a_superseded_source_sha` từng FAIL trước khi release docs cập nhật
+  `TESTED_SOURCE_SHA`. Đây là guard viết đúng: nó yêu cầu SHA trong `FINAL_PC_RELEASE_VERDICT.md` phải có
+  production tree giống hệt tree đang kiểm. Sau khi docs pin `1b890b7` và successor chỉ sửa docs, guard
+  này đã PASS trong cả bốn invocation chunked nêu trên.
 * `test_the_release_documents_quote_the_test_count_they_actually_ran` đã PASS sau khi cập nhật số liệu.
 
 ## Current model status — 2026-10-25
