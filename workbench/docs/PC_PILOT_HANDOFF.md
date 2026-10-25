@@ -31,7 +31,7 @@ Ma trận đầy đủ: `workbench/docs/MODEL_STATUS_SPEC.md` §2.
 **Trạng thái 17 model (bảng chuẩn, bằng chứng + điều kiện chuyển trạng thái):**
 [`workbench/docs/MODEL_STATUS_SPEC.md`](MODEL_STATUS_SPEC.md)
 
-**SHA ĐÃ KIỂM THỬ (nguồn sản xuất): `eb04fcc`** (`eb04fcc7ecbbe25cd8a119ff173e514a52ab2f26`), vòng R22; vòng R21 tương ứng `874ddcc` (`874ddccd7e3b869884b7f4ed25f7b9003d6b792d`) — mọi test, acceptance, mutation và release_verify mô
+**SHA ĐÃ KIỂM THỬ (nguồn sản xuất): `1b890b7`** (`1b890b759bc6663e838c374484092eabb73133b2`), vòng R23; vòng R22 tương ứng `eb04fcc` (`eb04fcc7ecbbe25cd8a119ff173e514a52ab2f26`) — mọi test, acceptance, mutation và release_verify mô
 tả trên trang này đã chạy trên đúng cây đó (xem §Kết quả test ở cuối trang cho số đo trên đúng cây đó). `119df5f` đã bị **thay thế**: lượt R9 sửa production (DCNet binding và
 thứ tự category, tập patch CSMCIR, tập input của constructor, processor BLIP-2), nên số test và kết
 quả gate ghi ở các bản trước không còn mô tả cây này.
@@ -64,7 +64,7 @@ git fetch origin research/cir-failure-workbench
 # Checkout tường minh. KHÔNG dùng `git reset --hard`: trên máy đã có việc đang làm, nó xoá sạch
 # không hỏi. Muốn đúng cây đã kiểm thử thì checkout đúng commit đó.
 # Nguồn đã kiểm thử (revision cố định):
-git checkout eb04fcc
+git checkout 1b890b7
 # Nhánh đang phát triển thêm tài liệu. Dùng nó nếu muốn bản mới nhất:
 #   git checkout research/cir-failure-workbench
 ```

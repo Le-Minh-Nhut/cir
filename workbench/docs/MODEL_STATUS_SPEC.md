@@ -7,7 +7,7 @@ service, database hay dashboard mới.
 
 ## Closure snapshot bổ sung — 2026-10-25 (R23 fix round)
 
-R23 fixes verified against the working-tree source. Last audited revision: `18b6a509f4cd0f50fef7f9ccef2bc7e80c2fa073`; delivered revision: `<!-- FILL: delivered SHA -->`. Suite accounting: `<!-- FILL: suite counts -->`. No target-PC access this round: host RTX 3050 Laptop (`sm_86`), no target `sm_120` execution, no model environment installed and no real weights downloaded this round. Every target-GPU execution remains `TARGET_GPU_PENDING`.
+R23 fixes verified against the working-tree source. Last audited revision: `18b6a509f4cd0f50fef7f9ccef2bc7e80c2fa073`; delivered revision: `1b890b759bc6663e838c374484092eabb73133b2`. Suite accounting: Hai lần chạy xdist trên cùng cây đóng băng 4c73d962: (1) 1998/2013 thực thi — 1986 passed, 11 skipped, 1 failed (guard SHA, dự kiến trước commit), 0 errors, abort do đĩa ở 840s; (2) 1722/2013 thực thi — 1715 passed, 5 skipped, 2 failed (cùng guard SHA + một xdist lock race đã chứng minh pass khi chạy riêng), 0 errors, abort do đĩa ở 540s. KHÔNG có lần chạy đầy đủ một lượt: đĩa máy chủ (/ còn ~3.7 GB, /tmp ~1.9 GB, ba project dùng chung) không đủ cho ~4 GB basetemp. Phần chưa thực thi của hai lần chạy bù nhau, nhưng không có log để chứng minh hợp (union) nên không claim "full suite green". No target-PC access this round: host RTX 3050 Laptop (`sm_86`), no target `sm_120` execution, no model environment installed and no real weights downloaded this round. Every target-GPU execution remains `TARGET_GPU_PENDING`.
 
 | Finding | Confirmed cause | Affected consumers | Repair | Evidence run | Remaining dependency |
 |---|---|---|---|---|---|

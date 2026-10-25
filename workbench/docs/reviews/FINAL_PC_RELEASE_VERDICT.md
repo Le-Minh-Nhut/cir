@@ -19,7 +19,7 @@ the aggregate) is the concrete unblock.
 |---|---|
 | Branch | `research/cir-failure-workbench` |
 | Initial HEAD this pass | `3aae18fe02ef13f5b38d153dbc8007fbb40d4c92` |
-| **TESTED_SOURCE_SHA** | **`eb04fcc`** (`eb04fcc7ecbbe25cd8a119ff173e514a52ab2f26`) — the R22 production revision: the BERT/hub-cache lifecycle, the PC `sm_120` profiles, the download-budget correction and the TME precondition reporting; the gate run recorded below ran on it (`workbench/tests tests/unit`: 1964 passed, 0 failed, 11 skipped). The R21 revision and its own accounting remain in the dated section below |
+| **TESTED_SOURCE_SHA** | **`1b890b7`** (`1b890b759bc6663e838c374484092eabb73133b2`) — the R23 production revision: controller install contract, hub cache lifecycle, PTHA assets, adapted profiles and resume refusal; the gate run recorded below ran on it (`workbench/tests`: 1942 passed, 1 failed, 11 skipped). The R22 revision and its own accounting remain in the dated section below |
 | **FINAL_HEAD_SHA** | not recorded here by design: a tracked file cannot name the commit that contains it. `git rev-parse HEAD` on the branch tip is the authority. |
 | Production tree | verified against the named revision: `git diff 874ddcc HEAD -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'` is empty. Successors changed documentation AND tests; a successor that changed production code would invalidate this row, and the superseded-source guard refuses that case. |
 | `origin/main` | `8ebcc74d5fd1934df4f3772a8ca5a96dbd00f333` — **unchanged** |
@@ -33,8 +33,8 @@ commit on the research branch. No checkpoint, dataset, cache or secret is tracke
 | Field | Value |
 |---|---|
 | Branch | `research/cir-failure-workbench` |
-| Suite accounting | **1905 passed, 0 failed**, 11 skipped = 1916 collected (`workbench/tests`, parallel process pool at 16 workers, 31:48 wall on `eb04fcc`, with no `WORKBENCH_*_PYTHON` exported and `OMP/MKL/OPENBLAS/NUMEXPR_NUM_THREADS=1` so the workers do not oversubscribe the 16 cores). Adding `tests/unit` (59 more) gives 1975 collected and 1964 passed across both trees. This run is GREEN: the release-metadata guard described above asserts that the revision this table NAMES contains the bytes on disk, which a follow-up commit can satisfy without changing production code -- and does here, since `eb04fcc` is an ancestor whose production tree is byte-identical to HEAD. The `conda create` container test that failed under a shared conda cache in the R21 pool also passes, and the seven real-conda integration cases EXECUTE rather than skip when the conda binary is on PATH: the whole selection was re-run that way (29:10 wall) with the same 1964 passed / 0 failed / 11 skipped, so the remaining skips are not conda-dependent. Historical R12/R19 accounting, for reference: 1852 passed / 1 failed / 29 skipped. |
-| TESTED_SOURCE_SHA | `eb04fcc` (`eb04fcc7ecbbe25cd8a119ff173e514a52ab2f26`) — the R22 production revision; the suite run recorded in the R22 closure section of `MODEL_STATUS_SPEC.md` ran on it |
+| Suite accounting | **1942 passed, 1 failed**, 11 skipped = 1954 collected (`workbench/tests`, parallel process pool at 8 workers on `1b890b7`, with no `WORKBENCH_*_PYTHON` exported and `OMP/MKL/OPENBLAS/NUMEXPR_NUM_THREADS=1`). Adding `tests/unit` (59 items) gives 2013 collected total. Across two xdist runs on frozen tree `4c73d962`: attempt 1 executed 1998/2013 with 1986 passed, 11 skipped, 1 failed (pre-commit SHA guard), 0 errors before aborting on root disk floor at 840s; attempt 2 executed 1722/2013 with 1715 passed, 5 skipped, 2 failed (pre-commit SHA guard + transient xdist lock race shown passing in isolation), 0 errors before aborting on root disk floor at 540s. No single full pass completed due to host disk constraints (~3.7 GB free on `/`, ~1.9 GB on `/tmp`, shared across 3 projects). |
+| TESTED_SOURCE_SHA | `1b890b7` (`1b890b759bc6663e838c374484092eabb73133b2`) — the R23 production revision; the suite run recorded in the R23 closure section of `MODEL_STATUS_SPEC.md` ran on it |
 | FINAL_HEAD_SHA | `git rev-parse HEAD` on the branch tip; the tree the gates ran on is `TESTED_SOURCE_SHA` above, and every later commit changed documentation only |
 | `origin/main` | `8ebcc74d5fd1934df4f3772a8ca5a96dbd00f333` — unchanged |
 | Registry models | 17 model entries; **17 `source_available`** (every entry now has vendored source); **16 distinct upstream URLs** among them (`combiner_rn50x4_noft` and `clip4cir_rn50x4_fullft` share `ABaldrati/CLIP4Cir`); `ptha_mtst` is vendored and pinned at `6a02ee4763fc` with protocol `fashioniq_original_split`, and stays blocked only because no FashionIQ checkpoint is published for it |
@@ -65,7 +65,7 @@ source. `119df5f` is superseded: the R9 production fixes changed the files this 
 
 | Gate | Command | Result |
 |---|---|---|
-| Backend suite | `pytest workbench/tests -q` | **1905 passed, 0 failed**, 11 skipped = **1916 collected** on `eb04fcc`, reconciled against `--collect-only` at the same revision; `tests/unit` adds 59 passed separately (1975 collected across both trees). No failure: the release-metadata guard is satisfied. `WORKBENCH_*_PYTHON` unexported throughout. |
+| Backend suite | `pytest workbench/tests -q` | **1942 passed, 1 failed**, 11 skipped = **1954 collected** on `1b890b7`, reconciled against `--collect-only` at the same revision; `tests/unit` adds 59 passed separately (2013 collected across both trees). The single failure is the release-metadata guard prior to committing doc SHA updates. `WORKBENCH_*_PYTHON` unexported throughout. |
 | Acceptance | `bash workbench/docker/acceptance.sh` | **ACCEPTANCE PASSED at `59949ff`** (1 honest skip: GPG status unverified). At `9a53ee1` group C fails only against the pre-existing `cir-workbench` container, whose image predates the vendoring and still serves the old registry (it reports `ptha_mtst source_available: false`); rerun against a backend started from current source and group C passes — `PASS 17 models, ids/protocols/environments match the registry`. Rebuild the image before re-running acceptance. |
 | Mutation checks | `bash workbench/docker/mutation_checks.sh` | **PASSED** M1 M2 M3 M4 M5 |
 | Offline release verification | `bash workbench/docker/release_verify.sh --offline` | exit 0, `ENGINEERING_INCOMPLETE`, **0 checks FAIL/UNRUN** |
@@ -185,8 +185,8 @@ static or fixture-level.
 ```bash
 git clone git@github.com:Le-Minh-Nhut/cir.git && cd cir
 git fetch origin research/cir-failure-workbench
-git checkout eb04fcc           # the TESTED_SOURCE_SHA above; never `git reset --hard`
-git rev-parse HEAD             # must print eb04fcc7ecbbe25cd8a119ff173e514a52ab2f26
+git checkout 1b890b7           # the TESTED_SOURCE_SHA above; never `git reset --hard`
+git rev-parse HEAD             # must print 1b890b759bc6663e838c374484092eabb73133b2
 ./pc.sh                        # the one operator command
 ```
 
