@@ -9,7 +9,7 @@ Superseded; the current release metadata is `FINAL_PC_RELEASE_VERDICT.md`.
 
 ## 1. Current-round attribution
 
-ordinary coding/review work in this round ran on `cx/gpt-6-luna` as resolved by the harness at `9router/cx/gpt-6-luna:max` (the operator's own `task.agentModelOverrides` maximum-effort setting for both worker tiers), the advisor role was left unchanged, and no Gemini model was invoked.
+The worker model was `cx/gpt-6-luna`, resolved by the harness as `9router/cx/gpt-6-luna:max` (the operator's own `task.agentModelOverrides` maximum-effort setting); the advisor role was unchanged, and no Gemini model was invoked.
 
 ## 2. The method every reviewer was given
 

@@ -19,11 +19,11 @@ the aggregate) is the concrete unblock.
 |---|---|
 | Branch | `research/cir-failure-workbench` |
 | Initial HEAD this pass | `3aae18fe02ef13f5b38d153dbc8007fbb40d4c92` |
-| **TESTED_SOURCE_SHA** | **`27f5db2`** (`27f5db291e80ff43fe3f44423bba9458ea874305`) — the production revision whose complete `workbench/tests` node set was measured in four sequential chunks; current accounting and the single release-guard failure are recorded below. R23 remains a historical round, not the current accounting. |
+| **TESTED_SOURCE_SHA** | **`a55a3264dcaef0aeb8e90af7dcafdb9512203d8a`** — the production revision under test; documentation-only successors preserve this production tree. Current R25 accounting includes the one stale-SHA guard failure that this metadata update satisfies. R23 remains historical. |
 | **FINAL_HEAD_SHA** | not recorded here by design: a tracked file cannot name the commit that contains it. `git rev-parse HEAD` on the branch tip is the authority. |
-| Production tree | compare against the named revision with `git diff 27f5db2 HEAD -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'`; the release guard requires byte-identical production source. |
+| Production tree | compare against the named revision with `git diff a55a326 HEAD -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'`; the release guard requires byte-identical production source. |
 | `origin/main` | `8ebcc74d5fd1934df4f3772a8ca5a96dbd00f333` — **unchanged** |
-| Worktree | clean |
+| Worktree | R25 changes committed; preserved untracked user files: `src/train_cirr.py`, `uv.lock` |
 
 `main` was never touched. Nothing was rebased, reset, force-pushed or amended; every change is a new
 commit on the research branch. No checkpoint, dataset, cache or secret is tracked.
@@ -33,8 +33,8 @@ commit on the research branch. No checkpoint, dataset, cache or secret is tracke
 | Field | Value |
 |---|---|
 | Branch | `research/cir-failure-workbench` |
-| Suite accounting | **1946 passed, 1 failed**, 11 skipped = **1958 collected** (`workbench/tests`): four sequential chunk invocations over the complete node set, not one single pass; partition `500+500+500+458 = 1958`, no duplicates or omissions. The one failure was `workbench/tests/test_handoff_commands.py::test_no_release_document_points_at_a_superseded_source_sha`: the release documents still named obsolete production revision `1b890b7`. This is the guard satisfied by advancing the documented tested source to `27f5db2`. Separate `tests/unit` scope: 59 IDs, 59 passed. Historical R23 report: its separate run recorded 1943 passed / 0 failed, 11 skipped = 1954 collected; that count remains historical. Earlier disk-floor attempts on `4c73d962` are also historical. |
-| TESTED_SOURCE_SHA | `27f5db291e80ff43fe3f44423bba9458ea874305` — the production revision named for current suite accounting |
+| Suite accounting | **1955 passed, 1 failed**, 11 skipped = **1967 collected** (`workbench/tests`): four sequential chunk invocations, not one single pass; partition `492+492+492+491 = 1967`, complete with no duplicates or omissions. The sole failure was `workbench/tests/test_handoff_commands.py::test_no_release_document_points_at_a_superseded_source_sha`, the stale-SHA guard this metadata update satisfies. The 11 skips were host-boundary cases; `MODEL_STATUS_SPEC.md` records the reasons. Separate `tests/unit` scope: 59 collected, 59 passed. |
+| TESTED_SOURCE_SHA | `a55a3264dcaef0aeb8e90af7dcafdb9512203d8a` — the production revision named for current R25 accounting |
 | FINAL_HEAD_SHA | `git rev-parse HEAD` on the branch tip; `TESTED_SOURCE_SHA` identifies the production tree under test. |
 | `origin/main` | `8ebcc74d5fd1934df4f3772a8ca5a96dbd00f333` — unchanged |
 | Registry models | 17 model entries; **17 `source_available`** (every entry has vendored source); **16 distinct upstream URLs** among them (`combiner_rn50x4_noft` and `clip4cir_rn50x4_fullft` share `ABaldrati/CLIP4Cir`); `ptha_mtst` is vendored and pinned at `6a02ee4763fc`, but its sole registered checkpoint is CIRR-trained for CIRR→FashionIQ transfer, not a FashionIQ reproduction. |
@@ -65,7 +65,7 @@ source. `119df5f` is superseded: the R9 production fixes changed the files this 
 
 | Gate | Command | Result |
 |---|---|---|
-| Backend suite | Four sequential chunk invocations over complete `workbench/tests`; partition `500+500+500+458 = 1958` | **1946 passed, 1 failed**, 11 skipped = **1958 collected** on `27f5db2`. Sole failure: `test_handoff_commands.py::test_no_release_document_points_at_a_superseded_source_sha`, because documents still named `1b890b7`; this edit advances the documented source SHA to satisfy that guard. Historical R23 report separately recorded 1943 passed / 0 failed, 11 skipped = 1954 collected. |
+| Backend suite | Four sequential chunk invocations over complete `workbench/tests`; partition `492+492+492+491 = 1967` | **1955 passed, 1 failed**, 11 skipped = **1967 collected** on `a55a326`. Sole failure: `test_handoff_commands.py::test_no_release_document_points_at_a_superseded_source_sha`, the stale-SHA guard this documentation update satisfies. `tests/unit`: 59 collected, 59 passed. |
 | Acceptance | `bash workbench/docker/acceptance.sh` | **ACCEPTANCE PASSED at `59949ff`** (1 honest skip: GPG status unverified). At `9a53ee1` group C fails only against the pre-existing `cir-workbench` container, whose image predates the vendoring and still serves the old registry (it reports `ptha_mtst source_available: false`); rerun against a backend started from current source and group C passes — `PASS 17 models, ids/protocols/environments match the registry`. Rebuild the image before re-running acceptance. |
 | Mutation checks | `bash workbench/docker/mutation_checks.sh` | **PASSED** M1 M2 M3 M4 M5 |
 | Offline release verification | `bash workbench/docker/release_verify.sh --offline` | exit 0, `ENGINEERING_INCOMPLETE`, **0 checks FAIL/UNRUN** |
@@ -190,8 +190,8 @@ static or fixture-level.
 ```bash
 git clone git@github.com:Le-Minh-Nhut/cir.git && cd cir
 git fetch origin research/cir-failure-workbench
-git checkout 27f5db2           # the fixed TESTED_SOURCE_SHA above; never `git reset --hard`
-git rev-parse HEAD             # must print 27f5db291e80ff43fe3f44423bba9458ea874305
+git checkout a55a326           # the fixed TESTED_SOURCE_SHA above; never `git reset --hard`
+git rev-parse HEAD             # must print a55a3264dcaef0aeb8e90af7dcafdb9512203d8a
 ./pc.sh                        # the one operator command
 ```
 
