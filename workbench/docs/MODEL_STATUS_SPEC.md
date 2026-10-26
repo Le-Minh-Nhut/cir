@@ -5,9 +5,14 @@ file này mô tả **tình trạng, bằng chứng và điều kiện chuyển t
 service, database hay dashboard mới.
 
 
+## Current release accounting — 2026-10-26
+
+`TESTED_SOURCE_SHA`: `27f5db291e80ff43fe3f44423bba9458ea874305`. Complete `workbench/tests` set: four sequential chunk invocations, not one single pass; `500+500+500+458 = 1958` IDs, complete partition with no duplicates or omissions. Total: **1946 passed, 1 failed**, 11 skipped, 0 errors. The failure was `workbench/tests/test_handoff_commands.py::test_no_release_document_points_at_a_superseded_source_sha`: the prior documents named `1b890b7`, whose production tree differed from source on disk; this metadata update advances the source SHA and satisfies that guard. Separate `tests/unit` scope: 59 IDs, 59 passed.
+
+The dated R23 accounting below remains the historical R23 record; it is not the current suite run.
 ## Closure snapshot bổ sung — 2026-10-25 (R23 fix round)
 
-R23 fixes verified against the working-tree source. Last audited revision: `18b6a509f4cd0f50fef7f9ccef2bc7e80c2fa073`; delivered revision: `1b890b759bc6663e838c374484092eabb73133b2`. Suite accounting: Bốn invocation pytest TUẦN TỰ trên cùng cây production đóng băng, KHÔNG phải một lượt chạy duy nhất; `TESTED_SOURCE_SHA` là `1b890b7`, production tree không đổi qua các successor chỉ sửa docs đến branch tip ghi nhận `5afec61`. Phân hoạch deterministic: `chunks.json` tổng 2,013 ID; bốn file `chunk-q<N>.txt` khớp chính xác manifest, không ID trùng; `--collect-only` độc lập cũng thu thập 2,013.
+**Historical R23 closure record (2026-10-25):** R23 fixes verified against the working-tree source. Last audited revision: `18b6a509f4cd0f50fef7f9ccef2bc7e80c2fa073`; delivered revision at that time: `1b890b759bc6663e838c374484092eabb73133b2`. Suite accounting below is for that R23 run, not the current run: Bốn invocation pytest TUẦN TỰ trên cùng cây production đóng băng, KHÔNG phải một lượt chạy duy nhất; `TESTED_SOURCE_SHA` khi đó là `1b890b7`, production tree không đổi qua các successor chỉ sửa docs đến branch tip ghi nhận `5afec61`. Phân hoạch deterministic: `chunks.json` tổng 2,013 ID; bốn file `chunk-q<N>.txt` khớp chính xác manifest, không ID trùng; `--collect-only` độc lập cũng thu thập 2,013.
 
 | Chunk | Collected | Passed | Failed | Skipped | Errors | Wall |
 |---|---:|---:|---:|---:|---:|---:|
@@ -55,14 +60,12 @@ Hai hạng mục dưới đây là guard **theo thiết kế**, không phải l�
 
 * `test_no_release_document_points_at_a_superseded_source_sha` từng FAIL trước khi release docs cập nhật
   `TESTED_SOURCE_SHA`. Đây là guard viết đúng: nó yêu cầu SHA trong `FINAL_PC_RELEASE_VERDICT.md` phải có
-  production tree giống hệt tree đang kiểm. Sau khi docs pin `1b890b7` và successor chỉ sửa docs, guard
-  này đã PASS trong cả bốn invocation chunked nêu trên.
-* `test_the_release_documents_quote_the_test_count_they_actually_ran` đã PASS sau khi cập nhật số liệu.
+  production tree giống hệt tree đang kiểm. Trong bản ghi lịch sử R23, docs pin `1b890b7` và successor khi đó chỉ sửa docs; guard được báo PASS trong bốn invocation chunked của lượt lịch sử đó.
+* `test_the_release_documents_quote_the_test_count_they_actually_ran` được báo PASS trong bản ghi lịch sử R23 sau khi cập nhật số liệu.
 
 ## Current model status — 2026-10-25
 
-This table records current registry/source/readiness evidence. R23 changes are marked by current registry/source review and delivered SHA; unchanged rows retain prior evidence references. Rows record inventory/preflight, not inference; ENCODER's separately cited 2026-10-24 GPU evaluation is prior-run evidence, not R23 execution. R22 suite/revision details remain historical below.
-
+This table preserves registry/source/readiness evidence recorded on 2026-10-25; R23 references describe that snapshot and are separate from the current 2026-10-26 release accounting above. Rows record inventory/preflight, not inference; ENCODER's separately cited 2026-10-24 GPU evaluation is prior-run evidence, not R23 execution. R22 suite/revision details remain historical below.
 
 
 

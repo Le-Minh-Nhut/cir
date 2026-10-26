@@ -31,10 +31,7 @@ Ma trận đầy đủ: `workbench/docs/MODEL_STATUS_SPEC.md` §2.
 **Trạng thái 17 model (bảng chuẩn, bằng chứng + điều kiện chuyển trạng thái):**
 [`workbench/docs/MODEL_STATUS_SPEC.md`](MODEL_STATUS_SPEC.md)
 
-**SHA ĐÃ KIỂM THỬ (nguồn sản xuất): `1b890b7`** (`1b890b759bc6663e838c374484092eabb73133b2`), vòng R23; vòng R22 tương ứng `eb04fcc` (`eb04fcc7ecbbe25cd8a119ff173e514a52ab2f26`) — mọi test, acceptance, mutation và release_verify mô
-tả trên trang này đã chạy trên đúng cây đó (xem §Kết quả test ở cuối trang cho số đo trên đúng cây đó). `119df5f` đã bị **thay thế**: lượt R9 sửa production (DCNet binding và
-thứ tự category, tập patch CSMCIR, tập input của constructor, processor BLIP-2), nên số test và kết
-quả gate ghi ở các bản trước không còn mô tả cây này.
+**SHA ĐÃ KIỂM THỬ (nguồn sản xuất): `27f5db2`** (`27f5db291e80ff43fe3f44423bba9458ea874305`), revision production được ghi nhận trong accounting release hiện tại. Bộ `workbench/tests` đầy đủ được chạy qua bốn invocation tuần tự, không phải một lượt: `500+500+500+458 = 1958`, kết quả `1946 passed, 1 failed`, 11 skipped. Lỗi duy nhất là guard `test_no_release_document_points_at_a_superseded_source_sha`: tài liệu khi chạy còn trỏ `1b890b7`; chỉnh sửa metadata này tiến SHA lên revision production khớp. R23 (`1b890b7`) và R22 (`eb04fcc`) là các lượt lịch sử; acceptance, mutation và release_verify được trích ở đây vẫn là bằng chứng lịch sử riêng. `119df5f` đã bị **thay thế**: lượt R9 sửa production (DCNet binding và thứ tự category, tập patch CSMCIR, tập input của constructor, processor BLIP-2), nên số test và kết quả gate ghi ở các bản trước không còn mô tả cây này.
 
 Lưu ý: các bản ghi cũ `59949ff`, `9a53ee1` và `5567bc7` đã bị **thay thế**. Công việc vendoring và phục hồi
 model đã thay đổi file production (`workbench/backend/runtime.py`, `workbench/replay/common.py`,
@@ -64,7 +61,7 @@ git fetch origin research/cir-failure-workbench
 # Checkout tường minh. KHÔNG dùng `git reset --hard`: trên máy đã có việc đang làm, nó xoá sạch
 # không hỏi. Muốn đúng cây đã kiểm thử thì checkout đúng commit đó.
 # Nguồn đã kiểm thử (revision cố định):
-git checkout 1b890b7
+git checkout 27f5db2
 # Nhánh đang phát triển thêm tài liệu. Dùng nó nếu muốn bản mới nhất:
 #   git checkout research/cir-failure-workbench
 ```

@@ -19,9 +19,9 @@ the aggregate) is the concrete unblock.
 |---|---|
 | Branch | `research/cir-failure-workbench` |
 | Initial HEAD this pass | `3aae18fe02ef13f5b38d153dbc8007fbb40d4c92` |
-| **TESTED_SOURCE_SHA** | **`1b890b7`** (`1b890b759bc6663e838c374484092eabb73133b2`) — the R23 production revision: controller install contract, hub cache lifecycle, PTHA assets, adapted profiles and resume refusal; a fresh `workbench/tests` run on this revision reports **1943 passed, 0 failed**, 11 skipped. The previously reported failure was the release-SHA guard; it now passes because the delivered docs name this tested revision. The R22 revision and its own accounting remain in the dated section below |
+| **TESTED_SOURCE_SHA** | **`27f5db2`** (`27f5db291e80ff43fe3f44423bba9458ea874305`) — the production revision whose complete `workbench/tests` node set was measured in four sequential chunks; current accounting and the single release-guard failure are recorded below. R23 remains a historical round, not the current accounting. |
 | **FINAL_HEAD_SHA** | not recorded here by design: a tracked file cannot name the commit that contains it. `git rev-parse HEAD` on the branch tip is the authority. |
-| Production tree | verified against the named revision: `git diff 1b890b7 HEAD -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'` is empty. Successors changed documentation AND tests; a successor that changed production code would invalidate this row, and the superseded-source guard refuses that case. |
+| Production tree | compare against the named revision with `git diff 27f5db2 HEAD -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'`; the release guard requires byte-identical production source. |
 | `origin/main` | `8ebcc74d5fd1934df4f3772a8ca5a96dbd00f333` — **unchanged** |
 | Worktree | clean |
 
@@ -33,9 +33,9 @@ commit on the research branch. No checkpoint, dataset, cache or secret is tracke
 | Field | Value |
 |---|---|
 | Branch | `research/cir-failure-workbench` |
-| Suite accounting | **1943 passed, 0 failed**, 11 skipped = 1954 collected (`workbench/tests`, measured with 2 xdist workers on `1b890b7`, with no `WORKBENCH_*_PYTHON` exported and `OMP/OPENBLAS/MKL/NUMEXPR_NUM_THREADS=1`; raw output: `.scratch-tmp/verdict-scope.log`). The previously reported failure was the release-SHA guard, which now passes because the delivered docs name the tested revision. Adding `tests/unit` (59 items) gives 2013 collected total. Two earlier full-suite invocations on frozen tree `4c73d962` aborted at the disk floor: attempt 1 executed 1998/2013 with 1986 passed, 11 skipped, 1 failed (pre-commit SHA guard), 0 errors at 840s; attempt 2 executed 1722/2013 with 1715 passed, 5 skipped, 2 failed (pre-commit SHA guard + transient xdist lock race shown passing in isolation), 0 errors at 540s. Four sequential chunk invocations later completed the 2013-test full collection; see `MODEL_STATUS_SPEC.md` and `PC_REPRODUCTION_HANDOFF.md` for full per-chunk accounting. |
-| TESTED_SOURCE_SHA | `1b890b7` (`1b890b759bc6663e838c374484092eabb73133b2`) — the R23 production revision; the suite run recorded in the R23 closure section of `MODEL_STATUS_SPEC.md` ran on it |
-| FINAL_HEAD_SHA | `git rev-parse HEAD` on the branch tip; the tree the gates ran on is `TESTED_SOURCE_SHA` above, and every later commit changed documentation only |
+| Suite accounting | **1946 passed, 1 failed**, 11 skipped = **1958 collected** (`workbench/tests`): four sequential chunk invocations over the complete node set, not one single pass; partition `500+500+500+458 = 1958`, no duplicates or omissions. The one failure was `workbench/tests/test_handoff_commands.py::test_no_release_document_points_at_a_superseded_source_sha`: the release documents still named obsolete production revision `1b890b7`. This is the guard satisfied by advancing the documented tested source to `27f5db2`. Separate `tests/unit` scope: 59 IDs, 59 passed. Historical R23 report: its separate run recorded 1943 passed / 0 failed, 11 skipped = 1954 collected; that count remains historical. Earlier disk-floor attempts on `4c73d962` are also historical. |
+| TESTED_SOURCE_SHA | `27f5db291e80ff43fe3f44423bba9458ea874305` — the production revision named for current suite accounting |
+| FINAL_HEAD_SHA | `git rev-parse HEAD` on the branch tip; `TESTED_SOURCE_SHA` identifies the production tree under test. |
 | `origin/main` | `8ebcc74d5fd1934df4f3772a8ca5a96dbd00f333` — unchanged |
 | Registry models | 17 model entries; **17 `source_available`** (every entry now has vendored source); **16 distinct upstream URLs** among them (`combiner_rn50x4_noft` and `clip4cir_rn50x4_fullft` share `ABaldrati/CLIP4Cir`); `ptha_mtst` is vendored and pinned at `6a02ee4763fc` with protocol `fashioniq_original_split`, and stays blocked only because no FashionIQ checkpoint is published for it |
 | Protocols | A `fashioniq_original_split` (full gallery, reference eligible) · B `fashioniq_full_gallery_ref_excluded` (full gallery, reference excluded) · C `fashioniq_val_split` (ordered pair-union, reference excluded) · `ptha_mtst` unresolved |
@@ -65,7 +65,7 @@ source. `119df5f` is superseded: the R9 production fixes changed the files this 
 
 | Gate | Command | Result |
 |---|---|---|
-| Backend suite | `pytest workbench/tests -n 2 --dist=loadfile` | **1943 passed, 0 failed**, 11 skipped = **1954 collected** on `1b890b7`; the previously reported failure was the release-SHA guard, now passing because the delivered docs name the tested revision. `WORKBENCH_*_PYTHON` unexported throughout. |
+| Backend suite | Four sequential chunk invocations over complete `workbench/tests`; partition `500+500+500+458 = 1958` | **1946 passed, 1 failed**, 11 skipped = **1958 collected** on `27f5db2`. Sole failure: `test_handoff_commands.py::test_no_release_document_points_at_a_superseded_source_sha`, because documents still named `1b890b7`; this edit advances the documented source SHA to satisfy that guard. Historical R23 report separately recorded 1943 passed / 0 failed, 11 skipped = 1954 collected. |
 | Acceptance | `bash workbench/docker/acceptance.sh` | **ACCEPTANCE PASSED at `59949ff`** (1 honest skip: GPG status unverified). At `9a53ee1` group C fails only against the pre-existing `cir-workbench` container, whose image predates the vendoring and still serves the old registry (it reports `ptha_mtst source_available: false`); rerun against a backend started from current source and group C passes — `PASS 17 models, ids/protocols/environments match the registry`. Rebuild the image before re-running acceptance. |
 | Mutation checks | `bash workbench/docker/mutation_checks.sh` | **PASSED** M1 M2 M3 M4 M5 |
 | Offline release verification | `bash workbench/docker/release_verify.sh --offline` | exit 0, `ENGINEERING_INCOMPLETE`, **0 checks FAIL/UNRUN** |
@@ -185,8 +185,8 @@ static or fixture-level.
 ```bash
 git clone git@github.com:Le-Minh-Nhut/cir.git && cd cir
 git fetch origin research/cir-failure-workbench
-git checkout 1b890b7           # the TESTED_SOURCE_SHA above; never `git reset --hard`
-git rev-parse HEAD             # must print 1b890b759bc6663e838c374484092eabb73133b2
+git checkout 27f5db2           # the fixed TESTED_SOURCE_SHA above; never `git reset --hard`
+git rev-parse HEAD             # must print 27f5db291e80ff43fe3f44423bba9458ea874305
 ./pc.sh                        # the one operator command
 ```
 

@@ -2,7 +2,20 @@
 
 Primary operator route is this document's [One run/resume path](#one-runresume-path). Copy the checked-in `pc_autopilot.pc_cohort.yaml` to a private PC-specific YAML and configure all six absolute paths, finite budgets, capabilities, model settings, and operational batch before any real run. [MODEL_STATUS_SPEC.md](MODEL_STATUS_SPEC.md) records per-model source, checkpoint, assets, capability, and blockers.
 
-**Revision identity:** delivered revision: `1b890b759bc6663e838c374484092eabb73133b2` (`TESTED_SOURCE_SHA`); its production tree was unchanged by documentation-only successors through the branch tip at accounting time, `5afec61`. Four pytest invocations ran SEQUENTIALLY against the same frozen production tree, NOT as one single pass. The deterministic partition is provable: `chunks.json` totals 2,013 IDs; the four `chunk-q<N>.txt` files match the manifest exactly with no duplicates; an independent `--collect-only` also collected 2,013.
+**Current revision identity:** tested production revision: `27f5db291e80ff43fe3f44423bba9458ea874305` (`TESTED_SOURCE_SHA`). The current complete `workbench/tests` set was run in FOUR SEQUENTIAL chunk invocations, not one single pass. The deterministic partition is `500+500+500+458 = 1958`; chunks have no duplicate or omitted IDs and their union equals the manifest.
+| Chunk | Collected | Passed | Failed | Skipped | Errors | Wall |
+|---|---:|---:|---:|---:|---:|---:|
+| q1 | 500 | 499 | 0 | 1 | 0 | 800.63 s |
+| q2 | 500 | 499 | 1 | 0 | 0 | 323.29 s |
+| q3 | 500 | 490 | 0 | 10 | 0 | 582.95 s |
+| q4 | 458 | 458 | 0 | 0 | 0 | 862.11 s |
+| **Total** | **1958** | **1946** | **1** | **11** | **0** | **2568.98 s (~42 min 49 s)** |
+
+**1946 passed, 1 failed**, 11 skipped, 1958 collected (`workbench/tests`). The sole failure was `workbench/tests/test_handoff_commands.py::test_no_release_document_points_at_a_superseded_source_sha`: release documents still named `1b890b7`, whose production tree did not match the production source on disk. This is the release guard this metadata update satisfies by advancing `TESTED_SOURCE_SHA` to `27f5db2`. The separate `tests/unit` scope recorded 59 IDs, 59 passed.
+
+Each chunk result above comes from one sequential invocation over its exact partition; together they cover the complete node set, not a single full-suite pass.
+
+**Historical R23 accounting (2026-10-25):** delivered revision `1b890b759bc6663e838c374484092eabb73133b2` (`TESTED_SOURCE_SHA` at that time); the chunk results and disk-floor notes below describe that earlier R23 run and remain historical.
 
 | Chunk | Collected | Passed | Failed | Skipped | Errors | Wall |
 |---|---:|---:|---:|---:|---:|---:|
@@ -67,9 +80,9 @@ git fetch origin research/cir-failure-workbench
 git checkout research/cir-failure-workbench
 git merge --ff-only origin/research/cir-failure-workbench
 git rev-parse HEAD          # branch tip; may be a documentation-only successor
-git rev-parse 1b890b7       # must print TESTED_SOURCE_SHA: 1b890b759bc6663e838c374484092eabb73133b2
-git merge-base --is-ancestor 1b890b7 HEAD
-git diff --exit-code 1b890b7 HEAD -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'
+git rev-parse 27f5db2       # must print TESTED_SOURCE_SHA: 27f5db291e80ff43fe3f44423bba9458ea874305
+git merge-base --is-ancestor 27f5db2 HEAD
+git diff --exit-code 27f5db2 HEAD -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'
 ```
 
 Fresh checkout (clone the research branch directly):
@@ -78,9 +91,9 @@ Fresh checkout (clone the research branch directly):
 git clone --branch research/cir-failure-workbench git@github.com:Le-Minh-Nhut/cir.git cir
 cd cir
 git rev-parse HEAD          # branch tip; may be a documentation-only successor
-git rev-parse 1b890b7       # must print TESTED_SOURCE_SHA: 1b890b759bc6663e838c374484092eabb73133b2
-git merge-base --is-ancestor 1b890b7 HEAD
-git diff --exit-code 1b890b7 HEAD -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'
+git rev-parse 27f5db2       # must print TESTED_SOURCE_SHA: 27f5db291e80ff43fe3f44423bba9458ea874305
+git merge-base --is-ancestor 27f5db2 HEAD
+git diff --exit-code 27f5db2 HEAD -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'
 ```
 
 Continue from the repository root:
