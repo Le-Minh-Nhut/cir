@@ -695,12 +695,10 @@ def test_only_real_interpreters_count_as_prefix_pythons():
 @pytest.mark.skipif(shutil.which("conda") is None,
                     reason="REAL conda integration: the conda binary is not on PATH")
 def test_a_renamed_conda_prefix_is_detected_as_stale(tmp_path):
-    """REAL conda: a prefix that has been moved must fail verification.
+    """REAL conda: moving a prefix with an absolute console-script shebang must fail verification.
 
-    `conda create --prefix` writes absolute shebangs into every console script. Moving the directory
-    leaves those pointing at the old location, which is why building at a staging path and renaming
-    was wrong: this is the check that catches it, exercised against a real conda prefix rather than a
-    hand-written shebang.
+    Keep the real conda environment, but add a probe script so conda's shebang choice cannot make
+    this relocation premise depend on the prefix path length.
     """
     import subprocess as _subprocess
 
@@ -713,13 +711,20 @@ def test_a_renamed_conda_prefix_is_detected_as_stale(tmp_path):
         pytest.skip(f"conda could not create a probe environment: {result.stderr.strip()[-200:]}")
 
     interpreter = original / "bin" / "python"
-    assert planner._verify_console_scripts(original, interpreter)[0] is True
+    probe = original / "bin" / "0-cir-relocation-probe"
+    probe.write_text(f"#!{interpreter.resolve()}\npass\n")
+    probe.chmod(0o755)
+    ok, reason = planner._verify_console_scripts(original, interpreter)
+    assert ok is True, reason
+    inspected = int(reason.split(" ", 1)[0])
+    assert inspected > 0, reason
 
     moved = tmp_path / "env-moved"
     original.rename(moved)
     moved_interpreter = moved / "bin" / "python"
     ok, reason = planner._verify_console_scripts(moved, moved_interpreter)
     assert ok is False, "a relocated prefix must not verify"
+    assert "console script 0-cir-relocation-probe points at" in reason
     assert "not a python of this environment" in reason
 
 
