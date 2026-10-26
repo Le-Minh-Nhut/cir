@@ -37,7 +37,7 @@ commit on the research branch. No checkpoint, dataset, cache or secret is tracke
 | TESTED_SOURCE_SHA | `27f5db291e80ff43fe3f44423bba9458ea874305` — the production revision named for current suite accounting |
 | FINAL_HEAD_SHA | `git rev-parse HEAD` on the branch tip; `TESTED_SOURCE_SHA` identifies the production tree under test. |
 | `origin/main` | `8ebcc74d5fd1934df4f3772a8ca5a96dbd00f333` — unchanged |
-| Registry models | 17 model entries; **17 `source_available`** (every entry now has vendored source); **16 distinct upstream URLs** among them (`combiner_rn50x4_noft` and `clip4cir_rn50x4_fullft` share `ABaldrati/CLIP4Cir`); `ptha_mtst` is vendored and pinned at `6a02ee4763fc` with protocol `fashioniq_original_split`, and stays blocked only because no FashionIQ checkpoint is published for it |
+| Registry models | 17 model entries; **17 `source_available`** (every entry has vendored source); **16 distinct upstream URLs** among them (`combiner_rn50x4_noft` and `clip4cir_rn50x4_fullft` share `ABaldrati/CLIP4Cir`); `ptha_mtst` is vendored and pinned at `6a02ee4763fc`, but its sole registered checkpoint is CIRR-trained for CIRR→FashionIQ transfer, not a FashionIQ reproduction. |
 | Protocols | A `fashioniq_original_split` (full gallery, reference eligible) · B `fashioniq_full_gallery_ref_excluded` (full gallery, reference excluded) · C `fashioniq_val_split` (ordered pair-union, reference excluded) · `ptha_mtst` unresolved |
 | Launcher exit codes | 0 success by declared capability · 3 aggregate reached, declared observer has no artifact · 4 artifact exported but not verified, or proof unavailable for an observer model · 5 launcher could not read what the run recorded · 6 summary and index disagree · 7 invocation authenticated but **not** scientifically certified |
 | `--verify-only` | GPU runtime probe only. It does not verify a run, rebuild the index, or download a checkpoint. |
@@ -119,9 +119,14 @@ Full matrix in `FINAL_16_MODEL_AUDIT_MATRIX.md`.
 | Verdict | Models |
 |---|---|
 | Executable here (subject to the external limits below) | `limn` (the pilot) |
-| `EXTERNAL_BLOCKER` — weights or mapping, not entrypoint: every one of these has a vendored source checkout and a supported entrypoint (a replay wrapper, or a native script with CLI). Their blockers are author checkpoints, unresolved archive members or unverified mappings. | `habit`, `intent`, `hint`, `clvc_net`, `tgcir` |
-| `EXTERNAL_BLOCKER` — needs an unpublished asset or has an uninstallable dependency | `csmcir`, `airknow`, `conesep`, `encoder`, `dcnet`, `combiner_rn50x4_noft`, `clip4cir_rn50x4_fullft`, `sprc` |
-| `EXTERNAL_BLOCKER` — verified FashionIQ weights absent; the source IS vendored and pinned | `ptha_mtst` |
+| `EXTERNAL_BLOCKER` — requested noise condition unavailable | `airknow` (20% requested; only 50%/80% registered) |
+| `EXTERNAL_BLOCKER` — unverified checkpoint mapping and blocked evaluator entrypoint | `pair` (`pair_b1`/`pair_b2` mapping unverified) |
+| `EXTERNAL_BLOCKER` — unresolved archive mapping, no source replay, missing ResNet-50 | `clvc_net` |
+| `EXTERNAL_BLOCKER` — unresolved author run-directory mapping, data preparation and assets | `dcnet` |
+| `EXTERNAL_BLOCKER` — unresolved checkpoint mapping, RN50x4 weights and compatible data | `combiner_rn50x4_noft` |
+| `EXTERNAL_BLOCKER` — unresolved two-state bundle, checkpoint mapping, RN50x4 weights and compatible data | `clip4cir_rn50x4_fullft` |
+| `EXTERNAL_BLOCKER` — blocked source entrypoint, archive mapping and asset provenance | `tgcir` |
+| `EXTERNAL_BLOCKER` — unverified model-class/key mapping and assets | `sprc` |
 
 - Only **LIMN** declares a per-query observer. The other sixteen are `AGGREGATE_ONLY` because their
   upstream code prints aggregate recalls and nothing else; none of them is presented as query-level
@@ -209,11 +214,7 @@ with
 
 ### Why READY, stated narrowly
 
-Within the audited scope this verdict covers, the gates below pass on the named revision and no defect the audits reported remains open in those paths. That is a bounded claim about what was examined -- it is not a statement that no defect exists anywhere. The R13 round found five more defects in the paths a previous round had already certified, which is the evidence for that boundary. No P0/P1/P2 defect remains in the audited
-intended workflows, the final source was reviewed by independent reviewers on four model families who
-were asked to disprove readiness, the three protocols are unchanged, evidence cannot self-certify, the
-launcher's success and failure paths are both covered by tests that exercise real HTTP and real child
-processes, and the external limitations are stated rather than papered over.
+Within the audited scope this verdict covers, at its recorded review time, the gates below passed on the named revision and no defect the audits reported remained open in those paths. That is a bounded claim about what was examined, not a statement that no defect existed anywhere. The R13 round found five more defects in paths a previous round had already certified, which is evidence for that boundary. Ordinary coding/review work in this round ran on `cx/gpt-6-luna` as resolved by the harness at `9router/cx/gpt-6-luna:max` (the operator's own `task.agentModelOverrides` maximum-effort setting for both worker tiers), the advisor role was left unchanged, and no Gemini model was invoked. The three protocols are unchanged, evidence cannot self-certify, the launcher's success and failure paths are covered by tests exercising real HTTP and real child processes, and external limitations are stated rather than papered over.
 
 ### What READY does not mean
 

@@ -16,10 +16,7 @@ Offline reuse: a source repository, checkpoint, or auxiliary asset that is alrea
 
 ## 2. Set dataset, artifact, checkpoint, results, and upstream roots
 
-Start from `workbench/configs/pc_autopilot.pc_cohort.yaml` — **the profile to run on the PC**: all 17
-registry entries, `include_flagged_conditions`, the authorized 20% overrides resolved, a budget
-derived from the registry, and every capability a cold cohort run needs. Copy it OUTSIDE the
-repository and edit it.
+Start from `workbench/configs/pc_autopilot.pc_cohort.yaml` — the PC profile selects all 17 registry entries with `include_flagged_conditions`, explicit condition overrides, a registry-derived budget, and cold-run capabilities. Selection does not mean all entries are runnable or provisioned: checkpoint- or budget-blocked entries remain reportable but are excluded from environment planning. Copy it OUTSIDE the repository and edit it.
 
 `workbench/configs/pc_autopilot.example.yaml` is a different thing: a minimal, fully-locked example
 used here only to show the required key set. Under `strict_clean` it leaves the noise-trained cohort
@@ -107,7 +104,7 @@ The previous per-model prose was a dated snapshot, not current readiness. See [M
 
 Set the PC process environment's `CUDA_VISIBLE_DEVICES` to the intended device(s) before launch. Keep visibility unchanged between capability verification and evaluation. GPU verification is an authorized autopilot stage using the assigned model interpreter; a still-valid capability is reused, while stale capability is refused and re-probed.
 
-TME validation-image features are a separate CUDA-only preparation step. `pipeline.py` accepts `--allow-gpu-preparation`; autopilot config accepts optional `permissions.allow_gpu_preparation`, default `false`. It must be explicitly authorized in addition to `allow_preparation`. The generator requires a CUDA-capable TME interpreter and about 10.47 GiB free for derived features. This host did not generate that cache. Creating its directory does not create features.
+TME validation-image features are a separate CUDA-only preparation step. `pipeline.py` accepts `--allow-gpu-preparation`; autopilot config accepts optional `permissions.allow_gpu_preparation`, default `false`. It must be explicitly authorized in addition to `allow_preparation`. The generator requires a CUDA-capable TME interpreter and an estimated ~10.47 GiB of CACHE/STORAGE, not a VRAM guarantee; actual VRAM fit depends on GPU and chosen batch. This host did not generate that cache. Creating its directory does not create features.
 
 TME's required EVA-ViT-g and BLIP-2 weights use the registered acquisition route:
 

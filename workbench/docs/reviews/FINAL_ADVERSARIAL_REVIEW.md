@@ -7,25 +7,9 @@ what the reviewers got from the code rather than from the documentation.
 Superseded; the current release metadata is `FINAL_PC_RELEASE_VERDICT.md`.
 **Baseline before this pass**: `3aae18f`
 
-## 1. Who reviewed, on which model
+## 1. Current-round attribution
 
-21 independent audits, dispatched as subagents. The routing is recorded because "the reviewers agreed"
-is worthless if they were all one model reading one summary.
-
-| Agent | Model | Assignments | Reports |
-|---|---|---|---|
-| model audits, Gemini | `ag/gemini-3.8-flash-high:high` | 8 model workflows | `/tmp/model_audits/*.md` |
-| model audits, DeepSeek | `wdb/deepseek-ai/DeepSeek-V4.1-Flash:high` (`v41audit`) | 8 model workflows + 4 first-party angles | same |
-| `glm-audit` | `wdb/zai-org/GLM-5.3-Flash:high` | evidence integrity / false certification | `/tmp/firstparty/glm_evidence_challenge.md` |
-| `qwen-audit` | `wdb/Qwen/Qwen3.8-27B:high` | scientific semantics / protocol / parity | `/tmp/firstparty/qwen_science_challenge.md` |
-
-All four requested models were reachable on the gateway and all four were used with
-`thinkingLevel: high`. Gemini and DeepSeek carried the bulk; GLM and Qwen were each given one narrow,
-difficult question (false certification; scientific-semantics equivalence) rather than a checklist.
-
-**Routing honesty**: the model IDs above are the ones configured in `~/.omp/agent/config.yml` and in
-the two agent definition files this pass added. Where a subagent's report disagreed with another's,
-the disagreement is recorded in §3 rather than averaged away.
+ordinary coding/review work in this round ran on `cx/gpt-6-luna` as resolved by the harness at `9router/cx/gpt-6-luna:max` (the operator's own `task.agentModelOverrides` maximum-effort setting for both worker tiers), the advisor role was left unchanged, and no Gemini model was invoked.
 
 ## 2. The method every reviewer was given
 

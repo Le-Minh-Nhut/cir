@@ -1,6 +1,6 @@
 # Hướng dẫn một lệnh duy nhất cho CIR Failure Analysis Workbench
 
-> **Lưu ý:** Hướng dẫn Docker/`./pc.sh` dưới đây là tài liệu lịch sử, không còn là quy trình hiện hành. Không làm theo lệnh hoặc trạng thái model cũ. Dùng [AUTOPILOT_GUIDE.md](AUTOPILOT_GUIDE.md) làm quy trình chính, [FINAL_PC_READINESS.md](FINAL_PC_READINESS.md) cho đường setup/run/resume duy nhất, và [MODEL_STATUS_SPEC.md](MODEL_STATUS_SPEC.md) cho blocker hiện tại. TME weights: `python -m workbench.scripts.download_auxiliary_assets --model tme`; cache feature validation cần CUDA preparation riêng với `--allow-gpu-preparation` và khoảng 10.47 GiB.
+> **Lưu ý:** Hướng dẫn Docker/`./pc.sh` dưới đây là tài liệu lịch sử, không còn là quy trình hiện hành. Không làm theo lệnh hoặc trạng thái model cũ. Dùng [AUTOPILOT_GUIDE.md](AUTOPILOT_GUIDE.md) làm quy trình chính, [FINAL_PC_READINESS.md](FINAL_PC_READINESS.md) cho đường setup/run/resume duy nhất, và [MODEL_STATUS_SPEC.md](MODEL_STATUS_SPEC.md) cho blocker hiện tại. TME weights: `python -m workbench.scripts.download_auxiliary_assets --model tme`; cache feature validation cần CUDA preparation riêng với `--allow-gpu-preparation` và ước tính khoảng 10.47 GiB CACHE/STORAGE, không phải bảo đảm VRAM; mức phù hợp VRAM phụ thuộc GPU và batch.
 
 Tài liệu hướng dẫn dành cho nhà nghiên cứu Composed Image Retrieval (CIR). Toàn bộ quy trình từ chuẩn bị môi trường, kiểm chứng phần cứng, nạp dữ liệu đến đánh giá mô hình và trực quan hóa kết quả đều được tự động hóa thông qua một lệnh duy nhất. Bạn không cần can thiệp hay gỡ lỗi cấu hình Docker nội bộ.
 

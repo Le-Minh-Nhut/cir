@@ -1,6 +1,6 @@
 # Final PC readiness -- Release B (GPU host)
 
-> **Current handoff:** use [AUTOPILOT_GUIDE.md](AUTOPILOT_GUIDE.md) for the single setup/run/resume path and [MODEL_STATUS_SPEC.md](MODEL_STATUS_SPEC.md) for current evidence. The checklist below preserves its earlier release snapshot; its pilot model/readiness claims are historical, not current. TME weights require `python -m workbench.scripts.download_auxiliary_assets --model tme`; its CUDA-only validation feature cache needs explicit `--allow-gpu-preparation` and about 10.47 GiB. Live GPU evaluation, target-device validation and Docker are not executed on this host.
+> **Current handoff:** use [AUTOPILOT_GUIDE.md](AUTOPILOT_GUIDE.md) for the single setup/run/resume path and [MODEL_STATUS_SPEC.md](MODEL_STATUS_SPEC.md) for current evidence. The checklist below preserves its earlier release snapshot; its pilot model/readiness claims are historical, not current. TME weights require `python -m workbench.scripts.download_auxiliary_assets --model tme`; its CUDA-only validation feature cache needs explicit `--allow-gpu-preparation` and an estimated ~10.47 GiB of CACHE/STORAGE (not a VRAM guarantee; fit depends on the GPU and chosen batch). Live GPU evaluation and target-device validation remain `TARGET_GPU_PENDING`; this host is an RTX 3050 Laptop (`sm_86`, 4 GB), and `sm_120` was never executed. Docker was not executed on this host.
 
 **Revision identity:** `TESTED_SOURCE_SHA` is `27f5db291e80ff43fe3f44423bba9458ea874305`, the production revision named by the current release accounting. The base commit below is historical authorship, not the current tested revision.
 
@@ -95,7 +95,7 @@ Two ready-made profiles are provided:
 A stage whose declared capability is not granted is refused as `BLOCKED_AUTHORIZATION_REQUIRED`. A
 missing permission is never treated as permission to download. `permissions.allow_gpu_preparation` is
 optional and defaults to `false`; TME validation-feature generation needs it in addition to
-`allow_preparation`. The CUDA-only cache is about 10.47 GiB and was not generated here. Obtain both
+`allow_preparation`. The CUDA-only feature cache needs an estimated ~10.47 GiB of CACHE/STORAGE (not a VRAM guarantee; fit depends on GPU and batch) and was not generated here. Obtain both
 TME EVA-ViT-g and BLIP-2 weights through
 `python -m workbench.scripts.download_auxiliary_assets --model tme`; making `weight/` or setting
 `WORKBENCH_TME_ASSET_EVA_VIT_G` does not install assets. `doctor.py` accepts
@@ -110,13 +110,13 @@ budget is 10 GiB. `max_models` must cover the selection. `top_k` sets retrieval 
 
 ## 6. Environment groups
 
-The planner groups models by their source-backed constraints and provisions **one environment per
-group** under the artifacts root, recording four distinct states:
+The planner groups checkpoint-eligible selected models by their source-backed constraints and provisions **one environment per
+group** under the artifacts root, recording four distinct states. Checkpoint-blocked models remain reportable and are excluded from environment planning:
 
 | State | Meaning |
 |---|---|
 | `CONSTRAINTS_COMPATIBLE` | the declared constraint sets do not conflict |
-| `SOLVER_COMPATIBLE` | a real solve succeeded |
+| `SOLVER_COMPATIBLE` | a solver found a compatible package solution; no installation, import success, or GPU execution is established |
 | `INSTALLED` | the packages are present |
 | `RUNTIME_VERIFIED` | versions (exact and range) and every member's evaluator imports were verified in that interpreter |
 
@@ -153,11 +153,16 @@ These are not software defects; the models that need them stay BLOCKED.
 |---|---|
 | `csmcir` | `COT_ours2/fashioniq` captions have no verified author source. Standard FashionIQ plus author Qwen captions are separate and the Qwen assets are downloadable from the registry. |
 | `limn` | the three category checkpoints (URLs and hashes recorded, ~5.01 GiB), resized images (`fashioniq_ilearn_resized_training`), and the category correction dictionaries. |
-| `ptha_mtst` | no source and no checkpoint variant; blocked. |
-| `pair` | `pair_b1`/`pair_b2` mapping unverified. |
-| `encoder` | direct checkpoint URL/hash unresolved; pinned evaluator imports `datasets1.py` which is absent; OpenCLIP binary asset required. |
-| `dcnet`, `clvc_net`, `sprc`, `tgcir`, `combiner_rn50x4_noft`, `clip4cir_rn50x4_fullft` | checkpoint mapping and/or backbone asset unresolved. |
-| Air-Know / ConeSep / HABIT / INTENT | registered weights are noise-trained; no clean checkpoint recorded. |
+| `ptha_mtst` | Only registered checkpoint is `cirr_transfer` (CIRR→FashionIQ transfer), not a FashionIQ reproduction. |
+| `pair` | `pair_b1`/`pair_b2` exist, but mapping remains unverified; source entrypoint is blocked. |
+| `encoder` | Registry checkpoint is `VERIFIED_METADATA`; checkpoint-to-evaluator mapping remains unresolved and is not verified. |
+| `dcnet` | Author run-directory mapping, GloVe PKLs, resized images and ResNet-50 weights unresolved. |
+| `clvc_net` | Six-file author archive mapping, evaluator entrypoint and ResNet-50 asset unresolved. |
+| `sprc` | Author checkpoint/model-class mapping and required assets unresolved. |
+| `tgcir` | Archive member/hash and evaluator entrypoint unresolved. |
+| `combiner_rn50x4_noft` | RN50x4 noft Combiner checkpoint mapping/checksum unverified; base weights and compatible data required. |
+| `clip4cir_rn50x4_fullft` | Two-state Combiner + fine-tuned CLIP bundle mapping unresolved; RN50x4 base weights and compatible data required. |
+| Air-Know | Only 50%/80% training-noise checkpoints registered; requested 20% unavailable. |
 
 `workbench/scripts/readiness_matrix.py` regenerates the per-model view of exactly this, with each
 blocker spelled out.

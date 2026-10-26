@@ -16,17 +16,12 @@ per-query parity (6/6 hit count khớp aggregate). Phân tích cross-model **đ�
 LIMN–ENCODER ở cùng protocol `fashioniq_val_split`.
 **`TARGET_GPU_PENDING`** — các lượt đo này trên `sm_86`; GPU đích `sm_120` chưa được đo.
 
-**Sẵn sàng cho lượt PC pilot đầu tiên: LIMN (đã đo) và ENCODER (đã đo).** Trong 17 entry, 15 model
-còn lại **chưa** sẵn sàng, nhưng **không phải vì thiếu wrapper**: `workbench/backend/adapters/models.py`
-đăng ký adapter cho mọi entry và `workbench/replay/` có wrapper tương ứng. Lý do thật, theo từng model:
-`hint`/`conesep`/`intent` thiếu môi trường + dung lượng đĩa; `habit` READY nhưng cần ~12 GB cho cache;
-`airknow` chỉ có checkpoint 50%/80% nên điều kiện 20% **hoãn**; `clvc_net` cần map sáu file
-local/global; `dcnet` thiếu run directory của tác giả; `tgcir` chỉ có preflight (chưa xác minh member
-của `TG-CIR.zip`); `sprc` chờ file OneDrive người dùng tải tay; `pair` thiếu class `model_vssp`/
-`MHTransformer_dis` từ tác giả (không tồn tại ở mọi revision công khai); `ptha_mtst` và `tme` đã có
-source/environment/command nhưng thiếu dung lượng đĩa cho cache native (TME cần ≥10.47 GiB chỉ riêng
-feature cache) — xem §"TME: số đo thật" bên dưới.
-Ma trận đầy đủ: `workbench/docs/MODEL_STATUS_SPEC.md` §2.
+**Sẵn sàng cho lượt PC pilot đầu tiên: LIMN (đã đo) và ENCODER (đã đo).** GPU đích `sm_120` vẫn
+`TARGET_GPU_PENDING`; các phép đo đã ghi nhận là trên `sm_86`. Cohort thực thi chín model là
+`csmcir`, `conesep`, `ptha_mtst`, `habit`, `intent`, `hint`, `encoder`, `limn`, `tme`; đây là cohort
+registry, không phải khẳng định mọi model đã sẵn sàng chạy.
+
+Tám entry hoãn có blocker khác nhau theo registry: `airknow` thiếu checkpoint 20% (chỉ khai 50%/80%); `pair` chưa xác minh mapping `pair_b1`/`pair_b2` và bị chặn ở entrypoint; `clvc_net` chưa xác minh archive sáu file theo category, thiếu replay entrypoint và ResNet-50; `dcnet` chưa xác minh association run directory với benchmark row, thiếu GloVe PKLs, ảnh resize và ResNet-50; `combiner_rn50x4_noft` chưa xác minh identity/checksum checkpoint, thiếu RN50x4 base weights và data tương thích; `clip4cir_rn50x4_fullft` chưa xác minh pairing bundle hai state, thiếu base weights và data tương thích; `tgcir` chưa xác minh archive member/hash và bị chặn ở replay entrypoint; `sprc` chưa xác minh mapping model-class/key và thiếu assets. `ptha_mtst` chỉ có `cirr_transfer` (CIRR→FashionIQ), không phải FashionIQ reproduction. TME mặc định dùng `fashioniq_0`; checkpoint 20% vẫn `CHECKPOINT_UNAVAILABLE`. Ước tính ~10.47 GiB là CACHE/STORAGE feature-cache estimate, không phải bảo đảm VRAM. Ma trận và blocker từng model: `MODEL_STATUS_SPEC.md` §2.
 
 **Trạng thái 17 model (bảng chuẩn, bằng chứng + điều kiện chuyển trạng thái):**
 [`workbench/docs/MODEL_STATUS_SPEC.md`](MODEL_STATUS_SPEC.md)
@@ -353,7 +348,6 @@ Chuỗi đầu-cuối đã chạy: aggregate → per-query export/observer → p
    sha256 `0f31c501…`), chỉ còn thiếu interpreter. Lưu ý cả hai **không** khai `per_query_observer`
    trong registry, nên cần thêm integration per-query **nhỏ nhất** theo format `ResultRun` sẵn có
    trước khi cross-model chạy được.
-2. **Đo trên GPU đích `sm_120`.** Lượt này dùng profile historical pins trên `sm_86`. Profile
-   `adapted_runtime: sm_120` (torch ≥2.7 + cu128) chưa được đo lần nào.
+2. **Đo trên GPU đích `sm_120`.** Lượt R14 dùng profile historical pins trên `sm_86`. Registry hiện khai `adapted_runtime: sm_120` với torch `>=2.8,<2.9` và cu128; R23 ghi solver-only resolution, không chứng minh cài đặt, import thành công, hay GPU execution. Adapted profile chưa được xác nhận trên host `sm_120`; giữ `TARGET_GPU_PENDING`.
 3. **15 model còn lại**: xem `MODEL_STATUS_SPEC.md` §2 cho blocker và điều kiện chuyển trạng thái
    của từng model.

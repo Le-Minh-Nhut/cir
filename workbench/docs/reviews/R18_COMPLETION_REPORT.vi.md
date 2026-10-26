@@ -215,19 +215,15 @@ export WORKBENCH_PTHA_MTST_PYTHON=$PWD/workbench/envs/ptha-mtst/bin/python
 
 Công thức env đầy đủ: `workbench/docs/MODEL_ENV_RECIPES.md`.
 
-## 8. Subagent — model/effort thật, kết quả
+## 8. Subagent work and results
 
-| Agent | Model / effort | Việc | Kết quả |
-|---|---|---|---|
-| `FixBAndC` | `cx/gpt-6-luna` **xhigh** | Fix B+C | 164 passed; **tự bắt regression của chính nó** rồi sửa |
-| `TmeRecon` | `cx/gpt-6-luna` **xhigh** | Recon TME | pin, data, assets, **20% không tồn tại** |
-| `PairWork` | `cx/gpt-6-luna` **xhigh** | PAIR B1/B2 | **NOT RUN** + bằng chứng; tự sửa 2 lần overstatement |
-| `SprcAndPtha` | `cx/gpt-6-luna` **xhigh** | SPRC doc + PTHA wrapper | tự sửa **2 lần** sai (kể cả "checkout missing") |
-| `MaskingReview` | `reviewer` `cx/gpt-6-luna` **xhigh** | Review test đã sửa có che mất bảo vệ không | Không cái nào masking; xác nhận fixture theo quy ước cũ |
-
-Không dùng DeepSeek, không dùng Gemini. Mỗi kết luận tôi **tự kiểm lại** — kể cả tự tìm ra
-`model_vssp` và dtype bug.
-
+| Agent | Work | Result |
+|---|---|---|
+| `FixBAndC` | Fix B+C | 164 passed; tự bắt regression của chính nó rồi sửa |
+| `TmeRecon` | Recon TME | pin, data, assets, 20% không tồn tại |
+| `PairWork` | PAIR B1/B2 | NOT RUN + bằng chứng; tự sửa 2 lần overstatement |
+| `SprcAndPtha` | SPRC doc + PTHA wrapper | tự sửa 2 lần sai (kể cả "checkout missing") |
+| `MaskingReview` | Review test đã sửa có che mất bảo vệ không | Không cái nào masking; xác nhận fixture theo quy ước cũ |
 ## 9. Blocker ngoài — có bằng chứng
 
 1. **Đĩa**: cần ~12 GB cho một lượt iLearn 3-category; volume 173 GB đã dùng ~97%.

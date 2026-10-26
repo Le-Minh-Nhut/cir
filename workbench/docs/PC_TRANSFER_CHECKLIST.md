@@ -1,7 +1,7 @@
 # PC transfer checklist
 
 
-> **Current handoff:** use [AUTOPILOT_GUIDE.md](AUTOPILOT_GUIDE.md) as the single setup/run/resume workflow and [MODEL_STATUS_SPEC.md](MODEL_STATUS_SPEC.md) for current model evidence. The first-experiment and readiness instructions below are historical snapshots, not current readiness claims. TME assets: `python -m workbench.scripts.download_auxiliary_assets --model tme`; `mkdir` and `WORKBENCH_TME_ASSET_EVA_VIT_G` do not install weights. CUDA-only TME validation preparation needs `--allow-gpu-preparation` and about 10.47 GiB; `doctor.py` uses `--checkpoint-policy {strict_clean,include_flagged_conditions}`.
+> **Current handoff:** use [AUTOPILOT_GUIDE.md](AUTOPILOT_GUIDE.md) as the single setup/run/resume workflow and [MODEL_STATUS_SPEC.md](MODEL_STATUS_SPEC.md) for current model evidence. The first-experiment and readiness instructions below are historical snapshots, not current readiness claims. TME assets: `python -m workbench.scripts.download_auxiliary_assets --model tme`; `mkdir` and `WORKBENCH_TME_ASSET_EVA_VIT_G` do not install weights. CUDA-only TME validation preparation needs `--allow-gpu-preparation` and about 10.47 GiB of feature-cache storage; this is a storage estimate, not a VRAM guarantee. `doctor.py` uses `--checkpoint-policy {strict_clean,include_flagged_conditions}`.
 What to copy, what to rebuild, and what only exists on the GPU host.
 
 For the first experiment itself, see [FIRST_GPU_EXPERIMENT.md](FIRST_GPU_EXPERIMENT.md): the one

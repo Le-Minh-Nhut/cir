@@ -1,6 +1,7 @@
 # CIR Failure Analysis Workbench — Automation Runbook
 
-> **Current handoff:** use [AUTOPILOT_GUIDE.md](AUTOPILOT_GUIDE.md) for the single setup/run/resume workflow and its current permissions. This runbook preserves an older standalone-stage/operator snapshot; its historical commands and model table are not current readiness claims. Current per-model evidence: [MODEL_STATUS_SPEC.md](MODEL_STATUS_SPEC.md). New TME preparation uses `--allow-gpu-preparation` / `permissions.allow_gpu_preparation` (default `false`) in addition to `--allow-preparation`; see the current guide for CUDA and ~10.47 GiB preconditions. TME EVA/BLIP weights download via `python -m workbench.scripts.download_auxiliary_assets --model tme`; `mkdir` or `WORKBENCH_TME_ASSET_EVA_VIT_G` does not install them.
+> **Current handoff:** use [AUTOPILOT_GUIDE.md](AUTOPILOT_GUIDE.md) for the single setup/run/resume workflow and its current permissions. This runbook preserves an older standalone-stage/operator snapshot; its historical commands and model table are not current readiness claims. Current per-model evidence: [MODEL_STATUS_SPEC.md](MODEL_STATUS_SPEC.md). New TME preparation uses `--allow-gpu-preparation` / `permissions.allow_gpu_preparation` (default `false`) in addition to `--allow-preparation`; TME's ~10.47 GiB figure is a CACHE/STORAGE estimate, not a VRAM guarantee; what fits depends on the GPU and chosen batch. TME EVA/BLIP weights download via `python -m workbench.scripts.download_auxiliary_assets --model tme`; `mkdir` or `WORKBENCH_TME_ASSET_EVA_VIT_G` does not install them.
+> Environment planning/provisioning follows Autopilot selection and checkpoint eligibility; checkpoint-blocked models remain reportable but are excluded from environment planning. This historical runbook's commands do not describe that current plan scope.
 
 Operator guide for running, resuming, troubleshooting, and verifying CIR model reproduction workflows.
 
@@ -23,6 +24,7 @@ Executes full reproduction pipeline for selected model: preflight doctor, datase
 ```bash
 # Planning mode (default for all, setup, reproduce without --apply):
 python workbench/scripts/pipeline.py all --model csmcir
+
 
 # Explicit dry run (zero mutations, prints stage plans):
 python workbench/scripts/pipeline.py all --model csmcir --dry-run
@@ -148,9 +150,13 @@ Stage states are tracked in `workbench/artifacts/pipeline_state.json`.
 
 ---
 
-## 4. Current Model Reproduction Readiness
+## 4. Historical Model Reproduction Readiness — 2026-10-19
 
-| Model | Status | Primary Blocker |
+This readiness table is a historical snapshot, not current status. See `MODEL_STATUS_SPEC.md` for current per-model evidence.
+
+> Current environment planning excludes models blocked by checkpoint selection; see `AUTOPILOT_GUIDE.md` and `FINAL_PC_READINESS.md`.
+
+| Model | Historical status | Historical blocker |
 |---|---|---|
 | **CSMCIR** | Setup Ready / Evaluation Guarded | COT_ours2 captions require manual author placement |
 | **Air-Know** | Blocked | Only noisy (50%, 80%) checkpoints published; evaluator unaudited |
@@ -160,11 +166,11 @@ Stage states are tracked in `workbench/artifacts/pipeline_state.json`.
 | **HINT** | Blocked | Pinned test.py CLI not audited |
 | **ENCODER** | Blocked | Google Drive checkpoint unresolved; missing datasets1.py in upstream |
 | **PAIR** | Blocked | pair-B1.pt vs pair-B2.pt checkpoint mapping unverified |
-| **PTHA + MTST**| Blocked | No verified FashionIQ checkpoint published |
+| **PTHA + MTST** | Blocked | The registered `cirr_transfer` is a CIRR→FashionIQ transfer experiment, not a FashionIQ reproduction. |
 | **CLVC-Net** | Blocked | Pinned test.py has no standalone CLI loader; ResNet50 weights unverified |
 | **DCNet** | Command Audited | Google Drive run directory hash unverified; ResNet50 weights unverified |
-| **Combiner (noft)**| Blocked | Drive checkpoint mapping unresolved; CLIP RN50x4 unverified |
-| **CLIP4Cir (fullft)**| Blocked | Paired checkpoint bundle unresolved; CLIP RN50x4 unverified |
+| **Combiner (noft)** | Blocked | Drive checkpoint mapping unresolved; CLIP RN50x4 unverified |
+| **CLIP4Cir (fullft)** | Blocked | Paired checkpoint bundle unresolved; CLIP RN50x4 unverified |
 | **TG-CIR** | Blocked | Pinned test.py has no standalone CLI; checkpoint mapping unverified |
 | **SPRC** | Blocked | sprc_fiq.pt backbone mapping unverified; LAVIS asset unverified |
 | **LIMN** | Replay Code Ready | Three category models required; CUDA 12.4 / OpenCLIP env unverified |

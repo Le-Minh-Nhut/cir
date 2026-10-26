@@ -113,7 +113,7 @@ Sửa: thêm preparation contract `tme_fashioniq` (raw inputs, generated artifac
 external assets) và preflight **báo** file cache, **số byte cần** (suy từ tokens/width/dtype đã khai
 nhân số ảnh gallery thật) và **dung lượng trống tại đích**. Hai điều chỉnh metadata từ việc làm tử tế:
 - dtype là **fp16**, không phải fp32 (`precompute.py:37` dùng `autocast`, `create_eva_vit_g` mặc định
-  `precision="fp16"`), nên yêu cầu **10.47 GiB** chứ không phải 20.94 GiB.
+  `precision="fp16"`), nên feature cache cần ước tính CACHE/STORAGE **10.47 GiB**, không phải bảo đảm VRAM.
 - **BLIP-2 pretrain weights BẮT BUỘC.** Một revision trước của chính tôi ghi là không bắt buộc, với lý
   do `load_from_pretrained` không được gọi. **Lý do đó SAI** và đã được ghi lại để không ai suy luận
   lại lần nữa: `blip2_pretrain.yaml` đặt `load_finetuned: False` **và** khai một `pretrained` URL, nên
@@ -181,7 +181,7 @@ làm **alias** trong `src/evaluation/fashioniq.py` để record cũ đọc đư�
 | 1 | `limn` | `fashioniq_val_split` | bundle 3 category | full val + per-query parity | — |
 | 2 | `encoder` | `fashioniq_val_split` | `fashioniq` | 3 category GPU + per-query parity | — |
 | 3 | `hint` | `fashioniq_val_split` | `fashioniq` | chưa | env + đĩa |
-| 4 | `pair` | `fashioniq_val_split` | B1/B2 exploratory | **NOT RUN** | `model_vssp`/`MHTransformer_dis` không tồn tại ở mọi revision công khai |
+| 4 | `pair` | `fashioniq_val_split` | B1/B2 exploratory | **NOT RUN** | `pair_b1`/`pair_b2` là checkpoint công khai; mapping FashionIQ chưa xác minh, còn `model_vssp`/`MHTransformer_dis` cần để nạp pickle là module source chưa được công bố |
 | 5 | `clvc_net` | `fashioniq_val_split` | drive unresolved | chưa | map 6 file local/global |
 | 6 | `tgcir` | `fashioniq_val_split` | archive | preflight-only | member `TG-CIR.zip` chưa xác minh |
 | 7 | `habit` | `fashioniq_full_gallery_ref_excluded` | **`fiq_n02`** | READY | đĩa ~12 GiB |
@@ -194,7 +194,7 @@ làm **alias** trong `src/evaluation/fashioniq.py` để record cũ đọc đư�
 | 14 | `clip4cir_rn50x4_fullft` | `fashioniq_original_split` | — | chưa | cặp CLIP/Combiner khớp config |
 | 15 | `sprc` | `fashioniq_original_split` | ViT-L variant | chờ file người dùng | OneDrive tải tay |
 | 16 | `ptha_mtst` | `fashioniq_original_split` | **`cirr_transfer`** (CIRR→FashionIQ, exploratory) | ckpt hash khớp, preflight PASS | env py3.9/torch2.0.1 (~5 GB) |
-| 17 | **`tme`** | `fashioniq_original_split` | `fashioniq_0` (0%); **20% `CHECKPOINT_UNAVAILABLE`** | ckpt **đã tải + trích**, env **verified + GPU probe thật** | **đĩa: ≥10.47 GiB** feature cache + 2 025 249 237 B EVA |
+| 17 | **`tme`** | `fashioniq_original_split` | `fashioniq_0` (0%); **20% `CHECKPOINT_UNAVAILABLE`** | ckpt **đã tải + trích**, env **verified + GPU probe thật** | **CACHE/STORAGE ước tính: ≥10.47 GiB feature cache, không phải bảo đảm VRAM,** + 2 025 249 237 B EVA |
 
 Không ô nào gọi "asset có sẵn" là "đã chạy".
 
@@ -209,13 +209,13 @@ Không ô nào gọi "asset có sẵn" là "đã chạy".
 | Cấu trúc | torch-zip, 862 entry / 860 tensor, `visual_encoder.*` 511 + `Qformer.*` 336 |
 | Env | `workbench/envs/tme`, Python 3.10.13, torch 2.1.2+cu121, torchvision 0.16.2+cu121 |
 | GPU trong interpreter đó | RTX 3050 Laptop, `sm_86`, cuda 12.1, `allocated_tensor: true`, `computed: true` |
-| Feature cache cần | **10.47 GiB** (15 536 ảnh × 257 × 1408 × 2) |
+| Feature cache cần | **CACHE/STORAGE estimate: 10.47 GiB, không phải bảo đảm VRAM** (15 536 ảnh × 257 × 1408 × 2) |
 | EVA-ViT-g | 2 025 249 237 B, **bắt buộc** (constructor đọc sớm hơn BLIP-2) |
 | Tokenizer | HF hub cache `models--bert-base-uncased`, **đã có** trên máy này |
 | BLIP-2 pretrain | 746 998 955 B, **bắt buộc** (xem dưới) |
 | 0% vs 20% | 0% **đã có**; 20% **`CHECKPOINT_UNAVAILABLE`** (tác giả chỉ phát hành `fashioniq-0.0-best`, `cirr-0.0-best`) |
 
-**Chưa chạy end-to-end trên máy này**: 10.47 GiB + 2 025 249 237 B > dung lượng trống. Preflight báo
+**Chưa chạy end-to-end trên máy này**: ước tính CACHE/STORAGE 10.47 GiB (không phải bảo đảm VRAM) + 2 025 249 237 B > dung lượng trống. Preflight báo
 đúng cả hai kèm số byte và dung lượng trống tại đích — đây là kết quả **trung thực** của host này,
 không phải một blocker giả.
 
@@ -255,7 +255,7 @@ export WORKBENCH_LIMN_PYTHON=$PWD/workbench/envs/limn-historical/bin/python
   --dataset-root <FashionIQ> --run-id <id>
 ```
 
-**TME trên PC** (cần ≥10.47 GiB trống cho feature cache):
+**TME trên PC** (ước tính CACHE/STORAGE ≥10.47 GiB cho feature cache; không phải bảo đảm VRAM):
 
 ```sh
 export WORKBENCH_TME_PYTHON=$PWD/workbench/envs/tme/bin/python
@@ -277,23 +277,17 @@ Chưa có bước nào được xác minh trên GPU đích. Laptop là `sm_86`; 
 
 ## 8. Subagent
 
-| Agent | Model / effort | Việc | Đóng góp |
-|---|---|---|---|
-| `TmeReplay` | `cx/gpt-6-luna` **xhigh** | R19-02/05/07 (TME) | phát hiện dtype native là **fp16** chứ không phải fp32 — sửa registry thay vì code quanh nó |
-| `PthaWrapper` | `cx/gpt-6-luna` **xhigh** | R19-02/03 (PTHA) | sửa danh tính về registered id; test chạy subprocess thật |
-| `ArchiveInstall` | `cx/gpt-6-luna` **xhigh** | R19-06 | extract + verify + publish atomic; ship kèm **một regression `import urllib.request` bị xoá** mà tôi phát hiện khi tải thật và đã sửa + yêu cầu test phủ đường thật |
-| `AggregateParser` | `cx/gpt-6-luna` **xhigh** | R19-08 | tự phát hiện `EvaluationPlan` dùng field `.protocol` (không phải `.protocol_id`) và báo lại |
-| `ProtocolDedup` | `cx/gpt-6-luna` **xhigh** | R19-10 | xác nhận cohort trùng nhau từ source; cập nhật schema/API theo registry |
-| `ScienceReview` | `reviewer` `cx/gpt-6-luna` **xhigh** | nhãn khoa học, protocol, test bị nới | **bác** kết luận BLIP-2 của tôi (đúng), xác nhận cohort trùng nhau và xác nhận không test nào bị nới |
-| `WiringReview` | `reviewer` `cx/gpt-6-luna` **xhigh** | wiring operator, fake readiness, asset thiếu | **5 finding CONFIRMED**: allowlist env, scope cache, path tokenizer, BLIP-2, `click` |
+| Agent | Work | Contribution |
+|---|---|---|
+| `TmeReplay` | R19-02/05/07 (TME) | Phát hiện dtype native là fp16 chứ không phải fp32 — sửa registry thay vì code quanh nó |
+| `PthaWrapper` | R19-02/03 (PTHA) | Sửa danh tính về registered id; test chạy subprocess thật |
+| `ArchiveInstall` | R19-06 | Extract + verify + publish atomic; sửa regression `import urllib.request` bị xoá và yêu cầu test phủ đường thật |
+| `AggregateParser` | R19-08 | Phát hiện `EvaluationPlan` dùng field `.protocol` (không phải `.protocol_id`) |
+| `ProtocolDedup` | R19-10 | Xác nhận cohort trùng nhau từ source; cập nhật schema/API theo registry |
+| `ScienceReview` | Nhãn khoa học, protocol, test bị nới | Bác kết luận BLIP-2, xác nhận cohort trùng nhau và xác nhận không test nào bị nới |
+| `WiringReview` | Wiring operator, fake readiness, asset thiếu | 5 finding CONFIRMED: allowlist env, scope cache, path tokenizer, BLIP-2, `click` |
 
-Không dùng Gemini, không dùng `ag/...`. Tôi tự kiểm từng kết luận, tự sửa 3 lỗi của chính subagent và
-2 lỗi metadata của chính mình.
-
-## 8b. Năm lỗi review độc lập tìm thêm — đã sửa
-
-Hai reviewer (`reviewer`, `cx/gpt-6-luna` xhigh) đọc source đã đổi đối chiếu native code và trả **5 kết luận
-CONFIRMED**. Mỗi cái đã sửa và commit riêng:
+Hai reviewer đọc source đã đổi đối chiếu native code và trả 5 kết luận CONFIRMED. Mỗi cái đã sửa và commit riêng:
 
 1. **Env var asset không tới được tiến trình con.** `_evaluator_environment` dựng env theo allowlist **cố
    định**, nên `WORKBENCH_TME_ASSET_EVA_VIT_G` resolve được ở parent nhưng tới child lại unset, và check asset
@@ -324,7 +318,7 @@ Sửa xong: **193 test** trên các file liên quan + `tests/unit` pass.
 
 | Blocker | Bằng chứng | Việc nhỏ nhất tiếp theo |
 |---|---|---|
-| Đĩa cho TME | 10.47 GiB feature + 2 025 249 237 B EVA > trống | giải phóng ~13 GB rồi chạy preflight |
+| Đĩa cho TME | Ước tính CACHE/STORAGE 10.47 GiB feature cache + 2 025 249 237 B EVA > trống; 10.47 GiB không phải bảo đảm VRAM | giải phóng ~13 GB rồi chạy preflight |
 | PAIR | `model_vssp`/`MHTransformer_dis` vắng ở mọi revision công khai | tác giả công bố 2 file đó |
 | TME 20% | tác giả chỉ công bố 0% | — (giữ `CHECKPOINT_UNAVAILABLE`) |
 | Air-Know 20% | chỉ có 50%/80% | tác giả công bố 20% |

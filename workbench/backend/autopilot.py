@@ -379,27 +379,15 @@ def resolved_plan(config: AutopilotConfig, *, dry_run: bool = False) -> dict[str
 
     by_id = {model["model_id"]: model for model in config.registry["models"]}
     models = [by_id[mid] for mid in config.selected_model_ids]
-    environment_plan = _environment_plan(models, dry_run=dry_run,
-                                          artifacts_root=config.paths["artifacts"],
-                                          third_party_root=config.paths["third_party"])
-    # The checkpoint policy is resolved before any work starts, so a model whose weights the policy
-    # refuses is reported as blocked rather than being evaluated with a variant nobody chose. This is
-    # also what stops a model with two registered variants from having both of them evaluated.
     selections = {mid: select_checkpoints(by_id[mid], policy=config.checkpoint_policy,
                                           requested=config.checkpoint_overrides.get(mid),
                                           checkpoint_root=config.paths["checkpoints"])
                   for mid in config.selected_model_ids}
-    blocked = {item["model_id"]: item["reason"] for item in environment_plan.get("blocked", [])}
     rows = []
     for model in models:
         mid = model["model_id"]
         selection = selections[mid]
-        if mid in blocked:
-            rows.append({"model_id": mid, "status": "BLOCKED_ENVIRONMENT",
-                         "blockers": [blocked[mid]], "metrics": None,
-                         "checkpoint_ids": list(selection.checkpoint_ids),
-                         "checkpoint_selection": selection.as_dict()})
-        elif selection.blocked:
+        if selection.blocked:
             rows.append({"model_id": mid, "status": "BLOCKED_CHECKPOINT",
                          "blockers": [selection.reason], "metrics": None,
                          "checkpoint_ids": [], "checkpoint_selection": selection.as_dict()})
@@ -407,13 +395,22 @@ def resolved_plan(config: AutopilotConfig, *, dry_run: bool = False) -> dict[str
             rows.append({"model_id": mid, "status": "NOT_RUN", "blockers": [], "metrics": None,
                          "checkpoint_ids": list(selection.checkpoint_ids),
                          "checkpoint_selection": selection.as_dict()})
+    if not dry_run and config.permissions["allow_network"] and config.permissions["allow_large_downloads"]:
+        _enforce_download_budget(config, rows)
+    # Checkpoint- and budget-blocked rows remain reportable but never enter environment planning.
+    eligible_ids = {row["model_id"] for row in rows if row["status"] == "NOT_RUN"}
+    environment_plan = _environment_plan(
+        [model for model in models if model["model_id"] in eligible_ids], dry_run=dry_run,
+        artifacts_root=config.paths["artifacts"], third_party_root=config.paths["third_party"])
+    blocked = {item["model_id"]: item["reason"] for item in environment_plan.get("blocked", [])}
+    for row in rows:
+        if row["status"] == "NOT_RUN" and row["model_id"] in blocked:
+            row.update(status="BLOCKED_ENVIRONMENT", blockers=[blocked[row["model_id"]]])
     plan = {"schema_version": 1, "generated_at": datetime.now(timezone.utc).isoformat(),
             "configuration_digest": _configuration_digest(config), "selected_models": list(config.selected_model_ids),
             "execution_started": False, "solver_verified": environment_plan["solver_verified"],
             "checkpoint_policy": config.checkpoint_policy,
             "environment_plan": environment_plan, "models": rows}
-    if not dry_run and config.permissions["allow_network"] and config.permissions["allow_large_downloads"]:
-        _enforce_download_budget(config, plan["models"])
     return plan
 
 
@@ -440,6 +437,40 @@ def _execute(config: AutopilotConfig, plan: dict[str, Any], *, resume: bool, for
     # subprocess with an interpreter taken from this mapping, and that mapping is computed once,
     # here. Leaving provisioning to the stage therefore meant the mapping was still empty when the
     # preflight ran, and every model reported UNCONFIGURED.
+    try:
+        from workbench.backend.environment_planner import (
+            _constraints, _environment_id, apply_interpreter_mapping, model_constraints,
+        )
+    except ImportError:
+        planner_available = False
+    else:
+        planner_available = True
+
+    # Reconciliation checks membership, per-group constraints, environment identity, and derived interpreter mapping when planner exists; fallback owns `blocked`, which is not checked or repaired here.
+    # By construction, `resolved_plan` copies `environment_plan["solver_verified"]` into the outer report field.
+    planned_ids = {mid for group in plan["environment_plan"].get("groups", [])
+                   for mid in group.get("members", [])}
+    executable_ids = {model["model_id"] for model in models}
+    replan = planned_ids != executable_ids
+    if planner_available and not replan:
+        specs = {model["model_id"]: model_constraints(
+            model, third_party_root=config.paths["third_party"]) for model in models}
+        for group in plan["environment_plan"].get("groups", []):
+            members = sorted(group.get("members", []))
+            constraints, conflict = _constraints([specs[mid] for mid in members])
+            if (conflict or group.get("constraints") != constraints
+                    or group.get("environment_id") != _environment_id(members, constraints)):
+                replan = True
+                break
+        if not replan:
+            interpreter_mapping = apply_interpreter_mapping(models, plan["environment_plan"], environ=os.environ)
+            if plan["environment_plan"].get("interpreter_mapping") != interpreter_mapping:
+                replan = True
+    if replan:
+        plan["environment_plan"] = _environment_plan(
+            models, dry_run=False, artifacts_root=config.paths["artifacts"],
+            third_party_root=config.paths["third_party"])
+    plan["solver_verified"] = plan["environment_plan"]["solver_verified"]
     assignment: dict[str, Any] = {}
     provision_authorized = bool(config.permissions["allow_env_install"])
     if provision_authorized:
@@ -954,8 +985,11 @@ def _classify(plan: dict[str, Any], execution: dict[str, Any], config: Autopilot
                 else:
                     status = stage_status.get(name, "FAILED_EVALUATION")
                 missing = execution.get("missing_permissions", {}).get(model_id, [])
+                assignment_reason = ((execution.get("environment_assignment") or {}).get("models") or {}).get(
+                    model_id, {}).get("reason") if name == "environment" else None
                 reasons.append("missing permission: " + ", ".join(missing) if state == "BLOCKED_AUTHORIZATION_REQUIRED" and missing
-                               else (failure.get("failure_reason") or f"{name} stage {str(state).lower()}"))
+                               else (assignment_reason or failure.get("failure_reason")
+                                     or f"{name} stage {str(state).lower()}"))
                 break
             if status == "NOT_RUN":
                 evals = [item for item in related if item.get("name") == "evaluation"]
