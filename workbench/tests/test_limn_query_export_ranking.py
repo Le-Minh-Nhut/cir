@@ -32,6 +32,12 @@ def _one_hot(indices: list[int], size: int) -> np.ndarray:
     return matrix
 
 
+def _ordered_gallery(size: int) -> np.ndarray:
+    """Unit vectors with distinct, descending cosine similarities against [1, 0]."""
+    angles = np.linspace(0.0, np.pi, size)
+    return np.column_stack((np.cos(angles), np.sin(angles)))
+
+
 @pytest.mark.parametrize("target_rank", [1, 10, 50, 51, 200, 201, 1000])
 def test_full_ranking_gives_the_true_target_rank(target_rank: int) -> None:
     """A target at ANY depth gets its true rank, including well beyond a saved Top-50/Top-200.
@@ -40,11 +46,10 @@ def test_full_ranking_gives_the_true_target_rank(target_rank: int) -> None:
     position beyond both so masking it cannot move the target.
     """
     size = max(target_rank + 2, 8)
-    # The query matches gallery 0 exactly (score 1); every other gallery scores 0 and ties, so
-    # they sort ascending by index. A target at index r-1 therefore lands at rank r.
-    queries = _one_hot([0], size)
-    targets = np.eye(size)
-    reference = size - 1 if target_rank - 1 != size - 1 else size - 2
+    # Distinct descending similarities make target index r-1 rank r on every NumPy build.
+    queries = np.array([[1.0, 0.0]])
+    targets = _ordered_gallery(size)
+    reference = size - 1
     ranks, _ = rank_queries(queries, targets, reference_positions=[reference],
                             target_positions=[target_rank - 1])
     assert ranks == [target_rank]
@@ -53,10 +58,8 @@ def test_full_ranking_gives_the_true_target_rank(target_rank: int) -> None:
 def test_target_beyond_saved_depth_is_absent_from_top_k_but_ranked() -> None:
     """Top-K depth truncates the SAVED list only; the rank stays true. §15's central invariant."""
     size = 300
-    # Gallery 0 is the query's exact match (rank 1), then the zero-scoring entries tie and sort
-    # ascending, so index 250 is rank 251.
-    queries = _one_hot([0], size)
-    ranks, top = rank_queries(queries, np.eye(size), reference_positions=[299],
+    queries = np.array([[1.0, 0.0]])
+    ranks, top = rank_queries(queries, _ordered_gallery(size), reference_positions=[299],
                               target_positions=[250], top_k=200)
     assert ranks == [251]
     assert len(top[0]) == 200
@@ -66,8 +69,8 @@ def test_target_beyond_saved_depth_is_absent_from_top_k_but_ranked() -> None:
 @pytest.mark.parametrize("rank", [1, 10, 50, 51, 200])
 def test_target_within_saved_depth_appears_at_its_rank(rank: int) -> None:
     size = 400
-    queries = _one_hot([0], size)
-    ranks, top = rank_queries(queries, np.eye(size), reference_positions=[399],
+    queries = np.array([[1.0, 0.0]])
+    ranks, top = rank_queries(queries, _ordered_gallery(size), reference_positions=[399],
                               target_positions=[rank - 1], top_k=200)
     assert ranks == [rank]
     assert top[0][rank - 1][1] == rank - 1
@@ -76,11 +79,10 @@ def test_target_within_saved_depth_appears_at_its_rank(rank: int) -> None:
 def test_reference_is_masked_not_removed_and_stays_in_the_ranking() -> None:
     """The reference still occupies a slot; it is made unreachable, not deleted. §10/§14."""
     size = 6
-    # Query matches gallery 3 best, and gallery 3 is also its reference.
-    queries = _one_hot([3], size)
-    ranks, top = rank_queries(queries, np.eye(size), reference_positions=[3], target_positions=[5])
-    # The gallery still has all six entries: masking 3 sends it to the END, it is not removed. The
-    # five unmasked entries tie and sort ascending, so the target (5) is rank 5.
+    queries = np.array([[1.0, 0.0]])
+    targets = np.array([[0.8, 0.6], [0.6, 0.8], [0.4, np.sqrt(0.84)], [1.0, 0.0],
+                        [0.2, np.sqrt(0.96)], [0.0, 1.0]])
+    ranks, top = rank_queries(queries, targets, reference_positions=[3], target_positions=[5])
     assert ranks == [5]
     assert len(top[0]) == size
     assert [gallery for _, gallery, _ in top[0]] == [0, 1, 2, 4, 5, 3]
@@ -90,9 +92,9 @@ def test_masked_reference_score_is_the_pinned_sentinel() -> None:
     """The mask value must be the author's -10e10, not a different large negative."""
     assert NATIVE_REFERENCE_MASK == -10e10
     size = 3
-    # Query matches gallery 1 best and gallery 1 is its reference; masking it sends it last.
-    queries = _one_hot([1], size)
-    ranks, top = rank_queries(queries, np.eye(size), reference_positions=[1], target_positions=[2])
+    queries = np.array([[1.0, 0.0]])
+    targets = np.array([[0.75, np.sqrt(0.4375)], [1.0, 0.0], [0.5, np.sqrt(0.75)]])
+    ranks, top = rank_queries(queries, targets, reference_positions=[1], target_positions=[2])
     assert ranks == [2]
     assert [gallery for _, gallery, _ in top[0]] == [0, 2, 1]
     masked = [score for _, gallery, score in top[0] if gallery == 1][0]
@@ -102,30 +104,19 @@ def test_masked_reference_score_is_the_pinned_sentinel() -> None:
 
 def test_masked_reference_ranks_last_even_when_it_would_win() -> None:
     """A reference that is the query's own best match must not be retrievable. §10."""
-    size = 4
-    queries = _one_hot([2], size)  # reference 2 is the exact match
-    ranks, top = rank_queries(queries, np.eye(size), reference_positions=[2], target_positions=[0])
+    queries = np.array([[1.0, 0.0]])
+    targets = np.array([[0.8, 0.6], [0.4, np.sqrt(0.84)], [1.0, 0.0], [-1.0, 0.0]])
+    ranks, top = rank_queries(queries, targets, reference_positions=[2], target_positions=[0])
     assert [gallery for _, gallery, _ in top[0]][-1] == 2
     assert ranks == [1]
 
 
-def test_equal_similarity_scores_follow_argsort_semantics() -> None:
-    """Ties resolve like ``np.argsort(-sims)`` — the pinned behavior, not an invented stable sort."""
-    size = 4
-    queries = np.ones((1, size))          # identical similarity to every gallery entry
-    targets = np.eye(size)
-    _, top = rank_queries(queries, targets, reference_positions=[3], target_positions=[0])
-    order = [gallery for _, gallery, _ in top[0]]
-    # np.argsort(-sims) on an all-equal row returns ascending index order.
-    assert order == [0, 1, 2, 3]
 
 
 def test_negative_and_large_negative_scores_sort_correctly() -> None:
     queries = np.array([[1.0, 0.0]])
-    targets = np.array([[-5.0, 0.0], [-1.0, 0.0], [1.0, 0.0]])
+    targets = np.array([[-1.0, np.sqrt(3.0)], [-1.0, 0.0], [1.0, 0.0]])
     ranks, top = rank_queries(queries, targets, reference_positions=[2], target_positions=[0])
-    # After normalization the scores are -1, -1, +1; the +1 (gallery 2) is masked, so the two -1s
-    # tie and sort ascending by index: gallery 0 then gallery 1.
     assert ranks == [1]
     assert [gallery for _, gallery, _ in top[0]] == [0, 1, 2]
 
@@ -141,8 +132,8 @@ def test_duplicate_identical_features_do_not_crash() -> None:
 
 def test_swapped_reference_and_target_changes_the_rank() -> None:
     size = 3
-    queries = _one_hot([1], size)
-    targets = np.eye(size)
+    queries = np.array([[1.0, 0.0]])
+    targets = np.array([[0.5, np.sqrt(0.75)], [1.0, 0.0], [-0.5, np.sqrt(0.75)]])
     forward, _ = rank_queries(queries, targets, reference_positions=[0], target_positions=[1])
     swapped, _ = rank_queries(queries, targets, reference_positions=[1], target_positions=[0])
     assert forward == [1]     # gallery 1 is the best real candidate
@@ -218,10 +209,11 @@ def test_non_finite_similarity_check_is_defensive_and_documented_as_such() -> No
 def test_valid_negative_and_positive_embeddings_are_still_accepted() -> None:
     """POSITIVE CONTROL: the refusal must not reject legitimate signed embeddings."""
     queries = np.array([[-1.0, -1.0], [1.0, -1.0]])
-    targets = np.array([[-1.0, -1.0], [1.0, 1.0], [-1.0, 1.0]])
+    # Strict scores keep the positive control independent of tie-sort implementation details.
+    targets = np.array([[-1.0, -1.0],
+                        [np.cos(np.deg2rad(80.0)), np.sin(np.deg2rad(80.0))],
+                        [0.0, -1.0]])
     ranks, top = rank_queries(queries, targets, reference_positions=[2, 2], target_positions=[0, 1])
-    # Query 0 matches gallery 0 exactly (rank 1). Query 1 ties gallery 0 and 1 at 0.0, and the tie
-    # resolves ascending by index, so its target (gallery 1) is rank 2. Gallery 2 is the reference.
     assert ranks == [1, 2]
     assert all(np.isfinite(score) for _, _, score in top[0])
 
@@ -477,28 +469,18 @@ def test_the_encoder_observer_reuses_the_same_ranking_core() -> None:
 
 
 def test_the_tie_order_is_the_one_the_native_metric_was_computed_with() -> None:
-    """Equally-scoring candidates must be ordered exactly as the pinned `test.py` orders them.
-
-    The native metric is `np.argsort(-sims)`. The observation exists to REPRODUCE that metric, so a
-    different tie order makes it disagree with the number it is supposed to explain. Measured on a
-    real ENCODER run: 8 dress, 2 shirt and 4 toptee queries have the target's score exactly equal to
-    the top-1 candidate's, and ordering those ties differently flipped R@1 by one hit in every
-    category -- with byte-identical inputs and deterministic kernels, so the tie WAS the difference.
-
-    This pins the ordering rule rather than a particular outcome: whatever `argsort` does with equal
-    keys, the observation must do the same thing.
-    """
-    import numpy as np
-
+    """Tied order and full target rank must match installed NumPy's native argsort oracle."""
     from workbench.replay.limn_observer import rank_queries
 
-    queries = np.array([[1.0, 0.0]], dtype=np.float32)
-    targets = np.array([[1.0, 0.0], [1.0, 0.0], [0.0, 1.0]], dtype=np.float32)
+    size = 202
+    reference, target = size - 1, size - 3
+    queries = np.ones((1, 2), dtype=np.float32)
+    targets = np.ones((size, 2), dtype=np.float32)
 
-    _, top = rank_queries(queries, targets, [2], [0], top_k=3)
+    ranks, top = rank_queries(queries, targets, [reference], [target], top_k=size)
     sims = queries.dot(targets.T)
-    sims[0, 2] = -10e10                      # the same reference mask `test.py` applies
+    sims[0, reference] = -10e10
     expected = list(np.argsort(-sims[0, :]))
 
-    assert [gallery for _, gallery, _ in top[0]] == expected, (
-        "the observed order differs from the native `argsort` order for equal scores")
+    assert [gallery for _, gallery, _ in top[0]] == expected
+    assert ranks == [expected.index(target) + 1]

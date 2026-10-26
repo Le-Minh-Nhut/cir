@@ -21,7 +21,7 @@ the aggregate) is the concrete unblock.
 | Initial HEAD this pass | `3aae18fe02ef13f5b38d153dbc8007fbb40d4c92` |
 | **TESTED_SOURCE_SHA** | **`1b890b7`** (`1b890b759bc6663e838c374484092eabb73133b2`) — the R23 production revision: controller install contract, hub cache lifecycle, PTHA assets, adapted profiles and resume refusal; a fresh `workbench/tests` run on this revision reports **1943 passed, 0 failed**, 11 skipped. The previously reported failure was the release-SHA guard; it now passes because the delivered docs name this tested revision. The R22 revision and its own accounting remain in the dated section below |
 | **FINAL_HEAD_SHA** | not recorded here by design: a tracked file cannot name the commit that contains it. `git rev-parse HEAD` on the branch tip is the authority. |
-| Production tree | verified against the named revision: `git diff 874ddcc HEAD -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'` is empty. Successors changed documentation AND tests; a successor that changed production code would invalidate this row, and the superseded-source guard refuses that case. |
+| Production tree | verified against the named revision: `git diff 1b890b7 HEAD -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'` is empty. Successors changed documentation AND tests; a successor that changed production code would invalidate this row, and the superseded-source guard refuses that case. |
 | `origin/main` | `8ebcc74d5fd1934df4f3772a8ca5a96dbd00f333` — **unchanged** |
 | Worktree | clean |
 

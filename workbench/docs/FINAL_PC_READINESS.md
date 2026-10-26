@@ -2,7 +2,7 @@
 
 > **Current handoff:** use [AUTOPILOT_GUIDE.md](AUTOPILOT_GUIDE.md) for the single setup/run/resume path and [MODEL_STATUS_SPEC.md](MODEL_STATUS_SPEC.md) for current evidence. The checklist below preserves its earlier release snapshot; its pilot model/readiness claims are historical, not current. TME weights require `python -m workbench.scripts.download_auxiliary_assets --model tme`; its CUDA-only validation feature cache needs explicit `--allow-gpu-preparation` and about 10.47 GiB. Live GPU evaluation, target-device validation and Docker are not executed on this host.
 
-**Revision identity:** `874ddcc` (`874ddccd7e3b869884b7f4ed25f7b9003d6b792d`) is the production revision whose checks ran; `git rev-parse HEAD` on the branch tip (the docs-only successor) is the final head, differing only in documentation. Production bytes are identical between them. The base commit below is historical authorship, not the current tested revision.
+**Revision identity:** `TESTED_SOURCE_SHA` is `1b890b7` (`1b890b759bc6663e838c374484092eabb73133b2`), the delivered R23 production revision; successors through accounting-time branch tip `5afec61` changed documentation only. The base commit below is historical authorship, not the current tested revision.
 
 ## 1. Commit and command
 

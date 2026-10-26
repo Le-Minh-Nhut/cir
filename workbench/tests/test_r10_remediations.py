@@ -6,6 +6,7 @@ uses a REAL interpreter rather than a description of one.
 """
 from __future__ import annotations
 
+import io
 import json
 import subprocess
 import sys
@@ -337,32 +338,31 @@ def test_a_link_pointing_elsewhere_is_refused(tmp_path: Path) -> None:
 
 # --------------------------------------------------------------------------------------- R10-05
 
-def test_the_lavis_profiles_no_longer_contradict_themselves() -> None:
+def test_the_lavis_profiles_no_longer_contradict_themselves(monkeypatch) -> None:
     """R10-05: the distribution's own pins cannot coexist with what the vendored code imports.
 
-    `salesforce-lavis==1.0.2` requires `timm==0.4.12` (verified against the published metadata), and
-    the vendored `eva_vit.py:15-16` imports `timm.models.layers`/`timm.models.registry`. A profile
-    cannot declare both the distribution and a `timm` it forbids, so the distribution is not
-    installed and the packages the code actually imports are declared directly.
+    `salesforce-lavis==1.0.2` requires `timm==0.4.12`, and the vendored `eva_vit.py:15-16`
+    imports `timm.models.layers`/`timm.models.registry`. Profiles omit the distribution and
+    declare the packages the code actually imports directly.
     """
-    import urllib.error
     import urllib.request
 
-    larvis_meta = {
-        "timm": "0.4.12", "transformers_min": "4.25.0", "transformers_max": "4.27",
-    }  # published by the 1.0.2 wheel; re-verified by the fetch below when the network answers
-    try:
-        with urllib.request.urlopen("https://pypi.org/pypi/salesforce-lavis/1.0.2/json", timeout=20) as fh:
-            payload = json.load(fh)
-        requires = payload["info"].get("requires_dist") or []
-        pins = {}
-        for entry in requires:
-            name, _, rest = entry.partition(" ")
-            pins.setdefault(name, []).append(rest)
-        assert pins["timm"] == ["(==0.4.12)"], pins["timm"]
-    except (urllib.error.URLError, TimeoutError, KeyError, AssertionError) as error:
-        # Offline runs still assert the profile coherence; only the upstream citation is skipped.
-        assert larvis_meta["timm"] == "0.4.12", error
+    def fake_urlopen(url: str, *, timeout: int) -> io.BytesIO:
+        assert url == "https://pypi.org/pypi/salesforce-lavis/1.0.2/json"
+        assert timeout == 20
+        payload = {"info": {"requires_dist": ["timm (==0.4.12)"]}}
+        return io.BytesIO(json.dumps(payload).encode())
+
+    monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
+    with urllib.request.urlopen("https://pypi.org/pypi/salesforce-lavis/1.0.2/json", timeout=20) as fh:
+        payload = json.load(fh)
+    requires = payload["info"].get("requires_dist") or []
+    pins = {}
+    for entry in requires:
+        name, _, rest = entry.partition(" ")
+        pins.setdefault(name, []).append(rest)
+    assert pins["timm"] == ["(==0.4.12)"], pins["timm"]
+    lavis_timm_constraint = f"timm{pins['timm'][0].strip('()')}"
 
     for model_id in ("airknow", "conesep", "habit", "intent", "hint", "sprc"):
         model = model_by_id(model_id)
@@ -370,6 +370,8 @@ def test_the_lavis_profiles_no_longer_contradict_themselves() -> None:
         assert not any(package.startswith("salesforce-lavis") for package in packages), (
             f"{model_id} declares the distribution whose `timm` pin contradicts the vendored imports")
         assert any(package.startswith("timm==") for package in packages), model_id
+        assert lavis_timm_constraint not in packages, (
+            f"{model_id} declares {lavis_timm_constraint}, required by salesforce-lavis metadata")
         assert any(package.startswith("transformers==") for package in packages), model_id
 
 

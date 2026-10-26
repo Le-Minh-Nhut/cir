@@ -282,13 +282,13 @@ def _enforce_download_budget(config: AutopilotConfig, rows: list[dict[str, Any]]
     here — the first variant, or every bundle member — charged the operator for weights the run
     never fetches, and could refuse a run that would have downloaded almost nothing.
     """
-    from workbench.backend.registry import (
-        auxiliary_assets_for_model, auxiliary_destination, checkpoint_is_present,
-        checkpoint_path, hub_cache_layout_problem, hub_cache_missing_files, is_hub_cache_asset,
-        sha256_file,
+    from workbench.backend.registry import checkpoint_is_present, checkpoint_path, sha256_file
+    from workbench.scripts.download_auxiliary_assets import (
+        assets as auxiliary_download_assets, auxiliary_asset_needs_acquisition,
+        load_manifest, manifest_path,
     )
-
     models = {model["model_id"]: model for model in config.registry["models"]}
+
     remaining = config.budgets["max_download_bytes"]
     for row in rows:
         if row["status"] != "NOT_RUN":
@@ -336,42 +336,23 @@ def _enforce_download_budget(config: AutopilotConfig, rows: list[dict[str, Any]]
 
         if not unknown:
             try:
-                for asset in auxiliary_assets_for_model(row["model_id"]):
-                    if not asset.get("automatic_download_available"):
+                from types import SimpleNamespace
+
+                asset_config = SimpleNamespace(
+                    WORKBENCH_ARTIFACTS_ROOT=config.paths.get("artifacts", config.path.parent / "artifacts"),
+                    WORKBENCH_THIRD_PARTY_ROOT=config.paths.get("third_party", config.path.parent / "third_party"),
+                    FASHIONIQ_ROOT=config.paths.get("dataset_root", config.path.parent / "FashionIQ"),
+                )
+                manifest = load_manifest(manifest_path(asset_config.WORKBENCH_ARTIFACTS_ROOT))
+                managed = {entry["destination"]: entry.get("downloaded_sha256") for entry in manifest}
+                for asset in auxiliary_download_assets(
+                        {row["model_id"]}, asset_config.WORKBENCH_THIRD_PARTY_ROOT,
+                        asset_config.FASHIONIQ_ROOT):
+                    if not asset.automatic_download_available:
                         continue
-                    if is_hub_cache_asset(asset):
-                        # A hub cache is acquired by the same budget rule as a checkpoint: what is
-                        # already RESOLVABLE costs nothing, what is not costs its declared file set.
-                        # The question is the loader's, not the directory's: a cache whose refs
-                        # resolve and whose declared payload is complete is free, while a partial or
-                        # orphaned one is charged in full, because acquisition re-fetches its files.
-                        missing = hub_cache_missing_files(asset)
-                        if not missing and hub_cache_layout_problem(asset["hub_repo_id"]) is None:
-                            continue
-                        size = asset.get("expected_size_bytes")
-                        if type(size) is not int or size < 0:
-                            unknown = True
-                            unknown_reason = ("download budget cannot be verified: hub cache "
-                                              f"{asset['hub_repo_id']} size unknown")
-                            break
-                        required += size
+                    if not auxiliary_asset_needs_acquisition(asset, managed_manifest=managed):
                         continue
-                    dest = auxiliary_destination(asset, config.paths["third_party"], config.paths["dataset_root"])
-                    if dest.is_file() and not dest.is_symlink() and dest.stat().st_size > 0:
-                        # Only a file whose bytes MATCH its declaration is free. A present file the
-                        # workbench cannot verify is one it may have to re-download -- an
-                        # operator-supplied copy of unknown content, or a file that merely matches
-                        # no digest at all. Waiving it here let the budget under-count exactly the
-                        # assets the acquisition step then fetched, so the recorded budget did not
-                        # cover the recorded transfer.
-                        exp_sha = asset.get("expected_sha256")
-                        exp_prefix = asset.get("expected_sha256_prefix")
-                        if not exp_sha and not exp_prefix:
-                            continue
-                        digest = sha256_file(dest)
-                        if (exp_sha and digest == exp_sha) or (exp_prefix and digest.startswith(exp_prefix)):
-                            continue
-                    size = asset.get("expected_size_bytes")
+                    size = asset.expected_size_bytes
                     if type(size) is not int or size < 0:
                         unknown = True
                         unknown_reason = "download budget cannot be verified: auxiliary asset size unknown"

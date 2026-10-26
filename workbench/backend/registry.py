@@ -1012,15 +1012,13 @@ def hub_cache_snapshot(repo: Path, revision: str = "main") -> Path | None:
     return None
 
 
-def hub_cache_layout_problem(repo_id: str, root: Path | None = None, revision: str = "main") -> str | None:
-    """Why a Hugging Face hub cache directory cannot be resolved by the loader, or None.
+def hub_cache_layout_problem(repo_id: str, root: Path | None = None, revision: str = "main",
+                             *, check_transfer: bool = True) -> str | None:
+    """Why a Hub cache cannot resolve, or None.
 
-    Reproduces the loader's own resolution in three steps without importing it: the repo directory
-    must exist, `refs/<revision>` must name a snapshot, and that snapshot must hold the payload. A
-    cache missing any of the three is one the loader cannot read -- an unreferenced snapshot fails a
-    repo-id lookup however complete it looks, and vocabulary plus config without weights still dies
-    in `BertLMHeadModel.from_pretrained`. Layout is all this answers: loading the files is the model
-    environment's job (`cache_asset_blocker`), so the two levels stay distinguishable.
+    The repair publisher may skip transfer-record comparison while replacing that record;
+    revision, declared-size, and substantive-payload checks still apply. All readers keep the
+    default transfer-record check.
     """
     repo = hf_hub_repo_dir(repo_id, root)
     if not repo.is_dir():
@@ -1043,7 +1041,8 @@ def hub_cache_layout_problem(repo_id: str, root: Path | None = None, revision: s
     missing = hub_cache_missing_files(asset, repo)
     if missing:
         return f"{snapshot} is missing the declared payload {', '.join(missing)}"
-    integrity_problem = hub_cache_integrity_problem(asset, repo, snapshot, hub_cache_declared_files(repo_id))
+    integrity_problem = hub_cache_integrity_problem(
+        asset, repo, snapshot, hub_cache_declared_files(repo_id), check_transfer=check_transfer)
     if integrity_problem:
         return integrity_problem
     if not hub_cache_declared_files(repo_id) and not any(
@@ -1209,13 +1208,15 @@ def hub_cache_transfer_problem(repo_id: str, repo: Path, snapshot: Path,
         path = snapshot / item["name"]
         try:
             actual_size = path.stat().st_size
-            actual_digest = sha256_file(path)
+            actual_digest = hub_payload_sha256(path)
             real_path = path.resolve()
             if real_path not in seen:
                 seen.add(real_path)
                 actual_total += actual_size
         except OSError:
             return f"HUB_TRANSFER_FILE_MISSING {path}"
+        except ValueError as error:
+            return f"HUB_TRANSFER_FILE_INVALID {path}: {error}"
         if item.get("size_bytes") != actual_size or item.get("sha256") != actual_digest:
             return f"HUB_TRANSFER_DIGEST_MISMATCH {path}: cache bytes differ from acquired transfer"
         normalized.append({"name": item["name"], "size_bytes": actual_size,
@@ -1228,15 +1229,16 @@ def hub_cache_transfer_problem(repo_id: str, repo: Path, snapshot: Path,
     return None
 
 def hub_cache_integrity_problem(asset: dict[str, Any], repo: Path, snapshot: Path,
-                                declared_files: list[str]) -> str | None:
+                                declared_files: list[str], *, check_transfer: bool = True) -> str | None:
     problem = hub_cache_size_problem(asset, repo)
     if problem:
         return problem
     problem = hub_cache_payload_problem(asset, repo)
     if problem:
         return problem
-    transfer_problem = hub_cache_transfer_problem(hub_cache_repo_id(asset), repo, snapshot, declared_files)
-    return transfer_problem
+    if check_transfer:
+        return hub_cache_transfer_problem(hub_cache_repo_id(asset), repo, snapshot, declared_files)
+    return None
 
 
 def hub_cache_identity(asset: dict[str, Any], repo: Path | None = None) -> dict[str, Any]:
@@ -1784,6 +1786,17 @@ def checkpoint_member_root(checkpoint: Path, members: list[dict[str, Any]] | Non
     # No declaration available (a bare path): fall back to the filesystem, which is the best
     # available answer and is what a caller passing only a path can mean.
     return checkpoint if checkpoint.is_dir() else checkpoint.parent
+
+
+def hub_payload_sha256(path: Path) -> str:
+    """Hash Hub payload bytes after resolving Hugging Face's snapshot symlinks."""
+    try:
+        resolved = path.resolve(strict=True)
+    except (OSError, RuntimeError) as error:
+        raise FileNotFoundError(f"Hub payload member is missing: {path}") from error
+    if not resolved.is_file():
+        raise ValueError(f"Hub payload member is not a regular file: {path}")
+    return sha256_file(resolved)
 
 
 def sha256_file(path: Path, required_files: list[str] | None = None) -> str:

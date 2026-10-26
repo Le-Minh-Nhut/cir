@@ -249,6 +249,19 @@ def test_r23_04_payload_budget_vs_cache_footprint(clean_tmp: Path, monkeypatch: 
         hub_repo_id="bert-base-uncased",
         hub_files=declared_files,
     )
+    config = WorkbenchConfig(
+        clean_tmp,
+        clean_tmp / "data",
+        clean_tmp / "FashionIQ",
+        "127.0.0.1",
+        8000,
+        5173,
+        clean_tmp / "checkpoints",
+        clean_tmp / "results",
+        clean_tmp / "third_party",
+        WORKBENCH_ARTIFACTS_ROOT=clean_tmp / "artifacts",
+    )
+    monkeypatch.setattr(downloader, "resolve_config", lambda: config)
 
     from dataclasses import replace
     oversized = replace(asset, expected_size_bytes=34)
@@ -291,11 +304,6 @@ def test_cache_declared_total_mismatch_blocks_readiness_and_acquisition(
 
     asset = next(item for item in downloader.assets({"tme"}, clean_tmp / "third_party", clean_tmp / "FashionIQ")
                  if item.hub_repo_id)
-    monkeypatch.setattr("huggingface_hub.snapshot_download", lambda **_kwargs: str(snapshot))
-    ok, message = downloader.bootstrap_hub_asset(asset)
-    assert not ok
-    assert message.startswith("PAYLOAD_SIZE_MISMATCH")
-    assert f"declared payload has {actual_bytes} bytes" in message
     cfg = WorkbenchConfig(
         clean_tmp,
         clean_tmp / "data",
@@ -306,9 +314,15 @@ def test_cache_declared_total_mismatch_blocks_readiness_and_acquisition(
         clean_tmp / "checkpoints",
         clean_tmp / "results",
         clean_tmp / "third_party",
+        WORKBENCH_ARTIFACTS_ROOT=clean_tmp / "artifacts",
     )
-    monkeypatch.setattr(pipeline, "resolve_config", lambda: cfg)
     monkeypatch.setattr(downloader, "resolve_config", lambda: cfg)
+    monkeypatch.setattr(pipeline, "resolve_config", lambda: cfg)
+    monkeypatch.setattr("huggingface_hub.snapshot_download", lambda **_kwargs: str(snapshot))
+    ok, message = downloader.bootstrap_hub_asset(asset)
+    assert not ok
+    assert message.startswith("PAYLOAD_SIZE_MISMATCH")
+    assert f"declared payload has {actual_bytes} bytes" in message
 
     # 1. Setup complete BERT cache
     hf_home = clean_tmp / "hf_home"

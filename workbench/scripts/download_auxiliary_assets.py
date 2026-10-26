@@ -20,7 +20,7 @@ from workbench.backend.operator_config import resolve_config
 from workbench.backend.registry import (
     auxiliary_assets_for_model, auxiliary_destination, auxiliary_model_ids,
     auxiliary_source_url, expected_asset_size, hf_hub_cache_root, hf_hub_repo_dir,
-    hub_cache_snapshot, sha256_file, validate_auxiliary_asset,
+    hub_cache_snapshot, hub_payload_sha256, sha256_file, validate_auxiliary_asset,
 )
 
 @dataclass(frozen=True)
@@ -115,12 +115,17 @@ def report(items: tuple[Asset, ...]) -> None:
                   f"source={asset.source_url or 'unverified author download source'}"
                   + (f" ({detail})" if detail else ""))
             continue
-        state = "present" if asset.destination.is_file() else "missing"
+        size = asset.destination.stat().st_size if asset.destination.is_file() else None
+        expected_size = asset.expected_size_bytes
+        size_mismatch = (size is not None and type(expected_size) is int
+                         and expected_size > 0 and size != expected_size)
+        state = "invalid size" if size_mismatch else "present" if size is not None else "missing"
         source = asset.source_url or "unverified author download source"
         prefix = getattr(asset, "expected_sha256_prefix", None)
         source_unverified = asset.provenance_status != "VERIFIED" or (asset.expected_sha256 is None and prefix is None)
+        size_detail = f" ({size} bytes; expected {expected_size})" if size_mismatch else ""
         print(
-            f"{asset.family}: destination={asset.destination} state={state} "
+            f"{asset.family}: destination={asset.destination} state={state}{size_detail} "
             f"required={str(asset.required).lower()} "
             f"automatic_download_available={str(asset.automatic_download_available).lower()} "
             f"source_unverified={str(source_unverified).lower()} "
@@ -177,7 +182,7 @@ def verify(asset: Asset, *, fashioniq_root: Path | None = None) -> bool:
             print(issue)
     return res.ok
 
-def hub_cache_layout_problem(repo_id: str) -> str | None:
+def hub_cache_layout_problem(repo_id: str, *, check_transfer: bool = True) -> str | None:
     """The registry's own hub-layout diagnosis, imported rather than duplicated.
 
     One definition answers this for the checker, the downloader and the bootstrap; a second copy
@@ -185,7 +190,7 @@ def hub_cache_layout_problem(repo_id: str) -> str | None:
     """
     from workbench.backend.registry import hub_cache_layout_problem as _problem
 
-    return _problem(repo_id)
+    return _problem(repo_id, check_transfer=check_transfer)
 
 
 def hub_cache_missing_files(asset: "Asset") -> list[str]:
@@ -222,7 +227,7 @@ def hub_cache_payload_bytes(snapshot: Path, declared_files: list[str] | tuple[st
     return total
 
 
-def bootstrap_hub_asset(asset: "Asset") -> tuple[bool, str]:
+def bootstrap_hub_asset(asset: "Asset", *, force_download: bool = False) -> tuple[bool, str]:
     """Acquire a Hugging Face hub asset into the cache the loader reads, bounded to its declaration.
 
     Uses the controller environment interpreter — acquisition runs under the controller
@@ -237,25 +242,49 @@ def bootstrap_hub_asset(asset: "Asset") -> tuple[bool, str]:
     allow = list(asset.hub_files or [])
     limit = asset.expected_size_bytes if type(asset.expected_size_bytes) is int and asset.expected_size_bytes > 0 else None
     root = hf_hub_cache_root()
+    repo = hf_hub_repo_dir(repo_id, root)
+    config = resolve_config()
+    manifest = manifest_path(config.WORKBENCH_ARTIFACTS_ROOT)
+    prior_record = next((entry for entry in load_manifest(manifest)
+                         if entry.get("destination") == str(repo.resolve())
+                         and entry.get("hub_repo_id") == repo_id
+                         and entry.get("source_revision") == asset.source_revision), None)
+    prior_digests = {
+        item["name"]: item["sha256"]
+        for item in (prior_record or {}).get("hub_file_records", [])
+        if isinstance(item, dict) and isinstance(item.get("name"), str)
+        and isinstance(item.get("sha256"), str)
+    }
     # `cache_dir` is explicit; do not mutate the controller's environment as a side effect.
     cache_dir = root / "hub"
     try:
         path = snapshot_download(repo_id=repo_id,
                                  revision=asset.source_revision or None,
                                  allow_patterns=allow or None,
-                                 cache_dir=str(cache_dir))
+                                 cache_dir=str(cache_dir),
+                                 force_download=force_download)
     except Exception as error:
         return False, f"hub bootstrap failed for {repo_id}: {type(error).__name__}: {error}"
-    repo = hf_hub_repo_dir(repo_id, root)
     snapshot = Path(path)
+    if asset.source_revision and snapshot.name != asset.source_revision:
+        return False, (f"HUB_REVISION_MISMATCH {snapshot}: expected pinned revision "
+                       f"{asset.source_revision}")
     payload_bytes = hub_cache_payload_bytes(snapshot, allow)
     missing = [name for name in allow if not (snapshot / name).is_file()]
     if missing:
         return False, (f"hub bootstrap for {repo_id} wrote snapshot missing declared payload: "
                        f"{', '.join(missing)}")
-    if asset.expected_size_bytes is not None and payload_bytes != asset.expected_size_bytes:
+    if limit is not None and payload_bytes != limit:
         return False, (f"PAYLOAD_SIZE_MISMATCH {snapshot}: declared payload has {payload_bytes} bytes, "
-                       f"registry declares {asset.expected_size_bytes} bytes")
+                       f"registry declares {limit} bytes")
+    for name, expected_digest in prior_digests.items():
+        try:
+            actual_digest = hub_payload_sha256(snapshot / name)
+        except (OSError, ValueError) as error:
+            return False, f"HUB_TRANSFER_FILE_INVALID {snapshot / name}: {error}"
+        if actual_digest != expected_digest:
+            return False, (f"HUB_TRANSFER_DIGEST_MISMATCH {snapshot / name}: repaired bytes differ "
+                           f"from previously acquired transfer")
     # PUBLISH the reference atomically AFTER payload is verified.
     if asset.source_revision:
         refs = repo / "refs"
@@ -266,12 +295,14 @@ def bootstrap_hub_asset(asset: "Asset") -> tuple[bool, str]:
             tmp_ref = ref.with_suffix(f".tmp.{os.getpid()}")
             tmp_ref.write_text(rev_content, encoding="utf-8")
             tmp_ref.replace(ref)
-    problem = hub_cache_layout_problem(repo_id)
+    # The repair replaces stale transfer evidence; all revision, size, and payload checks still run.
+    problem = hub_cache_layout_problem(repo_id, check_transfer=not force_download)
     if problem:
         return False, problem
-    config = resolve_config()
-    manifest = manifest_path(config.WORKBENCH_ARTIFACTS_ROOT)
-    entries = record_hub_download(load_manifest(manifest), asset, snapshot, repo)
+    try:
+        entries = record_hub_download(load_manifest(manifest), asset, snapshot, repo)
+    except (OSError, ValueError) as error:
+        return False, f"HUB_TRANSFER_FILE_INVALID {snapshot}: {error}"
     save_manifest(manifest, entries)
     print(f"STAGED HUB CACHE {repo} ({payload_bytes} bytes, files: {', '.join(sorted(allow)) or 'all'})")
     return True, str(path)
@@ -457,7 +488,7 @@ def record_hub_download(entries: list[dict], asset: Asset, snapshot: Path, repo:
     for name in sorted(asset.hub_files or ()):
         path = snapshot / name
         size = path.stat().st_size
-        digest = sha256_file(path)
+        digest = hub_payload_sha256(path)
         records.append({"name": name, "size_bytes": size, "sha256": digest})
         resolved = path.resolve()
         if resolved not in seen:
@@ -514,7 +545,8 @@ def auxiliary_asset_needs_acquisition(
     if not dest.is_file():
         return True
     try:
-        if dest.stat().st_size == 0:
+        size = dest.stat().st_size
+        if size == 0:
             return True
     except OSError:
         return True
@@ -525,6 +557,9 @@ def auxiliary_asset_needs_acquisition(
         return False
 
     if managed_manifest is not None:
+        expected_size = asset.expected_size_bytes
+        if type(expected_size) is int and expected_size > 0 and size != expected_size:
+            return True
         try:
             digest = sha256_file(dest)
         except OSError:
@@ -621,12 +656,27 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"{asset.family}: BLOCKED — required asset has no verified automatic acquisition source")
         print("DRY RUN: no network request and no filesystem mutation.")
         return 0
+    from workbench.backend.registry import (
+        hub_cache_declared_files, hub_cache_size_problem, hub_cache_transfer_problem,
+    )
     for asset in hub_selected:
-        ok, message = bootstrap_hub_asset(asset)
+        repo = hf_hub_repo_dir(asset.hub_repo_id)
+        snapshot = hub_cache_snapshot(repo)
+        repair = args.force_redownload
+        if not repair and snapshot is not None:
+            identity = {"hub_repo_id": asset.hub_repo_id}
+            size_problem = hub_cache_size_problem(identity, repo)
+            transfer_problem = hub_cache_transfer_problem(
+                asset.hub_repo_id, repo, snapshot, hub_cache_declared_files(asset.hub_repo_id))
+            if transfer_problem and transfer_problem.startswith("HUB_TRANSFER_REVISION_MISMATCH"):
+                print(f"BLOCKED: {asset.family}: {transfer_problem}", file=sys.stderr)
+                return 1
+            repair = bool(size_problem or transfer_problem)
+        ok, message = bootstrap_hub_asset(asset, force_download=repair)
         if not ok:
             print(f"BLOCKED: {asset.family}: {message}", file=sys.stderr)
             return 1
-    entries = manifest
+    entries = load_manifest(manifest_path(config.WORKBENCH_ARTIFACTS_ROOT))
     for asset in selected:
         assert asset.source_url is not None
         partial = asset.destination.with_suffix(asset.destination.suffix + ".part")
@@ -635,8 +685,12 @@ def main(argv: list[str] | None = None) -> int:
         try:
             limit = asset.expected_size_bytes if type(asset.expected_size_bytes) is int and asset.expected_size_bytes > 0 else _DOWNLOAD_CEILING
             download(asset.source_url, partial, limit)
-            if partial.stat().st_size == 0:
+            size = partial.stat().st_size
+            if size == 0:
                 raise RuntimeError("downloaded auxiliary asset is empty")
+            expected_size = asset.expected_size_bytes
+            if type(expected_size) is int and expected_size > 0 and size != expected_size:
+                raise RuntimeError(f"download size mismatch: expected {expected_size} bytes, got {size}")
             digest = sha256_file(partial)
             if asset.expected_sha256 and digest != asset.expected_sha256:
                 raise RuntimeError("official SHA256 mismatch")

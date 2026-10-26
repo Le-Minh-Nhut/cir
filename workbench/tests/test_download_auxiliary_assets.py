@@ -38,15 +38,14 @@ def qwen_assets(module, config: WorkbenchConfig, *, with_hash: bool = True):
     """The three downloadable Qwen captions.
 
     The registry now pins each file's published content hash, so a test that wants to exercise a
-    transfer path without reproducing the real 2-5 MB payload uses `with_hash=False`; the tests that
-    prove hash verification is enforced keep the real hash and serve matching or mismatching bytes.
+    transfer path without reproducing the real multi-megabyte payloads uses `with_hash=False`.
     """
     items = tuple(asset for asset in module.assets({"csmcir"}, config.WORKBENCH_THIRD_PARTY_ROOT, config.FASHIONIQ_ROOT)
                   if asset.family == "Qwen captions")
     if with_hash:
         return items
     from dataclasses import replace
-    return tuple(replace(asset, expected_sha256=None) for asset in items)
+    return tuple(replace(asset, expected_sha256=None, expected_size_bytes=None) for asset in items)
 
 def load_module():
     script = Path(__file__).resolve().parents[2] / "workbench" / "scripts" / "download_auxiliary_assets.py"
@@ -174,10 +173,18 @@ def test_a_published_hash_is_enforced_and_a_mismatch_is_refused(monkeypatch, tmp
     module = load_module()
     config = config_at(tmp_path)
     items = qwen_assets(module, config)
+    assert len(items) == 3
+    assert all(asset.family == "Qwen captions" and not asset.hub_repo_id for asset in items)
     assert all(asset.expected_sha256 for asset in items), "these assets declare a published hash"
 
+    selected = items
+    monkeypatch.setattr(module, "assets", lambda *args, **kwargs: selected)
     monkeypatch.setattr(module, "resolve_config", lambda: config)
-    monkeypatch.setattr(module.urllib.request, "urlopen", lambda url: Response(b"not-the-published-bytes"))
+    bad_payload = b"not-the-published-bytes"
+    from dataclasses import replace
+    selected = tuple(replace(asset, expected_size_bytes=len(bad_payload)) for asset in items)
+    assert module.assets({"csmcir"}, config.WORKBENCH_THIRD_PARTY_ROOT, config.FASHIONIQ_ROOT) == selected
+    monkeypatch.setattr(module.urllib.request, "urlopen", lambda url: Response(bad_payload))
 
     assert module.main(["--model", "csmcir"]) == 1, "a hash mismatch must refuse the download"
     for asset in items:
@@ -188,9 +195,9 @@ def test_a_published_hash_is_enforced_and_a_mismatch_is_refused(monkeypatch, tmp
     # something else about the payload.
     payload = b"the recorded bytes"
     digest = hashlib.sha256(payload).hexdigest()
-    from dataclasses import replace
-    monkeypatch.setattr(module, "assets",
-                        lambda *a, **k: tuple(replace(asset, expected_sha256=digest) for asset in items))
+    selected = tuple(replace(asset, expected_sha256=digest,
+                             expected_size_bytes=len(payload)) for asset in items)
+    assert module.assets({"csmcir"}, config.WORKBENCH_THIRD_PARTY_ROOT, config.FASHIONIQ_ROOT) == selected
     monkeypatch.setattr(module.urllib.request, "urlopen", lambda url: Response(payload))
     assert module.main(["--model", "csmcir"]) == 0
     assert all(asset.destination.read_bytes() == payload for asset in items)
@@ -987,6 +994,7 @@ def test_tme_auxiliary_destinations_match_preparation_contract(tmp_path: Path, m
     )
 
     third_party = tmp_path / "third_party"
+    monkeypatch.setenv("HF_HOME", str(tmp_path / "hf"))
     monkeypatch.setattr(
         "workbench.backend.operator_config.resolve_config",
         lambda: replace(resolve_config(), WORKBENCH_THIRD_PARTY_ROOT=third_party),
@@ -1180,6 +1188,8 @@ def test_hub_bootstrap_publishes_the_ref_the_loader_resolves(monkeypatch, tmp_pa
     import huggingface_hub
 
     module = load_module()
+    config = config_at(tmp_path)
+    monkeypatch.setattr(module, "resolve_config", lambda: config)
     hf_home = tmp_path / "hf_home"
     monkeypatch.setenv("HF_HOME", str(hf_home))
     revision = "86b5e0934494bd15c9632b12f734a8a67f723594"
@@ -1212,3 +1222,282 @@ def test_hub_bootstrap_publishes_the_ref_the_loader_resolves(monkeypatch, tmp_pa
 
     assert hub_cache_layout_problem("bert-base-uncased", hf_home) is None
     assert module.hub_cache_layout_problem("bert-base-uncased") is None
+
+
+def test_hub_transfer_hashes_real_relative_snapshot_symlinks(tmp_path: Path, monkeypatch) -> None:
+    module = load_module()
+    from workbench.backend import registry
+
+    config = config_at(tmp_path)
+    monkeypatch.setattr(module, "resolve_config", lambda: config)
+    monkeypatch.setattr("workbench.backend.operator_config.resolve_config", lambda: config)
+    repo = tmp_path / "hf" / "hub" / "models--fixture--repo"
+    snapshot = repo / "snapshots" / "rev-fixture"
+    blob = repo / "blobs" / "fixture-digest"
+    blob.parent.mkdir(parents=True)
+    blob.write_bytes(b"tiny hub payload")
+    snapshot.mkdir(parents=True)
+    member = snapshot / "config.json"
+    member.symlink_to("../../blobs/fixture-digest")
+    asset = module.Asset(
+        model_id="tme", family="fixture Hub", filename=repo.name,
+        destination=repo, required=True, automatic_download_available=True,
+        source_url=None, source_revision="rev-fixture", expected_sha256=None,
+        provenance_status="VERIFIED", expected_size_bytes=None,
+        hub_repo_id="fixture/repo", hub_files=("config.json",),
+    )
+    expected = hashlib.sha256(blob.read_bytes()).hexdigest()
+
+    records = module.record_hub_download([], asset, snapshot, repo)
+    assert records[0]["hub_file_records"][0]["sha256"] == expected
+    module.save_manifest(module.manifest_path(config.WORKBENCH_ARTIFACTS_ROOT), records)
+    assert registry.hub_cache_transfer_problem(
+        "fixture/repo", repo, snapshot, ["config.json"]
+    ) is None
+
+    member.unlink()
+    member.symlink_to("../../blobs/missing")
+    problem = registry.hub_cache_transfer_problem("fixture/repo", repo, snapshot, ["config.json"])
+    assert problem is not None and problem.startswith("HUB_TRANSFER_FILE_MISSING ")
+    assert str(member) in problem
+
+
+def test_mixed_hub_and_file_acquisition_preserves_manifest_and_warm_reuse(
+        tmp_path: Path, monkeypatch) -> None:
+    import huggingface_hub
+    from workbench.backend.registry import hf_hub_repo_dir
+
+    module = load_module()
+    config = config_at(tmp_path)
+    monkeypatch.setattr(module, "resolve_config", lambda: config)
+    monkeypatch.setattr("workbench.backend.operator_config.resolve_config", lambda: config)
+    monkeypatch.setenv("HF_HOME", str(tmp_path / "hf"))
+    hub = next(asset for asset in module.assets(
+        {"tme"}, config.WORKBENCH_THIRD_PARTY_ROOT, config.FASHIONIQ_ROOT) if asset.hub_repo_id)
+    files = {
+        "config.json": b"{}",
+        "pytorch_model.bin": b"weights",
+        "tokenizer.json": b"{}",
+        "tokenizer_config.json": b"{}",
+        "vocab.txt": b"tokens",
+    }
+    monkeypatch.setenv("WORKBENCH_TEST_ASSET_SIZE_CONFIG_JSON",
+                       str(sum(map(len, files.values()))))
+    hub = next(asset for asset in module.assets(
+        {"tme"}, config.WORKBENCH_THIRD_PARTY_ROOT, config.FASHIONIQ_ROOT) if asset.hub_repo_id)
+    file_bytes = b"file payload"
+    file_asset = module.Asset(
+        model_id="tme", family="fixture file", filename="fixture.bin",
+        destination=tmp_path / "third_party" / "fixture.bin", required=True,
+        automatic_download_available=True, source_url="https://fixture.invalid/file",
+        source_revision=None, expected_sha256=hashlib.sha256(file_bytes).hexdigest(),
+        provenance_status="VERIFIED", expected_size_bytes=len(file_bytes),
+    )
+    monkeypatch.setattr(module, "assets", lambda *args, **kwargs: (hub, file_asset))
+    repo = hf_hub_repo_dir(hub.hub_repo_id)
+    snapshot = repo / "snapshots" / hub.source_revision
+    calls: list[tuple[str, dict]] = []
+
+    def snapshot_download(**kwargs):
+        calls.append(("hub", kwargs))
+        snapshot.mkdir(parents=True, exist_ok=True)
+        for name, content in files.items():
+            (snapshot / name).write_bytes(content)
+        return str(snapshot)
+
+    monkeypatch.setattr(huggingface_hub, "snapshot_download", snapshot_download)
+    monkeypatch.setattr(module.urllib.request, "urlopen",
+                        lambda url: (calls.append(("file", {"url": url})), Response(file_bytes))[1])
+    manifest_path = module.manifest_path(config.WORKBENCH_ARTIFACTS_ROOT)
+    module.save_manifest(manifest_path, [{"destination": "/unrelated", "downloaded_sha256": "keep"}])
+
+    assert module.main(["--model", "tme"]) == 0
+    rows = module.load_manifest(manifest_path)
+    assert {row.get("destination") for row in rows} == {
+        "/unrelated", str(repo.resolve()), str(file_asset.destination)}
+    assert next(row for row in rows if row.get("hub_repo_id"))[
+        "hub_file_records"][0]["sha256"] == hashlib.sha256(files["config.json"]).hexdigest()
+    assert calls == [("hub", calls[0][1]), ("file", {"url": file_asset.source_url})]
+
+    monkeypatch.setattr(huggingface_hub, "snapshot_download",
+                        lambda **kwargs: (_ for _ in ()).throw(AssertionError("Hub transport used")))
+    monkeypatch.setattr(module.urllib.request, "urlopen",
+                        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("file transport used")))
+    assert module.main(["--model", "tme"]) == 0
+
+
+def test_short_response_is_not_published_and_correct_retry_repairs(
+        tmp_path: Path, monkeypatch, capsys) -> None:
+    module = load_module()
+    config = config_at(tmp_path)
+    monkeypatch.setattr(module, "resolve_config", lambda: config)
+    good = b"x" * 100
+    asset = module.Asset(
+        model_id="csmcir", family="fixture file", filename="fixture.bin",
+        destination=tmp_path / "third_party" / "fixture.bin", required=True,
+        automatic_download_available=True, source_url="https://fixture.invalid/file",
+        source_revision=None, expected_sha256=hashlib.sha256(good).hexdigest(),
+        provenance_status="VERIFIED", expected_size_bytes=100,
+    )
+    monkeypatch.setattr(module, "assets", lambda *args, **kwargs: (asset,))
+    monkeypatch.setattr(module, "auxiliary_model_ids", lambda: {"csmcir"})
+    asset.destination.parent.mkdir(parents=True)
+    manifest_path = module.manifest_path(config.WORKBENCH_ARTIFACTS_ROOT)
+    assert not manifest_path.exists()
+    monkeypatch.setattr(module.urllib.request, "urlopen", lambda _: Response(b"x" * 13))
+
+    assert module.main(["--model", "csmcir"]) == 1
+    assert not asset.destination.exists()
+    assert not manifest_path.exists()
+    assert "download size mismatch: expected 100 bytes, got 13" in capsys.readouterr().err
+
+    monkeypatch.setattr(module.urllib.request, "urlopen", lambda _: Response(good))
+    assert module.main(["--model", "csmcir"]) == 0
+    assert asset.destination.read_bytes() == good
+    repaired = module.load_manifest(manifest_path)
+    assert repaired[0]["downloaded_sha256"] == hashlib.sha256(good).hexdigest()
+
+
+
+def test_hub_force_redownload_repairs_same_size_corruption_and_checks_recorded_digest(
+        tmp_path: Path, monkeypatch, capsys) -> None:
+    import huggingface_hub
+    from workbench.backend.registry import hf_hub_repo_dir
+
+    module = load_module()
+    config = config_at(tmp_path)
+    monkeypatch.setattr(module, "resolve_config", lambda: config)
+    monkeypatch.setenv("HF_HOME", str(tmp_path / "hf"))
+    monkeypatch.setattr("workbench.backend.operator_config.resolve_config", lambda: config)
+    files = {
+        "config.json": b"cfg",
+        "pytorch_model.bin": b"weights",
+        "tokenizer.json": b"tokenizer",
+        "tokenizer_config.json": b"token-config",
+        "vocab.txt": b"vocab",
+    }
+    monkeypatch.setenv("WORKBENCH_TEST_ASSET_SIZE_CONFIG_JSON",
+                       str(sum(map(len, files.values()))))
+    hub = next(asset for asset in module.assets(
+        {"tme"}, config.WORKBENCH_THIRD_PARTY_ROOT, config.FASHIONIQ_ROOT) if asset.hub_repo_id)
+    monkeypatch.setattr(module, "assets", lambda *args, **kwargs: (hub,))
+    repo = hf_hub_repo_dir(hub.hub_repo_id)
+    snapshot = repo / "snapshots" / hub.source_revision
+    calls: list[dict] = []
+    serve_changed = False
+
+    def snapshot_download(**kwargs):
+        nonlocal serve_changed
+        calls.append(kwargs)
+        snapshot.mkdir(parents=True, exist_ok=True)
+        (repo / "blobs").mkdir(parents=True, exist_ok=True)
+        for name, original in files.items():
+            content = (b"X" * len(original)) if serve_changed and name == "config.json" else original
+            blob = repo / "blobs" / hashlib.sha256(original).hexdigest()
+            blob.write_bytes(content)
+            member = snapshot / name
+            member.unlink(missing_ok=True)
+            member.symlink_to(f"../../blobs/{blob.name}")
+        return str(snapshot)
+
+    monkeypatch.setattr(huggingface_hub, "snapshot_download", snapshot_download)
+    assert module.main(["--model", "tme"]) == 0
+    assert calls[0]["force_download"] is False
+    manifest_path = module.manifest_path(config.WORKBENCH_ARTIFACTS_ROOT)
+    original_manifest = module.load_manifest(manifest_path)
+
+    blob = repo / "blobs" / hashlib.sha256(files["config.json"]).hexdigest()
+    blob.write_bytes(b"Y" * len(files["config.json"]))
+    assert module.auxiliary_asset_needs_acquisition(hub)
+
+    serve_changed = True
+    assert module.main(["--model", "tme", "--force-redownload"]) == 1
+    assert calls[-1]["force_download"] is True
+    assert module.load_manifest(manifest_path) == original_manifest
+    assert "HUB_TRANSFER_DIGEST_MISMATCH" in capsys.readouterr().err
+
+    serve_changed = False
+    assert module.main(["--model", "tme", "--force-redownload"]) == 0
+    assert calls[-1]["force_download"] is True
+    assert module.load_manifest(manifest_path)[0]["hub_file_records"][0]["sha256"] == \
+        hashlib.sha256(files["config.json"]).hexdigest()
+
+    manifest_rows = module.load_manifest(manifest_path)
+    manifest_rows[0]["source_revision"] = "old-revision"
+    module.save_manifest(manifest_path, manifest_rows)
+    calls_before_warm_check = len(calls)
+    assert module.hub_cache_layout_problem("bert-base-uncased").startswith(
+        "HUB_TRANSFER_REVISION_MISMATCH")
+    assert module.main(["--model", "tme"]) == 1
+    assert len(calls) == calls_before_warm_check
+    assert module.load_manifest(manifest_path)[0]["source_revision"] == "old-revision"
+    assert "HUB_TRANSFER_REVISION_MISMATCH" in capsys.readouterr().err
+    assert module.main(["--model", "tme", "--force-redownload"]) == 0
+    assert calls[-1]["force_download"] is True
+    repaired = module.load_manifest(manifest_path)[0]
+    assert repaired["source_revision"] == hub.source_revision
+    assert repaired["size_bytes"] == sum(map(len, files.values()))
+    assert {item["name"] for item in repaired["hub_file_records"]} == set(files)
+    assert {item["name"]: item["sha256"] for item in repaired["hub_file_records"]} == {
+        name: hashlib.sha256(content).hexdigest() for name, content in files.items()}
+    assert repaired["official_hash_available"] is False
+    assert repaired["official_sha256"] is None
+
+
+def test_pipeline_capability_and_budget_match_managed_size_repair(tmp_path: Path, monkeypatch) -> None:
+    from workbench.backend.autopilot import AutopilotConfig, _enforce_download_budget
+    from workbench.backend.registry import load_registry
+    from workbench.scripts import download_auxiliary_assets as module
+    from workbench.scripts import pipeline
+    from workbench.backend import registry
+
+    config = config_at(tmp_path)
+    monkeypatch.setattr(module, "resolve_config", lambda: config)
+    monkeypatch.setattr("workbench.backend.operator_config.resolve_config", lambda: config)
+    declaration = {
+        "model_id": "csmcir", "family": "fixture file", "required_for": "official_evaluation",
+        "source_type": "direct_url", "source_repo": "https://fixture.invalid/file",
+        "source_revision": None, "source_path": None, "destination_scope": "fashioniq_root",
+        "destination_path": "fixture.bin", "automatic_download_available": True,
+        "expected_sha256": None, "expected_sha256_prefix": None,
+        "expected_size_bytes": 100, "provenance_status": "VERIFIED",
+    }
+    monkeypatch.setattr(registry, "load_auxiliary_assets", lambda *args, **kwargs: [declaration])
+    asset = module.assets({"csmcir"}, config.WORKBENCH_THIRD_PARTY_ROOT, config.FASHIONIQ_ROOT)[0]
+    asset.destination.parent.mkdir(parents=True, exist_ok=True)
+    asset.destination.write_bytes(b"x" * 13)
+    manifest_path = module.manifest_path(config.WORKBENCH_ARTIFACTS_ROOT)
+    module.save_manifest(manifest_path, module.record_download([], asset))
+
+    args = pipeline.parser_for().parse_args(["all", "--model", "csmcir"])
+    stage = next(stage for stage in pipeline.all_stages(args, config)
+                 if stage.name == "auxiliary-assets" and stage.model_id == "csmcir")
+    assert stage.required_capabilities == frozenset({"allow_network", "allow_large_downloads"})
+
+    cfg = AutopilotConfig(
+        path=tmp_path / "config.yaml", selected_model_ids=("csmcir",),
+        paths={"artifacts": config.WORKBENCH_ARTIFACTS_ROOT,
+               "checkpoints": config.WORKBENCH_CHECKPOINT_ROOT,
+               "dataset_root": config.FASHIONIQ_ROOT,
+               "third_party": config.WORKBENCH_THIRD_PARTY_ROOT},
+        budgets={"max_download_bytes": 99}, permissions={"allow_network": True},
+        registry={"models": [next(model for model in load_registry()["models"]
+                                   if model["model_id"] == "csmcir")]},
+    )
+    row = {"model_id": "csmcir", "status": "NOT_RUN", "checkpoint_ids": []}
+    _enforce_download_budget(cfg, [row])
+    assert row["status"] == "BLOCKED_CHECKPOINT"
+    assert "requires 100 bytes" in row["blockers"][0]
+
+    payload = b"valid 100-byte payload" + b"x" * 78
+    assert len(payload) == 100
+    asset.destination.write_bytes(payload)
+    module.save_manifest(manifest_path, module.record_download([], asset))
+    warm_stage = next(stage for stage in pipeline.all_stages(args, config)
+                      if stage.name == "auxiliary-assets" and stage.model_id == "csmcir")
+    assert warm_stage.commands == stage.commands
+    assert warm_stage.required_capabilities == frozenset()
+    warm_row = {"model_id": "csmcir", "status": "NOT_RUN", "checkpoint_ids": []}
+    cfg = __import__("dataclasses").replace(cfg, budgets={"max_download_bytes": 0})
+    _enforce_download_budget(cfg, [warm_row])
+    assert warm_row["status"] == "NOT_RUN"

@@ -187,6 +187,13 @@ def test_lavis_processor_parity_cli_rejects_unknown_model_without_traceback():
 
 
 def test_lavis_processor_parity_valid_model_runs_native_comparison():
+    missing = [module for module in ("omegaconf", "cv2")
+               if importlib.util.find_spec(module) is None]
+    if missing:
+        import pytest
+
+        pytest.skip(f"native LAVIS comparison requires model-side dependencies: {', '.join(missing)}")
+
     script = ROOT / "workbench/scripts/lavis_processor_parity.py"
     result = subprocess.run([sys.executable, str(script), "hint"], cwd=ROOT,
                             capture_output=True, text=True)

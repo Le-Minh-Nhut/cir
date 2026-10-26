@@ -1,6 +1,6 @@
 # PC reproduction handoff
 
-Primary operator path: [AUTOPILOT_GUIDE.md](AUTOPILOT_GUIDE.md). Use the checked-in example profile only for read-only planning; copy it to a private PC-specific YAML and configure dataset, persistent paths, model selection, checkpoint policy, budgets, and permissions before any real run. [MODEL_STATUS_SPEC.md](MODEL_STATUS_SPEC.md) records per-model source, checkpoint, assets, capability, and blockers.
+Primary operator route is this document's [One run/resume path](#one-runresume-path). Copy the checked-in `pc_autopilot.pc_cohort.yaml` to a private PC-specific YAML and configure all six absolute paths, finite budgets, capabilities, model settings, and operational batch before any real run. [MODEL_STATUS_SPEC.md](MODEL_STATUS_SPEC.md) records per-model source, checkpoint, assets, capability, and blockers.
 
 **Revision identity:** delivered revision: `1b890b759bc6663e838c374484092eabb73133b2` (`TESTED_SOURCE_SHA`); its production tree was unchanged by documentation-only successors through the branch tip at accounting time, `5afec61`. Four pytest invocations ran SEQUENTIALLY against the same frozen production tree, NOT as one single pass. The deterministic partition is provable: `chunks.json` totals 2,013 IDs; the four `chunk-q<N>.txt` files match the manifest exactly with no duplicates; an independent `--collect-only` also collected 2,013.
 
@@ -14,7 +14,7 @@ Primary operator path: [AUTOPILOT_GUIDE.md](AUTOPILOT_GUIDE.md). Use the checked
 
 **2,013 collected = 2,002 passed + 11 skipped + 0 failed + 0 errors.** Each chunk ran `OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 NUMEXPR_NUM_THREADS=1 .venv/bin/python -m pytest @.scratch-tmp/chunk-q<N>.txt -n 2 --dist=loadfile --basetemp=.scratch-tmp/chunk-q<N> -p no:cacheprovider`; each `basetemp` was on `/` under `.scratch-tmp/chunk-q<N>` and deleted after its chunk. Chunking was REQUIRED: this 173 GB drive is shared with three other active projects; a single full-suite pass needs ~4 GB of transient `basetemp`. Both earlier full-suite attempts aborted at the disk floor: 1998/2013 with 1.30 GB free on `/`, then 1722/2013 with 0.87 GB free; each chunk needed ≤~2 GB peak instead, and the lowest `/` free space during chunking was 1.44 GB (q1). `test_no_release_document_points_at_a_superseded_source_sha` passed in these runs: the documentation now names the revision containing the production tree. The 11 skips are the host's known, unchanged skip set (q1: 1, q3: 10); the logs do not classify reasons and they were not investigated further. Evidence: `.scratch-tmp/chunks.json`, `chunk-q1.txt`…`chunk-q4.txt`, `chunk-q1.log`…`chunk-q4.log`, `chunk-q<N>-meta.json`, `suite-attempts.jsonl`; `.scratch-tmp/chunk-q1-partial.log` preserves an earlier killed partial run for provenance. Last audited revision: `18b6a509f4cd0f50fef7f9ccef2bc7e80c2fa073`. This round ran without target-PC access: host RTX 3050 Laptop (`sm_86`), no model environment installed and no real weights downloaded. Every target-GPU execution remains `TARGET_GPU_PENDING`.
 
-Run these checks first after preparing the controller `.venv`, before authorizing model downloads, environment installation, preparation, or evaluation. The status commands inspect local inputs; `--dry-run` and `--verify-only` make no changes and do not use network. `prepare_model --model ptha_mtst --json` names missing validation image IDs. Some status commands return nonzero when they report blockers; read their JSON rather than treating the report itself as a failed check.
+After completing the source checkout, controller `.venv` install, and cohort-profile setup in [One run/resume path](#one-runresume-path) below, run these read-only checks before authorizing model downloads, environment installation, preparation, or evaluation. The status commands inspect local inputs; `--dry-run` and `--verify-only` make no changes and do not use network. `prepare_model --model ptha_mtst --json` names missing validation image IDs. Some status commands return nonzero when they report blockers; read their JSON rather than treating the report itself as a failed check.
 
 ```bash
 ./workbench/run.sh autopilot --help
@@ -50,7 +50,7 @@ The controller install route below matches the manifests: `workbench/backend/req
 | `workbench/configs/pc_autopilot.example.yaml` | A minimal, fully-locked example (`strict_clean`, no download, no env install, no preparation, no GPU) | You only want to confirm CLI/config parsing. **Do not** treat it as a runnable cohort: under `strict_clean` it leaves the noise-trained cohort blocked, and it authorizes nothing a cold run needs |
 | `workbench/configs/pc_autopilot.pilot_{csmcir,limn}.yaml` | Single-model pilots | Debugging one model's path |
 
-Copy whichever you choose outside the repository and set **all six** `paths` keys to absolute paths.
+Copy the cohort profile outside the repository. Set all six `paths` keys to PC-specific absolute paths: `registry`, `dataset_root`, `artifacts`, `checkpoints`, `results`, `third_party`.
 
 On this host the workbench-scope doctor returned 0, while `prepare_model.py --list --json` returned 1 because models have blockers; `manage_environment.py --list --json` likewise returned 1 because model interpreters are unconfigured. Those exit codes accompany valid read-only JSON diagnostics, not failed execution.
 
@@ -58,53 +58,68 @@ A workbench-scope doctor may exit 2 when local dependencies are pending; its JSO
 
 ## One run/resume path
 
-On the configured target GPU PC, use the same profile for the initial run and for resume:
+Choose exactly one source checkout path; both continue with the shared setup below.
+
+Existing checkout (safe fast-forward; divergence is refused):
 
 ```bash
-# 1. Source only. This moves NO dataset, NO checkpoint, NO environment.
-#    A bare `fetch` + `checkout` does NOT advance an existing stale local branch, so the update is
-#    an explicit fast-forward. `--ff-only` refuses rather than merging: divergent local work is never
-#    discarded, it is reported.
 git fetch origin research/cir-failure-workbench
 git checkout research/cir-failure-workbench
 git merge --ff-only origin/research/cir-failure-workbench
-git rev-parse HEAD          # must print the delivered SHA recorded in MODEL_STATUS_SPEC.md
+git rev-parse HEAD          # branch tip; may be a documentation-only successor
+git rev-parse 1b890b7       # must print TESTED_SOURCE_SHA: 1b890b759bc6663e838c374484092eabb73133b2
+git merge-base --is-ancestor 1b890b7 HEAD
+git diff --exit-code 1b890b7 HEAD -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'
+```
 
-# 1b. No local branch yet (fresh clone or another machine):
-#     git clone git@github.com:Le-Minh-Nhut/cir.git && cd cir
-#     git checkout -b research/cir-failure-workbench origin/research/cir-failure-workbench
+Fresh checkout (clone the research branch directly):
 
-# 2. Controller interpreter. Install the controller requirements AND the root project into .venv:
-#    `python3 -m venv .venv && .venv/bin/pip install -r workbench/backend/requirements.txt .`
-#    (or uv: `uv venv .venv && uv pip install -r workbench/backend/requirements.txt . --python .venv/bin/python`).
-#    The root project (`.`) provides core dependencies (torch, torchvision, numpy, pillow, packaging),
-#    while requirements.txt supplies controller CLIs and Hub acquisition. Model interpreters stay
-#    SEPARATE and are provisioned per model; never put a model environment on PATH. Run doctor:
+```bash
+git clone --branch research/cir-failure-workbench git@github.com:Le-Minh-Nhut/cir.git cir
+cd cir
+git rev-parse HEAD          # branch tip; may be a documentation-only successor
+git rev-parse 1b890b7       # must print TESTED_SOURCE_SHA: 1b890b759bc6663e838c374484092eabb73133b2
+git merge-base --is-ancestor 1b890b7 HEAD
+git diff --exit-code 1b890b7 HEAD -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'
+```
+
+Continue from the repository root:
+
+```bash
+# 2. Create controller .venv and install both real dependency sources.
+python3 -m venv .venv
+.venv/bin/pip install -r workbench/backend/requirements.txt .
+# The root project (`.`) supplies core dependencies; requirements.txt supplies controller CLIs and Hub acquisition.
+# Keep per-model environments SEPARATE; never put a model environment on PATH.
 .venv/bin/python workbench/scripts/doctor.py --scope workbench --json
 
-# 3. The cohort profile, with all six paths set absolute for the PC, kept outside the repository.
+# 3. Copy actual cohort YAML. Set all six paths above; keep budgets finite and permissions explicit.
 cp workbench/configs/pc_autopilot.pc_cohort.yaml ~/cir_pc.yaml
 $EDITOR ~/cir_pc.yaml
+# Existing finite budgets: max_download_bytes: 37580963840, max_models: 32, top_k: 200.
+# Confirm authorized capabilities: allow_network, allow_large_downloads, allow_env_install,
+# allow_preparation, allow_gpu_eval, allow_gpu_preparation, allow_index_write.
 
-# 3b. Local per-model settings that are NOT paths: the interpreter for each model's own environment
-#     and the operational batch for TME's CUDA feature generator. Copy the example and edit it; a
-#     value here behaves exactly like the same variable exported into the process environment.
+# 3b. Configure per-model interpreters and, for TME, a finite card-sustainable batch.
 cp workbench/config/workbench.env.example workbench/config/workbench.env
 $EDITOR workbench/config/workbench.env
+# For TME, set WORKBENCH_TME_BATCH_SIZE to a batch this GPU sustains; do not assume default 512 fits.
+# On a Blackwell target, select the declared adaptation before planning or applying:
+export WORKBENCH_RUNTIME_ADAPTATION=sm_120
 
-# 4. Read-only plan first. This resolves selection actually (all 17 entries) but persists nothing.
+# 4. Inspect read-only plan first.
 ./workbench/run.sh autopilot --config ~/cir_pc.yaml --dry-run
 
-# 5. Cold run, then the same command to resume: `--resume` reuses every stage whose inputs are
-#    unchanged and re-runs only what a changed input invalidated.
+# 5. Apply/resume the cohort.
 ./workbench/run.sh autopilot --config ~/cir_pc.yaml --apply --resume
 
-# 6. Verifier. All four flags are REQUIRED by its parser; a run cannot be verified without them.
-#    Take RUN_ID/CHECKPOINT/PROTOCOL from the run's own row in
-#    `<paths.artifacts>/reports/autopilot_results.csv` (or the aggregate report file name), not from
-#    memory: the verifier refuses a run whose recorded identity differs from the one requested.
+# 6. For EACH completed run, read the model row in <paths.artifacts>/reports/autopilot_results.csv;
+#    open its aggregate_report and use its exact run_id, model_id, checkpoint_id and protocol_id values.
 .venv/bin/python workbench/scripts/verify_run.py \
     --run-id <RUN_ID> --model <MODEL_ID> --checkpoint <CHECKPOINT_ID> --protocol <PROTOCOL>
+
+# 7. Repeat the unchanged apply/resume command and confirm completed stages are reused.
+./workbench/run.sh autopilot --config ~/cir_pc.yaml --apply --resume
 ```
 
 **This route does not need Docker.** `run.sh autopilot` calls the pipeline directly, and the
@@ -112,15 +127,6 @@ autopilot pins `serve=False`: no container, no API, no UI, no port. Requesting t
 index/UI surface is what engages the container stack (`pc.sh`, `docker compose`, `serve_workbench.py`),
 and nothing in the research run above depends on it. Do not treat an unverified Docker deployment as
 a blocker for a standalone research run, and do not claim Docker readiness without running it.
-
-On a Blackwell target, also set the runtime adaptation in the same file (step 3b):
-
-```bash
-# One operator setting, in the file whose precedence the guide documents:
-#     `WORKBENCH_RUNTIME_ADAPTATION=sm_120`
-# In `workbench/config/workbench.env`, or exported into the process environment (which wins).
-export WORKBENCH_RUNTIME_ADAPTATION=sm_120
-```
 
 Models that declare a matching `adapted_runtime` profile are provisioned with it and record it as
 `variant_provenance.runtime_adaptation`; every other model keeps its historical author pins

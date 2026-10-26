@@ -130,11 +130,7 @@ def test_the_nested_source_layout_resolves_to_the_directory_holding_src() -> Non
 
 
 def test_a_transfer_run_needs_the_explicit_opt_in(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """The CIRR checkpoint must never be evaluated on FashionIQ by default.
-
-    The refused message names the reason (the author publishes no FashionIQ fine-tune), so an operator
-    who has not read the prompt learns why rather than seeing an empty block.
-    """
+    """Positive cache fixture isolates setup; the final refusal asserts the opt-in gate."""
     from pathlib import Path
 
     from workbench.replay import ptha_mtst
@@ -160,6 +156,38 @@ def test_a_transfer_run_needs_the_explicit_opt_in(tmp_path: Path, monkeypatch: p
     eva.write_bytes(b"eva")
     monkeypatch.setenv("TORCH_HOME", str(torch_home))
     monkeypatch.setenv("WORKBENCH_TEST_ASSET_SIZE_EVA_VIT_G_PTH", "3")
+
+    from workbench.backend.registry import auxiliary_assets_for_model, hf_hub_repo_dir
+
+    hf_home = tmp_path / "hf"
+    monkeypatch.setenv("HF_HOME", str(hf_home))
+    revision = next(asset["source_revision"] for asset in auxiliary_assets_for_model("ptha_mtst")
+                    if asset.get("hub_repo_id") == "bert-base-uncased")
+    repo_dir = hf_hub_repo_dir("bert-base-uncased", hf_home)
+    snapshot = repo_dir / "snapshots" / revision
+    snapshot.mkdir(parents=True)
+    (repo_dir / "refs").mkdir()
+    (repo_dir / "refs" / "main").write_text(revision)
+    (snapshot / "config.json").write_text('{"model_type":"bert","vocab_size":7}')
+    (snapshot / "tokenizer_config.json").write_text(
+        '{"tokenizer_class":"BertTokenizer","do_lower_case":true}')
+    (snapshot / "tokenizer.json").write_text(
+        '{"version":"1.0","truncation":null,"padding":null,"added_tokens":[],'
+        '"normalizer":{"type":"BertNormalizer","clean_text":true,'
+        '"handle_chinese_chars":true,"strip_accents":null,"lowercase":true},'
+        '"pre_tokenizer":{"type":"BertPreTokenizer"},"post_processor":null,'
+        '"decoder":null,"model":{"type":"WordPiece","unk_token":"[UNK]",'
+        '"continuing_subword_prefix":"##","max_input_chars_per_word":100,'
+        '"vocab":{"[PAD]":0,"[UNK]":1,"[CLS]":2,"[SEP]":3,"[MASK]":4,'
+        '"hello":5,"world":6}}}')
+    (snapshot / "vocab.txt").write_text(
+        "[PAD]\n[UNK]\n[CLS]\n[SEP]\n[MASK]\nhello\nworld\n")
+    (snapshot / "pytorch_model.bin").write_bytes(b"tiny-model-payload\x00\xff")
+    payload_size = sum((snapshot / name).stat().st_size for name in (
+        "config.json", "pytorch_model.bin", "tokenizer.json", "tokenizer_config.json", "vocab.txt"))
+    monkeypatch.setenv("WORKBENCH_TEST_ASSET_SIZE_CONFIG_JSON", str(payload_size))
+
+    # The positive case proves opt-in permits the transfer; the negative case below is the gate.
     assert ptha_mtst.preflight(source, dataset, checkpoint_root,
                                transfer_cirr_to_fashioniq=True) == []
     refused = ptha_mtst.preflight(source, dataset, checkpoint_root,

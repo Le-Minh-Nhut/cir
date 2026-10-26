@@ -43,9 +43,11 @@ declares per model. Existing files are never overwritten, and the canonical `ima
 only ever read.
 
 **Auxiliary downloads.** Only registry entries with `automatic_download_available: true` are
-fetched, each from a pinned author revision, verified against the published SHA-256 and size where
-one is recorded, written to a temporary file and published atomically. A mismatch refuses the
-download and leaves nothing behind.
+fetched. File downloads are checked against declared SHA-256, prefix and exact size before atomic
+publication; a workbench-managed file with a mismatched declared size is scheduled for repair, while
+an unrecorded operator file is reported but preserved. Hugging Face cache payloads are fetched at
+their pinned revision and checked against declared size and existing transfer digests; snapshot
+symlinks are hashed through their resolved blob files. A mismatch refuses publication.
 
 ## What is deliberately not automated
 

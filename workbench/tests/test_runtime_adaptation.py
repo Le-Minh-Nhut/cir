@@ -75,19 +75,29 @@ def test_model_without_adapted_block_refuses_selection(monkeypatch):
 def test_limn_validate_environment_accepts_both_contracts(monkeypatch):
     from workbench.replay import limn
 
+    versions = {"torch": "2.7.1+cpu", "torchvision": "0.22.1+cpu"}
+
+    def package_version(package):
+        if package not in versions:
+            raise limn.importlib.metadata.PackageNotFoundError(package)
+        return versions[package]
+
+    monkeypatch.setattr(limn.importlib.metadata, "version", package_version)
     monkeypatch.delenv(runtime.ADAPTATION_ENV, raising=False)
     historical = limn.validate_environment()
-    assert any("torch" in blocker for blocker in historical)  # workbench env is not the pin
+    assert historical == [
+        "LIMN environment version mismatch: expected torch ==1.12.1, found 2.7.1+cpu",
+        "LIMN environment version mismatch: expected torchvision ==0.13.1, found 0.22.1+cpu",
+        "LIMN environment package missing: open_clip_torch ==2.20.0",
+    ]
 
     monkeypatch.setenv(runtime.ADAPTATION_ENV, "sm_120")
     adapted = limn.validate_environment()
-    # The workbench torch/vision builds are outside the adapted pin; open_clip_torch remains absent.
     assert adapted == [
-        "LIMN environment version mismatch: expected torch >=2.8,<2.9, found 2.14.1",
-        "LIMN environment version mismatch: expected torchvision >=0.23,<0.24, found 0.29.1",
+        "LIMN environment version mismatch: expected torch >=2.8,<2.9, found 2.7.1+cpu",
+        "LIMN environment version mismatch: expected torchvision >=0.23,<0.24, found 0.22.1+cpu",
         "LIMN environment package missing: open_clip_torch >=2.24,<2.27",
     ]
-
 
 @pytest.mark.parametrize("model_id", ["conesep", "habit", "hint"])
 def test_adapted_runtime_for_ilearn_family(model_id, monkeypatch):
