@@ -2,16 +2,16 @@
 
 Primary operator route is this document's [One run/resume path](#one-runresume-path). Copy the checked-in `pc_autopilot.pc_cohort.yaml` to a private PC-specific YAML and configure all six absolute paths, finite budgets, capabilities, model settings, and operational batch before any real run. [MODEL_STATUS_SPEC.md](MODEL_STATUS_SPEC.md) records per-model source, checkpoint, assets, capability, and blockers.
 
-**Current revision identity:** tested production revision: `d05149b9a71546166f5d5d38c813744c2a84c9e9` (`TESTED_SOURCE_SHA`). The composition-revision `workbench/tests` suite was collected once (2029 node IDs) and run as four sequential chunks, with no duplicate or omitted IDs.
+**Current revision identity:** tested production revision: `d2b6579d819577bed7f0d76714f199486defa1cb` (`TESTED_SOURCE_SHA`). The `workbench/tests` suite was collected once (2049 node IDs) and run as four sequential chunks, with no duplicate or omitted IDs.
 | Chunk | Collected | Passed | Failed | Skipped | Errors | Wall |
 |---|---:|---:|---:|---:|---:|---:|
-| q1 | 508 | 507 | 0 | 1 | 0 | 531.48 s |
-| q2 | 508 | 507 | 1 | 0 | 0 | 154.44 s |
-| q3 | 508 | 498 | 0 | 10 | 0 | 429.74 s |
-| q4 | 505 | 505 | 0 | 0 | 0 | 477.92 s |
-| **Total** | **2029** | **2017** | **1** | **11** | **0** | **1593.58 s (~26.6 min)** |
+| q1 | 513 | 511 | 2 | 0 | 0 | 507.23 s |
+| q2 | 512 | 510 | 1 | 1 | 0 | 227.11 s |
+| q3 | 512 | 502 | 0 | 10 | 0 | 463.73 s |
+| q4 | 512 | 512 | 0 | 0 | 0 | 474.33 s |
+| **Total** | **2049** | **2035** | **3** | **11** | **0** | **1672.40 s (~27.9 min)** |
 
-The measured failure was `workbench/tests/test_handoff_commands.py::test_the_release_documents_quote_the_test_count_they_actually_ran`: before this accounting update, the verdict still recorded the previous suite count. `tests/unit`: 59 passed in 2.59 s. The composition full-suite run preceded the metadata correction and has not been rerun; target-GPU execution remains `TARGET_GPU_PENDING`.
+The measured failures were in q1 (`test_circus_inputs.py`, two failures) and q2 (one failure); their short tracebacks were not retained from the pytest tail output. `tests/unit`: 59 passed in 2.45 s. Target-GPU execution remains `TARGET_GPU_PENDING`.
 
 
 ## Historical previous-release accounting
@@ -102,9 +102,9 @@ git fetch origin research/cir-failure-workbench
 git checkout research/cir-failure-workbench
 git merge --ff-only origin/research/cir-failure-workbench
 git rev-parse HEAD          # branch tip; may be a documentation-only successor
-git rev-parse d05149b9       # must print TESTED_SOURCE_SHA: d05149b9a71546166f5d5d38c813744c2a84c9e9
-git merge-base --is-ancestor d05149b9 HEAD
-git diff --exit-code d05149b9 HEAD -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'
+git rev-parse d2b6579d       # must print TESTED_SOURCE_SHA: d2b6579d819577bed7f0d76714f199486defa1cb
+git merge-base --is-ancestor d2b6579d HEAD
+git diff --exit-code d2b6579d HEAD -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'
 ```
 
 Fresh checkout (clone the research branch directly):
@@ -113,9 +113,9 @@ Fresh checkout (clone the research branch directly):
 git clone --branch research/cir-failure-workbench git@github.com:Le-Minh-Nhut/cir.git cir
 cd cir
 git rev-parse HEAD          # branch tip; may be a documentation-only successor
-git rev-parse d05149b9       # must print TESTED_SOURCE_SHA: d05149b9a71546166f5d5d38c813744c2a84c9e9
-git merge-base --is-ancestor d05149b9 HEAD
-git diff --exit-code d05149b9 HEAD -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'
+git rev-parse d2b6579d       # must print TESTED_SOURCE_SHA: d2b6579d819577bed7f0d76714f199486defa1cb
+git merge-base --is-ancestor d2b6579d HEAD
+git diff --exit-code d2b6579d HEAD -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'
 ```
 
 Continue from the repository root:

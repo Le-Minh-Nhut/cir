@@ -2,7 +2,7 @@
 
 > **Current handoff:** use [AUTOPILOT_GUIDE.md](AUTOPILOT_GUIDE.md) for the single setup/run/resume path and [MODEL_STATUS_SPEC.md](MODEL_STATUS_SPEC.md) for current evidence. The checklist below preserves its earlier release snapshot; its pilot model/readiness claims are historical, not current. TME weights require `python -m workbench.scripts.download_auxiliary_assets --model tme`; its CUDA-only validation feature cache needs explicit `--allow-gpu-preparation` and an estimated ~10.47 GiB of CACHE/STORAGE (not a VRAM guarantee; fit depends on the GPU and chosen batch). Live GPU evaluation and target-device validation remain `TARGET_GPU_PENDING`; this host is an RTX 3050 Laptop (`sm_86`, 4 GB), and `sm_120` was never executed. Docker was not executed on this host.
 
-**Revision identity:** `TESTED_SOURCE_SHA` is `d05149b9a71546166f5d5d38c813744c2a84c9e9`, the production revision named by the current release accounting. The base commit below is historical authorship, not the current tested revision.
+**Revision identity:** `TESTED_SOURCE_SHA` is `d2b6579d819577bed7f0d76714f199486defa1cb`, the production revision named by the current release accounting; `workbench/tests` measured 2049 collected, 2035 passed, 3 failed, 11 skipped in four sequential chunks. The base commit below is historical authorship, not the current tested revision.
 
 ## 1. Commit and command
 

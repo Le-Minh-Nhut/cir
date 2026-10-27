@@ -8,7 +8,7 @@ service, database hay dashboard mới.
 ## Current release accounting — 2026-10-26
 
 
-`TESTED_SOURCE_SHA`: `d05149b9a71546166f5d5d38c813744c2a84c9e9`. Composition-revision `workbench/tests`: **2029 collected, 2017 passed, 1 failed, 11 skipped, 0 errors**, in four sequential chunks (`508+508+508+505`); the sole measured failure was the pre-update verdict-count guard. `tests/unit`: 59 passed. Historical R25 result on `a55a326`: 1967 collected, 1955 passed, 1 failed, 11 skipped.
+`TESTED_SOURCE_SHA`: `d2b6579d819577bed7f0d76714f199486defa1cb`. Current `workbench/tests`: **2049 collected, 2035 passed, 3 failed, 11 skipped, 0 errors**, in four sequential chunks (`513+512+512+512`); two measured failures were in q1 and one in q2. `tests/unit`: 59 passed. Historical composition accounting on `d05149b9`: 2029 collected, 2017 passed, 1 failed, 11 skipped. Historical R25 result on `a55a326`: 1967 collected, 1955 passed, 1 failed, 11 skipped.
 Composition-suite skips were host boundaries: one checkpoint-variant case; two model environments lack declared Python versions; one base interpreter has no inherited packages; one interpreter has no pip; six LAVIS lifecycle cases lack configured model interpreters.
 
 ### R25 findings về code — 2026-10-26
