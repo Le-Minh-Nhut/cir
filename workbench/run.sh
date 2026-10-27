@@ -18,4 +18,8 @@ if [ "${1-}" = "autopilot" ]; then
     shift
     exec "$python" "$root/workbench/scripts/autopilot.py" "$@"
 fi
+if [ "${1-}" = "composition-eval" ]; then
+    shift
+    exec "$python" "$root/workbench/scripts/composition_eval.py" "$@"
+fi
 exec "$python" "$root/workbench/scripts/pipeline.py" "$@"

@@ -19,6 +19,7 @@ protocols:
     evaluation_noise_pct: 0
 models:
   - model_id: csmcir
+    composition_adapter: workbench.composition.model_csmcir
     environment:
       python_env_var: WORKBENCH_CSMCIR_PYTHON
       confidence: VERIFIED_README
@@ -184,6 +185,7 @@ models:
         status: NO_CLEAN_CHECKPOINT
         checkpoint_mapping_status: VERIFIED_METADATA
   - model_id: conesep
+    composition_adapter: workbench.composition.model_conesep
     environment:
       python_env_var: WORKBENCH_CONESEP_PYTHON
       confidence: VERIFIED_README
@@ -290,6 +292,7 @@ models:
         status: NO_CLEAN_CHECKPOINT
         checkpoint_mapping_status: VERIFIED_METADATA
   - model_id: ptha_mtst
+    composition_adapter: workbench.composition.model_ptha_mtst
     method_name: PTHA + MTST
     research_generation: recent
     publication_year: 2025
@@ -404,6 +407,7 @@ models:
         # must not be used to refuse the transfer experiment the operator explicitly authorized.
         checkpoint_mapping_status: VERIFIED_METADATA
   - model_id: habit
+    composition_adapter: workbench.composition.model_habit
     environment:
       python_env_var: WORKBENCH_HABIT_PYTHON
       confidence: VERIFIED_README
@@ -500,6 +504,7 @@ models:
         status: NO_CLEAN_CHECKPOINT
         checkpoint_mapping_status: VERIFIED_METADATA
   - model_id: intent
+    composition_adapter: workbench.composition.model_intent
     environment:
       python_env_var: WORKBENCH_INTENT_PYTHON
       confidence: VERIFIED_README
@@ -593,6 +598,7 @@ models:
         status: NO_CLEAN_CHECKPOINT
         checkpoint_mapping_status: VERIFIED_METADATA
   - model_id: hint
+    composition_adapter: workbench.composition.model_hint
     environment:
       python_env_var: WORKBENCH_HINT_PYTHON
       confidence: VERIFIED_README
@@ -667,6 +673,7 @@ models:
         status: URL_VERIFIED
         checkpoint_mapping_status: VERIFIED_METADATA
   - model_id: encoder
+    composition_adapter: workbench.composition.model_encoder
     # Declared because its evaluator needs its own interpreter: without this flag
     # `python_executable` returns the workbench interpreter and the declared
     # environment is silently ignored.
@@ -1263,6 +1270,7 @@ models:
         notes: "ViT-L backbone (CLIP ViT-L/14), author-published as a variant after the paper's ViT-g code default was acknowledged in upstream issue #4. Reachable (HTTP 200, 1 459 756 541 bytes observed); no published checksum."
 
   - model_id: limn
+    composition_adapter: workbench.composition.model_limn
     replay_status: REPLAY_CODE_IMPLEMENTED
     # The observer exists for this model, so a full pilot is only complete when its per-query
     # artifact is exported and verified. A model without this field is aggregate-only by design.
@@ -1358,6 +1366,7 @@ models:
         mapping_status: VERIFIED_METADATA
         notes: One independently trained whole-model checkpoint per FashionIQ category; all three are required for a complete macro result.
   - model_id: tme
+    composition_adapter: workbench.composition.model_tme
     # The base weights and the validation feature cache the native evaluator opens are declared in
     # the preparation contract, so preflight reports them as explicit blockers instead of reporting
     # an empty asset list as resolved.

@@ -18,6 +18,7 @@ _KEYS = {
     "WORKBENCH_CHECKPOINT_ROOT",
     "WORKBENCH_RESULTS_ROOT",
     "WORKBENCH_THIRD_PARTY_ROOT",
+    "WORKBENCH_CIRCUS_RELEASE_ROOT",
     # Declared external asset + per-model interpreter overrides (documented in
     # workbench.env.example and the registry; not operator path/ports).
     "WORKBENCH_CLVC_RESNET50_WEIGHTS",
@@ -70,11 +71,15 @@ class WorkbenchConfig:
     WORKBENCH_RESULTS_ROOT: Path
     WORKBENCH_THIRD_PARTY_ROOT: Path
     WORKBENCH_ARTIFACTS_ROOT: Path | None = None
+    WORKBENCH_CIRCUS_RELEASE_ROOT: Path | None = None
 
     def __post_init__(self) -> None:
         if self.WORKBENCH_ARTIFACTS_ROOT is None:
             object.__setattr__(self, "WORKBENCH_ARTIFACTS_ROOT",
                                self.CIR_REPO_ROOT / "workbench" / "artifacts")
+        if self.WORKBENCH_CIRCUS_RELEASE_ROOT is None:
+            object.__setattr__(self, "WORKBENCH_CIRCUS_RELEASE_ROOT",
+                               self.CIR_DATA_ROOT / "circus_release")
 
 
 def read_env_file(path: Path | None = None) -> dict[str, str]:
@@ -140,6 +145,8 @@ def resolve_config() -> WorkbenchConfig:
         WORKBENCH_CHECKPOINT_ROOT=_path(values.get("WORKBENCH_CHECKPOINT_ROOT", str(artifacts_root / "checkpoints")), repo_root),
         WORKBENCH_RESULTS_ROOT=_path(values.get("WORKBENCH_RESULTS_ROOT", str(artifacts_root / "results")), repo_root),
         WORKBENCH_THIRD_PARTY_ROOT=_path(values.get("WORKBENCH_THIRD_PARTY_ROOT", str(workbench_root / "third_party")), repo_root),
+        WORKBENCH_CIRCUS_RELEASE_ROOT=_path(values.get("WORKBENCH_CIRCUS_RELEASE_ROOT",
+                                                       str(data_root / "circus_release")), repo_root),
     )
 
 
