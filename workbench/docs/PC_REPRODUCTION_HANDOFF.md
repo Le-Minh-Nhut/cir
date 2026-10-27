@@ -2,14 +2,17 @@
 
 Primary operator route is this document's [One run/resume path](#one-runresume-path). Copy the checked-in `pc_autopilot.pc_cohort.yaml` to a private PC-specific YAML and configure all six absolute paths, finite budgets, capabilities, model settings, and operational batch before any real run. [MODEL_STATUS_SPEC.md](MODEL_STATUS_SPEC.md) records per-model source, checkpoint, assets, capability, and blockers.
 
-**Current revision identity:** tested production revision: `a55a3264dcaef0aeb8e90af7dcafdb9512203d8a` (`TESTED_SOURCE_SHA`). The complete `workbench/tests` suite was measured in FOUR SEQUENTIAL chunk invocations, not one single pass. The deterministic partition is `492+492+492+491 = 1967`; chunks have no duplicate or omitted IDs and their union equals the manifest.
-| Scope | Collected | Passed | Failed | Skipped | Errors |
-|---|---:|---:|---:|---:|---:|
-| `workbench/tests` | **1967** | **1955** | **1** | **11** | **0** |
+**Current revision identity:** tested production revision: `d05149b9a71546166f5d5d38c813744c2a84c9e9` (`TESTED_SOURCE_SHA`). The composition-revision `workbench/tests` suite was collected once (2029 node IDs) and run as four sequential chunks, with no duplicate or omitted IDs.
+| Chunk | Collected | Passed | Failed | Skipped | Errors | Wall |
+|---|---:|---:|---:|---:|---:|---:|
+| q1 | 508 | 507 | 0 | 1 | 0 | 531.48 s |
+| q2 | 508 | 507 | 1 | 0 | 0 | 154.44 s |
+| q3 | 508 | 498 | 0 | 10 | 0 | 429.74 s |
+| q4 | 505 | 505 | 0 | 0 | 0 | 477.92 s |
+| **Total** | **2029** | **2017** | **1** | **11** | **0** | **1593.58 s (~26.6 min)** |
 
-**1955 passed, 1 failed**, 11 skipped, 1967 collected (`workbench/tests`). The sole failure was `workbench/tests/test_handoff_commands.py::test_no_release_document_points_at_a_superseded_source_sha`, the stale-SHA guard this documentation-only update satisfies by advancing metadata. The separate `tests/unit` scope recorded 59 IDs, 59 passed. All 11 skips were host boundaries; `MODEL_STATUS_SPEC.md` records q1/q3 reasons.
+The measured failure was `workbench/tests/test_handoff_commands.py::test_the_release_documents_quote_the_test_count_they_actually_ran`: before this accounting update, the verdict still recorded the previous suite count. `tests/unit`: 59 passed in 2.59 s. The composition full-suite run preceded the metadata correction and has not been rerun; target-GPU execution remains `TARGET_GPU_PENDING`.
 
-Each chunk result above comes from one sequential invocation over its exact partition; together they cover the complete node set, not a single full-suite pass. These CPU/registry-level measurements do not establish model installation, evaluation, or target-GPU execution; all target-GPU execution remains `TARGET_GPU_PENDING`.
 
 ## Historical previous-release accounting
 
@@ -99,9 +102,9 @@ git fetch origin research/cir-failure-workbench
 git checkout research/cir-failure-workbench
 git merge --ff-only origin/research/cir-failure-workbench
 git rev-parse HEAD          # branch tip; may be a documentation-only successor
-git rev-parse a55a326       # must print TESTED_SOURCE_SHA: a55a3264dcaef0aeb8e90af7dcafdb9512203d8a
-git merge-base --is-ancestor a55a326 HEAD
-git diff --exit-code a55a326 HEAD -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'
+git rev-parse d05149b9       # must print TESTED_SOURCE_SHA: d05149b9a71546166f5d5d38c813744c2a84c9e9
+git merge-base --is-ancestor d05149b9 HEAD
+git diff --exit-code d05149b9 HEAD -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'
 ```
 
 Fresh checkout (clone the research branch directly):
@@ -110,9 +113,9 @@ Fresh checkout (clone the research branch directly):
 git clone --branch research/cir-failure-workbench git@github.com:Le-Minh-Nhut/cir.git cir
 cd cir
 git rev-parse HEAD          # branch tip; may be a documentation-only successor
-git rev-parse a55a326       # must print TESTED_SOURCE_SHA: a55a3264dcaef0aeb8e90af7dcafdb9512203d8a
-git merge-base --is-ancestor a55a326 HEAD
-git diff --exit-code a55a326 HEAD -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'
+git rev-parse d05149b9       # must print TESTED_SOURCE_SHA: d05149b9a71546166f5d5d38c813744c2a84c9e9
+git merge-base --is-ancestor d05149b9 HEAD
+git diff --exit-code d05149b9 HEAD -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'
 ```
 
 Continue from the repository root:

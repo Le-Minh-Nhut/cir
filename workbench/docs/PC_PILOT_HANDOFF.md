@@ -26,7 +26,7 @@ Tám entry hoãn có blocker khác nhau theo registry: `airknow` thiếu checkpo
 **Trạng thái 17 model (bảng chuẩn, bằng chứng + điều kiện chuyển trạng thái):**
 [`workbench/docs/MODEL_STATUS_SPEC.md`](MODEL_STATUS_SPEC.md)
 
-**SHA ĐÃ KIỂM THỬ (nguồn sản xuất): `a55a326`** (`a55a3264dcaef0aeb8e90af7dcafdb9512203d8a`), revision production được ghi nhận trong accounting release hiện tại. Bộ `workbench/tests` đầy đủ được thu thập thành bốn invocation tuần tự, không phải một lượt: `492+492+492+491 = 1967`; kết quả **1955 passed, 1 failed**, 11 skipped, 0 errors. Lỗi duy nhất là guard `test_no_release_document_points_at_a_superseded_source_sha`, được sửa bằng bước cập nhật metadata này. `tests/unit`: 59 collected, 59 passed. Mọi bằng chứng đo lường ở lượt này là CPU/registry-level; GPU đích vẫn `TARGET_GPU_PENDING`.
+**SHA ĐÃ KIỂM THỬ (nguồn sản xuất): `d05149b9`** (`d05149b9a71546166f5d5d38c813744c2a84c9e9`), revision production hiện được ghi nhận trong accounting release. Composition suite trên revision này: 2029 collected, 2017 passed, 1 failed (count guard trước khi cập nhật metadata), 11 skipped; `tests/unit`: 59/59 passed. Lịch sử R25 trên `a55a326`: 1967 collected, 1955 passed, 1 failed, 11 skipped. GPU đích vẫn `TARGET_GPU_PENDING`.
 
 Lưu ý: các bản ghi cũ `59949ff`, `9a53ee1` và `5567bc7` đã bị **thay thế**. Công việc vendoring và phục hồi
 model đã thay đổi file production (`workbench/backend/runtime.py`, `workbench/replay/common.py`,
@@ -56,7 +56,7 @@ git fetch origin research/cir-failure-workbench
 # Checkout tường minh. KHÔNG dùng `git reset --hard`: trên máy đã có việc đang làm, nó xoá sạch
 # không hỏi. Muốn đúng cây đã kiểm thử thì checkout đúng commit đó.
 # Nguồn đã kiểm thử (revision cố định):
-git checkout a55a326
+git checkout d05149b9
 # Nhánh đang phát triển thêm tài liệu. Dùng nó nếu muốn bản mới nhất:
 #   git checkout research/cir-failure-workbench
 ```

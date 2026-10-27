@@ -180,6 +180,12 @@ def test_every_document_in_the_handoff_set_has_run_commands_or_says_why_not() ->
         # running any model needs a GPU, neither of which this host has. The document is the operator
         # handoff, so it is exempt rather than silently unaudited.
         "MODEL_STATUS_SPEC.md",
+        # CIRCUS_COMPOSITION_SPEC.md is the composition experiment's operator handoff. Its bash
+        # blocks name ~/cir_pc.yaml and the configured release/artifact roots and would drive real
+        # GPU evaluation of a multi-gigabyte gallery; like MODEL_STATUS_SPEC.md it is exempt from
+        # command execution here rather than silently unaudited, and the runnable synthetic
+        # equivalent of every documented command IS exercised by workbench/tests/test_circus_cli.py.
+        "CIRCUS_COMPOSITION_SPEC.md",
         # SPRC_MANUAL_CHECKPOINTS.md instructs the operator to place files they download by hand from
         # OneDrive and Google Drive, which are not curl-able here, and its `cp` examples name the
         # operator's own download filenames (`<main-download-name>`) rather than fixed paths. The
