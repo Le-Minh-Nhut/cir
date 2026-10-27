@@ -11,24 +11,13 @@ import subprocess
 import sys
 import uuid
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Sequence
+from typing import Any, Sequence
 
 import numpy as np
 
-if TYPE_CHECKING:
-    from workbench.composition.adapters import AdapterStatus, CompositionAdapter
-else:
-    try:
-        from workbench.composition.adapters import (AdapterStatus, AdapterWorkRootError,
-                                                     AdapterWorkerError, CompositionAdapter)
-    except ModuleNotFoundError:
-        CompositionAdapter = object  # type: ignore[assignment,misc]
-        AdapterStatus = Any  # type: ignore[misc,assignment]
-        class AdapterWorkRootError(RuntimeError):
-            pass
-        class AdapterWorkerError(RuntimeError):
-            pass
-
+from workbench.composition.adapters import (
+    AdapterStatus, AdapterWorkRootError, AdapterWorkerError, CompositionAdapter,
+)
 
 CONDITIONS = ("multimodal", "text_only_black_image", "image_only_empty_text")
 
@@ -45,12 +34,16 @@ class Adapter(CompositionAdapter):
     category_scopes: tuple[str | None, ...] = (None,)
 
     def __init__(self, config: Any, checkpoint_id: str | None = None) -> None:
-        if CompositionAdapter is not object:
-            super().__init__(config, checkpoint_id)
+        super().__init__(config, checkpoint_id)
         self._model, self._checkpoint, self._interpreter = _resolve(
             config, checkpoint_id or getattr(self, "checkpoint_id", None))
         self.work_root: Path | None = None
         self._job_root: Path | None = None
+        self._worker: subprocess.Popen[str] | None = None
+        self._worker_log: Any | None = None
+        self._worker_counter = 0
+        self._worker_failed: str | None = None
+        self._interpreter_verified = False
 
     @classmethod
     def status(cls, config: Any | None = None) -> AdapterStatus:
@@ -83,10 +76,50 @@ class Adapter(CompositionAdapter):
         return np.einsum("nd,mdk->nmk", query, target, optimize=True).max(axis=-1)
 
     def close(self) -> None:
-        if self._job_root is not None and self._job_root.exists():
-            shutil.rmtree(self._job_root)
-        self._job_root = None
+        if self._worker is not None:
+            if self._worker.stdin is not None:
+                try:
+                    self._worker.stdin.write(json.dumps({"stop": True}) + "\n")
+                    self._worker.stdin.flush()
+                except (BrokenPipeError, OSError):
+                    pass
+            try:
+                self._worker.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                self._worker.terminate()
+                try:
+                    self._worker.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    self._worker.kill()
+                    self._worker.wait()
+            self._worker = None
+        if self._worker_log is not None:
+            self._worker_log.close()
+            self._worker_log = None
+        if self._job_root is not None:
+            shutil.rmtree(self._job_root, ignore_errors=True)
+            self._job_root = None
 
+    def restart(self) -> None:
+        self.close()
+
+
+def _kill_worker(adapter: Adapter) -> None:
+    worker = adapter._worker
+    if worker is not None:
+        if worker.stdin is not None:
+            worker.stdin.close()
+        if worker.poll() is None:
+            worker.terminate()
+        try:
+            worker.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            worker.kill()
+            worker.wait()
+        adapter._worker = None
+    if adapter._worker_log is not None:
+        adapter._worker_log.close()
+        adapter._worker_log = None
 
 def _check_work_root(adapter: Adapter) -> Path:
     if adapter.work_root is None:
@@ -113,6 +146,8 @@ def _run(adapter: Adapter, operation: str, image_paths: Sequence[str], texts: Se
     work_root = _check_work_root(adapter)
     if not image_paths:
         return np.empty((0, 8192), dtype=np.float32)
+    if adapter._worker_failed is not None:
+        raise AdapterWorkerError(adapter._worker_failed)
     interpreter = adapter._interpreter
     if not interpreter:
         raise RuntimeError("no interpreter environment resolved for WORKBENCH_CONESEP_PYTHON")
@@ -122,33 +157,81 @@ def _run(adapter: Adapter, operation: str, image_paths: Sequence[str], texts: Se
         raise FileNotFoundError(f"ConeSep checkpoint not staged at {checkpoint_path}")
     if checkpoint.get("checkpoint_training_noise_pct") not in {20, 50, 80}:
         raise ValueError(f"ConeSep checkpoint condition is not an author-released variant: {checkpoint['checkpoint_id']}")
-    adapter_root = work_root / "conesep"
-    adapter._job_root = adapter_root
-    adapter_root.mkdir(parents=True, exist_ok=True)
-    job_root = adapter_root / uuid.uuid4().hex
-    job_root.mkdir()
-    output, job = job_root / "features.npy", job_root / "job.json"
+    if not adapter._interpreter_verified:
+        from workbench.backend.runtime import require_verified_model_interpreter
+
+        verified = require_verified_model_interpreter(adapter._model, config=adapter.config)
+        if Path(verified).resolve() != Path(interpreter).resolve():
+            raise RuntimeError(f"ConeSep resolved interpreter changed: {interpreter} -> {verified}")
+        adapter._interpreter_verified = True
+    if adapter._job_root is None:
+        work_root.mkdir(parents=True, exist_ok=True)
+        adapter._job_root = work_root / f".conesep-worker-{uuid.uuid4().hex}"
+        adapter._job_root.mkdir()
+    work = adapter._job_root
+    adapter._worker_counter += 1
+    job_path, output_path = (work / f"job-{adapter._worker_counter}.json",
+                             work / f"output-{adapter._worker_counter}.npy")
     source = Path(adapter.config.WORKBENCH_THIRD_PARTY_ROOT) / adapter._model["source_dir"]
-    job.write_text(json.dumps({"operation": operation, "image_paths": list(map(str, image_paths)),
-                              "texts": list(texts), "categories": list(categories),
-                              "output": str(output), "source_root": str(source),
-                              "checkpoint_path": str(checkpoint_path),
-                              "checkpoint_id": checkpoint["checkpoint_id"]}), encoding="utf-8")
-    scope = categories[0] if categories and len(set(categories)) == 1 else "mixed"
+    job_path.write_text(json.dumps({"operation": operation,
+                                   "image_paths": [str(Path(path).resolve()) for path in image_paths],
+                                   "texts": list(texts), "categories": list(categories),
+                                   "output_path": str(output_path), "source_root": str(source),
+                                   "checkpoint_path": str(checkpoint_path),
+                                   "checkpoint_id": checkpoint["checkpoint_id"]}), encoding="utf-8")
+    scope = categories[0] if categories and len(set(categories)) == 1 else "global"
     try:
-        result = subprocess.run([interpreter, "-m", "workbench.composition.model_conesep",
-                                 "--worker-job", str(job)],
-                                cwd=Path(__file__).resolve().parents[2], check=False)
-        if result.returncode:
-            raise AdapterWorkerError(f"conesep worker scope {scope!r} exited with status {result.returncode}")
-        if not output.is_file():
-            raise AdapterWorkerError(f"conesep worker scope {scope!r} exited without feature matrix")
-        features = np.load(output, allow_pickle=False).copy()
+        if adapter._worker is not None and adapter._worker.poll() is not None:
+            status = adapter._worker.returncode
+            adapter._worker_failed = (
+                f"adapter_worker_exited: model=conesep scope={scope!r} phase={operation} exit_status={status}")
+            _kill_worker(adapter)
+            raise AdapterWorkerError(adapter._worker_failed)
+        if adapter._worker is None:
+            adapter._worker_log = (work / "worker.stderr.log").open("w", encoding="utf-8")
+            adapter._worker = subprocess.Popen(
+                [interpreter, "-m", "workbench.composition.model_conesep", "--worker-job", str(job_path)],
+                cwd=Path(__file__).resolve().parents[2], stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE, stderr=adapter._worker_log, text=True, bufsize=1)
+        else:
+            assert adapter._worker.stdin is not None
+            adapter._worker.stdin.write(json.dumps({"job_path": str(job_path)}) + "\n")
+            adapter._worker.stdin.flush()
+        assert adapter._worker.stdout is not None
+        line = adapter._worker.stdout.readline()
+        while line and not line.startswith("CIRCUS_WORKER:"):
+            line = adapter._worker.stdout.readline()
+        if not line:
+            status = adapter._worker.poll()
+            _kill_worker(adapter)
+            adapter._worker_failed = (
+                f"adapter_worker_exited: model=conesep scope={scope!r} phase={operation} exit_status={status}")
+            raise AdapterWorkerError(adapter._worker_failed)
+        response = json.loads(line[len("CIRCUS_WORKER:"):])
+        if not response.get("ok"):
+            adapter._worker_failed = (
+                f"adapter_worker_job_failed: model=conesep scope={scope!r} phase={operation} "
+                f"error={response.get('error_type')}: {response.get('error')}")
+            _kill_worker(adapter)
+            raise AdapterWorkerError(adapter._worker_failed)
+        features = np.load(output_path, allow_pickle=False)
         if features.dtype != np.float32 or features.shape != (len(image_paths), 8192):
-            raise AdapterWorkerError(f"conesep worker scope {scope!r} returned invalid matrix {features.shape}/{features.dtype}")
+            adapter._worker_failed = (
+                f"adapter_worker_invalid_matrix: model=conesep scope={scope!r} phase={operation} "
+                f"shape={features.shape}/{features.dtype} expected=({len(image_paths)}, 8192)/float32")
+            _kill_worker(adapter)
+            raise AdapterWorkerError(adapter._worker_failed)
         return features
+    except OSError as error:
+        status = adapter._worker.poll() if adapter._worker is not None else None
+        _kill_worker(adapter)
+        adapter._worker_failed = (
+            f"adapter_worker_exited: model=conesep scope={scope!r} phase={operation} "
+            f"exit_status={status}: {error}")
+        raise AdapterWorkerError(adapter._worker_failed) from error
     finally:
-        shutil.rmtree(job_root, ignore_errors=True)
+        job_path.unlink(missing_ok=True)
+        output_path.unlink(missing_ok=True)
 
 
 def _status(cls: type[Adapter], config: Any) -> AdapterStatus:
@@ -187,33 +270,63 @@ def _cuda_reason(interpreter: str) -> str | None:
     return None
 
 
-def _worker_main(job_path: str) -> None:
+def _worker_main(argv: Sequence[str] | None = None) -> int:
+    import argparse
     import torch
 
     from workbench.replay.common import load_trusted_whole_model
-    from workbench.replay.conesep import KNOWN_AUTHOR_SHA256, PROCESSOR_CONFIGS, _load_replay_modules
+    from workbench.replay.conesep import KNOWN_AUTHOR_SHA256, _load_replay_modules
 
-    job = json.loads(Path(job_path).read_text(encoding="utf-8"))
-    source = Path(job["source_root"])
-    _, _, data_utils, _, (txt_processors, _) = _load_replay_modules(source)
-    checkpoint = Path(job["checkpoint_path"])
-    expected = KNOWN_AUTHOR_SHA256.get(job["checkpoint_id"])
-    model = load_trusted_whole_model(checkpoint, expected, torch).cuda().eval()
-    transform = data_utils.targetpad_transform(1.25, 224)
-    batch_size = 32
-    outputs = []
-    with torch.no_grad():
-        for start in range(0, len(job["image_paths"]), batch_size):
-            images = torch.stack([transform(_open_image(path)) for path in job["image_paths"][start:start + batch_size]]).cuda()
-            if job["operation"] == "queries":
-                texts = [txt_processors["eval"](text) for text in job["texts"][start:start + batch_size]]
-                features = model.extract_retrieval_compose(images, texts)[:, 0, 0, :].repeat(1, 32)
-            else:
-                features = model.extract_retrieval_target(images).permute(0, 2, 1)
-            outputs.append(features.float().cpu().numpy())
-    dimension = 8192
-    result = np.concatenate(outputs, axis=0) if outputs else np.empty((0, dimension), dtype=np.float32)
-    np.save(job["output"], result.reshape(len(result), -1))
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--worker-job", required=True)
+    job_path = Path(parser.parse_args(argv).worker_job)
+
+    def reply(ok: bool, **values: Any) -> None:
+        print("CIRCUS_WORKER:" + json.dumps({"ok": ok, **values}), flush=True)
+
+    try:
+        job = json.loads(job_path.read_text(encoding="utf-8"))
+        source = Path(job["source_root"])
+        _, _, data_utils, _, (txt_processors, _) = _load_replay_modules(source)
+        checkpoint = Path(job["checkpoint_path"])
+        expected = KNOWN_AUTHOR_SHA256.get(job["checkpoint_id"])
+        model = load_trusted_whole_model(checkpoint, expected, torch).cuda().eval()
+        transform = data_utils.targetpad_transform(1.25, 224)
+    except Exception as error:
+        reply(False, error_type=type(error).__name__, error=str(error))
+        return 1
+
+    def run_one(current: dict[str, Any]) -> None:
+        outputs = []
+        try:
+            with torch.no_grad():
+                for start in range(0, len(current["image_paths"]), 32):
+                    images = torch.stack([transform(_open_image(path)) for path in
+                                          current["image_paths"][start:start + 32]]).cuda()
+                    if current["operation"] == "queries":
+                        texts = [txt_processors["eval"](text) for text in
+                                 current["texts"][start:start + 32]]
+                        features = model.extract_retrieval_compose(images, texts)[:, 0, 0, :].repeat(1, 32)
+                    else:
+                        features = model.extract_retrieval_target(images).permute(0, 2, 1)
+                    outputs.append(features.float().cpu().numpy())
+            result = np.concatenate(outputs, axis=0) if outputs else np.empty((0, 8192), dtype=np.float32)
+            np.save(current["output_path"], result.reshape(len(current["image_paths"]), -1), allow_pickle=False)
+            reply(True)
+        except Exception as error:
+            reply(False, error_type=type(error).__name__, error=str(error))
+
+    run_one(job)
+    for line in sys.stdin:
+        request = json.loads(line)
+        if request.get("stop"):
+            break
+        try:
+            run_one(json.loads(Path(request["job_path"]).read_text(encoding="utf-8")))
+        except Exception as error:
+            reply(False, error_type=type(error).__name__, error=str(error))
+            break
+    return 0
 
 
 def _open_image(path: str) -> Any:
@@ -222,8 +335,8 @@ def _open_image(path: str) -> Any:
         return image.convert("RGB")
 
 
-if __name__ == "__main__" and "--worker-job" in sys.argv:
-    _worker_main(sys.argv[sys.argv.index("--worker-job") + 1])
+if __name__ == "__main__":
+    raise SystemExit(_worker_main())
 
 
 ADAPTER = Adapter

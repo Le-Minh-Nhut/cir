@@ -69,9 +69,31 @@ def _path_ready(model: dict[str, Any], checkpoint_id: str, config: Any) -> tuple
         path = checkpoint_path(model["model_id"], checkpoint, config.WORKBENCH_CHECKPOINT_ROOT)
     except Exception as error:
         return False, f"checkpoint selection unavailable: {type(error).__name__}: {error}"
+    missing = ([name for name in checkpoint.get("required_files", []) if not (path / name).is_file()]
+               if checkpoint.get("bundle_id") else [])
+    if missing:
+        return False, f"checkpoint bundle missing member(s): {', '.join(missing)}"
     if not path.exists():
         return False, f"checkpoint not staged: {path}"
     return True, None
+
+
+def _composition_checkpoint(model: dict[str, Any], checkpoint_ids: list[str], bundle_id: str | None,
+                            unavailable: list[dict[str, Any]]) -> str | None:
+    """Resolve full checkpoint bundles to one composition job; refuse partial bundles."""
+    if bundle_id:
+        return bundle_id
+    selected = set(checkpoint_ids)
+    for bundle in model.get("checkpoint_bundles", []):
+        members = set(bundle.get("required_checkpoint_ids", []))
+        if selected & members:
+            if selected.issuperset(members):
+                return str(bundle["bundle_id"])
+            unavailable.append({"model_id": model["model_id"], "status": "UNSUPPORTED",
+                                "reason": f"composition supports full checkpoint bundle {bundle['bundle_id']!r}; "
+                                          "individual or partial bundle members are unsupported"})
+            return None
+    return checkpoint_ids[0] if len(checkpoint_ids) == 1 else None
 
 
 def _select_models(raw: str, registry: dict[str, Any], profile: Any,
@@ -94,14 +116,17 @@ def _select_models(raw: str, registry: dict[str, Any], profile: Any,
                                     "reason": "; ".join(row.get("blockers", [])) or
                                     "authorized cohort selection has no checkpoint"})
                 continue
-            for checkpoint_id in checkpoint_ids:
-                pairs.append((model, checkpoint_id))
-                ready, reason = _path_ready(model, checkpoint_id, config)
-                if not ready:
-                    unavailable.append({"model_id": model_id, "checkpoint_id": checkpoint_id,
-                                        "status": "NOT_READY", "reason": reason})
+            selection = row.get("checkpoint_selection") or {}
+            checkpoint_id = _composition_checkpoint(model, checkpoint_ids,
+                                                    selection.get("bundle_id"), unavailable)
+            if checkpoint_id is None:
+                continue
+            pairs.append((model, checkpoint_id))
+            ready, reason = _path_ready(model, checkpoint_id, config)
+            if not ready:
+                unavailable.append({"model_id": model_id, "checkpoint_id": checkpoint_id,
+                                    "status": "NOT_READY", "reason": reason})
         return pairs, unavailable
-
     requested = [item.strip() for item in raw.split(",") if item.strip()]
     if not requested:
         raise ValueError("--models needs model IDs or literal 'selected'")
@@ -121,12 +146,15 @@ def _select_models(raw: str, registry: dict[str, Any], profile: Any,
         if selection.blocked:
             unavailable.append({"model_id": model_id, "status": "NOT_READY", "reason": selection.reason})
             continue
-        for checkpoint_id in selection.checkpoint_ids:
-            pairs.append((model, checkpoint_id))
-            ready, reason = _path_ready(model, checkpoint_id, config)
-            if not ready:
-                unavailable.append({"model_id": model_id, "checkpoint_id": checkpoint_id,
-                                    "status": "NOT_READY", "reason": reason})
+        checkpoint_id = _composition_checkpoint(model, list(selection.checkpoint_ids),
+                                                selection.bundle_id, unavailable)
+        if checkpoint_id is None:
+            continue
+        pairs.append((model, checkpoint_id))
+        ready, reason = _path_ready(model, checkpoint_id, config)
+        if not ready:
+            unavailable.append({"model_id": model_id, "checkpoint_id": checkpoint_id,
+                                "status": "NOT_READY", "reason": reason})
     return pairs, unavailable
 
 
@@ -182,10 +210,10 @@ def _plan(pairs: list[tuple[dict[str, Any], str]], unavailable: list[dict[str, A
             for condition in composition_data.CONDITIONS:
                 outputs.append(str(assert_composition_destination(
                     artifacts, artifacts / "composition" / "results" / data.gallery.protocol_id /
-                    model["model_id"] / checkpoint_id / subset / f"{condition}.jsonl")))
+                    model["model_id"] / checkpoint_id / "<attempt>" / subset / f"{condition}.jsonl")))
             outputs.append(str(assert_composition_destination(
                 artifacts, artifacts / "composition" / "summary" /
-                f"{model['model_id']}_{checkpoint_id}_{subset}.json")))
+                f"{model['model_id']}_{checkpoint_id}_<attempt>" / f"{subset}.json")))
     gallery_identity = hashlib.sha256(json.dumps(
         {"protocol_id": data.gallery.protocol_id, "image_ids": data.gallery.image_ids},
         sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
@@ -275,7 +303,7 @@ def main(argv: list[str] | None = None) -> int:
             failures.update({"SELECTED_BUT_BLOCKED", "UNSUPPORTED"})
         # Fail runtime errors, explicit unavailable requests, or selected cohorts with zero runnable results.
         selected_empty = args.models == "selected" and not any(
-            row["status"] in {"COMPLETED", "PARTIAL"} for row in report["models"])
+            row["status"] in {"COMPLETED", "PARTIAL", "REUSED"} for row in report["models"])
         return 1 if selected_empty or any(row["status"] in failures for row in report["models"]) else 0
     except Exception as error:
         print(f"[COMPOSITION-EVAL-FAILED] {type(error).__name__}: {error}", file=sys.stderr)

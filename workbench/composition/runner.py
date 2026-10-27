@@ -411,11 +411,62 @@ def model_interpreter_identity(model: dict[str, Any], config: Any, adapter: Any 
 
 
 def _result_outputs(artifacts: Path, protocol: str, model: str, checkpoint: str,
-                    subset: str, condition: str, synthetic: bool = False) -> Path:
+                    attempt: str, subset: str, condition: str, synthetic: bool = False) -> Path:
     base = artifacts / "composition" / "results" / protocol
     if synthetic:
         base /= "SYNTHETIC"
-    return assert_composition_destination(artifacts, base / model / checkpoint / subset / f"{condition}.jsonl")
+    return assert_composition_destination(artifacts, base / model / checkpoint / attempt / subset /
+                                          f"{condition}.jsonl")
+
+def _attempt_id(artifacts: Path, protocol: str, model: str, checkpoint: str,
+                run_id: str, synthetic: bool, *, force_new: bool = False) -> str:
+    """Keep exports paired by attempt without replacing an earlier result."""
+    result_root = artifacts / "composition" / "results" / protocol
+    if synthetic:
+        result_root /= "SYNTHETIC"
+    result_root = result_root / model / checkpoint
+    summary_name = f"{'SYNTHETIC_' if synthetic else ''}{model}_{checkpoint}_{run_id}"
+    summary_root = artifacts / "composition" / "summary"
+    if not force_new and not (result_root / run_id).exists() and not (summary_root / summary_name).exists():
+        return run_id
+    retry_pattern = re.compile(re.escape(run_id) + r"-retry-(\d+)")
+    suffixes = [int(match.group(1)) for path in result_root.glob(f"{run_id}-retry-*")
+                if (match := retry_pattern.fullmatch(path.name))]
+    suffixes += [int(match.group(1)) for path in summary_root.glob(f"{summary_name}-retry-*")
+                 if (match := retry_pattern.search(path.name))]
+    return f"{run_id}-retry-{max(suffixes, default=0) + 1}"
+
+
+def _checkpoint_labels(model: dict[str, Any], checkpoint: str, protocol: str) -> dict[str, Any]:
+    """Expose checkpoint provenance directly from its registry record."""
+    variant = next((item for item in model.get("checkpoint_variants", [])
+                    if item.get("checkpoint_id") == checkpoint), None)
+    bundle = next((item for item in model.get("checkpoint_bundles", [])
+                   if item.get("bundle_id") == checkpoint), None)
+    if bundle:
+        members = [item for item in model.get("checkpoint_variants", [])
+                   if item.get("checkpoint_id") in bundle.get("required_checkpoint_ids", [])]
+        variant = members[0] if members else None
+    else:
+        members = []
+    training_dataset = variant.get("checkpoint_training_dataset") if variant else None
+    evaluation_dataset = "FashionIQ" if "fashioniq" in protocol.lower() else None
+    transfer = (f"{training_dataset}→{evaluation_dataset} transfer"
+                if training_dataset and training_dataset.lower() != "fashioniq" and evaluation_dataset else None)
+    labels = {"checkpoint_training_noise_pct": variant.get("checkpoint_training_noise_pct") if variant else None,
+              "evaluation_noise_pct": variant.get("evaluation_noise_pct") if variant else None,
+              "checkpoint_training_dataset": training_dataset,
+              "checkpoint_transfer": transfer,
+              "checkpoint_mapping_status": (bundle.get("mapping_status") if bundle else
+                                            variant.get("checkpoint_mapping_status") if variant else None),
+              "labels_source": "registry"}
+    if bundle:
+        labels["checkpoint_bundle_members"] = [
+            {key: member.get(key) for key in ("checkpoint_id", "checkpoint_training_noise_pct",
+                "checkpoint_training_dataset", "checkpoint_mapping_status")}
+            for member in members]
+    return labels
+
 
 
 def _method_source_hash(method: Callable[..., Any]) -> str | None:
@@ -463,12 +514,15 @@ def run_composition(data: Any, model_specs: Sequence[ModelSpec], config: Any, *,
         raise ValueError(f"conditions must be selected from {CONDITIONS}")
     artifacts = Path(config.WORKBENCH_ARTIFACTS_ROOT).expanduser().resolve()
     composition = assert_composition_destination(artifacts, artifacts / "composition")
-    queries = tuple(data.queries if smoke is None else data.queries[:smoke])
-    if not queries:
-        raise ValueError("release has no queries")
     for subset in subsets:
         if subset not in {"full", "sf", "validated"}:
             raise ValueError(f"unknown subset {subset!r}")
+    selected_subsets = set(subsets)
+    queries = tuple(query for query in data.queries if selected_subsets.intersection(query.subsets))
+    if smoke is not None:
+        queries = queries[:smoke]
+    if not queries:
+        raise ValueError("release has no queries")
     gallery_ids = tuple(data.gallery.image_ids)
     gallery_hash = _gallery_fingerprint(data)
     query_hash = _query_fingerprint(queries)
@@ -480,6 +534,8 @@ def run_composition(data: Any, model_specs: Sequence[ModelSpec], config: Any, *,
         model_id = _component(spec.model_id)
         checkpoint_id = _component(spec.checkpoint_id)
         model = spec.registry_model
+        labels = _checkpoint_labels(model, checkpoint_id, data.gallery.protocol_id)
+        attempt = uuid.uuid4().hex
         resolver = image_resolver or image_resolver_factory(Path(config.FASHIONIQ_ROOT),
                                                              model.get("fashioniq_layout", "fashioniq_standard"))
         gallery_paths = [resolver(identity, data.candidate_names) for identity in gallery_ids]
@@ -487,17 +543,21 @@ def run_composition(data: Any, model_specs: Sequence[ModelSpec], config: Any, *,
         missing_gallery = [gallery_ids[index] for index, path in enumerate(gallery_paths) if path is None]
         if missing_gallery:
             reason = f"{len(missing_gallery)} released gallery identities unresolved by stem"
-            _write_failed_results(data, artifacts, model_id, checkpoint_id, subsets, conditions, queries, reason,
-                                  is_synthetic)
+            summaries = _write_failed_results(data, artifacts, model_id, checkpoint_id, attempt,
+                subsets, conditions, queries, reason, is_synthetic, labels,
+                execution_status="FAILED", run_id=attempt)
             reports.append({"model_id": model_id, "checkpoint_id": checkpoint_id,
                             "status": "BLOCKED_MISSING_GALLERY_IMAGES", "reason": reason,
-                            "unresolvable_count": len(missing_gallery), "examples": missing_gallery[:20]})
+                            "unresolvable_count": len(missing_gallery), "examples": missing_gallery[:20],
+                            "summaries": summaries})
             continue
         if any(path is None for path in gallery_paths):
             raise AssertionError("gallery path check did not preserve complete released order")
 
         adapter = None
         adapter_source_hash = "unavailable"
+        run_id = None
+        work_root = None
         try:
             adapter = spec.adapter_factory(config, checkpoint_id)
             adapter_source_hash = _module_source_hash(adapter)
@@ -543,34 +603,61 @@ def run_composition(data: Any, model_specs: Sequence[ModelSpec], config: Any, *,
                 "batch_size": batch_size, "seed": seed,
             }
             run_id = _digest(identity)[:24]
-
+            fingerprint = _digest(identity)
             run_dir = assert_composition_destination(artifacts, composition / "runs" / run_id)
             work_root = assert_composition_destination(artifacts, run_dir / "work" / model_id)
             work_root.mkdir(parents=True, exist_ok=True)
             adapter.work_root = work_root
             rank_path = assert_composition_destination(artifacts, run_dir / "ranks" / f"{model_id}_{checkpoint_id}.json")
-            fingerprint = _digest(identity)
+            attempt = _attempt_id(artifacts, data.gallery.protocol_id, model_id, checkpoint_id,
+                                  run_id, is_synthetic, force_new=rank_path.exists())
             ranks: dict[str, dict[str, int | None]] | None = None
             reasons_by_condition: dict[str, dict[str, str]] = {}
-            mode_status: dict[str, dict[str, Any]] = {}
             reused = False
+            retry_conditions: set[str] = set()
+            mode_status: dict[str, dict[str, Any]] = {}
             if resume and adapter_source_hash != "unavailable" and rank_path.is_file():
                 try:
                     saved = json.loads(rank_path.read_text(encoding="utf-8"))
                     if saved.get("fingerprint") == fingerprint and set(saved.get("ranks", {})) == set(conditions):
-                        ranks = saved["ranks"]
-                        reasons_by_condition = saved.get("query_failures", {})
-                        mode_status = saved.get("condition_status", {})
-                        reused = True
+                        saved_status = saved.get("condition_status", {})
+                        saved_failures = saved.get("query_failures", {})
+                        transient = {condition for condition in conditions
+                                     if saved_status.get(condition, {}).get("status") in
+                                     {"MODEL_UNAVAILABLE", "FAILED", "EXACT_RANK_UNAVAILABLE"}
+                                     and not (saved_failures.get(condition) and all(
+                                         "category scope failure" in reason.lower()
+                                         for reason in saved_failures[condition].values()))}
+                        if transient:
+                            retry_conditions = transient if len(transient) < len(conditions) else set(conditions)
+                            ranks = {condition: dict(saved["ranks"][condition]) for condition in conditions}
+                            reasons_by_condition = dict(saved.get("query_failures", {}))
+                            mode_status = dict(saved_status)
+                            for condition in retry_conditions:
+                                ranks[condition] = {query.qid: None for query in queries}
+                                reasons_by_condition.pop(condition, None)
+                                mode_status.pop(condition, None)
+                        else:
+                            ranks = saved["ranks"]
+                            reasons_by_condition = saved.get("query_failures", {})
+                            mode_status = saved_status
+                            reused = True
+                            attempt = saved.get("attempt", run_id)
                 except (OSError, ValueError, TypeError):
                     ranks = None
+            if not reused:
+                attempt = _attempt_id(artifacts, data.gallery.protocol_id, model_id, checkpoint_id,
+                                      run_id, is_synthetic,
+                                      force_new=rank_path.exists() and (not resume or bool(retry_conditions)))
             projection_totals: dict[str, int] = {}
             category_failure_counts: dict[str, int] = {}
-            if ranks is None:
-                ranks = {condition: {query.qid: None for query in queries} for condition in conditions}
-                active_conditions = [condition for condition in conditions if supported[condition][0]]
+            if ranks is None or retry_conditions:
+                if ranks is None:
+                    ranks = {condition: {query.qid: None for query in queries} for condition in conditions}
+                active_conditions = [condition for condition in conditions if supported[condition][0]
+                                     and (not retry_conditions or condition in retry_conditions)]
                 for condition in conditions:
-                    if not supported[condition][0]:
+                    if not supported[condition][0] and condition not in mode_status:
                         mode_status[condition] = {"status": "ABLATION_UNSUPPORTED",
                                                   "reason": supported[condition][1]}
                 target_maps: dict[str | None, Any] = {}
@@ -601,6 +688,9 @@ def run_composition(data: Any, model_specs: Sequence[ModelSpec], config: Any, *,
                         feature_file = work_root / "features" / f"query_{condition}_{scope_name}.npy"
                         feature_fp = _digest({"run": fingerprint, "condition": condition, "scope": scope,
                                               "kind": "query-features"})
+                        if condition in retry_conditions:
+                            for suffix in ("", ".json", ".errors.json", ".category-errors.json"):
+                                feature_file.with_suffix(feature_file.suffix + suffix).unlink(missing_ok=True)
                         try:
                             values, errors, category_errors = _encode_queries(
                                 adapter, queries, query_paths, indexes, condition, work_root,
@@ -695,7 +785,8 @@ def run_composition(data: Any, model_specs: Sequence[ModelSpec], config: Any, *,
                             mode_status[condition] = {"status": "PARTIAL" if unscored_count else "COMPLETED",
                                                       "unscored_count": unscored_count,
                                                       "category_scope_failure_count": len(category_errors_all) + len(scope_errors)}
-                _atomic_json(rank_path, {"fingerprint": fingerprint, "identity": identity, "ranks": ranks,
+                _atomic_json(rank_path, {"fingerprint": fingerprint, "identity": identity,
+                                         "attempt": attempt, "ranks": ranks,
                                          "query_failures": reasons_by_condition,
                                          "condition_status": mode_status})
 
@@ -706,7 +797,8 @@ def run_composition(data: Any, model_specs: Sequence[ModelSpec], config: Any, *,
                     {"qid": query.qid, "index": query.index, "condition": condition,
                      "rank": ranks.get(condition, {}).get(query.qid),
                      "scored": ranks.get(condition, {}).get(query.qid) is not None,
-                     "failure": failures.get(query.qid), "synthetic": is_synthetic} for query in queries]
+                     "failure": failures.get(query.qid), "synthetic": is_synthetic,
+                     "checkpoint_labels": labels} for query in queries]
             from workbench.composition.metrics import compose
             summary_by_subset = {}
             for subset in subsets:
@@ -717,15 +809,25 @@ def run_composition(data: Any, model_specs: Sequence[ModelSpec], config: Any, *,
                 result = compose(subset_ranks, query_count=len(qids))
                 for condition in conditions:
                     output = _result_outputs(artifacts, data.gallery.protocol_id,
-                                             model_id, checkpoint_id, subset, condition, is_synthetic)
+                                             model_id, checkpoint_id, attempt, subset, condition, is_synthetic)
                     _atomic_jsonl(output, [row for row in query_rows_by_condition[condition]
                                            if row["qid"] in set(qids)])
-                summary_name = f"{'SYNTHETIC_' if is_synthetic else ''}{model_id}_{checkpoint_id}_{subset}.json"
-                summary_path = assert_composition_destination(artifacts, composition / "summary" / summary_name)
+                summary_name = f"{'SYNTHETIC_' if is_synthetic else ''}{model_id}_{checkpoint_id}_{attempt}"
+                summary_path = assert_composition_destination(artifacts, composition / "summary" /
+                                                              summary_name / f"{subset}.json")
+                transient_statuses = {"MODEL_UNAVAILABLE", "FAILED", "EXACT_RANK_UNAVAILABLE"}
+                has_transient_failure = any(status.get("status") in transient_statuses
+                                             for status in mode_status.values())
+                has_success = any(status.get("status") in {"COMPLETED", "PARTIAL"}
+                                  for status in mode_status.values())
+                has_failure = has_transient_failure or any(status.get("status") in
+                                    {"PARTIAL", "ABLATION_UNSUPPORTED"} for status in mode_status.values())
+                execution_status = ("REUSED" if reused else "FAILED" if has_transient_failure and not has_success
+                                    else "PARTIAL" if has_failure else "COMPLETED")
                 summary = {
+                    "checkpoint_labels": labels,
                     "synthetic": is_synthetic,
                     "adapter_module_source_status": identity["adapter_module_source_status"],
-                    "image_identity_method": identity["gallery_image_identity"]["stat_identity_method"],
                     "schema_version": 1, "model_id": model_id, "checkpoint_id": checkpoint_id,
                     "checkpoint_identity": checkpoint_identity, "protocol_id": data.gallery.protocol_id,
                     "gallery_identity_sha256": gallery_hash, "gallery_count": len(gallery_ids),
@@ -749,8 +851,13 @@ def run_composition(data: Any, model_specs: Sequence[ModelSpec], config: Any, *,
                     "paper_vs_release_gallery": data.provenance.get("gallery_note", {
                         "paper_stated_images": PAPER_STATED_GALLERY_IMAGES,
                         "released_images": RELEASED_GALLERY_IMAGES}),
-                    "execution_status": "REUSED" if reused else "COMPLETED",
+                    "execution_status": execution_status,
                     "condition_status": mode_status,
+                    "checkpoint_training_noise_pct": labels["checkpoint_training_noise_pct"],
+                    "evaluation_noise_pct": labels["evaluation_noise_pct"],
+                    "checkpoint_training_dataset": labels["checkpoint_training_dataset"],
+                    "checkpoint_transfer": labels["checkpoint_transfer"],
+                    "checkpoint_mapping_status": labels["checkpoint_mapping_status"],
                     "category_scope_failures": {condition: category_failure_counts.get(condition,
                                                        sum(reason.startswith(f"{model_id} category scope")
                                                            for reason in reasons_by_condition.get(condition, {}).values()))
@@ -775,7 +882,7 @@ def run_composition(data: Any, model_specs: Sequence[ModelSpec], config: Any, *,
                                  if status.get("status") not in successful_modes), None)
             reports.append({"model_id": model_id, "checkpoint_id": checkpoint_id,
                             "status": model_status, "reason": model_reason,
-                            "run_id": run_id,
+                            "run_id": run_id, "attempt": attempt,
                             "reused": reused, "reused_query_result_count": len(queries) * len(conditions) if reused else 0,
                             "query_count": len(queries), "gallery_count": len(gallery_ids),
                             "category_scopes": list(scopes), "condition_status": mode_status,
@@ -784,12 +891,14 @@ def run_composition(data: Any, model_specs: Sequence[ModelSpec], config: Any, *,
                             "summaries": summary_by_subset})
         except Exception as error:
             reason = f"{type(error).__name__}: {error}"
-            _write_failed_results(data, artifacts, model_id, checkpoint_id, subsets, conditions, queries, reason,
-                                  is_synthetic)
+            summaries = _write_failed_results(data, artifacts, model_id, checkpoint_id, attempt,
+                subsets, conditions, queries, reason, is_synthetic, labels,
+                execution_status="FAILED", run_id=run_id if "run_id" in locals() else attempt)
             reports.append({"model_id": model_id, "checkpoint_id": checkpoint_id,
                             "status": "FAILED", "reason": reason,
                             "adapter_module_source_status": "available" if adapter_source_hash != "unavailable" else "unavailable",
-                            "query_count": len(queries), "gallery_count": len(gallery_ids)})
+                            "query_count": len(queries), "gallery_count": len(gallery_ids),
+                            "run_id": locals().get("run_id"), "attempt": attempt, "summaries": summaries})
         finally:
             if adapter is not None:
                 try:
@@ -812,16 +921,45 @@ def image_resolver_factory(dataset_root: Path, layout: str):
 
 
 def _write_failed_results(data: Any, artifacts: Path, model_id: str, checkpoint_id: str,
-                          subsets: Sequence[str], conditions: Sequence[str], queries: Sequence[Any],
-                          reason: str, synthetic: bool = False) -> None:
+                          attempt: str, subsets: Sequence[str], conditions: Sequence[str],
+                          queries: Sequence[Any], reason: str, synthetic: bool = False,
+                          labels: dict[str, Any] | None = None, *, execution_status: str = "FAILED",
+                          condition_status: dict[str, Any] | None = None,
+                          run_id: str | None = None) -> dict[str, str]:
+    from workbench.composition.metrics import compose
+
+    summary_paths = {}
     for subset in subsets:
         selected = [query for query in queries if subset in query.subsets]
+        qids = {query.qid for query in selected}
+        failed_ranks = {condition: {query.qid: None for query in selected} for condition in conditions}
         for condition in conditions:
-            output = _result_outputs(artifacts, data.gallery.protocol_id,
-                                     model_id, checkpoint_id, subset, condition, synthetic)
+            output = _result_outputs(artifacts, data.gallery.protocol_id, model_id, checkpoint_id,
+                                     attempt, subset, condition, synthetic)
             _atomic_jsonl(output, [{"qid": query.qid, "index": query.index,
                                     "condition": condition, "rank": None, "scored": False,
-                                    "failure": reason, "synthetic": synthetic} for query in selected])
+                                    "failure": reason, "synthetic": synthetic,
+                                    "checkpoint_labels": labels or {}} for query in selected])
+        summary_name = f"{'SYNTHETIC_' if synthetic else ''}{model_id}_{checkpoint_id}_{attempt}"
+        summary_path = assert_composition_destination(artifacts, artifacts / "composition" / "summary" /
+                                                      summary_name / f"{subset}.json")
+        summary = {"synthetic": synthetic, "is_synthetic": synthetic, "model_id": model_id,
+                   "checkpoint_id": checkpoint_id, "protocol_id": data.gallery.protocol_id,
+                   "gallery_count": len(data.gallery.image_ids), "query_count": len(qids),
+                   "subset": subset, "conditions": list(conditions), "execution_status": execution_status,
+                   "condition_status": condition_status or {condition: {"status": execution_status,
+                       "reason": reason, "unscored_count": len(selected)} for condition in conditions},
+                   "checkpoint_labels": labels or {},
+                   "checkpoint_training_noise_pct": (labels or {}).get("checkpoint_training_noise_pct"),
+                   "evaluation_noise_pct": (labels or {}).get("evaluation_noise_pct"),
+                   "checkpoint_training_dataset": (labels or {}).get("checkpoint_training_dataset"),
+                   "checkpoint_transfer": (labels or {}).get("checkpoint_transfer"),
+                   "checkpoint_mapping_status": (labels or {}).get("checkpoint_mapping_status"),
+                   "metrics": asdict(compose(failed_ranks, query_count=len(selected))),
+                   "run_id": run_id or attempt}
+        _atomic_json(summary_path, summary)
+        summary_paths[subset] = str(summary_path)
+    return summary_paths
 
 
 def inspect_image_inventory(data: Any, models: Sequence[dict[str, Any]], dataset_root: Path) -> dict[str, Any]:

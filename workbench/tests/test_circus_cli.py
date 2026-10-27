@@ -82,11 +82,13 @@ def _fixture(tmp_path: Path, model_ids: tuple[str, ...] = ("fixture3d",)) -> tup
             "import numpy as np\n"
             "from workbench.composition.adapters import CompositionAdapter\n"
             f"MODEL_ID = {model_id!r}\n"
-            "def record(kind, shape):\n"
+            "def record(kind, shape, values=None):\n"
             "    path = os.environ.get('CIRCUS_TEST_LOG')\n"
             "    if path:\n"
+            "        entry = {'model': MODEL_ID, 'kind': kind, 'shape': list(shape)}\n"
+            "        if values is not None: entry['values'] = values\n"
             "        with open(path, 'a', encoding='utf-8') as stream:\n"
-            "            stream.write(json.dumps({'model': MODEL_ID, 'kind': kind, 'shape': list(shape)}) + '\\n')\n"
+            "            stream.write(json.dumps(entry) + '\\n')\n"
             "class Synthetic(CompositionAdapter):\n"
             "    model_id = MODEL_ID\n"
             "    category_scopes = ('dress',) if MODEL_ID == 'scoped' else (None,)\n"
@@ -96,6 +98,9 @@ def _fixture(tmp_path: Path, model_ids: tuple[str, ...] = ("fixture3d",)) -> tup
             "        return AdapterStatus(cls.model_id, cls.model_id != 'notready',\n"
             "            None if cls.model_id != 'notready' else 'synthetic adapter deliberately blocked',\n"
             "            ('fixture',), {}, 'synthetic test status')\n"
+            "    def __init__(self, config, checkpoint_id=None):\n"
+            "        super().__init__(config, checkpoint_id)\n"
+            "        record('checkpoint', (checkpoint_id,))\n"
             "    def mode_supported(self, condition): return True, None\n"
             "    def encode_targets(self, image_paths, categories):\n"
             "        record('targets', (len(image_paths),))\n"
@@ -107,7 +112,13 @@ def _fixture(tmp_path: Path, model_ids: tuple[str, ...] = ("fixture3d",)) -> tup
             "        values[:, 0, 0] = [int(Path(path).stem.removeprefix('img')) for path in image_paths]\n"
             "        return values\n"
             "    def encode_queries(self, images, texts, categories):\n"
-            "        record('queries', (len(images),))\n"
+            "        record('queries', (len(images),), texts)\n"
+            "        fail_once = int(os.environ.get('CIRCUS_TEST_FAIL_ONCE', '0'))\n"
+            "        counter = Path(os.environ['CIRCUS_TEST_LOG']).with_suffix('.fail-count') if os.environ.get('CIRCUS_TEST_LOG') else None\n"
+            "        if fail_once and counter:\n"
+            "            calls = int(counter.read_text() if counter.exists() else '0')\n"
+            "            counter.write_text(str(calls + 1))\n"
+            "            if calls < fail_once: raise RuntimeError('synthetic transient encoding failure')\n"
             "        if MODEL_ID in {'fail', 'blocked'}: raise RuntimeError('synthetic encoding failure')\n"
             "        width = 8192 if MODEL_ID == 'flat' else 256\n"
             "        result = np.zeros((len(images), width), dtype=np.float32)\n"
@@ -146,7 +157,8 @@ def _fixture(tmp_path: Path, model_ids: tuple[str, ...] = ("fixture3d",)) -> tup
             "literature_split_label": "original",
             "source_available": False,
             "checkpoint_variants": [{"checkpoint_id": "fixture", "filename": "fixture.pt",
-                                      "evaluation_noise_pct": 0, "checkpoint_training_noise_pct": 0,
+                                      "evaluation_noise_pct": 0, "checkpoint_training_noise_pct": None,
+                                      "checkpoint_training_dataset": "FashionIQ",
                                       "checkpoint_mapping_status": "VERIFIED_METADATA"}],
             "environment": {"python_env_var": "WORKBENCH_TEST_MODEL_PYTHON", "python": "3.13",
                             "packages": [], "cuda": "UNKNOWN"},
@@ -167,6 +179,7 @@ def _fixture(tmp_path: Path, model_ids: tuple[str, ...] = ("fixture3d",)) -> tup
                   "artifacts": str(artifacts), "checkpoints": str(checkpoints),
                   "results": str(tmp_path / "results"), "third_party": str(tmp_path / "third_party")},
         "budgets": {"max_download_bytes": 0, "max_models": max(1, len(model_ids)), "top_k": 10},
+        "checkpoint_policy": "include_flagged_conditions",
         "permissions": {name: False for name in (
             "allow_network", "allow_large_downloads", "allow_env_install", "allow_preparation",
             "allow_gpu_eval", "allow_gpu_preparation", "allow_index_write")},
@@ -237,28 +250,35 @@ def test_cli_3d_full_gallery_resume_and_gallery_invalidation(tmp_path: Path,
     assert summary["gallery_count"] == 5
     assert summary["runtime"]["model_interpreter"]["path"] == str(Path(sys.executable).absolute())
     assert "Python " in summary["runtime"]["model_interpreter"]["version"]
-    full_result_path = next((artifacts / "composition/results").rglob("full/multimodal.jsonl"))
+    full_result_path = next(path for path in (artifacts / "composition/results").rglob("full/multimodal.jsonl")
+                            if path.parent.parent.name == row["attempt"])
     assert "SYNTHETIC" in full_result_path.parts
     full_rows = [json.loads(line) for line in full_result_path.read_text().splitlines()]
     assert [row["rank"] for row in full_rows] == [1, 2, 3, 4]
     assert all(row["synthetic"] is True for row in full_rows)
-    assert summary_path.name.startswith("SYNTHETIC_")
-    assert runner._result_outputs(artifacts, "fashioniq_original_split", "fixture3d", "fixture",
-                                  "full", "multimodal") == (
-        artifacts / "composition/results/fashioniq_original_split/fixture3d/fixture/full/multimodal.jsonl")
+    assert summary_path.parent.name.startswith("SYNTHETIC_")
+    assert summary["checkpoint_labels"] == {
+        "checkpoint_training_noise_pct": None, "evaluation_noise_pct": 0,
+        "checkpoint_training_dataset": "FashionIQ", "checkpoint_transfer": None,
+        "checkpoint_mapping_status": "VERIFIED_METADATA", "labels_source": "registry"}
+    assert runner._result_outputs(artifacts, "circus_fashioniq_release_v1", "fixture3d", "fixture",
+                                  row["attempt"], "full", "multimodal", True) == full_result_path
     assert gallery_shapes == [(5, 32, 256)]
     assert query_shapes == [(4, 256)] * 3
     assert projections == [(5, (32, 256), 4, 3, 5 * 32 * 256 * 4 + 4 * 256 * 4 * 3)]
 
     log_path = tmp_path / "encodes.jsonl"
-    before = _log(log_path)
+    before = [entry for entry in _log(log_path) if entry["kind"] != "checkpoint"]
     rank_file = next((artifacts / "composition/runs").rglob("ranks/fixture3d_fixture.json"))
     rank_digest, rank_mtime = rank_file.read_bytes(), rank_file.stat().st_mtime_ns
     rc, resumed, error = _run(config, release, adapters, artifacts, monkeypatch, capsys,
                               "--models", "fixture3d", "--resume")
     assert rc == 0, error
     assert resumed["models"][0]["status"] == "REUSED"
-    assert _log(log_path) == before
+    assert resumed["models"][0]["attempt"] == row["attempt"]
+    assert resumed["models"][0]["summaries"]["full"] == str(summary_path)
+    assert json.loads(summary_path.read_text(encoding="utf-8"))["execution_status"] == "REUSED"
+    assert [entry for entry in _log(log_path) if entry["kind"] != "checkpoint"] == before
     assert (rank_file.read_bytes(), rank_file.stat().st_mtime_ns) == (rank_digest, rank_mtime)
     module_file = adapters / "synthetic_fixture3d.py"
     module_file.write_text(module_file.read_text(encoding="utf-8") + "\n# changed adapter worker source\n",
@@ -316,7 +336,8 @@ def test_cli_2d_gallery_memmap_and_weighted_subsets(tmp_path: Path,
     summaries = report["models"][0]["summaries"]
     rows = {}
     for subset in ("full", "sf", "validated"):
-        result_path = next((artifacts / "composition/results").rglob(f"{subset}/multimodal.jsonl"))
+        result_path = next(path for path in (artifacts / "composition/results").rglob(
+            f"{subset}/multimodal.jsonl") if path.parent.parent.name == report["models"][0]["attempt"])
         rows[subset] = [json.loads(line) for line in result_path.read_text(encoding="utf-8").splitlines()]
     assert [len(rows[name]) for name in ("full", "sf", "validated")] == [4, 3, 3]
     assert len([entry for entry in _log(tmp_path / "encodes.jsonl") if entry["kind"] == "queries"]) == 3
@@ -329,6 +350,33 @@ def test_cli_2d_gallery_memmap_and_weighted_subsets(tmp_path: Path,
     unsolved_mean = sum(ndcg_full(row["rank"]) for row in unsolved)
     assert subset_summary["metrics"]["multimodal"]["ndcg_full"] == pytest.approx((2 * solved_mean + unsolved_mean) / 3)
     assert subset_summary["metrics"]["multimodal"]["ndcg_full"] != pytest.approx((solved_mean + unsolved_mean) / 2)
+
+def test_cli_subset_filter_preserves_gallery_and_resume_fingerprint(tmp_path: Path,
+                                                                   monkeypatch: pytest.MonkeyPatch,
+                                                                   capsys: pytest.CaptureFixture[str]) -> None:
+    config, release, adapters, artifacts = _fixture(tmp_path)
+    rc, validated, error = _run(config, release, adapters, artifacts, monkeypatch, capsys,
+                                "--models", "fixture3d", "--subsets", "validated")
+    assert rc == 0, error
+    model = validated["models"][0]
+    summary = json.loads(Path(model["summaries"]["validated"]).read_text(encoding="utf-8"))
+    assert model["gallery_count"] == summary["gallery_count"] == 5
+    assert summary["query_count"] == 3
+    query_calls = [entry for entry in _log(tmp_path / "encodes.jsonl") if entry["kind"] == "queries"]
+    assert len(query_calls) == 3
+    assert {text for entry in query_calls for text in entry["values"] if text} == {
+        "p=1;r=1", "p=2;r=2", "p=3;r=3"}
+
+    rc, full, error = _run(config, release, adapters, artifacts, monkeypatch, capsys,
+                           "--models", "fixture3d", "--subsets", "full,sf,validated", "--resume")
+    assert rc == 0, error
+    full_summary = json.loads(Path(full["models"][0]["summaries"]["full"]).read_text(encoding="utf-8"))
+    assert full["models"][0]["status"] == "COMPLETED"
+    assert full["models"][0]["run_id"] != model["run_id"]
+    assert full_summary["resume_key"] != summary["resume_key"]
+    query_calls = [entry for entry in _log(tmp_path / "encodes.jsonl") if entry["kind"] == "queries"]
+    assert len(query_calls) == 6
+
 
 
 def test_cli_unsupported_and_selected_cohort_exit_codes(tmp_path: Path,
@@ -358,6 +406,112 @@ def test_cli_unsupported_and_selected_cohort_exit_codes(tmp_path: Path,
     assert {row["status"] for row in mixed["models"]} == {"SELECTED_BUT_BLOCKED", "COMPLETED"}
 
 
+def test_selected_cohort_resume_exits_successfully(tmp_path: Path,
+                                                  monkeypatch: pytest.MonkeyPatch,
+                                                  capsys: pytest.CaptureFixture[str]) -> None:
+    config, release, adapters, artifacts = _fixture(tmp_path)
+    rc, first, error = _run(config, release, adapters, artifacts, monkeypatch, capsys,
+                            "--models", "selected")
+    assert rc == 0, error
+    before = [entry for entry in _log(tmp_path / "encodes.jsonl") if entry["kind"] != "checkpoint"]
+    rc, resumed, error = _run(config, release, adapters, artifacts, monkeypatch, capsys,
+                              "--models", "selected", "--resume")
+    assert rc == 0, error
+    assert resumed["models"][0]["status"] == "REUSED"
+    assert [entry for entry in _log(tmp_path / "encodes.jsonl") if entry["kind"] != "checkpoint"] == before
+    summary = json.loads(Path(resumed["models"][0]["summaries"]["full"]).read_text())
+    assert summary["execution_status"] == "REUSED"
+def test_transient_failure_retries_on_resume(tmp_path: Path,
+                                            monkeypatch: pytest.MonkeyPatch,
+                                            capsys: pytest.CaptureFixture[str]) -> None:
+    config, release, adapters, artifacts = _fixture(tmp_path)
+    monkeypatch.setenv("CIRCUS_TEST_FAIL_ONCE", "15")
+    rc, failed, error = _run(config, release, adapters, artifacts, monkeypatch, capsys,
+                             "--models", "selected")
+    assert rc == 1, error
+    failed_model = failed["models"][0]
+    assert failed_model["status"] == "MODEL_UNAVAILABLE"
+    failed_summary = json.loads(Path(failed_model["summaries"]["full"]).read_text())
+    assert failed_summary["execution_status"] == "FAILED"
+    assert failed_summary["condition_status"]["multimodal"]["status"] == "MODEL_UNAVAILABLE"
+    before_retry = len(_log(tmp_path / "encodes.jsonl"))
+    monkeypatch.delenv("CIRCUS_TEST_FAIL_ONCE")
+    rc, recovered, error = _run(config, release, adapters, artifacts, monkeypatch, capsys,
+                                "--models", "selected", "--resume")
+    assert rc == 0, error
+    assert recovered["models"][0]["status"] == "COMPLETED"
+    assert recovered["models"][0]["attempt"] != failed_model["attempt"]
+    assert len(_log(tmp_path / "encodes.jsonl")) > before_retry
+    before_reuse = len([entry for entry in _log(tmp_path / "encodes.jsonl") if entry["kind"] != "checkpoint"])
+    rc, reused, error = _run(config, release, adapters, artifacts, monkeypatch, capsys,
+                             "--models", "selected", "--resume")
+    assert rc == 0, error
+    assert reused["models"][0]["status"] == "REUSED"
+    assert len([entry for entry in _log(tmp_path / "encodes.jsonl") if entry["kind"] != "checkpoint"]) == before_reuse
+
+
+
+
+def test_attempt_outputs_preserve_full_smoke_resume_and_failure(tmp_path: Path,
+                                                               monkeypatch: pytest.MonkeyPatch,
+                                                               capsys: pytest.CaptureFixture[str]) -> None:
+    config, release, adapters, artifacts = _fixture(tmp_path)
+    rc, full, error = _run(config, release, adapters, artifacts, monkeypatch, capsys,
+                           "--models", "fixture3d")
+    assert rc == 0, error
+    full_model = full["models"][0]
+    full_path = next(path for path in (artifacts / "composition/results").rglob("full/multimodal.jsonl")
+                     if path.parent.parent.name == full_model["attempt"])
+    assert len(_log(full_path)) == 4
+    rc, smoke, error = _run(config, release, adapters, artifacts, monkeypatch, capsys,
+                            "--models", "fixture3d", "--smoke", "1")
+    assert rc == 0, error
+    smoke_model = smoke["models"][0]
+    smoke_path = next(path for path in (artifacts / "composition/results").rglob("full/multimodal.jsonl")
+                      if path.parent.parent.name == smoke_model["attempt"])
+    assert smoke_model["attempt"] != full_model["attempt"]
+    assert len(_log(full_path)) == 4 and len(_log(smoke_path)) == 1
+    assert json.loads(Path(full_model["summaries"]["full"]).read_text())["query_count"] == 4
+    assert json.loads(Path(smoke_model["summaries"]["full"]).read_text())["query_count"] == 1
+
+    encode_queries = runner._encode_queries
+    monkeypatch.setattr(runner, "_encode_queries",
+                        lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("synthetic transient encoding failure")))
+    rc, failed, error = _run(config, release, adapters, artifacts, monkeypatch, capsys,
+                             "--models", "fixture3d")
+    monkeypatch.setattr(runner, "_encode_queries", encode_queries)
+    assert rc == 1, error
+    failed_model = failed["models"][0]
+    assert failed_model["status"] == "MODEL_UNAVAILABLE"
+    assert failed_model["attempt"] not in {full_model["attempt"], smoke_model["attempt"]}
+    assert len(_log(full_path)) == 4
+    failure_summary = json.loads(Path(failed_model["summaries"]["full"]).read_text())
+    assert failure_summary["execution_status"] == "FAILED"
+    assert failure_summary["condition_status"]["multimodal"]["status"] == "MODEL_UNAVAILABLE"
+    failure_path = next(path for path in (artifacts / "composition/results").rglob("full/multimodal.jsonl")
+                        if path.parent.parent.name == failed_model["attempt"])
+    assert len(_log(failure_path)) == 4
+    rc, recovered, error = _run(config, release, adapters, artifacts, monkeypatch, capsys,
+                                "--models", "fixture3d", "--resume")
+    assert rc == 0, error
+    assert len(_log(full_path)) == 4
+    assert recovered["models"][0]["attempt"] != failed_model["attempt"]
+
+def test_category_scope_failure_cache_is_stable(tmp_path: Path,
+                                                monkeypatch: pytest.MonkeyPatch,
+                                                capsys: pytest.CaptureFixture[str]) -> None:
+    config, release, adapters, artifacts = _fixture(tmp_path, ("scoped",))
+    rc, first, error = _run(config, release, adapters, artifacts, monkeypatch, capsys,
+                            "--models", "scoped", "--resume")
+    assert rc == 1, error
+    encode_count = len([entry for entry in _log(tmp_path / "encodes.jsonl") if entry["kind"] != "checkpoint"])
+    for _ in range(2):
+        rc, resumed, error = _run(config, release, adapters, artifacts, monkeypatch, capsys,
+                                  "--models", "scoped", "--resume")
+        assert rc == 1, error
+        assert resumed["models"][0]["status"] == "PARTIAL"
+        assert len([entry for entry in _log(tmp_path / "encodes.jsonl") if entry["kind"] != "checkpoint"]) == encode_count
+
 def test_partial_and_wholly_blocked_failures_are_unscored(tmp_path: Path,
                                                           monkeypatch: pytest.MonkeyPatch,
                                                           capsys: pytest.CaptureFixture[str]) -> None:
@@ -369,7 +523,8 @@ def test_partial_and_wholly_blocked_failures_are_unscored(tmp_path: Path,
     assert failed["status"] == "MODEL_UNAVAILABLE"
     assert "synthetic encoding failure" in failed["reason"]
     assert good["status"] == "COMPLETED"
-    failed_result = next((artifacts / "composition/results").rglob("fail/fixture/full/multimodal.jsonl"))
+    failed_result = next(path for path in (artifacts / "composition/results").rglob("multimodal.jsonl")
+                         if "fail" in path.parts and path.parent.parent.name == failed["attempt"])
     failed_rows = [json.loads(line) for line in failed_result.read_text(encoding="utf-8").splitlines()]
     assert all(row["rank"] is None and row["scored"] is False for row in failed_rows)
     failed_summary = json.loads(Path(failed["summaries"]["full"]).read_text(encoding="utf-8"))
@@ -515,3 +670,51 @@ def test_output_containment_and_synthetic_guard(tmp_path: Path,
     captured = capsys.readouterr()
     assert rc == 1
     assert "candidate count 5 != expected 74381" in captured.err
+
+def test_bundle_dispatch_and_partial_member_refusal(tmp_path: Path,
+                                                    monkeypatch: pytest.MonkeyPatch,
+                                                    capsys: pytest.CaptureFixture[str]) -> None:
+    config, release, adapters, artifacts = _fixture(tmp_path)
+    registry_path = config.parent / "registry.yaml"
+    registry = yaml.safe_load(registry_path.read_text(encoding="utf-8"))
+    model = registry["models"][0]
+    variants = []
+    for member in ("dress", "shirt", "toptee"):
+        checkpoint_id = f"member_{member}"
+        filename = f"{checkpoint_id}.pt"
+        (config.parent / "checkpoints" / "fixture3d" / filename).write_bytes(b"bundle member")
+        variants.append({"checkpoint_id": checkpoint_id, "filename": filename,
+                         "evaluation_noise_pct": 0, "checkpoint_training_noise_pct": None,
+                         "checkpoint_mapping_status": "VERIFIED_METADATA"})
+    model["checkpoint_variants"] = variants
+    model["checkpoint_bundles"] = [{"bundle_id": "bundle-all",
+        "required_checkpoint_ids": [item["checkpoint_id"] for item in variants],
+        "structure": "category_specific_whole_models", "mapping_status": "VERIFIED_METADATA",
+        "notes": "synthetic test bundle"}]
+    registry_path.write_text(yaml.safe_dump(registry), encoding="utf-8")
+    rc, explicit, error = _run(config, release, adapters, artifacts, monkeypatch, capsys,
+                               "--models", "fixture3d")
+    assert rc == 0, error
+    assert len(explicit["models"]) == 1
+    assert explicit["models"][0]["checkpoint_id"] == "bundle-all"
+    checkpoints = [entry["shape"][0] for entry in _log(tmp_path / "encodes.jsonl")
+                   if entry["kind"] == "checkpoint"]
+    assert checkpoints == ["bundle-all"]
+    rc, selected, error = _run(config, release, adapters, artifacts, monkeypatch, capsys,
+                               "--models", "selected")
+    assert rc == 0, error
+    assert len(selected["models"]) == 1
+    assert selected["models"][0]["checkpoint_id"] == "bundle-all"
+    checkpoints = [entry["shape"][0] for entry in _log(tmp_path / "encodes.jsonl")
+                   if entry["kind"] == "checkpoint"]
+    assert checkpoints == ["bundle-all", "bundle-all"]
+    config_data = yaml.safe_load(config.read_text(encoding="utf-8"))
+    config_data["checkpoint_overrides"] = {"fixture3d": ["member_dress"]}
+    config.write_text(yaml.safe_dump(config_data), encoding="utf-8")
+    rc, partial, error = _run(config, release, adapters, artifacts, monkeypatch, capsys,
+                              "--models", "fixture3d")
+    assert rc == 1, error
+    assert partial["models"][0]["status"] == "UNSUPPORTED"
+    assert "full checkpoint bundle 'bundle-all'" in partial["models"][0]["reason"]
+    assert len([entry for entry in _log(tmp_path / "encodes.jsonl") if entry["kind"] == "checkpoint"]) == 2
+
