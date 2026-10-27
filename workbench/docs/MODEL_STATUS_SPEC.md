@@ -7,6 +7,7 @@ service, database hay dashboard mới.
 
 ## Current release accounting — 2026-10-26
 
+
 `TESTED_SOURCE_SHA`: `a55a3264dcaef0aeb8e90af7dcafdb9512203d8a`. Complete `workbench/tests` set: four sequential chunk invocations, not one single pass; `492+492+492+491 = 1967` IDs, complete partition with no duplicates or omissions. Total: **1955 passed, 1 failed**, 11 skipped, 0 errors. The sole failure was `workbench/tests/test_handoff_commands.py::test_no_release_document_points_at_a_superseded_source_sha`: the stale-SHA guard that this documentation-only update satisfies by advancing the metadata. Separate `tests/unit` scope: 59 collected, 59 passed.
 The 11 skipped cases are host boundaries, not defects: q1 has one inapplicable no-checkpoint-variant case because every registry model declares a variant; q3 has 10 cases (system-site-packages venv, LIMN and TGCIR installability checks lack declared Python versions, no `pip` for the controller `pip check`, and six LAVIS lifecycle boundaries skip because per-model interpreter variables are unset, including the `hint` digest-gate case).
 
@@ -66,6 +67,9 @@ The dated R23 accounting below remains the historical R23 record; it is not the 
 
 
 Scientific labels and achieved-evidence levels remain unchanged: training-noise and evaluation-noise stay distinct; TME defaults to 0% and its 20% condition remains unavailable; no AirKnow 50% substitution; PTHA is CIRR→FashionIQ transfer only; ENCODER checkpoint-mapping uncertainty remains; the three protocols and aggregate-only vs per-query distinction are unchanged. Eight models remain externally blocked (`airknow`, `pair`, `clvc_net`, `dcnet`, `combiner_rn50x4_noft`, `clip4cir_rn50x4_fullft`, `tgcir`, `sprc`); selected nine remain `limn`, `encoder`, `csmcir`, `ptha_mtst`, `tme`, `intent`, `habit`, `conesep`, `hint`.
+## CIRCUS composition evaluation
+
+Opt-in composition evaluation and its released-data protocol are specified in [CIRCUS_COMPOSITION_SPEC.md](CIRCUS_COMPOSITION_SPEC.md). Nine composition adapters are scaffolded; full composition evaluation remains `TARGET_GPU_PENDING`. ENCODER passed a real-data GPU smoke on RTX 3050 (`sm_86`). The eight deferred registry entries keep their existing reasons and labels unchanged.
 
 ## Closure snapshot bổ sung — 2026-10-25 (R22 closure)
 
