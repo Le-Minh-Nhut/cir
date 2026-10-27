@@ -558,6 +558,7 @@ def run_composition(data: Any, model_specs: Sequence[ModelSpec], config: Any, *,
         adapter_source_hash = "unavailable"
         run_id = None
         work_root = None
+        mode_status: dict[str, dict[str, Any]] = {}
         try:
             adapter = spec.adapter_factory(config, checkpoint_id)
             adapter_source_hash = _module_source_hash(adapter)
@@ -615,7 +616,6 @@ def run_composition(data: Any, model_specs: Sequence[ModelSpec], config: Any, *,
             reasons_by_condition: dict[str, dict[str, str]] = {}
             reused = False
             retry_conditions: set[str] = set()
-            mode_status: dict[str, dict[str, Any]] = {}
             if resume and adapter_source_hash != "unavailable" and rank_path.is_file():
                 try:
                     saved = json.loads(rank_path.read_text(encoding="utf-8"))
@@ -899,17 +899,29 @@ def run_composition(data: Any, model_specs: Sequence[ModelSpec], config: Any, *,
                             "adapter_module_source_status": "available" if adapter_source_hash != "unavailable" else "unavailable",
                             "query_count": len(queries), "gallery_count": len(gallery_ids),
                             "run_id": locals().get("run_id"), "attempt": attempt, "summaries": summaries})
+            mode_status[conditions[0]] = {"status": "FAILED", "reason": reason}
         finally:
+            model_work = locals().get("work_root")
+            if model_work is not None and model_work.exists():
+                try:
+                    if any(status.get("status") in {"MODEL_UNAVAILABLE", "FAILED", "EXACT_RANK_UNAVAILABLE"}
+                           for status in mode_status.values()):
+                        log_dir = assert_composition_destination(
+                            artifacts, composition / "logs" / f"{model_id}_{checkpoint_id}" / str(attempt))
+                        for worker_log in model_work.rglob("worker.stderr.log"):
+                            try:
+                                log_dir.mkdir(parents=True, exist_ok=True)
+                                shutil.copy2(worker_log, log_dir / "worker.stderr.log")
+                            except Exception:
+                                pass
+                except Exception:
+                    pass
+                shutil.rmtree(model_work, ignore_errors=True)
             if adapter is not None:
                 try:
                     adapter.close()
                 except Exception:
                     pass
-            # Keep the durable per-query ranks/results; feature memmaps and staged black images are
-            # transient. Only one model's feature arrays ever occupy disk at a time.
-            model_work = locals().get("work_root")
-            if model_work is not None and model_work.exists():
-                shutil.rmtree(model_work, ignore_errors=True)
 
     return {"run_count": len(reports), "models": reports, "gallery_count": len(gallery_ids),
             "gallery_identity_sha256": gallery_hash, "protocol_id": data.gallery.protocol_id,

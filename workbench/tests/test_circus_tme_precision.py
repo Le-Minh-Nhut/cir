@@ -59,6 +59,19 @@ def test_tme_worker_vision_autocast_boundary_source_structure() -> None:
         ancestor = parents[ancestor]
     assert ast.unparse(ancestor.items[0].context_expr) == "torch.cuda.amp.autocast()"
 
+def test_tme_worker_loads_checkpoint_on_cpu_source_structure() -> None:
+    """Source-structure check pins checkpoint unpickling to CPU without requiring GPU."""
+    module = ast.parse(Path(model_tme.__file__).read_text(encoding="utf-8"))
+    worker = next(node for node in module.body if isinstance(node, ast.FunctionDef)
+                  and node.name == "_worker_main")
+    loads = [node for node in ast.walk(worker)
+             if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+             and node.func.attr == "load" and isinstance(node.func.value, ast.Name)
+             and node.func.value.id == "torch"]
+    assert len(loads) == 1
+    assert ast.literal_eval(next(keyword.value for keyword in loads[0].keywords
+                                 if keyword.arg == "map_location")) == "cpu"
+
 def test_worker_skips_empty_stdin_lines(tmp_path: Path, monkeypatch, capsys) -> None:
     source_root = tmp_path / "source"
     (source_root / "src").mkdir(parents=True)

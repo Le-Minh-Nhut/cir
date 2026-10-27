@@ -328,7 +328,7 @@ def _worker_main(argv: Sequence[str] | None = None) -> int:
             raise RuntimeError("TME requires CUDA in its model interpreter")
         network, _, processors = load_model_and_preprocess(
             name=MODEL_NAME, model_type=MODEL_TYPE, is_eval=False, device=device)
-        state = torch.load(path, map_location=device, weights_only=True)
+        state = torch.load(path, map_location="cpu", weights_only=True)
         report = network.load_state_dict(state, strict=False)
         if report.missing_keys or report.unexpected_keys:
             raise RuntimeError(

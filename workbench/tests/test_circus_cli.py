@@ -80,7 +80,7 @@ def _fixture(tmp_path: Path, model_ids: tuple[str, ...] = ("fixture3d",)) -> tup
             "import json, os, re\n"
             "from pathlib import Path\n"
             "import numpy as np\n"
-            "from workbench.composition.adapters import CompositionAdapter\n"
+            "from workbench.composition.adapters import CompositionAdapter, AdapterWorkerError\n"
             f"MODEL_ID = {model_id!r}\n"
             "def record(kind, shape, values=None):\n"
             "    path = os.environ.get('CIRCUS_TEST_LOG')\n"
@@ -113,6 +113,11 @@ def _fixture(tmp_path: Path, model_ids: tuple[str, ...] = ("fixture3d",)) -> tup
             "        return values\n"
             "    def encode_queries(self, images, texts, categories):\n"
             "        record('queries', (len(images),), texts)\n"
+            "        if MODEL_ID in {'workerfail', 'workersuccess'}:\n"
+            "            worker_dir = Path(self.work_root) / MODEL_ID / 'worker-test'\n"
+            "            worker_dir.mkdir(parents=True, exist_ok=True)\n"
+            "            (worker_dir / 'worker.stderr.log').write_text('synthetic worker traceback\\n')\n"
+            "        if MODEL_ID == 'workerfail': raise AdapterWorkerError('synthetic adapter worker failure')\n"
             "        fail_once = int(os.environ.get('CIRCUS_TEST_FAIL_ONCE', '0'))\n"
             "        counter = Path(os.environ['CIRCUS_TEST_LOG']).with_suffix('.fail-count') if os.environ.get('CIRCUS_TEST_LOG') else None\n"
             "        if fail_once and counter:\n"
@@ -448,6 +453,24 @@ def test_transient_failure_retries_on_resume(tmp_path: Path,
     assert rc == 0, error
     assert reused["models"][0]["status"] == "REUSED"
     assert len([entry for entry in _log(tmp_path / "encodes.jsonl") if entry["kind"] != "checkpoint"]) == before_reuse
+
+def test_worker_stderr_preserved_only_for_failed_model(tmp_path: Path,
+                                                       monkeypatch: pytest.MonkeyPatch,
+                                                       capsys: pytest.CaptureFixture[str]) -> None:
+    config, release, adapters, artifacts = _fixture(tmp_path, ("workerfail", "workersuccess"))
+    rc, report, error = _run(config, release, adapters, artifacts, monkeypatch, capsys,
+                             "--models", "workerfail,workersuccess")
+
+    assert rc == 1, error
+    failed, successful = report["models"]
+    failed_log = (artifacts / "composition/logs" / "workerfail_fixture" / failed["attempt"] /
+                  "worker.stderr.log")
+    assert failed["status"] == "MODEL_UNAVAILABLE"
+    assert failed_log.read_text(encoding="utf-8") == "synthetic worker traceback\n"
+    success_log = (artifacts / "composition/logs" / "workersuccess_fixture" / successful["attempt"] /
+                   "worker.stderr.log")
+    assert successful["status"] == "COMPLETED"
+    assert not success_log.exists()
 
 
 
