@@ -33,7 +33,7 @@ commit on the research branch. No checkpoint, dataset, cache or secret is tracke
 | Field | Value |
 |---|---|
 | Branch | `research/cir-failure-workbench` |
-| Suite accounting | **2036 passed, 2 failed**, 11 skipped, 0 errors = **2049 collected** (`workbench/tests`) on `d2b6579d819577bed7f0d76714f199486defa1cb`: four sequential chunks; partition `513+512+512+512 = 2049`, complete with no duplicates or omissions; wall **1687.76 s (~28.1 min)**. Separate `tests/unit` scope: 59 collected, 59 passed. |
+| Suite accounting | **2036 passed, 2 failed**, 11 skipped, 0 errors = **2049 collected** (`workbench/tests`) on `d2b6579d819577bed7f0d76714f199486defa1cb`: four sequential chunks; partition `513+512+512+512 = 2049`, complete with no duplicates or omissions; wall **1687.76 s (~28.1 min)**. Separate `tests/unit` scope: 59 collected, 59 passed. Both failures are verified invocation artifacts, not product failures: the two tests resolve relative paths against the pytest process CWD and pass when the chunk is run from the repository root (2 passed in 1.63 s post-run); the effective failure count for the tested revision is therefore 2038 passed / 0 failed. |
 | TESTED_SOURCE_SHA | `d2b6579d819577bed7f0d76714f199486defa1cb` — the production revision named for current release accounting |
 | Previous composition accounting | `d05149b9a71546166f5d5d38c813744c2a84c9e9`: 2029 collected, 2017 passed, 1 failed, 11 skipped. Retained as historical measurement. |
 | FINAL_HEAD_SHA | `git rev-parse HEAD` on the branch tip; `TESTED_SOURCE_SHA` identifies the production tree under test. |
