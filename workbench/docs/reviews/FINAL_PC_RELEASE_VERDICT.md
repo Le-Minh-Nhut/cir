@@ -33,7 +33,7 @@ commit on the research branch. No checkpoint, dataset, cache or secret is tracke
 | Field | Value |
 |---|---|
 | Branch | `research/cir-failure-workbench` |
-| Suite accounting | **2035 passed, 3 failed**, 11 skipped, 0 errors = **2049 collected** (`workbench/tests`) on `d2b6579d819577bed7f0d76714f199486defa1cb`: four sequential chunks; partition `513+512+512+512 = 2049`, complete with no duplicates or omissions; wall **1672.40 s (~27.9 min)**. Separate `tests/unit` scope: 59 collected, 59 passed. |
+| Suite accounting | **2036 passed, 2 failed**, 11 skipped, 0 errors = **2049 collected** (`workbench/tests`) on `d2b6579d819577bed7f0d76714f199486defa1cb`: four sequential chunks; partition `513+512+512+512 = 2049`, complete with no duplicates or omissions; wall **1687.76 s (~28.1 min)**. Separate `tests/unit` scope: 59 collected, 59 passed. |
 | TESTED_SOURCE_SHA | `d2b6579d819577bed7f0d76714f199486defa1cb` — the production revision named for current release accounting |
 | Previous composition accounting | `d05149b9a71546166f5d5d38c813744c2a84c9e9`: 2029 collected, 2017 passed, 1 failed, 11 skipped. Retained as historical measurement. |
 | FINAL_HEAD_SHA | `git rev-parse HEAD` on the branch tip; `TESTED_SOURCE_SHA` identifies the production tree under test. |
@@ -48,7 +48,7 @@ root, the model's provisioned interpreter, and exactly one ledger key file.
 
 ## What was tested
 
-The prior composition-revision measurement on `d05149b9` was 2029 collected, 2017 passed, 1 failed, 11 skipped. Current composition-revision full-suite measurement on `d2b6579d` used four sequential chunks (`513+512+512+512 = 2049`): **2035 passed, 3 failed**, 11 skipped, 0 errors. `tests/unit`: 59 passed. The earlier R25 measurement on `a55a326`: 1967 collected, 1955 passed, 1 failed, 11 skipped. The R25 verification began with the R10 pass and its post-review corrections (the six independent findings -- DCNet
+The prior composition-revision measurement on `d05149b9` was 2029 collected, 2017 passed, 1 failed, 11 skipped. Current composition-revision full-suite measurement on `d2b6579d` used four sequential chunks (`513+512+512+512 = 2049`): **2036 passed, 2 failed**, 11 skipped, 0 errors. `tests/unit`: 59 passed. The earlier R25 measurement on `a55a326`: 1967 collected, 1955 passed, 1 failed, 11 skipped. The R25 verification began with the R10 pass and its post-review corrections (the six independent findings -- DCNet
 binding and staging, the LAVIS processor/checkpoint lifecycle, the stale source blockers, the
 dependency profiles and the isolated-environment inventory; see
 `workbench/docs/reviews/r10/R10_REMEDIATION.md`. Before it, the R9 pass: DCNet dataset binding and category
@@ -66,7 +66,7 @@ source. `119df5f` is superseded: the R9 production fixes changed the files this 
 
 | Gate | Command | Result |
 |---|---|---|
-| Backend suite | Four sequential chunk invocations over complete `workbench/tests`; partition `513+512+512+512 = 2049` | **2035 passed, 3 failed**, 11 skipped, 0 errors = **2049 collected** on composition revision `d2b6579d`. `tests/unit`: 59 collected, 59 passed. |
+| Backend suite | Four sequential chunk invocations over complete `workbench/tests`; partition `513+512+512+512 = 2049` | **2036 passed, 2 failed**, 11 skipped, 0 errors = **2049 collected** on composition revision `d2b6579d`. `tests/unit`: 59 collected, 59 passed. |
 | Acceptance | `bash workbench/docker/acceptance.sh` | **ACCEPTANCE PASSED at `59949ff`** (1 honest skip: GPG status unverified). At `9a53ee1` group C fails only against the pre-existing `cir-workbench` container, whose image predates the vendoring and still serves the old registry (it reports `ptha_mtst source_available: false`); rerun against a backend started from current source and group C passes — `PASS 17 models, ids/protocols/environments match the registry`. Rebuild the image before re-running acceptance. |
 | Mutation checks | `bash workbench/docker/mutation_checks.sh` | **PASSED** M1 M2 M3 M4 M5 |
 | Offline release verification | `bash workbench/docker/release_verify.sh --offline` | exit 0, `ENGINEERING_INCOMPLETE`, **0 checks FAIL/UNRUN** |

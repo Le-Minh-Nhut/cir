@@ -26,7 +26,7 @@ Tám entry hoãn có blocker khác nhau theo registry: `airknow` thiếu checkpo
 **Trạng thái 17 model (bảng chuẩn, bằng chứng + điều kiện chuyển trạng thái):**
 [`workbench/docs/MODEL_STATUS_SPEC.md`](MODEL_STATUS_SPEC.md)
 
-**SHA ĐÃ KIỂM THỬ (nguồn sản xuất): `d2b6579d`** (`d2b6579d819577bed7f0d76714f199486defa1cb`), revision production hiện được ghi nhận trong accounting release. Composition suite trên revision này: 2049 collected, 2035 passed, 3 failed, 11 skipped, 0 errors; `tests/unit`: 59/59 passed. Historical accounting trên `d05149b9`: 2029 collected, 2017 passed, 1 failed, 11 skipped. Lịch sử R25 trên `a55a326`: 1967 collected, 1955 passed, 1 failed, 11 skipped. GPU đích vẫn `TARGET_GPU_PENDING`.
+**SHA ĐÃ KIỂM THỬ (nguồn sản xuất): `d2b6579d`** (`d2b6579d819577bed7f0d76714f199486defa1cb`), revision production hiện được ghi nhận trong accounting release. Composition suite trên revision này: 2049 collected, 2036 passed, 2 failed, 11 skipped, 0 errors; `tests/unit`: 59/59 passed. Historical accounting trên `d05149b9`: 2029 collected, 2017 passed, 1 failed, 11 skipped. Lịch sử R25 trên `a55a326`: 1967 collected, 1955 passed, 1 failed, 11 skipped. GPU đích vẫn `TARGET_GPU_PENDING`.
 
 Lưu ý: các bản ghi cũ `59949ff`, `9a53ee1` và `5567bc7` đã bị **thay thế**. Công việc vendoring và phục hồi
 model đã thay đổi file production (`workbench/backend/runtime.py`, `workbench/replay/common.py`,

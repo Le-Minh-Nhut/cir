@@ -6,12 +6,12 @@ Primary operator route is this document's [One run/resume path](#one-runresume-p
 | Chunk | Collected | Passed | Failed | Skipped | Errors | Wall |
 |---|---:|---:|---:|---:|---:|---:|
 | q1 | 513 | 511 | 2 | 0 | 0 | 507.23 s |
-| q2 | 512 | 510 | 1 | 1 | 0 | 227.11 s |
+| q2 | 512 | 511 | 0 | 1 | 0 | 230.61 s |
 | q3 | 512 | 502 | 0 | 10 | 0 | 463.73 s |
 | q4 | 512 | 512 | 0 | 0 | 0 | 474.33 s |
-| **Total** | **2049** | **2035** | **3** | **11** | **0** | **1672.40 s (~27.9 min)** |
+| **Total** | **2049** | **2036** | **2** | **11** | **0** | **1687.76 s (~28.1 min)** |
 
-The measured failures were in q1 (`test_circus_inputs.py`, two failures) and q2 (one failure); their short tracebacks were not retained from the pytest tail output. `tests/unit`: 59 passed in 2.45 s. Target-GPU execution remains `TARGET_GPU_PENDING`.
+Q1 failures: `test_doctor_vendored_source_and_selection::test_vendored_source_state_uses_provenance_and_local_changes_only` raised `FileNotFoundError` for `workbench/third_party/LIMN`; `test_encoder_pair_clvc_verification::test_f12_pair_reconstruction_labeling_and_behavior` raised `FileNotFoundError` for `workbench/third_party/PAIR/models/MHTransformer_rev.py`. Q2 had no failures; its one skip was the checkpoint-variant rule with no subject. `tests/unit`: 59 passed in 2.45 s. Target-GPU execution remains `TARGET_GPU_PENDING`.
 
 
 ## Historical previous-release accounting
