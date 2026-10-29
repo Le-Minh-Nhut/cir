@@ -2,16 +2,16 @@
 
 Primary operator route is this document's [One run/resume path](#one-runresume-path). Copy the checked-in `pc_autopilot.pc_cohort.yaml` to a private PC-specific YAML and configure all six absolute paths, finite budgets, capabilities, model settings, and operational batch before any real run. [MODEL_STATUS_SPEC.md](MODEL_STATUS_SPEC.md) records per-model source, checkpoint, assets, capability, and blockers.
 
-**Current revision identity:** tested production revision: `d2b6579d819577bed7f0d76714f199486defa1cb` (`TESTED_SOURCE_SHA`). The `workbench/tests` suite was collected once (2049 node IDs) and run as four sequential chunks, with no duplicate or omitted IDs.
+**Current revision identity:** tested production revision: `496cdf637e6aee0da2bfc855935e42a3295f605c` (`TESTED_SOURCE_SHA`). One collection produced 2130 node IDs (`workbench/tests` + `tests/unit`); they were run as four sequential chunks, with no duplicate or omitted IDs. Scope `workbench/tests` (2071 collected):
 | Chunk | Collected | Passed | Failed | Skipped | Errors | Wall |
 |---|---:|---:|---:|---:|---:|---:|
-| q1 | 513 | 511 | 2 | 0 | 0 | 507.23 s |
-| q2 | 512 | 511 | 0 | 1 | 0 | 230.61 s |
-| q3 | 512 | 502 | 0 | 10 | 0 | 463.73 s |
-| q4 | 512 | 512 | 0 | 0 | 0 | 474.33 s |
-| **Total** | **2049** | **2036** | **2** | **11** | **0** | **1687.76 s (~28.1 min)** |
+| q1 | 532 | 532 | 0 | 0 | 0 | 1436 s |
+| q2 | 533 | 531 | 1 | 1 | 0 | 706 s |
+| q3 | 532 | 523 | 0 | 9 | 0 | 1382 s |
+| q4 | 474 | 474 | 0 | 0 | 0 | 1599 s |
+| **Total** | **2071** | **2060** | **1** | **10** | **0** | **5123 s** |
 
-Q1 failures: `test_doctor_vendored_source_and_selection::test_vendored_source_state_uses_provenance_and_local_changes_only` raised `FileNotFoundError` for `workbench/third_party/LIMN`; `test_encoder_pair_clvc_verification::test_f12_pair_reconstruction_labeling_and_behavior` raised `FileNotFoundError` for `workbench/third_party/PAIR/models/MHTransformer_rev.py`. Q2 had no failures; its one skip was the checkpoint-variant rule with no subject. `tests/unit`: 59 passed in 2.45 s. Target-GPU execution remains `TARGET_GPU_PENDING`.
+The fourth chunk also carried the 59 `tests/unit` node IDs (chunk 4 total 533 = 474 + 59): `tests/unit` 59 passed, 0 failed. Total wall for all four chunks: **5126 s (~85.4 min)**. The single `workbench/tests` failure is q2's `test_handoff_commands.py::test_no_release_document_points_at_a_superseded_source_sha`, which fails by construction on the revision whose documents still name the previous tested source; it passes once they name this revision. `tests/unit`: 59 passed in 2.4 s. Target-GPU execution remains `TARGET_GPU_PENDING`.
 
 
 ## Historical previous-release accounting
@@ -102,9 +102,9 @@ git fetch origin research/cir-failure-workbench
 git checkout research/cir-failure-workbench
 git merge --ff-only origin/research/cir-failure-workbench
 git rev-parse HEAD          # branch tip; may be a documentation-only successor
-git rev-parse d2b6579d       # must print TESTED_SOURCE_SHA: d2b6579d819577bed7f0d76714f199486defa1cb
-git merge-base --is-ancestor d2b6579d HEAD
-git diff --exit-code d2b6579d HEAD -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'
+git rev-parse 496cdf63       # must print TESTED_SOURCE_SHA: 496cdf637e6aee0da2bfc855935e42a3295f605c
+git merge-base --is-ancestor 496cdf63 HEAD
+git diff --exit-code 496cdf63 HEAD -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'
 ```
 
 Fresh checkout (clone the research branch directly):
@@ -113,9 +113,9 @@ Fresh checkout (clone the research branch directly):
 git clone --branch research/cir-failure-workbench git@github.com:Le-Minh-Nhut/cir.git cir
 cd cir
 git rev-parse HEAD          # branch tip; may be a documentation-only successor
-git rev-parse d2b6579d       # must print TESTED_SOURCE_SHA: d2b6579d819577bed7f0d76714f199486defa1cb
-git merge-base --is-ancestor d2b6579d HEAD
-git diff --exit-code d2b6579d HEAD -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'
+git rev-parse 496cdf63       # must print TESTED_SOURCE_SHA: 496cdf637e6aee0da2bfc855935e42a3295f605c
+git merge-base --is-ancestor 496cdf63 HEAD
+git diff --exit-code 496cdf63 HEAD -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'
 ```
 
 Continue from the repository root:
