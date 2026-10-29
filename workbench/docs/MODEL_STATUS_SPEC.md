@@ -6,6 +6,12 @@
 > claimed for these pairs.
 > See [the current runtime instructions](CIRCUS_COMPOSITION_SPEC.md#target-pc-runtime-baseline-2026-10-29).
 
+### A30 — môi trường PC: ba lỗi đã đóng (2026-10-30)
+
+- **A30-01** — `runtime.py::verify_environment()` kiểm tra Python theo hợp đồng đã resolve (`resolved_runtime_environment`) thay vì pin lịch sử khi `WORKBENCH_RUNTIME_ADAPTATION=sm_120`; unset → hành vi giữ nguyên. Test: `workbench/tests/test_manage_environment_a30.py` (real CPython 3.10 venv, wrong-python vẫn bị refuse).
+- **A30-02** — `manage_environment.py::create_env()` đọc interpreter qua settings lookup (env > file) và cài theo resolved constraints của planner (`_resolved_install_plan`, kèm `--extra-index-url` cu128) thay vì historical freeze; unset → freeze như cũ. Test: argv capture 4 case (export/file/conflict/unset).
+- **A30-03** — assignment `RUNTIME_VERIFIED` cũ chỉ được reuse khi interpreter verify THẬT hiện tại; `status()` phát tier/reason nhất quán (hết GROUP_READY mâu thuẫn), `--create` sửa thay vì early-return; dry-run read-only và result-stable. Test: stale→repair, valid→reuse, dry-run stability.
+
 # MODEL_STATUS_SPEC — trạng thái 17 model CIR
 
 Tài liệu trạng thái chuẩn. Registry (`workbench/registry/models.yaml`) vẫn là **nguồn tham số thực thi**;
