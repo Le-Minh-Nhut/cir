@@ -2,21 +2,14 @@
 
 Primary operator route is this document's [One run/resume path](#one-runresume-path). Copy the checked-in `pc_autopilot.pc_cohort.yaml` to a private PC-specific YAML and configure all six absolute paths, finite budgets, capabilities, model settings, and operational batch before any real run. [MODEL_STATUS_SPEC.md](MODEL_STATUS_SPEC.md) records per-model source, checkpoint, assets, capability, and blockers.
 
-**Current revision identity:** tested production revision: `496cdf637e6aee0da2bfc855935e42a3295f605c` (`TESTED_SOURCE_SHA`). One collection produced 2130 node IDs (`workbench/tests` + `tests/unit`); they were run as four sequential chunks, with no duplicate or omitted IDs. Scope `workbench/tests` (2071 collected):
-| Chunk | Collected | Passed | Failed | Skipped | Errors | Wall |
-|---|---:|---:|---:|---:|---:|---:|
-| q1 | 532 | 532 | 0 | 0 | 0 | 1436 s |
-| q2 | 533 | 531 | 1 | 1 | 0 | 706 s |
-| q3 | 532 | 523 | 0 | 9 | 0 | 1382 s |
-| q4 | 474 | 474 | 0 | 0 | 0 | 1599 s |
-| **Total** | **2071** | **2060** | **1** | **10** | **0** | **5123 s** |
+**Current revision identity:** `TESTED_SOURCE_SHA` is `ab38ac7260e0788aa33ca8f1f61423dc3a1b5239`. Full invocation on `a3f90403e79a31424498ef9dfb30f9534907acc9`: 2139 collected across workbench/tests and tests/unit; 2119 passed, 5 failed, 15 skipped, 0 errors, 1304.19 s. Workbench scope: 2080 collected, 2060 passed, 5 failed, 15 skipped, 0 errors. Unit scope: 59 passed. The later blocked-row deduplication and blank-HF export correction in `ab38ac72` is covered by a separate 123-passing CIRCUS/runtime run; the full suite was not rerun after that narrow change. Separate reruns do not turn the recorded full invocation green.
 
-The fourth chunk also carried the 59 `tests/unit` node IDs (chunk 4 total 533 = 474 + 59): `tests/unit` 59 passed, 0 failed. Total wall for all four chunks: **5126 s (~85.4 min)**. The single `workbench/tests` failure is q2's `test_handoff_commands.py::test_no_release_document_points_at_a_superseded_source_sha`, which fails by construction on the revision whose documents still name the previous tested source; it passes once they name this revision. `tests/unit`: 59 passed in 2.4 s. Target-GPU execution remains `TARGET_GPU_PENDING`.
-
+The five full-run failures were two launcher-fixture 20 s timeouts, a missing-input resume assertion,
+an Autopilot resume assertion, and the documentation count guard (old 2071 vs new 2080 cases).
+The count guard is corrected by the metadata update. The other four require their separately recorded
+rechecks; they are not silently relabeled as full-run passes. GPU execution remains `TARGET_GPU_PENDING`.
 
 ## Historical previous-release accounting
-
-Each chunk result above comes from one sequential invocation over its exact partition; together they cover the complete node set, not a single full-suite pass.
 
 **Historical R23 accounting (2026-10-25):** delivered revision `1b890b759bc6663e838c374484092eabb73133b2` (`TESTED_SOURCE_SHA` at that time); the chunk results and disk-floor notes below describe that earlier R23 run and remain historical.
 
@@ -102,9 +95,9 @@ git fetch origin research/cir-failure-workbench
 git checkout research/cir-failure-workbench
 git merge --ff-only origin/research/cir-failure-workbench
 git rev-parse HEAD          # branch tip; may be a documentation-only successor
-git rev-parse 496cdf63       # must print TESTED_SOURCE_SHA: 496cdf637e6aee0da2bfc855935e42a3295f605c
-git merge-base --is-ancestor 496cdf63 HEAD
-git diff --exit-code 496cdf63 HEAD -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'
+git rev-parse ab38ac72       # must print TESTED_SOURCE_SHA: ab38ac7260e0788aa33ca8f1f61423dc3a1b5239
+git merge-base --is-ancestor ab38ac72 HEAD
+git diff --exit-code ab38ac72 HEAD -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'
 ```
 
 Fresh checkout (clone the research branch directly):
@@ -113,9 +106,9 @@ Fresh checkout (clone the research branch directly):
 git clone --branch research/cir-failure-workbench git@github.com:Le-Minh-Nhut/cir.git cir
 cd cir
 git rev-parse HEAD          # branch tip; may be a documentation-only successor
-git rev-parse 496cdf63       # must print TESTED_SOURCE_SHA: 496cdf637e6aee0da2bfc855935e42a3295f605c
-git merge-base --is-ancestor 496cdf63 HEAD
-git diff --exit-code 496cdf63 HEAD -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'
+git rev-parse ab38ac72       # must print TESTED_SOURCE_SHA: ab38ac7260e0788aa33ca8f1f61423dc3a1b5239
+git merge-base --is-ancestor ab38ac72 HEAD
+git diff --exit-code ab38ac72 HEAD -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'
 ```
 
 Continue from the repository root:

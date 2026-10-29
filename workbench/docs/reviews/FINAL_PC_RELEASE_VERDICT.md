@@ -19,9 +19,9 @@ the aggregate) is the concrete unblock.
 |---|---|
 | Branch | `research/cir-failure-workbench` |
 | Initial HEAD this pass | `3aae18fe02ef13f5b38d153dbc8007fbb40d4c92` |
-| **TESTED_SOURCE_SHA** | **`496cdf637e6aee0da2bfc855935e42a3295f605c`** — the production revision under test; documentation-only successors preserve this production tree. R25 suite counts below describe the pre-composition revision. R23 remains historical. |
+| **TESTED_SOURCE_SHA** | **`ab38ac7260e0788aa33ca8f1f61423dc3a1b5239`** — the production revision under test; documentation-only successors preserve this production tree. R25 suite counts below describe the pre-composition revision. R23 remains historical. |
 | **FINAL_HEAD_SHA** | not recorded here by design: a tracked file cannot name the commit that contains it. `git rev-parse HEAD` on the branch tip is the authority. |
-| Production tree | compare against the named revision with `git diff 496cdf637e6aee0da2bfc855935e42a3295f605c HEAD -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'`; the release guard requires byte-identical production source. |
+| Production tree | compare against the named revision with `git diff ab38ac7260e0788aa33ca8f1f61423dc3a1b5239 HEAD -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'`; the release guard requires byte-identical production source. |
 | `origin/main` | `8ebcc74d5fd1934df4f3772a8ca5a96dbd00f333` — **unchanged** |
 | Worktree | R25 changes committed; preserved untracked user files: `src/train_cirr.py`, `uv.lock` |
 
@@ -33,8 +33,8 @@ commit on the research branch. No checkpoint, dataset, cache or secret is tracke
 | Field | Value |
 |---|---|
 | Branch | `research/cir-failure-workbench` |
-| Suite accounting | **2060 passed, 1 failed**, 10 skipped, 0 errors = **2071 collected** (`workbench/tests`) on `496cdf637e6aee0da2bfc855935e42a3295f605c`: one collection of 2130 node ids run as four sequential chunks; this scope's partition is `532+533+532+474 = 2071` (the 59 `tests/unit` cases ride in the fourth chunk, so the full partition is `532+533+532+533 = 2130`), complete with no duplicates or omissions; wall **5126 s (~85.4 min)**. Separate `tests/unit` scope: 59 collected, 59 passed. The single failure is the release-metadata guard `test_no_release_document_points_at_a_superseded_source_sha`, which by construction fails on the very revision whose documents still name the previous tested source; it passes once the documents name this revision. |
-| TESTED_SOURCE_SHA | `496cdf637e6aee0da2bfc855935e42a3295f605c` — the production revision named for current release accounting |
+| Suite accounting | **2060 passed, 5 failed**, 15 skipped, 0 errors = **2080 collected** (`workbench/tests`) in the full invocation on `a3f90403e79a31424498ef9dfb30f9534907acc9`, wall 1304.19 s. Including `tests/unit`: 2139 collected, 2119 passed, 5 failed, 15 skipped; unit scope 59 passed. Subsequent focused runs are separate evidence. |
+| TESTED_SOURCE_SHA | `ab38ac7260e0788aa33ca8f1f61423dc3a1b5239` — the production revision named for current release accounting |
 | Previous composition accounting | `d05149b9a71546166f5d5d38c813744c2a84c9e9`: 2029 collected, 2017 passed, 1 failed, 11 skipped. Retained as historical measurement. |
 | FINAL_HEAD_SHA | `git rev-parse HEAD` on the branch tip; `TESTED_SOURCE_SHA` identifies the production tree under test. |
 | `origin/main` | `8ebcc74d5fd1934df4f3772a8ca5a96dbd00f333` — unchanged |
@@ -48,25 +48,21 @@ root, the model's provisioned interpreter, and exactly one ledger key file.
 
 ## What was tested
 
-The prior composition-revision measurement on `d05149b9` was 2029 collected, 2017 passed, 1 failed, 11 skipped. The composition-revision measurement on `d2b6579d` was 2049 collected, 2036 passed, 2 failed, 11 skipped. Current A–F revision measurement on `496cdf63` used four sequential chunks (`532+533+532+533 = 2130` node ids collected once; the `workbench/tests` scope is `532+533+532+474 = 2071`): **2060 passed, 1 failed**, 10 skipped, 0 errors. `tests/unit`: 59 passed. The earlier R25 measurement on `a55a326`: 1967 collected, 1955 passed, 1 failed, 11 skipped. The R25 verification began with the R10 pass and its post-review corrections (the six independent findings -- DCNet
-binding and staging, the LAVIS processor/checkpoint lifecycle, the stale source blockers, the
-dependency profiles and the isolated-environment inventory; see
-`workbench/docs/reviews/r10/R10_REMEDIATION.md`. Before it, the R9 pass: DCNet dataset binding and category
-order, the CSMCIR patch set, the constructor input set, and the F06 text processor — see
-`workbench/docs/reviews/r9/R9_FINAL_REPORT.md`). Commits after it on
-`research/cir-failure-workbench` changed **documentation only** — a tracked document cannot name the
-commit that contains it, so the metadata commit that records this verdict is itself outside the tested
-source. `119df5f` is superseded: the R9 production fixes changed the files this table's gates cover. The earlier `59949ff` pass is superseded: the vendored-source work changed production files
-(`workbench/backend/runtime.py`, `workbench/replay/common.py`, `workbench/backend/adapters/models.py`,
-`workbench/registry/*`), so its recorded pass count and gates no longer describe this tree. Both
-`main` and the pre-existing container are untouched by that note. Earlier passes ran on `11ba3df`, which is now an obsolete source:
-`git diff 11ba3df 2bc0cd2` touches `pc.sh`, `workbench/replay/limn_export.py`,
-`workbench/replay/limn_publish.py`, `workbench/scripts/evaluate_models.py` and
-`workbench/frontend/evidence.ts`. The handoff's checkout target is the `TESTED_SOURCE_SHA` above for that reason.
+Full invocation on `a3f90403e79a31424498ef9dfb30f9534907acc9`: 2139 collected across workbench/tests and tests/unit; 2119 passed, 5 failed, 15 skipped, 0 errors, 1304.19 s. Workbench scope: 2080 collected, 2060 passed, 5 failed, 15 skipped, 0 errors. Unit scope: 59 passed. The later blocked-row deduplication and blank-HF export correction in `ab38ac72` is covered by a separate 123-passing CIRCUS/runtime run; the full suite was not rerun after that narrow change. Separate reruns do not turn the recorded full invocation green.
+
+The raw failures are retained in the audit package. Two launcher fixtures exceeded 20 s under
+parallel load; missing-input and Autopilot resume assertions also failed; the count guard saw the
+old 2071-case metadata. Focused rechecks and the updated guard are recorded separately.
+The final source differs from the full-run source only by the blocked-row CLI correction, blank-HF export normalization and their
+stronger assertions; all 123 CIRCUS/runtime checks pass after that correction.
+Torch 2.7.1+cpu / torchvision 0.22.1+cpu also passed all 59 unit tests in an isolated environment.
+No target sm_120 GPU or complete per-model CUDA installation is claimed.
+
+Earlier R23/R25/composition measurements are historical and do not certify this runtime profile.
 
 | Gate | Command | Result |
 |---|---|---|
-| Backend suite | Four sequential chunk invocations over the complete collected `workbench/tests` scope; partition `532+533+532+474 = 2071` (full run including `tests/unit` in chunk 4: `532+533+532+533 = 2130`) | **2060 passed, 1 failed**, 10 skipped, 0 errors = **2071 collected** on the A–F revision `496cdf63`. `tests/unit`: 59 collected, 59 passed. The one failure is the release-metadata guard that requires the documents to name the tested revision. |
+| Backend suite | One full invocation on `a3f90403`; `-n 6 --dist=loadfile` with documented audit-host tool adaptations | **2060 passed, 5 failed**, 15 skipped, 0 errors = **2080 collected** for workbench/tests. Unit scope 59 passed. This is not a green full-suite claim. |
 | Acceptance | `bash workbench/docker/acceptance.sh` | **ACCEPTANCE PASSED at `59949ff`** (1 honest skip: GPG status unverified). At `9a53ee1` group C fails only against the pre-existing `cir-workbench` container, whose image predates the vendoring and still serves the old registry (it reports `ptha_mtst source_available: false`); rerun against a backend started from current source and group C passes — `PASS 17 models, ids/protocols/environments match the registry`. Rebuild the image before re-running acceptance. |
 | Mutation checks | `bash workbench/docker/mutation_checks.sh` | **PASSED** M1 M2 M3 M4 M5 |
 | Offline release verification | `bash workbench/docker/release_verify.sh --offline` | exit 0, `ENGINEERING_INCOMPLETE`, **0 checks FAIL/UNRUN** |
@@ -191,8 +187,8 @@ static or fixture-level.
 ```bash
 git clone git@github.com:Le-Minh-Nhut/cir.git && cd cir
 git fetch origin research/cir-failure-workbench
-git checkout 496cdf63           # the fixed TESTED_SOURCE_SHA above; never `git reset --hard`
-git rev-parse HEAD             # must print 496cdf637e6aee0da2bfc855935e42a3295f605c
+git checkout ab38ac72           # the fixed TESTED_SOURCE_SHA above; never `git reset --hard`
+git rev-parse HEAD             # must print ab38ac7260e0788aa33ca8f1f61423dc3a1b5239
 ./pc.sh                        # the one operator command
 ```
 
