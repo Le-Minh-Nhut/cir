@@ -228,6 +228,16 @@ def _walk_evidence(root: Path, *, skip_paths: frozenset[Path] = frozenset()) -> 
         """
         walk_errors.append(str(getattr(error, "filename", "?")))
 
+    # Python build products are not inputs, and this is where it matters most: merely RUNNING an
+    # evaluator writes `__pycache__` into its own checkout. Counting those bytes made the evaluation
+    # input digest change as a side effect of the previous evaluation, so the stage invalidated
+    # itself, `--resume` was refused, and the run got a new `run_id` after evaluating nothing
+    # differently. `runtime.is_bytecode` already states the policy for the source-provenance path
+    # ("`__pycache__`/*.pyc are Python build products that cannot change evaluator semantics");
+    # the walk now asks the same predicate instead of inventing a second answer. Nothing unverified
+    # is lost: a `.pyc` is a cache of a declared `.py` input, whose bytes this walk still hashes.
+    from workbench.backend.runtime import is_bytecode
+
     try:
         for current, directories, names in os.walk(root, followlinks=False, onerror=_on_error):
             directories.sort()
@@ -247,7 +257,7 @@ def _walk_evidence(root: Path, *, skip_paths: frozenset[Path] = frozenset()) -> 
                     partial = partial or not _is_verified_entry(category)
             for name in names:
                 candidate = Path(current) / name
-                if candidate in skip_paths:
+                if candidate in skip_paths or is_bytecode(str(candidate)):
                     continue
                 category, size = _entry_evidence(candidate, root, inventory)
                 files += 1

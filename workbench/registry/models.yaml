@@ -5,6 +5,8 @@
 # environment from the upstream spec, and record it before a reproduction run.
 # PC sm_120 baseline: torch 2.7.1 / torchvision 0.22.1, CUDA 12.8 wheels.
 # PyTorch 2.7 is the first stable Blackwell line; use its bugfix release, not a newer minor.
+# TME is the exception: it declares a floor-and-range so an already-provisioned 2.8.0 / 0.23.0
+# cu128 environment (workbench/envs/tme-adapted) stays accepted instead of being downgraded.
 # Sources: https://pytorch.org/blog/pytorch-2-7/
 #          https://pytorch.org/get-started/previous-versions/
 # These adapted profiles are PC choices, not changes to the historical author contracts.
@@ -1423,11 +1425,13 @@ models:
       # an exact paper reproduction.
       adapted_runtime:
         target_compute_capability: sm_120
-        # PC baseline is the first Blackwell stable line's bugfix pair (2.7.1 / 0.22.1).
-        # Historical torch 2.1.2 remains valid for the author's older-GPU setup only.
+        # PC baseline floor is the first Blackwell stable line's bugfix pair (2.7.1 / 0.22.1).
+        # An already-provisioned 2.8.0 / 0.23.0 cu128 environment (workbench/envs/tme-adapted) remains
+        # accepted: preserve working newer setups, do not downgrade them. Historical torch 2.1.2
+        # remains the author contract for older GPUs only.
         # Target-PC model loading and CUDA forward are still required; declaration is not a GPU pass.
-        pytorch: '==2.7.1'
-        torchvision: '==0.22.1'
+        pytorch: '>=2.7.1,<2.9'
+        torchvision: '>=0.22.1,<0.24'
         cuda: '12.8'
         # Kept from the pinned stack: the LAVIS code is pinned to transformers 4.36.0, `timm` is what
         # the EVA vision tower is built from; retain numpy<2 for this pinned dependency stack.

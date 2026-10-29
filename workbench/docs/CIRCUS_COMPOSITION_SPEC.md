@@ -105,7 +105,7 @@ Every result carries the selected checkpoint and its actual training condition s
 | `tgcir` | not implemented | — | — | — | — | not applicable (no adapter) | `tgcir_archive_unresolved`; archive member/hash unverified | Existing `PREFLIGHT_IMPLEMENTED_BLOCKED`; archive mapping and evaluator entrypoint unresolved. |
 | `sprc` | not implemented | — | — | — | — | not applicable (no adapter) | `sprc_fiq_unresolved` / separate `sprc_fiq_vitl`; both mappings unverified | Existing `BLOCKED_MODEL_MAPPING`; verify checkpoint/model mapping and assets; ViT-L is not the ViT-g paper-row variant. |
 | `limn` | yes | `workbench.composition.model_limn` | yes | yes | yes | `dress`, `shirt`, `toptee` whole-model checkpoints | `base_iter0_all_categories`; training noise unstated, eval noise 0% | Bundle dispatch verified on this host, and the worker entrypoint `NameError` is fixed (top-level `import sys`). `checkpoint_by_id` now carries the bundle's own `mapping_status`, so a bundle-qualified LIMN no longer refuses with "mapping unresolved"; `WORKBENCH_LIMN_BATCH_SIZE` is honored (reuses `replay.limn.resolved_batch_size`) and recorded in the run identity as `adapter_batch_size`. With batch 8 the dress scope encoded the full 74,381 gallery; the full three-scope smoke needs a longer window and was budget-stopped, not failed. 119 ambiguous-category queries are out of scope and reduce coverage, not misses. Full composition evaluation remains `TARGET_GPU_PENDING` (`sm_120`). |
-| `tme` | yes | `workbench.composition.model_tme` | yes | yes | yes | shared, category-agnostic | `fashioniq_0`; training noise 0%, eval noise 0%; no 20% checkpoint exists | Real-data GPU smoke on RTX 3050 (`sm_86`): with `WORKBENCH_TME_PYTHON` pointed at `envs/tme` (Python 3.10.13, torch 2.1.2+cu121) the adapter loads and encodes the FULL 74,381-image gallery, ~3.5 GiB peak VRAM, no OOM. The earlier "OOM on 4 GB" claim is **superseded**: the real gate was the wrong interpreter (`WORKBENCH_TME_PYTHON=envs/tme-adapted`, torch 2.8.0) against the registry pin `==2.1.2`. That historical-pin repair applies only to the older-GPU host with adaptation unset. On the target PC select `WORKBENCH_RUNTIME_ADAPTATION=sm_120` and provision the declared torch 2.7.1 / torchvision 0.22.1 cu128 profile; do not point that PC profile at torch 2.1.2. Retain 0% checkpoint and do not substitute another model's noisy variant; full composition evaluation remains `TARGET_GPU_PENDING`. |
+| `tme` | yes | `workbench.composition.model_tme` | yes | yes | yes | shared, category-agnostic | `fashioniq_0`; training noise 0%, eval noise 0%; no 20% checkpoint exists | Real-data GPU smoke on RTX 3050 (`sm_86`): with `WORKBENCH_TME_PYTHON` pointed at `envs/tme` (Python 3.10.13, torch 2.1.2+cu121) the adapter loads and encodes the FULL 74,381-image gallery, ~3.5 GiB peak VRAM, no OOM. The earlier "OOM on 4 GB" claim is **superseded**: the real gate was the wrong interpreter (`WORKBENCH_TME_PYTHON=envs/tme-adapted`, torch 2.8.0) against the registry pin `==2.1.2`. That historical-pin repair applies only to the older-GPU host with adaptation unset. On the target PC select `WORKBENCH_RUNTIME_ADAPTATION=sm_120`; TME's profile accepts the already-provisioned `envs/tme-adapted` (2.8.0 / 0.23.0 cu128), whose floor is the declared 2.7.1 / 0.22.1 cu128 pair — no downgrade needed. Do not point that PC profile at torch 2.1.2. Retain 0% checkpoint and do not substitute another model's noisy variant; full composition evaluation remains `TARGET_GPU_PENDING`. |
 
 The `csmcir` blocker is specifically the target-feature dependency, not the query-mode input wiring. The adapter reports all three conditions unavailable while those gallery target features cannot be produced. The seven other deferred entries retain their existing checkpoint/source/data reasons above; they have no composition adapter.
 
@@ -113,7 +113,7 @@ The `csmcir` blocker is specifically the target-feature dependency, not the quer
 
 Every summary must carry: protocol ID; gallery count and identity; subset and query count; model/checkpoint identity; condition set; preprocessing and ablation policy; adapter identity; category scopes; actual interpreter/runtime/GPU; seed; release artifact hashes; a synthetic-fixture label where applicable; and the paper-vs-release gallery note. Synthetic runs must remain labelled as fixtures. Results are written under `<artifacts>/composition/`; composition paths are checked to remain within that namespace and cannot overwrite native results.
 
-The summary records `runtime.model_interpreter` (path, version, source, verification status). On this smoke it recorded `DEPENDENCY_VERSION_MISMATCH` because the operator-selected `WORKBENCH_RUNTIME_ADAPTATION=sm_120` contract (torch `>=2.8,<2.9`) was compared against the historical torch-1.13.1 env; this is an honest env-vs-contract record, not a probe failure, and it did not block the run.
+The summary records `runtime.model_interpreter` (path, version, source, verification status). On this smoke it recorded `DEPENDENCY_VERSION_MISMATCH` because the operator-selected `WORKBENCH_RUNTIME_ADAPTATION=sm_120` contract (at that time torch `>=2.8,<2.9`) was compared against the historical torch-1.13.1 env; this is an honest env-vs-contract record, not a probe failure, and it did not block the run. The active contract later narrowed: eight of the nine models now pin `==2.7.1` / `==0.22.1` exactly, TME accepts `>=2.7.1,<2.9` / `>=0.22.1,<0.24`.
 
 ## PC command surface
 
@@ -144,17 +144,20 @@ The frontend's mobile overflow is fixed (`workbench/frontend/style.css`: `sectio
 
 ## Target-PC runtime baseline (2026-10-29)
 
-For the nine active composition models, `WORKBENCH_RUNTIME_ADAPTATION=sm_120` now selects exact
-`torch==2.7.1` / `torchvision==0.22.1` from the CUDA 12.8 wheel index. PyTorch 2.7 is the first
-stable Blackwell line; 2.7.1 is its bugfix release. The upstream author pins remain historical
-contracts for older GPUs. Sources: [PyTorch 2.7 release](https://pytorch.org/blog/pytorch-2-7/)
+For the nine active composition models, `WORKBENCH_RUNTIME_ADAPTATION=sm_120` selects a CUDA 12.8
+wheel profile. Eight pin exact `torch==2.7.1` / `torchvision==0.22.1` — PyTorch 2.7 is the first
+stable Blackwell line and 2.7.1 is its bugfix release. TME instead declares a floor-and-range
+`torch>=2.7.1,<2.9` / `torchvision>=0.22.1,<0.24`: its already-provisioned
+`workbench/envs/tme-adapted` (2.8.0 / 0.23.0+cu128, arch list includes sm_120, carries the full
+TME stack) stays valid and is NOT re-provisioned or downgraded. The upstream author pins remain
+historical contracts for older GPUs. Sources: [PyTorch 2.7 release](https://pytorch.org/blog/pytorch-2-7/)
 and [official wheel pairings](https://pytorch.org/get-started/previous-versions/).
 
-The planner and verifier consume the same registry profile. A previous 2.8 environment does not
-match the new exact pin: provision the new environment, then update the corresponding
-`WORKBENCH_<MODEL>_PYTHON` assignment. Do not copy a laptop virtualenv or downgrade the controller
-environment. Keep every model in its existing isolated environment/group; sharing this Torch
-baseline does not merge incompatible model dependencies.
+The planner and verifier consume the same registry profile. Provision a matching environment for
+each remaining model, then update the corresponding `WORKBENCH_<MODEL>_PYTHON` assignment; TME needs
+no such re-provision — point `WORKBENCH_TME_PYTHON` at the existing `envs/tme-adapted`. Do not copy a
+laptop virtualenv or downgrade the controller environment. Keep every model in its existing isolated
+environment/group; sharing this Torch baseline does not merge incompatible model dependencies.
 
 On the PC, first export `WORKBENCH_RUNTIME_ADAPTATION=sm_120` (or put it in `workbench.env`),
 provision the selected profile, run its actual CUDA capability check and then the ENCODER pilot.

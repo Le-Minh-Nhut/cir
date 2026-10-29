@@ -1302,12 +1302,32 @@ PYMODELS
             chmod 700 "$dedup_tmp_dir" 2>/dev/null || true
             runs_json_file="${dedup_tmp_dir}/runs.json"
             b_runs_json_file="${dedup_tmp_dir}/benchmark-runs.json"
-            curl -s --max-time 10 "${base}/api/runs" >"$runs_json_file" 2>/dev/null || true
-            curl -s --max-time 10 "${base}/api/benchmark-runs" >"$b_runs_json_file" 2>/dev/null || true
-            # A failed call leaves an empty file, which the reader already treats as "no runs" --
-            # the semantics the old `|| echo "[]"` had.
-            [[ -s "$runs_json_file" ]] || printf '%s' "[]" >"$runs_json_file"
-            [[ -s "$b_runs_json_file" ]] || printf '%s' "[]" >"$b_runs_json_file"
+            # `curl -f` so a 5xx body is not mistaken for a valid list, and an explicit exit code so
+            # "the API could not be asked" is never confused with "the API says there are no runs".
+            # Collapsing both into `[]` -- which is what `|| echo "[]"` did and what the empty-file
+            # check below still did -- made this evidence gate FAIL OPEN: a transient timeout under
+            # load skipped dedup entirely and re-queued a run whose result already existed. Measured
+            # on a loaded host, 2 of 40 concurrent invocations took that path.
+            local dedup_read_ok=0
+            local dedup_attempt
+            for dedup_attempt in 1 2; do
+                if curl -fsS --max-time 30 "${base}/api/runs" >"$runs_json_file" 2>/dev/null \
+                   && [[ -s "$runs_json_file" ]] \
+                   && curl -fsS --max-time 30 "${base}/api/benchmark-runs" >"$b_runs_json_file" 2>/dev/null \
+                   && [[ -s "$b_runs_json_file" ]]; then
+                    dedup_read_ok=1
+                    break
+                fi
+                # Same retry shape the `/api/models` read below uses: the backend is up (the
+                # readiness gate proved it), so one slow answer is contention, not an outage.
+                (( dedup_attempt < 2 )) && sleep 5
+            done
+            if (( dedup_read_ok != 1 )); then
+                fail_stage "EVIDENCE_DEDUP" \
+                    "Không đọc được /api/runs và /api/benchmark-runs sau 2 lần thử" \
+                    "docker logs cir-workbench" \
+                    "Không thể biết đã có lượt chạy hợp lệ nào chưa; chạy lại ./pc.sh khi backend ổn định"
+            fi
 
             local dedup_paths="${runs_json_file}
 ${b_runs_json_file}"
