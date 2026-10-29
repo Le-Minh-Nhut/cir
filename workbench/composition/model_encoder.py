@@ -32,6 +32,7 @@ from workbench.composition.adapters import (
     AdapterStatus,
     AdapterWorkerError,
     CompositionAdapter,
+    worker_environment,
 )
 from workbench.composition.inputs import CONDITIONS
 
@@ -58,6 +59,7 @@ class Adapter(CompositionAdapter):
         self._job_dir: Path | None = None
         self._worker: subprocess.Popen[str] | None = None
         self._worker_log: Any | None = None
+        self._worker_failed: str | None = None
 
     @classmethod
     def status(cls, config: Any | None = None) -> AdapterStatus:
@@ -118,6 +120,8 @@ class Adapter(CompositionAdapter):
         if not self.interpreter or not Path(self.interpreter).is_file():
             variable = self._model_record["environment"]["python_env_var"]
             raise RuntimeError(f"model interpreter unavailable: {variable} is unset or missing")
+        if self._worker_failed is not None:
+            raise AdapterWorkerError(self._worker_failed)
         adapter_root = work_root / self.model_id
         adapter_root.mkdir(parents=True, exist_ok=True)
         if self._job_dir is None:
@@ -137,9 +141,10 @@ class Adapter(CompositionAdapter):
         job_path.write_text(json.dumps(payload), encoding="utf-8")
         if self._worker is not None and self._worker.poll() is not None:
             status = self._worker.returncode
-            self.restart()
-            raise AdapterWorkerError(
+            self._worker_failed = (
                 f"adapter_worker_exited: model=encoder scope={scope} phase={phase} exit_status={status}")
+            self._stop_worker()
+            raise AdapterWorkerError(self._worker_failed)
         if self._worker is None:
             self._worker_error = self._job_dir / "worker.stderr.log"
             self._worker_log = self._worker_error.open("w", encoding="utf-8")
@@ -147,7 +152,7 @@ class Adapter(CompositionAdapter):
                 [self.interpreter, "-m", "workbench.composition.model_encoder",
                  "--worker-job", str(job_path)], cwd=self.config.CIR_REPO_ROOT,
                 stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=self._worker_log,
-                text=True, bufsize=1)
+                text=True, bufsize=1, env=worker_environment())
         else:
             assert self._worker.stdin is not None
             self._worker.stdin.write(json.dumps({"job_path": str(job_path)}) + "\n")
@@ -158,18 +163,20 @@ class Adapter(CompositionAdapter):
             line = self._worker.stdout.readline()
         if not line:
             worker = self._worker
-            self.restart()
+            self._stop_worker()
             status = worker.returncode if worker is not None else None
-            raise AdapterWorkerError(
+            self._worker_failed = (
                 f"adapter_worker_exited: model=encoder scope={scope} phase={phase} exit_status={status}")
+            raise AdapterWorkerError(self._worker_failed)
         response = json.loads(line[len("CIRCUS_WORKER:"):])
         if not response.get("ok"):
             job_path.unlink(missing_ok=True)
             output_path.unlink(missing_ok=True)
-            self.restart()
-            raise AdapterWorkerError(
+            self._worker_failed = (
                 f"adapter_worker_job_failed: model=encoder scope={scope} phase={phase} "
                 f"error={response.get('error_type')}: {response.get('error')}")
+            self._stop_worker()
+            raise AdapterWorkerError(self._worker_failed)
         result = np.load(output_path, allow_pickle=False).astype(np.float32, copy=False)
         if result.ndim != 2 or result.shape != (len(image_paths), 512):
             raise AdapterWorkerError(
@@ -211,6 +218,26 @@ class Adapter(CompositionAdapter):
                 norms, np.finfo(np.float32).tiny)[None, :]
         return scores
 
+    def _stop_worker(self) -> None:
+        worker = self._worker
+        if worker is not None:
+            if worker.stdin is not None:
+                try:
+                    worker.stdin.close()
+                except (BrokenPipeError, OSError):
+                    pass
+            if worker.poll() is None:
+                worker.terminate()
+            try:
+                worker.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                worker.kill()
+                worker.wait()
+            self._worker = None
+        if self._worker_log is not None:
+            self._worker_log.close()
+            self._worker_log = None
+
     def close(self) -> None:
         if self._worker is not None:
             if self._worker.stdin is not None:
@@ -233,7 +260,10 @@ class Adapter(CompositionAdapter):
             self._worker_log.close()
             self._worker_log = None
         if self._job_dir is not None:
-            shutil.rmtree(self._job_dir, ignore_errors=True)
+            # A latched failure leaves the job directory for the runner's preservation copy of
+            # worker.stderr.log; the runner's rmtree removes it. Only a clean close deletes here.
+            if self._worker_failed is None:
+                shutil.rmtree(self._job_dir, ignore_errors=True)
             self._job_dir = None
 
     def restart(self) -> None:

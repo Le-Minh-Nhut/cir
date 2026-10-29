@@ -18,6 +18,7 @@ import numpy as np
 
 from workbench.composition.adapters import (
     AdapterStatus, AdapterWorkRootError, AdapterWorkerError, CompositionAdapter,
+    worker_environment,
 )
 
 CONDITIONS = ("multimodal", "text_only_black_image", "image_only_empty_text")
@@ -187,7 +188,8 @@ def _run(adapter: Adapter, operation: str, image_paths: Sequence[str], texts: Se
             adapter._worker = subprocess.Popen(
                 [interpreter, "-m", "workbench.composition.model_ptha_mtst", "--worker-job", str(job_path)],
                 cwd=Path(__file__).resolve().parents[2], stdin=subprocess.PIPE,
-                stdout=subprocess.PIPE, stderr=adapter._worker_log, text=True, bufsize=1)
+                stdout=subprocess.PIPE, stderr=adapter._worker_log, text=True, bufsize=1,
+                env=worker_environment())
         else:
             assert adapter._worker.stdin is not None
             adapter._worker.stdin.write(json.dumps({"job_path": str(job_path)}) + "\n")

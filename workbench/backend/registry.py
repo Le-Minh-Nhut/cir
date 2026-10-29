@@ -1731,7 +1731,12 @@ def checkpoint_by_id(model: dict[str, Any], checkpoint_id: str) -> dict[str, Any
                     "artifact_type": "bundle_placeholder",
                     "bundle_members": members,
                     "required_files": [str(member["filename"]) for member in variants],
-                    "required_checkpoint_ids": required}
+                    "required_checkpoint_ids": required,
+                    # The bundle's OWN mapping status is a distinct fact from its anchor member's:
+                    # `checkpoint_selection` filters bundles on this key, and `model_limn.Adapter.status`
+                    # reads it to decide readiness. Deriving the record without it made both see None,
+                    # so a complete, VERIFIED_METADATA bundle was refused as "mapping unresolved".
+                    "mapping_status": bundle.get("mapping_status")}
         break
     raise KeyError(checkpoint_id)
 

@@ -23,7 +23,8 @@ if TYPE_CHECKING:
 else:
     try:
         from workbench.composition.adapters import (AdapterStatus, AdapterWorkRootError,
-                                                     AdapterWorkerError, CompositionAdapter)
+                                                     AdapterWorkerError, CompositionAdapter,
+                                                     worker_environment)
     except ModuleNotFoundError:
         CompositionAdapter = object  # type: ignore[assignment,misc]
         AdapterStatus = Any  # type: ignore[misc,assignment]
@@ -31,6 +32,10 @@ else:
             pass
         class AdapterWorkerError(RuntimeError):
             pass
+        def worker_environment() -> dict[str, str]:
+            import os
+
+            return os.environ.copy()
 
 CONDITIONS = ("multimodal", "text_only_black_image", "image_only_empty_text")
 _TARGET_REASON = (
@@ -144,7 +149,8 @@ def _run(adapter: Adapter, operation: str, image_paths: Sequence[str], texts: Se
     scope = categories[0] if categories and len(set(categories)) == 1 else "mixed"
     result = subprocess.run([adapter._interpreter, "-m", "workbench.composition.model_csmcir",
                              "--worker-job", str(job)],
-                            cwd=Path(__file__).resolve().parents[2], check=False)
+                            cwd=Path(__file__).resolve().parents[2], check=False,
+                            env=worker_environment())
     if result.returncode:
         raise AdapterWorkerError(f"csmcir worker scope {scope!r} exited with status {result.returncode}")
     if not output.is_file():

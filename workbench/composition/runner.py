@@ -66,6 +66,24 @@ def _scope_name(scope: str | None) -> str:
     return "global" if scope is None else _component(scope)
 
 
+#: Per-query failure reasons that a rerun reproduces deterministically. A recorded PARTIAL whose
+#: every failure is one of these is never retried on resume; only transient reasons (model
+#: unavailable, failed, unavailable exact rank, or an unexpected exception) earn another attempt.
+_STABLE_FAILURE_MARKERS = frozenset({
+    "category scope failure",
+    "has no adapter embedding scope",
+    "no positive target resolved in exact released gallery",
+    "query features unavailable",
+    "invalid full-gallery exact rank",
+    "query reference image is missing",
+})
+
+
+def _is_stable_failure(reason: str) -> bool:
+    lowered = reason.lower()
+    return any(marker in lowered for marker in _STABLE_FAILURE_MARKERS)
+
+
 def normalize_release_path(value: str) -> str:
     """Remove release placeholder while preserving exact relative path identity."""
     value = value.replace("\\", "/")
@@ -459,6 +477,7 @@ def _checkpoint_labels(model: dict[str, Any], checkpoint: str, protocol: str) ->
               "checkpoint_transfer": transfer,
               "checkpoint_mapping_status": (bundle.get("mapping_status") if bundle else
                                             variant.get("checkpoint_mapping_status") if variant else None),
+              "reproduction_status": model.get("reproduction_status"),
               "labels_source": "registry"}
     if bundle:
         labels["checkpoint_bundle_members"] = [
@@ -602,6 +621,9 @@ def run_composition(data: Any, model_specs: Sequence[ModelSpec], config: Any, *,
                 "gpu_identity": gpu_identity,
                 "category_scopes": list(scopes), "reference_eligible": True,
                 "batch_size": batch_size, "seed": seed,
+                # LIMN's own encoder batch (WORKBENCH_LIMN_BATCH_SIZE) changes the forward pass
+                # only, but it is part of the run's configuration and must key the run id.
+                "adapter_batch_size": getattr(adapter, "batch_size", None),
             }
             run_id = _digest(identity)[:24]
             fingerprint = _digest(identity)
@@ -623,10 +645,13 @@ def run_composition(data: Any, model_specs: Sequence[ModelSpec], config: Any, *,
                         saved_status = saved.get("condition_status", {})
                         saved_failures = saved.get("query_failures", {})
                         transient = {condition for condition in conditions
-                                     if saved_status.get(condition, {}).get("status") in
-                                     {"MODEL_UNAVAILABLE", "FAILED", "EXACT_RANK_UNAVAILABLE"}
+                                     if (saved_status.get(condition, {}).get("status") in
+                                         {"MODEL_UNAVAILABLE", "FAILED", "EXACT_RANK_UNAVAILABLE"}
+                                         or saved_status.get(condition, {}).get("status") == "PARTIAL" and
+                                         any(not _is_stable_failure(reason)
+                                             for reason in saved_failures.get(condition, {}).values()))
                                      and not (saved_failures.get(condition) and all(
-                                         "category scope failure" in reason.lower()
+                                         _is_stable_failure(reason)
                                          for reason in saved_failures[condition].values()))}
                         if transient:
                             retry_conditions = transient if len(transient) < len(conditions) else set(conditions)
@@ -854,6 +879,7 @@ def run_composition(data: Any, model_specs: Sequence[ModelSpec], config: Any, *,
                     "execution_status": execution_status,
                     "condition_status": mode_status,
                     "checkpoint_training_noise_pct": labels["checkpoint_training_noise_pct"],
+                    "reproduction_status": labels["reproduction_status"],
                     "evaluation_noise_pct": labels["evaluation_noise_pct"],
                     "checkpoint_training_dataset": labels["checkpoint_training_dataset"],
                     "checkpoint_transfer": labels["checkpoint_transfer"],
@@ -967,6 +993,7 @@ def _write_failed_results(data: Any, artifacts: Path, model_id: str, checkpoint_
                    "checkpoint_training_dataset": (labels or {}).get("checkpoint_training_dataset"),
                    "checkpoint_transfer": (labels or {}).get("checkpoint_transfer"),
                    "checkpoint_mapping_status": (labels or {}).get("checkpoint_mapping_status"),
+                   "reproduction_status": (labels or {}).get("reproduction_status"),
                    "metrics": asdict(compose(failed_ranks, query_count=len(selected))),
                    "run_id": run_id or attempt}
         _atomic_json(summary_path, summary)

@@ -79,21 +79,21 @@ def _path_ready(model: dict[str, Any], checkpoint_id: str, config: Any) -> tuple
 
 
 def _composition_checkpoint(model: dict[str, Any], checkpoint_ids: list[str], bundle_id: str | None,
-                            unavailable: list[dict[str, Any]]) -> str | None:
-    """Resolve full checkpoint bundles to one composition job; refuse partial bundles."""
+                            unavailable: list[dict[str, Any]]) -> list[str] | None:
+    """Resolve bundles to one job and independent variants to one job each."""
     if bundle_id:
-        return bundle_id
+        return [bundle_id]
     selected = set(checkpoint_ids)
     for bundle in model.get("checkpoint_bundles", []):
         members = set(bundle.get("required_checkpoint_ids", []))
         if selected & members:
             if selected.issuperset(members):
-                return str(bundle["bundle_id"])
+                return [str(bundle["bundle_id"])]
             unavailable.append({"model_id": model["model_id"], "status": "UNSUPPORTED",
                                 "reason": f"composition supports full checkpoint bundle {bundle['bundle_id']!r}; "
                                           "individual or partial bundle members are unsupported"})
             return None
-    return checkpoint_ids[0] if len(checkpoint_ids) == 1 else None
+    return list(dict.fromkeys(checkpoint_ids)) or None
 
 
 def _select_models(raw: str, registry: dict[str, Any], profile: Any,
@@ -117,15 +117,16 @@ def _select_models(raw: str, registry: dict[str, Any], profile: Any,
                                     "authorized cohort selection has no checkpoint"})
                 continue
             selection = row.get("checkpoint_selection") or {}
-            checkpoint_id = _composition_checkpoint(model, checkpoint_ids,
-                                                    selection.get("bundle_id"), unavailable)
-            if checkpoint_id is None:
+            checkpoint_ids = _composition_checkpoint(model, checkpoint_ids,
+                                                     selection.get("bundle_id"), unavailable)
+            if checkpoint_ids is None:
                 continue
-            pairs.append((model, checkpoint_id))
-            ready, reason = _path_ready(model, checkpoint_id, config)
-            if not ready:
-                unavailable.append({"model_id": model_id, "checkpoint_id": checkpoint_id,
-                                    "status": "NOT_READY", "reason": reason})
+            for checkpoint_id in checkpoint_ids:
+                pairs.append((model, checkpoint_id))
+                ready, reason = _path_ready(model, checkpoint_id, config)
+                if not ready:
+                    unavailable.append({"model_id": model_id, "checkpoint_id": checkpoint_id,
+                                        "status": "NOT_READY", "reason": reason})
         return pairs, unavailable
     requested = [item.strip() for item in raw.split(",") if item.strip()]
     if not requested:
@@ -146,15 +147,16 @@ def _select_models(raw: str, registry: dict[str, Any], profile: Any,
         if selection.blocked:
             unavailable.append({"model_id": model_id, "status": "NOT_READY", "reason": selection.reason})
             continue
-        checkpoint_id = _composition_checkpoint(model, list(selection.checkpoint_ids),
-                                                selection.bundle_id, unavailable)
-        if checkpoint_id is None:
+        checkpoint_ids = _composition_checkpoint(model, list(selection.checkpoint_ids),
+                                                 selection.bundle_id, unavailable)
+        if checkpoint_ids is None:
             continue
-        pairs.append((model, checkpoint_id))
-        ready, reason = _path_ready(model, checkpoint_id, config)
-        if not ready:
-            unavailable.append({"model_id": model_id, "checkpoint_id": checkpoint_id,
-                                "status": "NOT_READY", "reason": reason})
+        for checkpoint_id in checkpoint_ids:
+            pairs.append((model, checkpoint_id))
+            ready, reason = _path_ready(model, checkpoint_id, config)
+            if not ready:
+                unavailable.append({"model_id": model_id, "checkpoint_id": checkpoint_id,
+                                    "status": "NOT_READY", "reason": reason})
     return pairs, unavailable
 
 

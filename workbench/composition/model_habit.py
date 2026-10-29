@@ -11,7 +11,10 @@ from typing import Any, Sequence
 
 import numpy as np
 
-from .adapters import AdapterStatus, AdapterWorkRootError, AdapterWorkerError, CompositionAdapter
+from .adapters import (
+    AdapterStatus, AdapterWorkRootError, AdapterWorkerError, CompositionAdapter,
+    worker_environment,
+)
 
 CONDITIONS = ("multimodal", "text_only_black_image", "image_only_empty_text")
 CHECKPOINT_ID = "fiq_n02"
@@ -174,7 +177,7 @@ class Adapter(CompositionAdapter):
                 self._worker = subprocess.Popen(
                     [self.interpreter, "-m", "workbench.composition.model_habit", "--worker-job", str(job_path)],
                     cwd=REPO_ROOT, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                    stderr=self._worker_log, text=True, bufsize=1)
+                    stderr=self._worker_log, text=True, bufsize=1, env=worker_environment())
             else:
                 assert self._worker.stdin is not None
                 self._worker.stdin.write(json.dumps({"job_path": str(job_path)}) + "\n")

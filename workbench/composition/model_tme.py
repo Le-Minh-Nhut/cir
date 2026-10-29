@@ -10,7 +10,10 @@ from typing import Any, Sequence
 
 import numpy as np
 
-from .adapters import AdapterStatus, AdapterWorkerError, AdapterWorkRootError, CompositionAdapter
+from .adapters import (
+    AdapterStatus, AdapterWorkerError, AdapterWorkRootError, CompositionAdapter,
+    worker_environment,
+)
 
 CONDITIONS = ("multimodal", "text_only_black_image", "image_only_empty_text")
 CHECKPOINT_ID = "fashioniq_0"
@@ -86,6 +89,7 @@ class Adapter(CompositionAdapter):
         self._job_dir: Path | None = None
         self._worker: subprocess.Popen[str] | None = None
         self._worker_log: Any | None = None
+        self._worker_failed: str | None = None
 
     def _checkpoint_path(self) -> Path:
         from workbench.backend.registry import checkpoint_path
@@ -152,6 +156,8 @@ class Adapter(CompositionAdapter):
                  categories: Sequence[str | None] = ()) -> np.ndarray:
         if not self.interpreter or not Path(self.interpreter).is_file():
             raise RuntimeError("TME model interpreter is not configured")
+        if self._worker_failed is not None:
+            raise AdapterWorkerError(self._worker_failed)
         if self._verified_interpreter is None:
             from workbench.backend.runtime import require_verified_model_interpreter
 
@@ -175,16 +181,17 @@ class Adapter(CompositionAdapter):
         scope = tuple(categories)
         if self._worker is not None and self._worker.poll() is not None:
             status = self._worker.returncode
-            self.restart()
-            raise AdapterWorkerError(
+            self._worker_failed = (
                 f"adapter_worker_exited: model=tme scope={scope} phase={operation} exit_status={status}")
+            self._stop_worker()
+            raise AdapterWorkerError(self._worker_failed)
         if self._worker is None:
             self._worker_log = (self._job_dir / "worker.stderr.log").open("w", encoding="utf-8")
             self._worker = subprocess.Popen(
                 [self.interpreter, "-m", "workbench.composition.model_tme",
                  "--worker-job", str(job_path.resolve())], cwd=REPO_ROOT,
                 stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=self._worker_log,
-                text=True, bufsize=1)
+                text=True, bufsize=1, env=worker_environment())
         else:
             assert self._worker.stdin is not None
             self._worker.stdin.write(json.dumps({"job_path": str(job_path.resolve())}) + "\n")
@@ -195,18 +202,20 @@ class Adapter(CompositionAdapter):
             line = self._worker.stdout.readline()
         if not line:
             worker = self._worker
-            self.restart()
+            self._stop_worker()
             status = worker.returncode if worker is not None else None
-            raise AdapterWorkerError(
+            self._worker_failed = (
                 f"adapter_worker_exited: model=tme scope={scope} phase={operation} exit_status={status}")
+            raise AdapterWorkerError(self._worker_failed)
         response = json.loads(line[len("CIRCUS_WORKER:"):])
         if not response.get("ok"):
             job_path.unlink(missing_ok=True)
             output_path.unlink(missing_ok=True)
-            self.restart()
-            raise AdapterWorkerError(
+            self._worker_failed = (
                 f"adapter_worker_job_failed: model=tme scope={scope} phase={operation} "
                 f"error={response.get('error_type')}: {response.get('error')}")
+            self._stop_worker()
+            raise AdapterWorkerError(self._worker_failed)
         result = np.load(output_path, allow_pickle=False).astype(np.float32, copy=False)
         job_path.unlink(missing_ok=True)
         output_path.unlink(missing_ok=True)
@@ -243,6 +252,25 @@ class Adapter(CompositionAdapter):
             raise ValueError("TME query scopes must match query count")
         return np.einsum("nd,gqd->ngq", query_values, target_values).max(axis=-1)
 
+    def _stop_worker(self) -> None:
+        if self._worker is not None:
+            if self._worker.stdin is not None:
+                try:
+                    self._worker.stdin.close()
+                except (BrokenPipeError, OSError):
+                    pass
+            if self._worker.poll() is None:
+                self._worker.terminate()
+            try:
+                self._worker.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                self._worker.kill()
+                self._worker.wait()
+            self._worker = None
+        if self._worker_log is not None:
+            self._worker_log.close()
+            self._worker_log = None
+
     def close(self) -> None:
         if self._worker is not None:
             if self._worker.stdin is not None:
@@ -265,7 +293,10 @@ class Adapter(CompositionAdapter):
             self._worker_log.close()
             self._worker_log = None
         if self._job_dir is not None:
-            shutil.rmtree(self._job_dir, ignore_errors=True)
+            # A latched failure leaves the job directory for the runner's preservation copy of
+            # worker.stderr.log; the runner's rmtree removes it. Only a clean close deletes here.
+            if self._worker_failed is None:
+                shutil.rmtree(self._job_dir, ignore_errors=True)
             self._job_dir = None
 
     def restart(self) -> None:

@@ -9,6 +9,24 @@ from typing import Any, Mapping, Sequence
 import numpy as np
 
 
+def worker_environment() -> dict[str, str]:
+    """Inherit process environment and resolve file-only HF_HOME for workers."""
+    import os
+
+    from workbench.backend.model_settings import resolve_path_setting
+
+    environment = os.environ.copy()
+    # Only an exported `HF_HOME` suppresses the file setting. An exported sibling cache variable
+    # (`HF_HUB_CACHE`/`HUGGINGFACE_HUB_CACHE`) must not hide a file-only `HF_HOME`, and those
+    # siblings pass through untouched either way.
+    if environment.get("HF_HOME", "").strip():
+        return environment
+    root = resolve_path_setting("HF_HOME")
+    if root is not None:
+        environment["HF_HOME"] = str(root)
+    return environment
+
+
 
 class ExactRankUnavailable(RuntimeError):
     """The adapter cannot produce an exact positive rank over the entire eligible gallery."""
