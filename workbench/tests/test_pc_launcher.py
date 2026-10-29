@@ -315,9 +315,17 @@ def run_pc(
     sandbox: Path,
     args: list[str],
     env: dict[str, str],
-    timeout: float = 20.0,
+    timeout: float = 60.0,
 ) -> subprocess.CompletedProcess[str]:
-    """Execute ./pc.sh and assert real repository was untouched."""
+    """Execute ./pc.sh and assert real repository was untouched.
+
+    The budget is measured, not guessed. On a quiet host the two sandboxes this default covers run
+    in 1.2-3.5 s; the same launches under 12-way concurrency peak at 6.13 s and under 40-way
+    concurrency at 17.48 s, so the previous 20 s ceiling was inside the noise of a loaded host and
+    reported a merely-slow subprocess as a hang. 60 s is ~4x the worst measured contention, which
+    still fails loudly on a real hang (the launcher's own readiness/`--timeout` paths are asserted
+    separately) while no longer racing the machine's load average.
+    """
     if not PC_SH.exists():
         pytest.skip("pc.sh not yet created on disk")
 

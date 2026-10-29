@@ -62,18 +62,32 @@ def test_adapted_constraints_satisfy_modern_torch(model_id, monkeypatch):
     from workbench.backend.registry import model_by_id
     from workbench.backend.environment_planner import model_constraints
 
+    # TME keeps its already-provisioned 2.8.0 / 0.23.0 cu128 env accepted; the other eight pin the
+    # Blackwell baseline exactly.
+    expectations = {
+        "tme": {
+            "torch": (">=2.7.1,<2.9", {"2.7.1+cu128": True, "2.8.0+cu128": True,
+                                       "2.9.0+cu128": False, "2.6.0+cu124": False}),
+            "torchvision": (">=0.22.1,<0.24", {"0.22.1+cu128": True, "0.23.0+cu128": True,
+                                               "0.24.0+cu128": False, "0.21.0+cu128": False}),
+        },
+    }.get(model_id, {
+        "torch": ("==2.7.1", {"2.7.1+cu128": True, "2.6.0+cu124": False,
+                              "2.9.0+cu128": False, "2.8.0+cu128": False}),
+        "torchvision": ("==0.22.1", {"0.22.1+cu128": True}),
+    })
+
     model = model_by_id(model_id)
     monkeypatch.setenv(runtime.ADAPTATION_ENV, "sm_120")
     adapted = runtime.runtime_adaptation(model)
     required = runtime._adapted_packages(model, adapted)
-    assert runtime.version_satisfies(required["torch"], "2.7.1+cu128") is True
-    assert runtime.version_satisfies(required["torch"], "2.6.0+cu124") is False
-    assert runtime.version_satisfies(required["torch"], "2.9.0+cu128") is False
-    assert runtime.version_satisfies(required["torch"], "2.8.0+cu128") is False
-    assert runtime.version_satisfies(required["torchvision"], "0.22.1+cu128") is True
+    for package, (constraint, probes) in expectations.items():
+        assert required[package] == constraint
+        for version, expected in probes.items():
+            assert runtime.version_satisfies(required[package], version) is expected
     constraints = model_constraints(model)
-    assert constraints["torch"] == "==2.7.1"
-    assert constraints["torchvision"] == "==0.22.1"
+    for package, (constraint, _) in expectations.items():
+        assert constraints[package] == constraint
     assert constraints["pip_index_url"] == "https://download.pytorch.org/whl/cu128"
     assert adapted["cuda"] == "12.8"
 

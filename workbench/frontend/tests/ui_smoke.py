@@ -16,6 +16,8 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import time
+import urllib.parse
 import urllib.request
 from pathlib import Path
 
@@ -28,6 +30,10 @@ TOP_K_SAVED = 20
 VIEWPORT_DESKTOP = {"width": 1440, "height": 900}
 VIEWPORT_MOBILE = {"width": 390, "height": 844}
 NAV_TIMEOUT_MS = 90_000
+# The fixture's dress index 4 sits at rank 4 in run A and rank 45 in run B: one query whose two runs
+# disagree, which is what a comparison check must be able to see.
+STRADDLE_QUERY = "dress:4:dressref4:dresstgt4"
+COHORT_ID = "dom-smoke-cohort"
 
 
 # --------------------------------------------------------------------------- fixture
@@ -212,6 +218,39 @@ def open_query(page, query_id: str) -> None:
     wait_for_pager_ready(page)
 
 
+def select_active_run(page, run_id: str) -> None:
+    """Change the explorer's active run. The filter selects are Category, Active run, Failure, Pass."""
+    open_page(page, "Sample Explorer")
+    set_active_run(page, run_id)
+
+def set_active_run(page, run_id: str) -> None:
+    """Change the active run without navigating, and wait until BOTH run-switch effects landed.
+
+    Switching the run clears the page and refetches. Neither half is a defect: for a moment the
+    DOM legitimately shows no query. Callers that care must therefore wait on the effect they are
+    asserting, not on this helper.
+    """
+    select = page.locator("div.filters select").nth(1)
+    select.wait_for(timeout=NAV_TIMEOUT_MS)
+    select.select_option(run_id)
+    page.wait_for_function(
+        "id => document.querySelectorAll('div.filters select')[1].value === id",
+        arg=run_id, timeout=NAV_TIMEOUT_MS)
+
+def visible_query_id(page) -> str | None:
+    """The query heading the explorer is showing, or None when it shows no query."""
+    if page.locator("section h3").count() == 0:
+        return None
+    return page.locator("section h3").first.inner_text().split(" · ")[0]
+
+def wait_held(page, held: list, count: int) -> None:
+    """Wait until `count` requests have been parked by a route handler that never resolves them."""
+    for _ in range(100):
+        if len(held) >= count:
+            return
+        page.wait_for_timeout(100)
+    raise AssertionError(f"expected {count} held requests, saw {len(held)}: {[u for u, _ in held]}")
+
 def image_evidence(page) -> list[dict]:
     return page.evaluate("""() => [...document.querySelectorAll('figure img')].map(img => ({
         src: img.getAttribute('src'), alt: img.getAttribute('alt'),
@@ -349,12 +388,16 @@ def session_fixture(page, base_url: str, shots: Path, recorder: Recorder) -> lis
     label.locator("input").check()
     page.locator("textarea").fill("dom-verified smoke note")
     page.locator("section button", has_text="Save / update").click()
-    page.wait_for_function(
-        "() => document.querySelector('textarea').value === 'dom-verified smoke note'",
-        timeout=NAV_TIMEOUT_MS)
-    stored = api_json(base_url, f"/api/annotations?query_id={query_id}&protocol_id={PROTOCOL}")
+    # The PUT is not awaited by the handler, so read the record back with a poll rather than racing it.
+    stored: list = []
+    for _ in range(150):
+        stored = api_json(base_url, f"/api/annotations?query_id={query_id}&protocol_id={PROTOCOL}")
+        if stored:
+            break
+        time.sleep(0.2)
     recorder.note(f"flow 3: saved label {label_text!r} via the UI; API now holds "
                   f"{len(stored)} record(s), labels={stored[0]['labels'] if stored else None}")
+    assert stored and label_text in stored[0]["labels"], stored
 
     page.reload(wait_until="domcontentloaded")
     page.wait_for_selector("nav button", timeout=NAV_TIMEOUT_MS)
@@ -406,6 +449,120 @@ def session_fixture(page, base_url: str, shots: Path, recorder: Recorder) -> lis
     recorder.note(f"flow 4: after unroute+Dismiss a real request succeeded (pager {recovered!r}), "
                   f"error asides on screen = {errors_after} (recovered)")
     assert errors_after == 0, "error aside reappeared after recovery"
+
+    # --- Flow 5: two-run comparison answers for BOTH selected runs on one query.
+    # Both fixture runs are selected by default once the protocol is picked, so the comparison is
+    # already armed; it renders only after the explorer holds a query.
+    assert len(compatible) == 2, "the comparison needs both fixture runs selected"
+    open_query(page, STRADDLE_QUERY)
+    open_page(page, "Compare Models")
+    # Direct children of the section: the per-run columns. The Top-K tiles are articles too, nested
+    # deeper inside each column, and they carry no run heading.
+    articles = page.locator("section > article")
+    articles.first.wait_for(timeout=NAV_TIMEOUT_MS)
+    page.wait_for_function(
+        "() => document.querySelectorAll('section > article').length >= 2",
+        timeout=NAV_TIMEOUT_MS)
+    run_texts = page.evaluate(
+        "() => [...document.querySelectorAll('section > article')].map(a => a.querySelector('b')"
+        ".textContent)")
+    ranks = page.evaluate("""() => [...document.querySelectorAll('section > article')].map(a => {
+        const m = a.textContent.match(/target rank (\\d+)/); return m ? Number(m[1]) : null;})""")
+    api_rows = api_json(
+        base_url, f"/api/compare/{urllib.parse.quote(STRADDLE_QUERY, safe='')}"
+                   f"?run_ids={','.join(r['run_id'] for r in compatible)}&k=10")
+    api_ranks = [row["query"]["target_rank"] for row in api_rows]
+    recorder.note(f"flow 5: comparison rendered {len(run_texts)} run columns "
+                  f"(API holds {len(api_rows)}): DOM target ranks {ranks} vs API {api_ranks}")
+    assert len(api_rows) == 2, api_rows
+    assert len(run_texts) == 2, run_texts
+    assert ranks == api_ranks, f"DOM ranks {ranks} disagree with the API's {api_ranks}"
+    assert max(api_ranks) > 10 >= min(api_ranks), (
+        f"the straddle fixture query must rank inside K in one run and outside it in the other: "
+        f"{api_ranks}")
+    saved.append(shot(page, shots, "desktop-compare"))
+
+    # --- Flow 6: cohort save -> reload -> still listed.
+    open_page(page, "Common Failures")
+    page.locator("div.filters select").first.select_option("all")
+    page.locator("table tbody tr").first.wait_for(timeout=NAV_TIMEOUT_MS)
+    rows_shown = page.locator("table tbody tr").count()
+    page.get_by_placeholder("cohort ID").fill(COHORT_ID)
+    page.locator("section button", has_text="Save filtered set").click()
+    for _ in range(150):
+        stored = api_json(base_url, "/api/cohorts")
+        if any(c["cohort_id"] == COHORT_ID for c in stored):
+            break
+        time.sleep(0.2)
+    saved_cohort = next((c for c in stored if c["cohort_id"] == COHORT_ID), None)
+    recorder.note(f"flow 6: saved {rows_shown} filtered queries as cohort {COHORT_ID!r}; "
+                  f"API holds {len(stored)} cohort(s), query_ids={len(saved_cohort['query_ids']) if saved_cohort else None}")
+    assert saved_cohort is not None, stored
+    assert len(saved_cohort["query_ids"]) == rows_shown, (saved_cohort, rows_shown)
+
+    page.reload(wait_until="domcontentloaded")
+    page.wait_for_selector("nav button", timeout=NAV_TIMEOUT_MS)
+    wait_for_runs_loaded(page, 2)
+    select_protocol(page, PROTOCOL)
+    open_page(page, "Hypotheses")
+    article = page.locator("section article", has_text=COHORT_ID).first
+    article.wait_for(timeout=NAV_TIMEOUT_MS)
+    cohort_text = article.inner_text()
+    recorder.note(f"flow 6: after reload the Hypotheses page lists {cohort_text!r}")
+    assert str(len(saved_cohort["query_ids"])) in cohort_text, cohort_text
+
+    # --- Flow 7: a superseded response must not be applied (staleness guard).
+    # Both fixture runs share most query ids, so "the wrong run's query appeared" is not by itself
+    # observable. The check therefore holds BOTH the superseded and the current request, releases
+    # the superseded one first and asserts the screen stays empty, then releases the current one and
+    # asserts it lands. Only a guard that drops the old response passes; a leaked response fills the
+    # screen with the old run's query while the new run's request is still in flight.
+    select_active_run(page, compatible[0]["run_id"])
+    pager = wait_for_pager_ready(page)
+    if not pager.startswith("1–"):
+        # A non-zero offset would make the run switch fire two page requests (the stale offset, then
+        # the reset to 0), and the "current" request then carries the offset that is about to be
+        # discarded. Pin the window first so the run switch issues exactly one page request.
+        page.locator("div.pager button", has_text="Previous page").click()
+        pager = wait_for_pager_ready(page)
+    assert pager.startswith("1–"), pager
+    new_first = api_json(
+        base_url, f"/api/queries?run_id={compatible[1]['run_id']}&limit=20&offset=0&order=worst"
+    )["items"][0]["query_id"]
+    held: list = []
+
+    def hold_queries(route):
+        held.append((route.request.url, route))
+
+    page.route("**/api/queries*", hold_queries)
+    page.locator("div.filters button", has_text="Jump").click()
+    wait_held(page, held, 1)
+    superseded = held[0][0]
+    set_active_run(page, compatible[1]["run_id"])
+    wait_held(page, held, 2)
+    # Release the superseded response while the current one is still parked. `page.unroute` cannot
+    # be used to stop holding here: it forwards the requests it was holding, which would release
+    # both at once and prove nothing.
+    held[0][1].continue_()
+    page.wait_for_timeout(2_000)
+    leaked = visible_query_id(page)
+    stale_errors = page.locator("aside.error").count()
+    active_run_value = page.evaluate(
+        "() => document.querySelectorAll('div.filters select')[1].value")
+    recorder.note(f"flow 7: released the superseded {superseded.split('/api/')[1]!r} while "
+                  f"{held[1][0].split('/api/')[1]!r} was still in flight; the explorer shows "
+                  f"{leaked!r} (active run {active_run_value!r}, {stale_errors} error aside(s))")
+    assert leaked is None, f"a superseded response was applied: {leaked!r}"
+    assert stale_errors == 0, "dropping a superseded response raised a visible error"
+    assert active_run_value == compatible[1]["run_id"], active_run_value
+
+    held[1][1].continue_()
+    page.locator("h3", has_text=new_first).wait_for(timeout=NAV_TIMEOUT_MS)
+    landed = visible_query_id(page)
+    recorder.note(f"flow 7: releasing the current {held[1][0].split('/api/')[1]!r} then landed "
+                  f"{landed!r} (the new run's own first page entry)")
+    assert landed == new_first, (landed, new_first)
+    page.unroute("**/api/queries*", hold_queries)
     return saved
 
 
