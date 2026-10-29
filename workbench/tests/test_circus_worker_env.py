@@ -123,6 +123,17 @@ def test_relative_file_setting_resolves_absolute(tmp_path, monkeypatch, clean_ca
     assert child_hf_home == str(expected)
     assert Path(child_hf_home).is_absolute()
 
+
+def test_relative_environment_setting_resolves_absolute(tmp_path, monkeypatch, clean_cache_env) -> None:
+    clean_cache_env.write_text(f"HF_HOME={tmp_path / 'ignored-file-cache'}\n", encoding="utf-8")
+    model_settings.file_settings.cache_clear()
+    monkeypatch.setenv("HF_HOME", "relative-export-cache")
+    expected = model_settings.resolve_path_setting("HF_HOME")
+
+    child_hf_home = _run_probe(tmp_path, monkeypatch, "relative-env")
+    assert child_hf_home == str(expected)
+    assert Path(child_hf_home).is_absolute()
+
 def test_sibling_env_cache_does_not_suppress_file_hf_home(tmp_path, monkeypatch, clean_cache_env) -> None:
     """(f) An exported sibling cache var must not hide a file-only `HF_HOME`."""
     file_root = tmp_path / "file-cache"

@@ -10,17 +10,15 @@ import numpy as np
 
 
 def worker_environment() -> dict[str, str]:
-    """Inherit process environment and resolve file-only HF_HOME for workers."""
+    """Inherit environment and pass the effective HF_HOME as an absolute path."""
     import os
 
     from workbench.backend.model_settings import resolve_path_setting
 
     environment = os.environ.copy()
-    # Only an exported `HF_HOME` suppresses the file setting. An exported sibling cache variable
-    # (`HF_HUB_CACHE`/`HUGGINGFACE_HUB_CACHE`) must not hide a file-only `HF_HOME`, and those
-    # siblings pass through untouched either way.
-    if environment.get("HF_HOME", "").strip():
-        return environment
+    # The shared resolver preserves environment > file precedence and anchors either relative
+    # value at the repository root. Workers may chdir into a model source before importing HF.
+    # Sibling cache variables pass through untouched and do not suppress HF_HOME.
     root = resolve_path_setting("HF_HOME")
     if root is not None:
         environment["HF_HOME"] = str(root)

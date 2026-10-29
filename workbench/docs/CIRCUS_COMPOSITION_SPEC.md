@@ -158,7 +158,7 @@ baseline does not merge incompatible model dependencies.
 
 On the PC, first export `WORKBENCH_RUNTIME_ADAPTATION=sm_120` (or put it in `workbench.env`),
 provision the selected profile, run its actual CUDA capability check and then the ENCODER pilot.
-Keep `HF_HOME` absolute: file-only relative values are resolved, but a relative exported value
-is inherited verbatim by workers and may resolve under their source directory.
+`HF_HOME` is passed to workers as an absolute path, for both file and exported values; exported
+values keep precedence. An absolute path remains the clearest operator setting.
 This baseline declaration and CPU tests do not establish target-GPU forwards or paper reproduction.
 The eight deferred model entries remain deferred, with no new checkpoints or adapters added here.
