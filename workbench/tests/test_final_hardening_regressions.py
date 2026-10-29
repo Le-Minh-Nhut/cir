@@ -40,7 +40,7 @@ def test_planner_constraints_follow_the_selected_adaptation(monkeypatch, limn_mo
     adapted = planner.model_constraints(dict(limn_model))
     adapted_torch = str(adapted["torch"])
     assert "1.12.1" not in adapted_torch
-    assert "2.8" in adapted_torch
+    assert adapted_torch == "==2.7.1"
     # The two contracts must never share an environment id.
     assert historical != adapted
 

@@ -3,6 +3,11 @@
 # refused as UNSAFE_INTERPRETER; absent or UNKNOWN means unpinned. Compute it with
 # `sha256sum "$(readlink -f "$WORKBENCH_<MODEL>_PYTHON")"` after creating the
 # environment from the upstream spec, and record it before a reproduction run.
+# PC sm_120 baseline: torch 2.7.1 / torchvision 0.22.1, CUDA 12.8 wheels.
+# PyTorch 2.7 is the first stable Blackwell line; use its bugfix release, not a newer minor.
+# Sources: https://pytorch.org/blog/pytorch-2-7/
+#          https://pytorch.org/get-started/previous-versions/
+# These adapted profiles are PC choices, not changes to the historical author contracts.
 schema_version: 1
 protocols:
   fashioniq_original_split:
@@ -36,15 +41,15 @@ models:
       # operator may provision an adapted runtime. Historical pins remain the default reproduction contract.
       adapted_runtime:
         target_compute_capability: sm_120
-        # Historical Python 3.9 cu128 wheels end at 2.8.0 (https://download.pytorch.org/whl/cu128/torch/);
+        # The selected cu128 pair supports Python 3.9 and 3.10;
         # Python 3.10 matches the verified cp310 stack in envs/tme-adapted and models.yaml:1305.
         python: '3.10'
-        pytorch: '>=2.8,<2.9'
-        torchvision: '>=0.23,<0.24'
+        pytorch: '==2.7.1'
+        torchvision: '==0.22.1'
         cuda: '12.8'
         # CSMCIR/requirements.txt:9 pins transformers==4.36.2, required by vendored
         # src/lavis/models/blip2_models/Qformer.py:41 for apply_chunking_to_forward. timm==0.9.12 (:5)
-        # and fairscale==0.4.13 (:10) match pinned source; numpy<2 preserves torch 2.8 C ABI.
+        # and fairscale==0.4.13 (:10) match pinned source; numpy<2 preserves compatibility with the pinned model dependencies.
         packages: ['transformers==4.36.2', 'timm==0.9.12', 'fairscale==0.4.13', 'numpy<2']
         pip_index_url: https://download.pytorch.org/whl/cu128
     # The pinned evaluator derives its data root from `__file__` and opens
@@ -195,7 +200,7 @@ models:
       cuda: '12.6'
       # Historical Python 3.8.10 (models.yaml:175); the cu128 wheel index
       # (https://download.pytorch.org/whl/cu128/torch/) ships no cp38 wheels, and sm_120 needs
-      # torch >=2.8. An adapted profile would require a Python migration — deferred with that reason.
+      # torch >=2.7. The adapted profile below explicitly uses Python 3.9 for those wheels.
       # `lavis` is the checkout's OWN copy, put on `sys.path` by the wrapper (`replay/<model>.py`,
       # `_load_replay_modules`), so it shadows any installed distribution of the same name. The
       # `salesforce-lavis` PyPI pin is therefore NOT installed: it requires `timm==0.4.12` while the
@@ -212,13 +217,13 @@ models:
       adapted_runtime:
         target_compute_capability: sm_120
         # Historical Python 3.8.10 has no cu128 wheels (cp38: 0 wheels); Python 3.9 matches INTENT.
-        # cu128 publishes cp39 wheels up to torch 2.8.0 / torchvision 0.23.0; 2.8.0 is the last cu128 cp39 build.
+        # The selected 2.7.1 / 0.22.1 cu128 pair publishes cp39 wheels.
         python: '3.9'
-        pytorch: '>=2.8,<2.9'
-        torchvision: '>=0.23,<0.24'
+        pytorch: '==2.7.1'
+        torchvision: '==0.22.1'
         cuda: '12.8'
         # Core pins from checked source: transformers==4.25.0 for Qformer, timm==0.9.16 for EVA-ViT,
-        # fairscale==0.4.13, and numpy<2 to protect against NumPy 2 C ABI breakage on PyTorch 2.8.
+        # fairscale==0.4.13, and numpy<2 for compatibility with the pinned model dependencies.
         packages: ['transformers==4.25.0', 'timm==0.9.16', 'fairscale==0.4.13', 'numpy<2']
         pip_index_url: https://download.pytorch.org/whl/cu128
     method_name: ConeSep
@@ -357,15 +362,15 @@ models:
       # the operator may provision an adapted runtime. Historical pins remain the default reproduction contract.
       adapted_runtime:
         target_compute_capability: sm_120
-        # Historical Python 3.9 cu128 wheels end at 2.8.0 (https://download.pytorch.org/whl/cu128/torch/);
+        # The selected cu128 pair supports Python 3.9 and 3.10;
         # Python 3.10 matches the verified cp310 BLIP-2 Q-Former/EVA stack in envs/tme-adapted.
         python: '3.10'
-        pytorch: '>=2.8,<2.9'
-        torchvision: '>=0.23,<0.24'
+        pytorch: '==2.7.1'
+        torchvision: '==0.22.1'
         cuda: '12.8'
         # MTST_PTHA/requirements.txt:9 pins transformers==4.36.2, required by vendored
         # MTST_PTHA/src/lavis/models/blip2_models/Qformer.py:41 for apply_chunking_to_forward.
-        # timm==0.9.12 (:5) and fairscale==0.4.13 (:10) match pinned source; numpy<2 preserves torch 2.8 C ABI.
+        # timm==0.9.12 (:5) and fairscale==0.4.13 (:10) match pinned source; numpy<2 preserves compatibility with the pinned model dependencies.
         packages: ['transformers==4.36.2', 'timm==0.9.12', 'fairscale==0.4.13', 'numpy<2']
         pip_index_url: https://download.pytorch.org/whl/cu128
     reproduction_status: SELECTED_TRANSFER_ONLY
@@ -417,7 +422,7 @@ models:
       cuda: '12.6'
       # Historical Python 3.8.10 (models.yaml:362); the cu128 wheel index
       # (https://download.pytorch.org/whl/cu128/torch/) ships no cp38 wheels, and sm_120 needs
-      # torch >=2.8. An adapted profile would require a Python migration — deferred with that reason.
+      # torch >=2.7. The adapted profile below explicitly uses Python 3.9 for those wheels.
       # `lavis` is the checkout's OWN copy, put on `sys.path` by the wrapper (`replay/<model>.py`,
       # `_load_replay_modules`), so it shadows any installed distribution of the same name. The
       # `salesforce-lavis` PyPI pin is therefore NOT installed: it requires `timm==0.4.12` while the
@@ -434,13 +439,13 @@ models:
       adapted_runtime:
         target_compute_capability: sm_120
         # Historical Python 3.8.10 has no cu128 wheels (cp38: 0 wheels); Python 3.9 matches INTENT.
-        # cu128 publishes cp39 wheels up to torch 2.8.0 / torchvision 0.23.0; 2.8.0 is the last cu128 cp39 build.
+        # The selected 2.7.1 / 0.22.1 cu128 pair publishes cp39 wheels.
         python: '3.9'
-        pytorch: '>=2.8,<2.9'
-        torchvision: '>=0.23,<0.24'
+        pytorch: '==2.7.1'
+        torchvision: '==0.22.1'
         cuda: '12.8'
         # Core pins from checked source: transformers==4.25.0 for Qformer, timm==0.9.16 for EVA-ViT,
-        # fairscale==0.4.13, and numpy<2 to protect against NumPy 2 C ABI breakage on PyTorch 2.8.
+        # fairscale==0.4.13, and numpy<2 for compatibility with the pinned model dependencies.
         packages: ['transformers==4.25.0', 'timm==0.9.16', 'fairscale==0.4.13', 'numpy<2']
         pip_index_url: https://download.pytorch.org/whl/cu128
     method_name: HABIT
@@ -528,13 +533,13 @@ models:
       adapted_runtime:
         target_compute_capability: sm_120
         # Historical Python 3.9 kept: cu128 index (https://download.pytorch.org/whl/cu128/torch/)
-        # publishes cp39 wheels up to torch 2.8.0 / torchvision 0.23.0; 2.8.0 is the last cu128 cp39 build.
+        # publishes cp39 wheels for the selected 2.7.1 / 0.22.1 pair.
         python: '3.9'
-        pytorch: '>=2.8,<2.9'
-        torchvision: '>=0.23,<0.24'
+        pytorch: '==2.7.1'
+        torchvision: '==0.22.1'
         cuda: '12.8'
         # Core pins from checked source: transformers==4.25.0 for Qformer (models.yaml:455), timm==0.9.16
-        # for EVA-ViT, fairscale==0.4.13, and numpy<2 to protect against NumPy 2 C ABI breakage on PyTorch 2.8.
+        # for EVA-ViT, fairscale==0.4.13, and numpy<2 for compatibility with the pinned model dependencies.
         packages: ['transformers==4.25.0', 'timm==0.9.16', 'fairscale==0.4.13', 'numpy<2']
         pip_index_url: https://download.pytorch.org/whl/cu128
     method_name: INTENT
@@ -608,7 +613,7 @@ models:
       cuda: '12.6'
       # Historical Python 3.8.10 (models.yaml:520); the cu128 wheel index
       # (https://download.pytorch.org/whl/cu128/torch/) ships no cp38 wheels, and sm_120 needs
-      # torch >=2.8. An adapted profile would require a Python migration — deferred with that reason.
+      # torch >=2.7. The adapted profile below explicitly uses Python 3.9 for those wheels.
       # `lavis` is the checkout's OWN copy, put on `sys.path` by the wrapper (`replay/<model>.py`,
       # `_load_replay_modules`), so it shadows any installed distribution of the same name. The
       # `salesforce-lavis` PyPI pin is therefore NOT installed: it requires `timm==0.4.12` while the
@@ -625,13 +630,13 @@ models:
       adapted_runtime:
         target_compute_capability: sm_120
         # Historical Python 3.8.10 has no cu128 wheels (cp38: 0 wheels); Python 3.9 matches INTENT.
-        # cu128 publishes cp39 wheels up to torch 2.8.0 / torchvision 0.23.0; 2.8.0 is the last cu128 cp39 build.
+        # The selected 2.7.1 / 0.22.1 cu128 pair publishes cp39 wheels.
         python: '3.9'
-        pytorch: '>=2.8,<2.9'
-        torchvision: '>=0.23,<0.24'
+        pytorch: '==2.7.1'
+        torchvision: '==0.22.1'
         cuda: '12.8'
         # Core pins from checked source: transformers==4.25.0 for Qformer, timm==0.9.16 for EVA-ViT,
-        # fairscale==0.4.13, and numpy<2 to protect against NumPy 2 C ABI breakage on PyTorch 2.8.
+        # fairscale==0.4.13, and numpy<2 for compatibility with the pinned model dependencies.
         packages: ['transformers==4.25.0', 'timm==0.9.16', 'fairscale==0.4.13', 'numpy<2']
         pip_index_url: https://download.pytorch.org/whl/cu128
     method_name: HINT
@@ -695,11 +700,11 @@ models:
       # the operator may provision an adapted runtime. Historical pins remain the default reproduction contract.
       adapted_runtime:
         target_compute_capability: sm_120
-        # Historical Python 3.9 cu128 wheels end at 2.8.0 (https://download.pytorch.org/whl/cu128/torch/);
+        # The selected cu128 pair supports Python 3.9 and 3.10;
         # Python 3.10 runs replay wrapper (adapters/models.py:85, replay/encoder.py:198) and pinned modules.
         python: '3.10'
-        pytorch: '>=2.8,<2.9'
-        torchvision: '>=0.23,<0.24'
+        pytorch: '==2.7.1'
+        torchvision: '==0.22.1'
         cuda: '12.8'
         # Pinned source manifest workbench/third_party/ENCODER/requirements.txt:155 pins open-clip-torch==2.24.0,
         # imported by replay wrapper workbench/replay/encoder.py:198. open-clip-torch 2.24.0 requires torch>=1.9.0.
@@ -1322,11 +1327,11 @@ models:
       adapted_runtime:
         target_compute_capability: sm_120
         python: '3.10'
-        pytorch: '>=2.8,<2.9'
-        torchvision: '>=0.23,<0.24'
+        pytorch: '==2.7.1'
+        torchvision: '==0.22.1'
         cuda: '12.8'
         packages: ['open_clip_torch>=2.24,<2.27']
-        # The PyPI default torch build does not include sm_120 kernels; the adapted profile must
+        # Keep the declared CUDA build: the adapted profile must
         # install from the CUDA 12.8 wheel index explicitly.
         pip_index_url: https://download.pytorch.org/whl/cu128
     strict_clean_checkpoint_available: null
@@ -1418,15 +1423,14 @@ models:
       # an exact paper reproduction.
       adapted_runtime:
         target_compute_capability: sm_120
-        # Narrowest range verified to INSTALL from the cu128 index and to satisfy this model's own
-        # requirement set on cp310. `torch==2.5` ships no sm_120 kernels at all, so the floor is the
-        # first release that does; 2.8 is where `spacy`, `scikit-image`, `fairscale` and
-        # `pycocoevalcap` all resolve together on this Python.
-        pytorch: '>=2.8,<2.9'
-        torchvision: '>=0.23,<0.24'
+        # PC baseline is the first Blackwell stable line's bugfix pair (2.7.1 / 0.22.1).
+        # Historical torch 2.1.2 remains valid for the author's older-GPU setup only.
+        # Target-PC model loading and CUDA forward are still required; declaration is not a GPU pass.
+        pytorch: '==2.7.1'
+        torchvision: '==0.22.1'
         cuda: '12.8'
         # Kept from the pinned stack: the LAVIS code is pinned to transformers 4.36.0, `timm` is what
-        # the EVA vision tower is built from, and torch 2.8 is still not built against NumPy 2.x.
+        # the EVA vision tower is built from; retain numpy<2 for this pinned dependency stack.
         packages: ['transformers==4.36.0', 'timm==0.9.12', 'fairscale==0.4.13', 'numpy<2']
         pip_index_url: https://download.pytorch.org/whl/cu128
     method_name: TME

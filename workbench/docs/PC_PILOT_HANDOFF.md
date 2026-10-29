@@ -348,6 +348,6 @@ Chuỗi đầu-cuối đã chạy: aggregate → per-query export/observer → p
    sha256 `0f31c501…`), chỉ còn thiếu interpreter. Lưu ý cả hai **không** khai `per_query_observer`
    trong registry, nên cần thêm integration per-query **nhỏ nhất** theo format `ResultRun` sẵn có
    trước khi cross-model chạy được.
-2. **Đo trên GPU đích `sm_120`.** Lượt R14 dùng profile historical pins trên `sm_86`. Registry hiện khai `adapted_runtime: sm_120` với torch `>=2.8,<2.9` và cu128; R23 ghi solver-only resolution, không chứng minh cài đặt, import thành công, hay GPU execution. Adapted profile chưa được xác nhận trên host `sm_120`; giữ `TARGET_GPU_PENDING`.
+2. **Đo trên GPU đích `sm_120`.** Lượt R14 dùng profile historical pins trên `sm_86`. Registry hiện khai `adapted_runtime: sm_120` với torch `==2.7.1`, torchvision `==0.22.1` và cu128. R23 chỉ ghi solver resolution của bản 2.8 trước đó; bằng chứng ấy không xác nhận cài đặt, import hay GPU execution của baseline mới. Xem `CIRCUS_COMPOSITION_SPEC.md` phần Target-PC runtime baseline. Adapted profile chưa được xác nhận trên host `sm_120`; giữ `TARGET_GPU_PENDING`.
 3. **15 model còn lại**: xem `MODEL_STATUS_SPEC.md` §2 cho blocker và điều kiện chuyển trạng thái
    của từng model.

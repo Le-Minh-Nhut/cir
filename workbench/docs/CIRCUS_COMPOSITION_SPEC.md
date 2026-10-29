@@ -105,7 +105,7 @@ Every result carries the selected checkpoint and its actual training condition s
 | `tgcir` | not implemented | — | — | — | — | not applicable (no adapter) | `tgcir_archive_unresolved`; archive member/hash unverified | Existing `PREFLIGHT_IMPLEMENTED_BLOCKED`; archive mapping and evaluator entrypoint unresolved. |
 | `sprc` | not implemented | — | — | — | — | not applicable (no adapter) | `sprc_fiq_unresolved` / separate `sprc_fiq_vitl`; both mappings unverified | Existing `BLOCKED_MODEL_MAPPING`; verify checkpoint/model mapping and assets; ViT-L is not the ViT-g paper-row variant. |
 | `limn` | yes | `workbench.composition.model_limn` | yes | yes | yes | `dress`, `shirt`, `toptee` whole-model checkpoints | `base_iter0_all_categories`; training noise unstated, eval noise 0% | Bundle dispatch verified on this host, and the worker entrypoint `NameError` is fixed (top-level `import sys`). `checkpoint_by_id` now carries the bundle's own `mapping_status`, so a bundle-qualified LIMN no longer refuses with "mapping unresolved"; `WORKBENCH_LIMN_BATCH_SIZE` is honored (reuses `replay.limn.resolved_batch_size`) and recorded in the run identity as `adapter_batch_size`. With batch 8 the dress scope encoded the full 74,381 gallery; the full three-scope smoke needs a longer window and was budget-stopped, not failed. 119 ambiguous-category queries are out of scope and reduce coverage, not misses. Full composition evaluation remains `TARGET_GPU_PENDING` (`sm_120`). |
-| `tme` | yes | `workbench.composition.model_tme` | yes | yes | yes | shared, category-agnostic | `fashioniq_0`; training noise 0%, eval noise 0%; no 20% checkpoint exists | Real-data GPU smoke on RTX 3050 (`sm_86`): with `WORKBENCH_TME_PYTHON` pointed at `envs/tme` (Python 3.10.13, torch 2.1.2+cu121) the adapter loads and encodes the FULL 74,381-image gallery, ~3.5 GiB peak VRAM, no OOM. The earlier "OOM on 4 GB" claim is **superseded**: the real gate was the wrong interpreter (`WORKBENCH_TME_PYTHON=envs/tme-adapted`, torch 2.8.0) against the registry pin `==2.1.2`. Repair by repointing the env var at an interpreter matching the pin, or re-provisioning `envs/tme-adapted` on that pin. Retain 0% checkpoint and do not substitute another model's noisy variant; full composition evaluation remains `TARGET_GPU_PENDING`. |
+| `tme` | yes | `workbench.composition.model_tme` | yes | yes | yes | shared, category-agnostic | `fashioniq_0`; training noise 0%, eval noise 0%; no 20% checkpoint exists | Real-data GPU smoke on RTX 3050 (`sm_86`): with `WORKBENCH_TME_PYTHON` pointed at `envs/tme` (Python 3.10.13, torch 2.1.2+cu121) the adapter loads and encodes the FULL 74,381-image gallery, ~3.5 GiB peak VRAM, no OOM. The earlier "OOM on 4 GB" claim is **superseded**: the real gate was the wrong interpreter (`WORKBENCH_TME_PYTHON=envs/tme-adapted`, torch 2.8.0) against the registry pin `==2.1.2`. That historical-pin repair applies only to the older-GPU host with adaptation unset. On the target PC select `WORKBENCH_RUNTIME_ADAPTATION=sm_120` and provision the declared torch 2.7.1 / torchvision 0.22.1 cu128 profile; do not point that PC profile at torch 2.1.2. Retain 0% checkpoint and do not substitute another model's noisy variant; full composition evaluation remains `TARGET_GPU_PENDING`. |
 
 The `csmcir` blocker is specifically the target-feature dependency, not the query-mode input wiring. The adapter reports all three conditions unavailable while those gallery target features cannot be produced. The seven other deferred entries retain their existing checkpoint/source/data reasons above; they have no composition adapter.
 
@@ -141,3 +141,24 @@ An explicit or `selected` request with N independent checkpoint variants dispatc
 Composition workers inherit the process environment, and when `HF_HOME` is absent from it the file-resolved `HF_HOME` is injected instead. An exported `HF_HOME` wins over the file value; the sibling cache variables `HF_HUB_CACHE`/`HUGGINGFACE_HUB_CACHE` no longer suppress a file-only `HF_HOME` (they pass through untouched).
 
 The frontend's mobile overflow is fixed (`workbench/frontend/style.css`: `section` `overflow-x: auto` plus a control `min-width`), so a 390×844 viewport now has `scrollWidth == 390`. A DOM-verified Playwright smoke for this lives at `workbench/frontend/tests/ui_smoke.py`; it is dev-only and is not collected by pytest.
+
+## Target-PC runtime baseline (2026-10-29)
+
+For the nine active composition models, `WORKBENCH_RUNTIME_ADAPTATION=sm_120` now selects exact
+`torch==2.7.1` / `torchvision==0.22.1` from the CUDA 12.8 wheel index. PyTorch 2.7 is the first
+stable Blackwell line; 2.7.1 is its bugfix release. The upstream author pins remain historical
+contracts for older GPUs. Sources: [PyTorch 2.7 release](https://pytorch.org/blog/pytorch-2-7/)
+and [official wheel pairings](https://pytorch.org/get-started/previous-versions/).
+
+The planner and verifier consume the same registry profile. A previous 2.8 environment does not
+match the new exact pin: provision the new environment, then update the corresponding
+`WORKBENCH_<MODEL>_PYTHON` assignment. Do not copy a laptop virtualenv or downgrade the controller
+environment. Keep every model in its existing isolated environment/group; sharing this Torch
+baseline does not merge incompatible model dependencies.
+
+On the PC, first export `WORKBENCH_RUNTIME_ADAPTATION=sm_120` (or put it in `workbench.env`),
+provision the selected profile, run its actual CUDA capability check and then the ENCODER pilot.
+Keep `HF_HOME` absolute: file-only relative values are resolved, but a relative exported value
+is inherited verbatim by workers and may resolve under their source directory.
+This baseline declaration and CPU tests do not establish target-GPU forwards or paper reproduction.
+The eight deferred model entries remain deferred, with no new checkpoints or adapters added here.

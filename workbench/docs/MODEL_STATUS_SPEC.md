@@ -1,3 +1,8 @@
+> **PC runtime update — 2026-10-29:** The nine active models now select exact torch 2.7.1 /
+> torchvision 0.22.1 cu128 when `WORKBENCH_RUNTIME_ADAPTATION=sm_120`. Older references below to
+> 2.8 or its solver results are historical. No target-PC GPU result is claimed for the new pair.
+> See [the current runtime instructions](CIRCUS_COMPOSITION_SPEC.md#target-pc-runtime-baseline-2026-10-29).
+
 # MODEL_STATUS_SPEC — trạng thái 17 model CIR
 
 Tài liệu trạng thái chuẩn. Registry (`workbench/registry/models.yaml`) vẫn là **nguồn tham số thực thi**;

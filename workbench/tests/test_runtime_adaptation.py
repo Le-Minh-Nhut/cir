@@ -35,7 +35,7 @@ def test_selected_adaptation_returns_declared_block(limn_model, monkeypatch):
     adapted = runtime.runtime_adaptation(limn_model)
     assert adapted["target_compute_capability"] == "sm_120"
     adapted_packages = runtime._adapted_packages(limn_model, adapted)
-    assert adapted_packages["torch"] == ">=2.8,<2.9"
+    assert adapted_packages["torch"] == "==2.7.1"
     assert adapted_packages["open_clip_torch"] == ">=2.24,<2.27"
 
 
@@ -55,14 +55,27 @@ def test_adaptation_changes_the_contract_digest(limn_model, monkeypatch):
     assert historical != adapted
 
 
-def test_adapted_constraints_satisfy_modern_torch(limn_model, monkeypatch):
+@pytest.mark.parametrize("model_id", [
+    "csmcir", "conesep", "ptha_mtst", "habit", "intent", "hint", "encoder", "limn", "tme",
+])
+def test_adapted_constraints_satisfy_modern_torch(model_id, monkeypatch):
+    from workbench.backend.registry import model_by_id
+    from workbench.backend.environment_planner import model_constraints
+
+    model = model_by_id(model_id)
     monkeypatch.setenv(runtime.ADAPTATION_ENV, "sm_120")
-    adapted = runtime.runtime_adaptation(limn_model)
-    required = runtime._adapted_packages(limn_model, adapted)
-    assert runtime.version_satisfies(required["torch"], "2.8.0+cu128") is True
+    adapted = runtime.runtime_adaptation(model)
+    required = runtime._adapted_packages(model, adapted)
+    assert runtime.version_satisfies(required["torch"], "2.7.1+cu128") is True
     assert runtime.version_satisfies(required["torch"], "2.6.0+cu124") is False
     assert runtime.version_satisfies(required["torch"], "2.9.0+cu128") is False
-    assert runtime.version_satisfies(required["torchvision"], "0.23.0+cu128") is True
+    assert runtime.version_satisfies(required["torch"], "2.8.0+cu128") is False
+    assert runtime.version_satisfies(required["torchvision"], "0.22.1+cu128") is True
+    constraints = model_constraints(model)
+    assert constraints["torch"] == "==2.7.1"
+    assert constraints["torchvision"] == "==0.22.1"
+    assert constraints["pip_index_url"] == "https://download.pytorch.org/whl/cu128"
+    assert adapted["cuda"] == "12.8"
 
 def test_model_without_adapted_block_refuses_selection(monkeypatch):
     from workbench.backend.errors import WorkbenchError
@@ -94,8 +107,6 @@ def test_limn_validate_environment_accepts_both_contracts(monkeypatch):
     monkeypatch.setenv(runtime.ADAPTATION_ENV, "sm_120")
     adapted = limn.validate_environment()
     assert adapted == [
-        "LIMN environment version mismatch: expected torch >=2.8,<2.9, found 2.7.1+cpu",
-        "LIMN environment version mismatch: expected torchvision >=0.23,<0.24, found 0.22.1+cpu",
         "LIMN environment package missing: open_clip_torch >=2.24,<2.27",
     ]
 
@@ -118,19 +129,19 @@ def test_adapted_runtime_for_ilearn_family(model_id, monkeypatch):
     adapted = runtime.runtime_adaptation(m)
     assert adapted["target_compute_capability"] == "sm_120"
     assert adapted["python"] == "3.9"
-    assert adapted["pytorch"] == ">=2.8,<2.9"
-    assert adapted["torchvision"] == ">=0.23,<0.24"
+    assert adapted["pytorch"] == "==2.7.1"
+    assert adapted["torchvision"] == "==0.22.1"
     assert adapted["cuda"] == "12.8"
     assert adapted["packages"] == ['transformers==4.25.0', 'timm==0.9.16', 'fairscale==0.4.13', 'numpy<2']
 
     resolved = runtime.resolved_runtime_environment(m)
     assert resolved["python"] == "3.9"
-    assert resolved["pytorch"] == ">=2.8,<2.9"
+    assert resolved["pytorch"] == "==2.7.1"
 
     # 3. Planner constraints match resolved runtime
     constraints = model_constraints(m)
     assert constraints["python"] == "3.9"
-    assert constraints["torch"] == ">=2.8,<2.9"
+    assert constraints["torch"] == "==2.7.1"
     assert constraints["runtime_adaptation"] == "sm_120"
     assert constraints["packages"]["transformers"] == "4.25.0"
     assert constraints["packages"]["timm"] == "0.9.16"
