@@ -1517,8 +1517,19 @@ def verify_environment(model: dict[str, Any], *, probe: bool = True, require_cud
     if not probe:
         return report
 
-    # Python version agreement against source-declared version.
-    declared = str(env.get("python") or "").strip()
+    # Python version agreement against the RESOLVED contract. When the operator selects an
+    # adaptation the registry declares for this model, that adaptation's python is the contract the
+    # planner, solver and installer all build to; checking the historical author pin here rejected
+    # the very interpreter the resolved environment demands (e.g. encoder's adapted 3.10 refused
+    # against the historical 3.9). With no adaptation selected `resolved_runtime_environment`
+    # returns the historical block unchanged, so this is the identical check as before. A selection
+    # the model DECLARES but does not match still refuses — at the dependency step below, which
+    # calls `runtime_adaptation` unconditionally — so this check keeps its old answer there.
+    try:
+        contract = resolved_runtime_environment(model)
+    except WorkbenchError:
+        contract = env
+    declared = str(contract.get("python") or "").strip()
     python_ok = python_version_satisfies(declared, report.python_version)
     if python_ok is False:
         report.tier = TIER_BLOCKED

@@ -132,7 +132,8 @@ $EDITOR ~/cir_pc.yaml
 #     exact absolute path in ~/cir_pc.yaml (mapping and proof command above). Process exports win.
 cp workbench/config/workbench.env.example workbench/config/workbench.env
 $EDITOR workbench/config/workbench.env
-# For a custom paths.registry, export WORKBENCH_REGISTRY_PATH=<same absolute registry file>.
+# For a custom paths.registry, export WORKBENCH_REGISTRY_PATH to that absolute registry file.
+# Example: export WORKBENCH_REGISTRY_PATH=/home/operator/cir/workbench/registry/models.yaml
 # It is process-environment-only: the env-file parser rejects this undeclared setting.
 # Run the root-proof one-liner above now; do not proceed unless all values agree.
 # For TME, set WORKBENCH_TME_BATCH_SIZE to a batch this GPU sustains; default 512 is not guaranteed to fit.

@@ -120,13 +120,76 @@ The summary records `runtime.model_interpreter` (path, version, source, verifica
 The CLI exists at `workbench/scripts/composition_eval.py`; its parser defines `--config`, `--models`, `--subsets`, `--resume`, `--smoke [QUERY_LIMIT]`, `--plan`, `--prepare-data`, and `--seed`. These commands use parser-confirmed flags. `WORKBENCH_LIMN_BATCH_SIZE` is the batch knob for LIMN (see the run-identity note below). ENCODER smoke run `17ef444e30b829ac22f2d3c8` covered 8 queries over the full gallery, with composition_gap_ndcg 0.5227 on the 8-query full subset; that attempt predates the `adapter_batch_size` identity field, and the newer attempt `1410522b57d4fe79083c60a6` reports 0.5204. The summary labels both a smoke, not a full evaluation. The run also exercised the fixed inventory path: `missing_assets.status: "extension_mismatch"`, `unresolvable_gallery_count: 0`, and `local_resolved_by_stem_count: 74381` (58,966 via `.png` stems, 15,415 exact). The earlier `--plan` count of 58,966 came from pre-fix code. Remaining commands are the full-cohort surface on the target PC:
 
 ```bash
+# 1. Controller bootstrap. `workbench/run.sh` prefers `./.venv/bin/python` and never takes a model
+#    interpreter from PATH, so the controller environment is built once, here. Composition needs no
+#    Docker and no `pc.sh`.
+python3 -m venv .venv
+.venv/bin/pip install -r workbench/backend/requirements.txt .
+
+# 2. Roots. Every one is a placeholder the operator sets to an ABSOLUTE path on this PC before the
+#    next line; nothing below repeats a hand-typed path.
+export CIR_PC_ROOT="$HOME/cir-pc"                        # SET: root on the PC's large volume
+export CIR_DATASET_ROOT="$CIR_PC_ROOT/FashionIQ"         # canonical FashionIQ: images/, image_splits/, captions/
+export CIR_ARTIFACTS_ROOT="$CIR_PC_ROOT/artifacts"
+export CIR_CHECKPOINT_ROOT="$CIR_ARTIFACTS_ROOT/checkpoints"
+export CIR_RESULTS_ROOT="$CIR_ARTIFACTS_ROOT/results"
+export CIR_THIRD_PARTY_ROOT="$CIR_PC_ROOT/third_party"
+export CIR_ENVS_ROOT="$CIR_PC_ROOT/model-envs"           # SET: root holding the per-model interpreters
+export CIR_REGISTRY_PATH="$PWD/workbench/registry/models.yaml"
+export WORKBENCH_CIRCUS_RELEASE_ROOT="$CIR_PC_ROOT/circus_release"
+
+# 3. The composition config is the AUTOPILOT YAML, not `workbench.env`. Start from the checked-in
+#    cohort profile — it already carries `checkpoint_policy: include_flagged_conditions` and the
+#    authorized `checkpoint_overrides` — then set its six `paths` keys to the exported values above.
+cp workbench/configs/pc_autopilot.pc_cohort.yaml ~/cir_pc.yaml
+$EDITOR ~/cir_pc.yaml
+#    paths.registry     = $CIR_REGISTRY_PATH        (an absolute FILE)
+#    paths.dataset_root = $CIR_DATASET_ROOT
+#    paths.artifacts    = $CIR_ARTIFACTS_ROOT
+#    paths.checkpoints  = $CIR_CHECKPOINT_ROOT
+#    paths.results      = $CIR_RESULTS_ROOT
+#    paths.third_party  = $CIR_THIRD_PARTY_ROOT
+#    Schema — `workbench/backend/autopilot.py:load_config` rejects an unknown OR missing key:
+#      schema_version: 1 · selected_models · checkpoint_policy · checkpoint_overrides
+#      paths: {registry, dataset_root, artifacts, checkpoints, results, third_party}
+#      budgets: {max_download_bytes, max_models, top_k}
+#      permissions: {allow_network, allow_large_downloads, allow_env_install, allow_preparation,
+#                    allow_gpu_eval, allow_gpu_preparation, allow_index_write}
+
+# 4. One interpreter PER MODEL, under the registry's own `python_env_var` names
+#    (`workbench/registry/models.yaml`). Each value is the interpreter provisioned for that model on
+#    this PC — never the controller environment, never a copied laptop venv. If Autopilot
+#    provisioned the group itself, read the exact prefix it recorded in
+#    "$CIR_ARTIFACTS_ROOT/environment_assignment.json" and use that instead of the value below.
+export WORKBENCH_RUNTIME_ADAPTATION=sm_120
+export WORKBENCH_CSMCIR_PYTHON="$CIR_ENVS_ROOT/csmcir/bin/python"
+export WORKBENCH_CONESEP_PYTHON="$CIR_ENVS_ROOT/conesep/bin/python"
+export WORKBENCH_PTHA_MTST_PYTHON="$CIR_ENVS_ROOT/ptha-mtst/bin/python"
+export WORKBENCH_HABIT_PYTHON="$CIR_ENVS_ROOT/habit/bin/python"
+export WORKBENCH_INTENT_PYTHON="$CIR_ENVS_ROOT/intent/bin/python"
+export WORKBENCH_HINT_PYTHON="$CIR_ENVS_ROOT/hint/bin/python"
+export WORKBENCH_ENCODER_PYTHON="$CIR_ENVS_ROOT/encoder/bin/python"
+export WORKBENCH_LIMN_PYTHON="$CIR_ENVS_ROOT/limn/bin/python"
+export WORKBENCH_TME_PYTHON="$CIR_ENVS_ROOT/tme/bin/python"
+
+# 5. Plan: prints the selected work and the expected output paths, writes no state.
 ./workbench/run.sh composition-eval --config ~/cir_pc.yaml --plan
+
+# 6. Verify/inventory the released data. This checks the release files against their recorded
+#    hashes and inventories missing gallery/reference/positive images; it does NOT download a
+#    missing asset. A missing member is reported by name and has to be staged first.
 ./workbench/run.sh composition-eval --config ~/cir_pc.yaml --prepare-data
+
+# 7. Smoke one GPU-heavy model at a time; the runner serializes model runs.
 ./workbench/run.sh composition-eval --config ~/cir_pc.yaml --models encoder,limn --smoke
+
+# 8. Full cohort. Keep this on ONE line, or join the wrap with a trailing backslash: a copy that
+#    wraps before `--resume` without the continuation runs the evaluation WITHOUT resume and then
+#    tries `--resume` as the next command.
 ./workbench/run.sh composition-eval --config ~/cir_pc.yaml --models selected --subsets full,sf,validated --resume
 ```
 
-Schedule one GPU-heavy model at a time; the runner serializes model runs. Smoke mode limits queries (default 1) and preserves the full released gallery. Released data root is configured by `WORKBENCH_CIRCUS_RELEASE_ROOT`.
+Schedule one GPU-heavy model at a time; the runner serializes model runs. Smoke mode limits queries (default 1) and preserves the full released gallery. Released data root is configured by `WORKBENCH_CIRCUS_RELEASE_ROOT`. `--prepare-data` verifies the released files against their recorded hashes and inventories missing gallery/reference/positive images — it never downloads a missing asset. `--models selected` reads the authorized cohort from `~/cir_pc.yaml` (`selected_models` and `checkpoint_overrides`), so it must be run with `--config`.
 
 ## Run identity, resume and worker lifecycle
 

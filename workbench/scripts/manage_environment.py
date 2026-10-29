@@ -16,15 +16,77 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
+from workbench.backend.errors import WorkbenchError
+from workbench.backend.model_settings import setting
 from workbench.backend.operator_config import resolve_config
 from workbench.backend.registry import load_registry
 from workbench.backend.environment_planner import _is_staging_path, _package_manager_env
 from workbench.backend.runtime import READY_TIERS, check_environment_isolation, verify_environment
 
 
-
 _ENV_SPEC_CANDIDATES = ("environment.yml", "environment.yaml", "requirements.txt")
 _CONDA_COMMANDS = ("conda", "mamba", "micromamba")
+
+
+def _verify_assigned_interpreter(model: dict, interpreter: str, config) -> "object | None":
+    """The CURRENT verification of the assignment's interpreter against the selected contract.
+
+    A persisted `state == "RUNTIME_VERIFIED"` records a past install; it is not evidence that the
+    interpreter still satisfies the contract the operator selects now. The probe runs the same
+    verifier the planner, doctor and launcher use, pointed at the assignment's own interpreter, so
+    reuse is decided by measurement rather than by the record it is about to reuse.
+
+    Returns None when the model declares no `python_env_var`: such a model has no contract to
+    verify the assignment against, so the record stays the only evidence there is.
+    """
+    environment = dict(model.get("environment") or {})
+    variable = environment.get("python_env_var")
+    if not variable:
+        return None
+    previous = os.environ.get(variable)
+    os.environ[variable] = str(interpreter)
+    try:
+        return verify_environment({**model, "environment": environment}, probe=True, config=config)
+    finally:
+        if previous is None:
+            os.environ.pop(variable, None)
+        else:
+            os.environ[variable] = previous
+
+
+def _assigned_interpreter_verifies(model: dict, interpreter: str, config) -> bool:
+    """Whether a persisted assignment may be reused: it must not fail current verification.
+
+    A model with no declared contract (see `_verify_assigned_interpreter`) keeps its record. A
+    declared contract that does not currently pass — blocked, or merely unverified — is not
+    reusable: the assignment is stale, and the caller must repair rather than reuse it.
+    """
+    report = _verify_assigned_interpreter(model, interpreter, config)
+    return report is None or report.tier in READY_TIERS
+
+
+def _resolved_install_plan(model: dict, config) -> tuple[list[str], str | None] | None:
+    """The pip install plan for this model alone, or None when no adaptation is selected.
+
+    The constraints are the planner's own (`model_constraints` + `_constraints` + the same spec
+    renderer), so installer and verifier cannot disagree about what 'the resolved environment'
+    is. A venv has no conda to install the conda-resolvable half, so every declared package goes
+    through pip: the plan is the resolved constraint set, not a second interpretation of it.
+    """
+    from workbench.backend import environment_planner as planner
+    from workbench.backend.runtime import runtime_adaptation
+
+    if not runtime_adaptation(model, undeclared_is_error=False):
+        return None
+    third_party = getattr(config, "WORKBENCH_THIRD_PARTY_ROOT", None)
+    constraints, conflict = planner._constraints(
+        [planner.model_constraints(model, third_party_root=third_party)])
+    if conflict:
+        raise WorkbenchError("ENVIRONMENT_CONSTRAINTS_CONFLICT", conflict,
+                             {"model_id": model.get("model_id")})
+    constraints["pip_only"] = sorted(set(constraints["packages"]) | set(constraints["ranges"]))
+    return (planner._pip_specs_for_group({"constraints": constraints}, {}),
+            constraints.get("pip_index_url"))
 
 
 def _find_env_spec(source: Path) -> Path | None:
@@ -155,13 +217,25 @@ def status(model: dict, config) -> dict:
         state = shared_info.get("state")
         if assigned:
             res["interpreter"] = assigned
-            if state == "RUNTIME_VERIFIED" and Path(assigned).is_file() and os.access(assigned, os.X_OK):
-                res["interpreter_status"] = "GROUP_READY"
-                res["runtime_verified"] = True
-                res["ready"] = True
-            elif state in ("FAILED", "BLOCKED"):
+            if state in ("FAILED", "BLOCKED"):
                 res["ready"] = False
                 res["runtime_reason"] = f"assigned group {res['shared_group']} is {state}"
+            elif state == "RUNTIME_VERIFIED" and Path(assigned).is_file() and os.access(assigned, os.X_OK):
+                # The persisted record only says a past install verified. Whether the assignment
+                # is reusable is decided by the CURRENT verification of that same interpreter
+                # against the selected contract: a row that says ready while the probe says
+                # BLOCKED is the stale-assignment contradiction this check exists to end.
+                report = _verify_assigned_interpreter(model, assigned, config)
+                if report is None:
+                    res["interpreter_status"] = "GROUP_READY"
+                    res["runtime_verified"] = True
+                    res["ready"] = True
+                else:
+                    res["interpreter_status"] = report.status
+                    res["interpreter_tier"] = report.tier
+                    res["runtime_verified"] = report.tier in READY_TIERS
+                    res["runtime_reason"] = report.reason
+                    res["ready"] = res["runtime_verified"]
     return res
 
 def print_status(s: dict) -> None:
@@ -192,12 +266,26 @@ def create_env(model: dict, s: dict, dry_run: bool, config=None, network_allowed
         env_id = shared_info.get("environment_id")
         interp = shared_info.get("interpreter")
         print(f"[GROUP] {model_id}: assigned to shared group {env_id} (members: {members_str}); interpreter: {interp}")
+        if (shared_info.get("state") == "RUNTIME_VERIFIED" and interp
+                and not _is_staging_path(interp) and Path(interp).is_file() and os.access(interp, os.X_OK)
+                and _assigned_interpreter_verifies(model, interp, config)):
+            # Reused without reinstalling only because the assignment still verifies NOW against the
+            # selected contract. A persisted RUNTIME_VERIFIED record over a broken environment is not
+            # evidence of anything, and returning here was what made `--create` refuse to repair it.
+            if dry_run:
+                print(f"[OK] dry-run: would reuse group {env_id}")
+            return True
         if dry_run:
+            # Read-only AND result-stable: a dry run provisions nothing, so it does not drop the
+            # assignment either. It reports the planned group exactly as before the
+            # current-contract check existed, and the verdict cannot depend on --allow-network.
+            # The stale→repair drop belongs to a REAL run, which the branch below handles.
+            if shared_info.get("state") == "RUNTIME_VERIFIED":
+                print(f"[NOTICE] {model_id}: assigned group {env_id} does not verify against the "
+                      f"current contract; a real run repairs it instead of reusing it")
             print(f"[OK] dry-run: would provision or reuse group {env_id}")
             return True
-        if (shared_info.get("state") == "RUNTIME_VERIFIED" and interp and
-                not _is_staging_path(interp) and Path(interp).is_file() and os.access(interp, os.X_OK)):
-            return True
+    if shared_info:
         from workbench.backend.environment_planner import plan_environments, provision_environment_plan
         from workbench.backend.registry import load_registry
         registry = load_registry()
@@ -252,8 +340,9 @@ def create_env(model: dict, s: dict, dry_run: bool, config=None, network_allowed
         return False
     # An operator-preset interpreter (WORKBENCH_*_PYTHON set) must still go through the
     # isolation check in the venv branch below; the planner route is only for fresh installs
-    # with no preset interpreter.
-    preset_interpreter = s.get("env_var") and os.environ.get(s["env_var"])
+    # with no preset interpreter. The lookup is the shared one, so an export and a
+    # `workbench.env` entry select the SAME target with the documented precedence.
+    preset_interpreter = s.get("env_var") and setting(s["env_var"])
     if not preset_interpreter:
             # No shared assignment yet: route through the environment planner, which derives the
         # group from the model's own spec, provisions it under the workbench artifacts root, and
@@ -318,7 +407,17 @@ def create_env(model: dict, s: dict, dry_run: bool, config=None, network_allowed
     if not spec:
         print(f"[BLOCKED] {model_id}: no environment spec found in pinned source ({', '.join(_ENV_SPEC_CANDIDATES)})", file=sys.stderr)
         return False
-    if spec_type in ("environment.yml", "environment.yaml"):
+    # When the operator selected a declared adaptation, the RESOLVED contract — the same
+    # constraints the planner, verifier and assignment all consume — is what gets installed. The
+    # raw historical freeze (or environment.yml) is a different dependency set and would undo the
+    # migration. `_resolved_install_plan` returns None with no adaptation, so the historical
+    # branches below are byte-identical in that case.
+    try:
+        resolved_specs, resolved_index = _resolved_install_plan(model, config) or (None, None)
+    except WorkbenchError as error:
+        print(f"[BLOCKED] {model_id}: {error.message}", file=sys.stderr)
+        return False
+    if spec_type in ("environment.yml", "environment.yaml") and resolved_specs is None:
         conda_cmd = _conda_available()
         if not conda_cmd:
             print(f"[BLOCKED] {model_id}: no conda/mamba found; required for {spec}", file=sys.stderr)
@@ -344,7 +443,7 @@ def create_env(model: dict, s: dict, dry_run: bool, config=None, network_allowed
     if not env_var:
         print(f"[BLOCKED] {model_id}: no environment variable declared; cannot locate target interpreter", file=sys.stderr)
         return False
-    configured = os.environ.get(env_var)
+    configured = setting(env_var)
     if not configured:
         print(f"[BLOCKED] {model_id}: {env_var} not set; point it at a pre-created venv or interpreter", file=sys.stderr)
         return False
@@ -362,10 +461,18 @@ def create_env(model: dict, s: dict, dry_run: bool, config=None, network_allowed
         print(f"[BLOCKED] {model_id}: pip install requires network authorization (--allow-network)",
               file=sys.stderr)
         return False
-    argv = [str(interpreter), "-m", "pip", "install", "-r", spec]
+    if resolved_specs is None:
+        argv = [str(interpreter), "-m", "pip", "install", "-r", spec]
+    else:
+        argv = [str(interpreter), "-m", "pip", "install", *resolved_specs]
+        # An EXTRA index, not a replacement: the pytorch wheel index hosts the CUDA build the
+        # adapted profile pins (cu128 for sm_120) and not the regular PyPI packages beside it.
+        if resolved_index:
+            argv += ["--extra-index-url", str(resolved_index)]
     print(f"[RUN] {model_id}: {' '.join(argv)}")
     if dry_run:
-        print(f"[OK] dry-run: would install {spec} into {interpreter}")
+        print(f"[OK] dry-run: would install {spec if resolved_specs is None else 'resolved constraints'} "
+              f"into {interpreter}")
         return True
     result = subprocess.run(argv, env=_package_manager_env())
     if result.returncode != 0:
