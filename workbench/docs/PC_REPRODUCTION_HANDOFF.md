@@ -2,7 +2,7 @@
 
 Primary operator route is this document's [One run/resume path](#one-runresume-path). Copy the checked-in `pc_autopilot.pc_cohort.yaml` to a private PC-specific YAML and configure all six absolute paths, finite budgets, capabilities, model settings, and operational batch before any real run. [MODEL_STATUS_SPEC.md](MODEL_STATUS_SPEC.md) records per-model source, checkpoint, assets, capability, and blockers.
 
-**Current revision identity:** `TESTED_SOURCE_SHA` is `4e0c07476f02b43e63355b6e067da460251c54e4` (the sm_120 round). Full invocation on the working tree whose production bytes are that revision (docs/tests excluded): 2139 collected across workbench/tests and tests/unit; 2128 passed, 1 failed, 10 skipped, 0 errors, wall 5144 s (~85.7 min) in 4 chunks 535/535/535/534. Workbench scope: 2080 collected, 2069 passed, 1 failed, 10 skipped, 0 errors. Unit scope: 59 passed. The single failure is the release-metadata count guard itself, which fails by construction on the revision it describes and is resolved by this advance. Separate reruns do not turn the recorded full invocation green.
+**Current revision identity:** `TESTED_SOURCE_SHA` is `065c859ad24977e7bf98c0ea245bc6fe0b57c05c` (the A30 round). Full invocation on the working tree whose production bytes are that revision (docs/tests excluded): 2157 collected across workbench/tests and tests/unit; 2146 passed, 1 failed, 10 skipped, 0 errors, wall 5108 s (~85.1 min) in 4 chunks 539/540/539/539. Workbench scope: 2098 collected, 2087 passed, 1 failed, 10 skipped, 0 errors. Unit scope: 59 passed. The single failure is the release-metadata count guard itself, which fails by construction on the revision it describes and is resolved by this advance. Separate reruns do not turn the recorded full invocation green.
 
 The one full-run failure was the documentation count guard, reconciling the recorded numbers against the
 tested revision's own collection; it cannot pass before the advance. The launcher-fixture timeouts under
@@ -96,9 +96,9 @@ git fetch origin research/cir-failure-workbench
 git checkout research/cir-failure-workbench
 git merge --ff-only origin/research/cir-failure-workbench
 git rev-parse HEAD          # branch tip; may be a documentation-only successor
-git rev-parse 4e0c074       # must print TESTED_SOURCE_SHA: 4e0c07476f02b43e63355b6e067da460251c54e4
-git merge-base --is-ancestor 4e0c074 HEAD
-git diff --exit-code 4e0c074 HEAD -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'
+git rev-parse 065c859       # must print TESTED_SOURCE_SHA: 065c859ad24977e7bf98c0ea245bc6fe0b57c05c
+git merge-base --is-ancestor 065c859 HEAD
+git diff --exit-code 065c859 HEAD -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'
 ```
 
 Fresh checkout (clone the research branch directly):
@@ -107,9 +107,9 @@ Fresh checkout (clone the research branch directly):
 git clone --branch research/cir-failure-workbench git@github.com:Le-Minh-Nhut/cir.git cir
 cd cir
 git rev-parse HEAD          # branch tip; may be a documentation-only successor
-git rev-parse 4e0c074       # must print TESTED_SOURCE_SHA: 4e0c07476f02b43e63355b6e067da460251c54e4
-git merge-base --is-ancestor 4e0c074 HEAD
-git diff --exit-code 4e0c074 HEAD -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'
+git rev-parse 065c859       # must print TESTED_SOURCE_SHA: 065c859ad24977e7bf98c0ea245bc6fe0b57c05c
+git merge-base --is-ancestor 065c859 HEAD
+git diff --exit-code 065c859 HEAD -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'
 ```
 
 Continue from the repository root:

@@ -26,7 +26,7 @@ Tám entry hoãn có blocker khác nhau theo registry: `airknow` thiếu checkpo
 **Trạng thái 17 model (bảng chuẩn, bằng chứng + điều kiện chuyển trạng thái):**
 [`workbench/docs/MODEL_STATUS_SPEC.md`](MODEL_STATUS_SPEC.md)
 
-**SHA ĐÃ KIỂM THỬ (nguồn sản xuất): `4e0c074`** (`4e0c07476f02b43e63355b6e067da460251c54e4`, lượt sm_120), revision production hiện được ghi nhận trong accounting release. Full suite trên cây làm việc có byte production == `4e0c074` (docs/tests loại trừ): 2139 collected gồm workbench/tests và tests/unit; 2128 passed, 1 failed, 10 skipped, 0 errors, wall 5144 s (~85.7 phút), 4 chunk 535/535/535/534; `workbench/tests`: 2080 collected, 2069 passed, 1 failed, 10 skipped; `tests/unit`: 59/59 passed. Lỗi duy nhất là chính guard đếm số test — nó fail theo thiết kế trên đúng revision mà nó mô tả và được giải quyết bằng lần advance này. Historical accounting trên `d2b6579d`: 2049 collected, 2036 passed, 2 failed, 11 skipped. Historical accounting trên `d05149b9`: 2029 collected, 2017 passed, 1 failed, 11 skipped. Lịch sử R25 trên `a55a326`: 1967 collected, 1955 passed, 1 failed, 11 skipped. GPU đích vẫn `TARGET_GPU_PENDING`.
+**SHA ĐÃ KIỂM THỬ (nguồn sản xuất): `065c859`** (`065c859ad24977e7bf98c0ea245bc6fe0b57c05c`, lượt A30), revision production hiện được ghi nhận trong accounting release. Full suite trên cây làm việc có byte production == `065c859` (docs/tests loại trừ): 2157 collected gồm workbench/tests và tests/unit; 2146 passed, 1 failed, 10 skipped, 0 errors, wall 5108 s (~85.1 phút), 4 chunk 539/540/539/539; `workbench/tests`: 2098 collected, 2087 passed, 1 failed, 10 skipped; `tests/unit`: 59/59 passed. Lỗi duy nhất là chính guard đếm số test — nó fail theo thiết kế trên đúng revision mà nó mô tả và được giải quyết bằng lần advance này. Historical accounting trên `4e0c0747` (lượt sm_120): 2080 collected, 2069 passed, 1 failed, 10 skipped cho `workbench/tests`; 2139 collected, 2128 passed, 1 failed, 10 skipped gồm `tests/unit`. Historical accounting trên `d2b6579d`: 2049 collected, 2036 passed, 2 failed, 11 skipped. Historical accounting trên `d05149b9`: 2029 collected, 2017 passed, 1 failed, 11 skipped. Lịch sử R25 trên `a55a326`: 1967 collected, 1955 passed, 1 failed, 11 skipped. GPU đích vẫn `TARGET_GPU_PENDING`.
 
 Lưu ý: các bản ghi cũ `59949ff`, `9a53ee1` và `5567bc7` đã bị **thay thế**. Công việc vendoring và phục hồi
 model đã thay đổi file production (`workbench/backend/runtime.py`, `workbench/replay/common.py`,
@@ -56,7 +56,7 @@ git fetch origin research/cir-failure-workbench
 # Checkout tường minh. KHÔNG dùng `git reset --hard`: trên máy đã có việc đang làm, nó xoá sạch
 # không hỏi. Muốn đúng cây đã kiểm thử thì checkout đúng commit đó.
 # Nguồn đã kiểm thử (revision cố định):
-git checkout 4e0c074
+git checkout 065c859
 # Nhánh đang phát triển thêm tài liệu. Dùng nó nếu muốn bản mới nhất:
 #   git checkout research/cir-failure-workbench
 ```
