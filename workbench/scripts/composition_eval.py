@@ -263,7 +263,10 @@ def main(argv: list[str] | None = None) -> int:
                     "reason": item["reason"]}
                    for item in unavailable]
         specs = []
+        blocked_pairs = {(item["model_id"], item.get("checkpoint_id")) for item in unavailable}
         for model, checkpoint_id in pairs:
+            if (model["model_id"], checkpoint_id) in blocked_pairs:
+                continue
             try:
                 adapter_type = adapter_class(model["model_id"], registry)
                 adapter_status = adapter_type.status(config)

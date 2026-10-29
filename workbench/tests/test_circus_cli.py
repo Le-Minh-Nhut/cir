@@ -865,6 +865,7 @@ def test_multi_variant_with_one_missing_checkpoint_reports_row(tmp_path: Path,
     rc, report, error = _run(config, release, adapters, artifacts, monkeypatch, capsys,
                              "--models", "fixture3d")
     assert rc == 1, error
+    assert report["run_count"] == len(report["models"]) == 2, report["models"]
     rows = {row["checkpoint_id"]: row for row in report["models"]}
     assert set(rows) == {"fixture", "second"}
     assert rows["fixture"]["status"] == "COMPLETED"
