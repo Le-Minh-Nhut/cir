@@ -578,6 +578,43 @@ def test_existing_completed_corroborated_run_reported_without_re_running_unless_
     assert post_jobs_file.exists()
     assert len(post_jobs_file.read_text().strip().splitlines()) > 0
 
+def test_evidence_dedup_fails_closed_when_api_unreadable(tmp_path: Path):
+    """The dedup gate FAILS CLOSED (pc.sh:1295-1338, commit c897b6d).
+
+    Pins the gate itself, not the happy path: when `/api/runs` and `/api/benchmark-runs` cannot be
+    read, the launcher must REFUSE the run rather than treat "the API could not be asked" as "the
+    API says there are no runs". The old `|| echo "[]"` collapsed both into the empty list, so a
+    transient failure silently skipped dedup and re-queued a run whose result already existed.
+    Measured on a loaded host, 2 of 40 concurrent invocations took that path.
+
+    `MOCK_API_STATE` names a directory holding neither recorded body, which is exactly the shim's
+    mechanism for "these two endpoints do not answer" (fixtures/pc_launcher/bin/curl:100-102 exits 7
+    per missing file). Every other endpoint — readiness, /api/models, the job list — keeps
+    answering, so the launcher reaches the dedup stage for the same reason the corroborated-run
+    test above reaches it.
+    """
+    sandbox, env = setup_sandbox(tmp_path, with_env=True)
+    env["MOCK_RUNS_STATUS"] = "corroborated"
+    post_jobs_file = sandbox / "post_jobs.log"
+    env["MOCK_POST_JOBS_FILE"] = str(post_jobs_file)
+    # An empty state directory: no runs.json, no benchmark-runs.json.
+    env["MOCK_API_STATE"] = str(sandbox / "api_state_unreadable")
+
+    _create_corroborated_run(sandbox, "run_limn_corr_01")
+
+    # 2 attempts x 30 s curl deadline + the 5 s backoff, with margin.
+    proc = run_pc(sandbox, [], env, timeout=120.0)
+    output = proc.stdout + proc.stderr
+
+    assert proc.returncode != 0, output
+    assert "EVIDENCE_DEDUP" in output, output
+    # The already-corroborated run was neither reused nor re-queued: the gate stopped the run.
+    assert not post_jobs_file.exists() or not post_jobs_file.read_text().strip(), (
+        "the launcher POSTed a job despite an unreadable dedup index")
+    assert not [rec for rec in _read_tool_logs(sandbox)
+                if rec.get("tool") == "curl" and "-X" in rec.get("args", [])
+                and "POST" in rec.get("args", [])], "a POST to /api/jobs was issued"
+
 def test_failed_evaluation_job_exits_nonzero_with_vietnamese_failure_summary(tmp_path: Path):
     """15. Failed evaluation job -> exits non-zero with Vietnamese failure summary."""
     sandbox, env = setup_sandbox(tmp_path, with_env=True)
