@@ -2,7 +2,7 @@
 
 Primary GPU-PC guide for guarded FashionIQ reproduction. Use the local operator env file and a PC-specific autopilot YAML for paths, model selection, checkpoint policy, budgets, and permissions. The workbench does not make blocked registry entries runnable or claim paper parity.
 
-**Revision identity:** `ab38ac7260e0788aa33ca8f1f61423dc3a1b5239` is the tested production revision recorded by current release accounting; `git rev-parse HEAD` on the branch tip is the authority for branch's current head, and `test_handoff_commands.py` requires release documents' tested revision to match production tree on disk. `workbench/tests`: 2080 collected, 2060 passed, 5 failed, 15 skipped.
+**Revision identity:** `4e0c07476f02b43e63355b6e067da460251c54e4` (the sm_120 round) is the tested production revision recorded by current release accounting; `git rev-parse HEAD` on the branch tip is the authority for branch's current head, and `test_handoff_commands.py` requires release documents' tested revision to match production tree on disk. `workbench/tests`: 2080 collected, 2069 passed, 1 failed, 10 skipped — the one failure is the count guard itself, resolved by this advance.
 
 ## 1. Prerequisites and configuration
 

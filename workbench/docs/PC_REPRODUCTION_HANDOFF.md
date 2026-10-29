@@ -2,11 +2,12 @@
 
 Primary operator route is this document's [One run/resume path](#one-runresume-path). Copy the checked-in `pc_autopilot.pc_cohort.yaml` to a private PC-specific YAML and configure all six absolute paths, finite budgets, capabilities, model settings, and operational batch before any real run. [MODEL_STATUS_SPEC.md](MODEL_STATUS_SPEC.md) records per-model source, checkpoint, assets, capability, and blockers.
 
-**Current revision identity:** `TESTED_SOURCE_SHA` is `ab38ac7260e0788aa33ca8f1f61423dc3a1b5239`. Full invocation on `a3f90403e79a31424498ef9dfb30f9534907acc9`: 2139 collected across workbench/tests and tests/unit; 2119 passed, 5 failed, 15 skipped, 0 errors, 1304.19 s. Workbench scope: 2080 collected, 2060 passed, 5 failed, 15 skipped, 0 errors. Unit scope: 59 passed. The later blocked-row deduplication and blank-HF export correction in `ab38ac72` is covered by a separate 123-passing CIRCUS/runtime run; the full suite was not rerun after that narrow change. Separate reruns do not turn the recorded full invocation green.
+**Current revision identity:** `TESTED_SOURCE_SHA` is `4e0c07476f02b43e63355b6e067da460251c54e4` (the sm_120 round). Full invocation on the working tree whose production bytes are that revision (docs/tests excluded): 2139 collected across workbench/tests and tests/unit; 2128 passed, 1 failed, 10 skipped, 0 errors, wall 5144 s (~85.7 min) in 4 chunks 535/535/535/534. Workbench scope: 2080 collected, 2069 passed, 1 failed, 10 skipped, 0 errors. Unit scope: 59 passed. The single failure is the release-metadata count guard itself, which fails by construction on the revision it describes and is resolved by this advance. Separate reruns do not turn the recorded full invocation green.
 
-The five full-run failures were two launcher-fixture 20 s timeouts, a missing-input resume assertion,
-an Autopilot resume assertion, and the documentation count guard (old 2071 vs new 2080 cases).
-The count guard is corrected by the metadata update. The other four require their separately recorded
+The one full-run failure was the documentation count guard, reconciling the recorded numbers against the
+tested revision's own collection; it cannot pass before the advance. The launcher-fixture timeouts under
+load, the missing-input resume assertion and the Autopilot resume assertion that failed in the previous
+round all pass in this invocation. The other historical failures require their separately recorded
 rechecks; they are not silently relabeled as full-run passes. GPU execution remains `TARGET_GPU_PENDING`.
 
 ## Historical previous-release accounting
@@ -95,9 +96,9 @@ git fetch origin research/cir-failure-workbench
 git checkout research/cir-failure-workbench
 git merge --ff-only origin/research/cir-failure-workbench
 git rev-parse HEAD          # branch tip; may be a documentation-only successor
-git rev-parse ab38ac72       # must print TESTED_SOURCE_SHA: ab38ac7260e0788aa33ca8f1f61423dc3a1b5239
-git merge-base --is-ancestor ab38ac72 HEAD
-git diff --exit-code ab38ac72 HEAD -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'
+git rev-parse 4e0c074       # must print TESTED_SOURCE_SHA: 4e0c07476f02b43e63355b6e067da460251c54e4
+git merge-base --is-ancestor 4e0c074 HEAD
+git diff --exit-code 4e0c074 HEAD -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'
 ```
 
 Fresh checkout (clone the research branch directly):
@@ -106,9 +107,9 @@ Fresh checkout (clone the research branch directly):
 git clone --branch research/cir-failure-workbench git@github.com:Le-Minh-Nhut/cir.git cir
 cd cir
 git rev-parse HEAD          # branch tip; may be a documentation-only successor
-git rev-parse ab38ac72       # must print TESTED_SOURCE_SHA: ab38ac7260e0788aa33ca8f1f61423dc3a1b5239
-git merge-base --is-ancestor ab38ac72 HEAD
-git diff --exit-code ab38ac72 HEAD -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'
+git rev-parse 4e0c074       # must print TESTED_SOURCE_SHA: 4e0c07476f02b43e63355b6e067da460251c54e4
+git merge-base --is-ancestor 4e0c074 HEAD
+git diff --exit-code 4e0c074 HEAD -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'
 ```
 
 Continue from the repository root:
