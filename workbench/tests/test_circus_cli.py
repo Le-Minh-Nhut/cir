@@ -196,6 +196,16 @@ def _fixture(tmp_path: Path, model_ids: tuple[str, ...] = ("fixture3d",)) -> tup
 
 def _run(config: Path, release: Path, adapters: Path, artifacts: Path, monkeypatch: pytest.MonkeyPatch,
          capsys: pytest.CaptureFixture[str], *args: str) -> tuple[int, dict | None, str]:
+    # These adapters are NumPy fixtures, not model interpreters. Importing the host's Torch in
+    # their provenance probe can time out under parallel load and change an otherwise identical
+    # resume key. Real interpreter identity and real worker launches have separate tests.
+    monkeypatch.setattr(runner, "model_interpreter_identity", lambda *_args, **_kwargs: {
+        "path": str(Path(sys.executable).absolute()),
+        "version": f"Python {sys.version.split()[0]}; synthetic NumPy fixture",
+        "source": "process_environment", "verified": False,
+        "verification_status": "SYNTHETIC_FIXTURE",
+    })
+    monkeypatch.setattr(runner, "_gpu_identity", lambda: None)
     monkeypatch.syspath_prepend(str(adapters))
     monkeypatch.setenv("WORKBENCH_REGISTRY_PATH", str(config.parent / "registry.yaml"))
     monkeypatch.setenv("WORKBENCH_CIRCUS_RELEASE_ROOT", str(release))
