@@ -265,7 +265,8 @@ def test_cli_3d_full_gallery_resume_and_gallery_invalidation(tmp_path: Path,
     assert summary["checkpoint_labels"] == {
         "checkpoint_training_noise_pct": None, "evaluation_noise_pct": 0,
         "checkpoint_training_dataset": "FashionIQ", "checkpoint_transfer": None,
-        "checkpoint_mapping_status": "VERIFIED_METADATA", "labels_source": "registry"}
+        "checkpoint_mapping_status": "VERIFIED_METADATA", "reproduction_status": None,
+        "labels_source": "registry"}
     assert runner._result_outputs(artifacts, "circus_fashioniq_release_v1", "fixture3d", "fixture",
                                   row["attempt"], "full", "multimodal", True) == full_result_path
     assert gallery_shapes == [(5, 32, 256)]
@@ -453,6 +454,31 @@ def test_transient_failure_retries_on_resume(tmp_path: Path,
     assert rc == 0, error
     assert reused["models"][0]["status"] == "REUSED"
     assert len([entry for entry in _log(tmp_path / "encodes.jsonl") if entry["kind"] != "checkpoint"]) == before_reuse
+
+def test_partial_transient_failure_retries_and_then_reuses(tmp_path: Path,
+                                                            monkeypatch: pytest.MonkeyPatch,
+                                                            capsys: pytest.CaptureFixture[str]) -> None:
+    config, release, adapters, artifacts = _fixture(tmp_path)
+    monkeypatch.setenv("CIRCUS_TEST_FAIL_ONCE", "2")
+    rc, partial, error = _run(config, release, adapters, artifacts, monkeypatch, capsys,
+                              "--models", "selected")
+    assert rc == 1, error
+    assert partial["models"][0]["status"] == "PARTIAL"
+    monkeypatch.delenv("CIRCUS_TEST_FAIL_ONCE")
+    before = len([entry for entry in _log(tmp_path / "encodes.jsonl") if entry["kind"] != "checkpoint"])
+    rc, recovered, error = _run(config, release, adapters, artifacts, monkeypatch, capsys,
+                                "--models", "selected", "--resume")
+    assert rc == 0, error
+    assert recovered["models"][0]["status"] == "COMPLETED"
+    assert json.loads(Path(recovered["models"][0]["summaries"]["full"]).read_text(
+        encoding="utf-8"))["metrics"]["multimodal"]["coverage"] == 1.0
+    after = len([entry for entry in _log(tmp_path / "encodes.jsonl") if entry["kind"] != "checkpoint"])
+    assert after > before
+    rc, reused, error = _run(config, release, adapters, artifacts, monkeypatch, capsys,
+                             "--models", "selected", "--resume")
+    assert rc == 0, error
+    assert reused["models"][0]["status"] == "REUSED"
+    assert len([entry for entry in _log(tmp_path / "encodes.jsonl") if entry["kind"] != "checkpoint"]) == after
 
 def test_worker_stderr_preserved_only_for_failed_model(tmp_path: Path,
                                                        monkeypatch: pytest.MonkeyPatch,
@@ -741,3 +767,101 @@ def test_bundle_dispatch_and_partial_member_refusal(tmp_path: Path,
     assert "full checkpoint bundle 'bundle-all'" in partial["models"][0]["reason"]
     assert len([entry for entry in _log(tmp_path / "encodes.jsonl") if entry["kind"] == "checkpoint"]) == 2
 
+
+
+def _append_independent_variant(config: Path, checkpoint_id: str, *, staged: bool = True,
+                                download_url: str | None = None) -> None:
+    """Register a second clean, clean-mapping checkpoint variant on the fixture model."""
+    registry_path = config.parent / "registry.yaml"
+    registry = yaml.safe_load(registry_path.read_text(encoding="utf-8"))
+    filename = f"{checkpoint_id}.pt"
+    variant = {"checkpoint_id": checkpoint_id, "filename": filename, "evaluation_noise_pct": 0,
+               "checkpoint_training_noise_pct": None, "checkpoint_training_dataset": "FashionIQ",
+               "checkpoint_mapping_status": "VERIFIED_METADATA"}
+    if download_url is not None:
+        variant["download_url"] = download_url
+    registry["models"][0]["checkpoint_variants"].append(variant)
+    registry_path.write_text(yaml.safe_dump(registry), encoding="utf-8")
+    if staged:
+        (config.parent / "checkpoints" / "fixture3d" / filename).write_bytes(b"synthetic checkpoint")
+
+
+def _override_checkpoints(config: Path, model_id: str, checkpoint_ids: list[str]) -> None:
+    config_data = yaml.safe_load(config.read_text(encoding="utf-8"))
+    config_data["checkpoint_overrides"] = {model_id: checkpoint_ids}
+    config.write_text(yaml.safe_dump(config_data), encoding="utf-8")
+
+
+def test_explicit_multiple_independent_checkpoints_run_each(tmp_path: Path,
+                                                           monkeypatch: pytest.MonkeyPatch,
+                                                           capsys: pytest.CaptureFixture[str]) -> None:
+    config, release, adapters, artifacts = _fixture(tmp_path)
+    _append_independent_variant(config, "second")
+    _override_checkpoints(config, "fixture3d", ["fixture", "second"])
+    log_path = tmp_path / "encodes.jsonl"
+    rc, report, error = _run(config, release, adapters, artifacts, monkeypatch, capsys,
+                             "--models", "fixture3d")
+    assert rc == 0, error
+    assert len(report["models"]) == 2
+    rows = {row["checkpoint_id"]: row for row in report["models"]}
+    assert set(rows) == {"fixture", "second"}
+    assert all(row["status"] == "COMPLETED" for row in rows.values())
+    assert rows["fixture"]["attempt"] != rows["second"]["attempt"]
+    for checkpoint_id, row in rows.items():
+        assert row["run_id"]
+        assert checkpoint_id in Path(row["summaries"]["full"]).parent.name
+        assert Path(row["summaries"]["full"]).is_file()
+    assert [entry["shape"][0] for entry in _log(log_path)
+            if entry["kind"] == "checkpoint"] == ["fixture", "second"]
+    before = [entry for entry in _log(log_path) if entry["kind"] != "checkpoint"]
+    attempts = {key: row["attempt"] for key, row in rows.items()}
+    summaries = {key: row["summaries"]["full"] for key, row in rows.items()}
+    rc, resumed, error = _run(config, release, adapters, artifacts, monkeypatch, capsys,
+                              "--models", "fixture3d", "--resume")
+    assert rc == 0, error
+    resumed_rows = {row["checkpoint_id"]: row for row in resumed["models"]}
+    assert set(resumed_rows) == {"fixture", "second"}
+    for checkpoint_id, row in resumed_rows.items():
+        assert row["status"] == "REUSED"
+        assert row["attempt"] == attempts[checkpoint_id]
+        assert row["summaries"]["full"] == summaries[checkpoint_id]
+    assert [entry for entry in _log(log_path) if entry["kind"] != "checkpoint"] == before
+
+
+def test_selected_route_runs_each_selected_variant(tmp_path: Path,
+                                                   monkeypatch: pytest.MonkeyPatch,
+                                                   capsys: pytest.CaptureFixture[str]) -> None:
+    config, release, adapters, artifacts = _fixture(tmp_path)
+    _append_independent_variant(config, "second")
+    _override_checkpoints(config, "fixture3d", ["fixture", "second"])
+    rc, report, error = _run(config, release, adapters, artifacts, monkeypatch, capsys,
+                             "--models", "selected")
+    assert rc == 0, error
+    assert len(report["models"]) == 2
+    assert {row["checkpoint_id"] for row in report["models"]} == {"fixture", "second"}
+    assert all(row["status"] == "COMPLETED" for row in report["models"])
+    assert report["run_count"] == 2
+    assert [entry["shape"][0] for entry in _log(tmp_path / "encodes.jsonl")
+            if entry["kind"] == "checkpoint"] == ["fixture", "second"]
+
+
+def test_multi_variant_with_one_missing_checkpoint_reports_row(tmp_path: Path,
+                                                              monkeypatch: pytest.MonkeyPatch,
+                                                              capsys: pytest.CaptureFixture[str]) -> None:
+    config, release, adapters, artifacts = _fixture(tmp_path)
+    _append_independent_variant(config, "second", staged=False,
+                                download_url="https://example.invalid/second.pt")
+    _override_checkpoints(config, "fixture3d", ["fixture", "second"])
+    rc, report, error = _run(config, release, adapters, artifacts, monkeypatch, capsys,
+                             "--models", "fixture3d")
+    assert rc == 1, error
+    rows = {row["checkpoint_id"]: row for row in report["models"]}
+    assert set(rows) == {"fixture", "second"}
+    assert rows["fixture"]["status"] == "COMPLETED"
+    missing = rows["second"]
+    assert missing["checkpoint_id"] == "second"
+    assert missing["status"] == "SELECTED_BUT_BLOCKED"
+    assert "checkpoint not staged" in missing["reason"]
+    assert not (config.parent / "checkpoints/fixture3d/second.pt").exists()
+    assert [entry["shape"][0] for entry in _log(tmp_path / "encodes.jsonl")
+            if entry["kind"] == "checkpoint"] == ["fixture"]

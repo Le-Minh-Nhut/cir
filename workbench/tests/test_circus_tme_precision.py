@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import ast
+import os
 import contextlib
 import io
 import json
@@ -114,6 +115,6 @@ def test_worker_skips_empty_stdin_lines(tmp_path: Path, monkeypatch, capsys) -> 
     try:
         assert model_tme._worker_main(["--worker-job", str(job_path)]) == 0
     finally:
-        monkeypatch.chdir(original_cwd)
+        os.chdir(original_cwd)
     assert np.load(output_path, allow_pickle=False).shape == (0, 32, 256)
     assert capsys.readouterr().out.count("CIRCUS_WORKER:") == 1

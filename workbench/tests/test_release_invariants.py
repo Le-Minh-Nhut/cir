@@ -279,6 +279,10 @@ def test_i06_another_artifacts_evidence_does_not_certify_this_checkpoint() -> No
                                                  "base_iter0_toptee"]
     assert record["bundle_members"][0]["checkpoint_id"] == "base_iter0_dress", (
         "a member must carry its OWN id, not the bundle's")
+    # The bundle's OWN mapping status must survive derivation: `checkpoint_selection` filters
+    # bundles on it and the LIMN adapter reports readiness from it. Dropping it made a complete
+    # VERIFIED_METADATA bundle read as "mapping unresolved" and refuse the run.
+    assert record["mapping_status"] == "VERIFIED_METADATA"
 
 def test_i07_a_wrong_protocol_does_not_inherit_certification() -> None:
     """I07. A report's protocol must match the requested one exactly, never by prefix."""
