@@ -106,6 +106,8 @@ def test_environment_wins_over_file(tmp_path, monkeypatch, clean_cache_env) -> N
 
 
 def test_nothing_configured_keeps_huggingface_default(tmp_path, monkeypatch, clean_cache_env) -> None:
+    # The settings reader treats a blank export as unset; HF itself does not.
+    monkeypatch.setenv("HF_HOME", "")
     default_home = os.path.join(os.path.expanduser("~"), ".cache")
     expected = os.path.expanduser(
         os.path.join(os.getenv("XDG_CACHE_HOME", default_home), "huggingface"))

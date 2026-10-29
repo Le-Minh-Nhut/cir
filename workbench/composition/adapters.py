@@ -22,6 +22,8 @@ def worker_environment() -> dict[str, str]:
     root = resolve_path_setting("HF_HOME")
     if root is not None:
         environment["HF_HOME"] = str(root)
+    else:
+        environment.pop("HF_HOME", None)
     return environment
 
 
