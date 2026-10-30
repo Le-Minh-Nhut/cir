@@ -19,11 +19,11 @@ the aggregate) is the concrete unblock.
 |---|---|
 | Branch | `research/cir-failure-workbench` |
 | Initial HEAD this pass | `3aae18fe02ef13f5b38d153dbc8007fbb40d4c92` |
-| **TESTED_SOURCE_SHA** | **`e3f0dfaf34b62984db30eacffbac93417eccace0`** — the production revision under test (the A33 round); documentation-only successors preserve this production tree. R25 suite counts below describe the pre-composition revision. R23 remains historical. |
+| **TESTED_SOURCE_SHA** | **`1415e56919535627273b4afb3a7c400aee770475`** — the production revision under test (the A34/A35 round); documentation-only successors preserve this production tree. R25 suite counts below describe the pre-composition revision. R23 remains historical. |
 | **FINAL_HEAD_SHA** | not recorded here by design: a tracked file cannot name the commit that contains it. `git rev-parse HEAD` on the branch tip is the authority. |
-| Production tree | compare against the named revision with `git diff e3f0dfaf34b62984db30eacffbac93417eccace0 HEAD -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'`; the release guard requires byte-identical production source. |
+| Production tree | compare against the named revision with `git diff 1415e56919535627273b4afb3a7c400aee770475 HEAD -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'`; the release guard requires byte-identical production source. |
 | `origin/main` | `8ebcc74d5fd1934df4f3772a8ca5a96dbd00f333` — **unchanged** |
-| Worktree | A33 round changes committed; preserved untracked user files: `pc_composition_smoke.yaml`, `src/train_cirr.py`, `uv.lock` |
+| Worktree | A34/A35 round changes committed; preserved untracked user files: `pc_composition_smoke.yaml`, `src/train_cirr.py`, `uv.lock` |
 
 `main` was never touched. Nothing was rebased, reset, force-pushed or amended; every change is a new
 commit on the research branch. No checkpoint, dataset, cache or secret is tracked.
@@ -33,9 +33,9 @@ commit on the research branch. No checkpoint, dataset, cache or secret is tracke
 | Field | Value |
 |---|---|
 | Branch | `research/cir-failure-workbench` |
-| Suite accounting | **2129 passed, 2 failed**, 10 skipped, 0 errors = **2141 collected** (`workbench/tests`) in the full invocation on the working tree whose production bytes are `e3f0dfaf34b62984db30eacffbac93417eccace0`, wall 4796 s (~79.9 min) across 4 chunks (533/529/517/562). Including `tests/unit`: 2200 collected, 2188 passed, 2 failed, 10 skipped; unit scope 59 passed. One failure is the release-metadata SHA guard itself, which fails by construction on the revision it describes and is resolved by this advance. The other (`test_standalone_operator_commands.py::test_manage_environment_dry_run_authorized`) did NOT reproduce: a focused rerun of its own chunk passed (562 passed), and the run overlapped a host root filesystem at 100% (291 MB free); it is recorded as an environment-affected invocation result, not a defect. Subsequent focused runs are separate evidence. |
-| TESTED_SOURCE_SHA | `e3f0dfaf34b62984db30eacffbac93417eccace0` — the production revision named for current release accounting (the A33 round) |
-| Previous tested source | `d7df932ffdeb5fad0303b7cbcce4fc30f3412949` (the A32 round): 2127 collected, 2116 passed, 1 failed, 10 skipped for `workbench/tests`; 2186 collected, 2175 passed, 1 failed, 10 skipped including `tests/unit`. Retained as historical measurement. |
+| Suite accounting | **2146 passed, 1 failed**, 10 skipped, 0 errors = **2157 collected** (`workbench/tests`) in the full invocation on the working tree whose production bytes are `1415e56919535627273b4afb3a7c400aee770475`, wall 4657 s (~77.6 min) across 4 chunks (553/554/522/528). Including `tests/unit`: 2216 collected, 2205 passed, 1 failed, 10 skipped; unit scope 59 passed. The single failure is the release-metadata SHA guard itself, which fails by construction on the revision it describes and is resolved by this advance. Subsequent focused runs are separate evidence. |
+| TESTED_SOURCE_SHA | `1415e56919535627273b4afb3a7c400aee770475` — the production revision named for current release accounting (the A34/A35 round) |
+| Previous tested source | `e3f0dfaf34b62984db30eacffbac93417eccace0` (the A33 round): 2141 collected, 2129 passed, 2 failed, 10 skipped for `workbench/tests`; 2200 collected, 2188 passed, 2 failed, 10 skipped including `tests/unit`. Retained as historical measurement. |
 | Previous composition accounting | `4e0c07476f02b43e63355b6e067da460251c54e4` (the sm_120 round): 2080 collected, 2069 passed, 1 failed, 10 skipped for `workbench/tests`; 2139 collected, 2128 passed, 1 failed, 10 skipped including `tests/unit`. Retained as historical measurement. |
 | Earliest composition accounting | `d05149b9a71546166f5d5d38c813744c2a84c9e9`: 2029 collected, 2017 passed, 1 failed, 11 skipped. Retained as historical measurement. |
 | FINAL_HEAD_SHA | `git rev-parse HEAD` on the branch tip; `TESTED_SOURCE_SHA` identifies the production tree under test. |
@@ -50,7 +50,7 @@ root, the model's provisioned interpreter, and exactly one ledger key file.
 
 ## What was tested
 
-Full invocation on the working tree whose production bytes are `e3f0dfaf34b62984db30eacffbac93417eccace0`: 2200 collected across workbench/tests and tests/unit; 2188 passed, 2 failed, 10 skipped, 0 errors, wall 4796 s (~79.9 min), in 4 chunks of 533/529/517/562 (chunk tails: 533 passed 1303.15 s; 1 failed/527 passed/1 skipped 571.20 s; 508 passed/9 skipped 1333.74 s; 1 failed/561 passed 1588.36 s). Workbench scope: 2141 collected, 2129 passed, 2 failed, 10 skipped, 0 errors. Unit scope: 59 passed. Docs and tests were excluded from the byte comparison, since documentation-only successors preserve the production tree. One failure is the release-metadata SHA guard itself, which fails by construction on the very revision it describes (the documents must record the tested revision, and this commit advances them), and is resolved by this advance. It was not a test of the A33 production change. The other (`test_standalone_operator_commands.py::test_manage_environment_dry_run_authorized`) did not reproduce: a focused rerun of exactly that chunk passed (562 passed), and the invocation overlapped a host root filesystem at 100% (291 MB free) while a second project ran; the recorded result stands as measured, but its cause is recorded here as environment-affected rather than a code defect. Separate reruns do not turn the recorded full invocation green.
+Full invocation on the working tree whose production bytes are `1415e56919535627273b4afb3a7c400aee770475`: 2216 collected across workbench/tests and tests/unit; 2205 passed, 1 failed, 10 skipped, 0 errors, wall 4657 s (~77.6 min), in 4 chunks of 553/554/522/528 (chunk tails: 553 passed 1288.95 s; 1 failed/552 passed/1 skipped 570.33 s; 513 passed/9 skipped 1234.96 s; 528 passed 1553.88 s). Workbench scope: 2157 collected, 2146 passed, 1 failed, 10 skipped, 0 errors. Unit scope: 59 passed. Docs and tests were excluded from the byte comparison, since documentation-only successors preserve the production tree. The single failure is the release-metadata SHA guard itself, which fails by construction on the very revision it describes (the documents must record the tested revision, and this commit advances them), and is resolved by this advance. It was not a test of the A34/A35 production change. The 10 skips are host boundaries, unchanged from the A33 round: one checkpoint-variant case with no subject, one base interpreter with no inherited packages, two models that declare no Python version, and six LAVIS lifecycle cases whose model interpreters are not configured here.
 
 The raw failure is retained in the audit package: the source-SHA guard, which refuses a release document
 whose named tested revision does not contain the production tree on disk and therefore cannot pass on
@@ -64,7 +64,7 @@ Earlier R23/R25/composition measurements are historical and do not certify this 
 
 | Gate | Command | Result |
 |---|---|---|
-| Backend suite | One full invocation on the working tree whose production bytes are `e3f0dfaf34b62984db30eacffbac93417eccace0` (the A33 round); 4 chunks 533/529/517/562 | **2129 passed, 2 failed**, 10 skipped, 0 errors = **2141 collected** for workbench/tests, wall 4796 s (~79.9 min). Unit scope 59 passed. One failure is the SHA guard itself, resolved by this advance; the second did not reproduce (its own chunk passes on rerun) and is recorded as environment-affected. |
+| Backend suite | One full invocation on the working tree whose production bytes are `1415e56919535627273b4afb3a7c400aee770475` (the A34/A35 round); 4 chunks 553/554/522/528 | **2146 passed, 1 failed**, 10 skipped, 0 errors = **2157 collected** for workbench/tests, wall 4657 s (~77.6 min). Unit scope 59 passed. The single failure is the SHA guard itself, resolved by this advance. |
 | Acceptance | `bash workbench/docker/acceptance.sh` | **ACCEPTANCE PASSED at `59949ff`** (1 honest skip: GPG status unverified). At `9a53ee1` group C fails only against the pre-existing `cir-workbench` container, whose image predates the vendoring and still serves the old registry (it reports `ptha_mtst source_available: false`); rerun against a backend started from current source and group C passes — `PASS 17 models, ids/protocols/environments match the registry`. Rebuild the image before re-running acceptance. |
 | Mutation checks | `bash workbench/docker/mutation_checks.sh` | **PASSED** M1 M2 M3 M4 M5 |
 | Offline release verification | `bash workbench/docker/release_verify.sh --offline` | exit 0, `ENGINEERING_INCOMPLETE`, **0 checks FAIL/UNRUN** |
@@ -189,8 +189,8 @@ static or fixture-level.
 ```bash
 git clone git@github.com:Le-Minh-Nhut/cir.git && cd cir
 git fetch origin research/cir-failure-workbench
-git checkout e3f0dfa           # the fixed TESTED_SOURCE_SHA above; never `git reset --hard`
-git rev-parse HEAD             # must print e3f0dfaf34b62984db30eacffbac93417eccace0
+git checkout 1415e56           # the fixed TESTED_SOURCE_SHA above; never `git reset --hard`
+git rev-parse HEAD             # must print 1415e56919535627273b4afb3a7c400aee770475
 ./pc.sh                        # the one operator command
 ```
 

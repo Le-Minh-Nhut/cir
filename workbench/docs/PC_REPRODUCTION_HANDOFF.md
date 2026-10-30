@@ -2,12 +2,12 @@
 
 Primary operator route is this document's [One run/resume path](#one-runresume-path). Copy the checked-in `pc_autopilot.pc_cohort.yaml` to a private PC-specific YAML and configure all six absolute paths, finite budgets, capabilities, model settings, and operational batch before any real run. [MODEL_STATUS_SPEC.md](MODEL_STATUS_SPEC.md) records per-model source, checkpoint, assets, capability, and blockers.
 
-**Current revision identity:** `TESTED_SOURCE_SHA` is `e3f0dfaf34b62984db30eacffbac93417eccace0` (the A33 round). Full invocation on the working tree whose production bytes are that revision (docs/tests excluded): 2200 collected across workbench/tests and tests/unit; 2188 passed, 2 failed, 10 skipped, 0 errors, wall 4796 s (~79.9 min) in 4 chunks 533/529/517/562. Workbench scope: 2141 collected, 2129 passed, 2 failed, 10 skipped, 0 errors. Unit scope: 59 passed. One failure is the release-metadata SHA guard itself, which fails by construction on the revision it describes and is resolved by this advance. The second (`test_standalone_operator_commands.py::test_manage_environment_dry_run_authorized`) did not reproduce on a focused rerun of its own chunk (562 passed) and the invocation overlapped a host root filesystem at 100%; it is recorded as environment-affected. Separate reruns do not turn the recorded full invocation green.
+**Current revision identity:** `TESTED_SOURCE_SHA` is `1415e56919535627273b4afb3a7c400aee770475` (the A34/A35 round). Full invocation on the working tree whose production bytes are that revision (docs/tests excluded): 2216 collected across workbench/tests and tests/unit; 2205 passed, 1 failed, 10 skipped, 0 errors, wall 4657 s (~77.6 min) in 4 chunks 553/554/522/528. Workbench scope: 2157 collected, 2146 passed, 1 failed, 10 skipped, 0 errors. Unit scope: 59 passed. The single failure is the release-metadata SHA guard itself, which fails by construction on the revision it describes and is resolved by this advance. The 10 skips are unchanged host boundaries.
 
 The one full-run failure was the documentation SHA guard, which refuses a release document that names a
 tested source whose production tree does not contain the code on disk; on the very revision it describes
 it cannot pass before that revision is recorded, which is what this advance does. It is not a test of the
-A32 production change. Every other check passed in this invocation, and no focused recheck is relabeled
+A34/A35 production change. Every other check passed in this invocation, and no focused recheck is relabeled
 as a full-run pass. GPU execution remains `TARGET_GPU_PENDING`.
 
 ## Historical previous-release accounting
@@ -121,9 +121,9 @@ git fetch origin research/cir-failure-workbench
 git checkout research/cir-failure-workbench
 git merge --ff-only origin/research/cir-failure-workbench
 git rev-parse HEAD          # branch tip; may be a documentation-only successor
-git rev-parse e3f0dfa       # must print TESTED_SOURCE_SHA: e3f0dfaf34b62984db30eacffbac93417eccace0
-git merge-base --is-ancestor e3f0dfa HEAD
-git diff --exit-code e3f0dfa HEAD -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'
+git rev-parse 1415e56       # must print TESTED_SOURCE_SHA: 1415e56919535627273b4afb3a7c400aee770475
+git merge-base --is-ancestor 1415e56 HEAD
+git diff --exit-code 1415e56 HEAD -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'
 ```
 
 Fresh checkout (clone the research branch directly):
@@ -132,9 +132,9 @@ Fresh checkout (clone the research branch directly):
 git clone --branch research/cir-failure-workbench git@github.com:Le-Minh-Nhut/cir.git cir
 cd cir
 git rev-parse HEAD          # branch tip; may be a documentation-only successor
-git rev-parse e3f0dfa       # must print TESTED_SOURCE_SHA: e3f0dfaf34b62984db30eacffbac93417eccace0
-git merge-base --is-ancestor e3f0dfa HEAD
-git diff --exit-code e3f0dfa HEAD -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'
+git rev-parse 1415e56       # must print TESTED_SOURCE_SHA: 1415e56919535627273b4afb3a7c400aee770475
+git merge-base --is-ancestor 1415e56 HEAD
+git diff --exit-code 1415e56 HEAD -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'
 ```
 
 Continue from the repository root:
