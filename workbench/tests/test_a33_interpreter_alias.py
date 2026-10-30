@@ -32,12 +32,29 @@ if str(REPO) not in sys.path:
     sys.path.insert(0, str(REPO))
 
 #: A real CPython 3.10 — the adapted TME contract's interpreter.
-_PY310 = next((candidate for candidate in (
-    Path("/usr/local/bin/python3.10"),
-    Path("/tmp/a30-verify/venv310/bin/python"),
-) if candidate.exists() and os.access(candidate, os.X_OK)
-    and subprocess.run([str(candidate), "-c", "import sys;print(sys.version_info[:2])"],
-                       capture_output=True, text=True).stdout.strip() == "(3, 10)"), None)
+def _discover_python310() -> Path | None:
+    """A real CPython 3.10 on this host, discovered rather than assumed at one path."""
+    import shutil as _shutil
+
+    candidates = [Path("/usr/local/bin/python3.10"), Path("/usr/bin/python3.10"),
+                  Path("/tmp/a30-verify/venv310/bin/python"), Path("/tmp/a30-verify/venv310/bin/python3.10")]
+    which = _shutil.which("python3.10")
+    if which:
+        candidates.append(Path(which))
+    for directory in ("/usr/local/bin", "/usr/bin", "/opt/python/bin"):
+        candidates.extend(sorted(Path(directory).glob("python3.10*")))
+    for candidate in candidates:
+        try:
+            if (candidate.exists() and os.access(candidate, os.X_OK)
+                    and not candidate.is_dir()
+                    and subprocess.run([str(candidate), "-c", "import sys;print(sys.version_info[:2])"],
+                                       capture_output=True, text=True).stdout.strip() == "(3, 10)"):
+                return candidate
+        except OSError:
+            continue
+    return None
+
+_PY310 = _discover_python310()
 
 _SKIP = pytest.mark.skipif(_PY310 is None, reason="no CPython 3.10 available on this host")
 
@@ -55,15 +72,35 @@ def _isolate_settings(monkeypatch, tmp_path):
     runtime.forget_environment()
 
 def _python310(root: Path, name: str) -> Path:
-    """A real venv whose interpreter IS CPython 3.10 — its `bin/python` and `bin/python3.10` aliases."""
+    """A real venv whose interpreter IS CPython 3.10 — its `bin/python` and `bin/python3.10` aliases.
+
+    Both aliases are materialized as REAL interpreter files copied from `_PY310`, because what `venv`
+    leaves behind is host-dependent: with a versioned base (``python3.10``) it makes
+    ``bin/python -> bin/python3.10 -> <base>``, but with an UNVERSIONED base it makes
+    ``bin/python3.10 -> python``. The tests delete ``bin/python`` (the "assigned alias"), which in
+    that second layout also destroyed the selected ``bin/python3.10`` — a dangling symlink, so
+    ``status`` correctly reported CONFIGURED_MISSING and the suite passed or failed on which base
+    interpreter the host happened to have. Each alias is now independently viable, so deleting one
+    never removes the other's target.
+    """
     if _PY310 is None:
         pytest.skip("no CPython 3.10 available on this host")
+    import shutil
+
     env_dir = root / name
     result = subprocess.run([str(_PY310), "-m", "venv", "--without-pip", str(env_dir)],
                             capture_output=True, text=True)
     if result.returncode != 0:
         pytest.skip(f"could not build a CPython 3.10 venv: {result.stderr.strip()[-200:]}")
-    return env_dir / "bin" / "python"
+    bin_dir = env_dir / "bin"
+    for alias in ("python", "python3.10"):
+        target = bin_dir / alias
+        staged = bin_dir / f".{alias}.materialized"
+        shutil.copy2(_PY310, staged)
+        staged.chmod(0o755)
+        target.unlink(missing_ok=True)
+        staged.rename(target)
+    return bin_dir / "python"
 
 def _config(tmp_path: Path):
     from workbench.backend.operator_config import resolve_config
@@ -134,6 +171,9 @@ def test_a33_01_deleted_assigned_alias_reports_the_selected_alias(tmp_path, monk
     model = _stateful_model()
     _write_assignment(config.WORKBENCH_ARTIFACTS_ROOT, model["model_id"], assigned)
     os.remove(assigned)                               # the assigned alias is stale
+    # The FIXTURE contract: the selected alias is independently viable, so deleting the assigned one
+    # cannot be what makes this test pass.
+    assert selected.is_file() and os.access(selected, os.X_OK), selected
     monkeypatch.setenv("WORKBENCH_TME_PYTHON", str(selected))
 
     status = module.status(model, config)
@@ -213,6 +253,7 @@ def test_a33_01_stale_assigned_alias_does_not_reinstall_the_environment(
     model = _stateful_model()
     _write_assignment(config.WORKBENCH_ARTIFACTS_ROOT, model["model_id"], assigned)
     os.remove(assigned)
+    assert selected.is_file() and os.access(selected, os.X_OK), selected
     monkeypatch.setenv("WORKBENCH_TME_PYTHON", str(selected))
     spec = tmp_path / "requirements.txt"
     spec.write_text("stubdep==1.2.3\n", encoding="utf-8")

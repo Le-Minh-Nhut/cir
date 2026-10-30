@@ -329,3 +329,95 @@ def test_c_rewriting_a_startup_package_moves_the_fingerprint(tmp_path: Path) -> 
 
     # Real startup behaviour: `site` prefers the package over a same-named module.
     assert _startup_mode(package.parent, via_path=True) == "two-two"
+
+def test_c_rewriting_the_target_of_a_symlinked_pth_moves_the_fingerprint(tmp_path: Path) -> None:
+    """The `.pth` LINK is unchanged, but the bytes it reaches were rewritten: identity must move.
+
+    Folding the target NAME only (`os.readlink`) made a rewrite of the target's content invisible:
+    the link, the entry name and every distribution were untouched while the interpreter's startup
+    behaviour changed. The reached regular file is now hashed through the link as well.
+    """
+    prefix = tmp_path / "cir-lpth"
+    site = _fake_environment(prefix)
+    interpreter = str(prefix / "bin" / "python")
+    target = site / "payload.txt"          # non-startup name: only the link's arm can see this
+    target.write_text("import os; os.environ['A33_MODE'] = 'one'\n")
+    (site / "linked_paths.pth").symlink_to(target)
+
+    before = runtime._interpreter_fingerprint(interpreter, "contract", str(prefix),
+                                              authoritative=True)
+
+    # Same link, same target name, rewritten target bytes.
+    target.write_text("import os; os.environ['A33_MODE'] = 'two'\n")
+
+    assert runtime._interpreter_fingerprint(interpreter, "contract", str(prefix),
+                                            authoritative=True) != before, (
+        "rewriting the bytes a symlinked .pth reaches changes what the interpreter executes")
+    assert _startup_mode(site) == "two"
+
+
+def test_c_rewriting_the_target_of_a_symlinked_sitecustomize_moves_the_fingerprint(
+        tmp_path: Path) -> None:
+    """`sitecustomize.py` is a link; rewriting its target's bytes must move the identity."""
+    prefix = tmp_path / "cir-lsck"
+    site = _fake_environment(prefix)
+    interpreter = str(prefix / "bin" / "python")
+    target = site / "customize_real.py"
+    target.write_text("import os\nos.environ['A33_MODE'] = 'one'\n")
+    (site / "sitecustomize.py").symlink_to(target)
+
+    before = runtime._interpreter_fingerprint(interpreter, "contract", str(prefix),
+                                              authoritative=True)
+    assert _startup_mode(site, via_path=True) == "one"
+
+    target.write_text("import os\nos.environ['A33_MODE'] = 'two-two'\n")
+
+    assert runtime._interpreter_fingerprint(interpreter, "contract", str(prefix),
+                                            authoritative=True) != before
+    assert _startup_mode(site, via_path=True) == "two-two"
+
+
+def test_c_rewriting_a_symlinked_startup_package_initializer_moves_the_fingerprint(
+        tmp_path: Path) -> None:
+    """`sitecustomize` is a symlinked DIRECTORY; rewriting its `__init__.py` must move the identity."""
+    prefix = tmp_path / "cir-lpkg"
+    site = _fake_environment(prefix)
+    interpreter = str(prefix / "bin" / "python")
+    real = site / "_real_customize"
+    real.mkdir()
+    init = real / "__init__.py"
+    init.write_text("import os\nos.environ['A33_MODE'] = 'one'\n")
+    (site / "sitecustomize").symlink_to(real, target_is_directory=True)
+
+    before = runtime._interpreter_fingerprint(interpreter, "contract", str(prefix),
+                                              authoritative=True)
+    assert _startup_mode(site, via_path=True) == "one"
+
+    init.write_text("import os\nos.environ['A33_MODE'] = 'two-two'\n")
+
+    assert runtime._interpreter_fingerprint(interpreter, "contract", str(prefix),
+                                            authoritative=True) != before
+    assert _startup_mode(site, via_path=True) == "two-two"
+
+
+def test_c_rewriting_a_symlinked_package_initializer_moves_the_fingerprint(
+        tmp_path: Path) -> None:
+    """The package directory is regular, but its `__init__.py` is a LINK: rewriting the target moves it."""
+    prefix = tmp_path / "cir-linit"
+    site = _fake_environment(prefix)
+    interpreter = str(prefix / "bin" / "python")
+    target = site / "customize_real_init.py"
+    target.write_text("import os\nos.environ['A33_MODE'] = 'one'\n")
+    package = site / "sitecustomize"
+    package.mkdir()
+    (package / "__init__.py").symlink_to(target)
+
+    before = runtime._interpreter_fingerprint(interpreter, "contract", str(prefix),
+                                              authoritative=True)
+    assert _startup_mode(site, via_path=True) == "one"
+
+    target.write_text("import os\nos.environ['A33_MODE'] = 'two-two'\n")
+
+    assert runtime._interpreter_fingerprint(interpreter, "contract", str(prefix),
+                                            authoritative=True) != before
+    assert _startup_mode(site, via_path=True) == "two-two"
