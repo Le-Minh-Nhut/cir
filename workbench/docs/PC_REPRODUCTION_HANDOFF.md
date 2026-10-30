@@ -2,7 +2,7 @@
 
 Primary operator route is this document's [One run/resume path](#one-runresume-path). Copy the checked-in `pc_autopilot.pc_cohort.yaml` to a private PC-specific YAML and configure all six absolute paths, finite budgets, capabilities, model settings, and operational batch before any real run. [MODEL_STATUS_SPEC.md](MODEL_STATUS_SPEC.md) records per-model source, checkpoint, assets, capability, and blockers.
 
-**Current revision identity:** `TESTED_SOURCE_SHA` is `a6449e060e77f0deed0c79545dd0d5c1019e333c` (the A36 round; its production bytes are `b8adc46`, and `a6449e0` adds only regression tests). Sweep on the integrated tree (thread-capped, four sequential chunks, `/dev/shm` basetemps): `workbench/tests` collected 2164, passed 2152, failed 2, skipped 10. The two failures were the release-metadata SHA guard, which fails by construction on the revision it describes and is resolved by this advance, and one `test_circus_cli` test-isolation defect (a synthetic-flat fixture leaving a dynamic adapter module in `sys.modules`), fixed in this round's test commit and proven by focused reruns (22/22 in both file orders, 51/51 across three files); the equivalent final state is 2163 passed, 1 by-construction failure, 10 skipped. `tests/unit` was not re-run in this sweep. The 10 skips are unchanged host boundaries.
+**Current revision identity:** `TESTED_SOURCE_SHA` is `a6449e060e77f0deed0c79545dd0d5c1019e333c` (the A36 round; its production bytes are `b8adc46`, and `a6449e0` adds only regression tests). Sweep on the integrated tree (thread-capped, four sequential chunks, `/dev/shm` basetemps): `workbench/tests` collected 2164, passed 2152, failed 2, skipped 10. The two failures were the release-metadata SHA guard, which fails by construction on the revision it describes and is resolved by this advance, and one `test_circus_cli` test-isolation defect (a synthetic-flat fixture leaving a dynamic adapter module in `sys.modules`), fixed in this round's test commit and proven by focused reruns (22/22 in both file orders, 51/51 across three files); the equivalent final state is 2153 passed, 1 by-construction failure, 10 skipped. `tests/unit` was not re-run in this sweep. The 10 skips are unchanged host boundaries.
 
 One of the two failures was the documentation SHA guard, which refuses a release document that names a
 tested source whose production tree does not contain the code on disk; on the very revision it describes
@@ -11,7 +11,7 @@ A36 production change. The other was a `test_circus_cli` test-isolation defect, 
 the synthetic-flat fixture left a dynamically created adapter module in `sys.modules`, so a later file
 order loaded the stale module. It was root-caused, fixed in this round's test commit by an eviction
 fixture, and proven by focused reruns rather than by relabeling the sweep. The equivalent final state
-is 2163 passed, 1 by-construction failure, 10 skipped. GPU execution remains `TARGET_GPU_PENDING`.
+is 2153 passed, 1 by-construction failure, 10 skipped. GPU execution remains `TARGET_GPU_PENDING`.
 
 ## Historical previous-release accounting
 
