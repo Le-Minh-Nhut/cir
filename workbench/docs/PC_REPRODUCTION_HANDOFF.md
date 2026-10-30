@@ -2,13 +2,13 @@
 
 Primary operator route is this document's [One run/resume path](#one-runresume-path). Copy the checked-in `pc_autopilot.pc_cohort.yaml` to a private PC-specific YAML and configure all six absolute paths, finite budgets, capabilities, model settings, and operational batch before any real run. [MODEL_STATUS_SPEC.md](MODEL_STATUS_SPEC.md) records per-model source, checkpoint, assets, capability, and blockers.
 
-**Current revision identity:** `TESTED_SOURCE_SHA` is `065c859ad24977e7bf98c0ea245bc6fe0b57c05c` (the A30 round). Full invocation on the working tree whose production bytes are that revision (docs/tests excluded): 2157 collected across workbench/tests and tests/unit; 2146 passed, 1 failed, 10 skipped, 0 errors, wall 5108 s (~85.1 min) in 4 chunks 539/540/539/539. Workbench scope: 2098 collected, 2087 passed, 1 failed, 10 skipped, 0 errors. Unit scope: 59 passed. The single failure is the release-metadata count guard itself, which fails by construction on the revision it describes and is resolved by this advance. Separate reruns do not turn the recorded full invocation green.
+**Current revision identity:** `TESTED_SOURCE_SHA` is `d7df932ffdeb5fad0303b7cbcce4fc30f3412949` (the A32 round). Full invocation on the working tree whose production bytes are that revision (docs/tests excluded): 2186 collected across workbench/tests and tests/unit; 2175 passed, 1 failed, 10 skipped, 0 errors, wall 5096 s (~84.9 min) in 4 chunks 546/547/547/546. Workbench scope: 2127 collected, 2116 passed, 1 failed, 10 skipped, 0 errors. Unit scope: 59 passed. The single failure is the release-metadata SHA guard itself, which fails by construction on the revision it describes and is resolved by this advance. Separate reruns do not turn the recorded full invocation green.
 
-The one full-run failure was the documentation count guard, reconciling the recorded numbers against the
-tested revision's own collection; it cannot pass before the advance. The launcher-fixture timeouts under
-load, the missing-input resume assertion and the Autopilot resume assertion that failed in the previous
-round all pass in this invocation. The other historical failures require their separately recorded
-rechecks; they are not silently relabeled as full-run passes. GPU execution remains `TARGET_GPU_PENDING`.
+The one full-run failure was the documentation SHA guard, which refuses a release document that names a
+tested source whose production tree does not contain the code on disk; on the very revision it describes
+it cannot pass before that revision is recorded, which is what this advance does. It is not a test of the
+A32 production change. Every other check passed in this invocation, and no focused recheck is relabeled
+as a full-run pass. GPU execution remains `TARGET_GPU_PENDING`.
 
 ## Historical previous-release accounting
 
@@ -121,9 +121,9 @@ git fetch origin research/cir-failure-workbench
 git checkout research/cir-failure-workbench
 git merge --ff-only origin/research/cir-failure-workbench
 git rev-parse HEAD          # branch tip; may be a documentation-only successor
-git rev-parse 065c859       # must print TESTED_SOURCE_SHA: 065c859ad24977e7bf98c0ea245bc6fe0b57c05c
-git merge-base --is-ancestor 065c859 HEAD
-git diff --exit-code 065c859 HEAD -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'
+git rev-parse d7df932       # must print TESTED_SOURCE_SHA: d7df932ffdeb5fad0303b7cbcce4fc30f3412949
+git merge-base --is-ancestor d7df932 HEAD
+git diff --exit-code d7df932 HEAD -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'
 ```
 
 Fresh checkout (clone the research branch directly):
@@ -132,9 +132,9 @@ Fresh checkout (clone the research branch directly):
 git clone --branch research/cir-failure-workbench git@github.com:Le-Minh-Nhut/cir.git cir
 cd cir
 git rev-parse HEAD          # branch tip; may be a documentation-only successor
-git rev-parse 065c859       # must print TESTED_SOURCE_SHA: 065c859ad24977e7bf98c0ea245bc6fe0b57c05c
-git merge-base --is-ancestor 065c859 HEAD
-git diff --exit-code 065c859 HEAD -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'
+git rev-parse d7df932       # must print TESTED_SOURCE_SHA: d7df932ffdeb5fad0303b7cbcce4fc30f3412949
+git merge-base --is-ancestor d7df932 HEAD
+git diff --exit-code d7df932 HEAD -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'
 ```
 
 Continue from the repository root:

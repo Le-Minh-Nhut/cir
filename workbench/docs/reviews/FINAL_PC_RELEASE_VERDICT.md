@@ -19,11 +19,11 @@ the aggregate) is the concrete unblock.
 |---|---|
 | Branch | `research/cir-failure-workbench` |
 | Initial HEAD this pass | `3aae18fe02ef13f5b38d153dbc8007fbb40d4c92` |
-| **TESTED_SOURCE_SHA** | **`065c859ad24977e7bf98c0ea245bc6fe0b57c05c`** — the production revision under test (the A30 round); documentation-only successors preserve this production tree. R25 suite counts below describe the pre-composition revision. R23 remains historical. |
+| **TESTED_SOURCE_SHA** | **`d7df932ffdeb5fad0303b7cbcce4fc30f3412949`** — the production revision under test (the A32 round); documentation-only successors preserve this production tree. R25 suite counts below describe the pre-composition revision. R23 remains historical. |
 | **FINAL_HEAD_SHA** | not recorded here by design: a tracked file cannot name the commit that contains it. `git rev-parse HEAD` on the branch tip is the authority. |
-| Production tree | compare against the named revision with `git diff 065c859ad24977e7bf98c0ea245bc6fe0b57c05c HEAD -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'`; the release guard requires byte-identical production source. |
+| Production tree | compare against the named revision with `git diff d7df932ffdeb5fad0303b7cbcce4fc30f3412949 HEAD -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'`; the release guard requires byte-identical production source. |
 | `origin/main` | `8ebcc74d5fd1934df4f3772a8ca5a96dbd00f333` — **unchanged** |
-| Worktree | A30 round changes committed; preserved untracked user files: `pc_composition_smoke.yaml`, `src/train_cirr.py`, `uv.lock` |
+| Worktree | A32 round changes committed; preserved untracked user files: `pc_composition_smoke.yaml`, `src/train_cirr.py`, `uv.lock` |
 
 `main` was never touched. Nothing was rebased, reset, force-pushed or amended; every change is a new
 commit on the research branch. No checkpoint, dataset, cache or secret is tracked.
@@ -33,8 +33,8 @@ commit on the research branch. No checkpoint, dataset, cache or secret is tracke
 | Field | Value |
 |---|---|
 | Branch | `research/cir-failure-workbench` |
-| Suite accounting | **2087 passed, 1 failed**, 10 skipped, 0 errors = **2098 collected** (`workbench/tests`) in the full invocation on the working tree whose production bytes are `065c859ad24977e7bf98c0ea245bc6fe0b57c05c`, wall 5108 s (~85.1 min) across 4 chunks (539/540/539/539). Including `tests/unit`: 2157 collected, 2146 passed, 1 failed, 10 skipped; unit scope 59 passed. The single failure is the release-metadata count guard itself, which fails by construction on the revision it describes and is resolved by this advance. Subsequent focused runs are separate evidence. |
-| TESTED_SOURCE_SHA | `065c859ad24977e7bf98c0ea245bc6fe0b57c05c` — the production revision named for current release accounting (the A30 round) |
+| Suite accounting | **2116 passed, 1 failed**, 10 skipped, 0 errors = **2127 collected** (`workbench/tests`) in the full invocation on the working tree whose production bytes are `d7df932ffdeb5fad0303b7cbcce4fc30f3412949`, wall 5096 s (~84.9 min) across 4 chunks (546/547/547/546). Including `tests/unit`: 2186 collected, 2175 passed, 1 failed, 10 skipped; unit scope 59 passed. The single failure is the release-metadata SHA guard itself, which fails by construction on the revision it describes and is resolved by this advance. Subsequent focused runs are separate evidence. |
+| TESTED_SOURCE_SHA | `d7df932ffdeb5fad0303b7cbcce4fc30f3412949` — the production revision named for current release accounting (the A32 round) |
 | Previous tested source | `4e0c07476f02b43e63355b6e067da460251c54e4` (the sm_120 round): 2080 collected, 2069 passed, 1 failed, 10 skipped for `workbench/tests`; 2139 collected, 2128 passed, 1 failed, 10 skipped including `tests/unit`. Retained as historical measurement. |
 | Previous composition accounting | `d05149b9a71546166f5d5d38c813744c2a84c9e9`: 2029 collected, 2017 passed, 1 failed, 11 skipped. Retained as historical measurement. |
 | FINAL_HEAD_SHA | `git rev-parse HEAD` on the branch tip; `TESTED_SOURCE_SHA` identifies the production tree under test. |
@@ -49,10 +49,11 @@ root, the model's provisioned interpreter, and exactly one ledger key file.
 
 ## What was tested
 
-Full invocation on the working tree whose production bytes are `065c859ad24977e7bf98c0ea245bc6fe0b57c05c`: 2157 collected across workbench/tests and tests/unit; 2146 passed, 1 failed, 10 skipped, 0 errors, wall 5108 s (~85.1 min), in 4 chunks of 539/540/539/539 (chunk tails: 1 failed/534 passed/4 skipped 1142.95 s; 539 passed/1 skipped 1412.96 s; 538 passed/1 skipped 1618.80 s; 535 passed/4 skipped 923.69 s). Workbench scope: 2098 collected, 2087 passed, 1 failed, 10 skipped, 0 errors. Unit scope: 59 passed. Docs and tests were excluded from the byte comparison, since documentation-only successors preserve the production tree. The single failure is the release-metadata count guard itself, which fails by construction on the very revision it describes and is resolved by this advance. Separate reruns do not turn the recorded full invocation green.
+Full invocation on the working tree whose production bytes are `d7df932ffdeb5fad0303b7cbcce4fc30f3412949`: 2186 collected across workbench/tests and tests/unit; 2175 passed, 1 failed, 10 skipped, 0 errors, wall 5096 s (~84.9 min), in 4 chunks of 546/547/547/546 (chunk tails: 542 passed/4 skipped 1127.40 s; 1 failed/542 passed/4 skipped 1191.19 s; 546 passed/1 skipped 1015.23 s; 545 passed/1 skipped 1761.94 s). Workbench scope: 2127 collected, 2116 passed, 1 failed, 10 skipped, 0 errors. Unit scope: 59 passed. Docs and tests were excluded from the byte comparison, since documentation-only successors preserve the production tree. The single failure is the release-metadata SHA guard itself, which fails by construction on the very revision it describes (the documents must record the tested revision, and this commit advances them), and is resolved by this advance. It was not a test of the A32 production change. Separate reruns do not turn the recorded full invocation green.
 
-The raw failure is retained in the audit package: the count guard, which reconciles the recorded
-numbers against the tested revision's own collection and therefore cannot pass before the advance.
+The raw failure is retained in the audit package: the source-SHA guard, which refuses a release document
+whose named tested revision does not contain the production tree on disk and therefore cannot pass on
+the very revision it describes, before that revision is recorded.
 All other previously failing checks (launcher-fixture timeouts under load, missing-input and
 Autopilot resume assertions) now pass in this invocation. Focused rechecks are recorded separately.
 Torch 2.7.1+cpu / torchvision 0.22.1+cpu also passed all 59 unit tests in an isolated environment.
@@ -62,7 +63,7 @@ Earlier R23/R25/composition measurements are historical and do not certify this 
 
 | Gate | Command | Result |
 |---|---|---|
-| Backend suite | One full invocation on the working tree whose production bytes are `065c859ad24977e7bf98c0ea245bc6fe0b57c05c` (the A30 round); 4 chunks 539/540/539/539 | **2087 passed, 1 failed**, 10 skipped, 0 errors = **2098 collected** for workbench/tests, wall 5108 s (~85.1 min). Unit scope 59 passed. The one failure is the count guard itself, resolved by this advance. |
+| Backend suite | One full invocation on the working tree whose production bytes are `d7df932ffdeb5fad0303b7cbcce4fc30f3412949` (the A32 round); 4 chunks 546/547/547/546 | **2116 passed, 1 failed**, 10 skipped, 0 errors = **2127 collected** for workbench/tests, wall 5096 s (~84.9 min). Unit scope 59 passed. The one failure is the SHA guard itself, resolved by this advance. |
 | Acceptance | `bash workbench/docker/acceptance.sh` | **ACCEPTANCE PASSED at `59949ff`** (1 honest skip: GPG status unverified). At `9a53ee1` group C fails only against the pre-existing `cir-workbench` container, whose image predates the vendoring and still serves the old registry (it reports `ptha_mtst source_available: false`); rerun against a backend started from current source and group C passes — `PASS 17 models, ids/protocols/environments match the registry`. Rebuild the image before re-running acceptance. |
 | Mutation checks | `bash workbench/docker/mutation_checks.sh` | **PASSED** M1 M2 M3 M4 M5 |
 | Offline release verification | `bash workbench/docker/release_verify.sh --offline` | exit 0, `ENGINEERING_INCOMPLETE`, **0 checks FAIL/UNRUN** |
@@ -187,8 +188,8 @@ static or fixture-level.
 ```bash
 git clone git@github.com:Le-Minh-Nhut/cir.git && cd cir
 git fetch origin research/cir-failure-workbench
-git checkout 065c859           # the fixed TESTED_SOURCE_SHA above; never `git reset --hard`
-git rev-parse HEAD             # must print 065c859ad24977e7bf98c0ea245bc6fe0b57c05c
+git checkout d7df932           # the fixed TESTED_SOURCE_SHA above; never `git reset --hard`
+git rev-parse HEAD             # must print d7df932ffdeb5fad0303b7cbcce4fc30f3412949
 ./pc.sh                        # the one operator command
 ```
 
