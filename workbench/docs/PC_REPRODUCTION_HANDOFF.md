@@ -2,7 +2,7 @@
 
 Primary operator route is this document's [One run/resume path](#one-runresume-path). Copy the checked-in `pc_autopilot.pc_cohort.yaml` to a private PC-specific YAML and configure all six absolute paths, finite budgets, capabilities, model settings, and operational batch before any real run. [MODEL_STATUS_SPEC.md](MODEL_STATUS_SPEC.md) records per-model source, checkpoint, assets, capability, and blockers.
 
-**Current revision identity:** `TESTED_SOURCE_SHA` is `d7df932ffdeb5fad0303b7cbcce4fc30f3412949` (the A32 round). Full invocation on the working tree whose production bytes are that revision (docs/tests excluded): 2186 collected across workbench/tests and tests/unit; 2175 passed, 1 failed, 10 skipped, 0 errors, wall 5096 s (~84.9 min) in 4 chunks 546/547/547/546. Workbench scope: 2127 collected, 2116 passed, 1 failed, 10 skipped, 0 errors. Unit scope: 59 passed. The single failure is the release-metadata SHA guard itself, which fails by construction on the revision it describes and is resolved by this advance. Separate reruns do not turn the recorded full invocation green.
+**Current revision identity:** `TESTED_SOURCE_SHA` is `e3f0dfaf34b62984db30eacffbac93417eccace0` (the A33 round). Full invocation on the working tree whose production bytes are that revision (docs/tests excluded): 2200 collected across workbench/tests and tests/unit; 2188 passed, 2 failed, 10 skipped, 0 errors, wall 4796 s (~79.9 min) in 4 chunks 533/529/517/562. Workbench scope: 2141 collected, 2129 passed, 2 failed, 10 skipped, 0 errors. Unit scope: 59 passed. One failure is the release-metadata SHA guard itself, which fails by construction on the revision it describes and is resolved by this advance. The second (`test_standalone_operator_commands.py::test_manage_environment_dry_run_authorized`) did not reproduce on a focused rerun of its own chunk (562 passed) and the invocation overlapped a host root filesystem at 100%; it is recorded as environment-affected. Separate reruns do not turn the recorded full invocation green.
 
 The one full-run failure was the documentation SHA guard, which refuses a release document that names a
 tested source whose production tree does not contain the code on disk; on the very revision it describes
@@ -121,9 +121,9 @@ git fetch origin research/cir-failure-workbench
 git checkout research/cir-failure-workbench
 git merge --ff-only origin/research/cir-failure-workbench
 git rev-parse HEAD          # branch tip; may be a documentation-only successor
-git rev-parse d7df932       # must print TESTED_SOURCE_SHA: d7df932ffdeb5fad0303b7cbcce4fc30f3412949
-git merge-base --is-ancestor d7df932 HEAD
-git diff --exit-code d7df932 HEAD -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'
+git rev-parse e3f0dfa       # must print TESTED_SOURCE_SHA: e3f0dfaf34b62984db30eacffbac93417eccace0
+git merge-base --is-ancestor e3f0dfa HEAD
+git diff --exit-code e3f0dfa HEAD -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'
 ```
 
 Fresh checkout (clone the research branch directly):
@@ -132,9 +132,9 @@ Fresh checkout (clone the research branch directly):
 git clone --branch research/cir-failure-workbench git@github.com:Le-Minh-Nhut/cir.git cir
 cd cir
 git rev-parse HEAD          # branch tip; may be a documentation-only successor
-git rev-parse d7df932       # must print TESTED_SOURCE_SHA: d7df932ffdeb5fad0303b7cbcce4fc30f3412949
-git merge-base --is-ancestor d7df932 HEAD
-git diff --exit-code d7df932 HEAD -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'
+git rev-parse e3f0dfa       # must print TESTED_SOURCE_SHA: e3f0dfaf34b62984db30eacffbac93417eccace0
+git merge-base --is-ancestor e3f0dfa HEAD
+git diff --exit-code e3f0dfa HEAD -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'
 ```
 
 Continue from the repository root:
