@@ -379,6 +379,12 @@ def _stage_input_fingerprint_evidence(stage: Stage, config: WorkbenchConfig | No
                     except OSError as error:
                         category = UNREADABLE
                         item["error"] = f"{type(error).__name__}: {error}"
+                        # A link whose target could not be resolved is still a link that NAMES a
+                        # target, and that name is what decides which dataset the stage consumes.
+                        # Recording it only in the returned evidence left the digest blind: a
+                        # retarget of an unresolvable link produced byte-identical fingerprints, so
+                        # a resume silently reused a result computed from a different dataset.
+                        hasher.update(f"L:{target}:{category}".encode("utf-8"))
                     else:
                         item["resolved_target"] = str(resolved)
                         roots = [config.WORKBENCH_THIRD_PARTY_ROOT] if config else []
@@ -421,6 +427,10 @@ def _stage_input_fingerprint_evidence(stage: Stage, config: WorkbenchConfig | No
                             except OSError as error:
                                 category = UNREADABLE
                                 item["error"] = f"{type(error).__name__}: {error}"
+                                # Same blind spot one level down: the target was resolved, but
+                                # inspecting it failed, and the name it points at was folded
+                                # nowhere. A retarget between two failing reads was invisible.
+                                hasher.update(f"L:{target}:{resolved}:{category}".encode("utf-8"))
             elif stat.S_ISDIR(details.st_mode):
                 skip_paths = frozenset()
                 if stage.name == "evaluation" and stage.model_id and config:

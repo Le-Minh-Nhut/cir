@@ -1822,10 +1822,25 @@ def _interpreter_fingerprint(interpreter: str, contract_digest: str,
     for site_packages in site_packages_dirs:
         if not site_packages.is_dir():
             continue
-        try:
-            hasher.update(f"{site_packages}:{site_packages.stat().st_mtime_ns}".encode("utf-8"))
-        except OSError:
-            continue
+        # The directory's own mtime is deliberately NOT folded. It changes as a side effect of
+        # running the environment (materializing `__pycache__`, adding an entry), and this repo
+        # already treats that class of write as non-semantic (`is_bytecode`: `__pycache__`/`*.pyc`
+        # cannot change evaluator semantics). Folding it made a mere interpreter import — including
+        # the environment-verification probe itself — move the evaluation execution identity, so a
+        # legitimate `--resume` was refused and the stage re-ran with a new run_id. Content identity
+        # is carried by the distribution metadata and RECORD members hashed below, which is what a
+        # real install changes.
+        #
+        # The directory mtime is replaced by a content-NAME-addressed fold of the top-level entries
+        # themselves, bytecode excluded. That keeps fix B's goal (a `__pycache__` materialization
+        # must not move identity) while closing the hole a bare mtime removal would open: a dropped
+        # `sitecustomize.py` or `*.pth` executes at interpreter startup, so it changes evaluator
+        # semantics, yet it is not a distribution and is invisible to the `*.dist-info`/`*.egg-info`
+        # globs below.
+        for entry in sorted(site_packages.iterdir()):
+            if entry.name == "__pycache__" or entry.name.endswith((".pyc", ".pyo")):
+                continue
+            hasher.update(f"{site_packages.name}/{entry.name}".encode("utf-8"))
         for dist in sorted(list(site_packages.glob("*.dist-info")) + list(site_packages.glob("*.egg-info"))):
             metadata = dist / "METADATA" if dist.name.endswith(".dist-info") else dist / "PKG-INFO"
             try:

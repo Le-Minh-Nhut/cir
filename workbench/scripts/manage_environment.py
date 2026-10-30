@@ -89,6 +89,31 @@ def _resolved_install_plan(model: dict, config) -> tuple[list[str], str | None] 
             constraints.get("pip_index_url"))
 
 
+def _third_party_root(config) -> Path | None:
+    """The configured source root, so planning reads the SAME manifests the verifier does.
+
+    Omitting it let `plan_environments` fall back to `resolve_third_party_root(None)` -- the process
+    environment or the module default -- which is a different checkout than the one the operator's
+    `workbench.env` names whenever the two differ.
+    """
+    return getattr(config, "WORKBENCH_THIRD_PARTY_ROOT", None)
+
+
+def _same_environment_prefix(left: str, right: str) -> bool:
+    """Whether two interpreter paths name the SAME environment, by invocation prefix.
+
+    `.resolve()` is deliberately not used: a venv's `bin/python` is commonly a symlink to a shared
+    base binary, so resolving both sides reports two isolated environments as one and discards the
+    prefix the operator configured.
+    """
+    if not left or not right:
+        return False
+    try:
+        return Path(left).expanduser().parent == Path(right).expanduser().parent
+    except (OSError, TypeError):
+        return False
+
+
 def _find_env_spec(source: Path) -> Path | None:
     for name in _ENV_SPEC_CANDIDATES:
         candidate = source / name
@@ -186,7 +211,11 @@ def status(model: dict, config) -> dict:
     source = (config.WORKBENCH_THIRD_PARTY_ROOT / source_dir).resolve() if source_dir else None
     env_meta = model.get("environment") or {}
     spec = _find_env_spec(source) if source and source.is_dir() else None
-    interp = _interpreter_status(model, source) if source else {"status": "NO_SOURCE", "interpreter": None, "variable": None}
+    # Unconditional: `_interpreter_status` inspects the DECLARED selection and reads nothing from the
+    # source tree. Gating it on `source` made an explicitly selected interpreter invisible whenever
+    # the source was not synced, so the persisted assignment decided the answer by default -- the
+    # very override the precedence below forbids.
+    interp = _interpreter_status(model, source)
     res = {
         "model_id": model_id,
         "environment_required": bool(model.get("environment_required")),
@@ -215,7 +244,22 @@ def status(model: dict, config) -> dict:
         res["shared_interpreter"] = shared_info.get("interpreter")
         assigned = shared_info.get("interpreter")
         state = shared_info.get("state")
-        if assigned:
+        selected = _interpreter_from_env_var(model)
+        if assigned and selected and not _same_environment_prefix(selected, assigned):
+            # Precedence: process environment, then `workbench.env`, then this assignment. The
+            # assignment stays visible as metadata (`shared_group`, `shared_interpreter`), but it must
+            # not decide the interpreter or the verdict while the operator has selected a different
+            # environment. Overwriting both reported the ASSIGNED group for a model whose selected
+            # interpreter was ready -- contradicted by its own `interpreter_status` -- and, once the
+            # assigned executable had been deleted, reported `ready` true with `interpreter` naming a
+            # path that does not exist.
+            # `res["interpreter"]` keeps the SELECTED path -- it is what `_interpreter_status`
+            # reported and this branch deliberately does not overwrite. The assignment's own path is
+            # still published under `shared_interpreter`, so the operator sees both.
+            if not res.get("runtime_reason"):
+                res["runtime_reason"] = (f"operator-selected interpreter {selected} overrides "
+                                         f"assigned group {res['shared_group']}")
+        elif assigned:
             res["interpreter"] = assigned
             if state in ("FAILED", "BLOCKED"):
                 res["ready"] = False
@@ -261,6 +305,24 @@ def create_env(model: dict, s: dict, dry_run: bool, config=None, network_allowed
     if config is None:
         config = resolve_config()
     shared_info = _check_shared_assignment(model_id, config)
+    selected = _interpreter_from_env_var(model)
+    if (shared_info and selected and shared_info.get("interpreter")
+            and not _same_environment_prefix(selected, shared_info["interpreter"])):
+        # The same precedence `status` applies: a selection naming a DIFFERENT prefix is the target to
+        # build or repair. Following the assignment instead provisioned the old group while the
+        # operator had selected a new interpreter, and then failed with "interpreter missing or not
+        # executable" once the old prefix had been deleted.
+        print(f"[NOTICE] {model_id}: operator-selected interpreter {selected} overrides assigned "
+              f"group {shared_info.get('environment_id')}")
+        if dry_run:
+            # Read-only AND result-stable, exactly like the assignment branch below: a dry run
+            # provisions nothing, so it neither drops the assignment nor reaches the install paths,
+            # and its verdict cannot become a function of `--allow-network`. Reporting the selected
+            # target is what the operator asked to see; the drop to the selected environment belongs
+            # to a real run, which falls through below.
+            print(f"[OK] dry-run: would provision or reuse the selected interpreter {selected}")
+            return True
+        shared_info = None
     if shared_info:
         members_str = ", ".join(shared_info.get("group_members", []))
         env_id = shared_info.get("environment_id")
@@ -293,16 +355,14 @@ def create_env(model: dict, s: dict, dry_run: bool, config=None, network_allowed
         group_models = [m for m in registry["models"] if m["model_id"] in group_members]
         if not group_models:
             group_models = [model]
-        plan_path = config.WORKBENCH_ARTIFACTS_ROOT / "environment_plan.json"
-        plan = None
-        if plan_path.is_file():
-            try:
-                import json
-                plan = json.loads(plan_path.read_text(encoding="utf-8"))
-            except Exception:
-                plan = None
-        if plan is None:
-            plan = plan_environments(group_models, artifacts_root=config.WORKBENCH_ARTIFACTS_ROOT)
+        # Repair is planned from the CURRENT contract, never from the stored `environment_plan.json`:
+        # that file records the constraints of the run that wrote it, so repairing from it reinstalls
+        # a superseded freeze (Python 3.9 / torch==1.13.1) after the operator selects a profile whose
+        # current contract is Python 3.10 / torch==2.7.1 -- an install the verifier then rejects. The
+        # planner recomputes `model_constraints` from the registry and this third-party root, so the
+        # repaired environment and the contract it is verified against cannot disagree.
+        plan = plan_environments(group_models, artifacts_root=config.WORKBENCH_ARTIFACTS_ROOT,
+                                 third_party_root=_third_party_root(config))
         # Provision ONLY the group(s) the requested model belongs to. The plan file may carry
         # groups for every registered model; installing all of them on a single-model request
         # pulls gigabytes of unrelated packages the operator never asked for.
@@ -313,6 +373,7 @@ def create_env(model: dict, s: dict, dry_run: bool, config=None, network_allowed
             group_models,
             scoped,
             artifacts_root=config.WORKBENCH_ARTIFACTS_ROOT,
+            third_party_root=_third_party_root(config),
             allowed=True,
             network_allowed=network_allowed,
         )
@@ -342,7 +403,8 @@ def create_env(model: dict, s: dict, dry_run: bool, config=None, network_allowed
     # isolation check in the venv branch below; the planner route is only for fresh installs
     # with no preset interpreter. The lookup is the shared one, so an export and a
     # `workbench.env` entry select the SAME target with the documented precedence.
-    preset_interpreter = s.get("env_var") and setting(s["env_var"])
+    preset_interpreter = ((s.get("env_var") and setting(s["env_var"]))
+                          or _interpreter_from_env_var(model))
     if not preset_interpreter:
             # No shared assignment yet: route through the environment planner, which derives the
         # group from the model's own spec, provisions it under the workbench artifacts root, and
@@ -356,7 +418,8 @@ def create_env(model: dict, s: dict, dry_run: bool, config=None, network_allowed
             registry = load_registry()
             planned = plan_environments(
                 [next(m for m in registry["models"] if m["model_id"] == model_id)],
-                artifacts_root=config.WORKBENCH_ARTIFACTS_ROOT)
+                artifacts_root=config.WORKBENCH_ARTIFACTS_ROOT,
+                third_party_root=_third_party_root(config))
             groups = planned.get("groups") or []
             if groups:
                 print(f"[OK] dry-run: would provision or reuse group {groups[0]['environment_id']}")
@@ -369,7 +432,8 @@ def create_env(model: dict, s: dict, dry_run: bool, config=None, network_allowed
         from workbench.backend.registry import load_registry
         registry = load_registry()
         group_models = [next((m for m in registry["models"] if m["model_id"] == model_id), model)]
-        plan = plan_environments(group_models, artifacts_root=config.WORKBENCH_ARTIFACTS_ROOT)
+        plan = plan_environments(group_models, artifacts_root=config.WORKBENCH_ARTIFACTS_ROOT,
+                                 third_party_root=_third_party_root(config))
         wanted = {model_id}
         scoped = {**plan, "groups": [g for g in plan.get("groups", [])
                                      if wanted & set(g.get("members", []))]}
@@ -382,6 +446,7 @@ def create_env(model: dict, s: dict, dry_run: bool, config=None, network_allowed
                 group_models,
                 scoped,
                 artifacts_root=config.WORKBENCH_ARTIFACTS_ROOT,
+                third_party_root=_third_party_root(config),
                 allowed=True,
                 network_allowed=network_allowed,
             )

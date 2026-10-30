@@ -121,71 +121,119 @@ The CLI exists at `workbench/scripts/composition_eval.py`; its parser defines `-
 
 ```bash
 # 1. Controller bootstrap. `workbench/run.sh` prefers `./.venv/bin/python` and never takes a model
-#    interpreter from PATH, so the controller environment is built once, here. Composition needs no
-#    Docker and no `pc.sh`.
+#    interpreter from PATH, so the controller environment is built once, here. The controller needs
+#    Python >= 3.11 (`pyproject.toml` `requires-python`); model interpreters are separate and
+#    per-model. Composition needs no Docker and no `pc.sh`.
 python3 -m venv .venv
 .venv/bin/pip install -r workbench/backend/requirements.txt .
 
 # 2. Roots. Every one is a placeholder the operator sets to an ABSOLUTE path on this PC before the
-#    next line; nothing below repeats a hand-typed path.
-export CIR_PC_ROOT="$HOME/cir-pc"                        # SET: root on the PC's large volume
-export CIR_DATASET_ROOT="$CIR_PC_ROOT/FashionIQ"         # canonical FashionIQ: images/, image_splits/, captions/
-export CIR_ARTIFACTS_ROOT="$CIR_PC_ROOT/artifacts"
-export CIR_CHECKPOINT_ROOT="$CIR_ARTIFACTS_ROOT/checkpoints"
-export CIR_RESULTS_ROOT="$CIR_ARTIFACTS_ROOT/results"
-export CIR_THIRD_PARTY_ROOT="$CIR_PC_ROOT/third_party"
-export CIR_ENVS_ROOT="$CIR_PC_ROOT/model-envs"           # SET: root holding the per-model interpreters
-export CIR_REGISTRY_PATH="$PWD/workbench/registry/models.yaml"
+#    next line; nothing below repeats a hand-typed path. These are the names the code READS
+#    (`workbench/backend/operator_config.py::_KEYS`).
+export CIR_REPO_ROOT="$PWD"                              # SET: the CODE checkout (scripts + registry live here)
+export CIR_PC_ROOT="$HOME/cir-pc"                        # SET: root on the PC's large volume (SHELL-LOCAL ONLY)
+export FASHIONIQ_ROOT="$CIR_PC_ROOT/FashionIQ"           # SET: canonical FashionIQ: images/, image_splits/, captions/
+export WORKBENCH_ARTIFACTS_ROOT="$CIR_PC_ROOT/artifacts"
+export WORKBENCH_CHECKPOINT_ROOT="$CIR_PC_ROOT/artifacts/checkpoints"
+export WORKBENCH_RESULTS_ROOT="$CIR_PC_ROOT/artifacts/results"
+export WORKBENCH_THIRD_PARTY_ROOT="$CIR_PC_ROOT/third_party"      # SET: pinned upstream checkouts live here
 export WORKBENCH_CIRCUS_RELEASE_ROOT="$CIR_PC_ROOT/circus_release"
+export HF_HOME="$CIR_PC_ROOT/hf"                         # optional: Hugging Face cache root for declared assets
+export CIR_ENVS_ROOT="$CIR_PC_ROOT/model-envs"           # SET: root holding the per-model interpreters (SHELL-LOCAL ONLY)
+
+#    `CIR_DATASET_ROOT`/`CIR_ARTIFACTS_ROOT`/`CIR_CHECKPOINT_ROOT`/`CIR_RESULTS_ROOT`/
+#    `CIR_THIRD_PARTY_ROOT`/`CIR_ENVS_ROOT`/`CIR_REGISTRY_PATH` used to be exported here: NOTHING
+#    reads them, so they configured nothing while looking like they did. Only `CIR_REPO_ROOT` and
+#    `CIR_DATA_ROOT` are real `CIR_*` settings. `CIR_PC_ROOT`/`CIR_ENVS_ROOT` remain above only as
+#    shell-local shorthand. `WORKBENCH_REGISTRY_PATH` (the custom-registry override, below) is
+#    PROCESS-ENVIRONMENT ONLY: `workbench.env` rejects it as an unknown setting.
+
+# 2b. Mirror ONLY the five roots the standalone commands share into the operator env file, so the
+#     planner/verifier/manager path (which uses `resolve_config()`, never the YAML) agrees with the
+#     YAML. The agreement is proven in step 3, once the YAML config exists.
+cp workbench/config/workbench.env.example workbench/config/workbench.env
+$EDITOR workbench/config/workbench.env
+#    Set CIR_REPO_ROOT and each mapped root to the exact absolute path above. Process exports win.
+#    For a CUSTOM paths.registry, export WORKBENCH_REGISTRY_PATH to that absolute registry FILE
+#    (process environment only — the env file rejects the name):
+export WORKBENCH_REGISTRY_PATH="$CIR_REPO_ROOT/workbench/registry/models.yaml"
 
 # 3. The composition config is the AUTOPILOT YAML, not `workbench.env`. Start from the checked-in
 #    cohort profile — it already carries `checkpoint_policy: include_flagged_conditions` and the
 #    authorized `checkpoint_overrides` — then set its six `paths` keys to the exported values above.
+#    `paths.registry` must name an existing FILE and `paths.dataset_root` an existing DIRECTORY;
+#    relative values resolve against the YAML's own directory, so use absolute paths here.
 cp workbench/configs/pc_autopilot.pc_cohort.yaml ~/cir_pc.yaml
 $EDITOR ~/cir_pc.yaml
-#    paths.registry     = $CIR_REGISTRY_PATH        (an absolute FILE)
-#    paths.dataset_root = $CIR_DATASET_ROOT
-#    paths.artifacts    = $CIR_ARTIFACTS_ROOT
-#    paths.checkpoints  = $CIR_CHECKPOINT_ROOT
-#    paths.results      = $CIR_RESULTS_ROOT
-#    paths.third_party  = $CIR_THIRD_PARTY_ROOT
+#    paths.registry     = $WORKBENCH_REGISTRY_PATH     (an absolute FILE)
+#    paths.dataset_root = $FASHIONIQ_ROOT
+#    paths.artifacts    = $WORKBENCH_ARTIFACTS_ROOT
+#    paths.checkpoints  = $WORKBENCH_CHECKPOINT_ROOT
+#    paths.results      = $WORKBENCH_RESULTS_ROOT
+#    paths.third_party  = $WORKBENCH_THIRD_PARTY_ROOT
 #    Schema — `workbench/backend/autopilot.py:load_config` rejects an unknown OR missing key:
 #      schema_version: 1 · selected_models · checkpoint_policy · checkpoint_overrides
 #      paths: {registry, dataset_root, artifacts, checkpoints, results, third_party}
 #      budgets: {max_download_bytes, max_models, top_k}
 #      permissions: {allow_network, allow_large_downloads, allow_env_install, allow_preparation,
 #                    allow_gpu_eval, allow_gpu_preparation, allow_index_write}
+#    With the YAML in place, PROVE the agreement with the mirrored steps above: this must print
+#    verdict=MATCH, and a mismatch means stop — standalone preparation, inventory, doctor and
+#    verification would then read DIFFERENT roots than the run.
+.venv/bin/python workbench/scripts/print_roots.py --config ~/cir_pc.yaml
 
-# 4. One interpreter PER MODEL, under the registry's own `python_env_var` names
-#    (`workbench/registry/models.yaml`). Each value is the interpreter provisioned for that model on
-#    this PC — never the controller environment, never a copied laptop venv. If Autopilot
-#    provisioned the group itself, read the exact prefix it recorded in
-#    "$CIR_ARTIFACTS_ROOT/environment_assignment.json" and use that instead of the value below.
+# 4. Runtime profile. Select the declared adaptation BEFORE planning or provisioning.
 export WORKBENCH_RUNTIME_ADAPTATION=sm_120
-export WORKBENCH_CSMCIR_PYTHON="$CIR_ENVS_ROOT/csmcir/bin/python"
-export WORKBENCH_CONESEP_PYTHON="$CIR_ENVS_ROOT/conesep/bin/python"
-export WORKBENCH_PTHA_MTST_PYTHON="$CIR_ENVS_ROOT/ptha-mtst/bin/python"
-export WORKBENCH_HABIT_PYTHON="$CIR_ENVS_ROOT/habit/bin/python"
-export WORKBENCH_INTENT_PYTHON="$CIR_ENVS_ROOT/intent/bin/python"
-export WORKBENCH_HINT_PYTHON="$CIR_ENVS_ROOT/hint/bin/python"
-export WORKBENCH_ENCODER_PYTHON="$CIR_ENVS_ROOT/encoder/bin/python"
-export WORKBENCH_LIMN_PYTHON="$CIR_ENVS_ROOT/limn/bin/python"
-export WORKBENCH_TME_PYTHON="$CIR_ENVS_ROOT/tme/bin/python"
 
-# 5. Plan: prints the selected work and the expected output paths, writes no state.
+# 5. Model environments. PICK ONE MODE PER MODEL — the two modes damage each other on the same model.
+#
+# 5a. FRESH (the PC route): the planner creates each group's own prefix under `artifacts`, records
+#     the interpreter in `<artifacts>/environment_assignment.json`, and every later stage reads it.
+#     Preconditions: the pinned source is present under `WORKBENCH_THIRD_PARTY_ROOT` (stage it with
+#     `sync_upstreams.py --model <id> --output-root "$WORKBENCH_THIRD_PARTY_ROOT"`, or let
+#     `autopilot --apply` acquire it), and a `conda`/`mamba`/`micromamba` solver is on PATH.
+#     NEVER preset `WORKBENCH_<MODEL>_PYTHON` to a path that does not exist yet: status reports
+#     CONFIGURED_MISSING and `--create` refuses BEFORE the planner runs (exit 1). Because
+#     `model_settings.setting` treats an EMPTY value as unset, `export WORKBENCH_ENCODER_PYTHON=`
+#     does NOT clear a `workbench.env` entry for the same name — remove the line, or use `unset`.
+unset WORKBENCH_ENCODER_PYTHON
+.venv/bin/python workbench/scripts/manage_environment.py --model encoder --create --allow-env-install --dry-run
+.venv/bin/python workbench/scripts/manage_environment.py --model encoder --create --allow-env-install --allow-network
+#    The dry run is read-only and prints the group the planner WOULD form; the second command
+#    provisions it. `--create` without `--allow-env-install` is a usage error (exit 2), and the
+#    manager never installs into the controller environment.
+#
+# 5b. ALTERNATE (operator-staged interpreter): provision the environment yourself, then point the
+#     registry's own `python_env_var` at it and verify. The prefix must satisfy the profile selected
+#     in step 4 (`sm_120` selects the ADAPTED python/torch), or status reports
+#     PYTHON_VERSION_MISMATCH. Do NOT do this and 5a for the same model.
+export WORKBENCH_ENCODER_PYTHON="$CIR_ENVS_ROOT/encoder/bin/python"
+.venv/bin/python workbench/scripts/manage_environment.py --model encoder --json
+
+# 6. Status inspection — VALID flag combinations only:
+#      --list [--json]        inventory every registry model
+#      --model X [--json]     one model's status (the ONLY per-model form)
+#    `--list` together with `--model` is a usage error (exit 2); `--json` combined with `--create` is
+#    a VALID parse that prints status JSON and provisions NOTHING (exit 1, no environment created).
+.venv/bin/python workbench/scripts/manage_environment.py --list --json
+.venv/bin/python workbench/scripts/manage_environment.py --model encoder --json
+#    Exit codes are evidence, not failure: `--list --json` returns 1 while any required environment
+#    is unconfigured, and `--model X --json` returns 1 while that model is not `ready`.
+
+# 7. Plan: prints the selected work and the expected output paths, writes no state.
 ./workbench/run.sh composition-eval --config ~/cir_pc.yaml --plan
 
-# 6. Verify/inventory the released data. This checks the release files against their recorded
+# 8. Verify/inventory the released data. This checks the release files against their recorded
 #    hashes and inventories missing gallery/reference/positive images; it does NOT download a
 #    missing asset. A missing member is reported by name and has to be staged first.
 ./workbench/run.sh composition-eval --config ~/cir_pc.yaml --prepare-data
 
-# 7. Smoke one GPU-heavy model at a time; the runner serializes model runs.
+# 9. Smoke one GPU-heavy model at a time; the runner serializes model runs.
 ./workbench/run.sh composition-eval --config ~/cir_pc.yaml --models encoder,limn --smoke
 
-# 8. Full cohort. Keep this on ONE line, or join the wrap with a trailing backslash: a copy that
-#    wraps before `--resume` without the continuation runs the evaluation WITHOUT resume and then
-#    tries `--resume` as the next command.
+# 10. Full cohort. Keep this on ONE line, or join the wrap with a trailing backslash: a copy that
+#     wraps before `--resume` without the continuation runs the evaluation WITHOUT resume and then
+#     tries `--resume` as the next command.
 ./workbench/run.sh composition-eval --config ~/cir_pc.yaml --models selected --subsets full,sf,validated --resume
 ```
 

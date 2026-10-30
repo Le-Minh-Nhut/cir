@@ -111,6 +111,9 @@ python workbench/scripts/manage_environment.py --list
 python workbench/scripts/manage_environment.py --model csmcir
 # Creation requires explicit authorization:
 python workbench/scripts/manage_environment.py --model csmcir --create --allow-env-install --dry-run
+# --list and --model are mutually exclusive; --json must not accompany --create (it prints status
+# JSON and provisions nothing). Exit codes are evidence: --list --json returns 1 while any required
+# environment is unconfigured.
 
 # Model preparation
 python workbench/scripts/prepare_model.py --list

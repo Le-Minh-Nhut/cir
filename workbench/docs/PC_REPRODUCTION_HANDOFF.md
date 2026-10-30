@@ -39,6 +39,24 @@ After completing source checkout, controller `.venv` install, and cohort-profile
 ./workbench/run.sh autopilot --config ~/cir_pc.yaml --dry-run
 ```
 
+Provisioning an environment is a write, so it is not one of the read-only checks above. Either let
+the apply run provision each group (`allow_env_install: true` in the cohort profile), or provision
+one model directly — the same planner the run uses:
+
+```bash
+.venv/bin/python workbench/scripts/manage_environment.py --model encoder --create --allow-env-install --dry-run
+.venv/bin/python workbench/scripts/manage_environment.py --model encoder --create --allow-env-install --allow-network
+```
+
+Never preset `WORKBENCH_<MODEL>_PYTHON` to an environment that does not exist yet: status reports
+`CONFIGURED_MISSING` and `--create` refuses before the planner runs. Clear the variable in the shell
+and remove any matching line from `workbench.env` first — an empty export does not clear a
+`workbench.env` entry of the same name (`model_settings.setting` reads an empty value as unset).
+Valid flag combinations for the manager: `--list [--json]`
+or `--model X [--json]` — `--list` together with `--model` is a usage error (exit 2) — and `--json`
+must not accompany `--create`, which accepts the flag, prints status JSON, and provisions nothing.
+A nonzero status exit code still accompanies valid read-only JSON, as noted above.
+
 The controller install route below matches the manifests: `workbench/backend/requirements.txt` supplies `packaging` and `huggingface-hub`; installing the root project `.` supplies `torch`, `torchvision`, `numpy`, `pillow`, and `packaging`. The reported fresh-venv check installed both, started 14 CLI `--help` entrypoints, and passed `pip check`; no output artifact is retained. `test_controller_installation.py` checks declared dependencies, doctor coverage (ten modules), and CLI startup. Install only after reviewing the target's Python >=3.11/controller requirements; keep model interpreters separate.
 
 ## What changed this round / what remains PC-only
@@ -74,6 +92,13 @@ Copy the cohort profile outside the repository. Set all six `paths` keys to PC-s
 Set `CIR_REPO_ROOT` to the actual checkout. Exported shell variables override matching `workbench.env` values, so remove or update stale exports before proving roots. To print and check that both loaders agree (and that registry paths agree), run from the checkout root after editing the environment file and, for a custom registry, exporting `WORKBENCH_REGISTRY_PATH`:
 
 The helper prints the YAML paths, the five standalone roots, `CIR_REPO_ROOT`, and resolved registry; a disagreement exits nonzero and names the disagreeing key.
+
+`paths.third_party` (`WORKBENCH_THIRD_PARTY_ROOT`) must already hold the pinned upstream checkouts of
+every selected model. The planner reads each model's authoritative `requirements.txt` and its
+evaluator entry point from that tree, and a group whose checkout is absent is refused rather than
+verified blind (`cannot verify evaluator imports: pinned source not present`). Stage them with
+`sync_upstreams.py --model <id> --output-root "$WORKBENCH_THIRD_PARTY_ROOT"`, or let the apply run
+acquire them.
 
 ```bash
 .venv/bin/python workbench/scripts/print_roots.py --config ~/cir_pc.yaml

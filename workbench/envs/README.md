@@ -35,3 +35,8 @@ python workbench/scripts/manage_environment.py --model csmcir --create --allow-e
 ```
 
 Creation requires both `--create` and `--allow-env-install`. It will never guess or install unverified packages.
+
+`--list` and `--model` are mutually exclusive (use one per command line), and `--json` must not
+accompany `--create`: the flag is accepted, prints status JSON, and provisions nothing. A nonzero
+`--list --json` exit code means some required environment is not configured; it is evidence, not a
+failed check.

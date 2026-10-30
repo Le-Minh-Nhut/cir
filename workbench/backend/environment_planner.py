@@ -2168,6 +2168,59 @@ def _clear_unverified_group_interpreter(group: dict) -> None:
         group["interpreter"] = None
 
 
+def _merge_published_assignment(persisted: dict, assignment: dict, touched: set[str]) -> dict:
+    """The assignment document to persist: this call's scope merged over the previous one.
+
+    A provisioning call covers a SCOPE (the requested models). Entries outside it describe
+    environments the call never touched, and writing only the requested scope dropped every
+    previously provisioned model's interpreter route from the shared file. Treated entries are
+    replaced; the rest are carried over. Shared groups whose membership is only partly touched
+    follow their remaining membership, so the group, its member records and the interpreter
+    mapping cannot contradict one another.
+    """
+    merged_groups, shrunk = [], {}
+    by_id = {group["environment_id"]: group for group in assignment.get("groups") or []}
+    for group in persisted.get("groups") or []:
+        members = list(group.get("members") or [])
+        if not touched.intersection(members):
+            merged_groups.append(group)
+            continue
+        remaining = [mid for mid in members if mid not in touched]
+        if not remaining:
+            continue
+        if group["environment_id"] in by_id:
+            # This call planned the same content-derived environment id for its own members, so the
+            # persisted members of that environment keep it: one record, all its members.
+            owner = by_id[group["environment_id"]]
+            owner["members"] = list(owner.get("members") or []) + remaining
+            owner["group_members"] = list(owner["members"])
+            shrunk[group["environment_id"]] = owner["members"]
+            continue
+        survivor = {**group, "members": remaining, "group_members": remaining}
+        merged_groups.append(survivor)
+        shrunk[group["environment_id"]] = remaining
+    merged_models = {mid: info for mid, info in (persisted.get("models") or {}).items()
+                     if mid not in touched}
+    for mid, info in merged_models.items():
+        remaining = shrunk.get(info.get("environment_id"))
+        if remaining is not None:
+            merged_models[mid] = {**info, "group_members": list(remaining),
+                                  "shared": len(remaining) > 1}
+    merged_models.update(assignment.get("models") or {})
+    merged_groups.extend(assignment.get("groups") or [])
+    # Untouched models keep their mapping entry verbatim; the touched ones take this call's answer
+    # (which is None for a group that did not verify), so no stale route survives a failed repair.
+    merged_mapping = {mid: value for mid, value in (persisted.get("interpreter_mapping") or {}).items()
+                      if mid not in touched}
+    merged_mapping.update(assignment.get("interpreter_mapping") or {})
+    merged_blocked = [item for item in (persisted.get("blocked") or [])
+                      if item.get("model_id") not in touched]
+    merged_blocked.extend(assignment.get("blocked") or [])
+    return {**assignment, "groups": merged_groups, "models": merged_models,
+            "groups_by_id": {group["environment_id"]: group for group in merged_groups},
+            "interpreter_mapping": merged_mapping, "blocked": merged_blocked}
+
+
 def provision_environment_plan(
     models: list[dict],
     plan: dict,
@@ -2237,6 +2290,10 @@ def provision_environment_plan(
             "reason": b.get("reason"),
         }
 
+    # Models whose assignment entries this call replaces: the groups it provisioned plus the plan
+    # entries it blocked. Everything else in the shared file belongs to an earlier request.
+    touched = {mid for group in provisioned_groups for mid in group["members"]} | {
+        item["model_id"] for item in plan.get("blocked", [])}
     assignment = {
         "schema_version": 1,
         "artifacts_root": str(artifacts_root),
@@ -2250,9 +2307,22 @@ def provision_environment_plan(
         "plan": plan,
     }
 
-    if any(g.get("state") == "RUNTIME_VERIFIED" for g in provisioned_groups):
-        assignment_path = artifacts_root / "environment_assignment.json"
-        write_environment_assignment(assignment, assignment_path)
+    # The RETURNED document stays scope-limited: callers (the autopilot) index it by the models
+    # they selected, so carrying unrelated models here would make them look provisioned.
+    assignment_path = artifacts_root / "environment_assignment.json"
+    persisted = {}
+    if assignment_path.is_file():
+        try:
+            persisted = load_environment_assignment(assignment_path)
+        except (OSError, ValueError, TypeError):
+            persisted = {}
+    published = _merge_published_assignment(persisted, assignment, touched)
+    if any(g.get("state") == "RUNTIME_VERIFIED" for g in published["groups"]) or (
+            bool(persisted) and bool(touched)):
+        # Also published when a requested repair FAILED over an existing assignment: leaving the
+        # previous verified record in place kept advertising an interpreter for a group this run
+        # could not verify, while the untouched neighbours stay available.
+        write_environment_assignment(published, assignment_path)
         plan["environment_assignment_path"] = str(assignment_path)
     else:
         plan["environment_assignment_path"] = None
@@ -2327,4 +2397,23 @@ def main(argv: list[str] | None = None) -> int:
             print(f"Blocked {b['model_id']}: {b.get('reason')}")
     else:
         print(args.output)
+
+    if not args.allow_install:
+        # Plan-only/list stay read-only and report success: nothing was asked to be installed.
+        return 0
+    # Provisioning WAS requested, so the exit status must answer "did the requested installation
+    # and verification work succeed?". A run that installed nothing because no solver was
+    # reachable exited 0, so an operator or automation read success over a FAILED environment.
+    # The requested scope is exactly the models this invocation selected (`--model`). Each of them
+    # must end this call owning a RUNTIME_VERIFIED group: a group that FAILED, was refused for a
+    # missing permission, or a model the planner blocked instead of grouping is unfinished
+    # requested work. A model outside the selection is never in `models`, so an unrelated blocked
+    # entry (or a group left over from an earlier run) cannot fail a successful scoped request.
+    verified = {mid for group in plan.get("groups", []) if group.get("state") == "RUNTIME_VERIFIED"
+                for mid in (group.get("members") or [])}
+    unmet = sorted({m["model_id"] for m in models} - verified)
+    if unmet:
+        print(f"[FAILED] environment provisioning did not complete for {len(unmet)} of "
+              f"{len(models)} requested model(s): {', '.join(unmet)}", file=sys.stderr)
+        return 1
     return 0
