@@ -19,7 +19,9 @@ LIMN–ENCODER ở cùng protocol `fashioniq_val_split`.
 **Sẵn sàng cho lượt PC pilot đầu tiên: LIMN (đã đo) và ENCODER (đã đo).** GPU đích `sm_120` vẫn
 `TARGET_GPU_PENDING`; các phép đo đã ghi nhận là trên `sm_86`. Cohort thực thi chín model là
 `csmcir`, `conesep`, `ptha_mtst`, `habit`, `intent`, `hint`, `encoder`, `limn`, `tme`; đây là cohort
-registry, không phải khẳng định mọi model đã sẵn sàng chạy.
+registry, không phải khẳng định mọi model đã sẵn sàng chạy. Chín entry có adapter này là cohort registry,
+không phải khẳng định đã sẵn sàng: chọn rõ ràng cho lượt pilot (`--models encoder`, không
+`--models selected` khi YAML còn `selected_models: all_registered`), và các entry hoãn vẫn giữ trạng thái hoãn.
 
 Tám entry hoãn có blocker khác nhau theo registry: `airknow` thiếu checkpoint 20% (chỉ khai 50%/80%); `pair` chưa xác minh mapping `pair_b1`/`pair_b2` và bị chặn ở entrypoint; `clvc_net` chưa xác minh archive sáu file theo category, thiếu replay entrypoint và ResNet-50; `dcnet` chưa xác minh association run directory với benchmark row, thiếu GloVe PKLs, ảnh resize và ResNet-50; `combiner_rn50x4_noft` chưa xác minh identity/checksum checkpoint, thiếu RN50x4 base weights và data tương thích; `clip4cir_rn50x4_fullft` chưa xác minh pairing bundle hai state, thiếu base weights và data tương thích; `tgcir` chưa xác minh archive member/hash và bị chặn ở replay entrypoint; `sprc` chưa xác minh mapping model-class/key và thiếu assets. `ptha_mtst` chỉ có `cirr_transfer` (CIRR→FashionIQ), không phải FashionIQ reproduction. TME mặc định dùng `fashioniq_0`; checkpoint 20% vẫn `CHECKPOINT_UNAVAILABLE`. Ước tính ~10.47 GiB là CACHE/STORAGE feature-cache estimate, không phải bảo đảm VRAM. Ma trận và blocker từng model: `MODEL_STATUS_SPEC.md` §2.
 

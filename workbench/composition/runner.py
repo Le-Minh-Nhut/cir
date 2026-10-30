@@ -386,7 +386,8 @@ def _gpu_identity() -> str | None:
 def model_interpreter_identity(model: dict[str, Any], config: Any, adapter: Any = None, *,
                                verify: bool = True) -> dict[str, Any]:
     from workbench.backend.model_settings import setting_source
-    from workbench.backend.runtime import READY_TIERS, resolve_model_interpreter, verify_environment
+    from workbench.backend.runtime import (
+        READY_TIERS, _record_environment_fingerprint, resolve_model_interpreter, verify_environment)
 
     variable = (model.get("environment") or {}).get("python_env_var")
     path = getattr(adapter, "interpreter", None) or resolve_model_interpreter(model, config)
@@ -415,14 +416,41 @@ def model_interpreter_identity(model: dict[str, Any], config: Any, adapter: Any 
                 "verified": False, "verification_reason": f"{type(error).__name__}: {error}"}
     result = {"path": resolved, "version": version, "source": source, "verified": False}
     if verify:
+        # The environment's CONTENT identity, not just its path. Bound into this dict so every
+        # semantic key derived from it -- the run id, the rank-cache fingerprint, the feature
+        # memmap fingerprints -- changes when an installed dependency's bytes change. Computed on
+        # the interpreter the adapter actually invokes (never its resolved base) with that
+        # interpreter's parent's parent as the prefix, matching `_record_environment_fingerprint`
+        # and the GPU capability key.
+        #
+        # Verification computes this same digest internally: `verify_environment` reaches
+        # `_cached_gpu_capability`, which needs the AUTHORITATIVE fingerprint to decide whether a
+        # recorded capability still describes this environment. When that record matched, its
+        # payload carries the value -- same function, same interpreter -- so it is reused here
+        # instead of hashing every installed member a second time (~27,600 `_member_digest` calls,
+        # ~10 s per model per composition run). `report.environment_fingerprint` is deliberately NOT
+        # used: it is null on this path, and a cached report's value is derived from the
+        # interpreter's SELF-REPORTED prefix, which need not equal the parent's-parent prefix the
+        # capability key is built from.
+        #
+        # The internal computation is eager and is exposed only when a capability record matched,
+        # so on a host with no verified capability (tier GPU_VERIFICATION_PENDING) the digest is
+        # recomputed below; removing that remaining pass needs `runtime.py` to expose it, which is
+        # outside this file's ownership.
+        fingerprint = None
         try:
             report = verify_environment(model, probe=True, advisory=True, config=config)
             result.update(verified=report.tier in READY_TIERS,
                           verification_status=report.status, verification_reason=report.reason)
+            capability = getattr(report, "gpu_capability", None)
+            if isinstance(capability, dict) and report.interpreter == resolved:
+                fingerprint = capability.get("interpreter_fingerprint")
         except Exception as error:
             result.update(verification_status="UNAVAILABLE",
                           verification_reason=f"{type(error).__name__}: {error}")
+        result["environment_fingerprint"] = fingerprint or _record_environment_fingerprint(model, resolved)
     else:
+        result["environment_fingerprint"] = None
         result["verification_status"] = "NOT_PROBED"
         result["verification_reason"] = "environment verification not run in plan mode"
     return result

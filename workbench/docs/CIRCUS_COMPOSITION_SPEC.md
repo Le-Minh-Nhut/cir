@@ -271,6 +271,8 @@ PY
 
 Schedule one GPU-heavy model at a time; the runner serializes model runs. Fresh mode (5a) never exports the model interpreter into your shell — the manager publishes it to `<artifacts>/environment_assignment.json`, so resolve it there (step 5c) rather than assuming `$WORKBENCH_ENCODER_PYTHON` is set. Smoke mode limits queries (default 1) and preserves the full released gallery. Released data root is configured by `WORKBENCH_CIRCUS_RELEASE_ROOT`. `--prepare-data` verifies the released files against their recorded hashes and inventories missing gallery/reference/positive images — it never downloads a missing asset. `--models selected` reads the authorized cohort from `~/cir_pc.yaml` (`selected_models` and `checkpoint_overrides`), so it must be run with `--config`.
 
+For the first pilot, name the models explicitly — use `--models encoder` (the per-model form shown in step 9) rather than `--models selected`. The checked-in cohort template ships `selected_models: all_registered`, which resolves every registry entry into the selection, including the eight PAUSED entries, and the run then ends with a named blocker per paused model instead of the pilot's results. Set a deliberate, verified list in your local `~/cir_pc.yaml` before using `--models selected`.
+
 ## Run identity, resume and worker lifecycle
 
 The run identity now includes `adapter_batch_size`, the adapter's resolved batch. LIMN takes `WORKBENCH_LIMN_BATCH_SIZE` through `replay.limn.resolved_batch_size`, so that knob is honored by the composition adapter and recorded in the run identity. Because the field is part of the identity, the fingerprint changes for **every** run: ranks saved before this change are not reused across it, and a mismatch starts a fresh run by design.

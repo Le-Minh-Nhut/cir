@@ -1751,6 +1751,30 @@ def _member_digest(path: Path) -> str:
     return sha256_file(_Path(path))
 
 
+def _regular_through_link(path: Path, *, hops: int = 8) -> Path | None:
+    """The regular file or directory `path` reaches within its own tree, or None.
+
+    Resolution is deliberately BOUNDED and relative-only: `os.readlink` one hop at a time, an
+    absolute target is accepted as named (never re-rooted), and the chain is walked at most
+    `hops` deep. `Path.resolve` is not used because it follows the whole chain at once, so a
+    `link -> link -> wherever` retarget could pass this fingerprint as a single name, and because
+    it is lstat-heavy on network filesystems.
+
+    None means unreadable or still a link (a cycle, an over-budget chain); the caller keeps the
+    prior name-fold evidence, exactly as it did when `_member_digest` rejected the link outright.
+    """
+    current = path
+    for _ in range(hops):
+        try:
+            if current.is_symlink():
+                target = Path(os.readlink(current))
+                current = target if target.is_absolute() else (current.parent / target)
+                continue
+        except OSError:
+            return None
+        return current if (current.is_file() or current.is_dir()) else None
+    return None
+
 _ADVISORY_INTERPRETER_FINGERPRINT_CACHE: dict[tuple, str] = {}
 
 def _interpreter_fingerprint(interpreter: str, contract_digest: str,
@@ -1841,7 +1865,9 @@ def _interpreter_fingerprint(interpreter: str, contract_digest: str,
         #      exactly that. Rewriting the same bytes leaves it unchanged. A SYMLINKED entry is
         #      folded by the target it NAMES (`os.readlink`, the same convention as the stage input
         #      inventory): a symlink's identity is its target, so a retarget moves this digest even
-        #      when both targets hold identical bytes.
+        #      when both targets hold identical bytes -- AND the bytes that target reaches are
+        #      hashed through the link (one bounded hop), so rewriting a target in place moves this
+        #      digest too instead of hiding behind an unchanged target name.
         #   3. the distribution metadata/RECORD members hashed below, which is what a real install
         #      changes.
         # The directory's own mtime is still deliberately NOT folded (see above).
@@ -1861,6 +1887,25 @@ def _interpreter_fingerprint(interpreter: str, contract_digest: str,
                 except OSError:
                     # Unreadable: the name fold above is all the evidence there was before.
                     pass
+                # Link identity is not content: a symlink whose target STRING is unchanged but
+                # whose target's BYTES were rewritten changes startup behaviour while the readlink
+                # fold above stays put. So the regular file the link reaches is hashed too, with a
+                # bounded relative-only chain walk (`_regular_through_link`) -- deliberately not
+                # `Path.resolve`, which follows the whole chain at once and would collapse the
+                # intermediate hops into one name. `None` = unreadable/cyclic: name-fold evidence only.
+                linked = _regular_through_link(entry)
+                if linked is not None:
+                    if linked.is_dir():
+                        init = linked / "__init__.py"
+                        reached = init if not init.is_symlink() else _regular_through_link(init)
+                        label = f"{entry.name}/__init__.py"
+                    else:
+                        reached, label = linked, entry.name
+                    if reached is not None:
+                        try:
+                            hasher.update(f"{label}:{_member_digest(reached)}".encode("utf-8"))
+                        except (OSError, ValueError):
+                            pass
             elif startup_module:
                 try:
                     hasher.update(f"{entry.name}:{_member_digest(entry)}".encode("utf-8"))
@@ -1870,12 +1915,17 @@ def _interpreter_fingerprint(interpreter: str, contract_digest: str,
                     pass
             elif startup_package:
                 # The PACKAGE form (`sitecustomize/__init__.py`) is imported at startup too, and
-                # `site` prefers it over the module when both exist.
-                try:
-                    hasher.update(f"{entry.name}/__init__.py:"
-                                  f"{_member_digest(entry / '__init__.py')}".encode("utf-8"))
-                except (OSError, ValueError):
-                    pass
+                # `site` prefers it over the module when both exist. The initializer itself may be
+                # a symlink inside a regular directory: that is the same content-through-link blind
+                # spot as a linked entry, so the reached regular file is hashed as well.
+                init = entry / "__init__.py"
+                reached = init if not init.is_symlink() else _regular_through_link(init)
+                if reached is not None:
+                    try:
+                        hasher.update(f"{entry.name}/__init__.py:"
+                                      f"{_member_digest(reached)}".encode("utf-8"))
+                    except (OSError, ValueError):
+                        pass
         for dist in sorted(list(site_packages.glob("*.dist-info")) + list(site_packages.glob("*.egg-info"))):
             metadata = dist / "METADATA" if dist.name.endswith(".dist-info") else dist / "PKG-INFO"
             try:

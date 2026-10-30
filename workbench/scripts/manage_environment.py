@@ -114,6 +114,52 @@ def _same_environment_prefix(left: str, right: str) -> bool:
         return False
 
 
+def _usable_interpreter(path) -> bool:
+    """Whether a path is a file this process can execute, resolved without following aliases."""
+    if not path:
+        return False
+    try:
+        interpreter = Path(path).expanduser()
+        return interpreter.is_file() and os.access(interpreter, os.X_OK)
+    except (OSError, TypeError):
+        return False
+
+def _effective_target(model: dict, shared_info: dict | None) -> dict:
+    """The interpreter THIS run targets, decided before any assignment reuse or repair.
+
+    Precedence is the documented one -- process environment, then `workbench.env`, then the persisted
+    assignment -- and it is decided HERE, once, so `status` and `create_env` cannot disagree with the
+    launch resolver (`runtime.resolve_model_interpreter`, which returns the configured selection
+    whenever there is one). An explicit selection is therefore the target even when it is unusable:
+    a missing or non-executable selection is reported (and refused) as itself, never silently
+    replaced by a healthy assignment whose verdict would then be published as success.
+
+    `shared_info` is read for metadata only; it never overrides a selection here.
+    """
+    selected = _interpreter_from_env_var(model)
+    if selected:
+        path = Path(selected).expanduser()
+        if _is_staging_path(selected):
+            return {"path": str(path), "raw": selected, "source": "selection", "usable": False,
+                    "staging": True, "reason": "interrupted staging environment is not authoritative"}
+        if not path.is_file():
+            return {"path": str(path), "raw": selected, "source": "selection", "usable": False,
+                    "staging": False, "reason": "interpreter file missing"}
+        if not os.access(path, os.X_OK):
+            return {"path": str(path), "raw": selected, "source": "selection", "usable": False,
+                    "staging": False, "reason": "interpreter is not executable"}
+        return {"path": str(path), "raw": selected, "source": "selection", "usable": True,
+                "staging": False, "reason": None}
+    assigned = (shared_info or {}).get("interpreter")
+    if assigned:
+        # The assignment's own invocation path is kept as given (a venv alias), and its usability is
+        # measured, not assumed.
+        return {"path": str(assigned), "raw": assigned, "source": "assignment",
+                "usable": _usable_interpreter(assigned),
+                "staging": _is_staging_path(assigned), "reason": None}
+    return {"path": None, "raw": None, "source": None, "usable": False, "staging": False,
+            "reason": None}
+
 def _find_env_spec(source: Path) -> Path | None:
     for name in _ENV_SPEC_CANDIDATES:
         candidate = source / name
@@ -242,57 +288,45 @@ def status(model: dict, config) -> dict:
         res["shared_group"] = shared_info.get("environment_id")
         res["shared_members"] = shared_info.get("group_members")
         res["shared_interpreter"] = shared_info.get("interpreter")
-        assigned = shared_info.get("interpreter")
         state = shared_info.get("state")
-        selected = _interpreter_from_env_var(model)
-        if assigned and selected and not _same_environment_prefix(selected, assigned):
+        target = _effective_target(model, shared_info)
+        if target["source"] == "selection":
             # Precedence: process environment, then `workbench.env`, then this assignment. The
             # assignment stays visible as metadata (`shared_group`, `shared_interpreter`), but it must
-            # not decide the interpreter or the verdict while the operator has selected a different
-            # environment. Overwriting both reported the ASSIGNED group for a model whose selected
-            # interpreter was ready -- contradicted by its own `interpreter_status` -- and, once the
-            # assigned executable had been deleted, reported `ready` true with `interpreter` naming a
-            # path that does not exist.
-            # `res["interpreter"]` keeps the SELECTED path -- it is what `_interpreter_status`
-            # reported and this branch deliberately does not overwrite. The assignment's own path is
-            # still published under `shared_interpreter`, so the operator sees both.
+            # never decide the interpreter or the verdict while the operator has selected one --
+            # whatever that selection's state is. `res["interpreter"]` and the verdict are already
+            # the ones `_interpreter_status` measured for the SELECTED invocation path; overwriting
+            # them with the assignment reported the ASSIGNED group (and, once its executable had been
+            # deleted, `ready` true beside a path that does not exist), while the launch resolver
+            # kept using the selection. A MISSING or NON-EXECUTABLE selection is reported as itself
+            # for the same reason: falling back to a healthy assignment would publish a success the
+            # launch resolver then contradicts.
             if not res.get("runtime_reason"):
-                res["runtime_reason"] = (f"operator-selected interpreter {selected} overrides "
+                res["runtime_reason"] = (f"operator-selected interpreter {target['raw']} overrides "
                                          f"assigned group {res['shared_group']}")
-        elif assigned:
-            if selected and Path(selected).expanduser().is_file():
-                # Same environment prefix, so the precedence branch above did not fire -- but the
-                # operator still named an EXISTING executable alias (a venv's `bin/python3.10`
-                # beside an assigned `bin/python`). The assignment must not report its own path or
-                # its own verdict while that selection exists: `res["interpreter"]` stays the
-                # SELECTED invocation path with the verdict `_interpreter_status` measured for it,
-                # and the assignment remains visible as `shared_interpreter` metadata. Overwriting
-                # reported the assigned alias even after it was deleted -- `ready` true beside a
-                # path that does not exist.
-                if not res.get("runtime_reason"):
-                    res["runtime_reason"] = (f"operator-selected interpreter {selected} overrides "
-                                             f"assigned group {res['shared_group']}")
-                return res
+            return res
+        assigned = target["path"]
+        if assigned:
             res["interpreter"] = assigned
-            if state in ("FAILED", "BLOCKED"):
-                res["ready"] = False
-                res["runtime_reason"] = f"assigned group {res['shared_group']} is {state}"
-            elif state == "RUNTIME_VERIFIED" and Path(assigned).is_file() and os.access(assigned, os.X_OK):
-                # The persisted record only says a past install verified. Whether the assignment
-                # is reusable is decided by the CURRENT verification of that same interpreter
-                # against the selected contract: a row that says ready while the probe says
-                # BLOCKED is the stale-assignment contradiction this check exists to end.
-                report = _verify_assigned_interpreter(model, assigned, config)
-                if report is None:
-                    res["interpreter_status"] = "GROUP_READY"
-                    res["runtime_verified"] = True
-                    res["ready"] = True
-                else:
-                    res["interpreter_status"] = report.status
-                    res["interpreter_tier"] = report.tier
-                    res["runtime_verified"] = report.tier in READY_TIERS
-                    res["runtime_reason"] = report.reason
-                    res["ready"] = res["runtime_verified"]
+        if state in ("FAILED", "BLOCKED"):
+            res["ready"] = False
+            res["runtime_reason"] = f"assigned group {res['shared_group']} is {state}"
+        elif assigned and state == "RUNTIME_VERIFIED" and _usable_interpreter(assigned):
+            # The persisted record only says a past install verified. Whether the assignment
+            # is reusable is decided by the CURRENT verification of that same interpreter
+            # against the selected contract: a row that says ready while the probe says
+            # BLOCKED is the stale-assignment contradiction this check exists to end.
+            report = _verify_assigned_interpreter(model, assigned, config)
+            if report is None:
+                res["interpreter_status"] = "GROUP_READY"
+                res["runtime_verified"] = True
+                res["ready"] = True
+            else:
+                res["interpreter_status"] = report.status
+                res["interpreter_tier"] = report.tier
+                res["runtime_verified"] = report.tier in READY_TIERS
+                res["runtime_reason"] = report.reason
+                res["ready"] = res["runtime_verified"]
     return res
 
 def print_status(s: dict) -> None:
@@ -318,50 +352,58 @@ def create_env(model: dict, s: dict, dry_run: bool, config=None, network_allowed
     if config is None:
         config = resolve_config()
     shared_info = _check_shared_assignment(model_id, config)
-    selected = _interpreter_from_env_var(model)
-    if (shared_info and selected and shared_info.get("interpreter")
-            and not _same_environment_prefix(selected, shared_info["interpreter"])):
-        # The same precedence `status` applies: a selection naming a DIFFERENT prefix is the target to
-        # build or repair. Following the assignment instead provisioned the old group while the
-        # operator had selected a new interpreter, and then failed with "interpreter missing or not
-        # executable" once the old prefix had been deleted.
-        print(f"[NOTICE] {model_id}: operator-selected interpreter {selected} overrides assigned "
-              f"group {shared_info.get('environment_id')}")
-        if dry_run:
-            # Read-only AND result-stable, exactly like the assignment branch below: a dry run
-            # provisions nothing, so it neither drops the assignment nor reaches the install paths,
-            # and its verdict cannot become a function of `--allow-network`. Reporting the selected
-            # target is what the operator asked to see; the drop to the selected environment belongs
-            # to a real run, which falls through below.
-            print(f"[OK] dry-run: would provision or reuse the selected interpreter {selected}")
-            return True
-        shared_info = None
-    if (shared_info and selected and shared_info.get("interpreter")
-            and _same_environment_prefix(selected, shared_info["interpreter"])
-            and Path(selected).expanduser().is_file()
-            and not any(_is_staging_path(path) for path in (
-                selected, shared_info.get("interpreter"), shared_info.get("conda_env_path")))
-            and not (Path(shared_info["interpreter"]).is_file()
-                     and os.access(shared_info["interpreter"], os.X_OK))):
-        # Same prefix, different alias, and the ASSIGNED alias is unusable: an existing
-        # `bin/python3.10` beside a deleted `bin/python`. The assignment's alias is not the target --
-        # the last-resort branch below verified the deleted path, and `_provision_group` installs at
-        # `Path(assignment)/../..`, i.e. it rebuilds the environment the operator deliberately
-        # bypassed and then fails on the alias. The operator's executable IS this environment, so it
-        # is the interpreter to install into. An assigned alias that IS usable keeps the assignment
-        # branch (and its repair) exactly as before, as does a selection that does not exist yet.
-        # An INTERRUPTED STAGING prefix is excluded: no adoption path may install into `.staging-*`
-        # (`_provision_group`: "Interrupted staging prefixes cannot be adopted as environments"), so
-        # this branch must not point pip at one either. Staging falls through to the assignment
-        # branch, which refuses exactly as it did before the alias precedence existed.
-        print(f"[NOTICE] {model_id}: operator-selected interpreter {selected} is the target for "
-              f"assigned group {shared_info.get('environment_id')}")
-        if dry_run:
-            # Same contract as the different-prefix branch above: a dry run provisions nothing, so
-            # its verdict must stay read-only, result-stable and independent of `--allow-network`.
-            print(f"[OK] dry-run: would provision or reuse the selected interpreter {selected}")
-            return True
-        shared_info = None
+    # ONE decision, taken BEFORE any assignment reuse or repair, and the same one `status` takes:
+    # process environment > `workbench.env` > persisted assignment. Both callers read the same helper,
+    # so neither can disagree with the other or with the launch resolver, which returns the configured
+    # selection whenever there is one.
+    target = _effective_target(model, shared_info)
+    if target["source"] == "selection" and target["staging"]:
+        # An INTERRUPTED STAGING selection is not a target on ANY route -- with no assignment, beside
+        # one, or against a different or the same prefix. `status` reports it INTERRUPTED_STAGING (not
+        # ready) and the launch resolver still uses it, so no route may return success off a healthy
+        # assignment it names; and `_provision_group` refuses to adopt a `.staging-*` prefix
+        # ("Interrupted staging prefixes cannot be adopted as environments"), so pointing pip at one
+        # would install into exactly the environment every other adoption path rejects. The rule is
+        # the existing `INTERRUPTED_STAGING` one, not a new security layer: the assignment stays
+        # visible as metadata, then the run is refused.
+        if shared_info:
+            members_str = ", ".join(shared_info.get("group_members", []))
+            print(f"[GROUP] {model_id}: assigned to shared group {shared_info.get('environment_id')}"
+                  f" (members: {members_str}); interpreter: {shared_info.get('interpreter')}")
+        print(f"[BLOCKED] {model_id}: selected interpreter is an interrupted staging environment "
+              f"and cannot be installed into", file=sys.stderr)
+        return False
+    if target["source"] == "selection":
+        assigned = (shared_info or {}).get("interpreter")
+        same_prefix = bool(assigned) and _same_environment_prefix(target["raw"], assigned)
+        if not target["usable"]:
+            # A MISSING or NON-EXECUTABLE selection is the target, and its own unusable state is the
+            # answer. Reusing a healthy assignment instead would report success for an interpreter the
+            # launch resolver will still pick -- the disagreement this decision exists to end.
+            print(f"[BLOCKED] {model_id}: {s.get('env_var') or 'interpreter'}={target['path']} "
+                  f"{target['reason']}", file=sys.stderr)
+            return False
+        if shared_info and (not same_prefix or not _usable_interpreter(assigned)):
+            # The selection is the target. A selection naming a DIFFERENT prefix is the environment to
+            # build or repair: following the assignment provisioned the old group while the operator
+            # had moved on, then failed once the old prefix was deleted -- or, when the assignment
+            # recorded `interpreter: None` after FAILED/BLOCKED, planned peer groups for a model the
+            # operator had already pointed elsewhere. A SAME-prefix selection whose assigned alias is
+            # unusable is this environment under another name, and `_provision_group` would rebuild
+            # the assignment the operator deliberately bypassed. An assigned alias that IS usable
+            # keeps the assignment branch (and its repair) exactly as before.
+            print(f"[NOTICE] {model_id}: operator-selected interpreter {target['raw']} overrides "
+                  f"assigned group {shared_info.get('environment_id')}")
+            if dry_run:
+                # Read-only AND result-stable: a dry run provisions nothing, so it neither drops the
+                # assignment nor reaches the install paths, and its verdict cannot become a function
+                # of `--allow-network`. Reporting the selected target is what the operator asked to
+                # see; the drop to the selected environment belongs to a real run, which falls
+                # through below.
+                print(f"[OK] dry-run: would provision or reuse the selected interpreter "
+                      f"{target['raw']}")
+                return True
+            shared_info = None
     if shared_info:
         members_str = ", ".join(shared_info.get("group_members", []))
         env_id = shared_info.get("environment_id")
