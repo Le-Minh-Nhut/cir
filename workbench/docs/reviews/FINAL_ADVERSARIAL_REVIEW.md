@@ -9,7 +9,7 @@ Superseded; the current release metadata is `FINAL_PC_RELEASE_VERDICT.md`.
 
 ## 1. Current-round attribution
 
-The worker model was `cx/gpt-6-luna`, resolved by the harness as `9router/cx/gpt-6-luna:max` (the operator's own `task.agentModelOverrides` maximum-effort setting); the advisor role was unchanged, and no Gemini model was invoked.
+The worker model was `cx/gpt-6-luna`, resolved by the harness as `9router/cx/gpt-6-luna:max` (the operator's own `task.agentModelOverrides` maximum-effort setting); the advisor role was unchanged, and no Gemini model was invoked. Route note (added later): the current harness configuration pins all worker overrides to a different route, so this historical attribution can no longer be re-established from live configuration; it is retained as the record of the round that wrote this document.
 
 ## 2. The method every reviewer was given
 
