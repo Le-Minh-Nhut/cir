@@ -418,34 +418,28 @@ def model_interpreter_identity(model: dict[str, Any], config: Any, adapter: Any 
     if verify:
         # The environment's CONTENT identity, not just its path. Bound into this dict so every
         # semantic key derived from it -- the run id, the rank-cache fingerprint, the feature
-        # memmap fingerprints -- changes when an installed dependency's bytes change. Computed on
-        # the interpreter the adapter actually invokes (never its resolved base) with that
-        # interpreter's parent's parent as the prefix, matching `_record_environment_fingerprint`
-        # and the GPU capability key.
+        # memmap fingerprints -- changes when an installed dependency's bytes change.
         #
-        # Verification computes this same digest internally: `verify_environment` reaches
-        # `_cached_gpu_capability`, which needs the AUTHORITATIVE fingerprint to decide whether a
-        # recorded capability still describes this environment. When that record matched, its
-        # payload carries the value -- same function, same interpreter -- so it is reused here
-        # instead of hashing every installed member a second time (~27,600 `_member_digest` calls,
-        # ~10 s per model per composition run). `report.environment_fingerprint` is deliberately NOT
-        # used: it is null on this path, and a cached report's value is derived from the
-        # interpreter's SELF-REPORTED prefix, which need not equal the parent's-parent prefix the
-        # capability key is built from.
-        #
-        # The internal computation is eager and is exposed only when a capability record matched,
-        # so on a host with no verified capability (tier GPU_VERIFICATION_PENDING) the digest is
-        # recomputed below; removing that remaining pass needs `runtime.py` to expose it, which is
-        # outside this file's ownership.
-        fingerprint = None
+        # The digest is taken from `report.validated_environment_fingerprint`: the value
+        # `verify_environment` proved CURRENT for THIS call, either because it recomputed it or
+        # because it re-derived the current authoritative digest and matched a recorded capability
+        # payload against it. A capability payload is never trusted on its own -- reading
+        # `report.gpu_capability["interpreter_fingerprint"]` did exactly that, and a memo-warm reuse
+        # returned a cached report whose payload described an environment that had since been
+        # rewritten in place (indistinguishable to the cheap advisory check), so the composition
+        # identity stayed fixed while the environment changed. When nothing was validated (no
+        # capability record matched, a non-GPU model, a non-advisory path) the digest is computed
+        # here instead: same function, same interpreter, same parent's-parent prefix the capability
+        # key is built from. `report.environment_fingerprint` is deliberately NOT used: it is null
+        # on this path, and a cached report's value is derived from the interpreter's SELF-REPORTED
+        # prefix, which need not equal the parent's-parent prefix.
         try:
             report = verify_environment(model, probe=True, advisory=True, config=config)
             result.update(verified=report.tier in READY_TIERS,
                           verification_status=report.status, verification_reason=report.reason)
-            capability = getattr(report, "gpu_capability", None)
-            if isinstance(capability, dict) and report.interpreter == resolved:
-                fingerprint = capability.get("interpreter_fingerprint")
+            fingerprint = getattr(report, "validated_environment_fingerprint", None)
         except Exception as error:
+            fingerprint = None
             result.update(verification_status="UNAVAILABLE",
                           verification_reason=f"{type(error).__name__}: {error}")
         result["environment_fingerprint"] = fingerprint or _record_environment_fingerprint(model, resolved)

@@ -899,11 +899,16 @@ def _execution_identity(model: dict, config: WorkbenchConfig) -> dict:
 
     env = model.get("environment") or {}
     variable = env.get("python_env_var")
-    from workbench.backend.model_settings import setting as _setting
+    from workbench.backend import runtime as _runtime
 
-    configured = (_setting(variable) or "") if variable else ""
-    interpreter = configured or (sys.executable if not variable and not model.get("environment_required")
-                                 else "UNCONFIGURED")
+    # The identity must bind the interpreter the runtime will actually launch. The canonical
+    # resolver applies the documented precedence (process environment > workbench.env > provisioning
+    # assignment), and an assigned venv is normally reachable only through
+    # `environment_assignment.json`, so reading the setting alone would record a different
+    # interpreter than the one that runs the evaluation.
+    resolved = _runtime.resolve_model_interpreter(model, config)
+    interpreter = resolved or (sys.executable if not variable and not model.get("environment_required")
+                               else "UNCONFIGURED")
     digest.update(f"INTERPRETER:{interpreter}\0".encode("utf-8"))
     if interpreter != "UNCONFIGURED":
         interpreter_path = Path(interpreter).expanduser()
@@ -928,8 +933,6 @@ def _execution_identity(model: dict, config: WorkbenchConfig) -> dict:
             # the files its RECORD lists, which is the evidence the GPU capability cache uses —
             # reuse it rather than inventing a second package identity.
             try:
-                from workbench.backend import runtime as _runtime
-
                 digest.update(f"ENVIRONMENT_CONTENT:{_runtime._interpreter_fingerprint(str(interpreter_path), _runtime._environment_contract_digest(model), str(environment_prefix))}\0".encode("utf-8"))
             except Exception as error:
                 # An unreadable environment is not a reason to claim identity we could not

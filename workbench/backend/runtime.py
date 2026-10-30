@@ -70,6 +70,10 @@ class EnvironmentReport:
     runtime_adaptation: str | None = None
     advisory_fingerprint: str | None = None
     content_verified: bool = False
+    #: Environment-content digest proven current for THIS call (either freshly computed or a
+    #: recorded capability payload's fingerprint validated against the current authoritative
+    #: digest). Safe to bind into execution identity; None when nothing was validated.
+    validated_environment_fingerprint: str | None = None
 
 _PROBE_ENV_DENY_PREFIXES = (
     "WORKBENCH_LEDGER_KEY", "WORKBENCH_SECRET_",
@@ -1341,7 +1345,8 @@ def _record_environment_fingerprint(model: dict[str, Any],
         str(_Path(interpreter).parent.parent), authoritative=True)
 
 def _cached_gpu_capability(model: dict[str, Any], report: EnvironmentReport,
-                           authoritative: bool = True, config: Any | None = None) -> dict[str, Any] | None:
+                           authoritative: bool = True, config: Any | None = None,
+                           expected_fingerprint: str | None = None) -> dict[str, Any] | None:
     """A previously verified capability for exactly this environment, or None.
 
     On the advisory/readiness path (`authoritative=False`), this reads existing signed
@@ -1360,7 +1365,8 @@ def _cached_gpu_capability(model: dict[str, Any], report: EnvironmentReport,
 
     config_for_records = config if config is not None else resolve_config()
     synthetic_ok = os.environ.get(GPU_PROBE_OVERRIDE_ENV) == "1"
-    expected_fingerprint = _record_environment_fingerprint(model, configured)
+    if expected_fingerprint is None:
+        expected_fingerprint = _record_environment_fingerprint(model, configured)
 
     if not authoritative:
         # Only entries read from THIS workspace's root. The payloads below are otherwise identical
@@ -1666,8 +1672,14 @@ def verify_environment(model: dict[str, Any], *, probe: bool = True, require_cud
         # Interpreter, Python version, and dependencies are verified; GPU capability is a
         # separate question that inspection must never answer. The model is pending, and
         # verify_gpu_runtime() is the authorized path that resolves it on the GPU host.
+        # The authoritative fingerprint is computed exactly once here and handed both to the
+        # capability lookup (which must compare a record against the CURRENT environment) and to
+        # the report, so a caller that needs the environment identity does not pay for a second
+        # pass over every installed member.
+        expected = _record_environment_fingerprint(model, str(interpreter))
+        report.validated_environment_fingerprint = expected
         cached_gpu = _cached_gpu_capability(model, report, authoritative=is_authoritative,
-                                            config=config)
+                                            config=config, expected_fingerprint=expected)
         if cached_gpu is not None and cached_gpu.get("capability_verified"):
             report.gpu_capability = cached_gpu
             report.cuda_available = bool(cached_gpu.get("cuda_available"))
@@ -2050,6 +2062,11 @@ def _reuse(model: dict[str, Any], require_cuda: bool, interpreter: str,
         ):
             _VERIFIED_ENVIRONMENTS.pop(key, None)
             return None
+        # That comparison re-derived the byte-exact digest from the CURRENT content and proved the
+        # cached value unchanged, so the cached fingerprint IS the digest this call validated. It
+        # is reported as such: clearing it here too told a caller that nothing had been validated
+        # immediately after a full content check had just run.
+        cached.validated_environment_fingerprint = cached.environment_fingerprint
     else:
         cached_fp = cached.advisory_fingerprint or cached.environment_fingerprint
         current_fp = _interpreter_fingerprint(
@@ -2059,6 +2076,27 @@ def _reuse(model: dict[str, Any], require_cuda: bool, interpreter: str,
         if cached_fp != current_fp:
             _VERIFIED_ENVIRONMENTS.pop(key, None)
             return None
+        # A cached report carries the capability payload that was recorded when it was produced.
+        # That payload is a claim about the environment as it was THEN, and the advisory check
+        # above is a cheap one (name fold, RECORD text, member mtimes): an in-place same-length
+        # rewrite with the mtime restored passes it. So on this advisory path the payload's own
+        # fingerprint is re-derived from the CURRENT authoritative digest before it may be handed
+        # to a caller as this call's environment identity; a payload that no longer matches means
+        # the cached report is stale, and the full inspection (which reads the capability through
+        # `_cached_gpu_capability` and again refuses a mismatched record) has to run. Only a value
+        # validated HERE is exposed -- never one an earlier call left on the object.
+        cached.validated_environment_fingerprint = None
+        if isinstance(cached.gpu_capability, dict):
+            payload_fingerprint = cached.gpu_capability.get("interpreter_fingerprint")
+            if payload_fingerprint:
+                current = _interpreter_fingerprint(
+                    interpreter, _environment_contract_digest(model), cached.prefix,
+                    authoritative=True,
+                )
+                if current != payload_fingerprint:
+                    _VERIFIED_ENVIRONMENTS.pop(key, None)
+                    return None
+                cached.validated_environment_fingerprint = payload_fingerprint
     # A pinned-interpreter mismatch must never be masked by a cached verification.
     declared_digest = str((model.get("environment") or {}).get("interpreter_sha256") or "").strip().lower()
     if declared_digest and declared_digest.upper() != "UNKNOWN":
@@ -2343,8 +2381,15 @@ def verify_gpu_runtime(model: dict[str, Any], config: Any, *, authorized: bool =
         # A capability already verified for exactly this environment is a recorded
         # observation, not a guess: an evaluation launch consumes the record instead of
         # re-running the probe. `force=True` re-probes (the operator's explicit re-check).
-        existing = _cached_gpu_capability(model, verify_environment(model, probe=True, advisory=True),
-                                          config=config)
+        # The advisory report already carries the digest `verify_environment` proved current for
+        # this call (freshly computed, or a payload validated against the current authoritative
+        # digest), so it is handed to the lookup instead of paying for the same full authoritative
+        # pass a second time inside `_cached_gpu_capability`. `getattr` keeps this correct if a
+        # report ever arrives without one: the lookup then computes it as before.
+        advisory = verify_environment(model, probe=True, advisory=True)
+        existing = _cached_gpu_capability(
+            model, advisory, config=config,
+            expected_fingerprint=getattr(advisory, "validated_environment_fingerprint", None))
         if existing is not None and existing.get("capability_verified"):
             return existing
 
