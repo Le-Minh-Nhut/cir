@@ -260,6 +260,19 @@ def status(model: dict, config) -> dict:
                 res["runtime_reason"] = (f"operator-selected interpreter {selected} overrides "
                                          f"assigned group {res['shared_group']}")
         elif assigned:
+            if selected and Path(selected).expanduser().is_file():
+                # Same environment prefix, so the precedence branch above did not fire -- but the
+                # operator still named an EXISTING executable alias (a venv's `bin/python3.10`
+                # beside an assigned `bin/python`). The assignment must not report its own path or
+                # its own verdict while that selection exists: `res["interpreter"]` stays the
+                # SELECTED invocation path with the verdict `_interpreter_status` measured for it,
+                # and the assignment remains visible as `shared_interpreter` metadata. Overwriting
+                # reported the assigned alias even after it was deleted -- `ready` true beside a
+                # path that does not exist.
+                if not res.get("runtime_reason"):
+                    res["runtime_reason"] = (f"operator-selected interpreter {selected} overrides "
+                                             f"assigned group {res['shared_group']}")
+                return res
             res["interpreter"] = assigned
             if state in ("FAILED", "BLOCKED"):
                 res["ready"] = False
@@ -320,6 +333,32 @@ def create_env(model: dict, s: dict, dry_run: bool, config=None, network_allowed
             # and its verdict cannot become a function of `--allow-network`. Reporting the selected
             # target is what the operator asked to see; the drop to the selected environment belongs
             # to a real run, which falls through below.
+            print(f"[OK] dry-run: would provision or reuse the selected interpreter {selected}")
+            return True
+        shared_info = None
+    if (shared_info and selected and shared_info.get("interpreter")
+            and _same_environment_prefix(selected, shared_info["interpreter"])
+            and Path(selected).expanduser().is_file()
+            and not any(_is_staging_path(path) for path in (
+                selected, shared_info.get("interpreter"), shared_info.get("conda_env_path")))
+            and not (Path(shared_info["interpreter"]).is_file()
+                     and os.access(shared_info["interpreter"], os.X_OK))):
+        # Same prefix, different alias, and the ASSIGNED alias is unusable: an existing
+        # `bin/python3.10` beside a deleted `bin/python`. The assignment's alias is not the target --
+        # the last-resort branch below verified the deleted path, and `_provision_group` installs at
+        # `Path(assignment)/../..`, i.e. it rebuilds the environment the operator deliberately
+        # bypassed and then fails on the alias. The operator's executable IS this environment, so it
+        # is the interpreter to install into. An assigned alias that IS usable keeps the assignment
+        # branch (and its repair) exactly as before, as does a selection that does not exist yet.
+        # An INTERRUPTED STAGING prefix is excluded: no adoption path may install into `.staging-*`
+        # (`_provision_group`: "Interrupted staging prefixes cannot be adopted as environments"), so
+        # this branch must not point pip at one either. Staging falls through to the assignment
+        # branch, which refuses exactly as it did before the alias precedence existed.
+        print(f"[NOTICE] {model_id}: operator-selected interpreter {selected} is the target for "
+              f"assigned group {shared_info.get('environment_id')}")
+        if dry_run:
+            # Same contract as the different-prefix branch above: a dry run provisions nothing, so
+            # its verdict must stay read-only, result-stable and independent of `--allow-network`.
             print(f"[OK] dry-run: would provision or reuse the selected interpreter {selected}")
             return True
         shared_info = None

@@ -197,6 +197,40 @@ Per-model interpreters are PROVISIONED by the run, not copied: `allow_env_instal
 cohort profile lets the planner create each model group's own prefix under `artifacts`. Never copy a
 laptop virtualenv to the PC; the interpreter fingerprint is part of the model environment's identity.
 
+Fresh provisioning DOES NOT export the model interpreter into your shell: the manager publishes it to
+`<artifacts>/environment_assignment.json`, and a child process cannot export a shell variable back to
+the parent, so a pasted `"$WORKBENCH_ENCODER_PYTHON" ...` expands to an empty executable and fails
+with exit 127 (`command not found`). Resolve it the way every later stage does — from the assignment
+— and prove the CUDA runtime before the GPU-heavy steps:
+
+```
+.venv/bin/python - <<'PY'
+from pathlib import Path
+import subprocess
+
+from workbench.backend.operator_config import resolve_config
+from workbench.backend.registry import model_by_id
+from workbench.backend.runtime import resolve_model_interpreter
+
+config = resolve_config()
+interpreter = resolve_model_interpreter(model_by_id("encoder"), config)
+if not interpreter or not Path(interpreter).is_file():
+    raise SystemExit("ENCODER interpreter is unresolved; inspect roots/assignment/status first")
+print("Resolved ENCODER interpreter:", interpreter, flush=True)
+
+code = """import torch, torchvision
+print('versions:', torch.__version__, torchvision.__version__, torch.version.cuda)
+print('GPU:', torch.cuda.get_device_name(0), torch.cuda.get_device_capability(0))
+a = torch.randn(512, 512, device='cuda')
+b = a @ a
+torch.cuda.synchronize()
+assert b.isfinite().all().item()
+print('CUDA allocation/matmul/synchronization OK')
+"""
+subprocess.run([interpreter, "-c", code], check=True)
+PY
+```
+
 A preflight that refuses a run is reporting a prerequisite, not failing: the refusal names the exact
 item to fix (a missing permission by its flag, a missing asset by its path, an unverified
 interpreter by its environment variable). Fix that one thing and re-run the same command with

@@ -1831,16 +1831,51 @@ def _interpreter_fingerprint(interpreter: str, contract_digest: str,
         # is carried by the distribution metadata and RECORD members hashed below, which is what a
         # real install changes.
         #
-        # The directory mtime is replaced by a content-NAME-addressed fold of the top-level entries
-        # themselves, bytecode excluded. That keeps fix B's goal (a `__pycache__` materialization
-        # must not move identity) while closing the hole a bare mtime removal would open: a dropped
-        # `sitecustomize.py` or `*.pth` executes at interpreter startup, so it changes evaluator
-        # semantics, yet it is not a distribution and is invisible to the `*.dist-info`/`*.egg-info`
-        # globs below.
+        # Three layers carry the environment's content identity, all bytecode-excluded:
+        #   1. a NAME fold of every top-level entry, so adding or removing anything (a dropped
+        #      `sitecustomize.py`, a new `*.pth`, a stray module) moves the identity;
+        #   2. a CONTENT digest of the startup-executing entries only -- `*.pth`, `sitecustomize.py`,
+        #      `usercustomize.py`, plus their package form (`sitecustomize/__init__.py`). The
+        #      interpreter runs them before user code, so rewriting one in place changes evaluator
+        #      semantics while its name and its directory's mtime stay put; a name-only fold missed
+        #      exactly that. Rewriting the same bytes leaves it unchanged. A SYMLINKED entry is
+        #      folded by the target it NAMES (`os.readlink`, the same convention as the stage input
+        #      inventory): a symlink's identity is its target, so a retarget moves this digest even
+        #      when both targets hold identical bytes.
+        #   3. the distribution metadata/RECORD members hashed below, which is what a real install
+        #      changes.
+        # The directory's own mtime is still deliberately NOT folded (see above).
         for entry in sorted(site_packages.iterdir()):
             if entry.name == "__pycache__" or entry.name.endswith((".pyc", ".pyo")):
                 continue
             hasher.update(f"{site_packages.name}/{entry.name}".encode("utf-8"))
+            startup_module = entry.name.endswith(".pth") or entry.name in (
+                "sitecustomize.py", "usercustomize.py")
+            startup_package = entry.name in ("sitecustomize", "usercustomize")
+            if entry.is_symlink() and (startup_module or startup_package):
+                # A symlinked startup entry is folded by the target it NAMES: `_member_digest`
+                # rejects symlinks outright (registry `_regular_file`), and skipping it silently
+                # left a retarget invisible. Same convention as the stage input inventory.
+                try:
+                    hasher.update(f"{entry.name}:{os.readlink(entry)}".encode("utf-8"))
+                except OSError:
+                    # Unreadable: the name fold above is all the evidence there was before.
+                    pass
+            elif startup_module:
+                try:
+                    hasher.update(f"{entry.name}:{_member_digest(entry)}".encode("utf-8"))
+                except (OSError, ValueError):
+                    # Unreadable: the name fold above is all the evidence there was before, so the
+                    # entry keeps its prior behaviour rather than aborting the whole fingerprint.
+                    pass
+            elif startup_package:
+                # The PACKAGE form (`sitecustomize/__init__.py`) is imported at startup too, and
+                # `site` prefers it over the module when both exist.
+                try:
+                    hasher.update(f"{entry.name}/__init__.py:"
+                                  f"{_member_digest(entry / '__init__.py')}".encode("utf-8"))
+                except (OSError, ValueError):
+                    pass
         for dist in sorted(list(site_packages.glob("*.dist-info")) + list(site_packages.glob("*.egg-info"))):
             metadata = dist / "METADATA" if dist.name.endswith(".dist-info") else dist / "PKG-INFO"
             try:

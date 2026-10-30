@@ -298,6 +298,11 @@ PER_QUERY_PARITY     PENDING  (chỉ kiểm được sau suy luận thật)
 `GPU_SCIENTIFIC_VALIDATION_READY` **không** đạt được trên máy dev, và không có gì trong repo tuyên bố
 ngược lại.
 
+Lưu ý về hai con số bộ nhớ của TME: ~10.47 GiB là **CACHE/STORAGE** của feature validation (ước tính
+dung lượng đĩa), **không** phải yêu cầu VRAM; còn ~3.5 GiB là **đỉnh VRAM đo được** của smoke trên
+`sm_86`, **không** phải bảo đảm cho máy đích. Mức VRAM thực tế phụ thuộc GPU và batch — phải đo trên
+máy đích.
+
 ## 9. Lỗi thường gặp thật (không phải lỗi phần mềm)
 
 | Triệu chứng | Nguyên nhân |

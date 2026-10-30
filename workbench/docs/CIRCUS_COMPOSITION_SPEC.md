@@ -210,6 +210,38 @@ unset WORKBENCH_ENCODER_PYTHON
 export WORKBENCH_ENCODER_PYTHON="$CIR_ENVS_ROOT/encoder/bin/python"
 .venv/bin/python workbench/scripts/manage_environment.py --model encoder --json
 
+# 5c. Resolve the FRESH-mode interpreter and prove the CUDA runtime. Fresh mode (5a) publishes the
+#     interpreter to `<artifacts>/environment_assignment.json`; a CHILD PROCESS CANNOT EXPORT A
+#     SHELL VARIABLE BACK TO YOUR SHELL, so a pasted `"$WORKBENCH_ENCODER_PYTHON" ...` expands to an
+#     EMPTY executable and fails with exit 127 (`command not found`). Resolve it from the assignment
+#     instead (the same resolution every later stage uses), then check Python/Torch/vision/CUDA/GPU
+#     and run a real CUDA allocation + matmul + synchronization before the GPU-heavy steps:
+.venv/bin/python - <<'PY'
+from pathlib import Path
+import subprocess
+
+from workbench.backend.operator_config import resolve_config
+from workbench.backend.registry import model_by_id
+from workbench.backend.runtime import resolve_model_interpreter
+
+config = resolve_config()
+interpreter = resolve_model_interpreter(model_by_id("encoder"), config)
+if not interpreter or not Path(interpreter).is_file():
+    raise SystemExit("ENCODER interpreter is unresolved; inspect roots/assignment/status first")
+print("Resolved ENCODER interpreter:", interpreter, flush=True)
+
+code = """import torch, torchvision
+print('versions:', torch.__version__, torchvision.__version__, torch.version.cuda)
+print('GPU:', torch.cuda.get_device_name(0), torch.cuda.get_device_capability(0))
+a = torch.randn(512, 512, device='cuda')
+b = a @ a
+torch.cuda.synchronize()
+assert b.isfinite().all().item()
+print('CUDA allocation/matmul/synchronization OK')
+"""
+subprocess.run([interpreter, "-c", code], check=True)
+PY
+
 # 6. Status inspection — VALID flag combinations only:
 #      --list [--json]        inventory every registry model
 #      --model X [--json]     one model's status (the ONLY per-model form)
@@ -237,7 +269,7 @@ export WORKBENCH_ENCODER_PYTHON="$CIR_ENVS_ROOT/encoder/bin/python"
 ./workbench/run.sh composition-eval --config ~/cir_pc.yaml --models selected --subsets full,sf,validated --resume
 ```
 
-Schedule one GPU-heavy model at a time; the runner serializes model runs. Smoke mode limits queries (default 1) and preserves the full released gallery. Released data root is configured by `WORKBENCH_CIRCUS_RELEASE_ROOT`. `--prepare-data` verifies the released files against their recorded hashes and inventories missing gallery/reference/positive images — it never downloads a missing asset. `--models selected` reads the authorized cohort from `~/cir_pc.yaml` (`selected_models` and `checkpoint_overrides`), so it must be run with `--config`.
+Schedule one GPU-heavy model at a time; the runner serializes model runs. Fresh mode (5a) never exports the model interpreter into your shell — the manager publishes it to `<artifacts>/environment_assignment.json`, so resolve it there (step 5c) rather than assuming `$WORKBENCH_ENCODER_PYTHON` is set. Smoke mode limits queries (default 1) and preserves the full released gallery. Released data root is configured by `WORKBENCH_CIRCUS_RELEASE_ROOT`. `--prepare-data` verifies the released files against their recorded hashes and inventories missing gallery/reference/positive images — it never downloads a missing asset. `--models selected` reads the authorized cohort from `~/cir_pc.yaml` (`selected_models` and `checkpoint_overrides`), so it must be run with `--config`.
 
 ## Run identity, resume and worker lifecycle
 
