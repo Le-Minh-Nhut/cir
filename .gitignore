@@ -285,3 +285,6 @@ workbench/docker/release_verify_report.json
 
 # Local scratch space for runs whose caches exceed the tmpfs /tmp (see PC_PILOT_HANDOFF).
 .scratch-tmp/
+
+# omp per-project config (operator-local model routing, machine-specific)
+.omp/
