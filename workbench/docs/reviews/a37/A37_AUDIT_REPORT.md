@@ -18,7 +18,7 @@ re-derived in this drafting pass carry `[unverified]`.
 | Final HEAD | A tracked file cannot name the commit containing it; `git rev-parse HEAD` on `research/cir-failure-workbench` is authoritative. Historical datum verified immediately before this correction commit: `9bdf6db08511f93761a9bf3f566a5d3bc9a0d369`. |
 | Remote tip at end | `git ls-remote origin refs/heads/research/cir-failure-workbench` is authoritative. Historical datum verified immediately before this correction commit: `9bdf6db08511f93761a9bf3f566a5d3bc9a0d369`. |
 | `origin/main` | untouched at `8ebcc74d5fd1934df4f3772a8ca5a96dbd00f333` (`git ls-remote origin refs/heads/main`) |
-| Push | fast-forward `e06b4e6..f990ec8`; no force |
+| Push | Every push in this round was a fast-forward, never `--force` and never a rewrite. Initial span: `e06b4e6..f990ec8`; subsequent docs-only commits fast-forwarded on top. `git rev-parse HEAD` on `research/cir-failure-workbench` is authoritative; `git ls-remote origin refs/heads/research/cir-failure-workbench` gives the remote tip. |
 | `TESTED_SOURCE_SHA` at start | `a6449e060e77f0deed0c79545dd0d5c1019e333c` (the A36 round) |
 | `TESTED_SOURCE_SHA` at end | `27554b2ac731c40385cbf72daf06d5ed5a0a24d7` — the A37 **test** commit; see the justification below |
 | Recorded production bytes (A36) | `b8adc465dbde00e7ca7160b4ab075a37506c4cbb` [unverified — doc value, not re-derived] |
