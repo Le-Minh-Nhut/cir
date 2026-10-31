@@ -1,7 +1,7 @@
 # A37 AUDIT REPORT — CIR Failure Analysis Workbench
 
 Repo: `/home/heheboiz/data/cir`. Branch: `research/cir-failure-workbench`.
-The round is **committed and pushed**; final HEAD `f990ec8a6bc752a3f512b7733978f6eb12ef5943`.
+The round is **committed and pushed**; the tip is whatever `git rev-parse HEAD` reports on `research/cir-failure-workbench` and `git ls-remote origin refs/heads/research/cir-failure-workbench` reports for the remote; the enumerated commits are in section 1.
 Nothing was written into the repository by this drafting pass.
 
 Every claim below cites a `file:line`, a command, or a measured number. Claims that could not be
