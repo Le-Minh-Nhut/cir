@@ -24,6 +24,7 @@ from workbench.backend.errors import WorkbenchError
 from workbench.backend.index import database_path, rebuild_index
 from workbench.backend.jobs import DuplicateJobError, QueueShutdownError, SingleGpuQueue
 from workbench.backend.operator_config import resolve_config
+from workbench.backend.preflight import preflight_blockers
 from workbench.backend.registry import checkpoint_availability, load_registry, sha256_file
 from workbench.backend.schemas.results import PROTOCOL_IDS, Annotation, SavedCohort
 from workbench.backend.storage import cohort_metrics, get_analysis_input, get_query, list_runs, query_page, validate_analysis_selection
@@ -161,7 +162,12 @@ def models():
     registry = load_registry()
     out = []
     for model in registry["models"]:
-        entry = {**model, "checkpoints": [{**checkpoint_availability(model, item),
+        model_blockers = preflight_blockers(model, resolve_config())
+
+        available = {item["checkpoint_id"]: checkpoint_availability(
+            model, item, model_blockers=model_blockers)
+            for item in model["checkpoint_variants"]}
+        entry = {**model, "checkpoints": [{**available[item["checkpoint_id"]],
                                            "checkpoint_training_noise_pct": item.get("checkpoint_training_noise_pct"),
                                            "evaluation_noise_pct": item.get("evaluation_noise_pct")}
                                           for item in model["checkpoint_variants"]]}
@@ -172,7 +178,7 @@ def models():
             by_id = {c["checkpoint_id"]: c for c in model["checkpoint_variants"]}
             entry["checkpoint_bundles"] = [
                 {**bundle,
-                 "members": [{**checkpoint_availability(model, by_id[member]),
+                 "members": [{**available[member],
                               "checkpoint_training_noise_pct": by_id[member].get("checkpoint_training_noise_pct"),
                               "evaluation_noise_pct": by_id[member].get("evaluation_noise_pct")}
                              for member in bundle.get("required_checkpoint_ids", []) if member in by_id]}

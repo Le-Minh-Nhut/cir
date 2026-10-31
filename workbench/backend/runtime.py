@@ -2919,14 +2919,16 @@ def runtime_plan_blockers(model: dict[str, Any], checkpoint: dict[str, Any], con
 
 
 def runtime_blockers(model: dict[str, Any], checkpoint: dict[str, Any], config: Any,
-                     protocol: str | None = None, dataset_root: Path | None = None) -> list[str]:
+                     protocol: str | None = None, dataset_root: Path | None = None,
+                     model_blockers: list[str] | None = None) -> list[str]:
     from workbench.backend.registry import (
         checkpoint_bundle_missing_paths, checkpoint_is_present, checkpoint_missing_paths,
         checkpoint_path, sha256_file,
     )
     from workbench.backend.preflight import preflight_blockers
 
-    blockers = preflight_blockers(model, config, dataset_root=dataset_root)
+    blockers = (list(model_blockers) if model_blockers is not None else
+                preflight_blockers(model, config, dataset_root=dataset_root))
     if protocol is not None and protocol not in model.get("supported_protocols", []):
         blockers.append(f"protocol incompatible: {protocol}")
     checkpoint_file = checkpoint_path(model["model_id"], checkpoint, config.WORKBENCH_CHECKPOINT_ROOT)

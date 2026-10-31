@@ -15,12 +15,14 @@ from dataclasses import asdict, dataclass
 from pathlib import Path, PurePosixPath
 from typing import Any, Callable, Mapping, Sequence
 
+import fcntl
 import numpy as np
 from PIL import Image
 
 from workbench.composition.adapters import AdapterWorkerError, ExactRankUnavailable
 from workbench.composition.inputs import CONDITIONS, adapt_query_inputs
 from workbench.composition.data import PAPER_STATED_GALLERY_IMAGES, RELEASED_GALLERY_IMAGES, sha256_file
+
 
 @dataclass(frozen=True)
 class ModelSpec:
@@ -60,6 +62,33 @@ def _component(value: str) -> str:
 def _digest(value: Any) -> str:
     payload = json.dumps(value, sort_keys=True, separators=(",", ":"), default=str).encode("utf-8")
     return hashlib.sha256(payload).hexdigest()
+
+
+def _rank_payload_is_valid(ranks: Any, conditions: Sequence[str], qids: set[str], gallery_count: int) -> bool:
+    if not isinstance(ranks, dict) or set(ranks) != set(conditions):
+        return False
+    return all(isinstance(ranks[condition], dict) and set(ranks[condition]) == qids and
+               all(rank is None or type(rank) is int and 1 <= rank <= gallery_count
+                   for rank in ranks[condition].values())
+               for condition in conditions)
+
+
+def _acquire_model_lock(path: Path) -> int:
+    descriptor = os.open(path, os.O_CREAT | os.O_RDWR, 0o600)
+    try:
+        fcntl.flock(descriptor, fcntl.LOCK_EX)
+    except BaseException:
+        os.close(descriptor)
+        raise
+    return descriptor
+
+
+def _release_model_lock(descriptor: int) -> None:
+    try:
+        fcntl.flock(descriptor, fcntl.LOCK_UN)
+    finally:
+        os.close(descriptor)
+
 
 
 def _scope_name(scope: str | None) -> str:
@@ -571,7 +600,9 @@ def run_composition(data: Any, model_specs: Sequence[ModelSpec], config: Any, *,
     positive_positions = _positive_positions(data)
     reports = []
 
+
     for spec in model_specs:
+        model_lock = None
         model_id = _component(spec.model_id)
         checkpoint_id = _component(spec.checkpoint_id)
         model = spec.registry_model
@@ -654,6 +685,10 @@ def run_composition(data: Any, model_specs: Sequence[ModelSpec], config: Any, *,
             work_root.mkdir(parents=True, exist_ok=True)
             adapter.work_root = work_root
             rank_path = assert_composition_destination(artifacts, run_dir / "ranks" / f"{model_id}_{checkpoint_id}.json")
+            # ponytail: per-model lock serialises the whole section (~2x concurrent wall time); use per-feature-file locks if throughput matters; assumes a filesystem that honours flock, as a no-op lock reintroduces the race.
+            model_lock = _acquire_model_lock(assert_composition_destination(
+                artifacts, run_dir / f".{model_id}_{checkpoint_id}.lock"))
+
             attempt = _attempt_id(artifacts, data.gallery.protocol_id, model_id, checkpoint_id,
                                   run_id, is_synthetic, force_new=rank_path.exists())
             ranks: dict[str, dict[str, int | None]] | None = None
@@ -663,7 +698,9 @@ def run_composition(data: Any, model_specs: Sequence[ModelSpec], config: Any, *,
             if resume and adapter_source_hash != "unavailable" and rank_path.is_file():
                 try:
                     saved = json.loads(rank_path.read_text(encoding="utf-8"))
-                    if saved.get("fingerprint") == fingerprint and set(saved.get("ranks", {})) == set(conditions):
+                    if (isinstance(saved, dict) and saved.get("fingerprint") == fingerprint and
+                            _rank_payload_is_valid(saved.get("ranks"), conditions,
+                                                  {query.qid for query in queries}, len(gallery_ids))):
                         saved_status = saved.get("condition_status", {})
                         saved_failures = saved.get("query_failures", {})
                         transient = {condition for condition in conditions
@@ -836,6 +873,9 @@ def run_composition(data: Any, model_specs: Sequence[ModelSpec], config: Any, *,
                                          "attempt": attempt, "ranks": ranks,
                                          "query_failures": reasons_by_condition,
                                          "condition_status": mode_status})
+            if model_lock is not None:
+                _release_model_lock(model_lock)
+                model_lock = None
 
             query_rows_by_condition = {}
             for condition in conditions:
@@ -970,6 +1010,8 @@ def run_composition(data: Any, model_specs: Sequence[ModelSpec], config: Any, *,
                     adapter.close()
                 except Exception:
                     pass
+            if model_lock is not None:
+                _release_model_lock(model_lock)
 
     return {"run_count": len(reports), "models": reports, "gallery_count": len(gallery_ids),
             "gallery_identity_sha256": gallery_hash, "protocol_id": data.gallery.protocol_id,

@@ -299,29 +299,34 @@ def _stage_input_fingerprint_evidence(stage: Stage, config: WorkbenchConfig | No
     import hashlib
     import stat
     hasher = hashlib.sha256()
-    hasher.update(stage.name.encode("utf-8"))
+    def update(*values: object) -> None:
+        for value in values:
+            raw = value if isinstance(value, bytes) else str(value).encode("utf-8")
+            hasher.update(str(len(raw)).encode("ascii") + b":" + raw)
+
+    update("STAGE", stage.name)
     if stage.model_id:
-        hasher.update(f"MODEL:{stage.model_id}".encode("utf-8"))
+        update("MODEL", stage.model_id)
     if stage.checkpoint_id:
-        hasher.update(f"CKPT:{stage.checkpoint_id}".encode("utf-8"))
+        update("CKPT", stage.checkpoint_id)
     if stage.protocol:
-        hasher.update(f"PROTO:{stage.protocol}".encode("utf-8"))
+        update("PROTO", stage.protocol)
     for cmd in stage.commands:
-        hasher.update(shlex.join(cmd).encode("utf-8"))
+        update("COMMAND", shlex.join(cmd))
 
     if stage.name == "environment-plan":
         for cmd in stage.commands:
             for idx, arg in enumerate(cmd):
                 if arg in ("--model", "-m") and idx + 1 < len(cmd):
-                    hasher.update(f"MODEL_SEL:{cmd[idx+1]}".encode("utf-8"))
+                    update("MODEL_SEL", cmd[idx+1])
                 elif arg in ("--selected-models",) and idx + 1 < len(cmd):
-                    hasher.update(f"MODELS_SEL:{cmd[idx+1]}".encode("utf-8"))
+                    update("MODELS_SEL", cmd[idx+1])
                 elif arg in ("--third-party-root", "--source-root") and idx + 1 < len(cmd):
-                    hasher.update(f"SOURCE_ROOT:{cmd[idx+1]}".encode("utf-8"))
+                    update("SOURCE_ROOT", cmd[idx+1])
                 elif arg in ("--artifacts-root",) and idx + 1 < len(cmd):
-                    hasher.update(f"ARTIFACTS_ROOT:{cmd[idx+1]}".encode("utf-8"))
+                    update("ARTIFACTS_ROOT", cmd[idx+1])
                 elif arg in ("--output",) and idx + 1 < len(cmd):
-                    hasher.update(f"OUTPUT:{cmd[idx+1]}".encode("utf-8"))
+                    update("OUTPUT", cmd[idx+1])
     # The preprocessing recipe is part of what a result means: the same data evaluated under a
     # different layout, caption policy or image extension is a different experiment. It is a
     # derived identity rather than a file, so a model whose registry declaration changes
@@ -337,7 +342,7 @@ def _stage_input_fingerprint_evidence(stage: Stage, config: WorkbenchConfig | No
                 checkpoint_overrides=stage.checkpoint_overrides if stage.name == "evaluation" else ())
         except Exception:
             recipe_digest = "UNKNOWN_RECIPE"
-        hasher.update(f"RECIPE:{recipe_digest}".encode("utf-8"))
+        update("RECIPE", recipe_digest)
 
     # Evaluation identity covers the code that executes the experiment without making it an input
     # or weakening resume: implementation digests are derived identity, like the recipe.
@@ -348,13 +353,13 @@ def _stage_input_fingerprint_evidence(stage: Stage, config: WorkbenchConfig | No
             execution_identity = _execution_identity(model_by_id(stage.model_id), config)
         except Exception as error:
             execution_identity = {"digest": f"UNKNOWN:{type(error).__name__}:{error}"}
-        hasher.update(f"EXECUTION:{execution_identity['digest']}".encode("utf-8"))
+        update("EXECUTION", execution_identity["digest"])
 
     inputs = []
     weak = False
     for path in stage.input_paths:
         item = {"path": str(path)}
-        hasher.update(str(path).encode("utf-8"))
+        update("INPUT_PATH", str(path))
         try:
             details = path.lstat()
         except FileNotFoundError:
@@ -375,7 +380,7 @@ def _stage_input_fingerprint_evidence(stage: Stage, config: WorkbenchConfig | No
                         resolved = path.resolve(strict=True)
                     except (FileNotFoundError, RuntimeError):
                         category = SYMLINK_DANGLING
-                        hasher.update(f"L:{target}:{category}".encode("utf-8"))
+                        update("SYMLINK", "L", target, category)
                     except OSError as error:
                         category = UNREADABLE
                         item["error"] = f"{type(error).__name__}: {error}"
@@ -384,7 +389,7 @@ def _stage_input_fingerprint_evidence(stage: Stage, config: WorkbenchConfig | No
                         # Recording it only in the returned evidence left the digest blind: a
                         # retarget of an unresolvable link produced byte-identical fingerprints, so
                         # a resume silently reused a result computed from a different dataset.
-                        hasher.update(f"L:{target}:{category}".encode("utf-8"))
+                        update("SYMLINK", "L", target, category)
                     else:
                         item["resolved_target"] = str(resolved)
                         roots = [config.WORKBENCH_THIRD_PARTY_ROOT] if config else []
@@ -397,7 +402,7 @@ def _stage_input_fingerprint_evidence(stage: Stage, config: WorkbenchConfig | No
                                 roots.append(declared.parent.parent)
                         if not any(_inside_root(resolved, root) for root in roots):
                             category = SYMLINK_EXTERNAL
-                            hasher.update(f"L:{target}:{resolved}:{category}".encode("utf-8"))
+                            update("SYMLINK", "L", target, resolved, category)
                         else:
                             try:
                                 target_details = resolved.stat()
@@ -414,13 +419,12 @@ def _stage_input_fingerprint_evidence(stage: Stage, config: WorkbenchConfig | No
                                         item["target_tree_digest"] = target_digest
                                         category = (SYMLINK_VERIFIED
                                                     if target_category == TREE_CONTENT_VERIFIED else UNREADABLE)
-                                        hasher.update(
-                                            f"L:{target}:{resolved}:{target_category}:{target_digest}".encode("utf-8"))
+                                        update("SYMLINK", "L", target, resolved, target_category, target_digest)
                                 elif stat.S_ISREG(target_details.st_mode):
                                     target_digest = _file_digest(resolved)
                                     category = SYMLINK_VERIFIED
                                     item["target_sha256"] = target_digest
-                                    hasher.update(f"L:{target}:{resolved}:{target_digest}".encode("utf-8"))
+                                    update("SYMLINK", "L", target, resolved, target_digest)
                                 else:
                                     category = NOT_A_FILE
                                     item["error"] = "symlink target is not a regular file or directory"
@@ -430,7 +434,7 @@ def _stage_input_fingerprint_evidence(stage: Stage, config: WorkbenchConfig | No
                                 # Same blind spot one level down: the target was resolved, but
                                 # inspecting it failed, and the name it points at was folded
                                 # nowhere. A retarget between two failing reads was invisible.
-                                hasher.update(f"L:{target}:{resolved}:{category}".encode("utf-8"))
+                                update("SYMLINK", "L", target, resolved, category)
             elif stat.S_ISDIR(details.st_mode):
                 skip_paths = frozenset()
                 if stage.name == "evaluation" and stage.model_id and config:
@@ -447,10 +451,10 @@ def _stage_input_fingerprint_evidence(stage: Stage, config: WorkbenchConfig | No
                             tree_truncated=walk_truncated)
                 if inventory is None:
                     item["error"] = f"tree could not be walked: {path}"
-                    hasher.update(f"{category}\0".encode("utf-8"))
+                    update("TREE_ERROR", category)
                 else:
                     item["tree_digest"] = inventory.hexdigest()
-                    hasher.update(f"TREE:{inventory.hexdigest()}:{category}".encode("utf-8"))
+                    update("TREE", inventory.hexdigest(), category)
             elif stat.S_ISREG(details.st_mode):
                 try:
                     content_digest = _file_digest(path)
@@ -460,13 +464,13 @@ def _stage_input_fingerprint_evidence(stage: Stage, config: WorkbenchConfig | No
                 else:
                     category = CONTENT_VERIFIED
                     item["sha256"] = content_digest
-                    hasher.update(content_digest.encode("utf-8"))
+                    update("FILE_CONTENT", content_digest)
             else:
                 category = NOT_A_FILE
                 item["error"] = "path is not a regular file, directory, or symlink"
         item["category"] = category
         inputs.append(item)
-        hasher.update(f":{category}\0".encode("utf-8"))
+        update("INPUT_CATEGORY", category)
         if not _is_verified_entry(category) and category not in VERIFIED_TREE_CATEGORIES:
             weak = True
 
@@ -481,7 +485,7 @@ def _stage_input_fingerprint_evidence(stage: Stage, config: WorkbenchConfig | No
             pass
         except Exception as error:
             source_info = {"category": "HASH_FAILED", "error": f"{type(error).__name__}: {error}"}
-            hasher.update(f"SOURCE:{source_info['category']}:{source_info['error']}".encode("utf-8"))
+            update("SOURCE", source_info["category"], source_info["error"])
             weak = True
         else:
             source_name = model.get("source_dir")
@@ -521,10 +525,9 @@ def _stage_input_fingerprint_evidence(stage: Stage, config: WorkbenchConfig | No
                                 source_info.update(category="UNREADABLE", error=provenance["error"])
                             else:
                                 source_info["category"] = "UNVERIFIED"
-                hasher.update(f"SOURCE:{source_info['category']}:{source_info.get('provenance_digest')}"
-                              .encode("utf-8"))
+                update("SOURCE", source_info["category"], source_info.get("provenance_digest"))
                 if source_info.get("error"):
-                    hasher.update(source_info["error"].encode("utf-8"))
+                    update("SOURCE_ERROR", source_info["error"])
                 if source_info["category"] != "CONTENT_VERIFIED":
                     weak = True
 
@@ -532,7 +535,7 @@ def _stage_input_fingerprint_evidence(stage: Stage, config: WorkbenchConfig | No
         stages_rec = state.get("stages", {})
         for dep in stage.dependencies:
             dep_data = stages_rec.get(dep, {})
-            hasher.update(f"DEP:{dep}:{dep_data.get('status')}:{dep_data.get('fingerprint')}".encode("utf-8"))
+            update("DEPENDENCY", dep, dep_data.get("status"), dep_data.get("fingerprint"))
 
     return {"digest": hasher.hexdigest(), "weak": weak, "inputs": inputs,
             "source_provenance": source_info}

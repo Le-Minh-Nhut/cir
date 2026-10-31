@@ -17,12 +17,35 @@ PREPARATION_CONTRACT_REGISTRY_PATH = ROOT / "registry" / "preparation_contracts.
 CHECKPOINT_ROOT = ROOT / "artifacts" / "checkpoints"
 
 
+import copy
+
+
+# ponytail: unbounded by distinct config paths (three normal files).
+_YAML_PARSE_CACHE: dict[tuple[str, int, int], Any] = {}
+
+
+def _load_yaml_cached(path: Path) -> Any:
+    path = path.resolve()
+    stat = path.stat()
+    key = (str(path), stat.st_size, stat.st_mtime_ns)
+    if key not in _YAML_PARSE_CACHE:
+        with path.open(encoding="utf-8") as handle:
+            _YAML_PARSE_CACHE[key] = yaml.safe_load(handle)
+    return _YAML_PARSE_CACHE[key]
+_VALIDATED_CONFIG_CACHE: dict[tuple[str, str, int, int], Any] = {}
+
+
+def _validated_cache_key(kind: str, path: Path) -> tuple[str, str, int, int]:
+    path = path.resolve()
+    stat = path.stat()
+    return kind, str(path), stat.st_size, stat.st_mtime_ns
+
+
 def load_registry(path: Path | None = None) -> dict[str, Any]:
     if path is None:
         custom = os.environ.get("WORKBENCH_REGISTRY_PATH")
         path = Path(custom).resolve() if custom else REGISTRY_PATH
-    with path.open(encoding="utf-8") as handle:
-        registry = yaml.safe_load(handle)
+    registry = _load_yaml_cached(path)
     if registry.get("schema_version") != 1 or not isinstance(registry.get("models"), list):
         raise ValueError("unsupported model registry")
     layouts = {"fashioniq_standard", "fashioniq_ilearn_resized", "fashioniq_ilearn_resized_training", "fashioniq_clvc_resized", "fashioniq_dcnet"}
@@ -110,7 +133,7 @@ def load_registry(path: Path | None = None) -> dict[str, Any]:
                     raise ValueError(
                         f"checkpoint source state {source_state!r} and mapping state "
                         f"{checkpoint['checkpoint_mapping_status']!r} disagree for {model['model_id']}")
-    return registry
+    return copy.deepcopy(registry)
 
 
 def expected_asset_size(asset: dict[str, Any]) -> int | None:
@@ -134,8 +157,10 @@ def load_auxiliary_assets(path: Path | None = None) -> list[dict[str, Any]]:
     if path is None:
         custom = os.environ.get("WORKBENCH_AUXILIARY_REGISTRY_PATH")
         path = Path(custom).resolve() if custom else AUXILIARY_ASSET_REGISTRY_PATH
-    with path.open(encoding="utf-8") as handle:
-        registry = yaml.safe_load(handle)
+    key = _validated_cache_key("auxiliary", path)
+    if key in _VALIDATED_CONFIG_CACHE:
+        return copy.deepcopy(_VALIDATED_CONFIG_CACHE[key])
+    registry = _load_yaml_cached(path)
     if registry.get("schema_version") != 1 or not isinstance(registry.get("assets"), list):
         raise ValueError("unsupported auxiliary asset registry")
     required = {
@@ -165,12 +190,15 @@ def load_auxiliary_assets(path: Path | None = None) -> list[dict[str, Any]]:
         elif asset["required_for"] == "official_evaluation" and asset["source_type"] != "unverified_external":
             if asset["source_type"] != "author_huggingface" or not bool(asset["caption_alias_from"]):
                 raise ValueError(f"auxiliary source mismatch for {asset['model_id']}: {asset['destination_path']}")
-    return registry["assets"]
+    _VALIDATED_CONFIG_CACHE[key] = registry["assets"]
+    return copy.deepcopy(registry["assets"])
 
 
 def load_preparation_contracts(path: Path = PREPARATION_CONTRACT_REGISTRY_PATH) -> dict[str, dict[str, Any]]:
-    with path.open(encoding="utf-8") as handle:
-        registry = yaml.safe_load(handle)
+    key = _validated_cache_key("preparation", path)
+    if key in _VALIDATED_CONFIG_CACHE:
+        return copy.deepcopy(_VALIDATED_CONFIG_CACHE[key])
+    registry = _load_yaml_cached(path)
     if registry.get("schema_version") != 1 or not isinstance(registry.get("contracts"), list):
         raise ValueError("unsupported preparation contract registry")
     contracts: dict[str, dict[str, Any]] = {}
@@ -222,7 +250,8 @@ def load_preparation_contracts(path: Path = PREPARATION_CONTRACT_REGISTRY_PATH) 
             if asset.get("location_env_var") and not asset["location_env_var"].isidentifier():
                 raise ValueError(f"invalid external asset location variable for {contract['preparation_id']}")
         contracts[contract["preparation_id"]] = contract
-    return contracts
+    _VALIDATED_CONFIG_CACHE[key] = contracts
+    return copy.deepcopy(contracts)
 
 
 def preparation_contract_for_model(model: dict[str, Any]) -> dict[str, Any] | None:
@@ -1866,7 +1895,8 @@ def fashioniq_required_paths(model: dict[str, Any], root: Path) -> tuple[Path, .
     return paths_for_layout(root, layout)
 
 
-def checkpoint_availability(model: dict[str, Any], checkpoint: dict[str, Any]) -> dict[str, Any]:
+def checkpoint_availability(model: dict[str, Any], checkpoint: dict[str, Any],
+                            model_blockers: list[str] | None = None) -> dict[str, Any]:
     from workbench.backend.operator_config import resolve_config
     from workbench.backend.runtime import runtime_blockers
 
@@ -1896,7 +1926,8 @@ def checkpoint_availability(model: dict[str, Any], checkpoint: dict[str, Any]) -
         from workbench.backend.adapters.models import ADAPTERS, OfficialScriptAdapter
         adapter = ADAPTERS.get(model["model_id"])
         adapter_command_ready = adapter is not None and getattr(adapter, "command", None) is not OfficialScriptAdapter.command
-    reasons = runtime_blockers(model, checkpoint, config, model.get("native_protocol"))
+    reasons = runtime_blockers(model, checkpoint, config, model.get("native_protocol"),
+                               model_blockers=model_blockers)
     return {
         "checkpoint_id": checkpoint["checkpoint_id"],
         "filename": checkpoint["filename"],

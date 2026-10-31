@@ -182,11 +182,46 @@ def _cleanup(path: Path | None) -> None:
     if path is not None and path.exists():
         shutil.rmtree(path)
 
+def _format_keys(keys: Sequence[str], limit: int = 5) -> str:
+    if len(keys) <= limit:
+        return ", ".join(repr(k) for k in keys)
+    return f"{', '.join(repr(k) for k in keys[:limit])} (and {len(keys) - limit} more)"
+
+
+def _load_csmcir_checkpoint(model: Any, state: Any) -> None:
+    report = model.load_state_dict(state, strict=False)
+    _check_checkpoint_load(report)
+
+
+def _check_checkpoint_load(report: Any) -> None:
+    missing = list(getattr(report, "missing_keys", ()))
+    unexpected = list(getattr(report, "unexpected_keys", ()))
+    if unexpected:
+        print(
+            f"CSMCIR checkpoint load: {len(unexpected)} unexpected keys tolerated: "
+            f"{_format_keys(unexpected)}",
+            file=sys.stderr,
+        )
+    if missing:
+        unexpected_part = (
+            f", {len(unexpected)} unexpected keys [{_format_keys(unexpected)}]"
+            if unexpected
+            else f", {len(unexpected)} unexpected keys"
+        )
+        raise ValueError(
+            "CSMCIR checkpoint does not match the model: "
+            f"{len(missing)} missing [{_format_keys(missing)}]"
+            f"{unexpected_part}"
+        )
+
 
 def _worker_main(job_path: str) -> None:
     import torch
     from PIL import Image
     from workbench.replay.lavis_processors import prepare
+
+    def reply(ok: bool, **values: Any) -> None:
+        print("CIRCUS_WORKER:" + json.dumps({"ok": ok, **values}), flush=True)
 
     job = json.loads(Path(job_path).read_text(encoding="utf-8"))
     source = Path(job["source_root"]) / "src"
@@ -194,10 +229,14 @@ def _worker_main(job_path: str) -> None:
     from lavis.models import load_model_and_preprocess
     from data_utils_csmcir import targetpad_transform
 
-    model, _, processors = load_model_and_preprocess(
-        name="blip2_cir_align_prompt_csmcir", model_type="pretrain", is_eval=True, device="cuda")
-    state = torch.load(job["checkpoint_path"], map_location="cuda", weights_only=False)
-    model.load_state_dict(state[model.__class__.__name__], strict=False)
+    try:
+        model, _, processors = load_model_and_preprocess(
+            name="blip2_cir_align_prompt_csmcir", model_type="pretrain", is_eval=True, device="cuda")
+        state = torch.load(job["checkpoint_path"], map_location="cuda", weights_only=False)
+        _load_csmcir_checkpoint(model, state[model.__class__.__name__])
+    except Exception as error:
+        reply(False, error_type=type(error).__name__, error=str(error))
+        return
     model.eval()
     transform = targetpad_transform(1.25, 224)
     images = []
