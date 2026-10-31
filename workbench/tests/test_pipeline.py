@@ -273,6 +273,145 @@ def test_resume_reruns_when_fingerprint_changes(monkeypatch, tmp_path: Path) -> 
     assert called[0] == ["cmd1.py", "--arg2"]
 
 
+def test_fingerprint_fields_are_unambiguously_framed(monkeypatch) -> None:
+    import hashlib
+    pipeline = load_pipeline()
+    pairs = [
+        (pipeline.Stage("command-boundary", commands=(["ab"],)),
+         pipeline.Stage("command-boundary", commands=(["a"], ["b"]))),
+        (pipeline.Stage("sMODEL:abc"), pipeline.Stage("s", model_id="abc")),
+        (pipeline.Stage("s", checkpoint_id="x"), pipeline.Stage("sCKPT:x")),
+        (pipeline.Stage("s", protocol="p"), pipeline.Stage("sPROTO:p")),
+    ]
+    original = pipeline._stage_input_fingerprint_evidence
+
+    def old_evidence(stage, config=None, state=None):
+        hasher = hashlib.sha256()
+        hasher.update(stage.name.encode("utf-8"))
+        if stage.model_id:
+            hasher.update(f"MODEL:{stage.model_id}".encode("utf-8"))
+        if stage.checkpoint_id:
+            hasher.update(f"CKPT:{stage.checkpoint_id}".encode("utf-8"))
+        if stage.protocol:
+            hasher.update(f"PROTO:{stage.protocol}".encode("utf-8"))
+        for cmd in stage.commands:
+            hasher.update(pipeline.shlex.join(cmd).encode("utf-8"))
+        return {"digest": hasher.hexdigest()}
+
+    for left, right in pairs:
+        monkeypatch.setattr(pipeline, "_stage_input_fingerprint_evidence", old_evidence)
+        assert pipeline.compute_stage_input_fingerprint(left) == pipeline.compute_stage_input_fingerprint(right)
+        monkeypatch.setattr(pipeline, "_stage_input_fingerprint_evidence", original)
+        assert pipeline.compute_stage_input_fingerprint(left) != pipeline.compute_stage_input_fingerprint(right)
+
+    single = pipeline.Stage("stable", commands=(["command", "--flag"],))
+    first = pipeline.compute_stage_input_fingerprint(single)
+    assert pipeline.compute_stage_input_fingerprint(single) == first
+
+
+def test_multi_command_output_validation_resume(monkeypatch, tmp_path: Path, capsys) -> None:
+    pipeline = load_pipeline()
+    validate_outputs = pipeline.validate_stage_outputs
+
+    def run_case(name, output, behavior, *, validator=None, resume=False, continue_on_error=False,
+                 state_path=None):
+        calls = []
+
+        def launch(argv):
+            calls.append(argv[0])
+            result = behavior(argv[0], len(calls), output)
+            return result or 0
+
+        monkeypatch.setattr(pipeline, "run_command", launch)
+        monkeypatch.setattr(pipeline, "validate_stage_outputs", validator or validate_outputs)
+        stage = pipeline.run_stage(name, ["first"], ["second"], output_paths=(output,))
+        rc = pipeline.run_stages([stage], resume=resume, continue_on_error=continue_on_error,
+                                 state_path=state_path or tmp_path / f"{name}.json")
+        record = pipeline.load_pipeline_state(state_path or tmp_path / f"{name}.json")["stages"][name]
+        return rc, record, calls, stage
+
+    output = tmp_path / "complete.txt"
+    def write_success(command, _, path):
+        path.write_text("artifact")
+    state = tmp_path / "success.json"
+    rc, record, calls, stage = run_case("success", output, write_success, state_path=state)
+    assert rc == 0 and record["status"] == "COMPLETE" and calls == ["first", "second"]
+    calls.clear()
+    assert pipeline.run_stages([stage], resume=True, state_path=state) == 0
+    assert calls == [] and "[SKIP] resume: already completed" in capsys.readouterr().out
+
+    for failed_command in ("first", "second"):
+        output = tmp_path / f"{failed_command}-failure.txt"
+        def fail_selected(command, _, path, target=failed_command):
+            if command == target:
+                return 7
+            path.write_text("artifact")
+        state = tmp_path / f"{failed_command}-failure.json"
+        rc, record, calls, _ = run_case(f"failure-{failed_command}", output, fail_selected,
+                                        continue_on_error=True, state_path=state)
+        assert rc == 1 and record["status"] == "FAILED" and calls == ["first", *(["second"] if failed_command == "second" else [])]
+
+    for case, content in (("missing", None), ("empty", ""), ("invalid-json", "{")):
+        output = tmp_path / f"{case}.json"
+        def write_case(command, _, path, value=content):
+            if command == "second" and value is not None:
+                path.write_text(value)
+        state = tmp_path / f"{case}.state.json"
+        rc, record, calls, _ = run_case(case, output, write_case, state_path=state)
+        assert rc == 1 and record["status"] == "FAILED" and calls == ["first", "second"]
+        noop_state = tmp_path / f"{case}.noop.json"
+        noop = lambda *_args, **_kwargs: True
+        noop_rc, noop_record, _, _ = run_case(case + "-noop", output, write_case,
+                                              validator=noop, state_path=noop_state)
+        assert noop_rc == 0 and noop_record["status"] == "COMPLETE"
+
+    output = tmp_path / "stale.txt"
+    output.write_text("old valid artifact")
+    def fail_first(command, _, path):
+        return 9 if command == "first" else 0
+    rc, record, calls, _ = run_case("stale", output, fail_first, continue_on_error=True)
+    assert rc == 1 and record["status"] == "FAILED" and calls == ["first"]
+
+    output = tmp_path / "partial.json"
+    def interrupt(command, _, path):
+        if command == "first":
+            path.write_text("{")
+        return 8 if command == "second" else 0
+    state = tmp_path / "interrupted.json"
+    rc, record, calls, stage = run_case("interrupted", output, interrupt,
+                                        continue_on_error=True, state_path=state)
+    assert rc == 1 and record["status"] == "FAILED" and output.read_text() == "{" and calls == ["first", "second"]
+    persisted = pipeline.load_pipeline_state(state)
+    persisted["stages"]["interrupted"]["status"] = "COMPLETE"
+    persisted["stages"]["interrupted"]["output_fingerprints"] = {str(output): "stale-valid-digest"}
+    pipeline.save_pipeline_state(persisted, state)
+    noop_calls = []
+    monkeypatch.setattr(pipeline, "run_command", lambda argv: noop_calls.append(argv) or 0)
+    monkeypatch.setattr(pipeline, "validate_stage_outputs", lambda *_a, **_k: True)
+    assert pipeline.run_stages([stage], resume=True, state_path=state) == 0 and noop_calls == []
+    monkeypatch.setattr(pipeline, "validate_stage_outputs", validate_outputs)
+    def finish(command, _, path):
+        if command == "second":
+            path.write_text('{"ok": true}')
+    rc, record, calls, _ = run_case("interrupted", output, finish, resume=True, state_path=state)
+    assert rc == 0 and record["status"] == "COMPLETE" and calls == ["first", "second"]
+
+    output = tmp_path / "resume-invalid.json"
+    state = tmp_path / "resume-invalid.state.json"
+    def write_json(command, _, path):
+        if command == "second":
+            path.write_text('{"ok": true}')
+    rc, record, calls, stage = run_case("resume-invalid", output, write_json, state_path=state)
+    assert rc == 0 and record["status"] == "COMPLETE" and calls == ["first", "second"]
+    output.write_text("{")
+    calls.clear()
+    rc, record, calls, _ = run_case("resume-invalid", output, write_json, resume=True, state_path=state)
+    assert rc == 0 and record["status"] == "COMPLETE" and calls == ["first", "second"]
+    noop_calls = []
+    monkeypatch.setattr(pipeline, "run_command", lambda argv: noop_calls.append(argv) or 0)
+    monkeypatch.setattr(pipeline, "validate_stage_outputs", lambda *_a, **_k: True)
+    assert pipeline.run_stages([stage], resume=True, state_path=state) == 0 and noop_calls == []
+
 def test_setup_reproduce_analyze_all_modes_accepted() -> None:
     pipeline = load_pipeline()
     for mode in ("setup", "reproduce", "analyze", "all", "report"):

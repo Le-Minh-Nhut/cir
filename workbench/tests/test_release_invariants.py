@@ -58,6 +58,34 @@ UNVERIFIED = {
 
 # --------------------------------------------------------------------------- shared helpers
 
+def _shell_code(text: str) -> str:
+    """Strip shell comments without treating quoted `#` characters as comments.
+
+    This is a line/quote-aware scan, not a shell parser, so tokens in a heredoc body still count;
+    that is acceptable because these invariants concern presence in executed script text.
+    """
+    code = []
+    for line in text.splitlines():
+        quote = None
+        escaped = False
+        for index, char in enumerate(line):
+            if escaped:
+                escaped = False
+            elif char == "\\" and quote != "'":
+                escaped = True
+            elif quote:
+                if char == quote:
+                    quote = None
+            elif char in "'\"":
+                quote = char
+            elif char == "#":
+                line = line[:index]
+                break
+        if line.strip():
+            code.append(line)
+    return "\n".join(code)
+
+
 def _sha256(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
@@ -607,34 +635,51 @@ def test_i10_a_restart_does_not_silently_destroy_an_active_job() -> None:
 # --------------------------------------------------------------------------- I11
 
 def test_i11_an_invalid_mount_cannot_reach_evaluation() -> None:
-    """I11. The mount inspector reports a malformed mount rather than crashing or ignoring it."""
-    script = (REPOSITORY / "workbench" / "docker" / "release_verify.sh").read_text()
+    """I11. The mount inspector reports a malformed mount rather than crashing or ignoring it.
+
+    The text checks were satisfied by comments, so the executable parser and refusal tokens must
+    now appear in comment-insensitive shell code; the submount requirement is checked by its live
+    assertion rather than its comment-only label.
+    """
+    script = _shell_code((REPOSITORY / "workbench" / "docker" / "release_verify.sh").read_text())
     # D4's fix: one mount per line, so a host path containing a space cannot split into a bogus
     # token and crash the parser.
     assert 'splitlines()' in script
     assert '{{.Source}}=>{{.Destination}}{{"\\n"}}' in script
-    # And the dataset/checkpoint roots must be asserted present as separate read-only mounts.
-    assert "canonical dataset submounts must exist" in script
+    # The live assertion requires separate image and image_splits mount entries.
+    assert "assert len(ro) >= 2" in script
+
 
 # --------------------------------------------------------------------------- I13 / I14
 
 def test_i13_no_unverified_gpu_record_produces_gpu_runtime_pass() -> None:
-    """I13. A hand-written or foreign capability record cannot produce GPU_RUNTIME=PASS."""
+    """I13. A hand-written or foreign capability record cannot produce GPU_RUNTIME=PASS.
+
+    The shell token checks could be satisfied by comments, so the probe refusal and signature
+    validation tokens must now appear in comment-insensitive shell code.
+    """
     from workbench.backend import runtime
 
     assert runtime._gpu_capability_signature_valid({"probe_source": "interpreter",
                                                     "capability_verified": True,
                                                     "capability_key": "x"}) is False, (
         "a record with no valid signature must not verify")
-    script = (REPOSITORY / "workbench" / "docker" / "release_verify.sh").read_text()
+    script = _shell_code((REPOSITORY / "workbench" / "docker" / "release_verify.sh").read_text())
     assert 'probe_source=override is a synthetic test probe' in script
     assert "_gpu_capability_signature_valid" in script
 
+
+
 def test_i14_no_synthetic_inference_produces_model_inference_pass() -> None:
-    """I14. A synthetic evaluator is not real model execution."""
-    script = (REPOSITORY / "workbench" / "docker" / "release_verify.sh").read_text()
+    """I14. A synthetic evaluator is not real model execution.
+
+    The text checks were satisfied by comments, so the refusal and synthetic-record tokens must
+    now appear in comment-insensitive shell code.
+    """
+    script = _shell_code((REPOSITORY / "workbench" / "docker" / "release_verify.sh").read_text())
     assert "synthetic/self-test evaluator is not real model execution" in script
-    assert "_is_synthetic = _rep.get(\"is_synthetic\") is True" in script
+    assert '_is_synthetic = _rep.get("is_synthetic") is True' in script
+
 
 # --------------------------------------------------------------------------- I16
 
@@ -670,13 +715,32 @@ def test_i16_no_frontend_label_implies_certification_the_backend_refuses() -> No
 # --------------------------------------------------------------------------- I17
 
 def test_i17_an_api_error_never_becomes_an_empty_success() -> None:
-    """I17. A broken evidence ledger is a named error, not an empty list."""
-    source = (REPOSITORY / "workbench" / "backend" / "main.py").read_text()
-    assert '"ledger_corrupt"' in source, (
+    """I17. A broken evidence ledger is a named error, not an empty list.
+
+    The text checks were satisfied by comments, so the parsed module must contain a reachable
+    `WorkbenchError` raise with the corrupt-ledger code and an actionable ledger-path keyword.
+    """
+    backend = REPOSITORY / "workbench" / "backend" / "main.py"
+    tree = ast.parse(backend.read_text(encoding="utf-8"), filename=str(backend))
+    raises = [inner for function in ast.walk(tree) if isinstance(function, (ast.FunctionDef, ast.AsyncFunctionDef))
+              for inner in _pruned_walk(function, reachable=True)
+              if isinstance(inner, ast.Raise) and isinstance(inner.exc, ast.Call)
+              and isinstance(inner.exc.func, ast.Name) and inner.exc.func.id == "WorkbenchError"]
+    corrupt_raises = [node for node in raises
+                      if {value.value for value in _pruned_walk(node, reachable=True)
+                          if isinstance(value, ast.Constant)} >= {"ledger_corrupt", "ledger"}]
+    assert corrupt_raises, (
         "a ledger that exists but does not verify must be distinguishable from an empty workspace")
-    assert "raise WorkbenchError(" in source
-    # The refusal names the ledger path so an operator can act on it.
-    assert '"ledger": str(_ledger_path(config))' in source
+    assert any(any(isinstance(argument, ast.Dict)
+                   and any(isinstance(key, ast.Constant) and key.value == "ledger"
+                           and isinstance(value, ast.Call)
+                           and any(isinstance(inner, ast.Call) and isinstance(inner.func, ast.Name)
+                                   and inner.func.id == "_ledger_path" for inner in ast.walk(value))
+                           for key, value in zip(argument.keys, argument.values))
+                   for argument in node.exc.args)
+               for node in corrupt_raises), (
+        "the refusal must name the ledger path so an operator can act on it")
+
 
 # --------------------------------------------------------------------------- I18
 
@@ -696,26 +760,32 @@ def test_i18_matching_identity_strings_do_not_reuse_an_invalid_result() -> None:
 def test_i19_a_harness_does_not_pass_without_its_infrastructure() -> None:
     """I19. The verifier's report block cannot report PASS while its evidence is absent.
 
+    The report-state checks could be satisfied by comments, so the PENDING and verdict logic must
+    now appear in comment-insensitive shell code.
+
     The block derives every dimension from its own scan; a dimension with no evidence is PENDING,
     and only a green J-check plus its dimension sets PASS.
     """
     script = (REPOSITORY / "workbench" / "docker" / "release_verify.sh").read_text()
-    assert 'spec["status"] = "PENDING"' in script
-    assert 'elif all(s in ("PASS", "PENDING") for s in statuses)' in script
+    code = _shell_code(script)
+    assert 'spec["status"] = "PENDING"' in code
+    assert 'elif all(s in ("PASS", "PENDING") for s in statuses)' in code
     # A PENDING is never promoted: the verdict names it rather than collapsing it into READY.
-    assert 'out["pending_dimensions"] = mandatory_pending' in script
-    assert 'a PENDING is never converted into PASS' in script_preamble(script), (
-        "the verifier must state, and implement, that PENDING never becomes PASS")
+    # PENDING dimensions remain in the pending set and gate the verdict away from READY.
+    assert 'if spec["mandatory"] and spec["status"] != "PASS"' in code
+    assert "elif mandatory_pending:" in code, (
+        "the verifier must keep PENDING dimensions out of RELEASE_READY")
 
-def script_preamble(script: str) -> str:
-    """The shell header of the verifier, where its PENDING policy is documented."""
-    return script[:script.index("set -uo pipefail")]
 
 # --------------------------------------------------------------------------- I20
 
 def test_i20_a_verdict_never_claims_more_than_its_evidence() -> None:
-    """I20. The verdict is derived from the dimensions and the exit code follows the verdict."""
-    script = (REPOSITORY / "workbench" / "docker" / "release_verify.sh").read_text()
+    """I20. The verdict is derived from the dimensions and the exit code follows the verdict.
+
+    The text checks were satisfied by ordered comments and a fake shell-option line, so verdict
+    ordering, exit-code ownership, and failure reporting must now be present in shell code.
+    """
+    script = _shell_code((REPOSITORY / "workbench" / "docker" / "release_verify.sh").read_text())
     assert 'out["verdict"] = "RELEASE_READY"' in script
     # RELEASE_READY is reachable only in the final branch, after every mandatory dimension PASSed.
     ready = script.index('out["verdict"] = "RELEASE_READY"')
@@ -724,6 +794,7 @@ def test_i20_a_verdict_never_claims_more_than_its_evidence() -> None:
     # And the exit code is owned by the verdict, not by a counter that only walks J1-J12.
     assert 'sys.exit(3 if out["verdict"] == "RELEASE_BLOCKED" else 0)' in script
     assert 'RELEASE VERIFIER: FAILED (verdict RELEASE_BLOCKED)' in script
+
 
 def test_the_invariant_matrix_itself_is_complete() -> None:
     """Every invariant I01-I20 has a named test in this file, and the file has no orphan tests."""
