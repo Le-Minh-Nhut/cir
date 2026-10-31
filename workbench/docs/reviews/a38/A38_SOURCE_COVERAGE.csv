@@ -1,0 +1,361 @@
+path,category,feature,owner,inspection_status,inspection_method,tests,findings,evidence,limitations
+.dockerignore,other,F13 pc_deployment,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,"Tracked first-party file not covered by source, test, config, doc, vendored, or asset rules."
+.gitattributes,other,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,"Tracked first-party file not covered by source, test, config, doc, vendored, or asset rules."
+.gitignore,other,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,"Tracked first-party file not covered by source, test, config, doc, vendored, or asset rules."
+LICENSE,other,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,"Tracked first-party file not covered by source, test, config, doc, vendored, or asset rules."
+pc.sh,config,F13 pc_deployment,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+pyproject.toml,config,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+src/cache/__init__.py,source,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+src/cache/features.py,source,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+src/datasets/__init__.py,source,F02 dataset,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+src/datasets/cirr.py,source,F02 dataset,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+src/datasets/common.py,source,F02 dataset,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+src/datasets/fashioniq.py,source,F02 dataset,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+src/evaluation/__init__.py,source,F07 model_eval,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+src/evaluation/cirr.py,source,F07 model_eval,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+src/evaluation/cirr_encoder.py,source,F07 model_eval,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+src/evaluation/fashioniq.py,source,F07 model_eval,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+src/evaluation/fashioniq_encoder.py,source,F07 model_eval,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+tests/unit/test_cirr.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+tests/unit/test_cirr_encoder.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+tests/unit/test_cirr_encoder_submission.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+tests/unit/test_cirr_metrics.py,test,F07 model_eval,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+tests/unit/test_encoder_mode_isolation.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+tests/unit/test_encoder_observation_publication.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+tests/unit/test_fashioniq_caption_policies.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+tests/unit/test_fashioniq_dispatch.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+tests/unit/test_fashioniq_encoder.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+tests/unit/test_fashioniq_protocols.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/.gitignore,other,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,"Tracked first-party file not covered by source, test, config, doc, vendored, or asset rules."
+workbench/__init__.py,source,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/artifacts/checkpoints/**,asset,F03 checkpoint,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,1 tracked files summarized by top-level directory subtree; contents not inspected.
+workbench/artifacts/results/**,asset,F03 checkpoint,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,1 tracked files summarized by top-level directory subtree; contents not inspected.
+workbench/backend/__init__.py,source,F10 backend_api,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/backend/adapters/__init__.py,source,F10 backend_api,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/backend/adapters/base.py,source,F10 backend_api,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/backend/adapters/models.py,source,F10 backend_api,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/backend/analysis.py,source,F09 research_analysis,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/backend/autopilot.py,source,F06 pipeline,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/backend/benchmark_references.py,source,F10 backend_api,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/backend/checkpoint_selection.py,source,F03 checkpoint,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/backend/environment_planner.py,source,F04 environment,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/backend/errors.py,source,F10 backend_api,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/backend/fashioniq_layout.py,source,F10 backend_api,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/backend/index.py,source,F10 backend_api,unassigned,EXECUTION_VERIFIED,executed-probe,pytest workbench/tests/test_index_workspace_configuration.py,W8-01,concurrency_probe.py execution verifying atomic DuckDB temp file creation and replacement,Rebuild executed on empty results root; non-empty merge equivalence statically checked.
+workbench/backend/jobs.py,source,F10 backend_api,unassigned,EXECUTION_VERIFIED,executed-probe,pytest workbench/tests/test_http_api_layer.py,B-02,"queue_probe.py and cancel_natural.py execution (submit, cancel, recover, concurrent enqueues)",Queue lifecycle verified with synthetic sleep/exit children; no heavy model evaluations.
+workbench/backend/main.py,source,F10 backend_api,unassigned,EXECUTION_VERIFIED,executed-probe,pytest workbench/tests/test_http_api_layer.py,UI-01,git diff; curl API latency and error-shape probes (port 8000),Live server probe and route inspection; full API surface not exhaustively hit.
+workbench/backend/metrics_extraction.py,source,F07 model_eval,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/backend/model_settings.py,source,F10 backend_api,unassigned,FULLY_REVIEWED,read-end-to-end,pytest workbench/tests/test_autopilot_e2e.py,"T-01, OBJ-05",line-read and audit of _declared_names() and broad exception handling,Read end to end; silent exception masking analyzed statically.
+workbench/backend/operator_config.py,source,F10 backend_api,unassigned,FULLY_REVIEWED,read-end-to-end,pytest workbench/tests/test_autopilot_e2e.py,"A38-04, T-01",line-read and execution check of _permitted_keys() and config resolution,Read end to end and statically verified; no config mutation.
+workbench/backend/package_source.py,source,F10 backend_api,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/backend/paper_gate.py,source,F10 backend_api,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/backend/preflight.py,source,F10 backend_api,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/backend/registry.py,source,F01 registry,unassigned,EXECUTION_VERIFIED,executed-probe,pytest workbench/tests/test_a36_assigned_identity.py,"R-A38-01, T-01, UI-01",git diff; reproduction probe for MappingProxyType json.dumps; doctor model checks,Model registry caching and serialization paths verified; individual external weights not evaluated.
+workbench/backend/requirements.txt,config,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Tracked dependency/environment specification; discovered by path only; contents not inspected.
+workbench/backend/runtime.py,source,F10 backend_api,unassigned,EXECUTION_VERIFIED,executed-probe,pytest workbench/tests/test_gpu_capability_workspace.py,"A38-04, A38-05, G-01",git diff; GPU capability probe execution and workspace isolation verification,Execution verified on sm_86 host; sm_120 target device pending.
+workbench/backend/schemas/__init__.py,source,F10 backend_api,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/backend/schemas/results.py,source,F10 backend_api,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/backend/storage.py,source,F10 backend_api,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/backend/vendored_source.py,source,F10 backend_api,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/composition/__init__.py,source,F08 composition,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/composition/adapters.py,source,F08 composition,unassigned,EXECUTION_VERIFIED,executed-probe,pytest workbench/tests/test_composition_environment_binding.py,none,rank_probe.py execution using real CompositionAdapter.score with hand-built vectors,Scoring and rank math probed; native model adapter forward passes blocked.
+workbench/composition/data.py,source,F08 composition,unassigned,FULLY_REVIEWED,read-end-to-end,pytest workbench/tests/test_composition_image_identity.py,OBJ-03,"line-read of dataset loader, split verification, and query selection contracts",Local image files were absent; decode paths statically analyzed.
+workbench/composition/inputs.py,source,F08 composition,unassigned,EXECUTION_VERIFIED,executed-probe,pytest workbench/tests/test_composition_image_identity.py,none,"probe execution observing tensor shape, pixel values, and text for MM, text-only, and image-only",Condition input shapes and values verified with mock forward.
+workbench/composition/metrics.py,source,F07 model_eval,unassigned,EXECUTION_VERIFIED,executed-probe,pytest workbench/tests/test_adversarial_metrics.py,none,"metric_probe.py execution verifying NDCG, Recall@10/50, and composition gap to 16 decimals",Empirical recomputation on stored runs; zero-missing record cohort tested.
+workbench/composition/model_conesep.py,source,F08 composition,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/composition/model_csmcir.py,source,F08 composition,unassigned,EXECUTION_VERIFIED,executed-probe,pytest workbench/tests/test_csmcir_checkpoint.py,S-01,git diff; test_csmcir_checkpoint.py execution verifying strict key validation,Synthetic state dicts executed; real external checkpoint inference blocked.
+workbench/composition/model_encoder.py,source,F08 composition,unassigned,FULLY_REVIEWED,read-end-to-end,pytest workbench/tests/test_composition_environment_binding.py,none,"line-read of _assert_checkpoint_loaded, strict=False handling, and worker batching",Full model inference blocked on missing target GPU.
+workbench/composition/model_habit.py,source,F08 composition,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/composition/model_hint.py,source,F08 composition,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/composition/model_intent.py,source,F08 composition,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/composition/model_limn.py,source,F08 composition,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/composition/model_ptha_mtst.py,source,F08 composition,unassigned,FULLY_REVIEWED,read-end-to-end,pytest workbench/tests/test_composition_environment_binding.py,none,"line-read of strict=True checkpoint load, subprocess fusion, and feature output shapes",Inference blocked on missing target GPU.
+workbench/composition/model_tme.py,source,F08 composition,unassigned,FULLY_REVIEWED,read-end-to-end,pytest workbench/tests/test_composition_environment_binding.py,none,"line-read of missing/unexpected key rejection, CUDA gate, and token max-cosine scoring",Inference blocked on missing target GPU.
+workbench/composition/runner.py,source,F08 composition,unassigned,EXECUTION_VERIFIED,executed-probe,pytest workbench/tests/test_composition_image_identity.py,"C-01, C-02, C-03, C-04",git diff; focused execution probes for rank validation and concurrent memmap writes,"Ranking, caching, and serialization probed; model forward subprocesses mocked/synthetic."
+workbench/config/workbench.env.example,config,F04 environment,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/configs/pc_autopilot.all_available.yaml,config,F01 registry,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/configs/pc_autopilot.example.yaml,config,F01 registry,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/configs/pc_autopilot.pc_cohort.yaml,config,F01 registry,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/configs/pc_autopilot.pilot_csmcir.yaml,config,F01 registry,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/configs/pc_autopilot.pilot_limn.yaml,config,F01 registry,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/docker/.env.example,config,F04 environment,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/docker/Dockerfile,config,F13 pc_deployment,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/docker/acceptance.sh,source,F13 pc_deployment,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Shell script; discovered by path only; contents not inspected.
+workbench/docker/docker-compose.gpu.yml,config,F05 gpu_capability,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/docker/docker-compose.yml,config,F13 pc_deployment,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/docker/mutation_checks.sh,source,F13 pc_deployment,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Shell script; discovered by path only; contents not inspected.
+workbench/docker/release_verify.sh,source,F13 pc_deployment,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Shell script; discovered by path only; contents not inspected.
+workbench/docker/run.sh,source,F13 pc_deployment,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Shell script; discovered by path only; contents not inspected.
+workbench/docs/** and other tracked markdown,doc,F14 docs,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,223 tracked Markdown files summarized as one row; all non-vendored tracked Markdown; contents not inspected.
+workbench/docs/reviews/a37/A37_LEDGER.csv,other,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,"Tracked first-party file not covered by source, test, config, doc, vendored, or asset rules."
+workbench/envs/csmcir-import.txt,config,F04 environment,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Tracked dependency/environment specification; discovered by path only; contents not inspected.
+workbench/frontend/App.tsx,source,F11 frontend,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/frontend/client.ts,source,F11 frontend,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/frontend/components.tsx,source,F11 frontend,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/frontend/evidence.ts,source,F11 frontend,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/frontend/gate.ts,source,F11 frontend,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/frontend/gate_types.ts,source,F11 frontend,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/frontend/index.html,source,F11 frontend,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Tracked frontend document asset; classified source within frontend first-party set; contents not inspected.
+workbench/frontend/package-lock.json,config,F11 frontend,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/frontend/package.json,config,F11 frontend,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/frontend/protocols.ts,source,F11 frontend,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/frontend/src.tsx,source,F11 frontend,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/frontend/staleness.ts,source,F11 frontend,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/frontend/style.css,source,F11 frontend,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/frontend/tests/ui_smoke.py,test,F11 frontend,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/frontend/tsconfig.json,config,F11 frontend,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/frontend/types.ts,source,F11 frontend,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/frontend/vite-env.d.ts,source,F11 frontend,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/frontend/vite.config.mts,config,F11 frontend,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/patches/csmcir_models_init_compat.patch,other,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,"Tracked first-party file not covered by source, test, config, doc, vendored, or asset rules."
+workbench/patches/csmcir_validate_visualization_opt_in.patch,other,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,"Tracked first-party file not covered by source, test, config, doc, vendored, or asset rules."
+workbench/provenance/base_repo.json,config,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/registry/assets/cluster_b1_csmcir_limn.yaml,config,F01 registry,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/registry/assets/cluster_b2_encoder_family.yaml,config,F01 registry,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/registry/assets/cluster_b3_ilearn.yaml,config,F01 registry,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/registry/assets/cluster_b4_classic.yaml,config,F01 registry,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/registry/assets/cluster_b5_ptha_mtst.yaml,config,F01 registry,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/registry/audits/cluster_a_encoder_split.yaml,config,F01 registry,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/registry/audits/cluster_b_ilearn.yaml,config,F01 registry,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/registry/audits/cluster_c_classic.yaml,config,F01 registry,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/registry/audits/cluster_d_csmcir_limn.yaml,config,F01 registry,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/registry/auxiliary_assets.yaml,config,F01 registry,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/registry/models.yaml,config,F01 registry,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/registry/paper_benchmarks/extracted/airknow.json,config,F01 registry,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/registry/paper_benchmarks/extracted/clip4cir_tomm2023.json,config,F01 registry,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/registry/paper_benchmarks/extracted/clvc_net_sigir21.json,config,F01 registry,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/registry/paper_benchmarks/extracted/conesep_cvpr26.json,config,F01 registry,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/registry/paper_benchmarks/extracted/csmcir_acl26.json,config,F01 registry,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/registry/paper_benchmarks/extracted/habit_aaai26.json,config,F01 registry,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/registry/paper_benchmarks/extracted/hint_icassp26.json,config,F01 registry,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/registry/paper_benchmarks/extracted/intent_aaai26.json,config,F01 registry,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/registry/paper_benchmarks/extracted/legacy_cir_fashioniq_bundle.json,config,F01 registry,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/registry/paper_benchmarks/extracted/ptha_mtst_scaleup_mtst.json,config,F01 registry,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/registry/paper_benchmarks/extracted/sprc.json,config,F01 registry,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/registry/paper_benchmarks/papers.yaml,config,F01 registry,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/registry/paper_benchmarks/verification/VerifyPapersA.json,config,F01 registry,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/registry/paper_benchmarks/verification/VerifyPapersB.json,config,F01 registry,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/registry/paper_benchmarks/verification/VerifyPapersC.json,config,F01 registry,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/registry/preparation_contracts.yaml,config,F01 registry,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/replay/__init__.py,source,F08 composition,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/replay/airknow.py,source,F08 composition,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/replay/clvc_net.py,source,F08 composition,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/replay/common.py,source,F08 composition,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/replay/conesep.py,source,F08 composition,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/replay/dcnet.py,source,F08 composition,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/replay/encoder.py,source,F08 composition,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/replay/encoder_export.py,source,F08 composition,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/replay/encoder_observer.py,source,F08 composition,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/replay/encoder_publish.py,source,F08 composition,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/replay/habit.py,source,F08 composition,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/replay/hint.py,source,F08 composition,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/replay/intent.py,source,F08 composition,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/replay/lavis_processors.py,source,F08 composition,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/replay/limn.py,source,F08 composition,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/replay/limn_export.py,source,F08 composition,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/replay/limn_observer.py,source,F08 composition,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/replay/limn_publish.py,source,F08 composition,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/replay/pair.py,source,F08 composition,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/replay/ptha_mtst.py,source,F08 composition,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/replay/publication.py,source,F08 composition,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/replay/tgcir.py,source,F08 composition,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/replay/tme.py,source,F08 composition,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/run.sh,config,F13 pc_deployment,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/scripts/autopilot.py,source,F06 pipeline,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/scripts/build_paper_registry.py,source,F01 registry,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/scripts/clean_generated.py,source,F06 pipeline,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/scripts/composition_eval.py,source,F06 pipeline,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/scripts/doctor.py,source,F06 pipeline,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/scripts/download_auxiliary_assets.py,source,F06 pipeline,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/scripts/download_checkpoints.py,source,F03 checkpoint,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/scripts/evaluate_models.py,source,F06 pipeline,unassigned,FULLY_REVIEWED,read-end-to-end,pytest workbench/tests/test_evaluate_models.py,OBJ-07,"line-read of CLI arguments, execution loops, continue-on-error, and export validation",Heavy model evaluation was intentionally not run.
+workbench/scripts/gpu_check.py,source,F05 gpu_capability,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/scripts/lavis_processor_parity.py,source,F06 pipeline,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/scripts/load_mock_results.py,source,F06 pipeline,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/scripts/manage_environment.py,source,F04 environment,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/scripts/pc_readiness.py,source,F06 pipeline,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/scripts/pipeline.py,source,F06 pipeline,unassigned,EXECUTION_VERIFIED,executed-probe,pytest workbench/tests/test_pipeline.py,"A38-01, A38-02, A38-04",git diff; test_pipeline.py execution and pipeline_probe.py lock/failure runs,Pipeline orchestration and fingerprint framing verified; full model training not run.
+workbench/scripts/plan_environments.py,source,F04 environment,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/scripts/prepare_dataset.py,source,F02 dataset,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/scripts/prepare_model.py,source,F06 pipeline,unassigned,FULLY_REVIEWED,read-end-to-end,pytest workbench/tests/test_a36_assigned_identity.py,R-A38-01,line-read of resize_is_complete and parameter serialization contracts,Audited end to end; external asset downloads not triggered.
+workbench/scripts/print_roots.py,source,F06 pipeline,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/scripts/readiness_matrix.py,source,F06 pipeline,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/scripts/rebuild_index.py,source,F06 pipeline,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/scripts/run_eval.py,source,F06 pipeline,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/scripts/save_audit_payload.py,source,F06 pipeline,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/scripts/save_paper_payload.py,source,F06 pipeline,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/scripts/serve_workbench.py,source,F06 pipeline,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/scripts/sync_upstreams.py,source,F06 pipeline,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/scripts/validate_results.py,source,F06 pipeline,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/scripts/vendor_upstreams.py,source,F06 pipeline,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/scripts/verify_run.py,source,F06 pipeline,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/_core_fixture.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/_evaluator_output.py,test,F07 model_eval,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/fixtures/pc_launcher/bin/curl,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/fixtures/pc_launcher/bin/df,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/fixtures/pc_launcher/bin/docker,test,F13 pc_deployment,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/fixtures/pc_launcher/bin/git,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/fixtures/pc_launcher/bin/nvidia-smi,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/fixtures/pc_launcher/models.json,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/mock_data.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_a31_effective_interpreter.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_a32_fingerprint_invalidation.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_a33_interpreter_alias.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_a34_effective_target.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_a36_assigned_identity.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_a36_warm_capability_binding.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_adversarial_environment.py,test,F04 environment,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_adversarial_metrics.py,test,F07 model_eval,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_adversarial_orchestration.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_adversarial_resume.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_airknow_replay.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_approved_source_patch.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_artifact_hashing.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_artifact_root_configuration.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_authorization_policy.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_autopilot_cold_start.py,test,F06 pipeline,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_autopilot_config.py,test,F06 pipeline,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_autopilot_e2e.py,test,F06 pipeline,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_autopilot_report.py,test,F06 pipeline,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_backend_config_roots.py,test,F10 backend_api,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_blip2_text_processor_parity.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_bundle_selection.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_checkpoint_download_publication.py,test,F03 checkpoint,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_checkpoint_selection.py,test,F03 checkpoint,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_circus_adapters_blip.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_circus_adapters_rest.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_circus_cli.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_circus_data.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_circus_inputs.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_circus_metrics.py,test,F07 model_eval,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_circus_resume_stable.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_circus_tme_lifecycle.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_circus_tme_precision.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_circus_worker_env.py,test,F04 environment,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_clip4cir_preflight.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_clvc_net_replay.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_component_boundaries.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_composition_environment_binding.py,test,F04 environment,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_composition_image_identity.py,test,F08 composition,unassigned,EXECUTION_VERIFIED,git-diff-review,pytest workbench/tests/test_composition_image_identity.py,"C-01, C-03",git diff; executed regression tests for permissive rank validation and memmap race,Unit and regression scope only.
+workbench/tests/test_concurrency_ownership.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_conesep_replay.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_controller_installation.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_credential_boundary.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_csmcir_source_blocker.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_dcnet_replay.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_doctor.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_doctor_vendored_source_and_selection.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_download_auxiliary_assets.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_e2e_release_chain.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_encoder_pair_clvc_verification.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_encoder_replay.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_environment_planner.py,test,F04 environment,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_environment_provisioning_a32.py,test,F04 environment,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_evaluate_models.py,test,F07 model_eval,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_execution_graph_and_dependencies.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_execution_identity.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_f05_f08_f09_verification.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_failure_thresholds.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_final_hardening_regressions.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_fresh_clone_delivery.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_frontend_staleness.py,test,F11 frontend,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_gpu_capability_host_identity.py,test,F05 gpu_capability,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_gpu_capability_workspace.py,test,F05 gpu_capability,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_habit_replay.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_handoff_commands.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_hint_metric_parser.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_hint_replay.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_http_api_layer.py,test,F10 backend_api,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_index_workspace_configuration.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_intent_replay.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_limn_query_export_api.py,test,F10 backend_api,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_limn_query_export_e2e.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_limn_query_export_protocols.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_limn_query_export_publication.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_limn_query_export_ranking.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_manage_environment_a30.py,test,F04 environment,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_manage_environment_recipe_guards.py,test,F04 environment,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_mutation_effectiveness.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_only_synthetic.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_operator_config.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_operator_contracts.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_operator_runtime.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_operator_sync.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_pair_replay.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_paper_gate.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_pc_launcher.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_pc_readiness.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_phase1_acceptance_scenarios.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_phase1_integration_contracts.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_pipeline.py,test,F06 pipeline,unassigned,EXECUTION_VERIFIED,git-diff-review,pytest workbench/tests/test_pipeline.py,"A38-01, A38-02",git diff; executed regression tests for fingerprint framing and multi-command resume,Unit and orchestration test scope.
+workbench/tests/test_preflight_consistency.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_preparation_stages.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_prepare_dataset.py,test,F02 dataset,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_process_group_cancellation.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_production_stage_resume_invalidation.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_protocols.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_ptha_dataset_binding.py,test,F02 dataset,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_ptha_mtst_preflight.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_ptha_native_assets.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_r10_remediations.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_r11_lavis_lifecycle.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_r11_remediations.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_r12_remediations.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_r13_remediations.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_r19_aggregate_parsers.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_r19_archive_install.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_r19_ptha_wrapper.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_r19_tme_replay.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_r20_shared_seams.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_r21_stage_ordering.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_r21_tme_lifecycle.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_r23_cache_lifecycle.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_r25_selection_provisioning.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_r9_defect_regressions.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_release_blocker_adversarial_final.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_release_blocker_cuda_readiness.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_release_blocker_evaluation_output.py,test,F07 model_eval,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_release_blocker_gpu_records.py,test,F05 gpu_capability,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_release_blocker_interpreter.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_release_blocker_invocation_proof.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_release_blocker_master_e2e.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_release_blocker_mutations.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_release_blocker_production_stage_fingerprint.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_release_blocker_source_integrity.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_release_gate_scenarios.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_release_invariants.py,test,F00 support,unassigned,EXECUTION_VERIFIED,git-diff-review,pytest workbench/tests/test_release_invariants.py,none,git diff; executed release invariant tests including AST checks and comment strip checks,Static invariant test runner.
+workbench/tests/test_replay.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_replay_output_parser.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_result_operations.py,test,F12 persistence,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_runtime_adaptation.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_scenario_failure_isolation.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_scientific_input_identity.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_seeded_dataset_construction.py,test,F02 dataset,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_sprc_preflight.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_standalone_operator_commands.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_strict_acceptance_matrix.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_synthetic_reproduction_e2e.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_tgcir_replay.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_tme_preparation.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_true_master_e2e.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_vendored_approved_patch.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_vendored_source_integrity.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_verified_declarations.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_workbench.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/tests/test_workflow_report_termination.py,test,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,Discovered by path only; contents not inspected.
+workbench/third_party/AirKnow/**,vendored,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,1220 tracked files; one row per vendored top-level directory; individual upstream files not hand-audited.
+workbench/third_party/CLIP4Cir/**,vendored,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,15 tracked files; one row per vendored top-level directory; individual upstream files not hand-audited.
+workbench/third_party/CLVCNet/**,vendored,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,10 tracked files; one row per vendored top-level directory; individual upstream files not hand-audited.
+workbench/third_party/CSMCIR/**,vendored,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,361 tracked files; one row per vendored top-level directory; individual upstream files not hand-audited.
+workbench/third_party/ConeSep/**,vendored,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,1223 tracked files; one row per vendored top-level directory; individual upstream files not hand-audited.
+workbench/third_party/DCNet/**,vendored,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,40 tracked files; one row per vendored top-level directory; individual upstream files not hand-audited.
+workbench/third_party/ENCODER/**,vendored,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,27 tracked files; one row per vendored top-level directory; individual upstream files not hand-audited.
+workbench/third_party/HABIT/**,vendored,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,1236 tracked files; one row per vendored top-level directory; individual upstream files not hand-audited.
+workbench/third_party/HINT/**,vendored,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,1227 tracked files; one row per vendored top-level directory; individual upstream files not hand-audited.
+workbench/third_party/INTENT/**,vendored,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,1230 tracked files; one row per vendored top-level directory; individual upstream files not hand-audited.
+workbench/third_party/LIMN/**,vendored,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,34 tracked files; one row per vendored top-level directory; individual upstream files not hand-audited.
+workbench/third_party/MTST_PTHA/**,vendored,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,362 tracked files; one row per vendored top-level directory; individual upstream files not hand-audited.
+workbench/third_party/PAIR/**,vendored,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,23 tracked files; one row per vendored top-level directory; individual upstream files not hand-audited.
+workbench/third_party/SPRC/**,vendored,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,356 tracked files; one row per vendored top-level directory; individual upstream files not hand-audited.
+workbench/third_party/TGCIR/**,vendored,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,12 tracked files; one row per vendored top-level directory; individual upstream files not hand-audited.
+workbench/third_party/TME/**,vendored,F00 support,unassigned,NOT_REVIEWED,ls-files,unknown,none,git ls-files,352 tracked files; one row per vendored top-level directory; individual upstream files not hand-audited.

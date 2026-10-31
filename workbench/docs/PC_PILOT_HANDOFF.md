@@ -105,10 +105,9 @@ lượt aggregate. Cha (`evaluate_models.execute`) chạy observer như tiến t
 như tiến trình con, rồi **tự đọc lại bytes** để tính digest — con không bao giờ tự khai digest của mình.
 
 **Lượt chạy trên API/UI**: chỉ mục DuckDB chứa bản ghi per-query canonical, nên chỉ lượt chạy của
-model có observer mới xuất hiện ở `/api/runs` và tab **Evaluation Runs**. Lượt của 15 model
-aggregate-only nằm ở `/api/benchmark-runs` và tab **Models**. `./pc.sh` đọc **cả hai** endpoint và
-kết luận theo đúng khả năng mà chính report của lượt chạy khai (`AGGREGATE_ONLY_VERIFIED`), nên một
-lượt aggregate-only hợp lệ vẫn đạt exit 0 — nó **không** bị đòi một artifact per-query không tồn tại.
+model có observer mới xuất hiện ở `/api/runs` và tab **Evaluation Runs**. ENCODER và LIMN khai báo
+observer; 15 model còn lại aggregate-only nằm ở `/api/benchmark-runs` và tab **Models**. `./pc.sh` đọc **cả hai** endpoint,
+kết luận theo đúng khả năng mà report khai (`AGGREGATE_ONLY_VERIFIED`), nên lượt aggregate-only hợp lệ vẫn đạt exit 0 — nó **không** bị đòi artifact per-query không tồn tại.
 Xem mục 7 để có lệnh kiểm chứng từng bước.
 
 **Trạng thái per-query** (`per_query_state` trong report aggregate):
@@ -116,7 +115,7 @@ Xem mục 7 để có lệnh kiểm chứng từng bước.
 | Trạng thái | Nghĩa | Exit code của `./pc.sh` |
 |---|---|---|
 | `CAPABILITY_ABSENT` | model không khai báo observer — **aggregate-only theo thiết kế**, không phải lỗi | 0 |
-| `CAPABILITY_ABSENT_FOR_DIAGNOSTIC` | observer chỉ bao phủ bundle đầy đủ, còn lượt chạy này chủ động chọn MỘT danh mục | 0 |
+| `CAPABILITY_ABSENT_FOR_DIAGNOSTIC` | `per_query_export_reason` ghi nhận checkpoint đã chọn không khớp cấu hình observer | 0 |
 | `PER_QUERY_EXPORT_FAILED` | model CÓ khai báo observer và nó không xuất được gì | **3** |
 | `PER_QUERY_EXPORTED_UNVERIFIED` | đã xuất artifact, verifier chưa chứng thực | **4** |
 | `PER_QUERY_VERIFIED` | đã xuất + verifier đã chứng thực | 0 |
@@ -257,7 +256,7 @@ curl -sS -X POST http://127.0.0.1:8000/api/index/rebuild
 ```
 
 **Lượt chạy của mô hình aggregate-only** (15 trong 17 model) **không** xuất hiện trong `/api/runs`: chỉ mục
-chỉ chứa bản ghi per-query canonical, mà chỉ LIMN có observer. Lượt chạy của chúng nằm ở
+chỉ chứa bản ghi per-query canonical; ENCODER và LIMN khai báo observer. Lượt chạy của 15 model còn lại nằm ở
 `/api/benchmark-runs` và hiển thị trong UI ở tab **Models**. Đây là đúng theo thiết kế, không phải lỗi;
 `./pc.sh` báo `AGGREGATE_ONLY_VERIFIED` cho tình huống này và **không** đòi một artifact per-query
 không tồn tại.
@@ -350,11 +349,14 @@ Chuỗi đầu-cuối đã chạy: aggregate → per-query export/observer → p
 **Việc còn lại, theo thứ tự:**
 
 1. **Model thứ hai cho phân tích cross-model.** `encoder` và `hint` cùng khai protocol
-   `fashioniq_val_split`, nên so sánh được với LIMN. `encoder` là lựa chọn rẻ hơn: checkpoint
-   631 879 365 B **đã stage và verify** trên PC này (`workbench/artifacts/checkpoints/encoder/fashioniq.pt`,
-   sha256 `0f31c501…`), chỉ còn thiếu interpreter. Lưu ý cả hai **không** khai `per_query_observer`
-   trong registry, nên cần thêm integration per-query **nhỏ nhất** theo format `ResultRun` sẵn có
-   trước khi cross-model chạy được.
+   `fashioniq_val_split`, nên so sánh được với LIMN. `encoder` là lựa chọn rẻ hơn; hãy xác minh checkpoint
+   `workbench/artifacts/checkpoints/encoder/fashioniq.pt` và checksum trước khi chạy. `WORKBENCH_ENCODER_PYTHON`
+   phải trỏ tới interpreter đã chuẩn bị. ENCODER khai `per_query_observer` cho checkpoint `fashioniq`
+   (`workbench/registry/models.yaml:721-722`); không cần thêm observer integration cho ENCODER.
 2. **Đo trên GPU đích `sm_120`.** Lượt R14 dùng profile historical pins trên `sm_86`. Registry hiện khai `adapted_runtime: sm_120` với cu128: tám model pin đúng `torch==2.7.1`, torchvision `==0.22.1`, còn TME chấp nhận `torch>=2.7.1,<2.9` / `torchvision>=0.22.1,<0.24` để môi trường `envs/tme-adapted` (2.8.0 / 0.23.0) đang chạy tốt vẫn hợp lệ, không hạ cấp. R23 chỉ ghi solver resolution của bản 2.8 trước đó; bằng chứng ấy không xác nhận cài đặt, import hay GPU execution của baseline mới. Xem `CIRCUS_COMPOSITION_SPEC.md` phần Target-PC runtime baseline. Adapted profile chưa được xác nhận trên host `sm_120`; giữ `TARGET_GPU_PENDING`.
 3. **15 model còn lại**: xem `MODEL_STATUS_SPEC.md` §2 cho blocker và điều kiện chuyển trạng thái
    của từng model.
+
+## Ghi chú A38 — các claim chưa xác minh
+
+Các mục sau chưa được xác minh trong lượt này; hãy coi là gần đúng: đỉnh `TMPDIR` ≥12 GiB chỉ dựa trên số đo được trích dẫn; template đường dẫn report/index chưa đối chiếu đầy đủ; cổng frontend và tên tab chưa đối chiếu lại; độ phủ `adapted_runtime: sm_120`/package pins chưa kiểm tra cho mọi model; lịch sử supersession ở dòng 42–48 chưa tái dựng độc lập.
