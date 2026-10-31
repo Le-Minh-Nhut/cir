@@ -1,7 +1,7 @@
 # A37 AUDIT REPORT — CIR Failure Analysis Workbench
 
 Repo: `/home/heheboiz/data/cir`. Branch: `research/cir-failure-workbench`.
-The round is **committed and pushed**; final HEAD `a134091bdd3ebd37ddaa6617ec1fa0ad6277f5e0`.
+The round is **committed and pushed**; final HEAD `f990ec8a6bc752a3f512b7733978f6eb12ef5943`.
 Nothing was written into the repository by this drafting pass.
 
 Every claim below cites a `file:line`, a command, or a measured number. Claims that could not be
@@ -15,10 +15,10 @@ re-derived in this drafting pass carry `[unverified]`.
 |---|---|
 | Branch | `research/cir-failure-workbench` |
 | Starting HEAD | `e06b4e61d894cd895034838b126ad8046a0602a5` (`git rev-parse HEAD`) |
-| Final HEAD | `a134091bdd3ebd37ddaa6617ec1fa0ad6277f5e0` (`git rev-parse HEAD`) |
-| Remote tip at end | `a134091bdd3ebd37ddaa6617ec1fa0ad6277f5e0` — same SHA as final HEAD (`git ls-remote origin refs/heads/research/cir-failure-workbench`) |
+| Final HEAD | `f990ec8a6bc752a3f512b7733978f6eb12ef5943` (`git rev-parse HEAD`) |
+| Remote tip at end | `f990ec8a6bc752a3f512b7733978f6eb12ef5943` — same SHA as final HEAD (`git ls-remote origin refs/heads/research/cir-failure-workbench`) |
 | `origin/main` | untouched at `8ebcc74d5fd1934df4f3772a8ca5a96dbd00f333` (`git ls-remote origin refs/heads/main`) |
-| Push | fast-forward `e06b4e6..a134091`; no force |
+| Push | fast-forward `e06b4e6..f990ec8`; no force |
 | `TESTED_SOURCE_SHA` at start | `a6449e060e77f0deed0c79545dd0d5c1019e333c` (the A36 round) |
 | `TESTED_SOURCE_SHA` at end | `27554b2ac731c40385cbf72daf06d5ed5a0a24d7` — the A37 **test** commit; see the justification below |
 | Recorded production bytes (A36) | `b8adc465dbde00e7ca7160b4ab075a37506c4cbb` [unverified — doc value, not re-derived] |
@@ -27,7 +27,7 @@ re-derived in this drafting pass carry `[unverified]`.
 | Host | RTX 3050 Laptop GPU, 4096 MiB, sm_86 (`nvidia-smi`); target RTX 5070 Ti sm_120 NOT present |
 | Controller env | `.venv` Python 3.13.12, torch 2.14.1+cu130; node v20.19.5; Playwright browsers at `/tmp/pw-browsers` |
 
-The round's change set, now committed in four commits:
+The round's change set, now committed in seven commits:
 
 | # | SHA | Subject | Files |
 |---|---|---|---|
@@ -35,6 +35,9 @@ The round's change set, now committed in four commits:
 | 2 | `8c510be2ab9a9eefdfbacac0ca3b3698033c6664` | `fix(A37): bind composition dataset identity to image bytes, fix mobile model-card clipping and the dashboard count placeholder` | `composition/runner.py`, `frontend/App.tsx`, `frontend/style.css` — 3 files, +23/−14 |
 | 3 | `27554b2ac731c40385cbf72daf06d5ed5a0a24d7` | `test(A37): repair the regression tests that could not fail, and pin the composition content identity` | 7 files, +517/−34 |
 | 4 | `a134091bdd3ebd37ddaa6617ec1fa0ad6277f5e0` | `docs(A37): advance the tested source revision to 27554b2 and record the A37 evidence` | 6 docs, +52/−26 |
+| 5 | `03de83ae0dc2e4d8f8431e232f3726e482d46b9c` | `docs(A37): record the audit report, findings ledger, PC handoff and evidence index` | 4 files, +655 |
+| 6 | `603dafde863a5facf17039a537510a2697a122f0` | `test(A37): require a readable truthy literal when I09 checks that shutdown raises the flag` | `workbench/tests/test_release_invariants.py` — 1 file, +7/−2 |
+| 7 | `f990ec8a6bc752a3f512b7733978f6eb12ef5943` | `docs(A37): record the tightened I09 flag-assignment predicate and its residual ceiling` | 2 files, +17/−1 |
 
 ### Why `TESTED_SOURCE_SHA` is the test commit, not the production commit
 
@@ -49,8 +52,8 @@ mechanically-justified choice, **not** a deviation:
   `git diff --name-only 8c510be HEAD -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'`
   prints `workbench/frontend/tests/ui_smoke.py`;
 - `27554b2` returns **zero** on the same predicate (re-derived: empty output, exit 0) and is an
-  ancestor of HEAD containing every production change.
-
+  ancestor of HEAD containing every production change; the same predicate is EMPTY at current HEAD
+  `f990ec8` (verified with the full SHA in section 7).
 The guard predicate now holds at HEAD, so
 `workbench/tests/test_handoff_commands.py::test_no_release_document_points_at_a_superseded_source_sha`
 passes (8 passed for that file after the docs commit, see section 6).
@@ -199,7 +202,7 @@ fingerprint).
 | What | Command | Result |
 |---|---|---|
 | Pre-fix suite, 4 sequential thread-capped chunks, `/dev/shm` basetemps | logs `/dev/shm/a37sf-out{1..4}.txt`, file lists `/dev/shm/a37sf-chunk{1..4}.txt` | 2164 collected = **2153 passed + 1 failed + 10 skipped**. Measured chunk summaries: out1 `541 passed, 1 skipped`, out2 `533 passed, 9 skipped`, out3 `1 failed, 540 passed`. **out4's log is truncated mid-run (491 bytes, no summary line)**; its 539 passed are derived by subtraction (2153 − 541 − 533 − 540), not measured |
-| **Post-fix suite** (the fixed tree), 4 sequential thread-capped chunks, `/dev/shm` basetemps | reported by the round | **2166 collected = 2154 passed + 1 failed + 11 skipped**. Per-chunk (passed+failed+skipped): 541+0+1, 533+0+9, 540+1+0, 540+0+1. These are a **per-chunk sum, not a single-process run** [unverified — chunk logs not retrievable on this host; `/dev/shm` holds only the pre-fix set] |
+| **Post-fix suite** (the fixed tree), 4 sequential thread-capped chunks, `/dev/shm` basetemps | reported by the round | **2166 collected = 2154 passed + 1 failed + 11 skipped**. Per-chunk (passed+failed+skipped): 541+0+1, 533+0+9, 540+1+0, 540+0+1. These are a **per-chunk sum, not a single-process run** [unverified — chunk logs not retrievable on this host; `/dev/shm` holds only the pre-fix set]; this run predates commit 6 and did not include the final I09 predicate tightening |
 | Post-fix delta vs pre-fix | derived | +2 collected (the new identity test plus the strengthened rows), +1 passed, +1 skipped. The added skip is a host boundary, not a pass |
 | The single failure (both runs) | `workbench/tests/test_handoff_commands.py:485` | `AssertionError: TESTED_SOURCE_SHA … does not contain the production code currently on disk` — S-01, fails by construction on the revision it describes; resolved by the docs commit advancing the recorded SHA |
 | The 10 skips | `test_r11_lavis_lifecycle.py:149` (×6), `test_r11_remediations.py:63` (×2), `test_r10_remediations.py:99` (×1), `test_execution_graph_and_dependencies.py:317` (×1) | all four sites re-read; each skips only for the stated host condition |
@@ -214,6 +217,9 @@ fingerprint).
 | `test_handoff_commands.py` after the docs commit | **8 passed** |
 | `-k release_documents_quote_the_test_count` | **1 passed** — all bolded `**N passed, N failed**` pairs collapse to the single set `**2154 passed, 1 failed**` (re-derived: that string is the only `**N passed, N failed**` form in `workbench/docs/`), first `N skipped` = 11, and 2154+1+11 = 2166, which is what the named revision's own worktree collects |
 | `test_handoff_commands.py` + `test_composition_image_identity.py` | **10 passed** |
+| Post-suite targeted `test_release_invariants.py` on the final tree | reported targeted run | 22 passed |
+| Post-suite targeted `test_release_invariants.py` + `test_handoff_commands.py` | reported targeted run | 30 passed |
+| Post-suite targeted `test_handoff_commands.py` alone | reported targeted run | 8 passed |
 | Focused production run (`test_composition_image_identity` + `test_circus_resume_stable` + `test_execution_identity` + `test_scientific_input_identity`) | **31 passed** |
 | Affected-tests run (release_invariants + mutation_effectiveness + r12_remediations + r19_tme_replay + frontend_staleness + handoff_commands) | 72 passed, 1 failed — the failure was the same by-construction SHA guard *before* the docs commit advanced the SHA |
 
@@ -245,14 +251,15 @@ fingerprint).
 | Item | Value |
 |---|---|
 | Starting SHA | `e06b4e61d894cd895034838b126ad8046a0602a5` |
-| Final HEAD | `a134091bdd3ebd37ddaa6617ec1fa0ad6277f5e0` |
-| Remote tip | `a134091bdd3ebd37ddaa6617ec1fa0ad6277f5e0` — the same SHA (verified with `git ls-remote`) |
-| Push | fast-forward `e06b4e6..a134091`; no force |
+| Final HEAD | `f990ec8a6bc752a3f512b7733978f6eb12ef5943` |
+| Remote tip | `f990ec8a6bc752a3f512b7733978f6eb12ef5943` — the same SHA (verified with `git ls-remote`) |
+| Push | fast-forward `e06b4e6..f990ec8`; no force |
 | `origin/main` | untouched at `8ebcc74d5fd1934df4f3772a8ca5a96dbd00f333` |
-| Commits | 4, in the order listed in section 1 |
+| Commits | 7, in the order listed in section 1 |
 | Uncommitted at end | none; working tree clean except the three untracked operator files below |
 | Untracked, preserved, sha256 unchanged | `pc_composition_smoke.yaml` `aa4ccd6f405791662f8be2442e3a93e735bd2b81753c79815c30506638cf369e`; `src/train_cirr.py` `bb394437c13be97f3ff041274a8952c6054afc425308ef5f6edbc092abfcefb4`; `uv.lock` `fba52f424b9fed6776dd04c656c9024a7b6abe329aa2eb96a58adbd9454b4325` (all three re-derived with `sha256sum` in this pass) |
 | Release guard predicate | `git diff --name-only 27554b2 HEAD -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'` → EMPTY (re-derived, exit 0), so `test_no_release_document_points_at_a_superseded_source_sha` passes |
+| I09 tightening | Commits 6 and 7 tightened the I09 flag-assignment predicate and recorded its residual; neither touches production bytes, so `TESTED_SOURCE_SHA` remains `27554b2ac731c40385cbf72daf06d5ed5a0a24d7` |
 | Read-only discipline | this drafting pass made no edits, staging, commits, push, or checkout/stash/reset/clean; scratch only under `/tmp/a37-*` |
 
 Commit order rationale: `.gitignore` first (unrelated housekeeping); then production (the H3 identity
