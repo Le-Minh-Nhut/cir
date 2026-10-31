@@ -59,7 +59,7 @@ The audit evaluated 20 finding rows recorded in `workbench/docs/reviews/a38/A38_
 | `C-02` | INFO | INFORMATIONAL | Optional composition checkpoint identity for library callers |
 | `C-04` | INFO | INFORMATIONAL | Composition identity omits model-source revision |
 | `E-01` | INFO | INFORMATIONAL | Environment planning and provisioning |
-| `T-02` | INFO | BLOCKED | Autopilot apply-mode summary absent |
+| `T-02` | INFO | NOT_REPRODUCED | Autopilot apply-mode summary absent |
 | `B-02` | INFO | INFORMATIONAL | Backend job lifecycle |
 | `W8-01` | INFO | EXPECTED_BEHAVIOR | Cross-module concurrency |
 | `G-01` | N/A | BLOCKED | No sm_120 execution, capability record, or inference |
@@ -69,8 +69,8 @@ Summary breakdown across the 20 data rows:
   - `CONFIRMED_FIXED`: 10 findings
   - `INFORMATIONAL`: 5 findings
   - `EXPECTED_BEHAVIOR`: 2 findings
-  - `BLOCKED`: 2 findings (`T-02`, `G-01`)
-  - `NOT_REPRODUCED`: 1 finding (`T-01`)
+  - `BLOCKED`: 1 finding (`G-01`)
+  - `NOT_REPRODUCED`: 2 findings (`T-01`, `T-02`)
   - `CONFIRMED_UNFIXED`: 0 findings (all confirmed feasible defects have been addressed; unresolved items are external hardware/diagnostic blockers).
 - **By Severity**:
   - `HIGH`: 5 findings (`C-01`, `C-03`, `R-A38-01`, `S-01`, `T-A38-01`)
