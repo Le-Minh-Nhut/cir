@@ -11,6 +11,7 @@ suites, so a killed mutation means the real test suite would catch that defect.
 from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path
 
 import workbench.backend.index as index
@@ -49,19 +50,53 @@ def _auth_detector(monkeypatch, tmp_path) -> bool:
 
 
 def _output_detector(tmp_path) -> bool:
+    """Drive the REAL runner: a stage whose declared output is absent must not be COMPLETE.
+
+    The detector used to call ``pipeline.validate_stage_outputs`` itself, so the mutator rebound
+    exactly the symbol it called and the detector could never observe anything else: "mutation
+    survived" was unreachable. It now runs the stage through ``run_stages`` -- the path the release
+    workflow uses -- and reads the recorded outcome, so a disabled output contract is observable.
+    """
     missing = tmp_path / "absent.json"
     stage = pipeline.Stage(name="eval", commands=(["/bin/true"],), output_paths=(missing,))
-    return pipeline.validate_stage_outputs(stage) is False
+    state = tmp_path / "output_state.json"
+    rc = pipeline.run_stages([stage], dry_run=False, continue_on_error=True, state_path=state)
+    record = json.loads(state.read_text(encoding="utf-8"))["stages"]["eval"]
+    return rc != 0 and record["status"] != "COMPLETE"
 
 
 def _fingerprint_detector(tmp_path) -> bool:
+    """Drive the REAL runner: changed input content must re-execute a resumed stage.
+
+    The fingerprint's purpose is that a resumed stage re-runs when its input changed. The detector
+    used to call ``compute_stage_input_fingerprint`` directly, which ``run_stages`` never calls (it
+    goes through ``stage_input_fingerprint_info``), so rebinding the former changed nothing the
+    runner could see. Here the runner is asked twice with a mutated checkpoint and the observable
+    answers are whether the command ran again and whether the recorded identity moved.
+    """
     ckpt = tmp_path / "model.pt"
     ckpt.write_bytes(b"v1")
-    stage = pipeline.Stage(name="eval", commands=(["/bin/true"],), input_paths=(ckpt,), model_id="x")
-    before = pipeline.compute_stage_input_fingerprint(stage, None)
+    output = tmp_path / "report.json"
+    output.write_text('{"ok": 1}')
+    counter = tmp_path / "runs.txt"
+    counter.write_text("")
+    state = tmp_path / "fingerprint_state.json"
+    state.unlink(missing_ok=True)  # each detector invocation starts from a clean run history
+    stage = pipeline.Stage(
+        name="evaluation", model_id="m", input_paths=(ckpt,), output_paths=(output,),
+        commands=([sys.executable, "-c", f"open({str(counter)!r}, 'a').write('x')"],))
+
+    def run() -> dict:
+        assert pipeline.run_stages([stage], dry_run=False, resume=True,
+                                   state_path=state) == 0
+        return json.loads(state.read_text(encoding="utf-8"))["stages"]["evaluation:m"]
+
+    first = run()
+    assert len(counter.read_text(encoding="utf-8")) == 1
     ckpt.write_bytes(b"v2-different")
-    after = pipeline.compute_stage_input_fingerprint(stage, None)
-    return before != after
+    second = run()
+    return (first["fingerprint"] != second["fingerprint"]
+            and len(counter.read_text(encoding="utf-8")) == 2)
 
 
 def _dependency_detector(monkeypatch, tmp_path) -> bool:
@@ -127,10 +162,21 @@ def _index_detector(tmp_path) -> bool:
     return (root / "aggregate_report.json") not in index.result_files(root)
 
 
-def _side_effecting_output_detector() -> bool:
-    stage = pipeline.Stage(name="checkpoint", commands=(["/download"],),
+def _side_effecting_output_detector(tmp_path) -> bool:
+    """Drive the REAL runner: an authorized side-effecting stage with no output proof must fail.
+
+    The detector used to call ``validate_stage_outputs`` itself, so rebinding that symbol made the
+    detector unable to see anything else. It now runs the stage through ``run_stages`` with the
+    capability granted -- the multi-command path, where validation happens once after every command
+    has succeeded -- and asserts the stage is not finalized COMPLETE.
+    """
+    stage = pipeline.Stage(name="checkpoint", commands=(["/bin/true"], ["/bin/true"]),
                            required_capabilities=frozenset({"allow_large_downloads"}))
-    return pipeline.validate_stage_outputs(stage) is False
+    state = tmp_path / "side_effecting_state.json"
+    rc = pipeline.run_stages([stage], dry_run=False, continue_on_error=True, state_path=state,
+                             apply=True, authorized_capabilities={"allow_large_downloads"})
+    record = json.loads(state.read_text(encoding="utf-8"))["stages"]["checkpoint"]
+    return rc != 0 and record["status"] != "COMPLETE"
 
 
 def _immutability_detector(tmp_path) -> bool:
@@ -191,7 +237,9 @@ def test_mut3_checkpoint_fingerprint_omitted_detected(monkeypatch, tmp_path: Pat
     _assert_mutation_killed(
         monkeypatch,
         lambda: _fingerprint_detector(tmp_path),
-        lambda ctx: ctx.setattr(pipeline, "compute_stage_input_fingerprint", lambda *a, **k: "constant"),
+        lambda ctx: ctx.setattr(pipeline, "stage_input_fingerprint_info",
+                                lambda *a, **k: {"digest": "constant", "weak": False,
+                                                 "inputs": [], "source_provenance": None}),
         label="checkpoint content ignored in input fingerprint")
 
 
@@ -243,10 +291,10 @@ def test_mut8_aggregate_into_index_detected(monkeypatch, tmp_path: Path):
                             label="aggregate report admitted to per-query index")
 
 
-def test_mut9_complete_without_output_detected(monkeypatch):
+def test_mut9_complete_without_output_detected(monkeypatch, tmp_path: Path):
     _assert_mutation_killed(
         monkeypatch,
-        _side_effecting_output_detector,
+        lambda: _side_effecting_output_detector(tmp_path),
         lambda ctx: ctx.setattr(pipeline, "validate_stage_outputs", lambda *a, **k: True),
         label="side-effecting stage COMPLETE without output proof")
 

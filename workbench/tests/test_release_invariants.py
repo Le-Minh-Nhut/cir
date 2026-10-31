@@ -11,6 +11,7 @@ each row is the test that carries it.
 """
 from __future__ import annotations
 
+import ast
 import hashlib
 from pathlib import Path
 
@@ -313,22 +314,290 @@ def test_i08_no_stale_cache_survives_an_artifact_change() -> None:
 
 # --------------------------------------------------------------------------- I09 / I10
 
+_SCOPES = (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda, ast.ClassDef)
+
+
+def _executed(block: list) -> list:
+    """The statements of `block` that run in the enclosing scope's own frame.
+
+    A nested `def`/`class`/`lambda` does not run when the block runs, so what it contains
+    belongs to a different execution than the one being asserted about.
+    """
+    return [statement for statement in block if not isinstance(statement, _SCOPES)]
+
+
+def _terminates(statement: ast.stmt) -> bool:
+    """True when no statement after `statement`, in its own block, can run."""
+    if isinstance(statement, (ast.Return, ast.Raise, ast.Break, ast.Continue)):
+        return True
+    if isinstance(statement, ast.If) and statement.body and statement.orelse:
+        return _terminates(statement.body[-1]) and _terminates(statement.orelse[-1])
+    return False
+
+
+def _live_statements(block: list) -> list:
+    """`block` up to and including its first unconditional exit.
+
+    `ponytail:` a terminator test, not a control-flow graph: a body reached only through a
+    `while True` or a `try` is still counted as live. Widen it if a mutation exploits that.
+    """
+    live: list = []
+    for statement in block:
+        if not isinstance(statement, ast.AST):
+            continue
+        live.append(statement)
+        if _terminates(statement):
+            break
+    return live
+
+
+def _pruned_walk(node: ast.AST, *, reachable: bool = False) -> list[ast.AST]:
+    """Every node under `node`, without descending into a nested scope.
+
+    A statement inside a function that is never called is not a statement the checked code
+    executes, so a `raise` or a status write in one must not satisfy an invariant. With
+    `reachable`, statements cut off by a preceding unconditional exit are dropped as well.
+    """
+    scopes = _SCOPES
+    found: list[ast.AST] = []
+    stack: list[ast.AST] = [node]
+    while stack:
+        current = stack.pop()
+        found.append(current)
+        if current is not node and isinstance(current, scopes):
+            continue
+        dead_body = (reachable and isinstance(current, ast.If)
+                     and _constant_truth(current.test) is False)
+        for field, value in ast.iter_fields(current):
+            if field == "body" and dead_body:
+                continue
+            if isinstance(value, ast.AST):
+                stack.append(value)
+            elif isinstance(value, list):
+                items = [item for item in value if isinstance(item, ast.AST)]
+                if (reachable and items
+                        and all(isinstance(item, ast.stmt) for item in items)):
+                    items = _live_statements(_executed(items))
+                stack.extend(items)
+    return found
+
+
+def _constant_truth(node: ast.AST) -> bool | None:
+    """The truth of a literal, or None when the node is not a literal."""
+    if isinstance(node, ast.Constant):
+        return bool(node.value)
+    if isinstance(node, (ast.Tuple, ast.List, ast.Set)) and not node.elts:
+        return False
+    return None
+
+
 def test_i09_no_process_is_spawned_after_shutdown_wins() -> None:
-    """I09. Once shutdown has won the dispatch boundary, no new evaluator process may start."""
-    source = (REPOSITORY / "workbench" / "backend" / "jobs.py").read_text() \
-        if (REPOSITORY / "workbench" / "backend" / "jobs.py").is_file() else ""
-    if not source:
+    """I09. Once shutdown has won the dispatch boundary, no new evaluator process may start.
+
+    The text form of this row was satisfied by the WORD "shutdown" in the module's comments, so
+    replacing every guard (`if self._stopping:` -> `if False:`, `self._stopping = True` ->
+    `False`) left it green. The row is therefore asserted against the parsed module: `shutdown`
+    must raise the stopping flag, and the spawn site must sit inside a branch that reads the flag
+    and whose body leaves, so a shutdown that has already won cannot be followed by a `Popen`.
+
+    The behaviour itself is exercised for real on the queue object in test_concurrency_ownership.py
+    (the launch-guard tests and the Popen recorder); this row is the structural half of it.
+    """
+    jobs_py = REPOSITORY / "workbench" / "backend" / "jobs.py"
+    if not jobs_py.is_file():
         pytest.skip("the queue lives elsewhere; covered by test_concurrency_ownership.py")
-    assert "_shutting_down" in source or "shutdown" in source
+
+    tree = ast.parse(jobs_py.read_text(encoding="utf-8"), filename=str(jobs_py))
+    queue = next((node for node in tree.body
+                  if isinstance(node, ast.ClassDef) and node.name == "SingleGpuQueue"), None)
+    assert queue is not None, "the queue class is gone; the invariant has no implementation"
+    methods = {node.name: node for node in queue.body if isinstance(node, ast.FunctionDef)}
+    assert "shutdown" in methods, "shutdown() is gone: nothing stops the worker"
+    assert "_work" in methods, "the worker loop is gone: no job is ever dispatched"
+
+    def _truthy_read(node: ast.AST) -> bool:
+        """True when `node` reads the stopping flag somewhere a `not` does not invert."""
+        stack = [node]
+        while stack:
+            current = stack.pop()
+            if isinstance(current, ast.UnaryOp) and isinstance(current.op, ast.Not):
+                continue  # the operand is inverted: a read there is the opposite decision
+            if (isinstance(current, ast.Attribute) and current.attr == "_stopping"
+                    and isinstance(current.ctx, ast.Load)):
+                return True
+            stack.extend(ast.iter_child_nodes(current))
+        return False
+
+    def _truthy_condition(node: ast.AST) -> bool:
+        """True when the guard fires because the stopping flag reads as set.
+
+        A read of the flag abandons the job once shutdown has won — a bare `self._stopping`, or
+        one operand of a `BoolOp` beside whatever else the branch also tests. `not
+        self._stopping` is the opposite decision, and a `BoolOp` holding a falsy constant
+        short-circuits before the flag ever decides: neither may count as a guard.
+        """
+        if _constant_truth(node) is False:
+            return False
+        if isinstance(node, ast.BoolOp) and any(_constant_truth(inner) is False
+                                                for inner in _pruned_walk(node)):
+            return False
+        return _truthy_read(node)
+
+    def _abandons_job(node: ast.If) -> bool:
+        """True when the branch taken on a TRUE condition leaves the job.
+
+        Only `node.body` counts. The condition has already been established to read the stopping
+        flag truthy-directed, so the body is the path a shutdown takes; an exit that lives only
+        in `orelse` fires on the *clear* flag and leaves a set flag falling through to the spawn
+        — a guard written as `if self._stopping: pass / else: continue` guarded nothing. An
+        `elif` is an `If` in `orelse` and so sits in that same wrong branch, for the same reason.
+
+        The body must leave on every path: `if self._stopping:` wrapping a further `if job_id:
+        continue` still reaches the spawn whenever that inner test is false. `_terminates` says
+        exactly "no statement after this one can run", and no nested `def`/`lambda`/`class` runs
+        at all, so a `raise` inside one is not an exit of this branch.
+        """
+        body = _live_statements(_executed(node.body))
+        return bool(body) and _terminates(body[-1])
+
+    def _sets_flag_true(node: ast.AST) -> bool:
+        """True when `node` assigns the stopping flag a value the worker reads as set."""
+        return any(isinstance(inner, (ast.Assign, ast.AnnAssign))
+                   and any(isinstance(target, ast.Attribute) and target.attr == "_stopping"
+                           for target in (inner.targets if isinstance(inner, ast.Assign)
+                                          else [inner.target]))
+                   and (inner.value is None or _constant_truth(inner.value) is not False)
+                   for inner in _pruned_walk(node, reachable=True))
+
+    # shutdown() raises the flag it asks the worker to read. `False`, `0` and `None` all read as
+    # "not stopping", so an assignment of one is not a raise.
+    assert _sets_flag_true(methods["shutdown"]), (
+        "shutdown() no longer raises the stopping flag, so a waiting worker never leaves its loop")
+
+    # Every spawn site must be preceded, in its own block, by a branch that reads the flag and
+    # abandons the job: "shutdown has begun" and "no process is created" are then one decision.
+    parents = {id(child): node for node in ast.walk(tree) for child in ast.iter_child_nodes(node)}
+    spawns = [inner for inner in ast.walk(methods["_work"])
+              if isinstance(inner, ast.Call) and isinstance(inner.func, ast.Attribute)
+              and inner.func.attr == "Popen"]
+    assert spawns, "the worker no longer starts an evaluator process at all"
+    for spawn in spawns:
+        node = spawn
+        guarded = False
+        while node is not None and not guarded:
+            parent = parents.get(id(node))
+            if parent is None:
+                break
+            for field in ("body", "orelse", "finalbody"):
+                block = getattr(parent, field, None)
+                if not isinstance(block, list) or node not in block:
+                    continue
+                guarded = any(isinstance(step, ast.If) and _truthy_condition(step.test)
+                              and _abandons_job(step)
+                              for step in block[:block.index(node)])
+            node = parent
+        assert guarded, (
+            "the evaluator process is created in a block that no shutdown guard precedes: a "
+            "shutdown that has begun can still be followed by a Popen")
+
 
 def test_i10_a_restart_does_not_silently_destroy_an_active_job() -> None:
-    """I10. The compose restart policy must not kill an evaluation in flight."""
+    """I10. The compose restart policy must not kill an evaluation in flight.
+
+    The text form of this row was satisfied by the word "recover" inside a COMMENT at
+    `workbench/backend/jobs.py:451`, so deleting `recover_interrupted` and `adopt_recovered`
+    together left it green. The row is therefore asserted against the parsed module: a recovery
+    routine must exist, must be a classmethod (it runs at startup, before any queue instance), and
+    must rewrite an in-flight status to a truthful failure; and the backend must actually call it
+    at startup, with the recovered records adopted into the live queue. The behaviour itself is
+    exercised in test_final_hardening_regressions.py:163.
+    """
     compose = (REPOSITORY / "workbench" / "docker" / "docker-compose.yml").read_text()
     assert "restart:" in compose
     # A restart policy is only safe when the queue persists and re-adopts; assert the pair.
-    jobs_source = (REPOSITORY / "workbench" / "backend" / "jobs.py").read_text()
-    assert "recover" in jobs_source or "adopt" in jobs_source or "requeue" in jobs_source, (
-        "a restart policy without queue recovery would destroy active work")
+    jobs_py = REPOSITORY / "workbench" / "backend" / "jobs.py"
+    tree = ast.parse(jobs_py.read_text(encoding="utf-8"), filename=str(jobs_py))
+    queue = next((node for node in tree.body
+                  if isinstance(node, ast.ClassDef) and node.name == "SingleGpuQueue"), None)
+    assert queue is not None, "the queue class is gone; there is nothing to recover"
+
+    def _compared_strings(node: ast.AST) -> set[str]:
+        """Every string literal compared on either side of a `Compare` in `node`.
+
+        `record.get("status") in ("queued", "preparing", "running")` puts the recognised
+        statuses in the left operand and the compared one in the comparators; both spellings
+        are a real gate, so both are read.
+        """
+        found: set[str] = set()
+        for inner in _pruned_walk(node):
+            if not isinstance(inner, ast.Compare):
+                continue
+            sides = [inner.left, *inner.comparators]
+            for side in sides:
+                for holder in (side, *getattr(side, "elts", [])):
+                    if (isinstance(holder, ast.Constant) and isinstance(holder.value, str)):
+                        found.add(holder.value)
+        return found
+
+    def _recovery_rewrites(node: ast.AST, statuses: set[str]) -> set[str]:
+        """The status literals of the comparison that gates a reachable status rewrite.
+
+        Only the `if` whose body rewrites the record is read, so the recognised statuses cannot
+        be harvested from an unrelated literal elsewhere in the body — and never from the
+        docstring, which is not a comparison.
+        """
+        found: set[str] = set()
+        for inner in _pruned_walk(node, reachable=True):
+            if not isinstance(inner, ast.If) or _constant_truth(inner.test) is False:
+                continue
+            if not any(_status_assignment(step) for step in inner.body):
+                continue
+            found |= statuses & _compared_strings(inner.test)
+        return found
+
+    def _status_assignment(node: ast.AST) -> bool:
+        """True when `node` writes a constant to a record's `status` key."""
+        return any(isinstance(inner, (ast.Assign, ast.AnnAssign))
+                   and any(isinstance(target, ast.Subscript) and isinstance(target.slice, ast.Constant)
+                           and target.slice.value == "status"
+                           for target in (inner.targets if isinstance(inner, ast.Assign)
+                                          else [inner.target]))
+                   and isinstance(inner.value, ast.Constant)
+                   for inner in _pruned_walk(node, reachable=True))
+
+    def _rewritten_statuses(node: ast.AST) -> set[str]:
+        return {inner.value.value for inner in _pruned_walk(node, reachable=True)
+                if isinstance(inner, (ast.Assign, ast.AnnAssign))
+                and any(isinstance(target, ast.Subscript) and isinstance(target.slice, ast.Constant)
+                        and target.slice.value == "status"
+                        for target in (inner.targets if isinstance(inner, ast.Assign)
+                                       else [inner.target]))
+                and isinstance(inner.value, ast.Constant)}
+
+    recovery = next((node for node in queue.body
+                     if isinstance(node, ast.FunctionDef) and node.name == "recover_interrupted"),
+                    None)
+    assert recovery is not None, (
+        "a restart policy without a queue-recovery routine would leave in-flight jobs claimed "
+        "forever, with no process behind them")
+    assert any(isinstance(decorator, ast.Name) and decorator.id == "classmethod"
+               for decorator in recovery.decorator_list), (
+        "recovery must run before any queue exists, so it must be callable on the class")
+    in_flight = {"queued", "preparing", "running"}
+    assert in_flight <= _recovery_rewrites(recovery, in_flight), (
+        "recovery must gate the rewrite on every in-flight status it must recognise, in the "
+        "comparison that guards the rewrite itself")
+    assert "failed" in _rewritten_statuses(recovery), (
+        "recovery must rewrite an in-flight record to a truthful failure, not leave it claimed")
+
+    backend = (REPOSITORY / "workbench" / "backend" / "main.py")
+    assert backend.is_file(), "the backend startup path is gone"
+    backend_tree = ast.parse(backend.read_text(encoding="utf-8"), filename=str(backend))
+    referenced = {inner.attr for inner in ast.walk(backend_tree) if isinstance(inner, ast.Attribute)}
+    assert "recover_interrupted" in referenced, (
+        "nothing calls recovery at startup: the routine exists but never runs after a restart")
+    assert "adopt_recovered" in referenced, (
+        "recovered records are never adopted, so the status API reports a restarted job as lost")
 
 # --------------------------------------------------------------------------- I11
 

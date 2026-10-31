@@ -11,6 +11,8 @@ from __future__ import annotations
 import ast
 import sys
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import patch
 
 import pytest
 
@@ -193,19 +195,53 @@ def test_the_conda_solve_builder_skips_a_source_requirement() -> None:
     `_conda_constraints` removes references before the solver sees them, so this only bites a caller
     that hands the raw constraints straight through -- which is exactly the kind of latent break the
     audit looked for and found. The guard belongs in the builder, not only in its usual caller.
+
+    The previous version only asserted that the builder did not raise `TypeError`, so a DIFFERENT
+    defect (a `KeyError`, or a silently wrong spec list) left it green. The spec list the builder
+    hands the solver is now captured and asserted on: the pinned requirement must be present in its
+    conda form, and the source requirement must be absent entirely -- neither solved nor
+    concatenated into a bogus `name=[('@ref:...'), ...]` term.
     """
     name, spec = planner._parse_requirement(
         "custom-pkg @ git+https://example.invalid/repo.git@1.0.0")
     constraints = {"python": [("==", "3.9")], "packages": {name: spec, "pyyaml": [("==", "6.0")]},
                    "ranges": {}}
-    try:
-        # A binary that does not exist: the point is that it must not raise while BUILDING the spec
-        # list, before any process is started.
-        planner._solver_solve("definitely-not-a-real-solver", constraints)
-    except TypeError as exc:
-        raise AssertionError(f"the solve builder mishandled the reference: {exc}")
-    except Exception:  # noqa: BLE001
-        pass  # a missing solver binary is expected and irrelevant here
+    launched: list[list[str]] = []
+
+    def _recorded_run(argv, **kwargs):
+        launched.append([str(argument) for argument in argv])
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    solver = "definitely-not-a-real-solver"
+    with patch.object(planner.subprocess, "run", _recorded_run):
+        # No real process is started: the builder must produce its spec list before it ever
+        # reaches the solver, and that list is what is asserted below.
+        planner._solver_solve(solver, constraints)
+
+    assert len(launched) == 1, "the solver was never invoked, so nothing was proven"
+    argv = launched[0]
+    assert argv[0] == solver
+    assert argv[1:4] == ["create", "--dry-run", "--json"]
+    # Walk the argument list: `-c <channel>` flags carry the configured channels, and everything
+    # after them is a spec the solver would be asked to resolve.
+    specs: list[str] = []
+    tokens = argv[argv.index("--override-channels") + 1:]
+    index = 0
+    channels: list[str] = []
+    while index < len(tokens):
+        if tokens[index] == "-c":
+            channels.append(tokens[index + 1])
+            index += 2
+            continue
+        specs.append(tokens[index])
+        index += 1
+    assert channels == list(planner.CONDA_CHANNELS), channels
+    assert "python=3.9" in specs, specs
+    assert "pyyaml=6.0" in specs, specs
+    assert not any(name in spec for spec in specs), (
+        f"the source requirement reached the solver as a spec: {specs}")
+    assert not any("@ref:" in spec or "git+" in spec for spec in specs), (
+        f"the reference was concatenated into a version term: {specs}")
 
 
 def test_the_pin_scan_does_not_parse_a_reference_as_a_version() -> None:

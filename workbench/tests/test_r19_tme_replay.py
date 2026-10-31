@@ -15,6 +15,36 @@ from workbench.backend.fashioniq_layout import CATEGORIES
 from workbench.backend.registry import required_runtime_assets
 from workbench.replay import tme
 
+#: The names `_install_native_metric` imports out of the per-test fixture checkout.
+_NATIVE_MODULES = ("precompute_evaluation", "data", "utility", "lavis", "lavis.models")
+
+
+@pytest.fixture(autouse=True)
+def _purge_native_modules():
+    """Drop the fixture checkout's modules around each test, then restore what was already there.
+
+    `_install_native_metric` prepends a pytest tmpdir to `sys.path` and imports these names from
+    it, and `importlib` caches them in `sys.modules` for the WHOLE pytest process -- the tmpdir is
+    deleted when the test ends, but the module objects outlive it. Every test in this file
+    re-deletes and re-imports, so the order dependence is invisible from inside the file and only
+    shows from another one: `workbench/replay/tme.py:359` does the same bare `sys.path.insert` +
+    `import data`, so a later consumer in the same process resolves the deleted fixture module.
+
+    The purge is only a purge while a test is running. An earlier test module may legitimately
+    have a REAL `lavis` (or one of the other names) in `sys.modules`, and deleting that
+    permanently would leave the process in a state this fixture did not find -- the same defect
+    pointing the other way. So the incoming objects are snapshotted and put back after the test,
+    and the pop before that update is what keeps a fixture module from being restored in their
+    place.
+    """
+    saved = {name: sys.modules[name] for name in _NATIVE_MODULES if name in sys.modules}
+    for name in _NATIVE_MODULES:
+        sys.modules.pop(name, None)
+    yield
+    for name in _NATIVE_MODULES:
+        sys.modules.pop(name, None)
+    sys.modules.update(saved)
+
 
 VALUES = {
     "dress": {"recall_at1": 10.0, "recall_at5": 15.0, "recall_at10": 20.0,

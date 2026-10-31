@@ -272,6 +272,26 @@ def overflow(page) -> dict:
         widest: [...document.querySelectorAll('main *')].map(el => el.getBoundingClientRect().width)
                 .reduce((a, b) => Math.max(a, b), 0)})""")
 
+def model_detail_geometry(page) -> list[dict]:
+    """The Models page's detail column: the second cell of every model row.
+
+    `overflow()` cannot see this defect class. The Models section is `overflow-x:auto`, so a table
+    wider than its box scrolls INSIDE the section: `body.scrollWidth` stays equal to the viewport
+    while every checkpoint card is painted past the section's visible right edge, which reads as a
+    blank card body rather than as page overflow. This measures the cell's own box.
+
+    The selector is a DIRECT-CHILD path on purpose. A descendant `section table tbody tr` also
+    matches the nested gate-detail table each checkpoint card renders (9 comparison rows per report,
+    so 162 extra rows with the real artifacts root), which would both inflate the count and measure
+    cells that belong to another table.
+    """
+    return page.evaluate("""() => [...document.querySelectorAll('section > table > tbody > tr')]
+        .map(row => row.children[1]).filter(Boolean).map(td => {
+            const r = td.getBoundingClientRect();
+            return {left: Math.round(r.left), right: Math.round(r.right),
+                    width: Math.round(r.width), height: Math.round(r.height),
+                    scrollHeight: td.scrollHeight, textLength: td.textContent.length}})""")
+
 
 # --------------------------------------------------------------------------- sessions
 
@@ -577,7 +597,13 @@ def session_mobile(browser, base_url: str, shots: Path, recorder: Recorder) -> l
         wait_for_runs_loaded(page, 2)
         select_protocol(page, PROTOCOL)
         open_page(page, "Models")
-        page.locator("section table tbody tr").first.wait_for(timeout=NAV_TIMEOUT_MS)
+        models = api_json(base_url, "/api/models")
+        expected = len(models)
+        # The registry renders a single `loading registry…` row first, which is also a `tr`; the
+        # direct-child path keeps the nested gate-detail tables out of this count.
+        page.wait_for_function(
+            "n => document.querySelectorAll('section > table > tbody > tr').length === n",
+            arg=expected, timeout=NAV_TIMEOUT_MS)
         controls = page.locator("nav button").count()
         reachable = page.evaluate("""() => [...document.querySelectorAll('nav button, .controls select')]
             .every(el => { const r = el.getBoundingClientRect();
@@ -588,6 +614,22 @@ def session_mobile(browser, base_url: str, shots: Path, recorder: Recorder) -> l
                       f"body.scrollWidth={metrics['scrollWidth']} innerWidth={metrics['innerWidth']}")
         assert reachable, "a nav/control element is off-viewport"
         assert metrics["scrollWidth"] <= metrics["innerWidth"] + 2, metrics
+        # A table wider than its `overflow-x:auto` section keeps `body.scrollWidth` at the viewport
+        # while every checkpoint card paints past the section's right edge -- a blank card body that
+        # the page-level overflow assert above cannot see. Prove the detail COLUMN is on screen.
+        detail = model_detail_geometry(page)
+        first = detail[0]
+        recorder.note(f"mobile inventory: {len(detail)}/{expected} model rows from /api/models, "
+                      f"detail column reads left={first['left']} right={first['right']} "
+                      f"width={first['width']}")
+        assert len(detail) == expected, (
+            f"expected {expected} model rows from /api/models, measured {len(detail)} detail cells")
+        for index, cell in enumerate(detail):
+            assert cell["left"] >= 0 and cell["right"] <= metrics["innerWidth"], (
+                f"model row {index}: detail cell is outside the horizontal viewport: {cell}")
+            assert cell["textLength"] > 0, f"model row {index}: detail cell is empty: {cell}"
+            assert cell["scrollHeight"] > 0 and cell["width"] > 40, (
+                f"model row {index}: detail cell is collapsed: {cell}")
         saved.append(shot(page, shots, "mobile-inventory"))
 
         open_query(page, "dress:0:dressref0:dresstgt0")

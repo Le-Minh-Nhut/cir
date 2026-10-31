@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import re
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -87,12 +88,18 @@ def test_the_request_key_separates_every_state_this_explorer_can_be_in() -> None
     # re-implementation.
     compiled = Path("/tmp/cir_staleness_check")
     compiled.mkdir(exist_ok=True)
+    if shutil.which("npx") is None:
+        pytest.skip("npx is not installed: the pure module cannot be compiled here")
     emitted = subprocess.run(
         ["npx", "tsc", "staleness.ts", "--ignoreConfig", "--outDir", str(compiled),
          "--module", "esnext", "--target", "es2022", "--moduleResolution", "bundler"],
         cwd=FRONTEND, capture_output=True, text=True, timeout=180)
-    if emitted.returncode != 0:
-        pytest.skip(f"tsc unavailable for the pure module: {emitted.stderr[-200:]}")
+    # tsc reports type errors on STDOUT and leaves stderr empty, so asserting on stderr alone
+    # turned a broken compile into "tsc unavailable" — a skip concealing the defect, with no
+    # diagnostic. Only an unresolvable tool may skip; a non-zero exit with the tool present is
+    # a compile failure and must fail here.
+    assert emitted.returncode == 0, (
+        f"staleness.ts does not compile: {emitted.stdout[-200:]} {emitted.stderr[-200:]}")
 
     program = compiled / "staleness.js"
     assert program.is_file(), "the guard did not compile"
@@ -184,7 +191,12 @@ def test_the_built_bundle_is_not_older_than_the_sources() -> None:
     """
     dist = FRONTEND / "dist" / "index.html"
     if not dist.is_file():
-        pytest.skip("frontend/dist has not been built in this checkout")
+        # A missing bundle is exactly what the release verifier fails on (release_verify.sh J10),
+        # so skipping here would conceal the defect the test names. Only a host that cannot build
+        # at all (`npx` is what runs `vite build`) may skip.
+        if shutil.which("npx") is None:
+            pytest.skip("frontend/dist is unbuilt and no build toolchain (npx) is available")
+        pytest.fail("frontend/dist is not built: run `npx vite build`")
     newest_source = max(path.stat().st_mtime for path in list(FRONTEND.glob("*.ts"))
                         + list(FRONTEND.glob("*.tsx")))
     assert dist.stat().st_mtime >= newest_source, (
@@ -229,12 +241,16 @@ def test_a_development_certificate_is_not_counted_as_a_certified_result() -> Non
     program = FRONTEND / "evidence.ts"
     compiled = Path("/tmp/cir_evidence_check")
     compiled.mkdir(exist_ok=True)
+    if shutil.which("npx") is None:
+        pytest.skip("npx is not installed: the pure module cannot be compiled here")
     emitted = _subprocess.run(
         ["npx", "tsc", "evidence.ts", "--ignoreConfig", "--outDir", str(compiled),
          "--module", "esnext", "--target", "es2022", "--moduleResolution", "bundler"],
         cwd=FRONTEND, capture_output=True, text=True, timeout=180)
-    if emitted.returncode != 0:
-        pytest.skip(f"tsc unavailable for the pure module: {emitted.stderr[-200:]}")
+    # As above: tsc's diagnostics go to stdout, so a non-zero exit is a compile failure even
+    # when stderr is empty.
+    assert emitted.returncode == 0, (
+        f"evidence.ts does not compile: {emitted.stdout[-200:]} {emitted.stderr[-200:]}")
 
     server = compiled / "evidence.js"
     assert server.is_file(), "the module did not compile"
