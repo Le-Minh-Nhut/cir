@@ -1,6 +1,6 @@
 # A38 Evidence Index
 
-This document maps every finding from `workbench/docs/reviews/a38/A38_FINDINGS.csv` (20 data rows) to its supporting evidentiary artifact, verification type, and reproduction procedure.
+This document maps every finding from `workbench/docs/reviews/a38/A38_FINDINGS.csv` (21 data rows) to its supporting evidentiary artifact, verification type, and reproduction procedure.
 
 ## Findings Evidence Map
 
@@ -26,6 +26,7 @@ This document maps every finding from `workbench/docs/reviews/a38/A38_FINDINGS.c
 | `B-02` | INFO | INFORMATIONAL | Backend job lifecycle | `workbench/docs/reviews/a38/A38_FINDINGS_PARTIAL_W8.md` | executed | Run queue probes exercising submit, cancel, natural exit, failure code 7, 5 concurrent enqueues, and restart recovery. |
 | `W8-01` | INFO | EXPECTED_BEHAVIOR | Cross-module concurrency | `workbench/docs/reviews/a38/A38_FINDINGS_PARTIAL_W8.md` | executed | Run synchronized probes on DuckDB index rebuild, `run_stages` flock lock contention (`WorkflowLockError`), and GPU capability atomic file writes. |
 | `G-01` | N/A | BLOCKED | No sm_120 execution, capability record, or inference | `workbench/artifacts/gpu_capabilities/`; `runtime.py:2470-2493` | blocked | Census of `workbench/artifacts/gpu_capabilities/` shows zero records for `sm_120`; runtime gate enforces check. |
+| `X-01` | MEDIUM | CONFIRMED_UNFIXED | security | `workbench/third_party/AirKnow/lavis/models/Llm_online/gpt.py`; `workbench/third_party/AirKnow/lavis/models/Llm_online/MLLM.py` | static | Run `git grep -I -l -E '(sk-[A-Za-z0-9]{16,})' -- workbench/third_party/AirKnow` (file list only, no values). Pre-existing upstream credential introduced in `5e6e284`. |
 
 ## Durable Regression Tests Added This Round
 

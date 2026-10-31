@@ -39,7 +39,7 @@ Host environment and hardware resources:
 
 ## 3. Findings summary
 
-The audit evaluated 20 finding rows recorded in `workbench/docs/reviews/a38/A38_FINDINGS.csv`. Exactly 20 data rows are present in the findings register.
+The audit evaluated 21 finding rows recorded in `workbench/docs/reviews/a38/A38_FINDINGS.csv`. Exactly 21 data rows are present in the findings register.
 
 | ID | Severity | Status | Feature / Description |
 |---|---|---|---|
@@ -63,18 +63,19 @@ The audit evaluated 20 finding rows recorded in `workbench/docs/reviews/a38/A38_
 | `B-02` | INFO | INFORMATIONAL | Backend job lifecycle |
 | `W8-01` | INFO | EXPECTED_BEHAVIOR | Cross-module concurrency |
 | `G-01` | N/A | BLOCKED | No sm_120 execution, capability record, or inference |
+| `X-01` | MEDIUM | CONFIRMED_UNFIXED | security |
 
-Summary breakdown across the 20 data rows:
+Summary breakdown across the 21 data rows:
 - **By Status**:
   - `CONFIRMED_FIXED`: 10 findings
   - `INFORMATIONAL`: 5 findings
   - `EXPECTED_BEHAVIOR`: 2 findings
   - `BLOCKED`: 1 finding (`G-01`)
   - `NOT_REPRODUCED`: 2 findings (`T-01`, `T-02`)
-  - `CONFIRMED_UNFIXED`: 0 findings (all confirmed feasible defects have been addressed; unresolved items are external hardware/diagnostic blockers).
+  - `CONFIRMED_UNFIXED`: 1 finding (`X-01`)
 - **By Severity**:
   - `HIGH`: 5 findings (`C-01`, `C-03`, `R-A38-01`, `S-01`, `T-A38-01`)
-  - `MEDIUM`: 3 findings (`A38-02`, `A38-03`, `UI-01`)
+  - `MEDIUM`: 4 findings (`A38-02`, `A38-03`, `UI-01`, `X-01`)
   - `LOW`: 4 findings (`A38-01`, `A38-04`, `A38-05`, `B-01`)
   - `INFO`: 7 findings (`T-01`, `C-02`, `C-04`, `E-01`, `T-02`, `B-02`, `W8-01`)
   - `N/A`: 1 finding (`G-01`)
@@ -237,6 +238,8 @@ Readiness for transfer to the target evaluation host was assessed against `A38_P
 - **Full evaluation run**: Full multi-subset evaluation (`--subsets full,sf,validated --resume`) verified for production handoff.
 
 ## 9. Security
+
+The repository is clean of the WORKBENCH gateway token, but two vendored upstream AirKnow files carry a third-party proxy `api_key` literal (`<REDACTED>`), pre-existing since vendoring commit `5e6e284`, not introduced by this round, and not fixable without diverging from the pinned upstream provenance. Recommend the operator treat that third-party key as compromised and decide whether to document a scanner exception for `workbench/third_party/**`.
 
 Credential exposure assessment:
 - **Repository codebase**: Clean. Git-tracked code contains no exposed operational credentials or secrets.
