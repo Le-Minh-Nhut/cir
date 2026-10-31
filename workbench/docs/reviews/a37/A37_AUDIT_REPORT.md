@@ -333,6 +333,22 @@ S-01 is resolved by the commit series.
 
 ### Residual ceilings of the AST rows (T-02)
 
+- `_sets_flag_true` (the I09 predicate that checks `shutdown()` raises the stopping flag) no longer
+  accepts a right-hand side the analyser cannot evaluate. It previously treated
+  `_constant_truth(...) is not False` as sufficient, so four spellings PASSED while assigning a falsy
+  value: `self._stopping = False or None`, `self._stopping = bool(0)`, an annotation-only
+  `self._stopping: bool`, and `self._stopping = not True`. It now requires `_constant_truth(inner.value)
+  is True`, and each of those four spellings FAILS. Measured on mutated copies of
+  `workbench/backend/jobs.py`.
+- **Remaining residual, stated plainly: the predicate is existential and reads no ordering.** It asks
+  only whether *some* reachable assignment gives a truthy literal — it does not check which assignment
+  wins at run time, nor whether a later one overwrites it. So a `shutdown()` that raises the flag and
+  then clears it (`self._stopping = True` followed by `self._stopping = False`, or by `= 0`) still
+  satisfies the row, and so does a truthy assignment behind a decidable-true guard such as
+  `if len(self._jobs) >= 0:`. Neither spelling is used by the real `shutdown()`: it holds exactly TWO
+  assignments for that attribute, `self._stopping = False` at `workbench/backend/jobs.py:211` and
+  `self._stopping = True` at `workbench/backend/jobs.py:292`, both plain assignments with literal values
+  and no enclosing decidable-true guard.
 - `_terminates` / `_live_statements` (`workbench/tests/test_release_invariants.py:329-361`) are
   **terminator tests, not control-flow graphs**. A body whose exit sits behind `while True:`, or is
   reachable only through a `try`, is still judged terminating. The `ponytail:` comment at `:341` states
