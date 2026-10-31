@@ -15,8 +15,8 @@ re-derived in this drafting pass carry `[unverified]`.
 |---|---|
 | Branch | `research/cir-failure-workbench` |
 | Starting HEAD | `e06b4e61d894cd895034838b126ad8046a0602a5` (`git rev-parse HEAD`) |
-| Final HEAD | `f990ec8a6bc752a3f512b7733978f6eb12ef5943` (`git rev-parse HEAD`) |
-| Remote tip at end | `f990ec8a6bc752a3f512b7733978f6eb12ef5943` — same SHA as final HEAD (`git ls-remote origin refs/heads/research/cir-failure-workbench`) |
+| Final HEAD | A tracked file cannot name the commit containing it; `git rev-parse HEAD` on `research/cir-failure-workbench` is authoritative. Historical datum verified immediately before this correction commit: `9bdf6db08511f93761a9bf3f566a5d3bc9a0d369`. |
+| Remote tip at end | `git ls-remote origin refs/heads/research/cir-failure-workbench` is authoritative. Historical datum verified immediately before this correction commit: `9bdf6db08511f93761a9bf3f566a5d3bc9a0d369`. |
 | `origin/main` | untouched at `8ebcc74d5fd1934df4f3772a8ca5a96dbd00f333` (`git ls-remote origin refs/heads/main`) |
 | Push | fast-forward `e06b4e6..f990ec8`; no force |
 | `TESTED_SOURCE_SHA` at start | `a6449e060e77f0deed0c79545dd0d5c1019e333c` (the A36 round) |
@@ -27,7 +27,7 @@ re-derived in this drafting pass carry `[unverified]`.
 | Host | RTX 3050 Laptop GPU, 4096 MiB, sm_86 (`nvidia-smi`); target RTX 5070 Ti sm_120 NOT present |
 | Controller env | `.venv` Python 3.13.12, torch 2.14.1+cu130; node v20.19.5; Playwright browsers at `/tmp/pw-browsers` |
 
-The round's change set, now committed in seven commits:
+The round's commits, in order, ending at the last commit whose SHA this file can name:
 
 | # | SHA | Subject | Files |
 |---|---|---|---|
@@ -251,11 +251,11 @@ fingerprint).
 | Item | Value |
 |---|---|
 | Starting SHA | `e06b4e61d894cd895034838b126ad8046a0602a5` |
-| Final HEAD | `f990ec8a6bc752a3f512b7733978f6eb12ef5943` |
-| Remote tip | `f990ec8a6bc752a3f512b7733978f6eb12ef5943` — the same SHA (verified with `git ls-remote`) |
+| Final HEAD | A tracked file cannot name the commit containing it; `git rev-parse HEAD` on `research/cir-failure-workbench` is authoritative. Historical datum verified immediately before this correction commit: `9bdf6db08511f93761a9bf3f566a5d3bc9a0d369`. |
+| Remote tip | `git ls-remote origin refs/heads/research/cir-failure-workbench` is authoritative. Historical datum verified immediately before this correction commit: `9bdf6db08511f93761a9bf3f566a5d3bc9a0d369`. |
 | Push | fast-forward `e06b4e6..f990ec8`; no force |
 | `origin/main` | untouched at `8ebcc74d5fd1934df4f3772a8ca5a96dbd00f333` |
-| Commits | 7, in the order listed in section 1 |
+| Commits | 7 round commits, in order, ending at the last one whose SHA this file can name (section 1) |
 | Uncommitted at end | none; working tree clean except the three untracked operator files below |
 | Untracked, preserved, sha256 unchanged | `pc_composition_smoke.yaml` `aa4ccd6f405791662f8be2442e3a93e735bd2b81753c79815c30506638cf369e`; `src/train_cirr.py` `bb394437c13be97f3ff041274a8952c6054afc425308ef5f6edbc092abfcefb4`; `uv.lock` `fba52f424b9fed6776dd04c656c9024a7b6abe329aa2eb96a58adbd9454b4325` (all three re-derived with `sha256sum` in this pass) |
 | Release guard predicate | `git diff --name-only 27554b2 HEAD -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'` → EMPTY (re-derived, exit 0), so `test_no_release_document_points_at_a_superseded_source_sha` passes |
