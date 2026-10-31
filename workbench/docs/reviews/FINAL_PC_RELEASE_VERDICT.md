@@ -19,11 +19,11 @@ the aggregate) is the concrete unblock.
 |---|---|
 | Branch | `research/cir-failure-workbench` |
 | Initial HEAD this pass | `3aae18fe02ef13f5b38d153dbc8007fbb40d4c92` |
-| **TESTED_SOURCE_SHA** | **`a6449e060e77f0deed0c79545dd0d5c1019e333c`** — the production revision under test (the A36 round; its production bytes are `b8adc46`, and `a6449e0` adds only regression tests), so documentation-only successors preserve this production tree. The A34/A35 accounting on `1415e56` is retained below as historical measurement. R25 suite counts below describe the pre-composition revision. R23 remains historical. |
+| **TESTED_SOURCE_SHA** | **`27554b2ac731c40385cbf72daf06d5ed5a0a24d7`** — the revision under test (the A37 round): the A37 regression-test commit on top of the A37 production commit `8c510be2ab9a9eefdfbacac0ca3b3698033c6664`. It is the free revision the release guard accepts, because that guard's exclusion list is `workbench/docs` and `workbench/tests` only — the mobile smoke `workbench/frontend/tests/ui_smoke.py` is part of the compared production tree, so the pure production commit is not sufficient on its own and the revision named here is the first one whose production tree equals the tree on disk. Documents-only successors then preserve that tree. The A36 round named `a6449e0` on production bytes `b8adc46`; the A34/A35 accounting on `1415e56` is retained below as historical measurement. R25 suite counts below describe the pre-composition revision. R23 remains historical. |
 | **FINAL_HEAD_SHA** | not recorded here by design: a tracked file cannot name the commit that contains it. `git rev-parse HEAD` on the branch tip is the authority. |
-| Production tree | compare against the named revision with `git diff a6449e060e77f0deed0c79545dd0d5c1019e333c HEAD -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'`; the release guard requires byte-identical production source. |
+| Production tree | compare against the named revision with `git diff 27554b2ac731c40385cbf72daf06d5ed5a0a24d7 HEAD -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'`; the release guard requires byte-identical production source. |
 | `origin/main` | `8ebcc74d5fd1934df4f3772a8ca5a96dbd00f333` — **unchanged** |
-| Worktree | A36 round changes committed; preserved untracked user files: `pc_composition_smoke.yaml`, `src/train_cirr.py`, `uv.lock` |
+| Worktree | A37 round changes committed; preserved untracked user files: `pc_composition_smoke.yaml`, `src/train_cirr.py`, `uv.lock` |
 
 `main` was never touched. Nothing was rebased, reset, force-pushed or amended; every change is a new
 commit on the research branch. No checkpoint, dataset, cache or secret is tracked.
@@ -33,9 +33,9 @@ commit on the research branch. No checkpoint, dataset, cache or secret is tracke
 | Field | Value |
 |---|---|
 | Branch | `research/cir-failure-workbench` |
-| Suite accounting | A36 round, integrated tree (production bytes `b8adc465dbde00e7ca7160b4ab075a37506c4cbb` plus the A36 tests), four sequential chunks, thread-capped, `/dev/shm` basetemps: **2152 passed, 2 failed**, 10 skipped = 2164 collected (`workbench/tests`). The two failures were the release-metadata SHA guard failing by construction on the very revision it describes (resolved by this advance) and one test-isolation defect in `test_circus_cli`'s synthetic-flat `sys.modules` collision, root-caused and fixed in this round's test commit and proven by 22/22 in both file orders and 51/51 across three files; the suite-equivalent final state is therefore 2153 passed, 1 by-construction failure, 10 skipped on the `b8adc46` production bytes. This is a measured sweep with one defect fixed and proven afterwards, not a clean full pass, and `tests/unit` was not re-run in this sweep. Workbench-scope accounting only; subsequent focused runs are separate evidence. |
+| Suite accounting | A37 round, integrated tree (production bytes `8c510be2ab9a9eefdfbacac0ca3b3698033c6664` plus the A37 test commit `27554b2ac731c40385cbf72daf06d5ed5a0a24d7`, which adds regression tests and a test for the identity fix), four sequential chunks, thread-capped, `/dev/shm` basetemps: **2154 passed, 1 failed**, 11 skipped = 2166 collected (`workbench/tests`). The single failure was the release-metadata SHA guard failing by construction on the very revision it describes (resolved by this advance); the added tests are the repaired regression rows plus `test_composition_image_identity.py`, and the extra skip is a host boundary, not a pass. The A36 round on production bytes `b8adc46` recorded 2152 passed, 2 failed, 10 skipped = 2164 collected. Workbench-scope accounting only; targeted focused runs in the A37 prose below are separate evidence. |
 | Build/Playwright/image evidence | A36 round: `workbench/frontend` rebuilt after the in-flight loading placeholder change and the existing DOM-only smoke `workbench/frontend/tests/ui_smoke.py` re-run green (exit 0, 21 DOM-verified assertions; in-flight assertions recorded the `…` placeholder card and the `loading registry…` row during the fetch, then `17 registered models` with 17 rows after it settled, with the error path still not masked). A34/A35 round, on `1415e56`: `workbench/frontend` `npm run build` passed (Vite+TS, ~234 ms); the DOM-only smoke against the served production build passed all flows (cold inventory 17 models with verbatim blocker rows, query/Top-K, filter+pagination 20/24, annotation persist, injected-failure recovery, comparison ranks [4,45], cohort save/reload, stale-response guard; mobile 390×844 no overflow), desktop + mobile, zero unexpected console/page errors — the single recorded failure is the flow's own injected `Failed to fetch`. Supplementary screenshot reads (real image interpretation, tall full-page captures re-read via 1000-px crops at native resolution) agree with the DOM evidence: titles, 10 nav tabs, 17 model rows with truthful per-model blockers, LIMN bundle/partial cards, TME GPU_VERIFICATION_PENDING, no new rendering defect found; two initial tall-shot reads were superseded by the crop pass (downscale made them illegible; one confabulated reading was discarded). Screenshots are labelled mock-fixture artifacts, not research evidence. |
-| TESTED_SOURCE_SHA | `a6449e060e77f0deed0c79545dd0d5c1019e333c` — the production revision named for current release accounting (the A36 round) |
+| TESTED_SOURCE_SHA | `27554b2ac731c40385cbf72daf06d5ed5a0a24d7` — the revision named for current release accounting (the A37 round; the A37 production commit is `8c510be`) |
 | Previous tested source | `1415e56919535627273b4afb3a7c400aee770475` (the A34/A35 round): 2157 collected, 2146 passed, 1 failed, 10 skipped for `workbench/tests`; 2216 collected, 2205 passed, 1 failed, 10 skipped including `tests/unit`. Retained as historical measurement. |
 | Earlier tested source | `e3f0dfaf34b62984db30eacffbac93417eccace0` (the A33 round): 2141 collected, 2129 passed, 2 failed, 10 skipped for `workbench/tests`; 2200 collected, 2188 passed, 2 failed, 10 skipped including `tests/unit`. Retained as historical measurement. |
 | Previous composition accounting | `4e0c07476f02b43e63355b6e067da460251c54e4` (the sm_120 round): 2080 collected, 2069 passed, 1 failed, 10 skipped for `workbench/tests`; 2139 collected, 2128 passed, 1 failed, 10 skipped including `tests/unit`. Retained as historical measurement. |
@@ -60,13 +60,39 @@ the very revision it describes, before that revision is recorded. The second fai
 the `test_circus_cli` isolation defect described above; its focused proof reruns are recorded separately,
 and this sweep is not relabelled as a clean full pass. Torch 2.7.1+cpu / torchvision 0.22.1+cpu also
 passed all 59 unit tests in an isolated environment.
+
+A37 round, which advanced the tested source to `8c510be2ab9a9eefdfbacac0ca3b3698033c6664` (production
+bytes `8c510be`; the A37 test commit `27554b2` adds only regression tests and shares that production
+tree): three production files changed. `composition/runner.py` derived the dataset-content identity
+from `(size, mtime_ns)`, so a same-size rewrite with a restored mtime left the identity unchanged and
+`--resume` could serve ranks scored against changed bytes; it now streams sha256 per image and rolls
+the digests into one `content_digest`, intentionally invalidating previously written rank records.
+`frontend/style.css` scoped two direct-child rules to `section:has(.checkpoint) > table` inside the
+mobile media query so the Models table no longer keeps its min-content width and pushes the checkpoint
+column out of view, and `frontend/App.tsx` renders an em-dash rather than the in-flight ellipsis in the
+dashboard's first tile. This round also repaired six regression tests that could not fail for the
+defect they named and added `test_composition_image_identity.py` for the identity fix. Evidence is
+both a sweep and targeted: the integrated tree containing these fixes collects 2166 tests for
+`workbench/tests`, and a thread-capped four-chunk sweep of it measured 2154 passed, 1 failed and 11
+skipped, the single failure being the source-SHA guard itself, which fails by construction on the
+revision it describes and is resolved by this advance. Focused runs agree: against the production
+bytes, `test_composition_image_identity.py`, `test_circus_resume_stable.py`,
+`test_execution_identity.py` and `test_scientific_input_identity.py` reported 31 passed, and
+`test_release_invariants.py`, `test_mutation_effectiveness.py`, `test_r12_remediations.py`,
+`test_r19_tme_replay.py`, `test_frontend_staleness.py` and `test_handoff_commands.py` reported 72
+passed and 1 failed, the same by-construction guard. The delta from the A36 round's 2164 collected is
+the two new tests in `test_composition_image_identity.py`, and the delta from its 10 skips to 11 is a
+host boundary in the differently-ordered chunks, not a pass that moved. The production bytes the
+guard compares against are those of the A37 test commit, since the release guard's exclusion list
+covers `workbench/docs` and `workbench/tests` but not `workbench/frontend/tests`, so the mobile smoke
+repair in that directory belongs to the compared production tree.
 No target sm_120 GPU or complete per-model CUDA installation is claimed.
 
 Earlier R23/R25/composition measurements are historical and do not certify this runtime profile.
 
 | Gate | Command | Result |
 |---|---|---|
-| Backend suite | One sequential sweep on the integrated tree whose production bytes are `b8adc465dbde00e7ca7160b4ab075a37506c4cbb` plus the A36 tests (the A36 round); 4 chunks | **2152 passed, 2 failed**, 10 skipped = 2164 collected for workbench/tests. The two failures are the by-construction SHA guard, resolved by this advance, and one test-isolation defect fixed and proven by focused reruns afterwards (22/22 both file orders, 51/51 three files); the equivalent final state is 2153 passed, 1 by-construction failure, 10 skipped. |
+| Backend suite | One sequential sweep on the integrated tree whose production bytes are `8c510be2ab9a9eefdfbacac0ca3b3698033c6664` plus the A37 test commit `27554b2ac731c40385cbf72daf06d5ed5a0a24d7` (the A37 round); 4 chunks | **2154 passed, 1 failed**, 11 skipped = 2166 collected for workbench/tests. The single failure is the by-construction SHA guard, resolved by this advance. The A36 round recorded 2152 passed, 2 failed, 10 skipped on the `b8adc46` production bytes, its second failure being the `test_circus_cli` isolation defect fixed and proven by focused reruns afterwards (22/22 both file orders, 51/51 three files). |
 | Acceptance | `bash workbench/docker/acceptance.sh` | **ACCEPTANCE PASSED at `59949ff`** (1 honest skip: GPG status unverified). At `9a53ee1` group C fails only against the pre-existing `cir-workbench` container, whose image predates the vendoring and still serves the old registry (it reports `ptha_mtst source_available: false`); rerun against a backend started from current source and group C passes — `PASS 17 models, ids/protocols/environments match the registry`. Rebuild the image before re-running acceptance. |
 | Mutation checks | `bash workbench/docker/mutation_checks.sh` | **PASSED** M1 M2 M3 M4 M5 |
 | Offline release verification | `bash workbench/docker/release_verify.sh --offline` | exit 0, `ENGINEERING_INCOMPLETE`, **0 checks FAIL/UNRUN** |
@@ -192,8 +218,8 @@ static or fixture-level.
 ```bash
 git clone git@github.com:Le-Minh-Nhut/cir.git && cd cir
 git fetch origin research/cir-failure-workbench
-git checkout a6449e0           # the fixed TESTED_SOURCE_SHA above; never `git reset --hard`
-git rev-parse HEAD             # must print a6449e060e77f0deed0c79545dd0d5c1019e333c
+git checkout 27554b2         # the fixed TESTED_SOURCE_SHA above; never `git reset --hard`
+git rev-parse HEAD             # must print 27554b2ac731c40385cbf72daf06d5ed5a0a24d7
 ./pc.sh                        # the one operator command
 ```
 
