@@ -55,8 +55,8 @@ mechanically-justified choice, **not** a deviation:
   `git diff --name-only 8c510be HEAD -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'`
   prints `workbench/frontend/tests/ui_smoke.py`;
 - `27554b2` returns **zero** on the same predicate (re-derived: empty output, exit 0) and is an
-  ancestor of HEAD containing every production change; the same predicate is EMPTY at current HEAD
-  `f990ec8` (verified with the full SHA in section 7).
+  ancestor of HEAD containing every production change; the same predicate is EMPTY at the current tip,
+  and `git rev-parse HEAD` is authoritative for which tip that is.
 The guard predicate now holds at HEAD, so
 `workbench/tests/test_handoff_commands.py::test_no_release_document_points_at_a_superseded_source_sha`
 passes (8 passed for that file after the docs commit, see section 6).
@@ -256,7 +256,7 @@ fingerprint).
 | Starting SHA | `e06b4e61d894cd895034838b126ad8046a0602a5` |
 | Final HEAD | A tracked file cannot name the commit containing it; `git rev-parse HEAD` on `research/cir-failure-workbench` is authoritative. Historical datum verified immediately before this correction commit: `9bdf6db08511f93761a9bf3f566a5d3bc9a0d369`. |
 | Remote tip | `git ls-remote origin refs/heads/research/cir-failure-workbench` is authoritative. Historical datum verified immediately before this correction commit: `9bdf6db08511f93761a9bf3f566a5d3bc9a0d369`. |
-| Push | fast-forward `e06b4e6..f990ec8`; no force |
+| Push | Every push in this round was a fast-forward, never `--force` and never a rewrite. Initial span: `e06b4e6..f990ec8`; later docs-only commits fast-forwarded on top. `git rev-parse HEAD` is authoritative for the tip. |
 | `origin/main` | untouched at `8ebcc74d5fd1934df4f3772a8ca5a96dbd00f333` |
 | Commits | 10 round commits, enumerated in section 1; later commits are docs-only corrections under `workbench/docs/reviews/a37/` and never change production bytes. `git log --oneline origin/research/cir-failure-workbench` is authoritative. |
 | Uncommitted at end | none; working tree clean except the three untracked operator files below |
