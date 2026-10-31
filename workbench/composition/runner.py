@@ -20,7 +20,7 @@ from PIL import Image
 
 from workbench.composition.adapters import AdapterWorkerError, ExactRankUnavailable
 from workbench.composition.inputs import CONDITIONS, adapt_query_inputs
-from workbench.composition.data import PAPER_STATED_GALLERY_IMAGES, RELEASED_GALLERY_IMAGES
+from workbench.composition.data import PAPER_STATED_GALLERY_IMAGES, RELEASED_GALLERY_IMAGES, sha256_file
 
 @dataclass(frozen=True)
 class ModelSpec:
@@ -528,16 +528,16 @@ def _module_source_hash(adapter: Any) -> str:
 
 
 def _image_identity(paths: Sequence[Path | None]) -> dict[str, Any]:
+    """Dataset-content identity: resolved paths plus a rolled-up digest of every file's bytes.
+
+    Content-derived, not `(st_size, st_mtime_ns)`, so previously written rank records and
+    run_id-keyed result/summary directories no longer match and are intentionally invalidated.
+    """
     resolved = [None if path is None else str(Path(path).expanduser().resolve()) for path in paths]
-    file_stats = []
-    for path in resolved:
-        if path is None:
-            file_stats.append(None)
-            continue
-        stat = Path(path).stat()
-        file_stats.append((stat.st_size, stat.st_mtime_ns))
-    return {"resolved_paths_sha256": _digest(resolved), "file_stats": file_stats,
-            "stat_identity_method": "resolved absolute path plus size and mtime_ns; content identity approximation"}
+    content_digests = [None if path is None else sha256_file(Path(path)) for path in resolved]
+    return {"resolved_paths_sha256": _digest(resolved), "content_digest": _digest(content_digests),
+            "content_identity_method": "resolved absolute path plus sha256 of streamed file content; "
+                                       "per-file digests rolled up into one content_digest"}
 
 
 
@@ -577,8 +577,8 @@ def run_composition(data: Any, model_specs: Sequence[ModelSpec], config: Any, *,
         model = spec.registry_model
         labels = _checkpoint_labels(model, checkpoint_id, data.gallery.protocol_id)
         attempt = uuid.uuid4().hex
-        resolver = image_resolver or image_resolver_factory(Path(config.FASHIONIQ_ROOT),
-                                                             model.get("fashioniq_layout", "fashioniq_standard"))
+        layout = model.get("fashioniq_layout", "fashioniq_standard")
+        resolver = image_resolver or image_resolver_factory(Path(config.FASHIONIQ_ROOT), layout)
         gallery_paths = [resolver(identity, data.candidate_names) for identity in gallery_ids]
         query_paths = [resolver(query.reference_id, data.candidate_names) for query in queries]
         missing_gallery = [gallery_ids[index] for index, path in enumerate(gallery_paths) if path is None]

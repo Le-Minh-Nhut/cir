@@ -10,7 +10,16 @@
 section{overflow-x:auto}
 .controls>*,.filters>*{min-width:0}
 select,input,textarea,button{max-width:100%}
-fieldset.deviation-threshold{flex-wrap:wrap;min-width:0}}.warning-label { margin-left: .5rem; padding: .1rem .45rem; border-radius: .25rem; font-size: .8rem; font-weight: 600; }
+fieldset.deviation-threshold{flex-wrap:wrap;min-width:0}
+/* The Models table's min-content width is 1041px, so at 390px the section panned and the whole
+   detail column (x=387, past the 366px visible window) sat off-screen: every model card body read
+   as blank while the row kept its height. Making the table fit its container and letting the long
+   unbreakable tokens (relative paths, digests) wrap keeps both columns on screen.
+   Direct-child paths only: every checkpoint card nests a `details.gate-detail` table, and a
+   descendant selector would re-lay-out that unrelated table too (its 7 header cells collapsed from
+   auto to a flat 20px each at 390px). */
+section:has(.checkpoint) > table{table-layout:fixed}
+section:has(.checkpoint) > table > tbody > tr > td{overflow-wrap:anywhere}}.warning-label { margin-left: .5rem; padding: .1rem .45rem; border-radius: .25rem; font-size: .8rem; font-weight: 600; }
 .warning-label.amber { background: #b45309; color: #fff; }
 .warning-label.red { background: #b91c1c; color: #fff; }
 fieldset.deviation-threshold { display: flex; align-items: center; gap: .4rem; }
