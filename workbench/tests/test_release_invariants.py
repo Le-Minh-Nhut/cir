@@ -461,12 +461,17 @@ def test_i09_no_process_is_spawned_after_shutdown_wins() -> None:
         return bool(body) and _terminates(body[-1])
 
     def _sets_flag_true(node: ast.AST) -> bool:
-        """True when `node` assigns the stopping flag a value the worker reads as set."""
+        """True when `node` assigns the stopping flag a literal the analyser reads as truthy.
+
+        Only a value the analyser can evaluate counts as a raise: a right-hand side it cannot
+        read (`False or None`, `bool(0)`, a bare name) is not evidence of one, and an
+        annotation with no value assigns nothing at all.
+        """
         return any(isinstance(inner, (ast.Assign, ast.AnnAssign))
                    and any(isinstance(target, ast.Attribute) and target.attr == "_stopping"
                            for target in (inner.targets if isinstance(inner, ast.Assign)
                                           else [inner.target]))
-                   and (inner.value is None or _constant_truth(inner.value) is not False)
+                   and _constant_truth(inner.value) is True
                    for inner in _pruned_walk(node, reachable=True))
 
     # shutdown() raises the flag it asks the worker to read. `False`, `0` and `None` all read as
