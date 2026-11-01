@@ -28,7 +28,7 @@ Tám entry hoãn có blocker khác nhau theo registry: `airknow` thiếu checkpo
 **Trạng thái 17 model (bảng chuẩn, bằng chứng + điều kiện chuyển trạng thái):**
 [`workbench/docs/MODEL_STATUS_SPEC.md`](MODEL_STATUS_SPEC.md)
 
-**SHA ĐÃ KIỂM THỬ (nguồn sản xuất): `3786e1d`** (`3786e1d23db369c4869dd52c0e04e1530f2aba59`, lượt A38 — commit production chứa các thay đổi production của lượt A38; guard release chỉ loại `workbench/docs` và `workbench/tests`, và revision đầu tiên khớp đúng cây trên đĩa là `3786e1d`), revision hiện được ghi nhận trong accounting release. Chi tiết bộ test A38 xem `workbench/docs/reviews/a38/A38_TEST_RESULTS.md` (2164 passed, 1 failed, 10 skipped / 2175 collected qua 4 chunk; lỗi duy nhất là guard SHA đã được giải quyết bằng lần advance này). Historical accounting: lượt A37 (2166 collected, 2154 passed, 1 failed, 11 skipped trên `27554b2`); lượt A36 (2164 collected, 2152 passed, 2 failed, 10 skipped trên `b8adc46`); lượt A34/A35 (2216 collected gồm cả tests/unit, 2205 passed, 1 failed, 10 skipped trên `1415e56`); lượt sm_120 (2080 collected, 2069 passed, 1 failed, 10 skipped cho `workbench/tests`; 2139 collected, 2128 passed, 1 failed, 10 skipped gồm `tests/unit`); GPU đích vẫn `TARGET_GPU_PENDING`.
+**SHA ĐÃ KIỂM THỬ (nguồn sản xuất): `4ec5985`** (`4ec5985d31b5425073ad8724eaddcb36edad51b1`, lượt A39 — commit production chứa các thay đổi production của lượt A39: bind provenance model vào composition identity, đếm query cohort trung thực, trạng thái autopilot/availability fail-closed, và reader result-artifact từ chối bằng chứng hỏng nhưng bỏ qua file không phải result; guard release chỉ loại `workbench/docs` và `workbench/tests`, và revision đầu tiên khớp đúng cây trên đĩa là `4ec5985`), revision hiện được ghi nhận trong accounting release. Chi tiết bộ test A39 xem `workbench/docs/reviews/a39/A39_TEST_RESULTS.md` (frozen `3015df4`: 2233 passed, 3 failed, 10 skipped / 2246 collected trên `workbench/tests tests`; hai trong ba lỗi là regression của reader index, đã sửa trong `4ec5985`, lỗi còn lại là guard SHA tự thất bại trên chính revision nó mô tả và được giải quyết bằng lần advance này). Historical accounting: lượt A38 (`3786e1d`: 2175 collected, 2164 passed, 1 failed, 10 skipped trên `workbench/tests`); lượt A37 (2166 collected, 2154 passed, 1 failed, 11 skipped trên `27554b2`); lượt A36 (2164 collected, 2152 passed, 2 failed, 10 skipped trên `b8adc46`); lượt A34/A35 (2216 collected gồm cả tests/unit, 2205 passed, 1 failed, 10 skipped trên `1415e56`); lượt sm_120 (2080 collected, 2069 passed, 1 failed, 10 skipped cho `workbench/tests`; 2139 collected, 2128 passed, 1 failed, 10 skipped gồm `tests/unit`); GPU đích vẫn `TARGET_GPU_PENDING`.
 
 Lưu ý: các bản ghi cũ `59949ff`, `9a53ee1` và `5567bc7` đã bị **thay thế**. Công việc vendoring và phục hồi
 model đã thay đổi file production (`workbench/backend/runtime.py`, `workbench/replay/common.py`,
@@ -58,7 +58,7 @@ git fetch origin research/cir-failure-workbench
 # Checkout tường minh. KHÔNG dùng `git reset --hard`: trên máy đã có việc đang làm, nó xoá sạch
 # không hỏi. Muốn đúng cây đã kiểm thử thì checkout đúng commit đó.
 # Nguồn đã kiểm thử (revision cố định):
-git checkout 3786e1d
+git checkout 4ec5985
 # Nhánh đang phát triển thêm tài liệu. Dùng nó nếu muốn bản mới nhất:
 #   git checkout research/cir-failure-workbench
 ```
