@@ -549,7 +549,8 @@ def _method_source_hash(method: Callable[..., Any]) -> str | None:
 
 
 def _module_source_hash(adapter: Any) -> str:
-    module = sys.modules.get(type(adapter).__module__)
+    module_name = adapter.__name__ if inspect.ismodule(adapter) else type(adapter).__module__
+    module = sys.modules.get(module_name)
     try:
         return hashlib.sha256(Path(module.__file__).read_bytes()).hexdigest()
     except (AttributeError, OSError, TypeError):
@@ -719,6 +720,7 @@ def run_composition(data: Any, model_specs: Sequence[ModelSpec], config: Any, *,
                     supported[condition] = (False, f"{type(error).__name__}: {error}")
             gpu_identity = _gpu_identity()
             checkpoint_identity = spec.checkpoint_identity or "unknown"
+            condition_transform_source_hash = _module_source_hash(sys.modules.get("workbench.composition.inputs"))
             identity = {
                 "model_id": model_id, "checkpoint_id": checkpoint_id,
                 "checkpoint_identity": checkpoint_identity, "protocol_id": data.gallery.protocol_id,
@@ -737,6 +739,8 @@ def run_composition(data: Any, model_specs: Sequence[ModelSpec], config: Any, *,
                                                         "mode_supported")},
                 "adapter_module_source_hash": adapter_source_hash,
                 "adapter_module_source_status": "available" if adapter_source_hash != "unavailable" else "unavailable",
+                "condition_transform_source_hash": condition_transform_source_hash,
+                "condition_transform_source_status": "available" if condition_transform_source_hash != "unavailable" else "unavailable",
                 "score_signature": str(inspect.signature(adapter.score)),
                 "mode_support": {condition: supported[condition] for condition in conditions},
                 "runtime_identity": runtime_identity,
