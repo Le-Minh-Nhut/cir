@@ -9,7 +9,6 @@ from uuid import uuid4
 
 from workbench.backend.errors import WorkbenchError
 from workbench.backend.schemas.results import ResultRun
-from pydantic import ValidationError
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -41,6 +40,12 @@ NON_RESULT_ARTIFACT_TYPES = frozenset({
     "encoder_observation_payload",
 })
 
+#: The top-level fields ONLY a result artifact carries. A `.json` file under the results root that has
+#: none of them is not a result this reader may judge -- it is an operator's note, a plan, a recipe --
+#: and skipping it cannot hide an evaluation. A file that carries one of them has claimed to be a
+#: result, so its validation failure is corrupt evidence and is refused instead of skipped.
+RESULT_ARTIFACT_KEYS = frozenset(ResultRun.model_fields)
+
 
 def result_files(root: Path | None = None) -> list[Path]:
     from workbench.backend.operator_config import resolve_config
@@ -56,11 +61,14 @@ def result_files(root: Path | None = None) -> list[Path]:
         if path.name.startswith("."):
             continue
         try:
-            artifact = json.loads(path.read_text())
-        except (OSError, json.JSONDecodeError):
+            artifact = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError):
             files.append(path)
             continue
-        if artifact.get("artifact_type") in NON_RESULT_ARTIFACT_TYPES:
+        # A `.json` file need not hold an object: an operator's scratch list or a scalar written
+        # under the results root used to raise AttributeError here and take the whole rebuild with
+        # it, which is the same "one stray file owns the index" defect (DISC-03) one level up.
+        if isinstance(artifact, dict) and artifact.get("artifact_type") in NON_RESULT_ARTIFACT_TYPES:
             continue
         files.append(path)
     return files
@@ -77,8 +85,25 @@ def load_runs_with_digests(root: Path | None = None, skipped_files: list[Path] |
     about specific bytes, so promotion needs the digest of the artifact on disk, not a value the
     artifact claims about itself (that would be self-certification again). Computed here from the
     bytes actually read, so a later edit cannot silently keep a promotion it no longer deserves.
+
+    A `.json` file under the results root is answered in one of exactly two ways, and the
+    discriminator is what the file CLAIMS to be, never how convenient it is to skip:
+
+    * It carries NONE of the result fields (``RESULT_ARTIFACT_KEYS``) -- an operator's summary, a
+      preparation recipe, a stray note that happens to end in `.json`. Such a file is not a result
+      this reader may judge, and its validation failure cannot hide an evaluation, so it is skipped,
+      logged by path, and optionally appended to ``skipped_files``. Letting a stray note abort the
+      whole rebuild is precisely what took `/api/runs` down with a 503 (DISC-03), and the results
+      root is an operator directory, so foreign `.json` there is expected rather than exceptional.
+    * It carries at least one of them, or its bytes do not parse as JSON at all. Then it has
+      claimed to be a result (or is a damaged one -- a truncated result and a truncated note are the
+      same bytes), and failing validation means CORRUPT EVIDENCE: it is refused with
+      ``WorkbenchError`` naming the path. The alternative is a broken evaluation that merely looks
+      like it produced no output, which is the failure this reader exists to prevent. A file that
+      cannot be proven to be "not a result" is not treated as one.
     """
     import hashlib
+    import logging
 
     from workbench.replay.publication import verify_run_identity
 
@@ -87,13 +112,36 @@ def load_runs_with_digests(root: Path | None = None, skipped_files: list[Path] |
     for path in result_files(root):
         raw = path.read_bytes()
         try:
-            result = ResultRun.model_validate_json(raw.decode("utf-8"))
-        except (UnicodeDecodeError, ValueError, ValidationError) as error:
+            artifact = json.loads(raw.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError) as error:
+            # Unparseable bytes are judged by shape, because nothing else can be read out of them. A
+            # `ResultRun` is a JSON OBJECT, so only bytes that opened an object can be a damaged
+            # result -- and a truncated result and a truncated note are the same bytes, so those are
+            # refused. Anything else (a truncated list, a fragment of prose, non-UTF-8 bytes) could
+            # never have been a result, so it is one more foreign file in an operator directory and
+            # is skipped: one stray non-result `.json` still cannot take the index down.
+            if raw.lstrip()[:1] == b"{":
+                raise WorkbenchError("invalid_result_artifact",
+                                     f"{path} is not parseable JSON: {error}",
+                                     {"source": str(path)}) from error
             if skipped_files is not None:
                 skipped_files.append(path)
-            import logging
-            logging.getLogger(__name__).warning("Skipping invalid result JSON %s: %s", path, error)
+            logging.getLogger(__name__).warning(
+                "Skipping invalid result JSON %s: not JSON at all (%s)", path, error)
             continue
+        if not isinstance(artifact, dict) or not RESULT_ARTIFACT_KEYS & artifact.keys():
+            if skipped_files is not None:
+                skipped_files.append(path)
+            logging.getLogger(__name__).warning(
+                "Skipping invalid result JSON %s: not a run result (no %s field)",
+                path, "/".join(RESULT_ARTIFACT_KEYS))
+            continue
+        try:
+            result = ResultRun.model_validate(artifact)
+        except ValueError as error:
+            raise WorkbenchError("invalid_result_artifact",
+                                 f"{path} declares itself a result but is invalid: {error}",
+                                 {"source": str(path)}) from error
         # The SAME identity check the validator applies: the index must not admit an artifact the
         # validator refuses, or the two entry points disagree about one file (F-13).
         if mismatches := verify_run_identity(result):
