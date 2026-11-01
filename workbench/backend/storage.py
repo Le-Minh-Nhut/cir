@@ -217,7 +217,7 @@ def get_analysis_input(run_ids: list[str], k: int, database_path: Path | None = 
 
 def cohort_metrics(run_ids: list[str], query_ids: list[str], database_path: Path | None = None) -> list[dict[str, Any]]:
     if not query_ids:
-        return [{"run_id": run_id, "query_count": 0, **{f"r{k}": None for k in (1, 5, 10, 20, 50, 100)}, "mean_target_rank": None, "median_target_rank": None} for run_id in run_ids]
+        return [{"run_id": run_id, "query_count": 0, "scored_count": 0, **{f"r{k}": None for k in (1, 5, 10, 20, 50, 100)}, "mean_target_rank": None, "median_target_rank": None} for run_id in run_ids]
     connection = _connect(database_path)
     try:
         sql = f"SELECT run_id, target_rank FROM queries WHERE run_id IN ({_placeholders(run_ids)}) AND query_id IN ({_placeholders(query_ids)})"
@@ -227,4 +227,4 @@ def cohort_metrics(run_ids: list[str], query_ids: list[str], database_path: Path
     ranks_by_run: dict[str, list[int]] = defaultdict(list)
     for run_id, rank in rows:
         ranks_by_run[run_id].append(rank)
-    return [{"run_id": run_id, "query_count": len(ranks := ranks_by_run[run_id]), **{f"r{k}": 100 * sum(rank <= k for rank in ranks) / len(ranks) if ranks else None for k in (1, 5, 10, 20, 50, 100)}, "mean_target_rank": mean(ranks) if ranks else None, "median_target_rank": median(ranks) if ranks else None} for run_id in run_ids]
+    return [{"run_id": run_id, "query_count": len(query_ids), "scored_count": len(ranks := ranks_by_run[run_id]), **{f"r{k}": 100 * sum(rank <= k for rank in ranks) / len(ranks) if ranks else None for k in (1, 5, 10, 20, 50, 100)}, "mean_target_rank": mean(ranks) if ranks else None, "median_target_rank": median(ranks) if ranks else None} for run_id in run_ids]

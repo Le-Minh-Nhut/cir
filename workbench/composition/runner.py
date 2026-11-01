@@ -569,6 +569,74 @@ def _image_identity(paths: Sequence[Path | None]) -> dict[str, Any]:
                                        "per-file digests rolled up into one content_digest"}
 
 
+def model_provenance_identity(model: Mapping[str, Any] | None, config: Any = None) -> dict[str, Any]:
+    """Model implementation provenance: upstream commit, approved patches, and vendored source digest.
+
+    Direct callers or models without declared provenance degrade to status 'unknown'.
+    """
+    if not isinstance(model, Mapping) or not model:
+        return {
+            "status": "unknown",
+            "upstream_commit": None,
+            "approved_patches": [],
+            "vendored_source_digest": None,
+            "provenance_digest": "unknown",
+        }
+
+    upstream_commit = model.get("upstream_commit_sha")
+
+    raw_patches = model.get("approved_source_patches")
+    approved_patches: list[dict[str, str | None]] = []
+    if isinstance(raw_patches, Sequence) and not isinstance(raw_patches, (str, bytes)):
+        for patch in raw_patches:
+            if isinstance(patch, Mapping):
+                approved_patches.append({
+                    "path": patch.get("path"),
+                    "patch_sha256": patch.get("patch_sha256"),
+                    "derived_sha256": patch.get("derived_sha256"),
+                })
+        approved_patches.sort(key=lambda p: (p["path"] or "", p["patch_sha256"] or ""))
+
+    source_dir = model.get("source_dir")
+    source_path = None
+    if source_dir and isinstance(source_dir, (str, Path)):
+        candidate = Path(source_dir)
+        if candidate.is_absolute():
+            source_path = candidate
+        else:
+            tp_root = getattr(config, "WORKBENCH_THIRD_PARTY_ROOT", None)
+            if tp_root is not None:
+                source_path = Path(tp_root) / candidate
+            elif "WORKBENCH_THIRD_PARTY_ROOT" in os.environ:
+                source_path = Path(os.environ["WORKBENCH_THIRD_PARTY_ROOT"]) / candidate
+            else:
+                source_path = Path(__file__).resolve().parents[1] / "third_party" / candidate
+
+    vendored_digest: str | None = None
+    if source_path is not None and source_path.is_dir():
+        from workbench.backend.vendored_source import live_digest, manifest_digest
+        try:
+            live = live_digest(source_path, dict(model))
+            vendored_digest = manifest_digest(live)
+        except (OSError, ValueError):
+            vendored_digest = "unavailable"
+
+    has_provenance = (upstream_commit is not None or approved_patches or vendored_digest is not None)
+    status = "available" if has_provenance else "unknown"
+    payload = {
+        "upstream_commit": upstream_commit,
+        "approved_patches": approved_patches,
+        "vendored_source_digest": vendored_digest,
+    }
+    digest = _digest(payload) if has_provenance else "unknown"
+    return {
+        "status": status,
+        "upstream_commit": upstream_commit,
+        "approved_patches": approved_patches,
+        "vendored_source_digest": vendored_digest,
+        "provenance_digest": digest,
+    }
+
 
 def run_composition(data: Any, model_specs: Sequence[ModelSpec], config: Any, *,
                     subsets: Sequence[str], batch_size: int = 32, smoke: int | None = None,
@@ -605,7 +673,7 @@ def run_composition(data: Any, model_specs: Sequence[ModelSpec], config: Any, *,
         model_lock = None
         model_id = _component(spec.model_id)
         checkpoint_id = _component(spec.checkpoint_id)
-        model = spec.registry_model
+        model = spec.registry_model or {}
         labels = _checkpoint_labels(model, checkpoint_id, data.gallery.protocol_id)
         attempt = uuid.uuid4().hex
         layout = model.get("fashioniq_layout", "fashioniq_standard")
@@ -662,6 +730,7 @@ def run_composition(data: Any, model_specs: Sequence[ModelSpec], config: Any, *,
                                   "registry_values": {key: model.get(key) for key in
                                       ("fashioniq_layout", "fashioniq_image_extensions", "transform", "image_size",
                                        "text_processor", "candidate_normalization", "scoring")}},
+                "model_provenance": model_provenance_identity(model, config),
                 "adapter": f"{type(adapter).__module__}.{type(adapter).__qualname__}",
                 "adapter_source_hashes": {name: _method_source_hash(getattr(type(adapter), name))
                                            for name in ("encode_queries", "encode_targets", "score", "rank",

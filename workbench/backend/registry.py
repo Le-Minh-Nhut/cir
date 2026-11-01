@@ -744,17 +744,22 @@ def cache_asset_blocker(asset: dict[str, Any], status: dict[str, Any]) -> str | 
 #: made a single request take ~85 s. The key carries size and mtime_ns, so a replaced or
 #: rewritten file rehashes; the authoritative hashing behind verification, receipts and the
 #: ledger is deliberately NOT cached and still reads every byte.
-_AVAILABILITY_DIGEST_CACHE: dict[tuple[str, int, int], str] = {}
+_AVAILABILITY_DIGEST_CACHE: dict[tuple[Any, ...], str] = {}
 
 def _cached_availability_digest(path: Path, required_files: list[str] | None) -> str | None:
     try:
         stat = path.stat()
+        names = tuple(sorted(set(required_files))) if required_files is not None else None
+        members = ([(_safe_relative_file(path, name), _safe_relative_file(path, name).stat()) for name in names]
+                   if names is not None and path.is_dir() else None)
+        member_fingerprint = tuple((member.relative_to(path).as_posix(), member_stat.st_size, member_stat.st_mtime_ns)
+                                   for member, member_stat in members) if members is not None else None
     except OSError:
         return None
-    key = (str(path), stat.st_size, stat.st_mtime_ns)
+    key = (str(path), stat.st_size, stat.st_mtime_ns, names, member_fingerprint)
     cached = _AVAILABILITY_DIGEST_CACHE.get(key)
     if cached is None:
-        cached = sha256_file(path, required_files)
+        cached = sha256_file(path, list(names) if names is not None else None)
         _AVAILABILITY_DIGEST_CACHE[key] = cached
     return cached
 

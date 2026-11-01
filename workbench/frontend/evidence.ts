@@ -16,7 +16,13 @@
  *  the API reported. It is pure so the states are testable without a browser.
  */
 
+
 export type RunDataKind = "experiment" | "mock" | "synthetic" | string;
+export function isCertifiedEvidence(run: { verification?: EvidenceBenchmarkRun["verification"] | null } | null | undefined): boolean {
+  const receipt = run?.verification;
+  if (receipt?.certified !== true || receipt?.is_research_evidence !== true) return false;
+  return receipt?.development_mode !== true && receipt?.certification_mode !== "development";
+}
 
 /** The fields of `/api/runs` rows this module reads. */
 export interface EvidenceRun {
@@ -88,16 +94,6 @@ function isSyntheticAggregate(run: EvidenceBenchmarkRun): boolean {
   return run?.is_synthetic === true || run?.data_kind === "mock" || run?.data_kind === "synthetic";
 }
 
-function isCertifiedAggregate(run: EvidenceBenchmarkRun): boolean {
-  // `certified` is necessary and not sufficient: under a development certificate the API returns a
-  // receipt whose execution question was relaxed because there was no evaluator-written proof to
-  // validate, and a report judged that way is an execution record, not a research result. Counting
-  // it as one made the dashboard banner claim certified results for runs whose proof was never
-  // checked -- the exact claim this module exists to keep honest.
-  const receipt = run?.verification;
-  if (receipt?.certified !== true || receipt?.is_research_evidence !== true) return false;
-  return receipt?.development_mode !== true && receipt?.certification_mode !== "development";
-}
 
 export function evidenceState(runs: EvidenceRun[] | null | undefined,
                               benchmarkRuns: EvidenceBenchmarkRun[] | null | undefined): EvidenceState {
@@ -111,7 +107,7 @@ export function evidenceState(runs: EvidenceRun[] | null | undefined,
   const unverifiedExperimentRuns = experimentRuns - verifiedQueryRuns;
   const mockRuns = safeRuns.filter((run) => run?.data_kind === "mock").length;
   const aggregateRuns = safeBenchmarks.length;
-  const certifiedAggregates = safeBenchmarks.filter(isCertifiedAggregate).length;
+  const certifiedAggregates = safeBenchmarks.filter(isCertifiedEvidence).length;
   const syntheticAggregates = safeBenchmarks.filter(isSyntheticAggregate).length;
   const uncertifiedAggregates = aggregateRuns - certifiedAggregates;
   // "Aggregate-only" is a statement about the per-query export, not about certification: a

@@ -1189,11 +1189,14 @@ def _write_reports(config: AutopilotConfig, plan: dict[str, Any], rows: list[dic
 
 def _read_state(config: AutopilotConfig) -> dict[str, Any]:
     paths = _artifact_paths(config)
-    if paths["summary_json"].is_file():
-        summary = json.loads(paths["summary_json"].read_text(encoding="utf-8"))
-        return {"exit_code": int(summary.get("exit_code", 0)), "summary": summary}
-    if paths["plan"].is_file():
-        return {"exit_code": 0, "summary": json.loads(paths["plan"].read_text(encoding="utf-8"))}
+    state_path = next((paths[key] for key in ("summary_json", "plan") if paths[key].is_file()), None)
+    if state_path is not None:
+        try:
+            summary = json.loads(state_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return {"exit_code": 1, "summary": {"status": "FAILED", "models": [], "reason": "corrupted autopilot state"}}
+        return {"exit_code": int(summary.get("exit_code", 0)) if state_path == paths["summary_json"] else 0,
+                "summary": summary.get("summary", summary) if state_path == paths["summary_json"] else summary}
     return {"exit_code": 1, "summary": {"status": "NOT_RUN", "models": [], "reason": "no autopilot state exists"}}
 
 

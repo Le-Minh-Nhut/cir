@@ -9,6 +9,7 @@ from uuid import uuid4
 
 from workbench.backend.errors import WorkbenchError
 from workbench.backend.schemas.results import ResultRun
+from pydantic import ValidationError
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -69,7 +70,7 @@ def load_runs(root: Path | None = None) -> list[ResultRun]:
     return [result for _, result in load_runs_with_digests(root)]
 
 
-def load_runs_with_digests(root: Path | None = None) -> list[tuple[str, ResultRun]]:
+def load_runs_with_digests(root: Path | None = None, skipped_files: list[Path] | None = None) -> list[tuple[str, ResultRun]]:
     """Every canonical run with the digest of the FILE it was read from.
 
     The digest is what an evidence receipt binds: a verdict that a run was verified is a statement
@@ -85,7 +86,14 @@ def load_runs_with_digests(root: Path | None = None) -> list[tuple[str, ResultRu
     sources: dict[str, Path] = {}
     for path in result_files(root):
         raw = path.read_bytes()
-        result = ResultRun.model_validate_json(raw.decode("utf-8"))
+        try:
+            result = ResultRun.model_validate_json(raw.decode("utf-8"))
+        except (UnicodeDecodeError, ValueError, ValidationError) as error:
+            if skipped_files is not None:
+                skipped_files.append(path)
+            import logging
+            logging.getLogger(__name__).warning("Skipping invalid result JSON %s: %s", path, error)
+            continue
         # The SAME identity check the validator applies: the index must not admit an artifact the
         # validator refuses, or the two entry points disagree about one file (F-13).
         if mismatches := verify_run_identity(result):
@@ -160,7 +168,7 @@ def verifier_verdicts(config=None) -> dict[str, dict]:
 
 
 def rebuild_index(results_root: Path | None = None, database_path: Path | None = None,
-                  config=None) -> int:
+                  config=None, skipped_files: list[Path] | None = None) -> int:
     """Rebuild the serving index from canonical result files.
 
     ``config`` is threaded to every root this function defaults, so the index, the result files it
@@ -177,7 +185,7 @@ def rebuild_index(results_root: Path | None = None, database_path: Path | None =
         configured_database_path(config) if config is not None else configured_database_path())
     results_root = results_root or (results_path(config) if config is not None else None)
 
-    loaded = load_runs_with_digests(results_root)
+    loaded = load_runs_with_digests(results_root, skipped_files)
     runs = [result for _, result in loaded]
     digests = {result.run.run_id: digest for digest, result in loaded}
     verdicts = verifier_verdicts(config)

@@ -4,7 +4,7 @@ import { api } from "./client";
 import { evidenceBanner, evidenceState } from "./evidence";
 import { parseProtocolVisibility, protocolDefinitions, protocolVisibilityStorageKey, selectedVisibleProtocol, setProtocolVisibility, visibleProtocolIds, type ProtocolId, type ProtocolVisibility } from "./protocols";
 import { mayApply, requestKey } from "./staleness";
-import { DEFAULT_THRESHOLD_PCT, readThresholdPct, thresholdStorageKey, warningLabels, type BenchmarkRun, type GateVerdict, type RunGate, type WarningLabel } from "./gate";
+import { DEFAULT_THRESHOLD_PCT, isCertifiedEvidence, readThresholdPct, thresholdStorageKey, warningLabels, type BenchmarkRun, type GateVerdict, type RunGate, type WarningLabel } from "./gate";
 import type { MetricComparison } from "./gate_types";
 import type { Analysis, Cohort, Job, Model, Query, Run } from "./types";
 
@@ -78,7 +78,7 @@ function GateDetail({gate}:{gate:RunGate|undefined}) {
   const comparisons=(verdict.comparisons||[]).filter(c=>c&&typeof c==="object");
   const worst=comparisons.reduce<null|NonNullable<MetricComparison["relative_error_pct"]>>((acc,c)=>c.relative_error_pct!=null&&c.relative_error_pct>(acc??-Infinity)?c.relative_error_pct:acc,null);
   const variant=gate?.variant_provenance||{};
-  const isCertified=Boolean(gate?.verification?.certified && gate?.verification?.is_research_evidence);
+  const isCertified=isCertifiedEvidence(gate);
   if(!comparisons.length&&!verdict.status&&!Object.keys(gate?.observed_metrics||{}).length&&!gate?.parity_status&&!gate?.category_metrics&&!gate?.verification)return null;
   return <details className="gate-detail"><summary>Gate evidence{worst!==null?` · worst deviation ${worst.toFixed(2)}%`:""}</summary>
     {verdict.status&&<p><b>{verdict.status}</b>{gate?.verification&&!isCertified?" (not certified research evidence)":""}{verdict.detail?` — ${verdict.detail}`:""}</p>}

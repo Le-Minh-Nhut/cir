@@ -1,4 +1,6 @@
 import type { MetricComparison } from "./gate_types";
+import { isCertifiedEvidence } from "./evidence";
+
 
 export const DEFAULT_THRESHOLD_PCT = 5.0;
 export const thresholdStorageKey = "cir-workbench.thresholdPct";
@@ -13,13 +15,13 @@ export function readThresholdPct(storage: Pick<Storage, "getItem"> = localStorag
 }
 
 export type VerificationInfo = {
-  artifact_exists?: boolean;
-  execution_authenticated?: boolean;
-  is_research_evidence?: boolean;
-  certified?: boolean;
-  development_mode?: boolean;
-  certification_mode?: string;
-  state?: string;
+  artifact_exists?: boolean | null;
+  execution_authenticated?: boolean | null;
+  is_research_evidence?: boolean | null;
+  certified?: boolean | null;
+  development_mode?: boolean | null;
+  certification_mode?: string | null;
+  state?: string | null;
   report_digest?: string | null;
   reasons?: string[];
   evidence_reasons?: string[];
@@ -71,9 +73,7 @@ export type WarningLabel =
   | { kind: "refused"; text: "TỪ CHỐI CHỨNG NHẬN (REFUSED)"; tone: "red" }
   | { kind: "uncertified"; text: "CHƯA CHỨNG NHẬN (UNCERTIFIED)"; tone: "red" };
 
-export function isCertifiedEvidence(gate: RunGate | undefined): boolean {
-  return Boolean(gate?.verification?.certified && gate?.verification?.is_research_evidence);
-}
+export { isCertifiedEvidence };
 export function warningLabels(gate: RunGate | undefined, thresholdPct: number): WarningLabel[] {
   const labels: WarningLabel[] = [];
   if ((gate?.variant_provenance || {}).caption_alias_staged) {

@@ -1069,7 +1069,7 @@ def test_cohort_export_with_none_metrics_renders_na_cells(api, tmp_path, monkeyp
     content_csv = json.loads(body_csv)["content"]
     assert "N/A" in content_csv
     assert "nan" not in content_csv.lower()
-    expected_csv_row = "run-empty-1,0,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A"
+    expected_csv_row = "run-empty-1,0,0,N/A,N/A,N/A,N/A,N/A,N/A,N/A"
     assert expected_csv_row in content_csv.replace("\r\n", "\n")
 
     # 3. JSON export
