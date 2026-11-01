@@ -2,7 +2,7 @@
 
 Primary operator route is this document's [One run/resume path](#one-runresume-path). Copy the checked-in `pc_autopilot.pc_cohort.yaml` to a private PC-specific YAML and configure all six absolute paths, finite budgets, capabilities, model settings, and operational batch before any real run. [MODEL_STATUS_SPEC.md](MODEL_STATUS_SPEC.md) records per-model source, checkpoint, assets, capability, and blockers.
 
-**Current revision identity:** `TESTED_SOURCE_SHA` is `4ec5985d31b5425073ad8724eaddcb36edad51b1` (the A39 round: the A39 production commit that binds model provenance into the composition identity, reports honest cohort query counts, fails closed on truncated autopilot and availability state, and makes the result reader refuse corrupt evidence while skipping files that are not results at all; the release guard excludes only `workbench/docs` and `workbench/tests`, so the mobile smoke under `workbench/frontend/tests` counts as production and the first revision whose production tree matches the disk is `4ec5985`), the A38 round named `3786e1d` on production bytes now superseded, the A37 round named `27554b2ac731c40385cbf72daf06d5ed5a0a24d7` on the A37 production commit `8c510be2ab9a9eefdfbacac0ca3b3698033c6664`, and the A36 round named `a6449e0` on production bytes `b8adc46`. The frozen A39 sweep on `3015df4` (one sequential run of `workbench/tests tests`, thread-capped, `/dev/shm` basetemps) collected 2246: passed 2233, failed 3, skipped 10. Two of the three failures were regressions of the index reader against `test_adversarial_orchestration.py::test_d01_d03_d04_index_integrity` and `test_strict_acceptance_matrix.py::test_27_to_29_index_separation_and_validation`, both fixed in the tested source `4ec5985`; the third was the release-metadata SHA guard, which fails by construction on the revision it describes and is resolved by this advance. The A38 round on `3786e1d` recorded collected 2175, passed 2164, failed 1, skipped 10; the A37 round on `27554b2` recorded collected 2166, passed 2154, failed 1, skipped 11. The A36 round on the `b8adc46` production bytes recorded collected 2164, passed 2152, failed 2, skipped 10, its second failure being one `test_circus_cli` test-isolation defect (a synthetic-flat fixture leaving a dynamic adapter module in `sys.modules`), fixed in that round's test commit and proven by focused reruns (22/22 in both file orders, 51/51 across three files). `tests/unit` contributed 59 passed and 0 skipped to the 2246 total above. The 10 skips are unchanged host boundaries.
+**Current revision identity:** `TESTED_SOURCE_SHA` is `2ff698e5b201cbc5bd578e77d1dd7bbe952f1069`, latest production commit including condition-transform source binding in composition identity. Detached collection is 2188 `workbench/tests`, 2247 `workbench/tests tests`. Full serial sweep at this SHA: 2247 collected, 2236 passed, 1 failed, 10 skipped, 0 errors, 3800.01s. Sole failure was stale release count accounting; after correcting counts, `test_handoff_commands.py` passes 8 tests. `workbench/tests` scope: 2188 collected (2177 passed, 1 failed, 10 skipped); `tests/unit`: 59 passed. The earlier frozen `3015df4` sweep (2246/2233/3/10) is historical. A39 checkpoint probe process incident and no-data-loss finding are recorded in `A39_SECURITY_REVIEW.md` and `A39_FINDINGS.csv`.
 
 The frozen A39 sweep reported exactly three failures. Their identities are stated in full above and none
 of them is a passing claim dressed as a failure: two were the index reader's own regression, fixed in the
@@ -126,9 +126,9 @@ git fetch origin research/cir-failure-workbench
 git checkout research/cir-failure-workbench
 git merge --ff-only origin/research/cir-failure-workbench
 git rev-parse HEAD          # branch tip; may be a documentation-only successor
-git rev-parse 4ec5985       # must print TESTED_SOURCE_SHA: 4ec5985d31b5425073ad8724eaddcb36edad51b1
-git merge-base --is-ancestor 4ec5985 HEAD
-git diff --exit-code 4ec5985 HEAD -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'
+git rev-parse 2ff698e5b201cbc5bd578e77d1dd7bbe952f1069 # TESTED_SOURCE_SHA
+git merge-base --is-ancestor 2ff698e5b201cbc5bd578e77d1dd7bbe952f1069 HEAD
+git diff --exit-code 2ff698e5b201cbc5bd578e77d1dd7bbe952f1069 HEAD -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'
 ```
 
 Fresh checkout (clone the research branch directly):
@@ -137,9 +137,9 @@ Fresh checkout (clone the research branch directly):
 git clone --branch research/cir-failure-workbench git@github.com:Le-Minh-Nhut/cir.git cir
 cd cir
 git rev-parse HEAD          # branch tip; may be a documentation-only successor
-git rev-parse 4ec5985       # must print TESTED_SOURCE_SHA: 4ec5985d31b5425073ad8724eaddcb36edad51b1
-git merge-base --is-ancestor 4ec5985 HEAD
-git diff --exit-code 4ec5985 HEAD -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'
+git rev-parse 2ff698e5b201cbc5bd578e77d1dd7bbe952f1069 # TESTED_SOURCE_SHA
+git merge-base --is-ancestor 2ff698e5b201cbc5bd578e77d1dd7bbe952f1069 HEAD
+git diff --exit-code 2ff698e5b201cbc5bd578e77d1dd7bbe952f1069 HEAD -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'
 ```
 
 Continue from the repository root:
