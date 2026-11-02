@@ -2217,6 +2217,17 @@ def run_stages(
     mode: str = "real",
     report_path: Path | None = None,
 ) -> int:
+    old_signal_handlers = {}
+    def _handle_workflow_signal(signum: int, _frame: object) -> None:
+        if signum == signal.SIGINT:
+            raise KeyboardInterrupt
+        raise SystemExit(128 + signum)
+
+    for signum in (signal.SIGINT, signal.SIGTERM):
+        try:
+            old_signal_handlers[signum] = signal.signal(signum, _handle_workflow_signal)
+        except ValueError:
+            pass
     cfg = config or resolve_config()
     if state_path is None:
         state_path = _artifacts_root(cfg) / "pipeline_state.json"
@@ -2508,6 +2519,8 @@ def run_stages(
         write_report()
         if lock_fd is not None:
             release_workflow_lock(lock_fd)
+        for signum, handler in old_signal_handlers.items():
+            signal.signal(signum, handler)
 
     return 1 if failed else 0
 

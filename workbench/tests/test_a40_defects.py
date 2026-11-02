@@ -168,3 +168,61 @@ def test_load_mock_results_refuses_out_of_root_target(tmp_path: Path, monkeypatc
     assert sentinel.is_file(), "Out-of-root mock target was deleted!"
     assert ret == 2, f"Expected returncode 2 for unsafe output-root, got {ret}"
     assert "[BLOCKED]" in capsys.readouterr().err
+
+
+def test_load_mock_results_rejects_repo_subroot(tmp_path: Path) -> None:
+    repo_root = tmp_path / "repo"
+    output_root = repo_root / "workbench"
+    mock_dir = output_root / "protocol" / "mock"
+    mock_dir.mkdir(parents=True)
+    sentinel = mock_dir / "keep.txt"
+    sentinel.write_text("must survive", encoding="utf-8")
+    cfg = SimpleNamespace(
+        CIR_REPO_ROOT=repo_root,
+        CIR_DATA_ROOT=tmp_path / "data",
+        WORKBENCH_RESULTS_ROOT=tmp_path / "results",
+    )
+
+    assert not load_mock_results.is_safe_output_root(output_root, cfg)
+    assert not load_mock_results.is_safe_target(mock_dir, output_root, cfg)
+    assert sentinel.is_file()
+
+
+def test_pipeline_sigterm_between_commands_writes_report(tmp_path: Path) -> None:
+    ready = tmp_path / "ready"
+    gate = tmp_path / "gate"
+    report = tmp_path / "report.json"
+    state = tmp_path / "state.json"
+    script = tmp_path / "driver.py"
+    script.write_text(
+        "import pathlib, sys, time\n"
+        f"sys.path.insert(0, {str(Path(__file__).resolve().parents[2])!r})\n"
+        "from workbench.scripts import pipeline\n"
+        "ready, gate, report, state = map(pathlib.Path, sys.argv[1:])\n"
+        "def no_child(_argv):\n"
+        "    ready.write_text('ready')\n"
+        "    while not gate.exists(): time.sleep(0.01)\n"
+        "    return 0\n"
+        "pipeline.run_command = no_child\n"
+        "stage = pipeline.run_stage('signal-boundary', ['unused'])\n"
+        "pipeline.run_stages([stage], state_path=state, report_path=report, apply=True)\n",
+        encoding="utf-8",
+    )
+    proc = subprocess.Popen(
+        [sys.executable, str(script), str(ready), str(gate), str(report), str(state)],
+        cwd=Path(__file__).resolve().parents[2],
+    )
+    try:
+        deadline = time.monotonic() + 5
+        while not ready.exists() and time.monotonic() < deadline:
+            time.sleep(0.01)
+        assert ready.exists(), "pipeline did not reach no-child handshake"
+        proc.send_signal(signal.SIGTERM)
+        assert proc.wait(timeout=5) != 0
+        assert report.is_file(), "SIGTERM did not write workflow report"
+        assert json.loads(report.read_text(encoding="utf-8"))["status"] != "SUCCESS"
+    finally:
+        gate.touch()
+        if proc.poll() is None:
+            proc.kill()
+            proc.wait()
