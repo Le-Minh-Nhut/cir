@@ -19,9 +19,9 @@ the aggregate) is the concrete unblock.
 |---|---|
 | Branch | `research/cir-failure-workbench` |
 | Initial HEAD this pass | `3aae18fe02ef13f5b38d153dbc8007fbb40d4c92` |
-| **TESTED_SOURCE_SHA** | **`2ff698e5b201cbc5bd578e77d1dd7bbe952f1069`** — latest production commit, binding condition-transform source into composition identity. Detached worktree collection at this revision: 2188 tests in `workbench/tests`, 2247 in `workbench/tests tests`. The serial full suite was run on this SHA: 2247 collected, 2236 passed, 1 failed, 10 skipped; its sole failure is the stale release count guard, corrected below and re-verified afterward. Earlier frozen `3015df4` sweep remains historical at 2246 collected, 2233 passed, 3 failed, 10 skipped. |
+| **TESTED_SOURCE_SHA** | **`624fcf9607d7397c8eef51a3453792a8a9f93de6`** — latest production commit (round A40), incorporating production fixes across pipeline lifecycle, results root boundary, model CSMCIR work root, and viewport metadata. Detached worktree collection at this revision: 2197 tests in `workbench/tests`, 2256 in `workbench/tests tests`. The serial full suite was run on this SHA: 2256 collected, 2245 passed, 1 failed, 10 skipped; its sole failure is the by-construction release-metadata guard, resolved by this advance. Earlier frozen `2ff698e` sweep remains historical at 2247 collected, 2236 passed, 1 failed, 10 skipped. |
 | **FINAL_HEAD_SHA** | not recorded here by design: a tracked file cannot name the commit that contains it. `git rev-parse HEAD` on the branch tip is the authority. |
-| Production tree | compare against `2ff698e5b201cbc5bd578e77d1dd7bbe952f1069` with `git diff 2ff698e5b201cbc5bd578e77d1dd7bbe952f1069 HEAD -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'`; the release guard requires byte-identical production source. |
+| Production tree | compare against `624fcf9607d7397c8eef51a3453792a8a9f93de6` with `git diff 624fcf9607d7397c8eef51a3453792a8a9f93de6 HEAD -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'`; the release guard requires byte-identical production source. |
 | `origin/main` | `8ebcc74d5fd1934df4f3772a8ca5a96dbd00f333` — **unchanged** |
 | Worktree | A37 round changes committed; preserved untracked user files: `pc_composition_smoke.yaml`, `src/train_cirr.py`, `uv.lock` |
 
@@ -33,9 +33,9 @@ commit on the research branch. No checkpoint, dataset, cache or secret is tracke
 | Field | Value |
 |---|---|
 | Branch | `research/cir-failure-workbench` |
-| Suite accounting | Current named source `2ff698e5b201cbc5bd578e77d1dd7bbe952f1069`, serial sweep of `workbench/tests tests`: 2247 collected, 2236 passed, 1 failed, 10 skipped, 0 errors in 3800.01s. `workbench/tests` scope: **2177 passed, 1 failed**, 10 skipped = 2188 collected; `tests/unit` contributed 59 passed and 0 skipped. Sole failure was `test_the_release_documents_quote_the_test_count_they_actually_ran`, because docs still quoted historical 3015df4 counts; after correcting counts, the handoff command passed 8 tests. Earlier 3015df4 sweep (2246/2233/3/10) remains historical. |
+| Suite accounting | Current named source `624fcf9607d7397c8eef51a3453792a8a9f93de6`, serial sweep of `workbench/tests tests`: 2256 collected, 2245 passed, 1 failed, 10 skipped, 0 errors in 3942.16s (1:05:42). `workbench/tests` scope: **2186 passed, 1 failed**, 10 skipped = 2197 collected; `tests/unit` contributed 59 passed and 0 skipped (2197 + 59 = 2256 combined). Sole failure was `test_no_release_document_points_at_a_superseded_source_sha`, by-construction release guard resolved by this advance. Earlier `2ff698e` sweep (2247/2236/1/10) remains historical. |
 | Build/Playwright/image evidence | A36 round: `workbench/frontend` rebuilt after the in-flight loading placeholder change and the existing DOM-only smoke `workbench/frontend/tests/ui_smoke.py` re-run green (exit 0, 21 DOM-verified assertions; in-flight assertions recorded the `…` placeholder card and the `loading registry…` row during the fetch, then `17 registered models` with 17 rows after it settled, with the error path still not masked). A34/A35 round, on `1415e56`: `workbench/frontend` `npm run build` passed (Vite+TS, ~234 ms); the DOM-only smoke against the served production build passed all flows (cold inventory 17 models with verbatim blocker rows, query/Top-K, filter+pagination 20/24, annotation persist, injected-failure recovery, comparison ranks [4,45], cohort save/reload, stale-response guard; mobile 390×844 no overflow), desktop + mobile, zero unexpected console/page errors — the single recorded failure is the flow's own injected `Failed to fetch`. Supplementary screenshot reads (real image interpretation, tall full-page captures re-read via 1000-px crops at native resolution) agree with the DOM evidence: titles, 10 nav tabs, 17 model rows with truthful per-model blockers, LIMN bundle/partial cards, TME GPU_VERIFICATION_PENDING, no new rendering defect found; two initial tall-shot reads were superseded by the crop pass (downscale made them illegible; one confabulated reading was discarded). Screenshots are labelled mock-fixture artifacts, not research evidence. |
-| TESTED_SOURCE_SHA | `2ff698e5b201cbc5bd578e77d1dd7bbe952f1069` — latest production revision and revision used for the current serial sweep. |
+| TESTED_SOURCE_SHA | `624fcf9607d7397c8eef51a3453792a8a9f93de6` — latest production revision and revision used for the current serial sweep. |
 | Previous tested source | `1415e56919535627273b4afb3a7c400aee770475` (the A34/A35 round): 2157 collected, 2146 passed, 1 failed, 10 skipped for `workbench/tests`; 2216 collected, 2205 passed, 1 failed, 10 skipped including `tests/unit`. Retained as historical measurement. |
 | Earlier tested source | `e3f0dfaf34b62984db30eacffbac93417eccace0` (the A33 round): 2141 collected, 2129 passed, 2 failed, 10 skipped for `workbench/tests`; 2200 collected, 2188 passed, 2 failed, 10 skipped including `tests/unit`. Retained as historical measurement. |
 | Previous composition accounting | `4e0c07476f02b43e63355b6e067da460251c54e4` (the sm_120 round): 2080 collected, 2069 passed, 1 failed, 10 skipped for `workbench/tests`; 2139 collected, 2128 passed, 1 failed, 10 skipped including `tests/unit`. Retained as historical measurement. |
@@ -92,7 +92,7 @@ Earlier R23/R25/composition measurements are historical and do not certify this 
 
 | Gate | Command | Result |
 |---|---|---|
-| Backend suite | Current serial sweep on `2ff698e5b201cbc5bd578e77d1dd7bbe952f1069`: `workbench/tests` **2177 passed, 1 failed**, 10 skipped = 2188 collected; `tests/unit` contributed 59 passed and 0 skipped, for combined 2247 collected, 2236 passed, 1 failed, 10 skipped in 3800.01s. Sole failure was the release count guard using stale text; corrected counts then passed the standalone handoff command. The earlier `3015df4` sweep (2246/2233/3/10) is historical. |
+| Backend suite | Current serial sweep on `624fcf9607d7397c8eef51a3453792a8a9f93de6`: `workbench/tests` **2186 passed, 1 failed**, 10 skipped = 2197 collected; `tests/unit` contributed 59 passed and 0 skipped, for combined 2256 collected, 2245 passed, 1 failed, 10 skipped in 3942.16s. Sole failure was the by-construction release metadata guard; resolved by advancing release documents. The earlier `2ff698e` sweep (2247/2236/1/10) is historical. |
 | Acceptance | `bash workbench/docker/acceptance.sh` | **ACCEPTANCE PASSED at `59949ff`** (1 honest skip: GPG status unverified). At `9a53ee1` group C fails only against the pre-existing `cir-workbench` container, whose image predates the vendoring and still serves the old registry (it reports `ptha_mtst source_available: false`); rerun against a backend started from current source and group C passes — `PASS 17 models, ids/protocols/environments match the registry`. Rebuild the image before re-running acceptance. |
 | Mutation checks | `bash workbench/docker/mutation_checks.sh` | **PASSED** M1 M2 M3 M4 M5 |
 | Offline release verification | `bash workbench/docker/release_verify.sh --offline` | exit 0, `ENGINEERING_INCOMPLETE`, **0 checks FAIL/UNRUN** |
@@ -218,8 +218,8 @@ static or fixture-level.
 ```bash
 git clone git@github.com:Le-Minh-Nhut/cir.git && cd cir
 git fetch origin research/cir-failure-workbench
-git checkout 2ff698e         # the fixed TESTED_SOURCE_SHA above; never `git reset --hard`
-git rev-parse HEAD             # must print 2ff698e5b201cbc5bd578e77d1dd7bbe952f1069
+git checkout 624fcf9         # the fixed TESTED_SOURCE_SHA above; never `git reset --hard`
+git rev-parse HEAD             # must print 624fcf9607d7397c8eef51a3453792a8a9f93de6
 ./pc.sh                        # the one operator command
 ```
 

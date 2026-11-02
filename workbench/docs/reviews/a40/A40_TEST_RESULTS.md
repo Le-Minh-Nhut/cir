@@ -2,7 +2,7 @@
 
 **Repository**: `/home/heheboiz/data/cir`  
 **Branch**: `research/cir-failure-workbench`  
-**Tested Source SHA**: `b1b35117f3ab1b4fc0a5a21056d3799a71c06a66`  
+**Tested Source SHA**: `624fcf9607d7397c8eef51a3453792a8a9f93de6`  
 **Audit Round**: A40  
 **Interpreter**: Python 3.13.12 (`.venv/bin/python`)  
 **Node.js**: v20.19.5  
@@ -42,21 +42,29 @@ Targeted regression suites were executed against the frozen code to verify fixes
 
 ## 2. Full Frozen Test Suite Status
 
-- **Status**: **IN_PROGRESS — accounting to be recorded by the coordinator**
-- **Tested Source Commit**: `b1b35117f3ab1b4fc0a5a21056d3799a71c06a66`
-- **Execution Command**:
-  ```bash
-  export TMPDIR=/dev/shm/a40-suite && \
-  .venv/bin/python -m pytest workbench/tests/ -v --tb=short
-  ```
-- **Reason for In-Progress State**: The full workbench regression suite encompasses hundreds of integration and operator contract tests requiring ~60–70 minutes of sequential execution time. At the time of report authoring, the background runner was actively progressing (`suite-output.txt` actively accumulating pass markers; final summary file `/dev/shm/a40-suite/summary.txt` not yet published).
-- **Protocol Rule Enforced**: No test counts or pass/fail ratios are fabricated. The coordinator will record the final accounting upon suite completion.
+- **Status**: **COMPLETED**
+- **Command**: `.venv/bin/python -m pytest workbench/tests tests -q -p no:randomly -rf`
+- **Interpreter**: `/home/heheboiz/data/cir/.venv/bin/python` (Python 3.13.12)
+- **Frozen SHA Before / After**: `624fcf9607d7397c8eef51a3453792a8a9f93de6` -> `624fcf9607d7397c8eef51a3453792a8a9f93de6` (identical)
+- **Results Summary**: **`1 failed, 2245 passed, 10 skipped, 253 warnings in 3942.16s (1:05:42)`**
+- **Exact Counts**: Collected: 2256; Passed: 2245; Failed: 1; Skipped: 10; Errors: 0
+- **Arithmetic**: `2245 passed + 1 failed + 10 skipped + 0 errors = 2256 collected` (exact balance)
+- **Per-Scope Collection**: `workbench/tests`: 2197 collected (2186 passed, 1 failed, 10 skipped); `tests/unit`: 59 collected (59 passed, 0 failed, 0 skipped); Total = 2256
+- **Artifact & Log Locations**:
+  - Log: `.scratch-tmp/a40-suite2/suite-output.txt`
+  - Report: `.scratch-tmp/a40-suite2/suite.md`
+  - Summary: `/dev/shm/a40-suite2/summary.txt`
+
+### Failure Analysis & Classification
+- **Test**: `workbench/tests/test_handoff_commands.py::test_no_release_document_points_at_a_superseded_source_sha`
+- **Error**: `AssertionError: TESTED_SOURCE_SHA 2ff698e5b201cbc5bd578e77d1dd7bbe952f1069 does not contain the production code currently on disk: production files changed after the revision the release documents name as tested. Advance the recorded source to a revision that includes them, or the handoff installs code that was never gated.`
+- **Classification**: Stale release-documentation metadata guard failure by construction. The guard demands that release documents cite a tested source SHA containing the production code on disk. Because A40 made production changes (`pipeline.py`, `load_mock_results.py`, `model_csmcir.py`, `index.html`), the guard legitimately fails until release documents advance to the new revision (`624fcf9607d7397c8eef51a3453792a8a9f93de6`). Advancing the release documents resolves this failure completely.
 
 ---
 
 ## 3. The `TESTED_SOURCE_SHA` Concept
 
 In multi-lane audit rounds, documentation files and audit reports are written concurrently with or following the test run.
-- **`TESTED_SOURCE_SHA`**: `b1b35117f3ab1b4fc0a5a21056d3799a71c06a66`.
+- **`TESTED_SOURCE_SHA`**: `624fcf9607d7397c8eef51a3453792a8a9f93de6`.
   This is the frozen commit containing all production and test code changes. The full automated test suite executes strictly against this commit.
 - **Documentation HEAD**: The final git commit will encompass the authoring of review documents under `workbench/docs/reviews/a40/`. Because review docs do not modify production or test logic, the testing evidence from `TESTED_SOURCE_SHA` remains mathematically valid for the final documentation commit.
