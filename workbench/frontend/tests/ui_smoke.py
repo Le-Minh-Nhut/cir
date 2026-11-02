@@ -659,7 +659,8 @@ def run_sessions(url: str, shots: Path, which: str) -> Recorder:
     recorder = Recorder()
     saved: list[str] = []
     with sync_playwright() as playwright:
-        browser = playwright.chromium.launch()
+        chrome_path = os.environ.get("WORKBENCH_CHROME_PATH", "/usr/bin/google-chrome" if Path("/usr/bin/google-chrome").exists() else None)
+        browser = playwright.chromium.launch(executable_path=chrome_path) if chrome_path else playwright.chromium.launch(channel="chrome")
         context = browser.new_context(viewport=VIEWPORT_DESKTOP)
         page = context.new_page()
         recorder.attach(page)

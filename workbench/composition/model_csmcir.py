@@ -137,7 +137,8 @@ def _run(adapter: Adapter, operation: str, image_paths: Sequence[str], texts: Se
     if not checkpoint.is_file():
         raise FileNotFoundError(f"csmcir checkpoint not staged at {checkpoint}")
     job_root = work_root / f"csmcir-{adapter.checkpoint_id}"
-    assert job_root.resolve().is_relative_to(work_root.resolve()), f"unsafe job_root: {job_root}"
+    if not job_root.resolve().is_relative_to(work_root.resolve()):
+        raise ValueError(f"unsafe job_root: {job_root}")
     job_root.mkdir(parents=True, exist_ok=True)
     adapter._job_root = job_root
     token = uuid.uuid4().hex
@@ -181,8 +182,8 @@ def _status(cls: type[Adapter], config: Any) -> AdapterStatus:
 
 def _cleanup(path: Path | None, work_root: Path | None = None) -> None:
     if path is not None and path.exists():
-        if work_root is not None:
-            assert path.resolve().is_relative_to(work_root.resolve()), f"unsafe cleanup target: {path}"
+        if work_root is not None and not path.resolve().is_relative_to(work_root.resolve()):
+            raise ValueError(f"unsafe cleanup target: {path}")
         shutil.rmtree(path)
 
 def _format_keys(keys: Sequence[str], limit: int = 5) -> str:
