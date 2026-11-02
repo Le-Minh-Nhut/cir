@@ -104,7 +104,7 @@ class Adapter(CompositionAdapter):
         return super().rank(queries, targets, target_positions, categories)
 
     def close(self) -> None:
-        _cleanup(self._job_root)
+        _cleanup(self._job_root, self.work_root)
         self._job_root = None
 
 
@@ -137,6 +137,7 @@ def _run(adapter: Adapter, operation: str, image_paths: Sequence[str], texts: Se
     if not checkpoint.is_file():
         raise FileNotFoundError(f"csmcir checkpoint not staged at {checkpoint}")
     job_root = work_root / f"csmcir-{adapter.checkpoint_id}"
+    assert job_root.resolve().is_relative_to(work_root.resolve()), f"unsafe job_root: {job_root}"
     job_root.mkdir(parents=True, exist_ok=True)
     adapter._job_root = job_root
     token = uuid.uuid4().hex
@@ -178,8 +179,10 @@ def _status(cls: type[Adapter], config: Any) -> AdapterStatus:
                   "Required COT_ours2 captions are absent from the CIRCUS release; local qwen_captions are different Qwen-generated captions and are not substituted.")
 
 
-def _cleanup(path: Path | None) -> None:
+def _cleanup(path: Path | None, work_root: Path | None = None) -> None:
     if path is not None and path.exists():
+        if work_root is not None:
+            assert path.resolve().is_relative_to(work_root.resolve()), f"unsafe cleanup target: {path}"
         shutil.rmtree(path)
 
 def _format_keys(keys: Sequence[str], limit: int = 5) -> str:

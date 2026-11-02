@@ -7,9 +7,11 @@ import hashlib
 import json
 import os
 import shlex
+import signal
 import stat
 import subprocess
 import sys
+import time
 from collections.abc import Sequence
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone
@@ -700,7 +702,7 @@ def validate_stage_outputs(stage: Stage, recorded: dict[str, str] | None = None,
     return True
 
 
-_UNUSABLE_DEP_STATUSES = {"FAILED", "BLOCKED_AUTHORIZATION_REQUIRED", "SKIPPED_DEPENDENCY", "INTERRUPTED"}
+_UNUSABLE_DEP_STATUSES = {"FAILED", "BLOCKED_AUTHORIZATION_REQUIRED", "SKIPPED_DEPENDENCY", "INTERRUPTED", "RUNNING"}
 
 
 class WorkflowLockError(RuntimeError):
@@ -2120,10 +2122,85 @@ def run_command(argv: list[str]) -> int:
 
         env = os.environ.copy()
         env["HF_HOME"] = str(hf_hub_cache_root())
-        return subprocess.run(argv, cwd=REPOSITORY, env=env, check=False).returncode
+        proc = subprocess.Popen(argv, cwd=REPOSITORY, env=env, start_new_session=True)
     except OSError as error:
-        print(f"[BLOCKED] cannot start {argv[1]}: {error}", file=sys.stderr)
+        name = argv[1] if len(argv) > 1 else (argv[0] if argv else "command")
+        print(f"[BLOCKED] cannot start {name}: {error}", file=sys.stderr)
         return 127
+
+    interrupted_signum: int | None = None
+
+    def _terminate_pg() -> None:
+        pgid = proc.pid
+        try:
+            os.killpg(pgid, signal.SIGTERM)
+        except (ProcessLookupError, PermissionError):
+            return
+        end_time = time.monotonic() + 3.0
+        while time.monotonic() < end_time:
+            try:
+                proc.wait(timeout=0.05)
+            except subprocess.TimeoutExpired:
+                pass
+            try:
+                os.killpg(pgid, 0)
+            except (ProcessLookupError, PermissionError):
+                return
+            time.sleep(0.05)
+        try:
+            os.killpg(pgid, signal.SIGKILL)
+        except (ProcessLookupError, PermissionError):
+            pass
+        try:
+            proc.wait(timeout=1.0)
+        except (subprocess.TimeoutExpired, ProcessLookupError, PermissionError):
+            pass
+
+    def _handle_signal(signum: int, _frame: object) -> None:
+        nonlocal interrupted_signum
+        interrupted_signum = signum
+        try:
+            os.killpg(proc.pid, signal.SIGTERM)
+        except (ProcessLookupError, PermissionError):
+            pass
+
+    old_sigint = None
+    old_sigterm = None
+    try:
+        try:
+            old_sigint = signal.signal(signal.SIGINT, _handle_signal)
+        except ValueError:
+            pass
+        try:
+            old_sigterm = signal.signal(signal.SIGTERM, _handle_signal)
+        except ValueError:
+            pass
+
+        try:
+            proc.wait()
+        except BaseException:
+            _terminate_pg()
+            raise
+        if interrupted_signum is not None:
+            _terminate_pg()
+    finally:
+        if old_sigint is not None:
+            try:
+                signal.signal(signal.SIGINT, old_sigint)
+            except ValueError:
+                pass
+        if old_sigterm is not None:
+            try:
+                signal.signal(signal.SIGTERM, old_sigterm)
+            except ValueError:
+                pass
+
+    if interrupted_signum == signal.SIGINT:
+        raise KeyboardInterrupt
+    if interrupted_signum == signal.SIGTERM:
+        raise SystemExit(128 + signal.SIGTERM)
+
+    return proc.returncode
 
 
 def run_stages(
@@ -2144,6 +2221,7 @@ def run_stages(
     if state_path is None:
         state_path = _artifacts_root(cfg) / "pipeline_state.json"
     failed = False
+    interrupted = False
     force_set = set(force_stages or ())
     if force_set:
         known = {s.name for s in stages} | {stage_key(s) for s in stages} | {dependency_key(s) for s in stages}
@@ -2169,8 +2247,8 @@ def run_stages(
             workflow_report = {
                 "mode": mode,
                 "timestamp": datetime.now(timezone.utc).isoformat(),
-                "success": not failed,
-                "status": "SUCCESS" if not failed else ("PARTIAL" if any(s.get("status") == "COMPLETE" for s in stage_records.values()) else "FAILED"),
+                "success": not failed and not interrupted,
+                "status": "INTERRUPTED" if interrupted else ("SUCCESS" if not failed else ("PARTIAL" if any(s.get("status") == "COMPLETE" for s in stage_records.values()) else "FAILED")),
                 "stages": stage_records,
             }
             temp_rep = report_path.with_suffix(f".tmp.{os.getpid()}")
@@ -2419,6 +2497,13 @@ def run_stages(
                     "output_fingerprints": compute_stage_output_fingerprints(stage),
                 })
                 save_pipeline_state(state, state_path)
+    except (KeyboardInterrupt, SystemExit):
+        interrupted = True
+        failed = True
+        raise
+    except BaseException:
+        failed = True
+        raise
     finally:
         write_report()
         if lock_fd is not None:
