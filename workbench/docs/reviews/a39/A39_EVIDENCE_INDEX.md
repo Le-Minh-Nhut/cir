@@ -5,9 +5,9 @@
 | Baseline branch, SHA, initial worktree | `.scratch-tmp/a39-core/baseline.md` | Lines 1–23, 72–95 |
 | Recomputed source/feature/branch counts and mappings | `.scratch-tmp/a39-core/coverage-recount.md` | Lines 3–53, 55–137 |
 | A38 carried findings and eight objections | `.scratch-tmp/a39-core/a38-reconciliation.md` | Lines 14–53 |
-| Frozen suite command, counts, failures | `/dev/shm/a39-freeze/suite.md` | Lines 1–137; literal output `/dev/shm/a39-freeze/suite-output.txt` |
-| Frozen source identity | `/dev/shm/a39-freeze/frozen-sha.txt`; `/dev/shm/a39-freeze/freeze.md` | Frozen SHA and audit freeze state |
-| Vite build result | `/dev/shm/a39-freeze/build.md` | Command and success result |
+| Frozen suite command, counts, failures | `.scratch-tmp/a39-archive/a39-freeze/suite.md` | Lines 1–137; literal output `.scratch-tmp/a39-archive/a39-freeze/suite-output.txt` |
+| Frozen source identity | `.scratch-tmp/a39-archive/a39-freeze/frozen-sha.txt`; `.scratch-tmp/a39-archive/a39-freeze/freeze.md` | Frozen SHA and audit freeze state |
+| Vite build result | `.scratch-tmp/a39-archive/a39-freeze/build.md` | Command and success result |
 | Composition provenance defect reproduction | `.scratch-tmp/a39-id/composition-identity.md` | Lines 35–93 |
 | Composition provenance regression | `.scratch-tmp/a39-fix-id/regression.md` | Lines 6–16, 154–198 |
 | Export, gate, index, autopilot, availability fixes | `.scratch-tmp/a39-fix-rest/fixes.md` | Lines 1–31 |
@@ -27,3 +27,5 @@
 | Current reconciliation status at report authoring | Agent report from `a39-reconcile2` | Work in progress; no commits yet; no updated verification evidence available |
 
 All eleven reports are tied to available evidence above. No secrets are transcribed; credential evidence uses only redacted path/line/count descriptions.
+
+The `/dev/shm/a39-*` evidence paths cited in these reports were tmpfs scratch. They were archived to `.scratch-tmp/a39-archive/a39-*/` (same filenames) during a disk cleanup; the `/dev/shm` originals no longer exist. Paths under `.scratch-tmp/a39-*` (non-archive) remain in place.
