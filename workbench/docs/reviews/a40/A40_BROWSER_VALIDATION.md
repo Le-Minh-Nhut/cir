@@ -2,9 +2,9 @@
 
 **Repository**: `/home/heheboiz/data/cir`  
 **Branch**: `research/cir-failure-workbench`  
-**Frozen Source Tested**: `b1b35117f3ab1b4fc0a5a21056d3799a71c06a66`  
+**Frozen Source Tested**: `624fcf9607d7397c8eef51a3453792a8a9f93de6` (phase history: b1b3511 initial defect fixes, 39ca45a reviewer rework, 624fcf9 verified tested source)  
 **Audit Round**: A40  
-**Evidence Sources**: `/dev/shm/a40-e2e/e2e.md`, `timing.md`, `env.md`, `shots/`
+**Evidence Sources**: `/dev/shm/a40-e2e/e2e_rerun.md`, `g2_e2e_results.json`, `timing.md`, `env.md`, `shots2/` (current verified rerun); `/dev/shm/a40-e2e/shots/` (historical, superseded)
 
 ---
 
@@ -70,10 +70,14 @@ In cold backend startup, `workbench.backend.runtime._interpreter_fingerprint` in
 
 ## 4. Screenshot Evidence Inventory
 
-32 screenshots captured directly from Google Chrome into `/dev/shm/a40-e2e/shots/`:
-- **Desktop (1440×900)**: 8 shots (`A_initial_load.png` through `H_mobile_nav.png`).
-- **Laptop (1280×800)**: 8 shots (`A_initial_load.png` through `H_mobile_nav.png`).
-- **Mobile iPhone (390×844)**: 8 shots (`A_initial_load.png` through `H_mobile_nav.png`).
-- **Mobile Android (360×800)**: 8 shots (`A_initial_load.png` through `H_mobile_nav.png`).
+### Current Verified Evidence: `/dev/shm/a40-e2e/shots2/<viewport>/`
+32 screenshots captured directly from Google Chrome following the viewport meta fix (`39ca45a` / `624fcf9`):
+- **Desktop (1440×900)**: 8 shots in `/dev/shm/a40-e2e/shots2/1440x900/` (`A_initial_load.png` through `H_mobile_nav.png`). True CSS width 1440 px, PNG width 1440 px.
+- **Laptop (1280×800)**: 8 shots in `/dev/shm/a40-e2e/shots2/1280x800/` (`A_initial_load.png` through `H_mobile_nav.png`). True CSS width 1280 px, PNG width 1280 px.
+- **Mobile iPhone (390×844)**: 8 shots in `/dev/shm/a40-e2e/shots2/390x844/` (`A_initial_load.png` through `H_mobile_nav.png`). True CSS width 390 px, PNG width 390 px (`document.documentElement.clientWidth: 390`, `body.scrollWidth: 390`).
+- **Mobile Android (360×800)**: 8 shots in `/dev/shm/a40-e2e/shots2/360x800/` (`A_initial_load.png` through `H_mobile_nav.png`). True CSS width 360 px, PNG width 360 px (`document.documentElement.clientWidth: 360`, `body.scrollWidth: 360`).
 
-All mobile viewports verified horizontal overflow containment (`body.scrollWidth <= viewport width + 2px`) and full touch accessibility of table controls and cohort inputs.
+All mobile viewports in the post-fix rerun verified horizontal overflow containment (`body.scrollWidth <= viewport width + 2px`) and full touch accessibility of table controls and cohort inputs.
+
+### Superseded Initial Evidence: `/dev/shm/a40-e2e/shots/`
+The earlier screenshot set in `/dev/shm/a40-e2e/shots/` is **SUPERSEDED** (preserved in `/dev/shm/a40-e2e/shots/` for historical record). In that initial run, `workbench/frontend/index.html` lacked the `<meta name="viewport" content="width=device-width, initial-scale=1" />` tag, causing the headless browser to default mobile layout to 980 CSS px (resulting in mobile PNG widths of 980 px despite the requested viewport dimensions). Independent review finding `REVIEW-02` caught this discrepancy; commit `39ca45a` added the viewport meta tag, and the rerun in `shots2/` proves true mobile dimension rendering.

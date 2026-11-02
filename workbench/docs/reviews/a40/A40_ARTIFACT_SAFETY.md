@@ -2,7 +2,7 @@
 
 **Repository**: `/home/heheboiz/data/cir`  
 **Branch**: `research/cir-failure-workbench`  
-**Frozen Source Tested**: `b1b35117f3ab1b4fc0a5a21056d3799a71c06a66`  
+**Frozen Source Tested**: `624fcf9607d7397c8eef51a3453792a8a9f93de6` (phase history: b1b3511 initial defect fixes, 39ca45a reviewer rework, 624fcf9 verified tested source)
 **Audit Round**: A40  
 **Evidence Source**: `/dev/shm/a40-safety/audit.md` (Gate G1 Auditor `a40-safety`)
 

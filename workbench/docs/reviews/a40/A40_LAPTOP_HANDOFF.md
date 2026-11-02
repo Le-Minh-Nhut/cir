@@ -2,8 +2,9 @@
 
 **Repository**: `/home/heheboiz/data/cir`  
 **Branch**: `research/cir-failure-workbench`  
-**Frozen Source Tested**: `b1b35117f3ab1b4fc0a5a21056d3799a71c06a66`  
-**Audit Round**: A40  
+**Frozen Source Tested**: `624fcf9607d7397c8eef51a3453792a8a9f93de6` (phase history: b1b3511 initial defect fixes, 39ca45a reviewer rework, 624fcf9 verified tested source)  
+**Candidate Delivery HEAD**: `4e57c544d2299e7fee2bfc298b9309ecebcf1a1f` (production tree byte-identical to tested source: `git diff --quiet 624fcf9 4e57c54 -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'` rc 0)  
+**Audit Round**: A40
 **Environment**: Local Laptop / Workstation (CPU-only execution, restricted storage)
 
 ---
@@ -69,3 +70,14 @@ The following 4 external items could not be resolved within the local laptop aud
 | `A40-SEC-04` | Third-Party | Hardcoded upstream credential | Compliance / secret scanner alert | Decide via `approved_source_patches` |
 | `A40-MOD-01` | Weights | 2.72 GB weight file absent | CSMCIR evaluation cannot run | Run `download_checkpoints.py` on GPU node |
 | `A40-HW-01` | Hardware | sm_120 GPU hardware absent | Blackwell execution unverified | Run `gpu-verification` on target GPU |
+
+---
+
+## 4. Final Handoff Verdict
+
+**Verdict: A40_LAPTOP_ACCEPTED_WITH_BLOCKERS**
+
+- **Readiness**: All laptop-reproducible defects identified in A40 and the independent review (A40-PIPE-01/02/03, A40-SEC-01/02, A40-UI-01/02, REVIEW-01/02/03) have been confirmed fixed with passing reproduction tests and browser reruns.
+- **Suite Execution**: The full frozen test suite ran at `624fcf9` with 2245 passed of 2256 collected. The single failure was the release-metadata guard resolved by advancing release docs to `624fcf9` (`test_handoff_commands.py` 8 passed, `test_release_invariants.py` 22 passed).
+- **Integrity**: Zero scientific regression, zero dataset mutations, and zero destructive actions against real research assets.
+- **Blockers**: No laptop-reproducible blocking defect remains. Broader cluster/production acceptance remains gated on the four external operator actions above.

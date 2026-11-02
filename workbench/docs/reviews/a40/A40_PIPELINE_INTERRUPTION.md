@@ -2,7 +2,7 @@
 
 **Repository**: `/home/heheboiz/data/cir`  
 **Branch**: `research/cir-failure-workbench`  
-**Frozen Source Tested**: `b1b35117f3ab1b4fc0a5a21056d3799a71c06a66`  
+**Frozen Source Tested**: `624fcf9607d7397c8eef51a3453792a8a9f93de6` (phase history: b1b3511 initial defect fixes, 39ca45a reviewer rework, 624fcf9 verified tested source)
 **Audit Round**: A40  
 **Evidence Sources**: `/dev/shm/a40-pipe/contract.md`, `gaps.md`, `workbench/tests/test_a40_pipeline_interrupt.py`
 
@@ -83,15 +83,16 @@ The Gate G4 contract mapped 12 critical interruption and concurrency scenarios:
    - **Fix**: Added explicit `interrupted` tracking and signal handling in `run_stages` to record `"success": false` and `"status": "INTERRUPTED"`.
 2. **`A40-PIPE-02` (Stale RUNNING Unusable Dependency)**:
    - Added `"RUNNING"` to `_UNUSABLE_DEP_STATUSES` (`pipeline.py:703`), preventing downstream dependent stages from executing against an incomplete interrupted dependency.
-3. **`A40-PIPE-03` (Process Group Isolation and Orphan Prevention)**:
-   - Subprocesses are now spawned via `Popen(argv, start_new_session=True)`.
-   - On `SIGTERM` or `SIGINT`, `run_command` installs signal handlers that execute `os.killpg(proc.pid, signal.SIGTERM)` followed by a bounded wait and escalation to `SIGKILL`. This guarantees no child or grandchild process outlives the pipeline.
+3. **`A40-PIPE-03` & `REVIEW-03` (Process Group Isolation and Workflow-Lifetime Signal Handling)**:
+   - Subprocesses are spawned via `Popen(argv, start_new_session=True)`.
+   - `run_command` installs signal handlers executing `os.killpg(proc.pid, signal.SIGTERM)` with bounded wait and escalation to `SIGKILL`, ensuring no child or grandchild process outlives the pipeline.
+   - Furthermore, `REVIEW-03` (commit `39ca45a`) wrapped the entire `run_stages` execution in workflow-lifetime `SIGINT`/`SIGTERM` handlers, ensuring signals arriving in workflow gaps between subprocesses invoke `write_report()` and record `INTERRUPTED` rather than bypassing cleanup.
 
 ---
 
 ## 5. Residual Limitations
 
-1. **No Signal Handler at `run_stages` Level for In-Flight State Updates**:
-   - While `run_command` terminates child process groups cleanly on signals, the top-level `pipeline.py` process dying from `SIGKILL` or unhandled `SIGTERM` does not rewrite `pipeline_state.json`. Thus, the interrupted stage remains marked as `RUNNING` on disk. (Mitigated: `A40-PIPE-02` ensures `RUNNING` stages are treated as unusable on resume).
+1. **Kernel `SIGKILL` vs Unhandled State Rewriting**:
+   - Workflow-lifetime handlers cleanly catch `SIGINT` and `SIGTERM`. However, uncatchable `SIGKILL` or hardware power loss terminates the Python process abruptly without executing `finally: write_report()`. In that event, the in-flight stage remains persisted as `RUNNING` in `pipeline_state.json`. (Mitigated: `A40-PIPE-02` ensures `RUNNING` stages are treated as unusable on resume).
 2. **`INTERRUPTED` as a Report Status vs Stage Status**:
    - `INTERRUPTED` is recorded in `workflow_report.json`, but individual stage records in `pipeline_state.json` transition to `FAILED` or remain `RUNNING`.
