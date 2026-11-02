@@ -19,6 +19,7 @@ import socket
 import subprocess
 import sys
 import time
+import struct
 from pathlib import Path
 from typing import Any
 
@@ -317,9 +318,22 @@ def run_journeys_for_viewport(
     widest = max((i["width"] for i in q_imgs), default=0)
     assert q_metrics["scrollWidth"] <= q_metrics["innerWidth"] + 2, q_metrics
     assert widest <= q_metrics["innerWidth"] + 2, f"image too wide: {widest} > {q_metrics['innerWidth']}"
-    j_h_time = (time.perf_counter() - t0) * 1000.0
+    viewport_metrics = page.evaluate("""() => ({
+        document_client_width: document.documentElement.clientWidth,
+        window_inner_width: window.innerWidth,
+        device_pixel_ratio: window.devicePixelRatio,
+        body_scroll_width: document.body.scrollWidth,
+    })""")
     shot_h = shot(page, vp_shots, "H_mobile_nav")
-    report["journeys"]["H"] = {"status": "PASS", "timing_ms": round(j_h_time, 2)}
+    screenshot_pixel_width, screenshot_pixel_height = struct.unpack(">II", Path(shot_h).read_bytes()[16:24])
+    viewport_metrics["screenshot_pixel_width"] = screenshot_pixel_width
+    viewport_metrics["screenshot_pixel_height"] = screenshot_pixel_height
+    assert viewport_metrics["document_client_width"] == vp["width"], viewport_metrics
+    assert viewport_metrics["window_inner_width"] == vp["width"], viewport_metrics
+    assert viewport_metrics["body_scroll_width"] <= vp["width"] + 2, viewport_metrics
+    assert abs(screenshot_pixel_width - vp["width"]) <= 2, viewport_metrics
+    report["viewport_metrics"] = viewport_metrics
+    report["journeys"]["H"] = {"status": "PASS", "timing_ms": round((time.perf_counter() - t0) * 1000.0, 2)}
     report["screenshots"]["H"] = shot_h
 
     return report
@@ -332,7 +346,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     tmp_dir = args.tmpdir
-    shots_dir = tmp_dir / "shots"
+    shots_dir = tmp_dir / "shots2"
     shots_dir.mkdir(parents=True, exist_ok=True)
     results_dir = tmp_dir / "artifacts" / "results"
     images_dir = tmp_dir / "fashioniq"
