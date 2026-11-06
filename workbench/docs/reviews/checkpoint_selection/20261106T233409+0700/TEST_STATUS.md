@@ -22,10 +22,15 @@ Measured:
 was already like this at the commit this session started from. **No 3.12 interpreter with `pip` exists
 on this machine**, so a full-suite run could not be completed here.
 
-8 test modules fail to *collect* for that reason alone; 4 more fail only through that import:
+Exactly **8** test modules fail to *collect*, all for that reason:
+
 `test_composition_environment_binding`, `test_environment_planner`, `test_environment_provisioning_a32`,
 `test_r11_remediations`, `test_r12_remediations`, `test_r13_remediations`,
 `test_r25_selection_provisioning`, `test_release_gate_scenarios`.
+
+Separately, **12 individual tests inside `test_runtime_adaptation.py`** fail — that module imports fine,
+but those 12 bodies import `workbench.backend.environment_planner:model_constraints`, which is one of the
+3.12-only modules above.
 
 ## What was actually run here (Python 3.11 venv, `workbench/envs/test-adapted`)
 
@@ -33,8 +38,17 @@ on this machine**, so a full-suite run could not be completed here.
 workbench/tests/test_ptha_target_feature_contract.py   5 passed
 workbench/tests/test_ptha_mtst_preflight.py            passed
 workbench/tests/test_r19_ptha_wrapper.py               passed
-workbench/tests/test_runtime_adaptation.py             6 passed (12 collection/import failures from the 3.11 limit above)
+workbench/tests/test_runtime_adaptation.py             6 passed (12 import failures from the 3.11 limit above)
+
+# integrity gates around the DCNet approved patch — the files the registry edit touches
+test_approved_source_patch.py test_vendored_approved_patch.py
+test_vendored_source_integrity.py test_verified_declarations.py
+test_dcnet_replay.py                                   60 passed
 ```
+
+The 60 integrity tests matter most for the DCNet change: editing a vendored file
+(`base/base_trainer.py`) would normally trip the source-integrity gate, and these passing means the
+`approved_source_patches` declaration suppresses it exactly as intended, the same way CSMCIR's does.
 
 `workbench/tests/test_runtime_adaptation.py` had **two assertions that encoded the old LIMN contract**
 (`open_clip_torch >=2.24,<2.27`). They were updated to the newly declared `==2.20.0`, which is the

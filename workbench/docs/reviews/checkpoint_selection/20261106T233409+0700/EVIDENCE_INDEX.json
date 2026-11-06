@@ -15,8 +15,8 @@
   {
    "dest": "TEST_STATUS.md",
    "status": "present",
-   "bytes": 2203,
-   "sha256": "7705c2aa107039e71bb5c89efd33eb38e101ce80d61d9e4c3ab64195a940dcf6",
+   "bytes": 2970,
+   "sha256": "a4b3ab43b7ed47d5d8f4b410cbd23c479e760c6e7299406f424020a4c98dee22",
    "note": "test status + pre-existing 3.11 limit",
    "trimmed": false
   },
