@@ -1,0 +1,170 @@
+[
+ {
+  "model": "conesep",
+  "macro_r10": 54.7613,
+  "macro_r50": 75.2151,
+  "macro_mean": 64.9882,
+  "protocol": "fashioniq_full_gallery_ref_excluded",
+  "train_noise": 20,
+  "eval_noise": 0,
+  "runtime_adaptation": null,
+  "per_cat": {
+   "dress": {
+    "r10": 49.6282,
+    "r50": 72.6822
+   },
+   "shirt": {
+    "r10": 56.6241,
+    "r50": 74.5339
+   },
+   "toptee": {
+    "r10": 58.0316,
+    "r50": 78.4294
+   }
+  }
+ },
+ {
+  "model": "habit",
+  "macro_r10": 54.8733,
+  "macro_r50": 74.5034,
+  "macro_mean": 64.6883,
+  "protocol": "fashioniq_full_gallery_ref_excluded",
+  "train_noise": 20,
+  "eval_noise": 0,
+  "runtime_adaptation": null,
+  "per_cat": {
+   "dress": {
+    "r10": 49.182,
+    "r50": 72.0873
+   },
+   "shirt": {
+    "r10": 56.1825,
+    "r50": 73.5034
+   },
+   "toptee": {
+    "r10": 59.2555,
+    "r50": 77.9194
+   }
+  }
+ },
+ {
+  "model": "intent",
+  "macro_r10": 54.8662,
+  "macro_r50": 75.4319,
+  "macro_mean": 65.1491,
+  "protocol": "fashioniq_full_gallery_ref_excluded",
+  "train_noise": 20,
+  "eval_noise": 0,
+  "runtime_adaptation": null,
+  "per_cat": {
+   "dress": {
+    "r10": 49.9256,
+    "r50": 73.3267
+   },
+   "shirt": {
+    "r10": 56.1825,
+    "r50": 74.3867
+   },
+   "toptee": {
+    "r10": 58.4906,
+    "r50": 78.5824
+   }
+  }
+ },
+ {
+  "model": "hint",
+  "macro_r10": 59.8034,
+  "macro_r50": 80.1308,
+  "macro_mean": 69.9671,
+  "protocol": "fashioniq_val_split",
+  "train_noise": null,
+  "eval_noise": 0,
+  "runtime_adaptation": null,
+  "per_cat": {
+   "dress": {
+    "r10": 51.2643,
+    "r50": 75.6073
+   },
+   "shirt": {
+    "r10": 62.4141,
+    "r50": 81.2561
+   },
+   "toptee": {
+    "r10": 65.7318,
+    "r50": 83.5288
+   }
+  }
+ },
+ {
+  "model": "encoder",
+  "macro_r10": 56.2231,
+  "macro_r50": 77.6674,
+  "macro_mean": 66.9452,
+  "protocol": "fashioniq_val_split",
+  "train_noise": null,
+  "eval_noise": null,
+  "runtime_adaptation": null,
+  "per_cat": {
+   "dress": {
+    "r10": 51.8592,
+    "r50": 76.351
+   },
+   "shirt": {
+    "r10": 55.0049,
+    "r50": 75.4171
+   },
+   "toptee": {
+    "r10": 61.8052,
+    "r50": 81.2341
+   }
+  }
+ },
+ {
+  "model": "limn",
+  "macro_r10": 55.7919,
+  "macro_r50": 77.6378,
+  "macro_mean": 66.7149,
+  "protocol": "fashioniq_val_split",
+  "train_noise": null,
+  "eval_noise": 0,
+  "runtime_adaptation": "SCOPED_PINNED_OPENCLIP_2_20",
+  "per_cat": {
+   "dress": {
+    "r10": 51.1651,
+    "r50": 74.2687
+   },
+   "shirt": {
+    "r10": 55.9863,
+    "r50": 76.5947
+   },
+   "toptee": {
+    "r10": 60.2244,
+    "r50": 82.05
+   }
+  }
+ },
+ {
+  "model": "tme",
+  "macro_r10": 54.9229,
+  "macro_r50": 74.8384,
+  "macro_mean": 64.8807,
+  "protocol": "fashioniq_original_split",
+  "train_noise": 0,
+  "eval_noise": 0,
+  "runtime_adaptation": "python3.10/torch2.7.1 + session runner (native dtype, reduced evaluator batches)",
+  "per_cat": {
+   "dress": {
+    "r10": 49.3307,
+    "r50": 71.5915
+   },
+   "shirt": {
+    "r10": 56.1825,
+    "r50": 74.2395
+   },
+   "toptee": {
+    "r10": 59.2555,
+    "r50": 78.6843
+   }
+  }
+ }
+]

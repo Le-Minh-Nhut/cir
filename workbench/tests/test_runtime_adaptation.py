@@ -36,7 +36,9 @@ def test_selected_adaptation_returns_declared_block(limn_model, monkeypatch):
     assert adapted["target_compute_capability"] == "sm_120"
     adapted_packages = runtime._adapted_packages(limn_model, adapted)
     assert adapted_packages["torch"] == "==2.7.1"
-    assert adapted_packages["open_clip_torch"] == ">=2.24,<2.27"
+    # LIMN pins open_clip 2.20.0 in its own requirements.txt, and the adapted profile now follows
+    # that pin instead of the earlier >=2.24,<2.27 range that contradicted it.
+    assert adapted_packages["open_clip_torch"] == "==2.20.0"
 
 
 def test_undeclared_adaptation_is_refused(limn_model, monkeypatch):
@@ -121,7 +123,7 @@ def test_limn_validate_environment_accepts_both_contracts(monkeypatch):
     monkeypatch.setenv(runtime.ADAPTATION_ENV, "sm_120")
     adapted = limn.validate_environment()
     assert adapted == [
-        "LIMN environment package missing: open_clip_torch >=2.24,<2.27",
+        "LIMN environment package missing: open_clip_torch ==2.20.0",
     ]
 
 @pytest.mark.parametrize("model_id", ["conesep", "habit", "hint"])

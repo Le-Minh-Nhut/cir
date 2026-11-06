@@ -1,0 +1,264 @@
+{
+ "status": "EXPLORATORY_PUBLIC_MAPPING \u2014 loads and scores, but is NOT the training implementation",
+ "checkpoints": {
+  "B1": {
+   "path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/checkpoints/pair/pair-B1.pt",
+   "sha256": "c4d861ecd0baa3f1427fc7a853943f5614baf87def1cdd9c4bb7583ee925fbf2",
+   "bytes": 694958565,
+   "member": "model_epoch_1_ShuffleTrue"
+  },
+  "B2": {
+   "path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/checkpoints/pair/pair-B2.pt",
+   "sha256": "74346fd7de6efdafe8dde70458316286a60ceb2d7b419efed55193418aeb3f03",
+   "bytes": 694872371,
+   "member": "model_epoch_4_ShuffleFalse"
+  }
+ },
+ "mapping_tested": {
+  "model_vssp.Encoder": "model.PAIR",
+  "model_vssp.Backbone": "model.Backbone",
+  "model_vssp.FeatureWiseAffine": "model.FeatureWiseAffine",
+  "MHTransformer.*": "MHTransformer.*",
+  "MHTransformer_dis.MlpTransformer": "MHTransformer.MlpTransformer",
+  "MHTransformer_dis.TransformerLayer": "MHTransformer.TransformerLayer",
+  "MHTransformer_dis.Transformer": "MHTransformer.Transformer",
+  "MHTransformer_dis.MultiHeadAttention": "MHTransformer_rev.MultiHeadAttentionRev",
+  "hypothesis": "H_rev",
+  "hypothesis_rationale": "MHTransformer_dis holds reverse attention (1 - softmax); matches public PAIR's own transformer_b = MHTransformer_rev.Transformer assignment."
+ },
+ "restore_result": {
+  "unpickled_on_cpu": true,
+  "root_class_bound": "model.PAIR (public)",
+  "backbone_class_bound": "model.Backbone (public)",
+  "attribute_gaps": 0,
+  "forward_runs": true,
+  "determinism_max_abs_diff": 0.0,
+  "restored_dropout_p": 0.0
+ },
+ "incompatibility_found": {
+  "headline": "public model.py cannot be the implementation that trained these weights",
+  "evidence": [
+   "restored backbone.transformer_a = 2 layers x 4 heads; public Backbone declares transformer_a = Transformer(num_heads=8,num_layers=1) at model.py:46",
+   "restored backbone has transformer_c and transformer_d (2 layers x 4 heads each); public model.py defines neither",
+   "restored backbone has weight_chanelImg, weight_chanelImg_t, cross_t2i \u2014 names that exist only in the sibling ENCODER implementation (workbench/third_party/ENCODER/model_try2.py:145-160), never in PAIR's model.py",
+   "public PAIR.compose_feature reads only transformer_a/transformer_b; the extra branches stay dead"
+  ],
+  "dead_parameters_under_public_forward": 8986448,
+  "dead_parameters_pct": 5.2,
+  "dead_modules": [
+   "cross_t2i",
+   "transformer_c",
+   "transformer_d",
+   "weight_chanelImg",
+   "weight_chanelImg_t"
+  ],
+  "why_this_matters": "a strict-superset load would silently discard 5.20% of the trained parameters and run transformer_a with a branch geometry the author never trained, so the resulting score is not the checkpoint's own behaviour"
+ },
+ "measured": {
+  "B1/H_rev": {
+   "macro_r10": 35.0147,
+   "macro_r50": 57.5753,
+   "macro_mean": 46.295,
+   "per_cat": {
+    "dress": {
+     "dress_r1": 9.9157,
+     "dress_r10": 31.8294,
+     "dress_r50": 54.8835
+    },
+    "shirt": {
+     "shirt_r1": 13.0029,
+     "shirt_r10": 34.1021,
+     "shirt_r50": 55.9863
+    },
+    "toptee": {
+     "toptee_r1": 13.0036,
+     "toptee_r10": 39.1127,
+     "toptee_r50": 61.8562
+    }
+   },
+   "coverage": [
+    [
+     "dress",
+     2017,
+     2628,
+     2017
+    ],
+    [
+     "shirt",
+     2038,
+     3089,
+     2038
+    ],
+    [
+     "toptee",
+     1961,
+     2902,
+     1961
+    ]
+   ]
+  },
+  "B1/H_normal": {
+   "macro_r10": 34.035,
+   "macro_r50": 56.5957,
+   "macro_mean": 45.3154,
+   "per_cat": {
+    "dress": {
+     "dress_r1": 9.7174,
+     "dress_r10": 30.5404,
+     "dress_r50": 54.7348
+    },
+    "shirt": {
+     "shirt_r1": 11.8744,
+     "shirt_r10": 33.2679,
+     "shirt_r50": 54.318
+    },
+    "toptee": {
+     "toptee_r1": 12.6976,
+     "toptee_r10": 38.2968,
+     "toptee_r50": 60.7343
+    }
+   },
+   "coverage": [
+    [
+     "dress",
+     2017,
+     2628,
+     2017
+    ],
+    [
+     "shirt",
+     2038,
+     3089,
+     2038
+    ],
+    [
+     "toptee",
+     1961,
+     2902,
+     1961
+    ]
+   ]
+  },
+  "B2/H_rev": {
+   "macro_r10": 20.0868,
+   "macro_r50": 41.4988,
+   "macro_mean": 30.7928,
+   "per_cat": {
+    "dress": {
+     "dress_r1": 5.2553,
+     "dress_r10": 18.7903,
+     "dress_r50": 42.0922
+    },
+    "shirt": {
+     "shirt_r1": 5.79,
+     "shirt_r10": 19.1855,
+     "shirt_r50": 37.7331
+    },
+    "toptee": {
+     "toptee_r1": 5.9153,
+     "toptee_r10": 22.2845,
+     "toptee_r50": 44.6711
+    }
+   },
+   "coverage": [
+    [
+     "dress",
+     2017,
+     2628,
+     2017
+    ],
+    [
+     "shirt",
+     2038,
+     3089,
+     2038
+    ],
+    [
+     "toptee",
+     1961,
+     2902,
+     1961
+    ]
+   ]
+  },
+  "B2/H_normal": {
+   "macro_r10": 22.1564,
+   "macro_r50": 43.4864,
+   "macro_mean": 32.8214,
+   "per_cat": {
+    "dress": {
+     "dress_r1": 5.4536,
+     "dress_r10": 20.7734,
+     "dress_r50": 42.8855
+    },
+    "shirt": {
+     "shirt_r1": 6.3788,
+     "shirt_r10": 20.6575,
+     "shirt_r50": 39.843
+    },
+    "toptee": {
+     "toptee_r1": 6.3743,
+     "toptee_r10": 25.0382,
+     "toptee_r50": 47.7307
+    }
+   },
+   "coverage": [
+    [
+     "dress",
+     2017,
+     2628,
+     2017
+    ],
+    [
+     "shirt",
+     2038,
+     3089,
+     2038
+    ],
+    [
+     "toptee",
+     1961,
+     2902,
+     1961
+    ]
+   ]
+  }
+ },
+ "paper_reference": {
+  "macro_r10": 52.76,
+  "macro_r50": 74.51
+ },
+ "gap_pp": {
+  "B1/H_rev": 17.7453,
+  "B2/H_normal": 30.6036
+ },
+ "conclusion_label": "NOT source-compatible as an original PAIR reproduction; measurable only as an exploratory public mapping",
+ "what_would_resolve_it": [
+  "the author's model_vssp.py + MHTransformer_dis.py (or a code revision containing transformer_c/transformer_d, weight_chanelImg, cross_t2i and a 2-layer/4-head transformer_a)",
+  "OR confirmation that the released pickles were trained by an ancestor shared with the ENCODER codebase"
+ ],
+ "evidence_files": [
+  "pair_compat/scripts/compat_loader.py",
+  "pair_compat/scripts/audit_compat_load.py",
+  "pair_compat/scripts/forward_smoke.py",
+  "pair_compat/scripts/run_pair.py",
+  "pair_compat/manifests/pair_compat_audit.json",
+  "pair_compat/manifests/pair_B1_audit.json",
+  "pair_compat/manifests/pair_B2_audit.json",
+  "pair_compat/logs/",
+  "pair_compat/measurements/"
+ ],
+ "dependencies": {
+  "python": "3.11.15",
+  "torch": "2.7.1+cu128",
+  "open_clip_torch": "2.24.0",
+  "einops": "0.7.0"
+ },
+ "hypotheses": {
+  "H_normal": "MHTransformer_dis.MultiHeadAttention = MHTransformer.MultiHeadAttention",
+  "H_rev": "MHTransformer_dis.MultiHeadAttention = MHTransformer_rev.MultiHeadAttentionRev (1 - softmax)",
+  "selected_for_labeling": "B1/H_rev (highest R@10); B2/H_normal (highest R@10 for B2)",
+  "note": "hypothesis chosen by declaration BEFORE scoring; the two were reported side by side, not tuned to the paper row"
+ },
+ "dead_parameters_under_public_forward_pct": 5.2
+}

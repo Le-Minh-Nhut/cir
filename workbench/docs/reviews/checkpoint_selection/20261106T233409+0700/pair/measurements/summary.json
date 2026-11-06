@@ -1,0 +1,170 @@
+{
+ "B1/H_rev": {
+  "macro_r10": 35.0147,
+  "macro_r50": 57.5753,
+  "macro_mean": 46.295,
+  "per_cat": {
+   "dress": {
+    "dress_r1": 9.9157,
+    "dress_r10": 31.8294,
+    "dress_r50": 54.8835
+   },
+   "shirt": {
+    "shirt_r1": 13.0029,
+    "shirt_r10": 34.1021,
+    "shirt_r50": 55.9863
+   },
+   "toptee": {
+    "toptee_r1": 13.0036,
+    "toptee_r10": 39.1127,
+    "toptee_r50": 61.8562
+   }
+  },
+  "coverage": [
+   [
+    "dress",
+    2017,
+    2628,
+    2017
+   ],
+   [
+    "shirt",
+    2038,
+    3089,
+    2038
+   ],
+   [
+    "toptee",
+    1961,
+    2902,
+    1961
+   ]
+  ]
+ },
+ "B1/H_normal": {
+  "macro_r10": 34.035,
+  "macro_r50": 56.5957,
+  "macro_mean": 45.3154,
+  "per_cat": {
+   "dress": {
+    "dress_r1": 9.7174,
+    "dress_r10": 30.5404,
+    "dress_r50": 54.7348
+   },
+   "shirt": {
+    "shirt_r1": 11.8744,
+    "shirt_r10": 33.2679,
+    "shirt_r50": 54.318
+   },
+   "toptee": {
+    "toptee_r1": 12.6976,
+    "toptee_r10": 38.2968,
+    "toptee_r50": 60.7343
+   }
+  },
+  "coverage": [
+   [
+    "dress",
+    2017,
+    2628,
+    2017
+   ],
+   [
+    "shirt",
+    2038,
+    3089,
+    2038
+   ],
+   [
+    "toptee",
+    1961,
+    2902,
+    1961
+   ]
+  ]
+ },
+ "B2/H_rev": {
+  "macro_r10": 20.0868,
+  "macro_r50": 41.4988,
+  "macro_mean": 30.7928,
+  "per_cat": {
+   "dress": {
+    "dress_r1": 5.2553,
+    "dress_r10": 18.7903,
+    "dress_r50": 42.0922
+   },
+   "shirt": {
+    "shirt_r1": 5.79,
+    "shirt_r10": 19.1855,
+    "shirt_r50": 37.7331
+   },
+   "toptee": {
+    "toptee_r1": 5.9153,
+    "toptee_r10": 22.2845,
+    "toptee_r50": 44.6711
+   }
+  },
+  "coverage": [
+   [
+    "dress",
+    2017,
+    2628,
+    2017
+   ],
+   [
+    "shirt",
+    2038,
+    3089,
+    2038
+   ],
+   [
+    "toptee",
+    1961,
+    2902,
+    1961
+   ]
+  ]
+ },
+ "B2/H_normal": {
+  "macro_r10": 22.1564,
+  "macro_r50": 43.4864,
+  "macro_mean": 32.8214,
+  "per_cat": {
+   "dress": {
+    "dress_r1": 5.4536,
+    "dress_r10": 20.7734,
+    "dress_r50": 42.8855
+   },
+   "shirt": {
+    "shirt_r1": 6.3788,
+    "shirt_r10": 20.6575,
+    "shirt_r50": 39.843
+   },
+   "toptee": {
+    "toptee_r1": 6.3743,
+    "toptee_r10": 25.0382,
+    "toptee_r50": 47.7307
+   }
+  },
+  "coverage": [
+   [
+    "dress",
+    2017,
+    2628,
+    2017
+   ],
+   [
+    "shirt",
+    2038,
+    3089,
+    2038
+   ],
+   [
+    "toptee",
+    1961,
+    2902,
+    1961
+   ]
+  ]
+ }
+}

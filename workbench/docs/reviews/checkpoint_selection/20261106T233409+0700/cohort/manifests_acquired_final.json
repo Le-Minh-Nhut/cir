@@ -1,0 +1,106 @@
+[
+ {
+  "model": "pair",
+  "path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/checkpoints/pair/pair-B1.pt",
+  "bytes": 694958565,
+  "sha256": "c4d861ecd0baa3f1427fc7a853943f5614baf87def1cdd9c4bb7583ee925fbf2",
+  "prefix_match": true,
+  "state": "PRESENT"
+ },
+ {
+  "model": "pair",
+  "path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/checkpoints/pair/pair-B2.pt",
+  "bytes": 694872371,
+  "sha256": "74346fd7de6efdafe8dde70458316286a60ceb2d7b419efed55193418aeb3f03",
+  "prefix_match": true,
+  "state": "PRESENT"
+ },
+ {
+  "model": "encoder",
+  "path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/encoder/fashioniq.pt",
+  "bytes": 631879365,
+  "sha256": "0f31c50150a7bda3495e3378df13b4cec7924b52efd23b5e5dd9731459da9173",
+  "prefix_match": true,
+  "state": "PRESENT"
+ },
+ {
+  "model": "hint",
+  "path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/hint/fashioniq.pt",
+  "bytes": 2724451182,
+  "sha256": "bf9c72d42206b667ed586758c15c648970df821857e4067f26155a114a6517d4",
+  "prefix_match": true,
+  "state": "PRESENT"
+ },
+ {
+  "model": "conesep",
+  "path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/conesep/ConeSep-FIQ-N0.2.pt",
+  "bytes": 2721428966,
+  "sha256": "5a864ee5a78c1d249320c4f997cc7d14b529b329b2efba5577c82dbe019ed9d2",
+  "prefix_match": true,
+  "state": "PRESENT"
+ },
+ {
+  "model": "habit",
+  "path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/habit/HABIT-FIQ_N0.2.pt",
+  "bytes": 2730715930,
+  "sha256": "814d2d0ceb29ef910f37562e8bea8a76cf38aa546fbc2102e495df687c276b03",
+  "prefix_match": true,
+  "state": "PRESENT"
+ },
+ {
+  "model": "intent",
+  "path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/intent/intent_fiq_0.2.pt",
+  "bytes": 2722478522,
+  "sha256": "2a504cadfd6b1c2486a2c508538b0160c5653f62c7cd11f4f3d8a9534dc26afc",
+  "prefix_match": true,
+  "state": "PRESENT"
+ },
+ {
+  "model": "csmcir",
+  "path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/csmcir/fashioniq_tuned_clip_best.pt",
+  "bytes": 2720615859,
+  "sha256": "c8812071de0640d647c5ba2a70628b80a3289ee2c47676f7a1b6abaa313fa49e",
+  "prefix_match": true,
+  "state": "PRESENT"
+ },
+ {
+  "model": "ptha_mtst",
+  "path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/ptha_mtst/tuned_mtst_cirr.pt",
+  "bytes": 2720352973,
+  "sha256": "1c4dab86a9f66dfe10aff75b39790432eb6cc746cf27b6cfab74b66d93b7588f",
+  "prefix_match": true,
+  "state": "PRESENT"
+ },
+ {
+  "model": "limn",
+  "path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/limn/0_dress_best_model.pt",
+  "bytes": 1792010157,
+  "sha256": "96a335d4eb8b1e77d35575aab9177637208e2eb6c59e12f833f67e5cb0e7fc1c",
+  "prefix_match": true,
+  "state": "PRESENT"
+ },
+ {
+  "model": "limn",
+  "path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/limn/0_shirt_best_model.pt",
+  "bytes": 1792010157,
+  "sha256": "9260c7f77d3017d8cc10e6652cc8cfe275dbc9704366fa2bf581a24808930d74",
+  "prefix_match": true,
+  "state": "PRESENT"
+ },
+ {
+  "model": "limn",
+  "path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/limn/0_toptee_best_model.pt",
+  "bytes": 1792010157,
+  "sha256": "79f663a14d89d455fdc3612b0b36d011c06d7957d1475a654755e1053a6cece2",
+  "prefix_match": true,
+  "state": "PRESENT"
+ },
+ {
+  "model": "tme",
+  "path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/ckpt/tme/fashioniq_0_best_model.pth",
+  "bytes": 2728382104,
+  "sha256": "fea7fc08760dad1f5a66184ea7e65b45388f9781157cbd33a3b64db74103968a",
+  "prefix_match": false,
+  "state": "PRESENT"
+ }
+]

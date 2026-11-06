@@ -1,0 +1,91 @@
+{
+ "invocation": "CWD workbench/third_party/DCNet ; python test.py --resume <run_dir> ; PYTHONPATH unset",
+ "exit_code": 0,
+ "checkpoint_branch": "Resume training from epoch 83",
+ "per_category": {
+  "dress": {
+   "patched_run": {
+    "comp_r10": 27.962320277640057,
+    "comp_r50": 53.495290034705015,
+    "corr_r10": 28.85473475458602,
+    "corr_r50": 54.982647496281615,
+    "fused_r10": 29.15220624690134,
+    "fused_r50": 54.53644025780863
+   },
+   "previous_session": {
+    "comp_r10": 27.962320277640057,
+    "comp_r50": 53.495290034705015,
+    "corr_r10": 28.85473475458602,
+    "corr_r50": 54.982647496281615,
+    "fused_r10": 29.15220624690134,
+    "fused_r50": 54.53644025780863
+   },
+   "abs_diff": {
+    "comp_r10": 0.0,
+    "comp_r50": 0.0,
+    "corr_r10": 0.0,
+    "corr_r50": 0.0,
+    "fused_r10": 0.0,
+    "fused_r50": 0.0
+   },
+   "identical": true
+  },
+  "shirt": {
+   "patched_run": {
+    "comp_r10": 21.98233562315996,
+    "comp_r50": 46.27085377821393,
+    "corr_r10": 22.718351324828262,
+    "corr_r50": 47.1540726202159,
+    "fused_r10": 22.81648675171737,
+    "fused_r50": 47.64474975466143
+   },
+   "previous_session": {
+    "comp_r10": 21.98233562315996,
+    "comp_r50": 46.27085377821393,
+    "corr_r10": 22.718351324828262,
+    "corr_r50": 47.1540726202159,
+    "fused_r10": 22.81648675171737,
+    "fused_r50": 47.64474975466143
+   },
+   "abs_diff": {
+    "comp_r10": 0.0,
+    "comp_r50": 0.0,
+    "corr_r10": 0.0,
+    "corr_r50": 0.0,
+    "fused_r10": 0.0,
+    "fused_r50": 0.0
+   },
+   "identical": true
+  },
+  "toptee": {
+   "patched_run": {
+    "comp_r10": 30.086690464048953,
+    "comp_r50": 58.03161652218256,
+    "corr_r10": 31.463539010708825,
+    "corr_r50": 58.18459969403366,
+    "fused_r10": 31.820499745028048,
+    "fused_r50": 59.00050994390617
+   },
+   "previous_session": {
+    "comp_r10": 30.086690464048953,
+    "comp_r50": 58.03161652218256,
+    "corr_r10": 31.463539010708825,
+    "corr_r50": 58.18459969403366,
+    "fused_r10": 31.820499745028048,
+    "fused_r50": 59.00050994390617
+   },
+   "abs_diff": {
+    "comp_r10": 0.0,
+    "comp_r50": 0.0,
+    "corr_r10": 0.0,
+    "corr_r50": 0.0,
+    "fused_r10": 0.0,
+    "fused_r50": 0.0
+   },
+   "identical": true
+  }
+ },
+ "macro_fused_r10": 27.929730914548923,
+ "macro_fused_r50": 53.72723331879208,
+ "verdict": "identical to previous shim run"
+}

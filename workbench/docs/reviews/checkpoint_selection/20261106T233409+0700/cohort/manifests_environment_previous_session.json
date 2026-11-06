@@ -1,0 +1,44 @@
+{
+ "platform": "Linux-7.0.0-31-generic-x86_64-with-glibc2.39",
+ "machine": "x86_64",
+ "gpu": "NVIDIA GeForce RTX 5070 Ti, 16303 MiB, 580.173.02",
+ "environments": {
+  "pair-adapted": {
+   "python": "3.11.15",
+   "torch": "2.7.1+cu128",
+   "open_clip_torch": "2.24.0",
+   "einops": "0.7.0"
+  },
+  "airknow-adapted": {
+   "python": "3.11.15",
+   "torch": "2.7.1+cu128",
+   "matplotlib": "3.9.2",
+   "transformers": "4.25.0",
+   "timm": "0.9.16"
+  },
+  "limn-adapted": {
+   "python": "3.11.15",
+   "torch": "2.7.1+cu128",
+   "open_clip_torch": "2.20.0"
+  },
+  "tme-adapted": {
+   "python": "3.10.22",
+   "torch": "2.7.1+cu128",
+   "transformers": "4.36.0",
+   "numpy": "1.26.4",
+   "opencv-python-headless": "4.10.0.84"
+  },
+  "dl-adapted": {
+   "python": "3.11.15",
+   "torch": "2.7.1+cu128"
+  },
+  "sprc-adapted": {
+   "python": "3.11.15",
+   "torch": "2.7.1+cu128"
+  },
+  "clip4cir-adapted": {
+   "python": "3.11.15",
+   "torch": "2.7.1+cu128"
+  }
+ }
+}

@@ -1,0 +1,384 @@
+{
+ "session": "20261106T233409+0700",
+ "previous_session": "20261106T002617+0700",
+ "repo_head_at_start": "9cce69fb00e123e8c86d210c8c1b41d26701b5cf",
+ "note": "Regenerated artifacts are labelled; nothing here is relabelled as an original historical log. Model weights, images and dense tensors are excluded by design.",
+ "entries": [
+  {
+   "dest": "README.md",
+   "status": "present",
+   "bytes": 2730,
+   "sha256": "1817eea868f4c4af49e5747c4d1a2f5851fbe17b7ddb6bcb29fe1c8b81b9cbaf",
+   "note": "reviewer entry point",
+   "trimmed": false
+  },
+  {
+   "dest": "TEST_STATUS.md",
+   "status": "present",
+   "bytes": 2203,
+   "sha256": "7705c2aa107039e71bb5c89efd33eb38e101ce80d61d9e4c3ab64195a940dcf6",
+   "note": "test status + pre-existing 3.11 limit",
+   "trimmed": false
+  },
+  {
+   "dest": "cohort/cohort_summary_previous_session.json",
+   "status": "present",
+   "source": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/measurements/cohort_summary.json",
+   "bytes": 2984,
+   "sha256": "182880a2f926d6cbe0d71798e849575533b7cf599b01b543dae6ed4eb1e72c9d",
+   "note": "previous session cohort macros",
+   "trimmed": false
+  },
+  {
+   "dest": "cohort/manifests_acquired_final.json",
+   "status": "present",
+   "source": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/manifests_acquired_final.json",
+   "bytes": 4096,
+   "sha256": "267eb96358d1305409520b83bb1f69f283472c808f7316d5b32eb51139872ef7",
+   "note": "checkpoint digests acquired previously",
+   "trimmed": false
+  },
+  {
+   "dest": "cohort/manifests_environment_previous_session.json",
+   "status": "present",
+   "source": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/manifests_environment.json",
+   "bytes": 952,
+   "sha256": "1f470786110428320e7cf6999231b2ea8f5e4840a62315b44b84f7dffb464ce3",
+   "note": "previous session environment versions",
+   "trimmed": false
+  },
+  {
+   "dest": "dcnet/dcnet_checkpoint_weights_only_optout.patch",
+   "status": "present",
+   "source": "/home/heheboiz/data/cir/workbench/patches/dcnet_checkpoint_weights_only_optout.patch",
+   "bytes": 795,
+   "sha256": "659eabf3c5b98352b3a09fa8291e24aedf090d806f2ada682e181fdc460fc0b8",
+   "note": "narrow hash-gated DCNet patch",
+   "trimmed": false
+  },
+  {
+   "dest": "dcnet/logs/dcnet_patched_cli.log",
+   "status": "present",
+   "source": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T233409+0700/logs/dcnet_patched_cli.log",
+   "bytes": 6364,
+   "sha256": "c9ed9d06f4c2a3afdd8b2c39cd819cf5c7ec8e97840b7b15d5cf4f1f517a61f1",
+   "note": "official CLI run WITH patch and WITHOUT the global shim",
+   "trimmed": true
+  },
+  {
+   "dest": "dcnet/measurements/dcnet_patched_cli.json",
+   "status": "present",
+   "source": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T233409+0700/measurements/dcnet_patched_cli.json",
+   "bytes": 2343,
+   "sha256": "11fe186ef887124e019b850d4d35d31eef27f46401726aa5be5c6047fbca9192",
+   "note": "DCNet parsed results + diff vs previous shim run",
+   "trimmed": false
+  },
+  {
+   "dest": "hint/logs/hint_doc_command.log",
+   "status": "present",
+   "source": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T233409+0700/logs/hint_doc_command.log",
+   "bytes": 12404,
+   "sha256": "8b483ead3088d2b6da860811aff6565134e22013d2d2b20d067fadcb38262a55",
+   "note": "stdout of corrected documented command",
+   "trimmed": true
+  },
+  {
+   "dest": "hint/logs/hint_native_verify.log",
+   "status": "present",
+   "source": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T233409+0700/logs/hint_native_verify.log",
+   "bytes": 612,
+   "sha256": "1e224fca0cd15b8215fae31ee1595a9908335f8ffbc52cc668e17ff900aa2cf9",
+   "note": "full native verification stdout",
+   "trimmed": true
+  },
+  {
+   "dest": "hint/logs/hint_variant_repro.log",
+   "status": "present",
+   "source": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T233409+0700/logs/hint_variant_repro.log",
+   "bytes": 372,
+   "sha256": "29f678c82334bb0db90292311537b466a812045b2bf8ca1396bfd2f3c829aef6",
+   "note": "reproduced --variant parser failure, exit 2",
+   "trimmed": false
+  },
+  {
+   "dest": "hint/measurements/hint_doc_command.json",
+   "status": "present",
+   "source": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T233409+0700/measurements/hint_doc_command.json",
+   "bytes": 4333,
+   "sha256": "0355a0c278491a82c6090fcda9dceb757da4c13104580a67bd19c4b469c06f94",
+   "note": "result of the CORRECTED documented command, exit 0",
+   "trimmed": false
+  },
+  {
+   "dest": "hint/measurements/hint_fashioniq_previous_session.json",
+   "status": "present",
+   "source": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/measurements/hint_fashioniq.json",
+   "bytes": 4333,
+   "sha256": "131e4a35f6cc0b8bfc07e980cfa5fc5c214ca422edb8385fccfb44fd63c3acd6",
+   "note": "the historical 59.8034/80.1308 claim, preserved unmodified",
+   "trimmed": false
+  },
+  {
+   "dest": "hint/measurements/hint_native_verify.json",
+   "status": "present",
+   "source": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T233409+0700/measurements/hint_native_verify.json",
+   "bytes": 46114,
+   "sha256": "8837de1cd775295ad6f8ae4ac45e84b47ea62a2501a8b4a97cf48c14edc83068",
+   "note": "native recalls + per-query ranks",
+   "trimmed": false
+  },
+  {
+   "dest": "hint/measurements/hint_parity_top50.json",
+   "status": "present",
+   "source": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T233409+0700/measurements/hint_parity_top50.json",
+   "bytes": 1685,
+   "sha256": "b8ff77333b25280304409524d75c22a548aa0918654f489ff5477e91ba621920",
+   "note": "top-50 set+order equality per query (6016/6016)",
+   "trimmed": false
+  },
+  {
+   "dest": "hint/scripts/hint_parity_top50.py",
+   "status": "present",
+   "source": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T233409+0700/scripts/hint_parity_top50.py",
+   "bytes": 6170,
+   "sha256": "3cd217c5afaf6bf24c78d0ee27a19674c7d66e5c778697e5ec3f7017186734aa",
+   "note": "wrapper-vs-native top-50 index set comparison",
+   "trimmed": false
+  },
+  {
+   "dest": "hint/scripts/hint_shape_probe.py",
+   "status": "present",
+   "source": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T233409+0700/scripts/hint_shape_probe.py",
+   "bytes": 2656,
+   "sha256": "a1a242d47778e9319896b357247be348543beba539fff4a6d405cb22633c1f53",
+   "note": "real tensor-shape probe at the native boundary",
+   "trimmed": false
+  },
+  {
+   "dest": "hint/scripts/hint_verify.py",
+   "status": "present",
+   "source": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T233409+0700/scripts/hint_verify.py",
+   "bytes": 6168,
+   "sha256": "440a34dabfa1bc29a8fcf650895d9b8bb2d504fe90499bdcb6c160049d7fba03",
+   "note": "hand-transcribed native ranking, per-query ranks, recalls",
+   "trimmed": false
+  },
+  {
+   "dest": "limn/scripts/limn_version_forward.py",
+   "status": "present",
+   "source": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T233409+0700/scripts/limn_version_forward.py",
+   "bytes": 1452,
+   "sha256": "725b529ec2e43f18f18e923e2c72a6fed2c3873a2100ec20e594b58af8023819",
+   "note": "open_clip version forward attempt",
+   "trimmed": false
+  },
+  {
+   "dest": "limn/scripts/limn_version_repro.py",
+   "status": "present",
+   "source": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T233409+0700/scripts/limn_version_repro.py",
+   "bytes": 1022,
+   "sha256": "44288bdcfe5a09f0eac23506dd97e867af5da907bfbc7803d91bfa1e1c8d2017",
+   "note": "open_clip version load comparison",
+   "trimmed": false
+  },
+  {
+   "dest": "pair/manifests/attempts.json",
+   "status": "present",
+   "source": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/pair_compat/measurements/../manifests/attempts.json",
+   "bytes": 2216,
+   "sha256": "92f6f978348991f5fdc6eee94032a554bc0ee3efe0cb7569acd1240cb60c5a43",
+   "note": "recorded failure attempts with causes",
+   "trimmed": false
+  },
+  {
+   "dest": "pair/manifests/pair_compat_verdict.json",
+   "status": "present",
+   "source": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/pair_compat/manifests/pair_compat_verdict.json",
+   "bytes": 6920,
+   "sha256": "aa63878781885281da18796ed9c52a99bc41e5fe8ac36643651be712d1ba8f65",
+   "note": "verdict + recorded incompatibility evidence",
+   "trimmed": false
+  },
+  {
+   "dest": "pair/manifests/pair_extra_parameter_evidence.json",
+   "status": "present",
+   "source": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T233409+0700/manifests/pair_extra_parameter_evidence.json",
+   "bytes": 2150,
+   "sha256": "716fb9bced486e9a2dac40cb2dfe1a11f029bb955c128cfd39ba23316373b34f",
+   "note": "this session: measured geometry + exhaustive extra-name search",
+   "trimmed": false
+  },
+  {
+   "dest": "pair/measurements/summary.json",
+   "status": "present",
+   "source": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/pair_compat/measurements/summary.json",
+   "bytes": 2322,
+   "sha256": "19c51ec4e7f2aa3d18811e14fa6932fb613da20c41d6d26a6349f352fd511f1b",
+   "note": "all four B1/B2 x H measurements",
+   "trimmed": false
+  },
+  {
+   "dest": "pair/scripts/audit_compat_load.py",
+   "status": "present",
+   "source": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/pair_compat/scripts/audit_compat_load.py",
+   "bytes": 7294,
+   "sha256": "560d720470c30df30e5226922a8133c6e62f21dc01604c42112942fe44d40b0a",
+   "note": "restore + attribute-gap audit",
+   "trimmed": false
+  },
+  {
+   "dest": "pair/scripts/compat_loader.py",
+   "status": "present",
+   "source": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/pair_compat/scripts/compat_loader.py",
+   "bytes": 6084,
+   "sha256": "ffd1cd58bb7683e2d3e93d2d1320d380e5836271222f8f83cafdcdf3a910420a",
+   "note": "hash-gated compatibility unpickler with declared mapping",
+   "trimmed": false
+  },
+  {
+   "dest": "pair/scripts/forward_smoke.py",
+   "status": "present",
+   "source": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/pair_compat/scripts/forward_smoke.py",
+   "bytes": 6088,
+   "sha256": "2fe0e1a91ad58c39587a1a6213f534249e2e99220aee0b1ef8db574ecaf2d781",
+   "note": "real forward + determinism check",
+   "trimmed": false
+  },
+  {
+   "dest": "pair/scripts/run_pair.py",
+   "status": "present",
+   "source": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/pair_compat/scripts/run_pair.py",
+   "bytes": 7988,
+   "sha256": "68e8fa3434c876268337f45ad83647f214a96f8eb3a7601cece571be8696dca8",
+   "note": "native FashionIQ evaluation",
+   "trimmed": false
+  },
+  {
+   "dest": "plan/INVESTIGATION_PLAN.md",
+   "status": "present",
+   "source": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T233409+0700/manifests/INVESTIGATION_PLAN.md",
+   "bytes": 4267,
+   "sha256": "c3ed4e7a775a5c7508b132aaa14cfc9356dffa0437ff234b3abcf92a3f62772f",
+   "note": "pre-fix hypotheses and acceptance criteria, written before new scores",
+   "trimmed": false
+  },
+  {
+   "dest": "plan/blockers_recheck.json",
+   "status": "present",
+   "source": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T233409+0700/manifests/blockers_recheck.json",
+   "bytes": 1055,
+   "sha256": "208a9051a3fec856e76aeef7ba71bde4d234ea280e28f6236cbea80380d8a5d8",
+   "note": "SPRC/CSMCIR availability + entry counts",
+   "trimmed": false
+  },
+  {
+   "dest": "plan/evidence_inventory.json",
+   "status": "present",
+   "source": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T233409+0700/manifests/evidence_inventory.json",
+   "bytes": 1938,
+   "sha256": "a082e70f48a168ccc291bd471f03f327271365844a3e526d4666f0679ce5e7df",
+   "note": "report-claim to file reconciliation",
+   "trimmed": false
+  },
+  {
+   "dest": "ptha/logs/ptha_trace_contract.log",
+   "status": "present",
+   "source": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T233409+0700/logs/ptha_trace_contract.log",
+   "bytes": 2993,
+   "sha256": "ada508d9bc41ec29810026e0f58bd556c3a08b9a540084a4e8de866740175b31",
+   "note": "before/after operand shapes and equivalence",
+   "trimmed": true
+  },
+  {
+   "dest": "ptha/logs/ptha_transfer_run1.log",
+   "status": "present",
+   "source": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T233409+0700/logs/ptha_transfer_run1.log",
+   "bytes": 9110,
+   "sha256": "f6ba01df34c71bd53e07d6010dbb0ab8c7d975f535c8782709f63d3d5aa9e42c",
+   "note": "full transfer stdout",
+   "trimmed": true
+  },
+  {
+   "dest": "ptha/measurements/ptha_previous_blocker.json",
+   "status": "present",
+   "source": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/measurements/ptha_mtst_transfer_blocker.json",
+   "bytes": 1459,
+   "sha256": "73479e6d3b7ee30db3178eef8423718ed94731fad75e757038cf98e6ec073eda",
+   "note": "the historical BLOCKED_ARCHITECTURAL_MISMATCH record, preserved",
+   "trimmed": false
+  },
+  {
+   "dest": "ptha/measurements/ptha_transfer_run1.json",
+   "status": "present",
+   "source": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T233409+0700/measurements/ptha_transfer_run1.json",
+   "bytes": 3553,
+   "sha256": "9cea1cd225d4e8145b87efc121759708717ddea1593def8921abb7a7645432fc",
+   "note": "full 3-category transfer result + contract report",
+   "trimmed": false
+  },
+  {
+   "dest": "ptha/ptha_mtst_wrapper_after.py",
+   "status": "present",
+   "source": "/home/heheboiz/data/cir/workbench/replay/ptha_mtst.py",
+   "bytes": 17268,
+   "sha256": "0d787d57a2d9291b9d882911ae0c8f8f0988f9ca392913194ab47ac0134e5ecc",
+   "note": "wrapper containing the repair (full file)",
+   "trimmed": false
+  },
+  {
+   "dest": "ptha/scripts/ptha_inspect_ckpt.py",
+   "status": "present",
+   "source": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T233409+0700/scripts/ptha_inspect_ckpt.py",
+   "bytes": 904,
+   "sha256": "1763a14a3db557a1f917da79e7ed101abc7f865e8a704e45798ba38f0f09863a",
+   "note": "checkpoint key/projection shapes",
+   "trimmed": false
+  },
+  {
+   "dest": "ptha/scripts/ptha_trace_contract.py",
+   "status": "present",
+   "source": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T233409+0700/scripts/ptha_trace_contract.py",
+   "bytes": 4717,
+   "sha256": "d39ee48f1dc38ed177931b9a9aa8f1a74ee2e879d4cc18eebdff14e0b3c80dcd",
+   "note": "real tensor contract trace, pre-fix failure reproduced",
+   "trimmed": false
+  },
+  {
+   "dest": "ptha/tests/test_ptha_target_feature_contract.py",
+   "status": "present",
+   "source": "/home/heheboiz/data/cir/workbench/tests/test_ptha_target_feature_contract.py",
+   "bytes": 4814,
+   "sha256": "7eb3caa0de4aa327fe0f7e521a20e334d2bd9e5103bc1215a489bd7d355fd516",
+   "note": "targeted regressions for the projection contract",
+   "trimmed": false
+  },
+  {
+   "dest": "registry/models_yaml_after.yaml",
+   "status": "present",
+   "source": "/home/heheboiz/data/cir/workbench/registry/models.yaml",
+   "bytes": 95280,
+   "sha256": "af9441a04809f0f5737780cd5e1b32b26c3eaba7cdc66201d92e9464c61ce052",
+   "note": "registry after LIMN pin + DCNet patch declaration",
+   "trimmed": false
+  },
+  {
+   "dest": "tme/logs/tme_dtype_measure.log",
+   "status": "present",
+   "source": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T233409+0700/logs/tme_dtype_measure.log",
+   "bytes": 1815,
+   "sha256": "772f0aa11cf9aaa6b35f7a4b9c977d147e18af36e4d48195997498a58be09811",
+   "note": "TME dtype probe output",
+   "trimmed": true
+  },
+  {
+   "dest": "tme/scripts/tme_dtype_measure.py",
+   "status": "present",
+   "source": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T233409+0700/scripts/tme_dtype_measure.py",
+   "bytes": 1667,
+   "sha256": "f4ccf355913d78b87892397c58dbf29b9bb8dbf53c7b6fdf3e0656ac5dd0182d",
+   "note": "TME vit_encode dtype probe",
+   "trimmed": false
+  }
+ ]
+}

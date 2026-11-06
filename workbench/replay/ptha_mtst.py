@@ -157,6 +157,53 @@ def _fashioniq_dataset_binding(dataset_root: Path) -> Iterator[Any]:
                 os.environ["MTST_DATA_ROOT"] = previous_env
 
 
+def _target_feature_contract(model: Any, index_features: Any, torch: Any) -> tuple[Any, dict[str, Any]]:
+    """Apply the checkpoint's own trained `vision_proj` to unprojected target features.
+
+    Why this is needed, established by measurement on real tensors, not by reading names:
+
+    `blip2_qformer_cir_cat.py` defines `extract_target_features` TWICE and Python keeps the second
+    one, which returns the raw Q-Former states (`[N, 32, 768]`) and has the projection commented out.
+    Its `inference()` then builds the query side through `text_proj` (`[B, 1, 1, 256]`) and matmuls it
+    against those targets, so the shapes cannot meet: measured before repair on a real FashionIQ dress
+    batch, `Expected size for first two dimensions of batch2 tensor to be: [3, 256] but got: [3, 768]`.
+    The same file keeps a `inference_target()` that performs exactly the missing operation, and the
+    checkpoint really does carry the trained parameters for it (`vision_proj` 256x768, 196 864).
+
+    So the repair is one nested call at the boundary where the source expects already-projected
+    target features. It adds no parameters, no slicing, no padding and no renormalisation of its own:
+    `inference_target` is the author's own method, and on identical real tensors it agrees with
+    `F.normalize(vision_proj(x))` to `max_abs_diff = 0.0`.
+
+    Double projection is impossible here by construction rather than by a flag: `vision_proj` expects
+    768 inputs and emits 256, so a second application raises instead of silently corrupting scores
+    (measured: `mat1 and mat2 shapes cannot be multiplied (96x256 and 768x256)`).
+    """
+    unprojected = index_features[0]
+    projected = model.inference_target(unprojected)
+    report = {
+        "repair": "target_features_projected_via_model.inference_target",
+        "reason": "effective extract_target_features returns unprojected Q-Former states; inference() "
+                  "expects the projected width, and the trained vision_proj exists in the checkpoint",
+        "before_shape": list(unprojected.shape),
+        "after_shape": list(projected.shape),
+        "projection_parameters_reused": sum(p.numel() for p in model.vision_proj.parameters()),
+        "new_parameters_introduced": 0,
+        "double_projection_possible": False,
+        "double_projection_note": "vision_proj expects "
+                                   f"{model.vision_proj.in_features} and emits "
+                                   f"{model.vision_proj.out_features}; a second application raises",
+    }
+    # The check runs on whatever device the model is already on, so this helper does not require CUDA
+    # itself and the same code path is exercised by the CPU regression tests.
+    device = model.vision_proj.weight.device
+    with torch.no_grad():
+        normalised = torch.nn.functional.normalize(
+            model.vision_proj(unprojected.to(device)), dim=-1)
+    report["boundary_equivalence_max_abs_diff"] = float(
+        (normalised.to(projected.device) - projected).abs().max())
+    return (projected, index_features[1]), report
+
 def _state_dict_report(model_state: dict[str, Any], checkpoint_state: dict[str, Any]) -> dict[str, Any]:
     expected = set(model_state)
     supplied = set(checkpoint_state)
@@ -241,10 +288,13 @@ def evaluate_transfer(
         targetpad_transform = data_utils.targetpad_transform
         transform = targetpad_transform(1.25, 224)
         category_metrics: dict[str, dict[str, float]] = {}
+        contract_reports: dict[str, dict[str, Any]] = {}
         for category in CATEGORIES:
             relative = FashionIQDataset("val", [category], "relative", transform)
             classic = FashionIQDataset("val", [category], "classic", transform)
             index_features, index_names = extract_index_blip_features(classic, model)
+            index_features, contract_report = _target_feature_contract(model, index_features, torch)
+            contract_reports[category] = contract_report
             r10, r50 = compute_fiq_val_metrics(relative, model, index_features, index_names, text_processors)
             category_metrics[category] = {"r10": r10, "r50": r50}
             torch.cuda.empty_cache()
@@ -266,6 +316,7 @@ def evaluate_transfer(
         "model_name": model_name,
         "backbone_config": f"{model_type} (EVA-CLIP ViT-g; 224 px, 32 Q-Former tokens)",
         "load_report": {**report, "strict_load": True},
+        "target_feature_contract": contract_reports,
         "category_metrics": category_metrics,
         "macro_metrics": {"r10": r10, "r50": r50, "mean": (r10 + r50) / 2},
         "paper_fashioniq_context_only": {

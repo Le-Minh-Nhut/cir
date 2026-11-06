@@ -954,6 +954,21 @@ models:
       cuda: UNKNOWN
       packages: [nltk==3.5, spacy==2.3.0]
     strict_clean_checkpoint_available: null
+    # The pinned evaluator cannot load the author checkpoint under torch >= 2.6 without an opt-out:
+    # `base/base_trainer.py:195` calls `torch.load(ckpt_path)` with no `weights_only` argument, and the
+    # checkpoint embeds a numpy scalar, which the new default refuses. The earlier workaround replaced
+    # `torch.load` for the whole process via a PYTHONPATH `sitecustomize`, which also changed behaviour
+    # for every unrelated load in that interpreter. This declaration replaces it with one edited line
+    # at the single call site, so the opt-out covers exactly the author checkpoint and nothing else.
+    # Verified: applying this patch to the pinned file reproduces the derived digest exactly, and the
+    # patched tree runs without the shim.
+    approved_source_patches:
+      - path: base/base_trainer.py
+        patch_file: workbench/patches/dcnet_checkpoint_weights_only_optout.patch
+        patch_sha256: 659eabf3c5b98352b3a09fa8291e24aedf090d806f2ada682e181fdc460fc0b8
+        base_sha256: 3edd98363f81d0efbac6f7b1dcf9690a5db714bcc588cd4b0d890c5bb865860b
+        derived_sha256: f265cefec1795c92f6e64b6c652d60fcda7aed15071ee6817af2c1b035781a8b
+        reason: "the author checkpoint embeds a numpy scalar, so torch >= 2.6 refuses it under the new weights_only=True default; the opt-out is scoped to this one hash-verified load instead of replacing torch.load process-wide"
     notes: Native evaluator masks references and fuses log-softmax branch scores. Standard run directory requires config.json plus trained_model.pth; standard config uses ImageNet-pretrained ResNet-50, not optional DeepFashion DenseNet.
     checkpoint_variants:
       - checkpoint_id: fashioniq_run_directory
@@ -1332,7 +1347,18 @@ models:
         pytorch: '==2.7.1'
         torchvision: '==0.22.1'
         cuda: '12.8'
-        packages: ['open_clip_torch>=2.24,<2.27']
+        # open_clip 2.20.0 is the author's own verbatim pin: `LIMN/requirements.txt:37` declares
+        # `open-clip-torch==2.20.0`, and `environment.packages` above already carries it. The earlier
+        # `>=2.24,<2.27` range here contradicted that pin for no stated reason, and the only runtime
+        # actually built and measured for this model (`workbench/envs/limn-adapted`) is 2.20.0, which
+        # is what produced the recorded three-category result.
+        #
+        # Measured, so the record is not overstated: both 2.20.0 and 2.24.0 unpickle these bundles
+        # (`torch.load(weights_only=False)` returns `model.LIMN`, and the pickled
+        # `VisionTransformer` carries `global_average_pool=True` / no `pool_type` under BOTH). The
+        # version difference therefore does not show up at load time; this pin is justified by the
+        # author's pin and by provenance of the measured environment, not by a load-time failure.
+        packages: ['open_clip_torch==2.20.0']
         # Keep the declared CUDA build: the adapted profile must
         # install from the CUDA 12.8 wheel index explicitly.
         pip_index_url: https://download.pytorch.org/whl/cu128

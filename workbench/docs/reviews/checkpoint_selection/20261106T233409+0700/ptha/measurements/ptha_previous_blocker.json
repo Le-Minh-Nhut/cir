@@ -1,0 +1,22 @@
+{
+ "model": "ptha_mtst",
+ "checkpoint_id": "cirr_transfer",
+ "status": "BLOCKED_ARCHITECTURAL_MISMATCH",
+ "checkpoint_sha256": "1c4dab86a9f66dfe",
+ "bytes": 2720352973,
+ "error": "RuntimeError: Expected size for first two dimensions of batch2 tensor to be: [61072, 256] but got: [61072, 768]",
+ "where": "after index-feature extraction, during 'Compute FashionIQ [dress] validation predictions' (127 batches)",
+ "cause": "The released tuned_mtst_cirr.pt is a CIRR-trained model. Its FashionIQ inference path expects a 256-dimensional text/visual projection (FashionIQ BLIP-2 projection width) while the CIRR checkpoint supplies 768. This is a dataset-specific projection-head mismatch inside the checkpoint, not a wrapper flag, batch size or path error.",
+ "attempted": [
+  "explicit --transfer-cirr-to-fashioniq opt-in (accepted, run proceeded)",
+  "index feature extraction completed for all 60 batches",
+  "failure occurs on the first prediction batch"
+ ],
+ "not_attempted_because_forbidden": [
+  "randomly re-initialising the 256-dim projection head",
+  "truncating or projecting the 768-dim output to 256 to 'make it fit'",
+  "substituting a FashionIQ-trained PTHA/MTST checkpoint (none published by the author)"
+ ],
+ "conclusion": "CIRR->FashionIQ transfer is not runnable with this published artifact. Recorded as a concrete incompatibility, not a naming problem.",
+ "log": "cohort/logs/../.. (stderr captured in the preflight invocation transcript)"
+}

@@ -1,0 +1,44 @@
+[
+ {
+  "attempt": "1",
+  "what": "torch.load(pair-B1.pt, weights_only=True)",
+  "error": "_pickle.UnpicklingError: WeightsUnpickler error: Unsupported global: GLOBAL model_vssp.Encoder",
+  "cause": "whole-model pickle; class absent from every public revision",
+  "fix": "hash-gated weights_only=False load with subprocess-local aliases"
+ },
+ {
+  "attempt": "2",
+  "what": "audit_compat_load.py first run",
+  "error": "FileNotFoundError: <evidence>/third_party/PAIR/models/model.py",
+  "cause": "parents[3] from the script resolved inside the evidence dir",
+  "fix": "walk parents until workbench/third_party/PAIR/models exists; honour PAIR_SRC"
+ },
+ {
+  "attempt": "3",
+  "what": "dump_pickle_globals.py (pure-python structural walker)",
+  "error": "_pickle.UnpicklingError: A load persistent id instruction was encountered, but no persistent_load function was specified",
+  "cause": "torch zip serialization uses persistent ids for storages",
+  "fix": "abandoned in favour of torch.load with stub classes (audit_tree.py), which the torch deserializer handles"
+ },
+ {
+  "attempt": "4",
+  "what": "probe_hybrid2.py: construct public PAIR to diff declared keys",
+  "error": "RuntimeError: Pretrained weights (./open_clip_pytorch_model.bin) not found for model ViT-B-32",
+  "cause": "public Backbone.__init__ hardcodes clip_path='./' and downloads nothing",
+  "fix": "differencing done against the restored checkpoint's own state_dict instead of constructing PAIR"
+ },
+ {
+  "attempt": "5",
+  "what": "ENCODER run from repo root",
+  "error": "RuntimeError: Pretrained weights (./open_clip_pytorch_model.bin) not found for model ViT-B-32",
+  "cause": "pinned source uses clip_path='./', a relative path resolved against the process CWD",
+  "fix": "run with cwd=workbench/third_party/ENCODER; wrapper passes an absolute pretrained path but the model's own __init__ still reads './'"
+ },
+ {
+  "attempt": "6",
+  "what": "ENCODER preflight before the LAION backbone was staged",
+  "error": "[BLOCKED] ENCODER auxiliary asset missing: .../ENCODER/open_clip_pytorch_model.bin",
+  "cause": "cleanup had removed the cached copy",
+  "fix": "reacquired from the declared URL; sha256 1bd3c717\u2026 matches the registry digest"
+ }
+]

@@ -1,0 +1,15 @@
+--- a/base/base_trainer.py
++++ b/base/base_trainer.py
+@@ -192,7 +192,11 @@
+         """
+         ckpt_path = self.config.resume / 'trained_model.pth'
+         self.logger.info("Loading checkpoint: {} ...".format(ckpt_path))
+-        checkpoint = torch.load(ckpt_path)
++        # Approved workbench patch: this author checkpoint embeds a numpy scalar, which
++        # torch >= 2.6 refuses under the new default `weights_only=True`. The checkpoint is
++        # hash-verified by the wrapper before this load runs, and the opt-out is confined to
++        # this single call site instead of replacing `torch.load` process-wide.
++        checkpoint = torch.load(ckpt_path, weights_only=False)
+         self.start_epoch = checkpoint['epoch'] + 1
+         self.mnt_best = checkpoint['monitor_best']
+ 

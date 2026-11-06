@@ -1,0 +1,79 @@
+{
+ "protocol": "fashioniq_val_split",
+ "batch_size": 64,
+ "criterion": "top-50 index set equality per query; hit@1/10/50 identical",
+ "categories": {
+  "dress": {
+   "queries": 2017,
+   "gallery": 2628,
+   "wrapper_recalls": {
+    "1": 21.417947446703025,
+    "10": 51.26425384234011,
+    "50": 75.60733763014377
+   },
+   "wrapper_hits": {
+    "hit1": 432,
+    "hit10": 1034,
+    "hit50": 1525
+   },
+   "native_hits": {
+    "hit1": 432,
+    "hit10": 1034,
+    "hit50": 1525
+   },
+   "top50_set_equal_queries": 2017,
+   "top50_order_identical_queries": 2017,
+   "top50_set_mismatch_queries": 0,
+   "score_tie_pairs_in_row": 71083,
+   "first_mismatch": null
+  },
+  "shirt": {
+   "queries": 2038,
+   "gallery": 3089,
+   "wrapper_recalls": {
+    "1": 32.53189401373896,
+    "10": 62.414131501472035,
+    "50": 81.25613346418056
+   },
+   "wrapper_hits": {
+    "hit1": 663,
+    "hit10": 1272,
+    "hit50": 1656
+   },
+   "native_hits": {
+    "hit1": 663,
+    "hit10": 1272,
+    "hit50": 1656
+   },
+   "top50_set_equal_queries": 2038,
+   "top50_order_identical_queries": 2038,
+   "top50_set_mismatch_queries": 0,
+   "score_tie_pairs_in_row": 34161,
+   "first_mismatch": null
+  },
+  "toptee": {
+   "queries": 1961,
+   "gallery": 2902,
+   "wrapper_recalls": {
+    "1": 32.02447730749618,
+    "10": 65.7317695053544,
+    "50": 83.52881183069863
+   },
+   "wrapper_hits": {
+    "hit1": 628,
+    "hit10": 1289,
+    "hit50": 1638
+   },
+   "native_hits": {
+    "hit1": 628,
+    "hit10": 1289,
+    "hit50": 1638
+   },
+   "top50_set_equal_queries": 1961,
+   "top50_order_identical_queries": 1961,
+   "top50_set_mismatch_queries": 0,
+   "score_tie_pairs_in_row": 30604,
+   "first_mismatch": null
+  }
+ }
+}

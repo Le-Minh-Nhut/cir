@@ -20,32 +20,40 @@ Repo: `/home/heheboiz/data/cir`, branch `research/cir-failure-workbench`, HEAD `
 | `pair_compat/` | PAIR: loader, audit, forward smoke, 4 lần chạy native, verdict |
 | `cohort/` | 7 model inventory: scripts, measurements, logs, blocker JSON, hash + environment manifests |
 
-## 1. Bảng kết quả nhanh — toàn bộ 17 entry
+## 1. Bảng kết quả nhanh — 17 entry đăng ký
 
-| # | entry | macro R@10 | macro R@50 | mean | protocol | trạng thái |
+Đếm theo `model_id` trong registry. **PAIR là một entry** (B1/B2 chỉ là hai file của cùng entry), nên bảng dưới có 15 dòng đã đo + 2 dòng chưa đo. Bảng không xếp hạng giữa các protocol khác nhau; cột `protocol` nằm ngay cạnh số để tránh so sánh sai.
+
+| # | model_id | macro R@10 | macro R@50 | mean | protocol | trạng thái |
 |---|---|---|---|---|---|---|
-| 1 | hint | **59.8034** | **80.1308** | 69.9671 | `fashioniq_val_split` | COMPLETED |
+| 1 | hint | **59.8034** | **80.1308** | 69.9671 | `fashioniq_val_split` | COMPLETED — đã kiểm chứng lại, xem 3.12 |
 | 2 | encoder | **56.2231** | **77.6674** | 66.9452 | `fashioniq_val_split` | COMPLETED |
-| 3 | limn (base iter-0) | **55.7919** | **77.6378** | 66.7149 | `fashioniq_val_split` | COMPLETED (open_clip 2.20) |
+| 3 | limn (base iter-0) | **55.7919** | **77.6378** | 66.7149 | `fashioniq_val_split` | COMPLETED (open_clip 2.20, registry đã sửa) |
 | 4 | tme (0% noise) | **54.9229** | **74.8384** | 64.8807 | `fashioniq_original_split` | COMPLETED (session runner) |
 | 5 | habit (20%) | **54.8733** | **74.5034** | 64.6883 | `fashioniq_full_gallery_ref_excluded` | COMPLETED |
 | 6 | intent (20%) | **54.8662** | **75.4319** | 65.1491 | `fashioniq_full_gallery_ref_excluded` | COMPLETED |
 | 7 | conesep (20%) | **54.7613** | **75.2151** | 64.9882 | `fashioniq_full_gallery_ref_excluded` | COMPLETED |
 | 8 | airknow (50%) | **52.5466** | **72.9026** | 62.7246 | `fashioniq_full_gallery_ref_excluded` | COMPLETED, recommended |
-| 9 | sprc (ViT-L) | **51.0386** | **73.3263** | 62.1825 | `fashioniq_original_split` | COMPLETED |
+| 9 | sprc (ViT-L) | **51.0386** | **73.3263** | 62.1825 | `fashioniq_original_split` | COMPLETED (variant; ViT-g chờ D-1) |
 | 10 | airknow (80%) | **50.6417** | **71.4556** | 61.0486 | `fashioniq_full_gallery_ref_excluded` | COMPLETED, variant |
 | 11 | tgcir | **49.7208** | **71.1023** | 60.4116 | `fashioniq_val_split` | COMPLETED |
 | 12 | clip4cir_rn50x4_fullft | **43.8182** | **66.9501** | 55.3841 | `fashioniq_original_split` | COMPLETED |
-| 13 | pair B1 (H_rev) | 35.0147 | 57.5753 | 46.2950 | `fashioniq_val_split` | EXPLORATORY (không phải reproduction) |
+| 13 | ptha_mtst | **37.8978** | **59.8364** | 48.8671 | `fashioniq_original_split` | **COMPLETED (transfer CIRR→FIQ), xem 3.13** |
 | 14 | combiner_rn50x4_noft | **35.1407** | **58.4436** | 46.7922 | `fashioniq_original_split` | COMPLETED |
 | 15 | clvc_net | **29.9707** | **58.6217** | 44.2962 | `fashioniq_val_split` | COMPLETED |
-| 16 | dcnet | **27.9297** | **53.7272** | 40.8285 | `fashioniq_full_gallery_ref_excluded` | COMPLETED |
-| 17 | pair B2 (H_normal) | 22.1564 | 43.4864 | 32.8214 | `fashioniq_val_split` | EXPLORATORY (không phải reproduction) |
-| — | sprc ViT-g (paper) | — | — | — | — | PENDING_USER_INPUT (D-1) |
-| — | csmcir | — | — | — | `fashioniq_original_split` | BLOCKED (D-8) |
-| — | ptha_mtst | — | — | — | `fashioniq_original_split` | BLOCKED (D-9) |
+| 16 | dcnet | **27.9297** | **53.7272** | 40.8285 | `fashioniq_full_gallery_ref_excluded` | COMPLETED (patch 1 dòng, xem 3.14) |
+| e | pair (B1/B2) | 35.0147 / 22.1564 | 57.5753 / 43.4864 | — | `fashioniq_val_split` | **EXPLORATORY** — không phải reproduction, xem 3.9 |
+| — | csmcir | — | — | — | `fashioniq_original_split` | BLOCKED — thiếu caption asset (D-8) |
 
-Bảng đầy đủ kèm Δ so với hàng tham chiếu và điều kiện runtime: mục 3.11. Chi tiết PAIR: mục 3.9.
+**15/17 entry đã có số đo native thật** (PTHA nay nằm trong số đó). Số 17 đếm theo `model_id` đăng ký:
+
+- 15 entry đã đo native (bảng trên, trừ dòng `e`);
+- `pair` **đo được nhưng exploratory** — không tính vào 15 vì không phải hành vi của implementation gốc;
+- `csmcir` **chưa đo** — thiếu caption asset (D-8).
+
+15 + pair + csmcir = 17. Biến thể SPRC **ViT-g** là *variant của `sprc`*, không phải entry thứ 18: ViT-L đã đo, ViT-g chờ file (D-1).
+
+Bảng đầy đủ kèm Δ so với hàng tham chiếu và điều kiện runtime: mục 3.11.
 
 ## 2. Môi trường và dọn dẹp
 
@@ -279,24 +287,37 @@ Không alias mọi attention về một implementation; không chọn mapping th
 
 Coverage 100%, reference bị loại trước Recall, không cắt gallery. So với hàng paper (52.76 / 74.51) lệch **−17.7 / −16.9 pp** (B1/H_rev).
 
-**Bước 6 — vì sao lệch: public code KHÔNG phải code đã train.**
+**Bước 6 — vì sao lệch: giả thuyết, không phải kết luận nhân quả**
 
-- `backbone.transformer_a` khôi phục là **2 layer × 4 head**; public `model.py:46` khai báo `Transformer(num_heads=8, num_layers=1)`. Khác cả depth lẫn head count.
-- checkpoint có `transformer_c`, `transformer_d` (2×4 mỗi cái); public `model.py` **không định nghĩa** hai nhánh này.
-- checkpoint có `weight_chanelImg`, `weight_chanelImg_t`, `cross_t2i` — những tên **chỉ tồn tại** trong implementation ENCODER (`model_try2.py:145-160`), không hề có trong PAIR.
-- Forward public chỉ đọc `transformer/transformer_a/transformer_b`, nên **8 986 448 / 172 814 185 = 5.20 %** tham số đã train bị bỏ qua khi chạy.
-- ENCODER cũng không dùng được: nó cần thêm `weight_chanelText, weight_chanelText_i, cross_i2t, weight_cross, sparse_net, sparse_net_text, binding_decoder` — checkpoint không có.
+Bản trước trình bày mục này như *nguyên nhân đã chứng minh*. Sửa lại cho đúng mức bằng chứng:
 
-⇒ Nếu load strict-superset rồi chấm điểm thì điểm đó **không phải** hành vi của checkpoint. Đó là lý do 35 / 57 thay vì 52.76 / 74.51, và cũng là lý do không được báo cáo nó như PAIR tái lập.
+**Đo được (chắc chắn):**
 
-**Nhãn chính xác:** `EXPLORATORY_PUBLIC_MAPPING` — load và chấm được, **không** source-compatible với implementation đã train. Vẫn blocked cho mục đích tái lập; nay blocker được phát biểu cụ thể: thiếu nhánh `transformer_c/d` + `weight_chanelImg*` + `cross_t2i` và một `transformer_a` 2×4, tức cần `model_vssp.py`/`MHTransformer_dis.py` đúng revision (hoặc xác nhận checkpoint đến từ ancestor chung với ENCODER).
+- `backbone.transformer_a` khôi phục là **2 layer × 4 head**; public `model.py:46` khai `transformer_a` = **1 layer × 8 head**.
+- `transformer_b` khôi phục là 2×4; public `model.py:47` khai đúng 2 layer × 4 head ⇒ **khớp** ở nhánh này.
+- checkpoint có thêm `transformer_c`, `transformer_d` (mỗi cái 2×4), `weight_chanelImg`, `weight_chanelImg_t`, `cross_t2i`.
+- Forward public chỉ đọc `transformer`, `transformer_a`, `transformer_b`.
+
+**Đã kiểm tra và KHÔNG chứng minh được:**
+
+- Tra toàn bộ checkout PAIR (models, loss, mọi entrypoint train) cho 5 tên `transformer_c/d`, `weight_chanelImg*`, `cross_t2i`: **0 lần xuất hiện**. Vì vậy **không** thể nói các module đó là "training-only" — trong source public chúng không có consumer nào cả, kể cả lúc train.
+- **Không** kết luận được hình học 2×4 là "không tương thích về nguyên tắc": chính public code tạo ra kiểu 4-head/2-layer ở `transformer_b`, nên đây là cấu hình mà codebase này có hỗ trợ.
+
+**Hệ quả đúng đắn:**
+
+- ~~8 986 448 / 172 814 185 = 5.20% tham số bị bỏ~~ → con số **đếm được** là 5.20% tham số **không được forward public chạm tới**. Điều đó **không** chứng minh chúng từng được train cho inference, cũng **không** chứng minh chúng bị tác giả loại bỏ.
+- Điểm thấp (35.01 / 57.58 so với 52.76 / 74.51) **không** tự nó xác lập nguyên nhân duy nhất. Đã so cả 4 tổ hợp và cả hai định nghĩa attention; chênh lệch vẫn lớn ở mọi tổ hợp, nhưng một phép so 4 tổ hợp không tách được "kiến trúc khác" khỏi "preprocessing khác" hay "checkpoint khác" một cách chắc chắn.
+
+**Nhãn chính xác:** `EXPLORATORY_PUBLIC_MAPPING` — load được, chạy được, chấm được, nhưng **tương đương với source gốc vẫn chưa xác lập**. Không phải "definitely correct", cũng không phải "definitely impossible". Blocker cho mục đích reproduction vẫn còn, và nay được phát biểu đúng: cần `model_vssp.py`/`MHTransformer_dis.py` đúng revision để biết `transformer_c/d` và `weight_chanelImg*` được dùng ở đâu.
+
+**Đã giữ nguyên:** cả 4 phép đo B1/B2 × H_normal/H_rev, không chọn định nghĩa attention theo điểm gần paper nhất.
 
 ### 3.10 Empirical recommendation vs author-verified association
 
 | entry | association checkpoint↔kiến trúc | nguồn xác nhận | kết quả đo |
 |---|---|---|---|
 | AirKnow 50% / 80% | **AUTHOR_VERIFIED** | SHA-256 khớp đúng LFS `oid` do tác giả công bố trên Hub (`f4d25ed9…`, `756fc0bd…`), đúng tên file, đúng Framework `iLearn-Lab/CVPR26-Air-Know` | đo đầy đủ, D6 1.03 / 1.32 pp |
-| SPRC ViT-L | **AUTHOR_VERIFIED (architecture)** | state dict nạp vào đúng `Blip2QformerCirAlignPrompt` với `pretrain_vitL`: 0 missing / 0 unexpected; conv1 `1024×3×14×14`, positional `257×1024` ⇒ CLIP ViT-L/14 | đo đầy đủ, D6 0.027 pp |
+| SPRC ViT-L | **LOAD-COMPATIBLE (không phải AUTHOR_VERIFIED)** | state dict nạp **strict** vào đúng `Blip2QformerCirAlignPrompt`/`pretrain_vitL`: 0 missing / 0 unexpected; conv1 `1024×3×14×14`, positional `257×1024` ⇒ khớp CLIP ViT-L/14. Đây là *bằng chứng kiến trúc khớp*, **không** phải tác giả xác nhận: không có SHA do tác giả công bố để so, và nạp thành công không chứng minh đây là biến thể đã sinh ra con số paper | đo đầy đủ, D6 0.027 pp |
 | CLIP4Cir noft / fullft | **EMPIRICAL** | tên member + shape state dict khớp `Combiner(feature_dim=640, 2560, 5120)` và `CLIP` 669 key; không có checksum tác giả | đo đầy đủ |
 | DCNet | **EMPIRICAL** | `config.json` + `trained_model.pth` cùng thư mục Drive tác giả; state dict 518 key khớp `CENet`; không có checksum | đo đầy đủ |
 | CLVC-Net | **EMPIRICAL** | member `checkpoint/FashionIQ/<Cat>/{local,global}_model.pt` được archive tác giả đặt tên đúng; 415 key khớp `compose_local`/`compose_global` | đo đầy đủ |
@@ -309,7 +330,7 @@ Coverage 100%, reference bị loại trước Recall, không cắt gallery. So v
 | SPRC OneDrive (ViT-g) | **UNVERIFIED** | file không có trên máy | chưa chạy |
 | PAIR B1 / B2 | **EXPLORATORY_PUBLIC_MAPPING** | public `model.py` không phải code đã train (xem 3.9) | đo được nhưng không tính là reproduction |
 | CSMCIR | **UNVERIFIED (blocked)** | checkpoint SHA khớp tác giả; thiếu caption asset | chưa chạy |
-| PTHA+MTST | **UNVERIFIED (blocked)** | checkpoint CIRR SHA khớp; sai chiều đầu chiếu | chưa chạy |
+| PTHA+MTST | **EXPLORATORY TRANSFER (đã đo)** | checkpoint CIRR SHA khớp; nguyên nhân "sai chiều đầu chiếu" đã bị bác bỏ — lỗi ở biên feature, đã sửa | **đã chạy full 3 category: 37.8978 / 59.8364** (xem 3.13) |
 
 Nói cách khác: kết quả đo là **empirical**; chỉ AirKnow (SHA tác giả) và SPRC ViT-L (khớp lớp tuyệt đối) có association do tác giả/kiến trúc xác nhận, và **không entry nào** được gọi là "author-verified reproduction" của một con số paper.
 
@@ -331,16 +352,217 @@ Ghi chú điều kiện từng entry:
 
 - **ENCODER** — `fashioniq_val_split`; cần backbone LAION CLIP ViT-B/32 `open_clip_pytorch_model.bin` (đã tải lại, sha256 `1bd3c717…` khớp registry); phải chạy với `cwd=workbench/third_party/ENCODER` vì source dùng `clip_path='./'`. `parity_mismatches: []`.
 - **HINT** — `fashioniq_val_split`; checkpoint whole-model, SHA tác giả khớp trước khi unpickle.
-- **LIMN** — `fashioniq_val_split`, bundle iteration-0 đủ 3 file (dress/shirt/toptee), mỗi category một model riêng. **Chạy dưới open_clip 2.20.0** (env `workbench/envs/limn-adapted`), không phải 2.24 như `adapted_runtime` khai: pickle chứa `VisionTransformer.global_average_pool` và **không** có `pool_type`, nên dưới 2.24 nó chết ở `_global_pool`. 2.20 chính là pin trong `LIMN/requirements.txt`. Nhãn: `SCOPED_PINNED_OPENCLIP_2_20`, xem D-6.
+- **LIMN** — `fashioniq_val_split`, bundle iteration-0 đủ 3 file (dress/shirt/toptee), mỗi category một model riêng. **Chạy dưới open_clip 2.20.0** (env `workbench/envs/limn-adapted`) vì đó là pin của tác giả (`LIMN/requirements.txt:37`) và là môi trường đã đo. `adapted_runtime` trước đây ghi `>=2.24,<2.27`, mâu thuẫn với pin đó; nay đã sửa thành `==2.20.0` (mục 3.15). **Đính chính:** bản trước nói dưới 2.24 nó chết ở `_global_pool` — đo lại thì **không** tái lập: cả 2.20 lẫn 2.24 đều unpickle được bundle này. Nhãn: `SCOPED_PINNED_OPENCLIP_2_20`, xem D-6.
 - **ConeSep / HABIT / INTENT** — 20% training noise, **0% evaluation noise**, protocol `fashioniq_full_gallery_ref_excluded`; không thay bằng file noise khác.
 - **TME** — `fashioniq_original_split`, 0% eval noise. Checkpoint gốc là **tar bọc torch-zip**; đã bóc lớp tar để dùng state dict tensor-only. Cache feature do chính pipeline sinh: `(15536, 257, 1408)` **float32**; contract khai `float16` nên wrapper từ chối — xem D-7. Evaluator chạy với `Qformer_bs 256→64`, `query_bs 32→8` (chính docstring pinned bảo giảm khi OOM; chỉ đổi số ảnh mỗi forward, ranking không đổi).
 
 **CSMCIR** và **PTHA+MTST** chưa xong, blocker cụ thể:
 
 - **CSMCIR**: checkpoint tải đủ và khớp SHA (`c8812071…`), nhưng dataset constructor đòi `COT_ours2/bert_captions/fashioniq/cap.*.val.json` + `captions/keywords_in_mods_*.json`. Cả hai **không có** trên máy và **không có** trong repo HF của tác giả (repo chỉ có `fashioniq_qwen_captions/`). Không thay bằng Qwen caption, không sinh caption giả ⇒ `BLOCKED_MISSING_AUTHOR_CAPTION_ASSETS` (D-8).
-- **PTHA+MTST**: checkpoint CIRR tải đủ (`1c4dab86…`), chạy transfer tới bước dự đoán thì lỗi shape `[61072,256]` vs `[61072,768]` — checkpoint CIRR có đầu chiếu 768 chiều, đường FashionIQ cần 256. `BLOCKED_ARCHITECTURAL_MISMATCH`; không cắt/khởi tạo lại đầu chiếu để "cho chạy" (D-9).
+- **PTHA+MTST**: ~~BLOCKED~~ → **đã chạy xong trong buổi này** (mục 3.13). Nguyên nhân cũ được ghi lại nguyên văn: lỗi shape `[61072,256]` vs `[61072,768]`. Nhưng kết luận "checkpoint CIRR có đầu chiếu 768 chiều" là **sai**: checkpoint có `vision_proj (256,768)` và nạp strict thành công; lỗi nằm ở `extract_target_features` (định nghĩa thứ hai) trả **chưa chiếu**. Đã sửa bằng `inference_target()` của tác giả, macro **37.8978 / 59.8364**, vẫn là exploratory transfer.
 
 **SPRC OneDrive**: vẫn `PENDING_USER_INPUT` — file chưa có trên máy nên không thể "inspect actual class" (D-1 giữ nguyên).
+
+## 3.12 HINT — kiểm chứng lại toàn pipeline (buổi 20261106T233409+0700)
+
+Mục này **không** thay số cũ mà xác minh lại nó. Mọi kết quả cũ giữ nguyên nhận dạng.
+
+### 3.12.1 Khiếu nại ban đầu và cách tái lập
+
+Lệnh trong báo cáo cũ chạy HINT qua vòng lặp chung LA VIS có truyền `--variant fashioniq`. Parser của `workbench/replay/hint.py` **không** có cờ đó:
+
+```
+hint.py: error: unrecognized arguments: --variant fashioniq
+EXIT=2
+```
+
+Đã tái lập nguyên văn (`hint/logs/hint_variant_repro.log`, exit 2). Đây là lỗi **tài liệu**, không phải lỗi số đo: bản thân vòng lặp sai, kết quả cũ vẫn sinh ra bằng một lệnh khác không cờ đó.
+
+### 3.12.2 Danh tính nguồn / checkpoint / input
+
+| mục | giá trị |
+|---|---|
+| checkpoint | `fashioniq.pt`, 2 724 451 182 byte |
+| SHA-256 (đo lại) | `bf9c72d42206b667ed586758c15c648970df821857e4067f26155a114a6517d4` |
+| khớp registry `expected_sha256` | **có** |
+| lớp gốc khôi phục | `lavis.models.blip2_models.HINT.HINT` |
+| `datasets` / `test` / `data_utils` | đều resolve **trong** `workbench/third_party/HINT/` (không phải package HuggingFace trùng tên) |
+| text processor | `lavis/models/__init__.py:load_preprocess`, qua `blip2_pretrain.yaml` của chính lớp |
+| upstream commit | `bec50b6c8c19111893b617979502b948d1cea5b2` |
+| runtime | `airknow-adapted` (Python 3.11.15, torch 2.7.1+cu128), `WORKBENCH_RUNTIME_ADAPTATION=sm_120` |
+| preprocessing | `targetpad_transform(1.25, 224)` — đúng `train.py:72-80` |
+| chế độ khi forward | `model.eval()`, `training == False` |
+
+### 3.12.3 Tensor contract thật (đo, không suy đoán)
+
+Lớp HINT dùng "dual-path max": query là `[N,1,1,256]`, target là `[N,256,32]`; `np.matmul` broadcast thành `[N,M,1,32]`, `.squeeze()` → `[N,M,32]`, rồi `.max(-1)` lấy max **trên 32 Q-Former token** ⇒ `[N,M]`. Đo trực tiếp: `2017×2628 → (2017,2628,1,32)`. Đây chính là toán tử trong `test.py:74-86`, không phải biến thể của wrapper.
+
+### 3.12.4 Kết quả: native viết tay ≡ wrapper
+
+Đã viết lại `test.py:test` **độc lập** (cùng phép toán, cùng thứ tự, cùng dtype) và chạy trên cùng checkpoint/dataset/batch:
+
+| category | native R@10/R@50 | wrapper đã lưu | recompute từ rank | query | gallery | coverage |
+|---|---|---|---|---|---|---|
+| dress | 51.2643 / 75.6073 | 51.2643 / 75.6073 | 51.2643 / 75.6073 | 2017 | 2628 | 2017 |
+| shirt | 62.4141 / 81.2561 | 62.4141 / 81.2561 | 62.4141 / 81.2561 | 2038 | 3089 | 2038 |
+| toptee | 65.7318 / 83.5288 | 65.7318 / 83.5288 | 65.7318 / 83.5288 | 1961 | 2902 | 1961 |
+| **macro** | **59.8034 / 80.1308** | **59.8034 / 80.1308** | **59.8034 / 80.1308** | 6016 | — | 100% |
+
+Sai khác tuyệt đối < 1e-9 trên cả 6 con số. Reference bị mask `-10e10` trước khi tính recall; không bỏ query nào.
+
+### 3.12.5 Vì sao cao hơn paper (58.48 / 77.93)
+
+Đây là quan sát, **không** phải bằng chứng bug và **không** được "sửa" về phía paper. Nguyên nhân đã kiểm chứng được: HINT chấm bằng **max trên 32 token Q-Former** thay vì một vector pooled duy nhất, và protocol là `fashioniq_val_split` (hợp có thứ tự của reference+target, reference bị loại). Cả hai đều là hành vi của source pinned. Chênh lệch +1.32/+2.20 pp so với hàng paper nằm trong phần chưa xác định được: checkpoint này có thể là biến thể được chọn tốt hơn hàng báo cáo, và chế độ nhiễu lúc train là **unknown** (không suy ra được từ metadata).
+
+### 3.12.6 Phán quyết HINT
+
+- **Đã xác minh** dưới input/runtime/path đã ghi: checkpoint khớp SHA tác giả, module pinned resolve đúng, preprocessing đúng `train.py`, ranking native viết tay trùng khớp wrapper đến 1e-9, macro 59.8034/80.1308 tái lập được từ rank.
+- **Đã sửa**: lệnh tài liệu (bỏ `--variant`, dùng CLI riêng của HINT).
+- **Còn chưa chắc**: nhiễu train của checkpoint và việc đây có đúng là checkpoint sinh ra hàng paper hay không — không có metadata để kết luận, nên **không** gọi là reproduction.
+### 3.12.7 Parity theo top-50 index set từng query
+
+Tiêu chí khai báo **trước** khi chạy: với mỗi query, tập chỉ số top-50 do wrapper sinh ra phải bằng tập do bản viết tay sinh ra, và hit@1/10/50 phải trùng.
+
+Wrapper chỉ trả recall nên danh sách `nn_result` được **bắt tại chỗ** bằng cách chặn `np.argsort` trong lúc `test.py:test` chạy — capture đúng những gì hàm native sinh ra, không tính lại bằng đường khác.
+
+| category | query | tập top-50 bằng nhau | thứ tự giống hệt | hit@1/10/50 (wrapper) | hit@1/10/50 (native) |
+|---|---|---|---|---|---|
+| dress | 2017 | **2017/2017** | 2017/2017 | 432 / 1034 / 1525 | 432 / 1034 / 1525 |
+| shirt | 2038 | **2038/2038** | 2038/2038 | 663 / 1272 / 1656 | 663 / 1272 / 1656 |
+| toptee | 1961 | **1961/1961** | 1961/1961 | 628 / 1289 / 1638 | 628 / 1289 / 1638 |
+| **tổng** | **6016** | **6016** | **6016** | — | — |
+
+Không có query nào lệch (0 mismatch). Điểm trùng nhau có tồn tại trong dữ liệu (71083 / 34161 / 30604 cặp trong một hàng ở dress/shirt/toptee), nhưng chúng **không** làm hai đường rẽ nhánh, nên kết luận parity không dựa trên việc che các tie.
+
+
+## 3.13 PTHA+MTST — đã tìm ra nguyên nhân và chạy được transfer (buổi 20261106T233409+0700)
+
+Nhãn giữ nguyên suốt mục này: **CIRR-trained → FashionIQ evaluation, cross-dataset transfer**. Không phải reproduction FashionIQ.
+
+### 3.13.1 Kết luận cũ và tại sao nó quá mạnh
+
+Báo cáo trước ghi `BLOCKED_ARCHITECTURAL_MISMATCH` với lý do "checkpoint cung cấp 768 trong khi cần 256". Câu đó **suy diễn quá xa** từ một matmul lỗi. Bằng chứng phản bác, đo trong buổi này:
+
+- checkpoint chứa `vision_proj.weight` **`(256, 768)`**, 196 864 tham số — tức **có** đầu chiếu đã train đúng kích thước đích;
+- `load_state_dict(..., strict=True)` **thành công**, `missing_keys=[]`, `unexpected_keys=[]`, `shape_mismatches=[]`;
+- lỗi cũ xảy ra **sau** khi nạp strict thành công, tức không phải lỗi kiến trúc/không phải thiếu head.
+
+Vậy nguyên nhân nằm ở **biên truyền feature**, không phải ở checkpoint.
+
+### 3.13.2 Nguyên nhân thật, đo trên tensor thật
+
+Trong `lavis/models/blip2_models/blip2_qformer_cir_cat.py`:
+
+- `extract_target_features` được **định nghĩa hai lần**; Python giữ định nghĩa **sau** (dòng 483).
+- Định nghĩa sau trả `image_features = image_embeds` — tức **Q-Former state chưa chiếu** `[N,32,768]` — và dòng chiếu bị comment out.
+- `inference()` (dòng 287) dựng phía query qua `text_proj` thành `[B,1,1,256]` rồi matmul thẳng với target ⇒ hai chiều không gặp nhau.
+- Trong **cùng file** có sẵn `inference_target()` (dòng 447) làm đúng phép chiếu còn thiếu.
+
+Đo trên batch FashionIQ dress thật (GPU), trước khi sửa:
+
+```
+A) code tác giả như đang viết:
+   FAILED: Expected size for first two dimensions of batch2 tensor to be: [3, 256] but got: [3, 768].
+   phía query [B,1,1,256]  vs  target sau permute (3, 768, 32)
+B) target đi qua chính vision_proj đã train của checkpoint:
+   inference_target -> (3, 32, 256), norms [1.0, 1.0, 1.0]
+   OK: (3,) finite: True
+```
+
+Đối chiếu với lớp anh em `blip2_qformer_tgir_concatembedding_sim.py`: lớp đó chiếu target **bên trong** `inference()` (dòng 429) và extractor của nó cũng trả chưa chiếu. Nghĩa là "luôn chiếu target" **sai** cho lớp đó — nên sửa phải theo **từng lớp**, không được làm cờ toàn cục.
+
+### 3.13.3 Sửa tối thiểu
+
+Thêm `_target_feature_contract()` trong `workbench/replay/ptha_mtst.py`, gọi `model.inference_target(index_features[0])` — **đúng method của tác giả**, không viết lại phép chiếu:
+
+- không tạo tham số mới (`new_parameters_introduced = 0`);
+- không cắt/pad/reshape chiều, không thêm `Linear` ngẫu nhiên, không bỏ normalize;
+- không đổi hướng điểm hay pooling;
+- chỉ áp dụng ở nhánh FashionIQ transfer của `ptha_mtst`, không đụng lớp `tgir_ce_sim`.
+
+**Chống chiếu hai lần bằng hình học, không bằng cờ**: `vision_proj` nhận 768 và xuất 256, nên lần chiếu thứ hai **ném lỗi** thay vì âm thầm làm sai điểm — đo được `mat1 and mat2 shapes cannot be multiplied (96x256 and 768x256)`.
+
+### 3.13.4 Kiểm chứng sau khi sửa
+
+| kiểm tra | kết quả |
+|---|---|
+| trước/sau shape (dress/shirt/toptee) | `[3817,32,768]→[3817,32,256]`, `[6346,…]`, `[5373,…]` |
+| tham số chiếu dùng lại | 196 864 (đúng `vision_proj` của checkpoint) |
+| tham số mới | **0** |
+| adapter ≡ `F.normalize(vision_proj(x))` trên tensor thật | `max_abs_diff = 0.0` (cả 3 category) |
+| `load_state_dict` strict | 0 missing / 0 unexpected / 0 shape mismatch |
+| regression test | `workbench/tests/test_ptha_target_feature_contract.py` — 5/5 pass, gồm cả ca tái lập lỗi trước khi sửa và ca chặn chiếu hai lần |
+
+### 3.13.5 Kết quả transfer đầy đủ
+
+Protocol `fashioniq_original_split`, gallery đầy đủ theo thứ tự split, reference hợp lệ (không mask — khác DCNet), 100% coverage.
+
+| category | R@10 | R@50 |
+|---|---|---|
+| dress | 33.1185 | 56.0238 |
+| shirt | 38.8616 | 59.0285 |
+| toptee | 41.7134 | 64.4569 |
+| **macro** | **37.8978** | **59.8364** |
+
+Macro mean `48.8671`. Paper context (FashionIQ-trained, 54.99 / 76.28) **chỉ là tham chiếu số**, không phải mục tiêu: checkpoint này train trên CIRR, nên thấp hơn là kỳ vọng, và **không** được đọc là "kém hơn paper".
+
+### 3.13.6 Phán quyết PTHA
+
+- **Đã sửa và đo được**: nguyên nhân là biên feature trong chính source pinned, đã sửa bằng method có sẵn của tác giả, đã chạy đủ 3 category trên GPU thật.
+- **Vẫn là exploratory transfer**: checkpoint CIRR, không có checkpoint FashionIQ do tác giả phát hành.
+- **Chưa xác lập**: transfer này có tương đương cách tác giả *dùng* checkpoint cho CIRR hay không — muốn vậy cần dữ liệu CIRR, buổi này không tải thêm dataset.
+- Lỗi cũ `BLOCKED_ARCHITECTURAL_MISMATCH` **đã bị thay thế** bằng kết quả đo; lý do cũ được giữ trong evidence để đối chiếu, không xoá.
+
+## 3.14 DCNet — thay shim toàn cục bằng patch một dòng có hash-gate
+
+Bản trước chạy được nhờ một `sitecustomize.py` gắn qua `PYTHONPATH`, trong đó **thay thế `torch.load` cho cả process**. Như prompt chỉ ra, đó là đổi hành vi toàn cục cho mọi lần load không liên quan.
+
+Đã thay bằng khai báo `approved_source_patches` đúng cơ chế registry đang dùng cho CSMCIR:
+
+- file sửa: `base/base_trainer.py`, **đúng một call site** (`torch.load(ckpt_path)` tại dòng 195);
+- `base_sha256 = 3edd9836…`, `derived_sha256 = f265cefe…`, `patch_sha256 = 659eabf3…`;
+- patch áp từ base cho ra **đúng** derived digest (đã kiểm bằng `patch -p1` trên bản copy sạch);
+- không còn `sitecustomize`, không còn `PYTHONPATH`, không đổi `torch.load` toàn process.
+
+**Kiểm chứng thật** (`PYTHONPATH` đã unset, đúng CLI chính thức `cd workbench/third_party/DCNet && python test.py --resume <run_dir>`):
+
+| category | fused R@10 | fused R@50 | so với lần chạy trước (dùng shim) |
+|---|---|---|---|
+| dress | 29.1522 | 54.5364 | khớp tuyệt đối, diff `0.0` |
+| shirt | 22.8165 | 47.6447 | khớp tuyệt đối, diff `0.0` |
+| toptee | 31.8205 | 59.0005 | khớp tuyệt đối, diff `0.0` |
+| **macro** | **27.9297** | **53.7272** | **giống hệt** |
+
+Kết luận: patch **không** đổi khoa học, chỉ đổi phạm vi của opt-out. Checkpoint nạp được (`Ckpt loaded. Resume training from epoch 83`), exit code 0.
+
+## 3.15 LIMN — đưa pin về đúng của tác giả, và không nói quá
+
+`LIMN/requirements.txt:37` khai `open-clip-torch==2.20.0`, và `environment.packages` của registry đã đúng như vậy. Nhưng `adapted_runtime.packages` lại ghi `open_clip_torch>=2.24,<2.27` — **tự mâu thuẫn** với pin của tác giả.
+
+Đã sửa `adapted_runtime.packages` thành `['open_clip_torch==2.20.0']`, kèm comment ghi rõ **hai** căn cứ đúng: pin của tác giả, và việc runtime đã đo (`workbench/envs/limn-adapted`) là 2.20.0.
+
+**Đính chính so với bản trước:** báo cáo cũ nói dưới 2.24 thì LIMN chết ở `_global_pool` với `AttributeError: ... 'pool_type'`. Đo lại trong buổi này thì **không đúng như vậy**:
+
+| open_clip | unpickle bundle dress | có `global_average_pool` | có `pool_type` |
+|---|---|---|---|
+| 2.20.0 | **OK** (`model.LIMN`) | True | False |
+| 2.24.0 | **OK** (`model.LIMN`) | True | False |
+
+Cả hai đều unpickle được; lỗi `pool_type` mà bản trước mô tả **không tái lập**. Vì vậy comment trong registry đã được viết lại chỉ còn điều đo được, không giữ suy diễn cũ. Pin `==2.20.0` vẫn đúng, nhưng lý do là **pin của tác giả + provenance của môi trường đã đo**, không phải "chỉ 2.20 mới load được".
+
+Wrapper nay dùng chính `adapted_runtime` đó từ registry, nên đường chạy chuẩn không cần script riêng của phiên: `python -m workbench.replay.limn ... --preflight-only` → `[READY] LIMN preflight passed`.
+
+## 3.16 TME — dtype đo được, và giới hạn của kết luận
+
+Đo trực tiếp trên đường native (`precompute.py:38`, `blip2_model.vit_encode(image)` dưới `torch.cuda.amp.autocast()`): `visual_encoder` chứa **cả** fp16 và fp32 tham số, và output của `vit_encode` là **float32** trên runtime đã dùng.
+
+Hệ quả, và đây là chỗ bản trước nói quá: contract khai `feature_dtype: float16` kèm lập luận rằng autocast + `convert_weights_to_fp16` ⇒ fp16. Lập luận đó **không khớp** với output đo được. Nhưng **chưa** được kết luận rằng contract sai cho mọi runtime — autocast không bảo đảm dtype trả về, và một runtime khác có thể cho fp16. Vì vậy mục này ghi:
+
+- **đo được**: trên runtime đã chạy, output là float32, và cache 22.49 GB (15536×257×1408×4 byte) khớp float32 chứ không khớp float16;
+- **chưa xác lập**: dtype "native" theo nghĩa độc lập runtime. Cần đo trên runtime thứ hai mới tách được "native vs runtime-specific";
+- **đề xuất**: (D-7) khai báo dtype theo runtime, hoặc ghi rõ contract là "float32 on the adapted sm_120 runtime" thay vì sửa số của contract lịch sử.
+
+Không sửa `float16 → float32` trong contract lịch sử vì lý do khoa học: một runtime không đủ để phủ định contract cho mọi runtime.
 
 ## 4. Hàng đợi quyết định buổi sáng
 
@@ -352,16 +574,16 @@ Ghi chú điều kiện từng entry:
 | **D-4** | DCNet reproducibility | Cho phép ghi lại recipe sinh GloVe PKL thành generator trong `preparation_contracts.yaml` (seed cố định, sha256 của 10 file PKL) | Hiện contract ghi `NONDETERMINISTIC_WITHOUT_AUTHOR_ARTIFACT`, nên lần sau không tái lập được bằng workbench | Sửa 1 khối contract + thêm 10 entry hash; không đổi dataset canonical | Đã sinh trong session, giữ file + log, không sửa contract | `logs/dcnet_glove_prep.log`, `logs/dcnet_run2.log` | Duyệt việc chuẩn hoá recipe này |
 | **D-5** | `torch.load` shim cho DCNet | Cho phép thêm 1 dòng `weights_only=False` (có hash-check trước) vào `base/base_trainer.py` như `approved_source_patches` thay vì shim qua `PYTHONPATH` | Hiện phải inject shim để unpickle; nếu duyệt thì DCNet chạy được bằng CLI chuẩn không cần shim | Sửa 1 dòng trong checkout pinned + khai báo patch như CSMCIR | Đã chạy bằng shim, kết quả đầy đủ | `scripts/compat/sitecustomize.py`, `logs/dcnet_run2.log` | Duyệt patch 1 dòng (kèm base/derived sha256) hay giữ shim |
 
-Không mục nào chặn job khác: D-1/D-8/D-9 chỉ chặn đúng model của chúng; 15 entry còn lại đã có số đo độc lập.
+Không mục nào chặn job khác: chỉ **D-1** (file SPRC ViT-g) và **D-8** (caption CSMCIR) còn thực sự treo. D-6 đã áp dụng, D-9 đã giải quyết trong buổi này; 15/17 entry đã có số đo native độc lập.
 
 Bổ sung D-6…D-9 cho cohort inventory:
 
 | ID | model/job | hành động đề xuất | vì sao | phạm vi/rủi ro | đã thử an toàn | bằng chứng | cần bạn quyết/cung cấp |
 |---|---|---|---|---|---|---|---|
-| **D-6** | `limn` runtime | Duyệt sửa `adapted_runtime.packages` của LIMN từ `open_clip_torch>=2.24,<2.27` thành `==2.20.0` (đúng pin trong `LIMN/requirements.txt`) và ghi session này là `runtime_adaptation=SCOPED_PINNED_OPENCLIP_2_20` | Pickle LIMN chứa `VisionTransformer.global_average_pool` và không có `pool_type`; dưới 2.24 nó ném `AttributeError: 'VisionTransformer' object has no attribute 'pool_type'` | Sửa 1 dòng registry + thêm 1 env đã tạo (`workbench/envs/limn-adapted`) | Đã chạy đủ 3 category dưới 2.20, 55.7919/77.6378 | `cohort/measurements/limn_base_iter0.json`, `cohort/logs/limn_run2.log`, `cohort/scripts/run_limn_oc220.py` | Duyệt pin 2.20 (hay giữ 2.24 và chấp nhận LIMN không chạy) |
+| ~~D-6~~ | `limn` runtime | **ĐÃ ÁP DỤNG trong buổi này**: `adapted_runtime.packages` của LIMN nay là `['open_clip_torch==2.20.0']` trong `workbench/registry/models.yaml`, wrapper tự đọc profile đó nên không cần script riêng của phiên | Hai căn cứ **đo được**: (i) `LIMN/requirements.txt:37` khai đúng `open-clip-torch==2.20.0`; (ii) `workbench/envs/limn-adapted` đang chạy 2.20.0 và là môi trường sinh ra kết quả 55.7919/77.6378. Lý do cũ (`AttributeError: ... 'pool_type'` dưới 2.24) **đã bị rút lại** vì không tái lập được | Chỉ đổi 1 dòng của riêng LIMN; không đụng profile nào khác | Preflight qua wrapper: `[READY] LIMN preflight passed`; 3 checkpoint giữ nguyên một bundle | `limn/scripts/limn_version_repro.py`, mục 3.15 | Không cần quyết nữa |
 | **D-7** | `tme` feature contract | Duyệt sửa `preparation_contracts.yaml` `feature_dtype: float16 → float32` (và lower bound 10.47 → 20.94 GiB) | Đo thật: `visual_encoder` đúng là fp16, nhưng `vit_encode()` dưới `torch.cuda.amp.autocast()` trả **float32**, nên `torch.save` ra float32. Wrapper `tme.py:414` từ chối cache mà chính pipeline native sinh ra | Sửa 2 giá trị contract; không đổi numerics (dtype chỉ dùng cho gate + size floor) | Đã sinh cache đúng như native, chạy xong 3 category bằng session runner nhận dtype đo được | `cohort/measurements/tme_blocker.json`, `cohort/measurements/tme_fashioniq_0.json`, `cohort/logs/tme_run5.log` | Duyệt sửa contract (nếu không, TME chỉ chạy được qua session runner) |
 | **D-8** | `csmcir` | Cần bạn cung cấp `COT_ours2/bert_captions/fashioniq/cap.{dress,shirt,toptee}.val.json` và `captions/keywords_in_mods_*.json`, **hoặc** duyệt rõ ràng một phương án thay thế | Hai asset này không có trên máy và không có trong HF repo tác giả (repo chỉ ship Qwen captions) | Chỉ thêm file vào checkout/model root; không đổi code | Checkpoint đã tải + hash-verified; dừng đúng ở dataset constructor | `cohort/measurements/csmcir_blocker.json` | Gửi asset, hoặc chọn (a) bỏ CSMCIR, (b) duyệt thay bằng caption khác dưới nhãn riêng |
-| **D-9** | `ptha_mtst` | Quyết định: (a) chấp nhận PTHA/MTST chỉ là transfer không chạy được, (b) xin checkpoint FashionIQ-trained từ tác giả | Checkpoint CIRR có đầu chiếu 768-d, đường FashionIQ cần 256-d ⇒ `RuntimeError: batch2 [61072,256] vs [61072,768]` | (b) cần liên hệ tác giả | Đã chạy tới bước dự đoán rồi dừng; không cắt đầu chiếu | `cohort/measurements/ptha_mtst_transfer_blocker.json` | Chọn (a) hay (b) |
+| ~~D-9~~ | `ptha_mtst` | **ĐÃ GIẢI QUYẾT trong buổi này** — không còn cần bạn quyết để chạy được. Nguyên nhân là biên feature trong chính source pinned (định nghĩa `extract_target_features` thứ hai trả chưa chiếu), không phải checkpoint thiếu head; đã sửa bằng `inference_target()` của tác giả và chạy đủ 3 category. Nếu bạn **vẫn muốn** có reproduction FashionIQ thật thì đó là yêu cầu khác: (a) xin checkpoint FashionIQ-trained từ tác giả | Sửa xong: `load_state_dict` strict 0/0/0, `vision_proj (256,768)` dùng lại 196 864 tham số, 0 tham số mới, adapter ≡ `normalize(vision_proj(x))` với `max_abs_diff = 0.0`, regression 5/5 pass | Không cắt/pad chiều, không thêm Linear ngẫu nhiên, không chiếu hai lần (bị hình học chặn) | Đã chạy full 3 category trên GPU thật: macro **37.8978 / 59.8364**, coverage 100% | `ptha/measurements/ptha_transfer_run1.json`, mục 3.13 | Không cần quyết gì để dùng kết quả transfer; chỉ cần quyết nếu muốn theo (a) |
 
 
 ## 5. Lệnh chạy lại chính xác
@@ -403,9 +625,10 @@ $CIR/workbench/envs/clip4cir-adapted/bin/python src/validate.py --dataset Fashio
   --transform targetpad --target-ratio 1.25
 
 # 4) DCNet — CLI gốc của tác giả, run directory trong session
+# KHÔNG cần shim, KHÔNG cần PYTHONPATH: opt-out đã nằm trong approved_source_patches
+# (1 dòng ở base/base_trainer.py, khai báo trong registry — xem 3.14).
 cd $CIR/workbench/third_party/DCNet
-PYTHONPATH="$EVID/scripts/compat:$CIR/workbench/third_party/DCNet" \
-  TORCH_HOME=$HOME/.cache/torch \
+TORCH_HOME=$HOME/.cache/torch \
   $CIR/workbench/envs/airknow-adapted/bin/python test.py --resume "$EVID/checkpoints/dcnet"
 
 # 5) CLVC-Net — runner gọi native test.test() với 6 checkpoint theo category
@@ -468,9 +691,15 @@ WORKBENCH_RUNTIME_ADAPTATION=sm_120 PYTHONPATH=$CIR \
   --source-root $CIR/workbench/third_party/ENCODER --batch-size 96 \
   --output $CO/measurements/encoder_fashioniq.json
 
-# --- HINT / HABIT / INTENT / ConeSep (LAVIS family, one GPU at a time) ---
+# --- HINT (LAVIS, NHƯNG KHÔNG có --variant: parser riêng của HINT không nhận cờ đó) ---
 cd $CIR
-for spec in "hint fashioniq HINT" "habit fiq_n02 HABIT" "intent fiq_n02 INTENT" "conesep fiq_n02 ConeSep"; do
+WORKBENCH_RUNTIME_ADAPTATION=sm_120 $CIR/workbench/envs/airknow-adapted/bin/python \
+  -m workbench.replay.hint --checkpoint-root "$CO/downloads/hint" --dataset-root "$DS" \
+  --source-root $CIR/workbench/third_party/HINT --batch-size 64 \
+  --output "$CO/measurements/hint_fashioniq.json"
+
+# --- HABIT / INTENT / ConeSep (ba wrapper này MỚI có --variant) ---
+for spec in "habit fiq_n02 HABIT" "intent fiq_n02 INTENT" "conesep fiq_n02 ConeSep"; do
   set -- $spec
   WORKBENCH_RUNTIME_ADAPTATION=sm_120 $CIR/workbench/envs/airknow-adapted/bin/python \
     -m workbench.replay.$1 --checkpoint-root "$CO/downloads/$1" --dataset-root "$DS" \
@@ -504,7 +733,7 @@ PYTHONPATH=$CIR WORKBENCH_RUNTIME_ADAPTATION=sm_120 \
 |---|---|---|---|---|---|
 | airknow | `fiq_n05` | `fashioniq_full_gallery_ref_excluded` | **COMPLETED** | 52.5466 / 72.9026 | AUTHOR_VERIFIED (SHA LFS) |
 | airknow (variant) | `fiq_n08` | như trên | **COMPLETED** | 50.6417 / 71.4556 | AUTHOR_VERIFIED (SHA LFS) |
-| sprc | `sprc_fiq_vitl` (ViT-L) | `fashioniq_original_split` | **COMPLETED** | 51.0386 / 73.3263 | AUTHOR_VERIFIED (architecture) |
+| sprc | `sprc_fiq_vitl` (ViT-L) | `fashioniq_original_split` | **COMPLETED** | 51.0386 / 73.3263 | LOAD-COMPATIBLE (kiến trúc khớp; **không** có SHA tác giả) |
 | sprc | `sprc_fiq` (ViT-g, paper) | — | **PENDING_USER_INPUT** | — | chưa có file (D-1) |
 | pair | `pair-B1` | `fashioniq_val_split` | **EXPLORATORY** | 35.0147 / 57.5753 | EXPLORATORY_PUBLIC_MAPPING |
 | pair | `pair-B2` | `fashioniq_val_split` | **EXPLORATORY** | 22.1564 / 43.4864 (H_normal; tốt nhất của B2) | EXPLORATORY_PUBLIC_MAPPING |
@@ -521,18 +750,18 @@ PYTHONPATH=$CIR WORKBENCH_RUNTIME_ADAPTATION=sm_120 \
 | conesep | `ConeSep-FIQ-N0.2.pt` | `fashioniq_full_gallery_ref_excluded` | **COMPLETED** | 54.7613 / 75.2151 | EMPIRICAL |
 | tme | `fashioniq_0_best_model` | `fashioniq_original_split` | **COMPLETED** | 54.9229 / 74.8384 | EMPIRICAL (contract dtype, D-7) |
 | csmcir | `fashioniq_tuned_clip_best.pt` | `fashioniq_original_split` | **BLOCKED** | — | checkpoint hash-verified; thiếu caption asset (D-8) |
-| ptha_mtst | `tuned_mtst_cirr.pt` | `fashioniq_original_split` | **BLOCKED** | — | transfer CIRR→FIQ, sai chiều đầu chiếu (D-9) |
+| ptha_mtst | `tuned_mtst_cirr.pt` | `fashioniq_original_split` | **COMPLETED** | 37.8978 / 59.8364 | transfer CIRR→FIQ; nguyên nhân là biên feature, đã sửa (3.13) |
 
-Tổng: **15/17 entry có số đo thật**, 1 chờ file người dùng (SPRC ViT-g), 2 blocked với nguyên nhân cụ thể (CSMCIR thiếu caption asset; PTHA/MTST sai chiều projection). PAIR có số đo nhưng mang nhãn `EXPLORATORY_PUBLIC_MAPPING`, **không** tính là tái lập.
+Tổng: **15/17 entry có số đo native**, `pair` đo được nhưng exploratory, 1 entry chưa đo (CSMCIR, D-8), và **việc còn chờ file người dùng** là biến thể SPRC ViT-g của entry `sprc` (D-1) — không phải entry mới (CSMCIR thiếu caption asset; PTHA/MTST sai chiều projection). PAIR có số đo nhưng mang nhãn `EXPLORATORY_PUBLIC_MAPPING`, **không** tính là tái lập.
 
 Coverage: mọi run đều đủ query (2017 dress / 2038 shirt / 1961 toptee), gallery đúng protocol, reference loại trước Recall ở các protocol yêu cầu, không run nào bị rút gọn.
 
 ## 7. Những gì KHÔNG được chứng minh
 
-- **Không entry nào** là `AUTHOR_VERIFIED_REPRODUCTION` của một con số paper. AirKnow (SHA LFS) và SPRC ViT-L (khớp lớp tuyệt đối) chỉ đạt mức *association*; số đo vẫn là empirical.
-- **PAIR**: load và chấm được nhưng **không** phải implementation đã train. Bằng chứng cứng: `transformer_a` khôi phục 2 layer × 4 head ≠ public `1 layer × 8 head`; checkpoint có `transformer_c/d`, `weight_chanelImg*`, `cross_t2i` mà public `model.py` không định nghĩa; 5.20% tham số nằm ngoài đường forward public. Điểm 35/57 **không** phải hành vi checkpoint. Xem 3.9.
+- **Không entry nào** là `AUTHOR_VERIFIED_REPRODUCTION` của một con số paper. Nhãn `AUTHOR_VERIFIED` chỉ dùng khi có digest do tác giả công bố và khớp; SPRC ViT-L **không** đủ điều kiện đó và đã được hạ xuống `LOAD-COMPATIBLE`. AirKnow (SHA LFS) và SPRC ViT-L (khớp lớp tuyệt đối) chỉ đạt mức *association*; số đo vẫn là empirical.
+- **PAIR**: load và chấm được, nhưng **tương đương source gốc chưa xác lập**. Đo được: `transformer_a` khôi phục 2 layer × 4 head ≠ public 1 × 8; checkpoint có `transformer_c/d`, `weight_chanelImg*`, `cross_t2i` mà public `model.py` không định nghĩa; 5.20% tham số không được forward public chạm tới. **Chưa** chứng minh được đó là nguyên nhân duy nhất của điểm thấp, và **không** thể gọi các module thừa là "training-only" vì chúng không xuất hiện ở bất kỳ đâu trong checkout, kể cả loss/train. Xem 3.9.
 - **TME**: chạy được nhưng dưới session runner nhận dtype đo được (float32) và giảm `Qformer_bs`/`query_bs`; cho tới khi D-7 được duyệt, đây **không** phải đường chạy `workbench.replay.tme` nguyên bản.
-- **LIMN**: chạy dưới open_clip **2.20.0**, không phải `>=2.24,<2.27` như `adapted_runtime` khai (D-6). Số đo hợp lệ cho checkpoint, nhưng runtime lệch contract.
+- **LIMN**: chạy dưới open_clip **2.20.0**, đúng pin tác giả (`LIMN/requirements.txt:37`). `adapted_runtime` trước đây khai `>=2.24,<2.27` và **đã được sửa** về `==2.20.0` (mục 3.15), nên nay contract và môi trường khớp nhau — không còn lệch.
 - **CSMCIR / PTHA+MTST**: không có số đo. Không suy ra từ model khác, không dùng caption thay thế, không cắt đầu chiếu.
 - **SPRC ViT-g**: chưa chạy; không dùng ViT-L thay cho hàng ViT-g.
 - Validation set đã dùng để chọn checkpoint ⇒ các số không phải ước lượng held-out không thiên lệch.
@@ -551,7 +780,7 @@ Coverage: mọi run đều đủ query (2017 dress / 2038 shirt / 1961 toptee), 
 | INTENT lần 2 | sau khi cài `matplotlib==3.9.2` vào env scoped | 54.8662 / 75.4319 |
 | ConeSep lần 1 | `--checkpoint-id fiq_n02` | FAILED `unrecognized arguments` — cờ đúng là `--variant` |
 | ConeSep lần 2 | `--variant fiq_n02` | 54.7613 / 75.2151 |
-| LIMN lần 1 | `-m workbench.replay.limn` (open_clip 2.24) | FAILED `AttributeError: 'VisionTransformer' object has no attribute 'pool_type'` |
+| LIMN lần 1 | `-m workbench.replay.limn` (open_clip 2.24) | FAILED `version mismatch: expected open_clip_torch >=2.24,<2.27, found ...` — ghi chú: lỗi `pool_type` từng được quy cho 2.24 **không tái lập** khi đo lại; xem mục 3.15 |
 | LIMN lần 2 | env `limn-adapted` (open_clip 2.20) qua wrapper | FAILED `version mismatch: expected open_clip_torch >=2.24,<2.27, found 2.20.0` |
 | LIMN lần 3 | `run_limn_oc220.py` (3 category chạy xong) | aggregate helper lỗi `'dict' object has no attribute 'complete'`; số per-category đã có, tổng hợp lại từ chính 3 dòng đó ⇒ 55.7919 / 77.6378 |
 | TME assets | cleanup đêm trước đã xoá `blip2_pretrained.pth`, `eva_vit_g.pth` | tải lại; sha256 `f31f96e4…`, `99d2bb36…` khớp đúng giá trị đã ghi trong `cleanup_result.json` |
@@ -564,7 +793,7 @@ Coverage: mọi run đều đủ query (2017 dress / 2038 shirt / 1961 toptee), 
 | TME eval lần 3 | `tme_session_runner.py` (nhận dtype đo được) | FAILED `ModuleNotFoundError: No module named 'workbench'` (thiếu PYTHONPATH) |
 | TME eval lần 4 | + `PYTHONPATH=$CIR` | FAILED `torch.OutOfMemoryError`, cần 6.20 GiB, còn 4.32 GiB |
 | TME eval lần 5 | + `Qformer_bs 256→64`, `query_bs 32→8`, expandable_segments | 54.9229 / 74.8384 |
-| PTHA transfer | `-m workbench.replay.ptha_mtst --transfer-cirr-to-fashioniq` | FAILED `RuntimeError: Expected size for first two dimensions of batch2 tensor to be: [61072, 256] but got: [61072, 768]` |
+| PTHA transfer (lần 1, **đã bị thay thế**) | `-m workbench.replay.ptha_mtst --transfer-cirr-to-fashioniq` | FAILED `RuntimeError: ... [61072, 256] but got: [61072, 768]` — nguyên nhân tìm ra ở 3.13, nay chạy được |
 
 ## 8. Chi tiết vận hành từng lần chạy
 
@@ -626,7 +855,7 @@ Phạm vi nay rộng hơn bản đầu: 12 entry đã có số đo thật (mục
 
 1. `workbench/registry/models.yaml` — với `combiner_rn50x4_noft`, `clip4cir_rn50x4_fullft`, `dcnet`, `clvc_net`, `tgcir`, `limn`, `encoder`, `hint`, `habit`, `intent`, `conesep`, `tme`: đặt `reproduction_status` theo kết quả thật và `checkpoint_mapping_status: VERIFIED_METADATA` (SHA tác giả khớp, ghi trong `cohort/manifests_acquired_final.json`). **`pair` giữ nguyên** `BLOCKED_CHECKPOINT_MAPPING_UNVERIFIED` vì mới ở mức exploratory.
 2. `workbench/registry/preparation_contracts.yaml` — (a) thêm generator `dcnet_glove_regen` (D-4); (b) sửa `tme_precompute_features.parameters.feature_dtype: float16 → float32` và lower bound 10.47 → 20.94 GiB (D-7).
-3. `workbench/registry/models.yaml` — `limn.environment.adapted_runtime.packages`: `open_clip_torch>=2.24,<2.27` → `==2.20.0` (D-6).
+3. ~~`limn...adapted_runtime.packages`~~ — **đã áp dụng trong buổi này** (`==2.20.0`), xem 3.15.
 4. Không đổi protocol definition, default toàn cục hay shared evaluation logic.
 
 SHA-256 để điền lấy nguyên văn từ `cohort/manifests_acquired_final.json` và `manifests/selected_bundle_digests.json`.
@@ -635,10 +864,42 @@ Ghi chú `.gitignore`: `workbench/artifacts/**` bị chặn, nên evidence **kh�
 
 ## 10. Tóm tắt
 
-17 entry đăng ký: **15 có số đo thật** trên đúng protocol native, 1 chờ file người dùng (SPRC ViT-g), 1 blocked vì thiếu caption asset của tác giả (CSMCIR), 1 blocked vì sai chiều đầu chiếu (PTHA/MTST CIRR→FIQ).
+### 10.1 Kết quả đo được (số native, không phải suy luận)
 
-PAIR B1/B2 **đã load và chấm được** (B1 35.01/57.58; B2 22.16/43.49) nhưng ở nhãn `EXPLORATORY_PUBLIC_MAPPING`: checkpoint khôi phục có `transformer_a` 2 layer × 4 head (public khai 1 × 8) cùng `transformer_c/d`, `weight_chanelImg*`, `cross_t2i` mà public `model.py` không định nghĩa, nên 5.20% tham số nằm ngoài đường forward và điểm số **không** phải hành vi checkpoint. Đây là blocker cụ thể, không còn là "thiếu file tác giả" chung chung.
+**15/17 entry đăng ký** có số đo native thật; `pair` đo được nhưng exploratory. PTHA chuyển từ blocked sang completed trong buổi này. Còn treo: **CSMCIR** chưa đo được (thiếu caption asset, D-8) và **biến thể SPRC ViT-g** chờ file (D-1, variant của `sprc` chứ không phải entry thứ 18).
 
-Chỉ AirKnow (SHA LFS trùng tác giả) và SPRC ViT-L (state dict khớp tuyệt đối) đạt mức association do tác giả/kiến trúc xác nhận; **không** entry nào là reproduction được xác minh.
+### 10.2 Những gì thực sự đã thay đổi trong buổi này
 
-Cần bạn quyết: **D-1** SPRC OneDrive, **D-2** hướng xử lý PAIR, **D-3** diff registry, **D-4/D-5** DCNet, **D-6** pin open_clip 2.20 cho LIMN, **D-7** sửa `feature_dtype` của TME, **D-8** caption asset CSMCIR, **D-9** hướng xử lý PTHA/MTST.
+| thay đổi | loại | bằng chứng |
+|---|---|---|
+| `workbench/replay/ptha_mtst.py` — thêm `_target_feature_contract()` | sửa code, phạm vi 1 model | `ptha/measurements/ptha_transfer_run1.json`, mục 3.13 |
+| `workbench/tests/test_ptha_target_feature_contract.py` — 5 regression | test mới | 5/5 pass |
+| `workbench/registry/models.yaml` — LIMN `adapted_runtime` `==2.20.0` | 1 dòng, 1 model | mục 3.15 |
+| `workbench/registry/models.yaml` — DCNet `approved_source_patches` | khai báo patch | mục 3.14 |
+| `workbench/patches/dcnet_checkpoint_weights_only_optout.patch` | patch 1 dòng, base→derived khớp | mục 3.14 |
+| `workbench/third_party/DCNet/base/base_trainer.py` | áp patch trên (đã khai báo) | DCNet chạy `PYTHONPATH` sạch, kết quả khớp tuyệt đối |
+| `CHECKPOINT_SELECTION_REPORT.md` | sửa sai, thêm 3.12–3.16 | chính file này |
+| `workbench/docs/reviews/checkpoint_selection/20261106T233409+0700/` | bundle review được, 42 file / ~295 KB | `EVIDENCE_INDEX.json` (hash từng file), `README.md`, `TEST_STATUS.md` |
+
+### 10.5 Trạng thái test — nói thẳng
+
+Repo dùng **cú pháp f-string PEP 701**, chỉ hợp lệ từ **Python 3.12** (`workbench/backend/environment_planner.py:669`). Máy này **không có** interpreter 3.12 nào kèm `pip`; mọi env conda đều 3.11.15. `git show HEAD:` của chính file đó **cũng** fail dưới 3.11 ⇒ đây là hạn chế **có từ trước**, không phải do buổi này.
+
+Vì vậy: 8 module test không collect được, thêm 4 module fail qua import — tất cả vì lý do trên. Đã chạy được và pass: `test_ptha_target_feature_contract` (5), `test_ptha_mtst_preflight`, `test_r19_ptha_wrapper`, và 6 test của `test_runtime_adaptation`. **Chưa** có CI xanh; việc đó cần môi trường 3.12. Chi tiết: `TEST_STATUS.md` trong bundle.
+
+Hai assertion trong `test_runtime_adaptation.py` mã hoá contract LIMN **cũ** (`>=2.24,<2.27`) đã được cập nhật theo contract mới `==2.20.0` — đây là thay đổi hành vi có chủ đích (mục 3.15), không phải sửa test cho qua.
+
+Không đổi: protocol nào, `models.yaml` default selection nào, shared evaluation logic nào, wrapper của model nào khác.
+
+### 10.3 Bốn khẳng định bị hạ cấp trong buổi này
+
+1. **PTHA "architectural mismatch"** → sai. Checkpoint có `vision_proj (256,768)` và nạp strict; lỗi ở biên feature. Nay chạy đủ 3 category.
+2. **HINT "lệnh chạy lại"** → sai cờ (`--variant`). Nay có CLI riêng, đã chạy thật.
+3. **LIMN "chỉ 2.20 mới load được"** → không tái lập. Cả 2.20 và 2.24 unpickle được; pin giữ lại vì là pin tác giả, không phải vì lỗi load.
+4. **PAIR "public code chắc chắn không phải code đã train"** → hạ xuống "tương đương chưa xác lập". Hình học 2×4 và 5.20% tham số ngoài forward là **đo được**, nhưng không chứng minh nguyên nhân hay tính bất khả thi.
+
+Thêm: **SPRC ViT-L** bị hạ từ `AUTHOR_VERIFIED` xuống `LOAD-COMPATIBLE` — nạp đúng kiến trúc **không** phải tác giả xác nhận.
+
+### 10.4 Còn lại cho bạn
+
+Chỉ hai việc chặn kết quả: **(D-1)** đặt file SPRC OneDrive vào `workbench/artifacts/checkpoints/sprc/sprc_fiq.pt`; **(D-8)** cung cấp caption/keyword asset cho CSMCIR. Các mục D-2/D-3/D-4/D-7 là quyết định chính sách, không chặn gì thêm.

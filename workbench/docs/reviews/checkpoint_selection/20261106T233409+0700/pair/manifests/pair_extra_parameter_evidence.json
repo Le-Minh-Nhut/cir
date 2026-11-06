@@ -1,0 +1,45 @@
+{
+ "question": "are the extra restored parameters explainable as training-only in the PUBLIC source?",
+ "method": "exhaustive text search of the pinned PAIR checkout for each extra name, plus reading the public loss/training call sites",
+ "search_root": "workbench/third_party/PAIR",
+ "results": {
+  "transformer_c": "0 occurrences anywhere in the PAIR checkout (models, loss, train entrypoints)",
+  "transformer_d": "0 occurrences",
+  "weight_chanelImg": "0 occurrences",
+  "weight_chanelImg_t": "0 occurrences",
+  "cross_t2i": "0 occurrences",
+  "local_weight_dis": "present (model.py:207, used at :249-250) -> correctly exercised by public forward"
+ },
+ "measured_geometry": {
+  "restored.transformer_a": {
+   "layers": 2,
+   "num_heads_attr": 4
+  },
+  "restored.transformer_b": {
+   "layers": 2,
+   "num_heads_attr": 4
+  },
+  "restored.transformer_c": {
+   "layers": 2,
+   "num_heads_attr": 4
+  },
+  "restored.transformer_d": {
+   "layers": 2,
+   "num_heads_attr": 4
+  },
+  "public.transformer": "num_heads=8, num_layers=1 (model.py:45)",
+  "public.transformer_a": "num_heads=8, num_layers=1 (model.py:46)",
+  "public.transformer_b": "num_heads=4, num_layers=2 (model.py:47)"
+ },
+ "findings": [
+  "heads=4 and layers=2 are geometries the public code DOES construct (transformer_b) -- so '4 heads' is not by itself impossible for this codebase",
+  "but public transformer_a is declared 1 layer x 8 heads while the restored object carries 2 x 4, so the two cannot be the same layer stack",
+  "none of transformer_c/d/weight_chanelImg*/cross_t2i is referenced by public forward, loss, or any training call site in the checkout",
+  "therefore 'training-only' is NOT supported by the public source: those modules have no consumer there at all"
+ ],
+ "not_claimed": [
+  "that the restored 2x4 geometry is incompatible in principle",
+  "that the 5.20% dead parameter fraction was actually trained or actually excluded by the authors"
+ ],
+ "conclusion": "the public checkout does not define a complete consumer for this checkpoint's module set; full original-source equivalence remains unresolved. This supports 'exploratory mapping', not 'impossible'."
+}

@@ -1,0 +1,28 @@
+{
+ "checked_at": "2026-11-06",
+ "sprc_onedrive": {
+  "expected_path": "workbench/artifacts/checkpoints/sprc/sprc_fiq.pt",
+  "present": false,
+  "note": "no SPRC OneDrive archive anywhere under Downloads or the checkpoint root; ViT-g variant remains unmeasured (ViT-L was already measured)"
+ },
+ "csmcir_captions": {
+  "required": [
+   "workbench/third_party/CSMCIR/COT_ours2/bert_captions/fashioniq/cap.{dress,shirt,toptee}.val.json",
+   "data/FashionIQ/captions/keywords_in_mods_{dress,shirt,toptee}.json"
+  ],
+  "present": false,
+  "note": "neither path exists locally; generating or substituting captions is a forbidden scientific substitution, so the entry stays blocked"
+ },
+ "counts": {
+  "registered_entries": 17,
+  "completed_native_runs_before_this_session": 14,
+  "ptha_now_completed_this_session": true,
+  "completed_native_runs_after_this_session": 15,
+  "distinct_exploratory_entries": 1,
+  "entry": "pair (B1+B2 are one registered entry, not two)",
+  "still_pending": [
+   "csmcir (D-8 captions)",
+   "sprc ViT-g variant (D-1 file)"
+  ]
+ }
+}

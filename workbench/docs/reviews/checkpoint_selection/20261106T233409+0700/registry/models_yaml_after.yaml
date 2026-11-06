@@ -1,0 +1,1570 @@
+# Optional per-model environment field `interpreter_sha256`: the SHA-256 of the
+# interpreter binary an operator pinned for that model. When present, a mismatch is
+# refused as UNSAFE_INTERPRETER; absent or UNKNOWN means unpinned. Compute it with
+# `sha256sum "$(readlink -f "$WORKBENCH_<MODEL>_PYTHON")"` after creating the
+# environment from the upstream spec, and record it before a reproduction run.
+# PC sm_120 baseline: torch 2.7.1 / torchvision 0.22.1, CUDA 12.8 wheels.
+# PyTorch 2.7 is the first stable Blackwell line; use its bugfix release, not a newer minor.
+# TME is the exception: it declares a floor-and-range so an already-provisioned 2.8.0 / 0.23.0
+# cu128 environment (workbench/envs/tme-adapted) stays accepted instead of being downgraded.
+# Sources: https://pytorch.org/blog/pytorch-2-7/
+#          https://pytorch.org/get-started/previous-versions/
+# These adapted profiles are PC choices, not changes to the historical author contracts.
+schema_version: 1
+protocols:
+  fashioniq_original_split:
+    label: FashionIQ - Original Split (Full Gallery, Reference Included)
+    literature_split_label: original
+    evaluation_noise_pct: 0
+  fashioniq_full_gallery_ref_excluded:
+    label: FashionIQ - Original Full Gallery, Reference Excluded
+    literature_split_label: original
+    evaluation_noise_pct: 0
+  fashioniq_val_split:
+    label: FashionIQ - Val Split (Pair-Union Gallery, Reference Excluded)
+    literature_split_label: val
+    evaluation_noise_pct: 0
+models:
+  - model_id: csmcir
+    composition_adapter: workbench.composition.model_csmcir
+    environment:
+      python_env_var: WORKBENCH_CSMCIR_PYTHON
+      confidence: VERIFIED_README
+      python: '3.9'
+      pytorch: '2.0.1'
+      torchvision: '0.15.2'
+      # The pinned evaluator hard-requires CUDA: utils_csmcir.py selects the cuda device whenever
+      # torch sees one and blip_validate.py calls torch.cuda.empty_cache() (which raises without
+      # CUDA). torch==2.0.1 from PyPI bundles the CUDA 11.7 runtime wheels, so 11.7 is the
+      # declared requirement; an adapted sm_120 profile can override it per-model.
+      cuda: '11.7'
+      packages: []
+      # Historical pins (torch 2.0.1, CUDA 11.7) ship no sm_120 kernels; on Blackwell hardware the
+      # operator may provision an adapted runtime. Historical pins remain the default reproduction contract.
+      adapted_runtime:
+        target_compute_capability: sm_120
+        # The selected cu128 pair supports Python 3.9 and 3.10;
+        # Python 3.10 matches the verified cp310 stack in envs/tme-adapted and models.yaml:1305.
+        python: '3.10'
+        pytorch: '==2.7.1'
+        torchvision: '==0.22.1'
+        cuda: '12.8'
+        # CSMCIR/requirements.txt:9 pins transformers==4.36.2, required by vendored
+        # src/lavis/models/blip2_models/Qformer.py:41 for apply_chunking_to_forward. timm==0.9.12 (:5)
+        # and fairscale==0.4.13 (:10) match pinned source; numpy<2 preserves compatibility with the pinned model dependencies.
+        packages: ['transformers==4.36.2', 'timm==0.9.12', 'fairscale==0.4.13', 'numpy<2']
+        pip_index_url: https://download.pytorch.org/whl/cu128
+    # The pinned evaluator derives its data root from `__file__` and opens
+    # `<checkout>/fashionIQ_dataset`; the canonical root is staged there by the authorized
+    # preparation step, and this declaration is what approves the link as a runtime artifact.
+    canonical_dataset_link: fashionIQ_dataset
+    method_name: CSMCIR
+    research_generation: recent
+    publication_year: null
+    preparation_contract: manual_standard
+    paper_title: "CSMCIR: CoT-Enhanced Symmetric Alignment with Memory Bank for Composed Image Retrieval"
+    paper_url: https://arxiv.org/abs/2601.03728
+    upstream_repo_url: https://github.com/qzp2018/CSMCIR
+    upstream_default_branch: main
+    upstream_commit_sha: 774f94e2076ff17ea91703a6239d2a08f0e1a44e
+    source_available: true
+    source_dir: CSMCIR
+    fashioniq_layout: fashioniq_standard
+    # The official release ships `.jpg` (its own README shows this), but this evaluator's image
+    # path is hard-coded to `.png` (`src/data_utils_csmcir.py:FashionIQDataset.__getitem__`).
+    # The preflight therefore requires the basenames to be present with this extension, so the
+    # mismatch is reported on the laptop rather than as a missing-image failure on the GPU host.
+    fashioniq_image_extensions: [".png"]
+    literature_split_label: original
+    native_protocol: fashioniq_original_split
+    supported_protocols: [fashioniq_original_split]
+    reported_r10: 57.07
+    reported_r50: 77.27
+    reported_mean: 67.17
+    reproduction_status: NOT_RUN
+    strict_clean_checkpoint_available: true
+    # The pinned package cannot be imported, so no local preparation can make this model run.
+    # `lavis/models/__init__.py` executes 98 unguarded imports for modules the author never committed,
+    # before the line that registers the class this evaluator asks for, so the entrypoint fails during
+    # import. See workbench/patches/csmcir.md. Reported by preflight ahead of the caption blockers,
+    # which are real but downstream of this.
+    # The pinned public revision cannot import its own evaluator: `src/lavis/models/__init__.py` runs 98
+    # unguarded imports of modules the revision does not contain, before the line that registers the
+    # class this model needs. One approved patch repairs exactly that, and the declaration below is
+    # what makes a patched checkout an approved variant instead of an unauthorized source change.
+    # Preflight reports the unpatched state as a blocker and accepts only the recorded derived digest.
+    approved_source_patches:
+      - path: src/lavis/models/__init__.py
+        patch_file: workbench/patches/csmcir_models_init_compat.patch
+        patch_sha256: 0e703584a7ecb5df3781574c2516fd406745c414491b6aa487fbb3e76532b9bd
+        base_sha256: 9d8c914b551a7de614e062f9a241f44626fd591a31a0ccf1cc79f0ae23c9db01
+        derived_sha256: aa68fe5e20bcda5e17d978799deb8ec0ff4636e5b3b2a6ef637ce5e385b0c818
+        reason: "98 unguarded imports of modules absent from the pinned public revision prevent the package from importing, so the shipped CSMCIR class is never registered"
+      - path: src/validate_blip_csmcir.py
+        patch_file: workbench/patches/csmcir_validate_visualization_opt_in.patch
+        patch_sha256: eef0594109aa7e65a024a49bf3784f287ec21cbb466c7fc84712e5ba98582f68
+        base_sha256: aa7a4395cdb700fded0567e0969da774a331927eaea327b5a23da82fdc7506a9
+        derived_sha256: 84a1d476e99d9687b16b1a9c5238f89295f23d2a6f9f4dfb449acba2c118262c
+        reason: "the evaluator prints its metric JSON and then unconditionally runs the `vis_fiq` diagnostic dump, which raises AttributeError on the val-relative dataset's target-id field and exits non-zero after the metrics were already computed; the patch makes that dump opt-in and leaves the metric stage untouched"
+    source_blocker: "pinned lavis.models package cannot be imported as published (98 unguarded imports of absent modules sit before the registration); an approved patch is declared in approved_source_patches and removes only that blocker"
+    notes: Official Hugging Face model repository; checkpoint has an author-published size and sha256 (Hugging Face LFS oid).
+    checkpoint_variants:
+      - checkpoint_id: fashioniq
+        filename: fashioniq_tuned_clip_best.pt
+        download_url: https://huggingface.co/peng12138/CSMCIR/resolve/main/fashioniq_tuned_clip_best.pt
+        source_type: author_huggingface
+        checkpoint_training_noise_pct: 0
+        evaluation_noise_pct: 0
+        # Taken from the author Hugging Face repository's own LFS pointer metadata for this file at
+        # revision cf0c19bb346266c295b4b5772ebf03bd1c4f0467. Hugging Face stores large files via
+        # Git-LFS and publishes the content SHA-256 as the pointer `oid`; the convention was verified
+        # empirically against a 14 MB blob from this same repository before being relied on here.
+        expected_sha256: c8812071de0640d647c5ba2a70628b80a3289ee2c47676f7a1b6abaa313fa49e
+        expected_size_bytes: 2720615859
+        status: URL_VERIFIED
+        checkpoint_mapping_status: VERIFIED_METADATA
+  - model_id: airknow
+    environment:
+      python_env_var: WORKBENCH_AIRKNOW_PYTHON
+      confidence: VERIFIED_README
+      python: '3.8.10'
+      pytorch: '2.1.0'
+      torchvision: '0.16.0'
+      cuda: '12.6'
+      # `lavis` is the checkout's OWN copy, put on `sys.path` by the wrapper (`replay/<model>.py`,
+      # `_load_replay_modules`), so it shadows any installed distribution of the same name. The
+      # `salesforce-lavis` PyPI pin is therefore NOT installed: it requires `timm==0.4.12` while the
+      # vendored `eva_vit.py:15-16` imports `timm.models.layers`/`timm.models.registry`, which this
+      # tree reaches through `timm==0.9.16`; the wheel's own `lavis/` tree also lacks files this
+      # checkout has (no `datasets/datasets/audio_classification_datasets.py`), so it is not a
+      # drop-in for it. `transformers` and `timm` are declared directly, which is what the code
+      # imports. The declared list is the AUTHOR-pinned core; the packages the reachable program
+      # actually imports are computed by `environment_planner._evaluator_imports`, which walks the
+      # launcher this adapter declares, so this list is not a second copy of that answer.
+      packages: [opencv-python-headless==4.5.5.64, fairscale==0.4.13, iopath==0.1.10, peft==0.6.2, diffusers==0.19.3, huggingface-hub==0.19.4, accelerate==0.25.0, numpy, omegaconf==2.3.0, packaging, pandas==2.0.3, Pillow, pyyaml, regex, requests, tqdm, transformers==4.25.0, timm==0.9.16, scikit-learn==1.3.2]
+    method_name: Air-Know
+    research_generation: recent
+    publication_year: 2026
+    preparation_contract: manual_ilearn_resized
+    paper_title: "Air-Know: Arbiter-Calibrated Knowledge-Internalizing Robust Network for Composed Image Retrieval"
+    paper_url: https://arxiv.org/abs/2604.19386
+    upstream_repo_url: https://github.com/iLearn-Lab/CVPR26-Air-Know
+    upstream_default_branch: main
+    upstream_commit_sha: 6ab6fa95b746f85b08eea4cb66eb51448bce99b7
+    source_available: true
+    source_dir: AirKnow
+    # The wrapper constructs the native `datasets.FashionIQ`, whose `__init__` runs
+    # `train_init_process` and `get_test_data` for all three categories
+    # (`datasets.py:95-107` / `:59-73`), so the TRAIN captions are opened on every run -- and
+    # `isolated_cache_root` always starts cold, so that path is always taken. The layout
+    # therefore has to declare them: `fashioniq_ilearn_resized` omits `cap.*.train.json`, which
+    # made the layout check and the runtime check disagree.
+    fashioniq_layout: fashioniq_ilearn_resized_training
+    fashioniq_image_extensions: [".jpg"]
+    literature_split_label: original
+    native_protocol: fashioniq_full_gallery_ref_excluded
+    supported_protocols: [fashioniq_full_gallery_ref_excluded]
+    reported_r10: 55.75
+    reported_r50: 75.72
+    reported_mean: 65.73
+    reproduction_status: NOT_RUN
+    strict_clean_checkpoint_available: false
+    notes: Official Hub lists only FashionIQ 50% and 80% noise-trained weights; clean evaluation remains 0%.
+    checkpoint_variants:
+      - checkpoint_id: fiq_n05
+        filename: airknow_fiq_0.5.pt
+        download_url: https://huggingface.co/iLearn-Lab/CVPR26-Air-Know/resolve/main/airknow_fiq_0.5.pt
+        source_type: author_huggingface
+        checkpoint_training_noise_pct: 50
+        evaluation_noise_pct: 0
+        expected_size_bytes: null
+        expected_sha256: null
+        status: NO_CLEAN_CHECKPOINT
+        checkpoint_mapping_status: VERIFIED_METADATA
+      - checkpoint_id: fiq_n08
+        filename: airknow_fiq_0.8.pt
+        download_url: https://huggingface.co/iLearn-Lab/CVPR26-Air-Know/resolve/main/airknow_fiq_0.8.pt
+        source_type: author_huggingface
+        checkpoint_training_noise_pct: 80
+        evaluation_noise_pct: 0
+        expected_size_bytes: null
+        expected_sha256: null
+        status: NO_CLEAN_CHECKPOINT
+        checkpoint_mapping_status: VERIFIED_METADATA
+  - model_id: conesep
+    composition_adapter: workbench.composition.model_conesep
+    environment:
+      python_env_var: WORKBENCH_CONESEP_PYTHON
+      confidence: VERIFIED_README
+      python: '3.8.10'
+      pytorch: '2.1.0'
+      torchvision: '0.16.0'
+      cuda: '12.6'
+      # Historical Python 3.8.10 (models.yaml:175); the cu128 wheel index
+      # (https://download.pytorch.org/whl/cu128/torch/) ships no cp38 wheels, and sm_120 needs
+      # torch >=2.7. The adapted profile below explicitly uses Python 3.9 for those wheels.
+      # `lavis` is the checkout's OWN copy, put on `sys.path` by the wrapper (`replay/<model>.py`,
+      # `_load_replay_modules`), so it shadows any installed distribution of the same name. The
+      # `salesforce-lavis` PyPI pin is therefore NOT installed: it requires `timm==0.4.12` while the
+      # vendored `eva_vit.py:15-16` imports `timm.models.layers`/`timm.models.registry`, which this
+      # tree reaches through `timm==0.9.16`; the wheel's own `lavis/` tree also lacks files this
+      # checkout has (no `datasets/datasets/audio_classification_datasets.py`), so it is not a
+      # drop-in for it. `transformers` and `timm` are declared directly, which is what the code
+      # imports. The declared list is the AUTHOR-pinned core; the packages the reachable program
+      # actually imports are computed by `environment_planner._evaluator_imports`, which walks the
+      # launcher this adapter declares, so this list is not a second copy of that answer.
+      packages: [opencv-python-headless==4.5.5.64, fairscale==0.4.13, iopath==0.1.10, peft==0.6.2, diffusers==0.19.3, huggingface-hub==0.19.4, accelerate==0.25.0, numpy, omegaconf==2.3.0, packaging, pandas==2.0.3, Pillow, pyyaml, regex, requests, tqdm, transformers==4.25.0, timm==0.9.16, scikit-learn==1.3.2]
+      # Historical pins (torch 2.1.0, torchvision 0.16.0) ship no sm_120 kernels; on Blackwell hardware
+      # the operator may provision an adapted runtime. Historical pins remain the default reproduction contract.
+      adapted_runtime:
+        target_compute_capability: sm_120
+        # Historical Python 3.8.10 has no cu128 wheels (cp38: 0 wheels); Python 3.9 matches INTENT.
+        # The selected 2.7.1 / 0.22.1 cu128 pair publishes cp39 wheels.
+        python: '3.9'
+        pytorch: '==2.7.1'
+        torchvision: '==0.22.1'
+        cuda: '12.8'
+        # Core pins from checked source: transformers==4.25.0 for Qformer, timm==0.9.16 for EVA-ViT,
+        # fairscale==0.4.13, and numpy<2 for compatibility with the pinned model dependencies.
+        packages: ['transformers==4.25.0', 'timm==0.9.16', 'fairscale==0.4.13', 'numpy<2']
+        pip_index_url: https://download.pytorch.org/whl/cu128
+    method_name: ConeSep
+    research_generation: recent
+    publication_year: 2026
+    preparation_contract: manual_ilearn_resized
+    paper_title: "ConeSep: Cone-based Robust Noise-Unlearning Compositional Network for Composed Image Retrieval"
+    paper_url: https://arxiv.org/abs/2604.20358
+    upstream_repo_url: https://github.com/Lee-zixu/ConeSep
+    # provenance: the paper's HTML names github.com/Lee-zixu/ConeSep and the pinned SHA bd4bf62 is
+    # that repo's main HEAD; the lab mirror iLearn-Lab/CVPR26-ConeSep serves the identical SHA
+    # (ls-remote verified both). Existing checkouts cloned from the mirror keep working: the pin
+    # is content-addressed and both hosts serve the same object.
+    upstream_default_branch: main
+    upstream_commit_sha: bd4bf629ebe68045c1a54dcc61e4a3ea65f8759b
+    source_available: true
+    source_dir: ConeSep
+    # The wrapper constructs the native `datasets.FashionIQ`, whose `__init__` runs
+    # `train_init_process` and `get_test_data` for all three categories
+    # (`datasets.py:95-107` / `:59-73`), so the TRAIN captions are opened on every run -- and
+    # `isolated_cache_root` always starts cold, so that path is always taken. The layout
+    # therefore has to declare them: `fashioniq_ilearn_resized` omits `cap.*.train.json`, which
+    # made the layout check and the runtime check disagree.
+    fashioniq_layout: fashioniq_ilearn_resized_training
+    fashioniq_image_extensions: [".jpg"]
+    literature_split_label: original
+    native_protocol: fashioniq_full_gallery_ref_excluded
+    supported_protocols: [fashioniq_full_gallery_ref_excluded]
+    reported_r10: 55.58
+    reported_r50: 75.88
+    reported_mean: 65.73
+    reproduction_status: NOT_RUN
+    strict_clean_checkpoint_available: false
+    notes: Official Hub lists only FashionIQ 20%, 50%, and 80% noise-trained weights.
+    checkpoint_variants:
+      - checkpoint_id: fiq_n02
+        filename: ConeSep-FIQ-N0.2.pt
+        # Revision-pinned rather than `main`: the released file is 2.7 GB and the branch is a moving
+        # target, so the bytes must be named by revision. Verified against the Hub API by the
+        # workbench: repository revision cecc32deeec917d337e5d2def675b3746da7b8e6, size 2721428966
+        # bytes, LFS oid 5a864ee5a78c1d249320c4f997cc7d14b529b329b2efba5577c82dbe019ed9d2 (the
+        # pointer's own sha256). Recording it here reconciles the wrapper, which carried author-hash
+        # fallbacks while these registry fields were null -- the registry is the one authority.
+        download_url: https://huggingface.co/iLearn-Lab/CVPR26-ConeSep/resolve/cecc32deeec917d337e5d2def675b3746da7b8e6/fiq/ConeSep-FIQ-N0.2.pt
+        source_type: author_huggingface
+        source_revision: cecc32deeec917d337e5d2def675b3746da7b8e6
+        checkpoint_training_noise_pct: 20
+        evaluation_noise_pct: 0
+        expected_size_bytes: 2721428966
+        expected_sha256: 5a864ee5a78c1d249320c4f997cc7d14b529b329b2efba5577c82dbe019ed9d2
+        status: NO_CLEAN_CHECKPOINT
+        checkpoint_mapping_status: VERIFIED_METADATA
+      - checkpoint_id: fiq_n05
+        filename: ConeSep-FIQ-N0.5.pt
+        download_url: https://huggingface.co/iLearn-Lab/CVPR26-ConeSep/resolve/main/fiq/ConeSep-FIQ-N0.5.pt
+        source_type: author_huggingface
+        checkpoint_training_noise_pct: 50
+        evaluation_noise_pct: 0
+        expected_size_bytes: null
+        expected_sha256: null
+        status: NO_CLEAN_CHECKPOINT
+        checkpoint_mapping_status: VERIFIED_METADATA
+      - checkpoint_id: fiq_n08
+        filename: ConeSep-FIQ_N0.8.pt
+        download_url: https://huggingface.co/iLearn-Lab/CVPR26-ConeSep/resolve/main/fiq/ConeSep-FIQ_N0.8.pt
+        source_type: author_huggingface
+        checkpoint_training_noise_pct: 80
+        evaluation_noise_pct: 0
+        expected_size_bytes: null
+        expected_sha256: null
+        status: NO_CLEAN_CHECKPOINT
+        checkpoint_mapping_status: VERIFIED_METADATA
+  - model_id: ptha_mtst
+    composition_adapter: workbench.composition.model_ptha_mtst
+    method_name: PTHA + MTST
+    research_generation: recent
+    publication_year: 2025
+    preparation_contract: manual_standard
+    preparation_id: ptha_mtst_fashioniq
+    paper_title: Scale Up Composed Image Retrieval Learning via Modification Text Generation
+    paper_url: https://arxiv.org/abs/2504.05316
+    # Author repository, now vendored as tracked source at `source_dir`. Independence review
+    # (workbench/docs/reviews/models/ptha_mtst.md) refuted the earlier "no source" conclusion; the
+    # checkout is pinned at the commit whose tree is committed under workbench/third_party/MTST_PTHA,
+    # with provenance.json recording the resolved URL, the commit, and the per-file digest manifest.
+    # One local fix is recorded there: `src/lavis/models/__init__.py:54` is the only import in the
+    # package that names a module the pinned revision does not contain
+    # (`blip2_qformer_tgir_concatembedding_sim_zyn.py`), and the class this evaluator needs
+    # (`Blip2Qformer4TGIRCESIM`, registered as `blip2_tgir_ce_sim`) is imported on the line above it,
+    # so the unguarded import took down a package that would otherwise load.
+    upstream_repo_url: https://github.com/zyinan99/MTST_PTHA
+    upstream_default_branch: main
+    upstream_commit_sha: 6a02ee4763fc2260b6abfb18be78853facb91d86
+    source_available: true
+    source_dir: MTST_PTHA
+    # The pinned evaluator hard-codes `base_path` to the literal the README tells the operator to
+    # hand-edit (`src/data_utils.py:15`), and it opens `fashionIQ_dataset/images/{id}.png`
+    # (`:170`, `:206`) — matching the canonical mirror, which ships `.png` only.
+    fashioniq_layout: fashioniq_standard
+    fashioniq_image_extensions: [".png"]
+    literature_split_label: original
+    native_protocol: fashioniq_original_split
+    supported_protocols: [fashioniq_original_split]
+    reported_r10: 54.99
+    reported_r50: 76.28
+    reported_mean: 65.64
+    # The checkout ships `requirements.txt`, and the README pins the interpreter and torch:
+    # `conda create -n mtst python=3.9` and `pip install torch==2.0.1 torchvision==0.15.2
+    # torchaudio==2.0.2`. Without this declaration the model ran on the WORKBENCH interpreter, where
+    # `transformers` no longer exports `apply_chunking_to_forward` and the run died at import:
+    # `ImportError: cannot import name 'apply_chunking_to_forward' from 'transformers.modeling_utils'`.
+    # Declaring it lets `manage_environment.py --create` provision from the source-backed spec instead
+    # of guessing.
+    environment_required: true
+    environment:
+      python_env_var: WORKBENCH_PTHA_MTST_PYTHON
+      confidence: VERIFIED_REQUIREMENTS
+      python: '3.9'
+      pytorch: '2.0.1'
+      torchvision: '0.15.2'
+      packages:
+        - tqdm==4.66.1
+        - omegaconf==2.3.0
+        - iopath==0.1.10
+        - timm==0.9.12
+        - decord==0.6.0
+        - webdataset==0.2.86
+        - opencv-python
+        - transformers==4.36.2
+        - fairscale==0.4.13
+        - einops==0.7.0
+        - scikit-image==0.22.0
+        - spacy==3.7.2
+        - pycocoevalcap==1.2
+      # Historical pins (torch 2.0.1, torchvision 0.15.2) ship no sm_120 kernels; on Blackwell hardware
+      # the operator may provision an adapted runtime. Historical pins remain the default reproduction contract.
+      adapted_runtime:
+        target_compute_capability: sm_120
+        # The selected cu128 pair supports Python 3.9 and 3.10;
+        # Python 3.10 matches the verified cp310 BLIP-2 Q-Former/EVA stack in envs/tme-adapted.
+        python: '3.10'
+        pytorch: '==2.7.1'
+        torchvision: '==0.22.1'
+        cuda: '12.8'
+        # MTST_PTHA/requirements.txt:9 pins transformers==4.36.2, required by vendored
+        # MTST_PTHA/src/lavis/models/blip2_models/Qformer.py:41 for apply_chunking_to_forward.
+        # timm==0.9.12 (:5) and fairscale==0.4.13 (:10) match pinned source; numpy<2 preserves compatibility with the pinned model dependencies.
+        packages: ['transformers==4.36.2', 'timm==0.9.12', 'fairscale==0.4.13', 'numpy<2']
+        pip_index_url: https://download.pytorch.org/whl/cu128
+    reproduction_status: SELECTED_TRANSFER_ONLY
+    strict_clean_checkpoint_available: false
+    notes: No author-linked FashionIQ fine-tuned checkpoint verified. CIRR pretraining evidence is not eligible. The gallery is the complete ordered validation split with the reference ELIGIBLE (validate_blip.py:44-51 builds labels against targets only and contains no reference mask, unlike the CIRR path at :258-260), which is what makes fashioniq_original_split its protocol.
+    checkpoint_variants:
+      - checkpoint_id: cirr_transfer
+        filename: tuned_mtst_cirr.pt
+        # The released CIRR-trained checkpoint, verified against the Hub API: size 2720352973, LFS
+        # oid 1c4dab86a9f66dfe10aff75b39790432eb6cc746cf27b6cfab74b66d93b7588f. It is registered as
+        # a TRANSFER variant, not a FashionIQ checkpoint: its training dataset is CIRR and the
+        # registry records that as a condition rather than implying the paper's FashionIQ row.
+        #
+        # `URL_VERIFIED` because the source resolves and its published digest is known; the run it
+        # enables stays labelled cross-dataset transfer, and `--transfer-cirr-to-fashioniq` is
+        # required, so it can never be mistaken for a reproduction by default.
+        download_url: https://huggingface.co/yinanzhou1/mtst_ptha/resolve/main/tuned_mtst_cirr.pt
+        source_type: author_huggingface
+        source_revision: main
+        checkpoint_training_dataset: CIRR
+        checkpoint_forwards_dataset: FashionIQ
+        transfer_condition: cross_dataset_transfer
+        checkpoint_training_noise_pct: null
+        evaluation_noise_pct: 0
+        expected_size_bytes: 2720352973
+        expected_sha256: 1c4dab86a9f66dfe10aff75b39790432eb6cc746cf27b6cfab74b66d93b7588f
+        status: URL_VERIFIED
+        # VERIFIED_METADATA records what is actually established: this IS the author's released CIRR
+        # checkpoint. The Hub repository `yinanzhou1/mtst_ptha` lists exactly three files plus
+        # metadata -- `README.md`, the two CIRR modifier JSONs, and `tuned_mtst_cirr.pt` -- under
+        # `license: apache-2.0`, and the local digest equals the declared LFS oid byte for byte
+        # (sha256 1c4dab86...58f, 2720352973 bytes, re-verified this round with sha256sum).
+        #
+        # It does NOT record that this reproduces the paper's FashionIQ row. That separate question
+        # stays answered "no" in `reproduction_status` and in every label the run carries: the
+        # training dataset is CIRR, the evaluation dataset is FashionIQ, and the run is exploratory
+        # cross-dataset transfer. Conflating the two is the mistake this comment exists to prevent:
+        # an unresolved MAPPING gate must not be lifted by promoting an unexamined file, but it also
+        # must not be used to refuse the transfer experiment the operator explicitly authorized.
+        checkpoint_mapping_status: VERIFIED_METADATA
+  - model_id: habit
+    composition_adapter: workbench.composition.model_habit
+    environment:
+      python_env_var: WORKBENCH_HABIT_PYTHON
+      confidence: VERIFIED_README
+      python: '3.8.10'
+      pytorch: '2.1.0'
+      torchvision: '0.16.0'
+      cuda: '12.6'
+      # Historical Python 3.8.10 (models.yaml:362); the cu128 wheel index
+      # (https://download.pytorch.org/whl/cu128/torch/) ships no cp38 wheels, and sm_120 needs
+      # torch >=2.7. The adapted profile below explicitly uses Python 3.9 for those wheels.
+      # `lavis` is the checkout's OWN copy, put on `sys.path` by the wrapper (`replay/<model>.py`,
+      # `_load_replay_modules`), so it shadows any installed distribution of the same name. The
+      # `salesforce-lavis` PyPI pin is therefore NOT installed: it requires `timm==0.4.12` while the
+      # vendored `eva_vit.py:15-16` imports `timm.models.layers`/`timm.models.registry`, which this
+      # tree reaches through `timm==0.9.16`; the wheel's own `lavis/` tree also lacks files this
+      # checkout has (no `datasets/datasets/audio_classification_datasets.py`), so it is not a
+      # drop-in for it. `transformers` and `timm` are declared directly, which is what the code
+      # imports. The declared list is the AUTHOR-pinned core; the packages the reachable program
+      # actually imports are computed by `environment_planner._evaluator_imports`, which walks the
+      # launcher this adapter declares, so this list is not a second copy of that answer.
+      packages: [transformers==4.25.0, timm==0.9.16, omegaconf==2.3.0, opencv-python-headless==4.5.5.64, pandas==2.0.3, scikit-image==0.21.0, decord==0.6.0, einops==0.7.0, fairscale==0.4.13, ftfy, iopath==0.1.10, peft==0.6.2, diffusers==0.19.3, huggingface-hub==0.19.4, accelerate==0.25.0, pycocoevalcap==1.2, pycocotools, webdataset==0.2.86, scikit-learn==1.3.2]
+      # Historical pins (torch 2.1.0, torchvision 0.16.0) ship no sm_120 kernels; on Blackwell hardware
+      # the operator may provision an adapted runtime. Historical pins remain the default reproduction contract.
+      adapted_runtime:
+        target_compute_capability: sm_120
+        # Historical Python 3.8.10 has no cu128 wheels (cp38: 0 wheels); Python 3.9 matches INTENT.
+        # The selected 2.7.1 / 0.22.1 cu128 pair publishes cp39 wheels.
+        python: '3.9'
+        pytorch: '==2.7.1'
+        torchvision: '==0.22.1'
+        cuda: '12.8'
+        # Core pins from checked source: transformers==4.25.0 for Qformer, timm==0.9.16 for EVA-ViT,
+        # fairscale==0.4.13, and numpy<2 for compatibility with the pinned model dependencies.
+        packages: ['transformers==4.25.0', 'timm==0.9.16', 'fairscale==0.4.13', 'numpy<2']
+        pip_index_url: https://download.pytorch.org/whl/cu128
+    method_name: HABIT
+    research_generation: recent
+    publication_year: 2026
+    preparation_contract: manual_ilearn_resized
+    paper_title: "HABIT: Chrono-Synergia Robust Progressive Learning Framework for Composed Image Retrieval"
+    paper_url: https://ojs.aaai.org/index.php/AAAI/article/view/37608
+    upstream_repo_url: https://github.com/iLearn-Lab/AAAI26-HABIT
+    upstream_default_branch: main
+    upstream_commit_sha: 6ddc2cd63eac1f65693f4e821c34fb3b42aee306
+    source_available: true
+    source_dir: HABIT
+    # The wrapper constructs the native `datasets.FashionIQ`, whose `__init__` runs
+    # `train_init_process` and `get_test_data` for all three categories
+    # (`datasets.py:95-107` / `:59-73`), so the TRAIN captions are opened on every run -- and
+    # `isolated_cache_root` always starts cold, so that path is always taken. The layout
+    # therefore has to declare them: `fashioniq_ilearn_resized` omits `cap.*.train.json`, which
+    # made the layout check and the runtime check disagree.
+    fashioniq_layout: fashioniq_ilearn_resized_training
+    fashioniq_image_extensions: [".jpg"]
+    literature_split_label: original
+    native_protocol: fashioniq_full_gallery_ref_excluded
+    supported_protocols: [fashioniq_full_gallery_ref_excluded]
+    reported_r10: 55.38
+    reported_r50: 75.20
+    reported_mean: 65.29
+    reproduction_status: NOT_RUN
+    strict_clean_checkpoint_available: false
+    notes: Official Hub lists only FashionIQ 20%, 50%, and 80% noise-trained weights.
+    checkpoint_variants:
+      - checkpoint_id: fiq_n02
+        filename: HABIT-FIQ_N0.2.pt
+        download_url: https://huggingface.co/iLearn-Lab/AAAI26-HABIT/resolve/8712993b071f4668ce5b2db6070e70c856bd9174/fiq/HABIT-FIQ_N0.2.pt
+        source_type: author_huggingface
+        source_revision: 8712993b071f4668ce5b2db6070e70c856bd9174
+        checkpoint_training_noise_pct: 20
+        evaluation_noise_pct: 0
+        expected_size_bytes: 2730715930
+        expected_sha256: 814d2d0ceb29ef910f37562e8bea8a76cf38aa546fbc2102e495df687c276b03
+        status: NO_CLEAN_CHECKPOINT
+        checkpoint_mapping_status: VERIFIED_METADATA
+      - checkpoint_id: fiq_n05
+        filename: HABIT-FIQ_N0.5.pt
+        download_url: https://huggingface.co/iLearn-Lab/AAAI26-HABIT/resolve/main/fiq/HABIT-FIQ_N0.5.pt
+        source_type: author_huggingface
+        checkpoint_training_noise_pct: 50
+        evaluation_noise_pct: 0
+        expected_size_bytes: 2730715930
+        expected_sha256: 8a0d3bd27cf46d8334f9596404d89ebf803da0fa65236d89815bb3929b9a4216
+        status: NO_CLEAN_CHECKPOINT
+        checkpoint_mapping_status: VERIFIED_METADATA
+      - checkpoint_id: fiq_n08
+        filename: HABIT-FIQ_N0.8.pt
+        download_url: https://huggingface.co/iLearn-Lab/AAAI26-HABIT/resolve/main/fiq/HABIT-FIQ_N0.8.pt
+        source_type: author_huggingface
+        checkpoint_training_noise_pct: 80
+        evaluation_noise_pct: 0
+        expected_size_bytes: 2730715930
+        expected_sha256: 763885de6907bca4f017b336ed7ec3740cb9305c5adb6a135da45c158ddb9717
+        status: NO_CLEAN_CHECKPOINT
+        checkpoint_mapping_status: VERIFIED_METADATA
+  - model_id: intent
+    composition_adapter: workbench.composition.model_intent
+    environment:
+      python_env_var: WORKBENCH_INTENT_PYTHON
+      confidence: VERIFIED_README
+      python: '3.9'
+      pytorch: '2.1.0'
+      torchvision: '0.16.0'
+      cuda: '12.6'
+      # `lavis` is the checkout's OWN copy, put on `sys.path` by the wrapper (`replay/<model>.py`,
+      # `_load_replay_modules`), so it shadows any installed distribution of the same name. The
+      # `salesforce-lavis` PyPI pin is therefore NOT installed: it requires `timm==0.4.12` while the
+      # vendored `eva_vit.py:15-16` imports `timm.models.layers`/`timm.models.registry`, which this
+      # tree reaches through `timm==0.9.16`; the wheel's own `lavis/` tree also lacks files this
+      # checkout has (no `datasets/datasets/audio_classification_datasets.py`), so it is not a
+      # drop-in for it. `transformers` and `timm` are declared directly, which is what the code
+      # imports. The declared list is the AUTHOR-pinned core; the packages the reachable program
+      # actually imports are computed by `environment_planner._evaluator_imports`, which walks the
+      # launcher this adapter declares, so this list is not a second copy of that answer.
+      packages: [transformers==4.25.0, timm==0.9.16, omegaconf==2.3.0, opencv-python-headless==4.5.5.64, pandas==2.0.3, scikit-image==0.21.0, decord==0.6.0, einops==0.7.0, fairscale==0.4.13, ftfy, iopath==0.1.10, peft==0.6.2, diffusers==0.19.3, huggingface-hub==0.19.4, accelerate==0.25.0, pycocoevalcap==1.2, pycocotools, webdataset==0.2.86, scikit-learn==1.3.2, matplotlib]
+      # Historical pins (torch 2.1.0, torchvision 0.16.0) ship no sm_120 kernels; on Blackwell hardware
+      # the operator may provision an adapted runtime. Historical pins remain the default reproduction contract.
+      adapted_runtime:
+        target_compute_capability: sm_120
+        # Historical Python 3.9 kept: cu128 index (https://download.pytorch.org/whl/cu128/torch/)
+        # publishes cp39 wheels for the selected 2.7.1 / 0.22.1 pair.
+        python: '3.9'
+        pytorch: '==2.7.1'
+        torchvision: '==0.22.1'
+        cuda: '12.8'
+        # Core pins from checked source: transformers==4.25.0 for Qformer (models.yaml:455), timm==0.9.16
+        # for EVA-ViT, fairscale==0.4.13, and numpy<2 for compatibility with the pinned model dependencies.
+        packages: ['transformers==4.25.0', 'timm==0.9.16', 'fairscale==0.4.13', 'numpy<2']
+        pip_index_url: https://download.pytorch.org/whl/cu128
+    method_name: INTENT
+    research_generation: recent
+    publication_year: 2026
+    preparation_contract: manual_ilearn_resized
+    paper_title: "INTENT: Invariance and Discrimination-aware Noise Mitigation for Robust Composed Image Retrieval"
+    paper_url: https://ojs.aaai.org/index.php/AAAI/article/view/39181
+    upstream_repo_url: https://github.com/iLearn-Lab/AAAI26-INTENT
+    upstream_default_branch: main
+    upstream_commit_sha: 2a75fc6f57d1a036bf3167a7fe1d2cee072f51f3
+    source_available: true
+    source_dir: INTENT
+    # The wrapper constructs the native `datasets.FashionIQ`, whose `__init__` runs
+    # `train_init_process` and `get_test_data` for all three categories
+    # (`datasets.py:95-107` / `:59-73`), so the TRAIN captions are opened on every run -- and
+    # `isolated_cache_root` always starts cold, so that path is always taken. The layout
+    # therefore has to declare them: `fashioniq_ilearn_resized` omits `cap.*.train.json`, which
+    # made the layout check and the runtime check disagree.
+    fashioniq_layout: fashioniq_ilearn_resized_training
+    fashioniq_image_extensions: [".jpg"]
+    literature_split_label: original
+    native_protocol: fashioniq_full_gallery_ref_excluded
+    supported_protocols: [fashioniq_full_gallery_ref_excluded]
+    reported_r10: 55.31
+    reported_r50: 75.16
+    reported_mean: 65.24
+    reproduction_status: NOT_RUN
+    strict_clean_checkpoint_available: false
+    notes: Official Hub lists only FashionIQ 20%, 50%, and 80% noise-trained weights.
+    checkpoint_variants:
+      - checkpoint_id: fiq_n02
+        filename: intent_fiq_0.2.pt
+        download_url: https://huggingface.co/iLearn-Lab/AAAI26-INTENT/resolve/16ee2d31f05576bbebbad7da0530b412f5e7a1d8/intent_fiq_0.2.pt
+        source_type: author_huggingface
+        source_revision: 16ee2d31f05576bbebbad7da0530b412f5e7a1d8
+        checkpoint_training_noise_pct: 20
+        evaluation_noise_pct: 0
+        expected_size_bytes: 2722478522
+        expected_sha256: 2a504cadfd6b1c2486a2c508538b0160c5653f62c7cd11f4f3d8a9534dc26afc
+        status: NO_CLEAN_CHECKPOINT
+        checkpoint_mapping_status: VERIFIED_METADATA
+      - checkpoint_id: fiq_n05
+        filename: intent_fiq_0.5.pt
+        download_url: https://huggingface.co/iLearn-Lab/AAAI26-INTENT/resolve/main/intent_fiq_0.5.pt
+        source_type: author_huggingface
+        checkpoint_training_noise_pct: 50
+        evaluation_noise_pct: 0
+        expected_size_bytes: 2722478522
+        expected_sha256: 2d59ae002ecbf645a52c7e93bf8afd914e3061e2304413b97a0bf15ca43e39a9
+        status: NO_CLEAN_CHECKPOINT
+        checkpoint_mapping_status: VERIFIED_METADATA
+      - checkpoint_id: fiq_n08
+        filename: intent_fiq_0.8.pt
+        download_url: https://huggingface.co/iLearn-Lab/AAAI26-INTENT/resolve/main/intent_fiq_0.8.pt
+        source_type: author_huggingface
+        checkpoint_training_noise_pct: 80
+        evaluation_noise_pct: 0
+        expected_size_bytes: 2722478522
+        expected_sha256: 671bb217d3fdf32e6133fcb98eef4e80ebf831b5a203493c54507ef3c23b5cd2
+        status: NO_CLEAN_CHECKPOINT
+        checkpoint_mapping_status: VERIFIED_METADATA
+  - model_id: hint
+    composition_adapter: workbench.composition.model_hint
+    environment:
+      python_env_var: WORKBENCH_HINT_PYTHON
+      confidence: VERIFIED_README
+      python: '3.8.10'
+      pytorch: '2.1.0'
+      torchvision: '0.16.0'
+      cuda: '12.6'
+      # Historical Python 3.8.10 (models.yaml:520); the cu128 wheel index
+      # (https://download.pytorch.org/whl/cu128/torch/) ships no cp38 wheels, and sm_120 needs
+      # torch >=2.7. The adapted profile below explicitly uses Python 3.9 for those wheels.
+      # `lavis` is the checkout's OWN copy, put on `sys.path` by the wrapper (`replay/<model>.py`,
+      # `_load_replay_modules`), so it shadows any installed distribution of the same name. The
+      # `salesforce-lavis` PyPI pin is therefore NOT installed: it requires `timm==0.4.12` while the
+      # vendored `eva_vit.py:15-16` imports `timm.models.layers`/`timm.models.registry`, which this
+      # tree reaches through `timm==0.9.16`; the wheel's own `lavis/` tree also lacks files this
+      # checkout has (no `datasets/datasets/audio_classification_datasets.py`), so it is not a
+      # drop-in for it. `transformers` and `timm` are declared directly, which is what the code
+      # imports. The declared list is the AUTHOR-pinned core; the packages the reachable program
+      # actually imports are computed by `environment_planner._evaluator_imports`, which walks the
+      # launcher this adapter declares, so this list is not a second copy of that answer.
+      packages: [transformers==4.25.0, timm==0.9.16, omegaconf==2.3.0, opencv-python-headless==4.5.5.64, pandas==2.0.3, scikit-image==0.21.0, decord==0.6.0, einops==0.7.0, fairscale==0.4.13, ftfy, iopath==0.1.10, peft==0.6.2, diffusers==0.19.3, huggingface-hub==0.19.4, accelerate==0.25.0, pycocoevalcap==1.2, pycocotools, webdataset==0.2.86]
+      # Historical pins (torch 2.1.0, torchvision 0.16.0) ship no sm_120 kernels; on Blackwell hardware
+      # the operator may provision an adapted runtime. Historical pins remain the default reproduction contract.
+      adapted_runtime:
+        target_compute_capability: sm_120
+        # Historical Python 3.8.10 has no cu128 wheels (cp38: 0 wheels); Python 3.9 matches INTENT.
+        # The selected 2.7.1 / 0.22.1 cu128 pair publishes cp39 wheels.
+        python: '3.9'
+        pytorch: '==2.7.1'
+        torchvision: '==0.22.1'
+        cuda: '12.8'
+        # Core pins from checked source: transformers==4.25.0 for Qformer, timm==0.9.16 for EVA-ViT,
+        # fairscale==0.4.13, and numpy<2 for compatibility with the pinned model dependencies.
+        packages: ['transformers==4.25.0', 'timm==0.9.16', 'fairscale==0.4.13', 'numpy<2']
+        pip_index_url: https://download.pytorch.org/whl/cu128
+    method_name: HINT
+    research_generation: recent
+    publication_year: 2026
+    preparation_contract: manual_ilearn_resized
+    paper_title: "HINT: Composed Image Retrieval with Dual-Path Compositional Contextualized Network"
+    paper_url: https://arxiv.org/abs/2603.26341
+    upstream_repo_url: https://github.com/iLearn-Lab/ICASSP26-HINT
+    upstream_default_branch: main
+    upstream_commit_sha: bec50b6c8c19111893b617979502b948d1cea5b2
+    source_available: true
+    source_dir: HINT
+    fashioniq_layout: fashioniq_ilearn_resized_training
+    fashioniq_image_extensions: [".jpg"]
+    native_protocol: fashioniq_val_split
+    literature_split_label: val
+    supported_protocols: [fashioniq_val_split]
+    reported_r10: 58.48
+    reported_r50: 77.93
+    reported_mean: 68.21
+    reproduction_status: NOT_RUN
+    strict_clean_checkpoint_available: true
+    notes: Official iLearn-Lab Hugging Face repository exposes FashionIQ checkpoint.
+    checkpoint_variants:
+      - checkpoint_id: fashioniq
+        filename: fashioniq.pt
+        download_url: https://huggingface.co/iLearn-Lab/HINT/resolve/main/fashioniq.pt
+        source_type: author_huggingface
+        # The paper states no training condition and the Hub card states none; the 0 was inherited
+        # from train.py:56's default flag, which reaches no implementation in the pinned tree.
+        # Recorded as unstated so the gate reports the condition as unchecked (see the LIMN row).
+        checkpoint_training_noise_pct: null
+        evaluation_noise_pct: 0
+        expected_size_bytes: 2724451182
+        # LFS sha256 published by the author Hub repo (api/models/iLearn-Lab/HINT?blobs=true), so a
+        # download can finally be verified byte-for-byte.
+        expected_sha256: bf9c72d42206b667ed586758c15c648970df821857e4067f26155a114a6517d4
+        status: URL_VERIFIED
+        checkpoint_mapping_status: VERIFIED_METADATA
+  - model_id: encoder
+    composition_adapter: workbench.composition.model_encoder
+    # Declared because its evaluator needs its own interpreter: without this flag
+    # `python_executable` returns the workbench interpreter and the declared
+    # environment is silently ignored.
+    environment_required: true
+    environment:
+      python_env_var: WORKBENCH_ENCODER_PYTHON
+      confidence: VERIFIED_REQUIREMENTS
+      python: '3.9'
+      pytorch: '1.13.1'
+      torchvision: '0.14.1'
+      # `evaluate_model.py:64` moves the model with `Encoder_model.cuda()` unconditionally and never
+      # consults `torch.cuda.is_available()`, so this evaluator cannot run on a CPU-only host.
+      # Recording UNKNOWN here meant "the version is not declared in the README", which is not the
+      # same as "no GPU is needed" — the GPU-verification gate then never fired for a CUDA-hard
+      # evaluator. The version is the iLearn family's pinned one.
+      cuda: '12.6'
+      packages: []
+      # Historical pins (torch 1.13.1, torchvision 0.14.1) ship no sm_120 kernels; on Blackwell hardware
+      # the operator may provision an adapted runtime. Historical pins remain the default reproduction contract.
+      adapted_runtime:
+        target_compute_capability: sm_120
+        # The selected cu128 pair supports Python 3.9 and 3.10;
+        # Python 3.10 runs replay wrapper (adapters/models.py:85, replay/encoder.py:198) and pinned modules.
+        python: '3.10'
+        pytorch: '==2.7.1'
+        torchvision: '==0.22.1'
+        cuda: '12.8'
+        # Pinned source manifest workbench/third_party/ENCODER/requirements.txt:155 pins open-clip-torch==2.24.0,
+        # imported by replay wrapper workbench/replay/encoder.py:198. open-clip-torch 2.24.0 requires torch>=1.9.0.
+        packages: ['open_clip_torch==2.24.0']
+        pip_index_url: https://download.pytorch.org/whl/cu128
+    category_model_policy: shared
+    checkpoint_serialization: state_dict
+    # Implementation exists; registry capability does not imply real-run verification.
+    # `per_query_checkpoint` names the configuration the observer covers. Without it the gate had to
+    # test equality with LIMN's bundle id, which ENCODER could never satisfy, so its observer was
+    # skipped on every run it was meant to serve.
+    per_query_observer: ENCODER_QUERY_OBSERVER_V1
+    per_query_checkpoint: fashioniq
+    method_name: ENCODER
+    research_generation: recent
+    publication_year: 2025
+    preparation_contract: manual_ilearn_resized
+    paper_title: "ENCODER: Entity Mining and Modification Relation Binding for Composed Image Retrieval"
+    paper_url: https://ojs.aaai.org/index.php/AAAI/article/view/32541
+    upstream_repo_url: https://github.com/iLearn-Lab/AAAI25-ENCODER
+    upstream_default_branch: main
+    upstream_commit_sha: 29a2a31d6a56f677bf450c3be7cdaef423fb7018
+    source_available: true
+    source_dir: ENCODER
+    fashioniq_layout: fashioniq_ilearn_resized_training
+    fashioniq_image_extensions: [".jpg"]
+    native_protocol: fashioniq_val_split
+    literature_split_label: val
+    supported_protocols: [fashioniq_val_split]
+    reported_r10: 56.13
+    reported_r50: 77.59
+    reported_mean: 66.86
+    # A real FULL three-category GPU evaluation ran on 2026-10-24 through the workbench operator path
+    # (`evaluate_models.py --model encoder --checkpoint fashioniq --verify-gpu`; RTX 3050 Laptop,
+    # sm 8.6, driver 580.178.04, torch 1.13.1+cu117): macro R@10 56.06 / R@50 77.58 against the
+    # paper's 56.13 / 77.59, and `verify_run.py` returned `verified=true,
+    # is_research_evidence=true`. The benchmark gate is `PASS_METRICS_ONLY_MAPPING_UNVERIFIED`: the
+    # metrics agree within 5%, but the checkpoint MAPPING is unverified, so this is a measured
+    # metric comparison and NOT a certified official reproduction. The status records that
+    # distinction so it travels with the model rather than living only in a report.
+    reproduction_status: METRICS_MEASURED_MAPPING_UNVERIFIED
+    # The runtime computes this field (checkpoint_selection.select_checkpoints) and returns False:
+    # the variant has no author-linked download URL and no local artifact, so no obtainable
+    # checkpoint exists. The old `true` was a pre-download wish that contradicted the computation.
+    strict_clean_checkpoint_available: false
+    notes: Official README links public Google Drive folder; direct file URL and SHA remain unverified.
+    checkpoint_variants:
+      - checkpoint_id: fashioniq
+        filename: fashioniq.pt
+        # Author Hub, resolved to a revision so the bytes are pinned rather than "whatever main is".
+        # Verified independently by the workbench against the Hugging Face API: repository revision
+        # dd9b086569fe69bd9111b6114546201c97934b01, file size 631 879 365 bytes, LFS oid
+        # 0f31c50150a7bda3495e3378df13b4cec7924b52efd23b5e5dd9731459da9173 (the pointer's own
+        # sha256). A Range request on the object returns `PK..fashioniq/data.pkl` followed by a
+        # `collections.OrderedDict` whose first key is `loss_T`, matching `model_try2.py`'s parameter
+        # names — a flat full state_dict, which is what the replay loader now asserts.
+        download_url: https://huggingface.co/iLearn-Lab/AAAI25-ENCODER/resolve/dd9b086569fe69bd9111b6114546201c97934b01/fashioniq.pt
+        source_url: https://huggingface.co/iLearn-Lab/AAAI25-ENCODER/tree/main
+        source_type: author_huggingface
+        expected_size_bytes: 631879365
+        expected_sha256: 0f31c50150a7bda3495e3378df13b4cec7924b52efd23b5e5dd9731459da9173
+        # The paper states no training condition (AAAI-25 paper, Table 1 has no noise blocks); the 0
+        # was an extraction assumption. Recorded as unstated so the gate reports the condition as
+        # unchecked (see the LIMN row).
+        checkpoint_training_noise_pct: null
+        evaluation_noise_pct: 0
+        # Promoted from UNVERIFIED on the evidence above: an author-linked revision, a published size
+        # and hash, and a container whose schema matches the model the evaluator builds. What this
+        # does NOT claim is that inference has been run — that remains PENDING until a GPU executes it.
+        status: URL_VERIFIED
+        checkpoint_mapping_status: VERIFIED_METADATA
+  - model_id: pair
+    environment:
+      python_env_var: WORKBENCH_PAIR_PYTHON
+      confidence: VERIFIED_README
+      python: '3.8.10'
+      pytorch: '2.0.0'
+      torchvision: UNKNOWN
+      cuda: '11.8'
+      packages: []
+    method_name: PAIR
+    research_generation: recent
+    publication_year: 2025
+    preparation_contract: manual_ilearn_resized
+    preparation_id: pair_fashioniq
+    paper_title: "PAIR: Complementarity-guided Disentanglement for Composed Image Retrieval"
+    paper_url: https://ieeexplore.ieee.org/document/10888153
+    upstream_repo_url: https://github.com/iLearn-Lab/ICASSP25-PAIR
+    upstream_default_branch: main
+    upstream_commit_sha: bfb0b98cdb4c44f6b9190baaa84d783a77dd888f
+    source_available: true
+    source_dir: PAIR
+    fashioniq_layout: fashioniq_ilearn_resized_training
+    fashioniq_image_extensions: [".jpg"]
+    native_protocol: fashioniq_val_split
+    literature_split_label: val
+    supported_protocols: [fashioniq_val_split]
+    reported_r10: 52.76
+    reported_r50: 74.51
+    reported_mean: 63.64
+    reproduction_status: BLOCKED_CHECKPOINT_MAPPING_UNVERIFIED
+    # Final audit: no executable path exists (test.py has no __main__/argparse and the trainer's
+    # __main__ never reaches evaluation), so the command cannot be audited to runnable.
+    command_status: COMMAND_BLOCKED_SOURCE_ENTRYPOINT
+    strict_clean_checkpoint_available: false
+    notes: Existing audit found pair-B1.pt and pair-B2.pt; official FashionIQ mapping is not verified.
+    checkpoint_variants:
+      - checkpoint_id: pair_b1
+        filename: pair-B1.pt
+        # Hub-served (x-linked-size 694958565, oid c4d861ec…fbf2, final-audit observed) but no
+        # card, README or release note binds either blob to FashionIQ, a category or a training
+        # condition — obtainability is real, identity is not.
+        download_url: https://huggingface.co/ZhihengFu/PAIR/resolve/main/pair-B1.pt
+        source_type: author_huggingface
+        checkpoint_training_noise_pct: null
+        evaluation_noise_pct: 0
+        expected_size_bytes: 694958565
+        # Full digest unverified: the Hub LFS oid gives the sha256 prefix c4d861ec only.
+        expected_sha256: null
+        status: CHECKPOINT_MAPPING_UNVERIFIED
+        checkpoint_mapping_status: UNVERIFIED
+      - checkpoint_id: pair_b2
+        filename: pair-B2.pt
+        download_url: https://huggingface.co/ZhihengFu/PAIR/resolve/main/pair-B2.pt
+        source_type: author_huggingface
+        checkpoint_training_noise_pct: null
+        evaluation_noise_pct: 0
+        expected_size_bytes: 694872371
+        # Full digest unverified: the Hub LFS oid gives the sha256 prefix 74346fd7 only.
+        expected_sha256: null
+        status: CHECKPOINT_MAPPING_UNVERIFIED
+        checkpoint_mapping_status: UNVERIFIED
+  - model_id: clvc_net
+    replay_status: BLOCKED_NO_SOURCE_REPLAY
+    # The pinned trainer builds and saves a separate whole model per FashionIQ category
+    # (`train.py:load_dataset`, `train_and_evaluate` over dress/shirt/toptee). One shared pair of
+    # checkpoints is not scientifically equivalent: each category needs its own local/global pair.
+    # Filenames and identities remain UNVERIFIED, so this describes the structure to be routed
+    # once the author archive mapping is established, not a set of known files.
+    category_model_policy: independent
+    category_checkpoint_structure:
+      categories: [dress, shirt, toptee]
+      per_category_members: [local, global]
+      member_count_expected: 6
+      mapping_status: UNVERIFIED
+      notes: author Drive archive member/category mapping unresolved; do not claim six available files
+    checkpoint_serialization: whole_model
+    environment_required: true
+    method_name: CLVC-Net
+    research_generation: legacy
+    publication_year: 2021
+    paper_title: Comprehensive Linguistic-Visual Composition Network for Image Retrieval
+    paper_url: https://doi.org/10.1145/3404835.3462967
+    upstream_repo_url: https://github.com/iLearn-Lab/SIGIR21-CLVC-Net
+    upstream_default_branch: main
+    upstream_commit_sha: bd9b6889489806cb60676597880f91d918b279cb
+    source_available: true
+    source_dir: CLVCNet
+    fashioniq_layout: fashioniq_clvc_resized
+    fashioniq_image_extensions: [".jpg"]
+    preparation_contract: manual_clvc_resized
+    preparation_id: clvc_net_fashioniq
+    literature_split_label: val
+    native_protocol: fashioniq_val_split
+    supported_protocols: [fashioniq_val_split]
+    # Sanity row transcribed from the verified benchmark row clvc_net_sigir21_fiq_table1
+    # (papers.yaml; pdf digest reproduced from the author-hosted camera-ready). r10/r50 are
+    # paper-stated; the mean is WORKBENCH_DERIVED (the paper prints per-category values only).
+    # Feeds the legacy parity display; the gate compares against the committed benchmark row.
+    reported_r10: 30.7
+    reported_r50: 58.41
+    reported_mean: 44.56
+    reproduction_status: BLOCKED_CHECKPOINT_MAPPING
+    command_status: COMMAND_BLOCKED_SOURCE_ENTRYPOINT
+    environment:
+      python_env_var: WORKBENCH_CLVC_PYTHON
+      confidence: VERIFIED_README
+      python: '3.7.6'
+      pytorch: '1.6.0'
+      torchvision: UNKNOWN
+      # `test.py:28` and `:47` call `.cuda()` on every batch without consulting
+      # `torch.cuda.is_available()`, so this evaluator cannot run on a CPU-only host. The upstream
+      # README states no CUDA version, and recording UNKNOWN conflated "version not declared" with
+      # "no GPU needed", which suppressed the GPU-verification gate for a CUDA-hard evaluator.
+      cuda: '10.2'
+      packages: [torchvision]
+    strict_clean_checkpoint_available: null
+    notes: Native pair-union and reference exclusion verified. Pinned test.py has no CLI/model loader; author Drive CLVCNET.zip member/category mapping is unresolved. Evaluation requires torchvision ResNet-50 ImageNet weights through an unpinned Torch cache.
+    checkpoint_variants:
+      - checkpoint_id: author_drive_unresolved
+        filename: checkpoint-unresolved.pt
+        download_url: null
+        source_url: https://drive.google.com/file/d/159rBhWyhkLN7sXAi8iyW_ljzFNLJinKa/view?usp=sharing
+        source_type: author_google_drive
+        checkpoint_training_noise_pct: null
+        evaluation_noise_pct: 0
+        expected_size_bytes: null
+        expected_sha256: null
+        status: CHECKPOINT_MAPPING_UNVERIFIED
+        checkpoint_mapping_status: UNVERIFIED
+  - model_id: dcnet
+    replay_status: REPLAY_CODE_IMPLEMENTED
+    category_model_policy: shared
+    checkpoint_serialization: run_directory
+    replay_type: OFFICIAL_CLI
+    environment_required: true
+    method_name: DCNet
+    research_generation: legacy
+    publication_year: 2021
+    paper_title: Dual Compositional Learning in Interactive Image Retrieval
+    paper_url: https://github.com/ozmig77/dcnet/blob/68c79d38569f01ca39c3b4ea641b3b7eb2ccb5fb/DCNet_Kim2021.pdf
+    upstream_repo_url: https://github.com/ozmig77/dcnet
+    upstream_default_branch: main
+    upstream_commit_sha: 68c79d38569f01ca39c3b4ea641b3b7eb2ccb5fb
+    source_available: true
+    source_dir: DCNet
+    fashioniq_layout: fashioniq_dcnet
+    fashioniq_image_extensions: [".jpg"]
+    # DCNet's evaluator has no dataset-root option: `parse_config.py:28` reads
+    # `config.json:data_loader.args.data_dir` (the shipped configs say `dataset/fashioniq`) and
+    # `CE_dataset.py:22,27,34` joins it against the *process* CWD, which the adapter sets to this
+    # checkout. The link is therefore part of the source contract, not a caller choice: declaring it
+    # is what authorizes `prepare_dataset.py` to create it and what stops the source-integrity gate
+    # from reporting a sanctioned staging as an undeclared file. The path is nested, so the stager
+    # creates its parent; nothing about the author's own files changes.
+    canonical_dataset_link: dataset/fashioniq
+    preparation_contract: manual_dcnet
+    preparation_id: dcnet_fashioniq
+    literature_split_label: original
+    native_protocol: fashioniq_full_gallery_ref_excluded
+    supported_protocols: [fashioniq_full_gallery_ref_excluded]
+    # Sanity row: the paper prints only the category-level mean (40.83). r10/r50 exist only as
+    # WORKBENCH_DERIVED aggregates in the committed row, so they stay null here — a "reported_"
+    # field must not carry a derived value. Feeds the legacy parity display; the gate compares
+    # against the committed benchmark row dcnet_fashioniq_val_table1.
+    reported_mean: 40.83
+    reproduction_status: BLOCKED_CHECKPOINT_MAPPING
+    command_status: COMMAND_AUDITED
+    environment:
+      python_env_var: WORKBENCH_DCNET_PYTHON
+      confidence: VERIFIED_REQUIREMENTS
+      python: '3.7.7'
+      pytorch: '1.4.0'
+      torchvision: '0.5.0'
+      cuda: UNKNOWN
+      packages: [nltk==3.5, spacy==2.3.0]
+    strict_clean_checkpoint_available: null
+    # The pinned evaluator cannot load the author checkpoint under torch >= 2.6 without an opt-out:
+    # `base/base_trainer.py:195` calls `torch.load(ckpt_path)` with no `weights_only` argument, and the
+    # checkpoint embeds a numpy scalar, which the new default refuses. The earlier workaround replaced
+    # `torch.load` for the whole process via a PYTHONPATH `sitecustomize`, which also changed behaviour
+    # for every unrelated load in that interpreter. This declaration replaces it with one edited line
+    # at the single call site, so the opt-out covers exactly the author checkpoint and nothing else.
+    # Verified: applying this patch to the pinned file reproduces the derived digest exactly, and the
+    # patched tree runs without the shim.
+    approved_source_patches:
+      - path: base/base_trainer.py
+        patch_file: workbench/patches/dcnet_checkpoint_weights_only_optout.patch
+        patch_sha256: 659eabf3c5b98352b3a09fa8291e24aedf090d806f2ada682e181fdc460fc0b8
+        base_sha256: 3edd98363f81d0efbac6f7b1dcf9690a5db714bcc588cd4b0d890c5bb865860b
+        derived_sha256: f265cefec1795c92f6e64b6c652d60fcda7aed15071ee6817af2c1b035781a8b
+        reason: "the author checkpoint embeds a numpy scalar, so torch >= 2.6 refuses it under the new weights_only=True default; the opt-out is scoped to this one hash-verified load instead of replacing torch.load process-wide"
+    notes: Native evaluator masks references and fuses log-softmax branch scores. Standard run directory requires config.json plus trained_model.pth; standard config uses ImageNet-pretrained ResNet-50, not optional DeepFashion DenseNet.
+    checkpoint_variants:
+      - checkpoint_id: fashioniq_run_directory
+        filename: fashioniq_dcnet
+        artifact_type: run_directory
+        required_files: [config.json, trained_model.pth]
+        download_url: null
+        source_url: https://drive.google.com/drive/folders/1wgygqF095Di67EaHaGOXbwh3wEzk9izB?usp=sharing
+        source_type: author_google_drive
+        checkpoint_training_noise_pct: null
+        evaluation_noise_pct: 0
+        expected_size_bytes: null
+        expected_sha256: null
+        status: CHECKPOINT_MAPPING_UNVERIFIED
+        checkpoint_mapping_status: UNVERIFIED
+  - model_id: combiner_rn50x4_noft
+    # The pinned validator has no dataset-root option: `src/data_utils.py:base_path` fixes the data root to
+    # `<checkout>/fashionIQ_dataset` and opens `.jpg` images there. The canonical FashionIQ
+    # root is staged at that path by an explicitly authorized preparation step, and the link
+    # is approved as a runtime artifact so it does not read as a source modification.
+    canonical_dataset_link: fashionIQ_dataset
+    fashioniq_image_extensions: [".jpg"]
+    replay_status: REPLAY_CODE_IMPLEMENTED
+    category_model_policy: shared
+    checkpoint_serialization: state_dict
+    replay_type: OFFICIAL_CLI
+    environment_required: true
+    method_name: Combiner RN50x4 noft
+    research_generation: legacy
+    publication_year: 2023
+    paper_title: Composed Image Retrieval using Contrastive Learning and Task-oriented CLIP-based Features
+    paper_url: https://arxiv.org/abs/2308.11485
+    upstream_repo_url: https://github.com/ABaldrati/CLIP4Cir
+    upstream_default_branch: master
+    upstream_commit_sha: dfed9f748a8a4d05abf613164e06d59b22dbdf13
+    source_available: true
+    source_dir: CLIP4Cir
+    fashioniq_layout: fashioniq_standard
+    preparation_contract: manual_standard
+    preparation_id: clip4cir_fashioniq
+    literature_split_label: original
+    native_protocol: fashioniq_original_split
+    supported_protocols: [fashioniq_original_split]
+    reported_r10: null
+    reported_r50: null
+    reported_mean: null
+    reproduction_status: BLOCKED_CHECKPOINT_MAPPING
+    command_status: COMMAND_AUDITED
+    environment:
+      python_env_var: WORKBENCH_CLIP4CIR_PYTHON
+      confidence: VERIFIED_README
+      python: '3.8'
+      pytorch: '1.11.0'
+      torchvision: '0.12.0'
+      cuda: UNKNOWN
+      # The pinned README (`CLIP4Cir/README.md:118`) installs OpenAI CLIP from its Git source,
+      # and `src/validate.py:8,12` uses `import clip` and `from clip.model import CLIP` -- an API
+      # PyPI's same-named `clip==0.2.0` does not have. Declared as a direct reference so the
+      # installer fetches the source the evaluator was written against.
+      #
+      # The revision: the README pins none, so this is NOT an author-provided pin. It is the same
+      # revision the sibling LAVIS-family entries use (`a1d0717`), chosen so one environment can
+      # satisfy both families without two copies of the same distribution, and documented as an
+      # adaptation rather than as upstream intent.
+      packages: [pandas==1.4.2, comet-ml==3.21.0, clip @ git+https://github.com/openai/CLIP.git@a1d071733d7111c9c014f024669f959182114e33]
+    strict_clean_checkpoint_available: null
+    notes: Native full-gallery reference-eligible evaluator verified. RN50x4 noft Combiner state mapping is unverified; base OpenAI CLIP RN50x4 remains an evaluation asset.
+    checkpoint_variants:
+      - checkpoint_id: rn50x4_noft_unresolved
+        filename: rn50x4-noft-unresolved.pt
+        artifact_type: file
+        download_url: null
+        # The Drive folder documents the release structure and names exactly the FashionIQ noft file
+        # `FashionIQ/RN50x4_noft/fiq_comb_RN50x4_noft.pt` (folder README; final audit C-4); no checksum
+        # is published, so the bytes stay unmapped until one exists.
+        source_url: https://drive.google.com/drive/folders/1ny2hhzP8HZBnXhjvDEni8P8G4_inCNTv?usp=sharing
+        source_type: author_google_drive
+        # Noft configuration is noise-free by construction (frozen encoders; the committed noft rows
+        # assert checkpoint_training_noise_pct: 0). Recorded so gate selection can match.
+        checkpoint_training_noise_pct: 0
+        evaluation_noise_pct: 0
+        expected_size_bytes: null
+        expected_sha256: null
+        status: CHECKPOINT_MAPPING_UNVERIFIED
+        checkpoint_mapping_status: UNVERIFIED
+  - model_id: clip4cir_rn50x4_fullft
+    # The pinned validator has no dataset-root option: `src/data_utils.py:base_path` fixes the data root to
+    # `<checkout>/fashionIQ_dataset` and opens `.jpg` images there. The canonical FashionIQ
+    # root is staged at that path by an explicitly authorized preparation step, and the link
+    # is approved as a runtime artifact so it does not read as a source modification.
+    canonical_dataset_link: fashionIQ_dataset
+    fashioniq_image_extensions: [".jpg"]
+    replay_status: BLOCKED_CHECKPOINT_MAPPING
+    category_model_policy: shared
+    checkpoint_serialization: state_dict
+    replay_type: OFFICIAL_CLI
+    environment_required: true
+    method_name: CLIP4Cir RN50x4 fullft
+    research_generation: legacy
+    publication_year: 2023
+    command_status: COMMAND_AUDITED
+    paper_title: Composed Image Retrieval using Contrastive Learning and Task-oriented CLIP-based Features
+    paper_url: https://arxiv.org/abs/2308.11485
+    upstream_repo_url: https://github.com/ABaldrati/CLIP4Cir
+    upstream_default_branch: master
+    upstream_commit_sha: dfed9f748a8a4d05abf613164e06d59b22dbdf13
+    source_available: true
+    source_dir: CLIP4Cir
+    fashioniq_layout: fashioniq_standard
+    preparation_contract: manual_standard
+    preparation_id: clip4cir_fashioniq
+    literature_split_label: original
+    native_protocol: fashioniq_original_split
+    supported_protocols: [fashioniq_original_split]
+    # Sanity row transcribed from the verified benchmark row clip4cir_rn50x4_fullft_fiq_tab9
+    # (Table 9, arXiv v1; reproduced three independent ways by the final audit). The mean is
+    # WORKBENCH_DERIVED (the paper prints r10/r50 only); r10/r50 are paper-stated. Feeds the
+    # legacy parity display; the gate compares against the committed benchmark row.
+    reported_r10: 43.78
+    reported_r50: 66.93
+    reported_mean: 55.36
+    reproduction_status: BLOCKED_CHECKPOINT_BUNDLE
+    environment:
+      python_env_var: WORKBENCH_CLIP4CIR_PYTHON
+      confidence: VERIFIED_README
+      python: '3.8'
+      pytorch: '1.11.0'
+      torchvision: '0.12.0'
+      cuda: UNKNOWN
+      # The pinned README (`CLIP4Cir/README.md:118`) installs OpenAI CLIP from its Git source,
+      # and `src/validate.py:8,12` uses `import clip` and `from clip.model import CLIP` -- an API
+      # PyPI's same-named `clip==0.2.0` does not have. Declared as a direct reference so the
+      # installer fetches the source the evaluator was written against.
+      #
+      # The revision: the README pins none, so this is NOT an author-provided pin. It is the same
+      # revision the sibling LAVIS-family entries use (`a1d0717`), chosen so one environment can
+      # satisfy both families without two copies of the same distribution, and documented as an
+      # adaptation rather than as upstream intent.
+      packages: [pandas==1.4.2, comet-ml==3.21.0, clip @ git+https://github.com/openai/CLIP.git@a1d071733d7111c9c014f024669f959182114e33]
+    strict_clean_checkpoint_available: null
+    notes: Native full-gallery reference-eligible evaluator verified. RN50x4 fullft needs separately loaded Combiner and fine-tuned CLIP states; author pairing is unverified.
+    checkpoint_variants:
+      - checkpoint_id: rn50x4_fullft_unresolved
+        filename: rn50x4-fullft-unresolved.pt
+        artifact_type: bundle_placeholder
+        required_files: [combiner_state.pt, clip_state.pt]
+        download_url: null
+        source_url: https://drive.google.com/drive/folders/1ny2hhzP8HZBnXhjvDEni8P8G4_inCNTv?usp=sharing
+        source_type: author_google_drive
+        # Paper §4.1: task-oriented fine-tuning with no noise injection; the committed row asserts
+        # a clean condition. Recording 0 makes the gate comparable; the checkpoint itself remains
+        # unmapped and refused until the Drive pair is identified.
+        checkpoint_training_noise_pct: 0
+        evaluation_noise_pct: 0
+        expected_size_bytes: null
+        expected_sha256: null
+        status: CHECKPOINT_MAPPING_UNVERIFIED
+        checkpoint_mapping_status: UNVERIFIED
+  - model_id: tgcir
+    replay_status: PREFLIGHT_ONLY
+    category_model_policy: shared
+    checkpoint_serialization: whole_model
+    replay_type: PREFLIGHT_ONLY
+    environment_required: true
+    method_name: TG-CIR
+    research_generation: legacy
+    publication_year: 2023
+    paper_title: Target-Guided Composed Image Retrieval
+    paper_url: https://arxiv.org/abs/2309.01366
+    upstream_repo_url: https://github.com/iLearn-Lab/MM23-TG-CIR
+    upstream_default_branch: main
+    upstream_commit_sha: 65fa78eaf8cabe8197fcc22ccab42207c591bdee
+    source_available: true
+    source_dir: TGCIR
+    fashioniq_layout: fashioniq_ilearn_resized_training
+    fashioniq_image_extensions: [".jpg"]
+    preparation_contract: manual_ilearn_resized
+    preparation_id: tgcir_fashioniq
+    literature_split_label: val
+    native_protocol: fashioniq_val_split
+    supported_protocols: [fashioniq_val_split]
+    reported_r10: 51.32
+    reported_r50: 73.09
+    reported_mean: null
+    reported_score_note: Paper reports macro R@10 and R@50; 62.205 is derivable but not presented as a reproduced metric.
+    reproduction_status: BLOCKED_COMMAND
+    command_status: COMMAND_BLOCKED_SOURCE_ENTRYPOINT
+    environment:
+      python_env_var: WORKBENCH_TGCIR_PYTHON
+      confidence: VERIFIED_README
+      python: UNKNOWN
+      pytorch: '1.7.0'
+      torchvision: '0.8.0'
+      # `test.py:31` and `:47` call `.cuda()` on every batch without consulting
+      # `torch.cuda.is_available()`, so this evaluator cannot run on a CPU-only host. Recording
+      # UNKNOWN meant "the README declares no version", which is not "no GPU is needed" — the
+      # GPU-verification gate then never fired for a CUDA-hard evaluator.
+      cuda: '11.0'
+      # OpenAI CLIP, pinned to a revision rather than a release name. The module the evaluator
+      # imports is `clip` (`model.py:5`), and it calls `clip.load(img_encoder, device=..., jit=False)`
+      # (`:41`) and `clip.tokenize` (`cirr_test_submission.py`) — the OpenAI API. PyPI's `clip==0.2.0`
+      # is silent1mezzo/clip, an unrelated clipboard CLI that has neither function, so the previous
+      # pin installed a package the evaluator cannot import; it was recorded as knowingly wrong
+      # because openai/CLIP publishes no tags. A revision pins it properly: the commit below resolves
+      # (HTTP 200 on `clip/clip.py`) and defines both `load` and `tokenize`.
+      packages: ['clip @ git+https://github.com/openai/CLIP.git@a1d071733d7111c9c014f024669f959182114e33', numpy==1.22.3, pandas==1.4.2, Pillow]
+    strict_clean_checkpoint_available: null
+    notes: Native annotation endpoint-union/reference-excluded evaluator verified. Pinned test.py has no CLI/checkpoint replay; TG-CIR.zip FashionIQ member mapping and hash remain unresolved.
+    checkpoint_variants:
+      - checkpoint_id: tgcir_archive_unresolved
+        filename: tgcir-fashioniq-unresolved.pt
+        download_url: null
+        source_url: https://drive.google.com/file/d/1OdZTtJqy-RTpYXBaq5ThmH3IBnGvYCyi/view
+        source_type: author_google_drive
+        checkpoint_training_noise_pct: null
+        evaluation_noise_pct: 0
+        expected_size_bytes: null
+        expected_sha256: null
+        status: CHECKPOINT_MAPPING_UNVERIFIED
+        checkpoint_mapping_status: UNVERIFIED
+  - model_id: sprc
+    # `src/data_utils.py:base_path` derives the data root from the file location and the
+    # pinned dataset opens `fashionIQ_dataset/images/{id}.png`; there is no dataset-root
+    # CLI option. The link is staged by the same authorized preparation step as CSMCIR's,
+    # and the extension requirement is checked before any run.
+    canonical_dataset_link: fashionIQ_dataset
+    fashioniq_image_extensions: [".png"]
+    replay_status: BLOCKED_CHECKPOINT_MAPPING
+    category_model_policy: shared
+    checkpoint_serialization: state_dict
+    method_name: SPRC
+    environment_required: true
+    research_generation: legacy
+    publication_year: 2024
+    paper_title: Sentence-level Prompts Benefit Composed Image Retrieval
+    paper_url: https://arxiv.org/abs/2310.05473
+    upstream_repo_url: https://github.com/chunmeifeng/SPRC
+    upstream_default_branch: null
+    upstream_commit_sha: 2935a5397732260d1db6fa577e5926f963e36f0f
+    source_available: true
+    source_dir: SPRC
+    fashioniq_layout: fashioniq_standard
+    preparation_contract: manual_standard
+    preparation_id: sprc_fashioniq
+    literature_split_label: original
+    native_protocol: fashioniq_original_split
+    supported_protocols: [fashioniq_original_split]
+    reported_r10: 54.92
+    reported_r50: 74.97
+    reported_mean: 64.85
+    reported_score_note: Paper Table 1 prints R@10 54.92 while printed per-category values average 54.72; unresolved primary-source discrepancy.
+    reproduction_status: BLOCKED_CHECKPOINT_MAPPING
+    command_status: COMMAND_BLOCKED_MODEL_MAPPING
+    environment:
+      python_env_var: WORKBENCH_SPRC_PYTHON
+      confidence: VERIFIED_REQUIREMENTS
+      python: '3.9'
+      pytorch: '2.0.1'
+      torchvision: '0.15.2'
+      cuda: UNKNOWN
+      # `lavis` is vendored at src/lavis, and the evaluator runs from `src/` with the checkout on
+      # `sys.path`, so the checkout's own copy is what resolves -- the pinned sibling profile that
+      # listed `salesforce-lavis` was unsatisfiable (see the LAVIS-family note above) and is gone.
+      #
+      # `transformers` and `timm` are SPRC's own versions, not the LAVIS-family ones. The evaluator
+      # is `src/blip_validate.py`, which loads `Blip2QformerCirAlignPrompt`
+      # (`blip2_qformer_cir_align_prompt.py:25`) and therefore `blip2.py`, `Qformer.py` and `med.py`
+      # -- never `blip_models/blip.py`, whose `transformers_version < 4.27` assertion applies to
+      # BLIP-1's `BlipBase` and not to this BLIP-2 class. Every symbol the evaluation path imports
+      # (`transformers.activations.ACT2FN`, `file_utils.ModelOutput`,
+      # `modeling_utils.PreTrainedModel`/`apply_chunking_to_forward`/`find_pruneable_heads_and_indices`/
+      # `prune_linear_layer`, `models.bert.configuration_bert.BertConfig`, `timm.models.layers.*`,
+      # `timm.models.registry.register_model`) exists in 4.36.2/0.9.12, and those are the versions the
+      # pinned checkout's own `requirements.txt` declares. Declaring 4.25.0/0.9.16 here made the
+      # planner install one pair while the runtime verifier demanded the other, so a correctly
+      # installed environment could never reach DEPENDENCIES_OK.
+      packages: [spacy==3.7.2, clip @ git+https://github.com/openai/CLIP.git@a1d071733d7111c9c014f024669f959182114e33, opencv-python-headless==4.5.5.64, fairscale==0.4.13, iopath==0.1.10, numpy, omegaconf==2.3.0, packaging, pandas==2.2.0, Pillow, pyyaml, regex, requests, tqdm, transformers==4.36.2, timm==0.9.12]
+    strict_clean_checkpoint_available: null
+    notes: The evaluator's argparse default `--blip-model-name blip2_cir_rerank_learn` names a class the pinned repo does not register (only an argparse default; no @registry.register_model); the checkpoint class-key mapping remains unverified and loads non-strictly.
+    checkpoint_variants:
+      # `backbone` is the authors' flag value, declared rather than inferred. The evaluator selects
+      # its vision encoder from `--backbone` (`blip_validate.py:145`: `pretrain` is EVA-CLIP ViT-g,
+      # `pretrain_vitL` is CLIP ViT-L), and it loads with `strict=False` (`:49`), so a mismatched
+      # backbone would evaluate a partly-initialised model WITHOUT raising. Deriving the encoder from
+      # a filename substring is therefore unsafe: a rename would silently change the architecture.
+      # The paper's row is ViT-g while the released Google Drive checkpoints are ViT-L (upstream
+      # issue #4, acknowledged by the author), so choosing ViT-L is a SCIENTIFIC VARIANT and the
+      # distinction is recorded per variant instead of being guessed at run time.
+      - checkpoint_id: sprc_fiq_unresolved
+        filename: sprc_fiq.pt
+        backbone: pretrain
+        download_url: null
+        source_url: https://1drv.ms/u/s!Aj0q22vyiZbabnUya4mnufIBtYI?e=n4ZVKj
+        source_type: author_onedrive
+        checkpoint_training_noise_pct: null
+        evaluation_noise_pct: 0
+        expected_size_bytes: null
+        expected_sha256: null
+        status: CHECKPOINT_MAPPING_UNVERIFIED
+        checkpoint_mapping_status: UNVERIFIED
+      - checkpoint_id: sprc_fiq_vitl
+        filename: sprc_fiq_vitl.pt
+        backbone: pretrain_vitL
+        download_url: https://drive.usercontent.google.com/download?id=11p95msuuTAU6Pej7d_a-KjUHHpP3kH8Y&export=download&confirm=t
+        source_url: https://drive.google.com/file/d/11p95msuuTAU6Pej7d_a-KjUHHpP3kH8Y/view?usp=sharing
+        source_type: author_google_drive
+        checkpoint_training_noise_pct: null
+        evaluation_noise_pct: 0
+        expected_size_bytes: 1459756541
+        expected_sha256: null
+        # Obtainability: reachable, but no author checksum and the class-key mapping is not
+        # established, so the mapping stays UNVERIFIED rather than being promoted on a filename.
+        status: CHECKPOINT_MAPPING_UNVERIFIED
+        checkpoint_mapping_status: UNVERIFIED
+        scientific_variant: true
+        variant_provenance:
+          variant_id: vitl_backbone
+          changes: "CLIP ViT-L/14 vision encoder instead of the paper's EVA-CLIP ViT-g/14"
+          evidence: "upstream issue #4: the author acknowledges the paper reported ViT-L while the released code defaults to ViT-g, and published ViT-L weights as a separate variant"
+          comparability: "NOT comparable to the registry's paper row (reported_r10/reported_r50 describe the ViT-g configuration); a result from this checkpoint must not be compared against it"
+        notes: "ViT-L backbone (CLIP ViT-L/14), author-published as a variant after the paper's ViT-g code default was acknowledged in upstream issue #4. Reachable (HTTP 200, 1 459 756 541 bytes observed); no published checksum."
+
+  - model_id: limn
+    composition_adapter: workbench.composition.model_limn
+    replay_status: REPLAY_CODE_IMPLEMENTED
+    # The observer exists for this model, so a full pilot is only complete when its per-query
+    # artifact is exported and verified. A model without this field is aggregate-only by design.
+    per_query_observer: LIMN_QUERY_OBSERVER_V1
+    per_query_checkpoint: base_iter0_all_categories
+    category_model_policy: independent
+    checkpoint_serialization: whole_model
+    replay_type: SOURCE_FAITHFUL_WORKBENCH_REPLAY
+    environment_required: true
+    method_name: LIMN
+    research_generation: legacy
+    publication_year: 2024
+    paper_title: Self-Training Boosted Multi-Factor Matching Network for Composed Image Retrieval
+    paper_url: https://doi.org/10.1109/TPAMI.2023.3346434
+    upstream_repo_url: https://github.com/iLearn-Lab/TPAMI24-LIMN
+    upstream_default_branch: null
+    upstream_commit_sha: 7d7bc9b116f594a65ac22457491edf28a88d3c3e
+    source_available: true
+    source_dir: LIMN
+    fashioniq_layout: fashioniq_ilearn_resized_training
+    fashioniq_image_extensions: [".jpg"]
+    preparation_contract: manual_ilearn_resized
+    preparation_id: limn_fashioniq
+    literature_split_label: val
+    native_protocol: fashioniq_val_split
+    supported_protocols: [fashioniq_val_split]
+    # Sanity row transcribed from the verified benchmark row limn_fashioniq_base_iter0_table1
+    # (papers.yaml). The mean is WORKBENCH_DERIVED (the paper prints r10/r50 per category only);
+    # r10/r50 are paper-stated aggregates. Feeds the legacy parity display; the gate compares
+    # against the committed benchmark row.
+    reported_r10: 55.91
+    reported_r50: 77.82
+    reported_mean: 66.87
+    reproduction_status: BLOCKED_RUNTIME_PREREQUISITES
+    command_status: REPLAY_COMMAND_IMPLEMENTED
+    environment:
+      python_env_var: WORKBENCH_LIMN_PYTHON
+      confidence: VERIFIED_README
+      python: UNKNOWN
+      pytorch: '1.12.1'
+      torchvision: '0.13.1'
+      cuda: '12.4'
+      packages: [open_clip_torch==2.20.0]
+      # Historical pins above do not ship sm_120 (Blackwell) kernels, so on an RTX 5070 Ti the
+      # operator may provision an ADAPTED runtime instead. Declaring it here makes the adaptation
+      # explicit and auditable; a run under an adapted runtime is recorded as
+      # variant_provenance.runtime_adaptation=sm_120 in variant_provenance and is never labeled an
+      # exact paper reproduction. The historical pins stay the default contract.
+      adapted_runtime:
+        target_compute_capability: sm_120
+        python: '3.10'
+        pytorch: '==2.7.1'
+        torchvision: '==0.22.1'
+        cuda: '12.8'
+        # open_clip 2.20.0 is the author's own verbatim pin: `LIMN/requirements.txt:37` declares
+        # `open-clip-torch==2.20.0`, and `environment.packages` above already carries it. The earlier
+        # `>=2.24,<2.27` range here contradicted that pin for no stated reason, and the only runtime
+        # actually built and measured for this model (`workbench/envs/limn-adapted`) is 2.20.0, which
+        # is what produced the recorded three-category result.
+        #
+        # Measured, so the record is not overstated: both 2.20.0 and 2.24.0 unpickle these bundles
+        # (`torch.load(weights_only=False)` returns `model.LIMN`, and the pickled
+        # `VisionTransformer` carries `global_average_pool=True` / no `pool_type` under BOTH). The
+        # version difference therefore does not show up at load time; this pin is justified by the
+        # author's pin and by provenance of the measured environment, not by a load-time failure.
+        packages: ['open_clip_torch==2.20.0']
+        # Keep the declared CUDA build: the adapted profile must
+        # install from the CUDA 12.8 wheel index explicitly.
+        pip_index_url: https://download.pytorch.org/whl/cu128
+    strict_clean_checkpoint_available: null
+    notes: Base LIMN iteration 0 only. Author README and pinned train.py bind iteration-0 filenames to independently run dress, shirt, and toptee categories; author Hub LFS metadata supplies hashes. Workbench replay calls pinned native test.py:test(); full runtime remains unverified.
+    checkpoint_variants:
+      - checkpoint_id: base_iter0_dress
+        filename: 0_dress_best_model.pt
+        download_url: https://huggingface.co/iLearn-Lab/TPAMI24-LIMN/resolve/30560ad575a56c39cc39047d1a474269338c77c0/0_dress_best_model.pt
+        checkpoint_training_noise_pct: null
+        evaluation_noise_pct: 0
+        expected_size_bytes: 1792010157
+        expected_sha256: 96a335d4eb8b1e77d35575aab9177637208e2eb6c59e12f833f67e5cb0e7fc1c
+        status: URL_VERIFIED
+        checkpoint_mapping_status: VERIFIED_METADATA
+      - checkpoint_id: base_iter0_shirt
+        filename: 0_shirt_best_model.pt
+        download_url: https://huggingface.co/iLearn-Lab/TPAMI24-LIMN/resolve/30560ad575a56c39cc39047d1a474269338c77c0/0_shirt_best_model.pt
+        checkpoint_training_noise_pct: null
+        evaluation_noise_pct: 0
+        expected_size_bytes: 1792010157
+        expected_sha256: 9260c7f77d3017d8cc10e6652cc8cfe275dbc9704366fa2bf581a24808930d74
+        status: URL_VERIFIED
+        checkpoint_mapping_status: VERIFIED_METADATA
+      - checkpoint_id: base_iter0_toptee
+        filename: 0_toptee_best_model.pt
+        download_url: https://huggingface.co/iLearn-Lab/TPAMI24-LIMN/resolve/30560ad575a56c39cc39047d1a474269338c77c0/0_toptee_best_model.pt
+        checkpoint_training_noise_pct: null
+        evaluation_noise_pct: 0
+        expected_size_bytes: 1792010157
+        expected_sha256: 79f663a14d89d455fdc3612b0b36d011c06d7957d1475a654755e1053a6cece2
+        status: URL_VERIFIED
+        checkpoint_mapping_status: VERIFIED_METADATA
+    checkpoint_bundles:
+      - bundle_id: base_iter0_all_categories
+        required_checkpoint_ids: [base_iter0_dress, base_iter0_shirt, base_iter0_toptee]
+        structure: category_specific_whole_models
+        mapping_status: VERIFIED_METADATA
+        notes: One independently trained whole-model checkpoint per FashionIQ category; all three are required for a complete macro result.
+  - model_id: tme
+    composition_adapter: workbench.composition.model_tme
+    # The base weights and the validation feature cache the native evaluator opens are declared in
+    # the preparation contract, so preflight reports them as explicit blockers instead of reporting
+    # an empty asset list as resolved.
+    preparation_contract: manual_standard
+    preparation_id: tme_fashioniq
+    environment:
+      python_env_var: WORKBENCH_TME_PYTHON
+      confidence: VERIFIED_README
+      # The pinned README's own commands: `conda create -n TME -y python=3.10` and
+      # `conda install pytorch==2.1.2 torchvision==0.16.2 torchaudio==2.1.2 pytorch-cuda=12.1`.
+      # Before this block existed TME reported `interpreter_status: UNCONFIGURED` with
+      # `runtime_verified: false` while still claiming `ready: true`, and interpreter routing fell
+      # back to the WORKBENCH interpreter -- which cannot import this tree's LAVIS or its pinned
+      # `transformers`. Declared from the author's source rather than grouped with PTHA, whose
+      # Python 3.9 / torch 2.0.1 stack is a different pinned stack.
+      python: '3.10'
+      pytorch: '2.1.2'
+      torchvision: '0.16.2'
+      cuda: '12.1'
+      # From `requirements.txt` in the pinned checkout. `salesforce-lavis` is deliberately ABSENT:
+      # this tree vendors its own `src/lavis`, reached through the adapter's declared launcher root,
+      # so the PyPI distribution would be a second copy of the same import name.
+      packages: [transformers==4.36.0, timm==0.9.12, omegaconf==2.3.0, iopath==0.1.10, decord==0.6.0, webdataset==0.2.86, opencv-python==4.10.0.84, fairscale==0.4.13, einops==0.7.0, scikit-image==0.24.0, spacy==3.7.6, pycocoevalcap==1.2, pandas==2.2.3, scikit-learn==1.5.2, tqdm==4.67.0, 'numpy<2', click]
+      # `click` is not named by the author but IS reached by the reachable import graph: the pinned
+      # LAVIS imports `spacy`, whose CLI module does `from click import NoSuchOption`, so blocking
+      # click makes `import lavis.models` fail. Declared because the pinned code needs it, not because
+      # the requirements file lists it - provisioning proved it by failing without it.
+      # `mkl==2023.1.0` was copied from the author's file and then DROPPED here, because it cannot
+      # satisfy this model's own verifier: Intel's distribution ships no importable `mkl` module
+      # (`import mkl` -> ModuleNotFoundError; the PyPI project publishes no `top_level.txt`), so the
+      # dependency probe reports `missing package: mkl` and BLOCKS the environment whose author
+      # listed it. It is also unnecessary: torch 2.1.2+cu121 bundles its own oneMKL, and the
+      # requirement's stated purpose (avoiding a 2024.x MKL ABI clash) is met by the `numpy<2` pin.
+      # Verified by installing the environment, removing `mkl`, and running the pinned stack:
+      # matmul, the torch<->numpy bridge and an `nn.Linear` forward all succeed.
+      #
+      # `requirements.txt` pins no NumPy, and a bare install resolves NumPy 2.x, whose C ABI
+      # torch 2.1.2 was not built against: importing torch then warns
+      # `Failed to initialize NumPy: _ARRAY_API not found` and the tensor<->ndarray bridge is dead,
+      # which the pinned dataset code uses. Pinned to the last 1.x line that torch 2.1.2 supports.
+
+      # The base weights the pinned `blip2.py` loads by a LOCAL path relative to the evaluator cwd
+      # (`weight/blip2_pretrained.pth`, and EVA-ViT-g beside it); the native source redirects the
+      # usual pretrained URLs to those files, so an implicit downloader cannot be assumed.
+      #
+      # Historical pins do not ship sm_120 (Blackwell) kernels, so on an RTX 5070 Ti the operator may
+      # provision an ADAPTED runtime instead. The historical pins stay the default contract; a run
+      # under this profile is recorded as variant_provenance.runtime_adaptation and is never labeled
+      # an exact paper reproduction.
+      adapted_runtime:
+        target_compute_capability: sm_120
+        # PC baseline floor is the first Blackwell stable line's bugfix pair (2.7.1 / 0.22.1).
+        # An already-provisioned 2.8.0 / 0.23.0 cu128 environment (workbench/envs/tme-adapted) remains
+        # accepted: preserve working newer setups, do not downgrade them. Historical torch 2.1.2
+        # remains the author contract for older GPUs only.
+        # Target-PC model loading and CUDA forward are still required; declaration is not a GPU pass.
+        pytorch: '>=2.7.1,<2.9'
+        torchvision: '>=0.22.1,<0.24'
+        cuda: '12.8'
+        # Kept from the pinned stack: the LAVIS code is pinned to transformers 4.36.0, `timm` is what
+        # the EVA vision tower is built from; retain numpy<2 for this pinned dependency stack.
+        packages: ['transformers==4.36.0', 'timm==0.9.12', 'fairscale==0.4.13', 'numpy<2']
+        pip_index_url: https://download.pytorch.org/whl/cu128
+    method_name: TME
+    research_generation: recent
+    publication_year: 2025
+    paper_title: "Learning with Noisy Triplet Correspondence for Composed Image Retrieval"
+    paper_url: https://openaccess.thecvf.com/content/CVPR2025/papers/Li_Learning_with_Noisy_Triplet_Correspondence_for_Composed_Image_Retrieval_CVPR_2025_paper.pdf
+    upstream_repo_url: https://github.com/li-shuxian/TME
+    upstream_default_branch: master
+    upstream_commit_sha: 394aad79df2c104feb32a2c96132582012765062
+    source_available: true
+    source_dir: TME
+    fashioniq_layout: fashioniq_standard
+    literature_split_label: original
+    # The native evaluator's gallery is `image_splits/split.<category>.val.json` in file order
+    # (`data.py:175-188` loads it into `image_type_names[<cat>]` and `current_image_names` becomes
+    # that list), and the reference stays ELIGIBLE because the mask is inside
+    # `if category == 'CIRR'` (`precompute_evaluation.py:83`, commented "only for cirr").
+    # That is exactly `fashioniq_original_split`: complete ordered val split, reference eligible.
+    # An earlier revision added `fashioniq_val_split_ref_included` for this model on the claim that
+    # the original-split family used a TRAIN-split gallery. That claim was wrong -- the family has
+    # always been defined over `split.<cat>.val.json` -- so the protocol was redundant and the id was
+    # removed rather than wired through every consumer.
+    native_protocol: fashioniq_original_split
+    supported_protocols: [fashioniq_original_split]
+    reported_r10: 55.15
+    reported_r50: 75.02
+    reported_mean: 65.09
+    reproduction_status: NOT_RUN
+    # The audited entry point is the wrapper (`workbench/replay/tme.py`), which supplies the
+    # invocation shell the pinned `precompute_test.py` lacks: one category at a time, a checkpoint
+    # root, and a CHECKED `load_state_dict` report rather than the native `strict=False`.
+    command_status: REPLAY_COMMAND_IMPLEMENTED
+    strict_clean_checkpoint_available: true
+    # Libraries only: get the source by cloning it. The upstream repository's GitHub metadata reports
+    # `license: null` and the root tree carries no LICENSE file; the BSD-3 headers inside the bundled
+    # LAVIS are LAVIS's licence, not this project's, so no licence is claimed here.
+    # TME has no 20% artifact: the author's only releases are the FashionIQ 0% and CIRR 0% weights.
+    # The requested 20% training-noise condition is therefore CHECKPOINT_UNAVAILABLE, not substituted.
+    requested_conditions_unavailable:
+      - checkpoint_training_noise_pct: 20
+        reason: CHECKPOINT_UNAVAILABLE
+        detail: >-
+          The author publishes `fashioniq-0.0-best` and `cirr-0.0-best` on Kaggle and nothing else; no
+          20%-noise TME checkpoint exists at any author-linked location. Relabelling the 0% artifact,
+          adding noise to the validation split, or training a model to manufacture availability are
+          all refused.
+    notes: >-
+      Paper Table 2 (FashionIQ validation, sigma=0): Dress R@10/R@50 49.73/71.69, Shirt 56.43/74.44,
+      Toptee 59.31/78.94, Average 55.15/75.02, AVG 65.09. The paper reports the BEST-validation
+      checkpoint when sigma=0 and the FINAL checkpoint when sigma>0, so a run must state which rule it
+      followed. The author publishes 0% weights for FashionIQ and CIRR only; no 20% checkpoint is
+      listed, so the requested 20% condition is CHECKPOINT_UNAVAILABLE rather than substituted.
+    # Which of the clean variants a FashionIQ run means when the operator names no checkpoint.
+    # Both TME 0% weights are clean, so without this declaration the workflow is ambiguous between
+    # the FashionIQ-trained weight and the CIRR-trained one -- and letting the CIRR weight become the
+    # FashionIQ default by ordering would silently run the wrong experiment. CIRR remains reachable
+    # by naming it explicitly.
+    checkpoint_selection_preference: fashioniq_0
+    checkpoint_variants:
+      - checkpoint_id: fashioniq_0
+        # The endpoint serves a gzip/tar CONTAINER, not a weight: a range probe on
+        # `/1/download` answers 302 to `.../bundle/archive.tar.gz` on storage.googleapis.com and the
+        # body begins `1f8b0800`. Writing those bytes to a file named `best_model.pth` produced a
+        # correctly named archive that no loader could read, so the registry now declares the
+        # container's member and both sizes instead of one size for two different objects.
+        #
+        # `filename` is deliberately NOT the member's own name: both variants ship a member called
+        # `best_model.pth`, so keeping that name would collapse the FashionIQ and CIRR weights onto
+        # one path. The extracted member is published under the declared name below.
+        filename: fashioniq_0_best_model.pth
+        archive_member: best_model.pth
+        # Container size, observed on the live endpoint (compressed).
+        archive_size_bytes: 2533586661
+        # The EXTRACTED member: the audit inspected this value inside the container. Verified again
+        # after download by the local SHA-256 recorded in the manifest, which is a LOCAL hash -- Kaggle
+        # publishes no author checksum for this artifact, so `expected_sha256` stays null rather than
+        # presenting a local digest as an author-published one.
+        expected_size_bytes: 2728382104
+        expected_sha256: null
+        download_url: https://www.kaggle.com/api/v1/models/charlesneilsucian/tme/pytorch/fashioniq-0.0-best/1/download
+        source_type: author_kaggle
+        source_revision: '1'
+        checkpoint_training_noise_pct: 0
+        evaluation_noise_pct: 0
+        status: URL_VERIFIED
+        # The author links this artifact as the FashionIQ 0% release, which is what the run label
+        # depends on; the mapping is established by that link plus the container's single member,
+        # not by promoting an unexamined file to VERIFIED.
+        checkpoint_mapping_status: VERIFIED_METADATA
+      - checkpoint_id: cirr_0
+        # Same container shape and same member name as the FashionIQ variant; see above. This is the
+        # CIRR-trained weight and it must never resolve to the FashionIQ file.
+        filename: cirr_0_best_model.pth
+        archive_member: best_model.pth
+        archive_size_bytes: 2533584902
+        expected_size_bytes: 2728382104
+        expected_sha256: null
+        download_url: https://www.kaggle.com/api/v1/models/charlesneilsucian/tme/pytorch/cirr-0.0-best/1/download
+        source_type: author_kaggle
+        source_revision: '1'
+        checkpoint_training_dataset: CIRR
+        checkpoint_forwards_dataset: CIRR
+        checkpoint_training_noise_pct: 0
+        evaluation_noise_pct: 0
+        status: URL_VERIFIED
+        checkpoint_mapping_status: VERIFIED_METADATA

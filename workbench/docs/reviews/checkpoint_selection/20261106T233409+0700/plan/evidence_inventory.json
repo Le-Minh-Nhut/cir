@@ -1,0 +1,85 @@
+{
+ "previous_session": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700",
+ "this_session": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T233409+0700",
+ "report_claims": [
+  {
+   "claim": "hint measurement",
+   "path": "cohort/measurements/hint_fashioniq.json",
+   "exists": true,
+   "bytes": 4333
+  },
+  {
+   "claim": "encoder measurement",
+   "path": "cohort/measurements/encoder_fashioniq.json",
+   "exists": true,
+   "bytes": 2320
+  },
+  {
+   "claim": "limn measurement",
+   "path": "cohort/measurements/limn_base_iter0.json",
+   "exists": true,
+   "bytes": 1894
+  },
+  {
+   "claim": "tme measurement",
+   "path": "cohort/measurements/tme_fashioniq_0.json",
+   "exists": true,
+   "bytes": 11483
+  },
+  {
+   "claim": "habit",
+   "path": "cohort/measurements/habit_fiq_n02.json",
+   "exists": true,
+   "bytes": 4571
+  },
+  {
+   "claim": "intent",
+   "path": "cohort/measurements/intent_fiq_n02.json",
+   "exists": true,
+   "bytes": 4573
+  },
+  {
+   "claim": "conesep",
+   "path": "cohort/measurements/conesep_fiq_n02.json",
+   "exists": true,
+   "bytes": 4490
+  },
+  {
+   "claim": "csmcir blocker",
+   "path": "cohort/measurements/csmcir_blocker.json",
+   "exists": true,
+   "bytes": 2007
+  },
+  {
+   "claim": "ptha blocker",
+   "path": "cohort/measurements/ptha_mtst_transfer_blocker.json",
+   "exists": true,
+   "bytes": 1459
+  },
+  {
+   "claim": "pair verdict",
+   "path": "pair_compat/manifests/pair_compat_verdict.json",
+   "exists": true,
+   "bytes": 6920
+  },
+  {
+   "claim": "pair summary",
+   "path": "pair_compat/measurements/summary.json",
+   "exists": true,
+   "bytes": 2322
+  },
+  {
+   "claim": "cohort summary",
+   "path": "cohort/measurements/cohort_summary.json",
+   "exists": true,
+   "bytes": 2984
+  },
+  {
+   "claim": "acquired manifests",
+   "path": "cohort/manifests_acquired_final.json",
+   "exists": true,
+   "bytes": 4096
+  }
+ ],
+ "missing": []
+}
