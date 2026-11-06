@@ -1,0 +1,81 @@
+{
+ "schema_version": 1,
+ "session": "20261107T021500+0700",
+ "entries": [
+  {
+   "dest": "README.md",
+   "bytes": 3187,
+   "sha256": "7508b9e5e6e816c2a50521d67a7e107267d4058204e1d96953454878c4350b9d"
+  },
+  {
+   "dest": "csmcir/asset_verification.txt",
+   "bytes": 1778,
+   "sha256": "abd3878fa41f4782495696b9be9231d34181ec5dd4a3f1acffb4f23e2b00c950"
+  },
+  {
+   "dest": "csmcir/call_path_probe.txt",
+   "bytes": 2815,
+   "sha256": "3d8639d0d1b51aa160a3ad66b950e56c64742ed6449386baaff248f7fd6fb5c3"
+  },
+  {
+   "dest": "csmcir/full_eval.log",
+   "bytes": 46819,
+   "sha256": "22dc0587650b8c0e148cf90d0a4998027be8a8b411e4c512f2a83d834722c895"
+  },
+  {
+   "dest": "csmcir/measurement.json",
+   "bytes": 2336,
+   "sha256": "e503a65768c3038360b7accf78818c14def9bcec5a7e70d6a40974e631d1f688"
+  },
+  {
+   "dest": "csmcir/scripts/apply_operational_save_memory.py",
+   "bytes": 2602,
+   "sha256": "b5b9abe4c8c91e8e91b3c27b25a4518a4b01457d5bb37bdd20752658fc689fea"
+  },
+  {
+   "dest": "csmcir/scripts/build_csmcir_derived.py",
+   "bytes": 4307,
+   "sha256": "0643a9549a218599b256d2179559012a26cb244bfd1a2acba96f264d62d2afd7"
+  },
+  {
+   "dest": "csmcir/scripts/csmcir_call_path_probe.py",
+   "bytes": 3368,
+   "sha256": "a324b59f98f8b97859cabbdabcfd09e33f68a14c0a40f945a777672a717d64b2"
+  },
+  {
+   "dest": "csmcir/scripts/set_query_batch.py",
+   "bytes": 1639,
+   "sha256": "605a8116d5f2948e904b49215ec198b6ddd0cfb04a3d636f61492ab020458d31"
+  },
+  {
+   "dest": "csmcir/scripts/thread_save_memory.py",
+   "bytes": 3896,
+   "sha256": "01e2b07591ac0275b24bf44c88cc07036c1ebd4d6c6a31d213092bb7d5335dd8"
+  },
+  {
+   "dest": "glove_recipe/determinism.json",
+   "bytes": 708,
+   "sha256": "4a931e39cf220d2bcc92fe4d56afef2cc35e2c94ad45336526d76b5db4318d42"
+  },
+  {
+   "dest": "glove_recipe/run1_manifest.json",
+   "bytes": 1682,
+   "sha256": "ae5252f8ac9240797677c9b6a71ab10f75142beee78872fadb8a8b3d5e2763db"
+  },
+  {
+   "dest": "glove_recipe/run2_manifest.json",
+   "bytes": 1682,
+   "sha256": "ae5252f8ac9240797677c9b6a71ab10f75142beee78872fadb8a8b3d5e2763db"
+  },
+  {
+   "dest": "glove_recipe/scripts/dcnet_glove_recipe.py",
+   "bytes": 4313,
+   "sha256": "2b39f122085f8358ef35813e67a509ec362f2699a2fbd9a36228a471d3e0670a"
+  },
+  {
+   "dest": "registry_diff_csmcir.md",
+   "bytes": 4450,
+   "sha256": "5c98c1dd5450943d6f0e74f4dfd29a4befc3a3b247bccf6e646acc804fd2dee7"
+  }
+ ]
+}

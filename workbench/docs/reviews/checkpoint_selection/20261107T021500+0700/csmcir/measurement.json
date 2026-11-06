@@ -1,0 +1,62 @@
+{
+ "model_id": "csmcir",
+ "checkpoint_id": "fashioniq",
+ "protocol": "fashioniq_original_split",
+ "split_label": "val",
+ "per_category": {
+  "dress_recall_at10": 52.20624804496765,
+  "dress_recall_at50": 74.86366033554077,
+  "toptee_recall_at10": 61.19326949119568,
+  "toptee_recall_at50": 80.92809915542603,
+  "shirt_recall_at10": 57.75269865989685,
+  "shirt_recall_at50": 76.1040210723877,
+  "average_recall_at10": 57.05073873202006,
+  "average_recall_at50": 77.29859352111816,
+  "average_recall": 67.17466612656911
+ },
+ "macro_r10": 57.05073873202006,
+ "macro_r50": 77.29859352111816,
+ "macro_mean": 67.17466612656911,
+ "reported_paper": {
+  "r10": 57.07,
+  "r50": 77.27,
+  "mean": 67.17
+ },
+ "checkpoint": {
+  "path": "workbench/artifacts/checkpoints/csmcir/fashioniq_tuned_clip_best.pt",
+  "bytes": 2720615859,
+  "sha256": "c8812071de0640d647c5ba2a70628b80a3289ee2c47676f7a1b6abaa313fa49e",
+  "load_missing_keys": [],
+  "note": "strict=False; the checkpoint's extra `token_importance` (32 trained values) is not in either class's state_dict because the author assigns an unsqueezed Tensor, so it stays an unregistered attribute. Both the CSMCIR class and the author's .pyc share this; reproducing it is what yields the paper numbers."
+ },
+ "inputs": {
+  "dress": {
+   "sha256": "b7129bafc56ed7f33ea5175e565358b042b5ef9263af002758564579ebb5b6a6",
+   "bytes": 2817386
+  },
+  "shirt": {
+   "sha256": "bbe6f689dfe0c5fcc897979f90877fcaa2c4c8d3dc405cb64f1507fc78452cc9",
+   "bytes": 5015979
+  },
+  "toptee": {
+   "sha256": "acdacc3d8d0565e645324ddd838cb288f1bc69434635d83ece127b93dacac1cc",
+   "bytes": 3929303
+  }
+ },
+ "query_counts": {
+  "dress": 2017,
+  "shirt": 2038,
+  "toptee": 1961
+ },
+ "operational_parameters": {
+  "interpreter": "workbench/artifacts/environments/cir-005ef4e1b02999a5/bin/python (3.10)",
+  "torch": "2.7.1+cu128",
+  "compute_capability": "12.0",
+  "query_batch_size": 8,
+  "gallery_batch_size": 32,
+  "PYTORCH_CUDA_ALLOC_CONF": "expandable_segments:True",
+  "gallery_accumulation": "cpu (extractor save_memory path)"
+ },
+ "evidence_class": "PUBLIC_CAPTION PATH-MAPPED RESEARCH RUN",
+ "equivalence_to_historical_cot_input": "NOT PROVEN: the three caption JSONs are the bytes published at the pinned Hub revision; whether they are the files the authors evaluated with is not established by any author statement"
+}

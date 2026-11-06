@@ -1,0 +1,19 @@
+{
+ "label": "WORKBENCH_SEEDED_RECIPE",
+ "seed": 0,
+ "files": 9,
+ "run1_equals_run2": true,
+ "matches_previously_measured_artifact": {
+  "cap.dress.glove.test.pkl": true,
+  "cap.dress.glove.train.pkl": true,
+  "cap.dress.glove.val.pkl": true,
+  "cap.shirt.glove.test.pkl": true,
+  "cap.shirt.glove.train.pkl": true,
+  "cap.shirt.glove.val.pkl": true,
+  "cap.toptee.glove.test.pkl": true,
+  "cap.toptee.glove.train.pkl": true,
+  "cap.toptee.glove.val.pkl": true
+ },
+ "all_match": true,
+ "note": "The author's script samples OOV vectors unseeded, so this recipe cannot reproduce the author's bytes; they were never published. All ten outputs here match the artifact DCNet was measured against, byte for byte."
+}

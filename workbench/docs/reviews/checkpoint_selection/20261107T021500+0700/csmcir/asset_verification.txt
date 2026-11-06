@@ -1,0 +1,21 @@
+=== COT_ours2 / qwen_captions asset verification ===
+
+-- data/FashionIQ/qwen_captions
+dress: bytes=2817386 sha256=b7129bafc56ed7f33ea5175e565358b042b5ef9263af002758564579ebb5b6a6 official=MATCH records=3817 expected=3817 key_coverage_gallery=True refs_covered=True targets_covered=True empty_final=0
+shirt: bytes=5015979 sha256=bbe6f689dfe0c5fcc897979f90877fcaa2c4c8d3dc405cb64f1507fc78452cc9 official=MATCH records=6346 expected=6346 key_coverage_gallery=True refs_covered=True targets_covered=True empty_final=0
+toptee: bytes=3929303 sha256=acdacc3d8d0565e645324ddd838cb288f1bc69434635d83ece127b93dacac1cc official=MATCH records=5373 expected=5373 key_coverage_gallery=True refs_covered=True targets_covered=True empty_final=0
+
+-- workbench/third_party/CSMCIR/COT_ours2/fashioniq
+dress: bytes=2817386 sha256=b7129bafc56ed7f33ea5175e565358b042b5ef9263af002758564579ebb5b6a6 official=MATCH records=3817 expected=3817 key_coverage_gallery=True refs_covered=True targets_covered=True empty_final=0
+shirt: bytes=5015979 sha256=bbe6f689dfe0c5fcc897979f90877fcaa2c4c8d3dc405cb64f1507fc78452cc9 official=MATCH records=6346 expected=6346 key_coverage_gallery=True refs_covered=True targets_covered=True empty_final=0
+toptee: bytes=3929303 sha256=acdacc3d8d0565e645324ddd838cb288f1bc69434635d83ece127b93dacac1cc official=MATCH records=5373 expected=5373 key_coverage_gallery=True refs_covered=True targets_covered=True empty_final=0
+
+=== query counts (protocol invariants) ===
+dress: queries=2017 gallery=3817
+shirt: queries=2038 gallery=6346
+toptee: queries=1961 gallery=5373
+
+=== shirt/toptee 121-ID overlap ===
+overlap=121 identical_Final_Caption=0 differing=121
+merge order (utils_csmcir.py:97-103): dress -> shirt -> toptee, dict.update => TOPtee WINS
+sample differing: B00018AA74

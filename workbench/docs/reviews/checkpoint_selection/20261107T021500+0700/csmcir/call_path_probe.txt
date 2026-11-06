@@ -1,0 +1,45 @@
+FashionIQ val - ['dress'] dataset in relative mode initialized
+FashionIQ val - ['dress'] dataset in classic mode initialized
+FashionIQ val - ['shirt'] dataset in relative mode initialized
+FashionIQ val - ['shirt'] dataset in classic mode initialized
+FashionIQ val - ['toptee'] dataset in relative mode initialized
+FashionIQ val - ['toptee'] dataset in classic mode initialized
+FashionIQ val - ['dress'] dataset in classic mode initialized
+extracting fashionIQ ['dress'] - val index features
+  0%|          | 0/120 [00:00<?, ?it/s]  0%|          | 0/120 [00:00<?, ?it/s]
+FashionIQ val - ['shirt'] dataset in classic mode initialized
+extracting fashionIQ ['shirt'] - val index features
+  0%|          | 0/199 [00:00<?, ?it/s]  0%|          | 0/199 [00:00<?, ?it/s]
+FashionIQ val - ['toptee'] dataset in classic mode initialized
+extracting fashionIQ ['toptee'] - val index features
+  0%|          | 0/168 [00:00<?, ?it/s]  0%|          | 0/168 [00:00<?, ?it/s]
+{
+ "distinct_files_opened": 12,
+ "files": [
+  "/home/heheboiz/data/cir/workbench/third_party/CSMCIR/COT_ours2/fashioniq/dress_cot_val.json",
+  "/home/heheboiz/data/cir/workbench/third_party/CSMCIR/COT_ours2/fashioniq/shirt_cot_val.json",
+  "/home/heheboiz/data/cir/workbench/third_party/CSMCIR/COT_ours2/fashioniq/toptee_cot_val.json",
+  "/home/heheboiz/data/cir/workbench/third_party/CSMCIR/fashionIQ_dataset/captions/cap.dress.val.json",
+  "/home/heheboiz/data/cir/workbench/third_party/CSMCIR/fashionIQ_dataset/captions/cap.shirt.val.json",
+  "/home/heheboiz/data/cir/workbench/third_party/CSMCIR/fashionIQ_dataset/captions/cap.toptee.val.json",
+  "/home/heheboiz/data/cir/workbench/third_party/CSMCIR/fashionIQ_dataset/image_splits/split.dress.val.json",
+  "/home/heheboiz/data/cir/workbench/third_party/CSMCIR/fashionIQ_dataset/image_splits/split.shirt.val.json",
+  "/home/heheboiz/data/cir/workbench/third_party/CSMCIR/fashionIQ_dataset/image_splits/split.toptee.val.json",
+  "/home/heheboiz/data/cir/workbench/third_party/CSMCIR/fashionIQ_dataset/qwen_captions/dress_cot_val.json",
+  "/home/heheboiz/data/cir/workbench/third_party/CSMCIR/fashionIQ_dataset/qwen_captions/shirt_cot_val.json",
+  "/home/heheboiz/data/cir/workbench/third_party/CSMCIR/fashionIQ_dataset/qwen_captions/toptee_cot_val.json"
+ ],
+ "imageedit_instantiated": false,
+ "reads_bert_captions": [],
+ "reads_keywords_in_mods": [],
+ "reads_cot_ours2": [
+  "/home/heheboiz/data/cir/workbench/third_party/CSMCIR/COT_ours2/fashioniq/dress_cot_val.json",
+  "/home/heheboiz/data/cir/workbench/third_party/CSMCIR/COT_ours2/fashioniq/shirt_cot_val.json",
+  "/home/heheboiz/data/cir/workbench/third_party/CSMCIR/COT_ours2/fashioniq/toptee_cot_val.json"
+ ],
+ "gallery_stop_points": [
+  "dress: stopped at TypeError",
+  "shirt: stopped at TypeError",
+  "toptee: stopped at TypeError"
+ ]
+}

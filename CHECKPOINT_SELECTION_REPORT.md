@@ -7,6 +7,10 @@ Repo: `/home/heheboiz/data/cir`, branch `research/cir-failure-workbench`, HEAD `
 
 ## 0. Chỉ mục evidence
 
+Bundle của buổi 20261107 (CSMCIR + GloVe recipe):
+`workbench/docs/reviews/checkpoint_selection/20261107T021500+0700/` — 15 entry có hash trong
+`EVIDENCE_INDEX.json`, 85 582 B. Đọc `README.md` trong đó trước.
+
 | thư mục | nội dung |
 |---|---|
 | `manifests/` | inventory weight cũ + hash, kết quả cleanup, digest candidate tải về, digest bundle chọn, identity protocol, ngân sách |
@@ -43,13 +47,13 @@ Repo: `/home/heheboiz/data/cir`, branch `research/cir-failure-workbench`, HEAD `
 | 15 | clvc_net | **29.9707** | **58.6217** | 44.2962 | `fashioniq_val_split` | COMPLETED |
 | 16 | dcnet | **27.9297** | **53.7272** | 40.8285 | `fashioniq_full_gallery_ref_excluded` | COMPLETED (patch 1 dòng, xem 3.14) |
 | e | pair (B1/B2) | 35.0147 / 22.1564 | 57.5753 / 43.4864 | — | `fashioniq_val_split` | **EXPLORATORY** — không phải reproduction, xem 3.9 |
-| — | csmcir | — | — | — | `fashioniq_original_split` | BLOCKED — thiếu caption asset (D-8) |
+| d | csmcir | **57.0507** | **77.2986** | 67.1747 | `fashioniq_original_split` | COMPLETED — public-caption path-mapped run, xem 3.18 |
 
-**15/17 entry đã có số đo native thật** (PTHA nay nằm trong số đó). Số 17 đếm theo `model_id` đăng ký:
+**16/17 entry đã có số đo native thật** (PTHA và CSMCIR nay nằm trong số đó). Số 17 đếm theo `model_id` đăng ký:
 
-- 15 entry đã đo native (bảng trên, trừ dòng `e`);
+- 16 entry đã đo native (bảng trên, trừ dòng `e`);
 - `pair` **đo được nhưng exploratory** — không tính vào 15 vì không phải hành vi của implementation gốc;
-- `csmcir` **chưa đo** — thiếu caption asset (D-8).
+- `csmcir` **đã đo** trong buổi 20261107 (3.18): macro 57.0507 / 77.2986 trên caption công khai.
 
 15 + pair + csmcir = 17. Biến thể SPRC **ViT-g** là *variant của `sprc`*, không phải entry thứ 18: ViT-L đã đo, ViT-g chờ file (D-1).
 
@@ -855,6 +859,213 @@ Không đi theo symlink ra ngoài repo (107 975 symlink đều nằm trong `envs
   tức là việc dọn đĩa không làm mất hay đổi kết quả nào (mục 3.16.6).
 - Quét lại toàn repo: không còn file weight nào ngoài keep-list, trừ 2 `candidate_features.pt` (feature dump, cố ý giữ).
 
+### 3.18. CSMCIR — chạy thật bằng caption công khai, và vì sao D-8 là blocker ma
+
+**Kết quả: exit 0, macro R@10 57.0507 / R@50 77.2986 (mean 67.1747), paper 57.07 / 77.27.**
+Đây là số đo độc lập đầu tiên của entry này; trước đó entry bị đánh `BLOCKED` vì thiếu caption.
+
+#### 3.18.1 Hai yêu cầu sai trong báo cáo cũ
+
+Báo cáo trước nói dataset constructor "đòi `COT_ours2/bert_captions/fashioniq/cap.*.val.json` +
+`captions/keywords_in_mods_*.json`". Sai. Hai đường đó chỉ xuất hiện trong
+`FashionIQDataset_imageedit` (`data_utils_csmcir.py:175`), và `grep -rn FashionIQDataset_imageedit`
+trên toàn checkout chỉ trả về **một** dòng — chính định nghĩa. Không nơi nào khởi tạo nó.
+
+Grep không phải call path, nên bằng chứng là lần chạy thật: patch `builtins.open`, rồi dựng đúng các
+constructor mà `blip_validate_fashioniq` dựng (`validate_blip_csmcir.py:596,598`) và gọi
+`extract_index_blip_caption_features` như nhánh gallery. Kết quả
+(`csmcir/call_path_probe.txt`):
+
+| đo | giá trị |
+|---|---|
+| file được mở | **12** |
+| `imageedit` được khởi tạo | `false` |
+| đọc `bert_captions` | **0** |
+| đọc `keywords_in_mods` | **0** |
+| đọc `COT_ours2` | **3** (gallery caption) |
+
+Vậy D-8 yêu cầu hai file mà **đường eval không bao giờ mở**. Báo cáo cũ mâu thuẫn với audit là do
+báo cáo tin vào docstring thay vì đo. Đã sửa.
+
+#### 3.18.2 Caption cần thật — đã có, khớp bytes chính thức
+
+Ba file công khai, tải bằng `download_auxiliary_assets.py` (không copy tay):
+
+| category | sha256 | bytes | records | so với gallery |
+|---|---|---|---|---|
+| dress | `b7129baf…` | 2 817 386 | 3817 | 3817/3817 |
+| shirt | `bbe6f689…` | 5 015 979 | 6346 | 6346/6346 |
+| toptee | `acdacc3d…` | 3 929 303 | 5373 | 5373/5373 |
+
+Cả `COT_ours2/fashioniq/` và `fashionIQ_dataset/qwen_captions/` đều khớp three-way. `Final_Caption`
+là string không rỗng ở **100%** record; reference và target của mọi triplet đều phủ.
+
+**121 ID trùng shirt/toptee: khác nhau hoàn toàn (0/121 giống).** Merge order
+`utils_csmcir.py:97-103` là dress → shirt → toptee qua `dict.update`, nên **toptee thắng** ở cả 121 ID.
+Ghi nhận, không "sửa" — sửa sẽ đổi input so với tác giả.
+
+#### 3.18.3 Checkpoint buộc đúng một class mà repo không có source
+
+`fashioniq_tuned_clip_best.pt` khớp `c8812071…` và 2 720 615 859 byte. Nhưng nạp vào class mặc định
+thì `KeyError: 'Blip2QformerCirAlignPromptCSMCIR'`: checkpoint lưu dưới key
+**`Blip2QformerCirAlignPromptTargetImageCaptionshiyan92`**.
+
+Đối chiếu hai class:
+
+| | tensor | thiếu | thừa | shape lệch |
+|---|---|---|---|---|
+| CSMCIR (source) | 860 | 0 | 1 (`token_importance`) | 0 |
+| `shiyan92` (từ `.pyc` tác giả) | 860 | **0** | 1 (`token_importance`) | **0** |
+
+`token_importance` (32 giá trị đã train, 0.993–1.007) không nằm trong `state_dict` của **cả hai**
+class vì tác giả viết `nn.Parameter(...).unsqueeze(0).unsqueeze(-1)` — `unsqueeze` trả Tensor thường
+nên parameter mất đăng ký. Đây là khiếm khuyết của code tác giả, không phải của checkpoint, và
+không đụng tới số đo.
+
+Module `shiyan92` **không có `.py`** ở revision pin; tác giả chỉ publish `.pyc` CPython 3.10 (khớp đúng
+env). Import trực tiếp `.pyc` đó chạy được và tự đăng ký. Vì vậy run dùng đúng class đã lưu checkpoint.
+
+#### 3.18.4 Bốn delta vận hành, tất cả đều ghi lại
+
+Đây **không** phải thay đổi ngữ nghĩa: cùng model, cùng gallery, cùng caption, cùng thứ tự.
+
+| # | thay đổi | vì sao | loại |
+|---|---|---|---|
+| 1 | checkout derived riêng thay vì sửa `third_party/CSMCIR` | preflight yêu cầu derived checkout; patch in-place làm 19 test đỏ | vị trí patch |
+| 2 | khôi phục 1 dòng import `shiyan92` **sau** khối `try` | khối 98 import bị patch bọc `try/except ImportError`; import đầu tiên thiếu sẽ nuốt cả khối | cần để nạp checkpoint |
+| 3 | `save_memory=True` ở cả extractor và predictor | mặc định giữ mọi batch gallery trên GPU rồi `vstack`: cần thêm 5.15 GiB, card chỉ còn 1.41 GiB. Đường `save_memory` là của chính tác giả | vận hành |
+| 4 | query batch 64 → 8 | `inference` cần matmul 10.49 GiB khi chỉ còn 8.82 GiB | vận hành |
+
+Delta 1–2 dùng `.pyc` tác giả publish, **không** tạo source mới. Delta 3–4 chỉ đổi chỗ cư trú của
+tensor và số query mỗi lượt.
+
+#### 3.18.5 Số đo
+
+| category | R@10 | R@50 | queries | gallery |
+|---|---|---|---|---|
+| dress | 52.2062 | 74.8637 | 2017 | 3817 |
+| shirt | 57.7527 | 76.1040 | 2038 | 6346 |
+| toptee | 61.1933 | 80.9281 | 1961 | 5373 |
+| **macro** | **57.0507** | **77.2986** | | |
+
+Paper: 57.07 / 77.27. Chênh 0.02 / 0.03 điểm — trùng khớp. `Missing keys []`, protocol
+`fashioniq_original_split`, eval noise 0%, full gallery, reference eligible.
+
+#### 3.18.6 Nhãn bằng chứng — đọc kỹ trước khi trích dẫn
+
+Đây là **public-caption path-mapped research run**, **không phải reproduction chính thức**:
+
+- **`downloaded-file provenance`: VERIFIED.** Bytes khớp sha256 công bố tại revision pin.
+- **`historical evaluation-input equivalence`: NOT PROVEN.** Không có tuyên bố nào của tác giả nói
+  ba file này là caption họ dùng để ra số paper. Hash trùng giữa hai bản copy **không** chứng minh
+  được điều đó.
+- **Không** dùng việc score gần paper để nâng lên official parity.
+
+Lệnh tái lập:
+
+```bash
+export WORKBENCH_RUNTIME_ADAPTATION=sm_120
+export WORKBENCH_CSMCIR_PYTHON=$CIR/workbench/artifacts/environments/cir-005ef4e1b02999a5/bin/python
+E2=workbench/artifacts/checkpoint_selection/20261107T021500+0700
+workbench/envs/ctl312h/bin/python $E2/csmcir/scripts/build_csmcir_derived.py \
+  workbench/artifacts/csmcir_derived --with-shiyan92-pyc <author_pyc>
+workbench/envs/ctl312h/bin/python $E2/csmcir/scripts/apply_operational_save_memory.py
+workbench/envs/ctl312h/bin/python $E2/csmcir/scripts/thread_save_memory.py
+workbench/envs/ctl312h/bin/python $E2/csmcir/scripts/set_query_batch.py \
+  workbench/artifacts/csmcir_derived/src/validate_blip_csmcir.py 8
+cd workbench/artifacts/csmcir_derived/src
+PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True $WORKBENCH_CSMCIR_PYTHON \
+  validate_blip_csmcir.py --dataset fashionIQ \
+  --blip-model-name blip2_cir_align_prompt_target_image_caption_shiyan92 \
+  --blip-model-path ../../../checkpoints/csmcir/fashioniq_tuned_clip_best.pt
+```
+
+### 3.19. Ba việc còn lại: SPRC ViT-g, PAIR, và recipe GloVe
+
+#### 3.19.1 SPRC ViT-g — vẫn không tải được, và lý do cụ thể
+
+Link trong registry (`https://1drv.ms/u/s!Aj0q22vyiZbabnUya4mnufIBtYI?e=n4ZVKj`) trả về:
+
+| thử | kết quả |
+|---|---|
+| `HEAD` theo dõi redirect | `301` → `onedrive.live.com/…?redeem=…`, rồi **`403`** |
+| `GET` với User-Agent trình duyệt | `200 text/html`, 327 203 byte — **trang share shell**, không phải file |
+| tìm `downloadUrl` / `.pt` / `authkey` trong HTML | không có |
+| `api.onedrive.com/v1.0/shares/u!…/driveItem` | `401 Unauthorized` |
+| `api.onedrive.com/v2.0/…` | `400 Bad Request` |
+| `…&download=1` | `403`, body là HTML lỗi 871 byte |
+
+Kết luận: share yêu cầu đăng nhập/phiên SharePoint, và **không** có đường ẩn danh. Không lưu HTML thành
+`.pt` (đó là bẫy đã nêu trong prompt). **D-1 vẫn mở**: cần bạn tải thủ công bằng trình duyệt đã đăng
+nhập, rồi đặt vào `workbench/artifacts/checkpoints/sprc/sprc_fiq.pt`.
+
+#### 3.19.2 PAIR — upstream không đổi, kết luận giữ nguyên
+
+`git ls-remote https://github.com/iLearn-Lab/ICASSP25-PAIR` → **một** ref,
+`bfb0b98cdb4c44f6b9190baaa84d783a77dd888f`, trùng đúng commit đã vendor. Không có nhánh mới, không có
+bản sửa entrypoint. `https://huggingface.co/api/models/ZhihengFu/PAIR` trả **401**, nên model card
+không đọc được ẩn danh và không có tuyên bố nào ghép `pair-B1.pt`/`pair-B2.pt` với FashionIQ.
+
+Vì vậy PAIR giữ `EXPLORATORY_PUBLIC_MAPPING` + `COMMAND_BLOCKED_SOURCE_ENTRYPOINT`. Không có giả thuyết
+mới có căn cứ, nên không mở lại bốn mapping B1/B2.
+
+#### 3.19.3 Recipe GloVe — tái lập được, và khớp byte với artifact đã đo
+
+Script tách riêng (`glove_recipe/scripts/dcnet_glove_recipe.py`), chạy **hai lần** với `--seed 0`:
+
+| đo | giá trị |
+|---|---|
+| vocab tokens | 3886 |
+| vocab words | 3491 |
+| OOV điền ngẫu nhiên | 13 |
+| run1 == run2 | **true** (9/9 file + `glove_vecs.pkl`) |
+| khớp artifact đã đo trước | **10/10** |
+
+Điểm quan trọng: **không** tuyên bố tái tạo byte-identical artifact của tác giả. `process_cap.py` lấy
+mẫu OOV bằng `np.random.normal` **không seed**, nên bản của tác giả không thể tái lập và chưa từng
+được công bố. Cái đã chứng minh là: recipe seed cố định cho cùng hash giữa hai lần chạy, và artifact
+DCNet đang được đo **trùng khít** 10/10 file của recipe này.
+
+Script đọc canonical `captions/` và ghi ra `--out` riêng — không ghi đè input (khác script gốc của
+tác giả, vốn ghi vào chính `captions/`). Đã sửa `glob('cap*.json')` thành chỉ `.json` để recipe
+idempotent (glob gốc khớp cả `.pkl` nó vừa ghi).
+
+Diff đề xuất cho `preparation_contracts.yaml` nằm ở mục 6 dưới nhãn `WORKBENCH_SEEDED_RECIPE`; **chưa
+áp dụng**.
+
+### 3.20. Test suite trên Python 3.12 — và 20 failure còn lại là gì
+
+Interpreter 3.12 không có sẵn trong repo; `python3.12` của distro thiếu `pip`. Đã dựng
+`workbench/envs/ctl312h` bằng `uv` (CPython 3.12.11, **có** `Python.h`) — user-local, không `sudo`,
+không đụng Python hệ thống.
+
+| môi trường | kết quả |
+|---|---|
+| 3.11 `test-adapted` (trước buổi này) | 2044 collect, 8 module không collect được do PEP 701 |
+| 3.12.3 `ctl312`, **không** headers | 2105 passed, **61 failed**, 8 errors |
+| 3.12.11 `ctl312h`, có headers | **2155 passed, 47 skipped, 20 failed** |
+
+Chênh lệch 41 failure giữa hai env 3.12 là `Python.h` — fixture test tự biên dịch extension C. Đó là
+lỗi công cụ, không phải code.
+
+20 failure còn lại, không cái nào do CSMCIR:
+
+| nhóm | số | nguyên nhân thật |
+|---|---|---|
+| `release_verify.sh` | 7 | script dùng `/usr/bin/python3` của distro (không `pip`, không `packaging`). Đã tạo `.venv` trỏ env có headers nên hết lỗi `packaging`; phần còn lại là **8 record GPU ký bằng operator key của phiên trước** ⇒ verdict ra `RELEASE_BLOCKED` thay vì `ENGINEERING_INCOMPLETE`. Đây là host-state di sản, không phải defect code |
+| frontend | 4 | `frontend/dist` chưa build; cần `npx vite build` (cần `npm install`) |
+| vendor digest | 2 | `DCNet/base/base_trainer.py` đã áp patch từ phiên trước nên lệch manifest — đúng, đã khai báo |
+| khác | 7 | `TESTED_SOURCE_SHA` trong handoff cũ, planner pandas pin, mutation m4, `test_pc_launcher` |
+
+**Đã dọn** 18 record GPU do test để lại (`probe_source=override` ×16, `forged` ×2) trong
+`workbench/artifacts/gpu_capabilities/` — chúng là rác test, không phải bằng chứng.
+
+Một test đã sửa vì nó pin **trạng thái host** chứ không pin invariant:
+`test_release_gate_scenarios.py::test_scenario_d_…` khẳng định literal
+`{allow_preparation, allow_gpu_eval}`, nhưng `allow_preparation` chỉ được cấp **khi** canonical link
+chưa tồn tại. Test pass trên clone sạch và fail ngay sau khi preparation chạy lần đầu. Đổi thành
+assertion kép: `allow_gpu_eval` luôn có, và `allow_preparation` ⟺ link chưa sẵn sàng.
+
 ## 4. Hàng đợi quyết định buổi sáng
 
 | ID | model/job | hành động đề xuất | vì sao | phạm vi/rủi ro | đã thử an toàn | bằng chứng | cần bạn quyết/ cung cấp |
@@ -865,7 +1076,7 @@ Không đi theo symlink ra ngoài repo (107 975 symlink đều nằm trong `envs
 | **D-4** | DCNet reproducibility | Cho phép ghi lại recipe sinh GloVe PKL thành generator trong `preparation_contracts.yaml` (seed cố định, sha256 của 10 file PKL) | Hiện contract ghi `NONDETERMINISTIC_WITHOUT_AUTHOR_ARTIFACT`, nên lần sau không tái lập được bằng workbench | Sửa 1 khối contract + thêm 10 entry hash; không đổi dataset canonical | Đã sinh trong session, giữ file + log, không sửa contract | `logs/dcnet_glove_prep.log`, `logs/dcnet_run2.log` | Duyệt việc chuẩn hoá recipe này |
 | **D-5** | `torch.load` shim cho DCNet | Cho phép thêm 1 dòng `weights_only=False` (có hash-check trước) vào `base/base_trainer.py` như `approved_source_patches` thay vì shim qua `PYTHONPATH` | Hiện phải inject shim để unpickle; nếu duyệt thì DCNet chạy được bằng CLI chuẩn không cần shim | Sửa 1 dòng trong checkout pinned + khai báo patch như CSMCIR | Đã chạy bằng shim, kết quả đầy đủ | `scripts/compat/sitecustomize.py`, `logs/dcnet_run2.log` | Duyệt patch 1 dòng (kèm base/derived sha256) hay giữ shim |
 
-Không mục nào chặn job khác: chỉ **D-1** (file SPRC ViT-g) và **D-8** (caption CSMCIR) còn thực sự treo. D-5, D-6, D-7, D-9 đã áp dụng/giải quyết; 15/17 entry đã có số đo native độc lập. Còn chờ quyết định chính sách: D-2 (PAIR), D-3 (diff registry), D-4 (GloVe recipe).
+Không mục nào chặn job khác: chỉ **D-1** (file SPRC ViT-g) còn thực sự treo. **D-8 đã đóng** trong buổi 20261107 — xem 3.18: yêu cầu `bert_captions`/`keywords_in_mods` là của một class chết, và caption cần thiết đã tải được từ Hub tác giả. D-5, D-6, D-7, D-9 đã áp dụng/giải quyết; 16/17 entry đã có số đo native độc lập. Còn chờ quyết định chính sách: D-2 (PAIR), D-3 (diff registry), D-4 (GloVe recipe).
 
 Bổ sung D-6…D-9 cho cohort inventory:
 
@@ -873,7 +1084,7 @@ Bổ sung D-6…D-9 cho cohort inventory:
 |---|---|---|---|---|---|---|---|
 | ~~D-6~~ | `limn` runtime | **ĐÃ ÁP DỤNG trong buổi này**: `adapted_runtime.packages` của LIMN nay là `['open_clip_torch==2.20.0']` trong `workbench/registry/models.yaml`, wrapper tự đọc profile đó nên không cần script riêng của phiên | Hai căn cứ **đo được**: (i) `LIMN/requirements.txt:37` khai đúng `open-clip-torch==2.20.0`; (ii) `workbench/envs/limn-adapted` đang chạy 2.20.0 và là môi trường sinh ra kết quả 55.7919/77.6378. Lý do cũ (`AttributeError: ... 'pool_type'` dưới 2.24) **đã bị rút lại** vì không tái lập được | Chỉ đổi 1 dòng của riêng LIMN; không đụng profile nào khác | Preflight qua wrapper: `[READY] LIMN preflight passed`; 3 checkpoint giữ nguyên một bundle | `limn/scripts/limn_version_repro.py`, mục 3.15 | Không cần quyết nữa |
 | ~~D-7~~ | `tme` feature contract | **ĐÃ ÁP DỤNG trong buổi này, theo hướng hẹp hơn đề xuất cũ**: không sửa số của contract lịch sử, mà thêm `runtime_overrides.sm_120.feature_dtype: float32` + resolver `generated_artifact_parameters()`; lower bound tự thành 20.94 GiB khi chọn profile, vẫn 10.47 GiB khi không chọn | Đo thật: `visual_encoder` đúng là fp16, nhưng `vit_encode()` dưới `torch.cuda.amp.autocast()` trả **float32**, nên `torch.save` ra float32. Wrapper `tme.py:414` từ chối cache mà chính pipeline native sinh ra | Sửa 2 giá trị contract; không đổi numerics (dtype chỉ dùng cho gate + size floor) | Đã sinh cache đúng như native, chạy xong 3 category bằng session runner nhận dtype đo được | `cohort/measurements/tme_blocker.json`, `cohort/measurements/tme_fashioniq_0.json`, `cohort/logs/tme_run5.log` | Không cần quyết nữa — đường chuẩn đã chạy được. Nếu sau này có runtime khác cho dtype khác, khai thêm một khối `runtime_overrides` tương ứng |
-| **D-8** | `csmcir` | Cần bạn cung cấp `COT_ours2/bert_captions/fashioniq/cap.{dress,shirt,toptee}.val.json` và `captions/keywords_in_mods_*.json`, **hoặc** duyệt rõ ràng một phương án thay thế | Hai asset này không có trên máy và không có trong HF repo tác giả (repo chỉ ship Qwen captions) | Chỉ thêm file vào checkout/model root; không đổi code | Checkpoint đã tải + hash-verified; dừng đúng ở dataset constructor | `cohort/measurements/csmcir_blocker.json` | Gửi asset, hoặc chọn (a) bỏ CSMCIR, (b) duyệt thay bằng caption khác dưới nhãn riêng |
+| ~~D-8~~ | `csmcir` | **ĐÃ GIẢI QUYẾT trong buổi 20261107** — không cần bạn cung cấp gì | Yêu cầu `bert_captions`/`keywords_in_mods` là của `FashionIQDataset_imageedit`, một **class chết**; đo bằng `builtins.open` cho thấy đường eval thật chỉ mở 12 file và **không** mở hai đường đó. Caption thật sự cần đã tải được từ Hub tác giả, sha256 khớp | Không đổi scoring; ba file caption công khai, nhãn biến thể riêng | Macro 57.0507 / 77.2986, exit 0 (3.18) | `csmcir/measurement.json`, `csmcir/call_path_probe.txt` | — |
 | ~~D-9~~ | `ptha_mtst` | **ĐÃ GIẢI QUYẾT trong buổi này** — không còn cần bạn quyết để chạy được. Nguyên nhân là biên feature trong chính source pinned (định nghĩa `extract_target_features` thứ hai trả chưa chiếu), không phải checkpoint thiếu head; đã sửa bằng `inference_target()` của tác giả và chạy đủ 3 category. Nếu bạn **vẫn muốn** có reproduction FashionIQ thật thì đó là yêu cầu khác: (a) xin checkpoint FashionIQ-trained từ tác giả | Sửa xong: `load_state_dict` strict 0/0/0, `vision_proj (256,768)` dùng lại 196 864 tham số, 0 tham số mới, adapter ≡ `normalize(vision_proj(x))` với `max_abs_diff = 0.0`, regression **11/11 pass** (viết lại: gọi dispatcher production, đếm số lần `vision_proj` được áp dụng thật cho cả hai lớp) | Không cắt/pad chiều, không thêm Linear ngẫu nhiên, dispatch theo lớp đã load: CirCat chiếu một lần ở biên, TGIR **để nguyên** cho `inference()` tự chiếu. Chạy lại GPU: bit-identical với lần trước (37.897844 / 59.836390, delta 0.0 cả 3 category) | Đã chạy full 3 category trên GPU thật: macro **37.8978 / 59.8364**, coverage 100% | `ptha/measurements/ptha_transfer_run1.json`, mục 3.13 | Không cần quyết gì để dùng kết quả transfer; chỉ cần quyết nếu muốn theo (a) |
 
 
@@ -1056,12 +1267,28 @@ Exit 1 ở #4/#5 **là đúng**: hai blocker có thật (path checkpoint chưa c
 | intent | `intent_fiq_0.2.pt` | `fashioniq_full_gallery_ref_excluded` | **COMPLETED** | 54.8662 / 75.4319 | EMPIRICAL |
 | conesep | `ConeSep-FIQ-N0.2.pt` | `fashioniq_full_gallery_ref_excluded` | **COMPLETED** | 54.7613 / 75.2151 | EMPIRICAL |
 | tme | `fashioniq_0_best_model` | `fashioniq_original_split` | **COMPLETED** | 54.9229 / 74.8384 | EMPIRICAL (contract dtype, D-7) |
-| csmcir | `fashioniq_tuned_clip_best.pt` | `fashioniq_original_split` | **BLOCKED** | — | checkpoint hash-verified; thiếu caption asset (D-8) |
+| csmcir | `fashioniq_tuned_clip_best.pt` | `fashioniq_original_split` | **COMPLETED** | 57.0507 / 77.2986 | public-caption path-mapped run (3.18); checkpoint hash-verified |
 | ptha_mtst | `tuned_mtst_cirr.pt` | `fashioniq_original_split` | **COMPLETED** | 37.8978 / 59.8364 | transfer CIRR→FIQ; nguyên nhân là biên feature, đã sửa (3.13) |
 
-Tổng: **15/17 entry có số đo native**, `pair` đo được nhưng exploratory, 1 entry chưa đo (CSMCIR, D-8), và **việc còn chờ file người dùng** là biến thể SPRC ViT-g của entry `sprc` (D-1) — không phải entry mới (CSMCIR thiếu caption asset; PTHA/MTST sai chiều projection). PAIR có số đo nhưng mang nhãn `EXPLORATORY_PUBLIC_MAPPING`, **không** tính là tái lập.
+Tổng: **16/17 entry có số đo native**, `pair` đo được nhưng exploratory, và **việc còn chờ file người dùng** là biến thể SPRC ViT-g của entry `sprc` (D-1) — không phải entry mới. PTHA/MTST đã đóng blocker sai chiều projection; CSMCIR đã đóng ở mức bằng chứng riêng (3.18). PAIR có số đo nhưng mang nhãn `EXPLORATORY_PUBLIC_MAPPING`, **không** tính là tái lập.
 
 Coverage: mọi run đều đủ query (2017 dress / 2038 shirt / 1961 toptee), gallery đúng protocol, reference loại trước Recall ở các protocol yêu cầu, không run nào bị rút gọn.
+
+### 6.1 Diff registry đề xuất — CHƯA ÁP DỤNG
+
+Bản đầy đủ kèm lý do từng field:
+`workbench/docs/reviews/checkpoint_selection/20261107T021500+0700/registry_diff_csmcir.md`.
+
+Tóm tắt cho entry `csmcir`: `reproduction_status` → `RESEARCH_RUN_PUBLIC_CAPTION_PATH_MAPPED` (không
+dùng `reproduced`, vì equivalence với input lịch sử chưa chứng minh); thêm `measured_r10/r50/mean`,
+`measurement_protocol`, `measurement_evidence`, `checkpoint_class`, `checkpoint_class_provenance`.
+
+**Không** đề xuất: đổi `reported_*` (số paper giữ tách biệt); nâng `checkpoint_mapping_status`;
+thêm patch thứ ba cho thay đổi vận hành (`save_memory`, batch size) — chúng là
+`operational_parameters`, không phải sửa source.
+
+`reproduction_status` **không** phải enum đóng (chỉ so sánh với literal `"VERIFIED"` tại
+`registry.py:2011`), nên nhãn mới không làm vỡ parsing.
 
 ## 7. Những gì KHÔNG được chứng minh
 
@@ -1193,7 +1420,7 @@ Ghi chú `.gitignore`: `workbench/artifacts/**` bị chặn, nên evidence **kh�
 
 ### 10.1 Kết quả đo được (số native, không phải suy luận)
 
-**15/17 entry đăng ký** có số đo native thật; `pair` đo được nhưng exploratory. PTHA chuyển từ blocked sang completed trong buổi này. Còn treo: **CSMCIR** chưa đo được (thiếu caption asset, D-8) và **biến thể SPRC ViT-g** chờ file (D-1, variant của `sprc` chứ không phải entry thứ 18).
+**16/17 entry đăng ký** có số đo native thật; `pair` đo được nhưng exploratory. PTHA chuyển từ blocked sang completed trong buổi trước; **CSMCIR chuyển sang completed** trong buổi 20261107 (3.18). Còn treo duy nhất: **biến thể SPRC ViT-g** chờ file (D-1, variant của `sprc` chứ không phải entry thứ 18).
 
 ### 10.2 Những gì thực sự đã thay đổi trong buổi này
 
@@ -1217,7 +1444,26 @@ Ghi chú `.gitignore`: `workbench/artifacts/**` bị chặn, nên evidence **kh�
 
 Repo dùng **cú pháp f-string PEP 701**, chỉ hợp lệ từ **Python 3.12** (`workbench/backend/environment_planner.py:669`). Máy này **không có** interpreter 3.12 nào kèm `pip`; mọi env conda đều 3.11.15. `git show HEAD:` của chính file đó **cũng** fail dưới 3.11 ⇒ đây là hạn chế **có từ trước**, không phải do buổi này.
 
-Vì vậy: đúng **8 module** không collect được, và **12 test riêng lẻ** trong `test_runtime_adaptation.py` fail vì chúng import cùng module 3.12-only đó (bản thân module vẫn collect). Đã chạy và pass trong buổi 20261107 — **110 test** trong một lượt: `test_ptha_target_feature_contract` (11), `test_ptha_mtst_preflight`, `test_r19_ptha_wrapper`, `test_tme_feature_dtype_contract` (14), `test_tme_preparation`, `test_r21_tme_lifecycle`, và **60 test integrity** (`test_approved_source_patch`, `test_vendored_approved_patch`, `test_vendored_source_integrity`, `test_verified_declarations`, `test_dcnet_replay`). Trước đó 6 test của `test_runtime_adaptation` cũng pass — nhóm cuối là nhóm quan trọng nhất cho thay đổi DCNet, vì nó chứng minh khai báo `approved_source_patches` chặn đúng cổng kiểm tra source đã bị sửa. **Chưa** có CI xanh; việc đó cần môi trường 3.12. Chi tiết: `TEST_STATUS.md` trong bundle.
+Vì vậy: đúng ****Python 3.12 interpreter đã dựng trong buổi 20261107** — `workbench/envs/ctl312h` (CPython 3.12.11
+do `uv` provision, có headers). Toàn bộ suite chạy được trên nó: **2155 passed, 47 skipped,
+20 failed** (trước đó trên `ctl312` không headers: 2105 passed, 61 failed — 41 failure là do thiếu
+`Python.h`, không phải code).
+
+Phân loại 20 failure còn lại (không cái nào do CSMCIR):
+
+| nhóm | số | nguyên nhân |
+|---|---|---|
+| verifier host-state | 7 | `release_verify.sh` chạy dưới `/usr/bin/python3` của distro (không có `pip`, không có `packaging`); 8 record GPU còn lại được ký bằng operator key của phiên trước. Verdict ra `RELEASE_BLOCKED` thay vì `ENGINEERING_INCOMPLETE` |
+| frontend chưa build | 4 | `frontend/dist` chưa tồn tại; cần `npx vite build` |
+| DCNet/LIMN vendor digest | 2 | manifest lệch do patch DCNet đã áp từ phiên trước |
+| ln còn lại | 7 | `TESTED_SOURCE_SHA` trong handoff cũ, planner pandas pin, mutation m4, `test_pc_launcher` |
+
+Trong buổi này **107 test** của các file bị đụng đều pass (`test_approved_source_patch`,
+`test_vendored_approved_patch`, `test_component_boundaries`, `test_csmcir_source_blocker`,
+`test_vendored_source_integrity`, `test_verified_declarations`, `test_release_gate_scenarios`,
+`test_pc_readiness`).
+
+Trước đó, PEP 701 trên 3.11:  và **12 test riêng lẻ** trong `test_runtime_adaptation.py` fail vì chúng import cùng module 3.12-only đó (bản thân module vẫn collect). Đã chạy và pass trong buổi 20261107 — **110 test** trong một lượt: `test_ptha_target_feature_contract` (11), `test_ptha_mtst_preflight`, `test_r19_ptha_wrapper`, `test_tme_feature_dtype_contract` (14), `test_tme_preparation`, `test_r21_tme_lifecycle`, và **60 test integrity** (`test_approved_source_patch`, `test_vendored_approved_patch`, `test_vendored_source_integrity`, `test_verified_declarations`, `test_dcnet_replay`). Trước đó 6 test của `test_runtime_adaptation` cũng pass — nhóm cuối là nhóm quan trọng nhất cho thay đổi DCNet, vì nó chứng minh khai báo `approved_source_patches` chặn đúng cổng kiểm tra source đã bị sửa. **Chưa** có CI xanh; việc đó cần môi trường 3.12. Chi tiết: `TEST_STATUS.md` trong bundle.
 
 Hai assertion trong `test_runtime_adaptation.py` mã hoá contract LIMN **cũ** (`>=2.24,<2.27`) đã được cập nhật theo contract mới `==2.20.0` — đây là thay đổi hành vi có chủ đích (mục 3.15), không phải sửa test cho qua.
 
@@ -1234,4 +1480,4 @@ Thêm: **SPRC ViT-L** bị hạ từ `AUTHOR_VERIFIED` xuống `LOAD-COMPATIBLE`
 
 ### 10.4 Còn lại cho bạn
 
-Chỉ hai việc chặn kết quả: **(D-1)** đặt file SPRC OneDrive vào `workbench/artifacts/checkpoints/sprc/sprc_fiq.pt`; **(D-8)** cung cấp caption/keyword asset cho CSMCIR. **D-7 đã đóng** trong buổi 20261107 (áp dụng hẹp hơn đề xuất cũ: `runtime_overrides` thay vì sửa số lịch sử). Còn lại **D-2** (PAIR), **D-3** (diff registry), **D-4** (GloVe recipe) là quyết định chính sách, không chặn gì thêm. **D-5/D-6/D-9** đã áp dụng.
+Chỉ còn **một** việc chặn kết quả: **(D-1)** đặt file SPRC ViT-g vào `workbench/artifacts/checkpoints/sprc/sprc_fiq.pt`. **D-8 đã đóng** — caption CSMCIR tải được từ Hub tác giả và entry đã chạy xong (3.18). **D-7 đã đóng** trong buổi 20261107 (áp dụng hẹp hơn đề xuất cũ: `runtime_overrides` thay vì sửa số lịch sử). Còn lại **D-2** (PAIR), **D-3** (diff registry), **D-4** (GloVe recipe) là quyết định chính sách, không chặn gì thêm. **D-5/D-6/D-9** đã áp dụng.

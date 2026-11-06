@@ -239,7 +239,13 @@ def test_scenario_d_csmcir_production_dag_command_parses_with_real_parser() -> N
     # protocol, which is what the single-model branch below also ends up selecting for CSMCIR.
     assert parsed_all.protocol is None
     assert parsed_all.top_k == 200
-    assert eval_stage_all.required_capabilities == {"allow_preparation", "allow_gpu_eval"}
+    #  is granted only while the model's declared canonical link still needs
+    # creating. Asserting the literal set pinned one host state: it passed on a fresh clone and failed
+    # as soon as the link existed, which is the normal state after preparation has ever run. The
+    # invariant is the implication, not the current value.
+    assert "allow_gpu_eval" in eval_stage_all.required_capabilities
+    assert ("allow_preparation" in eval_stage_all.required_capabilities) == (
+        not pipeline._dataset_link_ready(model_by_id("csmcir", registry), config))
 
     # 2. Single-model branch in real_stages (CLI workflow)
     args_single = pipe_parser.parse_args([
