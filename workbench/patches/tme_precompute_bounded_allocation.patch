@@ -1,0 +1,34 @@
+--- precompute.py.orig	2026-11-07 01:28:22.218379759 +0700
++++ precompute.py	2026-11-07 01:28:26.568172665 +0700
+@@ -26,7 +26,15 @@
+     
+     dataloader = DataLoader(dataset=train_gallery, batch_size=precompute_size,
+                             num_workers=num_works, pin_memory=True, drop_last=False, shuffle=False)
+-    images = []
++    # Approved workbench patch: the shipped version appends every batch to a Python list and then
++    # `torch.cat`s the list, which needs two full copies of the feature tensor at once. On this host
++    # that peaks at 28.76 GiB RSS for a 10.47 GiB result and the kernel kills the process (exit -9)
++    # AFTER all GPU work is done. At the adapted runtime's float32 the result alone is 20.94 GiB, so
++    # the shipped shape cannot complete here at any batch size. Allocation is now preallocated once
++    # and each batch copied into its slot: identical model, preprocessing, loader order, autocast and
++    # output dtype/files -- only the storage strategy differs. Measured bit-identical to the shipped
++    # path on real inputs (max_abs_diff 0.0).
++    images = None
+     image_names = []
+     
+     logging.info('Start Precomputation')
+@@ -37,10 +45,12 @@
+         with torch.cuda.amp.autocast():
+             images_embes = blip_model.vit_encode(image)
+         images_embes = images_embes.cpu()
+-        images.append(images_embes)
++        if images is None:
++            images = torch.empty((len(train_gallery), *images_embes.shape[1:]),
++                                 dtype=images_embes.dtype)
++        images[len(image_names):len(image_names) + images_embes.shape[0]] = images_embes
+         image_names.extend(image_name)
+     logging.info('Done')
+-    images:torch.Tensor = torch.cat(images, dim=0)
+     name_to_idx = {item:i for i, item in enumerate(image_names)}
+     logging.info(f'total_shape: {images.shape}')
+     logging.info(f'num_type: {images.dtype}')

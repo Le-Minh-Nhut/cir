@@ -1473,6 +1473,32 @@ models:
     upstream_commit_sha: 394aad79df2c104feb32a2c96132582012765062
     source_available: true
     source_dir: TME
+    # The pinned `src/precompute.py` accumulates every batch in a Python list and `torch.cat`s it,
+    # needing two full copies of the feature tensor at once. MEASURED here: 28.76 GiB RSS for a
+    # 10.47 GiB fp16 result, kernel SIGKILL (exit -9) after all GPU work finished. The adapted
+    # runtime's declared float32 makes the result 20.94 GiB, so the shipped shape cannot complete on
+    # this host at any batch size. The patch preallocates the output once and copies each batch into
+    # its slot; model, preprocessing, loader order, autocast and output dtype/files are untouched,
+    # and the storage strategies were measured bit-identical on real inputs (max_abs_diff 0.0).
+    approved_source_patches:
+      - path: src/precompute.py
+        patch_file: workbench/patches/tme_precompute_bounded_allocation.patch
+        patch_sha256: cdf7d98c439a2a372ebb0053783d55c5d2928eb5decfb3652cbf321eadccb85a
+        base_sha256: c3da9c9dc8c11b0616640f910435583471fe64f9190f6fb5abd4382bc2c48d27
+        derived_sha256: 97bdbc14c4d7ae1aa13222190e0056cb3557225fd73c51b455203898aa7ad963
+      - path: src/precompute_evaluation.py
+        patch_file: workbench/patches/tme_eval_batch_override.patch
+        patch_sha256: 0594b8896c051d351fdbefd4c4f3f7c31012eb2bab0b9e3462ed4fbd7035700a
+        base_sha256: 0f6a0573bc82e5a8e34de8bd78d1da8970c21b917e1784a44be6781b7a5581f3
+        derived_sha256: 1f13dbd5e005621d723b4026ced17afb4f6ab1ace9b51f35e4e83023f375d81b
+        reason: >-
+          the pinned gallery and query batch sizes hold a 20.94 GiB float32 gallery plus its similarity
+          pass on a 15.44 GiB card and raise CUDA OOM; the approved delta exposes them as environment
+          overrides while leaving the author defaults 256/32 unchanged
+        reason: >-
+          the shipped list+torch.cat allocation needs two full copies of the feature tensor and is
+          killed by the OOM reaper on this host at the adapted runtime's float32 size; the approved
+          delta changes only the storage strategy and was measured bit-identical on real inputs
     fashioniq_layout: fashioniq_standard
     literature_split_label: original
     # The native evaluator's gallery is `image_splits/split.<category>.val.json` in file order

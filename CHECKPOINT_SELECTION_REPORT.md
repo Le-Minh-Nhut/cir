@@ -708,17 +708,40 @@ và production validator:
 "chỉnh tay session-only" nào được thêm; giá trị hiện hành của phiên là operational, và batch đã đo
 (`[10,10,4]`) chỉ dùng cho smoke.
 
-### 3.16.6 Giới hạn còn lại — nói rõ
+### 3.16.6 Giới hạn còn lại — cập nhật sau khi dọn đĩa (2026-11-07)
 
-- **Chưa chạy lại full 3 category của TME.** Cache 22.49 GB đã bị xoá; đĩa còn 25 G, và việc đó không
-  cần thiết vì (i) số đo full-cohort cũ vẫn còn (`tme_fashioniq_0.json`, macro 54.9229/74.8384, ghi
-  `feature_dtype = torch.float32`), (ii) phần thay đổi của buổi này chỉ là **gate dtype + size bound**,
-  không đụng numerics. Chạy lại 22.49 GB chỉ để đổi tài liệu là lãng phí và không tăng bằng chứng.
-- **dtype "native" độc lập runtime vẫn chưa xác lập** — cần đo trên runtime thứ hai. Buổi này không
-  khẳng định float16 sai cho mọi runtime; nó khẳng định float16 sai cho `sm_120` đã đo.
-- **Chưa chạy forward/ranking đầy đủ qua wrapper** trong buổi này: preflight chạy thật (cả hai profile),
-  `vit_encode` chạy thật trên GPU, validator chạy thật; nhưng một lượt ranking 3-category qua wrapper
-  cần cache 22.49 GB mà đĩa không đủ. Đây là giới hạn **tài nguyên**, không phải giới hạn code.
+Ba giới hạn ghi ở bản trước đã được **gỡ bỏ bằng phép đo thật**, không phải bằng lập luận:
+
+- **Đã chạy lại full 3 category của TME qua đúng `workbench.replay.tme`.**
+  `measurements/tme_normal_path_full.json`, exit 0, macro **54.9229 / 74.8384** — khớp **từng chữ số**
+  với số đo trước đó khi TME còn phải chạy qua session runner. Cache được sinh lại và có
+  sha256 `9fead93ac746…` **trùng khít** cache đã bị xoá, nên đây là cùng một đầu vào.
+- **dtype vẫn là kết luận theo runtime**, không phải phán quyết tuyệt đối: `sm_120` đo được float32,
+  contract lịch sử giữ float16 làm default. Không có runtime thứ hai để đo trong phiên này.
+- **Giới hạn tài nguyên đã hết**: đĩa đủ chỗ sau khi dọn checkpoint cũ, nên lượt ranking 3-category
+  chạy được thật.
+
+Hai điều kiện vận hành **bắt buộc** phải ghi lại cho lượt đo này, vì không có chúng thì không chạy được.
+Cả hai đều là tham số vận hành, không phải ngữ nghĩa:
+
+| điều kiện | giá trị dùng | default của tác giả | vì sao |
+|---|---|---|---|
+| `WORKBENCH_TME_QFORMER_BS` | 64 | 256 | gallery float32 là 20.94 GiB trên thẻ 15.44 GiB; `inference()` ném CUDA OOM. Đúng như docstring pinned khuyên ("reduce Qformer_bs and query_bs") |
+| `WORKBENCH_TME_QUERY_BS` | 8 | 32 | cùng lý do |
+| `PYTORCH_CUDA_ALLOC_CONF` | `expandable_segments:True` | — | giảm phân mảnh allocator |
+| `WORKBENCH_TME_BATCH_SIZE` | 32 | 512 | sinh cache, ghi trong receipt |
+
+Đường sinh cache cũng phải sửa: `src/precompute.py` gom mọi batch vào list rồi `torch.cat`, cần **hai**
+bản sao tensor cùng lúc. Đo được 28.76 GiB RSS cho kết quả fp16 10.47 GiB (SIGKILL), và ở float32 tensor
+đã là 20.94 GiB nên không thể chạy trên máy 31 GiB RAM. Patch được khai báo qua `approved_source_patches`
+(preallocate một lần rồi copy từng batch), đã đo **bit-identical** với đường native (`max_abs_diff 0.0`).
+Sửa ở đây là **chiến lược cấp phát**, không phải số học — model, preprocess, thứ tự loader, autocast và
+dtype/file đầu ra đều giữ nguyên.
+
+Một bug thật đã lộ ra trong lúc chạy: bộ ghi receipt dùng `len(expected)` (số tên **duy nhất**, 15415)
+làm số hàng, trong khi FashionIQ val liệt kê **15536 hàng** và `_tme_validate` luôn dùng `len(names)`.
+Hai bên lệch 121 hàng nên **không receipt nào ghi được**, và một cache đúng bị báo "shape invalid".
+Đã sửa bộ ghi về `len(names)` cho khớp validator.
 
 ### 3.16.7 Bounded runner ≡ native runner (đã đo, không suy luận)
 
@@ -733,7 +756,76 @@ Runner preallocate-then-copy của phiên trước từng bị nghi là đổi h
 
 Giới hạn của kết luận: phần này chứng minh **hai runner tương đương nhau**, không chứng minh dtype `float16` trong contract là sai cho mọi runtime — xem lý do ở trên.
 
-Không sửa `float16 → float32` trong contract lịch sử vì lý do khoa học: một runtime không đủ để phủ định contract cho mọi runtime.
+Không sửa `float16 → float32` trong contract lịch sử vì lý do khoa học: một runtime không đủ để phủ định contract cho mọi runtime. Giá trị lịch sử vẫn là default; runtime đã đo được khai riêng trong `runtime_overrides.sm_120`.
+
+## 3.17 Dọn checkpoint và cache cũ (2026-11-07)
+
+Bạn cho phép bỏ workflow cũ và làm lại. Việc dọn dựa trên **nội dung file** và **registry hiện tại**,
+không dựa vào tên thư mục hay việc file đó có phải do tự train hay không.
+
+### 3.17.1 Cách phân loại
+
+Mỗi file weight được mở thật bằng `torch.load` rồi phân loại theo nội dung:
+
+| nội dung | kết luận | xử lý |
+|---|---|---|
+| dict có `model` / `optimizer` / `state_dict` / key `.weight`·`.bias` | **weight model đã train** | xoá |
+| tensor thô, hoặc dict có `sample_ids`/`features`/`timesteps` | **feature dump / kết quả đo** | **giữ** |
+| nằm trong đường dẫn registry hiện tại khai báo | checkpoint của cohort 17 model | **giữ** |
+
+Nhờ vậy không xoá mù theo đuôi `.pt/.pth/.pkl/.bin`: 12 file `.pt` hoá ra là feature dump
+(`teacher/outputs/**`, `outputs/diagnostics/**`) và được giữ nguyên.
+
+### 3.17.2 Đã xoá
+
+| nhóm | số file | dung lượng | lý do |
+|---|---|---|---|
+| checkpoint của workflow TAPER/iag_srme cũ (`outputs/`) | 142 | ~93.9 GiB | kiến trúc đã bị gỡ khỏi repo (`LEGACY_CLEANUP_AUDIT.md`); loss/objective không còn consumer nào |
+| checkpoint TAPER trong `runs/` | 8 | 1.72 GiB | cùng workflow TAPER; metadata (`metrics_val.jsonl`, `config_resolved.yaml`) **vẫn giữ** |
+| trọng số trùng / sai dataset của CLVC và TG-CIR | 10 | 2.50 GiB | 6 file CLVC trùng byte-for-byte với bản canonical trong `checkpoints/clvc/` (đối chiếu `selected_bundle_digests.json`); Fashion200K/Shoes/CIRR không thuộc FashionIQ |
+| **tổng** | **160** | **~115.68 GiB** | |
+
+Cache feature cũ đã xoá trước đó trong cùng đợt dọn: `features/cirr/csmcir` (37 GiB),
+`features/fashioniq/csmcir` (29 GiB), `features/fashioniq/fgclip2-base` (14 GiB) — tổng **78.80 GiB**.
+Cả ba do các script `precompute_*` **đã bị gỡ khỏi repo** sinh ra, và `grep` trên toàn bộ code hiện
+hành không còn tham chiếu nào (chỉ `LEGACY_CLEANUP_AUDIT.md` nhắc tên).
+
+### 3.17.3 Giữ lại và vì sao
+
+| đường dẫn | dung lượng | lý do |
+|---|---|---|
+| `workbench/artifacts/checkpoint_selection/20261106T002617+0700/checkpoints/`, `cohort/`, `downloads/` | 22 checkpoint | cohort 17 model đang dùng; **22/22 còn đủ**, verify lại đúng sha256 |
+| `workbench/third_party/TME/weight/{eva_vit_g,blip2_pretrained}.pth` | 2.65 GiB | base weight bắt buộc của TME |
+| `workbench/third_party/TME/features/FashionIQ/` | 20.94 GiB | cache vừa sinh lại, sha `9fead93a…` |
+| `workbench/third_party/ENCODER/open_clip_pytorch_model.bin` | 577 MiB | base weight của ENCODER |
+| `data/**` (CIRR, FashionIQ, GloVe PKL) | 25 GiB | dataset + caption — **không** phải weight model |
+| `teacher/outputs/**`, `outputs/diagnostics/**` | 0.7 GiB | **feature dump và audit artifact**, không phải trọng số (đã mở kiểm) |
+| `workbench/envs/**` | 8.8 GiB | môi trường chạy |
+| `outputs/**/*.{yaml,json,jsonl,md,log}`, `runs/**/*.{json,yaml,jsonl}` | — | cấu hình, metric, log, báo cáo — đều giữ |
+
+### 3.17.4 Dung lượng
+
+| mốc | trống | ghi chú |
+|---|---|---|
+| đầu phiên | 24.70 GiB (26 525 630 464 B) | trước mọi thao tác |
+| sau xoá cache feature | 107.10 GiB | −78.80 GiB cache |
+| sau xoá checkpoint cũ | 201.92 GiB (216 810 348 544 B) | −115.68 GiB weight |
+| **net thu hồi** | **+177.22 GiB** (190 284 718 080 B) | |
+
+Net **nhỏ hơn** tổng đã xoá (194.48 GiB) vì trong lúc dọn đã **sinh lại** cache TME 20.94 GiB
+(`val_images.pt`, sha `9fead93a…`) để chạy verification. Nếu tính riêng phần xoá thì đúng 194.48 GiB.
+
+Phân vùng 630 GiB, dùng 67%. Xoá thực (`os.remove`), không thùng rác, không thư mục backup trên cùng ổ.
+Không đi theo symlink ra ngoài repo (107 975 symlink đều nằm trong `envs/`, trỏ tới conda — để nguyên).
+
+### 3.17.5 Đã kiểm lại sau khi xoá
+
+- 22/22 checkpoint cohort còn đủ; 11 entry của `selected_bundle_digests.json` verify đúng **bytes + sha256**.
+- `workbench/envs/test-adapted` chạy **67 test** liên quan (TME preparation, dtype contract, integrity,
+  approved patch, verified declarations) — pass.
+- **TME full verification qua đường chuẩn**: exit 0, macro 54.9229 / 74.8384, khớp chính xác số đo cũ —
+  tức là việc dọn đĩa không làm mất hay đổi kết quả nào (mục 3.16.6).
+- Quét lại toàn repo: không còn file weight nào ngoài keep-list, trừ 2 `candidate_features.pt` (feature dump, cố ý giữ).
 
 ## 4. Hàng đợi quyết định buổi sáng
 
@@ -1091,7 +1183,7 @@ Ghi chú `.gitignore`: `workbench/artifacts/**` bị chặn, nên evidence **kh�
 | `workbench/patches/dcnet_checkpoint_weights_only_optout.patch` | patch 1 dòng, base→derived khớp | mục 3.14 |
 | `workbench/third_party/DCNet/base/base_trainer.py` | áp patch trên (đã khai báo) | DCNet chạy `PYTHONPATH` sạch, kết quả khớp tuyệt đối |
 | `CHECKPOINT_SELECTION_REPORT.md` | sửa sai, thêm 3.12–3.16 | chính file này |
-| `workbench/docs/reviews/checkpoint_selection/20261106T233409+0700/` | bundle review được: **54 entry có hash** (+ chính file index = **55 file**; 445 973 B = 436 KiB, đo lại toàn bộ sau khi thêm). Chín log trước đây **khai là present nhưng vắng trên remote** vì `.gitignore:116` bỏ qua `*.log`; nay đã commit dưới tên `.txt`, giữ nguyên byte, kèm provenance `original_path`. Số byte khai trước đó nhỏ hơn file thật (ước lượng), nay là số đo. | `EVIDENCE_INDEX.json`, `README.md`, `TEST_STATUS.md` |
+| `workbench/docs/reviews/checkpoint_selection/20261106T233409+0700/` | bundle review được: **55 entry có hash** (+ chính file index = **56 file**; 457456 B = 446 KiB, đo lại toàn bộ sau khi thêm). Chín log trước đây **khai là present nhưng vắng trên remote** vì `.gitignore:116` bỏ qua `*.log`; nay đã commit dưới tên `.txt`, giữ nguyên byte, kèm provenance `original_path`. Số byte khai trước đó nhỏ hơn file thật (ước lượng), nay là số đo. | `EVIDENCE_INDEX.json`, `README.md`, `TEST_STATUS.md` |
 
 ### 10.5 Trạng thái test — nói thẳng
 

@@ -480,7 +480,12 @@ def _run_tme_precompute(config, model: dict, contract: dict, *, dry_run: bool,
                                      / f"split.{category}.{parameters['split']}.json").read_text(encoding="utf-8")))
         mapping = json.loads(files[1].read_text(encoding="utf-8"))
         expected = {name: index for index, name in enumerate(names)}
-        shape = [len(expected), parameters["tokens_per_image"], parameters["feature_width"]]
+        # The row count is the length of the CONCATENATED split lists, not the size of the name->index
+        # map: FashionIQ val lists 15536 rows across the three categories but only 15415 distinct
+        # basenames look unique here, so `len(expected)` is 121 short and the shape check below could
+        # never pass. `_tme_validate` has always used `len(names)`; the writer disagreed with it, so a
+        # correct cache was rejected as "shape ... invalid" and no receipt was ever written.
+        shape = [len(names), parameters["tokens_per_image"], parameters["feature_width"]]
         dtype = {"float16": torch.float16, "float32": torch.float32,
                  "float64": torch.float64}[parameters["feature_dtype"]]
         if (not isinstance(features, torch.Tensor) or list(features.shape) != shape

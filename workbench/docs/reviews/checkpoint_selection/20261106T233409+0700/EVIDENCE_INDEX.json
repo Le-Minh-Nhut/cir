@@ -503,6 +503,16 @@
     "redacted": false,
     "trim_note": "native progress prints precede the JSON on stdout; only the JSON object is stored in this file. The verbatim stdout is kept at ptha/logs/ptha_transfer_run2_stdout.txt"
    }
+  },
+  {
+   "dest": "tme/measurements/tme_normal_path_full.json",
+   "bytes": 11483,
+   "sha256": "f807063ee212760ec6517f7bf893e4f537986a7c0e3d78b437431197e1c92650",
+   "source": "workbench/artifacts/checkpoint_selection/20261106T233409+0700/measurements/tme_normal_path_full.json",
+   "provenance": {
+    "trimmed": false
+   },
+   "note": "full 3-category TME run through workbench.replay.tme after the cache was regenerated; macro 54.9229/74.8384"
   }
  ]
 }

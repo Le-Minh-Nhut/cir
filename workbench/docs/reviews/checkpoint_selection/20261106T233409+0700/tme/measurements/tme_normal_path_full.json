@@ -1,0 +1,232 @@
+{
+  "model_id": "tme",
+  "protocol": "fashioniq_original_split",
+  "results": [
+    {
+      "model_id": "tme",
+      "checkpoint_id": "fashioniq_0",
+      "category": "dress",
+      "protocol": "fashioniq_original_split",
+      "r1": 19.53396201133728,
+      "r10": 49.33069050312042,
+      "r50": 71.59147262573242,
+      "complete": true,
+      "provenance": {
+        "checkpoint": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/ckpt/tme/fashioniq_0_best_model.pth",
+        "checkpoint_sha256": "fea7fc08760dad1f5a66184ea7e65b45388f9781157cbd33a3b64db74103968a",
+        "checkpoint_training_noise_pct": 0,
+        "reference_policy": "reference_included",
+        "checkpoint_selection_rule": "best_validation_checkpoint_at_sigma_0",
+        "feature_cache": "/home/heheboiz/data/cir/workbench/third_party/TME/features/FashionIQ/val_images.pt",
+        "dataset_root": "/home/heheboiz/data/cir/data/FashionIQ",
+        "feature_split": "val",
+        "feature_backbone": "blip2_cir_image_diff_features:pretrain@394aad79df2c104feb32a2c96132582012765062",
+        "source_commit": "394aad79df2c104feb32a2c96132582012765062",
+        "feature_cache_sha256": "9fead93ac746318b3fa804de184f0af1bda6b3e85b5db013fcc0abaaae228b3f",
+        "feature_name_to_idx_sha256": "5cfc07a1016ed68ed85c6c08d8faba2daa05dd62f28e42783e17e3a5f0617a21",
+        "feature_gallery_sha256": {
+          "dress": "0ba50204167ef01c2f1f01befb0f67827b9fdf82243f0647c4cb96b74ac4e912",
+          "shirt": "88bfab0a0f7c139e2510e2960ab2f75ae6bdf2f80ffdf3168263fc319d9740ea",
+          "toptee": "101c5bc2218caf7a1bf2670e2277525b59138b75ffa26536f6bb77f853bd9df7"
+        },
+        "feature_split_files_sha256": {
+          "dress": "21ff91d53c23859da91bfd49f3acc139b7f3a3dc944fc4e4a80194468cf14bab",
+          "shirt": "b82effbf7352a6f828b38c45eb32e53d726bd4d6fd81d6290c81eeb2c68e3234",
+          "toptee": "ee42b2505275dd7a19b11ddb88c9264aab2d77f4e59b075fb1c7c3095d02f412"
+        },
+        "feature_shape": [
+          15536,
+          257,
+          1408
+        ],
+        "feature_dtype": "torch.float32",
+        "feature_cache_provenance": "UNVERIFIED",
+        "feature_cache_unverified_inputs": [
+          "no prior run provenance"
+        ],
+        "feature_gallery_order": "FashionIQ val split files, dress then shirt then toptee",
+        "runtime_assets": [
+          {
+            "name": "BLIP-2 pretrain weights",
+            "status": "EXISTS_UNVERIFIED_CHECKSUM",
+            "path": "/home/heheboiz/data/cir/workbench/third_party/TME/weight/blip2_pretrained.pth",
+            "expected_sha256": null,
+            "expected_sha256_prefix": null,
+            "local_sha256": "f31f96e4a97ce9ac7a140ea1961b8a871822ae1cd0a23f0f1122fbefd70db9f0",
+            "verification": "author digest unavailable; local digest recorded, not verified against a published value"
+          },
+          {
+            "name": "EVA-ViT-g backbone weights",
+            "status": "EXISTS_UNVERIFIED_CHECKSUM",
+            "path": "/home/heheboiz/data/cir/workbench/third_party/TME/weight/eva_vit_g.pth",
+            "expected_sha256": null,
+            "expected_sha256_prefix": null,
+            "local_sha256": "99d2bb36c6b52c94fe6e2e12373afb27de57ae81378c3d8c53bf0e83b0f4275f",
+            "verification": "author digest unavailable; local digest recorded, not verified against a published value"
+          },
+          {
+            "name": "bert-base-uncased tokenizer",
+            "status": "EXISTS_UNVERIFIED_CHECKSUM",
+            "path": "/home/heheboiz/.cache/huggingface/hub/models--bert-base-uncased",
+            "verification": "cache layout verified; loaded by its consumer"
+          }
+        ]
+      },
+      "parity_mismatches": [],
+      "per_query_published": false
+    },
+    {
+      "model_id": "tme",
+      "checkpoint_id": "fashioniq_0",
+      "category": "shirt",
+      "protocol": "fashioniq_original_split",
+      "r1": 25.07360279560089,
+      "r10": 56.182533502578735,
+      "r50": 74.2394506931305,
+      "complete": true,
+      "provenance": {
+        "checkpoint": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/ckpt/tme/fashioniq_0_best_model.pth",
+        "checkpoint_sha256": "fea7fc08760dad1f5a66184ea7e65b45388f9781157cbd33a3b64db74103968a",
+        "checkpoint_training_noise_pct": 0,
+        "reference_policy": "reference_included",
+        "checkpoint_selection_rule": "best_validation_checkpoint_at_sigma_0",
+        "feature_cache": "/home/heheboiz/data/cir/workbench/third_party/TME/features/FashionIQ/val_images.pt",
+        "dataset_root": "/home/heheboiz/data/cir/data/FashionIQ",
+        "feature_split": "val",
+        "feature_backbone": "blip2_cir_image_diff_features:pretrain@394aad79df2c104feb32a2c96132582012765062",
+        "source_commit": "394aad79df2c104feb32a2c96132582012765062",
+        "feature_cache_sha256": "9fead93ac746318b3fa804de184f0af1bda6b3e85b5db013fcc0abaaae228b3f",
+        "feature_name_to_idx_sha256": "5cfc07a1016ed68ed85c6c08d8faba2daa05dd62f28e42783e17e3a5f0617a21",
+        "feature_gallery_sha256": {
+          "dress": "0ba50204167ef01c2f1f01befb0f67827b9fdf82243f0647c4cb96b74ac4e912",
+          "shirt": "88bfab0a0f7c139e2510e2960ab2f75ae6bdf2f80ffdf3168263fc319d9740ea",
+          "toptee": "101c5bc2218caf7a1bf2670e2277525b59138b75ffa26536f6bb77f853bd9df7"
+        },
+        "feature_split_files_sha256": {
+          "dress": "21ff91d53c23859da91bfd49f3acc139b7f3a3dc944fc4e4a80194468cf14bab",
+          "shirt": "b82effbf7352a6f828b38c45eb32e53d726bd4d6fd81d6290c81eeb2c68e3234",
+          "toptee": "ee42b2505275dd7a19b11ddb88c9264aab2d77f4e59b075fb1c7c3095d02f412"
+        },
+        "feature_shape": [
+          15536,
+          257,
+          1408
+        ],
+        "feature_dtype": "torch.float32",
+        "feature_cache_provenance": "UNVERIFIED",
+        "feature_cache_unverified_inputs": [
+          "no prior run provenance"
+        ],
+        "feature_gallery_order": "FashionIQ val split files, dress then shirt then toptee",
+        "runtime_assets": [
+          {
+            "name": "BLIP-2 pretrain weights",
+            "status": "EXISTS_UNVERIFIED_CHECKSUM",
+            "path": "/home/heheboiz/data/cir/workbench/third_party/TME/weight/blip2_pretrained.pth",
+            "expected_sha256": null,
+            "expected_sha256_prefix": null,
+            "local_sha256": "f31f96e4a97ce9ac7a140ea1961b8a871822ae1cd0a23f0f1122fbefd70db9f0",
+            "verification": "author digest unavailable; local digest recorded, not verified against a published value"
+          },
+          {
+            "name": "EVA-ViT-g backbone weights",
+            "status": "EXISTS_UNVERIFIED_CHECKSUM",
+            "path": "/home/heheboiz/data/cir/workbench/third_party/TME/weight/eva_vit_g.pth",
+            "expected_sha256": null,
+            "expected_sha256_prefix": null,
+            "local_sha256": "99d2bb36c6b52c94fe6e2e12373afb27de57ae81378c3d8c53bf0e83b0f4275f",
+            "verification": "author digest unavailable; local digest recorded, not verified against a published value"
+          },
+          {
+            "name": "bert-base-uncased tokenizer",
+            "status": "EXISTS_UNVERIFIED_CHECKSUM",
+            "path": "/home/heheboiz/.cache/huggingface/hub/models--bert-base-uncased",
+            "verification": "cache layout verified; loaded by its consumer"
+          }
+        ]
+      },
+      "parity_mismatches": [],
+      "per_query_published": false
+    },
+    {
+      "model_id": "tme",
+      "checkpoint_id": "fashioniq_0",
+      "category": "toptee",
+      "protocol": "fashioniq_original_split",
+      "r1": 26.262110471725464,
+      "r10": 59.25548076629639,
+      "r50": 78.68434190750122,
+      "complete": true,
+      "provenance": {
+        "checkpoint": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/ckpt/tme/fashioniq_0_best_model.pth",
+        "checkpoint_sha256": "fea7fc08760dad1f5a66184ea7e65b45388f9781157cbd33a3b64db74103968a",
+        "checkpoint_training_noise_pct": 0,
+        "reference_policy": "reference_included",
+        "checkpoint_selection_rule": "best_validation_checkpoint_at_sigma_0",
+        "feature_cache": "/home/heheboiz/data/cir/workbench/third_party/TME/features/FashionIQ/val_images.pt",
+        "dataset_root": "/home/heheboiz/data/cir/data/FashionIQ",
+        "feature_split": "val",
+        "feature_backbone": "blip2_cir_image_diff_features:pretrain@394aad79df2c104feb32a2c96132582012765062",
+        "source_commit": "394aad79df2c104feb32a2c96132582012765062",
+        "feature_cache_sha256": "9fead93ac746318b3fa804de184f0af1bda6b3e85b5db013fcc0abaaae228b3f",
+        "feature_name_to_idx_sha256": "5cfc07a1016ed68ed85c6c08d8faba2daa05dd62f28e42783e17e3a5f0617a21",
+        "feature_gallery_sha256": {
+          "dress": "0ba50204167ef01c2f1f01befb0f67827b9fdf82243f0647c4cb96b74ac4e912",
+          "shirt": "88bfab0a0f7c139e2510e2960ab2f75ae6bdf2f80ffdf3168263fc319d9740ea",
+          "toptee": "101c5bc2218caf7a1bf2670e2277525b59138b75ffa26536f6bb77f853bd9df7"
+        },
+        "feature_split_files_sha256": {
+          "dress": "21ff91d53c23859da91bfd49f3acc139b7f3a3dc944fc4e4a80194468cf14bab",
+          "shirt": "b82effbf7352a6f828b38c45eb32e53d726bd4d6fd81d6290c81eeb2c68e3234",
+          "toptee": "ee42b2505275dd7a19b11ddb88c9264aab2d77f4e59b075fb1c7c3095d02f412"
+        },
+        "feature_shape": [
+          15536,
+          257,
+          1408
+        ],
+        "feature_dtype": "torch.float32",
+        "feature_cache_provenance": "UNVERIFIED",
+        "feature_cache_unverified_inputs": [
+          "no prior run provenance"
+        ],
+        "feature_gallery_order": "FashionIQ val split files, dress then shirt then toptee",
+        "runtime_assets": [
+          {
+            "name": "BLIP-2 pretrain weights",
+            "status": "EXISTS_UNVERIFIED_CHECKSUM",
+            "path": "/home/heheboiz/data/cir/workbench/third_party/TME/weight/blip2_pretrained.pth",
+            "expected_sha256": null,
+            "expected_sha256_prefix": null,
+            "local_sha256": "f31f96e4a97ce9ac7a140ea1961b8a871822ae1cd0a23f0f1122fbefd70db9f0",
+            "verification": "author digest unavailable; local digest recorded, not verified against a published value"
+          },
+          {
+            "name": "EVA-ViT-g backbone weights",
+            "status": "EXISTS_UNVERIFIED_CHECKSUM",
+            "path": "/home/heheboiz/data/cir/workbench/third_party/TME/weight/eva_vit_g.pth",
+            "expected_sha256": null,
+            "expected_sha256_prefix": null,
+            "local_sha256": "99d2bb36c6b52c94fe6e2e12373afb27de57ae81378c3d8c53bf0e83b0f4275f",
+            "verification": "author digest unavailable; local digest recorded, not verified against a published value"
+          },
+          {
+            "name": "bert-base-uncased tokenizer",
+            "status": "EXISTS_UNVERIFIED_CHECKSUM",
+            "path": "/home/heheboiz/.cache/huggingface/hub/models--bert-base-uncased",
+            "verification": "cache layout verified; loaded by its consumer"
+          }
+        ]
+      },
+      "parity_mismatches": [],
+      "per_query_published": false
+    }
+  ],
+  "aggregate": {
+    "macro_r10": 54.922901590665184,
+    "macro_r50": 74.83842174212138,
+    "macro_mean": 64.88066166639328,
+    "complete": true
+  },
+  "recorded_at": "2026-11-06T18:49:23.184074+00:00"
+}
