@@ -36,6 +36,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from workbench.backend.fashioniq_layout import CATEGORIES
 from workbench.backend.registry import (
     external_asset_statuses,
+    generated_artifact_parameters,
     model_by_id,
     preparation_contract_for_model,
     preparation_paths,
@@ -196,9 +197,10 @@ def preflight(checkout: Path, dataset_root: Path, checkpoint_root: Path,
     # Native `load_image_features()` resolves `./features/FashionIQ` from evaluator cwd; the
     # launcher uses the checkout as cwd, so preflight and evaluation share this root.
     contract = preparation_contract_for_model(MODEL)
-    feature_parameters = next(
-        artifact["parameters"] for artifact in contract["generated_artifacts"]
-        if artifact["generator"] == "tme_precompute_features")
+    # Runtime-aware: an adapted runtime may legitimately produce a different dtype than the
+    # historical contract, and preflight's size lower bound must agree with what replay accepts.
+    feature_parameters = generated_artifact_parameters(
+        contract, "tme_precompute_features", MODEL)
     from workbench.backend.fashioniq_layout import image_extension_for_layout
     image_extension = image_extension_for_layout(MODEL["fashioniq_layout"], MODEL.get("fashioniq_image_extensions"))
     blockers.extend(f"TME native gallery input missing: {problem}"
@@ -251,7 +253,7 @@ def _prior_feature_provenance(config=None) -> dict[str, Any] | None:
     contract = preparation_contract_for_model(MODEL)
     artifact = next(item for item in contract["generated_artifacts"]
                     if item.get("generator") == "tme_precompute_features")
-    parameters = artifact["parameters"]
+    parameters = generated_artifact_parameters(contract, "tme_precompute_features", MODEL)
     receipt = (config.WORKBENCH_ARTIFACTS_ROOT / artifact["paths"][0]
                / parameters["receipt_filename"])
     try:
@@ -378,7 +380,7 @@ def _evaluate_categories(checkout: Path, dataset_root: Path, checkpoint_root: Pa
     contract = preparation_contract_for_model(MODEL)
     artifact = next(item for item in contract["generated_artifacts"]
                     if item["generator"] == "tme_precompute_features")
-    parameters = artifact["parameters"]
+    parameters = generated_artifact_parameters(contract, "tme_precompute_features", MODEL)
     feature_root = preparation_paths(contract, dataset_root, "generated_artifacts",
                                      evaluator_root=source)[0]
     feature_path = feature_root / f"{parameters['split']}_images.pt"

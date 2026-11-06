@@ -1,0 +1,6 @@
+/home/heheboiz/data/cir/workbench/third_party/HINT/lavis/models/blip2_models/blip2.py:42: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  return torch.cuda.amp.autocast(dtype=dtype)
+[native] dress: q=2017 g=2628 r1/r10/r50=21.4179/51.2643/75.6073
+[native] shirt: q=2038 g=3089 r1/r10/r50=32.5319/62.4141/81.2561
+[native] toptee: q=1961 g=2902 r1/r10/r50=32.0245/65.7318/83.5288
+[OK] native verification written: /home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T233409+0700/measurements/hint_native_verify.json

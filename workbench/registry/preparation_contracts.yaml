@@ -408,7 +408,30 @@ contracts:
       # declaration would have OVERSTATED the requirement by 2x (20.94 GiB instead of a 10.47 GiB lower
       # bound) from the metadata alone, which is the kind of error that makes an operator free a disk
       # they did not have to.
+      #
+      # This remains the HISTORICAL/default contract and is still what the workbench expects when no
+      # adaptation is selected. `runtime_overrides` below is why a modern adapted runtime can produce
+      # float32 instead; see that block for the measured evidence.
       feature_dtype: float16
+  # Runtime-specific parameters. Applied ONLY when the operator selects exactly this
+  # `target_compute_capability` for this model through `WORKBENCH_RUNTIME_ADAPTATION`; with no
+  # selection the historical `feature_dtype: float16` above stands and a float32 cache is rejected.
+  #
+  # Why float32 is the honest value for this runtime rather than a relaxation: MEASURED on
+  # workbench/envs/tme-adapted (torch 2.8.0+cu128, RTX 5070 Ti), `vit_encode` under
+  # `torch.cuda.amp.autocast()` returns float32. The pinned source half-explains it --
+  # `convert_weights_to_fp16` is applied to the tower (`eva_vit.py:452`), but LayerNorm and the
+  # residual/norm paths stay float32, and autocast's fp16 kernel policy does not force the final
+  # activation width. The declared float16 was therefore right about the CHECKPOINT's precision and
+  # wrong about the OUTPUT tensor's dtype, and only a run could tell the two apart. The measured
+  # artifact agrees: the 15536x257x1408 cache is 22.49 GB, which is float32's size, not fp16's.
+  #
+  # The same override sets the cache lower bound used by preflight, so preparation and replay cannot
+  # disagree about how many bytes the cache must occupy. Shape, gallery ordering, split identity and
+  # the receipt's file digests are unchanged -- this retunes dtype only.
+  runtime_overrides:
+    sm_120:
+      feature_dtype: float32
   external_assets:
   - name: BLIP-2 pretrain weights
     kind: model_weight

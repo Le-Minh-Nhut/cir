@@ -1,0 +1,50 @@
+{
+ "checkpoint_sha256": "1c4dab86a9f66dfe10aff75b39790432eb6cc746cf27b6cfab74b66d93b7588f",
+ "class": "lavis.models.blip2_models.blip2_qformer_cir_cat.Blip2QformerCirCat",
+ "qformer_hidden": 768,
+ "vision_encoder_width": 1408,
+ "vision_proj": [
+  256,
+  768
+ ],
+ "text_proj": [
+  256,
+  768
+ ],
+ "vision_proj_params": 196864
+}
+FashionIQ val - ['dress'] dataset in classic mode initialized
+FashionIQ val - ['dress'] dataset in relative mode initialized
+relative[0]: B005X4PL1G -> B0084Y8XIU ['is shiny and silver with shorter sleeves', 'fit and flare']
+/home/heheboiz/data/cir/workbench/third_party/MTST_PTHA/MTST_PTHA/src/lavis/models/blip2_models/blip2.py:42: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  return torch.cuda.amp.autocast(dtype=dtype)
+extract_target_features -> image_features: (3, 32, 768) | image_embeds_frozen: (3, 257, 1408)
+reference_image_features: (1, 257, 1408) | target_feats: (3, 32, 768)
+--- A) author code as written ---
+FAILED: Expected size for first two dimensions of batch2 tensor to be: [3, 256] but got: [3, 768].
+  fusion_feats side: [B,1,1,256] | target side after permute: (3, 768, 32)
+--- B) targets through the checkpoint's OWN trained vision_proj ---
+inference_target -> (3, 32, 256) | norms: [1.0, 1.0, 1.0]
+boundary equivalence vs inference_target, max_abs_diff: 0.0
+OK: (3,) finite: True
+  sim min 16.357244 max 27.398979
+Traceback (most recent call last):
+  File "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T233409+0700/scripts/ptha_trace_contract.py", line 80, in <module>
+    twice = model.inference_target(projected.cuda())
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/heheboiz/miniconda3/envs/teacher-sprc/lib/python3.11/site-packages/torch/utils/_contextlib.py", line 116, in decorate_context
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/heheboiz/data/cir/workbench/third_party/MTST_PTHA/MTST_PTHA/src/lavis/models/blip2_models/blip2_qformer_cir_cat.py", line 449, in inference_target
+    target_feats = F.normalize(self.vision_proj(target_embeds), dim=-1)
+                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/heheboiz/miniconda3/envs/teacher-sprc/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1751, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/heheboiz/miniconda3/envs/teacher-sprc/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1762, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/heheboiz/miniconda3/envs/teacher-sprc/lib/python3.11/site-packages/torch/nn/modules/linear.py", line 125, in forward
+    return F.linear(input, self.weight, self.bias)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+RuntimeError: mat1 and mat2 shapes cannot be multiplied (96x256 and 768x256)

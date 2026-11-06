@@ -483,46 +483,87 @@ B) target đi qua chính vision_proj đã train của checkpoint:
 
 Đối chiếu với lớp anh em `blip2_qformer_tgir_concatembedding_sim.py`: lớp đó chiếu target **bên trong** `inference()` (dòng 429) và extractor của nó cũng trả chưa chiếu. Nghĩa là "luôn chiếu target" **sai** cho lớp đó — nên sửa phải theo **từng lớp**, không được làm cờ toàn cục.
 
-### 3.13.3 Sửa tối thiểu
+### 3.13.3 Sửa: dispatch theo ĐÚNG contract của lớp đã load
 
-Thêm `_target_feature_contract()` trong `workbench/replay/ptha_mtst.py`, gọi `model.inference_target(index_features[0])` — **đúng method của tác giả**, không viết lại phép chiếu:
+Bản đầu tiên áp `_target_feature_contract()` **vô điều kiện cho cả hai lớp**. Đó là một lỗi thật:
+hai lớp hỗ trợ cùng trả về target thô từ `extract_target_features`, nhưng **chiếu ở hai chỗ khác nhau**.
 
-- không tạo tham số mới (`new_parameters_introduced = 0`);
-- không cắt/pad/reshape chiều, không thêm `Linear` ngẫu nhiên, không bỏ normalize;
-- không đổi hướng điểm hay pooling;
-- chỉ áp dụng ở nhánh FashionIQ transfer của `ptha_mtst`, không đụng lớp `tgir_ce_sim`.
+| lớp | `extract_target_features` | `inference()` có tự chiếu target? | biên phải làm gì |
+|---|---|---|---|
+| `Blip2QformerCirCat` | trả Q-Former thô `[N,32,768]` (hàm định nghĩa **hai lần**, bản thứ hai ở dòng 483 thắng, dòng chiếu bị comment) | **Không** — `inference()` dòng 287 chỉ matmul query 256 chiều với target được đưa vào | **phải chiếu**, nếu không shape không gặp nhau |
+| `Blip2Qformer4TGIRCESIM` | trả Q-Former thô `[N,32,768]` (dòng 501) | **Có** — `inference()` dòng 429 chạy `F.normalize(self.vision_proj(target_embeds), dim=-1)` | **phải để nguyên**, chiếu ở biên sẽ thành chiếu hai lần |
 
-**Chống chiếu hai lần bằng hình học, không bằng cờ**: `vision_proj` nhận 768 và xuất 256, nên lần chiếu thứ hai **ném lỗi** thay vì âm thầm làm sai điểm — đo được `mat1 and mat2 shapes cannot be multiplied (96x256 and 768x256)`.
+Sửa: bảng `TARGET_FEATURE_CONTRACTS` ánh xạ **tên lớp đã construct và load** → contract, và
+`evaluate_transfer` resolve contract từ `type(model).__name__` **sau khi** `load_state_dict(strict=True)`,
+không từ key của checkpoint và không từ độ rộng tensor.
+
+- `project_at_boundary` → gọi `model.inference_target(raw)`; **kiểm tra độ rộng TRƯỚC khi chiếu**, để
+  extraction đổi thì ra chẩn đoán rõ ràng chứ không phải lỗi `nn.Linear` mờ nghĩa;
+- `project_inside_inference` → trả `(raw_targets, frozen_vision)` nguyên vẹn, tham chiếu chính object gốc;
+- lớp không khai báo → `ValueError` nêu tên lớp và danh sách lớp đã khai báo, **không đoán**;
+- `index_features` không phải cặp `(targets, frozen)` → `ValueError`.
+
+**Sửa lại một lập luận sai của bản trước.** Bản trước viết "chiếu hai lần là bất khả thi vì
+`vision_proj` nhận 768 xuất 256 nên lần thứ hai sẽ ném lỗi". Đo lại thì đúng là **có ném**
+(`mat1 and mat2 shapes cannot be multiplied (96x256 and 768x256)`) — nhưng đó **không phải** lý do
+biện minh cho dispatch đúng. Một exception xảy ra *sau khi đã làm sai phép toán* không phải là
+dispatch đúng; nó chỉ chứng minh nhánh đó **không dùng được**, không chứng minh nhánh kia đúng.
+Lý do đúng là: mỗi lớp phải nhận đúng representation mà `inference()` của nó tiêu thụ.
 
 ### 3.13.4 Kiểm chứng sau khi sửa
 
 | kiểm tra | kết quả |
 |---|---|
 | trước/sau shape (dress/shirt/toptee) | `[3817,32,768]→[3817,32,256]`, `[6346,…]`, `[5373,…]` |
+| contract resolve từ lớp đã load | `loaded_class = Blip2QformerCirCat`, `contract = project_at_boundary`, `action = projected_at_boundary_via_inference_target` |
 | tham số chiếu dùng lại | 196 864 (đúng `vision_proj` của checkpoint) |
 | tham số mới | **0** |
-| adapter ≡ `F.normalize(vision_proj(x))` trên tensor thật | `max_abs_diff = 0.0` (cả 3 category) |
+| biên ≡ `F.normalize(vision_proj(x))` trên tensor thật | `max_abs_diff = 0.0` (cả 3 category) |
 | `load_state_dict` strict | 0 missing / 0 unexpected / 0 shape mismatch |
-| regression test | `workbench/tests/test_ptha_target_feature_contract.py` — 5/5 pass, gồm cả ca tái lập lỗi trước khi sửa và ca chặn chiếu hai lần |
+| regression PTHA | 11/11 pass (viết lại, xem dưới) |
+| chạy GPU lại toàn bộ 3 category | exit 0, **bit-identical** với lần trước (bảng dưới) |
 
-### 3.13.5 Kết quả transfer đầy đủ
+**Regression mới thay cho bản cũ.** Bản cũ đếm số lần xuất hiện chuỗi `_target_feature_contract`
+trong source — không chạy contract của lớp nào cả. Bản mới gọi **đúng dispatcher production** với
+fixture có hình dạng như lớp thật, và đếm số lần `vision_proj` **thực sự được áp dụng end-to-end**:
+
+| ca | kiểm chứng |
+|---|---|
+| CirCat | biên chiếu **đúng một lần**; `inference()` sau đó **không** chiếu thêm (counter reset rồi assert `== 0`); điểm hữu hạn `[B,N]`; kết quả bằng `F.normalize(vision_proj(x))` cùng weight, `torch.equal == True` |
+| TGIR | biên **không** chiếu (`calls == 0`, trả về **chính object** gốc); `inference()` chiếu đúng một lần; điểm qua biên **giống hệt** điểm không qua biên (`torch.equal`) |
+| TGIR nếu dispatch sai | chiếu trước rồi `inference()` chiếu lần nữa → **ném** `mat1 and mat2 shapes cannot be multiplied`; ghi lại đúng failure mode đo được, không bịa "âm thầm sai điểm" |
+| lớp lạ / contract lạ | `ValueError` có tên lớp; không đoán |
+| sai độ rộng extraction | `ValueError` "expects unprojected targets of width 768" — kiểm **trước** khi chiếu |
+| cặp `index_features` sai | `ValueError`, nêu rõ cần cặp `(target_features, raw_vision_embeds)` |
+
+**Giới hạn của regression này, nói rõ:** CirCat được chạy **checkpoint thật trên GPU** (dưới đây).
+TGIR **chỉ** được kiểm bằng fixture hành vi — **không** có checkpoint TGIR nào trong phiên này, nên
+nhánh đó **chưa** được xác nhận bằng checkpoint/GPU. Fixture chứng minh luồng điều khiển, không
+chứng minh một checkpoint tác giả chạy được.
+
+### 3.13.5 Kết quả transfer đầy đủ (chạy lại sau khi sửa dispatch)
 
 Protocol `fashioniq_original_split`, gallery đầy đủ theo thứ tự split, reference hợp lệ (không mask — khác DCNet), 100% coverage.
 
-| category | R@10 | R@50 |
-|---|---|---|
-| dress | 33.1185 | 56.0238 |
-| shirt | 38.8616 | 59.0285 |
-| toptee | 41.7134 | 64.4569 |
-| **macro** | **37.8978** | **59.8364** |
+| category | R@10 | R@50 | so với run1 (dispatch cũ) |
+|---|---|---|---|
+| dress | 33.1185 | 56.0238 | `+0.000000` |
+| shirt | 38.8616 | 59.0285 | `+0.000000` |
+| toptee | 41.7134 | 64.4569 | `+0.000000` |
+| **macro** | **37.8978** | **59.8364** | **`0.000000`** |
 
-Macro mean `48.8671`. Paper context (FashionIQ-trained, 54.99 / 76.28) **chỉ là tham chiếu số**, không phải mục tiêu: checkpoint này train trên CIRR, nên thấp hơn là kỳ vọng, và **không** được đọc là "kém hơn paper".
+Macro mean `48.8671`. Việc refactor dispatch **không đổi một chữ số nào** — đúng như kỳ vọng, vì
+nhánh CirCat vẫn chiếu đúng một lần như trước; thay đổi chỉ làm nhánh TGIR thôi bị chiếu hai lần.
+
+Paper context (FashionIQ-trained, 54.99 / 76.28) **chỉ là tham chiếu số**, không phải mục tiêu: checkpoint này train trên CIRR, nên thấp hơn là kỳ vọng, và **không** được đọc là "kém hơn paper".
 
 ### 3.13.6 Phán quyết PTHA
 
-- **Đã sửa và đo được**: nguyên nhân là biên feature trong chính source pinned, đã sửa bằng method có sẵn của tác giả, đã chạy đủ 3 category trên GPU thật.
+- **Đã sửa và đo được**: nguyên nhân là biên feature trong chính source pinned; sửa bằng method có sẵn của tác giả, **dispatch theo lớp đã load**, đã chạy đủ 3 category trên GPU thật, kết quả không đổi so với bản trước đó.
+- **Cả hai nhánh giờ nhận đúng representation**: CirCat chiếu ở biên, TGIR để nguyên cho `inference()` tự chiếu.
 - **Vẫn là exploratory transfer**: checkpoint CIRR, không có checkpoint FashionIQ do tác giả phát hành.
-- **Chưa xác lập**: transfer này có tương đương cách tác giả *dùng* checkpoint cho CIRR hay không — muốn vậy cần dữ liệu CIRR, buổi này không tải thêm dataset.
+- **Chưa xác lập**: transfer này có tương đương cách tác giả *dùng* checkpoint cho CIRR hay không — cần dữ liệu CIRR, buổi này không tải thêm.
+- **TGIR chưa được xác nhận bằng checkpoint**: chỉ fixture hành vi; không có checkpoint TGIR trong phiên.
 - Lỗi cũ `BLOCKED_ARCHITECTURAL_MISMATCH` **đã bị thay thế** bằng kết quả đo; lý do cũ được giữ trong evidence để đối chiếu, không xoá.
 
 ## 3.14 DCNet — thay shim toàn cục bằng patch một dòng có hash-gate
@@ -564,17 +605,122 @@ Cả hai đều unpickle được; lỗi `pool_type` mà bản trước mô tả
 
 Wrapper nay dùng chính `adapted_runtime` đó từ registry, nên đường chạy chuẩn không cần script riêng của phiên: `python -m workbench.replay.limn ... --preflight-only` → `[READY] LIMN preflight passed`.
 
-## 3.16 TME — dtype đo được, và giới hạn của kết luận
+## 3.16 TME — đã đưa dtype theo runtime vào ĐƯỜNG CHẠY CHUẨN (buổi 20261107)
 
-Đo trực tiếp trên đường native (`precompute.py:38`, `blip2_model.vit_encode(image)` dưới `torch.cuda.amp.autocast()`): `visual_encoder` chứa **cả** fp16 và fp32 tham số, và output của `vit_encode` là **float32** trên runtime đã dùng.
+Đo trực tiếp trên đường native (`precompute.py:38`, `blip2_model.vit_encode(image)` dưới
+`torch.cuda.amp.autocast()`): output của `vit_encode` là **float32** trên runtime đã dùng, dù
+`create_eva_vit_g` có `convert_weights_to_fp16` tháp ViT. Nguồn: `convert_weights_to_fp16` chỉ hạ
+`Conv/Linear` (`eva_vit.py:410-425`), còn LayerNorm và residual/norm path vẫn float32, và autocast
+không ép độ rộng activation cuối. Cache 22.49 GB (15536×257×1408×4) khớp float32, không khớp fp16.
 
-Hệ quả, và đây là chỗ bản trước nói quá: contract khai `feature_dtype: float16` kèm lập luận rằng autocast + `convert_weights_to_fp16` ⇒ fp16. Lập luận đó **không khớp** với output đo được. Nhưng **chưa** được kết luận rằng contract sai cho mọi runtime — autocast không bảo đảm dtype trả về, và một runtime khác có thể cho fp16. Vì vậy mục này ghi:
+### 3.16.1 Đã sửa gì để đường chuẩn chạy được
 
-- **đo được**: trên runtime đã chạy, output là float32, và cache 22.49 GB (15536×257×1408×4 byte) khớp float32 chứ không khớp float16;
-- **chưa xác lập**: dtype "native" theo nghĩa độc lập runtime. Cần đo trên runtime thứ hai mới tách được "native vs runtime-specific";
-- **đề xuất**: (D-7) khai báo dtype theo runtime, hoặc ghi rõ contract là "float32 on the adapted sm_120 runtime" thay vì sửa số của contract lịch sử.
+Trước buổi này: contract khai `feature_dtype: float16`, nên wrapper **từ chối chính cache mà
+pipeline native sinh ra**; TME chỉ chạy được bằng session runner riêng. Đó là lỗ hổng thật —
+"chạy được" mà phải qua script riêng thì đường chuẩn chưa hoàn thành.
 
-### 3.16.1 Bounded runner ≡ native runner (đã đo, không suy luận)
+Cách sửa: **không** đổi số của contract lịch sử, mà thêm khối `runtime_overrides` vào
+`workbench/registry/preparation_contracts.yaml`, và một resolver duy nhất
+`workbench/backend/registry.py:generated_artifact_parameters()`:
+
+```yaml
+runtime_overrides:
+  sm_120:
+    feature_dtype: float32
+```
+
+- Override **chỉ** áp khi operator chọn đúng `WORKBENCH_RUNTIME_ADAPTATION=sm_120` cho model này.
+  Không chọn → giữ `float16`, và cache float32 **vẫn bị từ chối**. Contract lịch sử không bị
+  ghi đè; nó là mặc định.
+- Override bị **giới hạn ở `parameters`**. `paths`, `scope`, `generator` là identity của artifact,
+  runtime không được sửa. Key không tồn tại trong parameters → `ValueError` (gõ sai không im lặng).
+- Resolver trả **bản copy**; contract dùng chung không bị mutate.
+
+Mọi nơi tiêu thụ đều đi qua resolver đó, nên preparation và replay **không thể** bất đồng về dtype:
+
+| nơi dùng | trước | sau |
+|---|---|---|
+| `replay/tme.py` preflight (size lower bound) | `artifact["parameters"]` | `generated_artifact_parameters(...)` |
+| `replay/tme.py` `_prior_feature_provenance` | `artifact["parameters"]` | như trên |
+| `replay/tme.py` replay dtype gate | `artifact["parameters"]` | như trên |
+| `scripts/prepare_model.py` `_tme_artifact`/`_tme_inputs`/`_tme_validate`/`_tme_run_precompute` | `artifact["parameters"]` | như trên, có truyền `model` |
+
+### 3.16.2 Phân giải contract: mặc định vs adapted (đo bằng chính lệnh chuẩn)
+
+| profile | dtype | gallery | lower bound | preflight nói |
+|---|---|---|---|---|
+| mặc định (không đặt biến) | `float16` | 15536 | 11 243 589 632 B = **10.47 GiB** | `... 1408 features x 2 bytes` |
+| `WORKBENCH_RUNTIME_ADAPTATION=sm_120` | `float32` | 15536 | 22 487 179 264 B = **20.94 GiB** | `... 1408 features x 4 bytes` |
+
+Lệnh (cùng một lệnh, chỉ khác biến môi trường), exit 1 vì hai blocker có thật (checkpoint path và cache):
+
+```bash
+cd /home/heheboiz/data/cir
+env -u WORKBENCH_RUNTIME_ADAPTATION workbench/envs/tme-adapted/bin/python -m workbench.replay.tme \
+  --checkpoint-root workbench/artifacts/.../cohort/ckpt/tme --dataset-root data/FashionIQ \
+  --source-root workbench/third_party/TME --preflight-only
+```
+
+### 3.16.3 Kiểm chứng bằng model THẬT, không chỉ bằng số học
+
+Script `tme_real_cache_smoke.py` load checkpoint TME thật (`fashioniq_0_best_model.pth`,
+`load_state_dict` 0 missing / 0 unexpected), chạy `vit_encode` trên 24 ảnh gallery thật với
+**batch có chủ đích lẻ cuối** (`10 / 10 / 4`), rồi đưa đúng bytes đó vào `prepare_model._tme_validate`
+— hàm production.
+
+| kiểm tra | kết quả |
+|---|---|
+| shape | `[24, 257, 1408]` |
+| dtype đo được | **`float32`** |
+| `batch_sizes_seen` | `[10, 10, 4]`, batch cuối lẻ 4 dòng |
+| `validator_accepts_adapted_contract` | **True** (float32, contract adapted) |
+| `validator_rejects_default_contract` | **True** (cùng bytes đó, contract float16) |
+| `decision_is_dtype_only` | **True** — identity guard thoả, nên khác biệt duy nhất là dtype |
+| `validator_rejects_float64_under_adapted_contract` | **True** — không phải "mở cổng" |
+
+**Một thiết kế sai đã bị bỏ trước khi chạy.** Bản đầu tiên của script ghi thẳng vào
+`<checkout>/features/FashionIQ` — đúng chỗ preflight và prepare tìm. Nếu để nguyên, một cache 24 ảnh
+sẽ nằm chỗ mà lần chạy sau coi là cache thật, và file `val_name_to_idx.json` (312 726 B) — bằng chứng
+byte cuối cùng về identity của cache 22.49 GB đã xoá — sẽ bị ghi đè. Bản đang dùng chỉ ghi vào
+`tempfile.mkdtemp()`, và ghi lại `real_cache_location_written: false`.
+
+Trạng thái thật của cache gốc sau các lần chạy: `features/FashionIQ/val_name_to_idx.json`,
+312 726 B, sha256 `5cfc07a1…`, 15415 entry, mtime 23:05 — **không bị đụng**.
+
+### 3.16.4 Kiểm chứng regression (dtype contract)
+
+`workbench/tests/test_tme_feature_dtype_contract.py` — **14/14 pass**, chạy trên production resolver
+và production validator:
+
+- mặc định vẫn `float16`; model chỉ *khai* profile mà operator **không** chọn → vẫn `float16`;
+- chọn đúng → `float32`; override không đụng parameter khác; resolver trả copy;
+- model khai adaptation **khác** mà operator chọn `sm_120` → **refuse** (`UNKNOWN_RUNTIME_ADAPTATION`),
+  không im lặng fallback;
+- lower bound: 10.47 ↔ 20.94 GiB đúng tỉ lệ 2×;
+- validator: float32 **được nhận** chỉ khi contract mong float32; **bị từ chối** dưới float16;
+  float64 **bị từ chối**; shape sai **bị từ chối**; thứ tự gallery đổi **bị từ chối**; receipt digest
+  cũ **bị từ chối**.
+
+### 3.16.5 Batch-size: dùng qua đường chuẩn, không qua sửa tay
+
+`WORKBENCH_TME_BATCH_SIZE` là đường chuẩn có sẵn (`batch_size_override_env_var` trong contract,
+đọc qua `prepare_model.tme_generation_parameters`, ghi vào receipt và so lại khi reuse). Không có
+"chỉnh tay session-only" nào được thêm; giá trị hiện hành của phiên là operational, và batch đã đo
+(`[10,10,4]`) chỉ dùng cho smoke.
+
+### 3.16.6 Giới hạn còn lại — nói rõ
+
+- **Chưa chạy lại full 3 category của TME.** Cache 22.49 GB đã bị xoá; đĩa còn 25 G, và việc đó không
+  cần thiết vì (i) số đo full-cohort cũ vẫn còn (`tme_fashioniq_0.json`, macro 54.9229/74.8384, ghi
+  `feature_dtype = torch.float32`), (ii) phần thay đổi của buổi này chỉ là **gate dtype + size bound**,
+  không đụng numerics. Chạy lại 22.49 GB chỉ để đổi tài liệu là lãng phí và không tăng bằng chứng.
+- **dtype "native" độc lập runtime vẫn chưa xác lập** — cần đo trên runtime thứ hai. Buổi này không
+  khẳng định float16 sai cho mọi runtime; nó khẳng định float16 sai cho `sm_120` đã đo.
+- **Chưa chạy forward/ranking đầy đủ qua wrapper** trong buổi này: preflight chạy thật (cả hai profile),
+  `vit_encode` chạy thật trên GPU, validator chạy thật; nhưng một lượt ranking 3-category qua wrapper
+  cần cache 22.49 GB mà đĩa không đủ. Đây là giới hạn **tài nguyên**, không phải giới hạn code.
+
+### 3.16.7 Bounded runner ≡ native runner (đã đo, không suy luận)
 
 Runner preallocate-then-copy của phiên trước từng bị nghi là đổi hành vi. Đã kiểm bằng cách viết lại **đúng** đường native (`src/precompute.py:34-46`: gom list rồi `torch.cat`) và chạy song song với đường bounded trên **cùng ảnh thật, cùng model, cùng preprocess, cùng thứ tự**, có chủ đích tạo **batch cuối lẻ**: 5 ảnh, batch 2 ⇒ các batch 2 / 2 / **1**.
 
@@ -606,7 +752,7 @@ Bổ sung D-6…D-9 cho cohort inventory:
 | ID | model/job | hành động đề xuất | vì sao | phạm vi/rủi ro | đã thử an toàn | bằng chứng | cần bạn quyết/cung cấp |
 |---|---|---|---|---|---|---|---|
 | ~~D-6~~ | `limn` runtime | **ĐÃ ÁP DỤNG trong buổi này**: `adapted_runtime.packages` của LIMN nay là `['open_clip_torch==2.20.0']` trong `workbench/registry/models.yaml`, wrapper tự đọc profile đó nên không cần script riêng của phiên | Hai căn cứ **đo được**: (i) `LIMN/requirements.txt:37` khai đúng `open-clip-torch==2.20.0`; (ii) `workbench/envs/limn-adapted` đang chạy 2.20.0 và là môi trường sinh ra kết quả 55.7919/77.6378. Lý do cũ (`AttributeError: ... 'pool_type'` dưới 2.24) **đã bị rút lại** vì không tái lập được | Chỉ đổi 1 dòng của riêng LIMN; không đụng profile nào khác | Preflight qua wrapper: `[READY] LIMN preflight passed`; 3 checkpoint giữ nguyên một bundle | `limn/scripts/limn_version_repro.py`, mục 3.15 | Không cần quyết nữa |
-| **D-7** | `tme` feature contract | Duyệt sửa `preparation_contracts.yaml` `feature_dtype: float16 → float32` (và lower bound 10.47 → 20.94 GiB) | Đo thật: `visual_encoder` đúng là fp16, nhưng `vit_encode()` dưới `torch.cuda.amp.autocast()` trả **float32**, nên `torch.save` ra float32. Wrapper `tme.py:414` từ chối cache mà chính pipeline native sinh ra | Sửa 2 giá trị contract; không đổi numerics (dtype chỉ dùng cho gate + size floor) | Đã sinh cache đúng như native, chạy xong 3 category bằng session runner nhận dtype đo được | `cohort/measurements/tme_blocker.json`, `cohort/measurements/tme_fashioniq_0.json`, `cohort/logs/tme_run5.log` | Duyệt sửa contract (nếu không, TME chỉ chạy được qua session runner) |
+| ~~D-7~~ | `tme` feature contract | **ĐÃ ÁP DỤNG trong buổi này, theo hướng hẹp hơn đề xuất cũ**: không sửa số của contract lịch sử, mà thêm `runtime_overrides.sm_120.feature_dtype: float32` + resolver `generated_artifact_parameters()`; lower bound tự thành 20.94 GiB khi chọn profile, vẫn 10.47 GiB khi không chọn | Đo thật: `visual_encoder` đúng là fp16, nhưng `vit_encode()` dưới `torch.cuda.amp.autocast()` trả **float32**, nên `torch.save` ra float32. Wrapper `tme.py:414` từ chối cache mà chính pipeline native sinh ra | Sửa 2 giá trị contract; không đổi numerics (dtype chỉ dùng cho gate + size floor) | Đã sinh cache đúng như native, chạy xong 3 category bằng session runner nhận dtype đo được | `cohort/measurements/tme_blocker.json`, `cohort/measurements/tme_fashioniq_0.json`, `cohort/logs/tme_run5.log` | Duyệt sửa contract (nếu không, TME chỉ chạy được qua session runner) |
 | **D-8** | `csmcir` | Cần bạn cung cấp `COT_ours2/bert_captions/fashioniq/cap.{dress,shirt,toptee}.val.json` và `captions/keywords_in_mods_*.json`, **hoặc** duyệt rõ ràng một phương án thay thế | Hai asset này không có trên máy và không có trong HF repo tác giả (repo chỉ ship Qwen captions) | Chỉ thêm file vào checkout/model root; không đổi code | Checkpoint đã tải + hash-verified; dừng đúng ở dataset constructor | `cohort/measurements/csmcir_blocker.json` | Gửi asset, hoặc chọn (a) bỏ CSMCIR, (b) duyệt thay bằng caption khác dưới nhãn riêng |
 | ~~D-9~~ | `ptha_mtst` | **ĐÃ GIẢI QUYẾT trong buổi này** — không còn cần bạn quyết để chạy được. Nguyên nhân là biên feature trong chính source pinned (định nghĩa `extract_target_features` thứ hai trả chưa chiếu), không phải checkpoint thiếu head; đã sửa bằng `inference_target()` của tác giả và chạy đủ 3 category. Nếu bạn **vẫn muốn** có reproduction FashionIQ thật thì đó là yêu cầu khác: (a) xin checkpoint FashionIQ-trained từ tác giả | Sửa xong: `load_state_dict` strict 0/0/0, `vision_proj (256,768)` dùng lại 196 864 tham số, 0 tham số mới, adapter ≡ `normalize(vision_proj(x))` với `max_abs_diff = 0.0`, regression 5/5 pass | Không cắt/pad chiều, không thêm Linear ngẫu nhiên, không chiếu hai lần (bị hình học chặn) | Đã chạy full 3 category trên GPU thật: macro **37.8978 / 59.8364**, coverage 100% | `ptha/measurements/ptha_transfer_run1.json`, mục 3.13 | Không cần quyết gì để dùng kết quả transfer; chỉ cần quyết nếu muốn theo (a) |
 
@@ -751,6 +897,22 @@ PYTHONPATH=$CIR WORKBENCH_RUNTIME_ADAPTATION=sm_120 \
   --source-root $CIR/workbench/third_party/TME \
   --output $CO/measurements/tme_fashioniq_0.json
 ```
+
+## 5.2 Lệnh đã thực sự chạy trong buổi 20261107 (cwd, interpreter, exit)
+
+Mọi lệnh dưới đây đã chạy thật trong buổi này. `CIR=/home/heheboiz/data/cir`.
+
+| # | lệnh (rút gọn còn phần quyết định) | cwd | interpreter | exit | kết quả |
+|---|---|---|---|---|---|
+| 1 | `python -m pytest workbench/tests/test_ptha_target_feature_contract.py -q` | `$CIR` | `workbench/envs/test-adapted/bin/python` (3.11.15) | 0 | 11 passed |
+| 2 | `python -m pytest <11 module PTHA+TME+bundle> -q` | `$CIR` | như trên | 0 | **110 passed** |
+| 3 | `python -m workbench.replay.ptha_mtst --source-root workbench/third_party/MTST_PTHA --dataset-root data/FashionIQ --checkpoint-root .../ptha_mtst --checkpoint-id cirr_transfer --transfer-cirr-to-fashioniq` | `$CIR` | `workbench/envs/airknow-adapted/bin/python`, `WORKBENCH_RUNTIME_ADAPTATION=sm_120` | **0** | macro `37.897844 / 59.836390`, **bit-identical** run1 |
+| 4 | `python -m workbench.replay.tme ... --preflight-only` (`env -u WORKBENCH_RUNTIME_ADAPTATION`) | `$CIR` | `workbench/envs/tme-adapted/bin/python` (3.10.22) | 1 (blocker thật) | lower bound **11 243 589 632 B**, `2 bytes` |
+| 5 | như #4 nhưng `WORKBENCH_RUNTIME_ADAPTATION=sm_120` | `$CIR` | như trên | 1 (blocker thật) | lower bound **22 487 179 264 B**, `4 bytes` |
+| 6 | `python tme_real_cache_smoke.py <ckpt> <out> 24 10` | `workbench/third_party/TME` | `tme-adapted`, `sm_120` | **0** | float32 `[24,257,1408]`, batch `[10,10,4]`, `decision_is_dtype_only=true` |
+| 7 | `python -c "generated_artifact_parameters(...)"` mặc định / `sm_120` | `$CIR` | `test-adapted` | 0 | `float16` / `float32` |
+
+Exit 1 ở #4/#5 **là đúng**: hai blocker có thật (path checkpoint chưa có trong `downloads/`, và cache 22.49 GB đã xoá). Blocker không phải lỗi code, và không bị che bằng cách nới preflight.
 
 ## 6. Đối soát hoàn thành — cả 17 entry đăng ký
 
@@ -900,7 +1062,8 @@ Hiện trạng thật (đọc từ registry, không suy đoán): 10 entry đã `
 #### Còn lại ở `preparation_contracts.yaml` (D-4, D-7)
 
 - (D-4) `dcnet_glove_regen`: **hạ cấp đề xuất.** `process_cap.py` lấy mẫu `np.random.normal` **không seed** cho OOV, nên recipe có seed tạo ra artifact **khác** của tác giả — không thể khớp hash tác giả. Nếu làm, phải gắn nhãn `WORKBENCH_SEEDED_RECIPE` và **không** dùng để đối chiếu số paper.
-- (D-7) TME `feature_dtype`: xem 3.16 — đo được float32 trên runtime này, nhưng **chưa** đủ để phủ định `float16` cho mọi runtime. Đề xuất ghi dtype *theo runtime* thay vì sửa số lịch sử.
+- (D-7) TME `feature_dtype`: **đã áp dụng** trong buổi 20261107 theo đúng hướng "ghi dtype *theo runtime*" — `runtime_overrides.sm_120.feature_dtype: float32` trong `preparation_contracts.yaml`, cộng resolver `generated_artifact_parameters()`. Không sửa số của contract lịch sử; xem 3.16.
+- Ghi chú `.gitignore`: ngoài `workbench/artifacts/**`, dòng `*.log` (`.gitignore:116`) cũng chặn log — đây chính là lý do 9 log trong bundle "khai present nhưng vắng trên remote". Chúng nay được commit dưới tên `.txt`, giữ nguyên byte.
 
 SHA-256 để điền lấy nguyên văn từ `cohort/manifests_acquired_final.json` và `manifests/selected_bundle_digests.json`.
 
@@ -916,20 +1079,25 @@ Ghi chú `.gitignore`: `workbench/artifacts/**` bị chặn, nên evidence **kh�
 
 | thay đổi | loại | bằng chứng |
 |---|---|---|
-| `workbench/replay/ptha_mtst.py` — thêm `_target_feature_contract()` | sửa code, phạm vi 1 model | `ptha/measurements/ptha_transfer_run1.json`, mục 3.13 |
-| `workbench/tests/test_ptha_target_feature_contract.py` — 5 regression | test mới | 5/5 pass |
+| `workbench/replay/ptha_mtst.py` — `TARGET_FEATURE_CONTRACTS` + dispatch theo lớp đã load (buổi 20261107) | sửa code, phạm vi 1 model | `ptha/measurements/ptha_transfer_run2.json` (bit-identical run1), mục 3.13 |
+| `workbench/tests/test_ptha_target_feature_contract.py` — viết lại 11 regression hành vi | test mới | 11/11 pass |
+| `workbench/backend/registry.py` — `generated_artifact_parameters()` + validate `runtime_overrides` | sửa shared code, hẹp | mục 3.16 |
+| `workbench/registry/preparation_contracts.yaml` — TME `runtime_overrides.sm_120` | 1 khối contract | mục 3.16.2 |
+| `workbench/replay/tme.py`, `workbench/scripts/prepare_model.py` — mọi consumer đi qua resolver | wiring, 2 file | mục 3.16.1 |
+| `workbench/tests/test_tme_feature_dtype_contract.py` — 14 regression | test mới | 14/14 pass |
+| bundle — 9 log `.log` → `.txt`, + `ptha_transfer_run2`, + `tme_real_cache_smoke` | evidence | 54 entry / 55 file |
 | `workbench/registry/models.yaml` — LIMN `adapted_runtime` `==2.20.0` | 1 dòng, 1 model | mục 3.15 |
 | `workbench/registry/models.yaml` — DCNet `approved_source_patches` | khai báo patch | mục 3.14 |
 | `workbench/patches/dcnet_checkpoint_weights_only_optout.patch` | patch 1 dòng, base→derived khớp | mục 3.14 |
 | `workbench/third_party/DCNet/base/base_trainer.py` | áp patch trên (đã khai báo) | DCNet chạy `PYTHONPATH` sạch, kết quả khớp tuyệt đối |
 | `CHECKPOINT_SELECTION_REPORT.md` | sửa sai, thêm 3.12–3.16 | chính file này |
-| `workbench/docs/reviews/checkpoint_selection/20261106T233409+0700/` | bundle review được: **49 entry có hash** (+ chính file index = **50 file**, ~353 KB) | `EVIDENCE_INDEX.json`, `README.md`, `TEST_STATUS.md` |
+| `workbench/docs/reviews/checkpoint_selection/20261106T233409+0700/` | bundle review được: **54 entry có hash** (+ chính file index = **55 file**; 442 178 B = 432 KiB, đo lại toàn bộ sau khi thêm). Chín log trước đây **khai là present nhưng vắng trên remote** vì `.gitignore:116` bỏ qua `*.log`; nay đã commit dưới tên `.txt`, giữ nguyên byte, kèm provenance `original_path`. Số byte khai trước đó nhỏ hơn file thật (ước lượng), nay là số đo. | `EVIDENCE_INDEX.json`, `README.md`, `TEST_STATUS.md` |
 
 ### 10.5 Trạng thái test — nói thẳng
 
 Repo dùng **cú pháp f-string PEP 701**, chỉ hợp lệ từ **Python 3.12** (`workbench/backend/environment_planner.py:669`). Máy này **không có** interpreter 3.12 nào kèm `pip`; mọi env conda đều 3.11.15. `git show HEAD:` của chính file đó **cũng** fail dưới 3.11 ⇒ đây là hạn chế **có từ trước**, không phải do buổi này.
 
-Vì vậy: đúng **8 module** không collect được, và **12 test riêng lẻ** trong `test_runtime_adaptation.py` fail vì chúng import cùng module 3.12-only đó (bản thân module vẫn collect). Đã chạy và pass: `test_ptha_target_feature_contract` (5), `test_ptha_mtst_preflight`, `test_r19_ptha_wrapper`, 6 test của `test_runtime_adaptation`, và **60 test integrity** (`test_approved_source_patch`, `test_vendored_approved_patch`, `test_vendored_source_integrity`, `test_verified_declarations`, `test_dcnet_replay`) — nhóm cuối là nhóm quan trọng nhất cho thay đổi DCNet, vì nó chứng minh khai báo `approved_source_patches` chặn đúng cổng kiểm tra source đã bị sửa. **Chưa** có CI xanh; việc đó cần môi trường 3.12. Chi tiết: `TEST_STATUS.md` trong bundle.
+Vì vậy: đúng **8 module** không collect được, và **12 test riêng lẻ** trong `test_runtime_adaptation.py` fail vì chúng import cùng module 3.12-only đó (bản thân module vẫn collect). Đã chạy và pass trong buổi 20261107 — **110 test** trong một lượt: `test_ptha_target_feature_contract` (11), `test_ptha_mtst_preflight`, `test_r19_ptha_wrapper`, `test_tme_feature_dtype_contract` (14), `test_tme_preparation`, `test_r21_tme_lifecycle`, và **60 test integrity** (`test_approved_source_patch`, `test_vendored_approved_patch`, `test_vendored_source_integrity`, `test_verified_declarations`, `test_dcnet_replay`). Trước đó 6 test của `test_runtime_adaptation` cũng pass — nhóm cuối là nhóm quan trọng nhất cho thay đổi DCNet, vì nó chứng minh khai báo `approved_source_patches` chặn đúng cổng kiểm tra source đã bị sửa. **Chưa** có CI xanh; việc đó cần môi trường 3.12. Chi tiết: `TEST_STATUS.md` trong bundle.
 
 Hai assertion trong `test_runtime_adaptation.py` mã hoá contract LIMN **cũ** (`>=2.24,<2.27`) đã được cập nhật theo contract mới `==2.20.0` — đây là thay đổi hành vi có chủ đích (mục 3.15), không phải sửa test cho qua.
 
@@ -946,4 +1114,4 @@ Thêm: **SPRC ViT-L** bị hạ từ `AUTHOR_VERIFIED` xuống `LOAD-COMPATIBLE`
 
 ### 10.4 Còn lại cho bạn
 
-Chỉ hai việc chặn kết quả: **(D-1)** đặt file SPRC OneDrive vào `workbench/artifacts/checkpoints/sprc/sprc_fiq.pt`; **(D-8)** cung cấp caption/keyword asset cho CSMCIR. Các mục D-2/D-3/D-4/D-7 là quyết định chính sách, không chặn gì thêm.
+Chỉ hai việc chặn kết quả: **(D-1)** đặt file SPRC OneDrive vào `workbench/artifacts/checkpoints/sprc/sprc_fiq.pt`; **(D-8)** cung cấp caption/keyword asset cho CSMCIR. **D-7 đã đóng** trong buổi 20261107 (áp dụng hẹp hơn đề xuất cũ: `runtime_overrides` thay vì sửa số lịch sử). Còn lại **D-2** (PAIR), **D-3** (diff registry), **D-4** (GloVe recipe) là quyết định chính sách, không chặn gì thêm. **D-5/D-6/D-9** đã áp dụng.

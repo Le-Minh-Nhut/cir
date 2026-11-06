@@ -98,13 +98,19 @@ TME_FEATURE_GENERATOR = "tme_precompute_features"
 TME_RECEIPT_NAME = ".workbench_tme_precompute_receipt.json"
 
 
-def _tme_artifact(config, checkout: Path, contract: dict) -> tuple[dict, Path]:
-    from workbench.backend.registry import preparation_paths
+def _tme_artifact(config, checkout: Path, contract: dict,
+                  model: dict | None = None) -> tuple[dict, Path]:
+    from workbench.backend.registry import generated_artifact_parameters, preparation_paths
 
     artifact = next(item for item in contract.get("generated_artifacts", [])
                     if item.get("generator") == TME_FEATURE_GENERATOR)
     paths = preparation_paths(contract, config.FASHIONIQ_ROOT, "generated_artifacts",
                               evaluator_root=checkout)
+    # Runtime-aware first: an adapted runtime may declare a different `feature_dtype` than the
+    # historical contract, and the receipt this function feeds must record the dtype that was
+    # actually produced, not the historical one.
+    artifact = {**artifact,
+                "parameters": generated_artifact_parameters(contract, TME_FEATURE_GENERATOR, model)}
     # `batch_size` is an OPERATIONAL setting, not a preprocessing semantic: it decides how many
     # gallery images share one forward pass and therefore whether the job fits the card. The pinned
     # default is 512, which needs more memory than any consumer GPU this workbench supports -- a
@@ -151,8 +157,9 @@ def _tme_setting(name: str) -> int | None:
     return value
 
 
-def tme_receipt_path(config, checkout: Path, contract: dict) -> Path:
-    artifact, output = _tme_artifact(config, checkout, contract)
+def tme_receipt_path(config, checkout: Path, contract: dict,
+                     model: dict | None = None) -> Path:
+    artifact, output = _tme_artifact(config, checkout, contract, model)
     return (config.WORKBENCH_ARTIFACTS_ROOT / output.relative_to(checkout)
             / artifact["parameters"].get("receipt_filename", TME_RECEIPT_NAME))
 
@@ -196,11 +203,10 @@ def tme_input_blocker(config, contract: dict, model: dict | None = None) -> str 
     from workbench.backend.fashioniq_layout import CATEGORIES, image_extension_for_layout
     from workbench.backend.registry import (admitted_asset_statuses, asset_admission_status,
                                             cache_asset_blocker, external_asset_statuses,
-                                            required_runtime_assets)
+                                            generated_artifact_parameters, required_runtime_assets)
 
     parameters = tme_generation_parameters(
-        next(item["parameters"] for item in contract["generated_artifacts"]
-             if item.get("generator") == TME_FEATURE_GENERATOR))
+        generated_artifact_parameters(contract, TME_FEATURE_GENERATOR, model))
     files = {category: config.FASHIONIQ_ROOT / "image_splits"
              / f"split.{category}.{parameters['split']}.json" for category in CATEGORIES}
     captions = [config.FASHIONIQ_ROOT / "captions"
@@ -246,10 +252,10 @@ def _tme_inputs(config, contract: dict, model: dict | None = None) -> dict | Non
         from workbench.backend.registry import model_by_id
         model = model_by_id("tme")
     from workbench.backend.fashioniq_layout import CATEGORIES, image_extension_for_layout
+    from workbench.backend.registry import generated_artifact_parameters
 
     parameters = tme_generation_parameters(
-        next(item["parameters"] for item in contract["generated_artifacts"]
-             if item.get("generator") == TME_FEATURE_GENERATOR))
+        generated_artifact_parameters(contract, TME_FEATURE_GENERATOR, model))
     files = {category: config.FASHIONIQ_ROOT / "image_splits"
              / f"split.{category}.{parameters['split']}.json" for category in CATEGORIES}
     captions = [config.FASHIONIQ_ROOT / "captions"
@@ -367,9 +373,9 @@ def tme_features_complete(config, model: dict, contract: dict) -> bool | None:
     inputs = _tme_inputs(config, contract, model)
     if not clean or not commit or inputs is None:
         return False
-    resolved_recipe, output = _tme_artifact(config, checkout, contract)
+    resolved_recipe, output = _tme_artifact(config, checkout, contract, model)
     return _tme_validate(output, resolved_recipe["parameters"], inputs, commit,
-                          tme_receipt_path(config, checkout, contract))
+                          tme_receipt_path(config, checkout, contract, model))
 
 
 def _tme_command(interpreter: str, checkout: Path, dataset_root: Path,
@@ -390,7 +396,7 @@ def _run_tme_precompute(config, model: dict, contract: dict, *, dry_run: bool,
     from workbench.backend.runtime import require_verified_model_interpreter, source_clean_and_pinned
 
     checkout = config.WORKBENCH_THIRD_PARTY_ROOT / model["source_dir"]
-    recipe, output = _tme_artifact(config, checkout, contract)
+    recipe, output = _tme_artifact(config, checkout, contract, model)
     parameters = recipe["parameters"]
     script = checkout / parameters["source_script"]
     if not checkout.is_dir() or not script.is_file():
@@ -411,7 +417,7 @@ def _run_tme_precompute(config, model: dict, contract: dict, *, dry_run: bool,
         # blocker, which is the failure this branch exists to stop repeating.
         return False, (tme_input_blocker(config, contract, model) or
                        f"TME caption or validation split input is missing or malformed under {config.FASHIONIQ_ROOT}")
-    receipt = tme_receipt_path(config, checkout, contract)
+    receipt = tme_receipt_path(config, checkout, contract, model)
     if _tme_validate(output, parameters, inputs, commit, receipt):
         return True, f"reusing validated TME feature cache at {output}"
     files = [output / f"{parameters['split']}_images.pt",

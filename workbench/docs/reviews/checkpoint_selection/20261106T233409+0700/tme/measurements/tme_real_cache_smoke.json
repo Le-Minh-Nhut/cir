@@ -1,0 +1,38 @@
+{
+  "checkpoint": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/ckpt/tme/fashioniq_0_best_model.pth",
+  "interpreter": "/home/heheboiz/data/cir/workbench/envs/tme-adapted/bin/python",
+  "torch": "2.7.1+cu128",
+  "cuda_capability": [
+    12,
+    0
+  ],
+  "gallery_slice": 24,
+  "batch_size": 10,
+  "batch_sizes_seen": [
+    10,
+    10,
+    4
+  ],
+  "partial_final_batch_rows": 4,
+  "feature_shape": [
+    24,
+    257,
+    1408
+  ],
+  "feature_dtype": "float32",
+  "element_size": 4,
+  "checkpoint_load": {
+    "missing": 0,
+    "unexpected": 0
+  },
+  "default_contract_dtype": "float16",
+  "adapted_contract_dtype": "float32",
+  "contract_resolution": "workbench.backend.registry.generated_artifact_parameters",
+  "validator_accepts_adapted_contract": true,
+  "validator_rejects_default_contract": true,
+  "identity_guard_satisfied_with_matching_split": true,
+  "decision_is_dtype_only": true,
+  "scratch_root_used": "/tmp/tme_dtype_gate_von8rlig",
+  "real_cache_location_written": false,
+  "validator_rejects_float64_under_adapted_contract": true
+}

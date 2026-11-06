@@ -1,0 +1,7 @@
+usage: hint.py [-h] --checkpoint-root CHECKPOINT_ROOT --dataset-root
+               DATASET_ROOT --source-root SOURCE_ROOT
+               [--batch-size BATCH_SIZE] [--backbone BACKBONE]
+               [--device DEVICE] [--category {dress,shirt,toptee}]
+               [--preflight-only] [--output OUTPUT]
+hint.py: error: unrecognized arguments: --variant fashioniq
+exit=2

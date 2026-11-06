@@ -157,52 +157,114 @@ def _fashioniq_dataset_binding(dataset_root: Path) -> Iterator[Any]:
                 os.environ["MTST_DATA_ROOT"] = previous_env
 
 
-def _target_feature_contract(model: Any, index_features: Any, torch: Any) -> tuple[Any, dict[str, Any]]:
-    """Apply the checkpoint's own trained `vision_proj` to unprojected target features.
+#: Which side of the boundary owns the `vision_proj` step, decided by the SELECTED AND LOADED class.
+#:
+#: Both supported classes call `extract_target_features(image, mode="mean")` and both keep the
+#: projection commented out, so both hand the boundary raw Q-Former states `[N, 32, 768]`. They
+#: differ in where the projection belongs:
+#:
+#: ``cir_cat``  -- `blip2_qformer_cir_cat.py` defines `extract_target_features` TWICE (lines 453 and
+#:   483), Python keeps the second one, and its `inference()` (line 287) matmuls the 256-wide query
+#:   side against the target tensor it is handed. It never calls `vision_proj` on targets itself, so
+#:   the boundary MUST: the width cannot otherwise meet, and the checkpoint carries the trained
+#:   parameters (`vision_proj` 256x768 = 196 864).
+#:
+#: ``tgir_ce_sim`` -- `blip2_qformer_tgir_concatembedding_sim.py:429` runs
+#:   `F.normalize(self.vision_proj(target_embeds), dim=-1)` INSIDE `inference()`, and its
+#:   `extract_target_features` (line 501) also returns the raw states. The boundary must therefore
+#:   pass raw states through and leave the projection to the model.
+#:
+#: Choosing this by class rather than by tensor width or filename is what the earlier revision got
+#: wrong: applying the projection unconditionally to both classes double-projected the TGIR branch.
+#: A shape check would not have caught that either, because projecting raw tgir states first yields a
+#: tensor that this same `inference` then projects again -- a wrong-but-shaped-correct result.
+TARGET_FEATURE_CONTRACTS: dict[str, str] = {
+    "Blip2QformerCirCat": "project_at_boundary",
+    "Blip2Qformer4TGIRCESIM": "project_inside_inference",
+}
 
-    Why this is needed, established by measurement on real tensors, not by reading names:
+def _target_feature_contract(model: Any, index_features: Any, torch: Any,
+                             contract: str | None = None) -> tuple[Any, dict[str, Any]]:
+    """Give `inference()` the target representation THIS loaded class expects, exactly once.
 
-    `blip2_qformer_cir_cat.py` defines `extract_target_features` TWICE and Python keeps the second
-    one, which returns the raw Q-Former states (`[N, 32, 768]`) and has the projection commented out.
-    Its `inference()` then builds the query side through `text_proj` (`[B, 1, 1, 256]`) and matmuls it
-    against those targets, so the shapes cannot meet: measured before repair on a real FashionIQ dress
-    batch, `Expected size for first two dimensions of batch2 tensor to be: [3, 256] but got: [3, 768]`.
-    The same file keeps a `inference_target()` that performs exactly the missing operation, and the
-    checkpoint really does carry the trained parameters for it (`vision_proj` 256x768, 196 864).
+    `index_features` is the native `extract_index_blip_features` output: a 2-tuple whose members are
+    the gallery target features and the frozen vision embeddings. Both members are preserved
+    unchanged in type and order, because `compute_fiq_val_metrics` reaches for `index_features[0]`
+    to score against and the reference side is taken from `index_features[-1]`.
 
-    So the repair is one nested call at the boundary where the source expects already-projected
-    target features. It adds no parameters, no slicing, no padding and no renormalisation of its own:
-    `inference_target` is the author's own method, and on identical real tensors it agrees with
-    `F.normalize(vision_proj(x))` to `max_abs_diff = 0.0`.
-
-    Double projection is impossible here by construction rather than by a flag: `vision_proj` expects
-    768 inputs and emits 256, so a second application raises instead of silently corrupting scores
-    (measured: `mat1 and mat2 shapes cannot be multiplied (96x256 and 768x256)`).
+    Raises instead of guessing when the contract is not one this workbench declares, or when the
+    declared contract does not match the loaded class's geometry.
     """
-    unprojected = index_features[0]
-    projected = model.inference_target(unprojected)
-    report = {
-        "repair": "target_features_projected_via_model.inference_target",
-        "reason": "effective extract_target_features returns unprojected Q-Former states; inference() "
-                  "expects the projected width, and the trained vision_proj exists in the checkpoint",
-        "before_shape": list(unprojected.shape),
-        "after_shape": list(projected.shape),
-        "projection_parameters_reused": sum(p.numel() for p in model.vision_proj.parameters()),
+    contract = contract if contract is not None else TARGET_FEATURE_CONTRACTS.get(type(model).__name__)
+    class_name = type(model).__name__
+    if contract is None:
+        raise ValueError(
+            f"PTHA+MTST target-feature contract is undeclared for loaded class {class_name!r}; "
+            f"declared classes are {sorted(TARGET_FEATURE_CONTRACTS)}. Refusing to guess whether "
+            f"this class projects target embeddings inside `inference()`, because guessing wrong "
+            f"either double-projects or fails to project at all.")
+    if contract not in TARGET_FEATURE_CONTRACTS.values():
+        raise ValueError(
+            f"unknown PTHA+MTST target-feature contract {contract!r} for class {class_name!r}; "
+            f"expected one of {sorted(set(TARGET_FEATURE_CONTRACTS.values()))}")
+
+    if not (isinstance(index_features, tuple) and len(index_features) == 2):
+        raise ValueError(
+            "PTHA+MTST index features are not the native (target_features, raw_vision_embeds) pair: "
+            f"got {type(index_features).__name__} of length "
+            f"{len(index_features) if hasattr(index_features, '__len__') else 'n/a'}")
+    raw_targets, frozen_vision = index_features
+    report: dict[str, Any] = {
+        "contract": contract,
+        "loaded_class": class_name,
+        "extracted_shape": list(raw_targets.shape),
         "new_parameters_introduced": 0,
-        "double_projection_possible": False,
-        "double_projection_note": "vision_proj expects "
-                                   f"{model.vision_proj.in_features} and emits "
-                                   f"{model.vision_proj.out_features}; a second application raises",
+        "frozen_vision_preserved": True,
     }
-    # The check runs on whatever device the model is already on, so this helper does not require CUDA
-    # itself and the same code path is exercised by the CPU regression tests.
+
+    if contract == "project_inside_inference":
+        # The model projects these itself at `..._concatembedding_sim.py:429`. Any projection here
+        # would be applied a second time inside `inference()`, which no shape check would flag.
+        report.update(
+            action="passed_through_unprojected",
+            reason="this class applies vision_proj to target embeddings inside inference(); "
+                   "projecting at the boundary would double-project",
+            output_shape=list(raw_targets.shape),
+        )
+        return (raw_targets, frozen_vision), report
+
+    hidden = getattr(model.vision_proj, "in_features", None)
+    embed = getattr(model.vision_proj, "out_features", None)
+    # Width is validated BEFORE projecting: otherwise a changed extraction path surfaces as an
+    # opaque `mat1 and mat2 shapes cannot be multiplied` from inside `nn.Linear` instead of as the
+    # declared-contract diagnostic below.
+    if hidden is not None and raw_targets.shape[-1] != hidden:
+        raise ValueError(
+            f"PTHA+MTST contract {contract!r} for class {class_name!r} expects unprojected targets of "
+            f"width {hidden}, but the extracted features are width {raw_targets.shape[-1]}. "
+            f"Either the extraction path changed or the wrong contract was dispatched.")
+    projected = model.inference_target(raw_targets)
+    if embed is not None and projected.shape[-1] != embed:
+        raise ValueError(
+            f"PTHA+MTST boundary projection produced width {projected.shape[-1]}, but this class's "
+            f"inference() consumes width {embed}")
+    report.update(
+        action="projected_at_boundary_via_inference_target",
+        reason="effective extract_target_features returns unprojected Q-Former states while "
+               "inference() does not project targets itself",
+        projection_parameters_reused=sum(p.numel() for p in model.vision_proj.parameters()),
+        projection_in_features=hidden,
+        projection_out_features=embed,
+        output_shape=list(projected.shape),
+    )
+    # Equivalence is checked against the author's own operation with the SAME weights, on the SAME
+    # device, so this stays meaningful on CPU-only test hosts too.
     device = model.vision_proj.weight.device
     with torch.no_grad():
-        normalised = torch.nn.functional.normalize(
-            model.vision_proj(unprojected.to(device)), dim=-1)
-    report["boundary_equivalence_max_abs_diff"] = float(
-        (normalised.to(projected.device) - projected).abs().max())
-    return (projected, index_features[1]), report
+        direct = torch.nn.functional.normalize(model.vision_proj(raw_targets.to(device)), dim=-1)
+    report["equivalence_vs_direct_projection_max_abs_diff"] = float(
+        (direct.to(projected.device) - projected).abs().max())
+    return (projected, frozen_vision), report
 
 def _state_dict_report(model_state: dict[str, Any], checkpoint_state: dict[str, Any]) -> dict[str, Any]:
     expected = set(model_state)
@@ -278,6 +340,15 @@ def evaluate_transfer(
     model.load_state_dict(state, strict=True)
     report["strict_false_hid_anything"] = False
     model = model.cuda().eval()
+    # Resolved from the INSTANCE that was actually constructed and loaded, not from the checkpoint
+    # key and not from a tensor width: the same payload key could in principle build a different
+    # class, and the contract belongs to the class whose `inference()` will run.
+    target_contract = TARGET_FEATURE_CONTRACTS.get(type(model).__name__)
+    if target_contract is None:
+        raise ValueError(
+            f"checkpoint sha256={checkpoint_sha256}; checkpoint key {checkpoint_key!r} built class "
+            f"{type(model).__name__!r}, which has no declared target-feature contract "
+            f"({sorted(TARGET_FEATURE_CONTRACTS)}); refusing to guess a projection")
 
     _vis_processors, text_processors = load_preprocess(config.preprocess)
     with _fashioniq_dataset_binding(dataset_root) as data_utils:
@@ -293,7 +364,8 @@ def evaluate_transfer(
             relative = FashionIQDataset("val", [category], "relative", transform)
             classic = FashionIQDataset("val", [category], "classic", transform)
             index_features, index_names = extract_index_blip_features(classic, model)
-            index_features, contract_report = _target_feature_contract(model, index_features, torch)
+            index_features, contract_report = _target_feature_contract(
+                model, index_features, torch, target_contract)
             contract_reports[category] = contract_report
             r10, r50 = compute_fiq_val_metrics(relative, model, index_features, index_names, text_processors)
             category_metrics[category] = {"r10": r10, "r50": r50}

@@ -249,6 +249,24 @@ def load_preparation_contracts(path: Path = PREPARATION_CONTRACT_REGISTRY_PATH) 
                 raise ValueError(f"invalid external SHA-256 prefix for {contract['preparation_id']}")
             if asset.get("location_env_var") and not asset["location_env_var"].isidentifier():
                 raise ValueError(f"invalid external asset location variable for {contract['preparation_id']}")
+        # Runtime-specific overrides may only retune declared PARAMETERS. Paths, scopes and
+        # generators are artifact identity, so a runtime profile must not be able to rewrite them.
+        overrides = contract.get("runtime_overrides")
+        if overrides is not None:
+            if not isinstance(overrides, dict):
+                raise ValueError(f"invalid runtime_overrides for {contract['preparation_id']}")
+            declared_parameters = {
+                item["generator"]: set(item.get("parameters") or {})
+                for item in contract["generated_artifacts"]}
+            for target, block in overrides.items():
+                if not isinstance(block, dict) or not block:
+                    raise ValueError(
+                        f"invalid runtime_overrides block for {target!r} in "
+                        f"{contract['preparation_id']}")
+                if not all(isinstance(value, (str, int, float, bool)) for value in block.values()):
+                    raise ValueError(
+                        f"runtime_overrides values must be scalars for {target!r} in "
+                        f"{contract['preparation_id']}")
         contracts[contract["preparation_id"]] = contract
     _VALIDATED_CONFIG_CACHE[key] = contracts
     return copy.deepcopy(contracts)
@@ -262,6 +280,47 @@ def preparation_contract_for_model(model: dict[str, Any]) -> dict[str, Any] | No
         return load_preparation_contracts()[preparation_id]
     except KeyError as error:
         raise ValueError(f"unknown preparation contract for {model['model_id']}") from error
+
+def generated_artifact_parameters(contract: dict[str, Any], generator: str,
+                                  model: dict[str, Any] | None = None) -> dict[str, Any]:
+    """A generated artifact's parameters, with any runtime-specific overrides applied.
+
+    Some declared properties are properties of the RUNTIME, not of the recipe: TME's
+    `vit_encode` output is float32 when the vision tower runs under autocast on a modern
+    torch/CUDA pair, but the pinned source `convert_weights_to_fp16`s the tower and declares
+    float16. Both are true of their own runtime, so neither may be hard-coded over the other.
+
+    The override lives in the contract as `runtime_overrides.<target_compute_capability>`, and it
+    is applied ONLY when the operator has selected exactly that adaptation for this model
+    (`WORKBENCH_RUNTIME_ADAPTATION`). No selection, or a model that declares no such block, returns
+    the historical parameters unchanged -- so the default contract keeps rejecting a float32 cache.
+
+    Overrides are restricted to `parameters`: a runtime profile must not be able to rewrite paths,
+    scopes or generators, which are identity rather than environment.
+    """
+    artifact = next((item for item in contract.get("generated_artifacts", [])
+                     if item.get("generator") == generator), None)
+    if artifact is None:
+        raise ValueError(f"unknown generated artifact generator {generator!r}")
+    parameters = dict(artifact.get("parameters") or {})
+    if model is None:
+        return parameters
+    from workbench.backend.runtime import runtime_adaptation
+
+    adapted = runtime_adaptation(model, undeclared_is_error=False)
+    if not adapted:
+        return parameters
+    target = str(adapted.get("target_compute_capability") or "")
+    overrides = (contract.get("runtime_overrides") or {}).get(target) or {}
+    for key, value in overrides.items():
+        if key not in parameters:
+            # A typo would otherwise silently do nothing, and the run would proceed on the
+            # historical value while the operator believed the profile applied.
+            raise ValueError(
+                f"runtime override {key!r} for {target!r} does not name a declared parameter of "
+                f"{generator!r}; declared: {sorted(parameters)}")
+        parameters[key] = value
+    return parameters
 
 
 def preparation_paths(contract: dict[str, Any], root: Path, group: str,

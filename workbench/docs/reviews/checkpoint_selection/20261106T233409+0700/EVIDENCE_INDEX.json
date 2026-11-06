@@ -2,7 +2,7 @@
  "session": "20261106T233409+0700",
  "previous_session": "20261106T002617+0700",
  "repo_head_at_start": "9cce69fb00e123e8c86d210c8c1b41d26701b5cf",
- "note": "Regenerated artifacts are labelled; nothing here is relabelled as an original historical log. Model weights, images and dense tensors are excluded by design.",
+ "note": "Regenerated artifacts are labelled; nothing here is relabelled as an original historical log. Model weights, images and dense tensors are excluded by design. Rebuilt: nine log entries pointed at *.log paths, which are ignored by .gitignore:116, so the reviewed tree carried the index but not the files. They are now committed as .txt with their true byte counts and SHA-256. The earlier declared byte figures were smaller than the originals (they appear to have been estimated), so the recorded sizes are now measured.",
  "entries": [
   {
    "dest": "README.md",
@@ -57,11 +57,11 @@
    "trimmed": false
   },
   {
-   "dest": "dcnet/logs/dcnet_patched_cli.log",
+   "dest": "dcnet/logs/dcnet_patched_cli.txt",
    "status": "present",
    "source": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T233409+0700/logs/dcnet_patched_cli.log",
-   "bytes": 6364,
-   "sha256": "c9ed9d06f4c2a3afdd8b2c39cd819cf5c7ec8e97840b7b15d5cf4f1f517a61f1",
+   "bytes": 6922,
+   "sha256": "ca9a5065141d6f4ad2c44983f3cd3add4048a55892457e15e5eb9a1d7a857389",
    "note": "official CLI run WITH patch and WITHOUT the global shim",
    "trimmed": true
   },
@@ -93,16 +93,16 @@
    "trimmed": false
   },
   {
-   "dest": "hint/logs/hint_doc_command.log",
+   "dest": "hint/logs/hint_doc_command.txt",
    "status": "present",
    "source": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T233409+0700/logs/hint_doc_command.log",
-   "bytes": 12404,
-   "sha256": "8b483ead3088d2b6da860811aff6565134e22013d2d2b20d067fadcb38262a55",
+   "bytes": 15543,
+   "sha256": "fa447dda7fce45bc8e3e3fd557994e334a737a2e1a680d2ffac5be12dc2578ea",
    "note": "stdout of corrected documented command",
    "trimmed": true
   },
   {
-   "dest": "hint/logs/hint_native_b16.log",
+   "dest": "hint/logs/hint_native_b16.txt",
    "status": "present",
    "source": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T233409+0700/logs/hint_native_b16.log",
    "bytes": 592,
@@ -111,7 +111,7 @@
    "trimmed": true
   },
   {
-   "dest": "hint/logs/hint_native_verify.log",
+   "dest": "hint/logs/hint_native_verify.txt",
    "status": "present",
    "source": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T233409+0700/logs/hint_native_verify.log",
    "bytes": 612,
@@ -120,7 +120,7 @@
    "trimmed": true
   },
   {
-   "dest": "hint/logs/hint_variant_repro.log",
+   "dest": "hint/logs/hint_variant_repro.txt",
    "status": "present",
    "source": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T233409+0700/logs/hint_variant_repro.log",
    "bytes": 372,
@@ -318,7 +318,7 @@
    "trimmed": false
   },
   {
-   "dest": "ptha/logs/ptha_trace_contract.log",
+   "dest": "ptha/logs/ptha_trace_contract.txt",
    "status": "present",
    "source": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T233409+0700/logs/ptha_trace_contract.log",
    "bytes": 2993,
@@ -327,11 +327,11 @@
    "trimmed": true
   },
   {
-   "dest": "ptha/logs/ptha_transfer_run1.log",
+   "dest": "ptha/logs/ptha_transfer_run1.txt",
    "status": "present",
    "source": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T233409+0700/logs/ptha_transfer_run1.log",
-   "bytes": 9110,
-   "sha256": "f6ba01df34c71bd53e07d6010dbb0ab8c7d975f535c8782709f63d3d5aa9e42c",
+   "bytes": 39355,
+   "sha256": "4c1b9f8b3eeaa45e77d7a34411b1b85c7c687d829053f258d20c4eb3d3bc6bc1",
    "note": "full transfer stdout",
    "trimmed": true
   },
@@ -399,7 +399,7 @@
    "trimmed": false
   },
   {
-   "dest": "tme/logs/tme_bounded_equiv.log",
+   "dest": "tme/logs/tme_bounded_equiv.txt",
    "status": "present",
    "source": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T233409+0700/logs/tme_bounded_equiv.log",
    "bytes": 1962,
@@ -408,7 +408,7 @@
    "trimmed": false
   },
   {
-   "dest": "tme/logs/tme_dtype_measure.log",
+   "dest": "tme/logs/tme_dtype_measure.txt",
    "status": "present",
    "source": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T233409+0700/logs/tme_dtype_measure.log",
    "bytes": 1815,
@@ -442,6 +442,67 @@
    "sha256": "f4ccf355913d78b87892397c58dbf29b9bb8dbf53c7b6fdf3e0656ac5dd0182d",
    "note": "TME vit_encode dtype probe",
    "trimmed": false
+  },
+  {
+   "dest": "ptha/logs/ptha_transfer_run2.txt",
+   "status": "present",
+   "bytes": 27525,
+   "sha256": "996f85df39017602a57287efb76d2e66a2a3e14f058ee16ff396f8e694b59779",
+   "note": "stderr of the post-fix transfer run; progress bars retained",
+   "provenance": {
+    "original_path": "workbench/artifacts/checkpoint_selection/20261106T233409+0700/measurements/ptha_transfer_run2.err",
+    "trimmed": false,
+    "redacted": false
+   }
+  },
+  {
+   "dest": "ptha/logs/ptha_transfer_run2_stdout.txt",
+   "status": "present",
+   "bytes": 4715,
+   "sha256": "d740732b218363c0b510ec1ad113fe34cfd202cb9e336ff82de1000521331d14",
+   "note": "verbatim stdout of the post-fix transfer run, including native progress prints",
+   "provenance": {
+    "original_path": "workbench/artifacts/checkpoint_selection/20261106T233409+0700/measurements/ptha_transfer_run2.json",
+    "trimmed": false,
+    "redacted": false
+   }
+  },
+  {
+   "dest": "tme/measurements/tme_real_cache_smoke.json",
+   "status": "present",
+   "bytes": 1096,
+   "sha256": "a28caa8efe41daa10f989d097f5d6e8eb47e530b0206b1ed78ed3afa34fab9dd",
+   "note": "real checkpoint forward on adapted runtime: float32 [24,257,1408], batches 10/10/4 with partial tail; production _tme_validate accepts under float32 contract, rejects the same bytes under float16, and still rejects float64; scratch root used so the real cache location was never written",
+   "provenance": {
+    "original_path": "workbench/artifacts/checkpoint_selection/20261106T233409+0700/measurements/tme_real_cache_smoke.json",
+    "trimmed": false,
+    "redacted": false
+   }
+  },
+  {
+   "dest": "tme/scripts/tme_real_cache_smoke.py",
+   "status": "present",
+   "bytes": 9860,
+   "sha256": "a95dac0bc5d33fde065e968f5ed1bf0b8f24c119f188a57eea582f84e5172070",
+   "note": "the smoke itself; writes only to a temp scratch root",
+   "provenance": {
+    "original_path": "workbench/artifacts/checkpoint_selection/20261106T233409+0700/scripts/tme_real_cache_smoke.py",
+    "trimmed": false,
+    "redacted": false
+   }
+  },
+  {
+   "dest": "ptha/measurements/ptha_transfer_run2.json",
+   "status": "present",
+   "bytes": 3884,
+   "sha256": "a49ea61058afde7676112ab0f634d4bb9fa54468fcb00708d4e2b4bdb9c89e45",
+   "note": "post-dispatch-fix CirCat transfer, bit-identical to run1",
+   "provenance": {
+    "original_path": "workbench/artifacts/checkpoint_selection/20261106T233409+0700/measurements/ptha_transfer_run2.json",
+    "trimmed": true,
+    "redacted": false,
+    "trim_note": "native progress prints precede the JSON on stdout; only the JSON object is stored in this file. The verbatim stdout is kept at ptha/logs/ptha_transfer_run2_stdout.txt"
+   }
   }
  ]
 }
