@@ -420,9 +420,9 @@
    "dest": "tme/measurements/tme_bounded_equiv.json",
    "status": "present",
    "source": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T233409+0700/measurements/tme_bounded_equiv.json",
-   "bytes": 852,
-   "sha256": "4f98836e4c40e9d9404ecfe69dd24457ad2e5d7d49f24d0207688cbb9876cb52",
-   "note": "bit-identical result incl. partial final batch (2,2,1)",
+   "bytes": 1218,
+   "sha256": "bd4c0553656cd1aa4005838c168edad15e4d9896dce0745dc918740d0142e92e",
+   "note": "bit-identical result incl. partial final batch (2,2,1) + CWD/symlink provenance note",
    "trimmed": false
   },
   {

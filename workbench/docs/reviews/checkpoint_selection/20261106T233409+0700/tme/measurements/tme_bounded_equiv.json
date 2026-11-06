@@ -47,5 +47,6 @@
  "max_abs_diff": 0.0,
  "names_identical": true,
  "partial_final_batch_rows": 1,
- "verdict": "bounded storage is bit-identical to the native list+cat path on identical real inputs"
+ "verdict": "bounded storage is bit-identical to the native list+cat path on identical real inputs",
+ "environment_note": "TME resolves ./weight/ and ./data/FashionIQ relative to CWD; the probe ran from the checkout root with a temporary data/FashionIQ symlink to the existing .jpg view. That symlink was removed after the run and was gitignored by the checkout own .gitignore:8, so the vendored-source integrity gate stayed green (36/36) both with and without it."
 }

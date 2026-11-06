@@ -787,7 +787,8 @@ Coverage: mọi run đều đủ query (2017 dress / 2038 shirt / 1961 toptee), 
 - **PAIR**: load và chấm được, nhưng **tương đương source gốc chưa xác lập**. Đo được: `transformer_a` khôi phục 2 layer × 4 head ≠ public 1 × 8; checkpoint có `transformer_c/d`, `weight_chanelImg*`, `cross_t2i` mà public `model.py` không định nghĩa; 5.20% tham số không được forward public chạm tới. **Chưa** chứng minh được đó là nguyên nhân duy nhất của điểm thấp, và **không** thể gọi các module thừa là "training-only" vì chúng không xuất hiện ở bất kỳ đâu trong checkout, kể cả loss/train. Xem 3.9.
 - **TME**: chạy được nhưng dưới session runner nhận dtype đo được (float32) và giảm `Qformer_bs`/`query_bs`; cho tới khi D-7 được duyệt, đây **không** phải đường chạy `workbench.replay.tme` nguyên bản.
 - **LIMN**: chạy dưới open_clip **2.20.0**, đúng pin tác giả (`LIMN/requirements.txt:37`). `adapted_runtime` trước đây khai `>=2.24,<2.27` và **đã được sửa** về `==2.20.0` (mục 3.15), nên nay contract và môi trường khớp nhau — không còn lệch.
-- **CSMCIR / PTHA+MTST**: không có số đo. Không suy ra từ model khác, không dùng caption thay thế, không cắt đầu chiếu.
+- **CSMCIR**: không có số đo. Không suy ra từ model khác, không dùng caption thay thế.
+- **PTHA+MTST**: **có** số đo transfer CIRR→FIQ (mục 3.13: 37.8978 / 59.8364) nhưng **KHÔNG** phải reproduction FashionIQ — không cắt đầu chiếu, không thay bằng checkpoint FashionIQ của tác giả (không được phát hành). Điều chưa chứng minh là *tương đương với cách tác giả dùng checkpoint cho CIRR*, không phải "không có số đo".
 - **SPRC ViT-g**: chưa chạy; không dùng ViT-L thay cho hàng ViT-g.
 - Validation set đã dùng để chọn checkpoint ⇒ các số không phải ước lượng held-out không thiên lệch.
 - Không có so sánh nào vắt qua protocol khác nhau: mỗi Δ trong báo cáo chỉ so trong cùng dataset/backbone/protocol/noise đã ghi.
@@ -922,7 +923,7 @@ Ghi chú `.gitignore`: `workbench/artifacts/**` bị chặn, nên evidence **kh�
 | `workbench/patches/dcnet_checkpoint_weights_only_optout.patch` | patch 1 dòng, base→derived khớp | mục 3.14 |
 | `workbench/third_party/DCNet/base/base_trainer.py` | áp patch trên (đã khai báo) | DCNet chạy `PYTHONPATH` sạch, kết quả khớp tuyệt đối |
 | `CHECKPOINT_SELECTION_REPORT.md` | sửa sai, thêm 3.12–3.16 | chính file này |
-| `workbench/docs/reviews/checkpoint_selection/20261106T233409+0700/` | bundle review được: **47 entry có hash** (+ chính file index = 48 file, 584 KB) | `EVIDENCE_INDEX.json`, `README.md`, `TEST_STATUS.md` |
+| `workbench/docs/reviews/checkpoint_selection/20261106T233409+0700/` | bundle review được: **49 entry có hash** (+ chính file index = **50 file**, ~353 KB) | `EVIDENCE_INDEX.json`, `README.md`, `TEST_STATUS.md` |
 
 ### 10.5 Trạng thái test — nói thẳng
 
