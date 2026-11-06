@@ -7,16 +7,16 @@
   {
    "dest": "README.md",
    "status": "present",
-   "bytes": 2730,
-   "sha256": "1817eea868f4c4af49e5747c4d1a2f5851fbe17b7ddb6bcb29fe1c8b81b9cbaf",
+   "bytes": 3908,
+   "sha256": "0b4a7c060c7ee94c3c72b9f1a7a9ccd47b8c9bd7770d635a97f50f6f317ddfb0",
    "note": "reviewer entry point",
    "trimmed": false
   },
   {
    "dest": "TEST_STATUS.md",
    "status": "present",
-   "bytes": 2970,
-   "sha256": "a4b3ab43b7ed47d5d8f4b410cbd23c479e760c6e7299406f424020a4c98dee22",
+   "bytes": 5587,
+   "sha256": "e36af2f68d696041c15e0e31b7c8ccbcc5855866547cb634e6b14f812b9fc44a",
    "note": "test status + pre-existing 3.11 limit",
    "trimmed": false
   },

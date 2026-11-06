@@ -1836,7 +1836,8 @@ def all_stages(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage]
                 # would resume as done. `tme_features_complete` below still verifies the files the
                 # receipt names, so an emptied cache re-owes the stage.
                 tme_checkout = config.WORKBENCH_THIRD_PARTY_ROOT / (m.get("source_dir") or "")
-                prep_artifacts.append(prepare_model.tme_receipt_path(config, tme_checkout, prep_contract))
+                prep_artifacts.append(prepare_model.tme_receipt_path(
+                    config, tme_checkout, prep_contract, m))
             else:
                 prep_artifacts.extend(prep_dataset_root / relative for relative in artifact["paths"])
         owed_artifacts = tuple(p for p in prep_artifacts if not p.is_file())

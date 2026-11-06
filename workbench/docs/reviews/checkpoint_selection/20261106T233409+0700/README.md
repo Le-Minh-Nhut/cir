@@ -12,8 +12,11 @@ whether it was trimmed.
 * **HINT** — `hint/measurements/hint_native_verify.json` holds per-query ranks; recompute
   `R@1/R@10/R@50` from them and compare against the stored recalls. `hint/measurements/hint_parity_top50.json`
   records, per category, how many queries had equal top-50 **index sets** and identical **ordering**.
-* **PTHA** — `ptha/measurements/ptha_transfer_run1.json` has per-category metrics plus the contract report
-  (before/after shapes, reused parameters, new parameters, boundary equivalence).
+* **PTHA** — `ptha/measurements/ptha_transfer_run1.json` and `ptha_transfer_run2.json` have per-category
+  metrics plus the contract report (which class was loaded, which contract was dispatched, before/after
+  shapes, reused parameters, new parameters). Run 2 was taken **after** the target-feature dispatch was
+  rewritten to key off the loaded class, and is bit-identical to run 1 on all three categories — that
+  equality is the evidence that the refactor changed which branch projects, not the CirCat arithmetic.
 * **DCNet** — `dcnet/measurements/dcnet_patched_cli.json` compares the patched run against the previous
   shim-based run, per category, with absolute differences.
 * **PAIR** — `pair/measurements/summary.json` keeps all four B1/B2 × H_normal/H_rev measurements;
@@ -30,8 +33,14 @@ correct cwd/imports are in `CHECKPOINT_SELECTION_REPORT.md` section 5.
 
 * Historical artifacts from the previous session are copied **unchanged** and named `*_previous_session*`
   or `ptha_previous_blocker.json`. They are not relabelled as this session's output.
-* Long stdout is cut to the last 200 lines and marked `"trimmed": true` in the index. Metric lines are
-  always inside that window; progress bars are what gets dropped.
+* Trimming is recorded **per entry** as `provenance.trimmed`, never assumed. The nine `*/logs/*.txt`
+  files recovered this session are **verbatim**, including ANSI progress bars, `trimmed: false`.
+  `ptha/measurements/ptha_transfer_run2.json` is the one trimmed artifact: the native prints precede the
+  JSON on stdout, so only the JSON object is stored there, with the full stream kept beside it at
+  `ptha/logs/ptha_transfer_run2_stdout.txt`.
+* These logs are `.txt` rather than `.log` because `.gitignore:116` ignores `*.log` globally. That rule
+  is exactly why an earlier revision shipped an index declaring nine files that never reached the
+  repository; the bytes are otherwise unchanged.
 * No secrets, tokens or signed URLs are present. No redaction was necessary; nothing was altered.
 
 ## Known limits, stated plainly
@@ -42,4 +51,7 @@ correct cwd/imports are in `CHECKPOINT_SELECTION_REPORT.md` section 5.
 * PAIR is exploratory: the public checkout does not define a consumer for every restored module, so
   equivalence with the original implementation remains unresolved.
 * TME's measured feature dtype is float32 on the runtime used here; that does not prove the historical
-  float16 contract wrong for every runtime.
+  float16 contract wrong for every runtime. The historical value therefore remains the default, and the
+  adapted runtime is declared separately in `preparation_contracts.yaml` under `runtime_overrides`.
+* PTHA's TGIR branch is covered by behavioural fixtures only — no TGIR checkpoint exists on this machine,
+  so that path is not checkpoint- or GPU-verified.
