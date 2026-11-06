@@ -1,0 +1,57 @@
+{
+ "producer": "workbench/artifacts/checkpoint_selection/20261106T002617+0700/scripts/dcnet_glove_prep.py (np.random.seed(0))",
+ "author_behaviour": "process_cap.py samples UNSEDED np.random.normal(0,0.3,(300,)) for OOV words (cnt>2), so a seeded regeneration produces a DIFFERENT artifact than the author's; it cannot match author hashes and must not be compared against paper numbers",
+ "label": "WORKBENCH_SEEDED_RECIPE",
+ "files": [
+  {
+   "name": "cap.dress.glove.test.pkl",
+   "bytes": 26163303,
+   "sha256": "b293c849f3c67314db9f2f3e6370755d4a7fb77c5c0b5e86e13b201722b64ac0"
+  },
+  {
+   "name": "cap.dress.glove.train.pkl",
+   "bytes": 76948410,
+   "sha256": "521fbb7e30730246f4c69262604bf66950f6f8caef8c71d4be97cc7ea89029a1"
+  },
+  {
+   "name": "cap.dress.glove.val.pkl",
+   "bytes": 25822145,
+   "sha256": "02ac9a02104f63e4e7739ae7f8d47520f9085112c95bc2bd4b5ddf05cfe9d235"
+  },
+  {
+   "name": "cap.shirt.glove.test.pkl",
+   "bytes": 26034087,
+   "sha256": "bb44945b2b743013e62272cb730e0435ed4021b20a4cd534f4738e0c2edaf2e9"
+  },
+  {
+   "name": "cap.shirt.glove.train.pkl",
+   "bytes": 76591908,
+   "sha256": "ce40d04064efdafc77e881a8aa30a46c91894231be4a4a851f48100f06d2f878"
+  },
+  {
+   "name": "cap.shirt.glove.val.pkl",
+   "bytes": 25866009,
+   "sha256": "f472b88ab27da960fea00a28c3a21e44d574d00e64cf9d009ab0628f2aefb61a"
+  },
+  {
+   "name": "cap.toptee.glove.test.pkl",
+   "bytes": 27909963,
+   "sha256": "210eb1420d251dc8c1d49e90e18672d9ba82f747f93b8df9aec257a60888d8dc"
+  },
+  {
+   "name": "cap.toptee.glove.train.pkl",
+   "bytes": 81409145,
+   "sha256": "94746239b3d448a286627693c8f58175f73471a0b0a05228942dcd8eda94b7af"
+  },
+  {
+   "name": "cap.toptee.glove.val.pkl",
+   "bytes": 26566559,
+   "sha256": "e6cca9d64df6dc4dac41aeec82e30b169f07f9142ac9ec33e232c57d53f42a59"
+  },
+  {
+   "name": "glove_vecs.pkl",
+   "bytes": 4462717,
+   "sha256": "0fcd702ab68d061f0f4d097be3a38f0c58ed3ee1ca9c96778d3daac128cf3501"
+  }
+ ]
+}

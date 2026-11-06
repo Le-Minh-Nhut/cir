@@ -66,12 +66,30 @@
    "trimmed": true
   },
   {
+   "dest": "dcnet/manifests/dcnet_glove_recipe.json",
+   "status": "present",
+   "source": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T233409+0700/manifests/dcnet_glove_recipe.json",
+   "bytes": 1932,
+   "sha256": "fc805437e26a95b227d24feb3c2d867846b9bd539a5dbffbc057cf8a29d42c70",
+   "note": "10 GloVe artifacts with sha256 + WORKBENCH_SEEDED_RECIPE label; author sampling is unseeded so hashes cannot match",
+   "trimmed": false
+  },
+  {
    "dest": "dcnet/measurements/dcnet_patched_cli.json",
    "status": "present",
    "source": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T233409+0700/measurements/dcnet_patched_cli.json",
    "bytes": 2343,
    "sha256": "11fe186ef887124e019b850d4d35d31eef27f46401726aa5be5c6047fbca9192",
    "note": "DCNet parsed results + diff vs previous shim run",
+   "trimmed": false
+  },
+  {
+   "dest": "dcnet/scripts/dcnet_glove_prep.py",
+   "status": "present",
+   "source": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/scripts/dcnet_glove_prep.py",
+   "bytes": 2740,
+   "sha256": "94be2d07411d216e4cd2bbad4837e0e48818cd958abf8f950a5bf08d8b004e60",
+   "note": "seeded GloVe recipe (np.random.seed(0))",
    "trimmed": false
   },
   {
