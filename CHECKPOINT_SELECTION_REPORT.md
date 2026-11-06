@@ -713,9 +713,17 @@ và production validator:
 Ba giới hạn ghi ở bản trước đã được **gỡ bỏ bằng phép đo thật**, không phải bằng lập luận:
 
 - **Đã chạy lại full 3 category của TME qua đúng `workbench.replay.tme`.**
-  `measurements/tme_normal_path_full.json`, exit 0, macro **54.9229 / 74.8384** — khớp **từng chữ số**
-  với số đo trước đó khi TME còn phải chạy qua session runner. Cache được sinh lại và có
-  sha256 `9fead93ac746…` **trùng khít** cache đã bị xoá, nên đây là cùng một đầu vào.
+  `tme/measurements/tme_normal_path_full.json`, exit 0, macro **54.9229 / 74.8384** (54.922901590665184 /
+  74.83842174212138) — khớp **từng chữ số** với số đo trước đó khi TME còn phải chạy qua session runner.
+  Cache sinh lại có sha256 `9fead93ac746…` **trùng khít** cache đã bị xoá, và
+  `feature_name_to_idx_sha256` `5cfc07a1…` trùng khít file mapping gốc còn sống — nên đây là cùng một
+  đầu vào, không chỉ cùng kích thước.
+
+  **`feature_cache_provenance: VERIFIED_PRIOR_RUN`**, `feature_cache_unverified_inputs: []`. Đây là
+  điểm từng hỏng và đã sửa: lượt chạy đầu ghi `UNVERIFIED` vì lúc sinh cache tôi đặt
+  `WORKBENCH_TME_BATCH_SIZE=32` nhưng lúc eval **không** đặt, nên resolver tính ra 512 và receipt ghi 32
+  ⇒ hai bên lệch `recipe.batch_size`. Chạy lại với đủ biến môi trường thì khớp hoàn toàn. Bài học ghi
+  lại: batch là tham số vận hành **có mặt trong receipt**, nên phải đặt giống nhau ở cả hai bước.
 - **dtype vẫn là kết luận theo runtime**, không phải phán quyết tuyệt đối: `sm_120` đo được float32,
   contract lịch sử giữ float16 làm default. Không có runtime thứ hai để đo trong phiên này.
 - **Giới hạn tài nguyên đã hết**: đĩa đủ chỗ sau khi dọn checkpoint cũ, nên lượt ranking 3-category
@@ -730,6 +738,26 @@ Cả hai đều là tham số vận hành, không phải ngữ nghĩa:
 | `WORKBENCH_TME_QUERY_BS` | 8 | 32 | cùng lý do |
 | `PYTORCH_CUDA_ALLOC_CONF` | `expandable_segments:True` | — | giảm phân mảnh allocator |
 | `WORKBENCH_TME_BATCH_SIZE` | 32 | 512 | sinh cache, ghi trong receipt |
+
+Lệnh tái lập đầy đủ (cả hai bước phải dùng **cùng** `WORKBENCH_TME_BATCH_SIZE`, vì giá trị đó nằm trong receipt):
+
+```bash
+cd $CIR
+export WORKBENCH_TME_PYTHON=$CIR/workbench/envs/tme-adapted/bin/python
+export WORKBENCH_RUNTIME_ADAPTATION=sm_120
+export WORKBENCH_TME_BATCH_SIZE=32
+
+# sinh cache (đã chạy; cache hiện tại có sha 9fead93ac746…)
+workbench/envs/test-adapted/bin/python workbench/scripts/prepare_model.py \
+  --model tme --execute --allow-preparation --allow-gpu-preparation
+
+# eval full 3 category
+WORKBENCH_TME_QFORMER_BS=64 WORKBENCH_TME_QUERY_BS=8 \
+PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True \
+workbench/envs/tme-adapted/bin/python -m workbench.replay.tme \
+  --checkpoint-root $E1/cohort/ckpt/tme --dataset-root data/FashionIQ \
+  --source-root workbench/third_party/TME --output tme_full.json
+```
 
 Đường sinh cache cũng phải sửa: `src/precompute.py` gom mọi batch vào list rồi `torch.cat`, cần **hai**
 bản sao tensor cùng lúc. Đo được 28.76 GiB RSS cho kết quả fp16 10.47 GiB (SIGKILL), và ở float32 tensor
@@ -1183,7 +1211,7 @@ Ghi chú `.gitignore`: `workbench/artifacts/**` bị chặn, nên evidence **kh�
 | `workbench/patches/dcnet_checkpoint_weights_only_optout.patch` | patch 1 dòng, base→derived khớp | mục 3.14 |
 | `workbench/third_party/DCNet/base/base_trainer.py` | áp patch trên (đã khai báo) | DCNet chạy `PYTHONPATH` sạch, kết quả khớp tuyệt đối |
 | `CHECKPOINT_SELECTION_REPORT.md` | sửa sai, thêm 3.12–3.16 | chính file này |
-| `workbench/docs/reviews/checkpoint_selection/20261106T233409+0700/` | bundle review được: **55 entry có hash** (+ chính file index = **56 file**; 457456 B = 446 KiB, đo lại toàn bộ sau khi thêm). Chín log trước đây **khai là present nhưng vắng trên remote** vì `.gitignore:116` bỏ qua `*.log`; nay đã commit dưới tên `.txt`, giữ nguyên byte, kèm provenance `original_path`. Số byte khai trước đó nhỏ hơn file thật (ước lượng), nay là số đo. | `EVIDENCE_INDEX.json`, `README.md`, `TEST_STATUS.md` |
+| `workbench/docs/reviews/checkpoint_selection/20261106T233409+0700/` | bundle review được: **55 entry có hash** (+ chính file index = **56 file**; 456940 B = 446 KiB, đo lại toàn bộ sau khi thêm). Chín log trước đây **khai là present nhưng vắng trên remote** vì `.gitignore:116` bỏ qua `*.log`; nay đã commit dưới tên `.txt`, giữ nguyên byte, kèm provenance `original_path`. Số byte khai trước đó nhỏ hơn file thật (ước lượng), nay là số đo. | `EVIDENCE_INDEX.json`, `README.md`, `TEST_STATUS.md` |
 
 ### 10.5 Trạng thái test — nói thẳng
 

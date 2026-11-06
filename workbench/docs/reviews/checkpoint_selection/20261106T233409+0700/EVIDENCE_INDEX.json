@@ -506,8 +506,8 @@
   },
   {
    "dest": "tme/measurements/tme_normal_path_full.json",
-   "bytes": 11483,
-   "sha256": "f807063ee212760ec6517f7bf893e4f537986a7c0e3d78b437431197e1c92650",
+   "bytes": 10967,
+   "sha256": "3a2ad401d90faba00d452b9237cde2b9f85bcc19745354858c7599e6cd98f284",
    "source": "workbench/artifacts/checkpoint_selection/20261106T233409+0700/measurements/tme_normal_path_full.json",
    "provenance": {
     "trimmed": false
