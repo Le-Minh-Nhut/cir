@@ -5,7 +5,7 @@
   {
    "dest": "README.md",
    "bytes": 3187,
-   "sha256": "7508b9e5e6e816c2a50521d67a7e107267d4058204e1d96953454878c4350b9d"
+   "sha256": "e01b0097c0228fde682ab13c55149244c176c7c4e2a9f2dc64a05c9dabebc280"
   },
   {
    "dest": "csmcir/asset_verification.txt",
@@ -18,7 +18,7 @@
    "sha256": "3d8639d0d1b51aa160a3ad66b950e56c64742ed6449386baaff248f7fd6fb5c3"
   },
   {
-   "dest": "csmcir/full_eval.log",
+   "dest": "csmcir/full_eval.txt",
    "bytes": 46819,
    "sha256": "22dc0587650b8c0e148cf90d0a4998027be8a8b411e4c512f2a83d834722c895"
   },

@@ -14,7 +14,7 @@ opened by the real constructors, zero of them either of those paths.
 | `csmcir/call_path_probe.txt` | which files the evaluation path actually opens, with the constructors that opened them |
 | `csmcir/asset_verification.txt` | three caption JSONs vs published sha256, record counts, gallery/reference/target coverage, and the 121-ID shirt/toptee overlap |
 | `csmcir/measurement.json` | per-category R@10/R@50, macro, checkpoint and input digests, operational parameters |
-| `csmcir/full_eval.log` | the run itself: exit 0, `Missing keys []`, the printed metric JSON |
+| `csmcir/full_eval.txt` | the run itself: exit 0, `Missing keys []`, the printed metric JSON |
 | `csmcir/scripts/` | the four operational steps, each written to explain why it exists |
 | `glove_recipe/determinism.json` | two seeded runs producing identical hashes, all ten matching the artifact DCNet was measured against |
 
