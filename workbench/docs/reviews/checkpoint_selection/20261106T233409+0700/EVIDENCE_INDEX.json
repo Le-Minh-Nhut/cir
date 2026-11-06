@@ -84,6 +84,15 @@
    "trimmed": true
   },
   {
+   "dest": "hint/logs/hint_native_b16.log",
+   "status": "present",
+   "source": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T233409+0700/logs/hint_native_b16.log",
+   "bytes": 592,
+   "sha256": "bf234ac215791804cb1766ce46c559a56f64d531f2bafe528e12e24707cf1609",
+   "note": "batch-16 stdout",
+   "trimmed": true
+  },
+  {
    "dest": "hint/logs/hint_native_verify.log",
    "status": "present",
    "source": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T233409+0700/logs/hint_native_verify.log",
@@ -117,6 +126,15 @@
    "bytes": 4333,
    "sha256": "131e4a35f6cc0b8bfc07e980cfa5fc5c214ca422edb8385fccfb44fd63c3acd6",
    "note": "the historical 59.8034/80.1308 claim, preserved unmodified",
+   "trimmed": false
+  },
+  {
+   "dest": "hint/measurements/hint_native_b16.json",
+   "status": "present",
+   "source": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T233409+0700/measurements/hint_native_b16.json",
+   "bytes": 46114,
+   "sha256": "bc87d0646f3134833c59115f93b924dc1947caefa79022b613ca58d020372f5f",
+   "note": "same native path at batch 16: 0.0 diff and identical per-query ranks vs batch 64",
    "trimmed": false
   },
   {
@@ -363,6 +381,15 @@
    "trimmed": false
   },
   {
+   "dest": "tme/logs/tme_bounded_equiv.log",
+   "status": "present",
+   "source": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T233409+0700/logs/tme_bounded_equiv.log",
+   "bytes": 1962,
+   "sha256": "f22e7952c991d1f2cd36c02d2d606bd2b33a187c32db29531fa3531aca419a61",
+   "note": "probe stdout",
+   "trimmed": false
+  },
+  {
    "dest": "tme/logs/tme_dtype_measure.log",
    "status": "present",
    "source": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T233409+0700/logs/tme_dtype_measure.log",
@@ -370,6 +397,24 @@
    "sha256": "772f0aa11cf9aaa6b35f7a4b9c977d147e18af36e4d48195997498a58be09811",
    "note": "TME dtype probe output",
    "trimmed": true
+  },
+  {
+   "dest": "tme/measurements/tme_bounded_equiv.json",
+   "status": "present",
+   "source": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T233409+0700/measurements/tme_bounded_equiv.json",
+   "bytes": 852,
+   "sha256": "4f98836e4c40e9d9404ecfe69dd24457ad2e5d7d49f24d0207688cbb9876cb52",
+   "note": "bit-identical result incl. partial final batch (2,2,1)",
+   "trimmed": false
+  },
+  {
+   "dest": "tme/scripts/tme_bounded_equiv.py",
+   "status": "present",
+   "source": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T233409+0700/scripts/tme_bounded_equiv.py",
+   "bytes": 4141,
+   "sha256": "312da0c622e1652c21dd00217f38879b4729240ab819da60f402725847a4d3b6",
+   "note": "bounded-vs-native equivalence probe: list+cat transcribed from pinned precompute.py",
+   "trimmed": false
   },
   {
    "dest": "tme/scripts/tme_dtype_measure.py",

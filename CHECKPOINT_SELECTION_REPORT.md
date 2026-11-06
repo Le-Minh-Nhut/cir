@@ -434,6 +434,18 @@ Wrapper chỉ trả recall nên danh sách `nn_result` được **bắt tại ch
 
 Không có query nào lệch (0 mismatch). Điểm trùng nhau có tồn tại trong dữ liệu (71083 / 34161 / 30604 cặp trong một hàng ở dress/shirt/toptee), nhưng chúng **không** làm hai đường rẽ nhánh, nên kết luận parity không dựa trên việc che các tie.
 
+### 3.12.8 Batch-size invariance (đo, không giả định)
+
+Chạy lại **toàn bộ** đường native viết tay ở `--batch-size 16` thay vì 64, trên cùng checkpoint/dataset:
+
+| category | batch 64 R@10/R@50 | batch 16 R@10/R@50 | chênh |
+|---|---|---|---|
+| dress | 51.2643 / 75.6073 | 51.2643 / 75.6073 | `0.0` |
+| shirt | 62.4141 / 81.2561 | 62.4141 / 81.2561 | `0.0` |
+| toptee | 65.7318 / 83.5288 | 65.7318 / 83.5288 | `0.0` |
+
+Không chỉ trùng ở mức recall: **rank từng query của cả 6016 query giống hệt nhau** giữa hai batch size. Vậy batch size đúng là tham số vận hành, không phải tham số khoa học — batch 64 đã dùng cho kết quả chính là hợp lệ.
+
 
 ## 3.13 PTHA+MTST — đã tìm ra nguyên nhân và chạy được transfer (buổi 20261106T233409+0700)
 
@@ -561,6 +573,19 @@ Hệ quả, và đây là chỗ bản trước nói quá: contract khai `feature
 - **đo được**: trên runtime đã chạy, output là float32, và cache 22.49 GB (15536×257×1408×4 byte) khớp float32 chứ không khớp float16;
 - **chưa xác lập**: dtype "native" theo nghĩa độc lập runtime. Cần đo trên runtime thứ hai mới tách được "native vs runtime-specific";
 - **đề xuất**: (D-7) khai báo dtype theo runtime, hoặc ghi rõ contract là "float32 on the adapted sm_120 runtime" thay vì sửa số của contract lịch sử.
+
+### 3.16.1 Bounded runner ≡ native runner (đã đo, không suy luận)
+
+Runner preallocate-then-copy của phiên trước từng bị nghi là đổi hành vi. Đã kiểm bằng cách viết lại **đúng** đường native (`src/precompute.py:34-46`: gom list rồi `torch.cat`) và chạy song song với đường bounded trên **cùng ảnh thật, cùng model, cùng preprocess, cùng thứ tự**, có chủ đích tạo **batch cuối lẻ**: 5 ảnh, batch 2 ⇒ các batch 2 / 2 / **1**.
+
+| | shape | dtype | names |
+|---|---|---|---|
+| native (list + cat) | `[5,257,1408]` | float32 | 5 |
+| bounded (preallocate + copy) | `[5,257,1408]` | float32 | 5 |
+
+**Byte-identical: `True`. `max_abs_diff = 0.0`. Thứ tự tên trùng khít.** Vậy khác biệt duy nhất giữa hai runner là **bộ nhớ**, không phải số học — và batch cuối lẻ không gây lệch. Không loại ảnh gallery nào khỏi phép so này (chỉ cắt số lượng vì cache đầy đủ là 22.5 GiB và đây là kiểm tra tương đương, không phải đo lại).
+
+Giới hạn của kết luận: phần này chứng minh **hai runner tương đương nhau**, không chứng minh dtype `float16` trong contract là sai cho mọi runtime — xem lý do ở trên.
 
 Không sửa `float16 → float32` trong contract lịch sử vì lý do khoa học: một runtime không đủ để phủ định contract cho mọi runtime.
 
@@ -849,14 +874,32 @@ DataLoader: giữ **nguyên** cấu hình của từng evaluator (worker/prefetc
 | `$EVID/measurements/selection_decisions.json` | bảng quyết định máy đọc được (status + macro) |
 | `$EVID/manifests/*` | inventory weight cũ, cleanup result, protocol identity, digest bundle |
 
-### 9.1 Đề xuất diff registry (CHƯA áp dụng)
+### 9.1 Đề xuất diff registry — tách rõ "đã áp dụng" và "chờ duyệt"
 
-Phạm vi nay rộng hơn bản đầu: 12 entry đã có số đo thật (mục 3.11 và mục 6). Diff đề xuất, chờ duyệt ở **D-3**:
+**Đã rà lại schema trước khi đề xuất.** `workbench/backend/registry.py:52` chỉ chấp nhận ba giá trị cho `checkpoint_mapping_status`: `VERIFIED_METADATA`, `UNVERIFIED`, `ARTIFACT_ASSOCIATED_UNVALIDATED`. Vì vậy các nhãn kiểu `EMPIRICAL_VERIFIED` từng được đề xuất ở bản trước là **không hợp lệ** và đã bị bỏ.
 
-1. `workbench/registry/models.yaml` — với `combiner_rn50x4_noft`, `clip4cir_rn50x4_fullft`, `dcnet`, `clvc_net`, `tgcir`, `limn`, `encoder`, `hint`, `habit`, `intent`, `conesep`, `tme`: đặt `reproduction_status` theo kết quả thật và `checkpoint_mapping_status: VERIFIED_METADATA` (SHA tác giả khớp, ghi trong `cohort/manifests_acquired_final.json`). **`pair` giữ nguyên** `BLOCKED_CHECKPOINT_MAPPING_UNVERIFIED` vì mới ở mức exploratory.
-2. `workbench/registry/preparation_contracts.yaml` — (a) thêm generator `dcnet_glove_regen` (D-4); (b) sửa `tme_precompute_features.parameters.feature_dtype: float16 → float32` và lower bound 10.47 → 20.94 GiB (D-7).
-3. ~~`limn...adapted_runtime.packages`~~ — **đã áp dụng trong buổi này** (`==2.20.0`), xem 3.15.
-4. Không đổi protocol definition, default toàn cục hay shared evaluation logic.
+Hiện trạng thật (đọc từ registry, không suy đoán): 10 entry đã `VERIFIED_METADATA`; **8 variant còn `UNVERIFIED`** — `pair` (×2), `clvc_net`, `dcnet`, `combiner_rn50x4_noft`, `clip4cir_rn50x4_fullft`, `tgcir`, `sprc`.
+
+#### Đã áp dụng trong buổi này (không cần duyệt)
+
+| thay đổi | file | căn cứ |
+|---|---|---|
+| LIMN `adapted_runtime.packages` → `['open_clip_torch==2.20.0']` | `models.yaml` | pin tác giả `requirements.txt:37` + env đã đo (mục 3.15) |
+| DCNet `approved_source_patches` (1 dòng, `base/base_trainer.py`) | `models.yaml` + `workbench/patches/dcnet_checkpoint_weights_only_optout.patch` | patch áp từ base ra đúng derived digest; chạy CLI sạch không shim, kết quả khớp tuyệt đối (mục 3.14) |
+
+#### Chờ duyệt — **không** được thăng `VERIFIED_METADATA`
+
+Điểm quan trọng, và là chỗ bản trước sai: **có số đo không đồng nghĩa có digest tác giả.** Với 8 variant đang `UNVERIFIED`, không có SHA do tác giả công bố để đối chiếu; chúng mới chỉ có *archive/author association + đo được*. Theo đúng ba giá trị của schema, đề xuất là:
+
+1. `clvc_net`, `dcnet`, `combiner_rn50x4_noft`, `clip4cir_rn50x4_fullft`, `tgcir`, `sprc` → `ARTIFACT_ASSOCIATED_UNVALIDATED` (tác giả mô tả archive/config, đo được, **chưa** có digest tác giả để xác thực).
+2. `pair` → giữ nguyên `UNVERIFIED`, kèm `reproduction_status` `EXPLORATORY_PUBLIC_MAPPING` (mục 3.9: tương đương source gốc chưa xác lập).
+3. `reproduction_status` của các entry đã đo: cập nhật theo kết quả thật, dùng chuỗi mô tả tự do (trường này **không** có enum trong schema) — ví dụ `hint` → mô tả native-parity đã kiểm chứng, `ptha_mtst` giữ `SELECTED_TRANSFER_ONLY` vì bản chất vẫn là transfer.
+4. **Không** đổi default selection, protocol definition, hay shared evaluation logic.
+
+#### Còn lại ở `preparation_contracts.yaml` (D-4, D-7)
+
+- (D-4) `dcnet_glove_regen`: **hạ cấp đề xuất.** `process_cap.py` lấy mẫu `np.random.normal` **không seed** cho OOV, nên recipe có seed tạo ra artifact **khác** của tác giả — không thể khớp hash tác giả. Nếu làm, phải gắn nhãn `WORKBENCH_SEEDED_RECIPE` và **không** dùng để đối chiếu số paper.
+- (D-7) TME `feature_dtype`: xem 3.16 — đo được float32 trên runtime này, nhưng **chưa** đủ để phủ định `float16` cho mọi runtime. Đề xuất ghi dtype *theo runtime* thay vì sửa số lịch sử.
 
 SHA-256 để điền lấy nguyên văn từ `cohort/manifests_acquired_final.json` và `manifests/selected_bundle_digests.json`.
 
@@ -879,13 +922,13 @@ Ghi chú `.gitignore`: `workbench/artifacts/**` bị chặn, nên evidence **kh�
 | `workbench/patches/dcnet_checkpoint_weights_only_optout.patch` | patch 1 dòng, base→derived khớp | mục 3.14 |
 | `workbench/third_party/DCNet/base/base_trainer.py` | áp patch trên (đã khai báo) | DCNet chạy `PYTHONPATH` sạch, kết quả khớp tuyệt đối |
 | `CHECKPOINT_SELECTION_REPORT.md` | sửa sai, thêm 3.12–3.16 | chính file này |
-| `workbench/docs/reviews/checkpoint_selection/20261106T233409+0700/` | bundle review được, 42 file / ~295 KB | `EVIDENCE_INDEX.json` (hash từng file), `README.md`, `TEST_STATUS.md` |
+| `workbench/docs/reviews/checkpoint_selection/20261106T233409+0700/` | bundle review được: **47 entry có hash** (+ chính file index = 48 file, 584 KB) | `EVIDENCE_INDEX.json`, `README.md`, `TEST_STATUS.md` |
 
 ### 10.5 Trạng thái test — nói thẳng
 
 Repo dùng **cú pháp f-string PEP 701**, chỉ hợp lệ từ **Python 3.12** (`workbench/backend/environment_planner.py:669`). Máy này **không có** interpreter 3.12 nào kèm `pip`; mọi env conda đều 3.11.15. `git show HEAD:` của chính file đó **cũng** fail dưới 3.11 ⇒ đây là hạn chế **có từ trước**, không phải do buổi này.
 
-Vì vậy: 8 module test không collect được, thêm 4 module fail qua import — tất cả vì lý do trên. Đã chạy được và pass: `test_ptha_target_feature_contract` (5), `test_ptha_mtst_preflight`, `test_r19_ptha_wrapper`, và 6 test của `test_runtime_adaptation`. **Chưa** có CI xanh; việc đó cần môi trường 3.12. Chi tiết: `TEST_STATUS.md` trong bundle.
+Vì vậy: đúng **8 module** không collect được, và **12 test riêng lẻ** trong `test_runtime_adaptation.py` fail vì chúng import cùng module 3.12-only đó (bản thân module vẫn collect). Đã chạy và pass: `test_ptha_target_feature_contract` (5), `test_ptha_mtst_preflight`, `test_r19_ptha_wrapper`, 6 test của `test_runtime_adaptation`, và **60 test integrity** (`test_approved_source_patch`, `test_vendored_approved_patch`, `test_vendored_source_integrity`, `test_verified_declarations`, `test_dcnet_replay`) — nhóm cuối là nhóm quan trọng nhất cho thay đổi DCNet, vì nó chứng minh khai báo `approved_source_patches` chặn đúng cổng kiểm tra source đã bị sửa. **Chưa** có CI xanh; việc đó cần môi trường 3.12. Chi tiết: `TEST_STATUS.md` trong bundle.
 
 Hai assertion trong `test_runtime_adaptation.py` mã hoá contract LIMN **cũ** (`>=2.24,<2.27`) đã được cập nhật theo contract mới `==2.20.0` — đây là thay đổi hành vi có chủ đích (mục 3.15), không phải sửa test cho qua.
 

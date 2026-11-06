@@ -1,0 +1,51 @@
+{
+ "config": {
+  "images": 5,
+  "batch_size": 2,
+  "workers": 0,
+  "batch_sizes_seen": [
+   2,
+   2,
+   1
+  ],
+  "model": "blip2_cir_image_diff_features/pretrain",
+  "preprocess": "targetpad 1.25 @224 (utility.targetpad_transform)"
+ },
+ "native": {
+  "shape": [
+   5,
+   257,
+   1408
+  ],
+  "dtype": "torch.float32",
+  "element_size": 4,
+  "names": [
+   "B009PMCJLW",
+   "B0084Y8XIU",
+   "B007HNF4QI",
+   "B00AKLK08G",
+   "B00CMPE0C0"
+  ]
+ },
+ "bounded": {
+  "shape": [
+   5,
+   257,
+   1408
+  ],
+  "dtype": "torch.float32",
+  "names": [
+   "B009PMCJLW",
+   "B0084Y8XIU",
+   "B007HNF4QI",
+   "B00AKLK08G",
+   "B00CMPE0C0"
+  ],
+  "offset": 5
+ },
+ "identical_bytes": true,
+ "max_abs_diff": 0.0,
+ "names_identical": true,
+ "partial_final_batch_rows": 1,
+ "verdict": "bounded storage is bit-identical to the native list+cat path on identical real inputs"
+}
