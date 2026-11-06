@@ -918,12 +918,45 @@ thì `KeyError: 'Blip2QformerCirAlignPromptCSMCIR'`: checkpoint lưu dưới key
 | `shiyan92` (từ `.pyc` tác giả) | 860 | **0** | 1 (`token_importance`) | **0** |
 
 `token_importance` (32 giá trị đã train, 0.993–1.007) không nằm trong `state_dict` của **cả hai**
-class vì tác giả viết `nn.Parameter(...).unsqueeze(0).unsqueeze(-1)` — `unsqueeze` trả Tensor thường
-nên parameter mất đăng ký. Đây là khiếm khuyết của code tác giả, không phải của checkpoint, và
-không đụng tới số đo.
+class. Nguyên nhân đã kiểm trực tiếp, không suy đoán:
+
+| đo trên instance thật | CSMCIR | `shiyan92` |
+|---|---|---|
+| `len(state_dict())` | 860 | 860 |
+| `"token_importance" in state_dict()` | **False** | **False** |
+| `isinstance(m.token_importance, nn.Parameter)` | **False** (Tensor) | **False** (Tensor) |
+| đăng ký trong `named_parameters()` | False | False |
+| đăng ký trong `named_buffers()` | False | False |
+| giá trị lúc chạy | **toàn 1** | **toàn 1** |
+
+Tác giả viết `self.token_importance = nn.Parameter(torch.ones(n)).unsqueeze(0).unsqueeze(-1)`.
+`unsqueeze` trả **Tensor thường**, nên parameter bị mất đăng ký ngay tại dòng gán.
+
+Hệ quả cần nói rõ: **32 giá trị đã train trong checkpoint không bao giờ được dùng**. Cả hai class đều
+chạy với vector ones lúc init, bất kể checkpoint chứa gì. Nên việc `load_state_dict(strict=False)` bỏ
+qua khoá đó **không** làm sai lệch số đo — nó chỉ là hệ quả của một khiếm khuyết upstream, và
+`strict=True` cũng sẽ từ chối vì lý do y hệt. Đây không phải chỗ tôi được phép "sửa": gán lại thành
+`nn.Parameter` sẽ đổi hành vi forward so với tác giả.
 
 Module `shiyan92` **không có `.py`** ở revision pin; tác giả chỉ publish `.pyc` CPython 3.10 (khớp đúng
 env). Import trực tiếp `.pyc` đó chạy được và tự đăng ký. Vì vậy run dùng đúng class đã lưu checkpoint.
+
+#### 3.18.3b Hai class có cùng bề mặt evaluator gọi
+
+Vì class chạy là `shiyan92` chứ không phải `blip2_cir_align_prompt_csmcir` của entrypoint, phải kiểm
+ràng các method mà evaluator gọi đều tồn tại và không bị thừa kế từ đâu khác:
+
+| method | CSMCIR tự định nghĩa | `shiyan92` tự định nghĩa |
+|---|---|---|
+| `inference` | có | có |
+| `forward` | có | có |
+| `extract_target_caption_features` | có | có |
+| `extract_reference_features` | không (không bên nào có) | không |
+
+MRO của cả hai: `…→ Blip2Base → BaseModel → Module`, cùng gốc. Nên evaluator gọi đúng cùng một bộ
+method. Điều này **không** chứng minh hai forward giống nhau từng byte — chỉ chứng minh bề mặt gọi
+khớp và state_dict khớp từng tên+shape. Macro trùng paper là quan sát số học củng cố, không phải
+chứng minh.
 
 #### 3.18.4 Bốn delta vận hành, tất cả đều ghi lại
 

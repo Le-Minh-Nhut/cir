@@ -4,8 +4,8 @@
  "entries": [
   {
    "dest": "README.md",
-   "bytes": 3187,
-   "sha256": "e01b0097c0228fde682ab13c55149244c176c7c4e2a9f2dc64a05c9dabebc280"
+   "bytes": 4107,
+   "sha256": "c06ee927c10db90d8351394336d23e2f68040fc745f2bcb2ec8c8d359f21f2dd"
   },
   {
    "dest": "csmcir/asset_verification.txt",
@@ -24,8 +24,8 @@
   },
   {
    "dest": "csmcir/measurement.json",
-   "bytes": 2336,
-   "sha256": "e503a65768c3038360b7accf78818c14def9bcec5a7e70d6a40974e631d1f688"
+   "bytes": 3570,
+   "sha256": "243087224731458ed7fa0313d7801bb6a205e2769ed1464469c9bd2b62712f3e"
   },
   {
    "dest": "csmcir/scripts/apply_operational_save_memory.py",

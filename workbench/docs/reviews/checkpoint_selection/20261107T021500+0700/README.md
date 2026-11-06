@@ -46,8 +46,21 @@ tensors with zero missing and zero shape mismatches against the checkpoint, so i
 weights belong to. The run uses it.
 
 One tensor, `token_importance` (32 trained values), is in the checkpoint but in neither class's
-`state_dict`, because the author writes `nn.Parameter(...).unsqueeze(0)` and `unsqueeze` returns a plain
-Tensor, dropping the registration. That is an upstream defect; it does not affect the measured numbers.
+`state_dict`. Checked on live instances, not inferred: the attribute is a plain `Tensor`, not an
+`nn.Parameter`, it appears in neither `named_parameters()` nor `named_buffers()`, and its runtime value
+is all ones. The author writes `nn.Parameter(...).unsqueeze(0).unsqueeze(-1)`, and `unsqueeze` returns a
+plain Tensor, so the parameter is never registered.
+
+The consequence is worth stating plainly: **the 32 trained values are never used.** Both classes run
+with the ones vector regardless of what the checkpoint holds, so dropping that key cannot bias the
+measurement. Re-assigning it as a Parameter would change forward behaviour relative to the author, which
+is why it was not done.
+
+The class the checkpoint belongs to has the same evaluator-facing surface: `inference`, `forward` and
+`extract_target_caption_features` are each defined on both classes, and both share the
+`Blip2Base → BaseModel → Module` ancestry. That is a matching surface and matching state_dict keys, not a
+proof that the two forwards are byte-identical; the macro landing on the paper's numbers is a numerical
+observation, and is recorded as one.
 
 ## Verification
 

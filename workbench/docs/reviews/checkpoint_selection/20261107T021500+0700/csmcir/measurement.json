@@ -27,7 +27,7 @@
   "bytes": 2720615859,
   "sha256": "c8812071de0640d647c5ba2a70628b80a3289ee2c47676f7a1b6abaa313fa49e",
   "load_missing_keys": [],
-  "note": "strict=False; the checkpoint's extra `token_importance` (32 trained values) is not in either class's state_dict because the author assigns an unsqueezed Tensor, so it stays an unregistered attribute. Both the CSMCIR class and the author's .pyc share this; reproducing it is what yields the paper numbers."
+  "note": "strict=False on the class that saved it. `token_importance` (32 trained values, 0.993-1.007) is in the checkpoint but in NEITHER class's state_dict, verified on live instances: the author writes nn.Parameter(...).unsqueeze(0).unsqueeze(-1) and unsqueeze returns a plain Tensor, so the parameter is never registered. Both classes therefore run with the ones vector, i.e. the trained values are NEVER USED. Omitting them cannot bias the measurement, and re-assigning them as a Parameter would change forward behaviour relative to the author."
  },
  "inputs": {
   "dress": {
@@ -58,5 +58,18 @@
   "gallery_accumulation": "cpu (extractor save_memory path)"
  },
  "evidence_class": "PUBLIC_CAPTION PATH-MAPPED RESEARCH RUN",
- "equivalence_to_historical_cot_input": "NOT PROVEN: the three caption JSONs are the bytes published at the pinned Hub revision; whether they are the files the authors evaluated with is not established by any author statement"
+ "equivalence_to_historical_cot_input": "NOT PROVEN: the three caption JSONs are the bytes published at the pinned Hub revision; whether they are the files the authors evaluated with is not established by any author statement",
+ "derived_checkout": {
+  "builder": "workbench/docs/reviews/checkpoint_selection/20261107T021500+0700/csmcir/scripts/build_csmcir_derived.py",
+  "digests": {
+   "src/lavis/models/__init__.py": "aa68fe5e20bcda5e17d978799deb8ec0ff4636e5b3b2a6ef637ce5e385b0c818 (approved patch)",
+   "src/validate_blip_csmcir.py": "84a1d476e99d9687b16b1a9c5238f89295f23d2a6f9f4dfb449acba2c118262c (approved patch)",
+   "after_restoring_shiyan92_import": "(one unguarded import line added below the guarded block)",
+   "after_save_memory_metric": "4dd11e11838022681e0552e0cdf1d227469ddd360d7ebfd7115d9ea137a7dd6a",
+   "after_threading_save_memory": "f3c3533517fdfe891b719e65a0a324f0d4f71ab20dfaa795240e76a82d4d161f",
+   "after_query_batch_8": "9af8d1205a3edeaad966ed56fd731a2ca7d7551b16b6adca152086265f77f433"
+  },
+  "shiyan92_pyc_sha256": "46d00b0b8521291fef5b032afbaf20846fcfaf800ed9b4522c08b2ab991a15a8",
+  "note": "The .pyc is author-published at the pinned revision (CPython 3.10); no source was synthesised."
+ }
 }
