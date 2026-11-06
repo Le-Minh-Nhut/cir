@@ -347,12 +347,12 @@ Ghi chú điều kiện từng entry:
 | ID | model/job | hành động đề xuất | vì sao | phạm vi/rủi ro | đã thử an toàn | bằng chứng | cần bạn quyết/ cung cấp |
 |---|---|---|---|---|---|---|---|
 | **D-1** | `sprc` (biến thể chính, EVA-CLIP ViT-g) | Bạn tải file OneDrive rồi đặt tại `/home/heheboiz/data/cir/workbench/artifacts/checkpoints/sprc/sprc_fiq.pt` | Bản chính (paper config) chỉ có trên OneDrive; tôi không thể login/tương tác | Chỉ thêm 1 file 1.4–2.6 GB vào checkpoint root; không đổi code | Đã chạy biến thể ViT-L công khai (D6 0.0268 pp) — **không** dùng thay hàng ViT-g | `measurements/sprc_vitl_run1.json`, `measurements/sprc_distance.json` | Tải https://1drv.ms/u/s!Aj0q22vyiZbabnUya4mnufIBtYI?e=n4ZVKj (Baidu dự phòng, pass `t1at`) và đặt đúng path trên |
-| **D-2** | `pair` (B1 + B2) | Cho phép tôi (a) liên hệ tác giả để xin `model_vssp.py`/`MHTransformer_dis.py`, hoặc (b) chấp nhận bỏ PAIR khỏi cohort, hoặc (c) cung cấp source nếu bạn có bản khác | Không có class nguồn ⇒ không thể load trung thực; không được bịa kiến trúc | (a) cần bạn gửi email/issue; (b) chỉ là quyết định phạm vi | Đã probe HF, GitHub author/main + 5 branch khác, 2 namespace tác giả, git history — không có | `measurements/pair_blocker.json`, `measurements/pair_b1_structure.txt`, `pair_b2_structure.txt` | Chọn (a) hay (b), hoặc gửi file source nếu có |
-| **D-3** | registry dùng chung | Duyệt diff registry tối thiểu để map 5 entry đã chạy được (xem mục 9.1) | Hiện registry vẫn ghi `CHECKPOINT_MAPPING_UNVERIFIED` cho các bundle nay đã đo được; không nên tự sửa default toàn cục qua đêm | Sửa `workbench/registry/models.yaml` (mapping/`reproduction_status`) + thêm `preparation_contracts` cho DCNet GloVe (hiện `MANUAL_REQUIRED`, không generator) | Không sửa gì; chỉ ghi `configs/selected_overrides.yaml` trong session | `configs/selected_overrides.yaml`, mục 9.1 | Duyệt/không duyệt diff registry |
+| **D-2** | `pair` (B1 + B2) | Quyết định hướng: (a) xin tác giả `model_vssp.py`/`MHTransformer_dis.py` đúng revision, (b) bỏ PAIR khỏi cohort và giữ nhãn EXPLORATORY trong báo cáo, hoặc (c) xác nhận rằng checkpoint đến từ ancestor chung với ENCODER để tôi dựng đúng nhánh còn thiếu | Đã load và chấm được cả 2 file bằng EXPLORATORY_PUBLIC_MAPPING, nhưng public `model.py` KHÔNG phải code đã train: `transformer_a` khôi phục 2 layer×4 head vs public 1×8; checkpoint có `transformer_c/d`, `weight_chanelImg*`, `cross_t2i` mà public không định nghĩa; 5.20% tham số nằm ngoài forward ⇒ điểm 35.01/57.58 (B1) không phải hành vi checkpoint | (a)/(c) cần bạn liên hệ hoặc xác nhận; (b) chỉ là quyết định phạm vi. Không sửa forward, không khởi tạo lại module | Đã probe HF + ZhihFu/PAIR (chỉ `main`), 5 repo công khai của tác giả, git history; đã restore + audit + smoke + chạy đủ 3 category × 2 file × 2 hypothesis | `pair_compat/manifests/pair_compat_verdict.json`, `pair_compat/measurements/summary.json`, mục 3.9 | Chọn (a), (b) hay (c) |
+| **D-3** | registry dùng chung | Duyệt diff registry để map các entry đã đo được: 12 entry (8 priority + limn/encoder/hint/habit/intent/conesep/tme, trừ PAIR vì chỉ exploratory) | Hiện registry vẫn ghi `BLOCKED_*`/`NOT_RUN` cho các bundle nay đã đo được; không nên tự sửa default toàn cục qua đêm | Sửa `workbench/registry/models.yaml` (`reproduction_status` + `checkpoint_mapping_status`) + `preparation_contracts.yaml` cho DCNet GloVe và TME `feature_dtype` | Không sửa gì; chỉ ghi `configs/selected_overrides.yaml` trong session | `configs/selected_overrides.yaml`, mục 9.1, `cohort/measurements/cohort_summary.json` | Duyệt/không duyệt diff registry |
 | **D-4** | DCNet reproducibility | Cho phép ghi lại recipe sinh GloVe PKL thành generator trong `preparation_contracts.yaml` (seed cố định, sha256 của 10 file PKL) | Hiện contract ghi `NONDETERMINISTIC_WITHOUT_AUTHOR_ARTIFACT`, nên lần sau không tái lập được bằng workbench | Sửa 1 khối contract + thêm 10 entry hash; không đổi dataset canonical | Đã sinh trong session, giữ file + log, không sửa contract | `logs/dcnet_glove_prep.log`, `logs/dcnet_run2.log` | Duyệt việc chuẩn hoá recipe này |
 | **D-5** | `torch.load` shim cho DCNet | Cho phép thêm 1 dòng `weights_only=False` (có hash-check trước) vào `base/base_trainer.py` như `approved_source_patches` thay vì shim qua `PYTHONPATH` | Hiện phải inject shim để unpickle; nếu duyệt thì DCNet chạy được bằng CLI chuẩn không cần shim | Sửa 1 dòng trong checkout pinned + khai báo patch như CSMCIR | Đã chạy bằng shim, kết quả đầy đủ | `scripts/compat/sitecustomize.py`, `logs/dcnet_run2.log` | Duyệt patch 1 dòng (kèm base/derived sha256) hay giữ shim |
 
-Không mục nào chặn các job khác: PAIR bị block nhưng 8 candidate còn lại đã hoàn tất độc lập.
+Không mục nào chặn job khác: D-1/D-8/D-9 chỉ chặn đúng model của chúng; 15 entry còn lại đã có số đo độc lập.
 
 Bổ sung D-6…D-9 cho cohort inventory:
 
@@ -619,6 +619,17 @@ DataLoader: giữ **nguyên** cấu hình của từng evaluator (worker/prefetc
 | `$EVID/configs/selected_overrides.yaml` | mapping candidate-level + absolute path + hash; **chưa** áp vào global |
 | `$EVID/measurements/selection_decisions.json` | bảng quyết định máy đọc được (status + macro) |
 | `$EVID/manifests/*` | inventory weight cũ, cleanup result, protocol identity, digest bundle |
+
+### 9.1 Đề xuất diff registry (CHƯA áp dụng)
+
+Phạm vi nay rộng hơn bản đầu: 12 entry đã có số đo thật (mục 3.11 và mục 6). Diff đề xuất, chờ duyệt ở **D-3**:
+
+1. `workbench/registry/models.yaml` — với `combiner_rn50x4_noft`, `clip4cir_rn50x4_fullft`, `dcnet`, `clvc_net`, `tgcir`, `limn`, `encoder`, `hint`, `habit`, `intent`, `conesep`, `tme`: đặt `reproduction_status` theo kết quả thật và `checkpoint_mapping_status: VERIFIED_METADATA` (SHA tác giả khớp, ghi trong `cohort/manifests_acquired_final.json`). **`pair` giữ nguyên** `BLOCKED_CHECKPOINT_MAPPING_UNVERIFIED` vì mới ở mức exploratory.
+2. `workbench/registry/preparation_contracts.yaml` — (a) thêm generator `dcnet_glove_regen` (D-4); (b) sửa `tme_precompute_features.parameters.feature_dtype: float16 → float32` và lower bound 10.47 → 20.94 GiB (D-7).
+3. `workbench/registry/models.yaml` — `limn.environment.adapted_runtime.packages`: `open_clip_torch>=2.24,<2.27` → `==2.20.0` (D-6).
+4. Không đổi protocol definition, default toàn cục hay shared evaluation logic.
+
+SHA-256 để điền lấy nguyên văn từ `cohort/manifests_acquired_final.json` và `manifests/selected_bundle_digests.json`.
 
 Ghi chú `.gitignore`: `workbench/artifacts/**` bị chặn, nên evidence **không** vào git — chỉ commit báo cáo. Muốn đưa `pair_compat/` + `cohort/` lên git thì cần thêm negation hẹp, chưa làm.
 
