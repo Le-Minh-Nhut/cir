@@ -1,9 +1,18 @@
-[RUN] csmcir / fashioniq
-[OK] protocol: fashioniq_original_split
-[RUN] cwd: /home/heheboiz/data/cir/workbench/third_party/CSMCIR/src
-[RUN] command: /home/heheboiz/data/cir/workbench/artifacts/environments/cir-005ef4e1b02999a5/bin/python /home/heheboiz/data/cir/workbench/third_party/CSMCIR/src/validate_blip_csmcir.py --dataset fashionIQ --blip-model-name blip2_cir_align_prompt_target_image_caption_shiyan92 --blip-model-path /home/heheboiz/data/cir/workbench/artifacts/checkpoints/csmcir/fashioniq_tuned_clip_best.pt
-[RUN] log directory: /home/heheboiz/data/cir/workbench/artifacts/logs/csmcir__fashioniq__20261107T054914376731Z_csmcir_fashioniq_46f7bc56
-[RUN] provenance: /home/heheboiz/data/cir/workbench/artifacts/logs/csmcir__fashioniq__20261107T054914376731Z_csmcir_fashioniq_46f7bc56/command.json
+# EVIDENCE HEADER — dựng từ run có thật trên đĩa; KHÔNG phải dòng do `evaluate_models.py` in ra.
+# run_id:     20261107T054933277898Z_csmcir_fashioniq_f03887d2
+# log_dir:    /home/heheboiz/data/cir/workbench/artifacts/logs/csmcir__fashioniq__20261107T054933277898Z_csmcir_fashioniq_f03887d2
+# command.json: sha256 5673efbf58bdf09fd87487ace6fe771b667661b8fcf58ab62ccd903a19f30dc6 (2591 B) — bản sao y nguyên: csmcir/pipeline_command.json
+# exit code:  0  (command.json -> return_code: 0, invocation_outcome.json -> PROOF_VALIDATED)
+#
+# ĐÂY LÀ KHUNG GHÉP (stitched), không phải một file log đơn lẻ do pipeline ghi.
+# Thứ tự và nguồn:
+#   1) /home/heheboiz/data/cir/workbench/artifacts/logs/csmcir__fashioniq__20261107T054933277898Z_csmcir_fashioniq_f03887d2/stderr.log
+#      45455 B, sha256 d5dd114cda15eac62edbcd7feea41c4affdb28fc6ab8a90c708810545123be95
+#   2) /home/heheboiz/data/cir/workbench/artifacts/logs/csmcir__fashioniq__20261107T054933277898Z_csmcir_fashioniq_f03887d2/stdout.log
+#      1311 B, sha256 8d5d4d95fdc559a9a3b4d051067a2e609e52984d8f5f4caf80a6b17748222d55
+# Nội dung từng khối dán nguyên văn, không sửa, không cắt.
+
+===== BEGIN /home/heheboiz/data/cir/workbench/artifacts/logs/csmcir__fashioniq__20261107T054933277898Z_csmcir_fashioniq_f03887d2/stderr.log (verbatim) =====
 /home/heheboiz/data/cir/workbench/artifacts/environments/cir-005ef4e1b02999a5/lib/python3.10/site-packages/transformers/utils/generic.py:441: FutureWarning: `torch.utils._pytree._register_pytree_node` is deprecated. Please use `torch.utils._pytree.register_pytree_node` instead.
   _torch_pytree._register_pytree_node(
 /home/heheboiz/data/cir/workbench/artifacts/environments/cir-005ef4e1b02999a5/lib/python3.10/site-packages/transformers/utils/generic.py:309: FutureWarning: `torch.utils._pytree._register_pytree_node` is deprecated. Please use `torch.utils._pytree.register_pytree_node` instead.
@@ -12,15 +21,6 @@
   _torch_pytree._register_pytree_node(
 /home/heheboiz/data/cir/workbench/artifacts/environments/cir-005ef4e1b02999a5/lib/python3.10/site-packages/huggingface_hub/file_download.py:942: FutureWarning: `resume_download` is deprecated and will be removed in version 1.0.0. Downloads always resume when possible. If you want to force a new download, use `force_download=True`.
   warnings.warn(
-Missing keys []
-Target pad with target_ratio = 1.25 preprocess pipeline is used
-FashionIQ val - ['dress'] dataset in relative mode initialized
-FashionIQ val - ['dress'] dataset in classic mode initialized
-FashionIQ val - ['toptee'] dataset in relative mode initialized
-FashionIQ val - ['toptee'] dataset in classic mode initialized
-FashionIQ val - ['shirt'] dataset in relative mode initialized
-FashionIQ val - ['shirt'] dataset in classic mode initialized
-extracting fashionIQ ['dress'] - val index features
 
   0%|          | 0/120 [00:00<?, ?it/s]/home/heheboiz/data/cir/workbench/third_party/CSMCIR/src/lavis/models/blip2_models/blip2.py:42: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
   return torch.cuda.amp.autocast(dtype=dtype)
@@ -146,7 +146,6 @@ extracting fashionIQ ['dress'] - val index features
  99%|█████████▉| 119/120 [00:46<00:00,  2.62it/s]
 100%|██████████| 120/120 [00:46<00:00,  3.31it/s]
 100%|██████████| 120/120 [00:46<00:00,  2.59it/s]
-Compute FashionIQ ['dress'] validation predictions
 
   0%|          | 0/253 [00:00<?, ?it/s]
   0%|          | 1/253 [00:00<01:54,  2.21it/s]
@@ -214,8 +213,6 @@ Compute FashionIQ ['dress'] validation predictions
  98%|█████████▊| 249/253 [00:07<00:00, 33.13it/s]
 100%|██████████| 253/253 [00:08<00:00, 32.65it/s]
 100%|██████████| 253/253 [00:08<00:00, 30.76it/s]
-Compute FashionIQ ['dress'] validation metrics
-extracting fashionIQ ['toptee'] - val index features
 
   0%|          | 0/168 [00:00<?, ?it/s]
   1%|          | 1/168 [00:00<01:49,  1.52it/s]
@@ -387,7 +384,6 @@ extracting fashionIQ ['toptee'] - val index features
  99%|█████████▉| 167/168 [01:05<00:00,  2.44it/s]
 100%|██████████| 168/168 [01:05<00:00,  2.49it/s]
 100%|██████████| 168/168 [01:05<00:00,  2.56it/s]
-Compute FashionIQ ['toptee'] validation predictions
 
   0%|          | 0/246 [00:00<?, ?it/s]
   0%|          | 1/246 [00:00<01:46,  2.30it/s]
@@ -474,8 +470,6 @@ Compute FashionIQ ['toptee'] validation predictions
  99%|█████████▉| 244/246 [00:09<00:00, 26.89it/s]
 100%|██████████| 246/246 [00:09<00:00, 26.08it/s]
 
-Compute FashionIQ ['toptee'] validation metrics
-extracting fashionIQ ['shirt'] - val index features
   0%|          | 0/199 [00:00<?, ?it/s]
   1%|          | 1/199 [00:00<02:19,  1.42it/s]
   1%|          | 2/199 [00:01<01:42,  1.93it/s]
@@ -678,7 +672,6 @@ extracting fashionIQ ['shirt'] - val index features
 100%|██████████| 199/199 [01:16<00:00,  3.19it/s]
 100%|██████████| 199/199 [01:17<00:00,  2.58it/s]
 
-Compute FashionIQ ['shirt'] validation predictions
   0%|          | 0/255 [00:00<?, ?it/s]
   0%|          | 1/255 [00:00<01:58,  2.14it/s]
   2%|▏         | 4/255 [00:00<00:30,  8.30it/s]
@@ -766,6 +759,25 @@ Compute FashionIQ ['shirt'] validation predictions
  98%|█████████▊| 250/255 [00:09<00:00, 26.76it/s]
  99%|█████████▉| 253/255 [00:10<00:00, 26.56it/s]
 100%|██████████| 255/255 [00:10<00:00, 24.46it/s]
+===== END /home/heheboiz/data/cir/workbench/artifacts/logs/csmcir__fashioniq__20261107T054933277898Z_csmcir_fashioniq_f03887d2/stderr.log =====
+
+===== BEGIN /home/heheboiz/data/cir/workbench/artifacts/logs/csmcir__fashioniq__20261107T054933277898Z_csmcir_fashioniq_f03887d2/stdout.log (verbatim) =====
+Missing keys []
+Target pad with target_ratio = 1.25 preprocess pipeline is used
+FashionIQ val - ['dress'] dataset in relative mode initialized
+FashionIQ val - ['dress'] dataset in classic mode initialized
+FashionIQ val - ['toptee'] dataset in relative mode initialized
+FashionIQ val - ['toptee'] dataset in classic mode initialized
+FashionIQ val - ['shirt'] dataset in relative mode initialized
+FashionIQ val - ['shirt'] dataset in classic mode initialized
+extracting fashionIQ ['dress'] - val index features
+Compute FashionIQ ['dress'] validation predictions
+Compute FashionIQ ['dress'] validation metrics
+extracting fashionIQ ['toptee'] - val index features
+Compute FashionIQ ['toptee'] validation predictions
+Compute FashionIQ ['toptee'] validation metrics
+extracting fashionIQ ['shirt'] - val index features
+Compute FashionIQ ['shirt'] validation predictions
 Compute FashionIQ ['shirt'] validation metrics
 {
     "dress_recall_at10": 52.20624804496765,
@@ -778,3 +790,4 @@ Compute FashionIQ ['shirt'] validation metrics
     "average_recall_at50": 77.29859352111816,
     "average_recall": 67.17466612656911
 }
+===== END /home/heheboiz/data/cir/workbench/artifacts/logs/csmcir__fashioniq__20261107T054933277898Z_csmcir_fashioniq_f03887d2/stdout.log =====

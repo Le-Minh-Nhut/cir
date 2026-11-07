@@ -1,0 +1,14 @@
+{
+  "artifact_type": "invocation_outcome",
+  "schema_version": 1,
+  "run_id": "20261107T054933277898Z_csmcir_fashioniq_f03887d2",
+  "model_id": "csmcir",
+  "checkpoint_id": "fashioniq",
+  "protocol_id": "fashioniq_original_split",
+  "return_code": 0,
+  "invocation_status": "INVOCATION_COMPLETED",
+  "verdict": "PROOF_VALIDATED",
+  "completed": true,
+  "reason": null,
+  "recorded_at": "2026-11-07T05:53:41.233788+00:00"
+}

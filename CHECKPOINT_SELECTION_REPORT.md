@@ -8,8 +8,9 @@ Repo: `/home/heheboiz/data/cir`, branch `research/cir-failure-workbench`, HEAD `
 ## 0. Chỉ mục evidence
 
 Bundle của buổi 20261107 (CSMCIR + GloVe recipe):
-`workbench/docs/reviews/checkpoint_selection/20261107T021500+0700/` — 21 entry có hash trong
-`EVIDENCE_INDEX.json`, 275 161 B (đo lại cuối lượt). Đọc `README.md` trong đó trước.
+`workbench/docs/reviews/checkpoint_selection/20261107T021500+0700/` — **30 entry** có hash trong
+`EVIDENCE_INDEX.json`, **331 630 B** (đo lại cuối lượt; index tự nó không tính). Đọc `README.md` trong
+đó trước.
 
 | thư mục | nội dung |
 |---|---|
@@ -47,13 +48,13 @@ Bundle của buổi 20261107 (CSMCIR + GloVe recipe):
 | 15 | clvc_net | **29.9707** | **58.6217** | 44.2962 | `fashioniq_val_split` | COMPLETED |
 | 16 | dcnet | **27.9297** | **53.7272** | 40.8285 | `fashioniq_full_gallery_ref_excluded` | COMPLETED (patch 1 dòng, xem 3.14) |
 | e | pair (B1/B2) | 35.0147 / 22.1564 | 57.5753 / 43.4864 | — | `fashioniq_val_split` | **EXPLORATORY** — không phải reproduction, xem 3.9 |
-| d | csmcir | **57.0507** | **77.2986** | 67.1747 | `fashioniq_original_split` | COMPLETED — public-caption path-mapped run, xem 3.18 |
+| d | csmcir | **57.0507** | **77.2986** | 67.1747 | `fashioniq_original_split` | COMPLETED — public-caption path-mapped run, run `f03887d2` (đối chứng `f564570e`), xem 3.18 |
 
 **16/17 entry đã có số đo native thật** (PTHA và CSMCIR nay nằm trong số đó). Số 17 đếm theo `model_id` đăng ký:
 
 - 16 entry đã đo native (bảng trên, trừ dòng `e`);
 - `pair` **đo được nhưng exploratory** — không tính vào 15 vì không phải hành vi của implementation gốc;
-- `csmcir` **đã đo** trong buổi 20261107 (3.18): macro 57.0507 / 77.2986 trên caption công khai.
+- `csmcir` **đã đo** trong buổi 20261107 (3.18): macro 57.0507 / 77.2986 trên caption công khai, run `f03887d2` (đối chứng `f564570e`, cùng số).
 
 15 + pair + csmcir = 17. Biến thể SPRC **ViT-g** là *variant của `sprc`*, không phải entry thứ 18: ViT-L đã đo, ViT-g chờ file (D-1).
 
@@ -333,7 +334,7 @@ Bản trước trình bày mục này như *nguyên nhân đã chứng minh*. S�
 | TME | **EMPIRICAL** | bóc tar → torch zip tensor-only; SHA `fea7fc08…` **trùng khít** weight TME từng bị xoá trong cleanup (cùng nguồn Kaggle) | đo đầy đủ, Δ −0.23/−0.18 |
 | SPRC OneDrive (ViT-g) | **UNVERIFIED** | file không có trên máy | chưa chạy |
 | PAIR B1 / B2 | **EXPLORATORY_PUBLIC_MAPPING** | public `model.py` không phải code đã train (xem 3.9) | đo được nhưng không tính là reproduction |
-| CSMCIR | **COMPLETED** (research variant) | checkpoint SHA khớp tác giả; caption công khai khớp sha256; macro 57.0507 / 77.2986 (3.18) | đã chạy, exit 0 |
+| CSMCIR | **COMPLETED** (research variant) | checkpoint SHA khớp tác giả; caption công khai khớp sha256; macro 57.0507 / 77.2986 (3.18, run `f03887d2`; `f564570e` cùng số) | đã chạy, exit 0 cả hai run |
 | PTHA+MTST | **EXPLORATORY TRANSFER (đã đo)** | checkpoint CIRR SHA khớp; nguyên nhân "sai chiều đầu chiếu" đã bị bác bỏ — lỗi ở biên feature, đã sửa | **đã chạy full 3 category: 37.8978 / 59.8364** (xem 3.13) |
 
 Nói cách khác: kết quả đo là **empirical**; chỉ AirKnow (SHA tác giả) và SPRC ViT-L (khớp lớp tuyệt đối) có association do tác giả/kiến trúc xác nhận, và **không entry nào** được gọi là "author-verified reproduction" của một con số paper.
@@ -362,7 +363,7 @@ Ghi chú điều kiện từng entry:
 
 **CSMCIR** và **PTHA+MTST**: cả hai blocker cũ đã đóng — chi tiết:
 
-- **CSMCIR**: ~~checkpoint tải đủ nhưng thiếu caption~~ → **đã đo trong buổi 20261107** (3.18): checkpoint khớp SHA (`c8812071…`), caption công khai khớp sha256, exit 0, macro **57.0507 / 77.2986**. D-8 đóng vì `bert_captions`/`keywords_in_mods` chỉ được đọc bởi `FashionIQDataset_imageedit` — class chết, không nơi nào khởi tạo.
+- **CSMCIR**: ~~checkpoint tải đủ nhưng thiếu caption~~ → **đã đo trong buổi 20261107** (3.18): checkpoint khớp SHA (`c8812071…`), caption công khai khớp sha256, exit 0, macro **57.0507 / 77.2986** (hai run `f564570e` + `f03887d2`). D-8 đóng vì `bert_captions`/`keywords_in_mods` chỉ được đọc bởi `FashionIQDataset_imageedit` — class chết, không nơi nào khởi tạo.
 - **PTHA+MTST**: ~~BLOCKED~~ → **đã chạy xong trong buổi này** (mục 3.13). Nguyên nhân cũ được ghi lại nguyên văn: lỗi shape `[61072,256]` vs `[61072,768]`. Nhưng kết luận "checkpoint CIRR có đầu chiếu 768 chiều" là **sai**: checkpoint có `vision_proj (256,768)` và nạp strict thành công; lỗi nằm ở `extract_target_features` (định nghĩa thứ hai) trả **chưa chiếu**. Đã sửa bằng `inference_target()` của tác giả, macro **37.8978 / 59.8364**, vẫn là exploratory transfer.
 
 **SPRC OneDrive**: vẫn `PENDING_USER_INPUT` — file chưa có trên máy nên không thể "inspect actual class" (D-1 giữ nguyên).
@@ -656,12 +657,12 @@ Mọi nơi tiêu thụ đều đi qua resolver đó, nên preparation và replay
 | mặc định (không đặt biến) | `float16` | 15536 | 11 243 589 632 B = **10.47 GiB** | `... 1408 features x 2 bytes` |
 | `WORKBENCH_RUNTIME_ADAPTATION=sm_120` | `float32` | 15536 | 22 487 179 264 B = **20.94 GiB** | `... 1408 features x 4 bytes` |
 
-Lệnh (cùng một lệnh, chỉ khác biến môi trường), exit 1 vì hai blocker có thật (checkpoint path và cache):
+Lệnh (cùng một lệnh, chỉ khác biến môi trường; đường dẫn checkpoint thật dưới đây đã có trên đĩa):
 
 ```bash
 cd /home/heheboiz/data/cir
 env -u WORKBENCH_RUNTIME_ADAPTATION workbench/envs/tme-adapted/bin/python -m workbench.replay.tme \
-  --checkpoint-root workbench/artifacts/.../cohort/ckpt/tme --dataset-root data/FashionIQ \
+  --checkpoint-root workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/ckpt/tme --dataset-root data/FashionIQ \
   --source-root workbench/third_party/TME --preflight-only
 ```
 
@@ -746,7 +747,9 @@ Cả hai đều là tham số vận hành, không phải ngữ nghĩa:
 Lệnh tái lập đầy đủ (cả hai bước phải dùng **cùng** `WORKBENCH_TME_BATCH_SIZE`, vì giá trị đó nằm trong receipt):
 
 ```bash
+export CIR=/home/heheboiz/data/cir
 cd $CIR
+export E1=$CIR/workbench/artifacts/checkpoint_selection/20261106T002617+0700
 export WORKBENCH_TME_PYTHON=$CIR/workbench/envs/tme-adapted/bin/python
 export WORKBENCH_RUNTIME_ADAPTATION=sm_120
 export WORKBENCH_TME_BATCH_SIZE=32
@@ -862,6 +865,7 @@ Không đi theo symlink ra ngoài repo (107 975 symlink đều nằm trong `envs
 ### 3.18. CSMCIR — chạy thật bằng caption công khai, và vì sao D-8 là blocker ma
 
 **Kết quả: exit 0, macro R@10 57.0507 / R@50 77.2986 (mean 67.1747), paper 57.07 / 77.27.**
+Hai run exit 0 (`f564570e`, `f03887d2`) cho cùng số; chi tiết ở 3.18.5 và 3.23.5.
 Đây là số đo độc lập đầu tiên của entry này; trước đó entry bị đánh `BLOCKED` vì thiếu caption.
 
 #### 3.18.1 Hai yêu cầu sai trong báo cáo cũ
@@ -974,15 +978,24 @@ tensor và số query mỗi lượt.
 
 #### 3.18.5 Số đo
 
+Nguồn: **hai** run exit 0, mỗi run có thư mục log riêng — `f564570e`
+(`artifacts/logs/csmcir__fashioniq__20261107T054343058424Z_csmcir_fashioniq_f564570e/`) và `f03887d2`
+(`artifacts/logs/csmcir__fashioniq__20261107T054933277898Z_csmcir_fashioniq_f03887d2/`). R@10/R@50 dưới
+đây đọc từ `aggregate_report.json` của cả hai run và trùng nhau đến chữ số cuối; cột `queries`/`gallery`
+lấy từ `csmcir/measurement.json` (`aggregate_report.json` không xuất số query).
+
 | category | R@10 | R@50 | queries | gallery |
 |---|---|---|---|---|
-| dress | 52.2062 | 74.8637 | 2017 | 3817 |
-| shirt | 57.7527 | 76.1040 | 2038 | 6346 |
-| toptee | 61.1933 | 80.9281 | 1961 | 5373 |
-| **macro** | **57.0507** | **77.2986** | | |
+| dress | 52.20624804496765 | 74.86366033554077 | 2017 | 3817 |
+| shirt | 57.75269865989685 | 76.1040210723877 | 2038 | 6346 |
+| toptee | 61.19326949119568 | 80.92809915542603 | 1961 | 5373 |
+| **macro** | **57.05073873202006** | **77.29859352111816** | | |
 
-Paper: 57.07 / 77.27. Chênh 0.02 / 0.03 điểm — trùng khớp. `Missing keys []`, protocol
+Paper: 57.07 / 77.27. Chênh 0.02 / 0.03 điểm. `Missing keys []`, protocol
 `fashioniq_original_split`, eval noise 0%, full gallery, reference eligible.
+
+Chỉ `f03887d2` ghi lại knob thật đã tới evaluator; `f564570e` có
+`environment.evaluator_environment_knobs: null`. Chi tiết hai run: `csmcir/runs/README.md` và 3.23.5.
 
 #### 3.18.6 Nhãn bằng chứng — đọc kỹ trước khi trích dẫn
 
@@ -994,12 +1007,40 @@ Paper: 57.07 / 77.27. Chênh 0.02 / 0.03 điểm — trùng khớp. `Missing key
   được điều đó.
 - **Không** dùng việc score gần paper để nâng lên official parity.
 
-Lệnh tái lập:
+#### 3.18.6b Cách tái lập hiện hành — xem 3.23
+
+**Lệnh hiện hành duy nhất là recipe ở mục 3.23.5b.**
+Mục này chỉ còn giữ bốn delta vận hành và nhãn bằng chứng; cách chạy đã đổi.
+
+##### HISTORICAL — lệnh của lần đo đầu (2026-11-07 sáng), KHÔNG dùng nữa
+
+Đây là chuỗi đã tạo ra số ở 3.18.5 trên checkout `workbench/artifacts/csmcir_derived`, ghi lại để
+truy vết. **Không chạy lại**: patch hiện hành đã biến hai tham số thành env-overridable, nên ba helper
+vận hành **dừng có chủ đích** trên **mọi** cây mang derived digest hiện hành (đo lại 2026-11-07, xem
+`csmcir/recipe_check.txt`):
+
+| helper | kết quả trên cây đã áp patch hiện hành |
+|---|---|
+| `apply_operational_save_memory.py` | `expected exactly 1 metric call site, found 0; refusing to guess` → exit 1 |
+| `thread_save_memory.py` | `metric call block not found; refusing to guess` → exit 1 |
+| `set_query_batch.py` | `expected exactly 1 query loader, found 0` → exit 1 |
+
+Lý do: patch `csmcir_validate_visualization_opt_in.patch` đã biến hai tham số thành env-overridable
+(`WORKBENCH_CSMCIR_QUERY_BS`, `WORKBENCH_CSMCIR_SAVE_MEMORY`), nên anchor literal mà các helper tìm
+không còn tồn tại. Chúng fail-closed chứ không sửa mù — đúng thiết kế. Riêng builder vẫn tái tạo đúng
+`0ec13443…` / `a057e8f3…` khi chạy lại, nên phần dựng cây trong chuỗi dưới đây vẫn đúng; chỉ ba bước
+sửa tay là hết hiệu lực.
+
+**Phân định bản sao (authoritative vs working copy):** Thư mục `workbench/docs/reviews/checkpoint_selection/20261107T021500+0700` là **hồ sơ lưu trữ chính thức** (authoritative archived record, lập chỉ mục qua `EVIDENCE_INDEX.json`) chứa phiên bản script chuẩn đã được làm cứng (chặn digest mismatch, tự link dataset). Bản sao tại `workbench/artifacts/checkpoint_selection/20261107T021500+0700` chỉ là **working copy** của phiên chạy. Lệnh tham chiếu script chuẩn từ bundle lưu trữ `E2`.
 
 ```bash
+# HISTORICAL ONLY — không phải bước hiện hành; thiếu đầu vào <author_pyc> phải cung cấp. Xem recipe hiện hành ở 3.23.5b.
+export CIR=/home/heheboiz/data/cir
+cd $CIR
 export WORKBENCH_RUNTIME_ADAPTATION=sm_120
 export WORKBENCH_CSMCIR_PYTHON=$CIR/workbench/artifacts/environments/cir-005ef4e1b02999a5/bin/python
-E2=workbench/artifacts/checkpoint_selection/20261107T021500+0700
+# Hồ sơ lưu trữ chính thức (authoritative record); bản artifacts tương ứng chỉ là working copy:
+E2=workbench/docs/reviews/checkpoint_selection/20261107T021500+0700
 workbench/envs/ctl312h/bin/python $E2/csmcir/scripts/build_csmcir_derived.py \
   workbench/artifacts/csmcir_derived --with-shiyan92-pyc <author_pyc>
 workbench/envs/ctl312h/bin/python $E2/csmcir/scripts/apply_operational_save_memory.py
@@ -1012,6 +1053,15 @@ PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True $WORKBENCH_CSMCIR_PYTHON \
   --blip-model-name blip2_cir_align_prompt_target_image_caption_shiyan92 \
   --blip-model-path $CIR/workbench/artifacts/checkpoints/csmcir/fashioniq_tuned_clip_best.pt
 ```
+
+#### 3.18.7 Run id: dòng `[RUN] log directory` không phải run id
+
+`evaluate_models.py` in `[RUN] log directory: <path>` **trước** khi chạy, dùng id từ `make_run_id()`
+(`evaluate_models.py:551`, có `uuid.uuid4()`), rồi `execute()` sinh một id **khác**
+(`evaluate_models.py:2090`). Đường in ra là **dự đoán**, không phải run. Hệ quả thực tế: một bản
+bằng chứng cũ đã trích một run id **không tồn tại trên đĩa và chưa từng tồn tại**. Đã sửa: mọi run id
+trong bundle này lấy từ `workbench/artifacts/logs/<run_id>/command.json`, và bundle liệt kê hai run
+exit 0 ở `csmcir/runs/`.
 
 ### 3.19. Ba việc còn lại: SPRC ViT-g, PAIR, và recipe GloVe
 
@@ -1146,6 +1196,10 @@ Kết quả: **dress 52.2062/74.8637, shirt 57.7527/76.1040, toptee 61.1933/80.9
 57.05073873202006 / 77.29859352111816** — khớp **từng chữ số** với mốc. Chuỗi digest cũng khớp cái đã
 ghi, nên đường dẫn sửa không làm đổi kết quả.
 
+**Đây là số của lần đo HISTORICAL** (đường B: builder + ba helper cũ, cây `/tmp/derive_fresh` đã xoá).
+Không trích lại như bằng chứng hiện hành. Hai run pipeline có thư mục log còn trên đĩa cho **cùng**
+macro — `f564570e` và `f03887d2`, xem 3.23.5 — và đó là nguồn phải trích.
+
 #### 3.21.3 Adapter/web và đường chính thức — CONFIRMED (adapter), BLOCKED (tích hợp)
 
 Ba lỗi thật trong `workbench/composition/model_csmcir.py` và adapter lệnh chính thức:
@@ -1202,7 +1256,7 @@ Ba failure còn lại đều **có trong baseline**, đã kiểm từng cái (d�
 | `test_final_hardening_regressions::test_planner_verifier_uses_the_resolved_contract` | LIMN `open_clip_torch==2.20.0` trong registry từ commit `200b7c7` của phiên trước; test còn kỳ vọng hợp đồng `<2.27,>=2.24` | sửa registry hay test đều là quyết định về pin LIMN, không thuộc phạm vi lượt này |
 | `test_fresh_clone_delivery::test_every_manifest_path_matches_its_recorded_digest` | đúng ba file có approved patch áp **in-place**: `DCNet/base/base_trainer.py`, `TME/src/precompute.py`, `TME/src/precompute_evaluation.py`; `provenance.json` ghi digest **base** | manifest cần ghi derived digest — thay đổi có chủ đích của phiên trước, không tự sửa expected hash |
 | ~~`test_handoff_commands::test_no_release_document_points_at_a_superseded_source_sha`~~ | đã xử lý theo đúng thủ tục có sẵn (tiền lệ A40): nâng `TESTED_SOURCE_SHA` → `5ca7043` tại `FINAL_PC_RELEASE_VERDICT.md` và `PC_PILOT_HANDOFF.md`, kèm số suite đo thật | nay **xanh** (8/8 trong file đó) |
-| `test_release_blocker_interpreter::test_a_real_distro_environment_is_not_reported_empty` | chỉ 79 + 0 trên 88 package được giải thích — distro `/usr/bin/python3` không có metadata | thuộc môi trường host, ngoài phạm vi |
+| `test_release_blocker_interpreter::test_a_real_distro_environment_is_not_reported_empty` | **đã sửa** (xem 3.25.1): hai bug thật trong `runtime.inspect_environment_distributions` — `.egg-info` dạng file và glob khớp thư mục giả dạng extension. Nay 85/85 tên chuẩn hóa được giải trình | xanh |
 
 Không nhóm nào bị "làm xanh" bằng cách bỏ assertion hay thêm skip. Việc nâng `TESTED_SOURCE_SHA` không phải cập nhật hash tuỳ tiện: test tự chỉ dẫn và có tiền lệ A40 (`da209b5e`), và SHA mới là commit production thật `5ca7043` chứa đúng các thay đổi của lượt này.
 
@@ -1266,6 +1320,10 @@ thấy pristine và vẫn chặn — trừ khi sửa cả hai chỗ, tức lớn
 
 ### 3.23. D-10 ĐÓNG — native evaluation chạy qua pipeline chuẩn
 
+**Mục này là hướng dẫn hiện hành duy nhất cho CSMCIR.** Recipe chạy được ở 3.23.5b; digest đã đo lại ở
+3.23.5c; hai run exit 0 ở 3.23.5. Các lệnh trong 3.18.6b được giữ với nhãn **HISTORICAL** chỉ để truy
+vết, không phải bước cần làm.
+
 Trước mục này, CSMCIR chỉ chạy được qua script trong evidence bundle, không qua `evaluate_models.py`.
 Vấn đề không phải cấu hình: `approved_patch_state` đòi digest **đúng** `derived_sha256`, mà cây cho
 `shiyan92` đăng ký lại có digest khác. Đã giải bằng cách gộp, không bằng cách nới guard.
@@ -1321,29 +1379,114 @@ Evidence cũng ghi lại knob thật đã tới evaluator (`command.json` →
 `environment.evaluator_environment_knobs`), vì trước đó `command.json` chỉ có digest và một người đọc
 sau không biết batch/save_memory có được đặt hay không.
 
-#### 3.23.5 Kết quả — hai lần, khớp bit
+#### 3.23.5 Kết quả — hai lần, khớp bit, mỗi lần truy vết được
 
-| | R@10 | R@50 |
+Hai run exit 0, mỗi run có log dir + `command.json` + `invocation_outcome.json` + `aggregate_report.json`
+riêng, chép nguyên vào `csmcir/runs/<suffix>/`. Bảng đầy đủ: `csmcir/runs/README.md`.
+
+| | run A | run B |
 |---|---|---|
-| dress | 52.2062 | 74.8637 |
-| shirt | 57.7527 | 76.1040 |
-| toptee | 61.1933 | 80.9281 |
+| run_id | `20261107T054343058424Z_csmcir_fashioniq_f564570e` | `20261107T054933277898Z_csmcir_fashioniq_f03887d2` |
+| log dir | `artifacts/logs/csmcir__fashioniq__20261107T054343058424Z_csmcir_fashioniq_f564570e/` | `artifacts/logs/csmcir__fashioniq__20261107T054933277898Z_csmcir_fashioniq_f03887d2/` |
+| `return_code` | 0 | 0 |
+| `verdict` | `PROOF_VALIDATED` | `PROOF_VALIDATED` |
+| R@10 / R@50 | 57.05073873202006 / 77.29859352111816 | 57.05073873202006 / 77.29859352111816 |
+| `evaluator_environment_knobs` | **`null`** | đủ bốn knob |
+| provenance đầy đủ | **KHÔNG** | **CÓ** |
+
+Số từng category, giống nhau tuyệt đối ở cả hai run:
+
+| category | R@10 | R@50 |
+|---|---|---|
+| dress | 52.20624804496765 | 74.86366033554077 |
+| shirt | 57.75269865989685 | 76.1040210723877 |
+| toptee | 61.19326949119568 | 80.92809915542603 |
 | **macro** | **57.05073873202006** | **77.29859352111816** |
 
-Lệnh (chạy hai lần, exit 0 cả hai):
+Run A chạy trước khi `command.json` ghi knob thật đã tới evaluator. Vì vậy **chỉ run B là run đủ
+provenance**, và đó là run được dùng cho `csmcir/full_eval_pipeline.txt` + `csmcir/pipeline_command.json`.
+Run A là đối chứng độc lập: cùng `command_digest` (`7aa7a6db…`), cùng pin `774f94e2…`, cùng
+`checkpoint_local_sha256` `c8812071…`, nên nó chứng minh số đo lặp lại được, không chứng minh được
+knob đã đặt.
+
+#### 3.23.5b Recipe hiện hành — kiểm lại được, phần không cần GPU đã chạy
+
+Đây là **một lệnh duy nhất**. Không có helper nào phải chạy tay: `prepare_model` áp patch đã khai,
+`download_auxiliary_assets` stage `.pyc`.
 
 ```bash
+export CIR=/home/heheboiz/data/cir
+export EVID=$CIR/workbench/artifacts/checkpoint_selection/20261106T002617+0700
+export E2=$CIR/workbench/docs/reviews/checkpoint_selection/20261107T021500+0700
 cd $CIR
 export WORKBENCH_RUNTIME_ADAPTATION=sm_120
 export WORKBENCH_CSMCIR_PYTHON=$CIR/workbench/artifacts/environments/cir-005ef4e1b02999a5/bin/python
 export WORKBENCH_CSMCIR_QUERY_BS=8        # tác giả: 64
 export WORKBENCH_CSMCIR_SAVE_MEMORY=1     # tác giả: 0
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+
+# 1) source: áp approved patch + stage link fashionIQ_dataset (idempotent, no-op nếu đã derived)
+workbench/envs/ctl312h/bin/python workbench/scripts/prepare_model.py \
+  --model csmcir --execute --allow-preparation
+
+# 2) asset: caption công khai + .pyc tác giả (verify sha256 tại chỗ, không tải lại nếu đã có)
+workbench/envs/ctl312h/bin/python workbench/scripts/download_auxiliary_assets.py --model csmcir
+
+# 3) chạy thật
 workbench/envs/ctl312h/bin/python workbench/scripts/evaluate_models.py --model csmcir
 ```
 
-`command.json` của run: `return_code: 0`, `actual_source_commit` khớp pin
-`774f94e2…`, `checkpoint_local_sha256` `c8812071…`, knobs ghi đủ.
+Điều kiện tiên quyết đã kiểm trên máy này (`csmcir/recipe_check.txt`):
+
+| mục | trạng thái |
+|---|---|
+| source `workbench/third_party/CSMCIR/src` | đã ở `derived_sha256` của cả hai patch; `prepare_model --execute` → cả hai `already carries derived digest`, rc=0 |
+| link `fashionIQ_dataset` | `-> data/FashionIQ`, `prepare_model` báo `already correct` |
+| caption 3 category (2 bản mỗi cái) | `OFFICIAL SHA256 MATCH` ×6 |
+| `.pyc` tác giả | `12281 bytes`, `OFFICIAL SHA256 MATCH` |
+| interpreter evaluator | `Python 3.10.22`, `cache_tag = cpython-310` → khớp `.pyc` khai CPython 3.10 |
+| orchestrator | `workbench/envs/ctl312h/bin/python` = 3.12.11, chỉ chạy script workbench, không nạp `.pyc` |
+| runtime sm_120 | capability đã verify: RTX 5070 Ti, `compute_capability 12.0`, `torch 2.7.1+cu128`, arch list có `sm_120` |
+| booster LAVIS/EVA-ViT-g | có trên đĩa nhưng **`UNVERIFIED` provenance** (không có checksum upstream để đối chiếu) — ghi nhận, không phải claim đã verify |
+| `evaluate_models.py --dry-run` với đủ 5 biến | guard pass: protocol `fashioniq_original_split`, source derived, GPU capability hợp lệ |
+| builder (đường B) chạy lại | `0ec134431697af6f OK`, `a057e8f3ad7097ad OK`, `.pyc sha256=46d00b0b…`, rc=0 — vẫn tái tạo đúng derived |
+| ba helper vận hành cũ | `exit 1` trên mọi cây đã áp patch hiện hành (`found 0`) — HISTORICAL, xem 3.18.6b |
+| adapter CIRCUS | `ready=False`, reason nêu đúng ràng buộc; `data/circus_release/` vắng → `FileNotFoundError: .../circus_release/mbeir_fashioniq_task7_test.jsonl` |
+
+#### 3.23.5c Digest — giá trị đo lại (không suy từ registry)
+
+Đo trên máy này; lệnh và output đầy đủ ở `csmcir/digest_verification.txt`.
+
+| hạng mục | giá trị khai | đo lại | khớp |
+|---|---|---|---|
+| base `src/lavis/models/__init__.py` | `9d8c914b551a7de614e062f9a241f44626fd591a31a0ccf1cc79f0ae23c9db01` | `9d8c914b551a7de614e062f9a241f44626fd591a31a0ccf1cc79f0ae23c9db01` (reverse-apply patch, `patch -R -p1` rc=0) | **CÓ** |
+| base `src/validate_blip_csmcir.py` | `aa7a4395cdb700fded0567e0969da774a331927eaea327b5a23da82fdc7506a9` | `aa7a4395cdb700fded0567e0969da774a331927eaea327b5a23da82fdc7506a9` (như trên) | **CÓ** |
+| derived `src/lavis/models/__init__.py` | `0ec134431697af6f202b5256e4e30ab725a44191a279e3f8bfdb3a62495b3774` | `0ec134431697af6f202b5256e4e30ab725a44191a279e3f8bfdb3a62495b3774` | **CÓ** |
+| derived `src/validate_blip_csmcir.py` | `a057e8f3ad7097adcfabb2b8fd8b4747588ff3461cfb43f00cd3483dfd6d512d` | `a057e8f3ad7097adcfabb2b8fd8b4747588ff3461cfb43f00cd3483dfd6d512d` | **CÓ** |
+| patch `csmcir_models_init_compat.patch` | `3f2bac48…` | `3f2bac48fe1a1775d2e5e6a09f81affa3809a31ed6b7c4213d5da8c2a0ada3bd` | **CÓ** |
+| patch `csmcir_validate_visualization_opt_in.patch` | `0fcff28b…` | `0fcff28bf1f9abd31a14a06b0f200eecfa46af8c2d7624a3420a68204ef50fa8` | **CÓ** |
+| `.pyc` `shiyan92` | `46d00b0b8521291fef5b032afbaf20846fcfaf800ed9b4522c08b2ab991a15a8`, 12281 B | `46d00b0b8521291fef5b032afbaf20846fcfaf800ed9b4522c08b2ab991a15a8`, `size 12281` | **CÓ** |
+| checkpoint `fashioniq_tuned_clip_best.pt` | `c8812071de0640d647c5ba2a70628b80a3289ee2c47676f7a1b6abaa313fa49e`, 2720615859 B | `c8812071de0640d647c5ba2a70628b80a3289ee2c47676f7a1b6abaa313fa49e`, `size 2720615859` | **CÓ** |
+
+Base không đọc từ đâu khác: nó được dựng lại bằng cách reverse-apply **chính patch đã khai** lên
+derived đang dùng, rồi so với `base_sha256` trong registry. Cả hai chiều đều khớp, nên declaration
+không tự chứng minh vòng tròn.
+
+Một điểm không khớp, và đây là điểm **đã biết**: `workbench/artifacts/csmcir_derived/src/validate_blip_csmcir.py`
+có sha256 `9af8d120…`, **khác** derived `a057e8f3…`. Đó là checkout đường B (builder + ba helper cũ),
+không phải cây đường chuẩn; `measurement.json` đã ghi rõ chuỗi digest riêng của nó. Đường chuẩn dùng
+`workbench/third_party/CSMCIR/src`, và cây đó đúng `a057e8f3…`.
+
+#### 3.23.5d Bốn thứ không đổi
+
+Recipe trên không chạm vào bốn điểm đã tuyên bố, và chúng vẫn giữ nguyên:
+
+| thuộc tính | giá trị | kiểm ở đâu |
+|---|---|---|
+| scoring | native `inference()` của evaluator tác giả, không qua adapter | `validate_blip_csmcir.py`, `runs/f03887d2/command.json` |
+| protocol | `fashioniq_original_split` (full gallery, reference **eligible**) | `command.json` → `protocol_id`; dry-run in `[OK] protocol: fashioniq_original_split` |
+| nhãn bằng chứng | `public-caption path-mapped research run` | 3.18.6, `measurement.json` → `evidence_class` |
+| CIRCUS | luồng riêng, `ready=False`, `data/circus_release/` vắng — lý do giữ nguyên, không "sửa" bằng cách thay input | 3.23.6, `model_csmcir.py` `_TARGET_REASON` |
 
 #### 3.23.6 Luồng B (composition adapter) vẫn tách — và đúng là phải tách
 
@@ -1427,36 +1570,62 @@ Khi nâng `TESTED_SOURCE_SHA`, một lần thay thế toàn cục đã đè cả
 Đã revert file và chỉ nâng đúng các dòng **current**. Kiểm lại: `8ebcc74d` còn 2 hit, bốn SHA lịch sử
 nguyên vẹn.
 
-### 3.25. Hai bug inventory thật, và rác temp dir
+### 3.25. Hai bug inventory thật, rác temp dir, và thư mục run bị bịa
 
-#### 3.25.1 Inventory distro: 79/88 → 88/88
+#### 3.25.1 Inventory distro: 85/85 package, không phải 85+3
 
-Hai lỗi trong `runtime.inspect_environment_distributions`, cả hai đều làm **một package đã cài biến mất**:
+Hai lỗi trong `runtime.inspect_environment_distributions`, cả hai đều làm một distribution **hiện hai lần
+hoặc được tính là đã cài khi không có gì**:
 
-| lỗi | cơ chế |
-|---|---|
-| `.egg-info` legacy là **file**, không phải thư mục | `dist.iterdir()` ném `OSError` → `siblings = []` → rơi nhánh "không có content" → `versions.pop(key)` |
-| `top_level.txt` trỏ extension có tag ABI | `brlapi` → `brlapi.cpython-312-x86_64-linux-gnu.so`; phép kiểm cũ chỉ khớp `head.py` hoặc thư mục |
+| lỗi | cơ chế | đo được |
+|---|---|---|
+| `.egg-info` legacy là **file** | `dist / "PKG-INFO"` ghép vào một file → path không tồn tại → `_metadata_name_version` trả `(None, None)` → tên lấy bằng `dist_name.split("-")[0]`, nên `my-pkg-1.0` thành `my`; distribution sau đó được ghi **hai lần**, một lần tên thật một lần tên cắt | `versions` chứa cả `my` lẫn `my-pkg` |
+| `glob` khớp cả **thư mục** | `site_packages.glob(f"{head}.*.so")` nhận mọi path khớp mẫu, kể cả thư mục rỗng đặt tên `brlapi.cpython-312-x86_64-linux-gnu.so` | thư mục giả khiến `brlapi` thành module đã cài |
 
-Sau khi sửa: **85 versions + 3 unconfirmed = 88/88** (trước: 79 + 0). Test integration nay khẳng định
-mọi metadata entry đều được giải trình, chỉ loại trừ record có `top_level.txt` **tồn tại và rỗng** —
-những cái đó tự khai không ship module nào, và inventory báo đúng như vậy.
+Sau sửa, đo trên host thật (`inspect_environment_distributions("/usr")`):
 
-Đã thử một hướng sai trước đó: coi "không khai top_level module" là `unconfirmed`. Nó làm 5 test đỏ vì
-các test đó khẳng định metadata-only **không phải** installation — đúng. Đã revert.
+| | trước | sau |
+|---|---|---|
+| `len(versions)` | 85 | 85 |
+| `len(unconfirmed)` | 3 | 3 |
+| **package duy nhất** `len(set(versions) \| set(unconfirmed))` | **85** | **85** |
+| modules | 201 | 201 |
+
+`unconfirmed` là **tập con** của `versions` (cả 3 — `command-not-found`, `pycairo`, `pygobject` — đều đã có
+version), nên số package duy nhất là 85, **không phải** 85+3=88. Cách đếm `len(versions)+len(unconfirmed)`
+là sai và từng được ghi nhầm ở đây.
+
+`/usr/lib/python3/dist-packages` có 88 metadata entry nhưng chỉ **87 tên chuẩn hóa**:
+`cryptography-41.0.7.dist-info` và `cryptography.egg-info` là cùng một distribution. 85 tên được giải
+trình; 2 tên còn lại (`screen-resolution-extra`, `unattended-upgrades`) có `top_level.txt` **chỉ chứa một
+dòng trắng** — chúng khai không ship module nào, nên việc inventory bỏ qua là đúng hợp đồng hiện có.
 
 #### 3.25.2 Temp dir rò rỉ
 
-`wb-*` được tạo mỗi lần chạy và **không bao giờ dọn**: 314 thư mục tích trong `/tmp`. Nay xoá sau khi
-child thoát (`finally`), có cờ `keep_temp` để giữ khi cần debug. Vị trí vẫn được ghi trong
-`environment["TMPDIR"]`, nên evidence không mất — test chuyển từ "thư mục còn tồn tại" sang "vị trí đã
-được ghi, không nằm dưới artifact tree, đủ ngắn cho socket".
+`wb-*` tạo mỗi lần chạy nhưng cleanup chỉ gắn vào `try` **thứ hai**, tức đoạn sau khi `Popen` thành công.
+Mọi lỗi trước đó — `replay_cache.mkdir`, `chmod`, hay `Popen` ném `OSError` vì interpreter không tồn tại —
+thoát **trước** `finally` và để lại một thư mục. Đo được 314 thư mục tích trong `/tmp`.
 
-#### 3.25.3 Builder evidence đồng bộ lại
+Nay toàn bộ phần sau `mkdtemp` nằm trong một `try` ngoài, cleanup trong `finally` tương ứng. `keep_temp=True`
+giữ thư mục trên **mọi** đường, kể cả đường launch thất bại. Child được kill và reap **trước** khi xoá bất
+cứ gì. Lỗi gốc giữ nguyên kiểu: `OSError` từ `Popen` vẫn thành `RuntimeError(...) from error`. Mode 0700
+được **kiểm** chứ không giả định.
 
-`build_csmcir_derived.py` còn pin digest **trước khi gộp patch** (`aa68fe5e`/`84a1d476`), nên chạy lại
-sẽ fail. Đã nâng về `0ec13443`/`a057e8f3`, và thêm bước dựng base bằng cách đảo patch (vendor giờ đã
-derived). Docstring nói rõ builder **không còn** là đường chuẩn: `prepare_model` + downloader phủ việc đó.
+#### 3.25.3 Thư mục run được in ra là dự đoán, không phải run thật
+
+`main()` gọi `log_dir(config, plan, ...)` **không** truyền `run_id`, nên `log_dir` tự sinh một id bằng
+`make_run_id()` (kết thúc bằng `uuid.uuid4().hex[:8]`), in ra, rồi `execute()` sinh id **thứ hai**. Thư
+mục được quảng cáo chưa từng tồn tại.
+
+Đây chính là gốc của evidence ghép sai: bundle ghi run `..._20261107T054914376731Z_csmcir_fashioniq_46f7bc56`,
+không có trên đĩa; run thật là `f03887d2`. Nay id được sinh **một lần** trước khi in và dùng lại cho
+`execute()`. Định dạng id không đổi.
+
+#### 3.25.4 Builder evidence đồng bộ lại
+
+`build_csmcir_derived.py` còn pin digest **trước khi gộp patch** (`aa68fe5e`/`84a1d476`), nên chạy lại sẽ
+fail. Đã nâng về `0ec13443`/`a057e8f3`, và thêm bước dựng base bằng cách đảo patch (vendor giờ đã derived).
+Docstring nói rõ builder **không còn** là đường chuẩn: `prepare_model` + downloader phủ việc đó.
 
 ## 4. Hàng đợi quyết định buổi sáng
 
@@ -1476,7 +1645,7 @@ Bổ sung D-6…D-9 cho cohort inventory:
 |---|---|---|---|---|---|---|---|
 | ~~D-6~~ | `limn` runtime | **ĐÃ ÁP DỤNG trong buổi này**: `adapted_runtime.packages` của LIMN nay là `['open_clip_torch==2.20.0']` trong `workbench/registry/models.yaml`, wrapper tự đọc profile đó nên không cần script riêng của phiên | Hai căn cứ **đo được**: (i) `LIMN/requirements.txt:37` khai đúng `open-clip-torch==2.20.0`; (ii) `workbench/envs/limn-adapted` đang chạy 2.20.0 và là môi trường sinh ra kết quả 55.7919/77.6378. Lý do cũ (`AttributeError: ... 'pool_type'` dưới 2.24) **đã bị rút lại** vì không tái lập được | Chỉ đổi 1 dòng của riêng LIMN; không đụng profile nào khác | Preflight qua wrapper: `[READY] LIMN preflight passed`; 3 checkpoint giữ nguyên một bundle | `limn/scripts/limn_version_repro.py`, mục 3.15 | Không cần quyết nữa |
 | ~~D-7~~ | `tme` feature contract | **ĐÃ ÁP DỤNG trong buổi này, theo hướng hẹp hơn đề xuất cũ**: không sửa số của contract lịch sử, mà thêm `runtime_overrides.sm_120.feature_dtype: float32` + resolver `generated_artifact_parameters()`; lower bound tự thành 20.94 GiB khi chọn profile, vẫn 10.47 GiB khi không chọn | Đo thật: `visual_encoder` đúng là fp16, nhưng `vit_encode()` dưới `torch.cuda.amp.autocast()` trả **float32**, nên `torch.save` ra float32. Wrapper `tme.py:414` từ chối cache mà chính pipeline native sinh ra | Sửa 2 giá trị contract; không đổi numerics (dtype chỉ dùng cho gate + size floor) | Đã sinh cache đúng như native, chạy xong 3 category bằng session runner nhận dtype đo được | `cohort/measurements/tme_blocker.json`, `cohort/measurements/tme_fashioniq_0.json`, `cohort/logs/tme_run5.log` | Không cần quyết nữa — đường chuẩn đã chạy được. Nếu sau này có runtime khác cho dtype khác, khai thêm một khối `runtime_overrides` tương ứng |
-| ~~D-8~~ | `csmcir` | **ĐÃ GIẢI QUYẾT trong buổi 20261107** — không cần bạn cung cấp gì | Yêu cầu `bert_captions`/`keywords_in_mods` là của `FashionIQDataset_imageedit`, một **class chết**; đo bằng `builtins.open` cho thấy đường eval thật chỉ mở 12 file và **không** mở hai đường đó. Caption thật sự cần đã tải được từ Hub tác giả, sha256 khớp | Không đổi scoring; ba file caption công khai, nhãn biến thể riêng | Macro 57.0507 / 77.2986, exit 0 (3.18) | `csmcir/measurement.json`, `csmcir/call_path_probe.txt` | — |
+| ~~D-8~~ | `csmcir` | **ĐÃ GIẢI QUYẾT trong buổi 20261107** — không cần bạn cung cấp gì | Yêu cầu `bert_captions`/`keywords_in_mods` là của `FashionIQDataset_imageedit`, một **class chết**; đo bằng `builtins.open` cho thấy đường eval thật chỉ mở 12 file và **không** mở hai đường đó. Caption thật sự cần đã tải được từ Hub tác giả, sha256 khớp | Không đổi scoring; ba file caption công khai, nhãn biến thể riêng | Macro 57.0507 / 77.2986, exit 0 — hai run `f564570e` / `f03887d2` (3.18, 3.23.5) | `csmcir/measurement.json`, `csmcir/call_path_probe.txt` | — |
 | ~~D-9~~ | `ptha_mtst` | **ĐÃ GIẢI QUYẾT trong buổi này** — không còn cần bạn quyết để chạy được. Nguyên nhân là biên feature trong chính source pinned (định nghĩa `extract_target_features` thứ hai trả chưa chiếu), không phải checkpoint thiếu head; đã sửa bằng `inference_target()` của tác giả và chạy đủ 3 category. Nếu bạn **vẫn muốn** có reproduction FashionIQ thật thì đó là yêu cầu khác: (a) xin checkpoint FashionIQ-trained từ tác giả | Sửa xong: `load_state_dict` strict 0/0/0, `vision_proj (256,768)` dùng lại 196 864 tham số, 0 tham số mới, adapter ≡ `normalize(vision_proj(x))` với `max_abs_diff = 0.0`, regression **11/11 pass** (viết lại: gọi dispatcher production, đếm số lần `vision_proj` được áp dụng thật cho cả hai lớp) | Không cắt/pad chiều, không thêm Linear ngẫu nhiên, dispatch theo lớp đã load: CirCat chiếu một lần ở biên, TGIR **để nguyên** cho `inference()` tự chiếu. Chạy lại GPU: bit-identical với lần trước (37.897844 / 59.836390, delta 0.0 cả 3 category) | Đã chạy full 3 category trên GPU thật: macro **37.8978 / 59.8364**, coverage 100% | `ptha/measurements/ptha_transfer_run1.json`, mục 3.13 | Không cần quyết gì để dùng kết quả transfer; chỉ cần quyết nếu muốn theo (a) |
 
 
@@ -1659,7 +1828,7 @@ Exit 1 ở #4/#5 **là đúng**: hai blocker có thật (path checkpoint chưa c
 | intent | `intent_fiq_0.2.pt` | `fashioniq_full_gallery_ref_excluded` | **COMPLETED** | 54.8662 / 75.4319 | EMPIRICAL |
 | conesep | `ConeSep-FIQ-N0.2.pt` | `fashioniq_full_gallery_ref_excluded` | **COMPLETED** | 54.7613 / 75.2151 | EMPIRICAL |
 | tme | `fashioniq_0_best_model` | `fashioniq_original_split` | **COMPLETED** | 54.9229 / 74.8384 | EMPIRICAL (contract dtype, D-7 closed) |
-| csmcir | `fashioniq_tuned_clip_best.pt` | `fashioniq_original_split` | **COMPLETED** | 57.0507 / 77.2986 | public-caption path-mapped run (3.18); checkpoint hash-verified |
+| csmcir | `fashioniq_tuned_clip_best.pt` | `fashioniq_original_split` | **COMPLETED** | 57.0507 / 77.2986 | public-caption path-mapped run (3.18), run `f03887d2` + `f564570e`; checkpoint hash-verified |
 | ptha_mtst | `tuned_mtst_cirr.pt` | `fashioniq_original_split` | **COMPLETED** | 37.8978 / 59.8364 | transfer CIRR→FIQ; nguyên nhân là biên feature, đã sửa (3.13) |
 
 Tổng: **16/17 entry có số đo native**, `pair` đo được nhưng exploratory, và **việc còn chờ file người dùng** là biến thể SPRC ViT-g của entry `sprc` (D-1) — không phải entry mới. PTHA/MTST đã đóng blocker sai chiều projection; CSMCIR đã đóng ở mức bằng chứng riêng (3.18). PAIR có số đo nhưng mang nhãn `EXPLORATORY_PUBLIC_MAPPING`, **không** tính là tái lập.
@@ -1688,7 +1857,7 @@ thêm patch thứ ba cho thay đổi vận hành (`save_memory`, batch size) —
 - **PAIR**: load và chấm được, nhưng **tương đương source gốc chưa xác lập**. Đo được: `transformer_a` khôi phục 2 layer × 4 head ≠ public 1 × 8; checkpoint có `transformer_c/d`, `weight_chanelImg*`, `cross_t2i` mà public `model.py` không định nghĩa; 5.20% tham số không được forward public chạm tới. **Chưa** chứng minh được đó là nguyên nhân duy nhất của điểm thấp, và **không** thể gọi các module thừa là "training-only" vì chúng không xuất hiện ở bất kỳ đâu trong checkout, kể cả loss/train. Xem 3.9.
 - **TME**: **đã chạy qua đúng `workbench.replay.tme`** (3.16.6, exit 0, 54.9229 / 74.8384); trước đó từng chạy dưới session runner nhận dtype đo được (float32) và giảm `Qformer_bs`/`query_bs`; cho tới khi D-7 được duyệt, đây **không** phải đường chạy `workbench.replay.tme` nguyên bản.
 - **LIMN**: chạy dưới open_clip **2.20.0**, đúng pin tác giả (`LIMN/requirements.txt:37`). `adapted_runtime` trước đây khai `>=2.24,<2.27` và **đã được sửa** về `==2.20.0` (mục 3.15), nên nay contract và môi trường khớp nhau — không còn lệch.
-- **CSMCIR**: **có** số đo **57.0507 / 77.2986** (3.18) — public-caption path-mapped research run, **không** phải reproduction chính thức: equivalence giữa caption công khai và input ra số paper là `NOT PROVEN`. Không suy ra từ model khác.
+- **CSMCIR**: **có** số đo **57.0507 / 77.2986** (3.18, hai run `f564570e` + `f03887d2`) — public-caption path-mapped research run, **không** phải reproduction chính thức: equivalence giữa caption công khai và input ra số paper là `NOT PROVEN`. Không suy ra từ model khác.
 - **PTHA+MTST**: **có** số đo transfer CIRR→FIQ (mục 3.13: 37.8978 / 59.8364) nhưng **KHÔNG** phải reproduction FashionIQ — không cắt đầu chiếu, không thay bằng checkpoint FashionIQ của tác giả (không được phát hành). Điều chưa chứng minh là *tương đương với cách tác giả dùng checkpoint cho CIRR*, không phải "không có số đo".
 - **SPRC ViT-g**: chưa chạy; không dùng ViT-L thay cho hàng ViT-g.
 - Validation set đã dùng để chọn checkpoint ⇒ các số không phải ước lượng held-out không thiên lệch.

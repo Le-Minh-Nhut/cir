@@ -1,0 +1,122 @@
+# Kiểm tra recipe 3.23 — phần không cần GPU, chạy thật 2026-11-07T16:45:15+07:00
+
+Mọi lệnh dưới đây chạy trên máy này. Lệnh cần GPU (chính `evaluate_models.py` không `--dry-run`) KHÔNG chạy lại; số đo lấy từ run có thật trên đĩa.
+
+## 1. Chuẩn bị source + patch + link (`prepare_model --execute`)
+
+```
+$ workbench/envs/ctl312h/bin/python workbench/scripts/prepare_model.py --model csmcir --execute --allow-preparation
+[OK] csmcir: policy=NONE_REQUIRED deterministic=N/A
+  notes: Standard FashionIQ layout required; no custom generated artifacts.
+[OK] csmcir: src/lavis/models/__init__.py already carries derived digest
+[OK] csmcir: src/validate_blip_csmcir.py already carries derived digest
+[RUN] csmcir dataset-link preparation: /home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python /home/heheboiz/data/cir/workbench/scripts/prepare_dataset.py --dataset-root /home/heheboiz/data/cir/data/FashionIQ --model csmcir
+[OK] FashionIQ base layout valid: /home/heheboiz/data/cir/data/FashionIQ
+[OK] dataset link already correct: /home/heheboiz/data/cir/workbench/third_party/CSMCIR/fashionIQ_dataset -> /home/heheboiz/data/cir/data/FashionIQ
+rc=0
+```
+
+## 2. Asset (captions + .pyc) — verify offline, không tải lại
+
+```
+$ workbench/envs/ctl312h/bin/python workbench/scripts/download_auxiliary_assets.py --model csmcir --verify-only
+bert-base-uncased tokenizer: destination=/home/heheboiz/.cache/huggingface/hub/models--bert-base-uncased state=present required=true automatic_download_available=true source_unverified=false source=https://huggingface.co/bert-base-uncased/resolve/86b5e0934494bd15c9632b12f734a8a67f723594/config.json
+/home/heheboiz/data/cir/data/FashionIQ/qwen_captions/dress_cot_val.json: 2817386 bytes sha256=b7129bafc56ed7f33ea5175e565358b042b5ef9263af002758564579ebb5b6a6 OFFICIAL SHA256 MATCH
+/home/heheboiz/data/cir/data/FashionIQ/qwen_captions/shirt_cot_val.json: 5015979 bytes sha256=bbe6f689dfe0c5fcc897979f90877fcaa2c4c8d3dc405cb64f1507fc78452cc9 OFFICIAL SHA256 MATCH
+/home/heheboiz/data/cir/data/FashionIQ/qwen_captions/toptee_cot_val.json: 3929303 bytes sha256=acdacc3d8d0565e645324ddd838cb288f1bc69434635d83ece127b93dacac1cc OFFICIAL SHA256 MATCH
+/home/heheboiz/data/cir/workbench/third_party/CSMCIR/COT_ours2/fashioniq/dress_cot_val.json: 2817386 bytes sha256=b7129bafc56ed7f33ea5175e565358b042b5ef9263af002758564579ebb5b6a6 OFFICIAL SHA256 MATCH
+/home/heheboiz/data/cir/workbench/third_party/CSMCIR/COT_ours2/fashioniq/shirt_cot_val.json: 5015979 bytes sha256=bbe6f689dfe0c5fcc897979f90877fcaa2c4c8d3dc405cb64f1507fc78452cc9 OFFICIAL SHA256 MATCH
+/home/heheboiz/data/cir/workbench/third_party/CSMCIR/COT_ours2/fashioniq/toptee_cot_val.json: 3929303 bytes sha256=acdacc3d8d0565e645324ddd838cb288f1bc69434635d83ece127b93dacac1cc OFFICIAL SHA256 MATCH
+/home/heheboiz/data/cir/workbench/third_party/CSMCIR/src/lavis/models/blip2_models/blip2_qformer_cir_align_prompt_target_image_caption_shiyan92.pyc: 12281 bytes sha256=46d00b0b8521291fef5b032afbaf20846fcfaf800ed9b4522c08b2ab991a15a8 OFFICIAL SHA256 MATCH
+/home/heheboiz/.cache/lavis/blip2_pretrained.pth: 746998955 bytes sha256=f31f96e4a97ce9ac7a140ea1961b8a871822ae1cd0a23f0f1122fbefd70db9f0 — checksum unavailable; provenance not checksum-verified
+UNRESOLVED REQUIRED PROVENANCE /home/heheboiz/.cache/lavis/blip2_pretrained.pth: UNVERIFIED
+/home/heheboiz/.cache/torch/hub/checkpoints/eva_vit_g.pth: 2025249237 bytes sha256=99d2bb36c6b52c94fe6e2e12373afb27de57ae81378c3d8c53bf0e83b0f4275f — checksum unavailable; provenance not checksum-verified
+UNRESOLVED REQUIRED PROVENANCE /home/heheboiz/.cache/torch/hub/checkpoints/eva_vit_g.pth: UNVERIFIED
+bert-base-uncased tokenizer: cache layout and declared payload verified
+```
+
+## 3. Interpreter khớp `.pyc` đã khai
+
+```
+$ workbench/artifacts/environments/cir-005ef4e1b02999a5/bin/python -V
+$ workbench/artifacts/environments/cir-005ef4e1b02999a5/bin/python -c "import sys;print(sys.implementation.cache_tag)"
+Python 3.10.22
+cpython-310
+workbench/envs/ctl312h/bin/python -V
+Python 3.12.11
+```
+`.pyc` khai báo là CPython 3.10 (`cpython-310`), và interpreter của evaluator là 3.10.22 → khớp.
+`envs/ctl312h` là orchestrator 3.12, chỉ chạy `workbench/scripts/*.py`; nó không nạp `.pyc`.
+
+## 4. Recipe orchestration — `evaluate_models.py --dry-run` với đủ 5 biến
+
+```
+$ export WORKBENCH_RUNTIME_ADAPTATION=sm_120
+$ export WORKBENCH_CSMCIR_PYTHON=$PWD/workbench/artifacts/environments/cir-005ef4e1b02999a5/bin/python
+$ export WORKBENCH_CSMCIR_QUERY_BS=8
+$ export WORKBENCH_CSMCIR_SAVE_MEMORY=1
+$ export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+$ workbench/envs/ctl312h/bin/python workbench/scripts/evaluate_models.py --model csmcir --dry-run
+[RUN] csmcir / fashioniq
+[OK] protocol: fashioniq_original_split
+[RUN] cwd: /home/heheboiz/data/cir/workbench/third_party/CSMCIR/src
+[RUN] command: /home/heheboiz/data/cir/workbench/artifacts/environments/cir-005ef4e1b02999a5/bin/python /home/heheboiz/data/cir/workbench/third_party/CSMCIR/src/validate_blip_csmcir.py --dataset fashionIQ --blip-model-name blip2_cir_align_prompt_target_image_caption_shiyan92 --blip-model-path /home/heheboiz/data/cir/workbench/artifacts/checkpoints/csmcir/fashioniq_tuned_clip_best.pt
+[RUN] log directory: /home/heheboiz/data/cir/workbench/artifacts/logs/csmcir__fashioniq__20261107T094702160045Z_csmcir_fashioniq_ee2abe64   <-- DỰ ĐOÁN, run này KHÔNG tồn tại và chưa từng tồn tại
+[RUN] provenance: /home/heheboiz/data/cir/workbench/artifacts/logs/csmcir__fashioniq__20261107T094702160045Z_csmcir_fashioniq_ee2abe64/command.json   <-- cũng là dự đoán
+[PLAN] first-use downloads: LAVIS BLIP-2, EVA-ViT-g, bert-base-uncased; dry-run cannot verify acquisition or evaluator success
+[OK] dry-run: official command not executed; no logs created
+rc=0
+```
+
+Guard chấp nhận: protocol `fashioniq_original_split`, source đã ở derived digest, dataset link đúng,
+và GPU capability `sm_120` còn hiệu lực (nếu không, nó in `[BLOCKED]`).
+
+**Cảnh báo đọc kết quả trên:** dòng `[RUN] log directory:` do `evaluate_models.py:2698` in ra là
+**dự đoán**, không phải run. `make_run_id()` ở đó gọi `uuid.uuid4()` (`evaluate_models.py:551`), còn
+`execute()` sinh id **khác** (`evaluate_models.py:2090`). Không bao giờ trích run id từ dòng đó — lấy
+từ `workbench/artifacts/logs/<run>/command.json` sau khi chạy xong.
+
+## 5. Không đổi hành vi scoring
+
+`--dry-run` không tạo log, không nạp checkpoint, không chạy evaluator.
+
+## 6. Builder (đường B) vẫn tái tạo đúng derived digest
+
+Chỉ ba helper *sau* builder là hết dùng được. Builder thì không:
+
+```
+$ workbench/envs/ctl312h/bin/python <bundle>/csmcir/scripts/build_csmcir_derived.py \
+    /tmp/builder_check --dataset-root data/FashionIQ \
+    --with-shiyan92-pyc workbench/third_party/CSMCIR/src/lavis/models/blip2_models/blip2_qformer_cir_align_prompt_target_image_caption_shiyan92.pyc \
+    --expect-pyc-sha256 46d00b0b8521291fef5b032afbaf20846fcfaf800ed9b4522c08b2ab991a15a8
+src/lavis/models/__init__.py: 0ec134431697af6f OK
+src/validate_blip_csmcir.py: a057e8f3ad7097ad OK
+copied provenance.json
+copied README.md
+copied requirements.txt
+staged fashionIQ_dataset -> /home/heheboiz/data/cir/data/FashionIQ
+staged COT_ours2 -> /home/heheboiz/data/cir/workbench/third_party/CSMCIR/COT_ours2
+staged blip2_qformer_cir_align_prompt_target_image_caption_shiyan92.pyc sha256=46d00b0b8521291f
+rc=0
+$ sha256sum
+0ec134431697af6f202b5256e4e30ab725a44191a279e3f8bfdb3a62495b3774  /tmp/builder_check/src/lavis/models/__init__.py
+a057e8f3ad7097adcfabb2b8fd8b4747588ff3461cfb43f00cd3483dfd6d512d  /tmp/builder_check/src/validate_blip_csmcir.py
+```
+
+## 7. Ba helper vận hành — fail-closed trên cây mang derived digest hiện hành
+
+Dùng `workbench/artifacts/csmcir_derived/src/validate_blip_csmcir.py` (sha256 `9af8d120…`, cây đường B
+đóng băng) và `workbench/third_party/CSMCIR/src/validate_blip_csmcir.py` (`a057e8f3…`). Cả hai đều đã
+có hai knob qua env, nên anchor literal của helper không còn:
+
+```
+$ python3 <bundle>/csmcir/scripts/apply_operational_save_memory.py <tree>/validate_blip_csmcir.py
+expected exactly 1 metric call site, found 0; refusing to guess        [rc=1]
+$ python3 <bundle>/csmcir/scripts/thread_save_memory.py <tree>/validate_blip_csmcir.py
+metric call block not found; refusing to guess                          [rc=1]
+$ python3 <bundle>/csmcir/scripts/set_query_batch.py <tree>/validate_blip_csmcir.py 8
+expected exactly 1 query loader, found 0                                [rc=1]
+```
+
+Đính chính mục 3.18.6b: chúng fail trên **mọi cây đã áp patch hiện hành**, không riêng cây builder sinh
+ra. Đó là lý do mục 3.23 là hướng dẫn duy nhất.

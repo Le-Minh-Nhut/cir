@@ -1,0 +1,302 @@
+{
+  "artifact_type": "official_aggregate_evaluation_report",
+  "schema_version": 1,
+  "run_id": "20261107T054343058424Z_csmcir_fashioniq_f564570e",
+  "run_directory": "/home/heheboiz/data/cir/workbench/artifacts/logs/csmcir__fashioniq__20261107T054343058424Z_csmcir_fashioniq_f564570e",
+  "model_id": "csmcir",
+  "checkpoint_id": "fashioniq",
+  "protocol_id": "fashioniq_original_split",
+  "execution_status": "EXECUTION_COMPLETED",
+  "invocation_status": "INVOCATION_COMPLETED",
+  "reproduction_status": "EXTRACTED_VERIFIED",
+  "per_query_export_available": false,
+  "per_query_export_reason": "CAPABILITY_ABSENT",
+  "per_query_capability": null,
+  "per_query_state": "CAPABILITY_ABSENT",
+  "per_query_artifact": null,
+  "per_query_artifact_digest": null,
+  "instrumentation_parity": null,
+  "extraction_status": "EXTRACTED_VERIFIED",
+  "metric_extraction_available": true,
+  "parser_id": "csmcir_stdout_json",
+  "parser_version": 1,
+  "observed_metrics": {
+    "r10": 57.0507,
+    "r50": 77.2986,
+    "mean": 67.1747
+  },
+  "category_metrics": {
+    "dress": {
+      "r10": 52.20624804496765,
+      "r50": 74.86366033554077
+    },
+    "shirt": {
+      "r10": 57.75269865989685,
+      "r50": 76.1040210723877
+    },
+    "toptee": {
+      "r10": 61.19326949119568,
+      "r50": 80.92809915542603
+    }
+  },
+  "paper_sanity_metrics": {
+    "r10": 57.07,
+    "r50": 77.27,
+    "mean": 67.17
+  },
+  "parity_status": "PARITY_VERIFIED",
+  "benchmark_gate": {
+    "status": "PASS_WITHIN_5_PERCENT_VARIANT",
+    "passed": true,
+    "variant": true,
+    "blockers": [],
+    "detail": "every comparable metric is within 5 percent relative error",
+    "reference_evidence": {
+      "reference_id": "csmcir_fiq_val_ours_vitg",
+      "model_id": "csmcir",
+      "paper_id": "csmcir_acl26",
+      "paper_title": "CSMCIR: CoT-Enhanced Symmetric Alignment with Memory Bank for Composed Image Retrieval",
+      "registry_version": "extract-79c32139b606",
+      "registry_file": "/home/heheboiz/data/cir/workbench/registry/paper_benchmarks/papers.yaml",
+      "registry_digest": "8f8576c234f66600eabc149b40fddf43d3f3a658e481acd4374d0a74eeeacd21",
+      "reference_status": "VERIFIED",
+      "checkpoint_mapping_status": "VERIFIED",
+      "reported_metrics": {
+        "mean": 67.17,
+        "r10": 57.07,
+        "r50": 77.27
+      },
+      "derived_metrics": [],
+      "metric_provenance": {
+        "r10": "PAPER_REPORTED",
+        "r50": "PAPER_REPORTED",
+        "mean": "PAPER_REPORTED"
+      },
+      "category_metrics": {
+        "dress": {
+          "r10": 52.45,
+          "r50": 74.81
+        },
+        "shirt": {
+          "r10": 57.7,
+          "r50": 75.76
+        },
+        "toptee": {
+          "r10": 61.14,
+          "r50": 80.98
+        }
+      },
+      "checkpoint_training_noise_pct": 0,
+      "gallery_protocol": "fashioniq_original_split"
+    },
+    "comparisons": [
+      {
+        "metric": "r10",
+        "paper": 57.07,
+        "reproduced": 57.0507,
+        "absolute_error_pp": 0.019300000000001205,
+        "relative_error_pct": 0.03381811810058035,
+        "within_tolerance": true,
+        "paper_provenance": "PAPER_REPORTED",
+        "note": "",
+        "direction": "lower",
+        "signed_delta_pp": -0.019300000000001205
+      },
+      {
+        "metric": "r50",
+        "paper": 77.27,
+        "reproduced": 77.2986,
+        "absolute_error_pp": 0.028599999999997294,
+        "relative_error_pct": 0.03701307104956295,
+        "within_tolerance": true,
+        "paper_provenance": "PAPER_REPORTED",
+        "note": "",
+        "direction": "higher",
+        "signed_delta_pp": 0.028599999999997294
+      },
+      {
+        "metric": "mean",
+        "paper": 67.17,
+        "reproduced": 67.1747,
+        "absolute_error_pp": 0.004699999999999704,
+        "relative_error_pct": 0.006997171356259795,
+        "within_tolerance": true,
+        "paper_provenance": "PAPER_REPORTED",
+        "note": "",
+        "direction": "higher",
+        "signed_delta_pp": 0.004699999999999704
+      },
+      {
+        "metric": "dress_r10",
+        "paper": 52.45,
+        "reproduced": 52.20624804496765,
+        "absolute_error_pp": 0.24375195503235147,
+        "relative_error_pct": 0.4647320400998121,
+        "within_tolerance": true,
+        "paper_provenance": "PAPER_REPORTED",
+        "note": "",
+        "direction": "lower",
+        "signed_delta_pp": -0.24375195503235147
+      },
+      {
+        "metric": "dress_r50",
+        "paper": 74.81,
+        "reproduced": 74.86366033554077,
+        "absolute_error_pp": 0.05366033554076921,
+        "relative_error_pct": 0.07172882708296913,
+        "within_tolerance": true,
+        "paper_provenance": "PAPER_REPORTED",
+        "note": "",
+        "direction": "higher",
+        "signed_delta_pp": 0.05366033554076921
+      },
+      {
+        "metric": "shirt_r10",
+        "paper": 57.7,
+        "reproduced": 57.75269865989685,
+        "absolute_error_pp": 0.052698659896847744,
+        "relative_error_pct": 0.09133216619904287,
+        "within_tolerance": true,
+        "paper_provenance": "PAPER_REPORTED",
+        "note": "",
+        "direction": "higher",
+        "signed_delta_pp": 0.052698659896847744
+      },
+      {
+        "metric": "shirt_r50",
+        "paper": 75.76,
+        "reproduced": 76.1040210723877,
+        "absolute_error_pp": 0.3440210723876902,
+        "relative_error_pct": 0.45409328456664494,
+        "within_tolerance": true,
+        "paper_provenance": "PAPER_REPORTED",
+        "note": "",
+        "direction": "higher",
+        "signed_delta_pp": 0.3440210723876902
+      },
+      {
+        "metric": "toptee_r10",
+        "paper": 61.14,
+        "reproduced": 61.19326949119568,
+        "absolute_error_pp": 0.05326949119567814,
+        "relative_error_pct": 0.08712707097755666,
+        "within_tolerance": true,
+        "paper_provenance": "PAPER_REPORTED",
+        "note": "",
+        "direction": "higher",
+        "signed_delta_pp": 0.05326949119567814
+      },
+      {
+        "metric": "toptee_r50",
+        "paper": 80.98,
+        "reproduced": 80.92809915542603,
+        "absolute_error_pp": 0.05190084457397859,
+        "relative_error_pct": 0.06409094168187032,
+        "within_tolerance": true,
+        "paper_provenance": "PAPER_REPORTED",
+        "note": "",
+        "direction": "lower",
+        "signed_delta_pp": -0.05190084457397859
+      }
+    ],
+    "selection_reason": "exact condition match"
+  },
+  "benchmark_reference": {
+    "reference_id": "csmcir_fiq_val_ours_vitg",
+    "model_id": "csmcir",
+    "paper_id": "csmcir_acl26",
+    "paper_title": "CSMCIR: CoT-Enhanced Symmetric Alignment with Memory Bank for Composed Image Retrieval",
+    "registry_version": "extract-79c32139b606",
+    "registry_file": "/home/heheboiz/data/cir/workbench/registry/paper_benchmarks/papers.yaml",
+    "registry_digest": "8f8576c234f66600eabc149b40fddf43d3f3a658e481acd4374d0a74eeeacd21",
+    "reference_status": "VERIFIED",
+    "checkpoint_mapping_status": "VERIFIED",
+    "reported_metrics": {
+      "mean": 67.17,
+      "r10": 57.07,
+      "r50": 77.27
+    },
+    "derived_metrics": [],
+    "metric_provenance": {
+      "r10": "PAPER_REPORTED",
+      "r50": "PAPER_REPORTED",
+      "mean": "PAPER_REPORTED"
+    },
+    "category_metrics": {
+      "dress": {
+        "r10": 52.45,
+        "r50": 74.81
+      },
+      "shirt": {
+        "r10": 57.7,
+        "r50": 75.76
+      },
+      "toptee": {
+        "r10": 61.14,
+        "r50": 80.98
+      }
+    },
+    "checkpoint_training_noise_pct": 0,
+    "gallery_protocol": "fashioniq_original_split"
+  },
+  "variant_provenance": {
+    "caption_aliases": [],
+    "caption_alias_staged": false,
+    "approved_source_patch": {
+      "patch_file": "workbench/patches/csmcir_models_init_compat.patch, workbench/patches/csmcir_validate_visualization_opt_in.patch",
+      "patch_sha256": "3f2bac48fe1a1775d2e5e6a09f81affa3809a31ed6b7c4213d5da8c2a0ada3bd, 0fcff28bf1f9abd31a14a06b0f200eecfa46af8c2d7624a3420a68204ef50fa8",
+      "applied": true,
+      "patches": [
+        {
+          "path": "src/lavis/models/__init__.py",
+          "patch_file": "workbench/patches/csmcir_models_init_compat.patch",
+          "patch_sha256": "3f2bac48fe1a1775d2e5e6a09f81affa3809a31ed6b7c4213d5da8c2a0ada3bd",
+          "applied": true,
+          "detail": "src/lavis/models/__init__.py matches the recorded post-patch digest"
+        },
+        {
+          "path": "src/validate_blip_csmcir.py",
+          "patch_file": "workbench/patches/csmcir_validate_visualization_opt_in.patch",
+          "patch_sha256": "0fcff28bf1f9abd31a14a06b0f200eecfa46af8c2d7624a3420a68204ef50fa8",
+          "applied": true,
+          "detail": "src/validate_blip_csmcir.py matches the recorded post-patch digest"
+        }
+      ]
+    },
+    "adapted_runtime": null,
+    "checkpoint_training_dataset": null,
+    "warnings": [
+      "source repaired by the approved patch set [workbench/patches/csmcir_models_init_compat.patch, workbench/patches/csmcir_validate_visualization_opt_in.patch] (sha256=3f2bac48fe1a1775d2e5e6a09f81affa3809a31ed6b7c4213d5da8c2a0ada3bd, 0fcff28bf1f9abd31a14a06b0f200eecfa46af8c2d7624a3420a68204ef50fa8); the published-source blocker no longer applies and the run is an approved compatibility variant, not official parity",
+      "CSMCIR LAVIS BLIP-2 pretrain weights locally recorded; author digest unavailable",
+      "CSMCIR EVA-ViT-g backbone weights locally recorded; author digest unavailable"
+    ]
+  },
+  "metric_source": "stdout",
+  "is_synthetic": false,
+  "command_json": "command.json",
+  "stdout_log": "stdout.log",
+  "stderr_log": "stderr.log",
+  "command_digest": "7aa7a6db32cb2155d992da8f5b98cd047825ac31925066b95d4117eb7ceb32be",
+  "source_expected_commit": "774f94e2076ff17ea91703a6239d2a08f0e1a44e",
+  "source_actual_commit": "774f94e2076ff17ea91703a6239d2a08f0e1a44e",
+  "checkpoint_artifact_type": "single_file",
+  "checkpoint_sha256": "c8812071de0640d647c5ba2a70628b80a3289ee2c47676f7a1b6abaa313fa49e",
+  "checkpoint_bundle": null,
+  "bundle_manifest_digest": null,
+  "directory_members": null,
+  "environment": {
+    "orchestrator_python": "3.12.11 (main, Oct  7 2025, 15:34:39) [Clang 20.1.4 ]",
+    "orchestrator_executable": "/home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python",
+    "platform": "linux",
+    "model_interpreter": "/home/heheboiz/data/cir/workbench/artifacts/environments/cir-005ef4e1b02999a5/bin/python",
+    "evaluation_run_id": "20261107T054343058424Z_csmcir_fashioniq_f564570e",
+    "evaluation_output_root": "/home/heheboiz/data/cir/workbench/artifacts",
+    "TMPDIR": "/tmp/wb-benvxdi7",
+    "WORKBENCH_REPLAY_CACHE_ROOT": "/home/heheboiz/data/cir/workbench/artifacts/logs/csmcir__fashioniq__20261107T054343058424Z_csmcir_fashioniq_f564570e/replay-cache"
+  },
+  "model_interpreter": "/home/heheboiz/data/cir/workbench/artifacts/environments/cir-005ef4e1b02999a5/bin/python",
+  "environment_digest": "c0f40e7f4702458c9949ce864d7086dc0bf9260d5ac8e0c5bdae659843f0f284",
+  "runtime_adaptation": null,
+  "evidence_digest": "735299cc49ec976574a97a51d9329c3432e60268a0108ea57a3a802c8f0e5dc2",
+  "return_code": 0
+}

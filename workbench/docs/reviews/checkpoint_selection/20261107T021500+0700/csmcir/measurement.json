@@ -70,6 +70,74 @@
    "after_query_batch_8": "9af8d1205a3edeaad966ed56fd731a2ca7d7551b16b6adca152086265f77f433"
   },
   "shiyan92_pyc_sha256": "46d00b0b8521291fef5b032afbaf20846fcfaf800ed9b4522c08b2ab991a15a8",
-  "note": "The .pyc is author-published at the pinned revision (CPython 3.10); no source was synthesised."
- }
+  "note": "The .pyc is author-published at the pinned revision (CPython 3.10); no source was synthesised.",
+  "note_current": "Lịch sử đường B. Ba helper sau builder (apply_operational_save_memory, thread_save_memory, set_query_batch) nay exit 1 trên mọi cây đã áp patch hiện hành (found 0), vì patch đã làm hai knob thành env-overridable. Builder vẫn tái tạo đúng 0ec13443… / a057e8f3… khi chạy lại. Đường chuẩn hiện hành: workbench/third_party/CSMCIR/src ở 0ec13443… / a057e8f3…, chạy qua prepare_model + download_auxiliary_assets + evaluate_models (CHECKPOINT_SELECTION_REPORT.md 3.23.5b).",
+  "frozen_tree": {
+   "path": "workbench/artifacts/csmcir_derived",
+   "validate_blip_csmcir_sha256": "9af8d1205a3edeaad966ed56fd731a2ca7d7551b16b6adca152086265f77f433",
+   "is_standard_path": false,
+   "note": "Route-B checkout (builder + three hand-edit helpers). full_eval.txt and fresh_tree_eval.txt come from trees carrying this digest. The standard pipeline path uses workbench/third_party/CSMCIR/src at a057e8f3…."
+  }
+ },
+ "runs": [
+  {
+   "run_id": "20261107T054343058424Z_csmcir_fashioniq_f564570e",
+   "log_dir": "/home/heheboiz/data/cir/workbench/artifacts/logs/csmcir__fashioniq__20261107T054343058424Z_csmcir_fashioniq_f564570e",
+   "return_code": 0,
+   "invocation_status": "INVOCATION_COMPLETED",
+   "reproduction_status": "EXTRACTED_VERIFIED",
+   "command_json_sha256": "4ef74d2255913e84f962f973780c1a80c21bdb88d58a1b2640b5d585ba4381ff",
+   "evaluator_environment_knobs": null,
+   "full_provenance": false,
+   "per_category": {
+    "dress": {
+     "r10": 52.20624804496765,
+     "r50": 74.86366033554077
+    },
+    "shirt": {
+     "r10": 57.75269865989685,
+     "r50": 76.1040210723877
+    },
+    "toptee": {
+     "r10": 61.19326949119568,
+     "r50": 80.92809915542603
+    }
+   },
+   "macro_r10": 57.0507,
+   "macro_r50": 77.2986
+  },
+  {
+   "run_id": "20261107T054933277898Z_csmcir_fashioniq_f03887d2",
+   "log_dir": "/home/heheboiz/data/cir/workbench/artifacts/logs/csmcir__fashioniq__20261107T054933277898Z_csmcir_fashioniq_f03887d2",
+   "return_code": 0,
+   "invocation_status": "INVOCATION_COMPLETED",
+   "reproduction_status": "EXTRACTED_VERIFIED",
+   "command_json_sha256": "5673efbf58bdf09fd87487ace6fe771b667661b8fcf58ab62ccd903a19f30dc6",
+   "evaluator_environment_knobs": {
+    "PYTORCH_CUDA_ALLOC_CONF": "expandable_segments:True",
+    "WORKBENCH_CSMCIR_PYTHON": "/home/heheboiz/data/cir/workbench/artifacts/environments/cir-005ef4e1b02999a5/bin/python",
+    "WORKBENCH_CSMCIR_QUERY_BS": "8",
+    "WORKBENCH_CSMCIR_SAVE_MEMORY": "1"
+   },
+   "full_provenance": true,
+   "per_category": {
+    "dress": {
+     "r10": 52.20624804496765,
+     "r50": 74.86366033554077
+    },
+    "shirt": {
+     "r10": 57.75269865989685,
+     "r50": 76.1040210723877
+    },
+    "toptee": {
+     "r10": 61.19326949119568,
+     "r50": 80.92809915542603
+    }
+   },
+   "macro_r10": 57.0507,
+   "macro_r50": 77.2986
+  }
+ ],
+ "runs_note": "Two exit-0 runs, both on disk, macro identical to 1e-13. Only f03887d2 recorded evaluator_environment_knobs; f564570e predates that field and has it null, so only f03887d2 is a full-provenance run. f03887d2 is the run behind full_eval_pipeline.txt and pipeline_command.json.",
+ "primary_run_id": "20261107T054933277898Z_csmcir_fashioniq_f03887d2"
 }

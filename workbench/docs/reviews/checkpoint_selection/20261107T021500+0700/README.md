@@ -13,14 +13,50 @@ opened by the real constructors, zero of them either of those paths.
 |---|---|
 | `csmcir/call_path_probe.txt` | which files the evaluation path actually opens, with the constructors that opened them |
 | `csmcir/asset_verification.txt` | three caption JSONs vs published sha256, record counts, gallery/reference/target coverage, and the 121-ID shirt/toptee overlap |
-| `csmcir/measurement.json` | per-category R@10/R@50, macro, checkpoint and input digests, operational parameters |
-| `csmcir/full_eval.txt` | the run itself: exit 0, `Missing keys []`, the printed metric JSON |
-| `csmcir/scripts/` | the four operational steps, each written to explain why it exists |
+| `csmcir/measurement.json` | per-category R@10/R@50, macro, checkpoint and input digests, operational parameters, and both exit-0 runs |
+| `csmcir/runs/` | **the two exit-0 runs**, each with its own `command.json`, `invocation_outcome.json` and `aggregate_report.json`; table in `runs/README.md` |
+| `csmcir/full_eval_pipeline.txt` | run `f03887d2` end to end: header naming the real on-disk run dir, then `stderr.log` and `stdout.log` of that run verbatim, each labelled with source path, size and sha256 |
+| `csmcir/pipeline_command.json` | `command.json` of run `f03887d2`, byte-identical (sha256 `5673efbf…`) |
+| `csmcir/recipe_check.txt` | the non-GPU part of the 3.23 recipe executed, with actual output |
+| `csmcir/digest_verification.txt` | base/derived/patch/`.pyc`/checkpoint digests measured on this machine |
+| `csmcir/scripts/` | the four HISTORICAL operational steps of the first (route-B) measurement; all three post-builder helpers now exit 1 on a builder-produced tree by design |
 | `glove_recipe/determinism.json` | two seeded runs producing identical hashes, all ten matching the artifact DCNet was measured against |
-| `csmcir/fresh_tree_eval.txt` | the same numbers reproduced from a tree built from scratch, not the session's staged files |
+| `csmcir/full_eval.txt` | route-B manual invocation on the `csmcir_derived` checkout; no pipeline run dir, superseded for citation by `f03887d2` |
+| `csmcir/fresh_tree_eval.txt` | same route run end to end in `/tmp/derive_fresh` (tree still on disk, `validate_blip_csmcir.py` = `9af8d120…`); same macro, superseded for citation by `f03887d2` |
 | `tests/SUMMARY.json` | suite result with a baseline worktree for comparison, and each remaining failure's cause |
 
-## Reproduction was rebuilt from scratch
+## Authoritative Archive vs Working Copy
+
+- `workbench/docs/reviews/checkpoint_selection/20261107T021500+0700/` is the **authoritative archived record** and citation-grade evidence bundle, indexed by `EVIDENCE_INDEX.json`. Its scripts (such as hardened `csmcir/scripts/build_csmcir_derived.py` with `--dataset-root` and `--expect-pyc-sha256`) are the authoritative versions.
+- `workbench/artifacts/checkpoint_selection/20261107T021500+0700/` was the **session working copy** generated during execution; it is not the canonical evidence archive.
+
+
+## The bundle used to glue two runs together
+
+The earlier `full_eval_pipeline.txt` carried a six-line `[RUN]` header from `evaluate_models.py` and then
+a log body from a different invocation. The header's run id did not exist on disk and never had:
+`evaluate_models.py` prints `[RUN] log directory:` using an id from `make_run_id()`
+(`evaluate_models.py:551`, which calls `uuid.uuid4()`), and then `execute()` mints a **different** id
+(`evaluate_models.py:2090`). The printed path is a prediction, not the run.
+
+The file is rebuilt from run `f03887d2` only: its header names that run's real directory, and the body is
+`stderr.log` then `stdout.log` of that run, each pasted verbatim between labelled BEGIN/END markers with
+its byte count and sha256. Nothing is stitched across runs.
+
+## Two exit-0 runs, identical to 1e-13
+
+| | run A | run B |
+|---|---|---|
+| run id | `20261107T054343058424Z_csmcir_fashioniq_f564570e` | `20261107T054933277898Z_csmcir_fashioniq_f03887d2` |
+| `return_code` | 0 | 0 |
+| macro R@10 / R@50 | 57.05073873202006 / 77.29859352111816 | 57.05073873202006 / 77.29859352111816 |
+| `evaluator_environment_knobs` | **`null` — not recorded** | all four knobs |
+| full provenance | **no** | **yes** |
+
+Only run B has full provenance. Run A is an independent replication of the score, not evidence that the
+operational knobs were set. Details and byte copies: `csmcir/runs/`.
+
+## Reproduction was rebuilt from scratch (route B, historical)
 
 The first pass left three ways for the documented commands to fail that the staged tree hid: the
 checkpoint path was one directory level off, the builder copied `src` without the `fashionIQ_dataset`
@@ -33,16 +69,23 @@ The builder now also stops when an approved patch does not produce the declared 
 checks the author `.pyc` hash before using it. Printing a mismatch and continuing left a half-repaired
 tree that later read as an approved variant.
 
+**The standard pipeline no longer needs that route.** `prepare_model --execute` applies the declared
+patches to the pinned checkout and `download_auxiliary_assets` stages the bytecode; the three post-builder
+helpers (`apply_operational_save_memory.py`, `thread_save_memory.py`, `set_query_batch.py`) now stop with
+`found 0` because the patch already made those two knobs env-overridable. They are kept for provenance of
+the first measurement, and are labelled HISTORICAL wherever they appear. Current instruction:
+CHECKPOINT_SELECTION_REPORT.md 3.23.5b.
+
 ## Result
 
 | category | R@10 | R@50 |
 |---|---|---|
-| dress | 52.2062 | 74.8637 |
-| shirt | 57.7527 | 76.1040 |
-| toptee | 61.1933 | 80.9281 |
-| **macro** | **57.0507** | **77.2986** |
+| dress | 52.20624804496765 | 74.86366033554077 |
+| shirt | 57.75269865989685 | 76.1040210723877 |
+| toptee | 61.19326949119568 | 80.92809915542603 |
+| **macro** | **57.05073873202006** | **77.29859352111816** |
 
-Paper says 57.07 / 77.27.
+Both runs, from their own `aggregate_report.json`. Paper says 57.07 / 77.27.
 
 ## What this result is not
 

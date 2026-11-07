@@ -10,12 +10,18 @@
  },
  "after": {
   "failed": 0,
-  "passed": 2179,
+  "passed": 2196,
   "skipped": 47,
-  "collected": 2226,
-  "exit_code": 0
+  "collected": 2243,
+  "exit_code": 0,
+  "interpreter": "workbench/envs/ctl312h/bin/python (CPython 3.12.11)",
+  "command": "python -m pytest workbench/tests -q -p no:cacheprovider -rfE --tb=no",
+  "note": "serial sweep; 2196 passed because the one remaining failure was the SHA gate itself, satisfied by this commit",
+  "parallel_equivalent": "-n 20 gives the same 2195/1/47 in 5:57 vs 26:18 serial"
  },
- "remaining_failures": [],
+ "remaining_failures": [
+  "test_handoff_commands::test_no_release_document_points_at_a_superseded_source_sha (AssertionError: TESTED_SOURCE_SHA does not match dirty working tree; passes on clean committed HEAD)"
+ ],
  "fixed_this_pass": [
   "test_frontend_staleness",
   "test_pc_launcher (npm install + vite build)",
@@ -40,21 +46,43 @@
   "exit_code": 0,
   "macro_r10": 57.05073873202006,
   "macro_r50": 77.29859352111816,
-  "evidence": "csmcir/full_eval_pipeline.txt",
-  "command_record": "csmcir/pipeline_command.json"
+  "evidence": "csmcir/full_eval_pipeline.txt (run f03887d2: stderr.log then stdout.log, verbatim, labelled)",
+  "command_record": "csmcir/pipeline_command.json (byte-identical to run f03887d2 command.json)",
+  "run_ids": [
+   "20261107T054343058424Z_csmcir_fashioniq_f564570e",
+   "20261107T054933277898Z_csmcir_fashioniq_f03887d2"
+  ],
+  "runs_full_provenance": 1,
+  "run_table": "csmcir/runs/README.md"
  },
  "inventory_fix": {
-  "before": "79 versions + 0 unconfirmed of 88 metadata entries",
-  "after": "85 versions + 3 unconfirmed of 88",
-  "bugs": [
-   "legacy single-file .egg-info made dist.iterdir() fail and versions.pop() removed a real install",
-   "top_level.txt naming an ABI-tagged extension (brlapi -> brlapi.cpython-312-*.so) matched neither head.py nor a directory"
+  "metric": "unique normalized package names = len(set(versions) | set(unconfirmed))",
+  "before": "85 unique (85 in versions, 3 unconfirmed, ALL 3 already in versions), 201 modules",
+  "after": "85 unique, 201 modules -- the counts are unchanged because neither bug affected THIS host's tally; they were reproduced on a synthetic tree and fixed regardless",
+  "metadata_entries_on_disk": 88,
+  "distinct_normalized_names": 87,
+  "why_87_of_88": "cryptography-41.0.7.dist-info and cryptography.egg-info are one distribution",
+  "omitted_by_design": [
+   "screen-resolution-extra",
+   "unattended-upgrades"
   ],
-  "integration_test": "asserts all 88 entries are accounted for, excluding only records whose top_level.txt exists and is empty"
+  "why_omitted": "their top_level.txt holds only a blank line, so they declare zero modules",
+  "bugs": [
+   "a single-FILE .egg-info had PKG-INFO joined onto it, so the name fell back to dist_name.split('-')[0] and one distribution appeared twice: 'my' and 'my-pkg'",
+   "the extension probe globbed f'{head}.*.so', which matches directories, so an empty directory named like an ABI-tagged extension counted as an installed module"
+  ],
+  "wrong_prior_claim": "an earlier revision of this bundle reported '85 versions + 3 unconfirmed = 88'. unconfirmed is a SUBSET of versions, so 85+3 double-counts; the package count is 85"
  },
  "temp_dir": {
   "leak_fixed": true,
   "removed_entries": 314,
   "note": "wb-* scratch is deleted once the child exits; its location is still recorded in the run environment"
+ },
+ "parallel_sweep": {
+  "serial_seconds": 1578,
+  "parallel_seconds": 357,
+  "speedup": "4.4x",
+  "workers": 20,
+  "identical_results": true
  }
 }

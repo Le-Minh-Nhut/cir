@@ -4,8 +4,8 @@
  "entries": [
   {
    "dest": "README.md",
-   "bytes": 5212,
-   "sha256": "6ecfed44cded9a9c3411089d05c39e02d63c8d4b1a225f516104e158a87d0437"
+   "bytes": 8784,
+   "sha256": "5699da339678f6ece2c298bf9b522432525cf5160c53da0d32be00518af2ccc2"
   },
   {
    "dest": "csmcir/asset_verification.txt",
@@ -18,29 +18,74 @@
    "sha256": "3d8639d0d1b51aa160a3ad66b950e56c64742ed6449386baaff248f7fd6fb5c3"
   },
   {
+   "dest": "csmcir/digest_verification.txt",
+   "bytes": 3411,
+   "sha256": "5b0c5d5dded81f2a1aff21dfd111c180636ed98353ad8b78a92c77112ac9ee77"
+  },
+  {
    "dest": "csmcir/fresh_tree_eval.txt",
-   "bytes": 46775,
-   "sha256": "c9eb3db5c9257ba2bb73f139593374d449b5a04891116b7e736b84c3003adf37"
+   "bytes": 47487,
+   "sha256": "364020f929cd848fdcde36ab794ca442d9a73d74018ea633d4ec67b1e69a5c86"
   },
   {
    "dest": "csmcir/full_eval.txt",
-   "bytes": 46819,
-   "sha256": "22dc0587650b8c0e148cf90d0a4998027be8a8b411e4c512f2a83d834722c895"
+   "bytes": 47536,
+   "sha256": "8e7617d532f95c6cf562a66b282731da9eae18e58b8ee5a51cbfd2313fcd97b5"
   },
   {
    "dest": "csmcir/full_eval_pipeline.txt",
-   "bytes": 47571,
-   "sha256": "b9aae0542241154cf0277612095e59d659aed4b05eeba833db5ea1c65df35a01"
+   "bytes": 48562,
+   "sha256": "41294dc85b9e7eae22bc98eda8f47147100a4918b4f3f7280700c46d6cf89e71"
   },
   {
    "dest": "csmcir/measurement.json",
-   "bytes": 3570,
-   "sha256": "243087224731458ed7fa0313d7801bb6a205e2769ed1464469c9bd2b62712f3e"
+   "bytes": 6804,
+   "sha256": "437f0eaa41f80725ef86853ba42a9abe00c2f2f49511a87b64686515277909f7"
   },
   {
    "dest": "csmcir/pipeline_command.json",
    "bytes": 2591,
    "sha256": "5673efbf58bdf09fd87487ace6fe771b667661b8fcf58ab62ccd903a19f30dc6"
+  },
+  {
+   "dest": "csmcir/recipe_check.txt",
+   "bytes": 8871,
+   "sha256": "3a81e39931ced2e9897a34332b0696242ad22d8b2f42e05fdc734ba2c6ec3b23"
+  },
+  {
+   "dest": "csmcir/runs/README.md",
+   "bytes": 3396,
+   "sha256": "5452c7d3aa496d393b6a8c2871b61f25ebb24c6e5a39cd86f72ac98b35683a36"
+  },
+  {
+   "dest": "csmcir/runs/f03887d2/aggregate_report.json",
+   "bytes": 11413,
+   "sha256": "7d381b3031ba0affeac3f3121768fd19fa2efffa5124de075b4cd42dcdc3f1cc"
+  },
+  {
+   "dest": "csmcir/runs/f03887d2/command.json",
+   "bytes": 2591,
+   "sha256": "5673efbf58bdf09fd87487ace6fe771b667661b8fcf58ab62ccd903a19f30dc6"
+  },
+  {
+   "dest": "csmcir/runs/f03887d2/invocation_outcome.json",
+   "bytes": 423,
+   "sha256": "caef670edea8d069a64dbad17887325fcc134d87e93ca4c814e7d843bdef878f"
+  },
+  {
+   "dest": "csmcir/runs/f564570e/aggregate_report.json",
+   "bytes": 11101,
+   "sha256": "542b617a33e8a7533caf82a5764587516ca54e3b8d8b4b7047511826c900d6f7"
+  },
+  {
+   "dest": "csmcir/runs/f564570e/command.json",
+   "bytes": 2279,
+   "sha256": "4ef74d2255913e84f962f973780c1a80c21bdb88d58a1b2640b5d585ba4381ff"
+  },
+  {
+   "dest": "csmcir/runs/f564570e/invocation_outcome.json",
+   "bytes": 423,
+   "sha256": "540eb443708e57c21b0e4b60ddc5932d6388bfb357039d5f5bbae56e62526a0b"
   },
   {
    "dest": "csmcir/scripts/apply_operational_save_memory.py",
@@ -94,13 +139,13 @@
   },
   {
    "dest": "tests/SUMMARY.json",
-   "bytes": 2962,
-   "sha256": "d87d9dae9a51c18d255584e71d5847e67b9e86c679c5828379bd054a69cd9fd4"
+   "bytes": 4738,
+   "sha256": "a88fb00382c9ddfef4cd60a7bb4fe5e8c103c90e0e1a5f0836c74d5ca47a592f"
   },
   {
    "dest": "tests/full_suite_after.txt",
-   "bytes": 14273,
-   "sha256": "89c42f4f659483af036772778bcf2419357295109f8d33f5b47e3e14c9e4318f"
+   "bytes": 15832,
+   "sha256": "6994eda76ef147bead958d0f71192b1492b6e4b143e683d114ae6d6aaec36386"
   },
   {
    "dest": "tests/full_suite_baseline_ea5ff05.txt",

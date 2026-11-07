@@ -1,0 +1,47 @@
+# Đo digest cho recipe tái lập (3.23) — chạy trên máy này, không cần GPU
+
+Thời điểm: 2026-11-07T16:45:09+07:00
+Repo root: /home/heheboiz/data/cir
+
+```
+$ sha256sum workbench/patches/csmcir_models_init_compat.patch
+3f2bac48fe1a1775d2e5e6a09f81affa3809a31ed6b7c4213d5da8c2a0ada3bd  workbench/patches/csmcir_models_init_compat.patch
+$ sha256sum workbench/patches/csmcir_validate_visualization_opt_in.patch
+0fcff28bf1f9abd31a14a06b0f200eecfa46af8c2d7624a3420a68204ef50fa8  workbench/patches/csmcir_validate_visualization_opt_in.patch
+
+# base: lấy derived hiện có rồi reverse-apply chính patch đã khai
+$ rm -rf /tmp/revchk && mkdir -p /tmp/revchk/src/lavis/models
+$ cp workbench/third_party/CSMCIR/src/lavis/models/__init__.py /tmp/revchk/src/lavis/models/__init__.py
+$ cp workbench/third_party/CSMCIR/src/validate_blip_csmcir.py /tmp/revchk/src/validate_blip_csmcir.py
+$ patch -R -p1 -d /tmp/revchk < workbench/patches/csmcir_models_init_compat.patch
+$ patch -R -p1 -d /tmp/revchk < workbench/patches/csmcir_validate_visualization_opt_in.patch
+$ sha256sum /tmp/revchk/src/lavis/models/__init__.py /tmp/revchk/src/validate_blip_csmcir.py
+9d8c914b551a7de614e062f9a241f44626fd591a31a0ccf1cc79f0ae23c9db01  /tmp/revchk/src/lavis/models/__init__.py
+aa7a4395cdb700fded0567e0969da774a331927eaea327b5a23da82fdc7506a9  /tmp/revchk/src/validate_blip_csmcir.py
+# derived: cây đang được pipeline dùng
+0ec134431697af6f202b5256e4e30ab725a44191a279e3f8bfdb3a62495b3774  workbench/third_party/CSMCIR/src/lavis/models/__init__.py
+a057e8f3ad7097adcfabb2b8fd8b4747588ff3461cfb43f00cd3483dfd6d512d  workbench/third_party/CSMCIR/src/validate_blip_csmcir.py
+
+$ sha256sum workbench/third_party/CSMCIR/src/lavis/models/blip2_models/blip2_qformer_cir_align_prompt_target_image_caption_shiyan92.pyc
+46d00b0b8521291fef5b032afbaf20846fcfaf800ed9b4522c08b2ab991a15a8  workbench/third_party/CSMCIR/src/lavis/models/blip2_models/blip2_qformer_cir_align_prompt_target_image_caption_shiyan92.pyc
+size 12281
+
+$ sha256sum workbench/artifacts/checkpoints/csmcir/fashioniq_tuned_clip_best.pt
+c8812071de0640d647c5ba2a70628b80a3289ee2c47676f7a1b6abaa313fa49e  workbench/artifacts/checkpoints/csmcir/fashioniq_tuned_clip_best.pt
+size 2720615859
+```
+
+## pipeline_command.json ≡ command.json của run f03887d2
+
+```
+$ sha256sum workbench/docs/reviews/checkpoint_selection/20261107T021500+0700/csmcir/pipeline_command.json
+5673efbf58bdf09fd87487ace6fe771b667661b8fcf58ab62ccd903a19f30dc6  workbench/docs/reviews/checkpoint_selection/20261107T021500+0700/csmcir/pipeline_command.json
+$ sha256sum workbench/artifacts/logs/csmcir__fashioniq__20261107T054933277898Z_csmcir_fashioniq_f03887d2/command.json
+5673efbf58bdf09fd87487ace6fe771b667661b8fcf58ab62ccd903a19f30dc6  workbench/artifacts/logs/csmcir__fashioniq__20261107T054933277898Z_csmcir_fashioniq_f03887d2/command.json
+$ cmp workbench/docs/reviews/checkpoint_selection/20261107T021500+0700/csmcir/pipeline_command.json workbench/artifacts/logs/csmcir__fashioniq__20261107T054933277898Z_csmcir_fashioniq_f03887d2/command.json
+# exit 0, không in gì (byte-identical)
+```
+
+Bản trong bundle là **bản sao byte-for-byte**, không phải projection: `cmp` không báo khác biệt.
+Chín trường provenance giữ nguyên (`run_id`, `command_digest`, `checkpoint_local_sha256`,
+`environment.evaluator_environment_knobs`, `return_code`, …), không lược bỏ gì.
