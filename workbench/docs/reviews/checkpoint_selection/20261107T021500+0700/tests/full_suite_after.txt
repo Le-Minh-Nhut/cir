@@ -1,3 +1,10 @@
+REV=61f70b0bb205464cf9131e8dae054ec5f69e13f4
+CMD=workbench/envs/ctl312h/bin/python -m pytest workbench/tests -q -p no:cacheprovider -rfE --tb=no
+EXIT=0
+# interpreter: workbench/envs/ctl312h/bin/python (CPython 3.12.11)
+# wall: 26m14s ; tree: clean, HEAD 61f70b0bb205464cf9131e8dae054ec5f69e13f4
+# note: previous filed log (1 failed / 2201 passed) was the pre-advance tree where only the SHA gate was red; superseded.
+# ---- pytest output verbatim ----
 ssssssssss.s...............sssssssssssssssss......s..................... [  3%]
 ........................................................................ [  6%]
 ........................................................................ [  9%]
@@ -8,7 +15,7 @@ ssssssssss.s...............sssssssssssssssss......s..................... [  3%]
 ........................................................................ [ 25%]
 ..............................................................s......... [ 28%]
 ........................................................................ [ 32%]
-.............................................................F.......... [ 35%]
+........................................................................ [ 35%]
 ........................................................................ [ 38%]
 ....................................................................s... [ 41%]
 .....................................................ss......sss........ [ 44%]
@@ -29,7 +36,7 @@ ssssssssss.s...............sssssssssssssssss......s..................... [  3%]
 ........................................................................ [ 92%]
 ........................................................................ [ 96%]
 ........................................................................ [ 99%]
-.................                                                        [100%]
+..................                                                       [100%]
 =============================== warnings summary ===============================
 workbench/backend/main.py:97: 1 warning
 workbench/tests/test_e2e_release_chain.py: 1 warning
@@ -87,7 +94,7 @@ workbench/tests/test_circus_inputs.py::test_staged_black_path_and_empty_text_cro
 
 workbench/tests/test_composition_image_identity.py::test_model_lock_serializes_processes
 workbench/tests/test_composition_image_identity.py::test_model_lock_assertion_fails_when_flock_is_noop
-  /home/heheboiz/.local/share/uv/python/cpython-3.12-linux-x86_64-gnu/lib/python3.12/multiprocessing/popen_fork.py:66: DeprecationWarning: This process (pid=2432408) is multi-threaded, use of fork() may lead to deadlocks in the child.
+  /home/heheboiz/.local/share/uv/python/cpython-3.12-linux-x86_64-gnu/lib/python3.12/multiprocessing/popen_fork.py:66: DeprecationWarning: This process (pid=2704019) is multi-threaded, use of fork() may lead to deadlocks in the child.
     self.pid = os.fork()
 
 workbench/tests/test_e2e_release_chain.py: 1 warning
@@ -179,8 +186,4 @@ workbench/tests/test_release_blocker_interpreter.py::test_directory_egg_info_wit
     version = metadata["Version"]
 
 -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
-=========================== short test summary info ============================
-FAILED workbench/tests/test_handoff_commands.py::test_no_release_document_points_at_a_superseded_source_sha - AssertionError: TESTED_SOURCE_SHA 181955cfa25e2a78ff08f1f64b4bb20222118b55 does not contain the production code currently on disk: production files changed after the revision the release documents name as tested. Advance the recorded source to a revision that includes them, or the handoff installs code that was never gated.
-assert 1 == 0
- +  where 1 = CompletedProcess(args=['git', 'diff', '--quiet', '181955cfa25e2a78ff08f1f64b4bb20222118b55', '--', '.', ':(exclude)workbench/docs', ':(exclude)workbench/tests'], returncode=1, stdout='', stderr='').returncode
-1 failed, 2201 passed, 47 skipped, 289 warnings in 1636.29s (0:27:16)
+2203 passed, 47 skipped, 289 warnings in 1574.73s (0:26:14)

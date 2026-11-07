@@ -10,14 +10,17 @@
  },
  "after": {
   "failed": 0,
-  "passed": 2202,
+  "errors": 0,
+  "passed": 2203,
   "skipped": 47,
-  "collected": 2249,
+  "collected": 2250,
   "exit_code": 0,
   "interpreter": "workbench/envs/ctl312h/bin/python (CPython 3.12.11)",
   "command": "python -m pytest workbench/tests -q -p no:cacheprovider -rfE --tb=no",
-  "revision": "b3bc0682ecee5c7736a0297856b5e439e6b7096b",
-  "note": "serial sweep on the final tree; the one prior failure was this SHA gate itself"
+  "revision": "61f70b0bb205464cf9131e8dae054ec5f69e13f4",
+  "wall_seconds": 1574,
+  "log": "tests/full_suite_after.txt",
+  "note": "serial sweep on the clean final tree; exit 0"
  },
  "remaining_failures": [],
  "fixed_this_pass": [
