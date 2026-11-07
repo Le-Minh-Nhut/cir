@@ -9,29 +9,13 @@
   "skipped": 47
  },
  "after": {
-  "failed": 3,
-  "passed": 2172,
+  "failed": 0,
+  "passed": 2179,
   "skipped": 47,
-  "collected": 2222,
-  "reproduced_twice": true
+  "collected": 2226,
+  "exit_code": 0
  },
- "remaining_failures": [
-  {
-   "test": "test_final_hardening_regressions::test_planner_verifier_uses_the_resolved_contract",
-   "cause": "LIMN torch==2.20.0 pin from commit 200b7c7; test expects <2.27,>=2.24",
-   "in_baseline": true
-  },
-  {
-   "test": "test_fresh_clone_delivery::test_every_manifest_path_matches_its_recorded_digest",
-   "cause": "DCNet/TME approved patches applied in-place; provenance.json records base digests",
-   "in_baseline": true
-  },
-  {
-   "test": "test_release_blocker_interpreter::test_a_real_distro_environment_is_not_reported_empty",
-   "cause": "distro /usr/bin/python3 has no package metadata (79+0 of 88)",
-   "in_baseline": true
-  }
- ],
+ "remaining_failures": [],
  "fixed_this_pass": [
   "test_frontend_staleness",
   "test_pc_launcher (npm install + vite build)",
@@ -43,5 +27,20 @@
   "test": "test_handoff_commands::test_no_release_document_points_at_a_superseded_source_sha",
   "how": "Advanced TESTED_SOURCE_SHA to 5ca7043 in FINAL_PC_RELEASE_VERDICT.md and PC_PILOT_HANDOFF.md, and replaced the recorded suite counts with the measured ones. The test itself demands this after a production change; precedent is round A40.",
   "result": "8/8 pass in that file"
+ },
+ "resolved_this_pass": [
+  "test_final_hardening_regressions::test_planner_verifier_uses_the_resolved_contract \u2014 premise wrong; pin is open_clip_torch==2.20.0, invariant is installer/verifier agreement",
+  "test_fresh_clone_delivery::test_every_manifest_path_matches_its_recorded_digest \u2014 accepted digests now include the declared derived bytes; drift still rejected",
+  "test_release_blocker_interpreter::test_a_real_distro_environment_is_not_reported_empty \u2014 real implementation bug: legacy single-file .egg-info made a real install vanish from the inventory",
+  "33 fixtures that copied a derived tree and called it pristine \u2014 each now reconstructs the published base by inverting the same declaration"
+ ],
+ "csmcir_pipeline": {
+  "entry_point": "workbench/scripts/evaluate_models.py --model csmcir",
+  "runs": 2,
+  "exit_code": 0,
+  "macro_r10": 57.05073873202006,
+  "macro_r50": 77.29859352111816,
+  "evidence": "csmcir/full_eval_pipeline.txt",
+  "command_record": "csmcir/pipeline_command.json"
  }
 }

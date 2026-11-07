@@ -6,29 +6,29 @@ ssssssssss.s...............sssssssssssssssss......s..................... [  3%]
 ....s................................................................... [ 19%]
 ........................................................................ [ 22%]
 ........................................................................ [ 25%]
-............................................................s........... [ 29%]
-...............................................F........................ [ 32%]
-......................F................................................. [ 35%]
+.............................................................s.......... [ 29%]
+........................................................................ [ 32%]
+........................................................................ [ 35%]
 ........................................................................ [ 38%]
-................................................................s....... [ 42%]
-.................................................ss......sss............ [ 45%]
+...................................................................s.... [ 42%]
+....................................................ss......sss......... [ 45%]
 ........................................................................ [ 48%]
 ........................................................................ [ 51%]
-........................................................................ [ 55%]
+........................................................................ [ 54%]
 ........................................................................ [ 58%]
 ........................................................................ [ 61%]
-....................s.......................ssssss...........s...s...... [ 64%]
-........................................................................ [ 68%]
+.......................s.......................ssssss...........s...s... [ 64%]
+........................................................................ [ 67%]
 ........................................................................ [ 71%]
 ........................................................................ [ 74%]
-.......................s................................................ [ 77%]
-........................................................................ [ 81%]
-...............................................F........................ [ 84%]
+..........................s............................................. [ 77%]
+........................................................................ [ 80%]
+........................................................................ [ 84%]
 ........................................................................ [ 87%]
 ........................................................................ [ 90%]
 ........................................................................ [ 93%]
 ........................................................................ [ 97%]
-..............................................................           [100%]
+..................................................................       [100%]
 =============================== warnings summary ===============================
 workbench/backend/main.py:97: 1 warning
 workbench/tests/test_e2e_release_chain.py: 1 warning
@@ -86,7 +86,7 @@ workbench/tests/test_circus_inputs.py::test_staged_black_path_and_empty_text_cro
 
 workbench/tests/test_composition_image_identity.py::test_model_lock_serializes_processes
 workbench/tests/test_composition_image_identity.py::test_model_lock_assertion_fails_when_flock_is_noop
-  /home/heheboiz/.local/share/uv/python/cpython-3.12-linux-x86_64-gnu/lib/python3.12/multiprocessing/popen_fork.py:66: DeprecationWarning: This process (pid=749201) is multi-threaded, use of fork() may lead to deadlocks in the child.
+  /home/heheboiz/.local/share/uv/python/cpython-3.12-linux-x86_64-gnu/lib/python3.12/multiprocessing/popen_fork.py:66: DeprecationWarning: This process (pid=1115613) is multi-threaded, use of fork() may lead to deadlocks in the child.
     self.pid = os.fork()
 
 workbench/tests/test_e2e_release_chain.py: 1 warning
@@ -176,15 +176,4 @@ workbench/tests/test_release_blocker_interpreter.py::test_an_unreadable_installe
     version = metadata["Version"]
 
 -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
-=========================== short test summary info ============================
-FAILED workbench/tests/test_final_hardening_regressions.py::test_planner_verifier_uses_the_resolved_contract - AssertionError: assert '==2.20.0' == '<2.27,>=2.24'
-  
-  - <2.27,>=2.24
-  + ==2.20.0
-FAILED workbench/tests/test_fresh_clone_delivery.py::test_every_manifest_path_matches_its_recorded_digest - AssertionError: delivered bytes differ from the manifest: ['DCNet/base/base_trainer.py', 'TME/src/precompute.py', 'TME/src/precompute_evaluation.py']
-assert not ['DCNet/base/base_trainer.py', 'TME/src/precompute.py', 'TME/src/precompute_evaluation.py']
-FAILED workbench/tests/test_release_blocker_interpreter.py::test_a_real_distro_environment_is_not_reported_empty - AssertionError: only 79 + 0 of 88 were accounted for
-assert (79 + 0) >= (88 * 0.9)
- +  where 79 = len({'ubuntu-pro-client': '8001', 'pyrsistent': '0.20.0', 'language-selector': '0.1', 'bcc': '0.29.1', ...})
- +  and   0 = len(set())
-3 failed, 2172 passed, 47 skipped, 287 warnings in 1367.61s (0:22:47)
+2179 passed, 47 skipped, 287 warnings in 1627.31s (0:27:07)

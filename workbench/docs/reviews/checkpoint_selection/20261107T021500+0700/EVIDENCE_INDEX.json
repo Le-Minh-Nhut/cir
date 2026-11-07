@@ -28,9 +28,19 @@
    "sha256": "22dc0587650b8c0e148cf90d0a4998027be8a8b411e4c512f2a83d834722c895"
   },
   {
+   "dest": "csmcir/full_eval_pipeline.txt",
+   "bytes": 47571,
+   "sha256": "b9aae0542241154cf0277612095e59d659aed4b05eeba833db5ea1c65df35a01"
+  },
+  {
    "dest": "csmcir/measurement.json",
    "bytes": 3570,
    "sha256": "243087224731458ed7fa0313d7801bb6a205e2769ed1464469c9bd2b62712f3e"
+  },
+  {
+   "dest": "csmcir/pipeline_command.json",
+   "bytes": 2591,
+   "sha256": "5673efbf58bdf09fd87487ace6fe771b667661b8fcf58ab62ccd903a19f30dc6"
   },
   {
    "dest": "csmcir/scripts/apply_operational_save_memory.py",
@@ -84,13 +94,13 @@
   },
   {
    "dest": "tests/SUMMARY.json",
-   "bytes": 1903,
-   "sha256": "2cdae01ab24fced75129a759801892d5bdc54bfaade2e1e12c530b4ec208264d"
+   "bytes": 2271,
+   "sha256": "eb895c5477c2d347273267d993e4c1ccd92ae328e009dfe26aed7b9c5fb24a5e"
   },
   {
    "dest": "tests/full_suite_after.txt",
-   "bytes": 15267,
-   "sha256": "71feb9b8bc41e2a1ab33e90a118868f88432e5408d14e9eb945830f4be5ccabf"
+   "bytes": 14273,
+   "sha256": "311b53078892f7ef37005cc97c21e0633b14be2f687861249d2434be9542b035"
   },
   {
    "dest": "tests/full_suite_baseline_ea5ff05.txt",

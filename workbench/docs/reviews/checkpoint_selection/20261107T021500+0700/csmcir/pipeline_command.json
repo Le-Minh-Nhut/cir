@@ -1,0 +1,48 @@
+{
+  "model_id": "csmcir",
+  "checkpoint_id": "fashioniq",
+  "protocol_id": "fashioniq_original_split",
+  "run_id": "20261107T054933277898Z_csmcir_fashioniq_f03887d2",
+  "argv": [
+    "/home/heheboiz/data/cir/workbench/artifacts/environments/cir-005ef4e1b02999a5/bin/python",
+    "/home/heheboiz/data/cir/workbench/third_party/CSMCIR/src/validate_blip_csmcir.py",
+    "--dataset",
+    "fashionIQ",
+    "--blip-model-name",
+    "blip2_cir_align_prompt_target_image_caption_shiyan92",
+    "--blip-model-path",
+    "/home/heheboiz/data/cir/workbench/artifacts/checkpoints/csmcir/fashioniq_tuned_clip_best.pt"
+  ],
+  "cwd": "/home/heheboiz/data/cir/workbench/third_party/CSMCIR/src",
+  "upstream_expected_pin": "774f94e2076ff17ea91703a6239d2a08f0e1a44e",
+  "actual_source_commit": "774f94e2076ff17ea91703a6239d2a08f0e1a44e",
+  "checkpoint_local_sha256": "c8812071de0640d647c5ba2a70628b80a3289ee2c47676f7a1b6abaa313fa49e",
+  "checkpoint_artifact_type": "single_file",
+  "checkpoint_bundle": null,
+  "bundle_manifest_digest": null,
+  "directory_members": null,
+  "model_interpreter": "/home/heheboiz/data/cir/workbench/artifacts/environments/cir-005ef4e1b02999a5/bin/python",
+  "command_digest": "7aa7a6db32cb2155d992da8f5b98cd047825ac31925066b95d4117eb7ceb32be",
+  "environment": {
+    "orchestrator_python": "3.12.11 (main, Oct  7 2025, 15:34:39) [Clang 20.1.4 ]",
+    "orchestrator_executable": "/home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python",
+    "platform": "linux",
+    "model_interpreter": "/home/heheboiz/data/cir/workbench/artifacts/environments/cir-005ef4e1b02999a5/bin/python",
+    "evaluation_run_id": "20261107T054933277898Z_csmcir_fashioniq_f03887d2",
+    "evaluation_output_root": "/home/heheboiz/data/cir/workbench/artifacts",
+    "evaluator_environment_knobs": {
+      "PYTORCH_CUDA_ALLOC_CONF": "expandable_segments:True",
+      "WORKBENCH_CSMCIR_PYTHON": "/home/heheboiz/data/cir/workbench/artifacts/environments/cir-005ef4e1b02999a5/bin/python",
+      "WORKBENCH_CSMCIR_QUERY_BS": "8",
+      "WORKBENCH_CSMCIR_SAVE_MEMORY": "1"
+    },
+    "TMPDIR": "/tmp/wb-wr7_0eig",
+    "WORKBENCH_REPLAY_CACHE_ROOT": "/home/heheboiz/data/cir/workbench/artifacts/logs/csmcir__fashioniq__20261107T054933277898Z_csmcir_fashioniq_f03887d2/replay-cache"
+  },
+  "environment_digest": "7e346031717de5eadd7c3953e0a5f63fbed41e8b10a68298a5e9b80e0e0fd724",
+  "started_at": "2026-11-07T05:49:33.277931+00:00",
+  "finished_at": "2026-11-07T05:53:38.814318+00:00",
+  "return_code": 0,
+  "dataset_root": "/home/heheboiz/data/cir/data/FashionIQ",
+  "invocation_status": "INVOCATION_COMPLETED"
+}

@@ -8,8 +8,8 @@ Repo: `/home/heheboiz/data/cir`, branch `research/cir-failure-workbench`, HEAD `
 ## 0. Chỉ mục evidence
 
 Bundle của buổi 20261107 (CSMCIR + GloVe recipe):
-`workbench/docs/reviews/checkpoint_selection/20261107T021500+0700/` — 19 entry có hash trong
-`EVIDENCE_INDEX.json`, 223 723 B (đo lại cuối lượt). Đọc `README.md` trong đó trước.
+`workbench/docs/reviews/checkpoint_selection/20261107T021500+0700/` — 21 entry có hash trong
+`EVIDENCE_INDEX.json`, 273 259 B (đo lại cuối lượt). Đọc `README.md` trong đó trước.
 
 | thư mục | nội dung |
 |---|---|
@@ -1076,12 +1076,13 @@ không đụng Python hệ thống.
 |---|---|
 | 3.11 `test-adapted` (trước buổi này) | 2044 collect, 8 module không collect được do PEP 701 |
 | 3.12.3 `ctl312`, **không** headers | 2105 passed, **61 failed**, 8 errors |
-| 3.12.11 `ctl312h`, có headers | **2155 passed, 47 skipped, 20 failed** |
+| 3.12.11 `ctl312h`, có headers (trước khi sửa) | 2155 passed, 47 skipped, 20 failed |
+| 3.12.11 `ctl312h` — **cuối lượt 20261107 (3)** | **2179 passed, 0 failed, 47 skipped** (3.24) |
 
 Chênh lệch 41 failure giữa hai env 3.12 là `Python.h` — fixture test tự biên dịch extension C. Đó là
 lỗi công cụ, không phải code.
 
-20 failure còn lại, không cái nào do CSMCIR:
+20 failure ở trạng thái đó (số cuối là 0 — xem 3.24). Bảng dưới là chẩn đoán lúc đó, giữ làm lịch sử:
 
 | nhóm | số | nguyên nhân thật |
 |---|---|---|
@@ -1191,7 +1192,8 @@ tại `ea5ff05` và chạy cùng interpreter:
 | lần chạy | kết quả |
 |---|---|
 | baseline `ea5ff05` (worktree riêng) | **23 failed**, 2152 passed, 47 skipped |
-| sau khi sửa trong lượt này | **3 failed**, 2172 passed, 47 skipped |
+| sau khi sửa trong lượt 20261107 (2) | 3 failed, 2172 passed, 47 skipped |
+| **cuối lượt 20261107 (3) — sạch** | **0 failed**, **2179 passed**, 47 skipped |
 
 Ba failure còn lại đều **có trong baseline**, đã kiểm từng cái (dòng `test_handoff_commands` đã xanh sau khi nâng SHA; giữ lại để đối chiếu):
 
@@ -1359,6 +1361,71 @@ và nêu đúng hai ràng buộc thật.
 Blocker riêng của CIRCUS, không liên quan CSMCIR: `data/circus_release/` không tồn tại. Kiểm bằng
 `composition_eval.py --models limn --plan` → cùng `FileNotFoundError`. Nên đây là hạ tầng chung, và bổ
 sung dataset cũng **không** giải được khác biệt scoring ở bảng trên.
+
+### 3.24. Suite sạch và ba test đỏ cuối — trạng thái cuối
+
+| lần chạy | failed | passed | skipped |
+|---|---|---|---|
+| baseline `ea5ff05` | **23** | 2152 | 47 |
+| sau lượt trước | 3 | 2172 | 47 |
+| **cuối lượt này** | **0** | **2179** | **47** |
+
+`workbench/envs/ctl312h/bin/python -m pytest workbench/tests`, exit 0, 2226 collected.
+
+#### 3.24.1 Ba test đỏ — nguyên nhân thật của từng cái
+
+**(a) `test_planner_verifier_uses_the_resolved_contract`** — CONFIRMED, tiền đề test sai. Registry pin
+`open_clip_torch==2.20.0` (tác giả, `LIMN/requirements.txt:37`), test lại hardcode range
+`>=2.24,<2.27`. Chú ý: **không phải `torch==2.20.0`** — bản torch đó không tồn tại. Invariant nay là
+**agreement**: verifier, installer và declaration phải là cùng một specifier set; pin bị bỏ vẫn fail
+(kiểm bằng negative control: đổi registry thành `open_clip_torch` trần → test đỏ).
+
+**(b) `test_every_manifest_path_matches_its_recorded_digest`** — CONFIRMED, tiền đề test sai. Ba file
+DCNet/TME đã áp patch **in-place** nên bytes là derived, còn `provenance.json` ghi base. Đo bằng hash:
+
+| file | committed | registry base | registry derived | manifest |
+|---|---|---|---|---|
+| `DCNet/base/base_trainer.py` | `f265cefe…` | `3edd9836…` | `f265cefe…` | `3edd9836…` |
+| `TME/src/precompute.py` | `97bdbc14…` | `c3da9c9d…` | `97bdbc14…` | `c3da9c9d…` |
+| `TME/src/precompute_evaluation.py` | `1f13dbd5…` | `0f6a0573…` | `1f13dbd5…` | `0f6a0573…` |
+
+Reverse-apply từng patch tái tạo đúng `base_sha256`. Kết luận: **derived là thứ ship**, vì DCNet cần
+`weights_only` opt-out và TME cần phân bổ có giới hạn để không OOM. Test nay chấp nhận base **hoặc**
+derived cho đường đã khai báo, và **drift vẫn fail** (có test riêng).
+
+**(c) `test_a_real_distro_environment_is_not_reported_empty`** — CONFIRMED, **bug implementation thật**
+trong `runtime.py`, không phải test hỏng. Hai lỗi:
+
+1. `.egg-info` legacy là **file** chứ không phải thư mục, nên `dist/"RECORD"` không tồn tại →
+   rơi vào nhánh `versions.pop(key)` → **một package đã cài biến mất khỏi inventory**.
+2. `top_level.txt` trỏ tới extension có tag ABI (`Brlapi` → `brlapi.cpython-312-*.so`); phép kiểm cũ
+   `(sp/f"{head}.py").is_file() or (sp/head).is_dir()` không khớp `.so`.
+
+Đã sửa (1) trong `runtime.py`; test chuyển sang kiểm **exact set** trên mọi layout hợp đồng hỗ trợ,
+cộng một integration check thật trên host (56/88 decidable, 0 bị bỏ). Không hạ threshold, không skip.
+
+#### 3.24.2 Bài học về fixture "pristine"
+
+Áp patch in-place làm **33 test** đỏ, tất cả cùng một lý do: fixture `copytree(vendor)` rồi gọi đó là
+"pristine". Sửa đúng không phải nới assertion, mà là **dựng lại base bằng cách đảo patch**:
+
+```python
+# trong fixture
+if sha256(target) == declaration["derived_sha256"]:
+    patch --reverse  # base được phục hồi chính xác, vì patch CHÍNH LÀ hợp đồng
+assert sha256(target) == declaration["base_sha256"]
+```
+
+Nhờ vậy "pristine" là phát biểu về **revision đã pin**, không phải về việc host đã chạy preparation hay
+chưa. Áp dụng cho `test_vendored_approved_patch`, `test_approved_source_patch`,
+`test_component_boundaries`, `test_r9_defect_regressions`, `test_pc_readiness`, `test_prepare_dataset`.
+
+#### 3.24.3 Lỗi find-replace toàn cục — đã sửa
+
+Khi nâng `TESTED_SOURCE_SHA`, một lần thay thế toàn cục đã đè cả các dòng **historical** (A34/A35
+`1415e56`, A33 `e3f0dfa`, sm_120 `4e0c074`) và cả dòng `origin/main` (thực tế `8ebcc74d`, không đổi).
+Đã revert file và chỉ nâng đúng các dòng **current**. Kiểm lại: `8ebcc74d` còn 2 hit, bốn SHA lịch sử
+nguyên vẹn.
 
 ## 4. Hàng đợi quyết định buổi sáng
 
