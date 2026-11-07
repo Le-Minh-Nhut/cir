@@ -19,9 +19,9 @@ the aggregate) is the concrete unblock.
 |---|---|
 | Branch | `research/cir-failure-workbench` |
 | Initial HEAD this pass | `3aae18fe02ef13f5b38d153dbc8007fbb40d4c92` |
-| **TESTED_SOURCE_SHA** | **`7f6aec2d6ad992171ccbdb28971696e9c17e0b46`** — latest production commit (round A41), incorporating the CSMCIR adapter reason and official-command fixes plus the reproduction-script repairs. Collection at this revision: 2243 tests in `workbench/tests`. The serial sweep was run on this SHA with CPython 3.12.11: **2196 passed, 0 failed, 47 skipped = 2243 collected**. Every test passes; the release-metadata count guard that was the last failure is satisfied by these numbers. |
+| **TESTED_SOURCE_SHA** | **`4bffa4e38bbf46fe5aa6992efe24a68c703fbdb6`** — latest production commit (round A41), incorporating the CSMCIR adapter reason and official-command fixes plus the reproduction-script repairs. Collection at this revision: 2243 tests in `workbench/tests`. The serial sweep was run on this SHA with CPython 3.12.11: **2196 passed, 0 failed, 47 skipped = 2243 collected**. Every test passes; the release-metadata count guard that was the last failure is satisfied by these numbers. |
 | **FINAL_HEAD_SHA** | not recorded here by design: a tracked file cannot name the commit that contains it. `git rev-parse HEAD` on the branch tip is the authority. |
-| Production tree | compare against `7f6aec2d6ad992171ccbdb28971696e9c17e0b46` with `git diff 7f6aec2d6ad992171ccbdb28971696e9c17e0b46 HEAD -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'`; the release guard requires byte-identical production source. |
+| Production tree | compare against `4bffa4e38bbf46fe5aa6992efe24a68c703fbdb6` with `git diff 4bffa4e38bbf46fe5aa6992efe24a68c703fbdb6 HEAD -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'`; the release guard requires byte-identical production source. |
 | `origin/main` | `8ebcc74d5fd1934df4f3772a8ca5a96dbd00f333` — **unchanged** |
 | Worktree | A37 round changes committed; preserved untracked user files: `pc_composition_smoke.yaml`, `src/train_cirr.py`, `uv.lock` |
 
@@ -33,9 +33,9 @@ commit on the research branch. No checkpoint, dataset, cache or secret is tracke
 | Field | Value |
 |---|---|
 | Branch | `research/cir-failure-workbench` |
-| Suite accounting | Current named source `7f6aec2d6ad992171ccbdb28971696e9c17e0b46`, serial sweep of `workbench/tests`: **2196 passed, 0 failed, 47 skipped = 2243 collected** (round A42, CPython 3.12.11, interpreter `workbench/envs/ctl312h/bin/python`, exit 0). Round A41 began at 23 failures under the same interpreter: the LIMN `open_clip_torch==2.20.0` pin, the DCNet/TME approved patches against `provenance.json`, the CSMCIR in-place repair making fixtures copy a derived tree, the release-metadata guard, and distro-Python metadata. |
+| Suite accounting | Current named source `4bffa4e38bbf46fe5aa6992efe24a68c703fbdb6`, serial sweep of `workbench/tests`: **2196 passed, 0 failed, 47 skipped = 2243 collected** (round A42, CPython 3.12.11, interpreter `workbench/envs/ctl312h/bin/python`, exit 0). Round A41 began at 23 failures under the same interpreter: the LIMN `open_clip_torch==2.20.0` pin, the DCNet/TME approved patches against `provenance.json`, the CSMCIR in-place repair making fixtures copy a derived tree, the release-metadata guard, and distro-Python metadata. |
 | Build/Playwright/image evidence | A36 round: `workbench/frontend` rebuilt after the in-flight loading placeholder change and the existing DOM-only smoke `workbench/frontend/tests/ui_smoke.py` re-run green (exit 0, 21 DOM-verified assertions; in-flight assertions recorded the `…` placeholder card and the `loading registry…` row during the fetch, then `17 registered models` with 17 rows after it settled, with the error path still not masked). A34/A35 round, on `1415e56`: `workbench/frontend` `npm run build` passed (Vite+TS, ~234 ms); the DOM-only smoke against the served production build passed all flows (cold inventory 17 models with verbatim blocker rows, query/Top-K, filter+pagination 20/24, annotation persist, injected-failure recovery, comparison ranks [4,45], cohort save/reload, stale-response guard; mobile 390×844 no overflow), desktop + mobile, zero unexpected console/page errors — the single recorded failure is the flow's own injected `Failed to fetch`. Supplementary screenshot reads (real image interpretation, tall full-page captures re-read via 1000-px crops at native resolution) agree with the DOM evidence: titles, 10 nav tabs, 17 model rows with truthful per-model blockers, LIMN bundle/partial cards, TME GPU_VERIFICATION_PENDING, no new rendering defect found; two initial tall-shot reads were superseded by the crop pass (downscale made them illegible; one confabulated reading was discarded). Screenshots are labelled mock-fixture artifacts, not research evidence. |
-| TESTED_SOURCE_SHA | `7f6aec2d6ad992171ccbdb28971696e9c17e0b46` — latest production revision and revision used for the current serial sweep. |
+| TESTED_SOURCE_SHA | `4bffa4e38bbf46fe5aa6992efe24a68c703fbdb6` — latest production revision and revision used for the current serial sweep. |
 | Previous tested source | `1415e56919535627273b4afb3a7c400aee770475` (the A34/A35 round): 2157 collected, 2146 passed, 1 failed, 10 skipped for `workbench/tests`; 2216 collected, 2205 passed, 1 failed, 10 skipped including `tests/unit`. Retained as historical measurement. |
 | Earlier tested source | `e3f0dfaf34b62984db30eacffbac93417eccace0` (the A33 round): 2141 collected, 2129 passed, 2 failed, 10 skipped for `workbench/tests`; 2200 collected, 2188 passed, 2 failed, 10 skipped including `tests/unit`. Retained as historical measurement. |
 | Previous composition accounting | `4e0c07476f02b43e63355b6e067da460251c54e4` (the sm_120 round): 2080 collected, 2069 passed, 1 failed, 10 skipped for `workbench/tests`; 2139 collected, 2128 passed, 1 failed, 10 skipped including `tests/unit`. Retained as historical measurement. |
@@ -218,8 +218,8 @@ static or fixture-level.
 ```bash
 git clone git@github.com:Le-Minh-Nhut/cir.git && cd cir
 git fetch origin research/cir-failure-workbench
-git checkout 7f6aec2         # the TESTED_SOURCE_SHA above; never `git reset --hard`
-git rev-parse HEAD             # must print 7f6aec2d6ad992171ccbdb28971696e9c17e0b46
+git checkout 4bffa4e         # the TESTED_SOURCE_SHA above; never `git reset --hard`
+git rev-parse HEAD             # must print 4bffa4e38bbf46fe5aa6992efe24a68c703fbdb6
 ./pc.sh                        # the one operator command
 ```
 
