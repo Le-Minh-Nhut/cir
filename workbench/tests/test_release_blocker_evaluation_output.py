@@ -1649,6 +1649,14 @@ def test_the_evaluator_child_gets_no_operator_secrets_and_a_private_temp_dir(
     # and what lets the aggregate and the observer share one 11.87 GB cache instead of building two.
     permitted = {"WORKBENCH_THIRD_PARTY_ROOT", "WORKBENCH_REPLAY_CACHE_ROOT",
                  "WORKBENCH_OBSERVATION_OUT"}
+    # A test must not depend on the operator's shell. Following the documented CSMCIR recipe exports
+    # `WORKBENCH_CSMCIR_*`, and the child is SUPPOSED to receive those: they are declared by the
+    # registry as this model's own runtime knobs. Asserting a fixed set made the suite fail precisely
+    # for the operator who followed the instructions, so the permitted set is derived from the same
+    # declaration the forwarding code reads. What is actually under test -- that the ledger key and
+    # `WORKBENCH_SECRET_*` never arrive -- is unaffected and stays absolute.
+    from workbench.scripts.evaluate_models import _declared_model_env_names
+    permitted |= set(_declared_model_env_names(invocation.model_id))
     assert set(reported["workbench"]) - set(secret_names) <= permitted, reported
     assert reported["run_id"] == "secret-filter-run", "the run identity must reach the child"
 
@@ -1776,3 +1784,131 @@ def test_a_failing_setup_step_after_mkdtemp_still_cleans_the_temp_root(env, monk
                             "temp-owned-setup-failure", env["tmp"] / "out")
 
     assert list(parent.iterdir()) == [], "a setup failure must not strand the temp root"
+def test_setup_failure_cleans_claimed_run_directory_and_allows_retry(env, monkeypatch, tmp_path):
+    """A setup failure after the run directory is claimed must leave NO run directory behind,
+    so retrying with the same run-id succeeds instead of being refused.
+    """
+    import os
+
+    parent = _temp_parent(monkeypatch, tmp_path)
+    logs = em.artifact_root(env["config"]) / "logs"
+    run_id = "retry-probe-run"
+    run_log_dir = logs / f"{MODEL}__ckpt_v1__{run_id}"
+
+    real_chmod = os.chmod
+    fail_setup = True
+
+    def flake_chmod(path, mode, *args, **kwargs):
+        if fail_setup and Path(path).name == "replay-cache":
+            raise PermissionError(f"refused: {path}")
+        return real_chmod(path, mode, *args, **kwargs)
+
+    monkeypatch.setattr(em.os, "chmod", flake_chmod)
+
+    with pytest.raises(PermissionError, match="refused"):
+        em.invoke_evaluator(plan(env, reporting_script(env["tmp"])), env["config"],
+                            run_id, env["tmp"] / "out")
+
+    assert not run_log_dir.exists(), "claimed run log directory must be removed on setup failure"
+    assert list(parent.iterdir()) == [], "temp root must be cleaned on setup failure"
+
+    # Retry with the same run id must succeed without "refusing to overwrite existing run directory"
+    fail_setup = False
+    code, directory, _ = em.invoke_evaluator(plan(env, reporting_script(env["tmp"])), env["config"],
+                                            run_id, env["tmp"] / "out")
+    assert code == 0
+    assert directory == run_log_dir
+    assert run_log_dir.is_dir()
+    assert (run_log_dir / "stdout.log").is_file()
+
+
+def test_cli_keep_temp_preserves_temp_root_and_python_kwarg_works(env, monkeypatch, tmp_path):
+    """--keep-temp on CLI preserves temp root, and keep_temp=True still works from Python."""
+    parent = _temp_parent(monkeypatch, tmp_path)
+    run_plan = plan(env, reporting_script(env["tmp"]))
+
+    # 1. Test keep_temp=True from Python level via execute()
+    code = em.execute(run_plan, env["config"], run_id="py-keep-temp", keep_temp=True)
+    assert code == 0
+    roots_py = list(parent.iterdir())
+    assert len(roots_py) == 1, "keep_temp=True from Python must preserve temp root"
+    shutil.rmtree(roots_py[0], ignore_errors=True)
+
+    # 2. Test --keep-temp from CLI level via main()
+    model = {"model_id": MODEL, "native_protocol": run_plan.protocol}
+    monkeypatch.setattr(em, "load_registry",
+                        lambda: {"protocols": [run_plan.protocol], "models": [model]})
+    monkeypatch.setattr(em, "candidates",
+                        lambda args, models: [(model, {"checkpoint_id": "ckpt_v1"})])
+    monkeypatch.setattr(em, "resolve_config", lambda: env["config"])
+    monkeypatch.setattr(em, "guarded_plan", lambda *args, **kwargs: (run_plan, []))
+
+    rc = em.main(["--model", MODEL, "--run-id", "cli-keep-temp", "--keep-temp"])
+    assert rc == 0
+    roots_cli = list(parent.iterdir())
+    assert len(roots_cli) == 1, "--keep-temp on CLI must preserve temp root"
+
+
+def test_tmpdir_honoured_when_set_and_short_and_falls_back_when_too_long(tmp_path, monkeypatch):
+    """TMPDIR is honoured when set and short; falls back when too long."""
+    import os
+    import tempfile
+
+    short_dir = Path(tempfile.mkdtemp(prefix="st-", dir="/tmp"))
+    try:
+        monkeypatch.setenv("TMPDIR", str(short_dir))
+        assert em._short_temp_parent() == str(short_dir), "short valid TMPDIR must be honoured"
+    finally:
+        shutil.rmtree(short_dir, ignore_errors=True)
+
+    # Long TMPDIR (> 107 chars with socket probe) must fall back to /tmp or /var/tmp
+    long_dir = tmp_path / ("a" * 80)
+    long_dir.mkdir()
+    monkeypatch.setenv("TMPDIR", str(long_dir))
+    chosen = em._short_temp_parent()
+    assert chosen != str(long_dir), "overly long TMPDIR must not be chosen as AF_UNIX socket base"
+    assert chosen in ("/tmp", "/var/tmp") or len(chosen) < len(str(long_dir))
+    socket_path = os.path.join(chosen, "wb-01234567", "listener-0123456789")
+    assert len(socket_path.encode("utf-8")) <= 107
+
+
+def test_temp_privacy_failure_is_not_reported_as_audit_or_ledger_failure(env, monkeypatch, tmp_path, capsys):
+    """Temp-dir privacy failure raises TempPrivacyError and main() does not blame audit/ledger."""
+    import os
+
+    parent = _temp_parent(monkeypatch, tmp_path)
+    run_plan = plan(env, reporting_script(env["tmp"]))
+
+    # Simulate mkdtemp creating a non-private directory (mode 0755)
+    real_mkdtemp = em.tempfile.mkdtemp
+
+    def leaky_mkdtemp(*args, **kwargs):
+        path = real_mkdtemp(*args, **kwargs)
+        os.chmod(path, 0o755)
+        return path
+
+    monkeypatch.setattr(em.tempfile, "mkdtemp", leaky_mkdtemp)
+
+    # 1. Python invoke_evaluator raises TempPrivacyError, not generic RuntimeError
+    with pytest.raises(em.TempPrivacyError) as exc_info:
+        em.invoke_evaluator(run_plan, env["config"], "privacy-probe", env["tmp"] / "out")
+    assert "run temp directory is not private" in str(exc_info.value)
+    assert "audit" not in str(exc_info.value).lower()
+    assert "ledger" not in str(exc_info.value).lower()
+
+    # 2. CLI main() reports as [BLOCKED] without blaming audit or ledger
+    model = {"model_id": MODEL, "native_protocol": run_plan.protocol}
+    monkeypatch.setattr(em, "load_registry",
+                        lambda: {"protocols": [run_plan.protocol], "models": [model]})
+    monkeypatch.setattr(em, "candidates",
+                        lambda args, models: [(model, {"checkpoint_id": "ckpt_v1"})])
+    monkeypatch.setattr(em, "resolve_config", lambda: env["config"])
+    monkeypatch.setattr(em, "guarded_plan", lambda *args, **kwargs: (run_plan, []))
+
+    capsys.readouterr()
+    rc = em.main(["--model", MODEL, "--run-id", "privacy-cli"])
+    assert rc == 1
+    err = capsys.readouterr().err
+    assert "[BLOCKED] run temp directory is not private (mode 0755)" in err
+    assert "audit" not in err.lower()
+    assert "ledger" not in err.lower()

@@ -539,6 +539,34 @@ def _directory_is_importable(directory: Path) -> bool:
     return False
 
 
+def _is_safe_module_head(head: str) -> bool:
+    """True when *head* is a single safe Python identifier component.
+
+    Unsanitised `top_level.txt` entries (e.g. `..`, `*`, `a/b`) must not reach globbing,
+    path joins, or module sets: traversing upward could allow external files to falsely
+    confirm an install, and glob wildcards match unintended files.
+    """
+    return bool(head) and head.isidentifier()
+
+
+def _distribution_name_from_stem(dist_name: str) -> str:
+    """Derive a distribution name from a metadata directory or file name.
+
+    A naive `dist_name.split("-")[0]` truncates hyphenated package names like `my-pkg-1.0`
+    to `my`, inventing a phantom distribution. Stripping metadata suffixes and separating
+    the version preserves the true distribution name.
+    """
+    stem = dist_name
+    for suffix in (".dist-info", ".egg-info"):
+        if stem.endswith(suffix):
+            stem = stem[: -len(suffix)]
+            break
+    match = re.search(r"-\d", stem)
+    if match:
+        return stem[: match.start()]
+    return stem
+
+
 def _extension_module_file(site_packages: Path, head: str) -> Path | None:
     """The compiled extension file that provides module *head*, or None.
 
@@ -547,6 +575,8 @@ def _extension_module_file(site_packages: Path, head: str) -> Path | None:
     file counts, and every candidate is checked: a fake same-pattern directory must not hide
     the genuine file behind it.
     """
+    if not _is_safe_module_head(head):
+        return None
     for candidate in sorted(site_packages.glob(f"{head}.*")):
         if candidate.name.endswith(_EXTENSION_SUFFIXES) and candidate.is_file():
             return candidate
@@ -560,7 +590,7 @@ def _distribution_owner_names(declared_name: str, dist_name: str) -> list[str]:
     the metadata directory's own name.
     """
     candidates: list[str] = []
-    for raw in (str(declared_name), dist_name.rsplit(".", 2)[0].rsplit("-", 1)[0]):
+    for raw in (str(declared_name), _distribution_name_from_stem(dist_name)):
         if not raw:
             continue
         for spelling in (raw, raw.replace("-", "_"), raw.replace(".", "_"),
@@ -711,16 +741,18 @@ def inspect_environment_distributions(prefix: str | None,
 
         for dist in list(site_packages.glob("*.dist-info")) + list(site_packages.glob("*.egg-info")):
             dist_name = dist.name
-            # A legacy `.egg-info` may be a single FILE carrying `Name:`/`Version:` itself. Joining
-            # `PKG-INFO` onto a file names a path that never exists, so the name fell back to
-            # splitting the filename (`my-pkg-1.0` -> `my`) and the same distribution was then
-            # inventoried twice, once under the real name and once under the split one.
+            # A legacy `.egg-info` may be a single FILE carrying `Name:`/`Version:` itself, or a
+            # directory missing `PKG-INFO`. Splitting `dist_name` on `-` truncates hyphenated
+            # package names (`my-pkg-1.0` -> `my`) and invents a phantom distribution beside the
+            # real one. Deriving the name from the full stem preserves the real package name.
             metadata_path = (dist / ("METADATA" if dist_name.endswith(".dist-info") else "PKG-INFO")
                              if dist.is_dir() else dist)
             declared_name, declared_version = _metadata_name_version(metadata_path)
             if not declared_name:
-                declared_name = dist_name.split("-")[0]
+                declared_name = _distribution_name_from_stem(dist_name)
             key = normalize_distribution_name(str(declared_name))
+            if not key:
+                continue
 
             # Installed *content* is what could actually be imported. Metadata that merely
             # describes a distribution is not content, and a distribution whose files are
@@ -766,11 +798,12 @@ def inspect_environment_distributions(prefix: str | None,
                     siblings = []
                 for module_name in _declared_top_level_modules(dist):
                     head = module_name.split(".", 1)[0]
-                    # A declared module can be a source file, a package directory, or an extension
-                    # whose filename carries an ABI tag (`brlapi` -> `brlapi.cpython-312-x86_64-linux-gnu.so`).
-                    # Matching only the first two reported deb-installed extension modules as absent
-                    # and then removed them from the inventory, which is why a real distro environment
-                    # looked mostly empty.
+                    # A declared module head must be a single safe identifier component. Refuse
+                    # path traversal (..), separators (/ or \), glob characters (*?[]), or empty
+                    # heads outright so untrusted metadata cannot confirm outside files or inject
+                    # blank modules.
+                    if not _is_safe_module_head(head):
+                        continue
                     extension = _extension_module_file(site_packages, head)
                     if ((site_packages / f"{head}.py").is_file() or (site_packages / head).is_dir()
                             or extension is not None):

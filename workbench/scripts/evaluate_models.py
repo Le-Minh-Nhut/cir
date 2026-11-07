@@ -522,7 +522,9 @@ def parser_for(registry: dict) -> argparse.ArgumentParser:
                         help="authorize or refresh GPU capability verification before/instead of evaluation")
     parser.add_argument("--verify-gpu-only", action="store_true",
                         help="verify GPU readiness only: record the capability and exit, never "
-                             "loading a checkpoint or running an evaluator")
+                         "loading a checkpoint or running an evaluator")
+    parser.add_argument("--keep-temp", action="store_true",
+                        help="preserve the run-scoped temp root for post-mortem debugging")
     parser.add_argument("--continue-on-error", action="store_true")
     return parser
 
@@ -708,47 +710,46 @@ def invoke_evaluator(plan: EvaluationPlan, config: WorkbenchConfig, run_id: str,
     # wins. An existing directory belongs to an earlier invocation: it is refused as-is, never
     # reused, never deleted, and never silently replaced by a different run id — its evidence
     # must survive untouched.
+    claimed = False
+    temp_root: Path | None = None
     try:
-        directory.mkdir(parents=True, exist_ok=False)
-    except FileExistsError as error:
-        raise RuntimeError(
-            f"refusing to overwrite existing run directory for run id {run_id}: {directory}"
-        ) from error
-    # Evidence that the corroborator has to be able to re-read, not a convenience copy: DCNet's six
-    # anonymous `comb:` cells can only be attributed through the category order in the run directory's
-    # own `config.json` (the file `parse_config.py:28` read), and `verify_run` re-parses the recorded
-    # stdout with the same parser. A run whose config is missing makes that re-extraction refuse,
-    # which is how a transposed category would be caught rather than trusted.
-    if plan.model_id == "dcnet":
-        source_config = (plan.checkpoint if plan.checkpoint.is_file()
-                         else plan.checkpoint / "config.json")
-        if source_config.is_file():
-            shutil.copyfile(source_config, directory / "config.json")
+        try:
+            directory.mkdir(parents=True, exist_ok=False)
+            claimed = True
+        except FileExistsError as error:
+            raise RuntimeError(
+                f"refusing to overwrite existing run directory for run id {run_id}: {directory}"
+            ) from error
+        # Evidence that the corroborator has to be able to re-read, not a convenience copy: DCNet's six
+        # anonymous `comb:` cells can only be attributed through the category order in the run directory's
+        # own `config.json` (the file `parse_config.py:28` read), and `verify_run` re-parses the recorded
+        # stdout with the same parser. A run whose config is missing makes that re-extraction refuse,
+        # which is how a transposed category would be caught rather than trusted.
+        if plan.model_id == "dcnet":
+            source_config = (plan.checkpoint if plan.checkpoint.is_file()
+                             else plan.checkpoint / "config.json")
+            if source_config.is_file():
+                shutil.copyfile(source_config, directory / "config.json")
 
-    # Private temp space per run, created before the process so the child's TMPDIR is fixed at
-    # launch. The host temp dir is world-readable, so anything the evaluator writes there
-    # outlives the run and is exposed to every local user; a run-scoped 0700 directory keeps
-    # leaked material inside a tree the operator already controls.
-    #
-    # The directory is deliberately short. `TMPDIR` also becomes the base for
-    # `multiprocessing.resource_sharer`'s AF_UNIX listener, whose socket path is
-    # `<tmpdir>/listener-<10 random chars>` and is capped at 107 bytes by the kernel. A nested
-    # path under `artifacts/logs/<run-id>/tmp` is ~142 bytes, so any evaluator that shares tensors
-    # across DataLoader workers with num_workers > 0 died with
-    # `OSError: AF_UNIX path too long` before the first batch. Trial and error on the run name is
-    # not the fix; bounding the path is. The run-scoped privacy property is preserved: the
-    # directory is still unique per run and still 0700.
-    temp_root = Path(tempfile.mkdtemp(prefix="wb-", dir=_short_temp_parent()))
-    # Everything the temp root exists for is inside this `try`: preparing the replay cache, the
-    # launch, the log tee and the child wait. The cleanup used to hang off the code after a
-    # successful `Popen`, so any failure before that -- a refused `chmod`, a missing interpreter --
-    # returned before the `finally` ran and left one `wb-*` directory behind per failed run.
-    try:
+        # Private temp space per run, created before the process so the child's TMPDIR is fixed at
+        # launch. The host temp dir is world-readable, so anything the evaluator writes there
+        # outlives the run and is exposed to every local user; a run-scoped 0700 directory keeps
+        # leaked material inside a tree the operator already controls.
+        #
+        # The directory is deliberately short. `TMPDIR` also becomes the base for
+        # `multiprocessing.resource_sharer`'s AF_UNIX listener, whose socket path is
+        # `<tmpdir>/listener-<10 random chars>` and is capped at 107 bytes by the kernel. A nested
+        # path under `artifacts/logs/<run-id>/tmp` is ~142 bytes, so any evaluator that shares tensors
+        # across DataLoader workers with num_workers > 0 died with
+        # `OSError: AF_UNIX path too long` before the first batch. Trial and error on the run name is
+        # not the fix; bounding the path is. The run-scoped privacy property is preserved: the
+        # directory is still unique per run and still 0700.
+        temp_root = Path(tempfile.mkdtemp(prefix="wb-", dir=_short_temp_parent()))
         # `mkdtemp` creates the directory 0700, and that privacy is the reason it is used here, so
         # the mode is checked rather than assumed.
         mode = temp_root.stat().st_mode & 0o777
         if mode != 0o700:
-            raise RuntimeError(f"run temp directory is not private (mode {mode:04o}): {temp_root}")
+            raise TempPrivacyError(f"run temp directory is not private (mode {mode:04o}): {temp_root}")
         child_env["TMPDIR"] = str(temp_root)
         environment["TMPDIR"] = str(temp_root)
         # The native dataset cache is built ONCE per run and reused by the per-query observer, whose
@@ -773,10 +774,6 @@ def invoke_evaluator(plan: EvaluationPlan, config: WorkbenchConfig, run_id: str,
             process = subprocess.Popen(plan.command, cwd=plan.cwd, text=True,
                                        stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=child_env)
         except OSError as error:
-            # Only this invocation's own freshly claimed directory is removed; nothing else can be
-            # in it, because the claim above refuses a directory that already existed. The run id
-            # is released with it, so no burnt identity is left behind.
-            shutil.rmtree(directory, ignore_errors=True)
             raise RuntimeError(
                 f"cannot start the official command {plan.command[0]!r}: {error}") from error
         try:
@@ -804,17 +801,22 @@ def invoke_evaluator(plan: EvaluationPlan, config: WorkbenchConfig, run_id: str,
             # removed. The temp root itself is removed by the outer `finally`, after this returns.
             process.kill()
             process.wait()
-            shutil.rmtree(directory, ignore_errors=True)
             raise
+    except BaseException:
+        # Only this invocation's own freshly claimed directory is removed; nothing else can be
+        # in it, because the claim above refuses a directory that already existed. The run id
+        # is released with it, so no burnt identity is left behind on setup or launch failure.
+        if claimed:
+            shutil.rmtree(directory, ignore_errors=True)
+        raise
     finally:
         # The temp directory exists to bound an AF_UNIX socket path, not to keep scratch. Its location
         # is already recorded in `environment["TMPDIR"]`, so nothing is needed from it after the child
         # exits; leaving it behind accumulated one directory per invocation. `keep_temp` is the debug
         # escape hatch and holds on every path, including a launch that never started.
-        if not keep_temp:
+        if temp_root is not None and not keep_temp:
             shutil.rmtree(temp_root, ignore_errors=True)
     return code, directory, environment
-
 
 # Descriptor keys a completion proof may use to spell the run identity it belongs to.
 _RUN_ID_KEYS = ("run_id", "evaluation_run_id", "invocation_run_id")
@@ -825,6 +827,8 @@ _SOURCE_COMMIT_KEYS = ("source_actual_commit", "source_commit", "actual_source_c
 _CHECKPOINT_SHA_KEYS = ("checkpoint_sha256", "checkpoint_digest")
 
 
+class TempPrivacyError(RuntimeError):
+    """The run temp directory violates privacy constraints (not 0700)."""
 class EvaluationOutputError(RuntimeError):
     """The evaluator's declared output does not prove *this* invocation succeeded."""
 
@@ -2099,7 +2103,8 @@ def _run_observation(plan: EvaluationPlan, config: WorkbenchConfig, run_id: str,
     return artifact, note, digest, parity
 
 
-def execute(plan: EvaluationPlan, config: WorkbenchConfig, run_id: str | None = None) -> int:
+def execute(plan: EvaluationPlan, config: WorkbenchConfig, run_id: str | None = None,
+            keep_temp: bool = False) -> int:
     started = datetime.now(timezone.utc)
     run_id = validate_run_id(run_id) if run_id else make_run_id(plan, started)
     root = artifact_root(config)
@@ -2138,7 +2143,10 @@ def execute(plan: EvaluationPlan, config: WorkbenchConfig, run_id: str | None = 
     except LedgerDuplicateRunError as error:
         raise RuntimeError(f"evaluation could not be audited: {error}") from error
 
-    code, directory, environment = invoke_evaluator(plan, config, run_id, root)
+    try:
+        code, directory, environment = invoke_evaluator(plan, config, run_id, root, keep_temp=keep_temp)
+    except TypeError:
+        code, directory, environment = invoke_evaluator(plan, config, run_id, root)
     command_json = json.dumps(plan.command, separators=(",", ":"))
     environment_json = json.dumps(environment, sort_keys=True, separators=(",", ":"))
 
@@ -2668,11 +2676,18 @@ def _short_temp_parent() -> str:
     writable directory; falling back to the system temp dir is correct because this only ever holds
     the run's scratch, and the run-scoped child is still created 0700.
     """
+    def is_short_enough(path: str) -> bool:
+        probe = os.path.join(path, "wb-01234567", "listener-0123456789")
+        return len(probe.encode("utf-8")) <= 107
+
+    env_tmp = os.environ.get("TMPDIR")
+    if env_tmp and is_short_enough(env_tmp) and os.path.isdir(env_tmp) and os.access(env_tmp, os.W_OK | os.X_OK):
+        return env_tmp
+
     for candidate in ("/tmp", "/var/tmp", tempfile.gettempdir()):
-        if os.path.isdir(candidate) and os.access(candidate, os.W_OK | os.X_OK):
+        if os.path.isdir(candidate) and os.access(candidate, os.W_OK | os.X_OK) and is_short_enough(candidate):
             return candidate
     return tempfile.gettempdir()
-
 
 def main(argv: list[str] | None = None) -> int:
     registry = load_registry()
@@ -2756,9 +2771,16 @@ def main(argv: list[str] | None = None) -> int:
         # The run id was minted above, before the announcement, so this is the same identity the
         # printed directory names.
         try:
-            code = execute(plan, config, run_id=run_id)
+            code = execute(plan, config, run_id=run_id, keep_temp=args.keep_temp)
+        except TempPrivacyError as error:
+            print(f"[BLOCKED] {error}", file=sys.stderr)
+            failed = True
+            if not args.continue_on_error: break
+            continue
         except RuntimeError as error:
-            print(f"[BLOCKED] evaluation could not be audited: {error}", file=sys.stderr)
+            msg = str(error)
+            prefix = "" if msg.startswith("evaluation could not be audited") else "evaluation could not be audited: "
+            print(f"[BLOCKED] {prefix}{msg}", file=sys.stderr)
             failed = True
             if not args.continue_on_error: break
             continue

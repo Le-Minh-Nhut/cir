@@ -1321,6 +1321,16 @@ def test_the_real_distro_tree_never_drops_a_decidable_distribution():
     assert len(versions) + len(unconfirmed) >= entries, (
         f"only {len(versions)} versions and {len(unconfirmed)} unconfirmed for {entries} entries")
     assert modules, "the inventory found no importable module at all in a real distro tree"
+    # 85 unique distributions on this host. Submodule paths containing '/' in top_level.txt
+    # (specifically systemd/_daemon, systemd/_journal, systemd/_reader, systemd/id128, systemd/login)
+    # are not importable top-level modules (import systemd/_daemon is a SyntaxError) and must not be
+    # in modules. Dropping them brings module count from 201 to 196, while systemd itself remains
+    # confirmed and present in modules.
+    assert len(accounted) == 85, f"expected 85 unique distributions, got {len(accounted)}: {accounted}"
+    assert len(modules) == 196, f"expected 196 modules, got {len(modules)}"
+    assert "systemd" in modules, "systemd must remain in modules"
+    assert "systemd-python" in versions or "systemd" in versions, "systemd must remain confirmed"
+    assert not any("/" in m for m in modules), f"no module name may contain slashes: {[m for m in modules if '/' in m]}"
 
 
 # ------------------------------- inventory: empty directory entries and opaque installs
@@ -1486,3 +1496,82 @@ def test_one_row_per_distribution_and_only_real_extension_files_count(tmp_path: 
     assert "brlapi" in modules and "my_pkg" in modules, sorted(modules)
     # An empty ``top_level.txt`` ships no module: not a row at all, and not a phantom module.
     assert "shim" not in set(versions) | set(unconfirmed)
+
+
+@pytest.mark.parametrize("payload", ["..", "*", "a/b", "", "   "])
+def test_untrusted_top_level_text_cannot_traverse_or_glob(tmp_path: Path, payload: str):
+    """Untrusted top_level.txt text must not traverse directories, glob match, or confirm installs.
+
+    Feeding untrusted metadata text into globbing or directory joins allowed:
+    - '..' to confirm site-packages itself as installed content and add '' to modules
+    - a file outside site-packages to confirm an install via traversal
+    - '*' to glob-match unrelated files (like another package's .so) and confirm an install
+    - 'a/b' to confirm installs via subpath checks and add non-identifier module names
+    - empty/whitespace to contribute blank module names.
+    Every unsafe entry must contribute no module and confirm no install.
+    """
+    root = tmp_path / "env"
+    site_packages = root / "lib" / "python3.12" / "site-packages"
+    site_packages.mkdir(parents=True)
+
+    # An outside file in the parent directory (must never confirm an install via traversal).
+    parent_lib = site_packages.parent
+    (parent_lib / "outside.py").write_text("# outside\n")
+    (parent_lib / "outside.cpython-312-x86_64-linux-gnu.so").write_bytes(b"\x7fELF")
+
+    # An unrelated .so inside site-packages (must not be matched by glob wildcard '*').
+    (site_packages / "unrelated.cpython-312-x86_64-linux-gnu.so").write_bytes(b"\x7fELF")
+
+    # A nested directory and file (for 'a/b' payload).
+    (site_packages / "a").mkdir(exist_ok=True)
+    (site_packages / "a" / "b.py").write_text("# nested\n")
+
+    dist = site_packages / "evil-1.0.egg-info"
+    dist.mkdir(exist_ok=True)
+    (dist / "PKG-INFO").write_text("Name: evil\nVersion: 1.0\n")
+    (dist / "top_level.txt").write_text(f"{payload}\n")
+
+    versions, modules, unconfirmed = runtime.inspect_environment_distributions(str(root))
+
+    # No module contributed by the untrusted top_level.txt
+    assert "" not in modules, "empty module name must never be added"
+    assert "*" not in modules, "glob wildcard must never be added as a module"
+    assert "a/b" not in modules, "slash-separated path must never be added as a module"
+    assert ".." not in modules, "parent traversal must never be added as a module"
+    assert "outside" not in modules, "file outside site-packages must never be added as a module"
+
+    # No install confirmed: evil has no legitimate module inside site-packages
+    assert "evil" not in versions, f"evil must not be confirmed by {payload!r}: {versions}"
+    assert "evil" not in unconfirmed, f"evil must not be unconfirmed: {unconfirmed}"
+
+    # Direct helper call must also refuse the unsafe head
+    head = payload.split(".", 1)[0]
+    assert runtime._extension_module_file(site_packages, head) is None
+
+
+def test_directory_egg_info_without_pkg_info_does_not_invent_phantom_row(tmp_path: Path):
+    """A directory-shaped .egg-info without PKG-INFO must not invent a truncated phantom row.
+
+    When PKG-INFO is missing from a directory-shaped .egg-info (e.g. my-pkg-1.0.egg-info/),
+    falling back to dist_name.split("-")[0] invented 'my' as the distribution name.
+    The name must be derived from the full stem ('my-pkg'), never truncated at '-'.
+    """
+    root = tmp_path / "env"
+    site_packages = root / "lib" / "python3.12" / "site-packages"
+    site_packages.mkdir(parents=True)
+
+    # Real installed module
+    (site_packages / "my_pkg.py").write_text("__version__ = '1.0'\n")
+
+    # Directory .egg-info with NO PKG-INFO
+    egg = site_packages / "my-pkg-1.0.egg-info"
+    egg.mkdir()
+    (egg / "top_level.txt").write_text("my_pkg\n")
+
+    versions, modules, unconfirmed = runtime.inspect_environment_distributions(str(root))
+
+    assert "my" not in versions and "my" not in unconfirmed, (
+        f"phantom row 'my' must not exist: versions={versions}, unconfirmed={unconfirmed}"
+    )
+    assert "my-pkg" in versions, f"my-pkg must be confirmed: {versions}"
+    assert "my_pkg" in modules
