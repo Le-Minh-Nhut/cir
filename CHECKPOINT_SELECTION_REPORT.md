@@ -1127,7 +1127,7 @@ không đụng Python hệ thống.
 | 3.11 `test-adapted` (trước buổi này) | 2044 collect, 8 module không collect được do PEP 701 |
 | 3.12.3 `ctl312`, **không** headers | 2105 passed, **61 failed**, 8 errors |
 | 3.12.11 `ctl312h`, có headers (trước khi sửa) | 2155 passed, 47 skipped, 20 failed |
-| 3.12.11 `ctl312h` — **cuối lượt 20261107 (3)** | **2179 passed, 0 failed, 47 skipped** (3.24) |
+| 3.12.11 `ctl312h` — **cuối lượt 20261107 (3)** | **2203 passed, 0 failed, 47 skipped** = 2250 collected (3.24) |
 
 Chênh lệch 41 failure giữa hai env 3.12 là `Python.h` — fixture test tự biên dịch extension C. Đó là
 lỗi công cụ, không phải code.

@@ -28,7 +28,7 @@ Tám entry hoãn có blocker khác nhau theo registry: `airknow` thiếu checkpo
 **Trạng thái 17 model (bảng chuẩn, bằng chứng + điều kiện chuyển trạng thái):**
 [`workbench/docs/MODEL_STATUS_SPEC.md`](MODEL_STATUS_SPEC.md)
 
-**SHA ĐÃ KIỂM THỬ (nguồn sản xuất): `eb9209cf75e15944b1033ecb406e3a35d05c1007`** (commit production mới nhất, lượt A44). Full suite serial đã chạy tại chính revision này, CPython 3.12.11, interpreter `workbench/envs/ctl312h/bin/python`: scope `workbench/tests` **2249 collected — 2202 passed, 0 failed, 47 skipped**, exit 0.
+**SHA ĐÃ KIỂM THỬ (nguồn sản xuất): `27d84327da90a65b7f2c7f0fc46e3c8c79e27101`** (commit production mới nhất, lượt A44). Full suite serial đã chạy tại chính revision này, CPython 3.12.11, interpreter `workbench/envs/ctl312h/bin/python`: scope `workbench/tests` **2250 collected — 2203 passed, 0 failed, 47 skipped**, exit 0.
 
 Lịch sử (không phải trạng thái hiện tại): cây làm việc giữa lượt A41, tức sau `b2fca87` và trước `a194610`,
 đo được 2222 collected — 2172 passed, 3 failed, 47 skipped; ba failure đó tái hiện ở baseline `ea5ff05` (23 failed tại đó) nên không do lượt này gây ra: pin LIMN `open_clip_torch==2.20.0` từ `200b7c7`, patch DCNet/TME áp in-place so với `provenance.json`, và metadata package của `/usr/bin/python3` distro. Commit `a194610` đóng cả ba, `df9e6db` là cây sạch được ghi ở trên. Sweep cũ tại `2ff698e` (2247 collected / 2236 passed / 1 failed / 10 skipped) cũng là historical.
@@ -60,7 +60,7 @@ git fetch origin research/cir-failure-workbench
 # Checkout tường minh. KHÔNG dùng `git reset --hard`: trên máy đã có việc đang làm, nó xoá sạch
 # không hỏi. Muốn đúng cây đã kiểm thử thì checkout đúng commit đó.
 # Nguồn đã kiểm thử (revision cố định):
-git checkout eb9209cf75e15944b1033ecb406e3a35d05c1007
+git checkout 27d84327da90a65b7f2c7f0fc46e3c8c79e27101
 # Nhánh đang phát triển thêm tài liệu. Dùng nó nếu muốn bản mới nhất:
 #   git checkout research/cir-failure-workbench
 ```
