@@ -49,9 +49,16 @@ def test_planner_verifier_uses_the_resolved_contract(limn_model, monkeypatch):
     """P0-A: the planner's verifier input was rebuilt by hand from constraint dicts, which
     duplicated unversioned package entries and dropped the version floor on range-only
     declarations, so the verifier checked an unversioned name against a pinned reality.
-    The verifier input must be the canonical resolved contract the installer uses."""
-    import os
+    The verifier input must be the canonical resolved contract the installer uses.
+
+    The invariant is AGREEMENT, not a literal version range: the requirement the verifier checks,
+    the requirement the installer would emit, and the declaration the registry resolves to are one
+    contract. A pin that is dropped (a bare name reaching either side) still fails here, because
+    both sides must carry the registry's versioned specifier -- `open_clip_torch==2.20.0`, the
+    author's own pin from `LIMN/requirements.txt:37`, not the stale `>=2.24,<2.27` range this test
+    used to hardcode."""
     from workbench.backend import environment_planner, runtime
+    from packaging.requirements import Requirement
 
     monkeypatch.setenv("WORKBENCH_RUNTIME_ADAPTATION", "sm_120")
     spec = environment_planner.model_constraints(limn_model)
@@ -59,13 +66,34 @@ def test_planner_verifier_uses_the_resolved_contract(limn_model, monkeypatch):
     packages = runtime_model["environment"].get("packages") or []
     names = [p.partition(">=")[0].partition("==")[0].partition("<")[0] for p in packages]
     assert len(names) == len(set(names)), f"duplicated package declarations: {names}"
+
+    # The verifier side.
     required = runtime._required_packages(runtime_model)
-    # The floor survives: a range-only declaration must reach the verifier versioned.
-    # The specifier set is the identity, not its string ordering.
-    from packaging.requirements import Requirement
-    observed = Requirement(f"open_clip_torch{required.get('open_clip_torch') or ''}")
-    expected = Requirement("open_clip_torch>=2.24,<2.27")
-    assert str(observed.specifier) == str(expected.specifier)
+    verifier = Requirement(f"open_clip_torch{required.get('open_clip_torch') or ''}")
+    assert list(verifier.specifier), (
+        "the verifier received an unversioned requirement; the pin was dropped on the way to it")
+
+    # The installer side, from the same resolved contract the plan is built from.
+    constraints, error = environment_planner._constraints([spec])
+    assert error is None, error
+    installer_specs = environment_planner._pip_specs_for_group({"constraints": constraints}, {})
+    installed = [s for s in installer_specs
+                 if runtime.normalize_distribution_name(Requirement(s).name)
+                 == runtime.normalize_distribution_name("open_clip_torch")]
+    assert installed, f"the installer emits no requirement for open_clip_torch: {installer_specs}"
+    installer = Requirement(installed[0])
+
+    # And the declaration the resolved contract carries, which is the one both sides must match.
+    resolved = runtime.resolved_runtime_environment(limn_model).get("packages") or []
+    declared = [Requirement(str(item)) for item in resolved
+                if runtime.normalize_distribution_name(Requirement(str(item)).name)
+                == runtime.normalize_distribution_name("open_clip_torch")]
+    assert declared, f"the resolved contract declares no open_clip_torch: {resolved}"
+
+    assert installer.specifier == verifier.specifier, (
+        f"installer and verifier disagree: {installer} vs {verifier}")
+    assert verifier.specifier == declared[0].specifier, (
+        f"neither side carries the resolved contract: {verifier} vs {declared[0]}")
 
 
 # --------------------------------------------------------------------------- P0-B

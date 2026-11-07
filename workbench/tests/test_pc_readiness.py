@@ -39,7 +39,16 @@ def _derived_checkout(tmp_path: Path) -> Path:
     for patch in _model("csmcir")["approved_source_patches"]:
         relative = patch["path"]
         (target / Path(relative).parent).mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(REPO / "workbench/third_party/CSMCIR" / relative, target / relative)
+        shipped = (REPO / "workbench/third_party" / "CSMCIR" / relative).read_bytes()
+        (target / relative).write_bytes(shipped)
+        # The vendor tree may already carry the declared repair, because `prepare_model` applies it in
+        # place. This fixture is documented as the PUBLISHED bytes, and the test below depends on
+        # starting from an unrepaired checkout, so invert the declaration when it is already applied.
+        import hashlib as _hashlib
+        if _hashlib.sha256(shipped).hexdigest() == patch["derived_sha256"]:
+            subprocess.run(["patch", "-p1", "--reverse", "--quiet", "--directory", str(target), "-i",
+                            str(REPO / patch["patch_file"])], check=True, capture_output=True)
+            assert _hashlib.sha256((target / relative).read_bytes()).hexdigest() == patch["base_sha256"]
     return root
 
 

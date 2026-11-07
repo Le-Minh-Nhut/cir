@@ -97,24 +97,45 @@ def test_every_manifest_path_exists_in_the_fresh_clone(fresh_clone: Path) -> Non
     assert not missing, f"manifests promise files the clone does not contain: {missing}"
 
 
-def _expected_digests(payload: dict) -> dict[str, str]:
-    """The digest each delivered file must have.
+def _declared_patches(source_dir: str) -> list[dict]:
+    """The approved source patches the REGISTRY declares for a vendored checkout.
+
+    The patch declaration lives on the registry entry, not in `provenance.json`: the manifest
+    records the pinned UPSTREAM bytes (that is what makes an un-patched checkout detectable), and
+    the registry records the approved delta as `base_sha256` -> `derived_sha256`. Resolving it here
+    mirrors `vendored_source.source_provenance`, so the test and the integrity gate agree.
+    """
+    from workbench.backend.registry import load_registry
+
+    return [patch
+            for model in load_registry()["models"] if model.get("source_dir") == source_dir
+            for patch in (model.get("approved_source_patches") or [])]
+
+
+def _acceptable_digests(payload: dict, source_dir: str) -> dict[str, set[str]]:
+    """The digests each delivered file is allowed to have.
 
     A local fix intentionally replaces upstream's bytes, so the manifest's upstream digest is the
-    wrong expectation for that path: the record says so itself, in `delivered_sha256`. Resolving this
-    here mirrors `vendored_source.source_provenance`, so the test and the gate agree on what
-    "delivered correctly" means instead of the test inventing a second rule.
+    wrong expectation for that path: the record says so itself, in `delivered_sha256`.
+
+    An approved patch is the same kind of deliberate deviation, declared in the registry: the file
+    may ship as the published base (the patch has not been applied yet) or as the recorded derived
+    bytes (the checkout is the approved variant, which is the state DCNet and TME are consumed in --
+    `prepare_model` treats an already-derived target as a no-op and `vendored_source` reports it as
+    an approved artifact). Anything matching NEITHER is drift, and drift still fails.
     """
-    expected = dict(payload.get("file_manifest") or {})
+    expected: dict[str, set[str]] = {path: {digest}
+                                     for path, digest in (payload.get("file_manifest") or {}).items()}
     for fix in payload.get("local_fixes") or []:
         recorded = fix.get("delivered_sha256") or fix.get("upstream_sha256")
         if recorded:
-            expected[fix["path"]] = recorded
-    # An approved patch is also a deliberate, recorded deviation from upstream's bytes.
-    for patch in payload.get("approved_source_patches") or []:
-        derived = patch.get("derived_sha256")
-        if derived:
-            expected[patch["path"]] = derived
+            expected[fix["path"]] = {recorded}
+    for patch in _declared_patches(source_dir):
+        path = patch.get("path")
+        digests = {digest for digest in (patch.get("base_sha256"), patch.get("derived_sha256"))
+                   if digest}
+        if path and digests:
+            expected[path] = digests
     return expected
 
 
@@ -123,16 +144,60 @@ def test_every_manifest_path_matches_its_recorded_digest(fresh_clone: Path) -> N
     mismatched: list[str] = []
     for directory in _vendored_dirs(fresh_clone):
         payload = json.loads((directory / "provenance.json").read_text())
-        for relative, digest in _expected_digests(payload).items():
+        for relative, digests in _acceptable_digests(payload, directory.name).items():
             candidate = directory / relative
             if not candidate.is_file():
                 continue  # reported by the test above
-            if digest.startswith("symlink:"):
+            if any(digest.startswith("symlink:") for digest in digests):
                 continue
             actual = hashlib.sha256(candidate.read_bytes()).hexdigest()
-            if actual != digest:
+            if actual not in digests:
                 mismatched.append(f"{directory.name}/{relative}")
     assert not mismatched, f"delivered bytes differ from the manifest: {mismatched[:5]}"
+
+
+def test_an_approved_patch_accepts_base_or_derived_and_nothing_else() -> None:
+    """The three states the digest contract must separate, checked on the committed records.
+
+    Derived is the state the delivered DCNet/TME trees ship in and the one their measured runs used;
+    the published base is equally `recorded` (patch not yet applied). A digest matching neither side
+    is drift, and the contract must not contain it.
+    """
+    from workbench.backend.registry import load_registry
+
+    covered = 0
+    for model in load_registry()["models"]:
+        source_dir = model.get("source_dir")
+        if not source_dir:
+            continue
+        record = REPO / VENDOR_ROOT / source_dir / "provenance.json"
+        if not record.is_file():
+            continue
+        payload = json.loads(record.read_text())
+        acceptable = _acceptable_digests(payload, source_dir)
+        for patch in model.get("approved_source_patches") or []:
+            recorded = acceptable.get(patch["path"])
+            assert recorded, f"{source_dir}: no digest contract for {patch['path']}"
+            assert payload["file_manifest"][patch["path"]] == patch["base_sha256"], (
+                f"{source_dir}/{patch['path']}: the manifest must keep the UPSTREAM bytes, or a "
+                "pristine checkout becomes indistinguishable from a patched one")
+            assert patch["base_sha256"] in recorded and patch["derived_sha256"] in recorded
+            delivered = hashlib.sha256(
+                (REPO / VENDOR_ROOT / source_dir / patch["path"]).read_bytes()).hexdigest()
+            assert delivered in recorded, (
+                f"{source_dir}/{patch['path']}: committed bytes match neither the published base "
+                "nor the recorded derived digest")
+            assert "0" * 64 not in recorded, "an unrecorded digest must never be acceptable"
+            covered += 1
+    assert covered >= 3, f"expected the approved patches to be covered, saw {covered}"
+
+
+def test_a_digest_matching_neither_base_nor_derived_is_drift() -> None:
+    """The third state. If the contract accepted anything else, a silent edit would ship."""
+    payload = json.loads((REPO / VENDOR_ROOT / "DCNet" / "provenance.json").read_text())
+    acceptable = _acceptable_digests(payload, "DCNet")
+    recorded = acceptable["base/base_trainer.py"]
+    assert hashlib.sha256(b"an edit nobody recorded").hexdigest() not in recorded
 
 
 def test_no_checkout_carries_nested_git_metadata_or_a_gitlink(fresh_clone: Path) -> None:

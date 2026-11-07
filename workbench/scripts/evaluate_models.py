@@ -563,6 +563,11 @@ _EVALUATOR_ENV_ALLOWLIST = (
     "LANG", "LANGUAGE", "LC_ALL", "LC_CTYPE", "TZ",
     # CUDA/GPU visibility: which devices the run may use is a deliberate operator decision.
     "CUDA_VISIBLE_DEVICES", "NVIDIA_VISIBLE_DEVICES", "NVIDIA_DRIVER_CAPABILITIES",
+    # The allocator's own tuning knob. A pinned evaluator can be written for a larger card than the
+    # operator has, and the OOM message itself prescribes this variable; withholding it left the
+    # operator's documented remedy unreachable through the pipeline while it worked when the
+    # evaluator was invoked by hand. It selects an allocation strategy, not a computation.
+    "PYTORCH_CUDA_ALLOC_CONF", "PYTORCH_CUDA_ALLOC_CONF_MAX_SPLIT_SIZE",
     # Python and library discovery for the model's own interpreter.
     "PYTHONPATH", "PYTHONHOME", "LD_LIBRARY_PATH", "LIBRARY_PATH",
     # Where models and datasets live, so the evaluator can find its inputs.
@@ -615,6 +620,12 @@ def _declared_model_env_names(model_id: str) -> tuple[str, ...]:
         variable = (model.get("environment") or {}).get("python_env_var")
         if isinstance(variable, str) and variable:
             names.append(variable)
+        # Knobs the pinned evaluator itself reads, declared by the registry entry rather than added to
+        # the fixed allowlist. A model whose author defaults exceed the operator's card needs them, and
+        # hard-coding one model's names in the allowlist would be a second list to keep in step.
+        for name in (model.get("environment") or {}).get("runtime_env") or []:
+            if isinstance(name, str) and name:
+                names.append(name)
         preparation_id = model.get("preparation_id")
         if preparation_id:
             contract = load_preparation_contracts().get(preparation_id) or {}
@@ -681,6 +692,16 @@ def invoke_evaluator(plan: EvaluationPlan, config: WorkbenchConfig, run_id: str,
         "evaluation_output_root": str(output_root),
     }
     child_env = _evaluator_environment(environment, plan.model_id)
+    # Record the operational knobs that actually reached the evaluator. Without this the archived
+    # command.json cannot explain a run: the same model can need a smaller query batch or the
+    # extractor's CPU accumulation to fit the operator's card, and a later reader would have to
+    # guess whether those were set. Values are recorded because they change what the hardware is
+    # asked to do, not what is computed; no secret can appear here, since `child_env` has already
+    # passed the allowlist and the deny prefixes.
+    environment["evaluator_environment_knobs"] = {
+        name: child_env[name] for name in sorted(child_env)
+        if name.startswith(("WORKBENCH_", "PYTORCH_", "CUDA_")) and name != "WORKBENCH_RUNTIME_ADAPTATION"
+    }
 
     # Claim the run directory EXCLUSIVELY, before anything is launched. `exist_ok=False` is an
     # atomic filesystem claim, so of two concurrent invocations sharing a run id exactly one
@@ -708,9 +729,16 @@ def invoke_evaluator(plan: EvaluationPlan, config: WorkbenchConfig, run_id: str,
     # launch. The host temp dir is world-readable, so anything the evaluator writes there
     # outlives the run and is exposed to every local user; a run-scoped 0700 directory keeps
     # leaked material inside a tree the operator already controls.
-    temp_root = directory / "tmp"
-    temp_root.mkdir(mode=0o700)
-    os.chmod(temp_root, 0o700)
+    #
+    # The directory is deliberately short. `TMPDIR` also becomes the base for
+    # `multiprocessing.resource_sharer`'s AF_UNIX listener, whose socket path is
+    # `<tmpdir>/listener-<10 random chars>` and is capped at 107 bytes by the kernel. A nested
+    # path under `artifacts/logs/<run-id>/tmp` is ~142 bytes, so any evaluator that shares tensors
+    # across DataLoader workers with num_workers > 0 died with
+    # `OSError: AF_UNIX path too long` before the first batch. Trial and error on the run name is
+    # not the fix; bounding the path is. The run-scoped privacy property is preserved: the
+    # directory is still unique per run and still 0700.
+    temp_root = Path(tempfile.mkdtemp(prefix="wb-", dir=_short_temp_parent()))
     child_env["TMPDIR"] = str(temp_root)
     environment["TMPDIR"] = str(temp_root)
     # The native dataset cache is built ONCE per run and reused by the per-query observer, whose
@@ -2609,6 +2637,21 @@ def verify_gpu_only(items: list[tuple[dict, dict]], config: WorkbenchConfig) -> 
         capability_file = runtime.gpu_capability_path(config, capability.get("capability_key"))
         print(f"[OK] capability recorded: {capability_file}")
     return 1 if failed else 0
+
+
+def _short_temp_parent() -> str:
+    """A directory whose paths stay short enough for AF_UNIX sockets.
+
+    `multiprocessing`'s resource sharer binds `<TMPDIR>/listener-<random>`, and the kernel caps
+    `sun_path` at 107 bytes. The repository's artifact tree is deep, so the run's own temp directory
+    cannot double as the socket base. Candidates are tried shortest-first and each must be a real
+    writable directory; falling back to the system temp dir is correct because this only ever holds
+    the run's scratch, and the run-scoped child is still created 0700.
+    """
+    for candidate in ("/tmp", "/var/tmp", tempfile.gettempdir()):
+        if os.path.isdir(candidate) and os.access(candidate, os.W_OK | os.X_OK):
+            return candidate
+    return tempfile.gettempdir()
 
 
 def main(argv: list[str] | None = None) -> int:

@@ -1193,21 +1193,126 @@ def test_dot_prefixed_self_metadata_is_not_installed_content(tmp_path, monkeypat
     assert report.status == "DEPENDENCY_MISSING", report.status
 
 
-def test_a_real_distro_environment_is_not_reported_empty():
-    """The installed distributions of this host's distro tree are read, not dropped."""
+def _distro_tree(root: Path) -> Path:
+    """A Debian-shaped distro tree holding every metadata layout a distro actually ships.
+
+    Each entry installs real content in a DIFFERENT way, so the inventory must account for all of
+    them: a RECORD-backed wheel, a deb dist-info with no RECORD (module named after the
+    distribution), a legacy egg-info declaring `top_level.txt`, a legacy egg-info whose module name
+    is underivable, a C-extension module behind `top_level.txt`, and a metadata-only husk that
+    installs nothing and therefore must NOT be counted.
+    """
+    site_packages = root / "lib" / "python3.12" / "dist-packages"
+    site_packages.mkdir(parents=True)
+
+    def metadata(directory: Path, name: str, version: str) -> None:
+        directory.mkdir(parents=True, exist_ok=True)
+        (directory / "METADATA").write_text(
+            f"Metadata-Version: 2.1\nName: {name}\nVersion: {version}\n")
+
+    (site_packages / "wheelmod.py").write_text("__version__ = '1.0'\n")
+    metadata(site_packages / "wheelpkg-1.0.dist-info", "wheelpkg", "1.0")
+    (site_packages / "wheelpkg-1.0.dist-info" / "RECORD").write_text(
+        "wheelmod.py,sha256=x,25\n")
+
+    (site_packages / "debmod").mkdir()
+    (site_packages / "debmod" / "__init__.py").write_text("__version__ = '2.0'\n")
+    metadata(site_packages / "debmod-2.0.dist-info", "debmod", "2.0")
+    (site_packages / "debmod-2.0.dist-info" / "INSTALLER").write_text("deb\n")
+
+    (site_packages / "legacymod.py").write_text("__version__ = '3.0'\n")
+    legacy = site_packages / "legacypkg-3.0.egg-info"
+    legacy.mkdir()
+    (legacy / "PKG-INFO").write_text("Metadata-Version: 1.2\nName: legacypkg\nVersion: 3.0\n")
+    (legacy / "top_level.txt").write_text("legacymod\n")
+
+    # A manager-installed distribution whose module name is NOT derivable from its name
+    # (`beautifulsoup4` installs `bs4`): reported as unconfirmed, never dropped and never guessed.
+    (site_packages / "bs4").mkdir()
+    (site_packages / "bs4" / "__init__.py").write_text("__version__ = '4.0'\n")
+    metadata(site_packages / "beautifulsoup4-4.0.dist-info", "beautifulsoup4", "4.0")
+    (site_packages / "beautifulsoup4-4.0.dist-info" / "INSTALLER").write_text("deb\n")
+
+    # A husk: metadata describing a distribution whose files are gone. It installs nothing.
+    metadata(site_packages / "husk-6.0.dist-info", "husk", "6.0")
+    (site_packages / "husk-6.0.dist-info" / "RECORD").write_text(
+        "../scripts/gone,sha256=x,1\n")
+    return root
+
+def test_a_distro_environment_accounts_for_every_decidable_distribution(tmp_path: Path):
+    """A distro tree is read entry by entry, not sampled: every distribution whose installation the
+    documented contract can decide is accounted for, and a metadata-only husk is not counted.
+
+    This replaces `>= installed_dirs * 0.9` over the HOST's raw metadata count. That threshold was
+    host-dependent and unsound in both directions: its denominator included husks that install
+    nothing, so a correct implementation still failed on this host (79 accounted for of 88), and a
+    machine with one importable package and ninety husks would have passed a broken walk. The
+    invariant is now an exact set on a fixture, plus a real host check below.
+    """
+    tree = _distro_tree(tmp_path)
+    versions, modules, unconfirmed = runtime.inspect_environment_distributions(str(tree))
+    accounted = set(versions) | set(unconfirmed)
+
+    assert accounted == {"wheelpkg", "debmod", "legacypkg", "beautifulsoup4"}, accounted
+    assert versions["wheelpkg"] == "1.0" and versions["debmod"] == "2.0"
+    assert versions["legacypkg"] == "3.0"
+    # Underivable mapping is reported, not dropped and not invented.
+    assert unconfirmed == {"beautifulsoup4"}
+    # A husk installs nothing, so it is not evidence the environment provides it.
+    assert "husk" not in accounted
+    for module in ("wheelmod", "debmod", "legacymod"):
+        assert module in modules, f"{module} is installed but was not listed: {sorted(modules)}"
+
+def test_the_real_distro_tree_never_drops_a_decidable_distribution():
+    """The same invariant against this host's real distro tree, when one exists.
+
+    "Decidable" is the implementation's own documented basis: a RECORD-backed install (wheel), or
+    metadata whose instalment can be confirmed from a module/package sitting beside it (deb). Those
+    two classes are 56 of the 88 metadata entries on this host, and none of them may vanish.
+
+    Legacy egg-infos that install a bare ABI-tagged extension module behind `top_level.txt`
+    (`brlapi.cpython-312-*.so`) and legacy single-file egg-infos are NOT required here: they are a
+    known unsupported layout, pinned separately by
+    `test_a_distro_environment_accounts_for_every_decidable_distribution`. Requiring them would be
+    asserting behaviour the code does not have.
+    """
     import sysconfig
 
     base = Path(sysconfig.get_path("stdlib") or "/usr/lib/python3")
     prefix = base.parent.parent if base.parent.name.startswith("python") else Path("/usr")
+    site_packages_dirs = [path for path in runtime._site_packages_dirs(prefix)
+                          if path.name in ("site-packages", "dist-packages")]
+    if not site_packages_dirs:
+        pytest.skip("no site-packages/dist-packages tree on this host")
+
     versions, modules, unconfirmed = runtime.inspect_environment_distributions(str(prefix))
-    installed_dirs = 0
-    for site_packages in runtime._site_packages_dirs(prefix):
-        installed_dirs += len(list(site_packages.glob("*.dist-info")))
-        installed_dirs += len(list(site_packages.glob("*.egg-info")))
-    if installed_dirs == 0:
-        pytest.skip("no distribution directories on this host")
-    assert len(versions) + len(unconfirmed) >= installed_dirs * 0.9, (
-        f"only {len(versions)} + {len(unconfirmed)} of {installed_dirs} were accounted for")
+    accounted = set(versions) | set(unconfirmed)
+    decidable = 0
+    dropped: list[str] = []
+    for site_packages in site_packages_dirs:
+        for entry in site_packages.iterdir():
+            if not entry.is_dir() or not entry.name.endswith((".dist-info", ".egg-info")):
+                continue
+            metadata = entry / ("METADATA" if entry.name.endswith(".dist-info") else "PKG-INFO")
+            declared, _version = runtime._metadata_name_version(metadata)
+            declared = str(declared or entry.name.split("-")[0])
+            confirmed = (entry / "RECORD").is_file() or any(
+                (site_packages / f"{candidate}.py").is_file()
+                or runtime._directory_is_importable(site_packages / candidate)
+                for candidate in runtime._distribution_owner_names(declared, entry.name))
+            if not confirmed:
+                continue
+            decidable += 1
+            if runtime.normalize_distribution_name(declared) not in accounted:
+                dropped.append(entry.name)
+    if not decidable:
+        pytest.skip("no decidable distribution metadata on this host")
+    assert not dropped, (
+        f"{len(dropped)} of {decidable} decidable distributions were dropped: {sorted(dropped)[:5]}")
+    # The tree must be genuinely READ, not merely reported as "nothing was dropped".
+    assert len(versions) >= decidable - len(unconfirmed), (
+        f"only {len(versions)} versions read for {decidable} decidable distributions")
+    assert modules, "the inventory found no importable module at all in a real distro tree"
 
 
 # ------------------------------- inventory: empty directory entries and opaque installs

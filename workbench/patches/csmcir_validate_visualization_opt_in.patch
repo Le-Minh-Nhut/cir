@@ -1,6 +1,20 @@
 --- a/src/validate_blip_csmcir.py
 +++ b/src/validate_blip_csmcir.py
-@@ -506,13 +506,21 @@
+@@ -161,7 +161,12 @@
+     """
+     print(f"Compute FashionIQ {relative_val_dataset.dress_types} validation predictions")
+ 
+-    relative_val_loader = DataLoader(dataset=relative_val_dataset, batch_size=64,
++    # Operational override: the author default is 64, and `inference` builds a
++    # (queries x query_tokens x gallery) matmul that needs ~10.5 GiB at 64 on a 15.44 GiB
++    # card. The value does not change what is scored -- every query is still compared
++    # against the full gallery -- only how many are pushed through at once.
++    _query_bs = int(os.environ.get('WORKBENCH_CSMCIR_QUERY_BS', 64))
++    relative_val_loader = DataLoader(dataset=relative_val_dataset, batch_size=_query_bs,
+                                      num_workers=4, pin_memory=True, collate_fn=collate_fn,
+                                      shuffle=False)
+ 
+@@ -506,13 +511,21 @@
      parser.add_argument("--target-ratio", default=1.25, type=float, help="TargetPad target ratio")
      parser.add_argument("--transform", default="targetpad", type=str,
                          help="Preprocess pipeline, should be in ['clip', 'squarepad', 'targetpad'] ")
@@ -23,7 +37,7 @@
  
  
  
-@@ -562,7 +570,8 @@
+@@ -562,7 +575,8 @@
  
  
  
@@ -33,7 +47,27 @@
  
      # clip_model, clip_preprocess = clip.load(clip_model_name, device=device, jit=False)
      blip_model, _, txt_processors = load_model_and_preprocess(name=blip_model_name, model_type="pretrain", is_eval=False, device=device)
-@@ -630,7 +639,10 @@
+@@ -609,9 +623,17 @@
+     for relative_val_dataset, classic_val_dataset, idx in zip(relative_val_datasets, classic_val_datasets,
+                                                                 idx_to_dress_mapping):
+         
+-        index_features, index_names = extract_index_blip_caption_features(classic_val_dataset, blip_model)
++        # Operational override: the shipped default keeps every gallery batch resident on the GPU and
++        # then vstacks, which needs ~5.15 GiB this card does not have beside the model. `save_memory` is
++        # the author's own path, and it must be passed to BOTH halves -- the extractor lands features on
++        # CPU and the predictor moves them back to the model device before `inference`, which otherwise
++        # fails on a mixed-device cat.
++        _save_memory = os.environ.get('WORKBENCH_CSMCIR_SAVE_MEMORY', '0') == '1'
++        index_features, index_names = extract_index_blip_caption_features(
++            classic_val_dataset, blip_model, save_memory=_save_memory)
+         recall_at10, recall_at50 = compute_fiq_val_metrics(relative_val_dataset, blip_model,
+-                                                            index_features, index_names, txt_processors)
++                                                            index_features, index_names, txt_processors,
++                                                            save_memory=_save_memory)
+         
+         recalls_at10.append(recall_at10)
+         recalls_at50.append(recall_at50)
+@@ -630,7 +652,10 @@
      print(json.dumps(results_dict, indent=4))
  
  

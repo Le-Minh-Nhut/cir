@@ -699,8 +699,14 @@ def inspect_environment_distributions(prefix: str | None,
             # describes a distribution is not content, and a distribution whose files are
             # gone describes an install that never completed (or one that was wiped).
             installed_content = False
+            # A legacy `PKG-INFO`-style `.egg-info` can be a FILE, not a directory. Everything below
+            # joins children onto `dist`, so a file target made the RECORD lookup simply absent and
+            # the distribution fell through to the "no installed content" branch, where it was
+            # REMOVED from `versions` -- a real install disappearing from the inventory. Naming the
+            # shape up front keeps later joins meaningful.
+            dist_is_dir = dist.is_dir()
             record = dist / "RECORD"
-            if record.is_file():
+            if dist_is_dir and record.is_file():
                 try:
                     lines = record.read_text(encoding="utf-8", errors="replace").splitlines()
                 except OSError:
@@ -761,15 +767,21 @@ def inspect_environment_distributions(prefix: str | None,
             elif key in confirmed:
                 # Already confirmed by this environment's own prefix.
                 pass
-            elif not record.is_file() and (dist / "INSTALLER").is_file():
+            elif dist_is_dir and not record.is_file() and (dist / "INSTALLER").is_file():
                 # A package manager installed this (Debian's ``deb`` drops INSTALLER and no
                 # RECORD) and the module it provides is named differently from the
                 # distribution. That mapping is not decidable from disk, so the entry is
                 # reported as unconfirmed rather than dropped or accepted.
                 versions.setdefault(key, declared_version or None)
                 unconfirmed.add(key)
-            else:
+            elif dist_is_dir:
                 versions.pop(key, None)
+            else:
+                # A single-file metadata record describes a distribution whose content lives beside
+                # it; this walk cannot decide whether that content is importable, and dropping the
+                # entry made an installed package vanish from the report. Report it unconfirmed.
+                versions.setdefault(key, declared_version or None)
+                unconfirmed.add(key)
     unconfirmed -= confirmed
     return versions, modules, unconfirmed
 

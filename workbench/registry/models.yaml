@@ -29,6 +29,13 @@ models:
     composition_adapter: workbench.composition.model_csmcir
     environment:
       python_env_var: WORKBENCH_CSMCIR_PYTHON
+      # Knobs the pinned evaluator reads directly. The author's defaults need ~15.6 GiB on a
+      # 15.44 GiB card: the query pass builds a (queries x 32 x gallery) matmul, and the gallery pass
+      # keeps every batch resident before `torch.vstack`. Both overrides use the evaluator's OWN
+      # paths (`save_memory`, a batch size), never a different computation, and the author defaults
+      # apply when neither is set. Declared here so the pipeline forwards them to the child; the
+      # allowlist alone would withhold them.
+      runtime_env: [WORKBENCH_CSMCIR_QUERY_BS, WORKBENCH_CSMCIR_SAVE_MEMORY]
       confidence: VERIFIED_README
       python: '3.9'
       pytorch: '2.0.1'
@@ -96,16 +103,16 @@ models:
     approved_source_patches:
       - path: src/lavis/models/__init__.py
         patch_file: workbench/patches/csmcir_models_init_compat.patch
-        patch_sha256: 0e703584a7ecb5df3781574c2516fd406745c414491b6aa487fbb3e76532b9bd
+        patch_sha256: 3f2bac48fe1a1775d2e5e6a09f81affa3809a31ed6b7c4213d5da8c2a0ada3bd
         base_sha256: 9d8c914b551a7de614e062f9a241f44626fd591a31a0ccf1cc79f0ae23c9db01
-        derived_sha256: aa68fe5e20bcda5e17d978799deb8ec0ff4636e5b3b2a6ef637ce5e385b0c818
-        reason: "98 unguarded imports of modules absent from the pinned public revision prevent the package from importing, so the shipped CSMCIR class is never registered"
+        derived_sha256: 0ec134431697af6f202b5256e4e30ab725a44191a279e3f8bfdb3a62495b3774
+        reason: "98 unguarded imports of modules absent from the pinned public revision prevent the package from importing, so neither the CSMCIR class nor the class that saved the released checkpoint is ever registered; the patch guards that range and re-registers blip2_cir_align_prompt_target_image_caption_shiyan92 after it, because the checkpoint's state_dict is keyed by that class and its module ships only as an author-published CPython 3.10 .pyc"
       - path: src/validate_blip_csmcir.py
         patch_file: workbench/patches/csmcir_validate_visualization_opt_in.patch
-        patch_sha256: eef0594109aa7e65a024a49bf3784f287ec21cbb466c7fc84712e5ba98582f68
+        patch_sha256: 0fcff28bf1f9abd31a14a06b0f200eecfa46af8c2d7624a3420a68204ef50fa8
         base_sha256: aa7a4395cdb700fded0567e0969da774a331927eaea327b5a23da82fdc7506a9
-        derived_sha256: 84a1d476e99d9687b16b1a9c5238f89295f23d2a6f9f4dfb449acba2c118262c
-        reason: "the evaluator prints its metric JSON and then unconditionally runs the `vis_fiq` diagnostic dump, which raises AttributeError on the val-relative dataset's target-id field and exits non-zero after the metrics were already computed; the patch makes that dump opt-in and leaves the metric stage untouched"
+        derived_sha256: a057e8f3ad7097adcfabb2b8fd8b4747588ff3461cfb43f00cd3483dfd6d512d
+        reason: "the evaluator prints its metric JSON and then unconditionally runs the `vis_fiq` diagnostic dump, which raises AttributeError on the val-relative dataset's target-id field and exits non-zero after the metrics were already computed; the patch makes that dump opt-in, and makes the query batch size and the extractor's own save_memory path env-overridable (WORKBENCH_CSMCIR_QUERY_BS, WORKBENCH_CSMCIR_SAVE_MEMORY) because the author defaults need ~15.6 GiB on a 15.44 GiB card. Author defaults are unchanged when neither variable is set."
     source_blocker: "pinned lavis.models package cannot be imported as published (98 unguarded imports of absent modules sit before the registration); an approved patch is declared in approved_source_patches and removes only that blocker"
     notes: Official Hugging Face model repository; checkpoint has an author-published size and sha256 (Hugging Face LFS oid).
     checkpoint_variants:

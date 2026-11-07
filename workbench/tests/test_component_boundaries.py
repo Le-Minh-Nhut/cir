@@ -252,14 +252,47 @@ def test_f04_the_visualization_patch_is_declared_and_matches_its_file() -> None:
     contract = _csmcir_patch("src/validate_blip_csmcir.py")
     assert F04_PATCH.is_file()
     assert hashlib.sha256(F04_PATCH.read_bytes()).hexdigest() == contract["patch_sha256"]
-    base = CSMCIR / "src" / "validate_blip_csmcir.py"
-    assert hashlib.sha256(base.read_bytes()).hexdigest() == contract["base_sha256"]
+    # Either declared state is acceptable; the vendor tree may already carry the repair.
+    shipped = hashlib.sha256((CSMCIR / "src" / "validate_blip_csmcir.py").read_bytes()).hexdigest()
+    assert shipped in (contract["base_sha256"], contract["derived_sha256"]), (
+        f"the vendored file matches neither the published base nor the declared repair "
+        f"({shipped[:16]}...)")
+
+
+def _copy_at_published_base(source: Path, destination: Path) -> None:
+    """Copy the CSMCIR checkout, then reduce every declared-patch target to its published bytes.
+
+    `shutil.copytree` alone described a host that had never prepared the model. `prepare_model` now
+    applies the declared repairs in place -- the state DCNet and TME are consumed in -- so a verbatim
+    copy carries derived files and the tests' own `patch` step fails as already-applied. Inverting each
+    declaration recovers the base exactly.
+    """
+    import tempfile
+
+    shutil.copytree(source, destination)
+    from workbench.backend.registry import model_by_id as _model_by_id
+    for declaration in (_model_by_id("csmcir").get("approved_source_patches") or []):
+        target = destination / declaration["path"]
+        if not target.is_file():
+            continue
+        if hashlib.sha256(target.read_bytes()).hexdigest() != declaration["derived_sha256"]:
+            continue
+        scratch = Path(tempfile.mkdtemp()) / "CSMCIR"
+        staged = scratch / declaration["path"]
+        staged.parent.mkdir(parents=True)
+        staged.write_bytes(target.read_bytes())
+        reverted = subprocess.run(
+            ["patch", "-p1", "--reverse", "--quiet", "--directory", str(scratch), "-i",
+             str(REPO / declaration["patch_file"])], capture_output=True, text=True)
+        assert reverted.returncode == 0, reverted.stderr
+        target.write_bytes(staged.read_bytes())
+        shutil.rmtree(scratch.parent, ignore_errors=True)
 
 
 def test_f04_the_patch_makes_the_diagnostic_dump_opt_in(tmp_path) -> None:
     """Applying it must default the dump off and leave the metric stage as the last dependency."""
     root = tmp_path / "CSMCIR"
-    shutil.copytree(CSMCIR, root)
+    _copy_at_published_base(CSMCIR, root)
     result = subprocess.run(["patch", "-p1", "--quiet"], cwd=root, stdin=F04_PATCH.open("rb"),
                             capture_output=True, text=True)
     assert result.returncode == 0, result.stderr
@@ -286,7 +319,7 @@ def test_f04_the_patched_checkout_is_approved_and_an_edit_after_it_is_not(tmp_pa
 
     model = model_by_id("csmcir")
     root = tmp_path / "CSMCIR"
-    _shutil.copytree(CSMCIR, root)
+    _copy_at_published_base(CSMCIR, root)
     subprocess.run(["patch", "-p1", "--quiet"], cwd=root, stdin=F04_PATCH.open("rb"), check=True,
                    capture_output=True)
 
@@ -304,7 +337,7 @@ def test_f04_the_patched_checkout_is_approved_and_an_edit_after_it_is_not(tmp_pa
 def test_f04_both_csmcir_patches_apply_together(tmp_path) -> None:
     """The two approved patches touch different files, so both must apply and both be approved."""
     combined = tmp_path / "both"
-    shutil.copytree(CSMCIR, combined)
+    _copy_at_published_base(CSMCIR, combined)
     for name in ("csmcir_models_init_compat.patch", "csmcir_validate_visualization_opt_in.patch"):
         patch_file = REPO / "workbench" / "patches" / name
         # Each patch is generated against the pristine `__init__.py`/`validate_blip_csmcir.py` and

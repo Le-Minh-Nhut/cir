@@ -6,6 +6,7 @@ file (`test_f05_f08_f09_verification.py`), the replacement here imports the prod
 """
 from __future__ import annotations
 
+import hashlib
 import importlib
 import json
 import subprocess
@@ -254,11 +255,27 @@ def _csmcir() -> dict:
 
 
 def _staged_csmcir(tmp_path: Path, applied: int) -> Path:
+    """A checkout of the PUBLISHED base with the first *applied* patches applied.
+
+    The vendored tree itself may be derived: `prepare_model` applies the declared repairs in place, so
+    copying it verbatim would hand this fixture rows that are already patched and then fail to apply
+    them again. Each file is therefore reduced to its declared base first -- by inverting the same
+    declaration when it currently carries the derived bytes -- so the fixture describes the published
+    revision regardless of host state.
+    """
     target = tmp_path / "CSMCIR"
     for patch in _csmcir()["approved_source_patches"]:
         destination = target / patch["path"]
         destination.parent.mkdir(parents=True, exist_ok=True)
-        destination.write_bytes((REPO / "workbench/third_party/CSMCIR" / patch["path"]).read_bytes())
+        shipped = (REPO / "workbench/third_party/CSMCIR" / patch["path"]).read_bytes()
+        destination.write_bytes(shipped)
+        digest = hashlib.sha256(shipped).hexdigest()
+        if digest == patch["derived_sha256"]:
+            reverted = subprocess.run(["patch", "-p1", "--reverse", "--quiet", "--directory", str(target),
+                                       "-i", str(REPO / patch["patch_file"])],
+                                      capture_output=True, text=True)
+            assert reverted.returncode == 0, reverted.stderr
+            assert hashlib.sha256(destination.read_bytes()).hexdigest() == patch["base_sha256"]
     for patch in _csmcir()["approved_source_patches"][:applied]:
         result = subprocess.run(["patch", "-p1", "--directory", str(target), "-i",
                                  str(REPO / patch["patch_file"])], capture_output=True, text=True)

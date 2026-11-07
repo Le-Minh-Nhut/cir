@@ -134,6 +134,35 @@ assets:
     expected_record_count: 5373
     key_kind: fashioniq_image_id
     id_source: image_splits/split.toptee.val.json
+- model_id: csmcir
+  family: Author-published bytecode for the class that saved the released checkpoint
+  required_for: official_evaluation
+  # The released `fashioniq_tuned_clip_best.pt` stores its state_dict under
+  # `Blip2QformerCirAlignPromptTargetImageCaptionshiyan92`, and `validate_blip_csmcir.py` looks weights
+  # up as `checkpoint[blip_model.__class__.__name__]`, so the default class name raises KeyError. That
+  # module has NO `.py` at the pinned revision -- the author shipped only compiled bytecode. This is
+  # therefore the author's own artifact, not something reconstructed here: the URL below is the pinned
+  # commit's blob, the sha256 is measured from it, and the file is staged under the module name so a
+  # sourceless import can find it (CPython only accepts `foo.pyc` beside the package, not in __pycache__).
+  source_type: direct_url
+  # `direct_url` uses `source_repo` as the URL verbatim, so the pinned revision is part of it rather
+  # than a separate field that the URL builder would ignore.
+  source_repo: https://raw.githubusercontent.com/qzp2018/CSMCIR/774f94e2076ff17ea91703a6239d2a08f0e1a44e/src/lavis/models/blip2_models/__pycache__/blip2_qformer_cir_align_prompt_target_image_caption_shiyan92.cpython-310.pyc
+  source_revision: 774f94e2076ff17ea91703a6239d2a08f0e1a44e
+  source_path: src/lavis/models/blip2_models/__pycache__/blip2_qformer_cir_align_prompt_target_image_caption_shiyan92.cpython-310.pyc
+  destination_scope: model_source
+  destination_path: src/lavis/models/blip2_models/blip2_qformer_cir_align_prompt_target_image_caption_shiyan92.pyc
+  automatic_download_available: true
+  expected_sha256: 46d00b0b8521291fef5b032afbaf20846fcfaf800ed9b4522c08b2ab991a15a8
+  expected_size_bytes: 12281
+  provenance_status: VERIFIED
+  # No `content_contract`: presence of that key routes the validator down its JSON path
+  # (`registry.py:1551` treats any asset with a contract as JSON), which a .pyc is not. The identity
+  # that matters for bytecode is its sha256, already declared above, plus the tag naming the
+  # interpreter that can load it.
+  python_bytecode_tag: cpython-310
+  module_name: blip2_qformer_cir_align_prompt_target_image_caption_shiyan92
+  class_name: Blip2QformerCirAlignPromptTargetImageCaptionshiyan92
 - model_id: clvc_net
   family: torchvision ResNet-50 ImageNet weights
   required_for: official_evaluation

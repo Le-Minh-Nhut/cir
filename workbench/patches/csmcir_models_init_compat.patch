@@ -1,6 +1,6 @@
 --- a/src/lavis/models/__init__.py
 +++ b/src/lavis/models/__init__.py
-@@ -41,114 +41,130 @@
+@@ -41,115 +41,132 @@
  from lavis.models.blip2_models.blip2_qformer_prompt import Blip2QformerPrompt
  from lavis.models.blip2_models.blip2_qformer_cir_cat import Blip2QformerCirCat
  from lavis.models.blip2_models.blip2_qformer_cir_align_prompt import Blip2QformerCirAlignPrompt
@@ -22,18 +22,6 @@
 -from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan7cross1 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan7cross1
 -from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan7cross3 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan7cross3
 -from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan7prompttoken import Blip2QformerCirAlignPromptTargetImageCaptionshiyan7prompttoken
--
--
--
--
--from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan8 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan8
--from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan9 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan9
--from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan10 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan10
--from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan11 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan11
--from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan12 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan12
--from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan13 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan13
--from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan14 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan14
--from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan15 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan15
 +# --- workbench patch csmcir_models_init_compat.patch ---
 +# Each block below registers a class whose module this public revision does not contain, so
 +# the package died on the first one and never reached line {last}, where the shipped CSMCIR
@@ -59,10 +47,18 @@
 +    from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan7prompttoken import Blip2QformerCirAlignPromptTargetImageCaptionshiyan7prompttoken
 +except ImportError:
 +    pass
-+
-+
-+
-+
+ 
+ 
+ 
+ 
+-from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan8 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan8
+-from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan9 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan9
+-from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan10 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan10
+-from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan11 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan11
+-from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan12 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan12
+-from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan13 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan13
+-from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan14 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan14
+-from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan15 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan15
 +try:
 +    from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan8 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan8
 +    from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan9 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan9
@@ -231,5 +227,7 @@
 +except ImportError:
 +    pass
  from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_csmcir import Blip2QformerCirAlignPromptCSMCIR
++from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan92 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan92
  
  
+ from lavis.models.blip2_models.blip2_qformer_cir_cls import Blip2QformerCirCls

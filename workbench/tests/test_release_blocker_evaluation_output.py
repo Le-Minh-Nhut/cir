@@ -1651,9 +1651,18 @@ def test_the_evaluator_child_gets_no_operator_secrets_and_a_private_temp_dir(
     assert set(reported["workbench"]) - set(secret_names) <= permitted, reported
     assert reported["run_id"] == "secret-filter-run", "the run identity must reach the child"
 
-    run_temp = directory / "tmp"
-    assert Path(reported["tmpdir"]) == run_temp
+    # The child's temp directory must be private and run-scoped, but it must NOT be nested under the
+    # artifact tree: `multiprocessing.resource_sharer` binds `<TMPDIR>/listener-<random>`, and the
+    # kernel caps that AF_UNIX path at 107 bytes. A nested `artifacts/logs/<run-id>/tmp` is ~142, which
+    # killed any evaluator sharing tensors across DataLoader workers. The invariant is therefore
+    # "unique, 0700, and short enough to be a socket base" -- not one particular parent directory.
+    run_temp = Path(reported["tmpdir"])
+    assert run_temp.is_dir()
     assert run_temp.stat().st_mode & 0o777 == 0o700
+    assert len(str(run_temp / "listener-0123456789").encode()) <= 107, (
+        f"TMPDIR is too deep for an AF_UNIX socket: {run_temp}")
+    assert not run_temp.is_relative_to(directory), (
+        "the temp dir must not sit under the artifact tree, or the socket path overflows")
     assert environment["TMPDIR"] == str(run_temp)
 
 

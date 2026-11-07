@@ -19,6 +19,7 @@ from __future__ import annotations
 import hashlib
 import json
 import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -53,8 +54,40 @@ def _contract():
 
 
 def _copy(tmp_path: Path) -> Path:
+    """A checkout holding the PUBLISHED base bytes, whatever the working tree holds.
+
+    `shutil.copytree(CSMCIR, ...)` used to be enough because the vendor tree was always pristine.
+    It is not any more: `prepare_model` applies the declared patches in place, which is how DCNet and
+    TME are consumed, and how CSMCIR's import repair reaches the evaluator. Copying the working tree
+    would then hand these tests a derived file, so `patch -p1` would fail as "already applied" and the
+    base-digest assertion would describe the fixture rather than the contract.
+
+    The base is reconstructed by reverse-applying the same declared patch, so nothing here depends on
+    a second copy of the published bytes or on the operator's checkout state. The patch is the
+    contract; inverting it is therefore exact.
+    """
     root = tmp_path / "CSMCIR"
     shutil.copytree(CSMCIR, root)
+    # EVERY declared patch is inverted, not just the one this module names. The checkout now carries
+    # two repairs, so reversing one left the other derived and `source_provenance` then reported a
+    # generic "changed since vendoring" instead of the state the test is about.
+    for declaration in _model().get("approved_source_patches") or []:
+        target = root / declaration["path"]
+        if not target.is_file():
+            continue
+        digest = _sha(target)
+        if digest == declaration["derived_sha256"]:
+            patch_path = REPO / declaration["patch_file"]
+            reverted = subprocess.run(["patch", "-p1", "--reverse", "--quiet"],
+                                      cwd=root, stdin=patch_path.open("rb"),
+                                      capture_output=True, text=True)
+            assert reverted.returncode == 0, (
+                f"could not reconstruct the published base for {declaration['path']}: {reverted.stderr}")
+            digest = _sha(target)
+        assert digest == declaration["base_sha256"], (
+            f"{declaration['path']} matches neither the published base nor the declared derived "
+            f"bytes ({digest[:16]}...)")
+    assert _sha(root / TARGET) == _contract()["base_sha256"]
     return root
 
 
@@ -72,7 +105,7 @@ def test_the_registry_declaration_matches_the_shipped_patch_file(tmp_path: Path)
 def test_pristine_source_is_accepted(tmp_path: Path) -> None:
     root = _copy(tmp_path)
     assert _sha(root / TARGET) == _contract()["base_sha256"], (
-        "the vendored file is not the published base any more; refresh the registry contract")
+        "the fixture did not produce the published base; _copy must reconstruct it from git")
     assert source_provenance(_model(), root)["verified"] is True
 
 

@@ -8,8 +8,8 @@ Repo: `/home/heheboiz/data/cir`, branch `research/cir-failure-workbench`, HEAD `
 ## 0. Chỉ mục evidence
 
 Bundle của buổi 20261107 (CSMCIR + GloVe recipe):
-`workbench/docs/reviews/checkpoint_selection/20261107T021500+0700/` — 15 entry có hash trong
-`EVIDENCE_INDEX.json`, 85 582 B. Đọc `README.md` trong đó trước.
+`workbench/docs/reviews/checkpoint_selection/20261107T021500+0700/` — 19 entry có hash trong
+`EVIDENCE_INDEX.json`, 223 723 B (đo lại cuối lượt). Đọc `README.md` trong đó trước.
 
 | thư mục | nội dung |
 |---|---|
@@ -26,14 +26,14 @@ Bundle của buổi 20261107 (CSMCIR + GloVe recipe):
 
 ## 1. Bảng kết quả nhanh — 17 entry đăng ký
 
-Đếm theo `model_id` trong registry. **PAIR là một entry** (B1/B2 chỉ là hai file của cùng entry), nên bảng dưới có 15 dòng đã đo + 2 dòng chưa đo. Bảng không xếp hạng giữa các protocol khác nhau; cột `protocol` nằm ngay cạnh số để tránh so sánh sai.
+Đếm theo `model_id` trong registry. **PAIR là một entry** (B1/B2 chỉ là hai file của cùng entry), nên bảng dưới có 16 dòng đã đo (AirKnow hai variant) + 1 dòng exploratory (`pair`). Bảng không xếp hạng giữa các protocol khác nhau; cột `protocol` nằm ngay cạnh số để tránh so sánh sai.
 
 | # | model_id | macro R@10 | macro R@50 | mean | protocol | trạng thái |
 |---|---|---|---|---|---|---|
 | 1 | hint | **59.8034** | **80.1308** | 69.9671 | `fashioniq_val_split` | COMPLETED — đã kiểm chứng lại, xem 3.12 |
 | 2 | encoder | **56.2231** | **77.6674** | 66.9452 | `fashioniq_val_split` | COMPLETED |
 | 3 | limn (base iter-0) | **55.7919** | **77.6378** | 66.7149 | `fashioniq_val_split` | COMPLETED (open_clip 2.20, registry đã sửa) |
-| 4 | tme (0% noise) | **54.9229** | **74.8384** | 64.8807 | `fashioniq_original_split` | COMPLETED (session runner) |
+| 4 | tme (0% noise) | **54.9229** | **74.8384** | 64.8807 | `fashioniq_original_split` | COMPLETED (normal path `workbench.replay.tme`, xem 3.16.6) |
 | 5 | habit (20%) | **54.8733** | **74.5034** | 64.6883 | `fashioniq_full_gallery_ref_excluded` | COMPLETED |
 | 6 | intent (20%) | **54.8662** | **75.4319** | 65.1491 | `fashioniq_full_gallery_ref_excluded` | COMPLETED |
 | 7 | conesep (20%) | **54.7613** | **75.2151** | 64.9882 | `fashioniq_full_gallery_ref_excluded` | COMPLETED |
@@ -358,11 +358,11 @@ Ghi chú điều kiện từng entry:
 - **HINT** — `fashioniq_val_split`; checkpoint whole-model, SHA tác giả khớp trước khi unpickle.
 - **LIMN** — `fashioniq_val_split`, bundle iteration-0 đủ 3 file (dress/shirt/toptee), mỗi category một model riêng. **Chạy dưới open_clip 2.20.0** (env `workbench/envs/limn-adapted`) vì đó là pin của tác giả (`LIMN/requirements.txt:37`) và là môi trường đã đo. `adapted_runtime` trước đây ghi `>=2.24,<2.27`, mâu thuẫn với pin đó; nay đã sửa thành `==2.20.0` (mục 3.15). **Đính chính:** bản trước nói dưới 2.24 nó chết ở `_global_pool` — đo lại thì **không** tái lập: cả 2.20 lẫn 2.24 đều unpickle được bundle này. Nhãn: `SCOPED_PINNED_OPENCLIP_2_20`, xem D-6.
 - **ConeSep / HABIT / INTENT** — 20% training noise, **0% evaluation noise**, protocol `fashioniq_full_gallery_ref_excluded`; không thay bằng file noise khác.
-- **TME** — `fashioniq_original_split`, 0% eval noise. Checkpoint gốc là **tar bọc torch-zip**; đã bóc lớp tar để dùng state dict tensor-only. Cache feature do chính pipeline sinh: `(15536, 257, 1408)` **float32**; contract khai `float16` nên wrapper từ chối — xem D-7. Evaluator chạy với `Qformer_bs 256→64`, `query_bs 32→8` (chính docstring pinned bảo giảm khi OOM; chỉ đổi số ảnh mỗi forward, ranking không đổi).
+- **TME** — `fashioniq_original_split`, 0% eval noise. Checkpoint gốc là **tar bọc torch-zip**; đã bóc lớp tar để dùng state dict tensor-only. Cache feature do chính pipeline sinh: `(15536, 257, 1408)` **float32**; contract lịch sử khai `float16` nên wrapper **từng** từ chối; **D-7 đã đóng** bằng `runtime_overrides.sm_120.feature_dtype: float32` và đường chuẩn đã chạy xong (3.16.6). Evaluator chạy với `Qformer_bs 256→64`, `query_bs 32→8` (chính docstring pinned bảo giảm khi OOM; chỉ đổi số ảnh mỗi forward, ranking không đổi).
 
-**CSMCIR** và **PTHA+MTST** chưa xong, blocker cụ thể:
+**CSMCIR** và **PTHA+MTST**: cả hai blocker cũ đã đóng — chi tiết:
 
-- **CSMCIR**: checkpoint tải đủ và khớp SHA (`c8812071…`), nhưng dataset constructor đòi `COT_ours2/bert_captions/fashioniq/cap.*.val.json` + `captions/keywords_in_mods_*.json`. Cả hai **không có** trên máy và **không có** trong repo HF của tác giả (repo chỉ có `fashioniq_qwen_captions/`). Không thay bằng Qwen caption, không sinh caption giả ⇒ `BLOCKED_MISSING_AUTHOR_CAPTION_ASSETS` (D-8).
+- **CSMCIR**: ~~checkpoint tải đủ nhưng thiếu caption~~ → **đã đo trong buổi 20261107** (3.18): checkpoint khớp SHA (`c8812071…`), caption công khai khớp sha256, exit 0, macro **57.0507 / 77.2986**. D-8 đóng vì `bert_captions`/`keywords_in_mods` chỉ được đọc bởi `FashionIQDataset_imageedit` — class chết, không nơi nào khởi tạo.
 - **PTHA+MTST**: ~~BLOCKED~~ → **đã chạy xong trong buổi này** (mục 3.13). Nguyên nhân cũ được ghi lại nguyên văn: lỗi shape `[61072,256]` vs `[61072,768]`. Nhưng kết luận "checkpoint CIRR có đầu chiếu 768 chiều" là **sai**: checkpoint có `vision_proj (256,768)` và nạp strict thành công; lỗi nằm ở `extract_target_features` (định nghĩa thứ hai) trả **chưa chiếu**. Đã sửa bằng `inference_target()` của tác giả, macro **37.8978 / 59.8364**, vẫn là exploratory transfer.
 
 **SPRC OneDrive**: vẫn `PENDING_USER_INPUT` — file chưa có trên máy nên không thể "inspect actual class" (D-1 giữ nguyên).
@@ -1010,7 +1010,7 @@ cd workbench/artifacts/csmcir_derived/src
 PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True $WORKBENCH_CSMCIR_PYTHON \
   validate_blip_csmcir.py --dataset fashionIQ \
   --blip-model-name blip2_cir_align_prompt_target_image_caption_shiyan92 \
-  --blip-model-path ../../../checkpoints/csmcir/fashioniq_tuned_clip_best.pt
+  --blip-model-path $CIR/workbench/artifacts/checkpoints/csmcir/fashioniq_tuned_clip_best.pt
 ```
 
 ### 3.19. Ba việc còn lại: SPRC ViT-g, PAIR, và recipe GloVe
@@ -1066,7 +1066,7 @@ idempotent (glob gốc khớp cả `.pkl` nó vừa ghi).
 Diff đề xuất cho `preparation_contracts.yaml` nằm ở mục 6 dưới nhãn `WORKBENCH_SEEDED_RECIPE`; **chưa
 áp dụng**.
 
-### 3.20. Test suite trên Python 3.12 — và 20 failure còn lại là gì
+### 3.20. Test suite trên Python 3.12 — trạng thái TRƯỚC khi sửa (số cuối ở 3.21.5)
 
 Interpreter 3.12 không có sẵn trong repo; `python3.12` của distro thiếu `pip`. Đã dựng
 `workbench/envs/ctl312h` bằng `uv` (CPython 3.12.11, **có** `Python.h`) — user-local, không `sudo`,
@@ -1170,7 +1170,7 @@ unexpected ['token_importance']`, `rc 0`.
   hiện, không phải suy đoán.
 - Áp patch **in-place** sẽ làm đường chính thức chạy được (DCNet và TME đều đang ở trạng thái DERIVED,
   nên đó là tiền lệ trong repo), nhưng nó mâu thuẫn với `test_csmcir_source_blocker.py`, vốn khẳng
-  định workbench *không* patch checkout. Chọn hướng nào là quyết định nghiên cứu → **D-10**.
+  định workbench *không* patch checkout. Chọn hướng nào là quyết định nghiên cứu → **D-10** — **đã giải quyết ở 3.23** bằng cách gộp vào patch hiện có và tái ký digest, không nới guard.
 - Adapter còn một khác biệt ngữ nghĩa không thể vá bằng cấu hình: `score()` của adapter tính
   `reshape(N,32,256)[:,0,:]` rồi `einsum(...).max(-1)` trên vector 8192 chiều, còn evaluator gốc dùng
   `inference()` (attention-weighted token importance rồi max trên 32 query token). Hai đại lượng khác
@@ -1193,11 +1193,11 @@ tại `ea5ff05` và chạy cùng interpreter:
 | baseline `ea5ff05` (worktree riêng) | **23 failed**, 2152 passed, 47 skipped |
 | sau khi sửa trong lượt này | **3 failed**, 2172 passed, 47 skipped |
 
-Bốn failure còn lại đều **có trong baseline**, đã kiểm từng cái:
+Ba failure còn lại đều **có trong baseline**, đã kiểm từng cái (dòng `test_handoff_commands` đã xanh sau khi nâng SHA; giữ lại để đối chiếu):
 
 | test | nguyên nhân thật | vì sao không sửa |
 |---|---|---|
-| `test_final_hardening_regressions::test_planner_verifier_uses_the_resolved_contract` | LIMN `torch==2.20.0` trong registry từ commit `200b7c7` của phiên trước; test còn kỳ vọng hợp đồng `<2.27,>=2.24` | sửa registry hay test đều là quyết định về pin LIMN, không thuộc phạm vi lượt này |
+| `test_final_hardening_regressions::test_planner_verifier_uses_the_resolved_contract` | LIMN `open_clip_torch==2.20.0` trong registry từ commit `200b7c7` của phiên trước; test còn kỳ vọng hợp đồng `<2.27,>=2.24` | sửa registry hay test đều là quyết định về pin LIMN, không thuộc phạm vi lượt này |
 | `test_fresh_clone_delivery::test_every_manifest_path_matches_its_recorded_digest` | đúng ba file có approved patch áp **in-place**: `DCNet/base/base_trainer.py`, `TME/src/precompute.py`, `TME/src/precompute_evaluation.py`; `provenance.json` ghi digest **base** | manifest cần ghi derived digest — thay đổi có chủ đích của phiên trước, không tự sửa expected hash |
 | ~~`test_handoff_commands::test_no_release_document_points_at_a_superseded_source_sha`~~ | đã xử lý theo đúng thủ tục có sẵn (tiền lệ A40): nâng `TESTED_SOURCE_SHA` → `5ca7043` tại `FINAL_PC_RELEASE_VERDICT.md` và `PC_PILOT_HANDOFF.md`, kèm số suite đo thật | nay **xanh** (8/8 trong file đó) |
 | `test_release_blocker_interpreter::test_a_real_distro_environment_is_not_reported_empty` | chỉ 79 + 0 trên 88 package được giải thích — distro `/usr/bin/python3` không có metadata | thuộc môi trường host, ngoài phạm vi |
@@ -1216,8 +1216,8 @@ Khác biệt được phân loại từng file, không gộp. Nguyên nhân đã
 
 | ID | vấn đề | lựa chọn | tác động |
 |---|---|---|---|
-| **D-10** | Đường chính thức/adapter trỏ `third_party/CSMCIR` pristine, nơi `import lavis.models` chết — **và** overlay qua `WORKBENCH_THIRD_PARTY_ROOT` cũng không giải được (xem 3.22) | (a) thêm patch thứ ba vào registry cho dòng import `shiyan92` dưới `approved_source_patches` (đổi `derived_sha256` + `patch_sha256`); (b) nới `approved_patch_state` để chấp nhận một tập digest derived cho phép; (c) giữ nguyên, CSMCIR chỉ chạy qua script evidence | (a) là sửa registry, phải tái ký `derived_sha256` và chứng minh patch mới chỉ thêm 1 dòng; (b) nới guard bảo mật theo hướng rộng — cần cân nhắc; (c) trung thực nhưng đường web không dùng được |
-| **D-11** | `TESTED_SOURCE_SHA` trong `FINAL_PC_RELEASE_VERDICT.md` chưa tiến sau khi production code đổi trong lượt này | cập nhật sang commit mới sau khi merge, hoặc chấp nhận test đỏ | là nghi thức phát hành, không phải lỗi code |
+| ~~D-10~~ | `csmcir` đường chính thức | **ĐÃ GIẢI QUYẾT trong lượt này** (3.23): gộp `shiyan92` vào patch `__init__.py` và tái ký `derived_sha256`/`patch_sha256`; thêm `_apply_approved_source_patches`; khai `.pyc` là asset; sửa `AF_UNIX path too long` và chặn `PYTORCH_CUDA_ALLOC_CONF` | Không nới guard nào; digest vẫn phải khớp chính xác | Không còn gì để quyết cho luồng A 
+| ~~D-11~~ | `TESTED_SOURCE_SHA` trong `FINAL_PC_RELEASE_VERDICT.md` chưa tiến sau khi production code đổi trong lượt này | **ĐÃ XỬ LÝ**: `TESTED_SOURCE_SHA` nay là `c13ac29dfaa88eab8f175e7f6d3adc9115b10fd8` trong cả hai tài liệu phát hành | là nghi thức phát hành, không phải lỗi code |
 
 ### 3.22. Overlay `WORKBENCH_THIRD_PARTY_ROOT` — thử và bị chặn bởi mâu thuẫn digest
 
@@ -1254,7 +1254,7 @@ Kết quả là hai blocker, cái thứ hai là mâu thuẫn thật:
   attribute 'from_pretrained'`.
 
 Nên để đường chính thức chạy được, registry **phải** khai thêm một delta cho dòng import đó. Đó là
-D-10 phương án (a). Không tự làm: nó đổi `derived_sha256`, tức đổi thứ guard dùng để nói "cây này là
+D-10 phương án (a). **Lượt này đã làm đúng phương án đó** (3.23): nó đổi `derived_sha256`, tức đổi thứ guard dùng để nói "cây này là
 bản đã được duyệt", và phải tái ký `patch_sha256` — quyết định có ảnh hưởng tới tính toàn vẹn, không
 phải sửa cục bộ.
 
@@ -1262,15 +1262,113 @@ Ghi chú thêm: advisory đề xuất thêm một biến `WORKBENCH_CSMCIR_SOURC
 được, vì `preflight`/`runtime_blockers` vẫn tính source từ `WORKBENCH_THIRD_PARTY_ROOT`, nên nó vẫn
 thấy pristine và vẫn chặn — trừ khi sửa cả hai chỗ, tức lớn hơn phương án (a) chứ không nhỏ hơn.
 
+### 3.23. D-10 ĐÓNG — native evaluation chạy qua pipeline chuẩn
+
+Trước mục này, CSMCIR chỉ chạy được qua script trong evidence bundle, không qua `evaluate_models.py`.
+Vấn đề không phải cấu hình: `approved_patch_state` đòi digest **đúng** `derived_sha256`, mà cây cho
+`shiyan92` đăng ký lại có digest khác. Đã giải bằng cách gộp, không bằng cách nới guard.
+
+#### 3.23.1 Gộp vào patch hiện có, tái ký digest
+
+Hai patch CSMCIR giờ là **base → trạng thái cuối cần dùng**, không phải base → trung gian:
+
+| file | base | derived | patch_sha256 |
+|---|---|---|---|
+| `src/lavis/models/__init__.py` | `9d8c914b…` | `0ec13443…` | `3f2bac48…` |
+| `src/validate_blip_csmcir.py` | `aa7a4395…` | `a057e8f3…` | `0fcff28b…` |
+
+`__init__.py` gộp cả hai việc trong một patch: bọc khối 98 import trong `try/except`, **và** đăng ký
+`shiyan92` sau khối đó (không phải bên trong, vì module thiếu đầu tiên làm hỏng cả khối).
+
+`validate_blip_csmcir.py` gộp ba việc: làm `vis_fiq` thành opt-in, và hai tham số vận hành thành
+env-overridable với **default tác giả giữ nguyên** (`WORKBENCH_CSMCIR_QUERY_BS` mặc định 64,
+`WORKBENCH_CSMCIR_SAVE_MEMORY` mặc định 0).
+
+Không có whitelist nào được nới; digest vẫn phải khớp chính xác.
+
+#### 3.23.2 Cơ chế áp patch — trước đó không tồn tại
+
+`prepare_model.py` chỉ in trạng thái, không áp gì. Đã thêm `_apply_approved_source_patches`, giữ guard chặt:
+
+- patch file phải khớp `patch_sha256` của nó;
+- target phải đang là `base_sha256` **trước** khi áp (nếu lệch → từ chối, vì "unexpected modification
+  is not covered by the declaration");
+- **sau** khi áp, target phải đúng `derived_sha256` — nếu không, dừng;
+- target đã ở derived → no-op.
+
+#### 3.23.3 `.pyc` là asset có khai báo, không phải file chép tay
+
+Khai trong `auxiliary_assets.yaml`: `direct_url` trỏ đúng blob tại revision pin, `expected_sha256`
+`46d00b0b…`, stage vào tên module (CPython chỉ nhận `.pyc` cạnh package, không nhận trong
+`__pycache__`). Downloader tải và verify; không có file nào được tạo tại chỗ.
+
+Ghi chú kỹ thuật: asset này **không** được khai `content_contract`, vì `registry.py:1551` coi mọi asset
+có contract là JSON và sẽ báo `INVALID JSON` cho một `.pyc`.
+
+#### 3.23.4 Hai lỗi vận hành chặn đường pipeline — đã sửa
+
+| lỗi | bằng chứng | sửa |
+|---|---|---|
+| `OSError: AF_UNIX path too long` | `TMPDIR` do pipeline đặt là `artifacts/logs/<run-id>/tmp`, ~142 ký tự; `multiprocessing.resource_sharer` bind `<TMPDIR>/listener-<10 ký tự>` và kernel chặn ở 107 byte. Chết trước batch đầu tiên | temp dir của run giờ tạo bằng `mkdtemp(prefix="wb-", dir=/tmp)` — vẫn riêng cho từng run, vẫn 0700, nhưng đường dẫn ngắn |
+| `PYTORCH_CUDA_ALLOC_CONF` bị chặn | allowlist của evaluator không có biến này, nên biến operator đặt **không tới** evaluator, trong khi chính message OOM khuyên dùng nó. Chạy tay thì được, chạy pipeline thì không | thêm vào allowlist (là chiến lược cấp phát, không đổi phép tính) |
+
+Thêm nữa, các biến vận hành riêng của model nay khai qua `environment.runtime_env` trong registry và
+được `_declared_model_env_names` đưa vào allowlist — không hardcode tên model vào danh sách chung.
+
+Evidence cũng ghi lại knob thật đã tới evaluator (`command.json` →
+`environment.evaluator_environment_knobs`), vì trước đó `command.json` chỉ có digest và một người đọc
+sau không biết batch/save_memory có được đặt hay không.
+
+#### 3.23.5 Kết quả — hai lần, khớp bit
+
+| | R@10 | R@50 |
+|---|---|---|
+| dress | 52.2062 | 74.8637 |
+| shirt | 57.7527 | 76.1040 |
+| toptee | 61.1933 | 80.9281 |
+| **macro** | **57.05073873202006** | **77.29859352111816** |
+
+Lệnh (chạy hai lần, exit 0 cả hai):
+
+```bash
+cd $CIR
+export WORKBENCH_RUNTIME_ADAPTATION=sm_120
+export WORKBENCH_CSMCIR_PYTHON=$CIR/workbench/artifacts/environments/cir-005ef4e1b02999a5/bin/python
+export WORKBENCH_CSMCIR_QUERY_BS=8        # tác giả: 64
+export WORKBENCH_CSMCIR_SAVE_MEMORY=1     # tác giả: 0
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+workbench/envs/ctl312h/bin/python workbench/scripts/evaluate_models.py --model csmcir
+```
+
+`command.json` của run: `return_code: 0`, `actual_source_commit` khớp pin
+`774f94e2…`, `checkpoint_local_sha256` `c8812071…`, knobs ghi đủ.
+
+#### 3.23.6 Luồng B (composition adapter) vẫn tách — và đúng là phải tách
+
+Adapter CIRCUS **không** được nối vào số đo này, vì hợp đồng scoring khác:
+
+| | native (đường đo) | adapter |
+|---|---|---|
+| cách tính | `inference()`: attention-weighted token importance, matmul `(1,1,256) × (queries,32,gallery)`, max trên 32 query token | `score()`: `reshape(N,32,256)[:,0,:]`, chuẩn hoá, `einsum().max(-1)` trên vector 8192 chiều |
+| đại lượng | điểm tương đồng per-query | dot product trên embedding mở rộng |
+
+Ép hai cái bằng nhau là đổi thuật toán. `_status()` giữ `ready=False` nhưng **lý do đã sửa cho đúng**:
+trước nói thiếu caption `COT_ours2` (đã bị bác bỏ ở 3.18), nay nói adapter không được nối vào đường đã đo
+và nêu đúng hai ràng buộc thật.
+
+Blocker riêng của CIRCUS, không liên quan CSMCIR: `data/circus_release/` không tồn tại. Kiểm bằng
+`composition_eval.py --models limn --plan` → cùng `FileNotFoundError`. Nên đây là hạ tầng chung, và bổ
+sung dataset cũng **không** giải được khác biệt scoring ở bảng trên.
+
 ## 4. Hàng đợi quyết định buổi sáng
 
 | ID | model/job | hành động đề xuất | vì sao | phạm vi/rủi ro | đã thử an toàn | bằng chứng | cần bạn quyết/ cung cấp |
 |---|---|---|---|---|---|---|---|
 | **D-1** | `sprc` (biến thể chính, EVA-CLIP ViT-g) | Bạn tải file OneDrive rồi đặt tại `/home/heheboiz/data/cir/workbench/artifacts/checkpoints/sprc/sprc_fiq.pt` | Bản chính (paper config) chỉ có trên OneDrive; tôi không thể login/tương tác | Chỉ thêm 1 file 1.4–2.6 GB vào checkpoint root; không đổi code | Đã chạy biến thể ViT-L công khai (D6 0.0268 pp) — **không** dùng thay hàng ViT-g | `measurements/sprc_vitl_run1.json`, `measurements/sprc_distance.json` | Tải https://1drv.ms/u/s!Aj0q22vyiZbabnUya4mnufIBtYI?e=n4ZVKj (Baidu dự phòng, pass `t1at`) và đặt đúng path trên |
 | **D-2** | `pair` (B1 + B2) | Quyết định hướng: (a) xin tác giả `model_vssp.py`/`MHTransformer_dis.py` đúng revision, (b) bỏ PAIR khỏi cohort và giữ nhãn EXPLORATORY trong báo cáo, hoặc (c) xác nhận rằng checkpoint đến từ ancestor chung với ENCODER để tôi dựng đúng nhánh còn thiếu | Đã load và chấm được cả 2 file bằng EXPLORATORY_PUBLIC_MAPPING, nhưng public `model.py` KHÔNG phải code đã train: `transformer_a` khôi phục 2 layer×4 head vs public 1×8; checkpoint có `transformer_c/d`, `weight_chanelImg*`, `cross_t2i` mà public không định nghĩa; 5.20% tham số nằm ngoài forward ⇒ điểm 35.01/57.58 (B1) không phải hành vi checkpoint | (a)/(c) cần bạn liên hệ hoặc xác nhận; (b) chỉ là quyết định phạm vi. Không sửa forward, không khởi tạo lại module | Đã probe HF + ZhihFu/PAIR (chỉ `main`), 5 repo công khai của tác giả, git history; đã restore + audit + smoke + chạy đủ 3 category × 2 file × 2 hypothesis | `pair_compat/manifests/pair_compat_verdict.json`, `pair_compat/measurements/summary.json`, mục 3.9 | Chọn (a), (b) hay (c) |
-| **D-3** | registry dùng chung | Duyệt diff registry để map các entry đã đo được: 12 entry (8 priority + limn/encoder/hint/habit/intent/conesep/tme, trừ PAIR vì chỉ exploratory) | Hiện registry vẫn ghi `BLOCKED_*`/`NOT_RUN` cho các bundle nay đã đo được; không nên tự sửa default toàn cục qua đêm | Sửa `workbench/registry/models.yaml` (`reproduction_status` + `checkpoint_mapping_status`) + `preparation_contracts.yaml` cho DCNet GloVe và TME `feature_dtype` | Không sửa gì; chỉ ghi `configs/selected_overrides.yaml` trong session | `configs/selected_overrides.yaml`, mục 9.1, `cohort/measurements/cohort_summary.json` | Duyệt/không duyệt diff registry |
+| **D-3** | registry dùng chung | Duyệt diff registry để map các entry đã đo được: 16 entry (trừ `pair` vì chỉ exploratory; diff `csmcir` riêng ở 6.1); nguồn cũ ghi 8 priority + limn/encoder/hint/habit/intent/conesep/tme, trừ PAIR vì chỉ exploratory) | Hiện registry vẫn ghi `BLOCKED_*`/`NOT_RUN` cho các bundle nay đã đo được; không nên tự sửa default toàn cục qua đêm | Sửa `workbench/registry/models.yaml` (`reproduction_status` + `checkpoint_mapping_status`) + `preparation_contracts.yaml` cho DCNet GloVe và TME `feature_dtype` | Không sửa gì; chỉ ghi `configs/selected_overrides.yaml` trong session | `configs/selected_overrides.yaml`, mục 9.1, `cohort/measurements/cohort_summary.json` | Duyệt/không duyệt diff registry |
 | **D-4** | DCNet reproducibility | Cho phép ghi lại recipe sinh GloVe PKL thành generator trong `preparation_contracts.yaml` (seed cố định, sha256 của 10 file PKL) | Hiện contract ghi `NONDETERMINISTIC_WITHOUT_AUTHOR_ARTIFACT`, nên lần sau không tái lập được bằng workbench | Sửa 1 khối contract + thêm 10 entry hash; không đổi dataset canonical | Đã sinh trong session, giữ file + log, không sửa contract | `logs/dcnet_glove_prep.log`, `logs/dcnet_run2.log` | Duyệt việc chuẩn hoá recipe này |
-| **D-5** | `torch.load` shim cho DCNet | Cho phép thêm 1 dòng `weights_only=False` (có hash-check trước) vào `base/base_trainer.py` như `approved_source_patches` thay vì shim qua `PYTHONPATH` | Hiện phải inject shim để unpickle; nếu duyệt thì DCNet chạy được bằng CLI chuẩn không cần shim | Sửa 1 dòng trong checkout pinned + khai báo patch như CSMCIR | Đã chạy bằng shim, kết quả đầy đủ | `scripts/compat/sitecustomize.py`, `logs/dcnet_run2.log` | Duyệt patch 1 dòng (kèm base/derived sha256) hay giữ shim |
+| ~~D-5~~ | `torch.load` shim cho DCNet | **ĐÃ ÁP DỤNG** trong buổi trước: `approved_source_patches` 1 dòng `weights_only=False` trong `base/base_trainer.py`, base/derived sha256 trong registry (mục 3.14) | Hiện phải inject shim để unpickle; nếu duyệt thì DCNet chạy được bằng CLI chuẩn không cần shim | Sửa 1 dòng trong checkout pinned + khai báo patch như CSMCIR | Đã chạy bằng shim, kết quả đầy đủ | `scripts/compat/sitecustomize.py`, `logs/dcnet_run2.log` | Không cần quyết nữa |
 
 Không mục nào chặn job khác: chỉ **D-1** (file SPRC ViT-g) còn thực sự treo. **D-8 đã đóng** trong buổi 20261107 — xem 3.18: yêu cầu `bert_captions`/`keywords_in_mods` là của một class chết, và caption cần thiết đã tải được từ Hub tác giả. D-5, D-6, D-7, D-9 đã áp dụng/giải quyết; 16/17 entry đã có số đo native độc lập. Còn chờ quyết định chính sách: D-2 (PAIR), D-3 (diff registry), D-4 (GloVe recipe).
 
@@ -1462,7 +1560,7 @@ Exit 1 ở #4/#5 **là đúng**: hai blocker có thật (path checkpoint chưa c
 | habit | `HABIT-FIQ_N0.2.pt` | `fashioniq_full_gallery_ref_excluded` | **COMPLETED** | 54.8733 / 74.5034 | EMPIRICAL |
 | intent | `intent_fiq_0.2.pt` | `fashioniq_full_gallery_ref_excluded` | **COMPLETED** | 54.8662 / 75.4319 | EMPIRICAL |
 | conesep | `ConeSep-FIQ-N0.2.pt` | `fashioniq_full_gallery_ref_excluded` | **COMPLETED** | 54.7613 / 75.2151 | EMPIRICAL |
-| tme | `fashioniq_0_best_model` | `fashioniq_original_split` | **COMPLETED** | 54.9229 / 74.8384 | EMPIRICAL (contract dtype, D-7) |
+| tme | `fashioniq_0_best_model` | `fashioniq_original_split` | **COMPLETED** | 54.9229 / 74.8384 | EMPIRICAL (contract dtype, D-7 closed) |
 | csmcir | `fashioniq_tuned_clip_best.pt` | `fashioniq_original_split` | **COMPLETED** | 57.0507 / 77.2986 | public-caption path-mapped run (3.18); checkpoint hash-verified |
 | ptha_mtst | `tuned_mtst_cirr.pt` | `fashioniq_original_split` | **COMPLETED** | 37.8978 / 59.8364 | transfer CIRR→FIQ; nguyên nhân là biên feature, đã sửa (3.13) |
 
@@ -1490,9 +1588,9 @@ thêm patch thứ ba cho thay đổi vận hành (`save_memory`, batch size) —
 
 - **Không entry nào** là `AUTHOR_VERIFIED_REPRODUCTION` của một con số paper. Nhãn `AUTHOR_VERIFIED` chỉ dùng khi có digest do tác giả công bố và khớp; SPRC ViT-L **không** đủ điều kiện đó và đã được hạ xuống `LOAD-COMPATIBLE`. AirKnow (SHA LFS) và SPRC ViT-L (khớp lớp tuyệt đối) chỉ đạt mức *association*; số đo vẫn là empirical.
 - **PAIR**: load và chấm được, nhưng **tương đương source gốc chưa xác lập**. Đo được: `transformer_a` khôi phục 2 layer × 4 head ≠ public 1 × 8; checkpoint có `transformer_c/d`, `weight_chanelImg*`, `cross_t2i` mà public `model.py` không định nghĩa; 5.20% tham số không được forward public chạm tới. **Chưa** chứng minh được đó là nguyên nhân duy nhất của điểm thấp, và **không** thể gọi các module thừa là "training-only" vì chúng không xuất hiện ở bất kỳ đâu trong checkout, kể cả loss/train. Xem 3.9.
-- **TME**: chạy được nhưng dưới session runner nhận dtype đo được (float32) và giảm `Qformer_bs`/`query_bs`; cho tới khi D-7 được duyệt, đây **không** phải đường chạy `workbench.replay.tme` nguyên bản.
+- **TME**: **đã chạy qua đúng `workbench.replay.tme`** (3.16.6, exit 0, 54.9229 / 74.8384); trước đó từng chạy dưới session runner nhận dtype đo được (float32) và giảm `Qformer_bs`/`query_bs`; cho tới khi D-7 được duyệt, đây **không** phải đường chạy `workbench.replay.tme` nguyên bản.
 - **LIMN**: chạy dưới open_clip **2.20.0**, đúng pin tác giả (`LIMN/requirements.txt:37`). `adapted_runtime` trước đây khai `>=2.24,<2.27` và **đã được sửa** về `==2.20.0` (mục 3.15), nên nay contract và môi trường khớp nhau — không còn lệch.
-- **CSMCIR**: không có số đo. Không suy ra từ model khác, không dùng caption thay thế.
+- **CSMCIR**: **có** số đo **57.0507 / 77.2986** (3.18) — public-caption path-mapped research run, **không** phải reproduction chính thức: equivalence giữa caption công khai và input ra số paper là `NOT PROVEN`. Không suy ra từ model khác.
 - **PTHA+MTST**: **có** số đo transfer CIRR→FIQ (mục 3.13: 37.8978 / 59.8364) nhưng **KHÔNG** phải reproduction FashionIQ — không cắt đầu chiếu, không thay bằng checkpoint FashionIQ của tác giả (không được phát hành). Điều chưa chứng minh là *tương đương với cách tác giả dùng checkpoint cho CIRR*, không phải "không có số đo".
 - **SPRC ViT-g**: chưa chạy; không dùng ViT-L thay cho hàng ViT-g.
 - Validation set đã dùng để chọn checkpoint ⇒ các số không phải ước lượng held-out không thiên lệch.
@@ -1676,4 +1774,4 @@ Thêm: **SPRC ViT-L** bị hạ từ `AUTHOR_VERIFIED` xuống `LOAD-COMPATIBLE`
 
 ### 10.4 Còn lại cho bạn
 
-Chỉ còn **một** việc chặn kết quả: **(D-1)** đặt file SPRC ViT-g vào `workbench/artifacts/checkpoints/sprc/sprc_fiq.pt`. **D-8 đã đóng** — caption CSMCIR tải được từ Hub tác giả và entry đã chạy xong (3.18). **D-7 đã đóng** trong buổi 20261107 (áp dụng hẹp hơn đề xuất cũ: `runtime_overrides` thay vì sửa số lịch sử). Còn lại **D-2** (PAIR), **D-3** (diff registry), **D-4** (GloVe recipe) là quyết định chính sách, không chặn gì thêm. **D-5/D-6/D-9** đã áp dụng.
+Chỉ còn **một** việc chặn kết quả: **(D-1)** đặt file SPRC ViT-g vào `workbench/artifacts/checkpoints/sprc/sprc_fiq.pt`. **D-8 đã đóng** — caption CSMCIR tải được từ Hub tác giả và entry đã chạy xong (3.18). **D-7 đã đóng** trong buổi 20261107 (áp dụng hẹp hơn đề xuất cũ: `runtime_overrides` thay vì sửa số lịch sử). Còn lại **D-2** (PAIR), **D-3** (diff registry), **D-4** (GloVe recipe), ~~D-10~~ đã đóng ở 3.23; chỉ còn D-2/D-3/D-4 là quyết định chính sách. **D-5/D-6/D-9** đã áp dụng.

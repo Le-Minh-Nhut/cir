@@ -707,6 +707,84 @@ def resize_is_complete(config, model: dict, contract: dict) -> bool | None:
     return True
 
 
+def _apply_approved_source_patches(config, model: dict, *, dry_run: bool) -> bool:
+    """Apply the model's declared `approved_source_patches` to its pinned checkout.
+
+    A pinned revision can be unusable as published, and the registry already carries the exact repair
+    as a patch file with three digests: the published base, the committed patch, and the post-patch
+    result. This makes that declaration executable instead of advisory.
+
+    The guard stays strict. Nothing is applied unless the target currently holds `base_sha256`; the
+    patch file's own digest must equal `patch_sha256`; and afterwards the target must equal
+    `derived_sha256`. A tree that is already derived is a no-op. A tree matching neither is refused,
+    because an unexpected modification is not covered by any declaration, and this function must not
+    be able to turn it into one by patching on top.
+    """
+    import hashlib as _hashlib
+    import subprocess as _subprocess
+
+    from workbench.backend.registry import load_registry as _load
+
+    patches = model.get("approved_source_patches") or []
+    if not patches:
+        return True
+    source = config.WORKBENCH_THIRD_PARTY_ROOT / (model.get("source_dir") or "")
+    if not source.is_dir():
+        print(f"[BLOCKED] {model['model_id']}: source checkout absent at {source}", file=sys.stderr)
+        return False
+
+    repo_root = Path(__file__).resolve().parents[2]
+    ok = True
+    for declaration in patches:
+        target = source / declaration["path"]
+        patch_file = repo_root / declaration["patch_file"]
+        base, derived = declaration.get("base_sha256"), declaration.get("derived_sha256")
+        if not patch_file.is_file():
+            print(f"[BLOCKED] {model['model_id']}: patch file absent {patch_file}", file=sys.stderr)
+            ok = False
+            continue
+        if _hashlib.sha256(patch_file.read_bytes()).hexdigest() != declaration.get("patch_sha256"):
+            print(f"[BLOCKED] {model['model_id']}: {patch_file.name} does not match patch_sha256",
+                  file=sys.stderr)
+            ok = False
+            continue
+        if not target.is_file():
+            print(f"[BLOCKED] {model['model_id']}: patch target absent {target}", file=sys.stderr)
+            ok = False
+            continue
+
+        digest = _hashlib.sha256(target.read_bytes()).hexdigest()
+        if digest == derived:
+            print(f"[OK] {model['model_id']}: {declaration['path']} already carries derived digest")
+            continue
+        if digest != base:
+            print(f"[BLOCKED] {model['model_id']}: {declaration['path']} matches neither the published "
+                  f"base nor the recorded post-patch digest ({digest[:16]}...); an unexpected "
+                  f"modification is not covered by the declaration", file=sys.stderr)
+            ok = False
+            continue
+
+        if dry_run:
+            print(f"[DRY-RUN] {model['model_id']}: would apply {patch_file.name} to "
+                  f"{declaration['path']}")
+            continue
+        applied = _subprocess.run(["patch", "-p1", "--batch", "-i", str(patch_file)],
+                                  cwd=source, capture_output=True, text=True, check=False)
+        if applied.returncode != 0:
+            print(f"[BLOCKED] {model['model_id']}: {patch_file.name} failed to apply: "
+                  f"{(applied.stdout + applied.stderr).strip()[:400]}", file=sys.stderr)
+            ok = False
+            continue
+        after = _hashlib.sha256(target.read_bytes()).hexdigest()
+        if after != derived:
+            print(f"[BLOCKED] {model['model_id']}: {declaration['path']} after patching has "
+                  f"{after[:16]}..., expected {derived[:16]}...", file=sys.stderr)
+            ok = False
+            continue
+        print(f"[OK] {model['model_id']}: applied {patch_file.name} -> {after[:16]}...")
+    return ok
+
+
 def _fixed_link(config, model_id: str, dry_run: bool, check_only: bool) -> bool:
     """Stage the model's declared fixed dataset link through the shared helper.
 
@@ -1133,6 +1211,9 @@ def main(argv: list[str] | None = None) -> int:
     if args.execute:
         performed: list[str] = []
         ok = True
+        if model.get("approved_source_patches"):
+            ok = _apply_approved_source_patches(config, model, dry_run=args.dry_run) and ok
+            performed.append("approved-source-patches")
         if model.get("canonical_dataset_link"):
             ok = _fixed_link(config, model["model_id"], args.dry_run, check_only=False) and ok
             performed.append("dataset-link")

@@ -90,6 +90,29 @@ def _record_verified_auxiliary_asset(monkeypatch, settings: WorkbenchConfig, mod
     return path
 
 
+FIXTURE_BYTECODE = b"fixture bytecode"
+
+
+def stage_declared_bytecode(source: Path, model_id: str = "csmcir") -> None:
+    """Stage declared `.pyc` assets a model cannot be built without.
+
+    CSMCIR's released checkpoint is stored under a class whose module the author shipped only as
+    bytecode. The asset check runs before the command is built, so a fixture that omits the file is
+    blocked for the right reason and never reaches what it is trying to test.
+
+    These are synthetic bytes, so the declared digest no longer describes them; the fixture's registry
+    loader rewrites that declaration the same way it already rewrites the checkpoint digest.
+    """
+    from workbench.backend.registry import auxiliary_assets_for_model
+    for asset in auxiliary_assets_for_model(model_id):
+        destination = str(asset.get("destination_path") or "")
+        if not destination.endswith(".pyc"):
+            continue
+        staged = source / destination
+        staged.parent.mkdir(parents=True, exist_ok=True)
+        staged.write_bytes(FIXTURE_BYTECODE)
+
+
 def prepare_source(monkeypatch, module, tmp_path: Path, model: dict) -> tuple[Path, Path, WorkbenchConfig]:
     import subprocess as _sp
     settings = config(tmp_path)
@@ -128,6 +151,9 @@ def prepare_source(monkeypatch, module, tmp_path: Path, model: dict) -> tuple[Pa
                 # the real pinned source does not exist here. Clearing it lets these tests exercise
                 # the command path they are actually about.
                 candidate.pop("source_blocker", None)
+                # The synthetic `.pyc` above is not the author's published bytecode, so the declared
+                # digest cannot describe it. Restate the declaration for the bytes actually staged.
+                pass  # bytecode declarations are restated below
                 for variant in candidate.get("checkpoint_variants", []):
                     if variant.get("expected_sha256") or variant.get("expected_size_bytes"):
                         variant["expected_sha256"] = digest
@@ -135,6 +161,22 @@ def prepare_source(monkeypatch, module, tmp_path: Path, model: dict) -> tuple[Pa
             return loaded
 
         monkeypatch.setattr(registry, "load_registry", loader_with_fixture_declarations)
+
+        # The auxiliary asset declarations are read by their own loader, so the registry rewrite above
+        # does not reach them. The synthetic `.pyc` needs the declaration restated for the bytes that
+        # were actually staged, or the check correctly rejects a digest that does not describe them.
+        bytecode_digest = hashlib.sha256(FIXTURE_BYTECODE).hexdigest()
+        original_assets = registry.load_auxiliary_assets
+
+        def assets_with_fixture_declarations():
+            loaded_assets = original_assets()
+            for declared in loaded_assets:
+                if str(declared.get("destination_path") or "").endswith(".pyc"):
+                    declared["expected_sha256"] = bytecode_digest
+                    declared["expected_size_bytes"] = len(FIXTURE_BYTECODE)
+            return loaded_assets
+
+        monkeypatch.setattr(registry, "load_auxiliary_assets", assets_with_fixture_declarations)
         # `evaluate_models` binds the name at import time (`from ... import load_registry`), so
         # patching only the registry module would not reach the call inside `main()`.
         monkeypatch.setattr(module, "load_registry", loader_with_fixture_declarations, raising=False)
@@ -400,6 +442,8 @@ def test_csmcir_dry_run_constructs_official_command(monkeypatch, tmp_path: Path,
     script = source / "src" / "validate_blip_csmcir.py"
     script.parent.mkdir()
     script.write_text("")
+    stage_declared_bytecode(source)
+
     import workbench.backend.adapters.models as adapters
 
     monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "cache"))
@@ -463,6 +507,7 @@ def test_the_plan_carries_the_registry_mapping_verdict_not_a_hardcoded_true(monk
     script = source / "src" / "validate_blip_csmcir.py"
     script.parent.mkdir()
     script.write_text("")
+    stage_declared_bytecode(source)
     import workbench.backend.adapters.models as adapters
     monkeypatch.setattr(adapters, "checkpoint_path", lambda *_: checkpoint_file)
 
@@ -497,6 +542,7 @@ def test_csmcir_main_accepts_link_and_explicit_canonical_root(monkeypatch, tmp_p
     script = source / "src" / "validate_blip_csmcir.py"
     script.parent.mkdir()
     script.write_text("")
+    stage_declared_bytecode(source)
     import workbench.backend.adapters.models as adapters
 
     monkeypatch.setattr(adapters, "checkpoint_path", lambda *_: checkpoint_file)

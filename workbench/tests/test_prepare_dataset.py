@@ -255,6 +255,34 @@ def test_the_normal_workflow_stages_every_declared_link(tmp_path: Path, monkeypa
                  "dcnet": ("DCNet", "dataset/fashioniq")}
     for checkout in {value[0] for value in checkouts.values()}:
         (third_party / checkout).mkdir(parents=True)
+    # A model may also declare approved source repairs, and `prepare_model --execute` now applies them.
+    # This test is about the dataset link, so the declared targets are staged at their published bytes
+    # rather than left absent: an absent target is a legitimate refusal, just not the one under test.
+    import hashlib as _hashlib
+    for model in load_registry()["models"]:
+        for declaration in model.get("approved_source_patches") or []:
+            destination = third_party / model["source_dir"] / declaration["path"]
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            published = (REPOSITORY / "workbench" / "third_party" / model["source_dir"]
+                         / declaration["path"]).read_bytes()
+            if _hashlib.sha256(published).hexdigest() == declaration["derived_sha256"]:
+                # Already repaired in the vendor tree; invert to reach the published base, which is
+                # the only state the applier accepts as a starting point. The patch is written
+                # relative to its own checkout root, so invert in a scratch copy of the WHOLE
+                # source dir rather than of the single file.
+                import shutil as _shutil
+                import subprocess as _sub
+                import tempfile as _tmp
+                scratch = Path(_tmp.mkdtemp()) / "checkout"
+                _shutil.copytree(REPOSITORY / "workbench" / "third_party" / model["source_dir"], scratch,
+                                 ignore=_shutil.ignore_patterns("*.pyc", "__pycache__"))
+                reverted = _sub.run(["patch", "-p1", "--reverse", "--quiet", "--directory", str(scratch),
+                                     "-i", str(REPOSITORY / declaration["patch_file"])],
+                                    capture_output=True, text=True)
+                if reverted.returncode == 0:
+                    published = (scratch / declaration["path"]).read_bytes()
+                _shutil.rmtree(scratch.parent, ignore_errors=True)
+            destination.write_bytes(published)
 
     env = {**os.environ, "CIR_REPO_ROOT": str(tmp_path), "FASHIONIQ_ROOT": str(data),
            "WORKBENCH_THIRD_PARTY_ROOT": str(third_party), "PYTHONPATH": str(REPOSITORY)}

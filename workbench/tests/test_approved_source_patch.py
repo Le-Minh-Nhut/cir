@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import shutil
+import tempfile
 import subprocess
 import sys
 from dataclasses import replace
@@ -38,11 +39,39 @@ def _published_file() -> Path:
     return REPO / "workbench/third_party/CSMCIR" / _declared()["path"]
 
 
+def _published_bytes(declaration: dict) -> bytes:
+    """The PUBLISHED base bytes for a declared path, whatever the working tree holds.
+
+    The vendor tree may be derived: `prepare_model` applies the declared repairs in place, which is
+    how DCNet and TME are consumed. Reading the working copy and calling it "published" would make
+    these fixtures describe the host rather than the contract, and every `patch` step would then fail
+    as already-applied. Inverting the declaration recovers the base exactly, because the patch is the
+    contract.
+    """
+    shipped_path = REPO / "workbench/third_party/CSMCIR" / declaration["path"]
+    data = shipped_path.read_bytes()
+    if hashlib.sha256(data).hexdigest() == declaration["base_sha256"]:
+        return data
+    scratch = Path(tempfile.mkdtemp()) / "CSMCIR"
+    destination = scratch / declaration["path"]
+    destination.parent.mkdir(parents=True)
+    destination.write_bytes(data)
+    reverted = subprocess.run(
+        ["patch", "-p1", "--reverse", "--quiet", "--directory", str(scratch), "-i",
+         str(REPO / declaration["patch_file"])], capture_output=True, text=True)
+    assert reverted.returncode == 0, reverted.stderr
+    result = destination.read_bytes()
+    assert hashlib.sha256(result).hexdigest() == declaration["base_sha256"], (
+        f"could not reconstruct the published base for {declaration['path']}")
+    shutil.rmtree(scratch.parent, ignore_errors=True)
+    return result
+
+
 def _fixture(tmp_path: Path) -> Path:
     """A checkout holding only the one file the patch touches, at its published bytes."""
     target = tmp_path / "CSMCIR"
     (target / Path(_declared()["path"]).parent).mkdir(parents=True)
-    shutil.copyfile(_published_file(), target / _declared()["path"])
+    (target / _declared()["path"]).write_bytes(_published_bytes(_declared()))
     return target
 
 
@@ -51,7 +80,13 @@ def test_the_declaration_matches_the_committed_patch_and_the_real_file():
     patch_file = REPO / patch["patch_file"]
     assert patch_file.is_file(), patch["patch_file"]
     assert hashlib.sha256(patch_file.read_bytes()).hexdigest() == patch["patch_sha256"]
-    assert hashlib.sha256(_published_file().read_bytes()).hexdigest() == patch["base_sha256"]
+    # The vendored tree is allowed to carry either the published bytes or the declared repair: the
+    # repair is applied in place by `prepare_model`. What must hold is that those two are the ONLY
+    # states, and that the patch file itself is the approved one.
+    shipped = hashlib.sha256(_published_file().read_bytes()).hexdigest()
+    assert shipped in (patch["base_sha256"], patch["derived_sha256"]), (
+        f"the vendored file matches neither the published base nor the declared repair "
+        f"({shipped[:16]}...); an undeclared edit is not covered by any approval")
 
 
 def test_an_unpatched_checkout_reports_a_patch_explanation(tmp_path: Path):
@@ -72,7 +107,7 @@ def test_the_approved_patch_makes_the_checkout_an_approved_variant(tmp_path: Pat
     for remaining in _csmcir()["approved_source_patches"][1:]:
         destination = target / remaining["path"]
         destination.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(REPO / "workbench/third_party/CSMCIR" / remaining["path"], destination)
+        destination.write_bytes(_published_bytes(remaining))
         applied = subprocess.run(["patch", "-p1", "--directory", str(target), "-i",
                                   str(REPO / remaining["patch_file"])], capture_output=True, text=True)
         assert applied.returncode == 0, applied.stderr
@@ -119,7 +154,7 @@ def test_the_runtime_accepts_the_derived_file_and_rejects_other_bytes(tmp_path: 
     reason = runtime._verify_declared_artifact(target, patch["path"], declaration)
     assert reason and "modified source in an approved-patch checkout" in reason
 
-    shutil.copyfile(_published_file(), file)
+    file.write_bytes(_published_bytes(_declared()))
     reason = runtime._verify_declared_artifact(target, patch["path"], declaration)
     assert reason and "has not been applied" in reason
 
@@ -129,7 +164,7 @@ def _stage_whole_patch_set(target: Path) -> None:
     for patch in _csmcir()["approved_source_patches"]:
         destination = target / patch["path"]
         destination.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(REPO / "workbench/third_party/CSMCIR" / patch["path"], destination)
+        destination.write_bytes(_published_bytes(patch))
     for patch in _csmcir()["approved_source_patches"]:
         subprocess.run(["patch", "-p1", "--directory", str(target), "-i",
                         str(REPO / patch["patch_file"])], check=True, capture_output=True)
@@ -175,7 +210,7 @@ def test_a_patched_checkout_is_not_reported_as_a_dirty_source(tmp_path, monkeypa
     patch = _declared()
     target = tmp_path / "CSMCIR"
     (target / Path(patch["path"]).parent).mkdir(parents=True)
-    shutil.copyfile(REPO / "workbench/third_party/CSMCIR" / patch["path"], target / patch["path"])
+    (target / patch["path"]).write_bytes(_published_bytes(patch))
     # A git checkout is what the classifier reads, so the fixture must be one.
     subprocess.run(["git", "init", "-q"], cwd=target, check=True)
     subprocess.run(["git", "add", "-A"], cwd=target, check=True)

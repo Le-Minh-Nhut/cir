@@ -19,7 +19,7 @@ the aggregate) is the concrete unblock.
 |---|---|
 | Branch | `research/cir-failure-workbench` |
 | Initial HEAD this pass | `3aae18fe02ef13f5b38d153dbc8007fbb40d4c92` |
-| **TESTED_SOURCE_SHA** | **`c13ac29dfaa88eab8f175e7f6d3adc9115b10fd8`** — latest production commit (round A41), incorporating the CSMCIR adapter reason and official-command fixes plus the reproduction-script repairs. Collection at this revision: 2222 tests in `workbench/tests`. The serial sweep was run on this SHA with CPython 3.12.11: **2171 passed, 4 failed, 47 skipped = 2222 collected**. The third failure, the release-metadata guard, was resolved inside this round by advancing TESTED_SOURCE_SHA (see the accounting row); the remaining three all reproduce at baseline `ea5ff05` under the same interpreter (23 failed there), so none was introduced by this round. |
+| **TESTED_SOURCE_SHA** | **`c13ac29dfaa88eab8f175e7f6d3adc9115b10fd8`** — latest production commit (round A41), incorporating the CSMCIR adapter reason and official-command fixes plus the reproduction-script repairs. Collection at this revision: 2222 tests in `workbench/tests`. The serial sweep was run on this SHA with CPython 3.12.11: **2172 passed, 3 failed, 47 skipped = 2222 collected**. The release-metadata guard was resolved inside this round by advancing TESTED_SOURCE_SHA (see the accounting row); the remaining three all reproduce at baseline `ea5ff05` under the same interpreter (23 failed there), so none was introduced by this round. |
 | **FINAL_HEAD_SHA** | not recorded here by design: a tracked file cannot name the commit that contains it. `git rev-parse HEAD` on the branch tip is the authority. |
 | Production tree | compare against `c13ac29dfaa88eab8f175e7f6d3adc9115b10fd8` with `git diff c13ac29dfaa88eab8f175e7f6d3adc9115b10fd8 HEAD -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'`; the release guard requires byte-identical production source. |
 | `origin/main` | `8ebcc74d5fd1934df4f3772a8ca5a96dbd00f333` — **unchanged** |
@@ -33,7 +33,7 @@ commit on the research branch. No checkpoint, dataset, cache or secret is tracke
 | Field | Value |
 |---|---|
 | Branch | `research/cir-failure-workbench` |
-| Suite accounting | Current named source `c13ac29dfaa88eab8f175e7f6d3adc9115b10fd8`, serial sweep of `workbench/tests`: **2172 passed, 3 failed, 47 skipped = 2222 collected** (round A41, CPython 3.12.11, interpreter `workbench/envs/ctl312h/bin/python`). The four failures all reproduce at baseline `ea5ff05` under the same interpreter (23 failed there): the LIMN `torch==2.20.0` pin from `200b7c7`, the DCNet/TME approved patches applied in place against `provenance.json`, `TESTED_SOURCE_SHA` advancing after a production change, and distro-Python package metadata. |
+| Suite accounting | Current named source `c13ac29dfaa88eab8f175e7f6d3adc9115b10fd8`, serial sweep of `workbench/tests`: **2172 passed, 3 failed, 47 skipped = 2222 collected** (round A41, CPython 3.12.11, interpreter `workbench/envs/ctl312h/bin/python`). The three failures all reproduce at baseline `ea5ff05` under the same interpreter (23 failed there): the LIMN `open_clip_torch==2.20.0` pin from `200b7c7`, the DCNet/TME approved patches applied in place against `provenance.json`, `TESTED_SOURCE_SHA` advancing after a production change, and distro-Python package metadata. |
 | Build/Playwright/image evidence | A36 round: `workbench/frontend` rebuilt after the in-flight loading placeholder change and the existing DOM-only smoke `workbench/frontend/tests/ui_smoke.py` re-run green (exit 0, 21 DOM-verified assertions; in-flight assertions recorded the `…` placeholder card and the `loading registry…` row during the fetch, then `17 registered models` with 17 rows after it settled, with the error path still not masked). A34/A35 round, on `1415e56`: `workbench/frontend` `npm run build` passed (Vite+TS, ~234 ms); the DOM-only smoke against the served production build passed all flows (cold inventory 17 models with verbatim blocker rows, query/Top-K, filter+pagination 20/24, annotation persist, injected-failure recovery, comparison ranks [4,45], cohort save/reload, stale-response guard; mobile 390×844 no overflow), desktop + mobile, zero unexpected console/page errors — the single recorded failure is the flow's own injected `Failed to fetch`. Supplementary screenshot reads (real image interpretation, tall full-page captures re-read via 1000-px crops at native resolution) agree with the DOM evidence: titles, 10 nav tabs, 17 model rows with truthful per-model blockers, LIMN bundle/partial cards, TME GPU_VERIFICATION_PENDING, no new rendering defect found; two initial tall-shot reads were superseded by the crop pass (downscale made them illegible; one confabulated reading was discarded). Screenshots are labelled mock-fixture artifacts, not research evidence. |
 | TESTED_SOURCE_SHA | `c13ac29dfaa88eab8f175e7f6d3adc9115b10fd8` — latest production revision and revision used for the current serial sweep. |
 | Previous tested source | `1415e56919535627273b4afb3a7c400aee770475` (the A34/A35 round): 2157 collected, 2146 passed, 1 failed, 10 skipped for `workbench/tests`; 2216 collected, 2205 passed, 1 failed, 10 skipped including `tests/unit`. Retained as historical measurement. |
@@ -156,7 +156,7 @@ Full matrix in `FINAL_16_MODEL_AUDIT_MATRIX.md`.
 | `EXTERNAL_BLOCKER` — blocked source entrypoint, archive mapping and asset provenance | `tgcir` |
 | `EXTERNAL_BLOCKER` — unverified model-class/key mapping and assets | `sprc` |
 
-- Only **LIMN** declares a per-query observer. The other sixteen are `AGGREGATE_ONLY` because their
+- Only **LIMN** and **ENCODER** declare a per-query observer. The other fifteen are `AGGREGATE_ONLY` because their
   upstream code prints aggregate recalls and nothing else; none of them is presented as query-level
   capable, anywhere in this workbench.
 - **No model's native protocol was changed.** For every model, the candidate universe and reference
@@ -218,7 +218,7 @@ static or fixture-level.
 ```bash
 git clone git@github.com:Le-Minh-Nhut/cir.git && cd cir
 git fetch origin research/cir-failure-workbench
-git checkout 624fcf9         # the fixed TESTED_SOURCE_SHA above; never `git reset --hard`
+git checkout c13ac29dfaa88eab8f175e7f6d3adc9115b10fd8   # the TESTED_SOURCE_SHA above; never `git reset --hard`
 git rev-parse HEAD             # must print c13ac29dfaa88eab8f175e7f6d3adc9115b10fd8
 ./pc.sh                        # the one operator command
 ```
