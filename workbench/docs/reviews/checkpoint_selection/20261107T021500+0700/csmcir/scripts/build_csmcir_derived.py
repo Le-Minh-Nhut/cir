@@ -48,6 +48,20 @@ def main():
         shutil.rmtree(dest)
     shutil.copytree(PRISTINE, dest / "src")
 
+    # Check the source is the published bytes BEFORE patching. Patching a tree that has already drifted
+    # produces a digest that is neither base nor derived, and the failure then looks like a bad patch
+    # rather than a dirty source.
+    base_expected = {
+        "src/lavis/models/__init__.py": "9d8c914b551a7de614e062f9a241f44626fd591a31a0ccf1cc79f0ae23c9db01",
+        "src/validate_blip_csmcir.py": "aa7a4395cdb700fded0567e0969da774a331927eaea327b5a23da82fdc7506a9",
+    }
+    for target, expected_base in base_expected.items():
+        digest = hashlib.sha256((dest / target).read_bytes()).hexdigest()
+        if digest != expected_base:
+            raise SystemExit(
+                f"{target}: source is not the published base ({digest[:16]} != {expected_base[:16]}); "
+                "patch a pristine pinned checkout, do not patch an already-modified tree")
+
     for patch_file, target, expected in PATCHES:
         result = subprocess.run(["patch", "-p1", "-i", str(REPO / patch_file)],
                                 cwd=dest, capture_output=True, text=True)
@@ -64,6 +78,15 @@ def main():
     # The evaluator derives its data root from `__file__` and opens `<checkout>/fashionIQ_dataset`; the
     # gallery caption extractor opens `<checkout>/COT_ours2`. Neither exists in a fresh copy of `src`,
     # so a derived checkout built without these links starts and then dies on the first dataset read.
+    # A derived tree that holds only `src` is not a checkout: `provenance.json` is what tells preflight
+    # the tree is a vendored pin, and `requirements.txt` is the environment spec. Copying them keeps the
+    # derived tree usable with `WORKBENCH_THIRD_PARTY_ROOT` without hand-staging.
+    for name in ("provenance.json", "README.md", "requirements.txt"):
+        source_file = PRISTINE.parent / name
+        if source_file.is_file() and not (dest / name).exists():
+            shutil.copy2(source_file, dest / name)
+            print(f"copied {name}")
+
     dataset = Path(args.dataset_root).resolve()
     if not (dataset / "qwen_captions").is_dir():
         raise SystemExit(f"{dataset} does not look like the canonical FashionIQ root (no qwen_captions/)")
