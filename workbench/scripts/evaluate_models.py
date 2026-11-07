@@ -2150,10 +2150,12 @@ def execute(plan: EvaluationPlan, config: WorkbenchConfig, run_id: str | None = 
 
     claimed_directory: Path | None = None
     try:
-        try:
-            code, directory, environment = invoke_evaluator(plan, config, run_id, root, keep_temp=keep_temp)
-        except TypeError:
-            code, directory, environment = invoke_evaluator(plan, config, run_id, root)
+        # One call, with its real signature. A `TypeError` caught here used to mean "the fake in an
+        # old fixture takes four arguments", so it retried without `keep_temp` -- which silently
+        # downgraded a real run's debug retention AND swallowed a `TypeError` raised inside the
+        # evaluator itself, hiding the actual fault behind a second launch. A compatibility shim in
+        # the production path is not worth either cost: fixtures name the current signature.
+        code, directory, environment = invoke_evaluator(plan, config, run_id, root, keep_temp=keep_temp)
         claimed_directory = directory
         command_json = json.dumps(plan.command, separators=(",", ":"))
         environment_json = json.dumps(environment, sort_keys=True, separators=(",", ":"))

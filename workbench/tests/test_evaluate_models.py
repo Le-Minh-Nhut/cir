@@ -932,7 +932,7 @@ def test_execute_invokes_the_observer_with_this_invocations_identity(monkeypatch
     module = load_module()
     captured: dict = {}
 
-    def fake_invoke(plan, config, run_id, root):
+    def fake_invoke(plan, config, run_id, root, *, keep_temp=False):
         directory = tmp_path / "logs" / f"{plan.model_id}__{plan.checkpoint_id}__{run_id}"
         directory.mkdir(parents=True, exist_ok=True)
         (directory / "stdout.log").write_text('{"dress_r1": 1.0, "dress_r10": 2.0, "dress_r50": 3.0}')
@@ -1017,7 +1017,7 @@ def test_a_failed_observation_leaves_the_aggregate_result_intact(monkeypatch, tm
     module = load_module()
     from workbench.backend.schemas.results import ResultRun
 
-    def fake_invoke(plan, config, run_id, root):
+    def fake_invoke(plan, config, run_id, root, *, keep_temp=False):
         directory = tmp_path / "logs" / f"{plan.model_id}__{plan.checkpoint_id}__{run_id}"
         directory.mkdir(parents=True, exist_ok=True)
         (directory / "stdout.log").write_text('{"dress_r1": 1.0, "dress_r10": 2.0, "dress_r50": 3.0}')
@@ -1066,7 +1066,7 @@ def test_a_failed_observation_leaves_the_aggregate_result_intact(monkeypatch, tm
 def _run_with(module, monkeypatch, tmp_path: Path, *, model_id: str, observer_run):
     """Drive execute() for one model with a stubbed native command and a stubbed child pipeline."""
 
-    def fake_invoke(plan, config, run_id, root):
+    def fake_invoke(plan, config, run_id, root, *, keep_temp=False):
         directory = tmp_path / "logs" / f"{plan.model_id}__{plan.checkpoint_id}__{run_id}"
         directory.mkdir(parents=True, exist_ok=True)
         (directory / "stdout.log").write_text('{"dress_r1": 1.0, "dress_r10": 2.0, "dress_r50": 3.0}')
@@ -1545,7 +1545,7 @@ def test_a_per_query_artifact_that_disagrees_with_the_aggregate_is_refused(monke
         {"category": "dress", "target_rank": 7, "top_results": [{"rank": 7, "image_id": "c", "score": 0.1}]},
     ]
 
-    def fake_invoke(plan, config, run_id_arg, root):
+    def fake_invoke(plan, config, run_id_arg, root, *, keep_temp=False):
         directory = tmp_path / "logs" / f"{plan.model_id}__{plan.checkpoint_id}__{run_id_arg}"
         directory.mkdir(parents=True, exist_ok=True)
         (directory / "stdout.log").write_text('{"dress_r1": 1.0, "dress_r10": 2.0, "dress_r50": 3.0}')

@@ -2029,3 +2029,31 @@ def test_failure_with_keep_temp_preserves_directory_and_temp_root(env, monkeypat
 
     assert run_log_dir.is_dir(), "run directory must be preserved on failure when keep_temp=True"
     assert len(list(parent.iterdir())) == 1, "temp root must be preserved on failure when keep_temp=True"
+
+def test_a_type_error_inside_the_evaluator_is_reported_not_retried(env, monkeypatch):
+    """`execute` must launch the evaluator once, with its real signature.
+
+    The call used to be wrapped in `except TypeError:` and retried without `keep_temp`. That caught
+    two unrelated things: a fixture whose double took four arguments (the reason the shim existed),
+    and a genuine `TypeError` raised inside the evaluator -- which was swallowed, the child was
+    launched a SECOND time, and the operator got a wrong diagnosis plus a run that ignored
+    `keep_temp`. A production compatibility shim for test doubles is not worth that.
+    """
+    calls: list[dict] = []
+    original = em.invoke_evaluator
+
+    def counting(plan, config, run_id, root, *, keep_temp=False):
+        calls.append({"run_id": run_id, "keep_temp": keep_temp})
+        # A real fault from inside the evaluator body, which must reach the caller unchanged.
+        raise TypeError("evaluator body is broken")
+
+    monkeypatch.setattr(em, "invoke_evaluator", counting)
+
+    run_plan = plan(env, [sys.executable, "-c", "print('never runs')"])
+    with pytest.raises(TypeError, match="evaluator body is broken"):
+        em.execute(run_plan, env["config"], run_id="type-error-run", keep_temp=True)
+
+    assert len(calls) == 1, f"the evaluator must be invoked exactly once, got {calls}"
+    assert calls[0]["keep_temp"] is True, (
+        f"keep_temp must survive the call instead of being dropped by a retry: {calls[0]}")
+    assert original is not counting
