@@ -21,15 +21,15 @@ ssssssssss.s...............sssssssssssssssss......s..................... [  3%]
 ........................................................................ [ 67%]
 ........................................................................ [ 70%]
 ........................................................................ [ 73%]
-...........................s............................................ [ 77%]
+...........................s............................................ [ 76%]
 ........................................................................ [ 80%]
 ........................................................................ [ 83%]
 ........................................................................ [ 86%]
 ........................................................................ [ 89%]
-........................................................................ [ 93%]
+........................................................................ [ 92%]
 ........................................................................ [ 96%]
 ........................................................................ [ 99%]
-...........                                                              [100%]
+................                                                         [100%]
 =============================== warnings summary ===============================
 workbench/backend/main.py:97: 1 warning
 workbench/tests/test_e2e_release_chain.py: 1 warning
@@ -87,7 +87,7 @@ workbench/tests/test_circus_inputs.py::test_staged_black_path_and_empty_text_cro
 
 workbench/tests/test_composition_image_identity.py::test_model_lock_serializes_processes
 workbench/tests/test_composition_image_identity.py::test_model_lock_assertion_fails_when_flock_is_noop
-  /home/heheboiz/.local/share/uv/python/cpython-3.12-linux-x86_64-gnu/lib/python3.12/multiprocessing/popen_fork.py:66: DeprecationWarning: This process (pid=1876204) is multi-threaded, use of fork() may lead to deadlocks in the child.
+  /home/heheboiz/.local/share/uv/python/cpython-3.12-linux-x86_64-gnu/lib/python3.12/multiprocessing/popen_fork.py:66: DeprecationWarning: This process (pid=2255028) is multi-threaded, use of fork() may lead to deadlocks in the child.
     self.pid = os.fork()
 
 workbench/tests/test_e2e_release_chain.py: 1 warning
@@ -169,14 +169,14 @@ workbench/tests/test_r9_defect_regressions.py::test_the_integrated_loader_return
 workbench/tests/test_release_blocker_interpreter.py::test_disk_contradiction_is_never_ready
 workbench/tests/test_release_blocker_interpreter.py::test_an_unreadable_installed_version_never_confirms_a_probe
 workbench/tests/test_release_blocker_interpreter.py::test_directory_egg_info_without_pkg_info_does_not_invent_phantom_row
-  /home/heheboiz/data/cir/workbench/backend/runtime.py:717: DeprecationWarning: Implicit None on return values is deprecated and will raise KeyErrors.
+  /home/heheboiz/data/cir/workbench/backend/runtime.py:735: DeprecationWarning: Implicit None on return values is deprecated and will raise KeyErrors.
     name = metadata["Name"]
 
 workbench/tests/test_release_blocker_interpreter.py::test_disk_contradiction_is_never_ready
 workbench/tests/test_release_blocker_interpreter.py::test_an_unreadable_installed_version_never_confirms_a_probe
 workbench/tests/test_release_blocker_interpreter.py::test_directory_egg_info_without_pkg_info_does_not_invent_phantom_row
-  /home/heheboiz/data/cir/workbench/backend/runtime.py:718: DeprecationWarning: Implicit None on return values is deprecated and will raise KeyErrors.
+  /home/heheboiz/data/cir/workbench/backend/runtime.py:736: DeprecationWarning: Implicit None on return values is deprecated and will raise KeyErrors.
     version = metadata["Version"]
 
 -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
-2196 passed, 47 skipped, 289 warnings in 1565.39s (0:26:05)
+2201 passed, 47 skipped, 289 warnings in 1594.73s (0:26:34)

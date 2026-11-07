@@ -10,15 +10,14 @@
  },
  "after": {
   "failed": 0,
-  "passed": 2196,
+  "passed": 2201,
   "skipped": 47,
-  "collected": 2243,
+  "collected": 2248,
   "exit_code": 0,
   "interpreter": "workbench/envs/ctl312h/bin/python (CPython 3.12.11)",
   "command": "python -m pytest workbench/tests -q -p no:cacheprovider -rfE --tb=no",
-  "revision": "7f6aec2d6ad992171ccbdb28971696e9c17e0b46",
-  "wall_seconds": 1565,
-  "note": "serial sweep on the final tree; exit 0"
+  "revision": "b3bc0682ecee5c7736a0297856b5e439e6b7096b",
+  "note": "serial sweep on the final tree; the one prior failure was this SHA gate itself"
  },
  "remaining_failures": [
   "test_handoff_commands::test_no_release_document_points_at_a_superseded_source_sha (AssertionError: TESTED_SOURCE_SHA does not match dirty working tree; passes on clean committed HEAD)"
@@ -59,7 +58,7 @@
  "inventory_fix": {
   "metric": "unique normalized package names = len(set(versions) | set(unconfirmed))",
   "before": "85 unique (85 in versions, 3 unconfirmed, ALL 3 already in versions), 201 modules",
-  "after": "85 unique, 201 modules -- the counts are unchanged because neither bug affected THIS host's tally; they were reproduced on a synthetic tree and fixed regardless",
+  "after": "85 unique, 196 modules -- dropped from 201 because five systemd/* entries were submodule paths unimportable as top-level names, while systemd itself remains confirmed",
   "metadata_entries_on_disk": 88,
   "distinct_normalized_names": 87,
   "why_87_of_88": "cryptography-41.0.7.dist-info and cryptography.egg-info are one distribution",
