@@ -1912,3 +1912,120 @@ def test_temp_privacy_failure_is_not_reported_as_audit_or_ledger_failure(env, mo
     assert "[BLOCKED] run temp directory is not private (mode 0755)" in err
     assert "audit" not in err.lower()
     assert "ledger" not in err.lower()
+
+
+def test_crash_after_invoke_evaluator_releases_claimed_directory_and_allows_retry(env, monkeypatch):
+    """If execute() crashes between invoke_evaluator returning and command.json completion,
+    the claimed run directory must be released so the run id is reusable.
+    """
+    run_id = "retry-post-invoke-crash"
+    run_plan = plan(env, reporting_script(env["tmp"]))
+    logs = em.artifact_root(env["config"]) / "logs"
+    run_log_dir = logs / f"{MODEL}__ckpt_v1__{run_id}"
+
+    real_digest = em.manifest_digest
+    fail = True
+
+    def flake_digest(*args, **kwargs):
+        if fail:
+            raise RuntimeError("simulated crash before command.json completion")
+        return real_digest(*args, **kwargs)
+
+    monkeypatch.setattr(em, "manifest_digest", flake_digest)
+
+    with pytest.raises(RuntimeError, match="simulated crash before command.json"):
+        em.execute(run_plan, env["config"], run_id=run_id)
+
+    assert not run_log_dir.exists(), "claimed run directory must be removed on crash before completion"
+
+    # Second execute() with the same run_id must succeed
+    fail = False
+    code = em.execute(run_plan, env["config"], run_id=run_id)
+    assert code == 0
+    assert run_log_dir.is_dir()
+    assert (run_log_dir / "command.json").is_file()
+
+
+def test_keyboard_interrupt_with_keep_temp_preserves_logs_and_temp_root(env, monkeypatch, tmp_path):
+    """Operator interrupting a run with keep_temp=True preserves both log directory and temp root."""
+    import subprocess
+
+    parent = _temp_parent(monkeypatch, tmp_path)
+    run_id = "interrupt-keep-temp-run"
+    run_plan = plan(env, reporting_script(env["tmp"]))
+    logs = em.artifact_root(env["config"]) / "logs"
+    run_log_dir = logs / f"{MODEL}__ckpt_v1__{run_id}"
+
+    real_wait = subprocess.Popen.wait
+    interrupted = False
+
+    def interrupt_wait(self, *args, **kwargs):
+        nonlocal interrupted
+        if not interrupted:
+            interrupted = True
+            raise KeyboardInterrupt("simulated operator interrupt")
+        return real_wait(self, *args, **kwargs)
+
+    monkeypatch.setattr(subprocess.Popen, "wait", interrupt_wait)
+
+    with pytest.raises(KeyboardInterrupt):
+        em.execute(run_plan, env["config"], run_id=run_id, keep_temp=True)
+
+    assert run_log_dir.is_dir(), "log directory must survive interrupt when keep_temp=True"
+    assert (run_log_dir / "stdout.log").is_file(), "stdout.log must survive interrupt when keep_temp=True"
+    assert len(list(parent.iterdir())) == 1, "temp root must survive interrupt when keep_temp=True"
+
+
+def test_keyboard_interrupt_without_keep_temp_cleans_logs_and_temp_root(env, monkeypatch, tmp_path):
+    """Operator interrupting a run without keep_temp cleans up both log directory and temp root."""
+    import subprocess
+
+    parent = _temp_parent(monkeypatch, tmp_path)
+    run_id = "interrupt-clean-run"
+    run_plan = plan(env, reporting_script(env["tmp"]))
+    logs = em.artifact_root(env["config"]) / "logs"
+    run_log_dir = logs / f"{MODEL}__ckpt_v1__{run_id}"
+
+    real_wait = subprocess.Popen.wait
+    interrupted = False
+
+    def interrupt_wait(self, *args, **kwargs):
+        nonlocal interrupted
+        if not interrupted:
+            interrupted = True
+            raise KeyboardInterrupt("simulated operator interrupt")
+        return real_wait(self, *args, **kwargs)
+
+    monkeypatch.setattr(subprocess.Popen, "wait", interrupt_wait)
+
+    with pytest.raises(KeyboardInterrupt):
+        em.execute(run_plan, env["config"], run_id=run_id, keep_temp=False)
+
+    assert not run_log_dir.exists(), "log directory must be removed on interrupt when keep_temp=False"
+    assert list(parent.iterdir()) == [], "temp root must be removed on interrupt when keep_temp=False"
+
+
+def test_failure_with_keep_temp_preserves_directory_and_temp_root(env, monkeypatch, tmp_path):
+    """With keep_temp=True, genuine failure preserves run directory and temp root as debug escape hatch."""
+    import os
+
+    parent = _temp_parent(monkeypatch, tmp_path)
+    run_id = "failure-keep-temp-run"
+    run_plan = plan(env, reporting_script(env["tmp"]))
+    logs = em.artifact_root(env["config"]) / "logs"
+    run_log_dir = logs / f"{MODEL}__ckpt_v1__{run_id}"
+
+    real_chmod = os.chmod
+
+    def flake_chmod(path, mode, *args, **kwargs):
+        if Path(path).name == "replay-cache":
+            raise PermissionError(f"refused: {path}")
+        return real_chmod(path, mode, *args, **kwargs)
+
+    monkeypatch.setattr(em.os, "chmod", flake_chmod)
+
+    with pytest.raises(PermissionError, match="refused"):
+        em.execute(run_plan, env["config"], run_id=run_id, keep_temp=True)
+
+    assert run_log_dir.is_dir(), "run directory must be preserved on failure when keep_temp=True"
+    assert len(list(parent.iterdir())) == 1, "temp root must be preserved on failure when keep_temp=True"

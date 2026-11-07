@@ -804,9 +804,14 @@ def invoke_evaluator(plan: EvaluationPlan, config: WorkbenchConfig, run_id: str,
             raise
     except BaseException:
         # Only this invocation's own freshly claimed directory is removed; nothing else can be
-        # in it, because the claim above refuses a directory that already existed. The run id
-        # is released with it, so no burnt identity is left behind on setup or launch failure.
-        if claimed:
+        # in it, because the claim above refuses a directory that already existed.
+        # When keep_temp is False, the directory is released so no burnt identity is left behind
+        # on setup, launch, or execution failure.
+        # When keep_temp is True, the directory is preserved on both interrupt (Ctrl-C) and genuine
+        # failures: keep_temp is the debug escape hatch ("keep everything"), so accumulated logs
+        # (stdout.log/stderr.log) and scratch are preserved for operator inspection, and the run id
+        # is visibly burnt rather than silently reused.
+        if claimed and not keep_temp:
             shutil.rmtree(directory, ignore_errors=True)
         raise
     finally:
@@ -2143,332 +2148,345 @@ def execute(plan: EvaluationPlan, config: WorkbenchConfig, run_id: str | None = 
     except LedgerDuplicateRunError as error:
         raise RuntimeError(f"evaluation could not be audited: {error}") from error
 
+    claimed_directory: Path | None = None
     try:
-        code, directory, environment = invoke_evaluator(plan, config, run_id, root, keep_temp=keep_temp)
-    except TypeError:
-        code, directory, environment = invoke_evaluator(plan, config, run_id, root)
-    command_json = json.dumps(plan.command, separators=(",", ":"))
-    environment_json = json.dumps(environment, sort_keys=True, separators=(",", ":"))
+        try:
+            code, directory, environment = invoke_evaluator(plan, config, run_id, root, keep_temp=keep_temp)
+        except TypeError:
+            code, directory, environment = invoke_evaluator(plan, config, run_id, root)
+        claimed_directory = directory
+        command_json = json.dumps(plan.command, separators=(",", ":"))
+        environment_json = json.dumps(environment, sort_keys=True, separators=(",", ":"))
 
-    metadata = {
-        "model_id": plan.model_id,
-        "checkpoint_id": plan.checkpoint_id,
-        "protocol_id": plan.protocol,
-        "run_id": run_id,
-        "argv": plan.command,
-        "cwd": str(plan.cwd),
-        "upstream_expected_pin": plan.pin,
-        "actual_source_commit": plan.actual_source_commit,
-        "checkpoint_local_sha256": checkpoint_local_sha,
-        "checkpoint_artifact_type": plan.artifact_type,
-        "checkpoint_bundle": plan.checkpoint_bundle,
-        "bundle_manifest_digest": (plan.bundle_manifest_digest
-                                   or manifest_digest(_plan_members(plan))),
-        "directory_members": plan.directory_members,
-        "model_interpreter": plan.command[0] if plan.command else sys.executable,
-        "command_digest": hashlib.sha256(command_json.encode()).hexdigest(),
-        "environment": environment,
-        "environment_digest": hashlib.sha256(environment_json.encode()).hexdigest(),
-        "started_at": started.isoformat(),
-        "finished_at": datetime.now(timezone.utc).isoformat(),
-        "return_code": code,
-        "dataset_root": str(plan.dataset_root),
-    }
-    stdout_content = (directory / "stdout.log").read_text(encoding="utf-8")
-    stderr_content = (directory / "stderr.log").read_text(encoding="utf-8")
-    produced_output = bool(stdout_content.strip() or stderr_content.strip())
-    invocation_status = ("INVOCATION_FAILED" if code != 0 else
-                         "INVOCATION_COMPLETED" if produced_output else
-                         "INVOCATION_NO_OBSERVABLE_OUTPUT")
-    metadata["invocation_status"] = invocation_status
-    (directory / "command.json").write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
-    # Bound before the report is serialised: the report itself carries the digest of the
-    # invocation output, so a log edit invalidates the report as well as the proof.
-    evidence_digest = hashlib.sha256(
-        json.dumps({"stdout": stdout_content, "stderr": stderr_content},
-                   sort_keys=True).encode("utf-8")
-    ).hexdigest()
-    extraction = extract_aggregate_metrics(
-        plan.model_id,
-        stdout_content,
-        stderr_content,
-        code,
-        paper_metrics=plan.paper_metrics,
-        executed_config=read_executed_config(plan),
-        # The plan is the request. Passing its identity lets the parser REFUSE a document that
-        # describes a different checkpoint or protocol than the one this run asked for: a stale or
-        # foreign stdout file otherwise parses perfectly and is reported as this run's result.
-        expected_checkpoint_id=getattr(plan, "checkpoint_id", None),
-        # `EvaluationPlan` names this field `protocol`, not `protocol_id` (see the dataclass at the
-        # top of this module). Reading it as `protocol_id` silently passed None, which left the
-        # protocol identity UNCHECKED while looking as if it were being verified.
-        expected_protocol_id=getattr(plan, "protocol", None),
-    )
-    # A model the registry marks as synthetic has no published output format, so its evaluator's own
-    # JSON aggregate is the evidence. This is an explicit registry declaration, not a guess from the
-    # model id, and it is recorded in the report so a reader can tell the two apart.
-    synthetic = bool(getattr(plan, "synthetic_source", False))
-    if synthetic and code == 0 and extraction.category_metrics is None and extraction.observed_metrics is None:
-        declared = _synthetic_aggregate(stdout_content)
-        if declared is not None:
-            extraction = replace(
-                extraction,
-                extraction_status="EXTRACTED_SYNTHETIC",
-                parser_id=extraction.parser_id or "synthetic_declared_aggregate",
-                observed_metrics=declared["observed"],
-                category_metrics=declared["categories"],
-            )
+        metadata = {
+            "model_id": plan.model_id,
+            "checkpoint_id": plan.checkpoint_id,
+            "protocol_id": plan.protocol,
+            "run_id": run_id,
+            "argv": plan.command,
+            "cwd": str(plan.cwd),
+            "upstream_expected_pin": plan.pin,
+            "actual_source_commit": plan.actual_source_commit,
+            "checkpoint_local_sha256": checkpoint_local_sha,
+            "checkpoint_artifact_type": plan.artifact_type,
+            "checkpoint_bundle": plan.checkpoint_bundle,
+            "bundle_manifest_digest": (plan.bundle_manifest_digest
+                                       or manifest_digest(_plan_members(plan))),
+            "directory_members": plan.directory_members,
+            "model_interpreter": plan.command[0] if plan.command else sys.executable,
+            "command_digest": hashlib.sha256(command_json.encode()).hexdigest(),
+            "environment": environment,
+            "environment_digest": hashlib.sha256(environment_json.encode()).hexdigest(),
+            "started_at": started.isoformat(),
+            "finished_at": datetime.now(timezone.utc).isoformat(),
+            "return_code": code,
+            "dataset_root": str(plan.dataset_root),
+        }
+        stdout_content = (directory / "stdout.log").read_text(encoding="utf-8")
+        stderr_content = (directory / "stderr.log").read_text(encoding="utf-8")
+        produced_output = bool(stdout_content.strip() or stderr_content.strip())
+        invocation_status = ("INVOCATION_FAILED" if code != 0 else
+                             "INVOCATION_COMPLETED" if produced_output else
+                             "INVOCATION_NO_OBSERVABLE_OUTPUT")
+        metadata["invocation_status"] = invocation_status
+        (directory / "command.json").write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
+        # Bound before the report is serialised: the report itself carries the digest of the
+        # invocation output, so a log edit invalidates the report as well as the proof.
+        evidence_digest = hashlib.sha256(
+            json.dumps({"stdout": stdout_content, "stderr": stderr_content},
+                       sort_keys=True).encode("utf-8")
+        ).hexdigest()
+        extraction = extract_aggregate_metrics(
+            plan.model_id,
+            stdout_content,
+            stderr_content,
+            code,
+            paper_metrics=plan.paper_metrics,
+            executed_config=read_executed_config(plan),
+            # The plan is the request. Passing its identity lets the parser REFUSE a document that
+            # describes a different checkpoint or protocol than the one this run asked for: a stale or
+            # foreign stdout file otherwise parses perfectly and is reported as this run's result.
+            expected_checkpoint_id=getattr(plan, "checkpoint_id", None),
+            # `EvaluationPlan` names this field `protocol`, not `protocol_id` (see the dataclass at the
+            # top of this module). Reading it as `protocol_id` silently passed None, which left the
+            # protocol identity UNCHECKED while looking as if it were being verified.
+            expected_protocol_id=getattr(plan, "protocol", None),
+        )
+        # A model the registry marks as synthetic has no published output format, so its evaluator's own
+        # JSON aggregate is the evidence. This is an explicit registry declaration, not a guess from the
+        # model id, and it is recorded in the report so a reader can tell the two apart.
+        synthetic = bool(getattr(plan, "synthetic_source", False))
+        if synthetic and code == 0 and extraction.category_metrics is None and extraction.observed_metrics is None:
+            declared = _synthetic_aggregate(stdout_content)
+            if declared is not None:
+                extraction = replace(
+                    extraction,
+                    extraction_status="EXTRACTED_SYNTHETIC",
+                    parser_id=extraction.parser_id or "synthetic_declared_aggregate",
+                    observed_metrics=declared["observed"],
+                    category_metrics=declared["categories"],
+                )
 
-    # Per-query observation, bound to THIS invocation (F-08/F-09/F-11/F-12). It runs as a separate
-    # process under the model's own interpreter because in production the parent cannot import the
-    # model environment; the parent then VERIFIES what the child wrote rather than trusting it. A
-    # failure here never changes the aggregate result, and never promotes anything.
-    # The per-query capability is DECLARED, not inferred from a model id, so a capability-absent
-    # model (one the registry gives no observer) is distinguishable from a capability that FAILED.
-    # The launcher needs that distinction: only the second is a pilot blocker.
-    capability = per_query_capability(plan.model_id)
-    if capability and not per_query_checkpoint(plan.model_id, plan.checkpoint_id):
-        # The observer covers ONE specific checkpoint configuration. A run that selected something
-        # else -- a single-category diagnostic, or a different variant -- would produce a per-query
-        # artifact describing a different experiment, so it is not attempted. Saying why is better
-        # than binding a bundle artifact to a diagnostic.
-        #
-        # The registry DECLARES that checkpoint (`per_query_checkpoint`). This used to test equality
-        # with LIMN's literal bundle id, which meant ENCODER -- whose observer covers its single
-        # `fashioniq` checkpoint and which declares no bundle at all -- could never satisfy the
-        # condition, so its observer was silently skipped on every run it was supposed to serve.
-        capability = None
-        observation_note = (f"CAPABILITY_ABSENT_FOR_DIAGNOSTIC: the observer covers "
-                            f"{per_query_checkpoint(plan.model_id) or 'a different checkpoint'}, "
-                            f"and this run selected {plan.checkpoint_id}")
-    elif not capability:
-        observation_note = "CAPABILITY_ABSENT"
-    else:
-        observation_note = f"{capability}: not attempted"
-    per_query_artifact = None
-    per_query_artifact_digest = None
-    instrumentation_parity = None
-    # The field NAME is the constant; its VALUE is the observer's identity (e.g.
-    # "LIMN_QUERY_OBSERVER_V1"). The gate is "the registry declares one", not equality with the key.
-    if code == 0 and capability:
-        per_query_artifact, observation_note, per_query_artifact_digest, instrumentation_parity = \
-            _run_observation(plan, config, run_id, directory,
-                             metadata.get("command_digest"), metadata.get("environment_digest"),
-                             category_metrics=extraction.category_metrics)
-    # The native dataset cache is derived data, and both children that could read it have finished by
-    # this point. Leaving it in the run directory kept ~10.4 GB behind and, on a host that fits
-    # exactly one cache, that is what made the NEXT run fail with `No space left on device` -- a
-    # failure that looks like a broken evaluator and is a full disk. Everything needed to reproduce
-    # the run (command, stdout, aggregate report, digests) is already on disk.
-    shutil.rmtree(directory / "replay-cache", ignore_errors=True)
+        # Per-query observation, bound to THIS invocation (F-08/F-09/F-11/F-12). It runs as a separate
+        # process under the model's own interpreter because in production the parent cannot import the
+        # model environment; the parent then VERIFIES what the child wrote rather than trusting it. A
+        # failure here never changes the aggregate result, and never promotes anything.
+        # The per-query capability is DECLARED, not inferred from a model id, so a capability-absent
+        # model (one the registry gives no observer) is distinguishable from a capability that FAILED.
+        # The launcher needs that distinction: only the second is a pilot blocker.
+        capability = per_query_capability(plan.model_id)
+        if capability and not per_query_checkpoint(plan.model_id, plan.checkpoint_id):
+            # The observer covers ONE specific checkpoint configuration. A run that selected something
+            # else -- a single-category diagnostic, or a different variant -- would produce a per-query
+            # artifact describing a different experiment, so it is not attempted. Saying why is better
+            # than binding a bundle artifact to a diagnostic.
+            #
+            # The registry DECLARES that checkpoint (`per_query_checkpoint`). This used to test equality
+            # with LIMN's literal bundle id, which meant ENCODER -- whose observer covers its single
+            # `fashioniq` checkpoint and which declares no bundle at all -- could never satisfy the
+            # condition, so its observer was silently skipped on every run it was supposed to serve.
+            capability = None
+            observation_note = (f"CAPABILITY_ABSENT_FOR_DIAGNOSTIC: the observer covers "
+                                f"{per_query_checkpoint(plan.model_id) or 'a different checkpoint'}, "
+                                f"and this run selected {plan.checkpoint_id}")
+        elif not capability:
+            observation_note = "CAPABILITY_ABSENT"
+        else:
+            observation_note = f"{capability}: not attempted"
+        per_query_artifact = None
+        per_query_artifact_digest = None
+        instrumentation_parity = None
+        # The field NAME is the constant; its VALUE is the observer's identity (e.g.
+        # "LIMN_QUERY_OBSERVER_V1"). The gate is "the registry declares one", not equality with the key.
+        if code == 0 and capability:
+            per_query_artifact, observation_note, per_query_artifact_digest, instrumentation_parity = \
+                _run_observation(plan, config, run_id, directory,
+                                 metadata.get("command_digest"), metadata.get("environment_digest"),
+                                 category_metrics=extraction.category_metrics)
+        # The native dataset cache is derived data, and both children that could read it have finished by
+        # this point. Leaving it in the run directory kept ~10.4 GB behind and, on a host that fits
+        # exactly one cache, that is what made the NEXT run fail with `No space left on device` -- a
+        # failure that looks like a broken evaluator and is a full disk. Everything needed to reproduce
+        # the run (command, stdout, aggregate report, digests) is already on disk.
+        shutil.rmtree(directory / "replay-cache", ignore_errors=True)
 
-    paper = plan.paper_metrics or {}
-    gate_verdict = _benchmark_gate_verdict(plan, extraction, code)
-    report = {
-        "artifact_type": "official_aggregate_evaluation_report",
-        "schema_version": 1,
-        "run_id": run_id,
-        "run_directory": str(directory),
-        "model_id": plan.model_id,
-        "checkpoint_id": plan.checkpoint_id,
-        "protocol_id": plan.protocol,
-        # Execution completion and metric verification are separate states: a run that
-        # exited 0 with unusable aggregate output is still a completed execution.
-        "execution_status": "EXECUTION_COMPLETED" if code == 0 else "EXECUTION_FAILED",
-        "invocation_status": invocation_status,
-        "reproduction_status": extraction.extraction_status,
-        "per_query_export_available": per_query_artifact is not None,
-        "per_query_export_reason": observation_note,
-        # What this RUN achieved on the per-query axis, distinct from the artifact's evidence state.
-        # `CAPABILITY_ABSENT` is not a failure; `PER_QUERY_EXPORT_FAILED` is a pilot blocker for a
-        # model that declares an observer.
-        "per_query_capability": capability,
-        "per_query_state": per_query_state(capability, per_query_artifact, observation_note),
-        "per_query_artifact": str(per_query_artifact) if per_query_artifact else None,
-        "per_query_artifact_digest": per_query_artifact_digest,
-        "instrumentation_parity": instrumentation_parity,
-        "extraction_status": extraction.extraction_status,
-        "metric_extraction_available": extraction.observed_metrics is not None,
-        "parser_id": extraction.parser_id,
-        "parser_version": extraction.parser_version,
-        "observed_metrics": extraction.observed_metrics,
-        "category_metrics": extraction.category_metrics,
-        "paper_sanity_metrics": paper,
-        "parity_status": extraction.parity_status,
-        # The canonical acceptance verdict. `paper_sanity_metrics` above is the registry's transcribed
-        # row, kept only as a sanity reference; the gate judges the run against the committed paper
-        # benchmark reference, which records what the paper actually printed and under which
-        # checkpoint condition.
-        "benchmark_gate": gate_verdict,
-        "benchmark_reference": (gate_verdict or {}).get("reference_evidence"),
-        "variant_provenance": getattr(plan, "variant_provenance", None) or {},
-        "metric_source": extraction.metric_source,
-        "is_synthetic": synthetic,
-        "command_json": "command.json",
-        "stdout_log": "stdout.log",
-        "stderr_log": "stderr.log",
-        "command_digest": metadata["command_digest"],
-        "source_expected_commit": plan.pin,
-        "source_actual_commit": plan.actual_source_commit,
-        "checkpoint_artifact_type": plan.artifact_type,
-        "checkpoint_sha256": checkpoint_local_sha,
-        "checkpoint_bundle": plan.checkpoint_bundle,
-        "bundle_manifest_digest": (plan.bundle_manifest_digest
-                                   or manifest_digest(_plan_members(plan))),
-        "directory_members": plan.directory_members,
-        "environment": environment,
-        "model_interpreter": plan.command[0] if plan.command else sys.executable,
-        "environment_digest": metadata["environment_digest"],
-        # The adaptation the run executed under, named on the report itself (not only in
-        # variant_provenance): a reader of the environment block must not mistake an
-        # adapted stack for the authors' historical one.
-        "runtime_adaptation": (getattr(plan, "variant_provenance", None) or {}).get(
-            "adapted_runtime", {}).get("runtime_adaptation") if isinstance(
-            (getattr(plan, "variant_provenance", None) or {}).get("adapted_runtime"), dict) else None,
-        "evidence_digest": evidence_digest,
-        "return_code": code,
-    }
-    report_json = json.dumps(report, indent=2) + "\n"
+        paper = plan.paper_metrics or {}
+        gate_verdict = _benchmark_gate_verdict(plan, extraction, code)
+        report = {
+            "artifact_type": "official_aggregate_evaluation_report",
+            "schema_version": 1,
+            "run_id": run_id,
+            "run_directory": str(directory),
+            "model_id": plan.model_id,
+            "checkpoint_id": plan.checkpoint_id,
+            "protocol_id": plan.protocol,
+            # Execution completion and metric verification are separate states: a run that
+            # exited 0 with unusable aggregate output is still a completed execution.
+            "execution_status": "EXECUTION_COMPLETED" if code == 0 else "EXECUTION_FAILED",
+            "invocation_status": invocation_status,
+            "reproduction_status": extraction.extraction_status,
+            "per_query_export_available": per_query_artifact is not None,
+            "per_query_export_reason": observation_note,
+            # What this RUN achieved on the per-query axis, distinct from the artifact's evidence state.
+            # `CAPABILITY_ABSENT` is not a failure; `PER_QUERY_EXPORT_FAILED` is a pilot blocker for a
+            # model that declares an observer.
+            "per_query_capability": capability,
+            "per_query_state": per_query_state(capability, per_query_artifact, observation_note),
+            "per_query_artifact": str(per_query_artifact) if per_query_artifact else None,
+            "per_query_artifact_digest": per_query_artifact_digest,
+            "instrumentation_parity": instrumentation_parity,
+            "extraction_status": extraction.extraction_status,
+            "metric_extraction_available": extraction.observed_metrics is not None,
+            "parser_id": extraction.parser_id,
+            "parser_version": extraction.parser_version,
+            "observed_metrics": extraction.observed_metrics,
+            "category_metrics": extraction.category_metrics,
+            "paper_sanity_metrics": paper,
+            "parity_status": extraction.parity_status,
+            # The canonical acceptance verdict. `paper_sanity_metrics` above is the registry's transcribed
+            # row, kept only as a sanity reference; the gate judges the run against the committed paper
+            # benchmark reference, which records what the paper actually printed and under which
+            # checkpoint condition.
+            "benchmark_gate": gate_verdict,
+            "benchmark_reference": (gate_verdict or {}).get("reference_evidence"),
+            "variant_provenance": getattr(plan, "variant_provenance", None) or {},
+            "metric_source": extraction.metric_source,
+            "is_synthetic": synthetic,
+            "command_json": "command.json",
+            "stdout_log": "stdout.log",
+            "stderr_log": "stderr.log",
+            "command_digest": metadata["command_digest"],
+            "source_expected_commit": plan.pin,
+            "source_actual_commit": plan.actual_source_commit,
+            "checkpoint_artifact_type": plan.artifact_type,
+            "checkpoint_sha256": checkpoint_local_sha,
+            "checkpoint_bundle": plan.checkpoint_bundle,
+            "bundle_manifest_digest": (plan.bundle_manifest_digest
+                                       or manifest_digest(_plan_members(plan))),
+            "directory_members": plan.directory_members,
+            "environment": environment,
+            "model_interpreter": plan.command[0] if plan.command else sys.executable,
+            "environment_digest": metadata["environment_digest"],
+            # The adaptation the run executed under, named on the report itself (not only in
+            # variant_provenance): a reader of the environment block must not mistake an
+            # adapted stack for the authors' historical one.
+            "runtime_adaptation": (getattr(plan, "variant_provenance", None) or {}).get(
+                "adapted_runtime", {}).get("runtime_adaptation") if isinstance(
+                (getattr(plan, "variant_provenance", None) or {}).get("adapted_runtime"), dict) else None,
+            "evidence_digest": evidence_digest,
+            "return_code": code,
+        }
+        report_json = json.dumps(report, indent=2) + "\n"
 
-    # Immutable, run-scoped artifact. Exclusive create: a colliding run id must never
-    # overwrite a previous experiment.
-    reports.mkdir(parents=True, exist_ok=True)
-    try:
-        # `open("x")` is atomic for the NAME but not for the BYTES: an interruption mid-write leaves
-        # a partial file at the final path, which then fails its own digest on every later run and can
-        # never be replaced. Written to a private temporary and linked, so the name appears only once
-        # the content is complete.
-        _atomic_exclusive_write(run_report, report_json)
-    except FileExistsError as error:
-        raise RuntimeError(f"refusing to overwrite existing run report: {run_report}") from error
-    # The run-directory copy is replaced wholesale on a rerun, so it is written atomically rather
-    # than exclusively: a reader must never see a truncated report either way.
-    _atomic_replace(directory / "aggregate_report.json", report_json)
+        # Immutable, run-scoped artifact. Exclusive create: a colliding run id must never
+        # overwrite a previous experiment.
+        reports.mkdir(parents=True, exist_ok=True)
+        try:
+            # `open("x")` is atomic for the NAME but not for the BYTES: an interruption mid-write leaves
+            # a partial file at the final path, which then fails its own digest on every later run and can
+            # never be replaced. Written to a private temporary and linked, so the name appears only once
+            # the content is complete.
+            _atomic_exclusive_write(run_report, report_json)
+        except FileExistsError as error:
+            raise RuntimeError(f"refusing to overwrite existing run report: {run_report}") from error
+        # The run-directory copy is replaced wholesale on a rerun, so it is written atomically rather
+        # than exclusively: a reader must never see a truncated report either way.
+        _atomic_replace(directory / "aggregate_report.json", report_json)
 
 
-    # Append the out-of-band witness before any pointer moves; failed and silent invocations
-    # are recorded exactly like successful ones, but never earn a completion proof.
-    ledger_entry = append_evidence_entry(config, {
-        "run_id": run_id,
-        "model_id": plan.model_id,
-        "checkpoint_id": plan.checkpoint_id,
-        "protocol_id": plan.protocol,
-        "return_code": code,
-        "invocation_status": invocation_status,
-        "execution_status": report["execution_status"],
-        "report_digest": sha256_file(run_report),
-        "evidence_digest": evidence_digest,
-        "run_directory": str(directory),
-        "recorded_at": datetime.now(timezone.utc).isoformat(),
-    })
-    if invocation_status == "INVOCATION_NO_OBSERVABLE_OUTPUT":
-        print("[BLOCKED] official command exited 0 but produced no observable evaluation "
-              "output; no completion proof can be minted for this invocation", file=sys.stderr)
-        record_invocation_outcome(
-            directory, config, run_id=run_id, model_id=plan.model_id,
-            checkpoint_id=plan.checkpoint_id, protocol_id=plan.protocol, return_code=code,
-            invocation_status=invocation_status, verdict="NO_OBSERVABLE_OUTPUT",
-            reason="the official command exited 0 and produced no observable evaluation output")
+        # Append the out-of-band witness before any pointer moves; failed and silent invocations
+        # are recorded exactly like successful ones, but never earn a completion proof.
+        ledger_entry = append_evidence_entry(config, {
+            "run_id": run_id,
+            "model_id": plan.model_id,
+            "checkpoint_id": plan.checkpoint_id,
+            "protocol_id": plan.protocol,
+            "return_code": code,
+            "invocation_status": invocation_status,
+            "execution_status": report["execution_status"],
+            "report_digest": sha256_file(run_report),
+            "evidence_digest": evidence_digest,
+            "run_directory": str(directory),
+            "recorded_at": datetime.now(timezone.utc).isoformat(),
+        })
+        if invocation_status == "INVOCATION_NO_OBSERVABLE_OUTPUT":
+            print("[BLOCKED] official command exited 0 but produced no observable evaluation "
+                  "output; no completion proof can be minted for this invocation", file=sys.stderr)
+            record_invocation_outcome(
+                directory, config, run_id=run_id, model_id=plan.model_id,
+                checkpoint_id=plan.checkpoint_id, protocol_id=plan.protocol, return_code=code,
+                invocation_status=invocation_status, verdict="NO_OBSERVABLE_OUTPUT",
+                reason="the official command exited 0 and produced no observable evaluation output")
+            _atomic_write_json(latest_pointer(config, plan, "attempt"), {
+                "run_id": run_id,
+                "run_directory": str(directory),
+                "report": str(run_report),
+                "return_code": code,
+                "completion_status": "NO_OBSERVABLE_OUTPUT",
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+            })
+            return code
+
+        proof = {
+            "artifact_type": "official_evaluation_completion_proof",
+            "schema_version": 1,
+            "completion_status": "COMPLETED" if invocation_status == "INVOCATION_COMPLETED" and code == 0 else "FAILED",
+            "run_id": run_id,
+            "model_id": plan.model_id,
+            "checkpoint_id": plan.checkpoint_id,
+            "protocol_id": plan.protocol,
+            "source_expected_commit": plan.pin,
+            "source_actual_commit": plan.actual_source_commit,
+            "checkpoint_artifact_type": plan.artifact_type,
+            "checkpoint_sha256": checkpoint_local_sha,
+            # A bundle is one experiment: the manifest recorded here is what the validator
+            # compares against the live member files, so a changed member invalidates the proof.
+            "bundle_manifest_digest": (plan.bundle_manifest_digest
+                                       or manifest_digest(_plan_members(plan))),
+            "checkpoint_bundle": plan.checkpoint_bundle,
+            "directory_members": plan.directory_members,
+            "invocation_status": invocation_status,
+            "return_code": code,
+            "ledger_entry_digest": ledger_entry["entry_digest"],
+            "report": str(run_report),
+            "report_digest": sha256_file(run_report),
+            "report_relative": run_report.name,
+            "metric_extraction_available": extraction.observed_metrics is not None,
+            "extraction_status": extraction.extraction_status,
+            "environment_digest": metadata["environment_digest"],
+            "command_digest": metadata["command_digest"],
+            "evidence_digest": evidence_digest,
+            "stdout_log": "stdout.log",
+            "stderr_log": "stderr.log",
+            "run_directory": str(directory),
+            "run_id_expected_directory": str(log_dir(config, plan, datetime.now(timezone.utc), run_id)),
+            "invocation_identity": expected_run_identity(config, plan, run_id),
+            "completed_at": datetime.now(timezone.utc).isoformat(),
+        }
+        try:
+            with proof_path.open("x", encoding="utf-8") as handle:
+                handle.write(json.dumps(proof, indent=2) + "\n")
+        except FileExistsError as error:
+            raise RuntimeError(f"refusing to overwrite existing completion proof: {proof_path}") from error
+
+        # Attempts always advance; successes only advance on a genuinely successful,
+        # proof-backed execution. A failed rerun can never replace latest_successful.
         _atomic_write_json(latest_pointer(config, plan, "attempt"), {
             "run_id": run_id,
             "run_directory": str(directory),
             "report": str(run_report),
+            "proof": str(proof_path),
             "return_code": code,
-            "completion_status": "NO_OBSERVABLE_OUTPUT",
-            "updated_at": datetime.now(timezone.utc).isoformat(),
+            "completion_status": proof["completion_status"],
+            "updated_at": proof["completed_at"],
         })
-        return code
-
-    proof = {
-        "artifact_type": "official_evaluation_completion_proof",
-        "schema_version": 1,
-        "completion_status": "COMPLETED" if invocation_status == "INVOCATION_COMPLETED" and code == 0 else "FAILED",
-        "run_id": run_id,
-        "model_id": plan.model_id,
-        "checkpoint_id": plan.checkpoint_id,
-        "protocol_id": plan.protocol,
-        "source_expected_commit": plan.pin,
-        "source_actual_commit": plan.actual_source_commit,
-        "checkpoint_artifact_type": plan.artifact_type,
-        "checkpoint_sha256": checkpoint_local_sha,
-        # A bundle is one experiment: the manifest recorded here is what the validator
-        # compares against the live member files, so a changed member invalidates the proof.
-        "bundle_manifest_digest": (plan.bundle_manifest_digest
-                                   or manifest_digest(_plan_members(plan))),
-        "checkpoint_bundle": plan.checkpoint_bundle,
-        "directory_members": plan.directory_members,
-        "invocation_status": invocation_status,
-        "return_code": code,
-        "ledger_entry_digest": ledger_entry["entry_digest"],
-        "report": str(run_report),
-        "report_digest": sha256_file(run_report),
-        "report_relative": run_report.name,
-        "metric_extraction_available": extraction.observed_metrics is not None,
-        "extraction_status": extraction.extraction_status,
-        "environment_digest": metadata["environment_digest"],
-        "command_digest": metadata["command_digest"],
-        "evidence_digest": evidence_digest,
-        "stdout_log": "stdout.log",
-        "stderr_log": "stderr.log",
-        "run_directory": str(directory),
-        "run_id_expected_directory": str(log_dir(config, plan, datetime.now(timezone.utc), run_id)),
-        "invocation_identity": expected_run_identity(config, plan, run_id),
-        "completed_at": datetime.now(timezone.utc).isoformat(),
-    }
-    try:
-        with proof_path.open("x", encoding="utf-8") as handle:
-            handle.write(json.dumps(proof, indent=2) + "\n")
-    except FileExistsError as error:
-        raise RuntimeError(f"refusing to overwrite existing completion proof: {proof_path}") from error
-
-    # Attempts always advance; successes only advance on a genuinely successful,
-    # proof-backed execution. A failed rerun can never replace latest_successful.
-    _atomic_write_json(latest_pointer(config, plan, "attempt"), {
-        "run_id": run_id,
-        "run_directory": str(directory),
-        "report": str(run_report),
-        "proof": str(proof_path),
-        "return_code": code,
-        "completion_status": proof["completion_status"],
-        "updated_at": proof["completed_at"],
-    })
-    if invocation_status == "INVOCATION_COMPLETED" and code == 0:
-        try:
-            validate_run_manifest(plan, proof_path, run_id=run_id, output_root=root,
-                                  config=config, require_checksum=True,
-                                  require_environment_identity=True)
-        except EvaluationOutputError as error:
-            print(f"[BLOCKED] completion proof rejected: {error}", file=sys.stderr)
-            # The native code stays 0 — it is the evaluator's own evidence — but the run is not
-            # a completion, and the outcome file says so instead of leaving a caller to guess
-            # from an exit code that cannot distinguish the two.
-            record_invocation_outcome(
-                directory, config, run_id=run_id, model_id=plan.model_id,
-                checkpoint_id=plan.checkpoint_id, protocol_id=plan.protocol, return_code=code,
-                invocation_status=invocation_status, verdict="PROOF_REJECTED",
-                reason=str(error))
+        if invocation_status == "INVOCATION_COMPLETED" and code == 0:
+            try:
+                validate_run_manifest(plan, proof_path, run_id=run_id, output_root=root,
+                                      config=config, require_checksum=True,
+                                      require_environment_identity=True)
+            except EvaluationOutputError as error:
+                print(f"[BLOCKED] completion proof rejected: {error}", file=sys.stderr)
+                # The native code stays 0 — it is the evaluator's own evidence — but the run is not
+                # a completion, and the outcome file says so instead of leaving a caller to guess
+                # from an exit code that cannot distinguish the two.
+                record_invocation_outcome(
+                    directory, config, run_id=run_id, model_id=plan.model_id,
+                    checkpoint_id=plan.checkpoint_id, protocol_id=plan.protocol, return_code=code,
+                    invocation_status=invocation_status, verdict="PROOF_REJECTED",
+                    reason=str(error))
+            else:
+                record_invocation_outcome(
+                    directory, config, run_id=run_id, model_id=plan.model_id,
+                    checkpoint_id=plan.checkpoint_id, protocol_id=plan.protocol, return_code=code,
+                    invocation_status=invocation_status, verdict="PROOF_VALIDATED", reason=None)
+                _atomic_write_json(latest_pointer(config, plan, "successful"), {
+                    "run_id": run_id,
+                    "run_directory": str(directory),
+                    "report": str(run_report),
+                    "proof": str(proof_path),
+                    "return_code": code,
+                    "completion_status": "COMPLETED",
+                    "report_digest": proof["report_digest"],
+                    "updated_at": proof["completed_at"],
+                })
         else:
             record_invocation_outcome(
                 directory, config, run_id=run_id, model_id=plan.model_id,
                 checkpoint_id=plan.checkpoint_id, protocol_id=plan.protocol, return_code=code,
-                invocation_status=invocation_status, verdict="PROOF_VALIDATED", reason=None)
-            _atomic_write_json(latest_pointer(config, plan, "successful"), {
-                "run_id": run_id,
-                "run_directory": str(directory),
-                "report": str(run_report),
-                "proof": str(proof_path),
-                "return_code": code,
-                "completion_status": "COMPLETED",
-                "report_digest": proof["report_digest"],
-                "updated_at": proof["completed_at"],
-            })
-    else:
-        record_invocation_outcome(
-            directory, config, run_id=run_id, model_id=plan.model_id,
-            checkpoint_id=plan.checkpoint_id, protocol_id=plan.protocol, return_code=code,
-            invocation_status=invocation_status, verdict="EXECUTION_FAILED",
-            reason=f"the official command exited with code {code}")
-    return code
+                invocation_status=invocation_status, verdict="EXECUTION_FAILED",
+                reason=f"the official command exited with code {code}")
+        return code
+    except BaseException:
+        # If execute() fails after invoke_evaluator() returns (during metadata compilation,
+        # extraction, report/ledger generation, etc.), it cannot produce a complete, auditable
+        # run record. Only a directory claimed by this call is released so the run id remains
+        # reusable — matching invoke_evaluator's failure behavior.
+        # Like invoke_evaluator, keep_temp=True preserves the directory for operator debugging,
+        # visibly burning the run id.
+        if claimed_directory is not None and not keep_temp:
+            shutil.rmtree(claimed_directory, ignore_errors=True)
+        raise
 
 
 def _recorded_report_checkpoint_digest(proof_path: Path) -> str | None:

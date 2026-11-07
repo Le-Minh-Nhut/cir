@@ -1575,3 +1575,65 @@ def test_directory_egg_info_without_pkg_info_does_not_invent_phantom_row(tmp_pat
     )
     assert "my-pkg" in versions, f"my-pkg must be confirmed: {versions}"
     assert "my_pkg" in modules
+
+
+def test_overlong_name_and_pycache_rejected_without_crashing_inventory(tmp_path: Path):
+    """Overlong identifiers and __pycache__ must not crash inventory or falsely confirm packages.
+
+    B-1: An overlong identifier in top_level.txt raises OSError: [Errno 36] File name too long
+    when checked via (site_packages / f"{head}.py").is_file() if unbounded, taking down the entire
+    environment inventory. It must be rejected without raising.
+
+    B-2: __pycache__ is a Python bytecode directory, not a module. Because site-packages/__pycache__
+    almost always exists on disk, declaring __pycache__ in top_level.txt would falsely confirm an
+    uninstalled package and pollute modules with '__pycache__'.
+
+    A genuine module alongside them must still be discovered and confirmed normally.
+    """
+    root = tmp_path / "env"
+    site_packages = root / "lib" / "python3.12" / "site-packages"
+    site_packages.mkdir(parents=True)
+
+    # __pycache__ directory pre-exists on disk in almost every Python environment.
+    (site_packages / "__pycache__").mkdir()
+
+    # Genuine module installed alongside hostile/fake entries.
+    (site_packages / "genuine_mod.py").write_text("__version__ = '1.0'\n")
+    genuine_dist = site_packages / "genuine-1.0.egg-info"
+    genuine_dist.mkdir()
+    (genuine_dist / "PKG-INFO").write_text("Name: genuine\nVersion: 1.0\n")
+    (genuine_dist / "top_level.txt").write_text("genuine_mod\n")
+
+    # B-1: Hostile package declaring an overlong identifier that exceeds filesystem NAME_MAX.
+    overlong_name = "a" * 1000
+    hostile_dist = site_packages / "hostile-1.0.egg-info"
+    hostile_dist.mkdir()
+    (hostile_dist / "PKG-INFO").write_text("Name: hostile\nVersion: 1.0\n")
+    (hostile_dist / "top_level.txt").write_text(f"{overlong_name}\n")
+
+    # B-2: Fake package declaring __pycache__ as its top-level module.
+    fake_dist = site_packages / "fake-1.0.egg-info"
+    fake_dist.mkdir()
+    (fake_dist / "PKG-INFO").write_text("Name: fake\nVersion: 1.0\n")
+    (fake_dist / "top_level.txt").write_text("__pycache__\n")
+
+    versions, modules, unconfirmed = runtime.inspect_environment_distributions(str(root))
+
+    # Helper sanity checks
+    assert runtime._is_safe_module_head(overlong_name) is False
+    assert runtime._is_safe_module_head("__pycache__") is False
+    assert runtime._is_safe_module_head("genuine_mod") is True
+
+    # B-1 assertion: overlong identifier rejected without raising, confers no install confirmation.
+    assert overlong_name not in modules, "overlong name must not be added to modules"
+    assert "hostile" not in versions, "hostile package must not be confirmed by overlong name"
+    assert "hostile" not in unconfirmed, "hostile package must not be in unconfirmed"
+
+    # B-2 assertion: __pycache__ contributes no module and confirms nothing.
+    assert "__pycache__" not in modules, "__pycache__ is not a module and must not be in modules"
+    assert "fake" not in versions, "__pycache__ directory must not confirm fake install"
+    assert "fake" not in unconfirmed, "fake must not be in unconfirmed"
+
+    # Genuine package alongside them still works.
+    assert "genuine" in versions, "genuine package must be confirmed"
+    assert "genuine_mod" in modules, "genuine module must be discovered"

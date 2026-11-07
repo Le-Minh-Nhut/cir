@@ -539,14 +539,32 @@ def _directory_is_importable(directory: Path) -> bool:
     return False
 
 
+# A module filename on disk (e.g. {head}.py) cannot exceed filesystem NAME_MAX (255 bytes).
+# An overlong identifier causes OSError [Errno 36] File name too long when stat-ed.
+_MAX_MODULE_HEAD_BYTES = 255 - len(".py")
+# __pycache__ is Python bytecode storage, not an importable distribution module. Because
+# site-packages/__pycache__ almost always exists, accepting it falsely confirms fake packages.
+_NON_MODULE_HEADS = frozenset({"__pycache__"})
+
+
 def _is_safe_module_head(head: str) -> bool:
     """True when *head* is a single safe Python identifier component.
 
     Unsanitised `top_level.txt` entries (e.g. `..`, `*`, `a/b`) must not reach globbing,
     path joins, or module sets: traversing upward could allow external files to falsely
     confirm an install, and glob wildcards match unintended files.
+
+    Non-module names like `__pycache__` and overlong identifiers exceeding the filesystem
+    NAME_MAX for `{head}.py` are rejected so hostile or fake metadata cannot crash the
+    inventory or falsely confirm installs.
     """
-    return bool(head) and head.isidentifier()
+    if not (bool(head) and head.isidentifier()):
+        return False
+    if head in _NON_MODULE_HEADS:
+        return False
+    if len(head.encode("utf-8")) > _MAX_MODULE_HEAD_BYTES:
+        return False
+    return True
 
 
 def _distribution_name_from_stem(dist_name: str) -> str:
