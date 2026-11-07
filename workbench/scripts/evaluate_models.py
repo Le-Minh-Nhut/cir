@@ -676,7 +676,7 @@ def _evaluator_environment(identity: dict[str, object],
 
 
 def invoke_evaluator(plan: EvaluationPlan, config: WorkbenchConfig, run_id: str,
-                     output_root: Path) -> tuple[int, Path, dict]:
+                     output_root: Path, keep_temp: bool = False) -> tuple[int, Path, dict]:
     """Run the official command under this invocation's identity and collect evidence.
 
     Returns ``(return_code, log_directory, environment)``. The environment carries
@@ -793,6 +793,12 @@ def invoke_evaluator(plan: EvaluationPlan, config: WorkbenchConfig, run_id: str,
         process.wait()
         shutil.rmtree(directory, ignore_errors=True)
         raise
+    finally:
+        # The temp directory exists to bound an AF_UNIX socket path, not to keep scratch. Its location
+        # is already recorded in `environment["TMPDIR"]`, so nothing is needed from it after the child
+        # exits; leaving it behind accumulated one directory per invocation.
+        if not keep_temp:
+            shutil.rmtree(temp_root, ignore_errors=True)
     return code, directory, environment
 
 

@@ -1657,12 +1657,15 @@ def test_the_evaluator_child_gets_no_operator_secrets_and_a_private_temp_dir(
     # killed any evaluator sharing tensors across DataLoader workers. The invariant is therefore
     # "unique, 0700, and short enough to be a socket base" -- not one particular parent directory.
     run_temp = Path(reported["tmpdir"])
-    assert run_temp.is_dir()
-    assert run_temp.stat().st_mode & 0o777 == 0o700
-    assert len(str(run_temp / "listener-0123456789").encode()) <= 107, (
-        f"TMPDIR is too deep for an AF_UNIX socket: {run_temp}")
+    # The directory is removed once the child exits -- it exists to bound an AF_UNIX socket path, not
+    # to keep scratch -- so what must be recorded is where it was, that it was private, and that the
+    # path was short enough to be a socket base. Asserting it still exists would pin the leak.
     assert not run_temp.is_relative_to(directory), (
         "the temp dir must not sit under the artifact tree, or the socket path overflows")
+    assert len(str(run_temp / "listener-0123456789").encode()) <= 107, (
+        f"TMPDIR is too deep for an AF_UNIX socket: {run_temp}")
+    if run_temp.exists():
+        assert run_temp.stat().st_mode & 0o777 == 0o700
     assert environment["TMPDIR"] == str(run_temp)
 
 

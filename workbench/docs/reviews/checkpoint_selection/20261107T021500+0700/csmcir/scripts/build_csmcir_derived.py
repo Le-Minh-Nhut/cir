@@ -9,6 +9,11 @@ That patch is what the registry approves, and it is applied here unchanged. This
 reproduce the derived checkout in one step instead of a shell sequence, and it verifies both recorded
 digests afterwards so a half-applied tree cannot be mistaken for the approved variant.
 
+The STANDARD path no longer needs this script: `prepare_model --model csmcir --execute` applies the
+declared patches to the pinned checkout in place, and `download_auxiliary_assets --model csmcir`
+stages the author bytecode. This builder remains for producing a SEPARATE derived checkout (an
+overlay root, or a tree to test the patch applier against), and its digests follow the registry.
+
 Usage:
     python build_csmcir_derived.py <destination> [--with-shiyan92-pyc <path.pyc>]
 """
@@ -26,9 +31,9 @@ for parent in REPO.parents:
 PRISTINE = REPO / "workbench/third_party/CSMCIR/src"
 PATCHES = [
     ("workbench/patches/csmcir_models_init_compat.patch", "src/lavis/models/__init__.py",
-     "aa68fe5e20bcda5e17d978799deb8ec0ff4636e5b3b2a6ef637ce5e385b0c818"),
+     "0ec134431697af6f202b5256e4e30ab725a44191a279e3f8bfdb3a62495b3774"),
     ("workbench/patches/csmcir_validate_visualization_opt_in.patch", "src/validate_blip_csmcir.py",
-     "84a1d476e99d9687b16b1a9c5238f89295f23d2a6f9f4dfb449acba2c118262c"),
+     "a057e8f3ad7097adcfabb2b8fd8b4747588ff3461cfb43f00cd3483dfd6d512d"),
 ]
 
 
@@ -55,6 +60,19 @@ def main():
         "src/lavis/models/__init__.py": "9d8c914b551a7de614e062f9a241f44626fd591a31a0ccf1cc79f0ae23c9db01",
         "src/validate_blip_csmcir.py": "aa7a4395cdb700fded0567e0969da774a331927eaea327b5a23da82fdc7506a9",
     }
+    # The vendored tree may already carry the declared repairs (prepare_model applies them in place),
+    # so each copied file is first reduced to its published bytes by inverting the same declaration.
+    # "Pristine" here means the pinned revision, not an untouched working tree.
+    for patch_file, target, derived in PATCHES:
+        candidate = dest / target
+        if hashlib.sha256(candidate.read_bytes()).hexdigest() != derived:
+            continue
+        reverted = subprocess.run(["patch", "-p1", "--reverse", "--quiet", "-i",
+                                   str(REPO / patch_file)], cwd=dest,
+                                  capture_output=True, text=True)
+        if reverted.returncode != 0:
+            raise SystemExit(f"could not reconstruct the published base for {target}: {reverted.stderr}")
+
     for target, expected_base in base_expected.items():
         digest = hashlib.sha256((dest / target).read_bytes()).hexdigest()
         if digest != expected_base:

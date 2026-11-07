@@ -739,7 +739,15 @@ def inspect_environment_distributions(prefix: str | None,
                     siblings = []
                 for module_name in _declared_top_level_modules(dist):
                     head = module_name.split(".", 1)[0]
-                    if (site_packages / f"{head}.py").is_file() or (site_packages / head).is_dir():
+                    # A declared module can be a source file, a package directory, or an extension
+                    # whose filename carries an ABI tag (`brlapi` -> `brlapi.cpython-312-x86_64-linux-gnu.so`).
+                    # Matching only the first two reported deb-installed extension modules as absent
+                    # and then removed them from the inventory, which is why a real distro environment
+                    # looked mostly empty.
+                    extension = next(iter(site_packages.glob(f"{head}.*.so")), None) or next(
+                        iter(site_packages.glob(f"{head}.so")), None)
+                    if ((site_packages / f"{head}.py").is_file() or (site_packages / head).is_dir()
+                            or extension is not None):
                         installed_content = True
                         modules.add(head)
                 if any(sibling.is_file() and sibling.name not in _DESCRIPTIVE_METADATA

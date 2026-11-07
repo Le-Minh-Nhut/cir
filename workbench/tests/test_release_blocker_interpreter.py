@@ -1266,15 +1266,14 @@ def test_a_distro_environment_accounts_for_every_decidable_distribution(tmp_path
 def test_the_real_distro_tree_never_drops_a_decidable_distribution():
     """The same invariant against this host's real distro tree, when one exists.
 
-    "Decidable" is the implementation's own documented basis: a RECORD-backed install (wheel), or
-    metadata whose instalment can be confirmed from a module/package sitting beside it (deb). Those
-    two classes are 56 of the 88 metadata entries on this host, and none of them may vanish.
+    Every metadata entry on the host must be accounted for: either its version is read, or it is
+    reported as unconfirmed with a reason. None may vanish.
 
-    Legacy egg-infos that install a bare ABI-tagged extension module behind `top_level.txt`
-    (`brlapi.cpython-312-*.so`) and legacy single-file egg-infos are NOT required here: they are a
-    known unsupported layout, pinned separately by
-    `test_a_distro_environment_accounts_for_every_decidable_distribution`. Requiring them would be
-    asserting behaviour the code does not have.
+    This used to require only "decidable" entries, because two real layouts were unsupported and
+    silently removed a genuinely installed distribution from the inventory: a legacy single-file
+    `.egg-info`, and a `top_level.txt` naming a bare ABI-tagged extension
+    (`brlapi` -> `brlapi.cpython-312-*.so`). Both are fixed, so the assertion is now the stronger
+    one: dropping any entry at all fails, and the count must cover the whole tree.
     """
     import sysconfig
 
@@ -1287,31 +1286,40 @@ def test_the_real_distro_tree_never_drops_a_decidable_distribution():
 
     versions, modules, unconfirmed = runtime.inspect_environment_distributions(str(prefix))
     accounted = set(versions) | set(unconfirmed)
-    decidable = 0
+    entries = 0
     dropped: list[str] = []
     for site_packages in site_packages_dirs:
         for entry in site_packages.iterdir():
-            if not entry.is_dir() or not entry.name.endswith((".dist-info", ".egg-info")):
+            # A legacy `.egg-info` may be a FILE; both shapes are metadata and both must be accounted
+            # for. Skipping non-directories is what let the single-file layout vanish unnoticed.
+            if not entry.name.endswith((".dist-info", ".egg-info")):
                 continue
-            metadata = entry / ("METADATA" if entry.name.endswith(".dist-info") else "PKG-INFO")
+            entries += 1
+            metadata = (entry / ("METADATA" if entry.name.endswith(".dist-info") else "PKG-INFO")
+                        if entry.is_dir() else entry)
             declared, _version = runtime._metadata_name_version(metadata)
             declared = str(declared or entry.name.split("-")[0])
-            confirmed = (entry / "RECORD").is_file() or any(
-                (site_packages / f"{candidate}.py").is_file()
-                or runtime._directory_is_importable(site_packages / candidate)
-                for candidate in runtime._distribution_owner_names(declared, entry.name))
-            if not confirmed:
-                continue
-            decidable += 1
+            # A record that explicitly declares NO top-level module is not a lost install: it states
+            # that the distribution ships no importable Python (a deb with no bindings, an empty PyPI
+            # shim). The inventory is right to omit it. Every OTHER entry must be accounted for.
+            top_level = entry / "top_level.txt" if entry.is_dir() else None
+            if top_level is not None and top_level.is_file():
+                declared_modules = [line.strip() for line in
+                                    top_level.read_text(encoding="utf-8", errors="replace").splitlines()
+                                    if line.strip()]
+                if not declared_modules:
+                    entries -= 1
+                    continue
             if runtime.normalize_distribution_name(declared) not in accounted:
                 dropped.append(entry.name)
-    if not decidable:
-        pytest.skip("no decidable distribution metadata on this host")
+    if not entries:
+        pytest.skip("no distribution metadata on this host")
     assert not dropped, (
-        f"{len(dropped)} of {decidable} decidable distributions were dropped: {sorted(dropped)[:5]}")
-    # The tree must be genuinely READ, not merely reported as "nothing was dropped".
-    assert len(versions) >= decidable - len(unconfirmed), (
-        f"only {len(versions)} versions read for {decidable} decidable distributions")
+        f"{len(dropped)} of {entries} distributions were dropped entirely: {sorted(dropped)[:5]}")
+    # Most entries must have a resolved version; the remainder must be named as unconfirmed, which is
+    # a different outcome from disappearing.
+    assert len(versions) + len(unconfirmed) >= entries, (
+        f"only {len(versions)} versions and {len(unconfirmed)} unconfirmed for {entries} entries")
     assert modules, "the inventory found no importable module at all in a real distro tree"
 
 
