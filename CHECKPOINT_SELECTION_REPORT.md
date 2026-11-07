@@ -1216,8 +1216,51 @@ Khác biệt được phân loại từng file, không gộp. Nguyên nhân đã
 
 | ID | vấn đề | lựa chọn | tác động |
 |---|---|---|---|
-| **D-10** | Đường chính thức và adapter đều trỏ `third_party/CSMCIR` **pristine**, nơi `import lavis.models` chết. Preflight bảo "register that checkout as the model source" nhưng không có API nào làm việc đó | (a) áp hai approved patch **in-place** (như DCNet/TME đang DERIVED) và viết lại `test_csmcir_source_blocker`; (b) thêm cơ chế source-root override theo model; (c) giữ nguyên, CSMCIR chỉ chạy qua derived checkout + script trong evidence | (a) là ít code nhất và nhất quán với repo, nhưng đổi ngữ nghĩa của một test đang khoá hành vi công bố; (b) là thay đổi hạ tầng; (c) là trung thực nhưng đường web vẫn không dùng được |
+| **D-10** | Đường chính thức/adapter trỏ `third_party/CSMCIR` pristine, nơi `import lavis.models` chết — **và** overlay qua `WORKBENCH_THIRD_PARTY_ROOT` cũng không giải được (xem 3.22) | (a) thêm patch thứ ba vào registry cho dòng import `shiyan92` dưới `approved_source_patches` (đổi `derived_sha256` + `patch_sha256`); (b) nới `approved_patch_state` để chấp nhận một tập digest derived cho phép; (c) giữ nguyên, CSMCIR chỉ chạy qua script evidence | (a) là sửa registry, phải tái ký `derived_sha256` và chứng minh patch mới chỉ thêm 1 dòng; (b) nới guard bảo mật theo hướng rộng — cần cân nhắc; (c) trung thực nhưng đường web không dùng được |
 | **D-11** | `TESTED_SOURCE_SHA` trong `FINAL_PC_RELEASE_VERDICT.md` chưa tiến sau khi production code đổi trong lượt này | cập nhật sang commit mới sau khi merge, hoặc chấp nhận test đỏ | là nghi thức phát hành, không phải lỗi code |
+
+### 3.22. Overlay `WORKBENCH_THIRD_PARTY_ROOT` — thử và bị chặn bởi mâu thuẫn digest
+
+Review đề xuất một đường không đụng vendor: dựng `third_party` overlay, mọi model là symlink, riêng
+CSMCIR trỏ derived checkout, rồi chạy với `WORKBENCH_THIRD_PARTY_ROOT=<overlay>`. Đã thử và ghi lại
+đầy đủ, vì nó chạm đúng một mâu thuẫn cần quyết định.
+
+Đã dựng `/tmp/tp_derived`: symlink mọi model sang vendor thật, `CSMCIR -> /tmp/derive_fresh`. Để
+derived trông như một checkout thật, phải chép `provenance.json`, `README.md`, `requirements.txt`, và
+`COT_ours2` phải nằm **trong** cây (guard `_guard_auxiliary_destination` từ chối đường dẫn thoát khỏi
+root — guard đúng, không phải lỗi).
+
+Kết quả là hai blocker, cái thứ hai là mâu thuẫn thật:
+
+```
+[BLOCKED] source cannot run: … 2 of 2 required patches are not applied
+[BLOCKED] src/lavis/models/__init__.py: modified source in an approved-patch checkout
+          (matches neither the published base nor the recorded post-patch digest)
+```
+
+Đo trực tiếp, cùng một file:
+
+| trạng thái `__init__.py` | sha256 | khớp registry? |
+|---|---|---|
+| chỉ áp `csmcir_models_init_compat.patch` | `aa68fe5e20bcda5e…` | **đúng `derived_sha256`** |
+| thêm dòng import `shiyan92` | `0ec134431697af6f…` | không khớp gì |
+
+Đây là mâu thuẫn **không thể vá bằng cấu hình**:
+
+- `approved_patch_state` chỉ chấp nhận cây có digest **đúng** `aa68fe5e…`.
+- Ở cây đó, `shiyan92` **không** được đăng ký: khối 98 import nằm trong `try/except ImportError`, và
+  module thiếu đầu tiên (dòng 49) làm hỏng cả khối trước khi tới dòng import `shiyan92`.
+- Không đăng ký ⇒ `load_model_and_preprocess` trả `None` ⇒ `AttributeError: 'NoneType' object has no
+  attribute 'from_pretrained'`.
+
+Nên để đường chính thức chạy được, registry **phải** khai thêm một delta cho dòng import đó. Đó là
+D-10 phương án (a). Không tự làm: nó đổi `derived_sha256`, tức đổi thứ guard dùng để nói "cây này là
+bản đã được duyệt", và phải tái ký `patch_sha256` — quyết định có ảnh hưởng tới tính toàn vẹn, không
+phải sửa cục bộ.
+
+Ghi chú thêm: advisory đề xuất thêm một biến `WORKBENCH_CSMCIR_SOURCE_ROOT`. Cách đó **không** giải
+được, vì `preflight`/`runtime_blockers` vẫn tính source từ `WORKBENCH_THIRD_PARTY_ROOT`, nên nó vẫn
+thấy pristine và vẫn chặn — trừ khi sửa cả hai chỗ, tức lớn hơn phương án (a) chứ không nhỏ hơn.
 
 ## 4. Hàng đợi quyết định buổi sáng
 
