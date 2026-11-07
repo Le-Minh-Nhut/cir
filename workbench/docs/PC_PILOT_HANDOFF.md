@@ -28,7 +28,7 @@ Tám entry hoãn có blocker khác nhau theo registry: `airknow` thiếu checkpo
 **Trạng thái 17 model (bảng chuẩn, bằng chứng + điều kiện chuyển trạng thái):**
 [`workbench/docs/MODEL_STATUS_SPEC.md`](MODEL_STATUS_SPEC.md)
 
-**SHA ĐÃ KIỂM THỬ (nguồn sản xuất): `b2fca876ee7db0711a01a68c75973a6a53cdc341`** (commit production mới nhất, lượt A41). Full suite serial đã chạy tại revision này (CPython 3.12.11, interpreter `workbench/envs/ctl312h/bin/python`): scope `workbench/tests` **2226 collected — 2179 passed, 0 failed, 47 skipped**, exit 0.11, interpreter `workbench/envs/ctl312h/bin/python`): scope `workbench/tests` **2222 collected — 2172 passed, 3 failed, 47 skipped**. Ba failure còn lại đều tái hiện ở baseline `ea5ff05` (23 failed tại đó) nên không do lượt này gây ra: pin LIMN `open_clip_torch==2.20.0` từ `200b7c7`, patch DCNet/TME áp in-place so với `provenance.json`, và metadata package của `/usr/bin/python3` distro. Guard metadata phát hành ban đầu đỏ và đã được xử lý **trong cùng lượt** bằng cách nâng `TESTED_SOURCE_SHA`; 8 handoff test pass sau đó. Sweep cũ tại `2ff698e` (2247/2236/1/10) là historical.
+**SHA ĐÃ KIỂM THỬ (nguồn sản xuất): `df9e6db466060d3782b225b4bd65781654aef816`** (commit production mới nhất, lượt A41). Full suite serial đã chạy tại revision này (CPython 3.12.11, interpreter `workbench/envs/ctl312h/bin/python`): scope `workbench/tests` **2226 collected — 2179 passed, 0 failed, 47 skipped**, exit 0.11, interpreter `workbench/envs/ctl312h/bin/python`): scope `workbench/tests` **2222 collected — 2172 passed, 3 failed, 47 skipped**. Ba failure còn lại đều tái hiện ở baseline `ea5ff05` (23 failed tại đó) nên không do lượt này gây ra: pin LIMN `open_clip_torch==2.20.0` từ `200b7c7`, patch DCNet/TME áp in-place so với `provenance.json`, và metadata package của `/usr/bin/python3` distro. Guard metadata phát hành ban đầu đỏ và đã được xử lý **trong cùng lượt** bằng cách nâng `TESTED_SOURCE_SHA`; 8 handoff test pass sau đó. Sweep cũ tại `2ff698e` (2247/2236/1/10) là historical.
 
 Lưu ý: các bản ghi cũ `59949ff`, `9a53ee1` và `5567bc7` đã bị **thay thế**. Công việc vendoring và phục hồi
 model đã thay đổi file production (`workbench/backend/runtime.py`, `workbench/replay/common.py`,
@@ -58,7 +58,7 @@ git fetch origin research/cir-failure-workbench
 # Checkout tường minh. KHÔNG dùng `git reset --hard`: trên máy đã có việc đang làm, nó xoá sạch
 # không hỏi. Muốn đúng cây đã kiểm thử thì checkout đúng commit đó.
 # Nguồn đã kiểm thử (revision cố định):
-git checkout b2fca876ee7db0711a01a68c75973a6a53cdc341
+git checkout df9e6db466060d3782b225b4bd65781654aef816
 # Nhánh đang phát triển thêm tài liệu. Dùng nó nếu muốn bản mới nhất:
 #   git checkout research/cir-failure-workbench
 ```

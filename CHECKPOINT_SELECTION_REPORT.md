@@ -9,7 +9,7 @@ Repo: `/home/heheboiz/data/cir`, branch `research/cir-failure-workbench`, HEAD `
 
 Bundle của buổi 20261107 (CSMCIR + GloVe recipe):
 `workbench/docs/reviews/checkpoint_selection/20261107T021500+0700/` — 21 entry có hash trong
-`EVIDENCE_INDEX.json`, 273 259 B (đo lại cuối lượt). Đọc `README.md` trong đó trước.
+`EVIDENCE_INDEX.json`, 275 161 B (đo lại cuối lượt). Đọc `README.md` trong đó trước.
 
 | thư mục | nội dung |
 |---|---|
@@ -1426,6 +1426,37 @@ Khi nâng `TESTED_SOURCE_SHA`, một lần thay thế toàn cục đã đè cả
 `1415e56`, A33 `e3f0dfa`, sm_120 `4e0c074`) và cả dòng `origin/main` (thực tế `8ebcc74d`, không đổi).
 Đã revert file và chỉ nâng đúng các dòng **current**. Kiểm lại: `8ebcc74d` còn 2 hit, bốn SHA lịch sử
 nguyên vẹn.
+
+### 3.25. Hai bug inventory thật, và rác temp dir
+
+#### 3.25.1 Inventory distro: 79/88 → 88/88
+
+Hai lỗi trong `runtime.inspect_environment_distributions`, cả hai đều làm **một package đã cài biến mất**:
+
+| lỗi | cơ chế |
+|---|---|
+| `.egg-info` legacy là **file**, không phải thư mục | `dist.iterdir()` ném `OSError` → `siblings = []` → rơi nhánh "không có content" → `versions.pop(key)` |
+| `top_level.txt` trỏ extension có tag ABI | `brlapi` → `brlapi.cpython-312-x86_64-linux-gnu.so`; phép kiểm cũ chỉ khớp `head.py` hoặc thư mục |
+
+Sau khi sửa: **85 versions + 3 unconfirmed = 88/88** (trước: 79 + 0). Test integration nay khẳng định
+mọi metadata entry đều được giải trình, chỉ loại trừ record có `top_level.txt` **tồn tại và rỗng** —
+những cái đó tự khai không ship module nào, và inventory báo đúng như vậy.
+
+Đã thử một hướng sai trước đó: coi "không khai top_level module" là `unconfirmed`. Nó làm 5 test đỏ vì
+các test đó khẳng định metadata-only **không phải** installation — đúng. Đã revert.
+
+#### 3.25.2 Temp dir rò rỉ
+
+`wb-*` được tạo mỗi lần chạy và **không bao giờ dọn**: 314 thư mục tích trong `/tmp`. Nay xoá sau khi
+child thoát (`finally`), có cờ `keep_temp` để giữ khi cần debug. Vị trí vẫn được ghi trong
+`environment["TMPDIR"]`, nên evidence không mất — test chuyển từ "thư mục còn tồn tại" sang "vị trí đã
+được ghi, không nằm dưới artifact tree, đủ ngắn cho socket".
+
+#### 3.25.3 Builder evidence đồng bộ lại
+
+`build_csmcir_derived.py` còn pin digest **trước khi gộp patch** (`aa68fe5e`/`84a1d476`), nên chạy lại
+sẽ fail. Đã nâng về `0ec13443`/`a057e8f3`, và thêm bước dựng base bằng cách đảo patch (vendor giờ đã
+derived). Docstring nói rõ builder **không còn** là đường chuẩn: `prepare_model` + downloader phủ việc đó.
 
 ## 4. Hàng đợi quyết định buổi sáng
 

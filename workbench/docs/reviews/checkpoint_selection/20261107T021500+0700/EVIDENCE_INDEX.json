@@ -49,8 +49,8 @@
   },
   {
    "dest": "csmcir/scripts/build_csmcir_derived.py",
-   "bytes": 7665,
-   "sha256": "96286f9b3103e4a3a5ebb23cbcc37823e0c1b0b1205af47f60c603e2f1fc68a2"
+   "bytes": 8876,
+   "sha256": "86a032fdde7334c1249e198d9ae1ff13631c94f28dc85d5e53f01c716a13b92d"
   },
   {
    "dest": "csmcir/scripts/csmcir_call_path_probe.py",
@@ -94,13 +94,13 @@
   },
   {
    "dest": "tests/SUMMARY.json",
-   "bytes": 2271,
-   "sha256": "eb895c5477c2d347273267d993e4c1ccd92ae328e009dfe26aed7b9c5fb24a5e"
+   "bytes": 2962,
+   "sha256": "d87d9dae9a51c18d255584e71d5847e67b9e86c679c5828379bd054a69cd9fd4"
   },
   {
    "dest": "tests/full_suite_after.txt",
    "bytes": 14273,
-   "sha256": "311b53078892f7ef37005cc97c21e0633b14be2f687861249d2434be9542b035"
+   "sha256": "89c42f4f659483af036772778bcf2419357295109f8d33f5b47e3e14c9e4318f"
   },
   {
    "dest": "tests/full_suite_baseline_ea5ff05.txt",

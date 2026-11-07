@@ -42,5 +42,19 @@
   "macro_r50": 77.29859352111816,
   "evidence": "csmcir/full_eval_pipeline.txt",
   "command_record": "csmcir/pipeline_command.json"
+ },
+ "inventory_fix": {
+  "before": "79 versions + 0 unconfirmed of 88 metadata entries",
+  "after": "85 versions + 3 unconfirmed of 88",
+  "bugs": [
+   "legacy single-file .egg-info made dist.iterdir() fail and versions.pop() removed a real install",
+   "top_level.txt naming an ABI-tagged extension (brlapi -> brlapi.cpython-312-*.so) matched neither head.py nor a directory"
+  ],
+  "integration_test": "asserts all 88 entries are accounted for, excluding only records whose top_level.txt exists and is empty"
+ },
+ "temp_dir": {
+  "leak_fixed": true,
+  "removed_entries": 314,
+  "note": "wb-* scratch is deleted once the child exits; its location is still recorded in the run environment"
  }
 }

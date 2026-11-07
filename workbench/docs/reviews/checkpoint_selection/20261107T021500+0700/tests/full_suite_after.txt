@@ -86,7 +86,7 @@ workbench/tests/test_circus_inputs.py::test_staged_black_path_and_empty_text_cro
 
 workbench/tests/test_composition_image_identity.py::test_model_lock_serializes_processes
 workbench/tests/test_composition_image_identity.py::test_model_lock_assertion_fails_when_flock_is_noop
-  /home/heheboiz/.local/share/uv/python/cpython-3.12-linux-x86_64-gnu/lib/python3.12/multiprocessing/popen_fork.py:66: DeprecationWarning: This process (pid=1115613) is multi-threaded, use of fork() may lead to deadlocks in the child.
+  /home/heheboiz/.local/share/uv/python/cpython-3.12-linux-x86_64-gnu/lib/python3.12/multiprocessing/popen_fork.py:66: DeprecationWarning: This process (pid=1284039) is multi-threaded, use of fork() may lead to deadlocks in the child.
     self.pid = os.fork()
 
 workbench/tests/test_e2e_release_chain.py: 1 warning
@@ -176,4 +176,4 @@ workbench/tests/test_release_blocker_interpreter.py::test_an_unreadable_installe
     version = metadata["Version"]
 
 -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
-2179 passed, 47 skipped, 287 warnings in 1627.31s (0:27:07)
+2179 passed, 47 skipped, 287 warnings in 1530.46s (0:25:30)
