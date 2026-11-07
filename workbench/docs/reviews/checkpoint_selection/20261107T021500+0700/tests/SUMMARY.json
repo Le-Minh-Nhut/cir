@@ -9,9 +9,10 @@
   "skipped": 47
  },
  "after": {
-  "failed": 4,
-  "passed": 2171,
-  "skipped": 47
+  "failed": 3,
+  "passed": 2172,
+  "skipped": 47,
+  "collected": 2222
  },
  "remaining_failures": [
   {
@@ -22,11 +23,6 @@
   {
    "test": "test_fresh_clone_delivery::test_every_manifest_path_matches_its_recorded_digest",
    "cause": "DCNet/TME approved patches applied in-place; provenance.json records base digests",
-   "in_baseline": true
-  },
-  {
-   "test": "test_handoff_commands::test_no_release_document_points_at_a_superseded_source_sha",
-   "cause": "TESTED_SOURCE_SHA must advance after production code changes; the test is working as designed",
    "in_baseline": true
   },
   {
@@ -41,5 +37,10 @@
   "test_circus_adapters_blip (reason pinned a refuted claim)",
   "test_evaluate_models + test_backend_config_roots (pinned a command that KeyErrors on the released checkpoint)",
   "test_environment_planner + test_release_blocker_adversarial_final (no longer failing)"
- ]
+ ],
+ "resolved_by_procedure": {
+  "test": "test_handoff_commands::test_no_release_document_points_at_a_superseded_source_sha",
+  "how": "Advanced TESTED_SOURCE_SHA to 5ca7043 in FINAL_PC_RELEASE_VERDICT.md and PC_PILOT_HANDOFF.md, and replaced the recorded suite counts with the measured ones. The test itself demands this after a production change; precedent is round A40.",
+  "result": "8/8 pass in that file"
+ }
 }

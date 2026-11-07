@@ -8,7 +8,7 @@ ssssssssss.s...............sssssssssssssssss......s..................... [  3%]
 ........................................................................ [ 25%]
 ............................................................s........... [ 29%]
 ...............................................F........................ [ 32%]
-......................F..................................F.............. [ 35%]
+......................F................................................. [ 35%]
 ........................................................................ [ 38%]
 ................................................................s....... [ 42%]
 .................................................ss......sss............ [ 45%]
@@ -86,7 +86,7 @@ workbench/tests/test_circus_inputs.py::test_staged_black_path_and_empty_text_cro
 
 workbench/tests/test_composition_image_identity.py::test_model_lock_serializes_processes
 workbench/tests/test_composition_image_identity.py::test_model_lock_assertion_fails_when_flock_is_noop
-  /home/heheboiz/.local/share/uv/python/cpython-3.12-linux-x86_64-gnu/lib/python3.12/multiprocessing/popen_fork.py:66: DeprecationWarning: This process (pid=583555) is multi-threaded, use of fork() may lead to deadlocks in the child.
+  /home/heheboiz/.local/share/uv/python/cpython-3.12-linux-x86_64-gnu/lib/python3.12/multiprocessing/popen_fork.py:66: DeprecationWarning: This process (pid=666135) is multi-threaded, use of fork() may lead to deadlocks in the child.
     self.pid = os.fork()
 
 workbench/tests/test_e2e_release_chain.py: 1 warning
@@ -183,11 +183,8 @@ FAILED workbench/tests/test_final_hardening_regressions.py::test_planner_verifie
   + ==2.20.0
 FAILED workbench/tests/test_fresh_clone_delivery.py::test_every_manifest_path_matches_its_recorded_digest - AssertionError: delivered bytes differ from the manifest: ['DCNet/base/base_trainer.py', 'TME/src/precompute.py', 'TME/src/precompute_evaluation.py']
 assert not ['DCNet/base/base_trainer.py', 'TME/src/precompute.py', 'TME/src/precompute_evaluation.py']
-FAILED workbench/tests/test_handoff_commands.py::test_no_release_document_points_at_a_superseded_source_sha - AssertionError: TESTED_SOURCE_SHA 624fcf9607d7397c8eef51a3453792a8a9f93de6 does not contain the production code currently on disk: production files changed after the revision the release documents name as tested. Advance the recorded source to a revision that includes them, or the handoff installs code that was never gated.
-assert 1 == 0
- +  where 1 = CompletedProcess(args=['git', 'diff', '--quiet', '624fcf9607d7397c8eef51a3453792a8a9f93de6', '--', '.', ':(exclude)workbench/docs', ':(exclude)workbench/tests'], returncode=1, stdout='', stderr='').returncode
 FAILED workbench/tests/test_release_blocker_interpreter.py::test_a_real_distro_environment_is_not_reported_empty - AssertionError: only 79 + 0 of 88 were accounted for
 assert (79 + 0) >= (88 * 0.9)
  +  where 79 = len({'ubuntu-pro-client': '8001', 'pyrsistent': '0.20.0', 'language-selector': '0.1', 'bcc': '0.29.1', ...})
  +  and   0 = len(set())
-4 failed, 2171 passed, 47 skipped, 287 warnings in 1317.83s (0:21:57)
+3 failed, 2172 passed, 47 skipped, 287 warnings in 1354.42s (0:22:34)

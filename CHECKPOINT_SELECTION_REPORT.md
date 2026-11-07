@@ -1191,7 +1191,7 @@ tại `ea5ff05` và chạy cùng interpreter:
 | lần chạy | kết quả |
 |---|---|
 | baseline `ea5ff05` (worktree riêng) | **23 failed**, 2152 passed, 47 skipped |
-| sau khi sửa trong lượt này | **4 failed**, 2171 passed, 47 skipped |
+| sau khi sửa trong lượt này | **3 failed**, 2172 passed, 47 skipped |
 
 Bốn failure còn lại đều **có trong baseline**, đã kiểm từng cái:
 
@@ -1199,10 +1199,10 @@ Bốn failure còn lại đều **có trong baseline**, đã kiểm từng cái:
 |---|---|---|
 | `test_final_hardening_regressions::test_planner_verifier_uses_the_resolved_contract` | LIMN `torch==2.20.0` trong registry từ commit `200b7c7` của phiên trước; test còn kỳ vọng hợp đồng `<2.27,>=2.24` | sửa registry hay test đều là quyết định về pin LIMN, không thuộc phạm vi lượt này |
 | `test_fresh_clone_delivery::test_every_manifest_path_matches_its_recorded_digest` | đúng ba file có approved patch áp **in-place**: `DCNet/base/base_trainer.py`, `TME/src/precompute.py`, `TME/src/precompute_evaluation.py`; `provenance.json` ghi digest **base** | manifest cần ghi derived digest — thay đổi có chủ đích của phiên trước, không tự sửa expected hash |
-| `test_handoff_commands::test_no_release_document_points_at_a_superseded_source_sha` | `TESTED_SOURCE_SHA 624fcf96` không chứa production code hiện tại | **đây là test hoạt động đúng**: nó bắt buộc phải tiến SHA sau khi production code đổi. Cập nhật verdict doc là nghi thức phát hành, để D-11 |
+| ~~`test_handoff_commands::test_no_release_document_points_at_a_superseded_source_sha`~~ | đã xử lý theo đúng thủ tục có sẵn (tiền lệ A40): nâng `TESTED_SOURCE_SHA` → `5ca7043` tại `FINAL_PC_RELEASE_VERDICT.md` và `PC_PILOT_HANDOFF.md`, kèm số suite đo thật | nay **xanh** (8/8 trong file đó) |
 | `test_release_blocker_interpreter::test_a_real_distro_environment_is_not_reported_empty` | chỉ 79 + 0 trên 88 package được giải thích — distro `/usr/bin/python3` không có metadata | thuộc môi trường host, ngoài phạm vi |
 
-Không nhóm nào bị "làm xanh" bằng cách bỏ assertion hay thêm skip.
+Không nhóm nào bị "làm xanh" bằng cách bỏ assertion hay thêm skip. Việc nâng `TESTED_SOURCE_SHA` không phải cập nhật hash tuỳ tiện: test tự chỉ dẫn và có tiền lệ A40 (`da209b5e`), và SHA mới là commit production thật `5ca7043` chứa đúng các thay đổi của lượt này.
 
 Khác biệt được phân loại từng file, không gộp. Nguyên nhân đã sửa trong lượt này:
 
