@@ -831,9 +831,17 @@ def inspect_environment_distributions(prefix: str | None,
                        for sibling in siblings):
                     installed_content = True
                 for sibling in siblings:
-                    if sibling.is_dir():
-                        installed_content = True
-                        modules.add(sibling.name.split(".")[0])
+                    if not sibling.is_dir():
+                        continue
+                    # A directory beside the metadata is content only if its name can be an importable
+                    # top-level module. `site-packages/__pycache__` exists almost always, so accepting
+                    # any directory let one metadata record confirm a package that was never installed;
+                    # the declared-head path already rejects those names, and this path must agree.
+                    sibling_head = sibling.name.split(".")[0]
+                    if not _is_safe_module_head(sibling_head):
+                        continue
+                    installed_content = True
+                    modules.add(sibling_head)
                 # Debian's ``deb``-installed dist-infos carry no RECORD and no
                 # ``top_level.txt``: the installed code simply sits beside the metadata as a
                 # module or package directory named after the distribution. Recognise that

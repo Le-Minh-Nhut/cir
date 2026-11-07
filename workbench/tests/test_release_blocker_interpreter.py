@@ -1498,6 +1498,37 @@ def test_one_row_per_distribution_and_only_real_extension_files_count(tmp_path: 
     assert "shim" not in set(versions) | set(unconfirmed)
 
 
+def test_a_sibling_directory_that_is_not_a_module_cannot_confirm_an_install(tmp_path: Path):
+    """The directory-beside-the-metadata path must apply the same name rule as the declared path.
+
+    This path exists for the Debian layout, where a deb-installed dist-info names no modules and the
+    code sits beside it as a directory. It used to accept ANY directory, so `site-packages/__pycache__`
+    -- which nearly always exists -- confirmed a distribution that was never installed and put
+    `__pycache__` into `modules`. A genuine package directory beside the metadata must still confirm.
+    """
+    root = tmp_path / "env"
+    site_packages = root / "lib" / "python3.12" / "site-packages"
+    site_packages.mkdir(parents=True)
+
+    # No top_level.txt at all: the phantom can only be confirmed by the sibling scan.
+    fake = site_packages / "fake-1.0.egg-info"
+    fake.mkdir()
+    (fake / "PKG-INFO").write_text("Name: fake\nVersion: 1.0\n")
+    (fake / "__pycache__").mkdir()
+
+    real = site_packages / "realpkg-2.0.egg-info"
+    real.mkdir()
+    (real / "PKG-INFO").write_text("Name: realpkg\nVersion: 2.0\n")
+    (real / "realpkg").mkdir()
+    (real / "realpkg" / "__init__.py").write_text("")
+
+    versions, modules, unconfirmed = runtime.inspect_environment_distributions(str(root))
+
+    assert "__pycache__" not in modules, sorted(modules)
+    assert "fake" not in versions, f"__pycache__ must not confirm a package: {versions}"
+    assert "realpkg" in versions, f"a genuine package directory must still confirm: {versions}"
+    assert "realpkg" in modules, sorted(modules)
+
 @pytest.mark.parametrize("payload", ["..", "*", "a/b", "", "   "])
 def test_untrusted_top_level_text_cannot_traverse_or_glob(tmp_path: Path, payload: str):
     """Untrusted top_level.txt text must not traverse directories, glob match, or confirm installs.
