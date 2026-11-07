@@ -35,6 +35,15 @@ isolation của test, phải sửa test chứ không hạ số worker.
 Không bao giờ chạy hai job GPU đồng thời. Huỷ job GPU phải kill **cả cây process** — huỷ shell wrapper
 để lại evaluator sống (đã gặp: giữ 5.68 GiB hơn 1 giờ).
 
+## Đĩa: dọn scratch, đừng để đầy
+
+`/tmp` từng đầy tới **100%** (174G, riêng `/tmp/pytest-of-heheboiz` 117G) và làm suite đỏ với
+`OSError: [Errno 28] No space left on device` — đọc như lỗi test nhưng là hết đĩa. Sau khi dọn còn 174G.
+
+- Test xdist dựng `/tmp/pytest-of-<user>/`; xoá định kỳ sau khi đo xong.
+- Worktree tạm (`/tmp/wt*`, `/tmp/basewt`, `/tmp/rev_*`, `/tmp/revchk`) là scratch, xoá ngay khi xong.
+- Nếu suite đỏ bất thường với `Errno 28`, chạy `df -h /` trước khi debug test.
+
 ## Shell trong session này
 
 Output hay bị rút gọn/lẫn. Ghi ra file dưới `/tmp` rồi đọc lại, hoặc in từ trong Python. Đừng tin
