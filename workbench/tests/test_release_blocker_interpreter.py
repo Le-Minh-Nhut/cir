@@ -1413,3 +1413,76 @@ def test_a_declared_import_resolves_a_manager_installed_distribution(tmp_path, m
                              "required_imports": ["definitely_absent_module"]}}
     forget_environment()
     assert runtime.verify_environment(wrong, probe=True).tier != "RUNTIME_READY"
+
+# ------------------------------- inventory: one row per distribution, real extension files
+
+def _single_file_egg_and_extension_tree(root: Path) -> Path:
+    """A synthetic site-packages holding the layouts that each produced a phantom row.
+
+    * ``my-pkg-1.0.egg-info`` is a FILE carrying its own ``Name:``/``Version:`` — a real legacy
+      layout whose metadata must be read from that file, not guessed by splitting the filename.
+    * ``brlapi`` is a genuine ABI-tagged extension FILE beside a DIRECTORY named to imitate one,
+      so the probe must find the file rather than accept the first glob hit.
+    * ``phantom.abi3.so`` is only a directory: nothing is installed under that name.
+    * ``beautifulsoup4``-style ``phantom`` metadata ships no module it can be derived from, and
+      ``shim`` declares an EMPTY ``top_level.txt``: it legitimately ships no module at all.
+    """
+    site_packages = root / "lib" / "python3.12" / "site-packages"
+    site_packages.mkdir(parents=True)
+
+    (site_packages / "my-pkg-1.0.egg-info").write_text("Name: my-pkg\nVersion: 1.0\n")
+    (site_packages / "my_pkg.py").write_text("__version__ = '1.0'\n")
+
+    genuine = site_packages / "brlapi.abi3.so"
+    genuine.write_bytes(b"\x7fELF")
+    # Sorts before the genuine file, so "first glob hit" would pick this decoy.
+    (site_packages / "brlapi.cpython-312-x86_64-linux-gnu.so").mkdir()
+    brlapi = site_packages / "brlapi-0.8.3.egg-info"
+    brlapi.mkdir()
+    (brlapi / "PKG-INFO").write_text("Name: brlapi\nVersion: 0.8.3\n")
+    (brlapi / "top_level.txt").write_text("brlapi\n")
+
+    (site_packages / "phantom.abi3.so").mkdir()
+    phantom = site_packages / "phantom-1.0.dist-info"
+    phantom.mkdir()
+    (phantom / "METADATA").write_text("Name: phantom\nVersion: 1.0\n")
+    (phantom / "INSTALLER").write_text("deb\n")
+    # Declares its module, so the declared-module probe actually runs against the decoy directory.
+    (phantom / "top_level.txt").write_text("phantom\n")
+
+    shim = site_packages / "shim-2.0.egg-info"
+    shim.mkdir()
+    (shim / "PKG-INFO").write_text("Name: shim\nVersion: 2.0\n")
+    (shim / "top_level.txt").write_text("")
+    return root
+
+
+def test_one_row_per_distribution_and_only_real_extension_files_count(tmp_path: Path):
+    """A single-file egg-info is one distribution, and a directory named like a ``.so`` is not one.
+
+    Two defects this pins down: a file-shaped ``.egg-info`` whose ``PKG-INFO``/``METADATA`` join was
+    meaningless fell back to ``dist_name.split("-")[0]`` (``my-pkg-1.0`` -> ``my``) *in addition* to
+    being reported under its real name, so one distribution produced two rows; and the extension
+    probe accepted any glob hit, so an empty directory named
+    ``brlapi.cpython-312-x86_64-linux-gnu.so`` made ``brlapi`` look installed.
+    """
+    tree = _single_file_egg_and_extension_tree(tmp_path)
+    versions, modules, unconfirmed = runtime.inspect_environment_distributions(str(tree))
+
+    # One row per distribution: no filename-split phantom beside the real, hyphenated name.
+    assert set(versions) | set(unconfirmed) == {"my-pkg", "brlapi", "phantom"}, (
+        sorted(versions), sorted(unconfirmed))
+    assert "my" not in versions and "my" not in unconfirmed
+
+    # Reading metadata proves a name and a version; only real content may confirm an install.
+    assert versions["my-pkg"] == "1.0" and versions["brlapi"] == "0.8.3", versions
+    assert unconfirmed == {"phantom"}, unconfirmed
+    # The empty extension directory declares no importable module, so nothing confirms `phantom`.
+    assert "phantom" not in modules, sorted(modules)
+
+    # A directory that merely mimics an extension installs nothing, while the genuine tagged
+    # ``.so`` file behind it still counts.
+    assert "phantom" not in modules, sorted(modules)
+    assert "brlapi" in modules and "my_pkg" in modules, sorted(modules)
+    # An empty ``top_level.txt`` ships no module: not a row at all, and not a phantom module.
+    assert "shim" not in set(versions) | set(unconfirmed)

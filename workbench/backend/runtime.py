@@ -499,6 +499,10 @@ _DESCRIPTIVE_METADATA = {"METADATA", "PKG-INFO", "RECORD", "INSTALLER", "WHEEL",
                          "LICENSE.txt", "entry_points.txt", "SOURCES.txt", "requires.txt",
                          "dependency_links.txt", "top_level.txt", "not-zip-safe", "zip-safe"}
 
+#: Suffixes under which an installed module is a compiled extension (same contract as
+#: `_directory_is_importable`/`_holds_importable_content` use for importable content).
+_EXTENSION_SUFFIXES = (".so", ".pyd")
+
 
 def _directory_is_importable(directory: Path) -> bool:
     """True when a directory would actually be importable as a package.
@@ -511,6 +515,11 @@ def _directory_is_importable(directory: Path) -> bool:
         if not directory.is_dir():
             return False
     except OSError:
+        return False
+    # A directory named like a compiled extension (`brlapi.cpython-312-x86_64-linux-gnu.so`) is
+    # not a package: no such dotted name is importable, so an empty directory spelled that way
+    # proves nothing was installed.
+    if directory.name.endswith(_EXTENSION_SUFFIXES):
         return False
     try:
         entries = list(directory.iterdir())
@@ -529,6 +538,19 @@ def _directory_is_importable(directory: Path) -> bool:
             return True
     return False
 
+
+def _extension_module_file(site_packages: Path, head: str) -> Path | None:
+    """The compiled extension file that provides module *head*, or None.
+
+    ``glob`` matches directories as well as files, so a directory merely *named* like an
+    ABI-tagged extension would otherwise be accepted as an installed module. Only a regular
+    file counts, and every candidate is checked: a fake same-pattern directory must not hide
+    the genuine file behind it.
+    """
+    for candidate in sorted(site_packages.glob(f"{head}.*")):
+        if candidate.name.endswith(_EXTENSION_SUFFIXES) and candidate.is_file():
+            return candidate
+    return None
 
 def _distribution_owner_names(declared_name: str, dist_name: str) -> list[str]:
     """Candidate module names a distribution may install beside its metadata.
@@ -689,7 +711,12 @@ def inspect_environment_distributions(prefix: str | None,
 
         for dist in list(site_packages.glob("*.dist-info")) + list(site_packages.glob("*.egg-info")):
             dist_name = dist.name
-            metadata_path = dist / ("METADATA" if dist_name.endswith(".dist-info") else "PKG-INFO")
+            # A legacy `.egg-info` may be a single FILE carrying `Name:`/`Version:` itself. Joining
+            # `PKG-INFO` onto a file names a path that never exists, so the name fell back to
+            # splitting the filename (`my-pkg-1.0` -> `my`) and the same distribution was then
+            # inventoried twice, once under the real name and once under the split one.
+            metadata_path = (dist / ("METADATA" if dist_name.endswith(".dist-info") else "PKG-INFO")
+                             if dist.is_dir() else dist)
             declared_name, declared_version = _metadata_name_version(metadata_path)
             if not declared_name:
                 declared_name = dist_name.split("-")[0]
@@ -744,8 +771,7 @@ def inspect_environment_distributions(prefix: str | None,
                     # Matching only the first two reported deb-installed extension modules as absent
                     # and then removed them from the inventory, which is why a real distro environment
                     # looked mostly empty.
-                    extension = next(iter(site_packages.glob(f"{head}.*.so")), None) or next(
-                        iter(site_packages.glob(f"{head}.so")), None)
+                    extension = _extension_module_file(site_packages, head)
                     if ((site_packages / f"{head}.py").is_file() or (site_packages / head).is_dir()
                             or extension is not None):
                         installed_content = True

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import shutil
 
 import sys
 import uuid
@@ -1687,3 +1688,91 @@ def test_a_run_id_may_not_claim_the_reserved_development_prefix() -> None:
     # The positive control: the identity the orchestrator generates is accepted unchanged.
     generated = "20261018T101112000000Z_limn_base_iter0_all_categories_deadbeef"
     assert em.validate_run_id(generated) == generated
+
+
+# ------------------------------------------- the temp root belongs to the invocation
+
+def _temp_parent(monkeypatch, tmp_path: Path) -> Path:
+    """Point the run's temp parent at a directory this test can look inside afterwards."""
+    parent = tmp_path / "short-temp-parent"
+    parent.mkdir()
+    monkeypatch.setattr(em, "_short_temp_parent", lambda: str(parent))
+    return parent
+
+
+def test_invoke_evaluator_returns_the_code_and_leaves_no_temp_root(env, monkeypatch, tmp_path):
+    parent = _temp_parent(monkeypatch, tmp_path)
+    code, directory, environment = em.invoke_evaluator(
+        plan(env, reporting_script(env["tmp"])), env["config"], "temp-owned-success",
+        env["tmp"] / "out")
+
+    assert code == 0
+    assert (directory / "stdout.log").is_file()
+    assert list(parent.iterdir()) == [], "a completed invocation must not keep its temp root"
+    assert environment["TMPDIR"].startswith(str(parent))
+
+
+def test_invoke_evaluator_returns_a_nonzero_code_and_leaves_no_temp_root(env, monkeypatch, tmp_path):
+    parent = _temp_parent(monkeypatch, tmp_path)
+    code, _, _ = em.invoke_evaluator(
+        plan(env, reporting_script(env["tmp"], exit_code=5)), env["config"], "temp-owned-failure",
+        env["tmp"] / "out")
+
+    assert code == 5, "the evaluator's own exit code is returned, never turned into an exception"
+    assert list(parent.iterdir()) == [], "a failing invocation must not keep its temp root"
+
+
+def test_a_command_that_cannot_start_leaks_no_temp_root(env, monkeypatch, tmp_path):
+    """The leak: `Popen` raises before the old `finally` was ever entered.
+
+    The fix must also keep the error contract: a missing interpreter is still a `RuntimeError`
+    naming the command, raised `from` the `OSError`.
+    """
+    parent = _temp_parent(monkeypatch, tmp_path)
+    logs = em.artifact_root(env["config"]) / "logs"
+    broke = plan(env, [str(tmp_path / "no-such-interpreter"), "--eval"])
+
+    with pytest.raises(RuntimeError, match="cannot start the official command") as raised:
+        em.invoke_evaluator(broke, env["config"], "temp-owned-unstartable", env["tmp"] / "out")
+
+    assert isinstance(raised.value.__cause__, OSError), raised.value.__cause__
+    assert list(parent.iterdir()) == [], "the temp root must not outlive the failed launch"
+    assert not (logs / f"{MODEL}__ckpt_v1__temp-owned-unstartable").exists(), (
+        "only this invocation's freshly claimed log directory is released")
+
+
+def test_keep_temp_keeps_the_temp_root_after_return(env, monkeypatch, tmp_path):
+    parent = _temp_parent(monkeypatch, tmp_path)
+    try:
+        code, _, environment = em.invoke_evaluator(
+            plan(env, reporting_script(env["tmp"])), env["config"], "temp-kept",
+            env["tmp"] / "out", keep_temp=True)
+
+        assert code == 0
+        roots = list(parent.iterdir())
+        assert len(roots) == 1, roots
+        assert str(roots[0]) == environment["TMPDIR"]
+        assert roots[0].stat().st_mode & 0o777 == 0o700, "the kept root keeps its private mode"
+    finally:
+        shutil.rmtree(parent, ignore_errors=True)
+
+
+def test_a_failing_setup_step_after_mkdtemp_still_cleans_the_temp_root(env, monkeypatch, tmp_path):
+    """`mkdtemp` now happens inside the `try`, so a refused setup step cannot strand a `wb-*`."""
+    import os
+
+    parent = _temp_parent(monkeypatch, tmp_path)
+    real_chmod = os.chmod
+
+    def refusing_chmod(path, mode, *args, **kwargs):
+        if Path(path).name == "replay-cache":
+            raise PermissionError(f"refused: {path}")
+        return real_chmod(path, mode, *args, **kwargs)
+
+    monkeypatch.setattr(em.os, "chmod", refusing_chmod)
+
+    with pytest.raises(PermissionError, match="refused"):
+        em.invoke_evaluator(plan(env, reporting_script(env["tmp"])), env["config"],
+                            "temp-owned-setup-failure", env["tmp"] / "out")
+
+    assert list(parent.iterdir()) == [], "a setup failure must not strand the temp root"

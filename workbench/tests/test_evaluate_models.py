@@ -772,6 +772,56 @@ def test_execute_writes_reproducible_logs(monkeypatch, tmp_path: Path) -> None:
     assert metadata["dataset_root"] == str(tmp_path / "FashionIQ")
 
 
+def test_the_announced_log_directory_is_where_the_run_actually_writes(
+        monkeypatch, tmp_path: Path, capsys) -> None:
+    """The printed run directory must be a fact, not a prediction.
+
+    `log_dir()` mints its own run id when it is handed none, and `main()` minted a second one just
+    before calling `execute()`, so the announced directory never existed -- an operator following
+    the printed path found nothing, and the real run was filed under a different id. The identity is
+    now minted once, before the announcement, and the same value is used for the launch.
+    """
+    module = load_module()
+    settings = config(tmp_path)
+    checkout = settings.CIR_REPO_ROOT / "src"
+    checkout.mkdir(parents=True)
+    script = checkout / "evaluate.py"
+    script.write_text("import json; print(json.dumps({'average_recall_at10': 1.0}))\n")
+    checkpoint = tmp_path / "checkpoint.pt"
+    checkpoint.write_bytes(b"checkpoint")
+    invocation = module.EvaluationPlan(
+        "csmcir", "ckpt_v1", "fashioniq_original_split", tmp_path / "FashionIQ",
+        checkout, checkpoint, checkout,
+        [sys.executable, str(script)], "a" * 40, "a" * 40)
+    model = {"model_id": "csmcir", "native_protocol": invocation.protocol}
+    monkeypatch.setattr(module, "load_registry",
+                        lambda: {"protocols": [invocation.protocol], "models": [model]})
+    monkeypatch.setattr(module, "candidates",
+                        lambda args, models: [(model, {"checkpoint_id": "ckpt_v1"})])
+    monkeypatch.setattr(module, "resolve_config", lambda: settings)
+    monkeypatch.setattr(module, "guarded_plan", lambda *args, **kwargs: (invocation, []))
+    monkeypatch.setenv("WORKBENCH_LEDGER_KEY", "cli-run-id-test")
+
+    module.main(["--model", "csmcir"])
+
+    announced = [line.split(": ", 1)[1] for line in capsys.readouterr().out.splitlines()
+                 if line.startswith("[RUN] log directory: ")]
+    assert len(announced) == 1, announced
+    directory = Path(announced[0])
+    assert directory.is_dir(), f"the announced run directory never existed: {directory}"
+    metadata = json.loads((directory / "command.json").read_text())
+    assert directory.name == f"csmcir__ckpt_v1__{metadata['run_id']}", (
+        f"the announced directory {directory} is not the directory run {metadata['run_id']} "
+        f"was filed under")
+
+    # An explicit orchestrator identity is still used verbatim, announced and filed alike.
+    capsys.readouterr()
+    module.main(["--model", "csmcir", "--run-id", "cli-fixed-identity"])
+    announced = [line.split(": ", 1)[1] for line in capsys.readouterr().out.splitlines()
+                 if line.startswith("[RUN] log directory: ")]
+    assert Path(announced[0]).name == "csmcir__ckpt_v1__cli-fixed-identity"
+    assert (Path(announced[0]) / "command.json").is_file()
+
 def _limn_bundle_environment(monkeypatch, module, tmp_path: Path):
     """A LIMN environment whose bundle state the caller controls, with the REAL blocker sources.
 

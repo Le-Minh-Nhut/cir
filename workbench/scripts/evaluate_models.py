@@ -739,64 +739,78 @@ def invoke_evaluator(plan: EvaluationPlan, config: WorkbenchConfig, run_id: str,
     # not the fix; bounding the path is. The run-scoped privacy property is preserved: the
     # directory is still unique per run and still 0700.
     temp_root = Path(tempfile.mkdtemp(prefix="wb-", dir=_short_temp_parent()))
-    child_env["TMPDIR"] = str(temp_root)
-    environment["TMPDIR"] = str(temp_root)
-    # The native dataset cache is built ONCE per run and reused by the per-query observer, whose
-    # own process would otherwise construct it a second time: the measured peak for one
-    # three-category construction is 11.87 GB, so two of them do not fit on a host that fits one.
-    # The directory is run-scoped, so concurrent runs never share a cache. See
-    # `workbench.replay.common.run_cache_root` for why reuse is sound and what still refuses a
-    # stale cache.
-    replay_cache = directory / "replay-cache"
-    replay_cache.mkdir(mode=0o700, exist_ok=True)
-    os.chmod(replay_cache, 0o700)
-    child_env["WORKBENCH_REPLAY_CACHE_ROOT"] = str(replay_cache)
-    environment["WORKBENCH_REPLAY_CACHE_ROOT"] = str(replay_cache)
-    # The per-query export ranks THESE features rather than running its own pass. A second pass over
-    # the same inputs does not reproduce the first -- measured here: same seed, same input,
-    # deterministic kernels, different feature hashes across processes -- so the artifact could
-    # otherwise never agree with the metric it is supposed to reconstruct.
-    captured = directory / "captured-features.npz"
-    child_env["WORKBENCH_OBSERVATION_OUT"] = str(captured)
-
+    # Everything the temp root exists for is inside this `try`: preparing the replay cache, the
+    # launch, the log tee and the child wait. The cleanup used to hang off the code after a
+    # successful `Popen`, so any failure before that -- a refused `chmod`, a missing interpreter --
+    # returned before the `finally` ran and left one `wb-*` directory behind per failed run.
     try:
-        process = subprocess.Popen(plan.command, cwd=plan.cwd, text=True,
-                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=child_env)
-    except OSError as error:
-        # Only this invocation's own freshly claimed directory is removed; nothing else can be
-        # in it, because the claim above refuses a directory that already existed. The run id
-        # is released with it, so no burnt identity is left behind.
-        shutil.rmtree(directory, ignore_errors=True)
-        raise RuntimeError(f"cannot start the official command {plan.command[0]!r}: {error}") from error
-    try:
-        with (directory / "stdout.log").open("w", encoding="utf-8", newline="") as stdout, \
-                (directory / "stderr.log").open("w", encoding="utf-8", newline="") as stderr:
+        # `mkdtemp` creates the directory 0700, and that privacy is the reason it is used here, so
+        # the mode is checked rather than assumed.
+        mode = temp_root.stat().st_mode & 0o777
+        if mode != 0o700:
+            raise RuntimeError(f"run temp directory is not private (mode {mode:04o}): {temp_root}")
+        child_env["TMPDIR"] = str(temp_root)
+        environment["TMPDIR"] = str(temp_root)
+        # The native dataset cache is built ONCE per run and reused by the per-query observer, whose
+        # own process would otherwise construct it a second time: the measured peak for one
+        # three-category construction is 11.87 GB, so two of them do not fit on a host that fits one.
+        # The directory is run-scoped, so concurrent runs never share a cache. See
+        # `workbench.replay.common.run_cache_root` for why reuse is sound and what still refuses a
+        # stale cache.
+        replay_cache = directory / "replay-cache"
+        replay_cache.mkdir(mode=0o700, exist_ok=True)
+        os.chmod(replay_cache, 0o700)
+        child_env["WORKBENCH_REPLAY_CACHE_ROOT"] = str(replay_cache)
+        environment["WORKBENCH_REPLAY_CACHE_ROOT"] = str(replay_cache)
+        # The per-query export ranks THESE features rather than running its own pass. A second pass
+        # over the same inputs does not reproduce the first -- measured here: same seed, same input,
+        # deterministic kernels, different feature hashes across processes -- so the artifact could
+        # otherwise never agree with the metric it is supposed to reconstruct.
+        captured = directory / "captured-features.npz"
+        child_env["WORKBENCH_OBSERVATION_OUT"] = str(captured)
 
-            def tee(stream, destination, terminal):
-                for line in stream:
-                    destination.write(line)
-                    destination.flush()
-                    terminal.write(line)
-                    terminal.flush()
+        try:
+            process = subprocess.Popen(plan.command, cwd=plan.cwd, text=True,
+                                       stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=child_env)
+        except OSError as error:
+            # Only this invocation's own freshly claimed directory is removed; nothing else can be
+            # in it, because the claim above refuses a directory that already existed. The run id
+            # is released with it, so no burnt identity is left behind.
+            shutil.rmtree(directory, ignore_errors=True)
+            raise RuntimeError(
+                f"cannot start the official command {plan.command[0]!r}: {error}") from error
+        try:
+            with (directory / "stdout.log").open("w", encoding="utf-8", newline="") as stdout, \
+                    (directory / "stderr.log").open("w", encoding="utf-8", newline="") as stderr:
 
-            threads = [
-                threading.Thread(target=tee, args=(process.stdout, stdout, sys.stdout)),
-                threading.Thread(target=tee, args=(process.stderr, stderr, sys.stderr)),
-            ]
-            for thread in threads:
-                thread.start()
-            code = process.wait()
-            for thread in threads:
-                thread.join()
-    except BaseException:
-        process.kill()
-        process.wait()
-        shutil.rmtree(directory, ignore_errors=True)
-        raise
+                def tee(stream, destination, terminal):
+                    for line in stream:
+                        destination.write(line)
+                        destination.flush()
+                        terminal.write(line)
+                        terminal.flush()
+
+                threads = [
+                    threading.Thread(target=tee, args=(process.stdout, stdout, sys.stdout)),
+                    threading.Thread(target=tee, args=(process.stderr, stderr, sys.stderr)),
+                ]
+                for thread in threads:
+                    thread.start()
+                code = process.wait()
+                for thread in threads:
+                    thread.join()
+        except BaseException:
+            # The child may still hold the temp tree, so it is killed and reaped before anything is
+            # removed. The temp root itself is removed by the outer `finally`, after this returns.
+            process.kill()
+            process.wait()
+            shutil.rmtree(directory, ignore_errors=True)
+            raise
     finally:
         # The temp directory exists to bound an AF_UNIX socket path, not to keep scratch. Its location
         # is already recorded in `environment["TMPDIR"]`, so nothing is needed from it after the child
-        # exits; leaving it behind accumulated one directory per invocation.
+        # exits; leaving it behind accumulated one directory per invocation. `keep_temp` is the debug
+        # escape hatch and holds on every path, including a launch that never started.
         if not keep_temp:
             shutil.rmtree(temp_root, ignore_errors=True)
     return code, directory, environment
@@ -2691,7 +2705,15 @@ def main(argv: list[str] | None = None) -> int:
             for reason in reasons: print(f"{'[SKIP]' if reason.startswith('SKIPPED:') else '[BLOCKED]'} {reason}")
             failed = failed or any(not reason.startswith("SKIPPED:") for reason in reasons)
             continue
-        planned_logs = log_dir(config, plan, datetime.now(timezone.utc))
+        # The identity is minted ONCE, before anything is printed: `log_dir` mints its own when it is
+        # handed no run id, and the launch used to mint a second one, so the advertised directory
+        # never existed and an operator following it found nothing. The format is unchanged.
+        run_id = args.run_id
+        if run_id and len(items) > 1:
+            run_id = f"{run_id}_{model['model_id']}_{checkpoint['checkpoint_id']}"
+        if not run_id:
+            run_id = make_run_id(plan, datetime.now(timezone.utc))
+        planned_logs = log_dir(config, plan, datetime.now(timezone.utc), run_id)
         print(f"[OK] protocol: {protocol}")
         print(f"[RUN] cwd: {plan.cwd}")
         print(f"[RUN] command: {shlex.join(plan.command)}")
@@ -2731,11 +2753,8 @@ def main(argv: list[str] | None = None) -> int:
             failed = True
             if not args.continue_on_error: break
             continue
-        run_id = args.run_id
-        if run_id and len(items) > 1:
-            run_id = f"{run_id}_{model['model_id']}_{checkpoint['checkpoint_id']}"
-        if not run_id:
-            run_id = make_run_id(plan, datetime.now(timezone.utc))
+        # The run id was minted above, before the announcement, so this is the same identity the
+        # printed directory names.
         try:
             code = execute(plan, config, run_id=run_id)
         except RuntimeError as error:
