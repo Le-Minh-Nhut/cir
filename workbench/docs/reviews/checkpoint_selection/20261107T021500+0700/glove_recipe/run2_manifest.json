@@ -8,6 +8,11 @@
  "oov_filled": 13,
  "outputs": [
   {
+   "name": "glove_vecs.pkl",
+   "bytes": 4462717,
+   "sha256": "0fcd702ab68d061f0f4d097be3a38f0c58ed3ee1ca9c96778d3daac128cf3501"
+  },
+  {
    "name": "cap.dress.glove.test.pkl",
    "bytes": 26163303,
    "sha256": "b293c849f3c67314db9f2f3e6370755d4a7fb77c5c0b5e86e13b201722b64ac0"

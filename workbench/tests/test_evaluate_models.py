@@ -431,7 +431,14 @@ def test_csmcir_dry_run_constructs_official_command(monkeypatch, tmp_path: Path,
     # CSMCIR requires no isolated environment, so it runs in the workbench interpreter;
     # the command must name that interpreter, never a bare "python".
     assert plan.command[0] == sys.executable
-    assert plan.command[1:] == [str(script), "--dataset", "fashionIQ", "--blip-model-path", str(checkpoint_file)]
+    # `--blip-model-name` is now explicit. The released checkpoint's state_dict is keyed by
+    # `Blip2QformerCirAlignPromptTargetImageCaptionshiyan92`, and the evaluator looks weights up as
+    # `checkpoint[blip_model.__class__.__name__]`, so its default class name raises KeyError on this
+    # file. Asserting the old two-flag command pinned a command that cannot load the checkpoint.
+    assert plan.command[1:] == [
+        str(script), "--dataset", "fashionIQ",
+        "--blip-model-name", "blip2_cir_align_prompt_target_image_caption_shiyan92",
+        "--blip-model-path", str(checkpoint_file)]
     output = capsys.readouterr().out
     assert "[RUN] command:" in output
     assert "[PLAN] first-use downloads:" in output

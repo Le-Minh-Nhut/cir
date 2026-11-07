@@ -76,7 +76,16 @@ class CSMCIRAdapter(OfficialScriptAdapter):
     launcher = "script"
 
     def command(self, source, checkpoint, request: EvalRequest) -> list[str]:
-        return [_runtime.python_executable(self.model), str(source / self.script), "--dataset", "fashionIQ", "--blip-model-path", str(checkpoint)]
+        # `--blip-model-name` is passed explicitly because the evaluator's default is
+        # `blip2_cir_align_prompt_csmcir`, and this checkpoint is not stored under that class name. The
+        # released file keys its state_dict as `Blip2QformerCirAlignPromptTargetImageCaptionshiyan92`
+        # (`torch.load(...).keys()` -> ['epoch', 'Blip2QformerCirAlignPromptTargetImageCaptionshiyan92']),
+        # and `validate_blip_csmcir.py:580` looks the weights up as
+        # `checkpoint[blip_model.__class__.__name__]`, so the default raises KeyError on the released
+        # file. The class that name resolves to is published at the pinned revision as author bytecode.
+        return [_runtime.python_executable(self.model), str(source / self.script), "--dataset", "fashionIQ",
+                "--blip-model-name", "blip2_cir_align_prompt_target_image_caption_shiyan92",
+                "--blip-model-path", str(checkpoint)]
 
 
 class EncoderAdapter(OfficialScriptAdapter):

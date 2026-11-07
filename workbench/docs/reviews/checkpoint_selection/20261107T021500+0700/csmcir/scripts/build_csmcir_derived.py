@@ -35,6 +35,10 @@ PATCHES = [
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("destination")
+    parser.add_argument("--dataset-root", default="data/FashionIQ",
+                        help="canonical FashionIQ root to link as fashionIQ_dataset")
+    parser.add_argument("--expect-pyc-sha256", default=None,
+                        help="required sha256 of the author-published .pyc")
     parser.add_argument("--with-shiyan92-pyc", default=None,
                         help="author-published .pyc for the class that saved the checkpoint")
     args = parser.parse_args()
@@ -50,10 +54,35 @@ def main():
         if result.returncode != 0:
             raise SystemExit(f"{patch_file} failed: {result.stdout}{result.stderr}")
         digest = hashlib.sha256((dest / target).read_bytes()).hexdigest()
-        print(f"{target}: {digest[:16]} {'OK' if digest == expected else 'MISMATCH'}")
+        if digest != expected:
+            # Printing MISMATCH and continuing would leave a half-repaired tree that later reads as an
+            # approved variant. The registry declares this digest; a tree that does not carry it is not
+            # that variant, so stop.
+            raise SystemExit(f"{target}: digest {digest} != declared {expected}")
+        print(f"{target}: {digest[:16]} OK")
+
+    # The evaluator derives its data root from `__file__` and opens `<checkout>/fashionIQ_dataset`; the
+    # gallery caption extractor opens `<checkout>/COT_ours2`. Neither exists in a fresh copy of `src`,
+    # so a derived checkout built without these links starts and then dies on the first dataset read.
+    dataset = Path(args.dataset_root).resolve()
+    if not (dataset / "qwen_captions").is_dir():
+        raise SystemExit(f"{dataset} does not look like the canonical FashionIQ root (no qwen_captions/)")
+    for name, target in (("fashionIQ_dataset", dataset), ("COT_ours2", dataset.parent / ".." / "workbench/third_party/CSMCIR/COT_ours2")):
+        target = target.resolve()
+        if not target.is_dir():
+            raise SystemExit(f"cannot stage {name}: {target} is not a directory")
+        link = dest / name
+        if link.exists() or link.is_symlink():
+            link.unlink()
+        link.symlink_to(target)
+        print(f"staged {name} -> {target}")
 
     if args.with_shiyan92_pyc:
         pyc = Path(args.with_shiyan92_pyc)
+        # Author-published bytecode, so its identity is checkable before it is trusted.
+        pyc_sha = hashlib.sha256(pyc.read_bytes()).hexdigest()
+        if args.expect_pyc_sha256 and pyc_sha != args.expect_pyc_sha256:
+            raise SystemExit(f"{pyc}: sha256 {pyc_sha} != expected {args.expect_pyc_sha256}")
         # The module name decides where a sourceless .pyc is importable from, so the file is named
         # after the module it contains, not after whatever the download was called.
         target = (dest / "src/lavis/models/blip2_models"
@@ -73,7 +102,7 @@ def main():
         if unguarded not in text:
             if anchor not in text:
                 raise SystemExit("cannot locate the CSMCIR registration import to anchor on")
-            # The 98 rewritten imports sit inside one , and the FIRST absent
+            # The 98 rewritten imports sit inside one try/except ImportError, and the FIRST absent
             # module aborts the whole block -- so placing this line inside it would never execute.
             # It is anchored AFTER the CSMCIR registration instead, which is unguarded.
             init.write_text(text.replace(anchor, anchor + chr(10) + restore, 1))

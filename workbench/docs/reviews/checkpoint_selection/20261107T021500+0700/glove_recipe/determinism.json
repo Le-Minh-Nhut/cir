@@ -1,19 +1,50 @@
 {
  "label": "WORKBENCH_SEEDED_RECIPE",
  "seed": 0,
- "files": 9,
+ "files": 10,
  "run1_equals_run2": true,
- "matches_previously_measured_artifact": {
-  "cap.dress.glove.test.pkl": true,
-  "cap.dress.glove.train.pkl": true,
-  "cap.dress.glove.val.pkl": true,
-  "cap.shirt.glove.test.pkl": true,
-  "cap.shirt.glove.train.pkl": true,
-  "cap.shirt.glove.val.pkl": true,
-  "cap.toptee.glove.test.pkl": true,
-  "cap.toptee.glove.train.pkl": true,
-  "cap.toptee.glove.val.pkl": true
+ "matches_previously_measured_artifact": true,
+ "per_file": {
+  "cap.dress.glove.test.pkl": {
+   "sha256": "b293c849f3c67314db9f2f3e6370755d4a7fb77c5c0b5e86e13b201722b64ac0",
+   "matches_dcnet_artifact": true
+  },
+  "cap.dress.glove.train.pkl": {
+   "sha256": "521fbb7e30730246f4c69262604bf66950f6f8caef8c71d4be97cc7ea89029a1",
+   "matches_dcnet_artifact": true
+  },
+  "cap.dress.glove.val.pkl": {
+   "sha256": "02ac9a02104f63e4e7739ae7f8d47520f9085112c95bc2bd4b5ddf05cfe9d235",
+   "matches_dcnet_artifact": true
+  },
+  "cap.shirt.glove.test.pkl": {
+   "sha256": "bb44945b2b743013e62272cb730e0435ed4021b20a4cd534f4738e0c2edaf2e9",
+   "matches_dcnet_artifact": true
+  },
+  "cap.shirt.glove.train.pkl": {
+   "sha256": "ce40d04064efdafc77e881a8aa30a46c91894231be4a4a851f48100f06d2f878",
+   "matches_dcnet_artifact": true
+  },
+  "cap.shirt.glove.val.pkl": {
+   "sha256": "f472b88ab27da960fea00a28c3a21e44d574d00e64cf9d009ab0628f2aefb61a",
+   "matches_dcnet_artifact": true
+  },
+  "cap.toptee.glove.test.pkl": {
+   "sha256": "210eb1420d251dc8c1d49e90e18672d9ba82f747f93b8df9aec257a60888d8dc",
+   "matches_dcnet_artifact": true
+  },
+  "cap.toptee.glove.train.pkl": {
+   "sha256": "94746239b3d448a286627693c8f58175f73471a0b0a05228942dcd8eda94b7af",
+   "matches_dcnet_artifact": true
+  },
+  "cap.toptee.glove.val.pkl": {
+   "sha256": "e6cca9d64df6dc4dac41aeec82e30b169f07f9142ac9ec33e232c57d53f42a59",
+   "matches_dcnet_artifact": true
+  },
+  "glove_vecs.pkl": {
+   "sha256": "0fcd702ab68d061f0f4d097be3a38f0c58ed3ee1ca9c96778d3daac128cf3501",
+   "matches_dcnet_artifact": true
+  }
  },
- "all_match": true,
- "note": "The author's script samples OOV vectors unseeded, so this recipe cannot reproduce the author's bytes; they were never published. All ten outputs here match the artifact DCNet was measured against, byte for byte."
+ "note": "The author's script samples OOV vectors with an unseeded np.random.normal, so this recipe CANNOT reproduce the author's bytes -- those were never published. What is shown is that a fixed seed gives identical output across two runs, and that all ten outputs match the artifact DCNet was measured against, byte for byte. An earlier revision of this manifest listed only nine files because glove_vecs.pkl was written before the accumulator list was initialised; it is recorded now."
 }

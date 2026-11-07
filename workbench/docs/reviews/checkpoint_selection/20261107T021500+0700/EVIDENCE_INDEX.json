@@ -4,8 +4,8 @@
  "entries": [
   {
    "dest": "README.md",
-   "bytes": 4107,
-   "sha256": "c06ee927c10db90d8351394336d23e2f68040fc745f2bcb2ec8c8d359f21f2dd"
+   "bytes": 5212,
+   "sha256": "6ecfed44cded9a9c3411089d05c39e02d63c8d4b1a225f516104e158a87d0437"
   },
   {
    "dest": "csmcir/asset_verification.txt",
@@ -16,6 +16,11 @@
    "dest": "csmcir/call_path_probe.txt",
    "bytes": 2815,
    "sha256": "3d8639d0d1b51aa160a3ad66b950e56c64742ed6449386baaff248f7fd6fb5c3"
+  },
+  {
+   "dest": "csmcir/fresh_tree_eval.txt",
+   "bytes": 46775,
+   "sha256": "c9eb3db5c9257ba2bb73f139593374d449b5a04891116b7e736b84c3003adf37"
   },
   {
    "dest": "csmcir/full_eval.txt",
@@ -34,13 +39,13 @@
   },
   {
    "dest": "csmcir/scripts/build_csmcir_derived.py",
-   "bytes": 4307,
-   "sha256": "0643a9549a218599b256d2179559012a26cb244bfd1a2acba96f264d62d2afd7"
+   "bytes": 6231,
+   "sha256": "102daa81e2ef35d659c1e9cac3c27473ea9fcb27a7663269e861ff3cd0f036f8"
   },
   {
    "dest": "csmcir/scripts/csmcir_call_path_probe.py",
-   "bytes": 3368,
-   "sha256": "a324b59f98f8b97859cabbdabcfd09e33f68a14c0a40f945a777672a717d64b2"
+   "bytes": 4658,
+   "sha256": "98f94680f9106c1ff33aab05959f4a81a396e15e8b74988df6fead5ecb0af893"
   },
   {
    "dest": "csmcir/scripts/set_query_batch.py",
@@ -54,28 +59,43 @@
   },
   {
    "dest": "glove_recipe/determinism.json",
-   "bytes": 708,
-   "sha256": "4a931e39cf220d2bcc92fe4d56afef2cc35e2c94ad45336526d76b5db4318d42"
+   "bytes": 2161,
+   "sha256": "83ed66d34eb9a5ce7734924bea55133f5c0aec6d07f5cfebea96302110a00168"
   },
   {
    "dest": "glove_recipe/run1_manifest.json",
-   "bytes": 1682,
-   "sha256": "ae5252f8ac9240797677c9b6a71ab10f75142beee78872fadb8a8b3d5e2763db"
+   "bytes": 1821,
+   "sha256": "8ae79800e44c883a96d6e8ea9e7c4c5cc6e469c6f2a481b6f887680170bebbb6"
   },
   {
    "dest": "glove_recipe/run2_manifest.json",
-   "bytes": 1682,
-   "sha256": "ae5252f8ac9240797677c9b6a71ab10f75142beee78872fadb8a8b3d5e2763db"
+   "bytes": 1821,
+   "sha256": "8ae79800e44c883a96d6e8ea9e7c4c5cc6e469c6f2a481b6f887680170bebbb6"
   },
   {
    "dest": "glove_recipe/scripts/dcnet_glove_recipe.py",
-   "bytes": 4313,
-   "sha256": "2b39f122085f8358ef35813e67a509ec362f2699a2fbd9a36228a471d3e0670a"
+   "bytes": 4655,
+   "sha256": "2faf0ba2d790e962aec21680b463cf5cf9f20ba95bda5f0dd6a21b838fd805f7"
   },
   {
    "dest": "registry_diff_csmcir.md",
    "bytes": 4450,
    "sha256": "5c98c1dd5450943d6f0e74f4dfd29a4befc3a3b247bccf6e646acc804fd2dee7"
+  },
+  {
+   "dest": "tests/SUMMARY.json",
+   "bytes": 1679,
+   "sha256": "0eb73119669e68036f39f563c7cfcbadff1ef0267a46269b901e792a7806c2b4"
+  },
+  {
+   "dest": "tests/full_suite_after.txt",
+   "bytes": 15940,
+   "sha256": "74f12944eb46a70a521ae46ef4ffc495899b0d077851070f1b6d8af268c16848"
+  },
+  {
+   "dest": "tests/full_suite_baseline_ea5ff05.txt",
+   "bytes": 64216,
+   "sha256": "8cbd5e386cd63b1d5a00bf69a4f54da2aebe8e7bb99145c1287c050ebe223895"
   }
  ]
 }

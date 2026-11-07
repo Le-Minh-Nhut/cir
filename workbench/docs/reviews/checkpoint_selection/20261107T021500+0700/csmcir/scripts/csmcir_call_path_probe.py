@@ -9,6 +9,12 @@ constructors named by `blip_validate_fashioniq` run, so the answer comes from ex
 It needs the pinned checkout on `sys.path` and nothing else: no GPU, no checkpoint, no model. That is
 deliberate -- the question is which files the dataset layer reads, and loading a 2.7 GB BLIP-2 only
 makes the answer slower to obtain.
+
+This file ships inside the evidence bundle, where `parents[1]` is not a repository root: resolving the
+checkout relative to `__file__` pointed at
+`.../csmcir/third_party/CSMCIR`, which does not exist. The root is therefore located by walking up
+until `workbench/third_party/CSMCIR/src` is found, and the checkout can be overridden with
+`--checkout` for a derived tree.
 """
 import builtins
 import json
@@ -16,7 +22,20 @@ import sys
 import traceback
 from pathlib import Path
 
-CHECKOUT = Path(__file__).resolve().parents[1] / "third_party" / "CSMCIR"
+def _find_checkout(override: str | None) -> Path:
+    if override:
+        candidate = Path(override).resolve()
+        if not (candidate / "src/data_utils_csmcir.py").is_file():
+            raise SystemExit(f"--checkout {candidate} does not contain src/data_utils_csmcir.py")
+        return candidate
+    for parent in Path(__file__).resolve().parents:
+        candidate = parent / "workbench/third_party/CSMCIR"
+        if (candidate / "src/data_utils_csmcir.py").is_file():
+            return candidate
+    raise SystemExit("could not locate workbench/third_party/CSMCIR above this file; pass --checkout")
+
+
+CHECKOUT = _find_checkout(None)
 sys.path.insert(0, str(CHECKOUT / "src"))
 
 opened: list[tuple[str, str]] = []
@@ -74,4 +93,11 @@ def main():
 
 
 if __name__ == "__main__":
+    import argparse
+    _parser = argparse.ArgumentParser()
+    _parser.add_argument("--checkout", default=None,
+                         help="CSMCIR checkout root (default: search upwards for workbench/third_party/CSMCIR)")
+    _args = _parser.parse_args()
+    CHECKOUT = _find_checkout(_args.checkout)
+    sys.path.insert(0, str(CHECKOUT / "src"))
     main()

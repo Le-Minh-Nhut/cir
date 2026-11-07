@@ -1,0 +1,991 @@
+ssssssssss.s...............sssssssssssssssss......s...F................. [  3%]
+........................................................................ [  6%]
+........................................................................ [  9%]
+........................................................................ [ 12%]
+........................................................................ [ 16%]
+....s................................................................... [ 19%]
+........................................................................ [ 22%]
+............................FFF....................................F.... [ 25%]
+............................................................s........... [ 29%]
+...............................................F........................ [ 32%]
+....F.................F.......F..F.F.....................F.............. [ 35%]
+........................................................................ [ 38%]
+................................................................s....... [ 42%]
+.................................................ss......sss............ [ 45%]
+........................................................................ [ 48%]
+........................................................................ [ 51%]
+.F...................................................................... [ 55%]
+........................................................................ [ 58%]
+........................................................................ [ 61%]
+....................s.......................ssssss...........s...s...... [ 64%]
+........................................................................ [ 68%]
+........................................................................ [ 71%]
+...........................................................F.F.......... [ 74%]
+.......................s................................................ [ 77%]
+.........................................FFFFFF....F.................... [ 81%]
+...............................................F........................ [ 84%]
+........................................................................ [ 87%]
+........................................................................ [ 90%]
+........................................................................ [ 93%]
+........................................................................ [ 97%]
+..............................................................           [100%]
+=============================== warnings summary ===============================
+workbench/backend/main.py:97: 1 warning
+workbench/tests/test_e2e_release_chain.py: 1 warning
+workbench/tests/test_failure_thresholds.py: 7 warnings
+workbench/tests/test_http_api_layer.py: 43 warnings
+workbench/tests/test_phase1_acceptance_scenarios.py: 5 warnings
+workbench/tests/test_release_blocker_cuda_readiness.py: 2 warnings
+  /tmp/baseline_ea5ff05/workbench/backend/main.py:97: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    @app.on_event("startup")
+
+../../home/heheboiz/data/cir/workbench/envs/ctl312h/lib/python3.12/site-packages/fastapi/applications.py:4723: 2 warnings
+workbench/tests/test_e2e_release_chain.py: 2 warnings
+workbench/tests/test_failure_thresholds.py: 14 warnings
+workbench/tests/test_http_api_layer.py: 86 warnings
+workbench/tests/test_phase1_acceptance_scenarios.py: 10 warnings
+workbench/tests/test_release_blocker_cuda_readiness.py: 4 warnings
+  /home/heheboiz/data/cir/workbench/envs/ctl312h/lib/python3.12/site-packages/fastapi/applications.py:4723: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    return self.router.on_event(event_type)  # ty: ignore[deprecated]
+
+workbench/backend/main.py:104: 1 warning
+workbench/tests/test_e2e_release_chain.py: 1 warning
+workbench/tests/test_failure_thresholds.py: 7 warnings
+workbench/tests/test_http_api_layer.py: 43 warnings
+workbench/tests/test_phase1_acceptance_scenarios.py: 5 warnings
+workbench/tests/test_release_blocker_cuda_readiness.py: 2 warnings
+  /tmp/baseline_ea5ff05/workbench/backend/main.py:104: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    @app.on_event("shutdown")
+
+../../home/heheboiz/data/cir/workbench/envs/ctl312h/lib/python3.12/site-packages/transformers/utils/generic.py:441
+  /home/heheboiz/data/cir/workbench/envs/ctl312h/lib/python3.12/site-packages/transformers/utils/generic.py:441: FutureWarning: `torch.utils._pytree._register_pytree_node` is deprecated. Please use `torch.utils._pytree.register_pytree_node` instead.
+    _torch_pytree._register_pytree_node(
+
+workbench/tests/test_circus_inputs.py::test_black_image_preserves_size_mode_and_is_fresh
+  /tmp/baseline_ea5ff05/workbench/tests/test_circus_inputs.py:20: DeprecationWarning: Image.Image.getdata is deprecated and will be removed in Pillow 14 (2027-10-15). Use get_flattened_data instead.
+    assert all(pixel == (0, 0, 0) for pixel in black.getdata())
+
+workbench/tests/test_circus_inputs.py::test_staged_black_path_and_empty_text_cross_worker_seam
+  /tmp/baseline_ea5ff05/workbench/tests/test_circus_inputs.py:51: DeprecationWarning: Image.Image.getdata is deprecated and will be removed in Pillow 14 (2027-10-15). Use get_flattened_data instead.
+    assert all(pixel == (0, 0, 0) for pixel in black.getdata())
+
+workbench/tests/test_composition_image_identity.py::test_model_lock_serializes_processes
+workbench/tests/test_composition_image_identity.py::test_model_lock_assertion_fails_when_flock_is_noop
+  /home/heheboiz/.local/share/uv/python/cpython-3.12-linux-x86_64-gnu/lib/python3.12/multiprocessing/popen_fork.py:66: DeprecationWarning: This process (pid=409235) is multi-threaded, use of fork() may lead to deadlocks in the child.
+    self.pid = os.fork()
+
+workbench/tests/test_e2e_release_chain.py: 1 warning
+workbench/tests/test_operator_contracts.py: 1 warning
+workbench/tests/test_pc_launcher.py: 1 warning
+workbench/tests/test_pc_readiness.py: 2 warnings
+workbench/tests/test_ptha_mtst_preflight.py: 2 warnings
+workbench/tests/test_r19_tme_replay.py: 4 warnings
+workbench/tests/test_r20_shared_seams.py: 2 warnings
+workbench/tests/test_r23_cache_lifecycle.py: 1 warning
+workbench/tests/test_standalone_operator_commands.py: 1 warning
+  /home/heheboiz/data/cir/workbench/envs/ctl312h/lib/python3.12/site-packages/huggingface_hub/file_download.py:949: FutureWarning: `resume_download` is deprecated and will be removed in version 1.0.0. Downloads always resume when possible. If you want to force a new download, use `force_download=True`.
+    warnings.warn(
+
+workbench/tests/test_limn_query_export_ranking.py::test_non_finite_similarity_check_is_defensive_and_documented_as_such
+  /home/heheboiz/data/cir/workbench/envs/ctl312h/lib/python3.12/site-packages/numpy/linalg/linalg.py:2582: RuntimeWarning: overflow encountered in multiply
+    s = (x.conj() * x).real
+
+workbench/tests/test_ptha_target_feature_contract.py::test_circat_boundary_projects_once_and_inference_consumes_projected_targets
+  /tmp/baseline_ea5ff05/workbench/replay/ptha_mtst.py:265: UserWarning: Converting a tensor with requires_grad=True to a scalar may lead to unexpected behavior.
+  Consider using tensor.detach() first. (Triggered internally at /__w/pytorch/pytorch/torch/csrc/autograd/generated/python_variable_methods.cpp:820.)
+    report["equivalence_vs_direct_projection_max_abs_diff"] = float(
+
+workbench/tests/test_r19_tme_replay.py::test_tme_preflight_checks_unverified_assets_against_registry_size_and_digest[EXISTS_UNVERIFIED_CHECKSUM-4-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-4-False]
+  /tmp/baseline_ea5ff05/workbench/tests/test_r19_tme_replay.py:109: UserWarning: Sparse invariant checks are implicitly disabled. Memory errors (e.g. SEGFAULT) will occur when operating on a sparse tensor which violates the invariants, but checks incur performance overhead. To silence this warning, explicitly opt in or out. See `torch.sparse.check_sparse_tensor_invariants.__doc__` for guidance.  (Triggered internally at /__w/pytorch/pytorch/aten/src/ATen/Context.cpp:916.)
+    features = torch.sparse_coo_tensor(
+
+workbench/tests/test_r19_tme_replay.py::test_tme_native_aggregate_runs_once_and_produces_complete_category_rows
+workbench/tests/test_r19_tme_replay.py::test_tme_refuses_partial_or_nonfinite_native_category_metrics[payload0]
+workbench/tests/test_r19_tme_replay.py::test_tme_refuses_partial_or_nonfinite_native_category_metrics[payload1]
+  /home/heheboiz/data/cir/workbench/envs/ctl312h/lib/python3.12/site-packages/torch/serialization.py:2263: UserWarning: Validating sparse tensor invariants because weights_only=True; this is an O(nnz) scan per sparse tensor and may be slow for large checkpoints.
+    torch._utils._validate_loaded_sparse_tensors(weights_only=weights_only)
+
+workbench/tests/test_r9_defect_regressions.py::test_the_pinned_processor_loads_without_root_bert_assets[airknow]
+  /home/heheboiz/data/cir/workbench/envs/ctl312h/lib/python3.12/site-packages/torch/jit/_script.py:1491: FutureWarning: `torch.jit.script` is deprecated. Please switch to `torch.compile` or `torch.export`.
+    warnings.warn(
+
+workbench/tests/test_r9_defect_regressions.py::test_the_pinned_processor_loads_without_root_bert_assets[airknow]
+  /home/heheboiz/data/cir/workbench/envs/ctl312h/lib/python3.12/site-packages/torch/jit/_script.py:1643: FutureWarning: `torch.jit.interface` is deprecated. Please use `torch.compile` instead.
+    warnings.warn(
+
+workbench/tests/test_r9_defect_regressions.py::test_the_pinned_processor_loads_without_root_bert_assets[airknow]
+  /home/heheboiz/data/cir/workbench/envs/ctl312h/lib/python3.12/site-packages/timm/models/hub.py:4: DeprecationWarning: Importing from timm.models.hub is deprecated, please import via timm.models
+    warnings.warn(f"Importing from {__name__} is deprecated, please import via timm.models", DeprecationWarning)
+
+workbench/tests/test_r9_defect_regressions.py::test_the_pinned_processor_loads_without_root_bert_assets[airknow]
+  /tmp/baseline_ea5ff05/workbench/third_party/AirKnow/lavis/common/utils.py:23: DeprecationWarning: 
+  Pyarrow will become a required dependency of pandas in the next major release of pandas (pandas 3.0),
+  (to allow more performant data types, such as the Arrow string type, and better interoperability with other libraries)
+  but was not found to be installed on your system.
+  If this would cause problems for you,
+  please provide us feedback at https://github.com/pandas-dev/pandas/issues/54466
+          
+    import pandas as pd
+
+workbench/tests/test_r9_defect_regressions.py::test_the_pinned_processor_loads_without_root_bert_assets[airknow]
+  /home/heheboiz/data/cir/workbench/envs/ctl312h/lib/python3.12/site-packages/timm/models/registry.py:4: DeprecationWarning: Importing from timm.models.registry is deprecated, please import via timm.models
+    warnings.warn(f"Importing from {__name__} is deprecated, please import via timm.models", DeprecationWarning)
+
+workbench/tests/test_r9_defect_regressions.py::test_the_pinned_processor_loads_without_root_bert_assets[airknow]
+  /home/heheboiz/data/cir/workbench/envs/ctl312h/lib/python3.12/site-packages/timm/models/layers/__init__.py:49: DeprecationWarning: Importing from timm.models.layers is deprecated, please import via timm.layers
+    warnings.warn(f"Importing from {__name__} is deprecated, please import via timm.layers", DeprecationWarning)
+
+workbench/tests/test_r9_defect_regressions.py::test_the_pinned_processor_loads_without_root_bert_assets[airknow]
+  /home/heheboiz/data/cir/workbench/envs/ctl312h/lib/python3.12/site-packages/timm/models/helpers.py:7: DeprecationWarning: Importing from timm.models.helpers is deprecated, please import via timm.models
+    warnings.warn(f"Importing from {__name__} is deprecated, please import via timm.models", DeprecationWarning)
+
+workbench/tests/test_r9_defect_regressions.py::test_the_pinned_processor_loads_without_root_bert_assets[airknow]
+workbench/tests/test_r9_defect_regressions.py::test_the_pinned_processor_loads_without_root_bert_assets[conesep]
+workbench/tests/test_r9_defect_regressions.py::test_the_pinned_processor_loads_without_root_bert_assets[habit]
+workbench/tests/test_r9_defect_regressions.py::test_the_pinned_processor_loads_without_root_bert_assets[hint]
+workbench/tests/test_r9_defect_regressions.py::test_the_pinned_processor_loads_without_root_bert_assets[intent]
+workbench/tests/test_r9_defect_regressions.py::test_the_integrated_loader_returns_the_native_processor
+  /home/heheboiz/data/cir/workbench/envs/ctl312h/lib/python3.12/site-packages/transformers/utils/generic.py:309: FutureWarning: `torch.utils._pytree._register_pytree_node` is deprecated. Please use `torch.utils._pytree.register_pytree_node` instead.
+    _torch_pytree._register_pytree_node(
+
+workbench/tests/test_release_blocker_interpreter.py::test_disk_contradiction_is_never_ready
+workbench/tests/test_release_blocker_interpreter.py::test_an_unreadable_installed_version_never_confirms_a_probe
+  /tmp/baseline_ea5ff05/workbench/backend/runtime.py:665: DeprecationWarning: Implicit None on return values is deprecated and will raise KeyErrors.
+    name = metadata["Name"]
+
+workbench/tests/test_release_blocker_interpreter.py::test_disk_contradiction_is_never_ready
+workbench/tests/test_release_blocker_interpreter.py::test_an_unreadable_installed_version_never_confirms_a_probe
+  /tmp/baseline_ea5ff05/workbench/backend/runtime.py:666: DeprecationWarning: Implicit None on return values is deprecated and will raise KeyErrors.
+    version = metadata["Version"]
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED workbench/tests/test_a39_gate_certification.py::test_gate_and_evidence_certification_predicates_are_consistent - AssertionError: tsc compilation failed: 
+  [41m                                                                               [0m
+  [41m[37m                This is not the tsc command you are looking for                [0m
+  [41m                                                                               [0m
+  
+  To get access to the TypeScript compiler, [34mtsc[0m, from the command line either:
+  
+  - Use [1mnpm install typescript[0m to first add TypeScript to your project [1mbefore[0m using npx
+  - Use [1myarn[0m to avoid accidentally running code from un-installed packages
+   
+assert 1 == 0
+ +  where 1 = CompletedProcess(args=['npx', 'tsc', 'gate.ts', 'evidence.ts', '--ignoreConfig', '--outDir', '/tmp/pytest-of-heheboiz/...x1b[0m using npx\n- Use \x1b[1myarn\x1b[0m to avoid accidentally running code from un-installed packages\n', stderr='').returncode
+FAILED workbench/tests/test_environment_planner.py::test_evaluator_imports_keep_pins_and_drop_training_only_packages - AssertionError: assert {'einops': '0....8.0.74', ...} == {'numpy': '1....das': '2.0.0'}
+  
+  Differing items:
+  {'numpy': '1.21.6'} != {'numpy': '1.22.3'}
+  Left contains 7 more items:
+  {'einops': '0.4.1',
+   'open-clip-torch': '2.24.0',
+   'opencv-python': '4.8.0.74',
+   'opencv-python-headless': '4.5.5.64',
+   'pillow': '9.0.1',
+   'tqdm': '4.66.1',
+   'transformers': '4.30.2'}
+  Right contains 1 more item:
+  {'pandas': '2.0.0'}
+  
+  Full diff: (-: missing in left side, +: extra in left side)
+    {
+  +     'einops': '0.4.1',
+  -     'numpy': '1.22.3',
+  ?                  ^ ^
+  +     'numpy': '1.21.6',
+  ?                  ^ ^
+  -     'pandas': '2.0.0',
+  +     'open-clip-torch': '2.24.0',
+  +     'opencv-python': '4.8.0.74',
+  +     'opencv-python-headless': '4.5.5.64',
+  +     'pillow': '9.0.1',
+  +     'tqdm': '4.66.1',
+  +     'transformers': '4.30.2',
+    }
+FAILED workbench/tests/test_environment_planner.py::test_unpinned_evaluator_import_is_reported_unknown - AssertionError: assert {'einops': '0....8.0.74', ...} == {'open-clip-torch': 'UNKNOWN'}
+  
+  Differing items:
+  {'open-clip-torch': '2.24.0'} != {'open-clip-torch': 'UNKNOWN'}
+  Left contains 7 more items:
+  {'einops': '0.4.1',
+   'numpy': '1.21.6',
+   'opencv-python': '4.8.0.74',
+   'opencv-python-headless': '4.5.5.64',
+   'pillow': '9.0.1',
+   'tqdm': '4.66.1',
+   'transformers': '4.30.2'}
+  
+  Full diff: (-: missing in left side, +: extra in left side)
+    {
+  +     'einops': '0.4.1',
+  +     'numpy': '1.21.6',
+  -     'open-clip-torch': 'UNKNOWN',
+  ?                         ^^^^^^^
+  +     'open-clip-torch': '2.24.0',
+  ?                         ^^^^^^
+  +     'opencv-python': '4.8.0.74',
+  +     'opencv-python-headless': '4.5.5.64',
+  +     'pillow': '9.0.1',
+  +     'tqdm': '4.66.1',
+  +     'transformers': '4.30.2',
+    }
+FAILED workbench/tests/test_environment_planner.py::test_narrowed_numpy_pin_still_refuses_conflicting_python - AssertionError: assert {'einops': [(....0.74')], ...} == {'numpy': [('==', '1.22.3')]}
+  
+  Differing items:
+  {'numpy': [('==', '1.21.6')]} != {'numpy': [('==', '1.22.3')]}
+  Left contains 7 more items:
+  {'einops': [('==', '0.4.1')],
+   'open-clip-torch': [('==', '2.24.0')],
+   'opencv-python': [('==', '4.8.0.74')],
+   'opencv-python-headless': [('==', '4.5.5.64')],
+   'pillow': [('==', '9.0.1')],
+   'tqdm': [('==', '4.66.1')],
+   'transformers': [('==', '4.30.2')]}
+  
+  Full diff: (-: missing in left side, +: extra in left side)
+    {
+  +     'einops': [
+  +         (
+  +             '==',
+  +             '0.4.1',
+  +         ),
+  +     ],
+        'numpy': [
+            (
+                '==',
+  -             '1.22.3',
+  ?                 ^ ^
+  +             '1.21.6',
+  ?                 ^ ^
+  +         ),
+  +     ],
+  +     'open-clip-torch': [
+  +         (
+  +             '==',
+  +             '2.24.0',
+  +         ),
+  +     ],
+  +     'opencv-python': [
+  +         (
+  +             '==',
+  +             '4.8.0.74',
+  +         ),
+  +     ],
+  +     'opencv-python-headless': [
+  +         (
+  +             '==',
+  +             '4.5.5.64',
+  +         ),
+  +     ],
+  +     'pillow': [
+  +         (
+  +             '==',
+  +             '9.0.1',
+  +         ),
+  +     ],
+  +     'tqdm': [
+  +         (
+  +             '==',
+  +             '4.66.1',
+  +         ),
+  +     ],
+  +     'transformers': [
+  +         (
+  +             '==',
+  +             '4.30.2',
+            ),
+        ],
+    }
+FAILED workbench/tests/test_environment_planner.py::test_registry_package_pins_survive_import_filtering - AssertionError: assert {'einops': '0....8.0.74', ...} == {'numpy': '1....andas': '1.5'}
+  
+  Differing items:
+  {'numpy': '1.21.6'} != {'numpy': '1.22'}
+  Left contains 7 more items:
+  {'einops': '0.4.1',
+   'open-clip-torch': '2.24.0',
+   'opencv-python': '4.8.0.74',
+   'opencv-python-headless': '4.5.5.64',
+   'pillow': '9.0.1',
+   'tqdm': '4.66.1',
+   'transformers': '4.30.2'}
+  Right contains 1 more item:
+  {'pandas': '1.5'}
+  
+  Full diff: (-: missing in left side, +: extra in left side)
+    {
+  +     'einops': '0.4.1',
+  -     'numpy': '1.22',
+  ?                  ^
+  +     'numpy': '1.21.6',
+  ?                  ^^^
+  -     'pandas': '1.5',
+  +     'open-clip-torch': '2.24.0',
+  +     'opencv-python': '4.8.0.74',
+  +     'opencv-python-headless': '4.5.5.64',
+  +     'pillow': '9.0.1',
+  +     'tqdm': '4.66.1',
+  +     'transformers': '4.30.2',
+    }
+FAILED workbench/tests/test_final_hardening_regressions.py::test_planner_verifier_uses_the_resolved_contract - AssertionError: assert '==2.20.0' == '<2.27,>=2.24'
+  
+  - <2.27,>=2.24
+  + ==2.20.0
+FAILED workbench/tests/test_final_hardening_regressions.py::test_mutation_m4_not_reported_as_passed_when_docker_daemon_unavailable - AssertionError: expected passing summary for other mutations, got:
+  == M1/M2 pilot mutants: SKIP NOT VERIFIED (/tmp/baseline_ea5ff05/workbench/docker/.env absent; the pilot launcher refuses to start without it)
+     reason: M1/M2 need a running pilot; copy .env.example to .env and set the host paths to exercise them
+  == M1 BUG 1: pilot JSON parse discards the fetched response ==
+    SKIP M1: NOT VERIFIED (pilot launcher has no .env to start from)
+  == M2 BUG 6: bundle selection degraded to checkpoints[0] ==
+    SKIP M2: NOT VERIFIED (pilot launcher has no .env to start from)
+  == M3 BUG 7: missing reproduced metric must not carry a deviation label ==
+    FAIL mutant survived: 
+  == M4 BUG 2/3: compose rejects an empty host path; RO submounts protect canonical data ==
+    SKIP M4 compose env guard: NOT VERIFIED (docker daemon unavailable)
+    SKIP M4 live mount probe (container not running)
+  == M5 BUG 4: GPU override file declares the NVIDIA device reservation ==
+    PASS GPU reservation declared (fail-closed start without toolkit)
+  
+  MUTATION CHECKS FAILED: M3
+  /tmp/baseline_ea5ff05/workbench/docker/mutation_checks.sh: line 90: /tmp/baseline_ea5ff05/.venv/bin/python: No such file or directory
+  /tmp/baseline_ea5ff05/workbench/docker/mutation_checks.sh: line 51: /tmp/baseline_ea5ff05/.venv/bin/python: No such file or directory
+  /tmp/baseline_ea5ff05/workbench/docker/mutation_checks.sh: line 51: /tmp/baseline_ea5ff05/.venv/bin/python: No such file or directory
+  /tmp/baseline_ea5ff05/workbench/docker/mutation_checks.sh: line 187: /tmp/baseline_ea5ff05/.venv/bin/python: No such file or directory
+  
+assert []
+FAILED workbench/tests/test_fresh_clone_delivery.py::test_every_manifest_path_matches_its_recorded_digest - AssertionError: delivered bytes differ from the manifest: ['DCNet/base/base_trainer.py', 'TME/src/precompute.py', 'TME/src/precompute_evaluation.py']
+assert not ['DCNet/base/base_trainer.py', 'TME/src/precompute.py', 'TME/src/precompute_evaluation.py']
+FAILED workbench/tests/test_frontend_staleness.py::test_the_request_key_separates_every_state_this_explorer_can_be_in - AssertionError: staleness.ts does not compile: nd line either:
+  
+  - Use [1mnpm install typescript[0m to first add TypeScript to your project [1mbefore[0m using npx
+  - Use [1myarn[0m to avoid accidentally running code from un-installed packages
+   
+assert 1 == 0
+ +  where 1 = CompletedProcess(args=['npx', 'tsc', 'staleness.ts', '--ignoreConfig', '--outDir', '/tmp/cir_staleness_check', '--modu...x1b[0m using npx\n- Use \x1b[1myarn\x1b[0m to avoid accidentally running code from un-installed packages\n', stderr='').returncode
+FAILED workbench/tests/test_frontend_staleness.py::test_the_built_bundle_is_not_older_than_the_sources - Failed: frontend/dist is not built: run `npx vite build`
+FAILED workbench/tests/test_frontend_staleness.py::test_a_development_certificate_is_not_counted_as_a_certified_result - AssertionError: evidence.ts does not compile: nd line either:
+  
+  - Use [1mnpm install typescript[0m to first add TypeScript to your project [1mbefore[0m using npx
+  - Use [1myarn[0m to avoid accidentally running code from un-installed packages
+   
+assert 1 == 0
+ +  where 1 = CompletedProcess(args=['npx', 'tsc', 'evidence.ts', '--ignoreConfig', '--outDir', '/tmp/cir_evidence_check', '--module...x1b[0m using npx\n- Use \x1b[1myarn\x1b[0m to avoid accidentally running code from un-installed packages\n', stderr='').returncode
+FAILED workbench/tests/test_handoff_commands.py::test_no_release_document_points_at_a_superseded_source_sha - AssertionError: TESTED_SOURCE_SHA 624fcf9607d7397c8eef51a3453792a8a9f93de6 does not contain the production code currently on disk: production files changed after the revision the release documents name as tested. Advance the recorded source to a revision that includes them, or the handoff installs code that was never gated.
+assert 1 == 0
+ +  where 1 = CompletedProcess(args=['git', 'diff', '--quiet', '624fcf9607d7397c8eef51a3453792a8a9f93de6', '--', '.', ':(exclude)workbench/docs', ':(exclude)workbench/tests'], returncode=1, stdout='', stderr='').returncode
+FAILED workbench/tests/test_pc_launcher.py::test_limn_bundle_selection_submits_bundle_id_with_native_protocol - AssertionError: Built frontend bundle missing under workbench/frontend/dist/assets
+assert 0 > 0
+ +  where 0 = len([])
+FAILED workbench/tests/test_release_blocker_adversarial_final.py::test_adv10_forged_or_stale_gpu_record_release_verify_not_release_ready - AssertionError: release_verify.sh did not write report. Output: == J1 clean startup: backend, frontend, all 16 models, no fake results ==
+    PENDING J1 boot state UNOBSERVED: no live stack (run compose up, or drop --offline for static checks)
+  == J2 volume mounts resolve to the intended host directories ==
+    PENDING J2 offline mode
+  == J3 preparation is writable inside the container, canonical inputs unchanged ==
+    PENDING J3 offline mode
+  == J4 pilot launcher: stdin JSON parse + complete bundle selection ==
+    PASS J4 stdin parse verified; bundle preference in run.sh (live API check skipped)
+  == J5 GPU contract: fail-closed without a verified capability ==
+    FAIL J5 Traceback (most recent call last):
+    File "<stdin>", line 1, in <module>
+    File "/tmp/baseline_ea5ff05/workbench/backend/runtime.py", line 4, in <module>
+      from packaging.requirements import InvalidRequirement, Requirement
+  ModuleNotFoundError: No module named 'packaging'
+  == J6 sm_120 adaptation changes the verified requirements, not just metadata ==
+    FAIL J6 Traceback (most recent call last):
+    File "<stdin>", line 2, in <module>
+    File "/tmp/baseline_ea5ff05/workbench/backend/runtime.py", line 4, in <module>
+      from packaging.requirements import InvalidRequirement, Requirement
+  ModuleNotFoundError: No module named 'packaging'
+  == J7 complete-report rule via the synthetic evaluator (marked synthetic) ==
+    PASS J7 mock data refused; incomplete evaluation refused; 3-category bundle enforced; gate stays fail-closed
+  == J8 job lifecycle statuses are the backend enum ==
+    PENDING J8 no live stack
+  == J9 scientific gate cases incl. INCOMPLETE_METRIC_EVIDENCE ==
+    PASS J9 missing->incomplete, nan->invalid-alert, measured deviation still flagged
+  == J10 frontend: exactly two warning labels, built bundle present ==
+    FAIL J10 frontend/dist missing (run vite build); 
+  == J11 artifacts persist across a container restart (isolated disposable container) ==
+    PENDING J11 offline mode
+  == J12 resource failure: missing checkpoint recorded clearly, others intact ==
+    FAIL J12 Traceback (most recent call last):
+    File "<stdin>", line 3, in <module>
+    File "/tmp/baseline_ea5ff05/workbench/scripts/evaluate_models.py", line 27, in <module>
+      from workbench.backend.adapters.models import ADAPTERS, OfficialScriptAdapter
+    File "/tmp/baseline_ea5ff05/workbench/backend/adapters/models.py", line 8, in <module>
+      from workbench.backend import runtime as _runtime
+    File "/tmp/baseline_ea5ff05/workbench/backend/runtime.py", line 4, in <module>
+      from packaging.requirements import InvalidRequirement, Requirement
+  ModuleNotFoundError: No module named 'packaging'
+  
+  J1   PENDING  boot state UNOBSERVED: no live stack (run compose up, or drop --offline for static checks)
+  J2   PENDING  offline mode
+  J3   PENDING  offline mode
+  J4   PASS     stdin parse verified; bundle preference in run.sh (live API check skipped)
+  J5   FAIL     Traceback (most recent call last):
+    File "<stdin>", line 1, in <module>
+    File "/tmp/baseline_ea5ff05/workbench/backend/runtime.py", line 4, in <module>
+      from packaging.requirements import InvalidRequirement, Requirement
+  ModuleNotFoundError: No module named 'packaging'
+  J6   FAIL     Traceback (most recent call last):
+    File "<stdin>", line 2, in <module>
+    File "/tmp/baseline_ea5ff05/workbench/backend/runtime.py", line 4, in <module>
+      from packaging.requirements import InvalidRequirement, Requirement
+  ModuleNotFoundError: No module named 'packaging'
+  J7   PASS     mock data refused; incomplete evaluation refused; 3-category bundle enforced; gate stays fail-closed
+  J8   PENDING  no live stack
+  J9   PASS     missing->incomplete, nan->invalid-alert, measured deviation still flagged
+  J10  FAIL     frontend/dist missing (run vite build); 
+  J11  PENDING  offline mode
+  J12  FAIL     Traceback (most recent call last):
+    File "<stdin>", line 3, in <module>
+    File "/tmp/baseline_ea5ff05/workbench/scripts/evaluate_models.py", line 27, in <module>
+      from workbench.backend.adapters.models import ADAPTERS, OfficialScriptAdapter
+    File "/tmp/baseline_ea5ff05/workbench/backend/adapters/models.py", line 8, in <module>
+      from workbench.backend import runtime as _runtime
+    File "/tmp/baseline_ea5ff05/workbench/backend/runtime.py", line 4, in <module>
+      from packaging.requirements import InvalidRequirement, Requirement
+  ModuleNotFoundError: No module named 'packaging'
+  
+  Traceback (most recent call last):
+    File "<stdin>", line 74, in <module>
+    File "/tmp/baseline_ea5ff05/workbench/backend/runtime.py", line 4, in <module>
+      from packaging.requirements import InvalidRequirement, Requirement
+  ModuleNotFoundError: No module named 'packaging'
+  RELEASE VERIFIER: FAILED (report generation failed with exit code 1)
+  
+assert False
+ +  where False = is_file()
+ +    where is_file = PosixPath('/tmp/pytest-of-heheboiz/pytest-33/test_adv10_forged_or_stale_gpu0/release_report.json').is_file
+FAILED workbench/tests/test_release_blocker_adversarial_final.py::test_adv12_existing_valid_corroborated_results_no_false_failure - AssertionError: release_verify.sh did not write report. Output: == J1 clean startup: backend, frontend, all 16 models, no fake results ==
+    FAIL J1 Traceback (most recent call last):
+    File "<stdin>", line 26, in <module>
+    File "/tmp/baseline_ea5ff05/workbench/backend/main.py", line 16, in <module>
+      from fastapi import FastAPI, HTTPException, Request
+  ModuleNotFoundError: No module named 'fastapi'
+  == J2 volume mounts resolve to the intended host directories ==
+    PENDING J2 workbench container not running
+  == J3 preparation is writable inside the container, canonical inputs unchanged ==
+    PENDING J3 workbench container not running
+  == J4 pilot launcher: stdin JSON parse + complete bundle selection ==
+    FAIL J4 Traceback (most recent call last):
+    File "<stdin>", line 6, in <module>
+  AssertionError: limn must expose its checkpoint bundle
+  == J5 GPU contract: fail-closed without a verified capability ==
+    FAIL J5 Traceback (most recent call last):
+    File "<stdin>", line 1, in <module>
+    File "/tmp/baseline_ea5ff05/workbench/backend/runtime.py", line 4, in <module>
+      from packaging.requirements import InvalidRequirement, Requirement
+  ModuleNotFoundError: No module named 'packaging'
+  == J6 sm_120 adaptation changes the verified requirements, not just metadata ==
+    FAIL J6 Traceback (most recent call last):
+    File "<stdin>", line 2, in <module>
+    File "/tmp/baseline_ea5ff05/workbench/backend/runtime.py", line 4, in <module>
+      from packaging.requirements import InvalidRequirement, Requirement
+  ModuleNotFoundError: No module named 'packaging'
+  == J7 complete-report rule via the synthetic evaluator (marked synthetic) ==
+    PASS J7 mock data refused; incomplete evaluation refused; 3-category bundle enforced; gate stays fail-closed
+  == J8 job lifecycle statuses are the backend enum ==
+    PASS J8 queue idle: 0 jobs in flight, endpoint responsive
+  == J9 scientific gate cases incl. INCOMPLETE_METRIC_EVIDENCE ==
+    PASS J9 missing->incomplete, nan->invalid-alert, measured deviation still flagged
+  == J10 frontend: exactly two warning labels, built bundle present ==
+    FAIL J10 frontend/dist missing (run vite build); 
+  == J11 artifacts persist across a container restart (isolated disposable container) ==
+    PENDING J11 docker unavailable
+  == J12 resource failure: missing checkpoint recorded clearly, others intact ==
+    FAIL J12 Traceback (most recent call last):
+    File "<stdin>", line 3, in <module>
+    File "/tmp/baseline_ea5ff05/workbench/scripts/evaluate_models.py", line 27, in <module>
+      from workbench.backend.adapters.models import ADAPTERS, OfficialScriptAdapter
+    File "/tmp/baseline_ea5ff05/workbench/backend/adapters/models.py", line 8, in <module>
+      from workbench.backend import runtime as _runtime
+    File "/tmp/baseline_ea5ff05/workbench/backend/runtime.py", line 4, in <module>
+      from packaging.requirements import InvalidRequirement, Requirement
+  ModuleNotFoundError: No module named 'packaging'
+  
+  J1   FAIL     Traceback (most recent call last):
+    File "<stdin>", line 26, in <module>
+    File "/tmp/baseline_ea5ff05/workbench/backend/main.py", line 16, in <module>
+      from fastapi import FastAPI, HTTPException, Request
+  ModuleNotFoundError: No module named 'fastapi'
+  J2   PENDING  workbench container not running
+  J3   PENDING  workbench container not running
+  J4   FAIL     Traceback (most recent call last):
+    File "<stdin>", line 6, in <module>
+  AssertionError: limn must expose its checkpoint bundle
+  J5   FAIL     Traceback (most recent call last):
+    File "<stdin>", line 1, in <module>
+    File "/tmp/baseline_ea5ff05/workbench/backend/runtime.py", line 4, in <module>
+      from packaging.requirements import InvalidRequirement, Requirement
+  ModuleNotFoundError: No module named 'packaging'
+  J6   FAIL     Traceback (most recent call last):
+    File "<stdin>", line 2, in <module>
+    File "/tmp/baseline_ea5ff05/workbench/backend/runtime.py", line 4, in <module>
+      from packaging.requirements import InvalidRequirement, Requirement
+  ModuleNotFoundError: No module named 'packaging'
+  J7   PASS     mock data refused; incomplete evaluation refused; 3-category bundle enforced; gate stays fail-closed
+  J8   PASS     queue idle: 0 jobs in flight, endpoint responsive
+  J9   PASS     missing->incomplete, nan->invalid-alert, measured deviation still flagged
+  J10  FAIL     frontend/dist missing (run vite build); 
+  J11  PENDING  docker unavailable
+  J12  FAIL     Traceback (most recent call last):
+    File "<stdin>", line 3, in <module>
+    File "/tmp/baseline_ea5ff05/workbench/scripts/evaluate_models.py", line 27, in <module>
+      from workbench.backend.adapters.models import ADAPTERS, OfficialScriptAdapter
+    File "/tmp/baseline_ea5ff05/workbench/backend/adapters/models.py", line 8, in <module>
+      from workbench.backend import runtime as _runtime
+    File "/tmp/baseline_ea5ff05/workbench/backend/runtime.py", line 4, in <module>
+      from packaging.requirements import InvalidRequirement, Requirement
+  ModuleNotFoundError: No module named 'packaging'
+  
+  Traceback (most recent call last):
+    File "<stdin>", line 74, in <module>
+    File "/tmp/baseline_ea5ff05/workbench/backend/runtime.py", line 4, in <module>
+      from packaging.requirements import InvalidRequirement, Requirement
+  ModuleNotFoundError: No module named 'packaging'
+  RELEASE VERIFIER: FAILED (report generation failed with exit code 1)
+  
+assert False
+ +  where False = is_file()
+ +    where is_file = PosixPath('/tmp/pytest-of-heheboiz/pytest-33/test_adv12_existing_valid_corr0/release_report.json').is_file
+FAILED workbench/tests/test_release_blocker_gpu_records.py::test_defect_b_g_with_no_target_gpu_verdict_is_pending_not_pass - AssertionError: ("== J1 clean startup: backend, frontend, all 16 models, no fake results ==
+    PENDING J1 boot state UNOBSERVED: no li...eNotFoundError: No module named \'packaging\'
+  RELEASE VERIFIER: FAILED (report generation failed with exit code 1)
+  ')
+assert 1 == 0
+ +  where 1 = CompletedProcess(args=['bash', '/tmp/baseline_ea5ff05/workbench/docker/release_verify.sh', '--offline', '--report', '/...eNotFoundError: No module named \'packaging\'\nRELEASE VERIFIER: FAILED (report generation failed with exit code 1)\n').returncode
+FAILED workbench/tests/test_release_blocker_gpu_records.py::test_release_verify_documented_invocations_produce_parseable_report[<lambda>0] - AssertionError: Invocation failed: args=['--offline', '--report', '/tmp/pytest-of-heheboiz/pytest-33/test_release_verify_documented0/custom_report.json']
+  stdout:
+  == J1 clean startup: backend, frontend, all 16 models, no fake results ==
+    PENDING J1 boot state UNOBSERVED: no live stack (run compose up, or drop --offline for static checks)
+  == J2 volume mounts resolve to the intended host directories ==
+    PENDING J2 offline mode
+  == J3 preparation is writable inside the container, canonical inputs unchanged ==
+    PENDING J3 offline mode
+  == J4 pilot launcher: stdin JSON parse + complete bundle selection ==
+    PASS J4 stdin parse verified; bundle preference in run.sh (live API check skipped)
+  == J5 GPU contract: fail-closed without a verified capability ==
+    FAIL J5 Traceback (most recent call last):
+    File "<stdin>", line 1, in <module>
+    File "/tmp/baseline_ea5ff05/workbench/backend/runtime.py", line 4, in <module>
+      from packaging.requirements import InvalidRequirement, Requirement
+  ModuleNotFoundError: No module named 'packaging'
+  == J6 sm_120 adaptation changes the verified requirements, not just metadata ==
+    FAIL J6 Traceback (most recent call last):
+    File "<stdin>", line 2, in <module>
+    File "/tmp/baseline_ea5ff05/workbench/backend/runtime.py", line 4, in <module>
+      from packaging.requirements import InvalidRequirement, Requirement
+  ModuleNotFoundError: No module named 'packaging'
+  == J7 complete-report rule via the synthetic evaluator (marked synthetic) ==
+    PASS J7 mock data refused; incomplete evaluation refused; 3-category bundle enforced; gate stays fail-closed
+  == J8 job lifecycle statuses are the backend enum ==
+    PENDING J8 no live stack
+  == J9 scientific gate cases incl. INCOMPLETE_METRIC_EVIDENCE ==
+    PASS J9 missing->incomplete, nan->invalid-alert, measured deviation still flagged
+  == J10 frontend: exactly two warning labels, built bundle present ==
+    FAIL J10 frontend/dist missing (run vite build); 
+  == J11 artifacts persist across a container restart (isolated disposable container) ==
+    PENDING J11 offline mode
+  == J12 resource failure: missing checkpoint recorded clearly, others intact ==
+    FAIL J12 Traceback (most recent call last):
+    File "<stdin>", line 3, in <module>
+    File "/tmp/baseline_ea5ff05/workbench/scripts/evaluate_models.py", line 27, in <module>
+      from workbench.backend.adapters.models import ADAPTERS, OfficialScriptAdapter
+    File "/tmp/baseline_ea5ff05/workbench/backend/adapters/models.py", line 8, in <module>
+      from workbench.backend import runtime as _runtime
+    File "/tmp/baseline_ea5ff05/workbench/backend/runtime.py", line 4, in <module>
+      from packaging.requirements import InvalidRequirement, Requirement
+  ModuleNotFoundError: No module named 'packaging'
+  
+  J1   PENDING  boot state UNOBSERVED: no live stack (run compose up, or drop --offline for static checks)
+  J2   PENDING  offline mode
+  J3   PENDING  offline mode
+  J4   PASS     stdin parse verified; bundle preference in run.sh (live API check skipped)
+  J5   FAIL     Traceback (most recent call last):
+    File "<stdin>", line 1, in <module>
+    File "/tmp/baseline_ea5ff05/workbench/backend/runtime.py", line 4, in <module>
+      from packaging.requirements import InvalidRequirement, Requirement
+  ModuleNotFoundError: No module named 'packaging'
+  J6   FAIL     Traceback (most recent call last):
+    File "<stdin>", line 2, in <module>
+    File "/tmp/baseline_ea5ff05/workbench/backend/runtime.py", line 4, in <module>
+      from packaging.requirements import InvalidRequirement, Requirement
+  ModuleNotFoundError: No module named 'packaging'
+  J7   PASS     mock data refused; incomplete evaluation refused; 3-category bundle enforced; gate stays fail-closed
+  J8   PENDING  no live stack
+  J9   PASS     missing->incomplete, nan->invalid-alert, measured deviation still flagged
+  J10  FAIL     frontend/dist missing (run vite build); 
+  J11  PENDING  offline mode
+  J12  FAIL     Traceback (most recent call last):
+    File "<stdin>", line 3, in <module>
+    File "/tmp/baseline_ea5ff05/workbench/scripts/evaluate_models.py", line 27, in <module>
+      from workbench.backend.adapters.models import ADAPTERS, OfficialScriptAdapter
+    File "/tmp/baseline_ea5ff05/workbench/backend/adapters/models.py", line 8, in <module>
+      from workbench.backend import runtime as _runtime
+    File "/tmp/baseline_ea5ff05/workbench/backend/runtime.py", line 4, in <module>
+      from packaging.requirements import InvalidRequirement, Requirement
+  ModuleNotFoundError: No module named 'packaging'
+  
+  stderr:
+  Traceback (most recent call last):
+    File "<stdin>", line 74, in <module>
+    File "/tmp/baseline_ea5ff05/workbench/backend/runtime.py", line 4, in <module>
+      from packaging.requirements import InvalidRequirement, Requirement
+  ModuleNotFoundError: No module named 'packaging'
+  RELEASE VERIFIER: FAILED (report generation failed with exit code 1)
+  
+assert 1 == 0
+ +  where 1 = CompletedProcess(args=['bash', '/tmp/pytest-of-heheboiz/pytest-33/test_release_verify_documented0/release_verify.sh', ...eNotFoundError: No module named \'packaging\'\nRELEASE VERIFIER: FAILED (report generation failed with exit code 1)\n').returncode
+FAILED workbench/tests/test_release_blocker_gpu_records.py::test_release_verify_documented_invocations_produce_parseable_report[<lambda>1] - AssertionError: Invocation failed: args=['--report', '/tmp/pytest-of-heheboiz/pytest-33/test_release_verify_documented1/custom_report.json', '--offline']
+  stdout:
+  == J1 clean startup: backend, frontend, all 16 models, no fake results ==
+    PENDING J1 boot state UNOBSERVED: no live stack (run compose up, or drop --offline for static checks)
+  == J2 volume mounts resolve to the intended host directories ==
+    PENDING J2 offline mode
+  == J3 preparation is writable inside the container, canonical inputs unchanged ==
+    PENDING J3 offline mode
+  == J4 pilot launcher: stdin JSON parse + complete bundle selection ==
+    PASS J4 stdin parse verified; bundle preference in run.sh (live API check skipped)
+  == J5 GPU contract: fail-closed without a verified capability ==
+    FAIL J5 Traceback (most recent call last):
+    File "<stdin>", line 1, in <module>
+    File "/tmp/baseline_ea5ff05/workbench/backend/runtime.py", line 4, in <module>
+      from packaging.requirements import InvalidRequirement, Requirement
+  ModuleNotFoundError: No module named 'packaging'
+  == J6 sm_120 adaptation changes the verified requirements, not just metadata ==
+    FAIL J6 Traceback (most recent call last):
+    File "<stdin>", line 2, in <module>
+    File "/tmp/baseline_ea5ff05/workbench/backend/runtime.py", line 4, in <module>
+      from packaging.requirements import InvalidRequirement, Requirement
+  ModuleNotFoundError: No module named 'packaging'
+  == J7 complete-report rule via the synthetic evaluator (marked synthetic) ==
+    PASS J7 mock data refused; incomplete evaluation refused; 3-category bundle enforced; gate stays fail-closed
+  == J8 job lifecycle statuses are the backend enum ==
+    PENDING J8 no live stack
+  == J9 scientific gate cases incl. INCOMPLETE_METRIC_EVIDENCE ==
+    PASS J9 missing->incomplete, nan->invalid-alert, measured deviation still flagged
+  == J10 frontend: exactly two warning labels, built bundle present ==
+    FAIL J10 frontend/dist missing (run vite build); 
+  == J11 artifacts persist across a container restart (isolated disposable container) ==
+    PENDING J11 offline mode
+  == J12 resource failure: missing checkpoint recorded clearly, others intact ==
+    FAIL J12 Traceback (most recent call last):
+    File "<stdin>", line 3, in <module>
+    File "/tmp/baseline_ea5ff05/workbench/scripts/evaluate_models.py", line 27, in <module>
+      from workbench.backend.adapters.models import ADAPTERS, OfficialScriptAdapter
+    File "/tmp/baseline_ea5ff05/workbench/backend/adapters/models.py", line 8, in <module>
+      from workbench.backend import runtime as _runtime
+    File "/tmp/baseline_ea5ff05/workbench/backend/runtime.py", line 4, in <module>
+      from packaging.requirements import InvalidRequirement, Requirement
+  ModuleNotFoundError: No module named 'packaging'
+  
+  J1   PENDING  boot state UNOBSERVED: no live stack (run compose up, or drop --offline for static checks)
+  J2   PENDING  offline mode
+  J3   PENDING  offline mode
+  J4   PASS     stdin parse verified; bundle preference in run.sh (live API check skipped)
+  J5   FAIL     Traceback (most recent call last):
+    File "<stdin>", line 1, in <module>
+    File "/tmp/baseline_ea5ff05/workbench/backend/runtime.py", line 4, in <module>
+      from packaging.requirements import InvalidRequirement, Requirement
+  ModuleNotFoundError: No module named 'packaging'
+  J6   FAIL     Traceback (most recent call last):
+    File "<stdin>", line 2, in <module>
+    File "/tmp/baseline_ea5ff05/workbench/backend/runtime.py", line 4, in <module>
+      from packaging.requirements import InvalidRequirement, Requirement
+  ModuleNotFoundError: No module named 'packaging'
+  J7   PASS     mock data refused; incomplete evaluation refused; 3-category bundle enforced; gate stays fail-closed
+  J8   PENDING  no live stack
+  J9   PASS     missing->incomplete, nan->invalid-alert, measured deviation still flagged
+  J10  FAIL     frontend/dist missing (run vite build); 
+  J11  PENDING  offline mode
+  J12  FAIL     Traceback (most recent call last):
+    File "<stdin>", line 3, in <module>
+    File "/tmp/baseline_ea5ff05/workbench/scripts/evaluate_models.py", line 27, in <module>
+      from workbench.backend.adapters.models import ADAPTERS, OfficialScriptAdapter
+    File "/tmp/baseline_ea5ff05/workbench/backend/adapters/models.py", line 8, in <module>
+      from workbench.backend import runtime as _runtime
+    File "/tmp/baseline_ea5ff05/workbench/backend/runtime.py", line 4, in <module>
+      from packaging.requirements import InvalidRequirement, Requirement
+  ModuleNotFoundError: No module named 'packaging'
+  
+  stderr:
+  Traceback (most recent call last):
+    File "<stdin>", line 74, in <module>
+    File "/tmp/baseline_ea5ff05/workbench/backend/runtime.py", line 4, in <module>
+      from packaging.requirements import InvalidRequirement, Requirement
+  ModuleNotFoundError: No module named 'packaging'
+  RELEASE VERIFIER: FAILED (report generation failed with exit code 1)
+  
+assert 1 == 0
+ +  where 1 = CompletedProcess(args=['bash', '/tmp/pytest-of-heheboiz/pytest-33/test_release_verify_documented1/release_verify.sh', ...eNotFoundError: No module named \'packaging\'\nRELEASE VERIFIER: FAILED (report generation failed with exit code 1)\n').returncode
+FAILED workbench/tests/test_release_blocker_gpu_records.py::test_release_verify_documented_invocations_produce_parseable_report[<lambda>2] - AssertionError: Invocation failed: args=['--offline', '--base', 'http://127.0.0.1:8000', '--report', '/tmp/pytest-of-heheboiz/pytest-33/test_release_verify_documented2/custom_report.json']
+  stdout:
+  == J1 clean startup: backend, frontend, all 16 models, no fake results ==
+    PENDING J1 boot state UNOBSERVED: no live stack (run compose up, or drop --offline for static checks)
+  == J2 volume mounts resolve to the intended host directories ==
+    PENDING J2 offline mode
+  == J3 preparation is writable inside the container, canonical inputs unchanged ==
+    PENDING J3 offline mode
+  == J4 pilot launcher: stdin JSON parse + complete bundle selection ==
+    PASS J4 stdin parse verified; bundle preference in run.sh (live API check skipped)
+  == J5 GPU contract: fail-closed without a verified capability ==
+    FAIL J5 Traceback (most recent call last):
+    File "<stdin>", line 1, in <module>
+    File "/tmp/baseline_ea5ff05/workbench/backend/runtime.py", line 4, in <module>
+      from packaging.requirements import InvalidRequirement, Requirement
+  ModuleNotFoundError: No module named 'packaging'
+  == J6 sm_120 adaptation changes the verified requirements, not just metadata ==
+    FAIL J6 Traceback (most recent call last):
+    File "<stdin>", line 2, in <module>
+    File "/tmp/baseline_ea5ff05/workbench/backend/runtime.py", line 4, in <module>
+      from packaging.requirements import InvalidRequirement, Requirement
+  ModuleNotFoundError: No module named 'packaging'
+  == J7 complete-report rule via the synthetic evaluator (marked synthetic) ==
+    PASS J7 mock data refused; incomplete evaluation refused; 3-category bundle enforced; gate stays fail-closed
+  == J8 job lifecycle statuses are the backend enum ==
+    PENDING J8 no live stack
+  == J9 scientific gate cases incl. INCOMPLETE_METRIC_EVIDENCE ==
+    PASS J9 missing->incomplete, nan->invalid-alert, measured deviation still flagged
+  == J10 frontend: exactly two warning labels, built bundle present ==
+    FAIL J10 frontend/dist missing (run vite build); 
+  == J11 artifacts persist across a container restart (isolated disposable container) ==
+    PENDING J11 offline mode
+  == J12 resource failure: missing checkpoint recorded clearly, others intact ==
+    FAIL J12 Traceback (most recent call last):
+    File "<stdin>", line 3, in <module>
+    File "/tmp/baseline_ea5ff05/workbench/scripts/evaluate_models.py", line 27, in <module>
+      from workbench.backend.adapters.models import ADAPTERS, OfficialScriptAdapter
+    File "/tmp/baseline_ea5ff05/workbench/backend/adapters/models.py", line 8, in <module>
+      from workbench.backend import runtime as _runtime
+    File "/tmp/baseline_ea5ff05/workbench/backend/runtime.py", line 4, in <module>
+      from packaging.requirements import InvalidRequirement, Requirement
+  ModuleNotFoundError: No module named 'packaging'
+  
+  J1   PENDING  boot state UNOBSERVED: no live stack (run compose up, or drop --offline for static checks)
+  J2   PENDING  offline mode
+  J3   PENDING  offline mode
+  J4   PASS     stdin parse verified; bundle preference in run.sh (live API check skipped)
+  J5   FAIL     Traceback (most recent call last):
+    File "<stdin>", line 1, in <module>
+    File "/tmp/baseline_ea5ff05/workbench/backend/runtime.py", line 4, in <module>
+      from packaging.requirements import InvalidRequirement, Requirement
+  ModuleNotFoundError: No module named 'packaging'
+  J6   FAIL     Traceback (most recent call last):
+    File "<stdin>", line 2, in <module>
+    File "/tmp/baseline_ea5ff05/workbench/backend/runtime.py", line 4, in <module>
+      from packaging.requirements import InvalidRequirement, Requirement
+  ModuleNotFoundError: No module named 'packaging'
+  J7   PASS     mock data refused; incomplete evaluation refused; 3-category bundle enforced; gate stays fail-closed
+  J8   PENDING  no live stack
+  J9   PASS     missing->incomplete, nan->invalid-alert, measured deviation still flagged
+  J10  FAIL     frontend/dist missing (run vite build); 
+  J11  PENDING  offline mode
+  J12  FAIL     Traceback (most recent call last):
+    File "<stdin>", line 3, in <module>
+    File "/tmp/baseline_ea5ff05/workbench/scripts/evaluate_models.py", line 27, in <module>
+      from workbench.backend.adapters.models import ADAPTERS, OfficialScriptAdapter
+    File "/tmp/baseline_ea5ff05/workbench/backend/adapters/models.py", line 8, in <module>
+      from workbench.backend import runtime as _runtime
+    File "/tmp/baseline_ea5ff05/workbench/backend/runtime.py", line 4, in <module>
+      from packaging.requirements import InvalidRequirement, Requirement
+  ModuleNotFoundError: No module named 'packaging'
+  
+  stderr:
+  Traceback (most recent call last):
+    File "<stdin>", line 74, in <module>
+    File "/tmp/baseline_ea5ff05/workbench/backend/runtime.py", line 4, in <module>
+      from packaging.requirements import InvalidRequirement, Requirement
+  ModuleNotFoundError: No module named 'packaging'
+  RELEASE VERIFIER: FAILED (report generation failed with exit code 1)
+  
+assert 1 == 0
+ +  where 1 = CompletedProcess(args=['bash', '/tmp/pytest-of-heheboiz/pytest-33/test_release_verify_documented2/release_verify.sh', ...eNotFoundError: No module named \'packaging\'\nRELEASE VERIFIER: FAILED (report generation failed with exit code 1)\n').returncode
+FAILED workbench/tests/test_release_blocker_gpu_records.py::test_release_verify_documented_invocations_produce_parseable_report[<lambda>3] - AssertionError: Invocation failed: args=['--base', 'http://127.0.0.1:8000', '--report', '/tmp/pytest-of-heheboiz/pytest-33/test_release_verify_documented3/custom_report.json', '--offline']
+  stdout:
+  == J1 clean startup: backend, frontend, all 16 models, no fake results ==
+    PENDING J1 boot state UNOBSERVED: no live stack (run compose up, or drop --offline for static checks)
+  == J2 volume mounts resolve to the intended host directories ==
+    PENDING J2 offline mode
+  == J3 preparation is writable inside the container, canonical inputs unchanged ==
+    PENDING J3 offline mode
+  == J4 pilot launcher: stdin JSON parse + complete bundle selection ==
+    PASS J4 stdin parse verified; bundle preference in run.sh (live API check skipped)
+  == J5 GPU contract: fail-closed without a verified capability ==
+    FAIL J5 Traceback (most recent call last):
+    File "<stdin>", line 1, in <module>
+    File "/tmp/baseline_ea5ff05/workbench/backend/runtime.py", line 4, in <module>
+      from packaging.requirements import InvalidRequirement, Requirement
+  ModuleNotFoundError: No module named 'packaging'
+  == J6 sm_120 adaptation changes the verified requirements, not just metadata ==
+    FAIL J6 Traceback (most recent call last):
+    File "<stdin>", line 2, in <module>
+    File "/tmp/baseline_ea5ff05/workbench/backend/runtime.py", line 4, in <module>
+      from packaging.requirements import InvalidRequirement, Requirement
+  ModuleNotFoundError: No module named 'packaging'
+  == J7 complete-report rule via the synthetic evaluator (marked synthetic) ==
+    PASS J7 mock data refused; incomplete evaluation refused; 3-category bundle enforced; gate stays fail-closed
+  == J8 job lifecycle statuses are the backend enum ==
+    PENDING J8 no live stack
+  == J9 scientific gate cases incl. INCOMPLETE_METRIC_EVIDENCE ==
+    PASS J9 missing->incomplete, nan->invalid-alert, measured deviation still flagged
+  == J10 frontend: exactly two warning labels, built bundle present ==
+    FAIL J10 frontend/dist missing (run vite build); 
+  == J11 artifacts persist across a container restart (isolated disposable container) ==
+    PENDING J11 offline mode
+  == J12 resource failure: missing checkpoint recorded clearly, others intact ==
+    FAIL J12 Traceback (most recent call last):
+    File "<stdin>", line 3, in <module>
+    File "/tmp/baseline_ea5ff05/workbench/scripts/evaluate_models.py", line 27, in <module>
+      from workbench.backend.adapters.models import ADAPTERS, OfficialScriptAdapter
+    File "/tmp/baseline_ea5ff05/workbench/backend/adapters/models.py", line 8, in <module>
+      from workbench.backend import runtime as _runtime
+    File "/tmp/baseline_ea5ff05/workbench/backend/runtime.py", line 4, in <module>
+      from packaging.requirements import InvalidRequirement, Requirement
+  ModuleNotFoundError: No module named 'packaging'
+  
+  J1   PENDING  boot state UNOBSERVED: no live stack (run compose up, or drop --offline for static checks)
+  J2   PENDING  offline mode
+  J3   PENDING  offline mode
+  J4   PASS     stdin parse verified; bundle preference in run.sh (live API check skipped)
+  J5   FAIL     Traceback (most recent call last):
+    File "<stdin>", line 1, in <module>
+    File "/tmp/baseline_ea5ff05/workbench/backend/runtime.py", line 4, in <module>
+      from packaging.requirements import InvalidRequirement, Requirement
+  ModuleNotFoundError: No module named 'packaging'
+  J6   FAIL     Traceback (most recent call last):
+    File "<stdin>", line 2, in <module>
+    File "/tmp/baseline_ea5ff05/workbench/backend/runtime.py", line 4, in <module>
+      from packaging.requirements import InvalidRequirement, Requirement
+  ModuleNotFoundError: No module named 'packaging'
+  J7   PASS     mock data refused; incomplete evaluation refused; 3-category bundle enforced; gate stays fail-closed
+  J8   PENDING  no live stack
+  J9   PASS     missing->incomplete, nan->invalid-alert, measured deviation still flagged
+  J10  FAIL     frontend/dist missing (run vite build); 
+  J11  PENDING  offline mode
+  J12  FAIL     Traceback (most recent call last):
+    File "<stdin>", line 3, in <module>
+    File "/tmp/baseline_ea5ff05/workbench/scripts/evaluate_models.py", line 27, in <module>
+      from workbench.backend.adapters.models import ADAPTERS, OfficialScriptAdapter
+    File "/tmp/baseline_ea5ff05/workbench/backend/adapters/models.py", line 8, in <module>
+      from workbench.backend import runtime as _runtime
+    File "/tmp/baseline_ea5ff05/workbench/backend/runtime.py", line 4, in <module>
+      from packaging.requirements import InvalidRequirement, Requirement
+  ModuleNotFoundError: No module named 'packaging'
+  
+  stderr:
+  Traceback (most recent call last):
+    File "<stdin>", line 74, in <module>
+    File "/tmp/baseline_ea5ff05/workbench/backend/runtime.py", line 4, in <module>
+      from packaging.requirements import InvalidRequirement, Requirement
+  ModuleNotFoundError: No module named 'packaging'
+  RELEASE VERIFIER: FAILED (report generation failed with exit code 1)
+  
+assert 1 == 0
+ +  where 1 = CompletedProcess(args=['bash', '/tmp/pytest-of-heheboiz/pytest-33/test_release_verify_documented3/release_verify.sh', ...eNotFoundError: No module named \'packaging\'\nRELEASE VERIFIER: FAILED (report generation failed with exit code 1)\n').returncode
+FAILED workbench/tests/test_release_blocker_gpu_records.py::test_release_verify_documented_invocations_produce_parseable_report[<lambda>4] - AssertionError: Invocation failed: args=['--offline']
+  stdout:
+  == J1 clean startup: backend, frontend, all 16 models, no fake results ==
+    PENDING J1 boot state UNOBSERVED: no live stack (run compose up, or drop --offline for static checks)
+  == J2 volume mounts resolve to the intended host directories ==
+    PENDING J2 offline mode
+  == J3 preparation is writable inside the container, canonical inputs unchanged ==
+    PENDING J3 offline mode
+  == J4 pilot launcher: stdin JSON parse + complete bundle selection ==
+    PASS J4 stdin parse verified; bundle preference in run.sh (live API check skipped)
+  == J5 GPU contract: fail-closed without a verified capability ==
+    FAIL J5 Traceback (most recent call last):
+    File "<stdin>", line 1, in <module>
+    File "/tmp/baseline_ea5ff05/workbench/backend/runtime.py", line 4, in <module>
+      from packaging.requirements import InvalidRequirement, Requirement
+  ModuleNotFoundError: No module named 'packaging'
+  == J6 sm_120 adaptation changes the verified requirements, not just metadata ==
+    FAIL J6 Traceback (most recent call last):
+    File "<stdin>", line 2, in <module>
+    File "/tmp/baseline_ea5ff05/workbench/backend/runtime.py", line 4, in <module>
+      from packaging.requirements import InvalidRequirement, Requirement
+  ModuleNotFoundError: No module named 'packaging'
+  == J7 complete-report rule via the synthetic evaluator (marked synthetic) ==
+    PASS J7 mock data refused; incomplete evaluation refused; 3-category bundle enforced; gate stays fail-closed
+  == J8 job lifecycle statuses are the backend enum ==
+    PENDING J8 no live stack
+  == J9 scientific gate cases incl. INCOMPLETE_METRIC_EVIDENCE ==
+    PASS J9 missing->incomplete, nan->invalid-alert, measured deviation still flagged
+  == J10 frontend: exactly two warning labels, built bundle present ==
+    FAIL J10 frontend/dist missing (run vite build); 
+  == J11 artifacts persist across a container restart (isolated disposable container) ==
+    PENDING J11 offline mode
+  == J12 resource failure: missing checkpoint recorded clearly, others intact ==
+    FAIL J12 Traceback (most recent call last):
+    File "<stdin>", line 3, in <module>
+    File "/tmp/baseline_ea5ff05/workbench/scripts/evaluate_models.py", line 27, in <module>
+      from workbench.backend.adapters.models import ADAPTERS, OfficialScriptAdapter
+    File "/tmp/baseline_ea5ff05/workbench/backend/adapters/models.py", line 8, in <module>
+      from workbench.backend import runtime as _runtime
+    File "/tmp/baseline_ea5ff05/workbench/backend/runtime.py", line 4, in <module>
+      from packaging.requirements import InvalidRequirement, Requirement
+  ModuleNotFoundError: No module named 'packaging'
+  
+  J1   PENDING  boot state UNOBSERVED: no live stack (run compose up, or drop --offline for static checks)
+  J2   PENDING  offline mode
+  J3   PENDING  offline mode
+  J4   PASS     stdin parse verified; bundle preference in run.sh (live API check skipped)
+  J5   FAIL     Traceback (most recent call last):
+    File "<stdin>", line 1, in <module>
+    File "/tmp/baseline_ea5ff05/workbench/backend/runtime.py", line 4, in <module>
+      from packaging.requirements import InvalidRequirement, Requirement
+  ModuleNotFoundError: No module named 'packaging'
+  J6   FAIL     Traceback (most recent call last):
+    File "<stdin>", line 2, in <module>
+    File "/tmp/baseline_ea5ff05/workbench/backend/runtime.py", line 4, in <module>
+      from packaging.requirements import InvalidRequirement, Requirement
+  ModuleNotFoundError: No module named 'packaging'
+  J7   PASS     mock data refused; incomplete evaluation refused; 3-category bundle enforced; gate stays fail-closed
+  J8   PENDING  no live stack
+  J9   PASS     missing->incomplete, nan->invalid-alert, measured deviation still flagged
+  J10  FAIL     frontend/dist missing (run vite build); 
+  J11  PENDING  offline mode
+  J12  FAIL     Traceback (most recent call last):
+    File "<stdin>", line 3, in <module>
+    File "/tmp/baseline_ea5ff05/workbench/scripts/evaluate_models.py", line 27, in <module>
+      from workbench.backend.adapters.models import ADAPTERS, OfficialScriptAdapter
+    File "/tmp/baseline_ea5ff05/workbench/backend/adapters/models.py", line 8, in <module>
+      from workbench.backend import runtime as _runtime
+    File "/tmp/baseline_ea5ff05/workbench/backend/runtime.py", line 4, in <module>
+      from packaging.requirements import InvalidRequirement, Requirement
+  ModuleNotFoundError: No module named 'packaging'
+  
+  stderr:
+  Traceback (most recent call last):
+    File "<stdin>", line 74, in <module>
+    File "/tmp/baseline_ea5ff05/workbench/backend/runtime.py", line 4, in <module>
+      from packaging.requirements import InvalidRequirement, Requirement
+  ModuleNotFoundError: No module named 'packaging'
+  RELEASE VERIFIER: FAILED (report generation failed with exit code 1)
+  
+assert 1 == 0
+ +  where 1 = CompletedProcess(args=['bash', '/tmp/pytest-of-heheboiz/pytest-33/test_release_verify_documented4/release_verify.sh', ...eNotFoundError: No module named \'packaging\'\nRELEASE VERIFIER: FAILED (report generation failed with exit code 1)\n').returncode
+FAILED workbench/tests/test_release_blocker_gpu_records.py::test_offline_verdict_names_deployment_reason - AssertionError: ("== J1 clean startup: backend, frontend, all 16 models, no fake results ==
+    PENDING J1 boot state UNOBSERVED: no li...eNotFoundError: No module named \'packaging\'
+  RELEASE VERIFIER: FAILED (report generation failed with exit code 1)
+  ')
+assert 1 == 0
+ +  where 1 = CompletedProcess(args=['bash', '/tmp/baseline_ea5ff05/workbench/docker/release_verify.sh', '--offline', '--report', '/...eNotFoundError: No module named \'packaging\'\nRELEASE VERIFIER: FAILED (report generation failed with exit code 1)\n').returncode
+FAILED workbench/tests/test_release_blocker_interpreter.py::test_a_real_distro_environment_is_not_reported_empty - AssertionError: only 79 + 0 of 88 were accounted for
+assert (79 + 0) >= (88 * 0.9)
+ +  where 79 = len({'ubuntu-pro-client': '8001', 'pyrsistent': '0.20.0', 'language-selector': '0.1', 'bcc': '0.29.1', ...})
+ +  and   0 = len(set())
+23 failed, 2152 passed, 47 skipped, 279 warnings in 1222.96s (0:20:22)

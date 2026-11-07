@@ -333,7 +333,7 @@ Bản trước trình bày mục này như *nguyên nhân đã chứng minh*. S�
 | TME | **EMPIRICAL** | bóc tar → torch zip tensor-only; SHA `fea7fc08…` **trùng khít** weight TME từng bị xoá trong cleanup (cùng nguồn Kaggle) | đo đầy đủ, Δ −0.23/−0.18 |
 | SPRC OneDrive (ViT-g) | **UNVERIFIED** | file không có trên máy | chưa chạy |
 | PAIR B1 / B2 | **EXPLORATORY_PUBLIC_MAPPING** | public `model.py` không phải code đã train (xem 3.9) | đo được nhưng không tính là reproduction |
-| CSMCIR | **UNVERIFIED (blocked)** | checkpoint SHA khớp tác giả; thiếu caption asset | chưa chạy |
+| CSMCIR | **COMPLETED** (research variant) | checkpoint SHA khớp tác giả; caption công khai khớp sha256; macro 57.0507 / 77.2986 (3.18) | đã chạy, exit 0 |
 | PTHA+MTST | **EXPLORATORY TRANSFER (đã đo)** | checkpoint CIRR SHA khớp; nguyên nhân "sai chiều đầu chiếu" đã bị bác bỏ — lỗi ở biên feature, đã sửa | **đã chạy full 3 category: 37.8978 / 59.8364** (xem 3.13) |
 
 Nói cách khác: kết quả đo là **empirical**; chỉ AirKnow (SHA tác giả) và SPRC ViT-L (khớp lớp tuyệt đối) có association do tác giả/kiến trúc xác nhận, và **không entry nào** được gọi là "author-verified reproduction" của một con số paper.
@@ -1099,6 +1099,126 @@ Một test đã sửa vì nó pin **trạng thái host** chứ không pin invari
 chưa tồn tại. Test pass trên clone sạch và fail ngay sau khi preparation chạy lần đầu. Đổi thành
 assertion kép: `allow_gpu_eval` luôn có, và `allow_preparation` ⟺ link chưa sẵn sàng.
 
+### 3.21. Kiểm chứng lại bốn phát hiện review (2026-11-07, lượt 2)
+
+#### 3.21.1 Recipe GloVe: manifest thiếu `glove_vecs.pkl` — CONFIRMED, đã sửa
+
+Bản trước của `dcnet_glove_recipe.py` ghi `glove_vecs.pkl` **trước** khi khởi tạo danh sách `written`,
+nên manifest chỉ có 9 file trong khi recipe sinh ra 10. Kết luận "10/10" trong báo cáo trước dựa vào
+một phép đo riêng lẻ ngoài manifest, không kiểm được lại từ bundle.
+
+Đã sửa và chạy lại hai lần với seed 0:
+
+| đo | giá trị |
+|---|---|
+| file trong manifest | **10** (gồm `glove_vecs.pkl`) |
+| run1 == run2 | **true** |
+| khớp 10/10 file artifact DCNet đã dùng để đo | **true** |
+
+Nhãn giữ là `WORKBENCH_SEEDED_RECIPE`. Không gọi là byte-identical với artifact tác giả:
+`process_cap.py` lấy mẫu OOV bằng `np.random.normal` **không seed**, các byte đó chưa từng công bố.
+
+#### 3.21.2 Quy trình tái lập: ba lỗi — CONFIRMED, đã sửa
+
+| # | lỗi | bằng chứng | sửa |
+|---|---|---|---|
+| a | đường dẫn checkpoint trong hướng dẫn sai một cấp | từ `artifacts/csmcir_derived/src`, `../../../checkpoints/csmcir` **không tồn tại**; `../../checkpoints/csmcir` đúng | hướng dẫn dùng đường tuyệt đối `$CIR/workbench/artifacts/checkpoints/csmcir/...` |
+| b | `build_csmcir_derived.py` chỉ copy `src`, không stage data | `grep fashionIQ_dataset` trong builder = 0 hit; cây mới chết ở lần đọc dataset đầu tiên | thêm `--dataset-root`, tự tạo cả hai symlink, kiểm `qwen_captions/` tồn tại trước khi link |
+| c | `csmcir_call_path_probe.py` tính CHECKOUT sai từ bundle | `parents[1]` = `.../csmcir`, nên tìm `.../csmcir/third_party/CSMCIR` — không tồn tại | tìm repo root bằng cách đi lên tới khi thấy `workbench/third_party/CSMCIR/src`; thêm `--checkout` |
+
+Builder cũng được làm cứng: **dừng** nếu digest của approved patch không khớp `derived_sha256`, và kiểm
+sha256 của `.pyc` tác giả trước khi dùng (`--expect-pyc-sha256`). Trước đó nó chỉ in `MISMATCH` rồi
+tiếp tục, để lại cây nửa sửa mà sau này đọc như một approved variant.
+
+**Đã chạy lại toàn bộ từ cây mới** (`/tmp/derive_fresh`, không dùng symlink hay file stage của phiên
+trước), đúng các lệnh trong hướng dẫn:
+
+```
+build_csmcir_derived.py  -> aa68fe5e OK, 84a1d476 OK, 2 symlink, .pyc sha 46d00b0b…
+apply_operational_save_memory.py -> 4dd11e11…
+thread_save_memory.py            -> f3c35335…
+set_query_batch.py 8             -> 9af8d120…
+validate_blip_csmcir.py          -> exit 0
+```
+
+Kết quả: **dress 52.2062/74.8637, shirt 57.7527/76.1040, toptee 61.1933/80.9281, macro
+57.05073873202006 / 77.29859352111816** — khớp **từng chữ số** với mốc. Chuỗi digest cũng khớp cái đã
+ghi, nên đường dẫn sửa không làm đổi kết quả.
+
+#### 3.21.3 Adapter/web và đường chính thức — CONFIRMED (adapter), BLOCKED (tích hợp)
+
+Ba lỗi thật trong `workbench/composition/model_csmcir.py` và adapter lệnh chính thức:
+
+1. `_status()` trả `ready=False` **vô điều kiện**, lý do vẫn nói caption `COT_ours2` thiếu — đã bị
+   bác bỏ bằng đo (3.18). Đã sửa lý do cho đúng sự thật.
+2. Worker chọn `blip2_cir_align_prompt_csmcir`, rồi `state[model.__class__.__name__]` → `KeyError`
+   với checkpoint công bố, vốn lưu dưới `Blip2QformerCirAlignPromptTargetImageCaptionshiyan92`.
+3. `CSMCIRAdapter.command` (lệnh chính thức) **không** truyền `--blip-model-name`, nên nó dùng default
+   → cùng `KeyError`. Đã thêm flag, khớp cách SPRC khai `--backbone`.
+
+Đo trực tiếp để chứng minh (2): worker với class `shiyan92` + derived root cho `missing 0,
+unexpected ['token_importance']`, `rc 0`.
+
+**Nhưng tích hợp vẫn BLOCKED**, và đây là lý do cụ thể:
+
+- Adapter và `evaluate_models.py` đều lấy source là
+  `WORKBENCH_THIRD_PARTY_ROOT/<source_dir>` (`composition/model_csmcir.py:146`,
+  `evaluate_models.py:blockers`). **Không có** cơ chế trỏ sang derived checkout: preflight bảo
+  "register that checkout as the model source" nhưng không có API nào làm việc đó.
+- Vì vậy mọi đường đều chạy trên checkout **pristine**, nơi `import lavis.models` chết ngay:
+  `ModuleNotFoundError: …blip2_qformer_cir_align_prompt_caption_query`. Đó là blocker thật, đã tái
+  hiện, không phải suy đoán.
+- Áp patch **in-place** sẽ làm đường chính thức chạy được (DCNet và TME đều đang ở trạng thái DERIVED,
+  nên đó là tiền lệ trong repo), nhưng nó mâu thuẫn với `test_csmcir_source_blocker.py`, vốn khẳng
+  định workbench *không* patch checkout. Chọn hướng nào là quyết định nghiên cứu → **D-10**.
+- Adapter còn một khác biệt ngữ nghĩa không thể vá bằng cấu hình: `score()` của adapter tính
+  `reshape(N,32,256)[:,0,:]` rồi `einsum(...).max(-1)` trên vector 8192 chiều, còn evaluator gốc dùng
+  `inference()` (attention-weighted token importance rồi max trên 32 query token). Hai đại lượng khác
+  nhau, nên **không** dùng chung được. Ghi rõ, không đổi thuật toán.
+
+#### 3.21.4 Báo cáo còn mâu thuẫn — CONFIRMED, đã sửa
+
+| chỗ | cũ | mới |
+|---|---|---|
+| bảng trạng thái | `CSMCIR UNVERIFIED (blocked) … chưa chạy` | `COMPLETED (research variant) … đã chạy, exit 0` |
+| lệnh TME | `(see D-7)` | `(D-7 closed; see 3.16.6)` |
+
+#### 3.21.5 Full suite — 19 → số cuối, có đối chứng baseline
+
+Lần trước tôi nói "20 failure, không liên quan CSMCIR" **mà không có baseline**. Đã dựng worktree riêng
+tại `ea5ff05` và chạy cùng interpreter:
+
+| lần chạy | kết quả |
+|---|---|
+| baseline `ea5ff05` (worktree riêng) | **23 failed**, 2152 passed, 47 skipped |
+| sau khi sửa trong lượt này | **4 failed**, 2171 passed, 47 skipped |
+
+Bốn failure còn lại đều **có trong baseline**, đã kiểm từng cái:
+
+| test | nguyên nhân thật | vì sao không sửa |
+|---|---|---|
+| `test_final_hardening_regressions::test_planner_verifier_uses_the_resolved_contract` | LIMN `torch==2.20.0` trong registry từ commit `200b7c7` của phiên trước; test còn kỳ vọng hợp đồng `<2.27,>=2.24` | sửa registry hay test đều là quyết định về pin LIMN, không thuộc phạm vi lượt này |
+| `test_fresh_clone_delivery::test_every_manifest_path_matches_its_recorded_digest` | đúng ba file có approved patch áp **in-place**: `DCNet/base/base_trainer.py`, `TME/src/precompute.py`, `TME/src/precompute_evaluation.py`; `provenance.json` ghi digest **base** | manifest cần ghi derived digest — thay đổi có chủ đích của phiên trước, không tự sửa expected hash |
+| `test_handoff_commands::test_no_release_document_points_at_a_superseded_source_sha` | `TESTED_SOURCE_SHA 624fcf96` không chứa production code hiện tại | **đây là test hoạt động đúng**: nó bắt buộc phải tiến SHA sau khi production code đổi. Cập nhật verdict doc là nghi thức phát hành, để D-11 |
+| `test_release_blocker_interpreter::test_a_real_distro_environment_is_not_reported_empty` | chỉ 79 + 0 trên 88 package được giải thích — distro `/usr/bin/python3` không có metadata | thuộc môi trường host, ngoài phạm vi |
+
+Không nhóm nào bị "làm xanh" bằng cách bỏ assertion hay thêm skip.
+
+Khác biệt được phân loại từng file, không gộp. Nguyên nhân đã sửa trong lượt này:
+
+| nhóm | cách xử lý |
+|---|---|
+| `test_frontend_staleness`, `test_pc_launcher` | `npm install` + `npx vite build` — nay xanh (108 passed) |
+| `test_circus_adapters_blip` | pin chuỗi `"COT_ours2"` trong lý do đã bị bác bỏ; đổi sang kiểm lý do cụ thể, không rỗng |
+| `test_evaluate_models`, `test_backend_config_roots` | pin **lệnh cũ** (thiếu `--blip-model-name`), tức pin một lệnh `KeyError` với checkpoint công bố; cập nhật theo lệnh đúng |
+
+### 3.21.6 PENDING_USER_DECISION phát sinh từ lượt này
+
+| ID | vấn đề | lựa chọn | tác động |
+|---|---|---|---|
+| **D-10** | Đường chính thức và adapter đều trỏ `third_party/CSMCIR` **pristine**, nơi `import lavis.models` chết. Preflight bảo "register that checkout as the model source" nhưng không có API nào làm việc đó | (a) áp hai approved patch **in-place** (như DCNet/TME đang DERIVED) và viết lại `test_csmcir_source_blocker`; (b) thêm cơ chế source-root override theo model; (c) giữ nguyên, CSMCIR chỉ chạy qua derived checkout + script trong evidence | (a) là ít code nhất và nhất quán với repo, nhưng đổi ngữ nghĩa của một test đang khoá hành vi công bố; (b) là thay đổi hạ tầng; (c) là trung thực nhưng đường web vẫn không dùng được |
+| **D-11** | `TESTED_SOURCE_SHA` trong `FINAL_PC_RELEASE_VERDICT.md` chưa tiến sau khi production code đổi trong lượt này | cập nhật sang commit mới sau khi merge, hoặc chấp nhận test đỏ | là nghi thức phát hành, không phải lỗi code |
+
 ## 4. Hàng đợi quyết định buổi sáng
 
 | ID | model/job | hành động đề xuất | vì sao | phạm vi/rủi ro | đã thử an toàn | bằng chứng | cần bạn quyết/ cung cấp |
@@ -1247,7 +1367,7 @@ $CIR/workbench/envs/limn-adapted/bin/python $CO/scripts/run_limn_oc220.py \
   "$CO/downloads/limn" "$DS" $CIR/workbench/third_party/LIMN \
   "$CO/measurements/limn_base_iter0.json" 16
 
-# --- TME: feature cache, then evaluation (see D-7) ---
+# --- TME: feature cache, then evaluation (D-7 closed; see 3.16.6) ---
 cd $CIR/workbench/third_party/TME
 $CIR/workbench/envs/tme-adapted/bin/python $CO/scripts/tme_precompute_bounded.py \
   "$CO/tme_dataset_view_real/" $CIR/workbench/third_party/TME/features/FashionIQ 32 8

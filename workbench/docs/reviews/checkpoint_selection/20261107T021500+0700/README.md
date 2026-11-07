@@ -17,6 +17,21 @@ opened by the real constructors, zero of them either of those paths.
 | `csmcir/full_eval.txt` | the run itself: exit 0, `Missing keys []`, the printed metric JSON |
 | `csmcir/scripts/` | the four operational steps, each written to explain why it exists |
 | `glove_recipe/determinism.json` | two seeded runs producing identical hashes, all ten matching the artifact DCNet was measured against |
+| `csmcir/fresh_tree_eval.txt` | the same numbers reproduced from a tree built from scratch, not the session's staged files |
+| `tests/SUMMARY.json` | suite result with a baseline worktree for comparison, and each remaining failure's cause |
+
+## Reproduction was rebuilt from scratch
+
+The first pass left three ways for the documented commands to fail that the staged tree hid: the
+checkpoint path was one directory level off, the builder copied `src` without the `fashionIQ_dataset`
+and `COT_ours2` links the evaluator opens, and the call-path probe resolved its checkout relative to
+`__file__`, which is not a repository root inside an evidence bundle. All three are fixed, and
+`fresh_tree_eval.txt` is the result of running the corrected sequence end to end in `/tmp/derive_fresh`:
+macro 57.05073873202006 / 77.29859352111816, identical to the digit.
+
+The builder now also stops when an approved patch does not produce the declared `derived_sha256`, and
+checks the author `.pyc` hash before using it. Printing a mismatch and continuing left a half-repaired
+tree that later read as an approved variant.
 
 ## Result
 

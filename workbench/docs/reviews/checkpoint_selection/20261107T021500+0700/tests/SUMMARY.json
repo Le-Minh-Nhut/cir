@@ -1,0 +1,45 @@
+{
+ "interpreter": "/home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python (CPython 3.12.11, uv, has headers)",
+ "command": "python -m pytest workbench/tests -q -p no:cacheprovider -rfE --tb=no",
+ "baseline": {
+  "revision": "ea5ff05",
+  "worktree": "/tmp/baseline_ea5ff05",
+  "failed": 23,
+  "passed": 2152,
+  "skipped": 47
+ },
+ "after": {
+  "failed": 4,
+  "passed": 2171,
+  "skipped": 47
+ },
+ "remaining_failures": [
+  {
+   "test": "test_final_hardening_regressions::test_planner_verifier_uses_the_resolved_contract",
+   "cause": "LIMN torch==2.20.0 pin from commit 200b7c7; test expects <2.27,>=2.24",
+   "in_baseline": true
+  },
+  {
+   "test": "test_fresh_clone_delivery::test_every_manifest_path_matches_its_recorded_digest",
+   "cause": "DCNet/TME approved patches applied in-place; provenance.json records base digests",
+   "in_baseline": true
+  },
+  {
+   "test": "test_handoff_commands::test_no_release_document_points_at_a_superseded_source_sha",
+   "cause": "TESTED_SOURCE_SHA must advance after production code changes; the test is working as designed",
+   "in_baseline": true
+  },
+  {
+   "test": "test_release_blocker_interpreter::test_a_real_distro_environment_is_not_reported_empty",
+   "cause": "distro /usr/bin/python3 has no package metadata (79+0 of 88)",
+   "in_baseline": true
+  }
+ ],
+ "fixed_this_pass": [
+  "test_frontend_staleness",
+  "test_pc_launcher (npm install + vite build)",
+  "test_circus_adapters_blip (reason pinned a refuted claim)",
+  "test_evaluate_models + test_backend_config_roots (pinned a command that KeyErrors on the released checkpoint)",
+  "test_environment_planner + test_release_blocker_adversarial_final (no longer failing)"
+ ]
+}

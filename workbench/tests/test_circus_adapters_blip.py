@@ -38,7 +38,12 @@ def test_adapter_import_and_unready_status(module, model_id: str) -> None:
         assert supported == status.per_mode[condition][0]
         assert reason == status.per_mode[condition][1]
         if not supported:
-            assert reason and "COT_ours2" in reason and "utils_csmcir.py" in reason
+            # The CSMCIR reason used to cite missing `COT_ours2` captions and `utils_csmcir.py`. That was
+            # measured wrong: the evaluation path opens those files, they are published at the pinned
+            # revision with matching sha256, and the paths an earlier report demanded belong to a dead
+            # class. Pinning the old string would have preserved a refuted claim. Each adapter now only
+            # has to state a specific reason.
+            assert reason and len(reason) > 20
 
 
 @pytest.mark.parametrize("module", MODULES)

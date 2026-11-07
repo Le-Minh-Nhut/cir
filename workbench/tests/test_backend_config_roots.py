@@ -68,6 +68,7 @@ def test_backend_uses_current_configured_roots(monkeypatch, tmp_path: Path) -> N
     assert availability["source_synced_locally"] is True
     assert command[0] == sys.executable and command[0] != "python"
     assert command[1:] == [str(source / "src" / "validate_blip_csmcir.py"), "--dataset", "fashionIQ",
+                           "--blip-model-name", "blip2_cir_align_prompt_target_image_caption_shiyan92",
                            "--blip-model-path", str(checkpoint_path)]
     assert result_files() == [result]
     assert resolve_image("dress", "sample") == image

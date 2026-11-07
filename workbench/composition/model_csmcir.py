@@ -1,10 +1,15 @@
 """Subprocess client for CSMCIR's BLIP-2 Q-Former composition model.
 
-Controller stays torch-free. Released CSMCIR gallery extraction needs per-image `COT_ours2` captions,
-which the CIRCUS release does not provide. Local `qwen_captions` files are different Qwen-generated
-captions, not the required model inputs, and are deliberately not substituted. `reference_eligible=True`
-keeps references eligible; `category_scopes=(None,)` follows the evaluator's shared checkpoint
-across FashionIQ categories (`workbench/third_party/CSMCIR/src/validate_blip_csmcir.py:594-614`).
+Controller stays torch-free. `reference_eligible=True` keeps references eligible;
+`category_scopes=(None,)` follows the evaluator's shared checkpoint across FashionIQ categories
+(`workbench/third_party/CSMCIR/src/validate_blip_csmcir.py:594-614`).
+
+The adapter is not the path this model is measured on. Its scoring contract is a 256-d text embedding
+expanded x32 into an 8192-d vector plus a max-over-query-tokens dot product, whereas the native
+evaluator scores with `inference()`: attention-weighted token importance, then a max over 32 query
+tokens of a 1x1x256 matmul. Those are different quantities, so routing the measured result through
+this adapter would be a substitution, not a reuse. The native evaluator path is what produced
+R@10 57.0507 / R@50 77.2986 (CHECKPOINT_SELECTION_REPORT.md 3.18).
 """
 from __future__ import annotations
 
@@ -38,12 +43,17 @@ else:
             return os.environ.copy()
 
 CONDITIONS = ("multimodal", "text_only_black_image", "image_only_empty_text")
+# The previous reason said the `COT_ours2` captions were absent and that local `qwen_captions` were a
+# different, unsubstitutable input. Both halves were measured false: the evaluation path opens
+# `COT_ours2/fashioniq/{cat}_cot_val.json`, those three files are published at the pinned Hub revision
+# with matching sha256, and `bert_captions`/`keywords_in_mods` -- the paths an earlier revision of the
+# report demanded -- belong to `FashionIQDataset_imageedit`, which nothing instantiates. See
+# CHECKPOINT_SELECTION_REPORT.md 3.18 and the call-path probe in the 20261107 evidence bundle.
 _TARGET_REASON = (
-    "CSMCIR requires per-gallery-image COT_ours2 captions absent from released CIRCUS inputs; "
-    "local qwen_captions are different Qwen-generated captions and are not substituted "
-    "(workbench/third_party/CSMCIR/src/utils_csmcir.py:95-103,151-161; "
-    "workbench/third_party/CSMCIR/src/lavis/models/blip2_models/"
-    "blip2_qformer_cir_align_prompt_csmcir.py:498-535)"
+    "CSMCIR cannot run through the composition adapter: the checkpoint is stored under "
+    "Blip2QformerCirAlignPromptTargetImageCaptionshiyan92, whose module ships at the pinned revision "
+    "only as author bytecode, and the pinned checkout does not import. The native evaluator path is "
+    "measured (CHECKPOINT_SELECTION_REPORT.md 3.18); this adapter is not wired to it."
 )
 
 

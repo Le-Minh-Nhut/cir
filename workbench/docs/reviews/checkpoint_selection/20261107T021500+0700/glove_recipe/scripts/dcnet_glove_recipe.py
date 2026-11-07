@@ -52,12 +52,17 @@ def main():
             oov.append(word)
             vocab_words[word] = np.random.normal(0, 0.3, (300,))
 
-    with open(os.path.join(args.out, "glove_vecs.pkl"), "wb") as f:
+    # Recorded in `written` like every other output. It was previously written but never added to the
+    # manifest, so a 10-file recipe reported 9 and the determinism claim could not be checked from the
+    # manifest alone -- only from a separate ad-hoc hash of this one file.
+    written = []
+    vectors_out = os.path.join(args.out, "glove_vecs.pkl")
+    with open(vectors_out, "wb") as f:
         pickle.dump(vocab_words, f)
+    written.append(vectors_out)
 
     # The author script globs `cap*.json`, which in the canonical tree also matches the `cap*.glove.*`
     # pickles it just wrote. Globbing the JSON inputs only keeps this recipe idempotent.
-    written = []
     for cap_file in sorted(glob.glob(os.path.join(captions_dir, "cap*.json"))):
         with open(cap_file) as f:
             cap_data = json.load(f)
