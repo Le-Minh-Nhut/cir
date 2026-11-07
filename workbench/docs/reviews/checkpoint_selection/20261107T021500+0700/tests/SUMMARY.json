@@ -16,8 +16,9 @@
   "exit_code": 0,
   "interpreter": "workbench/envs/ctl312h/bin/python (CPython 3.12.11)",
   "command": "python -m pytest workbench/tests -q -p no:cacheprovider -rfE --tb=no",
-  "note": "serial sweep; 2196 passed because the one remaining failure was the SHA gate itself, satisfied by this commit",
-  "parallel_equivalent": "-n 20 gives the same 2195/1/47 in 5:57 vs 26:18 serial"
+  "revision": "7f6aec2d6ad992171ccbdb28971696e9c17e0b46",
+  "wall_seconds": 1565,
+  "note": "serial sweep on the final tree; exit 0"
  },
  "remaining_failures": [
   "test_handoff_commands::test_no_release_document_points_at_a_superseded_source_sha (AssertionError: TESTED_SOURCE_SHA does not match dirty working tree; passes on clean committed HEAD)"
