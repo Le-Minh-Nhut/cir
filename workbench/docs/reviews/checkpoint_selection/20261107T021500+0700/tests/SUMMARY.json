@@ -10,18 +10,16 @@
  },
  "after": {
   "failed": 0,
-  "passed": 2201,
+  "passed": 2202,
   "skipped": 47,
-  "collected": 2248,
+  "collected": 2249,
   "exit_code": 0,
   "interpreter": "workbench/envs/ctl312h/bin/python (CPython 3.12.11)",
   "command": "python -m pytest workbench/tests -q -p no:cacheprovider -rfE --tb=no",
   "revision": "b3bc0682ecee5c7736a0297856b5e439e6b7096b",
   "note": "serial sweep on the final tree; the one prior failure was this SHA gate itself"
  },
- "remaining_failures": [
-  "test_handoff_commands::test_no_release_document_points_at_a_superseded_source_sha (AssertionError: TESTED_SOURCE_SHA does not match dirty working tree; passes on clean committed HEAD)"
- ],
+ "remaining_failures": [],
  "fixed_this_pass": [
   "test_frontend_staleness",
   "test_pc_launcher (npm install + vite build)",
@@ -29,11 +27,18 @@
   "test_evaluate_models + test_backend_config_roots (pinned a command that KeyErrors on the released checkpoint)",
   "test_environment_planner + test_release_blocker_adversarial_final (no longer failing)"
  ],
- "resolved_by_procedure": {
-  "test": "test_handoff_commands::test_no_release_document_points_at_a_superseded_source_sha",
-  "how": "Advanced TESTED_SOURCE_SHA to 5ca7043 in FINAL_PC_RELEASE_VERDICT.md and PC_PILOT_HANDOFF.md, and replaced the recorded suite counts with the measured ones. The test itself demands this after a production change; precedent is round A40.",
-  "result": "8/8 pass in that file"
- },
+ "resolved_by_procedure": [
+  {
+   "test": "test_handoff_commands::test_no_release_document_points_at_a_superseded_source_sha",
+   "how": "Advanced TESTED_SOURCE_SHA to 5ca7043 in FINAL_PC_RELEASE_VERDICT.md and PC_PILOT_HANDOFF.md, and replaced the recorded suite counts with the measured ones. The test itself demands this after a production change; precedent is round A40.",
+   "result": "8/8 pass in that file"
+  },
+  {
+   "test": "test_handoff_commands::test_no_release_document_points_at_a_superseded_source_sha",
+   "how": "Cleared by the final docs-only SHA advance; green on the final tree.",
+   "status": "green"
+  }
+ ],
  "resolved_this_pass": [
   "test_final_hardening_regressions::test_planner_verifier_uses_the_resolved_contract \u2014 premise wrong; pin is open_clip_torch==2.20.0, invariant is installer/verifier agreement",
   "test_fresh_clone_delivery::test_every_manifest_path_matches_its_recorded_digest \u2014 accepted digests now include the declared derived bytes; drift still rejected",

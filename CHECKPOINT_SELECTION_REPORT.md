@@ -9,7 +9,7 @@ Repo: `/home/heheboiz/data/cir`, branch `research/cir-failure-workbench`, HEAD `
 
 Bundle của buổi 20261107 (CSMCIR + GloVe recipe):
 `workbench/docs/reviews/checkpoint_selection/20261107T021500+0700/` — **30 entry** có hash trong
-`EVIDENCE_INDEX.json`, **330 324 B** (đo lại cuối lượt; index tự nó không tính). Đọc `README.md` trong
+`EVIDENCE_INDEX.json`, **331 117 B** (đo lại cuối lượt; index tự nó không tính). Đọc `README.md` trong
 đó trước.
 
 | thư mục | nội dung |

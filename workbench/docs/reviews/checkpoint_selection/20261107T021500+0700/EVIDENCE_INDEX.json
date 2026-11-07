@@ -139,13 +139,13 @@
   },
   {
    "dest": "tests/SUMMARY.json",
-   "bytes": 4667,
-   "sha256": "b0d0bd68377c244984c106047fe4cac4657c059c1e8b376764244e0061c40fb7"
+   "bytes": 4696,
+   "sha256": "02eb06c1c3cc7e37acf2978dd475ba26de2f3cf5ba51d39475b13b93822f0281"
   },
   {
    "dest": "tests/full_suite_after.txt",
-   "bytes": 14597,
-   "sha256": "58e64ae2640c660c9bd2b6edac5559ff2dafd6b1a0e473fdb9d734b81193389e"
+   "bytes": 15361,
+   "sha256": "7f4bc1d73eaa194c02aa3d7d6a5804e99a54847fdd2c6e8e25f4210b7937b9de"
   },
   {
    "dest": "tests/full_suite_baseline_ea5ff05.txt",
