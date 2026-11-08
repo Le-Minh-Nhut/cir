@@ -9,6 +9,11 @@
 > `273abf1` — `Attribute the sweep failures to local operator state, not the code`.
 > Range push: **`1716e81..273abf1`** (251 file, +90,245/−37).
 
+SHA trên là tip tại thời điểm viết. Commit chứa chính báo cáo này nằm **sau** nó một bước, nên
+`273abf1` không thể là tip hiện tại — một file được track không thể tự nêu commit chứa nó (cùng quy
+ước với hàng `FINAL_HEAD_SHA` trong `FINAL_PC_RELEASE_VERDICT.md`). **Nguồn chuẩn: `git rev-parse HEAD`
+trên branch.**
+
 Kiểm lại, output nguyên văn chạy lúc cập nhật báo cáo này:
 
 ```
