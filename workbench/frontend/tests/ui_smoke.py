@@ -439,6 +439,15 @@ def session_composition(browser, base_url: str, shots: Path, recorder: Recorder)
     runs = api_json(base_url, "/api/composition/runs")
     served = [run for run in runs
               if run.get("protocol_id") == CIRCUS_PROTOCOL and run.get("subset") == "full"]
+    # Which of those rows actually carry candidate Top-K, from the same served field the table's
+    # badge reads. Two different scopes matter and must not be confused:
+    #  * the VISIBLE rows (this protocol, this subset) decide whether the banner's "unavailable"
+    #    claim contradicts what is on screen;
+    #  * the banner itself is deployment-wide, so its stated count is compared to the whole payload.
+    served_with_topk = sum(
+        1 for run in served if (run.get("capabilities") or {}).get("candidate_topk") is True)
+    deployment_with_topk = sum(
+        1 for run in runs if (run.get("capabilities") or {}).get("candidate_topk") is True)
     if not served:
         recorder.skip(f"composition: {base_url} serves 0 composition rows for "
                       f"{CIRCUS_PROTOCOL}/full (it has {len(runs)} rows in other scopes), so the "
@@ -464,6 +473,57 @@ def session_composition(browser, base_url: str, shots: Path, recorder: Recorder)
             assert fit["tableScroll"] <= fit["wrapClient"], (
                 f"{name}: composition table {fit['tableScroll']}px exceeds its box "
                 f"{fit['wrapClient']}px -- the last columns are clipped, not scrollable")
+
+            # The evidence banner is a claim about the rows directly beneath it. It may not call
+            # per-query Top-K unavailable while a visible row carries real candidate lists: a
+            # first-time reader believes the banner and concludes the tool cannot show retrieved
+            # images. 80842661 fixed this once by hand; this assertion is what makes the fix hold.
+            # The banner is derived from three regions that resolve independently, and while they are
+            # empty it renders the "no real evaluation results" branch. Read it only once it has
+            # settled into a state that reflects the served data, otherwise this assertion measures
+            # a loading frame rather than the product.
+            page.wait_for_function(
+                """() => {
+                    const node = document.querySelector('[data-testid=error-banner][data-notice-kind=evidence]');
+                    if (!node) return false;
+                    const text = node.textContent || '';
+                    return text.length > 0 && !/no real evaluation results are loaded/.test(text);
+                }""",
+                timeout=NAV_TIMEOUT_MS)
+            banner = page.evaluate("""() => {
+                const node = document.querySelector('[data-testid=error-banner][data-notice-kind=evidence]');
+                const rows = [...document.querySelectorAll('[data-testid=composition-table] tbody tr')];
+                return {
+                    text: node ? node.textContent : "",
+                    rowCount: rows.length,
+                    // The capability flags are not in the DOM; the table's own top-k badge is the
+                    // visible symptom, and detail rows expose the served status verbatim.
+                    rowsNamingAvailable: rows.filter(
+                        (row) => /top-k/i.test(row.textContent || "")).length,
+                };
+            }""")
+            rows_with_candidates = served_with_topk
+            recorder.note(f"composition {name}: banner {banner['text'] or '(none)'!r}; "
+                          f"{rows_with_candidates} of {len(served)} visible composed rows declare "
+                          f"candidate_topk, {deployment_with_topk} of {len(runs)} deployment-wide")
+            if rows_with_candidates > 0:
+                # The contradiction this assertion exists for: a reader looking at rows that DO
+                # carry candidates is told the analysis is unavailable.
+                assert "Top-K analysis unavailable" not in banner["text"], (
+                    f"{name}: the banner claims per-query Top-K is unavailable while "
+                    f"{rows_with_candidates} of {len(served)} visible composition rows have "
+                    f"capabilities.candidate_topk = true: {banner['text']!r}")
+            if deployment_with_topk > 0:
+                # The banner is deployment-wide, so its stated count is that scope's real count --
+                # not the visible subset's, and never a literal.
+                assert f"on {deployment_with_topk} of {len(runs)}" in banner["text"], (
+                    f"{name}: the banner does not state the served Top-K coverage "
+                    f"({deployment_with_topk} of {len(runs)}): {banner['text']!r}")
+            else:
+                assert "Top-K analysis unavailable" in banner["text"] or not banner["text"], (
+                    f"{name}: no served row has candidate Top-K, so the banner must say the "
+                    f"analysis is unavailable rather than implying it is fine: "
+                    f"{banner['text']!r}")
 
             collapsed_fit, collapsed = fit, fit["documentHeight"]
             how = open_row_detail(page)

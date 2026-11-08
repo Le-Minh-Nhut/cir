@@ -51,6 +51,14 @@ export interface EvidenceBenchmarkRun {
   } | null;
 }
 
+/** The fields of `/api/composition/runs` rows this module reads. */
+export interface EvidenceCompositionRun {
+  run_id?: string | null;
+  /** Served capability flags. `candidate_topk` is the one that decides whether this row can show
+   *  retrieved images, and it is the same field the composition table badges read. */
+  capabilities?: { candidate_topk?: boolean | null } | null;
+}
+
 /** Whether a per-query run may be presented as verified research evidence.
  *
  *  `evidence_status` is computed by the backend's admission policy, which only reports
@@ -87,6 +95,12 @@ export interface EvidenceState {
   hasMockEvidence: boolean;
   /** The per-query level is unavailable while real aggregate evidence exists. */
   queryLevelUnavailable: boolean;
+  /** Composition rows served for this deployment, and how many really carry candidate Top-K.
+   *  The banner may not call Top-K unavailable while these rows have it: the aggregate endpoints
+   *  report the per-query export level, which is not the same question as what the rows on screen
+   *  can show. */
+  compositionRows: number;
+  rowsWithCandidateTopk: number;
 }
 
 /** Whether a served report is a self-test rather than an experiment about the paper. */
@@ -96,7 +110,8 @@ function isSyntheticAggregate(run: EvidenceBenchmarkRun): boolean {
 
 
 export function evidenceState(runs: EvidenceRun[] | null | undefined,
-                              benchmarkRuns: EvidenceBenchmarkRun[] | null | undefined): EvidenceState {
+                              benchmarkRuns: EvidenceBenchmarkRun[] | null | undefined,
+                              compositionRuns?: EvidenceCompositionRun[] | null): EvidenceState {
   const safeRuns = Array.isArray(runs) ? runs : [];
   const safeBenchmarks = Array.isArray(benchmarkRuns) ? benchmarkRuns : [];
 
@@ -113,6 +128,9 @@ export function evidenceState(runs: EvidenceRun[] | null | undefined,
   // "Aggregate-only" is a statement about the per-query export, not about certification: a
   // refusal is still a real thing that happened, and it must not be reported as absent.
   const aggregateOnly = aggregateRuns > 0 && experimentRuns === 0;
+  const safeComposition = Array.isArray(compositionRuns) ? compositionRuns : [];
+  const rowsWithCandidateTopk = safeComposition
+    .filter((run) => run?.capabilities?.candidate_topk === true).length;
   return {
     experimentRuns,
     verifiedQueryRuns,
@@ -126,6 +144,8 @@ export function evidenceState(runs: EvidenceRun[] | null | undefined,
     noRealEvidence: aggregateRuns === 0 && experimentRuns === 0,
     hasMockEvidence: mockRuns > 0,
     queryLevelUnavailable: aggregateOnly,
+    compositionRows: safeComposition.length,
+    rowsWithCandidateTopk,
   };
 }
 
@@ -157,7 +177,16 @@ export function evidenceBanner(state: EvidenceState): string {
       ? ` (${state.uncertifiedAggregates} further aggregate `
         + `run${state.uncertifiedAggregates === 1 ? "" : "s"} uncertified)`
       : "";
-    return `${head}${trailer}; per-query Top-K analysis unavailable`
+    // The Top-K clause is a claim about what the rows on screen can show, so it is decided by the
+    // served `capabilities.candidate_topk` flags -- the same field the composition table badges
+    // read -- and NOT by the aggregate endpoints' per-query-export level. A deployment whose
+    // per-query export is absent can still serve composition rows that carry real candidate lists;
+    // saying "Top-K unavailable" over those rows contradicts the table printed beneath it.
+    const topk = state.rowsWithCandidateTopk > 0
+      ? `; per-query candidate Top-K available on ${state.rowsWithCandidateTopk} of `
+        + `${state.compositionRows} composed run${state.compositionRows === 1 ? "" : "s"}`
+      : "; per-query Top-K analysis unavailable";
+    return `${head}${trailer}${topk}`
       + (state.hasMockEvidence
         ? " (development runs also loaded and excluded from research conclusions)" : "");
   }
