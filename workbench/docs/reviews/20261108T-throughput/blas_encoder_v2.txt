@@ -1,0 +1,100 @@
+encoder: encoding gallery ...
+encoder: gallery (74381, 512)
+--- encoder/multimodal (applying the condition intervention)
+{
+  "adapter": "encoder:multimodal",
+  "queries": 6003,
+  "score_max_abs_delta": 2.384185791015625e-07,
+  "changed": 2,
+  "max_drank": 2,
+  "cross_k10": 0,
+  "cross_k50": 0,
+  "cross_k100": 0,
+  "r10_delta": 0.0,
+  "r50_delta": 0.0,
+  "ndcg_delta": 3.423140337022179e-06,
+  "mrr_delta": 2.6441805552057662e-06,
+  "seconds_blas1": 6.77,
+  "seconds_blas10": 1.94,
+  "examples": [
+    [
+      "7:4506",
+      18,
+      16
+    ],
+    [
+      "7:4764",
+      16,
+      14
+    ]
+  ]
+}
+--- encoder/text_only_black_image (applying the condition intervention)
+{
+  "adapter": "encoder:text_only_black_image",
+  "queries": 6003,
+  "score_max_abs_delta": 2.384185791015625e-07,
+  "changed": 4,
+  "max_drank": 2,
+  "cross_k10": 0,
+  "cross_k50": 0,
+  "cross_k100": 0,
+  "r10_delta": 0.0,
+  "r50_delta": 0.0,
+  "ndcg_delta": 1.295918353183545e-08,
+  "mrr_delta": 1.067774063612248e-09,
+  "seconds_blas1": 6.81,
+  "seconds_blas10": 1.92,
+  "examples": [
+    [
+      "7:2651",
+      10588,
+      10587
+    ],
+    [
+      "7:4506",
+      790,
+      788
+    ],
+    [
+      "7:4764",
+      788,
+      786
+    ],
+    [
+      "7:5555",
+      4943,
+      4944
+    ]
+  ]
+}
+--- encoder/image_only_empty_text (applying the condition intervention)
+{
+  "adapter": "encoder:image_only_empty_text",
+  "queries": 6003,
+  "score_max_abs_delta": 2.086162567138672e-07,
+  "changed": 1,
+  "max_drank": 1,
+  "cross_k10": 0,
+  "cross_k50": 0,
+  "cross_k100": 0,
+  "r10_delta": 0.0,
+  "r50_delta": 0.0,
+  "ndcg_delta": 2.181072023513253e-05,
+  "mrr_delta": 2.776389582986264e-05,
+  "seconds_blas1": 6.77,
+  "seconds_blas10": 1.91,
+  "examples": [
+    [
+      "7:5555",
+      2,
+      3
+    ]
+  ]
+}
+
+=== SUMMARY ===
+adapter:condition                     dscore  nchg  maxdR  xK10  xK50    dR10    dR50      dNDCG
+encoder:multimodal                  2.38e-07     2      2     0     0  0.0000  0.0000   3.42e-06
+encoder:text_only_black_image       2.38e-07     4      2     0     0  0.0000  0.0000   1.30e-08
+encoder:image_only_empty_text       2.09e-07     1      1     0     0  0.0000  0.0000   2.18e-05

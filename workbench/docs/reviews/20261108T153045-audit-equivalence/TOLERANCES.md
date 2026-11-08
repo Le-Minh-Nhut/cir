@@ -57,3 +57,24 @@ gallery `74381×32×256`, query sets `6003×256` × 3 conditions.
 - Reporting `NOT_RUN` as anything other than `NOT_RUN`.
 - Rounding a nonzero rank-change count to zero, or describing a per-query rank change as
   "no change" because the aggregate moved by less than a printing precision.
+
+---
+
+## Post-run attestation (appended after all measurements)
+
+No tolerance was changed, loosened, or reinterpreted after a result. Specifically:
+
+- The decode gates were declared as **exact bit equality** and are reported as PASS on that basis for
+  both transform families, 16 configurations each.
+- The scoring gates were declared as "any rank change is FAIL for a gate phrased as identical", and
+  the 207/18,009 rank changes are reported as **FAIL on rank identity**, not softened into a float
+  tolerance after the fact.
+- The K-boundary crossings were declared as the mechanism that decides metric movement, and **0
+  crossings** was reported as measured, with R@10/R@50 shown bit-equal.
+- The batch axis was declared "exact equality wherever the code path is deterministic". The GEMM path
+  turned out **not** to be deterministic in the batch size (6/6003). That is reported as a FAIL of the
+  axis, and the tolerance was not widened to accommodate it.
+- Where the sample was smaller than the full set (shipped-path batch axes: 96 queries; `opt` batch-1:
+  600 queries; ENCODER rank impact: proxy galleries), the sample size is stated in the result itself
+  and in `EQUIVALENCE.md`, never implied to be the full set.
+- `NOT_RUN` items are listed in `EQUIVALENCE.md` with reasons and are nowhere described as passes.

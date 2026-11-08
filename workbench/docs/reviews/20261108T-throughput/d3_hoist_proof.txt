@@ -1,0 +1,7 @@
+OPENBLAS_NUM_THREADS in env = 10 (the value a serial run used to inherit)
+threads=1 (BLAS pinned to 1):   2.43s   210.9 q/s
+serial WITHOUT the pin (BLAS=10):   1.70s   301.8 q/s
+threads=2 (BLAS pinned to 1):   1.65s   310.6 q/s  ranks_identical_to_threads_1=True
+threads=4 (BLAS pinned to 1):   0.93s   549.9 q/s  ranks_identical_to_threads_1=True
+threads=8 (BLAS pinned to 1):   0.92s   556.5 q/s  ranks_identical_to_threads_1=True
+VERDICT: PASS - @-based scorer ranks identical across WORKBENCH_SCORE_THREADS 1/2/4/8 under the hoisted BLAS pin

@@ -45,14 +45,19 @@ near-identical gallery images, not a query pathology.
 
 ## F3. Feature cache identity omits 7 inputs; the sidecar protects nothing
 
-See `EQUIVALENCE.md` G4b for the table. Two exposures are severe enough to restate:
+**Status update (recorded after the audit).** Two of the seven are now closed:
+`blas_threads_pinned` records the BLAS thread count in `identity` (`runner.py:1198`), and
+`scoring_module_source_hash` is written by current runs. **Five remain absent**, so this is still a
+defect — a partially remediated defect is not a pass. See `EQUIVALENCE.md` G4e for the table. The two
+exposures severe enough to restate:
 
 1. `scoring_module_source_hash` is **absent from run `497c25c57fbeba885ecfb9d1`** — the key was added
    after this artifact was written. This is exactly the run the user is reasoning about, and its
-   identity cannot distinguish a change to the shared scoring helpers.
+   identity cannot distinguish a change to the shared scoring helpers. Current runs record it, and a
+   row missing it is reported `partial` rather than `unique` or `duplicate`.
 2. `_load_memmap` compares only the sidecar fingerprint. A copied 2.3 GiB `.npy` with a rewritten
    `{"fingerprint": <expected>, "shape": [...], "dtype": "float32"}` sidecar is accepted with no
-   inspection of the numbers. Feature arrays are never verified by content.
+   inspection of the numbers. Feature arrays are never verified by content. **Still open.**
 
 Not tested by execution (would require writing a fake cache into a run directory, which the audit
 rules forbid). The claim is read from `runner._load_memmap` and from the four sidecar files' exact
@@ -180,3 +185,34 @@ the *scoring* batch is the same value today, but that coupling is undocumented).
 Scope note: `batch_invariance.json` records the targeted re-probe (600-query head, then the
 remaining tail) that was used to name the affected qids; `axes.json` is the source for the counts
 above.
+
+### F8a. The six batch-dependent qids, named
+
+`batch_invariance_gemm.json`, chunked GEMM, multimodal, full 6003:
+
+| qid | rank @ batch 32 | rank @ batch 1 | stored (shipped) rank |
+|---|---:|---:|---:|
+| `7:666` | 42455 | **42456** | **42456** |
+| `7:1988` | 1699 | **1700** | 1700 |
+| `7:2003` | 260 | **259** | 259 |
+| `7:2142` | 1302 | **1301** | 1301 |
+| `7:2253` | 17474 | **17475** | **17475** |
+| `7:4730` | 578 | **577** | 577 |
+
+Two facts follow and both matter:
+
+1. **The six are a subset of the F1 near-tie set.** `7:666` and `7:2253` appear in the batch-32
+   `opt`-vs-stored change list, so the batch axis and the summation-order axis are hitting the same
+   1-ULP-neighbour structure, not two independent defects.
+2. **At batch 1 the chunked GEMM agrees with the shipped path on all six** (447 → the stored rank),
+   while at batch 32 it disagrees. So "chunked GEMM" is not a single arithmetic object: its ranks are
+   a function of the batch size, and the shipped einsum happens to match the batch-1 form for these
+   queries. The honest description of the fast path is therefore
+   *"GEMM at a pinned batch size"*, and the batch size must be recorded as part of the scoring
+   identity if that path is adopted.
+
+Consequence for `opt`: `optimize=True` at batch 1 and batch 32 both matched the stored ranks on a
+600-query head slice (0 mismatches, `batch_invariance.json`), which is consistent with `optimize=True`
+selecting the same contraction path for these shapes regardless of the leading dimension. It is not
+proof for the whole 6003; the `opt` batch-1 full sweep was **NOT_RUN** (cost), and is the single
+remaining check I would run before declaring `opt` batch-invariant.

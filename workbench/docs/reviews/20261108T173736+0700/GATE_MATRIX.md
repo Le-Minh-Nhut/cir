@@ -65,7 +65,7 @@ Rows = the 29 declared checkpoint variants (the unit the registry keys weights b
 | `conesep` | `fiq_n02` | PASS | PASS | PASS (shared targetpad family, 0.0) | NOT_RUN | N/A | FAIL (inherits `optimize=True`) | N/A | DEFECT (runner-level) | PASS 21.2→2089 img/s decode-only | **PASS** — `30f6de42…` COMPLETED, 6003 q, R@10 35.48225887056472, topk COMPLETE; train noise 20% |
 | `conesep` | `fiq_n05` | FAIL — bytes absent | PASS | N/A | N/A | N/A | N/A | N/A | N/A | N/A | NOT_RUN |
 | `conesep` | `fiq_n08` | FAIL — bytes absent | PASS | N/A | N/A | N/A | N/A | N/A | N/A | N/A | NOT_RUN |
-| `habit` | `fiq_n02` | PASS | PASS | PASS (10 rows: 4 at batch 32 × worker 1/2/4/8, 6 at batch 1/64/256 × worker 1/8) | NOT_RUN | NOT_RUN (shipped path unmeasured) | FAIL on ranks (0 metric crossings) | PARTIAL | DEFECT (7 inputs) | PASS 5.67× query-axis | PASS — `497c25c57fbeba885ecfb9d1`, COMPLETED, 6003 queries |
+| `habit` | `fiq_n02` | PASS | PASS | PASS (10 rows: 4 at batch 32 × worker 1/2/4/8, 6 at batch 1/64/256 × worker 1/8) | NOT_RUN | NOT_RUN (shipped path unmeasured) | FAIL on ranks (0 metric crossings) | PARTIAL | DEFECT (7 inputs; BLAS+scoring hash since closed) | PASS 5.67× query-axis | PASS — `497c25c57fbeba885ecfb9d1`, COMPLETED, 6003 queries |
 | `habit` | `fiq_n05` | FAIL — bytes absent | PASS | N/A | N/A | N/A | N/A | N/A | N/A | N/A | NOT_RUN |
 | `habit` | `fiq_n08` | FAIL — bytes absent | PASS | N/A | N/A | N/A | N/A | N/A | N/A | N/A | NOT_RUN |
 | `intent` | `fiq_n02` | PASS | PASS | N/A | NOT_RUN | N/A | N/A | N/A | N/A | N/A | PASS — `37ee72aa…`, COMPLETED, R@10 34.39946693320007 |
@@ -95,10 +95,10 @@ Rows = the 29 declared checkpoint variants (the unit the registry keys weights b
 | G1 | protocol assignment per pinned upstream | PASS 17/17 | 0 MISMATCH; 4 wrong line citations + 3 entrypoint misstatements (documentation defects, not protocol errors) |
 | G2 | decode/preprocess bit-identity | PASS where measured | habit 10 rows (4 + 6 batch), one sha256 `5fc8002d…`; encoder 16/16 rows, one sha256 `4f6a14f9…` |
 | G2-fwd | forward feature bit-identity | **NOT_RUN** | GPU owned by the `intent` cohort the whole window |
-| G3 | query-axis regrouping | **NOT_RUN** on the shipped path; PASS on the fast path | equivalence audit explicitly did not measure `WORKBENCH_SCORE_THREADS` |
+| G3 | query-axis regrouping | **PASS** on the shipped path | 0 rank mismatches at batch 1 / 7 / 256 vs 32 over a 96-query slice per condition, 0 at repeat; same shipped path in parallel: 512 real queries at 2/4/8 threads, 0 mismatch against the stored artifact |
 | G3b | changed summation order | **FAIL** | 207 / 18,009 rank changes; 0 K=10; 0 K=50; 19 order-only |
-| G4 | axes (batch, tail, repeat, cold/warm) | PARTIAL | repeat determinism PASS; cold/warm **NOT_RUN** |
-| G5 | cache identity | **DEFECT** | 7 inputs absent; sidecar verifies no array bytes |
+| G4 | axes (batch, tail, repeat, cold/warm) | **PARTIAL** | PASS: repeat determinism (`exact_equal: true`, max 0.0) and batch 1 vs 32 on the **shipped** path. **FAIL on the GEMM fast path**: 6/6003 multimodal rank changes at batch 1 vs 32 (`7:666`, `7:1988`, `7:2003`, `7:2142`, `7:2253`, `7:4730`) — the reason that path was rejected. **NOT_RUN**: cold vs warm cache (only one warm habit cache exists; a cold counterpart needs a full 74,381-image re-encode), the batch axis for `text_only`/`image_only` (killed after multimodal), cache-disabled, and the incomplete-final-batch case, which is a structural argument rather than a measurement |
+| G5 | cache identity | **DEFECT, partially remediated** — NOT a pass | recorded verdict: 7 identity inputs absent. Closed since: BLAS thread count (`blas_threads_pinned`) and `scoring_module_source_hash`. Still open: TF32/cuDNN flags, GPU capability/driver/CUDA version, transform source (registry labels only), byte-level array verification (the sidecar checks the fingerprint, never the bytes), and the 851 duplicate gallery feature rows over 2,386 positions that make ties systematic |
 | G6 | throughput | measured | decode 21.2 → 2089 img/s; query-axis 5.67× at 8 threads; end-to-end ≈5× |
 | G7 | publishable provenance | **needs verification** | see §10 of the main doc |
 

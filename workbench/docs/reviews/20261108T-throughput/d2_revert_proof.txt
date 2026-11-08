@@ -1,0 +1,71 @@
+============================= test session starts ==============================
+platform linux -- Python 3.12.11, pytest-9.2.0, pluggy-1.7.0
+rootdir: /home/heheboiz/data/cir
+configfile: pyproject.toml
+plugins: anyio-4.16.0, xdist-3.8.0
+collected 24 items / 23 deselected / 1 selected
+
+workbench/tests/test_throughput_knobs.py F                               [100%]
+
+=================================== FAILURES ===================================
+_______________ test_group_size_does_not_depend_on_thread_count ________________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7df72a55d880>
+
+    def test_group_size_does_not_depend_on_thread_count(monkeypatch):
+        """D2: how many queries share one score() call is arithmetic, not a performance knob.
+    
+        The chunk size must come from the caller, so changing WORKBENCH_SCORE_THREADS can never change
+        the group shape an adapter sees (the BLAS matrix M dimension) for an unchanged run id.
+        """
+        seen = []
+    
+        class Recorder(_FakeScorer):
+            def rank(self, queries, targets, positions, categories=None):
+                seen.append(len(queries))
+                return super().rank(queries, targets, positions, categories)
+    
+        recorder = Recorder()
+        queries = [[i] for i in range(64)]
+        targets = [1.0]
+        positions = [[0] for _ in range(64)]
+        for threads in (1, 2, 4, 8):
+            monkeypatch.setenv(SCORE_THREADS_ENV, str(threads))
+            seen.clear()
+            rank_in_query_chunks(recorder, queries, targets, positions, None, 0,
+                                chunk_size=16)
+>           assert set(seen) == {16}, f"threads={threads} produced group sizes {sorted(set(seen))}"
+E           AssertionError: threads=1 produced group sizes [64]
+E           assert {64} == {16}
+E             
+E             Extra items in the left set:
+E             64
+E             Extra items in the right set:
+E             16
+E             
+E             Full diff: (-: missing in left side, +: extra in left side)
+E               {
+E             -     16,
+E             ?     -
+E             +     64,
+E             ?      +
+E               }
+
+workbench/tests/test_throughput_knobs.py:188: AssertionError
+=========================== short test summary info ============================
+FAILED workbench/tests/test_throughput_knobs.py::test_group_size_does_not_depend_on_thread_count - AssertionError: threads=1 produced group sizes [64]
+assert {64} == {16}
+  
+  Extra items in the left set:
+  64
+  Extra items in the right set:
+  16
+  
+  Full diff: (-: missing in left side, +: extra in left side)
+    {
+  -     16,
+  ?     -
+  +     64,
+  ?      +
+    }
+======================= 1 failed, 23 deselected in 0.18s =======================

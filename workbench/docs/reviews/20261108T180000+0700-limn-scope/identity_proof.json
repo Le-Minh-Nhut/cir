@@ -1,0 +1,12 @@
+{
+  "published_run_id": "10173dc45dea8c90fd2a284b",
+  "recomputed_from_stored_identity": "10173dc45dea8c90fd2a284b",
+  "reproduces_published": true,
+  "new_run_id_with_scope_resolution": "2a4b19f335f5ec281375d09f",
+  "run_id_differs": true,
+  "fingerprint_differs": true,
+  "resume_would_reuse_old": false,
+  "scope_resolution_digest": "3a1c5a6763154870536f3586491d5bea9d87b73a9836363dc298d2accdd34d87",
+  "stable_for_identical_map": true,
+  "moves_for_one_flip": true
+}

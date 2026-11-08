@@ -1,0 +1,63 @@
+[
+  {
+    "adapter": "encoder:multimodal",
+    "queries": 6003,
+    "score_max_abs_delta": 2.384185791015625e-07,
+    "changed": 2,
+    "max_drank": 2,
+    "cross_k10": 0,
+    "cross_k50": 0,
+    "cross_k100": 0,
+    "r10_delta": 0.0,
+    "r50_delta": 0.0,
+    "ndcg_delta": 8.329058049111326e-05,
+    "mrr_delta": 0.00011105553430260096,
+    "seconds_blas1": 8.39,
+    "seconds_blas10": 4.97,
+    "examples": [
+      [
+        "7:2651",
+        1844,
+        1843
+      ],
+      [
+        "7:4520",
+        1,
+        3
+      ]
+    ]
+  },
+  {
+    "adapter": "encoder:text_only_black_image",
+    "queries": 6003,
+    "score_max_abs_delta": 1.7881393432617188e-07,
+    "changed": 3,
+    "max_drank": 2,
+    "cross_k10": 0,
+    "cross_k50": 0,
+    "cross_k100": 0,
+    "r10_delta": 0.0,
+    "r50_delta": 0.0,
+    "ndcg_delta": 1.2961138717848542e-08,
+    "mrr_delta": 1.082740445912389e-09,
+    "seconds_blas1": 7.21,
+    "seconds_blas10": 4.78,
+    "examples": [
+      [
+        "7:4506",
+        784,
+        782
+      ],
+      [
+        "7:4764",
+        782,
+        780
+      ],
+      [
+        "7:5555",
+        4915,
+        4916
+      ]
+    ]
+  }
+]

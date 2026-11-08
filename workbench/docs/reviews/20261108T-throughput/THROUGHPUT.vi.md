@@ -1,6 +1,6 @@
 # Throughput CIRCUS: đo được, sửa được gì, và cái gì bị từ chối
 
-Ngày 2026-11-08. Nhánh `research/cir-failure-workbench`. Không commit.
+Ngày 2026-11-08. Nhánh `research/cir-failure-workbench`.
 
 ## TL;DR
 

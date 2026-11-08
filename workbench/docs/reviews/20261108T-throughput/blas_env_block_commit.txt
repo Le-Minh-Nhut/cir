@@ -1,0 +1,8 @@
+3d0e2b89fb3a86d5eedd8fa7f122d8c1a9dcb502
+2026-11-08 17:55:36 +0700
+Expose the throughput knobs, measure adapted runs, and correct the observer comment
+1a4cd32 Record the finished cohort chain and the batch-variance finding on the fast path
+5a25a4a File the session evidence: baseline, environments, checkpoints, tests, runs, browser QA
+0f51195 File the audit evidence: pipeline, equivalence, protocol, fixes, throughput, final matrix
+--- HEAD block count:
+2

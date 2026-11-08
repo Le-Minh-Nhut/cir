@@ -288,3 +288,12 @@ workbench/docker/release_verify_report.json
 
 # omp per-project config (operator-local model routing, machine-specific)
 .omp/
+
+# Throughput-ablation scratch inside an evidence directory: the decoded query PNGs
+# (6003 files, 24 MB) and the lock files that guard a concurrent encoder measurement.
+# Both are regenerable locally and carry no claim; the scripts and their JSON output are tracked.
+workbench/docs/reviews/*/.encoder_work/
+workbench/docs/reviews/*/.blas_encoder*.lock
+
+# Ad-hoc root-level scratch dumps from troubleshooting (not evidence, not tracked).
+/.scratch_*.txt

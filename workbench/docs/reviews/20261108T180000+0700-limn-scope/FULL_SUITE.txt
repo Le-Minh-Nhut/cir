@@ -1,0 +1,45 @@
+# Full suite — 17 failures, none caused by this change
+
+Command: `workbench/envs/ctl312h/bin/python -m pytest workbench/tests -q -p no:cacheprovider -n 4`
+
+```
+17 failed, 2456 passed, 47 skipped, 308 warnings in 2387.16s (0:39:47)
+```
+
+`-n 4` per the task's half-machine requirement. Numbers below are parallel-run
+observations, not release-document numbers (AGENTS.md requires serial for those).
+
+## Attribution: every failure reproduced on a clean `git archive HEAD` tree
+
+Baseline used `git archive HEAD | tar -x -C /tmp/bw2` (read-only; no git state touched).
+
+| # | test | cause | fails at HEAD too |
+|---|---|---|---|
+| 1-4 | `test_circus_adapters_blip.py::test_resident_worker_{reuse_and_cleanup,failure_uses_shared_error...}` × conesep/ptha_mtst | `AttributeError: 'Adapter' object has no attribute 'batch_size'` — fixture builds the adapter with `object.__new__` and never sets it | **yes** |
+| 5-6 | `test_circus_tme_lifecycle.py::test_encoder_and_limn_failed_child_latch_and_preserve_log[encoder,limn]` | `WORKBENCH_ENCODER_PYTHON` / `WORKBENCH_LIMN_PYTHON` unset in this shell | **yes** |
+| 7 | `test_circus_tme_precision.py::test_worker_skips_empty_stdin_lines` | missing `output.npy` worker artifact | **yes** |
+| 8 | `test_f05_f08_f09_verification.py::test_f08_dcnet_config_data_dir_resolution` | untracked symlink `workbench/third_party/DCNet/dataset/fashioniq -> data/FashionIQ` (created 13:43 by another agent) makes the test's `.resolve()` return the real tree | **yes** — reproduced by adding the same symlink to the baseline tree |
+| 9 | `test_standalone_operator_commands.py::test_prepare_model_executes_only_declared_recipe_steps` | same symlink changes the recipe path the command takes | **yes** — same reproduction |
+| 10 | `test_handoff_commands.py::test_no_release_document_points_at_a_superseded_source_sha` | the test diffs the **working tree** against the recorded `TESTED_SOURCE_SHA`; `git diff --quiet HEAD b0f38bd2…` already returns 1, i.e. HEAD itself has moved past the recorded revision (25 production files) | **yes** (at HEAD: "not a commit in this repo" / tree already differs) |
+| 11-17 | `test_release_blocker_gpu_records.py` ×7 | `docker/release_verify.sh` returns 1 with `verdict=RELEASE_BLOCKED`; `STATIC_SOURCE FAIL`, 591 capability records with `probe_source=override is a synthetic test probe` | **yes** — `test_offline_verdict_names_deployment_reason` reproduced failing at HEAD |
+
+## Relevant suites, all green
+
+```
+test_limn_scope_runner.py + test_limn_scope_routing.py + test_circus_resume_stable.py
+    → 31 passed in 2.67s
++ test_circus_cli.py
+    → 52 passed in 5.71s
+test_circus_cli.py alone
+    → 21 passed in 4.56s
+```
+
+`test_circus_cli.py` is the only test that drives a real adapter through the full runner, and it
+passes with the new `query_scopes` threading. `test_circus_adapters_blip.py::test_runner_forwards_adapted_inputs_to_adapter`
+passes too — the new `scopes` parameter is optional and trailing, so the positional caller is
+unchanged.
+
+## Not done
+
+No GPU evaluation was run. The 17 failures above are pre-existing and out of my file ownership
+(`model_*.py`, `backend/**`, `frontend/**`, existing tests).

@@ -1,0 +1,6 @@
+OPENBLAS_NUM_THREADS = 10
+serial BLAS=1:   1.90s  269.8 q/s
+serial BLAS=10:   1.44s 355.3 q/s
+threads=2 (BLAS forced 1 inside):   1.01s 508.7 q/s speedup_vs_serial=1.89x ranks_identical=True
+threads=4 (BLAS forced 1 inside):   0.72s 707.4 q/s speedup_vs_serial=2.62x ranks_identical=True
+threads=8 (BLAS forced 1 inside):   0.47s 1097.8 q/s speedup_vs_serial=4.07x ranks_identical=True

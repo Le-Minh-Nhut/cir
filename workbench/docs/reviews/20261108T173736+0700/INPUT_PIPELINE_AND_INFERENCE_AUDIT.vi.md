@@ -163,10 +163,10 @@ cách đọc đó.
 | **G1** protocol | `native_protocol` có khớp code upstream tại pin? | **PASS 17/17**, với ngoại lệ tài liệu được nêu tên | 0 MISMATCH; 4 citation sai thật; 3 entrypoint sai; 2 repo thiếu khai patch |
 | **G2** decode | ma trận pixel có bit-identical qua worker/batch? | **PASS** ở nơi đã đo | habit: 10 dòng đo, 1 sha256 `5fc8002d…`; encoder: 16 dòng, 1 sha256 `4f6a14f9…` |
 | **G2-fwd** forward | ma trận feature có bit-identical? | **NOT_RUN** | GPU bận toàn bộ cửa sổ; "pixel bằng nhau không suy ra feature bằng nhau" |
-| **G3** scoring, cùng thứ tự cộng | chia trục query có đổi rank? | **NOT_RUN** trên đường shipped; **PASS** trên đường fast path | 512 query thật, 2/4/8 thread: 1.81× / 3.26× / 5.67×, **0 mismatch** so với artifact đã lưu |
+| **G3** scoring, cùng thứ tự cộng | chia trục query (batch size) có đổi rank? | **PASS trên đường shipped** | 96-query slice/condition: **0 mismatch** ở batch 1 / 7 / 256 vs 32, 0 khi repeat, batch cuối không chia hết không đổi 32 hàng đầu. Cùng đường shipped, đo song song theo trục query: 512 query thật, 2/4/8 thread ⇒ 1.81× / 3.26× / 5.67×, **0 mismatch** so với artifact đã lưu |
 | **G3b** scoring, khác thứ tự cộng | `optimize=True`/GEMM có đổi rank? | **FAIL** | **207 / 18,009**; 0 vượt K=10; 0 vượt K=50; **19** cửa sổ Top-K đổi thứ tự |
-| **G4** axes | batch 1 vs 32, batch cuối, repeat, cold/warm | **PARTIAL** | repeat determinism PASS (`exact_equal: true`, max 0.0); **cold/warm NOT_RUN** |
-| **G5** cache identity | cache có thể bị dùng lại dưới một phép tính khác? | **DEFECT** (đã nêu, chưa sửa) | **7 input** vắng khỏi `identity`; sidecar chỉ giữ `dtype`/`fingerprint`/`shape`, không hash bytes mảng |
+| **G4** axes | batch 1 vs 32, batch cuối, repeat, cold/warm | **PARTIAL** | **PASS**: repeat determinism (`exact_equal: true`, max 0.0) và batch 1 vs 32 trên **đường shipped** (0 mismatch). **FAIL trên GEMM fast path**: **6/6003** rank đổi ở batch 1 vs 32 (multimodal; `7:666`, `7:1988`, `7:2003`, `7:2142`, `7:2253`, `7:4730`) — chính là lý do path đó bị từ chối. **NOT_RUN**: cold vs warm cache, batch axis cho `text_only`/`image_only` (bị kill sau multimodal), cache disabled, và batch cuối không chia hết — đó là **lập luận cấu trúc**, không phải phép đo |
+| **G5** cache identity | cache có thể bị dùng lại dưới một phép tính khác? | **DEFECT, đã đóng một phần** — **không phải PASS** | verdict gốc: **7 input** vắng. Đã đóng: BLAS thread count (`blas_threads_pinned`) và `scoring_module_source_hash`. **Còn mở**: TF32/cuDNN flags, byte-level cache verification (sidecar chỉ kiểm fingerprint, **không bao giờ** kiểm bytes mảng), và **851** hàng feature gallery trùng (nhóm lớn nhất 54) làm tie hệ thống. Xem §7.7 |
 | **G6** throughput | nhanh hơn bao nhiêu, có đổi kết quả không? | **đo được**, một phần chỉ có trong prose | decode 21.2 → 2089.2 img/s (decode-only, delta 0.0); end-to-end ~73 phút → ~15 phút ≈ **5×**; query-axis **5.67×**. ⚠️ hai con số decode baseline/after và cả bảng query-axis **chỉ có trong prose**, không có file raw — xem §8.8 |
 | **G7** provenance công bố | artifact trong tree có tái lập được từ tree? | **cần xác minh** | **2** artifact mang nhãn "pre-generated artifact, not runnable from HEAD" (ENCODER, PTHA+MTST — blocker đã gỡ, **chưa re-run**); **4** model có số đã publish bị re-key bởi fix decode (encoder, limn, ptha_mtst, tme) ⇒ run id cũ không tái lập; 1 artifact PARTIAL (limn), 1 FAILED (habit), 2 smoke 8-query |
 
@@ -674,22 +674,32 @@ cùng process cùng input; **discrete = exact equality**.
 
 `workbench/artifacts/composition/summary/*/full.json` — **quan sát được**:
 
-| run dir | status | queries | MM R@10 | MM R@50 | gap | `seed_applied` |
-|---|---|---:|---:|---:|---:|---|
-| `habit_fiq_n02_497c25c57fbeba885ecfb9d1` | COMPLETED | 6003 | 35.61552557054806 | 54.3728135932034 | 0.388704727214254 | `null` (pre-F1) |
-| `conesep_fiq_n02_30f6de423861cc1d6c78c361` | COMPLETED | 6003 | 35.48225887056472 | 54.13959686823255 | 0.3942551173824983 | **`false`** (post-F1) |
-| `intent_fiq_n02_37ee72aa298b276d1bfda0fa` | COMPLETED | 6003 | 34.39946693320007 | 54.00633016824921 | 0.37538250032494136 | `null` (pre-F1) |
-| `hint_fashioniq_4bc9893a977e501b82378e76` | COMPLETED | 6003 | 32.816924870897886 | 51.77411294352824 | 0.43870420817223343 | **`false`** (post-F1) |
-| `tme_fashioniq_0_ad477312aa57c1b9114f9e51` | COMPLETED | 6003 | 34.01632517074796 | 53.95635515575545 | 0.3586012581618244 | `null` |
-| `ptha_mtst_cirr_transfer_315dd590eeb03d2c78d7937a` | COMPLETED | 6003 | 19.473596535065802 | 34.44944194569382 | 0.24362219946484542 | `null` |
-| `encoder_fashioniq_6a528e877c328772e2c7bb28` | COMPLETED | 6003 | 31.01782442112277 | 49.5752123938031 | 0.47230210227676583 | `null` |
-| `limn_base_iter0_all_categories_10173dc45dea8c90fd2a284b` | **PARTIAL** | 6003 | 30.064581917063222 | 48.759347382732834 | 0.5417445849251903 | `null` |
-| `habit_fiq_n02_e0dd04a46ef7a58334b9e353` | **FAILED** | 6003 | — | — | — | `null` |
-| `encoder_fashioniq_eda30a37c0bc17ac43844f09` | COMPLETED | **8** | 12.5 | 25.0 | 0.5329370636334637 | `null` |
-| `limn_base_iter0_all_categories_3f86f58483b368377e2c151e` | COMPLETED | **8** | 25.0 | 37.5 | 0.5213859188416812 | `null` |
-| `released_audit_task7_mm_any_…` | COMPLETED | 6003 | 52.84024654339497 | 71.2976844910878 | 0.3667022194996058 | `null` |
-| `SYNTHETIC_encoder_fashioniq_fixture001` | COMPLETED | 6003 | 12.5 | 25.0 | 0.5204 | `null` |
-| `SYNTHETIC_habit_fiq_n02_fixture002` | COMPLETED | 6003 | 15.0 | 30.0 | 0.2856 | `null` |
+| run dir | status | queries | MM R@10 | MM R@50 | gap | `seed_applied` | BLAS policy |
+|---|---|---:|---:|---:|---:|---|---|
+| `habit_fiq_n02_497c25c57fbeba885ecfb9d1` | COMPLETED | 6003 | 35.61552557054806 | 54.3728135932034 | 0.388704727214254 | `null` (pre-F1) | BLAS-neutral (naive einsum, Δ = 0.0) |
+| `conesep_fiq_n02_30f6de423861cc1d6c78c361` | COMPLETED | 6003 | 35.48225887056472 | 54.13959686823255 | 0.3942551173824983 | **`false`** (post-F1) | **`unknown (predates the pin)`** — GEMM path |
+| `intent_fiq_n02_37ee72aa298b276d1bfda0fa` | COMPLETED | 6003 | 34.39946693320007 | 54.00633016824921 | 0.37538250032494136 | `null` (pre-F1) | BLAS-neutral (naive einsum, Δ = 0.0) |
+| `hint_fashioniq_4bc9893a977e501b82378e76` | COMPLETED | 6003 | 32.816924870897886 | 51.77411294352824 | 0.43870420817223343 | **`false`** (post-F1) | BLAS-neutral (naive einsum, Δ = 0.0) |
+| `tme_fashioniq_0_ad477312aa57c1b9114f9e51` | COMPLETED | 6003 | 34.01632517074796 | 53.95635515575545 | 0.3586012581618244 | `null` | BLAS-neutral (naive einsum, Δ = 0.0) |
+| `ptha_mtst_cirr_transfer_315dd590eeb03d2c78d7937a` | COMPLETED | 6003 | 19.473596535065802 | 34.44944194569382 | 0.24362219946484542 | `null` | **`unknown (predates the pin)`** — GEMM path |
+| `encoder_fashioniq_6a528e877c328772e2c7bb28` | COMPLETED | 6003 | 31.01782442112277 | 49.5752123938031 | 0.47230210227676583 | `null` | **`unknown (predates the pin)`** — GEMM path |
+| `limn_base_iter0_all_categories_10173dc45dea8c90fd2a284b` | **PARTIAL** | 6003 | 30.064581917063222 | 48.759347382732834 | 0.5417445849251903 | `null` | **`unknown (predates the pin)`** — GEMM path |
+| `habit_fiq_n02_e0dd04a46ef7a58334b9e353` | **FAILED** | 6003 | — | — | — | `null` | BLAS-neutral (naive einsum, Δ = 0.0) |
+| `encoder_fashioniq_eda30a37c0bc17ac43844f09` | COMPLETED | **8** | 12.5 | 25.0 | 0.5329370636334637 | `null` | **`unknown (predates the pin)`** — GEMM path, smoke |
+| `limn_base_iter0_all_categories_3f86f58483b368377e2c151e` | COMPLETED | **8** | 25.0 | 37.5 | 0.5213859188416812 | `null` | **`unknown (predates the pin)`** — GEMM path, smoke |
+| `released_audit_task7_mm_any_…` | COMPLETED | 6003 | 52.84024654339497 | 71.2976844910878 | 0.3667022194996058 | `null` | n/a — imported baseline, no model run |
+| `SYNTHETIC_encoder_fashioniq_fixture001` | COMPLETED | 6003 | 12.5 | 25.0 | 0.5204 | `null` | n/a — fixture |
+| `SYNTHETIC_habit_fiq_n02_fixture002` | COMPLETED | 6003 | 15.0 | 30.0 | 0.2856 | `null` | n/a — fixture |
+
+**Cột BLAS policy là bắt buộc khi đọc bảng này.** Không một run nào ở trên chạy sau khi pin ra đời
+(`bf6a448`), nên **không run nào mang bản ghi policy trong artifact** — `identity` của chúng có 61
+khoá và **0** khoá thread/BLAS/OMP. Vì thế 5 model GEMM-path (`encoder`, `limn`, `csmcir`,
+`ptha_mtst`, `conesep`) được ghi **`unknown (predates the pin)`**: chúng **không** so sánh trực tiếp
+được với một run mới dưới policy hiện tại, và mọi ΔnDCG đo được của chúng chỉ nên đọc như **bậc độ
+lượng** (1e-8 … 8e-5), không phải hằng số. 4 model naive-einsum (`habit`, `intent`, `hint`, `tme`)
+**không** chịu ảnh hưởng của BLAS threading — contraction của chúng không có đường BLAS, đo phẳng ở
+1/2/4/8/10 thread, delta **đúng 0.0** — nên nhãn của chúng giữ nguyên. Lý do và số đo:
+`20261108T-throughput/BLAS-POLICY.vi.md`.
 
 Hai dòng `SYNTHETIC_*` là fixture; hai dòng `query_count: 8` là smoke. **Cả bốn bị loại khỏi mọi
 claim metric**, theo đúng yêu cầu của `MODEL_INVENTORY.md` §7.
@@ -896,29 +906,38 @@ tập trung đúng ở các nhóm gần-trùng. **Đây là thuộc tính của 
 nếu không đổi gallery đã pin. Nó làm **tăng** recall cho query nằm trong nhóm trùng, và **hiện không
 được nêu ở bất kỳ summary nào**.
 
-**(c) 7 input vắng khỏi cache identity** — xem §7.7.
+**(c) 7 input vắng khỏi cache identity** — xem §7.7. **Một phần đã đóng**: BLAS thread count và
+`scoring_module_source_hash` nay là field identity; còn 5 vắng.
 
 **(d) 19 cửa sổ Top-K đổi thứ tự** — xem §9.
 
-### 7.7 Cache identity thiếu 7 input (DEFECT, đã nêu, chưa sửa)
+### 7.7 Cache identity thiếu input (DEFECT, **đã đóng một phần**)
+
+> **Trạng thái cập nhật.** Verdict gốc là "7 input vắng". Sau đó **hai** trong số đó đã đóng:
+> `blas_threads_pinned` (`runner.py:1198`) và `scoring_module_source_hash`. **Năm vẫn vắng.** Đây vẫn
+> là **DEFECT**, không phải PASS: một defect được đóng một phần không trở thành gate xanh.
 
 `_load_memmap` chấp nhận cache khi **sidecar `.json`** có `fingerprint` bằng digest kỳ vọng và `.npy`
 tồn tại đúng shape. Sidecar giữ **đúng** `dtype`, `fingerprint`, `shape`. **Không có gì hash nội dung
 mảng.** ⇒ copy `.npy` rồi viết lại sidecar là được nhận, không kiểm tra số.
 
-| input vắng khỏi `identity`/`fingerprint` | vì sao quan trọng |
-|---|---|
-| `scoring_module_source_hash` | **vắng hoàn toàn** ở run `497c25c57fbeba885ecfb9d1` (field được thêm sau). Chính là run đang được suy luận. Kể cả khi có, nó chỉ hash **một** file |
-| BLAS / OMP / MKL intra-op thread count | `ein_threads.txt` cho thấy nó đổi bit score của fast path (`2.384e-07` ở 10 thread, `3.576e-07` ở các mức khác) ⇒ có thể đổi rank suy từ score |
-| GPU compute capability / driver / CUDA version | chỉ **tên** device được ghi; capability quyết định kernel thì không |
-| tf32 / cudnn benchmark / deterministic flags | không ghi; có thể đổi bit forward |
-| decode worker count | cố ý không ghi vì decode bit-identical (đã đo lại 3 họ transform) — **hợp lý**, nhưng nó vẫn là một input |
-| code và tham số thật của transform | `preprocessing.registry_values` ghi **nhãn** registry (`fashioniq_layout`, `image_size`, `transform`), không ghi source của transform bên thứ ba ⇒ sửa bên trong hàm transform không bị phát hiện |
-| **nội dung mảng feature** | không có verify byte-level ở đâu; fingerprint là của identity, không phải của bytes |
+| input | trạng thái | ghi chú |
+|---|---|---|
+| **BLAS / OMP / MKL intra-op thread count** | **ĐÃ ĐÓNG** | `blas_threads_pinned: 1` trong `identity` (`runner.py:1198`), và pin thực thi trong `_rank_groups_concurrently`. Run cũ ghi `unknown (predates the pin)` — xem §6.6 |
+| **`scoring_module_source_hash`** | **ĐÃ ĐÓNG (một phần)** | có trong `identity` của run mới; run `497c25c57fbeba885ecfb9d1` **vẫn vắng** field này ⇒ nay báo `measurement_identity_confidence: partial`, không còn bị gọi là `duplicate`. Vẫn chỉ hash **một** file (`adapters.py`) |
+| tf32 / cudnn benchmark / deterministic flags | **VẪN VẮNG** | không ghi; có thể đổi bit forward |
+| GPU compute capability / driver / CUDA version | **VẪN VẮNG** | chỉ **tên** device được ghi; capability quyết định kernel thì không |
+| code và tham số thật của transform | **VẪN VẮNG** | `preprocessing.registry_values` ghi **nhãn** registry (`fashioniq_layout`, `image_size`, `transform`), không ghi source của transform bên thứ ba ⇒ sửa bên trong hàm transform không bị phát hiện |
+| **nội dung mảng feature** (byte-level) | **VẪN VẮNG** | không có verify byte-level ở đâu; fingerprint là của identity, không phải của bytes. Sidecar chỉ kiểm fingerprint, **không bao giờ** kiểm bytes |
+| decode worker count | **cố ý không ghi** | decode bit-identical (đã đo lại 3 họ transform) — hợp lý, nhưng nó vẫn là một input. Ghi nhận, không sửa |
 
-Hệ quả cụ thể: (a) viết lại sidecar làm số cũ trông mới; (b) đổi `score()` trong `model_*.py` mint
-run id mới, nhưng đổi một helper dùng chung **ngoài** `adapters.py` thì không; (c) đổi BLAS thread
-count đổi được điểm fast-path dưới một identity không đổi.
+Vẫn còn mở, và vẫn là defect: **851 hàng feature gallery trùng nhau trên 2386 vị trí** (nhóm lớn
+nhất 54) làm tie mang tính hệ thống — xem G3c. Trùng ở mức bytes trong gallery đã pin thì rank phụ
+thuộc thứ tự, và không field identity nào sửa được điều đó.
+
+Hệ quả còn lại: (a) viết lại sidecar làm số cũ trông mới; (b) đổi `score()` trong `model_*.py` mint
+run id mới, nhưng đổi một helper dùng chung **ngoài** `adapters.py` thì không; (c) ~~đổi BLAS thread
+count đổi được điểm fast-path dưới một identity không đổi~~ — **đã đóng**.
 
 ---
 
@@ -1023,16 +1042,39 @@ chạy nhiều query đồng thời **không thể** đổi thứ tự cộng d�
 
 **0 mismatch trên 512 query** so với artifact đã publish — không phải so với bản tính lại.
 
-Tương tác BLAS: đường `einsum` hiện tại **không dùng BLAS đa luồng** (đổi `OPENBLAS_NUM_THREADS` 1→10
-**không đổi** tốc độ, 5.6–6.5 q/s) — đó chính là lý do trước đây nó chỉ ăn 1 core. Vì BLAS 1 luồng,
-song song theo query không tranh chấp: 1.81 / 3.26 / 5.67× gần tuyến tính. Amdahl thực đạt ~71% ở 8
-thread. **Nếu sau này bật BLAS đa luồng thì hai cơ chế sẽ tranh nhau — chỉ nên chọn một.**
+Tương tác BLAS: hai cơ chế **không còn tranh nhau** — chúng đã được tách bằng code. `runner.py` ghim
+`BLAS_THREADS_PINNED = 1` (`runner.py:597`) và `_rank_groups_concurrently` gọi
+`_blas_thread_limit(BLAS_THREADS_PINNED)` **một lần, bao ngoài cả hai nhánh** (serial và concurrent,
+`runner.py:775`, restore trong `finally`), ngay trước khi fan out nhóm query. Nên BLAS đa luồng bên
+trong một group worker không xảy ra: song song chỉ có ở cấp nhóm. Việc đặt toggle **bên trong** worker
+đã được đo là đổi rank ở 4 và 8 thread (một worker restore giá trị cũ trong khi worker khác còn đang
+tính), nên toggle được hoist ra ngoài — đó là lý do của vị trí hiện tại.
 
-Vị trí code: hoàn toàn trong `workbench/composition/runner.py` (`rank_in_query_chunks`,
-`score_in_query_chunks`), **không sửa `model_*.py`**. `runner.py` **không** được hash vào `identity`
-⇒ `adapter_source_hashes` và `adapter_module_source_hash` **không đổi** ⇒ **`run_id` không đổi**, các
-run đã publish vẫn so sánh được, không phải encode lại. Nút `WORKBENCH_SCORE_THREADS` (mặc định
-`min(8, cpu//2)`); `=1` để tắt.
+Ghi chú cũ trong `composition_eval.py` nói 6.2 q/s là do "OpenBLAS baked in at import"; điều đó đã
+được sửa. Cơ chế thật: `np.einsum("nd,gqd->ngq")` naive **không có đường BLAS** (vòng lặp numpy tự
+viết), nên đổi `OPENBLAS_NUM_THREADS` 1→10 **không đổi** tốc độ (6.5/6.0/6.2/5.6/6.2 q/s — phẳng
+trên cả 5 mức, đây là bằng chứng loại trừ lỗi pool-sizing muộn). Với họ GEMM-path thì ngược lại: số
+thread BLAS đổi **kết quả**, không chỉ thời gian. Lý do đầy đủ và bảng theo từng họ adapter:
+**`20261108T-throughput/BLAS-POLICY.vi.md`**.
+
+Vị trí code: `rank_in_query_chunks`, `score_in_query_chunks` và `_rank_groups_concurrently` trong
+`workbench/composition/runner.py`, **không sửa `model_*.py`**.
+
+Về run identity: `runner.py` **vẫn không được hash toàn bộ** vào `identity` — cố ý, để mỗi lần sửa
+một comment trong file đó không mint run id mới và vô hiệu hoá mọi cache. Nhưng **hai input số học
+thực sự quan trọng thì nay là field identity tường minh**, nên câu "`run_id` không đổi" **không còn
+đúng**:
+
+| field | dòng | vì sao phải là identity |
+|---|---|---|
+| `blas_threads_pinned` | `runner.py:1198` | đổi policy BLAS đổi điểm score ⇒ đổi rank suy ra được. Không ghim thì `--resume` tái dùng rank cũ trong khi lần chạy mới sinh rank khác |
+| `query_scope_resolution` | `runner.py:1170` | bản đồ scope theo query quyết định **ma trận gallery nào** mỗi query được chấm. `query_order_identity` hash `query.category` của loader, vốn `None` đúng ở những query mà resolver scope — nên thiếu digest này thì wire resolver xong `run_id` vẫn y nguyên và `--resume` tái dùng 119 null cũ |
+
+Hệ quả phải nói rõ: bật/tắt hai thứ trên, đổi `batch_size` (hình dạng nhóm là một phần của số học),
+hoặc đổi scope map **đều mint run id mới**. Artifact đã publish dưới policy cũ vì thế **không** so
+sánh trực tiếp được với run mới mà không nêu nhãn policy — xem bảng ở §6.6. Nút
+`WORKBENCH_SCORE_THREADS` thì ngược lại: nó chỉ đổi **concurrency**, không đổi kích thước nhóm, nên
+không đổi kết quả và không đổi `run_id` (`test_group_size_does_not_depend_on_thread_count`).
 
 ### 8.6 `optimize=True` / chunked GEMM bị TỪ CHỐI — tới 17.8× nhưng đổi rank
 
@@ -1263,6 +1305,7 @@ path đồng loạt mà không verify từng model là tổng quát hoá một p
 | U10 | **compute capability thật của host**, đo độc lập | 547 bản ghi `gpu_capabilities`; 342 ghi `"8.9"` nhưng kèm `"Synthetic GPU"` + `"CUDA out of memory"` + interpreter `pytest-of-…` ⇒ **test fixture**, không phải đo host. 6 bản ghi `"12.0"` là thật và `capability_verified`, tên `torch 2.7.1+cu128`. Audit này không chạy GPU nên lấy từ 6 bản ghi đó |
 | U11 | **nhãn "pre-generated artifact" đã được gỡ chưa cho ENCODER/PTHA** | blocker đã sửa nhưng **chưa re-run**; nhãn vẫn còn hiệu lực |
 | U12 | **ba run mới `intent` / `hint` / `conesep`** | có trên đĩa, metric đầy đủ, `topk_export` COMPLETE, nhưng **không tài liệu nào chịu trách nhiệm** và không nằm trong bất kỳ audit nguồn nào. `intent` là pre-F1 (`seed_applied: null`), `hint` và `conesep` là post-F1 (`false`). Ba run này có `query_count: 6003` và `coverage: 1.0`, nên **không** thuộc lớp smoke/fixture bị loại |
+| U13 | **input identity còn vắng** (sau khi G5 đóng một phần) | **Đã đóng, không còn ở danh sách này**: BLAS/OMP/MKL intra-op thread count (`blas_threads_pinned`, `runner.py:1198`) và `scoring_module_source_hash`. **Vẫn vắng**: tf32/cuDNN benchmark/deterministic flags; GPU compute capability + driver + CUDA version (chỉ **tên** device được ghi); source thật của hàm transform bên thứ ba (`preprocessing.registry_values` chỉ ghi nhãn registry); **byte-level verification của mảng feature** khi đọc cache (sidecar kiểm fingerprint, không bao giờ kiểm bytes); và 851 hàng feature gallery trùng trên 2386 vị trí làm tie hệ thống. Xem §7.7 và G5 |
 
 ### 10.3 Định nghĩa gate — câu hỏi chưa giải quyết
 
@@ -1315,9 +1358,10 @@ thay vì ~73 ⇒ cả bốn ≈ 1.5 h. Dòng mới là "lần thử thứ hai", 
    cùng 512 ảnh hai lần ở hai cấu hình batch/worker khác nhau và so **feature matrix**, không so pixel.
    Đây là gate duy nhất còn trống ở giữa "decode đúng" và "số đúng".
 4. **Đo cold vs warm cache** (G4d) trên một model có cache sống được (habit), sau khi (2) xong.
-5. **Đóng G5**: thêm `scoring_module_source_hash` cho mọi run (đã có từ sau `497c25c5`), ghi tên BLAS
-   thread count + tf32/cudnn flags vào `identity`, và — quan trọng nhất — verify byte của mảng feature
-   khi đọc cache, không chỉ sidecar.
+5. **Đóng nốt G5**: `scoring_module_source_hash` nay có trong `identity` cho run mới và
+   `blas_threads_pinned` đã ghi BLAS thread count ⇒ **hai mục đã xong**. Còn lại: ghi tf32/cuDNN flags
+   và GPU capability/driver/CUDA version vào `identity`, và — quan trọng nhất — verify byte của mảng
+   feature khi đọc cache, không chỉ sidecar. G5 là **DEFECT đã đóng một phần**, không phải gate xanh.
 6. **Quyết định scoring function**: hoặc giữ bất đối xứng hiện tại (4 model một thứ tự cộng, 3 model
    khác) và **ghi caveat rằng rank giữa hai nhóm không so được ở mức từng query**, hoặc chuyển đồng
    loạt sang `optimize=True`/GEMM với run id mới và re-run **toàn bộ**. Trạng thái hiện tại — hai thứ
@@ -1379,12 +1423,14 @@ d=json.load(open('divergence_detail.json'))['order_only_divergences']
 print(sum(v['count'] for v in d.values()), collections.Counter(r['kind'][:20] for v in d.values() for r in v['rows']))"
 # 19  Counter({'NOT a shipped-path ti': 16, 'exact tie broken by': 3})
 
-# 7) Xác nhận 7 input vắng khỏi cache identity — 1 giây
+# 7) Xác nhận input vắng khỏi cache identity — 1 giây
+# Đây là số ĐO TẠI LÚC AUDIT (7). Từ đó 2 đã đóng (blas_threads_pinned, scoring_module_source_hash):
+# runner.py:1198 ghi blas_threads_pinned; xem BLAS-POLICY.vi.md và EQUIVALENCE.md G4e cho trạng thái hiện tại (5 còn vắng).
 python3 -c "
 import json; d=json.load(open('workbench/docs/reviews/20261108T153045-audit-equivalence/cache_and_ties.json'))['cache_identity']
 print(len(d['inputs_not_in_identity']), 'missing |', 'scoring hash present:', d['identity_has_scoring_module_source_hash'],
       '| sidecar verifies bytes:', d['sidecar_verifies_array_bytes'])"
-# 7 missing | False | False
+# 7 missing | False | False  ← số của lượt audit, không phải của HEAD hôm nay
 
 # 8) Kiểm metric aggregate full precision, không làm tròn
 python3 -c "

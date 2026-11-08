@@ -1,0 +1,76 @@
+sample=600 queries, real LIMN adapter, real gallery features
+--- encode multimodal ...
+    encoded in 35.2s
+--- encode text_only_black_image ...
+    encoded in 15.5s
+--- encode image_only_empty_text ...
+    encoded in 15.7s
+scoring at both BLAS settings ...
+{
+  "multimodal": {
+    "queries": 600,
+    "changed": 0,
+    "max_drank": 0,
+    "cross_k10": 0,
+    "cross_k50": 0,
+    "cross_k100": 0,
+    "r10_blas1": 20.833333333333332,
+    "r10_blas10": 20.833333333333332,
+    "r50_blas1": 39.166666666666664,
+    "r50_blas10": 39.166666666666664,
+    "ndcg_blas1": 0.22845198422054372,
+    "ndcg_blas10": 0.22845198422054372,
+    "ndcg_delta": 0.0,
+    "r10_delta": 0.0,
+    "r50_delta": 0.0,
+    "examples": []
+  }
+}
+{
+  "text_only_black_image": {
+    "queries": 600,
+    "changed": 0,
+    "max_drank": 0,
+    "cross_k10": 0,
+    "cross_k50": 0,
+    "cross_k100": 0,
+    "r10_blas1": 20.833333333333332,
+    "r10_blas10": 20.833333333333332,
+    "r50_blas1": 39.166666666666664,
+    "r50_blas10": 39.166666666666664,
+    "ndcg_blas1": 0.22845198422054372,
+    "ndcg_blas10": 0.22845198422054372,
+    "ndcg_delta": 0.0,
+    "r10_delta": 0.0,
+    "r50_delta": 0.0,
+    "examples": []
+  }
+}
+{
+  "image_only_empty_text": {
+    "queries": 600,
+    "changed": 0,
+    "max_drank": 0,
+    "cross_k10": 0,
+    "cross_k50": 0,
+    "cross_k100": 0,
+    "r10_blas1": 20.833333333333332,
+    "r10_blas10": 20.833333333333332,
+    "r50_blas1": 39.166666666666664,
+    "r50_blas10": 39.166666666666664,
+    "ndcg_blas1": 0.22845198422054372,
+    "ndcg_blas10": 0.22845198422054372,
+    "ndcg_delta": 0.0,
+    "r10_delta": 0.0,
+    "r50_delta": 0.0,
+    "examples": []
+  }
+}
+
+=== LIMN AGGREGATE SENSITIVITY (real data, 600 queries/condition) ===
+condition                     R@10 d    R@50 d      dNDCG  nchg  maxdR  xK10  xK50  xK100
+multimodal                    0.0000    0.0000   0.00e+00     0      0     0     0      0
+text_only_black_image         0.0000    0.0000   0.00e+00     0      0     0     0      0
+image_only_empty_text         0.0000    0.0000   0.00e+00     0      0     0     0      0
+
+VERDICT: AGGREGATES STABLE on this sample - changes confined to deep ranks

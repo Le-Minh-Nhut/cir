@@ -1,0 +1,5 @@
+gallery=(74381, 32, 256) queries=6003 threads=8 chunk_size=32
+multimodal: n=6003  183.0s  32.8 q/s mismatches=0 identical=True
+text_only_black_image: n=6003  196.0s  30.6 q/s mismatches=0 identical=True
+image_only_empty_text: n=6003  184.3s  32.6 q/s mismatches=0 identical=True
+VERDICT: PASS - shipped path reproduces the published ranks exactly on all 18009 query-condition pairs

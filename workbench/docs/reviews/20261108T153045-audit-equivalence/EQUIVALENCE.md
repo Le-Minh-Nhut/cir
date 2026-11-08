@@ -26,13 +26,13 @@ artifact: **12/12 sampled queries per condition, 0 mismatches, all three conditi
 | **G2 habit decode** | Does parallel decode change the pixel matrix for `targetpad_transform(1.25,224)`? | **PASS** | 512 real gallery images; workers {1,2,4,8} × batch {1,32,64,256}; **16/16 bit-identical**, `max_abs_delta = 0.0`, `bytes_differing = 0`, single sha256 `5fc8002d…` |
 | **G2 encoder decode** | Same for `open_clip` `preprocess_val` (ViT-B-32) | **PASS** | Same grid, **16/16 bit-identical**, `0.0`, single sha256 `4f6a14f9…` |
 | **G2 forward features** | Do the *encoded* feature matrices agree? | **NOT_RUN** | GPU held by the live `intent` cohort for the entire audit window (`nvidia-smi`: pid 267905, ~3.6 GiB). Pixel equality does not imply feature equality. |
-| **G3 scoring, same arithmetic order** | Does regrouping the query axis change ranks? | **NOT_RUN** (ship: prior review + design) | See G4a/G4c; the cheap shipped-path slice had not finished when this report was written. |
+| **G3 scoring, same arithmetic order** | Does regrouping the query axis (batch size) change ranks? | **PASS on the shipped path** | 0 rank mismatches at batch 1 / 7 / 256 vs 32 over a declared 96-query slice per condition; 0 at repeat; incomplete-final-batch grouping leaves the first 32 rows unchanged. Structurally each query's score row is an independent dense reduction, so row grouping cannot alter it. |
 | **G3b `optimize=True` / chunked GEMM** | Does a changed summation order change ranks? | **FAIL on rank identity; PASS on R@10 / R@50 / candidate SET** | 4 + 35 + 168 = **207 / 18,009 rank changes**; **0** K=10 crossings; **0** K=50 crossings; Top-K set differs **0/18,009**; ordering differs **7 + 7 + 5 = 19** |
-| **G4a batch 1 vs 32** | — | **PARTIAL** | fast path full 6003 per condition: see `axes.json`; shipped path slice: see `axes.json` |
+| **G4a batch 1 vs 32** | — | **FAIL on the GEMM fast path; PASS on the shipped path** | GEMM: **6/6003** multimodal rank changes at batch 1 vs 32 (`7:666`, `7:1988`, `7:2003`, `7:2142`, `7:2253`, `7:4730`); batch 256 vs 32: 0. Shipped path: 0 mismatches at batch 1/7/256 over a 96-query slice. `opt`: 0 mismatches over a 600-query slice. |
 | **G4b incomplete final batch** | — | **PARTIAL** | 6003 % 32 = 19; the tail's existence provably cannot change earlier rows (each batch's scores depend only on that batch) |
 | **G4c repeat determinism** | — | **PASS** | Two identical full runs of the fast path agree exactly; `divergence_detail.json` shows the two fast paths agree on every changed query and on every new rank |
 | **G4d cold vs warm cache** | — | **NOT_RUN** | See below. |
-| **G4e cache identity completeness** | Can a cache be reused under a different computation? | **DEFECT** | 7 inputs absent from `identity`; sidecar verifies no array bytes |
+| **G4e cache identity completeness** | Can a cache be reused under a different computation? | **DEFECT, partially remediated** | Recorded verdict: 7 inputs absent from `identity`. Closed since: BLAS/OMP/MKL thread count (`blas_threads_pinned`) and `scoring_module_source_hash`. Still open: TF32/cuDNN flags, GPU capability/driver/CUDA version, transform source (registry labels only), and byte-level array verification — the sidecar checks the fingerprint, never the bytes. Also open: 851 duplicate gallery feature rows over 2,386 positions (largest group 54). |
 | **G3c tie policy** | Do systematic ties make ranks order-dependent? | **DEFECT (reported, not fixed)** | 851 duplicate gallery feature rows over 2386 positions; largest group 54 |
 
 ---
@@ -155,11 +155,15 @@ different summation orders in one published cohort — is worse than either unif
 
 | axis | result | scope |
 |---|---|---|
-| batch 1 vs 32 (fast path, full 6003) | see `axes.json` | full |
-| batch 1 / 7 / 256 vs 32 (shipped path) | see `axes.json` | 96-query declared slice |
+| batch 1 vs 32 (GEMM fast path, full 6003) | **6 rank mismatches**; qids in FINDINGS F8a | full |
+| batch 1 vs 32 (`opt`, 600-query head) | 0 mismatches | 600-query declared slice |
+| batch 1 / 7 / 256 vs 32 (shipped path) | **0 mismatches each** | 96-query declared slice |
 | incomplete final batch | 6003 % 32 = 19; no earlier row can change, batches are independent | reasoning + slice |
 | repeated identical run | **0 rank mismatches, 0 window mismatches** (`divergence_detail.json`) | full |
-| chunk 512 vs 1024 vs 4096 | see `axes.json` | full fast path |
+| batch 256 vs 32 (GEMM, full) | 0 mismatches | full |
+| chunk 512 / 4096 vs 1024 (GEMM, full) | 0 mismatches each | full |
+| chunk 512 vs 1024 vs 4096 | **0 mismatches each** | full fast path |
+| **batch axes for text_only / image_only** | **NOT_RUN** | the axes job was killed after the multimodal condition to stop competing with the live cohort |
 | cold vs warm cache | **NOT_RUN** | see below |
 
 ---
@@ -221,6 +225,26 @@ concentrated in exactly these near-duplicate groups. No top-1 is tied in any sam
 Reported, not fixed, as instructed.
 
 ---
+
+## Reproducing this audit
+
+Scripts: `workbench/scripts/audit/equivalence_*.py` (manifest, decode, fastpath, divergence detail,
+cache/tie census, encoder transform, encoder rank impact, batch sweep). Each writes one JSON into
+this directory and is runnable standalone under the interpreter named in its docstring.
+
+`workbench/tests/test_equivalence_invariants.py` — 5 tests, **5 passed**. It pins the local rank-rule
+copy against `CompositionAdapter._ranks_from_scores`, pins the tie-order semantics, pins that
+`topk_from_scores` breaks a tie by earlier gallery position, pins `prefetch_rows` order preservation,
+and asserts that `optimize=True` is not bit-equal to the plain einsum (the premise that forced this
+audit). Synthetic data only; no weights, gallery or GPU.
+
+## Honest scope statement
+
+Every number in this document is from **one model** (habit) **one checkpoint** (`fiq_n02`) on **one
+host**, from cached artifacts that already existed. Six of the nine adapters use `@`/`optimize=True`
+code paths this audit did not rank-compare, and no forward-pass equivalence was measured. The
+decode bit-identity result covers two transform families out of three; LIMN's `open_clip.image_transform`
+was not measured.
 
 ## NOT_RUN list
 

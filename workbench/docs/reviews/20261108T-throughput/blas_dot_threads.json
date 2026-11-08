@@ -1,0 +1,27 @@
+{
+  "1": {
+    "score_max_abs_delta": 0.0,
+    "ranks_changed_vs_1": 0,
+    "fingerprint_of_scores": "f8dc27de33a36d7f"
+  },
+  "2": {
+    "score_max_abs_delta": 0.0,
+    "ranks_changed_vs_1": 0,
+    "fingerprint_of_scores": "f8dc27de33a36d7f"
+  },
+  "4": {
+    "score_max_abs_delta": 0.0,
+    "ranks_changed_vs_1": 0,
+    "fingerprint_of_scores": "f8dc27de33a36d7f"
+  },
+  "8": {
+    "score_max_abs_delta": 0.0,
+    "ranks_changed_vs_1": 0,
+    "fingerprint_of_scores": "f8dc27de33a36d7f"
+  },
+  "20": {
+    "score_max_abs_delta": 6.103515625e-05,
+    "ranks_changed_vs_1": 0,
+    "fingerprint_of_scores": "93c28bdeea6acb9f"
+  }
+}

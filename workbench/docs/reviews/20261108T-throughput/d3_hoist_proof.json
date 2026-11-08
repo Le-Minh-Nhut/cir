@@ -1,0 +1,26 @@
+{
+  "threads_1": {
+    "seconds": 2.43,
+    "q_per_s": 210.9
+  },
+  "serial_unpinned": {
+    "seconds": 1.7,
+    "q_per_s": 301.8,
+    "blas_env": "10"
+  },
+  "threads_2": {
+    "seconds": 1.65,
+    "q_per_s": 310.6,
+    "identical_to_threads_1": true
+  },
+  "threads_4": {
+    "seconds": 0.93,
+    "q_per_s": 549.9,
+    "identical_to_threads_1": true
+  },
+  "threads_8": {
+    "seconds": 0.92,
+    "q_per_s": 556.5,
+    "identical_to_threads_1": true
+  }
+}

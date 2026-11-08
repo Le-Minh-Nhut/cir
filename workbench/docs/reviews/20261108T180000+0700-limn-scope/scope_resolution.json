@@ -1,0 +1,16 @@
+{
+  "counts": {
+    "dress": 2010,
+    "shirt": 2035,
+    "None": 2,
+    "toptee": 1956
+  },
+  "nulls": [
+    "7:3038",
+    "7:3790"
+  ],
+  "loader_assigned": 5884,
+  "changed_loader_assigned": [],
+  "old_scope_digest": "8a5dd517595eb4883d8b3174f410f87980fbc612418231e2be4e0e3847cd1c19",
+  "new_scope_digest": "3a1c5a6763154870536f3586491d5bea9d87b73a9836363dc298d2accdd34d87"
+}

@@ -1,0 +1,52 @@
+============================= test session starts ==============================
+platform linux -- Python 3.12.11, pytest-9.2.0, pluggy-1.7.0
+rootdir: /home/heheboiz/data/cir
+configfile: pyproject.toml
+plugins: anyio-4.16.0, xdist-3.8.0
+collected 24 items / 23 deselected / 1 selected
+
+workbench/tests/test_throughput_knobs.py F                               [100%]
+
+=================================== FAILURES ===================================
+_______________________ test_parallel_decode_is_bounded ________________________
+
+    def test_parallel_decode_is_bounded():
+        """A full 74381-image gallery must never be buffered; at most workers*2 batches outstanding.
+    
+        Counts batches that have been SUBMITTED but not yet consumed, which is what occupies memory:
+        a completed future still holds its decoded tensor. `ThreadPoolExecutor.map` submits everything
+        up front and would show a peak equal to the batch count, so this test fails on that shape.
+        """
+        import threading
+        import time
+    
+        workers = 4
+        live = {"outstanding": 0, "peak": 0}
+        lock = threading.Lock()
+    
+        def decode(chunk):
+            with lock:
+                live["outstanding"] += 1
+                live["peak"] = max(live["peak"], live["outstanding"])
+            time.sleep(0.001)
+            return chunk
+    
+        batches = [[index] for index in range(64)]
+        seen = []
+        for batch in prefetch_rows(decode, batches, workers):
+            seen.append(batch)
+            # Consuming one batch retires exactly one outstanding slot.
+            with lock:
+                live["outstanding"] -= 1
+        assert [item for batch in seen for item in batch] == list(range(64))
+>       assert live["peak"] <= workers * 2, (
+            f"prefetch_rows held {live['peak']} batches in flight for {len(batches)} batches; "
+            f"a bounded pipeline must never exceed workers*2 = {workers * 2}")
+E       AssertionError: prefetch_rows held 12 batches in flight for 64 batches; a bounded pipeline must never exceed workers*2 = 8
+E       assert 12 <= (4 * 2)
+
+workbench/tests/test_throughput_knobs.py:145: AssertionError
+=========================== short test summary info ============================
+FAILED workbench/tests/test_throughput_knobs.py::test_parallel_decode_is_bounded - AssertionError: prefetch_rows held 12 batches in flight for 64 batches; a bounded pipeline must never exceed workers*2 = 8
+assert 12 <= (4 * 2)
+======================= 1 failed, 23 deselected in 0.17s =======================

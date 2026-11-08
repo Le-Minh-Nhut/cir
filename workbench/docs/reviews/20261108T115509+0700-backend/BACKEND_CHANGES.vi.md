@@ -1,6 +1,6 @@
 # BACKEND_CHANGES — candidate Top-K thật, capability tách rời, thống kê tính từ dữ liệu
 
-Ngày: 2026-11-08 · Nhánh: `research/cir-failure-workbench` · Không commit.
+Ngày: 2026-11-08 · Nhánh: `research/cir-failure-workbench`.
 Thư mục bằng chứng: `workbench/docs/reviews/20261108T115509+0700-backend/`.
 
 ---
@@ -450,3 +450,97 @@ PASS  browser.http_ge_400 | 0 HTTP >= 400 response(s)
 `http_ge_400: 0` nghĩa là **không có request nào được gửi** — UI tự chặn. Sửa guard trong
 `NotebookPage.tsx` (xoá hẳn, để server quyết) rồi rebuild bundle là flow (g) chuyển sang `pass`.
 Không thể sửa file đó từ đây: thuộc quyền agent frontend.
+
+---
+
+# BỔ SUNG — vòng 4: measurement identity phải gồm đường chấm điểm
+
+## Defect: `measurement_identity` bỏ sót scoring path — ĐÃ SỬA
+
+`measurement_identity` chỉ key trên `preprocessing`, `environment_fingerprint`,
+`checkpoint_identity`, `gallery_identity_sha256`. Hai run cùng model mà **chỉ khác cách chấm điểm**
+hash ra cùng `group_id` và bị gắn nhãn `duplicate` — tức "đo cùng một thứ hai lần" — sai sự thật.
+
+Cohort thật sự chứa **hai cách chấm điểm**:
+
+| impl | model | bằng chứng |
+|---|---|---|
+| `einsum-optimized` | conesep, csmcir, ptha_mtst | `np.einsum(..., optimize=True)` |
+| `einsum` | habit, hint, intent, tme | `np.einsum(...)` không optimize |
+| `matmul` | limn, encoder | `query @ gallery.T` |
+
+Nay `identity` thêm `scoring_module_source_hash` và `adapter_module_source_hash`. Hash này nằm trong
+**`identity` của rank artifact**, không phải summary, nên `decorate_summary` đọc từ đó và
+`annotate_duplicate_attempts` truyền vào (tham số `identity_source`).
+
+`scoring_module_source_hash` được thêm vào danh sách `essential`, nên artifact cũ thiếu nó →
+`measurement_identity_confidence: "partial"` + `measurement_identity_missing_inputs:
+["scoring_module_source_hash"]`. **Không** còn `duplicate`, cũng **không** đoán là `unique`.
+
+## Before / after (curl live, `?subset=full`)
+
+**Trước** — mọi dòng `confidence: full`, kể cả HABIT `497c25c` không có scoring hash:
+
+| model | run | duplicate_status | conf | group_id |
+|---|---|---|---|---|
+| limn | 10173dc45dea | unique | full | 38623b33c3 |
+| habit | **497c25c57fbe** | **unique** | **full** | b53c8721a8 |
+| conesep | 30f6de423861 | unique | full | 81c3a87c83 |
+
+**Sau**:
+
+| model | run | duplicate_status | conf | group_id | scoring_impl | missing |
+|---|---|---|---|---|---|---|
+| limn | 10173dc45dea | undetermined | partial | b6e64eda63 | matmul | `['scoring_module_source_hash']` |
+| conesep | 30f6de423861 | unique | full | 44b314e6de | einsum-optimized | `[]` |
+| ptha_mtst | 315dd590eeb0 | undetermined | partial | b24c07ac46 | einsum-optimized | `['scoring_module_source_hash']` |
+| intent | 37ee72aa298b | unique | full | 9485a6323d | einsum | `[]` |
+| **habit** | **497c25c57fbe** | **undetermined** | **partial** | d48b1ba050 | einsum | `['scoring_module_source_hash']` |
+| hint | 4bc9893a977e | unique | full | e3b12be2ab | einsum | `[]` |
+| encoder | 6a528e877c32 | undetermined | partial | 5cab6ce7a1 | matmul | `['scoring_module_source_hash']` |
+| tme | ad477312aa57 | undetermined | partial | fc99f23b26 | einsum | `['scoring_module_source_hash']` |
+| habit | e0dd04a46ef7 | undetermined | partial | 9684c07e6b | einsum | `['scoring_module_source_hash']` |
+
+9 dòng → **9 group_id khác nhau**. HABIT `497c25c` **không** cùng group với bất kỳ dòng nào
+(kiểm từng cặp: `same_group=False` cho cả 8 dòng còn lại).
+
+## A. `released_audit_task7_mm_any` không còn trông như model
+
+Trước: chỉ có `provenance_source`/`reproduction_status`, không có field nào một consumer buộc phải
+thấy. Nay mỗi dòng có:
+
+```json
+"is_model_run": false,
+"provenance_label": "released CIRCUS audit baseline (imported; not a model run of this workbench)"
+```
+
+Cùng `scoring_impl.impl: "unknown"` với lý do `"released_audit declares no composition adapter
+module"` — nó thật sự không chấm điểm bằng adapter nào của workbench.
+
+Xác nhận: đường mặc định **9 dòng, không có dòng import**; với `include_imported=true` thì 10 dòng
+và dòng đó mang `is_model_run: false`.
+
+## B. `scoring_impl` trên từng dòng
+
+Suy ra bằng cách **đọc thân hàm `score`** của adapter module đã đăng ký (`capability(model_id)` →
+`inspect.getsource(Adapter.score)`), rồi phân loại:
+
+- có `optimize=True` → `einsum-optimized`
+- có `einsum` → `einsum`
+- có `@` / `linalg` / `dot` → `matmul`
+- không nhận ra / không resolve được model → `unknown` kèm `basis` nói lý do
+
+Mỗi dòng mang `{impl, basis, adapter_hash_known, scoring_hash_known}`. **Không** suy từ chuỗi hash.
+Kết quả khớp đúng split thật trong mã nguồn (bảng trên).
+
+## Test
+
+`workbench/tests/test_capability_measurement_identity.py` — **16 passed**:
+
+- hai identity chỉ khác `scoring_module_source_hash` → **group_id khác nhau**, cả hai `full`;
+- hash đọc từ block `identity` của rank artifact vẫn được dùng;
+- artifact cũ thiếu hash → `undetermined` + `partial` + tên field, không bao giờ `duplicate`;
+- hai artifact cũ (đều thiếu) → `undetermined`, không `duplicate`;
+- một duplicate thật vẫn được phát hiện (`duplicate`, count 2, cùng group_id);
+- 9 model → đúng `impl`; model không resolve được → `unknown`;
+- cohort thật sự có ≥2 implementation.

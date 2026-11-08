@@ -1,0 +1,31 @@
+{
+  "threads": 8,
+  "chunk_size": 32,
+  "conditions": {
+    "multimodal": {
+      "queries": 6003,
+      "elapsed_s": 183.0,
+      "pairs_per_s": 32.8,
+      "rank_mismatches_vs_artifact": 0,
+      "identical": true,
+      "examples": []
+    },
+    "text_only_black_image": {
+      "queries": 6003,
+      "elapsed_s": 196.0,
+      "pairs_per_s": 30.6,
+      "rank_mismatches_vs_artifact": 0,
+      "identical": true,
+      "examples": []
+    },
+    "image_only_empty_text": {
+      "queries": 6003,
+      "elapsed_s": 184.3,
+      "pairs_per_s": 32.6,
+      "rank_mismatches_vs_artifact": 0,
+      "identical": true,
+      "examples": []
+    }
+  },
+  "all_identical": true
+}
