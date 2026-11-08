@@ -50,6 +50,8 @@ export interface CompositionRunLike {
   checkpoint_training_dataset?: string | null;
   training_or_transfer_label?: string | null;
   reproduction_status?: string | null;
+  /** Backend-derived contraction per run: `einsum` | `einsum-optimized` | `matmul`. */
+  scoring_impl?: { impl?: string | null } | null;
   checkpoint_identity?: string | null;
   gallery_count?: number | null;
   query_count?: number | null;
@@ -479,3 +481,14 @@ export const FIXED_CUTOFFS = {
   recallCutoffs: [1, 10, 50],
   candidateDisplayNote: "Top-K below is how many saved candidate images are DISPLAYED, not the cutoff that classified the outcome.",
 } as const;
+
+/** The distinct scoring implementations among the visible rows, sorted.
+ *
+ *  `einsum`, `einsum(..., optimize=True)` and `matmul` sum in different orders, so a run's rank is not
+ *  comparable to another's at query level. A table that ranks rows from different implementations in
+ *  one order, without saying so, asserts a comparability the arithmetic does not have. A row whose
+ *  backend derivation is missing counts as its own `unknown` — never silently folded into a real one.
+ */
+export function scoringImplsPresent(rows: readonly CompositionRunLike[]): string[] {
+  return [...new Set(rows.map((run) => run.scoring_impl?.impl?.trim() || "unknown"))].sort();
+}

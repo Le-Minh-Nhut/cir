@@ -4,7 +4,7 @@ import type { Location } from "./routes";
 import { SUBSET_LABEL, SUBSETS, CONDITIONS, FIXED_CUTOFF_LABEL } from "./routes";
 import { Badge, Card, Detail, EmptyState, ErrorState, KeyValue, LoadingState, SortHeader, sortRows, useSort } from "./ui";
 import {
-  COMPOSITION_GAP_FORMULA, FIXED_CUTOFFS, compositionGap, scoredCounts, transferLabel,
+  COMPOSITION_GAP_FORMULA, FIXED_CUTOFFS, compositionGap, scoredCounts, scoringImplsPresent, transferLabel,
 } from "./catalog";
 import { fmtDenominator, fmtFractionPercent, fmtGap, fmtInt, fmtNdcg, fmtPercentValue, fmtPp, shortId } from "./format";
 import type { CompositionRun } from "./types";
@@ -100,7 +100,9 @@ function CompositionTable({ data, location, onGoto, onSelectRun }: {
                             detail={`Protocol ${protocolLabel(location.protocol)} không có summary nào cho subset ${SUBSET_LABEL[location.subset]}.`}
                             next={<button type="button" onClick={() => onGoto({ subset: "full" })}>Xem subset Full</button>} />
               : (
-                <div className="table-wrap">
+                <>
+                  <ScoringImplNotice rows={sorted} />
+                  <div className="table-wrap">
                   <table data-testid="composition-table">
                     <caption className="sr-only">Chỉ số composition theo lượt</caption>
                     <thead>
@@ -169,7 +171,8 @@ function CompositionTable({ data, location, onGoto, onSelectRun }: {
                       })}
                     </tbody>
                   </table>
-                </div>
+                  </div>
+                </>
               )}
       </Card>
 
@@ -185,6 +188,25 @@ function CompositionTable({ data, location, onGoto, onSelectRun }: {
         </p>
       )}
     </div>
+  );
+}
+
+/** One line naming the scoring implementations present when they are NOT all the same.
+ *
+ *  Not decoration: `einsum`, `einsum(..., optimize=True)` and `matmul` sum in different orders, so the
+ *  rank of one run is not comparable to another's at query level even when the aggregate columns sit
+ *  side by side. Ranking those rows in one order without saying so is the one thing the audit calls
+ *  scientifically invalid, so the table says it instead of implying it.
+ */
+function ScoringImplNotice({ rows }: { rows: CompositionRun[] }) {
+  const present = scoringImplsPresent(rows);
+  if (present.length <= 1) return null;
+  return (
+    <p className="hint" data-testid="scoring-impl-notice">
+      Các lượt dưới đây chấm bằng <b>{present.length} cách khác nhau</b> ({present.join(", ")}). Thứ tự
+      cộng dồn khác nhau nên hạng của chúng không so sánh được ở mức từng query; cột điểm chỉ là số
+      tổng hợp, không phải một bảng xếp hạng.
+    </p>
   );
 }
 
@@ -211,6 +233,11 @@ function RunMetricsDetail({ run }: { run: CompositionRun }) {
           : "chưa công bố"],
         ["coverage", fmtFractionPercent(run.metrics?.coverage)],
         ["gallery", `${fmtInt(run.gallery_count)} ảnh · ${fmtInt(run.query_count)} query`],
+        ["scoring impl", <span key="si">
+          {run.scoring_impl?.impl
+            ? <><code>{run.scoring_impl.impl}</code>{run.scoring_impl.basis ? <span className="hint"> — {run.scoring_impl.basis}</span> : null}</>
+            : <span className="hint">unknown — backend did not record a derivation for this row</span>}
+        </span>],
         ["checkpoint id", <code key="c">{run.checkpoint_identity ?? run.checkpoint_id}</code>],
         ["run_id", <code key="r2">{run.run_id}</code>],
         ["cảnh báo", <span key="w">{warnings.length ? warnings.map((label) => label.text).join(" · ") : "không có"}</span>],

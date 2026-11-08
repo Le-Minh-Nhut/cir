@@ -120,6 +120,10 @@ export type CompositionRun = {
   is_synthetic?: boolean;
   synthetic_fixture?: boolean;
   candidate_topk_exported?: boolean | null;
+  /** How this run's `score()` combines features, derived by the backend from the registered adapter's
+   *  own source (`einsum` / `einsum-optimized` / `matmul`). Two runs with different implementations
+   *  are not bit-comparable at query level, so the table must not rank them as if they were. */
+  scoring_impl?: { impl: string; basis?: string; adapter_hash_known?: boolean; scoring_hash_known?: boolean } | null;
   /** Backend `is_failed_summary`: no numbers were measured, so metric cells must blank. */
   is_failed?: boolean;
   metrics: CompositionMetrics;
