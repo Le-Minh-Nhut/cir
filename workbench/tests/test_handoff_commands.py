@@ -585,6 +585,18 @@ def _collected_at(sha: str, destination: Path) -> str | None:
         print(f"note: could not materialise {sha} here, falling back to the working tree: "
               f"{added.stderr.strip().splitlines()[-1] if added.stderr.strip() else 'no stderr'}")
         return None
+    # `workbench/frontend/node_modules` is GITIGNORED, so a worktree never has it -- and five test
+    # modules compile shipping TypeScript with `npx tsc`, which fails without it. Measured: the same
+    # revision collects 2484 tests in a bare worktree and 2528 once node_modules resolves, so a
+    # guard that ignores this compares the record against a tree that CANNOT collect what the record
+    # counts, and then blames the record. Link the installed dependencies in: they are not part of
+    # the revision, so borrowing them cannot make a stale revision look current.
+    modules = ROOT / "workbench/frontend/node_modules"
+    if modules.is_dir() and not (worktree / "workbench/frontend/node_modules").exists():
+        try:
+            (worktree / "workbench/frontend/node_modules").symlink_to(modules, target_is_directory=True)
+        except OSError:
+            pass
     try:
         return subprocess.run(
             [sys.executable, "-m", "pytest", "workbench/tests", "--collect-only", "-q",

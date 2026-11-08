@@ -19,9 +19,9 @@ the aggregate) is the concrete unblock.
 |---|---|
 | Branch | `research/cir-failure-workbench` |
 | Initial HEAD this pass | `3aae18fe02ef13f5b38d153dbc8007fbb40d4c92` |
-| **TESTED_SOURCE_SHA** | **`b0f38bd2bc15efbaf75228f04be8327c9843b45c`** — latest production commit (the CIRCUS composition round: `backend/composition.py`, the composition routes in `backend/main.py`, `CompositionView.tsx`/`BenchmarkView.tsx`, the `runner.py` unresolved-category text and the `model_csmcir.py` reason strings). Collection at this revision: **2266 tests** in `workbench/tests`. **Serial sweep measured at this revision** (one run, CPython 3.12.11, interpreter `workbench/envs/ctl312h/bin/python`, command `python -m pytest workbench/tests -q -p no:cacheprovider -rfE --tb=no`, exit 1, 2211.38 s): **2186 passed, 33 failed**, 47 skipped = 2266 collected, and the raw log is filed at `20261108T015603+0700/tests/full_suite_b0f38bd.txt`. The 33 failures are recorded verbatim below and are NOT a pass. The previous record, measured at `61f70b0bb205464cf9131e8dae054ec5f69e13f4`, was 2203 passed, 0 failed, 47 skipped = 2250 collected; it does not carry over, because `b0f38bd` adds production code on the paths above and three test files (`test_composition_api.py`, `test_csmcir_aggregate_api_parity.py`, additions to `test_circus_resume_stable.py`), 2250 → 2266 collected. |
+| **TESTED_SOURCE_SHA** | **`c2d8cdeb0eabc3232b28070f55b5a10d63ccffcb`** — latest production commit (this round: `runner.py` parallel scoring across query groups + the BLAS pin and `blas_threads_pinned`, the LIMN `query_scope` wiring and `query_scope_resolution`, `backend/composition.py` scoring-path measurement identity, the bounded `prefetch_rows` window, the corrected BLAS comment in `composition_eval.py`). Collection at this revision: **2528 tests** in `workbench/tests`. **Serial sweep measured at this revision** (one run, CPython 3.12.11, interpreter `workbench/envs/ctl312h/bin/python`, command `python -m pytest workbench/tests -q -p no:cacheprovider -rfE --tb=no`, exit 1, 3464.03 s): **2463 passed, 18 failed**, 47 skipped = 2528 collected, and the raw log is filed at `20261108T212500+0700-sweep/full_suite_c2d8cdeb.txt`. The 33 failures are recorded verbatim below and are NOT a pass. The previous record, measured at `61f70b0bb205464cf9131e8dae054ec5f69e13f4`, was 2203 passed, 0 failed, 47 skipped = 2250 collected; it does not carry over, because `b0f38bd` adds production code on the paths above and three test files (`test_composition_api.py`, `test_csmcir_aggregate_api_parity.py`, additions to `test_circus_resume_stable.py`), 2250 → 2266 collected. |
 | **FINAL_HEAD_SHA** | not recorded here by design: a tracked file cannot name the commit that contains it. `git rev-parse HEAD` on the branch tip is the authority. |
-| Production tree | compare against `b0f38bd2bc15efbaf75228f04be8327c9843b45c` with `git diff b0f38bd2bc15efbaf75228f04be8327c9843b45c HEAD -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'`; the release guard requires byte-identical production source. |
+| Production tree | compare against `c2d8cdeb0eabc3232b28070f55b5a10d63ccffcb` with `git diff b0f38bd2bc15efbaf75228f04be8327c9843b45c HEAD -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'`; the release guard requires byte-identical production source. |
 | `origin/main` | `8ebcc74d5fd1934df4f3772a8ca5a96dbd00f333` — **unchanged** |
 | Worktree | A37 round changes committed; preserved untracked user files: `pc_composition_smoke.yaml`, `src/train_cirr.py`, `uv.lock` |
 
@@ -33,10 +33,11 @@ commit on the research branch. No checkpoint, dataset, cache or secret is tracke
 | Field | Value |
 |---|---|
 | Branch | `research/cir-failure-workbench` |
-| Suite accounting | Guard-named source `b0f38bd2bc15efbaf75228f04be8327c9843b45c`; **its own serial sweep was measured at that revision**: `workbench/tests` **2186 passed, 33 failed, 47 skipped = 2266 collected** (CPython 3.12.11, interpreter `workbench/envs/ctl312h/bin/python`, exit 1, 2211.38 s, one serial run; log at `20261108T015603+0700/tests/full_suite_b0f38bd.txt`). The 33 failures are itemised in "The serial sweep at `b0f38bd`" below and are not a pass. Historical: `61f70b0` measured 2203 passed, 0 failed, 47 skipped = 2250 collected (round A44); those numbers describe `61f70b0` only and do not add up to 2266. |
+| Suite accounting | Guard-named source `c2d8cdeb0eabc3232b28070f55b5a10d63ccffcb`; **its own serial sweep was measured at that revision**: `workbench/tests` **2463 passed, 18 failed, 47 skipped = 2528 collected** (CPython 3.12.11, interpreter `workbench/envs/ctl312h/bin/python`, exit 1, 3464.03 s, one serial run; log at `20261108T212500+0700-sweep/full_suite_c2d8cdeb.txt`). The 18 failures are itemised in "The serial sweep at `c2d8cdeb`" below and are not a pass. Historical: `b0f38bd` measured 2186 passed, 33 failed, 47 skipped = 2266 collected; `61f70b0` measured 2203 passed, 0 failed, 47 skipped = 2250 collected (round A44). Those numbers describe those revisions only and do not add up to 2528. |
 | Build/Playwright/image evidence | A36 round: `workbench/frontend` rebuilt after the in-flight loading placeholder change and the existing DOM-only smoke `workbench/frontend/tests/ui_smoke.py` re-run green (exit 0, 21 DOM-verified assertions; in-flight assertions recorded the `…` placeholder card and the `loading registry…` row during the fetch, then `17 registered models` with 17 rows after it settled, with the error path still not masked). A34/A35 round, on `1415e56`: `workbench/frontend` `npm run build` passed (Vite+TS, ~234 ms); the DOM-only smoke against the served production build passed all flows (cold inventory 17 models with verbatim blocker rows, query/Top-K, filter+pagination 20/24, annotation persist, injected-failure recovery, comparison ranks [4,45], cohort save/reload, stale-response guard; mobile 390×844 no overflow), desktop + mobile, zero unexpected console/page errors — the single recorded failure is the flow's own injected `Failed to fetch`. Supplementary screenshot reads (real image interpretation, tall full-page captures re-read via 1000-px crops at native resolution) agree with the DOM evidence: titles, 10 nav tabs, 17 model rows with truthful per-model blockers, LIMN bundle/partial cards, TME GPU_VERIFICATION_PENDING, no new rendering defect found; two initial tall-shot reads were superseded by the crop pass (downscale made them illegible; one confabulated reading was discarded). Screenshots are labelled mock-fixture artifacts, not research evidence. |
-| TESTED_SOURCE_SHA | `b0f38bd2bc15efbaf75228f04be8327c9843b45c` — latest production revision, and the revision the serial sweep was measured at: 2186 passed, 33 failed, 47 skipped = 2266 collected, exit 1. |
-| Previous tested source | `1415e56919535627273b4afb3a7c400aee770475` (the A34/A35 round): 2157 collected, 2146 passed, 1 failed, 10 skipped for `workbench/tests`; 2216 collected, 2205 passed, 1 failed, 10 skipped including `tests/unit`. Retained as historical measurement. |
+| TESTED_SOURCE_SHA | `c2d8cdeb0eabc3232b28070f55b5a10d63ccffcb` — latest production revision, and the revision the serial sweep was measured at: 2463 passed, 18 failed, 47 skipped = 2528 collected, exit 1. |
+| Previous tested source | `b0f38bd2bc15efbaf75228f04be8327c9843b45c` (the CIRCUS composition round): 2186 passed, 33 failed, 47 skipped = 2266 collected, exit 1, 2211.38 s; log at `20261108T015603+0700/tests/full_suite_b0f38bd.txt`. Retained as historical measurement. |
+| Earlier tested source | `1415e56919535627273b4afb3a7c400aee770475` (the A34/A35 round): 2157 collected, 2146 passed, 1 failed, 10 skipped for `workbench/tests`; 2216 collected, 2205 passed, 1 failed, 10 skipped including `tests/unit`. Retained as historical measurement. |
 | Earlier tested source | `e3f0dfaf34b62984db30eacffbac93417eccace0` (the A33 round): 2141 collected, 2129 passed, 2 failed, 10 skipped for `workbench/tests`; 2200 collected, 2188 passed, 2 failed, 10 skipped including `tests/unit`. Retained as historical measurement. |
 | Previous composition accounting | `4e0c07476f02b43e63355b6e067da460251c54e4` (the sm_120 round): 2080 collected, 2069 passed, 1 failed, 10 skipped for `workbench/tests`; 2139 collected, 2128 passed, 1 failed, 10 skipped including `tests/unit`. Retained as historical measurement. |
 | Earliest composition accounting | `d05149b9a71546166f5d5d38c813744c2a84c9e9`: 2029 collected, 2017 passed, 1 failed, 11 skipped. Retained as historical measurement. |
@@ -90,7 +91,50 @@ No target sm_120 GPU or complete per-model CUDA installation is claimed.
 
 Earlier R23/R25/composition measurements are historical and do not certify this runtime profile.
 
-## The serial sweep at `b0f38bd` (measured, 33 failures)
+## The serial sweep at `c2d8cdeb` (measured, 18 failures)
+
+One run, no retries, on a tree whose production bytes were byte-identical to `HEAD` for the whole run
+(`git rev-parse HEAD` before and after: `c2d8cdeb0eabc3232b28070f55b5a10d63ccffcb`, unchanged):
+`workbench/envs/ctl312h/bin/python -m pytest workbench/tests -q -p no:cacheprovider -rfE --tb=no`,
+3464.03 s wall (WALL=3466.58 s including interpreter start), exit 1. Summary line, verbatim:
+
+```
+18 failed, 2463 passed, 47 skipped, 290 warnings in 3464.03s (0:57:44)
+```
+
+2463 + 18 + 47 = 2528 = the collection count at this revision (`--collect-only` reports 2528 ids), so
+every collected test is accounted for. The full log is
+`20261108T212500+0700-sweep/full_suite_c2d8cdeb.txt`. The suite did NOT pass.
+
+### Attribution of all 18
+
+Every one reproduces outside the sweep, and none is caused by this round's production changes. Grouped
+by cause, with the reproduction that establishes it:
+
+| # | test(s) | cause | category |
+|---|---|---|---|
+| 1-4 | `test_circus_adapters_blip.py::test_resident_worker_{reuse_and_cleanup,failure_uses_shared_error_and_stays_failed}` × {conesep, ptha_mtst} | `AttributeError: 'Adapter' object has no attribute 'batch_size'` — the fixture builds the adapter with `Adapter.__new__` and never sets the attribute the worker now reads | **test pinning obsolete behaviour** (fixture); same failure at `1a4cd32` |
+| 5 | `test_circus_cli.py::test_cli_3d_full_gallery_resume_and_gallery_invalidation` | `assert 'REUSED' == 'COMPLETED'` — a cross-file fixture-ordering effect: it passes alone and fails when `test_composition_topk_runner.py` runs first | **pre-existing at the previously tested revision**; reproduced in a `git worktree` of `1a4cd32` with the same two files (1 failed, 30 passed) |
+| 6-7 | `test_circus_tme_lifecycle.py::test_encoder_and_limn_failed_child_latch_and_preserve_log[encoder,limn]` | `WORKBENCH_ENCODER_PYTHON` / `WORKBENCH_LIMN_PYTHON` resolve as `None` inside the test's sandbox | **machine/operator state** |
+| 8 | `test_circus_tme_precision.py::test_worker_skips_empty_stdin_lines` | missing `output.npy` worker artifact | **machine/operator state** |
+| 9 | `test_f05_f08_f09_verification.py::test_f08_dcnet_config_data_dir_resolution` | untracked symlink `workbench/third_party/DCNet/dataset/fashioniq -> /home/heheboiz/data/cir/data/FashionIQ`, created 13:43 by another agent; it makes `.resolve()` return the real tree | **machine/operator state** |
+| 10 | `test_handoff_commands.py::test_no_release_document_points_at_a_superseded_source_sha` | the guard diffed the tree against the OLD recorded `b0f38bd`; this document's advance is what resolves it | **test pinning obsolete behaviour** — closed by this commit |
+| 11-17 | `test_release_blocker_gpu_records.py` × 7 | `docker/release_verify.sh` returns 1 with `verdict=RELEASE_BLOCKED`: the shared artifacts root holds 621 capability records whose `probe_source=override is a synthetic test probe` | **machine/operator state** |
+| 18 | `test_standalone_operator_commands.py::test_prepare_model_executes_only_declared_recipe_steps` | same DCNet symlink changes the recipe path the command takes | **machine/operator state** |
+
+Nothing in this list is attributed to `c2d8cdeb`'s production bytes. The two causes that are not pure
+operator state are a test fixture that has not kept up (group 1-4) and a release-metadata guard whose
+entire job is to fail until the recorded revision is advanced (#10).
+
+### What this is not
+
+It is not a green suite and it is not paper reproduction. Two of the 18 expose open problems in the
+evidence rather than in this round's code: `release_verify` reports `RELEASE_BLOCKED` on this host, and
+the `test_circus_cli` ordering effect means that test's resume claim is only trustworthy when it runs in
+isolation. Neither is fixed here.
+
+## The serial sweep at `b0f38bd` (historical, 33 failures)
+
 
 One run, no retries: `workbench/envs/ctl312h/bin/python -m pytest workbench/tests -q
 -p no:cacheprovider -rfE --tb=no`, started 2026-11-08 on this host, 2211.38 s wall, exit 1.
