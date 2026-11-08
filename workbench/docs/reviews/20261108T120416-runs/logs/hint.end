@@ -1,0 +1,9 @@
+1794132463
+2026-11-08T17:07:43+0700
+model=hint
+exit_code=0
+timed_out=False
+duration_s=1745
+ok=True
+artifact={"ok": true, "run_id": "4bc9893a977e501b82378e76", "candidate_files": ["/home/heheboiz/data/cir/workbench/artifacts/composition/runs/4bc9893a977e501b82378e76/candidates/hint_fashioniq/image_only_empty_text.jsonl", "/home/heheboiz/data/cir/workbench/artifacts/composition/runs/4bc9893a977e501b82378e76/candidates/hint_fashioniq/multimodal.jsonl", "/home/heheboiz/data/cir/workbench/artifacts/composition/runs/4bc9893a977e501b82378e76/candidates/hint_fashioniq/text_only_black_image.jsonl"], "manifests": ["/home/heheboiz/data/cir/workbench/artifacts/composition/runs/4bc9893a977e501b82378e76/candidates/hint_fashioniq/image_only_empty_text.manifest.json", "/home/heheboiz/data/cir/workbench/artifacts/composition/runs/4bc9893a977e501b82378e76/candidates/hint_fashioniq/multimodal.manifest.json", "/home/heheboiz/data/cir/workbench/artifacts/composition/runs/4bc9893a977e501b82378e76/candidates/hint_fashioniq/text_only_black_image.manifest.json"], "reason": null}
+capability={"ok": true, "run_id": "4bc9893a977e501b82378e76", "execution_status": "COMPLETED", "candidate_topk": true, "depth": 50, "capability_status": "AVAILABLE", "reason_text": null, "problems": []}

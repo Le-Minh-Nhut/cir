@@ -144,3 +144,39 @@ gallery chunks in the controller. A uniform scoring function therefore does **no
 across the nine adapters, and the per-model rank sensitivity to a summation-order change has been
 measured for exactly one of them. Adopting the fast path uniformly without per-model re-verification
 would generalise a single measurement across six unmeasured code paths.
+
+## F8. The fast path is NOT batch-invariant; the shipped path and `opt` need separate verdicts
+
+Measured in the axes run (`axes.json`, multimodal, fast path, FULL 6003 queries):
+
+| comparison | rank mismatches |
+|---|---:|
+| `gemm1024` batch 1 vs batch 32 | **6 / 6003** |
+| `gemm1024` batch 256 vs batch 32 | 0 / 6003 |
+| `gemm1024` chunk 512 vs 1024 | 0 |
+| `gemm1024` chunk 4096 vs 1024 | 0 |
+| shipped path, batch 1/7/256 vs 32 (96-query slice) | 0 |
+| shipped path repeat determinism (96-query slice) | 0 |
+| shipped path incomplete-final-batch grouping | first 32 rows unchanged |
+
+So **the scoring result for the chunked-GEMM path depends on the query batch size**, with 6 of 6003
+queries changing rank between batch 1 and batch 32. That is a strictly worse property than the
+`optimize=True` behaviour: `optimize=True` at a fixed batch is reproducible, while the GEMM path is
+not even reproducible across batch sizes.
+
+Why this happens is a direct consequence of BLAS blocking: at batch 1 the gemm is a
+`(1×256)@(256×C)` matrix-vector product, which BLAS dispatches to a different kernel (a `gemv`) with a
+different accumulation order/vectorisation than the `(32×256)@(256×C)` `gemm` used at batch 32. A
+different kernel means different rounding, which the 1-ULP near-tie mechanism in F1 converts into a
+rank change.
+
+Consequence for the decision: the two fast paths are **not interchangeable**.
+`optimize=True` keeps a fixed batch and was rank-compared over all 18,009 rows against the stored
+artifact. Chunked GEMM additionally needs a pinned `--batch-size` before its ranks are even
+well-defined, and it was only rank-compared at batch 32. A uniform scoring function must therefore
+also pin the scoring batch size in the run identity (the forward `batch_size` is already recorded;
+the *scoring* batch is the same value today, but that coupling is undocumented).
+
+Scope note: `batch_invariance.json` records the targeted re-probe (600-query head, then the
+remaining tail) that was used to name the affected qids; `axes.json` is the source for the counts
+above.

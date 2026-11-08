@@ -1,0 +1,4 @@
+1794130718
+2026-11-08T16:38:38+0700
+model=hint
+cmd=/home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python -u workbench/scripts/composition_eval.py --config workbench/docs/reviews/20261108T113610-eval/circus_cohort.yaml --models hint --subsets full,sf,validated --topk-depth 50 --keep-features

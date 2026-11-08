@@ -13,9 +13,18 @@ rỗng trước mỗi model. Control interpreter: `workbench/envs/ctl312h/bin/py
 | model | trạng thái | run_id | candidate_topk | ghi chú |
 |---|---|---|---|---|
 | `habit` | **COMPLETED** | `497c25c57fbeba885ecfb9d1` | **true, depth 50** | NEW_RUN, có candidate thật, có `variant_provenance.sm_120` |
-| `intent` | đang chạy | — | — | xem §4 |
-| `hint` | chờ trong chain | — | — | tự chạy sau `intent` |
-| `conesep` | chờ trong chain | — | — | tự chạy sau `hint` |
+| `intent` | **COMPLETED** | `37ee72aa298b276d1bfda0fa` | **true, depth 50** | NEW_RUN |
+| `hint` | **COMPLETED** | `4bc9893a977e501b82378e76` | **true, depth 50** | NEW_RUN |
+| `conesep` | **COMPLETED** | `30f6de423861cc1d6c78c361` | **true, depth 50** | NEW_RUN |
+
+**Cả bốn model đã xong.** Chain exit code **0**, GPU đã rỗng, không còn process nào.
+
+| model | MM R@10 | MM R@50 | MM nDCG | gap | coverage |
+|---|---|---|---|---|---|
+| `habit` | 35.6155 | 54.3728 | 0.32828 | 0.38870 | 1.00000 |
+| `intent` | 34.3995 | 54.0063 | 0.31849 | 0.37538 | 1.00000 |
+| `hint` | 32.8169 | 51.7741 | 0.30927 | 0.43870 | 1.00000 |
+| `conesep` | 35.4823 | 54.1396 | 0.32944 | 0.39426 | 1.00000 |
 
 ---
 
@@ -115,9 +124,9 @@ Lượt 2 (thành công): thêm `--resume` để dùng lại feature cache 2.3 G
 
 | mốc | epoch | giờ |
 |---|---|---|
-| start (lượt thành công) | 1794116382 | 2026-11-08T14:39:42+0700 |
-| end | 1794118887 | 2026-11-08T15:21:27+0700 |
-| **thời lượng** | **2505 s = 41 ph 45 s** | |
+| start (lượt thành công) | 1794123582 | 2026-11-08T14:39:42+0700 |
+| end | 1794126095 | 2026-11-08T15:21:35+0700 |
+| **thời lượng** | **2513 s = 41.9 ph** | |
 | exit code | **0** | |
 
 Phân rã pha (đo từ mtime cache và log):
@@ -127,7 +136,7 @@ Phân rã pha (đo từ mtime cache và log):
 | encode gallery (74.381 ảnh) | 12:26:47 → 13:34 ≈ **57 ph** | **0** — cache hit |
 | encode query ×3 (6003 mỗi condition) | ≈ 24 ph | **≈ 30 s** |
 | scoring + export | — | ≈ 35 ph |
-| **tổng** | | **41 ph 45 s** |
+| **tổng** | | **41.9 ph** |
 
 ### Số liệu (`summary/habit_fiq_n02_497c25c57fbeba885ecfb9d1/full.json`)
 
@@ -204,22 +213,104 @@ Nhãn: **NEW_RUN**. Không dùng lại cache của lượt chết (lượt chế
 
 ---
 
-## 4. Ba model còn lại — đang chạy / đang chờ
+## 4. `intent`, `hint`, `conesep` — NEW_RUN, COMPLETED
 
-Chain: `/tmp/evalwork/chain_rest.sh` (detached, PID ghi ở `/tmp/evalwork/chain.log`). Nó chờ driver
-của `habit` thoát, chờ GPU rỗng, rồi chạy `intent → hint → conesep` trong **một** invocation của
-driver (driver tự tuần tự hoá, không có khoảng trống giữa model).
+Chain `/tmp/evalwork/chain_rest.sh` chờ driver của `habit` thoát (15:21:38), chờ GPU rỗng, rồi chạy
+`intent → hint → conesep` trong **một** invocation của driver. Không có khoảng trống giữa model.
+Kết thúc **17:43:04**, exit code **0**.
 
-`intent` bắt đầu 15:21:38, worker GPU đã lên (3654 MiB). Ba model này **không** có `--resume` (để
-rank site ghi candidate), có `--topk-depth 50 --keep-features`, timeout 21600 s.
+Không có `--resume` (để rank site ghi candidate), có `--topk-depth 50 --keep-features`, timeout 21600 s.
 
-Lợi ích tốc độ: bản vá BLAS đã landed (`composition_eval.py:13-20`, `adapters.py:28-37`) đặt
+### 4.1 `intent` / `fiq_n02` — `37ee72aa298b276d1bfda0fa`
+
+| trường | giá trị |
+|---|---|
+| start → end | 15:21:38 → 16:38:37 (**77.0 ph**) |
+| exit code | 0 |
+| `execution_status` | **COMPLETED** |
+| query / gallery | 6003 / 74381 |
+| condition_status | cả 3: `COMPLETED`, `unscored_count: 0` |
+| MM R@10 / R@50 / nDCG | **34.3995 / 54.0063 / 0.31849** |
+| image-only nDCG (R@10) | 0.11223 (2.8652) |
+| text-only nDCG (R@10) | 0.19894 (15.3257) |
+| coverage | **1.00000** |
+| Composition Gap | **0.37538** (cohort 6003) |
+| `topk_export` | `TOPK_EXPORT_COMPLETE`, depth 50, `partial: false`, `missing_query_count: 0` |
+| `variant_provenance.sm_120` | **có** |
+
+### 4.2 `hint` / `fashioniq` — `4bc9893a977e501b82378e76`
+
+| trường | giá trị |
+|---|---|
+| start → end | 16:38:38 → 17:07:43 (**29.1 ph**) |
+| exit code | 0 |
+| `execution_status` | **COMPLETED** |
+| query / gallery | 6003 / 74381 |
+| condition_status | cả 3: `COMPLETED`, `unscored_count: 0` |
+| MM R@10 / R@50 / nDCG | **32.8169 / 51.7741 / 0.30927** |
+| image-only nDCG | 0.11427 |
+| text-only nDCG | 0.17359 |
+| coverage | **1.00000** |
+| Composition Gap | **0.43870** (cohort 6003) |
+| `topk_export` | `TOPK_EXPORT_COMPLETE`, depth 50, `partial: false`, `missing_query_count: 0` |
+| `variant_provenance.sm_120` | **có** |
+
+### 4.3 `conesep` / `fiq_n02` — `30f6de423861cc1d6c78c361`
+
+| trường | giá trị |
+|---|---|
+| start → end | 17:07:43 → 17:43:04 (**35.4 ph**) |
+| exit code | 0 |
+| `execution_status` | **COMPLETED** |
+| query / gallery | 6003 / 74381 |
+| condition_status | cả 3: `COMPLETED`, `unscored_count: 0` |
+| MM R@10 / R@50 / nDCG | **35.4823 / 54.1396 / 0.32944** |
+| image-only nDCG | 0.11206 |
+| text-only nDCG | 0.19956 |
+| coverage | **1.00000** |
+| Composition Gap | **0.39426** (cohort 6003) |
+| `topk_export` | `TOPK_EXPORT_COMPLETE`, depth 50, `partial: false`, `missing_query_count: 0` |
+| `variant_provenance.sm_120` | **có** |
+
+### 4.4 Kiểm chứng API cho cả bốn model
+
+`GET /api/composition/runs/<run_id>?subset=full` → `capabilities.candidate_topk = true`,
+`capability_detail.candidate_topk.status = "AVAILABLE"`, `depth = 50`.
+
+`GET /api/composition/runs/<run_id>/queries?subset=full&condition=multimodal&limit=1` →
+
+| model | `candidates_available` | scored / unscored | candidate đọc được |
+|---|---|---|---|
+| habit | 6003 | 6003 / 0 | `B007X6BEF4.jpg` pos 34725 score 0.78261 |
+| intent | 6003 | 6003 / 0 | `B0047HWOOC.jpg` pos 12852 score 0.81323 |
+| hint | 6003 | 6003 / 0 | `B009FWH264.jpg` pos 46425 score 0.54547 |
+| conesep | 6003 | 6003 / 0 | `B0047HWOOC.jpg` pos 12852 score 0.81391 |
+
+Bất biến `target_rank` ↔ candidate đã kiểm trên `habit`: **5/5** query có `target_rank <= 50` trả về
+đúng ảnh target (`positive_names`) tại đúng vị trí đó.
+
+### 4.5 Vì sao ba model này nhanh hơn `habit`
+
+Bản vá BLAS đã landed (`composition_eval.py:13-20`, `adapters.py:28-37`) đặt
 `OMP/OPENBLAS/MKL/NUMEXPR_NUM_THREADS = min(10, cpu//2)` = **10 thread** (đúng nửa máy theo AGENTS.md).
-Đo được: scoring `intent` đạt **+136 giây CPU/phút** so với `habit` (nạp numpy trước bản vá)
-**+59 giây CPU/phút** → khoảng **2.3×**.
 
-Lưu ý: `habit` đã import numpy lúc 14:39, **trước** bản vá BLAS, nên lượt của nó không hưởng lợi.
-Ba model sau thì có.
+Đo được: `intent` đạt **+136…+296 giây CPU/phút** trong pha scoring, so với `habit` (import numpy
+**trước** bản vá) chỉ **+59 giây CPU/phút** → khoảng **2.3–5×**. `hint`/`conesep` còn cao hơn
+(+456…+617 giây CPU/phút ở pha scoring).
+
+**Lưu ý cho lượt sau:** `habit` không hưởng bản vá vì đã import numpy từ 14:39, trước khi bản vá tồn
+tại. Nếu cần số liệu `habit` nhanh hơn (không đổi kết quả — chỉ đổi thời gian), phải chạy lại thành
+process mới.
+
+### 4.6 Thời gian encode gallery (đo được, để ước lượng)
+
+| model | encode gallery | tổng |
+|---|---|---|
+| habit (lượt encode lạnh, bị timeout giết) | ~57 ph | ~2 giờ (không publish) |
+| habit (relaunch, cache ấm) | **0** | 41.9 ph (2513 s) |
+| intent | ~18 ph | 77.0 ph (4619 s) |
+| hint | riêng từng model | 29.1 ph (1745 s) |
+| conesep | riêng từng model | 35.4 ph (2121 s) |
 
 ---
 
@@ -278,6 +369,9 @@ khẳng định một chính sách chưa từng chạy (`limn` đo ra **false** 
 | summary | có `variant_provenance`? | `sm_120` trong summary? |
 |---|---|---|
 | `habit_..._497c25c5` (mới) | **có** | **có (2 khớp)** |
+| `intent_..._37ee72aa` (mới) | **có** | **có** |
+| `hint_..._4bc9893a` (mới) | **có** | **có** |
+| `conesep_..._30f6de42` (mới) | **có** | **có** |
 | `habit_..._e0dd04a4` (FAILED cũ) | không | không |
 | `tme_..._ad477312` | **không** | **không** |
 | `ptha_mtst_..._315dd590` | **không** | **không** |
@@ -290,7 +384,35 @@ trong tài liệu, **không** được sửa lại trong artifact. Chỉ `habit`
 
 ---
 
-## 7. Cách resume nếu cohort bị dừng
+## 7. Đĩa
+
+`--keep-features` giữ lại gallery/query memmap để lần resume sau có thể backfill cửa sổ candidate.
+Đây là **chủ ý**, không phải rác:
+
+| model | `work/<model>/features` |
+|---|---|
+| `conesep` | 2.9 GB |
+| `intent` | 2.3 GB |
+| `habit` | 2.3 GB |
+| `hint` | 2.3 GB |
+| **tổng features** | **≈ 9.8 GB** |
+
+Export candidate thật (thứ **không được** xoá): **116 MB** tổng cộng
+(`habit` 43 MB — còn 3 file `.tmp` trơ của lượt bị kill; `conesep`/`intent` 24 MB, `hint` 25 MB).
+
+`df -h /home`: **97 GB còn trống** (84% dùng). Đủ chỗ cho cả bốn feature cache, nhưng nếu chạy thêm
+nhiều model thì dọn feature trước:
+
+```sh
+rm -rf workbench/artifacts/composition/runs/<run_id>/work/<model>/features
+```
+
+Sau khi dọn, `--resume --topk-depth 50` trên run đó sẽ báo `EXPORT_INCOMPLETE` (đúng sự thật: không
+còn cache để dựng lại cửa sổ) — export đã có sẵn trên đĩa thì vẫn đọc được bình thường.
+
+---
+
+## 8. Cách resume nếu cohort bị dừng
 
 ```sh
 cd /tmp/evalwork
