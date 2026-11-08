@@ -54,6 +54,9 @@ export interface EvidenceBenchmarkRun {
 /** The fields of `/api/composition/runs` rows this module reads. */
 export interface EvidenceCompositionRun {
   run_id?: string | null;
+  /** The scope fields the composition table filters on, so the banner can count the same rows. */
+  protocol_id?: string | null;
+  subset?: string | null;
   /** Served capability flags. `candidate_topk` is the one that decides whether this row can show
    *  retrieved images, and it is the same field the composition table badges read. */
   capabilities?: { candidate_topk?: boolean | null } | null;
@@ -109,9 +112,17 @@ function isSyntheticAggregate(run: EvidenceBenchmarkRun): boolean {
 }
 
 
+/** The scope the composition table is showing. The banner must count inside it, not deployment-wide,
+ *  or it states a number the reader cannot reconcile with the rows directly beneath it. */
+export interface CompositionScope {
+  protocolId?: string | null;
+  subset?: string | null;
+}
+
 export function evidenceState(runs: EvidenceRun[] | null | undefined,
                               benchmarkRuns: EvidenceBenchmarkRun[] | null | undefined,
-                              compositionRuns?: EvidenceCompositionRun[] | null): EvidenceState {
+                              compositionRuns?: EvidenceCompositionRun[] | null,
+                              scope?: CompositionScope | null): EvidenceState {
   const safeRuns = Array.isArray(runs) ? runs : [];
   const safeBenchmarks = Array.isArray(benchmarkRuns) ? benchmarkRuns : [];
 
@@ -129,7 +140,15 @@ export function evidenceState(runs: EvidenceRun[] | null | undefined,
   // refusal is still a real thing that happened, and it must not be reported as absent.
   const aggregateOnly = aggregateRuns > 0 && experimentRuns === 0;
   const safeComposition = Array.isArray(compositionRuns) ? compositionRuns : [];
-  const rowsWithCandidateTopk = safeComposition
+  // The composition table renders only the rows matching the selected protocol and subset
+  // (`EvaluationPage` filters by `run.protocol_id === location.protocol` then by subset). The banner
+  // counts inside the SAME scope, so "N of M" always describes the rows the reader can see.
+  const scoped = (scope?.protocolId || scope?.subset)
+    ? safeComposition.filter((run) =>
+        (!scope?.protocolId || run?.protocol_id === scope.protocolId)
+        && (!scope?.subset || run?.subset === scope.subset))
+    : safeComposition;
+  const rowsWithCandidateTopk = scoped
     .filter((run) => run?.capabilities?.candidate_topk === true).length;
   return {
     experimentRuns,
@@ -144,7 +163,7 @@ export function evidenceState(runs: EvidenceRun[] | null | undefined,
     noRealEvidence: aggregateRuns === 0 && experimentRuns === 0,
     hasMockEvidence: mockRuns > 0,
     queryLevelUnavailable: aggregateOnly,
-    compositionRows: safeComposition.length,
+    compositionRows: scoped.length,
     rowsWithCandidateTopk,
   };
 }
@@ -177,14 +196,18 @@ export function evidenceBanner(state: EvidenceState): string {
       ? ` (${state.uncertifiedAggregates} further aggregate `
         + `run${state.uncertifiedAggregates === 1 ? "" : "s"} uncertified)`
       : "";
-    // The Top-K clause is a claim about what the rows on screen can show, so it is decided by the
-    // served `capabilities.candidate_topk` flags -- the same field the composition table badges
-    // read -- and NOT by the aggregate endpoints' per-query-export level. A deployment whose
-    // per-query export is absent can still serve composition rows that carry real candidate lists;
-    // saying "Top-K unavailable" over those rows contradicts the table printed beneath it.
+    // The Top-K clause is a claim about the rows on screen, so it is decided by the served
+    // `capabilities.candidate_topk` flags -- the same field the composition table badges read -- and
+    // NOT by the aggregate endpoints' per-query-export level. A deployment whose per-query export is
+    // absent can still serve composed rows that carry real candidate lists; saying "Top-K
+    // unavailable" over those rows contradicts the table printed beneath it.
+    //
+    // The count is scoped to the protocol and subset the table is filtered to, so "N of M" always
+    // describes the rows the reader can count. A deployment-wide number here was the same defect one
+    // scope out: a nine-row table under a banner reading "12 of 27".
     const topk = state.rowsWithCandidateTopk > 0
       ? `; per-query candidate Top-K available on ${state.rowsWithCandidateTopk} of `
-        + `${state.compositionRows} composed run${state.compositionRows === 1 ? "" : "s"}`
+        + `${state.compositionRows} composed run${state.compositionRows === 1 ? "" : "s"} in view`
       : "; per-query Top-K analysis unavailable";
     return `${head}${trailer}${topk}`
       + (state.hasMockEvidence

@@ -188,7 +188,10 @@ export default function App() {
   const evidence = evidenceState(
     (data.indexRuns.region.data ?? []).map((run) => ({ run_id: run.run_id, data_kind: run.data_kind, evidence_status: run.evidence_status })),
     (data.aggregates.region.data ?? []).map((run) => ({ run_id: run.run_id, is_synthetic: run.is_synthetic, verification: run.verification })),
-    (data.compositionRuns.region.data ?? []).map((run) => ({ run_id: run.run_id, capabilities: run.capabilities })));
+    (data.compositionRuns.region.data ?? []).map((run) => ({
+      run_id: run.run_id, protocol_id: run.protocol_id, subset: run.subset, capabilities: run.capabilities,
+    })),
+    { protocolId: location.protocol, subset: location.subset });
   const banner = evidenceBanner(evidence);
 
   // The selection-scoped claim that replaces the old app-wide banner: it is about the runs on
