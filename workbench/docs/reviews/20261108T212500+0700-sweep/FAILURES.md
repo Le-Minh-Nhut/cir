@@ -41,8 +41,8 @@ inside it) is the origin of two of these failures. The narrow claim was true; th
 | 3 | `test_circus_adapters_blip.py::test_resident_worker_failure_uses_shared_error_and_stays_failed[workbench.composition.model_conesep-conesep]` | **(a)** in `aa0f530` | same |
 | 4 | same, `[workbench.composition.model_ptha_mtst-ptha_mtst]` | **(a)** in `aa0f530` | same |
 | 5 | `test_circus_cli.py::test_cli_3d_full_gallery_resume_and_gallery_invalidation` | **(a)** — ordering interaction, introduced in `9b6b5b6` | `assert 'REUSED' == 'COMPLETED'`. Passes alone (21 passed). Fails when `test_composition_topk_runner.py` runs first: `1 failed, 30 passed`. **`test_composition_topk_runner.py` does not exist at `b0f38bd`** (`git cat-file -e b0f38bd:…` → exit 128) — it was added by `9b6b5b6`, inside the range. The first version called this "(c) pre-existing, reproduced at `1a4cd32`": the reproduction was real but it cannot make the cause pre-existing, because at `b0f38bd` the interacting file is absent. Mechanism is test ordering, not either test's own content. |
-| 6 | `test_circus_tme_lifecycle.py::test_encoder_and_limn_failed_child_latch_and_preserve_log[encoder]` | **(h)** harness/test defect — *not* operator state | `RuntimeError: execution environment not verified [UNCONFIGURED/UNCONFIGURED]: WORKBENCH_ENCODER_PYTHON=None`. **"Operator state" is impossible here by construction**: `conftest.py:31-43` `isolate_operator_state` is `autouse=True` and deletes every `CIR_*`/`WORKBENCH_*` variable for every test, then repoints `operator_config._CONFIG_PATH` at a non-existent file and clears the caches. Verified two ways: `env | grep -c WORKBENCH_` → **0** (the first version's claim that "all 9 are exported" was false; they live only in the gitignored `workbench/config/workbench.env`), and the test **still fails with the variable explicitly exported** (`WORKBENCH_ENCODER_PYTHON=/usr/bin/false pytest …` → same `None` message), because the fixture strips it. **Release-relevant: this fails on a fresh clone too**, which is exactly what the release guard claims to simulate. |
-| 7 | same, `[limn]` | **(h)** | `WORKBENCH_LIMN_PYTHON=None`, same fixture, same proof |
+| 6 | `test_circus_tme_lifecycle.py::test_encoder_and_limn_failed_child_latch_and_preserve_log[encoder]` | **(a)** — test unsatisfiable by construction, inside the range | Four independent reasons, each proven; see "Why #6/#7 cannot pass" below. |
+| 7 | same, `[limn]` | **(a)** | same, via `model_limn.py:352` → `:267` → `adapters.py:322` → `runtime.py:2309` |
 | 8 | `test_circus_tme_precision.py::test_worker_skips_empty_stdin_lines` | **(a)** in `aa0f530` | The first version said "missing `output.npy`, operator state". The file is missing *because the worker returned no output*: captured stdout is `CIRCUS_WORKER:{"ok": false, "error_type": "AttributeError", "error": "module 'torch' has no attribute 'set_num_threads'"}`. The test stubs `torch` as a `SimpleNamespace`; `adapters.py:182` now calls `torch.set_num_threads`, added by **`aa0f530`**. Verified `b0f38bd:model_tme.py` contains no such call (count 0). So: production change inside the range met a stdlib-only stub. |
 | 9 | `test_f05_f08_f09_verification.py::test_f08_dcnet_config_data_dir_resolution` | **(b)** host state | Untracked symlink `workbench/third_party/DCNet/dataset/fashioniq -> /home/heheboiz/data/cir/data/FashionIQ`, created 13:43 by another agent, makes `.resolve()` return the real tree. **Proven**: passes in a clean worktree of `c2d8cdeb`. |
 | 10 | `test_handoff_commands.py::test_no_release_document_points_at_a_superseded_source_sha` | **(d)**, closed | It diffed the tree against the then-recorded `b0f38bd` while four production commits had landed. Closed by advancing `TESTED_SOURCE_SHA`: `8 passed` on re-run. |
@@ -51,24 +51,92 @@ inside it) is the origin of two of these failures. The narrow claim was true; th
 | 17 | same file, `test_offline_verdict_names_deployment_reason` | **(b)** | same root cause |
 | 18 | `test_standalone_operator_commands.py::test_prepare_model_executes_only_declared_recipe_steps` | **(b)** | `[MANUAL] dcnet: policy=AUTHOR_ARTIFACT_PREFERRED deterministic=NONDETERMINISTIC_WITHOUT_AUTHOR_ARTIFACT` — the DCNet symlink of #9 changes the recipe path. **Proven**: passes in a clean worktree (`2 passed` together with #9). |
 
+## Why #6/#7 cannot pass — the traced mechanism
+
+The first version called these "operator/machine state". The second called them "harness/test defect
+that fails on a fresh clone". Both were understatements: **the test is unsatisfiable as written**, and
+the trace below shows why exporting the variable cannot help.
+
+### The raising path (encoder; LIMN is the same through `model_limn.py:352` → `:267`)
+
+```
+test_circus_tme_lifecycle.py:213  adapter.encode_queries(...)
+model_encoder.py:214              self._run_job("queries", ...)
+model_encoder.py:139              self.require_verified_interpreter()
+adapters.py:322                   require_verified_model_interpreter(...)
+runtime.py:2305                   verify_environment(model, probe=True, ...)
+runtime.py:1604                   resolve_model_interpreter(...) -> None
+runtime.py:1606                   EnvironmentReport(..., UNCONFIGURED, "UNCONFIGURED")
+runtime.py:2309                   raise RuntimeError
+```
+
+### Reason 1 — the fixture sets an attribute the gate never reads
+
+`test_circus_tme_lifecycle.py:181` does `adapter.interpreter = sys.executable` (LIMN `:190`). The gate
+**re-resolves from the registry row** via `setting(python_env_var)`
+(`adapters.py:322` → `runtime.py:1604`); it consults `adapter.interpreter` only *afterwards*, to compare.
+The fixture never sets `_verified_interpreter` / `_interpreter_verified`, which is exactly what the
+**TME fixture at `test_circus_tme_lifecycle.py:25-27` does** — and that one passes.
+
+### Reason 2 — the autouse fixture removes the env the gate does read
+
+`conftest.py:31-43` `isolate_operator_state` is `autouse=True` and `monkeypatch.delenv`s every `CIR_*`/
+`WORKBENCH_*` name for every test. Proven directly: an untracked probe test printed
+`WORKBENCH_ vars visible: {}` **with the variable exported**. Exporting it therefore changes nothing:
+`WORKBENCH_ENCODER_PYTHON=…/encoder310-adapted/bin/python pytest '[encoder]'` produces the identical
+`WORKBENCH_ENCODER_PYTHON=None` message.
+
+### Reason 3 — the test patches stdlib `subprocess` globally
+
+`test_circus_tme_lifecycle.py:209` does `monkeypatch.setattr(module.subprocess, "Popen", start)`.
+`module` is the adapter module, and that module does `import subprocess` (`:10` of the test file shows the
+same binding), so `module.subprocess` **is** the stdlib module: the patch is process-global for the test.
+`runtime._run_probe` → `subprocess.run` → the patched `Popen`, so the gate's own identity probe receives
+the test's `sys.exit(9)` child. Measured: `_interpreter_identity()` returns `None` inside the test and a
+valid dict outside it; `clean identity: True / patched global subprocess.Popen is start: True / identity
+after patch: None`.
+
+### Reason 4 — the post-check rejects every interpreter the fixture could supply
+
+`adapters.py:323-325` compares the gate's resolved interpreter against `adapter.interpreter` and raises on
+a mismatch. With a working probe:
+
+- `WORKBENCH_ENCODER_PYTHON=…/encoder310-adapted/bin/python` →
+  `RuntimeError: encoder resolved interpreter changed: …/ctl312h/bin/python -> …/encoder310-adapted/bin/python`
+- `WORKBENCH_ENCODER_PYTHON=…/ctl312h/bin/python` →
+  `[BLOCKED/UNSAFE_INTERPRETER] cannot use active workbench environment`
+
+There is **no value** that satisfies both the gate and the equality check in this fixture.
+
+### Verdict
+
+**(a) — a defect inside the delivered range.** These two tests **cannot pass on a fresh clone as
+written**. Minimal fix, described and deliberately NOT applied in this pass: the fixture should pass a
+`config` whose `setting()` resolves a real interpreter and set `_interpreter_verified` to it, and the
+`subprocess` patch should be scoped to the adapter module's own reference (e.g. patch the module's
+`_popen`/worker-spawn helper) rather than the stdlib module. **Loosening the gate would be wrong** — the
+gate is doing its job; the fixture is lying to it.
+
 ## Tally (corrected; the first version's prose said "11" for a range naming 12 ids)
 
 | category | n | ids |
 |---|---:|---|
-| **(a)** caused inside `b0f38bd..HEAD` | **6** | #1–#4 (in `aa0f530`), #5 (ordering, in `9b6b5b6`), #8 (in `aa0f530`) |
-| **(h)** harness/test defect | **2** | #6, #7 |
+| **(a)** caused inside `b0f38bd..HEAD` | **8** | #1–#4 (in `aa0f530`), #5 (ordering, in `9b6b5b6`), #6–#7 (test unsatisfiable by construction, traced below), #8 (in `aa0f530`) |
+| **(h)** harness/test defect | **0** | — (reclassified to (a); see the trace) |
 | **(b)** host state | **9** | #9, #11–#17, #18 |
 | **(c)** pre-existing at `b0f38bd` | **0** | — |
 | **(d)** obsolete test (now closed) | **1** | #10 |
 | **total** | **18** | |
 
-6 + 2 + 9 + 0 + 1 = 18, which is both the table's row count and the log's failure count. The earlier
-"11 operator-state / 1 pre-existing / 5 obsolete / 0 caused" split is withdrawn.
+8 + 0 + 9 + 0 + 1 = 18, which is both the table's row count and the log's failure count. The earlier
+"11 operator-state / 1 pre-existing / 5 obsolete / 0 caused" split is withdrawn, and so is the interim
+"6 caused / 2 harness" split.
 
-**Release impact, stated plainly:** 8 of the 18 are code/test defects inside the delivered range
-(6 production-caused, 2 harness), not operator noise. Two of them (#6, #7) will reproduce on a fresh
-clone because the isolation fixture guarantees the variable is unset, and #8 is a stdlib-only stub
-meeting a new torch call. None of them blocks the *numbers* this round recorded — the 18 failures do
+**Release impact, stated plainly:** 8 of the 18 are defects inside the delivered range (6 production-
+caused: #1–#4, #5, #8; 2 tests that are unsatisfiable by construction: #6, #7). **#6/#7 cannot pass on a
+fresh clone** — not because of operator state, but because the fixture sets an attribute the gate never
+reads, the autouse scrub removes the env the gate does read, the test patches stdlib `subprocess`, and
+the post-check rejects the only interpreter the fixture could supply. None of them blocks the *numbers* this round recorded — the 18 failures do
 not include any measurement path — but "operator state explains the failures" is false, and the earlier
 note that said so is withdrawn.
 

@@ -113,13 +113,13 @@ Full table, per-row evidence and correction history:
 
 | category | n | ids |
 |---|---:|---|
-| **(a)** caused by a change inside `b0f38bd..HEAD` | **6** | #1–#4 (`adapter.batch_size` read at `model_conesep.py:183`, added by `aa0f530`; the `Adapter.__new__` fixture never sets it), #5 (`test_circus_cli` ordering vs `test_composition_topk_runner.py`, added by `9b6b5b6`), #8 (worker dies with `module 'torch' has no attribute 'set_num_threads'` — `adapters.py:182`, added by `aa0f530`, meets a stdlib-only `torch` stub) |
-| **(h)** harness/test defect | **2** | #6, #7 — `conftest.py:31-43 isolate_operator_state` is `autouse=True` and deletes every `CIR_*`/`WORKBENCH_*` variable for every test, so the test's own fixture guarantees `WORKBENCH_{ENCODER,LIMN}_PYTHON=None`; still fails with the variable exported, and will fail on a fresh clone |
+| **(a)** caused inside `b0f38bd..HEAD` | **8** | #1–#4 (`adapter.batch_size` read at `model_conesep.py:183`, added by `aa0f530`; the `Adapter.__new__` fixture never sets it), #5 (`test_circus_cli` ordering vs `test_composition_topk_runner.py`, added by `9b6b5b6`), #6–#7 (unsatisfiable by construction: the fixture sets `adapter.interpreter`, the gate re-resolves from the registry via `setting()`, the autouse scrub deletes every `WORKBENCH_*`, and `test_circus_tme_lifecycle.py:209` patches stdlib `subprocess.Popen` so the gate's own probe gets the test's `sys.exit(9)` child), #8 (worker dies with `module 'torch' has no attribute 'set_num_threads'` — `adapters.py:182`, added by `aa0f530`, meets a stdlib-only `torch` stub) |
+| **(h)** harness/test defect | **0** | — (reclassified into (a)) |
 | **(b)** host state | **9** | #9, #18 (untracked DCNet symlink from another agent; both pass in a clean worktree), #11–#17 (`release_verify` `RELEASE_BLOCKED`; `workbench/artifacts/gpu_capabilities/` holds 632 records, 465 `probe_source: override`, 363 `Synthetic GPU`, 34 CUDA-OOM, 34 with both, 329 Synthetic GPU with `error: null`, 50 with no device name) |
 | **(c)** pre-existing at `b0f38bd` | **0** | — |
 | **(d)** obsolete test (closed) | **1** | #10, resolved by advancing `TESTED_SOURCE_SHA` |
 
-6 + 2 + 9 + 0 + 1 = 18.
+8 + 0 + 9 + 0 + 1 = 18.
 
 **This is not "operator state explains the failures".** 8 of the 18 are defects inside the delivered
 range. None of the 18 is on a measurement path, so they do not invalidate the numbers this revision
@@ -133,8 +133,8 @@ an independent agent re-ran three rows; `FAILURES.md` carries the full correctio
 ### What this is not
 
 It is not a green suite and it is not paper reproduction. **Eight of the 18 are defects that ship
-inside the `b0f38bd..HEAD` range** — six production-caused (#1–#4, #5, #8) and two harness defects whose
-test cannot pass as written (#6, #7, which reproduce on a fresh clone). The other ten are host state or
+inside the `b0f38bd..HEAD` range** — six production-caused (#1–#4, #5, #8) and two tests that are
+unsatisfiable by construction (#6, #7: they cannot pass on a fresh clone). The other ten are host state or
 closed. None of the 18 is on a measurement path, so they do not invalidate the numbers recorded above;
 none is fixed here. A suite whose failures are described as "operator state" without this breakdown
 would be claiming a green result it does not have.
@@ -287,7 +287,7 @@ Hai cách giải thích cũ trong mục này đã bị đo bác bỏ và đượ
 
 | Gate | Command | Result |
 |---|---|---|
-| Backend suite | **RUN, FAILED at `c2d8cdeb` — not a PASS.** One serial run of `workbench/tests` at `c2d8cdeb0eabc3232b28070f55b5a10d63ccffcb` (CPython 3.12.11, `workbench/envs/ctl312h/bin/python`, `-q -p no:cacheprovider -rfE --tb=no`, 3464.03 s, exit 1: **2463 passed, 18 failed, 47 skipped = 2528 collected**). All 18 attributed in "The serial sweep at `c2d8cdeb`"/`FAILURES.md`: **6 caused inside `b0f38bd..HEAD`**, 2 harness defects that fail on a fresh clone, 9 host state, 1 obsolete test now closed. |
+| Backend suite | **RUN, FAILED at `c2d8cdeb` — not a PASS.** One serial run of `workbench/tests` at `c2d8cdeb0eabc3232b28070f55b5a10d63ccffcb` (CPython 3.12.11, `workbench/envs/ctl312h/bin/python`, `-q -p no:cacheprovider -rfE --tb=no`, 3464.03 s, exit 1: **2463 passed, 18 failed, 47 skipped = 2528 collected**). All 18 attributed in "The serial sweep at `c2d8cdeb`"/`FAILURES.md`: **6 caused inside `b0f38bd..HEAD`**, 8 caused inside `b0f38bd..HEAD` (6 production, 2 unsatisfiable tests), 9 host state, 1 obsolete test closed. |
 | Acceptance | `bash workbench/docker/acceptance.sh` | **ACCEPTANCE PASSED at `59949ff`** (1 honest skip: GPG status unverified). At `9a53ee1` group C fails only against the pre-existing `cir-workbench` container, whose image predates the vendoring and still serves the old registry (it reports `ptha_mtst source_available: false`); rerun against a backend started from current source and group C passes — `PASS 17 models, ids/protocols/environments match the registry`. Rebuild the image before re-running acceptance. |
 | Mutation checks | `bash workbench/docker/mutation_checks.sh` | **PASSED** M1 M2 M3 M4 M5 |
 | Offline release verification | `bash workbench/docker/release_verify.sh --offline` | exit 0, `ENGINEERING_INCOMPLETE`, **0 checks FAIL/UNRUN** |

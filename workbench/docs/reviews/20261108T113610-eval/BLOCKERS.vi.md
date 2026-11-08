@@ -1,13 +1,24 @@
 # BLOCKERS — blocker có bằng chứng
 
+> **Audit liên quan (đọc trước khi dùng bất kỳ blocker nào dưới đây):**
+> [`workbench/docs/reviews/20261108T173736+0700/INPUT_PIPELINE_AND_INFERENCE_AUDIT.vi.md`](../20261108T173736+0700/INPUT_PIPELINE_AND_INFERENCE_AUDIT.vi.md)
+> — kiểm toán độc lập đường đọc → inference → scoring. **Xác lập**: danh tính repo/checkpoint (G0 PASS,
+> G1 PASS 17/17), decode bit-identical nơi đã đo (G2 PASS), và fast path bị từ chối vì đổi 207/18,009
+> rank (G3b FAIL). **KHÔNG xác lập**: forward-feature bit-identity (**G2-fwd NOT_RUN**), batch/tail/
+> cold-warm axes (**G4 PARTIAL**), cache identity (**G5 DEFECT, đã đóng một phần**), throughput
+> (**G6 PARTIAL**, một phần chỉ có trong prose). Không con số nào ở đây là paper reproduction.
+
 Mỗi mục theo đúng 6 mục yêu cầu: (1) model/checkpoint/protocol/condition bị ảnh hưởng; (2) stage
 hỏng; (3) lệnh tái hiện + exit code + lỗi gốc + log; (4) từng fix đã thử và kết quả, phân biệt
 **nguyên nhân đã xác nhận** với **giả thuyết**; (5) dữ liệu dùng được, coverage bị ảnh hưởng, phần
 chưa kiểm chứng; (6) thiếu chính xác cái gì và cách resume.
 
-Trạng thái tổng hợp: **4 model chạy được** (habit, intent, hint, conesep — sau khi env 3.9 có), **4 model
-có artifact cũ chưa xác nhận lại** (tme, ptha_mtst, encoder, limn), **1 model adapter tự từ chối**
-(csmcir). **8 model chỉ có đường native, không có composition adapter** — agent khác phụ trách.
+Trạng thái tổng hợp (cập nhật): **7 model COMPLETED** với artifact đầy đủ (habit, intent, hint,
+conesep, tme, encoder, ptha_mtst), **1 model PARTIAL và đã bị superseded** (limn — 5884/6003 dưới run id
+cũ, chưa re-run), **1 model adapter tự từ chối** (csmcir). **Không model nào là paper reproduction.**
+Blocker interpreter Python và NameError import của ENCODER/PTHA+MTST **đã gỡ**; blocker còn mở là
+`csmcir` (`encode_targets` raises `_TARGET_REASON`), 2 query LIMN genuinely ambiguous, và việc chưa
+re-run ENCODER/PTHA/LIMN dưới code đã sửa. **8 model chỉ có đường native, không có composition adapter** — agent khác phụ trách.
 
 ---
 
@@ -43,7 +54,7 @@ có artifact cũ chưa xác nhận lại** (tme, ptha_mtst, encoder, limn), **1 
 
 ---
 
-## B2. `encoder` — interpreter chưa khớp contract, chưa xác nhận
+## B2. `encoder` — ĐÃ GỠ (env 3.10 có, interpreter khớp) — còn lại: chưa re-run
 
 1. **Phạm vi**: `encoder` / `fashioniq` / `circus_fashioniq_release_v1` / 3 condition.
 2. **Stage hỏng**: `env` (nghi ngờ — chưa chạy được tới bước load).
@@ -55,12 +66,16 @@ có artifact cũ chưa xác nhận lại** (tme, ptha_mtst, encoder, limn), **1 
    `tme-adapted` là 3.10.22 nhưng thiếu `open_clip`, nên không dùng lại trực tiếp được.
 5. **Dữ liệu dùng được**: checkpoint staged + hash-verified; artifact cũ `6a528e877c328772e2c7bb28`
    (6003 query, MM R@10 31.0178) vẫn còn nhưng là **PRE_EXISTING_UNVERIFIED**.
-6. **Thiếu**: env py 3.10 có `open_clip_torch==2.24.0`. **Resume**: tạo env đó, đặt
-   `WORKBENCH_ENCODER_PYTHON`, chạy `--verify-gpu-only` rồi lệnh §2.
+6. **Trạng thái cập nhật**: blocker interpreter **đã gỡ** — env 3.10 có `open_clip_torch` đã được
+   provision và `WORKBENCH_ENCODER_PYTHON` trỏ vào nó. Blocker **thứ hai** đã gỡ luôn: ENCODER
+   **không chạy được từ HEAD** vì `model_encoder.py` gọi `limit_torch_threads`, `prefetch_rows`,
+   `resolved_decode_workers` mà **không import** chúng (`NameError`), đã sửa. Cái **còn mở**:
+   ENCODER **chưa được chạy lại**, nên số `31.0178` vẫn là `PRE_EXISTING_UNVERIFIED` dưới
+   checkpoint cũ. **Resume**: chạy lệnh §2 với `--topk-depth 50 --keep-features`.
 
 ---
 
-## B3. `ptha_mtst` — chỉ có checkpoint CIRR, nhãn transfer là bắt buộc
+## B3. `ptha_mtst` — chỉ có checkpoint CIRR, nhãn transfer là bắt buộc (NameError đã gỡ)
 
 1. **Phạm vi**: `ptha_mtst` / `cirr_transfer` / `circus_fashioniq_release_v1` / 3 condition.
 2. **Stage hỏng**: không hỏng — chỉ **không phải reproduction**.
@@ -72,24 +87,33 @@ có artifact cũ chưa xác nhận lại** (tme, ptha_mtst, encoder, limn), **1 
 5. **Dữ liệu dùng được**: checkpoint staged (2.72 GB, hash khớp LFS oid). Artifact cũ
    `315dd590eeb03d2c78d7937a`: MM R@10 19.4736 / R@50 34.4494 / nDCG 0.22493 — **số của transfer,
    không phải của paper row**. Không được so với `reported_r10 54.99`.
+   **NameError đã gỡ**: `model_ptha_mtst.py` gọi `limit_torch_threads` / `prefetch_rows` /
+   `resolved_decode_workers` mà không import, nên adapter **không chạy được từ HEAD**; đã sửa và có
+   test hồi quy tĩnh. Blocker **còn mở ở đây** chỉ là: chưa re-run dưới code đã sửa.
 6. **Thiếu**: checkpoint FashionIQ do tác giả huấn luyện. **Resume**: chạy lại để xác nhận
    (lệnh §2, `--models ptha_mtst`), luôn giữ nhãn TRANSFER.
 
 ---
 
-## B4. `limn` — 119/6003 query không gán được category
+## B4. `limn` — 2/6003 query genuinely ambiguous; 119 là con số cũ của loader
 
 1. **Phạm vi**: `limn` / `base_iter0_all_categories` / 3 condition / subset `full`.
 2. **Stage hỏng**: `metrics` (category resolution).
-3. **Tái hiện**: plan output ghi `category_resolution.ambiguous_count: 119`
-   (ví dụ `qid "7:2179"` ∈ {shirt, toptee}). LIMN là model **category-scoped** 3 checkpoint
-   riêng biệt (`dress`/`shirt`/`toptee`), nên ảnh reference thuộc 2 category không có không gian
-   đặc trưng để chấm.
-4. **Fix đã thử**: none — **agent khác đang điều tra** (theo chỉ đạo của director). Không chạy trùng.
-   **Nguyên nhân đã xác nhận** là dữ liệu reference dùng chung giữa 2 category, không phải lỗi code.
-5. **Dữ liệu dùng được**: 5884/6003 query chấm được (coverage 0.98018). Artifact cũ
-   `10173dc45dea8c90fd2a284b` status PARTIAL, MM R@10 30.0646.
-6. **Thiếu**: quy tắc gán category cho ảnh dùng chung. **Resume**: chờ agent kia; sau đó chạy §2.
+3. **Tái hiện**: `category_resolution.ambiguous_count: 119` — đây là **con số của release loader**,
+   vẫn đúng như một sự kiện cấp loader, và nó **giữ nguyên** sau fix. Nguyên nhân: LIMN là model
+   **category-scoped** 3 checkpoint riêng (`dress`/`shirt`/`toptee`), còn ảnh reference dùng chung giữa
+   2 category thì không có không gian đặc trưng để chấm.
+4. **Fix đã thử**: adapter có hook `query_scope()` đọc category từ chính caption annotation, **trước đây
+   chưa bao giờ được runner gọi**. Đã wire; scope map đã resolve được **6001/6003** query. Chi tiết và
+   số đo: `20261108T180000+0700-limn-scope/EVIDENCE.md`.
+5. **Dữ liệu dùng được**: **2 query genuinely ambiguous**, không phải 119:
+   `7:3038` và `7:3790` — không resolver nào gán được, và chúng **không** được chấm (không đoán bừa).
+   Artifact cũ `10173dc45dea8c90fd2a284b` là PARTIAL 5884/6003 và **đã bị superseded**: `identity` nay
+   gồm `query_scope_resolution`, nên run id đổi thành `2a4b19f335f5ec281375d09f` và **chưa re-run**.
+   Vì thế `MM R@10 30.0646` là số **5884-mẫu số cũ**, không phải kết quả sẽ có sau khi wire.
+6. **Thiếu**: một lần chạy lại LIMN dưới run id mới. **Blocker còn lại thật**: 2 query
+   `7:3038`/`7:3790` nhập nhằng vĩnh viễn với dữ liệu đã pin — phải nêu chúng trong mọi claim coverage.
+   **Resume**: chạy §2 cho `limn`; báo coverage là 6001/6003 và nêu tên 2 qid.
 
 ---
 
