@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AREAS, KNOWN_PROTOCOL_IDS, SUBSET_LABEL, TO_SEARCH_VERSION, areaDef, hrefFor, parseLocation, toSearch, type AreaId, type Location } from "./routes";
 import { useWorkbenchData, protocolLabel, type RunCatalogEntry } from "./data";
+import { protocolsWithReports, protocolOrDefault } from "./catalog";
 import { OverviewPage } from "./OverviewPage";
 import { ExperimentsPage } from "./ExperimentsPage";
 import { EvaluationPage } from "./EvaluationPage";
@@ -156,6 +157,27 @@ export default function App() {
       return next;
     });
   }, [data.catalog, data.compositionRuns.region.status, location.runs, writeUrl]);
+
+  // The benchmark view must not open on a dead end. The deployment's first protocol has composition
+  // rows but zero aggregate reports, so landing there showed an empty card that read as broken.
+  // This redirects ONLY when (a) the benchmark view is open, (b) the selected protocol has no report
+  // at all while another does, and (c) the URL did not name a protocol — an explicit choice is left
+  // alone, because a reader who asked for an empty protocol deserves to see it. `replace`, not
+  // `push`: a background correction must not become a history entry the operator has to walk back.
+  useEffect(() => {
+    if (location.area !== "evaluation" || location.view !== "benchmark") return;
+    if (data.aggregates.region.status !== "ready") return;
+    if (new URLSearchParams(window.location.search).has("protocol")) return;
+    const served = protocolsWithReports(data.aggregates.region.data ?? []);
+    if (!served.length) return;
+    const target = protocolOrDefault(location.protocol, served);
+    if (target === location.protocol) return;
+    setLocation((current) => {
+      const next = { ...current, protocol: target, runs: [], run: "", query: "", offset: 0 };
+      writeUrl(next, "replace");
+      return next;
+    });
+  }, [location.area, location.view, location.protocol, data.aggregates.region.status, data.aggregates.region.data, writeUrl]);
 
   useEffect(() => {
     if (!location.view && areaDef(location.area).views.length) {

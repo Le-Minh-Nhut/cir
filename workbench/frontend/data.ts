@@ -3,7 +3,7 @@ import { fetchJson, useRegion, type RegionHandle } from "./useRegion";
 import type { BenchmarkRun, RunGate } from "./gate";
 import type { Cohort, CompositionQuery, CompositionRun, DuplicateStatus, Job, Measurement, Model, Query, Run } from "./types";
 import type { CapabilityFlags, CapabilityReport, Provenance } from "./catalog";
-import { compositionCapabilities, benchmarkCapabilities, indexCapabilities, provenanceOf, transferLabel } from "./catalog";
+import { compositionCapabilities, benchmarkCapabilities, indexCapabilities, provenanceOf, testWorkspaceOrigin, transferLabel } from "./catalog";
 import type { Subset } from "./routes";
 
 /** Every source the workbench reads, each as its own keyed region.
@@ -37,6 +37,9 @@ export interface RunCatalogEntry {
   transferLabel: string | null;
   duplicateStatus: DuplicateStatus | null;
   duplicateAttempts: number | null;
+  /** Where a non-research artifact was produced (`/pytest-of-…/pytest-87`), when the served
+   *  evaluator environment proves it. Null for a row that is evidence about a real model run. */
+  testOrigin: string | null;
   measurement: Measurement | null;
   importedSource: string | null;
   composition?: CompositionRun;
@@ -95,6 +98,7 @@ export function buildCatalog(compositionRuns: CompositionRun[], indexRuns: Run[]
       transferLabel: transferLabel(run).label,
       duplicateStatus: run.duplicate_status ?? null,
       duplicateAttempts: run.duplicate_attempt_count ?? null,
+      testOrigin: testWorkspaceOrigin(run),
       measurement: run.measurement ?? null,
       importedSource: run.provenance_source ?? null,
       composition: run,
@@ -117,6 +121,7 @@ export function buildCatalog(compositionRuns: CompositionRun[], indexRuns: Run[]
       transferLabel: null,
       duplicateStatus: null,
       duplicateAttempts: null,
+      testOrigin: testWorkspaceOrigin(run),
       measurement: null,
       importedSource: null,
       indexRun: run,
@@ -139,6 +144,7 @@ export function buildCatalog(compositionRuns: CompositionRun[], indexRuns: Run[]
       transferLabel: transferLabel(run as never).label,
       duplicateStatus: run.duplicate_status ?? null,
       duplicateAttempts: run.duplicate_attempt_count ?? null,
+      testOrigin: testWorkspaceOrigin(run),
       measurement: run.measurement ?? null,
       importedSource: null,
       aggregate: run,

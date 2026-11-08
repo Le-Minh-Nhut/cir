@@ -474,6 +474,93 @@ export function duplicateLabel(status: DuplicateStatus | null | undefined, attem
   }
 }
 
+/** Where an artifact was produced, when the served environment knobs prove it.
+ *
+ *  The aggregate store legitimately holds rows written by the test suite (each `pytest` run
+ *  publishes into `WORKBENCH_RESULTS_ROOT`), and those rows are real API rows that must stay
+ *  visible. They are not, however, evidence about a model this deployment trained, and ten of them
+ *  sit side by side with two real reports. The UI already labels them REFUSED; it did not say WHY
+ *  they exist, so ten rows looked like duplicates of one another. This reads the served
+ *  `evaluator_environment_knobs` — the paths the evaluator actually ran with — and names the test
+ *  workspace. It never matches on `model_id`: a name is not a schema.
+ */
+export function testWorkspaceOrigin(run: {
+  evaluator_environment_knobs?: Record<string, string> | null;
+  is_synthetic?: boolean | null;
+  synthetic_fixture?: boolean | null;
+  data_kind?: string | null;
+}): string | null {
+  if (run.is_synthetic === true || run.synthetic_fixture === true) return "fixture";
+  if (run.data_kind === "mock" || run.data_kind === "synthetic") return `development (${run.data_kind})`;
+  for (const value of Object.values(run.evaluator_environment_knobs ?? {})) {
+    const match = /(\/[^\s"']*pytest-of-[^/\s]+\/pytest-\d+)/.exec(String(value));
+    if (match) return match[1];
+  }
+  return null;
+}
+
+/** Reported protocols, most reports first. A protocol with zero reports is not listed, because this
+ *  is the affordance a reader sees INSTEAD of a dead end: it must name only places with data. */
+export function protocolsWithReports(aggregates: readonly BenchmarkRunLike[]): Array<{ protocol_id: string; count: number }> {
+  const counts = new Map<string, number>();
+  for (const run of aggregates) {
+    const id = run.protocol_id;
+    if (!id) continue;
+    counts.set(id, (counts.get(id) ?? 0) + 1);
+  }
+  return [...counts.entries()]
+    .map(([protocol_id, count]) => ({ protocol_id, count }))
+    .sort((left, right) => right.count - left.count || left.protocol_id.localeCompare(right.protocol_id));
+}
+
+/** Which protocol the benchmark view should show when the operator did not name one.
+ *
+ *  The deployment's first protocol (CIRCUS release) has composition rows but ZERO aggregate
+ *  reports; the 13 real reports live under `fashioniq_original_split`. Landing on the former showed
+ *  an empty card and read as broken. This only redirects when the current protocol has NO report at
+ *  all AND another one does, and only when navigating into the view — an explicit `?protocol=…`
+ *  selection is left alone, because a reader who asked to see an empty protocol deserves to see it.
+ */
+export function protocolOrDefault(current: string, served: readonly { protocol_id: string }[]): string {
+  if (served.some((item) => item.protocol_id === current)) return current;
+  return served[0]?.protocol_id ?? current;
+}
+
+/** One column of the CIRCUS composition table.
+ *
+ *  The table overflowed its 1148 px container by 104 px at 1440x900 once the 11 columns existed,
+ *  which clipped the last two. With `table-layout: fixed` every column's width is declared here
+ *  rather than left to content, so the fit is a fact that can be asserted
+ *  (`workbench/tests/test_frontend_layout_columns.py`) instead of something only a screenshot knows.
+ *  Fixed columns are `px` because their content is (a checkbox, a badge, four digits); the two
+ *  flexible ones split the remainder, so the model cell can wrap instead of pushing the table wide.
+ */
+export interface CompositionColumn { key: string; label: string; px?: number; flex?: boolean }
+
+export const COMPOSITION_COLUMNS: readonly CompositionColumn[] = [
+  { key: "select", label: "", px: 34 },
+  { key: "model", label: "Mô hình / checkpoint", flex: true },
+  { key: "source", label: "Nguồn / transfer", flex: true },
+  { key: "status", label: "Trạng thái", px: 116 },
+  { key: "ndcg", label: "MM nDCG", px: 90 },
+  { key: "r10", label: "MM R@10", px: 112 },
+  { key: "text", label: "Text nDCG", px: 82 },
+  { key: "image", label: "Image nDCG", px: 88 },
+  { key: "gap", label: "Gap", px: 92 },
+  { key: "scored", label: "Đã chấm", px: 104 },
+  { key: "detail", label: "Chi tiết", px: 92 },
+];
+
+/** The narrowest a flexible column may be before its header wraps mid-word. */
+export const COMPOSITION_FLEX_MIN = 148;
+
+/** Total width the table needs at least: every fixed column plus the flexible minimum. */
+export function compositionMinWidth(columns: readonly CompositionColumn[] = COMPOSITION_COLUMNS): number {
+  const fixed = columns.reduce((sum, column) => sum + (column.px ?? 0), 0);
+  const flexible = columns.filter((column) => column.flex).length;
+  return fixed + flexible * COMPOSITION_FLEX_MIN;
+}
+
 /** Fixed cutoffs that the protocol itself defines. A UI control must not pretend to change these. */
 export const FIXED_CUTOFFS = {
   compositionOutcomeK: 10,

@@ -1,12 +1,15 @@
+import { useState } from "react";
 import type { WorkbenchData, RunCatalogEntry } from "./data";
 import { protocolLabel } from "./data";
 import type { Location } from "./routes";
 import { SUBSET_LABEL, SUBSETS, CONDITIONS, FIXED_CUTOFF_LABEL } from "./routes";
-import { Badge, Card, Detail, EmptyState, ErrorState, KeyValue, LoadingState, SortHeader, sortRows, useSort } from "./ui";
+import { Badge, Card, DetailToggle, EmptyState, ErrorState, KeyValue, LoadingState, SortHeader, sortRows, useSort } from "./ui";
 import {
-  COMPOSITION_GAP_FORMULA, FIXED_CUTOFFS, compositionGap, scoredCounts, scoringImplsPresent, transferLabel,
+  COMPOSITION_COLUMNS, COMPOSITION_GAP_FORMULA, FIXED_CUTOFFS, compositionGap, compositionMinWidth,
+  protocolsWithReports,
+  scoredCounts, scoringImplsPresent, testWorkspaceOrigin, transferLabel,
 } from "./catalog";
-import { fmtDenominator, fmtFractionPercent, fmtGap, fmtInt, fmtNdcg, fmtPercentValue, fmtPp, shortId } from "./format";
+import { fmtDateStamp, fmtDenominator, fmtFractionPercent, fmtGap, fmtInt, fmtNdcg, fmtPercentValue, fmtPp, shortId } from "./format";
 import type { CompositionRun } from "./types";
 import type { WarningLabel } from "./gate";
 import { warningLabels } from "./gate";
@@ -43,6 +46,7 @@ function CompositionTable({ data, location, onGoto, onSelectRun }: {
   onSelectRun: (entry: RunCatalogEntry, additive?: boolean) => void;
 }) {
   const { sort, toggle } = useSort({ key: "ndcg", dir: "desc" });
+  const [expandedDetail, setExpandedDetail] = useState<string | null>(null);
   const region = data.compositionRuns.region;
   const all = region.data ?? [];
   const forProtocol = all.filter((run) => run.protocol_id === location.protocol);
@@ -64,6 +68,10 @@ function CompositionTable({ data, location, onGoto, onSelectRun }: {
 
   const transferred = rows.filter((run) => transferLabel(run).isTransfer);
   const failed = rows.filter((run) => run.is_failed);
+  const expandedRow = expandedDetail
+    ? sorted.map((run) => ({ run, key: `${run.run_id}-${run.subset}` }))
+        .find((candidate) => candidate.key === expandedDetail) ?? null
+    : null;
 
   return (
     <div className="stack" data-testid="area-evaluation">
@@ -103,21 +111,28 @@ function CompositionTable({ data, location, onGoto, onSelectRun }: {
                 <>
                   <ScoringImplNotice rows={sorted} />
                   <div className="table-wrap">
-                  <table data-testid="composition-table">
+                  <table className="fixed-table" data-testid="composition-table"
+                         style={{ minWidth: compositionMinWidth() }}>
                     <caption className="sr-only">Chỉ số composition theo lượt</caption>
+                    <colgroup>
+                      {COMPOSITION_COLUMNS.map((column) => (
+                        <col key={column.key} data-col={column.key}
+                             style={column.px ? { width: column.px } : undefined} />
+                      ))}
+                    </colgroup>
                     <thead>
                       <tr>
-                        <th scope="col" style={{ width: 34 }} aria-label="Chọn" />
+                        <th scope="col" aria-label="Chọn" />
                         <SortHeader label="Mô hình / checkpoint" column="model" sort={sort} onSort={toggle} />
-                        <th scope="col" className="t-col-narrow">Nguồn / transfer</th>
+                        <th scope="col">Nguồn / transfer</th>
                         <th scope="col">Trạng thái</th>
                         <SortHeader label="MM nDCG" column="ndcg" sort={sort} onSort={toggle} numeric unit="[0,1]" />
                         <SortHeader label="MM R@10" column="r10" sort={sort} onSort={toggle} numeric unit="%" />
-                        <th scope="col" className="num t-col-narrow">Text nDCG</th>
-                        <th scope="col" className="num t-col-narrow">Image nDCG</th>
+                        <th scope="col" className="num">Text nDCG</th>
+                        <th scope="col" className="num">Image nDCG</th>
                         <SortHeader label="Gap" column="gap" sort={sort} onSort={toggle} numeric />
                         <SortHeader label="Đã chấm" column="coverage" sort={sort} onSort={toggle} numeric />
-                        <th scope="col" className="t-col-narrow">Chi tiết</th>
+                        <th scope="col">Chi tiết</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -127,9 +142,11 @@ function CompositionTable({ data, location, onGoto, onSelectRun }: {
                         const counts = scoredCounts(run, "multimodal");
                         const transfer = transferLabel(run);
                         const entry = data.catalog.find((item) => item.key === key);
+                        const rowKey = `${run.run_id}-${run.subset}`;
+                        const expanded = expandedDetail === rowKey;
                         return (
-                          <tr key={`${run.run_id}-${run.subset}`} aria-selected={selected.has(key)}
-                              data-testid={`composition-row-${run.run_id}`}>
+                          <tr aria-selected={selected.has(key)}
+                              data-testid={`composition-row-${run.run_id}`} data-expanded={expanded || undefined}>
                             <td>
                               <input type="checkbox" checked={selected.has(key)}
                                      disabled={!entry?.capabilities.flags.per_query_target_ranks}
@@ -142,7 +159,7 @@ function CompositionTable({ data, location, onGoto, onSelectRun }: {
                               <span className="cell-strong">{run.model_id}</span>
                               <span className="cell-sub">{shortId(run.checkpoint_id, 26)}</span>
                             </td>
-                            <td className="t-col-narrow">
+                            <td>
                               <Badge tone={transfer.isTransfer ? "warn" : "neutral"}
                                      title={transfer.isTransfer ? "Checkpoint huấn luyện trên dataset khác, đánh giá tại đây — không phải dòng paper" : undefined}>
                                 {transfer.label}
@@ -155,16 +172,23 @@ function CompositionTable({ data, location, onGoto, onSelectRun }: {
                             </td>
                             <td className="num">{run.is_failed ? "—" : fmtNdcg(run.metrics?.ndcg_multimodal)}</td>
                             <td className="num">{run.is_failed ? "—" : fmtPercentValue(run.metrics?.recall_at_10_multimodal)}</td>
-                            <td className="num t-col-narrow">{run.is_failed ? "—" : fmtNdcg(run.metrics?.ndcg_text_only)}</td>
-                            <td className="num t-col-narrow">{run.is_failed ? "—" : fmtNdcg(run.metrics?.ndcg_image_only)}</td>
+                            <td className="num">{run.is_failed ? "—" : fmtNdcg(run.metrics?.ndcg_text_only)}</td>
+                            <td className="num">{run.is_failed ? "—" : fmtNdcg(run.metrics?.ndcg_image_only)}</td>
                             <td className="num" title={gap.state === "available" ? `${gap.formula}; cohort ${fmtInt(gap.cohort)}` : gap.reason}>
                               {gap.state === "available"
                                 ? <span style={{ color: gap.value < 0 ? "var(--ok)" : undefined }}>{fmtGap(gap.value)}</span>
                                 : <span className="hint">unavailable</span>}
                             </td>
-                            <td className="num">{fmtDenominator(counts.scored, counts.total)}</td>
-                            <td className="t-col-narrow">
-                              <RunMetricsDetail run={run} />
+                            {/* Two lines, not one: "6,003 / 6,003 (100.0%)" is ~150 px of
+                                nowrap digits and cannot fit a 104 px track. Same three numbers,
+                                same meaning; the coverage share sits under its own denominator. */}
+                            <td className="num">
+                              {fmtInt(counts.scored)} / {fmtInt(counts.total)}
+                              <span className="cell-sub num">{fmtFractionPercent(counts.coverage)}</span>
+                            </td>
+                            <td>
+                              <DetailToggle open={expanded}
+                                            onToggle={() => setExpandedDetail(expanded ? null : rowKey)} />
                             </td>
                           </tr>
                         );
@@ -172,6 +196,16 @@ function CompositionTable({ data, location, onGoto, onSelectRun }: {
                     </tbody>
                   </table>
                   </div>
+                  {expandedRow && (
+                    <section className="row-detail" data-testid="composition-detail">
+                      <header className="row-detail-head">
+                        <b>{expandedRow.run.model_id} / {shortId(expandedRow.run.checkpoint_id, 26)}</b>
+                        <span className="hint">{expandedRow.run.run_id}</span>
+                        <button type="button" className="ghost" onClick={() => setExpandedDetail(null)}>Đóng</button>
+                      </header>
+                      <RunMetricsDetail run={expandedRow.run} />
+                    </section>
+                  )}
                 </>
               )}
       </Card>
@@ -214,8 +248,7 @@ function RunMetricsDetail({ run }: { run: CompositionRun }) {
   const gap = compositionGap(run);
   const warnings: WarningLabel[] = warningLabels(run as never, 5);
   return (
-    <Detail summary="Chỉ số & nguồn">
-      <KeyValue rows={[
+    <KeyValue rows={[
         ["gap", gap.state === "available"
           ? <span key="g">{fmtGap(gap.value)} · cohort {fmtInt(gap.cohort)} · {gap.formula}</span>
           : <span key="g" className="hint">unavailable — {gap.reason}</span>],
@@ -242,7 +275,6 @@ function RunMetricsDetail({ run }: { run: CompositionRun }) {
         ["run_id", <code key="r2">{run.run_id}</code>],
         ["cảnh báo", <span key="w">{warnings.length ? warnings.map((label) => label.text).join(" · ") : "không có"}</span>],
       ]} />
-    </Detail>
   );
 }
 
@@ -252,8 +284,13 @@ function BenchmarkTable({ data, location, onGoto }: {
   onGoto: (patch: Partial<Location>) => void;
 }) {
   const region = data.aggregates.region;
+  const [expandedRow, setExpandedRow] = useState<string | null>(null);
+  const served = protocolsWithReports(region.data ?? []);
   const rows = (region.data ?? []).filter((run) => run.protocol_id === location.protocol);
   const { sort, toggle } = useSort({ key: "r10", dir: "desc" });
+  const expandedReport = expandedRow
+    ? (region.data ?? []).find((run) => run.run_id === expandedRow) ?? null
+    : null;
   const sorted = sortRows(rows, sort, (run, key) => {
     switch (key) {
       case "model": return run.model_id ?? "";
@@ -265,15 +302,29 @@ function BenchmarkTable({ data, location, onGoto }: {
     }
   });
   return (
-    <div className="stack">
+    <div className="stack" data-testid="area-benchmark">
       <Card title="Báo cáo tổng hợp" subtitle={`${rows.length} report cho ${protocolLabel(location.protocol)} · chỉ số macro, không có rank từng query`}>
         {region.status === "error"
           ? <ErrorState message={region.error ?? ""} onRetry={data.aggregates.retry} />
           : region.status === "loading" && !region.data
             ? <LoadingState />
             : rows.length === 0
-              ? <EmptyState kind="capability" detail="Protocol này không có báo cáo tổng hợp nào."
-                            next={<button type="button" onClick={() => onGoto({ view: "composition" })}>Xem bảng composition</button>} />
+              ? <EmptyState kind="capability"
+                            testId="benchmark-empty"
+                            title={`Protocol ${protocolLabel(location.protocol)} không có báo cáo tổng hợp nào`}
+                            detail={served.length
+                              ? <>Đây là dữ liệu, không phải lỗi tải. {served.length} protocol khác có báo cáo — chọn một cái ở dưới để xem ngay.</>
+                              : "Không protocol nào trong deployment này có báo cáo tổng hợp."}
+                            next={<>
+                              {served.map((item) => (
+                                <button key={item.protocol_id} type="button"
+                                        data-testid={`benchmark-goto-${item.protocol_id}`}
+                                        onClick={() => onGoto({ protocol: item.protocol_id, runs: [], run: "", query: "", offset: 0 })}>
+                                  {protocolLabel(item.protocol_id)} ({fmtInt(item.count)} report)
+                                </button>
+                              ))}
+                              <button type="button" className="ghost" onClick={() => onGoto({ view: "composition" })}>Xem bảng composition</button>
+                            </>} />
               : (
                 <div className="table-wrap">
                   <table>
@@ -286,18 +337,26 @@ function BenchmarkTable({ data, location, onGoto }: {
                         <th scope="col" className="num">Paper R@10</th>
                         <SortHeader label="Δ vs paper" column="delta" sort={sort} onSort={toggle} numeric unit="pp" />
                         <th scope="col">Khả năng</th>
-                        <th scope="col" className="t-col-narrow">Chi tiết</th>
+                        <th scope="col">Chi tiết</th>
                       </tr>
                     </thead>
                     <tbody>
                       {sorted.map((run) => {
                         const entry = data.catalog.find((item) => item.key === `a:${run.run_id}`);
                         const certified = run.verification?.certified && run.verification?.is_research_evidence;
+                        const origin = testWorkspaceOrigin(run);
                         return (
                           <tr key={run.run_id}>
                             <td>
                               <span className="cell-strong">{(run.model_id || "?").toUpperCase()}</span>
                               <span className="cell-sub">{run.checkpoint_id}</span>
+                              {origin && (
+                                <span className="cell-sub" data-testid={`benchmark-origin-${run.run_id}`}
+                                      title={`Evaluator ran with paths under ${origin}: a test/development run, not evidence about a trained model`}>
+                                  TEST WORKSPACE · {origin.split("/").pop()}
+                                </span>
+                              )}
+                              <span className="cell-sub mono">{fmtDateStamp(run.run_id)}</span>
                             </td>
                             <td>
                               <Badge tone={certified ? "ok" : run.verification?.state === "refused" ? "bad" : "warn"}>
@@ -317,19 +376,8 @@ function BenchmarkTable({ data, location, onGoto }: {
                               </span>
                             </td>
                             <td>
-                              <Detail summary="Chi tiết">
-                                <KeyValue rows={[
-                                  ["per_query_state", <code key="p">{run.per_query_state ?? "unknown"}</code>],
-                                  ["evidence", (run.verification?.reasons ?? []).join("; ") || "—"],
-                                  ["danh tính", run.duplicate_status
-                                    ? `${run.duplicate_status}${run.duplicate_attempt_count ? ` · ${fmtInt(run.duplicate_attempt_count)} lần thử` : ""}`
-                                    : "chưa được công bố — không suy ra được là trùng hay khác"],
-                                  ["knobs", run.evaluator_environment_knobs
-                                    ? Object.entries(run.evaluator_environment_knobs).map(([name, value]) => `${name}=${shortId(String(value), 40)}`).join(", ")
-                                    : "không được ghi (đây KHÔNG phải bằng chứng trùng lặp)"],
-                                  ["run_id", <code key="r">{run.run_id}</code>],
-                                ]} />
-                              </Detail>
+                              <DetailToggle open={expandedRow === run.run_id}
+                                            onToggle={() => setExpandedRow(expandedRow === run.run_id ? null : run.run_id)} />
                             </td>
                           </tr>
                         );
@@ -338,6 +386,26 @@ function BenchmarkTable({ data, location, onGoto }: {
                   </table>
                 </div>
               )}
+        {expandedReport && (
+          <section className="row-detail" data-testid="benchmark-detail">
+            <header className="row-detail-head">
+              <b>{(expandedReport.model_id || "?").toUpperCase()} / {expandedReport.checkpoint_id}</b>
+              <span className="hint mono">{expandedReport.run_id}</span>
+              <button type="button" className="ghost" onClick={() => setExpandedRow(null)}>Đóng</button>
+            </header>
+            <KeyValue rows={[
+              ["per_query_state", <code key="p">{expandedReport.per_query_state ?? "unknown"}</code>],
+              ["evidence", (expandedReport.verification?.reasons ?? []).join("; ") || "—"],
+              ["danh tính", expandedReport.duplicate_status
+                ? `${expandedReport.duplicate_status}${expandedReport.duplicate_attempt_count ? ` · ${fmtInt(expandedReport.duplicate_attempt_count)} lần thử` : ""}`
+                : "chưa được công bố — không suy ra được là trùng hay khác"],
+              ["knobs", expandedReport.evaluator_environment_knobs
+                ? <span key="k">{Object.entries(expandedReport.evaluator_environment_knobs)
+                    .map(([name, value]) => `${name}=${value}`).join(", ")}</span>
+                : "không được ghi (đây KHÔNG phải bằng chứng trùng lặp)"],
+            ]} />
+          </section>
+        )}
       </Card>
       <p className="hint">
         Paper R@10 là <b>tham chiếu văn liệu</b>, không phải số đo. Δ tính bằng điểm phần trăm (pp) so với

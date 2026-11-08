@@ -276,6 +276,25 @@ select { min-height: 32px; }
 .kv-row { display: contents; }
 .kv dt { color: var(--ink-3); }
 .kv dd { margin: 0; color: var(--ink-2); word-break: break-word; }
+/* Inside the panel the value column gets whatever the container has; `min-width: 0` stops a long
+   unbroken run_id from making the grid's 1fr track wider than its box, which is exactly what
+   pushed the page when this panel lived inside a table cell. */
+.row-detail .kv { grid-template-columns: minmax(90px, max-content) minmax(0, 1fr); }
+.row-detail .kv dd { overflow-wrap: anywhere; }
+
+/* The panel a row's "Chi tiết" toggle opens: full container width, below the table. */
+.row-detail {
+  margin-top: 10px; padding: 10px 12px;
+  border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface-2);
+  min-width: 0;
+}
+.row-detail-head { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; margin-bottom: 8px; }
+.row-detail-head button { margin-left: auto; }
+.row-detail pre, .row-detail code {
+  overflow-wrap: anywhere; white-space: pre-wrap;
+}
+tbody tr[data-expanded] td { background: var(--surface-2); }
+tbody tr[data-expanded] td:first-child { box-shadow: inset 2px 0 0 var(--accent); }
 
 .progress { height: 5px; background: var(--surface-3); border-radius: 999px; overflow: hidden; min-width: 60px; }
 .progress span { display: block; height: 100%; background: var(--accent); }
@@ -295,6 +314,25 @@ button.secondary:hover:not(:disabled) { background: var(--surface-3); color: var
 
 .table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
 table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+/* A table whose columns are declared, not derived from content.
+   The CIRCUS composition table overflowed its 1148 px container by 104 px at 1440x900 because
+   `table-layout: auto` sized every cell to its widest content ("trained on FashionIQ", a badge, a
+   title attribute). With fixed layout the widths come from <col> in `catalog.ts` and the table fits
+   its container at every width above the declared minimum; below it the scroll box is the only
+   overflow, and it is inside `.table-wrap`, never on the page. */
+table.fixed-table { table-layout: fixed; min-width: 0; }
+table.fixed-table th, table.fixed-table td { overflow-wrap: anywhere; }
+table.fixed-table thead th { white-space: normal; }
+table.fixed-table .sort-head { white-space: normal; }
+/* A unit is one token: "MM R@10" wrapping before its "%" makes the unit read as a separate column. */
+table.fixed-table .sort-head .unit { white-space: nowrap; }
+/* A badge may wrap inside a declared-width column: "TRANSFER · CIRR → FashionIQ transfer" is one
+   long label and `nowrap` made it paint over the next column instead of growing the row. */
+/* `overflow-wrap: break-word` breaks inside a single long token only when it cannot fit, so
+   "TRANSFER · CIRR → FashionIQ transfer" wraps at its spaces while a one-word badge keeps its word. */
+table.fixed-table td .badge { white-space: normal; overflow-wrap: break-word; }
+/* A header that wraps between two words is readable; one that wraps inside a word is not. */
+table.fixed-table thead th .sort-head span:first-child { display: inline; }
 thead th {
   position: sticky;
   top: 0;
@@ -469,13 +507,17 @@ pre {
 
 /* Narrow screens: the evaluation table is the one place a horizontal scroll is legitimate (it is
    an 11-column numeric table), so it is CONTAINED in its own scroll box while every other region
-   must fit. Columns that only repeat the row's identity collapse first, so what scrolls is numbers. */
+   must fit. Columns are no longer hidden: hiding "Chi tiết" made the row detail unreachable on a
+   phone, and hiding a numeric column silently removed data a reader was told the table contains.
+   Instead the scroll box scrolls. The table's own `min-width` is derived from the same declared
+   column list (`compositionMinWidth`), so the flexible columns keep their floor and no cell ever
+   collapses to one character per line. */
 @media (max-width: 860px) {
   .table-wrap { overflow-x: auto; }
   table { min-width: 0; }
-  thead th.t-col-narrow, tbody td.t-col-narrow { display: none; }
   .card, .content, .workspace, .shell { min-width: 0; }
   .contextbar select { max-width: 100%; }
+  .row-detail { padding: 10px; }
 }
 
 @media (max-width: 860px) {

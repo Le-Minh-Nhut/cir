@@ -151,6 +151,27 @@ export function KeyValue({ rows }: { rows: Array<[string, ReactNode]> }) {
   );
 }
 
+/** The control that opens a row-detail panel. It stays in the last cell; the panel itself renders
+ *  BELOW the table, not inside a cell.
+ *
+ *  The previous markup put a `<details>` panel inside that cell. The cell is ~100 px wide and `.kv`
+ *  is a `max-content 1fr` grid, so the panel grew to 7 711 px tall with 12 px-wide value columns —
+ *  measured, not guessed — while the table widened from 1 252 to 1 304 px and the whole row reflowed
+ *  into single-character columns. A panel outside the table cannot widen it and gives hashes and
+ *  paths the container's full width.
+ */
+export function DetailToggle({ open, onToggle, label = "Chi tiết" }: {
+  open: boolean;
+  onToggle: () => void;
+  label?: string;
+}) {
+  return (
+    <button type="button" className="rowbtn" aria-expanded={open} onClick={onToggle}>
+      <span aria-hidden="true">{open ? "▾" : "▸"}</span> {label}
+    </button>
+  );
+}
+
 export function Progress({ value, max, label }: { value: number; max: number; label: string }) {
   const pct = max > 0 ? Math.min(100, Math.max(0, (value / max) * 100)) : 0;
   return (

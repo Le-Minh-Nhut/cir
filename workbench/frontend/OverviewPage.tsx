@@ -130,7 +130,7 @@ export function OverviewPage({ data, location, onOpenRun, onGoto }: {
                       <th scope="col" className="num">MM nDCG</th>
                       <th scope="col" className="num">MM R@10</th>
                       <th scope="col" className="num">Composition gap</th>
-                      <th scope="col" className="num t-col-narrow">Đã chấm / mẫu</th>
+                      <th scope="col" className="num">Đã chấm / mẫu</th>
                       <th scope="col">Hành động</th>
                     </tr>
                   </thead>

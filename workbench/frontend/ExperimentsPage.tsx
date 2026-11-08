@@ -48,6 +48,7 @@ function RunsView({ data, location, onSelectRun, onGoto }: {
   });
   const failedCount = catalog.filter((entry) => entry.status === "FAILED").length;
   const capabilityMissing = catalog.filter((entry) => !entry.capabilities.flags.per_query_target_ranks).length;
+  const testOriginCount = catalog.filter((entry) => entry.testOrigin).length;
 
   if (data.compositionRuns.region.status === "error" && data.indexRuns.region.status === "error") {
     return <ErrorState message={data.compositionRuns.region.error ?? ""} onRetry={data.refreshAll} />;
@@ -107,6 +108,20 @@ function RunsView({ data, location, onSelectRun, onGoto }: {
                               {entry.checkpointId} · {entry.family === "composition" ? "CIRCUS release" : entry.family === "index" ? "chỉ mục per-query" : "báo cáo tổng hợp"}
                               {entry.isTransfer ? " · TRANSFER" : ""}
                             </span>
+                            {/* Ten aggregate rows in this deployment were written by the test suite
+                                into its own pytest workspace. They are real API rows and stay
+                                visible; saying WHERE they came from is what stops them reading as
+                                ten copies of one run. The run id's own timestamp is printed too,
+                                because that is the only column that differs between them. */}
+                            {entry.testOrigin && (
+                              <span className="cell-sub" data-testid={`origin-${entry.key}`}
+                                    title={`Evaluator ran with paths under ${entry.testOrigin}: this row records a test/development run, not evidence about a trained model`}>
+                                TEST WORKSPACE · {entry.testOrigin.split("/").pop()}
+                              </span>
+                            )}
+                            {entry.family === "aggregate" && (
+                              <span className="cell-sub mono">{fmtDateStamp(entry.runId)}</span>
+                            )}
                           </td>
                           <td><Badge tone={entry.family === "composition" ? "info" : entry.family === "index" ? "neutral" : "warn"}>
                             {entry.family === "composition" ? "release" : entry.family === "index" ? "index" : "aggregate"}
@@ -155,6 +170,16 @@ function RunsView({ data, location, onSelectRun, onGoto }: {
         Đã chọn <b>{location.runs.length}</b> lượt. Phân tích lỗi và so sánh dùng đúng các lượt này; mọi
         phép so sánh đều nêu cohort và mẫu số.
       </p>
+      {testOriginCount > 0 && (
+        <p className="hint" data-testid="test-origin-notice">
+          <b>{fmtInt(testOriginCount)}</b> trong {fmtInt(catalog.length)} hàng là bản ghi <b>test
+          workspace</b>: evaluator chạy với đường dẫn trong thư mục pytest của chính bộ test, nên chúng
+          trùng tên mô hình/checkpoint và chỉ khác <code>run_id</code> (in dưới mỗi tên). Mỗi hàng là
+          một lần chạy riêng — backend báo <code>duplicate_status: unique</code> — nhưng không phải bằng
+          chứng về một mô hình đã huấn luyện, nên bị <code>REFUSED</code> và mang nhãn <code>dev</code>.
+          Chúng vẫn hiện đủ; không hàng nào bị ẩn hay gộp.
+        </p>
+      )}
     </div>
   );
 }

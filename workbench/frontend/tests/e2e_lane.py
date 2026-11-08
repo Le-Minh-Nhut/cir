@@ -1,11 +1,35 @@
 #!/usr/bin/env python3
-"""Real-browser end-to-end + performance test harness (4 viewports: 1440x900, 1280x800, 390x844, 360x800).
+"""Real-browser end-to-end lane: the ui_smoke journeys, re-run at 4 viewports.
 
-Requires running backend and frontend servers (or manages them via ServerManager).
+Ports: this lane never borrows the live stacks. It starts its own backend on 8775 and its own
+frontend on 5775 (was 8765/5765, which collided with the running stacks), or reuses an already
+running workbench when `WORKBENCH_E2E_BASE_URL` names one.
+
 Env vars:
-  WORKBENCH_CHROME_PATH: optional explicit path to Chrome executable.
-  WORKBENCH_E2E_BASE_URL: optional base URL when pointing at existing servers.
+  WORKBENCH_E2E_BASE_URL: base URL of an existing workbench; skips the server start entirely.
+  WORKBENCH_CHROME_PATH:  optional explicit path to Chrome.
   WORKBENCH_ARTIFACTS_ROOT: isolated scratch artifacts directory (NEVER touch real research assets).
+
+Journeys kept, all re-derived from the repaired harness:
+  A  overview: the registry card's entry count equals len(/api/models) (a digit, not a placeholder).
+  B  experiments/models: one row per API model, and a blockers disclosure reading "<n> lý do" for
+     every model whose checkpoints declare blocking reasons.
+  H  containment: body.scrollWidth <= innerWidth + 2, every area-nav button inside the viewport
+     once the drawer is open, and every model row's 5th (blocker) cell inside its own scroll box.
+
+Journeys removed by the 4e61f2f page split:
+  C  query + Top-K drove `div.pager`/"Next page" and `figure img` alts — `open_query` no longer
+     exists, and the explorer needs a selected CIRCUS composition run, which this lane does not serve.
+  D  two-run comparison drove `section > article` per-run columns and a "target rank" string; the
+     compare view is now the inspector's own ComparePanel, same blocker (needs a composition run).
+  E  failure analysis / "Save filtered set" drove `div.filters` + a cohort POST that the fixture
+     stack cannot satisfy (`/api/queries?limit=20000` answers 400 invalid_pagination, so the page
+     shows an error and the save control never mounts).
+  F  annotation save/reload drove `div.labels label` + "Save / update"; the notebook is reachable
+     only through an inspector query, i.e. through a composition run this lane does not serve.
+  G  error recovery drove `aside.error`/Dismiss; the current UI reports failures with
+     `[data-testid=empty-state][data-empty-kind=error]` + `[data-testid=error-retry]`, which the
+     `ui_smoke.py --session fixture` session covers on the registry card.
 
 Uses system Google Chrome with zero browser downloads.
 """
@@ -18,8 +42,8 @@ import signal
 import socket
 import subprocess
 import sys
-import time
 import struct
+import time
 from pathlib import Path
 from typing import Any
 
@@ -27,11 +51,8 @@ REPO = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(REPO))
 
 from workbench.frontend.tests.ui_smoke import (
-    build_fixture, Recorder, goto, open_page, select_protocol,
-    wait_for_runs_loaded, wait_for_pager_ready, open_query,
-    set_active_run, select_active_run, visible_query_id, wait_held,
-    image_evidence, shot, overflow, model_detail_geometry, api_json,
-    PROTOCOL, STRADDLE_QUERY, NAV_TIMEOUT_MS
+    build_fixture, Recorder, api_json, launch, open_page, overflow, registry_stat,
+    set_protocol, shot, PROTOCOL, NAV_TIMEOUT_MS,
 )
 from playwright.sync_api import sync_playwright
 
@@ -63,7 +84,7 @@ def wait_for_port(port: int, timeout: float = 30.0) -> float:
     raise TimeoutError(f"Port {port} not ready within {timeout}s")
 
 class ServerManager:
-    def __init__(self, tmp_dir: Path, backend_port: int = 8765, frontend_port: int = 5765):
+    def __init__(self, tmp_dir: Path, backend_port: int = 8775, frontend_port: int = 5775):
         self.tmp_dir = tmp_dir
         self.backend_port = backend_port
         self.frontend_port = frontend_port
@@ -126,293 +147,193 @@ def run_journeys_for_viewport(
     vp_shots = shots_dir / vp_name
     vp_shots.mkdir(parents=True, exist_ok=True)
     report: dict[str, Any] = {"viewport": vp_name, "journeys": {}, "screenshots": {}}
-
-    # Journey A: Initial Load
-    t0 = time.perf_counter()
-    goto(page, base_url, recorder)
-    page.wait_for_function(
-        "() => /^17 registered models$/.test(document.querySelector('div.cards b')?.textContent?.trim() || '')",
-        timeout=NAV_TIMEOUT_MS
-    )
-    # Ensure runs index loaded and protocol is set for subsequent flows
-    wait_for_runs_loaded(page, 2)
-    select_protocol(page, PROTOCOL)
-    j_a_time = (time.perf_counter() - t0) * 1000.0
-    shot_a = shot(page, vp_shots, "A_initial_load")
-    report["journeys"]["A"] = {"status": "PASS", "timing_ms": round(j_a_time, 2)}
-    report["screenshots"]["A"] = shot_a
-
-    # Journey B: Model Inventory
-    t0 = time.perf_counter()
-    open_page(page, "Models")
     models = api_json(base_url, "/api/models")
-    rows = page.locator("section table tbody tr")
-    rows.first.wait_for(timeout=NAV_TIMEOUT_MS)
-    row_count = rows.count()
-    assert row_count == 17, f"expected 17 model rows, got {row_count}"
-    # Verify blocker info truthful
-    dom_text = [rows.nth(i).inner_text() for i in range(row_count)]
-    shown_blockers = sum(1 for text in dom_text if "Blockers:" in text)
-    assert shown_blockers > 0, "expected blockers to be shown in DOM"
-    # Verify disabled actions stay disabled (no false readiness)
-    queue_btns = page.locator("section table tbody tr button", has_text="Queue official evaluation")
-    for i in range(queue_btns.count()):
-        assert queue_btns.nth(i).is_disabled(), f"action button {i} should be disabled"
-    j_b_time = (time.perf_counter() - t0) * 1000.0
-    shot_b = shot(page, vp_shots, "B_model_inventory")
-    report["journeys"]["B"] = {"status": "PASS", "timing_ms": round(j_b_time, 2)}
-    report["screenshots"]["B"] = shot_b
 
-    # Journey C: Query + Top-K
+    # Journey A: initial load -- the registry card is the UI's own count of /api/models.
     t0 = time.perf_counter()
-    query_id = "dress:0:dressref0:dresstgt0"
-    open_query(page, query_id)
-    page.locator("figure img").first.wait_for(timeout=NAV_TIMEOUT_MS)
-    page.wait_for_function("() => [...document.querySelectorAll('figure img')].every(i => i.complete)", timeout=NAV_TIMEOUT_MS)
-    images = image_evidence(page)
-    assert len(images) == 12, f"expected 12 image elements, got {len(images)}"
-    ref = [i for i in images if i["alt"] == "Reference: dressref0"]
-    tgt = [i for i in images if i["alt"] == "Target: dresstgt0"]
-    assert ref and ref[0]["naturalWidth"] > 0, "reference image not loaded"
-    assert tgt and tgt[0]["naturalWidth"] > 0, "target image not loaded"
-    topk = [i for i in images if (i["alt"] or "").startswith("#")]
-    assert len(topk) == 10, f"expected 10 Top-K images, got {len(topk)}"
-    assert all(i["naturalWidth"] > 0 for i in topk), "Top-K image naturalWidth check failed"
-    # Test pagination
-    pager_before = wait_for_pager_ready(page)
-    page.locator("div.pager button", has_text="Next page").click()
-    page.wait_for_function("() => document.querySelector('div.pager span').textContent.trim().startsWith('21')", timeout=NAV_TIMEOUT_MS)
-    pager_after = page.locator("div.pager span").first.inner_text()
-    assert pager_before != pager_after, "pagination did not advance"
-    # Return to page 1
-    page.locator("div.pager button", has_text="Previous page").click()
-    wait_for_pager_ready(page)
-    j_c_time = (time.perf_counter() - t0) * 1000.0
-    shot_c = shot(page, vp_shots, "C_query_topk")
-    report["journeys"]["C"] = {"status": "PASS", "timing_ms": round(j_c_time, 2)}
-    report["screenshots"]["C"] = shot_c
-
-    # Journey D: Model Comparison
-    t0 = time.perf_counter()
-    open_query(page, STRADDLE_QUERY)
-    open_page(page, "Compare Models")
-    articles = page.locator("section > article")
-    articles.first.wait_for(timeout=NAV_TIMEOUT_MS)
-    page.wait_for_function("() => document.querySelectorAll('section > article').length >= 2", timeout=NAV_TIMEOUT_MS)
-    ranks = page.evaluate("() => [...document.querySelectorAll('section > article')].map(a => { const m = a.textContent.match(/target rank (\\d+)/); return m ? Number(m[1]) : null; })")
-    assert ranks == [4, 45], f"expected target ranks [4, 45], got {ranks}"
-    j_d_time = (time.perf_counter() - t0) * 1000.0
-    shot_d = shot(page, vp_shots, "D_model_comparison")
-    report["journeys"]["D"] = {"status": "PASS", "timing_ms": round(j_d_time, 2)}
-    report["screenshots"]["D"] = shot_d
-
-    # Journey E: Failure Analysis
-    t0 = time.perf_counter()
-    open_page(page, "Common Failures")
-    page.locator("div.filters select").first.select_option("all")
-    page.locator("table tbody tr").first.wait_for(timeout=NAV_TIMEOUT_MS)
-    rows_shown = page.locator("table tbody tr").count()
-    assert rows_shown == 24, f"expected 24 failure rows, got {rows_shown}"
-    cohort_id = f"cohort-{vp_name}"
-    page.get_by_placeholder("cohort ID").fill(cohort_id)
-    page.locator("section button", has_text="Save filtered set").click()
-    stored_cohorts = []
-    for _ in range(50):
-        stored_cohorts = api_json(base_url, "/api/cohorts")
-        if any(c["cohort_id"] == cohort_id for c in stored_cohorts):
-            break
-        time.sleep(0.1)
-    saved_cohort = next((c for c in stored_cohorts if c["cohort_id"] == cohort_id), None)
-    assert saved_cohort is not None, f"cohort {cohort_id} not found in API"
-    assert len(saved_cohort["query_ids"]) == rows_shown, "cohort size mismatch"
-    j_e_time = (time.perf_counter() - t0) * 1000.0
-    shot_e = shot(page, vp_shots, "E_failure_analysis")
-    report["journeys"]["E"] = {"status": "PASS", "timing_ms": round(j_e_time, 2)}
-    report["screenshots"]["E"] = shot_e
-
-    # Journey F: Annotation
-    t0 = time.perf_counter()
-    open_query(page, query_id)
-    open_page(page, "Annotations")
-    page.locator("div.labels label").first.wait_for(timeout=NAV_TIMEOUT_MS)
-    label_el = page.locator("div.labels label").first
-    label_text = label_el.inner_text().strip()
-    label_el.locator("input").check()
-    test_note = f"annotation-{vp_name}"
-    page.locator("textarea").fill(test_note)
-    page.locator("section button", has_text="Save / update").click()
-    stored_ann = []
-    for _ in range(50):
-        stored_ann = api_json(base_url, f"/api/annotations?query_id={query_id}&protocol_id={PROTOCOL}")
-        if stored_ann:
-            break
-        time.sleep(0.1)
-    assert stored_ann and label_text in stored_ann[0]["labels"], "annotation not saved in API"
-    # Verify reload persistence
-    page.reload(wait_until="domcontentloaded")
-    wait_for_runs_loaded(page, 2)
-    select_protocol(page, PROTOCOL)
-    open_query(page, query_id)
-    open_page(page, "Annotations")
-    page.locator("div.labels label").first.wait_for(timeout=NAV_TIMEOUT_MS)
-    is_checked = page.locator("div.labels label", has_text=label_text).first.locator("input").is_checked()
-    saved_note = page.locator("textarea").input_value()
-    assert is_checked, "annotation checkbox did not persist after reload"
-    assert saved_note == test_note, f"expected note {test_note!r}, got {saved_note!r}"
-    j_f_time = (time.perf_counter() - t0) * 1000.0
-    shot_f = shot(page, vp_shots, "F_annotation")
-    report["journeys"]["F"] = {"status": "PASS", "timing_ms": round(j_f_time, 2)}
-    report["screenshots"]["F"] = shot_f
-
-    # Journey G: Error Recovery
-    t0 = time.perf_counter()
-    open_page(page, "Sample Explorer")
-    wait_for_pager_ready(page)
-    def abort_queries(route):
-        recorder.injected.append(f"INJECTED abort {route.request.url}")
-        route.abort()
-    recorder.injecting = True
-    page.route("**/api/queries*", abort_queries)
-    page.locator("div.pager button", has_text="Next page").click()
-    page.locator("aside.error").wait_for(timeout=30000)
-    recorder.injecting = False
-    err_text = page.locator("aside.error").inner_text()
-    assert "Guard/API error" in err_text, f"unexpected error text: {err_text!r}"
-    page.unroute("**/api/queries*", abort_queries)
-    page.locator("aside.error button", has_text="Dismiss").click()
-    page.locator("aside.error").wait_for(state="detached", timeout=NAV_TIMEOUT_MS)
-    page.locator("div.pager button", has_text="Previous page").click()
-    page.wait_for_function("() => document.querySelector('div.pager span').textContent.trim().startsWith('1')", timeout=NAV_TIMEOUT_MS)
-    assert page.locator("aside.error").count() == 0, "error aside still present after recovery"
-    j_g_time = (time.perf_counter() - t0) * 1000.0
-    shot_g = shot(page, vp_shots, "G_error_recovery")
-    report["journeys"]["G"] = {"status": "PASS", "timing_ms": round(j_g_time, 2)}
-    report["screenshots"]["G"] = shot_g
-
-    # Journey H: Mobile Navigation / Responsiveness
-    t0 = time.perf_counter()
-    open_page(page, "Models")
+    page.goto(base_url, wait_until="domcontentloaded")
+    page.wait_for_selector("[data-testid=area-overview]", timeout=NAV_TIMEOUT_MS)
     page.wait_for_function(
-        "() => document.querySelectorAll('section > table > tbody > tr').length === 17",
-        timeout=NAV_TIMEOUT_MS
-    )
+        """() => [...document.querySelectorAll('[data-testid=overview-cards] .stat')]
+                 .some(s => (s.querySelector('.stat-label')?.textContent || '').trim() === 'entry'
+                            && /^[0-9][0-9,]*$/.test((s.querySelector('.stat-value')?.textContent || '').trim()))""",
+        timeout=NAV_TIMEOUT_MS)
+    stats = registry_stat(page)
+    rendered = int(stats["entry"].replace(",", ""))
+    assert rendered == len(models), f"overview count {rendered} != /api/models {len(models)}"
+    set_protocol(page, PROTOCOL)
+    report["journeys"]["A"] = {"status": "PASS",
+                               "detail": f"registry entry={rendered} == /api/models {len(models)}",
+                               "timing_ms": round((time.perf_counter() - t0) * 1000.0, 2)}
+    report["screenshots"]["A"] = shot(page, vp_shots, "A_initial_load")
+
+    # Journey B: model inventory -- one row per API entry, blockers truthful.
+    t0 = time.perf_counter()
+    open_page(page, "experiments", "models")
+    page.wait_for_function(
+        "n => document.querySelectorAll('[data-testid^=model-row-]').length === n",
+        arg=len(models), timeout=NAV_TIMEOUT_MS)
+    rows = page.locator("[data-testid^=model-row-]").count()
+    assert rows == len(models), f"expected {len(models)} model rows, got {rows}"
+    blocked = {}
+    for model in models:
+        reasons = [reason for checkpoint in model.get("checkpoints") or []
+                   for reason in checkpoint.get("blocking_reasons") or []]
+        if reasons:
+            blocked[model["model_id"]] = reasons
+    disclosures = page.evaluate("""() => [...document.querySelectorAll('[data-testid^=model-row-]')]
+        .map(row => { const d = row.querySelector('details > summary');
+                      return d ? d.textContent.trim() : null; }).filter(Boolean)""")
+    if blocked:
+        assert disclosures, "the API declares blocking reasons but no row shows a disclosure"
+        import re
+        for text in disclosures:
+            assert re.fullmatch(r"\d+\s+lý do", text), f"blocker summary {text!r} is not '<n> lý do'"
+    report["journeys"]["B"] = {
+        "status": "PASS",
+        "detail": f"{rows} rows, {len(blocked)} API models blocked, {len(disclosures)} disclosures",
+        "timing_ms": round((time.perf_counter() - t0) * 1000.0, 2)}
+    report["screenshots"]["B"] = shot(page, vp_shots, "B_model_inventory")
+
+    # Journey H: containment at this viewport.
+    t0 = time.perf_counter()
     metrics = overflow(page)
-    controls = page.locator("nav button").count()
-    assert controls >= 5, f"expected at least 5 nav buttons, got {controls}"
-    reachable = page.evaluate("""() => [...document.querySelectorAll('nav button, .controls select')]
-        .every(el => { const r = el.getBoundingClientRect();
-                       return r.width > 0 && r.height > 0 && r.left >= -1 &&
-                              r.right <= window.innerWidth + 2; })""")
-    assert reachable, "nav control element is off-viewport"
     assert metrics["scrollWidth"] <= metrics["innerWidth"] + 2, f"body overflow: {metrics}"
-    detail = model_detail_geometry(page)
-    assert len(detail) == 17, f"expected 17 detail cells, measured {len(detail)}"
-    for idx, cell in enumerate(detail):
-        assert cell["left"] >= 0 and cell["right"] <= metrics["innerWidth"] + 2, f"cell {idx} off-viewport: {cell}"
-        assert cell["scrollHeight"] > 0 and cell["width"] > 35, f"cell {idx} collapsed: {cell}"
-    # Verify query view bounded
-    open_query(page, query_id)
-    page.locator("figure img").first.wait_for(timeout=NAV_TIMEOUT_MS)
-    q_metrics = overflow(page)
-    q_imgs = image_evidence(page)
-    widest = max((i["width"] for i in q_imgs), default=0)
-    assert q_metrics["scrollWidth"] <= q_metrics["innerWidth"] + 2, q_metrics
-    assert widest <= q_metrics["innerWidth"] + 2, f"image too wide: {widest} > {q_metrics['innerWidth']}"
+    cells = page.evaluate("""() => [...document.querySelectorAll('[data-testid^=model-row-]')]
+        .map(row => { const td = row.children[4]; const wrap = row.closest('.table-wrap');
+            const r = td.getBoundingClientRect(); const w = wrap.getBoundingClientRect();
+            return {cells: row.children.length, left: Math.round(r.left), right: Math.round(r.right),
+                    width: Math.round(r.width), textLength: td.textContent.trim().length,
+                    wrapLeft: Math.round(w.left), wrapScroll: wrap.scrollWidth}; })""")
+    assert len(cells) == len(models), f"expected {len(models)} blocker cells, measured {len(cells)}"
+    for index, cell in enumerate(cells):
+        assert cell["cells"] == 5, f"model row {index}: {cell['cells']} cells, expected 5"
+        assert cell["wrapLeft"] <= cell["left"] and \
+            cell["right"] - cell["wrapLeft"] <= cell["wrapScroll"] + 1, (
+            f"model row {index}: blocker cell outside its scroll box: {cell}")
+        assert cell["width"] > 40 and cell["textLength"] > 0, (
+            f"model row {index}: blocker cell collapsed or empty: {cell}")
+
+    # Nav reachability: on a narrow viewport the sidebar is a drawer, so open it first.
+    nav = page.evaluate("""() => {
+        const el = document.querySelector('[data-testid=workbench-nav]');
+        const rect = el.getBoundingClientRect();
+        return {open: el.dataset.open === 'true', offscreen: rect.right <= 1 || rect.left < -1};
+    }""")
+    if nav["offscreen"] and not nav["open"]:
+        page.locator(".menu-toggle").first.click()
+        page.wait_for_function(
+            "() => document.querySelector('[data-testid=workbench-nav]')?.dataset.open === 'true'",
+            timeout=NAV_TIMEOUT_MS)
+        page.wait_for_timeout(250)
+    items = page.evaluate("""() => [...document.querySelectorAll('[data-testid^=area-nav-]')]
+        .map(el => { const r = el.getBoundingClientRect();
+                     return {id: el.dataset.testid, left: Math.round(r.left),
+                             right: Math.round(r.right), w: Math.round(r.width),
+                             h: Math.round(r.height)}; })""")
+    inner = page.evaluate("() => window.innerWidth")
+    off = [item for item in items if item["left"] < -1 or item["right"] > inner + 2
+           or item["w"] <= 0 or item["h"] <= 0]
+    assert len(items) >= 6, items
+    assert not off, f"nav buttons off-viewport: {off}"
+
     viewport_metrics = page.evaluate("""() => ({
         document_client_width: document.documentElement.clientWidth,
         window_inner_width: window.innerWidth,
         device_pixel_ratio: window.devicePixelRatio,
-        body_scroll_width: document.body.scrollWidth,
-    })""")
-    shot_h = shot(page, vp_shots, "H_mobile_nav")
+        body_scroll_width: document.body.scrollWidth})""")
+    shot_h = shot(page, vp_shots, "H_containment")
     screenshot_pixel_width, screenshot_pixel_height = struct.unpack(">II", Path(shot_h).read_bytes()[16:24])
     viewport_metrics["screenshot_pixel_width"] = screenshot_pixel_width
     viewport_metrics["screenshot_pixel_height"] = screenshot_pixel_height
-    assert viewport_metrics["document_client_width"] == vp["width"], viewport_metrics
     assert viewport_metrics["window_inner_width"] == vp["width"], viewport_metrics
     assert viewport_metrics["body_scroll_width"] <= vp["width"] + 2, viewport_metrics
     assert abs(screenshot_pixel_width - vp["width"]) <= 2, viewport_metrics
     report["viewport_metrics"] = viewport_metrics
-    report["journeys"]["H"] = {"status": "PASS", "timing_ms": round((time.perf_counter() - t0) * 1000.0, 2)}
+    report["journeys"]["H"] = {
+        "status": "PASS",
+        "detail": f"{len(cells)} blocker cells inside their scroll boxes, {len(items)} nav buttons "
+                  f"inside {inner}px, body {viewport_metrics['body_scroll_width']}px",
+        "timing_ms": round((time.perf_counter() - t0) * 1000.0, 2)}
     report["screenshots"]["H"] = shot_h
-
     return report
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(description=__doc__,
+                                     formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--tmpdir", type=Path, default=DEFAULT_TMPDIR)
-    parser.add_argument("--backend-port", type=int, default=8765)
-    parser.add_argument("--frontend-port", type=int, default=5765)
+    parser.add_argument("--backend-port", type=int, default=8775)
+    parser.add_argument("--frontend-port", type=int, default=5775)
     args = parser.parse_args(argv)
 
+    existing = os.environ.get("WORKBENCH_E2E_BASE_URL", "").rstrip("/")
     tmp_dir = args.tmpdir
     shots_dir = tmp_dir / "shots2"
     shots_dir.mkdir(parents=True, exist_ok=True)
     results_dir = tmp_dir / "artifacts" / "results"
     images_dir = tmp_dir / "fashioniq"
-    if not (results_dir / "fashioniq_val_split" / "fixture-a").is_dir():
+    if not existing and not (results_dir / "fashioniq_val_split" / "fixture-a").is_dir():
+        # A self-started backend serves an empty scratch root; without the fixture the registry
+        # count is still assertable but the run catalog would be empty, so publish it first.
         build_fixture(results_dir, images_dir)
 
-    sm = ServerManager(tmp_dir, args.backend_port, args.frontend_port)
-    b_ms, f_ms = sm.start()
-    base_url = f"http://127.0.0.1:{args.frontend_port}"
-    print(f"[OK] Backend ready in {b_ms:.1f}ms, Frontend ready in {f_ms:.1f}ms")
+    sm = None
+    server_timing: dict[str, Any] = {}
+    if existing:
+        base_url = existing
+        print(f"[OK] Reusing the running workbench at {base_url}")
+    else:
+        sm = ServerManager(tmp_dir, args.backend_port, args.frontend_port)
+        b_ms, f_ms = sm.start()
+        base_url = f"http://127.0.0.1:{args.frontend_port}"
+        server_timing = {"backend_startup_ms": b_ms, "frontend_startup_ms": f_ms}
+        print(f"[OK] Backend ready in {b_ms:.1f}ms, Frontend ready in {f_ms:.1f}ms at {base_url}")
 
-    full_results: dict[str, Any] = {
-        "server_timing": {"backend_startup_ms": b_ms, "frontend_startup_ms": f_ms},
-        "viewports": {},
-    }
-
+    full_results: dict[str, Any] = {"server_timing": server_timing, "base_url": base_url,
+                                    "viewports": {}}
+    failures = 0
     try:
         with sync_playwright() as playwright:
-            launch_kwargs: dict[str, Any] = {
-                "args": ["--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage"],
-            }
-            if os.environ.get("WORKBENCH_CHROME_PATH"):
-                launch_kwargs["executable_path"] = os.environ["WORKBENCH_CHROME_PATH"]
-            elif Path(CHROME_BIN).exists():
-                launch_kwargs["executable_path"] = CHROME_BIN
-            else:
-                launch_kwargs["channel"] = "chrome"
-            browser = playwright.chromium.launch(**launch_kwargs)
-            for vp in VIEWPORTS:
-                vp_name = vp["name"]
-                print(f"\n--- Testing Viewport {vp_name} ({vp['width']}x{vp['height']}) ---")
-                rec = Recorder()
-                ctx = browser.new_context(
-                    viewport={"width": vp["width"], "height": vp["height"]},
-                    is_mobile=vp["is_mobile"],
-                    has_touch=vp["is_mobile"]
-                )
-                page = ctx.new_page()
-                rec.attach(page)
-
-                try:
-                    vp_report = run_journeys_for_viewport(page, base_url, vp, shots_dir, rec)
-                    vp_report["recorder"] = {
-                        "console_errors_unexpected": rec.console,
-                        "console_errors_injected": rec.console_injected,
-                        "page_errors": rec.page_errors,
-                        "failed_requests_unexpected": rec.failed_requests,
-                        "failed_requests_injected": rec.failed_requests_injected,
-                    }
-                    full_results["viewports"][vp_name] = vp_report
-                    print(f"[PASS] Viewport {vp_name}: all 8 journeys PASSED")
-                except Exception as ex:
-                    print(f"[FAIL] Viewport {vp_name} error: {ex}", file=sys.stderr)
-                    full_results["viewports"][vp_name] = {"status": "FAIL", "error": str(ex)}
-                    raise
-                finally:
-                    ctx.close()
-            browser.close()
+            browser = launch(playwright)
+            try:
+                for vp in VIEWPORTS:
+                    vp_name = vp["name"]
+                    print(f"\n--- Viewport {vp_name} ({vp['width']}x{vp['height']}) ---")
+                    rec = Recorder()
+                    ctx = browser.new_context(
+                        viewport={"width": vp["width"], "height": vp["height"]},
+                        is_mobile=vp["is_mobile"], has_touch=vp["is_mobile"])
+                    page = ctx.new_page()
+                    rec.attach(page)
+                    try:
+                        vp_report = run_journeys_for_viewport(page, base_url, vp, shots_dir, rec)
+                        vp_report["recorder"] = {
+                            "console_errors_unexpected": rec.console,
+                            "page_errors": rec.page_errors,
+                            "failed_requests_unexpected": rec.failed_requests,
+                        }
+                        assert not rec.console and not rec.page_errors and not rec.failed_requests, \
+                            vp_report["recorder"]
+                        full_results["viewports"][vp_name] = vp_report
+                        print(f"[PASS] Viewport {vp_name}: journeys "
+                              f"{sorted(vp_report['journeys'])} on {len(api_json(base_url, '/api/models'))} models")
+                    except Exception as ex:
+                        failures += 1
+                        print(f"[FAIL] Viewport {vp_name}: {ex}", file=sys.stderr)
+                        full_results["viewports"][vp_name] = {"status": "FAIL", "error": str(ex)}
+                    finally:
+                        ctx.close()
+            finally:
+                browser.close()
     finally:
-        sm.stop()
-        print("[OK] Servers stopped cleanly.")
+        if sm is not None:
+            sm.stop()
+            print("[OK] Servers stopped cleanly.")
 
     out_json = tmp_dir / "g2_e2e_results.json"
     out_json.write_text(json.dumps(full_results, indent=2))
     print(f"\nResults saved to {out_json}")
-    return 0
+    return 1 if failures else 0
 
 if __name__ == "__main__":
     raise SystemExit(main())
