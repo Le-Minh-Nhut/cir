@@ -144,33 +144,100 @@ The 33 failing test ids and their assertion lines, copied from the log's `short 
 
 ### What these failures are, and what they are not
 
-They are NOT attributed to `b0f38bd`'s production bytes. Two controls bound the claim:
+They are NOT attributed to `b0f38bd`'s production bytes. **32 of the 33 are caused by one untracked
+local config file created this session, not by `b0f38bd` and not by the host image.** A/B on the same
+tree, moving only that one file and touching no source and no test:
 
-- **Focused re-runs reproduce a subset outside the sweep.** `test_pc_launcher.py::test_matching_container_is_reused_positive_control`
-  fails alone with exit 1, `pc.sh` stopping at VERIFICATION because the sandbox's
-  `workbench/docker/.env` is absent, and the vendored CSMCIR checkout is dirty; the adapter tests
-  fail alone because this host has the `habit`/conesep/ptha_mtst checkpoints, so the adapter is
-  honestly `ready=True` where the test expects an unready adapter. The host has no reachable Docker
-  daemon (`docker info` exits non-zero).
-- **The same four files in a pristine worktree at `b0f38bd` give 1 failed, 148 passed**
-  (`test_pc_launcher.py`, `test_circus_adapters_blip.py`, `test_circus_adapters_rest.py`,
-  `test_release_blocker_source_integrity.py`), the single failure being
-  `test_limn_bundle_selection_submits_bundle_id_with_native_protocol` because
-  `workbench/frontend/dist/assets` is not present in a fresh checkout. So the launcher, e2e and
-  adapter classes reflect host state and missing build output, not a change introduced by this
-  revision.
+| Measurement | with `workbench/config/workbench.env` | without it |
+|---|---|---|
+| `test_circus_adapters_blip.py` + `test_circus_adapters_rest.py` | **3 failed, 27 passed** (exit 1) | **30 passed** (exit 0) |
+| the 8 files that produced 32 sweep failures | **33 failed, 188 passed** (exit 1) | 221 passed, 0 failed (exit 0) |
+| the four "pristine control" files at `b0f38bd` | **16 failed, 133 passed** | **1 failed, 148 passed** |
 
-One failure is not a defect at all: #4 is the release-metadata count guard, which fails on the very
-revision it describes until that revision is recorded. This document's advance is what resolves it,
-and it is deliberately quoted here rather than hidden, because a sweep that says "0 failed" while
-its own log says otherwise is the defect these guards exist to prevent.
+That table also corrects the earlier control: **1 failed, 148 passed** holds only when the file is
+absent; the remaining failure is `test_limn_bundle_selection_submits_bundle_id_with_native_protocol`
+— `Built frontend bundle missing under workbench/frontend/dist/assets`, i.e. a fresh checkout with no
+build artifact. The copy in `/tmp/cirb0` also carried a copy of the file (same md5), which is why the
+"16 failed" reading is the with-file one.
+
+The file is `workbench/config/workbench.env`: untracked (`.gitignore:209`), created this session,
+pointing `WORKBENCH_CHECKPOINT_ROOT` at
+`workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads` and overriding
+`WORKBENCH_ARTIFACTS_ROOT` and per-model interpreters. `workbench/backend/operator_config.py:8,128-150`
+(`resolve_config()`) reads it at import time, so any test that assumes default paths sees this repo's
+real paths instead of its sandbox.
+
+Single-key probes (export one key of the file, re-run):
+
+- `WORKBENCH_ARTIFACTS_ROOT` alone → launcher
+  `test_matching_container_is_reused_positive_control` **fails**; `test_release_blocker_source_integrity.py`
+  **2 failed, 16 passed** (the only single key that does this).
+- `WORKBENCH_CHECKPOINT_ROOT` alone → launcher control **fails**; adapters still **30 passed**.
+- Adapters need the **combo**: `WORKBENCH_CHECKPOINT_ROOT` + `WORKBENCH_{HABIT,CONESEP,PTHA_MTST}_PYTHON`
+  → **3 failed, 27 passed**. Neither lever alone suffices: the interpreter must be resolvable *and* a
+  staged checkpoint present for `Adapter.status().ready` to be genuinely `True` (the log records
+  `AdapterStatus(model_id='habit', ready=True, …)`, `ready=True` for `conesep`/`ptha_mtst`).
+- `WORKBENCH_ARTIFACTS_ROOT` alone is also the lever for both src07/src08: with it **2 failed,
+  16 passed**; with any other single key **18 passed**.
+- `CIR_DATA_ROOT`, `WORKBENCH_RESULTS_ROOT`, `WORKBENCH_CIRCUS_RELEASE_ROOT` alone → no change.
+
+Corrections to the earlier reading of this section: the launcher/e2e classes are **not** a "no reachable
+docker daemon" story — the tests drive a mock `docker` shim, and the sweep's own log records
+`[OK] Docker Engine: … daemon phản hồi tốt`; and src07/src08 are **not** a "dirty vendored CSMCIR
+checkout" story — `workbench/third_party/CSMCIR` is vendored with no `.git` and the pair passes
+without the file. One failure is not a defect at all and does not depend on the file: #4 is the
+release-metadata count guard, which fails on the very revision it describes until that revision is
+recorded; this document's advance is what resolves it, and it is deliberately quoted here rather than
+hidden, because a sweep that says "0 failed" while its own log says otherwise is the defect these
+guards exist to prevent.
+
+**The 33 is therefore specific to this working copy's operator state.** A fresh clone has no
+`workbench/config/workbench.env` and will produce a **different** failure count (per the control above,
+those files pass), so the log must be read with that caveat. This does not make the suite a PASS: the
+measured run on this host is still exit 1 with 33 failed.
 
 None of this is a green suite and none of it is presented as one. The sweep is recorded as measured:
 2186 passed, 33 failed, 47 skipped, exit 1.
 
+### Phát hiện: 32/33 failure do một file cấu hình cục bộ của session này, không phải `b0f38bd`
+
+**32 trong 33 failure là do một file cấu hình cục bộ untracked được tạo ra trong session này —
+`workbench/config/workbench.env` — không phải do `b0f38bd` và không phải do host image.**
+
+Đo trên đúng cây này, chỉ di chuyển file đó sang `/tmp` rồi trả lại, **không** sửa source, **không**
+sửa test:
+
+| phép đo | có `workbench.env` | không có `workbench.env` |
+|---|---|---|
+| `test_circus_adapters_blip.py` + `test_circus_adapters_rest.py` | **3 failed, 27 passed** | **30 passed** |
+| 8 file sinh ra 32 failure của sweep | **33 failed, 188 passed** | 221 passed, 0 failed |
+| 4 file control tại `b0f38bd` | **16 failed, 133 passed** | **1 failed, 148 passed** |
+
+Nghĩa là: khi **dời file đó đi**, các test này **pass**; con số **3/33** chỉ là nhóm adapter nhìn thấy
+được ngay, còn nhóm launcher/e2e/src-integrity cũng pass theo cùng một file. Failure còn lại khi không
+có file là `test_limn_bundle_selection_submits_bundle_id_with_native_protocol` —
+`Built frontend bundle missing under workbench/frontend/dist/assets` — tức bản clone sạch chưa build
+frontend, không liên quan tới revision.
+
+Cơ chế, đo bằng cách export **một** khoá của file rồi chạy lại: `WORKBENCH_ARTIFACTS_ROOT` một mình →
+launcher control fail và `test_release_blocker_source_integrity.py` **2 failed, 16 passed**;
+`WORKBENCH_CHECKPOINT_ROOT` một mình → launcher control fail nhưng adapter vẫn **30 passed**; adapter
+cần tổ hợp `WORKBENCH_CHECKPOINT_ROOT` + `WORKBENCH_{HABIT,CONESEP,PTHA_MTST}_PYTHON` → **3 failed,
+27 passed**, vì adapter cần interpreter resolve được **và** checkpoint staged để `ready` thật sự
+`True`. `workbench/backend/operator_config.py:8,128-150` đọc file này lúc import.
+
+**Vì vậy 33 là con số riêng của working copy này, phụ thuộc operator state.** Một fresh clone **không**
+có file đó và sẽ ra **số failure khác**, nên log phải được đọc kèm caveat này. Điều đó **không** làm
+suite thành PASS: lượt chạy thật vẫn là exit 1 với 33 failed.
+
+Hai cách giải thích cũ trong mục này đã bị đo bác bỏ và được sửa lại: nhóm launcher/e2e **không** phải
+"không có Docker daemon" (test dùng shim `docker` mock, và chính log sweep ghi
+`[OK] Docker Engine … daemon phản hồi tốt`); src07/src08 **không** phải "vendored CSMCIR checkout bẩn"
+(`workbench/third_party/CSMCIR` không có `.git`, và cặp test này pass khi không có file cấu hình).
+
 | Gate | Command | Result |
 |---|---|---|
-| Backend suite | **RUN, FAILED at `b0f38bd` — not a PASS.** One serial run of `workbench/tests` at `b0f38bd` (CPython 3.12.11, `workbench/envs/ctl312h/bin/python`, `-q -p no:cacheprovider -rfE --tb=no`, 2211.38 s, exit 1) measured **2186 passed, 33 failed, 47 skipped = 2266 collected**. Raw log: `20261108T015603+0700/tests/full_suite_b0f38bd.txt`. The 33 failures, verbatim from the log: 11 `test_pc_launcher.py`, 10 `test_release_blocker_master_e2e.py`, 4 `test_phase1_acceptance_scenarios.py`, 2 `test_release_blocker_source_integrity.py`, 2 `test_circus_adapters_blip.py`, 1 `test_true_master_e2e.py`, 1 `test_http_api_layer.py`, 1 `test_circus_adapters_rest.py`, 1 `test_handoff_commands.py`. Grouping by cause: (a) the `test_pc_launcher.py`/`test_http_api_layer.py` launcher group fails on a `docker` daemon that is unavailable on this host (`docker info` exits non-zero), and on this host's `workbench/docker/.env` being absent, so `pc.sh` stops in CONFIG/VERIFICATION; (b) `test_release_blocker_master_e2e.py` and `test_phase1_acceptance_scenarios.py` fail inside the same sandbox path; (c) `test_circus_adapters_blip.py`/`_rest.py` assert an adapter is NOT ready while the host has the checkpoint and reports ready=True; (d) `test_release_blocker_source_integrity.py` src07/src08 see a dirty vendored CSMCIR checkout; (e) the one `test_handoff_commands.py` failure is the by-construction count guard, which is resolved by this very documentation advance. Control: the same four files run in a clean worktree at `b0f38bd` gave 1 failed (frontend `dist/assets` absent), 148 passed — so the launcher/e2e classes are host-state, not this revision's production bytes. Historical: `61f70b0` measured 2203 passed, 0 failed, 47 skipped = 2250 collected; that result does not carry over. |
+| Backend suite | **RUN, FAILED at `b0f38bd` — not a PASS.** One serial run of `workbench/tests` at `b0f38bd` (CPython 3.12.11, `workbench/envs/ctl312h/bin/python`, `-q -p no:cacheprovider -rfE --tb=no`, 2211.38 s, exit 1) measured **2186 passed, 33 failed, 47 skipped = 2266 collected**. Raw log: `20261108T015603+0700/tests/full_suite_b0f38bd.txt`. The 33 failures, verbatim from the log: 11 `test_pc_launcher.py`, 10 `test_release_blocker_master_e2e.py`, 4 `test_phase1_acceptance_scenarios.py`, 2 `test_release_blocker_source_integrity.py`, 2 `test_circus_adapters_blip.py`, 1 `test_true_master_e2e.py`, 1 `test_http_api_layer.py`, 1 `test_circus_adapters_rest.py`, 1 `test_handoff_commands.py`. Grouping by cause: (a) **32 of 33** disappear when the untracked `workbench/config/workbench.env` created this session is moved aside — 11 `test_pc_launcher.py` + 1 `test_http_api_layer.py` keyed on `WORKBENCH_ARTIFACTS_ROOT`; 2 `test_release_blocker_source_integrity.py` (src07/src08) also keyed on `WORKBENCH_ARTIFACTS_ROOT`; 2 `test_circus_adapters_blip.py` + 1 `test_circus_adapters_rest.py` keyed on `WORKBENCH_CHECKPOINT_ROOT` + the three model interpreters, so `Adapter.status().ready` is honestly `True` where these tests expect unready; the remaining 15 (`test_release_blocker_master_e2e.py` 10, `test_phase1_acceptance_scenarios.py` 4, `test_true_master_e2e.py` 1) fail inside the same override and pass without the file; (b) the one `test_handoff_commands.py` failure is the by-construction count guard, which is resolved by this very documentation advance. A/B on the same tree: those 8 files give **33 failed, 188 passed** with the file and 221 passed, 0 failed without it. Control: the same four files in a clean worktree at `b0f38bd` give **1 failed, 148 passed** without the file (the one failure is `workbench/frontend/dist/assets` absent in a fresh checkout) and **16 failed, 133 passed** with a copy of it. Historical: `61f70b0` measured 2203 passed, 0 failed, 47 skipped = 2250 collected; that result does not carry over. |
 | Acceptance | `bash workbench/docker/acceptance.sh` | **ACCEPTANCE PASSED at `59949ff`** (1 honest skip: GPG status unverified). At `9a53ee1` group C fails only against the pre-existing `cir-workbench` container, whose image predates the vendoring and still serves the old registry (it reports `ptha_mtst source_available: false`); rerun against a backend started from current source and group C passes — `PASS 17 models, ids/protocols/environments match the registry`. Rebuild the image before re-running acceptance. |
 | Mutation checks | `bash workbench/docker/mutation_checks.sh` | **PASSED** M1 M2 M3 M4 M5 |
 | Offline release verification | `bash workbench/docker/release_verify.sh --offline` | exit 0, `ENGINEERING_INCOMPLETE`, **0 checks FAIL/UNRUN** |

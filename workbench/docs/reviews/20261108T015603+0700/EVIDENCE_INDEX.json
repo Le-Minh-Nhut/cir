@@ -4,13 +4,13 @@
   "entries": [
     {
       "dest": "FINAL_REPORT.md",
-      "bytes": 37381,
-      "sha256": "28f5be027b84c2c62354d232560a512e5f3c98d3fea58e081dc36a90e03cd64a"
+      "bytes": 42602,
+      "sha256": "6647ff6f68cc27b4cb7bbd1629daea94361328758c4a23df7a581c2b16f0d560"
     },
     {
       "dest": "FINAL_REPORT.vi.md",
-      "bytes": 37381,
-      "sha256": "28f5be027b84c2c62354d232560a512e5f3c98d3fea58e081dc36a90e03cd64a"
+      "bytes": 42602,
+      "sha256": "6647ff6f68cc27b4cb7bbd1629daea94361328758c4a23df7a581c2b16f0d560"
     },
     {
       "dest": "HANDOFF.md",
