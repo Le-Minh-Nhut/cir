@@ -19,7 +19,7 @@ the aggregate) is the concrete unblock.
 |---|---|
 | Branch | `research/cir-failure-workbench` |
 | Initial HEAD this pass | `3aae18fe02ef13f5b38d153dbc8007fbb40d4c92` |
-| **TESTED_SOURCE_SHA** | **`c2d8cdeb0eabc3232b28070f55b5a10d63ccffcb`** — latest production commit (this round: `runner.py` parallel scoring across query groups + the BLAS pin and `blas_threads_pinned`, the LIMN `query_scope` wiring and `query_scope_resolution`, `backend/composition.py` scoring-path measurement identity, the bounded `prefetch_rows` window, the corrected BLAS comment in `composition_eval.py`). Collection at this revision: **2528 tests** in `workbench/tests`. **Serial sweep measured at this revision** (one run, CPython 3.12.11, interpreter `workbench/envs/ctl312h/bin/python`, command `python -m pytest workbench/tests -q -p no:cacheprovider -rfE --tb=no`, exit 1, 3464.03 s): **2463 passed, 18 failed**, 47 skipped = 2528 collected, and the raw log is filed at `20261108T212500+0700-sweep/full_suite_c2d8cdeb.txt`. The 18 failures are recorded verbatim below and are NOT a pass. Historical rows, which do NOT carry over: `b0f38bd` measured 2186 passed, 33 failed, 47 skipped = 2266 collected, and `61f70b0bb205464cf9131e8dae054ec5f69e13f4` measured 2203 passed, 0 failed, 47 skipped = 2250 collected. This revision adds 38 test ids and 262 collected tests over `b0f38bd`, so neither earlier count describes this tree. |
+| **TESTED_SOURCE_SHA** | **`c2d8cdeb0eabc3232b28070f55b5a10d63ccffcb`** — latest production commit (this round: `runner.py` parallel scoring across query groups + the BLAS pin and `blas_threads_pinned`, the LIMN `query_scope` wiring and `query_scope_resolution`, `backend/composition.py` scoring-path measurement identity, the bounded `prefetch_rows` window, the corrected BLAS comment in `composition_eval.py`). Collection at this revision: **2528 tests** in `workbench/tests`. **Serial sweep measured at this revision** (one run, CPython 3.12.11, interpreter `workbench/envs/ctl312h/bin/python`, command `python -m pytest workbench/tests -q -p no:cacheprovider -rfE --tb=no`, exit 1, 3464.03 s): **2463 passed, 18 failed**, 47 skipped = 2528 collected, and the raw log is filed at `20261108T212500+0700-sweep/full_suite_c2d8cdeb.txt`. The 18 failures are recorded verbatim below and are NOT a pass. Historical rows, which do NOT carry over: `b0f38bd` measured 2186 passed, 33 failed, 47 skipped = 2266 collected, and `61f70b0bb205464cf9131e8dae054ec5f69e13f4` measured 2203 passed, 0 failed, 47 skipped = 2250 collected. Over `b0f38bd..c2d8cdeb` the suite grows 2266 → 2528 collected (**+262 ids**, measured by collecting both revisions), so neither earlier count describes this tree; `6eb4434` alone adds 30 `def test_*`. |
 | **FINAL_HEAD_SHA** | not recorded here by design: a tracked file cannot name the commit that contains it. `git rev-parse HEAD` on the branch tip is the authority. |
 | Production tree | compare against `c2d8cdeb0eabc3232b28070f55b5a10d63ccffcb` with `git diff c2d8cdeb0eabc3232b28070f55b5a10d63ccffcb HEAD -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'`; the release guard requires byte-identical production source. |
 | `origin/main` | `8ebcc74d5fd1934df4f3772a8ca5a96dbd00f333` — **unchanged** |
@@ -108,30 +108,36 @@ every collected test is accounted for. The full log is
 
 ### Attribution of all 18
 
-Every one reproduces outside the sweep, and none is caused by this round's production changes. Grouped
-by cause, with the reproduction that establishes it:
+Full table, per-row evidence and correction history:
+`20261108T212500+0700-sweep/FAILURES.md`. Summary:
 
-| # | test(s) | cause | category |
-|---|---|---|---|
-| 1-4 | `test_circus_adapters_blip.py::test_resident_worker_{reuse_and_cleanup,failure_uses_shared_error_and_stays_failed}` × {conesep, ptha_mtst} | `AttributeError: 'Adapter' object has no attribute 'batch_size'` — the fixture builds the adapter with `Adapter.__new__` and never sets the attribute the worker now reads | **test pinning obsolete behaviour** (fixture); same failure at `1a4cd32` |
-| 5 | `test_circus_cli.py::test_cli_3d_full_gallery_resume_and_gallery_invalidation` | `assert 'REUSED' == 'COMPLETED'` — a cross-file fixture-ordering effect: it passes alone and fails when `test_composition_topk_runner.py` runs first | **pre-existing at the previously tested revision**; reproduced in a `git worktree` of `1a4cd32` with the same two files (1 failed, 30 passed) |
-| 6-7 | `test_circus_tme_lifecycle.py::test_encoder_and_limn_failed_child_latch_and_preserve_log[encoder,limn]` | `WORKBENCH_ENCODER_PYTHON` / `WORKBENCH_LIMN_PYTHON` resolve as `None` inside the test's sandbox | **machine/operator state** |
-| 8 | `test_circus_tme_precision.py::test_worker_skips_empty_stdin_lines` | missing `output.npy` worker artifact | **machine/operator state** |
-| 9 | `test_f05_f08_f09_verification.py::test_f08_dcnet_config_data_dir_resolution` | untracked symlink `workbench/third_party/DCNet/dataset/fashioniq -> /home/heheboiz/data/cir/data/FashionIQ`, created 13:43 by another agent; it makes `.resolve()` return the real tree | **machine/operator state** |
-| 10 | `test_handoff_commands.py::test_no_release_document_points_at_a_superseded_source_sha` | the guard diffed the tree against the OLD recorded `b0f38bd`; this document's advance is what resolves it | **test pinning obsolete behaviour** — closed by this commit |
-| 11-17 | `test_release_blocker_gpu_records.py` × 7 | `docker/release_verify.sh` returns 1 with `verdict=RELEASE_BLOCKED`: the shared artifacts root holds 621 capability records whose `probe_source=override is a synthetic test probe` | **machine/operator state** |
-| 18 | `test_standalone_operator_commands.py::test_prepare_model_executes_only_declared_recipe_steps` | same DCNet symlink changes the recipe path the command takes | **machine/operator state** |
+| category | n | ids |
+|---|---:|---|
+| **(a)** caused by a change inside `b0f38bd..HEAD` | **6** | #1–#4 (`adapter.batch_size` read at `model_conesep.py:183`, added by `aa0f530`; the `Adapter.__new__` fixture never sets it), #5 (`test_circus_cli` ordering vs `test_composition_topk_runner.py`, added by `9b6b5b6`), #8 (worker dies with `module 'torch' has no attribute 'set_num_threads'` — `adapters.py:182`, added by `aa0f530`, meets a stdlib-only `torch` stub) |
+| **(h)** harness/test defect | **2** | #6, #7 — `conftest.py:31-43 isolate_operator_state` is `autouse=True` and deletes every `CIR_*`/`WORKBENCH_*` variable for every test, so the test's own fixture guarantees `WORKBENCH_{ENCODER,LIMN}_PYTHON=None`; still fails with the variable exported, and will fail on a fresh clone |
+| **(b)** host state | **9** | #9, #18 (untracked DCNet symlink from another agent; both pass in a clean worktree), #11–#17 (`release_verify` `RELEASE_BLOCKED`; `workbench/artifacts/gpu_capabilities/` holds 632 records, 465 `probe_source: override`, 363 `Synthetic GPU`, 34 CUDA-OOM, 34 with both, 329 Synthetic GPU with `error: null`, 50 with no device name) |
+| **(c)** pre-existing at `b0f38bd` | **0** | — |
+| **(d)** obsolete test (closed) | **1** | #10, resolved by advancing `TESTED_SOURCE_SHA` |
 
-Nothing in this list is attributed to `c2d8cdeb`'s production bytes. The two causes that are not pure
-operator state are a test fixture that has not kept up (group 1-4) and a release-metadata guard whose
-entire job is to fail until the recorded revision is advanced (#10).
+6 + 2 + 9 + 0 + 1 = 18.
+
+**This is not "operator state explains the failures".** 8 of the 18 are defects inside the delivered
+range. None of the 18 is on a measurement path, so they do not invalidate the numbers this revision
+recorded — but they are open, and #6/#7 reproduce on a fresh clone.
+
+An earlier version of this attribution was wrong in six ways (a mis-tally, two impossible-by-construction
+rows called operator state, a this-round ordering interaction called pre-existing, a zero-regression
+claim made over a range that was not checked, and two overstated evidence counts). It was corrected after
+an independent agent re-ran three rows; `FAILURES.md` carries the full correction history.
 
 ### What this is not
 
-It is not a green suite and it is not paper reproduction. Two of the 18 expose open problems in the
-evidence rather than in this round's code: `release_verify` reports `RELEASE_BLOCKED` on this host, and
-the `test_circus_cli` ordering effect means that test's resume claim is only trustworthy when it runs in
-isolation. Neither is fixed here.
+It is not a green suite and it is not paper reproduction. **Eight of the 18 are defects that ship
+inside the `b0f38bd..HEAD` range** — six production-caused (#1–#4, #5, #8) and two harness defects whose
+test cannot pass as written (#6, #7, which reproduce on a fresh clone). The other ten are host state or
+closed. None of the 18 is on a measurement path, so they do not invalidate the numbers recorded above;
+none is fixed here. A suite whose failures are described as "operator state" without this breakdown
+would be claiming a green result it does not have.
 
 ## The serial sweep at `b0f38bd` (historical, 33 failures)
 
@@ -281,7 +287,7 @@ Hai cách giải thích cũ trong mục này đã bị đo bác bỏ và đượ
 
 | Gate | Command | Result |
 |---|---|---|
-| Backend suite | **RUN, FAILED at `c2d8cdeb` — not a PASS.** One serial run of `workbench/tests` at `c2d8cdeb0eabc3232b28070f55b5a10d63ccffcb` (CPython 3.12.11, `workbench/envs/ctl312h/bin/python`, `-q -p no:cacheprovider -rfE --tb=no`, 3464.03 s, exit 1: **2463 passed, 18 failed, 47 skipped = 2528 collected**). All 18 attributed in "The serial sweep at `c2d8cdeb`": 11 operator state, 5 tests pinning obsolete behaviour, 1 pre-existing and 1 this round's guard; **0 caused by this revision's production bytes**. |
+| Backend suite | **RUN, FAILED at `c2d8cdeb` — not a PASS.** One serial run of `workbench/tests` at `c2d8cdeb0eabc3232b28070f55b5a10d63ccffcb` (CPython 3.12.11, `workbench/envs/ctl312h/bin/python`, `-q -p no:cacheprovider -rfE --tb=no`, 3464.03 s, exit 1: **2463 passed, 18 failed, 47 skipped = 2528 collected**). All 18 attributed in "The serial sweep at `c2d8cdeb`"/`FAILURES.md`: **6 caused inside `b0f38bd..HEAD`**, 2 harness defects that fail on a fresh clone, 9 host state, 1 obsolete test now closed. |
 | Acceptance | `bash workbench/docker/acceptance.sh` | **ACCEPTANCE PASSED at `59949ff`** (1 honest skip: GPG status unverified). At `9a53ee1` group C fails only against the pre-existing `cir-workbench` container, whose image predates the vendoring and still serves the old registry (it reports `ptha_mtst source_available: false`); rerun against a backend started from current source and group C passes — `PASS 17 models, ids/protocols/environments match the registry`. Rebuild the image before re-running acceptance. |
 | Mutation checks | `bash workbench/docker/mutation_checks.sh` | **PASSED** M1 M2 M3 M4 M5 |
 | Offline release verification | `bash workbench/docker/release_verify.sh --offline` | exit 0, `ENGINEERING_INCOMPLETE`, **0 checks FAIL/UNRUN** |

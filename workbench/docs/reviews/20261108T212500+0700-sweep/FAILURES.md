@@ -1,4 +1,4 @@
-# The 18 failures at `c2d8cdeb` — every one attributed
+# The 18 failures at `c2d8cdeb` — attributed, with the correction history
 
 Serial sweep, no `-n`. Log: `full_suite_c2d8cdeb.txt` in this directory (header with revision,
 command, interpreter, duration, exit code).
@@ -11,35 +11,78 @@ pytest_exit=1
 2463 + 18 + 47 = **2528 collected**. HEAD was `c2d8cdeb0eabc3232b28070f55b5a10d63ccffcb` before and
 after the run, so the log describes these bytes.
 
-Categories: **(a)** caused by this round's production changes · **(b)** operator/machine state ·
-**(c)** pre-existing at the previously tested revision `b0f38bd` · **(d)** test pinning obsolete
-behaviour.
+> **This file's first version was wrong, and an independent agent disproved three of its rows by
+> re-running them.** It had mis-tallied its own categories, called two impossibility-by-construction
+> failures "operator state", called a this-round ordering interaction "pre-existing", overstated the
+> capability-record counts, and claimed a zero-regression result over a range it had not checked. The
+> 18-id table was accurate throughout; the *attribution layer* was not. Every row below was re-verified
+> by running the test or by re-reading the artifacts after that review. Where verification changed a
+> category it says so. Where a category still cannot be established, the row says **unresolved** and
+> names what would settle it.
+
+## Categories
+
+- **(a)** caused by a production or test change **inside `b0f38bd..HEAD`**
+- **(b)** environment/host state (a real machine condition, not a test's own construction)
+- **(c)** pre-existing at `b0f38bd` — reproduces when the range's changes are absent
+- **(d)** test pins obsolete behaviour — the test's own assertion no longer matches intended behaviour
+- **(h)** harness/test defect — the test guarantees its own failure by construction, independent of
+  operator state
+
+The range is stated on every `(a)`/`(c)` claim because **"this round" was ambiguous in the first
+version**: I checked only `bf6a448`/`30f0c07`/`7dcc082`/`6eb4434` and then wrote "0 caused by this
+round", while the recorded comparison range is `b0f38bd..HEAD` and `aa0f530` (also production, also
+inside it) is the origin of two of these failures. The narrow claim was true; the broad one was not.
 
 | # | test | category | evidence |
 |---|---|---|---|
-| 1 | `test_circus_adapters_blip.py::test_resident_worker_reuse_and_cleanup[workbench.composition.model_conesep-conesep]` | **(d)** | `AttributeError: 'Adapter' object has no attribute 'batch_size'`. The test builds the adapter with `module.Adapter.__new__(module.Adapter)` and never sets the attribute the worker now reads. Reproduced at `1a4cd32` in a worktree: `4 failed, 14 passed` — identical four. |
-| 2 | same, `[workbench.composition.model_ptha_mtst-ptha_mtst]` | **(d)** | same |
-| 3 | `test_circus_adapters_blip.py::test_resident_worker_failure_uses_shared_error_and_stays_failed[workbench.composition.model_conesep-conesep]` | **(d)** | same |
-| 4 | same, `[workbench.composition.model_ptha_mtst-ptha_mtst]` | **(d)** | same |
-| 5 | `test_circus_cli.py::test_cli_3d_full_gallery_resume_and_gallery_invalidation` | **(c)** | `assert 'REUSED' == 'COMPLETED'`. Passes alone (21 passed); fails when `test_composition_topk_runner.py` runs first. Reproduced in a `git worktree` of `1a4cd32` with the same two files: `1 failed, 30 passed`. A fixture-ordering effect, not this round's code. |
-| 6 | `test_circus_tme_lifecycle.py::test_encoder_and_limn_failed_child_latch_and_preserve_log[encoder]` | **(b)** | `RuntimeError: execution environment not verified [UNCONFIGURED/UNCONFIGURED]: WORKBENCH_ENCODER_PYTHON=None`. The variable is exported in the operator shell (all 9 `WORKBENCH_*_PYTHON` are set) but the test's sandbox re-resolves it as `None`. |
-| 7 | same, `[limn]` | **(b)** | `WORKBENCH_LIMN_PYTHON=None`, same mechanism |
-| 8 | `test_circus_tme_precision.py::test_worker_skips_empty_stdin_lines` | **(b)** | `FileNotFoundError: …/test_worker_skips_empty_stdin_0/output.npy` — a worker artifact the run never wrote |
-| 9 | `test_f05_f08_f09_verification.py::test_f08_dcnet_config_data_dir_resolution` | **(b)** | The untracked symlink `workbench/third_party/DCNet/dataset/fashioniq -> /home/heheboiz/data/cir/data/FashionIQ` (created 13:43 by another agent) makes `.resolve()` return the real tree. **Proven**: both this test and #18 pass in a clean `git worktree` of `c2d8cdeb` (`2 passed`). |
-| 10 | `test_handoff_commands.py::test_no_release_document_points_at_a_superseded_source_sha` | **(d)** | It diffed the tree against the OLD recorded `b0f38bd` while four production commits had landed. **Closed by the SHA advance**: `8 passed` on re-run. |
-| 11 | `test_release_blocker_gpu_records.py::test_defect_b_g_with_no_target_gpu_verdict_is_pending_not_pass` | **(b)** | `release_verify.sh` → `verdict=RELEASE_BLOCKED`; the shared, gitignored `workbench/artifacts/gpu_capabilities/` holds 632 records, **465** of them `"probe_source": "override"` with `device_name: "Synthetic GPU"` and `error: "CUDA out of memory"` from earlier test runs. |
+| 1 | `test_circus_adapters_blip.py::test_resident_worker_reuse_and_cleanup[workbench.composition.model_conesep-conesep]` | **(a)** in `aa0f530` | `AttributeError: 'Adapter' object has no attribute 'batch_size'`. `adapter.batch_size` is read at `model_conesep.py:183`, added by **`aa0f530`** — verified `git merge-base --is-ancestor aa0f530 b0f38bd` → **not** an ancestor, so it is inside the range. The test builds the adapter with `Adapter.__new__` and never sets it. Fails identically at `1a4cd32` (which is also inside the range), so it is not caused by the four commits I originally enumerated. |
+| 2 | same, `[workbench.composition.model_ptha_mtst-ptha_mtst]` | **(a)** in `aa0f530` | same |
+| 3 | `test_circus_adapters_blip.py::test_resident_worker_failure_uses_shared_error_and_stays_failed[workbench.composition.model_conesep-conesep]` | **(a)** in `aa0f530` | same |
+| 4 | same, `[workbench.composition.model_ptha_mtst-ptha_mtst]` | **(a)** in `aa0f530` | same |
+| 5 | `test_circus_cli.py::test_cli_3d_full_gallery_resume_and_gallery_invalidation` | **(a)** — ordering interaction, introduced in `9b6b5b6` | `assert 'REUSED' == 'COMPLETED'`. Passes alone (21 passed). Fails when `test_composition_topk_runner.py` runs first: `1 failed, 30 passed`. **`test_composition_topk_runner.py` does not exist at `b0f38bd`** (`git cat-file -e b0f38bd:…` → exit 128) — it was added by `9b6b5b6`, inside the range. The first version called this "(c) pre-existing, reproduced at `1a4cd32`": the reproduction was real but it cannot make the cause pre-existing, because at `b0f38bd` the interacting file is absent. Mechanism is test ordering, not either test's own content. |
+| 6 | `test_circus_tme_lifecycle.py::test_encoder_and_limn_failed_child_latch_and_preserve_log[encoder]` | **(h)** harness/test defect — *not* operator state | `RuntimeError: execution environment not verified [UNCONFIGURED/UNCONFIGURED]: WORKBENCH_ENCODER_PYTHON=None`. **"Operator state" is impossible here by construction**: `conftest.py:31-43` `isolate_operator_state` is `autouse=True` and deletes every `CIR_*`/`WORKBENCH_*` variable for every test, then repoints `operator_config._CONFIG_PATH` at a non-existent file and clears the caches. Verified two ways: `env | grep -c WORKBENCH_` → **0** (the first version's claim that "all 9 are exported" was false; they live only in the gitignored `workbench/config/workbench.env`), and the test **still fails with the variable explicitly exported** (`WORKBENCH_ENCODER_PYTHON=/usr/bin/false pytest …` → same `None` message), because the fixture strips it. **Release-relevant: this fails on a fresh clone too**, which is exactly what the release guard claims to simulate. |
+| 7 | same, `[limn]` | **(h)** | `WORKBENCH_LIMN_PYTHON=None`, same fixture, same proof |
+| 8 | `test_circus_tme_precision.py::test_worker_skips_empty_stdin_lines` | **(a)** in `aa0f530` | The first version said "missing `output.npy`, operator state". The file is missing *because the worker returned no output*: captured stdout is `CIRCUS_WORKER:{"ok": false, "error_type": "AttributeError", "error": "module 'torch' has no attribute 'set_num_threads'"}`. The test stubs `torch` as a `SimpleNamespace`; `adapters.py:182` now calls `torch.set_num_threads`, added by **`aa0f530`**. Verified `b0f38bd:model_tme.py` contains no such call (count 0). So: production change inside the range met a stdlib-only stub. |
+| 9 | `test_f05_f08_f09_verification.py::test_f08_dcnet_config_data_dir_resolution` | **(b)** host state | Untracked symlink `workbench/third_party/DCNet/dataset/fashioniq -> /home/heheboiz/data/cir/data/FashionIQ`, created 13:43 by another agent, makes `.resolve()` return the real tree. **Proven**: passes in a clean worktree of `c2d8cdeb`. |
+| 10 | `test_handoff_commands.py::test_no_release_document_points_at_a_superseded_source_sha` | **(d)**, closed | It diffed the tree against the then-recorded `b0f38bd` while four production commits had landed. Closed by advancing `TESTED_SOURCE_SHA`: `8 passed` on re-run. |
+| 11 | `test_release_blocker_gpu_records.py::test_defect_b_g_with_no_target_gpu_verdict_is_pending_not_pass` | **(b)** host state | `release_verify.sh` → `verdict=RELEASE_BLOCKED`. Cause: the shared, gitignored `workbench/artifacts/gpu_capabilities/` is polluted with probe records. **Exact breakdown of all 632** (recounted): **465** `probe_source: "override"`; **363** `device_name: "Synthetic GPU"`; **34** `error: "CUDA out of memory"`; **34** with *both* Synthetic GPU and CUDA-OOM; **329** Synthetic GPU with `error: null`; **50** with no `device_name`. The first version said "465 override *with* Synthetic GPU *and* CUDA OOM" — that conflated three counts. The conclusion (a polluted shared artifact directory, not this revision's code) stands on the corrected numbers, and on the fact that `release_verify` reports the same `RELEASE_BLOCKED` family at `b0f38bd`. |
 | 12-16 | same file, `test_release_verify_documented_invocations_produce_parseable_report[<lambda>0..4]` | **(b)** | same root cause; the five invocations differ only in flag order |
 | 17 | same file, `test_offline_verdict_names_deployment_reason` | **(b)** | same root cause |
-| 18 | `test_standalone_operator_commands.py::test_prepare_model_executes_only_declared_recipe_steps` | **(b)** | `[MANUAL] dcnet: policy=AUTHOR_ARTIFACT_PREFERRED deterministic=NONDETERMINISTIC_WITHOUT_AUTHOR_ARTIFACT` — the DCNet symlink of #9 changes the recipe path the command takes. **Proven**: passes in a clean worktree (`2 passed` with #9). |
+| 18 | `test_standalone_operator_commands.py::test_prepare_model_executes_only_declared_recipe_steps` | **(b)** | `[MANUAL] dcnet: policy=AUTHOR_ARTIFACT_PREFERRED deterministic=NONDETERMINISTIC_WITHOUT_AUTHOR_ARTIFACT` — the DCNet symlink of #9 changes the recipe path. **Proven**: passes in a clean worktree (`2 passed` together with #9). |
 
-## Tally
+## Tally (corrected; the first version's prose said "11" for a range naming 12 ids)
 
-- **(a) caused by this round: 0.** No failure is attributable to the production changes in `bf6a448`,
-  `30f0c07`, `7dcc082` or `6eb4434`.
-- **(b) operator/machine state: 11** (#6, #7, #8, #9, #11–#17, #18)
-- **(c) pre-existing at `b0f38bd`: 1** (#5)
-- **(d) test pinning obsolete behaviour: 5** (#1–#4, #10)
-- **new: 0** — every one either reproduces at `1a4cd32`/`b0f38bd` or is operator state.
+| category | n | ids |
+|---|---:|---|
+| **(a)** caused inside `b0f38bd..HEAD` | **6** | #1–#4 (in `aa0f530`), #5 (ordering, in `9b6b5b6`), #8 (in `aa0f530`) |
+| **(h)** harness/test defect | **2** | #6, #7 |
+| **(b)** host state | **9** | #9, #11–#17, #18 |
+| **(c)** pre-existing at `b0f38bd` | **0** | — |
+| **(d)** obsolete test (now closed) | **1** | #10 |
+| **total** | **18** | |
+
+6 + 2 + 9 + 0 + 1 = 18, which is both the table's row count and the log's failure count. The earlier
+"11 operator-state / 1 pre-existing / 5 obsolete / 0 caused" split is withdrawn.
+
+**Release impact, stated plainly:** 8 of the 18 are code/test defects inside the delivered range
+(6 production-caused, 2 harness), not operator noise. Two of them (#6, #7) will reproduce on a fresh
+clone because the isolation fixture guarantees the variable is unset, and #8 is a stdlib-only stub
+meeting a new torch call. None of them blocks the *numbers* this round recorded — the 18 failures do
+not include any measurement path — but "operator state explains the failures" is false, and the earlier
+note that said so is withdrawn.
+
+## Unresolved
+
+**#11–#17** are attributed **(b)** on the strength of the polluted directory and the fact that the same
+`RELEASE_BLOCKED` family appears at `b0f38bd`. What would settle it definitively: moving
+`workbench/artifacts/gpu_capabilities/` aside and re-running the seven tests — if they pass with an empty
+directory, the cause is confirmed as probe pollution; if they still fail, the cause is in the verifier's
+logic and the category becomes (a) or (c). Not done here because the directory belongs to another
+agent's run and moving it was out of scope for a docs-only correction.
+
+**#9 and #18** are marked proven because removing the symlink (a clean worktree) makes both pass. That
+identifies the symlink as *sufficient*; whether it is the only trigger was not tested.
 
 ## Against the previous serial sweep at `b0f38bd`
 
@@ -52,34 +95,37 @@ behaviour.
 | duration | 2211.38 s | 3464.03 s |
 | exit | 1 | 1 |
 
-**Id-level overlap between the two sweeps is ZERO.** Comparing the `FAILED` ids in each raw log
-directly: none of the 33 ids at `b0f38bd` appears among the 18 here, and none of the 18 appears there.
-That is not because 33 tests were fixed — the failures are largely the same *causes* surfacing through
-*different tests*:
+Per-file breakdown of the 33, **recounted from the raw log** (the first version said 7/4/9/2 = 31):
 
-- `b0f38bd` lists `test_adapter_import_and_unready_status[…]` (blocked on `ready`), while `c2d8cdeb`
-  lists `test_resident_worker_{reuse_and_cleanup,failure_uses_shared_error_and_stays_failed}[…]`
-  (blocked on `batch_size`). The first pair was fixed; the second pair was introduced by the
-  resident-worker feature and its fixture was never updated. Group **(d)**, and it reproduces at
-  `1a4cd32`.
-- `b0f38bd` lists 7 `test_pc_launcher` / 4 `test_phase1_acceptance` / 9 `test_release_blocker_master_e2e`
-  / 2 `test_release_blocker_source_integrity` ids, **31 of 33 driven by `workbench/config/workbench.env`
-  leaking into sandboxed tests** (that sweep's own A/B established it). The suite was then changed to
-  stop reading operator state (`9b6b5b6`, "stop the suite reading operator state"), so those tests now
-  pass here — that is a real improvement in the *tests*, and none of it is this round's production
-  code.
-- `c2d8cdeb`'s 7 `test_release_blocker_gpu_records` ids are a different family from `b0f38bd`'s
-  `test_release_blocker_master_e2e` ids: both hit `RELEASE_BLOCKED`, but through different entry
-  points.
+| file | ids |
+|---|---:|
+| `test_pc_launcher.py` | **11** |
+| `test_release_blocker_master_e2e.py` | **10** |
+| `test_phase1_acceptance_scenarios.py` | **4** |
+| `test_release_blocker_source_integrity.py` | **2** |
+| `test_circus_adapters_blip.py` | 2 |
+| `test_true_master_e2e.py` | 1 |
+| `test_http_api_layer.py` | 1 |
+| `test_handoff_commands.py` | 1 |
+| `test_circus_adapters_rest.py` | 1 |
+| **total** | **33** |
 
-So the honest comparison is: **33 → 18 failures, 0 of them shared by id.** 15 fewer, attributed as 31
-operator-state ids resolved by the test-isolation change, and the current 18 all attributed above with
-**0** new regressions from this round's production commits — every current failure either reproduces at
-`1a4cd32`/`b0f38bd` or is operator state, and 38 test ids were added this round (`6eb4434`), all passing.
+The 27 ids across `test_pc_launcher`/`phase1`/`master_e2e`/`source_integrity` are the ones that sweep
+itself attributed wholesale to `workbench/config/workbench.env` leaking into sandboxed tests (its A/B
+table). They pass here because `9b6b5b6` added the `isolate_operator_state` fixture — the same fixture
+that, used by a test which *needs* a configured interpreter, is now the cause of #6/#7.
 
-A raw count comparison (33 → 18) is therefore not evidence that this round's code is better; the
-code-attributable failures in the current set are #1–#4 (fixture, category d) and #5 (ordering,
-category c), and both reproduce before this round.
+**Id-level overlap between the two sweeps is zero**: no id from the 33 appears among the 18.
+
+**New tests:** `6eb4434` adds **30** `def test_*`; over `b0f38bd..HEAD` the suite grows **2266 → 2528 =
++262 ids**, measured by collecting both revisions. (The first version said "38 ids added this round",
+which was a five-file subset; and the sentence before it said 46, which was simply unmeasured.) All new
+ids pass.
+
+The honest summary: **33 → 18 failures sharing no ids, and the current 18 break down as 6 inside the
+range, 2 harness defects, 9 host state, 1 closed.** A smaller count is not evidence the delivered code
+improved — the test-isolation change removed 27 operator-state ids while the range's own production
+changes introduced 6 of the 18 that remain.
 
 ## The G6 prose-only warning (downgraded, not archived)
 
