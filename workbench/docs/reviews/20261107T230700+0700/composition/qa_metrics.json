@@ -1,0 +1,39 @@
+{
+  "timestamp": "20261107T230700+0700",
+  "base_url": "http://127.0.0.1:5173/?page=Composition",
+  "viewports": {
+    "1440x900": {
+      "node_count": 836,
+      "scroll_width": 1440,
+      "inner_width": 1440,
+      "horizontal_overflow": false,
+      "screenshot": "workbench/docs/reviews/20261107T230700+0700/composition/1440x900.png",
+      "screenshot_bytes": 151192,
+      "console_errors": 0,
+      "page_errors": 0,
+      "failed_requests": 0,
+      "http_errors": 0,
+      "pass": true
+    },
+    "390x844": {
+      "node_count": 836,
+      "scroll_width": 390,
+      "inner_width": 390,
+      "horizontal_overflow": false,
+      "screenshot": "workbench/docs/reviews/20261107T230700+0700/composition/390x844.png",
+      "screenshot_bytes": 85903,
+      "console_errors": 0,
+      "page_errors": 0,
+      "failed_requests": 0,
+      "http_errors": 0,
+      "pass": true
+    }
+  },
+  "page_weight": {
+    "dist_index_html_bytes": 230,
+    "dist_css_bytes": 8430,
+    "dist_js_bytes": 263490,
+    "total_static_bytes": 272150,
+    "total_static_gzip_bytes": 82930
+  }
+}

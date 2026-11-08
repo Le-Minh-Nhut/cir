@@ -1,0 +1,442 @@
+{
+  "adapter": "workbench.composition.model_encoder.Adapter",
+  "adapter_module_source_status": "available",
+  "category_resolution": {
+    "ambiguous_count": 119,
+    "ambiguous_examples": [
+      {
+        "categories": [
+          "shirt",
+          "toptee"
+        ],
+        "qid": "7:2179"
+      },
+      {
+        "categories": [
+          "shirt",
+          "toptee"
+        ],
+        "qid": "7:2211"
+      },
+      {
+        "categories": [
+          "shirt",
+          "toptee"
+        ],
+        "qid": "7:2218"
+      },
+      {
+        "categories": [
+          "shirt",
+          "toptee"
+        ],
+        "qid": "7:2228"
+      },
+      {
+        "categories": [
+          "shirt",
+          "toptee"
+        ],
+        "qid": "7:2258"
+      },
+      {
+        "categories": [
+          "shirt",
+          "toptee"
+        ],
+        "qid": "7:2285"
+      },
+      {
+        "categories": [
+          "shirt",
+          "toptee"
+        ],
+        "qid": "7:2307"
+      },
+      {
+        "categories": [
+          "shirt",
+          "toptee"
+        ],
+        "qid": "7:2309"
+      },
+      {
+        "categories": [
+          "shirt",
+          "toptee"
+        ],
+        "qid": "7:2333"
+      },
+      {
+        "categories": [
+          "shirt",
+          "toptee"
+        ],
+        "qid": "7:2463"
+      },
+      {
+        "categories": [
+          "shirt",
+          "toptee"
+        ],
+        "qid": "7:2471"
+      },
+      {
+        "categories": [
+          "shirt",
+          "toptee"
+        ],
+        "qid": "7:2486"
+      },
+      {
+        "categories": [
+          "shirt",
+          "toptee"
+        ],
+        "qid": "7:2529"
+      },
+      {
+        "categories": [
+          "shirt",
+          "toptee"
+        ],
+        "qid": "7:2575"
+      },
+      {
+        "categories": [
+          "shirt",
+          "toptee"
+        ],
+        "qid": "7:2587"
+      },
+      {
+        "categories": [
+          "shirt",
+          "toptee"
+        ],
+        "qid": "7:2637"
+      },
+      {
+        "categories": [
+          "shirt",
+          "toptee"
+        ],
+        "qid": "7:2650"
+      },
+      {
+        "categories": [
+          "shirt",
+          "toptee"
+        ],
+        "qid": "7:2679"
+      },
+      {
+        "categories": [
+          "shirt",
+          "toptee"
+        ],
+        "qid": "7:2698"
+      },
+      {
+        "categories": [
+          "shirt",
+          "toptee"
+        ],
+        "qid": "7:2717"
+      }
+    ],
+    "ambiguous_qids": [
+      "7:2179",
+      "7:2211",
+      "7:2218",
+      "7:2228",
+      "7:2258",
+      "7:2285",
+      "7:2307",
+      "7:2309",
+      "7:2333",
+      "7:2463",
+      "7:2471",
+      "7:2486",
+      "7:2529",
+      "7:2575",
+      "7:2587",
+      "7:2637",
+      "7:2650",
+      "7:2679",
+      "7:2698",
+      "7:2717",
+      "7:2815",
+      "7:2959",
+      "7:2999",
+      "7:3005",
+      "7:3033",
+      "7:3038",
+      "7:3163",
+      "7:3177",
+      "7:3243",
+      "7:3280",
+      "7:3324",
+      "7:3367",
+      "7:3402",
+      "7:3464",
+      "7:3487",
+      "7:3493",
+      "7:3560",
+      "7:3601",
+      "7:3629",
+      "7:3635",
+      "7:3790",
+      "7:3800",
+      "7:3813",
+      "7:3906",
+      "7:3927",
+      "7:3993",
+      "7:4008",
+      "7:4013",
+      "7:4066",
+      "7:4086",
+      "7:4164",
+      "7:4171",
+      "7:4243",
+      "7:4246",
+      "7:4290",
+      "7:4294",
+      "7:4305",
+      "7:4322",
+      "7:4358",
+      "7:4397",
+      "7:4420",
+      "7:4425",
+      "7:4434",
+      "7:4487",
+      "7:4504",
+      "7:4510",
+      "7:4529",
+      "7:4540",
+      "7:4542",
+      "7:4582",
+      "7:4594",
+      "7:4641",
+      "7:4759",
+      "7:4765",
+      "7:4806",
+      "7:4808",
+      "7:4809",
+      "7:4838",
+      "7:4849",
+      "7:4871",
+      "7:4880",
+      "7:4884",
+      "7:4893",
+      "7:4956",
+      "7:4982",
+      "7:5048",
+      "7:5090",
+      "7:5101",
+      "7:5105",
+      "7:5109",
+      "7:5149",
+      "7:5170",
+      "7:5212",
+      "7:5228",
+      "7:5236",
+      "7:5239",
+      "7:5259",
+      "7:5329",
+      "7:5388",
+      "7:5415",
+      "7:5444",
+      "7:5512",
+      "7:5546",
+      "7:5584",
+      "7:5597",
+      "7:5607",
+      "7:5641",
+      "7:5654",
+      "7:5655",
+      "7:5700",
+      "7:5701",
+      "7:5711",
+      "7:5742",
+      "7:5764",
+      "7:5788",
+      "7:5798",
+      "7:5863",
+      "7:5896",
+      "7:5963"
+    ],
+    "considered_count": 6003,
+    "identity_source": "reference in FashionIQ validation splits or test-caption annotations",
+    "resolved_count": 5884,
+    "status": "resolved",
+    "unresolved_count": 0,
+    "unresolved_qids": []
+  },
+  "category_scope_failures": {
+    "image_only_empty_text": 0,
+    "multimodal": 0,
+    "text_only_black_image": 0
+  },
+  "category_scopes": [
+    null
+  ],
+  "checkpoint_id": "fashioniq",
+  "checkpoint_identity": "0f31c50150a7bda3495e3378df13b4cec7924b52efd23b5e5dd9731459da9173",
+  "checkpoint_labels": {
+    "checkpoint_mapping_status": "VERIFIED_METADATA",
+    "checkpoint_training_dataset": null,
+    "checkpoint_training_noise_pct": null,
+    "checkpoint_transfer": null,
+    "evaluation_noise_pct": 0,
+    "labels_source": "registry",
+    "reproduction_status": "METRICS_MEASURED_MAPPING_UNVERIFIED"
+  },
+  "checkpoint_mapping_status": "VERIFIED_METADATA",
+  "checkpoint_training_dataset": null,
+  "checkpoint_training_noise_pct": null,
+  "checkpoint_transfer": null,
+  "condition_status": {
+    "image_only_empty_text": {
+      "category_scope_failure_count": 0,
+      "status": "COMPLETED",
+      "unscored_count": 0
+    },
+    "multimodal": {
+      "category_scope_failure_count": 0,
+      "status": "COMPLETED",
+      "unscored_count": 0
+    },
+    "text_only_black_image": {
+      "category_scope_failure_count": 0,
+      "status": "COMPLETED",
+      "unscored_count": 0
+    }
+  },
+  "conditions": [
+    "multimodal",
+    "text_only_black_image",
+    "image_only_empty_text"
+  ],
+  "evaluation_noise_pct": 0,
+  "execution_status": "COMPLETED",
+  "failed_expectations": [],
+  "feature_storage": {
+    "arrays_removed_after_rank": true,
+    "format": "float32 .npy memmap",
+    "projected_bytes": {
+      "global": 189214720
+    }
+  },
+  "gallery_candidate_basename_match": true,
+  "gallery_count": 74381,
+  "gallery_identity_sha256": "1db68c59d96f014cdbecf936e108653de98abef0bd9a98a8abc2fe08b5dec4b4",
+  "hash_verification": "matched",
+  "is_synthetic": false,
+  "metrics": {
+    "composition_gap_ndcg": 0.47230210227676583,
+    "gap_cohort_count": 6003,
+    "gap_image_only_ndcg": 0.10727509765806255,
+    "gap_multimodal_ndcg": 0.29586071325251023,
+    "gap_text_only_ndcg": 0.15612507640224627,
+    "gap_unavailable_reason": null,
+    "image_only": {
+      "condition": "image_only_empty_text",
+      "coverage": 1.0,
+      "mrr": 0.010994057357674506,
+      "ndcg_full": 0.10727509765806255,
+      "query_count": 6003,
+      "recall_at_10": 2.6653339996668333,
+      "recall_at_50": 7.4795935365650505,
+      "scored_count": 6003,
+      "unavailable_reason": null
+    },
+    "mrr_gap": 0.12305002700946355,
+    "multimodal": {
+      "condition": "multimodal",
+      "coverage": 1.0,
+      "mrr": 0.16970724586506772,
+      "ndcg_full": 0.29586071325251023,
+      "query_count": 6003,
+      "recall_at_10": 31.01782442112277,
+      "recall_at_50": 49.5752123938031,
+      "scored_count": 6003,
+      "unavailable_reason": null
+    },
+    "shortcut_outcomes": {
+      "both": 5,
+      "composition_required": 1282,
+      "image_only": 155,
+      "neither_scored": 0,
+      "text_only": 510,
+      "unresolved": 4051
+    },
+    "text_only": {
+      "condition": "text_only_black_image",
+      "coverage": 1.0,
+      "mrr": 0.04665721885560417,
+      "ndcg_full": 0.15612507640224627,
+      "query_count": 6003,
+      "recall_at_10": 8.579043811427619,
+      "recall_at_50": 18.1575878727303,
+      "scored_count": 6003,
+      "unavailable_reason": null
+    }
+  },
+  "model_id": "encoder",
+  "paper_vs_release_gallery": {
+    "discrepancy": "paper states 18,853; pinned released audit artifact contains 74,381",
+    "identity_normalization": "removed <path_to_M-BEIR>/; retained released order",
+    "paper_stated_images": 18853,
+    "released_images": 74381
+  },
+  "preprocessing": {
+    "ablation_policy": "black PIL replacement is staged before adapter transform; empty text for image-only",
+    "policy": "adapter-native transform after path-based raw-image intervention"
+  },
+  "protocol_id": "circus_fashioniq_release_v1",
+  "query_count": 6003,
+  "query_count_per_subset": {
+    "full": 6003,
+    "sf": 4069,
+    "validated": 586
+  },
+  "reference_eligible": true,
+  "release_artifact_hashes": {
+    "aggregated_audit": "27bdbef041200dc393b5478d3e57121bc16c70a9acc2e98a19fb48408a99533c",
+    "mbeir_candidates": "121ec284832c33289ee13bfac19d5d59dc3f8aeddf672d784fd5eb8bcdf79eef",
+    "mbeir_query": "b601ef6a5411bf9385cff41e64bea863871ab1094cd09d78683de6a5141165ef",
+    "sf": "95a93883334e351e4d3aaaf25e47e89b48d4daf02bdb786e8f00d58165ace37d",
+    "validated_solved": "18f829da4d3b1ee8439f43998bae43dbbe8924c2eaafba84473ae849f564f5c7",
+    "validated_unsolved": "ba019a30d3b45f4b29c34d2d48638dbeeed2e2a42409f625922c65de5b2a7efa"
+  },
+  "reproduction_status": "METRICS_MEASURED_MAPPING_UNVERIFIED",
+  "resume_key": "6a528e877c328772e2c7bb28f8b17477c3d6fd1197b3b2a5f224eba58c6b09cc",
+  "reused_query_result_count": 0,
+  "run_id": "6a528e877c328772e2c7bb28",
+  "runtime": {
+    "controller_python": "3.12.11 (main, Oct  7 2025, 15:34:39) [Clang 20.1.4 ]",
+    "gpu": "NVIDIA GeForce RTX 5070 Ti",
+    "model_interpreter": {
+      "environment_fingerprint": "8f0a3a15c90d746a2104ecbfdf8ff8932a0a0c94f5d8e566c2d89a1b52b8d210",
+      "path": "/home/heheboiz/data/cir/workbench/envs/pair-adapted/bin/python",
+      "source": "process_environment",
+      "verification_reason": "expected Python 3.9, found 3.11.15",
+      "verification_status": "PYTHON_VERSION_MISMATCH",
+      "verified": false,
+      "version": "Python 3.11.15; torch 2.7.1+cu128"
+    },
+    "platform": "Linux-7.0.0-31-generic-x86_64-with-glibc2.39"
+  },
+  "schema_version": 1,
+  "seed": 0,
+  "smoke": {
+    "label": null,
+    "limited": false,
+    "query_limit": null
+  },
+  "subset": "full",
+  "synthetic": false,
+  "synthetic_fixture": false,
+  "unresolved_category_query_count": 119
+}

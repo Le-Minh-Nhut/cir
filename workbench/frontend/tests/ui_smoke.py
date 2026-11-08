@@ -312,7 +312,7 @@ def session_cold(page, base_url: str, shots: Path, recorder: Recorder) -> list[s
     open_page(page, "Models")
 
     models = api_json(base_url, "/api/models")
-    rows = page.locator("section table tbody tr")
+    rows = page.locator("section > table > tbody > tr")
     rows.first.wait_for(timeout=NAV_TIMEOUT_MS)
     row_count = rows.count()
     recorder.note(f"cold inventory: API /api/models returned {len(models)} entries, "

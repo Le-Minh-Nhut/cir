@@ -20,6 +20,12 @@ from pydantic import BaseModel, Field
 
 from workbench.backend.analysis import analysis_rows_from_maps, failure_jaccard_from_maps
 from workbench.backend import runtime
+from workbench.backend.composition import (
+    create_fixture_summaries,
+    get_composition_run_detail,
+    get_composition_run_queries,
+    list_composition_summaries,
+)
 from workbench.backend.errors import WorkbenchError
 from workbench.backend.index import database_path, rebuild_index
 from workbench.backend.jobs import DuplicateJobError, QueueShutdownError, SingleGpuQueue
@@ -157,8 +163,13 @@ def write_json(path: Path, payload: list[dict]) -> None:
     temporary.replace(path)
 
 
+_MODELS_CACHE: list[dict] | None = None
+
 @app.get("/api/models")
 def models():
+    global _MODELS_CACHE
+    if _MODELS_CACHE is not None:
+        return _MODELS_CACHE
     registry = load_registry()
     out = []
     for model in registry["models"]:
@@ -185,6 +196,7 @@ def models():
                 for bundle in bundles
             ]
         out.append(entry)
+    _MODELS_CACHE = out
     return out
 
 
@@ -872,6 +884,13 @@ def _gate_fields(report: dict) -> dict:
         # A registry-declared synthetic-output model has no published output format; its numbers
         # are evidence of a different kind and the UI must be able to say so.
         "is_synthetic": bool(report.get("is_synthetic")),
+        "paper_sanity_metrics": (report.get("paper_sanity_metrics")
+                                 if isinstance(report.get("paper_sanity_metrics"), dict) else None),
+        "benchmark_reference": (report.get("benchmark_reference")
+                                if isinstance(report.get("benchmark_reference"), dict) else None),
+        "per_query_export_available": report.get("per_query_export_available"),
+        "evaluator_environment_knobs": (report.get("environment", {}).get("evaluator_environment_knobs")
+                                        if isinstance(report.get("environment"), dict) else None),
     }
 
 @app.get("/api/benchmark-runs")
@@ -896,6 +915,68 @@ def benchmark_runs():
 def run_gates():
     """Gate fields keyed by run_id, for joining onto `/api/runs` records that have a report."""
     return {report["run_id"]: _gate_fields(report) for report in _aggregate_reports()}
+
+@app.get("/api/composition/runs")
+def composition_runs(subset: str | None = None, include_fixtures: bool = False,
+                     include_smoke: bool = False):
+    """Composition summaries: measured rows by default.
+
+    Synthetic layout fixtures and query-limited smoke runs are development artifacts, so both are
+    opt-in. ``include_fixtures=true`` / ``include_smoke=true`` append them after the measured rows.
+    """
+    config = resolve_config()
+    artifacts_root = config.WORKBENCH_ARTIFACTS_ROOT
+    runs = list_composition_summaries(artifacts_root=artifacts_root, subset=subset,
+                                      include_fixtures=include_fixtures,
+                                      include_smoke=include_smoke)
+    if not runs and include_fixtures:
+        create_fixture_summaries(artifacts_root)
+        runs = list_composition_summaries(artifacts_root=artifacts_root, subset=subset,
+                                          include_fixtures=True, include_smoke=include_smoke)
+    return runs
+
+
+@app.get("/api/composition/runs/{run_id}")
+def composition_run(run_id: str, subset: str = "full"):
+    config = resolve_config()
+    run = get_composition_run_detail(run_id=run_id, subset=subset, artifacts_root=config.WORKBENCH_ARTIFACTS_ROOT)
+    if run is None:
+        raise HTTPException(404, {"error": "composition_run_not_found", "message": f"Composition run {run_id!r} with subset {subset!r} was not found."})
+    return run
+
+
+@app.get("/api/composition/runs/{run_id}/queries")
+def composition_queries(
+    run_id: str,
+    subset: str = "full",
+    condition: str | None = None,
+    category: str | None = None,
+    outcome: str | None = None,
+    min_rank: int | None = None,
+    max_rank: int | None = None,
+    query_id: str | None = None,
+    order: str = "worst",
+    limit: int = 50,
+    offset: int = 0,
+):
+    config = resolve_config()
+    run = get_composition_run_detail(run_id=run_id, subset=subset, artifacts_root=config.WORKBENCH_ARTIFACTS_ROOT)
+    if run is None:
+        raise HTTPException(404, {"error": "composition_run_not_found", "message": f"Composition run {run_id!r} with subset {subset!r} was not found."})
+    return get_composition_run_queries(
+        run_id=run_id,
+        subset=subset,
+        condition=condition,
+        category=category,
+        outcome=outcome,
+        min_rank=min_rank,
+        max_rank=max_rank,
+        query_id=query_id,
+        order=order,
+        limit=limit,
+        offset=offset,
+        artifacts_root=config.WORKBENCH_ARTIFACTS_ROOT,
+    )
 
 
 @app.get("/api/queries")
@@ -1168,13 +1249,21 @@ def cancel_job(job_id: str):
 
 
 def resolve_image(category: str, image_id: str, root: Path | None = None) -> Path | None:
-    if category not in {"dress", "shirt", "toptee"} or not image_id or Path(image_id).name != image_id:
+    if category not in {"dress", "shirt", "toptee", "circus", "all"} or not image_id or Path(image_id).name != image_id:
         return None
     if root is None:
         from workbench.backend.operator_config import resolve_config
 
         root = resolve_config().FASHIONIQ_ROOT
-    candidates = [root / category / f"{image_id}{extension}" for extension in (".png", ".jpg", ".jpeg")] + [root / "images" / f"{image_id}{extension}" for extension in (".png", ".jpg", ".jpeg")] + [root / "resized_image" / category / f"{image_id}{extension}" for extension in (".png", ".jpg", ".jpeg")]
+    stem = Path(image_id).stem
+    candidates = (
+        [root / category / f"{image_id}{extension}" for extension in (".png", ".jpg", ".jpeg")]
+        + [root / category / f"{stem}{extension}" for extension in (".png", ".jpg", ".jpeg")]
+        + [root / "images" / f"{image_id}{extension}" for extension in (".png", ".jpg", ".jpeg")]
+        + [root / "images" / f"{stem}{extension}" for extension in (".png", ".jpg", ".jpeg")]
+        + [root / "resized_image" / category / f"{image_id}{extension}" for extension in (".png", ".jpg", ".jpeg")]
+        + [root / "resized_image" / category / f"{stem}{extension}" for extension in (".png", ".jpg", ".jpeg")]
+    )
     return next((candidate for candidate in candidates if candidate.is_file()), None)
 
 

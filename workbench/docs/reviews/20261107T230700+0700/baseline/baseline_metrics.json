@@ -1,0 +1,35 @@
+{
+  "timestamp": "20261107T230700+0700",
+  "base_url": "http://127.0.0.1:5173",
+  "viewports": {
+    "1440x900": {
+      "node_count": 62,
+      "scroll_width": 1440,
+      "inner_width": 1440,
+      "horizontal_overflow": false,
+      "screenshot": "workbench/docs/reviews/20261107T230700+0700/baseline/1440x900.png",
+      "screenshot_bytes": 92434,
+      "console_errors": 0,
+      "page_errors": 0,
+      "failed_requests": 0
+    },
+    "390x844": {
+      "node_count": 62,
+      "scroll_width": 390,
+      "inner_width": 390,
+      "horizontal_overflow": false,
+      "screenshot": "workbench/docs/reviews/20261107T230700+0700/baseline/390x844.png",
+      "screenshot_bytes": 77733,
+      "console_errors": 0,
+      "page_errors": 0,
+      "failed_requests": 0
+    }
+  },
+  "page_weight": {
+    "dist_index_html_bytes": 230,
+    "dist_css_bytes": 3226,
+    "dist_js_bytes": 256830,
+    "total_static_bytes": 260286,
+    "total_static_gzip_bytes": 80783
+  }
+}

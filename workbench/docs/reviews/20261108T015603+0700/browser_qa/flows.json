@@ -1,0 +1,3493 @@
+{
+  "ui": "http://127.0.0.1:5173",
+  "api": "http://127.0.0.1:8000",
+  "viewports": [
+    "1440x900",
+    "768x1024",
+    "390x844"
+  ],
+  "flowCount": 15,
+  "ok": false,
+  "flows": [
+    {
+      "flow": "benchmark_native",
+      "viewport": "1440x900",
+      "url": "http://127.0.0.1:5173/?page=Benchmark",
+      "checks": [
+        {
+          "label": "api: exactly 2 aggregate benchmark runs",
+          "ok": true,
+          "detail": "2 runs",
+          "defect": false
+        },
+        {
+          "label": "2 benchmark cards rendered",
+          "ok": true,
+          "detail": "2 cards",
+          "defect": false
+        },
+        {
+          "label": "20261107T054343058424Z_c: model/checkpoint in title",
+          "ok": true,
+          "detail": "CSMCIR \u00b7 fashioniq",
+          "defect": false
+        },
+        {
+          "label": "20261107T054343058424Z_c: run id + protocol in meta",
+          "ok": true,
+          "detail": "20261107T054343058424Z_csmcir_fashioniq_f564570e \u00b7 protocol: fashioniq_original_split",
+          "defect": false
+        },
+        {
+          "label": "20261107T054343058424Z_c: CERTIFIED badge",
+          "ok": true,
+          "detail": "['CERTIFIED', 'aggregate-only \u2014 per-query Top-K unavailable (CAPABILITY_ABSENT)']",
+          "defect": false
+        },
+        {
+          "label": "20261107T054343058424Z_c: aggregate-only badge states CAPABILITY_ABSENT",
+          "ok": true,
+          "detail": "['CERTIFIED', 'aggregate-only \u2014 per-query Top-K unavailable (CAPABILITY_ABSENT)']",
+          "defect": false
+        },
+        {
+          "label": "20261107T054343058424Z_c: measured R@10 = 57.0507",
+          "ok": true,
+          "detail": "57.05% (57.0507)",
+          "defect": false
+        },
+        {
+          "label": "20261107T054343058424Z_c: measured R@50 = 77.2986",
+          "ok": true,
+          "detail": "77.30% (77.2986)",
+          "defect": false
+        },
+        {
+          "label": "20261107T054343058424Z_c: paper ref R@10 = 57.07",
+          "ok": true,
+          "detail": "57.07% (57.07)",
+          "defect": false
+        },
+        {
+          "label": "20261107T054343058424Z_c: measured != paper cells (distinct values)",
+          "ok": true,
+          "detail": "measured=57.05% (57.0507) paper=57.07% (57.07)",
+          "defect": false
+        },
+        {
+          "label": "20261107T054343058424Z_c: paper cells carry muted styling",
+          "ok": true,
+          "detail": "text-muted on paper column only",
+          "defect": false
+        },
+        {
+          "label": "20261107T054343058424Z_c: per-category rows dress/shirt/toptee",
+          "ok": true,
+          "detail": "['dress', 'shirt', 'toptee']",
+          "defect": false
+        },
+        {
+          "label": "20261107T054343058424Z_c/dress: measured R@10 52.2062 rendered",
+          "ok": true,
+          "detail": "52.21% (52.2062)",
+          "defect": false
+        },
+        {
+          "label": "20261107T054343058424Z_c/shirt: measured R@10 57.7527 rendered",
+          "ok": true,
+          "detail": "57.75% (57.7527)",
+          "defect": false
+        },
+        {
+          "label": "20261107T054343058424Z_c/toptee: measured R@10 61.1933 rendered",
+          "ok": true,
+          "detail": "61.19% (61.1933)",
+          "defect": false
+        },
+        {
+          "label": "20261107T054933277898Z_c: model/checkpoint in title",
+          "ok": true,
+          "detail": "CSMCIR \u00b7 fashioniq",
+          "defect": false
+        },
+        {
+          "label": "20261107T054933277898Z_c: run id + protocol in meta",
+          "ok": true,
+          "detail": "20261107T054933277898Z_csmcir_fashioniq_f03887d2 \u00b7 protocol: fashioniq_original_split",
+          "defect": false
+        },
+        {
+          "label": "20261107T054933277898Z_c: CERTIFIED badge",
+          "ok": true,
+          "detail": "['CERTIFIED', 'aggregate-only \u2014 per-query Top-K unavailable (CAPABILITY_ABSENT)']",
+          "defect": false
+        },
+        {
+          "label": "20261107T054933277898Z_c: aggregate-only badge states CAPABILITY_ABSENT",
+          "ok": true,
+          "detail": "['CERTIFIED', 'aggregate-only \u2014 per-query Top-K unavailable (CAPABILITY_ABSENT)']",
+          "defect": false
+        },
+        {
+          "label": "20261107T054933277898Z_c: measured R@10 = 57.0507",
+          "ok": true,
+          "detail": "57.05% (57.0507)",
+          "defect": false
+        },
+        {
+          "label": "20261107T054933277898Z_c: measured R@50 = 77.2986",
+          "ok": true,
+          "detail": "77.30% (77.2986)",
+          "defect": false
+        },
+        {
+          "label": "20261107T054933277898Z_c: paper ref R@10 = 57.07",
+          "ok": true,
+          "detail": "57.07% (57.07)",
+          "defect": false
+        },
+        {
+          "label": "20261107T054933277898Z_c: measured != paper cells (distinct values)",
+          "ok": true,
+          "detail": "measured=57.05% (57.0507) paper=57.07% (57.07)",
+          "defect": false
+        },
+        {
+          "label": "20261107T054933277898Z_c: paper cells carry muted styling",
+          "ok": true,
+          "detail": "text-muted on paper column only",
+          "defect": false
+        },
+        {
+          "label": "20261107T054933277898Z_c: per-category rows dress/shirt/toptee",
+          "ok": true,
+          "detail": "['dress', 'shirt', 'toptee']",
+          "defect": false
+        },
+        {
+          "label": "20261107T054933277898Z_c/dress: measured R@10 52.2062 rendered",
+          "ok": true,
+          "detail": "52.21% (52.2062)",
+          "defect": false
+        },
+        {
+          "label": "20261107T054933277898Z_c/shirt: measured R@10 57.7527 rendered",
+          "ok": true,
+          "detail": "57.75% (57.7527)",
+          "defect": false
+        },
+        {
+          "label": "20261107T054933277898Z_c/toptee: measured R@10 61.1933 rendered",
+          "ok": true,
+          "detail": "61.19% (61.1933)",
+          "defect": false
+        },
+        {
+          "label": "evaluation runs: 2 aggregate-only rows",
+          "ok": true,
+          "detail": "2",
+          "defect": false
+        },
+        {
+          "label": "per-query action disabled",
+          "ok": true,
+          "detail": "CSMCIR \u00b7 train noise unrecorded \u00b7 eval noise unrecorded \u00b7 fa",
+          "defect": false
+        },
+        {
+          "label": "disabled reason stated ('Per-query actions disabled: aggregate-on')",
+          "ok": true,
+          "detail": "Per-query actions disabled: aggregate-only run (CAPABILITY_ABSENT)",
+          "defect": false
+        },
+        {
+          "label": "aggregate-only badge visible on row",
+          "ok": true,
+          "detail": "['CERTIFIED', 'aggregate-only \u2014 per-query Top-K unavailable (CAPABILITY_ABSENT)', '']",
+          "defect": false
+        },
+        {
+          "label": "SYNTHETIC SOURCE not claimed for real run",
+          "ok": true,
+          "detail": "",
+          "defect": false
+        },
+        {
+          "label": "per-query action disabled",
+          "ok": true,
+          "detail": "CSMCIR \u00b7 train noise unrecorded \u00b7 eval noise unrecorded \u00b7 fa",
+          "defect": false
+        },
+        {
+          "label": "disabled reason stated ('Per-query actions disabled: aggregate-on')",
+          "ok": true,
+          "detail": "Per-query actions disabled: aggregate-only run (CAPABILITY_ABSENT)",
+          "defect": false
+        },
+        {
+          "label": "aggregate-only badge visible on row",
+          "ok": true,
+          "detail": "['CERTIFIED', 'aggregate-only \u2014 per-query Top-K unavailable (CAPABILITY_ABSENT)', '']",
+          "defect": false
+        },
+        {
+          "label": "SYNTHETIC SOURCE not claimed for real run",
+          "ok": true,
+          "detail": "",
+          "defect": false
+        },
+        {
+          "label": "dashboard: model count is a number, not an em-dash",
+          "ok": true,
+          "detail": "17 registered models",
+          "defect": false
+        },
+        {
+          "label": "dashboard: model count == /api/models (17)",
+          "ok": true,
+          "detail": "17 registered models",
+          "defect": false
+        },
+        {
+          "label": "dashboard: certified aggregate count present",
+          "ok": true,
+          "detail": "['17 registered models', '0 experiment runs', '0 mock runs', '2 aggregate benchmark reports', '2 certified research results']",
+          "defect": false
+        },
+        {
+          "label": "sample explorer: explicit aggregate-only notice",
+          "ok": true,
+          "detail": "Sample Explorer Unavailable for Current Protocol  Protocol fashioniq_original_split contains only aggregate-only benchma",
+          "defect": false
+        }
+      ],
+      "pass": true,
+      "screens": {
+        "benchmark": {
+          "viewport": "workbench/docs/reviews/20261108T015603+0700/browser_qa/screens/benchmark_1440x900.png",
+          "fullPage": "workbench/docs/reviews/20261108T015603+0700/browser_qa/screens/benchmark_1440x900_full.png",
+          "viewportSize": [
+            1440,
+            900
+          ],
+          "fullPageSize": [
+            1440,
+            1938
+          ]
+        },
+        "evaluation_runs": {
+          "viewport": "workbench/docs/reviews/20261108T015603+0700/browser_qa/screens/evaluation_runs_1440x900.png",
+          "fullPage": "workbench/docs/reviews/20261108T015603+0700/browser_qa/screens/evaluation_runs_1440x900_full.png",
+          "viewportSize": [
+            1440,
+            900
+          ],
+          "fullPageSize": [
+            1440,
+            900
+          ]
+        },
+        "dashboard": {
+          "viewport": "workbench/docs/reviews/20261108T015603+0700/browser_qa/screens/dashboard_1440x900.png",
+          "fullPage": "workbench/docs/reviews/20261108T015603+0700/browser_qa/screens/dashboard_1440x900_full.png",
+          "viewportSize": [
+            1440,
+            900
+          ],
+          "fullPageSize": [
+            1440,
+            993
+          ]
+        },
+        "sample_explorer": {
+          "viewport": "workbench/docs/reviews/20261108T015603+0700/browser_qa/screens/sample_explorer_1440x900.png",
+          "fullPage": "workbench/docs/reviews/20261108T015603+0700/browser_qa/screens/sample_explorer_1440x900_full.png",
+          "viewportSize": [
+            1440,
+            900
+          ],
+          "fullPageSize": [
+            1440,
+            900
+          ]
+        }
+      },
+      "dashboardFirstPaint": "\u2014 registered models",
+      "consoleErrors": [],
+      "pageErrors": [],
+      "failedRequests": [],
+      "httpErrors": [],
+      "consoleErrorCount": 0,
+      "pageErrorCount": 0,
+      "failedRequestCount": 0,
+      "httpErrorCount": 0
+    },
+    {
+      "flow": "composition_switch",
+      "viewport": "1440x900",
+      "url": "http://127.0.0.1:5173/?page=Composition",
+      "checks": [
+        {
+          "label": "full: every rendered row equals the subset's API JSON",
+          "ok": true,
+          "detail": "",
+          "defect": false
+        },
+        {
+          "label": "full: pill active and labelled",
+          "ok": true,
+          "detail": "Full\n6,003\u00a0queries \u00b7 74,381\u00a0gallery",
+          "defect": false
+        },
+        {
+          "label": "full: API matches brief (queries=6003)",
+          "ok": true,
+          "detail": "6003",
+          "defect": false
+        },
+        {
+          "label": "full: API mm_ndcg == brief 0.2959",
+          "ok": true,
+          "detail": "api=0.2959",
+          "defect": false
+        },
+        {
+          "label": "full: API mm_r10 == brief 31.0",
+          "ok": true,
+          "detail": "api=31.0",
+          "defect": false
+        },
+        {
+          "label": "full: API text == brief 0.1561",
+          "ok": true,
+          "detail": "api=0.1561",
+          "defect": false
+        },
+        {
+          "label": "full: API image == brief 0.1073",
+          "ok": true,
+          "detail": "api=0.1073",
+          "defect": false
+        },
+        {
+          "label": "full: API gap == brief 47.23",
+          "ok": true,
+          "detail": "api=47.23",
+          "defect": false
+        },
+        {
+          "label": "full: API coverage == brief 100.0",
+          "ok": true,
+          "detail": "api=100.0",
+          "defect": false
+        },
+        {
+          "label": "full: DOM shows the brief's exact six values for the encoder run",
+          "ok": true,
+          "detail": "wanted ['0.2959', '31.0%', '0.1561', '0.1073', '+47.23%', '100.0%'], DOM had [['0.2959', '31.0%', '0.1561', '0.1073', '+47.23%', '100.0%']]",
+          "defect": false
+        },
+        {
+          "label": "full: default list renders exactly the measured runs",
+          "ok": true,
+          "detail": "1 rows vs 1 API runs",
+          "defect": false
+        },
+        {
+          "label": "full: no FIXTURE badge and no SYNTHETIC_ text on the default path",
+          "ok": true,
+          "detail": "['encoder fashioniq']",
+          "defect": false
+        },
+        {
+          "label": "full: real encoder row rendered as measured",
+          "ok": true,
+          "detail": "1 real rows: ['encoder fashioniq']",
+          "defect": false
+        },
+        {
+          "label": "sf: every rendered row equals the subset's API JSON",
+          "ok": true,
+          "detail": "",
+          "defect": false
+        },
+        {
+          "label": "sf: pill active and labelled",
+          "ok": true,
+          "detail": "Shortcut-Free (SF)\n4,069\u00a0queries \u00b7 74,381\u00a0gallery",
+          "defect": false
+        },
+        {
+          "label": "sf: API matches brief (queries=4069)",
+          "ok": true,
+          "detail": "4069",
+          "defect": false
+        },
+        {
+          "label": "sf: API mm_ndcg == brief 0.2189",
+          "ok": true,
+          "detail": "api=0.2189",
+          "defect": false
+        },
+        {
+          "label": "sf: API mm_r10 == brief 18.7",
+          "ok": true,
+          "detail": "api=18.7",
+          "defect": false
+        },
+        {
+          "label": "sf: API text == brief 0.1077",
+          "ok": true,
+          "detail": "api=0.1077",
+          "defect": false
+        },
+        {
+          "label": "sf: API image == brief 0.0977",
+          "ok": true,
+          "detail": "api=0.0977",
+          "defect": false
+        },
+        {
+          "label": "sf: API gap == brief 50.77",
+          "ok": true,
+          "detail": "api=50.77",
+          "defect": false
+        },
+        {
+          "label": "sf: API coverage == brief 100.0",
+          "ok": true,
+          "detail": "api=100.0",
+          "defect": false
+        },
+        {
+          "label": "sf: DOM shows the brief's exact six values for the encoder run",
+          "ok": true,
+          "detail": "wanted ['0.2189', '18.7%', '0.1077', '0.0977', '+50.77%', '100.0%'], DOM had [['0.2189', '18.7%', '0.1077', '0.0977', '+50.77%', '100.0%']]",
+          "defect": false
+        },
+        {
+          "label": "sf: default list renders exactly the measured runs",
+          "ok": true,
+          "detail": "1 rows vs 1 API runs",
+          "defect": false
+        },
+        {
+          "label": "sf: no FIXTURE badge and no SYNTHETIC_ text on the default path",
+          "ok": true,
+          "detail": "['encoder fashioniq']",
+          "defect": false
+        },
+        {
+          "label": "sf: real encoder row rendered as measured",
+          "ok": true,
+          "detail": "1 real rows: ['encoder fashioniq']",
+          "defect": false
+        },
+        {
+          "label": "validated: every rendered row equals the subset's API JSON",
+          "ok": true,
+          "detail": "",
+          "defect": false
+        },
+        {
+          "label": "validated: pill active and labelled",
+          "ok": true,
+          "detail": "Validated\n586\u00a0queries \u00b7 74,381\u00a0gallery",
+          "defect": false
+        },
+        {
+          "label": "validated: API matches brief (queries=586)",
+          "ok": true,
+          "detail": "586",
+          "defect": false
+        },
+        {
+          "label": "validated: API mm_ndcg == brief 0.2965",
+          "ok": true,
+          "detail": "api=0.2965",
+          "defect": false
+        },
+        {
+          "label": "validated: API mm_r10 == brief 34.6",
+          "ok": true,
+          "detail": "api=34.6",
+          "defect": false
+        },
+        {
+          "label": "validated: API text == brief 0.1161",
+          "ok": true,
+          "detail": "api=0.1161",
+          "defect": false
+        },
+        {
+          "label": "validated: API image == brief 0.1078",
+          "ok": true,
+          "detail": "api=0.1078",
+          "defect": false
+        },
+        {
+          "label": "validated: API gap == brief 60.84",
+          "ok": true,
+          "detail": "api=60.84",
+          "defect": false
+        },
+        {
+          "label": "validated: API coverage == brief 100.0",
+          "ok": true,
+          "detail": "api=100.0",
+          "defect": false
+        },
+        {
+          "label": "validated: DOM shows the brief's exact six values for the encoder run",
+          "ok": true,
+          "detail": "wanted ['0.2965', '34.6%', '0.1161', '0.1078', '+60.84%', '100.0%'], DOM had [['0.2965', '34.6%', '0.1161', '0.1078', '+60.84%', '100.0%']]",
+          "defect": false
+        },
+        {
+          "label": "validated: default list renders exactly the measured runs",
+          "ok": true,
+          "detail": "1 rows vs 1 API runs",
+          "defect": false
+        },
+        {
+          "label": "validated: no FIXTURE badge and no SYNTHETIC_ text on the default path",
+          "ok": true,
+          "detail": "['encoder fashioniq']",
+          "defect": false
+        },
+        {
+          "label": "validated: real encoder row rendered as measured",
+          "ok": true,
+          "detail": "1 real rows: ['encoder fashioniq']",
+          "defect": false
+        },
+        {
+          "label": "real encoder row present across subsets",
+          "ok": true,
+          "detail": "",
+          "defect": false
+        },
+        {
+          "label": "api: default list is measurements only",
+          "ok": true,
+          "detail": "1 runs",
+          "defect": false
+        },
+        {
+          "label": "api: fixtures available via include_fixtures/include_smoke opt-in",
+          "ok": true,
+          "detail": "4 runs",
+          "defect": false
+        },
+        {
+          "label": "opt-in: request carried include_fixtures",
+          "ok": true,
+          "detail": "['http://127.0.0.1:5173/api/composition/runs?subset=full&include_fixtures=true&include_smoke=true']",
+          "defect": false
+        },
+        {
+          "label": "opt-in: two SYNTHETIC_* fixture rows appear and are labelled FIXTURE",
+          "ok": true,
+          "detail": "2 labelled rows of 4",
+          "defect": false
+        },
+        {
+          "label": "opt-in: fixture rows are named SYNTHETIC_*",
+          "ok": true,
+          "detail": "['fixture_encoder fashioniq FIXTURE SMOKE (8)', 'fixture_habit fiq_n02 FIXTURE SMOKE (8)']",
+          "defect": false
+        },
+        {
+          "label": "opt-in: fixture rows carry different numbers than the measured rows",
+          "ok": true,
+          "detail": "[['0.2506', '12.5%', '0.1202', '0.0849', '+52.04%', '100.0%'], ['0.2881', '15.0%', '0.1520', '0.1130', '+28.56%', '98.0%']]",
+          "defect": false
+        },
+        {
+          "label": "opt-in: the real encoder run sorts FIRST, above the fixtures",
+          "ok": true,
+          "detail": "encoder fashioniq",
+          "defect": false
+        },
+        {
+          "label": "opt-in: every measured row precedes every fixture row",
+          "ok": true,
+          "detail": "real at [0, 1], fixture at [2, 3]",
+          "defect": false
+        }
+      ],
+      "pass": true,
+      "screens": {
+        "full": {
+          "viewport": "workbench/docs/reviews/20261108T015603+0700/browser_qa/screens/composition_full_1440x900.png",
+          "fullPage": "workbench/docs/reviews/20261108T015603+0700/browser_qa/screens/composition_full_1440x900_full.png",
+          "viewportSize": [
+            1440,
+            900
+          ],
+          "fullPageSize": [
+            1440,
+            4927
+          ]
+        },
+        "sf": {
+          "viewport": "workbench/docs/reviews/20261108T015603+0700/browser_qa/screens/composition_sf_1440x900.png",
+          "fullPage": "workbench/docs/reviews/20261108T015603+0700/browser_qa/screens/composition_sf_1440x900_full.png",
+          "viewportSize": [
+            1440,
+            900
+          ],
+          "fullPageSize": [
+            1440,
+            4927
+          ]
+        },
+        "validated": {
+          "viewport": "workbench/docs/reviews/20261108T015603+0700/browser_qa/screens/composition_validated_1440x900.png",
+          "fullPage": "workbench/docs/reviews/20261108T015603+0700/browser_qa/screens/composition_validated_1440x900_full.png",
+          "viewportSize": [
+            1440,
+            900
+          ],
+          "fullPageSize": [
+            1440,
+            4927
+          ]
+        },
+        "fixtures_injected": {
+          "viewport": "workbench/docs/reviews/20261108T015603+0700/browser_qa/screens/composition_fixtures_injected_1440x900.png",
+          "fullPage": "workbench/docs/reviews/20261108T015603+0700/browser_qa/screens/composition_fixtures_injected_1440x900_full.png",
+          "viewportSize": [
+            1440,
+            900
+          ],
+          "fullPageSize": [
+            1440,
+            5231
+          ]
+        }
+      },
+      "consoleErrors": [],
+      "pageErrors": [],
+      "failedRequests": [],
+      "httpErrors": [],
+      "consoleErrorCount": 0,
+      "pageErrorCount": 0,
+      "failedRequestCount": 0,
+      "httpErrorCount": 0
+    },
+    {
+      "flow": "composition_drilldown",
+      "viewport": "1440x900",
+      "url": "http://127.0.0.1:5173/?page=Composition&comp_run=6a528e877c328772e2c7bb28",
+      "checks": [
+        {
+          "label": "drilldown: images present",
+          "ok": true,
+          "detail": "40 imgs",
+          "defect": false
+        },
+        {
+          "label": "drilldown: every query image decoded (naturalWidth > 0)",
+          "ok": true,
+          "detail": "[]",
+          "defect": false
+        },
+        {
+          "label": "drilldown: reference and target images both load",
+          "ok": true,
+          "detail": "['Reference', 'Target']",
+          "defect": false
+        },
+        {
+          "label": "drilldown: no image fell back to the missing placeholder",
+          "ok": true,
+          "detail": "0 placeholders",
+          "defect": false
+        },
+        {
+          "label": "drilldown: edit text rendered",
+          "ok": true,
+          "detail": "",
+          "defect": false
+        },
+        {
+          "label": "drilldown: run id tag shows real run",
+          "ok": true,
+          "detail": "",
+          "defect": false
+        },
+        {
+          "label": "drilldown: pagination total == API total",
+          "ok": true,
+          "detail": "Showing 1\u201320 of 6,003 queries\nPrevious\nN",
+          "defect": false
+        },
+        {
+          "label": "missing rank: sparse run actually selected (not silently swapped)",
+          "ok": true,
+          "detail": "run: eda30a37c0bc17ac43844f09",
+          "defect": true
+        },
+        {
+          "label": "missing rank: cards rendered for sparse run",
+          "ok": true,
+          "detail": "20 cards",
+          "defect": false
+        },
+        {
+          "label": "missing rank: unscored state rendered explicitly",
+          "ok": true,
+          "detail": "[('7:9', ['unscored', 'unscored', 'unscored']), ('7:10', ['unscored', 'unscored', 'unscored'])]",
+          "defect": false
+        },
+        {
+          "label": "missing rank: never rendered as 0 / #0",
+          "ok": true,
+          "detail": "[]",
+          "defect": false
+        },
+        {
+          "label": "missing rank: API reports null target_rank for these queries",
+          "ok": true,
+          "detail": "[None, None, None, None, None]",
+          "defect": false
+        }
+      ],
+      "pass": true,
+      "screens": {
+        "drilldown": {
+          "viewport": "workbench/docs/reviews/20261108T015603+0700/browser_qa/screens/drilldown_1440x900.png",
+          "fullPage": "workbench/docs/reviews/20261108T015603+0700/browser_qa/screens/drilldown_1440x900_full.png",
+          "viewportSize": [
+            1440,
+            900
+          ],
+          "fullPageSize": [
+            1440,
+            4927
+          ]
+        },
+        "missing_rank": {
+          "viewport": "workbench/docs/reviews/20261108T015603+0700/browser_qa/screens/drilldown_missing_rank_1440x900.png",
+          "fullPage": "workbench/docs/reviews/20261108T015603+0700/browser_qa/screens/drilldown_missing_rank_1440x900_full.png",
+          "viewportSize": [
+            1440,
+            900
+          ],
+          "fullPageSize": [
+            1440,
+            5231
+          ]
+        }
+      },
+      "sparseTotal": 6003,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "failedRequests": [],
+      "httpErrors": [],
+      "consoleErrorCount": 0,
+      "pageErrorCount": 0,
+      "failedRequestCount": 0,
+      "httpErrorCount": 0
+    },
+    {
+      "flow": "rapid_filter_switching",
+      "viewport": "1440x900",
+      "url": "http://127.0.0.1:5173/?page=Composition",
+      "checks": [
+        {
+          "label": "burst 0 [0, 1, 2] -> validated: rendered data == validated JSON",
+          "ok": true,
+          "detail": "",
+          "defect": false
+        },
+        {
+          "label": "burst 0: active pill is validated",
+          "ok": true,
+          "detail": "Validated\n586\u00a0queries \u00b7 74,381\u00a0gallery",
+          "defect": false
+        },
+        {
+          "label": "burst 1 [2, 0, 1] -> sf: rendered data == sf JSON",
+          "ok": true,
+          "detail": "",
+          "defect": false
+        },
+        {
+          "label": "burst 1: active pill is sf",
+          "ok": true,
+          "detail": "Shortcut-Free (SF)\n4,069\u00a0queries \u00b7 74,38",
+          "defect": false
+        },
+        {
+          "label": "burst 2 [0, 2, 1, 0] -> full: rendered data == full JSON",
+          "ok": true,
+          "detail": "",
+          "defect": false
+        },
+        {
+          "label": "burst 2: active pill is full",
+          "ok": true,
+          "detail": "Full\n6,003\u00a0queries \u00b7 74,381\u00a0gallery",
+          "defect": false
+        },
+        {
+          "label": "burst 3 [1, 2, 0, 1, 2] -> validated: rendered data == validated JSON",
+          "ok": true,
+          "detail": "",
+          "defect": false
+        },
+        {
+          "label": "burst 3: active pill is validated",
+          "ok": true,
+          "detail": "Validated\n586\u00a0queries \u00b7 74,381\u00a0gallery",
+          "defect": false
+        }
+      ],
+      "pass": true,
+      "screens": {
+        "rapid_0": {
+          "viewport": "workbench/docs/reviews/20261108T015603+0700/browser_qa/screens/rapid_0_1440x900.png",
+          "fullPage": "workbench/docs/reviews/20261108T015603+0700/browser_qa/screens/rapid_0_1440x900_full.png",
+          "viewportSize": [
+            1440,
+            900
+          ],
+          "fullPageSize": [
+            1440,
+            4927
+          ]
+        },
+        "rapid_1": {
+          "viewport": "workbench/docs/reviews/20261108T015603+0700/browser_qa/screens/rapid_1_1440x900.png",
+          "fullPage": "workbench/docs/reviews/20261108T015603+0700/browser_qa/screens/rapid_1_1440x900_full.png",
+          "viewportSize": [
+            1440,
+            900
+          ],
+          "fullPageSize": [
+            1440,
+            4927
+          ]
+        },
+        "rapid_2": {
+          "viewport": "workbench/docs/reviews/20261108T015603+0700/browser_qa/screens/rapid_2_1440x900.png",
+          "fullPage": "workbench/docs/reviews/20261108T015603+0700/browser_qa/screens/rapid_2_1440x900_full.png",
+          "viewportSize": [
+            1440,
+            900
+          ],
+          "fullPageSize": [
+            1440,
+            4927
+          ]
+        },
+        "rapid_3": {
+          "viewport": "workbench/docs/reviews/20261108T015603+0700/browser_qa/screens/rapid_3_1440x900.png",
+          "fullPage": "workbench/docs/reviews/20261108T015603+0700/browser_qa/screens/rapid_3_1440x900_full.png",
+          "viewportSize": [
+            1440,
+            900
+          ],
+          "fullPageSize": [
+            1440,
+            4927
+          ]
+        }
+      },
+      "consoleErrors": [],
+      "pageErrors": [],
+      "failedRequests": [],
+      "httpErrors": [],
+      "consoleErrorCount": 0,
+      "pageErrorCount": 0,
+      "failedRequestCount": 0,
+      "httpErrorCount": 0
+    },
+    {
+      "flow": "mobile_layout",
+      "viewport": "1440x900",
+      "url": "http://127.0.0.1:5173/?page=Composition&comp_subset=full",
+      "checks": [
+        {
+          "label": "no whole-page horizontal overflow",
+          "ok": true,
+          "detail": "doc=1440 body=1440 vw=1440",
+          "defect": false
+        },
+        {
+          "label": "wide table scrolls inside its wrapper (never the page)",
+          "ok": true,
+          "detail": "table=1366 wrapper=1390 scrolls=False",
+          "defect": false
+        },
+        {
+          "label": "table overflow contained by an overflow-x:auto wrapper",
+          "ok": true,
+          "detail": "auto",
+          "defect": false
+        },
+        {
+          "label": "no elements escape the viewport outside the table wrapper",
+          "ok": true,
+          "detail": "[]",
+          "defect": false
+        },
+        {
+          "label": "controls stay inside the viewport",
+          "ok": true,
+          "detail": "[]",
+          "defect": false
+        },
+        {
+          "label": "tap targets meet WCAG 2.5.8 (>= 24px tall)",
+          "ok": true,
+          "detail": "[]",
+          "defect": false
+        },
+        {
+          "label": "row identity survives horizontal scroll (Model column pinned or in view)",
+          "ok": true,
+          "detail": "{'before': [38], 'after': [38], 'wrapLeft': 24, 'visibleAfter': True, 'scrollLeft': 0, 'maxScroll': 0}",
+          "defect": true
+        },
+        {
+          "label": "nav row not clipped",
+          "ok": true,
+          "detail": "nav scrollWidth=1392 clientWidth=1392",
+          "defect": false
+        }
+      ],
+      "pass": true,
+      "screens": {
+        "mobile": {
+          "viewport": "workbench/docs/reviews/20261108T015603+0700/browser_qa/screens/mobile_composition_1440x900.png",
+          "fullPage": "workbench/docs/reviews/20261108T015603+0700/browser_qa/screens/mobile_composition_1440x900_full.png",
+          "viewportSize": [
+            1440,
+            900
+          ],
+          "fullPageSize": [
+            1440,
+            4927
+          ]
+        }
+      },
+      "mobileMetrics": {
+        "innerWidth": 1440,
+        "docScrollWidth": 1440,
+        "bodyScrollWidth": 1440,
+        "tableScrolls": false,
+        "wrapOverflowX": "auto",
+        "wrapClientWidth": 1390,
+        "tableWidth": 1366,
+        "navScrollWidth": 1392,
+        "navClientWidth": 1392,
+        "sections": [
+          {
+            "cls": "controls",
+            "scrollWidth": 1392,
+            "clientWidth": 1392
+          },
+          {
+            "cls": "composition-view",
+            "scrollWidth": 1392,
+            "clientWidth": 1392
+          }
+        ]
+      },
+      "tapTargets": [
+        {
+          "text": "Dashboard",
+          "w": 87,
+          "h": 31,
+          "left": 24,
+          "right": 111
+        },
+        {
+          "text": "Models",
+          "w": 65,
+          "h": 31,
+          "left": 117,
+          "right": 182
+        },
+        {
+          "text": "Evaluation Runs",
+          "w": 119,
+          "h": 31,
+          "left": 188,
+          "right": 307
+        },
+        {
+          "text": "Benchmark",
+          "w": 89,
+          "h": 31,
+          "left": 313,
+          "right": 403
+        },
+        {
+          "text": "Composition",
+          "w": 96,
+          "h": 31,
+          "left": 409,
+          "right": 505
+        },
+        {
+          "text": "Sample Explorer",
+          "w": 121,
+          "h": 31,
+          "left": 511,
+          "right": 631
+        },
+        {
+          "text": "Compare Models",
+          "w": 123,
+          "h": 31,
+          "left": 637,
+          "right": 761
+        },
+        {
+          "text": "Common Failures",
+          "w": 127,
+          "h": 31,
+          "left": 767,
+          "right": 894
+        },
+        {
+          "text": "Disagreement",
+          "w": 105,
+          "h": 31,
+          "left": 900,
+          "right": 1005
+        },
+        {
+          "text": "Failure Analytics",
+          "w": 119,
+          "h": 31,
+          "left": 1011,
+          "right": 1130
+        },
+        {
+          "text": "Annotations",
+          "w": 92,
+          "h": 31,
+          "left": 1136,
+          "right": 1228
+        },
+        {
+          "text": "Hypotheses",
+          "w": 92,
+          "h": 31,
+          "left": 1234,
+          "right": 1327
+        },
+        {
+          "text": "Full 6,003 queries \u00b7 74,381 gallery",
+          "w": 176,
+          "h": 47,
+          "left": 24,
+          "right": 200
+        },
+        {
+          "text": "Shortcut-Free (SF) 4,069 queries \u00b7 74,38",
+          "w": 176,
+          "h": 47,
+          "left": 208,
+          "right": 383
+        },
+        {
+          "text": "Validated 586 queries \u00b7 74,381 gallery",
+          "w": 166,
+          "h": 47,
+          "left": 391,
+          "right": 558
+        },
+        {
+          "text": "Multimodal Text-Only (Black Image) Image",
+          "w": 186,
+          "h": 36,
+          "left": 41,
+          "right": 227
+        },
+        {
+          "text": "All Outcomes Composition Required Text O",
+          "w": 171,
+          "h": 36,
+          "left": 237,
+          "right": 408
+        },
+        {
+          "text": "All Categories dress shirt toptee",
+          "w": 123,
+          "h": 36,
+          "left": 418,
+          "right": 541
+        },
+        {
+          "text": "Worst Rank First Best Rank First Ascendi",
+          "w": 145,
+          "h": 36,
+          "left": 551,
+          "right": 696
+        },
+        {
+          "text": "Previous",
+          "w": 78,
+          "h": 36,
+          "left": 1262,
+          "right": 1340
+        },
+        {
+          "text": "Next",
+          "w": 53,
+          "h": 36,
+          "left": 1346,
+          "right": 1399
+        },
+        {
+          "text": "Previous",
+          "w": 78,
+          "h": 36,
+          "left": 41,
+          "right": 119
+        },
+        {
+          "text": "Next",
+          "w": 53,
+          "h": 36,
+          "left": 125,
+          "right": 178
+        }
+      ],
+      "consoleErrors": [],
+      "pageErrors": [],
+      "failedRequests": [],
+      "httpErrors": [],
+      "consoleErrorCount": 0,
+      "pageErrorCount": 0,
+      "failedRequestCount": 0,
+      "httpErrorCount": 0
+    },
+    {
+      "flow": "benchmark_native",
+      "viewport": "768x1024",
+      "url": "http://127.0.0.1:5173/?page=Benchmark",
+      "checks": [
+        {
+          "label": "api: exactly 2 aggregate benchmark runs",
+          "ok": true,
+          "detail": "2 runs",
+          "defect": false
+        },
+        {
+          "label": "2 benchmark cards rendered",
+          "ok": true,
+          "detail": "2 cards",
+          "defect": false
+        },
+        {
+          "label": "20261107T054343058424Z_c: model/checkpoint in title",
+          "ok": true,
+          "detail": "CSMCIR \u00b7 fashioniq",
+          "defect": false
+        },
+        {
+          "label": "20261107T054343058424Z_c: run id + protocol in meta",
+          "ok": true,
+          "detail": "20261107T054343058424Z_csmcir_fashioniq_f564570e \u00b7 protocol: fashioniq_original_split",
+          "defect": false
+        },
+        {
+          "label": "20261107T054343058424Z_c: CERTIFIED badge",
+          "ok": true,
+          "detail": "['CERTIFIED', 'aggregate-only \u2014 per-query Top-K unavailable (CAPABILITY_ABSENT)']",
+          "defect": false
+        },
+        {
+          "label": "20261107T054343058424Z_c: aggregate-only badge states CAPABILITY_ABSENT",
+          "ok": true,
+          "detail": "['CERTIFIED', 'aggregate-only \u2014 per-query Top-K unavailable (CAPABILITY_ABSENT)']",
+          "defect": false
+        },
+        {
+          "label": "20261107T054343058424Z_c: measured R@10 = 57.0507",
+          "ok": true,
+          "detail": "57.05% (57.0507)",
+          "defect": false
+        },
+        {
+          "label": "20261107T054343058424Z_c: measured R@50 = 77.2986",
+          "ok": true,
+          "detail": "77.30% (77.2986)",
+          "defect": false
+        },
+        {
+          "label": "20261107T054343058424Z_c: paper ref R@10 = 57.07",
+          "ok": true,
+          "detail": "57.07% (57.07)",
+          "defect": false
+        },
+        {
+          "label": "20261107T054343058424Z_c: measured != paper cells (distinct values)",
+          "ok": true,
+          "detail": "measured=57.05% (57.0507) paper=57.07% (57.07)",
+          "defect": false
+        },
+        {
+          "label": "20261107T054343058424Z_c: paper cells carry muted styling",
+          "ok": true,
+          "detail": "text-muted on paper column only",
+          "defect": false
+        },
+        {
+          "label": "20261107T054343058424Z_c: per-category rows dress/shirt/toptee",
+          "ok": true,
+          "detail": "['dress', 'shirt', 'toptee']",
+          "defect": false
+        },
+        {
+          "label": "20261107T054343058424Z_c/dress: measured R@10 52.2062 rendered",
+          "ok": true,
+          "detail": "52.21% (52.2062)",
+          "defect": false
+        },
+        {
+          "label": "20261107T054343058424Z_c/shirt: measured R@10 57.7527 rendered",
+          "ok": true,
+          "detail": "57.75% (57.7527)",
+          "defect": false
+        },
+        {
+          "label": "20261107T054343058424Z_c/toptee: measured R@10 61.1933 rendered",
+          "ok": true,
+          "detail": "61.19% (61.1933)",
+          "defect": false
+        },
+        {
+          "label": "20261107T054933277898Z_c: model/checkpoint in title",
+          "ok": true,
+          "detail": "CSMCIR \u00b7 fashioniq",
+          "defect": false
+        },
+        {
+          "label": "20261107T054933277898Z_c: run id + protocol in meta",
+          "ok": true,
+          "detail": "20261107T054933277898Z_csmcir_fashioniq_f03887d2 \u00b7 protocol: fashioniq_original_split",
+          "defect": false
+        },
+        {
+          "label": "20261107T054933277898Z_c: CERTIFIED badge",
+          "ok": true,
+          "detail": "['CERTIFIED', 'aggregate-only \u2014 per-query Top-K unavailable (CAPABILITY_ABSENT)']",
+          "defect": false
+        },
+        {
+          "label": "20261107T054933277898Z_c: aggregate-only badge states CAPABILITY_ABSENT",
+          "ok": true,
+          "detail": "['CERTIFIED', 'aggregate-only \u2014 per-query Top-K unavailable (CAPABILITY_ABSENT)']",
+          "defect": false
+        },
+        {
+          "label": "20261107T054933277898Z_c: measured R@10 = 57.0507",
+          "ok": true,
+          "detail": "57.05% (57.0507)",
+          "defect": false
+        },
+        {
+          "label": "20261107T054933277898Z_c: measured R@50 = 77.2986",
+          "ok": true,
+          "detail": "77.30% (77.2986)",
+          "defect": false
+        },
+        {
+          "label": "20261107T054933277898Z_c: paper ref R@10 = 57.07",
+          "ok": true,
+          "detail": "57.07% (57.07)",
+          "defect": false
+        },
+        {
+          "label": "20261107T054933277898Z_c: measured != paper cells (distinct values)",
+          "ok": true,
+          "detail": "measured=57.05% (57.0507) paper=57.07% (57.07)",
+          "defect": false
+        },
+        {
+          "label": "20261107T054933277898Z_c: paper cells carry muted styling",
+          "ok": true,
+          "detail": "text-muted on paper column only",
+          "defect": false
+        },
+        {
+          "label": "20261107T054933277898Z_c: per-category rows dress/shirt/toptee",
+          "ok": true,
+          "detail": "['dress', 'shirt', 'toptee']",
+          "defect": false
+        },
+        {
+          "label": "20261107T054933277898Z_c/dress: measured R@10 52.2062 rendered",
+          "ok": true,
+          "detail": "52.21% (52.2062)",
+          "defect": false
+        },
+        {
+          "label": "20261107T054933277898Z_c/shirt: measured R@10 57.7527 rendered",
+          "ok": true,
+          "detail": "57.75% (57.7527)",
+          "defect": false
+        },
+        {
+          "label": "20261107T054933277898Z_c/toptee: measured R@10 61.1933 rendered",
+          "ok": true,
+          "detail": "61.19% (61.1933)",
+          "defect": false
+        },
+        {
+          "label": "evaluation runs: 2 aggregate-only rows",
+          "ok": true,
+          "detail": "2",
+          "defect": false
+        },
+        {
+          "label": "per-query action disabled",
+          "ok": true,
+          "detail": "CSMCIR \u00b7 train noise unrecorded \u00b7 eval noise unrecorded \u00b7 fa",
+          "defect": false
+        },
+        {
+          "label": "disabled reason stated ('Per-query actions disabled: aggregate-on')",
+          "ok": true,
+          "detail": "Per-query actions disabled: aggregate-only run (CAPABILITY_ABSENT)",
+          "defect": false
+        },
+        {
+          "label": "aggregate-only badge visible on row",
+          "ok": true,
+          "detail": "['CERTIFIED', 'aggregate-only \u2014 per-query Top-K unavailable (CAPABILITY_ABSENT)', '']",
+          "defect": false
+        },
+        {
+          "label": "SYNTHETIC SOURCE not claimed for real run",
+          "ok": true,
+          "detail": "",
+          "defect": false
+        },
+        {
+          "label": "per-query action disabled",
+          "ok": true,
+          "detail": "CSMCIR \u00b7 train noise unrecorded \u00b7 eval noise unrecorded \u00b7 fa",
+          "defect": false
+        },
+        {
+          "label": "disabled reason stated ('Per-query actions disabled: aggregate-on')",
+          "ok": true,
+          "detail": "Per-query actions disabled: aggregate-only run (CAPABILITY_ABSENT)",
+          "defect": false
+        },
+        {
+          "label": "aggregate-only badge visible on row",
+          "ok": true,
+          "detail": "['CERTIFIED', 'aggregate-only \u2014 per-query Top-K unavailable (CAPABILITY_ABSENT)', '']",
+          "defect": false
+        },
+        {
+          "label": "SYNTHETIC SOURCE not claimed for real run",
+          "ok": true,
+          "detail": "",
+          "defect": false
+        },
+        {
+          "label": "dashboard: model count is a number, not an em-dash",
+          "ok": true,
+          "detail": "17 registered models",
+          "defect": false
+        },
+        {
+          "label": "dashboard: model count == /api/models (17)",
+          "ok": true,
+          "detail": "17 registered models",
+          "defect": false
+        },
+        {
+          "label": "dashboard: certified aggregate count present",
+          "ok": true,
+          "detail": "['17 registered models', '0 experiment runs', '0 mock runs', '2 aggregate benchmark reports', '2 certified research results']",
+          "defect": false
+        },
+        {
+          "label": "sample explorer: explicit aggregate-only notice",
+          "ok": true,
+          "detail": "Sample Explorer Unavailable for Current Protocol  Protocol fashioniq_original_split contains only aggregate-only benchma",
+          "defect": false
+        }
+      ],
+      "pass": true,
+      "screens": {
+        "benchmark": {
+          "viewport": "workbench/docs/reviews/20261108T015603+0700/browser_qa/screens/benchmark_768x1024.png",
+          "fullPage": "workbench/docs/reviews/20261108T015603+0700/browser_qa/screens/benchmark_768x1024_full.png",
+          "viewportSize": [
+            768,
+            1024
+          ],
+          "fullPageSize": [
+            768,
+            2421
+          ]
+        },
+        "evaluation_runs": {
+          "viewport": "workbench/docs/reviews/20261108T015603+0700/browser_qa/screens/evaluation_runs_768x1024.png",
+          "fullPage": "workbench/docs/reviews/20261108T015603+0700/browser_qa/screens/evaluation_runs_768x1024_full.png",
+          "viewportSize": [
+            768,
+            1024
+          ],
+          "fullPageSize": [
+            768,
+            1024
+          ]
+        },
+        "dashboard": {
+          "viewport": "workbench/docs/reviews/20261108T015603+0700/browser_qa/screens/dashboard_768x1024.png",
+          "fullPage": "workbench/docs/reviews/20261108T015603+0700/browser_qa/screens/dashboard_768x1024_full.png",
+          "viewportSize": [
+            768,
+            1024
+          ],
+          "fullPageSize": [
+            768,
+            1214
+          ]
+        },
+        "sample_explorer": {
+          "viewport": "workbench/docs/reviews/20261108T015603+0700/browser_qa/screens/sample_explorer_768x1024.png",
+          "fullPage": "workbench/docs/reviews/20261108T015603+0700/browser_qa/screens/sample_explorer_768x1024_full.png",
+          "viewportSize": [
+            768,
+            1024
+          ],
+          "fullPageSize": [
+            768,
+            1024
+          ]
+        }
+      },
+      "dashboardFirstPaint": "\u2014 registered models",
+      "consoleErrors": [],
+      "pageErrors": [],
+      "failedRequests": [],
+      "httpErrors": [],
+      "consoleErrorCount": 0,
+      "pageErrorCount": 0,
+      "failedRequestCount": 0,
+      "httpErrorCount": 0
+    },
+    {
+      "flow": "composition_switch",
+      "viewport": "768x1024",
+      "url": "http://127.0.0.1:5173/?page=Composition",
+      "checks": [
+        {
+          "label": "full: every rendered row equals the subset's API JSON",
+          "ok": true,
+          "detail": "",
+          "defect": false
+        },
+        {
+          "label": "full: pill active and labelled",
+          "ok": true,
+          "detail": "Full\n6,003\u00a0queries \u00b7 74,381\u00a0gallery",
+          "defect": false
+        },
+        {
+          "label": "full: API matches brief (queries=6003)",
+          "ok": true,
+          "detail": "6003",
+          "defect": false
+        },
+        {
+          "label": "full: API mm_ndcg == brief 0.2959",
+          "ok": true,
+          "detail": "api=0.2959",
+          "defect": false
+        },
+        {
+          "label": "full: API mm_r10 == brief 31.0",
+          "ok": true,
+          "detail": "api=31.0",
+          "defect": false
+        },
+        {
+          "label": "full: API text == brief 0.1561",
+          "ok": true,
+          "detail": "api=0.1561",
+          "defect": false
+        },
+        {
+          "label": "full: API image == brief 0.1073",
+          "ok": true,
+          "detail": "api=0.1073",
+          "defect": false
+        },
+        {
+          "label": "full: API gap == brief 47.23",
+          "ok": true,
+          "detail": "api=47.23",
+          "defect": false
+        },
+        {
+          "label": "full: API coverage == brief 100.0",
+          "ok": true,
+          "detail": "api=100.0",
+          "defect": false
+        },
+        {
+          "label": "full: DOM shows the brief's exact six values for the encoder run",
+          "ok": true,
+          "detail": "wanted ['0.2959', '31.0%', '0.1561', '0.1073', '+47.23%', '100.0%'], DOM had [['0.2959', '31.0%', '0.1561', '0.1073', '+47.23%', '100.0%']]",
+          "defect": false
+        },
+        {
+          "label": "full: default list renders exactly the measured runs",
+          "ok": true,
+          "detail": "1 rows vs 1 API runs",
+          "defect": false
+        },
+        {
+          "label": "full: no FIXTURE badge and no SYNTHETIC_ text on the default path",
+          "ok": true,
+          "detail": "['encoder fashioniq']",
+          "defect": false
+        },
+        {
+          "label": "full: real encoder row rendered as measured",
+          "ok": true,
+          "detail": "1 real rows: ['encoder fashioniq']",
+          "defect": false
+        },
+        {
+          "label": "sf: every rendered row equals the subset's API JSON",
+          "ok": true,
+          "detail": "",
+          "defect": false
+        },
+        {
+          "label": "sf: pill active and labelled",
+          "ok": true,
+          "detail": "Shortcut-Free (SF)\n4,069\u00a0queries \u00b7 74,381\u00a0gallery",
+          "defect": false
+        },
+        {
+          "label": "sf: API matches brief (queries=4069)",
+          "ok": true,
+          "detail": "4069",
+          "defect": false
+        },
+        {
+          "label": "sf: API mm_ndcg == brief 0.2189",
+          "ok": true,
+          "detail": "api=0.2189",
+          "defect": false
+        },
+        {
+          "label": "sf: API mm_r10 == brief 18.7",
+          "ok": true,
+          "detail": "api=18.7",
+          "defect": false
+        },
+        {
+          "label": "sf: API text == brief 0.1077",
+          "ok": true,
+          "detail": "api=0.1077",
+          "defect": false
+        },
+        {
+          "label": "sf: API image == brief 0.0977",
+          "ok": true,
+          "detail": "api=0.0977",
+          "defect": false
+        },
+        {
+          "label": "sf: API gap == brief 50.77",
+          "ok": true,
+          "detail": "api=50.77",
+          "defect": false
+        },
+        {
+          "label": "sf: API coverage == brief 100.0",
+          "ok": true,
+          "detail": "api=100.0",
+          "defect": false
+        },
+        {
+          "label": "sf: DOM shows the brief's exact six values for the encoder run",
+          "ok": true,
+          "detail": "wanted ['0.2189', '18.7%', '0.1077', '0.0977', '+50.77%', '100.0%'], DOM had [['0.2189', '18.7%', '0.1077', '0.0977', '+50.77%', '100.0%']]",
+          "defect": false
+        },
+        {
+          "label": "sf: default list renders exactly the measured runs",
+          "ok": true,
+          "detail": "1 rows vs 1 API runs",
+          "defect": false
+        },
+        {
+          "label": "sf: no FIXTURE badge and no SYNTHETIC_ text on the default path",
+          "ok": true,
+          "detail": "['encoder fashioniq']",
+          "defect": false
+        },
+        {
+          "label": "sf: real encoder row rendered as measured",
+          "ok": true,
+          "detail": "1 real rows: ['encoder fashioniq']",
+          "defect": false
+        },
+        {
+          "label": "validated: every rendered row equals the subset's API JSON",
+          "ok": true,
+          "detail": "",
+          "defect": false
+        },
+        {
+          "label": "validated: pill active and labelled",
+          "ok": true,
+          "detail": "Validated\n586\u00a0queries \u00b7 74,381\u00a0gallery",
+          "defect": false
+        },
+        {
+          "label": "validated: API matches brief (queries=586)",
+          "ok": true,
+          "detail": "586",
+          "defect": false
+        },
+        {
+          "label": "validated: API mm_ndcg == brief 0.2965",
+          "ok": true,
+          "detail": "api=0.2965",
+          "defect": false
+        },
+        {
+          "label": "validated: API mm_r10 == brief 34.6",
+          "ok": true,
+          "detail": "api=34.6",
+          "defect": false
+        },
+        {
+          "label": "validated: API text == brief 0.1161",
+          "ok": true,
+          "detail": "api=0.1161",
+          "defect": false
+        },
+        {
+          "label": "validated: API image == brief 0.1078",
+          "ok": true,
+          "detail": "api=0.1078",
+          "defect": false
+        },
+        {
+          "label": "validated: API gap == brief 60.84",
+          "ok": true,
+          "detail": "api=60.84",
+          "defect": false
+        },
+        {
+          "label": "validated: API coverage == brief 100.0",
+          "ok": true,
+          "detail": "api=100.0",
+          "defect": false
+        },
+        {
+          "label": "validated: DOM shows the brief's exact six values for the encoder run",
+          "ok": true,
+          "detail": "wanted ['0.2965', '34.6%', '0.1161', '0.1078', '+60.84%', '100.0%'], DOM had [['0.2965', '34.6%', '0.1161', '0.1078', '+60.84%', '100.0%']]",
+          "defect": false
+        },
+        {
+          "label": "validated: default list renders exactly the measured runs",
+          "ok": true,
+          "detail": "1 rows vs 1 API runs",
+          "defect": false
+        },
+        {
+          "label": "validated: no FIXTURE badge and no SYNTHETIC_ text on the default path",
+          "ok": true,
+          "detail": "['encoder fashioniq']",
+          "defect": false
+        },
+        {
+          "label": "validated: real encoder row rendered as measured",
+          "ok": true,
+          "detail": "1 real rows: ['encoder fashioniq']",
+          "defect": false
+        },
+        {
+          "label": "real encoder row present across subsets",
+          "ok": true,
+          "detail": "",
+          "defect": false
+        },
+        {
+          "label": "api: default list is measurements only",
+          "ok": true,
+          "detail": "1 runs",
+          "defect": false
+        },
+        {
+          "label": "api: fixtures available via include_fixtures/include_smoke opt-in",
+          "ok": true,
+          "detail": "4 runs",
+          "defect": false
+        },
+        {
+          "label": "opt-in: request carried include_fixtures",
+          "ok": true,
+          "detail": "['http://127.0.0.1:5173/api/composition/runs?subset=full&include_fixtures=true&include_smoke=true']",
+          "defect": false
+        },
+        {
+          "label": "opt-in: two SYNTHETIC_* fixture rows appear and are labelled FIXTURE",
+          "ok": true,
+          "detail": "2 labelled rows of 4",
+          "defect": false
+        },
+        {
+          "label": "opt-in: fixture rows are named SYNTHETIC_*",
+          "ok": true,
+          "detail": "['fixture_encoder fashioniq FIXTURE SMOKE (8)', 'fixture_habit fiq_n02 FIXTURE SMOKE (8)']",
+          "defect": false
+        },
+        {
+          "label": "opt-in: fixture rows carry different numbers than the measured rows",
+          "ok": true,
+          "detail": "[['0.2506', '12.5%', '0.1202', '0.0849', '+52.04%', '100.0%'], ['0.2881', '15.0%', '0.1520', '0.1130', '+28.56%', '98.0%']]",
+          "defect": false
+        },
+        {
+          "label": "opt-in: the real encoder run sorts FIRST, above the fixtures",
+          "ok": true,
+          "detail": "encoder fashioniq",
+          "defect": false
+        },
+        {
+          "label": "opt-in: every measured row precedes every fixture row",
+          "ok": true,
+          "detail": "real at [0, 1], fixture at [2, 3]",
+          "defect": false
+        }
+      ],
+      "pass": true,
+      "screens": {
+        "full": {
+          "viewport": "workbench/docs/reviews/20261108T015603+0700/browser_qa/screens/composition_full_768x1024.png",
+          "fullPage": "workbench/docs/reviews/20261108T015603+0700/browser_qa/screens/composition_full_768x1024_full.png",
+          "viewportSize": [
+            768,
+            1024
+          ],
+          "fullPageSize": [
+            768,
+            5162
+          ]
+        },
+        "sf": {
+          "viewport": "workbench/docs/reviews/20261108T015603+0700/browser_qa/screens/composition_sf_768x1024.png",
+          "fullPage": "workbench/docs/reviews/20261108T015603+0700/browser_qa/screens/composition_sf_768x1024_full.png",
+          "viewportSize": [
+            768,
+            1024
+          ],
+          "fullPageSize": [
+            768,
+            5162
+          ]
+        },
+        "validated": {
+          "viewport": "workbench/docs/reviews/20261108T015603+0700/browser_qa/screens/composition_validated_768x1024.png",
+          "fullPage": "workbench/docs/reviews/20261108T015603+0700/browser_qa/screens/composition_validated_768x1024_full.png",
+          "viewportSize": [
+            768,
+            1024
+          ],
+          "fullPageSize": [
+            768,
+            5162
+          ]
+        },
+        "fixtures_injected": {
+          "viewport": "workbench/docs/reviews/20261108T015603+0700/browser_qa/screens/composition_fixtures_injected_768x1024.png",
+          "fullPage": "workbench/docs/reviews/20261108T015603+0700/browser_qa/screens/composition_fixtures_injected_768x1024_full.png",
+          "viewportSize": [
+            768,
+            1024
+          ],
+          "fullPageSize": [
+            768,
+            5466
+          ]
+        }
+      },
+      "consoleErrors": [],
+      "pageErrors": [],
+      "failedRequests": [],
+      "httpErrors": [],
+      "consoleErrorCount": 0,
+      "pageErrorCount": 0,
+      "failedRequestCount": 0,
+      "httpErrorCount": 0
+    },
+    {
+      "flow": "composition_drilldown",
+      "viewport": "768x1024",
+      "url": "http://127.0.0.1:5173/?page=Composition&comp_run=6a528e877c328772e2c7bb28",
+      "checks": [
+        {
+          "label": "drilldown: images present",
+          "ok": true,
+          "detail": "40 imgs",
+          "defect": false
+        },
+        {
+          "label": "drilldown: every query image decoded (naturalWidth > 0)",
+          "ok": true,
+          "detail": "[]",
+          "defect": false
+        },
+        {
+          "label": "drilldown: reference and target images both load",
+          "ok": true,
+          "detail": "['Reference', 'Target']",
+          "defect": false
+        },
+        {
+          "label": "drilldown: no image fell back to the missing placeholder",
+          "ok": true,
+          "detail": "0 placeholders",
+          "defect": false
+        },
+        {
+          "label": "drilldown: edit text rendered",
+          "ok": true,
+          "detail": "",
+          "defect": false
+        },
+        {
+          "label": "drilldown: run id tag shows real run",
+          "ok": true,
+          "detail": "",
+          "defect": false
+        },
+        {
+          "label": "drilldown: pagination total == API total",
+          "ok": true,
+          "detail": "Showing 1\u201320 of 6,003 queries\nPrevious\nN",
+          "defect": false
+        },
+        {
+          "label": "missing rank: sparse run actually selected (not silently swapped)",
+          "ok": true,
+          "detail": "run: eda30a37c0bc17ac43844f09",
+          "defect": true
+        },
+        {
+          "label": "missing rank: cards rendered for sparse run",
+          "ok": true,
+          "detail": "20 cards",
+          "defect": false
+        },
+        {
+          "label": "missing rank: unscored state rendered explicitly",
+          "ok": true,
+          "detail": "[('7:9', ['unscored', 'unscored', 'unscored']), ('7:10', ['unscored', 'unscored', 'unscored'])]",
+          "defect": false
+        },
+        {
+          "label": "missing rank: never rendered as 0 / #0",
+          "ok": true,
+          "detail": "[]",
+          "defect": false
+        },
+        {
+          "label": "missing rank: API reports null target_rank for these queries",
+          "ok": true,
+          "detail": "[None, None, None, None, None]",
+          "defect": false
+        }
+      ],
+      "pass": true,
+      "screens": {
+        "drilldown": {
+          "viewport": "workbench/docs/reviews/20261108T015603+0700/browser_qa/screens/drilldown_768x1024.png",
+          "fullPage": "workbench/docs/reviews/20261108T015603+0700/browser_qa/screens/drilldown_768x1024_full.png",
+          "viewportSize": [
+            768,
+            1024
+          ],
+          "fullPageSize": [
+            768,
+            5162
+          ]
+        },
+        "missing_rank": {
+          "viewport": "workbench/docs/reviews/20261108T015603+0700/browser_qa/screens/drilldown_missing_rank_768x1024.png",
+          "fullPage": "workbench/docs/reviews/20261108T015603+0700/browser_qa/screens/drilldown_missing_rank_768x1024_full.png",
+          "viewportSize": [
+            768,
+            1024
+          ],
+          "fullPageSize": [
+            768,
+            5466
+          ]
+        }
+      },
+      "sparseTotal": 6003,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "failedRequests": [],
+      "httpErrors": [],
+      "consoleErrorCount": 0,
+      "pageErrorCount": 0,
+      "failedRequestCount": 0,
+      "httpErrorCount": 0
+    },
+    {
+      "flow": "rapid_filter_switching",
+      "viewport": "768x1024",
+      "url": "http://127.0.0.1:5173/?page=Composition",
+      "checks": [
+        {
+          "label": "burst 0 [0, 1, 2] -> validated: rendered data == validated JSON",
+          "ok": true,
+          "detail": "",
+          "defect": false
+        },
+        {
+          "label": "burst 0: active pill is validated",
+          "ok": true,
+          "detail": "Validated\n586\u00a0queries \u00b7 74,381\u00a0gallery",
+          "defect": false
+        },
+        {
+          "label": "burst 1 [2, 0, 1] -> sf: rendered data == sf JSON",
+          "ok": true,
+          "detail": "",
+          "defect": false
+        },
+        {
+          "label": "burst 1: active pill is sf",
+          "ok": true,
+          "detail": "Shortcut-Free (SF)\n4,069\u00a0queries \u00b7 74,38",
+          "defect": false
+        },
+        {
+          "label": "burst 2 [0, 2, 1, 0] -> full: rendered data == full JSON",
+          "ok": true,
+          "detail": "",
+          "defect": false
+        },
+        {
+          "label": "burst 2: active pill is full",
+          "ok": true,
+          "detail": "Full\n6,003\u00a0queries \u00b7 74,381\u00a0gallery",
+          "defect": false
+        },
+        {
+          "label": "burst 3 [1, 2, 0, 1, 2] -> validated: rendered data == validated JSON",
+          "ok": true,
+          "detail": "",
+          "defect": false
+        },
+        {
+          "label": "burst 3: active pill is validated",
+          "ok": true,
+          "detail": "Validated\n586\u00a0queries \u00b7 74,381\u00a0gallery",
+          "defect": false
+        }
+      ],
+      "pass": true,
+      "screens": {
+        "rapid_0": {
+          "viewport": "workbench/docs/reviews/20261108T015603+0700/browser_qa/screens/rapid_0_768x1024.png",
+          "fullPage": "workbench/docs/reviews/20261108T015603+0700/browser_qa/screens/rapid_0_768x1024_full.png",
+          "viewportSize": [
+            768,
+            1024
+          ],
+          "fullPageSize": [
+            768,
+            5162
+          ]
+        },
+        "rapid_1": {
+          "viewport": "workbench/docs/reviews/20261108T015603+0700/browser_qa/screens/rapid_1_768x1024.png",
+          "fullPage": "workbench/docs/reviews/20261108T015603+0700/browser_qa/screens/rapid_1_768x1024_full.png",
+          "viewportSize": [
+            768,
+            1024
+          ],
+          "fullPageSize": [
+            768,
+            5162
+          ]
+        },
+        "rapid_2": {
+          "viewport": "workbench/docs/reviews/20261108T015603+0700/browser_qa/screens/rapid_2_768x1024.png",
+          "fullPage": "workbench/docs/reviews/20261108T015603+0700/browser_qa/screens/rapid_2_768x1024_full.png",
+          "viewportSize": [
+            768,
+            1024
+          ],
+          "fullPageSize": [
+            768,
+            5162
+          ]
+        },
+        "rapid_3": {
+          "viewport": "workbench/docs/reviews/20261108T015603+0700/browser_qa/screens/rapid_3_768x1024.png",
+          "fullPage": "workbench/docs/reviews/20261108T015603+0700/browser_qa/screens/rapid_3_768x1024_full.png",
+          "viewportSize": [
+            768,
+            1024
+          ],
+          "fullPageSize": [
+            768,
+            5162
+          ]
+        }
+      },
+      "consoleErrors": [],
+      "pageErrors": [],
+      "failedRequests": [],
+      "httpErrors": [],
+      "consoleErrorCount": 0,
+      "pageErrorCount": 0,
+      "failedRequestCount": 0,
+      "httpErrorCount": 0
+    },
+    {
+      "flow": "mobile_layout",
+      "viewport": "768x1024",
+      "url": "http://127.0.0.1:5173/?page=Composition&comp_subset=full",
+      "checks": [
+        {
+          "label": "no whole-page horizontal overflow",
+          "ok": true,
+          "detail": "doc=768 body=768 vw=768",
+          "defect": false
+        },
+        {
+          "label": "wide table scrolls inside its wrapper (never the page)",
+          "ok": true,
+          "detail": "table=1193 wrapper=718 scrolls=True",
+          "defect": false
+        },
+        {
+          "label": "table overflow contained by an overflow-x:auto wrapper",
+          "ok": true,
+          "detail": "auto",
+          "defect": false
+        },
+        {
+          "label": "no elements escape the viewport outside the table wrapper",
+          "ok": true,
+          "detail": "[]",
+          "defect": false
+        },
+        {
+          "label": "controls stay inside the viewport",
+          "ok": true,
+          "detail": "[]",
+          "defect": false
+        },
+        {
+          "label": "tap targets meet WCAG 2.5.8 (>= 24px tall)",
+          "ok": true,
+          "detail": "[]",
+          "defect": false
+        },
+        {
+          "label": "row identity survives horizontal scroll (Model column pinned or in view)",
+          "ok": false,
+          "detail": "{'before': [38], 'after': [-461], 'wrapLeft': 24, 'visibleAfter': False, 'scrollLeft': 499, 'maxScroll': 499}",
+          "defect": true
+        },
+        {
+          "label": "nav row not clipped",
+          "ok": true,
+          "detail": "nav scrollWidth=720 clientWidth=720",
+          "defect": false
+        }
+      ],
+      "pass": false,
+      "screens": {
+        "mobile": {
+          "viewport": "workbench/docs/reviews/20261108T015603+0700/browser_qa/screens/mobile_composition_768x1024.png",
+          "fullPage": "workbench/docs/reviews/20261108T015603+0700/browser_qa/screens/mobile_composition_768x1024_full.png",
+          "viewportSize": [
+            768,
+            1024
+          ],
+          "fullPageSize": [
+            768,
+            5162
+          ]
+        }
+      },
+      "mobileMetrics": {
+        "innerWidth": 768,
+        "docScrollWidth": 768,
+        "bodyScrollWidth": 768,
+        "tableScrolls": true,
+        "wrapOverflowX": "auto",
+        "wrapClientWidth": 718,
+        "tableWidth": 1193,
+        "navScrollWidth": 720,
+        "navClientWidth": 720,
+        "sections": [
+          {
+            "cls": "controls",
+            "scrollWidth": 720,
+            "clientWidth": 720
+          },
+          {
+            "cls": "composition-view",
+            "scrollWidth": 720,
+            "clientWidth": 720
+          }
+        ]
+      },
+      "tapTargets": [
+        {
+          "text": "Dashboard",
+          "w": 87,
+          "h": 31,
+          "left": 24,
+          "right": 111
+        },
+        {
+          "text": "Models",
+          "w": 65,
+          "h": 31,
+          "left": 117,
+          "right": 182
+        },
+        {
+          "text": "Evaluation Runs",
+          "w": 119,
+          "h": 31,
+          "left": 188,
+          "right": 307
+        },
+        {
+          "text": "Benchmark",
+          "w": 89,
+          "h": 31,
+          "left": 313,
+          "right": 403
+        },
+        {
+          "text": "Composition",
+          "w": 96,
+          "h": 31,
+          "left": 409,
+          "right": 505
+        },
+        {
+          "text": "Sample Explorer",
+          "w": 121,
+          "h": 31,
+          "left": 511,
+          "right": 631
+        },
+        {
+          "text": "Compare Models",
+          "w": 123,
+          "h": 31,
+          "left": 24,
+          "right": 147
+        },
+        {
+          "text": "Common Failures",
+          "w": 127,
+          "h": 31,
+          "left": 153,
+          "right": 281
+        },
+        {
+          "text": "Disagreement",
+          "w": 105,
+          "h": 31,
+          "left": 287,
+          "right": 392
+        },
+        {
+          "text": "Failure Analytics",
+          "w": 119,
+          "h": 31,
+          "left": 398,
+          "right": 517
+        },
+        {
+          "text": "Annotations",
+          "w": 92,
+          "h": 31,
+          "left": 523,
+          "right": 615
+        },
+        {
+          "text": "Hypotheses",
+          "w": 92,
+          "h": 31,
+          "left": 621,
+          "right": 714
+        },
+        {
+          "text": "Full 6,003 queries \u00b7 74,381 gallery",
+          "w": 176,
+          "h": 47,
+          "left": 24,
+          "right": 200
+        },
+        {
+          "text": "Shortcut-Free (SF) 4,069 queries \u00b7 74,38",
+          "w": 176,
+          "h": 47,
+          "left": 208,
+          "right": 383
+        },
+        {
+          "text": "Validated 586 queries \u00b7 74,381 gallery",
+          "w": 166,
+          "h": 47,
+          "left": 391,
+          "right": 558
+        },
+        {
+          "text": "Multimodal Text-Only (Black Image) Image",
+          "w": 186,
+          "h": 36,
+          "left": 41,
+          "right": 227
+        },
+        {
+          "text": "All Outcomes Composition Required Text O",
+          "w": 171,
+          "h": 36,
+          "left": 237,
+          "right": 408
+        },
+        {
+          "text": "All Categories dress shirt toptee",
+          "w": 123,
+          "h": 36,
+          "left": 418,
+          "right": 541
+        },
+        {
+          "text": "Worst Rank First Best Rank First Ascendi",
+          "w": 145,
+          "h": 36,
+          "left": 551,
+          "right": 696
+        },
+        {
+          "text": "Previous",
+          "w": 78,
+          "h": 36,
+          "left": 590,
+          "right": 668
+        },
+        {
+          "text": "Next",
+          "w": 53,
+          "h": 36,
+          "left": 674,
+          "right": 727
+        },
+        {
+          "text": "Previous",
+          "w": 78,
+          "h": 36,
+          "left": 41,
+          "right": 119
+        },
+        {
+          "text": "Next",
+          "w": 53,
+          "h": 36,
+          "left": 125,
+          "right": 178
+        }
+      ],
+      "consoleErrors": [],
+      "pageErrors": [],
+      "failedRequests": [],
+      "httpErrors": [],
+      "consoleErrorCount": 0,
+      "pageErrorCount": 0,
+      "failedRequestCount": 0,
+      "httpErrorCount": 0
+    },
+    {
+      "flow": "benchmark_native",
+      "viewport": "390x844",
+      "url": "http://127.0.0.1:5173/?page=Benchmark",
+      "checks": [
+        {
+          "label": "api: exactly 2 aggregate benchmark runs",
+          "ok": true,
+          "detail": "2 runs",
+          "defect": false
+        },
+        {
+          "label": "2 benchmark cards rendered",
+          "ok": true,
+          "detail": "2 cards",
+          "defect": false
+        },
+        {
+          "label": "20261107T054343058424Z_c: model/checkpoint in title",
+          "ok": true,
+          "detail": "CSMCIR \u00b7 fashioniq",
+          "defect": false
+        },
+        {
+          "label": "20261107T054343058424Z_c: run id + protocol in meta",
+          "ok": true,
+          "detail": "20261107T054343058424Z_csmcir_fashioniq_f564570e \u00b7 protocol: fashioniq_original_split",
+          "defect": false
+        },
+        {
+          "label": "20261107T054343058424Z_c: CERTIFIED badge",
+          "ok": true,
+          "detail": "['CERTIFIED', 'aggregate-only \u2014 per-query Top-K unavailable (CAPABILITY_ABSENT)']",
+          "defect": false
+        },
+        {
+          "label": "20261107T054343058424Z_c: aggregate-only badge states CAPABILITY_ABSENT",
+          "ok": true,
+          "detail": "['CERTIFIED', 'aggregate-only \u2014 per-query Top-K unavailable (CAPABILITY_ABSENT)']",
+          "defect": false
+        },
+        {
+          "label": "20261107T054343058424Z_c: measured R@10 = 57.0507",
+          "ok": true,
+          "detail": "57.05% (57.0507)",
+          "defect": false
+        },
+        {
+          "label": "20261107T054343058424Z_c: measured R@50 = 77.2986",
+          "ok": true,
+          "detail": "77.30% (77.2986)",
+          "defect": false
+        },
+        {
+          "label": "20261107T054343058424Z_c: paper ref R@10 = 57.07",
+          "ok": true,
+          "detail": "57.07% (57.07)",
+          "defect": false
+        },
+        {
+          "label": "20261107T054343058424Z_c: measured != paper cells (distinct values)",
+          "ok": true,
+          "detail": "measured=57.05% (57.0507) paper=57.07% (57.07)",
+          "defect": false
+        },
+        {
+          "label": "20261107T054343058424Z_c: paper cells carry muted styling",
+          "ok": true,
+          "detail": "text-muted on paper column only",
+          "defect": false
+        },
+        {
+          "label": "20261107T054343058424Z_c: per-category rows dress/shirt/toptee",
+          "ok": true,
+          "detail": "['dress', 'shirt', 'toptee']",
+          "defect": false
+        },
+        {
+          "label": "20261107T054343058424Z_c/dress: measured R@10 52.2062 rendered",
+          "ok": true,
+          "detail": "52.21% (52.2062)",
+          "defect": false
+        },
+        {
+          "label": "20261107T054343058424Z_c/shirt: measured R@10 57.7527 rendered",
+          "ok": true,
+          "detail": "57.75% (57.7527)",
+          "defect": false
+        },
+        {
+          "label": "20261107T054343058424Z_c/toptee: measured R@10 61.1933 rendered",
+          "ok": true,
+          "detail": "61.19% (61.1933)",
+          "defect": false
+        },
+        {
+          "label": "20261107T054933277898Z_c: model/checkpoint in title",
+          "ok": true,
+          "detail": "CSMCIR \u00b7 fashioniq",
+          "defect": false
+        },
+        {
+          "label": "20261107T054933277898Z_c: run id + protocol in meta",
+          "ok": true,
+          "detail": "20261107T054933277898Z_csmcir_fashioniq_f03887d2 \u00b7 protocol: fashioniq_original_split",
+          "defect": false
+        },
+        {
+          "label": "20261107T054933277898Z_c: CERTIFIED badge",
+          "ok": true,
+          "detail": "['CERTIFIED', 'aggregate-only \u2014 per-query Top-K unavailable (CAPABILITY_ABSENT)']",
+          "defect": false
+        },
+        {
+          "label": "20261107T054933277898Z_c: aggregate-only badge states CAPABILITY_ABSENT",
+          "ok": true,
+          "detail": "['CERTIFIED', 'aggregate-only \u2014 per-query Top-K unavailable (CAPABILITY_ABSENT)']",
+          "defect": false
+        },
+        {
+          "label": "20261107T054933277898Z_c: measured R@10 = 57.0507",
+          "ok": true,
+          "detail": "57.05% (57.0507)",
+          "defect": false
+        },
+        {
+          "label": "20261107T054933277898Z_c: measured R@50 = 77.2986",
+          "ok": true,
+          "detail": "77.30% (77.2986)",
+          "defect": false
+        },
+        {
+          "label": "20261107T054933277898Z_c: paper ref R@10 = 57.07",
+          "ok": true,
+          "detail": "57.07% (57.07)",
+          "defect": false
+        },
+        {
+          "label": "20261107T054933277898Z_c: measured != paper cells (distinct values)",
+          "ok": true,
+          "detail": "measured=57.05% (57.0507) paper=57.07% (57.07)",
+          "defect": false
+        },
+        {
+          "label": "20261107T054933277898Z_c: paper cells carry muted styling",
+          "ok": true,
+          "detail": "text-muted on paper column only",
+          "defect": false
+        },
+        {
+          "label": "20261107T054933277898Z_c: per-category rows dress/shirt/toptee",
+          "ok": true,
+          "detail": "['dress', 'shirt', 'toptee']",
+          "defect": false
+        },
+        {
+          "label": "20261107T054933277898Z_c/dress: measured R@10 52.2062 rendered",
+          "ok": true,
+          "detail": "52.21% (52.2062)",
+          "defect": false
+        },
+        {
+          "label": "20261107T054933277898Z_c/shirt: measured R@10 57.7527 rendered",
+          "ok": true,
+          "detail": "57.75% (57.7527)",
+          "defect": false
+        },
+        {
+          "label": "20261107T054933277898Z_c/toptee: measured R@10 61.1933 rendered",
+          "ok": true,
+          "detail": "61.19% (61.1933)",
+          "defect": false
+        },
+        {
+          "label": "evaluation runs: 2 aggregate-only rows",
+          "ok": true,
+          "detail": "2",
+          "defect": false
+        },
+        {
+          "label": "per-query action disabled",
+          "ok": true,
+          "detail": "CSMCIR \u00b7 train noise unrecorded \u00b7 eval noise unrecorded \u00b7 fa",
+          "defect": false
+        },
+        {
+          "label": "disabled reason stated ('Per-query actions disabled: aggregate-on')",
+          "ok": true,
+          "detail": "Per-query actions disabled: aggregate-only run (CAPABILITY_ABSENT)",
+          "defect": false
+        },
+        {
+          "label": "aggregate-only badge visible on row",
+          "ok": true,
+          "detail": "['CERTIFIED', 'aggregate-only \u2014 per-query Top-K unavailable (CAPABILITY_ABSENT)', '']",
+          "defect": false
+        },
+        {
+          "label": "SYNTHETIC SOURCE not claimed for real run",
+          "ok": true,
+          "detail": "",
+          "defect": false
+        },
+        {
+          "label": "per-query action disabled",
+          "ok": true,
+          "detail": "CSMCIR \u00b7 train noise unrecorded \u00b7 eval noise unrecorded \u00b7 fa",
+          "defect": false
+        },
+        {
+          "label": "disabled reason stated ('Per-query actions disabled: aggregate-on')",
+          "ok": true,
+          "detail": "Per-query actions disabled: aggregate-only run (CAPABILITY_ABSENT)",
+          "defect": false
+        },
+        {
+          "label": "aggregate-only badge visible on row",
+          "ok": true,
+          "detail": "['CERTIFIED', 'aggregate-only \u2014 per-query Top-K unavailable (CAPABILITY_ABSENT)', '']",
+          "defect": false
+        },
+        {
+          "label": "SYNTHETIC SOURCE not claimed for real run",
+          "ok": true,
+          "detail": "",
+          "defect": false
+        },
+        {
+          "label": "dashboard: model count is a number, not an em-dash",
+          "ok": true,
+          "detail": "17 registered models",
+          "defect": false
+        },
+        {
+          "label": "dashboard: model count == /api/models (17)",
+          "ok": true,
+          "detail": "17 registered models",
+          "defect": false
+        },
+        {
+          "label": "dashboard: certified aggregate count present",
+          "ok": true,
+          "detail": "['17 registered models', '0 experiment runs', '0 mock runs', '2 aggregate benchmark reports', '2 certified research results']",
+          "defect": false
+        },
+        {
+          "label": "sample explorer: explicit aggregate-only notice",
+          "ok": true,
+          "detail": "Sample Explorer Unavailable for Current Protocol  Protocol fashioniq_original_split contains only aggregate-only benchma",
+          "defect": false
+        }
+      ],
+      "pass": true,
+      "screens": {
+        "benchmark": {
+          "viewport": "workbench/docs/reviews/20261108T015603+0700/browser_qa/screens/benchmark_390x844.png",
+          "fullPage": "workbench/docs/reviews/20261108T015603+0700/browser_qa/screens/benchmark_390x844_full.png",
+          "viewportSize": [
+            390,
+            844
+          ],
+          "fullPageSize": [
+            390,
+            3097
+          ]
+        },
+        "evaluation_runs": {
+          "viewport": "workbench/docs/reviews/20261108T015603+0700/browser_qa/screens/evaluation_runs_390x844.png",
+          "fullPage": "workbench/docs/reviews/20261108T015603+0700/browser_qa/screens/evaluation_runs_390x844_full.png",
+          "viewportSize": [
+            390,
+            844
+          ],
+          "fullPageSize": [
+            390,
+            1332
+          ]
+        },
+        "dashboard": {
+          "viewport": "workbench/docs/reviews/20261108T015603+0700/browser_qa/screens/dashboard_390x844.png",
+          "fullPage": "workbench/docs/reviews/20261108T015603+0700/browser_qa/screens/dashboard_390x844_full.png",
+          "viewportSize": [
+            390,
+            844
+          ],
+          "fullPageSize": [
+            390,
+            1908
+          ]
+        },
+        "sample_explorer": {
+          "viewport": "workbench/docs/reviews/20261108T015603+0700/browser_qa/screens/sample_explorer_390x844.png",
+          "fullPage": "workbench/docs/reviews/20261108T015603+0700/browser_qa/screens/sample_explorer_390x844_full.png",
+          "viewportSize": [
+            390,
+            844
+          ],
+          "fullPageSize": [
+            390,
+            1514
+          ]
+        }
+      },
+      "dashboardFirstPaint": "\u2014 registered models",
+      "consoleErrors": [],
+      "pageErrors": [],
+      "failedRequests": [],
+      "httpErrors": [],
+      "consoleErrorCount": 0,
+      "pageErrorCount": 0,
+      "failedRequestCount": 0,
+      "httpErrorCount": 0
+    },
+    {
+      "flow": "composition_switch",
+      "viewport": "390x844",
+      "url": "http://127.0.0.1:5173/?page=Composition",
+      "checks": [
+        {
+          "label": "full: every rendered row equals the subset's API JSON",
+          "ok": true,
+          "detail": "",
+          "defect": false
+        },
+        {
+          "label": "full: pill active and labelled",
+          "ok": true,
+          "detail": "Full\n6,003\u00a0queries \u00b7 74,381\u00a0gallery",
+          "defect": false
+        },
+        {
+          "label": "full: API matches brief (queries=6003)",
+          "ok": true,
+          "detail": "6003",
+          "defect": false
+        },
+        {
+          "label": "full: API mm_ndcg == brief 0.2959",
+          "ok": true,
+          "detail": "api=0.2959",
+          "defect": false
+        },
+        {
+          "label": "full: API mm_r10 == brief 31.0",
+          "ok": true,
+          "detail": "api=31.0",
+          "defect": false
+        },
+        {
+          "label": "full: API text == brief 0.1561",
+          "ok": true,
+          "detail": "api=0.1561",
+          "defect": false
+        },
+        {
+          "label": "full: API image == brief 0.1073",
+          "ok": true,
+          "detail": "api=0.1073",
+          "defect": false
+        },
+        {
+          "label": "full: API gap == brief 47.23",
+          "ok": true,
+          "detail": "api=47.23",
+          "defect": false
+        },
+        {
+          "label": "full: API coverage == brief 100.0",
+          "ok": true,
+          "detail": "api=100.0",
+          "defect": false
+        },
+        {
+          "label": "full: DOM shows the brief's exact six values for the encoder run",
+          "ok": true,
+          "detail": "wanted ['0.2959', '31.0%', '0.1561', '0.1073', '+47.23%', '100.0%'], DOM had [['0.2959', '31.0%', '0.1561', '0.1073', '+47.23%', '100.0%']]",
+          "defect": false
+        },
+        {
+          "label": "full: default list renders exactly the measured runs",
+          "ok": true,
+          "detail": "1 rows vs 1 API runs",
+          "defect": false
+        },
+        {
+          "label": "full: no FIXTURE badge and no SYNTHETIC_ text on the default path",
+          "ok": true,
+          "detail": "['encoder fashioniq']",
+          "defect": false
+        },
+        {
+          "label": "full: real encoder row rendered as measured",
+          "ok": true,
+          "detail": "1 real rows: ['encoder fashioniq']",
+          "defect": false
+        },
+        {
+          "label": "sf: every rendered row equals the subset's API JSON",
+          "ok": true,
+          "detail": "",
+          "defect": false
+        },
+        {
+          "label": "sf: pill active and labelled",
+          "ok": true,
+          "detail": "Shortcut-Free (SF)\n4,069\u00a0queries \u00b7 74,381\u00a0gallery",
+          "defect": false
+        },
+        {
+          "label": "sf: API matches brief (queries=4069)",
+          "ok": true,
+          "detail": "4069",
+          "defect": false
+        },
+        {
+          "label": "sf: API mm_ndcg == brief 0.2189",
+          "ok": true,
+          "detail": "api=0.2189",
+          "defect": false
+        },
+        {
+          "label": "sf: API mm_r10 == brief 18.7",
+          "ok": true,
+          "detail": "api=18.7",
+          "defect": false
+        },
+        {
+          "label": "sf: API text == brief 0.1077",
+          "ok": true,
+          "detail": "api=0.1077",
+          "defect": false
+        },
+        {
+          "label": "sf: API image == brief 0.0977",
+          "ok": true,
+          "detail": "api=0.0977",
+          "defect": false
+        },
+        {
+          "label": "sf: API gap == brief 50.77",
+          "ok": true,
+          "detail": "api=50.77",
+          "defect": false
+        },
+        {
+          "label": "sf: API coverage == brief 100.0",
+          "ok": true,
+          "detail": "api=100.0",
+          "defect": false
+        },
+        {
+          "label": "sf: DOM shows the brief's exact six values for the encoder run",
+          "ok": true,
+          "detail": "wanted ['0.2189', '18.7%', '0.1077', '0.0977', '+50.77%', '100.0%'], DOM had [['0.2189', '18.7%', '0.1077', '0.0977', '+50.77%', '100.0%']]",
+          "defect": false
+        },
+        {
+          "label": "sf: default list renders exactly the measured runs",
+          "ok": true,
+          "detail": "1 rows vs 1 API runs",
+          "defect": false
+        },
+        {
+          "label": "sf: no FIXTURE badge and no SYNTHETIC_ text on the default path",
+          "ok": true,
+          "detail": "['encoder fashioniq']",
+          "defect": false
+        },
+        {
+          "label": "sf: real encoder row rendered as measured",
+          "ok": true,
+          "detail": "1 real rows: ['encoder fashioniq']",
+          "defect": false
+        },
+        {
+          "label": "validated: every rendered row equals the subset's API JSON",
+          "ok": true,
+          "detail": "",
+          "defect": false
+        },
+        {
+          "label": "validated: pill active and labelled",
+          "ok": true,
+          "detail": "Validated\n586\u00a0queries \u00b7 74,381\u00a0gallery",
+          "defect": false
+        },
+        {
+          "label": "validated: API matches brief (queries=586)",
+          "ok": true,
+          "detail": "586",
+          "defect": false
+        },
+        {
+          "label": "validated: API mm_ndcg == brief 0.2965",
+          "ok": true,
+          "detail": "api=0.2965",
+          "defect": false
+        },
+        {
+          "label": "validated: API mm_r10 == brief 34.6",
+          "ok": true,
+          "detail": "api=34.6",
+          "defect": false
+        },
+        {
+          "label": "validated: API text == brief 0.1161",
+          "ok": true,
+          "detail": "api=0.1161",
+          "defect": false
+        },
+        {
+          "label": "validated: API image == brief 0.1078",
+          "ok": true,
+          "detail": "api=0.1078",
+          "defect": false
+        },
+        {
+          "label": "validated: API gap == brief 60.84",
+          "ok": true,
+          "detail": "api=60.84",
+          "defect": false
+        },
+        {
+          "label": "validated: API coverage == brief 100.0",
+          "ok": true,
+          "detail": "api=100.0",
+          "defect": false
+        },
+        {
+          "label": "validated: DOM shows the brief's exact six values for the encoder run",
+          "ok": true,
+          "detail": "wanted ['0.2965', '34.6%', '0.1161', '0.1078', '+60.84%', '100.0%'], DOM had [['0.2965', '34.6%', '0.1161', '0.1078', '+60.84%', '100.0%']]",
+          "defect": false
+        },
+        {
+          "label": "validated: default list renders exactly the measured runs",
+          "ok": true,
+          "detail": "1 rows vs 1 API runs",
+          "defect": false
+        },
+        {
+          "label": "validated: no FIXTURE badge and no SYNTHETIC_ text on the default path",
+          "ok": true,
+          "detail": "['encoder fashioniq']",
+          "defect": false
+        },
+        {
+          "label": "validated: real encoder row rendered as measured",
+          "ok": true,
+          "detail": "1 real rows: ['encoder fashioniq']",
+          "defect": false
+        },
+        {
+          "label": "real encoder row present across subsets",
+          "ok": true,
+          "detail": "",
+          "defect": false
+        },
+        {
+          "label": "api: default list is measurements only",
+          "ok": true,
+          "detail": "1 runs",
+          "defect": false
+        },
+        {
+          "label": "api: fixtures available via include_fixtures/include_smoke opt-in",
+          "ok": true,
+          "detail": "4 runs",
+          "defect": false
+        },
+        {
+          "label": "opt-in: request carried include_fixtures",
+          "ok": true,
+          "detail": "['http://127.0.0.1:5173/api/composition/runs?subset=full&include_fixtures=true&include_smoke=true']",
+          "defect": false
+        },
+        {
+          "label": "opt-in: two SYNTHETIC_* fixture rows appear and are labelled FIXTURE",
+          "ok": true,
+          "detail": "2 labelled rows of 4",
+          "defect": false
+        },
+        {
+          "label": "opt-in: fixture rows are named SYNTHETIC_*",
+          "ok": true,
+          "detail": "['fixture_encoder fashioniq FIXTURE SMOKE (8)', 'fixture_habit fiq_n02 FIXTURE SMOKE (8)']",
+          "defect": false
+        },
+        {
+          "label": "opt-in: fixture rows carry different numbers than the measured rows",
+          "ok": true,
+          "detail": "[['0.2506', '12.5%', '0.1202', '0.0849', '+52.04%', '100.0%'], ['0.2881', '15.0%', '0.1520', '0.1130', '+28.56%', '98.0%']]",
+          "defect": false
+        },
+        {
+          "label": "opt-in: the real encoder run sorts FIRST, above the fixtures",
+          "ok": true,
+          "detail": "encoder fashioniq",
+          "defect": false
+        },
+        {
+          "label": "opt-in: every measured row precedes every fixture row",
+          "ok": true,
+          "detail": "real at [0, 1], fixture at [2, 3]",
+          "defect": false
+        }
+      ],
+      "pass": true,
+      "screens": {
+        "full": {
+          "viewport": "workbench/docs/reviews/20261108T015603+0700/browser_qa/screens/composition_full_390x844.png",
+          "fullPage": "workbench/docs/reviews/20261108T015603+0700/browser_qa/screens/composition_full_390x844_full.png",
+          "viewportSize": [
+            390,
+            844
+          ],
+          "fullPageSize": [
+            390,
+            7838
+          ]
+        },
+        "sf": {
+          "viewport": "workbench/docs/reviews/20261108T015603+0700/browser_qa/screens/composition_sf_390x844.png",
+          "fullPage": "workbench/docs/reviews/20261108T015603+0700/browser_qa/screens/composition_sf_390x844_full.png",
+          "viewportSize": [
+            390,
+            844
+          ],
+          "fullPageSize": [
+            390,
+            7805
+          ]
+        },
+        "validated": {
+          "viewport": "workbench/docs/reviews/20261108T015603+0700/browser_qa/screens/composition_validated_390x844.png",
+          "fullPage": "workbench/docs/reviews/20261108T015603+0700/browser_qa/screens/composition_validated_390x844_full.png",
+          "viewportSize": [
+            390,
+            844
+          ],
+          "fullPageSize": [
+            390,
+            7886
+          ]
+        },
+        "fixtures_injected": {
+          "viewport": "workbench/docs/reviews/20261108T015603+0700/browser_qa/screens/composition_fixtures_injected_390x844.png",
+          "fullPage": "workbench/docs/reviews/20261108T015603+0700/browser_qa/screens/composition_fixtures_injected_390x844_full.png",
+          "viewportSize": [
+            390,
+            844
+          ],
+          "fullPageSize": [
+            390,
+            8142
+          ]
+        }
+      },
+      "consoleErrors": [],
+      "pageErrors": [],
+      "failedRequests": [],
+      "httpErrors": [],
+      "consoleErrorCount": 0,
+      "pageErrorCount": 0,
+      "failedRequestCount": 0,
+      "httpErrorCount": 0
+    },
+    {
+      "flow": "composition_drilldown",
+      "viewport": "390x844",
+      "url": "http://127.0.0.1:5173/?page=Composition&comp_run=6a528e877c328772e2c7bb28",
+      "checks": [
+        {
+          "label": "drilldown: images present",
+          "ok": true,
+          "detail": "40 imgs",
+          "defect": false
+        },
+        {
+          "label": "drilldown: every query image decoded (naturalWidth > 0)",
+          "ok": true,
+          "detail": "[]",
+          "defect": false
+        },
+        {
+          "label": "drilldown: reference and target images both load",
+          "ok": true,
+          "detail": "['Reference', 'Target']",
+          "defect": false
+        },
+        {
+          "label": "drilldown: no image fell back to the missing placeholder",
+          "ok": true,
+          "detail": "0 placeholders",
+          "defect": false
+        },
+        {
+          "label": "drilldown: edit text rendered",
+          "ok": true,
+          "detail": "",
+          "defect": false
+        },
+        {
+          "label": "drilldown: run id tag shows real run",
+          "ok": true,
+          "detail": "",
+          "defect": false
+        },
+        {
+          "label": "drilldown: pagination total == API total",
+          "ok": true,
+          "detail": "Showing 1\u201320 of 6,003 queries\nPrevious\nN",
+          "defect": false
+        },
+        {
+          "label": "missing rank: sparse run actually selected (not silently swapped)",
+          "ok": true,
+          "detail": "run: eda30a37c0bc17ac43844f09",
+          "defect": true
+        },
+        {
+          "label": "missing rank: cards rendered for sparse run",
+          "ok": true,
+          "detail": "20 cards",
+          "defect": false
+        },
+        {
+          "label": "missing rank: unscored state rendered explicitly",
+          "ok": true,
+          "detail": "[('7:9', ['unscored', 'unscored', 'unscored']), ('7:10', ['unscored', 'unscored', 'unscored'])]",
+          "defect": false
+        },
+        {
+          "label": "missing rank: never rendered as 0 / #0",
+          "ok": true,
+          "detail": "[]",
+          "defect": false
+        },
+        {
+          "label": "missing rank: API reports null target_rank for these queries",
+          "ok": true,
+          "detail": "[None, None, None, None, None]",
+          "defect": false
+        }
+      ],
+      "pass": true,
+      "screens": {
+        "drilldown": {
+          "viewport": "workbench/docs/reviews/20261108T015603+0700/browser_qa/screens/drilldown_390x844.png",
+          "fullPage": "workbench/docs/reviews/20261108T015603+0700/browser_qa/screens/drilldown_390x844_full.png",
+          "viewportSize": [
+            390,
+            844
+          ],
+          "fullPageSize": [
+            390,
+            7838
+          ]
+        },
+        "missing_rank": {
+          "viewport": "workbench/docs/reviews/20261108T015603+0700/browser_qa/screens/drilldown_missing_rank_390x844.png",
+          "fullPage": "workbench/docs/reviews/20261108T015603+0700/browser_qa/screens/drilldown_missing_rank_390x844_full.png",
+          "viewportSize": [
+            390,
+            844
+          ],
+          "fullPageSize": [
+            390,
+            8178
+          ]
+        }
+      },
+      "sparseTotal": 6003,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "failedRequests": [],
+      "httpErrors": [],
+      "consoleErrorCount": 0,
+      "pageErrorCount": 0,
+      "failedRequestCount": 0,
+      "httpErrorCount": 0
+    },
+    {
+      "flow": "rapid_filter_switching",
+      "viewport": "390x844",
+      "url": "http://127.0.0.1:5173/?page=Composition",
+      "checks": [
+        {
+          "label": "burst 0 [0, 1, 2] -> validated: rendered data == validated JSON",
+          "ok": true,
+          "detail": "",
+          "defect": false
+        },
+        {
+          "label": "burst 0: active pill is validated",
+          "ok": true,
+          "detail": "Validated\n586\u00a0queries \u00b7 74,381\u00a0gallery",
+          "defect": false
+        },
+        {
+          "label": "burst 1 [2, 0, 1] -> sf: rendered data == sf JSON",
+          "ok": true,
+          "detail": "",
+          "defect": false
+        },
+        {
+          "label": "burst 1: active pill is sf",
+          "ok": true,
+          "detail": "Shortcut-Free (SF)\n4,069\u00a0queries \u00b7 74,38",
+          "defect": false
+        },
+        {
+          "label": "burst 2 [0, 2, 1, 0] -> full: rendered data == full JSON",
+          "ok": true,
+          "detail": "",
+          "defect": false
+        },
+        {
+          "label": "burst 2: active pill is full",
+          "ok": true,
+          "detail": "Full\n6,003\u00a0queries \u00b7 74,381\u00a0gallery",
+          "defect": false
+        },
+        {
+          "label": "burst 3 [1, 2, 0, 1, 2] -> validated: rendered data == validated JSON",
+          "ok": true,
+          "detail": "",
+          "defect": false
+        },
+        {
+          "label": "burst 3: active pill is validated",
+          "ok": true,
+          "detail": "Validated\n586\u00a0queries \u00b7 74,381\u00a0gallery",
+          "defect": false
+        }
+      ],
+      "pass": true,
+      "screens": {
+        "rapid_0": {
+          "viewport": "workbench/docs/reviews/20261108T015603+0700/browser_qa/screens/rapid_0_390x844.png",
+          "fullPage": "workbench/docs/reviews/20261108T015603+0700/browser_qa/screens/rapid_0_390x844_full.png",
+          "viewportSize": [
+            390,
+            844
+          ],
+          "fullPageSize": [
+            390,
+            7886
+          ]
+        },
+        "rapid_1": {
+          "viewport": "workbench/docs/reviews/20261108T015603+0700/browser_qa/screens/rapid_1_390x844.png",
+          "fullPage": "workbench/docs/reviews/20261108T015603+0700/browser_qa/screens/rapid_1_390x844_full.png",
+          "viewportSize": [
+            390,
+            844
+          ],
+          "fullPageSize": [
+            390,
+            7805
+          ]
+        },
+        "rapid_2": {
+          "viewport": "workbench/docs/reviews/20261108T015603+0700/browser_qa/screens/rapid_2_390x844.png",
+          "fullPage": "workbench/docs/reviews/20261108T015603+0700/browser_qa/screens/rapid_2_390x844_full.png",
+          "viewportSize": [
+            390,
+            844
+          ],
+          "fullPageSize": [
+            390,
+            7838
+          ]
+        },
+        "rapid_3": {
+          "viewport": "workbench/docs/reviews/20261108T015603+0700/browser_qa/screens/rapid_3_390x844.png",
+          "fullPage": "workbench/docs/reviews/20261108T015603+0700/browser_qa/screens/rapid_3_390x844_full.png",
+          "viewportSize": [
+            390,
+            844
+          ],
+          "fullPageSize": [
+            390,
+            7886
+          ]
+        }
+      },
+      "consoleErrors": [],
+      "pageErrors": [],
+      "failedRequests": [],
+      "httpErrors": [],
+      "consoleErrorCount": 0,
+      "pageErrorCount": 0,
+      "failedRequestCount": 0,
+      "httpErrorCount": 0
+    },
+    {
+      "flow": "mobile_layout",
+      "viewport": "390x844",
+      "url": "http://127.0.0.1:5173/?page=Composition&comp_subset=full",
+      "checks": [
+        {
+          "label": "no whole-page horizontal overflow",
+          "ok": true,
+          "detail": "doc=390 body=390 vw=390",
+          "defect": false
+        },
+        {
+          "label": "wide table scrolls inside its wrapper (never the page)",
+          "ok": true,
+          "detail": "table=1193 wrapper=364 scrolls=True",
+          "defect": false
+        },
+        {
+          "label": "table overflow contained by an overflow-x:auto wrapper",
+          "ok": true,
+          "detail": "auto",
+          "defect": false
+        },
+        {
+          "label": "no elements escape the viewport outside the table wrapper",
+          "ok": true,
+          "detail": "[]",
+          "defect": false
+        },
+        {
+          "label": "controls stay inside the viewport",
+          "ok": true,
+          "detail": "[]",
+          "defect": false
+        },
+        {
+          "label": "tap targets meet WCAG 2.5.8 (>= 24px tall)",
+          "ok": true,
+          "detail": "[]",
+          "defect": false
+        },
+        {
+          "label": "row identity survives horizontal scroll (Model column pinned or in view)",
+          "ok": false,
+          "detail": "{'before': [26], 'after': [-827], 'wrapLeft': 12, 'visibleAfter': False, 'scrollLeft': 853, 'maxScroll': 853}",
+          "defect": true
+        },
+        {
+          "label": "nav row not clipped",
+          "ok": true,
+          "detail": "nav scrollWidth=366 clientWidth=366",
+          "defect": false
+        }
+      ],
+      "pass": false,
+      "screens": {
+        "mobile": {
+          "viewport": "workbench/docs/reviews/20261108T015603+0700/browser_qa/screens/mobile_composition_390x844.png",
+          "fullPage": "workbench/docs/reviews/20261108T015603+0700/browser_qa/screens/mobile_composition_390x844_full.png",
+          "viewportSize": [
+            390,
+            844
+          ],
+          "fullPageSize": [
+            390,
+            7838
+          ]
+        }
+      },
+      "mobileMetrics": {
+        "innerWidth": 390,
+        "docScrollWidth": 390,
+        "bodyScrollWidth": 390,
+        "tableScrolls": true,
+        "wrapOverflowX": "auto",
+        "wrapClientWidth": 364,
+        "tableWidth": 1193,
+        "navScrollWidth": 366,
+        "navClientWidth": 366,
+        "sections": [
+          {
+            "cls": "controls",
+            "scrollWidth": 366,
+            "clientWidth": 366
+          },
+          {
+            "cls": "composition-view",
+            "scrollWidth": 366,
+            "clientWidth": 366
+          }
+        ]
+      },
+      "tapTargets": [
+        {
+          "text": "Dashboard",
+          "w": 87,
+          "h": 31,
+          "left": 12,
+          "right": 99
+        },
+        {
+          "text": "Models",
+          "w": 65,
+          "h": 31,
+          "left": 105,
+          "right": 170
+        },
+        {
+          "text": "Evaluation Runs",
+          "w": 119,
+          "h": 31,
+          "left": 176,
+          "right": 295
+        },
+        {
+          "text": "Benchmark",
+          "w": 89,
+          "h": 31,
+          "left": 12,
+          "right": 101
+        },
+        {
+          "text": "Composition",
+          "w": 96,
+          "h": 31,
+          "left": 107,
+          "right": 204
+        },
+        {
+          "text": "Sample Explorer",
+          "w": 121,
+          "h": 31,
+          "left": 210,
+          "right": 330
+        },
+        {
+          "text": "Compare Models",
+          "w": 123,
+          "h": 31,
+          "left": 12,
+          "right": 135
+        },
+        {
+          "text": "Common Failures",
+          "w": 127,
+          "h": 31,
+          "left": 141,
+          "right": 269
+        },
+        {
+          "text": "Disagreement",
+          "w": 105,
+          "h": 31,
+          "left": 12,
+          "right": 117
+        },
+        {
+          "text": "Failure Analytics",
+          "w": 119,
+          "h": 31,
+          "left": 123,
+          "right": 242
+        },
+        {
+          "text": "Annotations",
+          "w": 92,
+          "h": 31,
+          "left": 248,
+          "right": 340
+        },
+        {
+          "text": "Hypotheses",
+          "w": 92,
+          "h": 31,
+          "left": 12,
+          "right": 104
+        },
+        {
+          "text": "Full 6,003 queries \u00b7 74,381 gallery",
+          "w": 176,
+          "h": 47,
+          "left": 12,
+          "right": 188
+        },
+        {
+          "text": "Shortcut-Free (SF) 4,069 queries \u00b7 74,38",
+          "w": 176,
+          "h": 47,
+          "left": 196,
+          "right": 371
+        },
+        {
+          "text": "Validated 586 queries \u00b7 74,381 gallery",
+          "w": 166,
+          "h": 47,
+          "left": 12,
+          "right": 178
+        },
+        {
+          "text": "Multimodal Text-Only (Black Image) Image",
+          "w": 186,
+          "h": 36,
+          "left": 29,
+          "right": 215
+        },
+        {
+          "text": "All Outcomes Composition Required Text O",
+          "w": 171,
+          "h": 36,
+          "left": 29,
+          "right": 200
+        },
+        {
+          "text": "All Categories dress shirt toptee",
+          "w": 123,
+          "h": 36,
+          "left": 210,
+          "right": 333
+        },
+        {
+          "text": "Worst Rank First Best Rank First Ascendi",
+          "w": 145,
+          "h": 36,
+          "left": 29,
+          "right": 174
+        },
+        {
+          "text": "Previous",
+          "w": 78,
+          "h": 36,
+          "left": 29,
+          "right": 107
+        },
+        {
+          "text": "Next",
+          "w": 53,
+          "h": 36,
+          "left": 113,
+          "right": 166
+        },
+        {
+          "text": "Previous",
+          "w": 78,
+          "h": 36,
+          "left": 29,
+          "right": 107
+        },
+        {
+          "text": "Next",
+          "w": 53,
+          "h": 36,
+          "left": 113,
+          "right": 166
+        }
+      ],
+      "consoleErrors": [],
+      "pageErrors": [],
+      "failedRequests": [],
+      "httpErrors": [],
+      "consoleErrorCount": 0,
+      "pageErrorCount": 0,
+      "failedRequestCount": 0,
+      "httpErrorCount": 0
+    }
+  ]
+}

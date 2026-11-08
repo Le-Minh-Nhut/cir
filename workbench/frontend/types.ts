@@ -7,3 +7,61 @@ export type Model = { model_id:string; method_name:string; native_protocol:strin
 export type Analysis = { query_id:string; category:string; target_rank:Record<string,number>; consensus_fail_fraction:number; min_rank:number; max_rank:number; median_rank:number; rank_range:number; rank_std:number; mean_topk_jaccard:number; common_distractors:{image_id:string;run_count:number;run_ids:string[];best_rank:number;mean_rank:number}[] };
 export type Cohort = { cohort_id:string; protocol_id:string; query_ids:string[]; run_ids:string[]; definition:Record<string,unknown>; notes:string; created_at:string };
 export type Job = { job_id:string; model_id:string; checkpoint_id:string; protocol_id:string; command:string[]; cwd:string; log_directory:string; status:"queued"|"preparing"|"running"|"blocked"|"completed"|"failed"|"cancelled"; created_at:string; started_at:string|null; completed_at:string|null; return_code:number|null; error:string|null; stdout_tail:string; stderr_tail:string };
+export type CompositionMetrics = {
+  ndcg_multimodal?: number | null;
+  ndcg_text_only?: number | null;
+  ndcg_image_only?: number | null;
+  composition_gap_ndcg?: number | null;
+  recall_at_1_multimodal?: number | null;
+  recall_at_10_multimodal?: number | null;
+  recall_at_50_multimodal?: number | null;
+  mrr_gap?: number | null;
+  coverage?: number;
+  common_cohort_count?: number;
+  outcomes?: {
+    composition_required: number;
+    text_only: number;
+    image_only: number;
+    both: number;
+    unresolved: number;
+    neither_scored: number;
+  };
+};
+export type CompositionRun = {
+  model_id: string;
+  checkpoint_id: string;
+  run_id: string;
+  protocol_id: string;
+  subset: "full" | "sf" | "validated";
+  gallery_count: number;
+  query_count: number;
+  query_count_per_subset?: Record<string, number>;
+  conditions: string[];
+  execution_status: string;
+  condition_status?: Record<string, { status: string; unscored_count?: number; reason?: string }>;
+  checkpoint_training_noise_pct?: number | null;
+  evaluation_noise_pct?: number | null;
+  checkpoint_transfer?: boolean | null;
+  checkpoint_training_dataset?: string | null;
+  reproduction_status?: string | null;
+  interpreter_verification_status?: string | null;
+  training_or_transfer_label?: string;
+  is_synthetic?: boolean;
+  synthetic_fixture?: boolean;
+  /** Backend `is_failed_summary`: no numbers were measured, so metric cells must blank. */
+  is_failed?: boolean;
+  metrics: CompositionMetrics;
+  smoke?: { limited: boolean; query_limit?: number | null; label?: string | null };
+};
+export type CompositionQuery = {
+  query_id: string;
+  category: string | null;
+  query_txt: string;
+  reference_id: string;
+  positive_ids: string[];
+  ranks: Record<string, number | null>;
+  target_rank: number | null;
+  outcome: "composition_required" | "text_only" | "image_only" | "both" | "unresolved" | "unscored";
+  failure?: string | null;
+  top_results?: TopResult[];
+};

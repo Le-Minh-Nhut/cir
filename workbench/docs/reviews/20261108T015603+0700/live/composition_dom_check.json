@@ -1,0 +1,248 @@
+{
+  "baseUrl": "http://127.0.0.1:5173",
+  "checks": [
+    {
+      "name": "one FAILED row visible",
+      "ok": true,
+      "detail": [
+        "habit"
+      ]
+    },
+    {
+      "name": "FAILED row keeps its identity",
+      "ok": true,
+      "detail": "habit"
+    },
+    {
+      "name": "FAILED row: 7 numeric cells",
+      "ok": true,
+      "detail": [
+        "\u2014",
+        "\u2014",
+        "\u2014",
+        "\u2014",
+        "\u2014",
+        "\u2014",
+        "\u2014"
+      ]
+    },
+    {
+      "name": "FAILED row: every numeric cell blank",
+      "ok": true,
+      "detail": [
+        "\u2014",
+        "\u2014",
+        "\u2014",
+        "\u2014",
+        "\u2014",
+        "\u2014",
+        "\u2014"
+      ]
+    },
+    {
+      "name": "limn: row present",
+      "ok": true,
+      "detail": [
+        "limn",
+        "ptha_mtst",
+        "encoder",
+        "tme",
+        "habit"
+      ]
+    },
+    {
+      "name": "limn: numbers unchanged",
+      "ok": true,
+      "detail": [
+        "0.2908",
+        "30.1%",
+        "48.8%",
+        "0.1333",
+        "0.0997",
+        "+54.17%",
+        "98.0%"
+      ]
+    },
+    {
+      "name": "ptha_mtst: row present",
+      "ok": true,
+      "detail": [
+        "limn",
+        "ptha_mtst",
+        "encoder",
+        "tme",
+        "habit"
+      ]
+    },
+    {
+      "name": "ptha_mtst: numbers unchanged",
+      "ok": true,
+      "detail": [
+        "0.2249",
+        "19.5%",
+        "34.4%",
+        "0.1701",
+        "0.0950",
+        "+24.36%",
+        "100.0%"
+      ]
+    },
+    {
+      "name": "encoder: row present",
+      "ok": true,
+      "detail": [
+        "limn",
+        "ptha_mtst",
+        "encoder",
+        "tme",
+        "habit"
+      ]
+    },
+    {
+      "name": "encoder: numbers unchanged",
+      "ok": true,
+      "detail": [
+        "0.2959",
+        "31.0%",
+        "49.6%",
+        "0.1561",
+        "0.1073",
+        "+47.23%",
+        "100.0%"
+      ]
+    },
+    {
+      "name": "tme: row present",
+      "ok": true,
+      "detail": [
+        "limn",
+        "ptha_mtst",
+        "encoder",
+        "tme",
+        "habit"
+      ]
+    },
+    {
+      "name": "tme: numbers unchanged",
+      "ok": true,
+      "detail": [
+        "0.3204",
+        "34.0%",
+        "54.0%",
+        "0.2055",
+        "0.1117",
+        "+35.86%",
+        "100.0%"
+      ]
+    },
+    {
+      "name": "no bare `None` in drilled page text",
+      "ok": true,
+      "detail": 0
+    },
+    {
+      "name": "failure text reads as prose",
+      "ok": true,
+      "detail": "category unresolved present"
+    },
+    {
+      "name": "at least one failure card rendered",
+      "ok": true,
+      "detail": 20
+    },
+    {
+      "name": "failure cards free of `None`",
+      "ok": true,
+      "detail": [
+        "Failure: query 7:2179: category unresolved has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(2178,), qids=['7:2179']",
+        "Failure: query 7:2211: category unresolved has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(2210,), qids=['7:2211']",
+        "Failure: query 7:2218: category unresolved has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(2217,), qids=['7:2218']"
+      ]
+    }
+  ],
+  "failures": [],
+  "rows": [
+    {
+      "model": "limn",
+      "status": "PARTIAL",
+      "cells": [
+        "0.2908",
+        "30.1%",
+        "48.8%",
+        "0.1333",
+        "0.0997",
+        "+54.17%",
+        "98.0%"
+      ]
+    },
+    {
+      "model": "ptha_mtst",
+      "status": "COMPLETED",
+      "cells": [
+        "0.2249",
+        "19.5%",
+        "34.4%",
+        "0.1701",
+        "0.0950",
+        "+24.36%",
+        "100.0%"
+      ]
+    },
+    {
+      "model": "encoder",
+      "status": "COMPLETED",
+      "cells": [
+        "0.2959",
+        "31.0%",
+        "49.6%",
+        "0.1561",
+        "0.1073",
+        "+47.23%",
+        "100.0%"
+      ]
+    },
+    {
+      "model": "tme",
+      "status": "COMPLETED",
+      "cells": [
+        "0.3204",
+        "34.0%",
+        "54.0%",
+        "0.2055",
+        "0.1117",
+        "+35.86%",
+        "100.0%"
+      ]
+    },
+    {
+      "model": "habit",
+      "status": "FAILED",
+      "cells": [
+        "\u2014",
+        "\u2014",
+        "\u2014",
+        "\u2014",
+        "\u2014",
+        "\u2014",
+        "\u2014"
+      ]
+    }
+  ],
+  "noneCount": {
+    "beforeDrilldown": 0,
+    "afterDrilldown": 0
+  },
+  "failureNotes": [
+    "Failure: query 7:2179: category unresolved has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(2178,), qids=['7:2179']",
+    "Failure: query 7:2211: category unresolved has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(2210,), qids=['7:2211']",
+    "Failure: query 7:2218: category unresolved has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(2217,), qids=['7:2218']",
+    "Failure: query 7:2228: category unresolved has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(2227,), qids=['7:2228']",
+    "Failure: query 7:2258: category unresolved has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(2257,), qids=['7:2258']"
+  ],
+  "console": {
+    "console": [],
+    "pageErrors": [],
+    "failedRequests": []
+  },
+  "ok": true
+}

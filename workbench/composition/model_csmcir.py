@@ -50,10 +50,13 @@ CONDITIONS = ("multimodal", "text_only_black_image", "image_only_empty_text")
 # report demanded -- belong to `FashionIQDataset_imageedit`, which nothing instantiates. See
 # CHECKPOINT_SELECTION_REPORT.md 3.18 and the call-path probe in the 20261107 evidence bundle.
 _TARGET_REASON = (
-    "CSMCIR cannot run through the composition adapter: the checkpoint is stored under "
-    "Blip2QformerCirAlignPromptTargetImageCaptionshiyan92, whose module ships at the pinned revision "
-    "only as author bytecode, and the pinned checkout does not import. The native evaluator path is "
-    "measured (CHECKPOINT_SELECTION_REPORT.md 3.18); this adapter is not wired to it."
+    "CSMCIR cannot run through the composition adapter: the adapter's score() is a 256-d text "
+    "embedding expanded x32 into an 8192-d dot product, whereas the native evaluator's inference() "
+    "uses attention-weighted token importance and a max over 32 query tokens. Those are different "
+    "quantities, so adapter scores would be a substitution, not the measured contract. The native "
+    "evaluator path is measured (CHECKPOINT_SELECTION_REPORT.md 3.18); this adapter is not wired to it. "
+    "Additionally, local captions cover only the FashionIQ validation split (15,415 of 74,381 CIRCUS "
+    "gallery images, or 20.72%), leaving 58,966 images uncaptioned."
 )
 
 
@@ -187,7 +190,7 @@ def _status(cls: type[Adapter], config: Any) -> AdapterStatus:
     return Status(cls.model_id, False, _TARGET_REASON,
                   tuple(str(item["checkpoint_id"]) for item in model["checkpoint_variants"]),
                   {condition: (False, _TARGET_REASON) for condition in CONDITIONS},
-                  "Required COT_ours2 captions are absent from the CIRCUS release; local qwen_captions are different Qwen-generated captions and are not substituted.")
+                  _TARGET_REASON)
 
 
 def _cleanup(path: Path | None, work_root: Path | None = None) -> None:

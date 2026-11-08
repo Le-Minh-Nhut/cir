@@ -48,3 +48,19 @@ def test_category_scope_failure_resume_keeps_partial_without_reencoding(
         assert resumed["models"][0]["status"] == "PARTIAL"
         assert len([entry for entry in _log(tmp_path / "encodes.jsonl")
                     if entry["kind"] != "checkpoint"]) == encode_count
+
+def test_unresolved_category_reason_is_readable(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A None category is a sentinel, not a name: the reason must say so without printing None."""
+    from types import SimpleNamespace
+
+    adapter = SimpleNamespace(category_scopes=("dress", "shirt", "toptee"))
+    query = SimpleNamespace(qid="7:2179", category=None, index=2178)
+    scope, reason = runner._scope_for_query(adapter, query)
+    assert scope is None
+    assert reason == ("query 7:2179: category unresolved has no adapter embedding scope "
+                      "('dress', 'shirt', 'toptee'); batch_indices=(2178,), qids=['7:2179']")
+    assert runner._is_stable_failure(reason)  # resumability unchanged
+
+    known = SimpleNamespace(qid="q3", category="bag", index=2)
+    _, named = runner._scope_for_query(adapter, known)
+    assert "category 'bag' has no adapter embedding scope" in named

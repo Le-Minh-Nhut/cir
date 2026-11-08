@@ -232,7 +232,10 @@ def _scope_for_query(adapter: Any, query: Any) -> tuple[str | None, str | None]:
         return query.category, None
     if None in scopes:
         return None, None
-    return None, (f"query {query.qid}: category {query.category!r} has no adapter embedding scope "
+    # `None` is the unresolved-category sentinel, not a category name; this text lands in failure
+    # records the UI shows verbatim.
+    category = "unresolved" if query.category is None else repr(query.category)
+    return None, (f"query {query.qid}: category {category} has no adapter embedding scope "
                    f"{scopes!r}; batch_indices=({query.index},), qids={[query.qid]}")
 
 

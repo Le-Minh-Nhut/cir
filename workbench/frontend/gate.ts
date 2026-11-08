@@ -33,7 +33,14 @@ export type RunGate = {
   variant_provenance?: Record<string, unknown> | null;
   category_metrics?: Record<string, Record<string, number | null>> | null;
   observed_metrics?: Record<string, number | null> | null;
+  paper_sanity_metrics?: Record<string, number | null> | null;
+  benchmark_reference?: Record<string, unknown> | null;
   execution_status?: string | null;
+  per_query_capability?: string | null;
+  per_query_state?: string | null;
+  per_query_export_reason?: string | null;
+  per_query_export_available?: boolean | null;
+  evaluator_environment_knobs?: Record<string, string> | null;
   is_synthetic?: boolean | null;
   verification?: VerificationInfo | null;
 };
@@ -44,6 +51,7 @@ export type GateVerdict = {
   comparisons?: MetricComparison[];
   blockers?: string[];
   detail?: string;
+  reference_evidence?: unknown;
 };
 
 export type BenchmarkRun = {

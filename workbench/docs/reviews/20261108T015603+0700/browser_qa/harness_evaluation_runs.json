@@ -1,0 +1,361 @@
+{
+  "baseUrl": "http://127.0.0.1:5173/?page=Evaluation%20Runs",
+  "out": "workbench/docs/reviews/20261108T015603+0700/browser_qa/harness_evaluation_runs",
+  "viewports": [
+    {
+      "viewport": "1440x900",
+      "url": "http://127.0.0.1:5173/?page=Evaluation%20Runs",
+      "screenshot": "workbench/docs/reviews/20261108T015603+0700/browser_qa/harness_evaluation_runs/1440x900.png",
+      "loadState": "networkidle",
+      "screenshotBytes": 136260,
+      "screenshotSize": [
+        1440,
+        900
+      ],
+      "innerWidth": 1440,
+      "innerHeight": 900,
+      "scrollWidth": 1440,
+      "bodyScrollWidth": 1440,
+      "scrollHeight": 900,
+      "nodeCount": 278,
+      "title": "",
+      "horizontalOverflow": false,
+      "overflowPixels": 0,
+      "wideElements": [],
+      "wideElementCount": 0,
+      "imageCount": 0,
+      "brokenImages": [],
+      "brokenImageCount": 0,
+      "unloadedImages": [],
+      "console": [],
+      "consoleErrorCount": 0,
+      "consoleWarningCount": 0,
+      "pageErrors": [],
+      "pageErrorCount": 0,
+      "failedRequests": [],
+      "failedRequestCount": 0,
+      "httpErrors": [],
+      "httpErrorCount": 0,
+      "pass": true,
+      "failures": []
+    },
+    {
+      "viewport": "768x1024",
+      "url": "http://127.0.0.1:5173/?page=Evaluation%20Runs",
+      "screenshot": "workbench/docs/reviews/20261108T015603+0700/browser_qa/harness_evaluation_runs/768x1024.png",
+      "loadState": "networkidle",
+      "screenshotBytes": 139535,
+      "screenshotSize": [
+        768,
+        1024
+      ],
+      "innerWidth": 768,
+      "innerHeight": 1024,
+      "scrollWidth": 768,
+      "bodyScrollWidth": 768,
+      "scrollHeight": 1024,
+      "nodeCount": 278,
+      "title": "",
+      "horizontalOverflow": false,
+      "overflowPixels": 0,
+      "wideElements": [
+        {
+          "selector": "main > section > label.run.aggregate-only > details.gate-detail > div.table-container > table.benchmark-table",
+          "width": 831,
+          "right": 907,
+          "text": "metricpaperreproduced\u0394 (pp)rel. errorwithin tolerancepaper p"
+        },
+        {
+          "selector": "section > label.run.aggregate-only > details.gate-detail > div.table-container > table.benchmark-table > thead",
+          "width": 830,
+          "right": 906,
+          "text": "metricpaperreproduced\u0394 (pp)rel. errorwithin tolerancepaper p"
+        },
+        {
+          "selector": "label.run.aggregate-only > details.gate-detail > div.table-container > table.benchmark-table > thead > tr",
+          "width": 830,
+          "right": 906,
+          "text": "metricpaperreproduced\u0394 (pp)rel. errorwithin tolerancepaper p"
+        },
+        {
+          "selector": "details.gate-detail > div.table-container > table.benchmark-table > thead > tr > th",
+          "width": 152,
+          "right": 906,
+          "text": "paper provenance"
+        },
+        {
+          "selector": "section > label.run.aggregate-only > details.gate-detail > div.table-container > table.benchmark-table > tbody",
+          "width": 830,
+          "right": 906,
+          "text": "r1057.0757.0507-0.0193000000000012050.03%yesPAPER_REPORTEDr5"
+        },
+        {
+          "selector": "label.run.aggregate-only > details.gate-detail > div.table-container > table.benchmark-table > tbody > tr",
+          "width": 830,
+          "right": 906,
+          "text": "r1057.0757.0507-0.0193000000000012050.03%yesPAPER_REPORTED"
+        },
+        {
+          "selector": "details.gate-detail > div.table-container > table.benchmark-table > tbody > tr > td",
+          "width": 152,
+          "right": 906,
+          "text": "PAPER_REPORTED"
+        },
+        {
+          "selector": "label.run.aggregate-only > details.gate-detail > div.table-container > table.benchmark-table > tbody > tr",
+          "width": 830,
+          "right": 906,
+          "text": "r5077.2777.29860.0285999999999972940.04%yesPAPER_REPORTED"
+        },
+        {
+          "selector": "details.gate-detail > div.table-container > table.benchmark-table > tbody > tr > td",
+          "width": 152,
+          "right": 906,
+          "text": "PAPER_REPORTED"
+        },
+        {
+          "selector": "label.run.aggregate-only > details.gate-detail > div.table-container > table.benchmark-table > tbody > tr",
+          "width": 830,
+          "right": 906,
+          "text": "mean67.1767.17470.0046999999999997040.01%yesPAPER_REPORTED"
+        },
+        {
+          "selector": "details.gate-detail > div.table-container > table.benchmark-table > tbody > tr > td",
+          "width": 152,
+          "right": 906,
+          "text": "PAPER_REPORTED"
+        },
+        {
+          "selector": "label.run.aggregate-only > details.gate-detail > div.table-container > table.benchmark-table > tbody > tr",
+          "width": 830,
+          "right": 906,
+          "text": "dress_r1052.4552.20624804496765-0.243751955032351470.46%yesP"
+        },
+        {
+          "selector": "details.gate-detail > div.table-container > table.benchmark-table > tbody > tr > td",
+          "width": 152,
+          "right": 906,
+          "text": "PAPER_REPORTED"
+        },
+        {
+          "selector": "label.run.aggregate-only > details.gate-detail > div.table-container > table.benchmark-table > tbody > tr",
+          "width": 830,
+          "right": 906,
+          "text": "dress_r5074.8174.863660335540770.053660335540769210.07%yesPA"
+        },
+        {
+          "selector": "details.gate-detail > div.table-container > table.benchmark-table > tbody > tr > td",
+          "width": 152,
+          "right": 906,
+          "text": "PAPER_REPORTED"
+        },
+        {
+          "selector": "label.run.aggregate-only > details.gate-detail > div.table-container > table.benchmark-table > tbody > tr",
+          "width": 830,
+          "right": 906,
+          "text": "shirt_r1057.757.752698659896850.0526986598968477440.09%yesPA"
+        },
+        {
+          "selector": "details.gate-detail > div.table-container > table.benchmark-table > tbody > tr > td",
+          "width": 152,
+          "right": 906,
+          "text": "PAPER_REPORTED"
+        },
+        {
+          "selector": "label.run.aggregate-only > details.gate-detail > div.table-container > table.benchmark-table > tbody > tr",
+          "width": 830,
+          "right": 906,
+          "text": "shirt_r5075.7676.10402107238770.34402107238769020.45%yesPAPE"
+        },
+        {
+          "selector": "details.gate-detail > div.table-container > table.benchmark-table > tbody > tr > td",
+          "width": 152,
+          "right": 906,
+          "text": "PAPER_REPORTED"
+        },
+        {
+          "selector": "label.run.aggregate-only > details.gate-detail > div.table-container > table.benchmark-table > tbody > tr",
+          "width": 830,
+          "right": 906,
+          "text": "toptee_r1061.1461.193269491195680.053269491195678140.09%yesP"
+        }
+      ],
+      "wideElementCount": 46,
+      "imageCount": 0,
+      "brokenImages": [],
+      "brokenImageCount": 0,
+      "unloadedImages": [],
+      "console": [],
+      "consoleErrorCount": 0,
+      "consoleWarningCount": 0,
+      "pageErrors": [],
+      "pageErrorCount": 0,
+      "failedRequests": [],
+      "failedRequestCount": 0,
+      "httpErrors": [],
+      "httpErrorCount": 0,
+      "pass": true,
+      "failures": []
+    },
+    {
+      "viewport": "390x844",
+      "url": "http://127.0.0.1:5173/?page=Evaluation%20Runs",
+      "screenshot": "workbench/docs/reviews/20261108T015603+0700/browser_qa/harness_evaluation_runs/390x844.png",
+      "loadState": "networkidle",
+      "screenshotBytes": 78142,
+      "screenshotSize": [
+        390,
+        844
+      ],
+      "innerWidth": 390,
+      "innerHeight": 844,
+      "scrollWidth": 390,
+      "bodyScrollWidth": 390,
+      "scrollHeight": 1332,
+      "nodeCount": 278,
+      "title": "",
+      "horizontalOverflow": false,
+      "overflowPixels": 0,
+      "wideElements": [
+        {
+          "selector": "main > section > label.run.aggregate-only > details.gate-detail > div.table-container > table.benchmark-table",
+          "width": 831,
+          "right": 895,
+          "text": "metricpaperreproduced\u0394 (pp)rel. errorwithin tolerancepaper p"
+        },
+        {
+          "selector": "section > label.run.aggregate-only > details.gate-detail > div.table-container > table.benchmark-table > thead",
+          "width": 830,
+          "right": 894,
+          "text": "metricpaperreproduced\u0394 (pp)rel. errorwithin tolerancepaper p"
+        },
+        {
+          "selector": "label.run.aggregate-only > details.gate-detail > div.table-container > table.benchmark-table > thead > tr",
+          "width": 830,
+          "right": 894,
+          "text": "metricpaperreproduced\u0394 (pp)rel. errorwithin tolerancepaper p"
+        },
+        {
+          "selector": "details.gate-detail > div.table-container > table.benchmark-table > thead > tr > th",
+          "width": 200,
+          "right": 588,
+          "text": "\u0394 (pp)"
+        },
+        {
+          "selector": "details.gate-detail > div.table-container > table.benchmark-table > thead > tr > th",
+          "width": 62,
+          "right": 650,
+          "text": "rel. error"
+        },
+        {
+          "selector": "details.gate-detail > div.table-container > table.benchmark-table > thead > tr > th",
+          "width": 92,
+          "right": 742,
+          "text": "within tolerance"
+        },
+        {
+          "selector": "details.gate-detail > div.table-container > table.benchmark-table > thead > tr > th",
+          "width": 152,
+          "right": 894,
+          "text": "paper provenance"
+        },
+        {
+          "selector": "section > label.run.aggregate-only > details.gate-detail > div.table-container > table.benchmark-table > tbody",
+          "width": 830,
+          "right": 894,
+          "text": "r1057.0757.0507-0.0193000000000012050.03%yesPAPER_REPORTEDr5"
+        },
+        {
+          "selector": "label.run.aggregate-only > details.gate-detail > div.table-container > table.benchmark-table > tbody > tr",
+          "width": 830,
+          "right": 894,
+          "text": "r1057.0757.0507-0.0193000000000012050.03%yesPAPER_REPORTED"
+        },
+        {
+          "selector": "details.gate-detail > div.table-container > table.benchmark-table > tbody > tr > td",
+          "width": 200,
+          "right": 588,
+          "text": "-0.019300000000001205"
+        },
+        {
+          "selector": "details.gate-detail > div.table-container > table.benchmark-table > tbody > tr > td",
+          "width": 62,
+          "right": 650,
+          "text": "0.03%"
+        },
+        {
+          "selector": "details.gate-detail > div.table-container > table.benchmark-table > tbody > tr > td",
+          "width": 92,
+          "right": 742,
+          "text": "yes"
+        },
+        {
+          "selector": "details.gate-detail > div.table-container > table.benchmark-table > tbody > tr > td",
+          "width": 152,
+          "right": 894,
+          "text": "PAPER_REPORTED"
+        },
+        {
+          "selector": "label.run.aggregate-only > details.gate-detail > div.table-container > table.benchmark-table > tbody > tr",
+          "width": 830,
+          "right": 894,
+          "text": "r5077.2777.29860.0285999999999972940.04%yesPAPER_REPORTED"
+        },
+        {
+          "selector": "details.gate-detail > div.table-container > table.benchmark-table > tbody > tr > td",
+          "width": 200,
+          "right": 588,
+          "text": "0.028599999999997294"
+        },
+        {
+          "selector": "details.gate-detail > div.table-container > table.benchmark-table > tbody > tr > td",
+          "width": 62,
+          "right": 650,
+          "text": "0.04%"
+        },
+        {
+          "selector": "details.gate-detail > div.table-container > table.benchmark-table > tbody > tr > td",
+          "width": 92,
+          "right": 742,
+          "text": "yes"
+        },
+        {
+          "selector": "details.gate-detail > div.table-container > table.benchmark-table > tbody > tr > td",
+          "width": 152,
+          "right": 894,
+          "text": "PAPER_REPORTED"
+        },
+        {
+          "selector": "label.run.aggregate-only > details.gate-detail > div.table-container > table.benchmark-table > tbody > tr",
+          "width": 830,
+          "right": 894,
+          "text": "mean67.1767.17470.0046999999999997040.01%yesPAPER_REPORTED"
+        },
+        {
+          "selector": "details.gate-detail > div.table-container > table.benchmark-table > tbody > tr > td",
+          "width": 200,
+          "right": 588,
+          "text": "0.004699999999999704"
+        }
+      ],
+      "wideElementCount": 106,
+      "imageCount": 0,
+      "brokenImages": [],
+      "brokenImageCount": 0,
+      "unloadedImages": [],
+      "console": [],
+      "consoleErrorCount": 0,
+      "consoleWarningCount": 0,
+      "pageErrors": [],
+      "pageErrorCount": 0,
+      "failedRequests": [],
+      "failedRequestCount": 0,
+      "httpErrors": [],
+      "httpErrorCount": 0,
+      "pass": true,
+      "failures": []
+    }
+  ],
+  "ok": true,
+  "fatal": false
+}

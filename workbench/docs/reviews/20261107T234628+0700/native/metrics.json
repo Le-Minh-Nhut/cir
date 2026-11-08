@@ -1,0 +1,46 @@
+{
+  "timestamp": "20261107T234628+0700",
+  "base_url": "http://127.0.0.1:5173",
+  "viewports": {
+    "1440x900": {
+      "settled_first_card": "17 registered models",
+      "cards": [
+        "17 registered models",
+        "0 experiment runs",
+        "0 mock runs",
+        "2 aggregate benchmark reports",
+        "2 certified research results"
+      ],
+      "node_count": 106,
+      "scroll_width": 1440,
+      "inner_width": 1440,
+      "horizontal_overflow": false,
+      "screenshot": "workbench/docs/reviews/20261107T234628+0700/native/1440x900.png",
+      "screenshot_bytes": 156793,
+      "console_errors": 0,
+      "console_error_messages": [],
+      "page_errors": 0,
+      "failed_requests": 0
+    },
+    "390x844": {
+      "settled_first_card": "17 registered models",
+      "cards": [
+        "17 registered models",
+        "0 experiment runs",
+        "0 mock runs",
+        "2 aggregate benchmark reports",
+        "2 certified research results"
+      ],
+      "node_count": 106,
+      "scroll_width": 390,
+      "inner_width": 390,
+      "horizontal_overflow": false,
+      "screenshot": "workbench/docs/reviews/20261107T234628+0700/native/390x844.png",
+      "screenshot_bytes": 166524,
+      "console_errors": 0,
+      "console_error_messages": [],
+      "page_errors": 0,
+      "failed_requests": 0
+    }
+  }
+}

@@ -1,0 +1,766 @@
+{
+  "baseUrl": "http://127.0.0.1:5173/?page=Composition&comp_run=6a528e877c328772e2c7bb28&comp_subset=validated",
+  "out": "workbench/docs/reviews/20261108T015603+0700/browser_qa/harness_drilldown",
+  "viewports": [
+    {
+      "viewport": "1440x900",
+      "url": "http://127.0.0.1:5173/?page=Composition&comp_run=6a528e877c328772e2c7bb28&comp_subset=validated",
+      "screenshot": "workbench/docs/reviews/20261108T015603+0700/browser_qa/harness_drilldown/1440x900.png",
+      "loadState": "networkidle",
+      "screenshotBytes": 157345,
+      "screenshotSize": [
+        1440,
+        900
+      ],
+      "innerWidth": 1440,
+      "innerHeight": 900,
+      "scrollWidth": 1440,
+      "bodyScrollWidth": 1440,
+      "scrollHeight": 4927,
+      "nodeCount": 756,
+      "title": "",
+      "horizontalOverflow": false,
+      "overflowPixels": 0,
+      "wideElements": [],
+      "wideElementCount": 0,
+      "imageCount": 40,
+      "brokenImages": [],
+      "brokenImageCount": 0,
+      "unloadedImages": [
+        {
+          "src": "http://127.0.0.1:5173/api/images/circus/B00DDQX05A.jpg",
+          "naturalWidth": 0,
+          "naturalHeight": 0,
+          "complete": false,
+          "selector": "div.queries-list > article.query-card > div.query-content > div.query-images > figure.image-figure > img"
+        },
+        {
+          "src": "http://127.0.0.1:5173/api/images/circus/B00BTHR98E.jpg",
+          "naturalWidth": 0,
+          "naturalHeight": 0,
+          "complete": false,
+          "selector": "article.query-card > div.query-content > div.query-images > div.target-images > figure.image-figure > img"
+        },
+        {
+          "src": "http://127.0.0.1:5173/api/images/circus/B0090F42VY.jpg",
+          "naturalWidth": 0,
+          "naturalHeight": 0,
+          "complete": false,
+          "selector": "div.queries-list > article.query-card > div.query-content > div.query-images > figure.image-figure > img"
+        },
+        {
+          "src": "http://127.0.0.1:5173/api/images/circus/B0038JE7LI.jpg",
+          "naturalWidth": 0,
+          "naturalHeight": 0,
+          "complete": false,
+          "selector": "article.query-card > div.query-content > div.query-images > div.target-images > figure.image-figure > img"
+        },
+        {
+          "src": "http://127.0.0.1:5173/api/images/circus/B00C5NMEPE.jpg",
+          "naturalWidth": 0,
+          "naturalHeight": 0,
+          "complete": false,
+          "selector": "div.queries-list > article.query-card > div.query-content > div.query-images > figure.image-figure > img"
+        },
+        {
+          "src": "http://127.0.0.1:5173/api/images/circus/B008X0HEZS.jpg",
+          "naturalWidth": 0,
+          "naturalHeight": 0,
+          "complete": false,
+          "selector": "article.query-card > div.query-content > div.query-images > div.target-images > figure.image-figure > img"
+        },
+        {
+          "src": "http://127.0.0.1:5173/api/images/circus/B004KE48Y6.jpg",
+          "naturalWidth": 0,
+          "naturalHeight": 0,
+          "complete": false,
+          "selector": "div.queries-list > article.query-card > div.query-content > div.query-images > figure.image-figure > img"
+        },
+        {
+          "src": "http://127.0.0.1:5173/api/images/circus/B00AQLLDZY.jpg",
+          "naturalWidth": 0,
+          "naturalHeight": 0,
+          "complete": false,
+          "selector": "article.query-card > div.query-content > div.query-images > div.target-images > figure.image-figure > img"
+        },
+        {
+          "src": "http://127.0.0.1:5173/api/images/circus/B000BO1R2K.jpg",
+          "naturalWidth": 0,
+          "naturalHeight": 0,
+          "complete": false,
+          "selector": "div.queries-list > article.query-card > div.query-content > div.query-images > figure.image-figure > img"
+        },
+        {
+          "src": "http://127.0.0.1:5173/api/images/circus/B00512NGTY.jpg",
+          "naturalWidth": 0,
+          "naturalHeight": 0,
+          "complete": false,
+          "selector": "article.query-card > div.query-content > div.query-images > div.target-images > figure.image-figure > img"
+        },
+        {
+          "src": "http://127.0.0.1:5173/api/images/circus/B008VJ0Q2Y.jpg",
+          "naturalWidth": 0,
+          "naturalHeight": 0,
+          "complete": false,
+          "selector": "div.queries-list > article.query-card > div.query-content > div.query-images > figure.image-figure > img"
+        },
+        {
+          "src": "http://127.0.0.1:5173/api/images/circus/B008BDRDPI.jpg",
+          "naturalWidth": 0,
+          "naturalHeight": 0,
+          "complete": false,
+          "selector": "article.query-card > div.query-content > div.query-images > div.target-images > figure.image-figure > img"
+        },
+        {
+          "src": "http://127.0.0.1:5173/api/images/circus/B002BOHPNS.jpg",
+          "naturalWidth": 0,
+          "naturalHeight": 0,
+          "complete": false,
+          "selector": "div.queries-list > article.query-card > div.query-content > div.query-images > figure.image-figure > img"
+        },
+        {
+          "src": "http://127.0.0.1:5173/api/images/circus/B005J4CCRG.jpg",
+          "naturalWidth": 0,
+          "naturalHeight": 0,
+          "complete": false,
+          "selector": "article.query-card > div.query-content > div.query-images > div.target-images > figure.image-figure > img"
+        },
+        {
+          "src": "http://127.0.0.1:5173/api/images/circus/B003KW7PXK.jpg",
+          "naturalWidth": 0,
+          "naturalHeight": 0,
+          "complete": false,
+          "selector": "div.queries-list > article.query-card > div.query-content > div.query-images > figure.image-figure > img"
+        },
+        {
+          "src": "http://127.0.0.1:5173/api/images/circus/B003O1HGTA.jpg",
+          "naturalWidth": 0,
+          "naturalHeight": 0,
+          "complete": false,
+          "selector": "article.query-card > div.query-content > div.query-images > div.target-images > figure.image-figure > img"
+        },
+        {
+          "src": "http://127.0.0.1:5173/api/images/circus/B00B9DYVZC.jpg",
+          "naturalWidth": 0,
+          "naturalHeight": 0,
+          "complete": false,
+          "selector": "div.queries-list > article.query-card > div.query-content > div.query-images > figure.image-figure > img"
+        },
+        {
+          "src": "http://127.0.0.1:5173/api/images/circus/B005LXFXIA.jpg",
+          "naturalWidth": 0,
+          "naturalHeight": 0,
+          "complete": false,
+          "selector": "article.query-card > div.query-content > div.query-images > div.target-images > figure.image-figure > img"
+        },
+        {
+          "src": "http://127.0.0.1:5173/api/images/circus/B005JDB3UO.jpg",
+          "naturalWidth": 0,
+          "naturalHeight": 0,
+          "complete": false,
+          "selector": "div.queries-list > article.query-card > div.query-content > div.query-images > figure.image-figure > img"
+        },
+        {
+          "src": "http://127.0.0.1:5173/api/images/circus/B008GX3852.jpg",
+          "naturalWidth": 0,
+          "naturalHeight": 0,
+          "complete": false,
+          "selector": "article.query-card > div.query-content > div.query-images > div.target-images > figure.image-figure > img"
+        }
+      ],
+      "console": [],
+      "consoleErrorCount": 0,
+      "consoleWarningCount": 0,
+      "pageErrors": [],
+      "pageErrorCount": 0,
+      "failedRequests": [],
+      "failedRequestCount": 0,
+      "httpErrors": [],
+      "httpErrorCount": 0,
+      "pass": true,
+      "failures": []
+    },
+    {
+      "viewport": "768x1024",
+      "url": "http://127.0.0.1:5173/?page=Composition&comp_run=6a528e877c328772e2c7bb28&comp_subset=validated",
+      "screenshot": "workbench/docs/reviews/20261108T015603+0700/browser_qa/harness_drilldown/768x1024.png",
+      "loadState": "networkidle",
+      "screenshotBytes": 144472,
+      "screenshotSize": [
+        768,
+        1024
+      ],
+      "innerWidth": 768,
+      "innerHeight": 1024,
+      "scrollWidth": 768,
+      "bodyScrollWidth": 768,
+      "scrollHeight": 5162,
+      "nodeCount": 756,
+      "title": "",
+      "horizontalOverflow": false,
+      "overflowPixels": 0,
+      "wideElements": [
+        {
+          "selector": "div#root > main > section.composition-view > div.table-container > table.composition-table",
+          "width": 1193,
+          "right": 1230,
+          "text": "Model / RunCondition / TransferStatusMM nDCGMM R@10Text nDCG"
+        },
+        {
+          "selector": "div#root > main > section.composition-view > div.table-container > table.composition-table > thead",
+          "width": 1192,
+          "right": 1230,
+          "text": "Model / RunCondition / TransferStatusMM nDCGMM R@10Text nDCG"
+        },
+        {
+          "selector": "main > section.composition-view > div.table-container > table.composition-table > thead > tr",
+          "width": 1192,
+          "right": 1230,
+          "text": "Model / RunCondition / TransferStatusMM nDCGMM R@10Text nDCG"
+        },
+        {
+          "selector": "section.composition-view > div.table-container > table.composition-table > thead > tr > th.num-col",
+          "width": 106,
+          "right": 797,
+          "text": "Text nDCG"
+        },
+        {
+          "selector": "section.composition-view > div.table-container > table.composition-table > thead > tr > th.num-col",
+          "width": 124,
+          "right": 921,
+          "text": "Image nDCG"
+        },
+        {
+          "selector": "section.composition-view > div.table-container > table.composition-table > thead > tr > th.num-col",
+          "width": 106,
+          "right": 1027,
+          "text": "Comp Gap"
+        },
+        {
+          "selector": "section.composition-view > div.table-container > table.composition-table > thead > tr > th.num-col",
+          "width": 100,
+          "right": 1127,
+          "text": "Coverage"
+        },
+        {
+          "selector": "section.composition-view > div.table-container > table.composition-table > thead > tr > th",
+          "width": 103,
+          "right": 1230,
+          "text": "Action"
+        },
+        {
+          "selector": "div#root > main > section.composition-view > div.table-container > table.composition-table > tbody",
+          "width": 1192,
+          "right": 1230,
+          "text": "encoderfashioniqtrain noise unstated \u00b7 eval noise 0%COMPLETE"
+        },
+        {
+          "selector": "main > section.composition-view > div.table-container > table.composition-table > tbody > tr.selected-row",
+          "width": 1192,
+          "right": 1230,
+          "text": "encoderfashioniqtrain noise unstated \u00b7 eval noise 0%COMPLETE"
+        },
+        {
+          "selector": "section.composition-view > div.table-container > table.composition-table > tbody > tr.selected-row > td.num-col.font-mono",
+          "width": 106,
+          "right": 797,
+          "text": "0.1161"
+        },
+        {
+          "selector": "section.composition-view > div.table-container > table.composition-table > tbody > tr.selected-row > td.num-col.font-mono",
+          "width": 124,
+          "right": 921,
+          "text": "0.1078"
+        },
+        {
+          "selector": "section.composition-view > div.table-container > table.composition-table > tbody > tr.selected-row > td.num-col.font-mono",
+          "width": 106,
+          "right": 1027,
+          "text": "+60.84%"
+        },
+        {
+          "selector": "div.table-container > table.composition-table > tbody > tr.selected-row > td.num-col.font-mono > span.gap-positive",
+          "width": 67,
+          "right": 1015,
+          "text": "+60.84%"
+        },
+        {
+          "selector": "section.composition-view > div.table-container > table.composition-table > tbody > tr.selected-row > td.num-col.font-mono",
+          "width": 100,
+          "right": 1127,
+          "text": "100.0%"
+        },
+        {
+          "selector": "section.composition-view > div.table-container > table.composition-table > tbody > tr.selected-row > td",
+          "width": 103,
+          "right": 1230,
+          "text": "Inspecting"
+        },
+        {
+          "selector": "div.table-container > table.composition-table > tbody > tr.selected-row > td > button.btn-drill.btn-active",
+          "width": 78,
+          "right": 1217,
+          "text": "Inspecting"
+        }
+      ],
+      "wideElementCount": 17,
+      "imageCount": 40,
+      "brokenImages": [],
+      "brokenImageCount": 0,
+      "unloadedImages": [
+        {
+          "src": "http://127.0.0.1:5173/api/images/circus/B00DDQX05A.jpg",
+          "naturalWidth": 0,
+          "naturalHeight": 0,
+          "complete": false,
+          "selector": "div.queries-list > article.query-card > div.query-content > div.query-images > figure.image-figure > img"
+        },
+        {
+          "src": "http://127.0.0.1:5173/api/images/circus/B00BTHR98E.jpg",
+          "naturalWidth": 0,
+          "naturalHeight": 0,
+          "complete": false,
+          "selector": "article.query-card > div.query-content > div.query-images > div.target-images > figure.image-figure > img"
+        },
+        {
+          "src": "http://127.0.0.1:5173/api/images/circus/B0090F42VY.jpg",
+          "naturalWidth": 0,
+          "naturalHeight": 0,
+          "complete": false,
+          "selector": "div.queries-list > article.query-card > div.query-content > div.query-images > figure.image-figure > img"
+        },
+        {
+          "src": "http://127.0.0.1:5173/api/images/circus/B0038JE7LI.jpg",
+          "naturalWidth": 0,
+          "naturalHeight": 0,
+          "complete": false,
+          "selector": "article.query-card > div.query-content > div.query-images > div.target-images > figure.image-figure > img"
+        },
+        {
+          "src": "http://127.0.0.1:5173/api/images/circus/B00C5NMEPE.jpg",
+          "naturalWidth": 0,
+          "naturalHeight": 0,
+          "complete": false,
+          "selector": "div.queries-list > article.query-card > div.query-content > div.query-images > figure.image-figure > img"
+        },
+        {
+          "src": "http://127.0.0.1:5173/api/images/circus/B008X0HEZS.jpg",
+          "naturalWidth": 0,
+          "naturalHeight": 0,
+          "complete": false,
+          "selector": "article.query-card > div.query-content > div.query-images > div.target-images > figure.image-figure > img"
+        },
+        {
+          "src": "http://127.0.0.1:5173/api/images/circus/B004KE48Y6.jpg",
+          "naturalWidth": 0,
+          "naturalHeight": 0,
+          "complete": false,
+          "selector": "div.queries-list > article.query-card > div.query-content > div.query-images > figure.image-figure > img"
+        },
+        {
+          "src": "http://127.0.0.1:5173/api/images/circus/B00AQLLDZY.jpg",
+          "naturalWidth": 0,
+          "naturalHeight": 0,
+          "complete": false,
+          "selector": "article.query-card > div.query-content > div.query-images > div.target-images > figure.image-figure > img"
+        },
+        {
+          "src": "http://127.0.0.1:5173/api/images/circus/B000BO1R2K.jpg",
+          "naturalWidth": 0,
+          "naturalHeight": 0,
+          "complete": false,
+          "selector": "div.queries-list > article.query-card > div.query-content > div.query-images > figure.image-figure > img"
+        },
+        {
+          "src": "http://127.0.0.1:5173/api/images/circus/B00512NGTY.jpg",
+          "naturalWidth": 0,
+          "naturalHeight": 0,
+          "complete": false,
+          "selector": "article.query-card > div.query-content > div.query-images > div.target-images > figure.image-figure > img"
+        },
+        {
+          "src": "http://127.0.0.1:5173/api/images/circus/B008VJ0Q2Y.jpg",
+          "naturalWidth": 0,
+          "naturalHeight": 0,
+          "complete": false,
+          "selector": "div.queries-list > article.query-card > div.query-content > div.query-images > figure.image-figure > img"
+        },
+        {
+          "src": "http://127.0.0.1:5173/api/images/circus/B008BDRDPI.jpg",
+          "naturalWidth": 0,
+          "naturalHeight": 0,
+          "complete": false,
+          "selector": "article.query-card > div.query-content > div.query-images > div.target-images > figure.image-figure > img"
+        },
+        {
+          "src": "http://127.0.0.1:5173/api/images/circus/B002BOHPNS.jpg",
+          "naturalWidth": 0,
+          "naturalHeight": 0,
+          "complete": false,
+          "selector": "div.queries-list > article.query-card > div.query-content > div.query-images > figure.image-figure > img"
+        },
+        {
+          "src": "http://127.0.0.1:5173/api/images/circus/B005J4CCRG.jpg",
+          "naturalWidth": 0,
+          "naturalHeight": 0,
+          "complete": false,
+          "selector": "article.query-card > div.query-content > div.query-images > div.target-images > figure.image-figure > img"
+        },
+        {
+          "src": "http://127.0.0.1:5173/api/images/circus/B003KW7PXK.jpg",
+          "naturalWidth": 0,
+          "naturalHeight": 0,
+          "complete": false,
+          "selector": "div.queries-list > article.query-card > div.query-content > div.query-images > figure.image-figure > img"
+        },
+        {
+          "src": "http://127.0.0.1:5173/api/images/circus/B003O1HGTA.jpg",
+          "naturalWidth": 0,
+          "naturalHeight": 0,
+          "complete": false,
+          "selector": "article.query-card > div.query-content > div.query-images > div.target-images > figure.image-figure > img"
+        },
+        {
+          "src": "http://127.0.0.1:5173/api/images/circus/B00B9DYVZC.jpg",
+          "naturalWidth": 0,
+          "naturalHeight": 0,
+          "complete": false,
+          "selector": "div.queries-list > article.query-card > div.query-content > div.query-images > figure.image-figure > img"
+        },
+        {
+          "src": "http://127.0.0.1:5173/api/images/circus/B005LXFXIA.jpg",
+          "naturalWidth": 0,
+          "naturalHeight": 0,
+          "complete": false,
+          "selector": "article.query-card > div.query-content > div.query-images > div.target-images > figure.image-figure > img"
+        },
+        {
+          "src": "http://127.0.0.1:5173/api/images/circus/B005JDB3UO.jpg",
+          "naturalWidth": 0,
+          "naturalHeight": 0,
+          "complete": false,
+          "selector": "div.queries-list > article.query-card > div.query-content > div.query-images > figure.image-figure > img"
+        },
+        {
+          "src": "http://127.0.0.1:5173/api/images/circus/B008GX3852.jpg",
+          "naturalWidth": 0,
+          "naturalHeight": 0,
+          "complete": false,
+          "selector": "article.query-card > div.query-content > div.query-images > div.target-images > figure.image-figure > img"
+        }
+      ],
+      "console": [],
+      "consoleErrorCount": 0,
+      "consoleWarningCount": 0,
+      "pageErrors": [],
+      "pageErrorCount": 0,
+      "failedRequests": [],
+      "failedRequestCount": 0,
+      "httpErrors": [],
+      "httpErrorCount": 0,
+      "pass": true,
+      "failures": []
+    },
+    {
+      "viewport": "390x844",
+      "url": "http://127.0.0.1:5173/?page=Composition&comp_run=6a528e877c328772e2c7bb28&comp_subset=validated",
+      "screenshot": "workbench/docs/reviews/20261108T015603+0700/browser_qa/harness_drilldown/390x844.png",
+      "loadState": "networkidle",
+      "screenshotBytes": 78395,
+      "screenshotSize": [
+        390,
+        844
+      ],
+      "innerWidth": 390,
+      "innerHeight": 844,
+      "scrollWidth": 390,
+      "bodyScrollWidth": 390,
+      "scrollHeight": 7886,
+      "nodeCount": 756,
+      "title": "",
+      "horizontalOverflow": false,
+      "overflowPixels": 0,
+      "wideElements": [
+        {
+          "selector": "div#root > main > section.composition-view > div.table-container > table.composition-table",
+          "width": 1193,
+          "right": 1218,
+          "text": "Model / RunCondition / TransferStatusMM nDCGMM R@10Text nDCG"
+        },
+        {
+          "selector": "div#root > main > section.composition-view > div.table-container > table.composition-table > thead",
+          "width": 1192,
+          "right": 1218,
+          "text": "Model / RunCondition / TransferStatusMM nDCGMM R@10Text nDCG"
+        },
+        {
+          "selector": "main > section.composition-view > div.table-container > table.composition-table > thead > tr",
+          "width": 1192,
+          "right": 1218,
+          "text": "Model / RunCondition / TransferStatusMM nDCGMM R@10Text nDCG"
+        },
+        {
+          "selector": "section.composition-view > div.table-container > table.composition-table > thead > tr > th",
+          "width": 103,
+          "right": 473,
+          "text": "Status"
+        },
+        {
+          "selector": "section.composition-view > div.table-container > table.composition-table > thead > tr > th.num-col",
+          "width": 103,
+          "right": 576,
+          "text": "MM nDCG"
+        },
+        {
+          "selector": "section.composition-view > div.table-container > table.composition-table > thead > tr > th.num-col",
+          "width": 103,
+          "right": 678,
+          "text": "MM R@10"
+        },
+        {
+          "selector": "section.composition-view > div.table-container > table.composition-table > thead > tr > th.num-col",
+          "width": 106,
+          "right": 785,
+          "text": "Text nDCG"
+        },
+        {
+          "selector": "section.composition-view > div.table-container > table.composition-table > thead > tr > th.num-col",
+          "width": 124,
+          "right": 909,
+          "text": "Image nDCG"
+        },
+        {
+          "selector": "section.composition-view > div.table-container > table.composition-table > thead > tr > th.num-col",
+          "width": 106,
+          "right": 1015,
+          "text": "Comp Gap"
+        },
+        {
+          "selector": "section.composition-view > div.table-container > table.composition-table > thead > tr > th.num-col",
+          "width": 100,
+          "right": 1115,
+          "text": "Coverage"
+        },
+        {
+          "selector": "section.composition-view > div.table-container > table.composition-table > thead > tr > th",
+          "width": 103,
+          "right": 1218,
+          "text": "Action"
+        },
+        {
+          "selector": "div#root > main > section.composition-view > div.table-container > table.composition-table > tbody",
+          "width": 1192,
+          "right": 1218,
+          "text": "encoderfashioniqtrain noise unstated \u00b7 eval noise 0%COMPLETE"
+        },
+        {
+          "selector": "main > section.composition-view > div.table-container > table.composition-table > tbody > tr.selected-row",
+          "width": 1192,
+          "right": 1218,
+          "text": "encoderfashioniqtrain noise unstated \u00b7 eval noise 0%COMPLETE"
+        },
+        {
+          "selector": "section.composition-view > div.table-container > table.composition-table > tbody > tr.selected-row > td",
+          "width": 103,
+          "right": 473,
+          "text": "COMPLETED"
+        },
+        {
+          "selector": "div.table-container > table.composition-table > tbody > tr.selected-row > td > span.status-badge.status-completed",
+          "width": 78,
+          "right": 460,
+          "text": "COMPLETED"
+        },
+        {
+          "selector": "section.composition-view > div.table-container > table.composition-table > tbody > tr.selected-row > td.num-col.font-mono",
+          "width": 103,
+          "right": 576,
+          "text": "0.2965"
+        },
+        {
+          "selector": "section.composition-view > div.table-container > table.composition-table > tbody > tr.selected-row > td.num-col.font-mono",
+          "width": 103,
+          "right": 678,
+          "text": "34.6%"
+        },
+        {
+          "selector": "section.composition-view > div.table-container > table.composition-table > tbody > tr.selected-row > td.num-col.font-mono",
+          "width": 106,
+          "right": 785,
+          "text": "0.1161"
+        },
+        {
+          "selector": "section.composition-view > div.table-container > table.composition-table > tbody > tr.selected-row > td.num-col.font-mono",
+          "width": 124,
+          "right": 909,
+          "text": "0.1078"
+        },
+        {
+          "selector": "section.composition-view > div.table-container > table.composition-table > tbody > tr.selected-row > td.num-col.font-mono",
+          "width": 106,
+          "right": 1015,
+          "text": "+60.84%"
+        }
+      ],
+      "wideElementCount": 24,
+      "imageCount": 40,
+      "brokenImages": [],
+      "brokenImageCount": 0,
+      "unloadedImages": [
+        {
+          "src": "http://127.0.0.1:5173/api/images/circus/B007Q2KFQO.jpg",
+          "naturalWidth": 0,
+          "naturalHeight": 0,
+          "complete": false,
+          "selector": "div.queries-list > article.query-card > div.query-content > div.query-images > figure.image-figure > img"
+        },
+        {
+          "src": "http://127.0.0.1:5173/api/images/circus/B00440GIHG.jpg",
+          "naturalWidth": 0,
+          "naturalHeight": 0,
+          "complete": false,
+          "selector": "article.query-card > div.query-content > div.query-images > div.target-images > figure.image-figure > img"
+        },
+        {
+          "src": "http://127.0.0.1:5173/api/images/circus/B0060Q7E0W.jpg",
+          "naturalWidth": 0,
+          "naturalHeight": 0,
+          "complete": false,
+          "selector": "div.queries-list > article.query-card > div.query-content > div.query-images > figure.image-figure > img"
+        },
+        {
+          "src": "http://127.0.0.1:5173/api/images/circus/B007RMNSYE.jpg",
+          "naturalWidth": 0,
+          "naturalHeight": 0,
+          "complete": false,
+          "selector": "article.query-card > div.query-content > div.query-images > div.target-images > figure.image-figure > img"
+        },
+        {
+          "src": "http://127.0.0.1:5173/api/images/circus/B00CD5NHMI.jpg",
+          "naturalWidth": 0,
+          "naturalHeight": 0,
+          "complete": false,
+          "selector": "div.queries-list > article.query-card > div.query-content > div.query-images > figure.image-figure > img"
+        },
+        {
+          "src": "http://127.0.0.1:5173/api/images/circus/B004CPWN1I.jpg",
+          "naturalWidth": 0,
+          "naturalHeight": 0,
+          "complete": false,
+          "selector": "article.query-card > div.query-content > div.query-images > div.target-images > figure.image-figure > img"
+        },
+        {
+          "src": "http://127.0.0.1:5173/api/images/circus/B005GN4ATS.jpg",
+          "naturalWidth": 0,
+          "naturalHeight": 0,
+          "complete": false,
+          "selector": "div.queries-list > article.query-card > div.query-content > div.query-images > figure.image-figure > img"
+        },
+        {
+          "src": "http://127.0.0.1:5173/api/images/circus/B0096HP0L2.jpg",
+          "naturalWidth": 0,
+          "naturalHeight": 0,
+          "complete": false,
+          "selector": "article.query-card > div.query-content > div.query-images > div.target-images > figure.image-figure > img"
+        },
+        {
+          "src": "http://127.0.0.1:5173/api/images/circus/B00DDQX05A.jpg",
+          "naturalWidth": 0,
+          "naturalHeight": 0,
+          "complete": false,
+          "selector": "div.queries-list > article.query-card > div.query-content > div.query-images > figure.image-figure > img"
+        },
+        {
+          "src": "http://127.0.0.1:5173/api/images/circus/B00BTHR98E.jpg",
+          "naturalWidth": 0,
+          "naturalHeight": 0,
+          "complete": false,
+          "selector": "article.query-card > div.query-content > div.query-images > div.target-images > figure.image-figure > img"
+        },
+        {
+          "src": "http://127.0.0.1:5173/api/images/circus/B0090F42VY.jpg",
+          "naturalWidth": 0,
+          "naturalHeight": 0,
+          "complete": false,
+          "selector": "div.queries-list > article.query-card > div.query-content > div.query-images > figure.image-figure > img"
+        },
+        {
+          "src": "http://127.0.0.1:5173/api/images/circus/B0038JE7LI.jpg",
+          "naturalWidth": 0,
+          "naturalHeight": 0,
+          "complete": false,
+          "selector": "article.query-card > div.query-content > div.query-images > div.target-images > figure.image-figure > img"
+        },
+        {
+          "src": "http://127.0.0.1:5173/api/images/circus/B00C5NMEPE.jpg",
+          "naturalWidth": 0,
+          "naturalHeight": 0,
+          "complete": false,
+          "selector": "div.queries-list > article.query-card > div.query-content > div.query-images > figure.image-figure > img"
+        },
+        {
+          "src": "http://127.0.0.1:5173/api/images/circus/B008X0HEZS.jpg",
+          "naturalWidth": 0,
+          "naturalHeight": 0,
+          "complete": false,
+          "selector": "article.query-card > div.query-content > div.query-images > div.target-images > figure.image-figure > img"
+        },
+        {
+          "src": "http://127.0.0.1:5173/api/images/circus/B004KE48Y6.jpg",
+          "naturalWidth": 0,
+          "naturalHeight": 0,
+          "complete": false,
+          "selector": "div.queries-list > article.query-card > div.query-content > div.query-images > figure.image-figure > img"
+        },
+        {
+          "src": "http://127.0.0.1:5173/api/images/circus/B00AQLLDZY.jpg",
+          "naturalWidth": 0,
+          "naturalHeight": 0,
+          "complete": false,
+          "selector": "article.query-card > div.query-content > div.query-images > div.target-images > figure.image-figure > img"
+        },
+        {
+          "src": "http://127.0.0.1:5173/api/images/circus/B000BO1R2K.jpg",
+          "naturalWidth": 0,
+          "naturalHeight": 0,
+          "complete": false,
+          "selector": "div.queries-list > article.query-card > div.query-content > div.query-images > figure.image-figure > img"
+        },
+        {
+          "src": "http://127.0.0.1:5173/api/images/circus/B00512NGTY.jpg",
+          "naturalWidth": 0,
+          "naturalHeight": 0,
+          "complete": false,
+          "selector": "article.query-card > div.query-content > div.query-images > div.target-images > figure.image-figure > img"
+        },
+        {
+          "src": "http://127.0.0.1:5173/api/images/circus/B008VJ0Q2Y.jpg",
+          "naturalWidth": 0,
+          "naturalHeight": 0,
+          "complete": false,
+          "selector": "div.queries-list > article.query-card > div.query-content > div.query-images > figure.image-figure > img"
+        },
+        {
+          "src": "http://127.0.0.1:5173/api/images/circus/B008BDRDPI.jpg",
+          "naturalWidth": 0,
+          "naturalHeight": 0,
+          "complete": false,
+          "selector": "article.query-card > div.query-content > div.query-images > div.target-images > figure.image-figure > img"
+        }
+      ],
+      "console": [],
+      "consoleErrorCount": 0,
+      "consoleWarningCount": 0,
+      "pageErrors": [],
+      "pageErrorCount": 0,
+      "failedRequests": [],
+      "failedRequestCount": 0,
+      "httpErrors": [],
+      "httpErrorCount": 0,
+      "pass": true,
+      "failures": []
+    }
+  ],
+  "ok": true,
+  "fatal": false
+}
