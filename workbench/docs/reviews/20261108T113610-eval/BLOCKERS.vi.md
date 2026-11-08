@@ -57,13 +57,21 @@ re-run ENCODER/PTHA/LIMN dưới code đã sửa. **8 model chỉ có đường 
 ## B2. `encoder` — ĐÃ GỠ (env 3.10 có, interpreter khớp) — còn lại: chưa re-run
 
 1. **Phạm vi**: `encoder` / `fashioniq` / `circus_fashioniq_release_v1` / 3 condition.
-2. **Stage hỏng**: `env` (nghi ngờ — chưa chạy được tới bước load).
-3. **Tái hiện**: `WORKBENCH_ENCODER_PYTHON=…/pair-adapted/bin/python`,
-   contract `adapted_runtime.python = '3.10'`, interpreter thực tế **3.11.15**.
-   `verify_environment` sẽ trả `PYTHON_VERSION_MISMATCH`.
-4. **Fix đã thử**: **chưa** chạy (hết budget phiên). **Giả thuyết** — mới đọc registry + đo version,
-   chưa quan sát report. Env đúng cần `python 3.10` + `open_clip_torch==2.24.0`; env
-   `tme-adapted` là 3.10.22 nhưng thiếu `open_clip`, nên không dùng lại trực tiếp được.
+2. **Stage hỏng**: `env` — **đã xác nhận** (blocked ở gate, trước khi tới bước load), nay đã gỡ; xem 3-4.
+3. **Trạng thái TRƯỚC FIX** (lịch sử, không tái hiện được nữa): khi đó
+   `WORKBENCH_ENCODER_PYTHON=…/pair-adapted/bin/python`, contract `adapted_runtime.python = '3.10'`,
+   còn interpreter thực tế là **3.11.15** (đo bằng `-V`). **Đã quan sát**: `--plan` in
+   `tier=BLOCKED status=PYTHON_VERSION_MISMATCH py=3.11.15` (§B8 F1(c)) — đó là output của chính
+   `verify_environment(probe=True, advisory=True)`, nên **không phải suy đoán**. Lưu ý điều
+   **chưa** từng quan sát: một lần `verify_environment` trả `READY` cho ENCODER. Trạng thái cuối
+   từng thấy là mismatch như trên.
+4. **Đã làm để gỡ** (quan sát được, không phải giả thuyết): provision env riêng
+   `workbench/envs/encoder310-adapted` → trỏ `python3.10` (**3.10.20**), có
+   `open_clip_torch 2.24.0`, `torch 2.7.1+cu128`, `torchvision 0.22.1+cu128`; đặt
+   `WORKBENCH_ENCODER_PYTHON` vào đó (`workbench/config/workbench.env`, operator-owned). LIMN có env
+   song sinh `limn310-adapted` cùng Python, cùng `open_clip_torch 2.24.0`.
+   `tme-adapted` (3.10.22) **không** dùng lại được vì thiếu `open_clip` — đó là lý do cần env riêng,
+   không phải vì version 3.10.22 sai.
 5. **Dữ liệu dùng được**: checkpoint staged + hash-verified; artifact cũ `6a528e877c328772e2c7bb28`
    (6003 query, MM R@10 31.0178) vẫn còn nhưng là **PRE_EXISTING_UNVERIFIED**.
 6. **Trạng thái cập nhật**: blocker interpreter **đã gỡ** — env 3.10 có `open_clip_torch` đã được
@@ -103,6 +111,19 @@ re-run ENCODER/PTHA/LIMN dưới code đã sửa. **8 model chỉ có đường 
    vẫn đúng như một sự kiện cấp loader, và nó **giữ nguyên** sau fix. Nguyên nhân: LIMN là model
    **category-scoped** 3 checkpoint riêng (`dress`/`shirt`/`toptee`), còn ảnh reference dùng chung giữa
    2 category thì không có không gian đặc trưng để chấm.
+
+   **HAI con số khác nhau, đừng gộp** (đo trong `20261108T180000+0700-limn-scope/scope_resolution.json`):
+
+   | đại lượng | giá trị | nghĩa |
+   |---|---:|---|
+   | `category_resolution.ambiguous_count` (release loader) | **119** | loader **không tự suy ra** được category cho 119 query. Đây là **sự kiện của loader**, **không** phải "119 query không chấm được" |
+   | `loader_assigned` | **5884** | loader gán được (đúng bằng số query của artifact cũ) |
+   | adapter `query_scope()` resolve thêm | **+117** | đọc category từ chính FashionIQ caption annotation |
+   | **resolved** = dress 2010 + shirt 2035 + toptee 1956 | **6001 / 6003** | số query **thật sự chấm được** sau fix |
+   | `nulls` — genuinely ambiguous | **2** (`7:3038`, `7:3790`) | không gì gán được; **không** chấm, không đoán |
+
+   Đọc 119 như "query bị mất" là sai: 119 là **phần loader bỏ ngỏ**, và 117 trong số đó được resolver
+   gán lại. Con số coverage đúng sau fix là **6001/6003**, không phải 5884 và không phải 5884+117.
 4. **Fix đã thử**: adapter có hook `query_scope()` đọc category từ chính caption annotation, **trước đây
    chưa bao giờ được runner gọi**. Đã wire; scope map đã resolve được **6001/6003** query. Chi tiết và
    số đo: `20261108T180000+0700-limn-scope/EVIDENCE.md`.

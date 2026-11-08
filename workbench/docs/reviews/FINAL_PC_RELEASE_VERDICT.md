@@ -19,9 +19,9 @@ the aggregate) is the concrete unblock.
 |---|---|
 | Branch | `research/cir-failure-workbench` |
 | Initial HEAD this pass | `3aae18fe02ef13f5b38d153dbc8007fbb40d4c92` |
-| **TESTED_SOURCE_SHA** | **`c2d8cdeb0eabc3232b28070f55b5a10d63ccffcb`** — latest production commit (this round: `runner.py` parallel scoring across query groups + the BLAS pin and `blas_threads_pinned`, the LIMN `query_scope` wiring and `query_scope_resolution`, `backend/composition.py` scoring-path measurement identity, the bounded `prefetch_rows` window, the corrected BLAS comment in `composition_eval.py`). Collection at this revision: **2528 tests** in `workbench/tests`. **Serial sweep measured at this revision** (one run, CPython 3.12.11, interpreter `workbench/envs/ctl312h/bin/python`, command `python -m pytest workbench/tests -q -p no:cacheprovider -rfE --tb=no`, exit 1, 3464.03 s): **2463 passed, 18 failed**, 47 skipped = 2528 collected, and the raw log is filed at `20261108T212500+0700-sweep/full_suite_c2d8cdeb.txt`. The 18 failures are recorded verbatim below and are NOT a pass. Historical rows, which do NOT carry over: `b0f38bd` measured 2186 passed, 33 failed, 47 skipped = 2266 collected, and `61f70b0bb205464cf9131e8dae054ec5f69e13f4` measured 2203 passed, 0 failed, 47 skipped = 2250 collected. Over `b0f38bd..c2d8cdeb` the suite grows 2266 → 2528 collected (**+262 ids**, measured by collecting both revisions), so neither earlier count describes this tree; `6eb4434` alone adds 30 `def test_*`. |
+| **TESTED_SOURCE_SHA** | **`1129c58ba8fa0566c5840cfe820292ae4e9e84f3`** — latest production commit (this round, on top of the throughput/scope/identity work: `EvaluationPage.tsx`/`catalog.ts`/`types.ts` render the backend's per-run `scoring_impl` and warn when the visible rows mix contractions). Collection at this revision: **2532 tests** in `workbench/tests`. **Serial sweep measured at this revision** (one run, CPython 3.12.11, interpreter `workbench/envs/ctl312h/bin/python`, command `python -m pytest workbench/tests -q -p no:cacheprovider -rfE --tb=no`, exit 1, 3483.79 s): **2467 passed, 18 failed**, 47 skipped = 2532 collected, and the raw log is filed at `20261108T225338+0700-sweep/full_suite_1129c58b.txt`. The 18 failures are recorded verbatim below and are NOT a pass. Earlier rows, which do NOT carry over: `c2d8cdeb0eabc3232b28070f55b5a10d63ccffcb` measured 2463/18/47 = 2528 (log `20261108T212500+0700-sweep/full_suite_c2d8cdeb.txt`), and `b0f38bd` measured 2186/33/47 = 2266. |
 | **FINAL_HEAD_SHA** | not recorded here by design: a tracked file cannot name the commit that contains it. `git rev-parse HEAD` on the branch tip is the authority. |
-| Production tree | compare against `c2d8cdeb0eabc3232b28070f55b5a10d63ccffcb` with `git diff c2d8cdeb0eabc3232b28070f55b5a10d63ccffcb HEAD -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'`; the release guard requires byte-identical production source. |
+| Production tree | compare against `1129c58ba8fa0566c5840cfe820292ae4e9e84f3` with `git diff 1129c58ba8fa0566c5840cfe820292ae4e9e84f3 HEAD -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'`; the release guard requires byte-identical production source. |
 | `origin/main` | `8ebcc74d5fd1934df4f3772a8ca5a96dbd00f333` — **unchanged** |
 | Worktree | A37 round changes committed; preserved untracked user files: `pc_composition_smoke.yaml`, `src/train_cirr.py`, `uv.lock` |
 
@@ -33,10 +33,10 @@ commit on the research branch. No checkpoint, dataset, cache or secret is tracke
 | Field | Value |
 |---|---|
 | Branch | `research/cir-failure-workbench` |
-| Suite accounting | Guard-named source `c2d8cdeb0eabc3232b28070f55b5a10d63ccffcb`; **its own serial sweep was measured at that revision**: `workbench/tests` **2463 passed, 18 failed, 47 skipped = 2528 collected** (CPython 3.12.11, interpreter `workbench/envs/ctl312h/bin/python`, exit 1, 3464.03 s, one serial run; log at `20261108T212500+0700-sweep/full_suite_c2d8cdeb.txt`). The 18 failures are itemised in "The serial sweep at `c2d8cdeb`" below and are not a pass. Historical: `b0f38bd` measured 2186 passed, 33 failed, 47 skipped = 2266 collected; `61f70b0` measured 2203 passed, 0 failed, 47 skipped = 2250 collected (round A44). Those numbers describe those revisions only and do not add up to 2528. |
+| Suite accounting | Guard-named source `1129c58ba8fa0566c5840cfe820292ae4e9e84f3`; **its own serial sweep was measured at that revision**: `workbench/tests` **2467 passed, 18 failed, 47 skipped = 2532 collected** (CPython 3.12.11, interpreter `workbench/envs/ctl312h/bin/python`, exit 1, 3483.79 s, one serial run; log at `20261108T225338+0700-sweep/full_suite_1129c58b.txt`). The 18 failures are itemised in "The serial sweep at `1129c58`" below and are not a pass. Historical: `c2d8cdeb` measured 2463/18/47 = 2528 (same 18 ids), `b0f38bd` 2186/33/47 = 2266, `61f70b0` 2203/0/47 = 2250. Those describe those revisions only. |
 | Build/Playwright/image evidence | A36 round: `workbench/frontend` rebuilt after the in-flight loading placeholder change and the existing DOM-only smoke `workbench/frontend/tests/ui_smoke.py` re-run green (exit 0, 21 DOM-verified assertions; in-flight assertions recorded the `…` placeholder card and the `loading registry…` row during the fetch, then `17 registered models` with 17 rows after it settled, with the error path still not masked). A34/A35 round, on `1415e56`: `workbench/frontend` `npm run build` passed (Vite+TS, ~234 ms); the DOM-only smoke against the served production build passed all flows (cold inventory 17 models with verbatim blocker rows, query/Top-K, filter+pagination 20/24, annotation persist, injected-failure recovery, comparison ranks [4,45], cohort save/reload, stale-response guard; mobile 390×844 no overflow), desktop + mobile, zero unexpected console/page errors — the single recorded failure is the flow's own injected `Failed to fetch`. Supplementary screenshot reads (real image interpretation, tall full-page captures re-read via 1000-px crops at native resolution) agree with the DOM evidence: titles, 10 nav tabs, 17 model rows with truthful per-model blockers, LIMN bundle/partial cards, TME GPU_VERIFICATION_PENDING, no new rendering defect found; two initial tall-shot reads were superseded by the crop pass (downscale made them illegible; one confabulated reading was discarded). Screenshots are labelled mock-fixture artifacts, not research evidence. |
-| TESTED_SOURCE_SHA | `c2d8cdeb0eabc3232b28070f55b5a10d63ccffcb` — latest production revision, and the revision the serial sweep was measured at: 2463 passed, 18 failed, 47 skipped = 2528 collected, exit 1. |
-| Previous tested source | `b0f38bd2bc15efbaf75228f04be8327c9843b45c` (the CIRCUS composition round): 2186 passed, 33 failed, 47 skipped = 2266 collected, exit 1, 2211.38 s; log at `20261108T015603+0700/tests/full_suite_b0f38bd.txt`. Retained as historical measurement. |
+| TESTED_SOURCE_SHA | `1129c58ba8fa0566c5840cfe820292ae4e9e84f3` — latest production revision, and the revision the serial sweep was measured at: 2467 passed, 18 failed, 47 skipped = 2532 collected, exit 1. |
+| Previous tested source | `c2d8cdeb0eabc3232b28070f55b5a10d63ccffcb` (throughput + LIMN scope + measurement identity + the docs round): 2463 passed, 18 failed, 47 skipped = 2528 collected, exit 1, 3464.03 s; log at `20261108T212500+0700-sweep/full_suite_c2d8cdeb.txt`. Same 18 ids as the current sweep. Retained as historical measurement. |
 | Earlier tested source | `1415e56919535627273b4afb3a7c400aee770475` (the A34/A35 round): 2157 collected, 2146 passed, 1 failed, 10 skipped for `workbench/tests`; 2216 collected, 2205 passed, 1 failed, 10 skipped including `tests/unit`. Retained as historical measurement. |
 | Earlier tested source | `e3f0dfaf34b62984db30eacffbac93417eccace0` (the A33 round): 2141 collected, 2129 passed, 2 failed, 10 skipped for `workbench/tests`; 2200 collected, 2188 passed, 2 failed, 10 skipped including `tests/unit`. Retained as historical measurement. |
 | Previous composition accounting | `4e0c07476f02b43e63355b6e067da460251c54e4` (the sm_120 round): 2080 collected, 2069 passed, 1 failed, 10 skipped for `workbench/tests`; 2139 collected, 2128 passed, 1 failed, 10 skipped including `tests/unit`. Retained as historical measurement. |
@@ -91,7 +91,29 @@ No target sm_120 GPU or complete per-model CUDA installation is claimed.
 
 Earlier R23/R25/composition measurements are historical and do not certify this runtime profile.
 
-## The serial sweep at `c2d8cdeb` (measured, 18 failures)
+## The serial sweep at `1129c58` (measured, 18 failures)
+
+Second serial run of the round. The first (`c2d8cdeb`) predates `224734b`, which changed three frontend
+production files and added `test_frontend_scoring_impl.py`; the release guard refused to let the recorded
+revision lag the tree, which is what it is for. One serial run, no `-n`, HEAD identical before and after
+(`1129c58ba8fa0566c5840cfe820292ae4e9e84f3`):
+
+```
+18 failed, 2467 passed, 47 skipped, 290 warnings in 3483.79s (0:58:03)
+pytest_exit=1
+```
+
+2467 + 18 + 47 = **2532 collected**. Log: `20261108T225338+0700-sweep/full_suite_1129c58b.txt`.
+
+**Delta against `c2d8cdeb`:** collected 2528 → 2532, passed 2463 → 2467, skipped 47 → 47, and **the
+failed set is byte-identical — the same 18 ids, none new, none fixed** (compared by id, not by count).
+The four added ids are `test_frontend_scoring_impl.py`'s four tests, all passing. So the attribution
+below is unchanged and no failure is new; what changed is only that the recorded revision now contains
+the code that produced these numbers.
+
+## The serial sweep at `c2d8cdeb` (historical, 18 failures)
+
+
 
 One run, no retries, on a tree whose production bytes were byte-identical to `HEAD` for the whole run
 (`git rev-parse HEAD` before and after: `c2d8cdeb0eabc3232b28070f55b5a10d63ccffcb`, unchanged):
@@ -413,8 +435,8 @@ static or fixture-level.
 ```bash
 git clone git@github.com:Le-Minh-Nhut/cir.git && cd cir
 git fetch origin research/cir-failure-workbench
-git checkout c2d8cde         # the TESTED_SOURCE_SHA above; never `git reset --hard`
-git rev-parse HEAD             # must print c2d8cdeb0eabc3232b28070f55b5a10d63ccffcb
+git checkout 1129c58         # the TESTED_SOURCE_SHA above; never `git reset --hard`
+git rev-parse HEAD             # must print 1129c58ba8fa0566c5840cfe820292ae4e9e84f3
 ./pc.sh                        # the one operator command
 ```
 
