@@ -69,11 +69,15 @@ BLAS, sweep test) được **đọc lại từ file raw**, không được đo l
 
 | đại lượng | giá trị | nguồn |
 |---|---|---|
-| `git rev-parse HEAD` | `992b25d254367eec919ea729b2d0df9c09343419` | chạy trong lượt này |
-| `git rev-parse origin/research/cir-failure-workbench` | `992b25d254367eec919ea729b2d0df9c09343419` | chạy trong lượt này |
+| `git rev-parse HEAD` | `992b25d254367eec919ea729b2d0df9c09343419` | chạy trong lượt này — **SHA của cây mà các số liệu được đọc ra**, không phải tip hiện tại |
+| `git rev-parse origin/research/cir-failure-workbench` | `992b25d254367eec919ea729b2d0df9c09343419` | chạy trong lượt này — như trên: cây mà số liệu mô tả, không phải tip hiện tại |
 | `git rev-parse origin/main` | `8ebcc74d5fd1934df4f3772a8ca5a96dbd00f333` | chạy trong lượt này |
-| `git status --short` | `?? workbench/docs/reviews/20261109-facts/` (thư mục do agent khác, không phải của lượt này) | chạy trong lượt này |
-| commit gần nhất | `992b25d` 2026-11-09 00:14:34 +0700 "Replace every unsourced throughput number with what the raw files actually say" | `git log` |
+| `git status --short` | tại thời điểm viết: `?? workbench/docs/reviews/20261109-facts/` — thư mục đó **đã được commit** sau đó ở `c1d99e4`, nên trạng thái hiện tại là sạch | chạy trong lượt này; cập nhật sau khi commit |
+| commit gần nhất | `992b25d` 2026-11-09 00:14:34 +0700 "Replace every unsourced throughput number with what the raw files actually say" | `git log` — commit cuối **của cây được đo**, không phải commit chứa báo cáo này |
+
+SHA trên là tip **tại thời điểm viết**; commit chứa chính báo cáo này nằm **sau** nó, nên nó không thể
+là tip hiện tại — một file được track không thể tự nêu commit chứa nó. **Nguồn chuẩn: `git rev-parse HEAD`**
+trên branch.
 
 Năm commit sau `1129c58` đều **chỉ chạm `workbench/docs/`**: `116c869`, `1191d26`, `f57fb0d`,
 `d0252bb`, `992b25d`. **quan sát được**:

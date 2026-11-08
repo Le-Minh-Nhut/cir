@@ -800,16 +800,23 @@ must never be quoted beside a model row.
 **Correct: A (11 is the measurement; the list is truncated).** The tuples are illustrative, not
 exhaustive. A report must say "11 queries changed rank" and never "11 examples listed".
 
-### C6. `EVIDENCE_INDEX.md` labels `vdecode.txt` as the source of `21.2 img/s`
+### C6. `EVIDENCE_INDEX.md:89` lists prose-only figures in a "proves" cell
 
 | | claim |
 |---|---|
-| **A** | `20261108T173736+0700/EVIDENCE_INDEX.md:96` — "`vdecode.txt` … serial 4.69 s (109.1 img/s) … " with the trailing column "the 21.2 img/s baseline" (i.e. implies it evidences 21.2) |
-| **B** | `vdecode.txt` itself — 4 lines, serial baseline `109.1 img/s`, no `21.2` anywhere |
+| **A** | `20261108T173736+0700/EVIDENCE_INDEX.md:89`, `THROUGHPUT.vi.md` row, **proves** column — "decode A/B **21.2 → 2089.2 img/s**; query-axis 1/2/4/8 → 4.8/8.7/15.7/27.4 q/s, **5.67×** at 8 threads" |
+| **B** | the table's own header at `:87` — `| file | proves | does not prove |`, and `vdecode.txt`'s row at `:96`, which puts "the 21.2 img/s baseline" in its **does-not-prove** column |
 
-**Correct: B.** `21.2` appears in zero raw files (§4g). The later `INPUT_PIPELINE_AND_INFERENCE_AUDIT.vi.md:1130`
-states this correctly; `EVIDENCE_INDEX.md` was not updated to match, so the two docs disagree with each
-other and only the audit is right.
+**Correct: B, and A is the defect.** A "proves" column may only list what the file evidences; the same
+page's `:96` already says `21.2` is not evidenced by any raw file. `21.2`, `2089.2`, `2192`, the `5.67×`
+multiplier and the `106.0/58.7/32.6/18.7 s` table each return **zero hits** across the 34 raw files in
+`20261108T-throughput/` (§4g). **Fixed 2026-11-09**: `:89`'s proves cell now reads "the write-up of this
+round's throughput work, with its own traceability caveats in §8.8", and the five figures moved to the
+does-not-prove cell.
+
+An earlier version of this entry accused `:96` of implying `vdecode.txt` evidences `21.2`. That was
+**wrong** — `:96` says the opposite, in the correct column. The error was mine; the real defect is one
+row up at `:89`.
 
 ### C7. `FINAL_PC_RELEASE_VERDICT.md` collected count vs its own sweep log
 
@@ -867,13 +874,13 @@ Recorded so no writer "resolves" a 4-test discrepancy that does not exist.
 | C3 | checkpoint staging | **21 of 29**, not 11 | high — 10 variants miscounted |
 | C4 | fixture query count | 8 (smoke limit), not 6003 | medium — quote-blocked |
 | C5 | changed-rank example count | 11 changed, 10 shown | low |
-| C6 | source of `21.2 img/s` | none; prose only | high — unsourced number |
+| C6 | `EVIDENCE_INDEX.md:89` proves-cell | prose-only figures moved to does-not-prove | high — unsourced number |
 | C7 | collected count provenance | header table, not pytest output | low |
 | C8 | LIMN R@10 denominator | 5884 of 6003, coverage 0.980176… | high — comparability |
 | C9 | duplicate checkpoint filename | both real; match on `model_id/filename` | medium — silent mismap |
 | C10 | 2528 vs 2532 collected | both right; +4 known ids, same 18 failures | low |
 
-**10 contradictions recorded.**
+**10 contradictions recorded (C6 corrected 2026-11-09: the accused line was `:89`, not `:96`).**
 
 ---
 

@@ -86,14 +86,14 @@ Key numbers to cite from `inventory.json` → `counts`:
 
 | file | proves | does not prove |
 |---|---|---|
-| `THROUGHPUT.vi.md` (24,272 B) | batch saturation at ~84 img/s from batch 32; bf16 no gain; transform 27 img/s at 20 threads vs 650 at 1 thread; decode A/B 21.2 → 2089.2 img/s; query-axis 1/2/4/8 → 4.8/8.7/15.7/27.4 q/s, 5.67× at 8 threads; `optimize=True` and GEMM chunk rejected on rank identity | see traceability caveats in the main doc §8 |
+| `THROUGHPUT.vi.md` (24,272 B) | the write-up of this round's throughput work, with its own traceability caveats in §8.8 | `21.2`, `2089.2`, `2192`, the `5.67×` query-axis figure and the `106.0/58.7/32.6/18.7 s` table — all prose-only; grep finds them in zero raw files. Authoritative raw evidence for decode is `vdecode.txt`; for the query-axis claim it is `d2_gate_full_6003x3.txt` (rank identity only, not throughput) |
 | `batch.txt` | 7 lines: 2000-image slice, fp32 17.6–18.0 img/s at bs 64–512, bf16 16.2–17.7; peak alloc 3484→9544 MiB | — |
 | `ein_threads.txt` | einsum timing grid at `OPENBLAS_THREADS` 1/2/4/8/10; `old` 4.89–5.76 s, `optimize=True` 0.94–1.45 s, `gemm_chunk4096` 0.32–1.03 s; maxdelta `3.576e-07` (and `2.384e-07`/`2.980e-07` at 10 threads) | — |
 | `eq_fast.txt` | 400-query slice: rank_mismatch 0 / 3 / 11 = 14 of 1200 | full cohort |
 | `eq_opt.txt` | 400-query slice, first two conditions only | — |
 | `metric_gate.json`, `metric_gate_gemm_vs_optimize.json`, `metric_gate_gemm_vs_optimize.txt`, `metric_decision_optimize_true.txt` | full 6,003×3 metric comparison; `accept: true`; exact r10/r50/ndcg/seconds per condition | — |
 | `query.txt` | query-stage timings, forward 81.0 q/s at b=32 and 79.1 at b=64 | the thread table |
-| `vdecode.txt` | 512 images: serial 4.69 s (109.1 img/s), 2/4/8 workers 4.6×/6.2×/5.4×, `bitwise_equal=True`, `maxabs_delta=0.0` | the 21.2 img/s baseline |
+| `vdecode.txt` | 512 images: serial 4.69 s (109.1 img/s), 2/4/8 workers 4.6×/6.2×/5.4×, `bitwise_equal=True`, `maxabs_delta=0.0`; **derived 682.7 img/s at 4 workers (512/0.75 s) — 4 workers is faster than 8 (588.5), so "8 is optimal" is not supported by this file** | the 21.2 img/s baseline |
 | `cohort_full.txt` | the cohort driver log for the `habit` attempt: `NO PROGRESS for 900s` repeatedly, `TIMEOUT after 7200s`, `END habit exit=-15`, `NO_CANDIDATE_FILES` | — |
 
 ---

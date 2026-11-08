@@ -190,8 +190,10 @@ that, used by a test which *needs* a configured interpreter, is now the cause of
 which was a five-file subset; and the sentence before it said 46, which was simply unmeasured.) All new
 ids pass.
 
-The honest summary: **33 → 18 failures sharing no ids, and the current 18 break down as 6 inside the
-range, 2 harness defects, 9 host state, 1 closed.** A smaller count is not evidence the delivered code
+The honest summary: **33 → 18 failures sharing no ids, and the current 18 break down as 8 inside the
+range, 9 host state, 1 closed, 0 pre-existing — #6/#7 are the two of those eight that are unsatisfiable
+by construction (the gate re-resolves via `setting()`, not `adapter.interpreter`, and the autouse fixture
+strips the env).** A smaller count is not evidence the delivered code
 improved — the test-isolation change removed 27 operator-state ids while the range's own production
 changes introduced 6 of the 18 that remain.
 
