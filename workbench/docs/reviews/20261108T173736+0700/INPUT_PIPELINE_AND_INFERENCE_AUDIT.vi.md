@@ -167,7 +167,7 @@ cách đọc đó.
 | **G3b** scoring, khác thứ tự cộng | `optimize=True`/GEMM có đổi rank? | **FAIL** | **207 / 18,009**; 0 vượt K=10; 0 vượt K=50; **19** cửa sổ Top-K đổi thứ tự |
 | **G4** axes | batch 1 vs 32, batch cuối, repeat, cold/warm | **PARTIAL** | **PASS**: repeat determinism (`exact_equal: true`, max 0.0) và batch 1 vs 32 trên **đường shipped** (0 mismatch). **FAIL trên GEMM fast path**: **6/6003** rank đổi ở batch 1 vs 32 (multimodal; `7:666`, `7:1988`, `7:2003`, `7:2142`, `7:2253`, `7:4730`) — chính là lý do path đó bị từ chối. **NOT_RUN**: cold vs warm cache, batch axis cho `text_only`/`image_only` (bị kill sau multimodal), cache disabled, và batch cuối không chia hết — đó là **lập luận cấu trúc**, không phải phép đo |
 | **G5** cache identity | cache có thể bị dùng lại dưới một phép tính khác? | **DEFECT, đã đóng một phần** — **không phải PASS** | verdict gốc: **7 input** vắng. Đã đóng: BLAS thread count (`blas_threads_pinned`) và `scoring_module_source_hash`. **Còn mở**: TF32/cuDNN flags, byte-level cache verification (sidecar chỉ kiểm fingerprint, **không bao giờ** kiểm bytes mảng), và **851** hàng feature gallery trùng (nhóm lớn nhất 54) làm tie hệ thống. Xem §7.7 |
-| **G6** throughput | nhanh hơn bao nhiêu, có đổi kết quả không? | **PARTIAL — một phần prose-only, không được trích như số đo** | **CÓ raw**: decode bão hoà theo batch (`batch.txt`), `OPENBLAS_NUM_THREADS` phẳng 1–10 ở 6.5/6.0/6.2/5.6/6.2 q/s (`ein_threads.txt`), decode song song tới 2192 img/s ở 8 worker (`vdecode.txt`), 512-query rank identity 0 mismatch (`query.txt`). **PROSE-ONLY, KHÔNG raw**: `21.2 img/s` baseline, `2089.2 img/s` after, và toàn bộ bảng wall/q/s của query-axis. Xem §8.8 |
+| **G6** throughput | nhanh hơn bao nhiêu, có đổi kết quả không? | **PARTIAL — không thể PASS cho bất kỳ variant nào** | **CÓ raw**: bão hoà theo batch (`batch.txt`: bs 64/128/256/512 = 17.6/18.0/17.9/18.0 img/s, phẳng); BLAS thread không giúp gì cho đường einsum (`ein_threads.txt`: 6.5/6.0/6.2/5.6/6.2 q/s ở 1/2/4/8/10); decode song song (`vdecode.txt`: 512 ảnh thật, **chỉ decode+transform**, serial 109.1 img/s → **682.7 img/s ở 4 worker** (6.2×), 502 ở 2, 588.5 ở 8 worker — 4 worker là tối ưu, 8 chậm hơn; `bitwise_equal=True` delta 0.0). **Không file raw nào chống lưng cho throughput cả pipeline**: `21.2` baseline và `2089.2` after chỉ có trong prose; `2192 img/s` **không xuất hiện trong bất kỳ file raw nào** và bảng prose của chính nó ngụ ý ~1024 ảnh mỗi dòng (một thí nghiệm khác với 512 ảnh của `vdecode.txt`); bảng wall/q/s theo trục query là prose-only. Xem §8.8 |
 | **G7** provenance công bố | artifact trong tree có tái lập được từ tree? | **cần xác minh** | **2** artifact mang nhãn "pre-generated artifact, not runnable from HEAD" (ENCODER, PTHA+MTST — blocker đã gỡ, **chưa re-run**); **4** model có số đã publish bị re-key bởi fix decode (encoder, limn, ptha_mtst, tme) ⇒ run id cũ không tái lập; 1 artifact PARTIAL (limn), 1 FAILED (habit), 2 smoke 8-query |
 
 Ma trận chi tiết theo từng biến thể: `GATE_MATRIX.md`.
@@ -981,14 +981,15 @@ transform only 512 (1 thread): 0.38s (~1350 img/s)
 Song song hoá decode (giữ nguyên thứ tự lô):
 
 | workers | wall | img/s |
+| workers | wall (s) | img/s |
 |---:|---:|---:|
-| 1 | 1.66s | 618 |
-| 2 | 1.31s | 780 |
-| 4 | 0.61s | 1672 |
-| 8 | 0.47s | 2192 |
-| 10 | 0.53s | 1915 |
+| 1 | 1.66 | 618 |
+| 2 | 1.31 | 780 |
+| 4 | 0.61 | 1672 |
+| 8 | 0.47 | 2192 |
+| 10 | 0.53 | 1915 |
 
-8 worker là điểm tốt nhất; 10 không hơn **và máy đang chia sẻ**. Mặc định `min(10, cpu_count // 2)`.
+> **Bảng này là PROSE-ONLY, KHÔNG có raw file — không được trích như số đo.** Nó cũng không tái lập được về mặt số học: `wall × img/s` ở mỗi dòng cho ~1015–1030 ảnh, tức **~1024 ảnh/dòng**, khác với `vdecode.txt` (512 ảnh, 109.1 img/s serial, tối ưu **682.7 img/s ở 4 worker**). Hai thứ là hai thí nghiệm khác nhau, và `2192` **không** phải điểm tốt nhất mà `vdecode.txt` đo được. Số có raw để trích: **682.7 img/s ở 4 worker**.
 
 A/B cuối, cùng 512 ảnh, cùng transform, cùng checkpoint, **chỉ decode+transform** (không forward):
 
@@ -1127,7 +1128,7 @@ và không được sửa.
 | con số | nằm ở đâu | vấn đề |
 |---|---|---|
 | `21.2 img/s` (BEFORE) | chỉ có trong prose `THROUGHPUT.vi.md` | **không có file raw**. `vdecode.txt` đo serial **109.1 img/s** (512 ảnh / 4.69s). Hai số chỉ tương thích nếu "21.2" là cấu hình 1 worker + torch **20 thread** còn "109.1" là cấu hình khác — nhưng không file nào ghi cấu hình của 109.1 |
-| `2089.2 img/s` (AFTER) | chỉ prose | `vdecode.txt` cao nhất là **2192 img/s ở 8 worker** (0.47s). Không có dòng 2089.2 |
+| `2089.2 img/s` (AFTER) | chỉ prose | **không có raw file**. `vdecode.txt` (512 ảnh, decode+transform) cho tối đa **682.7 img/s ở 4 worker**; không có dòng 2089.2 ở bất kỳ file nào. `2192 img/s` cũng không có raw — nó chỉ nằm trong bảng prose ~1024 ảnh/dòng ở trên |
 | bảng 4 thread (106.0 / 58.7 / 32.6 / 18.7 s) | chỉ prose | **không có file raw**, và `equivalence` audit nói thẳng là **nó không đo** `WORKBENCH_SCORE_THREADS` |
 | "27–43 q/s `optimize`, 70–75 q/s GEMM **dưới `OPENBLAS_NUM_THREADS=2`**" | prose | `ein_threads.txt` ở 2 thread ghi `optimize` **22.1** và `gemm` **56.2**. Hai số không khớp |
 | `seconds` trong `metric_gate*.json` (`opt` 66.5 s cho 6003 query multimodal) | JSON | 66.5 s cho 6,003 query = **~90 q/s**, trong khi `ein_threads` đo `optimize=True` ở 22–34 q/s. Một trong hai phép đo dùng cấu hình khác (khả năng cao: chunk/thread khác), nhưng **không file nào nói** |

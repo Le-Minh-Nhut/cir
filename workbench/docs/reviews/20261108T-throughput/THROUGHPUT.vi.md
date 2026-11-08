@@ -84,6 +84,13 @@ bù chi phí launch thread.
 
 Đo song song hoá decode (thread pool, giữ nguyên thứ tự lô):
 
+> **Bảng dưới đây là PROSE-ONLY — không có raw file, không được trích như số đo.** Kiểm lại bằng số học:
+> `wall × img/s` ở mỗi dòng cho ~1015–1030 ảnh, tức bảng này đo **~1024 ảnh/dòng**, trong khi bảng A/B
+> ngay dưới và `vdecode.txt` đo **512 ảnh**. Hai thứ là hai thí nghiệm khác nhau, và không file nào
+> trong tree sinh ra định dạng `workers/wall/img/s` này. Giữ lại chỉ để đối chiếu lịch sử.
+> **Số có raw để trích là `vdecode.txt`** (xem bảng A/B bên dưới): 512 ảnh thật, decode+transform,
+> serial 109.1 img/s → **682.7 img/s ở 4 worker** (6.2×), 588.5 ở 8 worker (5.4×), delta 0.0.
+
 | workers | wall | img/s | cpu_per_wall_min |
 |---|---|---|---|
 | 1  | 1.66s | 618 | 476s |
@@ -92,8 +99,9 @@ bù chi phí launch thread.
 | 8  | 0.47s | 2192 | 390s |
 | 10 | 0.53s | 1915 | 348s |
 
-8 worker là điểm tốt nhất; 10 không hơn (và máy đang chia sẻ với project khác). Mặc định chọn
-`min(10, cpu_count // 2)`.
+> **Không dùng bảng trên để chọn worker count.** Nó nói "8 worker là điểm tốt nhất", nhưng `vdecode.txt`
+> đo **4 worker nhanh hơn 8** (682.7 vs 588.5 img/s). Chọn mặc định `min(10, cpu_count // 2)` là quyết
+> định vận hành, không phải kết luận từ bảng prose này.
 
 ### A/B cuối cùng (cùng 512 ảnh, cùng transform, cùng checkpoint)
 

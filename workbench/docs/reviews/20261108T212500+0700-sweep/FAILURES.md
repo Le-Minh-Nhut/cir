@@ -198,8 +198,17 @@ changes introduced 6 of the 18 that remain.
 ## The G6 prose-only warning (downgraded, not archived)
 
 `INPUT_PIPELINE_AND_INFERENCE_AUDIT.vi.md` §8 reports a decode baseline/after pair (21.2 → 2089.2
-img/s) and the whole query-axis table as measurements. The raw files for those two numbers are **not**
-in the tree — the audit says so itself and points at `THROUGHPUT.vi.md`. They are therefore marked
-**prose-only, unverified** in §8.8 and in the G6 gate row, and the query-axis figure is retained only
-because `20261108T-throughput/query.txt` covers the 512-query rank identity that the table's last
-column asserts. No number in this document is used for a release claim.
+img/s) and the whole query-axis table as measurements. **None of it has a raw file** — verified by
+grepping every `.txt`/`.json` under `20261108T-throughput/`: `21.2`, `2089.2` and `2192` each appear in
+**zero** of them. They are therefore marked **prose-only, unverified** in §8.8 and in the G6 gate row.
+
+What G6 *can* cite, from raw files: `batch.txt` (17.6/18.0/17.9/18.0 img/s at bs 64/128/256/512 —
+saturated), `ein_threads.txt` (einsum flat at 6.5/6.0/6.2/5.6/6.2 q/s across 1/2/4/8/10 threads), and
+`vdecode.txt` (512 real images, decode+transform only: serial 109.1 img/s → **682.7 at 4 workers**,
+588.5 at 8, delta 0.0). **No raw file backs a full-pipeline throughput**, so G6 is PARTIAL for every
+variant.
+
+An earlier version of this paragraph claimed `query.txt` "covers the 512-query rank identity". It does
+not: `query.txt` contains stage timings and forward throughput only, with no rank data. The real
+full-coverage rank evidence is `d2_gate_full_6003x3.txt` (18,009/18,009 identical), which backs G3, not
+G6. No number in this document is used for a release claim.
