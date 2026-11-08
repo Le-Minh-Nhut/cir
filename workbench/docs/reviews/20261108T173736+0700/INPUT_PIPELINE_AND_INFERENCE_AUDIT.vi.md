@@ -167,7 +167,7 @@ cách đọc đó.
 | **G3b** scoring, khác thứ tự cộng | `optimize=True`/GEMM có đổi rank? | **FAIL** | **207 / 18,009**; 0 vượt K=10; 0 vượt K=50; **19** cửa sổ Top-K đổi thứ tự |
 | **G4** axes | batch 1 vs 32, batch cuối, repeat, cold/warm | **PARTIAL** | **PASS**: repeat determinism (`exact_equal: true`, max 0.0) và batch 1 vs 32 trên **đường shipped** (0 mismatch). **FAIL trên GEMM fast path**: **6/6003** rank đổi ở batch 1 vs 32 (multimodal; `7:666`, `7:1988`, `7:2003`, `7:2142`, `7:2253`, `7:4730`) — chính là lý do path đó bị từ chối. **NOT_RUN**: cold vs warm cache, batch axis cho `text_only`/`image_only` (bị kill sau multimodal), cache disabled, và batch cuối không chia hết — đó là **lập luận cấu trúc**, không phải phép đo |
 | **G5** cache identity | cache có thể bị dùng lại dưới một phép tính khác? | **DEFECT, đã đóng một phần** — **không phải PASS** | verdict gốc: **7 input** vắng. Đã đóng: BLAS thread count (`blas_threads_pinned`) và `scoring_module_source_hash`. **Còn mở**: TF32/cuDNN flags, byte-level cache verification (sidecar chỉ kiểm fingerprint, **không bao giờ** kiểm bytes mảng), và **851** hàng feature gallery trùng (nhóm lớn nhất 54) làm tie hệ thống. Xem §7.7 |
-| **G6** throughput | nhanh hơn bao nhiêu, có đổi kết quả không? | **đo được**, một phần chỉ có trong prose | decode 21.2 → 2089.2 img/s (decode-only, delta 0.0); end-to-end ~73 phút → ~15 phút ≈ **5×**; query-axis **5.67×**. ⚠️ hai con số decode baseline/after và cả bảng query-axis **chỉ có trong prose**, không có file raw — xem §8.8 |
+| **G6** throughput | nhanh hơn bao nhiêu, có đổi kết quả không? | **PARTIAL — một phần prose-only, không được trích như số đo** | **CÓ raw**: decode bão hoà theo batch (`batch.txt`), `OPENBLAS_NUM_THREADS` phẳng 1–10 ở 6.5/6.0/6.2/5.6/6.2 q/s (`ein_threads.txt`), decode song song tới 2192 img/s ở 8 worker (`vdecode.txt`), 512-query rank identity 0 mismatch (`query.txt`). **PROSE-ONLY, KHÔNG raw**: `21.2 img/s` baseline, `2089.2 img/s` after, và toàn bộ bảng wall/q/s của query-axis. Xem §8.8 |
 | **G7** provenance công bố | artifact trong tree có tái lập được từ tree? | **cần xác minh** | **2** artifact mang nhãn "pre-generated artifact, not runnable from HEAD" (ENCODER, PTHA+MTST — blocker đã gỡ, **chưa re-run**); **4** model có số đã publish bị re-key bởi fix decode (encoder, limn, ptha_mtst, tme) ⇒ run id cũ không tái lập; 1 artifact PARTIAL (limn), 1 FAILED (habit), 2 smoke 8-query |
 
 Ma trận chi tiết theo từng biến thể: `GATE_MATRIX.md`.
@@ -1029,6 +1029,13 @@ có vòng lặp lô để song song hoá). Bản thân `model_csmcir.py` **khôn
 
 Khác bản chất với `optimize=True`: mỗi query là một tích vô hướng **độc lập** trên cùng gallery, nên
 chạy nhiều query đồng thời **không thể** đổi thứ tự cộng dồn bên trong bất kỳ query nào.
+
+**⚠️ PROSE-ONLY, KHÔNG CÓ RAW FILE.** Bảng dưới đây **không** có file raw kèm theo — xem §8.8. Con số
+duy nhất trong bảng này có bằng chứng raw là **cột "rank identical"**, và nó đến từ
+`20261108T-throughput/query.txt` (512 query, 0 mismatch). Các cột `wall` / `q/s` / `speedup` chỉ tồn
+tại trong prose và **không được trích như số đo**. Phép đo authoritative cho `WORKBENCH_SCORE_THREADS`
+là `test_query_parallel_ranking_is_identical_to_serial`, nó khẳng định tính đồng nhất chứ không đo
+throughput.
 
 Đo trên chính đường production (`rank_in_query_chunks` trong `runner.py`), 512 query thật, so với
 **rank đã lưu của run thật**:
