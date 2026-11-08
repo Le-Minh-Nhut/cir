@@ -1,9 +1,23 @@
 # BÁO CÁO CUỐI — round 20261108T015603+0700
 
-> **CHƯA COMMIT, CHƯA PUSH.** Branch `research/cir-failure-workbench`, HEAD **`1716e81`**.
-> Toàn bộ công việc nằm trong working tree.
+> **ĐÃ COMMIT, ĐÃ PUSH.** Branch `research/cir-failure-workbench`, HEAD
+> **`b0f38bd2bc15efbaf75228f04be8327c9843b45c`** (`b0f38bd`), `HEAD == origin/research/cir-failure-workbench`,
+> working tree sạch. Commit subject: **`Publish CIRCUS composition results and make the web honest about them`**.
+> Range push: **`1716e81..b0f38bd`** (248 file, +89,129/−28).
 
-`git status --short` (chạy lại lúc viết file):
+Kiểm lại, output nguyên văn chạy lúc cập nhật báo cáo này:
+
+```
+$ git rev-parse HEAD
+b0f38bd2bc15efbaf75228f04be8327c9843b45c
+$ git rev-parse origin/research/cir-failure-workbench
+b0f38bd2bc15efbaf75228f04be8327c9843b45c
+$ git status --short
+            (rỗng — working tree sạch)
+```
+
+`git status --short` **trước khi commit** — chép lại nguyên văn từ bản báo cáo đầu, giữ để đối chiếu;
+mọi mục dưới đây giờ đã nằm trong `b0f38bd`:
 
 ```
  M workbench/backend/main.py
@@ -27,7 +41,9 @@
 
 **Xong:** dữ liệu CIRCUS pinned, 4/9 model có số thật đủ 3 subset, web composition + native chạy
 trên dữ liệu thật, browser QA 3 viewport, review độc lập 21/21 metric khớp.
-**Chưa xong:** 4 model bị gate chặn (F1), CSMCIR bị chặn (contract scorer), chưa commit.
+**Chưa xong:** 4 model bị gate chặn (F1), CSMCIR bị chặn (contract scorer).
+**Đã xong sau khi viết bản này:** commit + push `b0f38bd` (xem đầu file); frontend build `npm run build` exit 0.
+**Full test suite trên cây đã commit: CHƯA CHẠY xong** (bị dừng giữa đường) — xem §10.
 
 ---
 
@@ -69,6 +85,30 @@ curl -s http://127.0.0.1:5173/ | grep -o 'assets/index-[^"]*'
 
 Sửa frontend xong phải `npm run build --prefix workbench/frontend` rồi restart, nếu không
 `vite preview` vẫn phục vụ bundle cũ.
+
+**`dist/` KHÔNG nằm trong commit.** `workbench/frontend/dist/` bị gitignore (`.gitignore:95`), và lịch
+sử repo chưa từng track file nào trong đó: `git ls-tree -r --name-only b0f38bd -- workbench/frontend/dist`
+= **0 file**, `git log --all -- workbench/frontend/dist` = **0 commit**. Nên bundle đang phục vụ ở
+`127.0.0.1:5173` là **build artifact cục bộ**, dựng từ đúng source trong `b0f38bd` — không phải file
+commit nào. Riêng `node_modules/` cũng không track (0 file trong `b0f38bd`).
+
+Sau khi clone, thứ tự bắt buộc để dựng lại đúng bundle này:
+
+```bash
+cd /home/heheboiz/data/cir
+git checkout b0f38bd2bc15efbaf75228f04be8327c9843b45c
+npm install --prefix workbench/frontend              # tạo node_modules (không track)
+npm run build --prefix workbench/frontend            # tạo dist/ (không track)
+WORKBENCH_CIRCUS_RELEASE_ROOT=/home/heheboiz/data/cir/workbench/artifacts/circus_release \
+workbench/envs/ctl312h/bin/python workbench/scripts/serve_workbench.py \
+  --production-frontend --host 127.0.0.1 --backend-port 8000 --frontend-port 5173
+```
+
+`serve_workbench.py` **không tự build**: thiếu `dist/` nó báo
+`production frontend missing: .../dist (run npm run build yourself)` (`serve_workbench.py:76-77`).
+Kiểm lại trên stack đang chạy: `npm run build` cho đúng
+`index-CsxrZyq6.js` + `index-uzz8fv-H.css`, `curl` hai URL đều trả hai tên đó, frontend **200**,
+`/api/benchmark-runs` **200**.
 
 ---
 
@@ -383,9 +423,23 @@ lại GPU).
 
 ## 9. Evidence — cách kiểm lại
 
-`workbench/docs/reviews/20261108T015603+0700/` — **212 file, 44,114,992 B ≈ 44.1 MB** (toàn bundle,
-trừ chính file index). `composition/` chỉ là **18 file, 2,439,933 B**: phần `summary/` + `ranks/` +
-PNG QA, tức lớp bằng chứng composition.
+`workbench/docs/reviews/20261108T015603+0700/` — **213 file trong commit `b0f38bd`**
+(`git ls-tree -r --name-only b0f38bd -- workbench/docs/reviews/20261108T015603+0700 | wc -l` = 213);
+trong đó **212 file dữ liệu, 44,124,018 B ≈ 44.1 MB** (toàn bundle trừ chính file index).
+`composition/` chỉ là **18 file, 2,439,933 B**: phần `summary/` + `ranks/` + PNG QA, tức lớp bằng
+chứng composition.
+
+**Bundle đã nằm trong commit** — đây là thay đổi lớn so với bản trước: 213 file dưới thư mục này là
+file **tracked** của `b0f38bd`, không còn là untracked. `EVIDENCE_INDEX.json` **ở gốc bundle** index
+**212 entry** (mọi file trừ chính nó), `dest` relative với gốc bundle.
+
+`workbench/artifacts/**` thì **vẫn gitignored và cố ý không commit**: `.gitignore:85`
+(`workbench/artifacts/**`) chỉ mở lại hai marker `.gitkeep`
+(`artifacts/checkpoints/.gitkeep`, `artifacts/results/.gitkeep`) — đó là **2 file duy nhất** khớp
+`artifacts/` trong `b0f38bd` (`git ls-tree -r --name-only b0f38bd | grep 'artifacts/'`). Nhờ vậy các
+con số ở §1/§2 **tái dựng được từ chính repo**: bản copy `composition/` + rank JSON đã commit là đủ
+nguồn, không cần artifact root. Thiếu chúng thì mọi claim về R@10/R@50/nDCG/FAILED chỉ kiểm được trên
+máy đã có `workbench/artifacts/`.
 
 `EVIDENCE_INDEX.json` **ở gốc bundle** (một index duy nhất, `dest` relative với gốc bundle) có
 **212 entry: 186 PNG, 19 JSON, 5 MD, 2 PY**, tôi verify lại **212/212 hash khớp**.
@@ -425,8 +479,8 @@ sha256sum composition/summary/encoder_fashioniq_6a528e877c328772e2c7bb28/full.js
 (`composition/ranks/ad477312aa57c1b9114f9e51/tme_fashioniq_0.json`, 378,976 B, sha256 `2aa9f699…426d`) và
 **PTHA** (`composition/ranks/315dd590eeb03d2c78d7937a/ptha_mtst_cirr_transfer.json`, 385,302 B, sha256
 `eee6b94f…c443`) đã có trong bundle. Lớp `composition/` giờ **18 file** (11 dữ liệu + 7 PNG), tổng
-**2,439,933 B ≈ 2.4 MB**; toàn bundle (thêm `browser_qa/` 176 file, `live/` 8, `native/` 6, 4 file MD
-gốc) là **212 file, 44,114,992 B ≈ 44.1 MB**, **212/212 hash khớp**, và hai file mới
+**44,124,018 B ≈ 2.4 MB**; toàn bundle (thêm `browser_qa/` 176 file, `live/` 8, `native/` 6, 4 file MD
+gốc) là **212 file, 44,124,018 B ≈ 44.1 MB**, **212/212 hash khớp**, và hai file mới
 khớp byte-for-byte với nguồn trong `workbench/artifacts/composition/runs/`. Người đọc không cần đọc
 thẳng từ `workbench/artifacts/` nữa.
 
@@ -489,8 +543,8 @@ python3 -c "import json;d=json.load(open('composition_dom_check.json'));print(le
 | **Web native** | **PASS** | 2 CSMCIR certified, badge data-driven (chứng minh bằng intercept) |
 | **Browser QA** | **PASS** | re-run trên stack live: `live/browser_qa.json` `ok: true`, 1440x900 + 390x844 đều `pass: true`, nodes 111, **overflow 0**, console/page/req/HTTP≥400 đều **0**; DOM check 16/16; sticky `partially_occluded: []` tại 4 vị trí scroll × 2 viewport. **Còn nợ:** harness đầy đủ 15 flow `flows.py` chưa chạy lại từ sau fix sticky |
 | **Independent review** | **PASS** | 21/21 metric + 18/18 bin, abs diff 0.0 |
-| **Test suite** | **PASS** | `test_composition_api.py` + `test_csmcir_aggregate_api_parity.py` = **15 passed**; `test_circus_resume_stable.py` = **9 passed**; `-k csmcir` = 41 passed. Ba test mới: `test_failed_run_exposes_is_failed_flag`, `test_failure_message_never_shows_python_none_sentinel`, `test_unresolved_category_reason_is_readable` |
-| **Commit/push** | **NOT DONE** | HEAD vẫn `1716e81`, 8 modified + 9 untracked |
+| **Test suite** | **CHƯA CHẠY FULL SUITE trên cây đã commit** | Đã có (đo ở round trước, **không** phải lượt chạy này): `test_composition_api.py` + `test_csmcir_aggregate_api_parity.py` = **15 passed**; `test_circus_resume_stable.py` = **9 passed**. Lượt chạy full suite trên `b0f38bd` đã bị **dừng giữa đường theo yêu cầu** (log dừng ở 50%, đã gặp `F` trước khi dừng) — **không** có kết quả full suite để báo, và **không** được đọc là PASS. Frontend build trên cây đã commit: `npm run build --prefix workbench/frontend` exit 0, `tsc -b && vite build`, 24 module, ✓ built in 149 ms (xem §0) |
+| **Commit/push** | **PASS** | commit `b0f38bd2bc15efbaf75228f04be8327c9843b45c` (`Publish CIRCUS composition results and make the web honest about them`), push range `1716e81..b0f38bd`; `git rev-parse HEAD` = `git rev-parse origin/research/cir-failure-workbench` = `b0f38bd2bc15efbaf75228f04be8327c9843b45c`, `git status --short` rỗng. Bundle evidence 213 file đã track |
 
 ### Defect tìm thấy khi sửa test — đã fix: FAILED run được xếp như measurement
 
@@ -552,23 +606,21 @@ trước** khi sửa: **CHƯA XÁC MINH** — không có ảnh/DOM snapshot nào
 
 ## 11. Việc tiếp theo, xếp theo giá trị
 
-**Trạng thái hiện tại: chưa commit gì trong round này — cố ý, không phải bỏ sót.** Bạn yêu cầu báo
-cáo, không yêu cầu commit; vì vậy toàn bộ change set vẫn nằm nguyên trong working tree để review
-được (`git status` vẫn là 8 modified + 9 untracked). Việc commit là hành động đề xuất ở mục 1, chưa
-phải việc đã làm — nên §10 ghi `Commit/push: NOT DONE` là đúng.
+**Trạng thái hiện tại: đã commit và push** — commit `b0f38bd2bc15efbaf75228f04be8327c9843b45c`
+(`Publish CIRCUS composition results and make the web honest about them`), `HEAD ==
+origin/research/cir-failure-workbench`, working tree sạch. "Commit + push" **đã xong** nên đã bị bỏ
+khỏi danh sách dưới đây; các mục được đánh số lại.
 
-1. **Commit + push ngay.** Đây là rủi ro lớn nhất hiện tại: 8 file sửa + toàn bộ bundle review
-   chưa được bảo vệ. Một `git checkout` nhầm là mất hết.
-2. **Provision Python 3.9 prefix** → mở khoá habit/intent/hint/conesep (4 model, ~1–2 h setup +
+1. **Provision Python 3.9 prefix** → mở khoá habit/intent/hint/conesep (4 model, ~1–2 h setup +
    ~40 phút/model GPU).
-3. **Quyết gap `variant_provenance`** — patch runner ghi `sm_120`, hay chỉ ghi trong docs.
-4. **Re-run harness đầy đủ 15 flow `flows.py`** — phần targeted trên stack live đã xong
+2. **Quyết gap `variant_provenance`** — patch runner ghi `sm_120`, hay chỉ ghi trong docs.
+3. **Re-run harness đầy đủ 15 flow `flows.py`** — phần targeted trên stack live đã xong
    (`browser_qa.py` + DOM check + sticky đo riêng), nhưng bộ 15 flow chưa chạy lại từ sau fix sticky.
-5. **Viết lại 357 chuỗi `query_failures` legacy đã persist** trong
+4. **Viết lại 357 chuỗi `query_failures` legacy đã persist** trong
    `runs/limn_base_iter0_all_categories_10173dc4…/ranks/*.json` nếu cần artifact sạch byte-for-byte.
    Hiện chúng chỉ được chuẩn hoá **lúc đọc** (`readable_failure_message`), file trên đĩa vẫn còn
    `category None`.
-6. **Sau đó** mới tới F1/F7 code fixes như defect thật.
+5. **Sau đó** mới tới F1/F7 code fixes như defect thật.
 
 ---
 
@@ -588,7 +640,11 @@ phải việc đã làm — nên §10 ghi `Commit/push: NOT DONE` là đúng.
 | §6 test | `pytest` chạy lại trong session này |
 | §7 QA | `browser_qa/flows.json` + `screens/` |
 | §8 review | `REVIEW_ENCODER.md` |
-| §9 evidence | `EVIDENCE_INDEX.json` (gốc bundle), verify 212/212 |
+| §9 evidence | `EVIDENCE_INDEX.json` (gốc bundle), verify 212/212; `git ls-tree -r --name-only b0f38bd` = 213 file dưới bundle, 2 file `.gitkeep` dưới `artifacts/` |
+| §10 test suite | **CHƯA CHẠY** full suite trên `b0f38bd` (lượt chạy bị dừng ở 50%); số 15/9 passed là từ round trước |
+| §10 frontend build | `npm run build --prefix workbench/frontend` (`tsc -b && vite build`) |
+| §10 commit/push | `git rev-parse HEAD`, `git rev-parse origin/research/cir-failure-workbench`, `git status --short` |
+| §0 gitignore `dist/` | `.gitignore:95`, `git ls-tree -r --name-only b0f38bd -- workbench/frontend/dist` = 0, `git log --all -- workbench/frontend/dist` = 0 |
 | §0 URL/build | `curl -s http://127.0.0.1:5173/` vs `workbench/frontend/dist/index.html` |
 | §7 QA live | `live/browser_qa.json`, `live/composition_dom_check.json`, `live/*.png` |
 | §10 defect (a) | `CompositionView.tsx:220`, `backend/composition.py:138`, `metrics.py:162` |
