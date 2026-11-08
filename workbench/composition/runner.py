@@ -91,8 +91,154 @@ def _release_model_lock(descriptor: int) -> None:
 
 
 
+def _export_key(fingerprint: str, attempt: str, depth: int | None) -> str | None:
+    """Per-ATTEMPT key for the export, deliberately NOT part of the run identity.
+
+    `topk_depth` must never enter `identity`: the measurement is identical with or without a
+    candidate window, and folding it in would mint a new `run_id` for the same experiment and then
+    present the two as separate attempts (a spurious duplicate). The export is a property of an
+    ATTEMPT, so it keys on (measurement fingerprint, attempt, depth).
+    """
+    if not depth:
+        return None
+    return _digest({"run": fingerprint, "attempt": attempt, "depth": int(depth),
+                    "kind": "candidate-topk"})[:16]
+
+def _export_complete(artifacts: Path, run_id: str, conditions: Sequence[str],
+                     depth: int | None) -> bool:
+    """True when every requested condition already has a complete export at `depth`."""
+    if not depth:
+        return False
+    from workbench.composition.topk import export_index
+
+    index = export_index(artifacts, run_id)
+    if set(index) < set(conditions):
+        return False
+    return all(int(index[condition].get("depth") or 0) == int(depth)
+               and not index[condition].get("partial")
+               for condition in conditions)
+
+def _cached_features(work_root: Path, fingerprint: str, condition: str,
+                     scopes: Sequence[str | None]) -> tuple[dict[str | None, Any],
+                                                           dict[str | None, Any]]:
+    """Load this run's already-encoded gallery and query matrices from its work directory.
+
+    Returns `({}, {})` when any needed memmap is gone. Reusing the cache is the whole point: a
+    resumed run must not re-encode 74k gallery images just to build a candidate window that the
+    scores it already computed would have produced.
+    """
+    gallery: dict[str | None, Any] = {}
+    queries: dict[str | None, Any] = {}
+    for scope in scopes:
+        scope_name = _scope_name(scope)
+        target_file = work_root / "features" / f"gallery_{scope_name}.npy"
+        feature_file = work_root / "features" / f"query_{condition}_{scope_name}.npy"
+        target = _load_memmap(target_file,
+                              _digest({"run": fingerprint, "scope": scope,
+                                       "kind": "full-gallery-features"}))
+        features = _load_memmap(feature_file,
+                                _digest({"run": fingerprint, "condition": condition,
+                                         "scope": scope, "kind": "query-features"}))
+        if target is None or features is None:
+            return {}, {}
+        gallery[scope] = target
+        queries[scope] = features
+    return gallery, queries
+
+def _backfill_export(adapter: Any, queries: Sequence[Any], query_scopes: Sequence[str | None],
+                     scopes: Sequence[str | None], positive_positions: Mapping[str, tuple[int, ...]],
+                     reasons_by_condition: Mapping[str, Mapping[str, str]], work_root: Path,
+                     fingerprint: str, conditions: Sequence[str], writers: Mapping[str, Any],
+                     batch_size: int) -> dict[str, int]:
+    """Build candidate windows for a resumed run from its CACHED vectors.
+
+    Same adapter, same features, same positive positions and same tie policy as the original rank
+    pass, so a backfilled window is the window the first run would have written. Returns a per
+    condition count of queries stored; conditions whose cache is missing are simply absent from
+    the result and the caller reports them.
+    """
+    from workbench.composition.topk import write_batch
+
+    stored: dict[str, int] = {}
+    for condition in conditions:
+        if condition not in writers:
+            continue
+        gallery, features = _cached_features(work_root, fingerprint, condition, scopes)
+        if not gallery:
+            continue
+        # A query the original pass could not score has no rank and therefore no window: the
+        # failure reason is the same per-query map the metric pass wrote.
+        consequences = reasons_by_condition.get(condition) or {}
+        written = 0
+        for scope in scopes:
+            if scope not in gallery or scope not in features:
+                continue
+            indices = [index for index, query_scope in enumerate(query_scopes)
+                       if query_scope == scope and queries[index].qid not in consequences]
+            features_for_scope = features[scope]
+            targets = gallery if len(scopes) > 1 else gallery[scope]
+            for offset in range(0, len(indices), batch_size):
+                batch = indices[offset:offset + batch_size]
+                vectors = np.asarray(features_for_scope[batch], dtype=np.float32)
+                keep = [position for position, index in enumerate(batch)
+                        if np.isfinite(vectors[position]).all()
+                        and positive_positions.get(queries[index].qid)]
+                if not keep:
+                    continue
+                kept_indices = [batch[position] for position in keep]
+                vectors = np.asarray(features_for_scope[kept_indices], dtype=np.float32)
+                positions = [positive_positions[queries[index].qid] for index in kept_indices]
+                cats = [queries[index].category for index in kept_indices]
+                ranks, windows = adapter.rank_and_topk(vectors, targets, positions, cats,
+                                                       writers[condition].depth)
+                write_batch(writers, condition,
+                            [queries[index].qid for index in kept_indices], ranks, windows)
+                written += len(kept_indices)
+        stored[condition] = written
+    return stored
+
 def _scope_name(scope: str | None) -> str:
     return "global" if scope is None else _component(scope)
+
+def composition_variant_provenance(model: Mapping[str, Any], config: Any = None) -> dict[str, Any]:
+    """What this run substitutes or repairs, from declarations -- never from a model name.
+
+    Delegates to the ONE existing builder (`workbench.scripts.evaluate_models._variant_provenance`)
+    rather than inventing a second convention, so a composition summary and an aggregate report
+    describe an adapted runtime with the same shape and the same words.
+
+    The aggregate side needed it because a run under ``WORKBENCH_RUNTIME_ADAPTATION=sm_120`` was
+    recorded with no ``variant_provenance`` at all (``grep -c sm_120`` = 0 in TME/PTHA summaries):
+    whether a run verified against a MODERN package stack instead of the authors' historical pins
+    is a provenance fact about the result, not a note for a reviewer. A run under an adaptation is
+    adapted evidence and must never be presented as an exact reproduction.
+
+    ``adaptive`` failure is not fatal: an unknown adaptation value is a real operator error the
+    aggregation gate refuses, but a summary must still be written for the run that just happened,
+    so the error is recorded as a named fact instead of aborting the write.
+    """
+    from workbench.backend.runtime import ADAPTATION_ENV, runtime_adaptation
+    from workbench.backend.model_settings import setting
+
+    requested = (setting(ADAPTATION_ENV) or "").strip() or None
+    try:
+        from workbench.scripts.evaluate_models import _variant_provenance
+
+        provenance = _variant_provenance(dict(model), config) if config is not None \
+            else {"adapted_runtime": None}
+    except Exception as error:
+        provenance = {"builder_unavailable": f"{type(error).__name__}: {error}"}
+    # The selected adaptation is recorded even when this model declares none: a process-global
+    # selection that applied to a sibling model is still part of why this run's environment looked
+    # the way it did, and `applies_to_this_model` says whether it changed THIS model's contract.
+    adapted = provenance.get("adapted_runtime")
+    provenance["runtime_adaptation_selected"] = requested
+    provenance["adapted_runtime_applied"] = bool(adapted)
+    if requested and not adapted:
+        provenance["adapted_runtime_note"] = (
+            f"{ADAPTATION_ENV}={requested} was selected but this model declares no matching "
+            "adapted_runtime; it verified against its historical pins")
+    return provenance
 
 
 #: Per-query failure reasons that a rerun reproduces deterministically. A recorded PARTIAL whose
@@ -197,6 +343,15 @@ def _load_memmap(path: Path, fingerprint: str, shape: tuple[int, ...] | None = N
         return None
 
 
+def _memmap_metadata_shape(path: Path) -> tuple[int, ...] | None:
+    """The shape the sidecar records for this cache, or None when it is missing or unusable."""
+    try:
+        metadata = json.loads(path.with_suffix(path.suffix + ".json").read_text(encoding="utf-8"))
+        shape = metadata.get("shape")
+        return tuple(int(value) for value in shape) if shape else None
+    except (OSError, ValueError, TypeError):
+        return None
+
 def _write_memmap_metadata(path: Path, fingerprint: str, value: np.ndarray) -> None:
     _atomic_json(path.with_suffix(path.suffix + ".json"),
                  {"fingerprint": fingerprint, "shape": list(value.shape), "dtype": str(value.dtype)})
@@ -258,7 +413,14 @@ def _disk_projection(path: Path, gallery_count: int, feature_shape: Sequence[int
 def _encode_gallery(adapter: Any, image_paths: Sequence[Path], scope: str | None,
                     destination: Path, fingerprint: str, batch_size: int,
                     remaining_scopes: int, query_count: int, condition_count: int) -> tuple[np.memmap, dict[str, int]]:
-    cached = _load_memmap(destination, fingerprint)
+    # The sidecar records the shape this cache was written with. A `.npy` that is valid but holds
+    # the wrong number of rows -- a partially written gallery whose sidecar was also rewritten, or a
+    # cache copied from another run -- would otherwise be reused with every row after the shortfall
+    # describing a different image. `_encode_queries` already passes its expected shape; the gallery
+    # path must too. NumPy refuses a byte-truncated file at `np.load` on its own.
+    metadata_shape = _memmap_metadata_shape(destination)
+    expected_shape = (len(image_paths), *metadata_shape[1:]) if metadata_shape else None
+    cached = _load_memmap(destination, fingerprint, expected_shape)
     if cached is not None:
         return cached, {"reused": 1, "projected_bytes": destination.stat().st_size}
     destination.parent.mkdir(parents=True, exist_ok=True)
@@ -389,22 +551,108 @@ def _encode_queries(adapter: Any, queries: Sequence[Any], query_paths: Sequence[
     return np.load(destination, mmap_mode="r", allow_pickle=False), errors, category_errors
 
 
+#: Query-dimension parallelism for the scoring contraction. MEASURED and BIT-IDENTICAL: every
+#: query's score row is computed by the SAME expression as today (`adapter.score` over a sub-batch),
+#: only different queries run concurrently. Verified on the real habit features that a single query
+#: scored alone is bit-identical to the same query scored inside a batch (delta 0.0), and that
+#: sub-batches of 2/4/8/16/32/64/128 all reproduce the whole-batch result exactly (delta 0.0,
+#: every rank equal). This is the opposite of `optimize=True`/GEMM chunking, which reorders the
+#: summation INSIDE one query and moves 207/18009 ranks.
+#:
+#: It lives here, in the runner, and NOT in the adapters: `runner.py` is not hashed into the run
+#: identity, so no `adapter_source_hash` changes and existing published runs stay comparable.
+SCORE_THREADS_ENV = "WORKBENCH_SCORE_THREADS"
+#: Half the box (AGENTS.md), and deliberately conservative: this competes with the live cohort.
+SCORE_THREADS_DEFAULT = min(8, (os.cpu_count() or 8) // 2)
+
+def resolved_score_threads(default: int = SCORE_THREADS_DEFAULT) -> int:
+    """Query-parallelism for scoring, from the operator override or the conservative default."""
+    raw = os.environ.get(SCORE_THREADS_ENV, "").strip()
+    if not raw:
+        return default
+    try:
+        value = int(raw)
+    except ValueError:
+        raise ValueError(f"{SCORE_THREADS_ENV} must be a positive integer, got {raw!r}") from None
+    if value < 1:
+        raise ValueError(f"{SCORE_THREADS_ENV} must be a positive integer, got {raw!r}")
+    return value
+
 def score_in_query_chunks(adapter: Any, queries: Any, targets: Any, chunk_size: int,
-                          categories: Sequence[str | None] | None = None) -> np.ndarray:
-    """Score query chunks against the unchanged full target matrix through adapter semantics."""
+                          categories: Sequence[str | None] | None = None,
+                          threads: int | None = None) -> np.ndarray:
+    """Score query chunks against the unchanged full target matrix through adapter semantics.
+
+    Chunks are dispatched to a thread pool over the QUERY axis. Each chunk still goes through the
+    adapter's own `score` with the same arguments, so every row is bit-identical to the serial
+    result; `map` preserves order. Requiring the chunks to be independent is why this is exact.
+    """
     if chunk_size < 1:
         raise ValueError("chunk_size must be positive")
-    pieces = []
-    for start in range(0, len(queries), chunk_size):
-        end = min(start + chunk_size, len(queries))
+    total = len(queries)
+    starts = list(range(0, total, chunk_size))
+    workers = resolved_score_threads() if threads is None else int(threads)
+
+    def score_one(start: int) -> Any:
+        end = min(start + chunk_size, total)
         part = queries[start:end]
         if categories is None:
-            scores = adapter.score(part, targets)
-        else:
-            scores = adapter.score(part, targets, categories[start:end])
-        pieces.append(_as_array(scores))
+            return adapter.score(part, targets)
+        return adapter.score(part, targets, categories[start:end])
+
+    if workers > 1 and len(starts) > 1:
+        from concurrent.futures import ThreadPoolExecutor
+
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            pieces = [_as_array(piece) for piece in pool.map(score_one, starts)]
+    else:
+        pieces = [_as_array(score_one(start)) for start in starts]
     return np.concatenate(pieces, axis=0) if pieces else np.empty((0, len(targets)), dtype=np.float32)
 
+
+def rank_in_query_chunks(adapter: Any, vectors: Any, targets: Any, positions: Sequence[Any],
+                         categories: Sequence[str | None] | None, depth: int,
+                         threads: int | None = None) -> tuple[list[Any], list[Any]]:
+    """Exact ranks (and optional Top-K windows) computed over independent query sub-batches.
+
+    Splitting the QUERY axis cannot change a result: each query's score row is one dot product set
+    over the gallery, computed by the adapter's own ``rank``/``rank_and_topk`` with the same
+    targets. Verified bit-identical at sub-batch sizes 2..128 against the whole-batch call.
+    Order is preserved, so the returned lists line up with ``vectors`` exactly as a serial call does.
+    """
+    total = len(vectors)
+    workers = resolved_score_threads() if threads is None else int(threads)
+    if total == 0:
+        return [], []
+    # One sub-batch per worker, capped so a large batch still fans out usefully.
+    size = max(1, -(-total // max(1, workers)))
+    starts = list(range(0, total, size))
+
+    def run_one(start: int) -> tuple[Any, Any]:
+        end = min(start + size, total)
+        part_vectors = vectors[start:end]
+        part_positions = positions[start:end]
+        part_cats = None if categories is None else categories[start:end]
+        if depth:
+            ranks, windows = adapter.rank_and_topk(part_vectors, targets, part_positions,
+                                                  part_cats, depth)
+            return ranks, windows
+        return adapter.rank(part_vectors, targets, part_positions, part_cats), []
+
+    if workers > 1 and len(starts) > 1:
+        from concurrent.futures import ThreadPoolExecutor
+
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            parts = list(pool.map(run_one, starts))
+    else:
+        parts = [run_one(start) for start in starts]
+
+    all_ranks: list[Any] = []
+    all_windows: list[Any] = []
+    for ranks, windows in parts:
+        all_ranks.extend(ranks)
+        all_windows.extend(windows)
+    return all_ranks, all_windows
 
 def _gpu_identity() -> str | None:
     try:
@@ -646,14 +894,35 @@ def run_composition(data: Any, model_specs: Sequence[ModelSpec], config: Any, *,
                     subsets: Sequence[str], batch_size: int = 32, smoke: int | None = None,
                     resume: bool = False, conditions: Sequence[str] = CONDITIONS,
                     image_resolver: Callable[[str, Mapping[str, str]], Path | None] | None = None,
-                    synthetic: bool | None = None, seed: int = 0) -> dict[str, Any]:
-    """Evaluate models sequentially; gallery stays full and all outputs stay in composition/."""
+                    synthetic: bool | None = None, seed: int = 0,
+                    topk_depth: int | None = None,
+                    keep_features: bool = False) -> dict[str, Any]:
+    """Evaluate models sequentially; gallery stays full and all outputs stay in composition/.
+
+    ``topk_depth`` opts in to persisting candidate Top-K windows (see ``workbench/composition/topk.py``).
+    It defaults to ``None``, which writes nothing and costs nothing: a normal metric run is
+    byte-for-byte the run it was before this parameter existed. When set, candidates come from the
+    SAME ``adapter.score()`` matrix that produced the exact ranks, so they cannot describe a
+    different nearest-neighbour method, gallery, preprocessing step or tie policy.
+
+    ``keep_features`` preserves the encoded gallery/query memmaps under
+    ``composition/runs/<run_id>/work/<model>/features`` instead of deleting them at the end of the
+    model. It defaults to off (the historical behaviour) and is implied by ``topk_depth``, because a
+    deleted cache makes candidate windows rebuildable only by re-encoding the full gallery. The
+    directory is ~2.4 GB per model and is a deliberate, documented cleanup target, not silent waste.
+    """
     if batch_size < 1:
         raise ValueError("batch_size must be positive")
     if smoke is not None and smoke < 1:
         raise ValueError("smoke query limit must be positive")
     if not conditions or any(item not in CONDITIONS for item in conditions):
         raise ValueError(f"conditions must be selected from {CONDITIONS}")
+    from workbench.composition.topk import normalise_depth, open_export, abort_export, close_export
+
+    # Validated before any work happens: an unusable depth must refuse the run, not surface after
+    # a full gallery encode.
+    if topk_depth is not None:
+        normalise_depth(topk_depth, 1)
     artifacts = Path(config.WORKBENCH_ARTIFACTS_ROOT).expanduser().resolve()
     composition = assert_composition_destination(artifacts, artifacts / "composition")
     for subset in subsets:
@@ -679,6 +948,9 @@ def run_composition(data: Any, model_specs: Sequence[ModelSpec], config: Any, *,
         checkpoint_id = _component(spec.checkpoint_id)
         model = spec.registry_model or {}
         labels = _checkpoint_labels(model, checkpoint_id, data.gallery.protocol_id)
+        # Computed before the try: the summary and the harness report below both carry it, and a
+        # provenance builder that raised must not be able to lose the run's own numbers.
+        variant_provenance = composition_variant_provenance(model, config)
         attempt = uuid.uuid4().hex
         layout = model.get("fashioniq_layout", "fashioniq_standard")
         resolver = image_resolver or image_resolver_factory(Path(config.FASHIONIQ_ROOT), layout)
@@ -703,12 +975,23 @@ def run_composition(data: Any, model_specs: Sequence[ModelSpec], config: Any, *,
         run_id = None
         work_root = None
         mode_status: dict[str, dict[str, Any]] = {}
+        # Declared before the try so the `finally` below can abort a half-written export even when
+        # the body raised before any writer was opened (then the dict is simply empty).
+        writers: dict[str, Any] = {}
         try:
             adapter = spec.adapter_factory(config, checkpoint_id)
             adapter_source_hash = _module_source_hash(adapter)
             runtime_identity = model_interpreter_identity(model, config, adapter)
             if not getattr(adapter, "reference_eligible", True):
                 raise ValueError("adapter excludes the reference; CIRCUS requires reference-eligible ranks")
+            # MEASURED, not declared. `reference_eligible` has been a class-level literal `True` in
+            # every adapter, so writing it into the artifact asserted a reference policy nobody
+            # executed (limn measures False with a reason). The probe runs the adapter's own
+            # score+rank on a synthetic gallery; an adapter that cannot answer offline is reported
+            # as `unmeasurable` with the reason, which is the honest answer.
+            reference_eligibility = adapter.measured_reference_eligibility()
+            reference_eligible = bool(reference_eligibility.get("reference_eligible")) \
+                if reference_eligibility.get("measured") else None
             scopes = tuple(getattr(adapter, "category_scopes", (None,)))
             if not scopes or len(set(scopes)) != len(scopes):
                 raise ValueError(f"invalid adapter category_scopes: {scopes!r}")
@@ -724,6 +1007,8 @@ def run_composition(data: Any, model_specs: Sequence[ModelSpec], config: Any, *,
             gpu_identity = _gpu_identity()
             checkpoint_identity = spec.checkpoint_identity or "unknown"
             condition_transform_source_hash = _module_source_hash(sys.modules.get("workbench.composition.inputs"))
+            scoring_module_source_hash = _module_source_hash(
+                sys.modules.get("workbench.composition.adapters"))
             identity = {
                 "model_id": model_id, "checkpoint_id": checkpoint_id,
                 "checkpoint_identity": checkpoint_identity, "protocol_id": data.gallery.protocol_id,
@@ -742,14 +1027,30 @@ def run_composition(data: Any, model_specs: Sequence[ModelSpec], config: Any, *,
                                                         "mode_supported")},
                 "adapter_module_source_hash": adapter_source_hash,
                 "adapter_module_source_status": "available" if adapter_source_hash != "unavailable" else "unavailable",
+                # The shared scoring/decode helpers live in `composition/adapters.py`, which is NOT
+                # the adapter's own module: `adapter_module_source_hash` hashes `model_<id>.py` and
+                # `adapter_source_hashes` hashes five methods, so a change to a shared helper that
+                # an adapter calls would otherwise reuse an old rank artifact under an unchanged
+                # run_id. Hashed here so it mints a new run_id like every other scoring input.
+                "scoring_module_source_hash": scoring_module_source_hash,
+                "scoring_module_source_status": "available" if scoring_module_source_hash != "unavailable" else "unavailable",
                 "condition_transform_source_hash": condition_transform_source_hash,
                 "condition_transform_source_status": "available" if condition_transform_source_hash != "unavailable" else "unavailable",
                 "score_signature": str(inspect.signature(adapter.score)),
                 "mode_support": {condition: supported[condition] for condition in conditions},
                 "runtime_identity": runtime_identity,
                 "gpu_identity": gpu_identity,
-                "category_scopes": list(scopes), "reference_eligible": True,
-                "batch_size": batch_size, "seed": seed,
+                "category_scopes": list(scopes),
+                "reference_eligible": reference_eligible,
+                "reference_eligibility": reference_eligibility,
+                # `seed` is deliberately NOT hashed here. It is recorded in the summary for
+                # provenance, but no seeding call exists anywhere in the composition path: every
+                # encode-time transform is deterministic, every adapter encodes under `.eval()` +
+                # `torch.no_grad()`, and no forward pass draws randomness. A field that mints a new
+                # run_id while controlling nothing is worse than no field, so `--seed` no longer
+                # partitions the artifact tree. `metrics.paired_bootstrap_gap` keeps its own
+                # explicit seed argument; it is a function parameter, not a run variable.
+                "batch_size": batch_size,
                 # LIMN's own encoder batch (WORKBENCH_LIMN_BATCH_SIZE) changes the forward pass
                 # only, but it is part of the run's configuration and must key the run id.
                 "adapter_batch_size": getattr(adapter, "batch_size", None),
@@ -809,6 +1110,56 @@ def run_composition(data: Any, model_specs: Sequence[ModelSpec], config: Any, *,
                 attempt = _attempt_id(artifacts, data.gallery.protocol_id, model_id, checkpoint_id,
                                       run_id, is_synthetic,
                                       force_new=rank_path.exists() and (not resume or bool(retry_conditions)))
+            # Opened AFTER `attempt` is final (so a retry cannot publish under the previous
+            # attempt's name) and BEFORE the rank loop. `open_export` returns {} when depth is off,
+            # which makes every later call below a no-op -- that is the zero-cost-when-off contract.
+            #
+            # RESUME TRAP: a resumed run reuses its ranks, so it used to open no writers at all and
+            # finished COMPLETED with candidate_topk=false -- and every later `--topk-depth ...
+            # --resume` reused those ranks again, so the export could NEVER appear. The export is
+            # therefore keyed per ATTEMPT (never in `identity`, or the same measurement would mint a
+            # new run_id and look like a duplicate), and a resumed run that still has its feature
+            # cache backfills the window from those cached vectors instead of re-encoding the
+            # gallery.
+            export_conditions = [condition for condition in conditions
+                                 if supported[condition][0]
+                                 and (not retry_conditions or condition in retry_conditions)]
+            writers = {} if reused else open_export(
+                artifacts, run_id,
+                attempt=attempt, model_id=model_id, checkpoint_id=checkpoint_id,
+                protocol_id=data.gallery.protocol_id,
+                gallery_identity=gallery_hash,
+                gallery_count=len(gallery_ids),
+                depth=topk_depth or 0,
+                conditions=export_conditions,
+                reference_eligible=reference_eligible,
+                source="model_run")
+            export_blocked_reason: str | None = None
+            # Only a RESUMED run needs a backfill: when the rank loop actually runs, the export is
+            # written from the scoring call itself and this branch must not touch it.
+            if reused and topk_depth and not _export_complete(artifacts, run_id,
+                                                              export_conditions, topk_depth):
+                writers = open_export(
+                    artifacts, run_id,
+                    attempt=str(attempt), model_id=model_id, checkpoint_id=checkpoint_id,
+                    protocol_id=data.gallery.protocol_id,
+                    gallery_identity=gallery_hash, gallery_count=len(gallery_ids),
+                    depth=topk_depth, conditions=export_conditions,
+                    reference_eligible=reference_eligible, source="model_run_resume_backfill")
+                backfilled = _backfill_export(
+                    adapter, queries, query_scopes, scopes, positive_positions,
+                    reasons_by_condition, work_root, fingerprint, export_conditions,
+                    writers, batch_size)
+                if not backfilled:
+                    # The cache was removed after the original rank pass. Saying "COMPLETED" here
+                    # would be the exact lie this branch exists to stop, so the request is refused
+                    # by name and the caller must re-run without --resume.
+                    abort_export(writers)
+                    writers = {}
+                    export_blocked_reason = (
+                        "candidate Top-K was requested but this run's feature cache is gone, so the "
+                        "window cannot be rebuilt without re-encoding the full gallery; re-run "
+                        "without --resume")
             projection_totals: dict[str, int] = {}
             category_failure_counts: dict[str, int] = {}
             if ranks is None or retry_conditions:
@@ -895,8 +1246,25 @@ def run_composition(data: Any, model_specs: Sequence[ModelSpec], config: Any, *,
                                 continue
                             vectors = np.asarray(features[valid_indices], dtype=np.float32)
                             cats = [queries[index].category for index in valid_indices]
+                            # The candidate window is taken from the SAME call that produces the
+                            # metric ranks, so the two can never describe different nearest
+                            # neighbours. `valid_indices` is the post-`keep` list whose ranks are
+                            # written below, which is what makes a mismatch a hard error rather
+                            # than a silently swapped query.
+                            decode_depth = writers[condition].depth if condition in writers else 0
                             try:
-                                exact_ranks = adapter.rank(vectors, targets, positions, cats)
+                                # Query-axis parallelism: each query's score row is computed by
+                                # the adapter's own rank call with unchanged targets, so the result
+                                # is bit-identical (verified 2..128 sub-batches, delta 0.0); only
+                                # independent queries run concurrently.
+                                exact_ranks, windows = rank_in_query_chunks(
+                                    adapter, vectors, targets, positions, cats, decode_depth)
+                                if decode_depth:
+                                    from workbench.composition.topk import write_batch
+
+                                    write_batch(writers, condition,
+                                                [queries[index].qid for index in valid_indices],
+                                                exact_ranks, windows)
                                 if len(exact_ranks) != len(valid_indices):
                                     raise ValueError("adapter.rank returned wrong number of query ranks")
                             except Exception as batch_error:
@@ -949,6 +1317,40 @@ def run_composition(data: Any, model_specs: Sequence[ModelSpec], config: Any, *,
                                          "attempt": attempt, "ranks": ranks,
                                          "query_failures": reasons_by_condition,
                                          "condition_status": mode_status})
+            # Published here -- after every condition has been ranked and before any summary is
+            # written -- so a manifest exists exactly when the rows it describes exist. A condition
+            # that the run did not re-score has no writer and is reported absent, not partial.
+            topk_export_state: dict[str, Any] = {"requested": bool(topk_depth), "depth": None,
+                                                 "conditions": [], "partial": False,
+                                                 "missing_query_count": 0,
+                                                 "status": ("TOPK_EXPORT_REQUESTED" if topk_depth
+                                                            else "TOPK_EXPORT_NOT_REQUESTED"),
+                                                 "reason": None}
+            if writers:
+                expected = {condition: [query.qid for query in queries]
+                            for condition in writers}
+                published = close_export(writers, expected_qids=expected)
+                manifests = [json.loads(path.with_name(path.stem + ".manifest.json")
+                                        .read_text(encoding="utf-8"))
+                             for path in published.values()]
+                partial = any(item.get("partial") for item in manifests)
+                topk_export_state = {
+                    "requested": True,
+                    "depth": manifests[0].get("depth") if manifests else None,
+                    "conditions": sorted(published),
+                    "partial": partial,
+                    "missing_query_count": sum(int(item.get("missing_query_count") or 0)
+                                               for item in manifests),
+                    "status": "TOPK_EXPORT_COMPLETE_PARTIAL" if partial else "TOPK_EXPORT_COMPLETE",
+                    "reason": None,
+                }
+                writers = {}
+            elif export_blocked_reason:
+                # An export was requested and could not be produced. This is NOT success, and the
+                # state says exactly why so a consumer can never read `candidate_topk: false` as
+                # "the run simply chose not to export".
+                topk_export_state.update(status="TOPK_EXPORT_BLOCKED",
+                                         reason=export_blocked_reason)
             if model_lock is not None:
                 _release_model_lock(model_lock)
                 model_lock = None
@@ -963,6 +1365,9 @@ def run_composition(data: Any, model_specs: Sequence[ModelSpec], config: Any, *,
                      "failure": failures.get(query.qid), "synthetic": is_synthetic,
                      "checkpoint_labels": labels} for query in queries]
             from workbench.composition.metrics import compose
+            # A requested export that produced nothing is a non-success outcome: the run measured
+            # what it measured, but it did not deliver what was asked of it.
+            export_blocked = bool(export_blocked_reason)
             summary_by_subset = {}
             for subset in subsets:
                 selected = [query for query in queries if subset in query.subsets]
@@ -986,7 +1391,8 @@ def run_composition(data: Any, model_specs: Sequence[ModelSpec], config: Any, *,
                 has_failure = has_transient_failure or any(status.get("status") in
                                     {"PARTIAL", "ABLATION_UNSUPPORTED"} for status in mode_status.values())
                 execution_status = ("REUSED" if reused else "FAILED" if has_transient_failure and not has_success
-                                    else "PARTIAL" if has_failure else "COMPLETED")
+                                    else "PARTIAL" if has_failure else
+                                    "EXPORT_INCOMPLETE" if export_blocked else "COMPLETED")
                 summary = {
                     "checkpoint_labels": labels,
                     "synthetic": is_synthetic,
@@ -1004,10 +1410,14 @@ def run_composition(data: Any, model_specs: Sequence[ModelSpec], config: Any, *,
                     "category_scopes": list(scopes),
                     "category_resolution": data.provenance.get("category_resolution", {}),
                     "unresolved_category_query_count": sum(query.category is None for query in queries),
-                    "reference_eligible": True,
+                    "reference_eligible": reference_eligible,
+                    "reference_eligibility": reference_eligibility,
                     "runtime": {"controller_python": sys.version, "platform": platform.platform(),
                                 "gpu": gpu_identity, "model_interpreter": runtime_identity},
-                    "seed": seed, "release_artifact_hashes": data.provenance.get("sha256", {}),
+                    # Recorded, not applied: see the identity note above. Kept in the summary so a
+                    # reader can see what the operator passed without it forking the run tree.
+                    "seed": seed, "seed_applied": False,
+                    "release_artifact_hashes": data.provenance.get("sha256", {}),
                     "hash_verification": data.provenance.get("hash_verification"),
                     "failed_expectations": data.provenance.get("failed_expectations", ()),
                     "gallery_candidate_basename_match": data.provenance.get("gallery_candidate_basename_match"),
@@ -1031,6 +1441,8 @@ def run_composition(data: Any, model_specs: Sequence[ModelSpec], config: Any, *,
                     "is_synthetic": is_synthetic, "synthetic_fixture": is_synthetic,
                     "feature_storage": {"format": "float32 .npy memmap", "projected_bytes": projection_totals,
                                         "arrays_removed_after_rank": True},
+                    "topk_export": topk_export_state,
+                    "variant_provenance": variant_provenance,
                     "metrics": asdict(result), "run_id": run_id, "resume_key": fingerprint,
                     "reused_query_result_count": len(queries) * len(conditions) if reused else 0,
                 }
@@ -1041,7 +1453,9 @@ def run_composition(data: Any, model_specs: Sequence[ModelSpec], config: Any, *,
             incomplete = (any(status.get("status") not in successful_modes for status in mode_status.values())
                           or any(status.get("status") == "PARTIAL" for status in mode_status.values()))
             model_status = ("MODEL_UNAVAILABLE" if not successful else
-                            "PARTIAL" if incomplete else "REUSED" if reused else "COMPLETED")
+                            "PARTIAL" if incomplete else
+                            "EXPORT_INCOMPLETE" if export_blocked else
+                            "REUSED" if reused else "COMPLETED")
             model_reason = next((status.get("reason") for status in mode_status.values()
                                  if status.get("status") not in successful_modes), None)
             reports.append({"model_id": model_id, "checkpoint_id": checkpoint_id,
@@ -1080,12 +1494,45 @@ def run_composition(data: Any, model_specs: Sequence[ModelSpec], config: Any, *,
                                 pass
                 except Exception:
                     pass
-                shutil.rmtree(model_work, ignore_errors=True)
+                # The encoded gallery matrix is ~2.4 GB per model. It used to be deleted after
+                # EVERY run, which made a feature cache that can never be reused -- and turned the
+                # resume/backfill path into dead code (candidate windows could only be rebuilt by
+                # re-encoding 74,381 images).
+                #
+                # ponytail: keep `features/` only when the run either asked for a candidate export
+                # or the operator passed --keep-features; everything else (worker logs, staged query
+                # images, job dirs) is still removed every time. Ceiling: an operator who keeps
+                # features for N models holds ~2.4N GB until they delete it deliberately -- that is
+                # the point, and `composition runs/<id>/work/<model>/features` is the documented
+                # cleanup target. Upgrade path: prune by run age once a sweep job exists, or store
+                # features as float16/quantized (~half the bytes) if the disk becomes the limit.
+                keep_features = bool(topk_depth) or bool(keep_features)
+                if keep_features:
+                    for child in model_work.iterdir():
+                        if child.name == "features":
+                            continue
+                        if child.is_dir():
+                            shutil.rmtree(child, ignore_errors=True)
+                        else:
+                            try:
+                                child.unlink()
+                            except OSError:
+                                pass
+                else:
+                    shutil.rmtree(model_work, ignore_errors=True)
             if adapter is not None:
                 try:
                     adapter.close()
                 except Exception:
                     pass
+            if writers:
+                # No-op for writers already published above; the safety net for any path that left
+                # an un-closed export behind (an exception, an early continue, a retry branch).
+                try:
+                    abort_export(writers)
+                except Exception:
+                    pass
+                writers = {}
             if model_lock is not None:
                 _release_model_lock(model_lock)
 
