@@ -35,6 +35,8 @@ def _summary(root: Path, run_id: str, *, metrics=None, **extra) -> dict:
         "subset": "full", "protocol_id": "circus_fashioniq_release_v1",
         "conditions": list(CONDITIONS), "gallery_count": 20, "query_count": 4,
         "gallery_identity_sha256": "g" * 64, "checkpoint_identity": "ckpt",
+        # Essential since the identity fix: without it a row is `partial`, not `unique`.
+        "scoring_module_source_hash": "scorehash",
         "execution_status": "COMPLETED", "seed": 0,
         "runtime": {"model_interpreter": {"environment_fingerprint": "env"}},
         "metrics": metrics if metrics is not None else {
