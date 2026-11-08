@@ -188,7 +188,7 @@ def _backfill_export(adapter: Any, queries: Sequence[Any], query_scopes: Sequenc
                 kept_indices = [batch[position] for position in keep]
                 vectors = np.asarray(features_for_scope[kept_indices], dtype=np.float32)
                 positions = [positive_positions[queries[index].qid] for index in kept_indices]
-                cats = [queries[index].category for index in kept_indices]
+                cats = [query_scopes[index] for index in kept_indices]
                 ranks, windows = adapter.rank_and_topk(vectors, targets, positions, cats,
                                                        writers[condition].depth)
                 write_batch(writers, condition,
@@ -369,6 +369,17 @@ def _query_fingerprint(queries: Sequence[Any]) -> str:
                      "category": query.category, "subsets": list(query.subsets)} for query in queries])
 
 
+def _scope_resolution_identity(queries: Sequence[Any], query_scopes: Sequence[str | None]) -> str:
+    """Digest of the resolved per-query scope map: which gallery matrix each query is scored on.
+
+    This is a scoring INPUT, not metadata. `_query_fingerprint` keys on the loader's
+    `query.category`, which stays `None` for exactly the queries an adapter resolver scopes, so a
+    resolver wired without this digest leaves the run identity unchanged and `--resume` silently
+    reuses the old all-null ranks. Keyed by qid, so the same assignment in a different query order
+    is still the same experiment.
+    """
+    return _digest(sorted((query.qid, scope) for query, scope in zip(queries, query_scopes)))
+
 def _positive_positions(data: Any) -> dict[str, tuple[int, ...]]:
     index = {identity: position for position, identity in enumerate(data.gallery.image_ids)}
     by_path = {normalize_release_path(identity): position
@@ -381,10 +392,20 @@ def _positive_positions(data: Any) -> dict[str, tuple[int, ...]]:
             for query in data.queries}
 
 
-def _scope_for_query(adapter: Any, query: Any) -> tuple[str | None, str | None]:
+def _scope_for_query(adapter: Any, query: Any,
+                     candidate_names: Mapping[str, str] | None = None) -> tuple[str | None, str | None]:
     scopes = tuple(getattr(adapter, "category_scopes", (None,)))
+    # An assignment the release loader already made is final: never re-derive what it decided.
     if query.category in scopes:
         return query.category, None
+    # The adapter may know a scope the release loader could not derive (LIMN reads it from the
+    # query's own FashionIQ caption annotation). Only a value the adapter actually declares is
+    # accepted; anything else -- including `None` -- stays unresolved instead of being trusted.
+    resolver = getattr(adapter, "query_scope", None)
+    if callable(resolver):
+        resolved = resolver(query, candidate_names)
+        if resolved in scopes:
+            return resolved, None
     if None in scopes:
         return None, None
     # `None` is the unresolved-category sentinel, not a category name; this text lands in failure
@@ -468,7 +489,14 @@ def _stage_query_path(path: Path, query: Any, condition: str, work_root: Path) -
 def _encode_queries(adapter: Any, queries: Sequence[Any], query_paths: Sequence[Path | None],
                     indices: Sequence[int], condition: str, work_root: Path,
                     destination: Path, fingerprint: str, dimension: int,
-                    batch_size: int) -> tuple[np.memmap, dict[str, str], dict[str, str]]:
+                    batch_size: int, scopes: Sequence[str | None] | None = None,
+                    ) -> tuple[np.memmap, dict[str, str], dict[str, str]]:
+    # `scopes` is the resolved per-query scope the runner routed with. Without it the adapter would
+    # be handed the release loader's `query.category`, which is `None` exactly for the queries an
+    # adapter resolver exists to scope, and LIMN refuses those.
+    def scope_of(index: int) -> str | None:
+        return queries[index].category if scopes is None else scopes[index]
+
     cached = _load_memmap(destination, fingerprint, (len(queries), dimension))
     errors_path = destination.with_suffix(destination.suffix + ".errors.json")
     category_path = destination.with_suffix(destination.suffix + ".category-errors.json")
@@ -504,7 +532,7 @@ def _encode_queries(adapter: Any, queries: Sequence[Any], query_paths: Sequence[
                 staged_path, text = _stage_query_path(query_paths[index], queries[index], condition, work_root)  # type: ignore[arg-type]
                 paths.append(str(staged_path))
                 texts.append(text)
-                categories.append(queries[index].category)
+                categories.append(scope_of(index))
                 surviving.append(index)
             except Exception as error:
                 errors[queries[index].qid] = f"{type(error).__name__}: {error}"
@@ -530,7 +558,7 @@ def _encode_queries(adapter: Any, queries: Sequence[Any], query_paths: Sequence[
                 if local_index in bad_batch_indices:
                     continue
                 try:
-                    encoded = _as_array(adapter.encode_queries([path], [text], [queries[index].category]))
+                    encoded = _as_array(adapter.encode_queries([path], [text], [scope_of(index)]))
                     if encoded.shape != (1, dimension):
                         raise ValueError(f"encode_queries returned invalid shape {encoded.shape}")
                     features[index] = encoded[0].astype(np.float32, copy=False)
@@ -1113,7 +1141,7 @@ def run_composition(data: Any, model_specs: Sequence[ModelSpec], config: Any, *,
             scopes = tuple(getattr(adapter, "category_scopes", (None,)))
             if not scopes or len(set(scopes)) != len(scopes):
                 raise ValueError(f"invalid adapter category_scopes: {scopes!r}")
-            assignments = [_scope_for_query(adapter, query) for query in queries]
+            assignments = [_scope_for_query(adapter, query, data.candidate_names) for query in queries]
             query_scopes = [scope for scope, _reason in assignments]
             scope_errors = {query.qid: reason for query, (_scope, reason) in zip(queries, assignments) if reason}
             supported = {}
@@ -1133,6 +1161,13 @@ def run_composition(data: Any, model_specs: Sequence[ModelSpec], config: Any, *,
                 "gallery_image_identity": _image_identity(gallery_paths),
                 "query_image_identity": _image_identity(query_paths),
                 "gallery_identity": gallery_hash, "query_order_identity": query_hash,
+                # The resolved per-query scope map is a scoring INPUT, not metadata: it decides
+                # which gallery matrix each query is scored against. `query_order_identity` keys on
+                # the loader's `query.category`, which stays `None` for queries an adapter resolver
+                # scopes -- so wiring a resolver without this digest would leave the fingerprint
+                # unchanged and `--resume` would silently reuse the old all-null ranks. Hashed by
+                # qid so the same assignment independent of query order is the same experiment.
+                "query_scope_resolution": _scope_resolution_identity(queries, query_scopes),
                 "subset_memberships": sorted(set(subsets)), "conditions": list(conditions),
                 "preprocessing": {"id": model.get("preprocessing_id"),
                                   "registry_values": {key: model.get(key) for key in
@@ -1332,7 +1367,8 @@ def run_composition(data: Any, model_specs: Sequence[ModelSpec], config: Any, *,
                         try:
                             values, errors, category_errors = _encode_queries(
                                 adapter, queries, query_paths, indexes, condition, work_root,
-                                feature_file, feature_fp, target_maps[scope].shape[-1], batch_size)
+                                feature_file, feature_fp, target_maps[scope].shape[-1], batch_size,
+                                query_scopes)
                             query_features[scope] = values
                             feature_errors_all.update(errors)
                             category_errors_all.update(category_errors)
@@ -1380,7 +1416,7 @@ def run_composition(data: Any, model_specs: Sequence[ModelSpec], config: Any, *,
                                 continue
                             groups.append((valid_indices, group_positions,
                                            np.asarray(features[valid_indices], dtype=np.float32),
-                                           [queries[index].category for index in valid_indices]))
+                                           [query_scopes[index] for index in valid_indices]))
                         decode_depth = writers[condition].depth if condition in writers else 0
 
                         def rank_group(group: Any) -> Any:
@@ -1565,6 +1601,19 @@ def run_composition(data: Any, model_specs: Sequence[ModelSpec], config: Any, *,
                     "category_scopes": list(scopes),
                     "category_resolution": data.provenance.get("category_resolution", {}),
                     "unresolved_category_query_count": sum(query.category is None for query in queries),
+                    # `category_resolution` above is the RELEASE-level fact and keeps saying 119
+                    # ambiguous; this is what the adapter resolver actually routed, so a 6001
+                    # scored count does not read as a contradiction.
+                    "adapter_query_scope_resolution": {
+                        "resolver": (f"{type(adapter).__module__}."
+                                     f"{type(adapter).__qualname__}.query_scope"
+                                     if callable(getattr(adapter, "query_scope", None)) else None),
+                        "loader_scoped": sum(query.category is not None for query in queries),
+                        "adapter_routed": sum(scope is not None for scope in query_scopes),
+                        "still_unscoped": sum(scope is None for scope in query_scopes),
+                        "unscoped_qids": [query.qid for query, scope in zip(queries, query_scopes)
+                                          if scope is None],
+                    },
                     "reference_eligible": reference_eligible,
                     "reference_eligibility": reference_eligibility,
                     "runtime": {"controller_python": sys.version, "platform": platform.platform(),
