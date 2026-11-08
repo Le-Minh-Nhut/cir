@@ -10,6 +10,16 @@ import sys
 from pathlib import Path
 from typing import Any
 
+# BLAS thread count must be set BEFORE numpy is imported anywhere, or OpenBLAS has already sized its
+# pool and the scoring einsum stays single-threaded. MEASURED on the real (74381,32,256) gallery:
+# the production einsum runs at 6.2 q/s regardless of the env because OpenBLAS is baked in at import;
+# the same contraction as a chunked GEMM runs at 99.7 q/s with 8 BLAS threads. The half-box budget
+# comes from AGENTS.md, not from measurement: 10 threads on a 20-thread shared host.
+_BLAS_THREADS = os.environ.get("WORKBENCH_BLAS_THREADS", "").strip() or str(
+    min(10, (os.cpu_count() or 8) // 2))
+for _variable in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS", "NUMEXPR_NUM_THREADS"):
+    os.environ.setdefault(_variable, _BLAS_THREADS)
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from workbench.backend import autopilot
@@ -40,7 +50,30 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--plan", action="store_true", help="show work and paths without writing state")
     parser.add_argument("--prepare-data", action="store_true",
                         help="verify release and inventory missing gallery/reference/positive images")
-    parser.add_argument("--seed", type=int, default=0, help="seed recorded for deterministic summaries")
+    parser.add_argument("--seed", type=int, default=0,
+                        help="recorded in the summary only: no step of the composition path draws "
+                             "randomness, so this value is provenance, not a reproducibility "
+                             "control, and it does not change the run id")
+    parser.add_argument("--topk-depth", type=int, default=None,
+                        help="persist candidate Top-K (default: off; costs one small JSONL per "
+                             "condition). 50 covers the UI's Top-10 and Top-50 views. Implies "
+                             "--keep-features, because the window is rebuilt from that cache when "
+                             "a resumed run needs it.")
+    parser.add_argument("--keep-features", action="store_true",
+                        help="keep the encoded gallery/query memmaps under "
+                             "runs/<run_id>/work/<model>/features (~2.4 GB per model) instead of "
+                             "deleting them. Delete that directory deliberately when done.")
+    parser.add_argument("--batch-size", type=int, default=None,
+                        help="forward-pass batch size override (env: "
+                             "WORKBENCH_COMPOSITION_BATCH_SIZE). The default is unchanged at 32, so "
+                             "an unaffected run keeps its run id and its feature cache. Raised "
+                             "values change adapter_batch_size in the run identity and therefore "
+                             "mint a new run_id: the gallery must be re-encoded once. A value that "
+                             "cannot fit in VRAM is refused before the run starts.")
+    parser.add_argument("--decode-workers", type=int, default=None,
+                        help="parallel image-decode workers (env: WORKBENCH_DECODE_WORKERS, "
+                             "default 8). Decode-only: the transform and the feature values are "
+                             "unchanged, so this does not alter any result.")
     return parser
 
 
@@ -230,8 +263,49 @@ def _plan(pairs: list[tuple[dict[str, Any], str]], unavailable: list[dict[str, A
             "failed_expectations": data.provenance.get("failed_expectations", ())}
 
 
+def _runner_topk_kwargs(runner: Any, depth: int | None,
+                        keep_features: bool = False) -> dict[str, Any]:
+    """Pass ``topk_depth`` only when the runner accepts it.
+
+    The export is implemented entirely in ``workbench/composition/topk.py``; the runner still has
+    to call it (see ``workbench/docs/reviews/eval-runner-requests.md``). Until it does, asking for
+    ``--topk-depth`` must fail loudly rather than write a run that silently stores nothing: a
+    summary claiming an export that does not exist would be worse than a refusal.
+    """
+    import inspect
+
+    parameters = inspect.signature(runner).parameters
+    if depth is None:
+        return {"keep_features": True} if keep_features and "keep_features" in parameters else {}
+    if "topk_depth" not in parameters:
+        raise SystemExit(
+            "COMPOSITION-TOPK-UNAVAILABLE: this runner does not accept topk_depth yet "
+            "(workbench/docs/reviews/eval-runner-requests.md). Refusing to run with candidate "
+            "export requested rather than producing a run that silently stores none.")
+    kwargs: dict[str, Any] = {"topk_depth": depth}
+    # An export implies the cache: a deleted feature cache makes the window rebuildable only by
+    # re-encoding the full gallery.
+    if "keep_features" in parameters:
+        kwargs["keep_features"] = True
+    return kwargs
+
+
 def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
+    # CLI knobs are the same settings the adapters read from the environment; exporting them here
+    # keeps ONE resolution point (adapters.resolved_batch_size / resolved_decode_workers) instead of
+    # threading two more parameters through the runner and every adapter.
+    from workbench.composition.adapters import BATCH_SIZE_ENV, DECODE_WORKERS_ENV
+    if args.batch_size is not None:
+        if args.batch_size < 1:
+            print(json.dumps({"error": "--batch-size must be a positive integer"}))
+            return 2
+        os.environ[BATCH_SIZE_ENV] = str(args.batch_size)
+    if args.decode_workers is not None:
+        if args.decode_workers < 1:
+            print(json.dumps({"error": "--decode-workers must be a positive integer"}))
+            return 2
+        os.environ[DECODE_WORKERS_ENV] = str(args.decode_workers)
     try:
         profile, _, config, registry = _load_configuration(args.config)
         subsets = [item.strip() for item in args.subsets.split(",") if item.strip()]
@@ -290,7 +364,9 @@ def main(argv: list[str] | None = None) -> int:
                                    _checkpoint_identity(model, checkpoint_id, config)))
         report = run_composition(data, specs, config, subsets=subsets,
                                  resume=args.resume, smoke=args.smoke, seed=args.seed,
-                                 synthetic=bool(data.provenance.get("is_synthetic"))) if specs else {
+                                 synthetic=bool(data.provenance.get("is_synthetic")),
+                                 **_runner_topk_kwargs(run_composition, args.topk_depth,
+                                                       args.keep_features)) if specs else {
                                      "run_count": 0, "models": [], "gallery_count": len(data.gallery.image_ids),
                                      "gallery_identity_sha256": hashlib.sha256(json.dumps(
                                          {"protocol_id": data.gallery.protocol_id,

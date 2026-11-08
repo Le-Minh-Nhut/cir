@@ -355,8 +355,12 @@ def _variant_provenance(model: dict, config: WorkbenchConfig,
         adaptation = runtime_adaptation(model)
     except Exception:
         adaptation = None
+    # `adaptation` is the guard, not `adapted_profile`: testing the freshly-assigned None made this
+    # branch unreachable, so a run under WORKBENCH_RUNTIME_ADAPTATION=sm_120 recorded NO
+    # `adapted_runtime` provenance at all (grep -c sm_120 == 0 in the TME/PTHA summaries). That is
+    # exactly the "adapted evidence presented as a reproduction" failure the block exists to prevent.
     adapted_profile = None
-    if adapted_profile:
+    if adaptation:
         adapted_profile = {
             "runtime_adaptation": str(adaptation.get("target_compute_capability")),
             # The declared constraints this run actually verified against. A run under an
