@@ -4,7 +4,11 @@ from pathlib import Path
 
 from workbench.backend.adapters.base import EvalRequest, ModelAdapter
 from workbench.backend.errors import WorkbenchError
-from workbench.backend.registry import checkpoint_path, checkpoint_member_root
+from workbench.backend.registry import (
+    checkpoint_by_id,
+    checkpoint_path,
+    checkpoint_member_root,
+)
 from workbench.backend import runtime as _runtime
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -69,6 +73,40 @@ def _replay_command(adapter: OfficialScriptAdapter, checkpoint: Path, request: E
         command.extend(("--checkpoint-id", request.checkpoint_id))
     return command
 
+
+def _declared_member_paths(checkpoint: Path, variant: dict, roles: tuple[str, ...]) -> dict[str, Path]:
+    """Resolve a bundle's member files from the registry's declaration, by declared role.
+
+    The registry is the ONE source of truth for member filenames: `required_files` is what the
+    integrity check, the hashing and the manifest all read, so an adapter that spelled its own
+    names could disagree with every one of them. That is exactly what happened here -- the
+    adapter asked for `combiner_state.pt` / `clip_state.pt`, no file by either name exists, and
+    the resulting "missing argument" surfaced as if the Python environment were broken.
+
+    A member is selected by its declared `role`, never by position or by a filename substring:
+    the two files are both `.pt` and both belong to the same release, so only the declaration
+    says which is the Combiner and which is the CLIP state. An incomplete role set is an error,
+    not a silent fallback to the old literals.
+    """
+    members = variant.get("bundle_members") or []
+    by_role = {str(member.get("role")): str(member["filename"])
+               for member in members if member.get("role")}
+    if set(by_role) != set(roles):
+        raise WorkbenchError(
+            "checkpoint_members_unresolved",
+            "Checkpoint bundle does not declare the member roles this adapter loads.",
+            {"checkpoint_id": variant.get("checkpoint_id"),
+             "declared_roles": sorted(by_role), "required_roles": sorted(roles)})
+    declared_files = set(variant.get("required_files") or [])
+    if not set(by_role.values()) <= declared_files:
+        raise WorkbenchError(
+            "checkpoint_members_unresolved",
+            "A role names a file that `required_files` does not declare.",
+            {"checkpoint_id": variant.get("checkpoint_id"),
+             "role_files": sorted(by_role.values()),
+             "required_files": sorted(declared_files)})
+    root = checkpoint_member_root(checkpoint, artifact_type=variant.get("artifact_type"))
+    return {role: root / by_role[role] for role in roles}
 
 class CSMCIRAdapter(OfficialScriptAdapter):
     model_id = "csmcir"
@@ -371,11 +409,17 @@ class CLIP4CirFullftAdapter(OfficialScriptAdapter):
         # A bundle_placeholder path IS the bundle directory (registry.checkpoint_missing_paths
         # resolves members under it); the previous `checkpoint.parent` disagreed with that and
         # pointed the evaluator at sibling files that the integrity check never validates.
-        combiner_path = checkpoint / "combiner_state.pt"
-        clip_path = checkpoint / "clip_state.pt"
+        #
+        # The two member filenames come from the registry record, never from this file. They used
+        # to be the literals `combiner_state.pt` / `clip_state.pt`, which name no file on disk:
+        # the release ships `fiq_comb_RN50x4_fullft.pt` / `fiq_clip_RN50x4_fullft.pt`, the pair
+        # `required_files`/`bundle_members` declares and the integrity check hashes. Spelling them
+        # here made a complete bundle read as two absent paths.
+        members = _declared_member_paths(
+            checkpoint, checkpoint_by_id(self.model, request.checkpoint_id), ("combiner", "clip"))
         return [_runtime.python_executable(self.model), str(source / self.script), "--dataset", "fashionIQ",
-                "--combining-function", "combiner", "--combiner-path", str(combiner_path),
-                "--clip-model-path", str(clip_path),
+                "--combining-function", "combiner", "--combiner-path", str(members["combiner"]),
+                "--clip-model-path", str(members["clip"]),
                 "--projection-dim", "2560", "--hidden-dim", "5120",
                 "--clip-model-name", "RN50x4", "--target-ratio", "1.25", "--transform", "targetpad"]
 

@@ -1213,8 +1213,8 @@ models:
         artifact_type: bundle_directory
         required_files: [fiq_comb_RN50x4_fullft.pt, fiq_clip_RN50x4_fullft.pt]
         bundle_members:
-          - {filename: fiq_comb_RN50x4_fullft.pt, expected_sha256: 7c7c0a10fb4c995cb1ded9ad70a58891d50c622263c54131523bfb232b493f8e}
-          - {filename: fiq_clip_RN50x4_fullft.pt, expected_sha256: 4111ac139cf96ac0cf31b30bf8f55b654247b06f0f5fbee4fe8dcc8c1c7cfd2f}
+          - {filename: fiq_comb_RN50x4_fullft.pt, role: combiner, expected_sha256: 7c7c0a10fb4c995cb1ded9ad70a58891d50c622263c54131523bfb232b493f8e}
+          - {filename: fiq_clip_RN50x4_fullft.pt, role: clip, expected_sha256: 4111ac139cf96ac0cf31b30bf8f55b654247b06f0f5fbee4fe8dcc8c1c7cfd2f}
         download_url: null
         source_url: https://drive.google.com/drive/folders/1ny2hhzP8HZBnXhjvDEni8P8G4_inCNTv?usp=sharing
         source_type: author_google_drive
@@ -1237,14 +1237,13 @@ models:
         # is what "frozen encoders" means — so the two variants cannot be each other's file.
         checkpoint_mapping_status: VERIFIED_METADATA
         checkpoint_base_relative: ../../checkpoints/clip4cir/FashionIQ/RN50x4_fullft
-        # PREREQUISITE, not yet satisfied: `adapters/models.py:CLIP4CirFullftAdapter.command`
-        # hard-codes `combiner_state.pt` / `clip_state.pt` instead of reading `required_files` from
-        # this record. With the author filenames declared here, that adapter would pass two
-        # non-existent paths to `validate.py`. Nothing can run in that state anyway (no
-        # WORKBENCH_CLIP4CIR_PYTHON exists, so the environment tier refuses first), but the adapter
-        # MUST be changed to resolve its two member paths from the declaration before this row is
-        # allowed to run. Declaring the adapter's spellings instead would recreate the original
-        # defect: an artifact description that names no file on disk.
+        # The adapter resolves its two member paths from THIS record: `role` names which file is
+        # the Combiner state and which is the CLIP state, and `required_files` names the files.
+        # Nothing in `adapters/models.py` spells a filename any more -- before this, the adapter
+        # hard-coded `combiner_state.pt` / `clip_state.pt`, no file by either name existed, and a
+        # complete pair was reported as two missing paths. Declaring the adapter's spellings
+        # instead would recreate the original defect: an artifact description that names no file
+        # on disk. `test_clip4cir_checkpoint_resolution.py` pins the agreement.
   - model_id: tgcir
     replay_status: PREFLIGHT_ONLY
     category_model_policy: shared
