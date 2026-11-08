@@ -184,20 +184,26 @@ models:
         source_type: author_huggingface
         checkpoint_training_noise_pct: 50
         evaluation_noise_pct: 0
-        expected_size_bytes: null
-        expected_sha256: null
+        expected_size_bytes: 2724056638
+        # Measured over the staged bytes and equal to the digest the author's Hub published as this
+        # file's LFS oid, so this is an AUTHOR digest, not merely a local one.
+        expected_sha256: f4d25ed9e532f2ee3671f6edadb1048e73113246ec056b413bde75dfe3f79bc6
         status: NO_CLEAN_CHECKPOINT
         checkpoint_mapping_status: VERIFIED_METADATA
+        # Native weights are staged beside the composition download tree, not under it. The path is
+        # relative to WORKBENCH_CHECKPOINT_ROOT, which still serves the nine CIRCUS models.
+        checkpoint_base_relative: ../../checkpoints/airknow
       - checkpoint_id: fiq_n08
         filename: airknow_fiq_0.8.pt
         download_url: https://huggingface.co/iLearn-Lab/CVPR26-Air-Know/resolve/main/airknow_fiq_0.8.pt
         source_type: author_huggingface
         checkpoint_training_noise_pct: 80
         evaluation_noise_pct: 0
-        expected_size_bytes: null
-        expected_sha256: null
+        expected_size_bytes: 2724056638
+        expected_sha256: 756fc0bdc43d9e0f0cae13c8a02b0279f64e62092ce465c1e60bda45e179c54e
         status: NO_CLEAN_CHECKPOINT
         checkpoint_mapping_status: VERIFIED_METADATA
+        checkpoint_base_relative: ../../checkpoints/airknow
   - model_id: conesep
     composition_adapter: workbench.composition.model_conesep
     environment:
@@ -820,6 +826,22 @@ models:
     command_status: COMMAND_BLOCKED_SOURCE_ENTRYPOINT
     strict_clean_checkpoint_available: false
     notes: Existing audit found pair-B1.pt and pair-B2.pt; official FashionIQ mapping is not verified.
+    # Map status stays UNVERIFIED, and the reason is now POSITIVE rather than "nobody checked":
+    # the released pickles were produced by an implementation the pinned repo does not contain.
+    # Measured on CPU from the bytes (see docs/reviews/20261108T114646+0700-ckpt-mapping):
+    #   * the pickle names `model_vssp.{Encoder,Backbone,FeatureWiseAffine}` and
+    #     `MHTransformer_dis.{MlpTransformer,MultiHeadAttention,Transformer,TransformerLayer}`;
+    #     neither module exists in `third_party/PAIR/models`.
+    #   * rebuilt with those names bound to the public classes, `PAIR()` loads NON-strictly:
+    #     455 checkpoint keys vs 381 model keys, 74 unexpected keys, 70 shape mismatches.
+    #   * `backbone.transformer_a` restored as 2 layers x 4 heads; `model.py:46` declares 1 x 8.
+    #     The checkpoint also carries `transformer_c`, `transformer_d`, `weight_chanelImg`,
+    #     `weight_chanelImg_t`, `cross_t2i` — names that exist only in the sibling ENCODER
+    #     implementation. 8 986 448 of 172 814 185 parameters (5.20 %) are unreachable from the
+    #     pinned forward pass.
+    # What would settle it: the author's `model_vssp.py` / `MHTransformer_dis.py` at the training
+    # revision, or a PAIR revision whose `Backbone` declares that geometry. Neither is a judgement
+    # call, so no run from these bytes may be labelled a PAIR reproduction.
     checkpoint_variants:
       - checkpoint_id: pair_b1
         filename: pair-B1.pt
@@ -831,10 +853,13 @@ models:
         checkpoint_training_noise_pct: null
         evaluation_noise_pct: 0
         expected_size_bytes: 694958565
-        # Full digest unverified: the Hub LFS oid gives the sha256 prefix c4d861ec only.
-        expected_sha256: null
+        # The full digest is now MEASURED from the staged bytes and equals the Hub LFS oid
+        # `c4d861ec…`, so it is an author digest. It is filled in so a substituted file is refused;
+        # it does NOT make the mapping verified — the bytes contradict it (see below).
+        expected_sha256: c4d861ecd0baa3f1427fc7a853943f5614baf87def1cdd9c4bb7583ee925fbf2
         status: CHECKPOINT_MAPPING_UNVERIFIED
         checkpoint_mapping_status: UNVERIFIED
+        checkpoint_base_relative: ../../checkpoints/pair
       - checkpoint_id: pair_b2
         filename: pair-B2.pt
         download_url: https://huggingface.co/ZhihengFu/PAIR/resolve/main/pair-B2.pt
@@ -842,24 +867,30 @@ models:
         checkpoint_training_noise_pct: null
         evaluation_noise_pct: 0
         expected_size_bytes: 694872371
-        # Full digest unverified: the Hub LFS oid gives the sha256 prefix 74346fd7 only.
-        expected_sha256: null
+        expected_sha256: 74346fd7de6efdafe8dde70458316286a60ceb2d7b419efed55193418aeb3f03
         status: CHECKPOINT_MAPPING_UNVERIFIED
         checkpoint_mapping_status: UNVERIFIED
+        checkpoint_base_relative: ../../checkpoints/pair
   - model_id: clvc_net
     replay_status: BLOCKED_NO_SOURCE_REPLAY
     # The pinned trainer builds and saves a separate whole model per FashionIQ category
     # (`train.py:load_dataset`, `train_and_evaluate` over dress/shirt/toptee). One shared pair of
     # checkpoints is not scientifically equivalent: each category needs its own local/global pair.
-    # Filenames and identities remain UNVERIFIED, so this describes the structure to be routed
-    # once the author archive mapping is established, not a set of known files.
     category_model_policy: independent
     category_checkpoint_structure:
       categories: [dress, shirt, toptee]
       per_category_members: [local, global]
       member_count_expected: 6
-      mapping_status: UNVERIFIED
-      notes: author Drive archive member/category mapping unresolved; do not claim six available files
+      # ESTABLISHED from the staged bytes, not from the archive listing. Each pickle's root class
+      # is the pinned `model.compose_local` / `model.compose_global`, and each loads STRICTLY
+      # (0 missing, 0 unexpected, 0 shape mismatches) into that class rebuilt from
+      # `third_party/CLVCNet/model.py`. Category identity comes from a second, independent fact:
+      # every pickle carries its own `SimpleVocab`, and the vocabulary SIZES equal the distinct
+      # token counts of `cap.<category>.train.json` exactly (dress 1598, shirt 2290, toptee 2148),
+      # with the local and global member of a category sharing one vocabulary and the three
+      # categories sharing none.
+      mapping_status: VERIFIED_METADATA
+      notes: six files present and structurally confirmed; three per-category vocabularies recovered from the checkpoints match the three categories' train captions exactly.
     checkpoint_serialization: whole_model
     environment_required: true
     method_name: CLVC-Net
@@ -901,19 +932,45 @@ models:
       cuda: '10.2'
       packages: [torchvision]
     strict_clean_checkpoint_available: null
-    notes: Native pair-union and reference exclusion verified. Pinned test.py has no CLI/model loader; author Drive CLVCNET.zip member/category mapping is unresolved. Evaluation requires torchvision ResNet-50 ImageNet weights through an unpinned Torch cache.
+    notes: Native pair-union and reference exclusion verified. Pinned test.py has no CLI/model loader, so `workbench/replay/clvc_net.py` supplies the shell and loads the six per-category whole models by name. The staged six files are confirmed against the pinned classes and the three category vocabularies; the renamed single-file declaration that preceded this pointed at no existing artifact. Evaluation requires torchvision ResNet-50 ImageNet weights through an unpinned Torch cache, but the six whole-model pickles already carry 318 of the 320 ResNet-50 tensors (only `fc.*` is absent, and `model.py:78` replaces it with a bare `nn.Sequential`), so that download governs module construction and cannot change a scored parameter.
     checkpoint_variants:
+      # The evaluator consumes SIX files, not one (`replay/clvc_net.py:EXPECTED_CATEGORY_FILES`).
+      # The artifact is therefore the directory holding them, named by `filename: "."` — the shape
+      # `dcnet` already uses for its run directory — and the members are declared so a missing or
+      # substituted category is refused by the presence check instead of surfacing mid-run.
+      # `checkpoint_id` is unchanged: the published-variant identity is not what the filename
+      # mis-stated.
       - checkpoint_id: author_drive_unresolved
-        filename: checkpoint-unresolved.pt
+        filename: "."
+        artifact_type: bundle_directory
+        required_files:
+          - dress_local_model.pt
+          - dress_global_model.pt
+          - shirt_local_model.pt
+          - shirt_global_model.pt
+          - toptee_local_model.pt
+          - toptee_global_model.pt
+        bundle_members:
+          - {filename: dress_local_model.pt, expected_sha256: 33d44186efd6a25ca0761794115610016182b9f53ff6413083f31b6979769a07}
+          - {filename: dress_global_model.pt, expected_sha256: be41c2ba81b803fd392c2c2517bf29cf4dd58205af7777f2becb4f84a80f5c7c}
+          - {filename: shirt_local_model.pt, expected_sha256: 2ba8e320b08ebb97d6558eb599cde2be228b5488250de7cb4cde8a138ff2c681}
+          - {filename: shirt_global_model.pt, expected_sha256: 78b1d660227ab6928e3a11a7384f9fff2aa7ab2a39baec1a45ac59db35e28bcf}
+          - {filename: toptee_local_model.pt, expected_sha256: d1fa9170496f73a008736723fe5329c93ff710305d0bcc79ff628822c0a91f4c}
+          - {filename: toptee_global_model.pt, expected_sha256: c78a58c4becafee3bffe719bef743d42c4495c3a91096a4b5935c364449ed11d}
         download_url: null
         source_url: https://drive.google.com/file/d/159rBhWyhkLN7sXAi8iyW_ljzFNLJinKa/view?usp=sharing
         source_type: author_google_drive
         checkpoint_training_noise_pct: null
         evaluation_noise_pct: 0
+        # No single-file size: this artifact is a directory whose members are sized by their own
+        # records. A `expected_size_bytes` here would be compared against a directory stat and
+        # always disagree.
         expected_size_bytes: null
         expected_sha256: null
-        status: CHECKPOINT_MAPPING_UNVERIFIED
-        checkpoint_mapping_status: UNVERIFIED
+        status: URL_VERIFIED
+        checkpoint_mapping_status: VERIFIED_METADATA
+        # Staged as `clvc/`, not `clvc_net/` — the directory name is the author archive's.
+        checkpoint_base_relative: ../../checkpoints/clvc
   - model_id: dcnet
     replay_status: REPLAY_CODE_IMPLEMENTED
     category_model_policy: shared
@@ -979,9 +1036,20 @@ models:
     notes: Native evaluator masks references and fuses log-softmax branch scores. Standard run directory requires config.json plus trained_model.pth; standard config uses ImageNet-pretrained ResNet-50, not optional DeepFashion DenseNet.
     checkpoint_variants:
       - checkpoint_id: fashioniq_run_directory
-        filename: fashioniq_dcnet
+        # The author ships the run directory itself; there is no directory named after the
+        # experiment, so `filename` names the directory the members occupy (`"."`), exactly as
+        # `clvc_net` now does. `"fashioniq_dcnet"` existed in no tree on disk.
+        filename: "."
         artifact_type: run_directory
         required_files: [config.json, trained_model.pth]
+        # `base_trainer.py:191` opens `<resume>/trained_model.pth`; the digest below is of the
+        # staged bytes and was measured, not published. The staged `config.json` is NOT the author's
+        # original: three operational values were changed for this host (`data_dir`, `num_workers`,
+        # `trainer.save_dir`). Its sha is recorded so the substitution is pinned rather than silent,
+        # and the author's 1982-byte original is recorded beside it for comparison.
+        bundle_members:
+          - {filename: trained_model.pth, expected_sha256: 130f031e0f7808ccf5f15630a691bd7af95ad9fadbf94f64acfce64e7d8b850f}
+          - {filename: config.json, expected_sha256: fa5fca78790a33063a4e73b379393f4ffbbf1b251b3c27058aed481136984ba0}
         download_url: null
         source_url: https://drive.google.com/drive/folders/1wgygqF095Di67EaHaGOXbwh3wEzk9izB?usp=sharing
         source_type: author_google_drive
@@ -989,8 +1057,15 @@ models:
         evaluation_noise_pct: 0
         expected_size_bytes: null
         expected_sha256: null
-        status: CHECKPOINT_MAPPING_UNVERIFIED
-        checkpoint_mapping_status: UNVERIFIED
+        status: URL_VERIFIED
+        # ESTABLISHED from the bytes. The checkpoint is the trainer's own record
+        # (`base_trainer.py:158-168`): {arch: 'CENet', epoch: 82, monitor_best, state_dict, config,
+        # optimizer}. Rebuilding `CENet` from the config the checkpoint itself embeds and loading
+        # strictly gives 518/518 tensors, 0 missing, 0 unexpected. The embedded `monitor_best`
+        # (0.4119) reproduces the `comb_avg` the author's own `val/info.log` printed (0.4083), and
+        # the embedded `data_loader.args.categories` are the three FashionIQ ones.
+        checkpoint_mapping_status: VERIFIED_METADATA
+        checkpoint_base_relative: ../../checkpoints/dcnet
   - model_id: combiner_rn50x4_noft
     # The pinned validator has no dataset-root option: `src/data_utils.py:base_path` fixes the data root to
     # `<checkout>/fashionIQ_dataset` and opens `.jpg` images there. The canonical FashionIQ
@@ -1042,25 +1117,37 @@ models:
       # adaptation rather than as upstream intent.
       packages: [pandas==1.4.2, comet-ml==3.21.0, clip @ git+https://github.com/openai/CLIP.git@a1d071733d7111c9c014f024669f959182114e33]
     strict_clean_checkpoint_available: null
-    notes: Native full-gallery reference-eligible evaluator verified. RN50x4 noft Combiner state mapping is unverified; base OpenAI CLIP RN50x4 remains an evaluation asset.
+    notes: Native full-gallery reference-eligible evaluator verified. The staged Combiner state loads strictly into the pinned class at the geometry the adapter passes; base OpenAI CLIP RN50x4 remains an evaluation asset.
     checkpoint_variants:
       - checkpoint_id: rn50x4_noft_unresolved
-        filename: rn50x4-noft-unresolved.pt
+        # The release member's own name, which is the file that exists.
+        filename: fiq_comb_RN50x4_noft.pt
         artifact_type: file
         download_url: null
         # The Drive folder documents the release structure and names exactly the FashionIQ noft file
-        # `FashionIQ/RN50x4_noft/fiq_comb_RN50x4_noft.pt` (folder README; final audit C-4); no checksum
-        # is published, so the bytes stay unmapped until one exists.
+        # `FashionIQ/RN50x4_noft/fiq_comb_RN50x4_noft.pt` (folder README; final audit C-4). No author
+        # checksum is published, so the digest below is the MEASURED one: it pins the bytes in place
+        # without claiming author provenance.
         source_url: https://drive.google.com/drive/folders/1ny2hhzP8HZBnXhjvDEni8P8G4_inCNTv?usp=sharing
         source_type: author_google_drive
         # Noft configuration is noise-free by construction (frozen encoders; the committed noft rows
         # assert checkpoint_training_noise_pct: 0). Recorded so gate selection can match.
         checkpoint_training_noise_pct: 0
         evaluation_noise_pct: 0
-        expected_size_bytes: null
-        expected_sha256: null
-        status: CHECKPOINT_MAPPING_UNVERIFIED
-        checkpoint_mapping_status: UNVERIFIED
+        expected_size_bytes: 236017921
+        expected_sha256: b31882fe6f7e3e194cb9cfda048926844ee0ccc9d4ebc5483fb3bacfa5972955
+        status: URL_VERIFIED
+        # ESTABLISHED from the bytes, in the two ways a bare state_dict allows. Structure: the file
+        # is {'epoch': 165, 'Combiner': OrderedDict(12 tensors)} — exactly the two keys
+        # `validate.py:306` reads — with geometry 640->2560, 5120->5120, 5120->640, i.e. the
+        # `Combiner(feature_dim=640, projection_dim=2560, hidden_dim=5120)` the adapter builds for
+        # RN50x4 (RN50 would be 1024-wide, ViT-L 768-wide, so the width identifies the encoder).
+        # Load: `Combiner(640, 2560, 5120).load_state_dict(state["Combiner"], strict=True)` succeeds
+        # with 0 missing and 0 unexpected. A pickle-only fingerprint cannot name a class here (the
+        # archive's only globals are OrderedDict and torch's tensor rebuilders), which is why the
+        # strict load and the shapes carry this one.
+        checkpoint_mapping_status: VERIFIED_METADATA
+        checkpoint_base_relative: ../../checkpoints/clip4cir/FashionIQ/RN50x4_noft
   - model_id: clip4cir_rn50x4_fullft
     # The pinned validator has no dataset-root option: `src/data_utils.py:base_path` fixes the data root to
     # `<checkout>/fashionIQ_dataset` and opens `.jpg` images there. The canonical FashionIQ
@@ -1116,24 +1203,48 @@ models:
       # adaptation rather than as upstream intent.
       packages: [pandas==1.4.2, comet-ml==3.21.0, clip @ git+https://github.com/openai/CLIP.git@a1d071733d7111c9c014f024669f959182114e33]
     strict_clean_checkpoint_available: null
-    notes: Native full-gallery reference-eligible evaluator verified. RN50x4 fullft needs separately loaded Combiner and fine-tuned CLIP states; author pairing is unverified.
+    notes: Native full-gallery reference-eligible evaluator verified. RN50x4 fullft needs separately loaded Combiner and fine-tuned CLIP states; both are staged, hashed, and each loads strictly into the object `validate.py` builds.
     checkpoint_variants:
       - checkpoint_id: rn50x4_fullft_unresolved
-        filename: rn50x4-fullft-unresolved.pt
-        artifact_type: bundle_placeholder
-        required_files: [combiner_state.pt, clip_state.pt]
+        # The bundle's members keep the AUTHOR's filenames; the artifact is the directory holding
+        # them. `combiner_state.pt` / `clip_state.pt` were the adapter's internal spellings and no
+        # file by either name exists, so declaring them made a complete pair read as missing.
+        filename: "."
+        artifact_type: bundle_directory
+        required_files: [fiq_comb_RN50x4_fullft.pt, fiq_clip_RN50x4_fullft.pt]
+        bundle_members:
+          - {filename: fiq_comb_RN50x4_fullft.pt, expected_sha256: 7c7c0a10fb4c995cb1ded9ad70a58891d50c622263c54131523bfb232b493f8e}
+          - {filename: fiq_clip_RN50x4_fullft.pt, expected_sha256: 4111ac139cf96ac0cf31b30bf8f55b654247b06f0f5fbee4fe8dcc8c1c7cfd2f}
         download_url: null
         source_url: https://drive.google.com/drive/folders/1ny2hhzP8HZBnXhjvDEni8P8G4_inCNTv?usp=sharing
         source_type: author_google_drive
         # Paper §4.1: task-oriented fine-tuning with no noise injection; the committed row asserts
-        # a clean condition. Recording 0 makes the gate comparable; the checkpoint itself remains
-        # unmapped and refused until the Drive pair is identified.
+        # a clean condition. Recording 0 makes the gate comparable.
         checkpoint_training_noise_pct: 0
         evaluation_noise_pct: 0
         expected_size_bytes: null
         expected_sha256: null
-        status: CHECKPOINT_MAPPING_UNVERIFIED
-        checkpoint_mapping_status: UNVERIFIED
+        status: URL_VERIFIED
+        # ESTABLISHED from the bytes. Each member names its own role and each loads strictly into the
+        # object `validate.py` builds:
+        #   * `fiq_comb_RN50x4_fullft.pt` = {'epoch': 87, 'Combiner': OrderedDict(12)} ->
+        #     `Combiner(640, 2560, 5120)` strict, 0 missing / 0 unexpected.
+        #   * `fiq_clip_RN50x4_fullft.pt` = {'epoch': 6, 'CLIP': OrderedDict(669)} -> the OpenAI
+        #     `CLIP` state, strict, 0 missing / 0 unexpected, 0 key difference against the stock
+        #     RN50x4 architecture (input 288, output 640, vision stage blocks 4/6/10/6).
+        # And it is genuinely FINE-TUNED, not a renamed stock file: 413 of the 669 tensors that the
+        # stock RN50x4 also has differ in value (61.73 %). The noft sibling has only a Combiner, which
+        # is what "frozen encoders" means — so the two variants cannot be each other's file.
+        checkpoint_mapping_status: VERIFIED_METADATA
+        checkpoint_base_relative: ../../checkpoints/clip4cir/FashionIQ/RN50x4_fullft
+        # PREREQUISITE, not yet satisfied: `adapters/models.py:CLIP4CirFullftAdapter.command`
+        # hard-codes `combiner_state.pt` / `clip_state.pt` instead of reading `required_files` from
+        # this record. With the author filenames declared here, that adapter would pass two
+        # non-existent paths to `validate.py`. Nothing can run in that state anyway (no
+        # WORKBENCH_CLIP4CIR_PYTHON exists, so the environment tier refuses first), but the adapter
+        # MUST be changed to resolve its two member paths from the declaration before this row is
+        # allowed to run. Declaring the adapter's spellings instead would recreate the original
+        # defect: an artifact description that names no file on disk.
   - model_id: tgcir
     replay_status: PREFLIGHT_ONLY
     category_model_policy: shared
@@ -1183,19 +1294,36 @@ models:
       # (HTTP 200 on `clip/clip.py`) and defines both `load` and `tokenize`.
       packages: ['clip @ git+https://github.com/openai/CLIP.git@a1d071733d7111c9c014f024669f959182114e33', numpy==1.22.3, pandas==1.4.2, Pillow]
     strict_clean_checkpoint_available: null
-    notes: Native annotation endpoint-union/reference-excluded evaluator verified. Pinned test.py has no CLI/checkpoint replay; TG-CIR.zip FashionIQ member mapping and hash remain unresolved.
+    notes: Native annotation endpoint-union/reference-excluded evaluator verified. Pinned test.py has no CLI/checkpoint replay, so `workbench/replay/tgcir.py` supplies the shell. The extracted archive member is the FashionIQ checkpoint and loads strictly into `model.VCG_CIR`; only the archive-member NAME was ever unresolved.
     checkpoint_variants:
       - checkpoint_id: tgcir_archive_unresolved
-        filename: tgcir-fashioniq-unresolved.pt
+        # The name the archive actually contains, under `checkpoints/`.
+        filename: Fashioniq.pt
         download_url: null
         source_url: https://drive.google.com/file/d/1OdZTtJqy-RTpYXBaq5ThmH3IBnGvYCyi/view
         source_type: author_google_drive
         checkpoint_training_noise_pct: null
         evaluation_noise_pct: 0
-        expected_size_bytes: null
-        expected_sha256: null
-        status: CHECKPOINT_MAPPING_UNVERIFIED
-        checkpoint_mapping_status: UNVERIFIED
+        expected_size_bytes: 607928637
+        expected_sha256: c37768f374c75bebff1299e870518c23bf6db3dc8a75c4d1f729ccd6dd02e966
+        status: URL_VERIFIED
+        # ESTABLISHED from the bytes, and settled by a test that can FAIL. The pickle's globals are
+        # `model VCG_CIR` / `model Backbone` / `model TokenLearner` / `model SpatialAttention` plus
+        # `clip.model CLIP` — the pinned `model.py` classes. The restored module declares
+        # local_token_num=8, global_token_num=4, local_weight[12], t=0.1, clip backbone
+        # 224px / 512-dim / conv1 16x16 (ViT-B/16). Rebuilding `VCG_CIR` and loading strictly:
+        #   hidden 512, Q=8, P=4  -> 489/489, 0 missing, 0 unexpected -> STRICT_OK
+        #   hidden 512, Q=4, P=8  -> 8 unexpected keys                  -> FAIL
+        #   hidden 1024, Q=8, P=4 -> shape mismatch on the tokenizer    -> FAIL
+        #   hidden 1024, Q=4, P=8 -> 8 unexpected keys                  -> FAIL
+        # Three of four permutations are rejected by tensors alone, and the surviving one is the
+        # source's own default (`train.py:60,68,69`: feature_dim 512, P 4, Q 8). The archive also
+        # carries `checkpoints/Fashioniq_metrics.json` beside the weight, recording
+        # dress 45.2157 / shirt 52.6006 / toptee 56.1448 -> 51.32 / 73.09, which is the paper row.
+        checkpoint_mapping_status: VERIFIED_METADATA
+        # The member lives in the EXTRACTED archive tree, not the main staging tree. Kept there on
+        # purpose: `Fashioniq_metrics.json` sits beside it and is part of the provenance.
+        checkpoint_base_relative: ../../downloads/tgcir/x/checkpoints
   - model_id: sprc
     # `src/data_utils.py:base_path` derives the data root from the file location and the
     # pinned dataset opens `fashionIQ_dataset/images/{id}.png`; there is no dataset-root
@@ -1276,6 +1404,11 @@ models:
         expected_sha256: null
         status: CHECKPOINT_MAPPING_UNVERIFIED
         checkpoint_mapping_status: UNVERIFIED
+        # Declared-missing, and it genuinely is: a filesystem-wide search found no `sprc_fiq.pt` and
+        # no downloaded OneDrive blob for it, so there are no bytes to establish anything from. The
+        # relocation below is still declared because the file belongs in the same tree once it
+        # arrives; it does not make the variant present.
+        checkpoint_base_relative: ../../checkpoints/sprc
       - checkpoint_id: sprc_fiq_vitl
         filename: sprc_fiq_vitl.pt
         backbone: pretrain_vitL
@@ -1285,11 +1418,21 @@ models:
         checkpoint_training_noise_pct: null
         evaluation_noise_pct: 0
         expected_size_bytes: 1459756541
-        expected_sha256: null
-        # Obtainability: reachable, but no author checksum and the class-key mapping is not
-        # established, so the mapping stays UNVERIFIED rather than being promoted on a filename.
-        status: CHECKPOINT_MAPPING_UNVERIFIED
-        checkpoint_mapping_status: UNVERIFIED
+        expected_sha256: 19386104271c01ea03ee2177575c0e55f98edd3ba61a116d78f2e61ab5dbea08
+        status: URL_VERIFIED
+        # ESTABLISHED from the bytes, in the direction that can FAIL. The file is
+        # {'epoch': 7, 'Blip2QformerCirAlignPrompt': OrderedDict(628)} — indexed by exactly the
+        # `blip_model.__class__.__name__` key `blip_validate.py:49` reads. Its backbone tensors are
+        # conv1 [1024,3,14,14], positional_embedding [257,1024], class_embedding [1024] — CLIP
+        # ViT-L/14, not EVA-CLIP ViT-g — with Q-Former hidden 768, 32 query/prompt tokens,
+        # vision/text projections 768->256. Loading into the pinned factory:
+        #   model_type 'pretrain_vitL' -> 628/628, 0 missing, 0 unexpected -> STRICT_OK
+        #   model_type 'pretrain'      -> 511 missing, 281 unexpected        -> STRICT_FAIL
+        # So the `backbone: pretrain_vitL` declaration is confirmed by shape rather than by
+        # filename, and the 481-tensor disagreement with ViT-g is why the wrong backbone would have
+        # been silent: the loader is `strict=False`.
+        checkpoint_mapping_status: VERIFIED_METADATA
+        checkpoint_base_relative: ../../checkpoints/sprc
         scientific_variant: true
         variant_provenance:
           variant_id: vitl_backbone

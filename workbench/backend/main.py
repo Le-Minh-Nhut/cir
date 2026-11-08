@@ -5,6 +5,7 @@ import os
 
 import csv
 import io
+import hashlib
 import json
 import sys
 import re
@@ -25,6 +26,7 @@ from workbench.backend.composition import (
     get_composition_run_detail,
     get_composition_run_queries,
     list_composition_summaries,
+    unique_measurement_count,
 )
 from workbench.backend.errors import WorkbenchError
 from workbench.backend.index import database_path, rebuild_index
@@ -891,7 +893,74 @@ def _gate_fields(report: dict) -> dict:
         "per_query_export_available": report.get("per_query_export_available"),
         "evaluator_environment_knobs": (report.get("environment", {}).get("evaluator_environment_knobs")
                                         if isinstance(report.get("environment"), dict) else None),
+        # Which of the four independent facts this report can serve. A report with macro numbers
+        # but no per-query artifact is a real result with an absent capability, not a broken run,
+        # and the UI must be able to say which one it is without guessing from other fields.
+        "capabilities": _report_capabilities(report),
+        "transfer": _report_transfer(report),
+        # The identity of WHAT was measured, so "N artifacts" and "M measurements" are two
+        # different, computed numbers instead of a hardcoded pair.
+        "measurement": _report_measurement(report),
     }
+
+def _report_capabilities(report: dict) -> dict[str, bool]:
+    """Per-report capability flags, each read from the field that proves it."""
+    environment = report.get("environment") if isinstance(report.get("environment"), dict) else {}
+    return {
+        "aggregate_metrics": bool(report.get("observed_metrics")
+                                  or report.get("category_metrics")
+                                  or report.get("paper_sanity_metrics")),
+        "per_query_target_ranks": (report.get("per_query_state") == "EXPORTED"
+                                   or bool(report.get("per_query_artifact"))),
+        # No aggregate-only evaluator can emit candidate windows; the report says so itself.
+        "candidate_topk": bool(report.get("candidate_topk_state") == "EXPORTED"
+                               or report.get("candidate_topk_artifact")),
+        "image_availability": bool(environment.get("local_image_root")
+                                   or environment.get("dataset_root")),
+    }
+
+def _report_transfer(report: dict) -> dict:
+    """Transfer setting as a boolean plus the dataset pair it names."""
+    training = report.get("checkpoint_training_dataset")
+    label = report.get("checkpoint_transfer")
+    if isinstance(label, str) and label.strip():
+        return {"is_transfer": True, "training_dataset": training,
+                "evaluation_dataset": "FashionIQ", "label": label}
+    return {"is_transfer": bool(label), "training_dataset": training,
+            "evaluation_dataset": "FashionIQ" if label else None,
+            "label": label if isinstance(label, str) and label.strip() else None}
+
+def _report_measurement(report: dict) -> dict:
+    """Counts computed from the report: sample size, denominator, and the measurement identity."""
+    environment = report.get("environment") if isinstance(report.get("environment"), dict) else {}
+    identity = {
+        "model_id": report.get("model_id"),
+        "checkpoint_id": report.get("checkpoint_id"),
+        "protocol_id": report.get("protocol_id"),
+        "checkpoint_sha256": report.get("checkpoint_sha256"),
+        "bundle_manifest_digest": report.get("bundle_manifest_digest"),
+        "command_digest": report.get("command_digest"),
+        "environment_digest": report.get("environment_digest"),
+        # Included only when the evaluator recorded one: an absent knobs record is evidence of
+        # nothing and must never become the reason two runs are called duplicates.
+        "evaluator_environment_knobs": (environment.get("evaluator_environment_knobs")
+                                        if environment.get("evaluator_environment_knobs") else None),
+    }
+    missing = [name for name in ("checkpoint_sha256", "command_digest", "environment_digest")
+               if not identity.get(name)]
+    payload = json.dumps(identity, sort_keys=True, separators=(",", ":"), default=str)
+    recorded_count = report.get("query_count")
+    return {"sample_count": recorded_count,
+            "denominator": recorded_count,
+            # An evaluator that writes only macro numbers records no denominator at all. Reporting
+            # `null` with a reason is the honest answer; inventing the dataset's size would state a
+            # denominator the artifact never had.
+            "denominator_reason": None if recorded_count else
+            "the aggregate report records no query count; coverage is not derivable from it",
+            "identity": identity,
+            "group_id": hashlib.sha256(payload.encode("utf-8")).hexdigest()[:24],
+            "identity_confidence": "partial" if missing else "full",
+            "missing_identity_inputs": missing}
 
 @app.get("/api/benchmark-runs")
 def benchmark_runs():
@@ -909,7 +978,50 @@ def benchmark_runs():
              "checkpoint_id": report.get("checkpoint_id"), "protocol_id": report.get("protocol_id"),
              "checkpoint_training_noise_pct": report.get("checkpoint_training_noise_pct"),
              "evaluation_noise_pct": report.get("evaluation_noise_pct"),
-             **_gate_fields(report)} for report in _aggregate_reports()]
+             "duplicate_status": status,
+             "duplicate_attempt_count": counts,
+             **_gate_fields(report)}
+            for report, status, counts in _annotate_report_duplicates(_aggregate_reports())]
+
+def _annotate_report_duplicates(reports: list[dict]) -> list[tuple[dict, str, int]]:
+    """Group aggregate reports by measurement identity and label each row in place.
+
+    The dashboard used to print a literal "(1 unique measurement)" beside a computed certified
+    count. Both numbers are now derived: ``duplicate_status`` compares measurement identity, and a
+    report whose identity lacks the digest inputs that would prove any two rows equal or different
+    is reported as ``undetermined`` rather than being folded into either answer.
+    """
+    groups: dict[str, list[dict]] = {}
+    for report in reports:
+        groups.setdefault(_report_measurement(report)["group_id"], []).append(report)
+    output = []
+    for report in reports:
+        facts = _report_measurement(report)
+        members = groups[facts["group_id"]]
+        count = len(members)
+        if facts["identity_confidence"] == "partial":
+            status = "undetermined"
+        else:
+            status = "duplicate" if count > 1 else "unique"
+        output.append((report, status, count))
+    return output
+
+@app.get("/api/evidence/summary")
+def evidence_summary():
+    """Counts the dashboard may print, all computed from served artifacts."""
+    annotated = _annotate_report_duplicates(_aggregate_reports())
+    determined = {_report_measurement(report)["group_id"]
+                  for report, status, _count in annotated if status != "undetermined"}
+    undetermined = {_report_measurement(report)["group_id"]
+                    for report, status, _count in annotated if status == "undetermined"}
+    return {"aggregate_run_count": len(annotated),
+            "certified_aggregate_count": sum(1 for report, _status, _count in annotated
+                                             if (report.get("verification") or {}).get("certified")),
+            "unique_measurement_count": len(determined),
+            "undetermined_measurement_count": len(undetermined),
+            "duplicate_attempt_count": sum(count - 1 for _report, status, count in annotated
+                                           if status == "duplicate"),
+            "confidence": "partial" if undetermined else "full"}
 
 @app.get("/api/runs/gate")
 def run_gates():
@@ -918,23 +1030,74 @@ def run_gates():
 
 @app.get("/api/composition/runs")
 def composition_runs(subset: str | None = None, include_fixtures: bool = False,
-                     include_smoke: bool = False):
+                     include_smoke: bool = False, include_imported: bool = False):
     """Composition summaries: measured rows by default.
 
     Synthetic layout fixtures and query-limited smoke runs are development artifacts, so both are
     opt-in. ``include_fixtures=true`` / ``include_smoke=true`` append them after the measured rows.
+    Rows imported from an external artifact (``include_imported=true``) are also opt-in and sort
+    last: their numbers are the source artifact's, not ours. Every row carries ``capabilities``
+    (which of the four independent facts it can serve) and ``duplicate_status`` (derived from
+    measurement identity, never from a missing metadata field).
     """
     config = resolve_config()
     artifacts_root = config.WORKBENCH_ARTIFACTS_ROOT
     runs = list_composition_summaries(artifacts_root=artifacts_root, subset=subset,
                                       include_fixtures=include_fixtures,
-                                      include_smoke=include_smoke)
+                                      include_smoke=include_smoke,
+                                      include_imported=include_imported)
     if not runs and include_fixtures:
         create_fixture_summaries(artifacts_root)
         runs = list_composition_summaries(artifacts_root=artifacts_root, subset=subset,
-                                          include_fixtures=True, include_smoke=include_smoke)
+                                          include_fixtures=True, include_smoke=include_smoke,
+                                          include_imported=include_imported)
     return runs
 
+@app.get("/api/composition/capabilities")
+def composition_capabilities_summary(subset: str | None = None):
+    """Which capabilities the served runs actually carry, counted from their artifacts.
+
+    A single boolean cannot say "this run has ranks but no candidate window", so the counts are
+    per capability, and the unique-measurement count is filtered by measurement identity rather
+    than being a literal.
+    """
+    config = resolve_config()
+    runs = list_composition_summaries(artifacts_root=config.WORKBENCH_ARTIFACTS_ROOT, subset=subset,
+                                      include_fixtures=False, include_smoke=False)
+    counts = {"aggregate_metrics": 0, "per_query_target_ranks": 0,
+              "candidate_topk": 0, "image_availability": 0}
+    for run in runs:
+        for name, value in (run.get("capabilities") or {}).items():
+            if value:
+                counts[name] = counts.get(name, 0) + 1
+    return {"run_count": len(runs), "capability_counts": counts,
+            **unique_measurement_count(runs),
+            "image_availability_is_sample": True}
+
+@app.get("/api/composition/runs/{run_id}/candidates")
+def composition_candidates(run_id: str, subset: str = "full", condition: str = "multimodal",
+                           query_id: str | None = None, limit: int = 50, offset: int = 0):
+    """Candidate Top-K rows for one run, straight from the stored export.
+
+    Served from an artifact written by a controlled pipeline step; opening this page never starts
+    an evaluation. When the run stored no candidates the response says which status applies
+    (``TOPK_EXPORT_NOT_REQUESTED``, ``TOPK_EXPORT_INCOMPLETE``, ...) instead of an empty success.
+    """
+    config = resolve_config()
+    root = config.WORKBENCH_ARTIFACTS_ROOT
+    run = get_composition_run_detail(run_id=run_id, subset=subset, artifacts_root=root)
+    if run is None:
+        raise HTTPException(404, {"error": "composition_run_not_found",
+                                  "message": f"Composition run {run_id!r} with subset {subset!r} was not found."})
+    page = get_composition_run_queries(run_id=run_id, subset=subset, condition=condition,
+                                       query_id=query_id, limit=limit, offset=offset,
+                                       artifacts_root=root, top_k=limit)
+    return {"run_id": run_id, "condition": condition,
+            "candidates": page["candidates"], "counters": page["counters"],
+            "items": [{"query_id": item["query_id"], "target_rank": item["target_rank"],
+                       "candidate_status": item["candidate_status"],
+                       "top_results": item["top_results"]} for item in page["items"]],
+            "total": page["total"], "limit": limit, "offset": offset}
 
 @app.get("/api/composition/runs/{run_id}")
 def composition_run(run_id: str, subset: str = "full"):
@@ -958,6 +1121,8 @@ def composition_queries(
     order: str = "worst",
     limit: int = 50,
     offset: int = 0,
+    query_state: str | None = None,
+    top_k: int = 10,
 ):
     config = resolve_config()
     run = get_composition_run_detail(run_id=run_id, subset=subset, artifacts_root=config.WORKBENCH_ARTIFACTS_ROOT)
@@ -976,6 +1141,8 @@ def composition_queries(
         limit=limit,
         offset=offset,
         artifacts_root=config.WORKBENCH_ARTIFACTS_ROOT,
+        query_state=query_state,
+        top_k=top_k,
     )
 
 
@@ -1010,6 +1177,54 @@ def overlap(run_ids: str, k: int = 10):
 #: must describe a query a run could actually contain.
 ANNOTATION_QUERY_ID = re.compile(r"^(dress|shirt|toptee):[0-9]+:[^:]+:[^:]+$")
 
+#: The CIRCUS release query identity, e.g. `7:603`: `task_id:annotation_index`. It is a DIFFERENT
+#: identity form from the one above, not a looser version of it, so it gets its own pattern and its
+#: own admission rule -- the backend used to refuse every CIRCUS query id, which made it impossible
+#: to annotate the main dataset this workbench now serves.
+CIRCUS_QUERY_ID = re.compile(r"^[0-9]+:[0-9]+$")
+
+def annotation_query_id_error(query_id: str, protocol_id: str) -> dict | None:
+    """Why `query_id` cannot describe a query of `protocol_id`, or None when it can.
+
+    Two admitted identity forms, each bound to the protocol whose data actually uses it:
+
+    * `category:index:reference:target` -- the canonical FashionIQ `ResultRun` identity.
+    * `task:index` (`7:603`) -- the CIRCUS release identity, admitted ONLY under the release
+      protocol id AND ONLY when the loaded release actually contains that qid. A bare `7:603` is
+      therefore rejected under any other protocol, so two protocols can never share an annotation
+      by numeric coincidence: the (query_id, protocol_id) pair is the annotation key, and this
+      function is what makes that pair meaningful rather than merely unique.
+    """
+    if ANNOTATION_QUERY_ID.fullmatch(query_id):
+        return None
+    if CIRCUS_QUERY_ID.fullmatch(query_id):
+        from workbench.backend.composition import release_protocol_ids, release_query_ids
+
+        released_protocols = release_protocol_ids()
+        if protocol_id not in released_protocols:
+            return {"error": "query_id_protocol_mismatch",
+                    "message": "A CIRCUS task:index query id is only valid under the protocol of "
+                               "the loaded CIRCUS release.",
+                    "details": {"query_id": query_id, "protocol_id": protocol_id,
+                                "release_protocols": sorted(released_protocols)}}
+        known = release_query_ids()
+        if known is None:
+            return {"error": "query_dataset_unavailable",
+                    "message": "The CIRCUS release is not loaded locally, so this query id cannot "
+                               "be verified.",
+                    "details": {"query_id": query_id, "protocol_id": protocol_id}}
+        if query_id not in known:
+            return {"error": "unknown_query_id",
+                    "message": "No query with this id exists in the loaded CIRCUS release.",
+                    "details": {"query_id": query_id, "protocol_id": protocol_id,
+                                "known_query_count": len(known)}}
+        return None
+    return {"error": "invalid_query_id",
+            "message": "query_id must use the canonical category:index:reference:target identity, "
+                       "or a CIRCUS task:index id that exists in the loaded release.",
+            "details": {"query_id": query_id, "protocol_id": protocol_id,
+                        "accepted_forms": ["category:index:reference:target", "task:index"]}}
+
 class AnnotationInput(BaseModel):
     query_id: str
     protocol_id: str
@@ -1032,15 +1247,20 @@ def save_annotation(payload: AnnotationInput):
     # could produce, and then read it back as if it were about this workbench's data (found by an
     # independent audit). The two identities are validated against the SAME rules the canonical
     # schema uses, so an annotation cannot describe something the schema would refuse.
-    if payload.protocol_id not in PROTOCOL_IDS:
+    # The admitted protocols are the registry's PLUS the protocol of a locally loaded CIRCUS
+    # release. The release declares its own protocol id, and refusing it made every CIRCUS query
+    # unannotatable even though it is the data this workbench now serves. An arbitrary string is
+    # still refused: a protocol is admitted because something on disk claims it, never because it
+    # was typed.
+    from workbench.backend.composition import release_protocol_ids
+
+    known_protocols = set(PROTOCOL_IDS) | set(release_protocol_ids())
+    if payload.protocol_id not in known_protocols:
         raise HTTPException(400, {"error": "unknown_protocol", "message": "Unknown protocol id.",
                                   "details": {"protocol_id": payload.protocol_id,
-                                              "known": sorted(PROTOCOL_IDS)}})
-    if not ANNOTATION_QUERY_ID.fullmatch(payload.query_id):
-        raise HTTPException(400, {"error": "invalid_query_id",
-                                  "message": "query_id must use the canonical "
-                                             "category:index:reference:target identity.",
-                                  "details": {"query_id": payload.query_id}})
+                                              "known": sorted(known_protocols)}})
+    if problem := annotation_query_id_error(payload.query_id, payload.protocol_id):
+        raise HTTPException(400, problem)
     record = Annotation(**payload.model_dump(), updated_at=datetime.now(timezone.utc)).model_dump(mode="json")
     records = [item for item in read_json(ANNOTATIONS_PATH) if (item["query_id"], item["protocol_id"]) != (payload.query_id, payload.protocol_id)] + [record]
     write_json(ANNOTATIONS_PATH, records)

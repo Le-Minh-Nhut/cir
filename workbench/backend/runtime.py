@@ -1555,6 +1555,27 @@ def _cached_gpu_capability(model: dict[str, Any], report: EnvironmentReport,
             return None
     return cached
 
+def _record_dependency_facts(report: EnvironmentReport, model: dict[str, Any],
+                             required: dict[str, Any], imports: tuple[str, ...] | list[str]) -> None:
+    """Populate ``report.packages``/``report.imports`` without deciding a verdict.
+
+    Used only on the version-mismatch path, where the failure is already established but the
+    dependency INVENTORY is still the evidence an operator needs to reproduce it. It performs no
+    verification of its own: nothing here can turn a blocked environment into a ready one.
+    """
+    if not required and not imports:
+        return
+    report.packages, installed_modules, _unconfirmed = inspect_environment_distributions(
+        report.prefix, report.base_prefix)
+    import sys as _sys
+
+    installed_modules |= set(_sys.stdlib_module_names)
+    installed_modules |= set(_sys.builtin_module_names)
+    report.dependency_probe_executed = True
+    if imports:
+        report.imports = {name: name.split(".")[0] in installed_modules for name in imports}
+
+
 def verify_environment(model: dict[str, Any], *, probe: bool = True, require_cuda: bool = False,
                        authoritative: bool | None = None, advisory: bool = False,
                        config: Any | None = None) -> EnvironmentReport:
@@ -1642,19 +1663,23 @@ def verify_environment(model: dict[str, Any], *, probe: bool = True, require_cud
         contract = env
     declared = str(contract.get("python") or "").strip()
     python_ok = python_version_satisfies(declared, report.python_version)
+    # A failing version check used to `return report` here, which skipped dependency verification
+    # entirely: a blocked-because-wrong-Python environment reported NO package facts at all, so an
+    # operator debugging it could not tell a version mismatch from a set of missing packages, and
+    # `--plan` (which reads only tier/status) printed READY while the run later died at this gate.
+    # The verdict is still BLOCKED; it is now recorded AFTER the dependency probe, and a
+    # dependency failure outranks it because it is the more actionable fact.
+    python_problem: tuple[str, str] | None = None
     if python_ok is False:
-        report.tier = TIER_BLOCKED
-        report.status = "PYTHON_VERSION_MISMATCH"
-        report.reason = f"expected Python {declared}, found {report.python_version}"
-        return report
-    if python_ok is None and declared and declared.upper() != "UNKNOWN":
+        python_problem = ("PYTHON_VERSION_MISMATCH",
+                          f"expected Python {declared}, found {report.python_version}")
+    elif python_ok is None and declared and declared.upper() != "UNKNOWN":
         # A declaration we cannot interpret is not evidence of agreement.
-        report.tier = TIER_REQUIREMENTS_UNVERIFIED
-        report.status = "VERSION_CONSTRAINT_UNVERIFIED"
-        report.reason = f"unusable declared Python version {declared!r} (found {report.python_version})"
-        return report
-    report.tier = "PYTHON_VERSION_VERIFIED"
-    report.status = "PYTHON_OK"
+        python_problem = ("VERSION_CONSTRAINT_UNVERIFIED",
+                          f"unusable declared Python version {declared!r} (found {report.python_version})")
+    else:
+        report.tier = "PYTHON_VERSION_VERIFIED"
+        report.status = "PYTHON_OK"
 
     # Dependency verification. The inventory is read from disk by the orchestrator
     # itself: no code belonging to the environment runs, so the environment cannot
@@ -1662,6 +1687,19 @@ def verify_environment(model: dict[str, Any], *, probe: bool = True, require_cud
     adaptation = runtime_adaptation(model, undeclared_is_error=False)
     required = _adapted_packages(model, adaptation) if adaptation else _required_packages(model)
     imports = _required_imports(model)
+    if python_problem is not None:
+        # A wrong interpreter version is the verdict, but it must not hide the dependency facts:
+        # the old early return meant a version-mismatched environment reported `packages={}` and
+        # `imports={}`, so an operator could not distinguish "wrong Python only" from "wrong
+        # Python AND nothing installed", and `--plan` (tier/status only) printed READY for an
+        # environment that then died at this gate. The probe below is read-only and runs against
+        # the SAME prefix, so its answer is valid regardless of the interpreter version.
+        _record_dependency_facts(report, model, required, imports)
+        status, reason = python_problem
+        report.tier = TIER_BLOCKED if status == "PYTHON_VERSION_MISMATCH" else TIER_REQUIREMENTS_UNVERIFIED
+        report.status, report.reason = status, reason
+        _remember(model, require_cuda, report, config)
+        return report
     if required or imports:
         report.packages, installed_modules, unconfirmed = inspect_environment_distributions(
             report.prefix, report.base_prefix)

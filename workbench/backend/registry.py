@@ -113,6 +113,18 @@ def load_registry(path: Path | None = None) -> dict[str, Any]:
                 raise ValueError(f"non-clean evaluation policy for {model['model_id']}")
             if checkpoint["checkpoint_mapping_status"] not in mapping_statuses:
                 raise ValueError(f"unknown checkpoint mapping state for {model['model_id']}")
+            # `checkpoint_base_relative` relocates a variant's staging directory (see
+            # `checkpoint_path`). It must be RELATIVE and non-empty: `..` is legitimate and in fact
+            # necessary (the native tree is a sibling of the composition download tree, and naming
+            # it relatively is what keeps the declaration valid when the staging session is
+            # renamed), but an absolute value would pin one machine's layout into the registry.
+            relative_base = checkpoint.get("checkpoint_base_relative")
+            if relative_base is not None:
+                declared = PurePosixPath(str(relative_base))
+                if declared.is_absolute() or not declared.parts:
+                    raise ValueError(
+                        f"checkpoint_base_relative must be a non-empty relative path for "
+                        f"{model['model_id']}/{checkpoint['checkpoint_id']}: {relative_base!r}")
             # One direction only: a source state that says the mapping is unresolved must not
             # coexist with a mapping field claiming verification (the transposition). The
             # converse is deliberately NOT enforced: an obtainability fact such as
@@ -1849,10 +1861,36 @@ def checkpoint_path(model_id: str, checkpoint: dict[str, Any], root: Path | None
     * a **file** artifact's path is the file.
 
     The last two are the same expression, so there is one branch and no third convention to drift.
+
+    ``checkpoint_base_relative`` names where ONE variant's staging directory actually lives when it
+    is not the conventional ``<root>/<model_id>``. Two cohorts staged side by side cannot both obey
+    a single convention: the configured root holds the nine composition models, while every native
+    weight sits in a sibling tree -- and some of those directories are not even named after their
+    `model_id` (`clvc_net` is staged as `clvc/`). With one global root alone, all eleven native rows
+    reported "checkpoint missing" for a path reason rather than a science reason.
+
+    It is a FALLBACK, not an override: the conventional location is tried first and the declared
+    one only when the conventional one holds no artifact. Overriding unconditionally would ignore
+    the root a caller actually passed, which silently defeated a redirected root -- a test that
+    stages a checkpoint under its own temp root, or an operator pointing the workbench at another
+    session, would resolve into the repository instead of at what they configured. Every real
+    deployment resolves the same way either way, because the native tree never has a
+    ``<root>/<model_id>`` and the composition tree never has a declared relocation.
+
+    The value stays RELATIVE to the configured root (so it survives the staging session being
+    renamed) and REPLACES the ``<root>/<model_id>`` base instead of being appended to it -- that
+    replacement is what lets a differently-named directory resolve.
+
+    No ``resolve()``: the presence checks deliberately refuse a symlinked artifact or directory
+    (`_regular_file` / `_regular_directory`), and normalising the path first would defeat them.
     """
     from workbench.backend.operator_config import resolve_config
 
-    base = (root or resolve_config().WORKBENCH_CHECKPOINT_ROOT) / model_id
+    configured = root or resolve_config().WORKBENCH_CHECKPOINT_ROOT
+    conventional = configured / model_id
+    relative = checkpoint.get("checkpoint_base_relative")
+    # Conventional first; the declared location only when the conventional one is absent.
+    base = conventional if (conventional.exists() or not relative) else configured / relative
     if checkpoint.get("bundle_id"):
         return base
     return base / checkpoint["filename"]

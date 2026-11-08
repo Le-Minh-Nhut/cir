@@ -1,6 +1,7 @@
 """Read-only API and cache for CIRCUS composition evaluation artifacts."""
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 from dataclasses import asdict
@@ -165,6 +166,26 @@ def is_smoke_summary(summary: Mapping[str, Any]) -> bool:
     smoke = summary.get("smoke")
     return bool(isinstance(smoke, Mapping) and smoke.get("limited"))
 
+#: Provenance values that mean "this row is not one of our evaluations". Matched on what the row
+#: declares about itself, never on a model name: an artifact imported from a released pipeline is
+#: real data, but it is not evidence about a model we ran, and it must not appear among default
+#: research results because its numbers would be read as ours.
+IMPORTED_PROVENANCE_SOURCES = frozenset({
+    "released_audit_retriever",
+    "released_artifact_import",
+    "external_artifact",
+})
+_IMPORTED_REPRODUCTION_STATUSES = frozenset({"RELEASED_ARTIFACT_IMPORT"})
+
+def is_imported_summary(summary: Mapping[str, Any]) -> bool:
+    """True when a row was imported from an external artifact rather than produced here."""
+    if is_fixture_summary(summary):
+        return False
+    source = str(summary.get("provenance_source") or "").strip().lower()
+    if source in IMPORTED_PROVENANCE_SOURCES:
+        return True
+    return str(summary.get("reproduction_status") or "").strip().upper() in _IMPORTED_REPRODUCTION_STATUSES
+
 # `execution_status` values the composition runner can emit: COMPLETED, PARTIAL, REUSED, FAILED
 # (workbench/composition/runner.py:985-986 plus the ``_write_failed_results`` default). Only
 # FAILED means the run produced no numbers; MODEL_UNAVAILABLE / EXACT_RANK_UNAVAILABLE /
@@ -212,6 +233,7 @@ def list_composition_summaries(
     subset: str | None = None,
     include_fixtures: bool = True,
     include_smoke: bool = True,
+    include_imported: bool = False,
 ) -> list[dict[str, Any]]:
     """Scan <artifacts>/composition/summary/ and return validated summaries.
 
@@ -219,7 +241,8 @@ def list_composition_summaries(
     then smoke-limited runs, then synthetic fixtures, with run_id breaking ties. A fixture can
     never sort above measured data on a byte-order accident, a failed run can never outrank a run
     that measured something, and a query-limited run can never outrank a full measurement it does
-    not measure.
+    not measure. Rows imported from an external artifact are opt-in (``include_imported``) and sort
+    in their own tier: they are real data, but not evidence about a model this workbench ran.
     """
     if artifacts_root is None:
         artifacts_root = resolve_config().WORKBENCH_ARTIFACTS_ROOT
@@ -246,9 +269,17 @@ def list_composition_summaries(
                     continue
                 if not include_smoke and is_smoke_summary(summary):
                     continue
+                if not include_imported and is_imported_summary(summary):
+                    continue
                 results.append(summary)
+    for summary in results:
+        decorate_summary(artifacts_root, summary)
+    annotate_duplicate_attempts(results)
+
     def rank(summary: Mapping[str, Any]) -> tuple[int, str, str]:
-        if is_fixture_summary(summary):
+        if is_imported_summary(summary):
+            tier = 4
+        elif is_fixture_summary(summary):
             tier = 3
         elif is_failed_summary(summary):
             tier = 1  # visible, but never ranked as if it produced numbers
@@ -261,6 +292,421 @@ def list_composition_summaries(
     results.sort(key=rank)
     return results
 
+
+# ---------------------------------------------------------------------------------------------
+# Capabilities, per-run statistics and measurement identity.
+#
+# One boolean ("this run is broken") cannot describe the four independent facts a CIRCUS run can
+# or cannot carry: aggregated numbers, per-query exact target ranks, candidate Top-K windows, and
+# locally resolvable images. A run with ranks but no candidates is *not* broken, and a run whose
+# images are missing is not a run that scored nothing. Each fact is computed from the artifact that
+# proves it, and each absence carries a named status instead of a bare false.
+# ---------------------------------------------------------------------------------------------
+
+#: Per-query failure markers, mapped to the pipeline stage that produced them. An unscored query
+#: is a MAPPING/pipeline fact (an ambiguous garment category, a missing reference image); it is a
+#: different thing from a query that was scored and simply retrieved badly, and the API must never
+#: merge them into one "failure" bucket.
+_UNSCORED_KIND_MARKERS = (
+    ("category_unresolved", ("category unresolved", "category none has no adapter",
+                             "category '", "category \"")),
+    ("reference_image_missing", ("query reference image is missing",)),
+    ("positive_target_unresolved", ("no positive target resolved",)),
+    ("features_unavailable", ("query features unavailable",)),
+    ("exact_rank_unavailable", ("invalid full-gallery exact rank", "exact rank unavailable")),
+)
+
+def classify_unscored(failure: str | None) -> str | None:
+    """Name the pipeline stage behind a missing rank, or ``None`` when there was no failure.
+
+    ``None`` means "this query has a real rank"; it is never a synonym for "unknown". A failure
+    text that matches no declared marker returns ``"other"`` so an unrecognised cause is still
+    visible and countable rather than silently falling into "unscored for no reason".
+    """
+    if not failure:
+        return None
+    lowered = failure.lower()
+    for kind, markers in _UNSCORED_KIND_MARKERS:
+        if any(marker in lowered for marker in markers):
+            return kind
+    return "other"
+
+_RANKS_CACHE: dict[tuple[str, float, int], dict[str, Any] | None] = {}
+
+def load_run_ranks(artifacts_root: Path, run_id: str) -> dict[str, Any] | None:
+    """Load this run's per-query rank artifact (``runs/<run_id>/ranks/*.json``), or ``None``.
+
+    Cached on (path, mtime, size). ``None`` means no usable rank artifact exists for the run, which
+    ``per_query_target_ranks`` reports as ``CAPABILITY_ABSENT`` rather than an empty result.
+    """
+    try:
+        run_ranks_dir = resolve_composition_path(artifacts_root, f"runs/{run_id}/ranks")
+    except ValueError:
+        return None
+    if not run_ranks_dir.is_dir():
+        return None
+    for candidate in sorted(run_ranks_dir.glob("*.json")):
+        try:
+            stat = candidate.stat()
+        except OSError:
+            continue
+        key = (str(candidate), stat.st_mtime, stat.st_size)
+        if key in _RANKS_CACHE:
+            cached = _RANKS_CACHE[key]
+            if cached is not None:
+                return cached
+            continue
+        try:
+            content = json.loads(candidate.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            _RANKS_CACHE[key] = None
+            continue
+        if not (isinstance(content, dict) and isinstance(content.get("ranks"), dict)):
+            _RANKS_CACHE[key] = None
+            continue
+        _RANKS_CACHE[key] = content
+        return content
+    return None
+
+_IMAGE_AVAILABILITY_CACHE: dict[tuple, dict[str, Any]] = {}
+
+def _sample_identities(values: list[str], size: int) -> list[str]:
+    """Deterministic, evenly spread sample (never the first N, which cluster by category)."""
+    if len(values) <= size:
+        return list(values)
+    step = len(values) / float(size)
+    return [values[min(int(index * step), len(values) - 1)] for index in range(size)]
+
+def image_availability(artifacts_root: Path, summary: Mapping[str, Any],
+                       sample_size: int = 40) -> dict[str, Any]:
+    """Whether the images this run refers to can be opened locally, sampled deterministically.
+
+    A whole-gallery stat() of 74k files per request is not acceptable latency, so this answers from
+    a bounded, evenly spread sample of released identities through the run's own declared layout.
+    ``status`` is ``local`` when every sampled identity resolved, ``partial`` when some did not, and
+    ``unavailable`` when none did; ``unknown`` when no dataset root is configured. The sample size
+    is reported so a consumer never reads it as an exhaustive count.
+    """
+    config = resolve_config()
+    dataset_root = Path(config.FASHIONIQ_ROOT)
+    layout = str(summary.get("fashioniq_layout") or "fashioniq_standard")
+    key = (str(dataset_root), layout, str(summary.get("protocol_id")))
+    cached = _IMAGE_AVAILABILITY_CACHE.get(key)
+    if cached is not None:
+        return cached
+    if not dataset_root.is_dir():
+        result = {"status": "unknown", "sampled": 0, "resolved": 0,
+                  "reason": f"dataset root is absent: {dataset_root}"}
+    else:
+        from workbench.composition.runner import image_resolver_factory
+
+        try:
+            resolve = image_resolver_factory(dataset_root, layout)
+        except Exception as error:  # unknown layout name is a configuration fact, not a crash
+            return {"status": "unknown", "sampled": 0, "resolved": 0,
+                    "reason": f"{type(error).__name__}: {error}"}
+        try:
+            release = load_cached_release()
+        except Exception:
+            release = None
+        identities = list(getattr(getattr(release, "gallery", None), "image_ids", ()) or ())
+        names = getattr(release, "candidate_names", None) or {}
+        sample = _sample_identities(identities, sample_size)
+        resolved = sum(1 for identity in sample if resolve(identity, names) is not None)
+        if not sample:
+            result = {"status": "unknown", "sampled": 0, "resolved": 0,
+                      "reason": "no released gallery identities to sample"}
+        else:
+            status = ("local" if resolved == len(sample)
+                      else "unavailable" if resolved == 0 else "partial")
+            result = {"status": status, "sampled": len(sample), "resolved": resolved,
+                      "layout": layout, "reason": None}
+    _IMAGE_AVAILABILITY_CACHE[key] = result
+    return result
+
+def subset_qids(subset: str) -> set[str] | None:
+    """The qids that belong to `subset`, or None when the release is not loaded.
+
+    Counters that describe a scoped view must be scoped by the SAME predicate the view uses. The
+    API used to publish `sample_count` for the requested subset beside `scored_count` computed over
+    all 6003 queries, so `subset=sf` rendered `5,884 / 4,069 (144.6%)`.
+    """
+    release = load_cached_release()
+    if release is None:
+        return None
+    return {query.qid for query in release.queries if subset in query.subsets}
+
+def _ranks_statistics(ranks_data: Mapping[str, Any] | None,
+                      query_count: int | None,
+                      qids: set[str] | None = None) -> dict[str, Any] | None:
+    """Per-condition scored/unscored counts over `qids` (the requested view), from the artifact.
+
+    The invariant this guarantees: for every condition,
+    ``scored_count + unscored_count == denominator`` and ``coverage <= 1.0``. `qids=None` means the
+    whole artifact, which is only used for the explicitly named `whole_run` block.
+    """
+    if not ranks_data:
+        return None
+    ranks = ranks_data.get("ranks") or {}
+    failures = ranks_data.get("query_failures") or {}
+    conditions: dict[str, Any] = {}
+    for condition, table in ranks.items():
+        if not isinstance(table, Mapping):
+            continue
+        scoped = table if qids is None else {qid: rank for qid, rank in table.items() if qid in qids}
+        scored = [qid for qid, rank in scoped.items() if rank is not None]
+        unscored = [qid for qid, rank in scoped.items() if rank is None]
+        by_kind: dict[str, int] = {}
+        for qid in unscored:
+            kind = classify_unscored((failures.get(condition) or {}).get(qid)) or "other"
+            by_kind[kind] = by_kind.get(kind, 0) + 1
+        denominator = len(scoped)
+        conditions[condition] = {
+            "denominator": denominator,
+            "scored_count": len(scored),
+            "unscored_count": len(unscored),
+            "unscored_by_kind": dict(sorted(by_kind.items())),
+            # Coverage is over the queries this view was asked to score, so an ambiguous category
+            # lowers it instead of vanishing from the denominator.
+            "coverage": (len(scored) / denominator) if denominator else 1.0,
+        }
+    return {"conditions": conditions,
+            "query_count": query_count if query_count is not None else
+            max((item["denominator"] for item in conditions.values()), default=0)}
+
+_TRANSFER_ENV_EVALUATION_DATASET = "FashionIQ"
+
+def transfer_facts(summary: Mapping[str, Any]) -> dict[str, Any]:
+    """Normalise the transfer setting into one boolean plus the dataset pair it names.
+
+    ``checkpoint_transfer`` is written as a label string ("CIRR→FashionIQ transfer") by the runner
+    and as a boolean by fixtures; a consumer gating a scientific warning needs the boolean, so it is
+    derived here rather than re-derived (and possibly re-derived differently) in the UI.
+    """
+    raw = summary.get("checkpoint_transfer")
+    training = summary.get("checkpoint_training_dataset")
+    if isinstance(raw, str) and raw.strip():
+        is_transfer = True
+        evaluation = (_TRANSFER_ENV_EVALUATION_DATASET
+                      if _TRANSFER_ENV_EVALUATION_DATASET.lower() in raw.lower() else None)
+        label = raw
+    else:
+        is_transfer = bool(raw)
+        evaluation = _TRANSFER_ENV_EVALUATION_DATASET if is_transfer else None
+        label = (f"{training}→{evaluation} transfer" if is_transfer and training and evaluation
+                 else None)
+    return {"is_transfer": is_transfer,
+            "training_dataset": training,
+            "evaluation_dataset": evaluation,
+            "label": label}
+
+#: Inputs that make two runs the same measurement. A run missing the tensor environment digest or
+#: the checkpoint content identity cannot be proven distinct from another attempt, so it is
+#: reported as ``undetermined`` rather than either "unique" or "duplicate".
+def measurement_identity(summary: Mapping[str, Any]) -> dict[str, Any]:
+    """The defensible identity of WHAT was measured (not which file it landed in)."""
+    runtime = summary.get("runtime") if isinstance(summary.get("runtime"), Mapping) else {}
+    interpreter = (runtime.get("model_interpreter")
+                   if isinstance(runtime.get("model_interpreter"), Mapping) else {})
+    metrics = summary.get("metrics") if isinstance(summary.get("metrics"), Mapping) else {}
+    knobs = summary.get("evaluator_environment_knobs")
+    identity = {
+        "model_id": summary.get("model_id"),
+        "checkpoint_id": summary.get("checkpoint_id"),
+        "checkpoint_identity": summary.get("checkpoint_identity"),
+        "protocol_id": summary.get("protocol_id"),
+        "subset": summary.get("subset"),
+        "gallery_identity_sha256": summary.get("gallery_identity_sha256"),
+        "query_count": summary.get("query_count"),
+        "conditions": sorted(summary.get("conditions") or ()),
+        "seed": summary.get("seed"),
+        "preprocessing": summary.get("preprocessing"),
+        "environment_fingerprint": interpreter.get("environment_fingerprint"),
+        "checkpoint_transfer": transfer_facts(summary)["label"],
+        # An absent knobs record is evidence of nothing; it is included only when the evaluator
+        # actually recorded one, so two unrelated aggregate runs cannot be declared duplicates
+        # merely because neither carries the field.
+        "evaluator_environment_knobs": knobs if isinstance(knobs, Mapping) and knobs else None,
+        "measurement_denominator": (metrics.get("gap_cohort_count")
+                                    or summary.get("query_count")),
+    }
+    essential = ("checkpoint_identity", "gallery_identity_sha256", "environment_fingerprint")
+    missing = [name for name in essential if not identity.get(name)]
+    payload = json.dumps(identity, sort_keys=True, separators=(",", ":"), default=str)
+    return {"identity": identity,
+            "group_id": hashlib.sha256(payload.encode("utf-8")).hexdigest()[:24],
+            "missing_identity_inputs": missing,
+            "confidence": "partial" if missing else "full"}
+
+def annotate_duplicate_attempts(summaries: list[dict[str, Any]]) -> None:
+    """Group the served rows by measurement identity and label each row in place.
+
+    ``duplicate_status`` is ``unique`` (one attempt of this measurement), ``duplicate`` (more than
+    one artifact measured the same thing), or ``undetermined`` when the recorded identity lacks an
+    input that would prove any two rows the same or different. Duplicate detection never relies on
+    a missing ``evaluator_environment_knobs`` field.
+    """
+    groups: dict[str, list[dict[str, Any]]] = {}
+    for summary in summaries:
+        if is_fixture_summary(summary):
+            summary["measurement_identity"] = None
+            summary["measurement_group_id"] = None
+            summary["duplicate_attempt_count"] = 0
+            summary["duplicate_status"] = "synthetic_fixture"
+            continue
+        facts = measurement_identity(summary)
+        summary["measurement_identity"] = facts["identity"]
+        summary["measurement_group_id"] = facts["group_id"]
+        summary["measurement_identity_confidence"] = facts["confidence"]
+        summary["measurement_identity_missing_inputs"] = facts["missing_identity_inputs"]
+        groups.setdefault(facts["group_id"], []).append(summary)
+    for members in groups.values():
+        count = len(members)
+        confidence = "partial" if any(member.get("measurement_identity_confidence") == "partial"
+                                      for member in members) else "full"
+        status = ("undetermined" if confidence == "partial"
+                  else "duplicate" if count > 1 else "unique")
+        for member in members:
+            member["duplicate_attempt_count"] = count
+            member["duplicate_status"] = status
+
+def unique_measurement_count(summaries: list[dict[str, Any]]) -> dict[str, Any]:
+    """How many distinct measurements the served rows describe, and how sure that is."""
+    real = [item for item in summaries
+            if not is_fixture_summary(item) and not is_smoke_summary(item)]
+    groups = {item.get("measurement_group_id") for item in real}
+    partial = [item for item in real if item.get("measurement_identity_confidence") == "partial"]
+    return {"artifact_count": len(summaries),
+            "measured_artifact_count": len(real),
+            "unique_measurement_count": len(groups),
+            "undetermined_artifact_count": len(partial),
+            "confidence": "partial" if partial else "full"}
+
+def _candidate_capability(artifacts_root: Path, run_id: str) -> dict[str, Any]:
+    """Candidate Top-K availability, read from the export manifest (never inferred)."""
+    from workbench.composition.topk import export_index
+
+    try:
+        index = export_index(artifacts_root, run_id)
+    except Exception as error:
+        return {"available": False, "status": "TOPK_EXPORT_UNREADABLE",
+                "reason": f"{type(error).__name__}: {error}", "depth": None,
+                "conditions": [], "source": None, "path": None}
+    if not index:
+        return {"available": False, "status": "TOPK_EXPORT_NOT_REQUESTED",
+                "reason": "this run was produced without candidate Top-K export "
+                          "(enable it with --topk-depth on composition_eval)",
+                "depth": None, "conditions": [], "source": None, "path": None}
+    depths = sorted({int(item.get("depth")) for item in index.values() if item.get("depth")})
+    partial = sorted(name for name, item in index.items() if item.get("partial"))
+    return {"available": True,
+            "status": "AVAILABLE_PARTIAL" if partial else "AVAILABLE",
+            "reason": (f"partial export for conditions {partial}" if partial else None),
+            "depth": depths[-1] if depths else None,
+            "conditions": sorted(index),
+            "source": sorted({str(item.get("source") or "model_run") for item in index.values()}),
+            "gallery_count": next(iter(index.values())).get("gallery_count"),
+            "tie_policy": next(iter(index.values())).get("tie_policy"),
+            "path": next(iter(index.values())).get("path")}
+
+def composition_capabilities(artifacts_root: Path, summary: Mapping[str, Any],
+                            ranks_data: Mapping[str, Any] | None = None,
+                            sample_size: int = 40) -> tuple[dict[str, bool], dict[str, Any]]:
+    """The four independent capabilities of one run, as booleans plus the evidence behind them."""
+    run_id = str(summary.get("run_id") or "")
+    ranks_data = ranks_data if ranks_data is not None else load_run_ranks(artifacts_root, run_id)
+    has_numbers = _has_measured_numbers(summary.get("metrics"))
+    rank_count = 0
+    rank_conditions: list[str] = []
+    if ranks_data:
+        for condition, table in (ranks_data.get("ranks") or {}).items():
+            if isinstance(table, Mapping) and table:
+                rank_conditions.append(condition)
+                rank_count = max(rank_count, len(table))
+    candidates = _candidate_capability(artifacts_root, run_id)
+    images = image_availability(artifacts_root, summary, sample_size=sample_size)
+    detail = {
+        "aggregate_metrics": {
+            "available": bool(has_numbers),
+            "status": "AVAILABLE" if has_numbers else (
+                "NO_NUMBERS_MEASURED" if not is_fixture_summary(summary) else "SYNTHETIC_FIXTURE"),
+            "reason": None if has_numbers else "the summary carries no non-null score",
+        },
+        "per_query_target_ranks": {
+            "available": bool(ranks_data),
+            "status": "AVAILABLE" if ranks_data else "CAPABILITY_ABSENT",
+            "reason": None if ranks_data else
+            "no per-query rank artifact exists for this run (aggregate-only or failed)",
+            "query_count": rank_count or None,
+            "conditions": sorted(rank_conditions),
+        },
+        "candidate_topk": candidates,
+        "image_availability": images,
+    }
+    flags = {
+        "aggregate_metrics": detail["aggregate_metrics"]["available"],
+        "per_query_target_ranks": detail["per_query_target_ranks"]["available"],
+        "candidate_topk": candidates["available"],
+        "image_availability": images["status"] in {"local", "partial"},
+    }
+    return flags, detail
+
+def decorate_summary(artifacts_root: Path, summary: dict[str, Any],
+                     ranks_data: Mapping[str, Any] | None = None) -> dict[str, Any]:
+    """Attach capabilities, capabilities detail, statistics and transfer facts to a summary.
+
+    Applied on read (and cached with the parsed summary) so a list row and a detail row can never
+    disagree about what a run can do.
+    """
+    flags, detail = composition_capabilities(artifacts_root, summary, ranks_data=ranks_data)
+    ranks_data = ranks_data if ranks_data is not None else load_run_ranks(
+        artifacts_root, str(summary.get("run_id") or ""))
+    subset = str(summary.get("subset") or "full")
+    qids = subset_qids(subset)
+    # Scoped to the SAME subset `query_count` describes, so scored + unscored == sample_count and
+    # coverage can never exceed 1.0. The whole-artifact view is published under an explicit
+    # `whole_run` name rather than being mistaken for a scoped figure.
+    statistics = _ranks_statistics(ranks_data, summary.get("query_count"), qids)
+    whole_run = _ranks_statistics(ranks_data, None, None)
+    summary["capabilities"] = flags
+    summary["capability_detail"] = detail
+    summary["statistics"] = statistics
+    summary["transfer"] = transfer_facts(summary)
+    summary["checkpoint_identity"] = summary.get("checkpoint_identity")
+    metrics = summary.get("metrics") if isinstance(summary.get("metrics"), Mapping) else {}
+    denominator = metrics.get("gap_cohort_count") or summary.get("query_count")
+    unscored: dict[str, int] = {}
+    if statistics:
+        for condition, values in statistics["conditions"].items():
+            for kind, count in (values.get("unscored_by_kind") or {}).items():
+                unscored[kind] = max(unscored.get(kind, 0), count)
+    # `unscored` (pipeline/mapping, no rank exists) and `retrieval_failure` (a real rank worse than
+    # K) are separate counters over separate facts; the UI filters them apart.
+    # `None` means "no rank artifact, so this cannot be computed"; `0` means "computed, none
+    # unscored". Conflating them hid a clean run behind the same null an absent artifact produces.
+    summary["measurement"] = {
+        # Every counter here describes `subset`: scored + unscored == sample_count, coverage <= 1.
+        "subset": subset,
+        "sample_count": summary.get("query_count"),
+        "denominator": denominator,
+        "coverage": metrics.get("coverage"),
+        "scored_count": (statistics["conditions"].get("multimodal", {}).get("scored_count")
+                         if statistics else None),
+        "unscored_query_count": sum(unscored.values()) if statistics else None,
+        "unscored_by_kind": dict(sorted(unscored.items())) if statistics else None,
+        "image_availability_sample_size": detail["image_availability"].get("sampled"),
+        # Explicitly NOT scoped to `subset`; here so a consumer that wants it cannot confuse it
+        # with the scoped figures above.
+        "whole_run": ({"query_count": whole_run["query_count"],
+                       "scored_count": whole_run["conditions"].get("multimodal", {})
+                       .get("scored_count"),
+                       "unscored_query_count": sum(
+                           (values.get("unscored_count") or 0)
+                           for values in whole_run["conditions"].values())}
+                      if whole_run else None),
+    }
+    summary["statistics_whole_run"] = whole_run
+    return summary
 
 def get_composition_run_detail(
     run_id: str,
@@ -288,9 +734,34 @@ def get_composition_run_detail(
                 # Add available subsets list
                 available = [s for s in SUBSETS if (run_dir / f"{s}.json").is_file()]
                 summary["available_subsets"] = available
+                decorate_summary(artifacts_root, summary)
+                annotate_duplicate_attempts([summary])
                 return summary
     return None
 
+
+def release_protocol_ids() -> frozenset[str]:
+    """Protocol ids a locally loaded CIRCUS release declares; empty when none is loaded.
+
+    An annotation identity form is only admissible under a protocol whose data actually uses it,
+    so this is read from the release rather than matched against a protocol-name literal.
+    """
+    release = load_cached_release()
+    if release is None:
+        return frozenset()
+    protocol = getattr(getattr(release, "gallery", None), "protocol_id", None)
+    return frozenset({protocol}) if protocol else frozenset()
+
+def release_query_ids() -> frozenset[str] | None:
+    """Every qid in the loaded release, or ``None`` when no release is available.
+
+    ``None`` (cannot verify) is distinct from an empty set (a release with no queries): the caller
+    must not report "unknown query" when it simply could not look.
+    """
+    release = load_cached_release()
+    if release is None:
+        return None
+    return frozenset(query.qid for query in release.queries)
 
 def determine_query_outcome(
     ranks: Mapping[str, int | None],
@@ -316,6 +787,52 @@ def determine_query_outcome(
     return "unresolved"
 
 
+def _candidate_reader(release: Any, candidates: Mapping[str, Any]) -> dict[str, Any]:
+    """Validate the export's gallery identity ONCE, then resolve rows without re-hashing.
+
+    The digest covers the whole ordered released gallery, so recomputing it per query made a
+    6003-query page hash 74k identities 6003 times. The refusal is identical either way -- the
+    check is about the export, not about the query.
+    """
+    from workbench.composition.topk import gallery_digest
+
+    if not candidates.get("available"):
+        return {"status": candidates.get("status") or "TOPK_EXPORT_NOT_REQUESTED",
+                "reason": candidates.get("reason"), "rows": candidates.get("rows") or {}}
+    manifest = candidates.get("manifest") or {}
+    recorded = manifest.get("gallery_identity_sha256")
+    if recorded:
+        current = gallery_digest(getattr(release.gallery, "protocol_id", ""),
+                                 release.gallery.image_ids, release.candidate_names)
+        if current != recorded:
+            return {"status": "TOPK_EXPORT_GALLERY_MISMATCH",
+                    "reason": "candidate positions were produced against a different gallery "
+                              "identity than the one loaded now", "rows": {}}
+    return {"status": "AVAILABLE", "reason": None, "rows": candidates.get("rows") or {}}
+
+def _resolve_candidates(release: Any, reader: Mapping[str, Any], qid: str) -> dict[str, Any]:
+    """Resolve one query's stored gallery positions to released image names."""
+    if reader["status"] != "AVAILABLE":
+        return {"status": reader["status"], "reason": reader["reason"], "rows": []}
+    row = (reader["rows"] or {}).get(qid)
+    if row is None:
+        return {"status": "NO_CANDIDATES_FOR_QUERY", "rows": [],
+                "reason": "this query has no stored candidate window "
+                          "(unscored, or the export did not reach it)"}
+    ids = release.gallery.image_ids
+    names = release.candidate_names
+    rows = []
+    for position, score in row.get("topk") or []:
+        if not isinstance(position, int) or not 0 <= position < len(ids):
+            return {"status": "TOPK_EXPORT_CORRUPT", "rows": [],
+                    "reason": f"stored gallery position {position!r} is outside the gallery"}
+        identity = ids[position]
+        rows.append({"rank": len(rows) + 1,
+                     "image_id": names.get(identity, identity),
+                     "gallery_position": position,
+                     "score": float(score) if isinstance(score, (int, float)) else None})
+    return {"status": "AVAILABLE", "reason": None, "rows": rows}
+
 def get_composition_run_queries(
     run_id: str,
     subset: str = "full",
@@ -329,29 +846,26 @@ def get_composition_run_queries(
     limit: int = 50,
     offset: int = 0,
     artifacts_root: Path | None = None,
+    query_state: str | None = None,
+    top_k: int = 10,
 ) -> dict[str, Any]:
-    """Retrieve paginated per-query composition details with filtering."""
+    """Retrieve paginated per-query composition details with filtering.
+
+    ``query_state`` separates facts that used to be one bucket:
+
+    * ``unscored`` -- no rank exists because the pipeline could not process the query (ambiguous
+      garment category, missing reference image, unresolvable positive, missing features). The
+      cause is named in ``unscored_kind``.
+    * ``retrieval_failure`` -- a real rank exists and is worse than K.
+    * ``hit`` -- a real rank exists and is at or better than K.
+
+    ``top_k`` bounds how many candidate rows are attached per query; the stored window may be
+    deeper (``candidate_depth``) and its ranks are the scorer's own order, not the metric rank.
+    """
     if artifacts_root is None:
         artifacts_root = resolve_config().WORKBENCH_ARTIFACTS_ROOT
 
-    # 1. Locate ranks file for run_id
-    try:
-        run_ranks_dir = resolve_composition_path(artifacts_root, f"runs/{run_id}/ranks")
-    except ValueError as exc:
-        return {"items": [], "total": 0, "limit": limit, "offset": offset, "error": str(exc)}
-
-    ranks_data: dict[str, Any] | None = None
-    if run_ranks_dir.is_dir():
-        for candidate in sorted(run_ranks_dir.glob("*.json")):
-            try:
-                content = json.loads(candidate.read_text(encoding="utf-8"))
-                if isinstance(content, dict) and "ranks" in content:
-                    ranks_data = content
-                    break
-            except Exception:
-                continue
-
-    # 2. Load queries from release data
+    ranks_data = load_run_ranks(artifacts_root, run_id)
     release = load_cached_release()
     if release is None:
         return {
@@ -362,13 +876,20 @@ def get_composition_run_queries(
             "queries_unavailable_reason": "CIRCUS release query dataset not available locally.",
         }
 
+    from workbench.composition.topk import read_candidates
+
     ranks_by_condition = ranks_data.get("ranks", {}) if ranks_data else {}
     failures_by_condition = ranks_data.get("query_failures", {}) if ranks_data else {}
     target_condition = condition or "multimodal"
+    candidates = read_candidates(artifacts_root, run_id, target_condition)
+    reader = _candidate_reader(release, candidates)
+    candidate_depth = int((candidates.get("manifest") or {}).get("depth") or 0)
 
     # Filter release queries to subset
     subset_queries = [q for q in release.queries if subset in q.subsets]
     items: list[dict[str, Any]] = []
+    counters = {"scored": 0, "unscored": 0, "hit_at_k": 0, "retrieval_failure": 0,
+                "unscored_by_kind": {}, "candidates_available": 0}
 
     for q in subset_queries:
         q_ranks = {
@@ -377,11 +898,22 @@ def get_composition_run_queries(
         }
         q_outcome = determine_query_outcome(q_ranks)
         target_rank = q_ranks.get(target_condition)
+        failure_msg = readable_failure_message(
+            failures_by_condition.get(target_condition, {}).get(q.qid))
+        unscored_kind = classify_unscored(failure_msg) if target_rank is None else None
+        if target_rank is None:
+            state = "unscored"
+        elif target_rank <= SHORTCUT_K:
+            state = "hit"
+        else:
+            state = "retrieval_failure"
 
         # Filters
         if category and q.category != category:
             continue
         if outcome and q_outcome != outcome:
+            continue
+        if query_state and state != query_state:
             continue
         if query_id and q.qid != query_id:
             continue
@@ -390,9 +922,21 @@ def get_composition_run_queries(
         if max_rank is not None and (target_rank is None or target_rank > max_rank):
             continue
 
+        counters["scored" if target_rank is not None else "unscored"] += 1
+        if state == "hit":
+            counters["hit_at_k"] += 1
+        elif state == "retrieval_failure":
+            counters["retrieval_failure"] += 1
+        if unscored_kind:
+            kind_counts = counters["unscored_by_kind"]
+            kind_counts[unscored_kind] = kind_counts.get(unscored_kind, 0) + 1
+
         ref_name = release.candidate_names.get(q.reference_id, q.reference_id)
         pos_names = [release.candidate_names.get(p, p) for p in q.positive_ids]
-        failure_msg = readable_failure_message(failures_by_condition.get(target_condition, {}).get(q.qid))
+        resolved = _resolve_candidates(release, reader, q.qid)
+        window = resolved["rows"][:max(0, top_k)]
+        if window:
+            counters["candidates_available"] += 1
 
         items.append({
             "query_id": q.qid,
@@ -400,11 +944,20 @@ def get_composition_run_queries(
             "query_txt": q.query_txt,
             "reference_id": ref_name,
             "positive_ids": pos_names,
+            "reference_name": ref_name,
+            "positive_names": pos_names,
             "ranks": q_ranks,
             "target_rank": target_rank,
             "outcome": q_outcome,
+            "query_state": state,
+            "unscored": target_rank is None,
+            "unscored_kind": unscored_kind,
+            "retrieval_failure": state == "retrieval_failure",
             "failure": failure_msg,
-            "top_results": [],
+            "top_results": window,
+            "candidate_status": resolved["status"],
+            "candidate_reason": resolved["reason"],
+            "candidate_depth": candidate_depth or None,
         })
 
     # Sorting
@@ -423,11 +976,21 @@ def get_composition_run_queries(
         "total": total,
         "limit": limit,
         "offset": offset,
+        "condition": target_condition,
+        "counters": counters,
+        "candidates": {
+            "available": bool(candidates.get("available")),
+            "status": candidates.get("status"),
+            "reason": candidates.get("reason"),
+            "depth": candidate_depth or None,
+        },
+        "statistics": _ranks_statistics(ranks_data, len(subset_queries),
+                                        {query.qid for query in subset_queries}),
+        "statistics_whole_run": _ranks_statistics(ranks_data, None, None),
     }
     if not ranks_data:
         result["queries_unavailable_reason"] = (
-            "Per-query exact ranks not found on disk for this run (aggregate-only or pending run)."
-        )
+            "Per-query exact ranks not found on disk for this run (aggregate-only or pending run).")
     return result
 
 
