@@ -1,0 +1,10 @@
+### no conftest.py, no workbench.env, nothing injected
+30 passed in 0.33s
+### WORKBENCH_ARTIFACTS_ROOT=/home/heheboiz/data/cir/workbench/artifacts (no workbench.env)
+30 passed in 0.24s
+### WORKBENCH_CHECKPOINT_ROOT=/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads (no workbench.env)
+30 passed in 10.43s
+### CIR_DATA_ROOT=/home/heheboiz/data/cir/data (no workbench.env)
+30 passed in 0.24s
+### workbench.env restored, no env var
+DONE

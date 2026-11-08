@@ -1,0 +1,2 @@
+ADAPTERS:{"workbench.composition.model_encoder": "OK", "workbench.composition.model_limn": "OK"}
+ADAPTERS:{"workbench.composition.model_encoder": "OK", "workbench.composition.model_limn": "OK"}

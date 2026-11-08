@@ -1,0 +1,39 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+_________________ test_src08_modified_auxiliary_asset_rejected _________________
+
+csmcir_checkout = {'repo_root': PosixPath('/tmp/pytest-of-heheboiz/pytest-143/test_src08_modified_auxiliary_0/repo'), 'source': PosixPat...z/pytest-143/test_src08_modified_auxiliary_0/repo/data/FashionIQ'), 'head': '1d0482c494912b4636ef8bed0f169cacfbba940d'}
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x795797757950>
+
+    def test_src08_modified_auxiliary_asset_rejected(csmcir_checkout, monkeypatch):
+        """A declared asset whose bytes changed after acquisition is rejected.
+    
+        As in `test_src07`, the published digest is neutralized so the *recorded acquisition* digest is
+        the authority under test; COT_ours2 does now declare real published digests, because the author
+        Hub publishes those caption files.
+        """
+        model = csmcir_model(csmcir_checkout["head"])
+        source = csmcir_checkout["source"]
+        asset_dir = source / "COT_ours2" / "fashioniq"
+        asset_dir.mkdir(parents=True)
+        asset = asset_dir / "dress_cot_val.json"
+        asset.write_text('{"captions": []}')
+    
+        import workbench.backend.registry as registry
+    
+        original = registry.auxiliary_assets_for_model
+        monkeypatch.setattr(registry, "auxiliary_assets_for_model",
+                            lambda model_id: [{**a, "expected_sha256": None} for a in original(model_id)])
+    
+        _record_auxiliary_digests(csmcir_checkout, [asset])
+>       assert _source_dirty(source) is False, "recorded bytes are approved"
+E       AssertionError: recorded bytes are approved
+E       assert True is False
+E        +  where True = _source_dirty(PosixPath('/tmp/pytest-of-heheboiz/pytest-143/test_src08_modified_auxiliary_0/repo/third_party/CSMCIR'))
+
+workbench/tests/test_release_blocker_source_integrity.py:263: AssertionError
+=========================== short test summary info ============================
+FAILED workbench/tests/test_release_blocker_source_integrity.py::test_src08_modified_auxiliary_asset_rejected - AssertionError: recorded bytes are approved
+assert True is False
+ +  where True = _source_dirty(PosixPath('/tmp/pytest-of-heheboiz/pytest-143/test_src08_modified_auxiliary_0/repo/third_party/CSMCIR'))
+1 failed in 0.14s

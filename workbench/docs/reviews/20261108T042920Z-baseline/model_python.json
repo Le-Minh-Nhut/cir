@@ -1,0 +1,155 @@
+[
+ {
+  "model": "csmcir",
+  "var": "WORKBENCH_CSMCIR_PYTHON",
+  "declared": "3.9",
+  "configured": null,
+  "exists": false,
+  "actual": "",
+  "adapter": true
+ },
+ {
+  "model": "airknow",
+  "var": "WORKBENCH_AIRKNOW_PYTHON",
+  "declared": "3.8.10",
+  "configured": null,
+  "exists": false,
+  "actual": "",
+  "adapter": false
+ },
+ {
+  "model": "conesep",
+  "var": "WORKBENCH_CONESEP_PYTHON",
+  "declared": "3.8.10",
+  "configured": "/home/heheboiz/data/cir/workbench/envs/airknow-adapted/bin/python",
+  "exists": true,
+  "actual": "Python 3.11.15",
+  "adapter": true
+ },
+ {
+  "model": "ptha_mtst",
+  "var": "WORKBENCH_PTHA_MTST_PYTHON",
+  "declared": "3.9",
+  "configured": "/home/heheboiz/data/cir/workbench/envs/airknow-adapted/bin/python",
+  "exists": true,
+  "actual": "Python 3.11.15",
+  "adapter": true
+ },
+ {
+  "model": "habit",
+  "var": "WORKBENCH_HABIT_PYTHON",
+  "declared": "3.8.10",
+  "configured": "/home/heheboiz/data/cir/workbench/envs/airknow-adapted/bin/python",
+  "exists": true,
+  "actual": "Python 3.11.15",
+  "adapter": true
+ },
+ {
+  "model": "intent",
+  "var": "WORKBENCH_INTENT_PYTHON",
+  "declared": "3.9",
+  "configured": "/home/heheboiz/data/cir/workbench/envs/airknow-adapted/bin/python",
+  "exists": true,
+  "actual": "Python 3.11.15",
+  "adapter": true
+ },
+ {
+  "model": "hint",
+  "var": "WORKBENCH_HINT_PYTHON",
+  "declared": "3.8.10",
+  "configured": "/home/heheboiz/data/cir/workbench/envs/airknow-adapted/bin/python",
+  "exists": true,
+  "actual": "Python 3.11.15",
+  "adapter": true
+ },
+ {
+  "model": "encoder",
+  "var": "WORKBENCH_ENCODER_PYTHON",
+  "declared": "3.9",
+  "configured": "/home/heheboiz/data/cir/workbench/envs/pair-adapted/bin/python",
+  "exists": true,
+  "actual": "Python 3.11.15",
+  "adapter": true
+ },
+ {
+  "model": "pair",
+  "var": "WORKBENCH_PAIR_PYTHON",
+  "declared": "3.8.10",
+  "configured": null,
+  "exists": false,
+  "actual": "",
+  "adapter": false
+ },
+ {
+  "model": "clvc_net",
+  "var": "WORKBENCH_CLVC_PYTHON",
+  "declared": "3.7.6",
+  "configured": null,
+  "exists": false,
+  "actual": "",
+  "adapter": false
+ },
+ {
+  "model": "dcnet",
+  "var": "WORKBENCH_DCNET_PYTHON",
+  "declared": "3.7.7",
+  "configured": null,
+  "exists": false,
+  "actual": "",
+  "adapter": false
+ },
+ {
+  "model": "combiner_rn50x4_noft",
+  "var": "WORKBENCH_CLIP4CIR_PYTHON",
+  "declared": "3.8",
+  "configured": null,
+  "exists": false,
+  "actual": "",
+  "adapter": false
+ },
+ {
+  "model": "clip4cir_rn50x4_fullft",
+  "var": "WORKBENCH_CLIP4CIR_PYTHON",
+  "declared": "3.8",
+  "configured": null,
+  "exists": false,
+  "actual": "",
+  "adapter": false
+ },
+ {
+  "model": "tgcir",
+  "var": "WORKBENCH_TGCIR_PYTHON",
+  "declared": "UNKNOWN",
+  "configured": null,
+  "exists": false,
+  "actual": "",
+  "adapter": false
+ },
+ {
+  "model": "sprc",
+  "var": "WORKBENCH_SPRC_PYTHON",
+  "declared": "3.9",
+  "configured": null,
+  "exists": false,
+  "actual": "",
+  "adapter": false
+ },
+ {
+  "model": "limn",
+  "var": "WORKBENCH_LIMN_PYTHON",
+  "declared": "UNKNOWN",
+  "configured": "/home/heheboiz/data/cir/workbench/envs/limn-adapted/bin/python",
+  "exists": true,
+  "actual": "Python 3.11.15",
+  "adapter": true
+ },
+ {
+  "model": "tme",
+  "var": "WORKBENCH_TME_PYTHON",
+  "declared": "3.10",
+  "configured": "/home/heheboiz/data/cir/workbench/envs/tme-adapted/bin/python",
+  "exists": true,
+  "actual": "Python 3.10.22",
+  "adapter": true
+ }
+]

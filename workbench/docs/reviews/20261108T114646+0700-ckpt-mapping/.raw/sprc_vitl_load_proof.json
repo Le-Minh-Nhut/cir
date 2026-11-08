@@ -1,0 +1,44 @@
+{
+ "root_keys": [
+  "epoch",
+  "Blip2QformerCirAlignPrompt"
+ ],
+ "state_key": "Blip2QformerCirAlignPrompt",
+ "epoch": 7,
+ "backbone": "pretrain_vitL",
+ "class": "lavis.models.blip2_models.blip2_qformer_cir_align_prompt.Blip2QformerCirAlignPrompt",
+ "n_model": 628,
+ "n_ckpt": 628,
+ "missing": 0,
+ "unexpected": 0,
+ "verdict": "STRICT_OK",
+ "missing_sample": [],
+ "unexpected_sample": [],
+ "conv1": [
+  1024,
+  3,
+  14,
+  14
+ ],
+ "positional_embedding": [
+  257,
+  1024
+ ],
+ "class_embedding": [
+  1024
+ ],
+ "qformer_hidden": 768,
+ "num_query_token": 32,
+ "vision_proj": [
+  256,
+  768
+ ],
+ "text_proj": [
+  256,
+  768
+ ],
+ "itm_head": [
+  2,
+  768
+ ]
+}

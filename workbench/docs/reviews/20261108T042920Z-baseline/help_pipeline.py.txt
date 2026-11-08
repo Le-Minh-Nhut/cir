@@ -1,0 +1,66 @@
+rc=0
+usage: pipeline.py [-h] [--dataset-root DATASET_ROOT] [--sync-sources]
+                   [--download-checkpoints] [--download-auxiliary-assets]
+                   [--stage-caption-aliases] [--evaluate] [--rebuild-index]
+                   [--serve] [--dry-run] [--continue-on-error] [--resume]
+                   [--force-stage FORCE_STAGE] [--apply] [--allow-network]
+                   [--allow-large-downloads] [--allow-env-install]
+                   [--allow-preparation] [--allow-gpu-eval]
+                   [--allow-gpu-preparation] [--verify-gpu]
+                   [--allow-index-write] [--model MODEL] [--all-models]
+                   [--protocol PROTOCOL] [--checkpoint CHECKPOINT]
+                   [--top-k TOP_K] [--report REPORT]
+                   {mock,prepare,real,serve,status,setup,reproduce,analyze,all,report}
+
+Orchestrate existing workbench operator scripts without reimplementing them.
+
+positional arguments:
+  {mock,prepare,real,serve,status,setup,reproduce,analyze,all,report}
+
+options:
+  -h, --help            show this help message and exit
+  --dataset-root DATASET_ROOT
+                        canonical FashionIQ dataset root
+  --sync-sources        sync selected official source repositories
+  --download-checkpoints
+                        download selected registry checkpoints
+  --download-auxiliary-assets
+                        obtain selected model auxiliary evaluation assets
+  --stage-caption-aliases
+                        with --download-auxiliary-assets, stage a published
+                        source-compatible caption at a registered asset whose
+                        own source was never published (CSMCIR COT_ours2). The
+                        run is then a labelled variant, not official parity:
+                        workbench/docs/COT_OURS2_AUDIT.md
+  --evaluate            run guarded official reproduction commands
+  --rebuild-index       validate and rebuild the derived result index
+  --serve               serve after pipeline stages
+  --dry-run             print ordered stage plan without subprocesses or
+                        mutations
+  --continue-on-error   continue pipeline after a failed stage
+  --resume              skip stages already completed with matching input
+                        fingerprints
+  --force-stage FORCE_STAGE
+                        force re-execution of a stage even when --resume is
+                        set
+  --apply               authorize execution of expensive operations
+  --allow-network       authorize network access (git clone/fetch, downloads)
+  --allow-large-downloads
+                        authorize large checkpoint downloads
+  --allow-env-install   authorize environment creation and package
+                        installation
+  --allow-preparation   authorize model-specific preparation execution
+  --allow-gpu-eval      authorize model evaluation subprocess execution
+  --allow-gpu-preparation
+                        authorize the CUDA-only preparation generators (TME
+                        validation image features)
+  --verify-gpu          run the authorized GPU capability probe before
+                        evaluating (GPU hosts only)
+  --allow-index-write   authorize rebuilding the derived DuckDB index
+  --model MODEL         registry model selection
+  --all-models          select all registry models
+  --protocol PROTOCOL   official protocol selection for evaluation
+  --checkpoint CHECKPOINT
+                        checkpoint selection
+  --top-k TOP_K         requested saved retrieval depth
+  --report REPORT       write machine-readable execution report JSON to path

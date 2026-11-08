@@ -1,0 +1,302 @@
+{
+  "generated_at": "2026-11-08T11:31:10+07:00",
+  "host": {
+    "gpu": "NVIDIA GeForce RTX 5070 Ti",
+    "compute_capability": "sm_120",
+    "driver_cuda_runtime": "12.8"
+  },
+  "required_environment": {
+    "WORKBENCH_RUNTIME_ADAPTATION": "sm_120",
+    "why": "without it the historical contract applies and every listed interpreter is refused; see verify_no_adaptation.txt"
+  },
+  "envs": [
+    {
+      "env_id": "ilearn39-adapted",
+      "path": "/home/heheboiz/data/cir/workbench/envs/ilearn39-adapted",
+      "python": "/home/heheboiz/data/cir/workbench/envs/ilearn39-adapted/bin/python",
+      "python_version": "3.9.25",
+      "created_by": "uv venv --python 3.9",
+      "torch": "2.7.1+cu128",
+      "torchvision": "0.22.1+cu128",
+      "cuda_build": "12.8",
+      "pip_index_url": "https://download.pytorch.org/whl/cu128",
+      "torch_arch_list": [
+        "sm_75",
+        "sm_80",
+        "sm_86",
+        "sm_90",
+        "sm_100",
+        "sm_120",
+        "compute_120"
+      ],
+      "observed_capability": [
+        12,
+        0
+      ],
+      "disk_gib": 7.0,
+      "python_headers": true,
+      "c_extension_build_verified": true,
+      "cuda_smoke": {
+        "matmul_64x64_fp32": "ok (finite)",
+        "matmul_bf16": "ok (finite)",
+        "conv2d": "ok (finite)",
+        "layer_norm": "ok (finite)",
+        "scaled_dot_product_attention": "ok (finite)",
+        "max_memory_reserved_MiB": 22.0
+      },
+      "models": {
+        "habit": {
+          "env_var": "WORKBENCH_HABIT_PYTHON",
+          "contract_python": "3.9",
+          "worker_entrypoint": "workbench.composition.model_habit",
+          "worker_module_import": "OK",
+          "replay_load": "OK",
+          "model_class": "lavis.models.blip2_models.HABIT.HABIT",
+          "checkpoint": "artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/habit/HABIT-FIQ_N0.2.pt",
+          "checkpoint_sha_verified": true,
+          "unpickle_cpu": "OK",
+          "params": 1172624574
+        },
+        "intent": {
+          "env_var": "WORKBENCH_INTENT_PYTHON",
+          "contract_python": "3.9",
+          "worker_entrypoint": "workbench.composition.model_intent",
+          "worker_module_import": "OK",
+          "replay_load": "OK",
+          "model_class": "lavis.models.blip2_models.blip2_cir.Blip2QformerCir",
+          "checkpoint": "artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/intent/intent_fiq_0.2.pt",
+          "checkpoint_sha_verified": true,
+          "unpickle_cpu": "OK",
+          "params": 1172821439
+        },
+        "hint": {
+          "env_var": "WORKBENCH_HINT_PYTHON",
+          "contract_python": "3.9",
+          "worker_entrypoint": "workbench.composition.model_hint",
+          "worker_module_import": "OK",
+          "replay_load": "OK",
+          "model_class": "lavis.models.blip2_models.HINT.HINT",
+          "checkpoint": "artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/hint/fashioniq.pt",
+          "checkpoint_sha_verified": true,
+          "unpickle_cpu": "OK",
+          "params": 1173374720
+        },
+        "conesep": {
+          "env_var": "WORKBENCH_CONESEP_PYTHON",
+          "contract_python": "3.9",
+          "worker_entrypoint": "workbench.composition.model_conesep",
+          "worker_module_import": "OK",
+          "replay_load": "OK",
+          "model_class": "lavis.models.blip2_models.ConeSep.ConeSep",
+          "checkpoint": "artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/conesep/ConeSep-FIQ-N0.2.pt",
+          "checkpoint_sha_verified": true,
+          "unpickle_cpu": "OK",
+          "params": 1172624573
+        }
+      },
+      "deliberate_omissions": {
+        "salesforce-lavis": "checkout ships its own lavis/ on sys.path and shadows any distribution; PyPI wheel pins timm==0.4.12 which conflicts with the required timm==0.9.16",
+        "torchaudio": "not imported anywhere on the evaluator path; lavis_processors.py installs a skeleton to avoid it",
+        "open_clip-torch": "only train/submission scripts import it; not reachable from the evaluator",
+        "thop": "not imported anywhere in these four checkouts",
+        "setproctitle": "only train.py / train_INTENT.py",
+        "sentencepiece": "not imported; tokenizers 0.13.3 covers the BLIP-2 processors"
+      },
+      "known_warnings": {
+        "pip_check": "The package `decord` was built for a different platform -> import works (0.6.0, VideoReader present); unused by these evaluators",
+        "transformers_4_25_0": "yanked marker on PyPI; it is the registry pin and installed fine"
+      },
+      "verify_environment_status": "GPU_VERIFICATION_PENDING",
+      "verify_environment_note": "Python + dependency checks pass; only the official GPU probe remains, and it is out of scope for this task",
+      "adapter_status_ready": true
+    },
+    {
+      "env_id": "limn310-adapted",
+      "path": "/home/heheboiz/data/cir/workbench/envs/limn310-adapted",
+      "python": "/home/heheboiz/data/cir/workbench/envs/limn310-adapted/bin/python",
+      "python_version": "3.10.20",
+      "created_by": "uv venv --python 3.10",
+      "torch": "2.7.1+cu128",
+      "torchvision": "0.22.1+cu128",
+      "cuda_build": "12.8",
+      "pip_index_url": "https://download.pytorch.org/whl/cu128",
+      "torch_arch_list": [
+        "sm_75",
+        "sm_80",
+        "sm_86",
+        "sm_90",
+        "sm_100",
+        "sm_120",
+        "compute_120"
+      ],
+      "observed_capability": [
+        12,
+        0
+      ],
+      "cuda_smoke": {
+        "matmul_64x64_fp32": "ok (-1332.275146484375, finite)",
+        "peak_reserved_MiB": 22.0,
+        "freed": true
+      },
+      "models": {
+        "limn": {
+          "env_var": "WORKBENCH_LIMN_PYTHON",
+          "contract_python": "3.10",
+          "open_clip_torch": "2.20.0",
+          "open_clip_pin_source": "workbench/third_party/LIMN/requirements.txt:37 = open-clip-torch==2.20.0; enforced by workbench/replay/limn.py:94 validate_environment()",
+          "adapter_import": "OK",
+          "pinned_modules": "model, datasets, test, Transformer - all resolve inside the checkout",
+          "validate_environment": "all version pins pass; only the CUDA line fails when CUDA_VISIBLE_DEVICES is empty",
+          "checkpoint_unpickle_cpu": "OK model.LIMN, 440258572 params (0_dress_best_model.pt, SHA-256 verified)",
+          "open_clip_variant": "open_clip.image_transform(visual.image_size, is_train, mean, std) -> OK Compose",
+          "adapter_status_ready": true
+        }
+      },
+      "exclusive_pin_reason": "adapted_runtime.packages pins open_clip_torch==2.20.0 exactly, and LIMN's own replay validate_environment() enforces it; cannot share an env with encoder (2.24.0)"
+    },
+    {
+      "env_id": "encoder310-adapted",
+      "path": "/home/heheboiz/data/cir/workbench/envs/encoder310-adapted",
+      "python": "/home/heheboiz/data/cir/workbench/envs/encoder310-adapted/bin/python",
+      "python_version": "3.10.20",
+      "created_by": "uv venv --python 3.10",
+      "torch": "2.7.1+cu128",
+      "torchvision": "0.22.1+cu128",
+      "cuda_build": "12.8",
+      "pip_index_url": "https://download.pytorch.org/whl/cu128",
+      "torch_arch_list": [
+        "sm_75",
+        "sm_80",
+        "sm_86",
+        "sm_90",
+        "sm_100",
+        "sm_120",
+        "compute_120"
+      ],
+      "observed_capability": [
+        12,
+        0
+      ],
+      "cuda_smoke": {
+        "matmul_64x64_fp32": "ok (336.82635498046875, finite)",
+        "peak_reserved_MiB": 22.0,
+        "freed": true
+      },
+      "models": {
+        "encoder": {
+          "env_var": "WORKBENCH_ENCODER_PYTHON",
+          "contract_python": "3.10",
+          "open_clip_torch": "2.24.0",
+          "open_clip_pin_source": "workbench/third_party/ENCODER/requirements.txt:155 = open-clip-torch==2.24.0",
+          "extra_pins_from_source": {
+            "transformers": "4.30.2",
+            "einops": "0.4.1",
+            "opencv-python-headless": "4.5.5.64"
+          },
+          "adapter_import": "OK",
+          "replay_load": "_load_replay_modules OK (torch, open_clip, datasets, test, model_try2)",
+          "open_clip_variant": "create_model_and_transforms('ViT-B-32', pretrained=<checkout>/open_clip_pytorch_model.bin) -> OK CLIP, visual 224x224, output_dim 512, CPU encode_image -> [1,512]",
+          "adapter_status_ready": true
+        }
+      },
+      "exclusive_pin_reason": "adapted_runtime.packages pins open_clip_torch==2.24.0 exactly; cannot share an env with limn (2.20.0)"
+    }
+  ],
+  "existing_envs_rejected": [
+    {
+      "path": "/home/heheboiz/data/cir/workbench/envs/airknow-adapted/bin/python",
+      "python_version": "3.11.15",
+      "reason": "PYTHON_VERSION_MISMATCH: expected Python 3.9, found 3.11.15 (this is what workbench.config/workbench.env currently points the four models at)"
+    },
+    {
+      "path": "/home/heheboiz/data/cir/workbench/envs/pair-adapted/bin/python",
+      "python_version": "3.11.15",
+      "reason": "python 3.11 != 3.9; also missing peft/diffusers/accelerate/sklearn"
+    },
+    {
+      "path": "/home/heheboiz/data/cir/workbench/envs/limn-adapted/bin/python",
+      "python_version": "3.11.15",
+      "reason": "python 3.11 != 3.9; also missing peft/diffusers/accelerate/sklearn"
+    },
+    {
+      "path": "/home/heheboiz/data/cir/workbench/envs/tme-adapted/bin/python",
+      "python_version": "3.10.22",
+      "reason": "python 3.10 != 3.9; missing skimage/peft/diffusers/accelerate/open_clip"
+    },
+    {
+      "path": "/home/heheboiz/data/cir/workbench/envs/clip4cir-adapted/bin/python",
+      "python_version": "3.11.15",
+      "reason": "python 3.11 != 3.9"
+    },
+    {
+      "path": "/home/heheboiz/data/cir/workbench/envs/sprc-adapted/bin/python",
+      "python_version": "3.11.15",
+      "reason": "python 3.11 != 3.9"
+    },
+    {
+      "path": "/home/heheboiz/data/cir/workbench/envs/dl-adapted/bin/python",
+      "python_version": "3.11.15",
+      "reason": "python 3.11 != 3.9"
+    },
+    {
+      "path": "/home/heheboiz/data/cir/workbench/artifacts/environments/cir-005ef4e1b02999a5/bin/python",
+      "python_version": "3.10.22",
+      "reason": "python 3.10 != 3.9 (LIMN contract env)"
+    }
+  ],
+  "why_not_python_3810": {
+    "evidence": "https://download.pytorch.org/whl/cu128/torch/ contains 0 cp38 x86_64 wheels; torch 2.7.1+cu128 publishes cp39-cp39-manylinux_2_28_x86_64",
+    "consequence": "the historical 3.8.10 + torch 2.1.0 pins cannot run on sm_120, which needs torch >= 2.7; the registry itself declares python 3.9 in adapted_runtime"
+  },
+  "unresolved": [
+    {
+      "item": "evaluate_models --verify-gpu-only for the four models",
+      "status": "not run",
+      "reason": "GPU is owned by another agent in this task; the probe allocates and computes on the device"
+    },
+    {
+      "item": "workbench/backend/environment_planner.py imports under Python 3.9",
+      "status": "SyntaxError: EOL while scanning string literal (line 669)",
+      "reason": "orchestrator-side source uses a 3.12-only f-string; it runs in workbench/envs/ctl312h, not in the model interpreter, so the worker path is unaffected. Owner: backend agent, not this task."
+    },
+    {
+      "item": "evaluate_models --verify-gpu-only for encoder and limn",
+      "status": "not run",
+      "reason": "GPU owned by another agent; the probe allocates and computes on the device. Interpreter, torch build, sm_120 arch support and capability (12,0) are all proven."
+    }
+  ],
+  "evidence_dir": "/home/heheboiz/data/cir/workbench/docs/reviews/20261108T113110-envs",
+  "disk_gib_total_all_envs": 13.63,
+  "disk_note": "encoder310 + limn310 = 6.63 GiB combined (uv hardlinks shared wheels); ilearn39 = 7.0 GiB",
+  "config_changes": {
+    "file": "workbench/config/workbench.env",
+    "backup": "workbench/docs/reviews/20261108T113110-envs/workbench.env.bak",
+    "diff": "workbench/docs/reviews/20261108T113110-envs/f_up_config.diff",
+    "lines_changed": 2,
+    "changes": {
+      "WORKBENCH_ENCODER_PYTHON": {
+        "from": "/home/heheboiz/data/cir/workbench/envs/pair-adapted/bin/python",
+        "to": "/home/heheboiz/data/cir/workbench/envs/encoder310-adapted/bin/python"
+      },
+      "WORKBENCH_LIMN_PYTHON": {
+        "from": "/home/heheboiz/data/cir/workbench/envs/limn-adapted/bin/python",
+        "to": "/home/heheboiz/data/cir/workbench/envs/limn310-adapted/bin/python"
+      }
+    },
+    "untouched": [
+      "WORKBENCH_CHECKPOINT_ROOT",
+      "WORKBENCH_ARTIFACTS_ROOT",
+      "WORKBENCH_RESULTS_ROOT",
+      "WORKBENCH_CIRCUS_RELEASE_ROOT",
+      "WORKBENCH_RUNTIME_ADAPTATION",
+      "WORKBENCH_HABIT_PYTHON",
+      "WORKBENCH_INTENT_PYTHON",
+      "WORKBENCH_HINT_PYTHON",
+      "WORKBENCH_CONESEP_PYTHON",
+      "WORKBENCH_PTHA_MTST_PYTHON",
+      "WORKBENCH_TME_PYTHON"
+    ]
+  },
+  "restart_required": true,
+  "restart_note": "resolve_config() caches the file at import; the running web service still holds the old values. Not restarted here because another agent is actively using it."
+}

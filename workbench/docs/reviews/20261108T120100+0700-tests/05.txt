@@ -1,0 +1,130 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+_ test_a7_launcher_reuses_ledger_corroborated_run_without_proof_and_queues_when_uncorroborated _
+
+tmp_path = PosixPath('/tmp/pytest-of-heheboiz/pytest-110/test_a7_launcher_reuses_ledger0')
+
+    def test_a7_launcher_reuses_ledger_corroborated_run_without_proof_and_queues_when_uncorroborated(
+            tmp_path) -> None:
+        """A7 (c): launcher reuses completed run whose proof is gone, and queues fresh run when uncorroborated."""
+        from workbench.tests.test_pc_launcher import setup_sandbox, run_pc, _create_corroborated_run
+    
+        # (c-1) Reuses completed run whose proof is gone instead of queueing duplicate
+        sandbox1, env1 = setup_sandbox(tmp_path / "reused", with_env=True)
+        env1["MOCK_RUNS_STATUS"] = "corroborated_no_proof"
+        post_jobs1 = sandbox1 / "post_jobs.log"
+        env1["MOCK_POST_JOBS_FILE"] = str(post_jobs1)
+        # The proof is gone AND the per-query artifact was never published. For a model that declares an
+        # observer, that run can never be a full pilot: the artifact cannot be promoted without the
+        # receipt the proof carries, so the launcher must not report success -- but it must still REUSE
+        # the run rather than queue a duplicate job, which is what this test is about.
+        _create_corroborated_run(sandbox1, "run_limn_corr_01", omit_proof=True, omit_artifact=True)
+    
+        proc1 = run_pc(sandbox1, [], env1)
+>       assert "Tái sử dụng kết quả có sẵn" in proc1.stdout, proc1.stdout
+E       AssertionError: Cấu hình môi trường workbench/docker/.env...
+E         Kích hoạt thích nghi runtime cho limn: WORKBENCH_RUNTIME_ADAPTATION=sm_120
+E         Môi trường đã sẵn sàng: WORKBENCH_ENABLE_GPU=1, MODEL=limn
+E         ================================================================================
+E         CIR FAILURE ANALYSIS WORKBENCH — TIỀN KIỂM HỆ THỐNG (PREFLIGHT)
+E         ================================================================================
+E         [OK] Hệ điều hành (OS)      : Ubuntu 24.04.4 LTS (kernel 7.0.0-31-generic)
+E         [OK] Git Repository         : branch research/cir-failure-workbench, commit 0123456789abcdef0123456789abcdef01234567
+E         [OK] Bộ nhớ RAM             : 31 GB (khả dụng: 23 GB)
+E         [OK] Dung lượng đĩa trống  : 80 GB khả dụng tại /tmp/pytest-of-heheboiz/pytest-110/test_a7_launcher_reuses_ledger0/reused/sandbox
+E         [OK] Thư mục & Quyền sở hữu : Đầy đủ (uid: 1000, user: heheboiz)
+E         [OK] Docker Engine          : phiên bản 24.0.5, daemon phản hồi tốt
+E         [OK] Docker Compose         : plugin phiên bản Docker version 24.0.5, build ced0996
+E         [OK] NVIDIA Driver & GPU    : Driver 550.54.14 | Thiết bị: NVIDIA GeForce RTX 5070 Ti (Compute 12.0)
+E              Kiến trúc              : Blackwell sm_120 (RTX 5070 Ti) được nhận diện chính xác
+E         [OK] NVIDIA Container Runtime: Đã cấu hình và đăng ký trong Docker daemon
+E         [OK] Dataset FashionIQ      : Tồn tại và đầy đủ (images/, image_splits/, captions/) tại /tmp/pytest-of-heheboiz/pytest-110/test_a7_launcher_reuses_ledger0/reused/sandbox/data/FashionIQ
+E         [INFO] Container cir-workbench: Đang chạy (Container ID: cir-workbench-1)
+E         ================================================================================
+E         Docker container cir-workbench đã đang chạy, cấu hình phù hợp và API sẵn sàng (http://127.0.0.1:8000).
+E         Thăm dò trạng thái sẵn sàng (readiness polling) của Backend và Frontend...
+E         [OK] Docker stack đã sẵn sàng: Backend (http://127.0.0.1:8000), Frontend (http://127.0.0.1:5173)
+E         Kiểm tra mount dataset trong container (/data/FashionIQ/images)...
+E         Chuẩn bị mô hình limn qua pipeline guarded...
+E         preparing limn through the guarded pipeline (sync, environment, dataset, checkpoints, GPU)…
+E         Pipeline setup complete: limn prepared
+E         Kiểm chứng runtime GPU bên trong container cho mô hình limn...
+E         {"nvidia_smi": "NVIDIA GeForce RTX 5070 Ti, 12.0", "torch_cuda": true, "cuda_tensor": true, "compute_capability": "12.0", "device_name": "NVIDIA GeForce RTX 5070 Ti", "error": null}
+E         [OK] Năng lực GPU cho limn đã được kiểm chứng và ghi nhận thành công.
+E         Xác định protocol và checkpoint chính thức cho limn từ API...
+E         Mô hình: limn | Checkpoint: base_iter0_all_categories | Protocol: fashioniq_val_split | top_k: 200
+E         Xếp hàng đánh giá qua API POST /api/jobs...
+E         Đã xếp job thành công: job_limn_new_999
+E         Đang theo dõi tiến trình thực thi job job_limn_new_999 (thời hạn: 3600s)...
+E         [11:37:06] Job job_limn_new_999: trạng thái 'completed' (đã chạy 0s)...
+E         Xác thực bằng chứng thực thi khoa học và đối chiếu sổ cái qua verify_run.py...
+E         Xác thực thất bại: Thiếu bằng chứng thực thi khoa học hoặc bằng chứng không hợp lệ!
+E         Chi tiết: aggregate report not found: /home/heheboiz/data/cir/workbench/artifacts/reports/limn_base_iter0_all_categories_run_limn_corr_01_aggregate.json; the evidence ledger is missing or its HMAC chain does not verify; completion proof rejected: declared output missing: /home/heheboiz/data/cir/workbench/artifacts/reports/limn_base_iter0_all_categories_run_limn_corr_01_completion.json; the report records metric_extraction_available=None: no metric extraction was performed for this run; the report's extraction_status is None, not 'EXTRACTED_VERIFIED': the run's metrics were not extracted; the report carries no category metrics for limn
+E         
+E         ================================================================================
+E         LỖI THỰC THI — CIR FAILURE ANALYSIS WORKBENCH
+E         ================================================================================
+E         Giai đoạn thất bại (Failed stage) : VERIFICATION
+E         Chi tiết lỗi (Error details)      : Xác thực thất bại: Thiếu bằng chứng thực thi khoa học hoặc bằng chứng không hợp lệ!
+E         Chi tiết: aggregate report not found: /home/heheboiz/data/cir/workbench/artifacts/reports/limn_base_iter0_all_categories_run_limn_corr_01_aggregate.json; the evidence ledger is missing or its HMAC chain does not verify; completion proof rejected: declared output missing: /home/heheboiz/data/cir/workbench/artifacts/reports/limn_base_iter0_all_categories_run_limn_corr_01_completion.json; the report records metric_extraction_available=None: no metric extraction was performed for this run; the report's extraction_status is None, not 'EXTRACTED_VERIFIED': the run's metrics were not extracted; the report carries no category metrics for limn
+E         Vị trí nhật ký (Log location)     : verify_run.py (trong container)
+E         Hành động khắc phục (Remedy)      : Đọc phần 'Chi tiết' ở trên, sửa nguyên nhân, rồi chạy lại ./pc.sh (dùng ./pc.sh --verify-only nếu bạn chỉ muốn kiểm chứng lại năng lực GPU trước khi tốn thời gian đánh giá)
+E         ================================================================================
+E         
+E       assert 'Tái sử dụng kết quả có sẵn' in 'Cấu hình môi trường workbench/docker/.env...\nKích hoạt thích nghi runtime cho limn: WORKBENCH_RUNTIME_ADAPTATION=sm_... trước khi tốn thời gian đánh giá)\n================================================================================\n'
+E        +  where 'Cấu hình môi trường workbench/docker/.env...\nKích hoạt thích nghi runtime cho limn: WORKBENCH_RUNTIME_ADAPTATION=sm_... trước khi tốn thời gian đánh giá)\n================================================================================\n' = CompletedProcess(args=['/home/heheboiz/data/cir/pc.sh'], returncode=1, stdout='Cấu hình môi trường workbench/docker/.e...ốn thời gian đánh giá)\n================================================================================\n', stderr='').stdout
+
+workbench/tests/test_http_api_layer.py:904: AssertionError
+=========================== short test summary info ============================
+FAILED workbench/tests/test_http_api_layer.py::test_a7_launcher_reuses_ledger_corroborated_run_without_proof_and_queues_when_uncorroborated - AssertionError: Cấu hình môi trường workbench/docker/.env...
+  Kích hoạt thích nghi runtime cho limn: WORKBENCH_RUNTIME_ADAPTATION=sm_120
+  Môi trường đã sẵn sàng: WORKBENCH_ENABLE_GPU=1, MODEL=limn
+  ================================================================================
+  CIR FAILURE ANALYSIS WORKBENCH — TIỀN KIỂM HỆ THỐNG (PREFLIGHT)
+  ================================================================================
+  [OK] Hệ điều hành (OS)      : Ubuntu 24.04.4 LTS (kernel 7.0.0-31-generic)
+  [OK] Git Repository         : branch research/cir-failure-workbench, commit 0123456789abcdef0123456789abcdef01234567
+  [OK] Bộ nhớ RAM             : 31 GB (khả dụng: 23 GB)
+  [OK] Dung lượng đĩa trống  : 80 GB khả dụng tại /tmp/pytest-of-heheboiz/pytest-110/test_a7_launcher_reuses_ledger0/reused/sandbox
+  [OK] Thư mục & Quyền sở hữu : Đầy đủ (uid: 1000, user: heheboiz)
+  [OK] Docker Engine          : phiên bản 24.0.5, daemon phản hồi tốt
+  [OK] Docker Compose         : plugin phiên bản Docker version 24.0.5, build ced0996
+  [OK] NVIDIA Driver & GPU    : Driver 550.54.14 | Thiết bị: NVIDIA GeForce RTX 5070 Ti (Compute 12.0)
+       Kiến trúc              : Blackwell sm_120 (RTX 5070 Ti) được nhận diện chính xác
+  [OK] NVIDIA Container Runtime: Đã cấu hình và đăng ký trong Docker daemon
+  [OK] Dataset FashionIQ      : Tồn tại và đầy đủ (images/, image_splits/, captions/) tại /tmp/pytest-of-heheboiz/pytest-110/test_a7_launcher_reuses_ledger0/reused/sandbox/data/FashionIQ
+  [INFO] Container cir-workbench: Đang chạy (Container ID: cir-workbench-1)
+  ================================================================================
+  Docker container cir-workbench đã đang chạy, cấu hình phù hợp và API sẵn sàng (http://127.0.0.1:8000).
+  Thăm dò trạng thái sẵn sàng (readiness polling) của Backend và Frontend...
+  [OK] Docker stack đã sẵn sàng: Backend (http://127.0.0.1:8000), Frontend (http://127.0.0.1:5173)
+  Kiểm tra mount dataset trong container (/data/FashionIQ/images)...
+  Chuẩn bị mô hình limn qua pipeline guarded...
+  preparing limn through the guarded pipeline (sync, environment, dataset, checkpoints, GPU)…
+  Pipeline setup complete: limn prepared
+  Kiểm chứng runtime GPU bên trong container cho mô hình limn...
+  {"nvidia_smi": "NVIDIA GeForce RTX 5070 Ti, 12.0", "torch_cuda": true, "cuda_tensor": true, "compute_capability": "12.0", "device_name": "NVIDIA GeForce RTX 5070 Ti", "error": null}
+  [OK] Năng lực GPU cho limn đã được kiểm chứng và ghi nhận thành công.
+  Xác định protocol và checkpoint chính thức cho limn từ API...
+  Mô hình: limn | Checkpoint: base_iter0_all_categories | Protocol: fashioniq_val_split | top_k: 200
+  Xếp hàng đánh giá qua API POST /api/jobs...
+  Đã xếp job thành công: job_limn_new_999
+  Đang theo dõi tiến trình thực thi job job_limn_new_999 (thời hạn: 3600s)...
+  [11:37:06] Job job_limn_new_999: trạng thái 'completed' (đã chạy 0s)...
+  Xác thực bằng chứng thực thi khoa học và đối chiếu sổ cái qua verify_run.py...
+  Xác thực thất bại: Thiếu bằng chứng thực thi khoa học hoặc bằng chứng không hợp lệ!
+  Chi tiết: aggregate report not found: /home/heheboiz/data/cir/workbench/artifacts/reports/limn_base_iter0_all_categories_run_limn_corr_01_aggregate.json; the evidence ledger is missing or its HMAC chain does not verify; completion proof rejected: declared output missing: /home/heheboiz/data/cir/workbench/artifacts/reports/limn_base_iter0_all_categories_run_limn_corr_01_completion.json; the report records metric_extraction_available=None: no metric extraction was performed for this run; the report's extraction_status is None, not 'EXTRACTED_VERIFIED': the run's metrics were not extracted; the report carries no category metrics for limn
+  
+  ================================================================================
+  LỖI THỰC THI — CIR FAILURE ANALYSIS WORKBENCH
+  ================================================================================
+  Giai đoạn thất bại (Failed stage) : VERIFICATION
+  Chi tiết lỗi (Error details)      : Xác thực thất bại: Thiếu bằng chứng thực thi khoa học hoặc bằng chứng không hợp lệ!
+  Chi tiết: aggregate report not found: /home/heheboiz/data/cir/workbench/artifacts/reports/limn_base_iter0_all_categories_run_limn_corr_01_aggregate.json; the evidence ledger is missing or its HMAC chain does not verify; completion proof rejected: declared output missing: /home/heheboiz/data/cir/workbench/artifacts/reports/limn_base_iter0_all_categories_run_limn_corr_01_completion.json; the report records metric_extraction_available=None: no metric extraction was performed for this run; the report's extraction_status is None, not 'EXTRACTED_VERIFIED': the run's metrics were not extracted; the report carries no category metrics for limn
+  Vị trí nhật ký (Log location)     : verify_run.py (trong container)
+  Hành động khắc phục (Remedy)      : Đọc phần 'Chi tiết' ở trên, sửa nguyên nhân, rồi chạy lại ./pc.sh (dùng ./pc.sh --verify-only nếu bạn chỉ muốn kiểm chứng lại năng lực GPU trước khi tốn thời gian đánh giá)
+  ================================================================================
+  
+assert 'Tái sử dụng kết quả có sẵn' in 'Cấu hình môi trường workbench/docker/.env...\nKích hoạt thích nghi runtime cho limn: WORKBENCH_RUNTIME_ADAPTATION=sm_... trước khi tốn thời gian đánh giá)\n================================================================================\n'
+ +  where 'Cấu hình môi trường workbench/docker/.env...\nKích hoạt thích nghi runtime cho limn: WORKBENCH_RUNTIME_ADAPTATION=sm_... trước khi tốn thời gian đánh giá)\n================================================================================\n' = CompletedProcess(args=['/home/heheboiz/data/cir/pc.sh'], returncode=1, stdout='Cấu hình môi trường workbench/docker/.e...ốn thời gian đánh giá)\n================================================================================\n', stderr='').stdout
+1 failed in 21.86s

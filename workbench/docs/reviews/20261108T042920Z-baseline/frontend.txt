@@ -1,0 +1,23 @@
+=== dist listing ===
+total 16
+drwxrwxr-x 3 heheboiz heheboiz 4096 Nov  8 09:32 .
+drwxrwxr-x 5 heheboiz heheboiz 4096 Nov  7 23:39 ..
+drwxrwxr-x 2 heheboiz heheboiz 4096 Nov  8 09:32 assets
+-rw-rw-r-- 1 heheboiz heheboiz  271 Nov  8 09:32 index.html
+
+=== dist assets ===
+total 292
+drwxrwxr-x 2 heheboiz heheboiz   4096 Nov  8 09:32 .
+drwxrwxr-x 3 heheboiz heheboiz   4096 Nov  8 09:32 ..
+-rw-rw-r-- 1 heheboiz heheboiz 277236 Nov  8 09:32 index-CsxrZyq6.js
+-rw-rw-r-- 1 heheboiz heheboiz  12034 Nov  8 09:32 index-uzz8fv-H.css
+
+=== dist index.html ===
+<script type="module" crossorigin src="/assets/index-CsxrZyq6.js"></script>
+<link rel="stylesheet" crossorigin href="/assets/index-uzz8fv-H.css">
+<meta name="viewport" content="width=device-width, initial-scale=1" /><link rel="icon" href="data:," /><div id="root"></div>
+
+=== served index (5173) ===
+<script type="module" crossorigin src="/assets/index-CsxrZyq6.js"></script>
+<link rel="stylesheet" crossorigin href="/assets/index-uzz8fv-H.css">
+<meta name="viewport" content="width=device-width, initial-scale=1" /><link rel="icon" href="data:," /><div id="root"></div>

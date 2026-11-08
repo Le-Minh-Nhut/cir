@@ -1,0 +1,6 @@
+{
+ "remotes": "origin\tgit@github.com:Le-Minh-Nhut/cir.git (fetch)\norigin\tgit@github.com:Le-Minh-Nhut/cir.git (push)",
+ "head_log": "6421188f4f93574b7fe093a804dd235d39e630e8\n2026-11-08 11:19:31 +0700\nState that the named SHA precedes the commit carrying it",
+ "origin_ref_log": "6421188f4f93574b7fe093a804dd235d39e630e8\n2026-11-08 11:19:31 +0700\nState that the named SHA precedes the commit carrying it",
+ "status_full": "?? workbench/docs/probe_out.txt\n?? workbench/docs/reviews/20261108T042920Z-baseline/\n?? workbench/docs/reviews/20261108T042931Z/"
+}

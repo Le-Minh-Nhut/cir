@@ -1,0 +1,24 @@
+== habit
+usage: model_habit.py [-h] --worker-job WORKER_JOB
+
+optional arguments:
+  -h, --help            show this help message and exit
+EXIT=0
+== intent
+usage: model_intent.py [-h] --worker-job WORKER_JOB
+
+optional arguments:
+  -h, --help            show this help message and exit
+EXIT=0
+== hint
+usage: model_hint.py [-h] --worker-job WORKER_JOB
+
+optional arguments:
+  -h, --help            show this help message and exit
+EXIT=0
+== conesep
+usage: model_conesep.py [-h] --worker-job WORKER_JOB
+
+optional arguments:
+  -h, --help            show this help message and exit
+EXIT=0

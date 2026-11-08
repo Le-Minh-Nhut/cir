@@ -1,0 +1,127 @@
+{
+ "path": "workbench/artifacts/checkpoint_selection/20261106T002617+0700/checkpoints/clip4cir/FashionIQ/RN50x4_noft/fiq_comb_RN50x4_noft.pt",
+ "size_bytes": 236017921,
+ "load_attempts": [],
+ "top_type": "dict",
+ "top_keys": [
+  "epoch",
+  "Combiner"
+ ],
+ "top_key_count": 2,
+ "structure": {
+  "__type__": "dict",
+  "keys": {
+   "epoch": "165",
+   "Combiner": {
+    "__type__": "OrderedDict",
+    "keys": {
+     "text_projection_layer.weight": {
+      "dtype": "torch.float32",
+      "shape": [
+       2560,
+       640
+      ],
+      "numel": 1638400,
+      "requires_grad": false
+     },
+     "text_projection_layer.bias": {
+      "dtype": "torch.float32",
+      "shape": [
+       2560
+      ],
+      "numel": 2560,
+      "requires_grad": false
+     },
+     "image_projection_layer.weight": {
+      "dtype": "torch.float32",
+      "shape": [
+       2560,
+       640
+      ],
+      "numel": 1638400,
+      "requires_grad": false
+     },
+     "image_projection_layer.bias": {
+      "dtype": "torch.float32",
+      "shape": [
+       2560
+      ],
+      "numel": 2560,
+      "requires_grad": false
+     },
+     "combiner_layer.weight": {
+      "dtype": "torch.float32",
+      "shape": [
+       5120,
+       5120
+      ],
+      "numel": 26214400,
+      "requires_grad": false
+     },
+     "combiner_layer.bias": {
+      "dtype": "torch.float32",
+      "shape": [
+       5120
+      ],
+      "numel": 5120,
+      "requires_grad": false
+     },
+     "output_layer.weight": {
+      "dtype": "torch.float32",
+      "shape": [
+       640,
+       5120
+      ],
+      "numel": 3276800,
+      "requires_grad": false
+     },
+     "output_layer.bias": {
+      "dtype": "torch.float32",
+      "shape": [
+       640
+      ],
+      "numel": 640,
+      "requires_grad": false
+     },
+     "dynamic_scalar.0.weight": {
+      "dtype": "torch.float32",
+      "shape": [
+       5120,
+       5120
+      ],
+      "numel": 26214400,
+      "requires_grad": false
+     },
+     "dynamic_scalar.0.bias": {
+      "dtype": "torch.float32",
+      "shape": [
+       5120
+      ],
+      "numel": 5120,
+      "requires_grad": false
+     },
+     "dynamic_scalar.3.weight": {
+      "dtype": "torch.float32",
+      "shape": [
+       1,
+       5120
+      ],
+      "numel": 5120,
+      "requires_grad": false
+     },
+     "dynamic_scalar.3.bias": {
+      "dtype": "torch.float32",
+      "shape": [
+       1
+      ],
+      "numel": 1,
+      "requires_grad": false
+     }
+    }
+   }
+  }
+ },
+ "parameters": {
+  "kind": "no-parameter-container-found"
+ }
+}

@@ -1,0 +1,90 @@
+{
+ "airknow": {
+  "source_dir": "/home/heheboiz/data/cir/workbench/third_party/AirKnow",
+  "has_git": false,
+  "verified": true,
+  "error": null,
+  "expected": "6ab6fa95b746f85b08eea4cb66eb51448bce99b7",
+  "actual": "6ab6fa95b746f85b08eea4cb66eb51448bce99b7",
+  "unauthorized": [],
+  "tracked": [],
+  "state": "vendored_in_repo"
+ },
+ "pair": {
+  "source_dir": "/home/heheboiz/data/cir/workbench/third_party/PAIR",
+  "has_git": false,
+  "verified": true,
+  "error": null,
+  "expected": "bfb0b98cdb4c44f6b9190baaa84d783a77dd888f",
+  "actual": "bfb0b98cdb4c44f6b9190baaa84d783a77dd888f",
+  "unauthorized": [],
+  "tracked": [],
+  "state": "vendored_in_repo"
+ },
+ "clvc_net": {
+  "source_dir": "/home/heheboiz/data/cir/workbench/third_party/CLVCNet",
+  "has_git": false,
+  "verified": true,
+  "error": null,
+  "expected": "bd9b6889489806cb60676597880f91d918b279cb",
+  "actual": "bd9b6889489806cb60676597880f91d918b279cb",
+  "unauthorized": [],
+  "tracked": [],
+  "state": "vendored_in_repo"
+ },
+ "dcnet": {
+  "source_dir": "/home/heheboiz/data/cir/workbench/third_party/DCNet",
+  "has_git": false,
+  "verified": true,
+  "error": null,
+  "expected": "68c79d38569f01ca39c3b4ea641b3b7eb2ccb5fb",
+  "actual": "68c79d38569f01ca39c3b4ea641b3b7eb2ccb5fb",
+  "unauthorized": [],
+  "tracked": [],
+  "state": "vendored_in_repo"
+ },
+ "combiner_rn50x4_noft": {
+  "source_dir": "/home/heheboiz/data/cir/workbench/third_party/CLIP4Cir",
+  "has_git": false,
+  "verified": true,
+  "error": null,
+  "expected": "dfed9f748a8a4d05abf613164e06d59b22dbdf13",
+  "actual": "dfed9f748a8a4d05abf613164e06d59b22dbdf13",
+  "unauthorized": [],
+  "tracked": [],
+  "state": "vendored_in_repo"
+ },
+ "clip4cir_rn50x4_fullft": {
+  "source_dir": "/home/heheboiz/data/cir/workbench/third_party/CLIP4Cir",
+  "has_git": false,
+  "verified": true,
+  "error": null,
+  "expected": "dfed9f748a8a4d05abf613164e06d59b22dbdf13",
+  "actual": "dfed9f748a8a4d05abf613164e06d59b22dbdf13",
+  "unauthorized": [],
+  "tracked": [],
+  "state": "vendored_in_repo"
+ },
+ "tgcir": {
+  "source_dir": "/home/heheboiz/data/cir/workbench/third_party/TGCIR",
+  "has_git": false,
+  "verified": true,
+  "error": null,
+  "expected": "65fa78eaf8cabe8197fcc22ccab42207c591bdee",
+  "actual": "65fa78eaf8cabe8197fcc22ccab42207c591bdee",
+  "unauthorized": [],
+  "tracked": [],
+  "state": "vendored_in_repo"
+ },
+ "sprc": {
+  "source_dir": "/home/heheboiz/data/cir/workbench/third_party/SPRC",
+  "has_git": false,
+  "verified": true,
+  "error": null,
+  "expected": "2935a5397732260d1db6fa577e5926f963e36f0f",
+  "actual": "2935a5397732260d1db6fa577e5926f963e36f0f",
+  "unauthorized": [],
+  "tracked": [],
+  "state": "vendored_in_repo"
+ }
+}

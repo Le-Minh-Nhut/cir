@@ -1,0 +1,1 @@
+LIMN:{"pinned_modules": "OK model, datasets, test, Transformer", "origins_ok": true, "open_clip": "OK", "validate_environment": ["LIMN native test requires CUDA; torch.cuda.is_available() is false"]}

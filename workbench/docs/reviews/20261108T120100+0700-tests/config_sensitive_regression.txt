@@ -1,0 +1,43 @@
+....ssssssssss.ssssssssssssssssss.................ss......sss........... [ 85%]
+............                                                             [100%]
+=============================== warnings summary ===============================
+workbench/backend/main.py:105
+  /home/heheboiz/data/cir/workbench/backend/main.py:105: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    @app.on_event("startup")
+
+workbench/envs/ctl312h/lib/python3.12/site-packages/fastapi/applications.py:4723
+workbench/envs/ctl312h/lib/python3.12/site-packages/fastapi/applications.py:4723
+  /home/heheboiz/data/cir/workbench/envs/ctl312h/lib/python3.12/site-packages/fastapi/applications.py:4723: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    return self.router.on_event(event_type)  # ty: ignore[deprecated]
+
+workbench/backend/main.py:112
+  /home/heheboiz/data/cir/workbench/backend/main.py:112: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    @app.on_event("shutdown")
+
+workbench/tests/test_r20_shared_seams.py::test_tme_assets_resolve_where_the_pinned_loader_reads_them
+  /home/heheboiz/data/cir/workbench/envs/ctl312h/lib/python3.12/site-packages/transformers/utils/generic.py:441: FutureWarning: `torch.utils._pytree._register_pytree_node` is deprecated. Please use `torch.utils._pytree.register_pytree_node` instead.
+    _torch_pytree._register_pytree_node(
+
+workbench/tests/test_r20_shared_seams.py::test_tme_assets_resolve_where_the_pinned_loader_reads_them
+workbench/tests/test_r20_shared_seams.py::test_asset_admission_agrees_between_shared_readiness_and_the_wrapper_contract
+workbench/tests/test_r20_shared_seams.py::test_every_registry_model_keeps_a_consistent_declared_command
+  /home/heheboiz/data/cir/workbench/envs/ctl312h/lib/python3.12/site-packages/huggingface_hub/file_download.py:949: FutureWarning: `resume_download` is deprecated and will be removed in version 1.0.0. Downloads always resume when possible. If you want to force a new download, use `force_download=True`.
+    warnings.warn(
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+51 passed, 33 skipped, 8 warnings in 43.47s

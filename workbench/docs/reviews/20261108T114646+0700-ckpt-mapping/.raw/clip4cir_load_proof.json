@@ -1,0 +1,44 @@
+{
+ "noft": {
+  "combiner_strict_load": "OK",
+  "epoch": 165
+ },
+ "fullft": {
+  "combiner_strict_load": "OK",
+  "epoch": 87
+ },
+ "clip_fullft": {
+  "strict_load": "OK",
+  "epoch": 6,
+  "input_resolution": 288,
+  "output_dim": 640,
+  "conv1_out": 40,
+  "stage_blocks": [
+   4,
+   6,
+   10,
+   6
+  ],
+  "text_projection": [
+   640,
+   640
+  ]
+ },
+ "official_RN50x4": {
+  "input_resolution": 288,
+  "output_dim": 640,
+  "conv1_out": 40,
+  "stage_blocks": [
+   4,
+   6,
+   10,
+   6
+  ]
+ },
+ "key_diff_vs_official": {
+  "n_missing": 0,
+  "n_extra": 0,
+  "missing": [],
+  "extra": []
+ }
+}

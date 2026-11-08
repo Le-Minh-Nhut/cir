@@ -1,0 +1,4 @@
+habit REACHABLE:{"clip": false, "open_clip": false, "thop": false, "setproctitle": false, "torchaudio": false, "sentencepiece": false, "spacy": false}
+intent REACHABLE:{"clip": false, "open_clip": false, "thop": false, "setproctitle": false, "torchaudio": false, "sentencepiece": false, "spacy": false}
+hint REACHABLE:{"clip": false, "open_clip": false, "thop": false, "setproctitle": false, "torchaudio": false, "sentencepiece": false, "spacy": false}
+conesep REACHABLE:{"clip": false, "open_clip": false, "thop": false, "setproctitle": false, "torchaudio": false, "sentencepiece": false, "spacy": false}

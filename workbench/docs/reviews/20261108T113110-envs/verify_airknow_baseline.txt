@@ -1,0 +1,2 @@
+CONTRACT:"3.9"
+REPORT:{"tier": "BLOCKED", "status": "PYTHON_VERSION_MISMATCH", "reason": "expected Python 3.9, found 3.11.15", "python_version": "3.11.15", "interpreter": "/home/heheboiz/data/cir/workbench/envs/airknow-adapted/bin/python"}

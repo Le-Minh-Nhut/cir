@@ -1,0 +1,65 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+___________________ test_scenario_a_api_to_evaluator_success ___________________
+
+master = {'ws': PosixPath('/tmp/pytest-of-heheboiz/pytest-125/test_scenario_a_api_to_evaluat0/workspace'), 'data': PosixPath('/...ixPath('/tmp/pytest-of-heheboiz/pytest-125/test_scenario_a_api_to_evaluat0/workspace/third_party/SyntheticModel'), ...}
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7e6081133410>
+request = <FixtureRequest for <Function test_scenario_a_api_to_evaluator_success>>
+
+    def test_scenario_a_api_to_evaluator_success(master, monkeypatch, request):  # noqa: F811
+        """POST /api/jobs -> queue -> real operator subprocess -> real evaluator -> ledger+proof."""
+        module = _api_module(monkeypatch, master, request)
+    
+        accepted = module.queue_job(_payload())
+        job_id = accepted["job_id"]
+        # The queue's own directory is separate from the run directory the operator will claim.
+        job_directory = Path(accepted["log_directory"])
+        assert job_directory.parent.name == "queue_jobs"
+        assert "logs" not in job_directory.parts
+    
+        settled = _wait_for(module.JOBS, job_id)
+>       assert settled["status"] == "completed", (settled, settled.get("error"))
+E       AssertionError: ({'job_id': '637d0c5c-4a59-46c2-a676-27a788386048', 'model_id': 'synthetic_model', 'checkpoint_id': 'ckpt_v1', 'protoc...] No such file or directory: '/tmp/pytest-of-heheboiz/pytest-125/test_scenario_a_api_to_evaluat0/workspace/workbench'")
+E       assert 'failed' == 'completed'
+E         
+E         - completed
+E         + failed
+
+workbench/tests/test_phase1_acceptance_scenarios.py:99: AssertionError
+=============================== warnings summary ===============================
+workbench/tests/test_phase1_acceptance_scenarios.py::test_scenario_a_api_to_evaluator_success
+  /home/heheboiz/data/cir/workbench/backend/main.py:103: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    @app.on_event("startup")
+
+workbench/tests/test_phase1_acceptance_scenarios.py::test_scenario_a_api_to_evaluator_success
+workbench/tests/test_phase1_acceptance_scenarios.py::test_scenario_a_api_to_evaluator_success
+  /home/heheboiz/data/cir/workbench/envs/ctl312h/lib/python3.12/site-packages/fastapi/applications.py:4723: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    return self.router.on_event(event_type)  # ty: ignore[deprecated]
+
+workbench/tests/test_phase1_acceptance_scenarios.py::test_scenario_a_api_to_evaluator_success
+  /home/heheboiz/data/cir/workbench/backend/main.py:110: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    @app.on_event("shutdown")
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED workbench/tests/test_phase1_acceptance_scenarios.py::test_scenario_a_api_to_evaluator_success - AssertionError: ({'job_id': '637d0c5c-4a59-46c2-a676-27a788386048', 'model_id': 'synthetic_model', 'checkpoint_id': 'ckpt_v1', 'protoc...] No such file or directory: '/tmp/pytest-of-heheboiz/pytest-125/test_scenario_a_api_to_evaluat0/workspace/workbench'")
+assert 'failed' == 'completed'
+  
+  - completed
+  + failed
+1 failed, 4 warnings in 0.41s

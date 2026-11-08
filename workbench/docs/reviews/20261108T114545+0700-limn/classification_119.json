@@ -1,0 +1,2320 @@
+[
+ {
+  "qid": "7:2179",
+  "stem": "B0020Q11LE",
+  "resolved": "shirt",
+  "val": [
+   "shirt"
+  ],
+  "test": [
+   "toptee"
+  ],
+  "captest": [
+   "toptee"
+  ],
+  "text": "Has writing on the t-shirt and is gray with black lettering.",
+  "subsets": [
+   "full",
+   "sf"
+  ],
+  "pos_scope": [
+   "B000WB6WTU"
+  ]
+ },
+ {
+  "qid": "7:2211",
+  "stem": "B000X74R7C",
+  "resolved": "shirt",
+  "val": [
+   "shirt"
+  ],
+  "test": [
+   "toptee"
+  ],
+  "captest": [
+   "toptee"
+  ],
+  "text": "Black and has a video game character and is darker.",
+  "subsets": [
+   "full",
+   "sf"
+  ],
+  "pos_scope": [
+   "B003RW8XFW"
+  ]
+ },
+ {
+  "qid": "7:2218",
+  "stem": "B0020Q11LE",
+  "resolved": "shirt",
+  "val": [
+   "shirt"
+  ],
+  "test": [
+   "toptee"
+  ],
+  "captest": [
+   "toptee"
+  ],
+  "text": "Is blue in color with a different logo and wrestling.",
+  "subsets": [
+   "full",
+   "sf"
+  ],
+  "pos_scope": [
+   "B0030EX7Z8"
+  ]
+ },
+ {
+  "qid": "7:2228",
+  "stem": "B004TMGDME",
+  "resolved": "shirt",
+  "val": [
+   "shirt",
+   "toptee"
+  ],
+  "test": [],
+  "captest": [],
+  "text": "Is lighter and it is blue.",
+  "subsets": [
+   "full",
+   "sf"
+  ],
+  "pos_scope": [
+   "B000WNEK7Y"
+  ]
+ },
+ {
+  "qid": "7:2258",
+  "stem": "B003Y5LY76",
+  "resolved": "shirt",
+  "val": [
+   "shirt",
+   "toptee"
+  ],
+  "test": [],
+  "captest": [],
+  "text": "Is green with a character and is brighter in color.",
+  "subsets": [
+   "full",
+   "sf"
+  ],
+  "pos_scope": [
+   "B005XIGH92"
+  ]
+ },
+ {
+  "qid": "7:2285",
+  "stem": "B0046Q4F28",
+  "resolved": "shirt",
+  "val": [
+   "shirt",
+   "toptee"
+  ],
+  "test": [],
+  "captest": [],
+  "text": "Its cream colored and minimal print and tan.",
+  "subsets": [
+   "full"
+  ],
+  "pos_scope": [
+   "B00CP5TV58"
+  ]
+ },
+ {
+  "qid": "7:2307",
+  "stem": "B00BGJ4OQA",
+  "resolved": "shirt",
+  "val": [
+   "shirt",
+   "toptee"
+  ],
+  "test": [],
+  "captest": [],
+  "text": "Is white with california republic writing and is lighter.",
+  "subsets": [
+   "full"
+  ],
+  "pos_scope": [
+   "B005F0JPDI"
+  ]
+ },
+ {
+  "qid": "7:2309",
+  "stem": "B00AZ0180G",
+  "resolved": "shirt",
+  "val": [
+   "shirt",
+   "toptee"
+  ],
+  "test": [],
+  "captest": [],
+  "text": "Is navy blue with yellow lettering and is navy in color.",
+  "subsets": [
+   "full",
+   "sf"
+  ],
+  "pos_scope": [
+   "B005MGDZ04"
+  ]
+ },
+ {
+  "qid": "7:2333",
+  "stem": "B0013F2JGE",
+  "resolved": "shirt",
+  "val": [
+   "shirt"
+  ],
+  "test": [
+   "toptee"
+  ],
+  "captest": [
+   "toptee"
+  ],
+  "text": "Has dolphins on a light blue tee shirt and is lighter.",
+  "subsets": [
+   "full"
+  ],
+  "pos_scope": [
+   "B000H84DIA"
+  ]
+ },
+ {
+  "qid": "7:2463",
+  "stem": "B00GGR9BSS",
+  "resolved": "shirt",
+  "val": [
+   "shirt",
+   "toptee"
+  ],
+  "test": [],
+  "captest": [],
+  "text": "Is white with shorter sleeves and is short sleeved and white.",
+  "subsets": [
+   "full",
+   "sf"
+  ],
+  "pos_scope": [
+   "B004DCCKBI"
+  ]
+ },
+ {
+  "qid": "7:2471",
+  "stem": "B00B92J932",
+  "resolved": "shirt",
+  "val": [
+   "shirt"
+  ],
+  "test": [
+   "toptee"
+  ],
+  "captest": [
+   "toptee"
+  ],
+  "text": "Is more formal and lighter and is a light colored button up.",
+  "subsets": [
+   "full",
+   "sf"
+  ],
+  "pos_scope": [
+   "B00DEKLOYO"
+  ]
+ },
+ {
+  "qid": "7:2486",
+  "stem": "B006VJXGAU",
+  "resolved": "shirt",
+  "val": [
+   "shirt",
+   "toptee"
+  ],
+  "test": [],
+  "captest": [],
+  "text": "Has writing on front and is more black and is darker in color.",
+  "subsets": [
+   "full",
+   "sf"
+  ],
+  "pos_scope": [
+   "B0046IB5JW"
+  ]
+ },
+ {
+  "qid": "7:2529",
+  "stem": "B00DG9ISYM",
+  "resolved": "shirt",
+  "val": [
+   "shirt",
+   "toptee"
+  ],
+  "test": [],
+  "captest": [],
+  "text": "Is specifically for hiking and a grey and black vest.",
+  "subsets": [
+   "full"
+  ],
+  "pos_scope": [
+   "B003R50LA4"
+  ]
+ },
+ {
+  "qid": "7:2575",
+  "stem": "B0020Q11LE",
+  "resolved": "shirt",
+  "val": [
+   "shirt"
+  ],
+  "test": [
+   "toptee"
+  ],
+  "captest": [
+   "toptee"
+  ],
+  "text": "Is a black T shirt with a logo and is black with red circular motif.",
+  "subsets": [
+   "full",
+   "sf"
+  ],
+  "pos_scope": [
+   "B00CIYDP94"
+  ]
+ },
+ {
+  "qid": "7:2587",
+  "stem": "B0046Q4F28",
+  "resolved": "shirt",
+  "val": [
+   "shirt",
+   "toptee"
+  ],
+  "test": [],
+  "captest": [],
+  "text": "Is dark grey with pi on it and is darker colored and fewer fonts.",
+  "subsets": [
+   "full"
+  ],
+  "pos_scope": [
+   "B00CAAJSYC"
+  ]
+ },
+ {
+  "qid": "7:2637",
+  "stem": "B000RQO9S6",
+  "resolved": "shirt",
+  "val": [
+   "shirt",
+   "toptee"
+  ],
+  "test": [],
+  "captest": [],
+  "text": "Is just a plain smooth brown color and is a brown belt that is not distressed.",
+  "subsets": [
+   "full"
+  ],
+  "pos_scope": [
+   "B00CTPTNKW"
+  ]
+ },
+ {
+  "qid": "7:2650",
+  "stem": "B008JVJI00",
+  "resolved": "shirt",
+  "val": [
+   "shirt"
+  ],
+  "test": [
+   "toptee"
+  ],
+  "captest": [
+   "toptee"
+  ],
+  "text": "Is green and is green with a yellow motif.",
+  "subsets": [
+   "full",
+   "sf"
+  ],
+  "pos_scope": [
+   "B009G81G82"
+  ]
+ },
+ {
+  "qid": "7:2679",
+  "stem": "B006YDMYCY",
+  "resolved": "shirt",
+  "val": [
+   "shirt",
+   "toptee"
+  ],
+  "test": [],
+  "captest": [],
+  "text": "Has its an anime thing written on it and has a graphic that says its an anime thing.",
+  "subsets": [
+   "full"
+  ],
+  "pos_scope": [
+   "B00DH8E2F6"
+  ]
+ },
+ {
+  "qid": "7:2698",
+  "stem": "B007RGHP1W",
+  "resolved": "shirt",
+  "val": [
+   "shirt",
+   "toptee"
+  ],
+  "test": [],
+  "captest": [],
+  "text": "Has more print work and is darker.",
+  "subsets": [
+   "full",
+   "sf"
+  ],
+  "pos_scope": [
+   "B009BBDBGY"
+  ]
+ },
+ {
+  "qid": "7:2717",
+  "stem": "B00B92J932",
+  "resolved": "shirt",
+  "val": [
+   "shirt"
+  ],
+  "test": [
+   "toptee"
+  ],
+  "captest": [
+   "toptee"
+  ],
+  "text": "Is short sleeved and has a larger design on it.",
+  "subsets": [
+   "full",
+   "sf"
+  ],
+  "pos_scope": [
+   "B0041I3CNO"
+  ]
+ },
+ {
+  "qid": "7:2815",
+  "stem": "B006VJXGAU",
+  "resolved": "shirt",
+  "val": [
+   "shirt",
+   "toptee"
+  ],
+  "test": [],
+  "captest": [],
+  "text": "Has a logo on the pocket and has a simpler graphic.",
+  "subsets": [
+   "full",
+   "sf"
+  ],
+  "pos_scope": [
+   "B00A64UD4I"
+  ]
+ },
+ {
+  "qid": "7:2959",
+  "stem": "B00018AA74",
+  "resolved": "shirt",
+  "val": [
+   "shirt",
+   "toptee"
+  ],
+  "test": [],
+  "captest": [],
+  "text": "Is green and has a cartoon figure on it and is more colorful.",
+  "subsets": [
+   "full"
+  ],
+  "pos_scope": [
+   "B008T3X5CA"
+  ]
+ },
+ {
+  "qid": "7:2999",
+  "stem": "B00ER9PWY4",
+  "resolved": "shirt",
+  "val": [
+   "shirt",
+   "toptee"
+  ],
+  "test": [],
+  "captest": [],
+  "text": "Is more black and has longer sleeves and is long sleeved.",
+  "subsets": [
+   "full",
+   "sf"
+  ],
+  "pos_scope": [
+   "B004QMA13O"
+  ]
+ },
+ {
+  "qid": "7:3005",
+  "stem": "B00CXV9H26",
+  "resolved": "shirt",
+  "val": [
+   "shirt",
+   "toptee"
+  ],
+  "test": [],
+  "captest": [],
+  "text": "Is white and has a fish image on it and is light gray colored.",
+  "subsets": [
+   "full"
+  ],
+  "pos_scope": [
+   "B001CP1LLY"
+  ]
+ },
+ {
+  "qid": "7:3033",
+  "stem": "B000EOZGWE",
+  "resolved": "shirt",
+  "val": [
+   "shirt",
+   "toptee"
+  ],
+  "test": [],
+  "captest": [],
+  "text": "Is red with yellow stars and has stars and a red background.",
+  "subsets": [
+   "full"
+  ],
+  "pos_scope": [
+   "B00BJ94VEC"
+  ]
+ },
+ {
+  "qid": "7:3038",
+  "stem": "B004TMGDME",
+  "resolved": null,
+  "val": [
+   "shirt",
+   "toptee"
+  ],
+  "test": [],
+  "captest": [],
+  "text": "Is darker and has a different graphic and is darker.",
+  "subsets": [
+   "full"
+  ],
+  "pos_scope": [
+   "B004D8QCN4"
+  ]
+ },
+ {
+  "qid": "7:3163",
+  "stem": "B008JVJI00",
+  "resolved": "shirt",
+  "val": [
+   "shirt"
+  ],
+  "test": [
+   "toptee"
+  ],
+  "captest": [
+   "toptee"
+  ],
+  "text": "Is a darker solid gray in color and gray with words.",
+  "subsets": [
+   "full"
+  ],
+  "pos_scope": [
+   "B003IRS13K"
+  ]
+ },
+ {
+  "qid": "7:3177",
+  "stem": "B000X74R7C",
+  "resolved": "shirt",
+  "val": [
+   "shirt"
+  ],
+  "test": [
+   "toptee"
+  ],
+  "captest": [
+   "toptee"
+  ],
+  "text": "Is a black collared shirt and is black with wide sleeves.",
+  "subsets": [
+   "full",
+   "sf"
+  ],
+  "pos_scope": [
+   "B001UZ7IHM"
+  ]
+ },
+ {
+  "qid": "7:3243",
+  "stem": "B00BFCV6A0",
+  "resolved": "shirt",
+  "val": [
+   "shirt",
+   "toptee"
+  ],
+  "test": [],
+  "captest": [],
+  "text": "Is navy blue with a Might Mouse logo and is darker and masculine.",
+  "subsets": [
+   "full"
+  ],
+  "pos_scope": [
+   "B001HKGHVS"
+  ]
+ },
+ {
+  "qid": "7:3280",
+  "stem": "B006Z2HG0Y",
+  "resolved": "shirt",
+  "val": [
+   "shirt",
+   "toptee"
+  ],
+  "test": [],
+  "captest": [],
+  "text": "Is white handbag and is a bag.",
+  "subsets": [
+   "full",
+   "sf"
+  ],
+  "pos_scope": [
+   "B008FPJHVK"
+  ]
+ },
+ {
+  "qid": "7:3324",
+  "stem": "B00AECN92K",
+  "resolved": "shirt",
+  "val": [
+   "shirt",
+   "toptee"
+  ],
+  "test": [],
+  "captest": [],
+  "text": "Is black with long sleeves and with a hood and longer sleeves.",
+  "subsets": [
+   "full",
+   "sf"
+  ],
+  "pos_scope": [
+   "B009PTECLU"
+  ]
+ },
+ {
+  "qid": "7:3367",
+  "stem": "B00BQZ7OCK",
+  "resolved": "shirt",
+  "val": [
+   "shirt",
+   "toptee"
+  ],
+  "test": [],
+  "captest": [],
+  "text": "Is similar and has a larger car on it.",
+  "subsets": [
+   "full"
+  ],
+  "pos_scope": [
+   "B008K9C9Q6"
+  ]
+ },
+ {
+  "qid": "7:3402",
+  "stem": "B001PIXJTA",
+  "resolved": "shirt",
+  "val": [
+   "shirt"
+  ],
+  "test": [
+   "toptee"
+  ],
+  "captest": [
+   "toptee"
+  ],
+  "text": "Is a Jesus loves Iceland T shirt and is white and has more graphics.",
+  "subsets": [
+   "full"
+  ],
+  "pos_scope": [
+   "B005E0TR32"
+  ]
+ },
+ {
+  "qid": "7:3464",
+  "stem": "B00DG9ISYM",
+  "resolved": "shirt",
+  "val": [
+   "shirt",
+   "toptee"
+  ],
+  "test": [],
+  "captest": [],
+  "text": "Is light blue and also larger and is blue and has a white text logo.",
+  "subsets": [
+   "full",
+   "sf"
+  ],
+  "pos_scope": [
+   "B008Y24H1E"
+  ]
+ },
+ {
+  "qid": "7:3487",
+  "stem": "B0067K5MNC",
+  "resolved": "shirt",
+  "val": [
+   "shirt",
+   "toptee"
+  ],
+  "test": [],
+  "captest": [],
+  "text": "The shirt is black in color with white and black symbols and has short sleeves and no hood.",
+  "subsets": [
+   "full",
+   "sf"
+  ],
+  "pos_scope": [
+   "B00AAJ687U"
+  ]
+ },
+ {
+  "qid": "7:3493",
+  "stem": "B006BZ8690",
+  "resolved": "shirt",
+  "val": [
+   "shirt",
+   "toptee"
+  ],
+  "test": [],
+  "captest": [],
+  "text": "Is white with red designs and is white with a Leroy Jenkins design.",
+  "subsets": [
+   "full"
+  ],
+  "pos_scope": [
+   "B0068RJFC8"
+  ]
+ },
+ {
+  "qid": "7:3560",
+  "stem": "B006ZZV0L2",
+  "resolved": "shirt",
+  "val": [
+   "shirt",
+   "toptee"
+  ],
+  "test": [],
+  "captest": [],
+  "text": "Is political and is black and different phrase.",
+  "subsets": [
+   "full",
+   "sf"
+  ],
+  "pos_scope": [
+   "B003S0W9EO"
+  ]
+ },
+ {
+  "qid": "7:3601",
+  "stem": "B000EOZGWE",
+  "resolved": "shirt",
+  "val": [
+   "shirt",
+   "toptee"
+  ],
+  "test": [],
+  "captest": [],
+  "text": "The shirt is gray with the word Croatia and the Croatian Flag and is darker.",
+  "subsets": [
+   "full"
+  ],
+  "pos_scope": [
+   "B002R7U7Q6"
+  ]
+ },
+ {
+  "qid": "7:3629",
+  "stem": "B00BYIN01I",
+  "resolved": "shirt",
+  "val": [
+   "shirt"
+  ],
+  "test": [
+   "toptee"
+  ],
+  "captest": [
+   "toptee"
+  ],
+  "text": "Is dark blue with a Doctor Who logo on front and is blue with DW and multiple hash marks on front.",
+  "subsets": [
+   "full"
+  ],
+  "pos_scope": [
+   "B006W969LW"
+  ]
+ },
+ {
+  "qid": "7:3635",
+  "stem": "B00AECN92K",
+  "resolved": "shirt",
+  "val": [
+   "shirt",
+   "toptee"
+  ],
+  "test": [],
+  "captest": [],
+  "text": "Is red in color and is red with different facial drawings.",
+  "subsets": [
+   "full"
+  ],
+  "pos_scope": [
+   "B00AECKNR4"
+  ]
+ },
+ {
+  "qid": "7:3790",
+  "stem": "B0079K0YBO",
+  "resolved": null,
+  "val": [
+   "shirt",
+   "toptee"
+  ],
+  "test": [],
+  "captest": [],
+  "text": "Is grey and has a less whimsical graphic and is lighter.",
+  "subsets": [
+   "full",
+   "sf"
+  ],
+  "pos_scope": [
+   "B00E3WVAD2"
+  ]
+ },
+ {
+  "qid": "7:3800",
+  "stem": "B006ZZV0L2",
+  "resolved": "shirt",
+  "val": [
+   "shirt",
+   "toptee"
+  ],
+  "test": [],
+  "captest": [],
+  "text": "Is more of a costume and is redder and is a red costume.",
+  "subsets": [
+   "full"
+  ],
+  "pos_scope": [
+   "B00BW5K82C"
+  ]
+ },
+ {
+  "qid": "7:3813",
+  "stem": "B001BISBCY",
+  "resolved": "shirt",
+  "val": [
+   "shirt",
+   "toptee"
+  ],
+  "test": [],
+  "captest": [],
+  "text": "Is grey with batman logo on it and is gray colored.",
+  "subsets": [
+   "full"
+  ],
+  "pos_scope": [
+   "B00F96M5LC"
+  ]
+ },
+ {
+  "qid": "7:3906",
+  "stem": "B008MC2GY6",
+  "resolved": "shirt",
+  "val": [
+   "shirt"
+  ],
+  "test": [
+   "toptee"
+  ],
+  "captest": [
+   "toptee"
+  ],
+  "text": "Is a collared shirt and is totally plain with no picture.",
+  "subsets": [
+   "full",
+   "sf"
+  ],
+  "pos_scope": [
+   "B007E4SN6S"
+  ]
+ },
+ {
+  "qid": "7:3927",
+  "stem": "B00BFCV6A0",
+  "resolved": "shirt",
+  "val": [
+   "shirt",
+   "toptee"
+  ],
+  "test": [],
+  "captest": [],
+  "text": "Is black with white words and is black with a white logo.",
+  "subsets": [
+   "full",
+   "sf"
+  ],
+  "pos_scope": [
+   "B003CMQITA"
+  ]
+ },
+ {
+  "qid": "7:3993",
+  "stem": "B00BYIN01I",
+  "resolved": "shirt",
+  "val": [
+   "shirt"
+  ],
+  "test": [
+   "toptee"
+  ],
+  "captest": [
+   "toptee"
+  ],
+  "text": "Is more wordy and has less color on it.",
+  "subsets": [
+   "full",
+   "sf"
+  ],
+  "pos_scope": [
+   "B004L6ZSVU"
+  ]
+ },
+ {
+  "qid": "7:4008",
+  "stem": "B006YDMYCY",
+  "resolved": "shirt",
+  "val": [
+   "shirt",
+   "toptee"
+  ],
+  "test": [],
+  "captest": [],
+  "text": "Is a checked shirt with front pockets and is more formal.",
+  "subsets": [
+   "full",
+   "sf",
+   "validated"
+  ],
+  "pos_scope": [
+   "B0099RSPBG"
+  ]
+ },
+ {
+  "qid": "7:4013",
+  "stem": "B000RQO9S6",
+  "resolved": "shirt",
+  "val": [
+   "shirt",
+   "toptee"
+  ],
+  "test": [],
+  "captest": [],
+  "text": "Is made of fabric and has no studs and is a t shirt that resembles a vest.",
+  "subsets": [
+   "full",
+   "sf"
+  ],
+  "pos_scope": [
+   "B007P88LU6"
+  ]
+ },
+ {
+  "qid": "7:4066",
+  "stem": "B004D8QCN4",
+  "resolved": "toptee",
+  "val": [
+   "shirt",
+   "toptee"
+  ],
+  "test": [],
+  "captest": [],
+  "text": "Is navy blue with a mustang on it and is a lighter color.",
+  "subsets": [
+   "full"
+  ],
+  "pos_scope": [
+   "B004KUUK3S"
+  ]
+ },
+ {
+  "qid": "7:4086",
+  "stem": "B000F4U6QE",
+  "resolved": "toptee",
+  "val": [
+   "shirt",
+   "toptee"
+  ],
+  "test": [],
+  "captest": [],
+  "text": "Is darker and is an elegant black and gray top with embroidered neckline.",
+  "subsets": [
+   "full"
+  ],
+  "pos_scope": [
+   "B00F6518JG"
+  ]
+ },
+ {
+  "qid": "7:4164",
+  "stem": "B001BISBCY",
+  "resolved": "toptee",
+  "val": [
+   "shirt",
+   "toptee"
+  ],
+  "test": [],
+  "captest": [],
+  "text": "The shirt is white with black writing and is a white crew neck with black lettering.",
+  "subsets": [
+   "full"
+  ],
+  "pos_scope": [
+   "B00AZ01658"
+  ]
+ },
+ {
+  "qid": "7:4171",
+  "stem": "B007Z4WRC8",
+  "resolved": "toptee",
+  "val": [
+   "shirt",
+   "toptee"
+  ],
+  "test": [],
+  "captest": [],
+  "text": "Is brighter in color and is lighter and masculine.",
+  "subsets": [
+   "full",
+   "sf"
+  ],
+  "pos_scope": [
+   "B00ER9PWY4"
+  ]
+ },
+ {
+  "qid": "7:4243",
+  "stem": "B00BXMUFWC",
+  "resolved": "toptee",
+  "val": [
+   "shirt",
+   "toptee"
+  ],
+  "test": [],
+  "captest": [],
+  "text": "Is purple and is more colorful.",
+  "subsets": [
+   "full"
+  ],
+  "pos_scope": [
+   "B000FAE1SW"
+  ]
+ },
+ {
+  "qid": "7:4246",
+  "stem": "B00GIOKE8U",
+  "resolved": "toptee",
+  "val": [
+   "toptee"
+  ],
+  "test": [
+   "shirt"
+  ],
+  "captest": [
+   "shirt"
+  ],
+  "text": "The long sleeve shirt is white and is lighter color and has no graphic.",
+  "subsets": [
+   "full",
+   "sf"
+  ],
+  "pos_scope": [
+   "B00686OHK4"
+  ]
+ },
+ {
+  "qid": "7:4290",
+  "stem": "B004KSP3ZK",
+  "resolved": "toptee",
+  "val": [
+   "toptee"
+  ],
+  "test": [
+   "shirt"
+  ],
+  "captest": [
+   "shirt"
+  ],
+  "text": "The shirt is blue with a white emblem and is dark blue with white emblem.",
+  "subsets": [
+   "full",
+   "sf"
+  ],
+  "pos_scope": [
+   "B00EJOHA2O"
+  ]
+ },
+ {
+  "qid": "7:4294",
+  "stem": "B006BZ8690",
+  "resolved": "toptee",
+  "val": [
+   "shirt",
+   "toptee"
+  ],
+  "test": [],
+  "captest": [],
+  "text": "Numbered colts shirt blue white and it is a lighter blue.",
+  "subsets": [
+   "full"
+  ],
+  "pos_scope": [
+   "B00826O9SS"
+  ]
+ },
+ {
+  "qid": "7:4305",
+  "stem": "B0094I4IOI",
+  "resolved": "toptee",
+  "val": [
+   "shirt",
+   "toptee"
+  ],
+  "test": [],
+  "captest": [],
+  "text": "Is more wordy and is a grey crew neck with print.",
+  "subsets": [
+   "full",
+   "sf"
+  ],
+  "pos_scope": [
+   "B00DI5EP8M"
+  ]
+ },
+ {
+  "qid": "7:4322",
+  "stem": "B006YDMYCY",
+  "resolved": "toptee",
+  "val": [
+   "shirt",
+   "toptee"
+  ],
+  "test": [],
+  "captest": [],
+  "text": "The shirt is white with the word California in red and white and is light colored and fitted.",
+  "subsets": [
+   "full"
+  ],
+  "pos_scope": [
+   "B00B2WMY5E"
+  ]
+ },
+ {
+  "qid": "7:4358",
+  "stem": "B006VJXGAU",
+  "resolved": "toptee",
+  "val": [
+   "shirt",
+   "toptee"
+  ],
+  "test": [],
+  "captest": [],
+  "text": "Is lighter in color with a different print and is a lighter color.",
+  "subsets": [
+   "full",
+   "sf"
+  ],
+  "pos_scope": [
+   "B0051C9FHQ"
+  ]
+ },
+ {
+  "qid": "7:4397",
+  "stem": "B00092SAR4",
+  "resolved": "toptee",
+  "val": [
+   "shirt",
+   "toptee"
+  ],
+  "test": [],
+  "captest": [],
+  "text": "Is purple and is blue Batman t-shirt.",
+  "subsets": [
+   "full"
+  ],
+  "pos_scope": [
+   "B005X4DNHA"
+  ]
+ },
+ {
+  "qid": "7:4420",
+  "stem": "B0051DQXH0",
+  "resolved": "toptee",
+  "val": [
+   "shirt",
+   "toptee"
+  ],
+  "test": [],
+  "captest": [],
+  "text": "Is blue with no sleeves and is blue and a tank top.",
+  "subsets": [
+   "full",
+   "sf"
+  ],
+  "pos_scope": [
+   "B003ICJSXC"
+  ]
+ },
+ {
+  "qid": "7:4425",
+  "stem": "B00CMD9IKQ",
+  "resolved": "toptee",
+  "val": [
+   "toptee"
+  ],
+  "test": [
+   "shirt"
+  ],
+  "captest": [
+   "shirt"
+  ],
+  "text": "Is darker and is dark gray colored.",
+  "subsets": [
+   "full"
+  ],
+  "pos_scope": [
+   "B005QQGOTO"
+  ]
+ },
+ {
+  "qid": "7:4434",
+  "stem": "B005E0TR32",
+  "resolved": "toptee",
+  "val": [
+   "shirt",
+   "toptee"
+  ],
+  "test": [],
+  "captest": [],
+  "text": "Is feminine fitting and pink and is pink with shorter sleeves.",
+  "subsets": [
+   "full",
+   "sf"
+  ],
+  "pos_scope": [
+   "B003HB8MIQ"
+  ]
+ },
+ {
+  "qid": "7:4487",
+  "stem": "B0045DTP72",
+  "resolved": "toptee",
+  "val": [
+   "toptee"
+  ],
+  "test": [
+   "shirt"
+  ],
+  "captest": [
+   "shirt"
+  ],
+  "text": "Is light blue and shorter sleeves and womens fit rounded neck light blue with graphic.",
+  "subsets": [
+   "full"
+  ],
+  "pos_scope": [
+   "B008FJZ7LK"
+  ]
+ },
+ {
+  "qid": "7:4504",
+  "stem": "B000FVAR52",
+  "resolved": "toptee",
+  "val": [
+   "shirt",
+   "toptee"
+  ],
+  "test": [],
+  "captest": [],
+  "text": "Is darker and is a lighter black with a British flag on it.",
+  "subsets": [
+   "full"
+  ],
+  "pos_scope": [
+   "B009BHFGKC"
+  ]
+ },
+ {
+  "qid": "7:4510",
+  "stem": "B009ZYYBVG",
+  "resolved": "toptee",
+  "val": [
+   "toptee"
+  ],
+  "test": [
+   "shirt"
+  ],
+  "captest": [
+   "shirt"
+  ],
+  "text": "Is white colored and is white with a more colorful pattern.",
+  "subsets": [
+   "full",
+   "sf"
+  ],
+  "pos_scope": [
+   "B005VSPMEK"
+  ]
+ },
+ {
+  "qid": "7:4529",
+  "stem": "B000EOZGWE",
+  "resolved": "toptee",
+  "val": [
+   "shirt",
+   "toptee"
+  ],
+  "test": [],
+  "captest": [],
+  "text": "Has greek letters on it and is less graphic and more collegate.",
+  "subsets": [
+   "full"
+  ],
+  "pos_scope": [
+   "B00EUSTQQW"
+  ]
+ },
+ {
+  "qid": "7:4540",
+  "stem": "B00579WNTA",
+  "resolved": "toptee",
+  "val": [
+   "shirt",
+   "toptee"
+  ],
+  "test": [],
+  "captest": [],
+  "text": "Is black with red words and black with a print.",
+  "subsets": [
+   "full",
+   "sf"
+  ],
+  "pos_scope": [
+   "B00AWRUOE8"
+  ]
+ },
+ {
+  "qid": "7:4542",
+  "stem": "B0067F9A0S",
+  "resolved": "toptee",
+  "val": [
+   "shirt",
+   "toptee"
+  ],
+  "test": [],
+  "captest": [],
+  "text": "The short sleeve shirt is white with a white and black ball and is white with a different graphic.",
+  "subsets": [
+   "full",
+   "sf",
+   "validated"
+  ],
+  "pos_scope": [
+   "B003KS9NCA"
+  ]
+ },
+ {
+  "qid": "7:4582",
+  "stem": "B0067F94EK",
+  "resolved": "toptee",
+  "val": [
+   "shirt",
+   "toptee"
+  ],
+  "test": [],
+  "captest": [],
+  "text": "`has large painting and deeply purple and has native-folklore graphic and purple background.",
+  "subsets": [
+   "full"
+  ],
+  "pos_scope": [
+   "B003UWZXAC"
+  ]
+ },
+ {
+  "qid": "7:4594",
+  "stem": "B000GNYYDA",
+  "resolved": "toptee",
+  "val": [
+   "shirt",
+   "toptee"
+  ],
+  "test": [],
+  "captest": [],
+  "text": "Is white and is white woman's tee.",
+  "subsets": [
+   "full",
+   "sf"
+  ],
+  "pos_scope": [
+   "B008OGHR94"
+  ]
+ },
+ {
+  "qid": "7:4641",
+  "stem": "B0094I4IOI",
+  "resolved": "toptee",
+  "val": [
+   "shirt",
+   "toptee"
+  ],
+  "test": [],
+  "captest": [],
+  "text": "Is blue and red colored and american tie dye.",
+  "subsets": [
+   "full"
+  ],
+  "pos_scope": [
+   "B003FOG0EI"
+  ]
+ },
+ {
+  "qid": "7:4759",
+  "stem": "B000A35AMK",
+  "resolved": "toptee",
+  "val": [
+   "shirt",
+   "toptee"
+  ],
+  "test": [],
+  "captest": [],
+  "text": "Has no sleeves and is darker in color.",
+  "subsets": [
+   "full",
+   "sf"
+  ],
+  "pos_scope": [
+   "B00CO4GP72"
+  ]
+ },
+ {
+  "qid": "7:4765",
+  "stem": "B00H879A5Y",
+  "resolved": "toptee",
+  "val": [
+   "shirt",
+   "toptee"
+  ],
+  "test": [],
+  "captest": [],
+  "text": "Has more images in the middle and is lighter in color.",
+  "subsets": [
+   "full",
+   "sf"
+  ],
+  "pos_scope": [
+   "B004YDELJA"
+  ]
+ },
+ {
+  "qid": "7:4806",
+  "stem": "B003PD0G30",
+  "resolved": "toptee",
+  "val": [
+   "shirt",
+   "toptee"
+  ],
+  "test": [],
+  "captest": [],
+  "text": "Is dark blue colored and is blue and lighter in color.",
+  "subsets": [
+   "full",
+   "sf"
+  ],
+  "pos_scope": [
+   "B006BZ8690"
+  ]
+ },
+ {
+  "qid": "7:4808",
+  "stem": "B005LIXPPI",
+  "resolved": "toptee",
+  "val": [
+   "shirt",
+   "toptee"
+  ],
+  "test": [],
+  "captest": [],
+  "text": "The shirt is black with red writing and a woman in red and has redder colors on the graphic.",
+  "subsets": [
+   "full",
+   "sf",
+   "validated"
+  ],
+  "pos_scope": [
+   "B003IE8TXU"
+  ]
+ },
+ {
+  "qid": "7:4809",
+  "stem": "B0001W1KSI",
+  "resolved": "toptee",
+  "val": [
+   "toptee"
+  ],
+  "test": [
+   "shirt"
+  ],
+  "captest": [
+   "shirt"
+  ],
+  "text": "A tie dye tank top with light and dark colors and has no sleeves.",
+  "subsets": [
+   "full",
+   "sf",
+   "validated"
+  ],
+  "pos_scope": [
+   "B009LHGDLS"
+  ]
+ },
+ {
+  "qid": "7:4838",
+  "stem": "B00AZ0180G",
+  "resolved": "toptee",
+  "val": [
+   "shirt",
+   "toptee"
+  ],
+  "test": [],
+  "captest": [],
+  "text": "The shirt is short sleeved gray in color with red writing and is grey with red print.",
+  "subsets": [
+   "full",
+   "sf"
+  ],
+  "pos_scope": [
+   "B00655SJ20"
+  ]
+ },
+ {
+  "qid": "7:4849",
+  "stem": "B0089HEOHG",
+  "resolved": "toptee",
+  "val": [
+   "shirt",
+   "toptee"
+  ],
+  "test": [],
+  "captest": [],
+  "text": "The shirt is pink with a black camel and wording of Hump Daaay! and is pink with black image.",
+  "subsets": [
+   "full"
+  ],
+  "pos_scope": [
+   "B00GVHV6YA"
+  ]
+ },
+ {
+  "qid": "7:4871",
+  "stem": "B003Y5LY76",
+  "resolved": "toptee",
+  "val": [
+   "shirt",
+   "toptee"
+  ],
+  "test": [],
+  "captest": [],
+  "text": "Blue tee with logo and is navy with a different graphic.",
+  "subsets": [
+   "full",
+   "sf"
+  ],
+  "pos_scope": [
+   "B007JI3V8Y"
+  ]
+ },
+ {
+  "qid": "7:4880",
+  "stem": "B004KSP3ZK",
+  "resolved": "toptee",
+  "val": [
+   "toptee"
+  ],
+  "test": [
+   "shirt"
+  ],
+  "captest": [
+   "shirt"
+  ],
+  "text": "Is lighter and is white with black letters.",
+  "subsets": [
+   "full",
+   "sf"
+  ],
+  "pos_scope": [
+   "B00F46ZN66"
+  ]
+ },
+ {
+  "qid": "7:4884",
+  "stem": "B00AIAIO46",
+  "resolved": "toptee",
+  "val": [
+   "shirt",
+   "toptee"
+  ],
+  "test": [],
+  "captest": [],
+  "text": "Is more wordy and has no sleeves and has no sleeves.",
+  "subsets": [
+   "full"
+  ],
+  "pos_scope": [
+   "B00FBBPMOW"
+  ]
+ },
+ {
+  "qid": "7:4893",
+  "stem": "B00GGYKWFW",
+  "resolved": "toptee",
+  "val": [
+   "shirt",
+   "toptee"
+  ],
+  "test": [],
+  "captest": [],
+  "text": "Has more dense text and is black with a World War Champs design.",
+  "subsets": [
+   "full"
+  ],
+  "pos_scope": [
+   "B0088LSAQO"
+  ]
+ },
+ {
+  "qid": "7:4956",
+  "stem": "B00GIOKE8U",
+  "resolved": "toptee",
+  "val": [
+   "toptee"
+  ],
+  "test": [
+   "shirt"
+  ],
+  "captest": [
+   "shirt"
+  ],
+  "text": "Is light colored and has lacey sleeves and is more open around the neck.",
+  "subsets": [
+   "full",
+   "sf"
+  ],
+  "pos_scope": [
+   "B00DDJGA6S"
+  ]
+ },
+ {
+  "qid": "7:4982",
+  "stem": "B00CMD9IKQ",
+  "resolved": "toptee",
+  "val": [
+   "toptee"
+  ],
+  "test": [
+   "shirt"
+  ],
+  "captest": [
+   "shirt"
+  ],
+  "text": "Is a t-shirt and is a grey graphic tee.",
+  "subsets": [
+   "full",
+   "sf"
+  ],
+  "pos_scope": [
+   "B004JKT87S"
+  ]
+ },
+ {
+  "qid": "7:5048",
+  "stem": "B00C8S6TNE",
+  "resolved": "toptee",
+  "val": [
+   "shirt",
+   "toptee"
+  ],
+  "test": [],
+  "captest": [],
+  "text": "Has a darker background and is black with yellow lettering.",
+  "subsets": [
+   "full"
+  ],
+  "pos_scope": [
+   "B00BCX6F1C"
+  ]
+ },
+ {
+  "qid": "7:5090",
+  "stem": "B0045DTP72",
+  "resolved": "toptee",
+  "val": [
+   "toptee"
+  ],
+  "test": [
+   "shirt"
+  ],
+  "captest": [
+   "shirt"
+  ],
+  "text": "Has no sleeves and is brigther and shorter sleeved.",
+  "subsets": [
+   "full",
+   "sf"
+  ],
+  "pos_scope": [
+   "B00AFJ9L24"
+  ]
+ },
+ {
+  "qid": "7:5101",
+  "stem": "B00699EPO8",
+  "resolved": "toptee",
+  "val": [
+   "shirt",
+   "toptee"
+  ],
+  "test": [],
+  "captest": [],
+  "text": "Has longer sleeves with a monkey in it and has long sleeves.",
+  "subsets": [
+   "full"
+  ],
+  "pos_scope": [
+   "B003W3RBFY"
+  ]
+ },
+ {
+  "qid": "7:5105",
+  "stem": "B00GIOKE8U",
+  "resolved": "toptee",
+  "val": [
+   "toptee"
+  ],
+  "test": [
+   "shirt"
+  ],
+  "captest": [
+   "shirt"
+  ],
+  "text": "Is longer and darker and is a darker color and sexier with long bell sleeves.",
+  "subsets": [
+   "full",
+   "sf"
+  ],
+  "pos_scope": [
+   "B008DUZLX0"
+  ]
+ },
+ {
+  "qid": "7:5109",
+  "stem": "B000EMDA1A",
+  "resolved": "toptee",
+  "val": [
+   "shirt",
+   "toptee"
+  ],
+  "test": [],
+  "captest": [],
+  "text": "Is brown colored with image of giraffe and has more of a brownish color.",
+  "subsets": [
+   "full"
+  ],
+  "pos_scope": [
+   "B00BR8ES16"
+  ]
+ },
+ {
+  "qid": "7:5149",
+  "stem": "B009VI0H7S",
+  "resolved": "toptee",
+  "val": [
+   "shirt",
+   "toptee"
+  ],
+  "test": [],
+  "captest": [],
+  "text": "Is brighter and has a motivational quote and is brighter in color.",
+  "subsets": [
+   "full",
+   "sf"
+  ],
+  "pos_scope": [
+   "B005OCD7O0"
+  ]
+ },
+ {
+  "qid": "7:5170",
+  "stem": "B00GIOKE8U",
+  "resolved": "toptee",
+  "val": [
+   "toptee"
+  ],
+  "test": [
+   "shirt"
+  ],
+  "captest": [
+   "shirt"
+  ],
+  "text": "Is a long sleeve brown shirt and is tan with shorter sleeves.",
+  "subsets": [
+   "full"
+  ],
+  "pos_scope": [
+   "B002AA8JS8"
+  ]
+ },
+ {
+  "qid": "7:5212",
+  "stem": "B0094I4IOI",
+  "resolved": "toptee",
+  "val": [
+   "shirt",
+   "toptee"
+  ],
+  "test": [],
+  "captest": [],
+  "text": "Has no sleeve and multiple green colors and has less graphics on it.",
+  "subsets": [
+   "full",
+   "sf"
+  ],
+  "pos_scope": [
+   "B00CMVLDQU"
+  ]
+ },
+ {
+  "qid": "7:5228",
+  "stem": "B00CXV9H26",
+  "resolved": "toptee",
+  "val": [
+   "shirt",
+   "toptee"
+  ],
+  "test": [],
+  "captest": [],
+  "text": "Is dark blue in color and is more of a navy color.",
+  "subsets": [
+   "full",
+   "sf"
+  ],
+  "pos_scope": [
+   "B0067EVHQO"
+  ]
+ },
+ {
+  "qid": "7:5236",
+  "stem": "B0077DN4P6",
+  "resolved": "toptee",
+  "val": [
+   "shirt",
+   "toptee"
+  ],
+  "test": [],
+  "captest": [],
+  "text": "Is blue and comes in blue.",
+  "subsets": [
+   "full",
+   "sf"
+  ],
+  "pos_scope": [
+   "B00B7SB6RA"
+  ]
+ },
+ {
+  "qid": "7:5239",
+  "stem": "B00579WNTA",
+  "resolved": "toptee",
+  "val": [
+   "shirt",
+   "toptee"
+  ],
+  "test": [],
+  "captest": [],
+  "text": "The shirt is short sleeves and is pink and is pink and says fight like a girl.",
+  "subsets": [
+   "full"
+  ],
+  "pos_scope": [
+   "B00FI9WO9I"
+  ]
+ },
+ {
+  "qid": "7:5259",
+  "stem": "B00BGJ4OQA",
+  "resolved": "toptee",
+  "val": [
+   "shirt",
+   "toptee"
+  ],
+  "test": [],
+  "captest": [],
+  "text": "Is sleeveless and is sleeveless and has more white.",
+  "subsets": [
+   "full",
+   "sf"
+  ],
+  "pos_scope": [
+   "B00EE0DGTE"
+  ]
+ },
+ {
+  "qid": "7:5329",
+  "stem": "B009VI0H7S",
+  "resolved": "toptee",
+  "val": [
+   "shirt",
+   "toptee"
+  ],
+  "test": [],
+  "captest": [],
+  "text": "Lace and more form fitting and has stripes that go horizontal.",
+  "subsets": [
+   "full",
+   "sf"
+  ],
+  "pos_scope": [
+   "B009IFP2ZQ"
+  ]
+ },
+ {
+  "qid": "7:5388",
+  "stem": "B00B7SB6RA",
+  "resolved": "toptee",
+  "val": [
+   "shirt",
+   "toptee"
+  ],
+  "test": [],
+  "captest": [],
+  "text": "Is brown with a v neck and is a shorter sleeved blouse.",
+  "subsets": [
+   "full"
+  ],
+  "pos_scope": [
+   "B004RDYOTY"
+  ]
+ },
+ {
+  "qid": "7:5415",
+  "stem": "B006JW32N0",
+  "resolved": "toptee",
+  "val": [
+   "toptee"
+  ],
+  "test": [
+   "shirt"
+  ],
+  "captest": [
+   "shirt"
+  ],
+  "text": "Has short sleeves and is blue and is lighter and has shorter sleeves.",
+  "subsets": [
+   "full",
+   "sf"
+  ],
+  "pos_scope": [
+   "B00H2680W0"
+  ]
+ },
+ {
+  "qid": "7:5444",
+  "stem": "B009HU9HN0",
+  "resolved": "toptee",
+  "val": [
+   "toptee"
+  ],
+  "test": [
+   "shirt"
+  ],
+  "captest": [
+   "shirt"
+  ],
+  "text": "Is more of a tank top and with no polka dots.",
+  "subsets": [
+   "full",
+   "sf"
+  ],
+  "pos_scope": [
+   "B008T44C8U"
+  ]
+ },
+ {
+  "qid": "7:5512",
+  "stem": "B00GIOKE8U",
+  "resolved": "toptee",
+  "val": [
+   "toptee"
+  ],
+  "test": [
+   "shirt"
+  ],
+  "captest": [
+   "shirt"
+  ],
+  "text": "Is two different color stripes and has black and white stripes.",
+  "subsets": [
+   "full"
+  ],
+  "pos_scope": [
+   "B00C0QCRHG"
+  ]
+ },
+ {
+  "qid": "7:5546",
+  "stem": "B007738INY",
+  "resolved": "toptee",
+  "val": [
+   "shirt",
+   "toptee"
+  ],
+  "test": [],
+  "captest": [],
+  "text": "Has short sleeves and is black and is darker and sleeveless.",
+  "subsets": [
+   "full",
+   "sf"
+  ],
+  "pos_scope": [
+   "B003PNTWGW"
+  ]
+ },
+ {
+  "qid": "7:5584",
+  "stem": "B006VJXGAU",
+  "resolved": "toptee",
+  "val": [
+   "shirt",
+   "toptee"
+  ],
+  "test": [],
+  "captest": [],
+  "text": "Has a graphic design and is darker and has bolder font.",
+  "subsets": [
+   "full",
+   "sf"
+  ],
+  "pos_scope": [
+   "B0097DMFKO"
+  ]
+ },
+ {
+  "qid": "7:5597",
+  "stem": "B001PJEI8U",
+  "resolved": "toptee",
+  "val": [
+   "shirt",
+   "toptee"
+  ],
+  "test": [],
+  "captest": [],
+  "text": "Has a humorous message in the center and has a different graphic.",
+  "subsets": [
+   "full"
+  ],
+  "pos_scope": [
+   "B001PIY68I"
+  ]
+ },
+ {
+  "qid": "7:5607",
+  "stem": "B00CD5NHMI",
+  "resolved": "toptee",
+  "val": [
+   "toptee"
+  ],
+  "test": [
+   "shirt"
+  ],
+  "captest": [
+   "shirt"
+  ],
+  "text": "Has longer sleeves and is more geometric and a solid darker color and has shorter sleeves.",
+  "subsets": [
+   "full",
+   "sf",
+   "validated"
+  ],
+  "pos_scope": [
+   "B004CPWN1I"
+  ]
+ },
+ {
+  "qid": "7:5641",
+  "stem": "B009ZYYBVG",
+  "resolved": "toptee",
+  "val": [
+   "toptee"
+  ],
+  "test": [
+   "shirt"
+  ],
+  "captest": [
+   "shirt"
+  ],
+  "text": "Is blue colored with a meme picture and is blue and has undersea graphic.",
+  "subsets": [
+   "full"
+  ],
+  "pos_scope": [
+   "B004X7HL9O"
+  ]
+ },
+ {
+  "qid": "7:5654",
+  "stem": "B00945QZJM",
+  "resolved": "toptee",
+  "val": [
+   "toptee"
+  ],
+  "test": [
+   "shirt"
+  ],
+  "captest": [
+   "shirt"
+  ],
+  "text": "Is darker and is black colored with font graphic design.",
+  "subsets": [
+   "full",
+   "sf"
+  ],
+  "pos_scope": [
+   "B00BXL4BRI"
+  ]
+ },
+ {
+  "qid": "7:5655",
+  "stem": "B006WAP98U",
+  "resolved": "toptee",
+  "val": [
+   "shirt",
+   "toptee"
+  ],
+  "test": [],
+  "captest": [],
+  "text": "A badge and white with scoop neck and tulip sleeves.",
+  "subsets": [
+   "full",
+   "sf"
+  ],
+  "pos_scope": [
+   "B0024XNP2Q"
+  ]
+ },
+ {
+  "qid": "7:5700",
+  "stem": "B0089HEOHG",
+  "resolved": "toptee",
+  "val": [
+   "shirt",
+   "toptee"
+  ],
+  "test": [],
+  "captest": [],
+  "text": "Has longer sleeves and is grey and purple and has long sleeve and is dark grey color.",
+  "subsets": [
+   "full",
+   "sf"
+  ],
+  "pos_scope": [
+   "B0081ZRZ0O"
+  ]
+ },
+ {
+  "qid": "7:5701",
+  "stem": "B005E0TR32",
+  "resolved": "toptee",
+  "val": [
+   "shirt",
+   "toptee"
+  ],
+  "test": [],
+  "captest": [],
+  "text": "Has a different graphic and is more blue in colour and has a feminine cut and blue.",
+  "subsets": [
+   "full",
+   "sf"
+  ],
+  "pos_scope": [
+   "B005NAEZXU"
+  ]
+ },
+ {
+  "qid": "7:5711",
+  "stem": "B0096HHMC2",
+  "resolved": "toptee",
+  "val": [
+   "toptee"
+  ],
+  "test": [
+   "shirt"
+  ],
+  "captest": [
+   "shirt"
+  ],
+  "text": "The shirt is the torso of a hula dancer and has sleeves and has a design of a body.",
+  "subsets": [
+   "full"
+  ],
+  "pos_scope": [
+   "B00CLZ14S4"
+  ]
+ },
+ {
+  "qid": "7:5742",
+  "stem": "B003YLKY12",
+  "resolved": "toptee",
+  "val": [
+   "shirt",
+   "toptee"
+  ],
+  "test": [],
+  "captest": [],
+  "text": "Has long sleeves and is denim with long sleeves.",
+  "subsets": [
+   "full"
+  ],
+  "pos_scope": [
+   "B0097AH5DY"
+  ]
+ },
+ {
+  "qid": "7:5764",
+  "stem": "B001LV9ZQM",
+  "resolved": "toptee",
+  "val": [
+   "shirt",
+   "toptee"
+  ],
+  "test": [],
+  "captest": [],
+  "text": "Is much darker and is black with white logo.",
+  "subsets": [
+   "full",
+   "sf"
+  ],
+  "pos_scope": [
+   "B001W82GU6"
+  ]
+ },
+ {
+  "qid": "7:5788",
+  "stem": "B00GISBRL4",
+  "resolved": "toptee",
+  "val": [
+   "shirt",
+   "toptee"
+  ],
+  "test": [],
+  "captest": [],
+  "text": "Is purple with white designs and is purple with white text.",
+  "subsets": [
+   "full",
+   "sf"
+  ],
+  "pos_scope": [
+   "B00H4GLJAI"
+  ]
+ },
+ {
+  "qid": "7:5798",
+  "stem": "B000VX6TAG",
+  "resolved": "toptee",
+  "val": [
+   "shirt",
+   "toptee"
+  ],
+  "test": [],
+  "captest": [],
+  "text": "Is red with white lettering and has a red tone to it.",
+  "subsets": [
+   "full",
+   "sf"
+  ],
+  "pos_scope": [
+   "B003GQY1FK"
+  ]
+ },
+ {
+  "qid": "7:5863",
+  "stem": "B0089HEOHG",
+  "resolved": "toptee",
+  "val": [
+   "shirt",
+   "toptee"
+  ],
+  "test": [],
+  "captest": [],
+  "text": "Is for a  female with scoupe neck and black and is black with an american flag.",
+  "subsets": [
+   "full"
+  ],
+  "pos_scope": [
+   "B005ABVTOU"
+  ]
+ },
+ {
+  "qid": "7:5896",
+  "stem": "B009ZYYBVG",
+  "resolved": "toptee",
+  "val": [
+   "toptee"
+  ],
+  "test": [
+   "shirt"
+  ],
+  "captest": [
+   "shirt"
+  ],
+  "text": "Is a dark blue shirt with a picture of a crescent and no dogs and brighter colors.",
+  "subsets": [
+   "full"
+  ],
+  "pos_scope": [
+   "B000O8PLI4"
+  ]
+ },
+ {
+  "qid": "7:5963",
+  "stem": "B006VJXGAU",
+  "resolved": "toptee",
+  "val": [
+   "shirt",
+   "toptee"
+  ],
+  "test": [],
+  "captest": [],
+  "text": "The shirt is black with red and white wording and is black with a different logo.",
+  "subsets": [
+   "full",
+   "sf"
+  ],
+  "pos_scope": [
+   "B000E27YSK"
+  ]
+ }
+]

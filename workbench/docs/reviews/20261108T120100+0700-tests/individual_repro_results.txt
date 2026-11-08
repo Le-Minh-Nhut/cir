@@ -1,0 +1,34 @@
+01|exit=1|dur=4s|1 failed in 4.43s|workbench/tests/test_circus_adapters_blip.py::test_adapter_import_and_unready_status[workbench.composition.model_conesep-conesep]
+02|exit=1|dur=5s|1 failed in 4.57s|workbench/tests/test_circus_adapters_blip.py::test_adapter_import_and_unready_status[workbench.composition.model_ptha_mtst-ptha_mtst]
+03|exit=1|dur=5s|1 failed in 4.76s|workbench/tests/test_circus_adapters_rest.py::test_status_is_honest_and_reports_every_mode
+04|exit=0|dur=6s|1 passed in 5.64s|workbench/tests/test_handoff_commands.py::test_the_release_documents_quote_the_test_count_they_actually_ran
+05|exit=1|dur=22s|1 failed in 21.86s|workbench/tests/test_http_api_layer.py::test_a7_launcher_reuses_ledger_corroborated_run_without_proof_and_queues_when_uncorroborated
+06|exit=1|dur=15s|1 failed in 15.34s|workbench/tests/test_pc_launcher.py::test_existing_completed_corroborated_run_reported_without_re_running_unless_force
+07|exit=1|dur=8s|1 failed in 7.70s|workbench/tests/test_pc_launcher.py::test_matching_container_is_reused_positive_control
+08|exit=1|dur=7s|1 failed in 7.14s|workbench/tests/test_pc_launcher.py::test_verification_attempted_inside_container_not_on_host
+09|exit=1|dur=5s|1 failed in 4.18s|workbench/tests/test_pc_launcher.py::test_limn_bundle_selection_submits_bundle_id_with_native_protocol
+10|exit=1|dur=7s|1 failed in 7.20s|workbench/tests/test_pc_launcher.py::test_a_container_built_from_another_commit_is_not_reused
+11|exit=1|dur=7s|1 failed in 7.19s|workbench/tests/test_pc_launcher.py::test_the_summary_does_not_claim_the_index_holds_an_aggregate_only_run
+12|exit=1|dur=8s|1 failed in 7.19s|workbench/tests/test_pc_launcher.py::test_the_index_gate_refuses_a_per_query_run_that_is_not_verified
+13|exit=1|dur=7s|1 failed in 7.26s|workbench/tests/test_pc_launcher.py::test_the_index_gate_refuses_a_per_query_run_the_index_never_saw
+14|exit=1|dur=8s|1 failed in 7.38s|workbench/tests/test_pc_launcher.py::test_the_index_gate_refuses_an_aggregate_only_run_the_api_does_not_certify
+15|exit=1|dur=7s|1 failed in 7.40s|workbench/tests/test_pc_launcher.py::test_the_index_gate_refuses_a_run_the_api_cannot_certify
+16|exit=1|dur=8s|1 failed in 7.11s|workbench/tests/test_pc_launcher.py::test_a_completed_job_naming_its_run_uses_exactly_that_run
+17|exit=1|dur=0s|1 failed, 4 warnings in 0.41s|workbench/tests/test_phase1_acceptance_scenarios.py::test_scenario_a_api_to_evaluator_success
+18|exit=1|dur=1s|1 failed, 4 warnings in 0.55s|workbench/tests/test_phase1_acceptance_scenarios.py::test_scenario_b_evaluator_failure_is_recorded_and_pointer_unchanged
+19|exit=1|dur=60s|1 failed, 4 warnings in 60.38s (0:01:00)|workbench/tests/test_phase1_acceptance_scenarios.py::test_scenario_d_cancellation_kills_the_evaluator_tree
+20|exit=1|dur=61s|1 failed, 4 warnings in 60.38s (0:01:00)|workbench/tests/test_phase1_acceptance_scenarios.py::test_scenario_g_grandchild_ignoring_sigterm_is_still_stopped
+21|exit=1|dur=4s|1 failed in 3.59s|workbench/tests/test_release_blocker_master_e2e.py::test_e2e01_full_synthetic_evaluation_succeeds
+22|exit=1|dur=3s|1 failed in 3.38s|workbench/tests/test_release_blocker_master_e2e.py::test_e2e02_resume_skips_verified_completed_run
+23|exit=1|dur=4s|1 failed in 3.93s|workbench/tests/test_release_blocker_master_e2e.py::test_e2e03_checkpoint_modification_invalidates_evaluation
+24|exit=1|dur=5s|1 failed in 4.44s|workbench/tests/test_release_blocker_master_e2e.py::test_e2e04_dataset_modification_invalidates_evaluation
+25|exit=1|dur=5s|1 failed in 4.50s|workbench/tests/test_release_blocker_master_e2e.py::test_e2e04b_dataset_modification_invalidates_only_metadata_size_changes
+26|exit=1|dur=4s|1 failed in 4.31s|workbench/tests/test_release_blocker_master_e2e.py::test_e2e05_exit_zero_without_new_output_fails_evaluation
+27|exit=1|dur=5s|1 failed in 4.69s|workbench/tests/test_release_blocker_master_e2e.py::test_e2e06_failed_rerun_preserves_previous_successful_experiment
+28|exit=1|dur=4s|1 failed in 4.32s|workbench/tests/test_release_blocker_master_e2e.py::test_e2e07_recovery_after_failure_succeeds_and_advances
+29|exit=1|dur=5s|1 failed in 4.22s|workbench/tests/test_release_blocker_master_e2e.py::test_e2e11_cli_refuses_weak_input_fingerprint
+30|exit=1|dur=1s|1 failed in 0.74s|workbench/tests/test_release_blocker_master_e2e.py::test_e2e14_verified_gpu_capability_permits_the_authorized_synthetic_path
+31|exit=1|dur=0s|1 failed in 0.16s|workbench/tests/test_release_blocker_source_integrity.py::test_src07_declared_auxiliary_asset_accepted_only_with_provenance
+32|exit=1|dur=0s|1 failed in 0.14s|workbench/tests/test_release_blocker_source_integrity.py::test_src08_modified_auxiliary_asset_rejected
+33|exit=1|dur=11s|1 failed in 10.47s|workbench/tests/test_true_master_e2e.py::test_true_master_pipeline_subprocess_e2e_complete_flow
+DONE

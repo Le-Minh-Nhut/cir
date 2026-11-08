@@ -1,0 +1,4 @@
+CONTRACT:"3.8.10"
+REPORT:{"tier": "BLOCKED", "status": "PYTHON_VERSION_MISMATCH", "reason": "expected Python 3.8.10, found 3.9.25", "python_version": "3.9.25", "interpreter": "/home/heheboiz/data/cir/workbench/envs/ilearn39-adapted/bin/python"}
+CONTRACT:"3.9"
+REPORT:{"tier": "BLOCKED", "status": "DEPENDENCY_VERSION_MISMATCH", "reason": "torch: expected ==2.1.0, found 2.7.1+cu128", "python_version": "3.9.25", "interpreter": "/home/heheboiz/data/cir/workbench/envs/ilearn39-adapted/bin/python"}

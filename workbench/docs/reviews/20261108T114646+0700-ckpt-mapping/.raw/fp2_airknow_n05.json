@@ -1,0 +1,8 @@
+{
+ "path": "workbench/artifacts/checkpoint_selection/20261106T002617+0700/checkpoints/airknow/airknow_fiq_0.5.pt",
+ "load_error": "ModuleNotFoundError: No module named 'lavis'",
+ "traceback": "Traceback (most recent call last):\n  File \"/home/heheboiz/data/cir/workbench/docs/reviews/20261108T114646+0700-ckpt-mapping/.raw/fingerprint2.py\", line 160, in <module>\n    obj = torch.load(PATH, map_location=\"cpu\", weights_only=False)\n          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/heheboiz/miniconda3/envs/teacher-sprc/lib/python3.11/site-packages/torch/serialization.py\", line 1525, in load\n    return _load(\n           ^^^^^^\n  File \"/home/heheboiz/miniconda3/envs/teacher-sprc/lib/python3.11/site-packages/torch/serialization.py\", line 2114, in _load\n    result = unpickler.load()\n             ^^^^^^^^^^^^^^^^\n  File \"/home/heheboiz/miniconda3/envs/teacher-sprc/lib/python3.11/site-packages/torch/serialization.py\", line 2103, in find_class\n    return super().find_class(mod_name, name)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nModuleNotFoundError: No module named 'lavis'\n",
+ "sys_modules_from_stubs": {},
+ "class_aliases": [],
+ "resolved_module_origins": {}
+}

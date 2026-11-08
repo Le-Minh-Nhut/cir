@@ -1,0 +1,181 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+________________ test_e2e01_full_synthetic_evaluation_succeeds _________________
+
+master = {'ws': PosixPath('/tmp/pytest-of-heheboiz/pytest-131/test_e2e01_full_synthetic_eval0/workspace'), 'data': PosixPath('/...ixPath('/tmp/pytest-of-heheboiz/pytest-131/test_e2e01_full_synthetic_eval0/workspace/third_party/SyntheticModel'), ...}
+
+    def test_e2e01_full_synthetic_evaluation_succeeds(master):
+        result = run(master)
+>       assert result.returncode == 0, f"{result.stdout}\n{result.stderr}"
+E       AssertionError: /tmp/pytest-of-heheboiz/pytest-131/test_e2e01_full_synthetic_eval0/workspace/checkpoints/synthetic_model/model.pt: 23 bytes sha256=deb3dd48f3b65779539acb94ceb50286a171c85d0c3506178f6323d214542cf0 LOCAL SHA256 COMPUTED — official SHA256 unavailable
+E         [1/10] doctor
+E           [RUN] /home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python /home/heheboiz/data/cir/workbench/scripts/doctor.py --scope workbench
+E         [OK] repository: repository information
+E         [OK] python: 3.12.11
+E         [OK] import:fastapi: available
+E         [OK] import:uvicorn: available
+E         [OK] import:duckdb: available
+E         [OK] import:pydantic: available
+E         [OK] import:yaml: available
+E         [OK] import:packaging: available
+E         [OK] import:huggingface_hub: available
+E         [OK] import:numpy: available
+E         [OK] import:PIL: available
+E         [OK] import:torch: available
+E         [OK] generated:results: generated path writable
+E         [READY] doctor
+E         [2/10] dataset
+E           [RUN] /home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python /home/heheboiz/data/cir/workbench/scripts/prepare_dataset.py --dataset-root /tmp/pytest-of-heheboiz/pytest-131/test_e2e01_full_synthetic_eval0/workspace/FashionIQ --check-only
+E         [OK] FashionIQ base layout valid: /tmp/pytest-of-heheboiz/pytest-131/test_e2e01_full_synthetic_eval0/workspace/FashionIQ
+E         [WARN] no model selected: check only; layout preparation not verified
+E         [3/10] sync
+E           [RUN] /home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python /home/heheboiz/data/cir/workbench/scripts/sync_upstreams.py --model synthetic_model --verify-only --output-root /tmp/pytest-of-heheboiz/pytest-131/test_e2e01_full_synthetic_eval0/workspace/third_party
+E         synthetic_model: url=https://example.invalid/synthetic.git source_dir=SyntheticModel pin=a14d75306b1fb870d41dfa698f66664ab70ca2f1 local=clean head=a14d75306b1fb870d41dfa698f66664ab70ca2f1
+E         [OK] synthetic_model: pinned SHA present
+E         [4/10] environment
+E           [RUN] /home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python /home/heheboiz/data/cir/workbench/scripts/manage_environment.py --model synthetic_model
+E         [OK] synthetic_model: interpreter=UNCONFIGURED tier=UNCONFIGURED env_var=None
+E           spec: not found in /tmp/pytest-of-heheboiz/pytest-131/test_e2e01_full_synthetic_eval0/workspace/third_party/SyntheticModel
+E         [5/10] checkpoint
+E           [RUN] /home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python /home/heheboiz/data/cir/workbench/scripts/download_checkpoints.py --verify-only --model synthetic_model --output-root /tmp/pytest-of-heheboiz/pytest-131/test_e2e01_full_synthetic_eval0/workspace/checkpoints --checkpoint ckpt_v1
+E         Model: SyntheticModel (synthetic_model)
+E         Checkpoint: ckpt_v1 / model.pt
+E         Source URL: https://example.invalid/model.pt
+E         Checkpoint training noise: 0%
+E         Evaluation policy: clean / 0%
+E         FashionIQ protocol: fashioniq_original_split
+E         Destination: /tmp/pytest-of-heheboiz/pytest-131/test_e2e01_full_synthetic_eval0/workspace/checkpoints/synthetic_model/model.pt
+E         /tmp/pytest-of-heheboiz/pytest-131/test_e2e01_full_synthetic_eval0/workspace/checkpoints/synthetic_model/model.pt: 23 bytes sha256=deb3dd48f3b65779539acb94ceb50286a171c85d0c3506178f6323d214542cf0 LOCAL SHA256 COMPUTED — official SHA256 unavailable
+E         [6/10] gpu-verification
+E           [RUN] /home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python -c 'import sys, workbench.scripts.pipeline as p; sys.exit(p.probe_gpu_capability(sys.argv[1]))' synthetic_model
+E         [SKIP] synthetic_model declares no CUDA requirement
+E         [7/10] preparation
+E           [RUN] /home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python /home/heheboiz/data/cir/workbench/scripts/prepare_model.py --model synthetic_model --dataset-root /tmp/pytest-of-heheboiz/pytest-131/test_e2e01_full_synthetic_eval0/workspace/FashionIQ
+E         [OK] synthetic_model: policy=NONE_REQUIRED deterministic=N/A
+E           notes: Standard FashionIQ layout required; no custom generated artifacts.
+E         [8/10] runtime-preflight
+E           [RUN] /home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python /home/heheboiz/data/cir/workbench/scripts/doctor.py --scope real --dataset-root /tmp/pytest-of-heheboiz/pytest-131/test_e2e01_full_synthetic_eval0/workspace/FashionIQ --model synthetic_model --checkpoint ckpt_v1
+E         [OK] repository: repository information
+E         [OK] python: 3.12.11
+E         [OK] import:fastapi: available
+E         [OK] import:uvicorn: available
+E         [OK] import:duckdb: available
+E         [OK] import:pydantic: available
+E         [OK] import:yaml: available
+E         [OK] import:packaging: available
+E         [OK] import:huggingface_hub: available
+E         [OK] import:numpy: available
+E         [OK] import:PIL: available
+E         [OK] import:torch: available
+E         [OK] generated:results: generated path writable
+E         [OK] fashioniq: FashionIQ base layout available
+E         [OK] registry: registry parsed
+E         [OK] source:synthetic_model: source pin ready
+E         [OK] runtime:synthetic_model: prerequisites present; evaluation not run
+E         [OK] external-assets:synthetic_model: required evaluation assets resolved
+E         [OK] command:synthetic_model: COMMAND_AUDITED
+E         [OK] environment:synthetic_model: UNCONFIGURED
+E         [READY] doctor
+E         [9/10] evaluation
+E           [RUN] /home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python /home/heheboiz/data/cir/workbench/scripts/evaluate_models.py --model synthetic_model --dataset-root /tmp/pytest-of-heheboiz/pytest-131/test_e2e01_full_synthetic_eval0/workspace/FashionIQ --checkpoint ckpt_v1 --top-k 200 --run-id 20261108T044046828173Z_bedddf49
+E           [INFO] official reproduction only; no instrumented ranking export
+E         [RUN] synthetic_model / ckpt_v1
+E         [OK] protocol: fashioniq_original_split
+E         [RUN] cwd: /tmp/pytest-of-heheboiz/pytest-131/test_e2e01_full_synthetic_eval0/workspace/third_party/SyntheticModel
+E         [RUN] command: /home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python /tmp/pytest-of-heheboiz/pytest-131/test_e2e01_full_synthetic_eval0/workspace/third_party/SyntheticModel/src/evaluator.py
+E         [RUN] log directory: /home/heheboiz/data/cir/workbench/artifacts/logs/synthetic_model__ckpt_v1__20261108T044046828173Z_bedddf49
+E         [RUN] provenance: /home/heheboiz/data/cir/workbench/artifacts/logs/synthetic_model__ckpt_v1__20261108T044046828173Z_bedddf49/command.json
+E         
+E         [BLOCKED] evaluation could not be audited: evidence ledger does not verify
+E           [BLOCKED] evaluation exited with status 1
+E         
+E       assert 1 == 0
+E        +  where 1 = CompletedProcess(args=['/home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python', '/home/heheboiz/data/cir/workbench...CKED] evaluation could not be audited: evidence ledger does not verify\n  [BLOCKED] evaluation exited with status 1\n').returncode
+
+workbench/tests/test_release_blocker_master_e2e.py:167: AssertionError
+=========================== short test summary info ============================
+FAILED workbench/tests/test_release_blocker_master_e2e.py::test_e2e01_full_synthetic_evaluation_succeeds - AssertionError: /tmp/pytest-of-heheboiz/pytest-131/test_e2e01_full_synthetic_eval0/workspace/checkpoints/synthetic_model/model.pt: 23 bytes sha256=deb3dd48f3b65779539acb94ceb50286a171c85d0c3506178f6323d214542cf0 LOCAL SHA256 COMPUTED — official SHA256 unavailable
+  [1/10] doctor
+    [RUN] /home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python /home/heheboiz/data/cir/workbench/scripts/doctor.py --scope workbench
+  [OK] repository: repository information
+  [OK] python: 3.12.11
+  [OK] import:fastapi: available
+  [OK] import:uvicorn: available
+  [OK] import:duckdb: available
+  [OK] import:pydantic: available
+  [OK] import:yaml: available
+  [OK] import:packaging: available
+  [OK] import:huggingface_hub: available
+  [OK] import:numpy: available
+  [OK] import:PIL: available
+  [OK] import:torch: available
+  [OK] generated:results: generated path writable
+  [READY] doctor
+  [2/10] dataset
+    [RUN] /home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python /home/heheboiz/data/cir/workbench/scripts/prepare_dataset.py --dataset-root /tmp/pytest-of-heheboiz/pytest-131/test_e2e01_full_synthetic_eval0/workspace/FashionIQ --check-only
+  [OK] FashionIQ base layout valid: /tmp/pytest-of-heheboiz/pytest-131/test_e2e01_full_synthetic_eval0/workspace/FashionIQ
+  [WARN] no model selected: check only; layout preparation not verified
+  [3/10] sync
+    [RUN] /home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python /home/heheboiz/data/cir/workbench/scripts/sync_upstreams.py --model synthetic_model --verify-only --output-root /tmp/pytest-of-heheboiz/pytest-131/test_e2e01_full_synthetic_eval0/workspace/third_party
+  synthetic_model: url=https://example.invalid/synthetic.git source_dir=SyntheticModel pin=a14d75306b1fb870d41dfa698f66664ab70ca2f1 local=clean head=a14d75306b1fb870d41dfa698f66664ab70ca2f1
+  [OK] synthetic_model: pinned SHA present
+  [4/10] environment
+    [RUN] /home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python /home/heheboiz/data/cir/workbench/scripts/manage_environment.py --model synthetic_model
+  [OK] synthetic_model: interpreter=UNCONFIGURED tier=UNCONFIGURED env_var=None
+    spec: not found in /tmp/pytest-of-heheboiz/pytest-131/test_e2e01_full_synthetic_eval0/workspace/third_party/SyntheticModel
+  [5/10] checkpoint
+    [RUN] /home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python /home/heheboiz/data/cir/workbench/scripts/download_checkpoints.py --verify-only --model synthetic_model --output-root /tmp/pytest-of-heheboiz/pytest-131/test_e2e01_full_synthetic_eval0/workspace/checkpoints --checkpoint ckpt_v1
+  Model: SyntheticModel (synthetic_model)
+  Checkpoint: ckpt_v1 / model.pt
+  Source URL: https://example.invalid/model.pt
+  Checkpoint training noise: 0%
+  Evaluation policy: clean / 0%
+  FashionIQ protocol: fashioniq_original_split
+  Destination: /tmp/pytest-of-heheboiz/pytest-131/test_e2e01_full_synthetic_eval0/workspace/checkpoints/synthetic_model/model.pt
+  /tmp/pytest-of-heheboiz/pytest-131/test_e2e01_full_synthetic_eval0/workspace/checkpoints/synthetic_model/model.pt: 23 bytes sha256=deb3dd48f3b65779539acb94ceb50286a171c85d0c3506178f6323d214542cf0 LOCAL SHA256 COMPUTED — official SHA256 unavailable
+  [6/10] gpu-verification
+    [RUN] /home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python -c 'import sys, workbench.scripts.pipeline as p; sys.exit(p.probe_gpu_capability(sys.argv[1]))' synthetic_model
+  [SKIP] synthetic_model declares no CUDA requirement
+  [7/10] preparation
+    [RUN] /home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python /home/heheboiz/data/cir/workbench/scripts/prepare_model.py --model synthetic_model --dataset-root /tmp/pytest-of-heheboiz/pytest-131/test_e2e01_full_synthetic_eval0/workspace/FashionIQ
+  [OK] synthetic_model: policy=NONE_REQUIRED deterministic=N/A
+    notes: Standard FashionIQ layout required; no custom generated artifacts.
+  [8/10] runtime-preflight
+    [RUN] /home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python /home/heheboiz/data/cir/workbench/scripts/doctor.py --scope real --dataset-root /tmp/pytest-of-heheboiz/pytest-131/test_e2e01_full_synthetic_eval0/workspace/FashionIQ --model synthetic_model --checkpoint ckpt_v1
+  [OK] repository: repository information
+  [OK] python: 3.12.11
+  [OK] import:fastapi: available
+  [OK] import:uvicorn: available
+  [OK] import:duckdb: available
+  [OK] import:pydantic: available
+  [OK] import:yaml: available
+  [OK] import:packaging: available
+  [OK] import:huggingface_hub: available
+  [OK] import:numpy: available
+  [OK] import:PIL: available
+  [OK] import:torch: available
+  [OK] generated:results: generated path writable
+  [OK] fashioniq: FashionIQ base layout available
+  [OK] registry: registry parsed
+  [OK] source:synthetic_model: source pin ready
+  [OK] runtime:synthetic_model: prerequisites present; evaluation not run
+  [OK] external-assets:synthetic_model: required evaluation assets resolved
+  [OK] command:synthetic_model: COMMAND_AUDITED
+  [OK] environment:synthetic_model: UNCONFIGURED
+  [READY] doctor
+  [9/10] evaluation
+    [RUN] /home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python /home/heheboiz/data/cir/workbench/scripts/evaluate_models.py --model synthetic_model --dataset-root /tmp/pytest-of-heheboiz/pytest-131/test_e2e01_full_synthetic_eval0/workspace/FashionIQ --checkpoint ckpt_v1 --top-k 200 --run-id 20261108T044046828173Z_bedddf49
+    [INFO] official reproduction only; no instrumented ranking export
+  [RUN] synthetic_model / ckpt_v1
+  [OK] protocol: fashioniq_original_split
+  [RUN] cwd: /tmp/pytest-of-heheboiz/pytest-131/test_e2e01_full_synthetic_eval0/workspace/third_party/SyntheticModel
+  [RUN] command: /home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python /tmp/pytest-of-heheboiz/pytest-131/test_e2e01_full_synthetic_eval0/workspace/third_party/SyntheticModel/src/evaluator.py
+  [RUN] log directory: /home/heheboiz/data/cir/workbench/artifacts/logs/synthetic_model__ckpt_v1__20261108T044046828173Z_bedddf49
+  [RUN] provenance: /home/heheboiz/data/cir/workbench/artifacts/logs/synthetic_model__ckpt_v1__20261108T044046828173Z_bedddf49/command.json
+  
+  [BLOCKED] evaluation could not be audited: evidence ledger does not verify
+    [BLOCKED] evaluation exited with status 1
+  
+assert 1 == 0
+ +  where 1 = CompletedProcess(args=['/home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python', '/home/heheboiz/data/cir/workbench...CKED] evaluation could not be audited: evidence ledger does not verify\n  [BLOCKED] evaluation exited with status 1\n').returncode
+1 failed in 3.59s

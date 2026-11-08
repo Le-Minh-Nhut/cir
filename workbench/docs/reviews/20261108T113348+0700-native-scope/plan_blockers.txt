@@ -1,0 +1,51 @@
+== airknow::fiq_n05
+   - official command construction failed: execution environment not verified [UNCONFIGURED/UNCONFIGURED]: WORKBENCH_AIRKNOW_PYTHON=None (WORKBENCH_AIRKNOW_PYTHON not set)
+== airknow::fiq_n08
+   - official command construction failed: execution environment not verified [UNCONFIGURED/UNCONFIGURED]: WORKBENCH_AIRKNOW_PYTHON=None (WORKBENCH_AIRKNOW_PYTHON not set)
+== pair::pair_b1
+   - command not runnable: COMMAND_BLOCKED_SOURCE_ENTRYPOINT
+   - checkpoint mapping unresolved
+== pair::pair_b2
+   - command not runnable: COMMAND_BLOCKED_SOURCE_ENTRYPOINT
+   - checkpoint mapping unresolved
+== clvc_net::author_drive_unresolved
+   - torchvision ResNet-50 ImageNet weights missing: /home/heheboiz/.cache/torch/hub/checkpoints/resnet50-19c8e357.pth
+   - external runtime asset file missing: torchvision ResNet-50 ImageNet weights (/home/heheboiz/.cache/torch/hub/checkpoints/resnet50-19c8e357.pth)
+   - command not runnable: COMMAND_BLOCKED_SOURCE_ENTRYPOINT
+   - checkpoint missing: /home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/checkpoints/clvc_net/checkpoint-unresolved.pt
+   - checkpoint mapping unresolved
+== dcnet::fashioniq_run_directory
+   - canonical dataset link missing: /home/heheboiz/data/cir/workbench/third_party/DCNet/dataset/fashioniq -> /home/heheboiz/data/cir/data/FashionIQ
+   - external runtime asset file missing: torchvision ResNet-50 ImageNet weights (/home/heheboiz/.cache/torch/hub/checkpoints/resnet50-19c8e357.pth)
+   - checkpoint missing: /home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/checkpoints/dcnet/fashioniq_dcnet
+   - checkpoint mapping unresolved
+== combiner_rn50x4_noft::rn50x4_noft_unresolved
+   - FashionIQ image extension requirement: 3817 of 3817 dress validation images lack .jpg in /home/heheboiz/data/cir/data/FashionIQ/images (first: B009PMCJLW.jpg)
+   - FashionIQ image extension requirement: 6346 of 6346 shirt validation images lack .jpg in /home/heheboiz/data/cir/data/FashionIQ/images (first: B000KENMD8.jpg)
+   - FashionIQ image extension requirement: 5373 of 5373 toptee validation images lack .jpg in /home/heheboiz/data/cir/data/FashionIQ/images (first: B008CG1JJ0.jpg)
+   - canonical dataset link resolves to /home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/prepared/clip4cir/fashionIQ_dataset, expected /home/heheboiz/data/cir/data/FashionIQ
+   - checkpoint missing: /home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/checkpoints/combiner_rn50x4_noft/rn50x4-noft-unresolved.pt
+   - checkpoint mapping unresolved
+== clip4cir_rn50x4_fullft::rn50x4_fullft_unresolved
+   - FashionIQ image extension requirement: 3817 of 3817 dress validation images lack .jpg in /home/heheboiz/data/cir/data/FashionIQ/images (first: B009PMCJLW.jpg)
+   - FashionIQ image extension requirement: 6346 of 6346 shirt validation images lack .jpg in /home/heheboiz/data/cir/data/FashionIQ/images (first: B000KENMD8.jpg)
+   - FashionIQ image extension requirement: 5373 of 5373 toptee validation images lack .jpg in /home/heheboiz/data/cir/data/FashionIQ/images (first: B008CG1JJ0.jpg)
+   - canonical dataset link resolves to /home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/prepared/clip4cir/fashionIQ_dataset, expected /home/heheboiz/data/cir/data/FashionIQ
+   - checkpoint missing: /home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/checkpoints/clip4cir_rn50x4_fullft/rn50x4-fullft-unresolved.pt
+   - checkpoint mapping unresolved
+== tgcir::tgcir_archive_unresolved
+   - external runtime asset provenance unresolved: OpenAI CLIP ViT-B/16 weights/cache
+   - command not runnable: COMMAND_BLOCKED_SOURCE_ENTRYPOINT
+   - checkpoint missing: /home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/checkpoints/tgcir/tgcir-fashioniq-unresolved.pt
+   - checkpoint mapping unresolved
+== sprc::sprc_fiq_unresolved
+   - canonical dataset link resolves to /home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/prepared/sprc/fashionIQ_dataset, expected /home/heheboiz/data/cir/data/FashionIQ
+   - external runtime asset provenance unresolved: LAVIS BLIP-2 pretrain weights
+   - command not runnable: COMMAND_BLOCKED_MODEL_MAPPING
+   - checkpoint missing: /home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/checkpoints/sprc/sprc_fiq.pt
+   - checkpoint mapping unresolved
+== sprc::sprc_fiq_vitl
+   - canonical dataset link resolves to /home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/prepared/sprc/fashionIQ_dataset, expected /home/heheboiz/data/cir/data/FashionIQ
+   - external runtime asset provenance unresolved: LAVIS BLIP-2 pretrain weights
+   - command not runnable: COMMAND_BLOCKED_MODEL_MAPPING
+   - checkpoint mapping unresolved

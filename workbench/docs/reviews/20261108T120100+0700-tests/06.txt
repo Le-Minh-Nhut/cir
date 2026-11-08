@@ -1,0 +1,26 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+_ test_existing_completed_corroborated_run_reported_without_re_running_unless_force _
+
+tmp_path = PosixPath('/tmp/pytest-of-heheboiz/pytest-111/test_existing_completed_corrob0')
+
+    def test_existing_completed_corroborated_run_reported_without_re_running_unless_force(tmp_path: Path):
+        """14. Existing completed corroborated run reported instead of re-running; with --force re-queues."""
+        sandbox, env = setup_sandbox(tmp_path, with_env=True)
+        env["MOCK_RUNS_STATUS"] = "corroborated"
+        post_jobs_file = sandbox / "post_jobs.log"
+        env["MOCK_POST_JOBS_FILE"] = str(post_jobs_file)
+    
+        _create_corroborated_run(sandbox, "run_limn_corr_01")
+    
+        # Without --force: should not POST new job
+        proc1 = run_pc(sandbox, [], env)
+>       assert proc1.returncode == 0
+E       AssertionError: assert 1 == 0
+E        +  where 1 = CompletedProcess(args=['/home/heheboiz/data/cir/pc.sh'], returncode=1, stdout='Cấu hình môi trường workbench/docker/.e...ốn thời gian đánh giá)\n================================================================================\n', stderr='').returncode
+
+workbench/tests/test_pc_launcher.py:571: AssertionError
+=========================== short test summary info ============================
+FAILED workbench/tests/test_pc_launcher.py::test_existing_completed_corroborated_run_reported_without_re_running_unless_force - AssertionError: assert 1 == 0
+ +  where 1 = CompletedProcess(args=['/home/heheboiz/data/cir/pc.sh'], returncode=1, stdout='Cấu hình môi trường workbench/docker/.e...ốn thời gian đánh giá)\n================================================================================\n', stderr='').returncode
+1 failed in 15.34s

@@ -1,0 +1,2064 @@
+{
+ "path": "workbench/artifacts/checkpoint_selection/20261106T002617+0700/checkpoints/sprc/sprc_fiq_vitl.pt",
+ "sys_modules_from_stubs": {},
+ "resolved_module_origins": {},
+ "root_class": "builtins.dict",
+ "root_keys": [
+  "epoch",
+  "Blip2QformerCirAlignPrompt"
+ ],
+ "root_key_types": {
+  "epoch": "builtins.int",
+  "Blip2QformerCirAlignPrompt": "collections.OrderedDict"
+ },
+ "root_scalars": {
+  "epoch": 7
+ },
+ "nested_dict_keys": {},
+ "nested_dict_lengths": {
+  "Blip2QformerCirAlignPrompt": 628
+ },
+ "state_dict_at": "Blip2QformerCirAlignPrompt",
+ "tensor_count": 628,
+ "total_numel": 497244537,
+ "dtype_numel": {
+  "torch.float32": 279445369,
+  "torch.float16": 217798656,
+  "torch.int64": 512
+ },
+ "prefix1": {
+  "Qformer.*": 336,
+  "visual_encoder.*": 281,
+  "ln_vision.*": 2,
+  "vision_proj.*": 2,
+  "text_proj.*": 2,
+  "itm_head.*": 2,
+  "query_tokens": 1,
+  "temp": 1,
+  "prompt_tokens": 1
+ },
+ "prefix2": {
+  "Qformer.bert.*": 329,
+  "visual_encoder.transformer.*": 276,
+  "Qformer.cls.*": 7,
+  "visual_encoder.ln_pre.*": 2,
+  "query_tokens": 1,
+  "temp": 1,
+  "prompt_tokens": 1,
+  "visual_encoder.class_embedding": 1,
+  "visual_encoder.positional_embedding": 1,
+  "visual_encoder.conv1.*": 1,
+  "ln_vision.weight": 1,
+  "ln_vision.bias": 1,
+  "vision_proj.weight": 1,
+  "vision_proj.bias": 1,
+  "text_proj.weight": 1,
+  "text_proj.bias": 1,
+  "itm_head.weight": 1,
+  "itm_head.bias": 1
+ },
+ "prefix3": {
+  "Qformer.bert.encoder.*": 324,
+  "visual_encoder.transformer.resblocks.*": 276,
+  "Qformer.cls.predictions.*": 7,
+  "Qformer.bert.embeddings.*": 5,
+  "query_tokens": 1,
+  "temp": 1,
+  "prompt_tokens": 1,
+  "visual_encoder.class_embedding": 1,
+  "visual_encoder.positional_embedding": 1,
+  "visual_encoder.conv1.weight": 1,
+  "visual_encoder.ln_pre.weight": 1,
+  "visual_encoder.ln_pre.bias": 1,
+  "ln_vision.weight": 1,
+  "ln_vision.bias": 1,
+  "vision_proj.weight": 1,
+  "vision_proj.bias": 1,
+  "text_proj.weight": 1,
+  "text_proj.bias": 1,
+  "itm_head.weight": 1,
+  "itm_head.bias": 1
+ },
+ "first_keys": [
+  "query_tokens",
+  "temp",
+  "prompt_tokens",
+  "visual_encoder.class_embedding",
+  "visual_encoder.positional_embedding",
+  "visual_encoder.conv1.weight",
+  "visual_encoder.ln_pre.weight",
+  "visual_encoder.ln_pre.bias",
+  "visual_encoder.transformer.resblocks.0.attn.in_proj_weight",
+  "visual_encoder.transformer.resblocks.0.attn.in_proj_bias",
+  "visual_encoder.transformer.resblocks.0.attn.out_proj.weight",
+  "visual_encoder.transformer.resblocks.0.attn.out_proj.bias",
+  "visual_encoder.transformer.resblocks.0.ln_1.weight",
+  "visual_encoder.transformer.resblocks.0.ln_1.bias",
+  "visual_encoder.transformer.resblocks.0.mlp.c_fc.weight",
+  "visual_encoder.transformer.resblocks.0.mlp.c_fc.bias",
+  "visual_encoder.transformer.resblocks.0.mlp.c_proj.weight",
+  "visual_encoder.transformer.resblocks.0.mlp.c_proj.bias",
+  "visual_encoder.transformer.resblocks.0.ln_2.weight",
+  "visual_encoder.transformer.resblocks.0.ln_2.bias"
+ ],
+ "last_keys": [
+  "Qformer.cls.predictions.transform.LayerNorm.weight",
+  "Qformer.cls.predictions.transform.LayerNorm.bias",
+  "Qformer.cls.predictions.decoder.weight",
+  "Qformer.cls.predictions.decoder.bias",
+  "vision_proj.weight",
+  "vision_proj.bias",
+  "text_proj.weight",
+  "text_proj.bias",
+  "itm_head.weight",
+  "itm_head.bias"
+ ],
+ "shapes": {
+  "query_tokens": [
+   1,
+   32,
+   768
+  ],
+  "temp": [],
+  "prompt_tokens": [
+   1,
+   32,
+   768
+  ],
+  "visual_encoder.class_embedding": [
+   1024
+  ],
+  "visual_encoder.positional_embedding": [
+   257,
+   1024
+  ],
+  "visual_encoder.conv1.weight": [
+   1024,
+   3,
+   14,
+   14
+  ],
+  "visual_encoder.ln_pre.weight": [
+   1024
+  ],
+  "visual_encoder.ln_pre.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.0.attn.in_proj_weight": [
+   3072,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.0.attn.in_proj_bias": [
+   3072
+  ],
+  "visual_encoder.transformer.resblocks.0.attn.out_proj.weight": [
+   1024,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.0.attn.out_proj.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.0.ln_1.weight": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.0.ln_1.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.0.mlp.c_fc.weight": [
+   4096,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.0.mlp.c_fc.bias": [
+   4096
+  ],
+  "visual_encoder.transformer.resblocks.0.mlp.c_proj.weight": [
+   1024,
+   4096
+  ],
+  "visual_encoder.transformer.resblocks.0.mlp.c_proj.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.0.ln_2.weight": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.0.ln_2.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.1.attn.in_proj_weight": [
+   3072,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.1.attn.in_proj_bias": [
+   3072
+  ],
+  "visual_encoder.transformer.resblocks.1.attn.out_proj.weight": [
+   1024,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.1.attn.out_proj.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.1.ln_1.weight": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.1.ln_1.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.1.mlp.c_fc.weight": [
+   4096,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.1.mlp.c_fc.bias": [
+   4096
+  ],
+  "visual_encoder.transformer.resblocks.1.mlp.c_proj.weight": [
+   1024,
+   4096
+  ],
+  "visual_encoder.transformer.resblocks.1.mlp.c_proj.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.1.ln_2.weight": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.1.ln_2.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.2.attn.in_proj_weight": [
+   3072,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.2.attn.in_proj_bias": [
+   3072
+  ],
+  "visual_encoder.transformer.resblocks.2.attn.out_proj.weight": [
+   1024,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.2.attn.out_proj.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.2.ln_1.weight": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.2.ln_1.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.2.mlp.c_fc.weight": [
+   4096,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.2.mlp.c_fc.bias": [
+   4096
+  ],
+  "visual_encoder.transformer.resblocks.2.mlp.c_proj.weight": [
+   1024,
+   4096
+  ],
+  "visual_encoder.transformer.resblocks.2.mlp.c_proj.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.2.ln_2.weight": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.2.ln_2.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.3.attn.in_proj_weight": [
+   3072,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.3.attn.in_proj_bias": [
+   3072
+  ],
+  "visual_encoder.transformer.resblocks.3.attn.out_proj.weight": [
+   1024,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.3.attn.out_proj.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.3.ln_1.weight": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.3.ln_1.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.3.mlp.c_fc.weight": [
+   4096,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.3.mlp.c_fc.bias": [
+   4096
+  ],
+  "visual_encoder.transformer.resblocks.3.mlp.c_proj.weight": [
+   1024,
+   4096
+  ],
+  "visual_encoder.transformer.resblocks.3.mlp.c_proj.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.3.ln_2.weight": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.3.ln_2.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.4.attn.in_proj_weight": [
+   3072,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.4.attn.in_proj_bias": [
+   3072
+  ],
+  "visual_encoder.transformer.resblocks.4.attn.out_proj.weight": [
+   1024,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.4.attn.out_proj.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.4.ln_1.weight": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.4.ln_1.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.4.mlp.c_fc.weight": [
+   4096,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.4.mlp.c_fc.bias": [
+   4096
+  ],
+  "visual_encoder.transformer.resblocks.4.mlp.c_proj.weight": [
+   1024,
+   4096
+  ],
+  "visual_encoder.transformer.resblocks.4.mlp.c_proj.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.4.ln_2.weight": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.4.ln_2.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.5.attn.in_proj_weight": [
+   3072,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.5.attn.in_proj_bias": [
+   3072
+  ],
+  "visual_encoder.transformer.resblocks.5.attn.out_proj.weight": [
+   1024,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.5.attn.out_proj.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.5.ln_1.weight": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.5.ln_1.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.5.mlp.c_fc.weight": [
+   4096,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.5.mlp.c_fc.bias": [
+   4096
+  ],
+  "visual_encoder.transformer.resblocks.5.mlp.c_proj.weight": [
+   1024,
+   4096
+  ],
+  "visual_encoder.transformer.resblocks.5.mlp.c_proj.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.5.ln_2.weight": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.5.ln_2.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.6.attn.in_proj_weight": [
+   3072,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.6.attn.in_proj_bias": [
+   3072
+  ],
+  "visual_encoder.transformer.resblocks.6.attn.out_proj.weight": [
+   1024,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.6.attn.out_proj.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.6.ln_1.weight": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.6.ln_1.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.6.mlp.c_fc.weight": [
+   4096,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.6.mlp.c_fc.bias": [
+   4096
+  ],
+  "visual_encoder.transformer.resblocks.6.mlp.c_proj.weight": [
+   1024,
+   4096
+  ],
+  "visual_encoder.transformer.resblocks.6.mlp.c_proj.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.6.ln_2.weight": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.6.ln_2.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.7.attn.in_proj_weight": [
+   3072,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.7.attn.in_proj_bias": [
+   3072
+  ],
+  "visual_encoder.transformer.resblocks.7.attn.out_proj.weight": [
+   1024,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.7.attn.out_proj.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.7.ln_1.weight": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.7.ln_1.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.7.mlp.c_fc.weight": [
+   4096,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.7.mlp.c_fc.bias": [
+   4096
+  ],
+  "visual_encoder.transformer.resblocks.7.mlp.c_proj.weight": [
+   1024,
+   4096
+  ],
+  "visual_encoder.transformer.resblocks.7.mlp.c_proj.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.7.ln_2.weight": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.7.ln_2.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.8.attn.in_proj_weight": [
+   3072,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.8.attn.in_proj_bias": [
+   3072
+  ],
+  "visual_encoder.transformer.resblocks.8.attn.out_proj.weight": [
+   1024,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.8.attn.out_proj.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.8.ln_1.weight": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.8.ln_1.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.8.mlp.c_fc.weight": [
+   4096,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.8.mlp.c_fc.bias": [
+   4096
+  ],
+  "visual_encoder.transformer.resblocks.8.mlp.c_proj.weight": [
+   1024,
+   4096
+  ],
+  "visual_encoder.transformer.resblocks.8.mlp.c_proj.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.8.ln_2.weight": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.8.ln_2.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.9.attn.in_proj_weight": [
+   3072,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.9.attn.in_proj_bias": [
+   3072
+  ],
+  "visual_encoder.transformer.resblocks.9.attn.out_proj.weight": [
+   1024,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.9.attn.out_proj.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.9.ln_1.weight": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.9.ln_1.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.9.mlp.c_fc.weight": [
+   4096,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.9.mlp.c_fc.bias": [
+   4096
+  ],
+  "visual_encoder.transformer.resblocks.9.mlp.c_proj.weight": [
+   1024,
+   4096
+  ],
+  "visual_encoder.transformer.resblocks.9.mlp.c_proj.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.9.ln_2.weight": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.9.ln_2.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.10.attn.in_proj_weight": [
+   3072,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.10.attn.in_proj_bias": [
+   3072
+  ],
+  "visual_encoder.transformer.resblocks.10.attn.out_proj.weight": [
+   1024,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.10.attn.out_proj.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.10.ln_1.weight": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.10.ln_1.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.10.mlp.c_fc.weight": [
+   4096,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.10.mlp.c_fc.bias": [
+   4096
+  ],
+  "visual_encoder.transformer.resblocks.10.mlp.c_proj.weight": [
+   1024,
+   4096
+  ],
+  "visual_encoder.transformer.resblocks.10.mlp.c_proj.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.10.ln_2.weight": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.10.ln_2.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.11.attn.in_proj_weight": [
+   3072,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.11.attn.in_proj_bias": [
+   3072
+  ],
+  "visual_encoder.transformer.resblocks.11.attn.out_proj.weight": [
+   1024,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.11.attn.out_proj.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.11.ln_1.weight": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.11.ln_1.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.11.mlp.c_fc.weight": [
+   4096,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.11.mlp.c_fc.bias": [
+   4096
+  ],
+  "visual_encoder.transformer.resblocks.11.mlp.c_proj.weight": [
+   1024,
+   4096
+  ],
+  "visual_encoder.transformer.resblocks.11.mlp.c_proj.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.11.ln_2.weight": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.11.ln_2.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.12.attn.in_proj_weight": [
+   3072,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.12.attn.in_proj_bias": [
+   3072
+  ],
+  "visual_encoder.transformer.resblocks.12.attn.out_proj.weight": [
+   1024,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.12.attn.out_proj.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.12.ln_1.weight": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.12.ln_1.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.12.mlp.c_fc.weight": [
+   4096,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.12.mlp.c_fc.bias": [
+   4096
+  ],
+  "visual_encoder.transformer.resblocks.12.mlp.c_proj.weight": [
+   1024,
+   4096
+  ],
+  "visual_encoder.transformer.resblocks.12.mlp.c_proj.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.12.ln_2.weight": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.12.ln_2.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.13.attn.in_proj_weight": [
+   3072,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.13.attn.in_proj_bias": [
+   3072
+  ],
+  "visual_encoder.transformer.resblocks.13.attn.out_proj.weight": [
+   1024,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.13.attn.out_proj.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.13.ln_1.weight": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.13.ln_1.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.13.mlp.c_fc.weight": [
+   4096,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.13.mlp.c_fc.bias": [
+   4096
+  ],
+  "visual_encoder.transformer.resblocks.13.mlp.c_proj.weight": [
+   1024,
+   4096
+  ],
+  "visual_encoder.transformer.resblocks.13.mlp.c_proj.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.13.ln_2.weight": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.13.ln_2.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.14.attn.in_proj_weight": [
+   3072,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.14.attn.in_proj_bias": [
+   3072
+  ],
+  "visual_encoder.transformer.resblocks.14.attn.out_proj.weight": [
+   1024,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.14.attn.out_proj.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.14.ln_1.weight": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.14.ln_1.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.14.mlp.c_fc.weight": [
+   4096,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.14.mlp.c_fc.bias": [
+   4096
+  ],
+  "visual_encoder.transformer.resblocks.14.mlp.c_proj.weight": [
+   1024,
+   4096
+  ],
+  "visual_encoder.transformer.resblocks.14.mlp.c_proj.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.14.ln_2.weight": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.14.ln_2.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.15.attn.in_proj_weight": [
+   3072,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.15.attn.in_proj_bias": [
+   3072
+  ],
+  "visual_encoder.transformer.resblocks.15.attn.out_proj.weight": [
+   1024,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.15.attn.out_proj.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.15.ln_1.weight": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.15.ln_1.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.15.mlp.c_fc.weight": [
+   4096,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.15.mlp.c_fc.bias": [
+   4096
+  ],
+  "visual_encoder.transformer.resblocks.15.mlp.c_proj.weight": [
+   1024,
+   4096
+  ],
+  "visual_encoder.transformer.resblocks.15.mlp.c_proj.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.15.ln_2.weight": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.15.ln_2.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.16.attn.in_proj_weight": [
+   3072,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.16.attn.in_proj_bias": [
+   3072
+  ],
+  "visual_encoder.transformer.resblocks.16.attn.out_proj.weight": [
+   1024,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.16.attn.out_proj.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.16.ln_1.weight": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.16.ln_1.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.16.mlp.c_fc.weight": [
+   4096,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.16.mlp.c_fc.bias": [
+   4096
+  ],
+  "visual_encoder.transformer.resblocks.16.mlp.c_proj.weight": [
+   1024,
+   4096
+  ],
+  "visual_encoder.transformer.resblocks.16.mlp.c_proj.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.16.ln_2.weight": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.16.ln_2.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.17.attn.in_proj_weight": [
+   3072,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.17.attn.in_proj_bias": [
+   3072
+  ],
+  "visual_encoder.transformer.resblocks.17.attn.out_proj.weight": [
+   1024,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.17.attn.out_proj.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.17.ln_1.weight": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.17.ln_1.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.17.mlp.c_fc.weight": [
+   4096,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.17.mlp.c_fc.bias": [
+   4096
+  ],
+  "visual_encoder.transformer.resblocks.17.mlp.c_proj.weight": [
+   1024,
+   4096
+  ],
+  "visual_encoder.transformer.resblocks.17.mlp.c_proj.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.17.ln_2.weight": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.17.ln_2.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.18.attn.in_proj_weight": [
+   3072,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.18.attn.in_proj_bias": [
+   3072
+  ],
+  "visual_encoder.transformer.resblocks.18.attn.out_proj.weight": [
+   1024,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.18.attn.out_proj.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.18.ln_1.weight": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.18.ln_1.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.18.mlp.c_fc.weight": [
+   4096,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.18.mlp.c_fc.bias": [
+   4096
+  ],
+  "visual_encoder.transformer.resblocks.18.mlp.c_proj.weight": [
+   1024,
+   4096
+  ],
+  "visual_encoder.transformer.resblocks.18.mlp.c_proj.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.18.ln_2.weight": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.18.ln_2.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.19.attn.in_proj_weight": [
+   3072,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.19.attn.in_proj_bias": [
+   3072
+  ],
+  "visual_encoder.transformer.resblocks.19.attn.out_proj.weight": [
+   1024,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.19.attn.out_proj.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.19.ln_1.weight": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.19.ln_1.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.19.mlp.c_fc.weight": [
+   4096,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.19.mlp.c_fc.bias": [
+   4096
+  ],
+  "visual_encoder.transformer.resblocks.19.mlp.c_proj.weight": [
+   1024,
+   4096
+  ],
+  "visual_encoder.transformer.resblocks.19.mlp.c_proj.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.19.ln_2.weight": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.19.ln_2.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.20.attn.in_proj_weight": [
+   3072,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.20.attn.in_proj_bias": [
+   3072
+  ],
+  "visual_encoder.transformer.resblocks.20.attn.out_proj.weight": [
+   1024,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.20.attn.out_proj.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.20.ln_1.weight": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.20.ln_1.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.20.mlp.c_fc.weight": [
+   4096,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.20.mlp.c_fc.bias": [
+   4096
+  ],
+  "visual_encoder.transformer.resblocks.20.mlp.c_proj.weight": [
+   1024,
+   4096
+  ],
+  "visual_encoder.transformer.resblocks.20.mlp.c_proj.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.20.ln_2.weight": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.20.ln_2.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.21.attn.in_proj_weight": [
+   3072,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.21.attn.in_proj_bias": [
+   3072
+  ],
+  "visual_encoder.transformer.resblocks.21.attn.out_proj.weight": [
+   1024,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.21.attn.out_proj.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.21.ln_1.weight": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.21.ln_1.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.21.mlp.c_fc.weight": [
+   4096,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.21.mlp.c_fc.bias": [
+   4096
+  ],
+  "visual_encoder.transformer.resblocks.21.mlp.c_proj.weight": [
+   1024,
+   4096
+  ],
+  "visual_encoder.transformer.resblocks.21.mlp.c_proj.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.21.ln_2.weight": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.21.ln_2.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.22.attn.in_proj_weight": [
+   3072,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.22.attn.in_proj_bias": [
+   3072
+  ],
+  "visual_encoder.transformer.resblocks.22.attn.out_proj.weight": [
+   1024,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.22.attn.out_proj.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.22.ln_1.weight": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.22.ln_1.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.22.mlp.c_fc.weight": [
+   4096,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.22.mlp.c_fc.bias": [
+   4096
+  ],
+  "visual_encoder.transformer.resblocks.22.mlp.c_proj.weight": [
+   1024,
+   4096
+  ],
+  "visual_encoder.transformer.resblocks.22.mlp.c_proj.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.22.ln_2.weight": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.22.ln_2.bias": [
+   1024
+  ],
+  "ln_vision.weight": [
+   1024
+  ],
+  "ln_vision.bias": [
+   1024
+  ],
+  "Qformer.bert.embeddings.position_ids": [
+   1,
+   512
+  ],
+  "Qformer.bert.embeddings.word_embeddings.weight": [
+   30523,
+   768
+  ],
+  "Qformer.bert.embeddings.position_embeddings.weight": [
+   512,
+   768
+  ],
+  "Qformer.bert.embeddings.LayerNorm.weight": [
+   768
+  ],
+  "Qformer.bert.embeddings.LayerNorm.bias": [
+   768
+  ],
+  "Qformer.bert.encoder.layer.0.attention.self.query.weight": [
+   768,
+   768
+  ],
+  "Qformer.bert.encoder.layer.0.attention.self.query.bias": [
+   768
+  ],
+  "Qformer.bert.encoder.layer.0.attention.self.key.weight": [
+   768,
+   768
+  ],
+  "Qformer.bert.encoder.layer.0.attention.self.key.bias": [
+   768
+  ],
+  "Qformer.bert.encoder.layer.0.attention.self.value.weight": [
+   768,
+   768
+  ],
+  "Qformer.bert.encoder.layer.0.attention.self.value.bias": [
+   768
+  ],
+  "Qformer.bert.encoder.layer.0.attention.output.dense.weight": [
+   768,
+   768
+  ],
+  "Qformer.bert.encoder.layer.0.attention.output.dense.bias": [
+   768
+  ],
+  "Qformer.bert.encoder.layer.0.attention.output.LayerNorm.weight": [
+   768
+  ],
+  "Qformer.bert.encoder.layer.0.attention.output.LayerNorm.bias": [
+   768
+  ],
+  "Qformer.bert.encoder.layer.0.crossattention.self.query.weight": [
+   768,
+   768
+  ],
+  "Qformer.bert.encoder.layer.0.crossattention.self.query.bias": [
+   768
+  ],
+  "Qformer.bert.encoder.layer.0.crossattention.self.key.weight": [
+   768,
+   1024
+  ],
+  "Qformer.bert.encoder.layer.0.crossattention.self.key.bias": [
+   768
+  ],
+  "Qformer.bert.encoder.layer.0.crossattention.self.value.weight": [
+   768,
+   1024
+  ],
+  "Qformer.bert.encoder.layer.0.crossattention.self.value.bias": [
+   768
+  ],
+  "Qformer.bert.encoder.layer.0.crossattention.output.dense.weight": [
+   768,
+   768
+  ],
+  "Qformer.bert.encoder.layer.0.crossattention.output.dense.bias": [
+   768
+  ],
+  "Qformer.bert.encoder.layer.0.crossattention.output.LayerNorm.weight": [
+   768
+  ],
+  "Qformer.bert.encoder.layer.0.crossattention.output.LayerNorm.bias": [
+   768
+  ],
+  "Qformer.bert.encoder.layer.0.intermediate.dense.weight": [
+   3072,
+   768
+  ],
+  "Qformer.bert.encoder.layer.0.intermediate.dense.bias": [
+   3072
+  ],
+  "Qformer.bert.encoder.layer.0.output.dense.weight": [
+   768,
+   3072
+  ],
+  "Qformer.bert.encoder.layer.0.output.dense.bias": [
+   768
+  ],
+  "Qformer.bert.encoder.layer.0.output.LayerNorm.weight": [
+   768
+  ],
+  "Qformer.bert.encoder.layer.0.output.LayerNorm.bias": [
+   768
+  ],
+  "Qformer.bert.encoder.layer.0.intermediate_query.dense.weight": [
+   3072,
+   768
+  ],
+  "Qformer.bert.encoder.layer.0.intermediate_query.dense.bias": [
+   3072
+  ],
+  "Qformer.bert.encoder.layer.0.output_query.dense.weight": [
+   768,
+   3072
+  ],
+  "Qformer.bert.encoder.layer.0.output_query.dense.bias": [
+   768
+  ],
+  "Qformer.bert.encoder.layer.0.output_query.LayerNorm.weight": [
+   768
+  ],
+  "Qformer.bert.encoder.layer.0.output_query.LayerNorm.bias": [
+   768
+  ],
+  "Qformer.bert.encoder.layer.1.attention.self.query.weight": [
+   768,
+   768
+  ],
+  "Qformer.bert.encoder.layer.1.attention.self.query.bias": [
+   768
+  ],
+  "Qformer.bert.encoder.layer.1.attention.self.key.weight": [
+   768,
+   768
+  ],
+  "Qformer.bert.encoder.layer.1.attention.self.key.bias": [
+   768
+  ],
+  "Qformer.bert.encoder.layer.1.attention.self.value.weight": [
+   768,
+   768
+  ],
+  "Qformer.bert.encoder.layer.1.attention.self.value.bias": [
+   768
+  ],
+  "Qformer.bert.encoder.layer.1.attention.output.dense.weight": [
+   768,
+   768
+  ],
+  "Qformer.bert.encoder.layer.1.attention.output.dense.bias": [
+   768
+  ],
+  "Qformer.bert.encoder.layer.1.attention.output.LayerNorm.weight": [
+   768
+  ],
+  "Qformer.bert.encoder.layer.1.attention.output.LayerNorm.bias": [
+   768
+  ],
+  "Qformer.bert.encoder.layer.1.intermediate.dense.weight": [
+   3072,
+   768
+  ],
+  "Qformer.bert.encoder.layer.1.intermediate.dense.bias": [
+   3072
+  ],
+  "Qformer.bert.encoder.layer.1.output.dense.weight": [
+   768,
+   3072
+  ],
+  "Qformer.bert.encoder.layer.1.output.dense.bias": [
+   768
+  ],
+  "Qformer.bert.encoder.layer.1.output.LayerNorm.weight": [
+   768
+  ],
+  "Qformer.bert.encoder.layer.1.output.LayerNorm.bias": [
+   768
+  ],
+  "Qformer.bert.encoder.layer.1.intermediate_query.dense.weight": [
+   3072,
+   768
+  ],
+  "Qformer.bert.encoder.layer.1.intermediate_query.dense.bias": [
+   3072
+  ],
+  "Qformer.bert.encoder.layer.1.output_query.dense.weight": [
+   768,
+   3072
+  ],
+  "Qformer.bert.encoder.layer.1.output_query.dense.bias": [
+   768
+  ],
+  "Qformer.bert.encoder.layer.1.output_query.LayerNorm.weight": [
+   768
+  ],
+  "Qformer.bert.encoder.layer.1.output_query.LayerNorm.bias": [
+   768
+  ],
+  "Qformer.bert.encoder.layer.2.attention.self.query.weight": [
+   768,
+   768
+  ],
+  "Qformer.bert.encoder.layer.2.attention.self.query.bias": [
+   768
+  ],
+  "Qformer.bert.encoder.layer.2.attention.self.key.weight": [
+   768,
+   768
+  ],
+  "Qformer.bert.encoder.layer.2.attention.self.key.bias": [
+   768
+  ],
+  "Qformer.bert.encoder.layer.2.attention.self.value.weight": [
+   768,
+   768
+  ],
+  "Qformer.bert.encoder.layer.2.attention.self.value.bias": [
+   768
+  ],
+  "Qformer.bert.encoder.layer.2.attention.output.dense.weight": [
+   768,
+   768
+  ],
+  "Qformer.bert.encoder.layer.2.attention.output.dense.bias": [
+   768
+  ],
+  "Qformer.bert.encoder.layer.2.attention.output.LayerNorm.weight": [
+   768
+  ],
+  "Qformer.bert.encoder.layer.2.attention.output.LayerNorm.bias": [
+   768
+  ],
+  "Qformer.bert.encoder.layer.2.crossattention.self.query.weight": [
+   768,
+   768
+  ],
+  "Qformer.bert.encoder.layer.2.crossattention.self.query.bias": [
+   768
+  ],
+  "Qformer.bert.encoder.layer.2.crossattention.self.key.weight": [
+   768,
+   1024
+  ],
+  "Qformer.bert.encoder.layer.2.crossattention.self.key.bias": [
+   768
+  ],
+  "Qformer.bert.encoder.layer.2.crossattention.self.value.weight": [
+   768,
+   1024
+  ],
+  "Qformer.bert.encoder.layer.2.crossattention.self.value.bias": [
+   768
+  ],
+  "Qformer.bert.encoder.layer.2.crossattention.output.dense.weight": [
+   768,
+   768
+  ],
+  "Qformer.bert.encoder.layer.2.crossattention.output.dense.bias": [
+   768
+  ],
+  "Qformer.bert.encoder.layer.2.crossattention.output.LayerNorm.weight": [
+   768
+  ],
+  "Qformer.bert.encoder.layer.2.crossattention.output.LayerNorm.bias": [
+   768
+  ],
+  "Qformer.bert.encoder.layer.2.intermediate.dense.weight": [
+   3072,
+   768
+  ],
+  "Qformer.bert.encoder.layer.2.intermediate.dense.bias": [
+   3072
+  ],
+  "Qformer.bert.encoder.layer.2.output.dense.weight": [
+   768,
+   3072
+  ],
+  "Qformer.bert.encoder.layer.2.output.dense.bias": [
+   768
+  ],
+  "Qformer.bert.encoder.layer.2.output.LayerNorm.weight": [
+   768
+  ],
+  "Qformer.bert.encoder.layer.2.output.LayerNorm.bias": [
+   768
+  ],
+  "Qformer.bert.encoder.layer.2.intermediate_query.dense.weight": [
+   3072,
+   768
+  ],
+  "Qformer.bert.encoder.layer.2.intermediate_query.dense.bias": [
+   3072
+  ],
+  "Qformer.bert.encoder.layer.2.output_query.dense.weight": [
+   768,
+   3072
+  ],
+  "Qformer.bert.encoder.layer.2.output_query.dense.bias": [
+   768
+  ],
+  "Qformer.bert.encoder.layer.2.output_query.LayerNorm.weight": [
+   768
+  ],
+  "Qformer.bert.encoder.layer.2.output_query.LayerNorm.bias": [
+   768
+  ],
+  "Qformer.bert.encoder.layer.3.attention.self.query.weight": [
+   768,
+   768
+  ],
+  "Qformer.bert.encoder.layer.3.attention.self.query.bias": [
+   768
+  ],
+  "Qformer.bert.encoder.layer.3.attention.self.key.weight": [
+   768,
+   768
+  ],
+  "Qformer.bert.encoder.layer.3.attention.self.key.bias": [
+   768
+  ],
+  "Qformer.bert.encoder.layer.3.attention.self.value.weight": [
+   768,
+   768
+  ],
+  "Qformer.bert.encoder.layer.3.attention.self.value.bias": [
+   768
+  ],
+  "Qformer.bert.encoder.layer.3.attention.output.dense.weight": [
+   768,
+   768
+  ],
+  "Qformer.bert.encoder.layer.3.attention.output.dense.bias": [
+   768
+  ],
+  "Qformer.bert.encoder.layer.3.attention.output.LayerNorm.weight": [
+   768
+  ],
+  "Qformer.bert.encoder.layer.3.attention.output.LayerNorm.bias": [
+   768
+  ],
+  "Qformer.bert.encoder.layer.3.intermediate.dense.weight": [
+   3072,
+   768
+  ],
+  "Qformer.bert.encoder.layer.3.intermediate.dense.bias": [
+   3072
+  ],
+  "Qformer.bert.encoder.layer.3.output.dense.weight": [
+   768,
+   3072
+  ],
+  "Qformer.bert.encoder.layer.3.output.dense.bias": [
+   768
+  ],
+  "Qformer.bert.encoder.layer.3.output.LayerNorm.weight": [
+   768
+  ],
+  "Qformer.bert.encoder.layer.3.output.LayerNorm.bias": [
+   768
+  ],
+  "Qformer.bert.encoder.layer.3.intermediate_query.dense.weight": [
+   3072,
+   768
+  ],
+  "Qformer.bert.encoder.layer.3.intermediate_query.dense.bias": [
+   3072
+  ],
+  "Qformer.bert.encoder.layer.3.output_query.dense.weight": [
+   768,
+   3072
+  ],
+  "Qformer.bert.encoder.layer.3.output_query.dense.bias": [
+   768
+  ],
+  "Qformer.bert.encoder.layer.3.output_query.LayerNorm.weight": [
+   768
+  ],
+  "Qformer.bert.encoder.layer.3.output_query.LayerNorm.bias": [
+   768
+  ],
+  "Qformer.bert.encoder.layer.4.attention.self.query.weight": [
+   768,
+   768
+  ]
+ },
+ "fingerprint_shapes": {
+  "visual_encoder.class_embedding": [
+   1024
+  ],
+  "visual_encoder.positional_embedding": [
+   257,
+   1024
+  ],
+  "visual_encoder.conv1.weight": [
+   1024,
+   3,
+   14,
+   14
+  ],
+  "visual_encoder.transformer.resblocks.0.attn.in_proj_weight": [
+   3072,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.0.attn.in_proj_bias": [
+   3072
+  ],
+  "visual_encoder.transformer.resblocks.0.attn.out_proj.weight": [
+   1024,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.0.attn.out_proj.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.0.mlp.c_fc.weight": [
+   4096,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.0.mlp.c_proj.weight": [
+   1024,
+   4096
+  ],
+  "visual_encoder.transformer.resblocks.0.mlp.c_proj.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.1.attn.in_proj_weight": [
+   3072,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.1.attn.in_proj_bias": [
+   3072
+  ],
+  "visual_encoder.transformer.resblocks.1.attn.out_proj.weight": [
+   1024,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.1.attn.out_proj.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.1.mlp.c_fc.weight": [
+   4096,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.1.mlp.c_proj.weight": [
+   1024,
+   4096
+  ],
+  "visual_encoder.transformer.resblocks.1.mlp.c_proj.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.2.attn.in_proj_weight": [
+   3072,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.2.attn.in_proj_bias": [
+   3072
+  ],
+  "visual_encoder.transformer.resblocks.2.attn.out_proj.weight": [
+   1024,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.2.attn.out_proj.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.2.mlp.c_fc.weight": [
+   4096,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.2.mlp.c_proj.weight": [
+   1024,
+   4096
+  ],
+  "visual_encoder.transformer.resblocks.2.mlp.c_proj.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.3.attn.in_proj_weight": [
+   3072,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.3.attn.in_proj_bias": [
+   3072
+  ],
+  "visual_encoder.transformer.resblocks.3.attn.out_proj.weight": [
+   1024,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.3.attn.out_proj.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.3.mlp.c_fc.weight": [
+   4096,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.3.mlp.c_proj.weight": [
+   1024,
+   4096
+  ],
+  "visual_encoder.transformer.resblocks.3.mlp.c_proj.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.4.attn.in_proj_weight": [
+   3072,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.4.attn.in_proj_bias": [
+   3072
+  ],
+  "visual_encoder.transformer.resblocks.4.attn.out_proj.weight": [
+   1024,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.4.attn.out_proj.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.4.mlp.c_fc.weight": [
+   4096,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.4.mlp.c_proj.weight": [
+   1024,
+   4096
+  ],
+  "visual_encoder.transformer.resblocks.4.mlp.c_proj.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.5.attn.in_proj_weight": [
+   3072,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.5.attn.in_proj_bias": [
+   3072
+  ],
+  "visual_encoder.transformer.resblocks.5.attn.out_proj.weight": [
+   1024,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.5.attn.out_proj.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.5.mlp.c_fc.weight": [
+   4096,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.5.mlp.c_proj.weight": [
+   1024,
+   4096
+  ],
+  "visual_encoder.transformer.resblocks.5.mlp.c_proj.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.6.attn.in_proj_weight": [
+   3072,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.6.attn.in_proj_bias": [
+   3072
+  ],
+  "visual_encoder.transformer.resblocks.6.attn.out_proj.weight": [
+   1024,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.6.attn.out_proj.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.6.mlp.c_fc.weight": [
+   4096,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.6.mlp.c_proj.weight": [
+   1024,
+   4096
+  ],
+  "visual_encoder.transformer.resblocks.6.mlp.c_proj.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.7.attn.in_proj_weight": [
+   3072,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.7.attn.in_proj_bias": [
+   3072
+  ],
+  "visual_encoder.transformer.resblocks.7.attn.out_proj.weight": [
+   1024,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.7.attn.out_proj.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.7.mlp.c_fc.weight": [
+   4096,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.7.mlp.c_proj.weight": [
+   1024,
+   4096
+  ],
+  "visual_encoder.transformer.resblocks.7.mlp.c_proj.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.8.attn.in_proj_weight": [
+   3072,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.8.attn.in_proj_bias": [
+   3072
+  ],
+  "visual_encoder.transformer.resblocks.8.attn.out_proj.weight": [
+   1024,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.8.attn.out_proj.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.8.mlp.c_fc.weight": [
+   4096,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.8.mlp.c_proj.weight": [
+   1024,
+   4096
+  ],
+  "visual_encoder.transformer.resblocks.8.mlp.c_proj.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.9.attn.in_proj_weight": [
+   3072,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.9.attn.in_proj_bias": [
+   3072
+  ],
+  "visual_encoder.transformer.resblocks.9.attn.out_proj.weight": [
+   1024,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.9.attn.out_proj.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.9.mlp.c_fc.weight": [
+   4096,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.9.mlp.c_proj.weight": [
+   1024,
+   4096
+  ],
+  "visual_encoder.transformer.resblocks.9.mlp.c_proj.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.10.attn.in_proj_weight": [
+   3072,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.10.attn.in_proj_bias": [
+   3072
+  ],
+  "visual_encoder.transformer.resblocks.10.attn.out_proj.weight": [
+   1024,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.10.attn.out_proj.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.10.mlp.c_fc.weight": [
+   4096,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.10.mlp.c_proj.weight": [
+   1024,
+   4096
+  ],
+  "visual_encoder.transformer.resblocks.10.mlp.c_proj.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.11.attn.in_proj_weight": [
+   3072,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.11.attn.in_proj_bias": [
+   3072
+  ],
+  "visual_encoder.transformer.resblocks.11.attn.out_proj.weight": [
+   1024,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.11.attn.out_proj.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.11.mlp.c_fc.weight": [
+   4096,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.11.mlp.c_proj.weight": [
+   1024,
+   4096
+  ],
+  "visual_encoder.transformer.resblocks.11.mlp.c_proj.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.12.attn.in_proj_weight": [
+   3072,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.12.attn.in_proj_bias": [
+   3072
+  ],
+  "visual_encoder.transformer.resblocks.12.attn.out_proj.weight": [
+   1024,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.12.attn.out_proj.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.12.mlp.c_fc.weight": [
+   4096,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.12.mlp.c_proj.weight": [
+   1024,
+   4096
+  ],
+  "visual_encoder.transformer.resblocks.12.mlp.c_proj.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.13.attn.in_proj_weight": [
+   3072,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.13.attn.in_proj_bias": [
+   3072
+  ],
+  "visual_encoder.transformer.resblocks.13.attn.out_proj.weight": [
+   1024,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.13.attn.out_proj.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.13.mlp.c_fc.weight": [
+   4096,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.13.mlp.c_proj.weight": [
+   1024,
+   4096
+  ],
+  "visual_encoder.transformer.resblocks.13.mlp.c_proj.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.14.attn.in_proj_weight": [
+   3072,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.14.attn.in_proj_bias": [
+   3072
+  ],
+  "visual_encoder.transformer.resblocks.14.attn.out_proj.weight": [
+   1024,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.14.attn.out_proj.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.14.mlp.c_fc.weight": [
+   4096,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.14.mlp.c_proj.weight": [
+   1024,
+   4096
+  ],
+  "visual_encoder.transformer.resblocks.14.mlp.c_proj.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.15.attn.in_proj_weight": [
+   3072,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.15.attn.in_proj_bias": [
+   3072
+  ],
+  "visual_encoder.transformer.resblocks.15.attn.out_proj.weight": [
+   1024,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.15.attn.out_proj.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.15.mlp.c_fc.weight": [
+   4096,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.15.mlp.c_proj.weight": [
+   1024,
+   4096
+  ],
+  "visual_encoder.transformer.resblocks.15.mlp.c_proj.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.16.attn.in_proj_weight": [
+   3072,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.16.attn.in_proj_bias": [
+   3072
+  ],
+  "visual_encoder.transformer.resblocks.16.attn.out_proj.weight": [
+   1024,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.16.attn.out_proj.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.16.mlp.c_fc.weight": [
+   4096,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.16.mlp.c_proj.weight": [
+   1024,
+   4096
+  ],
+  "visual_encoder.transformer.resblocks.16.mlp.c_proj.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.17.attn.in_proj_weight": [
+   3072,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.17.attn.in_proj_bias": [
+   3072
+  ],
+  "visual_encoder.transformer.resblocks.17.attn.out_proj.weight": [
+   1024,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.17.attn.out_proj.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.17.mlp.c_fc.weight": [
+   4096,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.17.mlp.c_proj.weight": [
+   1024,
+   4096
+  ],
+  "visual_encoder.transformer.resblocks.17.mlp.c_proj.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.18.attn.in_proj_weight": [
+   3072,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.18.attn.in_proj_bias": [
+   3072
+  ],
+  "visual_encoder.transformer.resblocks.18.attn.out_proj.weight": [
+   1024,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.18.attn.out_proj.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.18.mlp.c_fc.weight": [
+   4096,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.18.mlp.c_proj.weight": [
+   1024,
+   4096
+  ],
+  "visual_encoder.transformer.resblocks.18.mlp.c_proj.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.19.attn.in_proj_weight": [
+   3072,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.19.attn.in_proj_bias": [
+   3072
+  ],
+  "visual_encoder.transformer.resblocks.19.attn.out_proj.weight": [
+   1024,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.19.attn.out_proj.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.19.mlp.c_fc.weight": [
+   4096,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.19.mlp.c_proj.weight": [
+   1024,
+   4096
+  ],
+  "visual_encoder.transformer.resblocks.19.mlp.c_proj.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.20.attn.in_proj_weight": [
+   3072,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.20.attn.in_proj_bias": [
+   3072
+  ],
+  "visual_encoder.transformer.resblocks.20.attn.out_proj.weight": [
+   1024,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.20.attn.out_proj.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.20.mlp.c_fc.weight": [
+   4096,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.20.mlp.c_proj.weight": [
+   1024,
+   4096
+  ],
+  "visual_encoder.transformer.resblocks.20.mlp.c_proj.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.21.attn.in_proj_weight": [
+   3072,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.21.attn.in_proj_bias": [
+   3072
+  ],
+  "visual_encoder.transformer.resblocks.21.attn.out_proj.weight": [
+   1024,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.21.attn.out_proj.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.21.mlp.c_fc.weight": [
+   4096,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.21.mlp.c_proj.weight": [
+   1024,
+   4096
+  ],
+  "visual_encoder.transformer.resblocks.21.mlp.c_proj.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.22.attn.in_proj_weight": [
+   3072,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.22.attn.in_proj_bias": [
+   3072
+  ],
+  "visual_encoder.transformer.resblocks.22.attn.out_proj.weight": [
+   1024,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.22.attn.out_proj.bias": [
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.22.mlp.c_fc.weight": [
+   4096,
+   1024
+  ],
+  "visual_encoder.transformer.resblocks.22.mlp.c_proj.weight": [
+   1024,
+   4096
+  ],
+  "visual_encoder.transformer.resblocks.22.mlp.c_proj.bias": [
+   1024
+  ],
+  "vision_proj.weight": [
+   256,
+   768
+  ],
+  "vision_proj.bias": [
+   256
+  ],
+  "text_proj.weight": [
+   256,
+   768
+  ],
+  "text_proj.bias": [
+   256
+  ]
+ }
+}

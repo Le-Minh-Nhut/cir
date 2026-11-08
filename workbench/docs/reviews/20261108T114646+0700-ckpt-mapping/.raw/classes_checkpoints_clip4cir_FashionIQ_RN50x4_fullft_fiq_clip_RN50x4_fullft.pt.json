@@ -1,0 +1,26 @@
+{
+ "path": "workbench/artifacts/checkpoint_selection/20261106T002617+0700/checkpoints/clip4cir/FashionIQ/RN50x4_fullft/fiq_clip_RN50x4_fullft.pt",
+ "size_bytes": 713874695,
+ "container": "zip:archive/data.pkl",
+ "pickle_stream_bytes": 106708,
+ "distinct_globals": 4,
+ "globals": [
+  "collections OrderedDict",
+  "torch FloatStorage",
+  "torch LongStorage",
+  "torch._utils _rebuild_tensor_v2"
+ ],
+ "global_occurrences": 4,
+ "modules": {
+  "collections OrderedDict": 1,
+  "torch": 1,
+  "torch FloatStorage": 1,
+  "torch LongStorage": 1
+ },
+ "first_globals_in_order": [
+  "collections OrderedDict",
+  "torch._utils _rebuild_tensor_v2",
+  "torch FloatStorage",
+  "torch LongStorage"
+ ]
+}

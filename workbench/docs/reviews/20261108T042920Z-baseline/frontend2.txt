@@ -1,0 +1,17 @@
+### dist_index_html:
+    <script type="module" crossorigin src="/assets/index-CsxrZyq6.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-uzz8fv-H.css">
+    <meta name="viewport" content="width=device-width, initial-scale=1" /><link rel="icon" href="data:," /><div id="root"></div>
+### served_5173_root:
+    <script type="module" crossorigin src="/assets/index-CsxrZyq6.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-uzz8fv-H.css">
+    <meta name="viewport" content="width=device-width, initial-scale=1" /><link rel="icon" href="data:," /><div id="root"></div>
+### code_5173_root:
+200
+### code_5173_js:
+200 bytes=277236
+### stat_js:
+workbench/frontend/dist/assets/index-CsxrZyq6.js 277236 bytes 2026-11-08 09:32:17.733725227 +0700
+workbench/frontend/dist/assets/index-uzz8fv-H.css 12034 bytes 2026-11-08 09:32:17.735381727 +0700
+workbench/frontend/dist/index.html 271 bytes 2026-11-08 09:32:17.735381727 +0700
+### frontend_dir_mtime:

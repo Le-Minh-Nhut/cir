@@ -1,0 +1,10 @@
+=== branch ===
+research/cir-failure-workbench
+=== HEAD ===
+6421188f4f93574b7fe093a804dd235d39e630e8
+=== origin ===
+6421188f4f93574b7fe093a804dd235d39e630e8
+=== status ===
+?? workbench/docs/reviews/20261108T042920Z-baseline/
+=== blame-uncommitted-count ===
+1

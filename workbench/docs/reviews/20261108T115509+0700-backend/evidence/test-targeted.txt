@@ -1,0 +1,47 @@
+s.................................................................s..... [ 40%]
+........................................................................ [ 81%]
+.................................                                        [100%]
+=============================== warnings summary ===============================
+workbench/backend/main.py:105
+  /home/heheboiz/data/cir/workbench/backend/main.py:105: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    @app.on_event("startup")
+
+workbench/envs/ctl312h/lib/python3.12/site-packages/fastapi/applications.py:4723
+workbench/envs/ctl312h/lib/python3.12/site-packages/fastapi/applications.py:4723
+  /home/heheboiz/data/cir/workbench/envs/ctl312h/lib/python3.12/site-packages/fastapi/applications.py:4723: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    return self.router.on_event(event_type)  # ty: ignore[deprecated]
+
+workbench/backend/main.py:112
+  /home/heheboiz/data/cir/workbench/backend/main.py:112: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    @app.on_event("shutdown")
+
+workbench/envs/ctl312h/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /home/heheboiz/data/cir/workbench/envs/ctl312h/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+workbench/envs/ctl312h/lib/python3.12/site-packages/transformers/utils/generic.py:441
+  /home/heheboiz/data/cir/workbench/envs/ctl312h/lib/python3.12/site-packages/transformers/utils/generic.py:441: FutureWarning: `torch.utils._pytree._register_pytree_node` is deprecated. Please use `torch.utils._pytree.register_pytree_node` instead.
+    _torch_pytree._register_pytree_node(
+
+workbench/tests/test_composition_image_identity.py::test_model_lock_serializes_processes
+workbench/tests/test_composition_image_identity.py::test_model_lock_assertion_fails_when_flock_is_noop
+  /home/heheboiz/.local/share/uv/python/cpython-3.12-linux-x86_64-gnu/lib/python3.12/multiprocessing/popen_fork.py:66: DeprecationWarning: This process (pid=3854107) is multi-threaded, use of fork() may lead to deadlocks in the child.
+    self.pid = os.fork()
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+175 passed, 2 skipped, 2211 deselected, 8 warnings in 187.79s (0:03:07)

@@ -1,0 +1,9 @@
+=== /api/composition/runs ===
+
+HTTP=200
+=== /api/runs ===
+HTTP=200
+=== /api/benchmark-runs ===
+HTTP=200
+composition_runs HTTP=200 bytes=117041
+benchmark_runs HTTP=200 bytes=23025

@@ -1,0 +1,2 @@
+{"out": "/tmp/qa-annot2", "summary": {"total": 2, "pass": 0, "fail": 0, "selector_miss": 0, "blocked": 2, "console_error_total": 0, "page_error_total": 0, "http_ge_400_total": 0}}
+  g annotations  1440x900=blocked 390x844=blocked

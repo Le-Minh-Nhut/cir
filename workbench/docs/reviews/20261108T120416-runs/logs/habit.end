@@ -1,0 +1,9 @@
+1794126095
+2026-11-08T15:21:35+0700
+model=habit
+exit_code=0
+timed_out=False
+duration_s=2513
+ok=True
+artifact={"ok": true, "run_id": "497c25c57fbeba885ecfb9d1", "candidate_files": ["/home/heheboiz/data/cir/workbench/artifacts/composition/runs/497c25c57fbeba885ecfb9d1/candidates/habit_fiq_n02/image_only_empty_text.jsonl", "/home/heheboiz/data/cir/workbench/artifacts/composition/runs/497c25c57fbeba885ecfb9d1/candidates/habit_fiq_n02/multimodal.jsonl", "/home/heheboiz/data/cir/workbench/artifacts/composition/runs/497c25c57fbeba885ecfb9d1/candidates/habit_fiq_n02/text_only_black_image.jsonl"], "manifests": ["/home/heheboiz/data/cir/workbench/artifacts/composition/runs/497c25c57fbeba885ecfb9d1/candidates/habit_fiq_n02/image_only_empty_text.manifest.json", "/home/heheboiz/data/cir/workbench/artifacts/composition/runs/497c25c57fbeba885ecfb9d1/candidates/habit_fiq_n02/multimodal.manifest.json", "/home/heheboiz/data/cir/workbench/artifacts/composition/runs/497c25c57fbeba885ecfb9d1/candidates/habit_fiq_n02/text_only_black_image.manifest.json"], "reason": null}
+capability={"ok": true, "run_id": "497c25c57fbeba885ecfb9d1", "execution_status": "COMPLETED", "candidate_topk": true, "depth": 50, "capability_status": "AVAILABLE", "reason_text": null, "problems": []}

@@ -1,0 +1,49 @@
+=== 01 /api/composition/runs?subset=full (default: no fixtures, no smoke, no imported) ===
+rows=0 ids=[]
+
+=== 02 /api/composition/runs?subset=full&include_imported=true (isolated root) ===
+released_audit_task7_mm_any | provenance=released_audit_retriever | caps={'aggregate_metrics': True, 'per_query_target_ranks': True, 'candidate_topk': True, 'image_availability': True}
+  candidate_topk.available=True status=AVAILABLE depth=20 conditions=['image_only_empty_text', 'multimodal', 'text_only_black_image']
+  candidate_topk.gallery_count=74381 tie_policy='descending score, ties broken by earlier gallery position'
+  duplicate_status=undetermined count=1 conf=partial missing=['checkpoint_identity', 'environment_fingerprint']
+  measurement={"sample_count": 6003, "denominator": 6003, "coverage": 1.0, "scored_count": 6003, "unscored_query_count": 0, "unscored_by_kind": {}, "image_availability_sample_size": 40}
+
+=== 03 /api/composition/capabilities?subset=full (isolated root: only an imported row) ===
+{"run_count": 0, "capability_counts": {"aggregate_metrics": 0, "per_query_target_ranks": 0, "candidate_topk": 0, "image_availability": 0}, "artifact_count": 0, "measured_artifact_count": 0, "unique_measurement_count": 0, "undetermined_artifact_count": 0, "confidence": "full", "image_availability_is_sample": true}
+
+=== 04 /api/composition/runs/<imported>/candidates?condition=multimodal&limit=2 ===
+candidates={"available": true, "status": "AVAILABLE", "reason": null, "depth": 20}
+counters={"scored": 6003, "unscored": 0, "hit_at_k": 3172, "retrieval_failure": 2831, "unscored_by_kind": {}, "candidates_available": 6003}
+  qid=7:4436 target_rank=31987 top_results=[{"rank": 1, "image_id": "mbeir_images/fashioniq_images/B00DP8U3GU.jpg", "gallery_position": 69023, "score": null}, {"rank": 2, "image_id": "mbeir_images/fashioniq_images/B0047LWLOG.jpg", "gallery_position": 12875, "score": null}]
+  qid=7:3045 target_rank=22126 top_results=[{"rank": 1, "image_id": "mbeir_images/fashioniq_images/B00EI53R4E.jpg", "gallery_position": 71387, "score": null}, {"rank": 2, "image_id": "mbeir_images/fashioniq_images/B00DVWKEK0.jpg", "gallery_position": 69748, "score": null}]
+
+=== 05 /api/composition/runs/<imported>/queries?limit=2&top_k=3 ===
+candidates={"available": true, "status": "AVAILABLE", "reason": null, "depth": 20}
+counters={"scored": 6003, "unscored": 0, "hit_at_k": 3172, "retrieval_failure": 2831, "unscored_by_kind": {}, "candidates_available": 6003}
+  qid=7:4436 target_rank=31987 state=retrieval_failure top_results=3 candidate_status=AVAILABLE
+  qid=7:3045 target_rank=22126 state=retrieval_failure top_results=3 candidate_status=AVAILABLE
+
+=== 06 /api/evidence/summary (isolated root) ===
+{"aggregate_run_count": 0, "certified_aggregate_count": 0, "unique_measurement_count": 0, "undetermined_measurement_count": 0, "duplicate_attempt_count": 0, "confidence": "full"}
+
+=== 07 /api/composition/capabilities?subset=full (LIVE stack, real model artifacts) ===
+{"run_count": 5, "capability_counts": {"aggregate_metrics": 4, "per_query_target_ranks": 5, "candidate_topk": 0, "image_availability": 5}, "artifact_count": 5, "measured_artifact_count": 5, "unique_measurement_count": 5, "undetermined_artifact_count": 0, "confidence": "full", "image_availability_is_sample": true}
+
+=== 08 /api/composition/runs/10173dc45dea8c90fd2a284b (LIVE, LIMN PARTIAL) ===
+capabilities={"aggregate_metrics": true, "per_query_target_ranks": true, "candidate_topk": false, "image_availability": true}
+candidate_topk={"available": false, "status": "TOPK_EXPORT_NOT_REQUESTED", "reason": "this run was produced without candidate Top-K export (enable it with --topk-depth on composition_eval)", "depth": null, "conditions": [], "source": null, "path": null}
+image_availability={"status": "local", "sampled": 40, "resolved": 40, "layout": "fashioniq_standard", "reason": null}
+measurement={"sample_count": 6003, "denominator": 5884, "coverage": 0.980176578377478, "scored_count": 5884, "unscored_query_count": 119, "unscored_by_kind": {"category_unresolved": 119}, "image_availability_sample_size": 40}
+transfer={"is_transfer": false, "training_dataset": null, "evaluation_dataset": null, "label": null}
+duplicate_status=unique count=1 conf=full
+
+=== 09 /api/composition/runs/<limn>/queries?query_state=unscored (LIVE) ===
+total=119 counters={"scored": 0, "unscored": 119, "hit_at_k": 0, "retrieval_failure": 0, "unscored_by_kind": {"category_unresolved": 119}, "candidates_available": 0}
+statistics.multimodal={"denominator": 6003, "scored_count": 5884, "unscored_count": 119, "unscored_by_kind": {"category_unresolved": 119}, "coverage": 0.980176578377478}
+first item: qid=7:2179 state=unscored unscored_kind=category_unresolved target_rank=None retrieval_failure=False
+  candidate_status=TOPK_EXPORT_NOT_REQUESTED reason=no candidate export directory for this run
+
+=== 10 /api/composition/runs/315dd590eeb03d2c78d7937a (LIVE, PTHA CIRR->FashionIQ) ===
+model_id=ptha_mtst checkpoint_id=cirr_transfer
+transfer={"is_transfer": true, "training_dataset": "CIRR", "evaluation_dataset": "FashionIQ", "label": "CIRR\u2192FashionIQ transfer"}
+capabilities={"aggregate_metrics": true, "per_query_target_ranks": true, "candidate_topk": false, "image_availability": true}

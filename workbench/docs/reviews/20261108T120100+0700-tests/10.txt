@@ -1,0 +1,32 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+___________ test_a_container_built_from_another_commit_is_not_reused ___________
+
+tmp_path = PosixPath('/tmp/pytest-of-heheboiz/pytest-115/test_a_container_built_from_an0')
+
+    def test_a_container_built_from_another_commit_is_not_reused(tmp_path: Path):
+        """A reused container must be THIS checkout's code.
+    
+        `pc.sh` reuses a live container on a configuration match, and configuration says nothing about
+        which commit was baked into the image. After a `git pull` the old image's backend, queue,
+        verifier and evaluator would sign a report naming the new commit: the report would be about code
+        that never ran. An independent runtime audit found exactly this. `run.sh up` stamps `cir.commit`,
+        and the launcher must refuse a container whose label is absent or different.
+        """
+        sandbox, env = setup_sandbox(tmp_path, with_env=True)
+        env["MOCK_CONTAINER_ADAPTATION"] = "sm_120"
+        _create_corroborated_run(sandbox, "run_limn_corr_01")
+        env["MOCK_RUNS_STATUS"] = "corroborated"
+    
+        # Positive control: the stamp matches the checkout, so reuse is allowed.
+        env["MOCK_IMAGE_COMMIT"] = "0123456789abcdef0123456789abcdef01234567"
+        proc = run_pc(sandbox, [], env)
+>       assert proc.returncode == 0
+E       AssertionError: assert 1 == 0
+E        +  where 1 = CompletedProcess(args=['/home/heheboiz/data/cir/pc.sh'], returncode=1, stdout='Cấu hình môi trường workbench/docker/.e...ốn thời gian đánh giá)\n================================================================================\n', stderr='').returncode
+
+workbench/tests/test_pc_launcher.py:1928: AssertionError
+=========================== short test summary info ============================
+FAILED workbench/tests/test_pc_launcher.py::test_a_container_built_from_another_commit_is_not_reused - AssertionError: assert 1 == 0
+ +  where 1 = CompletedProcess(args=['/home/heheboiz/data/cir/pc.sh'], returncode=1, stdout='Cấu hình môi trường workbench/docker/.e...ốn thời gian đánh giá)\n================================================================================\n', stderr='').returncode
+1 failed in 7.20s

@@ -1,0 +1,74 @@
+{
+ "dress_local": {
+  "restored_class": "model.compose_local",
+  "fresh_class": "model.compose_local",
+  "vocab_size": 1602,
+  "n_model": 415,
+  "n_ckpt": 415,
+  "missing": 0,
+  "unexpected": 0,
+  "shape_mismatch": 0,
+  "shape_sample": [],
+  "verdict": "STRICT_OK"
+ },
+ "dress_global": {
+  "restored_class": "model.compose_global",
+  "fresh_class": "model.compose_global",
+  "vocab_size": 1602,
+  "n_model": 415,
+  "n_ckpt": 415,
+  "missing": 0,
+  "unexpected": 0,
+  "shape_mismatch": 0,
+  "shape_sample": [],
+  "verdict": "STRICT_OK"
+ },
+ "shirt_local": {
+  "restored_class": "model.compose_local",
+  "fresh_class": "model.compose_local",
+  "vocab_size": 2294,
+  "n_model": 415,
+  "n_ckpt": 415,
+  "missing": 0,
+  "unexpected": 0,
+  "shape_mismatch": 0,
+  "shape_sample": [],
+  "verdict": "STRICT_OK"
+ },
+ "shirt_global": {
+  "restored_class": "model.compose_global",
+  "fresh_class": "model.compose_global",
+  "vocab_size": 2294,
+  "n_model": 415,
+  "n_ckpt": 415,
+  "missing": 0,
+  "unexpected": 0,
+  "shape_mismatch": 0,
+  "shape_sample": [],
+  "verdict": "STRICT_OK"
+ },
+ "toptee_local": {
+  "restored_class": "model.compose_local",
+  "fresh_class": "model.compose_local",
+  "vocab_size": 2152,
+  "n_model": 415,
+  "n_ckpt": 415,
+  "missing": 0,
+  "unexpected": 0,
+  "shape_mismatch": 0,
+  "shape_sample": [],
+  "verdict": "STRICT_OK"
+ },
+ "toptee_global": {
+  "restored_class": "model.compose_global",
+  "fresh_class": "model.compose_global",
+  "vocab_size": 2152,
+  "n_model": 415,
+  "n_ckpt": 415,
+  "missing": 0,
+  "unexpected": 0,
+  "shape_mismatch": 0,
+  "shape_sample": [],
+  "verdict": "STRICT_OK"
+ }
+}

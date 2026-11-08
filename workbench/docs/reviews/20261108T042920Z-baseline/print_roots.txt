@@ -1,0 +1,15 @@
+rc=0
+autopilot_yaml.paths.registry=/home/heheboiz/data/cir/workbench/registry/models.yaml
+autopilot_yaml.paths.dataset_root=/home/heheboiz/data/cir/data/FashionIQ
+autopilot_yaml.paths.artifacts=/home/heheboiz/data/cir/workbench/artifacts
+autopilot_yaml.paths.checkpoints=/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads
+autopilot_yaml.paths.results=/home/heheboiz/data/cir/workbench/artifacts/results
+autopilot_yaml.paths.third_party=/home/heheboiz/data/cir/workbench/third_party
+standalone.dataset_root=/home/heheboiz/data/cir/data/FashionIQ
+standalone.artifacts=/home/heheboiz/data/cir/workbench/artifacts
+standalone.checkpoints=/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads
+standalone.results=/home/heheboiz/data/cir/workbench/artifacts/results
+standalone.third_party=/home/heheboiz/data/cir/workbench/third_party
+CIR_REPO_ROOT=/home/heheboiz/data/cir
+resolved_registry=/home/heheboiz/data/cir/workbench/registry/models.yaml
+verdict=MATCH

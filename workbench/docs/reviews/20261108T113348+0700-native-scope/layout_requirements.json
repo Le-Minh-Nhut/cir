@@ -1,0 +1,42 @@
+{
+ "airknow": {
+  "layout": "fashioniq_ilearn_resized_training",
+  "n_req": 18,
+  "missing": []
+ },
+ "pair": {
+  "layout": "fashioniq_ilearn_resized_training",
+  "n_req": 18,
+  "missing": []
+ },
+ "clvc_net": {
+  "layout": "fashioniq_clvc_resized",
+  "n_req": 15,
+  "missing": []
+ },
+ "dcnet": {
+  "layout": "fashioniq_dcnet",
+  "n_req": 9,
+  "missing": []
+ },
+ "combiner_rn50x4_noft": {
+  "layout": "fashioniq_standard",
+  "n_req": 9,
+  "missing": []
+ },
+ "clip4cir_rn50x4_fullft": {
+  "layout": "fashioniq_standard",
+  "n_req": 9,
+  "missing": []
+ },
+ "tgcir": {
+  "layout": "fashioniq_ilearn_resized_training",
+  "n_req": 18,
+  "missing": []
+ },
+ "sprc": {
+  "layout": "fashioniq_standard",
+  "n_req": 9,
+  "missing": []
+ }
+}

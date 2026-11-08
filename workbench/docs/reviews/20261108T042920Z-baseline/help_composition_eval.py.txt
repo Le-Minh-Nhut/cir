@@ -1,0 +1,20 @@
+rc=0
+usage: composition_eval.py [-h] [--config CONFIG] [--models MODELS]
+                           [--subsets SUBSETS] [--resume] [--smoke [SMOKE]]
+                           [--plan] [--prepare-data] [--seed SEED]
+
+Opt-in CIRCUS composition CLI; WORKBENCH_CIRCUS_SYNTHETIC_FIXTURE=1 is TEST-
+ONLY.
+
+options:
+  -h, --help         show this help message and exit
+  --config CONFIG    autopilot YAML config
+  --models MODELS    comma-separated model IDs or 'selected' authorized cohort
+  --subsets SUBSETS  comma-separated subsets: full,sf,validated
+  --resume           reuse matching composition results
+  --smoke [SMOKE]    limit query count (default 1); always preserve full
+                     gallery
+  --plan             show work and paths without writing state
+  --prepare-data     verify release and inventory missing
+                     gallery/reference/positive images
+  --seed SEED        seed recorded for deterministic summaries

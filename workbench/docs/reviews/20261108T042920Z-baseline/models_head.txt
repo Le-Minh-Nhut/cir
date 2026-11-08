@@ -1,0 +1,60 @@
+# Optional per-model environment field `interpreter_sha256`: the SHA-256 of the
+# interpreter binary an operator pinned for that model. When present, a mismatch is
+# refused as UNSAFE_INTERPRETER; absent or UNKNOWN means unpinned. Compute it with
+# `sha256sum "$(readlink -f "$WORKBENCH_<MODEL>_PYTHON")"` after creating the
+# environment from the upstream spec, and record it before a reproduction run.
+# PC sm_120 baseline: torch 2.7.1 / torchvision 0.22.1, CUDA 12.8 wheels.
+# PyTorch 2.7 is the first stable Blackwell line; use its bugfix release, not a newer minor.
+# TME is the exception: it declares a floor-and-range so an already-provisioned 2.8.0 / 0.23.0
+# cu128 environment (workbench/envs/tme-adapted) stays accepted instead of being downgraded.
+# Sources: https://pytorch.org/blog/pytorch-2-7/
+#          https://pytorch.org/get-started/previous-versions/
+# These adapted profiles are PC choices, not changes to the historical author contracts.
+schema_version: 1
+protocols:
+  fashioniq_original_split:
+    label: FashionIQ - Original Split (Full Gallery, Reference Included)
+    literature_split_label: original
+    evaluation_noise_pct: 0
+  fashioniq_full_gallery_ref_excluded:
+    label: FashionIQ - Original Full Gallery, Reference Excluded
+    literature_split_label: original
+    evaluation_noise_pct: 0
+  fashioniq_val_split:
+    label: FashionIQ - Val Split (Pair-Union Gallery, Reference Excluded)
+    literature_split_label: val
+    evaluation_noise_pct: 0
+models:
+  - model_id: csmcir
+    composition_adapter: workbench.composition.model_csmcir
+    environment:
+      python_env_var: WORKBENCH_CSMCIR_PYTHON
+      # Knobs the pinned evaluator reads directly. The author's defaults need ~15.6 GiB on a
+      # 15.44 GiB card: the query pass builds a (queries x 32 x gallery) matmul, and the gallery pass
+      # keeps every batch resident before `torch.vstack`. Both overrides use the evaluator's OWN
+      # paths (`save_memory`, a batch size), never a different computation, and the author defaults
+      # apply when neither is set. Declared here so the pipeline forwards them to the child; the
+      # allowlist alone would withhold them.
+      runtime_env: [WORKBENCH_CSMCIR_QUERY_BS, WORKBENCH_CSMCIR_SAVE_MEMORY]
+      confidence: VERIFIED_README
+      python: '3.9'
+      pytorch: '2.0.1'
+      torchvision: '0.15.2'
+      # The pinned evaluator hard-requires CUDA: utils_csmcir.py selects the cuda device whenever
+      # torch sees one and blip_validate.py calls torch.cuda.empty_cache() (which raises without
+      # CUDA). torch==2.0.1 from PyPI bundles the CUDA 11.7 runtime wheels, so 11.7 is the
+      # declared requirement; an adapted sm_120 profile can override it per-model.
+      cuda: '11.7'
+      packages: []
+      # Historical pins (torch 2.0.1, CUDA 11.7) ship no sm_120 kernels; on Blackwell hardware the
+      # operator may provision an adapted runtime. Historical pins remain the default reproduction contract.
+      adapted_runtime:
+        target_compute_capability: sm_120
+        # The selected cu128 pair supports Python 3.9 and 3.10;
+        # Python 3.10 matches the verified cp310 stack in envs/tme-adapted and models.yaml:1305.
+        python: '3.10'
+        pytorch: '==2.7.1'
+        torchvision: '==0.22.1'
+        cuda: '12.8'
+        # CSMCIR/requirements.txt:9 pins transformers==4.36.2, required by vendored
+        # src/lavis/models/blip2_models/Qformer.py:41 for apply_chunking_to_forward. timm==0.9.12 (:5)

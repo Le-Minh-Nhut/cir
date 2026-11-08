@@ -1,0 +1,25 @@
+{
+ "arch_type": "CENet",
+ "arch_args": {
+  "backbone": "resnet",
+  "backbone_pretrain": "imagenet",
+  "composition": "tirg",
+  "correction": "fd",
+  "fusion": "hadamard",
+  "norm_scale": 5.0,
+  "text_pooling_module": "sharedconv",
+  "metric_fn": "ip"
+ },
+ "class": "model.model.CENet",
+ "n_model_keys": 518,
+ "n_ckpt_keys": 518,
+ "missing": [],
+ "n_missing": 0,
+ "unexpected": [],
+ "n_unexpected": 0,
+ "epoch": 82,
+ "monitor_best": 0.4119230891300661,
+ "embedded_data_dir": "dataset/fashioniq",
+ "embedded_trainer_save_dir": "logdir",
+ "strict_load": "OK"
+}

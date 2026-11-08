@@ -1,0 +1,13 @@
+--- workbench/docs/reviews/20261108T113110-envs/workbench.env.bak	2026-11-08 12:33:28.595228808 +0700
++++ workbench/config/workbench.env	2026-11-08 13:08:01.324224013 +0700
+@@ -7,8 +7,8 @@
+ WORKBENCH_THIRD_PARTY_ROOT=/home/heheboiz/data/cir/workbench/third_party
+ WORKBENCH_CIRCUS_RELEASE_ROOT=/home/heheboiz/data/cir/workbench/artifacts/circus_release
+ 
+-WORKBENCH_ENCODER_PYTHON=/home/heheboiz/data/cir/workbench/envs/pair-adapted/bin/python
+-WORKBENCH_LIMN_PYTHON=/home/heheboiz/data/cir/workbench/envs/limn-adapted/bin/python
++WORKBENCH_ENCODER_PYTHON=/home/heheboiz/data/cir/workbench/envs/encoder310-adapted/bin/python
++WORKBENCH_LIMN_PYTHON=/home/heheboiz/data/cir/workbench/envs/limn310-adapted/bin/python
+ WORKBENCH_HABIT_PYTHON=/home/heheboiz/data/cir/workbench/envs/ilearn39-adapted/bin/python
+ WORKBENCH_INTENT_PYTHON=/home/heheboiz/data/cir/workbench/envs/ilearn39-adapted/bin/python
+ WORKBENCH_HINT_PYTHON=/home/heheboiz/data/cir/workbench/envs/ilearn39-adapted/bin/python

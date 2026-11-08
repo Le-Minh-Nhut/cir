@@ -1,0 +1,65 @@
+LIVE STACK http://127.0.0.1:8000 (restarted after backend edits; 200 for backend and frontend)
+
+=== 11 GET /api/composition/runs?subset=full ===
+10173dc45dea8c90fd2a284b | limn/base_iter0_all_categories | PARTIAL
+    capabilities={"aggregate_metrics": true, "per_query_target_ranks": true, "candidate_topk": false, "image_availability": true}
+    candidate_topk.status=TOPK_EXPORT_NOT_REQUESTED
+    duplicate_status=unique count=1 conf=full
+    measurement={"sample_count": 6003, "denominator": 5884, "coverage": 0.980176578377478, "scored_count": 5884, "unscored_query_count": 119, "unscored_by_kind": {"category_unresolved": 119}, "image_availability_sample_size": 40}
+    transfer={"is_transfer": false, "training_dataset": null, "evaluation_dataset": null, "label": null}
+315dd590eeb03d2c78d7937a | ptha_mtst/cirr_transfer | COMPLETED
+    capabilities={"aggregate_metrics": true, "per_query_target_ranks": true, "candidate_topk": false, "image_availability": true}
+    candidate_topk.status=TOPK_EXPORT_NOT_REQUESTED
+    duplicate_status=unique count=1 conf=full
+    measurement={"sample_count": 6003, "denominator": 6003, "coverage": 1.0, "scored_count": 6003, "unscored_query_count": 0, "unscored_by_kind": {}, "image_availability_sample_size": 40}
+    transfer={"is_transfer": true, "training_dataset": "CIRR", "evaluation_dataset": "FashionIQ", "label": "CIRR\u2192FashionIQ transfer"}
+6a528e877c328772e2c7bb28 | encoder/fashioniq | COMPLETED
+    capabilities={"aggregate_metrics": true, "per_query_target_ranks": true, "candidate_topk": false, "image_availability": true}
+    candidate_topk.status=TOPK_EXPORT_NOT_REQUESTED
+    duplicate_status=unique count=1 conf=full
+    measurement={"sample_count": 6003, "denominator": 6003, "coverage": 1.0, "scored_count": 6003, "unscored_query_count": 0, "unscored_by_kind": {}, "image_availability_sample_size": 40}
+    transfer={"is_transfer": false, "training_dataset": null, "evaluation_dataset": null, "label": null}
+ad477312aa57c1b9114f9e51 | tme/fashioniq_0 | COMPLETED
+    capabilities={"aggregate_metrics": true, "per_query_target_ranks": true, "candidate_topk": false, "image_availability": true}
+    candidate_topk.status=TOPK_EXPORT_NOT_REQUESTED
+    duplicate_status=unique count=1 conf=full
+    measurement={"sample_count": 6003, "denominator": 6003, "coverage": 1.0, "scored_count": 6003, "unscored_query_count": 0, "unscored_by_kind": {}, "image_availability_sample_size": 40}
+    transfer={"is_transfer": false, "training_dataset": null, "evaluation_dataset": null, "label": null}
+e0dd04a46ef7a58334b9e353 | habit/fiq_n02 | FAILED
+    capabilities={"aggregate_metrics": false, "per_query_target_ranks": true, "candidate_topk": false, "image_availability": true}
+    candidate_topk.status=TOPK_EXPORT_NOT_REQUESTED
+    duplicate_status=unique count=1 conf=full
+    measurement={"sample_count": 6003, "denominator": 6003, "coverage": 0.0, "scored_count": 0, "unscored_query_count": 6003, "unscored_by_kind": {"other": 6003}, "image_availability_sample_size": 40}
+    transfer={"is_transfer": false, "training_dataset": null, "evaluation_dataset": null, "label": null}
+
+=== 12 GET /api/composition/capabilities?subset=full ===
+{
+ "run_count": 5,
+ "capability_counts": {
+  "aggregate_metrics": 4,
+  "per_query_target_ranks": 5,
+  "candidate_topk": 0,
+  "image_availability": 5
+ },
+ "artifact_count": 5,
+ "measured_artifact_count": 5,
+ "unique_measurement_count": 5,
+ "undetermined_artifact_count": 0,
+ "confidence": "full",
+ "image_availability_is_sample": true
+}
+
+=== 13 GET /api/composition/runs/<limn>/queries?query_state=retrieval_failure ===
+total=4115
+counters={"scored": 4115, "unscored": 0, "hit_at_k": 0, "retrieval_failure": 4115, "unscored_by_kind": {}, "candidates_available": 0}
+first={"query_id": "7:3045", "target_rank": 73369, "query_state": "retrieval_failure", "unscored": false, "retrieval_failure": true, "unscored_kind": null}
+
+=== 14 GET /api/evidence/summary ===
+{
+ "aggregate_run_count": 12,
+ "certified_aggregate_count": 2,
+ "unique_measurement_count": 12,
+ "undetermined_measurement_count": 0,
+ "duplicate_attempt_count": 0,
+ "confidence": "full"
+}

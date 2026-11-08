@@ -1,0 +1,82 @@
+[
+ {
+  "run_id": "20261107T054343058424Z_csmcir_fashioniq_f564570e",
+  "model_id": "csmcir",
+  "checkpoint_id": "fashioniq",
+  "protocol_id": "fashioniq_original_split",
+  "execution_status": "EXECUTION_COMPLETED",
+  "is_synthetic": false,
+  "gate": "PASS_WITHIN_5_PERCENT_VARIANT",
+  "parity": "PARITY_VERIFIED"
+ },
+ {
+  "run_id": "20261107T054933277898Z_csmcir_fashioniq_f03887d2",
+  "model_id": "csmcir",
+  "checkpoint_id": "fashioniq",
+  "protocol_id": "fashioniq_original_split",
+  "execution_status": "EXECUTION_COMPLETED",
+  "is_synthetic": false,
+  "gate": "PASS_WITHIN_5_PERCENT_VARIANT",
+  "parity": "PARITY_VERIFIED"
+ },
+ {
+  "run_id": "20261108T034229743368Z_df99b451",
+  "model_id": "synthetic_model",
+  "checkpoint_id": "ckpt_v1",
+  "protocol_id": "fashioniq_original_split",
+  "execution_status": "EXECUTION_COMPLETED",
+  "is_synthetic": false,
+  "gate": "FAILED_OUTPUT_VALIDATION",
+  "parity": "PARSER_UNAVAILABLE"
+ },
+ {
+  "run_id": "20261108T034240727549Z_a4b501de",
+  "model_id": "synthetic_model",
+  "checkpoint_id": "ckpt_v1",
+  "protocol_id": "fashioniq_original_split",
+  "execution_status": "EXECUTION_COMPLETED",
+  "is_synthetic": false,
+  "gate": "FAILED_OUTPUT_VALIDATION",
+  "parity": "PARSER_UNAVAILABLE"
+ },
+ {
+  "run_id": "20261108T040753124451Z_42d25474",
+  "model_id": "synthetic_model",
+  "checkpoint_id": "ckpt_v1",
+  "protocol_id": "fashioniq_original_split",
+  "execution_status": "EXECUTION_COMPLETED",
+  "is_synthetic": false,
+  "gate": "FAILED_OUTPUT_VALIDATION",
+  "parity": "PARSER_UNAVAILABLE"
+ },
+ {
+  "run_id": "20261108T040759307423Z_69b956d6",
+  "model_id": "synthetic_model",
+  "checkpoint_id": "ckpt_v1",
+  "protocol_id": "fashioniq_original_split",
+  "execution_status": "EXECUTION_COMPLETED",
+  "is_synthetic": false,
+  "gate": "FAILED_OUTPUT_VALIDATION",
+  "parity": "PARSER_UNAVAILABLE"
+ },
+ {
+  "run_id": "20261108T043003050390Z_c67fbd71",
+  "model_id": "synthetic_model",
+  "checkpoint_id": "ckpt_v1",
+  "protocol_id": "fashioniq_original_split",
+  "execution_status": "EXECUTION_COMPLETED",
+  "is_synthetic": false,
+  "gate": "FAILED_OUTPUT_VALIDATION",
+  "parity": "PARSER_UNAVAILABLE"
+ },
+ {
+  "run_id": "20261108T043009574832Z_943c8131",
+  "model_id": "synthetic_model",
+  "checkpoint_id": "ckpt_v1",
+  "protocol_id": "fashioniq_original_split",
+  "execution_status": "EXECUTION_COMPLETED",
+  "is_synthetic": false,
+  "gate": "FAILED_OUTPUT_VALIDATION",
+  "parity": "PARSER_UNAVAILABLE"
+ }
+]

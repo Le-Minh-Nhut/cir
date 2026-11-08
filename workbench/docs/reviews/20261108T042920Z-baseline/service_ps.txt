@@ -1,0 +1,8 @@
+=== ps tree ===
+    PID    PPID ELAPSED     RSS COMMAND
+3213589   21761 02:06:13  12276 workbench/envs/ctl312h/bin/python workbench/scripts/serve_workbench.py --production-frontend --host 127.0.0.1 --backend-port 8000 --frontend-port 5173
+3213598 3213589 02:06:13 223512 /home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python -m uvicorn workbench.backend.main:app --host 127.0.0.1 --port 8000
+3213611 3213610 02:06:13  45668 node /home/heheboiz/data/cir/workbench/frontend/node_modules/.bin/vite preview --host 127.0.0.1 --port 5173 --strictPort
+=== children of 3213589 ===
+3213598 /home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python -m uvicorn workbench.backend.main:app --host 127.0.0.1 --port 8000
+3213599 npm run preview --host 127.0.0.1 --port 5173 --strictPort

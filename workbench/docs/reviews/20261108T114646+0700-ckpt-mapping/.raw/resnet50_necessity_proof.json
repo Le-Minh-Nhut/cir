@@ -1,0 +1,52 @@
+{
+ "clvc_net": {
+  "vendored_resnet50_keys": 320,
+  "checkpoint_img_model_keys": 321,
+  "missing_from_checkpoint": [
+   "img_model.bn1.bias",
+   "img_model.bn1.num_batches_tracked",
+   "img_model.bn1.running_mean",
+   "img_model.bn1.running_var",
+   "img_model.bn1.weight",
+   "img_model.conv1.weight",
+   "img_model.fc.bias",
+   "img_model.fc.weight",
+   "img_model.layer1.0.bn1.bias",
+   "img_model.layer1.0.bn1.num_batches_tracked"
+  ],
+  "n_missing": 320,
+  "extra_in_checkpoint": [
+   "img_model.img_fc.bias",
+   "img_model.img_fc.weight",
+   "img_model.img_model.bn1.bias",
+   "img_model.img_model.bn1.num_batches_tracked",
+   "img_model.img_model.bn1.running_mean"
+  ],
+  "verdict": "BACKBONE_PARTIAL"
+ },
+ "dcnet": {
+  "torchvision_resnet50_keys": 320,
+  "checkpoint_backbone_keys": 318,
+  "missing_from_checkpoint": [
+   "image_encoder.backbone.bn1.bias",
+   "image_encoder.backbone.bn1.num_batches_tracked",
+   "image_encoder.backbone.bn1.running_mean",
+   "image_encoder.backbone.bn1.running_var",
+   "image_encoder.backbone.bn1.weight",
+   "image_encoder.backbone.conv1.weight",
+   "image_encoder.backbone.fc.bias",
+   "image_encoder.backbone.fc.weight",
+   "image_encoder.backbone.layer1.0.bn1.bias",
+   "image_encoder.backbone.layer1.0.bn1.num_batches_tracked"
+  ],
+  "n_missing": 320,
+  "extra_in_checkpoint": [
+   "image_encoder.backbone.0.weight",
+   "image_encoder.backbone.1.bias",
+   "image_encoder.backbone.1.num_batches_tracked",
+   "image_encoder.backbone.1.running_mean",
+   "image_encoder.backbone.1.running_var"
+  ],
+  "verdict": "BACKBONE_PARTIAL"
+ }
+}

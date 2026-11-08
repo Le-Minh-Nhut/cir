@@ -1,0 +1,22 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+___________ test_verification_attempted_inside_container_not_on_host ___________
+
+tmp_path = PosixPath('/tmp/pytest-of-heheboiz/pytest-113/test_verification_attempted_in0')
+
+    def test_verification_attempted_inside_container_not_on_host(tmp_path: Path):
+        """P0-1 (a): Verification is attempted inside the container, not on the host."""
+        sandbox, env = setup_sandbox(tmp_path, with_env=True)
+        env["MOCK_RUNS_STATUS"] = "corroborated"
+        _create_corroborated_run(sandbox, "run_limn_corr_01")
+    
+        proc = run_pc(sandbox, [], env)
+>       assert proc.returncode == 0
+E       AssertionError: assert 1 == 0
+E        +  where 1 = CompletedProcess(args=['/home/heheboiz/data/cir/pc.sh'], returncode=1, stdout='Cấu hình môi trường workbench/docker/.e...ốn thời gian đánh giá)\n================================================================================\n', stderr='').returncode
+
+workbench/tests/test_pc_launcher.py:1283: AssertionError
+=========================== short test summary info ============================
+FAILED workbench/tests/test_pc_launcher.py::test_verification_attempted_inside_container_not_on_host - AssertionError: assert 1 == 0
+ +  where 1 = CompletedProcess(args=['/home/heheboiz/data/cir/pc.sh'], returncode=1, stdout='Cấu hình môi trường workbench/docker/.e...ốn thời gian đánh giá)\n================================================================================\n', stderr='').returncode
+1 failed in 7.14s

@@ -1,0 +1,252 @@
+{
+ "dress_local_model.pt": {
+  "class": "compose_local",
+  "vocab_size": 1602,
+  "vocab_sha1_order": "8c40e16d0f24bcc63c6870740786c3791eddcfb5",
+  "has_probe_words": {
+   "dress": true,
+   "shirt": true,
+   "toptee": false,
+   "sleeve": true,
+   "neckline": true,
+   "collar": true,
+   "skirt": true,
+   "button": true,
+   "floral": true,
+   "plaid": true,
+   "pattern": true,
+   "length": true
+  },
+  "text_model_state": {
+   "text_model.embedding_layer.weight": [
+    1602,
+    512
+   ],
+   "text_model.lstm.weight_ih_l0": [
+    4096,
+    512
+   ],
+   "text_model.lstm.weight_hh_l0": [
+    4096,
+    1024
+   ],
+   "text_model.lstm.bias_ih_l0": [
+    4096
+   ],
+   "text_model.lstm.bias_hh_l0": [
+    4096
+   ]
+  },
+  "categories_attr": null,
+  "number_of_models": null
+ },
+ "dress_global_model.pt": {
+  "class": "compose_global",
+  "vocab_size": 1602,
+  "vocab_sha1_order": "8c40e16d0f24bcc63c6870740786c3791eddcfb5",
+  "has_probe_words": {
+   "dress": true,
+   "shirt": true,
+   "toptee": false,
+   "sleeve": true,
+   "neckline": true,
+   "collar": true,
+   "skirt": true,
+   "button": true,
+   "floral": true,
+   "plaid": true,
+   "pattern": true,
+   "length": true
+  },
+  "text_model_state": {
+   "text_model.embedding_layer.weight": [
+    1602,
+    512
+   ],
+   "text_model.lstm.weight_ih_l0": [
+    4096,
+    512
+   ],
+   "text_model.lstm.weight_hh_l0": [
+    4096,
+    1024
+   ],
+   "text_model.lstm.bias_ih_l0": [
+    4096
+   ],
+   "text_model.lstm.bias_hh_l0": [
+    4096
+   ]
+  },
+  "categories_attr": null,
+  "number_of_models": null
+ },
+ "shirt_local_model.pt": {
+  "class": "compose_local",
+  "vocab_size": 2294,
+  "vocab_sha1_order": "1435473be6c9eee4528852f7ff918d83848e0523",
+  "has_probe_words": {
+   "dress": true,
+   "shirt": true,
+   "toptee": false,
+   "sleeve": true,
+   "neckline": true,
+   "collar": true,
+   "skirt": false,
+   "button": true,
+   "floral": true,
+   "plaid": true,
+   "pattern": true,
+   "length": true
+  },
+  "text_model_state": {
+   "text_model.embedding_layer.weight": [
+    2294,
+    512
+   ],
+   "text_model.lstm.weight_ih_l0": [
+    4096,
+    512
+   ],
+   "text_model.lstm.weight_hh_l0": [
+    4096,
+    1024
+   ],
+   "text_model.lstm.bias_ih_l0": [
+    4096
+   ],
+   "text_model.lstm.bias_hh_l0": [
+    4096
+   ]
+  },
+  "categories_attr": null,
+  "number_of_models": null
+ },
+ "shirt_global_model.pt": {
+  "class": "compose_global",
+  "vocab_size": 2294,
+  "vocab_sha1_order": "1435473be6c9eee4528852f7ff918d83848e0523",
+  "has_probe_words": {
+   "dress": true,
+   "shirt": true,
+   "toptee": false,
+   "sleeve": true,
+   "neckline": true,
+   "collar": true,
+   "skirt": false,
+   "button": true,
+   "floral": true,
+   "plaid": true,
+   "pattern": true,
+   "length": true
+  },
+  "text_model_state": {
+   "text_model.embedding_layer.weight": [
+    2294,
+    512
+   ],
+   "text_model.lstm.weight_ih_l0": [
+    4096,
+    512
+   ],
+   "text_model.lstm.weight_hh_l0": [
+    4096,
+    1024
+   ],
+   "text_model.lstm.bias_ih_l0": [
+    4096
+   ],
+   "text_model.lstm.bias_hh_l0": [
+    4096
+   ]
+  },
+  "categories_attr": null,
+  "number_of_models": null
+ },
+ "toptee_local_model.pt": {
+  "class": "compose_local",
+  "vocab_size": 2152,
+  "vocab_sha1_order": "1b46d565474d36f2a2ecb7889c20b4f4784057c0",
+  "has_probe_words": {
+   "dress": true,
+   "shirt": true,
+   "toptee": false,
+   "sleeve": true,
+   "neckline": true,
+   "collar": true,
+   "skirt": true,
+   "button": true,
+   "floral": true,
+   "plaid": true,
+   "pattern": true,
+   "length": true
+  },
+  "text_model_state": {
+   "text_model.embedding_layer.weight": [
+    2152,
+    512
+   ],
+   "text_model.lstm.weight_ih_l0": [
+    4096,
+    512
+   ],
+   "text_model.lstm.weight_hh_l0": [
+    4096,
+    1024
+   ],
+   "text_model.lstm.bias_ih_l0": [
+    4096
+   ],
+   "text_model.lstm.bias_hh_l0": [
+    4096
+   ]
+  },
+  "categories_attr": null,
+  "number_of_models": null
+ },
+ "toptee_global_model.pt": {
+  "class": "compose_global",
+  "vocab_size": 2152,
+  "vocab_sha1_order": "1b46d565474d36f2a2ecb7889c20b4f4784057c0",
+  "has_probe_words": {
+   "dress": true,
+   "shirt": true,
+   "toptee": false,
+   "sleeve": true,
+   "neckline": true,
+   "collar": true,
+   "skirt": true,
+   "button": true,
+   "floral": true,
+   "plaid": true,
+   "pattern": true,
+   "length": true
+  },
+  "text_model_state": {
+   "text_model.embedding_layer.weight": [
+    2152,
+    512
+   ],
+   "text_model.lstm.weight_ih_l0": [
+    4096,
+    512
+   ],
+   "text_model.lstm.weight_hh_l0": [
+    4096,
+    1024
+   ],
+   "text_model.lstm.bias_ih_l0": [
+    4096
+   ],
+   "text_model.lstm.bias_hh_l0": [
+    4096
+   ]
+  },
+  "categories_attr": null,
+  "number_of_models": null
+ },
+ "_same_vocab_dress": true,
+ "_same_vocab_shirt": true,
+ "_same_vocab_toptee": true,
+ "_all_six_share_one_vocab": false
+}

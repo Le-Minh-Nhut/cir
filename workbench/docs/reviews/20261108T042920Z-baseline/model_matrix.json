@@ -1,0 +1,221 @@
+[
+ {
+  "model": "csmcir",
+  "adapter": true,
+  "python_var": "WORKBENCH_CSMCIR_PYTHON",
+  "declared_python": "3.9",
+  "configured": null,
+  "checkpoint_staged": true,
+  "checkpoint_files": [
+   "fashioniq_tuned_clip_best.pt"
+  ],
+  "checkpoint_bytes": 2720615859,
+  "summary_dirs": []
+ },
+ {
+  "model": "airknow",
+  "adapter": false,
+  "python_var": "WORKBENCH_AIRKNOW_PYTHON",
+  "declared_python": "3.8.10",
+  "configured": null,
+  "checkpoint_staged": false,
+  "checkpoint_files": [],
+  "checkpoint_bytes": 0,
+  "summary_dirs": []
+ },
+ {
+  "model": "conesep",
+  "adapter": true,
+  "python_var": "WORKBENCH_CONESEP_PYTHON",
+  "declared_python": "3.8.10",
+  "configured": "/home/heheboiz/data/cir/workbench/envs/airknow-adapted/bin/python",
+  "checkpoint_staged": true,
+  "checkpoint_files": [
+   "ConeSep-FIQ-N0.2.pt"
+  ],
+  "checkpoint_bytes": 2721428966,
+  "summary_dirs": []
+ },
+ {
+  "model": "ptha_mtst",
+  "adapter": true,
+  "python_var": "WORKBENCH_PTHA_MTST_PYTHON",
+  "declared_python": "3.9",
+  "configured": "/home/heheboiz/data/cir/workbench/envs/airknow-adapted/bin/python",
+  "checkpoint_staged": true,
+  "checkpoint_files": [
+   "tuned_mtst_cirr.pt"
+  ],
+  "checkpoint_bytes": 2720352973,
+  "summary_dirs": [
+   "ptha_mtst_cirr_transfer_315dd590eeb03d2c78d7937a"
+  ]
+ },
+ {
+  "model": "habit",
+  "adapter": true,
+  "python_var": "WORKBENCH_HABIT_PYTHON",
+  "declared_python": "3.8.10",
+  "configured": "/home/heheboiz/data/cir/workbench/envs/airknow-adapted/bin/python",
+  "checkpoint_staged": true,
+  "checkpoint_files": [
+   "HABIT-FIQ_N0.2.pt"
+  ],
+  "checkpoint_bytes": 2730715930,
+  "summary_dirs": [
+   "habit_fiq_n02_e0dd04a46ef7a58334b9e353"
+  ]
+ },
+ {
+  "model": "intent",
+  "adapter": true,
+  "python_var": "WORKBENCH_INTENT_PYTHON",
+  "declared_python": "3.9",
+  "configured": "/home/heheboiz/data/cir/workbench/envs/airknow-adapted/bin/python",
+  "checkpoint_staged": true,
+  "checkpoint_files": [
+   "intent_fiq_0.2.pt"
+  ],
+  "checkpoint_bytes": 2722478522,
+  "summary_dirs": []
+ },
+ {
+  "model": "hint",
+  "adapter": true,
+  "python_var": "WORKBENCH_HINT_PYTHON",
+  "declared_python": "3.8.10",
+  "configured": "/home/heheboiz/data/cir/workbench/envs/airknow-adapted/bin/python",
+  "checkpoint_staged": true,
+  "checkpoint_files": [
+   "fashioniq.pt"
+  ],
+  "checkpoint_bytes": 2724451182,
+  "summary_dirs": []
+ },
+ {
+  "model": "encoder",
+  "adapter": true,
+  "python_var": "WORKBENCH_ENCODER_PYTHON",
+  "declared_python": "3.9",
+  "configured": "/home/heheboiz/data/cir/workbench/envs/pair-adapted/bin/python",
+  "checkpoint_staged": true,
+  "checkpoint_files": [
+   "fashioniq.pt"
+  ],
+  "checkpoint_bytes": 631879365,
+  "summary_dirs": [
+   "encoder_fashioniq_6a528e877c328772e2c7bb28",
+   "encoder_fashioniq_eda30a37c0bc17ac43844f09"
+  ]
+ },
+ {
+  "model": "pair",
+  "adapter": false,
+  "python_var": "WORKBENCH_PAIR_PYTHON",
+  "declared_python": "3.8.10",
+  "configured": null,
+  "checkpoint_staged": false,
+  "checkpoint_files": [],
+  "checkpoint_bytes": 0,
+  "summary_dirs": []
+ },
+ {
+  "model": "clvc_net",
+  "adapter": false,
+  "python_var": "WORKBENCH_CLVC_PYTHON",
+  "declared_python": "3.7.6",
+  "configured": null,
+  "checkpoint_staged": false,
+  "checkpoint_files": [],
+  "checkpoint_bytes": 0,
+  "summary_dirs": []
+ },
+ {
+  "model": "dcnet",
+  "adapter": false,
+  "python_var": "WORKBENCH_DCNET_PYTHON",
+  "declared_python": "3.7.7",
+  "configured": null,
+  "checkpoint_staged": false,
+  "checkpoint_files": [],
+  "checkpoint_bytes": 0,
+  "summary_dirs": []
+ },
+ {
+  "model": "combiner_rn50x4_noft",
+  "adapter": false,
+  "python_var": "WORKBENCH_CLIP4CIR_PYTHON",
+  "declared_python": "3.8",
+  "configured": null,
+  "checkpoint_staged": false,
+  "checkpoint_files": [],
+  "checkpoint_bytes": 0,
+  "summary_dirs": []
+ },
+ {
+  "model": "clip4cir_rn50x4_fullft",
+  "adapter": false,
+  "python_var": "WORKBENCH_CLIP4CIR_PYTHON",
+  "declared_python": "3.8",
+  "configured": null,
+  "checkpoint_staged": false,
+  "checkpoint_files": [],
+  "checkpoint_bytes": 0,
+  "summary_dirs": []
+ },
+ {
+  "model": "tgcir",
+  "adapter": false,
+  "python_var": "WORKBENCH_TGCIR_PYTHON",
+  "declared_python": "UNKNOWN",
+  "configured": null,
+  "checkpoint_staged": false,
+  "checkpoint_files": [],
+  "checkpoint_bytes": 0,
+  "summary_dirs": []
+ },
+ {
+  "model": "sprc",
+  "adapter": false,
+  "python_var": "WORKBENCH_SPRC_PYTHON",
+  "declared_python": "3.9",
+  "configured": null,
+  "checkpoint_staged": false,
+  "checkpoint_files": [],
+  "checkpoint_bytes": 0,
+  "summary_dirs": []
+ },
+ {
+  "model": "limn",
+  "adapter": true,
+  "python_var": "WORKBENCH_LIMN_PYTHON",
+  "declared_python": "UNKNOWN",
+  "configured": "/home/heheboiz/data/cir/workbench/envs/limn-adapted/bin/python",
+  "checkpoint_staged": true,
+  "checkpoint_files": [
+   "0_dress_best_model.pt",
+   "0_shirt_best_model.pt",
+   "0_toptee_best_model.pt"
+  ],
+  "checkpoint_bytes": 5376030471,
+  "summary_dirs": [
+   "limn_base_iter0_all_categories_10173dc45dea8c90fd2a284b",
+   "limn_base_iter0_all_categories_3f86f58483b368377e2c151e"
+  ]
+ },
+ {
+  "model": "tme",
+  "adapter": true,
+  "python_var": "WORKBENCH_TME_PYTHON",
+  "declared_python": "3.10",
+  "configured": "/home/heheboiz/data/cir/workbench/envs/tme-adapted/bin/python",
+  "checkpoint_staged": true,
+  "checkpoint_files": [
+   "fashioniq_0_best_model.pth"
+  ],
+  "checkpoint_bytes": 2728382104,
+  "summary_dirs": [
+   "tme_fashioniq_0_ad477312aa57c1b9114f9e51"
+  ]
+ }
+]

@@ -1,0 +1,18 @@
+rc=0
+usage: run_eval.py [-h] --model
+                   {airknow,clip4cir_rn50x4_fullft,clvc_net,combiner_rn50x4_noft,conesep,csmcir,dcnet,encoder,habit,hint,intent,limn,pair,ptha_mtst,sprc,tgcir,tme}
+                   --checkpoint CHECKPOINT --protocol
+                   {fashioniq_original_split,fashioniq_full_gallery_ref_excluded,fashioniq_val_split}
+                   --dataset-root DATASET_ROOT --output OUTPUT [--top-k TOP_K]
+
+Validate a later GPU evaluation request and print its official command; never
+executes it.
+
+options:
+  -h, --help            show this help message and exit
+  --model {airknow,clip4cir_rn50x4_fullft,clvc_net,combiner_rn50x4_noft,conesep,csmcir,dcnet,encoder,habit,hint,intent,limn,pair,ptha_mtst,sprc,tgcir,tme}
+  --checkpoint CHECKPOINT
+  --protocol {fashioniq_original_split,fashioniq_full_gallery_ref_excluded,fashioniq_val_split}
+  --dataset-root DATASET_ROOT
+  --output OUTPUT
+  --top-k TOP_K

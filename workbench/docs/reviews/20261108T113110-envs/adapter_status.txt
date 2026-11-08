@@ -1,0 +1,18 @@
+STATUS:{
+ "habit": {
+  "ok": true,
+  "detail": null
+ },
+ "intent": {
+  "ok": true,
+  "detail": null
+ },
+ "hint": {
+  "ok": true,
+  "detail": null
+ },
+ "conesep": {
+  "ok": true,
+  "detail": null
+ }
+}

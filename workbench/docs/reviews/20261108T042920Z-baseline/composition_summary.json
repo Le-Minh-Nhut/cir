@@ -1,0 +1,152 @@
+[
+ {
+  "run_id": "10173dc45dea8c90fd2a284b",
+  "model_id": "limn",
+  "checkpoint_id": "base_iter0_all_categories",
+  "protocol_id": "circus_fashioniq_release_v1",
+  "execution_status": "PARTIAL",
+  "query_count": 6003,
+  "gallery_count": 74381,
+  "is_synthetic": false
+ },
+ {
+  "run_id": "10173dc45dea8c90fd2a284b",
+  "model_id": "limn",
+  "checkpoint_id": "base_iter0_all_categories",
+  "protocol_id": "circus_fashioniq_release_v1",
+  "execution_status": "PARTIAL",
+  "query_count": 4069,
+  "gallery_count": 74381,
+  "is_synthetic": false
+ },
+ {
+  "run_id": "10173dc45dea8c90fd2a284b",
+  "model_id": "limn",
+  "checkpoint_id": "base_iter0_all_categories",
+  "protocol_id": "circus_fashioniq_release_v1",
+  "execution_status": "PARTIAL",
+  "query_count": 586,
+  "gallery_count": 74381,
+  "is_synthetic": false
+ },
+ {
+  "run_id": "315dd590eeb03d2c78d7937a",
+  "model_id": "ptha_mtst",
+  "checkpoint_id": "cirr_transfer",
+  "protocol_id": "circus_fashioniq_release_v1",
+  "execution_status": "COMPLETED",
+  "query_count": 6003,
+  "gallery_count": 74381,
+  "is_synthetic": false
+ },
+ {
+  "run_id": "315dd590eeb03d2c78d7937a",
+  "model_id": "ptha_mtst",
+  "checkpoint_id": "cirr_transfer",
+  "protocol_id": "circus_fashioniq_release_v1",
+  "execution_status": "COMPLETED",
+  "query_count": 4069,
+  "gallery_count": 74381,
+  "is_synthetic": false
+ },
+ {
+  "run_id": "315dd590eeb03d2c78d7937a",
+  "model_id": "ptha_mtst",
+  "checkpoint_id": "cirr_transfer",
+  "protocol_id": "circus_fashioniq_release_v1",
+  "execution_status": "COMPLETED",
+  "query_count": 586,
+  "gallery_count": 74381,
+  "is_synthetic": false
+ },
+ {
+  "run_id": "6a528e877c328772e2c7bb28",
+  "model_id": "encoder",
+  "checkpoint_id": "fashioniq",
+  "protocol_id": "circus_fashioniq_release_v1",
+  "execution_status": "COMPLETED",
+  "query_count": 6003,
+  "gallery_count": 74381,
+  "is_synthetic": false
+ },
+ {
+  "run_id": "6a528e877c328772e2c7bb28",
+  "model_id": "encoder",
+  "checkpoint_id": "fashioniq",
+  "protocol_id": "circus_fashioniq_release_v1",
+  "execution_status": "COMPLETED",
+  "query_count": 4069,
+  "gallery_count": 74381,
+  "is_synthetic": false
+ },
+ {
+  "run_id": "6a528e877c328772e2c7bb28",
+  "model_id": "encoder",
+  "checkpoint_id": "fashioniq",
+  "protocol_id": "circus_fashioniq_release_v1",
+  "execution_status": "COMPLETED",
+  "query_count": 586,
+  "gallery_count": 74381,
+  "is_synthetic": false
+ },
+ {
+  "run_id": "ad477312aa57c1b9114f9e51",
+  "model_id": "tme",
+  "checkpoint_id": "fashioniq_0",
+  "protocol_id": "circus_fashioniq_release_v1",
+  "execution_status": "COMPLETED",
+  "query_count": 6003,
+  "gallery_count": 74381,
+  "is_synthetic": false
+ },
+ {
+  "run_id": "ad477312aa57c1b9114f9e51",
+  "model_id": "tme",
+  "checkpoint_id": "fashioniq_0",
+  "protocol_id": "circus_fashioniq_release_v1",
+  "execution_status": "COMPLETED",
+  "query_count": 4069,
+  "gallery_count": 74381,
+  "is_synthetic": false
+ },
+ {
+  "run_id": "ad477312aa57c1b9114f9e51",
+  "model_id": "tme",
+  "checkpoint_id": "fashioniq_0",
+  "protocol_id": "circus_fashioniq_release_v1",
+  "execution_status": "COMPLETED",
+  "query_count": 586,
+  "gallery_count": 74381,
+  "is_synthetic": false
+ },
+ {
+  "run_id": "e0dd04a46ef7a58334b9e353",
+  "model_id": "habit",
+  "checkpoint_id": "fiq_n02",
+  "protocol_id": "circus_fashioniq_release_v1",
+  "execution_status": "FAILED",
+  "query_count": 6003,
+  "gallery_count": 74381,
+  "is_synthetic": false
+ },
+ {
+  "run_id": "e0dd04a46ef7a58334b9e353",
+  "model_id": "habit",
+  "checkpoint_id": "fiq_n02",
+  "protocol_id": "circus_fashioniq_release_v1",
+  "execution_status": "FAILED",
+  "query_count": 4069,
+  "gallery_count": 74381,
+  "is_synthetic": false
+ },
+ {
+  "run_id": "e0dd04a46ef7a58334b9e353",
+  "model_id": "habit",
+  "checkpoint_id": "fiq_n02",
+  "protocol_id": "circus_fashioniq_release_v1",
+  "execution_status": "FAILED",
+  "query_count": 586,
+  "gallery_count": 74381,
+  "is_synthetic": false
+ }
+]

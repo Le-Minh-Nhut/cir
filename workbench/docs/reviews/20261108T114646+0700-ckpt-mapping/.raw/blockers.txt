@@ -1,0 +1,62 @@
+== airknow fiq_n05
+   - execution environment not verified: WORKBENCH_AIRKNOW_PYTHON=None [UNCONFIGURED/UNCONFIGURED] (WORKBENCH_AIRKNOW_PYTHON not set)
+   - checkpoint missing: /home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/airknow/airknow_fiq_0.5.pt
+== airknow fiq_n08
+   - execution environment not verified: WORKBENCH_AIRKNOW_PYTHON=None [UNCONFIGURED/UNCONFIGURED] (WORKBENCH_AIRKNOW_PYTHON not set)
+   - checkpoint missing: /home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/airknow/airknow_fiq_0.8.pt
+== pair pair_b1
+   - command not runnable: COMMAND_BLOCKED_SOURCE_ENTRYPOINT
+   - execution environment not verified: WORKBENCH_PAIR_PYTHON=None [UNCONFIGURED/UNCONFIGURED] (WORKBENCH_PAIR_PYTHON not set)
+   - checkpoint missing: /home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/pair/pair-B1.pt
+   - checkpoint mapping unresolved
+== pair pair_b2
+   - command not runnable: COMMAND_BLOCKED_SOURCE_ENTRYPOINT
+   - execution environment not verified: WORKBENCH_PAIR_PYTHON=None [UNCONFIGURED/UNCONFIGURED] (WORKBENCH_PAIR_PYTHON not set)
+   - checkpoint missing: /home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/pair/pair-B2.pt
+   - checkpoint mapping unresolved
+== clvc_net author_drive_unresolved
+   - command not runnable: COMMAND_BLOCKED_SOURCE_ENTRYPOINT
+   - execution environment not verified: WORKBENCH_CLVC_PYTHON=None [UNCONFIGURED/UNCONFIGURED] (WORKBENCH_CLVC_PYTHON not set)
+   - checkpoint missing: /home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/clvc_net/checkpoint-unresolved.pt
+   - checkpoint mapping unresolved
+== dcnet fashioniq_run_directory
+   - canonical dataset link missing: /home/heheboiz/data/cir/workbench/third_party/DCNet/dataset/fashioniq -> /home/heheboiz/data/cir/data/FashionIQ
+   - execution environment not verified: WORKBENCH_DCNET_PYTHON=None [UNCONFIGURED/UNCONFIGURED] (WORKBENCH_DCNET_PYTHON not set)
+   - checkpoint missing: /home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/dcnet/fashioniq_dcnet
+   - checkpoint mapping unresolved
+== combiner_rn50x4_noft rn50x4_noft_unresolved
+   - FashionIQ image extension requirement: 3817 of 3817 dress validation images lack .jpg in /home/heheboiz/data/cir/data/FashionIQ/images (first: B009PMCJLW.jpg)
+   - FashionIQ image extension requirement: 6346 of 6346 shirt validation images lack .jpg in /home/heheboiz/data/cir/data/FashionIQ/images (first: B000KENMD8.jpg)
+   - FashionIQ image extension requirement: 5373 of 5373 toptee validation images lack .jpg in /home/heheboiz/data/cir/data/FashionIQ/images (first: B008CG1JJ0.jpg)
+   - canonical dataset link resolves to /home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/prepared/clip4cir/fashionIQ_dataset, expected /home/heheboiz/data/cir/data/FashionIQ
+   - execution environment not verified: WORKBENCH_CLIP4CIR_PYTHON=None [UNCONFIGURED/UNCONFIGURED] (WORKBENCH_CLIP4CIR_PYTHON not set)
+   - checkpoint missing: /home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/combiner_rn50x4_noft/rn50x4-noft-unresolved.pt
+   - checkpoint mapping unresolved
+== clip4cir_rn50x4_fullft rn50x4_fullft_unresolved
+   - FashionIQ image extension requirement: 3817 of 3817 dress validation images lack .jpg in /home/heheboiz/data/cir/data/FashionIQ/images (first: B009PMCJLW.jpg)
+   - FashionIQ image extension requirement: 6346 of 6346 shirt validation images lack .jpg in /home/heheboiz/data/cir/data/FashionIQ/images (first: B000KENMD8.jpg)
+   - FashionIQ image extension requirement: 5373 of 5373 toptee validation images lack .jpg in /home/heheboiz/data/cir/data/FashionIQ/images (first: B008CG1JJ0.jpg)
+   - canonical dataset link resolves to /home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/prepared/clip4cir/fashionIQ_dataset, expected /home/heheboiz/data/cir/data/FashionIQ
+   - execution environment not verified: WORKBENCH_CLIP4CIR_PYTHON=None [UNCONFIGURED/UNCONFIGURED] (WORKBENCH_CLIP4CIR_PYTHON not set)
+   - checkpoint missing: /home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/clip4cir_rn50x4_fullft/rn50x4-fullft-unresolved.pt
+   - checkpoint mapping unresolved
+== tgcir tgcir_archive_unresolved
+   - external runtime asset provenance unresolved: OpenAI CLIP ViT-B/16 weights/cache
+   - command not runnable: COMMAND_BLOCKED_SOURCE_ENTRYPOINT
+   - execution environment not verified: WORKBENCH_TGCIR_PYTHON=None [UNCONFIGURED/UNCONFIGURED] (WORKBENCH_TGCIR_PYTHON not set)
+   - checkpoint missing: /home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/tgcir/tgcir-fashioniq-unresolved.pt
+   - checkpoint mapping unresolved
+== sprc sprc_fiq_unresolved
+   - canonical dataset link resolves to /home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/prepared/sprc/fashionIQ_dataset, expected /home/heheboiz/data/cir/data/FashionIQ
+   - external runtime asset provenance unresolved: LAVIS BLIP-2 pretrain weights
+   - command not runnable: COMMAND_BLOCKED_MODEL_MAPPING
+   - execution environment not verified: WORKBENCH_SPRC_PYTHON=None [UNCONFIGURED/UNCONFIGURED] (WORKBENCH_SPRC_PYTHON not set)
+   - checkpoint missing: /home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/sprc/sprc_fiq.pt
+   - checkpoint mapping unresolved
+== sprc sprc_fiq_vitl
+   - canonical dataset link resolves to /home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/prepared/sprc/fashionIQ_dataset, expected /home/heheboiz/data/cir/data/FashionIQ
+   - external runtime asset provenance unresolved: LAVIS BLIP-2 pretrain weights
+   - command not runnable: COMMAND_BLOCKED_MODEL_MAPPING
+   - execution environment not verified: WORKBENCH_SPRC_PYTHON=None [UNCONFIGURED/UNCONFIGURED] (WORKBENCH_SPRC_PYTHON not set)
+   - checkpoint missing: /home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/sprc/sprc_fiq_vitl.pt
+   - checkpoint mapping unresolved

@@ -1,0 +1,88 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+____________ test_scenario_d_cancellation_kills_the_evaluator_tree _____________
+
+master = {'ws': PosixPath('/tmp/pytest-of-heheboiz/pytest-127/test_scenario_d_cancellation_k0/workspace'), 'data': PosixPath('/...ixPath('/tmp/pytest-of-heheboiz/pytest-127/test_scenario_d_cancellation_k0/workspace/third_party/SyntheticModel'), ...}
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x78409fc57350>
+request = <FixtureRequest for <Function test_scenario_d_cancellation_kills_the_evaluator_tree>>
+
+    def test_scenario_d_cancellation_kills_the_evaluator_tree(master, monkeypatch, request):  # noqa: F811
+        """Cancel through the queue while a long evaluator runs: operator and evaluator both die."""
+        sentinel = master["ws"] / "evaluator_completed.txt"
+        # A slow evaluator: the synthetic one honours SYNTHETIC_SLEEP and writes a sentinel if it
+        # survives long enough to finish.
+        evaluator = master["source"] / "src" / "evaluator.py"
+        source_text = evaluator.read_text()
+        assert "SYNTHETIC_SLEEP" not in source_text
+        evaluator.write_text(source_text.replace(
+            'if os.environ.get("SYNTHETIC_FAIL"):',
+            "import time\n"
+            f"sentinel = {str(sentinel)!r}\n"
+            "if os.environ.get('SYNTHETIC_SLEEP'):\n"
+            "    time.sleep(float(os.environ['SYNTHETIC_SLEEP']))\n"
+            "    open(sentinel, 'w').write('finished')\n"
+            'if os.environ.get("SYNTHETIC_FAIL"):'))
+        subprocess.run(["git", "add", "-A"], cwd=master["source"], check=True, capture_output=True)
+        subprocess.run(["git", "-c", "user.email=t@t.invalid", "-c", "user.name=T",
+                        "commit", "-qm", "slow"], cwd=master["source"],
+                       check=True, capture_output=True)
+        head = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=master["source"],
+                                       text=True).strip()
+        registry = json.loads(Path(master["env"]["WORKBENCH_REGISTRY_PATH"]).read_text())
+        registry["models"][0]["upstream_commit_sha"] = head
+        Path(master["env"]["WORKBENCH_REGISTRY_PATH"]).write_text(json.dumps(registry))
+    
+        monkeypatch.setenv("SYNTHETIC_SLEEP", "6")
+        monkeypatch.setenv("WORKBENCH_EVALUATOR_ENV_PASSTHROUGH", "SYNTHETIC_SLEEP")
+        module = _api_module(monkeypatch, master, request)
+        accepted = module.queue_job(_payload())
+        job_id = accepted["job_id"]
+    
+        # Wait until the evaluator itself is running (the operator is up and has spawned it).
+        deadline = time.monotonic() + 60
+        started = False
+        while time.monotonic() < deadline:
+            runs = list((master["ws"] / "workbench" / "artifacts" / "logs").glob("*"))
+            if runs and (runs[0] / "stdout.log").exists():
+                started = True
+                break
+            time.sleep(0.05)
+>       assert started, "the operator never started the evaluator"
+E       AssertionError: the operator never started the evaluator
+E       assert False
+
+workbench/tests/test_phase1_acceptance_scenarios.py:223: AssertionError
+=============================== warnings summary ===============================
+workbench/tests/test_phase1_acceptance_scenarios.py::test_scenario_d_cancellation_kills_the_evaluator_tree
+  /home/heheboiz/data/cir/workbench/backend/main.py:103: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    @app.on_event("startup")
+
+workbench/tests/test_phase1_acceptance_scenarios.py::test_scenario_d_cancellation_kills_the_evaluator_tree
+workbench/tests/test_phase1_acceptance_scenarios.py::test_scenario_d_cancellation_kills_the_evaluator_tree
+  /home/heheboiz/data/cir/workbench/envs/ctl312h/lib/python3.12/site-packages/fastapi/applications.py:4723: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    return self.router.on_event(event_type)  # ty: ignore[deprecated]
+
+workbench/tests/test_phase1_acceptance_scenarios.py::test_scenario_d_cancellation_kills_the_evaluator_tree
+  /home/heheboiz/data/cir/workbench/backend/main.py:110: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    @app.on_event("shutdown")
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED workbench/tests/test_phase1_acceptance_scenarios.py::test_scenario_d_cancellation_kills_the_evaluator_tree - AssertionError: the operator never started the evaluator
+assert False
+1 failed, 4 warnings in 60.38s (0:01:00)

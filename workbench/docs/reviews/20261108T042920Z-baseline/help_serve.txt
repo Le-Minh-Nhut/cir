@@ -1,0 +1,23 @@
+rc=0
+usage: serve_workbench.py [-h] [--backend-only | --frontend-only]
+                          [--config CONFIG] [--host HOST]
+                          [--backend-port BACKEND_PORT]
+                          [--frontend-port FRONTEND_PORT] [--open-browser]
+                          [--production-frontend] [--dry-run]
+
+Launch workbench backend and frontend without installing dependencies.
+
+options:
+  -h, --help            show this help message and exit
+  --backend-only
+  --frontend-only
+  --config CONFIG       autopilot config YAML; its resolved paths override
+                        workbench.env for the served backend, so the web,
+                        autopilot and readiness reports describe the same
+                        artifacts
+  --host HOST
+  --backend-port BACKEND_PORT
+  --frontend-port FRONTEND_PORT
+  --open-browser
+  --production-frontend
+  --dry-run

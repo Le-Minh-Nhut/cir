@@ -1,0 +1,96 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+_____ test_scenario_b_evaluator_failure_is_recorded_and_pointer_unchanged ______
+
+master = {'ws': PosixPath('/tmp/pytest-of-heheboiz/pytest-126/test_scenario_b_evaluator_fail0/workspace'), 'data': PosixPath('/...ixPath('/tmp/pytest-of-heheboiz/pytest-126/test_scenario_b_evaluator_fail0/workspace/third_party/SyntheticModel'), ...}
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x75eb3635f110>
+request = <FixtureRequest for <Function test_scenario_b_evaluator_failure_is_recorded_and_pointer_unchanged>>
+
+    def test_scenario_b_evaluator_failure_is_recorded_and_pointer_unchanged(master, monkeypatch, request):  # noqa: F811
+        """A nonzero evaluator is recorded as failed, audited, and never becomes a success."""
+        module = _api_module(monkeypatch, master, request)
+        artifacts = master["ws"] / "workbench" / "artifacts"
+        reports = artifacts / "reports"
+        reports.mkdir(parents=True, exist_ok=True)
+        pointer = reports / "synthetic_model_ckpt_v1_latest_successful.json"
+    
+        # The synthetic evaluator fails whenever SYNTHETIC_FAIL is set. The evaluator child receives
+        # an allowlist, so a fixture switch must be *declared* for passthrough rather than happening
+        # to leak from the caller's shell.
+        monkeypatch.setenv("SYNTHETIC_FAIL", "1")
+        monkeypatch.setenv("WORKBENCH_EVALUATOR_ENV_PASSTHROUGH", "SYNTHETIC_FAIL")
+        accepted = module.queue_job(_payload())
+        settled = _wait_for(module.JOBS, accepted["job_id"])
+        assert settled["status"] == "failed", settled
+        assert not pointer.exists(), "a failed run must not move latest_successful"
+    
+        entries = [json.loads(line) for line in
+>                  (artifacts / "evidence_ledger.jsonl").read_text().splitlines() if line.strip()]
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+workbench/tests/test_phase1_acceptance_scenarios.py:157: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = PosixPath('/tmp/pytest-of-heheboiz/pytest-126/test_scenario_b_evaluator_fail0/workspace/workbench/artifacts/evidence_ledger.jsonl')
+encoding = 'locale', errors = None
+
+    def read_text(self, encoding=None, errors=None):
+        """
+        Open the file in text mode, read it, and close the file.
+        """
+        encoding = io.text_encoding(encoding)
+>       with self.open(mode='r', encoding=encoding, errors=errors) as f:
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../../.local/share/uv/python/cpython-3.12-linux-x86_64-gnu/lib/python3.12/pathlib.py:1027: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = PosixPath('/tmp/pytest-of-heheboiz/pytest-126/test_scenario_b_evaluator_fail0/workspace/workbench/artifacts/evidence_ledger.jsonl')
+mode = 'r', buffering = -1, encoding = 'locale', errors = None, newline = None
+
+    def open(self, mode='r', buffering=-1, encoding=None,
+             errors=None, newline=None):
+        """
+        Open the file pointed to by this path and return a file object, as
+        the built-in open() function does.
+        """
+        if "b" not in mode:
+            encoding = io.text_encoding(encoding)
+>       return io.open(self, mode, buffering, encoding, errors, newline)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       FileNotFoundError: [Errno 2] No such file or directory: '/tmp/pytest-of-heheboiz/pytest-126/test_scenario_b_evaluator_fail0/workspace/workbench/artifacts/evidence_ledger.jsonl'
+
+../../.local/share/uv/python/cpython-3.12-linux-x86_64-gnu/lib/python3.12/pathlib.py:1013: FileNotFoundError
+=============================== warnings summary ===============================
+workbench/tests/test_phase1_acceptance_scenarios.py::test_scenario_b_evaluator_failure_is_recorded_and_pointer_unchanged
+  /home/heheboiz/data/cir/workbench/backend/main.py:103: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    @app.on_event("startup")
+
+workbench/tests/test_phase1_acceptance_scenarios.py::test_scenario_b_evaluator_failure_is_recorded_and_pointer_unchanged
+workbench/tests/test_phase1_acceptance_scenarios.py::test_scenario_b_evaluator_failure_is_recorded_and_pointer_unchanged
+  /home/heheboiz/data/cir/workbench/envs/ctl312h/lib/python3.12/site-packages/fastapi/applications.py:4723: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    return self.router.on_event(event_type)  # ty: ignore[deprecated]
+
+workbench/tests/test_phase1_acceptance_scenarios.py::test_scenario_b_evaluator_failure_is_recorded_and_pointer_unchanged
+  /home/heheboiz/data/cir/workbench/backend/main.py:110: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    @app.on_event("shutdown")
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED workbench/tests/test_phase1_acceptance_scenarios.py::test_scenario_b_evaluator_failure_is_recorded_and_pointer_unchanged - FileNotFoundError: [Errno 2] No such file or directory: '/tmp/pytest-of-heheboiz/pytest-126/test_scenario_b_evaluator_fail0/workspace/workbench/artifacts/evidence_ledger.jsonl'
+1 failed, 4 warnings in 0.55s

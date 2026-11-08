@@ -1,0 +1,11 @@
+{
+ "path": "workbench/artifacts/checkpoint_selection/20261106T002617+0700/checkpoints/dcnet/trained_model.pth",
+ "size_bytes": 2877310172,
+ "container": "legacy-bare-pickle",
+ "pickle_stream_bytes": 2877310172,
+ "distinct_globals": 0,
+ "globals": [],
+ "global_occurrences": 0,
+ "modules": {},
+ "first_globals_in_order": []
+}

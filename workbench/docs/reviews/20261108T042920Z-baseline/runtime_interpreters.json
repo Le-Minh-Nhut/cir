@@ -1,0 +1,47 @@
+[
+ {
+  "model": "limn",
+  "path": "/home/heheboiz/data/cir/workbench/envs/limn-adapted/bin/python",
+  "source": "process_environment",
+  "status": "DEPENDENCY_VERSION_MISMATCH",
+  "verified": false,
+  "version": "Python 3.11.15; torch 2.7.1+cu128",
+  "reason": "torch: expected ==1.12.1, found 2.7.1+cu128"
+ },
+ {
+  "model": "ptha_mtst",
+  "path": "/home/heheboiz/data/cir/workbench/artifacts/environments/cir-005ef4e1b02999a5/bin/python",
+  "source": "process_environment",
+  "status": "RUNTIME_READY",
+  "verified": true,
+  "version": "Python 3.10.22; torch 2.7.1+cu128",
+  "reason": null
+ },
+ {
+  "model": "encoder",
+  "path": "/home/heheboiz/data/cir/workbench/envs/pair-adapted/bin/python",
+  "source": "process_environment",
+  "status": "PYTHON_VERSION_MISMATCH",
+  "verified": false,
+  "version": "Python 3.11.15; torch 2.7.1+cu128",
+  "reason": "expected Python 3.9, found 3.11.15"
+ },
+ {
+  "model": "tme",
+  "path": "/home/heheboiz/data/cir/workbench/envs/tme-adapted/bin/python",
+  "source": "process_environment",
+  "status": "GPU_RUNTIME_READY",
+  "verified": true,
+  "version": "Python 3.10.22; torch 2.7.1+cu128",
+  "reason": null
+ },
+ {
+  "model": "habit",
+  "path": "/home/heheboiz/data/cir/workbench/envs/airknow-adapted/bin/python",
+  "source": "process_environment",
+  "status": "PYTHON_VERSION_MISMATCH",
+  "verified": false,
+  "version": "Python 3.11.15; torch 2.7.1+cu128",
+  "reason": "expected Python 3.8.10, found 3.11.15"
+ }
+]

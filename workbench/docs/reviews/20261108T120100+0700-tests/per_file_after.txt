@@ -1,0 +1,9 @@
+test_circus_adapters_blip|18 passed in 0.44s
+test_circus_adapters_rest|12 passed in 0.22s
+test_handoff_commands|1 failed, 7 passed in 8.65s
+test_http_api_layer|45 passed, 176 warnings in 5.69s
+test_pc_launcher|101 passed, 6 warnings in 137.26s (0:02:17)
+test_phase1_acceptance_scenarios|8 passed, 20 warnings in 23.94s
+test_release_blocker_source_integrity|18 passed in 1.42s
+test_release_blocker_master_e2e|16 passed in 68.06s (0:01:08)
+test_true_master_e2e|3 passed in 19.85s

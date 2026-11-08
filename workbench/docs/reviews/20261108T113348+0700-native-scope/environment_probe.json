@@ -1,0 +1,62 @@
+{
+ "airknow": {
+  "var": "WORKBENCH_AIRKNOW_PYTHON",
+  "interp": "/home/heheboiz/data/cir/workbench/envs/airknow-adapted/bin/python",
+  "tier": "BLOCKED",
+  "status": "PYTHON_VERSION_MISMATCH",
+  "reason": "expected Python 3.8.10, found 3.11.15",
+  "python": "3.11.15",
+  "declared_python": "3.8.10",
+  "missing_deps": []
+ },
+ "pair": {
+  "var": "WORKBENCH_PAIR_PYTHON",
+  "interp": "/home/heheboiz/data/cir/workbench/envs/pair-adapted/bin/python",
+  "tier": "BLOCKED",
+  "status": "PYTHON_VERSION_MISMATCH",
+  "reason": "expected Python 3.8.10, found 3.11.15",
+  "python": "3.11.15",
+  "declared_python": "3.8.10",
+  "missing_deps": []
+ },
+ "combiner_rn50x4_noft": {
+  "var": "WORKBENCH_CLIP4CIR_PYTHON",
+  "interp": "/home/heheboiz/data/cir/workbench/envs/clip4cir-adapted/bin/python",
+  "tier": "BLOCKED",
+  "status": "PYTHON_VERSION_MISMATCH",
+  "reason": "expected Python 3.8, found 3.11.15",
+  "python": "3.11.15",
+  "declared_python": "3.8",
+  "missing_deps": []
+ },
+ "clip4cir_rn50x4_fullft": {
+  "var": "WORKBENCH_CLIP4CIR_PYTHON",
+  "interp": "/home/heheboiz/data/cir/workbench/envs/clip4cir-adapted/bin/python",
+  "tier": "BLOCKED",
+  "status": "PYTHON_VERSION_MISMATCH",
+  "reason": "expected Python 3.8, found 3.11.15",
+  "python": "3.11.15",
+  "declared_python": "3.8",
+  "missing_deps": []
+ },
+ "sprc": {
+  "var": "WORKBENCH_SPRC_PYTHON",
+  "interp": "/home/heheboiz/data/cir/workbench/envs/sprc-adapted/bin/python",
+  "tier": "BLOCKED",
+  "status": "PYTHON_VERSION_MISMATCH",
+  "reason": "expected Python 3.9, found 3.11.15",
+  "python": "3.11.15",
+  "declared_python": "3.9",
+  "missing_deps": []
+ },
+ "dcnet": {
+  "var": "WORKBENCH_DCNET_PYTHON",
+  "interp": "/home/heheboiz/data/cir/workbench/envs/dcnet-prepare/bin/python",
+  "tier": "BLOCKED",
+  "status": "PYTHON_VERSION_MISMATCH",
+  "reason": "expected Python 3.7.7, found 3.7.12",
+  "python": "3.7.12",
+  "declared_python": "3.7.7",
+  "missing_deps": []
+ }
+}

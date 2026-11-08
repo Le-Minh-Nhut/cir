@@ -1,0 +1,261 @@
+ M workbench/backend/composition.py
+ M workbench/backend/main.py
+ M workbench/backend/runtime.py
+ M workbench/composition/adapters.py
+ M workbench/composition/model_conesep.py
+ M workbench/composition/model_csmcir.py
+ M workbench/composition/model_encoder.py
+ M workbench/composition/model_habit.py
+ M workbench/composition/model_hint.py
+ M workbench/composition/model_intent.py
+ M workbench/composition/model_limn.py
+ M workbench/composition/model_ptha_mtst.py
+ M workbench/composition/model_tme.py
+ M workbench/frontend/App.tsx
+ D workbench/frontend/BenchmarkView.tsx
+ D workbench/frontend/CompositionView.tsx
+ D workbench/frontend/components.tsx
+ M workbench/frontend/gate.ts
+ D workbench/frontend/protocols.ts
+ D workbench/frontend/staleness.ts
+ M workbench/frontend/style.css
+ M workbench/frontend/types.ts
+ M workbench/scripts/composition_eval.py
+ M workbench/tests/test_circus_adapters_blip.py
+ M workbench/tests/test_frontend_staleness.py
+ M workbench/tests/test_pc_launcher.py
+ M workbench/tests/test_phase1_acceptance_scenarios.py
+ M workbench/tests/test_release_blocker_master_e2e.py
+ M workbench/tests/test_true_master_e2e.py
+?? workbench/composition/topk.py
+?? workbench/docs/reviews/20261108T042920Z-baseline/BASELINE.md
+?? workbench/docs/reviews/20261108T042920Z-baseline/api_analysis.json
+?? workbench/docs/reviews/20261108T042920Z-baseline/api_benchmark_runs.json
+?? workbench/docs/reviews/20261108T042920Z-baseline/api_codes.txt
+?? workbench/docs/reviews/20261108T042920Z-baseline/api_cohorts.json
+?? workbench/docs/reviews/20261108T042920Z-baseline/api_composition_runs.json
+?? workbench/docs/reviews/20261108T042920Z-baseline/api_models.json
+?? workbench/docs/reviews/20261108T042920Z-baseline/api_raw.txt
+?? workbench/docs/reviews/20261108T042920Z-baseline/api_runs.json
+?? workbench/docs/reviews/20261108T042920Z-baseline/benchmark_summary.json
+?? workbench/docs/reviews/20261108T042920Z-baseline/composition_summary.json
+?? workbench/docs/reviews/20261108T042920Z-baseline/config_redacted.txt
+?? workbench/docs/reviews/20261108T042920Z-baseline/data1.txt
+?? workbench/docs/reviews/20261108T042920Z-baseline/disk_gpu.txt
+?? workbench/docs/reviews/20261108T042920Z-baseline/frontend.txt
+?? workbench/docs/reviews/20261108T042920Z-baseline/frontend2.txt
+?? workbench/docs/reviews/20261108T042920Z-baseline/frontend_raw.txt
+?? workbench/docs/reviews/20261108T042920Z-baseline/git.txt
+?? workbench/docs/reviews/20261108T042920Z-baseline/git_info.json
+?? workbench/docs/reviews/20261108T042920Z-baseline/help_composition_eval.py.txt
+?? workbench/docs/reviews/20261108T042920Z-baseline/help_evaluate_models.py.txt
+?? workbench/docs/reviews/20261108T042920Z-baseline/help_pipeline.py.txt
+?? workbench/docs/reviews/20261108T042920Z-baseline/help_run_eval.py.txt
+?? workbench/docs/reviews/20261108T042920Z-baseline/help_serve.txt
+?? workbench/docs/reviews/20261108T042920Z-baseline/interpreters.json
+?? workbench/docs/reviews/20261108T042920Z-baseline/live_env.txt
+?? workbench/docs/reviews/20261108T042920Z-baseline/model_matrix.json
+?? workbench/docs/reviews/20261108T042920Z-baseline/model_python.json
+?? workbench/docs/reviews/20261108T042920Z-baseline/models_head.txt
+?? workbench/docs/reviews/20261108T042920Z-baseline/print_roots.txt
+?? workbench/docs/reviews/20261108T042920Z-baseline/runtime_interpreters.json
+?? workbench/docs/reviews/20261108T042920Z-baseline/service_ps.txt
+?? workbench/docs/reviews/20261108T042920Z-baseline/service_raw.txt
+?? workbench/docs/reviews/20261108T042920Z-baseline/snap_a_benchmark.json
+?? workbench/docs/reviews/20261108T042920Z-baseline/snap_a_composition.json
+?? workbench/docs/reviews/20261108T042920Z-baseline/snap_a_runs.json
+?? workbench/docs/reviews/20261108T042920Z-baseline/snap_b_benchmark.json
+?? workbench/docs/reviews/20261108T042920Z-baseline/snap_b_composition.json
+?? workbench/docs/reviews/20261108T042920Z-baseline/snap_b_runs.json
+?? workbench/docs/reviews/20261108T042931Z/UI_ACCEPTANCE.vi.md
+?? workbench/docs/reviews/20261108T042931Z/capture-log.txt
+?? workbench/docs/reviews/20261108T042931Z/frontend-before-after.md
+?? workbench/docs/reviews/20261108T042931Z/shots/after-evaluation-1440x900.png
+?? workbench/docs/reviews/20261108T042931Z/shots/after-evaluation-1920x1080.png
+?? workbench/docs/reviews/20261108T042931Z/shots/after-evaluation-390x844.png
+?? workbench/docs/reviews/20261108T042931Z/shots/after-experiments-1440x900.png
+?? workbench/docs/reviews/20261108T042931Z/shots/after-experiments-1920x1080.png
+?? workbench/docs/reviews/20261108T042931Z/shots/after-experiments-390x844.png
+?? workbench/docs/reviews/20261108T042931Z/shots/after-failures-1440x900.png
+?? workbench/docs/reviews/20261108T042931Z/shots/after-failures-1920x1080.png
+?? workbench/docs/reviews/20261108T042931Z/shots/after-failures-390x844.png
+?? workbench/docs/reviews/20261108T042931Z/shots/after-inspector-1440x900.png
+?? workbench/docs/reviews/20261108T042931Z/shots/after-inspector-1920x1080.png
+?? workbench/docs/reviews/20261108T042931Z/shots/after-inspector-390x844.png
+?? workbench/docs/reviews/20261108T042931Z/shots/after-notebook-1440x900.png
+?? workbench/docs/reviews/20261108T042931Z/shots/after-notebook-1920x1080.png
+?? workbench/docs/reviews/20261108T042931Z/shots/after-notebook-390x844.png
+?? workbench/docs/reviews/20261108T042931Z/shots/after-overview-1440x900.png
+?? workbench/docs/reviews/20261108T042931Z/shots/after-overview-1920x1080.png
+?? workbench/docs/reviews/20261108T042931Z/shots/after-overview-390x844.png
+?? workbench/docs/reviews/20261108T042931Z/shots/before-composition-1440x900.png
+?? workbench/docs/reviews/20261108T042931Z/shots/before-composition-1920x1080.png
+?? workbench/docs/reviews/20261108T042931Z/shots/before-composition-390x844.png
+?? workbench/docs/reviews/20261108T042931Z/shots/before-dashboard-1440x900.png
+?? workbench/docs/reviews/20261108T042931Z/shots/before-dashboard-1920x1080.png
+?? workbench/docs/reviews/20261108T042931Z/shots/before-dashboard-390x844.png
+?? workbench/docs/reviews/20261108T042931Z/shots/before-evaluation_runs-1440x900.png
+?? workbench/docs/reviews/20261108T042931Z/shots/before-evaluation_runs-1920x1080.png
+?? workbench/docs/reviews/20261108T042931Z/shots/before-evaluation_runs-390x844.png
+?? workbench/docs/reviews/20261108T042931Z/shots/before-inspector-1440x900.png
+?? workbench/docs/reviews/20261108T042931Z/shots/before-inspector-1920x1080.png
+?? workbench/docs/reviews/20261108T042931Z/shots/before-inspector-390x844.png
+?? workbench/docs/reviews/20261108T042931Z/shots/before-sample_explorer-1440x900.png
+?? workbench/docs/reviews/20261108T042931Z/shots/before-sample_explorer-1920x1080.png
+?? workbench/docs/reviews/20261108T042931Z/shots/before-sample_explorer-390x844.png
+?? workbench/docs/reviews/20261108T113110-envs/ENVS.vi.md
+?? workbench/docs/reviews/20261108T113110-envs/adapter_status.txt
+?? workbench/docs/reviews/20261108T113110-envs/checkpoint_check.txt
+?? workbench/docs/reviews/20261108T113110-envs/env_map.json
+?? workbench/docs/reviews/20261108T113110-envs/freeze.txt
+?? workbench/docs/reviews/20261108T113110-envs/gpu_ops_smoke.txt
+?? workbench/docs/reviews/20261108T113110-envs/gpu_smoke.txt
+?? workbench/docs/reviews/20261108T113110-envs/import_chain_39.txt
+?? workbench/docs/reviews/20261108T113110-envs/iso_probe.txt
+?? workbench/docs/reviews/20261108T113110-envs/module_origins.txt
+?? workbench/docs/reviews/20261108T113110-envs/reachable_modules.txt
+?? workbench/docs/reviews/20261108T113110-envs/unpickle.txt
+?? workbench/docs/reviews/20261108T113110-envs/verify_airknow_baseline.txt
+?? workbench/docs/reviews/20261108T113110-envs/verify_deps.txt
+?? workbench/docs/reviews/20261108T113110-envs/verify_environment.txt
+?? workbench/docs/reviews/20261108T113110-envs/verify_no_adaptation.txt
+?? workbench/docs/reviews/20261108T113110-envs/verify_packages.txt
+?? workbench/docs/reviews/20261108T113110-envs/worker_job_habit.txt
+?? workbench/docs/reviews/20261108T113110-envs/worker_module.txt
+?? workbench/docs/reviews/20261108T113348+0700-native-scope/NATIVE_SCOPE.md
+?? workbench/docs/reviews/20261108T113348+0700-native-scope/blockers_configured_root.json
+?? workbench/docs/reviews/20261108T113348+0700-native-scope/checkpoint_selection_policy.json
+?? workbench/docs/reviews/20261108T113348+0700-native-scope/checkpoint_sha256.tsv
+?? workbench/docs/reviews/20261108T113348+0700-native-scope/environment_probe.json
+?? workbench/docs/reviews/20261108T113348+0700-native-scope/layout_requirements.json
+?? workbench/docs/reviews/20261108T113348+0700-native-scope/plan_blockers.txt
+?? workbench/docs/reviews/20261108T113348+0700-native-scope/source_provenance.json
+?? workbench/docs/reviews/20261108T113610-eval/BLOCKERS.vi.md
+?? workbench/docs/reviews/20261108T113610-eval/ENVIRONMENTS.vi.md
+?? workbench/docs/reviews/20261108T113610-eval/MODEL_INVENTORY.md
+?? workbench/docs/reviews/20261108T113610-eval/MODEL_RUN_MATRIX.md
+?? workbench/docs/reviews/20261108T113610-eval/RUNS.vi.md
+?? workbench/docs/reviews/20261108T113610-eval/circus_cohort.yaml
+?? workbench/docs/reviews/20261108T114545+0700-limn/CLASSIFICATION_119.md
+?? workbench/docs/reviews/20261108T114545+0700-limn/LIMN_UNSCORED.vi.md
+?? workbench/docs/reviews/20261108T114545+0700-limn/RUNNER_REQUESTS.md
+?? workbench/docs/reviews/20261108T114545+0700-limn/classification_119.json
+?? workbench/docs/reviews/20261108T114646+0700-ckpt-mapping/.raw/classes_checkpoints_clip4cir_FashionIQ_RN50x4_fullft_fiq_clip_RN50x4_fullft.pt.json
+?? workbench/docs/reviews/20261108T114646+0700-ckpt-mapping/.raw/classes_checkpoints_clvc_dress_global_model.pt.json
+?? workbench/docs/reviews/20261108T114646+0700-ckpt-mapping/.raw/classes_checkpoints_clvc_dress_local_model.pt.json
+?? workbench/docs/reviews/20261108T114646+0700-ckpt-mapping/.raw/classes_checkpoints_dcnet_trained_model.pth.json
+?? workbench/docs/reviews/20261108T114646+0700-ckpt-mapping/.raw/classes_checkpoints_pair_pair-B1.pt.json
+?? workbench/docs/reviews/20261108T114646+0700-ckpt-mapping/.raw/classes_checkpoints_pair_pair-B2.pt.json
+?? workbench/docs/reviews/20261108T114646+0700-ckpt-mapping/.raw/classes_checkpoints_sprc_sprc_fiq_vitl.pt.json
+?? workbench/docs/reviews/20261108T114646+0700-ckpt-mapping/.raw/classes_downloads_tgcir_x_checkpoints_Fashioniq.pt.json
+?? workbench/docs/reviews/20261108T114646+0700-ckpt-mapping/.raw/clip4cir_load_proof.json
+?? workbench/docs/reviews/20261108T114646+0700-ckpt-mapping/.raw/clvc_vocab_probe.json
+?? workbench/docs/reviews/20261108T114646+0700-ckpt-mapping/.raw/clvc_vocab_probe.py
+?? workbench/docs/reviews/20261108T114646+0700-ckpt-mapping/.raw/dcnet_embedded_config.json
+?? workbench/docs/reviews/20261108T114646+0700-ckpt-mapping/.raw/dcnet_load_proof.json
+?? workbench/docs/reviews/20261108T114646+0700-ckpt-mapping/.raw/fingerprint.py
+?? workbench/docs/reviews/20261108T114646+0700-ckpt-mapping/.raw/fingerprint2.py
+?? workbench/docs/reviews/20261108T114646+0700-ckpt-mapping/.raw/fp2_clip_fullft.json
+?? workbench/docs/reviews/20261108T114646+0700-ckpt-mapping/.raw/fp2_clvc_dress_global.json
+?? workbench/docs/reviews/20261108T114646+0700-ckpt-mapping/.raw/fp2_clvc_dress_local.json
+?? workbench/docs/reviews/20261108T114646+0700-ckpt-mapping/.raw/fp2_clvc_shirt_global.json
+?? workbench/docs/reviews/20261108T114646+0700-ckpt-mapping/.raw/fp2_clvc_shirt_local.json
+?? workbench/docs/reviews/20261108T114646+0700-ckpt-mapping/.raw/fp2_clvc_toptee_global.json
+?? workbench/docs/reviews/20261108T114646+0700-ckpt-mapping/.raw/fp2_clvc_toptee_local.json
+?? workbench/docs/reviews/20261108T114646+0700-ckpt-mapping/.raw/fp2_comb_fullft.json
+?? workbench/docs/reviews/20261108T114646+0700-ckpt-mapping/.raw/fp2_comb_noft.json
+?? workbench/docs/reviews/20261108T114646+0700-ckpt-mapping/.raw/fp2_dcnet.json
+?? workbench/docs/reviews/20261108T114646+0700-ckpt-mapping/.raw/fp2_pair_B1.json
+?? workbench/docs/reviews/20261108T114646+0700-ckpt-mapping/.raw/fp2_sprc_vitl.json
+?? workbench/docs/reviews/20261108T114646+0700-ckpt-mapping/.raw/fp2_tgcir.json
+?? workbench/docs/reviews/20261108T114646+0700-ckpt-mapping/.raw/fp_checkpoints_clip4cir_FashionIQ_RN50x4_noft_fiq_comb_RN50x4_noft.pt.json
+?? workbench/docs/reviews/20261108T114646+0700-ckpt-mapping/.raw/fp_checkpoints_pair_pair-B1.pt.json
+?? workbench/docs/reviews/20261108T114646+0700-ckpt-mapping/.raw/pickle_classes.py
+?? workbench/docs/reviews/20261108T114646+0700-ckpt-mapping/.raw/pickle_globals.py
+?? workbench/docs/reviews/20261108T114646+0700-ckpt-mapping/.raw/sha256_all.txt
+?? workbench/docs/reviews/20261108T114646+0700-ckpt-mapping/.raw/sha256_flat.tsv
+?? workbench/docs/reviews/20261108T114646+0700-ckpt-mapping/.raw/tgcir_load_proof.json
+?? workbench/docs/reviews/20261108T115509+0700-backend/BACKEND_CHANGES.vi.md
+?? workbench/docs/reviews/20261108T115509+0700-backend/evidence/artifacts/composition/runs/released_audit_task7_mm_any/candidates/released_audit_task7_mm_any/image_only_empty_text.jsonl
+?? workbench/docs/reviews/20261108T115509+0700-backend/evidence/artifacts/composition/runs/released_audit_task7_mm_any/candidates/released_audit_task7_mm_any/image_only_empty_text.manifest.json
+?? workbench/docs/reviews/20261108T115509+0700-backend/evidence/artifacts/composition/runs/released_audit_task7_mm_any/candidates/released_audit_task7_mm_any/multimodal.jsonl
+?? workbench/docs/reviews/20261108T115509+0700-backend/evidence/artifacts/composition/runs/released_audit_task7_mm_any/candidates/released_audit_task7_mm_any/multimodal.manifest.json
+?? workbench/docs/reviews/20261108T115509+0700-backend/evidence/artifacts/composition/runs/released_audit_task7_mm_any/candidates/released_audit_task7_mm_any/text_only_black_image.jsonl
+?? workbench/docs/reviews/20261108T115509+0700-backend/evidence/artifacts/composition/runs/released_audit_task7_mm_any/candidates/released_audit_task7_mm_any/text_only_black_image.manifest.json
+?? workbench/docs/reviews/20261108T115509+0700-backend/evidence/artifacts/composition/runs/released_audit_task7_mm_any/ranks/released_audit_task7_mm_any.json
+?? workbench/docs/reviews/20261108T115509+0700-backend/evidence/artifacts/composition/summary/released_audit_task7_mm_any_released_audit_task7_mm_any/full.json
+?? workbench/docs/reviews/20261108T115509+0700-backend/evidence/artifacts/composition/summary/released_audit_task7_mm_any_released_audit_task7_mm_any/sf.json
+?? workbench/docs/reviews/20261108T115509+0700-backend/evidence/artifacts/composition/summary/released_audit_task7_mm_any_released_audit_task7_mm_any/validated.json
+?? workbench/docs/reviews/20261108T115509+0700-backend/evidence/artifacts/workbench.duckdb
+?? workbench/docs/reviews/20261108T115509+0700-backend/evidence/curl/01-runs-default.json
+?? workbench/docs/reviews/20261108T115509+0700-backend/evidence/curl/02-runs-imported.json
+?? workbench/docs/reviews/20261108T115509+0700-backend/evidence/curl/03-capabilities.json
+?? workbench/docs/reviews/20261108T115509+0700-backend/evidence/curl/04-candidates.json
+?? workbench/docs/reviews/20261108T115509+0700-backend/evidence/curl/05-queries-with-candidates.json
+?? workbench/docs/reviews/20261108T115509+0700-backend/evidence/curl/06-evidence-summary.json
+?? workbench/docs/reviews/20261108T115509+0700-backend/evidence/curl/07-live-caps.json
+?? workbench/docs/reviews/20261108T115509+0700-backend/evidence/curl/08-live-limn-detail.json
+?? workbench/docs/reviews/20261108T115509+0700-backend/evidence/curl/09-live-unscored-filter.json
+?? workbench/docs/reviews/20261108T115509+0700-backend/evidence/curl/10-live-ptha-transfer.json
+?? workbench/docs/reviews/20261108T115509+0700-backend/evidence/curl/SUMMARY.txt
+?? workbench/docs/reviews/20261108T115509+0700-backend/evidence/import-released-audit.json
+?? workbench/docs/reviews/20261108T115509+0700-backend/evidence/test-targeted.txt
+?? workbench/docs/reviews/20261108T115856-qa/before-composition-table-1440x900.png
+?? workbench/docs/reviews/20261108T115856-qa/before-dashboard-1440x900.png
+?? workbench/docs/reviews/20261108T115856-qa/before-evaluation-runs-1440x900.png
+?? workbench/docs/reviews/20261108T115856-qa/before-query-inspector-1440x900.png
+?? workbench/docs/reviews/20261108T115856-qa/screens/a-1440x900-failure-analytics.png
+?? workbench/docs/reviews/20261108T115856-qa/screens/a-1440x900-overview.png
+?? workbench/docs/reviews/20261108T115856-qa/screens/b-1440x900-final.png
+?? workbench/docs/reviews/20261108T115856-qa/screens/c-1440x900-after-retry.png
+?? workbench/docs/reviews/20261108T115856-qa/screens/c-1440x900-aggregate-only.png
+?? workbench/docs/reviews/20261108T115856-qa/screens/c-1440x900-blocked-model.png
+?? workbench/docs/reviews/20261108T115856-qa/screens/c-1440x900-empty-filter.png
+?? workbench/docs/reviews/20261108T115856-qa/screens/c-1440x900-error-state.png
+?? workbench/docs/reviews/20261108T115856-qa/screens/c-1440x900-failed-run.png
+?? workbench/docs/reviews/20261108T115856-qa/screens/c-1440x900-no-query.png
+?? workbench/docs/reviews/20261108T115856-qa/screens/c-1440x900-partial-coverage.png
+?? workbench/docs/reviews/20261108T115856-qa/screens/c-1440x900-rank-only.png
+?? workbench/docs/reviews/20261108T115856-qa/screens/d-1440x900-deep-link-notebook.png
+?? workbench/docs/reviews/20261108T115856-qa/screens/d-1440x900-invalid-area.png
+?? workbench/docs/reviews/20261108T115856-qa/screens/d-1440x900-invalid-subset.png
+?? workbench/docs/reviews/20261108T115856-qa/screens/d-1440x900-invalid-view.png
+?? workbench/docs/reviews/20261108T115856-qa/testid-requests.md
+?? workbench/docs/reviews/20261108T120100+0700-tests/tree_state_before_sweep.txt
+?? workbench/docs/reviews/backend-gpu-requests.md
+?? workbench/docs/reviews/eval-runner-requests.md
+?? workbench/docs/reviews/frontend-backend-requests.md
+?? workbench/frontend/EvaluationPage.tsx
+?? workbench/frontend/ExperimentsPage.tsx
+?? workbench/frontend/FailuresPage.tsx
+?? workbench/frontend/NotebookPage.tsx
+?? workbench/frontend/OverviewPage.tsx
+?? workbench/frontend/QueryInspector.tsx
+?? workbench/frontend/SamplesPage.tsx
+?? workbench/frontend/analysis.ts
+?? workbench/frontend/catalog.ts
+?? workbench/frontend/data.ts
+?? workbench/frontend/format.ts
+?? workbench/frontend/inspector.ts
+?? workbench/frontend/requests.ts
+?? workbench/frontend/routes.ts
+?? workbench/frontend/ui.tsx
+?? workbench/frontend/useRegion.ts
+?? workbench/scripts/browser_qa/dump_report.py
+?? workbench/scripts/browser_qa/harness.py
+?? workbench/scripts/browser_qa/run_flows.py
+?? workbench/scripts/import_released_audit_candidates.py
+?? workbench/tests/conftest.py
+?? workbench/tests/test_capability_composition.py
+?? workbench/tests/test_circus_env_gate_omp.py
+?? workbench/tests/test_composition_topk_api.py
+?? workbench/tests/test_composition_topk_export.py
+?? workbench/tests/test_composition_topk_provenance.py
+?? workbench/tests/test_composition_topk_rank_agreement.py
+?? workbench/tests/test_frontend_analysis.py
+?? workbench/tests/test_frontend_catalog.py
+?? workbench/tests/test_frontend_format.py
+?? workbench/tests/test_frontend_requests.py
+?? workbench/tests/test_frontend_routes.py
+?? workbench/tests/test_frontend_support.py
+?? workbench/tests/test_limn_scope_routing.py

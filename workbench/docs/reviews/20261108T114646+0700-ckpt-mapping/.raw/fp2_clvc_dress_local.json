@@ -1,0 +1,3851 @@
+{
+ "path": "workbench/artifacts/checkpoint_selection/20261106T002617+0700/checkpoints/clvc/dress_local_model.pt",
+ "sys_modules_from_stubs": {},
+ "resolved_module_origins": {},
+ "root_class": "model.compose_local",
+ "module_tree": [
+  {
+   "path": "<root>",
+   "class": "model.compose_local"
+  },
+  {
+   "path": "text_model",
+   "class": "text_model.TextLSTMModel"
+  },
+  {
+   "path": "text_model.embedding_layer",
+   "class": "torch.nn.modules.sparse.Embedding"
+  },
+  {
+   "path": "text_model.lstm",
+   "class": "torch.nn.modules.rnn.LSTM"
+  },
+  {
+   "path": "img_model",
+   "class": "model.img_backbone"
+  },
+  {
+   "path": "img_model.img_model",
+   "class": "resnet.ResNet"
+  },
+  {
+   "path": "img_model.img_model.conv1",
+   "class": "torch.nn.modules.conv.Conv2d"
+  },
+  {
+   "path": "img_model.img_model.bn1",
+   "class": "torch.nn.modules.batchnorm.BatchNorm2d"
+  },
+  {
+   "path": "img_model.img_model.relu",
+   "class": "torch.nn.modules.activation.ReLU"
+  },
+  {
+   "path": "img_model.img_model.maxpool",
+   "class": "torch.nn.modules.pooling.MaxPool2d"
+  },
+  {
+   "path": "img_model.img_model.layer1",
+   "class": "torch.nn.modules.container.Sequential"
+  },
+  {
+   "path": "img_model.img_model.layer1.0",
+   "class": "resnet.Bottleneck"
+  },
+  {
+   "path": "img_model.img_model.layer1.0.conv1",
+   "class": "torch.nn.modules.conv.Conv2d"
+  },
+  {
+   "path": "img_model.img_model.layer1.0.bn1",
+   "class": "torch.nn.modules.batchnorm.BatchNorm2d"
+  },
+  {
+   "path": "img_model.img_model.layer1.0.conv2",
+   "class": "torch.nn.modules.conv.Conv2d"
+  },
+  {
+   "path": "img_model.img_model.layer1.0.bn2",
+   "class": "torch.nn.modules.batchnorm.BatchNorm2d"
+  },
+  {
+   "path": "img_model.img_model.layer1.0.conv3",
+   "class": "torch.nn.modules.conv.Conv2d"
+  },
+  {
+   "path": "img_model.img_model.layer1.0.bn3",
+   "class": "torch.nn.modules.batchnorm.BatchNorm2d"
+  },
+  {
+   "path": "img_model.img_model.layer1.0.relu",
+   "class": "torch.nn.modules.activation.ReLU"
+  },
+  {
+   "path": "img_model.img_model.layer1.0.downsample",
+   "class": "torch.nn.modules.container.Sequential"
+  },
+  {
+   "path": "img_model.img_model.layer1.0.downsample.0",
+   "class": "torch.nn.modules.conv.Conv2d"
+  },
+  {
+   "path": "img_model.img_model.layer1.0.downsample.1",
+   "class": "torch.nn.modules.batchnorm.BatchNorm2d"
+  },
+  {
+   "path": "img_model.img_model.layer1.1",
+   "class": "resnet.Bottleneck"
+  },
+  {
+   "path": "img_model.img_model.layer1.1.conv1",
+   "class": "torch.nn.modules.conv.Conv2d"
+  },
+  {
+   "path": "img_model.img_model.layer1.1.bn1",
+   "class": "torch.nn.modules.batchnorm.BatchNorm2d"
+  },
+  {
+   "path": "img_model.img_model.layer1.1.conv2",
+   "class": "torch.nn.modules.conv.Conv2d"
+  },
+  {
+   "path": "img_model.img_model.layer1.1.bn2",
+   "class": "torch.nn.modules.batchnorm.BatchNorm2d"
+  },
+  {
+   "path": "img_model.img_model.layer1.1.conv3",
+   "class": "torch.nn.modules.conv.Conv2d"
+  },
+  {
+   "path": "img_model.img_model.layer1.1.bn3",
+   "class": "torch.nn.modules.batchnorm.BatchNorm2d"
+  },
+  {
+   "path": "img_model.img_model.layer1.1.relu",
+   "class": "torch.nn.modules.activation.ReLU"
+  },
+  {
+   "path": "img_model.img_model.layer1.2",
+   "class": "resnet.Bottleneck"
+  },
+  {
+   "path": "img_model.img_model.layer1.2.conv1",
+   "class": "torch.nn.modules.conv.Conv2d"
+  },
+  {
+   "path": "img_model.img_model.layer1.2.bn1",
+   "class": "torch.nn.modules.batchnorm.BatchNorm2d"
+  },
+  {
+   "path": "img_model.img_model.layer1.2.conv2",
+   "class": "torch.nn.modules.conv.Conv2d"
+  },
+  {
+   "path": "img_model.img_model.layer1.2.bn2",
+   "class": "torch.nn.modules.batchnorm.BatchNorm2d"
+  },
+  {
+   "path": "img_model.img_model.layer1.2.conv3",
+   "class": "torch.nn.modules.conv.Conv2d"
+  },
+  {
+   "path": "img_model.img_model.layer1.2.bn3",
+   "class": "torch.nn.modules.batchnorm.BatchNorm2d"
+  },
+  {
+   "path": "img_model.img_model.layer1.2.relu",
+   "class": "torch.nn.modules.activation.ReLU"
+  },
+  {
+   "path": "img_model.img_model.layer2",
+   "class": "torch.nn.modules.container.Sequential"
+  },
+  {
+   "path": "img_model.img_model.layer2.0",
+   "class": "resnet.Bottleneck"
+  },
+  {
+   "path": "img_model.img_model.layer2.0.conv1",
+   "class": "torch.nn.modules.conv.Conv2d"
+  },
+  {
+   "path": "img_model.img_model.layer2.0.bn1",
+   "class": "torch.nn.modules.batchnorm.BatchNorm2d"
+  },
+  {
+   "path": "img_model.img_model.layer2.0.conv2",
+   "class": "torch.nn.modules.conv.Conv2d"
+  },
+  {
+   "path": "img_model.img_model.layer2.0.bn2",
+   "class": "torch.nn.modules.batchnorm.BatchNorm2d"
+  },
+  {
+   "path": "img_model.img_model.layer2.0.conv3",
+   "class": "torch.nn.modules.conv.Conv2d"
+  },
+  {
+   "path": "img_model.img_model.layer2.0.bn3",
+   "class": "torch.nn.modules.batchnorm.BatchNorm2d"
+  },
+  {
+   "path": "img_model.img_model.layer2.0.relu",
+   "class": "torch.nn.modules.activation.ReLU"
+  },
+  {
+   "path": "img_model.img_model.layer2.0.downsample",
+   "class": "torch.nn.modules.container.Sequential"
+  },
+  {
+   "path": "img_model.img_model.layer2.0.downsample.0",
+   "class": "torch.nn.modules.conv.Conv2d"
+  },
+  {
+   "path": "img_model.img_model.layer2.0.downsample.1",
+   "class": "torch.nn.modules.batchnorm.BatchNorm2d"
+  },
+  {
+   "path": "img_model.img_model.layer2.1",
+   "class": "resnet.Bottleneck"
+  },
+  {
+   "path": "img_model.img_model.layer2.1.conv1",
+   "class": "torch.nn.modules.conv.Conv2d"
+  },
+  {
+   "path": "img_model.img_model.layer2.1.bn1",
+   "class": "torch.nn.modules.batchnorm.BatchNorm2d"
+  },
+  {
+   "path": "img_model.img_model.layer2.1.conv2",
+   "class": "torch.nn.modules.conv.Conv2d"
+  },
+  {
+   "path": "img_model.img_model.layer2.1.bn2",
+   "class": "torch.nn.modules.batchnorm.BatchNorm2d"
+  },
+  {
+   "path": "img_model.img_model.layer2.1.conv3",
+   "class": "torch.nn.modules.conv.Conv2d"
+  },
+  {
+   "path": "img_model.img_model.layer2.1.bn3",
+   "class": "torch.nn.modules.batchnorm.BatchNorm2d"
+  },
+  {
+   "path": "img_model.img_model.layer2.1.relu",
+   "class": "torch.nn.modules.activation.ReLU"
+  },
+  {
+   "path": "img_model.img_model.layer2.2",
+   "class": "resnet.Bottleneck"
+  },
+  {
+   "path": "img_model.img_model.layer2.2.conv1",
+   "class": "torch.nn.modules.conv.Conv2d"
+  },
+  {
+   "path": "img_model.img_model.layer2.2.bn1",
+   "class": "torch.nn.modules.batchnorm.BatchNorm2d"
+  },
+  {
+   "path": "img_model.img_model.layer2.2.conv2",
+   "class": "torch.nn.modules.conv.Conv2d"
+  },
+  {
+   "path": "img_model.img_model.layer2.2.bn2",
+   "class": "torch.nn.modules.batchnorm.BatchNorm2d"
+  },
+  {
+   "path": "img_model.img_model.layer2.2.conv3",
+   "class": "torch.nn.modules.conv.Conv2d"
+  },
+  {
+   "path": "img_model.img_model.layer2.2.bn3",
+   "class": "torch.nn.modules.batchnorm.BatchNorm2d"
+  },
+  {
+   "path": "img_model.img_model.layer2.2.relu",
+   "class": "torch.nn.modules.activation.ReLU"
+  },
+  {
+   "path": "img_model.img_model.layer2.3",
+   "class": "resnet.Bottleneck"
+  },
+  {
+   "path": "img_model.img_model.layer2.3.conv1",
+   "class": "torch.nn.modules.conv.Conv2d"
+  },
+  {
+   "path": "img_model.img_model.layer2.3.bn1",
+   "class": "torch.nn.modules.batchnorm.BatchNorm2d"
+  },
+  {
+   "path": "img_model.img_model.layer2.3.conv2",
+   "class": "torch.nn.modules.conv.Conv2d"
+  },
+  {
+   "path": "img_model.img_model.layer2.3.bn2",
+   "class": "torch.nn.modules.batchnorm.BatchNorm2d"
+  },
+  {
+   "path": "img_model.img_model.layer2.3.conv3",
+   "class": "torch.nn.modules.conv.Conv2d"
+  },
+  {
+   "path": "img_model.img_model.layer2.3.bn3",
+   "class": "torch.nn.modules.batchnorm.BatchNorm2d"
+  },
+  {
+   "path": "img_model.img_model.layer2.3.relu",
+   "class": "torch.nn.modules.activation.ReLU"
+  },
+  {
+   "path": "img_model.img_model.layer3",
+   "class": "torch.nn.modules.container.Sequential"
+  },
+  {
+   "path": "img_model.img_model.layer3.0",
+   "class": "resnet.Bottleneck"
+  },
+  {
+   "path": "img_model.img_model.layer3.0.conv1",
+   "class": "torch.nn.modules.conv.Conv2d"
+  },
+  {
+   "path": "img_model.img_model.layer3.0.bn1",
+   "class": "torch.nn.modules.batchnorm.BatchNorm2d"
+  },
+  {
+   "path": "img_model.img_model.layer3.0.conv2",
+   "class": "torch.nn.modules.conv.Conv2d"
+  },
+  {
+   "path": "img_model.img_model.layer3.0.bn2",
+   "class": "torch.nn.modules.batchnorm.BatchNorm2d"
+  },
+  {
+   "path": "img_model.img_model.layer3.0.conv3",
+   "class": "torch.nn.modules.conv.Conv2d"
+  },
+  {
+   "path": "img_model.img_model.layer3.0.bn3",
+   "class": "torch.nn.modules.batchnorm.BatchNorm2d"
+  },
+  {
+   "path": "img_model.img_model.layer3.0.relu",
+   "class": "torch.nn.modules.activation.ReLU"
+  },
+  {
+   "path": "img_model.img_model.layer3.0.downsample",
+   "class": "torch.nn.modules.container.Sequential"
+  },
+  {
+   "path": "img_model.img_model.layer3.0.downsample.0",
+   "class": "torch.nn.modules.conv.Conv2d"
+  },
+  {
+   "path": "img_model.img_model.layer3.0.downsample.1",
+   "class": "torch.nn.modules.batchnorm.BatchNorm2d"
+  },
+  {
+   "path": "img_model.img_model.layer3.1",
+   "class": "resnet.Bottleneck"
+  },
+  {
+   "path": "img_model.img_model.layer3.1.conv1",
+   "class": "torch.nn.modules.conv.Conv2d"
+  },
+  {
+   "path": "img_model.img_model.layer3.1.bn1",
+   "class": "torch.nn.modules.batchnorm.BatchNorm2d"
+  },
+  {
+   "path": "img_model.img_model.layer3.1.conv2",
+   "class": "torch.nn.modules.conv.Conv2d"
+  },
+  {
+   "path": "img_model.img_model.layer3.1.bn2",
+   "class": "torch.nn.modules.batchnorm.BatchNorm2d"
+  },
+  {
+   "path": "img_model.img_model.layer3.1.conv3",
+   "class": "torch.nn.modules.conv.Conv2d"
+  },
+  {
+   "path": "img_model.img_model.layer3.1.bn3",
+   "class": "torch.nn.modules.batchnorm.BatchNorm2d"
+  },
+  {
+   "path": "img_model.img_model.layer3.1.relu",
+   "class": "torch.nn.modules.activation.ReLU"
+  },
+  {
+   "path": "img_model.img_model.layer3.2",
+   "class": "resnet.Bottleneck"
+  },
+  {
+   "path": "img_model.img_model.layer3.2.conv1",
+   "class": "torch.nn.modules.conv.Conv2d"
+  },
+  {
+   "path": "img_model.img_model.layer3.2.bn1",
+   "class": "torch.nn.modules.batchnorm.BatchNorm2d"
+  },
+  {
+   "path": "img_model.img_model.layer3.2.conv2",
+   "class": "torch.nn.modules.conv.Conv2d"
+  },
+  {
+   "path": "img_model.img_model.layer3.2.bn2",
+   "class": "torch.nn.modules.batchnorm.BatchNorm2d"
+  },
+  {
+   "path": "img_model.img_model.layer3.2.conv3",
+   "class": "torch.nn.modules.conv.Conv2d"
+  },
+  {
+   "path": "img_model.img_model.layer3.2.bn3",
+   "class": "torch.nn.modules.batchnorm.BatchNorm2d"
+  },
+  {
+   "path": "img_model.img_model.layer3.2.relu",
+   "class": "torch.nn.modules.activation.ReLU"
+  },
+  {
+   "path": "img_model.img_model.layer3.3",
+   "class": "resnet.Bottleneck"
+  },
+  {
+   "path": "img_model.img_model.layer3.3.conv1",
+   "class": "torch.nn.modules.conv.Conv2d"
+  },
+  {
+   "path": "img_model.img_model.layer3.3.bn1",
+   "class": "torch.nn.modules.batchnorm.BatchNorm2d"
+  },
+  {
+   "path": "img_model.img_model.layer3.3.conv2",
+   "class": "torch.nn.modules.conv.Conv2d"
+  },
+  {
+   "path": "img_model.img_model.layer3.3.bn2",
+   "class": "torch.nn.modules.batchnorm.BatchNorm2d"
+  },
+  {
+   "path": "img_model.img_model.layer3.3.conv3",
+   "class": "torch.nn.modules.conv.Conv2d"
+  },
+  {
+   "path": "img_model.img_model.layer3.3.bn3",
+   "class": "torch.nn.modules.batchnorm.BatchNorm2d"
+  },
+  {
+   "path": "img_model.img_model.layer3.3.relu",
+   "class": "torch.nn.modules.activation.ReLU"
+  },
+  {
+   "path": "img_model.img_model.layer3.4",
+   "class": "resnet.Bottleneck"
+  },
+  {
+   "path": "img_model.img_model.layer3.4.conv1",
+   "class": "torch.nn.modules.conv.Conv2d"
+  },
+  {
+   "path": "img_model.img_model.layer3.4.bn1",
+   "class": "torch.nn.modules.batchnorm.BatchNorm2d"
+  },
+  {
+   "path": "img_model.img_model.layer3.4.conv2",
+   "class": "torch.nn.modules.conv.Conv2d"
+  },
+  {
+   "path": "img_model.img_model.layer3.4.bn2",
+   "class": "torch.nn.modules.batchnorm.BatchNorm2d"
+  },
+  {
+   "path": "img_model.img_model.layer3.4.conv3",
+   "class": "torch.nn.modules.conv.Conv2d"
+  },
+  {
+   "path": "img_model.img_model.layer3.4.bn3",
+   "class": "torch.nn.modules.batchnorm.BatchNorm2d"
+  },
+  {
+   "path": "img_model.img_model.layer3.4.relu",
+   "class": "torch.nn.modules.activation.ReLU"
+  },
+  {
+   "path": "img_model.img_model.layer3.5",
+   "class": "resnet.Bottleneck"
+  },
+  {
+   "path": "img_model.img_model.layer3.5.conv1",
+   "class": "torch.nn.modules.conv.Conv2d"
+  },
+  {
+   "path": "img_model.img_model.layer3.5.bn1",
+   "class": "torch.nn.modules.batchnorm.BatchNorm2d"
+  },
+  {
+   "path": "img_model.img_model.layer3.5.conv2",
+   "class": "torch.nn.modules.conv.Conv2d"
+  },
+  {
+   "path": "img_model.img_model.layer3.5.bn2",
+   "class": "torch.nn.modules.batchnorm.BatchNorm2d"
+  },
+  {
+   "path": "img_model.img_model.layer3.5.conv3",
+   "class": "torch.nn.modules.conv.Conv2d"
+  },
+  {
+   "path": "img_model.img_model.layer3.5.bn3",
+   "class": "torch.nn.modules.batchnorm.BatchNorm2d"
+  },
+  {
+   "path": "img_model.img_model.layer3.5.relu",
+   "class": "torch.nn.modules.activation.ReLU"
+  },
+  {
+   "path": "img_model.img_model.layer4",
+   "class": "torch.nn.modules.container.Sequential"
+  },
+  {
+   "path": "img_model.img_model.layer4.0",
+   "class": "resnet.Bottleneck"
+  },
+  {
+   "path": "img_model.img_model.layer4.0.conv1",
+   "class": "torch.nn.modules.conv.Conv2d"
+  },
+  {
+   "path": "img_model.img_model.layer4.0.bn1",
+   "class": "torch.nn.modules.batchnorm.BatchNorm2d"
+  },
+  {
+   "path": "img_model.img_model.layer4.0.conv2",
+   "class": "torch.nn.modules.conv.Conv2d"
+  },
+  {
+   "path": "img_model.img_model.layer4.0.bn2",
+   "class": "torch.nn.modules.batchnorm.BatchNorm2d"
+  },
+  {
+   "path": "img_model.img_model.layer4.0.conv3",
+   "class": "torch.nn.modules.conv.Conv2d"
+  },
+  {
+   "path": "img_model.img_model.layer4.0.bn3",
+   "class": "torch.nn.modules.batchnorm.BatchNorm2d"
+  },
+  {
+   "path": "img_model.img_model.layer4.0.relu",
+   "class": "torch.nn.modules.activation.ReLU"
+  },
+  {
+   "path": "img_model.img_model.layer4.0.downsample",
+   "class": "torch.nn.modules.container.Sequential"
+  },
+  {
+   "path": "img_model.img_model.layer4.0.downsample.0",
+   "class": "torch.nn.modules.conv.Conv2d"
+  },
+  {
+   "path": "img_model.img_model.layer4.0.downsample.1",
+   "class": "torch.nn.modules.batchnorm.BatchNorm2d"
+  },
+  {
+   "path": "img_model.img_model.layer4.1",
+   "class": "resnet.Bottleneck"
+  },
+  {
+   "path": "img_model.img_model.layer4.1.conv1",
+   "class": "torch.nn.modules.conv.Conv2d"
+  },
+  {
+   "path": "img_model.img_model.layer4.1.bn1",
+   "class": "torch.nn.modules.batchnorm.BatchNorm2d"
+  },
+  {
+   "path": "img_model.img_model.layer4.1.conv2",
+   "class": "torch.nn.modules.conv.Conv2d"
+  },
+  {
+   "path": "img_model.img_model.layer4.1.bn2",
+   "class": "torch.nn.modules.batchnorm.BatchNorm2d"
+  },
+  {
+   "path": "img_model.img_model.layer4.1.conv3",
+   "class": "torch.nn.modules.conv.Conv2d"
+  },
+  {
+   "path": "img_model.img_model.layer4.1.bn3",
+   "class": "torch.nn.modules.batchnorm.BatchNorm2d"
+  },
+  {
+   "path": "img_model.img_model.layer4.1.relu",
+   "class": "torch.nn.modules.activation.ReLU"
+  },
+  {
+   "path": "img_model.img_model.layer4.2",
+   "class": "resnet.Bottleneck"
+  },
+  {
+   "path": "img_model.img_model.layer4.2.conv1",
+   "class": "torch.nn.modules.conv.Conv2d"
+  },
+  {
+   "path": "img_model.img_model.layer4.2.bn1",
+   "class": "torch.nn.modules.batchnorm.BatchNorm2d"
+  },
+  {
+   "path": "img_model.img_model.layer4.2.conv2",
+   "class": "torch.nn.modules.conv.Conv2d"
+  },
+  {
+   "path": "img_model.img_model.layer4.2.bn2",
+   "class": "torch.nn.modules.batchnorm.BatchNorm2d"
+  },
+  {
+   "path": "img_model.img_model.layer4.2.conv3",
+   "class": "torch.nn.modules.conv.Conv2d"
+  },
+  {
+   "path": "img_model.img_model.layer4.2.bn3",
+   "class": "torch.nn.modules.batchnorm.BatchNorm2d"
+  },
+  {
+   "path": "img_model.img_model.layer4.2.relu",
+   "class": "torch.nn.modules.activation.ReLU"
+  },
+  {
+   "path": "img_model.img_model.avgpool",
+   "class": "torch.nn.modules.pooling.AdaptiveAvgPool2d"
+  },
+  {
+   "path": "img_model.img_model.fc",
+   "class": "torch.nn.modules.container.Sequential"
+  },
+  {
+   "path": "img_model.img_pool",
+   "class": "blocks.GeM"
+  },
+  {
+   "path": "img_model.img_fc",
+   "class": "torch.nn.modules.linear.Linear"
+  },
+  {
+   "path": "img_model.dropout",
+   "class": "torch.nn.modules.dropout.Dropout"
+  },
+  {
+   "path": "local_fuse",
+   "class": "model.local_conv"
+  },
+  {
+   "path": "local_fuse.img1x1conv",
+   "class": "torch.nn.modules.conv.Conv2d"
+  },
+  {
+   "path": "local_fuse.softmax",
+   "class": "torch.nn.modules.activation.Softmax"
+  },
+  {
+   "path": "local_fuse.inception_gamma",
+   "class": "blocks.Inception2d"
+  },
+  {
+   "path": "local_fuse.inception_gamma.branch0",
+   "class": "blocks.BasicConv2d"
+  },
+  {
+   "path": "local_fuse.inception_gamma.branch0.conv",
+   "class": "torch.nn.modules.conv.Conv2d"
+  },
+  {
+   "path": "local_fuse.inception_gamma.branch0.bn",
+   "class": "torch.nn.modules.batchnorm.BatchNorm2d"
+  },
+  {
+   "path": "local_fuse.inception_gamma.branch0.relu",
+   "class": "torch.nn.modules.activation.ReLU"
+  },
+  {
+   "path": "local_fuse.inception_gamma.branch1",
+   "class": "torch.nn.modules.container.Sequential"
+  },
+  {
+   "path": "local_fuse.inception_gamma.branch1.0",
+   "class": "blocks.BasicConv2d"
+  },
+  {
+   "path": "local_fuse.inception_gamma.branch1.0.conv",
+   "class": "torch.nn.modules.conv.Conv2d"
+  },
+  {
+   "path": "local_fuse.inception_gamma.branch1.0.bn",
+   "class": "torch.nn.modules.batchnorm.BatchNorm2d"
+  },
+  {
+   "path": "local_fuse.inception_gamma.branch1.0.relu",
+   "class": "torch.nn.modules.activation.ReLU"
+  },
+  {
+   "path": "local_fuse.inception_gamma.branch1.1",
+   "class": "blocks.BasicConv2d"
+  },
+  {
+   "path": "local_fuse.inception_gamma.branch1.1.conv",
+   "class": "torch.nn.modules.conv.Conv2d"
+  },
+  {
+   "path": "local_fuse.inception_gamma.branch1.1.bn",
+   "class": "torch.nn.modules.batchnorm.BatchNorm2d"
+  },
+  {
+   "path": "local_fuse.inception_gamma.branch1.1.relu",
+   "class": "torch.nn.modules.activation.ReLU"
+  },
+  {
+   "path": "local_fuse.inception_gamma.branch2",
+   "class": "torch.nn.modules.container.Sequential"
+  },
+  {
+   "path": "local_fuse.inception_gamma.branch2.0",
+   "class": "blocks.BasicConv2d"
+  },
+  {
+   "path": "local_fuse.inception_gamma.branch2.0.conv",
+   "class": "torch.nn.modules.conv.Conv2d"
+  },
+  {
+   "path": "local_fuse.inception_gamma.branch2.0.bn",
+   "class": "torch.nn.modules.batchnorm.BatchNorm2d"
+  },
+  {
+   "path": "local_fuse.inception_gamma.branch2.0.relu",
+   "class": "torch.nn.modules.activation.ReLU"
+  },
+  {
+   "path": "local_fuse.inception_gamma.branch2.1",
+   "class": "blocks.BasicConv2d"
+  },
+  {
+   "path": "local_fuse.inception_gamma.branch2.1.conv",
+   "class": "torch.nn.modules.conv.Conv2d"
+  },
+  {
+   "path": "local_fuse.inception_gamma.branch2.1.bn",
+   "class": "torch.nn.modules.batchnorm.BatchNorm2d"
+  },
+  {
+   "path": "local_fuse.inception_gamma.branch2.1.relu",
+   "class": "torch.nn.modules.activation.ReLU"
+  },
+  {
+   "path": "local_fuse.inception_gamma.branch2.2",
+   "class": "blocks.BasicConv2d"
+  },
+  {
+   "path": "local_fuse.inception_gamma.branch2.2.conv",
+   "class": "torch.nn.modules.conv.Conv2d"
+  },
+  {
+   "path": "local_fuse.inception_gamma.branch2.2.bn",
+   "class": "torch.nn.modules.batchnorm.BatchNorm2d"
+  },
+  {
+   "path": "local_fuse.inception_gamma.branch2.2.relu",
+   "class": "torch.nn.modules.activation.ReLU"
+  },
+  {
+   "path": "local_fuse.inception_gamma.branch3",
+   "class": "torch.nn.modules.container.Sequential"
+  },
+  {
+   "path": "local_fuse.inception_gamma.branch3.0",
+   "class": "torch.nn.modules.pooling.AvgPool2d"
+  },
+  {
+   "path": "local_fuse.inception_gamma.branch3.1",
+   "class": "blocks.BasicConv2d"
+  },
+  {
+   "path": "local_fuse.inception_gamma.branch3.1.conv",
+   "class": "torch.nn.modules.conv.Conv2d"
+  },
+  {
+   "path": "local_fuse.inception_gamma.branch3.1.bn",
+   "class": "torch.nn.modules.batchnorm.BatchNorm2d"
+  },
+  {
+   "path": "local_fuse.inception_gamma.branch3.1.relu",
+   "class": "torch.nn.modules.activation.ReLU"
+  },
+  {
+   "path": "local_fuse.inception_beta",
+   "class": "blocks.Inception2d"
+  },
+  {
+   "path": "local_fuse.inception_beta.branch0",
+   "class": "blocks.BasicConv2d"
+  },
+  {
+   "path": "local_fuse.inception_beta.branch0.conv",
+   "class": "torch.nn.modules.conv.Conv2d"
+  },
+  {
+   "path": "local_fuse.inception_beta.branch0.bn",
+   "class": "torch.nn.modules.batchnorm.BatchNorm2d"
+  },
+  {
+   "path": "local_fuse.inception_beta.branch0.relu",
+   "class": "torch.nn.modules.activation.ReLU"
+  },
+  {
+   "path": "local_fuse.inception_beta.branch1",
+   "class": "torch.nn.modules.container.Sequential"
+  },
+  {
+   "path": "local_fuse.inception_beta.branch1.0",
+   "class": "blocks.BasicConv2d"
+  },
+  {
+   "path": "local_fuse.inception_beta.branch1.0.conv",
+   "class": "torch.nn.modules.conv.Conv2d"
+  },
+  {
+   "path": "local_fuse.inception_beta.branch1.0.bn",
+   "class": "torch.nn.modules.batchnorm.BatchNorm2d"
+  },
+  {
+   "path": "local_fuse.inception_beta.branch1.0.relu",
+   "class": "torch.nn.modules.activation.ReLU"
+  },
+  {
+   "path": "local_fuse.inception_beta.branch1.1",
+   "class": "blocks.BasicConv2d"
+  },
+  {
+   "path": "local_fuse.inception_beta.branch1.1.conv",
+   "class": "torch.nn.modules.conv.Conv2d"
+  },
+  {
+   "path": "local_fuse.inception_beta.branch1.1.bn",
+   "class": "torch.nn.modules.batchnorm.BatchNorm2d"
+  },
+  {
+   "path": "local_fuse.inception_beta.branch1.1.relu",
+   "class": "torch.nn.modules.activation.ReLU"
+  },
+  {
+   "path": "local_fuse.inception_beta.branch2",
+   "class": "torch.nn.modules.container.Sequential"
+  },
+  {
+   "path": "local_fuse.inception_beta.branch2.0",
+   "class": "blocks.BasicConv2d"
+  },
+  {
+   "path": "local_fuse.inception_beta.branch2.0.conv",
+   "class": "torch.nn.modules.conv.Conv2d"
+  },
+  {
+   "path": "local_fuse.inception_beta.branch2.0.bn",
+   "class": "torch.nn.modules.batchnorm.BatchNorm2d"
+  },
+  {
+   "path": "local_fuse.inception_beta.branch2.0.relu",
+   "class": "torch.nn.modules.activation.ReLU"
+  },
+  {
+   "path": "local_fuse.inception_beta.branch2.1",
+   "class": "blocks.BasicConv2d"
+  },
+  {
+   "path": "local_fuse.inception_beta.branch2.1.conv",
+   "class": "torch.nn.modules.conv.Conv2d"
+  },
+  {
+   "path": "local_fuse.inception_beta.branch2.1.bn",
+   "class": "torch.nn.modules.batchnorm.BatchNorm2d"
+  },
+  {
+   "path": "local_fuse.inception_beta.branch2.1.relu",
+   "class": "torch.nn.modules.activation.ReLU"
+  },
+  {
+   "path": "local_fuse.inception_beta.branch2.2",
+   "class": "blocks.BasicConv2d"
+  },
+  {
+   "path": "local_fuse.inception_beta.branch2.2.conv",
+   "class": "torch.nn.modules.conv.Conv2d"
+  },
+  {
+   "path": "local_fuse.inception_beta.branch2.2.bn",
+   "class": "torch.nn.modules.batchnorm.BatchNorm2d"
+  },
+  {
+   "path": "local_fuse.inception_beta.branch2.2.relu",
+   "class": "torch.nn.modules.activation.ReLU"
+  },
+  {
+   "path": "local_fuse.inception_beta.branch3",
+   "class": "torch.nn.modules.container.Sequential"
+  },
+  {
+   "path": "local_fuse.inception_beta.branch3.0",
+   "class": "torch.nn.modules.pooling.AvgPool2d"
+  },
+  {
+   "path": "local_fuse.inception_beta.branch3.1",
+   "class": "blocks.BasicConv2d"
+  },
+  {
+   "path": "local_fuse.inception_beta.branch3.1.conv",
+   "class": "torch.nn.modules.conv.Conv2d"
+  },
+  {
+   "path": "local_fuse.inception_beta.branch3.1.bn",
+   "class": "torch.nn.modules.batchnorm.BatchNorm2d"
+  },
+  {
+   "path": "local_fuse.inception_beta.branch3.1.relu",
+   "class": "torch.nn.modules.activation.ReLU"
+  },
+  {
+   "path": "relu",
+   "class": "torch.nn.modules.activation.ReLU"
+  },
+  {
+   "path": "local_pool",
+   "class": "blocks.GeM"
+  },
+  {
+   "path": "local_fc",
+   "class": "torch.nn.modules.linear.Linear"
+  },
+  {
+   "path": "dropout",
+   "class": "torch.nn.modules.dropout.Dropout"
+  }
+ ],
+ "module_scalars": {
+  "_is_full_backward_hook": null,
+  "text_model.word_embed_dim": 512,
+  "text_model.lstm_hidden_dim": 1024,
+  "text_model._is_full_backward_hook": null,
+  "text_model.embedding_layer.num_embeddings": 1602,
+  "text_model.embedding_layer.embedding_dim": 512,
+  "text_model.embedding_layer.padding_idx": null,
+  "text_model.embedding_layer.max_norm": null,
+  "text_model.embedding_layer.norm_type": 2.0,
+  "text_model.embedding_layer.scale_grad_by_freq": false,
+  "text_model.embedding_layer.sparse": false,
+  "text_model.embedding_layer._is_full_backward_hook": null,
+  "text_model.lstm.mode": "LSTM",
+  "text_model.lstm.input_size": 512,
+  "text_model.lstm.hidden_size": 1024,
+  "text_model.lstm.num_layers": 1,
+  "text_model.lstm.bias": true,
+  "text_model.lstm.batch_first": false,
+  "text_model.lstm.dropout": 0.0,
+  "text_model.lstm.bidirectional": false,
+  "text_model.lstm._flat_weights_names": "list[4]=['weight_ih_l0', 'weight_hh_l0', 'bias_ih_l0', 'bias_hh_l0']",
+  "text_model.lstm._is_full_backward_hook": null,
+  "text_model.lstm.proj_size": 0,
+  "img_model._is_full_backward_hook": null,
+  "img_model.img_model.inplanes": 2048,
+  "img_model.img_model.dilation": 1,
+  "img_model.img_model.groups": 1,
+  "img_model.img_model.base_width": 64,
+  "img_model.img_model._is_full_backward_hook": null,
+  "img_model.img_model.conv1.in_channels": 3,
+  "img_model.img_model.conv1.out_channels": 64,
+  "img_model.img_model.conv1.kernel_size": "tuple[2]=[7, 7]",
+  "img_model.img_model.conv1.stride": "tuple[2]=[2, 2]",
+  "img_model.img_model.conv1.padding": "tuple[2]=[3, 3]",
+  "img_model.img_model.conv1.dilation": "tuple[2]=[1, 1]",
+  "img_model.img_model.conv1.transposed": false,
+  "img_model.img_model.conv1.output_padding": "tuple[2]=[0, 0]",
+  "img_model.img_model.conv1.groups": 1,
+  "img_model.img_model.conv1.padding_mode": "zeros",
+  "img_model.img_model.conv1._reversed_padding_repeated_twice": "tuple[4]=[3, 3, 3, 3]",
+  "img_model.img_model.conv1._is_full_backward_hook": null,
+  "img_model.img_model.bn1.num_features": 64,
+  "img_model.img_model.bn1.eps": 1e-05,
+  "img_model.img_model.bn1.momentum": 0.1,
+  "img_model.img_model.bn1.affine": true,
+  "img_model.img_model.bn1.track_running_stats": true,
+  "img_model.img_model.bn1._is_full_backward_hook": null,
+  "img_model.img_model.relu.inplace": true,
+  "img_model.img_model.relu._is_full_backward_hook": null,
+  "img_model.img_model.maxpool.kernel_size": 3,
+  "img_model.img_model.maxpool.stride": 2,
+  "img_model.img_model.maxpool.padding": 1,
+  "img_model.img_model.maxpool.dilation": 1,
+  "img_model.img_model.maxpool.return_indices": false,
+  "img_model.img_model.maxpool.ceil_mode": false,
+  "img_model.img_model.maxpool._is_full_backward_hook": null,
+  "img_model.img_model.layer1._is_full_backward_hook": null,
+  "img_model.img_model.layer1.0.stride": 1,
+  "img_model.img_model.layer1.0._is_full_backward_hook": null,
+  "img_model.img_model.layer1.0.conv1.in_channels": 64,
+  "img_model.img_model.layer1.0.conv1.out_channels": 64,
+  "img_model.img_model.layer1.0.conv1.kernel_size": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer1.0.conv1.stride": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer1.0.conv1.padding": "tuple[2]=[0, 0]",
+  "img_model.img_model.layer1.0.conv1.dilation": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer1.0.conv1.transposed": false,
+  "img_model.img_model.layer1.0.conv1.output_padding": "tuple[2]=[0, 0]",
+  "img_model.img_model.layer1.0.conv1.groups": 1,
+  "img_model.img_model.layer1.0.conv1.padding_mode": "zeros",
+  "img_model.img_model.layer1.0.conv1._reversed_padding_repeated_twice": "tuple[4]=[0, 0, 0, 0]",
+  "img_model.img_model.layer1.0.conv1._is_full_backward_hook": null,
+  "img_model.img_model.layer1.0.bn1.num_features": 64,
+  "img_model.img_model.layer1.0.bn1.eps": 1e-05,
+  "img_model.img_model.layer1.0.bn1.momentum": 0.1,
+  "img_model.img_model.layer1.0.bn1.affine": true,
+  "img_model.img_model.layer1.0.bn1.track_running_stats": true,
+  "img_model.img_model.layer1.0.bn1._is_full_backward_hook": null,
+  "img_model.img_model.layer1.0.conv2.in_channels": 64,
+  "img_model.img_model.layer1.0.conv2.out_channels": 64,
+  "img_model.img_model.layer1.0.conv2.kernel_size": "tuple[2]=[3, 3]",
+  "img_model.img_model.layer1.0.conv2.stride": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer1.0.conv2.padding": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer1.0.conv2.dilation": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer1.0.conv2.transposed": false,
+  "img_model.img_model.layer1.0.conv2.output_padding": "tuple[2]=[0, 0]",
+  "img_model.img_model.layer1.0.conv2.groups": 1,
+  "img_model.img_model.layer1.0.conv2.padding_mode": "zeros",
+  "img_model.img_model.layer1.0.conv2._reversed_padding_repeated_twice": "tuple[4]=[1, 1, 1, 1]",
+  "img_model.img_model.layer1.0.conv2._is_full_backward_hook": null,
+  "img_model.img_model.layer1.0.bn2.num_features": 64,
+  "img_model.img_model.layer1.0.bn2.eps": 1e-05,
+  "img_model.img_model.layer1.0.bn2.momentum": 0.1,
+  "img_model.img_model.layer1.0.bn2.affine": true,
+  "img_model.img_model.layer1.0.bn2.track_running_stats": true,
+  "img_model.img_model.layer1.0.bn2._is_full_backward_hook": null,
+  "img_model.img_model.layer1.0.conv3.in_channels": 64,
+  "img_model.img_model.layer1.0.conv3.out_channels": 256,
+  "img_model.img_model.layer1.0.conv3.kernel_size": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer1.0.conv3.stride": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer1.0.conv3.padding": "tuple[2]=[0, 0]",
+  "img_model.img_model.layer1.0.conv3.dilation": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer1.0.conv3.transposed": false,
+  "img_model.img_model.layer1.0.conv3.output_padding": "tuple[2]=[0, 0]",
+  "img_model.img_model.layer1.0.conv3.groups": 1,
+  "img_model.img_model.layer1.0.conv3.padding_mode": "zeros",
+  "img_model.img_model.layer1.0.conv3._reversed_padding_repeated_twice": "tuple[4]=[0, 0, 0, 0]",
+  "img_model.img_model.layer1.0.conv3._is_full_backward_hook": null,
+  "img_model.img_model.layer1.0.bn3.num_features": 256,
+  "img_model.img_model.layer1.0.bn3.eps": 1e-05,
+  "img_model.img_model.layer1.0.bn3.momentum": 0.1,
+  "img_model.img_model.layer1.0.bn3.affine": true,
+  "img_model.img_model.layer1.0.bn3.track_running_stats": true,
+  "img_model.img_model.layer1.0.bn3._is_full_backward_hook": null,
+  "img_model.img_model.layer1.0.relu.inplace": true,
+  "img_model.img_model.layer1.0.relu._is_full_backward_hook": null,
+  "img_model.img_model.layer1.0.downsample._is_full_backward_hook": null,
+  "img_model.img_model.layer1.0.downsample.0.in_channels": 64,
+  "img_model.img_model.layer1.0.downsample.0.out_channels": 256,
+  "img_model.img_model.layer1.0.downsample.0.kernel_size": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer1.0.downsample.0.stride": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer1.0.downsample.0.padding": "tuple[2]=[0, 0]",
+  "img_model.img_model.layer1.0.downsample.0.dilation": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer1.0.downsample.0.transposed": false,
+  "img_model.img_model.layer1.0.downsample.0.output_padding": "tuple[2]=[0, 0]",
+  "img_model.img_model.layer1.0.downsample.0.groups": 1,
+  "img_model.img_model.layer1.0.downsample.0.padding_mode": "zeros",
+  "img_model.img_model.layer1.0.downsample.0._reversed_padding_repeated_twice": "tuple[4]=[0, 0, 0, 0]",
+  "img_model.img_model.layer1.0.downsample.0._is_full_backward_hook": null,
+  "img_model.img_model.layer1.0.downsample.1.num_features": 256,
+  "img_model.img_model.layer1.0.downsample.1.eps": 1e-05,
+  "img_model.img_model.layer1.0.downsample.1.momentum": 0.1,
+  "img_model.img_model.layer1.0.downsample.1.affine": true,
+  "img_model.img_model.layer1.0.downsample.1.track_running_stats": true,
+  "img_model.img_model.layer1.0.downsample.1._is_full_backward_hook": null,
+  "img_model.img_model.layer1.1.downsample": null,
+  "img_model.img_model.layer1.1.stride": 1,
+  "img_model.img_model.layer1.1._is_full_backward_hook": null,
+  "img_model.img_model.layer1.1.conv1.in_channels": 256,
+  "img_model.img_model.layer1.1.conv1.out_channels": 64,
+  "img_model.img_model.layer1.1.conv1.kernel_size": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer1.1.conv1.stride": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer1.1.conv1.padding": "tuple[2]=[0, 0]",
+  "img_model.img_model.layer1.1.conv1.dilation": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer1.1.conv1.transposed": false,
+  "img_model.img_model.layer1.1.conv1.output_padding": "tuple[2]=[0, 0]",
+  "img_model.img_model.layer1.1.conv1.groups": 1,
+  "img_model.img_model.layer1.1.conv1.padding_mode": "zeros",
+  "img_model.img_model.layer1.1.conv1._reversed_padding_repeated_twice": "tuple[4]=[0, 0, 0, 0]",
+  "img_model.img_model.layer1.1.conv1._is_full_backward_hook": null,
+  "img_model.img_model.layer1.1.bn1.num_features": 64,
+  "img_model.img_model.layer1.1.bn1.eps": 1e-05,
+  "img_model.img_model.layer1.1.bn1.momentum": 0.1,
+  "img_model.img_model.layer1.1.bn1.affine": true,
+  "img_model.img_model.layer1.1.bn1.track_running_stats": true,
+  "img_model.img_model.layer1.1.bn1._is_full_backward_hook": null,
+  "img_model.img_model.layer1.1.conv2.in_channels": 64,
+  "img_model.img_model.layer1.1.conv2.out_channels": 64,
+  "img_model.img_model.layer1.1.conv2.kernel_size": "tuple[2]=[3, 3]",
+  "img_model.img_model.layer1.1.conv2.stride": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer1.1.conv2.padding": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer1.1.conv2.dilation": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer1.1.conv2.transposed": false,
+  "img_model.img_model.layer1.1.conv2.output_padding": "tuple[2]=[0, 0]",
+  "img_model.img_model.layer1.1.conv2.groups": 1,
+  "img_model.img_model.layer1.1.conv2.padding_mode": "zeros",
+  "img_model.img_model.layer1.1.conv2._reversed_padding_repeated_twice": "tuple[4]=[1, 1, 1, 1]",
+  "img_model.img_model.layer1.1.conv2._is_full_backward_hook": null,
+  "img_model.img_model.layer1.1.bn2.num_features": 64,
+  "img_model.img_model.layer1.1.bn2.eps": 1e-05,
+  "img_model.img_model.layer1.1.bn2.momentum": 0.1,
+  "img_model.img_model.layer1.1.bn2.affine": true,
+  "img_model.img_model.layer1.1.bn2.track_running_stats": true,
+  "img_model.img_model.layer1.1.bn2._is_full_backward_hook": null,
+  "img_model.img_model.layer1.1.conv3.in_channels": 64,
+  "img_model.img_model.layer1.1.conv3.out_channels": 256,
+  "img_model.img_model.layer1.1.conv3.kernel_size": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer1.1.conv3.stride": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer1.1.conv3.padding": "tuple[2]=[0, 0]",
+  "img_model.img_model.layer1.1.conv3.dilation": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer1.1.conv3.transposed": false,
+  "img_model.img_model.layer1.1.conv3.output_padding": "tuple[2]=[0, 0]",
+  "img_model.img_model.layer1.1.conv3.groups": 1,
+  "img_model.img_model.layer1.1.conv3.padding_mode": "zeros",
+  "img_model.img_model.layer1.1.conv3._reversed_padding_repeated_twice": "tuple[4]=[0, 0, 0, 0]",
+  "img_model.img_model.layer1.1.conv3._is_full_backward_hook": null,
+  "img_model.img_model.layer1.1.bn3.num_features": 256,
+  "img_model.img_model.layer1.1.bn3.eps": 1e-05,
+  "img_model.img_model.layer1.1.bn3.momentum": 0.1,
+  "img_model.img_model.layer1.1.bn3.affine": true,
+  "img_model.img_model.layer1.1.bn3.track_running_stats": true,
+  "img_model.img_model.layer1.1.bn3._is_full_backward_hook": null,
+  "img_model.img_model.layer1.1.relu.inplace": true,
+  "img_model.img_model.layer1.1.relu._is_full_backward_hook": null,
+  "img_model.img_model.layer1.2.downsample": null,
+  "img_model.img_model.layer1.2.stride": 1,
+  "img_model.img_model.layer1.2._is_full_backward_hook": null,
+  "img_model.img_model.layer1.2.conv1.in_channels": 256,
+  "img_model.img_model.layer1.2.conv1.out_channels": 64,
+  "img_model.img_model.layer1.2.conv1.kernel_size": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer1.2.conv1.stride": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer1.2.conv1.padding": "tuple[2]=[0, 0]",
+  "img_model.img_model.layer1.2.conv1.dilation": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer1.2.conv1.transposed": false,
+  "img_model.img_model.layer1.2.conv1.output_padding": "tuple[2]=[0, 0]",
+  "img_model.img_model.layer1.2.conv1.groups": 1,
+  "img_model.img_model.layer1.2.conv1.padding_mode": "zeros",
+  "img_model.img_model.layer1.2.conv1._reversed_padding_repeated_twice": "tuple[4]=[0, 0, 0, 0]",
+  "img_model.img_model.layer1.2.conv1._is_full_backward_hook": null,
+  "img_model.img_model.layer1.2.bn1.num_features": 64,
+  "img_model.img_model.layer1.2.bn1.eps": 1e-05,
+  "img_model.img_model.layer1.2.bn1.momentum": 0.1,
+  "img_model.img_model.layer1.2.bn1.affine": true,
+  "img_model.img_model.layer1.2.bn1.track_running_stats": true,
+  "img_model.img_model.layer1.2.bn1._is_full_backward_hook": null,
+  "img_model.img_model.layer1.2.conv2.in_channels": 64,
+  "img_model.img_model.layer1.2.conv2.out_channels": 64,
+  "img_model.img_model.layer1.2.conv2.kernel_size": "tuple[2]=[3, 3]",
+  "img_model.img_model.layer1.2.conv2.stride": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer1.2.conv2.padding": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer1.2.conv2.dilation": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer1.2.conv2.transposed": false,
+  "img_model.img_model.layer1.2.conv2.output_padding": "tuple[2]=[0, 0]",
+  "img_model.img_model.layer1.2.conv2.groups": 1,
+  "img_model.img_model.layer1.2.conv2.padding_mode": "zeros",
+  "img_model.img_model.layer1.2.conv2._reversed_padding_repeated_twice": "tuple[4]=[1, 1, 1, 1]",
+  "img_model.img_model.layer1.2.conv2._is_full_backward_hook": null,
+  "img_model.img_model.layer1.2.bn2.num_features": 64,
+  "img_model.img_model.layer1.2.bn2.eps": 1e-05,
+  "img_model.img_model.layer1.2.bn2.momentum": 0.1,
+  "img_model.img_model.layer1.2.bn2.affine": true,
+  "img_model.img_model.layer1.2.bn2.track_running_stats": true,
+  "img_model.img_model.layer1.2.bn2._is_full_backward_hook": null,
+  "img_model.img_model.layer1.2.conv3.in_channels": 64,
+  "img_model.img_model.layer1.2.conv3.out_channels": 256,
+  "img_model.img_model.layer1.2.conv3.kernel_size": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer1.2.conv3.stride": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer1.2.conv3.padding": "tuple[2]=[0, 0]",
+  "img_model.img_model.layer1.2.conv3.dilation": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer1.2.conv3.transposed": false,
+  "img_model.img_model.layer1.2.conv3.output_padding": "tuple[2]=[0, 0]",
+  "img_model.img_model.layer1.2.conv3.groups": 1,
+  "img_model.img_model.layer1.2.conv3.padding_mode": "zeros",
+  "img_model.img_model.layer1.2.conv3._reversed_padding_repeated_twice": "tuple[4]=[0, 0, 0, 0]",
+  "img_model.img_model.layer1.2.conv3._is_full_backward_hook": null,
+  "img_model.img_model.layer1.2.bn3.num_features": 256,
+  "img_model.img_model.layer1.2.bn3.eps": 1e-05,
+  "img_model.img_model.layer1.2.bn3.momentum": 0.1,
+  "img_model.img_model.layer1.2.bn3.affine": true,
+  "img_model.img_model.layer1.2.bn3.track_running_stats": true,
+  "img_model.img_model.layer1.2.bn3._is_full_backward_hook": null,
+  "img_model.img_model.layer1.2.relu.inplace": true,
+  "img_model.img_model.layer1.2.relu._is_full_backward_hook": null,
+  "img_model.img_model.layer2._is_full_backward_hook": null,
+  "img_model.img_model.layer2.0.stride": 2,
+  "img_model.img_model.layer2.0._is_full_backward_hook": null,
+  "img_model.img_model.layer2.0.conv1.in_channels": 256,
+  "img_model.img_model.layer2.0.conv1.out_channels": 128,
+  "img_model.img_model.layer2.0.conv1.kernel_size": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer2.0.conv1.stride": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer2.0.conv1.padding": "tuple[2]=[0, 0]",
+  "img_model.img_model.layer2.0.conv1.dilation": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer2.0.conv1.transposed": false,
+  "img_model.img_model.layer2.0.conv1.output_padding": "tuple[2]=[0, 0]",
+  "img_model.img_model.layer2.0.conv1.groups": 1,
+  "img_model.img_model.layer2.0.conv1.padding_mode": "zeros",
+  "img_model.img_model.layer2.0.conv1._reversed_padding_repeated_twice": "tuple[4]=[0, 0, 0, 0]",
+  "img_model.img_model.layer2.0.conv1._is_full_backward_hook": null,
+  "img_model.img_model.layer2.0.bn1.num_features": 128,
+  "img_model.img_model.layer2.0.bn1.eps": 1e-05,
+  "img_model.img_model.layer2.0.bn1.momentum": 0.1,
+  "img_model.img_model.layer2.0.bn1.affine": true,
+  "img_model.img_model.layer2.0.bn1.track_running_stats": true,
+  "img_model.img_model.layer2.0.bn1._is_full_backward_hook": null,
+  "img_model.img_model.layer2.0.conv2.in_channels": 128,
+  "img_model.img_model.layer2.0.conv2.out_channels": 128,
+  "img_model.img_model.layer2.0.conv2.kernel_size": "tuple[2]=[3, 3]",
+  "img_model.img_model.layer2.0.conv2.stride": "tuple[2]=[2, 2]",
+  "img_model.img_model.layer2.0.conv2.padding": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer2.0.conv2.dilation": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer2.0.conv2.transposed": false,
+  "img_model.img_model.layer2.0.conv2.output_padding": "tuple[2]=[0, 0]",
+  "img_model.img_model.layer2.0.conv2.groups": 1,
+  "img_model.img_model.layer2.0.conv2.padding_mode": "zeros",
+  "img_model.img_model.layer2.0.conv2._reversed_padding_repeated_twice": "tuple[4]=[1, 1, 1, 1]",
+  "img_model.img_model.layer2.0.conv2._is_full_backward_hook": null,
+  "img_model.img_model.layer2.0.bn2.num_features": 128,
+  "img_model.img_model.layer2.0.bn2.eps": 1e-05,
+  "img_model.img_model.layer2.0.bn2.momentum": 0.1,
+  "img_model.img_model.layer2.0.bn2.affine": true,
+  "img_model.img_model.layer2.0.bn2.track_running_stats": true,
+  "img_model.img_model.layer2.0.bn2._is_full_backward_hook": null,
+  "img_model.img_model.layer2.0.conv3.in_channels": 128,
+  "img_model.img_model.layer2.0.conv3.out_channels": 512,
+  "img_model.img_model.layer2.0.conv3.kernel_size": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer2.0.conv3.stride": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer2.0.conv3.padding": "tuple[2]=[0, 0]",
+  "img_model.img_model.layer2.0.conv3.dilation": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer2.0.conv3.transposed": false,
+  "img_model.img_model.layer2.0.conv3.output_padding": "tuple[2]=[0, 0]",
+  "img_model.img_model.layer2.0.conv3.groups": 1,
+  "img_model.img_model.layer2.0.conv3.padding_mode": "zeros",
+  "img_model.img_model.layer2.0.conv3._reversed_padding_repeated_twice": "tuple[4]=[0, 0, 0, 0]",
+  "img_model.img_model.layer2.0.conv3._is_full_backward_hook": null,
+  "img_model.img_model.layer2.0.bn3.num_features": 512,
+  "img_model.img_model.layer2.0.bn3.eps": 1e-05,
+  "img_model.img_model.layer2.0.bn3.momentum": 0.1,
+  "img_model.img_model.layer2.0.bn3.affine": true,
+  "img_model.img_model.layer2.0.bn3.track_running_stats": true,
+  "img_model.img_model.layer2.0.bn3._is_full_backward_hook": null,
+  "img_model.img_model.layer2.0.relu.inplace": true,
+  "img_model.img_model.layer2.0.relu._is_full_backward_hook": null,
+  "img_model.img_model.layer2.0.downsample._is_full_backward_hook": null,
+  "img_model.img_model.layer2.0.downsample.0.in_channels": 256,
+  "img_model.img_model.layer2.0.downsample.0.out_channels": 512,
+  "img_model.img_model.layer2.0.downsample.0.kernel_size": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer2.0.downsample.0.stride": "tuple[2]=[2, 2]",
+  "img_model.img_model.layer2.0.downsample.0.padding": "tuple[2]=[0, 0]",
+  "img_model.img_model.layer2.0.downsample.0.dilation": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer2.0.downsample.0.transposed": false,
+  "img_model.img_model.layer2.0.downsample.0.output_padding": "tuple[2]=[0, 0]",
+  "img_model.img_model.layer2.0.downsample.0.groups": 1,
+  "img_model.img_model.layer2.0.downsample.0.padding_mode": "zeros",
+  "img_model.img_model.layer2.0.downsample.0._reversed_padding_repeated_twice": "tuple[4]=[0, 0, 0, 0]",
+  "img_model.img_model.layer2.0.downsample.0._is_full_backward_hook": null,
+  "img_model.img_model.layer2.0.downsample.1.num_features": 512,
+  "img_model.img_model.layer2.0.downsample.1.eps": 1e-05,
+  "img_model.img_model.layer2.0.downsample.1.momentum": 0.1,
+  "img_model.img_model.layer2.0.downsample.1.affine": true,
+  "img_model.img_model.layer2.0.downsample.1.track_running_stats": true,
+  "img_model.img_model.layer2.0.downsample.1._is_full_backward_hook": null,
+  "img_model.img_model.layer2.1.downsample": null,
+  "img_model.img_model.layer2.1.stride": 1,
+  "img_model.img_model.layer2.1._is_full_backward_hook": null,
+  "img_model.img_model.layer2.1.conv1.in_channels": 512,
+  "img_model.img_model.layer2.1.conv1.out_channels": 128,
+  "img_model.img_model.layer2.1.conv1.kernel_size": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer2.1.conv1.stride": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer2.1.conv1.padding": "tuple[2]=[0, 0]",
+  "img_model.img_model.layer2.1.conv1.dilation": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer2.1.conv1.transposed": false,
+  "img_model.img_model.layer2.1.conv1.output_padding": "tuple[2]=[0, 0]",
+  "img_model.img_model.layer2.1.conv1.groups": 1,
+  "img_model.img_model.layer2.1.conv1.padding_mode": "zeros",
+  "img_model.img_model.layer2.1.conv1._reversed_padding_repeated_twice": "tuple[4]=[0, 0, 0, 0]",
+  "img_model.img_model.layer2.1.conv1._is_full_backward_hook": null,
+  "img_model.img_model.layer2.1.bn1.num_features": 128,
+  "img_model.img_model.layer2.1.bn1.eps": 1e-05,
+  "img_model.img_model.layer2.1.bn1.momentum": 0.1,
+  "img_model.img_model.layer2.1.bn1.affine": true,
+  "img_model.img_model.layer2.1.bn1.track_running_stats": true,
+  "img_model.img_model.layer2.1.bn1._is_full_backward_hook": null,
+  "img_model.img_model.layer2.1.conv2.in_channels": 128,
+  "img_model.img_model.layer2.1.conv2.out_channels": 128,
+  "img_model.img_model.layer2.1.conv2.kernel_size": "tuple[2]=[3, 3]",
+  "img_model.img_model.layer2.1.conv2.stride": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer2.1.conv2.padding": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer2.1.conv2.dilation": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer2.1.conv2.transposed": false,
+  "img_model.img_model.layer2.1.conv2.output_padding": "tuple[2]=[0, 0]",
+  "img_model.img_model.layer2.1.conv2.groups": 1,
+  "img_model.img_model.layer2.1.conv2.padding_mode": "zeros",
+  "img_model.img_model.layer2.1.conv2._reversed_padding_repeated_twice": "tuple[4]=[1, 1, 1, 1]",
+  "img_model.img_model.layer2.1.conv2._is_full_backward_hook": null,
+  "img_model.img_model.layer2.1.bn2.num_features": 128,
+  "img_model.img_model.layer2.1.bn2.eps": 1e-05,
+  "img_model.img_model.layer2.1.bn2.momentum": 0.1,
+  "img_model.img_model.layer2.1.bn2.affine": true,
+  "img_model.img_model.layer2.1.bn2.track_running_stats": true,
+  "img_model.img_model.layer2.1.bn2._is_full_backward_hook": null,
+  "img_model.img_model.layer2.1.conv3.in_channels": 128,
+  "img_model.img_model.layer2.1.conv3.out_channels": 512,
+  "img_model.img_model.layer2.1.conv3.kernel_size": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer2.1.conv3.stride": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer2.1.conv3.padding": "tuple[2]=[0, 0]",
+  "img_model.img_model.layer2.1.conv3.dilation": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer2.1.conv3.transposed": false,
+  "img_model.img_model.layer2.1.conv3.output_padding": "tuple[2]=[0, 0]",
+  "img_model.img_model.layer2.1.conv3.groups": 1,
+  "img_model.img_model.layer2.1.conv3.padding_mode": "zeros",
+  "img_model.img_model.layer2.1.conv3._reversed_padding_repeated_twice": "tuple[4]=[0, 0, 0, 0]",
+  "img_model.img_model.layer2.1.conv3._is_full_backward_hook": null,
+  "img_model.img_model.layer2.1.bn3.num_features": 512,
+  "img_model.img_model.layer2.1.bn3.eps": 1e-05,
+  "img_model.img_model.layer2.1.bn3.momentum": 0.1,
+  "img_model.img_model.layer2.1.bn3.affine": true,
+  "img_model.img_model.layer2.1.bn3.track_running_stats": true,
+  "img_model.img_model.layer2.1.bn3._is_full_backward_hook": null,
+  "img_model.img_model.layer2.1.relu.inplace": true,
+  "img_model.img_model.layer2.1.relu._is_full_backward_hook": null,
+  "img_model.img_model.layer2.2.downsample": null,
+  "img_model.img_model.layer2.2.stride": 1,
+  "img_model.img_model.layer2.2._is_full_backward_hook": null,
+  "img_model.img_model.layer2.2.conv1.in_channels": 512,
+  "img_model.img_model.layer2.2.conv1.out_channels": 128,
+  "img_model.img_model.layer2.2.conv1.kernel_size": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer2.2.conv1.stride": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer2.2.conv1.padding": "tuple[2]=[0, 0]",
+  "img_model.img_model.layer2.2.conv1.dilation": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer2.2.conv1.transposed": false,
+  "img_model.img_model.layer2.2.conv1.output_padding": "tuple[2]=[0, 0]",
+  "img_model.img_model.layer2.2.conv1.groups": 1,
+  "img_model.img_model.layer2.2.conv1.padding_mode": "zeros",
+  "img_model.img_model.layer2.2.conv1._reversed_padding_repeated_twice": "tuple[4]=[0, 0, 0, 0]",
+  "img_model.img_model.layer2.2.conv1._is_full_backward_hook": null,
+  "img_model.img_model.layer2.2.bn1.num_features": 128,
+  "img_model.img_model.layer2.2.bn1.eps": 1e-05,
+  "img_model.img_model.layer2.2.bn1.momentum": 0.1,
+  "img_model.img_model.layer2.2.bn1.affine": true,
+  "img_model.img_model.layer2.2.bn1.track_running_stats": true,
+  "img_model.img_model.layer2.2.bn1._is_full_backward_hook": null,
+  "img_model.img_model.layer2.2.conv2.in_channels": 128,
+  "img_model.img_model.layer2.2.conv2.out_channels": 128,
+  "img_model.img_model.layer2.2.conv2.kernel_size": "tuple[2]=[3, 3]",
+  "img_model.img_model.layer2.2.conv2.stride": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer2.2.conv2.padding": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer2.2.conv2.dilation": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer2.2.conv2.transposed": false,
+  "img_model.img_model.layer2.2.conv2.output_padding": "tuple[2]=[0, 0]",
+  "img_model.img_model.layer2.2.conv2.groups": 1,
+  "img_model.img_model.layer2.2.conv2.padding_mode": "zeros",
+  "img_model.img_model.layer2.2.conv2._reversed_padding_repeated_twice": "tuple[4]=[1, 1, 1, 1]",
+  "img_model.img_model.layer2.2.conv2._is_full_backward_hook": null,
+  "img_model.img_model.layer2.2.bn2.num_features": 128,
+  "img_model.img_model.layer2.2.bn2.eps": 1e-05,
+  "img_model.img_model.layer2.2.bn2.momentum": 0.1,
+  "img_model.img_model.layer2.2.bn2.affine": true,
+  "img_model.img_model.layer2.2.bn2.track_running_stats": true,
+  "img_model.img_model.layer2.2.bn2._is_full_backward_hook": null,
+  "img_model.img_model.layer2.2.conv3.in_channels": 128,
+  "img_model.img_model.layer2.2.conv3.out_channels": 512,
+  "img_model.img_model.layer2.2.conv3.kernel_size": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer2.2.conv3.stride": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer2.2.conv3.padding": "tuple[2]=[0, 0]",
+  "img_model.img_model.layer2.2.conv3.dilation": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer2.2.conv3.transposed": false,
+  "img_model.img_model.layer2.2.conv3.output_padding": "tuple[2]=[0, 0]",
+  "img_model.img_model.layer2.2.conv3.groups": 1,
+  "img_model.img_model.layer2.2.conv3.padding_mode": "zeros",
+  "img_model.img_model.layer2.2.conv3._reversed_padding_repeated_twice": "tuple[4]=[0, 0, 0, 0]",
+  "img_model.img_model.layer2.2.conv3._is_full_backward_hook": null,
+  "img_model.img_model.layer2.2.bn3.num_features": 512,
+  "img_model.img_model.layer2.2.bn3.eps": 1e-05,
+  "img_model.img_model.layer2.2.bn3.momentum": 0.1,
+  "img_model.img_model.layer2.2.bn3.affine": true,
+  "img_model.img_model.layer2.2.bn3.track_running_stats": true,
+  "img_model.img_model.layer2.2.bn3._is_full_backward_hook": null,
+  "img_model.img_model.layer2.2.relu.inplace": true,
+  "img_model.img_model.layer2.2.relu._is_full_backward_hook": null,
+  "img_model.img_model.layer2.3.downsample": null,
+  "img_model.img_model.layer2.3.stride": 1,
+  "img_model.img_model.layer2.3._is_full_backward_hook": null,
+  "img_model.img_model.layer2.3.conv1.in_channels": 512,
+  "img_model.img_model.layer2.3.conv1.out_channels": 128,
+  "img_model.img_model.layer2.3.conv1.kernel_size": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer2.3.conv1.stride": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer2.3.conv1.padding": "tuple[2]=[0, 0]",
+  "img_model.img_model.layer2.3.conv1.dilation": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer2.3.conv1.transposed": false,
+  "img_model.img_model.layer2.3.conv1.output_padding": "tuple[2]=[0, 0]",
+  "img_model.img_model.layer2.3.conv1.groups": 1,
+  "img_model.img_model.layer2.3.conv1.padding_mode": "zeros",
+  "img_model.img_model.layer2.3.conv1._reversed_padding_repeated_twice": "tuple[4]=[0, 0, 0, 0]",
+  "img_model.img_model.layer2.3.conv1._is_full_backward_hook": null,
+  "img_model.img_model.layer2.3.bn1.num_features": 128,
+  "img_model.img_model.layer2.3.bn1.eps": 1e-05,
+  "img_model.img_model.layer2.3.bn1.momentum": 0.1,
+  "img_model.img_model.layer2.3.bn1.affine": true,
+  "img_model.img_model.layer2.3.bn1.track_running_stats": true,
+  "img_model.img_model.layer2.3.bn1._is_full_backward_hook": null,
+  "img_model.img_model.layer2.3.conv2.in_channels": 128,
+  "img_model.img_model.layer2.3.conv2.out_channels": 128,
+  "img_model.img_model.layer2.3.conv2.kernel_size": "tuple[2]=[3, 3]",
+  "img_model.img_model.layer2.3.conv2.stride": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer2.3.conv2.padding": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer2.3.conv2.dilation": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer2.3.conv2.transposed": false,
+  "img_model.img_model.layer2.3.conv2.output_padding": "tuple[2]=[0, 0]",
+  "img_model.img_model.layer2.3.conv2.groups": 1,
+  "img_model.img_model.layer2.3.conv2.padding_mode": "zeros",
+  "img_model.img_model.layer2.3.conv2._reversed_padding_repeated_twice": "tuple[4]=[1, 1, 1, 1]",
+  "img_model.img_model.layer2.3.conv2._is_full_backward_hook": null,
+  "img_model.img_model.layer2.3.bn2.num_features": 128,
+  "img_model.img_model.layer2.3.bn2.eps": 1e-05,
+  "img_model.img_model.layer2.3.bn2.momentum": 0.1,
+  "img_model.img_model.layer2.3.bn2.affine": true,
+  "img_model.img_model.layer2.3.bn2.track_running_stats": true,
+  "img_model.img_model.layer2.3.bn2._is_full_backward_hook": null,
+  "img_model.img_model.layer2.3.conv3.in_channels": 128,
+  "img_model.img_model.layer2.3.conv3.out_channels": 512,
+  "img_model.img_model.layer2.3.conv3.kernel_size": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer2.3.conv3.stride": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer2.3.conv3.padding": "tuple[2]=[0, 0]",
+  "img_model.img_model.layer2.3.conv3.dilation": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer2.3.conv3.transposed": false,
+  "img_model.img_model.layer2.3.conv3.output_padding": "tuple[2]=[0, 0]",
+  "img_model.img_model.layer2.3.conv3.groups": 1,
+  "img_model.img_model.layer2.3.conv3.padding_mode": "zeros",
+  "img_model.img_model.layer2.3.conv3._reversed_padding_repeated_twice": "tuple[4]=[0, 0, 0, 0]",
+  "img_model.img_model.layer2.3.conv3._is_full_backward_hook": null,
+  "img_model.img_model.layer2.3.bn3.num_features": 512,
+  "img_model.img_model.layer2.3.bn3.eps": 1e-05,
+  "img_model.img_model.layer2.3.bn3.momentum": 0.1,
+  "img_model.img_model.layer2.3.bn3.affine": true,
+  "img_model.img_model.layer2.3.bn3.track_running_stats": true,
+  "img_model.img_model.layer2.3.bn3._is_full_backward_hook": null,
+  "img_model.img_model.layer2.3.relu.inplace": true,
+  "img_model.img_model.layer2.3.relu._is_full_backward_hook": null,
+  "img_model.img_model.layer3._is_full_backward_hook": null,
+  "img_model.img_model.layer3.0.stride": 1,
+  "img_model.img_model.layer3.0._is_full_backward_hook": null,
+  "img_model.img_model.layer3.0.conv1.in_channels": 512,
+  "img_model.img_model.layer3.0.conv1.out_channels": 256,
+  "img_model.img_model.layer3.0.conv1.kernel_size": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer3.0.conv1.stride": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer3.0.conv1.padding": "tuple[2]=[0, 0]",
+  "img_model.img_model.layer3.0.conv1.dilation": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer3.0.conv1.transposed": false,
+  "img_model.img_model.layer3.0.conv1.output_padding": "tuple[2]=[0, 0]",
+  "img_model.img_model.layer3.0.conv1.groups": 1,
+  "img_model.img_model.layer3.0.conv1.padding_mode": "zeros",
+  "img_model.img_model.layer3.0.conv1._reversed_padding_repeated_twice": "tuple[4]=[0, 0, 0, 0]",
+  "img_model.img_model.layer3.0.conv1._is_full_backward_hook": null,
+  "img_model.img_model.layer3.0.bn1.num_features": 256,
+  "img_model.img_model.layer3.0.bn1.eps": 1e-05,
+  "img_model.img_model.layer3.0.bn1.momentum": 0.1,
+  "img_model.img_model.layer3.0.bn1.affine": true,
+  "img_model.img_model.layer3.0.bn1.track_running_stats": true,
+  "img_model.img_model.layer3.0.bn1._is_full_backward_hook": null,
+  "img_model.img_model.layer3.0.conv2.in_channels": 256,
+  "img_model.img_model.layer3.0.conv2.out_channels": 256,
+  "img_model.img_model.layer3.0.conv2.kernel_size": "tuple[2]=[3, 3]",
+  "img_model.img_model.layer3.0.conv2.stride": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer3.0.conv2.padding": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer3.0.conv2.dilation": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer3.0.conv2.transposed": false,
+  "img_model.img_model.layer3.0.conv2.output_padding": "tuple[2]=[0, 0]",
+  "img_model.img_model.layer3.0.conv2.groups": 1,
+  "img_model.img_model.layer3.0.conv2.padding_mode": "zeros",
+  "img_model.img_model.layer3.0.conv2._reversed_padding_repeated_twice": "tuple[4]=[1, 1, 1, 1]",
+  "img_model.img_model.layer3.0.conv2._is_full_backward_hook": null,
+  "img_model.img_model.layer3.0.bn2.num_features": 256,
+  "img_model.img_model.layer3.0.bn2.eps": 1e-05,
+  "img_model.img_model.layer3.0.bn2.momentum": 0.1,
+  "img_model.img_model.layer3.0.bn2.affine": true,
+  "img_model.img_model.layer3.0.bn2.track_running_stats": true,
+  "img_model.img_model.layer3.0.bn2._is_full_backward_hook": null,
+  "img_model.img_model.layer3.0.conv3.in_channels": 256,
+  "img_model.img_model.layer3.0.conv3.out_channels": 1024,
+  "img_model.img_model.layer3.0.conv3.kernel_size": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer3.0.conv3.stride": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer3.0.conv3.padding": "tuple[2]=[0, 0]",
+  "img_model.img_model.layer3.0.conv3.dilation": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer3.0.conv3.transposed": false,
+  "img_model.img_model.layer3.0.conv3.output_padding": "tuple[2]=[0, 0]",
+  "img_model.img_model.layer3.0.conv3.groups": 1,
+  "img_model.img_model.layer3.0.conv3.padding_mode": "zeros",
+  "img_model.img_model.layer3.0.conv3._reversed_padding_repeated_twice": "tuple[4]=[0, 0, 0, 0]",
+  "img_model.img_model.layer3.0.conv3._is_full_backward_hook": null,
+  "img_model.img_model.layer3.0.bn3.num_features": 1024,
+  "img_model.img_model.layer3.0.bn3.eps": 1e-05,
+  "img_model.img_model.layer3.0.bn3.momentum": 0.1,
+  "img_model.img_model.layer3.0.bn3.affine": true,
+  "img_model.img_model.layer3.0.bn3.track_running_stats": true,
+  "img_model.img_model.layer3.0.bn3._is_full_backward_hook": null,
+  "img_model.img_model.layer3.0.relu.inplace": true,
+  "img_model.img_model.layer3.0.relu._is_full_backward_hook": null,
+  "img_model.img_model.layer3.0.downsample._is_full_backward_hook": null,
+  "img_model.img_model.layer3.0.downsample.0.in_channels": 512,
+  "img_model.img_model.layer3.0.downsample.0.out_channels": 1024,
+  "img_model.img_model.layer3.0.downsample.0.kernel_size": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer3.0.downsample.0.stride": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer3.0.downsample.0.padding": "tuple[2]=[0, 0]",
+  "img_model.img_model.layer3.0.downsample.0.dilation": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer3.0.downsample.0.transposed": false,
+  "img_model.img_model.layer3.0.downsample.0.output_padding": "tuple[2]=[0, 0]",
+  "img_model.img_model.layer3.0.downsample.0.groups": 1,
+  "img_model.img_model.layer3.0.downsample.0.padding_mode": "zeros",
+  "img_model.img_model.layer3.0.downsample.0._reversed_padding_repeated_twice": "tuple[4]=[0, 0, 0, 0]",
+  "img_model.img_model.layer3.0.downsample.0._is_full_backward_hook": null,
+  "img_model.img_model.layer3.0.downsample.1.num_features": 1024,
+  "img_model.img_model.layer3.0.downsample.1.eps": 1e-05,
+  "img_model.img_model.layer3.0.downsample.1.momentum": 0.1,
+  "img_model.img_model.layer3.0.downsample.1.affine": true,
+  "img_model.img_model.layer3.0.downsample.1.track_running_stats": true,
+  "img_model.img_model.layer3.0.downsample.1._is_full_backward_hook": null,
+  "img_model.img_model.layer3.1.downsample": null,
+  "img_model.img_model.layer3.1.stride": 1,
+  "img_model.img_model.layer3.1._is_full_backward_hook": null,
+  "img_model.img_model.layer3.1.conv1.in_channels": 1024,
+  "img_model.img_model.layer3.1.conv1.out_channels": 256,
+  "img_model.img_model.layer3.1.conv1.kernel_size": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer3.1.conv1.stride": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer3.1.conv1.padding": "tuple[2]=[0, 0]",
+  "img_model.img_model.layer3.1.conv1.dilation": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer3.1.conv1.transposed": false,
+  "img_model.img_model.layer3.1.conv1.output_padding": "tuple[2]=[0, 0]",
+  "img_model.img_model.layer3.1.conv1.groups": 1,
+  "img_model.img_model.layer3.1.conv1.padding_mode": "zeros",
+  "img_model.img_model.layer3.1.conv1._reversed_padding_repeated_twice": "tuple[4]=[0, 0, 0, 0]",
+  "img_model.img_model.layer3.1.conv1._is_full_backward_hook": null,
+  "img_model.img_model.layer3.1.bn1.num_features": 256,
+  "img_model.img_model.layer3.1.bn1.eps": 1e-05,
+  "img_model.img_model.layer3.1.bn1.momentum": 0.1,
+  "img_model.img_model.layer3.1.bn1.affine": true,
+  "img_model.img_model.layer3.1.bn1.track_running_stats": true,
+  "img_model.img_model.layer3.1.bn1._is_full_backward_hook": null,
+  "img_model.img_model.layer3.1.conv2.in_channels": 256,
+  "img_model.img_model.layer3.1.conv2.out_channels": 256,
+  "img_model.img_model.layer3.1.conv2.kernel_size": "tuple[2]=[3, 3]",
+  "img_model.img_model.layer3.1.conv2.stride": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer3.1.conv2.padding": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer3.1.conv2.dilation": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer3.1.conv2.transposed": false,
+  "img_model.img_model.layer3.1.conv2.output_padding": "tuple[2]=[0, 0]",
+  "img_model.img_model.layer3.1.conv2.groups": 1,
+  "img_model.img_model.layer3.1.conv2.padding_mode": "zeros",
+  "img_model.img_model.layer3.1.conv2._reversed_padding_repeated_twice": "tuple[4]=[1, 1, 1, 1]",
+  "img_model.img_model.layer3.1.conv2._is_full_backward_hook": null,
+  "img_model.img_model.layer3.1.bn2.num_features": 256,
+  "img_model.img_model.layer3.1.bn2.eps": 1e-05,
+  "img_model.img_model.layer3.1.bn2.momentum": 0.1,
+  "img_model.img_model.layer3.1.bn2.affine": true,
+  "img_model.img_model.layer3.1.bn2.track_running_stats": true,
+  "img_model.img_model.layer3.1.bn2._is_full_backward_hook": null,
+  "img_model.img_model.layer3.1.conv3.in_channels": 256,
+  "img_model.img_model.layer3.1.conv3.out_channels": 1024,
+  "img_model.img_model.layer3.1.conv3.kernel_size": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer3.1.conv3.stride": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer3.1.conv3.padding": "tuple[2]=[0, 0]",
+  "img_model.img_model.layer3.1.conv3.dilation": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer3.1.conv3.transposed": false,
+  "img_model.img_model.layer3.1.conv3.output_padding": "tuple[2]=[0, 0]",
+  "img_model.img_model.layer3.1.conv3.groups": 1,
+  "img_model.img_model.layer3.1.conv3.padding_mode": "zeros",
+  "img_model.img_model.layer3.1.conv3._reversed_padding_repeated_twice": "tuple[4]=[0, 0, 0, 0]",
+  "img_model.img_model.layer3.1.conv3._is_full_backward_hook": null,
+  "img_model.img_model.layer3.1.bn3.num_features": 1024,
+  "img_model.img_model.layer3.1.bn3.eps": 1e-05,
+  "img_model.img_model.layer3.1.bn3.momentum": 0.1,
+  "img_model.img_model.layer3.1.bn3.affine": true,
+  "img_model.img_model.layer3.1.bn3.track_running_stats": true,
+  "img_model.img_model.layer3.1.bn3._is_full_backward_hook": null,
+  "img_model.img_model.layer3.1.relu.inplace": true,
+  "img_model.img_model.layer3.1.relu._is_full_backward_hook": null,
+  "img_model.img_model.layer3.2.downsample": null,
+  "img_model.img_model.layer3.2.stride": 1,
+  "img_model.img_model.layer3.2._is_full_backward_hook": null,
+  "img_model.img_model.layer3.2.conv1.in_channels": 1024,
+  "img_model.img_model.layer3.2.conv1.out_channels": 256,
+  "img_model.img_model.layer3.2.conv1.kernel_size": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer3.2.conv1.stride": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer3.2.conv1.padding": "tuple[2]=[0, 0]",
+  "img_model.img_model.layer3.2.conv1.dilation": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer3.2.conv1.transposed": false,
+  "img_model.img_model.layer3.2.conv1.output_padding": "tuple[2]=[0, 0]",
+  "img_model.img_model.layer3.2.conv1.groups": 1,
+  "img_model.img_model.layer3.2.conv1.padding_mode": "zeros",
+  "img_model.img_model.layer3.2.conv1._reversed_padding_repeated_twice": "tuple[4]=[0, 0, 0, 0]",
+  "img_model.img_model.layer3.2.conv1._is_full_backward_hook": null,
+  "img_model.img_model.layer3.2.bn1.num_features": 256,
+  "img_model.img_model.layer3.2.bn1.eps": 1e-05,
+  "img_model.img_model.layer3.2.bn1.momentum": 0.1,
+  "img_model.img_model.layer3.2.bn1.affine": true,
+  "img_model.img_model.layer3.2.bn1.track_running_stats": true,
+  "img_model.img_model.layer3.2.bn1._is_full_backward_hook": null,
+  "img_model.img_model.layer3.2.conv2.in_channels": 256,
+  "img_model.img_model.layer3.2.conv2.out_channels": 256,
+  "img_model.img_model.layer3.2.conv2.kernel_size": "tuple[2]=[3, 3]",
+  "img_model.img_model.layer3.2.conv2.stride": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer3.2.conv2.padding": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer3.2.conv2.dilation": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer3.2.conv2.transposed": false,
+  "img_model.img_model.layer3.2.conv2.output_padding": "tuple[2]=[0, 0]",
+  "img_model.img_model.layer3.2.conv2.groups": 1,
+  "img_model.img_model.layer3.2.conv2.padding_mode": "zeros",
+  "img_model.img_model.layer3.2.conv2._reversed_padding_repeated_twice": "tuple[4]=[1, 1, 1, 1]",
+  "img_model.img_model.layer3.2.conv2._is_full_backward_hook": null,
+  "img_model.img_model.layer3.2.bn2.num_features": 256,
+  "img_model.img_model.layer3.2.bn2.eps": 1e-05,
+  "img_model.img_model.layer3.2.bn2.momentum": 0.1,
+  "img_model.img_model.layer3.2.bn2.affine": true,
+  "img_model.img_model.layer3.2.bn2.track_running_stats": true,
+  "img_model.img_model.layer3.2.bn2._is_full_backward_hook": null,
+  "img_model.img_model.layer3.2.conv3.in_channels": 256,
+  "img_model.img_model.layer3.2.conv3.out_channels": 1024,
+  "img_model.img_model.layer3.2.conv3.kernel_size": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer3.2.conv3.stride": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer3.2.conv3.padding": "tuple[2]=[0, 0]",
+  "img_model.img_model.layer3.2.conv3.dilation": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer3.2.conv3.transposed": false,
+  "img_model.img_model.layer3.2.conv3.output_padding": "tuple[2]=[0, 0]",
+  "img_model.img_model.layer3.2.conv3.groups": 1,
+  "img_model.img_model.layer3.2.conv3.padding_mode": "zeros",
+  "img_model.img_model.layer3.2.conv3._reversed_padding_repeated_twice": "tuple[4]=[0, 0, 0, 0]",
+  "img_model.img_model.layer3.2.conv3._is_full_backward_hook": null,
+  "img_model.img_model.layer3.2.bn3.num_features": 1024,
+  "img_model.img_model.layer3.2.bn3.eps": 1e-05,
+  "img_model.img_model.layer3.2.bn3.momentum": 0.1,
+  "img_model.img_model.layer3.2.bn3.affine": true,
+  "img_model.img_model.layer3.2.bn3.track_running_stats": true,
+  "img_model.img_model.layer3.2.bn3._is_full_backward_hook": null,
+  "img_model.img_model.layer3.2.relu.inplace": true,
+  "img_model.img_model.layer3.2.relu._is_full_backward_hook": null,
+  "img_model.img_model.layer3.3.downsample": null,
+  "img_model.img_model.layer3.3.stride": 1,
+  "img_model.img_model.layer3.3._is_full_backward_hook": null,
+  "img_model.img_model.layer3.3.conv1.in_channels": 1024,
+  "img_model.img_model.layer3.3.conv1.out_channels": 256,
+  "img_model.img_model.layer3.3.conv1.kernel_size": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer3.3.conv1.stride": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer3.3.conv1.padding": "tuple[2]=[0, 0]",
+  "img_model.img_model.layer3.3.conv1.dilation": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer3.3.conv1.transposed": false,
+  "img_model.img_model.layer3.3.conv1.output_padding": "tuple[2]=[0, 0]",
+  "img_model.img_model.layer3.3.conv1.groups": 1,
+  "img_model.img_model.layer3.3.conv1.padding_mode": "zeros",
+  "img_model.img_model.layer3.3.conv1._reversed_padding_repeated_twice": "tuple[4]=[0, 0, 0, 0]",
+  "img_model.img_model.layer3.3.conv1._is_full_backward_hook": null,
+  "img_model.img_model.layer3.3.bn1.num_features": 256,
+  "img_model.img_model.layer3.3.bn1.eps": 1e-05,
+  "img_model.img_model.layer3.3.bn1.momentum": 0.1,
+  "img_model.img_model.layer3.3.bn1.affine": true,
+  "img_model.img_model.layer3.3.bn1.track_running_stats": true,
+  "img_model.img_model.layer3.3.bn1._is_full_backward_hook": null,
+  "img_model.img_model.layer3.3.conv2.in_channels": 256,
+  "img_model.img_model.layer3.3.conv2.out_channels": 256,
+  "img_model.img_model.layer3.3.conv2.kernel_size": "tuple[2]=[3, 3]",
+  "img_model.img_model.layer3.3.conv2.stride": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer3.3.conv2.padding": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer3.3.conv2.dilation": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer3.3.conv2.transposed": false,
+  "img_model.img_model.layer3.3.conv2.output_padding": "tuple[2]=[0, 0]",
+  "img_model.img_model.layer3.3.conv2.groups": 1,
+  "img_model.img_model.layer3.3.conv2.padding_mode": "zeros",
+  "img_model.img_model.layer3.3.conv2._reversed_padding_repeated_twice": "tuple[4]=[1, 1, 1, 1]",
+  "img_model.img_model.layer3.3.conv2._is_full_backward_hook": null,
+  "img_model.img_model.layer3.3.bn2.num_features": 256,
+  "img_model.img_model.layer3.3.bn2.eps": 1e-05,
+  "img_model.img_model.layer3.3.bn2.momentum": 0.1,
+  "img_model.img_model.layer3.3.bn2.affine": true,
+  "img_model.img_model.layer3.3.bn2.track_running_stats": true,
+  "img_model.img_model.layer3.3.bn2._is_full_backward_hook": null,
+  "img_model.img_model.layer3.3.conv3.in_channels": 256,
+  "img_model.img_model.layer3.3.conv3.out_channels": 1024,
+  "img_model.img_model.layer3.3.conv3.kernel_size": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer3.3.conv3.stride": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer3.3.conv3.padding": "tuple[2]=[0, 0]",
+  "img_model.img_model.layer3.3.conv3.dilation": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer3.3.conv3.transposed": false,
+  "img_model.img_model.layer3.3.conv3.output_padding": "tuple[2]=[0, 0]",
+  "img_model.img_model.layer3.3.conv3.groups": 1,
+  "img_model.img_model.layer3.3.conv3.padding_mode": "zeros",
+  "img_model.img_model.layer3.3.conv3._reversed_padding_repeated_twice": "tuple[4]=[0, 0, 0, 0]",
+  "img_model.img_model.layer3.3.conv3._is_full_backward_hook": null,
+  "img_model.img_model.layer3.3.bn3.num_features": 1024,
+  "img_model.img_model.layer3.3.bn3.eps": 1e-05,
+  "img_model.img_model.layer3.3.bn3.momentum": 0.1,
+  "img_model.img_model.layer3.3.bn3.affine": true,
+  "img_model.img_model.layer3.3.bn3.track_running_stats": true,
+  "img_model.img_model.layer3.3.bn3._is_full_backward_hook": null,
+  "img_model.img_model.layer3.3.relu.inplace": true,
+  "img_model.img_model.layer3.3.relu._is_full_backward_hook": null,
+  "img_model.img_model.layer3.4.downsample": null,
+  "img_model.img_model.layer3.4.stride": 1,
+  "img_model.img_model.layer3.4._is_full_backward_hook": null,
+  "img_model.img_model.layer3.4.conv1.in_channels": 1024,
+  "img_model.img_model.layer3.4.conv1.out_channels": 256,
+  "img_model.img_model.layer3.4.conv1.kernel_size": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer3.4.conv1.stride": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer3.4.conv1.padding": "tuple[2]=[0, 0]",
+  "img_model.img_model.layer3.4.conv1.dilation": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer3.4.conv1.transposed": false,
+  "img_model.img_model.layer3.4.conv1.output_padding": "tuple[2]=[0, 0]",
+  "img_model.img_model.layer3.4.conv1.groups": 1,
+  "img_model.img_model.layer3.4.conv1.padding_mode": "zeros",
+  "img_model.img_model.layer3.4.conv1._reversed_padding_repeated_twice": "tuple[4]=[0, 0, 0, 0]",
+  "img_model.img_model.layer3.4.conv1._is_full_backward_hook": null,
+  "img_model.img_model.layer3.4.bn1.num_features": 256,
+  "img_model.img_model.layer3.4.bn1.eps": 1e-05,
+  "img_model.img_model.layer3.4.bn1.momentum": 0.1,
+  "img_model.img_model.layer3.4.bn1.affine": true,
+  "img_model.img_model.layer3.4.bn1.track_running_stats": true,
+  "img_model.img_model.layer3.4.bn1._is_full_backward_hook": null,
+  "img_model.img_model.layer3.4.conv2.in_channels": 256,
+  "img_model.img_model.layer3.4.conv2.out_channels": 256,
+  "img_model.img_model.layer3.4.conv2.kernel_size": "tuple[2]=[3, 3]",
+  "img_model.img_model.layer3.4.conv2.stride": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer3.4.conv2.padding": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer3.4.conv2.dilation": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer3.4.conv2.transposed": false,
+  "img_model.img_model.layer3.4.conv2.output_padding": "tuple[2]=[0, 0]",
+  "img_model.img_model.layer3.4.conv2.groups": 1,
+  "img_model.img_model.layer3.4.conv2.padding_mode": "zeros",
+  "img_model.img_model.layer3.4.conv2._reversed_padding_repeated_twice": "tuple[4]=[1, 1, 1, 1]",
+  "img_model.img_model.layer3.4.conv2._is_full_backward_hook": null,
+  "img_model.img_model.layer3.4.bn2.num_features": 256,
+  "img_model.img_model.layer3.4.bn2.eps": 1e-05,
+  "img_model.img_model.layer3.4.bn2.momentum": 0.1,
+  "img_model.img_model.layer3.4.bn2.affine": true,
+  "img_model.img_model.layer3.4.bn2.track_running_stats": true,
+  "img_model.img_model.layer3.4.bn2._is_full_backward_hook": null,
+  "img_model.img_model.layer3.4.conv3.in_channels": 256,
+  "img_model.img_model.layer3.4.conv3.out_channels": 1024,
+  "img_model.img_model.layer3.4.conv3.kernel_size": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer3.4.conv3.stride": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer3.4.conv3.padding": "tuple[2]=[0, 0]",
+  "img_model.img_model.layer3.4.conv3.dilation": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer3.4.conv3.transposed": false,
+  "img_model.img_model.layer3.4.conv3.output_padding": "tuple[2]=[0, 0]",
+  "img_model.img_model.layer3.4.conv3.groups": 1,
+  "img_model.img_model.layer3.4.conv3.padding_mode": "zeros",
+  "img_model.img_model.layer3.4.conv3._reversed_padding_repeated_twice": "tuple[4]=[0, 0, 0, 0]",
+  "img_model.img_model.layer3.4.conv3._is_full_backward_hook": null,
+  "img_model.img_model.layer3.4.bn3.num_features": 1024,
+  "img_model.img_model.layer3.4.bn3.eps": 1e-05,
+  "img_model.img_model.layer3.4.bn3.momentum": 0.1,
+  "img_model.img_model.layer3.4.bn3.affine": true,
+  "img_model.img_model.layer3.4.bn3.track_running_stats": true,
+  "img_model.img_model.layer3.4.bn3._is_full_backward_hook": null,
+  "img_model.img_model.layer3.4.relu.inplace": true,
+  "img_model.img_model.layer3.4.relu._is_full_backward_hook": null,
+  "img_model.img_model.layer3.5.downsample": null,
+  "img_model.img_model.layer3.5.stride": 1,
+  "img_model.img_model.layer3.5._is_full_backward_hook": null,
+  "img_model.img_model.layer3.5.conv1.in_channels": 1024,
+  "img_model.img_model.layer3.5.conv1.out_channels": 256,
+  "img_model.img_model.layer3.5.conv1.kernel_size": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer3.5.conv1.stride": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer3.5.conv1.padding": "tuple[2]=[0, 0]",
+  "img_model.img_model.layer3.5.conv1.dilation": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer3.5.conv1.transposed": false,
+  "img_model.img_model.layer3.5.conv1.output_padding": "tuple[2]=[0, 0]",
+  "img_model.img_model.layer3.5.conv1.groups": 1,
+  "img_model.img_model.layer3.5.conv1.padding_mode": "zeros",
+  "img_model.img_model.layer3.5.conv1._reversed_padding_repeated_twice": "tuple[4]=[0, 0, 0, 0]",
+  "img_model.img_model.layer3.5.conv1._is_full_backward_hook": null,
+  "img_model.img_model.layer3.5.bn1.num_features": 256,
+  "img_model.img_model.layer3.5.bn1.eps": 1e-05,
+  "img_model.img_model.layer3.5.bn1.momentum": 0.1,
+  "img_model.img_model.layer3.5.bn1.affine": true,
+  "img_model.img_model.layer3.5.bn1.track_running_stats": true,
+  "img_model.img_model.layer3.5.bn1._is_full_backward_hook": null,
+  "img_model.img_model.layer3.5.conv2.in_channels": 256,
+  "img_model.img_model.layer3.5.conv2.out_channels": 256,
+  "img_model.img_model.layer3.5.conv2.kernel_size": "tuple[2]=[3, 3]",
+  "img_model.img_model.layer3.5.conv2.stride": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer3.5.conv2.padding": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer3.5.conv2.dilation": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer3.5.conv2.transposed": false,
+  "img_model.img_model.layer3.5.conv2.output_padding": "tuple[2]=[0, 0]",
+  "img_model.img_model.layer3.5.conv2.groups": 1,
+  "img_model.img_model.layer3.5.conv2.padding_mode": "zeros",
+  "img_model.img_model.layer3.5.conv2._reversed_padding_repeated_twice": "tuple[4]=[1, 1, 1, 1]",
+  "img_model.img_model.layer3.5.conv2._is_full_backward_hook": null,
+  "img_model.img_model.layer3.5.bn2.num_features": 256,
+  "img_model.img_model.layer3.5.bn2.eps": 1e-05,
+  "img_model.img_model.layer3.5.bn2.momentum": 0.1,
+  "img_model.img_model.layer3.5.bn2.affine": true,
+  "img_model.img_model.layer3.5.bn2.track_running_stats": true,
+  "img_model.img_model.layer3.5.bn2._is_full_backward_hook": null,
+  "img_model.img_model.layer3.5.conv3.in_channels": 256,
+  "img_model.img_model.layer3.5.conv3.out_channels": 1024,
+  "img_model.img_model.layer3.5.conv3.kernel_size": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer3.5.conv3.stride": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer3.5.conv3.padding": "tuple[2]=[0, 0]",
+  "img_model.img_model.layer3.5.conv3.dilation": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer3.5.conv3.transposed": false,
+  "img_model.img_model.layer3.5.conv3.output_padding": "tuple[2]=[0, 0]",
+  "img_model.img_model.layer3.5.conv3.groups": 1,
+  "img_model.img_model.layer3.5.conv3.padding_mode": "zeros",
+  "img_model.img_model.layer3.5.conv3._reversed_padding_repeated_twice": "tuple[4]=[0, 0, 0, 0]",
+  "img_model.img_model.layer3.5.conv3._is_full_backward_hook": null,
+  "img_model.img_model.layer3.5.bn3.num_features": 1024,
+  "img_model.img_model.layer3.5.bn3.eps": 1e-05,
+  "img_model.img_model.layer3.5.bn3.momentum": 0.1,
+  "img_model.img_model.layer3.5.bn3.affine": true,
+  "img_model.img_model.layer3.5.bn3.track_running_stats": true,
+  "img_model.img_model.layer3.5.bn3._is_full_backward_hook": null,
+  "img_model.img_model.layer3.5.relu.inplace": true,
+  "img_model.img_model.layer3.5.relu._is_full_backward_hook": null,
+  "img_model.img_model.layer4._is_full_backward_hook": null,
+  "img_model.img_model.layer4.0.stride": 2,
+  "img_model.img_model.layer4.0._is_full_backward_hook": null,
+  "img_model.img_model.layer4.0.conv1.in_channels": 1024,
+  "img_model.img_model.layer4.0.conv1.out_channels": 512,
+  "img_model.img_model.layer4.0.conv1.kernel_size": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer4.0.conv1.stride": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer4.0.conv1.padding": "tuple[2]=[0, 0]",
+  "img_model.img_model.layer4.0.conv1.dilation": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer4.0.conv1.transposed": false,
+  "img_model.img_model.layer4.0.conv1.output_padding": "tuple[2]=[0, 0]",
+  "img_model.img_model.layer4.0.conv1.groups": 1,
+  "img_model.img_model.layer4.0.conv1.padding_mode": "zeros",
+  "img_model.img_model.layer4.0.conv1._reversed_padding_repeated_twice": "tuple[4]=[0, 0, 0, 0]",
+  "img_model.img_model.layer4.0.conv1._is_full_backward_hook": null,
+  "img_model.img_model.layer4.0.bn1.num_features": 512,
+  "img_model.img_model.layer4.0.bn1.eps": 1e-05,
+  "img_model.img_model.layer4.0.bn1.momentum": 0.1,
+  "img_model.img_model.layer4.0.bn1.affine": true,
+  "img_model.img_model.layer4.0.bn1.track_running_stats": true,
+  "img_model.img_model.layer4.0.bn1._is_full_backward_hook": null,
+  "img_model.img_model.layer4.0.conv2.in_channels": 512,
+  "img_model.img_model.layer4.0.conv2.out_channels": 512,
+  "img_model.img_model.layer4.0.conv2.kernel_size": "tuple[2]=[3, 3]",
+  "img_model.img_model.layer4.0.conv2.stride": "tuple[2]=[2, 2]",
+  "img_model.img_model.layer4.0.conv2.padding": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer4.0.conv2.dilation": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer4.0.conv2.transposed": false,
+  "img_model.img_model.layer4.0.conv2.output_padding": "tuple[2]=[0, 0]",
+  "img_model.img_model.layer4.0.conv2.groups": 1,
+  "img_model.img_model.layer4.0.conv2.padding_mode": "zeros",
+  "img_model.img_model.layer4.0.conv2._reversed_padding_repeated_twice": "tuple[4]=[1, 1, 1, 1]",
+  "img_model.img_model.layer4.0.conv2._is_full_backward_hook": null,
+  "img_model.img_model.layer4.0.bn2.num_features": 512,
+  "img_model.img_model.layer4.0.bn2.eps": 1e-05,
+  "img_model.img_model.layer4.0.bn2.momentum": 0.1,
+  "img_model.img_model.layer4.0.bn2.affine": true,
+  "img_model.img_model.layer4.0.bn2.track_running_stats": true,
+  "img_model.img_model.layer4.0.bn2._is_full_backward_hook": null,
+  "img_model.img_model.layer4.0.conv3.in_channels": 512,
+  "img_model.img_model.layer4.0.conv3.out_channels": 2048,
+  "img_model.img_model.layer4.0.conv3.kernel_size": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer4.0.conv3.stride": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer4.0.conv3.padding": "tuple[2]=[0, 0]",
+  "img_model.img_model.layer4.0.conv3.dilation": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer4.0.conv3.transposed": false,
+  "img_model.img_model.layer4.0.conv3.output_padding": "tuple[2]=[0, 0]",
+  "img_model.img_model.layer4.0.conv3.groups": 1,
+  "img_model.img_model.layer4.0.conv3.padding_mode": "zeros",
+  "img_model.img_model.layer4.0.conv3._reversed_padding_repeated_twice": "tuple[4]=[0, 0, 0, 0]",
+  "img_model.img_model.layer4.0.conv3._is_full_backward_hook": null,
+  "img_model.img_model.layer4.0.bn3.num_features": 2048,
+  "img_model.img_model.layer4.0.bn3.eps": 1e-05,
+  "img_model.img_model.layer4.0.bn3.momentum": 0.1,
+  "img_model.img_model.layer4.0.bn3.affine": true,
+  "img_model.img_model.layer4.0.bn3.track_running_stats": true,
+  "img_model.img_model.layer4.0.bn3._is_full_backward_hook": null,
+  "img_model.img_model.layer4.0.relu.inplace": true,
+  "img_model.img_model.layer4.0.relu._is_full_backward_hook": null,
+  "img_model.img_model.layer4.0.downsample._is_full_backward_hook": null,
+  "img_model.img_model.layer4.0.downsample.0.in_channels": 1024,
+  "img_model.img_model.layer4.0.downsample.0.out_channels": 2048,
+  "img_model.img_model.layer4.0.downsample.0.kernel_size": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer4.0.downsample.0.stride": "tuple[2]=[2, 2]",
+  "img_model.img_model.layer4.0.downsample.0.padding": "tuple[2]=[0, 0]",
+  "img_model.img_model.layer4.0.downsample.0.dilation": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer4.0.downsample.0.transposed": false,
+  "img_model.img_model.layer4.0.downsample.0.output_padding": "tuple[2]=[0, 0]",
+  "img_model.img_model.layer4.0.downsample.0.groups": 1,
+  "img_model.img_model.layer4.0.downsample.0.padding_mode": "zeros",
+  "img_model.img_model.layer4.0.downsample.0._reversed_padding_repeated_twice": "tuple[4]=[0, 0, 0, 0]",
+  "img_model.img_model.layer4.0.downsample.0._is_full_backward_hook": null,
+  "img_model.img_model.layer4.0.downsample.1.num_features": 2048,
+  "img_model.img_model.layer4.0.downsample.1.eps": 1e-05,
+  "img_model.img_model.layer4.0.downsample.1.momentum": 0.1,
+  "img_model.img_model.layer4.0.downsample.1.affine": true,
+  "img_model.img_model.layer4.0.downsample.1.track_running_stats": true,
+  "img_model.img_model.layer4.0.downsample.1._is_full_backward_hook": null,
+  "img_model.img_model.layer4.1.downsample": null,
+  "img_model.img_model.layer4.1.stride": 1,
+  "img_model.img_model.layer4.1._is_full_backward_hook": null,
+  "img_model.img_model.layer4.1.conv1.in_channels": 2048,
+  "img_model.img_model.layer4.1.conv1.out_channels": 512,
+  "img_model.img_model.layer4.1.conv1.kernel_size": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer4.1.conv1.stride": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer4.1.conv1.padding": "tuple[2]=[0, 0]",
+  "img_model.img_model.layer4.1.conv1.dilation": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer4.1.conv1.transposed": false,
+  "img_model.img_model.layer4.1.conv1.output_padding": "tuple[2]=[0, 0]",
+  "img_model.img_model.layer4.1.conv1.groups": 1,
+  "img_model.img_model.layer4.1.conv1.padding_mode": "zeros",
+  "img_model.img_model.layer4.1.conv1._reversed_padding_repeated_twice": "tuple[4]=[0, 0, 0, 0]",
+  "img_model.img_model.layer4.1.conv1._is_full_backward_hook": null,
+  "img_model.img_model.layer4.1.bn1.num_features": 512,
+  "img_model.img_model.layer4.1.bn1.eps": 1e-05,
+  "img_model.img_model.layer4.1.bn1.momentum": 0.1,
+  "img_model.img_model.layer4.1.bn1.affine": true,
+  "img_model.img_model.layer4.1.bn1.track_running_stats": true,
+  "img_model.img_model.layer4.1.bn1._is_full_backward_hook": null,
+  "img_model.img_model.layer4.1.conv2.in_channels": 512,
+  "img_model.img_model.layer4.1.conv2.out_channels": 512,
+  "img_model.img_model.layer4.1.conv2.kernel_size": "tuple[2]=[3, 3]",
+  "img_model.img_model.layer4.1.conv2.stride": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer4.1.conv2.padding": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer4.1.conv2.dilation": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer4.1.conv2.transposed": false,
+  "img_model.img_model.layer4.1.conv2.output_padding": "tuple[2]=[0, 0]",
+  "img_model.img_model.layer4.1.conv2.groups": 1,
+  "img_model.img_model.layer4.1.conv2.padding_mode": "zeros",
+  "img_model.img_model.layer4.1.conv2._reversed_padding_repeated_twice": "tuple[4]=[1, 1, 1, 1]",
+  "img_model.img_model.layer4.1.conv2._is_full_backward_hook": null,
+  "img_model.img_model.layer4.1.bn2.num_features": 512,
+  "img_model.img_model.layer4.1.bn2.eps": 1e-05,
+  "img_model.img_model.layer4.1.bn2.momentum": 0.1,
+  "img_model.img_model.layer4.1.bn2.affine": true,
+  "img_model.img_model.layer4.1.bn2.track_running_stats": true,
+  "img_model.img_model.layer4.1.bn2._is_full_backward_hook": null,
+  "img_model.img_model.layer4.1.conv3.in_channels": 512,
+  "img_model.img_model.layer4.1.conv3.out_channels": 2048,
+  "img_model.img_model.layer4.1.conv3.kernel_size": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer4.1.conv3.stride": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer4.1.conv3.padding": "tuple[2]=[0, 0]",
+  "img_model.img_model.layer4.1.conv3.dilation": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer4.1.conv3.transposed": false,
+  "img_model.img_model.layer4.1.conv3.output_padding": "tuple[2]=[0, 0]",
+  "img_model.img_model.layer4.1.conv3.groups": 1,
+  "img_model.img_model.layer4.1.conv3.padding_mode": "zeros",
+  "img_model.img_model.layer4.1.conv3._reversed_padding_repeated_twice": "tuple[4]=[0, 0, 0, 0]",
+  "img_model.img_model.layer4.1.conv3._is_full_backward_hook": null,
+  "img_model.img_model.layer4.1.bn3.num_features": 2048,
+  "img_model.img_model.layer4.1.bn3.eps": 1e-05,
+  "img_model.img_model.layer4.1.bn3.momentum": 0.1,
+  "img_model.img_model.layer4.1.bn3.affine": true,
+  "img_model.img_model.layer4.1.bn3.track_running_stats": true,
+  "img_model.img_model.layer4.1.bn3._is_full_backward_hook": null,
+  "img_model.img_model.layer4.1.relu.inplace": true,
+  "img_model.img_model.layer4.1.relu._is_full_backward_hook": null,
+  "img_model.img_model.layer4.2.downsample": null,
+  "img_model.img_model.layer4.2.stride": 1,
+  "img_model.img_model.layer4.2._is_full_backward_hook": null,
+  "img_model.img_model.layer4.2.conv1.in_channels": 2048,
+  "img_model.img_model.layer4.2.conv1.out_channels": 512,
+  "img_model.img_model.layer4.2.conv1.kernel_size": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer4.2.conv1.stride": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer4.2.conv1.padding": "tuple[2]=[0, 0]",
+  "img_model.img_model.layer4.2.conv1.dilation": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer4.2.conv1.transposed": false,
+  "img_model.img_model.layer4.2.conv1.output_padding": "tuple[2]=[0, 0]",
+  "img_model.img_model.layer4.2.conv1.groups": 1,
+  "img_model.img_model.layer4.2.conv1.padding_mode": "zeros",
+  "img_model.img_model.layer4.2.conv1._reversed_padding_repeated_twice": "tuple[4]=[0, 0, 0, 0]",
+  "img_model.img_model.layer4.2.conv1._is_full_backward_hook": null,
+  "img_model.img_model.layer4.2.bn1.num_features": 512,
+  "img_model.img_model.layer4.2.bn1.eps": 1e-05,
+  "img_model.img_model.layer4.2.bn1.momentum": 0.1,
+  "img_model.img_model.layer4.2.bn1.affine": true,
+  "img_model.img_model.layer4.2.bn1.track_running_stats": true,
+  "img_model.img_model.layer4.2.bn1._is_full_backward_hook": null,
+  "img_model.img_model.layer4.2.conv2.in_channels": 512,
+  "img_model.img_model.layer4.2.conv2.out_channels": 512,
+  "img_model.img_model.layer4.2.conv2.kernel_size": "tuple[2]=[3, 3]",
+  "img_model.img_model.layer4.2.conv2.stride": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer4.2.conv2.padding": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer4.2.conv2.dilation": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer4.2.conv2.transposed": false,
+  "img_model.img_model.layer4.2.conv2.output_padding": "tuple[2]=[0, 0]",
+  "img_model.img_model.layer4.2.conv2.groups": 1,
+  "img_model.img_model.layer4.2.conv2.padding_mode": "zeros",
+  "img_model.img_model.layer4.2.conv2._reversed_padding_repeated_twice": "tuple[4]=[1, 1, 1, 1]",
+  "img_model.img_model.layer4.2.conv2._is_full_backward_hook": null,
+  "img_model.img_model.layer4.2.bn2.num_features": 512,
+  "img_model.img_model.layer4.2.bn2.eps": 1e-05,
+  "img_model.img_model.layer4.2.bn2.momentum": 0.1,
+  "img_model.img_model.layer4.2.bn2.affine": true,
+  "img_model.img_model.layer4.2.bn2.track_running_stats": true,
+  "img_model.img_model.layer4.2.bn2._is_full_backward_hook": null,
+  "img_model.img_model.layer4.2.conv3.in_channels": 512,
+  "img_model.img_model.layer4.2.conv3.out_channels": 2048,
+  "img_model.img_model.layer4.2.conv3.kernel_size": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer4.2.conv3.stride": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer4.2.conv3.padding": "tuple[2]=[0, 0]",
+  "img_model.img_model.layer4.2.conv3.dilation": "tuple[2]=[1, 1]",
+  "img_model.img_model.layer4.2.conv3.transposed": false,
+  "img_model.img_model.layer4.2.conv3.output_padding": "tuple[2]=[0, 0]",
+  "img_model.img_model.layer4.2.conv3.groups": 1,
+  "img_model.img_model.layer4.2.conv3.padding_mode": "zeros",
+  "img_model.img_model.layer4.2.conv3._reversed_padding_repeated_twice": "tuple[4]=[0, 0, 0, 0]",
+  "img_model.img_model.layer4.2.conv3._is_full_backward_hook": null,
+  "img_model.img_model.layer4.2.bn3.num_features": 2048,
+  "img_model.img_model.layer4.2.bn3.eps": 1e-05,
+  "img_model.img_model.layer4.2.bn3.momentum": 0.1,
+  "img_model.img_model.layer4.2.bn3.affine": true,
+  "img_model.img_model.layer4.2.bn3.track_running_stats": true,
+  "img_model.img_model.layer4.2.bn3._is_full_backward_hook": null,
+  "img_model.img_model.layer4.2.relu.inplace": true,
+  "img_model.img_model.layer4.2.relu._is_full_backward_hook": null,
+  "img_model.img_model.avgpool.output_size": "tuple[2]=[1, 1]",
+  "img_model.img_model.avgpool._is_full_backward_hook": null,
+  "img_model.img_model.fc._is_full_backward_hook": null,
+  "img_model.img_pool.eps": 1e-06,
+  "img_model.img_pool._is_full_backward_hook": null,
+  "img_model.img_fc.in_features": 2048,
+  "img_model.img_fc.out_features": 1024,
+  "img_model.img_fc._is_full_backward_hook": null,
+  "img_model.dropout.p": 0.2,
+  "img_model.dropout.inplace": false,
+  "img_model.dropout._is_full_backward_hook": null,
+  "local_fuse.T": 7.0,
+  "local_fuse._is_full_backward_hook": null,
+  "local_fuse.img1x1conv.in_channels": 2048,
+  "local_fuse.img1x1conv.out_channels": 1024,
+  "local_fuse.img1x1conv.kernel_size": "tuple[2]=[1, 1]",
+  "local_fuse.img1x1conv.stride": "tuple[2]=[1, 1]",
+  "local_fuse.img1x1conv.padding": "tuple[2]=[0, 0]",
+  "local_fuse.img1x1conv.dilation": "tuple[2]=[1, 1]",
+  "local_fuse.img1x1conv.transposed": false,
+  "local_fuse.img1x1conv.output_padding": "tuple[2]=[0, 0]",
+  "local_fuse.img1x1conv.groups": 1,
+  "local_fuse.img1x1conv.padding_mode": "zeros",
+  "local_fuse.img1x1conv._reversed_padding_repeated_twice": "tuple[4]=[0, 0, 0, 0]",
+  "local_fuse.img1x1conv._is_full_backward_hook": null,
+  "local_fuse.softmax.dim": 1,
+  "local_fuse.softmax._is_full_backward_hook": null,
+  "local_fuse.inception_gamma._is_full_backward_hook": null,
+  "local_fuse.inception_gamma.branch0._is_full_backward_hook": null,
+  "local_fuse.inception_gamma.branch0.conv.in_channels": 2048,
+  "local_fuse.inception_gamma.branch0.conv.out_channels": 640,
+  "local_fuse.inception_gamma.branch0.conv.kernel_size": "tuple[2]=[1, 1]",
+  "local_fuse.inception_gamma.branch0.conv.stride": "tuple[2]=[1, 1]",
+  "local_fuse.inception_gamma.branch0.conv.padding": "tuple[2]=[0, 0]",
+  "local_fuse.inception_gamma.branch0.conv.dilation": "tuple[2]=[1, 1]",
+  "local_fuse.inception_gamma.branch0.conv.transposed": false,
+  "local_fuse.inception_gamma.branch0.conv.output_padding": "tuple[2]=[0, 0]",
+  "local_fuse.inception_gamma.branch0.conv.groups": 1,
+  "local_fuse.inception_gamma.branch0.conv.padding_mode": "zeros",
+  "local_fuse.inception_gamma.branch0.conv._reversed_padding_repeated_twice": "tuple[4]=[0, 0, 0, 0]",
+  "local_fuse.inception_gamma.branch0.conv._is_full_backward_hook": null,
+  "local_fuse.inception_gamma.branch0.bn.num_features": 640,
+  "local_fuse.inception_gamma.branch0.bn.eps": 1e-05,
+  "local_fuse.inception_gamma.branch0.bn.momentum": 0.1,
+  "local_fuse.inception_gamma.branch0.bn.affine": true,
+  "local_fuse.inception_gamma.branch0.bn.track_running_stats": true,
+  "local_fuse.inception_gamma.branch0.bn._is_full_backward_hook": null,
+  "local_fuse.inception_gamma.branch0.relu.inplace": false,
+  "local_fuse.inception_gamma.branch0.relu._is_full_backward_hook": null,
+  "local_fuse.inception_gamma.branch1._is_full_backward_hook": null,
+  "local_fuse.inception_gamma.branch1.0._is_full_backward_hook": null,
+  "local_fuse.inception_gamma.branch1.0.conv.in_channels": 2048,
+  "local_fuse.inception_gamma.branch1.0.conv.out_channels": 512,
+  "local_fuse.inception_gamma.branch1.0.conv.kernel_size": "tuple[2]=[1, 1]",
+  "local_fuse.inception_gamma.branch1.0.conv.stride": "tuple[2]=[1, 1]",
+  "local_fuse.inception_gamma.branch1.0.conv.padding": "tuple[2]=[0, 0]",
+  "local_fuse.inception_gamma.branch1.0.conv.dilation": "tuple[2]=[1, 1]",
+  "local_fuse.inception_gamma.branch1.0.conv.transposed": false,
+  "local_fuse.inception_gamma.branch1.0.conv.output_padding": "tuple[2]=[0, 0]",
+  "local_fuse.inception_gamma.branch1.0.conv.groups": 1,
+  "local_fuse.inception_gamma.branch1.0.conv.padding_mode": "zeros",
+  "local_fuse.inception_gamma.branch1.0.conv._reversed_padding_repeated_twice": "tuple[4]=[0, 0, 0, 0]",
+  "local_fuse.inception_gamma.branch1.0.conv._is_full_backward_hook": null,
+  "local_fuse.inception_gamma.branch1.0.bn.num_features": 512,
+  "local_fuse.inception_gamma.branch1.0.bn.eps": 1e-05,
+  "local_fuse.inception_gamma.branch1.0.bn.momentum": 0.1,
+  "local_fuse.inception_gamma.branch1.0.bn.affine": true,
+  "local_fuse.inception_gamma.branch1.0.bn.track_running_stats": true,
+  "local_fuse.inception_gamma.branch1.0.bn._is_full_backward_hook": null,
+  "local_fuse.inception_gamma.branch1.0.relu.inplace": false,
+  "local_fuse.inception_gamma.branch1.0.relu._is_full_backward_hook": null,
+  "local_fuse.inception_gamma.branch1.1._is_full_backward_hook": null,
+  "local_fuse.inception_gamma.branch1.1.conv.in_channels": 512,
+  "local_fuse.inception_gamma.branch1.1.conv.out_channels": 512,
+  "local_fuse.inception_gamma.branch1.1.conv.kernel_size": "tuple[2]=[3, 3]",
+  "local_fuse.inception_gamma.branch1.1.conv.stride": "tuple[2]=[1, 1]",
+  "local_fuse.inception_gamma.branch1.1.conv.padding": "tuple[2]=[1, 1]",
+  "local_fuse.inception_gamma.branch1.1.conv.dilation": "tuple[2]=[1, 1]",
+  "local_fuse.inception_gamma.branch1.1.conv.transposed": false,
+  "local_fuse.inception_gamma.branch1.1.conv.output_padding": "tuple[2]=[0, 0]",
+  "local_fuse.inception_gamma.branch1.1.conv.groups": 1,
+  "local_fuse.inception_gamma.branch1.1.conv.padding_mode": "zeros",
+  "local_fuse.inception_gamma.branch1.1.conv._reversed_padding_repeated_twice": "tuple[4]=[1, 1, 1, 1]",
+  "local_fuse.inception_gamma.branch1.1.conv._is_full_backward_hook": null,
+  "local_fuse.inception_gamma.branch1.1.bn.num_features": 512,
+  "local_fuse.inception_gamma.branch1.1.bn.eps": 1e-05,
+  "local_fuse.inception_gamma.branch1.1.bn.momentum": 0.1,
+  "local_fuse.inception_gamma.branch1.1.bn.affine": true,
+  "local_fuse.inception_gamma.branch1.1.bn.track_running_stats": true,
+  "local_fuse.inception_gamma.branch1.1.bn._is_full_backward_hook": null,
+  "local_fuse.inception_gamma.branch1.1.relu.inplace": false,
+  "local_fuse.inception_gamma.branch1.1.relu._is_full_backward_hook": null,
+  "local_fuse.inception_gamma.branch2._is_full_backward_hook": null,
+  "local_fuse.inception_gamma.branch2.0._is_full_backward_hook": null,
+  "local_fuse.inception_gamma.branch2.0.conv.in_channels": 2048,
+  "local_fuse.inception_gamma.branch2.0.conv.out_channels": 512,
+  "local_fuse.inception_gamma.branch2.0.conv.kernel_size": "tuple[2]=[1, 1]",
+  "local_fuse.inception_gamma.branch2.0.conv.stride": "tuple[2]=[1, 1]",
+  "local_fuse.inception_gamma.branch2.0.conv.padding": "tuple[2]=[0, 0]",
+  "local_fuse.inception_gamma.branch2.0.conv.dilation": "tuple[2]=[1, 1]",
+  "local_fuse.inception_gamma.branch2.0.conv.transposed": false,
+  "local_fuse.inception_gamma.branch2.0.conv.output_padding": "tuple[2]=[0, 0]",
+  "local_fuse.inception_gamma.branch2.0.conv.groups": 1,
+  "local_fuse.inception_gamma.branch2.0.conv.padding_mode": "zeros",
+  "local_fuse.inception_gamma.branch2.0.conv._reversed_padding_repeated_twice": "tuple[4]=[0, 0, 0, 0]",
+  "local_fuse.inception_gamma.branch2.0.conv._is_full_backward_hook": null,
+  "local_fuse.inception_gamma.branch2.0.bn.num_features": 512,
+  "local_fuse.inception_gamma.branch2.0.bn.eps": 1e-05,
+  "local_fuse.inception_gamma.branch2.0.bn.momentum": 0.1,
+  "local_fuse.inception_gamma.branch2.0.bn.affine": true,
+  "local_fuse.inception_gamma.branch2.0.bn.track_running_stats": true,
+  "local_fuse.inception_gamma.branch2.0.bn._is_full_backward_hook": null,
+  "local_fuse.inception_gamma.branch2.0.relu.inplace": false,
+  "local_fuse.inception_gamma.branch2.0.relu._is_full_backward_hook": null,
+  "local_fuse.inception_gamma.branch2.1._is_full_backward_hook": null,
+  "local_fuse.inception_gamma.branch2.1.conv.in_channels": 512,
+  "local_fuse.inception_gamma.branch2.1.conv.out_channels": 224,
+  "local_fuse.inception_gamma.branch2.1.conv.kernel_size": "tuple[2]=[3, 3]",
+  "local_fuse.inception_gamma.branch2.1.conv.stride": "tuple[2]=[1, 1]",
+  "local_fuse.inception_gamma.branch2.1.conv.padding": "tuple[2]=[1, 1]",
+  "local_fuse.inception_gamma.branch2.1.conv.dilation": "tuple[2]=[1, 1]",
+  "local_fuse.inception_gamma.branch2.1.conv.transposed": false,
+  "local_fuse.inception_gamma.branch2.1.conv.output_padding": "tuple[2]=[0, 0]",
+  "local_fuse.inception_gamma.branch2.1.conv.groups": 1,
+  "local_fuse.inception_gamma.branch2.1.conv.padding_mode": "zeros",
+  "local_fuse.inception_gamma.branch2.1.conv._reversed_padding_repeated_twice": "tuple[4]=[1, 1, 1, 1]",
+  "local_fuse.inception_gamma.branch2.1.conv._is_full_backward_hook": null,
+  "local_fuse.inception_gamma.branch2.1.bn.num_features": 224,
+  "local_fuse.inception_gamma.branch2.1.bn.eps": 1e-05,
+  "local_fuse.inception_gamma.branch2.1.bn.momentum": 0.1,
+  "local_fuse.inception_gamma.branch2.1.bn.affine": true,
+  "local_fuse.inception_gamma.branch2.1.bn.track_running_stats": true,
+  "local_fuse.inception_gamma.branch2.1.bn._is_full_backward_hook": null,
+  "local_fuse.inception_gamma.branch2.1.relu.inplace": false,
+  "local_fuse.inception_gamma.branch2.1.relu._is_full_backward_hook": null,
+  "local_fuse.inception_gamma.branch2.2._is_full_backward_hook": null,
+  "local_fuse.inception_gamma.branch2.2.conv.in_channels": 224,
+  "local_fuse.inception_gamma.branch2.2.conv.out_channels": 512,
+  "local_fuse.inception_gamma.branch2.2.conv.kernel_size": "tuple[2]=[3, 3]",
+  "local_fuse.inception_gamma.branch2.2.conv.stride": "tuple[2]=[1, 1]",
+  "local_fuse.inception_gamma.branch2.2.conv.padding": "tuple[2]=[1, 1]",
+  "local_fuse.inception_gamma.branch2.2.conv.dilation": "tuple[2]=[1, 1]",
+  "local_fuse.inception_gamma.branch2.2.conv.transposed": false,
+  "local_fuse.inception_gamma.branch2.2.conv.output_padding": "tuple[2]=[0, 0]",
+  "local_fuse.inception_gamma.branch2.2.conv.groups": 1,
+  "local_fuse.inception_gamma.branch2.2.conv.padding_mode": "zeros",
+  "local_fuse.inception_gamma.branch2.2.conv._reversed_padding_repeated_twice": "tuple[4]=[1, 1, 1, 1]",
+  "local_fuse.inception_gamma.branch2.2.conv._is_full_backward_hook": null,
+  "local_fuse.inception_gamma.branch2.2.bn.num_features": 512,
+  "local_fuse.inception_gamma.branch2.2.bn.eps": 1e-05,
+  "local_fuse.inception_gamma.branch2.2.bn.momentum": 0.1,
+  "local_fuse.inception_gamma.branch2.2.bn.affine": true,
+  "local_fuse.inception_gamma.branch2.2.bn.track_running_stats": true,
+  "local_fuse.inception_gamma.branch2.2.bn._is_full_backward_hook": null,
+  "local_fuse.inception_gamma.branch2.2.relu.inplace": false,
+  "local_fuse.inception_gamma.branch2.2.relu._is_full_backward_hook": null,
+  "local_fuse.inception_gamma.branch3._is_full_backward_hook": null,
+  "local_fuse.inception_gamma.branch3.0.kernel_size": 3,
+  "local_fuse.inception_gamma.branch3.0.stride": 1,
+  "local_fuse.inception_gamma.branch3.0.padding": 1,
+  "local_fuse.inception_gamma.branch3.0.ceil_mode": false,
+  "local_fuse.inception_gamma.branch3.0.count_include_pad": false,
+  "local_fuse.inception_gamma.branch3.0.divisor_override": null,
+  "local_fuse.inception_gamma.branch3.0._is_full_backward_hook": null,
+  "local_fuse.inception_gamma.branch3.1._is_full_backward_hook": null,
+  "local_fuse.inception_gamma.branch3.1.conv.in_channels": 2048,
+  "local_fuse.inception_gamma.branch3.1.conv.out_channels": 384,
+  "local_fuse.inception_gamma.branch3.1.conv.kernel_size": "tuple[2]=[1, 1]",
+  "local_fuse.inception_gamma.branch3.1.conv.stride": "tuple[2]=[1, 1]",
+  "local_fuse.inception_gamma.branch3.1.conv.padding": "tuple[2]=[0, 0]",
+  "local_fuse.inception_gamma.branch3.1.conv.dilation": "tuple[2]=[1, 1]",
+  "local_fuse.inception_gamma.branch3.1.conv.transposed": false,
+  "local_fuse.inception_gamma.branch3.1.conv.output_padding": "tuple[2]=[0, 0]",
+  "local_fuse.inception_gamma.branch3.1.conv.groups": 1,
+  "local_fuse.inception_gamma.branch3.1.conv.padding_mode": "zeros",
+  "local_fuse.inception_gamma.branch3.1.conv._reversed_padding_repeated_twice": "tuple[4]=[0, 0, 0, 0]",
+  "local_fuse.inception_gamma.branch3.1.conv._is_full_backward_hook": null,
+  "local_fuse.inception_gamma.branch3.1.bn.num_features": 384,
+  "local_fuse.inception_gamma.branch3.1.bn.eps": 1e-05,
+  "local_fuse.inception_gamma.branch3.1.bn.momentum": 0.1,
+  "local_fuse.inception_gamma.branch3.1.bn.affine": true,
+  "local_fuse.inception_gamma.branch3.1.bn.track_running_stats": true,
+  "local_fuse.inception_gamma.branch3.1.bn._is_full_backward_hook": null,
+  "local_fuse.inception_gamma.branch3.1.relu.inplace": false,
+  "local_fuse.inception_gamma.branch3.1.relu._is_full_backward_hook": null,
+  "local_fuse.inception_beta._is_full_backward_hook": null,
+  "local_fuse.inception_beta.branch0._is_full_backward_hook": null,
+  "local_fuse.inception_beta.branch0.conv.in_channels": 2048,
+  "local_fuse.inception_beta.branch0.conv.out_channels": 640,
+  "local_fuse.inception_beta.branch0.conv.kernel_size": "tuple[2]=[1, 1]",
+  "local_fuse.inception_beta.branch0.conv.stride": "tuple[2]=[1, 1]",
+  "local_fuse.inception_beta.branch0.conv.padding": "tuple[2]=[0, 0]",
+  "local_fuse.inception_beta.branch0.conv.dilation": "tuple[2]=[1, 1]",
+  "local_fuse.inception_beta.branch0.conv.transposed": false,
+  "local_fuse.inception_beta.branch0.conv.output_padding": "tuple[2]=[0, 0]",
+  "local_fuse.inception_beta.branch0.conv.groups": 1,
+  "local_fuse.inception_beta.branch0.conv.padding_mode": "zeros",
+  "local_fuse.inception_beta.branch0.conv._reversed_padding_repeated_twice": "tuple[4]=[0, 0, 0, 0]",
+  "local_fuse.inception_beta.branch0.conv._is_full_backward_hook": null,
+  "local_fuse.inception_beta.branch0.bn.num_features": 640,
+  "local_fuse.inception_beta.branch0.bn.eps": 1e-05,
+  "local_fuse.inception_beta.branch0.bn.momentum": 0.1,
+  "local_fuse.inception_beta.branch0.bn.affine": true,
+  "local_fuse.inception_beta.branch0.bn.track_running_stats": true,
+  "local_fuse.inception_beta.branch0.bn._is_full_backward_hook": null,
+  "local_fuse.inception_beta.branch0.relu.inplace": false,
+  "local_fuse.inception_beta.branch0.relu._is_full_backward_hook": null,
+  "local_fuse.inception_beta.branch1._is_full_backward_hook": null,
+  "local_fuse.inception_beta.branch1.0._is_full_backward_hook": null,
+  "local_fuse.inception_beta.branch1.0.conv.in_channels": 2048,
+  "local_fuse.inception_beta.branch1.0.conv.out_channels": 512,
+  "local_fuse.inception_beta.branch1.0.conv.kernel_size": "tuple[2]=[1, 1]",
+  "local_fuse.inception_beta.branch1.0.conv.stride": "tuple[2]=[1, 1]",
+  "local_fuse.inception_beta.branch1.0.conv.padding": "tuple[2]=[0, 0]",
+  "local_fuse.inception_beta.branch1.0.conv.dilation": "tuple[2]=[1, 1]",
+  "local_fuse.inception_beta.branch1.0.conv.transposed": false,
+  "local_fuse.inception_beta.branch1.0.conv.output_padding": "tuple[2]=[0, 0]",
+  "local_fuse.inception_beta.branch1.0.conv.groups": 1,
+  "local_fuse.inception_beta.branch1.0.conv.padding_mode": "zeros",
+  "local_fuse.inception_beta.branch1.0.conv._reversed_padding_repeated_twice": "tuple[4]=[0, 0, 0, 0]",
+  "local_fuse.inception_beta.branch1.0.conv._is_full_backward_hook": null,
+  "local_fuse.inception_beta.branch1.0.bn.num_features": 512,
+  "local_fuse.inception_beta.branch1.0.bn.eps": 1e-05,
+  "local_fuse.inception_beta.branch1.0.bn.momentum": 0.1,
+  "local_fuse.inception_beta.branch1.0.bn.affine": true,
+  "local_fuse.inception_beta.branch1.0.bn.track_running_stats": true,
+  "local_fuse.inception_beta.branch1.0.bn._is_full_backward_hook": null,
+  "local_fuse.inception_beta.branch1.0.relu.inplace": false,
+  "local_fuse.inception_beta.branch1.0.relu._is_full_backward_hook": null,
+  "local_fuse.inception_beta.branch1.1._is_full_backward_hook": null,
+  "local_fuse.inception_beta.branch1.1.conv.in_channels": 512,
+  "local_fuse.inception_beta.branch1.1.conv.out_channels": 512,
+  "local_fuse.inception_beta.branch1.1.conv.kernel_size": "tuple[2]=[3, 3]",
+  "local_fuse.inception_beta.branch1.1.conv.stride": "tuple[2]=[1, 1]",
+  "local_fuse.inception_beta.branch1.1.conv.padding": "tuple[2]=[1, 1]",
+  "local_fuse.inception_beta.branch1.1.conv.dilation": "tuple[2]=[1, 1]",
+  "local_fuse.inception_beta.branch1.1.conv.transposed": false,
+  "local_fuse.inception_beta.branch1.1.conv.output_padding": "tuple[2]=[0, 0]",
+  "local_fuse.inception_beta.branch1.1.conv.groups": 1,
+  "local_fuse.inception_beta.branch1.1.conv.padding_mode": "zeros",
+  "local_fuse.inception_beta.branch1.1.conv._reversed_padding_repeated_twice": "tuple[4]=[1, 1, 1, 1]",
+  "local_fuse.inception_beta.branch1.1.conv._is_full_backward_hook": null,
+  "local_fuse.inception_beta.branch1.1.bn.num_features": 512,
+  "local_fuse.inception_beta.branch1.1.bn.eps": 1e-05,
+  "local_fuse.inception_beta.branch1.1.bn.momentum": 0.1,
+  "local_fuse.inception_beta.branch1.1.bn.affine": true,
+  "local_fuse.inception_beta.branch1.1.bn.track_running_stats": true,
+  "local_fuse.inception_beta.branch1.1.bn._is_full_backward_hook": null,
+  "local_fuse.inception_beta.branch1.1.relu.inplace": false,
+  "local_fuse.inception_beta.branch1.1.relu._is_full_backward_hook": null,
+  "local_fuse.inception_beta.branch2._is_full_backward_hook": null,
+  "local_fuse.inception_beta.branch2.0._is_full_backward_hook": null,
+  "local_fuse.inception_beta.branch2.0.conv.in_channels": 2048,
+  "local_fuse.inception_beta.branch2.0.conv.out_channels": 512,
+  "local_fuse.inception_beta.branch2.0.conv.kernel_size": "tuple[2]=[1, 1]",
+  "local_fuse.inception_beta.branch2.0.conv.stride": "tuple[2]=[1, 1]",
+  "local_fuse.inception_beta.branch2.0.conv.padding": "tuple[2]=[0, 0]",
+  "local_fuse.inception_beta.branch2.0.conv.dilation": "tuple[2]=[1, 1]",
+  "local_fuse.inception_beta.branch2.0.conv.transposed": false,
+  "local_fuse.inception_beta.branch2.0.conv.output_padding": "tuple[2]=[0, 0]",
+  "local_fuse.inception_beta.branch2.0.conv.groups": 1,
+  "local_fuse.inception_beta.branch2.0.conv.padding_mode": "zeros",
+  "local_fuse.inception_beta.branch2.0.conv._reversed_padding_repeated_twice": "tuple[4]=[0, 0, 0, 0]",
+  "local_fuse.inception_beta.branch2.0.conv._is_full_backward_hook": null,
+  "local_fuse.inception_beta.branch2.0.bn.num_features": 512,
+  "local_fuse.inception_beta.branch2.0.bn.eps": 1e-05,
+  "local_fuse.inception_beta.branch2.0.bn.momentum": 0.1,
+  "local_fuse.inception_beta.branch2.0.bn.affine": true,
+  "local_fuse.inception_beta.branch2.0.bn.track_running_stats": true,
+  "local_fuse.inception_beta.branch2.0.bn._is_full_backward_hook": null,
+  "local_fuse.inception_beta.branch2.0.relu.inplace": false,
+  "local_fuse.inception_beta.branch2.0.relu._is_full_backward_hook": null,
+  "local_fuse.inception_beta.branch2.1._is_full_backward_hook": null,
+  "local_fuse.inception_beta.branch2.1.conv.in_channels": 512,
+  "local_fuse.inception_beta.branch2.1.conv.out_channels": 224,
+  "local_fuse.inception_beta.branch2.1.conv.kernel_size": "tuple[2]=[3, 3]",
+  "local_fuse.inception_beta.branch2.1.conv.stride": "tuple[2]=[1, 1]",
+  "local_fuse.inception_beta.branch2.1.conv.padding": "tuple[2]=[1, 1]",
+  "local_fuse.inception_beta.branch2.1.conv.dilation": "tuple[2]=[1, 1]",
+  "local_fuse.inception_beta.branch2.1.conv.transposed": false,
+  "local_fuse.inception_beta.branch2.1.conv.output_padding": "tuple[2]=[0, 0]",
+  "local_fuse.inception_beta.branch2.1.conv.groups": 1,
+  "local_fuse.inception_beta.branch2.1.conv.padding_mode": "zeros",
+  "local_fuse.inception_beta.branch2.1.conv._reversed_padding_repeated_twice": "tuple[4]=[1, 1, 1, 1]",
+  "local_fuse.inception_beta.branch2.1.conv._is_full_backward_hook": null,
+  "local_fuse.inception_beta.branch2.1.bn.num_features": 224,
+  "local_fuse.inception_beta.branch2.1.bn.eps": 1e-05,
+  "local_fuse.inception_beta.branch2.1.bn.momentum": 0.1,
+  "local_fuse.inception_beta.branch2.1.bn.affine": true,
+  "local_fuse.inception_beta.branch2.1.bn.track_running_stats": true,
+  "local_fuse.inception_beta.branch2.1.bn._is_full_backward_hook": null,
+  "local_fuse.inception_beta.branch2.1.relu.inplace": false,
+  "local_fuse.inception_beta.branch2.1.relu._is_full_backward_hook": null,
+  "local_fuse.inception_beta.branch2.2._is_full_backward_hook": null,
+  "local_fuse.inception_beta.branch2.2.conv.in_channels": 224,
+  "local_fuse.inception_beta.branch2.2.conv.out_channels": 512,
+  "local_fuse.inception_beta.branch2.2.conv.kernel_size": "tuple[2]=[3, 3]",
+  "local_fuse.inception_beta.branch2.2.conv.stride": "tuple[2]=[1, 1]",
+  "local_fuse.inception_beta.branch2.2.conv.padding": "tuple[2]=[1, 1]",
+  "local_fuse.inception_beta.branch2.2.conv.dilation": "tuple[2]=[1, 1]",
+  "local_fuse.inception_beta.branch2.2.conv.transposed": false,
+  "local_fuse.inception_beta.branch2.2.conv.output_padding": "tuple[2]=[0, 0]",
+  "local_fuse.inception_beta.branch2.2.conv.groups": 1,
+  "local_fuse.inception_beta.branch2.2.conv.padding_mode": "zeros",
+  "local_fuse.inception_beta.branch2.2.conv._reversed_padding_repeated_twice": "tuple[4]=[1, 1, 1, 1]",
+  "local_fuse.inception_beta.branch2.2.conv._is_full_backward_hook": null,
+  "local_fuse.inception_beta.branch2.2.bn.num_features": 512,
+  "local_fuse.inception_beta.branch2.2.bn.eps": 1e-05,
+  "local_fuse.inception_beta.branch2.2.bn.momentum": 0.1,
+  "local_fuse.inception_beta.branch2.2.bn.affine": true,
+  "local_fuse.inception_beta.branch2.2.bn.track_running_stats": true,
+  "local_fuse.inception_beta.branch2.2.bn._is_full_backward_hook": null,
+  "local_fuse.inception_beta.branch2.2.relu.inplace": false,
+  "local_fuse.inception_beta.branch2.2.relu._is_full_backward_hook": null,
+  "local_fuse.inception_beta.branch3._is_full_backward_hook": null,
+  "local_fuse.inception_beta.branch3.0.kernel_size": 3,
+  "local_fuse.inception_beta.branch3.0.stride": 1,
+  "local_fuse.inception_beta.branch3.0.padding": 1,
+  "local_fuse.inception_beta.branch3.0.ceil_mode": false,
+  "local_fuse.inception_beta.branch3.0.count_include_pad": false,
+  "local_fuse.inception_beta.branch3.0.divisor_override": null,
+  "local_fuse.inception_beta.branch3.0._is_full_backward_hook": null,
+  "local_fuse.inception_beta.branch3.1._is_full_backward_hook": null,
+  "local_fuse.inception_beta.branch3.1.conv.in_channels": 2048,
+  "local_fuse.inception_beta.branch3.1.conv.out_channels": 384,
+  "local_fuse.inception_beta.branch3.1.conv.kernel_size": "tuple[2]=[1, 1]",
+  "local_fuse.inception_beta.branch3.1.conv.stride": "tuple[2]=[1, 1]",
+  "local_fuse.inception_beta.branch3.1.conv.padding": "tuple[2]=[0, 0]",
+  "local_fuse.inception_beta.branch3.1.conv.dilation": "tuple[2]=[1, 1]",
+  "local_fuse.inception_beta.branch3.1.conv.transposed": false,
+  "local_fuse.inception_beta.branch3.1.conv.output_padding": "tuple[2]=[0, 0]",
+  "local_fuse.inception_beta.branch3.1.conv.groups": 1,
+  "local_fuse.inception_beta.branch3.1.conv.padding_mode": "zeros",
+  "local_fuse.inception_beta.branch3.1.conv._reversed_padding_repeated_twice": "tuple[4]=[0, 0, 0, 0]",
+  "local_fuse.inception_beta.branch3.1.conv._is_full_backward_hook": null,
+  "local_fuse.inception_beta.branch3.1.bn.num_features": 384,
+  "local_fuse.inception_beta.branch3.1.bn.eps": 1e-05,
+  "local_fuse.inception_beta.branch3.1.bn.momentum": 0.1,
+  "local_fuse.inception_beta.branch3.1.bn.affine": true,
+  "local_fuse.inception_beta.branch3.1.bn.track_running_stats": true,
+  "local_fuse.inception_beta.branch3.1.bn._is_full_backward_hook": null,
+  "local_fuse.inception_beta.branch3.1.relu.inplace": false,
+  "local_fuse.inception_beta.branch3.1.relu._is_full_backward_hook": null,
+  "relu.inplace": false,
+  "relu._is_full_backward_hook": null,
+  "local_pool.eps": 1e-06,
+  "local_pool._is_full_backward_hook": null,
+  "local_fc.in_features": 2048,
+  "local_fc.out_features": 1024,
+  "local_fc._is_full_backward_hook": null,
+  "dropout.p": 0.0,
+  "dropout.inplace": false,
+  "dropout._is_full_backward_hook": null
+ },
+ "state_dict_at": "<root is nn.Module>",
+ "tensor_count": 415,
+ "total_numel": 54236934,
+ "dtype_numel": {
+  "torch.float32": 54236867,
+  "torch.int64": 67
+ },
+ "prefix1": {
+  "img_model.*": 321,
+  "local_fuse.*": 85,
+  "text_model.*": 5,
+  "local_fc.*": 2,
+  "loss_weight": 1,
+  "local_pool.*": 1
+ },
+ "prefix2": {
+  "img_model.img_model.*": 318,
+  "local_fuse.inception_gamma.*": 42,
+  "local_fuse.inception_beta.*": 42,
+  "text_model.lstm.*": 4,
+  "img_model.img_fc.*": 2,
+  "loss_weight": 1,
+  "text_model.embedding_layer.*": 1,
+  "img_model.img_pool.*": 1,
+  "local_fuse.img1x1conv.*": 1,
+  "local_pool.p": 1,
+  "local_fc.weight": 1,
+  "local_fc.bias": 1
+ },
+ "prefix3": {
+  "img_model.img_model.layer3.*": 114,
+  "img_model.img_model.layer2.*": 78,
+  "img_model.img_model.layer1.*": 60,
+  "img_model.img_model.layer4.*": 60,
+  "local_fuse.inception_gamma.branch2.*": 18,
+  "local_fuse.inception_beta.branch2.*": 18,
+  "local_fuse.inception_gamma.branch1.*": 12,
+  "local_fuse.inception_beta.branch1.*": 12,
+  "local_fuse.inception_gamma.branch0.*": 6,
+  "local_fuse.inception_gamma.branch3.*": 6,
+  "local_fuse.inception_beta.branch0.*": 6,
+  "local_fuse.inception_beta.branch3.*": 6,
+  "img_model.img_model.bn1.*": 5,
+  "loss_weight": 1,
+  "text_model.embedding_layer.weight": 1,
+  "text_model.lstm.weight_ih_l0": 1,
+  "text_model.lstm.weight_hh_l0": 1,
+  "text_model.lstm.bias_ih_l0": 1,
+  "text_model.lstm.bias_hh_l0": 1,
+  "img_model.img_model.conv1.*": 1,
+  "img_model.img_pool.p": 1,
+  "img_model.img_fc.weight": 1,
+  "img_model.img_fc.bias": 1,
+  "local_fuse.img1x1conv.weight": 1,
+  "local_pool.p": 1,
+  "local_fc.weight": 1,
+  "local_fc.bias": 1
+ },
+ "first_keys": [
+  "loss_weight",
+  "text_model.embedding_layer.weight",
+  "text_model.lstm.weight_ih_l0",
+  "text_model.lstm.weight_hh_l0",
+  "text_model.lstm.bias_ih_l0",
+  "text_model.lstm.bias_hh_l0",
+  "img_model.img_model.conv1.weight",
+  "img_model.img_model.bn1.weight",
+  "img_model.img_model.bn1.bias",
+  "img_model.img_model.bn1.running_mean",
+  "img_model.img_model.bn1.running_var",
+  "img_model.img_model.bn1.num_batches_tracked",
+  "img_model.img_model.layer1.0.conv1.weight",
+  "img_model.img_model.layer1.0.bn1.weight",
+  "img_model.img_model.layer1.0.bn1.bias",
+  "img_model.img_model.layer1.0.bn1.running_mean",
+  "img_model.img_model.layer1.0.bn1.running_var",
+  "img_model.img_model.layer1.0.bn1.num_batches_tracked",
+  "img_model.img_model.layer1.0.conv2.weight",
+  "img_model.img_model.layer1.0.bn2.weight"
+ ],
+ "last_keys": [
+  "local_fuse.inception_beta.branch2.2.bn.num_batches_tracked",
+  "local_fuse.inception_beta.branch3.1.conv.weight",
+  "local_fuse.inception_beta.branch3.1.bn.weight",
+  "local_fuse.inception_beta.branch3.1.bn.bias",
+  "local_fuse.inception_beta.branch3.1.bn.running_mean",
+  "local_fuse.inception_beta.branch3.1.bn.running_var",
+  "local_fuse.inception_beta.branch3.1.bn.num_batches_tracked",
+  "local_pool.p",
+  "local_fc.weight",
+  "local_fc.bias"
+ ],
+ "shapes": {
+  "loss_weight": [
+   1
+  ],
+  "text_model.embedding_layer.weight": [
+   1602,
+   512
+  ],
+  "text_model.lstm.weight_ih_l0": [
+   4096,
+   512
+  ],
+  "text_model.lstm.weight_hh_l0": [
+   4096,
+   1024
+  ],
+  "text_model.lstm.bias_ih_l0": [
+   4096
+  ],
+  "text_model.lstm.bias_hh_l0": [
+   4096
+  ],
+  "img_model.img_model.conv1.weight": [
+   64,
+   3,
+   7,
+   7
+  ],
+  "img_model.img_model.bn1.weight": [
+   64
+  ],
+  "img_model.img_model.bn1.bias": [
+   64
+  ],
+  "img_model.img_model.bn1.running_mean": [
+   64
+  ],
+  "img_model.img_model.bn1.running_var": [
+   64
+  ],
+  "img_model.img_model.bn1.num_batches_tracked": [],
+  "img_model.img_model.layer1.0.conv1.weight": [
+   64,
+   64,
+   1,
+   1
+  ],
+  "img_model.img_model.layer1.0.bn1.weight": [
+   64
+  ],
+  "img_model.img_model.layer1.0.bn1.bias": [
+   64
+  ],
+  "img_model.img_model.layer1.0.bn1.running_mean": [
+   64
+  ],
+  "img_model.img_model.layer1.0.bn1.running_var": [
+   64
+  ],
+  "img_model.img_model.layer1.0.bn1.num_batches_tracked": [],
+  "img_model.img_model.layer1.0.conv2.weight": [
+   64,
+   64,
+   3,
+   3
+  ],
+  "img_model.img_model.layer1.0.bn2.weight": [
+   64
+  ],
+  "img_model.img_model.layer1.0.bn2.bias": [
+   64
+  ],
+  "img_model.img_model.layer1.0.bn2.running_mean": [
+   64
+  ],
+  "img_model.img_model.layer1.0.bn2.running_var": [
+   64
+  ],
+  "img_model.img_model.layer1.0.bn2.num_batches_tracked": [],
+  "img_model.img_model.layer1.0.conv3.weight": [
+   256,
+   64,
+   1,
+   1
+  ],
+  "img_model.img_model.layer1.0.bn3.weight": [
+   256
+  ],
+  "img_model.img_model.layer1.0.bn3.bias": [
+   256
+  ],
+  "img_model.img_model.layer1.0.bn3.running_mean": [
+   256
+  ],
+  "img_model.img_model.layer1.0.bn3.running_var": [
+   256
+  ],
+  "img_model.img_model.layer1.0.bn3.num_batches_tracked": [],
+  "img_model.img_model.layer1.0.downsample.0.weight": [
+   256,
+   64,
+   1,
+   1
+  ],
+  "img_model.img_model.layer1.0.downsample.1.weight": [
+   256
+  ],
+  "img_model.img_model.layer1.0.downsample.1.bias": [
+   256
+  ],
+  "img_model.img_model.layer1.0.downsample.1.running_mean": [
+   256
+  ],
+  "img_model.img_model.layer1.0.downsample.1.running_var": [
+   256
+  ],
+  "img_model.img_model.layer1.0.downsample.1.num_batches_tracked": [],
+  "img_model.img_model.layer1.1.conv1.weight": [
+   64,
+   256,
+   1,
+   1
+  ],
+  "img_model.img_model.layer1.1.bn1.weight": [
+   64
+  ],
+  "img_model.img_model.layer1.1.bn1.bias": [
+   64
+  ],
+  "img_model.img_model.layer1.1.bn1.running_mean": [
+   64
+  ],
+  "img_model.img_model.layer1.1.bn1.running_var": [
+   64
+  ],
+  "img_model.img_model.layer1.1.bn1.num_batches_tracked": [],
+  "img_model.img_model.layer1.1.conv2.weight": [
+   64,
+   64,
+   3,
+   3
+  ],
+  "img_model.img_model.layer1.1.bn2.weight": [
+   64
+  ],
+  "img_model.img_model.layer1.1.bn2.bias": [
+   64
+  ],
+  "img_model.img_model.layer1.1.bn2.running_mean": [
+   64
+  ],
+  "img_model.img_model.layer1.1.bn2.running_var": [
+   64
+  ],
+  "img_model.img_model.layer1.1.bn2.num_batches_tracked": [],
+  "img_model.img_model.layer1.1.conv3.weight": [
+   256,
+   64,
+   1,
+   1
+  ],
+  "img_model.img_model.layer1.1.bn3.weight": [
+   256
+  ],
+  "img_model.img_model.layer1.1.bn3.bias": [
+   256
+  ],
+  "img_model.img_model.layer1.1.bn3.running_mean": [
+   256
+  ],
+  "img_model.img_model.layer1.1.bn3.running_var": [
+   256
+  ],
+  "img_model.img_model.layer1.1.bn3.num_batches_tracked": [],
+  "img_model.img_model.layer1.2.conv1.weight": [
+   64,
+   256,
+   1,
+   1
+  ],
+  "img_model.img_model.layer1.2.bn1.weight": [
+   64
+  ],
+  "img_model.img_model.layer1.2.bn1.bias": [
+   64
+  ],
+  "img_model.img_model.layer1.2.bn1.running_mean": [
+   64
+  ],
+  "img_model.img_model.layer1.2.bn1.running_var": [
+   64
+  ],
+  "img_model.img_model.layer1.2.bn1.num_batches_tracked": [],
+  "img_model.img_model.layer1.2.conv2.weight": [
+   64,
+   64,
+   3,
+   3
+  ],
+  "img_model.img_model.layer1.2.bn2.weight": [
+   64
+  ],
+  "img_model.img_model.layer1.2.bn2.bias": [
+   64
+  ],
+  "img_model.img_model.layer1.2.bn2.running_mean": [
+   64
+  ],
+  "img_model.img_model.layer1.2.bn2.running_var": [
+   64
+  ],
+  "img_model.img_model.layer1.2.bn2.num_batches_tracked": [],
+  "img_model.img_model.layer1.2.conv3.weight": [
+   256,
+   64,
+   1,
+   1
+  ],
+  "img_model.img_model.layer1.2.bn3.weight": [
+   256
+  ],
+  "img_model.img_model.layer1.2.bn3.bias": [
+   256
+  ],
+  "img_model.img_model.layer1.2.bn3.running_mean": [
+   256
+  ],
+  "img_model.img_model.layer1.2.bn3.running_var": [
+   256
+  ],
+  "img_model.img_model.layer1.2.bn3.num_batches_tracked": [],
+  "img_model.img_model.layer2.0.conv1.weight": [
+   128,
+   256,
+   1,
+   1
+  ],
+  "img_model.img_model.layer2.0.bn1.weight": [
+   128
+  ],
+  "img_model.img_model.layer2.0.bn1.bias": [
+   128
+  ],
+  "img_model.img_model.layer2.0.bn1.running_mean": [
+   128
+  ],
+  "img_model.img_model.layer2.0.bn1.running_var": [
+   128
+  ],
+  "img_model.img_model.layer2.0.bn1.num_batches_tracked": [],
+  "img_model.img_model.layer2.0.conv2.weight": [
+   128,
+   128,
+   3,
+   3
+  ],
+  "img_model.img_model.layer2.0.bn2.weight": [
+   128
+  ],
+  "img_model.img_model.layer2.0.bn2.bias": [
+   128
+  ],
+  "img_model.img_model.layer2.0.bn2.running_mean": [
+   128
+  ],
+  "img_model.img_model.layer2.0.bn2.running_var": [
+   128
+  ],
+  "img_model.img_model.layer2.0.bn2.num_batches_tracked": [],
+  "img_model.img_model.layer2.0.conv3.weight": [
+   512,
+   128,
+   1,
+   1
+  ],
+  "img_model.img_model.layer2.0.bn3.weight": [
+   512
+  ],
+  "img_model.img_model.layer2.0.bn3.bias": [
+   512
+  ],
+  "img_model.img_model.layer2.0.bn3.running_mean": [
+   512
+  ],
+  "img_model.img_model.layer2.0.bn3.running_var": [
+   512
+  ],
+  "img_model.img_model.layer2.0.bn3.num_batches_tracked": [],
+  "img_model.img_model.layer2.0.downsample.0.weight": [
+   512,
+   256,
+   1,
+   1
+  ],
+  "img_model.img_model.layer2.0.downsample.1.weight": [
+   512
+  ],
+  "img_model.img_model.layer2.0.downsample.1.bias": [
+   512
+  ],
+  "img_model.img_model.layer2.0.downsample.1.running_mean": [
+   512
+  ],
+  "img_model.img_model.layer2.0.downsample.1.running_var": [
+   512
+  ],
+  "img_model.img_model.layer2.0.downsample.1.num_batches_tracked": [],
+  "img_model.img_model.layer2.1.conv1.weight": [
+   128,
+   512,
+   1,
+   1
+  ],
+  "img_model.img_model.layer2.1.bn1.weight": [
+   128
+  ],
+  "img_model.img_model.layer2.1.bn1.bias": [
+   128
+  ],
+  "img_model.img_model.layer2.1.bn1.running_mean": [
+   128
+  ],
+  "img_model.img_model.layer2.1.bn1.running_var": [
+   128
+  ],
+  "img_model.img_model.layer2.1.bn1.num_batches_tracked": [],
+  "img_model.img_model.layer2.1.conv2.weight": [
+   128,
+   128,
+   3,
+   3
+  ],
+  "img_model.img_model.layer2.1.bn2.weight": [
+   128
+  ],
+  "img_model.img_model.layer2.1.bn2.bias": [
+   128
+  ],
+  "img_model.img_model.layer2.1.bn2.running_mean": [
+   128
+  ],
+  "img_model.img_model.layer2.1.bn2.running_var": [
+   128
+  ],
+  "img_model.img_model.layer2.1.bn2.num_batches_tracked": [],
+  "img_model.img_model.layer2.1.conv3.weight": [
+   512,
+   128,
+   1,
+   1
+  ],
+  "img_model.img_model.layer2.1.bn3.weight": [
+   512
+  ],
+  "img_model.img_model.layer2.1.bn3.bias": [
+   512
+  ],
+  "img_model.img_model.layer2.1.bn3.running_mean": [
+   512
+  ],
+  "img_model.img_model.layer2.1.bn3.running_var": [
+   512
+  ],
+  "img_model.img_model.layer2.1.bn3.num_batches_tracked": [],
+  "img_model.img_model.layer2.2.conv1.weight": [
+   128,
+   512,
+   1,
+   1
+  ],
+  "img_model.img_model.layer2.2.bn1.weight": [
+   128
+  ],
+  "img_model.img_model.layer2.2.bn1.bias": [
+   128
+  ],
+  "img_model.img_model.layer2.2.bn1.running_mean": [
+   128
+  ],
+  "img_model.img_model.layer2.2.bn1.running_var": [
+   128
+  ],
+  "img_model.img_model.layer2.2.bn1.num_batches_tracked": [],
+  "img_model.img_model.layer2.2.conv2.weight": [
+   128,
+   128,
+   3,
+   3
+  ],
+  "img_model.img_model.layer2.2.bn2.weight": [
+   128
+  ],
+  "img_model.img_model.layer2.2.bn2.bias": [
+   128
+  ],
+  "img_model.img_model.layer2.2.bn2.running_mean": [
+   128
+  ],
+  "img_model.img_model.layer2.2.bn2.running_var": [
+   128
+  ],
+  "img_model.img_model.layer2.2.bn2.num_batches_tracked": [],
+  "img_model.img_model.layer2.2.conv3.weight": [
+   512,
+   128,
+   1,
+   1
+  ],
+  "img_model.img_model.layer2.2.bn3.weight": [
+   512
+  ],
+  "img_model.img_model.layer2.2.bn3.bias": [
+   512
+  ],
+  "img_model.img_model.layer2.2.bn3.running_mean": [
+   512
+  ],
+  "img_model.img_model.layer2.2.bn3.running_var": [
+   512
+  ],
+  "img_model.img_model.layer2.2.bn3.num_batches_tracked": [],
+  "img_model.img_model.layer2.3.conv1.weight": [
+   128,
+   512,
+   1,
+   1
+  ],
+  "img_model.img_model.layer2.3.bn1.weight": [
+   128
+  ],
+  "img_model.img_model.layer2.3.bn1.bias": [
+   128
+  ],
+  "img_model.img_model.layer2.3.bn1.running_mean": [
+   128
+  ],
+  "img_model.img_model.layer2.3.bn1.running_var": [
+   128
+  ],
+  "img_model.img_model.layer2.3.bn1.num_batches_tracked": [],
+  "img_model.img_model.layer2.3.conv2.weight": [
+   128,
+   128,
+   3,
+   3
+  ],
+  "img_model.img_model.layer2.3.bn2.weight": [
+   128
+  ],
+  "img_model.img_model.layer2.3.bn2.bias": [
+   128
+  ],
+  "img_model.img_model.layer2.3.bn2.running_mean": [
+   128
+  ],
+  "img_model.img_model.layer2.3.bn2.running_var": [
+   128
+  ],
+  "img_model.img_model.layer2.3.bn2.num_batches_tracked": [],
+  "img_model.img_model.layer2.3.conv3.weight": [
+   512,
+   128,
+   1,
+   1
+  ],
+  "img_model.img_model.layer2.3.bn3.weight": [
+   512
+  ],
+  "img_model.img_model.layer2.3.bn3.bias": [
+   512
+  ],
+  "img_model.img_model.layer2.3.bn3.running_mean": [
+   512
+  ],
+  "img_model.img_model.layer2.3.bn3.running_var": [
+   512
+  ],
+  "img_model.img_model.layer2.3.bn3.num_batches_tracked": [],
+  "img_model.img_model.layer3.0.conv1.weight": [
+   256,
+   512,
+   1,
+   1
+  ],
+  "img_model.img_model.layer3.0.bn1.weight": [
+   256
+  ],
+  "img_model.img_model.layer3.0.bn1.bias": [
+   256
+  ],
+  "img_model.img_model.layer3.0.bn1.running_mean": [
+   256
+  ],
+  "img_model.img_model.layer3.0.bn1.running_var": [
+   256
+  ],
+  "img_model.img_model.layer3.0.bn1.num_batches_tracked": [],
+  "img_model.img_model.layer3.0.conv2.weight": [
+   256,
+   256,
+   3,
+   3
+  ],
+  "img_model.img_model.layer3.0.bn2.weight": [
+   256
+  ],
+  "img_model.img_model.layer3.0.bn2.bias": [
+   256
+  ],
+  "img_model.img_model.layer3.0.bn2.running_mean": [
+   256
+  ],
+  "img_model.img_model.layer3.0.bn2.running_var": [
+   256
+  ],
+  "img_model.img_model.layer3.0.bn2.num_batches_tracked": [],
+  "img_model.img_model.layer3.0.conv3.weight": [
+   1024,
+   256,
+   1,
+   1
+  ],
+  "img_model.img_model.layer3.0.bn3.weight": [
+   1024
+  ],
+  "img_model.img_model.layer3.0.bn3.bias": [
+   1024
+  ],
+  "img_model.img_model.layer3.0.bn3.running_mean": [
+   1024
+  ],
+  "img_model.img_model.layer3.0.bn3.running_var": [
+   1024
+  ],
+  "img_model.img_model.layer3.0.bn3.num_batches_tracked": [],
+  "img_model.img_model.layer3.0.downsample.0.weight": [
+   1024,
+   512,
+   1,
+   1
+  ],
+  "img_model.img_model.layer3.0.downsample.1.weight": [
+   1024
+  ],
+  "img_model.img_model.layer3.0.downsample.1.bias": [
+   1024
+  ],
+  "img_model.img_model.layer3.0.downsample.1.running_mean": [
+   1024
+  ],
+  "img_model.img_model.layer3.0.downsample.1.running_var": [
+   1024
+  ],
+  "img_model.img_model.layer3.0.downsample.1.num_batches_tracked": [],
+  "img_model.img_model.layer3.1.conv1.weight": [
+   256,
+   1024,
+   1,
+   1
+  ],
+  "img_model.img_model.layer3.1.bn1.weight": [
+   256
+  ],
+  "img_model.img_model.layer3.1.bn1.bias": [
+   256
+  ],
+  "img_model.img_model.layer3.1.bn1.running_mean": [
+   256
+  ],
+  "img_model.img_model.layer3.1.bn1.running_var": [
+   256
+  ],
+  "img_model.img_model.layer3.1.bn1.num_batches_tracked": [],
+  "img_model.img_model.layer3.1.conv2.weight": [
+   256,
+   256,
+   3,
+   3
+  ],
+  "img_model.img_model.layer3.1.bn2.weight": [
+   256
+  ],
+  "img_model.img_model.layer3.1.bn2.bias": [
+   256
+  ],
+  "img_model.img_model.layer3.1.bn2.running_mean": [
+   256
+  ],
+  "img_model.img_model.layer3.1.bn2.running_var": [
+   256
+  ],
+  "img_model.img_model.layer3.1.bn2.num_batches_tracked": [],
+  "img_model.img_model.layer3.1.conv3.weight": [
+   1024,
+   256,
+   1,
+   1
+  ],
+  "img_model.img_model.layer3.1.bn3.weight": [
+   1024
+  ],
+  "img_model.img_model.layer3.1.bn3.bias": [
+   1024
+  ],
+  "img_model.img_model.layer3.1.bn3.running_mean": [
+   1024
+  ],
+  "img_model.img_model.layer3.1.bn3.running_var": [
+   1024
+  ],
+  "img_model.img_model.layer3.1.bn3.num_batches_tracked": [],
+  "img_model.img_model.layer3.2.conv1.weight": [
+   256,
+   1024,
+   1,
+   1
+  ],
+  "img_model.img_model.layer3.2.bn1.weight": [
+   256
+  ],
+  "img_model.img_model.layer3.2.bn1.bias": [
+   256
+  ],
+  "img_model.img_model.layer3.2.bn1.running_mean": [
+   256
+  ],
+  "img_model.img_model.layer3.2.bn1.running_var": [
+   256
+  ],
+  "img_model.img_model.layer3.2.bn1.num_batches_tracked": [],
+  "img_model.img_model.layer3.2.conv2.weight": [
+   256,
+   256,
+   3,
+   3
+  ],
+  "img_model.img_model.layer3.2.bn2.weight": [
+   256
+  ],
+  "img_model.img_model.layer3.2.bn2.bias": [
+   256
+  ],
+  "img_model.img_model.layer3.2.bn2.running_mean": [
+   256
+  ],
+  "img_model.img_model.layer3.2.bn2.running_var": [
+   256
+  ],
+  "img_model.img_model.layer3.2.bn2.num_batches_tracked": [],
+  "img_model.img_model.layer3.2.conv3.weight": [
+   1024,
+   256,
+   1,
+   1
+  ],
+  "img_model.img_model.layer3.2.bn3.weight": [
+   1024
+  ],
+  "img_model.img_model.layer3.2.bn3.bias": [
+   1024
+  ],
+  "img_model.img_model.layer3.2.bn3.running_mean": [
+   1024
+  ],
+  "img_model.img_model.layer3.2.bn3.running_var": [
+   1024
+  ],
+  "img_model.img_model.layer3.2.bn3.num_batches_tracked": [],
+  "img_model.img_model.layer3.3.conv1.weight": [
+   256,
+   1024,
+   1,
+   1
+  ],
+  "img_model.img_model.layer3.3.bn1.weight": [
+   256
+  ],
+  "img_model.img_model.layer3.3.bn1.bias": [
+   256
+  ],
+  "img_model.img_model.layer3.3.bn1.running_mean": [
+   256
+  ],
+  "img_model.img_model.layer3.3.bn1.running_var": [
+   256
+  ],
+  "img_model.img_model.layer3.3.bn1.num_batches_tracked": [],
+  "img_model.img_model.layer3.3.conv2.weight": [
+   256,
+   256,
+   3,
+   3
+  ],
+  "img_model.img_model.layer3.3.bn2.weight": [
+   256
+  ],
+  "img_model.img_model.layer3.3.bn2.bias": [
+   256
+  ],
+  "img_model.img_model.layer3.3.bn2.running_mean": [
+   256
+  ],
+  "img_model.img_model.layer3.3.bn2.running_var": [
+   256
+  ],
+  "img_model.img_model.layer3.3.bn2.num_batches_tracked": [],
+  "img_model.img_model.layer3.3.conv3.weight": [
+   1024,
+   256,
+   1,
+   1
+  ],
+  "img_model.img_model.layer3.3.bn3.weight": [
+   1024
+  ],
+  "img_model.img_model.layer3.3.bn3.bias": [
+   1024
+  ],
+  "img_model.img_model.layer3.3.bn3.running_mean": [
+   1024
+  ],
+  "img_model.img_model.layer3.3.bn3.running_var": [
+   1024
+  ],
+  "img_model.img_model.layer3.3.bn3.num_batches_tracked": [],
+  "img_model.img_model.layer3.4.conv1.weight": [
+   256,
+   1024,
+   1,
+   1
+  ],
+  "img_model.img_model.layer3.4.bn1.weight": [
+   256
+  ],
+  "img_model.img_model.layer3.4.bn1.bias": [
+   256
+  ],
+  "img_model.img_model.layer3.4.bn1.running_mean": [
+   256
+  ],
+  "img_model.img_model.layer3.4.bn1.running_var": [
+   256
+  ],
+  "img_model.img_model.layer3.4.bn1.num_batches_tracked": [],
+  "img_model.img_model.layer3.4.conv2.weight": [
+   256,
+   256,
+   3,
+   3
+  ],
+  "img_model.img_model.layer3.4.bn2.weight": [
+   256
+  ],
+  "img_model.img_model.layer3.4.bn2.bias": [
+   256
+  ],
+  "img_model.img_model.layer3.4.bn2.running_mean": [
+   256
+  ],
+  "img_model.img_model.layer3.4.bn2.running_var": [
+   256
+  ],
+  "img_model.img_model.layer3.4.bn2.num_batches_tracked": [],
+  "img_model.img_model.layer3.4.conv3.weight": [
+   1024,
+   256,
+   1,
+   1
+  ],
+  "img_model.img_model.layer3.4.bn3.weight": [
+   1024
+  ],
+  "img_model.img_model.layer3.4.bn3.bias": [
+   1024
+  ],
+  "img_model.img_model.layer3.4.bn3.running_mean": [
+   1024
+  ],
+  "img_model.img_model.layer3.4.bn3.running_var": [
+   1024
+  ],
+  "img_model.img_model.layer3.4.bn3.num_batches_tracked": [],
+  "img_model.img_model.layer3.5.conv1.weight": [
+   256,
+   1024,
+   1,
+   1
+  ],
+  "img_model.img_model.layer3.5.bn1.weight": [
+   256
+  ],
+  "img_model.img_model.layer3.5.bn1.bias": [
+   256
+  ],
+  "img_model.img_model.layer3.5.bn1.running_mean": [
+   256
+  ],
+  "img_model.img_model.layer3.5.bn1.running_var": [
+   256
+  ],
+  "img_model.img_model.layer3.5.bn1.num_batches_tracked": [],
+  "img_model.img_model.layer3.5.conv2.weight": [
+   256,
+   256,
+   3,
+   3
+  ],
+  "img_model.img_model.layer3.5.bn2.weight": [
+   256
+  ],
+  "img_model.img_model.layer3.5.bn2.bias": [
+   256
+  ],
+  "img_model.img_model.layer3.5.bn2.running_mean": [
+   256
+  ],
+  "img_model.img_model.layer3.5.bn2.running_var": [
+   256
+  ],
+  "img_model.img_model.layer3.5.bn2.num_batches_tracked": [],
+  "img_model.img_model.layer3.5.conv3.weight": [
+   1024,
+   256,
+   1,
+   1
+  ],
+  "img_model.img_model.layer3.5.bn3.weight": [
+   1024
+  ],
+  "img_model.img_model.layer3.5.bn3.bias": [
+   1024
+  ],
+  "img_model.img_model.layer3.5.bn3.running_mean": [
+   1024
+  ],
+  "img_model.img_model.layer3.5.bn3.running_var": [
+   1024
+  ],
+  "img_model.img_model.layer3.5.bn3.num_batches_tracked": [],
+  "img_model.img_model.layer4.0.conv1.weight": [
+   512,
+   1024,
+   1,
+   1
+  ],
+  "img_model.img_model.layer4.0.bn1.weight": [
+   512
+  ],
+  "img_model.img_model.layer4.0.bn1.bias": [
+   512
+  ],
+  "img_model.img_model.layer4.0.bn1.running_mean": [
+   512
+  ],
+  "img_model.img_model.layer4.0.bn1.running_var": [
+   512
+  ],
+  "img_model.img_model.layer4.0.bn1.num_batches_tracked": [],
+  "img_model.img_model.layer4.0.conv2.weight": [
+   512,
+   512,
+   3,
+   3
+  ],
+  "img_model.img_model.layer4.0.bn2.weight": [
+   512
+  ],
+  "img_model.img_model.layer4.0.bn2.bias": [
+   512
+  ],
+  "img_model.img_model.layer4.0.bn2.running_mean": [
+   512
+  ],
+  "img_model.img_model.layer4.0.bn2.running_var": [
+   512
+  ],
+  "img_model.img_model.layer4.0.bn2.num_batches_tracked": [],
+  "img_model.img_model.layer4.0.conv3.weight": [
+   2048,
+   512,
+   1,
+   1
+  ],
+  "img_model.img_model.layer4.0.bn3.weight": [
+   2048
+  ],
+  "img_model.img_model.layer4.0.bn3.bias": [
+   2048
+  ],
+  "img_model.img_model.layer4.0.bn3.running_mean": [
+   2048
+  ],
+  "img_model.img_model.layer4.0.bn3.running_var": [
+   2048
+  ],
+  "img_model.img_model.layer4.0.bn3.num_batches_tracked": [],
+  "img_model.img_model.layer4.0.downsample.0.weight": [
+   2048,
+   1024,
+   1,
+   1
+  ],
+  "img_model.img_model.layer4.0.downsample.1.weight": [
+   2048
+  ],
+  "img_model.img_model.layer4.0.downsample.1.bias": [
+   2048
+  ],
+  "img_model.img_model.layer4.0.downsample.1.running_mean": [
+   2048
+  ],
+  "img_model.img_model.layer4.0.downsample.1.running_var": [
+   2048
+  ],
+  "img_model.img_model.layer4.0.downsample.1.num_batches_tracked": [],
+  "img_model.img_model.layer4.1.conv1.weight": [
+   512,
+   2048,
+   1,
+   1
+  ],
+  "img_model.img_model.layer4.1.bn1.weight": [
+   512
+  ],
+  "img_model.img_model.layer4.1.bn1.bias": [
+   512
+  ],
+  "img_model.img_model.layer4.1.bn1.running_mean": [
+   512
+  ],
+  "img_model.img_model.layer4.1.bn1.running_var": [
+   512
+  ],
+  "img_model.img_model.layer4.1.bn1.num_batches_tracked": [],
+  "img_model.img_model.layer4.1.conv2.weight": [
+   512,
+   512,
+   3,
+   3
+  ],
+  "img_model.img_model.layer4.1.bn2.weight": [
+   512
+  ],
+  "img_model.img_model.layer4.1.bn2.bias": [
+   512
+  ],
+  "img_model.img_model.layer4.1.bn2.running_mean": [
+   512
+  ],
+  "img_model.img_model.layer4.1.bn2.running_var": [
+   512
+  ],
+  "img_model.img_model.layer4.1.bn2.num_batches_tracked": [],
+  "img_model.img_model.layer4.1.conv3.weight": [
+   2048,
+   512,
+   1,
+   1
+  ],
+  "img_model.img_model.layer4.1.bn3.weight": [
+   2048
+  ],
+  "img_model.img_model.layer4.1.bn3.bias": [
+   2048
+  ],
+  "img_model.img_model.layer4.1.bn3.running_mean": [
+   2048
+  ],
+  "img_model.img_model.layer4.1.bn3.running_var": [
+   2048
+  ],
+  "img_model.img_model.layer4.1.bn3.num_batches_tracked": [],
+  "img_model.img_model.layer4.2.conv1.weight": [
+   512,
+   2048,
+   1,
+   1
+  ],
+  "img_model.img_model.layer4.2.bn1.weight": [
+   512
+  ],
+  "img_model.img_model.layer4.2.bn1.bias": [
+   512
+  ],
+  "img_model.img_model.layer4.2.bn1.running_mean": [
+   512
+  ],
+  "img_model.img_model.layer4.2.bn1.running_var": [
+   512
+  ],
+  "img_model.img_model.layer4.2.bn1.num_batches_tracked": [],
+  "img_model.img_model.layer4.2.conv2.weight": [
+   512,
+   512,
+   3,
+   3
+  ],
+  "img_model.img_model.layer4.2.bn2.weight": [
+   512
+  ],
+  "img_model.img_model.layer4.2.bn2.bias": [
+   512
+  ],
+  "img_model.img_model.layer4.2.bn2.running_mean": [
+   512
+  ],
+  "img_model.img_model.layer4.2.bn2.running_var": [
+   512
+  ],
+  "img_model.img_model.layer4.2.bn2.num_batches_tracked": [],
+  "img_model.img_model.layer4.2.conv3.weight": [
+   2048,
+   512,
+   1,
+   1
+  ],
+  "img_model.img_model.layer4.2.bn3.weight": [
+   2048
+  ],
+  "img_model.img_model.layer4.2.bn3.bias": [
+   2048
+  ],
+  "img_model.img_model.layer4.2.bn3.running_mean": [
+   2048
+  ],
+  "img_model.img_model.layer4.2.bn3.running_var": [
+   2048
+  ],
+  "img_model.img_model.layer4.2.bn3.num_batches_tracked": [],
+  "img_model.img_pool.p": [
+   1
+  ],
+  "img_model.img_fc.weight": [
+   1024,
+   2048
+  ],
+  "img_model.img_fc.bias": [
+   1024
+  ],
+  "local_fuse.img1x1conv.weight": [
+   1024,
+   2048,
+   1,
+   1
+  ],
+  "local_fuse.inception_gamma.branch0.conv.weight": [
+   640,
+   2048,
+   1,
+   1
+  ],
+  "local_fuse.inception_gamma.branch0.bn.weight": [
+   640
+  ],
+  "local_fuse.inception_gamma.branch0.bn.bias": [
+   640
+  ],
+  "local_fuse.inception_gamma.branch0.bn.running_mean": [
+   640
+  ],
+  "local_fuse.inception_gamma.branch0.bn.running_var": [
+   640
+  ],
+  "local_fuse.inception_gamma.branch0.bn.num_batches_tracked": [],
+  "local_fuse.inception_gamma.branch1.0.conv.weight": [
+   512,
+   2048,
+   1,
+   1
+  ],
+  "local_fuse.inception_gamma.branch1.0.bn.weight": [
+   512
+  ],
+  "local_fuse.inception_gamma.branch1.0.bn.bias": [
+   512
+  ],
+  "local_fuse.inception_gamma.branch1.0.bn.running_mean": [
+   512
+  ],
+  "local_fuse.inception_gamma.branch1.0.bn.running_var": [
+   512
+  ],
+  "local_fuse.inception_gamma.branch1.0.bn.num_batches_tracked": [],
+  "local_fuse.inception_gamma.branch1.1.conv.weight": [
+   512,
+   512,
+   3,
+   3
+  ],
+  "local_fuse.inception_gamma.branch1.1.bn.weight": [
+   512
+  ],
+  "local_fuse.inception_gamma.branch1.1.bn.bias": [
+   512
+  ],
+  "local_fuse.inception_gamma.branch1.1.bn.running_mean": [
+   512
+  ],
+  "local_fuse.inception_gamma.branch1.1.bn.running_var": [
+   512
+  ],
+  "local_fuse.inception_gamma.branch1.1.bn.num_batches_tracked": [],
+  "local_fuse.inception_gamma.branch2.0.conv.weight": [
+   512,
+   2048,
+   1,
+   1
+  ],
+  "local_fuse.inception_gamma.branch2.0.bn.weight": [
+   512
+  ],
+  "local_fuse.inception_gamma.branch2.0.bn.bias": [
+   512
+  ],
+  "local_fuse.inception_gamma.branch2.0.bn.running_mean": [
+   512
+  ],
+  "local_fuse.inception_gamma.branch2.0.bn.running_var": [
+   512
+  ],
+  "local_fuse.inception_gamma.branch2.0.bn.num_batches_tracked": [],
+  "local_fuse.inception_gamma.branch2.1.conv.weight": [
+   224,
+   512,
+   3,
+   3
+  ],
+  "local_fuse.inception_gamma.branch2.1.bn.weight": [
+   224
+  ],
+  "local_fuse.inception_gamma.branch2.1.bn.bias": [
+   224
+  ],
+  "local_fuse.inception_gamma.branch2.1.bn.running_mean": [
+   224
+  ],
+  "local_fuse.inception_gamma.branch2.1.bn.running_var": [
+   224
+  ],
+  "local_fuse.inception_gamma.branch2.1.bn.num_batches_tracked": [],
+  "local_fuse.inception_gamma.branch2.2.conv.weight": [
+   512,
+   224,
+   3,
+   3
+  ],
+  "local_fuse.inception_gamma.branch2.2.bn.weight": [
+   512
+  ],
+  "local_fuse.inception_gamma.branch2.2.bn.bias": [
+   512
+  ],
+  "local_fuse.inception_gamma.branch2.2.bn.running_mean": [
+   512
+  ],
+  "local_fuse.inception_gamma.branch2.2.bn.running_var": [
+   512
+  ],
+  "local_fuse.inception_gamma.branch2.2.bn.num_batches_tracked": [],
+  "local_fuse.inception_gamma.branch3.1.conv.weight": [
+   384,
+   2048,
+   1,
+   1
+  ],
+  "local_fuse.inception_gamma.branch3.1.bn.weight": [
+   384
+  ],
+  "local_fuse.inception_gamma.branch3.1.bn.bias": [
+   384
+  ],
+  "local_fuse.inception_gamma.branch3.1.bn.running_mean": [
+   384
+  ],
+  "local_fuse.inception_gamma.branch3.1.bn.running_var": [
+   384
+  ],
+  "local_fuse.inception_gamma.branch3.1.bn.num_batches_tracked": [],
+  "local_fuse.inception_beta.branch0.conv.weight": [
+   640,
+   2048,
+   1,
+   1
+  ],
+  "local_fuse.inception_beta.branch0.bn.weight": [
+   640
+  ],
+  "local_fuse.inception_beta.branch0.bn.bias": [
+   640
+  ],
+  "local_fuse.inception_beta.branch0.bn.running_mean": [
+   640
+  ],
+  "local_fuse.inception_beta.branch0.bn.running_var": [
+   640
+  ],
+  "local_fuse.inception_beta.branch0.bn.num_batches_tracked": [],
+  "local_fuse.inception_beta.branch1.0.conv.weight": [
+   512,
+   2048,
+   1,
+   1
+  ],
+  "local_fuse.inception_beta.branch1.0.bn.weight": [
+   512
+  ],
+  "local_fuse.inception_beta.branch1.0.bn.bias": [
+   512
+  ],
+  "local_fuse.inception_beta.branch1.0.bn.running_mean": [
+   512
+  ],
+  "local_fuse.inception_beta.branch1.0.bn.running_var": [
+   512
+  ],
+  "local_fuse.inception_beta.branch1.0.bn.num_batches_tracked": [],
+  "local_fuse.inception_beta.branch1.1.conv.weight": [
+   512,
+   512,
+   3,
+   3
+  ],
+  "local_fuse.inception_beta.branch1.1.bn.weight": [
+   512
+  ],
+  "local_fuse.inception_beta.branch1.1.bn.bias": [
+   512
+  ],
+  "local_fuse.inception_beta.branch1.1.bn.running_mean": [
+   512
+  ],
+  "local_fuse.inception_beta.branch1.1.bn.running_var": [
+   512
+  ],
+  "local_fuse.inception_beta.branch1.1.bn.num_batches_tracked": [],
+  "local_fuse.inception_beta.branch2.0.conv.weight": [
+   512,
+   2048,
+   1,
+   1
+  ],
+  "local_fuse.inception_beta.branch2.0.bn.weight": [
+   512
+  ],
+  "local_fuse.inception_beta.branch2.0.bn.bias": [
+   512
+  ],
+  "local_fuse.inception_beta.branch2.0.bn.running_mean": [
+   512
+  ],
+  "local_fuse.inception_beta.branch2.0.bn.running_var": [
+   512
+  ],
+  "local_fuse.inception_beta.branch2.0.bn.num_batches_tracked": [],
+  "local_fuse.inception_beta.branch2.1.conv.weight": [
+   224,
+   512,
+   3,
+   3
+  ],
+  "local_fuse.inception_beta.branch2.1.bn.weight": [
+   224
+  ],
+  "local_fuse.inception_beta.branch2.1.bn.bias": [
+   224
+  ],
+  "local_fuse.inception_beta.branch2.1.bn.running_mean": [
+   224
+  ],
+  "local_fuse.inception_beta.branch2.1.bn.running_var": [
+   224
+  ],
+  "local_fuse.inception_beta.branch2.1.bn.num_batches_tracked": []
+ },
+ "fingerprint_shapes": {
+  "img_model.img_model.conv1.weight": [
+   64,
+   3,
+   7,
+   7
+  ],
+  "img_model.img_model.layer1.0.conv1.weight": [
+   64,
+   64,
+   1,
+   1
+  ],
+  "img_model.img_model.layer1.1.conv1.weight": [
+   64,
+   256,
+   1,
+   1
+  ],
+  "img_model.img_model.layer1.2.conv1.weight": [
+   64,
+   256,
+   1,
+   1
+  ],
+  "img_model.img_model.layer2.0.conv1.weight": [
+   128,
+   256,
+   1,
+   1
+  ],
+  "img_model.img_model.layer2.1.conv1.weight": [
+   128,
+   512,
+   1,
+   1
+  ],
+  "img_model.img_model.layer2.2.conv1.weight": [
+   128,
+   512,
+   1,
+   1
+  ],
+  "img_model.img_model.layer2.3.conv1.weight": [
+   128,
+   512,
+   1,
+   1
+  ],
+  "img_model.img_model.layer3.0.conv1.weight": [
+   256,
+   512,
+   1,
+   1
+  ],
+  "img_model.img_model.layer3.1.conv1.weight": [
+   256,
+   1024,
+   1,
+   1
+  ],
+  "img_model.img_model.layer3.2.conv1.weight": [
+   256,
+   1024,
+   1,
+   1
+  ],
+  "img_model.img_model.layer3.3.conv1.weight": [
+   256,
+   1024,
+   1,
+   1
+  ],
+  "img_model.img_model.layer3.4.conv1.weight": [
+   256,
+   1024,
+   1,
+   1
+  ],
+  "img_model.img_model.layer3.5.conv1.weight": [
+   256,
+   1024,
+   1,
+   1
+  ],
+  "img_model.img_model.layer4.0.conv1.weight": [
+   512,
+   1024,
+   1,
+   1
+  ],
+  "img_model.img_model.layer4.1.conv1.weight": [
+   512,
+   2048,
+   1,
+   1
+  ],
+  "img_model.img_model.layer4.2.conv1.weight": [
+   512,
+   2048,
+   1,
+   1
+  ],
+  "img_model.img_fc.weight": [
+   1024,
+   2048
+  ],
+  "img_model.img_fc.bias": [
+   1024
+  ],
+  "local_fc.weight": [
+   1024,
+   2048
+  ],
+  "local_fc.bias": [
+   1024
+  ]
+ }
+}

@@ -1,0 +1,48 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+______ test_src07_declared_auxiliary_asset_accepted_only_with_provenance _______
+
+csmcir_checkout = {'repo_root': PosixPath('/tmp/pytest-of-heheboiz/pytest-142/test_src07_declared_auxiliary_0/repo'), 'source': PosixPat...z/pytest-142/test_src07_declared_auxiliary_0/repo/data/FashionIQ'), 'head': '1d0482c494912b4636ef8bed0f169cacfbba940d'}
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7c728e59b9b0>
+
+    def test_src07_declared_auxiliary_asset_accepted_only_with_provenance(csmcir_checkout, monkeypatch):
+        """A declared asset is approved only when it has a provenance digest to verify against.
+    
+        The asset is a real one (CSMCIR's in-checkout COT_ours2 captions) whose bytes are synthetic here,
+        so the published digest is neutralized for the duration of this test: what is under test is the
+        *recorded acquisition* digest, and `test_src07b` covers the published-digest check.
+        """
+        model = csmcir_model(csmcir_checkout["head"])
+        source = csmcir_checkout["source"]
+        asset_dir = source / "COT_ours2" / "fashioniq"
+        asset_dir.mkdir(parents=True)
+        assets = []
+        for category in ("dress", "shirt", "toptee"):
+            path = asset_dir / f"{category}_cot_val.json"
+            path.write_text('{"captions": []}')
+            assets.append(path)
+    
+        import workbench.backend.registry as registry
+    
+        original = registry.auxiliary_assets_for_model
+    
+        def patched(model_id: str):
+            return [{**asset, "expected_sha256": None} for asset in original(model_id)]
+    
+        monkeypatch.setattr(registry, "auxiliary_assets_for_model", patched)
+    
+        # Without any recorded acquisition digest the declared asset cannot be trusted.
+        assert _source_dirty(source) is True
+    
+        _record_auxiliary_digests(csmcir_checkout, assets)
+>       assert _source_dirty(source) is False, "recorded declared assets are approved runtime artifacts"
+E       AssertionError: recorded declared assets are approved runtime artifacts
+E       assert True is False
+E        +  where True = _source_dirty(PosixPath('/tmp/pytest-of-heheboiz/pytest-142/test_src07_declared_auxiliary_0/repo/third_party/CSMCIR'))
+
+workbench/tests/test_release_blocker_source_integrity.py:237: AssertionError
+=========================== short test summary info ============================
+FAILED workbench/tests/test_release_blocker_source_integrity.py::test_src07_declared_auxiliary_asset_accepted_only_with_provenance - AssertionError: recorded declared assets are approved runtime artifacts
+assert True is False
+ +  where True = _source_dirty(PosixPath('/tmp/pytest-of-heheboiz/pytest-142/test_src07_declared_auxiliary_0/repo/third_party/CSMCIR'))
+1 failed in 0.16s

@@ -1,0 +1,22 @@
+BASELINE (nothing injected)
+................................................                         [100%]
+48 passed in 1.43s
+=== WORKBENCH_CIRCUS_RELEASE_ROOT=/home/heheboiz/data/cir/workbench/artifacts/circus_release ===
+................................................                         [100%]
+48 passed in 1.32s
+=== WORKBENCH_THIRD_PARTY_ROOT=/home/heheboiz/data/cir/workbench/third_party ===
+................................................                         [100%]
+48 passed in 1.29s
+=== WORKBENCH_ARTIFACTS_ROOT=/home/heheboiz/data/cir/workbench/artifacts ===
+................................................                         [100%]
+48 passed in 1.58s
+=== WORKBENCH_CHECKPOINT_ROOT=/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads ===
+................................................                         [100%]
+48 passed in 1.43s
+=== CIR_DATA_ROOT=/home/heheboiz/data/cir/data ===
+................................................                         [100%]
+48 passed in 1.50s
+=== WORKBENCH_RESULTS_ROOT=/home/heheboiz/data/cir/workbench/artifacts/results ===
+................................................                         [100%]
+48 passed in 1.44s
+DONE

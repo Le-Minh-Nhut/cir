@@ -1,0 +1,62 @@
+{
+  "depth": 20,
+  "gallery_count": 74381,
+  "gallery_identity_sha256": "1db68c59d96f014cdbecf936e108653de98abef0bd9a98a8abc2fe08b5dec4b4",
+  "output_root": "/tmp/topk-audit",
+  "run_id": "released_audit_task7_mm_any",
+  "summary_paths": {
+    "full": "/tmp/topk-audit/composition/summary/released_audit_task7_mm_any_released_audit_task7_mm_any/full.json",
+    "ranks": "/tmp/topk-audit/composition/runs/released_audit_task7_mm_any/ranks/released_audit_task7_mm_any.json",
+    "sf": "/tmp/topk-audit/composition/summary/released_audit_task7_mm_any_released_audit_task7_mm_any/sf.json",
+    "validated": "/tmp/topk-audit/composition/summary/released_audit_task7_mm_any_released_audit_task7_mm_any/validated.json"
+  },
+  "verification": {
+    "image_only_empty_text": {
+      "checked_count": 6003,
+      "examples": [],
+      "manifest": {
+        "depth": 20,
+        "gallery_count": 74381,
+        "partial": false,
+        "record_count": 6003,
+        "score_semantics": "released audit retrieval order (no scores stored)",
+        "tie_policy": "descending score, ties broken by earlier gallery position"
+      },
+      "mismatch_count": 0,
+      "status": "AVAILABLE"
+    },
+    "multimodal": {
+      "checked_count": 6003,
+      "examples": [],
+      "manifest": {
+        "depth": 20,
+        "gallery_count": 74381,
+        "partial": false,
+        "record_count": 6003,
+        "score_semantics": "released audit retrieval order (no scores stored)",
+        "tie_policy": "descending score, ties broken by earlier gallery position"
+      },
+      "mismatch_count": 0,
+      "status": "AVAILABLE"
+    },
+    "text_only_black_image": {
+      "checked_count": 6003,
+      "examples": [],
+      "manifest": {
+        "depth": 20,
+        "gallery_count": 74381,
+        "partial": false,
+        "record_count": 6003,
+        "score_semantics": "released audit retrieval order (no scores stored)",
+        "tie_policy": "descending score, ties broken by earlier gallery position"
+      },
+      "mismatch_count": 0,
+      "status": "AVAILABLE"
+    }
+  },
+  "written": {
+    "image_only_empty_text": 6003,
+    "multimodal": 6003,
+    "text_only_black_image": 6003
+  }
+}

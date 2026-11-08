@@ -1,0 +1,36 @@
+# CIRCUS cohort status — durable record, one line per model.
+#
+# ============================ F1: INCONSISTENT ENVIRONMENT GATE ============================
+# Why four models cannot run on this PC:
+#  (a) The interpreter verification gate is applied by only 5 of 9 composition adapters —
+#      model_habit.py:152, model_intent.py:148, model_hint.py:150, model_conesep.py:164,
+#      model_tme.py:164 call require_verified_model_interpreter() in _run_job.
+#      model_ptha_mtst.py / model_encoder.py / model_limn.py / model_csmcir.py never call it,
+#      so they score with only the advisory record (verified=false) and still produce metrics.
+#  (b) workbench/backend/runtime.py:1644-1649 sets TIER_BLOCKED and RETURNS EARLY on a Python
+#      version mismatch, so dependency verification never runs at all on that path.
+#  (c) --plan probes CUDA/capability only (model_habit.py:111-127) and reports
+#      ready:true / status:READY / reason:null, while the run then dies at the gate —
+#      the plan and the gate check different contracts.
+#  (d) No bypass exists: no SKIP_ENV/ALLOW_UNVERIFIED/BYPASS/FORCE_UNVERIFIED switch in
+#      runtime.py. The only documented switch, WORKBENCH_RUNTIME_ADAPTATION=sm_120, swaps the
+#      CONTRACT (registry adapted_runtime block) and does not bypass the gate; runs under it
+#      must be badged variant_provenance.runtime_adaptation and are never paper reproductions.
+#  (e) No Python 3.9 and no Python 3.8.10 interpreter exists on this host (scanned
+#      workbench/envs/*, ~/miniconda3/envs/*, workbench/artifacts/environments/*, find /).
+#  (f) A finished run's runs/<run_id>/work/ is EMPTY BY DESIGN: runner.py:1080 calls
+#      shutil.rmtree(model_work) in the finally block on clean close. Encoder's and LIMN's
+#      work/ dirs are likewise 4.0K/empty. An empty work/ is NOT evidence a run did nothing;
+#      the rank file + results/*.jsonl + summary/*.json are the completion evidence.
+# =========================================================================================
+#
+# format: model | checkpoint | run_id | subsets | MM R@10 | MM R@50 | MM nDCG | gap | coverage | exec | repro | blocker
+encoder   | fashioniq                  | 6a528e877c328772e2c7bb28 | full,sf,validated | 31.0178 | 49.5752 | 0.29586 | 0.47230 | 1.00000 | COMPLETED | METRICS_MEASURED_MAPPING_UNVERIFIED | none. no gate; advisory PYTHON_VERSION_MISMATCH (verified=false) and still scores
+limn      | base_iter0_all_categories   | 10173dc45dea8c90fd2a284b | full,sf,validated | 30.0646 | 48.7593 | 0.29084 | 0.54174 | 0.98018 | PARTIAL | BLOCKED_RUNTIME_PREREQUISITES | 119/6003 unscored: ambiguous category, 3 category-scoped checkpoints, no auto-assign. no gate; advisory DEPENDENCY_VERSION_MISMATCH (verified=false)
+habit     | fiq_n02                     | e0dd04a46ef7a58334b9e353 | none | null | null | null | null | 0.00000 | FAILED | NOT_RUN | GATE: RuntimeError: execution environment not verified [BLOCKED/PYTHON_VERSION_MISMATCH]: WORKBENCH_HABIT_PYTHON=/home/heheboiz/data/cir/workbench/envs/airknow-adapted/bin/python (expected Python 3.8.10, found 3.11.15). sm_120 pin is 3.9 -> still blocked
+intent    | fiq_n02                     | not run | none | null | null | null | null | null | NOT RUN (WOULD BLOCK) | NOT_RUN | GATE: expected Python 3.9 (both contracts), airknow-adapted is 3.11.15
+hint      | fashioniq                   | not run | none | null | null | null | null | null | NOT RUN (WOULD BLOCK) | NOT_RUN | GATE: expected Python 3.8.10 (hist) / 3.9 (sm_120), airknow-adapted is 3.11.15
+conesep   | fiq_n02                     | not run | none | null | null | null | null | null | NOT RUN (WOULD BLOCK) | NOT_RUN | GATE: expected Python 3.8.10 (hist) / 3.9 (sm_120), airknow-adapted is 3.11.15
+tme       | fashioniq_0                 | ad477312aa57c1b9114f9e51 | full,sf,validated | 34.0163 | 53.9564 | 0.32039 | 0.35860 | 1.00000 | COMPLETED | NOT_RUN | none. ran under WORKBENCH_RUNTIME_ADAPTATION=sm_120, verified=true GPU_RUNTIME_READY torch 2.7.1+cu128, tme-adapted py 3.10.22. ADAPTED RUNTIME: not a paper reproduction. summary carries NO variant_provenance key (grep sm_120 in full.json = 0 matches) -> adaptation badge recorded here, not in the artifact
+ptha_mtst | cirr_transfer               | 315dd590eeb03d2c78d7937a | full,sf,validated | 19.4736 | 34.4494 | 0.22493 | 0.24362 | 1.00000 | COMPLETED | SELECTED_TRANSFER_ONLY | none. CIRR->FashionIQ TRANSFER, NEVER a paper row. sm_120 + WORKBENCH_PTHA_MTST_PYTHON=artifacts/environments/cir-005ef4e1b02999a5/bin/python (py 3.10.22, torch 2.7.1+cu128, verified=true RUNTIME_READY). adapter has no gate. summary carries NO variant_provenance key (grep sm_120 = 0) -> adaptation badge recorded here only
+csmcir    | fashioniq                  | not run | none | null | null | null | null | null | NOT ATTEMPTED | NOT_RUN | outside the six requested; 9th registered composition model. no gate in model_csmcir.py; adapted contract py 3.10; checkpoint fashioniq_tuned_clip_best.pt staged; WORKBENCH_CSMCIR_PYTHON unset in workbench/config/workbench.env

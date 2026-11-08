@@ -1,0 +1,10 @@
+STATUS:{
+ "encoder": {
+  "ready": true,
+  "detail": null
+ },
+ "limn": {
+  "ready": true,
+  "detail": null
+ }
+}

@@ -1,0 +1,38 @@
+rc=0
+usage: evaluate_models.py [-h] (--list | --model MODEL | --all-runnable)
+                          [--checkpoint CHECKPOINT]
+                          [--protocol {fashioniq_full_gallery_ref_excluded,fashioniq_original_split,fashioniq_val_split}]
+                          [--dataset-root DATASET_ROOT]
+                          [--canonical-dataset-root CANONICAL_DATASET_ROOT]
+                          [--top-k TOP_K] [--run-id RUN_ID] [--dry-run]
+                          [--verify-gpu] [--verify-gpu-only] [--keep-temp]
+                          [--continue-on-error]
+
+Guard and run audited official evaluation commands.
+
+options:
+  -h, --help            show this help message and exit
+  --list                list registry candidates and command-audit state
+  --model MODEL         select one registry model
+  --all-runnable        guard every registry candidate for official execution
+  --checkpoint CHECKPOINT
+                        select a checkpoint ID; repeat to select a bundle's
+                        members
+  --protocol {fashioniq_full_gallery_ref_excluded,fashioniq_original_split,fashioniq_val_split}
+                        protocol; defaults to each model native protocol
+  --dataset-root DATASET_ROOT
+                        FashionIQ root; CSMCIR requires its fixed upstream
+                        layout
+  --canonical-dataset-root CANONICAL_DATASET_ROOT
+                        canonical FashionIQ root behind a CSMCIR fixed link
+  --top-k TOP_K
+  --run-id RUN_ID       invocation run identity supplied by the orchestrator
+  --dry-run             print guarded command and log plan without writing
+  --verify-gpu          authorize or refresh GPU capability verification
+                        before/instead of evaluation
+  --verify-gpu-only     verify GPU readiness only: record the capability and
+                        exit, never loading a checkpoint or running an
+                        evaluator
+  --keep-temp           preserve the run-scoped temp root for post-mortem
+                        debugging
+  --continue-on-error

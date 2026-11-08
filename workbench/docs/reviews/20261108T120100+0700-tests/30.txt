@@ -1,0 +1,69 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+___ test_e2e14_verified_gpu_capability_permits_the_authorized_synthetic_path ___
+
+master = {'ws': PosixPath('/tmp/pytest-of-heheboiz/pytest-141/test_e2e14_verified_gpu_capabi0/workspace'), 'data': PosixPath('/...ixPath('/tmp/pytest-of-heheboiz/pytest-141/test_e2e14_verified_gpu_capabi0/workspace/third_party/SyntheticModel'), ...}
+
+    def test_e2e14_verified_gpu_capability_permits_the_authorized_synthetic_path(master):
+        """E2E-14: a verified capability lets the authorized synthetic evaluation run.
+    
+        On a GPU host this step runs the identical code against a real ``torch``. Here the
+        workbench's own opt-in test seam installs a deterministic probe *inside the evaluator
+        process*, and the evaluator is invoked through its real CLI entrypoint.
+        """
+        registry = _gpu_registry(master, cuda="12.4")
+        env = _gpu_env(master, registry)
+        probe_env = {**env, "WORKBENCH_ALLOW_SYNTHETIC_GPU_PROBE": "1"}
+        evaluator = str(REPOSITORY / "workbench" / "scripts" / "evaluate_models.py")
+    
+        # A launcher that installs the opt-in probe and then runs the real CLI in-process, so the
+        # argument parsing, the verification call, and the launch gate are all production code.
+        launcher = master["ws"] / "verify_gpu_launcher.py"
+        torch_stub = _gpu_interpreter(master).parent.parent / "torch_corroboration.py"
+        torch_stub.write_text("__version__ = '1.12.1'\n")
+        torch_core = build_core_module(torch_stub.parent / "_C_fixture.so")
+        launcher.write_text(
+            "import runpy, sys\n"
+            f"sys.path.insert(0, {str(REPOSITORY)!r})\n"
+            "import workbench.backend.runtime as runtime\n"
+            "runtime.set_gpu_probe_for_tests(lambda model, report: {\n"
+            "    'cuda_available': True, 'device_count': 1, 'torch_version': '1.12.1',\n"
+            "    'torch_cuda_version': '12.4', 'device_name': 'Synthetic GPU',\n"
+            "    'compute_capability': '8.9', 'allocated_tensor': True, 'computed': True,\n"
+            f"    'torch_module_file': {str(torch_stub)!r},\n"
+            f"    'torch_core_origin': {str(torch_core)!r},\n"
+            "    'torch_has_compiled_core': True, 'error': None})\n"
+            f"sys.argv = [{evaluator!r}, '--model', 'synthetic_model', '--verify-gpu',\n"
+            "            '--checkpoint', 'ckpt_v1']\n"
+            f"runpy.run_path({evaluator!r}, run_name='__main__')\n")
+    
+        verification = subprocess.run([sys.executable, str(launcher)], env=probe_env,
+                                      capture_output=True, text=True)
+        output = verification.stdout + verification.stderr
+>       assert verification.returncode == 0, output
+E       AssertionError: [RUN] synthetic_model / ckpt_v1
+E         [OK] protocol: fashioniq_original_split
+E         [RUN] cwd: /tmp/pytest-of-heheboiz/pytest-141/test_e2e14_verified_gpu_capabi0/workspace/third_party/SyntheticModel
+E         [RUN] command: /tmp/pytest-of-heheboiz/pytest-141/test_e2e14_verified_gpu_capabi0/workspace/gpu_model_env/bin/python /tmp/pytest-of-heheboiz/pytest-141/test_e2e14_verified_gpu_capabi0/workspace/third_party/SyntheticModel/src/evaluator.py
+E         [RUN] log directory: /home/heheboiz/data/cir/workbench/artifacts/logs/synthetic_model__ckpt_v1__20261108T044125902643Z_synthetic_model_ckpt_v1_e3176e53
+E         [RUN] provenance: /home/heheboiz/data/cir/workbench/artifacts/logs/synthetic_model__ckpt_v1__20261108T044125902643Z_synthetic_model_ckpt_v1_e3176e53/command.json
+E         {"allocated_tensor": true, "capability_verified": true, "compute_capability": "8.9", "computed": true, "cuda_available": true, "dependency_fingerprint": "241faca307e0cbcb12a373387e538c29b5ecad98bb69dc0ff8da09bba55d7a02", "device_count": 1, "device_name": "Synthetic GPU", "error": null, "expires_on": ["interpreter change", "dependency change", "host change", "driver change", "CUDA_VISIBLE_DEVICES change"], "host_identity": {"cuda_visible_devices": "<unset>", "driver": "NVRM version: NVIDIA UNIX Open Kernel Module for x86_64  580.173.02  Release Build  (dvs-builder@U22-I3-AK02-24-4)  Tue Jun 23 08:17:01 UTC 2026", "machine": "x86_64", "node": "heheboiz-nhut-pc", "nvidia_driver_capabilities": "<unset>", "nvidia_visible_devices": "<unset>"}, "interpreter": "/tmp/pytest-of-heheboiz/pytest-141/test_e2e14_verified_gpu_capabi0/workspace/gpu_model_env/bin/python", "interpreter_fingerprint": "2b4336c9a509e82e8ad4d26eaad1c7c7f75b48238c34b9f3d08b0109d10431be", "probe_source": "override", "probed_at": "2026-11-08T04:41:25.981132+00:00", "revalidation": "re-probe when the interpreter, dependency set, host, driver or device visibility changes", "runtime_adaptation": null, "torch_core_loadable": true, "torch_core_origin": "/tmp/pytest-of-heheboiz/pytest-141/test_e2e14_verified_gpu_capabi0/workspace/gpu_model_env/_C_fixture.so", "torch_cuda_version": "12.4", "torch_file_digest": "1e552da3468031949de7639cdc0cc2c9c4a8453205947e624dcf66660bf3c378", "torch_has_compiled_core": true, "torch_module_file": "/tmp/pytest-of-heheboiz/pytest-141/test_e2e14_verified_gpu_capabi0/workspace/gpu_model_env/torch_corroboration.py", "torch_version": "1.12.1"}
+E         [BLOCKED] evaluation could not be audited: evidence ledger does not verify
+E         
+E       assert 1 == 0
+E        +  where 1 = CompletedProcess(args=['/home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python', '/tmp/pytest-of-heheboiz/pytest-14..., "torch_version": "1.12.1"}\n', stderr='[BLOCKED] evaluation could not be audited: evidence ledger does not verify\n').returncode
+
+workbench/tests/test_release_blocker_master_e2e.py:561: AssertionError
+=========================== short test summary info ============================
+FAILED workbench/tests/test_release_blocker_master_e2e.py::test_e2e14_verified_gpu_capability_permits_the_authorized_synthetic_path - AssertionError: [RUN] synthetic_model / ckpt_v1
+  [OK] protocol: fashioniq_original_split
+  [RUN] cwd: /tmp/pytest-of-heheboiz/pytest-141/test_e2e14_verified_gpu_capabi0/workspace/third_party/SyntheticModel
+  [RUN] command: /tmp/pytest-of-heheboiz/pytest-141/test_e2e14_verified_gpu_capabi0/workspace/gpu_model_env/bin/python /tmp/pytest-of-heheboiz/pytest-141/test_e2e14_verified_gpu_capabi0/workspace/third_party/SyntheticModel/src/evaluator.py
+  [RUN] log directory: /home/heheboiz/data/cir/workbench/artifacts/logs/synthetic_model__ckpt_v1__20261108T044125902643Z_synthetic_model_ckpt_v1_e3176e53
+  [RUN] provenance: /home/heheboiz/data/cir/workbench/artifacts/logs/synthetic_model__ckpt_v1__20261108T044125902643Z_synthetic_model_ckpt_v1_e3176e53/command.json
+  {"allocated_tensor": true, "capability_verified": true, "compute_capability": "8.9", "computed": true, "cuda_available": true, "dependency_fingerprint": "241faca307e0cbcb12a373387e538c29b5ecad98bb69dc0ff8da09bba55d7a02", "device_count": 1, "device_name": "Synthetic GPU", "error": null, "expires_on": ["interpreter change", "dependency change", "host change", "driver change", "CUDA_VISIBLE_DEVICES change"], "host_identity": {"cuda_visible_devices": "<unset>", "driver": "NVRM version: NVIDIA UNIX Open Kernel Module for x86_64  580.173.02  Release Build  (dvs-builder@U22-I3-AK02-24-4)  Tue Jun 23 08:17:01 UTC 2026", "machine": "x86_64", "node": "heheboiz-nhut-pc", "nvidia_driver_capabilities": "<unset>", "nvidia_visible_devices": "<unset>"}, "interpreter": "/tmp/pytest-of-heheboiz/pytest-141/test_e2e14_verified_gpu_capabi0/workspace/gpu_model_env/bin/python", "interpreter_fingerprint": "2b4336c9a509e82e8ad4d26eaad1c7c7f75b48238c34b9f3d08b0109d10431be", "probe_source": "override", "probed_at": "2026-11-08T04:41:25.981132+00:00", "revalidation": "re-probe when the interpreter, dependency set, host, driver or device visibility changes", "runtime_adaptation": null, "torch_core_loadable": true, "torch_core_origin": "/tmp/pytest-of-heheboiz/pytest-141/test_e2e14_verified_gpu_capabi0/workspace/gpu_model_env/_C_fixture.so", "torch_cuda_version": "12.4", "torch_file_digest": "1e552da3468031949de7639cdc0cc2c9c4a8453205947e624dcf66660bf3c378", "torch_has_compiled_core": true, "torch_module_file": "/tmp/pytest-of-heheboiz/pytest-141/test_e2e14_verified_gpu_capabi0/workspace/gpu_model_env/torch_corroboration.py", "torch_version": "1.12.1"}
+  [BLOCKED] evaluation could not be audited: evidence ledger does not verify
+  
+assert 1 == 0
+ +  where 1 = CompletedProcess(args=['/home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python', '/tmp/pytest-of-heheboiz/pytest-14..., "torch_version": "1.12.1"}\n', stderr='[BLOCKED] evaluation could not be audited: evidence ledger does not verify\n').returncode
+1 failed in 0.74s

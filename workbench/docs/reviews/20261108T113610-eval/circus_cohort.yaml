@@ -1,0 +1,32 @@
+# Evaluation-agent profile. Identical policy to workbench/configs/pc_autopilot.all_available.yaml
+# but with `paths.checkpoints` pointed at the tree the checkpoints are ACTUALLY staged in
+# (WORKBENCH_CHECKPOINT_ROOT from workbench/config/workbench.env). The shipped profile points at
+# ../artifacts/checkpoints, which holds only `csmcir/`, so it reports 8 of 9 models as
+# "checkpoint not staged" regardless of environment or code state.
+schema_version: 1
+selected_models: all_registered
+checkpoint_policy: include_flagged_conditions
+checkpoint_overrides:
+  habit: [fiq_n02]
+  intent: [fiq_n02]
+  conesep: [fiq_n02]
+  ptha_mtst: [cirr_transfer]
+paths:
+  registry: /home/heheboiz/data/cir/workbench/registry/models.yaml
+  dataset_root: /home/heheboiz/data/cir/data/FashionIQ
+  artifacts: /home/heheboiz/data/cir/workbench/artifacts
+  checkpoints: /home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads
+  results: /home/heheboiz/data/cir/workbench/artifacts/results
+  third_party: /home/heheboiz/data/cir/workbench/third_party
+budgets:
+  max_download_bytes: 37580963840
+  max_models: 32
+  top_k: 200
+permissions:
+  allow_network: true
+  allow_large_downloads: true
+  allow_env_install: true
+  allow_preparation: true
+  allow_gpu_eval: true
+  allow_gpu_preparation: true
+  allow_index_write: true

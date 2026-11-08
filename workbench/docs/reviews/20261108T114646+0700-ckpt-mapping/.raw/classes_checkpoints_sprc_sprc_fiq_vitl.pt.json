@@ -1,0 +1,29 @@
+{
+ "path": "workbench/artifacts/checkpoint_selection/20261106T002617+0700/checkpoints/sprc/sprc_fiq_vitl.pt",
+ "size_bytes": 1459756541,
+ "container": "zip:tuned_clip_best/data.pkl",
+ "pickle_stream_bytes": 138200,
+ "distinct_globals": 5,
+ "globals": [
+  "collections OrderedDict",
+  "torch FloatStorage",
+  "torch HalfStorage",
+  "torch LongStorage",
+  "torch._utils _rebuild_tensor_v2"
+ ],
+ "global_occurrences": 5,
+ "modules": {
+  "collections OrderedDict": 1,
+  "torch": 1,
+  "torch FloatStorage": 1,
+  "torch HalfStorage": 1,
+  "torch LongStorage": 1
+ },
+ "first_globals_in_order": [
+  "collections OrderedDict",
+  "torch._utils _rebuild_tensor_v2",
+  "torch FloatStorage",
+  "torch HalfStorage",
+  "torch LongStorage"
+ ]
+}

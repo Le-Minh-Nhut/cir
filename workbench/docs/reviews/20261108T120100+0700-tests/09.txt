@@ -1,0 +1,39 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+______ test_limn_bundle_selection_submits_bundle_id_with_native_protocol _______
+
+tmp_path = PosixPath('/tmp/pytest-of-heheboiz/pytest-114/test_limn_bundle_selection_sub0')
+
+    def test_limn_bundle_selection_submits_bundle_id_with_native_protocol(tmp_path: Path):
+        """Selecting LIMN official bundle queues bundle_id == 'base_iter0_all_categories' with native protocol."""
+        fixtures_models_file = FIXTURES_BIN.parent / "models.json"
+        assert fixtures_models_file.exists()
+        models_data = json.loads(fixtures_models_file.read_text())
+        limn_model = next(m for m in models_data if m["model_id"] == "limn")
+        assert "checkpoint_bundles" in limn_model and len(limn_model["checkpoint_bundles"]) > 0
+        bundle = limn_model["checkpoint_bundles"][0]
+        assert bundle["bundle_id"] == "base_iter0_all_categories"
+        assert set(bundle["required_checkpoint_ids"]) == {"base_iter0_dress", "base_iter0_shirt", "base_iter0_toptee"}
+        assert "members" in bundle
+        assert len(bundle["members"]) == 3
+        assert all("blocking_reasons" in mem for mem in bundle["members"])
+    
+        sandbox, env = setup_sandbox(tmp_path, with_env=True)
+        _create_corroborated_run(sandbox, "run_limn_corr_01")
+        post_jobs_file = sandbox / "post_jobs.log"
+        env["MOCK_POST_JOBS_FILE"] = str(post_jobs_file)
+        # The launcher requires the evaluated run to be IN the index before it reports the pilot
+        # finished -- the API and the UI read that index, so a run absent from it is a run nobody can
+        # inspect. The fixture must therefore serve the state the real rebuild would have produced.
+        env["MOCK_RUNS_STATUS"] = "corroborated"
+    
+        proc = run_pc(sandbox, ["--force"], env)
+>       assert proc.returncode == 0
+E       AssertionError: assert 1 == 0
+E        +  where 1 = CompletedProcess(args=['/home/heheboiz/data/cir/pc.sh', '--force'], returncode=1, stdout='Cấu hình môi trường workbenc...ốn thời gian đánh giá)\n================================================================================\n', stderr='').returncode
+
+workbench/tests/test_pc_launcher.py:1469: AssertionError
+=========================== short test summary info ============================
+FAILED workbench/tests/test_pc_launcher.py::test_limn_bundle_selection_submits_bundle_id_with_native_protocol - AssertionError: assert 1 == 0
+ +  where 1 = CompletedProcess(args=['/home/heheboiz/data/cir/pc.sh', '--force'], returncode=1, stdout='Cấu hình môi trường workbenc...ốn thời gian đánh giá)\n================================================================================\n', stderr='').returncode
+1 failed in 4.18s

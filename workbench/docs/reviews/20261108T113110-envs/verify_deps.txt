@@ -1,0 +1,4 @@
+habit DEPS:{"torch": "2.7.1+cu128", "torchvision": "0.22.1+cu128", "transformers": "4.25.0", "timm": "0.9.16", "fairscale": "0.4.13", "numpy": "1.26.4"} status=GPU_VERIFICATION_PENDING
+intent DEPS:{"torch": "2.7.1+cu128", "torchvision": "0.22.1+cu128", "transformers": "4.25.0", "timm": "0.9.16", "fairscale": "0.4.13", "numpy": "1.26.4"} status=GPU_VERIFICATION_PENDING
+hint DEPS:{"torch": "2.7.1+cu128", "torchvision": "0.22.1+cu128", "transformers": "4.25.0", "timm": "0.9.16", "fairscale": "0.4.13", "numpy": "1.26.4"} status=GPU_VERIFICATION_PENDING
+conesep DEPS:{"torch": "2.7.1+cu128", "torchvision": "0.22.1+cu128", "transformers": "4.25.0", "timm": "0.9.16", "fairscale": "0.4.13", "numpy": "1.26.4"} status=GPU_VERIFICATION_PENDING

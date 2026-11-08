@@ -1,0 +1,86 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+_________ test_scenario_g_grandchild_ignoring_sigterm_is_still_stopped _________
+
+master = {'ws': PosixPath('/tmp/pytest-of-heheboiz/pytest-129/test_scenario_g_grandchild_ign0/workspace'), 'data': PosixPath('/...ixPath('/tmp/pytest-of-heheboiz/pytest-129/test_scenario_g_grandchild_ign0/workspace/third_party/SyntheticModel'), ...}
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7d6affe5b1a0>
+request = <FixtureRequest for <Function test_scenario_g_grandchild_ignoring_sigterm_is_still_stopped>>
+
+    def test_scenario_g_grandchild_ignoring_sigterm_is_still_stopped(master, monkeypatch, request):  # noqa: F811
+        """Scenario F: a non-cooperative evaluator grandchild must still be stopped.
+    
+        The operator exits on SIGTERM, but the evaluator ignores it. Reaching that evaluator requires
+        signalling the process group, which the operator would have reaped if liveness were read from
+        its own exit status.
+        """
+        sentinel = master["ws"] / "evaluator_completed.txt"
+        pid_file = master["ws"] / "evaluator.pid"
+        evaluator = master["source"] / "src" / "evaluator.py"
+        evaluator.write_text(
+            "import os, signal, time\n"
+            "signal.signal(signal.SIGTERM, signal.SIG_IGN)\n"
+            f"open({str(pid_file)!r}, 'w').write(str(os.getpid()))\n"
+            "time.sleep(30)\n"
+            f"open({str(sentinel)!r}, 'w').write('survived')\n")
+        subprocess.run(["git", "add", "-A"], cwd=master["source"], check=True, capture_output=True)
+        subprocess.run(["git", "-c", "user.email=t@t.invalid", "-c", "user.name=T",
+                        "commit", "-qm", "stubborn"], cwd=master["source"],
+                       check=True, capture_output=True)
+        head = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=master["source"],
+                                       text=True).strip()
+        registry_path = Path(master["env"]["WORKBENCH_REGISTRY_PATH"])
+        registry = json.loads(registry_path.read_text())
+        registry["models"][0]["upstream_commit_sha"] = head
+        registry_path.write_text(json.dumps(registry))
+    
+        module = _api_module(monkeypatch, master, request)
+        module.JOBS.GRACE_SECONDS = 1.0
+        accepted = module.queue_job(_payload())
+        job_id = accepted["job_id"]
+    
+        deadline = time.monotonic() + 60
+        while time.monotonic() < deadline and not pid_file.exists():
+            time.sleep(0.05)
+>       assert pid_file.exists(), "the operator never started the evaluator"
+E       AssertionError: the operator never started the evaluator
+E       assert False
+E        +  where False = exists()
+E        +    where exists = PosixPath('/tmp/pytest-of-heheboiz/pytest-129/test_scenario_g_grandchild_ign0/workspace/evaluator.pid').exists
+
+workbench/tests/test_phase1_acceptance_scenarios.py:361: AssertionError
+=============================== warnings summary ===============================
+workbench/tests/test_phase1_acceptance_scenarios.py::test_scenario_g_grandchild_ignoring_sigterm_is_still_stopped
+  /home/heheboiz/data/cir/workbench/backend/main.py:103: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    @app.on_event("startup")
+
+workbench/tests/test_phase1_acceptance_scenarios.py::test_scenario_g_grandchild_ignoring_sigterm_is_still_stopped
+workbench/tests/test_phase1_acceptance_scenarios.py::test_scenario_g_grandchild_ignoring_sigterm_is_still_stopped
+  /home/heheboiz/data/cir/workbench/envs/ctl312h/lib/python3.12/site-packages/fastapi/applications.py:4723: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    return self.router.on_event(event_type)  # ty: ignore[deprecated]
+
+workbench/tests/test_phase1_acceptance_scenarios.py::test_scenario_g_grandchild_ignoring_sigterm_is_still_stopped
+  /home/heheboiz/data/cir/workbench/backend/main.py:110: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    @app.on_event("shutdown")
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED workbench/tests/test_phase1_acceptance_scenarios.py::test_scenario_g_grandchild_ignoring_sigterm_is_still_stopped - AssertionError: the operator never started the evaluator
+assert False
+ +  where False = exists()
+ +    where exists = PosixPath('/tmp/pytest-of-heheboiz/pytest-129/test_scenario_g_grandchild_ign0/workspace/evaluator.pid').exists
+1 failed, 4 warnings in 60.38s (0:01:00)

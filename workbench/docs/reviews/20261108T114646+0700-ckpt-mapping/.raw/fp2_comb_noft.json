@@ -1,0 +1,160 @@
+{
+ "path": "workbench/artifacts/checkpoint_selection/20261106T002617+0700/checkpoints/clip4cir/FashionIQ/RN50x4_noft/fiq_comb_RN50x4_noft.pt",
+ "sys_modules_from_stubs": {},
+ "resolved_module_origins": {},
+ "root_class": "builtins.dict",
+ "root_keys": [
+  "epoch",
+  "Combiner"
+ ],
+ "root_key_types": {
+  "epoch": "builtins.int",
+  "Combiner": "collections.OrderedDict"
+ },
+ "root_scalars": {
+  "epoch": 165
+ },
+ "nested_dict_keys": {},
+ "nested_dict_lengths": {
+  "Combiner": 12
+ },
+ "state_dict_at": "Combiner",
+ "tensor_count": 12,
+ "total_numel": 59003521,
+ "dtype_numel": {
+  "torch.float32": 59003521
+ },
+ "prefix1": {
+  "dynamic_scalar.*": 4,
+  "text_projection_layer.*": 2,
+  "image_projection_layer.*": 2,
+  "combiner_layer.*": 2,
+  "output_layer.*": 2
+ },
+ "prefix2": {
+  "dynamic_scalar.0.*": 2,
+  "dynamic_scalar.3.*": 2,
+  "text_projection_layer.weight": 1,
+  "text_projection_layer.bias": 1,
+  "image_projection_layer.weight": 1,
+  "image_projection_layer.bias": 1,
+  "combiner_layer.weight": 1,
+  "combiner_layer.bias": 1,
+  "output_layer.weight": 1,
+  "output_layer.bias": 1
+ },
+ "prefix3": {
+  "text_projection_layer.weight": 1,
+  "text_projection_layer.bias": 1,
+  "image_projection_layer.weight": 1,
+  "image_projection_layer.bias": 1,
+  "combiner_layer.weight": 1,
+  "combiner_layer.bias": 1,
+  "output_layer.weight": 1,
+  "output_layer.bias": 1,
+  "dynamic_scalar.0.weight": 1,
+  "dynamic_scalar.0.bias": 1,
+  "dynamic_scalar.3.weight": 1,
+  "dynamic_scalar.3.bias": 1
+ },
+ "first_keys": [
+  "text_projection_layer.weight",
+  "text_projection_layer.bias",
+  "image_projection_layer.weight",
+  "image_projection_layer.bias",
+  "combiner_layer.weight",
+  "combiner_layer.bias",
+  "output_layer.weight",
+  "output_layer.bias",
+  "dynamic_scalar.0.weight",
+  "dynamic_scalar.0.bias",
+  "dynamic_scalar.3.weight",
+  "dynamic_scalar.3.bias"
+ ],
+ "last_keys": [
+  "image_projection_layer.weight",
+  "image_projection_layer.bias",
+  "combiner_layer.weight",
+  "combiner_layer.bias",
+  "output_layer.weight",
+  "output_layer.bias",
+  "dynamic_scalar.0.weight",
+  "dynamic_scalar.0.bias",
+  "dynamic_scalar.3.weight",
+  "dynamic_scalar.3.bias"
+ ],
+ "shapes": {
+  "text_projection_layer.weight": [
+   2560,
+   640
+  ],
+  "text_projection_layer.bias": [
+   2560
+  ],
+  "image_projection_layer.weight": [
+   2560,
+   640
+  ],
+  "image_projection_layer.bias": [
+   2560
+  ],
+  "combiner_layer.weight": [
+   5120,
+   5120
+  ],
+  "combiner_layer.bias": [
+   5120
+  ],
+  "output_layer.weight": [
+   640,
+   5120
+  ],
+  "output_layer.bias": [
+   640
+  ],
+  "dynamic_scalar.0.weight": [
+   5120,
+   5120
+  ],
+  "dynamic_scalar.0.bias": [
+   5120
+  ],
+  "dynamic_scalar.3.weight": [
+   1,
+   5120
+  ],
+  "dynamic_scalar.3.bias": [
+   1
+  ]
+ },
+ "fingerprint_shapes": {
+  "text_projection_layer.weight": [
+   2560,
+   640
+  ],
+  "text_projection_layer.bias": [
+   2560
+  ],
+  "image_projection_layer.weight": [
+   2560,
+   640
+  ],
+  "image_projection_layer.bias": [
+   2560
+  ],
+  "combiner_layer.weight": [
+   5120,
+   5120
+  ],
+  "combiner_layer.bias": [
+   5120
+  ],
+  "output_layer.weight": [
+   640,
+   5120
+  ],
+  "output_layer.bias": [
+   640
+  ]
+ }
+}

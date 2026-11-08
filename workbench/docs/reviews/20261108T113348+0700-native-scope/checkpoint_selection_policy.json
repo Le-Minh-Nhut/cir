@@ -1,0 +1,98 @@
+{
+ "airknow|strict_clean": {
+  "status": "BLOCKED",
+  "code": "BLOCKED_CHECKPOINT",
+  "ids": [],
+  "reason": "no checkpoint is recorded as clean-trained under policy strict_clean: fiq_n05=50%, fiq_n08=80%. Policy include_flagged_conditions runs these as an exploratory secondary cohort."
+ },
+ "airknow|include_flagged_conditions": {
+  "status": "BLOCKED",
+  "code": "BLOCKED_CHECKPOINT_SELECTION",
+  "ids": [],
+  "reason": "more than one source-backed variant is registered and none is declared a bundle: fiq_n05, fiq_n08. Source-backed options: fiq_n05 (VERIFIED_METADATA, trained with 50% noise); fiq_n08 (VERIFIED_METADAT"
+ },
+ "pair|strict_clean": {
+  "status": "BLOCKED",
+  "code": "BLOCKED_CHECKPOINT",
+  "ids": [],
+  "reason": "no checkpoint variant records a training condition, so none can be called clean under policy strict_clean. Policy include_flagged_conditions runs these with the condition recorded as unknown."
+ },
+ "pair|include_flagged_conditions": {
+  "status": "BLOCKED",
+  "code": "BLOCKED_CHECKPOINT",
+  "ids": [],
+  "reason": "checkpoint mapping unverified for pair_b1, pair_b2; the upstream repository does not establish which variant is the benchmark checkpoint"
+ },
+ "clvc_net|strict_clean": {
+  "status": "BLOCKED",
+  "code": "BLOCKED_CHECKPOINT",
+  "ids": [],
+  "reason": "no checkpoint variant records a training condition, so none can be called clean under policy strict_clean. Policy include_flagged_conditions runs these with the condition recorded as unknown."
+ },
+ "clvc_net|include_flagged_conditions": {
+  "status": "BLOCKED",
+  "code": "BLOCKED_CHECKPOINT",
+  "ids": [],
+  "reason": "checkpoint mapping unverified for author_drive_unresolved; the upstream repository does not establish which variant is the benchmark checkpoint"
+ },
+ "dcnet|strict_clean": {
+  "status": "BLOCKED",
+  "code": "BLOCKED_CHECKPOINT",
+  "ids": [],
+  "reason": "no checkpoint variant records a training condition, so none can be called clean under policy strict_clean. Policy include_flagged_conditions runs these with the condition recorded as unknown."
+ },
+ "dcnet|include_flagged_conditions": {
+  "status": "BLOCKED",
+  "code": "BLOCKED_CHECKPOINT",
+  "ids": [],
+  "reason": "checkpoint mapping unverified for fashioniq_run_directory; the upstream repository does not establish which variant is the benchmark checkpoint"
+ },
+ "combiner_rn50x4_noft|strict_clean": {
+  "status": "BLOCKED",
+  "code": "BLOCKED_CHECKPOINT",
+  "ids": [],
+  "reason": "checkpoint mapping unverified for rn50x4_noft_unresolved; the upstream repository does not establish which variant is the benchmark checkpoint"
+ },
+ "combiner_rn50x4_noft|include_flagged_conditions": {
+  "status": "BLOCKED",
+  "code": "BLOCKED_CHECKPOINT",
+  "ids": [],
+  "reason": "checkpoint mapping unverified for rn50x4_noft_unresolved; the upstream repository does not establish which variant is the benchmark checkpoint"
+ },
+ "clip4cir_rn50x4_fullft|strict_clean": {
+  "status": "BLOCKED",
+  "code": "BLOCKED_CHECKPOINT",
+  "ids": [],
+  "reason": "checkpoint mapping unverified for rn50x4_fullft_unresolved; the upstream repository does not establish which variant is the benchmark checkpoint"
+ },
+ "clip4cir_rn50x4_fullft|include_flagged_conditions": {
+  "status": "BLOCKED",
+  "code": "BLOCKED_CHECKPOINT",
+  "ids": [],
+  "reason": "checkpoint mapping unverified for rn50x4_fullft_unresolved; the upstream repository does not establish which variant is the benchmark checkpoint"
+ },
+ "tgcir|strict_clean": {
+  "status": "BLOCKED",
+  "code": "BLOCKED_CHECKPOINT",
+  "ids": [],
+  "reason": "no checkpoint variant records a training condition, so none can be called clean under policy strict_clean. Policy include_flagged_conditions runs these with the condition recorded as unknown."
+ },
+ "tgcir|include_flagged_conditions": {
+  "status": "BLOCKED",
+  "code": "BLOCKED_CHECKPOINT",
+  "ids": [],
+  "reason": "checkpoint mapping unverified for tgcir_archive_unresolved; the upstream repository does not establish which variant is the benchmark checkpoint"
+ },
+ "sprc|strict_clean": {
+  "status": "BLOCKED",
+  "code": "BLOCKED_CHECKPOINT",
+  "ids": [],
+  "reason": "no checkpoint variant records a training condition, so none can be called clean under policy strict_clean. Policy include_flagged_conditions runs these with the condition recorded as unknown."
+ },
+ "sprc|include_flagged_conditions": {
+  "status": "BLOCKED",
+  "code": "BLOCKED_CHECKPOINT",
+  "ids": [],
+  "reason": "checkpoint mapping unverified for sprc_fiq_unresolved, sprc_fiq_vitl; the upstream repository does not establish which variant is the benchmark checkpoint"
+ }
+}

@@ -1,0 +1,26 @@
+FINAL:{
+ "encoder": {
+  "env_var": "WORKBENCH_ENCODER_PYTHON",
+  "contract_python": "3.10",
+  "resolved_interpreter": "/home/heheboiz/data/cir/workbench/envs/encoder310-adapted/bin/python",
+  "python_version": "3.10.20",
+  "tier": "GPU_VERIFICATION_PENDING",
+  "status": "GPU_VERIFICATION_PENDING",
+  "reason": "CUDA capability must be verified on the GPU host with verify_gpu_runtime() before this model can be launched",
+  "torch": "2.7.1+cu128",
+  "torchvision": "0.22.1+cu128",
+  "open_clip_torch": "2.24.0"
+ },
+ "limn": {
+  "env_var": "WORKBENCH_LIMN_PYTHON",
+  "contract_python": "3.10",
+  "resolved_interpreter": "/home/heheboiz/data/cir/workbench/envs/limn310-adapted/bin/python",
+  "python_version": "3.10.20",
+  "tier": "GPU_VERIFICATION_PENDING",
+  "status": "GPU_VERIFICATION_PENDING",
+  "reason": "CUDA capability must be verified on the GPU host with verify_gpu_runtime() before this model can be launched",
+  "torch": "2.7.1+cu128",
+  "torchvision": "0.22.1+cu128",
+  "open_clip_torch": "2.20.0"
+ }
+}

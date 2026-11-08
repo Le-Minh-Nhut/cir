@@ -1,0 +1,10 @@
+test_circus_adapters_blip|exit=1|dur=7s|2 failed, 16 passed in 6.79s
+test_circus_adapters_rest|exit=1|dur=5s|1 failed, 11 passed in 4.53s
+test_handoff_commands|exit=1|dur=6s|1 failed, 7 passed in 5.98s
+test_http_api_layer|exit=1|dur=16s|1 failed, 44 passed, 176 warnings in 15.79s
+test_pc_launcher|exit=1|dur=294s|11 failed, 90 passed, 6 warnings in 292.56s (0:04:52)
+test_phase1_acceptance_scenarios|exit=1|dur=123s|5 failed, 3 passed, 20 warnings in 122.28s (0:02:02)
+test_release_blocker_master_e2e|exit=1|dur=107s|10 failed, 6 passed in 106.71s (0:01:46)
+test_release_blocker_source_integrity|exit=0|dur=2s|18 passed in 1.44s
+test_true_master_e2e|exit=1|dur=11s|1 failed, 2 passed in 11.65s
+DONE

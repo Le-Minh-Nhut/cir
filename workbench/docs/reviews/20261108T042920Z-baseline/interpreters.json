@@ -1,0 +1,50 @@
+[
+ {
+  "var": "WORKBENCH_CONESEP_PYTHON",
+  "path": "/home/heheboiz/data/cir/workbench/envs/airknow-adapted/bin/python",
+  "exists": true,
+  "version": "Python 3.11.15"
+ },
+ {
+  "var": "WORKBENCH_ENCODER_PYTHON",
+  "path": "/home/heheboiz/data/cir/workbench/envs/pair-adapted/bin/python",
+  "exists": true,
+  "version": "Python 3.11.15"
+ },
+ {
+  "var": "WORKBENCH_HABIT_PYTHON",
+  "path": "/home/heheboiz/data/cir/workbench/envs/airknow-adapted/bin/python",
+  "exists": true,
+  "version": "Python 3.11.15"
+ },
+ {
+  "var": "WORKBENCH_HINT_PYTHON",
+  "path": "/home/heheboiz/data/cir/workbench/envs/airknow-adapted/bin/python",
+  "exists": true,
+  "version": "Python 3.11.15"
+ },
+ {
+  "var": "WORKBENCH_INTENT_PYTHON",
+  "path": "/home/heheboiz/data/cir/workbench/envs/airknow-adapted/bin/python",
+  "exists": true,
+  "version": "Python 3.11.15"
+ },
+ {
+  "var": "WORKBENCH_LIMN_PYTHON",
+  "path": "/home/heheboiz/data/cir/workbench/envs/limn-adapted/bin/python",
+  "exists": true,
+  "version": "Python 3.11.15"
+ },
+ {
+  "var": "WORKBENCH_PTHA_MTST_PYTHON",
+  "path": "/home/heheboiz/data/cir/workbench/envs/airknow-adapted/bin/python",
+  "exists": true,
+  "version": "Python 3.11.15"
+ },
+ {
+  "var": "WORKBENCH_TME_PYTHON",
+  "path": "/home/heheboiz/data/cir/workbench/envs/tme-adapted/bin/python",
+  "exists": true,
+  "version": "Python 3.10.22"
+ }
+]

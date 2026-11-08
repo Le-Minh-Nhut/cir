@@ -1,0 +1,18 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+________________ test_e2e02_resume_skips_verified_completed_run ________________
+
+master = {'ws': PosixPath('/tmp/pytest-of-heheboiz/pytest-132/test_e2e02_resume_skips_verifi0/workspace'), 'data': PosixPath('/...ixPath('/tmp/pytest-of-heheboiz/pytest-132/test_e2e02_resume_skips_verifi0/workspace/third_party/SyntheticModel'), ...}
+
+    def test_e2e02_resume_skips_verified_completed_run(master):
+>       assert run(master).returncode == 0
+E       AssertionError: assert 1 == 0
+E        +  where 1 = CompletedProcess(args=['/home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python', '/home/heheboiz/data/cir/workbench...CKED] evaluation could not be audited: evidence ledger does not verify\n  [BLOCKED] evaluation exited with status 1\n').returncode
+E        +    where CompletedProcess(args=['/home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python', '/home/heheboiz/data/cir/workbench...CKED] evaluation could not be audited: evidence ledger does not verify\n  [BLOCKED] evaluation exited with status 1\n') = run({'ws': PosixPath('/tmp/pytest-of-heheboiz/pytest-132/test_e2e02_resume_skips_verifi0/workspace'), 'data': PosixPath('/...ixPath('/tmp/pytest-of-heheboiz/pytest-132/test_e2e02_resume_skips_verifi0/workspace/third_party/SyntheticModel'), ...})
+
+workbench/tests/test_release_blocker_master_e2e.py:187: AssertionError
+=========================== short test summary info ============================
+FAILED workbench/tests/test_release_blocker_master_e2e.py::test_e2e02_resume_skips_verified_completed_run - AssertionError: assert 1 == 0
+ +  where 1 = CompletedProcess(args=['/home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python', '/home/heheboiz/data/cir/workbench...CKED] evaluation could not be audited: evidence ledger does not verify\n  [BLOCKED] evaluation exited with status 1\n').returncode
+ +    where CompletedProcess(args=['/home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python', '/home/heheboiz/data/cir/workbench...CKED] evaluation could not be audited: evidence ledger does not verify\n  [BLOCKED] evaluation exited with status 1\n') = run({'ws': PosixPath('/tmp/pytest-of-heheboiz/pytest-132/test_e2e02_resume_skips_verifi0/workspace'), 'data': PosixPath('/...ixPath('/tmp/pytest-of-heheboiz/pytest-132/test_e2e02_resume_skips_verifi0/workspace/third_party/SyntheticModel'), ...})
+1 failed in 3.38s

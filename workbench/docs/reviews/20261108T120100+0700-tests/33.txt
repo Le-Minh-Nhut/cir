@@ -1,0 +1,78 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+____________ test_true_master_pipeline_subprocess_e2e_complete_flow ____________
+
+true_e2e_workspace = {'ws': PosixPath('/tmp/pytest-of-heheboiz/pytest-144/test_true_master_pipeline_subp0/workspace'), 'data': PosixPath('/...mp/pytest-of-heheboiz/pytest-144/test_true_master_pipeline_subp0/workspace/checkpoints/synthetic_model/model.pt'), ...}
+
+    def test_true_master_pipeline_subprocess_e2e_complete_flow(true_e2e_workspace):
+        """Full Level 3 Master E2E: Real CLI subprocess execution of pipeline.py through all stages."""
+        w = true_e2e_workspace
+        env = w["env"]
+        report_file = w["reports"] / "workflow_report.json"
+        pipeline_script = str(REPOSITORY / "workbench" / "scripts" / "pipeline.py")
+    
+        # RUN 1: Master 'all' workflow executed as a REAL subprocess
+        cmd1 = [
+            sys.executable,
+            pipeline_script,
+            "all",
+            "--model", "synthetic_model",
+            "--apply",
+            "--allow-network",
+            "--allow-large-downloads",
+            "--allow-env-install",
+            "--allow-preparation",
+            "--allow-gpu-eval",
+            "--allow-index-write",
+            "--report", str(report_file),
+        ]
+    
+        res1 = subprocess.run(cmd1, env=env, capture_output=True, text=True)
+        assert res1.returncode == 0, f"Master pipeline failed:\nSTDOUT:\n{res1.stdout}\nSTDERR:\n{res1.stderr}"
+    
+        # Verify real workflow report was written
+        assert report_file.is_file(), "Master workflow report was not created"
+        rep1 = json.loads(report_file.read_text())
+        assert rep1["success"] is True
+        assert rep1["status"] == "SUCCESS"
+        eval_key = next(k for k in rep1["stages"] if "evaluation" in k and "synthetic_model" in k)
+        assert rep1["stages"][eval_key]["status"] == "COMPLETE"
+    
+        # RUN 2: Master 'all' with --resume -> must skip already completed stages
+        cmd2 = cmd1 + ["--resume"]
+        res2 = subprocess.run(cmd2, env=env, capture_output=True, text=True)
+        assert res2.returncode == 0
+        assert "[SKIP] resume: already completed" in res2.stdout, f"Resume did not skip completed work:\n{res2.stdout}"
+    
+        # RUN 3: Mutate checkpoint bytes -> --resume must invalidate and rerun evaluation
+        logs_dir = w["ws"] / "workbench" / "artifacts" / "logs"
+        logs_before = len(list(logs_dir.iterdir())) if logs_dir.is_dir() else 0
+        w["ckpt_file"].write_bytes(b"mutated-checkpoint-bytes-v2")
+        res3 = subprocess.run(cmd2, env=env, capture_output=True, text=True)
+        assert res3.returncode == 0
+>       logs_after = len(list(logs_dir.iterdir()))
+                         ^^^^^^^^^^^^^^^^^^^^^^^^
+
+workbench/tests/test_true_master_e2e.py:228: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = PosixPath('/tmp/pytest-of-heheboiz/pytest-144/test_true_master_pipeline_subp0/workspace/workbench/artifacts/logs')
+
+    def iterdir(self):
+        """Yield path objects of the directory contents.
+    
+        The children are yielded in arbitrary order, and the
+        special entries '.' and '..' are not included.
+        """
+>       for name in os.listdir(self):
+                    ^^^^^^^^^^^^^^^^
+E       FileNotFoundError: [Errno 2] No such file or directory: '/tmp/pytest-of-heheboiz/pytest-144/test_true_master_pipeline_subp0/workspace/workbench/artifacts/logs'
+
+../../.local/share/uv/python/cpython-3.12-linux-x86_64-gnu/lib/python3.12/pathlib.py:1056: FileNotFoundError
+---------------------------- Captured stdout setup -----------------------------
+[master (root-commit) 2efcdce] init
+ 1 file changed, 22 insertions(+)
+ create mode 100755 src/evaluator.py
+=========================== short test summary info ============================
+FAILED workbench/tests/test_true_master_e2e.py::test_true_master_pipeline_subprocess_e2e_complete_flow - FileNotFoundError: [Errno 2] No such file or directory: '/tmp/pytest-of-heheboiz/pytest-144/test_true_master_pipeline_subp0/workspace/workbench/artifacts/logs'
+1 failed in 10.47s

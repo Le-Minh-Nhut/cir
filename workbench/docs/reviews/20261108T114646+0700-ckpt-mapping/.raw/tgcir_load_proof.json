@@ -1,0 +1,39 @@
+{
+ "ckpt": {
+  "hidden_dim": 512,
+  "local_token_num": 8,
+  "global_token_num": 4,
+  "local_weight": [
+   12
+  ],
+  "epoch": null
+ },
+ "hidden512_Q8_P4": {
+  "n_model": 489,
+  "n_ckpt": 489,
+  "missing": 0,
+  "unexpected": 0,
+  "verdict": "STRICT_OK"
+ },
+ "hidden512_Q4_P8": {
+  "n_model": 481,
+  "n_ckpt": 489,
+  "missing": 0,
+  "unexpected": 8,
+  "verdict": "STRICT_FAIL: \tUnexpected key(s) in state_dict: \"backbone.tokenlearn.tokenizers.4.conv.0.weight\", \"backbone.tokenlearn.tokenizers.4.co"
+ },
+ "hidden1024_Q8_P4": {
+  "n_model": 489,
+  "n_ckpt": 489,
+  "missing": 0,
+  "unexpected": 0,
+  "verdict": "STRICT_FAIL: \tsize mismatch for backbone.tokenlearn.tokenizers.0.conv.0.weight: copying a param with shape torch.Size([1, 512, 1]) fr"
+ },
+ "hidden1024_Q4_P8": {
+  "n_model": 481,
+  "n_ckpt": 489,
+  "missing": 0,
+  "unexpected": 8,
+  "verdict": "STRICT_FAIL: \tUnexpected key(s) in state_dict: \"backbone.tokenlearn.tokenizers.4.conv.0.weight\", \"backbone.tokenlearn.tokenizers.4.co"
+ }
+}

@@ -1,0 +1,16 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+_________________ test_status_is_honest_and_reports_every_mode _________________
+
+    def test_status_is_honest_and_reports_every_mode() -> None:
+        for module_name in MODELS.values():
+            status = import_module(module_name).Adapter.status()
+>           assert status.ready is False
+E           AssertionError: assert True is False
+E            +  where True = AdapterStatus(model_id='habit', ready=True, reason=None, checkpoint_ids=('fiq_n02',), per_mode={'multimodal': (True, None), 'text_only_black_image': (True, None), 'image_only_empty_text': (True, None)}, notes='').ready
+
+workbench/tests/test_circus_adapters_rest.py:160: AssertionError
+=========================== short test summary info ============================
+FAILED workbench/tests/test_circus_adapters_rest.py::test_status_is_honest_and_reports_every_mode - AssertionError: assert True is False
+ +  where True = AdapterStatus(model_id='habit', ready=True, reason=None, checkpoint_ids=('fiq_n02',), per_mode={'multimodal': (True, None), 'text_only_black_image': (True, None), 'image_only_empty_text': (True, None)}, notes='').ready
+1 failed in 4.76s

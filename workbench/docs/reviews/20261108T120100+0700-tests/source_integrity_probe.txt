@@ -1,0 +1,9 @@
+### no conftest, no operator file
+18 passed in 1.51s
+### no conftest, operator file present (its absolute WORKBENCH_ARTIFACTS_ROOT leaks)
+FAILED workbench/tests/test_release_blocker_source_integrity.py::test_src07_declared_auxiliary_asset_accepted_only_with_provenance - AssertionError: recorded declared assets are approved runtime artifacts
+FAILED workbench/tests/test_release_blocker_source_integrity.py::test_src08_modified_auxiliary_asset_rejected - AssertionError: recorded bytes are approved
+2 failed, 16 passed in 2.43s
+### no conftest, no operator file, WORKBENCH_ARTIFACTS_ROOT injected to a scratch root
+2 failed, 16 passed in 1.49s
+DONE

@@ -1,0 +1,12 @@
+=== habit
+CONTRACT:"3.9"
+REPORT:{"tier": "GPU_VERIFICATION_PENDING", "status": "GPU_VERIFICATION_PENDING", "reason": "CUDA capability must be verified on the GPU host with verify_gpu_runtime() before this model can be launched", "python_version": "3.9.25", "interpreter": "/home/heheboiz/data/cir/workbench/envs/ilearn39-adapted/bin/python"}
+=== intent
+CONTRACT:"3.9"
+REPORT:{"tier": "GPU_VERIFICATION_PENDING", "status": "GPU_VERIFICATION_PENDING", "reason": "CUDA capability must be verified on the GPU host with verify_gpu_runtime() before this model can be launched", "python_version": "3.9.25", "interpreter": "/home/heheboiz/data/cir/workbench/envs/ilearn39-adapted/bin/python"}
+=== hint
+CONTRACT:"3.9"
+REPORT:{"tier": "GPU_VERIFICATION_PENDING", "status": "GPU_VERIFICATION_PENDING", "reason": "CUDA capability must be verified on the GPU host with verify_gpu_runtime() before this model can be launched", "python_version": "3.9.25", "interpreter": "/home/heheboiz/data/cir/workbench/envs/ilearn39-adapted/bin/python"}
+=== conesep
+CONTRACT:"3.9"
+REPORT:{"tier": "GPU_VERIFICATION_PENDING", "status": "GPU_VERIFICATION_PENDING", "reason": "CUDA capability must be verified on the GPU host with verify_gpu_runtime() before this model can be launched", "python_version": "3.9.25", "interpreter": "/home/heheboiz/data/cir/workbench/envs/ilearn39-adapted/bin/python"}

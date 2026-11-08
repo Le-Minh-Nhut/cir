@@ -1,0 +1,7 @@
+=== live env of backend pid 3213598 (WORKBENCH_*/CIR_*/FASHIONIQ only) ===
+WORKBENCH_CIRCUS_RELEASE_ROOT=/home/heheboiz/data/cir/workbench/artifacts/circus_release
+=== live env of serve pid 3213589 ===
+WORKBENCH_CIRCUS_RELEASE_ROOT=/home/heheboiz/data/cir/workbench/artifacts/circus_release
+=== live env of vite pid 3213611 ===
+WORKBENCH_BACKEND_URL=http://127.0.0.1:8000
+WORKBENCH_CIRCUS_RELEASE_ROOT=/home/heheboiz/data/cir/workbench/artifacts/circus_release

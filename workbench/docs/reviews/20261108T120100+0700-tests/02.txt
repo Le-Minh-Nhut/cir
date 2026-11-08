@@ -1,0 +1,26 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+_ test_adapter_import_and_unready_status[workbench.composition.model_ptha_mtst-ptha_mtst] _
+
+module = <module 'workbench.composition.model_ptha_mtst' from '/home/heheboiz/data/cir/workbench/composition/model_ptha_mtst.py'>
+model_id = 'ptha_mtst'
+
+    @pytest.mark.parametrize(("module", "model_id"), [
+        (model_csmcir, "csmcir"), (model_conesep, "conesep"), (model_ptha_mtst, "ptha_mtst")
+    ])
+    def test_adapter_import_and_unready_status(module, model_id: str) -> None:
+        assert module.ADAPTER is module.Adapter
+        assert issubclass(module.Adapter, adapters.CompositionAdapter)
+        assert module.Adapter.model_id == model_id
+        assert module.Adapter.category_scopes == (None,)
+        assert module.Adapter.reference_eligible is True
+        status = module.Adapter.status()
+>       assert status.ready is False
+E       AssertionError: assert True is False
+E        +  where True = AdapterStatus(model_id='ptha_mtst', ready=True, reason=None, checkpoint_ids=('cirr_transfer',), per_mode={'multimodal'...: (True, None)}, notes='cirr_transfer is a CIRR-trained → FashionIQ transfer checkpoint, not a FashionIQ reproduction').ready
+
+workbench/tests/test_circus_adapters_blip.py:31: AssertionError
+=========================== short test summary info ============================
+FAILED workbench/tests/test_circus_adapters_blip.py::test_adapter_import_and_unready_status[workbench.composition.model_ptha_mtst-ptha_mtst] - AssertionError: assert True is False
+ +  where True = AdapterStatus(model_id='ptha_mtst', ready=True, reason=None, checkpoint_ids=('cirr_transfer',), per_mode={'multimodal'...: (True, None)}, notes='cirr_transfer is a CIRR-trained → FashionIQ transfer checkpoint, not a FashionIQ reproduction').ready
+1 failed in 4.57s

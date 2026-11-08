@@ -1,0 +1,4 @@
+1794123582
+2026-11-08T14:39:42+0700
+model=habit
+cmd=/home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python -u workbench/scripts/composition_eval.py --config workbench/docs/reviews/20261108T113610-eval/circus_cohort.yaml --models habit --subsets full,sf,validated --topk-depth 50 --keep-features --resume

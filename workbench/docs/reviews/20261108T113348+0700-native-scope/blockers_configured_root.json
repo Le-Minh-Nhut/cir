@@ -1,0 +1,145 @@
+{
+ "airknow::fiq_n05::fashioniq_full_gallery_ref_excluded": {
+  "runtime_plan": [
+   "checkpoint missing: /home/heheboiz/data/cir/workbench/artifacts/checkpoints/airknow/airknow_fiq_0.5.pt"
+  ],
+  "preflight": [
+   "execution environment not verified: WORKBENCH_AIRKNOW_PYTHON=None [UNCONFIGURED/UNCONFIGURED] (WORKBENCH_AIRKNOW_PYTHON not set)"
+  ]
+ },
+ "airknow::fiq_n08::fashioniq_full_gallery_ref_excluded": {
+  "runtime_plan": [
+   "checkpoint missing: /home/heheboiz/data/cir/workbench/artifacts/checkpoints/airknow/airknow_fiq_0.8.pt"
+  ],
+  "preflight": [
+   "execution environment not verified: WORKBENCH_AIRKNOW_PYTHON=None [UNCONFIGURED/UNCONFIGURED] (WORKBENCH_AIRKNOW_PYTHON not set)"
+  ]
+ },
+ "pair::pair_b1::fashioniq_val_split": {
+  "runtime_plan": [
+   "command not runnable: COMMAND_BLOCKED_SOURCE_ENTRYPOINT",
+   "checkpoint missing: /home/heheboiz/data/cir/workbench/artifacts/checkpoints/pair/pair-B1.pt",
+   "checkpoint mapping unresolved"
+  ],
+  "preflight": [
+   "command not runnable: COMMAND_BLOCKED_SOURCE_ENTRYPOINT",
+   "execution environment not verified: WORKBENCH_PAIR_PYTHON=None [UNCONFIGURED/UNCONFIGURED] (WORKBENCH_PAIR_PYTHON not set)"
+  ]
+ },
+ "pair::pair_b2::fashioniq_val_split": {
+  "runtime_plan": [
+   "command not runnable: COMMAND_BLOCKED_SOURCE_ENTRYPOINT",
+   "checkpoint missing: /home/heheboiz/data/cir/workbench/artifacts/checkpoints/pair/pair-B2.pt",
+   "checkpoint mapping unresolved"
+  ],
+  "preflight": [
+   "command not runnable: COMMAND_BLOCKED_SOURCE_ENTRYPOINT",
+   "execution environment not verified: WORKBENCH_PAIR_PYTHON=None [UNCONFIGURED/UNCONFIGURED] (WORKBENCH_PAIR_PYTHON not set)"
+  ]
+ },
+ "clvc_net::author_drive_unresolved::fashioniq_val_split": {
+  "runtime_plan": [
+   "torchvision ResNet-50 ImageNet weights missing: /home/heheboiz/.cache/torch/hub/checkpoints/resnet50-19c8e357.pth",
+   "external runtime asset file missing: torchvision ResNet-50 ImageNet weights (/home/heheboiz/.cache/torch/hub/checkpoints/resnet50-19c8e357.pth)",
+   "command not runnable: COMMAND_BLOCKED_SOURCE_ENTRYPOINT",
+   "checkpoint missing: /home/heheboiz/data/cir/workbench/artifacts/checkpoints/clvc_net/checkpoint-unresolved.pt",
+   "checkpoint mapping unresolved"
+  ],
+  "preflight": [
+   "torchvision ResNet-50 ImageNet weights missing: /home/heheboiz/.cache/torch/hub/checkpoints/resnet50-19c8e357.pth",
+   "external runtime asset file missing: torchvision ResNet-50 ImageNet weights (/home/heheboiz/.cache/torch/hub/checkpoints/resnet50-19c8e357.pth)",
+   "command not runnable: COMMAND_BLOCKED_SOURCE_ENTRYPOINT",
+   "execution environment not verified: WORKBENCH_CLVC_PYTHON=None [UNCONFIGURED/UNCONFIGURED] (WORKBENCH_CLVC_PYTHON not set)"
+  ]
+ },
+ "dcnet::fashioniq_run_directory::fashioniq_full_gallery_ref_excluded": {
+  "runtime_plan": [
+   "canonical dataset link missing: /home/heheboiz/data/cir/workbench/third_party/DCNet/dataset/fashioniq -> /home/heheboiz/data/cir/data/FashionIQ",
+   "external runtime asset file missing: torchvision ResNet-50 ImageNet weights (/home/heheboiz/.cache/torch/hub/checkpoints/resnet50-19c8e357.pth)",
+   "checkpoint missing: /home/heheboiz/data/cir/workbench/artifacts/checkpoints/dcnet/fashioniq_dcnet",
+   "checkpoint mapping unresolved"
+  ],
+  "preflight": [
+   "canonical dataset link missing: /home/heheboiz/data/cir/workbench/third_party/DCNet/dataset/fashioniq -> /home/heheboiz/data/cir/data/FashionIQ",
+   "external runtime asset file missing: torchvision ResNet-50 ImageNet weights (/home/heheboiz/.cache/torch/hub/checkpoints/resnet50-19c8e357.pth)",
+   "execution environment not verified: WORKBENCH_DCNET_PYTHON=None [UNCONFIGURED/UNCONFIGURED] (WORKBENCH_DCNET_PYTHON not set)"
+  ]
+ },
+ "combiner_rn50x4_noft::rn50x4_noft_unresolved::fashioniq_original_split": {
+  "runtime_plan": [
+   "FashionIQ image extension requirement: 3817 of 3817 dress validation images lack .jpg in /home/heheboiz/data/cir/data/FashionIQ/images (first: B009PMCJLW.jpg)",
+   "FashionIQ image extension requirement: 6346 of 6346 shirt validation images lack .jpg in /home/heheboiz/data/cir/data/FashionIQ/images (first: B000KENMD8.jpg)",
+   "FashionIQ image extension requirement: 5373 of 5373 toptee validation images lack .jpg in /home/heheboiz/data/cir/data/FashionIQ/images (first: B008CG1JJ0.jpg)",
+   "canonical dataset link resolves to /home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/prepared/clip4cir/fashionIQ_dataset, expected /home/heheboiz/data/cir/data/FashionIQ",
+   "checkpoint missing: /home/heheboiz/data/cir/workbench/artifacts/checkpoints/combiner_rn50x4_noft/rn50x4-noft-unresolved.pt",
+   "checkpoint mapping unresolved"
+  ],
+  "preflight": [
+   "FashionIQ image extension requirement: 3817 of 3817 dress validation images lack .jpg in /home/heheboiz/data/cir/data/FashionIQ/images (first: B009PMCJLW.jpg)",
+   "FashionIQ image extension requirement: 6346 of 6346 shirt validation images lack .jpg in /home/heheboiz/data/cir/data/FashionIQ/images (first: B000KENMD8.jpg)",
+   "FashionIQ image extension requirement: 5373 of 5373 toptee validation images lack .jpg in /home/heheboiz/data/cir/data/FashionIQ/images (first: B008CG1JJ0.jpg)",
+   "canonical dataset link resolves to /home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/prepared/clip4cir/fashionIQ_dataset, expected /home/heheboiz/data/cir/data/FashionIQ",
+   "execution environment not verified: WORKBENCH_CLIP4CIR_PYTHON=None [UNCONFIGURED/UNCONFIGURED] (WORKBENCH_CLIP4CIR_PYTHON not set)"
+  ]
+ },
+ "clip4cir_rn50x4_fullft::rn50x4_fullft_unresolved::fashioniq_original_split": {
+  "runtime_plan": [
+   "FashionIQ image extension requirement: 3817 of 3817 dress validation images lack .jpg in /home/heheboiz/data/cir/data/FashionIQ/images (first: B009PMCJLW.jpg)",
+   "FashionIQ image extension requirement: 6346 of 6346 shirt validation images lack .jpg in /home/heheboiz/data/cir/data/FashionIQ/images (first: B000KENMD8.jpg)",
+   "FashionIQ image extension requirement: 5373 of 5373 toptee validation images lack .jpg in /home/heheboiz/data/cir/data/FashionIQ/images (first: B008CG1JJ0.jpg)",
+   "canonical dataset link resolves to /home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/prepared/clip4cir/fashionIQ_dataset, expected /home/heheboiz/data/cir/data/FashionIQ",
+   "checkpoint missing: /home/heheboiz/data/cir/workbench/artifacts/checkpoints/clip4cir_rn50x4_fullft/rn50x4-fullft-unresolved.pt",
+   "checkpoint mapping unresolved"
+  ],
+  "preflight": [
+   "FashionIQ image extension requirement: 3817 of 3817 dress validation images lack .jpg in /home/heheboiz/data/cir/data/FashionIQ/images (first: B009PMCJLW.jpg)",
+   "FashionIQ image extension requirement: 6346 of 6346 shirt validation images lack .jpg in /home/heheboiz/data/cir/data/FashionIQ/images (first: B000KENMD8.jpg)",
+   "FashionIQ image extension requirement: 5373 of 5373 toptee validation images lack .jpg in /home/heheboiz/data/cir/data/FashionIQ/images (first: B008CG1JJ0.jpg)",
+   "canonical dataset link resolves to /home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/prepared/clip4cir/fashionIQ_dataset, expected /home/heheboiz/data/cir/data/FashionIQ",
+   "execution environment not verified: WORKBENCH_CLIP4CIR_PYTHON=None [UNCONFIGURED/UNCONFIGURED] (WORKBENCH_CLIP4CIR_PYTHON not set)"
+  ]
+ },
+ "tgcir::tgcir_archive_unresolved::fashioniq_val_split": {
+  "runtime_plan": [
+   "external runtime asset provenance unresolved: OpenAI CLIP ViT-B/16 weights/cache",
+   "command not runnable: COMMAND_BLOCKED_SOURCE_ENTRYPOINT",
+   "checkpoint missing: /home/heheboiz/data/cir/workbench/artifacts/checkpoints/tgcir/tgcir-fashioniq-unresolved.pt",
+   "checkpoint mapping unresolved"
+  ],
+  "preflight": [
+   "external runtime asset provenance unresolved: OpenAI CLIP ViT-B/16 weights/cache",
+   "command not runnable: COMMAND_BLOCKED_SOURCE_ENTRYPOINT",
+   "execution environment not verified: WORKBENCH_TGCIR_PYTHON=None [UNCONFIGURED/UNCONFIGURED] (WORKBENCH_TGCIR_PYTHON not set)"
+  ]
+ },
+ "sprc::sprc_fiq_unresolved::fashioniq_original_split": {
+  "runtime_plan": [
+   "canonical dataset link resolves to /home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/prepared/sprc/fashionIQ_dataset, expected /home/heheboiz/data/cir/data/FashionIQ",
+   "external runtime asset provenance unresolved: LAVIS BLIP-2 pretrain weights",
+   "command not runnable: COMMAND_BLOCKED_MODEL_MAPPING",
+   "checkpoint missing: /home/heheboiz/data/cir/workbench/artifacts/checkpoints/sprc/sprc_fiq.pt",
+   "checkpoint mapping unresolved"
+  ],
+  "preflight": [
+   "canonical dataset link resolves to /home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/prepared/sprc/fashionIQ_dataset, expected /home/heheboiz/data/cir/data/FashionIQ",
+   "external runtime asset provenance unresolved: LAVIS BLIP-2 pretrain weights",
+   "command not runnable: COMMAND_BLOCKED_MODEL_MAPPING",
+   "execution environment not verified: WORKBENCH_SPRC_PYTHON=None [UNCONFIGURED/UNCONFIGURED] (WORKBENCH_SPRC_PYTHON not set)"
+  ]
+ },
+ "sprc::sprc_fiq_vitl::fashioniq_original_split": {
+  "runtime_plan": [
+   "canonical dataset link resolves to /home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/prepared/sprc/fashionIQ_dataset, expected /home/heheboiz/data/cir/data/FashionIQ",
+   "external runtime asset provenance unresolved: LAVIS BLIP-2 pretrain weights",
+   "command not runnable: COMMAND_BLOCKED_MODEL_MAPPING",
+   "checkpoint missing: /home/heheboiz/data/cir/workbench/artifacts/checkpoints/sprc/sprc_fiq_vitl.pt",
+   "checkpoint mapping unresolved"
+  ],
+  "preflight": [
+   "canonical dataset link resolves to /home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/prepared/sprc/fashionIQ_dataset, expected /home/heheboiz/data/cir/data/FashionIQ",
+   "external runtime asset provenance unresolved: LAVIS BLIP-2 pretrain weights",
+   "command not runnable: COMMAND_BLOCKED_MODEL_MAPPING",
+   "execution environment not verified: WORKBENCH_SPRC_PYTHON=None [UNCONFIGURED/UNCONFIGURED] (WORKBENCH_SPRC_PYTHON not set)"
+  ]
+ }
+}

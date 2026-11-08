@@ -1,0 +1,4703 @@
+{
+ "path": "workbench/artifacts/checkpoint_selection/20261106T002617+0700/checkpoints/pair/pair-B1.pt",
+ "sys_modules_from_stubs": {
+  "model_vssp": [
+   "Encoder",
+   "Backbone",
+   "FeatureWiseAffine"
+  ],
+  "MHTransformer_dis": [
+   "MlpTransformer",
+   "MultiHeadAttention",
+   "Transformer",
+   "TransformerLayer"
+  ]
+ },
+ "resolved_module_origins": {},
+ "root_class": "model_vssp.Encoder",
+ "module_tree": [
+  {
+   "path": "<root>",
+   "class": "model_vssp.Encoder"
+  },
+  {
+   "path": "backbone",
+   "class": "model_vssp.Backbone"
+  },
+  {
+   "path": "backbone.clip",
+   "class": "open_clip.model.CLIP"
+  },
+  {
+   "path": "backbone.clip.visual",
+   "class": "open_clip.transformer.VisionTransformer"
+  },
+  {
+   "path": "backbone.clip.visual.conv1",
+   "class": "torch.nn.modules.conv.Conv2d"
+  },
+  {
+   "path": "backbone.clip.visual.patch_dropout",
+   "class": "torch.nn.modules.linear.Identity"
+  },
+  {
+   "path": "backbone.clip.visual.ln_pre",
+   "class": "open_clip.transformer.LayerNorm"
+  },
+  {
+   "path": "backbone.clip.visual.transformer",
+   "class": "open_clip.transformer.Transformer"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks",
+   "class": "torch.nn.modules.container.ModuleList"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.0",
+   "class": "open_clip.transformer.ResidualAttentionBlock"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.0.ln_1",
+   "class": "open_clip.transformer.LayerNorm"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.0.attn",
+   "class": "torch.nn.modules.activation.MultiheadAttention"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.0.attn.out_proj",
+   "class": "torch.nn.modules.linear.NonDynamicallyQuantizableLinear"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.0.ls_1",
+   "class": "torch.nn.modules.linear.Identity"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.0.ln_2",
+   "class": "open_clip.transformer.LayerNorm"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.0.mlp",
+   "class": "torch.nn.modules.container.Sequential"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.0.mlp.c_fc",
+   "class": "torch.nn.modules.linear.Linear"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.0.mlp.gelu",
+   "class": "torch.nn.modules.activation.GELU"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.0.mlp.c_proj",
+   "class": "torch.nn.modules.linear.Linear"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.0.ls_2",
+   "class": "torch.nn.modules.linear.Identity"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.1",
+   "class": "open_clip.transformer.ResidualAttentionBlock"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.1.ln_1",
+   "class": "open_clip.transformer.LayerNorm"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.1.attn",
+   "class": "torch.nn.modules.activation.MultiheadAttention"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.1.attn.out_proj",
+   "class": "torch.nn.modules.linear.NonDynamicallyQuantizableLinear"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.1.ls_1",
+   "class": "torch.nn.modules.linear.Identity"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.1.ln_2",
+   "class": "open_clip.transformer.LayerNorm"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.1.mlp",
+   "class": "torch.nn.modules.container.Sequential"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.1.mlp.c_fc",
+   "class": "torch.nn.modules.linear.Linear"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.1.mlp.gelu",
+   "class": "torch.nn.modules.activation.GELU"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.1.mlp.c_proj",
+   "class": "torch.nn.modules.linear.Linear"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.1.ls_2",
+   "class": "torch.nn.modules.linear.Identity"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.2",
+   "class": "open_clip.transformer.ResidualAttentionBlock"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.2.ln_1",
+   "class": "open_clip.transformer.LayerNorm"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.2.attn",
+   "class": "torch.nn.modules.activation.MultiheadAttention"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.2.attn.out_proj",
+   "class": "torch.nn.modules.linear.NonDynamicallyQuantizableLinear"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.2.ls_1",
+   "class": "torch.nn.modules.linear.Identity"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.2.ln_2",
+   "class": "open_clip.transformer.LayerNorm"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.2.mlp",
+   "class": "torch.nn.modules.container.Sequential"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.2.mlp.c_fc",
+   "class": "torch.nn.modules.linear.Linear"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.2.mlp.gelu",
+   "class": "torch.nn.modules.activation.GELU"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.2.mlp.c_proj",
+   "class": "torch.nn.modules.linear.Linear"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.2.ls_2",
+   "class": "torch.nn.modules.linear.Identity"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.3",
+   "class": "open_clip.transformer.ResidualAttentionBlock"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.3.ln_1",
+   "class": "open_clip.transformer.LayerNorm"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.3.attn",
+   "class": "torch.nn.modules.activation.MultiheadAttention"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.3.attn.out_proj",
+   "class": "torch.nn.modules.linear.NonDynamicallyQuantizableLinear"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.3.ls_1",
+   "class": "torch.nn.modules.linear.Identity"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.3.ln_2",
+   "class": "open_clip.transformer.LayerNorm"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.3.mlp",
+   "class": "torch.nn.modules.container.Sequential"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.3.mlp.c_fc",
+   "class": "torch.nn.modules.linear.Linear"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.3.mlp.gelu",
+   "class": "torch.nn.modules.activation.GELU"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.3.mlp.c_proj",
+   "class": "torch.nn.modules.linear.Linear"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.3.ls_2",
+   "class": "torch.nn.modules.linear.Identity"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.4",
+   "class": "open_clip.transformer.ResidualAttentionBlock"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.4.ln_1",
+   "class": "open_clip.transformer.LayerNorm"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.4.attn",
+   "class": "torch.nn.modules.activation.MultiheadAttention"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.4.attn.out_proj",
+   "class": "torch.nn.modules.linear.NonDynamicallyQuantizableLinear"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.4.ls_1",
+   "class": "torch.nn.modules.linear.Identity"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.4.ln_2",
+   "class": "open_clip.transformer.LayerNorm"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.4.mlp",
+   "class": "torch.nn.modules.container.Sequential"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.4.mlp.c_fc",
+   "class": "torch.nn.modules.linear.Linear"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.4.mlp.gelu",
+   "class": "torch.nn.modules.activation.GELU"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.4.mlp.c_proj",
+   "class": "torch.nn.modules.linear.Linear"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.4.ls_2",
+   "class": "torch.nn.modules.linear.Identity"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.5",
+   "class": "open_clip.transformer.ResidualAttentionBlock"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.5.ln_1",
+   "class": "open_clip.transformer.LayerNorm"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.5.attn",
+   "class": "torch.nn.modules.activation.MultiheadAttention"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.5.attn.out_proj",
+   "class": "torch.nn.modules.linear.NonDynamicallyQuantizableLinear"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.5.ls_1",
+   "class": "torch.nn.modules.linear.Identity"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.5.ln_2",
+   "class": "open_clip.transformer.LayerNorm"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.5.mlp",
+   "class": "torch.nn.modules.container.Sequential"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.5.mlp.c_fc",
+   "class": "torch.nn.modules.linear.Linear"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.5.mlp.gelu",
+   "class": "torch.nn.modules.activation.GELU"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.5.mlp.c_proj",
+   "class": "torch.nn.modules.linear.Linear"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.5.ls_2",
+   "class": "torch.nn.modules.linear.Identity"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.6",
+   "class": "open_clip.transformer.ResidualAttentionBlock"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.6.ln_1",
+   "class": "open_clip.transformer.LayerNorm"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.6.attn",
+   "class": "torch.nn.modules.activation.MultiheadAttention"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.6.attn.out_proj",
+   "class": "torch.nn.modules.linear.NonDynamicallyQuantizableLinear"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.6.ls_1",
+   "class": "torch.nn.modules.linear.Identity"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.6.ln_2",
+   "class": "open_clip.transformer.LayerNorm"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.6.mlp",
+   "class": "torch.nn.modules.container.Sequential"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.6.mlp.c_fc",
+   "class": "torch.nn.modules.linear.Linear"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.6.mlp.gelu",
+   "class": "torch.nn.modules.activation.GELU"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.6.mlp.c_proj",
+   "class": "torch.nn.modules.linear.Linear"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.6.ls_2",
+   "class": "torch.nn.modules.linear.Identity"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.7",
+   "class": "open_clip.transformer.ResidualAttentionBlock"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.7.ln_1",
+   "class": "open_clip.transformer.LayerNorm"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.7.attn",
+   "class": "torch.nn.modules.activation.MultiheadAttention"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.7.attn.out_proj",
+   "class": "torch.nn.modules.linear.NonDynamicallyQuantizableLinear"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.7.ls_1",
+   "class": "torch.nn.modules.linear.Identity"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.7.ln_2",
+   "class": "open_clip.transformer.LayerNorm"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.7.mlp",
+   "class": "torch.nn.modules.container.Sequential"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.7.mlp.c_fc",
+   "class": "torch.nn.modules.linear.Linear"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.7.mlp.gelu",
+   "class": "torch.nn.modules.activation.GELU"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.7.mlp.c_proj",
+   "class": "torch.nn.modules.linear.Linear"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.7.ls_2",
+   "class": "torch.nn.modules.linear.Identity"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.8",
+   "class": "open_clip.transformer.ResidualAttentionBlock"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.8.ln_1",
+   "class": "open_clip.transformer.LayerNorm"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.8.attn",
+   "class": "torch.nn.modules.activation.MultiheadAttention"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.8.attn.out_proj",
+   "class": "torch.nn.modules.linear.NonDynamicallyQuantizableLinear"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.8.ls_1",
+   "class": "torch.nn.modules.linear.Identity"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.8.ln_2",
+   "class": "open_clip.transformer.LayerNorm"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.8.mlp",
+   "class": "torch.nn.modules.container.Sequential"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.8.mlp.c_fc",
+   "class": "torch.nn.modules.linear.Linear"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.8.mlp.gelu",
+   "class": "torch.nn.modules.activation.GELU"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.8.mlp.c_proj",
+   "class": "torch.nn.modules.linear.Linear"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.8.ls_2",
+   "class": "torch.nn.modules.linear.Identity"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.9",
+   "class": "open_clip.transformer.ResidualAttentionBlock"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.9.ln_1",
+   "class": "open_clip.transformer.LayerNorm"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.9.attn",
+   "class": "torch.nn.modules.activation.MultiheadAttention"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.9.attn.out_proj",
+   "class": "torch.nn.modules.linear.NonDynamicallyQuantizableLinear"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.9.ls_1",
+   "class": "torch.nn.modules.linear.Identity"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.9.ln_2",
+   "class": "open_clip.transformer.LayerNorm"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.9.mlp",
+   "class": "torch.nn.modules.container.Sequential"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.9.mlp.c_fc",
+   "class": "torch.nn.modules.linear.Linear"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.9.mlp.gelu",
+   "class": "torch.nn.modules.activation.GELU"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.9.mlp.c_proj",
+   "class": "torch.nn.modules.linear.Linear"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.9.ls_2",
+   "class": "torch.nn.modules.linear.Identity"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.10",
+   "class": "open_clip.transformer.ResidualAttentionBlock"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.10.ln_1",
+   "class": "open_clip.transformer.LayerNorm"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.10.attn",
+   "class": "torch.nn.modules.activation.MultiheadAttention"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.10.attn.out_proj",
+   "class": "torch.nn.modules.linear.NonDynamicallyQuantizableLinear"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.10.ls_1",
+   "class": "torch.nn.modules.linear.Identity"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.10.ln_2",
+   "class": "open_clip.transformer.LayerNorm"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.10.mlp",
+   "class": "torch.nn.modules.container.Sequential"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.10.mlp.c_fc",
+   "class": "torch.nn.modules.linear.Linear"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.10.mlp.gelu",
+   "class": "torch.nn.modules.activation.GELU"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.10.mlp.c_proj",
+   "class": "torch.nn.modules.linear.Linear"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.10.ls_2",
+   "class": "torch.nn.modules.linear.Identity"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.11",
+   "class": "open_clip.transformer.ResidualAttentionBlock"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.11.ln_1",
+   "class": "open_clip.transformer.LayerNorm"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.11.attn",
+   "class": "torch.nn.modules.activation.MultiheadAttention"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.11.attn.out_proj",
+   "class": "torch.nn.modules.linear.NonDynamicallyQuantizableLinear"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.11.ls_1",
+   "class": "torch.nn.modules.linear.Identity"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.11.ln_2",
+   "class": "open_clip.transformer.LayerNorm"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.11.mlp",
+   "class": "torch.nn.modules.container.Sequential"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.11.mlp.c_fc",
+   "class": "torch.nn.modules.linear.Linear"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.11.mlp.gelu",
+   "class": "torch.nn.modules.activation.GELU"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.11.mlp.c_proj",
+   "class": "torch.nn.modules.linear.Linear"
+  },
+  {
+   "path": "backbone.clip.visual.transformer.resblocks.11.ls_2",
+   "class": "torch.nn.modules.linear.Identity"
+  },
+  {
+   "path": "backbone.clip.visual.ln_post",
+   "class": "open_clip.transformer.LayerNorm"
+  },
+  {
+   "path": "backbone.clip.transformer",
+   "class": "open_clip.transformer.Transformer"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks",
+   "class": "torch.nn.modules.container.ModuleList"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.0",
+   "class": "open_clip.transformer.ResidualAttentionBlock"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.0.ln_1",
+   "class": "open_clip.transformer.LayerNorm"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.0.attn",
+   "class": "torch.nn.modules.activation.MultiheadAttention"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.0.attn.out_proj",
+   "class": "torch.nn.modules.linear.NonDynamicallyQuantizableLinear"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.0.ls_1",
+   "class": "torch.nn.modules.linear.Identity"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.0.ln_2",
+   "class": "open_clip.transformer.LayerNorm"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.0.mlp",
+   "class": "torch.nn.modules.container.Sequential"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.0.mlp.c_fc",
+   "class": "torch.nn.modules.linear.Linear"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.0.mlp.gelu",
+   "class": "torch.nn.modules.activation.GELU"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.0.mlp.c_proj",
+   "class": "torch.nn.modules.linear.Linear"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.0.ls_2",
+   "class": "torch.nn.modules.linear.Identity"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.1",
+   "class": "open_clip.transformer.ResidualAttentionBlock"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.1.ln_1",
+   "class": "open_clip.transformer.LayerNorm"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.1.attn",
+   "class": "torch.nn.modules.activation.MultiheadAttention"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.1.attn.out_proj",
+   "class": "torch.nn.modules.linear.NonDynamicallyQuantizableLinear"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.1.ls_1",
+   "class": "torch.nn.modules.linear.Identity"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.1.ln_2",
+   "class": "open_clip.transformer.LayerNorm"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.1.mlp",
+   "class": "torch.nn.modules.container.Sequential"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.1.mlp.c_fc",
+   "class": "torch.nn.modules.linear.Linear"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.1.mlp.gelu",
+   "class": "torch.nn.modules.activation.GELU"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.1.mlp.c_proj",
+   "class": "torch.nn.modules.linear.Linear"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.1.ls_2",
+   "class": "torch.nn.modules.linear.Identity"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.2",
+   "class": "open_clip.transformer.ResidualAttentionBlock"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.2.ln_1",
+   "class": "open_clip.transformer.LayerNorm"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.2.attn",
+   "class": "torch.nn.modules.activation.MultiheadAttention"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.2.attn.out_proj",
+   "class": "torch.nn.modules.linear.NonDynamicallyQuantizableLinear"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.2.ls_1",
+   "class": "torch.nn.modules.linear.Identity"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.2.ln_2",
+   "class": "open_clip.transformer.LayerNorm"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.2.mlp",
+   "class": "torch.nn.modules.container.Sequential"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.2.mlp.c_fc",
+   "class": "torch.nn.modules.linear.Linear"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.2.mlp.gelu",
+   "class": "torch.nn.modules.activation.GELU"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.2.mlp.c_proj",
+   "class": "torch.nn.modules.linear.Linear"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.2.ls_2",
+   "class": "torch.nn.modules.linear.Identity"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.3",
+   "class": "open_clip.transformer.ResidualAttentionBlock"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.3.ln_1",
+   "class": "open_clip.transformer.LayerNorm"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.3.attn",
+   "class": "torch.nn.modules.activation.MultiheadAttention"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.3.attn.out_proj",
+   "class": "torch.nn.modules.linear.NonDynamicallyQuantizableLinear"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.3.ls_1",
+   "class": "torch.nn.modules.linear.Identity"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.3.ln_2",
+   "class": "open_clip.transformer.LayerNorm"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.3.mlp",
+   "class": "torch.nn.modules.container.Sequential"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.3.mlp.c_fc",
+   "class": "torch.nn.modules.linear.Linear"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.3.mlp.gelu",
+   "class": "torch.nn.modules.activation.GELU"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.3.mlp.c_proj",
+   "class": "torch.nn.modules.linear.Linear"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.3.ls_2",
+   "class": "torch.nn.modules.linear.Identity"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.4",
+   "class": "open_clip.transformer.ResidualAttentionBlock"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.4.ln_1",
+   "class": "open_clip.transformer.LayerNorm"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.4.attn",
+   "class": "torch.nn.modules.activation.MultiheadAttention"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.4.attn.out_proj",
+   "class": "torch.nn.modules.linear.NonDynamicallyQuantizableLinear"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.4.ls_1",
+   "class": "torch.nn.modules.linear.Identity"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.4.ln_2",
+   "class": "open_clip.transformer.LayerNorm"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.4.mlp",
+   "class": "torch.nn.modules.container.Sequential"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.4.mlp.c_fc",
+   "class": "torch.nn.modules.linear.Linear"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.4.mlp.gelu",
+   "class": "torch.nn.modules.activation.GELU"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.4.mlp.c_proj",
+   "class": "torch.nn.modules.linear.Linear"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.4.ls_2",
+   "class": "torch.nn.modules.linear.Identity"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.5",
+   "class": "open_clip.transformer.ResidualAttentionBlock"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.5.ln_1",
+   "class": "open_clip.transformer.LayerNorm"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.5.attn",
+   "class": "torch.nn.modules.activation.MultiheadAttention"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.5.attn.out_proj",
+   "class": "torch.nn.modules.linear.NonDynamicallyQuantizableLinear"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.5.ls_1",
+   "class": "torch.nn.modules.linear.Identity"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.5.ln_2",
+   "class": "open_clip.transformer.LayerNorm"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.5.mlp",
+   "class": "torch.nn.modules.container.Sequential"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.5.mlp.c_fc",
+   "class": "torch.nn.modules.linear.Linear"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.5.mlp.gelu",
+   "class": "torch.nn.modules.activation.GELU"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.5.mlp.c_proj",
+   "class": "torch.nn.modules.linear.Linear"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.5.ls_2",
+   "class": "torch.nn.modules.linear.Identity"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.6",
+   "class": "open_clip.transformer.ResidualAttentionBlock"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.6.ln_1",
+   "class": "open_clip.transformer.LayerNorm"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.6.attn",
+   "class": "torch.nn.modules.activation.MultiheadAttention"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.6.attn.out_proj",
+   "class": "torch.nn.modules.linear.NonDynamicallyQuantizableLinear"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.6.ls_1",
+   "class": "torch.nn.modules.linear.Identity"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.6.ln_2",
+   "class": "open_clip.transformer.LayerNorm"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.6.mlp",
+   "class": "torch.nn.modules.container.Sequential"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.6.mlp.c_fc",
+   "class": "torch.nn.modules.linear.Linear"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.6.mlp.gelu",
+   "class": "torch.nn.modules.activation.GELU"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.6.mlp.c_proj",
+   "class": "torch.nn.modules.linear.Linear"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.6.ls_2",
+   "class": "torch.nn.modules.linear.Identity"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.7",
+   "class": "open_clip.transformer.ResidualAttentionBlock"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.7.ln_1",
+   "class": "open_clip.transformer.LayerNorm"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.7.attn",
+   "class": "torch.nn.modules.activation.MultiheadAttention"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.7.attn.out_proj",
+   "class": "torch.nn.modules.linear.NonDynamicallyQuantizableLinear"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.7.ls_1",
+   "class": "torch.nn.modules.linear.Identity"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.7.ln_2",
+   "class": "open_clip.transformer.LayerNorm"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.7.mlp",
+   "class": "torch.nn.modules.container.Sequential"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.7.mlp.c_fc",
+   "class": "torch.nn.modules.linear.Linear"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.7.mlp.gelu",
+   "class": "torch.nn.modules.activation.GELU"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.7.mlp.c_proj",
+   "class": "torch.nn.modules.linear.Linear"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.7.ls_2",
+   "class": "torch.nn.modules.linear.Identity"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.8",
+   "class": "open_clip.transformer.ResidualAttentionBlock"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.8.ln_1",
+   "class": "open_clip.transformer.LayerNorm"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.8.attn",
+   "class": "torch.nn.modules.activation.MultiheadAttention"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.8.attn.out_proj",
+   "class": "torch.nn.modules.linear.NonDynamicallyQuantizableLinear"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.8.ls_1",
+   "class": "torch.nn.modules.linear.Identity"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.8.ln_2",
+   "class": "open_clip.transformer.LayerNorm"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.8.mlp",
+   "class": "torch.nn.modules.container.Sequential"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.8.mlp.c_fc",
+   "class": "torch.nn.modules.linear.Linear"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.8.mlp.gelu",
+   "class": "torch.nn.modules.activation.GELU"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.8.mlp.c_proj",
+   "class": "torch.nn.modules.linear.Linear"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.8.ls_2",
+   "class": "torch.nn.modules.linear.Identity"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.9",
+   "class": "open_clip.transformer.ResidualAttentionBlock"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.9.ln_1",
+   "class": "open_clip.transformer.LayerNorm"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.9.attn",
+   "class": "torch.nn.modules.activation.MultiheadAttention"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.9.attn.out_proj",
+   "class": "torch.nn.modules.linear.NonDynamicallyQuantizableLinear"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.9.ls_1",
+   "class": "torch.nn.modules.linear.Identity"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.9.ln_2",
+   "class": "open_clip.transformer.LayerNorm"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.9.mlp",
+   "class": "torch.nn.modules.container.Sequential"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.9.mlp.c_fc",
+   "class": "torch.nn.modules.linear.Linear"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.9.mlp.gelu",
+   "class": "torch.nn.modules.activation.GELU"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.9.mlp.c_proj",
+   "class": "torch.nn.modules.linear.Linear"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.9.ls_2",
+   "class": "torch.nn.modules.linear.Identity"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.10",
+   "class": "open_clip.transformer.ResidualAttentionBlock"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.10.ln_1",
+   "class": "open_clip.transformer.LayerNorm"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.10.attn",
+   "class": "torch.nn.modules.activation.MultiheadAttention"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.10.attn.out_proj",
+   "class": "torch.nn.modules.linear.NonDynamicallyQuantizableLinear"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.10.ls_1",
+   "class": "torch.nn.modules.linear.Identity"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.10.ln_2",
+   "class": "open_clip.transformer.LayerNorm"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.10.mlp",
+   "class": "torch.nn.modules.container.Sequential"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.10.mlp.c_fc",
+   "class": "torch.nn.modules.linear.Linear"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.10.mlp.gelu",
+   "class": "torch.nn.modules.activation.GELU"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.10.mlp.c_proj",
+   "class": "torch.nn.modules.linear.Linear"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.10.ls_2",
+   "class": "torch.nn.modules.linear.Identity"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.11",
+   "class": "open_clip.transformer.ResidualAttentionBlock"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.11.ln_1",
+   "class": "open_clip.transformer.LayerNorm"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.11.attn",
+   "class": "torch.nn.modules.activation.MultiheadAttention"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.11.attn.out_proj",
+   "class": "torch.nn.modules.linear.NonDynamicallyQuantizableLinear"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.11.ls_1",
+   "class": "torch.nn.modules.linear.Identity"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.11.ln_2",
+   "class": "open_clip.transformer.LayerNorm"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.11.mlp",
+   "class": "torch.nn.modules.container.Sequential"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.11.mlp.c_fc",
+   "class": "torch.nn.modules.linear.Linear"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.11.mlp.gelu",
+   "class": "torch.nn.modules.activation.GELU"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.11.mlp.c_proj",
+   "class": "torch.nn.modules.linear.Linear"
+  },
+  {
+   "path": "backbone.clip.transformer.resblocks.11.ls_2",
+   "class": "torch.nn.modules.linear.Identity"
+  },
+  {
+   "path": "backbone.clip.token_embedding",
+   "class": "torch.nn.modules.sparse.Embedding"
+  },
+  {
+   "path": "backbone.clip.ln_final",
+   "class": "open_clip.transformer.LayerNorm"
+  },
+  {
+   "path": "backbone.fc",
+   "class": "torch.nn.modules.linear.Linear"
+  },
+  {
+   "path": "backbone.text_fc",
+   "class": "torch.nn.modules.linear.Linear"
+  },
+  {
+   "path": "backbone.transformer",
+   "class": "MHTransformer.Transformer"
+  },
+  {
+   "path": "backbone.transformer.layers",
+   "class": "torch.nn.modules.container.ModuleList"
+  },
+  {
+   "path": "backbone.transformer.layers.0",
+   "class": "MHTransformer.TransformerLayer"
+  },
+  {
+   "path": "backbone.transformer.layers.0.norm1",
+   "class": "torch.nn.modules.normalization.LayerNorm"
+  },
+  {
+   "path": "backbone.transformer.layers.0.attn",
+   "class": "MHTransformer.MultiHeadAttention"
+  },
+  {
+   "path": "backbone.transformer.layers.0.attn.to_queries",
+   "class": "torch.nn.modules.linear.Linear"
+  },
+  {
+   "path": "backbone.transformer.layers.0.attn.to_keys_values",
+   "class": "torch.nn.modules.linear.Linear"
+  },
+  {
+   "path": "backbone.transformer.layers.0.attn.project",
+   "class": "torch.nn.modules.linear.Linear"
+  },
+  {
+   "path": "backbone.transformer.layers.0.attn.dropout",
+   "class": "torch.nn.modules.dropout.Dropout"
+  },
+  {
+   "path": "backbone.transformer.layers.0.norm2",
+   "class": "torch.nn.modules.normalization.LayerNorm"
+  },
+  {
+   "path": "backbone.transformer.layers.0.mlp",
+   "class": "MHTransformer.MlpTransformer"
+  },
+  {
+   "path": "backbone.transformer.layers.0.mlp.fc1",
+   "class": "torch.nn.modules.linear.Linear"
+  },
+  {
+   "path": "backbone.transformer.layers.0.mlp.fc2",
+   "class": "torch.nn.modules.linear.Linear"
+  },
+  {
+   "path": "backbone.transformer.layers.0.mlp.dropout",
+   "class": "torch.nn.modules.dropout.Dropout"
+  },
+  {
+   "path": "backbone.transformer_a",
+   "class": "MHTransformer.Transformer"
+  },
+  {
+   "path": "backbone.transformer_a.layers",
+   "class": "torch.nn.modules.container.ModuleList"
+  },
+  {
+   "path": "backbone.transformer_a.layers.0",
+   "class": "MHTransformer.TransformerLayer"
+  },
+  {
+   "path": "backbone.transformer_a.layers.0.norm1",
+   "class": "torch.nn.modules.normalization.LayerNorm"
+  },
+  {
+   "path": "backbone.transformer_a.layers.0.attn",
+   "class": "MHTransformer.MultiHeadAttention"
+  },
+  {
+   "path": "backbone.transformer_a.layers.0.attn.to_queries",
+   "class": "torch.nn.modules.linear.Linear"
+  },
+  {
+   "path": "backbone.transformer_a.layers.0.attn.to_keys_values",
+   "class": "torch.nn.modules.linear.Linear"
+  },
+  {
+   "path": "backbone.transformer_a.layers.0.attn.project",
+   "class": "torch.nn.modules.linear.Linear"
+  },
+  {
+   "path": "backbone.transformer_a.layers.0.attn.dropout",
+   "class": "torch.nn.modules.dropout.Dropout"
+  },
+  {
+   "path": "backbone.transformer_a.layers.0.norm2",
+   "class": "torch.nn.modules.normalization.LayerNorm"
+  },
+  {
+   "path": "backbone.transformer_a.layers.0.mlp",
+   "class": "MHTransformer.MlpTransformer"
+  },
+  {
+   "path": "backbone.transformer_a.layers.0.mlp.fc1",
+   "class": "torch.nn.modules.linear.Linear"
+  },
+  {
+   "path": "backbone.transformer_a.layers.0.mlp.fc2",
+   "class": "torch.nn.modules.linear.Linear"
+  },
+  {
+   "path": "backbone.transformer_a.layers.0.mlp.dropout",
+   "class": "torch.nn.modules.dropout.Dropout"
+  },
+  {
+   "path": "backbone.transformer_a.layers.1",
+   "class": "MHTransformer.TransformerLayer"
+  },
+  {
+   "path": "backbone.transformer_a.layers.1.norm1",
+   "class": "torch.nn.modules.normalization.LayerNorm"
+  },
+  {
+   "path": "backbone.transformer_a.layers.1.attn",
+   "class": "MHTransformer.MultiHeadAttention"
+  },
+  {
+   "path": "backbone.transformer_a.layers.1.attn.to_queries",
+   "class": "torch.nn.modules.linear.Linear"
+  },
+  {
+   "path": "backbone.transformer_a.layers.1.attn.to_keys_values",
+   "class": "torch.nn.modules.linear.Linear"
+  },
+  {
+   "path": "backbone.transformer_a.layers.1.attn.project",
+   "class": "torch.nn.modules.linear.Linear"
+  },
+  {
+   "path": "backbone.transformer_a.layers.1.attn.dropout",
+   "class": "torch.nn.modules.dropout.Dropout"
+  },
+  {
+   "path": "backbone.transformer_a.layers.1.norm2",
+   "class": "torch.nn.modules.normalization.LayerNorm"
+  },
+  {
+   "path": "backbone.transformer_a.layers.1.mlp",
+   "class": "MHTransformer.MlpTransformer"
+  },
+  {
+   "path": "backbone.transformer_a.layers.1.mlp.fc1",
+   "class": "torch.nn.modules.linear.Linear"
+  },
+  {
+   "path": "backbone.transformer_a.layers.1.mlp.fc2",
+   "class": "torch.nn.modules.linear.Linear"
+  },
+  {
+   "path": "backbone.transformer_a.layers.1.mlp.dropout",
+   "class": "torch.nn.modules.dropout.Dropout"
+  },
+  {
+   "path": "backbone.transformer_b",
+   "class": "MHTransformer_dis.Transformer"
+  },
+  {
+   "path": "backbone.transformer_b.layers",
+   "class": "torch.nn.modules.container.ModuleList"
+  },
+  {
+   "path": "backbone.transformer_b.layers.0",
+   "class": "MHTransformer_dis.TransformerLayer"
+  },
+  {
+   "path": "backbone.transformer_b.layers.0.norm1",
+   "class": "torch.nn.modules.normalization.LayerNorm"
+  },
+  {
+   "path": "backbone.transformer_b.layers.0.attn",
+   "class": "MHTransformer_dis.MultiHeadAttention"
+  },
+  {
+   "path": "backbone.transformer_b.layers.0.attn.to_queries",
+   "class": "torch.nn.modules.linear.Linear"
+  },
+  {
+   "path": "backbone.transformer_b.layers.0.attn.to_keys_values",
+   "class": "torch.nn.modules.linear.Linear"
+  },
+  {
+   "path": "backbone.transformer_b.layers.0.attn.project",
+   "class": "torch.nn.modules.linear.Linear"
+  },
+  {
+   "path": "backbone.transformer_b.layers.0.attn.dropout",
+   "class": "torch.nn.modules.dropout.Dropout"
+  },
+  {
+   "path": "backbone.transformer_b.layers.0.norm2",
+   "class": "torch.nn.modules.normalization.LayerNorm"
+  },
+  {
+   "path": "backbone.transformer_b.layers.0.mlp",
+   "class": "MHTransformer_dis.MlpTransformer"
+  },
+  {
+   "path": "backbone.transformer_b.layers.0.mlp.fc1",
+   "class": "torch.nn.modules.linear.Linear"
+  },
+  {
+   "path": "backbone.transformer_b.layers.0.mlp.fc2",
+   "class": "torch.nn.modules.linear.Linear"
+  },
+  {
+   "path": "backbone.transformer_b.layers.0.mlp.dropout",
+   "class": "torch.nn.modules.dropout.Dropout"
+  },
+  {
+   "path": "backbone.transformer_b.layers.1",
+   "class": "MHTransformer_dis.TransformerLayer"
+  },
+  {
+   "path": "backbone.transformer_b.layers.1.norm1",
+   "class": "torch.nn.modules.normalization.LayerNorm"
+  },
+  {
+   "path": "backbone.transformer_b.layers.1.attn",
+   "class": "MHTransformer_dis.MultiHeadAttention"
+  },
+  {
+   "path": "backbone.transformer_b.layers.1.attn.to_queries",
+   "class": "torch.nn.modules.linear.Linear"
+  },
+  {
+   "path": "backbone.transformer_b.layers.1.attn.to_keys_values",
+   "class": "torch.nn.modules.linear.Linear"
+  },
+  {
+   "path": "backbone.transformer_b.layers.1.attn.project",
+   "class": "torch.nn.modules.linear.Linear"
+  },
+  {
+   "path": "backbone.transformer_b.layers.1.attn.dropout",
+   "class": "torch.nn.modules.dropout.Dropout"
+  },
+  {
+   "path": "backbone.transformer_b.layers.1.norm2",
+   "class": "torch.nn.modules.normalization.LayerNorm"
+  },
+  {
+   "path": "backbone.transformer_b.layers.1.mlp",
+   "class": "MHTransformer_dis.MlpTransformer"
+  },
+  {
+   "path": "backbone.transformer_b.layers.1.mlp.fc1",
+   "class": "torch.nn.modules.linear.Linear"
+  },
+  {
+   "path": "backbone.transformer_b.layers.1.mlp.fc2",
+   "class": "torch.nn.modules.linear.Linear"
+  },
+  {
+   "path": "backbone.transformer_b.layers.1.mlp.dropout",
+   "class": "torch.nn.modules.dropout.Dropout"
+  },
+  {
+   "path": "backbone.transformer_c",
+   "class": "MHTransformer.Transformer"
+  },
+  {
+   "path": "backbone.transformer_c.layers",
+   "class": "torch.nn.modules.container.ModuleList"
+  },
+  {
+   "path": "backbone.transformer_c.layers.0",
+   "class": "MHTransformer.TransformerLayer"
+  },
+  {
+   "path": "backbone.transformer_c.layers.0.norm1",
+   "class": "torch.nn.modules.normalization.LayerNorm"
+  },
+  {
+   "path": "backbone.transformer_c.layers.0.attn",
+   "class": "MHTransformer.MultiHeadAttention"
+  },
+  {
+   "path": "backbone.transformer_c.layers.0.attn.to_queries",
+   "class": "torch.nn.modules.linear.Linear"
+  },
+  {
+   "path": "backbone.transformer_c.layers.0.attn.to_keys_values",
+   "class": "torch.nn.modules.linear.Linear"
+  },
+  {
+   "path": "backbone.transformer_c.layers.0.attn.project",
+   "class": "torch.nn.modules.linear.Linear"
+  },
+  {
+   "path": "backbone.transformer_c.layers.0.attn.dropout",
+   "class": "torch.nn.modules.dropout.Dropout"
+  },
+  {
+   "path": "backbone.transformer_c.layers.0.norm2",
+   "class": "torch.nn.modules.normalization.LayerNorm"
+  },
+  {
+   "path": "backbone.transformer_c.layers.0.mlp",
+   "class": "MHTransformer.MlpTransformer"
+  },
+  {
+   "path": "backbone.transformer_c.layers.0.mlp.fc1",
+   "class": "torch.nn.modules.linear.Linear"
+  },
+  {
+   "path": "backbone.transformer_c.layers.0.mlp.fc2",
+   "class": "torch.nn.modules.linear.Linear"
+  },
+  {
+   "path": "backbone.transformer_c.layers.0.mlp.dropout",
+   "class": "torch.nn.modules.dropout.Dropout"
+  },
+  {
+   "path": "backbone.transformer_c.layers.1",
+   "class": "MHTransformer.TransformerLayer"
+  },
+  {
+   "path": "backbone.transformer_c.layers.1.norm1",
+   "class": "torch.nn.modules.normalization.LayerNorm"
+  },
+  {
+   "path": "backbone.transformer_c.layers.1.attn",
+   "class": "MHTransformer.MultiHeadAttention"
+  },
+  {
+   "path": "backbone.transformer_c.layers.1.attn.to_queries",
+   "class": "torch.nn.modules.linear.Linear"
+  },
+  {
+   "path": "backbone.transformer_c.layers.1.attn.to_keys_values",
+   "class": "torch.nn.modules.linear.Linear"
+  },
+  {
+   "path": "backbone.transformer_c.layers.1.attn.project",
+   "class": "torch.nn.modules.linear.Linear"
+  },
+  {
+   "path": "backbone.transformer_c.layers.1.attn.dropout",
+   "class": "torch.nn.modules.dropout.Dropout"
+  },
+  {
+   "path": "backbone.transformer_c.layers.1.norm2",
+   "class": "torch.nn.modules.normalization.LayerNorm"
+  },
+  {
+   "path": "backbone.transformer_c.layers.1.mlp",
+   "class": "MHTransformer.MlpTransformer"
+  },
+  {
+   "path": "backbone.transformer_c.layers.1.mlp.fc1",
+   "class": "torch.nn.modules.linear.Linear"
+  },
+  {
+   "path": "backbone.transformer_c.layers.1.mlp.fc2",
+   "class": "torch.nn.modules.linear.Linear"
+  },
+  {
+   "path": "backbone.transformer_c.layers.1.mlp.dropout",
+   "class": "torch.nn.modules.dropout.Dropout"
+  },
+  {
+   "path": "backbone.transformer_d",
+   "class": "MHTransformer_dis.Transformer"
+  },
+  {
+   "path": "backbone.transformer_d.layers",
+   "class": "torch.nn.modules.container.ModuleList"
+  },
+  {
+   "path": "backbone.transformer_d.layers.0",
+   "class": "MHTransformer_dis.TransformerLayer"
+  },
+  {
+   "path": "backbone.transformer_d.layers.0.norm1",
+   "class": "torch.nn.modules.normalization.LayerNorm"
+  },
+  {
+   "path": "backbone.transformer_d.layers.0.attn",
+   "class": "MHTransformer_dis.MultiHeadAttention"
+  },
+  {
+   "path": "backbone.transformer_d.layers.0.attn.to_queries",
+   "class": "torch.nn.modules.linear.Linear"
+  },
+  {
+   "path": "backbone.transformer_d.layers.0.attn.to_keys_values",
+   "class": "torch.nn.modules.linear.Linear"
+  },
+  {
+   "path": "backbone.transformer_d.layers.0.attn.project",
+   "class": "torch.nn.modules.linear.Linear"
+  },
+  {
+   "path": "backbone.transformer_d.layers.0.attn.dropout",
+   "class": "torch.nn.modules.dropout.Dropout"
+  },
+  {
+   "path": "backbone.transformer_d.layers.0.norm2",
+   "class": "torch.nn.modules.normalization.LayerNorm"
+  },
+  {
+   "path": "backbone.transformer_d.layers.0.mlp",
+   "class": "MHTransformer_dis.MlpTransformer"
+  },
+  {
+   "path": "backbone.transformer_d.layers.0.mlp.fc1",
+   "class": "torch.nn.modules.linear.Linear"
+  },
+  {
+   "path": "backbone.transformer_d.layers.0.mlp.fc2",
+   "class": "torch.nn.modules.linear.Linear"
+  },
+  {
+   "path": "backbone.transformer_d.layers.0.mlp.dropout",
+   "class": "torch.nn.modules.dropout.Dropout"
+  },
+  {
+   "path": "backbone.transformer_d.layers.1",
+   "class": "MHTransformer_dis.TransformerLayer"
+  },
+  {
+   "path": "backbone.transformer_d.layers.1.norm1",
+   "class": "torch.nn.modules.normalization.LayerNorm"
+  },
+  {
+   "path": "backbone.transformer_d.layers.1.attn",
+   "class": "MHTransformer_dis.MultiHeadAttention"
+  },
+  {
+   "path": "backbone.transformer_d.layers.1.attn.to_queries",
+   "class": "torch.nn.modules.linear.Linear"
+  },
+  {
+   "path": "backbone.transformer_d.layers.1.attn.to_keys_values",
+   "class": "torch.nn.modules.linear.Linear"
+  },
+  {
+   "path": "backbone.transformer_d.layers.1.attn.project",
+   "class": "torch.nn.modules.linear.Linear"
+  },
+  {
+   "path": "backbone.transformer_d.layers.1.attn.dropout",
+   "class": "torch.nn.modules.dropout.Dropout"
+  },
+  {
+   "path": "backbone.transformer_d.layers.1.norm2",
+   "class": "torch.nn.modules.normalization.LayerNorm"
+  },
+  {
+   "path": "backbone.transformer_d.layers.1.mlp",
+   "class": "MHTransformer_dis.MlpTransformer"
+  },
+  {
+   "path": "backbone.transformer_d.layers.1.mlp.fc1",
+   "class": "torch.nn.modules.linear.Linear"
+  },
+  {
+   "path": "backbone.transformer_d.layers.1.mlp.fc2",
+   "class": "torch.nn.modules.linear.Linear"
+  },
+  {
+   "path": "backbone.transformer_d.layers.1.mlp.dropout",
+   "class": "torch.nn.modules.dropout.Dropout"
+  },
+  {
+   "path": "backbone.mlp",
+   "class": "torch.nn.modules.container.Sequential"
+  },
+  {
+   "path": "backbone.mlp.0",
+   "class": "torch.nn.modules.normalization.LayerNorm"
+  },
+  {
+   "path": "backbone.mlp.1",
+   "class": "torch.nn.modules.linear.Linear"
+  },
+  {
+   "path": "backbone.mlp.2",
+   "class": "torch.nn.modules.activation.GELU"
+  },
+  {
+   "path": "backbone.mlp.3",
+   "class": "torch.nn.modules.linear.Linear"
+  },
+  {
+   "path": "backbone.mlp.4",
+   "class": "torch.nn.modules.activation.Softmax"
+  },
+  {
+   "path": "backbone.mlp_img",
+   "class": "torch.nn.modules.container.Sequential"
+  },
+  {
+   "path": "backbone.mlp_img.0",
+   "class": "torch.nn.modules.normalization.LayerNorm"
+  },
+  {
+   "path": "backbone.mlp_img.1",
+   "class": "torch.nn.modules.linear.Linear"
+  },
+  {
+   "path": "backbone.mlp_img.2",
+   "class": "torch.nn.modules.activation.GELU"
+  },
+  {
+   "path": "backbone.mlp_img.3",
+   "class": "torch.nn.modules.linear.Linear"
+  },
+  {
+   "path": "backbone.mlp_img.4",
+   "class": "torch.nn.modules.activation.Softmax"
+  },
+  {
+   "path": "backbone.mlp_text",
+   "class": "torch.nn.modules.container.Sequential"
+  },
+  {
+   "path": "backbone.mlp_text.0",
+   "class": "torch.nn.modules.normalization.LayerNorm"
+  },
+  {
+   "path": "backbone.mlp_text.1",
+   "class": "torch.nn.modules.linear.Linear"
+  },
+  {
+   "path": "backbone.mlp_text.2",
+   "class": "torch.nn.modules.activation.GELU"
+  },
+  {
+   "path": "backbone.mlp_text.3",
+   "class": "torch.nn.modules.linear.Linear"
+  },
+  {
+   "path": "backbone.mlp_text.4",
+   "class": "torch.nn.modules.activation.Softmax"
+  },
+  {
+   "path": "backbone.weight_chanelImg",
+   "class": "torch.nn.modules.container.Sequential"
+  },
+  {
+   "path": "backbone.weight_chanelImg.0",
+   "class": "torch.nn.modules.normalization.LayerNorm"
+  },
+  {
+   "path": "backbone.weight_chanelImg.1",
+   "class": "torch.nn.modules.linear.Linear"
+  },
+  {
+   "path": "backbone.weight_chanelImg.2",
+   "class": "torch.nn.modules.activation.GELU"
+  },
+  {
+   "path": "backbone.weight_chanelImg.3",
+   "class": "torch.nn.modules.linear.Linear"
+  },
+  {
+   "path": "backbone.weight_chanelImg.4",
+   "class": "torch.nn.modules.activation.Softmax"
+  },
+  {
+   "path": "backbone.weight_chanelImg_t",
+   "class": "torch.nn.modules.container.Sequential"
+  },
+  {
+   "path": "backbone.weight_chanelImg_t.0",
+   "class": "torch.nn.modules.normalization.LayerNorm"
+  },
+  {
+   "path": "backbone.weight_chanelImg_t.1",
+   "class": "torch.nn.modules.linear.Linear"
+  },
+  {
+   "path": "backbone.weight_chanelImg_t.2",
+   "class": "torch.nn.modules.activation.GELU"
+  },
+  {
+   "path": "backbone.weight_chanelImg_t.3",
+   "class": "torch.nn.modules.linear.Linear"
+  },
+  {
+   "path": "backbone.cross_t2i",
+   "class": "torch.nn.modules.container.Sequential"
+  },
+  {
+   "path": "backbone.cross_t2i.0",
+   "class": "torch.nn.modules.linear.Linear"
+  },
+  {
+   "path": "backbone.cross_t2i.1",
+   "class": "torch.nn.modules.activation.Softmax"
+  },
+  {
+   "path": "affine",
+   "class": "model_vssp.FeatureWiseAffine"
+  },
+  {
+   "path": "affine.MLP",
+   "class": "torch.nn.modules.container.Sequential"
+  },
+  {
+   "path": "affine.MLP.0",
+   "class": "torch.nn.modules.normalization.LayerNorm"
+  },
+  {
+   "path": "affine.MLP.1",
+   "class": "torch.nn.modules.linear.Linear"
+  },
+  {
+   "path": "affine.MLP.2",
+   "class": "torch.nn.modules.activation.GELU"
+  },
+  {
+   "path": "affine.MLP.3",
+   "class": "torch.nn.modules.linear.Linear"
+  }
+ ],
+ "module_scalars": {
+  "_is_full_backward_hook": null,
+  "t": 0.1,
+  "backbone._is_full_backward_hook": null,
+  "backbone.hidden_dim": 512,
+  "backbone.weighted": true,
+  "backbone.local_token_num": 6,
+  "backbone.clip._is_full_backward_hook": null,
+  "backbone.clip.output_dict": false,
+  "backbone.clip.context_length": 77,
+  "backbone.clip.vocab_size": 49408,
+  "backbone.clip.text_pool_type": "argmax",
+  "backbone.clip.logit_bias": null,
+  "backbone.clip.visual._is_full_backward_hook": null,
+  "backbone.clip.visual.output_tokens": false,
+  "backbone.clip.visual.image_size": "tuple[2]=[224, 224]",
+  "backbone.clip.visual.patch_size": "tuple[2]=[32, 32]",
+  "backbone.clip.visual.grid_size": "tuple[2]=[7, 7]",
+  "backbone.clip.visual.final_ln_after_pool": false,
+  "backbone.clip.visual.output_dim": 512,
+  "backbone.clip.visual.attn_pool": null,
+  "backbone.clip.visual.pool_type": "tok",
+  "backbone.clip.visual.image_mean": "tuple[3]=[0.48145466, 0.4578275, 0.40821073]",
+  "backbone.clip.visual.image_std": "tuple[3]=[0.26862954, 0.26130258, 0.27577711]",
+  "backbone.clip.visual.conv1._is_full_backward_hook": null,
+  "backbone.clip.visual.conv1.in_channels": 3,
+  "backbone.clip.visual.conv1.out_channels": 768,
+  "backbone.clip.visual.conv1.kernel_size": "tuple[2]=[32, 32]",
+  "backbone.clip.visual.conv1.stride": "tuple[2]=[32, 32]",
+  "backbone.clip.visual.conv1.padding": "tuple[2]=[0, 0]",
+  "backbone.clip.visual.conv1.dilation": "tuple[2]=[1, 1]",
+  "backbone.clip.visual.conv1.transposed": false,
+  "backbone.clip.visual.conv1.output_padding": "tuple[2]=[0, 0]",
+  "backbone.clip.visual.conv1.groups": 1,
+  "backbone.clip.visual.conv1.padding_mode": "zeros",
+  "backbone.clip.visual.conv1._reversed_padding_repeated_twice": "tuple[4]=[0, 0, 0, 0]",
+  "backbone.clip.visual.patch_dropout._is_full_backward_hook": null,
+  "backbone.clip.visual.ln_pre._is_full_backward_hook": null,
+  "backbone.clip.visual.ln_pre.normalized_shape": "tuple[1]=[768]",
+  "backbone.clip.visual.ln_pre.eps": 1e-05,
+  "backbone.clip.visual.ln_pre.elementwise_affine": true,
+  "backbone.clip.visual.transformer._is_full_backward_hook": null,
+  "backbone.clip.visual.transformer.width": 768,
+  "backbone.clip.visual.transformer.layers": 12,
+  "backbone.clip.visual.transformer.grad_checkpointing": false,
+  "backbone.clip.visual.transformer.resblocks._is_full_backward_hook": null,
+  "backbone.clip.visual.transformer.resblocks.0._is_full_backward_hook": null,
+  "backbone.clip.visual.transformer.resblocks.1._is_full_backward_hook": null,
+  "backbone.clip.visual.transformer.resblocks.2._is_full_backward_hook": null,
+  "backbone.clip.visual.transformer.resblocks.3._is_full_backward_hook": null,
+  "backbone.clip.visual.transformer.resblocks.4._is_full_backward_hook": null,
+  "backbone.clip.visual.transformer.resblocks.5._is_full_backward_hook": null,
+  "backbone.clip.visual.transformer.resblocks.6._is_full_backward_hook": null,
+  "backbone.clip.visual.transformer.resblocks.7._is_full_backward_hook": null,
+  "backbone.clip.visual.transformer.resblocks.8._is_full_backward_hook": null,
+  "backbone.clip.visual.transformer.resblocks.9._is_full_backward_hook": null,
+  "backbone.clip.visual.transformer.resblocks.10._is_full_backward_hook": null,
+  "backbone.clip.visual.transformer.resblocks.11._is_full_backward_hook": null,
+  "backbone.clip.visual.ln_post._is_full_backward_hook": null,
+  "backbone.clip.visual.ln_post.normalized_shape": "tuple[1]=[768]",
+  "backbone.clip.visual.ln_post.eps": 1e-05,
+  "backbone.clip.visual.ln_post.elementwise_affine": true,
+  "backbone.clip.transformer._is_full_backward_hook": null,
+  "backbone.clip.transformer.width": 512,
+  "backbone.clip.transformer.layers": 12,
+  "backbone.clip.transformer.grad_checkpointing": false,
+  "backbone.clip.transformer.resblocks._is_full_backward_hook": null,
+  "backbone.clip.transformer.resblocks.0._is_full_backward_hook": null,
+  "backbone.clip.transformer.resblocks.0.ln_1._is_full_backward_hook": null,
+  "backbone.clip.transformer.resblocks.0.ln_1.normalized_shape": "tuple[1]=[512]",
+  "backbone.clip.transformer.resblocks.0.ln_1.eps": 1e-05,
+  "backbone.clip.transformer.resblocks.0.ln_1.elementwise_affine": true,
+  "backbone.clip.transformer.resblocks.0.attn._is_full_backward_hook": null,
+  "backbone.clip.transformer.resblocks.0.attn.embed_dim": 512,
+  "backbone.clip.transformer.resblocks.0.attn.kdim": 512,
+  "backbone.clip.transformer.resblocks.0.attn.vdim": 512,
+  "backbone.clip.transformer.resblocks.0.attn._qkv_same_embed_dim": true,
+  "backbone.clip.transformer.resblocks.0.attn.num_heads": 8,
+  "backbone.clip.transformer.resblocks.0.attn.dropout": 0.0,
+  "backbone.clip.transformer.resblocks.0.attn.batch_first": false,
+  "backbone.clip.transformer.resblocks.0.attn.head_dim": 64,
+  "backbone.clip.transformer.resblocks.0.attn.bias_k": null,
+  "backbone.clip.transformer.resblocks.0.attn.bias_v": null,
+  "backbone.clip.transformer.resblocks.0.attn.add_zero_attn": false,
+  "backbone.clip.transformer.resblocks.0.ls_1._is_full_backward_hook": null,
+  "backbone.clip.transformer.resblocks.0.ln_2._is_full_backward_hook": null,
+  "backbone.clip.transformer.resblocks.0.ln_2.normalized_shape": "tuple[1]=[512]",
+  "backbone.clip.transformer.resblocks.0.ln_2.eps": 1e-05,
+  "backbone.clip.transformer.resblocks.0.ln_2.elementwise_affine": true,
+  "backbone.clip.transformer.resblocks.0.mlp._is_full_backward_hook": null,
+  "backbone.clip.transformer.resblocks.0.ls_2._is_full_backward_hook": null,
+  "backbone.clip.transformer.resblocks.1._is_full_backward_hook": null,
+  "backbone.clip.transformer.resblocks.1.ln_1._is_full_backward_hook": null,
+  "backbone.clip.transformer.resblocks.1.ln_1.normalized_shape": "tuple[1]=[512]",
+  "backbone.clip.transformer.resblocks.1.ln_1.eps": 1e-05,
+  "backbone.clip.transformer.resblocks.1.ln_1.elementwise_affine": true,
+  "backbone.clip.transformer.resblocks.1.attn._is_full_backward_hook": null,
+  "backbone.clip.transformer.resblocks.1.attn.embed_dim": 512,
+  "backbone.clip.transformer.resblocks.1.attn.kdim": 512,
+  "backbone.clip.transformer.resblocks.1.attn.vdim": 512,
+  "backbone.clip.transformer.resblocks.1.attn._qkv_same_embed_dim": true,
+  "backbone.clip.transformer.resblocks.1.attn.num_heads": 8,
+  "backbone.clip.transformer.resblocks.1.attn.dropout": 0.0,
+  "backbone.clip.transformer.resblocks.1.attn.batch_first": false,
+  "backbone.clip.transformer.resblocks.1.attn.head_dim": 64,
+  "backbone.clip.transformer.resblocks.1.attn.bias_k": null,
+  "backbone.clip.transformer.resblocks.1.attn.bias_v": null,
+  "backbone.clip.transformer.resblocks.1.attn.add_zero_attn": false,
+  "backbone.clip.transformer.resblocks.1.ls_1._is_full_backward_hook": null,
+  "backbone.clip.transformer.resblocks.1.ln_2._is_full_backward_hook": null,
+  "backbone.clip.transformer.resblocks.1.ln_2.normalized_shape": "tuple[1]=[512]",
+  "backbone.clip.transformer.resblocks.1.ln_2.eps": 1e-05,
+  "backbone.clip.transformer.resblocks.1.ln_2.elementwise_affine": true,
+  "backbone.clip.transformer.resblocks.1.mlp._is_full_backward_hook": null,
+  "backbone.clip.transformer.resblocks.1.ls_2._is_full_backward_hook": null,
+  "backbone.clip.transformer.resblocks.2._is_full_backward_hook": null,
+  "backbone.clip.transformer.resblocks.2.ln_1._is_full_backward_hook": null,
+  "backbone.clip.transformer.resblocks.2.ln_1.normalized_shape": "tuple[1]=[512]",
+  "backbone.clip.transformer.resblocks.2.ln_1.eps": 1e-05,
+  "backbone.clip.transformer.resblocks.2.ln_1.elementwise_affine": true,
+  "backbone.clip.transformer.resblocks.2.attn._is_full_backward_hook": null,
+  "backbone.clip.transformer.resblocks.2.attn.embed_dim": 512,
+  "backbone.clip.transformer.resblocks.2.attn.kdim": 512,
+  "backbone.clip.transformer.resblocks.2.attn.vdim": 512,
+  "backbone.clip.transformer.resblocks.2.attn._qkv_same_embed_dim": true,
+  "backbone.clip.transformer.resblocks.2.attn.num_heads": 8,
+  "backbone.clip.transformer.resblocks.2.attn.dropout": 0.0,
+  "backbone.clip.transformer.resblocks.2.attn.batch_first": false,
+  "backbone.clip.transformer.resblocks.2.attn.head_dim": 64,
+  "backbone.clip.transformer.resblocks.2.attn.bias_k": null,
+  "backbone.clip.transformer.resblocks.2.attn.bias_v": null,
+  "backbone.clip.transformer.resblocks.2.attn.add_zero_attn": false,
+  "backbone.clip.transformer.resblocks.2.ls_1._is_full_backward_hook": null,
+  "backbone.clip.transformer.resblocks.2.ln_2._is_full_backward_hook": null,
+  "backbone.clip.transformer.resblocks.2.ln_2.normalized_shape": "tuple[1]=[512]",
+  "backbone.clip.transformer.resblocks.2.ln_2.eps": 1e-05,
+  "backbone.clip.transformer.resblocks.2.ln_2.elementwise_affine": true,
+  "backbone.clip.transformer.resblocks.2.mlp._is_full_backward_hook": null,
+  "backbone.clip.transformer.resblocks.2.ls_2._is_full_backward_hook": null,
+  "backbone.clip.transformer.resblocks.3._is_full_backward_hook": null,
+  "backbone.clip.transformer.resblocks.3.ln_1._is_full_backward_hook": null,
+  "backbone.clip.transformer.resblocks.3.ln_1.normalized_shape": "tuple[1]=[512]",
+  "backbone.clip.transformer.resblocks.3.ln_1.eps": 1e-05,
+  "backbone.clip.transformer.resblocks.3.ln_1.elementwise_affine": true,
+  "backbone.clip.transformer.resblocks.3.attn._is_full_backward_hook": null,
+  "backbone.clip.transformer.resblocks.3.attn.embed_dim": 512,
+  "backbone.clip.transformer.resblocks.3.attn.kdim": 512,
+  "backbone.clip.transformer.resblocks.3.attn.vdim": 512,
+  "backbone.clip.transformer.resblocks.3.attn._qkv_same_embed_dim": true,
+  "backbone.clip.transformer.resblocks.3.attn.num_heads": 8,
+  "backbone.clip.transformer.resblocks.3.attn.dropout": 0.0,
+  "backbone.clip.transformer.resblocks.3.attn.batch_first": false,
+  "backbone.clip.transformer.resblocks.3.attn.head_dim": 64,
+  "backbone.clip.transformer.resblocks.3.attn.bias_k": null,
+  "backbone.clip.transformer.resblocks.3.attn.bias_v": null,
+  "backbone.clip.transformer.resblocks.3.attn.add_zero_attn": false,
+  "backbone.clip.transformer.resblocks.3.ls_1._is_full_backward_hook": null,
+  "backbone.clip.transformer.resblocks.3.ln_2._is_full_backward_hook": null,
+  "backbone.clip.transformer.resblocks.3.ln_2.normalized_shape": "tuple[1]=[512]",
+  "backbone.clip.transformer.resblocks.3.ln_2.eps": 1e-05,
+  "backbone.clip.transformer.resblocks.3.ln_2.elementwise_affine": true,
+  "backbone.clip.transformer.resblocks.3.mlp._is_full_backward_hook": null,
+  "backbone.clip.transformer.resblocks.3.ls_2._is_full_backward_hook": null,
+  "backbone.clip.transformer.resblocks.4._is_full_backward_hook": null,
+  "backbone.clip.transformer.resblocks.4.ln_1._is_full_backward_hook": null,
+  "backbone.clip.transformer.resblocks.4.ln_1.normalized_shape": "tuple[1]=[512]",
+  "backbone.clip.transformer.resblocks.4.ln_1.eps": 1e-05,
+  "backbone.clip.transformer.resblocks.4.ln_1.elementwise_affine": true,
+  "backbone.clip.transformer.resblocks.4.attn._is_full_backward_hook": null,
+  "backbone.clip.transformer.resblocks.4.attn.embed_dim": 512,
+  "backbone.clip.transformer.resblocks.4.attn.kdim": 512,
+  "backbone.clip.transformer.resblocks.4.attn.vdim": 512,
+  "backbone.clip.transformer.resblocks.4.attn._qkv_same_embed_dim": true,
+  "backbone.clip.transformer.resblocks.4.attn.num_heads": 8,
+  "backbone.clip.transformer.resblocks.4.attn.dropout": 0.0,
+  "backbone.clip.transformer.resblocks.4.attn.batch_first": false,
+  "backbone.clip.transformer.resblocks.4.attn.head_dim": 64,
+  "backbone.clip.transformer.resblocks.4.attn.bias_k": null,
+  "backbone.clip.transformer.resblocks.4.attn.bias_v": null,
+  "backbone.clip.transformer.resblocks.4.attn.add_zero_attn": false,
+  "backbone.clip.transformer.resblocks.4.ls_1._is_full_backward_hook": null,
+  "backbone.clip.transformer.resblocks.4.ln_2._is_full_backward_hook": null,
+  "backbone.clip.transformer.resblocks.4.ln_2.normalized_shape": "tuple[1]=[512]",
+  "backbone.clip.transformer.resblocks.4.ln_2.eps": 1e-05,
+  "backbone.clip.transformer.resblocks.4.ln_2.elementwise_affine": true,
+  "backbone.clip.transformer.resblocks.4.mlp._is_full_backward_hook": null,
+  "backbone.clip.transformer.resblocks.4.ls_2._is_full_backward_hook": null,
+  "backbone.clip.transformer.resblocks.5._is_full_backward_hook": null,
+  "backbone.clip.transformer.resblocks.5.ln_1._is_full_backward_hook": null,
+  "backbone.clip.transformer.resblocks.5.ln_1.normalized_shape": "tuple[1]=[512]",
+  "backbone.clip.transformer.resblocks.5.ln_1.eps": 1e-05,
+  "backbone.clip.transformer.resblocks.5.ln_1.elementwise_affine": true,
+  "backbone.clip.transformer.resblocks.5.attn._is_full_backward_hook": null,
+  "backbone.clip.transformer.resblocks.5.attn.embed_dim": 512,
+  "backbone.clip.transformer.resblocks.5.attn.kdim": 512,
+  "backbone.clip.transformer.resblocks.5.attn.vdim": 512,
+  "backbone.clip.transformer.resblocks.5.attn._qkv_same_embed_dim": true,
+  "backbone.clip.transformer.resblocks.5.attn.num_heads": 8,
+  "backbone.clip.transformer.resblocks.5.attn.dropout": 0.0,
+  "backbone.clip.transformer.resblocks.5.attn.batch_first": false,
+  "backbone.clip.transformer.resblocks.5.attn.head_dim": 64,
+  "backbone.clip.transformer.resblocks.5.attn.bias_k": null,
+  "backbone.clip.transformer.resblocks.5.attn.bias_v": null,
+  "backbone.clip.transformer.resblocks.5.attn.add_zero_attn": false,
+  "backbone.clip.transformer.resblocks.5.ls_1._is_full_backward_hook": null,
+  "backbone.clip.transformer.resblocks.5.ln_2._is_full_backward_hook": null,
+  "backbone.clip.transformer.resblocks.5.ln_2.normalized_shape": "tuple[1]=[512]",
+  "backbone.clip.transformer.resblocks.5.ln_2.eps": 1e-05,
+  "backbone.clip.transformer.resblocks.5.ln_2.elementwise_affine": true,
+  "backbone.clip.transformer.resblocks.5.mlp._is_full_backward_hook": null,
+  "backbone.clip.transformer.resblocks.5.ls_2._is_full_backward_hook": null,
+  "backbone.clip.transformer.resblocks.6._is_full_backward_hook": null,
+  "backbone.clip.transformer.resblocks.6.ln_1._is_full_backward_hook": null,
+  "backbone.clip.transformer.resblocks.6.ln_1.normalized_shape": "tuple[1]=[512]",
+  "backbone.clip.transformer.resblocks.6.ln_1.eps": 1e-05,
+  "backbone.clip.transformer.resblocks.6.ln_1.elementwise_affine": true,
+  "backbone.clip.transformer.resblocks.6.attn._is_full_backward_hook": null,
+  "backbone.clip.transformer.resblocks.6.attn.embed_dim": 512,
+  "backbone.clip.transformer.resblocks.6.attn.kdim": 512,
+  "backbone.clip.transformer.resblocks.6.attn.vdim": 512,
+  "backbone.clip.transformer.resblocks.6.attn._qkv_same_embed_dim": true,
+  "backbone.clip.transformer.resblocks.6.attn.num_heads": 8,
+  "backbone.clip.transformer.resblocks.6.attn.dropout": 0.0,
+  "backbone.clip.transformer.resblocks.6.attn.batch_first": false,
+  "backbone.clip.transformer.resblocks.6.attn.head_dim": 64,
+  "backbone.clip.transformer.resblocks.6.attn.bias_k": null,
+  "backbone.clip.transformer.resblocks.6.attn.bias_v": null,
+  "backbone.clip.transformer.resblocks.6.attn.add_zero_attn": false,
+  "backbone.clip.transformer.resblocks.6.ls_1._is_full_backward_hook": null,
+  "backbone.clip.transformer.resblocks.6.ln_2._is_full_backward_hook": null,
+  "backbone.clip.transformer.resblocks.6.ln_2.normalized_shape": "tuple[1]=[512]",
+  "backbone.clip.transformer.resblocks.6.ln_2.eps": 1e-05,
+  "backbone.clip.transformer.resblocks.6.ln_2.elementwise_affine": true,
+  "backbone.clip.transformer.resblocks.6.mlp._is_full_backward_hook": null,
+  "backbone.clip.transformer.resblocks.6.ls_2._is_full_backward_hook": null,
+  "backbone.clip.transformer.resblocks.7._is_full_backward_hook": null,
+  "backbone.clip.transformer.resblocks.7.ln_1._is_full_backward_hook": null,
+  "backbone.clip.transformer.resblocks.7.ln_1.normalized_shape": "tuple[1]=[512]",
+  "backbone.clip.transformer.resblocks.7.ln_1.eps": 1e-05,
+  "backbone.clip.transformer.resblocks.7.ln_1.elementwise_affine": true,
+  "backbone.clip.transformer.resblocks.7.attn._is_full_backward_hook": null,
+  "backbone.clip.transformer.resblocks.7.attn.embed_dim": 512,
+  "backbone.clip.transformer.resblocks.7.attn.kdim": 512,
+  "backbone.clip.transformer.resblocks.7.attn.vdim": 512,
+  "backbone.clip.transformer.resblocks.7.attn._qkv_same_embed_dim": true,
+  "backbone.clip.transformer.resblocks.7.attn.num_heads": 8,
+  "backbone.clip.transformer.resblocks.7.attn.dropout": 0.0,
+  "backbone.clip.transformer.resblocks.7.attn.batch_first": false,
+  "backbone.clip.transformer.resblocks.7.attn.head_dim": 64,
+  "backbone.clip.transformer.resblocks.7.attn.bias_k": null,
+  "backbone.clip.transformer.resblocks.7.attn.bias_v": null,
+  "backbone.clip.transformer.resblocks.7.attn.add_zero_attn": false,
+  "backbone.clip.transformer.resblocks.7.ls_1._is_full_backward_hook": null,
+  "backbone.clip.transformer.resblocks.7.ln_2._is_full_backward_hook": null,
+  "backbone.clip.transformer.resblocks.7.ln_2.normalized_shape": "tuple[1]=[512]",
+  "backbone.clip.transformer.resblocks.7.ln_2.eps": 1e-05,
+  "backbone.clip.transformer.resblocks.7.ln_2.elementwise_affine": true,
+  "backbone.clip.transformer.resblocks.7.mlp._is_full_backward_hook": null,
+  "backbone.clip.transformer.resblocks.7.ls_2._is_full_backward_hook": null,
+  "backbone.clip.transformer.resblocks.8._is_full_backward_hook": null,
+  "backbone.clip.transformer.resblocks.8.ln_1._is_full_backward_hook": null,
+  "backbone.clip.transformer.resblocks.8.ln_1.normalized_shape": "tuple[1]=[512]",
+  "backbone.clip.transformer.resblocks.8.ln_1.eps": 1e-05,
+  "backbone.clip.transformer.resblocks.8.ln_1.elementwise_affine": true,
+  "backbone.clip.transformer.resblocks.8.attn._is_full_backward_hook": null,
+  "backbone.clip.transformer.resblocks.8.attn.embed_dim": 512,
+  "backbone.clip.transformer.resblocks.8.attn.kdim": 512,
+  "backbone.clip.transformer.resblocks.8.attn.vdim": 512,
+  "backbone.clip.transformer.resblocks.8.attn._qkv_same_embed_dim": true,
+  "backbone.clip.transformer.resblocks.8.attn.num_heads": 8,
+  "backbone.clip.transformer.resblocks.8.attn.dropout": 0.0,
+  "backbone.clip.transformer.resblocks.8.attn.batch_first": false,
+  "backbone.clip.transformer.resblocks.8.attn.head_dim": 64,
+  "backbone.clip.transformer.resblocks.8.attn.bias_k": null,
+  "backbone.clip.transformer.resblocks.8.attn.bias_v": null,
+  "backbone.clip.transformer.resblocks.8.attn.add_zero_attn": false,
+  "backbone.clip.transformer.resblocks.8.ls_1._is_full_backward_hook": null,
+  "backbone.clip.transformer.resblocks.8.ln_2._is_full_backward_hook": null,
+  "backbone.clip.transformer.resblocks.8.ln_2.normalized_shape": "tuple[1]=[512]",
+  "backbone.clip.transformer.resblocks.8.ln_2.eps": 1e-05,
+  "backbone.clip.transformer.resblocks.8.ln_2.elementwise_affine": true,
+  "backbone.clip.transformer.resblocks.8.mlp._is_full_backward_hook": null,
+  "backbone.clip.transformer.resblocks.8.ls_2._is_full_backward_hook": null,
+  "backbone.clip.transformer.resblocks.9._is_full_backward_hook": null,
+  "backbone.clip.transformer.resblocks.9.ln_1._is_full_backward_hook": null,
+  "backbone.clip.transformer.resblocks.9.ln_1.normalized_shape": "tuple[1]=[512]",
+  "backbone.clip.transformer.resblocks.9.ln_1.eps": 1e-05,
+  "backbone.clip.transformer.resblocks.9.ln_1.elementwise_affine": true,
+  "backbone.clip.transformer.resblocks.9.attn._is_full_backward_hook": null,
+  "backbone.clip.transformer.resblocks.9.attn.embed_dim": 512,
+  "backbone.clip.transformer.resblocks.9.attn.kdim": 512,
+  "backbone.clip.transformer.resblocks.9.attn.vdim": 512,
+  "backbone.clip.transformer.resblocks.9.attn._qkv_same_embed_dim": true,
+  "backbone.clip.transformer.resblocks.9.attn.num_heads": 8,
+  "backbone.clip.transformer.resblocks.9.attn.dropout": 0.0,
+  "backbone.clip.transformer.resblocks.9.attn.batch_first": false,
+  "backbone.clip.transformer.resblocks.9.attn.head_dim": 64,
+  "backbone.clip.transformer.resblocks.9.attn.bias_k": null,
+  "backbone.clip.transformer.resblocks.9.attn.bias_v": null,
+  "backbone.clip.transformer.resblocks.9.attn.add_zero_attn": false,
+  "backbone.clip.transformer.resblocks.9.ls_1._is_full_backward_hook": null,
+  "backbone.clip.transformer.resblocks.9.ln_2._is_full_backward_hook": null,
+  "backbone.clip.transformer.resblocks.9.ln_2.normalized_shape": "tuple[1]=[512]",
+  "backbone.clip.transformer.resblocks.9.ln_2.eps": 1e-05,
+  "backbone.clip.transformer.resblocks.9.ln_2.elementwise_affine": true,
+  "backbone.clip.transformer.resblocks.9.mlp._is_full_backward_hook": null,
+  "backbone.clip.transformer.resblocks.9.ls_2._is_full_backward_hook": null,
+  "backbone.clip.transformer.resblocks.10._is_full_backward_hook": null,
+  "backbone.clip.transformer.resblocks.10.ln_1._is_full_backward_hook": null,
+  "backbone.clip.transformer.resblocks.10.ln_1.normalized_shape": "tuple[1]=[512]",
+  "backbone.clip.transformer.resblocks.10.ln_1.eps": 1e-05,
+  "backbone.clip.transformer.resblocks.10.ln_1.elementwise_affine": true,
+  "backbone.clip.transformer.resblocks.10.attn._is_full_backward_hook": null,
+  "backbone.clip.transformer.resblocks.10.attn.embed_dim": 512,
+  "backbone.clip.transformer.resblocks.10.attn.kdim": 512,
+  "backbone.clip.transformer.resblocks.10.attn.vdim": 512,
+  "backbone.clip.transformer.resblocks.10.attn._qkv_same_embed_dim": true,
+  "backbone.clip.transformer.resblocks.10.attn.num_heads": 8,
+  "backbone.clip.transformer.resblocks.10.attn.dropout": 0.0,
+  "backbone.clip.transformer.resblocks.10.attn.batch_first": false,
+  "backbone.clip.transformer.resblocks.10.attn.head_dim": 64,
+  "backbone.clip.transformer.resblocks.10.attn.bias_k": null,
+  "backbone.clip.transformer.resblocks.10.attn.bias_v": null,
+  "backbone.clip.transformer.resblocks.10.attn.add_zero_attn": false,
+  "backbone.clip.transformer.resblocks.10.ls_1._is_full_backward_hook": null,
+  "backbone.clip.transformer.resblocks.10.ln_2._is_full_backward_hook": null,
+  "backbone.clip.transformer.resblocks.10.ln_2.normalized_shape": "tuple[1]=[512]",
+  "backbone.clip.transformer.resblocks.10.ln_2.eps": 1e-05,
+  "backbone.clip.transformer.resblocks.10.ln_2.elementwise_affine": true,
+  "backbone.clip.transformer.resblocks.10.mlp._is_full_backward_hook": null,
+  "backbone.clip.transformer.resblocks.10.ls_2._is_full_backward_hook": null,
+  "backbone.clip.transformer.resblocks.11._is_full_backward_hook": null,
+  "backbone.clip.transformer.resblocks.11.ln_1._is_full_backward_hook": null,
+  "backbone.clip.transformer.resblocks.11.ln_1.normalized_shape": "tuple[1]=[512]",
+  "backbone.clip.transformer.resblocks.11.ln_1.eps": 1e-05,
+  "backbone.clip.transformer.resblocks.11.ln_1.elementwise_affine": true,
+  "backbone.clip.transformer.resblocks.11.attn._is_full_backward_hook": null,
+  "backbone.clip.transformer.resblocks.11.attn.embed_dim": 512,
+  "backbone.clip.transformer.resblocks.11.attn.kdim": 512,
+  "backbone.clip.transformer.resblocks.11.attn.vdim": 512,
+  "backbone.clip.transformer.resblocks.11.attn._qkv_same_embed_dim": true,
+  "backbone.clip.transformer.resblocks.11.attn.num_heads": 8,
+  "backbone.clip.transformer.resblocks.11.attn.dropout": 0.0,
+  "backbone.clip.transformer.resblocks.11.attn.batch_first": false,
+  "backbone.clip.transformer.resblocks.11.attn.head_dim": 64,
+  "backbone.clip.transformer.resblocks.11.attn.bias_k": null,
+  "backbone.clip.transformer.resblocks.11.attn.bias_v": null,
+  "backbone.clip.transformer.resblocks.11.attn.add_zero_attn": false,
+  "backbone.clip.transformer.resblocks.11.ls_1._is_full_backward_hook": null,
+  "backbone.clip.transformer.resblocks.11.ln_2._is_full_backward_hook": null,
+  "backbone.clip.transformer.resblocks.11.ln_2.normalized_shape": "tuple[1]=[512]",
+  "backbone.clip.transformer.resblocks.11.ln_2.eps": 1e-05,
+  "backbone.clip.transformer.resblocks.11.ln_2.elementwise_affine": true,
+  "backbone.clip.transformer.resblocks.11.mlp._is_full_backward_hook": null,
+  "backbone.clip.transformer.resblocks.11.ls_2._is_full_backward_hook": null,
+  "backbone.clip.token_embedding._is_full_backward_hook": null,
+  "backbone.clip.token_embedding.num_embeddings": 49408,
+  "backbone.clip.token_embedding.embedding_dim": 512,
+  "backbone.clip.token_embedding.padding_idx": null,
+  "backbone.clip.token_embedding.max_norm": null,
+  "backbone.clip.token_embedding.norm_type": 2.0,
+  "backbone.clip.token_embedding.scale_grad_by_freq": false,
+  "backbone.clip.token_embedding.sparse": false,
+  "backbone.clip.ln_final._is_full_backward_hook": null,
+  "backbone.clip.ln_final.normalized_shape": "tuple[1]=[512]",
+  "backbone.clip.ln_final.eps": 1e-05,
+  "backbone.clip.ln_final.elementwise_affine": true,
+  "backbone.fc._is_full_backward_hook": null,
+  "backbone.fc.in_features": 768,
+  "backbone.fc.out_features": 512,
+  "backbone.text_fc._is_full_backward_hook": null,
+  "backbone.text_fc.in_features": 512,
+  "backbone.text_fc.out_features": 512,
+  "backbone.transformer._is_full_backward_hook": null,
+  "backbone.transformer.enc_dec": false,
+  "backbone.transformer.layers._is_full_backward_hook": null,
+  "backbone.transformer.layers.0._is_full_backward_hook": null,
+  "backbone.transformer.layers.0.norm1._is_full_backward_hook": null,
+  "backbone.transformer.layers.0.norm1.normalized_shape": "tuple[1]=[512]",
+  "backbone.transformer.layers.0.norm1.eps": 1e-05,
+  "backbone.transformer.layers.0.norm1.elementwise_affine": true,
+  "backbone.transformer.layers.0.attn._is_full_backward_hook": null,
+  "backbone.transformer.layers.0.attn.num_heads": 8,
+  "backbone.transformer.layers.0.attn.scale": 0.125,
+  "backbone.transformer.layers.0.attn.to_queries._is_full_backward_hook": null,
+  "backbone.transformer.layers.0.attn.to_queries.in_features": 512,
+  "backbone.transformer.layers.0.attn.to_queries.out_features": 512,
+  "backbone.transformer.layers.0.attn.to_keys_values._is_full_backward_hook": null,
+  "backbone.transformer.layers.0.attn.to_keys_values.in_features": 512,
+  "backbone.transformer.layers.0.attn.to_keys_values.out_features": 1024,
+  "backbone.transformer.layers.0.attn.project._is_full_backward_hook": null,
+  "backbone.transformer.layers.0.attn.project.in_features": 512,
+  "backbone.transformer.layers.0.attn.project.out_features": 512,
+  "backbone.transformer.layers.0.attn.dropout._is_full_backward_hook": null,
+  "backbone.transformer.layers.0.attn.dropout.p": 0.0,
+  "backbone.transformer.layers.0.attn.dropout.inplace": false,
+  "backbone.transformer.layers.0.norm2._is_full_backward_hook": null,
+  "backbone.transformer.layers.0.norm2.normalized_shape": "tuple[1]=[512]",
+  "backbone.transformer.layers.0.norm2.eps": 1e-05,
+  "backbone.transformer.layers.0.norm2.elementwise_affine": true,
+  "backbone.transformer.layers.0.mlp._is_full_backward_hook": null,
+  "backbone.transformer.layers.0.mlp.fc1._is_full_backward_hook": null,
+  "backbone.transformer.layers.0.mlp.fc1.in_features": 512,
+  "backbone.transformer.layers.0.mlp.fc1.out_features": 1024,
+  "backbone.transformer.layers.0.mlp.fc2._is_full_backward_hook": null,
+  "backbone.transformer.layers.0.mlp.fc2.in_features": 1024,
+  "backbone.transformer.layers.0.mlp.fc2.out_features": 512,
+  "backbone.transformer.layers.0.mlp.dropout._is_full_backward_hook": null,
+  "backbone.transformer.layers.0.mlp.dropout.p": 0.0,
+  "backbone.transformer.layers.0.mlp.dropout.inplace": false,
+  "backbone.transformer_a._is_full_backward_hook": null,
+  "backbone.transformer_a.enc_dec": false,
+  "backbone.transformer_a.layers._is_full_backward_hook": null,
+  "backbone.transformer_a.layers.0._is_full_backward_hook": null,
+  "backbone.transformer_a.layers.0.norm1._is_full_backward_hook": null,
+  "backbone.transformer_a.layers.0.norm1.normalized_shape": "tuple[1]=[512]",
+  "backbone.transformer_a.layers.0.norm1.eps": 1e-05,
+  "backbone.transformer_a.layers.0.norm1.elementwise_affine": true,
+  "backbone.transformer_a.layers.0.attn._is_full_backward_hook": null,
+  "backbone.transformer_a.layers.0.attn.num_heads": 4,
+  "backbone.transformer_a.layers.0.attn.scale": 0.08838834764831845,
+  "backbone.transformer_a.layers.0.attn.to_queries._is_full_backward_hook": null,
+  "backbone.transformer_a.layers.0.attn.to_queries.in_features": 512,
+  "backbone.transformer_a.layers.0.attn.to_queries.out_features": 512,
+  "backbone.transformer_a.layers.0.attn.to_keys_values._is_full_backward_hook": null,
+  "backbone.transformer_a.layers.0.attn.to_keys_values.in_features": 512,
+  "backbone.transformer_a.layers.0.attn.to_keys_values.out_features": 1024,
+  "backbone.transformer_a.layers.0.attn.project._is_full_backward_hook": null,
+  "backbone.transformer_a.layers.0.attn.project.in_features": 512,
+  "backbone.transformer_a.layers.0.attn.project.out_features": 512,
+  "backbone.transformer_a.layers.0.attn.dropout._is_full_backward_hook": null,
+  "backbone.transformer_a.layers.0.attn.dropout.p": 0.0,
+  "backbone.transformer_a.layers.0.attn.dropout.inplace": false,
+  "backbone.transformer_a.layers.0.norm2._is_full_backward_hook": null,
+  "backbone.transformer_a.layers.0.norm2.normalized_shape": "tuple[1]=[512]",
+  "backbone.transformer_a.layers.0.norm2.eps": 1e-05,
+  "backbone.transformer_a.layers.0.norm2.elementwise_affine": true,
+  "backbone.transformer_a.layers.0.mlp._is_full_backward_hook": null,
+  "backbone.transformer_a.layers.0.mlp.fc1._is_full_backward_hook": null,
+  "backbone.transformer_a.layers.0.mlp.fc1.in_features": 512,
+  "backbone.transformer_a.layers.0.mlp.fc1.out_features": 1024,
+  "backbone.transformer_a.layers.0.mlp.fc2._is_full_backward_hook": null,
+  "backbone.transformer_a.layers.0.mlp.fc2.in_features": 1024,
+  "backbone.transformer_a.layers.0.mlp.fc2.out_features": 512,
+  "backbone.transformer_a.layers.0.mlp.dropout._is_full_backward_hook": null,
+  "backbone.transformer_a.layers.0.mlp.dropout.p": 0.0,
+  "backbone.transformer_a.layers.0.mlp.dropout.inplace": false,
+  "backbone.transformer_a.layers.1._is_full_backward_hook": null,
+  "backbone.transformer_a.layers.1.norm1._is_full_backward_hook": null,
+  "backbone.transformer_a.layers.1.norm1.normalized_shape": "tuple[1]=[512]",
+  "backbone.transformer_a.layers.1.norm1.eps": 1e-05,
+  "backbone.transformer_a.layers.1.norm1.elementwise_affine": true,
+  "backbone.transformer_a.layers.1.attn._is_full_backward_hook": null,
+  "backbone.transformer_a.layers.1.attn.num_heads": 4,
+  "backbone.transformer_a.layers.1.attn.scale": 0.08838834764831845,
+  "backbone.transformer_a.layers.1.attn.to_queries._is_full_backward_hook": null,
+  "backbone.transformer_a.layers.1.attn.to_queries.in_features": 512,
+  "backbone.transformer_a.layers.1.attn.to_queries.out_features": 512,
+  "backbone.transformer_a.layers.1.attn.to_keys_values._is_full_backward_hook": null,
+  "backbone.transformer_a.layers.1.attn.to_keys_values.in_features": 512,
+  "backbone.transformer_a.layers.1.attn.to_keys_values.out_features": 1024,
+  "backbone.transformer_a.layers.1.attn.project._is_full_backward_hook": null,
+  "backbone.transformer_a.layers.1.attn.project.in_features": 512,
+  "backbone.transformer_a.layers.1.attn.project.out_features": 512,
+  "backbone.transformer_a.layers.1.attn.dropout._is_full_backward_hook": null,
+  "backbone.transformer_a.layers.1.attn.dropout.p": 0.0,
+  "backbone.transformer_a.layers.1.attn.dropout.inplace": false,
+  "backbone.transformer_a.layers.1.norm2._is_full_backward_hook": null,
+  "backbone.transformer_a.layers.1.norm2.normalized_shape": "tuple[1]=[512]",
+  "backbone.transformer_a.layers.1.norm2.eps": 1e-05,
+  "backbone.transformer_a.layers.1.norm2.elementwise_affine": true,
+  "backbone.transformer_a.layers.1.mlp._is_full_backward_hook": null,
+  "backbone.transformer_a.layers.1.mlp.fc1._is_full_backward_hook": null,
+  "backbone.transformer_a.layers.1.mlp.fc1.in_features": 512,
+  "backbone.transformer_a.layers.1.mlp.fc1.out_features": 1024,
+  "backbone.transformer_a.layers.1.mlp.fc2._is_full_backward_hook": null,
+  "backbone.transformer_a.layers.1.mlp.fc2.in_features": 1024,
+  "backbone.transformer_a.layers.1.mlp.fc2.out_features": 512,
+  "backbone.transformer_a.layers.1.mlp.dropout._is_full_backward_hook": null,
+  "backbone.transformer_a.layers.1.mlp.dropout.p": 0.0,
+  "backbone.transformer_a.layers.1.mlp.dropout.inplace": false,
+  "backbone.transformer_b._is_full_backward_hook": null,
+  "backbone.transformer_b.enc_dec": false,
+  "backbone.transformer_b.layers._is_full_backward_hook": null,
+  "backbone.transformer_b.layers.0._is_full_backward_hook": null,
+  "backbone.transformer_b.layers.0.norm1._is_full_backward_hook": null,
+  "backbone.transformer_b.layers.0.norm1.normalized_shape": "tuple[1]=[512]",
+  "backbone.transformer_b.layers.0.norm1.eps": 1e-05,
+  "backbone.transformer_b.layers.0.norm1.elementwise_affine": true,
+  "backbone.transformer_b.layers.0.attn._is_full_backward_hook": null,
+  "backbone.transformer_b.layers.0.attn.num_heads": 4,
+  "backbone.transformer_b.layers.0.attn.scale": 0.08838834764831845,
+  "backbone.transformer_b.layers.0.attn.to_queries._is_full_backward_hook": null,
+  "backbone.transformer_b.layers.0.attn.to_queries.in_features": 512,
+  "backbone.transformer_b.layers.0.attn.to_queries.out_features": 512,
+  "backbone.transformer_b.layers.0.attn.to_keys_values._is_full_backward_hook": null,
+  "backbone.transformer_b.layers.0.attn.to_keys_values.in_features": 512,
+  "backbone.transformer_b.layers.0.attn.to_keys_values.out_features": 1024,
+  "backbone.transformer_b.layers.0.attn.project._is_full_backward_hook": null,
+  "backbone.transformer_b.layers.0.attn.project.in_features": 512,
+  "backbone.transformer_b.layers.0.attn.project.out_features": 512,
+  "backbone.transformer_b.layers.0.attn.dropout._is_full_backward_hook": null,
+  "backbone.transformer_b.layers.0.attn.dropout.p": 0.0,
+  "backbone.transformer_b.layers.0.attn.dropout.inplace": false,
+  "backbone.transformer_b.layers.0.norm2._is_full_backward_hook": null,
+  "backbone.transformer_b.layers.0.norm2.normalized_shape": "tuple[1]=[512]",
+  "backbone.transformer_b.layers.0.norm2.eps": 1e-05,
+  "backbone.transformer_b.layers.0.norm2.elementwise_affine": true,
+  "backbone.transformer_b.layers.0.mlp._is_full_backward_hook": null,
+  "backbone.transformer_b.layers.0.mlp.fc1._is_full_backward_hook": null,
+  "backbone.transformer_b.layers.0.mlp.fc1.in_features": 512,
+  "backbone.transformer_b.layers.0.mlp.fc1.out_features": 1024,
+  "backbone.transformer_b.layers.0.mlp.fc2._is_full_backward_hook": null,
+  "backbone.transformer_b.layers.0.mlp.fc2.in_features": 1024,
+  "backbone.transformer_b.layers.0.mlp.fc2.out_features": 512,
+  "backbone.transformer_b.layers.0.mlp.dropout._is_full_backward_hook": null,
+  "backbone.transformer_b.layers.0.mlp.dropout.p": 0.0,
+  "backbone.transformer_b.layers.0.mlp.dropout.inplace": false,
+  "backbone.transformer_b.layers.1._is_full_backward_hook": null,
+  "backbone.transformer_b.layers.1.norm1._is_full_backward_hook": null,
+  "backbone.transformer_b.layers.1.norm1.normalized_shape": "tuple[1]=[512]",
+  "backbone.transformer_b.layers.1.norm1.eps": 1e-05,
+  "backbone.transformer_b.layers.1.norm1.elementwise_affine": true,
+  "backbone.transformer_b.layers.1.attn._is_full_backward_hook": null,
+  "backbone.transformer_b.layers.1.attn.num_heads": 4,
+  "backbone.transformer_b.layers.1.attn.scale": 0.08838834764831845,
+  "backbone.transformer_b.layers.1.attn.to_queries._is_full_backward_hook": null,
+  "backbone.transformer_b.layers.1.attn.to_queries.in_features": 512,
+  "backbone.transformer_b.layers.1.attn.to_queries.out_features": 512,
+  "backbone.transformer_b.layers.1.attn.to_keys_values._is_full_backward_hook": null,
+  "backbone.transformer_b.layers.1.attn.to_keys_values.in_features": 512,
+  "backbone.transformer_b.layers.1.attn.to_keys_values.out_features": 1024,
+  "backbone.transformer_b.layers.1.attn.project._is_full_backward_hook": null,
+  "backbone.transformer_b.layers.1.attn.project.in_features": 512,
+  "backbone.transformer_b.layers.1.attn.project.out_features": 512,
+  "backbone.transformer_b.layers.1.attn.dropout._is_full_backward_hook": null,
+  "backbone.transformer_b.layers.1.attn.dropout.p": 0.0,
+  "backbone.transformer_b.layers.1.attn.dropout.inplace": false,
+  "backbone.transformer_b.layers.1.norm2._is_full_backward_hook": null,
+  "backbone.transformer_b.layers.1.norm2.normalized_shape": "tuple[1]=[512]",
+  "backbone.transformer_b.layers.1.norm2.eps": 1e-05,
+  "backbone.transformer_b.layers.1.norm2.elementwise_affine": true,
+  "backbone.transformer_b.layers.1.mlp._is_full_backward_hook": null,
+  "backbone.transformer_b.layers.1.mlp.fc1._is_full_backward_hook": null,
+  "backbone.transformer_b.layers.1.mlp.fc1.in_features": 512,
+  "backbone.transformer_b.layers.1.mlp.fc1.out_features": 1024,
+  "backbone.transformer_b.layers.1.mlp.fc2._is_full_backward_hook": null,
+  "backbone.transformer_b.layers.1.mlp.fc2.in_features": 1024,
+  "backbone.transformer_b.layers.1.mlp.fc2.out_features": 512,
+  "backbone.transformer_b.layers.1.mlp.dropout._is_full_backward_hook": null,
+  "backbone.transformer_b.layers.1.mlp.dropout.p": 0.0,
+  "backbone.transformer_b.layers.1.mlp.dropout.inplace": false,
+  "backbone.transformer_c._is_full_backward_hook": null,
+  "backbone.transformer_c.enc_dec": false,
+  "backbone.transformer_c.layers._is_full_backward_hook": null,
+  "backbone.transformer_c.layers.0._is_full_backward_hook": null,
+  "backbone.transformer_c.layers.0.norm1._is_full_backward_hook": null,
+  "backbone.transformer_c.layers.0.norm1.normalized_shape": "tuple[1]=[512]",
+  "backbone.transformer_c.layers.0.norm1.eps": 1e-05,
+  "backbone.transformer_c.layers.0.norm1.elementwise_affine": true,
+  "backbone.transformer_c.layers.0.attn._is_full_backward_hook": null,
+  "backbone.transformer_c.layers.0.attn.num_heads": 4,
+  "backbone.transformer_c.layers.0.attn.scale": 0.08838834764831845,
+  "backbone.transformer_c.layers.0.attn.to_queries._is_full_backward_hook": null,
+  "backbone.transformer_c.layers.0.attn.to_queries.in_features": 512,
+  "backbone.transformer_c.layers.0.attn.to_queries.out_features": 512,
+  "backbone.transformer_c.layers.0.attn.to_keys_values._is_full_backward_hook": null,
+  "backbone.transformer_c.layers.0.attn.to_keys_values.in_features": 512,
+  "backbone.transformer_c.layers.0.attn.to_keys_values.out_features": 1024,
+  "backbone.transformer_c.layers.0.attn.project._is_full_backward_hook": null,
+  "backbone.transformer_c.layers.0.attn.project.in_features": 512,
+  "backbone.transformer_c.layers.0.attn.project.out_features": 512,
+  "backbone.transformer_c.layers.0.attn.dropout._is_full_backward_hook": null,
+  "backbone.transformer_c.layers.0.attn.dropout.p": 0.0,
+  "backbone.transformer_c.layers.0.attn.dropout.inplace": false,
+  "backbone.transformer_c.layers.0.norm2._is_full_backward_hook": null,
+  "backbone.transformer_c.layers.0.norm2.normalized_shape": "tuple[1]=[512]",
+  "backbone.transformer_c.layers.0.norm2.eps": 1e-05,
+  "backbone.transformer_c.layers.0.norm2.elementwise_affine": true,
+  "backbone.transformer_c.layers.0.mlp._is_full_backward_hook": null,
+  "backbone.transformer_c.layers.0.mlp.fc1._is_full_backward_hook": null,
+  "backbone.transformer_c.layers.0.mlp.fc1.in_features": 512,
+  "backbone.transformer_c.layers.0.mlp.fc1.out_features": 1024,
+  "backbone.transformer_c.layers.0.mlp.fc2._is_full_backward_hook": null,
+  "backbone.transformer_c.layers.0.mlp.fc2.in_features": 1024,
+  "backbone.transformer_c.layers.0.mlp.fc2.out_features": 512,
+  "backbone.transformer_c.layers.0.mlp.dropout._is_full_backward_hook": null,
+  "backbone.transformer_c.layers.0.mlp.dropout.p": 0.0,
+  "backbone.transformer_c.layers.0.mlp.dropout.inplace": false,
+  "backbone.transformer_c.layers.1._is_full_backward_hook": null,
+  "backbone.transformer_c.layers.1.norm1._is_full_backward_hook": null,
+  "backbone.transformer_c.layers.1.norm1.normalized_shape": "tuple[1]=[512]",
+  "backbone.transformer_c.layers.1.norm1.eps": 1e-05,
+  "backbone.transformer_c.layers.1.norm1.elementwise_affine": true,
+  "backbone.transformer_c.layers.1.attn._is_full_backward_hook": null,
+  "backbone.transformer_c.layers.1.attn.num_heads": 4,
+  "backbone.transformer_c.layers.1.attn.scale": 0.08838834764831845,
+  "backbone.transformer_c.layers.1.attn.to_queries._is_full_backward_hook": null,
+  "backbone.transformer_c.layers.1.attn.to_queries.in_features": 512,
+  "backbone.transformer_c.layers.1.attn.to_queries.out_features": 512,
+  "backbone.transformer_c.layers.1.attn.to_keys_values._is_full_backward_hook": null,
+  "backbone.transformer_c.layers.1.attn.to_keys_values.in_features": 512,
+  "backbone.transformer_c.layers.1.attn.to_keys_values.out_features": 1024,
+  "backbone.transformer_c.layers.1.attn.project._is_full_backward_hook": null,
+  "backbone.transformer_c.layers.1.attn.project.in_features": 512,
+  "backbone.transformer_c.layers.1.attn.project.out_features": 512,
+  "backbone.transformer_c.layers.1.attn.dropout._is_full_backward_hook": null,
+  "backbone.transformer_c.layers.1.attn.dropout.p": 0.0,
+  "backbone.transformer_c.layers.1.attn.dropout.inplace": false,
+  "backbone.transformer_c.layers.1.norm2._is_full_backward_hook": null,
+  "backbone.transformer_c.layers.1.norm2.normalized_shape": "tuple[1]=[512]",
+  "backbone.transformer_c.layers.1.norm2.eps": 1e-05,
+  "backbone.transformer_c.layers.1.norm2.elementwise_affine": true,
+  "backbone.transformer_c.layers.1.mlp._is_full_backward_hook": null,
+  "backbone.transformer_c.layers.1.mlp.fc1._is_full_backward_hook": null,
+  "backbone.transformer_c.layers.1.mlp.fc1.in_features": 512,
+  "backbone.transformer_c.layers.1.mlp.fc1.out_features": 1024,
+  "backbone.transformer_c.layers.1.mlp.fc2._is_full_backward_hook": null,
+  "backbone.transformer_c.layers.1.mlp.fc2.in_features": 1024,
+  "backbone.transformer_c.layers.1.mlp.fc2.out_features": 512,
+  "backbone.transformer_c.layers.1.mlp.dropout._is_full_backward_hook": null,
+  "backbone.transformer_c.layers.1.mlp.dropout.p": 0.0,
+  "backbone.transformer_c.layers.1.mlp.dropout.inplace": false,
+  "backbone.transformer_d._is_full_backward_hook": null,
+  "backbone.transformer_d.enc_dec": false,
+  "backbone.transformer_d.layers._is_full_backward_hook": null,
+  "backbone.transformer_d.layers.0._is_full_backward_hook": null,
+  "backbone.transformer_d.layers.0.norm1._is_full_backward_hook": null,
+  "backbone.transformer_d.layers.0.norm1.normalized_shape": "tuple[1]=[512]",
+  "backbone.transformer_d.layers.0.norm1.eps": 1e-05,
+  "backbone.transformer_d.layers.0.norm1.elementwise_affine": true,
+  "backbone.transformer_d.layers.0.attn._is_full_backward_hook": null,
+  "backbone.transformer_d.layers.0.attn.num_heads": 4,
+  "backbone.transformer_d.layers.0.attn.scale": 0.08838834764831845,
+  "backbone.transformer_d.layers.0.attn.to_queries._is_full_backward_hook": null,
+  "backbone.transformer_d.layers.0.attn.to_queries.in_features": 512,
+  "backbone.transformer_d.layers.0.attn.to_queries.out_features": 512,
+  "backbone.transformer_d.layers.0.attn.to_keys_values._is_full_backward_hook": null,
+  "backbone.transformer_d.layers.0.attn.to_keys_values.in_features": 512,
+  "backbone.transformer_d.layers.0.attn.to_keys_values.out_features": 1024,
+  "backbone.transformer_d.layers.0.attn.project._is_full_backward_hook": null,
+  "backbone.transformer_d.layers.0.attn.project.in_features": 512,
+  "backbone.transformer_d.layers.0.attn.project.out_features": 512,
+  "backbone.transformer_d.layers.0.attn.dropout._is_full_backward_hook": null,
+  "backbone.transformer_d.layers.0.attn.dropout.p": 0.0,
+  "backbone.transformer_d.layers.0.attn.dropout.inplace": false,
+  "backbone.transformer_d.layers.0.norm2._is_full_backward_hook": null,
+  "backbone.transformer_d.layers.0.norm2.normalized_shape": "tuple[1]=[512]",
+  "backbone.transformer_d.layers.0.norm2.eps": 1e-05,
+  "backbone.transformer_d.layers.0.norm2.elementwise_affine": true,
+  "backbone.transformer_d.layers.0.mlp._is_full_backward_hook": null,
+  "backbone.transformer_d.layers.0.mlp.fc1._is_full_backward_hook": null,
+  "backbone.transformer_d.layers.0.mlp.fc1.in_features": 512,
+  "backbone.transformer_d.layers.0.mlp.fc1.out_features": 1024,
+  "backbone.transformer_d.layers.0.mlp.fc2._is_full_backward_hook": null,
+  "backbone.transformer_d.layers.0.mlp.fc2.in_features": 1024,
+  "backbone.transformer_d.layers.0.mlp.fc2.out_features": 512,
+  "backbone.transformer_d.layers.0.mlp.dropout._is_full_backward_hook": null,
+  "backbone.transformer_d.layers.0.mlp.dropout.p": 0.0,
+  "backbone.transformer_d.layers.0.mlp.dropout.inplace": false,
+  "backbone.transformer_d.layers.1._is_full_backward_hook": null,
+  "backbone.transformer_d.layers.1.norm1._is_full_backward_hook": null,
+  "backbone.transformer_d.layers.1.norm1.normalized_shape": "tuple[1]=[512]",
+  "backbone.transformer_d.layers.1.norm1.eps": 1e-05,
+  "backbone.transformer_d.layers.1.norm1.elementwise_affine": true,
+  "backbone.transformer_d.layers.1.attn._is_full_backward_hook": null,
+  "backbone.transformer_d.layers.1.attn.num_heads": 4,
+  "backbone.transformer_d.layers.1.attn.scale": 0.08838834764831845,
+  "backbone.transformer_d.layers.1.attn.to_queries._is_full_backward_hook": null,
+  "backbone.transformer_d.layers.1.attn.to_queries.in_features": 512,
+  "backbone.transformer_d.layers.1.attn.to_queries.out_features": 512,
+  "backbone.transformer_d.layers.1.attn.to_keys_values._is_full_backward_hook": null,
+  "backbone.transformer_d.layers.1.attn.to_keys_values.in_features": 512,
+  "backbone.transformer_d.layers.1.attn.to_keys_values.out_features": 1024,
+  "backbone.transformer_d.layers.1.attn.project._is_full_backward_hook": null,
+  "backbone.transformer_d.layers.1.attn.project.in_features": 512,
+  "backbone.transformer_d.layers.1.attn.project.out_features": 512,
+  "backbone.transformer_d.layers.1.attn.dropout._is_full_backward_hook": null,
+  "backbone.transformer_d.layers.1.attn.dropout.p": 0.0,
+  "backbone.transformer_d.layers.1.attn.dropout.inplace": false,
+  "backbone.transformer_d.layers.1.norm2._is_full_backward_hook": null,
+  "backbone.transformer_d.layers.1.norm2.normalized_shape": "tuple[1]=[512]",
+  "backbone.transformer_d.layers.1.norm2.eps": 1e-05,
+  "backbone.transformer_d.layers.1.norm2.elementwise_affine": true,
+  "backbone.transformer_d.layers.1.mlp._is_full_backward_hook": null,
+  "backbone.transformer_d.layers.1.mlp.fc1._is_full_backward_hook": null,
+  "backbone.transformer_d.layers.1.mlp.fc1.in_features": 512,
+  "backbone.transformer_d.layers.1.mlp.fc1.out_features": 1024,
+  "backbone.transformer_d.layers.1.mlp.fc2._is_full_backward_hook": null,
+  "backbone.transformer_d.layers.1.mlp.fc2.in_features": 1024,
+  "backbone.transformer_d.layers.1.mlp.fc2.out_features": 512,
+  "backbone.transformer_d.layers.1.mlp.dropout._is_full_backward_hook": null,
+  "backbone.transformer_d.layers.1.mlp.dropout.p": 0.0,
+  "backbone.transformer_d.layers.1.mlp.dropout.inplace": false,
+  "backbone.mlp._is_full_backward_hook": null,
+  "backbone.mlp.0._is_full_backward_hook": null,
+  "backbone.mlp.0.normalized_shape": "tuple[1]=[512]",
+  "backbone.mlp.0.eps": 1e-05,
+  "backbone.mlp.0.elementwise_affine": true,
+  "backbone.mlp.1._is_full_backward_hook": null,
+  "backbone.mlp.1.in_features": 512,
+  "backbone.mlp.1.out_features": 512,
+  "backbone.mlp.2._is_full_backward_hook": null,
+  "backbone.mlp.2.approximate": "none",
+  "backbone.mlp.3._is_full_backward_hook": null,
+  "backbone.mlp.3.in_features": 512,
+  "backbone.mlp.3.out_features": 512,
+  "backbone.mlp.4._is_full_backward_hook": null,
+  "backbone.mlp.4.dim": -1,
+  "backbone.mlp_img._is_full_backward_hook": null,
+  "backbone.mlp_img.0._is_full_backward_hook": null,
+  "backbone.mlp_img.0.normalized_shape": "tuple[1]=[49]",
+  "backbone.mlp_img.0.eps": 1e-05,
+  "backbone.mlp_img.0.elementwise_affine": true,
+  "backbone.mlp_img.1._is_full_backward_hook": null,
+  "backbone.mlp_img.1.in_features": 49,
+  "backbone.mlp_img.1.out_features": 512,
+  "backbone.mlp_img.2._is_full_backward_hook": null,
+  "backbone.mlp_img.2.approximate": "none",
+  "backbone.mlp_img.3._is_full_backward_hook": null,
+  "backbone.mlp_img.3.in_features": 512,
+  "backbone.mlp_img.3.out_features": 6,
+  "backbone.mlp_img.4._is_full_backward_hook": null,
+  "backbone.mlp_img.4.dim": -1,
+  "backbone.mlp_text._is_full_backward_hook": null,
+  "backbone.mlp_text.0._is_full_backward_hook": null,
+  "backbone.mlp_text.0.normalized_shape": "tuple[1]=[77]",
+  "backbone.mlp_text.0.eps": 1e-05,
+  "backbone.mlp_text.0.elementwise_affine": true,
+  "backbone.mlp_text.1._is_full_backward_hook": null,
+  "backbone.mlp_text.1.in_features": 77,
+  "backbone.mlp_text.1.out_features": 512,
+  "backbone.mlp_text.2._is_full_backward_hook": null,
+  "backbone.mlp_text.2.approximate": "none",
+  "backbone.mlp_text.3._is_full_backward_hook": null,
+  "backbone.mlp_text.3.in_features": 512,
+  "backbone.mlp_text.3.out_features": 6,
+  "backbone.mlp_text.4._is_full_backward_hook": null,
+  "backbone.mlp_text.4.dim": -1,
+  "backbone.weight_chanelImg._is_full_backward_hook": null,
+  "backbone.weight_chanelImg.0._is_full_backward_hook": null,
+  "backbone.weight_chanelImg.0.normalized_shape": "tuple[1]=[512]",
+  "backbone.weight_chanelImg.0.eps": 1e-05,
+  "backbone.weight_chanelImg.0.elementwise_affine": true,
+  "backbone.weight_chanelImg.1._is_full_backward_hook": null,
+  "backbone.weight_chanelImg.1.in_features": 512,
+  "backbone.weight_chanelImg.1.out_features": 512,
+  "backbone.weight_chanelImg.2._is_full_backward_hook": null,
+  "backbone.weight_chanelImg.2.approximate": "none",
+  "backbone.weight_chanelImg.3._is_full_backward_hook": null,
+  "backbone.weight_chanelImg.3.in_features": 512,
+  "backbone.weight_chanelImg.3.out_features": 49,
+  "backbone.weight_chanelImg.4._is_full_backward_hook": null,
+  "backbone.weight_chanelImg.4.dim": -1,
+  "backbone.weight_chanelImg_t._is_full_backward_hook": null,
+  "backbone.weight_chanelImg_t.0._is_full_backward_hook": null,
+  "backbone.weight_chanelImg_t.0.normalized_shape": "tuple[1]=[512]",
+  "backbone.weight_chanelImg_t.0.eps": 1e-05,
+  "backbone.weight_chanelImg_t.0.elementwise_affine": true,
+  "backbone.weight_chanelImg_t.1._is_full_backward_hook": null,
+  "backbone.weight_chanelImg_t.1.in_features": 512,
+  "backbone.weight_chanelImg_t.1.out_features": 512,
+  "backbone.weight_chanelImg_t.2._is_full_backward_hook": null,
+  "backbone.weight_chanelImg_t.2.approximate": "none",
+  "backbone.weight_chanelImg_t.3._is_full_backward_hook": null,
+  "backbone.weight_chanelImg_t.3.in_features": 512,
+  "backbone.weight_chanelImg_t.3.out_features": 49,
+  "backbone.cross_t2i._is_full_backward_hook": null,
+  "backbone.cross_t2i.0._is_full_backward_hook": null,
+  "backbone.cross_t2i.0.in_features": 77,
+  "backbone.cross_t2i.0.out_features": 49,
+  "backbone.cross_t2i.1._is_full_backward_hook": null,
+  "backbone.cross_t2i.1.dim": -1,
+  "affine._is_full_backward_hook": null,
+  "affine.use_affine_level": true,
+  "affine.MLP._is_full_backward_hook": null,
+  "affine.MLP.0._is_full_backward_hook": null,
+  "affine.MLP.0.normalized_shape": "tuple[1]=[1024]",
+  "affine.MLP.0.eps": 1e-05,
+  "affine.MLP.0.elementwise_affine": true,
+  "affine.MLP.1._is_full_backward_hook": null,
+  "affine.MLP.1.in_features": 1024,
+  "affine.MLP.1.out_features": 512,
+  "affine.MLP.2._is_full_backward_hook": null,
+  "affine.MLP.2.approximate": "none",
+  "affine.MLP.3._is_full_backward_hook": null,
+  "affine.MLP.3.in_features": 512,
+  "affine.MLP.3.out_features": 512
+ },
+ "state_dict_at": "<root is nn.Module>",
+ "tensor_count": 455,
+ "total_numel": 172814185,
+ "dtype_numel": {
+  "torch.float32": 172814185
+ },
+ "prefix1": {
+  "backbone.*": 446,
+  "affine.*": 6,
+  "loss_T": 1,
+  "local_weight": 1,
+  "local_weight_dis": 1
+ },
+ "prefix2": {
+  "backbone.clip.*": 302,
+  "backbone.transformer_a.*": 24,
+  "backbone.transformer_b.*": 24,
+  "backbone.transformer_c.*": 24,
+  "backbone.transformer_d.*": 24,
+  "backbone.transformer.*": 12,
+  "backbone.mlp.*": 6,
+  "backbone.mlp_img.*": 6,
+  "backbone.mlp_text.*": 6,
+  "backbone.weight_chanelImg.*": 6,
+  "backbone.weight_chanelImg_t.*": 6,
+  "affine.MLP.*": 6,
+  "backbone.fc.*": 2,
+  "backbone.text_fc.*": 2,
+  "backbone.cross_t2i.*": 2,
+  "loss_T": 1,
+  "local_weight": 1,
+  "local_weight_dis": 1
+ },
+ "prefix3": {
+  "backbone.clip.visual.*": 152,
+  "backbone.clip.transformer.*": 144,
+  "backbone.transformer_a.layers.*": 24,
+  "backbone.transformer_b.layers.*": 24,
+  "backbone.transformer_c.layers.*": 24,
+  "backbone.transformer_d.layers.*": 24,
+  "backbone.transformer.layers.*": 12,
+  "backbone.clip.ln_final.*": 2,
+  "backbone.mlp.0.*": 2,
+  "backbone.mlp.1.*": 2,
+  "backbone.mlp.3.*": 2,
+  "backbone.mlp_img.0.*": 2,
+  "backbone.mlp_img.1.*": 2,
+  "backbone.mlp_img.3.*": 2,
+  "backbone.mlp_text.0.*": 2,
+  "backbone.mlp_text.1.*": 2,
+  "backbone.mlp_text.3.*": 2,
+  "backbone.weight_chanelImg.0.*": 2,
+  "backbone.weight_chanelImg.1.*": 2,
+  "backbone.weight_chanelImg.3.*": 2,
+  "backbone.weight_chanelImg_t.0.*": 2,
+  "backbone.weight_chanelImg_t.1.*": 2,
+  "backbone.weight_chanelImg_t.3.*": 2,
+  "backbone.cross_t2i.0.*": 2,
+  "affine.MLP.0.*": 2,
+  "affine.MLP.1.*": 2,
+  "affine.MLP.3.*": 2,
+  "loss_T": 1,
+  "local_weight": 1,
+  "local_weight_dis": 1,
+  "backbone.clip.positional_embedding": 1,
+  "backbone.clip.text_projection": 1,
+  "backbone.clip.logit_scale": 1,
+  "backbone.clip.token_embedding.*": 1,
+  "backbone.fc.weight": 1,
+  "backbone.fc.bias": 1,
+  "backbone.text_fc.weight": 1,
+  "backbone.text_fc.bias": 1
+ },
+ "first_keys": [
+  "loss_T",
+  "local_weight",
+  "local_weight_dis",
+  "backbone.clip.positional_embedding",
+  "backbone.clip.text_projection",
+  "backbone.clip.logit_scale",
+  "backbone.clip.visual.class_embedding",
+  "backbone.clip.visual.positional_embedding",
+  "backbone.clip.visual.proj",
+  "backbone.clip.visual.conv1.weight",
+  "backbone.clip.visual.ln_pre.weight",
+  "backbone.clip.visual.ln_pre.bias",
+  "backbone.clip.visual.transformer.resblocks.0.ln_1.weight",
+  "backbone.clip.visual.transformer.resblocks.0.ln_1.bias",
+  "backbone.clip.visual.transformer.resblocks.0.attn.in_proj_weight",
+  "backbone.clip.visual.transformer.resblocks.0.attn.in_proj_bias",
+  "backbone.clip.visual.transformer.resblocks.0.attn.out_proj.weight",
+  "backbone.clip.visual.transformer.resblocks.0.attn.out_proj.bias",
+  "backbone.clip.visual.transformer.resblocks.0.ln_2.weight",
+  "backbone.clip.visual.transformer.resblocks.0.ln_2.bias"
+ ],
+ "last_keys": [
+  "backbone.weight_chanelImg_t.3.weight",
+  "backbone.weight_chanelImg_t.3.bias",
+  "backbone.cross_t2i.0.weight",
+  "backbone.cross_t2i.0.bias",
+  "affine.MLP.0.weight",
+  "affine.MLP.0.bias",
+  "affine.MLP.1.weight",
+  "affine.MLP.1.bias",
+  "affine.MLP.3.weight",
+  "affine.MLP.3.bias"
+ ],
+ "shapes": {
+  "loss_T": [
+   1
+  ],
+  "local_weight": [
+   8
+  ],
+  "local_weight_dis": [
+   7
+  ],
+  "backbone.clip.positional_embedding": [
+   77,
+   512
+  ],
+  "backbone.clip.text_projection": [
+   512,
+   512
+  ],
+  "backbone.clip.logit_scale": [],
+  "backbone.clip.visual.class_embedding": [
+   768
+  ],
+  "backbone.clip.visual.positional_embedding": [
+   50,
+   768
+  ],
+  "backbone.clip.visual.proj": [
+   768,
+   512
+  ],
+  "backbone.clip.visual.conv1.weight": [
+   768,
+   3,
+   32,
+   32
+  ],
+  "backbone.clip.visual.ln_pre.weight": [
+   768
+  ],
+  "backbone.clip.visual.ln_pre.bias": [
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.0.ln_1.weight": [
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.0.ln_1.bias": [
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.0.attn.in_proj_weight": [
+   2304,
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.0.attn.in_proj_bias": [
+   2304
+  ],
+  "backbone.clip.visual.transformer.resblocks.0.attn.out_proj.weight": [
+   768,
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.0.attn.out_proj.bias": [
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.0.ln_2.weight": [
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.0.ln_2.bias": [
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.0.mlp.c_fc.weight": [
+   3072,
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.0.mlp.c_fc.bias": [
+   3072
+  ],
+  "backbone.clip.visual.transformer.resblocks.0.mlp.c_proj.weight": [
+   768,
+   3072
+  ],
+  "backbone.clip.visual.transformer.resblocks.0.mlp.c_proj.bias": [
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.1.ln_1.weight": [
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.1.ln_1.bias": [
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.1.attn.in_proj_weight": [
+   2304,
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.1.attn.in_proj_bias": [
+   2304
+  ],
+  "backbone.clip.visual.transformer.resblocks.1.attn.out_proj.weight": [
+   768,
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.1.attn.out_proj.bias": [
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.1.ln_2.weight": [
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.1.ln_2.bias": [
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.1.mlp.c_fc.weight": [
+   3072,
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.1.mlp.c_fc.bias": [
+   3072
+  ],
+  "backbone.clip.visual.transformer.resblocks.1.mlp.c_proj.weight": [
+   768,
+   3072
+  ],
+  "backbone.clip.visual.transformer.resblocks.1.mlp.c_proj.bias": [
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.2.ln_1.weight": [
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.2.ln_1.bias": [
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.2.attn.in_proj_weight": [
+   2304,
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.2.attn.in_proj_bias": [
+   2304
+  ],
+  "backbone.clip.visual.transformer.resblocks.2.attn.out_proj.weight": [
+   768,
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.2.attn.out_proj.bias": [
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.2.ln_2.weight": [
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.2.ln_2.bias": [
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.2.mlp.c_fc.weight": [
+   3072,
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.2.mlp.c_fc.bias": [
+   3072
+  ],
+  "backbone.clip.visual.transformer.resblocks.2.mlp.c_proj.weight": [
+   768,
+   3072
+  ],
+  "backbone.clip.visual.transformer.resblocks.2.mlp.c_proj.bias": [
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.3.ln_1.weight": [
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.3.ln_1.bias": [
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.3.attn.in_proj_weight": [
+   2304,
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.3.attn.in_proj_bias": [
+   2304
+  ],
+  "backbone.clip.visual.transformer.resblocks.3.attn.out_proj.weight": [
+   768,
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.3.attn.out_proj.bias": [
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.3.ln_2.weight": [
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.3.ln_2.bias": [
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.3.mlp.c_fc.weight": [
+   3072,
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.3.mlp.c_fc.bias": [
+   3072
+  ],
+  "backbone.clip.visual.transformer.resblocks.3.mlp.c_proj.weight": [
+   768,
+   3072
+  ],
+  "backbone.clip.visual.transformer.resblocks.3.mlp.c_proj.bias": [
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.4.ln_1.weight": [
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.4.ln_1.bias": [
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.4.attn.in_proj_weight": [
+   2304,
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.4.attn.in_proj_bias": [
+   2304
+  ],
+  "backbone.clip.visual.transformer.resblocks.4.attn.out_proj.weight": [
+   768,
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.4.attn.out_proj.bias": [
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.4.ln_2.weight": [
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.4.ln_2.bias": [
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.4.mlp.c_fc.weight": [
+   3072,
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.4.mlp.c_fc.bias": [
+   3072
+  ],
+  "backbone.clip.visual.transformer.resblocks.4.mlp.c_proj.weight": [
+   768,
+   3072
+  ],
+  "backbone.clip.visual.transformer.resblocks.4.mlp.c_proj.bias": [
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.5.ln_1.weight": [
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.5.ln_1.bias": [
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.5.attn.in_proj_weight": [
+   2304,
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.5.attn.in_proj_bias": [
+   2304
+  ],
+  "backbone.clip.visual.transformer.resblocks.5.attn.out_proj.weight": [
+   768,
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.5.attn.out_proj.bias": [
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.5.ln_2.weight": [
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.5.ln_2.bias": [
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.5.mlp.c_fc.weight": [
+   3072,
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.5.mlp.c_fc.bias": [
+   3072
+  ],
+  "backbone.clip.visual.transformer.resblocks.5.mlp.c_proj.weight": [
+   768,
+   3072
+  ],
+  "backbone.clip.visual.transformer.resblocks.5.mlp.c_proj.bias": [
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.6.ln_1.weight": [
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.6.ln_1.bias": [
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.6.attn.in_proj_weight": [
+   2304,
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.6.attn.in_proj_bias": [
+   2304
+  ],
+  "backbone.clip.visual.transformer.resblocks.6.attn.out_proj.weight": [
+   768,
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.6.attn.out_proj.bias": [
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.6.ln_2.weight": [
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.6.ln_2.bias": [
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.6.mlp.c_fc.weight": [
+   3072,
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.6.mlp.c_fc.bias": [
+   3072
+  ],
+  "backbone.clip.visual.transformer.resblocks.6.mlp.c_proj.weight": [
+   768,
+   3072
+  ],
+  "backbone.clip.visual.transformer.resblocks.6.mlp.c_proj.bias": [
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.7.ln_1.weight": [
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.7.ln_1.bias": [
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.7.attn.in_proj_weight": [
+   2304,
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.7.attn.in_proj_bias": [
+   2304
+  ],
+  "backbone.clip.visual.transformer.resblocks.7.attn.out_proj.weight": [
+   768,
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.7.attn.out_proj.bias": [
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.7.ln_2.weight": [
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.7.ln_2.bias": [
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.7.mlp.c_fc.weight": [
+   3072,
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.7.mlp.c_fc.bias": [
+   3072
+  ],
+  "backbone.clip.visual.transformer.resblocks.7.mlp.c_proj.weight": [
+   768,
+   3072
+  ],
+  "backbone.clip.visual.transformer.resblocks.7.mlp.c_proj.bias": [
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.8.ln_1.weight": [
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.8.ln_1.bias": [
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.8.attn.in_proj_weight": [
+   2304,
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.8.attn.in_proj_bias": [
+   2304
+  ],
+  "backbone.clip.visual.transformer.resblocks.8.attn.out_proj.weight": [
+   768,
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.8.attn.out_proj.bias": [
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.8.ln_2.weight": [
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.8.ln_2.bias": [
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.8.mlp.c_fc.weight": [
+   3072,
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.8.mlp.c_fc.bias": [
+   3072
+  ],
+  "backbone.clip.visual.transformer.resblocks.8.mlp.c_proj.weight": [
+   768,
+   3072
+  ],
+  "backbone.clip.visual.transformer.resblocks.8.mlp.c_proj.bias": [
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.9.ln_1.weight": [
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.9.ln_1.bias": [
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.9.attn.in_proj_weight": [
+   2304,
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.9.attn.in_proj_bias": [
+   2304
+  ],
+  "backbone.clip.visual.transformer.resblocks.9.attn.out_proj.weight": [
+   768,
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.9.attn.out_proj.bias": [
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.9.ln_2.weight": [
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.9.ln_2.bias": [
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.9.mlp.c_fc.weight": [
+   3072,
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.9.mlp.c_fc.bias": [
+   3072
+  ],
+  "backbone.clip.visual.transformer.resblocks.9.mlp.c_proj.weight": [
+   768,
+   3072
+  ],
+  "backbone.clip.visual.transformer.resblocks.9.mlp.c_proj.bias": [
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.10.ln_1.weight": [
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.10.ln_1.bias": [
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.10.attn.in_proj_weight": [
+   2304,
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.10.attn.in_proj_bias": [
+   2304
+  ],
+  "backbone.clip.visual.transformer.resblocks.10.attn.out_proj.weight": [
+   768,
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.10.attn.out_proj.bias": [
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.10.ln_2.weight": [
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.10.ln_2.bias": [
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.10.mlp.c_fc.weight": [
+   3072,
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.10.mlp.c_fc.bias": [
+   3072
+  ],
+  "backbone.clip.visual.transformer.resblocks.10.mlp.c_proj.weight": [
+   768,
+   3072
+  ],
+  "backbone.clip.visual.transformer.resblocks.10.mlp.c_proj.bias": [
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.11.ln_1.weight": [
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.11.ln_1.bias": [
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.11.attn.in_proj_weight": [
+   2304,
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.11.attn.in_proj_bias": [
+   2304
+  ],
+  "backbone.clip.visual.transformer.resblocks.11.attn.out_proj.weight": [
+   768,
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.11.attn.out_proj.bias": [
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.11.ln_2.weight": [
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.11.ln_2.bias": [
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.11.mlp.c_fc.weight": [
+   3072,
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.11.mlp.c_fc.bias": [
+   3072
+  ],
+  "backbone.clip.visual.transformer.resblocks.11.mlp.c_proj.weight": [
+   768,
+   3072
+  ],
+  "backbone.clip.visual.transformer.resblocks.11.mlp.c_proj.bias": [
+   768
+  ],
+  "backbone.clip.visual.ln_post.weight": [
+   768
+  ],
+  "backbone.clip.visual.ln_post.bias": [
+   768
+  ],
+  "backbone.clip.transformer.resblocks.0.ln_1.weight": [
+   512
+  ],
+  "backbone.clip.transformer.resblocks.0.ln_1.bias": [
+   512
+  ],
+  "backbone.clip.transformer.resblocks.0.attn.in_proj_weight": [
+   1536,
+   512
+  ],
+  "backbone.clip.transformer.resblocks.0.attn.in_proj_bias": [
+   1536
+  ],
+  "backbone.clip.transformer.resblocks.0.attn.out_proj.weight": [
+   512,
+   512
+  ],
+  "backbone.clip.transformer.resblocks.0.attn.out_proj.bias": [
+   512
+  ],
+  "backbone.clip.transformer.resblocks.0.ln_2.weight": [
+   512
+  ],
+  "backbone.clip.transformer.resblocks.0.ln_2.bias": [
+   512
+  ],
+  "backbone.clip.transformer.resblocks.0.mlp.c_fc.weight": [
+   2048,
+   512
+  ],
+  "backbone.clip.transformer.resblocks.0.mlp.c_fc.bias": [
+   2048
+  ],
+  "backbone.clip.transformer.resblocks.0.mlp.c_proj.weight": [
+   512,
+   2048
+  ],
+  "backbone.clip.transformer.resblocks.0.mlp.c_proj.bias": [
+   512
+  ],
+  "backbone.clip.transformer.resblocks.1.ln_1.weight": [
+   512
+  ],
+  "backbone.clip.transformer.resblocks.1.ln_1.bias": [
+   512
+  ],
+  "backbone.clip.transformer.resblocks.1.attn.in_proj_weight": [
+   1536,
+   512
+  ],
+  "backbone.clip.transformer.resblocks.1.attn.in_proj_bias": [
+   1536
+  ],
+  "backbone.clip.transformer.resblocks.1.attn.out_proj.weight": [
+   512,
+   512
+  ],
+  "backbone.clip.transformer.resblocks.1.attn.out_proj.bias": [
+   512
+  ],
+  "backbone.clip.transformer.resblocks.1.ln_2.weight": [
+   512
+  ],
+  "backbone.clip.transformer.resblocks.1.ln_2.bias": [
+   512
+  ],
+  "backbone.clip.transformer.resblocks.1.mlp.c_fc.weight": [
+   2048,
+   512
+  ],
+  "backbone.clip.transformer.resblocks.1.mlp.c_fc.bias": [
+   2048
+  ],
+  "backbone.clip.transformer.resblocks.1.mlp.c_proj.weight": [
+   512,
+   2048
+  ],
+  "backbone.clip.transformer.resblocks.1.mlp.c_proj.bias": [
+   512
+  ],
+  "backbone.clip.transformer.resblocks.2.ln_1.weight": [
+   512
+  ],
+  "backbone.clip.transformer.resblocks.2.ln_1.bias": [
+   512
+  ],
+  "backbone.clip.transformer.resblocks.2.attn.in_proj_weight": [
+   1536,
+   512
+  ],
+  "backbone.clip.transformer.resblocks.2.attn.in_proj_bias": [
+   1536
+  ],
+  "backbone.clip.transformer.resblocks.2.attn.out_proj.weight": [
+   512,
+   512
+  ],
+  "backbone.clip.transformer.resblocks.2.attn.out_proj.bias": [
+   512
+  ],
+  "backbone.clip.transformer.resblocks.2.ln_2.weight": [
+   512
+  ],
+  "backbone.clip.transformer.resblocks.2.ln_2.bias": [
+   512
+  ],
+  "backbone.clip.transformer.resblocks.2.mlp.c_fc.weight": [
+   2048,
+   512
+  ],
+  "backbone.clip.transformer.resblocks.2.mlp.c_fc.bias": [
+   2048
+  ],
+  "backbone.clip.transformer.resblocks.2.mlp.c_proj.weight": [
+   512,
+   2048
+  ],
+  "backbone.clip.transformer.resblocks.2.mlp.c_proj.bias": [
+   512
+  ],
+  "backbone.clip.transformer.resblocks.3.ln_1.weight": [
+   512
+  ],
+  "backbone.clip.transformer.resblocks.3.ln_1.bias": [
+   512
+  ],
+  "backbone.clip.transformer.resblocks.3.attn.in_proj_weight": [
+   1536,
+   512
+  ],
+  "backbone.clip.transformer.resblocks.3.attn.in_proj_bias": [
+   1536
+  ],
+  "backbone.clip.transformer.resblocks.3.attn.out_proj.weight": [
+   512,
+   512
+  ],
+  "backbone.clip.transformer.resblocks.3.attn.out_proj.bias": [
+   512
+  ],
+  "backbone.clip.transformer.resblocks.3.ln_2.weight": [
+   512
+  ],
+  "backbone.clip.transformer.resblocks.3.ln_2.bias": [
+   512
+  ],
+  "backbone.clip.transformer.resblocks.3.mlp.c_fc.weight": [
+   2048,
+   512
+  ],
+  "backbone.clip.transformer.resblocks.3.mlp.c_fc.bias": [
+   2048
+  ],
+  "backbone.clip.transformer.resblocks.3.mlp.c_proj.weight": [
+   512,
+   2048
+  ],
+  "backbone.clip.transformer.resblocks.3.mlp.c_proj.bias": [
+   512
+  ],
+  "backbone.clip.transformer.resblocks.4.ln_1.weight": [
+   512
+  ],
+  "backbone.clip.transformer.resblocks.4.ln_1.bias": [
+   512
+  ],
+  "backbone.clip.transformer.resblocks.4.attn.in_proj_weight": [
+   1536,
+   512
+  ],
+  "backbone.clip.transformer.resblocks.4.attn.in_proj_bias": [
+   1536
+  ],
+  "backbone.clip.transformer.resblocks.4.attn.out_proj.weight": [
+   512,
+   512
+  ],
+  "backbone.clip.transformer.resblocks.4.attn.out_proj.bias": [
+   512
+  ],
+  "backbone.clip.transformer.resblocks.4.ln_2.weight": [
+   512
+  ],
+  "backbone.clip.transformer.resblocks.4.ln_2.bias": [
+   512
+  ],
+  "backbone.clip.transformer.resblocks.4.mlp.c_fc.weight": [
+   2048,
+   512
+  ],
+  "backbone.clip.transformer.resblocks.4.mlp.c_fc.bias": [
+   2048
+  ],
+  "backbone.clip.transformer.resblocks.4.mlp.c_proj.weight": [
+   512,
+   2048
+  ],
+  "backbone.clip.transformer.resblocks.4.mlp.c_proj.bias": [
+   512
+  ],
+  "backbone.clip.transformer.resblocks.5.ln_1.weight": [
+   512
+  ],
+  "backbone.clip.transformer.resblocks.5.ln_1.bias": [
+   512
+  ],
+  "backbone.clip.transformer.resblocks.5.attn.in_proj_weight": [
+   1536,
+   512
+  ],
+  "backbone.clip.transformer.resblocks.5.attn.in_proj_bias": [
+   1536
+  ],
+  "backbone.clip.transformer.resblocks.5.attn.out_proj.weight": [
+   512,
+   512
+  ],
+  "backbone.clip.transformer.resblocks.5.attn.out_proj.bias": [
+   512
+  ],
+  "backbone.clip.transformer.resblocks.5.ln_2.weight": [
+   512
+  ],
+  "backbone.clip.transformer.resblocks.5.ln_2.bias": [
+   512
+  ],
+  "backbone.clip.transformer.resblocks.5.mlp.c_fc.weight": [
+   2048,
+   512
+  ],
+  "backbone.clip.transformer.resblocks.5.mlp.c_fc.bias": [
+   2048
+  ],
+  "backbone.clip.transformer.resblocks.5.mlp.c_proj.weight": [
+   512,
+   2048
+  ],
+  "backbone.clip.transformer.resblocks.5.mlp.c_proj.bias": [
+   512
+  ],
+  "backbone.clip.transformer.resblocks.6.ln_1.weight": [
+   512
+  ],
+  "backbone.clip.transformer.resblocks.6.ln_1.bias": [
+   512
+  ],
+  "backbone.clip.transformer.resblocks.6.attn.in_proj_weight": [
+   1536,
+   512
+  ],
+  "backbone.clip.transformer.resblocks.6.attn.in_proj_bias": [
+   1536
+  ],
+  "backbone.clip.transformer.resblocks.6.attn.out_proj.weight": [
+   512,
+   512
+  ],
+  "backbone.clip.transformer.resblocks.6.attn.out_proj.bias": [
+   512
+  ],
+  "backbone.clip.transformer.resblocks.6.ln_2.weight": [
+   512
+  ],
+  "backbone.clip.transformer.resblocks.6.ln_2.bias": [
+   512
+  ],
+  "backbone.clip.transformer.resblocks.6.mlp.c_fc.weight": [
+   2048,
+   512
+  ],
+  "backbone.clip.transformer.resblocks.6.mlp.c_fc.bias": [
+   2048
+  ],
+  "backbone.clip.transformer.resblocks.6.mlp.c_proj.weight": [
+   512,
+   2048
+  ],
+  "backbone.clip.transformer.resblocks.6.mlp.c_proj.bias": [
+   512
+  ],
+  "backbone.clip.transformer.resblocks.7.ln_1.weight": [
+   512
+  ],
+  "backbone.clip.transformer.resblocks.7.ln_1.bias": [
+   512
+  ],
+  "backbone.clip.transformer.resblocks.7.attn.in_proj_weight": [
+   1536,
+   512
+  ],
+  "backbone.clip.transformer.resblocks.7.attn.in_proj_bias": [
+   1536
+  ],
+  "backbone.clip.transformer.resblocks.7.attn.out_proj.weight": [
+   512,
+   512
+  ],
+  "backbone.clip.transformer.resblocks.7.attn.out_proj.bias": [
+   512
+  ],
+  "backbone.clip.transformer.resblocks.7.ln_2.weight": [
+   512
+  ],
+  "backbone.clip.transformer.resblocks.7.ln_2.bias": [
+   512
+  ],
+  "backbone.clip.transformer.resblocks.7.mlp.c_fc.weight": [
+   2048,
+   512
+  ],
+  "backbone.clip.transformer.resblocks.7.mlp.c_fc.bias": [
+   2048
+  ],
+  "backbone.clip.transformer.resblocks.7.mlp.c_proj.weight": [
+   512,
+   2048
+  ],
+  "backbone.clip.transformer.resblocks.7.mlp.c_proj.bias": [
+   512
+  ],
+  "backbone.clip.transformer.resblocks.8.ln_1.weight": [
+   512
+  ],
+  "backbone.clip.transformer.resblocks.8.ln_1.bias": [
+   512
+  ],
+  "backbone.clip.transformer.resblocks.8.attn.in_proj_weight": [
+   1536,
+   512
+  ],
+  "backbone.clip.transformer.resblocks.8.attn.in_proj_bias": [
+   1536
+  ],
+  "backbone.clip.transformer.resblocks.8.attn.out_proj.weight": [
+   512,
+   512
+  ],
+  "backbone.clip.transformer.resblocks.8.attn.out_proj.bias": [
+   512
+  ],
+  "backbone.clip.transformer.resblocks.8.ln_2.weight": [
+   512
+  ],
+  "backbone.clip.transformer.resblocks.8.ln_2.bias": [
+   512
+  ],
+  "backbone.clip.transformer.resblocks.8.mlp.c_fc.weight": [
+   2048,
+   512
+  ],
+  "backbone.clip.transformer.resblocks.8.mlp.c_fc.bias": [
+   2048
+  ],
+  "backbone.clip.transformer.resblocks.8.mlp.c_proj.weight": [
+   512,
+   2048
+  ],
+  "backbone.clip.transformer.resblocks.8.mlp.c_proj.bias": [
+   512
+  ],
+  "backbone.clip.transformer.resblocks.9.ln_1.weight": [
+   512
+  ],
+  "backbone.clip.transformer.resblocks.9.ln_1.bias": [
+   512
+  ],
+  "backbone.clip.transformer.resblocks.9.attn.in_proj_weight": [
+   1536,
+   512
+  ],
+  "backbone.clip.transformer.resblocks.9.attn.in_proj_bias": [
+   1536
+  ],
+  "backbone.clip.transformer.resblocks.9.attn.out_proj.weight": [
+   512,
+   512
+  ],
+  "backbone.clip.transformer.resblocks.9.attn.out_proj.bias": [
+   512
+  ],
+  "backbone.clip.transformer.resblocks.9.ln_2.weight": [
+   512
+  ],
+  "backbone.clip.transformer.resblocks.9.ln_2.bias": [
+   512
+  ],
+  "backbone.clip.transformer.resblocks.9.mlp.c_fc.weight": [
+   2048,
+   512
+  ],
+  "backbone.clip.transformer.resblocks.9.mlp.c_fc.bias": [
+   2048
+  ],
+  "backbone.clip.transformer.resblocks.9.mlp.c_proj.weight": [
+   512,
+   2048
+  ],
+  "backbone.clip.transformer.resblocks.9.mlp.c_proj.bias": [
+   512
+  ],
+  "backbone.clip.transformer.resblocks.10.ln_1.weight": [
+   512
+  ],
+  "backbone.clip.transformer.resblocks.10.ln_1.bias": [
+   512
+  ],
+  "backbone.clip.transformer.resblocks.10.attn.in_proj_weight": [
+   1536,
+   512
+  ],
+  "backbone.clip.transformer.resblocks.10.attn.in_proj_bias": [
+   1536
+  ],
+  "backbone.clip.transformer.resblocks.10.attn.out_proj.weight": [
+   512,
+   512
+  ],
+  "backbone.clip.transformer.resblocks.10.attn.out_proj.bias": [
+   512
+  ],
+  "backbone.clip.transformer.resblocks.10.ln_2.weight": [
+   512
+  ],
+  "backbone.clip.transformer.resblocks.10.ln_2.bias": [
+   512
+  ],
+  "backbone.clip.transformer.resblocks.10.mlp.c_fc.weight": [
+   2048,
+   512
+  ],
+  "backbone.clip.transformer.resblocks.10.mlp.c_fc.bias": [
+   2048
+  ],
+  "backbone.clip.transformer.resblocks.10.mlp.c_proj.weight": [
+   512,
+   2048
+  ],
+  "backbone.clip.transformer.resblocks.10.mlp.c_proj.bias": [
+   512
+  ],
+  "backbone.clip.transformer.resblocks.11.ln_1.weight": [
+   512
+  ],
+  "backbone.clip.transformer.resblocks.11.ln_1.bias": [
+   512
+  ],
+  "backbone.clip.transformer.resblocks.11.attn.in_proj_weight": [
+   1536,
+   512
+  ],
+  "backbone.clip.transformer.resblocks.11.attn.in_proj_bias": [
+   1536
+  ],
+  "backbone.clip.transformer.resblocks.11.attn.out_proj.weight": [
+   512,
+   512
+  ],
+  "backbone.clip.transformer.resblocks.11.attn.out_proj.bias": [
+   512
+  ],
+  "backbone.clip.transformer.resblocks.11.ln_2.weight": [
+   512
+  ],
+  "backbone.clip.transformer.resblocks.11.ln_2.bias": [
+   512
+  ],
+  "backbone.clip.transformer.resblocks.11.mlp.c_fc.weight": [
+   2048,
+   512
+  ],
+  "backbone.clip.transformer.resblocks.11.mlp.c_fc.bias": [
+   2048
+  ],
+  "backbone.clip.transformer.resblocks.11.mlp.c_proj.weight": [
+   512,
+   2048
+  ],
+  "backbone.clip.transformer.resblocks.11.mlp.c_proj.bias": [
+   512
+  ],
+  "backbone.clip.token_embedding.weight": [
+   49408,
+   512
+  ],
+  "backbone.clip.ln_final.weight": [
+   512
+  ],
+  "backbone.clip.ln_final.bias": [
+   512
+  ],
+  "backbone.fc.weight": [
+   512,
+   768
+  ],
+  "backbone.fc.bias": [
+   512
+  ],
+  "backbone.text_fc.weight": [
+   512,
+   512
+  ],
+  "backbone.text_fc.bias": [
+   512
+  ],
+  "backbone.transformer.layers.0.norm1.weight": [
+   512
+  ],
+  "backbone.transformer.layers.0.norm1.bias": [
+   512
+  ],
+  "backbone.transformer.layers.0.attn.to_queries.weight": [
+   512,
+   512
+  ],
+  "backbone.transformer.layers.0.attn.to_keys_values.weight": [
+   1024,
+   512
+  ],
+  "backbone.transformer.layers.0.attn.project.weight": [
+   512,
+   512
+  ],
+  "backbone.transformer.layers.0.attn.project.bias": [
+   512
+  ],
+  "backbone.transformer.layers.0.norm2.weight": [
+   512
+  ],
+  "backbone.transformer.layers.0.norm2.bias": [
+   512
+  ],
+  "backbone.transformer.layers.0.mlp.fc1.weight": [
+   1024,
+   512
+  ],
+  "backbone.transformer.layers.0.mlp.fc1.bias": [
+   1024
+  ],
+  "backbone.transformer.layers.0.mlp.fc2.weight": [
+   512,
+   1024
+  ],
+  "backbone.transformer.layers.0.mlp.fc2.bias": [
+   512
+  ],
+  "backbone.transformer_a.layers.0.norm1.weight": [
+   512
+  ],
+  "backbone.transformer_a.layers.0.norm1.bias": [
+   512
+  ],
+  "backbone.transformer_a.layers.0.attn.to_queries.weight": [
+   512,
+   512
+  ],
+  "backbone.transformer_a.layers.0.attn.to_keys_values.weight": [
+   1024,
+   512
+  ],
+  "backbone.transformer_a.layers.0.attn.project.weight": [
+   512,
+   512
+  ],
+  "backbone.transformer_a.layers.0.attn.project.bias": [
+   512
+  ],
+  "backbone.transformer_a.layers.0.norm2.weight": [
+   512
+  ],
+  "backbone.transformer_a.layers.0.norm2.bias": [
+   512
+  ],
+  "backbone.transformer_a.layers.0.mlp.fc1.weight": [
+   1024,
+   512
+  ],
+  "backbone.transformer_a.layers.0.mlp.fc1.bias": [
+   1024
+  ],
+  "backbone.transformer_a.layers.0.mlp.fc2.weight": [
+   512,
+   1024
+  ],
+  "backbone.transformer_a.layers.0.mlp.fc2.bias": [
+   512
+  ],
+  "backbone.transformer_a.layers.1.norm1.weight": [
+   512
+  ],
+  "backbone.transformer_a.layers.1.norm1.bias": [
+   512
+  ],
+  "backbone.transformer_a.layers.1.attn.to_queries.weight": [
+   512,
+   512
+  ],
+  "backbone.transformer_a.layers.1.attn.to_keys_values.weight": [
+   1024,
+   512
+  ],
+  "backbone.transformer_a.layers.1.attn.project.weight": [
+   512,
+   512
+  ],
+  "backbone.transformer_a.layers.1.attn.project.bias": [
+   512
+  ],
+  "backbone.transformer_a.layers.1.norm2.weight": [
+   512
+  ],
+  "backbone.transformer_a.layers.1.norm2.bias": [
+   512
+  ],
+  "backbone.transformer_a.layers.1.mlp.fc1.weight": [
+   1024,
+   512
+  ],
+  "backbone.transformer_a.layers.1.mlp.fc1.bias": [
+   1024
+  ],
+  "backbone.transformer_a.layers.1.mlp.fc2.weight": [
+   512,
+   1024
+  ],
+  "backbone.transformer_a.layers.1.mlp.fc2.bias": [
+   512
+  ],
+  "backbone.transformer_b.layers.0.norm1.weight": [
+   512
+  ],
+  "backbone.transformer_b.layers.0.norm1.bias": [
+   512
+  ],
+  "backbone.transformer_b.layers.0.attn.to_queries.weight": [
+   512,
+   512
+  ],
+  "backbone.transformer_b.layers.0.attn.to_keys_values.weight": [
+   1024,
+   512
+  ],
+  "backbone.transformer_b.layers.0.attn.project.weight": [
+   512,
+   512
+  ],
+  "backbone.transformer_b.layers.0.attn.project.bias": [
+   512
+  ],
+  "backbone.transformer_b.layers.0.norm2.weight": [
+   512
+  ],
+  "backbone.transformer_b.layers.0.norm2.bias": [
+   512
+  ],
+  "backbone.transformer_b.layers.0.mlp.fc1.weight": [
+   1024,
+   512
+  ],
+  "backbone.transformer_b.layers.0.mlp.fc1.bias": [
+   1024
+  ],
+  "backbone.transformer_b.layers.0.mlp.fc2.weight": [
+   512,
+   1024
+  ],
+  "backbone.transformer_b.layers.0.mlp.fc2.bias": [
+   512
+  ],
+  "backbone.transformer_b.layers.1.norm1.weight": [
+   512
+  ],
+  "backbone.transformer_b.layers.1.norm1.bias": [
+   512
+  ],
+  "backbone.transformer_b.layers.1.attn.to_queries.weight": [
+   512,
+   512
+  ],
+  "backbone.transformer_b.layers.1.attn.to_keys_values.weight": [
+   1024,
+   512
+  ],
+  "backbone.transformer_b.layers.1.attn.project.weight": [
+   512,
+   512
+  ],
+  "backbone.transformer_b.layers.1.attn.project.bias": [
+   512
+  ],
+  "backbone.transformer_b.layers.1.norm2.weight": [
+   512
+  ],
+  "backbone.transformer_b.layers.1.norm2.bias": [
+   512
+  ],
+  "backbone.transformer_b.layers.1.mlp.fc1.weight": [
+   1024,
+   512
+  ],
+  "backbone.transformer_b.layers.1.mlp.fc1.bias": [
+   1024
+  ],
+  "backbone.transformer_b.layers.1.mlp.fc2.weight": [
+   512,
+   1024
+  ],
+  "backbone.transformer_b.layers.1.mlp.fc2.bias": [
+   512
+  ],
+  "backbone.transformer_c.layers.0.norm1.weight": [
+   512
+  ],
+  "backbone.transformer_c.layers.0.norm1.bias": [
+   512
+  ],
+  "backbone.transformer_c.layers.0.attn.to_queries.weight": [
+   512,
+   512
+  ],
+  "backbone.transformer_c.layers.0.attn.to_keys_values.weight": [
+   1024,
+   512
+  ],
+  "backbone.transformer_c.layers.0.attn.project.weight": [
+   512,
+   512
+  ],
+  "backbone.transformer_c.layers.0.attn.project.bias": [
+   512
+  ],
+  "backbone.transformer_c.layers.0.norm2.weight": [
+   512
+  ],
+  "backbone.transformer_c.layers.0.norm2.bias": [
+   512
+  ],
+  "backbone.transformer_c.layers.0.mlp.fc1.weight": [
+   1024,
+   512
+  ],
+  "backbone.transformer_c.layers.0.mlp.fc1.bias": [
+   1024
+  ],
+  "backbone.transformer_c.layers.0.mlp.fc2.weight": [
+   512,
+   1024
+  ],
+  "backbone.transformer_c.layers.0.mlp.fc2.bias": [
+   512
+  ],
+  "backbone.transformer_c.layers.1.norm1.weight": [
+   512
+  ],
+  "backbone.transformer_c.layers.1.norm1.bias": [
+   512
+  ],
+  "backbone.transformer_c.layers.1.attn.to_queries.weight": [
+   512,
+   512
+  ],
+  "backbone.transformer_c.layers.1.attn.to_keys_values.weight": [
+   1024,
+   512
+  ],
+  "backbone.transformer_c.layers.1.attn.project.weight": [
+   512,
+   512
+  ],
+  "backbone.transformer_c.layers.1.attn.project.bias": [
+   512
+  ],
+  "backbone.transformer_c.layers.1.norm2.weight": [
+   512
+  ],
+  "backbone.transformer_c.layers.1.norm2.bias": [
+   512
+  ],
+  "backbone.transformer_c.layers.1.mlp.fc1.weight": [
+   1024,
+   512
+  ],
+  "backbone.transformer_c.layers.1.mlp.fc1.bias": [
+   1024
+  ],
+  "backbone.transformer_c.layers.1.mlp.fc2.weight": [
+   512,
+   1024
+  ],
+  "backbone.transformer_c.layers.1.mlp.fc2.bias": [
+   512
+  ],
+  "backbone.transformer_d.layers.0.norm1.weight": [
+   512
+  ],
+  "backbone.transformer_d.layers.0.norm1.bias": [
+   512
+  ],
+  "backbone.transformer_d.layers.0.attn.to_queries.weight": [
+   512,
+   512
+  ],
+  "backbone.transformer_d.layers.0.attn.to_keys_values.weight": [
+   1024,
+   512
+  ],
+  "backbone.transformer_d.layers.0.attn.project.weight": [
+   512,
+   512
+  ],
+  "backbone.transformer_d.layers.0.attn.project.bias": [
+   512
+  ],
+  "backbone.transformer_d.layers.0.norm2.weight": [
+   512
+  ]
+ },
+ "fingerprint_shapes": {
+  "backbone.clip.positional_embedding": [
+   77,
+   512
+  ],
+  "backbone.clip.text_projection": [
+   512,
+   512
+  ],
+  "backbone.clip.logit_scale": [],
+  "backbone.clip.visual.class_embedding": [
+   768
+  ],
+  "backbone.clip.visual.positional_embedding": [
+   50,
+   768
+  ],
+  "backbone.clip.visual.proj": [
+   768,
+   512
+  ],
+  "backbone.clip.visual.conv1.weight": [
+   768,
+   3,
+   32,
+   32
+  ],
+  "backbone.clip.visual.transformer.resblocks.0.attn.in_proj_weight": [
+   2304,
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.0.attn.in_proj_bias": [
+   2304
+  ],
+  "backbone.clip.visual.transformer.resblocks.0.attn.out_proj.weight": [
+   768,
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.0.attn.out_proj.bias": [
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.0.mlp.c_fc.weight": [
+   3072,
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.0.mlp.c_proj.weight": [
+   768,
+   3072
+  ],
+  "backbone.clip.visual.transformer.resblocks.0.mlp.c_proj.bias": [
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.1.attn.in_proj_weight": [
+   2304,
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.1.attn.in_proj_bias": [
+   2304
+  ],
+  "backbone.clip.visual.transformer.resblocks.1.attn.out_proj.weight": [
+   768,
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.1.attn.out_proj.bias": [
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.1.mlp.c_fc.weight": [
+   3072,
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.1.mlp.c_proj.weight": [
+   768,
+   3072
+  ],
+  "backbone.clip.visual.transformer.resblocks.1.mlp.c_proj.bias": [
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.2.attn.in_proj_weight": [
+   2304,
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.2.attn.in_proj_bias": [
+   2304
+  ],
+  "backbone.clip.visual.transformer.resblocks.2.attn.out_proj.weight": [
+   768,
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.2.attn.out_proj.bias": [
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.2.mlp.c_fc.weight": [
+   3072,
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.2.mlp.c_proj.weight": [
+   768,
+   3072
+  ],
+  "backbone.clip.visual.transformer.resblocks.2.mlp.c_proj.bias": [
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.3.attn.in_proj_weight": [
+   2304,
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.3.attn.in_proj_bias": [
+   2304
+  ],
+  "backbone.clip.visual.transformer.resblocks.3.attn.out_proj.weight": [
+   768,
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.3.attn.out_proj.bias": [
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.3.mlp.c_fc.weight": [
+   3072,
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.3.mlp.c_proj.weight": [
+   768,
+   3072
+  ],
+  "backbone.clip.visual.transformer.resblocks.3.mlp.c_proj.bias": [
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.4.attn.in_proj_weight": [
+   2304,
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.4.attn.in_proj_bias": [
+   2304
+  ],
+  "backbone.clip.visual.transformer.resblocks.4.attn.out_proj.weight": [
+   768,
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.4.attn.out_proj.bias": [
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.4.mlp.c_fc.weight": [
+   3072,
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.4.mlp.c_proj.weight": [
+   768,
+   3072
+  ],
+  "backbone.clip.visual.transformer.resblocks.4.mlp.c_proj.bias": [
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.5.attn.in_proj_weight": [
+   2304,
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.5.attn.in_proj_bias": [
+   2304
+  ],
+  "backbone.clip.visual.transformer.resblocks.5.attn.out_proj.weight": [
+   768,
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.5.attn.out_proj.bias": [
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.5.mlp.c_fc.weight": [
+   3072,
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.5.mlp.c_proj.weight": [
+   768,
+   3072
+  ],
+  "backbone.clip.visual.transformer.resblocks.5.mlp.c_proj.bias": [
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.6.attn.in_proj_weight": [
+   2304,
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.6.attn.in_proj_bias": [
+   2304
+  ],
+  "backbone.clip.visual.transformer.resblocks.6.attn.out_proj.weight": [
+   768,
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.6.attn.out_proj.bias": [
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.6.mlp.c_fc.weight": [
+   3072,
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.6.mlp.c_proj.weight": [
+   768,
+   3072
+  ],
+  "backbone.clip.visual.transformer.resblocks.6.mlp.c_proj.bias": [
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.7.attn.in_proj_weight": [
+   2304,
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.7.attn.in_proj_bias": [
+   2304
+  ],
+  "backbone.clip.visual.transformer.resblocks.7.attn.out_proj.weight": [
+   768,
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.7.attn.out_proj.bias": [
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.7.mlp.c_fc.weight": [
+   3072,
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.7.mlp.c_proj.weight": [
+   768,
+   3072
+  ],
+  "backbone.clip.visual.transformer.resblocks.7.mlp.c_proj.bias": [
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.8.attn.in_proj_weight": [
+   2304,
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.8.attn.in_proj_bias": [
+   2304
+  ],
+  "backbone.clip.visual.transformer.resblocks.8.attn.out_proj.weight": [
+   768,
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.8.attn.out_proj.bias": [
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.8.mlp.c_fc.weight": [
+   3072,
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.8.mlp.c_proj.weight": [
+   768,
+   3072
+  ],
+  "backbone.clip.visual.transformer.resblocks.8.mlp.c_proj.bias": [
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.9.attn.in_proj_weight": [
+   2304,
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.9.attn.in_proj_bias": [
+   2304
+  ],
+  "backbone.clip.visual.transformer.resblocks.9.attn.out_proj.weight": [
+   768,
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.9.attn.out_proj.bias": [
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.9.mlp.c_fc.weight": [
+   3072,
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.9.mlp.c_proj.weight": [
+   768,
+   3072
+  ],
+  "backbone.clip.visual.transformer.resblocks.9.mlp.c_proj.bias": [
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.10.attn.in_proj_weight": [
+   2304,
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.10.attn.in_proj_bias": [
+   2304
+  ],
+  "backbone.clip.visual.transformer.resblocks.10.attn.out_proj.weight": [
+   768,
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.10.attn.out_proj.bias": [
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.10.mlp.c_fc.weight": [
+   3072,
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.10.mlp.c_proj.weight": [
+   768,
+   3072
+  ],
+  "backbone.clip.visual.transformer.resblocks.10.mlp.c_proj.bias": [
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.11.attn.in_proj_weight": [
+   2304,
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.11.attn.in_proj_bias": [
+   2304
+  ],
+  "backbone.clip.visual.transformer.resblocks.11.attn.out_proj.weight": [
+   768,
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.11.attn.out_proj.bias": [
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.11.mlp.c_fc.weight": [
+   3072,
+   768
+  ],
+  "backbone.clip.visual.transformer.resblocks.11.mlp.c_proj.weight": [
+   768,
+   3072
+  ],
+  "backbone.clip.visual.transformer.resblocks.11.mlp.c_proj.bias": [
+   768
+  ],
+  "backbone.clip.transformer.resblocks.0.attn.in_proj_weight": [
+   1536,
+   512
+  ],
+  "backbone.clip.transformer.resblocks.0.attn.in_proj_bias": [
+   1536
+  ],
+  "backbone.clip.transformer.resblocks.0.attn.out_proj.weight": [
+   512,
+   512
+  ],
+  "backbone.clip.transformer.resblocks.0.attn.out_proj.bias": [
+   512
+  ],
+  "backbone.clip.transformer.resblocks.0.mlp.c_fc.weight": [
+   2048,
+   512
+  ],
+  "backbone.clip.transformer.resblocks.0.mlp.c_proj.weight": [
+   512,
+   2048
+  ],
+  "backbone.clip.transformer.resblocks.0.mlp.c_proj.bias": [
+   512
+  ],
+  "backbone.clip.transformer.resblocks.1.attn.in_proj_weight": [
+   1536,
+   512
+  ],
+  "backbone.clip.transformer.resblocks.1.attn.in_proj_bias": [
+   1536
+  ],
+  "backbone.clip.transformer.resblocks.1.attn.out_proj.weight": [
+   512,
+   512
+  ],
+  "backbone.clip.transformer.resblocks.1.attn.out_proj.bias": [
+   512
+  ],
+  "backbone.clip.transformer.resblocks.1.mlp.c_fc.weight": [
+   2048,
+   512
+  ],
+  "backbone.clip.transformer.resblocks.1.mlp.c_proj.weight": [
+   512,
+   2048
+  ],
+  "backbone.clip.transformer.resblocks.1.mlp.c_proj.bias": [
+   512
+  ],
+  "backbone.clip.transformer.resblocks.2.attn.in_proj_weight": [
+   1536,
+   512
+  ],
+  "backbone.clip.transformer.resblocks.2.attn.in_proj_bias": [
+   1536
+  ],
+  "backbone.clip.transformer.resblocks.2.attn.out_proj.weight": [
+   512,
+   512
+  ],
+  "backbone.clip.transformer.resblocks.2.attn.out_proj.bias": [
+   512
+  ],
+  "backbone.clip.transformer.resblocks.2.mlp.c_fc.weight": [
+   2048,
+   512
+  ],
+  "backbone.clip.transformer.resblocks.2.mlp.c_proj.weight": [
+   512,
+   2048
+  ],
+  "backbone.clip.transformer.resblocks.2.mlp.c_proj.bias": [
+   512
+  ],
+  "backbone.clip.transformer.resblocks.3.attn.in_proj_weight": [
+   1536,
+   512
+  ],
+  "backbone.clip.transformer.resblocks.3.attn.in_proj_bias": [
+   1536
+  ],
+  "backbone.clip.transformer.resblocks.3.attn.out_proj.weight": [
+   512,
+   512
+  ],
+  "backbone.clip.transformer.resblocks.3.attn.out_proj.bias": [
+   512
+  ],
+  "backbone.clip.transformer.resblocks.3.mlp.c_fc.weight": [
+   2048,
+   512
+  ],
+  "backbone.clip.transformer.resblocks.3.mlp.c_proj.weight": [
+   512,
+   2048
+  ],
+  "backbone.clip.transformer.resblocks.3.mlp.c_proj.bias": [
+   512
+  ],
+  "backbone.clip.transformer.resblocks.4.attn.in_proj_weight": [
+   1536,
+   512
+  ],
+  "backbone.clip.transformer.resblocks.4.attn.in_proj_bias": [
+   1536
+  ],
+  "backbone.clip.transformer.resblocks.4.attn.out_proj.weight": [
+   512,
+   512
+  ],
+  "backbone.clip.transformer.resblocks.4.attn.out_proj.bias": [
+   512
+  ],
+  "backbone.clip.transformer.resblocks.4.mlp.c_fc.weight": [
+   2048,
+   512
+  ],
+  "backbone.clip.transformer.resblocks.4.mlp.c_proj.weight": [
+   512,
+   2048
+  ],
+  "backbone.clip.transformer.resblocks.4.mlp.c_proj.bias": [
+   512
+  ],
+  "backbone.clip.transformer.resblocks.5.attn.in_proj_weight": [
+   1536,
+   512
+  ],
+  "backbone.clip.transformer.resblocks.5.attn.in_proj_bias": [
+   1536
+  ],
+  "backbone.clip.transformer.resblocks.5.attn.out_proj.weight": [
+   512,
+   512
+  ],
+  "backbone.clip.transformer.resblocks.5.attn.out_proj.bias": [
+   512
+  ],
+  "backbone.clip.transformer.resblocks.5.mlp.c_fc.weight": [
+   2048,
+   512
+  ],
+  "backbone.clip.transformer.resblocks.5.mlp.c_proj.weight": [
+   512,
+   2048
+  ],
+  "backbone.clip.transformer.resblocks.5.mlp.c_proj.bias": [
+   512
+  ],
+  "backbone.clip.transformer.resblocks.6.attn.in_proj_weight": [
+   1536,
+   512
+  ],
+  "backbone.clip.transformer.resblocks.6.attn.in_proj_bias": [
+   1536
+  ],
+  "backbone.clip.transformer.resblocks.6.attn.out_proj.weight": [
+   512,
+   512
+  ],
+  "backbone.clip.transformer.resblocks.6.attn.out_proj.bias": [
+   512
+  ],
+  "backbone.clip.transformer.resblocks.6.mlp.c_fc.weight": [
+   2048,
+   512
+  ],
+  "backbone.clip.transformer.resblocks.6.mlp.c_proj.weight": [
+   512,
+   2048
+  ],
+  "backbone.clip.transformer.resblocks.6.mlp.c_proj.bias": [
+   512
+  ],
+  "backbone.clip.transformer.resblocks.7.attn.in_proj_weight": [
+   1536,
+   512
+  ],
+  "backbone.clip.transformer.resblocks.7.attn.in_proj_bias": [
+   1536
+  ],
+  "backbone.clip.transformer.resblocks.7.attn.out_proj.weight": [
+   512,
+   512
+  ],
+  "backbone.clip.transformer.resblocks.7.attn.out_proj.bias": [
+   512
+  ],
+  "backbone.clip.transformer.resblocks.7.mlp.c_fc.weight": [
+   2048,
+   512
+  ],
+  "backbone.clip.transformer.resblocks.7.mlp.c_proj.weight": [
+   512,
+   2048
+  ],
+  "backbone.clip.transformer.resblocks.7.mlp.c_proj.bias": [
+   512
+  ],
+  "backbone.clip.transformer.resblocks.8.attn.in_proj_weight": [
+   1536,
+   512
+  ],
+  "backbone.clip.transformer.resblocks.8.attn.in_proj_bias": [
+   1536
+  ],
+  "backbone.clip.transformer.resblocks.8.attn.out_proj.weight": [
+   512,
+   512
+  ],
+  "backbone.clip.transformer.resblocks.8.attn.out_proj.bias": [
+   512
+  ],
+  "backbone.clip.transformer.resblocks.8.mlp.c_fc.weight": [
+   2048,
+   512
+  ],
+  "backbone.clip.transformer.resblocks.8.mlp.c_proj.weight": [
+   512,
+   2048
+  ],
+  "backbone.clip.transformer.resblocks.8.mlp.c_proj.bias": [
+   512
+  ],
+  "backbone.clip.transformer.resblocks.9.attn.in_proj_weight": [
+   1536,
+   512
+  ],
+  "backbone.clip.transformer.resblocks.9.attn.in_proj_bias": [
+   1536
+  ],
+  "backbone.clip.transformer.resblocks.9.attn.out_proj.weight": [
+   512,
+   512
+  ],
+  "backbone.clip.transformer.resblocks.9.attn.out_proj.bias": [
+   512
+  ],
+  "backbone.clip.transformer.resblocks.9.mlp.c_fc.weight": [
+   2048,
+   512
+  ],
+  "backbone.clip.transformer.resblocks.9.mlp.c_proj.weight": [
+   512,
+   2048
+  ],
+  "backbone.clip.transformer.resblocks.9.mlp.c_proj.bias": [
+   512
+  ],
+  "backbone.clip.transformer.resblocks.10.attn.in_proj_weight": [
+   1536,
+   512
+  ],
+  "backbone.clip.transformer.resblocks.10.attn.in_proj_bias": [
+   1536
+  ],
+  "backbone.clip.transformer.resblocks.10.attn.out_proj.weight": [
+   512,
+   512
+  ],
+  "backbone.clip.transformer.resblocks.10.attn.out_proj.bias": [
+   512
+  ],
+  "backbone.clip.transformer.resblocks.10.mlp.c_fc.weight": [
+   2048,
+   512
+  ],
+  "backbone.clip.transformer.resblocks.10.mlp.c_proj.weight": [
+   512,
+   2048
+  ],
+  "backbone.clip.transformer.resblocks.10.mlp.c_proj.bias": [
+   512
+  ],
+  "backbone.clip.transformer.resblocks.11.attn.in_proj_weight": [
+   1536,
+   512
+  ],
+  "backbone.clip.transformer.resblocks.11.attn.in_proj_bias": [
+   1536
+  ],
+  "backbone.clip.transformer.resblocks.11.attn.out_proj.weight": [
+   512,
+   512
+  ],
+  "backbone.clip.transformer.resblocks.11.attn.out_proj.bias": [
+   512
+  ],
+  "backbone.clip.transformer.resblocks.11.mlp.c_fc.weight": [
+   2048,
+   512
+  ],
+  "backbone.clip.transformer.resblocks.11.mlp.c_proj.weight": [
+   512,
+   2048
+  ],
+  "backbone.clip.transformer.resblocks.11.mlp.c_proj.bias": [
+   512
+  ],
+  "backbone.fc.weight": [
+   512,
+   768
+  ],
+  "backbone.text_fc.weight": [
+   512,
+   512
+  ],
+  "backbone.transformer.layers.0.attn.project.weight": [
+   512,
+   512
+  ],
+  "backbone.transformer.layers.0.attn.project.bias": [
+   512
+  ],
+  "backbone.transformer_a.layers.0.attn.project.weight": [
+   512,
+   512
+  ],
+  "backbone.transformer_a.layers.0.attn.project.bias": [
+   512
+  ],
+  "backbone.transformer_a.layers.1.attn.project.weight": [
+   512,
+   512
+  ],
+  "backbone.transformer_a.layers.1.attn.project.bias": [
+   512
+  ],
+  "backbone.transformer_b.layers.0.attn.project.weight": [
+   512,
+   512
+  ],
+  "backbone.transformer_b.layers.0.attn.project.bias": [
+   512
+  ],
+  "backbone.transformer_b.layers.1.attn.project.weight": [
+   512,
+   512
+  ],
+  "backbone.transformer_b.layers.1.attn.project.bias": [
+   512
+  ],
+  "backbone.transformer_c.layers.0.attn.project.weight": [
+   512,
+   512
+  ],
+  "backbone.transformer_c.layers.0.attn.project.bias": [
+   512
+  ],
+  "backbone.transformer_c.layers.1.attn.project.weight": [
+   512,
+   512
+  ],
+  "backbone.transformer_c.layers.1.attn.project.bias": [
+   512
+  ],
+  "backbone.transformer_d.layers.0.attn.project.weight": [
+   512,
+   512
+  ],
+  "backbone.transformer_d.layers.0.attn.project.bias": [
+   512
+  ],
+  "backbone.transformer_d.layers.1.attn.project.weight": [
+   512,
+   512
+  ],
+  "backbone.transformer_d.layers.1.attn.project.bias": [
+   512
+  ]
+ }
+}

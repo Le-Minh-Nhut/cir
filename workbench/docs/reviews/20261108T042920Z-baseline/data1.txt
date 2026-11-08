@@ -1,0 +1,14 @@
+=== du data root ===
+25G	data
+25424200455	data
+=== data/FashionIQ ===
+2.1G	data/FashionIQ
+total 3008
+drwxr-xr-x 8 heheboiz heheboiz    4096 Nov  7 02:02 .
+drwxrwxr-x 6 heheboiz heheboiz    4096 Sep 16 02:09 ..
+drwxr-xr-x 2 heheboiz heheboiz    4096 Nov  6 00:52 captions
+drwxr-xr-x 2 heheboiz heheboiz    4096 Nov  8  2022 image_splits
+drwxr-xr-x 2 heheboiz heheboiz 2527232 Nov  8  2022 images
+drwxrwxr-x 2 heheboiz heheboiz    4096 Nov  7 02:02 qwen_captions
+drwxrwxr-x 5 heheboiz heheboiz    4096 Nov  6 00:32 resized_image
+drwxrwxr-x 2 heheboiz heheboiz  520192 Nov  6 00:46 resized_images

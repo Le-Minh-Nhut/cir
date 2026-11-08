@@ -1,0 +1,192 @@
+{
+ "B1": {
+  "root": "model.PAIR",
+  "ckpt_state_keys": 455,
+  "ckpt_params": 172814185,
+  "public_state_keys": 381,
+  "missing_in_ckpt": 0,
+  "unexpected_in_model": 74,
+  "missing_sample": [],
+  "unexpected_sample": [
+   "backbone.cross_t2i.0.bias",
+   "backbone.cross_t2i.0.weight",
+   "backbone.transformer_a.layers.1.attn.project.bias",
+   "backbone.transformer_a.layers.1.attn.project.weight",
+   "backbone.transformer_a.layers.1.attn.to_keys_values.weight",
+   "backbone.transformer_a.layers.1.attn.to_queries.weight"
+  ],
+  "shape_mismatch_count": 70,
+  "shape_mismatch_sample": [
+   "affine.MLP.0.bias",
+   "affine.MLP.0.weight",
+   "affine.MLP.1.bias",
+   "affine.MLP.1.weight",
+   "affine.MLP.3.bias",
+   "affine.MLP.3.weight",
+   "backbone.mlp.0.bias",
+   "backbone.mlp.0.weight"
+  ],
+  "verdict": "STRICT_FAIL",
+  "ckpt_transformer_geometry": {
+   "transformer": {
+    "class": "MHTransformer.Transformer",
+    "num_layers": 1,
+    "num_heads": 8
+   },
+   "transformer_a": {
+    "class": "MHTransformer.Transformer",
+    "num_layers": 2,
+    "num_heads": 4
+   },
+   "transformer_b": {
+    "class": "MHTransformer.Transformer",
+    "num_layers": 2,
+    "num_heads": 4
+   },
+   "transformer_c": {
+    "class": "MHTransformer.Transformer",
+    "num_layers": 2,
+    "num_heads": 4
+   },
+   "transformer_d": {
+    "class": "MHTransformer.Transformer",
+    "num_layers": 2,
+    "num_heads": 4
+   }
+  },
+  "public_transformer_geometry": {
+   "transformer": {
+    "class": "MHTransformer.Transformer",
+    "num_layers": 1,
+    "num_heads": 8
+   },
+   "transformer_a": {
+    "class": "MHTransformer.Transformer",
+    "num_layers": 1,
+    "num_heads": 8
+   },
+   "transformer_b": {
+    "class": "MHTransformer_rev.Transformer",
+    "num_layers": 2,
+    "num_heads": 4
+   }
+  },
+  "modules_absent_from_pinned_source": [
+   "transformer_c",
+   "transformer_d",
+   "weight_chanelImg",
+   "weight_chanelImg_t",
+   "cross_t2i"
+  ],
+  "params_dead_under_pinned_forward": 8986448,
+  "pct": 5.2,
+  "backbone_clip": {
+   "conv1": [
+    768,
+    3,
+    32,
+    32
+   ],
+   "pos": [
+    50,
+    768
+   ],
+   "vocab": 49408
+  }
+ },
+ "B2": {
+  "root": "model.PAIR",
+  "ckpt_state_keys": 455,
+  "ckpt_params": 172814185,
+  "public_state_keys": 381,
+  "missing_in_ckpt": 0,
+  "unexpected_in_model": 74,
+  "missing_sample": [],
+  "unexpected_sample": [
+   "backbone.cross_t2i.0.bias",
+   "backbone.cross_t2i.0.weight",
+   "backbone.transformer_a.layers.1.attn.project.bias",
+   "backbone.transformer_a.layers.1.attn.project.weight",
+   "backbone.transformer_a.layers.1.attn.to_keys_values.weight",
+   "backbone.transformer_a.layers.1.attn.to_queries.weight"
+  ],
+  "shape_mismatch_count": 70,
+  "shape_mismatch_sample": [
+   "affine.MLP.0.bias",
+   "affine.MLP.0.weight",
+   "affine.MLP.1.bias",
+   "affine.MLP.1.weight",
+   "affine.MLP.3.bias",
+   "affine.MLP.3.weight",
+   "backbone.mlp.0.bias",
+   "backbone.mlp.0.weight"
+  ],
+  "verdict": "STRICT_FAIL",
+  "ckpt_transformer_geometry": {
+   "transformer": {
+    "class": "MHTransformer.Transformer",
+    "num_layers": 1,
+    "num_heads": 8
+   },
+   "transformer_a": {
+    "class": "MHTransformer.Transformer",
+    "num_layers": 2,
+    "num_heads": 4
+   },
+   "transformer_b": {
+    "class": "MHTransformer.Transformer",
+    "num_layers": 2,
+    "num_heads": 4
+   },
+   "transformer_c": {
+    "class": "MHTransformer.Transformer",
+    "num_layers": 2,
+    "num_heads": 4
+   },
+   "transformer_d": {
+    "class": "MHTransformer.Transformer",
+    "num_layers": 2,
+    "num_heads": 4
+   }
+  },
+  "public_transformer_geometry": {
+   "transformer": {
+    "class": "MHTransformer.Transformer",
+    "num_layers": 1,
+    "num_heads": 8
+   },
+   "transformer_a": {
+    "class": "MHTransformer.Transformer",
+    "num_layers": 1,
+    "num_heads": 8
+   },
+   "transformer_b": {
+    "class": "MHTransformer_rev.Transformer",
+    "num_layers": 2,
+    "num_heads": 4
+   }
+  },
+  "modules_absent_from_pinned_source": [
+   "transformer_c",
+   "transformer_d",
+   "weight_chanelImg",
+   "weight_chanelImg_t",
+   "cross_t2i"
+  ],
+  "params_dead_under_pinned_forward": 8986448,
+  "pct": 5.2,
+  "backbone_clip": {
+   "conv1": [
+    768,
+    3,
+    32,
+    32
+   ],
+   "pos": [
+    50,
+    768
+   ],
+   "vocab": 49408
+  }
+ }
+}

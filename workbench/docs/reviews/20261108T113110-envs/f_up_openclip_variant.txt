@@ -1,0 +1,2 @@
+ENCVAR:{"create_model_and_transforms": "OK ViT-B-32 with the checkout's open_clip_pytorch_model.bin", "class": "CLIP", "visual_image_size": [224, 224], "visual_output_dim": 512, "preprocess_val_class": "Compose", "cpu_forward_shape": [1, 512]}
+VARIANT:{"checkpoint": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/limn/0_dress_best_model.pt", "unpickle": "OK LIMN", "image_size": [224, 224], "image_transform": "OK Compose", "params": 440258572}

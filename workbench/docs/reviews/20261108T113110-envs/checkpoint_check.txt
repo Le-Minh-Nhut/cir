@@ -1,0 +1,38 @@
+CK:{
+ "habit": {
+  "variant": "fiq_n02",
+  "path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/habit/HABIT-FIQ_N0.2.pt",
+  "exists": true,
+  "bytes": 2730715930,
+  "filename": "HABIT-FIQ_N0.2.pt",
+  "sha_match": true,
+  "seconds": 2.3
+ },
+ "intent": {
+  "variant": "fiq_n02",
+  "path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/intent/intent_fiq_0.2.pt",
+  "exists": true,
+  "bytes": 2722478522,
+  "filename": "intent_fiq_0.2.pt",
+  "sha_match": true,
+  "seconds": 0.7
+ },
+ "hint": {
+  "variant": "fashioniq",
+  "path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/hint/fashioniq.pt",
+  "exists": true,
+  "bytes": 2724451182,
+  "filename": "fashioniq.pt",
+  "sha_match": true,
+  "seconds": 2.6
+ },
+ "conesep": {
+  "variant": "fiq_n02",
+  "path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/conesep/ConeSep-FIQ-N0.2.pt",
+  "exists": true,
+  "bytes": 2721428966,
+  "filename": "ConeSep-FIQ-N0.2.pt",
+  "sha_match": true,
+  "seconds": 2.7
+ }
+}
