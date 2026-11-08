@@ -1,5 +1,16 @@
 # The browser harness no longer matches the UI it drives
 
+> **STATUS — FIXED by `80842661`, 2026-11-09. This document describes a state that no longer exists.**
+> `80842661` rewrote both harnesses against the `4e61f2f` page split (`ui_smoke.py` +618/−733,
+> `e2e_lane.py` +439 changed lines), replacing label-based navigation with the `data-testid` ids
+> `routes.ts` declares. Re-verified at `80842661`: `ui_smoke.py` cold 3 checks, composition 6, mobile 4
+> (+1 documented SKIP), fixture 5 — all exit 0; `e2e_lane.py` exit 0 with journeys A/B/H at all four
+> viewports. Read everything below as the diagnosis that led to the rewrite, not as current status.
+> One limitation survives and is documented in the harness itself rather than hidden: of the six
+> `routes.ts` areas, `overview`, `experiments` and `evaluation` are covered; `samples`, `failures` and
+> `notebook` are not, because every flow there needs a selected CIRCUS composition run that no live
+> stack serves end to end. See `FINAL_PC_RELEASE_VERDICT.md` row "Build/Playwright/image evidence".
+
 Date: 2026-11-08. Branch `research/cir-failure-workbench`. Written after the release-guard round; no
 production change accompanies it.
 
