@@ -1,0 +1,37 @@
+# Serial full-suite sweep at 80842661 / ffb6ae8 — ABORTED AT USER REQUEST
+
+| field | value |
+|---|---|
+| status | **ABORTED — did not finish. No test counts were produced.** |
+| aborted at | user request, to free the machine for a larger task |
+| revision | `ffb6ae8a072f4f92ddd203bbebac8fa2cb4e3702` (tree verified clean and frozen at this commit for the whole run) |
+| command | `workbench/envs/ctl312h/bin/python -m pytest workbench/tests -q -p no:cacheprovider -rfE --tb=no` |
+| interpreter | `workbench/envs/ctl312h/bin/python` (CPython 3.12.11) |
+| serial? | **yes — no `-n`, no xdist** |
+| started | 2026-11-09 03:00:08 +0700 |
+| stopped | 2026-11-09 03:05:04 +0700 (SIGTERM to process group 1477413, then SIGKILL) |
+| wall duration | ~296 s (0:04:56) |
+| progress reached | **22%** of the suite |
+| failures observed | 5 `F` marks in the progress line up to 22%; **no `FAILED` lines and no summary line were written**, so neither ids nor counts exist |
+| exit code | **not recorded — the run was killed, so any exit status would be an artifact of the kill, not a test result** |
+
+**RESULT: INCOMPLETE — no test counts recorded, `TESTED_SOURCE_SHA` NOT advanced, guard remains red.**
+
+This file exists only so the partial output is not lost. It is **not** a measurement of `ffb6ae8`:
+a sweep that stops at 22% proves nothing about the suite. Do not quote any number from it, and do
+not treat the 5 visible `F` marks as a failure count. A complete serial sweep at this revision is
+still owed before `TESTED_SOURCE_SHA` can move off `80842661`.
+
+Raw partial log follows verbatim.
+
+---
+
+ssssssssss.s...............sssssssssssssssss......s..................... [  2%]
+........................................................................ [  5%]
+........................................................................ [  8%]
+........................................................................ [ 11%]
+.................................................FFFF.............F..... [ 14%]
+........................................................................ [ 16%]
+.....FF...F............................................................. [ 19%]
+.s.......................................................F.............. [ 22%]
+...
