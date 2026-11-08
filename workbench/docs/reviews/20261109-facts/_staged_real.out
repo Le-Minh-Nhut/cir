@@ -1,0 +1,109 @@
+WORKBENCH_CHECKPOINT_ROOT = /home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads
+exists: True
+
+==============================================================================================================
+ROOT (CIRCUS cohort root): /home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads
+exists: True
+model_id               checkpoint_id                rule       exists   resolved path
+csmcir                 fashioniq                    conventional True     csmcir/fashioniq_tuned_clip_best.pt
+airknow                fiq_n05                      checkpoint_base_relative True     ../../checkpoints/airknow/airknow_fiq_0.5.pt
+airknow                fiq_n08                      checkpoint_base_relative True     ../../checkpoints/airknow/airknow_fiq_0.8.pt
+conesep                fiq_n02                      conventional True     conesep/ConeSep-FIQ-N0.2.pt
+conesep                fiq_n05                      conventional False    conesep/ConeSep-FIQ-N0.5.pt
+conesep                fiq_n08                      conventional False    conesep/ConeSep-FIQ_N0.8.pt
+ptha_mtst              cirr_transfer                conventional True     ptha_mtst/tuned_mtst_cirr.pt
+habit                  fiq_n02                      conventional True     habit/HABIT-FIQ_N0.2.pt
+habit                  fiq_n05                      conventional False    habit/HABIT-FIQ_N0.5.pt
+habit                  fiq_n08                      conventional False    habit/HABIT-FIQ_N0.8.pt
+intent                 fiq_n02                      conventional True     intent/intent_fiq_0.2.pt
+intent                 fiq_n05                      conventional False    intent/intent_fiq_0.5.pt
+intent                 fiq_n08                      conventional False    intent/intent_fiq_0.8.pt
+hint                   fashioniq                    conventional True     hint/fashioniq.pt
+encoder                fashioniq                    conventional True     encoder/fashioniq.pt
+pair                   pair_b1                      checkpoint_base_relative True     ../../checkpoints/pair/pair-B1.pt
+pair                   pair_b2                      checkpoint_base_relative True     ../../checkpoints/pair/pair-B2.pt
+clvc_net               author_drive_unresolved      checkpoint_base_relative True     ../../checkpoints/clvc
+dcnet                  fashioniq_run_directory      checkpoint_base_relative True     ../../checkpoints/dcnet
+combiner_rn50x4_noft   rn50x4_noft_unresolved       checkpoint_base_relative True     ../../checkpoints/clip4cir/FashionIQ/RN50x4_noft/fiq_comb_RN50x4_noft.pt
+clip4cir_rn50x4_fullft rn50x4_fullft_unresolved     checkpoint_base_relative True     ../../checkpoints/clip4cir/FashionIQ/RN50x4_fullft
+tgcir                  tgcir_archive_unresolved     checkpoint_base_relative True     ../../downloads/tgcir/x/checkpoints/Fashioniq.pt
+sprc                   sprc_fiq_unresolved          checkpoint_base_relative False    ../../checkpoints/sprc/sprc_fiq.pt
+sprc                   sprc_fiq_vitl                checkpoint_base_relative True     ../../checkpoints/sprc/sprc_fiq_vitl.pt
+limn                   base_iter0_dress             conventional True     limn/0_dress_best_model.pt
+limn                   base_iter0_shirt             conventional True     limn/0_shirt_best_model.pt
+limn                   base_iter0_toptee            conventional True     limn/0_toptee_best_model.pt
+tme                    fashioniq_0                  conventional True     tme/fashioniq_0_best_model.pth
+tme                    cirr_0                       conventional False    tme/cirr_0_best_model.pth
+
+CIRCUS cohort root: variants=29 staged=21 not_staged=8 | staged-by-conventional=11 staged-by-base_relative=10
+
+==============================================================================================================
+ROOT (native cohort sibling): /home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/checkpoints
+exists: True
+model_id               checkpoint_id                rule       exists   resolved path
+csmcir                 fashioniq                    conventional False    csmcir/fashioniq_tuned_clip_best.pt
+airknow                fiq_n05                      conventional True     airknow/airknow_fiq_0.5.pt
+airknow                fiq_n08                      conventional True     airknow/airknow_fiq_0.8.pt
+conesep                fiq_n02                      conventional False    conesep/ConeSep-FIQ-N0.2.pt
+conesep                fiq_n05                      conventional False    conesep/ConeSep-FIQ-N0.5.pt
+conesep                fiq_n08                      conventional False    conesep/ConeSep-FIQ_N0.8.pt
+ptha_mtst              cirr_transfer                conventional False    ptha_mtst/tuned_mtst_cirr.pt
+habit                  fiq_n02                      conventional False    habit/HABIT-FIQ_N0.2.pt
+habit                  fiq_n05                      conventional False    habit/HABIT-FIQ_N0.5.pt
+habit                  fiq_n08                      conventional False    habit/HABIT-FIQ_N0.8.pt
+intent                 fiq_n02                      conventional False    intent/intent_fiq_0.2.pt
+intent                 fiq_n05                      conventional False    intent/intent_fiq_0.5.pt
+intent                 fiq_n08                      conventional False    intent/intent_fiq_0.8.pt
+hint                   fashioniq                    conventional False    hint/fashioniq.pt
+encoder                fashioniq                    conventional False    encoder/fashioniq.pt
+pair                   pair_b1                      conventional True     pair/pair-B1.pt
+pair                   pair_b2                      conventional True     pair/pair-B2.pt
+clvc_net               author_drive_unresolved      checkpoint_base_relative False    ../../checkpoints/clvc
+dcnet                  fashioniq_run_directory      conventional True     dcnet
+combiner_rn50x4_noft   rn50x4_noft_unresolved       checkpoint_base_relative False    ../../checkpoints/clip4cir/FashionIQ/RN50x4_noft/fiq_comb_RN50x4_noft.pt
+clip4cir_rn50x4_fullft rn50x4_fullft_unresolved     checkpoint_base_relative False    ../../checkpoints/clip4cir/FashionIQ/RN50x4_fullft
+tgcir                  tgcir_archive_unresolved     checkpoint_base_relative False    ../../downloads/tgcir/x/checkpoints/Fashioniq.pt
+sprc                   sprc_fiq_unresolved          conventional False    sprc/sprc_fiq.pt
+sprc                   sprc_fiq_vitl                conventional True     sprc/sprc_fiq_vitl.pt
+limn                   base_iter0_dress             conventional False    limn/0_dress_best_model.pt
+limn                   base_iter0_shirt             conventional False    limn/0_shirt_best_model.pt
+limn                   base_iter0_toptee            conventional False    limn/0_toptee_best_model.pt
+tme                    fashioniq_0                  conventional False    tme/fashioniq_0_best_model.pth
+tme                    cirr_0                       conventional False    tme/cirr_0_best_model.pth
+
+native cohort sibling: variants=29 staged=6 not_staged=23 | staged-by-conventional=6 staged-by-base_relative=0
+
+==============================================================================================================
+Per-variant: which root resolves it
+model_id               checkpoint_id                CIRCUS         native         agree      note
+csmcir                 fashioniq                    True           False          False      
+airknow                fiq_n05                      True           True           True       rule checkpoint_base_relative vs conventional
+airknow                fiq_n08                      True           True           True       rule checkpoint_base_relative vs conventional
+conesep                fiq_n02                      True           False          False      
+conesep                fiq_n05                      False          False          True       
+conesep                fiq_n08                      False          False          True       
+ptha_mtst              cirr_transfer                True           False          False      
+habit                  fiq_n02                      True           False          False      
+habit                  fiq_n05                      False          False          True       
+habit                  fiq_n08                      False          False          True       
+intent                 fiq_n02                      True           False          False      
+intent                 fiq_n05                      False          False          True       
+intent                 fiq_n08                      False          False          True       
+hint                   fashioniq                    True           False          False      
+encoder                fashioniq                    True           False          False      
+pair                   pair_b1                      True           True           True       rule checkpoint_base_relative vs conventional
+pair                   pair_b2                      True           True           True       rule checkpoint_base_relative vs conventional
+clvc_net               author_drive_unresolved      True           False          False      
+dcnet                  fashioniq_run_directory      True           True           True       rule checkpoint_base_relative vs conventional
+combiner_rn50x4_noft   rn50x4_noft_unresolved       True           False          False      
+clip4cir_rn50x4_fullft rn50x4_fullft_unresolved     True           False          False      
+tgcir                  tgcir_archive_unresolved     True           False          False      
+sprc                   sprc_fiq_unresolved          False          False          True       rule checkpoint_base_relative vs conventional
+sprc                   sprc_fiq_vitl                True           True           True       rule checkpoint_base_relative vs conventional
+limn                   base_iter0_dress             True           False          False      
+limn                   base_iter0_shirt             True           False          False      
+limn                   base_iter0_toptee            True           False          False      
+tme                    fashioniq_0                  True           False          False      
+tme                    cirr_0                       False          False          True       
+rows where the two roots disagree on exists(): 15
+union staged (resolvable under at least one root): 21

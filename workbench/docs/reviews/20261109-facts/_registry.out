@@ -1,0 +1,79 @@
+schema_version: 1
+n_models: 17
+n_distinct_upstream_repo_url: 16
+distinct urls:
+    https://github.com/ABaldrati/CLIP4Cir ['combiner_rn50x4_noft', 'clip4cir_rn50x4_fullft']
+    https://github.com/Lee-zixu/ConeSep ['conesep']
+    https://github.com/chunmeifeng/SPRC ['sprc']
+    https://github.com/iLearn-Lab/AAAI25-ENCODER ['encoder']
+    https://github.com/iLearn-Lab/AAAI26-HABIT ['habit']
+    https://github.com/iLearn-Lab/AAAI26-INTENT ['intent']
+    https://github.com/iLearn-Lab/CVPR26-Air-Know ['airknow']
+    https://github.com/iLearn-Lab/ICASSP25-PAIR ['pair']
+    https://github.com/iLearn-Lab/ICASSP26-HINT ['hint']
+    https://github.com/iLearn-Lab/MM23-TG-CIR ['tgcir']
+    https://github.com/iLearn-Lab/SIGIR21-CLVC-Net ['clvc_net']
+    https://github.com/iLearn-Lab/TPAMI24-LIMN ['limn']
+    https://github.com/li-shuxian/TME ['tme']
+    https://github.com/ozmig77/dcnet ['dcnet']
+    https://github.com/qzp2018/CSMCIR ['csmcir']
+    https://github.com/zyinan99/MTST_PTHA ['ptha_mtst']
+
+per-model:
+model_id       native_protocol              supported_protocols[0]         adapter n_ckpt_var   reproduction_status checkpoint_variants(ids)
+csmcir         fashioniq_original_split     fashioniq_original_split       YES    1            NOT_RUN            ['fashioniq']
+airknow        fashioniq_full_gallery_ref_excluded fashioniq_full_gallery_ref_excluded no     2            NOT_RUN            ['fiq_n05', 'fiq_n08']
+conesep        fashioniq_full_gallery_ref_excluded fashioniq_full_gallery_ref_excluded YES    3            NOT_RUN            ['fiq_n02', 'fiq_n05', 'fiq_n08']
+ptha_mtst      fashioniq_original_split     fashioniq_original_split       YES    1            SELECTED_TRANSFER_ONLY ['cirr_transfer']
+habit          fashioniq_full_gallery_ref_excluded fashioniq_full_gallery_ref_excluded YES    3            NOT_RUN            ['fiq_n02', 'fiq_n05', 'fiq_n08']
+intent         fashioniq_full_gallery_ref_excluded fashioniq_full_gallery_ref_excluded YES    3            NOT_RUN            ['fiq_n02', 'fiq_n05', 'fiq_n08']
+hint           fashioniq_val_split          fashioniq_val_split            YES    1            NOT_RUN            ['fashioniq']
+encoder        fashioniq_val_split          fashioniq_val_split            YES    1            METRICS_MEASURED_MAPPING_UNVERIFIED ['fashioniq']
+pair           fashioniq_val_split          fashioniq_val_split            no     2            BLOCKED_CHECKPOINT_MAPPING_UNVERIFIED ['pair_b1', 'pair_b2']
+clvc_net       fashioniq_val_split          fashioniq_val_split            no     1            BLOCKED_CHECKPOINT_MAPPING ['author_drive_unresolved']
+dcnet          fashioniq_full_gallery_ref_excluded fashioniq_full_gallery_ref_excluded no     1            BLOCKED_CHECKPOINT_MAPPING ['fashioniq_run_directory']
+combiner_rn50x4_noft fashioniq_original_split     fashioniq_original_split       no     1            BLOCKED_CHECKPOINT_MAPPING ['rn50x4_noft_unresolved']
+clip4cir_rn50x4_fullft fashioniq_original_split     fashioniq_original_split       no     1            BLOCKED_CHECKPOINT_BUNDLE ['rn50x4_fullft_unresolved']
+tgcir          fashioniq_val_split          fashioniq_val_split            no     1            BLOCKED_COMMAND    ['tgcir_archive_unresolved']
+sprc           fashioniq_original_split     fashioniq_original_split       no     2            BLOCKED_CHECKPOINT_MAPPING ['sprc_fiq_unresolved', 'sprc_fiq_vitl']
+limn           fashioniq_val_split          fashioniq_val_split            YES    3            BLOCKED_RUNTIME_PREREQUISITES ['base_iter0_dress', 'base_iter0_shirt', 'base_iter0_toptee']
+tme            fashioniq_original_split     fashioniq_original_split       YES    2            NOT_RUN            ['fashioniq_0', 'cirr_0']
+
+total_checkpoint_variants: 29
+keys of one checkpoint_variant sample:
+{
+ "checkpoint_id": "fashioniq",
+ "filename": "fashioniq_tuned_clip_best.pt",
+ "download_url": "https://huggingface.co/peng12138/CSMCIR/resolve/main/fashioniq_tuned_clip_best.pt",
+ "source_type": "author_huggingface",
+ "checkpoint_training_noise_pct": 0,
+ "evaluation_noise_pct": 0,
+ "expected_sha256": "c8812071de0640d647c5ba2a70628b80a3289ee2c47676f7a1b6abaa313fa49e",
+ "expected_size_bytes": 2720615859,
+ "status": "URL_VERIFIED",
+ "checkpoint_mapping_status": "VERIFIED_METADATA"
+}
+source_available count: 17
+
+WORKBENCH_CHECKPOINT_ROOT: /home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads
+exists: True
+
+variant staging (relative_path -> exists):
+   csmcir None None -> None
+   airknow None None -> None
+   conesep None None -> None
+   ptha_mtst None None -> None
+   habit None None -> None
+   intent None None -> None
+   hint None None -> None
+   encoder None None -> None
+   pair None None -> None
+   clvc_net None None -> None
+   dcnet None None -> None
+   combiner_rn50x4_noft None None -> None
+   clip4cir_rn50x4_fullft None None -> None
+   tgcir None None -> None
+   sprc None None -> None
+   limn None None -> None
+   tme None None -> None
+staged true: 0 / 17

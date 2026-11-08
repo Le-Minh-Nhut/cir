@@ -1,0 +1,238 @@
+### SYNTHETIC_encoder_fashioniq_fixture001
+   path=workbench/artifacts/composition/summary/SYNTHETIC_encoder_fashioniq_fixture001/full.json bytes=1815
+   model_id='fixture_encoder' run_id='SYNTHETIC_encoder_fashioniq_fixture001' checkpoint_id='fashioniq'
+   query_count=6003 subset='full' execution_status='COMPLETED' protocol_id='circus_fashioniq_release_v1'
+   is_synthetic=True reproduction_status='FIXTURE_DEVELOPMENT_ONLY'
+   seed=None seed_applied=None
+   ckpt_noise=None eval_noise=0
+   gap=0.5204 gap_cohort_count=None
+   topk_export=null
+   reference_eligibility=null reference_eligible=None
+   variant_provenance_keys=None
+   multimodal             ABSENT from metrics
+   text_only_black_image  ABSENT from metrics
+   image_only_empty_text  ABSENT from metrics
+   top-level coverage=1.0 common_cohort_count=6003
+   condition_status={"multimodal": {"status": "COMPLETED", "unscored_count": 0}, "text_only_black_image": {"status": "COMPLETED", "unscored_count": 0}, "image_only_empty_text": {"status": "COMPLETED", "unscored_count": 0}}
+
+### SYNTHETIC_habit_fiq_n02_fixture002
+   path=workbench/artifacts/composition/summary/SYNTHETIC_habit_fiq_n02_fixture002/full.json bytes=1803
+   model_id='fixture_habit' run_id='SYNTHETIC_habit_fiq_n02_fixture002' checkpoint_id='fiq_n02'
+   query_count=6003 subset='full' execution_status='COMPLETED' protocol_id='circus_fashioniq_release_v1'
+   is_synthetic=True reproduction_status='FIXTURE_DEVELOPMENT_ONLY'
+   seed=None seed_applied=None
+   ckpt_noise=20 eval_noise=0
+   gap=0.2856 gap_cohort_count=None
+   topk_export=null
+   reference_eligibility=null reference_eligible=None
+   variant_provenance_keys=None
+   multimodal             ABSENT from metrics
+   text_only_black_image  ABSENT from metrics
+   image_only_empty_text  ABSENT from metrics
+   top-level coverage=0.98 common_cohort_count=6003
+   condition_status={"multimodal": {"status": "COMPLETED", "unscored_count": 0}, "text_only_black_image": {"status": "COMPLETED", "unscored_count": 0}, "image_only_empty_text": {"status": "COMPLETED", "unscored_count": 0}}
+
+### conesep_fiq_n02_30f6de423861cc1d6c78c361
+   path=workbench/artifacts/composition/summary/conesep_fiq_n02_30f6de423861cc1d6c78c361/full.json bytes=11447
+   model_id='conesep' run_id='30f6de423861cc1d6c78c361' checkpoint_id='fiq_n02'
+   query_count=6003 subset='full' execution_status='COMPLETED' protocol_id='circus_fashioniq_release_v1'
+   is_synthetic=False reproduction_status='NOT_RUN'
+   seed=0 seed_applied=False
+   ckpt_noise=20 eval_noise=0
+   gap=0.3942551173824983 gap_cohort_count=6003
+   topk_export={"conditions": ["image_only_empty_text", "multimodal", "text_only_black_image"], "depth": 50, "missing_query_count": 0, "partial": false, "reason": null, "requested": true, "status": "TOPK_EXPORT_COMPLETE"}
+   reference_eligibility={"measured": true, "method": "score+rank on a synthetic gallery whose reference is the exact match", "reason": null, "reference_eligible": true, "reference_rank": 1} reference_eligible=True
+   variant_provenance_keys=['adapted_runtime', 'adapted_runtime_applied', 'approved_source_patch', 'caption_alias_staged', 'caption_aliases', 'checkpoint_training_dataset', 'runtime_adaptation_selected', 'warnings']
+   multimodal             recall_at_10=35.48225887056472 recall_at_50=54.13959686823255 ndcg_full=0.3294414713812836 coverage=1.0 scored_count=6003 query_count=6003 mrr=0.20644076757446772
+   text_only_black_image  recall_at_10=15.092453773113442 recall_at_50=26.869898384141262 ndcg_full=0.19955748541119267 coverage=1.0 scored_count=6003 query_count=6003 mrr=0.08728409275962092
+   image_only_empty_text  recall_at_10=3.1984007996001997 recall_at_50=9.611860736298517 ndcg_full=0.11206403391502913 coverage=1.0 scored_count=6003 query_count=6003 mrr=0.01269949319682611
+   top-level coverage=None common_cohort_count=None
+   condition_status={"image_only_empty_text": {"category_scope_failure_count": 0, "status": "COMPLETED", "unscored_count": 0}, "multimodal": {"category_scope_failure_count": 0, "status": "COMPLETED", "unscored_count": 0}, "text_only_black_image": {"category_scope_failure_count": 0, "status": "COMPLETED", "unscored_count": 0}}
+
+### encoder_fashioniq_6a528e877c328772e2c7bb28
+   path=workbench/artifacts/composition/summary/encoder_fashioniq_6a528e877c328772e2c7bb28/full.json bytes=10319
+   model_id='encoder' run_id='6a528e877c328772e2c7bb28' checkpoint_id='fashioniq'
+   query_count=6003 subset='full' execution_status='COMPLETED' protocol_id='circus_fashioniq_release_v1'
+   is_synthetic=False reproduction_status='METRICS_MEASURED_MAPPING_UNVERIFIED'
+   seed=0 seed_applied=None
+   ckpt_noise=None eval_noise=0
+   gap=0.47230210227676583 gap_cohort_count=6003
+   topk_export=null
+   reference_eligibility=null reference_eligible=True
+   variant_provenance_keys=None
+   multimodal             recall_at_10=31.01782442112277 recall_at_50=49.5752123938031 ndcg_full=0.29586071325251023 coverage=1.0 scored_count=6003 query_count=6003 mrr=0.16970724586506772
+   text_only_black_image  recall_at_10=8.579043811427619 recall_at_50=18.1575878727303 ndcg_full=0.15612507640224627 coverage=1.0 scored_count=6003 query_count=6003 mrr=0.04665721885560417
+   image_only_empty_text  recall_at_10=2.6653339996668333 recall_at_50=7.4795935365650505 ndcg_full=0.10727509765806255 coverage=1.0 scored_count=6003 query_count=6003 mrr=0.010994057357674506
+   top-level coverage=None common_cohort_count=None
+   condition_status={"image_only_empty_text": {"category_scope_failure_count": 0, "status": "COMPLETED", "unscored_count": 0}, "multimodal": {"category_scope_failure_count": 0, "status": "COMPLETED", "unscored_count": 0}, "text_only_black_image": {"category_scope_failure_count": 0, "status": "COMPLETED", "unscored_count": 0}}
+
+### encoder_fashioniq_eda30a37c0bc17ac43844f09
+   path=workbench/artifacts/composition/summary/encoder_fashioniq_eda30a37c0bc17ac43844f09/full.json bytes=10234
+   model_id='encoder' run_id='eda30a37c0bc17ac43844f09' checkpoint_id='fashioniq'
+   query_count=8 subset='full' execution_status='COMPLETED' protocol_id='circus_fashioniq_release_v1'
+   is_synthetic=False reproduction_status='METRICS_MEASURED_MAPPING_UNVERIFIED'
+   seed=0 seed_applied=None
+   ckpt_noise=None eval_noise=0
+   gap=0.5329370636334637 gap_cohort_count=8
+   topk_export=null
+   reference_eligibility=null reference_eligible=True
+   variant_provenance_keys=None
+   multimodal             recall_at_10=12.5 recall_at_50=25.0 ndcg_full=0.2517959991456291 coverage=1.0 scored_count=8 query_count=8 mrr=0.14053070207252985
+   text_only_black_image  recall_at_10=0.0 recall_at_50=0.0 ndcg_full=0.1176045787263034 coverage=1.0 scored_count=8 query_count=8 mrr=0.005035824931968425
+   image_only_empty_text  recall_at_10=0.0 recall_at_50=0.0 ndcg_full=0.08495998091394541 coverage=1.0 scored_count=8 query_count=8 mrr=0.0005991773816461504
+   top-level coverage=None common_cohort_count=None
+   condition_status={"image_only_empty_text": {"category_scope_failure_count": 0, "status": "COMPLETED", "unscored_count": 0}, "multimodal": {"category_scope_failure_count": 0, "status": "COMPLETED", "unscored_count": 0}, "text_only_black_image": {"category_scope_failure_count": 0, "status": "COMPLETED", "unscored_count": 0}}
+
+### habit_fiq_n02_497c25c57fbeba885ecfb9d1
+   path=workbench/artifacts/composition/summary/habit_fiq_n02_497c25c57fbeba885ecfb9d1/full.json bytes=11417
+   model_id='habit' run_id='497c25c57fbeba885ecfb9d1' checkpoint_id='fiq_n02'
+   query_count=6003 subset='full' execution_status='COMPLETED' protocol_id='circus_fashioniq_release_v1'
+   is_synthetic=False reproduction_status='NOT_RUN'
+   seed=0 seed_applied=None
+   ckpt_noise=20 eval_noise=0
+   gap=0.388704727214254 gap_cohort_count=6003
+   topk_export={"conditions": ["image_only_empty_text", "multimodal", "text_only_black_image"], "depth": 50, "missing_query_count": 0, "partial": false, "reason": null, "requested": true, "status": "TOPK_EXPORT_COMPLETE"}
+   reference_eligibility={"measured": true, "method": "score+rank on a synthetic gallery whose reference is the exact match", "reason": null, "reference_eligible": true, "reference_rank": 1} reference_eligible=True
+   variant_provenance_keys=['adapted_runtime', 'adapted_runtime_applied', 'approved_source_patch', 'caption_alias_staged', 'caption_aliases', 'checkpoint_training_dataset', 'runtime_adaptation_selected', 'warnings']
+   multimodal             recall_at_10=35.61552557054806 recall_at_50=54.3728135932034 ndcg_full=0.32828280509551133 coverage=1.0 scored_count=6003 query_count=6003 mrr=0.20496768403872728
+   text_only_black_image  recall_at_10=15.292353823088456 recall_at_50=27.053140096618357 ndcg_full=0.2006777268917305 coverage=1.0 scored_count=6003 query_count=6003 mrr=0.08817990129679686
+   image_only_empty_text  recall_at_10=3.315009162085624 recall_at_50=10.31151091121106 ndcg_full=0.11373588650412819 coverage=1.0 scored_count=6003 query_count=6003 mrr=0.013568380581241523
+   top-level coverage=None common_cohort_count=None
+   condition_status={"image_only_empty_text": {"category_scope_failure_count": 0, "status": "COMPLETED", "unscored_count": 0}, "multimodal": {"category_scope_failure_count": 0, "status": "COMPLETED", "unscored_count": 0}, "text_only_black_image": {"category_scope_failure_count": 0, "status": "COMPLETED", "unscored_count": 0}}
+
+### habit_fiq_n02_e0dd04a46ef7a58334b9e353
+   path=workbench/artifacts/composition/summary/habit_fiq_n02_e0dd04a46ef7a58334b9e353/full.json bytes=10821
+   model_id='habit' run_id='e0dd04a46ef7a58334b9e353' checkpoint_id='fiq_n02'
+   query_count=6003 subset='full' execution_status='FAILED' protocol_id='circus_fashioniq_release_v1'
+   is_synthetic=False reproduction_status='NOT_RUN'
+   seed=0 seed_applied=None
+   ckpt_noise=20 eval_noise=0
+   gap=None gap_cohort_count=0
+   topk_export=null
+   reference_eligibility=null reference_eligible=True
+   variant_provenance_keys=None
+   multimodal             recall_at_10=None recall_at_50=None ndcg_full=None coverage=0.0 scored_count=0 query_count=6003 mrr=None
+   text_only_black_image  recall_at_10=None recall_at_50=None ndcg_full=None coverage=0.0 scored_count=0 query_count=6003 mrr=None
+   image_only_empty_text  recall_at_10=None recall_at_50=None ndcg_full=None coverage=0.0 scored_count=0 query_count=6003 mrr=None
+   top-level coverage=None common_cohort_count=None
+   condition_status={"image_only_empty_text": {"category_scope_failure_count": 0, "reason": "RuntimeError: execution environment not verified [BLOCKED/PYTHON_VERSION_MISMATCH]: WORKBENCH_HABIT_PYTHON=/home/heheboiz/data/cir/workbench/envs/airknow-adapted/bin/python (expected Python 3.8.10, found 3.11.15)", "status": "MODEL_UNAVAILABLE", "unscored_count": 6003}, "multimodal": {"category_scope_failure_count": 0, "reason": "RuntimeError: execution environment not verified [BLOCKED/PYTHON_VERSION_MISMATCH]: WORKBENCH_HABIT_PYTHON=/home/heheboiz/data/cir/workbench/envs/airknow-adapted/bin/python (expected Python 3.8.10, found 3.11.15)", "status": "MODEL_UNAVAILABLE", "unscored_count": 6003}, "text_only_black_image": {"category_scope_failure_count": 0, "reason": "RuntimeError: execution environment not verified [BLOCKED/PYTHON_VERSION_MISMATCH]: WORKBENCH_HABIT_PYTHON=/home/heheboiz/data/cir/workbench/envs/airknow-adapted/bin/python (expected Python 3.8.10, found 3.11.15)", "status": "MODEL_UNAVAILABLE", "unscored_count": 6003}}
+
+### hint_fashioniq_4bc9893a977e501b82378e76
+   path=workbench/artifacts/composition/summary/hint_fashioniq_4bc9893a977e501b82378e76/full.json bytes=11450
+   model_id='hint' run_id='4bc9893a977e501b82378e76' checkpoint_id='fashioniq'
+   query_count=6003 subset='full' execution_status='COMPLETED' protocol_id='circus_fashioniq_release_v1'
+   is_synthetic=False reproduction_status='NOT_RUN'
+   seed=0 seed_applied=False
+   ckpt_noise=None eval_noise=0
+   gap=0.43870420817223343 gap_cohort_count=6003
+   topk_export={"conditions": ["image_only_empty_text", "multimodal", "text_only_black_image"], "depth": 50, "missing_query_count": 0, "partial": false, "reason": null, "requested": true, "status": "TOPK_EXPORT_COMPLETE"}
+   reference_eligibility={"measured": true, "method": "score+rank on a synthetic gallery whose reference is the exact match", "reason": null, "reference_eligible": true, "reference_rank": 1} reference_eligible=True
+   variant_provenance_keys=['adapted_runtime', 'adapted_runtime_applied', 'approved_source_patch', 'caption_alias_staged', 'caption_aliases', 'checkpoint_training_dataset', 'runtime_adaptation_selected', 'warnings']
+   multimodal             recall_at_10=32.816924870897886 recall_at_50=51.77411294352824 ndcg_full=0.30926916692748224 coverage=1.0 scored_count=6003 query_count=6003 mrr=0.184097069637043
+   text_only_black_image  recall_at_10=11.211061136098618 recall_at_50=21.58920539730135 ndcg_full=0.17359148193847487 coverage=1.0 scored_count=6003 query_count=6003 mrr=0.06438786776428373
+   image_only_empty_text  recall_at_10=3.3983008495752123 recall_at_50=9.928369148758954 ndcg_full=0.11427446535657035 coverage=1.0 scored_count=6003 query_count=6003 mrr=0.013999623458717756
+   top-level coverage=None common_cohort_count=None
+   condition_status={"image_only_empty_text": {"category_scope_failure_count": 0, "status": "COMPLETED", "unscored_count": 0}, "multimodal": {"category_scope_failure_count": 0, "status": "COMPLETED", "unscored_count": 0}, "text_only_black_image": {"category_scope_failure_count": 0, "status": "COMPLETED", "unscored_count": 0}}
+
+### intent_fiq_n02_37ee72aa298b276d1bfda0fa
+   path=workbench/artifacts/composition/summary/intent_fiq_n02_37ee72aa298b276d1bfda0fa/full.json bytes=11418
+   model_id='intent' run_id='37ee72aa298b276d1bfda0fa' checkpoint_id='fiq_n02'
+   query_count=6003 subset='full' execution_status='COMPLETED' protocol_id='circus_fashioniq_release_v1'
+   is_synthetic=False reproduction_status='NOT_RUN'
+   seed=0 seed_applied=None
+   ckpt_noise=20 eval_noise=0
+   gap=0.37538250032494136 gap_cohort_count=6003
+   topk_export={"conditions": ["image_only_empty_text", "multimodal", "text_only_black_image"], "depth": 50, "missing_query_count": 0, "partial": false, "reason": null, "requested": true, "status": "TOPK_EXPORT_COMPLETE"}
+   reference_eligibility={"measured": true, "method": "score+rank on a synthetic gallery whose reference is the exact match", "reason": null, "reference_eligible": true, "reference_rank": 1} reference_eligible=True
+   variant_provenance_keys=['adapted_runtime', 'adapted_runtime_applied', 'approved_source_patch', 'caption_alias_staged', 'caption_aliases', 'checkpoint_training_dataset', 'runtime_adaptation_selected', 'warnings']
+   multimodal             recall_at_10=34.39946693320007 recall_at_50=54.00633016824921 ndcg_full=0.3184910253798891 coverage=1.0 scored_count=6003 query_count=6003 mrr=0.1927466373092879
+   text_only_black_image  recall_at_10=15.32567049808429 recall_at_50=26.73663168415792 ndcg_full=0.19893506794173196 coverage=1.0 scored_count=6003 query_count=6003 mrr=0.08603430736319763
+   image_only_empty_text  recall_at_10=2.865234049641846 recall_at_50=9.128768948858903 ndcg_full=0.11223296860976952 coverage=1.0 scored_count=6003 query_count=6003 mrr=0.01259566388924523
+   top-level coverage=None common_cohort_count=None
+   condition_status={"image_only_empty_text": {"category_scope_failure_count": 0, "status": "COMPLETED", "unscored_count": 0}, "multimodal": {"category_scope_failure_count": 0, "status": "COMPLETED", "unscored_count": 0}, "text_only_black_image": {"category_scope_failure_count": 0, "status": "COMPLETED", "unscored_count": 0}}
+
+### limn_base_iter0_all_categories_10173dc45dea8c90fd2a284b
+   path=workbench/artifacts/composition/summary/limn_base_iter0_all_categories_10173dc45dea8c90fd2a284b/full.json bytes=11143
+   model_id='limn' run_id='10173dc45dea8c90fd2a284b' checkpoint_id='base_iter0_all_categories'
+   query_count=6003 subset='full' execution_status='PARTIAL' protocol_id='circus_fashioniq_release_v1'
+   is_synthetic=False reproduction_status='BLOCKED_RUNTIME_PREREQUISITES'
+   seed=0 seed_applied=None
+   ckpt_noise=None eval_noise=0
+   gap=0.5417445849251903 gap_cohort_count=5884
+   topk_export=null
+   reference_eligibility=null reference_eligible=True
+   variant_provenance_keys=None
+   multimodal             recall_at_10=30.064581917063222 recall_at_50=48.759347382732834 ndcg_full=0.2908449032087251 coverage=0.980176578377478 scored_count=5884 query_count=6003 mrr=0.16724361415786146
+   text_only_black_image  recall_at_10=6.3052345343303875 recall_at_50=14.208021753908906 ndcg_full=0.13328125184230716 coverage=0.980176578377478 scored_count=5884 query_count=6003 mrr=0.02897056414513849
+   image_only_empty_text  recall_at_10=2.4983004758667575 recall_at_50=6.985044187627464 ndcg_full=0.09970453632376666 coverage=0.980176578377478 scored_count=5884 query_count=6003 mrr=0.010299692644786418
+   top-level coverage=None common_cohort_count=None
+   condition_status={"image_only_empty_text": {"category_scope_failure_count": 119, "status": "PARTIAL", "unscored_count": 119}, "multimodal": {"category_scope_failure_count": 119, "status": "PARTIAL", "unscored_count": 119}, "text_only_black_image": {"category_scope_failure_count": 119, "status": "PARTIAL", "unscored_count": 119}}
+
+### limn_base_iter0_all_categories_3f86f58483b368377e2c151e
+   path=workbench/artifacts/composition/summary/limn_base_iter0_all_categories_3f86f58483b368377e2c151e/full.json bytes=11008
+   model_id='limn' run_id='3f86f58483b368377e2c151e' checkpoint_id='base_iter0_all_categories'
+   query_count=8 subset='full' execution_status='COMPLETED' protocol_id='circus_fashioniq_release_v1'
+   is_synthetic=False reproduction_status='BLOCKED_RUNTIME_PREREQUISITES'
+   seed=0 seed_applied=None
+   ckpt_noise=None eval_noise=0
+   gap=0.5213859188416812 gap_cohort_count=8
+   topk_export=null
+   reference_eligibility=null reference_eligible=True
+   variant_provenance_keys=None
+   multimodal             recall_at_10=25.0 recall_at_50=37.5 ndcg_full=0.27140734010891865 coverage=1.0 scored_count=8 query_count=8 mrr=0.16565869698048927
+   text_only_black_image  recall_at_10=12.5 recall_at_50=12.5 ndcg_full=0.12989937470585344 coverage=1.0 scored_count=8 query_count=8 mrr=0.020857168642979113
+   image_only_empty_text  recall_at_10=0.0 recall_at_50=0.0 ndcg_full=0.07103489291674814 coverage=1.0 scored_count=8 query_count=8 mrr=9.353700190532542e-05
+   top-level coverage=None common_cohort_count=None
+   condition_status={"image_only_empty_text": {"category_scope_failure_count": 0, "status": "COMPLETED", "unscored_count": 0}, "multimodal": {"category_scope_failure_count": 0, "status": "COMPLETED", "unscored_count": 0}, "text_only_black_image": {"category_scope_failure_count": 0, "status": "COMPLETED", "unscored_count": 0}}
+
+### ptha_mtst_cirr_transfer_315dd590eeb03d2c78d7937a
+   path=workbench/artifacts/composition/summary/ptha_mtst_cirr_transfer_315dd590eeb03d2c78d7937a/full.json bytes=10342
+   model_id='ptha_mtst' run_id='315dd590eeb03d2c78d7937a' checkpoint_id='cirr_transfer'
+   query_count=6003 subset='full' execution_status='COMPLETED' protocol_id='circus_fashioniq_release_v1'
+   is_synthetic=False reproduction_status='SELECTED_TRANSFER_ONLY'
+   seed=0 seed_applied=None
+   ckpt_noise=None eval_noise=0
+   gap=0.24362219946484542 gap_cohort_count=6003
+   topk_export=null
+   reference_eligibility=null reference_eligible=True
+   variant_provenance_keys=None
+   multimodal             recall_at_10=19.473596535065802 recall_at_50=34.44944194569382 ndcg_full=0.22493423438490692 coverage=1.0 scored_count=6003 query_count=6003 mrr=0.10452331088916629
+   text_only_black_image  recall_at_10=10.811261036148592 recall_at_50=21.0727969348659 ndcg_full=0.17013526146911484 coverage=1.0 scored_count=6003 query_count=6003 mrr=0.06093800083752328
+   image_only_empty_text  recall_at_10=1.3326669998334166 recall_at_50=4.6476761619190405 ndcg_full=0.09498086792403913 coverage=1.0 scored_count=6003 query_count=6003 mrr=0.006189204408168027
+   top-level coverage=None common_cohort_count=None
+   condition_status={"image_only_empty_text": {"category_scope_failure_count": 0, "status": "COMPLETED", "unscored_count": 0}, "multimodal": {"category_scope_failure_count": 0, "status": "COMPLETED", "unscored_count": 0}, "text_only_black_image": {"category_scope_failure_count": 0, "status": "COMPLETED", "unscored_count": 0}}
+
+### released_audit_task7_mm_any_released_audit_task7_mm_any
+   path=workbench/artifacts/composition/summary/released_audit_task7_mm_any_released_audit_task7_mm_any/full.json bytes=5929
+   model_id='released_audit' run_id='released_audit_task7_mm_any' checkpoint_id='task7_mm_any'
+   query_count=6003 subset='full' execution_status='COMPLETED' protocol_id='circus_fashioniq_release_v1'
+   is_synthetic=False reproduction_status='RELEASED_ARTIFACT_IMPORT'
+   seed=0 seed_applied=None
+   ckpt_noise=None eval_noise=None
+   gap=0.3667022194996058 gap_cohort_count=None
+   topk_export=null
+   reference_eligibility=null reference_eligible=None
+   variant_provenance_keys=None
+   multimodal             recall_at_10=52.84024654339497 recall_at_50=71.2976844910878 ndcg_full=0.463455133125359 coverage=1.0 scored_count=6003 query_count=6003 mrr=0.35146147441151676
+   text_only_black_image  recall_at_10=27.33633183408296 recall_at_50=43.76145260702982 ndcg_full=0.2935051071698046 coverage=1.0 scored_count=6003 query_count=6003 mrr=0.1758482229260032
+   image_only_empty_text  recall_at_10=6.363484924204564 recall_at_50=16.14192903548226 ndcg_full=0.13498441386078872 coverage=1.0 scored_count=6003 query_count=6003 mrr=0.024526890918890067
+   top-level coverage=1.0 common_cohort_count=6003
+   condition_status={"image_only_empty_text": {"status": "COMPLETED", "unscored_count": 0}, "multimodal": {"status": "COMPLETED", "unscored_count": 0}, "text_only_black_image": {"status": "COMPLETED", "unscored_count": 0}}
+
+### tme_fashioniq_0_ad477312aa57c1b9114f9e51
+   path=workbench/artifacts/composition/summary/tme_fashioniq_0_ad477312aa57c1b9114f9e51/full.json bytes=10211
+   model_id='tme' run_id='ad477312aa57c1b9114f9e51' checkpoint_id='fashioniq_0'
+   query_count=6003 subset='full' execution_status='COMPLETED' protocol_id='circus_fashioniq_release_v1'
+   is_synthetic=False reproduction_status='NOT_RUN'
+   seed=0 seed_applied=None
+   ckpt_noise=0 eval_noise=0
+   gap=0.3586012581618244 gap_cohort_count=6003
+   topk_export=null
+   reference_eligibility=null reference_eligible=True
+   variant_provenance_keys=None
+   multimodal             recall_at_10=34.01632517074796 recall_at_50=53.95635515575545 ndcg_full=0.32038840538867464 coverage=1.0 scored_count=6003 query_count=6003 mrr=0.19580793835746663
+   text_only_black_image  recall_at_10=16.075295685490588 recall_at_50=28.035982008995504 ndcg_full=0.20549672011583525 coverage=1.0 scored_count=6003 query_count=6003 mrr=0.0929247235573566
+   image_only_empty_text  recall_at_10=2.6986506746626686 recall_at_50=9.22871897384641 ndcg_full=0.1117059272471363 coverage=1.0 scored_count=6003 query_count=6003 mrr=0.011584030964067734
+   top-level coverage=None common_cohort_count=None
+   condition_status={"image_only_empty_text": {"category_scope_failure_count": 0, "status": "COMPLETED", "unscored_count": 0}, "multimodal": {"category_scope_failure_count": 0, "status": "COMPLETED", "unscored_count": 0}, "text_only_black_image": {"category_scope_failure_count": 0, "status": "COMPLETED", "unscored_count": 0}}
+

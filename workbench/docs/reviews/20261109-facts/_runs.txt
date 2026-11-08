@@ -1,0 +1,107 @@
+== workbench/artifacts/composition/runs/10173dc45dea8c90fd2a284b
+  ranks dir exists: True
+    ranks/limn_base_iter0_all_categories.json               438051 bytes
+  candidates dir exists: False
+
+== workbench/artifacts/composition/runs/30f6de423861cc1d6c78c361
+  ranks dir exists: True
+    ranks/conesep_fiq_n02.json                              379330 bytes
+  candidates dir exists: True
+    candidates/conesep_fiq_n02/
+      image_only_empty_text.jsonl                      8308760 bytes  lines=6003
+      image_only_empty_text.manifest.json                  980 bytes  lines=27
+      multimodal.jsonl                                 8291625 bytes  lines=6003
+      multimodal.manifest.json                             958 bytes  lines=27
+      text_only_black_image.jsonl                      8313027 bytes  lines=6003
+      text_only_black_image.manifest.json                  980 bytes  lines=27
+
+== workbench/artifacts/composition/runs/315dd590eeb03d2c78d7937a
+  ranks dir exists: True
+    ranks/ptha_mtst_cirr_transfer.json                      385302 bytes
+  candidates dir exists: False
+
+== workbench/artifacts/composition/runs/37ee72aa298b276d1bfda0fa
+  ranks dir exists: True
+    ranks/intent_fiq_n02.json                               379014 bytes
+  candidates dir exists: True
+    candidates/intent_fiq_n02/
+      image_only_empty_text.jsonl                      8309501 bytes  lines=6003
+      image_only_empty_text.manifest.json                  979 bytes  lines=27
+      multimodal.jsonl                                 8295625 bytes  lines=6003
+      multimodal.manifest.json                             957 bytes  lines=27
+      text_only_black_image.jsonl                      8344657 bytes  lines=6003
+      text_only_black_image.manifest.json                  979 bytes  lines=27
+
+== workbench/artifacts/composition/runs/3f86f58483b368377e2c151e
+  ranks dir exists: True
+    ranks/limn_base_iter0_all_categories.json                 5207 bytes
+  candidates dir exists: False
+
+== workbench/artifacts/composition/runs/497c25c57fbeba885ecfb9d1
+  ranks dir exists: True
+    ranks/habit_fiq_n02.json                                378866 bytes
+  candidates dir exists: True
+    candidates/habit_fiq_n02/
+      .image_only_empty_text.jsonl.3981587.3480b2fdb44543f8943a8b02052f092f.tmp    2441072 bytes  lines=1758
+      .multimodal.jsonl.3981587.09e7a9c29b7549f0967c3625e747be20.tmp    8291497 bytes  lines=6000
+      .text_only_black_image.jsonl.3981587.53b4006fcd3d415aa1b781dcdda3a4d3.tmp    8324653 bytes  lines=6000
+      image_only_empty_text.jsonl                      8323259 bytes  lines=6003
+      image_only_empty_text.manifest.json                  978 bytes  lines=27
+      multimodal.jsonl                                 8295650 bytes  lines=6003
+      multimodal.manifest.json                             956 bytes  lines=27
+      text_only_black_image.jsonl                      8328804 bytes  lines=6003
+      text_only_black_image.manifest.json                  978 bytes  lines=27
+
+== workbench/artifacts/composition/runs/4bc9893a977e501b82378e76
+  ranks dir exists: True
+    ranks/hint_fashioniq.json                               380422 bytes
+  candidates dir exists: True
+    candidates/hint_fashioniq/
+      image_only_empty_text.jsonl                      8355602 bytes  lines=6003
+      image_only_empty_text.manifest.json                  979 bytes  lines=27
+      multimodal.jsonl                                 8358202 bytes  lines=6003
+      multimodal.manifest.json                             957 bytes  lines=27
+      text_only_black_image.jsonl                      8442695 bytes  lines=6003
+      text_only_black_image.manifest.json                  979 bytes  lines=27
+
+== workbench/artifacts/composition/runs/6a528e877c328772e2c7bb28
+  ranks dir exists: True
+    ranks/encoder_fashioniq.json                            381477 bytes
+  candidates dir exists: False
+
+== workbench/artifacts/composition/runs/SYNTHETIC_encoder_fashioniq_fixture001
+  ranks dir exists: True
+    ranks/fixture_encoder_fashioniq.json                      1443 bytes
+  candidates dir exists: False
+
+== workbench/artifacts/composition/runs/SYNTHETIC_habit_fiq_n02_fixture002
+  ranks dir exists: True
+    ranks/fixture_habit_fiq_n02.json                          1439 bytes
+  candidates dir exists: False
+
+== workbench/artifacts/composition/runs/ad477312aa57c1b9114f9e51
+  ranks dir exists: True
+    ranks/tme_fashioniq_0.json                              378976 bytes
+  candidates dir exists: False
+
+== workbench/artifacts/composition/runs/e0dd04a46ef7a58334b9e353
+  ranks dir exists: True
+    ranks/habit_fiq_n02.json                               4573087 bytes
+  candidates dir exists: False
+
+== workbench/artifacts/composition/runs/eda30a37c0bc17ac43844f09
+  ranks dir exists: True
+    ranks/encoder_fashioniq.json                              5142 bytes
+  candidates dir exists: False
+
+== workbench/artifacts/composition/runs/released_audit_task7_mm_any
+  ranks dir exists: True
+    ranks/released_audit_task7_mm_any.json                  366340 bytes
+  candidates dir exists: True
+    candidates/released_audit_task7_mm_any/
+      image_only_empty_text.jsonl                      1808505 bytes  lines=6003
+      image_only_empty_text.manifest.json                  999 bytes  lines=27
+      multimodal.jsonl                                 1798920 bytes  lines=6003
+      multimodal.manifest.json                             977 bytes  lines=27
+      text_only_black_image.jsonl                      1801082 bytes  lines=6003
+      text_only_black_image.manifest.json                  999 bytes  lines=27

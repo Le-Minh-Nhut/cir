@@ -1,0 +1,102 @@
+SYNTHETIC_encoder_fashioniq_fixture001                     smoke={"limited": true, "query_limit": 8, "label": "FIXTURE ONLY"}           ref_elig=null
+      reproduction_status= FIXTURE_DEVELOPMENT_ONLY | checkpoint_mapping_status= None | checkpoint_training_dataset= FashionIQ | checkpoint_transfer= False
+      category_scopes= null | category_resolution.ambiguous_count= None | resolved_count= None | unresolved_count= None
+      query_count_per_subset= {"full": 6003, "sf": 4069, "validated": 586}
+      gallery_count= 74381 | gallery_identity_sha256= None
+      reused_query_result_count= None
+      release_artifact_hashes= null
+SYNTHETIC_habit_fiq_n02_fixture002                         smoke={"limited": true, "query_limit": 8, "label": "FIXTURE ONLY"}           ref_elig=null
+      reproduction_status= FIXTURE_DEVELOPMENT_ONLY | checkpoint_mapping_status= None | checkpoint_training_dataset= FashionIQ | checkpoint_transfer= False
+      category_scopes= null | category_resolution.ambiguous_count= None | resolved_count= None | unresolved_count= None
+      query_count_per_subset= {"full": 6003, "sf": 4069, "validated": 586}
+      gallery_count= 74381 | gallery_identity_sha256= None
+      reused_query_result_count= None
+      release_artifact_hashes= null
+conesep_fiq_n02_30f6de423861cc1d6c78c361                   smoke={"label": null, "limited": false, "query_limit": null}                 ref_elig=true
+      reference_eligibility= {"measured": true, "method": "score+rank on a synthetic gallery whose reference is the exact match", "reason": null, "reference_eligible": true, "reference_rank": 1}
+      reproduction_status= NOT_RUN | checkpoint_mapping_status= VERIFIED_METADATA | checkpoint_training_dataset= None | checkpoint_transfer= None
+      category_scopes= [null] | category_resolution.ambiguous_count= 119 | resolved_count= 5884 | unresolved_count= 0
+      query_count_per_subset= {"full": 6003, "sf": 4069, "validated": 586}
+      gallery_count= 74381 | gallery_identity_sha256= 1db68c59d96f014cdbecf936e108653de98abef0bd9a98a8abc2fe08b5dec4b4
+      reused_query_result_count= 0
+      release_artifact_hashes= {"aggregated_audit": "27bdbef041200dc393b5478d3e57121bc16c70a9acc2e98a19fb48408a99533c", "mbeir_candidates": "121ec284832c33289ee13bfac19d5d59dc3f8aeddf672d784fd5eb8bcdf79eef", "mbeir_query": "b601ef6a5411bf9385cff41e64bea863871ab1094cd09d78683de6a5141165ef", "sf": "95a93883334e351e4d3aaaf25e47e89b4
+encoder_fashioniq_6a528e877c328772e2c7bb28                 smoke={"label": null, "limited": false, "query_limit": null}                 ref_elig=true
+      reproduction_status= METRICS_MEASURED_MAPPING_UNVERIFIED | checkpoint_mapping_status= VERIFIED_METADATA | checkpoint_training_dataset= None | checkpoint_transfer= None
+      category_scopes= [null] | category_resolution.ambiguous_count= 119 | resolved_count= 5884 | unresolved_count= 0
+      query_count_per_subset= {"full": 6003, "sf": 4069, "validated": 586}
+      gallery_count= 74381 | gallery_identity_sha256= 1db68c59d96f014cdbecf936e108653de98abef0bd9a98a8abc2fe08b5dec4b4
+      reused_query_result_count= 0
+      release_artifact_hashes= {"aggregated_audit": "27bdbef041200dc393b5478d3e57121bc16c70a9acc2e98a19fb48408a99533c", "mbeir_candidates": "121ec284832c33289ee13bfac19d5d59dc3f8aeddf672d784fd5eb8bcdf79eef", "mbeir_query": "b601ef6a5411bf9385cff41e64bea863871ab1094cd09d78683de6a5141165ef", "sf": "95a93883334e351e4d3aaaf25e47e89b4
+encoder_fashioniq_eda30a37c0bc17ac43844f09                 smoke={"label": "SMOKE QUERY LIMIT; full released gallery preserved", "limited": true, "query_limit": 8} ref_elig=true
+      reproduction_status= METRICS_MEASURED_MAPPING_UNVERIFIED | checkpoint_mapping_status= VERIFIED_METADATA | checkpoint_training_dataset= None | checkpoint_transfer= None
+      category_scopes= [null] | category_resolution.ambiguous_count= 119 | resolved_count= 5884 | unresolved_count= 0
+      query_count_per_subset= {"full": 8, "sf": 6, "validated": 0}
+      gallery_count= 74381 | gallery_identity_sha256= 1db68c59d96f014cdbecf936e108653de98abef0bd9a98a8abc2fe08b5dec4b4
+      reused_query_result_count= 0
+      release_artifact_hashes= {"aggregated_audit": "27bdbef041200dc393b5478d3e57121bc16c70a9acc2e98a19fb48408a99533c", "mbeir_candidates": "121ec284832c33289ee13bfac19d5d59dc3f8aeddf672d784fd5eb8bcdf79eef", "mbeir_query": "b601ef6a5411bf9385cff41e64bea863871ab1094cd09d78683de6a5141165ef", "sf": "95a93883334e351e4d3aaaf25e47e89b4
+habit_fiq_n02_497c25c57fbeba885ecfb9d1                     smoke={"label": null, "limited": false, "query_limit": null}                 ref_elig=true
+      reference_eligibility= {"measured": true, "method": "score+rank on a synthetic gallery whose reference is the exact match", "reason": null, "reference_eligible": true, "reference_rank": 1}
+      reproduction_status= NOT_RUN | checkpoint_mapping_status= VERIFIED_METADATA | checkpoint_training_dataset= None | checkpoint_transfer= None
+      category_scopes= [null] | category_resolution.ambiguous_count= 119 | resolved_count= 5884 | unresolved_count= 0
+      query_count_per_subset= {"full": 6003, "sf": 4069, "validated": 586}
+      gallery_count= 74381 | gallery_identity_sha256= 1db68c59d96f014cdbecf936e108653de98abef0bd9a98a8abc2fe08b5dec4b4
+      reused_query_result_count= 0
+      release_artifact_hashes= {"aggregated_audit": "27bdbef041200dc393b5478d3e57121bc16c70a9acc2e98a19fb48408a99533c", "mbeir_candidates": "121ec284832c33289ee13bfac19d5d59dc3f8aeddf672d784fd5eb8bcdf79eef", "mbeir_query": "b601ef6a5411bf9385cff41e64bea863871ab1094cd09d78683de6a5141165ef", "sf": "95a93883334e351e4d3aaaf25e47e89b4
+habit_fiq_n02_e0dd04a46ef7a58334b9e353                     smoke={"label": null, "limited": false, "query_limit": null}                 ref_elig=true
+      reproduction_status= NOT_RUN | checkpoint_mapping_status= VERIFIED_METADATA | checkpoint_training_dataset= None | checkpoint_transfer= None
+      category_scopes= [null] | category_resolution.ambiguous_count= 119 | resolved_count= 5884 | unresolved_count= 0
+      query_count_per_subset= {"full": 6003, "sf": 4069, "validated": 586}
+      gallery_count= 74381 | gallery_identity_sha256= 1db68c59d96f014cdbecf936e108653de98abef0bd9a98a8abc2fe08b5dec4b4
+      reused_query_result_count= 0
+      release_artifact_hashes= {"aggregated_audit": "27bdbef041200dc393b5478d3e57121bc16c70a9acc2e98a19fb48408a99533c", "mbeir_candidates": "121ec284832c33289ee13bfac19d5d59dc3f8aeddf672d784fd5eb8bcdf79eef", "mbeir_query": "b601ef6a5411bf9385cff41e64bea863871ab1094cd09d78683de6a5141165ef", "sf": "95a93883334e351e4d3aaaf25e47e89b4
+hint_fashioniq_4bc9893a977e501b82378e76                    smoke={"label": null, "limited": false, "query_limit": null}                 ref_elig=true
+      reference_eligibility= {"measured": true, "method": "score+rank on a synthetic gallery whose reference is the exact match", "reason": null, "reference_eligible": true, "reference_rank": 1}
+      reproduction_status= NOT_RUN | checkpoint_mapping_status= VERIFIED_METADATA | checkpoint_training_dataset= None | checkpoint_transfer= None
+      category_scopes= [null] | category_resolution.ambiguous_count= 119 | resolved_count= 5884 | unresolved_count= 0
+      query_count_per_subset= {"full": 6003, "sf": 4069, "validated": 586}
+      gallery_count= 74381 | gallery_identity_sha256= 1db68c59d96f014cdbecf936e108653de98abef0bd9a98a8abc2fe08b5dec4b4
+      reused_query_result_count= 0
+      release_artifact_hashes= {"aggregated_audit": "27bdbef041200dc393b5478d3e57121bc16c70a9acc2e98a19fb48408a99533c", "mbeir_candidates": "121ec284832c33289ee13bfac19d5d59dc3f8aeddf672d784fd5eb8bcdf79eef", "mbeir_query": "b601ef6a5411bf9385cff41e64bea863871ab1094cd09d78683de6a5141165ef", "sf": "95a93883334e351e4d3aaaf25e47e89b4
+intent_fiq_n02_37ee72aa298b276d1bfda0fa                    smoke={"label": null, "limited": false, "query_limit": null}                 ref_elig=true
+      reference_eligibility= {"measured": true, "method": "score+rank on a synthetic gallery whose reference is the exact match", "reason": null, "reference_eligible": true, "reference_rank": 1}
+      reproduction_status= NOT_RUN | checkpoint_mapping_status= VERIFIED_METADATA | checkpoint_training_dataset= None | checkpoint_transfer= None
+      category_scopes= [null] | category_resolution.ambiguous_count= 119 | resolved_count= 5884 | unresolved_count= 0
+      query_count_per_subset= {"full": 6003, "sf": 4069, "validated": 586}
+      gallery_count= 74381 | gallery_identity_sha256= 1db68c59d96f014cdbecf936e108653de98abef0bd9a98a8abc2fe08b5dec4b4
+      reused_query_result_count= 0
+      release_artifact_hashes= {"aggregated_audit": "27bdbef041200dc393b5478d3e57121bc16c70a9acc2e98a19fb48408a99533c", "mbeir_candidates": "121ec284832c33289ee13bfac19d5d59dc3f8aeddf672d784fd5eb8bcdf79eef", "mbeir_query": "b601ef6a5411bf9385cff41e64bea863871ab1094cd09d78683de6a5141165ef", "sf": "95a93883334e351e4d3aaaf25e47e89b4
+limn_base_iter0_all_categories_10173dc45dea8c90fd2a284b    smoke={"label": null, "limited": false, "query_limit": null}                 ref_elig=true
+      reproduction_status= BLOCKED_RUNTIME_PREREQUISITES | checkpoint_mapping_status= VERIFIED_METADATA | checkpoint_training_dataset= None | checkpoint_transfer= None
+      category_scopes= ["dress", "shirt", "toptee"] | category_resolution.ambiguous_count= 119 | resolved_count= 5884 | unresolved_count= 0
+      query_count_per_subset= {"full": 6003, "sf": 4069, "validated": 586}
+      gallery_count= 74381 | gallery_identity_sha256= 1db68c59d96f014cdbecf936e108653de98abef0bd9a98a8abc2fe08b5dec4b4
+      reused_query_result_count= 0
+      release_artifact_hashes= {"aggregated_audit": "27bdbef041200dc393b5478d3e57121bc16c70a9acc2e98a19fb48408a99533c", "mbeir_candidates": "121ec284832c33289ee13bfac19d5d59dc3f8aeddf672d784fd5eb8bcdf79eef", "mbeir_query": "b601ef6a5411bf9385cff41e64bea863871ab1094cd09d78683de6a5141165ef", "sf": "95a93883334e351e4d3aaaf25e47e89b4
+limn_base_iter0_all_categories_3f86f58483b368377e2c151e    smoke={"label": "SMOKE QUERY LIMIT; full released gallery preserved", "limited": true, "query_limit": 8} ref_elig=true
+      reproduction_status= BLOCKED_RUNTIME_PREREQUISITES | checkpoint_mapping_status= VERIFIED_METADATA | checkpoint_training_dataset= None | checkpoint_transfer= None
+      category_scopes= ["dress", "shirt", "toptee"] | category_resolution.ambiguous_count= 119 | resolved_count= 5884 | unresolved_count= 0
+      query_count_per_subset= {"full": 8, "sf": 6, "validated": 0}
+      gallery_count= 74381 | gallery_identity_sha256= 1db68c59d96f014cdbecf936e108653de98abef0bd9a98a8abc2fe08b5dec4b4
+      reused_query_result_count= 0
+      release_artifact_hashes= {"aggregated_audit": "27bdbef041200dc393b5478d3e57121bc16c70a9acc2e98a19fb48408a99533c", "mbeir_candidates": "121ec284832c33289ee13bfac19d5d59dc3f8aeddf672d784fd5eb8bcdf79eef", "mbeir_query": "b601ef6a5411bf9385cff41e64bea863871ab1094cd09d78683de6a5141165ef", "sf": "95a93883334e351e4d3aaaf25e47e89b4
+ptha_mtst_cirr_transfer_315dd590eeb03d2c78d7937a           smoke={"label": null, "limited": false, "query_limit": null}                 ref_elig=true
+      reproduction_status= SELECTED_TRANSFER_ONLY | checkpoint_mapping_status= VERIFIED_METADATA | checkpoint_training_dataset= CIRR | checkpoint_transfer= CIRR→FashionIQ transfer
+      category_scopes= [null] | category_resolution.ambiguous_count= 119 | resolved_count= 5884 | unresolved_count= 0
+      query_count_per_subset= {"full": 6003, "sf": 4069, "validated": 586}
+      gallery_count= 74381 | gallery_identity_sha256= 1db68c59d96f014cdbecf936e108653de98abef0bd9a98a8abc2fe08b5dec4b4
+      reused_query_result_count= 0
+      release_artifact_hashes= {"aggregated_audit": "27bdbef041200dc393b5478d3e57121bc16c70a9acc2e98a19fb48408a99533c", "mbeir_candidates": "121ec284832c33289ee13bfac19d5d59dc3f8aeddf672d784fd5eb8bcdf79eef", "mbeir_query": "b601ef6a5411bf9385cff41e64bea863871ab1094cd09d78683de6a5141165ef", "sf": "95a93883334e351e4d3aaaf25e47e89b4
+released_audit_task7_mm_any_released_audit_task7_mm_any    smoke={"label": null, "limited": false, "query_limit": null}                 ref_elig=null
+      reproduction_status= RELEASED_ARTIFACT_IMPORT | checkpoint_mapping_status= None | checkpoint_training_dataset= None | checkpoint_transfer= None
+      category_scopes= null | category_resolution.ambiguous_count= None | resolved_count= None | unresolved_count= None
+      query_count_per_subset= {"full": 6003, "sf": 4069, "validated": 586}
+      gallery_count= 74381 | gallery_identity_sha256= 1db68c59d96f014cdbecf936e108653de98abef0bd9a98a8abc2fe08b5dec4b4
+      reused_query_result_count= None
+      release_artifact_hashes= null
+tme_fashioniq_0_ad477312aa57c1b9114f9e51                   smoke={"label": null, "limited": false, "query_limit": null}                 ref_elig=true
+      reproduction_status= NOT_RUN | checkpoint_mapping_status= VERIFIED_METADATA | checkpoint_training_dataset= None | checkpoint_transfer= None
+      category_scopes= [null] | category_resolution.ambiguous_count= 119 | resolved_count= 5884 | unresolved_count= 0
+      query_count_per_subset= {"full": 6003, "sf": 4069, "validated": 586}
+      gallery_count= 74381 | gallery_identity_sha256= 1db68c59d96f014cdbecf936e108653de98abef0bd9a98a8abc2fe08b5dec4b4
+      reused_query_result_count= 0
+      release_artifact_hashes= {"aggregated_audit": "27bdbef041200dc393b5478d3e57121bc16c70a9acc2e98a19fb48408a99533c", "mbeir_candidates": "121ec284832c33289ee13bfac19d5d59dc3f8aeddf672d784fd5eb8bcdf79eef", "mbeir_query": "b601ef6a5411bf9385cff41e64bea863871ab1094cd09d78683de6a5141165ef", "sf": "95a93883334e351e4d3aaaf25e47e89b4

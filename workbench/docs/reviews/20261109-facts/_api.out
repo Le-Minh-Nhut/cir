@@ -1,0 +1,112 @@
+n_rows: 9
+top-level keys of row0: ['_recorded_identity', 'adapter', 'adapter_module_source_hash', 'adapter_module_source_status', 'capabilities', 'capability_detail', 'category_resolution', 'category_scope_failures', 'category_scopes', 'checkpoint_id', 'checkpoint_identity', 'checkpoint_labels', 'checkpoint_mapping_status', 'checkpoint_training_dataset', 'checkpoint_training_noise_pct', 'checkpoint_transfer', 'condition_status', 'conditions', 'duplicate_attempt_count', 'duplicate_status', 'evaluation_noise_pct', 'execution_status', 'failed_expectations', 'feature_storage', 'gallery_candidate_basename_match', 'gallery_count', 'gallery_identity_sha256', 'hash_verification', 'interpreter_verification_status', 'is_failed', 'is_model_run', 'is_synthetic', 'measurement', 'measurement_group_id', 'measurement_identity', 'measurement_identity_confidence', 'measurement_identity_missing_inputs', 'metrics', 'model_id', 'paper_vs_release_gallery', 'preprocessing', 'protocol_id', 'provenance_label', 'query_count', 'query_count_per_subset', 'reference_eligible', 'release_artifact_hashes', 'reproduction_status', 'resume_key', 'reused_query_result_count', 'run_id', 'runtime', 'schema_version', 'scoring_impl', 'scoring_module_source_hash', 'seed', 'smoke', 'statistics', 'statistics_whole_run', 'subset', 'synthetic', 'synthetic_fixture', 'training_or_transfer_label', 'transfer', 'unresolved_category_query_count']
+
+### model_id='limn' run_id='10173dc45dea8c90fd2a284b'
+   execution_status='PARTIAL'
+   capabilities.candidate_topk=false
+   capabilities keys=['aggregate_metrics', 'candidate_topk', 'image_availability', 'per_query_target_ranks']
+   measurement.coverage=0.980176578377478
+   measurement keys=['coverage', 'denominator', 'image_availability_sample_size', 'sample_count', 'scored_count', 'subset', 'unscored_by_kind', 'unscored_query_count', 'whole_run']
+   scoring_impl.impl='matmul'
+   duplicate_status='undetermined'
+   measurement_identity_confidence='partial'
+   other top-level: {"adapter_module_source_status": "available", "category_scope_failures": {"image_only_empty_text": 119, "multimodal": 119, "text_only_black_image": 119}, "category_scopes": ["dress", "shirt", "toptee"], "checkpoint_id": "base_iter0_all_categories", "checkpoint_identity": "12cbbf95d6c8a03e6174b560bca423f13aefe05fa50fad87ee197ae7d680ac06", "checkpoint_labels": {"checkpoint_bundle_members": [{"checkpoint_id": "base_iter0_dress", "checkpoint_mapping_status": "VERIFIED_METADATA", "checkpoint_training_dataset": null, "checkpoint_training_noise_pct": null}, {"checkpoint_id": "base_iter0_shirt", "chec
+
+### model_id='conesep' run_id='30f6de423861cc1d6c78c361'
+   execution_status='COMPLETED'
+   capabilities.candidate_topk=true
+   capabilities keys=['aggregate_metrics', 'candidate_topk', 'image_availability', 'per_query_target_ranks']
+   measurement.coverage=1.0
+   measurement keys=['coverage', 'denominator', 'image_availability_sample_size', 'sample_count', 'scored_count', 'subset', 'unscored_by_kind', 'unscored_query_count', 'whole_run']
+   scoring_impl.impl='einsum-optimized'
+   duplicate_status='unique'
+   measurement_identity_confidence='full'
+   other top-level: {"adapter_module_source_status": "available", "category_scope_failures": {"image_only_empty_text": 0, "multimodal": 0, "text_only_black_image": 0}, "category_scopes": [null], "checkpoint_id": "fiq_n02", "checkpoint_identity": "5a864ee5a78c1d249320c4f997cc7d14b529b329b2efba5577c82dbe019ed9d2", "checkpoint_labels": {"checkpoint_mapping_status": "VERIFIED_METADATA", "checkpoint_training_dataset": null, "checkpoint_training_noise_pct": 20, "checkpoint_transfer": null, "evaluation_noise_pct": 0, "labels_source": "registry", "reproduction_status": "NOT_RUN"}, "checkpoint_mapping_status": "VERIFIED_M
+
+### model_id='ptha_mtst' run_id='315dd590eeb03d2c78d7937a'
+   execution_status='COMPLETED'
+   capabilities.candidate_topk=false
+   capabilities keys=['aggregate_metrics', 'candidate_topk', 'image_availability', 'per_query_target_ranks']
+   measurement.coverage=1.0
+   measurement keys=['coverage', 'denominator', 'image_availability_sample_size', 'sample_count', 'scored_count', 'subset', 'unscored_by_kind', 'unscored_query_count', 'whole_run']
+   scoring_impl.impl='einsum-optimized'
+   duplicate_status='undetermined'
+   measurement_identity_confidence='partial'
+   other top-level: {"adapter_module_source_status": "available", "category_scope_failures": {"image_only_empty_text": 0, "multimodal": 0, "text_only_black_image": 0}, "category_scopes": [null], "checkpoint_id": "cirr_transfer", "checkpoint_identity": "1c4dab86a9f66dfe10aff75b39790432eb6cc746cf27b6cfab74b66d93b7588f", "checkpoint_labels": {"checkpoint_mapping_status": "VERIFIED_METADATA", "checkpoint_training_dataset": "CIRR", "checkpoint_training_noise_pct": null, "checkpoint_transfer": "CIRR→FashionIQ transfer", "evaluation_noise_pct": 0, "labels_source": "registry", "reproduction_status": "SELECTED_TRANSFER_ON
+
+### model_id='intent' run_id='37ee72aa298b276d1bfda0fa'
+   execution_status='COMPLETED'
+   capabilities.candidate_topk=true
+   capabilities keys=['aggregate_metrics', 'candidate_topk', 'image_availability', 'per_query_target_ranks']
+   measurement.coverage=1.0
+   measurement keys=['coverage', 'denominator', 'image_availability_sample_size', 'sample_count', 'scored_count', 'subset', 'unscored_by_kind', 'unscored_query_count', 'whole_run']
+   scoring_impl.impl='einsum'
+   duplicate_status='unique'
+   measurement_identity_confidence='full'
+   other top-level: {"adapter_module_source_status": "available", "category_scope_failures": {"image_only_empty_text": 0, "multimodal": 0, "text_only_black_image": 0}, "category_scopes": [null], "checkpoint_id": "fiq_n02", "checkpoint_identity": "2a504cadfd6b1c2486a2c508538b0160c5653f62c7cd11f4f3d8a9534dc26afc", "checkpoint_labels": {"checkpoint_mapping_status": "VERIFIED_METADATA", "checkpoint_training_dataset": null, "checkpoint_training_noise_pct": 20, "checkpoint_transfer": null, "evaluation_noise_pct": 0, "labels_source": "registry", "reproduction_status": "NOT_RUN"}, "checkpoint_mapping_status": "VERIFIED_M
+
+### model_id='habit' run_id='497c25c57fbeba885ecfb9d1'
+   execution_status='COMPLETED'
+   capabilities.candidate_topk=true
+   capabilities keys=['aggregate_metrics', 'candidate_topk', 'image_availability', 'per_query_target_ranks']
+   measurement.coverage=1.0
+   measurement keys=['coverage', 'denominator', 'image_availability_sample_size', 'sample_count', 'scored_count', 'subset', 'unscored_by_kind', 'unscored_query_count', 'whole_run']
+   scoring_impl.impl='einsum'
+   duplicate_status='undetermined'
+   measurement_identity_confidence='partial'
+   other top-level: {"adapter_module_source_status": "available", "category_scope_failures": {"image_only_empty_text": 0, "multimodal": 0, "text_only_black_image": 0}, "category_scopes": [null], "checkpoint_id": "fiq_n02", "checkpoint_identity": "814d2d0ceb29ef910f37562e8bea8a76cf38aa546fbc2102e495df687c276b03", "checkpoint_labels": {"checkpoint_mapping_status": "VERIFIED_METADATA", "checkpoint_training_dataset": null, "checkpoint_training_noise_pct": 20, "checkpoint_transfer": null, "evaluation_noise_pct": 0, "labels_source": "registry", "reproduction_status": "NOT_RUN"}, "checkpoint_mapping_status": "VERIFIED_M
+
+### model_id='hint' run_id='4bc9893a977e501b82378e76'
+   execution_status='COMPLETED'
+   capabilities.candidate_topk=true
+   capabilities keys=['aggregate_metrics', 'candidate_topk', 'image_availability', 'per_query_target_ranks']
+   measurement.coverage=1.0
+   measurement keys=['coverage', 'denominator', 'image_availability_sample_size', 'sample_count', 'scored_count', 'subset', 'unscored_by_kind', 'unscored_query_count', 'whole_run']
+   scoring_impl.impl='einsum'
+   duplicate_status='unique'
+   measurement_identity_confidence='full'
+   other top-level: {"adapter_module_source_status": "available", "category_scope_failures": {"image_only_empty_text": 0, "multimodal": 0, "text_only_black_image": 0}, "category_scopes": [null], "checkpoint_id": "fashioniq", "checkpoint_identity": "bf9c72d42206b667ed586758c15c648970df821857e4067f26155a114a6517d4", "checkpoint_labels": {"checkpoint_mapping_status": "VERIFIED_METADATA", "checkpoint_training_dataset": null, "checkpoint_training_noise_pct": null, "checkpoint_transfer": null, "evaluation_noise_pct": 0, "labels_source": "registry", "reproduction_status": "NOT_RUN"}, "checkpoint_mapping_status": "VERIFI
+
+### model_id='encoder' run_id='6a528e877c328772e2c7bb28'
+   execution_status='COMPLETED'
+   capabilities.candidate_topk=false
+   capabilities keys=['aggregate_metrics', 'candidate_topk', 'image_availability', 'per_query_target_ranks']
+   measurement.coverage=1.0
+   measurement keys=['coverage', 'denominator', 'image_availability_sample_size', 'sample_count', 'scored_count', 'subset', 'unscored_by_kind', 'unscored_query_count', 'whole_run']
+   scoring_impl.impl='matmul'
+   duplicate_status='undetermined'
+   measurement_identity_confidence='partial'
+   other top-level: {"adapter_module_source_status": "available", "category_scope_failures": {"image_only_empty_text": 0, "multimodal": 0, "text_only_black_image": 0}, "category_scopes": [null], "checkpoint_id": "fashioniq", "checkpoint_identity": "0f31c50150a7bda3495e3378df13b4cec7924b52efd23b5e5dd9731459da9173", "checkpoint_labels": {"checkpoint_mapping_status": "VERIFIED_METADATA", "checkpoint_training_dataset": null, "checkpoint_training_noise_pct": null, "checkpoint_transfer": null, "evaluation_noise_pct": 0, "labels_source": "registry", "reproduction_status": "METRICS_MEASURED_MAPPING_UNVERIFIED"}, "checkpo
+
+### model_id='tme' run_id='ad477312aa57c1b9114f9e51'
+   execution_status='COMPLETED'
+   capabilities.candidate_topk=false
+   capabilities keys=['aggregate_metrics', 'candidate_topk', 'image_availability', 'per_query_target_ranks']
+   measurement.coverage=1.0
+   measurement keys=['coverage', 'denominator', 'image_availability_sample_size', 'sample_count', 'scored_count', 'subset', 'unscored_by_kind', 'unscored_query_count', 'whole_run']
+   scoring_impl.impl='einsum'
+   duplicate_status='undetermined'
+   measurement_identity_confidence='partial'
+   other top-level: {"adapter_module_source_status": "available", "category_scope_failures": {"image_only_empty_text": 0, "multimodal": 0, "text_only_black_image": 0}, "category_scopes": [null], "checkpoint_id": "fashioniq_0", "checkpoint_identity": "fea7fc08760dad1f5a66184ea7e65b45388f9781157cbd33a3b64db74103968a", "checkpoint_labels": {"checkpoint_mapping_status": "VERIFIED_METADATA", "checkpoint_training_dataset": null, "checkpoint_training_noise_pct": 0, "checkpoint_transfer": null, "evaluation_noise_pct": 0, "labels_source": "registry", "reproduction_status": "NOT_RUN"}, "checkpoint_mapping_status": "VERIFIE
+
+### model_id='habit' run_id='e0dd04a46ef7a58334b9e353'
+   execution_status='FAILED'
+   capabilities.candidate_topk=false
+   capabilities keys=['aggregate_metrics', 'candidate_topk', 'image_availability', 'per_query_target_ranks']
+   measurement.coverage=0.0
+   measurement keys=['coverage', 'denominator', 'image_availability_sample_size', 'sample_count', 'scored_count', 'subset', 'unscored_by_kind', 'unscored_query_count', 'whole_run']
+   scoring_impl.impl='einsum'
+   duplicate_status='undetermined'
+   measurement_identity_confidence='partial'
+   other top-level: {"adapter_module_source_status": "available", "category_scope_failures": {"image_only_empty_text": 0, "multimodal": 0, "text_only_black_image": 0}, "category_scopes": [null], "checkpoint_id": "fiq_n02", "checkpoint_identity": "814d2d0ceb29ef910f37562e8bea8a76cf38aa546fbc2102e495df687c276b03", "checkpoint_labels": {"checkpoint_mapping_status": "VERIFIED_METADATA", "checkpoint_training_dataset": null, "checkpoint_training_noise_pct": 20, "checkpoint_transfer": null, "evaluation_noise_pct": 0, "labels_source": "registry", "reproduction_status": "NOT_RUN"}, "checkpoint_mapping_status": "VERIFIED_M
+
+variants list:
+   limn 10173dc45dea8c90fd2a284b PARTIAL undetermined
+   conesep 30f6de423861cc1d6c78c361 COMPLETED unique
+   ptha_mtst 315dd590eeb03d2c78d7937a COMPLETED undetermined
+   intent 37ee72aa298b276d1bfda0fa COMPLETED unique
+   habit 497c25c57fbeba885ecfb9d1 COMPLETED undetermined
+   hint 4bc9893a977e501b82378e76 COMPLETED unique
+   encoder 6a528e877c328772e2c7bb28 COMPLETED undetermined
+   tme ad477312aa57c1b9114f9e51 COMPLETED undetermined
+   habit e0dd04a46ef7a58334b9e353 FAILED undetermined
