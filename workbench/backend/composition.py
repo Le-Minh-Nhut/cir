@@ -274,7 +274,7 @@ def list_composition_summaries(
                 results.append(summary)
     for summary in results:
         decorate_summary(artifacts_root, summary)
-    annotate_duplicate_attempts(results)
+    annotate_duplicate_attempts(results, artifacts_root)
 
     def rank(summary: Mapping[str, Any]) -> tuple[int, str, str]:
         if is_imported_summary(summary):
@@ -503,8 +503,74 @@ def transfer_facts(summary: Mapping[str, Any]) -> dict[str, Any]:
 #: Inputs that make two runs the same measurement. A run missing the tensor environment digest or
 #: the checkpoint content identity cannot be proven distinct from another attempt, so it is
 #: reported as ``undetermined`` rather than either "unique" or "duplicate".
-def measurement_identity(summary: Mapping[str, Any]) -> dict[str, Any]:
-    """The defensible identity of WHAT was measured (not which file it landed in)."""
+#: How each adapter's `score` combines query and target features, read from the model's own
+#: registry-declared adapter module. Recorded per run so a cohort table cannot imply comparability
+#: between a numpy `einsum(..., optimize=True)` path and a plain `einsum`/matmul path when the
+#: implementations genuinely differ. A module that cannot be read yields `unknown`, never a guess.
+_SCORING_IMPL_CACHE: dict[tuple[str, str], dict[str, Any]] = {}
+
+def scoring_implementation(model_id: str | None, scoring_hash: str | None,
+                           adapter_hash: str | None) -> dict[str, Any]:
+    """The scoring implementation behind a run, derived from that adapter's own source.
+
+    `optimize=True` selects numpy's contraction-order optimiser, which picks a different
+    intermediate and therefore a different floating-point summation order than the plain
+    `einsum`/matmul path. Two runs scored with different implementations are not bit-comparable,
+    so this is a property of the measurement, not a display detail.
+
+    Derivation reads the registered adapter module's `score` body. It is never inferred from a hash
+    string, and a row whose model cannot be resolved reports `unknown` with the reason.
+    """
+    resolved = _scoring_impl_for(model_id, adapter_hash)
+    return {"impl": resolved["impl"], "basis": resolved["basis"],
+            "adapter_hash_known": adapter_hash is not None,
+            "scoring_hash_known": scoring_hash is not None}
+
+def _scoring_impl_for(model_id: str | None, adapter_hash: str | None) -> dict[str, Any]:
+    from workbench.composition.adapters import capability
+
+    if not model_id:
+        return {"impl": "unknown", "basis": "no model id recorded for this row"}
+    module_name = capability(model_id)
+    if not module_name:
+        return {"impl": "unknown", "basis": f"{model_id} declares no composition adapter module"}
+    key = (model_id, module_name)
+    cached = _SCORING_IMPL_CACHE.get(key)
+    if cached is not None:
+        return cached
+    import inspect as _inspect
+    import sys as _sys
+
+    try:
+        module = _sys.modules.get(module_name) or __import__(module_name, fromlist=["Adapter"])
+        adapter_type = getattr(module, "Adapter", None)
+        source = _inspect.getsource(adapter_type.score) if adapter_type is not None else ""
+    except Exception as error:
+        result = {"impl": "unknown", "basis": f"{type(error).__name__}: {error}"}
+        _SCORING_IMPL_CACHE[key] = result
+        return result
+    if "optimize=True" in source:
+        result = {"impl": "einsum-optimized", "basis": f"{module_name}.Adapter.score uses optimize=True"}
+    elif "einsum" in source:
+        result = {"impl": "einsum", "basis": f"{module_name}.Adapter.score uses plain einsum"}
+    elif "@" in source or "linalg" in source or "dot" in source:
+        result = {"impl": "matmul", "basis": f"{module_name}.Adapter.score uses matmul"}
+    else:
+        result = {"impl": "unknown", "basis": f"{module_name}.Adapter.score has no recognised "
+                                              "contraction"}
+    _SCORING_IMPL_CACHE[key] = result
+    return result
+
+def measurement_identity(summary: Mapping[str, Any],
+                         identity_source: Mapping[str, Any] | None = None) -> dict[str, Any]:
+    """The defensible identity of WHAT was measured (not which file it landed in).
+
+    `identity_source` is the run's recorded identity block (`runs/<run_id>/ranks/*.json:identity`),
+    which is where `scoring_module_source_hash` and `adapter_module_source_hash` actually live; the
+    summary does not carry them. Passing it is what lets a scoring-only change read as a distinct
+    measurement instead of a duplicate. A summary value still wins when both exist.
+    """
+    recorded = identity_source if isinstance(identity_source, Mapping) else {}
     runtime = summary.get("runtime") if isinstance(summary.get("runtime"), Mapping) else {}
     interpreter = (runtime.get("model_interpreter")
                    if isinstance(runtime.get("model_interpreter"), Mapping) else {})
@@ -522,6 +588,19 @@ def measurement_identity(summary: Mapping[str, Any]) -> dict[str, Any]:
         "seed": summary.get("seed"),
         "preprocessing": summary.get("preprocessing"),
         "environment_fingerprint": interpreter.get("environment_fingerprint"),
+        # The SCORING PATH is part of what was measured. Without it, two runs of the same model
+        # that differ only in scoring implementation hashed to one `group_id` and were labelled
+        # `duplicate` -- i.e. "the same thing measured twice" -- which is false. The cohort really
+        # contains two implementations: conesep/ptha_mtst/csmcir score with `optimize=True` while
+        # the BLIP-2 family uses a plain `einsum`.
+        #
+        # `scoring_module_source_hash` hashes the shared adapters module; `adapter_module_source_hash`
+        # hashes the model's own module, which is where a `score` override lives. Absent values stay
+        # absent (never fabricated) and are reported through `missing_identity_inputs`.
+        "scoring_module_source_hash": (summary.get("scoring_module_source_hash")
+                                       or recorded.get("scoring_module_source_hash")),
+        "adapter_module_source_hash": (summary.get("adapter_module_source_hash")
+                                       or recorded.get("adapter_module_source_hash")),
         "checkpoint_transfer": transfer_facts(summary)["label"],
         # An absent knobs record is evidence of nothing; it is included only when the evaluator
         # actually recorded one, so two unrelated aggregate runs cannot be declared duplicates
@@ -530,7 +609,11 @@ def measurement_identity(summary: Mapping[str, Any]) -> dict[str, Any]:
         "measurement_denominator": (metrics.get("gap_cohort_count")
                                     or summary.get("query_count")),
     }
-    essential = ("checkpoint_identity", "gallery_identity_sha256", "environment_fingerprint")
+    # `scoring_module_source_hash` is essential for the same reason: without it an older artifact
+    # cannot be proven different from a run whose scoring implementation changed, so the honest
+    # answer is `partial`, not `unique` and certainly not `duplicate`.
+    essential = ("checkpoint_identity", "gallery_identity_sha256", "environment_fingerprint",
+                 "scoring_module_source_hash")
     missing = [name for name in essential if not identity.get(name)]
     payload = json.dumps(identity, sort_keys=True, separators=(",", ":"), default=str)
     return {"identity": identity,
@@ -538,7 +621,8 @@ def measurement_identity(summary: Mapping[str, Any]) -> dict[str, Any]:
             "missing_identity_inputs": missing,
             "confidence": "partial" if missing else "full"}
 
-def annotate_duplicate_attempts(summaries: list[dict[str, Any]]) -> None:
+def annotate_duplicate_attempts(summaries: list[dict[str, Any]],
+                                artifacts_root: Path | None = None) -> None:
     """Group the served rows by measurement identity and label each row in place.
 
     ``duplicate_status`` is ``unique`` (one attempt of this measurement), ``duplicate`` (more than
@@ -554,7 +638,10 @@ def annotate_duplicate_attempts(summaries: list[dict[str, Any]]) -> None:
             summary["duplicate_attempt_count"] = 0
             summary["duplicate_status"] = "synthetic_fixture"
             continue
-        facts = measurement_identity(summary)
+        recorded = (summary.get("_recorded_identity")
+                    or ((load_run_ranks(artifacts_root, str(summary.get("run_id") or "")) or {})
+                        .get("identity") if artifacts_root is not None else None))
+        facts = measurement_identity(summary, recorded)
         summary["measurement_identity"] = facts["identity"]
         summary["measurement_group_id"] = facts["group_id"]
         summary["measurement_identity_confidence"] = facts["confidence"]
@@ -661,6 +748,25 @@ def decorate_summary(artifacts_root: Path, summary: dict[str, Any],
     flags, detail = composition_capabilities(artifacts_root, summary, ranks_data=ranks_data)
     ranks_data = ranks_data if ranks_data is not None else load_run_ranks(
         artifacts_root, str(summary.get("run_id") or ""))
+    # The rank artifact's identity block is where the scoring path lives; cached on the summary so
+    # grouping (which runs after decoration) never re-reads it.
+    recorded_identity = (ranks_data or {}).get("identity") if isinstance(ranks_data, Mapping) else None
+    summary["_recorded_identity"] = dict(recorded_identity) if isinstance(recorded_identity, Mapping) else None
+    summary["scoring_module_source_hash"] = (recorded_identity or {}).get("scoring_module_source_hash") \
+        if isinstance(recorded_identity, Mapping) else None
+    summary["adapter_module_source_hash"] = (recorded_identity or {}).get("adapter_module_source_hash") \
+        if isinstance(recorded_identity, Mapping) else None
+    # The single field a consumer cannot miss: is this row a run of a MODEL at all? An imported
+    # released-audit row is real data but needs no model, so ranking it beside HABIT's 35.62 makes
+    # it read as the best model in the table. `is_model_run` is the explicit answer, and
+    # `provenance_label` is the sentence to render.
+    summary["is_model_run"] = not is_imported_summary(summary)
+    summary["provenance_label"] = (
+        "released CIRCUS audit baseline (imported; not a model run of this workbench)"
+        if is_imported_summary(summary) else None)
+    summary["scoring_impl"] = scoring_implementation(
+        summary.get("model_id"), summary["scoring_module_source_hash"],
+        summary["adapter_module_source_hash"])
     subset = str(summary.get("subset") or "full")
     qids = subset_qids(subset)
     # Scoped to the SAME subset `query_count` describes, so scored + unscored == sample_count and
@@ -735,7 +841,7 @@ def get_composition_run_detail(
                 available = [s for s in SUBSETS if (run_dir / f"{s}.json").is_file()]
                 summary["available_subsets"] = available
                 decorate_summary(artifacts_root, summary)
-                annotate_duplicate_attempts([summary])
+                annotate_duplicate_attempts([summary], artifacts_root)
                 return summary
     return None
 
