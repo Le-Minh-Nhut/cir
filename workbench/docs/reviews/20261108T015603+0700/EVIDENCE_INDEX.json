@@ -1061,6 +1061,11 @@
       "dest": "native/evaluation_runs_badge_stub_uncorroborated_1440x900.png",
       "bytes": 140282,
       "sha256": "17570edd5aa7ee2ac40b1166f2f9b68d1ad52d00f84e97e7c49cff57f58dada6"
+    },
+    {
+      "dest": "tests/full_suite_b0f38bd.txt",
+      "bytes": 80544,
+      "sha256": "e7ec621366631c3346d3011cdb637a5d71be9355cf6f7239729de4e49d26d8bc"
     }
   ]
 }

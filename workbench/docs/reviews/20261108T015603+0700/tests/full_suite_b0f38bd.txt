@@ -1,0 +1,709 @@
+# Full serial suite sweep at b0f38bd2bc15efbaf75228f04be8327c9843b45c
+# revision : b0f38bd2bc15efbaf75228f04be8327c9843b45c (TESTED_SOURCE_SHA)
+# branch   : research/cir-failure-workbench
+# command  : workbench/envs/ctl312h/bin/python -m pytest workbench/tests -q -p no:cacheprovider -rfE --tb=no
+# cwd      : /home/heheboiz/data/cir
+# interp   : CPython 3.12.11 (workbench/envs/ctl312h/bin/python)
+# date     : 2026-11-08
+# duration : 2211.38s (0:36:51)
+# exit code: 1
+# summary  : 33 failed, 2186 passed, 47 skipped, 290 warnings
+# accounting: 2186 + 33 + 47 = 2266 = collected at this revision
+# note     : one serial run, no retries. This suite did NOT pass.
+# ---------------------------------------------------------------------------
+ssssssssss.s...............sssssssssssssssss......s..................... [  3%]
+........................................................................ [  6%]
+........................................................................ [  9%]
+.............FF......................F.................................. [ 12%]
+........................................................................ [ 15%]
+..................s..................................................... [ 19%]
+........................................................................ [ 22%]
+........................................................................ [ 25%]
+........................................................................ [ 28%]
+......s................................................................. [ 31%]
+........................................................................ [ 34%]
+.......F...............................................F................ [ 38%]
+........................................................................ [ 41%]
+............s........................................................ss. [ 44%]
+.....sss................................................................ [ 47%]
+.....................................................................F.. [ 50%]
+.............FF......F..................F..............F.FFFF.F......... [ 54%]
+............................FF.F..F..................................... [ 57%]
+........................................................................ [ 60%]
+........................................s.......................ssssss.. [ 63%]
+.........s...s.......................................................... [ 66%]
+........................................................................ [ 69%]
+........................................................................ [ 73%]
+...........................................s............................ [ 76%]
+........................................................................ [ 79%]
+........................................................................ [ 82%]
+...............................................................FFFFFFFF. [ 85%]
+...F.F....................................FF............................ [ 88%]
+........................................................................ [ 92%]
+........................................................................ [ 95%]
+.............................F.......................................... [ 98%]
+..................................                                       [100%]
+=============================== warnings summary ===============================
+workbench/backend/main.py:103: 1 warning
+workbench/tests/test_e2e_release_chain.py: 1 warning
+workbench/tests/test_failure_thresholds.py: 7 warnings
+workbench/tests/test_http_api_layer.py: 43 warnings
+workbench/tests/test_phase1_acceptance_scenarios.py: 5 warnings
+workbench/tests/test_release_blocker_cuda_readiness.py: 2 warnings
+  /home/heheboiz/data/cir/workbench/backend/main.py:103: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    @app.on_event("startup")
+
+workbench/envs/ctl312h/lib/python3.12/site-packages/fastapi/applications.py:4723: 2 warnings
+workbench/tests/test_e2e_release_chain.py: 2 warnings
+workbench/tests/test_failure_thresholds.py: 14 warnings
+workbench/tests/test_http_api_layer.py: 86 warnings
+workbench/tests/test_phase1_acceptance_scenarios.py: 10 warnings
+workbench/tests/test_release_blocker_cuda_readiness.py: 4 warnings
+  /home/heheboiz/data/cir/workbench/envs/ctl312h/lib/python3.12/site-packages/fastapi/applications.py:4723: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    return self.router.on_event(event_type)  # ty: ignore[deprecated]
+
+workbench/backend/main.py:110: 1 warning
+workbench/tests/test_e2e_release_chain.py: 1 warning
+workbench/tests/test_failure_thresholds.py: 7 warnings
+workbench/tests/test_http_api_layer.py: 43 warnings
+workbench/tests/test_phase1_acceptance_scenarios.py: 5 warnings
+workbench/tests/test_release_blocker_cuda_readiness.py: 2 warnings
+  /home/heheboiz/data/cir/workbench/backend/main.py:110: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    @app.on_event("shutdown")
+
+workbench/envs/ctl312h/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /home/heheboiz/data/cir/workbench/envs/ctl312h/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+workbench/envs/ctl312h/lib/python3.12/site-packages/transformers/utils/generic.py:441
+  /home/heheboiz/data/cir/workbench/envs/ctl312h/lib/python3.12/site-packages/transformers/utils/generic.py:441: FutureWarning: `torch.utils._pytree._register_pytree_node` is deprecated. Please use `torch.utils._pytree.register_pytree_node` instead.
+    _torch_pytree._register_pytree_node(
+
+workbench/tests/test_circus_inputs.py::test_black_image_preserves_size_mode_and_is_fresh
+  /home/heheboiz/data/cir/workbench/tests/test_circus_inputs.py:20: DeprecationWarning: Image.Image.getdata is deprecated and will be removed in Pillow 14 (2027-10-15). Use get_flattened_data instead.
+    assert all(pixel == (0, 0, 0) for pixel in black.getdata())
+
+workbench/tests/test_circus_inputs.py::test_staged_black_path_and_empty_text_cross_worker_seam
+  /home/heheboiz/data/cir/workbench/tests/test_circus_inputs.py:51: DeprecationWarning: Image.Image.getdata is deprecated and will be removed in Pillow 14 (2027-10-15). Use get_flattened_data instead.
+    assert all(pixel == (0, 0, 0) for pixel in black.getdata())
+
+workbench/tests/test_composition_image_identity.py::test_model_lock_serializes_processes
+workbench/tests/test_composition_image_identity.py::test_model_lock_assertion_fails_when_flock_is_noop
+  /home/heheboiz/.local/share/uv/python/cpython-3.12-linux-x86_64-gnu/lib/python3.12/multiprocessing/popen_fork.py:66: DeprecationWarning: This process (pid=3395505) is multi-threaded, use of fork() may lead to deadlocks in the child.
+    self.pid = os.fork()
+
+workbench/tests/test_e2e_release_chain.py: 1 warning
+workbench/tests/test_operator_contracts.py: 1 warning
+workbench/tests/test_pc_launcher.py: 1 warning
+workbench/tests/test_pc_readiness.py: 2 warnings
+workbench/tests/test_preparation_stages.py: 1 warning
+workbench/tests/test_ptha_mtst_preflight.py: 2 warnings
+workbench/tests/test_r19_tme_replay.py: 8 warnings
+workbench/tests/test_r20_shared_seams.py: 3 warnings
+workbench/tests/test_r23_cache_lifecycle.py: 1 warning
+workbench/tests/test_release_gate_scenarios.py: 2 warnings
+workbench/tests/test_standalone_operator_commands.py: 1 warning
+  /home/heheboiz/data/cir/workbench/envs/ctl312h/lib/python3.12/site-packages/huggingface_hub/file_download.py:949: FutureWarning: `resume_download` is deprecated and will be removed in version 1.0.0. Downloads always resume when possible. If you want to force a new download, use `force_download=True`.
+    warnings.warn(
+
+workbench/tests/test_limn_query_export_ranking.py::test_non_finite_similarity_check_is_defensive_and_documented_as_such
+  /home/heheboiz/data/cir/workbench/envs/ctl312h/lib/python3.12/site-packages/numpy/linalg/linalg.py:2582: RuntimeWarning: overflow encountered in multiply
+    s = (x.conj() * x).real
+
+workbench/tests/test_ptha_target_feature_contract.py::test_circat_boundary_projects_once_and_inference_consumes_projected_targets
+  /home/heheboiz/data/cir/workbench/replay/ptha_mtst.py:265: UserWarning: Converting a tensor with requires_grad=True to a scalar may lead to unexpected behavior.
+  Consider using tensor.detach() first. (Triggered internally at /__w/pytorch/pytorch/torch/csrc/autograd/generated/python_variable_methods.cpp:820.)
+    report["equivalence_vs_direct_projection_max_abs_diff"] = float(
+
+workbench/tests/test_r19_tme_replay.py::test_tme_preflight_checks_unverified_assets_against_registry_size_and_digest[EXISTS_UNVERIFIED_CHECKSUM-4-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-4-False]
+  /home/heheboiz/data/cir/workbench/tests/test_r19_tme_replay.py:109: UserWarning: Sparse invariant checks are implicitly disabled. Memory errors (e.g. SEGFAULT) will occur when operating on a sparse tensor which violates the invariants, but checks incur performance overhead. To silence this warning, explicitly opt in or out. See `torch.sparse.check_sparse_tensor_invariants.__doc__` for guidance.  (Triggered internally at /__w/pytorch/pytorch/aten/src/ATen/Context.cpp:916.)
+    features = torch.sparse_coo_tensor(
+
+workbench/tests/test_r19_tme_replay.py::test_tme_native_aggregate_runs_once_and_produces_complete_category_rows
+workbench/tests/test_r19_tme_replay.py::test_tme_refuses_partial_or_nonfinite_native_category_metrics[payload0]
+workbench/tests/test_r19_tme_replay.py::test_tme_refuses_partial_or_nonfinite_native_category_metrics[payload1]
+  /home/heheboiz/data/cir/workbench/envs/ctl312h/lib/python3.12/site-packages/torch/serialization.py:2263: UserWarning: Validating sparse tensor invariants because weights_only=True; this is an O(nnz) scan per sparse tensor and may be slow for large checkpoints.
+    torch._utils._validate_loaded_sparse_tensors(weights_only=weights_only)
+
+workbench/tests/test_r9_defect_regressions.py::test_the_pinned_processor_loads_without_root_bert_assets[airknow]
+  /home/heheboiz/data/cir/workbench/envs/ctl312h/lib/python3.12/site-packages/torch/jit/_script.py:1491: FutureWarning: `torch.jit.script` is deprecated. Please switch to `torch.compile` or `torch.export`.
+    warnings.warn(
+
+workbench/tests/test_r9_defect_regressions.py::test_the_pinned_processor_loads_without_root_bert_assets[airknow]
+  /home/heheboiz/data/cir/workbench/envs/ctl312h/lib/python3.12/site-packages/torch/jit/_script.py:1643: FutureWarning: `torch.jit.interface` is deprecated. Please use `torch.compile` instead.
+    warnings.warn(
+
+workbench/tests/test_r9_defect_regressions.py::test_the_pinned_processor_loads_without_root_bert_assets[airknow]
+  /home/heheboiz/data/cir/workbench/envs/ctl312h/lib/python3.12/site-packages/timm/models/hub.py:4: DeprecationWarning: Importing from timm.models.hub is deprecated, please import via timm.models
+    warnings.warn(f"Importing from {__name__} is deprecated, please import via timm.models", DeprecationWarning)
+
+workbench/tests/test_r9_defect_regressions.py::test_the_pinned_processor_loads_without_root_bert_assets[airknow]
+  /home/heheboiz/data/cir/workbench/third_party/AirKnow/lavis/common/utils.py:23: DeprecationWarning: 
+  Pyarrow will become a required dependency of pandas in the next major release of pandas (pandas 3.0),
+  (to allow more performant data types, such as the Arrow string type, and better interoperability with other libraries)
+  but was not found to be installed on your system.
+  If this would cause problems for you,
+  please provide us feedback at https://github.com/pandas-dev/pandas/issues/54466
+          
+    import pandas as pd
+
+workbench/tests/test_r9_defect_regressions.py::test_the_pinned_processor_loads_without_root_bert_assets[airknow]
+  /home/heheboiz/data/cir/workbench/envs/ctl312h/lib/python3.12/site-packages/timm/models/registry.py:4: DeprecationWarning: Importing from timm.models.registry is deprecated, please import via timm.models
+    warnings.warn(f"Importing from {__name__} is deprecated, please import via timm.models", DeprecationWarning)
+
+workbench/tests/test_r9_defect_regressions.py::test_the_pinned_processor_loads_without_root_bert_assets[airknow]
+  /home/heheboiz/data/cir/workbench/envs/ctl312h/lib/python3.12/site-packages/timm/models/layers/__init__.py:49: DeprecationWarning: Importing from timm.models.layers is deprecated, please import via timm.layers
+    warnings.warn(f"Importing from {__name__} is deprecated, please import via timm.layers", DeprecationWarning)
+
+workbench/tests/test_r9_defect_regressions.py::test_the_pinned_processor_loads_without_root_bert_assets[airknow]
+  /home/heheboiz/data/cir/workbench/envs/ctl312h/lib/python3.12/site-packages/timm/models/helpers.py:7: DeprecationWarning: Importing from timm.models.helpers is deprecated, please import via timm.models
+    warnings.warn(f"Importing from {__name__} is deprecated, please import via timm.models", DeprecationWarning)
+
+workbench/tests/test_r9_defect_regressions.py::test_the_pinned_processor_loads_without_root_bert_assets[airknow]
+workbench/tests/test_r9_defect_regressions.py::test_the_pinned_processor_loads_without_root_bert_assets[conesep]
+workbench/tests/test_r9_defect_regressions.py::test_the_pinned_processor_loads_without_root_bert_assets[habit]
+workbench/tests/test_r9_defect_regressions.py::test_the_pinned_processor_loads_without_root_bert_assets[hint]
+workbench/tests/test_r9_defect_regressions.py::test_the_pinned_processor_loads_without_root_bert_assets[intent]
+workbench/tests/test_r9_defect_regressions.py::test_the_integrated_loader_returns_the_native_processor
+  /home/heheboiz/data/cir/workbench/envs/ctl312h/lib/python3.12/site-packages/transformers/utils/generic.py:309: FutureWarning: `torch.utils._pytree._register_pytree_node` is deprecated. Please use `torch.utils._pytree.register_pytree_node` instead.
+    _torch_pytree._register_pytree_node(
+
+workbench/tests/test_release_blocker_interpreter.py::test_disk_contradiction_is_never_ready
+workbench/tests/test_release_blocker_interpreter.py::test_an_unreadable_installed_version_never_confirms_a_probe
+workbench/tests/test_release_blocker_interpreter.py::test_directory_egg_info_without_pkg_info_does_not_invent_phantom_row
+  /home/heheboiz/data/cir/workbench/backend/runtime.py:735: DeprecationWarning: Implicit None on return values is deprecated and will raise KeyErrors.
+    name = metadata["Name"]
+
+workbench/tests/test_release_blocker_interpreter.py::test_disk_contradiction_is_never_ready
+workbench/tests/test_release_blocker_interpreter.py::test_an_unreadable_installed_version_never_confirms_a_probe
+workbench/tests/test_release_blocker_interpreter.py::test_directory_egg_info_without_pkg_info_does_not_invent_phantom_row
+  /home/heheboiz/data/cir/workbench/backend/runtime.py:736: DeprecationWarning: Implicit None on return values is deprecated and will raise KeyErrors.
+    version = metadata["Version"]
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED workbench/tests/test_circus_adapters_blip.py::test_adapter_import_and_unready_status[workbench.composition.model_conesep-conesep] - AssertionError: assert True is False
+ +  where True = AdapterStatus(model_id='conesep', ready=True, reason=None, checkpoint_ids=('fiq_n02', 'fiq_n05', 'fiq_n08'), per_mode=...rue, None)}, notes='Category-agnostic single space; transfer/evaluation checkpoint follows selected registry variant.').ready
+FAILED workbench/tests/test_circus_adapters_blip.py::test_adapter_import_and_unready_status[workbench.composition.model_ptha_mtst-ptha_mtst] - AssertionError: assert True is False
+ +  where True = AdapterStatus(model_id='ptha_mtst', ready=True, reason=None, checkpoint_ids=('cirr_transfer',), per_mode={'multimodal'...: (True, None)}, notes='cirr_transfer is a CIRR-trained → FashionIQ transfer checkpoint, not a FashionIQ reproduction').ready
+FAILED workbench/tests/test_circus_adapters_rest.py::test_status_is_honest_and_reports_every_mode - AssertionError: assert True is False
+ +  where True = AdapterStatus(model_id='habit', ready=True, reason=None, checkpoint_ids=('fiq_n02',), per_mode={'multimodal': (True, None), 'text_only_black_image': (True, None), 'image_only_empty_text': (True, None)}, notes='').ready
+FAILED workbench/tests/test_handoff_commands.py::test_the_release_documents_quote_the_test_count_they_actually_ran - AssertionError: the verdict records 2203 passed + 0 failed + 47 skipped = 2250, but this tree collects 2266. Every collected test must be accounted for as passed, failed, or skipped, each with its own recorded field; update the numbers to what the suite actually reports rather than to a total that leaves cases unexplained.
+assert 2250 == 2266
+FAILED workbench/tests/test_http_api_layer.py::test_a7_launcher_reuses_ledger_corroborated_run_without_proof_and_queues_when_uncorroborated - AssertionError: Cấu hình môi trường workbench/docker/.env...
+  Kích hoạt thích nghi runtime cho limn: WORKBENCH_RUNTIME_ADAPTATION=sm_120
+  Môi trường đã sẵn sàng: WORKBENCH_ENABLE_GPU=1, MODEL=limn
+  ================================================================================
+  CIR FAILURE ANALYSIS WORKBENCH — TIỀN KIỂM HỆ THỐNG (PREFLIGHT)
+  ================================================================================
+  [OK] Hệ điều hành (OS)      : Ubuntu 24.04.4 LTS (kernel 7.0.0-31-generic)
+  [OK] Git Repository         : branch research/cir-failure-workbench, commit 0123456789abcdef0123456789abcdef01234567
+  [OK] Bộ nhớ RAM             : 31 GB (khả dụng: 26 GB)
+  [OK] Dung lượng đĩa trống  : 80 GB khả dụng tại /tmp/pytest-of-heheboiz/pytest-69/test_a7_launcher_reuses_ledger0/reused/sandbox
+  [OK] Thư mục & Quyền sở hữu : Đầy đủ (uid: 1000, user: heheboiz)
+  [OK] Docker Engine          : phiên bản 24.0.5, daemon phản hồi tốt
+  [OK] Docker Compose         : plugin phiên bản Docker version 24.0.5, build ced0996
+  [OK] NVIDIA Driver & GPU    : Driver 550.54.14 | Thiết bị: NVIDIA GeForce RTX 5070 Ti (Compute 12.0)
+       Kiến trúc              : Blackwell sm_120 (RTX 5070 Ti) được nhận diện chính xác
+  [OK] NVIDIA Container Runtime: Đã cấu hình và đăng ký trong Docker daemon
+  [OK] Dataset FashionIQ      : Tồn tại và đầy đủ (images/, image_splits/, captions/) tại /tmp/pytest-of-heheboiz/pytest-69/test_a7_launcher_reuses_ledger0/reused/sandbox/data/FashionIQ
+  [INFO] Container cir-workbench: Đang chạy (Container ID: cir-workbench-1)
+  ================================================================================
+  Docker container cir-workbench đã đang chạy, cấu hình phù hợp và API sẵn sàng (http://127.0.0.1:8000).
+  Thăm dò trạng thái sẵn sàng (readiness polling) của Backend và Frontend...
+  [OK] Docker stack đã sẵn sàng: Backend (http://127.0.0.1:8000), Frontend (http://127.0.0.1:5173)
+  Kiểm tra mount dataset trong container (/data/FashionIQ/images)...
+  Chuẩn bị mô hình limn qua pipeline guarded...
+  preparing limn through the guarded pipeline (sync, environment, dataset, checkpoints, GPU)…
+  Pipeline setup complete: limn prepared
+  Kiểm chứng runtime GPU bên trong container cho mô hình limn...
+  {"nvidia_smi": "NVIDIA GeForce RTX 5070 Ti, 12.0", "torch_cuda": true, "cuda_tensor": true, "compute_capability": "12.0", "device_name": "NVIDIA GeForce RTX 5070 Ti", "error": null}
+  [OK] Năng lực GPU cho limn đã được kiểm chứng và ghi nhận thành công.
+  Xác định protocol và checkpoint chính thức cho limn từ API...
+  Mô hình: limn | Checkpoint: base_iter0_all_categories | Protocol: fashioniq_val_split | top_k: 200
+  Xếp hàng đánh giá qua API POST /api/jobs...
+  Đã xếp job thành công: job_limn_new_999
+  Đang theo dõi tiến trình thực thi job job_limn_new_999 (thời hạn: 3600s)...
+  [10:17:10] Job job_limn_new_999: trạng thái 'completed' (đã chạy 0s)...
+  Xác thực bằng chứng thực thi khoa học và đối chiếu sổ cái qua verify_run.py...
+  Xác thực thất bại: Thiếu bằng chứng thực thi khoa học hoặc bằng chứng không hợp lệ!
+  Chi tiết: aggregate report not found: /home/heheboiz/data/cir/workbench/artifacts/reports/limn_base_iter0_all_categories_run_limn_corr_01_aggregate.json; the evidence ledger is missing or its HMAC chain does not verify; completion proof rejected: declared output missing: /home/heheboiz/data/cir/workbench/artifacts/reports/limn_base_iter0_all_categories_run_limn_corr_01_completion.json; the report records metric_extraction_available=None: no metric extraction was performed for this run; the report's extraction_status is None, not 'EXTRACTED_VERIFIED': the run's metrics were not extracted; the report carries no category metrics for limn
+  
+  ================================================================================
+  LỖI THỰC THI — CIR FAILURE ANALYSIS WORKBENCH
+  ================================================================================
+  Giai đoạn thất bại (Failed stage) : VERIFICATION
+  Chi tiết lỗi (Error details)      : Xác thực thất bại: Thiếu bằng chứng thực thi khoa học hoặc bằng chứng không hợp lệ!
+  Chi tiết: aggregate report not found: /home/heheboiz/data/cir/workbench/artifacts/reports/limn_base_iter0_all_categories_run_limn_corr_01_aggregate.json; the evidence ledger is missing or its HMAC chain does not verify; completion proof rejected: declared output missing: /home/heheboiz/data/cir/workbench/artifacts/reports/limn_base_iter0_all_categories_run_limn_corr_01_completion.json; the report records metric_extraction_available=None: no metric extraction was performed for this run; the report's extraction_status is None, not 'EXTRACTED_VERIFIED': the run's metrics were not extracted; the report carries no category metrics for limn
+  Vị trí nhật ký (Log location)     : verify_run.py (trong container)
+  Hành động khắc phục (Remedy)      : Đọc phần 'Chi tiết' ở trên, sửa nguyên nhân, rồi chạy lại ./pc.sh (dùng ./pc.sh --verify-only nếu bạn chỉ muốn kiểm chứng lại năng lực GPU trước khi tốn thời gian đánh giá)
+  ================================================================================
+  
+assert 'Tái sử dụng kết quả có sẵn' in 'Cấu hình môi trường workbench/docker/.env...\nKích hoạt thích nghi runtime cho limn: WORKBENCH_RUNTIME_ADAPTATION=sm_... trước khi tốn thời gian đánh giá)\n================================================================================\n'
+ +  where 'Cấu hình môi trường workbench/docker/.env...\nKích hoạt thích nghi runtime cho limn: WORKBENCH_RUNTIME_ADAPTATION=sm_... trước khi tốn thời gian đánh giá)\n================================================================================\n' = CompletedProcess(args=['/home/heheboiz/data/cir/pc.sh'], returncode=1, stdout='Cấu hình môi trường workbench/docker/.e...ốn thời gian đánh giá)\n================================================================================\n', stderr='').stdout
+FAILED workbench/tests/test_pc_launcher.py::test_existing_completed_corroborated_run_reported_without_re_running_unless_force - AssertionError: assert 1 == 0
+ +  where 1 = CompletedProcess(args=['/home/heheboiz/data/cir/pc.sh'], returncode=1, stdout='Cấu hình môi trường workbench/docker/.e...ốn thời gian đánh giá)\n================================================================================\n', stderr='').returncode
+FAILED workbench/tests/test_pc_launcher.py::test_matching_container_is_reused_positive_control - AssertionError: assert 1 == 0
+ +  where 1 = CompletedProcess(args=['/home/heheboiz/data/cir/pc.sh'], returncode=1, stdout='Cấu hình môi trường workbench/docker/.e...ốn thời gian đánh giá)\n================================================================================\n', stderr='').returncode
+FAILED workbench/tests/test_pc_launcher.py::test_verification_attempted_inside_container_not_on_host - AssertionError: assert 1 == 0
+ +  where 1 = CompletedProcess(args=['/home/heheboiz/data/cir/pc.sh'], returncode=1, stdout='Cấu hình môi trường workbench/docker/.e...ốn thời gian đánh giá)\n================================================================================\n', stderr='').returncode
+FAILED workbench/tests/test_pc_launcher.py::test_limn_bundle_selection_submits_bundle_id_with_native_protocol - AssertionError: assert 1 == 0
+ +  where 1 = CompletedProcess(args=['/home/heheboiz/data/cir/pc.sh', '--force'], returncode=1, stdout='Cấu hình môi trường workbenc...ốn thời gian đánh giá)\n================================================================================\n', stderr='').returncode
+FAILED workbench/tests/test_pc_launcher.py::test_a_container_built_from_another_commit_is_not_reused - AssertionError: assert 1 == 0
+ +  where 1 = CompletedProcess(args=['/home/heheboiz/data/cir/pc.sh'], returncode=1, stdout='Cấu hình môi trường workbench/docker/.e...ốn thời gian đánh giá)\n================================================================================\n', stderr='').returncode
+FAILED workbench/tests/test_pc_launcher.py::test_the_summary_does_not_claim_the_index_holds_an_aggregate_only_run - AssertionError: Cấu hình môi trường workbench/docker/.env...
+  Kích hoạt thích nghi runtime cho limn: WORKBENCH_RUNTIME_ADAPTATION=sm_120
+  Môi trường đã sẵn sàng: WORKBENCH_ENABLE_GPU=1, MODEL=limn
+  ================================================================================
+  CIR FAILURE ANALYSIS WORKBENCH — TIỀN KIỂM HỆ THỐNG (PREFLIGHT)
+  ================================================================================
+  [OK] Hệ điều hành (OS)      : Ubuntu 24.04.4 LTS (kernel 7.0.0-31-generic)
+  [OK] Git Repository         : branch research/cir-failure-workbench, commit 0123456789abcdef0123456789abcdef01234567
+  [OK] Bộ nhớ RAM             : 31 GB (khả dụng: 25 GB)
+  [OK] Dung lượng đĩa trống  : 80 GB khả dụng tại /tmp/pytest-of-heheboiz/pytest-69/test_the_summary_does_not_clai0/sandbox
+  [OK] Thư mục & Quyền sở hữu : Đầy đủ (uid: 1000, user: heheboiz)
+  [OK] Docker Engine          : phiên bản 24.0.5, daemon phản hồi tốt
+  [OK] Docker Compose         : plugin phiên bản Docker version 24.0.5, build ced0996
+  [OK] NVIDIA Driver & GPU    : Driver 550.54.14 | Thiết bị: NVIDIA GeForce RTX 5070 Ti (Compute 12.0)
+       Kiến trúc              : Blackwell sm_120 (RTX 5070 Ti) được nhận diện chính xác
+  [OK] NVIDIA Container Runtime: Đã cấu hình và đăng ký trong Docker daemon
+  [OK] Dataset FashionIQ      : Tồn tại và đầy đủ (images/, image_splits/, captions/) tại /tmp/pytest-of-heheboiz/pytest-69/test_the_summary_does_not_clai0/sandbox/data/FashionIQ
+  [INFO] Container cir-workbench: Đang chạy (Container ID: cir-workbench-1)
+  ================================================================================
+  Docker container cir-workbench đã đang chạy, cấu hình phù hợp và API sẵn sàng (http://127.0.0.1:8000).
+  Thăm dò trạng thái sẵn sàng (readiness polling) của Backend và Frontend...
+  [OK] Docker stack đã sẵn sàng: Backend (http://127.0.0.1:8000), Frontend (http://127.0.0.1:5173)
+  Kiểm tra mount dataset trong container (/data/FashionIQ/images)...
+  Chuẩn bị mô hình limn qua pipeline guarded...
+  preparing limn through the guarded pipeline (sync, environment, dataset, checkpoints, GPU)…
+  Pipeline setup complete: limn prepared
+  Kiểm chứng runtime GPU bên trong container cho mô hình limn...
+  {"nvidia_smi": "NVIDIA GeForce RTX 5070 Ti, 12.0", "torch_cuda": true, "cuda_tensor": true, "compute_capability": "12.0", "device_name": "NVIDIA GeForce RTX 5070 Ti", "error": null}
+  [OK] Năng lực GPU cho limn đã được kiểm chứng và ghi nhận thành công.
+  Xác định protocol và checkpoint chính thức cho limn từ API...
+  Mô hình: limn | Checkpoint: base_iter0_all_categories | Protocol: fashioniq_val_split | top_k: 200
+  Xếp hàng đánh giá qua API POST /api/jobs...
+  Đã xếp job thành công: job_limn_new_999
+  Đang theo dõi tiến trình thực thi job job_limn_new_999 (thời hạn: 3600s)...
+  [10:20:56] Job job_limn_new_999: trạng thái 'completed' (đã chạy 0s)...
+  Xác thực bằng chứng thực thi khoa học và đối chiếu sổ cái qua verify_run.py...
+  Xác thực thất bại: Thiếu bằng chứng thực thi khoa học hoặc bằng chứng không hợp lệ!
+  Chi tiết: aggregate report not found: /home/heheboiz/data/cir/workbench/artifacts/reports/limn_base_iter0_all_categories_run_limn_corr_01_aggregate.json; the evidence ledger is missing or its HMAC chain does not verify; completion proof rejected: declared output missing: /home/heheboiz/data/cir/workbench/artifacts/reports/limn_base_iter0_all_categories_run_limn_corr_01_completion.json; the report records metric_extraction_available=None: no metric extraction was performed for this run; the report's extraction_status is None, not 'EXTRACTED_VERIFIED': the run's metrics were not extracted; the report carries no category metrics for limn
+  
+  ================================================================================
+  LỖI THỰC THI — CIR FAILURE ANALYSIS WORKBENCH
+  ================================================================================
+  Giai đoạn thất bại (Failed stage) : VERIFICATION
+  Chi tiết lỗi (Error details)      : Xác thực thất bại: Thiếu bằng chứng thực thi khoa học hoặc bằng chứng không hợp lệ!
+  Chi tiết: aggregate report not found: /home/heheboiz/data/cir/workbench/artifacts/reports/limn_base_iter0_all_categories_run_limn_corr_01_aggregate.json; the evidence ledger is missing or its HMAC chain does not verify; completion proof rejected: declared output missing: /home/heheboiz/data/cir/workbench/artifacts/reports/limn_base_iter0_all_categories_run_limn_corr_01_completion.json; the report records metric_extraction_available=None: no metric extraction was performed for this run; the report's extraction_status is None, not 'EXTRACTED_VERIFIED': the run's metrics were not extracted; the report carries no category metrics for limn
+  Vị trí nhật ký (Log location)     : verify_run.py (trong container)
+  Hành động khắc phục (Remedy)      : Đọc phần 'Chi tiết' ở trên, sửa nguyên nhân, rồi chạy lại ./pc.sh (dùng ./pc.sh --verify-only nếu bạn chỉ muốn kiểm chứng lại năng lực GPU trước khi tốn thời gian đánh giá)
+  ================================================================================
+  
+assert 'mô hình limn KHAI BÁO trình quan sát' in 'Cấu hình môi trường workbench/docker/.env...\nKích hoạt thích nghi runtime cho limn: WORKBENCH_RUNTIME_ADAPTATION=sm_... trước khi tốn thời gian đánh giá)\n================================================================================\n'
+FAILED workbench/tests/test_pc_launcher.py::test_the_index_gate_refuses_a_per_query_run_that_is_not_verified - AssertionError: Cấu hình môi trường workbench/docker/.env...
+  Kích hoạt thích nghi runtime cho limn: WORKBENCH_RUNTIME_ADAPTATION=sm_120
+  Môi trường đã sẵn sàng: WORKBENCH_ENABLE_GPU=1, MODEL=limn
+  ================================================================================
+  CIR FAILURE ANALYSIS WORKBENCH — TIỀN KIỂM HỆ THỐNG (PREFLIGHT)
+  ================================================================================
+  [OK] Hệ điều hành (OS)      : Ubuntu 24.04.4 LTS (kernel 7.0.0-31-generic)
+  [OK] Git Repository         : branch research/cir-failure-workbench, commit 0123456789abcdef0123456789abcdef01234567
+  [OK] Bộ nhớ RAM             : 31 GB (khả dụng: 25 GB)
+  [OK] Dung lượng đĩa trống  : 80 GB khả dụng tại /tmp/pytest-of-heheboiz/pytest-69/test_the_index_gate_refuses_a_0/sandbox
+  [OK] Thư mục & Quyền sở hữu : Đầy đủ (uid: 1000, user: heheboiz)
+  [OK] Docker Engine          : phiên bản 24.0.5, daemon phản hồi tốt
+  [OK] Docker Compose         : plugin phiên bản Docker version 24.0.5, build ced0996
+  [OK] NVIDIA Driver & GPU    : Driver 550.54.14 | Thiết bị: NVIDIA GeForce RTX 5070 Ti (Compute 12.0)
+       Kiến trúc              : Blackwell sm_120 (RTX 5070 Ti) được nhận diện chính xác
+  [OK] NVIDIA Container Runtime: Đã cấu hình và đăng ký trong Docker daemon
+  [OK] Dataset FashionIQ      : Tồn tại và đầy đủ (images/, image_splits/, captions/) tại /tmp/pytest-of-heheboiz/pytest-69/test_the_index_gate_refuses_a_0/sandbox/data/FashionIQ
+  [INFO] Container cir-workbench: Đang chạy (Container ID: cir-workbench-1)
+  ================================================================================
+  Docker container cir-workbench đã đang chạy, cấu hình phù hợp và API sẵn sàng (http://127.0.0.1:8000).
+  Thăm dò trạng thái sẵn sàng (readiness polling) của Backend và Frontend...
+  [OK] Docker stack đã sẵn sàng: Backend (http://127.0.0.1:8000), Frontend (http://127.0.0.1:5173)
+  Kiểm tra mount dataset trong container (/data/FashionIQ/images)...
+  Chuẩn bị mô hình limn qua pipeline guarded...
+  preparing limn through the guarded pipeline (sync, environment, dataset, checkpoints, GPU)…
+  Pipeline setup complete: limn prepared
+  Kiểm chứng runtime GPU bên trong container cho mô hình limn...
+  {"nvidia_smi": "NVIDIA GeForce RTX 5070 Ti, 12.0", "torch_cuda": true, "cuda_tensor": true, "compute_capability": "12.0", "device_name": "NVIDIA GeForce RTX 5070 Ti", "error": null}
+  [OK] Năng lực GPU cho limn đã được kiểm chứng và ghi nhận thành công.
+  Xác định protocol và checkpoint chính thức cho limn từ API...
+  Mô hình: limn | Checkpoint: base_iter0_all_categories | Protocol: fashioniq_val_split | top_k: 200
+  Xếp hàng đánh giá qua API POST /api/jobs...
+  Đã xếp job thành công: job_limn_new_999
+  Đang theo dõi tiến trình thực thi job job_limn_new_999 (thời hạn: 3600s)...
+  [10:21:11] Job job_limn_new_999: trạng thái 'completed' (đã chạy 0s)...
+  Xác thực bằng chứng thực thi khoa học và đối chiếu sổ cái qua verify_run.py...
+  Xác thực thất bại: Thiếu bằng chứng thực thi khoa học hoặc bằng chứng không hợp lệ!
+  Chi tiết: aggregate report not found: /home/heheboiz/data/cir/workbench/artifacts/reports/limn_base_iter0_all_categories_run_limn_corr_01_aggregate.json; the evidence ledger is missing or its HMAC chain does not verify; completion proof rejected: declared output missing: /home/heheboiz/data/cir/workbench/artifacts/reports/limn_base_iter0_all_categories_run_limn_corr_01_completion.json; the report records metric_extraction_available=None: no metric extraction was performed for this run; the report's extraction_status is None, not 'EXTRACTED_VERIFIED': the run's metrics were not extracted; the report carries no category metrics for limn
+  
+  ================================================================================
+  LỖI THỰC THI — CIR FAILURE ANALYSIS WORKBENCH
+  ================================================================================
+  Giai đoạn thất bại (Failed stage) : VERIFICATION
+  Chi tiết lỗi (Error details)      : Xác thực thất bại: Thiếu bằng chứng thực thi khoa học hoặc bằng chứng không hợp lệ!
+  Chi tiết: aggregate report not found: /home/heheboiz/data/cir/workbench/artifacts/reports/limn_base_iter0_all_categories_run_limn_corr_01_aggregate.json; the evidence ledger is missing or its HMAC chain does not verify; completion proof rejected: declared output missing: /home/heheboiz/data/cir/workbench/artifacts/reports/limn_base_iter0_all_categories_run_limn_corr_01_completion.json; the report records metric_extraction_available=None: no metric extraction was performed for this run; the report's extraction_status is None, not 'EXTRACTED_VERIFIED': the run's metrics were not extracted; the report carries no category metrics for limn
+  Vị trí nhật ký (Log location)     : verify_run.py (trong container)
+  Hành động khắc phục (Remedy)      : Đọc phần 'Chi tiết' ở trên, sửa nguyên nhân, rồi chạy lại ./pc.sh (dùng ./pc.sh --verify-only nếu bạn chỉ muốn kiểm chứng lại năng lực GPU trước khi tốn thời gian đánh giá)
+  ================================================================================
+  
+assert 'INDEX_VERIFY' in 'Cấu hình môi trường workbench/docker/.env...\nKích hoạt thích nghi runtime cho limn: WORKBENCH_RUNTIME_ADAPTATION=sm_... trước khi tốn thời gian đánh giá)\n================================================================================\n'
+FAILED workbench/tests/test_pc_launcher.py::test_the_index_gate_refuses_a_per_query_run_the_index_never_saw - AssertionError: Cấu hình môi trường workbench/docker/.env...
+  Kích hoạt thích nghi runtime cho limn: WORKBENCH_RUNTIME_ADAPTATION=sm_120
+  Môi trường đã sẵn sàng: WORKBENCH_ENABLE_GPU=1, MODEL=limn
+  ================================================================================
+  CIR FAILURE ANALYSIS WORKBENCH — TIỀN KIỂM HỆ THỐNG (PREFLIGHT)
+  ================================================================================
+  [OK] Hệ điều hành (OS)      : Ubuntu 24.04.4 LTS (kernel 7.0.0-31-generic)
+  [OK] Git Repository         : branch research/cir-failure-workbench, commit 0123456789abcdef0123456789abcdef01234567
+  [OK] Bộ nhớ RAM             : 31 GB (khả dụng: 24 GB)
+  [OK] Dung lượng đĩa trống  : 80 GB khả dụng tại /tmp/pytest-of-heheboiz/pytest-69/test_the_index_gate_refuses_a_1/sandbox
+  [OK] Thư mục & Quyền sở hữu : Đầy đủ (uid: 1000, user: heheboiz)
+  [OK] Docker Engine          : phiên bản 24.0.5, daemon phản hồi tốt
+  [OK] Docker Compose         : plugin phiên bản Docker version 24.0.5, build ced0996
+  [OK] NVIDIA Driver & GPU    : Driver 550.54.14 | Thiết bị: NVIDIA GeForce RTX 5070 Ti (Compute 12.0)
+       Kiến trúc              : Blackwell sm_120 (RTX 5070 Ti) được nhận diện chính xác
+  [OK] NVIDIA Container Runtime: Đã cấu hình và đăng ký trong Docker daemon
+  [OK] Dataset FashionIQ      : Tồn tại và đầy đủ (images/, image_splits/, captions/) tại /tmp/pytest-of-heheboiz/pytest-69/test_the_index_gate_refuses_a_1/sandbox/data/FashionIQ
+  [INFO] Container cir-workbench: Đang chạy (Container ID: cir-workbench-1)
+  ================================================================================
+  Docker container cir-workbench đã đang chạy, cấu hình phù hợp và API sẵn sàng (http://127.0.0.1:8000).
+  Thăm dò trạng thái sẵn sàng (readiness polling) của Backend và Frontend...
+  [OK] Docker stack đã sẵn sàng: Backend (http://127.0.0.1:8000), Frontend (http://127.0.0.1:5173)
+  Kiểm tra mount dataset trong container (/data/FashionIQ/images)...
+  Chuẩn bị mô hình limn qua pipeline guarded...
+  preparing limn through the guarded pipeline (sync, environment, dataset, checkpoints, GPU)…
+  Pipeline setup complete: limn prepared
+  Kiểm chứng runtime GPU bên trong container cho mô hình limn...
+  {"nvidia_smi": "NVIDIA GeForce RTX 5070 Ti, 12.0", "torch_cuda": true, "cuda_tensor": true, "compute_capability": "12.0", "device_name": "NVIDIA GeForce RTX 5070 Ti", "error": null}
+  [OK] Năng lực GPU cho limn đã được kiểm chứng và ghi nhận thành công.
+  Xác định protocol và checkpoint chính thức cho limn từ API...
+  Mô hình: limn | Checkpoint: base_iter0_all_categories | Protocol: fashioniq_val_split | top_k: 200
+  Xếp hàng đánh giá qua API POST /api/jobs...
+  Đã xếp job thành công: job_limn_new_999
+  Đang theo dõi tiến trình thực thi job job_limn_new_999 (thời hạn: 3600s)...
+  [10:21:18] Job job_limn_new_999: trạng thái 'completed' (đã chạy 0s)...
+  Xác thực bằng chứng thực thi khoa học và đối chiếu sổ cái qua verify_run.py...
+  Xác thực thất bại: Thiếu bằng chứng thực thi khoa học hoặc bằng chứng không hợp lệ!
+  Chi tiết: aggregate report not found: /home/heheboiz/data/cir/workbench/artifacts/reports/limn_base_iter0_all_categories_run_limn_corr_01_aggregate.json; the evidence ledger is missing or its HMAC chain does not verify; completion proof rejected: declared output missing: /home/heheboiz/data/cir/workbench/artifacts/reports/limn_base_iter0_all_categories_run_limn_corr_01_completion.json; the report records metric_extraction_available=None: no metric extraction was performed for this run; the report's extraction_status is None, not 'EXTRACTED_VERIFIED': the run's metrics were not extracted; the report carries no category metrics for limn
+  
+  ================================================================================
+  LỖI THỰC THI — CIR FAILURE ANALYSIS WORKBENCH
+  ================================================================================
+  Giai đoạn thất bại (Failed stage) : VERIFICATION
+  Chi tiết lỗi (Error details)      : Xác thực thất bại: Thiếu bằng chứng thực thi khoa học hoặc bằng chứng không hợp lệ!
+  Chi tiết: aggregate report not found: /home/heheboiz/data/cir/workbench/artifacts/reports/limn_base_iter0_all_categories_run_limn_corr_01_aggregate.json; the evidence ledger is missing or its HMAC chain does not verify; completion proof rejected: declared output missing: /home/heheboiz/data/cir/workbench/artifacts/reports/limn_base_iter0_all_categories_run_limn_corr_01_completion.json; the report records metric_extraction_available=None: no metric extraction was performed for this run; the report's extraction_status is None, not 'EXTRACTED_VERIFIED': the run's metrics were not extracted; the report carries no category metrics for limn
+  Vị trí nhật ký (Log location)     : verify_run.py (trong container)
+  Hành động khắc phục (Remedy)      : Đọc phần 'Chi tiết' ở trên, sửa nguyên nhân, rồi chạy lại ./pc.sh (dùng ./pc.sh --verify-only nếu bạn chỉ muốn kiểm chứng lại năng lực GPU trước khi tốn thời gian đánh giá)
+  ================================================================================
+  
+assert 'INDEX_VERIFY' in 'Cấu hình môi trường workbench/docker/.env...\nKích hoạt thích nghi runtime cho limn: WORKBENCH_RUNTIME_ADAPTATION=sm_... trước khi tốn thời gian đánh giá)\n================================================================================\n'
+FAILED workbench/tests/test_pc_launcher.py::test_the_index_gate_refuses_an_aggregate_only_run_the_api_does_not_certify - AssertionError: Cấu hình môi trường workbench/docker/.env...
+  Kích hoạt thích nghi runtime cho limn: WORKBENCH_RUNTIME_ADAPTATION=sm_120
+  Môi trường đã sẵn sàng: WORKBENCH_ENABLE_GPU=1, MODEL=limn
+  ================================================================================
+  CIR FAILURE ANALYSIS WORKBENCH — TIỀN KIỂM HỆ THỐNG (PREFLIGHT)
+  ================================================================================
+  [OK] Hệ điều hành (OS)      : Ubuntu 24.04.4 LTS (kernel 7.0.0-31-generic)
+  [OK] Git Repository         : branch research/cir-failure-workbench, commit 0123456789abcdef0123456789abcdef01234567
+  [OK] Bộ nhớ RAM             : 31 GB (khả dụng: 25 GB)
+  [OK] Dung lượng đĩa trống  : 80 GB khả dụng tại /tmp/pytest-of-heheboiz/pytest-69/test_the_index_gate_refuses_an0/sandbox
+  [OK] Thư mục & Quyền sở hữu : Đầy đủ (uid: 1000, user: heheboiz)
+  [OK] Docker Engine          : phiên bản 24.0.5, daemon phản hồi tốt
+  [OK] Docker Compose         : plugin phiên bản Docker version 24.0.5, build ced0996
+  [OK] NVIDIA Driver & GPU    : Driver 550.54.14 | Thiết bị: NVIDIA GeForce RTX 5070 Ti (Compute 12.0)
+       Kiến trúc              : Blackwell sm_120 (RTX 5070 Ti) được nhận diện chính xác
+  [OK] NVIDIA Container Runtime: Đã cấu hình và đăng ký trong Docker daemon
+  [OK] Dataset FashionIQ      : Tồn tại và đầy đủ (images/, image_splits/, captions/) tại /tmp/pytest-of-heheboiz/pytest-69/test_the_index_gate_refuses_an0/sandbox/data/FashionIQ
+  [INFO] Container cir-workbench: Đang chạy (Container ID: cir-workbench-1)
+  ================================================================================
+  Docker container cir-workbench đã đang chạy, cấu hình phù hợp và API sẵn sàng (http://127.0.0.1:8000).
+  Thăm dò trạng thái sẵn sàng (readiness polling) của Backend và Frontend...
+  [OK] Docker stack đã sẵn sàng: Backend (http://127.0.0.1:8000), Frontend (http://127.0.0.1:5173)
+  Kiểm tra mount dataset trong container (/data/FashionIQ/images)...
+  Chuẩn bị mô hình limn qua pipeline guarded...
+  preparing limn through the guarded pipeline (sync, environment, dataset, checkpoints, GPU)…
+  Pipeline setup complete: limn prepared
+  Kiểm chứng runtime GPU bên trong container cho mô hình limn...
+  {"nvidia_smi": "NVIDIA GeForce RTX 5070 Ti, 12.0", "torch_cuda": true, "cuda_tensor": true, "compute_capability": "12.0", "device_name": "NVIDIA GeForce RTX 5070 Ti", "error": null}
+  [OK] Năng lực GPU cho limn đã được kiểm chứng và ghi nhận thành công.
+  Xác định protocol và checkpoint chính thức cho limn từ API...
+  Mô hình: limn | Checkpoint: base_iter0_all_categories | Protocol: fashioniq_val_split | top_k: 200
+  Xếp hàng đánh giá qua API POST /api/jobs...
+  Đã xếp job thành công: job_limn_new_999
+  Đang theo dõi tiến trình thực thi job job_limn_new_999 (thời hạn: 3600s)...
+  [10:21:25] Job job_limn_new_999: trạng thái 'completed' (đã chạy 0s)...
+  Xác thực bằng chứng thực thi khoa học và đối chiếu sổ cái qua verify_run.py...
+  Xác thực thất bại: Thiếu bằng chứng thực thi khoa học hoặc bằng chứng không hợp lệ!
+  Chi tiết: aggregate report not found: /home/heheboiz/data/cir/workbench/artifacts/reports/limn_base_iter0_all_categories_run_limn_corr_01_aggregate.json; the evidence ledger is missing or its HMAC chain does not verify; completion proof rejected: declared output missing: /home/heheboiz/data/cir/workbench/artifacts/reports/limn_base_iter0_all_categories_run_limn_corr_01_completion.json; the report records metric_extraction_available=None: no metric extraction was performed for this run; the report's extraction_status is None, not 'EXTRACTED_VERIFIED': the run's metrics were not extracted; the report carries no category metrics for limn
+  
+  ================================================================================
+  LỖI THỰC THI — CIR FAILURE ANALYSIS WORKBENCH
+  ================================================================================
+  Giai đoạn thất bại (Failed stage) : VERIFICATION
+  Chi tiết lỗi (Error details)      : Xác thực thất bại: Thiếu bằng chứng thực thi khoa học hoặc bằng chứng không hợp lệ!
+  Chi tiết: aggregate report not found: /home/heheboiz/data/cir/workbench/artifacts/reports/limn_base_iter0_all_categories_run_limn_corr_01_aggregate.json; the evidence ledger is missing or its HMAC chain does not verify; completion proof rejected: declared output missing: /home/heheboiz/data/cir/workbench/artifacts/reports/limn_base_iter0_all_categories_run_limn_corr_01_completion.json; the report records metric_extraction_available=None: no metric extraction was performed for this run; the report's extraction_status is None, not 'EXTRACTED_VERIFIED': the run's metrics were not extracted; the report carries no category metrics for limn
+  Vị trí nhật ký (Log location)     : verify_run.py (trong container)
+  Hành động khắc phục (Remedy)      : Đọc phần 'Chi tiết' ở trên, sửa nguyên nhân, rồi chạy lại ./pc.sh (dùng ./pc.sh --verify-only nếu bạn chỉ muốn kiểm chứng lại năng lực GPU trước khi tốn thời gian đánh giá)
+  ================================================================================
+  
+assert 'INDEX_VERIFY' in 'Cấu hình môi trường workbench/docker/.env...\nKích hoạt thích nghi runtime cho limn: WORKBENCH_RUNTIME_ADAPTATION=sm_... trước khi tốn thời gian đánh giá)\n================================================================================\n'
+FAILED workbench/tests/test_pc_launcher.py::test_the_index_gate_refuses_a_run_the_api_cannot_certify - AssertionError: Cấu hình môi trường workbench/docker/.env...
+  Kích hoạt thích nghi runtime cho limn: WORKBENCH_RUNTIME_ADAPTATION=sm_120
+  Môi trường đã sẵn sàng: WORKBENCH_ENABLE_GPU=1, MODEL=limn
+  ================================================================================
+  CIR FAILURE ANALYSIS WORKBENCH — TIỀN KIỂM HỆ THỐNG (PREFLIGHT)
+  ================================================================================
+  [OK] Hệ điều hành (OS)      : Ubuntu 24.04.4 LTS (kernel 7.0.0-31-generic)
+  [OK] Git Repository         : branch research/cir-failure-workbench, commit 0123456789abcdef0123456789abcdef01234567
+  [OK] Bộ nhớ RAM             : 31 GB (khả dụng: 25 GB)
+  [OK] Dung lượng đĩa trống  : 80 GB khả dụng tại /tmp/pytest-of-heheboiz/pytest-69/test_the_index_gate_refuses_a_2/sandbox
+  [OK] Thư mục & Quyền sở hữu : Đầy đủ (uid: 1000, user: heheboiz)
+  [OK] Docker Engine          : phiên bản 24.0.5, daemon phản hồi tốt
+  [OK] Docker Compose         : plugin phiên bản Docker version 24.0.5, build ced0996
+  [OK] NVIDIA Driver & GPU    : Driver 550.54.14 | Thiết bị: NVIDIA GeForce RTX 5070 Ti (Compute 12.0)
+       Kiến trúc              : Blackwell sm_120 (RTX 5070 Ti) được nhận diện chính xác
+  [OK] NVIDIA Container Runtime: Đã cấu hình và đăng ký trong Docker daemon
+  [OK] Dataset FashionIQ      : Tồn tại và đầy đủ (images/, image_splits/, captions/) tại /tmp/pytest-of-heheboiz/pytest-69/test_the_index_gate_refuses_a_2/sandbox/data/FashionIQ
+  [INFO] Container cir-workbench: Đang chạy (Container ID: cir-workbench-1)
+  ================================================================================
+  Docker container cir-workbench đã đang chạy, cấu hình phù hợp và API sẵn sàng (http://127.0.0.1:8000).
+  Thăm dò trạng thái sẵn sàng (readiness polling) của Backend và Frontend...
+  [OK] Docker stack đã sẵn sàng: Backend (http://127.0.0.1:8000), Frontend (http://127.0.0.1:5173)
+  Kiểm tra mount dataset trong container (/data/FashionIQ/images)...
+  Chuẩn bị mô hình limn qua pipeline guarded...
+  preparing limn through the guarded pipeline (sync, environment, dataset, checkpoints, GPU)…
+  Pipeline setup complete: limn prepared
+  Kiểm chứng runtime GPU bên trong container cho mô hình limn...
+  {"nvidia_smi": "NVIDIA GeForce RTX 5070 Ti, 12.0", "torch_cuda": true, "cuda_tensor": true, "compute_capability": "12.0", "device_name": "NVIDIA GeForce RTX 5070 Ti", "error": null}
+  [OK] Năng lực GPU cho limn đã được kiểm chứng và ghi nhận thành công.
+  Xác định protocol và checkpoint chính thức cho limn từ API...
+  Mô hình: limn | Checkpoint: base_iter0_all_categories | Protocol: fashioniq_val_split | top_k: 200
+  Xếp hàng đánh giá qua API POST /api/jobs...
+  Đã xếp job thành công: job_limn_new_999
+  Đang theo dõi tiến trình thực thi job job_limn_new_999 (thời hạn: 3600s)...
+  [10:21:33] Job job_limn_new_999: trạng thái 'completed' (đã chạy 0s)...
+  Xác thực bằng chứng thực thi khoa học và đối chiếu sổ cái qua verify_run.py...
+  Xác thực thất bại: Thiếu bằng chứng thực thi khoa học hoặc bằng chứng không hợp lệ!
+  Chi tiết: aggregate report not found: /home/heheboiz/data/cir/workbench/artifacts/reports/limn_base_iter0_all_categories_run_limn_corr_01_aggregate.json; the evidence ledger is missing or its HMAC chain does not verify; completion proof rejected: declared output missing: /home/heheboiz/data/cir/workbench/artifacts/reports/limn_base_iter0_all_categories_run_limn_corr_01_completion.json; the report records metric_extraction_available=None: no metric extraction was performed for this run; the report's extraction_status is None, not 'EXTRACTED_VERIFIED': the run's metrics were not extracted; the report carries no category metrics for limn
+  
+  ================================================================================
+  LỖI THỰC THI — CIR FAILURE ANALYSIS WORKBENCH
+  ================================================================================
+  Giai đoạn thất bại (Failed stage) : VERIFICATION
+  Chi tiết lỗi (Error details)      : Xác thực thất bại: Thiếu bằng chứng thực thi khoa học hoặc bằng chứng không hợp lệ!
+  Chi tiết: aggregate report not found: /home/heheboiz/data/cir/workbench/artifacts/reports/limn_base_iter0_all_categories_run_limn_corr_01_aggregate.json; the evidence ledger is missing or its HMAC chain does not verify; completion proof rejected: declared output missing: /home/heheboiz/data/cir/workbench/artifacts/reports/limn_base_iter0_all_categories_run_limn_corr_01_completion.json; the report records metric_extraction_available=None: no metric extraction was performed for this run; the report's extraction_status is None, not 'EXTRACTED_VERIFIED': the run's metrics were not extracted; the report carries no category metrics for limn
+  Vị trí nhật ký (Log location)     : verify_run.py (trong container)
+  Hành động khắc phục (Remedy)      : Đọc phần 'Chi tiết' ở trên, sửa nguyên nhân, rồi chạy lại ./pc.sh (dùng ./pc.sh --verify-only nếu bạn chỉ muốn kiểm chứng lại năng lực GPU trước khi tốn thời gian đánh giá)
+  ================================================================================
+  
+assert 'INDEX_VERIFY' in 'Cấu hình môi trường workbench/docker/.env...\nKích hoạt thích nghi runtime cho limn: WORKBENCH_RUNTIME_ADAPTATION=sm_... trước khi tốn thời gian đánh giá)\n================================================================================\n'
+FAILED workbench/tests/test_pc_launcher.py::test_a_completed_job_naming_its_run_uses_exactly_that_run - AssertionError: Cấu hình môi trường workbench/docker/.env...
+  Kích hoạt thích nghi runtime cho limn: WORKBENCH_RUNTIME_ADAPTATION=sm_120
+  Môi trường đã sẵn sàng: WORKBENCH_ENABLE_GPU=1, MODEL=limn
+  ================================================================================
+  CIR FAILURE ANALYSIS WORKBENCH — TIỀN KIỂM HỆ THỐNG (PREFLIGHT)
+  ================================================================================
+  [OK] Hệ điều hành (OS)      : Ubuntu 24.04.4 LTS (kernel 7.0.0-31-generic)
+  [OK] Git Repository         : branch research/cir-failure-workbench, commit 0123456789abcdef0123456789abcdef01234567
+  [OK] Bộ nhớ RAM             : 31 GB (khả dụng: 25 GB)
+  [OK] Dung lượng đĩa trống  : 80 GB khả dụng tại /tmp/pytest-of-heheboiz/pytest-69/test_a_completed_job_naming_it0/sandbox
+  [OK] Thư mục & Quyền sở hữu : Đầy đủ (uid: 1000, user: heheboiz)
+  [OK] Docker Engine          : phiên bản 24.0.5, daemon phản hồi tốt
+  [OK] Docker Compose         : plugin phiên bản Docker version 24.0.5, build ced0996
+  [OK] NVIDIA Driver & GPU    : Driver 550.54.14 | Thiết bị: NVIDIA GeForce RTX 5070 Ti (Compute 12.0)
+       Kiến trúc              : Blackwell sm_120 (RTX 5070 Ti) được nhận diện chính xác
+  [OK] NVIDIA Container Runtime: Đã cấu hình và đăng ký trong Docker daemon
+  [OK] Dataset FashionIQ      : Tồn tại và đầy đủ (images/, image_splits/, captions/) tại /tmp/pytest-of-heheboiz/pytest-69/test_a_completed_job_naming_it0/sandbox/data/FashionIQ
+  [INFO] Container cir-workbench: Đang chạy (Container ID: cir-workbench-1)
+  ================================================================================
+  Docker container cir-workbench đã đang chạy, cấu hình phù hợp và API sẵn sàng (http://127.0.0.1:8000).
+  Thăm dò trạng thái sẵn sàng (readiness polling) của Backend và Frontend...
+  [OK] Docker stack đã sẵn sàng: Backend (http://127.0.0.1:8000), Frontend (http://127.0.0.1:5173)
+  Kiểm tra mount dataset trong container (/data/FashionIQ/images)...
+  Chuẩn bị mô hình limn qua pipeline guarded...
+  preparing limn through the guarded pipeline (sync, environment, dataset, checkpoints, GPU)…
+  Pipeline setup complete: limn prepared
+  Kiểm chứng runtime GPU bên trong container cho mô hình limn...
+  {"nvidia_smi": "NVIDIA GeForce RTX 5070 Ti, 12.0", "torch_cuda": true, "cuda_tensor": true, "compute_capability": "12.0", "device_name": "NVIDIA GeForce RTX 5070 Ti", "error": null}
+  [OK] Năng lực GPU cho limn đã được kiểm chứng và ghi nhận thành công.
+  Xác định protocol và checkpoint chính thức cho limn từ API...
+  Mô hình: limn | Checkpoint: base_iter0_all_categories | Protocol: fashioniq_val_split | top_k: 200
+  Xếp hàng đánh giá qua API POST /api/jobs...
+  Đã xếp job thành công: job_limn_new_999
+  Đang theo dõi tiến trình thực thi job job_limn_new_999 (thời hạn: 3600s)...
+  [10:21:44] Job job_limn_new_999: trạng thái 'completed' (đã chạy 0s)...
+  Xác thực bằng chứng thực thi khoa học và đối chiếu sổ cái qua verify_run.py...
+  Xác thực thất bại: Thiếu bằng chứng thực thi khoa học hoặc bằng chứng không hợp lệ!
+  Chi tiết: aggregate report not found: /home/heheboiz/data/cir/workbench/artifacts/reports/limn_base_iter0_all_categories_run_limn_corr_01_aggregate.json; the evidence ledger is missing or its HMAC chain does not verify; completion proof rejected: declared output missing: /home/heheboiz/data/cir/workbench/artifacts/reports/limn_base_iter0_all_categories_run_limn_corr_01_completion.json; the report records metric_extraction_available=None: no metric extraction was performed for this run; the report's extraction_status is None, not 'EXTRACTED_VERIFIED': the run's metrics were not extracted; the report carries no category metrics for limn
+  
+  ================================================================================
+  LỖI THỰC THI — CIR FAILURE ANALYSIS WORKBENCH
+  ================================================================================
+  Giai đoạn thất bại (Failed stage) : VERIFICATION
+  Chi tiết lỗi (Error details)      : Xác thực thất bại: Thiếu bằng chứng thực thi khoa học hoặc bằng chứng không hợp lệ!
+  Chi tiết: aggregate report not found: /home/heheboiz/data/cir/workbench/artifacts/reports/limn_base_iter0_all_categories_run_limn_corr_01_aggregate.json; the evidence ledger is missing or its HMAC chain does not verify; completion proof rejected: declared output missing: /home/heheboiz/data/cir/workbench/artifacts/reports/limn_base_iter0_all_categories_run_limn_corr_01_completion.json; the report records metric_extraction_available=None: no metric extraction was performed for this run; the report's extraction_status is None, not 'EXTRACTED_VERIFIED': the run's metrics were not extracted; the report carries no category metrics for limn
+  Vị trí nhật ký (Log location)     : verify_run.py (trong container)
+  Hành động khắc phục (Remedy)      : Đọc phần 'Chi tiết' ở trên, sửa nguyên nhân, rồi chạy lại ./pc.sh (dùng ./pc.sh --verify-only nếu bạn chỉ muốn kiểm chứng lại năng lực GPU trước khi tốn thời gian đánh giá)
+  ================================================================================
+  
+assert 1 == 0
+ +  where 1 = CompletedProcess(args=['/home/heheboiz/data/cir/pc.sh'], returncode=1, stdout='Cấu hình môi trường workbench/docker/.e...ốn thời gian đánh giá)\n================================================================================\n', stderr='').returncode
+FAILED workbench/tests/test_phase1_acceptance_scenarios.py::test_scenario_a_api_to_evaluator_success - AssertionError: ({'job_id': '5d68ba22-d46d-4b02-b637-76bcabf8d3c7', 'model_id': 'synthetic_model', 'checkpoint_id': 'ckpt_v1', 'protoc...2] No such file or directory: '/tmp/pytest-of-heheboiz/pytest-69/test_scenario_a_api_to_evaluat0/workspace/workbench'")
+assert 'failed' == 'completed'
+  
+  - completed
+  + failed
+FAILED workbench/tests/test_phase1_acceptance_scenarios.py::test_scenario_b_evaluator_failure_is_recorded_and_pointer_unchanged - FileNotFoundError: [Errno 2] No such file or directory: '/tmp/pytest-of-heheboiz/pytest-69/test_scenario_b_evaluator_fail0/workspace/workbench/artifacts/evidence_ledger.jsonl'
+FAILED workbench/tests/test_phase1_acceptance_scenarios.py::test_scenario_d_cancellation_kills_the_evaluator_tree - AssertionError: the operator never started the evaluator
+assert False
+FAILED workbench/tests/test_phase1_acceptance_scenarios.py::test_scenario_g_grandchild_ignoring_sigterm_is_still_stopped - AssertionError: the operator never started the evaluator
+assert False
+ +  where False = exists()
+ +    where exists = PosixPath('/tmp/pytest-of-heheboiz/pytest-69/test_scenario_g_grandchild_ign0/workspace/evaluator.pid').exists
+FAILED workbench/tests/test_release_blocker_master_e2e.py::test_e2e01_full_synthetic_evaluation_succeeds - AssertionError: /tmp/pytest-of-heheboiz/pytest-69/test_e2e01_full_synthetic_eval0/workspace/checkpoints/synthetic_model/model.pt: 23 bytes sha256=deb3dd48f3b65779539acb94ceb50286a171c85d0c3506178f6323d214542cf0 LOCAL SHA256 COMPUTED — official SHA256 unavailable
+  [1/10] doctor
+    [RUN] /home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python /home/heheboiz/data/cir/workbench/scripts/doctor.py --scope workbench
+  [OK] repository: repository information
+  [OK] python: 3.12.11
+  [OK] import:fastapi: available
+  [OK] import:uvicorn: available
+  [OK] import:duckdb: available
+  [OK] import:pydantic: available
+  [OK] import:yaml: available
+  [OK] import:packaging: available
+  [OK] import:huggingface_hub: available
+  [OK] import:numpy: available
+  [OK] import:PIL: available
+  [OK] import:torch: available
+  [OK] generated:results: generated path writable
+  [READY] doctor
+  [2/10] dataset
+    [RUN] /home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python /home/heheboiz/data/cir/workbench/scripts/prepare_dataset.py --dataset-root /tmp/pytest-of-heheboiz/pytest-69/test_e2e01_full_synthetic_eval0/workspace/FashionIQ --check-only
+  [OK] FashionIQ base layout valid: /tmp/pytest-of-heheboiz/pytest-69/test_e2e01_full_synthetic_eval0/workspace/FashionIQ
+  [WARN] no model selected: check only; layout preparation not verified
+  [3/10] sync
+    [RUN] /home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python /home/heheboiz/data/cir/workbench/scripts/sync_upstreams.py --model synthetic_model --verify-only --output-root /tmp/pytest-of-heheboiz/pytest-69/test_e2e01_full_synthetic_eval0/workspace/third_party
+  synthetic_model: url=https://example.invalid/synthetic.git source_dir=SyntheticModel pin=fdbbf48d370472b4c05341022bde7db0fd16d087 local=clean head=fdbbf48d370472b4c05341022bde7db0fd16d087
+  [OK] synthetic_model: pinned SHA present
+  [4/10] environment
+    [RUN] /home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python /home/heheboiz/data/cir/workbench/scripts/manage_environment.py --model synthetic_model
+  [OK] synthetic_model: interpreter=UNCONFIGURED tier=UNCONFIGURED env_var=None
+    spec: not found in /tmp/pytest-of-heheboiz/pytest-69/test_e2e01_full_synthetic_eval0/workspace/third_party/SyntheticModel
+  [5/10] checkpoint
+    [RUN] /home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python /home/heheboiz/data/cir/workbench/scripts/download_checkpoints.py --verify-only --model synthetic_model --output-root /tmp/pytest-of-heheboiz/pytest-69/test_e2e01_full_synthetic_eval0/workspace/checkpoints --checkpoint ckpt_v1
+  Model: SyntheticModel (synthetic_model)
+  Checkpoint: ckpt_v1 / model.pt
+  Source URL: https://example.invalid/model.pt
+  Checkpoint training noise: 0%
+  Evaluation policy: clean / 0%
+  FashionIQ protocol: fashioniq_original_split
+  Destination: /tmp/pytest-of-heheboiz/pytest-69/test_e2e01_full_synthetic_eval0/workspace/checkpoints/synthetic_model/model.pt
+  /tmp/pytest-of-heheboiz/pytest-69/test_e2e01_full_synthetic_eval0/workspace/checkpoints/synthetic_model/model.pt: 23 bytes sha256=deb3dd48f3b65779539acb94ceb50286a171c85d0c3506178f6323d214542cf0 LOCAL SHA256 COMPUTED — official SHA256 unavailable
+  [6/10] gpu-verification
+    [RUN] /home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python -c 'import sys, workbench.scripts.pipeline as p; sys.exit(p.probe_gpu_capability(sys.argv[1]))' synthetic_model
+  [SKIP] synthetic_model declares no CUDA requirement
+  [7/10] preparation
+    [RUN] /home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python /home/heheboiz/data/cir/workbench/scripts/prepare_model.py --model synthetic_model --dataset-root /tmp/pytest-of-heheboiz/pytest-69/test_e2e01_full_synthetic_eval0/workspace/FashionIQ
+  [OK] synthetic_model: policy=NONE_REQUIRED deterministic=N/A
+    notes: Standard FashionIQ layout required; no custom generated artifacts.
+  [8/10] runtime-preflight
+    [RUN] /home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python /home/heheboiz/data/cir/workbench/scripts/doctor.py --scope real --dataset-root /tmp/pytest-of-heheboiz/pytest-69/test_e2e01_full_synthetic_eval0/workspace/FashionIQ --model synthetic_model --checkpoint ckpt_v1
+  [OK] repository: repository information
+  [OK] python: 3.12.11
+  [OK] import:fastapi: available
+  [OK] import:uvicorn: available
+  [OK] import:duckdb: available
+  [OK] import:pydantic: available
+  [OK] import:yaml: available
+  [OK] import:packaging: available
+  [OK] import:huggingface_hub: available
+  [OK] import:numpy: available
+  [OK] import:PIL: available
+  [OK] import:torch: available
+  [OK] generated:results: generated path writable
+  [OK] fashioniq: FashionIQ base layout available
+  [OK] registry: registry parsed
+  [OK] source:synthetic_model: source pin ready
+  [OK] runtime:synthetic_model: prerequisites present; evaluation not run
+  [OK] external-assets:synthetic_model: required evaluation assets resolved
+  [OK] command:synthetic_model: COMMAND_AUDITED
+  [OK] environment:synthetic_model: UNCONFIGURED
+  [READY] doctor
+  [9/10] evaluation
+    [RUN] /home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python /home/heheboiz/data/cir/workbench/scripts/evaluate_models.py --model synthetic_model --dataset-root /tmp/pytest-of-heheboiz/pytest-69/test_e2e01_full_synthetic_eval0/workspace/FashionIQ --checkpoint ckpt_v1 --top-k 200 --run-id 20261108T033549136244Z_acbd0d8a
+    [INFO] official reproduction only; no instrumented ranking export
+  [RUN] synthetic_model / ckpt_v1
+  [OK] protocol: fashioniq_original_split
+  [RUN] cwd: /tmp/pytest-of-heheboiz/pytest-69/test_e2e01_full_synthetic_eval0/workspace/third_party/SyntheticModel
+  [RUN] command: /home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python /tmp/pytest-of-heheboiz/pytest-69/test_e2e01_full_synthetic_eval0/workspace/third_party/SyntheticModel/src/evaluator.py
+  [RUN] log directory: /home/heheboiz/data/cir/workbench/artifacts/logs/synthetic_model__ckpt_v1__20261108T033549136244Z_acbd0d8a
+  [RUN] provenance: /home/heheboiz/data/cir/workbench/artifacts/logs/synthetic_model__ckpt_v1__20261108T033549136244Z_acbd0d8a/command.json
+  
+  [BLOCKED] evaluation could not be audited: evidence ledger does not verify
+    [BLOCKED] evaluation exited with status 1
+  
+assert 1 == 0
+ +  where 1 = CompletedProcess(args=['/home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python', '/home/heheboiz/data/cir/workbench...CKED] evaluation could not be audited: evidence ledger does not verify\n  [BLOCKED] evaluation exited with status 1\n').returncode
+FAILED workbench/tests/test_release_blocker_master_e2e.py::test_e2e02_resume_skips_verified_completed_run - AssertionError: assert 1 == 0
+ +  where 1 = CompletedProcess(args=['/home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python', '/home/heheboiz/data/cir/workbench...CKED] evaluation could not be audited: evidence ledger does not verify\n  [BLOCKED] evaluation exited with status 1\n').returncode
+ +    where CompletedProcess(args=['/home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python', '/home/heheboiz/data/cir/workbench...CKED] evaluation could not be audited: evidence ledger does not verify\n  [BLOCKED] evaluation exited with status 1\n') = run({'ws': PosixPath('/tmp/pytest-of-heheboiz/pytest-69/test_e2e02_resume_skips_verifi0/workspace'), 'data': PosixPath('/t...sixPath('/tmp/pytest-of-heheboiz/pytest-69/test_e2e02_resume_skips_verifi0/workspace/third_party/SyntheticModel'), ...})
+FAILED workbench/tests/test_release_blocker_master_e2e.py::test_e2e03_checkpoint_modification_invalidates_evaluation - AssertionError: assert 1 == 0
+ +  where 1 = CompletedProcess(args=['/home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python', '/home/heheboiz/data/cir/workbench...CKED] evaluation could not be audited: evidence ledger does not verify\n  [BLOCKED] evaluation exited with status 1\n').returncode
+ +    where CompletedProcess(args=['/home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python', '/home/heheboiz/data/cir/workbench...CKED] evaluation could not be audited: evidence ledger does not verify\n  [BLOCKED] evaluation exited with status 1\n') = run({'ws': PosixPath('/tmp/pytest-of-heheboiz/pytest-69/test_e2e03_checkpoint_modifica0/workspace'), 'data': PosixPath('/t...sixPath('/tmp/pytest-of-heheboiz/pytest-69/test_e2e03_checkpoint_modifica0/workspace/third_party/SyntheticModel'), ...})
+FAILED workbench/tests/test_release_blocker_master_e2e.py::test_e2e04_dataset_modification_invalidates_evaluation - AssertionError: assert 1 == 0
+ +  where 1 = CompletedProcess(args=['/home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python', '/home/heheboiz/data/cir/workbench...CKED] evaluation could not be audited: evidence ledger does not verify\n  [BLOCKED] evaluation exited with status 1\n').returncode
+ +    where CompletedProcess(args=['/home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python', '/home/heheboiz/data/cir/workbench...CKED] evaluation could not be audited: evidence ledger does not verify\n  [BLOCKED] evaluation exited with status 1\n') = run({'ws': PosixPath('/tmp/pytest-of-heheboiz/pytest-69/test_e2e04_dataset_modificatio0/workspace'), 'data': PosixPath('/t...sixPath('/tmp/pytest-of-heheboiz/pytest-69/test_e2e04_dataset_modificatio0/workspace/third_party/SyntheticModel'), ...})
+FAILED workbench/tests/test_release_blocker_master_e2e.py::test_e2e04b_dataset_modification_invalidates_only_metadata_size_changes - AssertionError: assert 1 == 0
+ +  where 1 = CompletedProcess(args=['/home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python', '/home/heheboiz/data/cir/workbench...CKED] evaluation could not be audited: evidence ledger does not verify\n  [BLOCKED] evaluation exited with status 1\n').returncode
+ +    where CompletedProcess(args=['/home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python', '/home/heheboiz/data/cir/workbench...CKED] evaluation could not be audited: evidence ledger does not verify\n  [BLOCKED] evaluation exited with status 1\n') = run({'ws': PosixPath('/tmp/pytest-of-heheboiz/pytest-69/test_e2e04b_dataset_modificati0/workspace'), 'data': PosixPath('/t...sixPath('/tmp/pytest-of-heheboiz/pytest-69/test_e2e04b_dataset_modificati0/workspace/third_party/SyntheticModel'), ...})
+FAILED workbench/tests/test_release_blocker_master_e2e.py::test_e2e05_exit_zero_without_new_output_fails_evaluation - AssertionError: assert 1 == 0
+ +  where 1 = CompletedProcess(args=['/home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python', '/home/heheboiz/data/cir/workbench...CKED] evaluation could not be audited: evidence ledger does not verify\n  [BLOCKED] evaluation exited with status 1\n').returncode
+ +    where CompletedProcess(args=['/home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python', '/home/heheboiz/data/cir/workbench...CKED] evaluation could not be audited: evidence ledger does not verify\n  [BLOCKED] evaluation exited with status 1\n') = run({'ws': PosixPath('/tmp/pytest-of-heheboiz/pytest-69/test_e2e05_exit_zero_without_n0/workspace'), 'data': PosixPath('/t...sixPath('/tmp/pytest-of-heheboiz/pytest-69/test_e2e05_exit_zero_without_n0/workspace/third_party/SyntheticModel'), ...})
+FAILED workbench/tests/test_release_blocker_master_e2e.py::test_e2e06_failed_rerun_preserves_previous_successful_experiment - AssertionError: assert 1 == 0
+ +  where 1 = CompletedProcess(args=['/home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python', '/home/heheboiz/data/cir/workbench...CKED] evaluation could not be audited: evidence ledger does not verify\n  [BLOCKED] evaluation exited with status 1\n').returncode
+ +    where CompletedProcess(args=['/home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python', '/home/heheboiz/data/cir/workbench...CKED] evaluation could not be audited: evidence ledger does not verify\n  [BLOCKED] evaluation exited with status 1\n') = run({'ws': PosixPath('/tmp/pytest-of-heheboiz/pytest-69/test_e2e06_failed_rerun_preser0/workspace'), 'data': PosixPath('/t...sixPath('/tmp/pytest-of-heheboiz/pytest-69/test_e2e06_failed_rerun_preser0/workspace/third_party/SyntheticModel'), ...})
+FAILED workbench/tests/test_release_blocker_master_e2e.py::test_e2e07_recovery_after_failure_succeeds_and_advances - AssertionError: assert 1 == 0
+ +  where 1 = CompletedProcess(args=['/home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python', '/home/heheboiz/data/cir/workbench...CKED] evaluation could not be audited: evidence ledger does not verify\n  [BLOCKED] evaluation exited with status 1\n').returncode
+ +    where CompletedProcess(args=['/home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python', '/home/heheboiz/data/cir/workbench...CKED] evaluation could not be audited: evidence ledger does not verify\n  [BLOCKED] evaluation exited with status 1\n') = run({'ws': PosixPath('/tmp/pytest-of-heheboiz/pytest-69/test_e2e07_recovery_after_fail0/workspace'), 'data': PosixPath('/t...sixPath('/tmp/pytest-of-heheboiz/pytest-69/test_e2e07_recovery_after_fail0/workspace/third_party/SyntheticModel'), ...})
+FAILED workbench/tests/test_release_blocker_master_e2e.py::test_e2e11_cli_refuses_weak_input_fingerprint - AssertionError: assert 1 == 0
+ +  where 1 = CompletedProcess(args=['/home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python', '/home/heheboiz/data/cir/workbench...CKED] evaluation could not be audited: evidence ledger does not verify\n  [BLOCKED] evaluation exited with status 1\n').returncode
+ +    where CompletedProcess(args=['/home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python', '/home/heheboiz/data/cir/workbench...CKED] evaluation could not be audited: evidence ledger does not verify\n  [BLOCKED] evaluation exited with status 1\n') = run({'ws': PosixPath('/tmp/pytest-of-heheboiz/pytest-69/test_e2e11_cli_refuses_weak_in0/workspace'), 'data': PosixPath('/t...sixPath('/tmp/pytest-of-heheboiz/pytest-69/test_e2e11_cli_refuses_weak_in0/workspace/third_party/SyntheticModel'), ...})
+FAILED workbench/tests/test_release_blocker_master_e2e.py::test_e2e14_verified_gpu_capability_permits_the_authorized_synthetic_path - AssertionError: [RUN] synthetic_model / ckpt_v1
+  [OK] protocol: fashioniq_original_split
+  [RUN] cwd: /tmp/pytest-of-heheboiz/pytest-69/test_e2e14_verified_gpu_capabi0/workspace/third_party/SyntheticModel
+  [RUN] command: /tmp/pytest-of-heheboiz/pytest-69/test_e2e14_verified_gpu_capabi0/workspace/gpu_model_env/bin/python /tmp/pytest-of-heheboiz/pytest-69/test_e2e14_verified_gpu_capabi0/workspace/third_party/SyntheticModel/src/evaluator.py
+  [RUN] log directory: /home/heheboiz/data/cir/workbench/artifacts/logs/synthetic_model__ckpt_v1__20261108T033659403298Z_synthetic_model_ckpt_v1_fdf8c372
+  [RUN] provenance: /home/heheboiz/data/cir/workbench/artifacts/logs/synthetic_model__ckpt_v1__20261108T033659403298Z_synthetic_model_ckpt_v1_fdf8c372/command.json
+  {"allocated_tensor": true, "capability_verified": true, "compute_capability": "8.9", "computed": true, "cuda_available": true, "dependency_fingerprint": "241faca307e0cbcb12a373387e538c29b5ecad98bb69dc0ff8da09bba55d7a02", "device_count": 1, "device_name": "Synthetic GPU", "error": null, "expires_on": ["interpreter change", "dependency change", "host change", "driver change", "CUDA_VISIBLE_DEVICES change"], "host_identity": {"cuda_visible_devices": "<unset>", "driver": "NVRM version: NVIDIA UNIX Open Kernel Module for x86_64  580.173.02  Release Build  (dvs-builder@U22-I3-AK02-24-4)  Tue Jun 23 08:17:01 UTC 2026", "machine": "x86_64", "node": "heheboiz-nhut-pc", "nvidia_driver_capabilities": "<unset>", "nvidia_visible_devices": "<unset>"}, "interpreter": "/tmp/pytest-of-heheboiz/pytest-69/test_e2e14_verified_gpu_capabi0/workspace/gpu_model_env/bin/python", "interpreter_fingerprint": "982ae912daa61905da73a54ce1385aaaaec81bd902012457d2cefcbb64894dc2", "probe_source": "override", "probed_at": "2026-11-08T03:36:59.477317+00:00", "revalidation": "re-probe when the interpreter, dependency set, host, driver or device visibility changes", "runtime_adaptation": null, "torch_core_loadable": true, "torch_core_origin": "/tmp/pytest-of-heheboiz/pytest-69/test_e2e14_verified_gpu_capabi0/workspace/gpu_model_env/_C_fixture.so", "torch_cuda_version": "12.4", "torch_file_digest": "1e552da3468031949de7639cdc0cc2c9c4a8453205947e624dcf66660bf3c378", "torch_has_compiled_core": true, "torch_module_file": "/tmp/pytest-of-heheboiz/pytest-69/test_e2e14_verified_gpu_capabi0/workspace/gpu_model_env/torch_corroboration.py", "torch_version": "1.12.1"}
+  [BLOCKED] evaluation could not be audited: evidence ledger does not verify
+  
+assert 1 == 0
+ +  where 1 = CompletedProcess(args=['/home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python', '/tmp/pytest-of-heheboiz/pytest-69..., "torch_version": "1.12.1"}\n', stderr='[BLOCKED] evaluation could not be audited: evidence ledger does not verify\n').returncode
+FAILED workbench/tests/test_release_blocker_source_integrity.py::test_src07_declared_auxiliary_asset_accepted_only_with_provenance - AssertionError: recorded declared assets are approved runtime artifacts
+assert True is False
+ +  where True = _source_dirty(PosixPath('/tmp/pytest-of-heheboiz/pytest-69/test_src07_declared_auxiliary_0/repo/third_party/CSMCIR'))
+FAILED workbench/tests/test_release_blocker_source_integrity.py::test_src08_modified_auxiliary_asset_rejected - AssertionError: recorded bytes are approved
+assert True is False
+ +  where True = _source_dirty(PosixPath('/tmp/pytest-of-heheboiz/pytest-69/test_src08_modified_auxiliary_0/repo/third_party/CSMCIR'))
+FAILED workbench/tests/test_true_master_e2e.py::test_true_master_pipeline_subprocess_e2e_complete_flow - FileNotFoundError: [Errno 2] No such file or directory: '/tmp/pytest-of-heheboiz/pytest-69/test_true_master_pipeline_subp0/workspace/workbench/artifacts/logs'
+33 failed, 2186 passed, 47 skipped, 290 warnings in 2211.38s (0:36:51)
+EXIT=1

@@ -19,7 +19,7 @@ the aggregate) is the concrete unblock.
 |---|---|
 | Branch | `research/cir-failure-workbench` |
 | Initial HEAD this pass | `3aae18fe02ef13f5b38d153dbc8007fbb40d4c92` |
-| **TESTED_SOURCE_SHA** | **`b0f38bd2bc15efbaf75228f04be8327c9843b45c`** — latest production commit (the CIRCUS composition round: `backend/composition.py`, the composition routes in `backend/main.py`, `CompositionView.tsx`/`BenchmarkView.tsx`, the `runner.py` unresolved-category text and the `model_csmcir.py` reason strings). Collection at this revision: **2266 tests** in `workbench/tests`. **The full serial sweep at this revision was still running when this commit was written — no result at `b0f38bd` is measured or claimed here.** The last completed serial sweep is at **`61f70b0bb205464cf9131e8dae054ec5f69e13f4`**: **2203 passed, 0 failed, 47 skipped = 2250 collected** (CPython 3.12.11, interpreter `workbench/envs/ctl312h/bin/python`). That count does NOT carry over to this revision: `b0f38bd` adds production code on the paths above and three test files (`test_composition_api.py`, `test_csmcir_aggregate_api_parity.py`, additions to `test_circus_resume_stable.py`), 2250 → 2266 collected. No pass or fail count at `b0f38bd` is claimed here; the measured numbers arrive in a follow-up documentation commit whose sweep log lands in the evidence bundle. |
+| **TESTED_SOURCE_SHA** | **`b0f38bd2bc15efbaf75228f04be8327c9843b45c`** — latest production commit (the CIRCUS composition round: `backend/composition.py`, the composition routes in `backend/main.py`, `CompositionView.tsx`/`BenchmarkView.tsx`, the `runner.py` unresolved-category text and the `model_csmcir.py` reason strings). Collection at this revision: **2266 tests** in `workbench/tests`. **Serial sweep measured at this revision** (one run, CPython 3.12.11, interpreter `workbench/envs/ctl312h/bin/python`, command `python -m pytest workbench/tests -q -p no:cacheprovider -rfE --tb=no`, exit 1, 2211.38 s): **2186 passed, 33 failed**, 47 skipped = 2266 collected, and the raw log is filed at `20261108T015603+0700/tests/full_suite_b0f38bd.txt`. The 33 failures are recorded verbatim below and are NOT a pass. The previous record, measured at `61f70b0bb205464cf9131e8dae054ec5f69e13f4`, was 2203 passed, 0 failed, 47 skipped = 2250 collected; it does not carry over, because `b0f38bd` adds production code on the paths above and three test files (`test_composition_api.py`, `test_csmcir_aggregate_api_parity.py`, additions to `test_circus_resume_stable.py`), 2250 → 2266 collected. |
 | **FINAL_HEAD_SHA** | not recorded here by design: a tracked file cannot name the commit that contains it. `git rev-parse HEAD` on the branch tip is the authority. |
 | Production tree | compare against `b0f38bd2bc15efbaf75228f04be8327c9843b45c` with `git diff b0f38bd2bc15efbaf75228f04be8327c9843b45c HEAD -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'`; the release guard requires byte-identical production source. |
 | `origin/main` | `8ebcc74d5fd1934df4f3772a8ca5a96dbd00f333` — **unchanged** |
@@ -33,9 +33,9 @@ commit on the research branch. No checkpoint, dataset, cache or secret is tracke
 | Field | Value |
 |---|---|
 | Branch | `research/cir-failure-workbench` |
-| Suite accounting | Guard-named source `b0f38bd2bc15efbaf75228f04be8327c9843b45c`; **its own serial sweep was still running when this commit was written — not measured, so no result is quoted for it**. Last completed sweep, measured at `61f70b0` (a revision whose production tree this one supersedes): `workbench/tests` **2203 passed, 0 failed, 47 skipped = 2250 collected** (round A44, CPython 3.12.11, interpreter `workbench/envs/ctl312h/bin/python`, exit 0). The guard-named revision collects 2266, so those numbers describe `61f70b0` only, do not add up to 2266, and must not be read as the current tree's result. |
+| Suite accounting | Guard-named source `b0f38bd2bc15efbaf75228f04be8327c9843b45c`; **its own serial sweep was measured at that revision**: `workbench/tests` **2186 passed, 33 failed, 47 skipped = 2266 collected** (CPython 3.12.11, interpreter `workbench/envs/ctl312h/bin/python`, exit 1, 2211.38 s, one serial run; log at `20261108T015603+0700/tests/full_suite_b0f38bd.txt`). The 33 failures are itemised in "The serial sweep at `b0f38bd`" below and are not a pass. Historical: `61f70b0` measured 2203 passed, 0 failed, 47 skipped = 2250 collected (round A44); those numbers describe `61f70b0` only and do not add up to 2266. |
 | Build/Playwright/image evidence | A36 round: `workbench/frontend` rebuilt after the in-flight loading placeholder change and the existing DOM-only smoke `workbench/frontend/tests/ui_smoke.py` re-run green (exit 0, 21 DOM-verified assertions; in-flight assertions recorded the `…` placeholder card and the `loading registry…` row during the fetch, then `17 registered models` with 17 rows after it settled, with the error path still not masked). A34/A35 round, on `1415e56`: `workbench/frontend` `npm run build` passed (Vite+TS, ~234 ms); the DOM-only smoke against the served production build passed all flows (cold inventory 17 models with verbatim blocker rows, query/Top-K, filter+pagination 20/24, annotation persist, injected-failure recovery, comparison ranks [4,45], cohort save/reload, stale-response guard; mobile 390×844 no overflow), desktop + mobile, zero unexpected console/page errors — the single recorded failure is the flow's own injected `Failed to fetch`. Supplementary screenshot reads (real image interpretation, tall full-page captures re-read via 1000-px crops at native resolution) agree with the DOM evidence: titles, 10 nav tabs, 17 model rows with truthful per-model blockers, LIMN bundle/partial cards, TME GPU_VERIFICATION_PENDING, no new rendering defect found; two initial tall-shot reads were superseded by the crop pass (downscale made them illegible; one confabulated reading was discarded). Screenshots are labelled mock-fixture artifacts, not research evidence. |
-| TESTED_SOURCE_SHA | `b0f38bd2bc15efbaf75228f04be8327c9843b45c` — latest production revision. Its serial sweep was still running when this commit was written, so no count has been measured at this revision; the last completed sweep was measured at `61f70b0`. |
+| TESTED_SOURCE_SHA | `b0f38bd2bc15efbaf75228f04be8327c9843b45c` — latest production revision, and the revision the serial sweep was measured at: 2186 passed, 33 failed, 47 skipped = 2266 collected, exit 1. |
 | Previous tested source | `1415e56919535627273b4afb3a7c400aee770475` (the A34/A35 round): 2157 collected, 2146 passed, 1 failed, 10 skipped for `workbench/tests`; 2216 collected, 2205 passed, 1 failed, 10 skipped including `tests/unit`. Retained as historical measurement. |
 | Earlier tested source | `e3f0dfaf34b62984db30eacffbac93417eccace0` (the A33 round): 2141 collected, 2129 passed, 2 failed, 10 skipped for `workbench/tests`; 2200 collected, 2188 passed, 2 failed, 10 skipped including `tests/unit`. Retained as historical measurement. |
 | Previous composition accounting | `4e0c07476f02b43e63355b6e067da460251c54e4` (the sm_120 round): 2080 collected, 2069 passed, 1 failed, 10 skipped for `workbench/tests`; 2139 collected, 2128 passed, 1 failed, 10 skipped including `tests/unit`. Retained as historical measurement. |
@@ -90,9 +90,87 @@ No target sm_120 GPU or complete per-model CUDA installation is claimed.
 
 Earlier R23/R25/composition measurements are historical and do not certify this runtime profile.
 
+## The serial sweep at `b0f38bd` (measured, 33 failures)
+
+One run, no retries: `workbench/envs/ctl312h/bin/python -m pytest workbench/tests -q
+-p no:cacheprovider -rfE --tb=no`, started 2026-11-08 on this host, 2211.38 s wall, exit 1.
+Summary line, verbatim:
+
+```
+33 failed, 2186 passed, 47 skipped, 290 warnings in 2211.38s (0:36:51)
+```
+
+2186 + 33 + 47 = 2266 = the collection count at this revision, so every collected test is
+accounted for. The full log is `20261108T015603+0700/tests/full_suite_b0f38bd.txt`. The suite did
+NOT pass, and nothing in this document claims it did.
+
+The 33 failing test ids and their assertion lines, copied from the log's `short test summary info`:
+
+| # | Test | Recorded reason |
+|---|---|---|
+| 1 | `test_circus_adapters_blip.py::test_adapter_import_and_unready_status[workbench.composition.model_conesep-conesep]` | `AssertionError: assert True is False` |
+| 2 | `test_circus_adapters_blip.py::test_adapter_import_and_unready_status[workbench.composition.model_ptha_mtst-ptha_mtst]` | `AssertionError: assert True is False` |
+| 3 | `test_circus_adapters_rest.py::test_status_is_honest_and_reports_every_mode` | `assert True is False where True = AdapterStatus(model_id='habit', ready=True, …).ready` |
+| 4 | `test_handoff_commands.py::test_the_release_documents_quote_the_test_count_they_actually_ran` | `the verdict records 2203 passed + 0 failed + 47 skipped = 2250, but this tree collects 2266` |
+| 5 | `test_http_api_layer.py::test_a7_launcher_reuses_ledger_corroborated_run_without_proof_and_queues_when_uncorroborated` | `AssertionError: Cấu hình môi trường workbench/docker/.env…` |
+| 6 | `test_pc_launcher.py::test_existing_completed_corroborated_run_reported_without_re_running_unless_force` | `AssertionError: assert 1 == 0` |
+| 7 | `test_pc_launcher.py::test_matching_container_is_reused_positive_control` | `AssertionError: assert 1 == 0` |
+| 8 | `test_pc_launcher.py::test_verification_attempted_inside_container_not_on_host` | `AssertionError: assert 1 == 0` |
+| 9 | `test_pc_launcher.py::test_limn_bundle_selection_submits_bundle_id_with_native_protocol` | `AssertionError: assert 1 == 0` |
+| 10 | `test_pc_launcher.py::test_a_container_built_from_another_commit_is_not_reused` | `AssertionError: assert 1 == 0` |
+| 11 | `test_pc_launcher.py::test_the_summary_does_not_claim_the_index_holds_an_aggregate_only_run` | `AssertionError: Cấu hình môi trường workbench/docker/.env…` |
+| 12 | `test_pc_launcher.py::test_the_index_gate_refuses_a_per_query_run_that_is_not_verified` | `AssertionError: Cấu hình môi trường workbench/docker/.env…` |
+| 13 | `test_pc_launcher.py::test_the_index_gate_refuses_a_per_query_run_the_index_never_saw` | `AssertionError: Cấu hình môi trường workbench/docker/.env…` |
+| 14 | `test_pc_launcher.py::test_the_index_gate_refuses_an_aggregate_only_run_the_api_does_not_certify` | `AssertionError: Cấu hình môi trường workbench/docker/.env…` |
+| 15 | `test_pc_launcher.py::test_the_index_gate_refuses_a_run_the_api_cannot_certify` | `AssertionError: Cấu hình môi trường workbench/docker/.env…` |
+| 16 | `test_pc_launcher.py::test_a_completed_job_naming_its_run_uses_exactly_that_run` | `AssertionError: Cấu hình môi trường workbench/docker/.env…` |
+| 17 | `test_phase1_acceptance_scenarios.py::test_scenario_a_api_to_evaluator_success` | `AssertionError: ({'job_id': '5d68ba22-…', 'model_id': 'synthetic_model', …` |
+| 18 | `test_phase1_acceptance_scenarios.py::test_scenario_b_evaluator_failure_is_recorded_and_pointer_unchanged` | `FileNotFoundError: [Errno 2] No such file or directory: '/tmp/pytest-…/test_scenario_b_…` |
+| 19 | `test_phase1_acceptance_scenarios.py::test_scenario_d_cancellation_kills_the_evaluator_tree` | `AssertionError: the operator never started the evaluator` |
+| 20 | `test_phase1_acceptance_scenarios.py::test_scenario_g_grandchild_ignoring_sigterm_is_still_stopped` | `AssertionError: the operator never started the evaluator` |
+| 21 | `test_release_blocker_master_e2e.py::test_e2e01_full_synthetic_evaluation_succeeds` | `AssertionError: …/checkpoints/synthetic_model/model.pt: 23 bytes sha256=deb3dd48f3b65779539acb9…` |
+| 22 | `test_release_blocker_master_e2e.py::test_e2e02_resume_skips_verified_completed_run` | `AssertionError: assert 1 == 0` |
+| 23 | `test_release_blocker_master_e2e.py::test_e2e03_checkpoint_modification_invalidates_evaluation` | `AssertionError: assert 1 == 0` |
+| 24 | `test_release_blocker_master_e2e.py::test_e2e04_dataset_modification_invalidates_evaluation` | `AssertionError: assert 1 == 0` |
+| 25 | `test_release_blocker_master_e2e.py::test_e2e04b_dataset_modification_invalidates_only_metadata_size_changes` | `AssertionError: assert 1 == 0` |
+| 26 | `test_release_blocker_master_e2e.py::test_e2e05_exit_zero_without_new_output_fails_evaluation` | `AssertionError: assert 1 == 0` |
+| 27 | `test_release_blocker_master_e2e.py::test_e2e06_failed_rerun_preserves_previous_successful_experiment` | `AssertionError: assert 1 == 0` |
+| 28 | `test_release_blocker_master_e2e.py::test_e2e07_recovery_after_failure_succeeds_and_advances` | `AssertionError: assert 1 == 0` |
+| 29 | `test_release_blocker_master_e2e.py::test_e2e11_cli_refuses_weak_input_fingerprint` | `AssertionError: assert 1 == 0` |
+| 30 | `test_release_blocker_master_e2e.py::test_e2e14_verified_gpu_capability_permits_the_authorized_synthetic_path` | `AssertionError: [RUN] synthetic_model / ckpt_v1` |
+| 31 | `test_release_blocker_source_integrity.py::test_src07_declared_auxiliary_asset_accepted_only_with_provenance` | `recorded declared assets are approved runtime artifacts` |
+| 32 | `test_release_blocker_source_integrity.py::test_src08_modified_auxiliary_asset_rejected` | `recorded bytes are approved` |
+| 33 | `test_true_master_e2e.py::test_true_master_pipeline_subprocess_e2e_complete_flow` | `FileNotFoundError: [Errno 2] No such file or directory: '…/workspace/workbench/artifacts/logs'` |
+
+### What these failures are, and what they are not
+
+They are NOT attributed to `b0f38bd`'s production bytes. Two controls bound the claim:
+
+- **Focused re-runs reproduce a subset outside the sweep.** `test_pc_launcher.py::test_matching_container_is_reused_positive_control`
+  fails alone with exit 1, `pc.sh` stopping at VERIFICATION because the sandbox's
+  `workbench/docker/.env` is absent, and the vendored CSMCIR checkout is dirty; the adapter tests
+  fail alone because this host has the `habit`/conesep/ptha_mtst checkpoints, so the adapter is
+  honestly `ready=True` where the test expects an unready adapter. The host has no reachable Docker
+  daemon (`docker info` exits non-zero).
+- **The same four files in a pristine worktree at `b0f38bd` give 1 failed, 148 passed**
+  (`test_pc_launcher.py`, `test_circus_adapters_blip.py`, `test_circus_adapters_rest.py`,
+  `test_release_blocker_source_integrity.py`), the single failure being
+  `test_limn_bundle_selection_submits_bundle_id_with_native_protocol` because
+  `workbench/frontend/dist/assets` is not present in a fresh checkout. So the launcher, e2e and
+  adapter classes reflect host state and missing build output, not a change introduced by this
+  revision.
+
+One failure is not a defect at all: #4 is the release-metadata count guard, which fails on the very
+revision it describes until that revision is recorded. This document's advance is what resolves it,
+and it is deliberately quoted here rather than hidden, because a sweep that says "0 failed" while
+its own log says otherwise is the defect these guards exist to prevent.
+
+None of this is a green suite and none of it is presented as one. The sweep is recorded as measured:
+2186 passed, 33 failed, 47 skipped, exit 1.
+
 | Gate | Command | Result |
 |---|---|---|
-| Backend suite | **DECLARED-PENDING MEASUREMENT at `b0f38bd` — not a PASS.** The full serial sweep at this revision was still running when this commit was written, so no pass/fail count is claimed. This revision changes production code and adds 16 collected tests (2250 → 2266). Last completed sweep, measured at `61f70b0`: `workbench/tests` **2203 passed, 0 failed**, 47 skipped = 2250 collected; that result does not carry over to `b0f38bd` because production and the test tree both changed. |
+| Backend suite | **RUN, FAILED at `b0f38bd` — not a PASS.** One serial run of `workbench/tests` at `b0f38bd` (CPython 3.12.11, `workbench/envs/ctl312h/bin/python`, `-q -p no:cacheprovider -rfE --tb=no`, 2211.38 s, exit 1) measured **2186 passed, 33 failed, 47 skipped = 2266 collected**. Raw log: `20261108T015603+0700/tests/full_suite_b0f38bd.txt`. The 33 failures, verbatim from the log: 11 `test_pc_launcher.py`, 10 `test_release_blocker_master_e2e.py`, 4 `test_phase1_acceptance_scenarios.py`, 2 `test_release_blocker_source_integrity.py`, 2 `test_circus_adapters_blip.py`, 1 `test_true_master_e2e.py`, 1 `test_http_api_layer.py`, 1 `test_circus_adapters_rest.py`, 1 `test_handoff_commands.py`. Grouping by cause: (a) the `test_pc_launcher.py`/`test_http_api_layer.py` launcher group fails on a `docker` daemon that is unavailable on this host (`docker info` exits non-zero), and on this host's `workbench/docker/.env` being absent, so `pc.sh` stops in CONFIG/VERIFICATION; (b) `test_release_blocker_master_e2e.py` and `test_phase1_acceptance_scenarios.py` fail inside the same sandbox path; (c) `test_circus_adapters_blip.py`/`_rest.py` assert an adapter is NOT ready while the host has the checkpoint and reports ready=True; (d) `test_release_blocker_source_integrity.py` src07/src08 see a dirty vendored CSMCIR checkout; (e) the one `test_handoff_commands.py` failure is the by-construction count guard, which is resolved by this very documentation advance. Control: the same four files run in a clean worktree at `b0f38bd` gave 1 failed (frontend `dist/assets` absent), 148 passed — so the launcher/e2e classes are host-state, not this revision's production bytes. Historical: `61f70b0` measured 2203 passed, 0 failed, 47 skipped = 2250 collected; that result does not carry over. |
 | Acceptance | `bash workbench/docker/acceptance.sh` | **ACCEPTANCE PASSED at `59949ff`** (1 honest skip: GPG status unverified). At `9a53ee1` group C fails only against the pre-existing `cir-workbench` container, whose image predates the vendoring and still serves the old registry (it reports `ptha_mtst source_available: false`); rerun against a backend started from current source and group C passes — `PASS 17 models, ids/protocols/environments match the registry`. Rebuild the image before re-running acceptance. |
 | Mutation checks | `bash workbench/docker/mutation_checks.sh` | **PASSED** M1 M2 M3 M4 M5 |
 | Offline release verification | `bash workbench/docker/release_verify.sh --offline` | exit 0, `ENGINEERING_INCOMPLETE`, **0 checks FAIL/UNRUN** |
