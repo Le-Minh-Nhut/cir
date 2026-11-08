@@ -1,4 +1,5 @@
 import type { MetricComparison } from "./gate_types";
+import type { CapabilityDetail, CapabilityFlags, DuplicateStatus, Measurement, TransferInfo } from "./types";
 import { isCertifiedEvidence } from "./evidence";
 
 
@@ -61,6 +62,15 @@ export type BenchmarkRun = {
   checkpoint_training_noise_pct: number | null;
   evaluation_noise_pct: number | null;
   protocol_id: string | null;
+  /** Served per the frontend←backend contract: capabilities, measurement, transfer and the
+   *  duplicate verdict computed from measurement identity. */
+  capabilities?: CapabilityFlags | null;
+  capability_detail?: Partial<Record<keyof CapabilityFlags, CapabilityDetail>> | null;
+  measurement?: Measurement | null;
+  transfer?: TransferInfo | null;
+  duplicate_status?: DuplicateStatus | null;
+  duplicate_attempt_count?: number | null;
+  provenance_source?: string | null;
 } & RunGate;
 
 /** Re-flag recorded comparisons against a user-chosen threshold. Same arithmetic as the backend's

@@ -1,112 +1,350 @@
-import { Image, noiseConditionLabel, runLabel } from "./components";
-import { CompositionView } from "./CompositionView";
-import { BenchmarkView } from "./BenchmarkView";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { api } from "./client";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { AREAS, KNOWN_PROTOCOL_IDS, SUBSET_LABEL, TO_SEARCH_VERSION, areaDef, hrefFor, parseLocation, toSearch, type AreaId, type Location } from "./routes";
+import { useWorkbenchData, protocolLabel, type RunCatalogEntry } from "./data";
+import { OverviewPage } from "./OverviewPage";
+import { ExperimentsPage } from "./ExperimentsPage";
+import { EvaluationPage } from "./EvaluationPage";
+import { SamplesPage } from "./SamplesPage";
+import { FailuresPage } from "./FailuresPage";
+import { NotebookPage } from "./NotebookPage";
+import { Card, CopyLink, EmptyState } from "./ui";
+import { fmtInt } from "./format";
 import { evidenceBanner, evidenceState } from "./evidence";
-import { parseProtocolVisibility, protocolDefinitions, protocolVisibilityStorageKey, selectedVisibleProtocol, setProtocolVisibility, visibleProtocolIds, type ProtocolId, type ProtocolVisibility } from "./protocols";
-import { mayApply, requestKey } from "./staleness";
-import { DEFAULT_THRESHOLD_PCT, isCertifiedEvidence, readThresholdPct, thresholdStorageKey, warningLabels, type BenchmarkRun, type GateVerdict, type RunGate, type WarningLabel } from "./gate";
-import type { MetricComparison } from "./gate_types";
-import type { Analysis, Cohort, Job, Model, Query, Run } from "./types";
 
-const labels = ["preservation_failure","under_edit","over_edit","partial_edit","wrong_attribute","wrong_entity_binding","reference_dominance","text_dominance","fine_grained_visual_confusion","ambiguous_ground_truth","possible_dataset_issue","duplicate_or_near_duplicate","other","unknown"];
-const pages = ["Dashboard","Models","Evaluation Runs","Benchmark","Composition","Sample Explorer","Compare Models","Common Failures","Disagreement","Failure Analytics","Annotations","Hypotheses"];
-
+/** The shell: URL → context → area.
+ *
+ *  The URL is the source of truth for area, view, protocol, subset, selected runs, inspected query
+ *  and every shareable filter. Every navigation is a `pushState`, so Back/Forward walk the operator's
+ *  own trail, and a `popstate` listener restores the state a URL describes. Invalid values are
+ *  reported in the context bar (and the message names the accepted values) instead of being
+ *  silently replaced by a default: a reader must never see one subset's numbers under another
+ *  subset's label because a URL was quietly coerced.
+ */
 export default function App() {
- const initialPage = () => {
-   const p = new URLSearchParams(window.location.search).get("page") || new URLSearchParams(window.location.search).get("tab");
-   return p && pages.includes(p) ? p : "Dashboard";
- };
- const [page,setPage]=useState(initialPage),[models,setModels]=useState<Model[]|null>(null),[runs,setRuns]=useState<Run[]|null>(null),[selected,setSelected]=useState<string[]>([]),[protocol,setProtocol]=useState<ProtocolId>("fashioniq_original_split"),[visibility,setVisibility]=useState<ProtocolVisibility>(()=>parseProtocolVisibility(localStorage.getItem(protocolVisibilityStorageKey))),[queries,setQueries]=useState<Query[]>([]),[activeRun,setActiveRun]=useState<string>(""),[pass,setPass]=useState<string>(""),[total,setTotal]=useState(0),[offset,setOffset]=useState(0),[query,setQuery]=useState<Query|null>(null),[k,setK]=useState(10),[analysis,setAnalysis]=useState<Analysis[]>([]),[jaccard,setJaccard]=useState<{left_run_id:string;right_run_id:string;jaccard:number}[]>([]),[error,setError]=useState(""),[annotations,setAnnotations]=useState<string[]>([]),[note,setNote]=useState(""),[cohorts,setCohorts]=useState<Cohort[]>([]),[jobs,setJobs]=useState<Job[]>([]),[cohortName,setCohortName]=useState(""),[failurePreset,setFailurePreset]=useState("all"),[category,setCategory]=useState(""),[failure,setFailure]=useState(""),[minRank,setMinRank]=useState(""),[maxRank,setMaxRank]=useState(""),[order,setOrder]=useState("worst"),[jump,setJump]=useState("");
- const visibleProtocols=useMemo(()=>visibleProtocolIds(visibility),[visibility]);
- const[thresholdPct,setThresholdPct]=useState<number>(()=>readThresholdPct())
- const [gates,setGates]=useState<Record<string,RunGate>>({});
- const [benchmarkRuns,setBenchmarkRuns]=useState<BenchmarkRun[]|null>(null);
- const safeRuns=useMemo(()=>Array.isArray(runs)?runs:[],[runs]);
- const safeBenchmarks=useMemo(()=>Array.isArray(benchmarkRuns)?benchmarkRuns:[],[benchmarkRuns]);
- const isInitialLoading=runs===null||benchmarkRuns===null;
- const evidence=useMemo(()=>evidenceState(safeRuns,safeBenchmarks),[safeRuns,safeBenchmarks]);
- // The Top-K thresholds the backend filter accepts, named once. `failed_at`/`passed_at` are compared
-// against the authoritative `target_rank` (a complete eligible ranking), never against the length of
-// a saved Top-K list -- a run that stores fewer images still classifies every query correctly.
-const FAILURE_K=[1,5,10,20,50,100,200];
- const mockBanner=isInitialLoading?"":evidenceBanner(evidence);
- const setProtocolVisible=(id:ProtocolId,visible:boolean)=>setVisibility(old=>setProtocolVisibility(old,id,visible));
- const compatible=useMemo(()=>safeRuns.filter(run=>run.protocol_id===protocol),[safeRuns,protocol]); const selectedRuns=useMemo(()=>safeRuns.filter(run=>(selected||[]).includes(run.run_id)),[safeRuns,selected]); const mockRuns=safeRuns.filter(run=>run.data_kind==="mock"), experiments=safeRuns.filter(run=>run.data_kind==="experiment");
- const refresh=()=>{api<Model[]>("/api/models").then(m=>setModels(Array.isArray(m)?m:[])).catch(e=>{setModels([]);setError(`models: ${e.message}`);});api<Cohort[]>("/api/cohorts").then(c=>setCohorts(Array.isArray(c)?c:[])).catch(e=>setError(`cohorts: ${e.message}`));api<Job[]>("/api/jobs").then(j=>setJobs(Array.isArray(j)?j:[])).catch(e=>setError(`jobs: ${e.message}`));api<Run[]>("/api/runs").then(r=>{const safeRuns=Array.isArray(r)?r:[];setRuns(safeRuns);setSelected(old=>{const prior=old||[];return prior.length?prior:safeRuns.filter(x=>x.protocol_id===protocol).map(x=>x.run_id);});}).catch(e=>{setRuns([]);setError(`runs: ${e.message}`);});};
- useEffect(()=>{refresh();},[]); useEffect(()=>{localStorage.setItem(protocolVisibilityStorageKey,JSON.stringify(visibility));},[visibility]); useEffect(()=>{localStorage.setItem(thresholdStorageKey,String(thresholdPct));},[thresholdPct]);const loadReports=()=>{api<Record<string,RunGate>>("/api/runs/gate").then(g=>setGates(g||{})).catch(e=>{setGates({});setError(`runs/gate: ${e.message}`);});api<BenchmarkRun[]>("/api/benchmark-runs").then(r=>setBenchmarkRuns(Array.isArray(r)?r:[])).catch(e=>{setBenchmarkRuns([]);setError(`benchmark-runs: ${e.message}`);});};
- useEffect(loadReports,[]);
- // A finished evaluation job changes the aggregate reports without changing the DuckDB run count, so
- // the report state must refetch when any job settles -- not only when runs.length moves.
- const settledJobs=useRef<Set<string>>(new Set());
- useEffect(()=>{let changed=false;for(const job of jobs){if((job.status==="completed"||job.status==="failed"||job.status==="blocked")&&!settledJobs.current.has(job.job_id)){settledJobs.current.add(job.job_id);changed=true;}}if(changed){loadReports();api<Run[]>("/api/runs").then(r=>setRuns(Array.isArray(r)?r:[])).catch(e=>setError(`runs: ${e.message}`));}},[jobs]);
- useEffect(()=>{const timer=window.setInterval(loadReports,10000);return()=>window.clearInterval(timer);},[]); useEffect(()=>{const visible=selectedVisibleProtocol(protocol,visibility);if(visible!==protocol){setProtocol(visible);resetFilters();}},[protocol,visibility,visibleProtocols]); useEffect(()=>{const timer=window.setInterval(()=>api<Job[]>("/api/jobs").then(setJobs).catch(e=>setError(e.message)),2000);return()=>window.clearInterval(timer);},[]); useEffect(()=>{const ids=compatible.map(x=>x.run_id);setSelected(old=>{const retained=(old||[]).filter(id=>ids.includes(id));return retained.length?retained:ids;});},[protocol,runs]);
- const activeRunId=compatible.some(r=>r.run_id===activeRun)?activeRun:compatible.some(r=>r.run_id===selected[0])?(selected[0]||""):""; const activeRunObj=compatible.find(r=>r.run_id===activeRunId)||null;
- const pageRequest=useRef(0);
- // One counter per request family. They are deliberately NOT shared: a counter that all four
- // families incremented would let an unrelated fetch (say the query page) cancel a legitimate
- // in-flight analysis answer, which is data loss dressed as safety.
- const analysisRequest=useRef(0), annotationRequest=useRef(0);
- const selectedKey=selected.join(",");
- const analysisKeyRef=useRef(selectedKey); analysisKeyRef.current=selectedKey;
- const annotationKey=requestKey(protocol,query?.query_id||"");
- const annotationKeyRef=useRef(annotationKey); annotationKeyRef.current=annotationKey;
- // Which query state the newest request belongs to. `activeRunId` alone is not enough: if the
- // newly selected protocol has no compatible run, `activeRunId` is "" while the request for the
- // PREVIOUS run is still in flight, and answering that request would populate the explorer with
- // another model's queries under the protocol the operator is now looking at. The key therefore
- // carries the protocol too, and every response is checked against it.
- const pageKey=requestKey(protocol,activeRunId);
- const pageKeyRef=useRef(pageKey); pageKeyRef.current=pageKey;
- const loadPage=()=>{const runId=activeRunId;const key=pageKey;const token=++pageRequest.current;if(!runId)return;const p=new URLSearchParams({run_id:runId,limit:"20",offset:String(offset),order});if(category)p.set("category",category);if(failure)p.set("failed_at",failure);if(pass)p.set("passed_at",pass);if(minRank)p.set("min_rank",minRank);if(maxRank)p.set("max_rank",maxRank);api<{items:Query[];total:number}>(`/api/queries?${p}`).then(data=>{if(!mayApply({token,key},{token:pageRequest.current,key:pageKeyRef.current}))return;setQueries(data.items);setTotal(data.total);setQuery(current=>data.items.find(x=>x.query_id===current?.query_id)||data.items[0]||null);}).catch(e=>{if(!mayApply({token,key},{token:pageRequest.current,key:pageKeyRef.current}))return;setError(e.message);});};
- useEffect(loadPage,[pageKey,offset,category,failure,pass,minRank,maxRank,order]);
- useEffect(()=>{setQuery(null);setQueries([]);setTotal(0);setOffset(0);},[activeRunId]); useEffect(()=>{if(selected.length<2){setAnalysis([]);setJaccard([]);return;}const ids=selected.join(",");const token=++analysisRequest.current;Promise.all([api<Analysis[]>(`/api/analysis?run_ids=${ids}&k=${k}`),api<{left_run_id:string;right_run_id:string;jaccard:number}[]>(`/api/analysis/failure-jaccard?run_ids=${ids}&k=${k}`)]).then(([a,j])=>{if(!mayApply({token,key:ids},{token:analysisRequest.current,key:analysisKeyRef.current}))return;setAnalysis(a);setJaccard(j);}).catch(e=>{if(!mayApply({token,key:ids},{token:analysisRequest.current,key:analysisKeyRef.current}))return;setError(e.message);});},[selected,k]); useEffect(()=>{const token=++annotationRequest.current;const key=annotationKey;setAnnotations([]);setNote("");if(!query)return;api<{labels:string[];note:string}[]>(`/api/annotations?query_id=${encodeURIComponent(query.query_id)}&protocol_id=${protocol}`).then(x=>{if(!mayApply({token,key},{token:annotationRequest.current,key:annotationKeyRef.current}))return;setAnnotations(x[0]?.labels||[]);setNote(x[0]?.note||"");}).catch(e=>{if(!mayApply({token,key},{token:annotationRequest.current,key:annotationKeyRef.current}))return;setError(e.message);});},[query,protocol]);
- const resetFilters=()=>setOffset(0); const toggle=(id:string)=>setSelected(old=>(old||[]).includes(id)?(old||[]).filter(x=>x!==id):[...(old||[]),id]); const openQuery=(id:string)=>{const runId=activeRunId;if(!runId)return;const key=pageKey;const token=++pageRequest.current;api<{items:Query[]}>(`/api/queries?run_id=${encodeURIComponent(runId)}&query_id=${encodeURIComponent(id)}&limit=1`).then(x=>{if(!mayApply({token,key},{token:pageRequest.current,key:pageKeyRef.current}))return;if(!x.items[0])throw Error("query not found");setQuery(x.items[0]);setPage("Sample Explorer");}).catch(e=>{if(!mayApply({token,key},{token:pageRequest.current,key:pageKeyRef.current}))return;setError(e.message);});};
- const shown=analysis.filter(row=>!category||row.category===category).filter(row=>failurePreset==="all"||failurePreset==="allfail"&&row.consensus_fail_fraction===1||failurePreset==="80"&&row.consensus_fail_fraction>=.8||failurePreset==="50"&&row.consensus_fail_fraction>=.5||failurePreset==="winner"&&row.min_rank<=k&&row.max_rank>k||failurePreset==="easy"&&row.max_rank<=k).sort((a,b)=>page==="Disagreement"?b.rank_range-a.rank_range:b.consensus_fail_fraction-a.consensus_fail_fraction);
- const saveAnnotation=()=>query&&api("/api/annotations",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({query_id:query.query_id,protocol_id:protocol,labels:annotations,note})}).catch(e=>setError(e.message)); const saveCohort=()=>shown.length&&api("/api/cohorts",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({cohort_id:cohortName||`cohort-${Date.now()}`,protocol_id:protocol,query_ids:shown.map(x=>x.query_id),run_ids:selected,definition:{failurePreset,k,category},notes:""})}).then(refresh).catch(e=>setError(e.message)); const queue=(model:Model,checkpoint:string)=>api<Job>("/api/jobs",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model_id:model.model_id,checkpoint_id:checkpoint,protocol_id:model.native_protocol,top_k:200})}).then(job=>setJobs(old=>[...old,job])).catch(e=>setError(e.message));
- return <main><header><div><h1>CIR Failure Analysis Workbench</h1><p>Canonical JSON source; DuckDB serving index.</p></div>{mockBanner&&<strong className="mock-banner">{mockBanner}</strong>}</header>{error&&<aside className="error"><b>Guard/API error:</b> {error}<button onClick={()=>setError("")}>Dismiss</button></aside>}<nav>{pages.map(x=><button key={x} className={page===x?"active":""} onClick={()=>setPage(x)}>{x}</button>)}</nav><section className="controls"><label>Protocol <select value={protocol} onChange={e=>{setProtocol(e.target.value as ProtocolId);resetFilters();}}>{protocolDefinitions.filter(({id})=>visibility[id]).map(({id,label})=><option key={id} value={id}>{label}</option>)}</select></label><fieldset className="deviation-threshold"><legend>Ngưỡng lệch paper (%)</legend><input type="range" min={0} max={20} step={0.5} value={thresholdPct} onChange={e=>setThresholdPct(Number(e.target.value))}/><input type="number" min={0} max={20} step={0.5} value={thresholdPct} onChange={e=>{const v=Number(e.target.value);if(Number.isFinite(v)&&v>=0&&v<=20)setThresholdPct(v);}}/><button onClick={()=>setThresholdPct(DEFAULT_THRESHOLD_PCT)}>Reset</button><small>Chỉ áp dụng cho cảnh báo hiển thị; phán quyết audit chuẩn (5%) trong báo cáo không đổi, không chạy lại evaluator.</small></fieldset><fieldset className="protocol-visibility"><legend>Protocol visibility</legend>{protocolDefinitions.map(({id,label})=><label key={id}><input type="checkbox" checked={visibility[id]} onChange={e=>setProtocolVisible(id,e.target.checked)}/>{label}</label>)}</fieldset><label>Top-K <select value={k} onChange={e=>setK(+e.target.value)}>{[1,5,10,20,50,100,200].map(x=><option key={x}>{x}</option>)}</select></label><span>{selected.length} compatible runs selected</span></section>
- {page==="Dashboard"&&<section><h2>Dashboard</h2><div className="cards"><b>{models===null?"—":models.length} registered models</b><b>{runs===null?"—":evidence.experimentRuns} experiment runs</b><b>{runs===null?"—":evidence.mockRuns} mock runs</b><b>{benchmarkRuns===null?"—":evidence.aggregateRuns} aggregate benchmark reports</b>{benchmarkRuns!==null&&evidence.certifiedAggregates>0&&<b>{evidence.certifiedAggregates} certified research results (1 unique measurement)</b>}</div><p>Paper scores are sanity references only. Cross-protocol analysis fails closed.</p>{safeBenchmarks.length>0&&<div className="dashboard-benchmarks"><h3>Certified Aggregate Benchmark Evidence</h3><p>Official macro evaluations verified against published paper references. These runs operate at aggregate level only; per-query sample rankings were not exported by design (<code>per_query_state: CAPABILITY_ABSENT</code>).</p><div className="benchmark-cards">{safeBenchmarks.map(b=>{const isCertified=isCertifiedEvidence(b);const isDuplicateWeak=!b.evaluator_environment_knobs;return <div key={b.run_id} className="benchmark-summary-card"><div className="benchmark-summary-header"><div><b>{b.model_id?.toUpperCase()} / {b.checkpoint_id} ({b.protocol_id})</b>{isDuplicateWeak&&<small className="duplicate-note" style={{display:"block",color:"#d29922",fontSize:"11px",marginTop:"2px"}}>duplicate attempt — provenance knobs missing</small>}</div><div style={{display:"flex",gap:"6px",alignItems:"center"}}><span className={`badge ${isCertified?"badge-pass":"badge-warn"}`}>{b.verification?.state?.toUpperCase()||(isCertified?"CERTIFIED":"UNCERTIFIED")}</span><span className="badge badge-aggregate">aggregate-only (CAPABILITY_ABSENT)</span></div></div><div className="metrics-pills"><div className="metric-pill"><span className="label">Macro R@10</span><span className="value">{b.observed_metrics?.r10!=null?`${b.observed_metrics.r10.toFixed(2)}%`:"—"}</span><span className="ref">paper sanity ref: {b.paper_sanity_metrics?.r10!=null?`${b.paper_sanity_metrics.r10.toFixed(2)}%`:"—"}</span></div><div className="metric-pill"><span className="label">Macro R@50</span><span className="value">{b.observed_metrics?.r50!=null?`${b.observed_metrics.r50.toFixed(2)}%`:"—"}</span><span className="ref">paper sanity ref: {b.paper_sanity_metrics?.r50!=null?`${b.paper_sanity_metrics.r50.toFixed(2)}%`:"—"}</span></div><div className="metric-pill"><span className="label">Mean R@10/50</span><span className="value">{b.observed_metrics?.mean!=null?`${b.observed_metrics.mean.toFixed(2)}%`:"—"}</span><span className="ref">paper sanity ref: {b.paper_sanity_metrics?.mean!=null?`${b.paper_sanity_metrics.mean.toFixed(2)}%`:"—"}</span></div></div></div>;})}</div></div>}</section>}
- {page==="Models"&&<section><h2>Models</h2><table><tbody>{models===null?<tr><td>loading registry…</td></tr>:models.map(m=><tr key={m.model_id}><td><b>{m.method_name}</b><br/>{m.reproduction_status}<br/><small>{m.native_protocol||"protocol unavailable"} · literature {m.literature_split_label}</small>{safeBenchmarks.filter(b=>b.model_id===m.model_id).map(b=>{const shown:WarningLabel[]=warningLabels(b,thresholdPct);return <div key={b.run_id} className="model-gate"><b>{noiseConditionLabel(b.model_id||m.model_id,b.checkpoint_training_noise_pct,b.evaluation_noise_pct)}</b><span className="badge badge-aggregate">aggregate-only (CAPABILITY_ABSENT)</span>{shown.map(label=><span key={label.kind} className={`warning-label ${label.tone}`}>{label.text}</span>)}<div className="gate-metrics-summary"><small>Measured: R@10 {b.observed_metrics?.r10!=null?`${b.observed_metrics.r10.toFixed(2)}%`:"—"} · R@50 {b.observed_metrics?.r50!=null?`${b.observed_metrics.r50.toFixed(2)}%`:"—"} · Mean {b.observed_metrics?.mean!=null?`${b.observed_metrics.mean.toFixed(2)}%`:"—"} [Paper sanity ref: R@10 {b.paper_sanity_metrics?.r10!=null?`${b.paper_sanity_metrics.r10.toFixed(2)}%`:"—"} · R@50 {b.paper_sanity_metrics?.r50!=null?`${b.paper_sanity_metrics.r50.toFixed(2)}%`:"—"}]</small></div><GateDetail gate={b}/></div>;})}</td><td>{(m.checkpoint_bundles||[]).map(b=>{const mems=b.members||[];const blockers=mems.flatMap(mem=>(mem.blocking_reasons||[]).map(r=>`${mem.checkpoint_id}: ${r}`));const missing=mems.filter(mem=>!mem.checkpoint_downloaded).map(mem=>`${mem.checkpoint_id} not installed`);const allBlockers=[...blockers,...missing];const ready=mems.length>0&&mems.every(mem=>mem.runnable);return <div className="checkpoint bundle" key={b.bundle_id}><b>{b.bundle_id}</b> <span className="badge">COMPLETE multi-category reproduction</span><br/><small>{b.notes||`Requires: ${b.required_checkpoint_ids.join(", ")}`}</small><br/><small>Readiness: {ready?"READY (all category models runnable)":`BLOCKED (${allBlockers.join("; ")||"unverified"})`}</small><br/><button disabled={!ready||!m.native_protocol} onClick={()=>queue(m,b.bundle_id)}>Queue official bundle (COMPLETE multi-category)</button></div>;})}{m.checkpoints.map(c=>{const isMember=(m.checkpoint_bundles||[]).some(b=>b.required_checkpoint_ids.includes(c.checkpoint_id));return <div className="checkpoint" key={c.checkpoint_id}><b>{noiseConditionLabel(m.model_id,c.checkpoint_training_noise_pct,c.evaluation_noise_pct)}</b><br/>{c.checkpoint_id}: {c.checkpoint_downloaded?"installed":"not installed"} {isMember&&<span className="badge">Single-category (partial evaluation — NOT complete reproduction)</span>}<br/><small>auto {String(c.automatic_download_available)} · mapping {String(c.mapping_verified)} · command {String(c.adapter_command_ready)} · runtime {String(c.runtime_verified)}</small>{c.blocking_reasons&&c.blocking_reasons.length>0&&<><br/><small>Blockers: {c.blocking_reasons.join("; ")}</small></>}<br/><button disabled={!c.runnable||!m.native_protocol} onClick={()=>queue(m,c.checkpoint_id)}>{isMember?"Queue single category (partial)":"Queue official evaluation"}</button></div>;})}</td></tr>)}</tbody></table></section>}
- {page==="Evaluation Runs"&&<section><h2>Evaluation Runs</h2>{compatible.map(run=>{const gate=gates[run.run_id];const shown:WarningLabel[]=warningLabels(gate,thresholdPct);return <label className="run" key={run.run_id}><input type="checkbox" checked={selected.includes(run.run_id)} onChange={()=>toggle(run.run_id)}/><b>{runLabel(run)}</b> <span className="badge">{run.data_kind.toUpperCase()}</span>{shown.map(label=><span key={label.kind} className={`warning-label ${label.tone}`}>{label.text}</span>)}<GateDetail gate={gate}/></label>;})}{safeBenchmarks.filter(b=>b.protocol_id===protocol&&!compatible.some(run=>run.run_id===b.run_id)).map(b=>{const shown:WarningLabel[]=warningLabels(b,thresholdPct);const isCertified=isCertifiedEvidence(b);const isDuplicateWeak=!b.evaluator_environment_knobs;return <label className="run aggregate-only" key={b.run_id}><input type="checkbox" disabled title="Per-query actions disabled: aggregate-only run (CAPABILITY_ABSENT)"/><b>{noiseConditionLabel(b.model_id||"unknown",b.checkpoint_training_noise_pct,b.evaluation_noise_pct)} · {b.checkpoint_id}</b>{isDuplicateWeak&&<small className="duplicate-note" style={{display:"block",color:"#d29922",fontSize:"11px",marginTop:"2px"}}>duplicate attempt — provenance knobs missing</small>} <span className={`badge ${isCertified?"badge-pass":"badge-warn"}`}>{b.verification?.state?.toUpperCase()||(isCertified?"CERTIFIED":"UNCERTIFIED")}</span> <span className="badge badge-aggregate">aggregate-only — per-query Top-K unavailable (CAPABILITY_ABSENT)</span>{b.is_synthetic&&<span className="badge">SYNTHETIC SOURCE</span>}{shown.map(label=><span key={label.kind} className={`warning-label ${label.tone}`}>{label.text}</span>)}<div className="aggregate-metrics-preview"><small><b>Measured:</b> R@10 {b.observed_metrics?.r10!=null?`${b.observed_metrics.r10.toFixed(2)}%`:"—"} · R@50 {b.observed_metrics?.r50!=null?`${b.observed_metrics.r50.toFixed(2)}%`:"—"} · Mean {b.observed_metrics?.mean!=null?`${b.observed_metrics.mean.toFixed(2)}%`:"—"} | <b>Paper sanity ref:</b> R@10 {b.paper_sanity_metrics?.r10!=null?`${b.paper_sanity_metrics.r10.toFixed(2)}%`:"—"} · R@50 {b.paper_sanity_metrics?.r50!=null?`${b.paper_sanity_metrics.r50.toFixed(2)}%`:"—"}</small></div><GateDetail gate={b}/></label>;})}<h3>GPU job queue</h3><p>Only preflighted official commands enter queue. One evaluator runs at once.</p>{jobs.length?jobs.map(job=><article className="job" key={job.job_id}><b>{job.model_id} / {job.checkpoint_id}</b> · {job.status}{job.return_code!==null&&` · exit ${job.return_code}`}<br/><small>{job.command.join(" ")}</small>{["queued","preparing","running"].includes(job.status)&&<button onClick={()=>api(`/api/jobs/${job.job_id}/cancel`,{method:"POST"}).then(refresh).catch(e=>setError(e.message))}>Cancel</button>}{job.error&&<pre>{job.error}</pre>}{job.stderr_tail&&<pre>{job.stderr_tail}</pre>}</article>):<p>No evaluation jobs.</p>}</section>}
- {page==="Benchmark"&&<BenchmarkView benchmarkRuns={safeBenchmarks} thresholdPct={thresholdPct}/>}
- {page==="Composition"&&<CompositionView onError={setError}/>}
- {page==="Sample Explorer"&&<section><h2>Sample Explorer</h2>{!compatible.length&&<div className="notice-aggregate-only"><h3>Sample Explorer Unavailable for Current Protocol</h3><p>Protocol <code>{protocol}</code> contains only aggregate-only benchmark runs. Query-level ranking artifacts were not exported by design (<code>per_query_state: CAPABILITY_ABSENT</code>). Top-K sample inspection, query images, and individual rankings cannot be displayed.</p></div>}<div className="filters"><label>Category <select value={category} onChange={e=>{setCategory(e.target.value);resetFilters();}}><option value="">All</option>{["dress","shirt","toptee"].map(x=><option key={x}>{x}</option>)}</select></label><label>Active model/run <select value={compatible.some(r=>r.run_id===activeRunId)?activeRunId:""} onChange={e=>setActiveRun(e.target.value)}>{compatible.length?compatible.map(r=><option key={r.run_id} value={r.run_id}>{runLabel(r)} — {r.checkpoint_id}{r.evidence_status?` [${r.evidence_status}]`:""}</option>):<option value="">— No per-query runs available (CSMCIR is aggregate-only) —</option>}</select></label><label>Failure <select value={failure} onChange={e=>{setFailure(e.target.value);setPass("");resetFilters();}}><option value="">All</option>{FAILURE_K.map(k=><option key={"f"+k} value={String(k)}>fail @{k}</option>)}</select></label><label>Pass <select value={pass} onChange={e=>{setPass(e.target.value);setFailure("");resetFilters();}}><option value="">—</option>{FAILURE_K.map(k=><option key={"p"+k} value={String(k)}>pass @{k}</option>)}</select></label><input placeholder="min rank" value={minRank} onChange={e=>{setMinRank(e.target.value);resetFilters();}}/><input placeholder="max rank" value={maxRank} onChange={e=>{setMaxRank(e.target.value);resetFilters();}}/><select value={order} onChange={e=>{setOrder(e.target.value);resetFilters();}}><option value="worst">worst first</option><option value="best">best first</option></select><input placeholder="Paste query ID" value={jump} onChange={e=>setJump(e.target.value)}/><button disabled={!activeRunId||!jump} onClick={()=>openQuery(jump)}>Jump</button></div><div className="pager"><button disabled={!offset} onClick={()=>setOffset(Math.max(0,offset-20))}>Previous page</button><span>{activeRunId ? `${offset+1}–${Math.min(offset+20,total)} of ${total}` : compatible.length ? "select an active run to page through its queries" : "no run for this protocol holds query-level results (aggregate-only models never do)"}</span><button disabled={offset+20>=total} onClick={()=>setOffset(offset+20)}>Next page</button></div>{query&&activeRunObj&&<><h3>{query.query_id} · target rank {query.target_rank}</h3><p className="active-run">Lượt đang xem: <b>{runLabel(activeRunObj)}</b> · {activeRunObj.checkpoint_id} · {activeRunObj.protocol_id} · trạng thái bằng chứng: <b>{activeRunObj.evidence_status||"PER_QUERY_UNVERIFIED"}</b></p><div className="images"><Image category={query.category} id={query.reference_id} kind="Reference"/><Image category={query.category} id={query.target_id} kind="Target"/></div><p>{query.raw_captions.join(" / ")}<br/><code>{query.model_input_text}</code></p><p className="limitation">{query.top_results.length<k?`Yêu cầu Top-${k} — chỉ có Top-${query.top_results.length} được lưu cho lượt này. Danh sách dưới đây KHÔNG phải Top-${k} đầy đủ.`:`Hiển thị Top-${k} trong ${query.top_results.length} kết quả đã lưu.`}</p><div className="grid">{query.top_results.slice(0,k).map(x=><article className={x.image_id===query.target_id?"target":""} key={x.rank}><Image category={query.category} id={x.image_id} kind={`#${x.rank}`}/><small>{x.score.toFixed(4)}</small></article>)}</div></>}</section>}
- {page==="Compare Models"&&<section><h2>Compare Models</h2>{!query?<div className="notice-aggregate-only"><h3>Model Comparison Unavailable</h3><p>Model comparison requires per-query ranking data from at least 2 runs. The available CSMCIR runs are aggregate-only (<code>CAPABILITY_ABSENT</code>) and have no query rankings to compare. To use Compare Models, select a protocol with indexed per-query runs and choose an active sample query.</p></div>:<Compare query={query} runIds={selected} k={k} onError={setError}/>}</section>}
- {["Common Failures","Disagreement"].includes(page)&&<section><h2>{page}</h2><div className="filters"><select value={failurePreset} onChange={e=>setFailurePreset(e.target.value)}><option value="all">All</option><option value="allfail">All runs fail</option><option value="80">≥80% fail</option><option value="50">≥50% fail</option><option value="winner">One run succeeds</option><option value="easy">Universal success</option></select><button onClick={saveCohort}>Save filtered set</button><input placeholder="cohort ID" value={cohortName} onChange={e=>setCohortName(e.target.value)}/></div>{shown.length===0&&!compatible.length?<p>Failure analytics unavailable: this protocol has no run with query-level results loaded (aggregate-only models hold none by design).</p>:<AnalysisTable rows={shown} onOpen={openQuery}/>}</section>}
- {page==="Failure Analytics"&&<section><h2>Failure Analytics</h2>{shown.length===0&&!compatible.length?<p>Failure analytics unavailable: this protocol has no run with query-level results loaded (aggregate-only models hold none by design).</p>:<AnalysisTable rows={shown} onOpen={openQuery}/>}<h3>Failure-set Jaccard</h3><table><thead><tr><th>run</th>{selectedRuns.map(r=><th key={r.run_id}>{runLabel(r)}</th>)}</tr></thead><tbody>{selectedRuns.map(left=><tr key={left.run_id}><th>{runLabel(left)}</th>{selectedRuns.map(right=><td key={right.run_id}>{jaccard.find(x=>x.left_run_id===left.run_id&&x.right_run_id===right.run_id)?.jaccard.toFixed(2)||"—"}</td>)}</tr>)}</tbody></table><h3>Query × run target rank</h3><table><thead><tr><th>query</th>{selectedRuns.map(r=><th key={r.run_id}>{runLabel(r)}</th>)}</tr></thead><tbody>{shown.map(row=><tr key={row.query_id} onClick={()=>openQuery(row.query_id)}><td>{row.query_id}</td>{selectedRuns.map(r=><td key={r.run_id}>{row.target_rank[r.run_id]}</td>)}</tr>)}</tbody></table></section>}
- {page==="Annotations"&&<section><h2>Annotations</h2>{query&&<><p>{query.query_id} · {protocol}</p><div className="labels">{labels.map(x=><label key={x}><input type="checkbox" checked={annotations.includes(x)} onChange={()=>setAnnotations(old=>old.includes(x)?old.filter(y=>y!==x):[...old,x])}/>{x}</label>)}</div><textarea value={note} onChange={e=>setNote(e.target.value)}/><button onClick={saveAnnotation}>Save / update</button></>}</section>}
- {page==="Hypotheses"&&<section><h2>Hypotheses</h2>{cohorts.map(c=><article key={c.cohort_id}><b>{c.cohort_id}</b> · {c.query_ids.length} queries · {c.run_ids.length} runs</article>)}</section>}</main>;
+  const [knownProtocols, setKnownProtocols] = useState<string[]>([]);
+  const initial = useMemo(() => parseLocation(window.location.search, knownProtocolsForParse()), []);
+  const [location, setLocation] = useState<Location>(initial.location);
+  const [problems, setProblems] = useState(initial.problems);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [dismissed, setDismissed] = useState(false);
+
+  const data = useWorkbenchData({
+    protocol: location.protocol,
+    subset: location.subset,
+    selectedKeys: location.runs,
+    condition: location.condition,
+    outcome: location.outcome,
+    category: location.category,
+    order: location.order,
+    offset: location.offset,
+    limit: 20,
+    query: location.q,
+    imported: location.imported,
+  });
+
+  // Protocols this deployment actually serves, from its own data. Kept in state so the URL parser
+  // can validate later navigations against the same list the selectors use.
+  useEffect(() => {
+    if (data.protocolIds.length && data.protocolIds.join(",") !== knownProtocols.join(",")) {
+      setKnownProtocols(data.protocolIds);
+    }
+  }, [data.protocolIds, knownProtocols]);
+
+  // Write the canonical URL. `replaceState` is used only when nothing the operator did changed the
+  // area (a background default landing), so Back never skips an area they chose.
+  const writeUrl = useCallback((next: Location, mode: "push" | "replace") => {
+    const search = toSearch(next);
+    const url = `${window.location.pathname}${search}${TO_SEARCH_VERSION}`;
+    if (`${window.location.pathname}${window.location.search}` === url) return;
+    if (mode === "push") window.history.pushState({ at: Date.now() }, "", url);
+    else window.history.replaceState({ at: Date.now() }, "", url);
+  }, []);
+
+  const goto = useCallback((patch: Partial<Location>, mode: "push" | "replace" = "push") => {
+    setLocation((current) => {
+      const next = { ...current, ...patch };
+      // A different area starts at its own first view (or the explicit one in the patch).
+      if (patch.area && patch.view === undefined) {
+        next.view = areaDef(patch.area).views[0]?.id ?? "";
+      }
+      writeUrl(next, mode);
+      return next;
+    });
+  }, [writeUrl]);
+
+  // Select a run for analysis: composition runs are exclusive within a subset, and choosing one
+  // clears the inspected query so a query from another run cannot be shown under the new run.
+  const selectRun = useCallback((entry: RunCatalogEntry, additive?: boolean) => {
+    setLocation((current) => {
+      const key = entry.key;
+      const has = current.runs.includes(key);
+      const runs = additive
+        ? (has ? current.runs.filter((item) => item !== key) : [...current.runs, key])
+        : [key];
+      const next: Location = {
+        ...current,
+        runs,
+        run: entry.family === "composition" ? entry.runId : current.run,
+        subset: entry.family === "composition" ? current.subset : current.subset,
+        query: "",
+        offset: 0,
+      };
+      writeUrl(next, "push");
+      return next;
+    });
+  }, [writeUrl]);
+
+  // Back/Forward. The URL is re-parsed with the protocol list now known, so a restored link with a
+  // protocol this deployment does not serve is reported rather than silently swapped.
+  useEffect(() => {
+    const onPop = () => {
+      const parsed = parseLocation(window.location.search, knownProtocols.length ? knownProtocols : knownProtocolsForParse());
+      setLocation(parsed.location);
+      setProblems(parsed.problems);
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, [knownProtocols]);
+
+  // First load: if the URL said nothing, adopt the protocol the data actually has, so the header
+  // never claims "FashionIQ Original" while the served rows are CIRCUS release content.
+  useEffect(() => {
+    if (window.location.search) return;
+    const fallback = data.protocolIds[0];
+    if (fallback && fallback !== location.protocol) {
+      setLocation((current) => {
+        const next = { ...current, protocol: fallback };
+        writeUrl(next, "replace");
+        return next;
+      });
+    }
+  }, [data.protocolIds, location.protocol, writeUrl]);
+
+  // A subset switch KEEPS the run selection.
+  //
+  // Clearing it was a defect the browser harness caught: a CIRCUS composition run has the same
+  // `run_id` in full/sf/validated (one summary row per subset), so the selection is still valid
+  // after the switch — but dropping it left the label reading "SF" over an empty pager and no
+  // `runs=` in the URL, which is the same class of lie as painting the wrong rows. The inspected
+  // query is cleared because a query id from another subset's page is not the same reading.
+  //
+  // Selection validity is not assumed here: `reconcileSelection` below removes any key the serving
+  // catalog no longer contains, so a run that genuinely does not exist in the new scope cannot
+  // linger as a phantom selection.
+  const changeSubset = (subset: Location["subset"]) => {
+    goto({ subset, query: "", offset: 0 });
+  };
+
+  // Drop selected runs the current catalog does not serve.
+  //
+  // This is the ONLY place that rewrites the selection because of served data, and it reads the
+  // catalog, which is itself currency-guarded (`useRegion`): a superseded response never reaches
+  // it, so a late answer cannot remove a selection it knows nothing about. It only runs once the
+  // composition summaries are READY, so an in-flight or failed load cannot look like "no runs
+  // exist" and wipe the operator's choice.
+  useEffect(() => {
+    if (data.compositionRuns.region.status !== "ready") return;
+    if (!location.runs.length) return;
+    const served = new Set(data.catalog.map((entry) => entry.key));
+    // The per-query index family is not filtered by subset, so its keys always remain valid.
+    const kept = location.runs.filter((key) => key.startsWith("i:") || served.has(key));
+    if (kept.length === location.runs.length) return;
+    const nextRuns = kept;
+    setLocation((current) => {
+      const next: Location = { ...current, runs: nextRuns, query: nextRuns.length ? current.query : "" };
+      writeUrl(next, "replace");
+      return next;
+    });
+  }, [data.catalog, data.compositionRuns.region.status, location.runs, writeUrl]);
+
+  useEffect(() => {
+    if (!location.view && areaDef(location.area).views.length) {
+      goto({ view: areaDef(location.area).views[0].id }, "replace");
+    }
+  }, [location.area, location.view, goto]);
+
+  const evidence = evidenceState(
+    (data.indexRuns.region.data ?? []).map((run) => ({ run_id: run.run_id, data_kind: run.data_kind, evidence_status: run.evidence_status })),
+    (data.aggregates.region.data ?? []).map((run) => ({ run_id: run.run_id, is_synthetic: run.is_synthetic, verification: run.verification })));
+  const banner = evidenceBanner(evidence);
+
+  // The selection-scoped claim that replaces the old app-wide banner: it is about the runs on
+  // screen, not about the deployment, and it disappears when the selection does have per-query ranks.
+  const selectedEntries = data.catalog.filter((entry) => location.runs.includes(entry.key));
+  const selectionNotice = selectedEntries.length === 0
+    ? "Chưa chọn lượt nào — số liệu bên dưới là của toàn bộ dữ liệu đang có."
+    : selectedEntries.every((entry) => !entry.capabilities.flags.per_query_target_ranks)
+      ? `${selectedEntries.length} lượt đang chọn không có rank từng query, nên không phân tích được query cá nhân.`
+      : null;
+
+  const area = areaDef(location.area);
+  const openArea = (id: AreaId) => {
+    goto({ area: id, view: undefined });
+    setMenuOpen(false);
+  };
+
+  return (
+    <div className="shell">
+      {menuOpen && <div className="scrim" onClick={() => setMenuOpen(false)} role="presentation" />}
+      <nav className="sidebar" data-open={menuOpen} aria-label="Khu vực" data-testid="workbench-nav">
+        <div className="brand">
+          <b>CIR Workbench</b>
+          <span>research</span>
+        </div>
+        {AREAS.map((item) => (
+          <button key={item.id} type="button" className="nav-item"
+                  aria-current={location.area === item.id ? "page" : undefined}
+                  data-testid={`area-nav-${item.id}`}
+                  onClick={() => openArea(item.id)}>
+            <span className="nav-glyph" aria-hidden="true">{GLYPHS[item.id]}</span>
+            <span>{item.label}</span>
+            {COUNTS[item.id] ? <span className="nav-count">{COUNTS[item.id]!(data, location)}</span> : null}
+          </button>
+        ))}
+        <div className="sidebar-foot">
+          <small>{protocolLabel(location.protocol)}</small>
+          <small>Subset {SUBSET_LABEL[location.subset]}</small>
+          <small>{data.catalog.length} lượt khả dụng</small>
+        </div>
+      </nav>
+
+      <div className="workspace">
+        <header className="topbar">
+          <button type="button" className="menu-toggle ghost" aria-expanded={menuOpen}
+                  aria-label="Mở điều hướng" onClick={() => setMenuOpen(true)}>☰</button>
+          <div>
+            <h1>{area.label}</h1>
+            <p className="question">{area.question}</p>
+          </div>
+          <div className="topbar-actions">
+            <CopyLink href={hrefFor(location)} />
+          </div>
+        </header>
+
+        <div className="contextbar">
+          <div className="ctx">
+            <label htmlFor="protocol-select">Protocol</label>
+            <select id="protocol-select" value={location.protocol}
+                    onChange={(event) => goto({ protocol: event.target.value, runs: [], run: "", query: "", offset: 0 })}>
+              {(knownProtocols.length ? knownProtocols : [location.protocol]).map((id) => (
+                <option key={id} value={id}>{protocolLabel(id)}</option>
+              ))}
+            </select>
+          </div>
+          {(location.area === "evaluation" || location.area === "samples" || location.area === "failures") && (
+            <div className="ctx">
+              <label htmlFor="subset-select">Subset</label>
+              <select id="subset-select" value={location.subset}
+                      data-testid="subset-select"
+                      onChange={(event) => changeSubset(event.target.value as Location["subset"])}>
+                {(["full", "sf", "validated"] as const).map((subset) => (
+                  <option key={subset} value={subset}>{SUBSET_LABEL[subset]}</option>
+                ))}
+              </select>
+            </div>
+          )}
+          <div className="ctx">
+            <span>Lượt chọn</span><b data-testid="selected-run-count">{location.runs.length}</b>
+          </div>
+          {location.query && (
+            <div className="ctx"><span>Query</span><b className="mono">{location.query}</b></div>
+          )}
+          <span className="spacer" />
+          {area.views.length > 0 && (
+            <div className="viewtabs" role="tablist" aria-label={`Chế độ xem ${area.label}`}>
+              {area.views.map((view) => (
+                <button key={view.id} type="button" role="tab" className="viewtab"
+                        aria-selected={location.view === view.id}
+                        data-testid={`view-${view.id}`}
+                        onClick={() => goto({ view: view.id })}>{view.label}</button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {problems.length > 0 && (
+          <div className="content" style={{ paddingBottom: 0 }}>
+            <Card title="Giá trị URL không hợp lệ" subtitle="Không giá trị nào bị âm thầm thay đổi; hãy chọn lại">
+              <ul style={{ margin: 0, paddingLeft: 18 }}>
+                {problems.map((problem) => (
+                  <li key={`${problem.param}:${problem.value}`}>
+                    <code>{problem.param}={problem.value}</code> — {problem.message}
+                  </li>
+                ))}
+              </ul>
+            </Card>
+          </div>
+        )}
+
+        {(banner || selectionNotice) && !dismissed && (
+          <div className="content" style={{ paddingBottom: 0 }}>
+            <div className={`empty ${banner ? "empty-partial" : "empty-capability"}`}
+                 data-testid="error-banner" data-notice-kind={banner ? "evidence" : "selection"}
+                 style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+              <div style={{ flex: 1 }}>
+                {banner && <b>{banner}</b>}
+                {selectionNotice && <span className="empty-detail" style={{ display: "block" }}>{selectionNotice}</span>}
+              </div>
+              <button type="button" className="ghost" data-testid="error-dismiss"
+                      onClick={() => setDismissed(true)} aria-label="Ẩn thông báo">Ẩn</button>
+            </div>
+          </div>
+        )}
+
+        <main className="content">
+          {location.area === "overview" && (
+            <OverviewPage data={data} location={location}
+                          onOpenRun={(entry) => selectRun(entry)}
+                          onGoto={goto} />
+          )}
+          {location.area === "experiments" && (
+            <ExperimentsPage data={data} location={location} view={location.view}
+                             onSelectRun={selectRun} onGoto={goto} />
+          )}
+          {location.area === "evaluation" && (
+            <EvaluationPage data={data} location={location} view={location.view}
+                            onGoto={goto} onSelectRun={selectRun} />
+          )}
+          {location.area === "samples" && (
+            <SamplesPage data={data} location={location} onGoto={goto}
+                         onAnnotate={() => goto({ area: "notebook", view: "annotations" })} />
+          )}
+          {location.area === "failures" && (
+            <FailuresPage data={data} location={location} onGoto={goto} onSaved={() => data.cohorts.retry()} />
+          )}
+          {location.area === "notebook" && (
+            <NotebookPage data={data} location={location} view={location.view} onGoto={goto} />
+          )}
+        </main>
+      </div>
+    </div>
+  );
 }
-/** The full gate evidence for one run: every comparable metric with paper vs reproduced values, the
- *  signed difference, the relative error and the paper provenance, plus gate status, parity and
- *  variant provenance. Shown collapsed behind a toggle so the run list stays scannable; expanded it
- *  is the same evidence the backend recorded, not a re-derivation. */
-function GateDetail({gate}:{gate:RunGate|undefined}) {
-  const verdict=(gate?.benchmark_gate||{}) as GateVerdict;
-  // Only dict-shaped comparisons survive the API projection, but this component also renders for
-  // any gate-shaped object; filter again here so a malformed element degrades, not crashes.
-  const comparisons=(verdict.comparisons||[]).filter(c=>c&&typeof c==="object");
-  const worst=comparisons.reduce<null|NonNullable<MetricComparison["relative_error_pct"]>>((acc,c)=>c.relative_error_pct!=null&&c.relative_error_pct>(acc??-Infinity)?c.relative_error_pct:acc,null);
-  const variant=gate?.variant_provenance||{};
-  const isCertified=isCertifiedEvidence(gate);
-  if(!comparisons.length&&!verdict.status&&!Object.keys(gate?.observed_metrics||{}).length&&!gate?.parity_status&&!gate?.category_metrics&&!gate?.verification)return null;
-  return <details className="gate-detail"><summary>Gate evidence{worst!==null?` · worst deviation ${worst.toFixed(2)}%`:""}</summary>
-    {verdict.status&&<p><b>{verdict.status}</b>{gate?.verification&&!isCertified?" (not certified research evidence)":""}{verdict.detail?` — ${verdict.detail}`:""}</p>}
-    {gate?.verification&&<p><b>Certification: </b><span className={`badge ${isCertified?"badge-pass":gate.verification.state==="proof_unavailable"?"amber":"red"}`}>{gate.verification.state||(isCertified?"certified":"uncertified")}</span>{!isCertified?" · uncertified run":""}{gate.verification.reasons?.length?` — ${gate.verification.reasons.join("; ")}`:""}{gate.verification.evidence_reasons?.length?` — ${gate.verification.evidence_reasons.join("; ")}`:""}</p>}
-    {(verdict.blockers||[]).length>0&&<p>blockers: {(verdict.blockers||[]).join("; ")}</p>}
-    {gate?.parity_status&&<p>parity: {gate.parity_status}</p>}
-    {Object.keys(variant).length>0&&<p>variant: {Object.entries(variant).filter(([,v])=>v!==null&&v!==false&&v!=="").map(([k,v])=>`${k}=${v&&typeof v==="object"&&"patch_file" in v&&typeof v.patch_file==="string"?v.patch_file:typeof v==="object"?JSON.stringify(v):String(v)}`).join(", ")}</p>}
-    {gate?.evaluator_environment_knobs&&<p>evaluator knobs: {Object.entries(gate.evaluator_environment_knobs).map(([k,v])=>`${k}=${v}`).join(", ")}</p>}
-    {comparisons.length>0&&<div className="table-container"><table className="benchmark-table"><thead><tr><th>metric</th><th>paper</th><th>reproduced</th><th>&Delta; (pp)</th><th>rel. error</th><th>within tolerance</th><th>paper provenance</th></tr></thead><tbody>
-      {comparisons.map(c=><tr key={c.metric} className={c.within_tolerance===false?"deviating":""}><td>{c.metric}</td><td>{c.paper??"—"}</td><td>{c.reproduced??"—"}</td><td>{c.signed_delta_pp??"—"}</td><td>{c.relative_error_pct==null?"—":`${c.relative_error_pct.toFixed(2)}%`}</td><td>{c.within_tolerance?"yes":"no"}</td><td>{c.paper_provenance}</td></tr>)}
-    </tbody></table></div>}
-    {gate?.category_metrics&&Object.values(gate.category_metrics).every(m=>m&&typeof m==="object")&&Object.entries(gate.category_metrics).map(([cat,metrics])=><p key={cat}><small>{cat}: {Object.entries(metrics as Record<string,number|null>).filter(([,v])=>v!=null).map(([m,v])=>`${m}=${v}`).join(", ")||"(no recorded values)"}</small></p>)}
-  </details>;
+
+const GLYPHS: Record<AreaId, string> = {
+  overview: "◎",
+  experiments: "▤",
+  evaluation: "◑",
+  samples: "▦",
+  failures: "△",
+  notebook: "✎",
+};
+
+/** Sidebar counts are real counts from the loaded data, or nothing at all — never a placeholder. */
+const COUNTS: Partial<Record<AreaId, (data: ReturnType<typeof useWorkbenchData>, location: Location) => string>> = {
+  experiments: (data) => data.catalog.length ? fmtInt(data.catalog.length) : "",
+  evaluation: (data, location) => {
+    const runs = (data.compositionRuns.region.data ?? []).filter((run) => run.subset === location.subset);
+    return runs.length ? fmtInt(runs.length) : "";
+  },
+  failures: (data) => {
+    const selected = data.catalog.filter((entry) => entry.capabilities.flags.per_query_target_ranks);
+    return selected.length ? fmtInt(selected.length) : "";
+  },
+};
+
+/** Before the data lands the served protocol list is unknown; the parser accepts the known ids so a
+ *  valid deep link is not reported as invalid on first paint. Same list the registry test reads. */
+function knownProtocolsForParse(): string[] {
+  return [...KNOWN_PROTOCOL_IDS];
 }
-function AnalysisTable({rows,onOpen}:{rows:Analysis[];onOpen:(id:string)=>void}) {return <table><thead><tr><th>Query</th><th>Fail</th><th>Median</th><th>Range</th><th>Common distractor</th></tr></thead><tbody>{rows.map(r=><tr key={r.query_id} onClick={()=>onOpen(r.query_id)}><td>{r.query_id}</td><td>{(r.consensus_fail_fraction*100).toFixed(0)}%</td><td>{r.median_rank}</td><td>{r.rank_range}</td><td>{r.common_distractors[0]&&`${r.common_distractors[0].image_id} (${r.common_distractors[0].run_count} runs)`}</td></tr>)}</tbody></table>}
-// One counter for this component's family, module-scoped because it must survive re-renders and
-// must not be shared with the explorer's families: a shared counter would let one family's request
-// cancel another family's legitimate in-flight answer.
-const compareRequest={current:0};
-function Compare({query,runIds,k,onError}:{query:Query;runIds:string[];k:number;onError:(x:string)=>void}) {const [rows,setRows]=useState<{run:Run;query:Query}[]>([]);useEffect(()=>{const ids=runIds.join(",");const request=compareRequest;request.current+=1;const token=request.current;if(runIds.length<2){setRows([]);return;}api<{run:Run;query:Query}[]>(`/api/compare/${encodeURIComponent(query.query_id)}?run_ids=${ids}&k=${k}`).then(rows=>{if(token!==request.current)return;setRows(rows);}).catch(e=>{if(token!==request.current)return;onError(e.message);});},[query.query_id,runIds.join(","),k]);const counts=new Map<string,number>();rows.forEach(r=>r.query.top_results.slice(0,k).forEach(x=>counts.set(x.image_id,(counts.get(x.image_id)||0)+1)));return <>{<div className="images"><Image category={query.category} id={query.reference_id} kind="Reference"/><Image category={query.category} id={query.target_id} kind="Ground-truth target"/></div>}<p>{query.raw_captions.join(" / ")}</p>{rows.map(row=><article key={row.run.run_id}><b>{runLabel(row.run)}</b> · target rank {row.query.target_rank}<div className="grid">{row.query.top_results.slice(0,k).map(x=><article className={x.image_id===row.query.target_id?"target":""} key={x.rank}><Image category={row.query.category} id={x.image_id} kind={`#${x.rank}`}/><small>{x.score.toFixed(4)} {x.image_id!==row.query.target_id&&(counts.get(x.image_id)||0)>1&&<span className="shared">shared by {counts.get(x.image_id)}/{rows.length} runs</span>}</small></article>)}</div></article>)}</>}
