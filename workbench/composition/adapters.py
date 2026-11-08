@@ -25,9 +25,13 @@ def worker_environment() -> dict[str, str]:
         environment["HF_HOME"] = str(root)
     else:
         environment.pop("HF_HOME", None)
-    # The scoring einsum runs on CPU inside the controller, and BLAS otherwise picks a thread
-    # count from the machine rather than from the half-box budget AGENTS.md sets. Pinned here so
-    # the parent and the worker agree and neither spawns a full-machine BLAS pool.
+    # BLAS thread count is pinned here so the parent and the worker agree and neither spawns a
+    # full-machine pool. Only the paths that actually reach BLAS matter: `np.einsum(...,
+    # optimize=True)` lowers to a gemm (csmcir, ptha_mtst, conesep) and the `@` bodies do too
+    # (encoder, limn). The naive `np.einsum("nd,gqd->ngq")` used by habit/intent/hint/tme has NO
+    # BLAS path -- a hand-rolled numpy loop -- which is why these variables do not change its
+    # throughput (measured flat at 1/2/4/8/10 threads) and why raising them is not a speedup for
+    # those four; their speedup comes from query-axis parallelism.
     threads = str(resolved_decode_workers())
     for variable in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS",
                      "NUMEXPR_NUM_THREADS"):
@@ -122,30 +126,45 @@ def prefetch_rows(map_fn: Any, batches: Sequence[Sequence[Any]], workers: int,
     """Decode batches in parallel, YIELDING them in submission order.
 
     Only the DECODE stage is parallel: PIL work releases the GIL, so threads beat processes here and
-    the transform objects stay shared. ``map`` returns results in input order regardless of
-    completion order, which is what keeps encoded feature rows aligned with the released gallery.
+    the transform objects stay shared. Submission order is preserved, which keeps encoded feature
+    rows aligned with the released gallery.
 
-    Bounded on purpose. Decoding every batch before the first forward would buffer the whole
-    gallery in RAM -- 74381 images as float32 224x224x3 is ~45 GB -- so at most ``workers * 2``
-    batches are in flight and the rest are pulled as the consumer advances.
+    Genuinely bounded. ``ThreadPoolExecutor.map`` submits EVERY future up front, so completed
+    batches pile up inside their futures: decode measured 2089 img/s against forward at ~84 img/s,
+    so a ``map`` would run ~25x ahead and hold the whole gallery's tensors (~45 GB for 74381
+    images) -- the exact blow-up this function exists to prevent. Instead only ``workers * 2``
+    futures are outstanding at any moment: the oldest is yielded, then one more is submitted.
     """
-    from concurrent.futures import ThreadPoolExecutor
-    from itertools import islice
+    from collections import deque
+    from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 
     if workers <= 1 or len(batches) <= 1:
         for batch in batches:
             yield map_fn(batch)
         return
+
+    window = max(1, workers * 2 if depth is None else int(depth))
+    pending: deque[Any] = deque()
+    remaining = iter(batches)
     pool = ThreadPoolExecutor(max_workers=workers)
     try:
-        pending = pool.map(map_fn, batches)
-        window = max(1, workers * 2 if depth is None else int(depth))
-        while True:
-            chunk = list(islice(pending, window))
-            if not chunk:
-                return
-            yield from chunk
+        for batch in remaining:
+            pending.append(pool.submit(map_fn, batch))
+            if len(pending) >= window:
+                break
+        while pending:
+            # `pending` is in submission order; wait only until that OLDEST future is done so
+            # order is preserved, then retire it and submit the next batch.
+            oldest = pending[0]
+            wait([oldest], return_when=FIRST_COMPLETED)
+            yield oldest.result()
+            pending.popleft()
+            for batch in remaining:
+                pending.append(pool.submit(map_fn, batch))
+                break
     finally:
+        for future in pending:
+            future.cancel()
         pool.shutdown(wait=True)
 
 def limit_torch_threads(threads: int | None = None) -> int:

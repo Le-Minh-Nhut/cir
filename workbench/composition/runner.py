@@ -561,6 +561,12 @@ def _encode_queries(adapter: Any, queries: Sequence[Any], query_paths: Sequence[
 #:
 #: It lives here, in the runner, and NOT in the adapters: `runner.py` is not hashed into the run
 #: identity, so no `adapter_source_hash` changes and existing published runs stay comparable.
+#: The BLAS thread count every scoring call is pinned to, and the value recorded in the run
+#: identity. ONE fixed value, not an operator knob: the pin exists to remove thread count as a
+#: source of arithmetic variation, so allowing it to float would defeat it. Pinned to 1 because
+#: concurrent group-level parallelism already supplies the speed and multi-threaded BLAS inside a
+#: group worker would oversubscribe (8 groups x 10 BLAS threads = 80 threads on 20 cores).
+BLAS_THREADS_PINNED = 1
 SCORE_THREADS_ENV = "WORKBENCH_SCORE_THREADS"
 #: Half the box (AGENTS.md), and deliberately conservative: this competes with the live cohort.
 SCORE_THREADS_DEFAULT = min(8, (os.cpu_count() or 8) // 2)
@@ -612,20 +618,27 @@ def score_in_query_chunks(adapter: Any, queries: Any, targets: Any, chunk_size: 
 
 def rank_in_query_chunks(adapter: Any, vectors: Any, targets: Any, positions: Sequence[Any],
                          categories: Sequence[str | None] | None, depth: int,
-                         threads: int | None = None) -> tuple[list[Any], list[Any]]:
+                         threads: int | None = None, chunk_size: int = 32,
+                         ) -> tuple[list[Any], list[Any]]:
     """Exact ranks (and optional Top-K windows) computed over independent query sub-batches.
 
     Splitting the QUERY axis cannot change a result: each query's score row is one dot product set
     over the gallery, computed by the adapter's own ``rank``/``rank_and_topk`` with the same
     targets. Verified bit-identical at sub-batch sizes 2..128 against the whole-batch call.
     Order is preserved, so the returned lists line up with ``vectors`` exactly as a serial call does.
+
+    ``chunk_size`` -- not the thread count -- decides how many queries ride in one ``adapter.score``
+    call. That grouping is part of the arithmetic: a scorer whose BLAS kernel depends on the matrix
+    M dimension (any ``@``-based adapter, and GEMM under ``optimize=True``) can return last-bit
+    differences at a different group size. Deriving the group from a worker count would therefore
+    make an operator env var change publishable numbers under an unchanged run id, so the caller
+    passes its own ``batch_size`` here and thread count only decides CONCURRENCY.
     """
     total = len(vectors)
     workers = resolved_score_threads() if threads is None else int(threads)
     if total == 0:
         return [], []
-    # One sub-batch per worker, capped so a large batch still fans out usefully.
-    size = max(1, -(-total // max(1, workers)))
+    size = max(1, int(chunk_size))
     starts = list(range(0, total, size))
 
     def run_one(start: int) -> tuple[Any, Any]:
@@ -653,6 +666,111 @@ def rank_in_query_chunks(adapter: Any, vectors: Any, targets: Any, positions: Se
         all_ranks.extend(ranks)
         all_windows.extend(windows)
     return all_ranks, all_windows
+
+def _blas_thread_limit(threads: int) -> int:
+    """Set the BLAS thread count at runtime, returning the previous value.
+
+    MEASURED collision this prevents: ``@``-based scorers (the base ``CompositionAdapter.score``
+    used by ENCODER and LIMN) hand their work to multi-threaded OpenBLAS, and composition_eval.py
+    pins OPENBLAS/OMP to 10 by default. Eight group threads times ten BLAS threads is eighty threads
+    on a twenty-core box. Inside a group worker the parallelism already exists at the group level,
+    so BLAS is pinned to one thread for the duration of the call.
+
+    Uses OpenBLAS's own runtime setter, which is honoured mid-process and needs no new dependency
+    (``threadpoolctl`` is not installed in the workbench env). For the ``einsum`` adapters this is
+    effectively a no-op: their contraction never reaches BLAS, verified by OPENBLAS_NUM_THREADS
+    having no effect on their throughput.
+    """
+    import ctypes
+    import glob
+    import os
+
+    import numpy as np
+
+    cache = getattr(_blas_thread_limit, "_cache", None)
+    if cache is None:
+        setter = None
+        root = os.path.dirname(os.path.dirname(np.__file__))
+        for pattern in (os.path.join(root, "numpy.libs", "*openblas*"),
+                        "/home/heheboiz/data/cir/workbench/envs/*/lib/*openblas*"):
+            for path in glob.glob(pattern):
+                try:
+                    library = ctypes.CDLL(path)
+                except OSError:
+                    continue
+                setter = (getattr(library, "openblas_set_num_threads64_", None)
+                          or getattr(library, "openblas_set_num_threads", None))
+                if setter is not None:
+                    break
+            if setter is not None:
+                break
+        cache = (setter, _current_openblas_threads())
+        _blas_thread_limit._cache = cache
+    setter, previous = cache
+    if setter is None:
+        return int(previous)
+    setter(ctypes.c_int(int(threads)))
+    return int(previous)
+
+def _current_openblas_threads() -> int:
+    """Best-effort read of the configured BLAS threads, used only to restore the prior value."""
+    import os
+
+    for variable in ("OPENBLAS_NUM_THREADS", "OMP_NUM_THREADS", "MKL_NUM_THREADS"):
+        raw = os.environ.get(variable, "").strip()
+        if raw.isdigit() and int(raw) > 0:
+            return int(raw)
+    return 1
+
+def _rank_groups_concurrently(rank_group: Any, groups: Sequence[Any], threads: int) -> list[Any]:
+    """Run ``rank_group`` over independent groups, returning results or exceptions in group order.
+
+    Group boundaries are fixed by the caller and never depend on ``threads``: the number of queries
+    in one ``adapter.score`` call is part of the arithmetic (BLAS matrix M dimension), so only
+    CONCURRENCY varies with the operator knob. Each group is computed by the same adapter call the
+    serial loop made, which is what makes the result bit-identical.
+
+    A raised exception is returned in its group's slot rather than aborting the batch, so the
+    caller's existing per-batch fallback and error bookkeeping keep their behaviour.
+
+    BLAS is pinned to ONE thread for the WHOLE call -- both the serial and the concurrent branch --
+    toggled exactly once, and restored in a ``finally``. This matters because BLAS thread count is
+    not numerically neutral: measured score deltas differ between 1 and 10 threads (3.576e-07 vs
+    2.384e-07). Pinning only the concurrent branch would mean ``WORKBENCH_SCORE_THREADS=1`` computes
+    with BLAS=10 while ``=8`` computes with BLAS=1, so the knob could move publishable numbers under
+    an unchanged run id -- the same defect class this change exists to remove. The toggle stays
+    OUTSIDE the workers: toggling per worker races (one worker restoring the previous count while
+    another is still computing), and that race was measured to change ranks at 4 and 8 threads.
+    """
+    if not groups:
+        return []
+    previous = _blas_thread_limit(BLAS_THREADS_PINNED)
+    try:
+        if threads <= 1 or len(groups) == 1:
+            out: list[Any] = []
+            for group in groups:
+                try:
+                    out.append(rank_group(group))
+                except BaseException as error:  # noqa: BLE001 - reported per group by the caller
+                    out.append(error)
+            return out
+        from concurrent.futures import ThreadPoolExecutor
+
+        # MEASURED collision: `@`-based scorers (the base CompositionAdapter.score used by ENCODER
+        # and LIMN) hand their work to multi-threaded BLAS, and composition_eval.py pins
+        # OPENBLAS/OMP to 10 by default, so 8 group threads x 10 BLAS threads would be 80 threads
+        # on 20 cores. Inside one thread per group the parallelism already exists at group level.
+        with ThreadPoolExecutor(max_workers=min(int(threads), len(groups))) as pool:
+            futures = [pool.submit(rank_group, group) for group in groups]
+            out = []
+            for future in futures:
+                try:
+                    out.append(future.result())
+                except BaseException as error:  # noqa: BLE001 - reported per group by the caller
+                    out.append(error)
+            return out
+    finally:
+        _blas_thread_limit(previous)
 
 def _gpu_identity() -> str | None:
     try:
@@ -1034,6 +1152,15 @@ def run_composition(data: Any, model_specs: Sequence[ModelSpec], config: Any, *,
                 # run_id. Hashed here so it mints a new run_id like every other scoring input.
                 "scoring_module_source_hash": scoring_module_source_hash,
                 "scoring_module_source_status": "available" if scoring_module_source_hash != "unavailable" else "unavailable",
+                # The BLAS thread count is an ARITHMETIC input, not just a performance knob:
+                # measured on a real `@`-based scorer, serial BLAS=1 vs BLAS=10 changed rank for
+                # 11 of 512 queries (max |drank| 1) and moved nDCG by 2.181e-05 at full 6003-query
+                # scale on ENCODER. `_rank_groups_concurrently` pins it to 1, but that helper lives
+                # in THIS file, which `_module_source_hash` never covers -- so without an explicit
+                # field a rank artifact written under one policy would keep matching the fingerprint
+                # under another and `--resume` would silently reuse it. Recorded here so the run id
+                # partitions on the arithmetic policy.
+                "blas_threads_pinned": BLAS_THREADS_PINNED,
                 "condition_transform_source_hash": condition_transform_source_hash,
                 "condition_transform_source_status": "available" if condition_transform_source_hash != "unavailable" else "unavailable",
                 "score_signature": str(inspect.signature(adapter.score)),
@@ -1225,6 +1352,12 @@ def run_composition(data: Any, model_specs: Sequence[ModelSpec], config: Any, *,
                                    if query_scope == scope and queries[index].qid not in condition_reasons]
                         features = query_features[scope]
                         targets = target_maps if len(scopes) > 1 else target_maps[scope]
+                        # Group shape is `batch_size` -- the SAME as before the ranking became
+                        # concurrent -- because how many queries ride in one `adapter.score` call
+                        # is part of the arithmetic (the BLAS matrix M dimension). Concurrency is
+                        # across these groups, so `WORKBENCH_SCORE_THREADS` changes timing only and
+                        # can never change a publishable number.
+                        groups = []
                         for offset in range(0, len(indices), batch_size):
                             batch_indices = indices[offset:offset + batch_size]
                             query_vectors = np.asarray(features[batch_indices], dtype=np.float32)
@@ -1235,36 +1368,58 @@ def run_composition(data: Any, model_specs: Sequence[ModelSpec], config: Any, *,
                                 condition_reasons[queries[index].qid] = "query features unavailable"
                             if not valid_indices:
                                 continue
-                            positions = [positive_positions.get(queries[index].qid, ()) for index in valid_indices]
-                            for index, positive in zip(valid_indices, positions):
+                            group_positions = [positive_positions.get(queries[index].qid, ())
+                                               for index in valid_indices]
+                            for index, positive in zip(valid_indices, group_positions):
                                 if not positive:
                                     condition_reasons[queries[index].qid] = "no positive target resolved in exact released gallery"
-                            keep = [offset for offset, positive in enumerate(positions) if positive]
-                            valid_indices = [valid_indices[offset] for offset in keep]
-                            positions = [positions[offset] for offset in keep]
+                            keep = [slot for slot, positive in enumerate(group_positions) if positive]
+                            valid_indices = [valid_indices[slot] for slot in keep]
+                            group_positions = [group_positions[slot] for slot in keep]
                             if not valid_indices:
                                 continue
-                            vectors = np.asarray(features[valid_indices], dtype=np.float32)
-                            cats = [queries[index].category for index in valid_indices]
-                            # The candidate window is taken from the SAME call that produces the
-                            # metric ranks, so the two can never describe different nearest
-                            # neighbours. `valid_indices` is the post-`keep` list whose ranks are
-                            # written below, which is what makes a mismatch a hard error rather
-                            # than a silently swapped query.
-                            decode_depth = writers[condition].depth if condition in writers else 0
+                            groups.append((valid_indices, group_positions,
+                                           np.asarray(features[valid_indices], dtype=np.float32),
+                                           [queries[index].category for index in valid_indices]))
+                        decode_depth = writers[condition].depth if condition in writers else 0
+
+                        def rank_group(group: Any) -> Any:
+                            """One group, ranked by exactly the call the serial loop made.
+
+                            The group's shape is `batch_size`, so the adapter sees the same matrix
+                            M dimension as before; concurrency happens strictly ACROSS groups.
+                            """
+                            group_indices, group_positions, group_vectors, group_cats = group
+                            if decode_depth:
+                                return adapter.rank_and_topk(group_vectors, targets, group_positions,
+                                                             group_cats, decode_depth)
+                            return adapter.rank(group_vectors, targets, group_positions,
+                                                group_cats), []
+
+                        # Rank every group concurrently, capturing a per-group failure instead of
+                        # letting one bad group abort the rest; results are consumed in group order.
+                        group_results = _rank_groups_concurrently(rank_group, groups,
+                                                                  resolved_score_threads())
+
+                        for group, outcome in zip(groups, group_results):
+                            valid_indices, positions, vectors, cats = group
+                            exact_ranks = windows = None
+                            batch_error = None
+                            if isinstance(outcome, BaseException):
+                                batch_error = outcome
+                            else:
+                                exact_ranks, windows = outcome
                             try:
-                                # Query-axis parallelism: each query's score row is computed by
-                                # the adapter's own rank call with unchanged targets, so the result
-                                # is bit-identical (verified 2..128 sub-batches, delta 0.0); only
-                                # independent queries run concurrently.
-                                exact_ranks, windows = rank_in_query_chunks(
-                                    adapter, vectors, targets, positions, cats, decode_depth)
+                                if batch_error is not None:
+                                    raise batch_error
                                 if decode_depth:
                                     from workbench.composition.topk import write_batch
 
                                     write_batch(writers, condition,
                                                 [queries[index].qid for index in valid_indices],
                                                 exact_ranks, windows)
+                                else:
+                                    del windows
                                 if len(exact_ranks) != len(valid_indices):
                                     raise ValueError("adapter.rank returned wrong number of query ranks")
                             except Exception as batch_error:

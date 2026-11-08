@@ -10,11 +10,27 @@ import sys
 from pathlib import Path
 from typing import Any
 
-# BLAS thread count must be set BEFORE numpy is imported anywhere, or OpenBLAS has already sized its
-# pool and the scoring einsum stays single-threaded. MEASURED on the real (74381,32,256) gallery:
-# the production einsum runs at 6.2 q/s regardless of the env because OpenBLAS is baked in at import;
-# the same contraction as a chunked GEMM runs at 99.7 q/s with 8 BLAS threads. The half-box budget
-# comes from AGENTS.md, not from measurement: 10 threads on a 20-thread shared host.
+# BLAS thread count is set BEFORE numpy is imported, because OpenBLAS sizes its pool at import: a
+# value assigned afterwards would be ignored by every path that reaches BLAS.
+#
+# WHICH paths reach BLAS -- the distinction that matters, and two different phenomena:
+#
+#  * GEMM-lowering paths DO reach BLAS and their thread count changes their RESULTS, not just
+#    throughput. `np.einsum(..., optimize=True)` lowers the contraction to a gemm (csmcir,
+#    ptha_mtst, conesep), and the `@` bodies do too (encoder, limn). OpenBLAS partitions the
+#    K-reduction differently at different thread counts, so the last bits differ: measured on
+#    ENCODER at full 6003-query scale, serial BLAS=1 vs BLAS=10 moved one rank (2->3) and shifted
+#    nDCG by 2.181e-05. That is why `runner.py` pins BLAS to 1 during scoring (BLAS_THREADS_PINNED,
+#    recorded in the run identity) -- a declared policy, not an optimisation.
+#
+#  * The naive `np.einsum("nd,gqd->ngq")` used by habit/intent/hint/tme has NO BLAS path at all: it
+#    runs a hand-rolled numpy loop. Its ~6.2 q/s is a property of that contraction, NOT of pool
+#    sizing or import ordering -- verified flat at OPENBLAS_NUM_THREADS = 1/2/4/8/10 (6.5/6.0/6.2/
+#    5.6/6.2 q/s). Flatness across five settings is what rules out a late-sizing bug. Raising threads
+#    does not speed those four up; their speedup comes from query-axis parallelism, not BLAS.
+#
+# The half-box budget comes from AGENTS.md, not from measurement: 10 threads on a 20-thread shared
+# host.
 _BLAS_THREADS = os.environ.get("WORKBENCH_BLAS_THREADS", "").strip() or str(
     min(10, (os.cpu_count() or 8) // 2))
 for _variable in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS", "NUMEXPR_NUM_THREADS"):
