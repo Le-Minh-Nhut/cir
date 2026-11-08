@@ -1,0 +1,77 @@
+# REGISTRY_CORRECTIONS.patch — PROPOSED, NOT APPLIED
+#
+# Result of the 2026-11-08 protocol audit against 16 clean upstream clones pinned at the registry SHAs.
+#
+# PROTOCOL CORRECTIONS: NONE.
+#   Every model's `native_protocol`, `supported_protocols` and `literature_split_label` is correct.
+#   5 Group A (6 variants) / 5 Group B / 6 Group C, verified from the pinned scorer and dataset code,
+#   with gallery counts executed against the real local splits (15536 full / 8619 pair union).
+#   No hunk is proposed for any protocol field. See PROTOCOL_MATRIX.md for the per-repo quotes.
+#
+# The only registry-side defects found are DECLARATION gaps: two repositories carry modified files that
+# the registry does not list in `approved_source_patches`. The files need no content change — they are
+# already recorded in `workbench/third_party/<repo>/provenance.json` under `local_fixes`, and
+# `backend/vendored_source.py:218-245` accepts them on that basis. Adding the declaration makes the
+# registry say what the vendored trees do, so a reader does not have to open provenance.json.
+#
+# Reviewers: the `base_sha256` / `derived_sha256` values below were computed from the LIVE vendored
+# files and the CLEAN clones; the two patch files do not exist yet. Generate them with
+#   diff -u <clean clone>/<path> workbench/third_party/<dir>/<path> > workbench/patches/<name>.patch
+# then recompute `patch_sha256` with sha256sum and fill it in. Do NOT apply this hunk until those
+# files exist, or `vendored_source.py` will reject the checkout for a missing patch file.
+
+--- a/workbench/registry/models.yaml
++++ b/workbench/registry/models.yaml
+@@
+   # MTST_PTHA: the pinned repository tells the operator to hand-edit a module-level literal
+   # (`base_path = Path("path_to_data_dir")` in MTST_PTHA/src/data_utils.py), which makes every data
+   # load machine-specific. The vendored tree reads `MTST_DATA_ROOT` first and keeps the literal as
+   # the fallback. The gallery read (`:167-168`) and the file-existence filter (`:169-172`) are
+   # byte-identical to upstream, so no gallery or reference semantics change. Recorded today only in
+   # third_party/MTST_PTHA/provenance.json `local_fixes`, which is why the registry did not show it.
+   approval_note: >-
+     This hunk is illustrative; fill in patch_file / patch_sha256 / base_sha256 / derived_sha256
+     before applying.
+   approved_source_patches:
+     - path: MTST_PTHA/src/data_utils.py
+       patch_file: workbench/patches/ptha_data_root_env.patch
+       patch_sha256: <compute: sha256sum workbench/patches/ptha_data_root_env.patch>
+       base_sha256: <sha256 of the clean-clone file>
+       derived_sha256: <sha256 of the live vendored file>
+       reason: "upstream hard-codes `base_path = Path(\"path_to_data_dir\")` and instructs the operator to hand-edit it; the approved delta reads MTST_DATA_ROOT first and keeps the literal as the fallback. Gallery construction and the existence filter are unchanged."
+     - path: MTST_PTHA/src/lavis/models/__init__.py
+       patch_file: workbench/patches/ptha_models_init_guard.patch
+       patch_sha256: <compute>
+       base_sha256: <sha256 of the clean-clone file>
+       derived_sha256: <sha256 of the live vendored file>
+       reason: "one `lavis.models` import of a module absent from the pinned revision (blip2_qformer_tgir_concatembedding_sim_zyn) is guarded with an ImportError fallback so the package imports; no shipped class is renamed, removed, or re-registered. No evaluation semantics change."
+@@
+   # AirKnow: the vendored data_utils.py resolves `.jpg` to `.png` when the `.jpg` is absent. This is
+   # an IMAGE-PATH helper, not a gallery filter: `datasets.py` does not import `data_utils` (grep: no
+   # hits), so this file is unreachable from test_BLIP2.py; only train_BLIP2.py:23 and
+   # cirr_sub_BLIP2.py:99 import it. Declared here for completeness of the modification record.
+   approved_source_patches:
+     - path: data_utils.py
+       patch_file: workbench/patches/airknow_png_fallback.patch
+       patch_sha256: <compute>
+       base_sha256: <sha256 of the clean-clone file>
+       derived_sha256: <sha256 of the live vendored file>
+       reason: "adds _resolve_img_path so a missing `.jpg` falls back to `.png`; unreachable from the FashionIQ evaluator (datasets.py does not import data_utils) and it changes no gallery membership because datasets.py builds `<cat>/<id>.jpg` directly."
+     - path: lavis/models/__init__.py
+       patch_file: workbench/patches/airknow_models_init_guard.patch
+       patch_sha256: <compute>
+       base_sha256: <sha256 of the clean-clone file>
+       derived_sha256: <sha256 of the live vendored file>
+       reason: "guards the blip_cir / blip_cir_caption imports with ImportError fallbacks; no evaluation semantics change."
+
+# ---------------------------------------------------------------------------------------------
+# NOT a registry change, recorded here so it is not lost: `native_protocol` is per MODEL, and every
+# workbench replay wrapper hard-codes its cohort as a module constant
+#   PROTOCOL = "fashioniq_val_split"                  -> encoder.py:48, clvc_net.py:46, hint.py:65, pair.py:44
+#   PROTOCOL = "fashioniq_full_gallery_ref_excluded"  -> airknow.py:51, habit.py:46, intent.py:46, dcnet.py:25
+#   protocol="fashioniq_val_split" (literal)          -> limn.py:243
+# while `_replay_command` (backend/adapters/models.py:44-70) passes no protocol flag and no replay
+# declares `--protocol`. `--protocol` therefore changes the plan/proof metadata without changing what a
+# replay-launched child computes. This is harmless ONLY while every `supported_protocols` has exactly
+# one entry, which is true today. The fix belongs in the replay argv + proof payload, not in models.yaml.
+# Do not "fix" it by narrowing supported_protocols: that would document the defect instead of removing it.

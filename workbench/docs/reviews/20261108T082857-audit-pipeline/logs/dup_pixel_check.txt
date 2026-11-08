@@ -1,0 +1,19 @@
+group 54 files ['B008ZAUL8I', 'B00A16L1EC', 'B00A8E8GJK', 'B00ABDFQ28']
+   file_sha_equal True ['8203c2a518', '8203c2a518', '8203c2a518', '8203c2a518']
+group 26 files ['B009HJUM5I', 'B009HJV1BC', 'B00AFS3CY8', 'B00AFS3OA0']
+   file_sha_equal True ['e7c06a3214', 'e7c06a3214', 'e7c06a3214', 'e7c06a3214']
+group 24 files ['B009S5I028', 'B009S5II5M', 'B009V1L03U', 'B009YRBZ4K']
+   file_sha_equal True ['f583041d64', 'f583041d64', 'f583041d64', 'f583041d64']
+group 22 files ['B008KDPD8I', 'B008KDPN0G', 'B009MPPW3Y', 'B009MPQL0C']
+   file_sha_equal True ['20c301fb40', '20c301fb40', '20c301fb40', '20c301fb40']
+group 21 files ['B00AAUXAXO', 'B00AAUXFGQ', 'B00ALTB0PY', 'B00AYXA5US']
+   file_sha_equal True ['411dd985d6', '411dd985d6', '411dd985d6', '411dd985d6']
+group 20 files ['B008QZEPRK', 'B009LJ8NE6', 'B009LJ8QQQ', 'B009LJ95MA']
+   file_sha_equal True ['dd31397950', 'dd31397950', 'dd31397950', 'dd31397950']
+group 20 files ['B00A1CQA06', 'B00A76OYKE', 'B00A76P12Y', 'B00AASLYB6']
+   file_sha_equal True ['e62dfd8fa2', 'e62dfd8fa2', 'e62dfd8fa2', 'e62dfd8fa2']
+group 18 files ['B004EHIM00', 'B004FGML8Y', 'B004FGMLMU', 'B004FGMLU2']
+   file_sha_equal True ['76f2f6a14d', '76f2f6a14d', '76f2f6a14d', '76f2f6a14d']
+
+groups_checked 8 byte_identical_groups 8
+total_duplicate_groups 851 rows_in_groups 2386 excess 1535

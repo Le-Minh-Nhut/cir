@@ -1,0 +1,18 @@
+--- a/workbench/replay/limn_observer.py
++++ b/workbench/replay/limn_observer.py
+@@ -165,8 +165,13 @@
+         # reproduce. Measured on a real ENCODER run: 8 dress, 2 shirt and 4 toptee queries have the
+         # target's score EXACTLY equal to the top-1 candidate's, and a different tie order flipped
+         # R@1 by one hit in all three categories -- with byte-identical inputs and deterministic
+-        # kernels, so the tie was the whole difference. `argsort` is stable in NumPy, so reproducing
+-        # the native call reproduces its tie order too.
++        # kernels, so the tie was the whole difference. `np.argsort`'s default kind is `quicksort`
++        # (introsort), which is NOT stable, so stability is not why the tie order reproduces: it
++        # reproduces because this is the SAME call on the SAME input as the native `test.py`, and
++        # that call is deterministic for a given dtype and array size. Reproducing it therefore
++        # requires keeping the kind implicit, as the native code does. Passing an explicit
++        # `kind="stable"` here (or accepting one on only one side) would choose a different tie
++        # order from the native metric and break the reproduction the comment above justifies.
+         order = np.argsort(-sims[index, :])
+         # The full ranking is walked, so a target beyond the saved depth still gets a true rank.
+         rank = int(np.flatnonzero(order == gallery_index)[0]) + 1

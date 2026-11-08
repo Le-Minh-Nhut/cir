@@ -1,0 +1,216 @@
+### CSMCIR/src/data_utils_csmcir.py:410-424
+                self.target_image_captions.update(captions_chunk)  # 合并字典
+
+            # with open(base_path/'fashionIQ_dataset' / 'captions' /f'reference_image_caption_{dress_type}_{split}.json') as f:
+            #     captions_chunk = json.load(f)  # 假设每个文件返回一个字典
+            #     self.target_image_captions.update(captions_chunk)  # 合并字典
+
+        # get the image names
+        self.image_names: list = []
+        for dress_type in dress_types:
+            with open(base_path / 'fashionIQ_dataset' / 'image_splits' / f'split.{dress_type}.{split}.json') as f:
+                self.image_names.extend(json.load(f))
+
+        print(f"FashionIQ {split} - {dress_types} dataset in {mode} mode initialized")
+
+
+### CSMCIR/src/validate_blip_csmcir.py:24-56
+def compute_fiq_val_metrics(relative_val_dataset: FashionIQDataset, blip_model, index_features: torch.tensor,
+                            index_names: List[str], txt_processors, save_memory=False) -> Tuple[float, float]:
+    """
+    Compute validation metrics on FashionIQ dataset
+    :param relative_val_dataset: FashionIQ validation dataset in relative mode
+    :param clip_model: CLIP model
+    :param index_features: validation index features
+    :param index_names: validation index names
+    :param combining_function: function which takes as input (image_features, text_features) and outputs the combined
+                            features
+    :return: the computed validation metrics
+    """
+
+    # Generate predictions
+    pred_sim, target_names, reference_names, captions_all = generate_fiq_val_predictions(blip_model, relative_val_dataset,
+                                                                    index_names, index_features, txt_processors, save_memory)
+
+    print(f"Compute FashionIQ {relative_val_dataset.dress_types} validation metrics")
+
+    # Compute the distances and sort the results
+    distances = 1 - pred_sim
+    sorted_indices = torch.argsort(distances, dim=-1).cpu()
+    sorted_index_names = np.array(index_names)[sorted_indices]
+
+    # Compute the ground-truth labels wrt the predictions
+    labels = torch.tensor(
+        sorted_index_names == np.repeat(np.array(target_names), len(index_names)).reshape(len(target_names), -1))
+    assert torch.equal(torch.sum(labels, dim=-1).int(), torch.ones(len(target_names)).int())
+
+    # Compute the metrics
+    recall_at10 = (torch.sum(labels[:, :10]) / len(labels)).item() * 100
+    recall_at50 = (torch.sum(labels[:, :50]) / len(labels)).item() * 100
+
+### MTST_PTHA/MTST_PTHA/src/data_utils.py:164-175
+        # get the image names
+        self.image_names: list = []
+        for dress_type in dress_types:
+            with open(base_path / 'fashionIQ_dataset' / 'image_splits' / f'split.{dress_type}.{split}.json') as f:
+                self.image_names.extend(json.load(f))
+        for image_name in self.image_names[:]:
+            file_path = base_path / 'fashionIQ_dataset' / 'images' /f"{image_name}.png"
+            if not file_path.exists():
+                self.image_names.remove(image_name)
+
+        print(f"FashionIQ {split} - {dress_types} dataset in {mode} mode initialized")
+
+### MTST_PTHA/MTST_PTHA/src/validate_blip.py:24-56
+def compute_fiq_val_metrics(relative_val_dataset: FashionIQDataset, blip_model, index_features: torch.tensor,
+                            index_names: List[str], txt_processors, save_memory=False) -> Tuple[float, float]:
+    """
+    Compute validation metrics on FashionIQ dataset
+    :param relative_val_dataset: FashionIQ validation dataset in relative mode
+    :param clip_model: CLIP model
+    :param index_features: validation index features
+    :param index_names: validation index names
+    :param combining_function: function which takes as input (image_features, text_features) and outputs the combined
+                            features
+    :return: the computed validation metrics
+    """
+
+    # Generate predictions
+    pred_sim, target_names, reference_names, captions_all = generate_fiq_val_predictions(blip_model, relative_val_dataset,
+                                                                    index_names, index_features, txt_processors, save_memory)
+
+    print(f"Compute FashionIQ {relative_val_dataset.dress_types} validation metrics")
+
+    # Compute the distances and sort the results
+    distances = 1 - pred_sim
+    sorted_indices = torch.argsort(distances, dim=-1).cpu()
+    sorted_index_names = np.array(index_names)[sorted_indices]
+
+    # Compute the ground-truth labels wrt the predictions
+    labels = torch.tensor(
+        sorted_index_names == np.repeat(np.array(target_names), len(index_names)).reshape(len(target_names), -1))
+    assert torch.equal(torch.sum(labels, dim=-1).int(), torch.ones(len(target_names)).int())
+
+    # Compute the metrics
+    recall_at10 = (torch.sum(labels[:, :10]) / len(labels)).item() * 100
+    recall_at50 = (torch.sum(labels[:, :50]) / len(labels)).item() * 100
+
+### CLIP4Cir/src/data_utils.py:143-148
+        # get the image names
+        self.image_names: list = []
+        for dress_type in dress_types:
+            with open(base_path / 'fashionIQ_dataset' / 'image_splits' / f'split.{dress_type}.{split}.json') as f:
+                self.image_names.extend(json.load(f))
+
+### CLIP4Cir/src/validate.py:21-56
+def compute_fiq_val_metrics(relative_val_dataset: FashionIQDataset, clip_model: CLIP, index_features: torch.tensor,
+                            index_names: List[str], combining_function: callable) -> Tuple[float, float]:
+    """
+    Compute validation metrics on FashionIQ dataset
+    :param relative_val_dataset: FashionIQ validation dataset in relative mode
+    :param clip_model: CLIP model
+    :param index_features: validation index features
+    :param index_names: validation index names
+    :param combining_function: function which takes as input (image_features, text_features) and outputs the combined
+                            features
+    :return: the computed validation metrics
+    """
+
+    # Generate predictions
+    predicted_features, target_names = generate_fiq_val_predictions(clip_model, relative_val_dataset,
+                                                                    combining_function, index_names, index_features)
+
+    print(f"Compute FashionIQ {relative_val_dataset.dress_types} validation metrics")
+
+    # Normalize the index features
+    index_features = F.normalize(index_features, dim=-1).float()
+
+    # Compute the distances and sort the results
+    distances = 1 - predicted_features @ index_features.T
+    sorted_indices = torch.argsort(distances, dim=-1).cpu()
+    sorted_index_names = np.array(index_names)[sorted_indices]
+
+    # Compute the ground-truth labels wrt the predictions
+    labels = torch.tensor(
+        sorted_index_names == np.repeat(np.array(target_names), len(index_names)).reshape(len(target_names), -1))
+    assert torch.equal(torch.sum(labels, dim=-1).int(), torch.ones(len(target_names)).int())
+
+    # Compute the metrics
+    recall_at10 = (torch.sum(labels[:, :10]) / len(labels)).item() * 100
+    recall_at50 = (torch.sum(labels[:, :50]) / len(labels)).item() * 100
+
+### SPRC/src/data_utils.py:152-158
+        # get the image names
+        self.image_names: list = []
+        for dress_type in dress_types:
+            with open(base_path / 'fashionIQ_dataset' / 'image_splits' / f'split.{dress_type}.{split}.json') as f:
+                self.image_names.extend(json.load(f))
+
+        print(f"FashionIQ {split} - {dress_types} dataset in {mode} mode initialized")
+### SPRC/src/validate_blip.py:24-56
+def compute_fiq_val_metrics(relative_val_dataset: FashionIQDataset, blip_model, index_features: torch.tensor,
+                            index_names: List[str], txt_processors, save_memory=False) -> Tuple[float, float]:
+    """
+    Compute validation metrics on FashionIQ dataset
+    :param relative_val_dataset: FashionIQ validation dataset in relative mode
+    :param clip_model: CLIP model
+    :param index_features: validation index features
+    :param index_names: validation index names
+    :param combining_function: function which takes as input (image_features, text_features) and outputs the combined
+                            features
+    :return: the computed validation metrics
+    """
+
+    # Generate predictions
+    pred_sim, target_names, reference_names, captions_all = generate_fiq_val_predictions(blip_model, relative_val_dataset,
+                                                                    index_names, index_features, txt_processors, save_memory)
+
+    print(f"Compute FashionIQ {relative_val_dataset.dress_types} validation metrics")
+
+    # Compute the distances and sort the results
+    distances = 1 - pred_sim
+    sorted_indices = torch.argsort(distances, dim=-1).cpu()
+    sorted_index_names = np.array(index_names)[sorted_indices]
+
+    # Compute the ground-truth labels wrt the predictions
+    labels = torch.tensor(
+        sorted_index_names == np.repeat(np.array(target_names), len(index_names)).reshape(len(target_names), -1))
+    assert torch.equal(torch.sum(labels, dim=-1).int(), torch.ones(len(target_names)).int())
+
+    # Compute the metrics
+    recall_at10 = (torch.sum(labels[:, :10]) / len(labels)).item() * 100
+    recall_at50 = (torch.sum(labels[:, :50]) / len(labels)).item() * 100
+
+### TME/src/data.py:160-179
+        self.image_names: list = []
+        self.image_type_names = {}
+        if self.split == 'train':
+            # shuffle the data across dress types
+            self.shuffle()
+        # get the image names
+            images_names = []
+            ref_names = [item['candidate'] for item in self.triplets]
+            tag_names = [item['target'] for item in self.triplets]
+            images_names.extend(ref_names)
+            images_names.extend(tag_names)
+            self.image_names = list(dict.fromkeys(images_names)) # Keep the image order and remove replicated image
+            logging.info(f"FashionIQ {split} dataset in {mode} mode initialized")
+        else:
+            for dress_type in self.dress_types:
+                with open(self.path / 'image_splits' / f'split.{dress_type}.{split}.json') as f:
+                    self.image_type_names[dress_type] = json.load(f)
+                    self.image_names.extend(self.image_type_names[dress_type])
+            logging.info(f"FashionIQ {split} dataset in {mode} mode initialized")
+        self.set_specific_dress_type(specific_dress_type)
+### TME/src/precompute_evaluation.py:80-90
+    distances = torch.vstack(distances)
+    distances = 1 - distances
+    ref_images_indices_in_index_names = []
+    if category == 'CIRR': # only for cirr, delete the reference image from current query.
+        for i in reference_names:
+            ref_images_indices_in_index_names.append(index_names.index(i))
+        distances[list(range(distances.shape[0])), ref_images_indices_in_index_names] = 10e10
+    
+    sorted_indices = torch.argsort(distances, dim=-1).cpu()
+    sorted_index_names = np.array(index_names)[sorted_indices]
+    

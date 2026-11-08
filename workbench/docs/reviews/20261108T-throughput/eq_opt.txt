@@ -1,0 +1,5 @@
+multimodal: n=400 old=78.5s new=8.9s speedup=8.8x score_maxdelta=3.576e-07 rank_mismatch=0
+text_only_black_image: n=400 old=76.8s new=7.8s speedup=9.8x score_maxdelta=3.576e-07 rank_mismatch=3
+   MISMATCH ('7:164', 53954, 53956)
+   MISMATCH ('7:363', 64531, 64532)
+   MISMATCH ('7:396', 2124, 2125)

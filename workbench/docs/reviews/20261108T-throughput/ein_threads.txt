@@ -1,0 +1,25 @@
+=== OPENBLAS_THREADS=1
+gallery=(74381, 32, 256) queries=6003 threads_env=1
+old                4.89s    6.5 q/s  proj6003q= 15.3min  maxdelta=0.000e+00
+optimize=True      1.17s   27.3 q/s  proj6003q=  3.7min  maxdelta=3.576e-07
+gemm_chunk4096     1.03s   31.2 q/s  proj6003q=  3.2min  maxdelta=3.576e-07
+=== OPENBLAS_THREADS=2
+gallery=(74381, 32, 256) queries=6003 threads_env=2
+old                5.31s    6.0 q/s  proj6003q= 16.6min  maxdelta=0.000e+00
+optimize=True      1.45s   22.1 q/s  proj6003q=  4.5min  maxdelta=3.576e-07
+gemm_chunk4096     0.57s   56.2 q/s  proj6003q=  1.8min  maxdelta=3.576e-07
+=== OPENBLAS_THREADS=4
+gallery=(74381, 32, 256) queries=6003 threads_env=4
+old                5.18s    6.2 q/s  proj6003q= 16.2min  maxdelta=0.000e+00
+optimize=True      0.94s   33.9 q/s  proj6003q=  2.9min  maxdelta=3.576e-07
+gemm_chunk4096     0.37s   86.3 q/s  proj6003q=  1.2min  maxdelta=3.576e-07
+=== OPENBLAS_THREADS=8
+gallery=(74381, 32, 256) queries=6003 threads_env=8
+old                5.76s    5.6 q/s  proj6003q= 18.0min  maxdelta=0.000e+00
+optimize=True      1.25s   25.7 q/s  proj6003q=  3.9min  maxdelta=3.576e-07
+gemm_chunk4096     0.32s   99.7 q/s  proj6003q=  1.0min  maxdelta=3.576e-07
+=== OPENBLAS_THREADS=10
+gallery=(74381, 32, 256) queries=6003 threads_env=10
+old                5.20s    6.2 q/s  proj6003q= 16.3min  maxdelta=0.000e+00
+optimize=True      1.40s   22.9 q/s  proj6003q=  4.4min  maxdelta=2.384e-07
+gemm_chunk4096     0.37s   87.7 q/s  proj6003q=  1.1min  maxdelta=2.980e-07

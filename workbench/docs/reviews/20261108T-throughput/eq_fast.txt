@@ -1,0 +1,17 @@
+multimodal: n=400 old=65.2s new=6.6s speedup=9.9x score_maxdelta=3.576e-07 rank_mismatch=0
+text_only_black_image: n=400 old=75.1s new=5.1s speedup=14.7x score_maxdelta=3.576e-07 rank_mismatch=3
+   MISMATCH ('7:164', 53954, 53956)
+   MISMATCH ('7:363', 64531, 64532)
+   MISMATCH ('7:396', 2124, 2125)
+image_only_empty_text: n=400 old=80.3s new=4.9s speedup=16.3x score_maxdelta=3.576e-07 rank_mismatch=11
+   MISMATCH ('7:3', 26635, 26634)
+   MISMATCH ('7:64', 24709, 24707)
+   MISMATCH ('7:100', 51312, 51313)
+   MISMATCH ('7:157', 53495, 53494)
+   MISMATCH ('7:194', 55927, 55928)
+   MISMATCH ('7:244', 50554, 50553)
+   MISMATCH ('7:314', 20162, 20161)
+   MISMATCH ('7:357', 50834, 50833)
+   MISMATCH ('7:387', 37919, 37920)
+   MISMATCH ('7:391', 21786, 21787)
+TOTAL queries=1200 rank_mismatch=14 score_maxdelta=3.576e-07

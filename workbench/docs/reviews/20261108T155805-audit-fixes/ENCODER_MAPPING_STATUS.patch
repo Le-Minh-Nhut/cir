@@ -1,0 +1,24 @@
+--- a/workbench/composition/model_encoder.py
++++ b/workbench/composition/model_encoder.py
+@@ -151,6 +151,7 @@
+             "texts": list(texts), "categories": list(categories),
+             "output_path": str(output_path), "checkpoint_path": str(self._checkpoint_path),
+             "expected_sha256": self._checkpoint.get("expected_sha256"),
++            "checkpoint_mapping_status": self._checkpoint.get("checkpoint_mapping_status"),
+             "source_root": str(self.source_root), "dataset_root": str(self.dataset_root),
+             "batch_size": self.batch_size,
+         }
+@@ -299,8 +300,12 @@
+     try:
+         job = json.loads(job_path.read_text(encoding="utf-8"))
+         source_root = Path(job["source_root"])
++        # The mapping status is one of the four gates `_unused_checkpoint_keys` applies before the
++        # two provably-unread `binding_decoder.fc.0.*` tensors may be skipped. Asserting
++        # `VERIFIED_METADATA` here meant a registry downgrade could never tighten the loader; take
++        # the registry's value instead, so a downgrade reaches this decision by construction.
+         checkpoint = {"checkpoint_id": "fashioniq", "expected_sha256": job["expected_sha256"],
+-                      "checkpoint_mapping_status": "VERIFIED_METADATA"}
++                      "checkpoint_mapping_status": job.get("checkpoint_mapping_status")}
+         torch_module, open_clip_module, _datasets, _test, model_try2 = _load_replay_modules(source_root)
+         previous_cwd = Path.cwd()
+         try:

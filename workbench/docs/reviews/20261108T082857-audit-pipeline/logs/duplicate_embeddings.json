@@ -1,0 +1,67 @@
+{
+  "arrays": [
+    {
+      "array": "gallery_dress.npy",
+      "distinct_row_bytes": 72846,
+      "excess_duplicate_rows": 1535,
+      "largest_duplicate_group_sizes": [
+        13,
+        14,
+        18,
+        20,
+        20,
+        21,
+        22,
+        24,
+        26,
+        54
+      ],
+      "rows": 74381,
+      "rows_in_exact_duplicate_groups": 2386
+    },
+    {
+      "array": "gallery_shirt.npy",
+      "distinct_row_bytes": 72846,
+      "excess_duplicate_rows": 1535,
+      "largest_duplicate_group_sizes": [
+        13,
+        14,
+        18,
+        20,
+        20,
+        21,
+        22,
+        24,
+        26,
+        54
+      ],
+      "rows": 74381,
+      "rows_in_exact_duplicate_groups": 2386
+    },
+    {
+      "array": "gallery_toptee.npy",
+      "distinct_row_bytes": 72846,
+      "excess_duplicate_rows": 1535,
+      "largest_duplicate_group_sizes": [
+        13,
+        14,
+        18,
+        20,
+        20,
+        21,
+        22,
+        24,
+        26,
+        54
+      ],
+      "rows": 74381,
+      "rows_in_exact_duplicate_groups": 2386
+    }
+  ],
+  "feature_dir": "workbench/artifacts/composition/preserved_features/limn",
+  "released_identities": {
+    "distinct_basename_stem": 74381,
+    "distinct_img_path": 74381,
+    "rows": 74381
+  }
+}

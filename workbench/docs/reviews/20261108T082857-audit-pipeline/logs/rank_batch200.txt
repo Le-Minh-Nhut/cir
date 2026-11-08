@@ -1,0 +1,5 @@
+queries 200 max_abs_score_delta 2.384185791015625e-07
+ranks differing: 0
+max rank delta 0 mean rank 1.035
+rank==1 count batch1 197 batch32 197
+sample ranks [(1, 1), (1, 1), (1, 1), (1, 1), (1, 1), (1, 1), (1, 1), (1, 1)]

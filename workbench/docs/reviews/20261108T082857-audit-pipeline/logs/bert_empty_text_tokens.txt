@@ -1,0 +1,7 @@
+bos id 30522 eos None pad 0 cls 101 sep 102
+'is long and has a floral print' -> nonpad 9 ids [101, 2003, 2146, 1998, 2038, 1037, 18686, 6140] mask_sum 9
+    decoded '[CLS] is long and has a floral print [SEP]'
+'' -> nonpad 2 ids [101, 102, 0, 0, 0, 0, 0, 0] mask_sum 2
+    decoded '[CLS] [SEP]'
+'x' -> nonpad 3 ids [101, 1060, 102, 0, 0, 0, 0, 0] mask_sum 3
+    decoded '[CLS] x [SEP]'

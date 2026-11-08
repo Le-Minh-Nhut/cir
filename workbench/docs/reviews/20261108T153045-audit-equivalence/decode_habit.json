@@ -1,0 +1,78 @@
+{
+ "family": "habit",
+ "images": 512,
+ "interpreter": "/home/heheboiz/data/cir/workbench/envs/ilearn39-adapted/bin/python",
+ "numpy": "1.26.4",
+ "results": [
+  {
+   "batch": 32,
+   "bit_identical": true,
+   "bytes_differing": 0,
+   "images": 512,
+   "max_abs_delta": 0.0,
+   "max_rel_delta": 0.0,
+   "sha256": "5fc8002d8e2dbd283e97a0661461b10e3c5ba5fad840b3d5a378b9e77f5d540c",
+   "shape": [
+    512,
+    3,
+    224,
+    224
+   ],
+   "torch_threads": 1,
+   "workers": 1
+  },
+  {
+   "batch": 32,
+   "bit_identical": true,
+   "bytes_differing": 0,
+   "images": 512,
+   "max_abs_delta": 0.0,
+   "max_rel_delta": 0.0,
+   "sha256": "5fc8002d8e2dbd283e97a0661461b10e3c5ba5fad840b3d5a378b9e77f5d540c",
+   "shape": [
+    512,
+    3,
+    224,
+    224
+   ],
+   "torch_threads": 2,
+   "workers": 2
+  },
+  {
+   "batch": 32,
+   "bit_identical": true,
+   "bytes_differing": 0,
+   "images": 512,
+   "max_abs_delta": 0.0,
+   "max_rel_delta": 0.0,
+   "sha256": "5fc8002d8e2dbd283e97a0661461b10e3c5ba5fad840b3d5a378b9e77f5d540c",
+   "shape": [
+    512,
+    3,
+    224,
+    224
+   ],
+   "torch_threads": 4,
+   "workers": 4
+  },
+  {
+   "batch": 32,
+   "bit_identical": true,
+   "bytes_differing": 0,
+   "images": 512,
+   "max_abs_delta": 0.0,
+   "max_rel_delta": 0.0,
+   "sha256": "5fc8002d8e2dbd283e97a0661461b10e3c5ba5fad840b3d5a378b9e77f5d540c",
+   "shape": [
+    512,
+    3,
+    224,
+    224
+   ],
+   "torch_threads": 8,
+   "workers": 8
+  }
+ ],
+ "torch": "2.7.1+cu128",
+ "transform": "lavis targetpad_transform(1.25, 224)"
+}

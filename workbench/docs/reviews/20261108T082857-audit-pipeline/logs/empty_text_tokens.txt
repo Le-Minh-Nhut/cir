@@ -1,0 +1,7 @@
+boundary lavis/models/__init__.py:load_preprocess
+processor class BlipCaptionProcessor max_words 50 prompt ''
+'is long and has a floral print' -> 'is long and has a floral print'
+'IS LONG AND HAS A FLORAL PRINT' -> 'is long and has a floral print'
+'' -> ''
+'   ' -> ''
+'is long & red!' -> 'is long & red'

@@ -1,0 +1,580 @@
+======== MTST_PTHA/MTST_PTHA/src/data_utils.py
+--- /tmp/cir-upstream-audit-20261108T155252/MTST_PTHA/MTST_PTHA/src/data_utils.py	2026-11-08 15:53:15.563914949 +0700
++++ workbench/third_party/MTST_PTHA/MTST_PTHA/src/data_utils.py	2026-11-06 00:22:18.252504632 +0700
+@@ -12,7 +12,12 @@
+ import torch.utils.data
+ import torchvision
+ import os
+-base_path = Path("path_to_data_dir")
++# The upstream author's README tells the operator to hand-edit this literal ("change
++# `base_path = Path("path_to_data_dir")` in MTST_PTHA/src/data_utils.py"), which makes a run
++# machine-specific and unreproducible: every data load in this repository routes through it.
++# The environment variable is read *first* and the literal stays the fallback, so a run that does
++# not set it behaves exactly as before.
++base_path = Path(os.environ.get("MTST_DATA_ROOT", "path_to_data_dir"))
+ 
+ def collate_fn(batch):
+     '''
+======== MTST_PTHA/MTST_PTHA/src/lavis/models/__init__.py
+--- /tmp/cir-upstream-audit-20261108T155252/MTST_PTHA/MTST_PTHA/src/lavis/models/__init__.py	2026-11-08 15:53:15.566990986 +0700
++++ workbench/third_party/MTST_PTHA/MTST_PTHA/src/lavis/models/__init__.py	2026-11-06 00:22:18.254110442 +0700
+@@ -51,7 +51,16 @@
+ from lavis.models.blip2_models.blip2_qformer_cir_z_learn_pos_align import Blip2QformerCirZLearnPosAlign
+ from lavis.models.blip2_models.blip2_instruct_cir import Blip2InstructCir
+ from lavis.models.blip2_models.blip2_qformer_tgir_concatembedding_sim import Blip2Qformer4TGIRCESIM
+-from lavis.models.blip2_models.blip2_qformer_tgir_concatembedding_sim_zyn import Blip2Qformer4TGIRCESIMZYN
++try:
++    # `blip2_qformer_tgir_concatembedding_sim_zyn.py` is absent from the pinned public revision
++    # (verified: 1 of 33 `lavis.models` imports in this file resolves to a file the repository does
++    # not contain). The class the FashionIQ evaluator asks for, `Blip2Qformer4TGIRCESIM`, is
++    # registered one line above, so an unguarded import here takes down a package that would
++    # otherwise load. The fallback is the same shape used for the absent `blip_cir` modules in the
++    # sibling checkouts; no shipped class is renamed, removed, or re-registered.
++    from lavis.models.blip2_models.blip2_qformer_tgir_concatembedding_sim_zyn import Blip2Qformer4TGIRCESIMZYN
++except ImportError:
++    Blip2Qformer4TGIRCESIMZYN = None
+ from lavis.models.blip2_models.blip2_vicuna_instruct_tgir_modifiercaption import Blip2VicunaInstructTGIR4MC
+ from lavis.models.blip2_models.blip2_t5_instruct import Blip2T5Instruct
+ from lavis.models.blip2_models.blip2_vicuna_instruct import Blip2VicunaInstruct
+======== TME/precompute.sh
+--- /tmp/cir-upstream-audit-20261108T155252/TME/precompute.sh	2026-11-08 15:53:19.664879348 +0700
++++ workbench/third_party/TME/precompute.sh	2026-11-06 00:22:18.293804400 +0700
+@@ -1,7 +1,5 @@
+-nohup python src/precompute.py \
+-    --dataset 'CIRR' \
++python src/precompute.py \
++    --dataset 'FashionIQ' \
+     --split 'val' \
+     --batch_size '512' \
+-    --gpu 2 \
+-    --log_file_name precompute_test \
+-    > run.log 2>&1 &
+\ No newline at end of file
++    --num_works '8'
+\ No newline at end of file
+======== TME/src/precompute.py
+--- /tmp/cir-upstream-audit-20261108T155252/TME/src/precompute.py	2026-11-08 15:53:19.677186851 +0700
++++ workbench/third_party/TME/src/precompute.py	2026-11-07 01:28:36.029121895 +0700
+@@ -26,7 +26,15 @@
+     
+     dataloader = DataLoader(dataset=train_gallery, batch_size=precompute_size,
+                             num_workers=num_works, pin_memory=True, drop_last=False, shuffle=False)
+-    images = []
++    # Approved workbench patch: the shipped version appends every batch to a Python list and then
++    # `torch.cat`s the list, which needs two full copies of the feature tensor at once. On this host
++    # that peaks at 28.76 GiB RSS for a 10.47 GiB result and the kernel kills the process (exit -9)
++    # AFTER all GPU work is done. At the adapted runtime's float32 the result alone is 20.94 GiB, so
++    # the shipped shape cannot complete here at any batch size. Allocation is now preallocated once
++    # and each batch copied into its slot: identical model, preprocessing, loader order, autocast and
++    # output dtype/files -- only the storage strategy differs. Measured bit-identical to the shipped
++    # path on real inputs (max_abs_diff 0.0).
++    images = None
+     image_names = []
+     
+     logging.info('Start Precomputation')
+@@ -37,10 +45,12 @@
+         with torch.cuda.amp.autocast():
+             images_embes = blip_model.vit_encode(image)
+         images_embes = images_embes.cpu()
+-        images.append(images_embes)
++        if images is None:
++            images = torch.empty((len(train_gallery), *images_embes.shape[1:]),
++                                 dtype=images_embes.dtype)
++        images[len(image_names):len(image_names) + images_embes.shape[0]] = images_embes
+         image_names.extend(image_name)
+     logging.info('Done')
+-    images:torch.Tensor = torch.cat(images, dim=0)
+     name_to_idx = {item:i for i, item in enumerate(image_names)}
+     logging.info(f'total_shape: {images.shape}')
+     logging.info(f'num_type: {images.dtype}')
+======== TME/src/precompute_evaluation.py
+--- /tmp/cir-upstream-audit-20261108T155252/TME/src/precompute_evaluation.py	2026-11-08 15:53:19.677186851 +0700
++++ workbench/third_party/TME/src/precompute_evaluation.py	2026-11-07 01:47:28.651887254 +0700
+@@ -1,3 +1,4 @@
++import os
+ import torch
+ import numpy as np
+ from operator import itemgetter
+@@ -36,7 +37,12 @@
+     Returns:
+         dict: The metric results.
+     """
+-    Qformer_bs = 256
++    # Approved workbench patch: the pinned batch sizes are OPERATIONAL, not part of the metric.
++    # The shipped 256/32 hold the whole 15536x257x1408 gallery and its similarity pass on the card;
++    # measured here that is 20.94 GiB at the adapted runtime's float32 against a 15.44 GiB card, so
++    # `inference()` raised CUDA OOM. The defaults below are unchanged -- an override only lowers them
++    # for a smaller card, exactly as the pinned docstring advises ("reduce Qformer_bs and query_bs").
++    Qformer_bs = int(os.environ.get("WORKBENCH_TME_QFORMER_BS", 256))
+     n_images = len(dataset.current_image_names)
+     F_images = []
+     print('Evaluation for', category)
+@@ -56,7 +62,7 @@
+     distances = []
+     subset_names = []
+     print('Compute simlarity: ')
+-    query_bs = 32
++    query_bs = int(os.environ.get("WORKBENCH_TME_QUERY_BS", 32))
+     for idx in tqdm(range(0, len(dataset), query_bs), ncols=120, mininterval=30):
+         batch = dataset[idx:idx+query_bs]
+         if category == 'CIRR':
+======== TME/src/utility.py
+--- /tmp/cir-upstream-audit-20261108T155252/TME/src/utility.py	2026-11-08 15:53:19.677186851 +0700
++++ workbench/third_party/TME/src/utility.py	2026-11-06 00:22:18.301294564 +0700
+@@ -47,11 +47,10 @@
+ 
+ def set_device(i):
+     global device
++    if not torch.cuda.is_available():
++        raise RuntimeError("TME requires CUDA for feature generation; CPU execution is unsupported")
+     torch.cuda.set_device(f"cuda:{i}")
+-    if torch.cuda.is_available():
+-        device = torch.device(f'cuda:{i}')
+-    else:
+-        device = torch.device('cpu')
++    device = torch.device(f"cuda:{i}")
+     
+ 
+ def get_closs(i2t, target, loss_name=None):
+======== AirKnow/data_utils.py
+--- /tmp/cir-upstream-audit-20261108T155252/AirKnow/data_utils.py	2026-11-08 15:53:11.123648347 +0700
++++ workbench/third_party/AirKnow/data_utils.py	2026-11-06 00:22:17.677790324 +0700
+@@ -106,6 +106,15 @@
+     ])
+ 
+ 
++def _resolve_img_path(path: Path) -> Path:
++    if path.exists():
++        return path
++    png = path.with_suffix('.png')
++    if png.exists():
++        return png
++    return path
++
++
+ class FashionIQDataset(Dataset):
+     """
+     FashionIQ dataset class which manage FashionIQ data.
+@@ -165,10 +174,10 @@
+                 reference_name = self.triplets[index]['candidate']
+ 
+                 if self.split == 'train':
+-                    reference_image_path = base_path / 'fashionIQ_dataset' / 'images' / f"{reference_name}.jpg"
++                    reference_image_path = _resolve_img_path(base_path / 'fashionIQ_dataset' / 'images' / f"{reference_name}.jpg")
+                     reference_image = self.preprocess(PIL.Image.open(reference_image_path))
+                     target_name = self.triplets[index]['target']
+-                    target_image_path = base_path / 'fashionIQ_dataset' / 'images' / f"{target_name}.jpg"
++                    target_image_path = _resolve_img_path(base_path / 'fashionIQ_dataset' / 'images' / f"{target_name}.jpg")
+                     target_image = self.preprocess(PIL.Image.open(target_image_path))
+                     return reference_image, target_image, image_captions
+ 
+@@ -177,13 +186,13 @@
+                     return reference_name, target_name, image_captions
+ 
+                 elif self.split == 'test':
+-                    reference_image_path = base_path / 'fashionIQ_dataset' / 'images' / f"{reference_name}.jpg"
++                    reference_image_path = _resolve_img_path(base_path / 'fashionIQ_dataset' / 'images' / f"{reference_name}.jpg")
+                     reference_image = self.preprocess(PIL.Image.open(reference_image_path))
+                     return reference_name, reference_image, image_captions
+ 
+             elif self.mode == 'classic':
+                 image_name = self.image_names[index]
+-                image_path = base_path / 'fashionIQ_dataset' / 'images' / f"{image_name}.jpg"
++                image_path = _resolve_img_path(base_path / 'fashionIQ_dataset' / 'images' / f"{image_name}.jpg")
+                 image = self.preprocess(PIL.Image.open(image_path))
+                 return image_name, image
+ 
+======== AirKnow/lavis/models/__init__.py
+--- /tmp/cir-upstream-audit-20261108T155252/AirKnow/lavis/models/__init__.py	2026-11-08 15:53:11.209841734 +0700
++++ workbench/third_party/AirKnow/lavis/models/__init__.py	2026-11-06 00:22:17.743915334 +0700
+@@ -30,8 +30,12 @@
+ from lavis.models.blip_models.blip_pretrain import BlipPretrain
+ from lavis.models.blip_models.blip_retrieval import BlipRetrieval
+ from lavis.models.blip_models.blip_vqa import BlipVQA
+-from lavis.models.blip_models.blip_cir import BlipCir
+-from lavis.models.blip_models.blip_cir_caption import BlipCirCaption
++try:
++    from lavis.models.blip_models.blip_cir import BlipCir
++    from lavis.models.blip_models.blip_cir_caption import BlipCirCaption
++except ImportError:
++    BlipCir = None
++    BlipCirCaption = None
+ 
+ from lavis.models.blip2_models.blip2 import Blip2Base
+ from lavis.models.blip2_models.blip2_opt import Blip2OPT
+======== DCNet/base/base_trainer.py
+--- /tmp/cir-upstream-audit-20261108T155252/DCNet/base/base_trainer.py	2026-11-08 15:53:05.757147813 +0700
++++ workbench/third_party/DCNet/base/base_trainer.py	2026-11-06 23:54:50.539920196 +0700
+@@ -192,7 +192,11 @@
+         """
+         ckpt_path = self.config.resume / 'trained_model.pth'
+         self.logger.info("Loading checkpoint: {} ...".format(ckpt_path))
+-        checkpoint = torch.load(ckpt_path)
++        # Approved workbench patch: this author checkpoint embeds a numpy scalar, which
++        # torch >= 2.6 refuses under the new default `weights_only=True`. The checkpoint is
++        # hash-verified by the wrapper before this load runs, and the opt-out is confined to
++        # this single call site instead of replacing `torch.load` process-wide.
++        checkpoint = torch.load(ckpt_path, weights_only=False)
+         self.start_epoch = checkpoint['epoch'] + 1
+         self.mnt_best = checkpoint['monitor_best']
+ 
+======== ENCODER/evaluate_model.py
+--- /tmp/cir-upstream-audit-20261108T155252/ENCODER/evaluate_model.py	2026-11-08 15:53:11.862668336 +0700
++++ workbench/third_party/ENCODER/evaluate_model.py	2026-11-06 00:22:17.918795832 +0700
+@@ -4,7 +4,7 @@
+ import test
+ import os
+ import open_clip
+-import datasets1
++import datasets as datasets1
+ from model_try2 import Encoder
+ import numpy as np
+ import random
+======== CLVCNet/resnet.py
+--- /tmp/cir-upstream-audit-20261108T155252/CLVCNet/resnet.py	2026-11-08 15:53:03.574444150 +0700
++++ workbench/third_party/CLVCNet/resnet.py	2026-11-06 00:22:17.756629695 +0700
+@@ -1,6 +1,9 @@
+ import torch
+ import torch.nn as nn
+-from torchvision.models.utils import load_state_dict_from_url
++try:
++    from torch.hub import load_state_dict_from_url
++except ImportError:
++    from torchvision.models.utils import load_state_dict_from_url
+ 
+ __all__ = ['ResNet', 'resnet18', 'resnet34', 'resnet50', 'resnet101',
+            'resnet152', 'resnext50_32x4d', 'resnext101_32x8d',
+======== CSMCIR/src/lavis/models/__init__.py
+--- /tmp/cir-upstream-audit-20261108T155252/CSMCIR/src/lavis/models/__init__.py	2026-11-08 15:53:05.139947097 +0700
++++ workbench/third_party/CSMCIR/src/lavis/models/__init__.py	2026-11-07 11:16:39.195376005 +0700
+@@ -41,115 +41,132 @@
+ from lavis.models.blip2_models.blip2_qformer_prompt import Blip2QformerPrompt
+ from lavis.models.blip2_models.blip2_qformer_cir_cat import Blip2QformerCirCat
+ from lavis.models.blip2_models.blip2_qformer_cir_align_prompt import Blip2QformerCirAlignPrompt
+-from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_caption_query import Blip2QformerCirAlignPromptCaptionQuery
+-from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_daul_contrastive import Blip2QformerCirAlignPromptDaulContrastive
+-from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_alignloss import Blip2QformerCirAlignPromptAlignLoss
+-from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption import Blip2QformerCirAlignPromptTargetImageCaption
+-from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_logsumexp import Blip2QformerCirAlignPromptLogsumexp
+-from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_attentionpooling import Blip2QformerCirAlignPromptAttentionpooling
+-from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_gatepool import Blip2QformerCirAlignPromptGatepool
+-from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_aggregator import Blip2QformerCirAlignPromptAggregator
+-from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan4 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan4
+-from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan5 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan5
+-from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan6 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan6
+-from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan7 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan7
+-from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan7wocaption import Blip2QformerCirAlignPromptTargetImageCaptionshiyan7wocaption
+-from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan7cross4 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan7cross4
+-from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan7cross6 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan7cross6
+-from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan7cross1 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan7cross1
+-from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan7cross3 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan7cross3
+-from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan7prompttoken import Blip2QformerCirAlignPromptTargetImageCaptionshiyan7prompttoken
++# --- workbench patch csmcir_models_init_compat.patch ---
++# Each block below registers a class whose module this public revision does not contain, so
++# the package died on the first one and never reached line {last}, where the shipped CSMCIR
++# class is registered. Every original line is preserved; only an absent module is skipped.
++try:
++    from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_caption_query import Blip2QformerCirAlignPromptCaptionQuery
++    from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_daul_contrastive import Blip2QformerCirAlignPromptDaulContrastive
++    from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_alignloss import Blip2QformerCirAlignPromptAlignLoss
++    from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption import Blip2QformerCirAlignPromptTargetImageCaption
++    from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_logsumexp import Blip2QformerCirAlignPromptLogsumexp
++    from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_attentionpooling import Blip2QformerCirAlignPromptAttentionpooling
++    from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_gatepool import Blip2QformerCirAlignPromptGatepool
++    from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_aggregator import Blip2QformerCirAlignPromptAggregator
++    from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan4 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan4
++    from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan5 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan5
++    from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan6 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan6
++    from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan7 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan7
++    from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan7wocaption import Blip2QformerCirAlignPromptTargetImageCaptionshiyan7wocaption
++    from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan7cross4 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan7cross4
++    from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan7cross6 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan7cross6
++    from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan7cross1 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan7cross1
++    from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan7cross3 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan7cross3
++    from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan7prompttoken import Blip2QformerCirAlignPromptTargetImageCaptionshiyan7prompttoken
++except ImportError:
++    pass
+ 
+ 
+ 
+ 
+-from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan8 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan8
+-from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan9 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan9
+-from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan10 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan10
+-from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan11 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan11
+-from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan12 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan12
+-from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan13 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan13
+-from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan14 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan14
+-from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan15 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan15
++try:
++    from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan8 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan8
++    from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan9 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan9
++    from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan10 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan10
++    from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan11 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan11
++    from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan12 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan12
++    from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan13 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan13
++    from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan14 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan14
++    from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan15 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan15
++except ImportError:
++    pass
+ # from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan16 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan16
+ # from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan16cirr import Blip2QformerCirAlignPromptTargetImageCaptionshiyan16cirr
+ # from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan17 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan17
+ # from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan18 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan18
+ # from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan16_17 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan16_17
+-from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan19 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan19
+-from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan20 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan20
+-from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan21 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan21
+-from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan22 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan22
+-from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan23 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan23
+-from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan24 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan24
+-from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan25 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan25
+-from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan26 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan26
+-from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan27 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan27
+-from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan28 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan28
+-from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan29 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan29
+-from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan30 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan30
+-from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan31 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan31
+-from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan32 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan32
+-from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan33 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan33
+-from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan34 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan34
+-from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan35 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan35
+-from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan36 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan36
+-from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan37 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan37
+-from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan38 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan38
+-from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan39 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan39
+-from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan40 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan40
+-from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan41 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan41
+-from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan42 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan42
+-from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan43 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan43
+-from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan44 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan44
+-from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan45 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan45
+-from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan46 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan46
+-from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan47 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan47
+-from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan48 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan48
+-from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan49 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan49
+-from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan50 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan50
+-from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan51 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan51
+-from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan52 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan52
+-from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan53 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan53
+-from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan54 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan54
+-from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan52openvit import Blip2QformerCirAlignPromptTargetImageCaptionshiyan52openvit
+-from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan55 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan55
+-from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan56 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan56
+-from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan57 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan57
+-from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan58 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan58
+-from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan59 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan59
+-from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan60 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan60
+-from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan61 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan61
+-from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan62 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan62
+-from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan63 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan63
+-from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan64 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan64
+-from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan65 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan65
+-from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan66 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan66
+-from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan67 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan67
++try:
++    from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan19 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan19
++    from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan20 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan20
++    from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan21 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan21
++    from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan22 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan22
++    from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan23 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan23
++    from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan24 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan24
++    from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan25 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan25
++    from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan26 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan26
++    from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan27 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan27
++    from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan28 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan28
++    from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan29 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan29
++    from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan30 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan30
++    from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan31 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan31
++    from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan32 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan32
++    from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan33 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan33
++    from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan34 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan34
++    from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan35 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan35
++    from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan36 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan36
++    from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan37 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan37
++    from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan38 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan38
++    from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan39 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan39
++    from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan40 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan40
++    from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan41 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan41
++    from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan42 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan42
++    from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan43 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan43
++    from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan44 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan44
++    from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan45 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan45
++    from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan46 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan46
++    from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan47 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan47
++    from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan48 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan48
++    from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan49 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan49
++    from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan50 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan50
++    from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan51 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan51
++    from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan52 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan52
++    from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan53 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan53
++    from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan54 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan54
++    from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan52openvit import Blip2QformerCirAlignPromptTargetImageCaptionshiyan52openvit
++    from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan55 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan55
++    from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan56 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan56
++    from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan57 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan57
++    from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan58 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan58
++    from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan59 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan59
++    from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan60 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan60
++    from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan61 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan61
++    from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan62 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan62
++    from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan63 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan63
++    from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan64 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan64
++    from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan65 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan65
++    from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan66 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan66
++    from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan67 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan67
++except ImportError:
++    pass
+ # from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan68 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan68
+-from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan69 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan69
+-from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan70_pretrain import Blip2QformerCirAlignPromptTargetImageCaptionshiyan70_pretrain
+-from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan71 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan71
+-from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan72 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan72
+-from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan73 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan73
+-from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan74 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan74
+-from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan76 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan76
+-from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan77 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan77
+-from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan78 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan78
+-from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan79 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan79
+-from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan80 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan80
+-from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan81 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan81
+-from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan82 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan82
+-from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan83 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan83
+-from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan84 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan84
+-from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan85 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan85
+-from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan86 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan86
+-from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan88 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan88
+-from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan89 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan89
+-from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan90 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan90
+-from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan91 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan91
+-from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan92 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan92
++try:
++    from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan69 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan69
++    from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan70_pretrain import Blip2QformerCirAlignPromptTargetImageCaptionshiyan70_pretrain
++    from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan71 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan71
++    from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan72 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan72
++    from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan73 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan73
++    from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan74 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan74
++    from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan76 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan76
++    from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan77 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan77
++    from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan78 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan78
++    from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan79 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan79
++    from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan80 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan80
++    from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan81 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan81
++    from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan82 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan82
++    from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan83 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan83
++    from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan84 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan84
++    from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan85 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan85
++    from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan86 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan86
++    from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan88 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan88
++    from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan89 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan89
++    from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan90 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan90
++    from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan91 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan91
++    from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan92 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan92
++except ImportError:
++    pass
+ from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_csmcir import Blip2QformerCirAlignPromptCSMCIR
++from lavis.models.blip2_models.blip2_qformer_cir_align_prompt_target_image_caption_shiyan92 import Blip2QformerCirAlignPromptTargetImageCaptionshiyan92
+ 
+ 
+ from lavis.models.blip2_models.blip2_qformer_cir_cls import Blip2QformerCirCls
+======== CSMCIR/src/validate_blip_csmcir.py
+--- /tmp/cir-upstream-audit-20261108T155252/CSMCIR/src/validate_blip_csmcir.py	2026-11-08 15:53:05.167487242 +0700
++++ workbench/third_party/CSMCIR/src/validate_blip_csmcir.py	2026-11-07 11:16:39.197289007 +0700
+@@ -161,7 +161,12 @@
+     """
+     print(f"Compute FashionIQ {relative_val_dataset.dress_types} validation predictions")
+ 
+-    relative_val_loader = DataLoader(dataset=relative_val_dataset, batch_size=64,
++    # Operational override: the author default is 64, and `inference` builds a
++    # (queries x query_tokens x gallery) matmul that needs ~10.5 GiB at 64 on a 15.44 GiB
++    # card. The value does not change what is scored -- every query is still compared
++    # against the full gallery -- only how many are pushed through at once.
++    _query_bs = int(os.environ.get('WORKBENCH_CSMCIR_QUERY_BS', 64))
++    relative_val_loader = DataLoader(dataset=relative_val_dataset, batch_size=_query_bs,
+                                      num_workers=4, pin_memory=True, collate_fn=collate_fn,
+                                      shuffle=False)
+ 
+@@ -506,13 +511,21 @@
+     parser.add_argument("--target-ratio", default=1.25, type=float, help="TargetPad target ratio")
+     parser.add_argument("--transform", default="targetpad", type=str,
+                         help="Preprocess pipeline, should be in ['clip', 'squarepad', 'targetpad'] ")
++    # Diagnostic image dumps (`vis_fiq`) are a development aid, not part of measurement. They were
++    # previously unconditional and ran AFTER the metrics were printed, so a benchmark run died in the
++    # drawing code -- `vis_fiq` treats `data[1]` of the val-relative dataset as a score tensor while
++    # it is a target id string -- and exited non-zero with the metrics already computed. Making it
++    # opt-in keeps the drawing tools untouched and leaves the metric stage unaffected.
++    parser.add_argument("--visualize", action="store_true",
++                        help="write diagnostic image dumps after evaluation (off by default)")
+ 
+     args = parser.parse_args()
+ 
+     if args.dataset == 'CIRR':
+         blip_validate_cirr(args.blip_model_name, args.blip_model_path, args.transform, args.target_ratio)
+     elif args.dataset == 'fashionIQ':
+-        blip_validate_fashioniq(args.blip_model_name, args.blip_model_path, args.transform, args.target_ratio)
++        blip_validate_fashioniq(args.blip_model_name, args.blip_model_path, args.transform,
++                                args.target_ratio, visualize=args.visualize)
+ 
+ 
+ 
+@@ -562,7 +575,8 @@
+ 
+ 
+ 
+-def blip_validate_fashioniq(blip_model_name, blip_model_path, transform, target_ratio):
++def blip_validate_fashioniq(blip_model_name, blip_model_path, transform, target_ratio,
++                            visualize: bool = False):
+ 
+     # clip_model, clip_preprocess = clip.load(clip_model_name, device=device, jit=False)
+     blip_model, _, txt_processors = load_model_and_preprocess(name=blip_model_name, model_type="pretrain", is_eval=False, device=device)
+@@ -609,9 +623,17 @@
+     for relative_val_dataset, classic_val_dataset, idx in zip(relative_val_datasets, classic_val_datasets,
+                                                                 idx_to_dress_mapping):
+         
+-        index_features, index_names = extract_index_blip_caption_features(classic_val_dataset, blip_model)
++        # Operational override: the shipped default keeps every gallery batch resident on the GPU and
++        # then vstacks, which needs ~5.15 GiB this card does not have beside the model. `save_memory` is
++        # the author's own path, and it must be passed to BOTH halves -- the extractor lands features on
++        # CPU and the predictor moves them back to the model device before `inference`, which otherwise
++        # fails on a mixed-device cat.
++        _save_memory = os.environ.get('WORKBENCH_CSMCIR_SAVE_MEMORY', '0') == '1'
++        index_features, index_names = extract_index_blip_caption_features(
++            classic_val_dataset, blip_model, save_memory=_save_memory)
+         recall_at10, recall_at50 = compute_fiq_val_metrics(relative_val_dataset, blip_model,
+-                                                            index_features, index_names, txt_processors)
++                                                            index_features, index_names, txt_processors,
++                                                            save_memory=_save_memory)
+         
+         recalls_at10.append(recall_at10)
+         recalls_at50.append(recall_at50)
+@@ -630,7 +652,10 @@
+     print(json.dumps(results_dict, indent=4))
+ 
+ 
+-    # 可视化部分
++    # 可视化部分 -- opt-in only. `--visualize` is off for evaluation so the metric stage above is the
++    # last thing a benchmark run depends on.
++    if not visualize:
++        return
+     for relative_val_dataset, classic_val_dataset, idx in zip(relative_val_datasets, classic_val_datasets,
+                                                               idx_to_dress_mapping):
+         index_features, index_names = extract_index_blip_caption_features(classic_val_dataset, blip_model)
+======== ENCODER/datasets1.py (added, absent upstream)
+from datasets import *
+======== PAIR/models/MHTransformer_rev.py (added, absent upstream)
+"""EXPERIMENTAL_RECONSTRUCTION: Reverse-attention Transformer module for PAIR.
+
+Derived:
+- MultiHeadAttentionRev is a faithful copy of MHTransformer.py:61-95 using
+  `attention = 1 - attention.softmax(dim=2)` (line 92) instead of standard softmax.
+- Surrounding TransformerLayer and Transformer classes mirror MHTransformer.py structure.
+
+NOT established:
+- That the author's unpublished upstream MHTransformer_rev.py is structurally identical.
+- A 2-line diff from a locally constructed module does not prove author parity.
+"""
+import torch
+import torch.nn as nn
+from torch.nn import functional as nnf
+from typing import Tuple, Optional, Union

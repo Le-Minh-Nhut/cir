@@ -1,0 +1,1258 @@
+{
+ "csmcir": {
+  "url": "https://github.com/qzp2018/CSMCIR",
+  "sha": "774f94e2076ff17ea91703a6239d2a08f0e1a44e",
+  "source_dir": "CSMCIR",
+  "adapter": "workbench.composition.model_csmcir",
+  "env": {
+   "python_env_var": "WORKBENCH_CSMCIR_PYTHON",
+   "runtime_env": [
+    "WORKBENCH_CSMCIR_QUERY_BS",
+    "WORKBENCH_CSMCIR_SAVE_MEMORY"
+   ],
+   "confidence": "VERIFIED_README",
+   "python": "3.9",
+   "pytorch": "2.0.1",
+   "torchvision": "0.15.2",
+   "cuda": "11.7",
+   "packages": [],
+   "adapted_runtime": {
+    "target_compute_capability": "sm_120",
+    "python": "3.10",
+    "pytorch": "==2.7.1",
+    "torchvision": "==0.22.1",
+    "cuda": "12.8",
+    "packages": [
+     "transformers==4.36.2",
+     "timm==0.9.12",
+     "fairscale==0.4.13",
+     "numpy<2"
+    ],
+    "pip_index_url": "https://download.pytorch.org/whl/cu128"
+   }
+  },
+  "protocols": [
+   "fashioniq_original_split"
+  ],
+  "native": "fashioniq_original_split",
+  "layout": "fashioniq_standard",
+  "prep": "manual_standard",
+  "prepid": null,
+  "status": "NOT_RUN",
+  "envreq": null,
+  "replay_status": null,
+  "replay_type": null,
+  "cmd_status": null,
+  "nvariants": 1,
+  "variants": [
+   {
+    "checkpoint_id": "fashioniq",
+    "filename": "fashioniq_tuned_clip_best.pt",
+    "download_url": "https://huggingface.co/peng12138/CSMCIR/resolve/main/fashioniq_tuned_clip_best.pt",
+    "source_type": "author_huggingface",
+    "checkpoint_training_noise_pct": 0,
+    "evaluation_noise_pct": 0,
+    "expected_sha256": "c8812071de0640d647c5ba2a70628b80a3289ee2c47676f7a1b6abaa313fa49e",
+    "expected_size_bytes": 2720615859,
+    "status": "URL_VERIFIED",
+    "checkpoint_mapping_status": "VERIFIED_METADATA"
+   }
+  ]
+ },
+ "airknow": {
+  "url": "https://github.com/iLearn-Lab/CVPR26-Air-Know",
+  "sha": "6ab6fa95b746f85b08eea4cb66eb51448bce99b7",
+  "source_dir": "AirKnow",
+  "adapter": null,
+  "env": {
+   "python_env_var": "WORKBENCH_AIRKNOW_PYTHON",
+   "confidence": "VERIFIED_README",
+   "python": "3.8.10",
+   "pytorch": "2.1.0",
+   "torchvision": "0.16.0",
+   "cuda": "12.6",
+   "packages": [
+    "opencv-python-headless==4.5.5.64",
+    "fairscale==0.4.13",
+    "iopath==0.1.10",
+    "peft==0.6.2",
+    "diffusers==0.19.3",
+    "huggingface-hub==0.19.4",
+    "accelerate==0.25.0",
+    "numpy",
+    "omegaconf==2.3.0",
+    "packaging",
+    "pandas==2.0.3",
+    "Pillow",
+    "pyyaml",
+    "regex",
+    "requests",
+    "tqdm",
+    "transformers==4.25.0",
+    "timm==0.9.16",
+    "scikit-learn==1.3.2"
+   ]
+  },
+  "protocols": [
+   "fashioniq_full_gallery_ref_excluded"
+  ],
+  "native": "fashioniq_full_gallery_ref_excluded",
+  "layout": "fashioniq_ilearn_resized_training",
+  "prep": "manual_ilearn_resized",
+  "prepid": null,
+  "status": "NOT_RUN",
+  "envreq": null,
+  "replay_status": null,
+  "replay_type": null,
+  "cmd_status": null,
+  "nvariants": 2,
+  "variants": [
+   {
+    "checkpoint_id": "fiq_n05",
+    "filename": "airknow_fiq_0.5.pt",
+    "download_url": "https://huggingface.co/iLearn-Lab/CVPR26-Air-Know/resolve/main/airknow_fiq_0.5.pt",
+    "source_type": "author_huggingface",
+    "checkpoint_training_noise_pct": 50,
+    "evaluation_noise_pct": 0,
+    "expected_size_bytes": 2724056638,
+    "expected_sha256": "f4d25ed9e532f2ee3671f6edadb1048e73113246ec056b413bde75dfe3f79bc6",
+    "status": "NO_CLEAN_CHECKPOINT",
+    "checkpoint_mapping_status": "VERIFIED_METADATA",
+    "checkpoint_base_relative": "../../checkpoints/airknow"
+   },
+   {
+    "checkpoint_id": "fiq_n08",
+    "filename": "airknow_fiq_0.8.pt",
+    "download_url": "https://huggingface.co/iLearn-Lab/CVPR26-Air-Know/resolve/main/airknow_fiq_0.8.pt",
+    "source_type": "author_huggingface",
+    "checkpoint_training_noise_pct": 80,
+    "evaluation_noise_pct": 0,
+    "expected_size_bytes": 2724056638,
+    "expected_sha256": "756fc0bdc43d9e0f0cae13c8a02b0279f64e62092ce465c1e60bda45e179c54e",
+    "status": "NO_CLEAN_CHECKPOINT",
+    "checkpoint_mapping_status": "VERIFIED_METADATA",
+    "checkpoint_base_relative": "../../checkpoints/airknow"
+   }
+  ]
+ },
+ "conesep": {
+  "url": "https://github.com/Lee-zixu/ConeSep",
+  "sha": "bd4bf629ebe68045c1a54dcc61e4a3ea65f8759b",
+  "source_dir": "ConeSep",
+  "adapter": "workbench.composition.model_conesep",
+  "env": {
+   "python_env_var": "WORKBENCH_CONESEP_PYTHON",
+   "confidence": "VERIFIED_README",
+   "python": "3.8.10",
+   "pytorch": "2.1.0",
+   "torchvision": "0.16.0",
+   "cuda": "12.6",
+   "packages": [
+    "opencv-python-headless==4.5.5.64",
+    "fairscale==0.4.13",
+    "iopath==0.1.10",
+    "peft==0.6.2",
+    "diffusers==0.19.3",
+    "huggingface-hub==0.19.4",
+    "accelerate==0.25.0",
+    "numpy",
+    "omegaconf==2.3.0",
+    "packaging",
+    "pandas==2.0.3",
+    "Pillow",
+    "pyyaml",
+    "regex",
+    "requests",
+    "tqdm",
+    "transformers==4.25.0",
+    "timm==0.9.16",
+    "scikit-learn==1.3.2"
+   ],
+   "adapted_runtime": {
+    "target_compute_capability": "sm_120",
+    "python": "3.9",
+    "pytorch": "==2.7.1",
+    "torchvision": "==0.22.1",
+    "cuda": "12.8",
+    "packages": [
+     "transformers==4.25.0",
+     "timm==0.9.16",
+     "fairscale==0.4.13",
+     "numpy<2"
+    ],
+    "pip_index_url": "https://download.pytorch.org/whl/cu128"
+   }
+  },
+  "protocols": [
+   "fashioniq_full_gallery_ref_excluded"
+  ],
+  "native": "fashioniq_full_gallery_ref_excluded",
+  "layout": "fashioniq_ilearn_resized_training",
+  "prep": "manual_ilearn_resized",
+  "prepid": null,
+  "status": "NOT_RUN",
+  "envreq": null,
+  "replay_status": null,
+  "replay_type": null,
+  "cmd_status": null,
+  "nvariants": 3,
+  "variants": [
+   {
+    "checkpoint_id": "fiq_n02",
+    "filename": "ConeSep-FIQ-N0.2.pt",
+    "download_url": "https://huggingface.co/iLearn-Lab/CVPR26-ConeSep/resolve/cecc32deeec917d337e5d2def675b3746da7b8e6/fiq/ConeSep-FIQ-N0.2.pt",
+    "source_type": "author_huggingface",
+    "source_revision": "cecc32deeec917d337e5d2def675b3746da7b8e6",
+    "checkpoint_training_noise_pct": 20,
+    "evaluation_noise_pct": 0,
+    "expected_size_bytes": 2721428966,
+    "expected_sha256": "5a864ee5a78c1d249320c4f997cc7d14b529b329b2efba5577c82dbe019ed9d2",
+    "status": "NO_CLEAN_CHECKPOINT",
+    "checkpoint_mapping_status": "VERIFIED_METADATA"
+   },
+   {
+    "checkpoint_id": "fiq_n05",
+    "filename": "ConeSep-FIQ-N0.5.pt",
+    "download_url": "https://huggingface.co/iLearn-Lab/CVPR26-ConeSep/resolve/main/fiq/ConeSep-FIQ-N0.5.pt",
+    "source_type": "author_huggingface",
+    "checkpoint_training_noise_pct": 50,
+    "evaluation_noise_pct": 0,
+    "expected_size_bytes": null,
+    "expected_sha256": null,
+    "status": "NO_CLEAN_CHECKPOINT",
+    "checkpoint_mapping_status": "VERIFIED_METADATA"
+   },
+   {
+    "checkpoint_id": "fiq_n08",
+    "filename": "ConeSep-FIQ_N0.8.pt",
+    "download_url": "https://huggingface.co/iLearn-Lab/CVPR26-ConeSep/resolve/main/fiq/ConeSep-FIQ_N0.8.pt",
+    "source_type": "author_huggingface",
+    "checkpoint_training_noise_pct": 80,
+    "evaluation_noise_pct": 0,
+    "expected_size_bytes": null,
+    "expected_sha256": null,
+    "status": "NO_CLEAN_CHECKPOINT",
+    "checkpoint_mapping_status": "VERIFIED_METADATA"
+   }
+  ]
+ },
+ "ptha_mtst": {
+  "url": "https://github.com/zyinan99/MTST_PTHA",
+  "sha": "6a02ee4763fc2260b6abfb18be78853facb91d86",
+  "source_dir": "MTST_PTHA",
+  "adapter": "workbench.composition.model_ptha_mtst",
+  "env": {
+   "python_env_var": "WORKBENCH_PTHA_MTST_PYTHON",
+   "confidence": "VERIFIED_REQUIREMENTS",
+   "python": "3.9",
+   "pytorch": "2.0.1",
+   "torchvision": "0.15.2",
+   "packages": [
+    "tqdm==4.66.1",
+    "omegaconf==2.3.0",
+    "iopath==0.1.10",
+    "timm==0.9.12",
+    "decord==0.6.0",
+    "webdataset==0.2.86",
+    "opencv-python",
+    "transformers==4.36.2",
+    "fairscale==0.4.13",
+    "einops==0.7.0",
+    "scikit-image==0.22.0",
+    "spacy==3.7.2",
+    "pycocoevalcap==1.2"
+   ],
+   "adapted_runtime": {
+    "target_compute_capability": "sm_120",
+    "python": "3.10",
+    "pytorch": "==2.7.1",
+    "torchvision": "==0.22.1",
+    "cuda": "12.8",
+    "packages": [
+     "transformers==4.36.2",
+     "timm==0.9.12",
+     "fairscale==0.4.13",
+     "numpy<2"
+    ],
+    "pip_index_url": "https://download.pytorch.org/whl/cu128"
+   }
+  },
+  "protocols": [
+   "fashioniq_original_split"
+  ],
+  "native": "fashioniq_original_split",
+  "layout": "fashioniq_standard",
+  "prep": "manual_standard",
+  "prepid": "ptha_mtst_fashioniq",
+  "status": "SELECTED_TRANSFER_ONLY",
+  "envreq": true,
+  "replay_status": null,
+  "replay_type": null,
+  "cmd_status": null,
+  "nvariants": 1,
+  "variants": [
+   {
+    "checkpoint_id": "cirr_transfer",
+    "filename": "tuned_mtst_cirr.pt",
+    "download_url": "https://huggingface.co/yinanzhou1/mtst_ptha/resolve/main/tuned_mtst_cirr.pt",
+    "source_type": "author_huggingface",
+    "source_revision": "main",
+    "checkpoint_training_dataset": "CIRR",
+    "checkpoint_forwards_dataset": "FashionIQ",
+    "transfer_condition": "cross_dataset_transfer",
+    "checkpoint_training_noise_pct": null,
+    "evaluation_noise_pct": 0,
+    "expected_size_bytes": 2720352973,
+    "expected_sha256": "1c4dab86a9f66dfe10aff75b39790432eb6cc746cf27b6cfab74b66d93b7588f",
+    "status": "URL_VERIFIED",
+    "checkpoint_mapping_status": "VERIFIED_METADATA"
+   }
+  ]
+ },
+ "habit": {
+  "url": "https://github.com/iLearn-Lab/AAAI26-HABIT",
+  "sha": "6ddc2cd63eac1f65693f4e821c34fb3b42aee306",
+  "source_dir": "HABIT",
+  "adapter": "workbench.composition.model_habit",
+  "env": {
+   "python_env_var": "WORKBENCH_HABIT_PYTHON",
+   "confidence": "VERIFIED_README",
+   "python": "3.8.10",
+   "pytorch": "2.1.0",
+   "torchvision": "0.16.0",
+   "cuda": "12.6",
+   "packages": [
+    "transformers==4.25.0",
+    "timm==0.9.16",
+    "omegaconf==2.3.0",
+    "opencv-python-headless==4.5.5.64",
+    "pandas==2.0.3",
+    "scikit-image==0.21.0",
+    "decord==0.6.0",
+    "einops==0.7.0",
+    "fairscale==0.4.13",
+    "ftfy",
+    "iopath==0.1.10",
+    "peft==0.6.2",
+    "diffusers==0.19.3",
+    "huggingface-hub==0.19.4",
+    "accelerate==0.25.0",
+    "pycocoevalcap==1.2",
+    "pycocotools",
+    "webdataset==0.2.86",
+    "scikit-learn==1.3.2"
+   ],
+   "adapted_runtime": {
+    "target_compute_capability": "sm_120",
+    "python": "3.9",
+    "pytorch": "==2.7.1",
+    "torchvision": "==0.22.1",
+    "cuda": "12.8",
+    "packages": [
+     "transformers==4.25.0",
+     "timm==0.9.16",
+     "fairscale==0.4.13",
+     "numpy<2"
+    ],
+    "pip_index_url": "https://download.pytorch.org/whl/cu128"
+   }
+  },
+  "protocols": [
+   "fashioniq_full_gallery_ref_excluded"
+  ],
+  "native": "fashioniq_full_gallery_ref_excluded",
+  "layout": "fashioniq_ilearn_resized_training",
+  "prep": "manual_ilearn_resized",
+  "prepid": null,
+  "status": "NOT_RUN",
+  "envreq": null,
+  "replay_status": null,
+  "replay_type": null,
+  "cmd_status": null,
+  "nvariants": 3,
+  "variants": [
+   {
+    "checkpoint_id": "fiq_n02",
+    "filename": "HABIT-FIQ_N0.2.pt",
+    "download_url": "https://huggingface.co/iLearn-Lab/AAAI26-HABIT/resolve/8712993b071f4668ce5b2db6070e70c856bd9174/fiq/HABIT-FIQ_N0.2.pt",
+    "source_type": "author_huggingface",
+    "source_revision": "8712993b071f4668ce5b2db6070e70c856bd9174",
+    "checkpoint_training_noise_pct": 20,
+    "evaluation_noise_pct": 0,
+    "expected_size_bytes": 2730715930,
+    "expected_sha256": "814d2d0ceb29ef910f37562e8bea8a76cf38aa546fbc2102e495df687c276b03",
+    "status": "NO_CLEAN_CHECKPOINT",
+    "checkpoint_mapping_status": "VERIFIED_METADATA"
+   },
+   {
+    "checkpoint_id": "fiq_n05",
+    "filename": "HABIT-FIQ_N0.5.pt",
+    "download_url": "https://huggingface.co/iLearn-Lab/AAAI26-HABIT/resolve/main/fiq/HABIT-FIQ_N0.5.pt",
+    "source_type": "author_huggingface",
+    "checkpoint_training_noise_pct": 50,
+    "evaluation_noise_pct": 0,
+    "expected_size_bytes": 2730715930,
+    "expected_sha256": "8a0d3bd27cf46d8334f9596404d89ebf803da0fa65236d89815bb3929b9a4216",
+    "status": "NO_CLEAN_CHECKPOINT",
+    "checkpoint_mapping_status": "VERIFIED_METADATA"
+   },
+   {
+    "checkpoint_id": "fiq_n08",
+    "filename": "HABIT-FIQ_N0.8.pt",
+    "download_url": "https://huggingface.co/iLearn-Lab/AAAI26-HABIT/resolve/main/fiq/HABIT-FIQ_N0.8.pt",
+    "source_type": "author_huggingface",
+    "checkpoint_training_noise_pct": 80,
+    "evaluation_noise_pct": 0,
+    "expected_size_bytes": 2730715930,
+    "expected_sha256": "763885de6907bca4f017b336ed7ec3740cb9305c5adb6a135da45c158ddb9717",
+    "status": "NO_CLEAN_CHECKPOINT",
+    "checkpoint_mapping_status": "VERIFIED_METADATA"
+   }
+  ]
+ },
+ "intent": {
+  "url": "https://github.com/iLearn-Lab/AAAI26-INTENT",
+  "sha": "2a75fc6f57d1a036bf3167a7fe1d2cee072f51f3",
+  "source_dir": "INTENT",
+  "adapter": "workbench.composition.model_intent",
+  "env": {
+   "python_env_var": "WORKBENCH_INTENT_PYTHON",
+   "confidence": "VERIFIED_README",
+   "python": "3.9",
+   "pytorch": "2.1.0",
+   "torchvision": "0.16.0",
+   "cuda": "12.6",
+   "packages": [
+    "transformers==4.25.0",
+    "timm==0.9.16",
+    "omegaconf==2.3.0",
+    "opencv-python-headless==4.5.5.64",
+    "pandas==2.0.3",
+    "scikit-image==0.21.0",
+    "decord==0.6.0",
+    "einops==0.7.0",
+    "fairscale==0.4.13",
+    "ftfy",
+    "iopath==0.1.10",
+    "peft==0.6.2",
+    "diffusers==0.19.3",
+    "huggingface-hub==0.19.4",
+    "accelerate==0.25.0",
+    "pycocoevalcap==1.2",
+    "pycocotools",
+    "webdataset==0.2.86",
+    "scikit-learn==1.3.2",
+    "matplotlib"
+   ],
+   "adapted_runtime": {
+    "target_compute_capability": "sm_120",
+    "python": "3.9",
+    "pytorch": "==2.7.1",
+    "torchvision": "==0.22.1",
+    "cuda": "12.8",
+    "packages": [
+     "transformers==4.25.0",
+     "timm==0.9.16",
+     "fairscale==0.4.13",
+     "numpy<2"
+    ],
+    "pip_index_url": "https://download.pytorch.org/whl/cu128"
+   }
+  },
+  "protocols": [
+   "fashioniq_full_gallery_ref_excluded"
+  ],
+  "native": "fashioniq_full_gallery_ref_excluded",
+  "layout": "fashioniq_ilearn_resized_training",
+  "prep": "manual_ilearn_resized",
+  "prepid": null,
+  "status": "NOT_RUN",
+  "envreq": null,
+  "replay_status": null,
+  "replay_type": null,
+  "cmd_status": null,
+  "nvariants": 3,
+  "variants": [
+   {
+    "checkpoint_id": "fiq_n02",
+    "filename": "intent_fiq_0.2.pt",
+    "download_url": "https://huggingface.co/iLearn-Lab/AAAI26-INTENT/resolve/16ee2d31f05576bbebbad7da0530b412f5e7a1d8/intent_fiq_0.2.pt",
+    "source_type": "author_huggingface",
+    "source_revision": "16ee2d31f05576bbebbad7da0530b412f5e7a1d8",
+    "checkpoint_training_noise_pct": 20,
+    "evaluation_noise_pct": 0,
+    "expected_size_bytes": 2722478522,
+    "expected_sha256": "2a504cadfd6b1c2486a2c508538b0160c5653f62c7cd11f4f3d8a9534dc26afc",
+    "status": "NO_CLEAN_CHECKPOINT",
+    "checkpoint_mapping_status": "VERIFIED_METADATA"
+   },
+   {
+    "checkpoint_id": "fiq_n05",
+    "filename": "intent_fiq_0.5.pt",
+    "download_url": "https://huggingface.co/iLearn-Lab/AAAI26-INTENT/resolve/main/intent_fiq_0.5.pt",
+    "source_type": "author_huggingface",
+    "checkpoint_training_noise_pct": 50,
+    "evaluation_noise_pct": 0,
+    "expected_size_bytes": 2722478522,
+    "expected_sha256": "2d59ae002ecbf645a52c7e93bf8afd914e3061e2304413b97a0bf15ca43e39a9",
+    "status": "NO_CLEAN_CHECKPOINT",
+    "checkpoint_mapping_status": "VERIFIED_METADATA"
+   },
+   {
+    "checkpoint_id": "fiq_n08",
+    "filename": "intent_fiq_0.8.pt",
+    "download_url": "https://huggingface.co/iLearn-Lab/AAAI26-INTENT/resolve/main/intent_fiq_0.8.pt",
+    "source_type": "author_huggingface",
+    "checkpoint_training_noise_pct": 80,
+    "evaluation_noise_pct": 0,
+    "expected_size_bytes": 2722478522,
+    "expected_sha256": "671bb217d3fdf32e6133fcb98eef4e80ebf831b5a203493c54507ef3c23b5cd2",
+    "status": "NO_CLEAN_CHECKPOINT",
+    "checkpoint_mapping_status": "VERIFIED_METADATA"
+   }
+  ]
+ },
+ "hint": {
+  "url": "https://github.com/iLearn-Lab/ICASSP26-HINT",
+  "sha": "bec50b6c8c19111893b617979502b948d1cea5b2",
+  "source_dir": "HINT",
+  "adapter": "workbench.composition.model_hint",
+  "env": {
+   "python_env_var": "WORKBENCH_HINT_PYTHON",
+   "confidence": "VERIFIED_README",
+   "python": "3.8.10",
+   "pytorch": "2.1.0",
+   "torchvision": "0.16.0",
+   "cuda": "12.6",
+   "packages": [
+    "transformers==4.25.0",
+    "timm==0.9.16",
+    "omegaconf==2.3.0",
+    "opencv-python-headless==4.5.5.64",
+    "pandas==2.0.3",
+    "scikit-image==0.21.0",
+    "decord==0.6.0",
+    "einops==0.7.0",
+    "fairscale==0.4.13",
+    "ftfy",
+    "iopath==0.1.10",
+    "peft==0.6.2",
+    "diffusers==0.19.3",
+    "huggingface-hub==0.19.4",
+    "accelerate==0.25.0",
+    "pycocoevalcap==1.2",
+    "pycocotools",
+    "webdataset==0.2.86"
+   ],
+   "adapted_runtime": {
+    "target_compute_capability": "sm_120",
+    "python": "3.9",
+    "pytorch": "==2.7.1",
+    "torchvision": "==0.22.1",
+    "cuda": "12.8",
+    "packages": [
+     "transformers==4.25.0",
+     "timm==0.9.16",
+     "fairscale==0.4.13",
+     "numpy<2"
+    ],
+    "pip_index_url": "https://download.pytorch.org/whl/cu128"
+   }
+  },
+  "protocols": [
+   "fashioniq_val_split"
+  ],
+  "native": "fashioniq_val_split",
+  "layout": "fashioniq_ilearn_resized_training",
+  "prep": "manual_ilearn_resized",
+  "prepid": null,
+  "status": "NOT_RUN",
+  "envreq": null,
+  "replay_status": null,
+  "replay_type": null,
+  "cmd_status": null,
+  "nvariants": 1,
+  "variants": [
+   {
+    "checkpoint_id": "fashioniq",
+    "filename": "fashioniq.pt",
+    "download_url": "https://huggingface.co/iLearn-Lab/HINT/resolve/main/fashioniq.pt",
+    "source_type": "author_huggingface",
+    "checkpoint_training_noise_pct": null,
+    "evaluation_noise_pct": 0,
+    "expected_size_bytes": 2724451182,
+    "expected_sha256": "bf9c72d42206b667ed586758c15c648970df821857e4067f26155a114a6517d4",
+    "status": "URL_VERIFIED",
+    "checkpoint_mapping_status": "VERIFIED_METADATA"
+   }
+  ]
+ },
+ "encoder": {
+  "url": "https://github.com/iLearn-Lab/AAAI25-ENCODER",
+  "sha": "29a2a31d6a56f677bf450c3be7cdaef423fb7018",
+  "source_dir": "ENCODER",
+  "adapter": "workbench.composition.model_encoder",
+  "env": {
+   "python_env_var": "WORKBENCH_ENCODER_PYTHON",
+   "confidence": "VERIFIED_REQUIREMENTS",
+   "python": "3.9",
+   "pytorch": "1.13.1",
+   "torchvision": "0.14.1",
+   "cuda": "12.6",
+   "packages": [],
+   "adapted_runtime": {
+    "target_compute_capability": "sm_120",
+    "python": "3.10",
+    "pytorch": "==2.7.1",
+    "torchvision": "==0.22.1",
+    "cuda": "12.8",
+    "packages": [
+     "open_clip_torch==2.24.0"
+    ],
+    "pip_index_url": "https://download.pytorch.org/whl/cu128"
+   }
+  },
+  "protocols": [
+   "fashioniq_val_split"
+  ],
+  "native": "fashioniq_val_split",
+  "layout": "fashioniq_ilearn_resized_training",
+  "prep": "manual_ilearn_resized",
+  "prepid": null,
+  "status": "METRICS_MEASURED_MAPPING_UNVERIFIED",
+  "envreq": true,
+  "replay_status": null,
+  "replay_type": null,
+  "cmd_status": null,
+  "nvariants": 1,
+  "variants": [
+   {
+    "checkpoint_id": "fashioniq",
+    "filename": "fashioniq.pt",
+    "download_url": "https://huggingface.co/iLearn-Lab/AAAI25-ENCODER/resolve/dd9b086569fe69bd9111b6114546201c97934b01/fashioniq.pt",
+    "source_url": "https://huggingface.co/iLearn-Lab/AAAI25-ENCODER/tree/main",
+    "source_type": "author_huggingface",
+    "expected_size_bytes": 631879365,
+    "expected_sha256": "0f31c50150a7bda3495e3378df13b4cec7924b52efd23b5e5dd9731459da9173",
+    "checkpoint_training_noise_pct": null,
+    "evaluation_noise_pct": 0,
+    "status": "URL_VERIFIED",
+    "checkpoint_mapping_status": "VERIFIED_METADATA"
+   }
+  ]
+ },
+ "pair": {
+  "url": "https://github.com/iLearn-Lab/ICASSP25-PAIR",
+  "sha": "bfb0b98cdb4c44f6b9190baaa84d783a77dd888f",
+  "source_dir": "PAIR",
+  "adapter": null,
+  "env": {
+   "python_env_var": "WORKBENCH_PAIR_PYTHON",
+   "confidence": "VERIFIED_README",
+   "python": "3.8.10",
+   "pytorch": "2.0.0",
+   "torchvision": "UNKNOWN",
+   "cuda": "11.8",
+   "packages": []
+  },
+  "protocols": [
+   "fashioniq_val_split"
+  ],
+  "native": "fashioniq_val_split",
+  "layout": "fashioniq_ilearn_resized_training",
+  "prep": "manual_ilearn_resized",
+  "prepid": "pair_fashioniq",
+  "status": "BLOCKED_CHECKPOINT_MAPPING_UNVERIFIED",
+  "envreq": null,
+  "replay_status": null,
+  "replay_type": null,
+  "cmd_status": "COMMAND_BLOCKED_SOURCE_ENTRYPOINT",
+  "nvariants": 2,
+  "variants": [
+   {
+    "checkpoint_id": "pair_b1",
+    "filename": "pair-B1.pt",
+    "download_url": "https://huggingface.co/ZhihengFu/PAIR/resolve/main/pair-B1.pt",
+    "source_type": "author_huggingface",
+    "checkpoint_training_noise_pct": null,
+    "evaluation_noise_pct": 0,
+    "expected_size_bytes": 694958565,
+    "expected_sha256": "c4d861ecd0baa3f1427fc7a853943f5614baf87def1cdd9c4bb7583ee925fbf2",
+    "status": "CHECKPOINT_MAPPING_UNVERIFIED",
+    "checkpoint_mapping_status": "UNVERIFIED",
+    "checkpoint_base_relative": "../../checkpoints/pair"
+   },
+   {
+    "checkpoint_id": "pair_b2",
+    "filename": "pair-B2.pt",
+    "download_url": "https://huggingface.co/ZhihengFu/PAIR/resolve/main/pair-B2.pt",
+    "source_type": "author_huggingface",
+    "checkpoint_training_noise_pct": null,
+    "evaluation_noise_pct": 0,
+    "expected_size_bytes": 694872371,
+    "expected_sha256": "74346fd7de6efdafe8dde70458316286a60ceb2d7b419efed55193418aeb3f03",
+    "status": "CHECKPOINT_MAPPING_UNVERIFIED",
+    "checkpoint_mapping_status": "UNVERIFIED",
+    "checkpoint_base_relative": "../../checkpoints/pair"
+   }
+  ]
+ },
+ "clvc_net": {
+  "url": "https://github.com/iLearn-Lab/SIGIR21-CLVC-Net",
+  "sha": "bd9b6889489806cb60676597880f91d918b279cb",
+  "source_dir": "CLVCNet",
+  "adapter": null,
+  "env": {
+   "python_env_var": "WORKBENCH_CLVC_PYTHON",
+   "confidence": "VERIFIED_README",
+   "python": "3.7.6",
+   "pytorch": "1.6.0",
+   "torchvision": "UNKNOWN",
+   "cuda": "10.2",
+   "packages": [
+    "torchvision"
+   ]
+  },
+  "protocols": [
+   "fashioniq_val_split"
+  ],
+  "native": "fashioniq_val_split",
+  "layout": "fashioniq_clvc_resized",
+  "prep": "manual_clvc_resized",
+  "prepid": "clvc_net_fashioniq",
+  "status": "BLOCKED_CHECKPOINT_MAPPING",
+  "envreq": true,
+  "replay_status": "BLOCKED_NO_SOURCE_REPLAY",
+  "replay_type": null,
+  "cmd_status": "COMMAND_BLOCKED_SOURCE_ENTRYPOINT",
+  "nvariants": 1,
+  "variants": [
+   {
+    "checkpoint_id": "author_drive_unresolved",
+    "filename": ".",
+    "artifact_type": "bundle_directory",
+    "required_files": [
+     "dress_local_model.pt",
+     "dress_global_model.pt",
+     "shirt_local_model.pt",
+     "shirt_global_model.pt",
+     "toptee_local_model.pt",
+     "toptee_global_model.pt"
+    ],
+    "bundle_members": [
+     {
+      "filename": "dress_local_model.pt",
+      "expected_sha256": "33d44186efd6a25ca0761794115610016182b9f53ff6413083f31b6979769a07"
+     },
+     {
+      "filename": "dress_global_model.pt",
+      "expected_sha256": "be41c2ba81b803fd392c2c2517bf29cf4dd58205af7777f2becb4f84a80f5c7c"
+     },
+     {
+      "filename": "shirt_local_model.pt",
+      "expected_sha256": "2ba8e320b08ebb97d6558eb599cde2be228b5488250de7cb4cde8a138ff2c681"
+     },
+     {
+      "filename": "shirt_global_model.pt",
+      "expected_sha256": "78b1d660227ab6928e3a11a7384f9fff2aa7ab2a39baec1a45ac59db35e28bcf"
+     },
+     {
+      "filename": "toptee_local_model.pt",
+      "expected_sha256": "d1fa9170496f73a008736723fe5329c93ff710305d0bcc79ff628822c0a91f4c"
+     },
+     {
+      "filename": "toptee_global_model.pt",
+      "expected_sha256": "c78a58c4becafee3bffe719bef743d42c4495c3a91096a4b5935c364449ed11d"
+     }
+    ],
+    "download_url": null,
+    "source_url": "https://drive.google.com/file/d/159rBhWyhkLN7sXAi8iyW_ljzFNLJinKa/view?usp=sharing",
+    "source_type": "author_google_drive",
+    "checkpoint_training_noise_pct": null,
+    "evaluation_noise_pct": 0,
+    "expected_size_bytes": null,
+    "expected_sha256": null,
+    "status": "URL_VERIFIED",
+    "checkpoint_mapping_status": "VERIFIED_METADATA",
+    "checkpoint_base_relative": "../../checkpoints/clvc"
+   }
+  ]
+ },
+ "dcnet": {
+  "url": "https://github.com/ozmig77/dcnet",
+  "sha": "68c79d38569f01ca39c3b4ea641b3b7eb2ccb5fb",
+  "source_dir": "DCNet",
+  "adapter": null,
+  "env": {
+   "python_env_var": "WORKBENCH_DCNET_PYTHON",
+   "confidence": "VERIFIED_REQUIREMENTS",
+   "python": "3.7.7",
+   "pytorch": "1.4.0",
+   "torchvision": "0.5.0",
+   "cuda": "UNKNOWN",
+   "packages": [
+    "nltk==3.5",
+    "spacy==2.3.0"
+   ]
+  },
+  "protocols": [
+   "fashioniq_full_gallery_ref_excluded"
+  ],
+  "native": "fashioniq_full_gallery_ref_excluded",
+  "layout": "fashioniq_dcnet",
+  "prep": "manual_dcnet",
+  "prepid": "dcnet_fashioniq",
+  "status": "BLOCKED_CHECKPOINT_MAPPING",
+  "envreq": true,
+  "replay_status": "REPLAY_CODE_IMPLEMENTED",
+  "replay_type": "OFFICIAL_CLI",
+  "cmd_status": "COMMAND_AUDITED",
+  "nvariants": 1,
+  "variants": [
+   {
+    "checkpoint_id": "fashioniq_run_directory",
+    "filename": ".",
+    "artifact_type": "run_directory",
+    "required_files": [
+     "config.json",
+     "trained_model.pth"
+    ],
+    "bundle_members": [
+     {
+      "filename": "trained_model.pth",
+      "expected_sha256": "130f031e0f7808ccf5f15630a691bd7af95ad9fadbf94f64acfce64e7d8b850f"
+     },
+     {
+      "filename": "config.json",
+      "expected_sha256": "fa5fca78790a33063a4e73b379393f4ffbbf1b251b3c27058aed481136984ba0"
+     }
+    ],
+    "download_url": null,
+    "source_url": "https://drive.google.com/drive/folders/1wgygqF095Di67EaHaGOXbwh3wEzk9izB?usp=sharing",
+    "source_type": "author_google_drive",
+    "checkpoint_training_noise_pct": null,
+    "evaluation_noise_pct": 0,
+    "expected_size_bytes": null,
+    "expected_sha256": null,
+    "status": "URL_VERIFIED",
+    "checkpoint_mapping_status": "VERIFIED_METADATA",
+    "checkpoint_base_relative": "../../checkpoints/dcnet"
+   }
+  ]
+ },
+ "combiner_rn50x4_noft": {
+  "url": "https://github.com/ABaldrati/CLIP4Cir",
+  "sha": "dfed9f748a8a4d05abf613164e06d59b22dbdf13",
+  "source_dir": "CLIP4Cir",
+  "adapter": null,
+  "env": {
+   "python_env_var": "WORKBENCH_CLIP4CIR_PYTHON",
+   "confidence": "VERIFIED_README",
+   "python": "3.8",
+   "pytorch": "1.11.0",
+   "torchvision": "0.12.0",
+   "cuda": "UNKNOWN",
+   "packages": [
+    "pandas==1.4.2",
+    "comet-ml==3.21.0",
+    "clip @ git+https://github.com/openai/CLIP.git@a1d071733d7111c9c014f024669f959182114e33"
+   ]
+  },
+  "protocols": [
+   "fashioniq_original_split"
+  ],
+  "native": "fashioniq_original_split",
+  "layout": "fashioniq_standard",
+  "prep": "manual_standard",
+  "prepid": "clip4cir_fashioniq",
+  "status": "BLOCKED_CHECKPOINT_MAPPING",
+  "envreq": true,
+  "replay_status": "REPLAY_CODE_IMPLEMENTED",
+  "replay_type": "OFFICIAL_CLI",
+  "cmd_status": "COMMAND_AUDITED",
+  "nvariants": 1,
+  "variants": [
+   {
+    "checkpoint_id": "rn50x4_noft_unresolved",
+    "filename": "fiq_comb_RN50x4_noft.pt",
+    "artifact_type": "file",
+    "download_url": null,
+    "source_url": "https://drive.google.com/drive/folders/1ny2hhzP8HZBnXhjvDEni8P8G4_inCNTv?usp=sharing",
+    "source_type": "author_google_drive",
+    "checkpoint_training_noise_pct": 0,
+    "evaluation_noise_pct": 0,
+    "expected_size_bytes": 236017921,
+    "expected_sha256": "b31882fe6f7e3e194cb9cfda048926844ee0ccc9d4ebc5483fb3bacfa5972955",
+    "status": "URL_VERIFIED",
+    "checkpoint_mapping_status": "VERIFIED_METADATA",
+    "checkpoint_base_relative": "../../checkpoints/clip4cir/FashionIQ/RN50x4_noft"
+   }
+  ]
+ },
+ "clip4cir_rn50x4_fullft": {
+  "url": "https://github.com/ABaldrati/CLIP4Cir",
+  "sha": "dfed9f748a8a4d05abf613164e06d59b22dbdf13",
+  "source_dir": "CLIP4Cir",
+  "adapter": null,
+  "env": {
+   "python_env_var": "WORKBENCH_CLIP4CIR_PYTHON",
+   "confidence": "VERIFIED_README",
+   "python": "3.8",
+   "pytorch": "1.11.0",
+   "torchvision": "0.12.0",
+   "cuda": "UNKNOWN",
+   "packages": [
+    "pandas==1.4.2",
+    "comet-ml==3.21.0",
+    "clip @ git+https://github.com/openai/CLIP.git@a1d071733d7111c9c014f024669f959182114e33"
+   ]
+  },
+  "protocols": [
+   "fashioniq_original_split"
+  ],
+  "native": "fashioniq_original_split",
+  "layout": "fashioniq_standard",
+  "prep": "manual_standard",
+  "prepid": "clip4cir_fashioniq",
+  "status": "BLOCKED_CHECKPOINT_BUNDLE",
+  "envreq": true,
+  "replay_status": "BLOCKED_CHECKPOINT_MAPPING",
+  "replay_type": "OFFICIAL_CLI",
+  "cmd_status": "COMMAND_AUDITED",
+  "nvariants": 1,
+  "variants": [
+   {
+    "checkpoint_id": "rn50x4_fullft_unresolved",
+    "filename": ".",
+    "artifact_type": "bundle_directory",
+    "required_files": [
+     "fiq_comb_RN50x4_fullft.pt",
+     "fiq_clip_RN50x4_fullft.pt"
+    ],
+    "bundle_members": [
+     {
+      "filename": "fiq_comb_RN50x4_fullft.pt",
+      "expected_sha256": "7c7c0a10fb4c995cb1ded9ad70a58891d50c622263c54131523bfb232b493f8e"
+     },
+     {
+      "filename": "fiq_clip_RN50x4_fullft.pt",
+      "expected_sha256": "4111ac139cf96ac0cf31b30bf8f55b654247b06f0f5fbee4fe8dcc8c1c7cfd2f"
+     }
+    ],
+    "download_url": null,
+    "source_url": "https://drive.google.com/drive/folders/1ny2hhzP8HZBnXhjvDEni8P8G4_inCNTv?usp=sharing",
+    "source_type": "author_google_drive",
+    "checkpoint_training_noise_pct": 0,
+    "evaluation_noise_pct": 0,
+    "expected_size_bytes": null,
+    "expected_sha256": null,
+    "status": "URL_VERIFIED",
+    "checkpoint_mapping_status": "VERIFIED_METADATA",
+    "checkpoint_base_relative": "../../checkpoints/clip4cir/FashionIQ/RN50x4_fullft"
+   }
+  ]
+ },
+ "tgcir": {
+  "url": "https://github.com/iLearn-Lab/MM23-TG-CIR",
+  "sha": "65fa78eaf8cabe8197fcc22ccab42207c591bdee",
+  "source_dir": "TGCIR",
+  "adapter": null,
+  "env": {
+   "python_env_var": "WORKBENCH_TGCIR_PYTHON",
+   "confidence": "VERIFIED_README",
+   "python": "UNKNOWN",
+   "pytorch": "1.7.0",
+   "torchvision": "0.8.0",
+   "cuda": "11.0",
+   "packages": [
+    "clip @ git+https://github.com/openai/CLIP.git@a1d071733d7111c9c014f024669f959182114e33",
+    "numpy==1.22.3",
+    "pandas==1.4.2",
+    "Pillow"
+   ]
+  },
+  "protocols": [
+   "fashioniq_val_split"
+  ],
+  "native": "fashioniq_val_split",
+  "layout": "fashioniq_ilearn_resized_training",
+  "prep": "manual_ilearn_resized",
+  "prepid": "tgcir_fashioniq",
+  "status": "BLOCKED_COMMAND",
+  "envreq": true,
+  "replay_status": "PREFLIGHT_ONLY",
+  "replay_type": "PREFLIGHT_ONLY",
+  "cmd_status": "COMMAND_BLOCKED_SOURCE_ENTRYPOINT",
+  "nvariants": 1,
+  "variants": [
+   {
+    "checkpoint_id": "tgcir_archive_unresolved",
+    "filename": "Fashioniq.pt",
+    "download_url": null,
+    "source_url": "https://drive.google.com/file/d/1OdZTtJqy-RTpYXBaq5ThmH3IBnGvYCyi/view",
+    "source_type": "author_google_drive",
+    "checkpoint_training_noise_pct": null,
+    "evaluation_noise_pct": 0,
+    "expected_size_bytes": 607928637,
+    "expected_sha256": "c37768f374c75bebff1299e870518c23bf6db3dc8a75c4d1f729ccd6dd02e966",
+    "status": "URL_VERIFIED",
+    "checkpoint_mapping_status": "VERIFIED_METADATA",
+    "checkpoint_base_relative": "../../downloads/tgcir/x/checkpoints"
+   }
+  ]
+ },
+ "sprc": {
+  "url": "https://github.com/chunmeifeng/SPRC",
+  "sha": "2935a5397732260d1db6fa577e5926f963e36f0f",
+  "source_dir": "SPRC",
+  "adapter": null,
+  "env": {
+   "python_env_var": "WORKBENCH_SPRC_PYTHON",
+   "confidence": "VERIFIED_REQUIREMENTS",
+   "python": "3.9",
+   "pytorch": "2.0.1",
+   "torchvision": "0.15.2",
+   "cuda": "UNKNOWN",
+   "packages": [
+    "spacy==3.7.2",
+    "clip @ git+https://github.com/openai/CLIP.git@a1d071733d7111c9c014f024669f959182114e33",
+    "opencv-python-headless==4.5.5.64",
+    "fairscale==0.4.13",
+    "iopath==0.1.10",
+    "numpy",
+    "omegaconf==2.3.0",
+    "packaging",
+    "pandas==2.2.0",
+    "Pillow",
+    "pyyaml",
+    "regex",
+    "requests",
+    "tqdm",
+    "transformers==4.36.2",
+    "timm==0.9.12"
+   ]
+  },
+  "protocols": [
+   "fashioniq_original_split"
+  ],
+  "native": "fashioniq_original_split",
+  "layout": "fashioniq_standard",
+  "prep": "manual_standard",
+  "prepid": "sprc_fashioniq",
+  "status": "BLOCKED_CHECKPOINT_MAPPING",
+  "envreq": true,
+  "replay_status": "BLOCKED_CHECKPOINT_MAPPING",
+  "replay_type": null,
+  "cmd_status": "COMMAND_BLOCKED_MODEL_MAPPING",
+  "nvariants": 2,
+  "variants": [
+   {
+    "checkpoint_id": "sprc_fiq_unresolved",
+    "filename": "sprc_fiq.pt",
+    "backbone": "pretrain",
+    "download_url": null,
+    "source_url": "https://1drv.ms/u/s!Aj0q22vyiZbabnUya4mnufIBtYI?e=n4ZVKj",
+    "source_type": "author_onedrive",
+    "checkpoint_training_noise_pct": null,
+    "evaluation_noise_pct": 0,
+    "expected_size_bytes": null,
+    "expected_sha256": null,
+    "status": "CHECKPOINT_MAPPING_UNVERIFIED",
+    "checkpoint_mapping_status": "UNVERIFIED",
+    "checkpoint_base_relative": "../../checkpoints/sprc"
+   },
+   {
+    "checkpoint_id": "sprc_fiq_vitl",
+    "filename": "sprc_fiq_vitl.pt",
+    "backbone": "pretrain_vitL",
+    "download_url": "https://drive.usercontent.google.com/download?id=11p95msuuTAU6Pej7d_a-KjUHHpP3kH8Y&export=download&confirm=t",
+    "source_url": "https://drive.google.com/file/d/11p95msuuTAU6Pej7d_a-KjUHHpP3kH8Y/view?usp=sharing",
+    "source_type": "author_google_drive",
+    "checkpoint_training_noise_pct": null,
+    "evaluation_noise_pct": 0,
+    "expected_size_bytes": 1459756541,
+    "expected_sha256": "19386104271c01ea03ee2177575c0e55f98edd3ba61a116d78f2e61ab5dbea08",
+    "status": "URL_VERIFIED",
+    "checkpoint_mapping_status": "VERIFIED_METADATA",
+    "checkpoint_base_relative": "../../checkpoints/sprc",
+    "scientific_variant": true,
+    "variant_provenance": {
+     "variant_id": "vitl_backbone",
+     "changes": "CLIP ViT-L/14 vision encoder instead of the paper's EVA-CLIP ViT-g/14",
+     "evidence": "upstream issue #4: the author acknowledges the paper reported ViT-L while the released code defaults to ViT-g, and published ViT-L weights as a separate variant",
+     "comparability": "NOT comparable to the registry's paper row (reported_r10/reported_r50 describe the ViT-g configuration); a result from this checkpoint must not be compared against it"
+    },
+    "notes": "ViT-L backbone (CLIP ViT-L/14), author-published as a variant after the paper's ViT-g code default was acknowledged in upstream issue #4. Reachable (HTTP 200, 1 459 756 541 bytes observed); no published checksum."
+   }
+  ]
+ },
+ "limn": {
+  "url": "https://github.com/iLearn-Lab/TPAMI24-LIMN",
+  "sha": "7d7bc9b116f594a65ac22457491edf28a88d3c3e",
+  "source_dir": "LIMN",
+  "adapter": "workbench.composition.model_limn",
+  "env": {
+   "python_env_var": "WORKBENCH_LIMN_PYTHON",
+   "confidence": "VERIFIED_README",
+   "python": "UNKNOWN",
+   "pytorch": "1.12.1",
+   "torchvision": "0.13.1",
+   "cuda": "12.4",
+   "packages": [
+    "open_clip_torch==2.20.0"
+   ],
+   "adapted_runtime": {
+    "target_compute_capability": "sm_120",
+    "python": "3.10",
+    "pytorch": "==2.7.1",
+    "torchvision": "==0.22.1",
+    "cuda": "12.8",
+    "packages": [
+     "open_clip_torch==2.20.0"
+    ],
+    "pip_index_url": "https://download.pytorch.org/whl/cu128"
+   }
+  },
+  "protocols": [
+   "fashioniq_val_split"
+  ],
+  "native": "fashioniq_val_split",
+  "layout": "fashioniq_ilearn_resized_training",
+  "prep": "manual_ilearn_resized",
+  "prepid": "limn_fashioniq",
+  "status": "BLOCKED_RUNTIME_PREREQUISITES",
+  "envreq": true,
+  "replay_status": "REPLAY_CODE_IMPLEMENTED",
+  "replay_type": "SOURCE_FAITHFUL_WORKBENCH_REPLAY",
+  "cmd_status": "REPLAY_COMMAND_IMPLEMENTED",
+  "nvariants": 3,
+  "variants": [
+   {
+    "checkpoint_id": "base_iter0_dress",
+    "filename": "0_dress_best_model.pt",
+    "download_url": "https://huggingface.co/iLearn-Lab/TPAMI24-LIMN/resolve/30560ad575a56c39cc39047d1a474269338c77c0/0_dress_best_model.pt",
+    "checkpoint_training_noise_pct": null,
+    "evaluation_noise_pct": 0,
+    "expected_size_bytes": 1792010157,
+    "expected_sha256": "96a335d4eb8b1e77d35575aab9177637208e2eb6c59e12f833f67e5cb0e7fc1c",
+    "status": "URL_VERIFIED",
+    "checkpoint_mapping_status": "VERIFIED_METADATA"
+   },
+   {
+    "checkpoint_id": "base_iter0_shirt",
+    "filename": "0_shirt_best_model.pt",
+    "download_url": "https://huggingface.co/iLearn-Lab/TPAMI24-LIMN/resolve/30560ad575a56c39cc39047d1a474269338c77c0/0_shirt_best_model.pt",
+    "checkpoint_training_noise_pct": null,
+    "evaluation_noise_pct": 0,
+    "expected_size_bytes": 1792010157,
+    "expected_sha256": "9260c7f77d3017d8cc10e6652cc8cfe275dbc9704366fa2bf581a24808930d74",
+    "status": "URL_VERIFIED",
+    "checkpoint_mapping_status": "VERIFIED_METADATA"
+   },
+   {
+    "checkpoint_id": "base_iter0_toptee",
+    "filename": "0_toptee_best_model.pt",
+    "download_url": "https://huggingface.co/iLearn-Lab/TPAMI24-LIMN/resolve/30560ad575a56c39cc39047d1a474269338c77c0/0_toptee_best_model.pt",
+    "checkpoint_training_noise_pct": null,
+    "evaluation_noise_pct": 0,
+    "expected_size_bytes": 1792010157,
+    "expected_sha256": "79f663a14d89d455fdc3612b0b36d011c06d7957d1475a654755e1053a6cece2",
+    "status": "URL_VERIFIED",
+    "checkpoint_mapping_status": "VERIFIED_METADATA"
+   }
+  ]
+ },
+ "tme": {
+  "url": "https://github.com/li-shuxian/TME",
+  "sha": "394aad79df2c104feb32a2c96132582012765062",
+  "source_dir": "TME",
+  "adapter": "workbench.composition.model_tme",
+  "env": {
+   "python_env_var": "WORKBENCH_TME_PYTHON",
+   "confidence": "VERIFIED_README",
+   "python": "3.10",
+   "pytorch": "2.1.2",
+   "torchvision": "0.16.2",
+   "cuda": "12.1",
+   "packages": [
+    "transformers==4.36.0",
+    "timm==0.9.12",
+    "omegaconf==2.3.0",
+    "iopath==0.1.10",
+    "decord==0.6.0",
+    "webdataset==0.2.86",
+    "opencv-python==4.10.0.84",
+    "fairscale==0.4.13",
+    "einops==0.7.0",
+    "scikit-image==0.24.0",
+    "spacy==3.7.6",
+    "pycocoevalcap==1.2",
+    "pandas==2.2.3",
+    "scikit-learn==1.5.2",
+    "tqdm==4.67.0",
+    "numpy<2",
+    "click"
+   ],
+   "adapted_runtime": {
+    "target_compute_capability": "sm_120",
+    "pytorch": ">=2.7.1,<2.9",
+    "torchvision": ">=0.22.1,<0.24",
+    "cuda": "12.8",
+    "packages": [
+     "transformers==4.36.0",
+     "timm==0.9.12",
+     "fairscale==0.4.13",
+     "numpy<2"
+    ],
+    "pip_index_url": "https://download.pytorch.org/whl/cu128"
+   }
+  },
+  "protocols": [
+   "fashioniq_original_split"
+  ],
+  "native": "fashioniq_original_split",
+  "layout": "fashioniq_standard",
+  "prep": "manual_standard",
+  "prepid": "tme_fashioniq",
+  "status": "NOT_RUN",
+  "envreq": null,
+  "replay_status": null,
+  "replay_type": null,
+  "cmd_status": "REPLAY_COMMAND_IMPLEMENTED",
+  "nvariants": 2,
+  "variants": [
+   {
+    "checkpoint_id": "fashioniq_0",
+    "filename": "fashioniq_0_best_model.pth",
+    "archive_member": "best_model.pth",
+    "archive_size_bytes": 2533586661,
+    "expected_size_bytes": 2728382104,
+    "expected_sha256": null,
+    "download_url": "https://www.kaggle.com/api/v1/models/charlesneilsucian/tme/pytorch/fashioniq-0.0-best/1/download",
+    "source_type": "author_kaggle",
+    "source_revision": "1",
+    "checkpoint_training_noise_pct": 0,
+    "evaluation_noise_pct": 0,
+    "status": "URL_VERIFIED",
+    "checkpoint_mapping_status": "VERIFIED_METADATA"
+   },
+   {
+    "checkpoint_id": "cirr_0",
+    "filename": "cirr_0_best_model.pth",
+    "archive_member": "best_model.pth",
+    "archive_size_bytes": 2533584902,
+    "expected_size_bytes": 2728382104,
+    "expected_sha256": null,
+    "download_url": "https://www.kaggle.com/api/v1/models/charlesneilsucian/tme/pytorch/cirr-0.0-best/1/download",
+    "source_type": "author_kaggle",
+    "source_revision": "1",
+    "checkpoint_training_dataset": "CIRR",
+    "checkpoint_forwards_dataset": "CIRR",
+    "checkpoint_training_noise_pct": 0,
+    "evaluation_noise_pct": 0,
+    "status": "URL_VERIFIED",
+    "checkpoint_mapping_status": "VERIFIED_METADATA"
+   }
+  ]
+ }
+}

@@ -1,0 +1,7 @@
+stage multimodal: 0.05s for 64 -> 1982.7 q/s
+stage text_only_black_image: 0.03s for 64 -> 2070.7 q/s
+/home/heheboiz/data/cir/workbench/third_party/HABIT/lavis/models/blip2_models/blip2.py:42: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  return torch.cuda.amp.autocast(dtype=dtype)
+query forward b=32: 395ms 81.0 q/s
+query forward b=64: 809ms 79.1 q/s
+text_processor: 0.0 ms/q

@@ -1,0 +1,5 @@
+/home/heheboiz/data/cir/workbench/envs/encoder310-adapted/lib/python3.10/site-packages/timm/models/layers/__init__.py:49: FutureWarning: Importing from timm.models.layers is deprecated, please import via timm.layers
+  warnings.warn(f"Importing from {__name__} is deprecated, please import via timm.layers", FutureWarning)
+B008ZAUL8I size=(154, 200) mean|train_val|=0.1636 max|train_val|=3.83 train_draw_variability=3.827 same_seed_equal=True
+245600258X size=(342, 407) mean|train_val|=0.5033 max|train_val|=3.83 train_draw_variability=3.827 same_seed_equal=True
+B0037KIXK4 size=(342, 442) mean|train_val|=0.2054 max|train_val|=3.83 train_draw_variability=3.271 same_seed_equal=True

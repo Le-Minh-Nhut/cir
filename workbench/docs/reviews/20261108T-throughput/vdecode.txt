@@ -1,0 +1,4 @@
+workers=2: serial=4.69s parallel=1.02s speedup=4.6x bitwise_equal=True maxabs_delta=0.0
+workers=4: serial=4.69s parallel=0.75s speedup=6.2x bitwise_equal=True maxabs_delta=0.0
+workers=8: serial=4.69s parallel=0.87s speedup=5.4x bitwise_equal=True maxabs_delta=0.0
+serial baseline: 512 imgs in 4.69s = 109.1 img/s

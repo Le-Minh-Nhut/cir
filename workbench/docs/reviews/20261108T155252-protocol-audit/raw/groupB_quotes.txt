@@ -1,0 +1,163 @@
+### AirKnow/datasets.py:203-225
+        
+        test_targets_id = []
+        test_targets = []
+        if self.split == 'val-split':
+            for i in test_queries:
+                if i['source_img_id'] not in test_targets_id:
+                    test_targets_id.append(i['source_img_id'])
+                if i['target_img_id'] not in test_targets_id:
+                    test_targets_id.append(i['target_img_id'])
+
+            for i in test_targets_id:
+                out = {}
+                out['target_img_id'] = i
+                out['target_img_data'] = self.get_img(name + '_' + images[i])
+                test_targets.append(out)
+        elif self.split == 'original-split':
+            for id, image_name in enumerate(images):
+                test_targets_id.append(id)
+                out = {}
+                out['target_img_id'] = id
+                out['target_img_data'] = self.get_img(name + '_' + image_name)      
+                test_targets.append(out)
+        return test_queries, test_targets
+### AirKnow/test_BLIP2.py:145-155
+
+        
+            test_targets_id = []
+            for i in test_targets:
+                test_targets_id.append(i['target_img_id'])
+            for i, t in enumerate(test_queries):
+                sims[i, test_targets_id.index(t['source_img_id'])] = -10e10
+
+
+            nn_result = [np.argsort(-sims[i, :])[:50] for i in range(sims.shape[0])]
+
+### ConeSep/datasets.py:186-208
+        
+        test_targets_id = []
+        test_targets = []
+        if self.split == 'val-split':
+            for i in test_queries:
+                if i['source_img_id'] not in test_targets_id:
+                    test_targets_id.append(i['source_img_id'])
+                if i['target_img_id'] not in test_targets_id:
+                    test_targets_id.append(i['target_img_id'])
+
+            for i in test_targets_id:
+                out = {}
+                out['target_img_id'] = i
+                out['target_img_data'] = self.get_img(name + '_' + images[i])
+                test_targets.append(out)
+        elif self.split == 'original-split':
+            for id, image_name in enumerate(images):
+                test_targets_id.append(id)
+                out = {}
+                out['target_img_id'] = id
+                out['target_img_data'] = self.get_img(name + '_' + image_name)      
+                test_targets.append(out)
+        return test_queries, test_targets
+### ConeSep/test.py:62-72
+
+        
+        test_targets_id = []
+        for i in test_targets:
+            test_targets_id.append(i['target_img_id'])
+        for i, t in enumerate(test_queries):
+            sims[i, test_targets_id.index(t['source_img_id'])] = -10e10
+
+
+        nn_result = [np.argsort(-sims[i, :])[:50] for i in range(sims.shape[0])]
+
+### HABIT/datasets.py:190-212
+        
+        test_targets_id = []
+        test_targets = []
+        if self.split == 'val-split':
+            for i in test_queries:
+                if i['source_img_id'] not in test_targets_id:
+                    test_targets_id.append(i['source_img_id'])
+                if i['target_img_id'] not in test_targets_id:
+                    test_targets_id.append(i['target_img_id'])
+
+            for i in test_targets_id:
+                out = {}
+                out['target_img_id'] = i
+                out['target_img_data'] = self.get_img(name + '_' + images[i])
+                test_targets.append(out)
+        elif self.split == 'original-split':
+            for id, image_name in enumerate(images):
+                test_targets_id.append(id)
+                out = {}
+                out['target_img_id'] = id
+                out['target_img_data'] = self.get_img(name + '_' + image_name)      
+                test_targets.append(out)
+        return test_queries, test_targets
+### HABIT/test.py:145-155
+
+        
+        test_targets_id = []
+        for i in test_targets:
+            test_targets_id.append(i['target_img_id'])
+        for i, t in enumerate(test_queries):
+            sims[i, test_targets_id.index(t['source_img_id'])] = -10e10
+
+
+        nn_result = [np.argsort(-sims[i, :])[:50] for i in range(sims.shape[0])]
+
+### INTENT/datasets.py:188-210
+        
+        test_targets_id = []
+        test_targets = []
+        if self.split == 'val-split':
+            for i in test_queries:
+                if i['source_img_id'] not in test_targets_id:
+                    test_targets_id.append(i['source_img_id'])
+                if i['target_img_id'] not in test_targets_id:
+                    test_targets_id.append(i['target_img_id'])
+
+            for i in test_targets_id:
+                out = {}
+                out['target_img_id'] = i
+                out['target_img_data'] = self.get_img(name + '_' + images[i])
+                test_targets.append(out)
+        elif self.split == 'original-split':
+            for id, image_name in enumerate(images):
+                test_targets_id.append(id)
+                out = {}
+                out['target_img_id'] = id
+                out['target_img_data'] = self.get_img(name + '_' + image_name)      
+                test_targets.append(out)
+        return test_queries, test_targets
+### INTENT/test.py:144-154
+
+        
+        test_targets_id = []
+        for i in test_targets:
+            test_targets_id.append(i['target_img_id'])
+        for i, t in enumerate(test_queries):
+            sims[i, test_targets_id.index(t['source_img_id'])] = -10e10
+
+
+        nn_result = [np.argsort(-sims[i, :])[:50] for i in range(sims.shape[0])]
+
+### DCNet/data_loader/CE_dataset.py:21-29
+        self.category = category
+        self.image_dir = os.path.join(data_dir, "resized_images")
+        self.split = split
+        self.no_target = (split == 'val_trg' or split == 'test_trg')
+        self.text_feat = text_feat
+        if self.no_target:
+            self.data = read_json(Path(data_dir + f"/image_splits/split.{category}.{split.split('_')[0]}.json"))
+            self.data_length = len(self.data)
+        else:
+### DCNet/trainer/trainer_joint.py:213-220
+                        val=True
+                    )
+                    # Delete reference == target
+                    for ei, elem in enumerate(batch['meta_info']):
+                        score_matrix_comp[ei, id2targetidx[elem['candidate']]] = -10e10 
+                        score_matrix_corr[ei, id2targetidx[elem['candidate']]] = -10e10 
+                    # --- Sum --------------
+                    score_comp.append(score_matrix_comp)

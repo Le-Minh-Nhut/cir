@@ -1,0 +1,17 @@
+== csmcir/fashioniq_tuned_clip_best.pt 2720615859 torch-zip
+   prefix=tuned_clip_best n_top=2 kind=None
+   keys=['epoch', 'Blip2QformerCirAlignPromptTargetImageCaptionshiyan92']
+   errors=None
+   nested: Blip2QformerCirAlignPromptTargetImageCaptionshiyan92 n=861 sample=['query_tokens', 'temp', 'attn_temp', 'token_importance', 'visual_encoder.cls_token', 'visual_encoder.pos_embed', 'visual_encoder.patch_embed.proj.weight', 'visual_encoder.patch_embed.proj.bias']
+== intent/intent_fiq_0.2.pt 2722478522 torch-zip
+   prefix=model_epoch_5 n_top=None kind=Stub_Blip2QformerCir
+   keys=[]
+   errors=None
+== encoder/fashioniq.pt 631879365 torch-zip
+   prefix=fashioniq n_top=417 kind=None
+   keys=['loss_T', 'local_weight', 'backbone.clip.positional_embedding', 'backbone.clip.text_projection', 'backbone.clip.logit_scale']
+   errors=None
+== tme/fashioniq_0_best_model.pth 2728382104 torch-zip
+   prefix=best_model n_top=860 kind=None
+   keys=['query_tokens', 'temp', 'prompt_tokens', 'visual_encoder.cls_token', 'visual_encoder.pos_embed']
+   errors=None

@@ -1,0 +1,51 @@
+{
+ "device": "cpu",
+ "features": {
+  "cosine_train_vs_val": {
+   "max": 1.0,
+   "mean": 0.9276208877563477,
+   "min": 0.8261280059814453
+  },
+  "images": 64,
+  "max_abs_delta": 1.2528373748064041,
+  "mean_abs_delta": 0.13496107971573323,
+  "relative_delta_max": 33534.378531073446
+ },
+ "interpreter": "/home/heheboiz/data/cir/workbench/envs/encoder310-adapted/bin/python",
+ "open_clip": "unknown",
+ "pixels": {
+  "fraction_elements_differing": 0.4258990644597683,
+  "images": 64,
+  "images_with_any_difference": 64,
+  "max_abs_delta": 3.8269808292388916,
+  "mean_abs_delta": 0.24868646082674112
+ },
+ "rank_proxy": {
+  "fraction_top1_changed": 0.390625,
+  "gallery_images": 512,
+  "kind": "PROXY (self-consistent mini-gallery of real gallery images, gallery encoded with preprocess_val because no ENCODER gallery feature cache survives on this host)",
+  "max_top1_shift_positions": 234,
+  "queries": 64,
+  "queries_whose_full_order_changes": 63,
+  "queries_whose_top1_changes": 25
+ },
+ "stochasticity": {
+  "pairwise_identical": false,
+  "pairwise_max_abs_delta": [
+   3.8269808292388916,
+   3.8269808292388916,
+   3.8269808292388916
+  ],
+  "preprocess_val_pairwise_identical": true,
+  "same_image_repeats": 3,
+  "transform": "open_clip preprocess_train (ViT-B-32)"
+ },
+ "torch": "2.7.1+cu128",
+ "torch_cuda": "12.8",
+ "upstream_wiring": {
+  "FashionIQ.get_test_data": "source_img_data = get_img(..., stage=0); target_img_data = get_img(..., stage=1)",
+  "conclusion": "upstream reference = preprocess_train, gallery = preprocess_val; the workbench adapter applies preprocess_val to both",
+  "file": "workbench/third_party/ENCODER/datasets.py",
+  "transform_list": "evaluate_model.py: transform=[preprocess_train, preprocess_val]"
+ }
+}

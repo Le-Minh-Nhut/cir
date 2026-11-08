@@ -1,0 +1,386 @@
+[
+ {
+  "repo": "CSMCIR",
+  "file": "src/data_utils_csmcir.py",
+  "line": 419,
+  "kind": "gallery",
+  "text": "with open(base_path / 'fashionIQ_dataset' / 'image_splits' / f'split.{dress_type}.{split}.json') as f:",
+  "enclosing": [
+   "__init__",
+   375,
+   422
+  ]
+ },
+ {
+  "repo": "CSMCIR",
+  "file": "src/validate_blip_csmcir.py",
+  "line": 24,
+  "kind": "ranking",
+  "text": "def compute_fiq_val_metrics(relative_val_dataset: FashionIQDataset, blip_model, index_features: torch.tensor,",
+  "enclosing": [
+   "compute_fiq_val_metrics",
+   24,
+   57
+  ]
+ },
+ {
+  "repo": "MTST_PTHA/MTST_PTHA",
+  "file": "src/data_utils.py",
+  "line": 164,
+  "kind": "gallery",
+  "text": "# get the image names",
+  "enclosing": [
+   "__init__",
+   123,
+   174
+  ]
+ },
+ {
+  "repo": "MTST_PTHA/MTST_PTHA",
+  "file": "src/validate_blip.py",
+  "line": 24,
+  "kind": "ranking",
+  "text": "def compute_fiq_val_metrics(relative_val_dataset: FashionIQDataset, blip_model, index_features: torch.tensor,",
+  "enclosing": [
+   "compute_fiq_val_metrics",
+   24,
+   57
+  ]
+ },
+ {
+  "repo": "CLIP4Cir",
+  "file": "src/data_utils.py",
+  "line": 146,
+  "kind": "gallery",
+  "text": "with open(base_path / 'fashionIQ_dataset' / 'image_splits' / f'split.{dress_type}.{split}.json') as f:",
+  "enclosing": [
+   "__init__",
+   111,
+   149
+  ]
+ },
+ {
+  "repo": "CLIP4Cir",
+  "file": "src/validate.py",
+  "line": 21,
+  "kind": "ranking",
+  "text": "def compute_fiq_val_metrics(relative_val_dataset: FashionIQDataset, clip_model: CLIP, index_features: torch.tensor,",
+  "enclosing": [
+   "compute_fiq_val_metrics",
+   21,
+   57
+  ]
+ },
+ {
+  "repo": "SPRC",
+  "file": "src/data_utils.py",
+  "line": 155,
+  "kind": "gallery",
+  "text": "with open(base_path / 'fashionIQ_dataset' / 'image_splits' / f'split.{dress_type}.{split}.json') as f:",
+  "enclosing": [
+   "__init__",
+   120,
+   158
+  ]
+ },
+ {
+  "repo": "SPRC",
+  "file": "src/validate_blip.py",
+  "line": 24,
+  "kind": "ranking",
+  "text": "def compute_fiq_val_metrics(relative_val_dataset: FashionIQDataset, blip_model, index_features: torch.tensor,",
+  "enclosing": [
+   "compute_fiq_val_metrics",
+   24,
+   57
+  ]
+ },
+ {
+  "repo": "TME",
+  "file": "src/data.py",
+  "line": 175,
+  "kind": "gallery",
+  "text": "with open(self.path / 'image_splits' / f'split.{dress_type}.{split}.json') as f:",
+  "enclosing": [
+   "__init__",
+   133,
+   179
+  ]
+ },
+ {
+  "repo": "TME",
+  "file": "src/precompute_evaluation.py",
+  "line": 83,
+  "kind": "mask",
+  "text": "if category == 'CIRR': # only for cirr, delete the reference image from current query.",
+  "enclosing": [
+   "compute_metric_features",
+   27,
+   134
+  ]
+ },
+ {
+  "repo": "AirKnow",
+  "file": "datasets.py",
+  "line": 218,
+  "kind": "gallery",
+  "text": "elif self.split == 'original-split':",
+  "enclosing": [
+   "get_test_data",
+   181,
+   225
+  ]
+ },
+ {
+  "repo": "AirKnow",
+  "file": "test_BLIP2.py",
+  "line": 151,
+  "kind": "mask",
+  "text": "sims[i, test_targets_id.index(t['source_img_id'])] = -10e10",
+  "enclosing": [
+   "test",
+   9,
+   177
+  ]
+ },
+ {
+  "repo": "ConeSep",
+  "file": "datasets.py",
+  "line": 201,
+  "kind": "gallery",
+  "text": "elif self.split == 'original-split':",
+  "enclosing": [
+   "get_test_data",
+   164,
+   208
+  ]
+ },
+ {
+  "repo": "ConeSep",
+  "file": "test.py",
+  "line": 68,
+  "kind": "mask",
+  "text": "sims[i, test_targets_id.index(t['source_img_id'])] = -10e10",
+  "enclosing": [
+   "test",
+   9,
+   84
+  ]
+ },
+ {
+  "repo": "HABIT",
+  "file": "datasets.py",
+  "line": 205,
+  "kind": "gallery",
+  "text": "elif self.split == 'original-split':",
+  "enclosing": [
+   "get_test_data",
+   168,
+   212
+  ]
+ },
+ {
+  "repo": "HABIT",
+  "file": "test.py",
+  "line": 151,
+  "kind": "mask",
+  "text": "sims[i, test_targets_id.index(t['source_img_id'])] = -10e10",
+  "enclosing": [
+   "test",
+   9,
+   177
+  ]
+ },
+ {
+  "repo": "INTENT",
+  "file": "datasets.py",
+  "line": 203,
+  "kind": "gallery",
+  "text": "elif self.split == 'original-split':",
+  "enclosing": [
+   "get_test_data",
+   166,
+   210
+  ]
+ },
+ {
+  "repo": "INTENT",
+  "file": "test.py",
+  "line": 150,
+  "kind": "mask",
+  "text": "sims[i, test_targets_id.index(t['source_img_id'])] = -10e10",
+  "enclosing": [
+   "test",
+   9,
+   176
+  ]
+ },
+ {
+  "repo": "DCNet",
+  "file": "data_loader/CE_dataset.py",
+  "line": 24,
+  "kind": "gallery",
+  "text": "self.no_target = (split == 'val_trg' or split == 'test_trg')",
+  "enclosing": [
+   "__init__",
+   14,
+   39
+  ]
+ },
+ {
+  "repo": "DCNet",
+  "file": "trainer/trainer_joint.py",
+  "line": 215,
+  "kind": "mask",
+  "text": "# Delete reference == target",
+  "enclosing": [
+   "_valid_epoch",
+   133,
+   253
+  ]
+ },
+ {
+  "repo": "HINT",
+  "file": "datasets.py",
+  "line": 154,
+  "kind": "gallery",
+  "text": "test_targets_id = []",
+  "enclosing": [
+   "get_test_data",
+   131,
+   166
+  ]
+ },
+ {
+  "repo": "HINT",
+  "file": "test.py",
+  "line": 83,
+  "kind": "mask",
+  "text": "sims[i, test_targets_id.index(t['source_img_id'])] = -10e10",
+  "enclosing": [
+   "test",
+   11,
+   109
+  ]
+ },
+ {
+  "repo": "ENCODER",
+  "file": "datasets.py",
+  "line": 185,
+  "kind": "gallery",
+  "text": "if self.split == 'val-split':",
+  "enclosing": [
+   "get_test_data",
+   158,
+   204
+  ]
+ },
+ {
+  "repo": "ENCODER",
+  "file": "test.py",
+  "line": 68,
+  "kind": "mask",
+  "text": "sims[i, test_targets_id.index(t['source_img_id'])] = -10e10",
+  "enclosing": [
+   "test",
+   6,
+   83
+  ]
+ },
+ {
+  "repo": "PAIR",
+  "file": "data/datasets.py",
+  "line": 148,
+  "kind": "gallery",
+  "text": "if self.split == 'val-split':",
+  "enclosing": [
+   "get_test_data",
+   117,
+   167
+  ]
+ },
+ {
+  "repo": "PAIR",
+  "file": "test.py",
+  "line": 68,
+  "kind": "mask",
+  "text": "sims[i, test_targets_id.index(t['source_img_id'])] = -10e10",
+  "enclosing": [
+   "test",
+   6,
+   83
+  ]
+ },
+ {
+  "repo": "CLVCNet",
+  "file": "datasets.py",
+  "line": 233,
+  "kind": "gallery",
+  "text": "def get_test_targets(self):       # \u6240\u6709\u7684image",
+  "enclosing": [
+   "get_test_targets",
+   233,
+   257
+  ]
+ },
+ {
+  "repo": "CLVCNet",
+  "file": "test.py",
+  "line": 135,
+  "kind": "mask",
+  "text": "sims[i, test_targets_id.index(t['source_img_id'])] = -10e10",
+  "enclosing": [
+   "test",
+   6,
+   149
+  ]
+ },
+ {
+  "repo": "TGCIR",
+  "file": "datasets.py",
+  "line": 148,
+  "kind": "gallery",
+  "text": "test_targets_id = []",
+  "enclosing": [
+   "get_test_data",
+   125,
+   160
+  ]
+ },
+ {
+  "repo": "TGCIR",
+  "file": "test.py",
+  "line": 67,
+  "kind": "mask",
+  "text": "sims[i, test_targets_id.index(t['source_img_id'])] = -10e10",
+  "enclosing": [
+   "test",
+   6,
+   82
+  ]
+ },
+ {
+  "repo": "LIMN/LIMN",
+  "file": "datasets.py",
+  "line": 158,
+  "kind": "gallery",
+  "text": "test_targets_id = []",
+  "enclosing": [
+   "get_test_data",
+   136,
+   170
+  ]
+ },
+ {
+  "repo": "LIMN/LIMN",
+  "file": "test.py",
+  "line": 82,
+  "kind": "mask",
+  "text": "sims[i, test_targets_id.index(t['source_img_id'])] = -10e10",
+  "enclosing": [
+   "test",
+   23,
+   97
+  ]
+ }
+]

@@ -1,0 +1,38 @@
+diff -r a/workbench/composition/runner.py b/workbench/composition/runner.py
+--- a/workbench/composition/runner.py	2026-11-08 15:42:48.666915616 +0700
++++ b/workbench/composition/runner.py	2026-11-08 15:42:48.667420312 +0700
+@@ -343,6 +343,16 @@
+         return None
+ 
+ 
++def _memmap_metadata_shape(path: Path) -> tuple[int, ...] | None:
++    """The recorded shape of a cached matrix, or None when the sidecar is missing/unusable."""
++    try:
++        metadata = json.loads(path.with_suffix(path.suffix + ".json").read_text(encoding="utf-8"))
++        shape = metadata.get("shape")
++        return tuple(int(value) for value in shape) if shape else None
++    except (OSError, ValueError, TypeError, json.JSONDecodeError):
++        return None
++
++
+ def _write_memmap_metadata(path: Path, fingerprint: str, value: np.ndarray) -> None:
+     _atomic_json(path.with_suffix(path.suffix + ".json"),
+                  {"fingerprint": fingerprint, "shape": list(value.shape), "dtype": str(value.dtype)})
+@@ -404,8 +414,16 @@
+ def _encode_gallery(adapter: Any, image_paths: Sequence[Path], scope: str | None,
+                     destination: Path, fingerprint: str, batch_size: int,
+                     remaining_scopes: int, query_count: int, condition_count: int) -> tuple[np.memmap, dict[str, int]]:
+-    cached = _load_memmap(destination, fingerprint)
++    # The sidecar records the shape this cache was written with; a truncated or partially
++    # overwritten .npy keeps its .json and would otherwise be reused at whatever length it now
++    # has. `_encode_queries` already passes its expected shape here; the gallery path must too.
++    metadata_shape = _memmap_metadata_shape(destination)
++    cached = _load_memmap(destination, fingerprint, metadata_shape)
+     if cached is not None:
++        if metadata_shape is not None and cached.shape[0] != len(image_paths):
++            raise ValueError(
++                f"gallery cache {destination} holds {cached.shape[0]} rows, "
++                f"but this run has {len(image_paths)} gallery identities")
+         return cached, {"reused": 1, "projected_bytes": destination.stat().st_size}
+     destination.parent.mkdir(parents=True, exist_ok=True)
+     mapped = None

@@ -1,0 +1,10 @@
+slice images: 2000
+/home/heheboiz/data/cir/workbench/third_party/HABIT/lavis/models/blip2_models/blip2.py:42: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  return torch.cuda.amp.autocast(dtype=dtype)
+threads=20  fp32  bs=64   113.77s    17.6 img/s peak_alloc=  3484MiB peak_reserved=  3958MiB
+threads=20  fp32  bs=128  110.81s    18.0 img/s peak_alloc=  4350MiB peak_reserved=  5066MiB
+threads=20  fp32  bs=256  111.77s    17.9 img/s peak_alloc=  6082MiB peak_reserved=  7306MiB
+threads=20  fp32  bs=512  111.15s    18.0 img/s peak_alloc=  9544MiB peak_reserved= 11788MiB
+threads=20  bf16  bs=64   112.80s    17.7 img/s peak_alloc=  3484MiB peak_reserved=  3976MiB
+threads=20  bf16  bs=128  116.84s    17.1 img/s peak_alloc=  4350MiB peak_reserved=  5066MiB
+threads=20  bf16  bs=256  123.72s    16.2 img/s peak_alloc=  6082MiB peak_reserved=  7306MiB

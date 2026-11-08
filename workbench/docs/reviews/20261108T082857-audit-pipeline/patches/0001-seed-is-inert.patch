@@ -1,0 +1,60 @@
+diff -r a/workbench/composition/runner.py b/workbench/composition/runner.py
+--- a/workbench/composition/runner.py	2026-11-08 15:42:52.841975071 +0700
++++ b/workbench/composition/runner.py	2026-11-08 15:42:57.495969228 +0700
+@@ -788,6 +788,30 @@
+     }
+ 
+ 
++def _seed_generators(seed: int) -> None:
++    """Make the global generators deterministic for this run, then stop seeding.
++
++    Scope is deliberate: only the composition run's own draws. Callers that seeded deliberately
++    before calling `run_composition` are overwritten, because `seed` is a declared identity field
++    and a declared field that does not control its variable is worse than no field at all.
++    """
++    import random
++
++    random.seed(seed)
++    try:
++        import numpy as _np
++
++        _np.random.seed(seed)
++    except Exception:  # numpy is a hard dependency, but a broken install must not mask the run
++        pass
++    try:
++        import torch as _torch
++
++        _torch.manual_seed(seed)
++    except Exception:  # the controller need not have torch; workers are separate processes
++        pass
++
++
+ def run_composition(data: Any, model_specs: Sequence[ModelSpec], config: Any, *,
+                     subsets: Sequence[str], batch_size: int = 32, smoke: int | None = None,
+                     resume: bool = False, conditions: Sequence[str] = CONDITIONS,
+@@ -813,6 +837,12 @@
+         raise ValueError("batch_size must be positive")
+     if smoke is not None and smoke < 1:
+         raise ValueError("smoke query limit must be positive")
++    # `seed` is bound into `identity`, so it MUST actually control the randomness it claims to.
++    # It used to be hashed and then never applied: a changed `--seed` minted a new run_id and
++    # produced byte-identical results, and the RNG state that really produced the features was
++    # unbound. Seed the generators here, in the controller, so controller-side scoring and any
++    # adapter that draws from the global generators see a deterministic state.
++    _seed_generators(seed)
+     if not conditions or any(item not in CONDITIONS for item in conditions):
+         raise ValueError(f"conditions must be selected from {CONDITIONS}")
+     from workbench.composition.topk import normalise_depth, open_export, abort_export, close_export
+diff -r a/workbench/scripts/composition_eval.py b/workbench/scripts/composition_eval.py
+--- a/workbench/scripts/composition_eval.py	2026-11-08 15:42:52.842617004 +0700
++++ b/workbench/scripts/composition_eval.py	2026-11-08 15:42:57.496256463 +0700
+@@ -50,7 +50,8 @@
+     parser.add_argument("--plan", action="store_true", help="show work and paths without writing state")
+     parser.add_argument("--prepare-data", action="store_true",
+                         help="verify release and inventory missing gallery/reference/positive images")
+-    parser.add_argument("--seed", type=int, default=0, help="seed recorded for deterministic summaries")
++    parser.add_argument("--seed", type=int, default=0,
++                        help="seed applied to the run's global generators and bound into the run id")
+     parser.add_argument("--topk-depth", type=int, default=None,
+                         help="persist candidate Top-K (default: off; costs one small JSONL per "
+                              "condition). 50 covers the UI's Top-10 and Top-50 views. Implies "

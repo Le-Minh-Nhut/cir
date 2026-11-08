@@ -1,0 +1,247 @@
+======== AirKnow
+{
+ "requested_url": "https://github.com/iLearn-Lab/CVPR26-Air-Know",
+ "resolved_url": "git@github.com:iLearn-Lab/CVPR26-Air-Know",
+ "upstream_commit": "6ab6fa95b746f85b08eea4cb66eb51448bce99b7",
+ "local_fixes": [
+  {
+   "path": "data_utils.py",
+   "origin": "model_recovery",
+   "upstream_sha256": "c6a90c6d7a57bbcc9604e0fb2b24875289909a6d8b727dfcb11597660e1843ca",
+   "delivered_sha256": "878d8cbb73328685245460f67d7790e54a7b034e7d4603a44ab3c6478788202a"
+  },
+  {
+   "path": "lavis/models/__init__.py",
+   "origin": "model_recovery",
+   "upstream_sha256": "0a26009a09281d23df56579b4151ac7edfb272e75182595c0dfb910bf2d00052",
+   "delivered_sha256": "0526db7b4c1790b2987c0dd500da10043a2e92dd0200694b4a5788c6dfa3c9b5"
+  }
+ ],
+ "excluded_by_vendoring": [
+  "lavis/.ipynb_checkpoints/__init__-checkpoint.py",
+  "lavis/models/.ipynb_checkpoints/__init__-checkpoint.py",
+  "lavis/models/.ipynb_checkpoints/base_model-checkpoint.py",
+  "lavis/models/.ipynb_checkpoints/beats_encoder-checkpoint.py",
+  "lavis/models/.ipynb_checkpoints/clip_vit-checkpoint.py",
+  "lavis/models/.ipynb_checkpoints/eva_vit-checkpoint.py",
+  "lavis/models/.ipynb_checkpoints/med-checkpoint.py",
+  "lavis/models/.ipynb_checkpoints/vit-checkpoint.py",
+  "lavis/models/alpro_models/.ipynb_checkpoints/alpro_retrieval-checkpoint.py",
+  "lavis/models/blip2_models/.ipynb_checkpoints/Qwen-checkpoint.py",
+  "lavis/models/blip2_models/.ipynb_checkpoints/blip2-checkpoint.py",
+  "lavis/models/blip2_models/.ipynb_checkpoints/blip2_cir-checkpoint.py",
+  "lavis/models/blip2_models/.ipynb_checkpoints/blip2_image_text_matching-checkpoint.py",
+  "lavis/models/blip_diffusion_models/.ipynb_checkpoints/modeling_ctx_clip-checkpoint.py",
+  "lavis/models/blip_diffusion_models/.ipynb_checkpoints/ptp_utils-checkpoint.py",
+  "lavis/models/blip_models/.ipynb_checkpoints/blip_cir-checkpoint.py",
+  "lavis/projects/xinstruct_blip/eval/discrn/audio_video_describe_proj copy.yaml"
+ ]
+}
+======== MTST_PTHA
+{
+ "requested_url": "https://github.com/zyinan99/MTST_PTHA",
+ "resolved_url": "https://github.com/zyinan99/MTST_PTHA",
+ "upstream_commit": "6a02ee4763fc2260b6abfb18be78853facb91d86",
+ "local_fixes": [
+  {
+   "path": ".gitattributes",
+   "origin": "coordinator",
+   "justification": "upstream's `* text=auto` normalizes line endings on checkout, which would rewrite the 124 vendored files that carry CRLF and leave them failing their own recorded digests; replaced with `* -text -diff`",
+   "upstream_sha256": "1a1dbe176bc233b499d35a57db7513f2941c99ab9759f177830c9149be99005b",
+   "delivered_sha256": "f864bd73f2ff7555faadbc25023d8265123035d51495e065fc233586ffb56905"
+  },
+  {
+   "path": "MTST_PTHA/src/data_utils.py",
+   "origin": "coordinator",
+   "justification": "data_utils.py: base_path reads MTST_DATA_ROOT with the upstream literal as fallback",
+   "upstream_sha256": "bfcce728c5fa54b843e3a0e9009b85aba0b017370b4d147fc4206365c0543935",
+   "delivered_sha256": "ac933197e817dec27ee47fcf28c32534198b67cee6ba9f8d663e12d00e7d5d3f"
+  },
+  {
+   "path": "MTST_PTHA/src/lavis/models/__init__.py",
+   "origin": "coordinator",
+   "justification": "lavis/models/__init__.py: 1 unguarded import of a module absent from the pinned revision is guarded, so the package registers blip2_tgir_ce_sim",
+   "upstream_sha256": "fe9449e56b99e5fdf081c47dfbac05dc958f1d0a27f6fa7559abee45fd825bfa",
+   "delivered_sha256": "6a1feee8364a2636160bbdc0da14e843561265adc9dfc6410f8736ab06f307dd"
+  }
+ ],
+ "excluded_by_vendoring": [
+  "MTST_PTHA/src/lavis/configs/models/blip2/blip2_instruct_vicuna7b copy.yaml"
+ ]
+}
+======== ENCODER
+{
+ "requested_url": "https://github.com/iLearn-Lab/AAAI25-ENCODER",
+ "resolved_url": "git@github.com:iLearn-Lab/AAAI25-ENCODER",
+ "upstream_commit": "29a2a31d6a56f677bf450c3be7cdaef423fb7018",
+ "local_fixes": [
+  {
+   "path": "datasets1.py",
+   "origin": "model_recovery_addition",
+   "upstream_sha256": null,
+   "delivered_sha256": "05b2ee20228c3bafb757785f14789f0855c6c0128c34837020b88e479a682dc7"
+  },
+  {
+   "path": "evaluate_model.py",
+   "origin": "model_recovery",
+   "upstream_sha256": "8a147bd1474f18651117fb4712c600b58c1d894f130e1b3f509894816f2969e9",
+   "delivered_sha256": "e01623e35cdee23cf976b4dd359728feb301d81fc2efe09a91f3a9e4a29f932f"
+  }
+ ],
+ "excluded_by_vendoring": []
+}
+======== CLVCNet
+{
+ "requested_url": "https://github.com/iLearn-Lab/SIGIR21-CLVC-Net",
+ "resolved_url": "git@github.com:iLearn-Lab/SIGIR21-CLVC-Net",
+ "upstream_commit": "bd9b6889489806cb60676597880f91d918b279cb",
+ "local_fixes": [
+  {
+   "path": "resnet.py",
+   "origin": "model_recovery",
+   "upstream_sha256": "8eb6ad211ff91372e61c41f408f6adefef00c7757e9c6eef3144689fbe31cdf1",
+   "delivered_sha256": "de1fc79597adff1a73fa9e1ddd6a68ed18a2ee2a76cd1d7bd206ad64535fbddd"
+  }
+ ],
+ "excluded_by_vendoring": []
+}
+======== PAIR
+{
+ "requested_url": "https://github.com/iLearn-Lab/ICASSP25-PAIR",
+ "resolved_url": "git@github.com:iLearn-Lab/ICASSP25-PAIR",
+ "upstream_commit": "bfb0b98cdb4c44f6b9190baaa84d783a77dd888f",
+ "local_fixes": [
+  {
+   "path": "models/MHTransformer_rev.py",
+   "origin": "model_recovery_addition",
+   "upstream_sha256": null,
+   "delivered_sha256": "d683df18db253f1dada1ec6ba0a9788f728da7d7dec6c11db347393eb5b26ce6"
+  }
+ ],
+ "excluded_by_vendoring": []
+}
+======== TME
+{
+ "requested_url": "https://github.com/li-shuxian/TME",
+ "resolved_url": "git@github.com:li-shuxian/TME",
+ "upstream_commit": "394aad79df2c104feb32a2c96132582012765062",
+ "local_fixes": [
+  {
+   "path": "precompute.sh",
+   "origin": "coordinator",
+   "justification": "Removed upstream's stray background CIRR nohup command; the documented foreground precompute command is explicit and cannot outlive its caller.",
+   "upstream_sha256": "32bfd7ea52af9d5a17880d77300b61fbb62a203d5eb7a6d9f077533a62443a5f",
+   "delivered_sha256": "ccf16712e8b4d9cdceb78570add73c7806e42199e5150802d0bec6c39d70a0b9"
+  },
+  {
+   "path": "src/utility.py",
+   "origin": "coordinator",
+   "justification": "Check CUDA availability before selecting a device and fail with an explicit CUDA prerequisite instead of invoking set_device on CPU-only hosts.",
+   "upstream_sha256": "6c467eadfdfa4fd76e6a3951838cb1f5241265908d59b2a2a4abf95562cd9e61",
+   "delivered_sha256": "3d2c92dba91f2bbf104fd4fb91e6ae256f0c28615ef645652fe369cb8e1a34ba"
+  }
+ ],
+ "excluded_by_vendoring": null
+}
+======== CSMCIR
+{
+ "requested_url": "https://github.com/qzp2018/CSMCIR",
+ "resolved_url": "git@github.com:qzp2018/CSMCIR",
+ "upstream_commit": "774f94e2076ff17ea91703a6239d2a08f0e1a44e",
+ "local_fixes": [],
+ "excluded_by_vendoring": [
+  "src/lavis/configs/models/blip2/blip2_instruct_vicuna7b copy.yaml",
+  "src/lavis/models/blip2_models/.ipynb_checkpoints/blip2_qformer_cir_align_prompt_target_image_caption_shiyan88-checkpoint.py"
+ ]
+}
+======== DCNet
+{
+ "requested_url": "https://github.com/ozmig77/dcnet",
+ "resolved_url": "git@github.com:ozmig77/dcnet",
+ "upstream_commit": "68c79d38569f01ca39c3b4ea641b3b7eb2ccb5fb",
+ "local_fixes": [],
+ "excluded_by_vendoring": []
+}
+======== CLIP4Cir
+{
+ "requested_url": "https://github.com/ABaldrati/CLIP4Cir",
+ "resolved_url": "git@github.com:ABaldrati/CLIP4Cir",
+ "upstream_commit": "dfed9f748a8a4d05abf613164e06d59b22dbdf13",
+ "local_fixes": [],
+ "excluded_by_vendoring": []
+}
+======== SPRC
+{
+ "requested_url": "https://github.com/chunmeifeng/SPRC",
+ "resolved_url": "git@github.com:chunmeifeng/SPRC",
+ "upstream_commit": "2935a5397732260d1db6fa577e5926f963e36f0f",
+ "local_fixes": [],
+ "excluded_by_vendoring": [
+  "src/lavis/configs/models/blip2/blip2_instruct_vicuna7b copy.yaml"
+ ]
+}
+======== HINT
+{
+ "requested_url": "https://github.com/iLearn-Lab/ICASSP26-HINT",
+ "resolved_url": "git@github.com:iLearn-Lab/ICASSP26-HINT",
+ "upstream_commit": "bec50b6c8c19111893b617979502b948d1cea5b2",
+ "local_fixes": [],
+ "excluded_by_vendoring": [
+  ".idea/.gitignore",
+  ".idea/HINT-FINAL.iml",
+  ".idea/inspectionProfiles/Project_Default.xml",
+  ".idea/inspectionProfiles/profiles_settings.xml",
+  ".idea/misc.xml",
+  ".idea/modules.xml",
+  ".idea/vcs.xml",
+  "lavis/projects/xinstruct_blip/eval/discrn/audio_video_describe_proj copy.yaml"
+ ]
+}
+======== HABIT
+{
+ "requested_url": "https://github.com/iLearn-Lab/AAAI26-HABIT",
+ "resolved_url": "git@github.com:iLearn-Lab/AAAI26-HABIT",
+ "upstream_commit": "6ddc2cd63eac1f65693f4e821c34fb3b42aee306",
+ "local_fixes": [],
+ "excluded_by_vendoring": [
+  "lavis/projects/xinstruct_blip/eval/discrn/audio_video_describe_proj copy.yaml"
+ ]
+}
+======== INTENT
+{
+ "requested_url": "https://github.com/iLearn-Lab/AAAI26-INTENT",
+ "resolved_url": "git@github.com:iLearn-Lab/AAAI26-INTENT",
+ "upstream_commit": "2a75fc6f57d1a036bf3167a7fe1d2cee072f51f3",
+ "local_fixes": [],
+ "excluded_by_vendoring": [
+  "lavis/.ipynb_checkpoints/Untitled-checkpoint.ipynb",
+  "lavis/models/blip_models/.ipynb_checkpoints/blip_cir-checkpoint.py",
+  "lavis/projects/xinstruct_blip/eval/discrn/audio_video_describe_proj copy.yaml"
+ ]
+}
+======== ConeSep
+{
+ "requested_url": "https://github.com/Lee-zixu/ConeSep",
+ "resolved_url": "git@github.com:Lee-zixu/ConeSep",
+ "upstream_commit": "bd4bf629ebe68045c1a54dcc61e4a3ea65f8759b",
+ "local_fixes": [],
+ "excluded_by_vendoring": [
+  "lavis/projects/xinstruct_blip/eval/discrn/audio_video_describe_proj copy.yaml"
+ ]
+}
+======== LIMN
+{
+ "requested_url": "https://github.com/iLearn-Lab/TPAMI24-LIMN",
+ "resolved_url": "git@github.com:iLearn-Lab/TPAMI24-LIMN",
+ "upstream_commit": "7d7bc9b116f594a65ac22457491edf28a88d3c3e",
+ "local_fixes": [],
+ "excluded_by_vendoring": []
+}
+======== TGCIR
+{
+ "requested_url": "https://github.com/iLearn-Lab/MM23-TG-CIR",
+ "resolved_url": "git@github.com:iLearn-Lab/MM23-TG-CIR",
+ "upstream_commit": "65fa78eaf8cabe8197fcc22ccab42207c591bdee",
+ "local_fixes": [],
+ "excluded_by_vendoring": []
+}

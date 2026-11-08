@@ -1,0 +1,2 @@
+modes over 4000 sample: {'RGB': 3998, 'L': 2}
+non-RGB files whose "black" is NOT black after convert(RGB): 0

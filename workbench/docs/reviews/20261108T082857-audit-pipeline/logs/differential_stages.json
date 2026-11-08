@@ -1,0 +1,47 @@
+{
+  "axes": {
+    "A1_score_batch_invariance": {
+      "batch1_vs_full_exact_equal": false,
+      "batch1_vs_full_max_abs": 6.556510925292969e-07,
+      "batch32_vs_full_exact_equal": true,
+      "batch32_vs_full_max_abs": 0.0,
+      "gallery": 74381,
+      "rows": 8,
+      "verdict": "DIVERGENT_WITHIN_TOLERANCE"
+    },
+    "A2_rank_vs_bruteforce": {
+      "disagreements": [],
+      "targets_checked": 8,
+      "verdict": "IDENTICAL"
+    },
+    "A3_duplicate_ties": {
+      "cases": [],
+      "query_rows_with_exact_duplicate_gallery_rows": 0,
+      "verdict": "IDENTICAL"
+    },
+    "A4_repeat_determinism": {
+      "exact_equal": true,
+      "max_abs": 0.0,
+      "verdict": "IDENTICAL"
+    },
+    "A5_metric_order_invariance": {
+      "cohort_forward": 6003,
+      "cohort_reversed": 6003,
+      "exact_equal": true,
+      "gap_forward": 0.388704727214254,
+      "gap_reversed": 0.388704727214254,
+      "max_abs_delta": 0.0
+    }
+  },
+  "ranks_source": "workbench/artifacts/composition/runs/497c25c57fbeba885ecfb9d1/ranks/habit_fiq_n02.json",
+  "tolerances": {
+    "repeat": {
+      "atol": 0.0,
+      "rtol": 0.0
+    },
+    "score_chunked": {
+      "atol": 1e-06,
+      "rtol": 0.0
+    }
+  }
+}

@@ -1,0 +1,282 @@
+{
+ "family": "encoder",
+ "images": 512,
+ "interpreter": "/home/heheboiz/data/cir/workbench/envs/encoder310-adapted/bin/python",
+ "numpy": "1.26.4",
+ "results": [
+  {
+   "batch": 1,
+   "bit_identical": true,
+   "bytes_differing": 0,
+   "images": 512,
+   "max_abs_delta": 0.0,
+   "max_rel_delta": 0.0,
+   "sha256": "4f6a14f9f6384f61a56b504e165b62e122cfc124eb60d02666416535edf72d95",
+   "shape": [
+    512,
+    3,
+    224,
+    224
+   ],
+   "torch_threads": 1,
+   "workers": 1
+  },
+  {
+   "batch": 1,
+   "bit_identical": true,
+   "bytes_differing": 0,
+   "images": 512,
+   "max_abs_delta": 0.0,
+   "max_rel_delta": 0.0,
+   "sha256": "4f6a14f9f6384f61a56b504e165b62e122cfc124eb60d02666416535edf72d95",
+   "shape": [
+    512,
+    3,
+    224,
+    224
+   ],
+   "torch_threads": 2,
+   "workers": 2
+  },
+  {
+   "batch": 1,
+   "bit_identical": true,
+   "bytes_differing": 0,
+   "images": 512,
+   "max_abs_delta": 0.0,
+   "max_rel_delta": 0.0,
+   "sha256": "4f6a14f9f6384f61a56b504e165b62e122cfc124eb60d02666416535edf72d95",
+   "shape": [
+    512,
+    3,
+    224,
+    224
+   ],
+   "torch_threads": 4,
+   "workers": 4
+  },
+  {
+   "batch": 1,
+   "bit_identical": true,
+   "bytes_differing": 0,
+   "images": 512,
+   "max_abs_delta": 0.0,
+   "max_rel_delta": 0.0,
+   "sha256": "4f6a14f9f6384f61a56b504e165b62e122cfc124eb60d02666416535edf72d95",
+   "shape": [
+    512,
+    3,
+    224,
+    224
+   ],
+   "torch_threads": 8,
+   "workers": 8
+  },
+  {
+   "batch": 32,
+   "bit_identical": true,
+   "bytes_differing": 0,
+   "images": 512,
+   "max_abs_delta": 0.0,
+   "max_rel_delta": 0.0,
+   "sha256": "4f6a14f9f6384f61a56b504e165b62e122cfc124eb60d02666416535edf72d95",
+   "shape": [
+    512,
+    3,
+    224,
+    224
+   ],
+   "torch_threads": 1,
+   "workers": 1
+  },
+  {
+   "batch": 32,
+   "bit_identical": true,
+   "bytes_differing": 0,
+   "images": 512,
+   "max_abs_delta": 0.0,
+   "max_rel_delta": 0.0,
+   "sha256": "4f6a14f9f6384f61a56b504e165b62e122cfc124eb60d02666416535edf72d95",
+   "shape": [
+    512,
+    3,
+    224,
+    224
+   ],
+   "torch_threads": 2,
+   "workers": 2
+  },
+  {
+   "batch": 32,
+   "bit_identical": true,
+   "bytes_differing": 0,
+   "images": 512,
+   "max_abs_delta": 0.0,
+   "max_rel_delta": 0.0,
+   "sha256": "4f6a14f9f6384f61a56b504e165b62e122cfc124eb60d02666416535edf72d95",
+   "shape": [
+    512,
+    3,
+    224,
+    224
+   ],
+   "torch_threads": 4,
+   "workers": 4
+  },
+  {
+   "batch": 32,
+   "bit_identical": true,
+   "bytes_differing": 0,
+   "images": 512,
+   "max_abs_delta": 0.0,
+   "max_rel_delta": 0.0,
+   "sha256": "4f6a14f9f6384f61a56b504e165b62e122cfc124eb60d02666416535edf72d95",
+   "shape": [
+    512,
+    3,
+    224,
+    224
+   ],
+   "torch_threads": 8,
+   "workers": 8
+  },
+  {
+   "batch": 64,
+   "bit_identical": true,
+   "bytes_differing": 0,
+   "images": 512,
+   "max_abs_delta": 0.0,
+   "max_rel_delta": 0.0,
+   "sha256": "4f6a14f9f6384f61a56b504e165b62e122cfc124eb60d02666416535edf72d95",
+   "shape": [
+    512,
+    3,
+    224,
+    224
+   ],
+   "torch_threads": 1,
+   "workers": 1
+  },
+  {
+   "batch": 64,
+   "bit_identical": true,
+   "bytes_differing": 0,
+   "images": 512,
+   "max_abs_delta": 0.0,
+   "max_rel_delta": 0.0,
+   "sha256": "4f6a14f9f6384f61a56b504e165b62e122cfc124eb60d02666416535edf72d95",
+   "shape": [
+    512,
+    3,
+    224,
+    224
+   ],
+   "torch_threads": 2,
+   "workers": 2
+  },
+  {
+   "batch": 64,
+   "bit_identical": true,
+   "bytes_differing": 0,
+   "images": 512,
+   "max_abs_delta": 0.0,
+   "max_rel_delta": 0.0,
+   "sha256": "4f6a14f9f6384f61a56b504e165b62e122cfc124eb60d02666416535edf72d95",
+   "shape": [
+    512,
+    3,
+    224,
+    224
+   ],
+   "torch_threads": 4,
+   "workers": 4
+  },
+  {
+   "batch": 64,
+   "bit_identical": true,
+   "bytes_differing": 0,
+   "images": 512,
+   "max_abs_delta": 0.0,
+   "max_rel_delta": 0.0,
+   "sha256": "4f6a14f9f6384f61a56b504e165b62e122cfc124eb60d02666416535edf72d95",
+   "shape": [
+    512,
+    3,
+    224,
+    224
+   ],
+   "torch_threads": 8,
+   "workers": 8
+  },
+  {
+   "batch": 256,
+   "bit_identical": true,
+   "bytes_differing": 0,
+   "images": 512,
+   "max_abs_delta": 0.0,
+   "max_rel_delta": 0.0,
+   "sha256": "4f6a14f9f6384f61a56b504e165b62e122cfc124eb60d02666416535edf72d95",
+   "shape": [
+    512,
+    3,
+    224,
+    224
+   ],
+   "torch_threads": 1,
+   "workers": 1
+  },
+  {
+   "batch": 256,
+   "bit_identical": true,
+   "bytes_differing": 0,
+   "images": 512,
+   "max_abs_delta": 0.0,
+   "max_rel_delta": 0.0,
+   "sha256": "4f6a14f9f6384f61a56b504e165b62e122cfc124eb60d02666416535edf72d95",
+   "shape": [
+    512,
+    3,
+    224,
+    224
+   ],
+   "torch_threads": 2,
+   "workers": 2
+  },
+  {
+   "batch": 256,
+   "bit_identical": true,
+   "bytes_differing": 0,
+   "images": 512,
+   "max_abs_delta": 0.0,
+   "max_rel_delta": 0.0,
+   "sha256": "4f6a14f9f6384f61a56b504e165b62e122cfc124eb60d02666416535edf72d95",
+   "shape": [
+    512,
+    3,
+    224,
+    224
+   ],
+   "torch_threads": 4,
+   "workers": 4
+  },
+  {
+   "batch": 256,
+   "bit_identical": true,
+   "bytes_differing": 0,
+   "images": 512,
+   "max_abs_delta": 0.0,
+   "max_rel_delta": 0.0,
+   "sha256": "4f6a14f9f6384f61a56b504e165b62e122cfc124eb60d02666416535edf72d95",
+   "shape": [
+    512,
+    3,
+    224,
+    224
+   ],
+   "torch_threads": 8,
+   "workers": 8
+  }
+ ],
+ "torch": "2.7.1+cu128",
+ "transform": "open_clip preprocess_val (ViT-B-32)"
+}

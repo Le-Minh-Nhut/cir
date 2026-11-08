@@ -1,0 +1,132 @@
+{
+ "axes": {},
+ "gap": {
+  "gemm1024": {
+   "composition_gap_ndcg": 0.38870472510024856,
+   "gap_cohort_count": 6003,
+   "gap_image_ndcg": 0.11373587075219026,
+   "gap_mm_ndcg": 0.3282828064999273,
+   "gap_ndcg": 0.38870472510024856,
+   "gap_text_ndcg": 0.20067772844423498,
+   "gap_unavailable_reason": null,
+   "image_ndcg": 0.11373587075219026,
+   "image_only_ndcg": 0.11373587075219026,
+   "mm_mrr": 0.20496768410229743,
+   "mm_ndcg": 0.3282828064999273,
+   "mm_recall_at_10": 35.61552557054806,
+   "mm_recall_at_50": 54.3728135932034,
+   "mrr_gap": 0.11678778259623385,
+   "multimodal_ndcg": 0.3282828064999273,
+   "scored_counts": {
+    "image": 6003,
+    "mm": 6003,
+    "text": 6003
+   },
+   "text_ndcg": 0.20067772844423498,
+   "text_only_ndcg": 0.20067772844423498,
+   "unavailable_reason": null
+  },
+  "opt": {
+   "composition_gap_ndcg": 0.38870472510024856,
+   "gap_cohort_count": 6003,
+   "gap_image_ndcg": 0.11373587075219026,
+   "gap_mm_ndcg": 0.3282828064999273,
+   "gap_ndcg": 0.38870472510024856,
+   "gap_text_ndcg": 0.20067772844423498,
+   "gap_unavailable_reason": null,
+   "image_ndcg": 0.11373587075219026,
+   "image_only_ndcg": 0.11373587075219026,
+   "mm_mrr": 0.20496768410229743,
+   "mm_ndcg": 0.3282828064999273,
+   "mm_recall_at_10": 35.61552557054806,
+   "mm_recall_at_50": 54.3728135932034,
+   "mrr_gap": 0.11678778259623385,
+   "multimodal_ndcg": 0.3282828064999273,
+   "scored_counts": {
+    "image": 6003,
+    "mm": 6003,
+    "text": 6003
+   },
+   "text_ndcg": 0.20067772844423498,
+   "text_only_ndcg": 0.20067772844423498,
+   "unavailable_reason": null
+  },
+  "stored": {
+   "composition_gap_ndcg": 0.388704727214254,
+   "gap_cohort_count": 6003,
+   "gap_image_ndcg": 0.11373588650412819,
+   "gap_mm_ndcg": 0.32828280509551133,
+   "gap_ndcg": 0.388704727214254,
+   "gap_text_ndcg": 0.2006777268917305,
+   "gap_unavailable_reason": null,
+   "image_ndcg": 0.11373588650412819,
+   "image_only_ndcg": 0.11373588650412819,
+   "mm_mrr": 0.20496768403872728,
+   "mm_ndcg": 0.32828280509551133,
+   "mm_recall_at_10": 35.61552557054806,
+   "mm_recall_at_50": 54.3728135932034,
+   "mrr_gap": 0.11678778274193043,
+   "multimodal_ndcg": 0.32828280509551133,
+   "scored_counts": {
+    "image": 6003,
+    "mm": 6003,
+    "text": 6003
+   },
+   "text_ndcg": 0.2006777268917305,
+   "text_only_ndcg": 0.2006777268917305,
+   "unavailable_reason": null
+  }
+ },
+ "gap_delta": {
+  "gemm1024": {
+   "composition_gap_ndcg": -2.1140054151658205e-09,
+   "gap_cohort_count": 0,
+   "gap_image_ndcg": -1.5751937934571636e-08,
+   "gap_mm_ndcg": 1.4044159724058147e-09,
+   "gap_ndcg": -2.1140054151658205e-09,
+   "gap_text_ndcg": 1.5525044860797976e-09,
+   "gap_unavailable_reason": null,
+   "image_ndcg": -1.5751937934571636e-08,
+   "image_only_ndcg": -1.5751937934571636e-08,
+   "mm_mrr": 6.357014914470938e-11,
+   "mm_ndcg": 1.4044159724058147e-09,
+   "mm_recall_at_10": 0.0,
+   "mm_recall_at_50": 0.0,
+   "mrr_gap": -1.4569657980079143e-10,
+   "multimodal_ndcg": 1.4044159724058147e-09,
+   "scored_counts": {
+    "image": 0,
+    "mm": 0,
+    "text": 0
+   },
+   "text_ndcg": 1.5525044860797976e-09,
+   "text_only_ndcg": 1.5525044860797976e-09,
+   "unavailable_reason": null
+  },
+  "opt": {
+   "composition_gap_ndcg": -2.1140054151658205e-09,
+   "gap_cohort_count": 0,
+   "gap_image_ndcg": -1.5751937934571636e-08,
+   "gap_mm_ndcg": 1.4044159724058147e-09,
+   "gap_ndcg": -2.1140054151658205e-09,
+   "gap_text_ndcg": 1.5525044860797976e-09,
+   "gap_unavailable_reason": null,
+   "image_ndcg": -1.5751937934571636e-08,
+   "image_only_ndcg": -1.5751937934571636e-08,
+   "mm_mrr": 6.357014914470938e-11,
+   "mm_ndcg": 1.4044159724058147e-09,
+   "mm_recall_at_10": 0.0,
+   "mm_recall_at_50": 0.0,
+   "mrr_gap": -1.4569657980079143e-10,
+   "multimodal_ndcg": 1.4044159724058147e-09,
+   "scored_counts": {
+    "image": 0,
+    "mm": 0,
+    "text": 0
+   },
+   "text_ndcg": 1.5525044860797976e-09,
+   "text_only_ndcg": 1.5525044860797976e-09,
+   "unavailable_reason": null
+  }
+ }
+}

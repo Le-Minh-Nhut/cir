@@ -1,0 +1,21 @@
+/home/heheboiz/data/cir/workbench/envs/encoder310-adapted/lib/python3.10/site-packages/timm/models/layers/__init__.py:49: FutureWarning: Importing from timm.models.layers is deprecated, please import via timm.layers
+  warnings.warn(f"Importing from {__name__} is deprecated, please import via timm.layers", FutureWarning)
+open_clip file: /home/heheboiz/data/cir/workbench/envs/encoder310-adapted/lib/python3.10/site-packages/open_clip/__init__.py
+--- preprocess_train ---
+Compose(
+    RandomResizedCrop(size=(224, 224), scale=(0.9, 1.0), ratio=(0.75, 1.3333), interpolation=bicubic, antialias=True)
+    <function _convert_to_rgb at 0x7c9c6bf293f0>
+    ToTensor()
+    Normalize(mean=(0.48145466, 0.4578275, 0.40821073), std=(0.26862954, 0.26130258, 0.27577711))
+)
+--- preprocess_val ---
+Compose(
+    Resize(size=224, interpolation=bicubic, max_size=None, antialias=True)
+    CenterCrop(size=(224, 224))
+    <function _convert_to_rgb at 0x7c9c6bf293f0>
+    ToTensor()
+    Normalize(mean=(0.48145466, 0.4578275, 0.40821073), std=(0.26862954, 0.26130258, 0.27577711))
+)
+same object? False
+train has RandomResizedCrop: True
+val has RandomResizedCrop: False

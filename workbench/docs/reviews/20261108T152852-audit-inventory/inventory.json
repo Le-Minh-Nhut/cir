@@ -1,0 +1,2007 @@
+{
+ "schema": "cir.audit.inventory/1",
+ "generated": "2026-11-08T15:28:52+07:00",
+ "branch": "research/cir-failure-workbench",
+ "host": "heheboiz-nhut-pc",
+ "read_only_audit": true,
+ "sources": {
+  "registry": {
+   "path": "workbench/registry/models.yaml",
+   "sha256": "86fe722cf3959ed23b5dd0bf4254bac9137384d42a6b9c19aa0fa94824f7641e",
+   "git_status": "modified (uncommitted); HEAD=b2fca876ee7db0711a01a68c75973a6a53cdc341",
+   "head_sha256": "cc39cf53ff13de89a6c3ede3186de34492a2b71ff2b32159b67e6df6b35e8e3a"
+  },
+  "adapter_table": "workbench/backend/adapters/models.py (ADAPTERS dict, 17 subclasses)",
+  "composition_adapters": "workbench/composition/model_*.py (9 files)",
+  "checkpoint_root": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads",
+  "third_party_root": "/home/heheboiz/data/cir/workbench/third_party",
+  "configs": [
+   "workbench/configs/pc_autopilot.all_available.yaml",
+   "workbench/configs/pc_autopilot.example.yaml",
+   "workbench/configs/pc_autopilot.pc_cohort.yaml",
+   "workbench/configs/pc_autopilot.pilot_csmcir.yaml",
+   "workbench/configs/pc_autopilot.pilot_limn.yaml",
+   "workbench/docs/reviews/20261108T113610-eval/circus_cohort.yaml"
+  ],
+  "patch_dir": "workbench/patches",
+  "manifests": "workbench/artifacts/checkpoint_selection/20261106T002617+0700/manifests"
+ },
+ "counts": {
+  "unique_repositories_workbench_scope": 16,
+  "registered_model_variants": 17,
+  "declared_checkpoint_variants": 29,
+  "staged_checkpoint_variants": 21,
+  "absent_checkpoint_variants": 8,
+  "single_file_digest_match": 17,
+  "multi_member_artifacts": 3,
+  "models_with_composition_adapter": 9,
+  "models_with_native_launcher": 17,
+  "models_with_resolvable_interpreter": 9,
+  "vendored_repos_zero_drift": 13,
+  "vendored_repos_drift_explained_by_patch": 3,
+  "non_model_git_checkouts": 2,
+  "source_trees_on_disk_including_non_model": 18
+ },
+ "reconciliation": {
+  "prior_claim": {
+   "repositories": 16,
+   "registered_variants": 17
+  },
+  "verdict": "CONFIRMED (both numbers) with 4 qualifications",
+  "qualifications": [
+   "17 model_id map onto 16 URLs solely because combiner_rn50x4_noft and clip4cir_rn50x4_fullft share ABaldrati/CLIP4Cir",
+   "the registry declares 29 checkpoint variants, not 17; the prior 17 counted model identities only",
+   "16/17 is a registry count; 2 further non-model git checkouts exist (teacher/repos/SPN4CIR, data/cirr) making 18 source trees on disk",
+   "the working-tree registry is uncommitted-dirty: 12 checkpoint variants gained real digests and 5 gained VERIFIED_METADATA status vs HEAD, while the 16/17 shape is invariant"
+  ]
+ },
+ "protocols": {
+  "fashioniq_original_split": "FashionIQ original split, full gallery, reference included (74,381-image FashionIQ release)",
+  "fashioniq_full_gallery_ref_excluded": "FashionIQ original split, full gallery, reference masked before R@K",
+  "fashioniq_val_split": "FashionIQ val, pair-union gallery, reference masked",
+  "circus_fashioniq_release_v1": "composition path only; 74,381-image released gallery; 6,003 full / 4,069 sf / 586 validated queries; conditions multimodal, text_only_black_image, image_only_empty_text (workbench/composition/data.py, inputs.py)"
+ },
+ "datasets": {
+  "fashioniq": {
+   "root": "/home/heheboiz/data/cir/data/FashionIQ",
+   "categories": [
+    "dress",
+    "shirt",
+    "toptee"
+   ],
+   "queries": {
+    "dress": 2017,
+    "shirt": 2038,
+    "toptee": 1961
+   },
+   "full_gallery": {
+    "dress": 3817,
+    "shirt": 6346,
+    "toptee": 5373
+   },
+   "pair_union_gallery": {
+    "dress": 2628,
+    "shirt": 3089,
+    "toptee": 2902
+   },
+   "source": "workbench/artifacts/checkpoint_selection/20261106T002617+0700/manifests/protocol_identity.json"
+  },
+  "cirr": {
+   "root": "/home/heheboiz/data/cir/data/CIRR",
+   "used_by": [
+    "ptha_mtst (cirr_transfer)",
+    "tme (cirr_0, declared but not staged)"
+   ],
+   "note": "CIRR is a transfer/training source for registered variants, never an evaluation dataset of this workbench"
+  }
+ },
+ "repositories": [
+  {
+   "upstream_url": "https://github.com/qzp2018/CSMCIR",
+   "source_dir": "CSMCIR",
+   "variant_model_ids": [
+    "csmcir"
+   ],
+   "registry_pin": "774f94e2076ff17ea91703a6239d2a08f0e1a44e",
+   "provenance_pin": "774f94e2076ff17ea91703a6239d2a08f0e1a44e",
+   "pin_agrees": true,
+   "resolved_url": "git@github.com:qzp2018/CSMCIR",
+   "vendored_at": "2026-10-18T12:15:26+00:00",
+   "local_path": "workbench/third_party/CSMCIR",
+   "source_state": "vendored + git-tracked (no nested .git); content verified against provenance file_manifest",
+   "manifest_files": 359,
+   "manifest_match": 357,
+   "manifest_differ": 2,
+   "manifest_differs": [
+    [
+     "DIFF",
+     "src/lavis/models/__init__.py"
+    ],
+    [
+     "DIFF",
+     "src/validate_blip_csmcir.py"
+    ]
+   ],
+   "extras_untracked_ignored": 354,
+   "patches": [
+    {
+     "path": "src/lavis/models/__init__.py",
+     "patch_file": "workbench/patches/csmcir_models_init_compat.patch",
+     "tree_state": "DERIVED_MATCH"
+    },
+    {
+     "path": "src/validate_blip_csmcir.py",
+     "patch_file": "workbench/patches/csmcir_validate_visualization_opt_in.patch",
+     "tree_state": "DERIVED_MATCH"
+    }
+   ],
+   "has_git_checkout": true,
+   "git_checkout_head": "774f94e2076ff17ea91703a6239d2a08f0e1a44e",
+   "git_checkout_path": "teacher/repos/CSMCIR",
+   "git_checkout_head_matches_registry_pin": true,
+   "git_checkout_dirty_files": 236
+  },
+  {
+   "upstream_url": "https://github.com/iLearn-Lab/CVPR26-Air-Know",
+   "source_dir": "AirKnow",
+   "variant_model_ids": [
+    "airknow"
+   ],
+   "registry_pin": "6ab6fa95b746f85b08eea4cb66eb51448bce99b7",
+   "provenance_pin": "6ab6fa95b746f85b08eea4cb66eb51448bce99b7",
+   "pin_agrees": true,
+   "resolved_url": "git@github.com:iLearn-Lab/CVPR26-Air-Know",
+   "vendored_at": "2026-10-18T12:15:44+00:00",
+   "local_path": "workbench/third_party/AirKnow",
+   "source_state": "vendored + git-tracked (no nested .git); content verified against provenance file_manifest",
+   "manifest_files": 1218,
+   "manifest_match": 1218,
+   "manifest_differ": 0,
+   "manifest_differs": [],
+   "extras_untracked_ignored": 130,
+   "patches": [],
+   "has_git_checkout": false,
+   "git_checkout_head": null
+  },
+  {
+   "upstream_url": "https://github.com/Lee-zixu/ConeSep",
+   "source_dir": "ConeSep",
+   "variant_model_ids": [
+    "conesep"
+   ],
+   "registry_pin": "bd4bf629ebe68045c1a54dcc61e4a3ea65f8759b",
+   "provenance_pin": "bd4bf629ebe68045c1a54dcc61e4a3ea65f8759b",
+   "pin_agrees": true,
+   "resolved_url": "git@github.com:Lee-zixu/ConeSep",
+   "vendored_at": "2026-10-18T12:16:30+00:00",
+   "local_path": "workbench/third_party/ConeSep",
+   "source_state": "vendored + git-tracked (no nested .git); content verified against provenance file_manifest",
+   "manifest_files": 1221,
+   "manifest_match": 1221,
+   "manifest_differ": 0,
+   "manifest_differs": [],
+   "extras_untracked_ignored": 220,
+   "patches": [],
+   "has_git_checkout": false,
+   "git_checkout_head": null
+  },
+  {
+   "upstream_url": "https://github.com/zyinan99/MTST_PTHA",
+   "source_dir": "MTST_PTHA",
+   "variant_model_ids": [
+    "ptha_mtst"
+   ],
+   "registry_pin": "6a02ee4763fc2260b6abfb18be78853facb91d86",
+   "provenance_pin": "6a02ee4763fc2260b6abfb18be78853facb91d86",
+   "pin_agrees": true,
+   "resolved_url": "https://github.com/zyinan99/MTST_PTHA",
+   "vendored_at": "2026-10-18T12:45:00+00:00",
+   "local_path": "workbench/third_party/MTST_PTHA",
+   "source_state": "vendored + git-tracked (no nested .git); content verified against provenance file_manifest",
+   "manifest_files": 360,
+   "manifest_match": 360,
+   "manifest_differ": 0,
+   "manifest_differs": [],
+   "extras_untracked_ignored": 264,
+   "patches": [],
+   "has_git_checkout": false,
+   "git_checkout_head": null
+  },
+  {
+   "upstream_url": "https://github.com/iLearn-Lab/AAAI26-HABIT",
+   "source_dir": "HABIT",
+   "variant_model_ids": [
+    "habit"
+   ],
+   "registry_pin": "6ddc2cd63eac1f65693f4e821c34fb3b42aee306",
+   "provenance_pin": "6ddc2cd63eac1f65693f4e821c34fb3b42aee306",
+   "pin_agrees": true,
+   "resolved_url": "git@github.com:iLearn-Lab/AAAI26-HABIT",
+   "vendored_at": "2026-10-18T12:16:49+00:00",
+   "local_path": "workbench/third_party/HABIT",
+   "source_state": "vendored + git-tracked (no nested .git); content verified against provenance file_manifest",
+   "manifest_files": 1234,
+   "manifest_match": 1234,
+   "manifest_differ": 0,
+   "manifest_differs": [],
+   "extras_untracked_ignored": 196,
+   "patches": [],
+   "has_git_checkout": false,
+   "git_checkout_head": null
+  },
+  {
+   "upstream_url": "https://github.com/iLearn-Lab/AAAI26-INTENT",
+   "source_dir": "INTENT",
+   "variant_model_ids": [
+    "intent"
+   ],
+   "registry_pin": "2a75fc6f57d1a036bf3167a7fe1d2cee072f51f3",
+   "provenance_pin": "2a75fc6f57d1a036bf3167a7fe1d2cee072f51f3",
+   "pin_agrees": true,
+   "resolved_url": "git@github.com:iLearn-Lab/AAAI26-INTENT",
+   "vendored_at": "2026-10-18T12:17:23+00:00",
+   "local_path": "workbench/third_party/INTENT",
+   "source_state": "vendored + git-tracked (no nested .git); content verified against provenance file_manifest",
+   "manifest_files": 1228,
+   "manifest_match": 1228,
+   "manifest_differ": 0,
+   "manifest_differs": [],
+   "extras_untracked_ignored": 180,
+   "patches": [],
+   "has_git_checkout": false,
+   "git_checkout_head": null
+  },
+  {
+   "upstream_url": "https://github.com/iLearn-Lab/ICASSP26-HINT",
+   "source_dir": "HINT",
+   "variant_model_ids": [
+    "hint"
+   ],
+   "registry_pin": "bec50b6c8c19111893b617979502b948d1cea5b2",
+   "provenance_pin": "bec50b6c8c19111893b617979502b948d1cea5b2",
+   "pin_agrees": true,
+   "resolved_url": "git@github.com:iLearn-Lab/ICASSP26-HINT",
+   "vendored_at": "2026-10-18T12:17:42+00:00",
+   "local_path": "workbench/third_party/HINT",
+   "source_state": "vendored + git-tracked (no nested .git); content verified against provenance file_manifest",
+   "manifest_files": 1225,
+   "manifest_match": 1225,
+   "manifest_differ": 0,
+   "manifest_differs": [],
+   "extras_untracked_ignored": 205,
+   "patches": [],
+   "has_git_checkout": false,
+   "git_checkout_head": null
+  },
+  {
+   "upstream_url": "https://github.com/iLearn-Lab/AAAI25-ENCODER",
+   "source_dir": "ENCODER",
+   "variant_model_ids": [
+    "encoder"
+   ],
+   "registry_pin": "29a2a31d6a56f677bf450c3be7cdaef423fb7018",
+   "provenance_pin": "29a2a31d6a56f677bf450c3be7cdaef423fb7018",
+   "pin_agrees": true,
+   "resolved_url": "git@github.com:iLearn-Lab/AAAI25-ENCODER",
+   "vendored_at": "2026-10-18T12:17:53+00:00",
+   "local_path": "workbench/third_party/ENCODER",
+   "source_state": "vendored + git-tracked (no nested .git); content verified against provenance file_manifest",
+   "manifest_files": 26,
+   "manifest_match": 26,
+   "manifest_differ": 0,
+   "manifest_differs": [],
+   "extras_untracked_ignored": 9,
+   "patches": [],
+   "has_git_checkout": false,
+   "git_checkout_head": "29a2a31d6a56f677bf450c3be7cdaef423fb7018",
+   "git_checkout_path": "teacher/repos/AAAI25-ENCODER",
+   "git_checkout_head_matches_registry_pin": true,
+   "git_checkout_dirty_files": 1
+  },
+  {
+   "upstream_url": "https://github.com/iLearn-Lab/ICASSP25-PAIR",
+   "source_dir": "PAIR",
+   "variant_model_ids": [
+    "pair"
+   ],
+   "registry_pin": "bfb0b98cdb4c44f6b9190baaa84d783a77dd888f",
+   "provenance_pin": "bfb0b98cdb4c44f6b9190baaa84d783a77dd888f",
+   "pin_agrees": true,
+   "resolved_url": "git@github.com:iLearn-Lab/ICASSP25-PAIR",
+   "vendored_at": "2026-10-18T12:18:01+00:00",
+   "local_path": "workbench/third_party/PAIR",
+   "source_state": "vendored + git-tracked (no nested .git); content verified against provenance file_manifest",
+   "manifest_files": 22,
+   "manifest_match": 22,
+   "manifest_differ": 0,
+   "manifest_differs": [],
+   "extras_untracked_ignored": 5,
+   "patches": [],
+   "has_git_checkout": false,
+   "git_checkout_head": null
+  },
+  {
+   "upstream_url": "https://github.com/iLearn-Lab/SIGIR21-CLVC-Net",
+   "source_dir": "CLVCNet",
+   "variant_model_ids": [
+    "clvc_net"
+   ],
+   "registry_pin": "bd9b6889489806cb60676597880f91d918b279cb",
+   "provenance_pin": "bd9b6889489806cb60676597880f91d918b279cb",
+   "pin_agrees": true,
+   "resolved_url": "git@github.com:iLearn-Lab/SIGIR21-CLVC-Net",
+   "vendored_at": "2026-10-18T12:18:06+00:00",
+   "local_path": "workbench/third_party/CLVCNet",
+   "source_state": "vendored + git-tracked (no nested .git); content verified against provenance file_manifest",
+   "manifest_files": 9,
+   "manifest_match": 9,
+   "manifest_differ": 0,
+   "manifest_differs": [],
+   "extras_untracked_ignored": 14,
+   "patches": [],
+   "has_git_checkout": false,
+   "git_checkout_head": null
+  },
+  {
+   "upstream_url": "https://github.com/ozmig77/dcnet",
+   "source_dir": "DCNet",
+   "variant_model_ids": [
+    "dcnet"
+   ],
+   "registry_pin": "68c79d38569f01ca39c3b4ea641b3b7eb2ccb5fb",
+   "provenance_pin": "68c79d38569f01ca39c3b4ea641b3b7eb2ccb5fb",
+   "pin_agrees": true,
+   "resolved_url": "git@github.com:ozmig77/dcnet",
+   "vendored_at": "2026-10-18T12:18:12+00:00",
+   "local_path": "workbench/third_party/DCNet",
+   "source_state": "vendored + git-tracked (no nested .git); content verified against provenance file_manifest",
+   "manifest_files": 39,
+   "manifest_match": 38,
+   "manifest_differ": 1,
+   "manifest_differs": [
+    [
+     "DIFF",
+     "base/base_trainer.py"
+    ]
+   ],
+   "extras_untracked_ignored": 77,
+   "patches": [
+    {
+     "path": "base/base_trainer.py",
+     "patch_file": "workbench/patches/dcnet_checkpoint_weights_only_optout.patch",
+     "tree_state": "DERIVED_MATCH"
+    }
+   ],
+   "has_git_checkout": false,
+   "git_checkout_head": null
+  },
+  {
+   "upstream_url": "https://github.com/ABaldrati/CLIP4Cir",
+   "source_dir": "CLIP4Cir",
+   "variant_model_ids": [
+    "combiner_rn50x4_noft",
+    "clip4cir_rn50x4_fullft"
+   ],
+   "registry_pin": "dfed9f748a8a4d05abf613164e06d59b22dbdf13",
+   "provenance_pin": "dfed9f748a8a4d05abf613164e06d59b22dbdf13",
+   "pin_agrees": true,
+   "resolved_url": "git@github.com:ABaldrati/CLIP4Cir",
+   "vendored_at": "2026-10-18T12:18:16+00:00",
+   "local_path": "workbench/third_party/CLIP4Cir",
+   "source_state": "vendored + git-tracked (no nested .git); content verified against provenance file_manifest",
+   "manifest_files": 14,
+   "manifest_match": 14,
+   "manifest_differ": 0,
+   "manifest_differs": [],
+   "extras_untracked_ignored": 7,
+   "patches": [],
+   "has_git_checkout": false,
+   "git_checkout_head": null
+  },
+  {
+   "upstream_url": "https://github.com/iLearn-Lab/MM23-TG-CIR",
+   "source_dir": "TGCIR",
+   "variant_model_ids": [
+    "tgcir"
+   ],
+   "registry_pin": "65fa78eaf8cabe8197fcc22ccab42207c591bdee",
+   "provenance_pin": "65fa78eaf8cabe8197fcc22ccab42207c591bdee",
+   "pin_agrees": true,
+   "resolved_url": "git@github.com:iLearn-Lab/MM23-TG-CIR",
+   "vendored_at": "2026-10-18T12:18:20+00:00",
+   "local_path": "workbench/third_party/TGCIR",
+   "source_state": "vendored + git-tracked (no nested .git); content verified against provenance file_manifest",
+   "manifest_files": 11,
+   "manifest_match": 11,
+   "manifest_differ": 0,
+   "manifest_differs": [],
+   "extras_untracked_ignored": 9,
+   "patches": [],
+   "has_git_checkout": false,
+   "git_checkout_head": null
+  },
+  {
+   "upstream_url": "https://github.com/chunmeifeng/SPRC",
+   "source_dir": "SPRC",
+   "variant_model_ids": [
+    "sprc"
+   ],
+   "registry_pin": "2935a5397732260d1db6fa577e5926f963e36f0f",
+   "provenance_pin": "2935a5397732260d1db6fa577e5926f963e36f0f",
+   "pin_agrees": true,
+   "resolved_url": "git@github.com:chunmeifeng/SPRC",
+   "vendored_at": "2026-10-18T12:18:26+00:00",
+   "local_path": "workbench/third_party/SPRC",
+   "source_state": "vendored + git-tracked (no nested .git); content verified against provenance file_manifest",
+   "manifest_files": 354,
+   "manifest_match": 354,
+   "manifest_differ": 0,
+   "manifest_differs": [],
+   "extras_untracked_ignored": 262,
+   "patches": [],
+   "has_git_checkout": true,
+   "git_checkout_head": "2935a5397732260d1db6fa577e5926f963e36f0f",
+   "git_checkout_path": "teacher/repos/SPRC",
+   "git_checkout_head_matches_registry_pin": true,
+   "git_checkout_dirty_files": 128
+  },
+  {
+   "upstream_url": "https://github.com/iLearn-Lab/TPAMI24-LIMN",
+   "source_dir": "LIMN",
+   "variant_model_ids": [
+    "limn"
+   ],
+   "registry_pin": "7d7bc9b116f594a65ac22457491edf28a88d3c3e",
+   "provenance_pin": "7d7bc9b116f594a65ac22457491edf28a88d3c3e",
+   "pin_agrees": true,
+   "resolved_url": "git@github.com:iLearn-Lab/TPAMI24-LIMN",
+   "vendored_at": "2026-10-18T12:18:32+00:00",
+   "local_path": "workbench/third_party/LIMN",
+   "source_state": "vendored + git-tracked (no nested .git); content verified against provenance file_manifest",
+   "manifest_files": 33,
+   "manifest_match": 33,
+   "manifest_differ": 0,
+   "manifest_differs": [],
+   "extras_untracked_ignored": 8,
+   "patches": [],
+   "has_git_checkout": false,
+   "git_checkout_head": null
+  },
+  {
+   "upstream_url": "https://github.com/li-shuxian/TME",
+   "source_dir": "TME",
+   "variant_model_ids": [
+    "tme"
+   ],
+   "registry_pin": "394aad79df2c104feb32a2c96132582012765062",
+   "provenance_pin": "394aad79df2c104feb32a2c96132582012765062",
+   "pin_agrees": true,
+   "resolved_url": "git@github.com:li-shuxian/TME",
+   "vendored_at": "2026-10-23T13:28:06+00:00",
+   "local_path": "workbench/third_party/TME",
+   "source_state": "vendored + git-tracked (no nested .git); content verified against provenance file_manifest",
+   "manifest_files": 351,
+   "manifest_match": 349,
+   "manifest_differ": 2,
+   "manifest_differs": [
+    [
+     "DIFF",
+     "src/precompute.py"
+    ],
+    [
+     "DIFF",
+     "src/precompute_evaluation.py"
+    ]
+   ],
+   "extras_untracked_ignored": 247,
+   "patches": [
+    {
+     "path": "src/precompute.py",
+     "patch_file": "workbench/patches/tme_precompute_bounded_allocation.patch",
+     "tree_state": "DERIVED_MATCH"
+    },
+    {
+     "path": "src/precompute_evaluation.py",
+     "patch_file": "workbench/patches/tme_eval_batch_override.patch",
+     "tree_state": "DERIVED_MATCH"
+    }
+   ],
+   "has_git_checkout": true,
+   "git_checkout_head": "7fe811992820d30828e24065eb0c7a7ba099dd3b",
+   "git_checkout_path": "teacher/repos/TME",
+   "git_checkout_head_matches_registry_pin": false,
+   "git_checkout_dirty_files": 0
+  }
+ ],
+ "variants": [
+  {
+   "model_id": "csmcir",
+   "checkpoint_id": "fashioniq",
+   "repository": "https://github.com/qzp2018/CSMCIR",
+   "source_dir": "CSMCIR",
+   "filename": "fashioniq_tuned_clip_best.pt",
+   "artifact_type": "file",
+   "bytes": 2720615859,
+   "sha256": "c8812071de0640d647c5ba2a70628b80a3289ee2c47676f7a1b6abaa313fa49e",
+   "member_digests": [
+    {
+     "member": "fashioniq_tuned_clip_best.pt",
+     "bytes": 2720615859,
+     "sha256": "c8812071de0640d647c5ba2a70628b80a3289ee2c47676f7a1b6abaa313fa49e"
+    }
+   ],
+   "expected_sha256": "c8812071de0640d647c5ba2a70628b80a3289ee2c47676f7a1b6abaa313fa49e",
+   "sha_state": "MATCH",
+   "staged": true,
+   "resolved_path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/csmcir/fashioniq_tuned_clip_best.pt",
+   "checkpoint_mapping_status": "VERIFIED_METADATA",
+   "variant_status": "URL_VERIFIED",
+   "training_noise_pct": 0,
+   "evaluation_noise_pct": 0,
+   "training_dataset": null,
+   "state_dict_shape": "torch-zip dict; 2 top-level keys",
+   "state_dict_evidence": "['epoch','Blip2QformerCirAlignPromptTargetImageCaptionshiyan92']; 861 param names nested under the class key",
+   "interpreter": "/home/heheboiz/data/cir/workbench/artifacts/environments/cir-005ef4e1b02999a5/bin/python",
+   "interpreter_source": "workbench.env",
+   "interpreter_probe": "py 3.10.22, torch 2.7.1+cu128, tv 0.22.1+cu128, cuda 12.8",
+   "native_entrypoint": "src/validate_blip_csmcir.py",
+   "native_launcher": "script",
+   "workbench_entrypoint": "workbench.composition.model_csmcir",
+   "protocols": [
+    "fashioniq_original_split"
+   ],
+   "native_protocol": "fashioniq_original_split",
+   "live_composition": "live (adapter)",
+   "live_native": "live (script)"
+  },
+  {
+   "model_id": "airknow",
+   "checkpoint_id": "fiq_n05",
+   "repository": "https://github.com/iLearn-Lab/CVPR26-Air-Know",
+   "source_dir": "AirKnow",
+   "filename": "airknow_fiq_0.5.pt",
+   "artifact_type": "file",
+   "bytes": 2724056638,
+   "sha256": "f4d25ed9e532f2ee3671f6edadb1048e73113246ec056b413bde75dfe3f79bc6",
+   "member_digests": [
+    {
+     "member": "airknow_fiq_0.5.pt",
+     "bytes": 2724056638,
+     "sha256": "f4d25ed9e532f2ee3671f6edadb1048e73113246ec056b413bde75dfe3f79bc6"
+    }
+   ],
+   "expected_sha256": "f4d25ed9e532f2ee3671f6edadb1048e73113246ec056b413bde75dfe3f79bc6",
+   "sha_state": "MATCH",
+   "staged": true,
+   "resolved_path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/../../checkpoints/airknow/airknow_fiq_0.5.pt",
+   "checkpoint_mapping_status": "VERIFIED_METADATA",
+   "variant_status": "NO_CLEAN_CHECKPOINT",
+   "training_noise_pct": 50,
+   "evaluation_noise_pct": 0,
+   "training_dataset": null,
+   "state_dict_shape": "torch-zip WHOLE-MODEL object",
+   "state_dict_evidence": "class Blip2QformerCir",
+   "interpreter": null,
+   "interpreter_source": "UNSET",
+   "interpreter_probe": "UNVERIFIED",
+   "native_entrypoint": "test_BLIP2.py",
+   "native_launcher": "replay",
+   "workbench_entrypoint": "workbench/backend/adapters/models.py:airknow via evaluate_models.py",
+   "protocols": [
+    "fashioniq_full_gallery_ref_excluded"
+   ],
+   "native_protocol": "fashioniq_full_gallery_ref_excluded",
+   "live_composition": "absent (no adapter)",
+   "live_native": "live (replay wrapper)"
+  },
+  {
+   "model_id": "airknow",
+   "checkpoint_id": "fiq_n08",
+   "repository": "https://github.com/iLearn-Lab/CVPR26-Air-Know",
+   "source_dir": "AirKnow",
+   "filename": "airknow_fiq_0.8.pt",
+   "artifact_type": "file",
+   "bytes": 2724056638,
+   "sha256": "756fc0bdc43d9e0f0cae13c8a02b0279f64e62092ce465c1e60bda45e179c54e",
+   "member_digests": [
+    {
+     "member": "airknow_fiq_0.8.pt",
+     "bytes": 2724056638,
+     "sha256": "756fc0bdc43d9e0f0cae13c8a02b0279f64e62092ce465c1e60bda45e179c54e"
+    }
+   ],
+   "expected_sha256": "756fc0bdc43d9e0f0cae13c8a02b0279f64e62092ce465c1e60bda45e179c54e",
+   "sha_state": "MATCH",
+   "staged": true,
+   "resolved_path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/../../checkpoints/airknow/airknow_fiq_0.8.pt",
+   "checkpoint_mapping_status": "VERIFIED_METADATA",
+   "variant_status": "NO_CLEAN_CHECKPOINT",
+   "training_noise_pct": 80,
+   "evaluation_noise_pct": 0,
+   "training_dataset": null,
+   "state_dict_shape": "torch-zip WHOLE-MODEL object",
+   "state_dict_evidence": "class Blip2QformerCir",
+   "interpreter": null,
+   "interpreter_source": "UNSET",
+   "interpreter_probe": "UNVERIFIED",
+   "native_entrypoint": "test_BLIP2.py",
+   "native_launcher": "replay",
+   "workbench_entrypoint": "workbench/backend/adapters/models.py:airknow via evaluate_models.py",
+   "protocols": [
+    "fashioniq_full_gallery_ref_excluded"
+   ],
+   "native_protocol": "fashioniq_full_gallery_ref_excluded",
+   "live_composition": "absent (no adapter)",
+   "live_native": "live (replay wrapper)"
+  },
+  {
+   "model_id": "conesep",
+   "checkpoint_id": "fiq_n02",
+   "repository": "https://github.com/Lee-zixu/ConeSep",
+   "source_dir": "ConeSep",
+   "filename": "ConeSep-FIQ-N0.2.pt",
+   "artifact_type": "file",
+   "bytes": 2721428966,
+   "sha256": "5a864ee5a78c1d249320c4f997cc7d14b529b329b2efba5577c82dbe019ed9d2",
+   "member_digests": [
+    {
+     "member": "ConeSep-FIQ-N0.2.pt",
+     "bytes": 2721428966,
+     "sha256": "5a864ee5a78c1d249320c4f997cc7d14b529b329b2efba5577c82dbe019ed9d2"
+    }
+   ],
+   "expected_sha256": "5a864ee5a78c1d249320c4f997cc7d14b529b329b2efba5577c82dbe019ed9d2",
+   "sha_state": "MATCH",
+   "staged": true,
+   "resolved_path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/conesep/ConeSep-FIQ-N0.2.pt",
+   "checkpoint_mapping_status": "VERIFIED_METADATA",
+   "variant_status": "NO_CLEAN_CHECKPOINT",
+   "training_noise_pct": 20,
+   "evaluation_noise_pct": 0,
+   "training_dataset": null,
+   "state_dict_shape": "torch-zip WHOLE-MODEL object",
+   "state_dict_evidence": "class ConeSep",
+   "interpreter": "/home/heheboiz/data/cir/workbench/envs/ilearn39-adapted/bin/python",
+   "interpreter_source": "workbench.env",
+   "interpreter_probe": "py 3.9.25, torch 2.7.1+cu128, tv 0.22.1+cu128, cuda 12.8",
+   "native_entrypoint": "test.py",
+   "native_launcher": "replay",
+   "workbench_entrypoint": "workbench.composition.model_conesep",
+   "protocols": [
+    "fashioniq_full_gallery_ref_excluded"
+   ],
+   "native_protocol": "fashioniq_full_gallery_ref_excluded",
+   "live_composition": "live (adapter)",
+   "live_native": "live (replay wrapper)"
+  },
+  {
+   "model_id": "conesep",
+   "checkpoint_id": "fiq_n05",
+   "repository": "https://github.com/Lee-zixu/ConeSep",
+   "source_dir": "ConeSep",
+   "filename": "ConeSep-FIQ-N0.5.pt",
+   "artifact_type": "file",
+   "bytes": null,
+   "sha256": null,
+   "member_digests": [],
+   "expected_sha256": null,
+   "sha_state": "ABSENT",
+   "staged": false,
+   "resolved_path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/conesep/ConeSep-FIQ-N0.5.pt",
+   "checkpoint_mapping_status": "VERIFIED_METADATA",
+   "variant_status": "NO_CLEAN_CHECKPOINT",
+   "training_noise_pct": 50,
+   "evaluation_noise_pct": 0,
+   "training_dataset": null,
+   "state_dict_shape": "UNVERIFIED",
+   "state_dict_evidence": "not inspected in this pass",
+   "interpreter": "/home/heheboiz/data/cir/workbench/envs/ilearn39-adapted/bin/python",
+   "interpreter_source": "workbench.env",
+   "interpreter_probe": "py 3.9.25, torch 2.7.1+cu128, tv 0.22.1+cu128, cuda 12.8",
+   "native_entrypoint": "test.py",
+   "native_launcher": "replay",
+   "workbench_entrypoint": "workbench.composition.model_conesep",
+   "protocols": [
+    "fashioniq_full_gallery_ref_excluded"
+   ],
+   "native_protocol": "fashioniq_full_gallery_ref_excluded",
+   "live_composition": "live (adapter)",
+   "live_native": "not runnable (checkpoint not staged in resolved root)"
+  },
+  {
+   "model_id": "conesep",
+   "checkpoint_id": "fiq_n08",
+   "repository": "https://github.com/Lee-zixu/ConeSep",
+   "source_dir": "ConeSep",
+   "filename": "ConeSep-FIQ_N0.8.pt",
+   "artifact_type": "file",
+   "bytes": null,
+   "sha256": null,
+   "member_digests": [],
+   "expected_sha256": null,
+   "sha_state": "ABSENT",
+   "staged": false,
+   "resolved_path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/conesep/ConeSep-FIQ_N0.8.pt",
+   "checkpoint_mapping_status": "VERIFIED_METADATA",
+   "variant_status": "NO_CLEAN_CHECKPOINT",
+   "training_noise_pct": 80,
+   "evaluation_noise_pct": 0,
+   "training_dataset": null,
+   "state_dict_shape": "UNVERIFIED",
+   "state_dict_evidence": "not inspected in this pass",
+   "interpreter": "/home/heheboiz/data/cir/workbench/envs/ilearn39-adapted/bin/python",
+   "interpreter_source": "workbench.env",
+   "interpreter_probe": "py 3.9.25, torch 2.7.1+cu128, tv 0.22.1+cu128, cuda 12.8",
+   "native_entrypoint": "test.py",
+   "native_launcher": "replay",
+   "workbench_entrypoint": "workbench.composition.model_conesep",
+   "protocols": [
+    "fashioniq_full_gallery_ref_excluded"
+   ],
+   "native_protocol": "fashioniq_full_gallery_ref_excluded",
+   "live_composition": "live (adapter)",
+   "live_native": "not runnable (checkpoint not staged in resolved root)"
+  },
+  {
+   "model_id": "ptha_mtst",
+   "checkpoint_id": "cirr_transfer",
+   "repository": "https://github.com/zyinan99/MTST_PTHA",
+   "source_dir": "MTST_PTHA",
+   "filename": "tuned_mtst_cirr.pt",
+   "artifact_type": "file",
+   "bytes": 2720352973,
+   "sha256": "1c4dab86a9f66dfe10aff75b39790432eb6cc746cf27b6cfab74b66d93b7588f",
+   "member_digests": [
+    {
+     "member": "tuned_mtst_cirr.pt",
+     "bytes": 2720352973,
+     "sha256": "1c4dab86a9f66dfe10aff75b39790432eb6cc746cf27b6cfab74b66d93b7588f"
+    }
+   ],
+   "expected_sha256": "1c4dab86a9f66dfe10aff75b39790432eb6cc746cf27b6cfab74b66d93b7588f",
+   "sha_state": "MATCH",
+   "staged": true,
+   "resolved_path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/ptha_mtst/tuned_mtst_cirr.pt",
+   "checkpoint_mapping_status": "VERIFIED_METADATA",
+   "variant_status": "URL_VERIFIED",
+   "training_noise_pct": null,
+   "evaluation_noise_pct": 0,
+   "training_dataset": "CIRR",
+   "state_dict_shape": "torch-zip dict; 2 top-level keys",
+   "state_dict_evidence": "['epoch','Blip2QformerCirCat']; 857 param names nested",
+   "interpreter": "/home/heheboiz/data/cir/workbench/artifacts/environments/cir-005ef4e1b02999a5/bin/python",
+   "interpreter_source": "workbench.env",
+   "interpreter_probe": "py 3.10.22, torch 2.7.1+cu128, tv 0.22.1+cu128, cuda 12.8",
+   "native_entrypoint": "MTST_PTHA/src/validate_blip.py",
+   "native_launcher": "replay",
+   "workbench_entrypoint": "workbench.composition.model_ptha_mtst",
+   "protocols": [
+    "fashioniq_original_split"
+   ],
+   "native_protocol": "fashioniq_original_split",
+   "live_composition": "live (adapter)",
+   "live_native": "live (replay wrapper)"
+  },
+  {
+   "model_id": "habit",
+   "checkpoint_id": "fiq_n02",
+   "repository": "https://github.com/iLearn-Lab/AAAI26-HABIT",
+   "source_dir": "HABIT",
+   "filename": "HABIT-FIQ_N0.2.pt",
+   "artifact_type": "file",
+   "bytes": 2730715930,
+   "sha256": "814d2d0ceb29ef910f37562e8bea8a76cf38aa546fbc2102e495df687c276b03",
+   "member_digests": [
+    {
+     "member": "HABIT-FIQ_N0.2.pt",
+     "bytes": 2730715930,
+     "sha256": "814d2d0ceb29ef910f37562e8bea8a76cf38aa546fbc2102e495df687c276b03"
+    }
+   ],
+   "expected_sha256": "814d2d0ceb29ef910f37562e8bea8a76cf38aa546fbc2102e495df687c276b03",
+   "sha_state": "MATCH",
+   "staged": true,
+   "resolved_path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/habit/HABIT-FIQ_N0.2.pt",
+   "checkpoint_mapping_status": "VERIFIED_METADATA",
+   "variant_status": "NO_CLEAN_CHECKPOINT",
+   "training_noise_pct": 20,
+   "evaluation_noise_pct": 0,
+   "training_dataset": null,
+   "state_dict_shape": "torch-zip WHOLE-MODEL object",
+   "state_dict_evidence": "class HABIT",
+   "interpreter": "/home/heheboiz/data/cir/workbench/envs/ilearn39-adapted/bin/python",
+   "interpreter_source": "workbench.env",
+   "interpreter_probe": "py 3.9.25, torch 2.7.1+cu128, tv 0.22.1+cu128, cuda 12.8",
+   "native_entrypoint": "test.py",
+   "native_launcher": "replay",
+   "workbench_entrypoint": "workbench.composition.model_habit",
+   "protocols": [
+    "fashioniq_full_gallery_ref_excluded"
+   ],
+   "native_protocol": "fashioniq_full_gallery_ref_excluded",
+   "live_composition": "live (adapter)",
+   "live_native": "live (replay wrapper)"
+  },
+  {
+   "model_id": "habit",
+   "checkpoint_id": "fiq_n05",
+   "repository": "https://github.com/iLearn-Lab/AAAI26-HABIT",
+   "source_dir": "HABIT",
+   "filename": "HABIT-FIQ_N0.5.pt",
+   "artifact_type": "file",
+   "bytes": null,
+   "sha256": null,
+   "member_digests": [],
+   "expected_sha256": "8a0d3bd27cf46d8334f9596404d89ebf803da0fa65236d89815bb3929b9a4216",
+   "sha_state": "ABSENT",
+   "staged": false,
+   "resolved_path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/habit/HABIT-FIQ_N0.5.pt",
+   "checkpoint_mapping_status": "VERIFIED_METADATA",
+   "variant_status": "NO_CLEAN_CHECKPOINT",
+   "training_noise_pct": 50,
+   "evaluation_noise_pct": 0,
+   "training_dataset": null,
+   "state_dict_shape": "UNVERIFIED",
+   "state_dict_evidence": "not inspected in this pass",
+   "interpreter": "/home/heheboiz/data/cir/workbench/envs/ilearn39-adapted/bin/python",
+   "interpreter_source": "workbench.env",
+   "interpreter_probe": "py 3.9.25, torch 2.7.1+cu128, tv 0.22.1+cu128, cuda 12.8",
+   "native_entrypoint": "test.py",
+   "native_launcher": "replay",
+   "workbench_entrypoint": "workbench.composition.model_habit",
+   "protocols": [
+    "fashioniq_full_gallery_ref_excluded"
+   ],
+   "native_protocol": "fashioniq_full_gallery_ref_excluded",
+   "live_composition": "live (adapter)",
+   "live_native": "not runnable (checkpoint not staged in resolved root)"
+  },
+  {
+   "model_id": "habit",
+   "checkpoint_id": "fiq_n08",
+   "repository": "https://github.com/iLearn-Lab/AAAI26-HABIT",
+   "source_dir": "HABIT",
+   "filename": "HABIT-FIQ_N0.8.pt",
+   "artifact_type": "file",
+   "bytes": null,
+   "sha256": null,
+   "member_digests": [],
+   "expected_sha256": "763885de6907bca4f017b336ed7ec3740cb9305c5adb6a135da45c158ddb9717",
+   "sha_state": "ABSENT",
+   "staged": false,
+   "resolved_path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/habit/HABIT-FIQ_N0.8.pt",
+   "checkpoint_mapping_status": "VERIFIED_METADATA",
+   "variant_status": "NO_CLEAN_CHECKPOINT",
+   "training_noise_pct": 80,
+   "evaluation_noise_pct": 0,
+   "training_dataset": null,
+   "state_dict_shape": "UNVERIFIED",
+   "state_dict_evidence": "not inspected in this pass",
+   "interpreter": "/home/heheboiz/data/cir/workbench/envs/ilearn39-adapted/bin/python",
+   "interpreter_source": "workbench.env",
+   "interpreter_probe": "py 3.9.25, torch 2.7.1+cu128, tv 0.22.1+cu128, cuda 12.8",
+   "native_entrypoint": "test.py",
+   "native_launcher": "replay",
+   "workbench_entrypoint": "workbench.composition.model_habit",
+   "protocols": [
+    "fashioniq_full_gallery_ref_excluded"
+   ],
+   "native_protocol": "fashioniq_full_gallery_ref_excluded",
+   "live_composition": "live (adapter)",
+   "live_native": "not runnable (checkpoint not staged in resolved root)"
+  },
+  {
+   "model_id": "intent",
+   "checkpoint_id": "fiq_n02",
+   "repository": "https://github.com/iLearn-Lab/AAAI26-INTENT",
+   "source_dir": "INTENT",
+   "filename": "intent_fiq_0.2.pt",
+   "artifact_type": "file",
+   "bytes": 2722478522,
+   "sha256": "2a504cadfd6b1c2486a2c508538b0160c5653f62c7cd11f4f3d8a9534dc26afc",
+   "member_digests": [
+    {
+     "member": "intent_fiq_0.2.pt",
+     "bytes": 2722478522,
+     "sha256": "2a504cadfd6b1c2486a2c508538b0160c5653f62c7cd11f4f3d8a9534dc26afc"
+    }
+   ],
+   "expected_sha256": "2a504cadfd6b1c2486a2c508538b0160c5653f62c7cd11f4f3d8a9534dc26afc",
+   "sha_state": "MATCH",
+   "staged": true,
+   "resolved_path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/intent/intent_fiq_0.2.pt",
+   "checkpoint_mapping_status": "VERIFIED_METADATA",
+   "variant_status": "NO_CLEAN_CHECKPOINT",
+   "training_noise_pct": 20,
+   "evaluation_noise_pct": 0,
+   "training_dataset": null,
+   "state_dict_shape": "torch-zip WHOLE-MODEL object (pickled nn.Module), not a state_dict",
+   "state_dict_evidence": "class Blip2QformerCir",
+   "interpreter": "/home/heheboiz/data/cir/workbench/envs/ilearn39-adapted/bin/python",
+   "interpreter_source": "workbench.env",
+   "interpreter_probe": "py 3.9.25, torch 2.7.1+cu128, tv 0.22.1+cu128, cuda 12.8",
+   "native_entrypoint": "test.py",
+   "native_launcher": "replay",
+   "workbench_entrypoint": "workbench.composition.model_intent",
+   "protocols": [
+    "fashioniq_full_gallery_ref_excluded"
+   ],
+   "native_protocol": "fashioniq_full_gallery_ref_excluded",
+   "live_composition": "live (adapter)",
+   "live_native": "live (replay wrapper)"
+  },
+  {
+   "model_id": "intent",
+   "checkpoint_id": "fiq_n05",
+   "repository": "https://github.com/iLearn-Lab/AAAI26-INTENT",
+   "source_dir": "INTENT",
+   "filename": "intent_fiq_0.5.pt",
+   "artifact_type": "file",
+   "bytes": null,
+   "sha256": null,
+   "member_digests": [],
+   "expected_sha256": "2d59ae002ecbf645a52c7e93bf8afd914e3061e2304413b97a0bf15ca43e39a9",
+   "sha_state": "ABSENT",
+   "staged": false,
+   "resolved_path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/intent/intent_fiq_0.5.pt",
+   "checkpoint_mapping_status": "VERIFIED_METADATA",
+   "variant_status": "NO_CLEAN_CHECKPOINT",
+   "training_noise_pct": 50,
+   "evaluation_noise_pct": 0,
+   "training_dataset": null,
+   "state_dict_shape": "UNVERIFIED",
+   "state_dict_evidence": "not inspected in this pass",
+   "interpreter": "/home/heheboiz/data/cir/workbench/envs/ilearn39-adapted/bin/python",
+   "interpreter_source": "workbench.env",
+   "interpreter_probe": "py 3.9.25, torch 2.7.1+cu128, tv 0.22.1+cu128, cuda 12.8",
+   "native_entrypoint": "test.py",
+   "native_launcher": "replay",
+   "workbench_entrypoint": "workbench.composition.model_intent",
+   "protocols": [
+    "fashioniq_full_gallery_ref_excluded"
+   ],
+   "native_protocol": "fashioniq_full_gallery_ref_excluded",
+   "live_composition": "live (adapter)",
+   "live_native": "not runnable (checkpoint not staged in resolved root)"
+  },
+  {
+   "model_id": "intent",
+   "checkpoint_id": "fiq_n08",
+   "repository": "https://github.com/iLearn-Lab/AAAI26-INTENT",
+   "source_dir": "INTENT",
+   "filename": "intent_fiq_0.8.pt",
+   "artifact_type": "file",
+   "bytes": null,
+   "sha256": null,
+   "member_digests": [],
+   "expected_sha256": "671bb217d3fdf32e6133fcb98eef4e80ebf831b5a203493c54507ef3c23b5cd2",
+   "sha_state": "ABSENT",
+   "staged": false,
+   "resolved_path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/intent/intent_fiq_0.8.pt",
+   "checkpoint_mapping_status": "VERIFIED_METADATA",
+   "variant_status": "NO_CLEAN_CHECKPOINT",
+   "training_noise_pct": 80,
+   "evaluation_noise_pct": 0,
+   "training_dataset": null,
+   "state_dict_shape": "UNVERIFIED",
+   "state_dict_evidence": "not inspected in this pass",
+   "interpreter": "/home/heheboiz/data/cir/workbench/envs/ilearn39-adapted/bin/python",
+   "interpreter_source": "workbench.env",
+   "interpreter_probe": "py 3.9.25, torch 2.7.1+cu128, tv 0.22.1+cu128, cuda 12.8",
+   "native_entrypoint": "test.py",
+   "native_launcher": "replay",
+   "workbench_entrypoint": "workbench.composition.model_intent",
+   "protocols": [
+    "fashioniq_full_gallery_ref_excluded"
+   ],
+   "native_protocol": "fashioniq_full_gallery_ref_excluded",
+   "live_composition": "live (adapter)",
+   "live_native": "not runnable (checkpoint not staged in resolved root)"
+  },
+  {
+   "model_id": "hint",
+   "checkpoint_id": "fashioniq",
+   "repository": "https://github.com/iLearn-Lab/ICASSP26-HINT",
+   "source_dir": "HINT",
+   "filename": "fashioniq.pt",
+   "artifact_type": "file",
+   "bytes": 2724451182,
+   "sha256": "bf9c72d42206b667ed586758c15c648970df821857e4067f26155a114a6517d4",
+   "member_digests": [
+    {
+     "member": "fashioniq.pt",
+     "bytes": 2724451182,
+     "sha256": "bf9c72d42206b667ed586758c15c648970df821857e4067f26155a114a6517d4"
+    }
+   ],
+   "expected_sha256": "bf9c72d42206b667ed586758c15c648970df821857e4067f26155a114a6517d4",
+   "sha_state": "MATCH",
+   "staged": true,
+   "resolved_path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/hint/fashioniq.pt",
+   "checkpoint_mapping_status": "VERIFIED_METADATA",
+   "variant_status": "URL_VERIFIED",
+   "training_noise_pct": null,
+   "evaluation_noise_pct": 0,
+   "training_dataset": null,
+   "state_dict_shape": "torch-zip WHOLE-MODEL object",
+   "state_dict_evidence": "class lavis.models.blip2_models.HINT.HINT",
+   "interpreter": "/home/heheboiz/data/cir/workbench/envs/ilearn39-adapted/bin/python",
+   "interpreter_source": "workbench.env",
+   "interpreter_probe": "py 3.9.25, torch 2.7.1+cu128, tv 0.22.1+cu128, cuda 12.8",
+   "native_entrypoint": "test.py",
+   "native_launcher": "replay",
+   "workbench_entrypoint": "workbench.composition.model_hint",
+   "protocols": [
+    "fashioniq_val_split"
+   ],
+   "native_protocol": "fashioniq_val_split",
+   "live_composition": "live (adapter)",
+   "live_native": "live (replay wrapper)"
+  },
+  {
+   "model_id": "encoder",
+   "checkpoint_id": "fashioniq",
+   "repository": "https://github.com/iLearn-Lab/AAAI25-ENCODER",
+   "source_dir": "ENCODER",
+   "filename": "fashioniq.pt",
+   "artifact_type": "file",
+   "bytes": 631879365,
+   "sha256": "0f31c50150a7bda3495e3378df13b4cec7924b52efd23b5e5dd9731459da9173",
+   "member_digests": [
+    {
+     "member": "fashioniq.pt",
+     "bytes": 631879365,
+     "sha256": "0f31c50150a7bda3495e3378df13b4cec7924b52efd23b5e5dd9731459da9173"
+    }
+   ],
+   "expected_sha256": "0f31c50150a7bda3495e3378df13b4cec7924b52efd23b5e5dd9731459da9173",
+   "sha_state": "MATCH",
+   "staged": true,
+   "resolved_path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/encoder/fashioniq.pt",
+   "checkpoint_mapping_status": "VERIFIED_METADATA",
+   "variant_status": "URL_VERIFIED",
+   "training_noise_pct": null,
+   "evaluation_noise_pct": 0,
+   "training_dataset": null,
+   "state_dict_shape": "torch-zip bare state_dict",
+   "state_dict_evidence": "417 keys; first: loss_T, local_weight, backbone.clip.positional_embedding, backbone.clip.text_projection",
+   "interpreter": "/home/heheboiz/data/cir/workbench/envs/encoder310-adapted/bin/python",
+   "interpreter_source": "workbench.env",
+   "interpreter_probe": "py 3.10.20, torch 2.7.1+cu128, tv 0.22.1+cu128, cuda 12.8",
+   "native_entrypoint": "evaluate_model.py",
+   "native_launcher": "replay",
+   "workbench_entrypoint": "workbench.composition.model_encoder",
+   "protocols": [
+    "fashioniq_val_split"
+   ],
+   "native_protocol": "fashioniq_val_split",
+   "live_composition": "live (adapter)",
+   "live_native": "live (replay wrapper)"
+  },
+  {
+   "model_id": "pair",
+   "checkpoint_id": "pair_b1",
+   "repository": "https://github.com/iLearn-Lab/ICASSP25-PAIR",
+   "source_dir": "PAIR",
+   "filename": "pair-B1.pt",
+   "artifact_type": "file",
+   "bytes": 694958565,
+   "sha256": "c4d861ecd0baa3f1427fc7a853943f5614baf87def1cdd9c4bb7583ee925fbf2",
+   "member_digests": [
+    {
+     "member": "pair-B1.pt",
+     "bytes": 694958565,
+     "sha256": "c4d861ecd0baa3f1427fc7a853943f5614baf87def1cdd9c4bb7583ee925fbf2"
+    }
+   ],
+   "expected_sha256": "c4d861ecd0baa3f1427fc7a853943f5614baf87def1cdd9c4bb7583ee925fbf2",
+   "sha_state": "MATCH",
+   "staged": true,
+   "resolved_path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/../../checkpoints/pair/pair-B1.pt",
+   "checkpoint_mapping_status": "UNVERIFIED",
+   "variant_status": "CHECKPOINT_MAPPING_UNVERIFIED",
+   "training_noise_pct": null,
+   "evaluation_noise_pct": 0,
+   "training_dataset": null,
+   "state_dict_shape": "UNVERIFIED",
+   "state_dict_evidence": "not inspected in this pass",
+   "interpreter": null,
+   "interpreter_source": "UNSET",
+   "interpreter_probe": "UNVERIFIED",
+   "native_entrypoint": "test.py",
+   "native_launcher": "replay",
+   "workbench_entrypoint": "workbench/backend/adapters/models.py:pair via evaluate_models.py",
+   "protocols": [
+    "fashioniq_val_split"
+   ],
+   "native_protocol": "fashioniq_val_split",
+   "live_composition": "absent (no adapter)",
+   "live_native": "live (replay wrapper)"
+  },
+  {
+   "model_id": "pair",
+   "checkpoint_id": "pair_b2",
+   "repository": "https://github.com/iLearn-Lab/ICASSP25-PAIR",
+   "source_dir": "PAIR",
+   "filename": "pair-B2.pt",
+   "artifact_type": "file",
+   "bytes": 694872371,
+   "sha256": "74346fd7de6efdafe8dde70458316286a60ceb2d7b419efed55193418aeb3f03",
+   "member_digests": [
+    {
+     "member": "pair-B2.pt",
+     "bytes": 694872371,
+     "sha256": "74346fd7de6efdafe8dde70458316286a60ceb2d7b419efed55193418aeb3f03"
+    }
+   ],
+   "expected_sha256": "74346fd7de6efdafe8dde70458316286a60ceb2d7b419efed55193418aeb3f03",
+   "sha_state": "MATCH",
+   "staged": true,
+   "resolved_path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/../../checkpoints/pair/pair-B2.pt",
+   "checkpoint_mapping_status": "UNVERIFIED",
+   "variant_status": "CHECKPOINT_MAPPING_UNVERIFIED",
+   "training_noise_pct": null,
+   "evaluation_noise_pct": 0,
+   "training_dataset": null,
+   "state_dict_shape": "UNVERIFIED",
+   "state_dict_evidence": "not inspected in this pass",
+   "interpreter": null,
+   "interpreter_source": "UNSET",
+   "interpreter_probe": "UNVERIFIED",
+   "native_entrypoint": "test.py",
+   "native_launcher": "replay",
+   "workbench_entrypoint": "workbench/backend/adapters/models.py:pair via evaluate_models.py",
+   "protocols": [
+    "fashioniq_val_split"
+   ],
+   "native_protocol": "fashioniq_val_split",
+   "live_composition": "absent (no adapter)",
+   "live_native": "live (replay wrapper)"
+  },
+  {
+   "model_id": "clvc_net",
+   "checkpoint_id": "author_drive_unresolved",
+   "repository": "https://github.com/iLearn-Lab/SIGIR21-CLVC-Net",
+   "source_dir": "CLVCNet",
+   "filename": ".",
+   "artifact_type": "bundle_directory",
+   "bytes": 1185968194,
+   "sha256": null,
+   "member_digests": [
+    {
+     "member": "dress_global_model.pt",
+     "bytes": 176437419,
+     "sha256": "be41c2ba81b803fd392c2c2517bf29cf4dd58205af7777f2becb4f84a80f5c7c"
+    },
+    {
+     "member": "dress_local_model.pt",
+     "bytes": 217168235,
+     "sha256": "33d44186efd6a25ca0761794115610016182b9f53ff6413083f31b6979769a07"
+    },
+    {
+     "member": "shirt_global_model.pt",
+     "bytes": 177872427,
+     "sha256": "78b1d660227ab6928e3a11a7384f9fff2aa7ab2a39baec1a45ac59db35e28bcf"
+    },
+    {
+     "member": "shirt_local_model.pt",
+     "bytes": 218603243,
+     "sha256": "2ba8e320b08ebb97d6558eb599cde2be228b5488250de7cb4cde8a138ff2c681"
+    },
+    {
+     "member": "toptee_global_model.pt",
+     "bytes": 177578027,
+     "sha256": "c78a58c4becafee3bffe719bef743d42c4495c3a91096a4b5935c364449ed11d"
+    },
+    {
+     "member": "toptee_local_model.pt",
+     "bytes": 218308843,
+     "sha256": "d1fa9170496f73a008736723fe5329c93ff710305d0bcc79ff628822c0a91f4c"
+    }
+   ],
+   "expected_sha256": null,
+   "sha_state": "BUNDLE_SEE_MEMBERS",
+   "staged": true,
+   "resolved_path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/../../checkpoints/clvc",
+   "checkpoint_mapping_status": "VERIFIED_METADATA",
+   "variant_status": "URL_VERIFIED",
+   "training_noise_pct": null,
+   "evaluation_noise_pct": 0,
+   "training_dataset": null,
+   "state_dict_shape": "UNVERIFIED",
+   "state_dict_evidence": "not inspected in this pass",
+   "interpreter": null,
+   "interpreter_source": "UNSET",
+   "interpreter_probe": "UNVERIFIED",
+   "native_entrypoint": "test.py",
+   "native_launcher": "replay",
+   "workbench_entrypoint": "workbench/backend/adapters/models.py:clvc_net via evaluate_models.py",
+   "protocols": [
+    "fashioniq_val_split"
+   ],
+   "native_protocol": "fashioniq_val_split",
+   "live_composition": "absent (no adapter)",
+   "live_native": "live (replay wrapper)"
+  },
+  {
+   "model_id": "dcnet",
+   "checkpoint_id": "fashioniq_run_directory",
+   "repository": "https://github.com/ozmig77/dcnet",
+   "source_dir": "DCNet",
+   "filename": ".",
+   "artifact_type": "run_directory",
+   "bytes": 2877316002,
+   "sha256": null,
+   "member_digests": [
+    {
+     "member": "config.json",
+     "bytes": 1734,
+     "sha256": "fa5fca78790a33063a4e73b379393f4ffbbf1b251b3c27058aed481136984ba0"
+    },
+    {
+     "member": "trained_model.pth",
+     "bytes": 2877310172,
+     "sha256": "130f031e0f7808ccf5f15630a691bd7af95ad9fadbf94f64acfce64e7d8b850f"
+    },
+    {
+     "member": "val",
+     "bytes": 4096,
+     "sha256": "UNVERIFIED"
+    }
+   ],
+   "expected_sha256": null,
+   "sha_state": "BUNDLE_SEE_MEMBERS",
+   "staged": true,
+   "resolved_path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/../../checkpoints/dcnet",
+   "checkpoint_mapping_status": "VERIFIED_METADATA",
+   "variant_status": "URL_VERIFIED",
+   "training_noise_pct": null,
+   "evaluation_noise_pct": 0,
+   "training_dataset": null,
+   "state_dict_shape": "UNVERIFIED",
+   "state_dict_evidence": "not inspected in this pass",
+   "interpreter": null,
+   "interpreter_source": "UNSET",
+   "interpreter_probe": "UNVERIFIED",
+   "native_entrypoint": "test.py",
+   "native_launcher": "script",
+   "workbench_entrypoint": "workbench/backend/adapters/models.py:dcnet via evaluate_models.py",
+   "protocols": [
+    "fashioniq_full_gallery_ref_excluded"
+   ],
+   "native_protocol": "fashioniq_full_gallery_ref_excluded",
+   "live_composition": "absent (no adapter)",
+   "live_native": "live (script)"
+  },
+  {
+   "model_id": "combiner_rn50x4_noft",
+   "checkpoint_id": "rn50x4_noft_unresolved",
+   "repository": "https://github.com/ABaldrati/CLIP4Cir",
+   "source_dir": "CLIP4Cir",
+   "filename": "fiq_comb_RN50x4_noft.pt",
+   "artifact_type": "file",
+   "bytes": 236017921,
+   "sha256": "b31882fe6f7e3e194cb9cfda048926844ee0ccc9d4ebc5483fb3bacfa5972955",
+   "member_digests": [
+    {
+     "member": "fiq_comb_RN50x4_noft.pt",
+     "bytes": 236017921,
+     "sha256": "b31882fe6f7e3e194cb9cfda048926844ee0ccc9d4ebc5483fb3bacfa5972955"
+    }
+   ],
+   "expected_sha256": "b31882fe6f7e3e194cb9cfda048926844ee0ccc9d4ebc5483fb3bacfa5972955",
+   "sha_state": "MATCH",
+   "staged": true,
+   "resolved_path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/../../checkpoints/clip4cir/FashionIQ/RN50x4_noft/fiq_comb_RN50x4_noft.pt",
+   "checkpoint_mapping_status": "VERIFIED_METADATA",
+   "variant_status": "URL_VERIFIED",
+   "training_noise_pct": 0,
+   "evaluation_noise_pct": 0,
+   "training_dataset": null,
+   "state_dict_shape": "torch-zip dict; 2 top-level keys",
+   "state_dict_evidence": "['epoch','Combiner']",
+   "interpreter": null,
+   "interpreter_source": "UNSET",
+   "interpreter_probe": "UNVERIFIED",
+   "native_entrypoint": "src/validate.py",
+   "native_launcher": "script",
+   "workbench_entrypoint": "workbench/backend/adapters/models.py:combiner_rn50x4_noft via evaluate_models.py",
+   "protocols": [
+    "fashioniq_original_split"
+   ],
+   "native_protocol": "fashioniq_original_split",
+   "live_composition": "absent (no adapter)",
+   "live_native": "live (script)"
+  },
+  {
+   "model_id": "clip4cir_rn50x4_fullft",
+   "checkpoint_id": "rn50x4_fullft_unresolved",
+   "repository": "https://github.com/ABaldrati/CLIP4Cir",
+   "source_dir": "CLIP4Cir",
+   "filename": ".",
+   "artifact_type": "bundle_directory",
+   "bytes": 949892616,
+   "sha256": null,
+   "member_digests": [
+    {
+     "member": "fiq_clip_RN50x4_fullft.pt",
+     "bytes": 713874695,
+     "sha256": "4111ac139cf96ac0cf31b30bf8f55b654247b06f0f5fbee4fe8dcc8c1c7cfd2f"
+    },
+    {
+     "member": "fiq_comb_RN50x4_fullft.pt",
+     "bytes": 236017921,
+     "sha256": "7c7c0a10fb4c995cb1ded9ad70a58891d50c622263c54131523bfb232b493f8e"
+    }
+   ],
+   "expected_sha256": null,
+   "sha_state": "BUNDLE_SEE_MEMBERS",
+   "staged": true,
+   "resolved_path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/../../checkpoints/clip4cir/FashionIQ/RN50x4_fullft",
+   "checkpoint_mapping_status": "VERIFIED_METADATA",
+   "variant_status": "URL_VERIFIED",
+   "training_noise_pct": 0,
+   "evaluation_noise_pct": 0,
+   "training_dataset": null,
+   "state_dict_shape": "torch-zip; two member files",
+   "state_dict_evidence": "fiq_comb_RN50x4_fullft.pt: ['epoch','Combiner']; fiq_clip_RN50x4_fullft.pt: ['epoch','CLIP'] (669 param names)",
+   "interpreter": null,
+   "interpreter_source": "UNSET",
+   "interpreter_probe": "UNVERIFIED",
+   "native_entrypoint": "src/validate.py",
+   "native_launcher": "script",
+   "workbench_entrypoint": "workbench/backend/adapters/models.py:clip4cir_rn50x4_fullft via evaluate_models.py",
+   "protocols": [
+    "fashioniq_original_split"
+   ],
+   "native_protocol": "fashioniq_original_split",
+   "live_composition": "absent (no adapter)",
+   "live_native": "live (script)"
+  },
+  {
+   "model_id": "tgcir",
+   "checkpoint_id": "tgcir_archive_unresolved",
+   "repository": "https://github.com/iLearn-Lab/MM23-TG-CIR",
+   "source_dir": "TGCIR",
+   "filename": "Fashioniq.pt",
+   "artifact_type": "file",
+   "bytes": 607928637,
+   "sha256": "c37768f374c75bebff1299e870518c23bf6db3dc8a75c4d1f729ccd6dd02e966",
+   "member_digests": [
+    {
+     "member": "Fashioniq.pt",
+     "bytes": 607928637,
+     "sha256": "UNVERIFIED"
+    }
+   ],
+   "expected_sha256": "c37768f374c75bebff1299e870518c23bf6db3dc8a75c4d1f729ccd6dd02e966",
+   "sha_state": "MATCH",
+   "staged": true,
+   "resolved_path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/../../downloads/tgcir/x/checkpoints/Fashioniq.pt",
+   "checkpoint_mapping_status": "VERIFIED_METADATA",
+   "variant_status": "URL_VERIFIED",
+   "training_noise_pct": null,
+   "evaluation_noise_pct": 0,
+   "training_dataset": null,
+   "state_dict_shape": "UNVERIFIED",
+   "state_dict_evidence": "not inspected in this pass",
+   "interpreter": null,
+   "interpreter_source": "UNSET",
+   "interpreter_probe": "UNVERIFIED",
+   "native_entrypoint": "test.py",
+   "native_launcher": "replay",
+   "workbench_entrypoint": "workbench/backend/adapters/models.py:tgcir via evaluate_models.py",
+   "protocols": [
+    "fashioniq_val_split"
+   ],
+   "native_protocol": "fashioniq_val_split",
+   "live_composition": "absent (no adapter)",
+   "live_native": "live (replay wrapper)"
+  },
+  {
+   "model_id": "sprc",
+   "checkpoint_id": "sprc_fiq_unresolved",
+   "repository": "https://github.com/chunmeifeng/SPRC",
+   "source_dir": "SPRC",
+   "filename": "sprc_fiq.pt",
+   "artifact_type": "file",
+   "bytes": null,
+   "sha256": null,
+   "member_digests": [],
+   "expected_sha256": null,
+   "sha_state": "ABSENT",
+   "staged": false,
+   "resolved_path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/../../checkpoints/sprc/sprc_fiq.pt",
+   "checkpoint_mapping_status": "UNVERIFIED",
+   "variant_status": "CHECKPOINT_MAPPING_UNVERIFIED",
+   "training_noise_pct": null,
+   "evaluation_noise_pct": 0,
+   "training_dataset": null,
+   "state_dict_shape": "UNVERIFIED",
+   "state_dict_evidence": "not inspected in this pass",
+   "interpreter": null,
+   "interpreter_source": "UNSET",
+   "interpreter_probe": "UNVERIFIED",
+   "native_entrypoint": "src/blip_validate.py",
+   "native_launcher": "script",
+   "workbench_entrypoint": "workbench/backend/adapters/models.py:sprc via evaluate_models.py",
+   "protocols": [
+    "fashioniq_original_split"
+   ],
+   "native_protocol": "fashioniq_original_split",
+   "live_composition": "absent (no adapter)",
+   "live_native": "not runnable (checkpoint not staged in resolved root)"
+  },
+  {
+   "model_id": "sprc",
+   "checkpoint_id": "sprc_fiq_vitl",
+   "repository": "https://github.com/chunmeifeng/SPRC",
+   "source_dir": "SPRC",
+   "filename": "sprc_fiq_vitl.pt",
+   "artifact_type": "file",
+   "bytes": 1459756541,
+   "sha256": "19386104271c01ea03ee2177575c0e55f98edd3ba61a116d78f2e61ab5dbea08",
+   "member_digests": [
+    {
+     "member": "sprc_fiq_vitl.pt",
+     "bytes": 1459756541,
+     "sha256": "19386104271c01ea03ee2177575c0e55f98edd3ba61a116d78f2e61ab5dbea08"
+    }
+   ],
+   "expected_sha256": "19386104271c01ea03ee2177575c0e55f98edd3ba61a116d78f2e61ab5dbea08",
+   "sha_state": "MATCH",
+   "staged": true,
+   "resolved_path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/../../checkpoints/sprc/sprc_fiq_vitl.pt",
+   "checkpoint_mapping_status": "VERIFIED_METADATA",
+   "variant_status": "URL_VERIFIED",
+   "training_noise_pct": null,
+   "evaluation_noise_pct": 0,
+   "training_dataset": null,
+   "state_dict_shape": "torch-zip dict; 2 top-level keys",
+   "state_dict_evidence": "['epoch','Blip2QformerCirAlignPrompt']; 628 param names nested",
+   "interpreter": null,
+   "interpreter_source": "UNSET",
+   "interpreter_probe": "UNVERIFIED",
+   "native_entrypoint": "src/blip_validate.py",
+   "native_launcher": "script",
+   "workbench_entrypoint": "workbench/backend/adapters/models.py:sprc via evaluate_models.py",
+   "protocols": [
+    "fashioniq_original_split"
+   ],
+   "native_protocol": "fashioniq_original_split",
+   "live_composition": "absent (no adapter)",
+   "live_native": "live (script)"
+  },
+  {
+   "model_id": "limn",
+   "checkpoint_id": "base_iter0_dress",
+   "repository": "https://github.com/iLearn-Lab/TPAMI24-LIMN",
+   "source_dir": "LIMN",
+   "filename": "0_dress_best_model.pt",
+   "artifact_type": "file",
+   "bytes": 1792010157,
+   "sha256": "96a335d4eb8b1e77d35575aab9177637208e2eb6c59e12f833f67e5cb0e7fc1c",
+   "member_digests": [
+    {
+     "member": "0_dress_best_model.pt",
+     "bytes": 1792010157,
+     "sha256": "96a335d4eb8b1e77d35575aab9177637208e2eb6c59e12f833f67e5cb0e7fc1c"
+    }
+   ],
+   "expected_sha256": "96a335d4eb8b1e77d35575aab9177637208e2eb6c59e12f833f67e5cb0e7fc1c",
+   "sha_state": "MATCH",
+   "staged": true,
+   "resolved_path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/limn/0_dress_best_model.pt",
+   "checkpoint_mapping_status": "VERIFIED_METADATA",
+   "variant_status": "URL_VERIFIED",
+   "training_noise_pct": null,
+   "evaluation_noise_pct": 0,
+   "training_dataset": null,
+   "state_dict_shape": "torch-zip WHOLE-MODEL object",
+   "state_dict_evidence": "class LIMN",
+   "interpreter": "/home/heheboiz/data/cir/workbench/envs/limn310-adapted/bin/python",
+   "interpreter_source": "workbench.env",
+   "interpreter_probe": "py 3.10.20, torch 2.7.1+cu128, tv 0.22.1+cu128, cuda 12.8",
+   "native_entrypoint": "LIMN/test.py",
+   "native_launcher": "replay",
+   "workbench_entrypoint": "workbench.composition.model_limn",
+   "protocols": [
+    "fashioniq_val_split"
+   ],
+   "native_protocol": "fashioniq_val_split",
+   "live_composition": "live (adapter)",
+   "live_native": "live (replay wrapper)"
+  },
+  {
+   "model_id": "limn",
+   "checkpoint_id": "base_iter0_shirt",
+   "repository": "https://github.com/iLearn-Lab/TPAMI24-LIMN",
+   "source_dir": "LIMN",
+   "filename": "0_shirt_best_model.pt",
+   "artifact_type": "file",
+   "bytes": 1792010157,
+   "sha256": "9260c7f77d3017d8cc10e6652cc8cfe275dbc9704366fa2bf581a24808930d74",
+   "member_digests": [
+    {
+     "member": "0_shirt_best_model.pt",
+     "bytes": 1792010157,
+     "sha256": "9260c7f77d3017d8cc10e6652cc8cfe275dbc9704366fa2bf581a24808930d74"
+    }
+   ],
+   "expected_sha256": "9260c7f77d3017d8cc10e6652cc8cfe275dbc9704366fa2bf581a24808930d74",
+   "sha_state": "MATCH",
+   "staged": true,
+   "resolved_path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/limn/0_shirt_best_model.pt",
+   "checkpoint_mapping_status": "VERIFIED_METADATA",
+   "variant_status": "URL_VERIFIED",
+   "training_noise_pct": null,
+   "evaluation_noise_pct": 0,
+   "training_dataset": null,
+   "state_dict_shape": "torch-zip WHOLE-MODEL object",
+   "state_dict_evidence": "class LIMN",
+   "interpreter": "/home/heheboiz/data/cir/workbench/envs/limn310-adapted/bin/python",
+   "interpreter_source": "workbench.env",
+   "interpreter_probe": "py 3.10.20, torch 2.7.1+cu128, tv 0.22.1+cu128, cuda 12.8",
+   "native_entrypoint": "LIMN/test.py",
+   "native_launcher": "replay",
+   "workbench_entrypoint": "workbench.composition.model_limn",
+   "protocols": [
+    "fashioniq_val_split"
+   ],
+   "native_protocol": "fashioniq_val_split",
+   "live_composition": "live (adapter)",
+   "live_native": "live (replay wrapper)"
+  },
+  {
+   "model_id": "limn",
+   "checkpoint_id": "base_iter0_toptee",
+   "repository": "https://github.com/iLearn-Lab/TPAMI24-LIMN",
+   "source_dir": "LIMN",
+   "filename": "0_toptee_best_model.pt",
+   "artifact_type": "file",
+   "bytes": 1792010157,
+   "sha256": "79f663a14d89d455fdc3612b0b36d011c06d7957d1475a654755e1053a6cece2",
+   "member_digests": [
+    {
+     "member": "0_toptee_best_model.pt",
+     "bytes": 1792010157,
+     "sha256": "79f663a14d89d455fdc3612b0b36d011c06d7957d1475a654755e1053a6cece2"
+    }
+   ],
+   "expected_sha256": "79f663a14d89d455fdc3612b0b36d011c06d7957d1475a654755e1053a6cece2",
+   "sha_state": "MATCH",
+   "staged": true,
+   "resolved_path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/limn/0_toptee_best_model.pt",
+   "checkpoint_mapping_status": "VERIFIED_METADATA",
+   "variant_status": "URL_VERIFIED",
+   "training_noise_pct": null,
+   "evaluation_noise_pct": 0,
+   "training_dataset": null,
+   "state_dict_shape": "torch-zip WHOLE-MODEL object",
+   "state_dict_evidence": "class LIMN",
+   "interpreter": "/home/heheboiz/data/cir/workbench/envs/limn310-adapted/bin/python",
+   "interpreter_source": "workbench.env",
+   "interpreter_probe": "py 3.10.20, torch 2.7.1+cu128, tv 0.22.1+cu128, cuda 12.8",
+   "native_entrypoint": "LIMN/test.py",
+   "native_launcher": "replay",
+   "workbench_entrypoint": "workbench.composition.model_limn",
+   "protocols": [
+    "fashioniq_val_split"
+   ],
+   "native_protocol": "fashioniq_val_split",
+   "live_composition": "live (adapter)",
+   "live_native": "live (replay wrapper)"
+  },
+  {
+   "model_id": "tme",
+   "checkpoint_id": "fashioniq_0",
+   "repository": "https://github.com/li-shuxian/TME",
+   "source_dir": "TME",
+   "filename": "fashioniq_0_best_model.pth",
+   "artifact_type": "file",
+   "bytes": 2728382104,
+   "sha256": "fea7fc08760dad1f5a66184ea7e65b45388f9781157cbd33a3b64db74103968a",
+   "member_digests": [
+    {
+     "member": "fashioniq_0_best_model.pth",
+     "bytes": 2728382104,
+     "sha256": "fea7fc08760dad1f5a66184ea7e65b45388f9781157cbd33a3b64db74103968a"
+    }
+   ],
+   "expected_sha256": null,
+   "sha_state": "PRESENT_NO_DECLARED_SHA",
+   "staged": true,
+   "resolved_path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/tme/fashioniq_0_best_model.pth",
+   "checkpoint_mapping_status": "VERIFIED_METADATA",
+   "variant_status": "URL_VERIFIED",
+   "training_noise_pct": 0,
+   "evaluation_noise_pct": 0,
+   "training_dataset": null,
+   "state_dict_shape": "torch-zip bare state_dict",
+   "state_dict_evidence": "860 keys; first: query_tokens, temp, prompt_tokens, visual_encoder.cls_token",
+   "interpreter": "/home/heheboiz/data/cir/workbench/envs/tme-adapted/bin/python",
+   "interpreter_source": "workbench.env",
+   "interpreter_probe": "py 3.10.22, torch 2.7.1+cu128, tv 0.22.1+cu128, cuda 12.8",
+   "native_entrypoint": "src/precompute_test.py",
+   "native_launcher": "replay",
+   "workbench_entrypoint": "workbench.composition.model_tme",
+   "protocols": [
+    "fashioniq_original_split"
+   ],
+   "native_protocol": "fashioniq_original_split",
+   "live_composition": "live (adapter)",
+   "live_native": "live (replay wrapper)"
+  },
+  {
+   "model_id": "tme",
+   "checkpoint_id": "cirr_0",
+   "repository": "https://github.com/li-shuxian/TME",
+   "source_dir": "TME",
+   "filename": "cirr_0_best_model.pth",
+   "artifact_type": "file",
+   "bytes": null,
+   "sha256": null,
+   "member_digests": [],
+   "expected_sha256": null,
+   "sha_state": "ABSENT",
+   "staged": false,
+   "resolved_path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/tme/cirr_0_best_model.pth",
+   "checkpoint_mapping_status": "VERIFIED_METADATA",
+   "variant_status": "URL_VERIFIED",
+   "training_noise_pct": 0,
+   "evaluation_noise_pct": 0,
+   "training_dataset": "CIRR",
+   "state_dict_shape": "UNVERIFIED",
+   "state_dict_evidence": "not inspected in this pass",
+   "interpreter": "/home/heheboiz/data/cir/workbench/envs/tme-adapted/bin/python",
+   "interpreter_source": "workbench.env",
+   "interpreter_probe": "py 3.10.22, torch 2.7.1+cu128, tv 0.22.1+cu128, cuda 12.8",
+   "native_entrypoint": "src/precompute_test.py",
+   "native_launcher": "replay",
+   "workbench_entrypoint": "workbench.composition.model_tme",
+   "protocols": [
+    "fashioniq_original_split"
+   ],
+   "native_protocol": "fashioniq_original_split",
+   "live_composition": "live (adapter)",
+   "live_native": "not runnable (checkpoint not staged in resolved root)"
+  }
+ ],
+ "environments": {
+  "workbench_env_vars": {
+   "WORKBENCH_ENCODER_PYTHON": "/home/heheboiz/data/cir/workbench/envs/encoder310-adapted/bin/python",
+   "WORKBENCH_LIMN_PYTHON": "/home/heheboiz/data/cir/workbench/envs/limn310-adapted/bin/python",
+   "WORKBENCH_HABIT_PYTHON": "/home/heheboiz/data/cir/workbench/envs/ilearn39-adapted/bin/python",
+   "WORKBENCH_INTENT_PYTHON": "/home/heheboiz/data/cir/workbench/envs/ilearn39-adapted/bin/python",
+   "WORKBENCH_HINT_PYTHON": "/home/heheboiz/data/cir/workbench/envs/ilearn39-adapted/bin/python",
+   "WORKBENCH_CONESEP_PYTHON": "/home/heheboiz/data/cir/workbench/envs/ilearn39-adapted/bin/python",
+   "WORKBENCH_PTHA_MTST_PYTHON": "/home/heheboiz/data/cir/workbench/artifacts/environments/cir-005ef4e1b02999a5/bin/python",
+   "WORKBENCH_TME_PYTHON": "/home/heheboiz/data/cir/workbench/envs/tme-adapted/bin/python",
+   "WORKBENCH_CSMCIR_PYTHON": "/home/heheboiz/data/cir/workbench/artifacts/environments/cir-005ef4e1b02999a5/bin/python"
+  },
+  "unset_vars": [
+   "WORKBENCH_AIRKNOW_PYTHON",
+   "WORKBENCH_CLIP4CIR_PYTHON",
+   "WORKBENCH_CLVC_PYTHON",
+   "WORKBENCH_DCNET_PYTHON",
+   "WORKBENCH_PAIR_PYTHON",
+   "WORKBENCH_SPRC_PYTHON",
+   "WORKBENCH_TGCIR_PYTHON"
+  ],
+  "probes": [
+   {
+    "interpreter": "/home/heheboiz/data/cir/workbench/envs/airknow-adapted/bin/python",
+    "python": "3.11.15",
+    "torch": "2.7.1+cu128",
+    "torchvision": "0.22.1+cu128",
+    "torch_cuda": "12.8",
+    "probe_method": "CUDA_VISIBLE_DEVICES=\"\" <interp> -c \"import torch,torchvision,sys; ...\"",
+    "gpu_used": false
+   },
+   {
+    "interpreter": "/home/heheboiz/data/cir/workbench/envs/clip4cir-adapted/bin/python",
+    "python": "3.11.15",
+    "torch": "2.7.1+cu128",
+    "torchvision": "0.22.1+cu128",
+    "torch_cuda": "12.8",
+    "probe_method": "CUDA_VISIBLE_DEVICES=\"\" <interp> -c \"import torch,torchvision,sys; ...\"",
+    "gpu_used": false
+   },
+   {
+    "interpreter": "/home/heheboiz/data/cir/workbench/envs/ctl312/bin/python",
+    "python": "3.12.3",
+    "torch": "2.15.0+cu132",
+    "torchvision": "0.29.2+cu132",
+    "torch_cuda": "13.2",
+    "probe_method": "CUDA_VISIBLE_DEVICES=\"\" <interp> -c \"import torch,torchvision,sys; ...\"",
+    "gpu_used": false
+   },
+   {
+    "interpreter": "/home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python",
+    "python": "3.12.11",
+    "torch": "2.15.0+cu132",
+    "torchvision": "0.29.2+cu132",
+    "torch_cuda": "13.2",
+    "probe_method": "CUDA_VISIBLE_DEVICES=\"\" <interp> -c \"import torch,torchvision,sys; ...\"",
+    "gpu_used": false
+   },
+   {
+    "interpreter": "/home/heheboiz/data/cir/workbench/envs/dcnet-prepare/bin/python",
+    "python": "3.7.12",
+    "torch": "NO_TORCH",
+    "torchvision": "-",
+    "torch_cuda": "-",
+    "probe_method": "CUDA_VISIBLE_DEVICES=\"\" <interp> -c \"import torch,torchvision,sys; ...\"",
+    "gpu_used": false
+   },
+   {
+    "interpreter": "/home/heheboiz/data/cir/workbench/envs/dl-adapted/bin/python",
+    "python": "3.11.15",
+    "torch": "2.7.1+cu128",
+    "torchvision": "0.22.1+cu128",
+    "torch_cuda": "12.8",
+    "probe_method": "CUDA_VISIBLE_DEVICES=\"\" <interp> -c \"import torch,torchvision,sys; ...\"",
+    "gpu_used": false
+   },
+   {
+    "interpreter": "/home/heheboiz/data/cir/workbench/envs/encoder310-adapted/bin/python",
+    "python": "3.10.20",
+    "torch": "2.7.1+cu128",
+    "torchvision": "0.22.1+cu128",
+    "torch_cuda": "12.8",
+    "probe_method": "CUDA_VISIBLE_DEVICES=\"\" <interp> -c \"import torch,torchvision,sys; ...\"",
+    "gpu_used": false
+   },
+   {
+    "interpreter": "/home/heheboiz/data/cir/workbench/envs/ilearn39-adapted/bin/python",
+    "python": "3.9.25",
+    "torch": "2.7.1+cu128",
+    "torchvision": "0.22.1+cu128",
+    "torch_cuda": "12.8",
+    "probe_method": "CUDA_VISIBLE_DEVICES=\"\" <interp> -c \"import torch,torchvision,sys; ...\"",
+    "gpu_used": false
+   },
+   {
+    "interpreter": "/home/heheboiz/data/cir/workbench/envs/limn-adapted/bin/python",
+    "python": "3.11.15",
+    "torch": "2.7.1+cu128",
+    "torchvision": "0.22.1+cu128",
+    "torch_cuda": "12.8",
+    "probe_method": "CUDA_VISIBLE_DEVICES=\"\" <interp> -c \"import torch,torchvision,sys; ...\"",
+    "gpu_used": false
+   },
+   {
+    "interpreter": "/home/heheboiz/data/cir/workbench/envs/limn310-adapted/bin/python",
+    "python": "3.10.20",
+    "torch": "2.7.1+cu128",
+    "torchvision": "0.22.1+cu128",
+    "torch_cuda": "12.8",
+    "probe_method": "CUDA_VISIBLE_DEVICES=\"\" <interp> -c \"import torch,torchvision,sys; ...\"",
+    "gpu_used": false
+   },
+   {
+    "interpreter": "/home/heheboiz/data/cir/workbench/envs/pair-adapted/bin/python",
+    "python": "3.11.15",
+    "torch": "2.7.1+cu128",
+    "torchvision": "0.22.1+cu128",
+    "torch_cuda": "12.8",
+    "probe_method": "CUDA_VISIBLE_DEVICES=\"\" <interp> -c \"import torch,torchvision,sys; ...\"",
+    "gpu_used": false
+   },
+   {
+    "interpreter": "/home/heheboiz/data/cir/workbench/envs/sprc-adapted/bin/python",
+    "python": "3.11.15",
+    "torch": "2.7.1+cu128",
+    "torchvision": "0.22.1+cu128",
+    "torch_cuda": "12.8",
+    "probe_method": "CUDA_VISIBLE_DEVICES=\"\" <interp> -c \"import torch,torchvision,sys; ...\"",
+    "gpu_used": false
+   },
+   {
+    "interpreter": "/home/heheboiz/data/cir/workbench/envs/test-adapted/bin/python",
+    "python": "3.11.15",
+    "torch": "2.7.1+cu128",
+    "torchvision": "0.22.1+cu128",
+    "torch_cuda": "12.8",
+    "probe_method": "CUDA_VISIBLE_DEVICES=\"\" <interp> -c \"import torch,torchvision,sys; ...\"",
+    "gpu_used": false
+   },
+   {
+    "interpreter": "/home/heheboiz/data/cir/workbench/envs/tme-adapted/bin/python",
+    "python": "3.10.22",
+    "torch": "2.7.1+cu128",
+    "torchvision": "0.22.1+cu128",
+    "torch_cuda": "12.8",
+    "probe_method": "CUDA_VISIBLE_DEVICES=\"\" <interp> -c \"import torch,torchvision,sys; ...\"",
+    "gpu_used": false
+   },
+   {
+    "interpreter": "/home/heheboiz/data/cir/workbench/artifacts/environments/cir-005ef4e1b02999a5/bin/python",
+    "python": "3.10.22",
+    "torch": "2.7.1+cu128",
+    "torchvision": "0.22.1+cu128",
+    "torch_cuda": "12.8",
+    "probe_method": "CUDA_VISIBLE_DEVICES=\"\" <interp> -c \"import torch,torchvision,sys; ...\"",
+    "gpu_used": false
+   },
+   {
+    "interpreter": "/home/heheboiz/data/cir/workbench/artifacts/environments/clip4cir-38/bin/python",
+    "python": "3.8.20",
+    "torch": "1.11.0+cpu",
+    "torchvision": "0.12.0+cpu",
+    "torch_cuda": null,
+    "probe_method": "CUDA_VISIBLE_DEVICES=\"\" <interp> -c \"import torch,torchvision,sys; ...\"",
+    "gpu_used": false
+   },
+   {
+    "interpreter": "/home/heheboiz/data/cir/workbench/artifacts/environments/dcnet-377/bin/python",
+    "python": "3.7.7",
+    "torch": "1.4.0+cpu",
+    "torchvision": "0.5.0+cpu",
+    "torch_cuda": null,
+    "probe_method": "CUDA_VISIBLE_DEVICES=\"\" <interp> -c \"import torch,torchvision,sys; ...\"",
+    "gpu_used": false
+   },
+   {
+    "interpreter": "/home/heheboiz/data/cir/workbench/artifacts/environments/sprc-39/bin/python",
+    "python": "3.9.25",
+    "torch": "2.0.1+cpu",
+    "torchvision": "0.15.2+cpu",
+    "torch_cuda": null,
+    "probe_method": "CUDA_VISIBLE_DEVICES=\"\" <interp> -c \"import torch,torchvision,sys; ...\"",
+    "gpu_used": false
+   }
+  ],
+  "assignment_fallback": {
+   "path": "workbench/artifacts/environment_assignment.json",
+   "exists": false
+  }
+ },
+ "checkpoint_identities": {
+  "method": "pickle read with every global class stubbed and persistent ids stubbed; no upstream module imported, no checkpoint code executed",
+  "observed": {
+   "whole_model_pickle": [
+    "intent/fiq_n02 (Blip2QformerCir)",
+    "airknow/fiq_n05 (Blip2QformerCir)",
+    "airknow/fiq_n08 (Blip2QformerCir)",
+    "conesep/fiq_n02 (ConeSep)",
+    "habit/fiq_n02 (HABIT)",
+    "hint/fashioniq (lavis.models.blip2_models.HINT.HINT)",
+    "limn/base_iter0_dress (LIMN)",
+    "limn/base_iter0_shirt (LIMN)",
+    "limn/base_iter0_toptee (LIMN)"
+   ],
+   "epoch_plus_class_wrapper": {
+    "csmcir/fashioniq": "Blip2QformerCirAlignPromptTargetImageCaptionshiyan92, 861 names",
+    "ptha_mtst/cirr_transfer": "Blip2QformerCirCat, 857 names",
+    "sprc/sprc_fiq_vitl": "Blip2QformerCirAlignPrompt, 628 names",
+    "combiner_rn50x4_noft/rn50x4_noft_unresolved": "Combiner",
+    "clip4cir_rn50x4_fullft/rn50x4_fullft_unresolved": "Combiner + CLIP (669 names)"
+   },
+   "bare_state_dict": {
+    "encoder/fashioniq": "417 keys",
+    "tme/fashioniq_0": "860 keys"
+   },
+   "legacy_non_zip_pickle": [
+    "dcnet/fashioniq_run_directory (2877310172 B)"
+   ],
+   "not_inspected": [
+    "clvc_net/author_drive_unresolved (6 files)",
+    "tgcir/tgcir_archive_unresolved"
+   ]
+  }
+ },
+ "patches": [
+  {
+   "model_id": "csmcir",
+   "path": "src/lavis/models/__init__.py",
+   "patch_file": "workbench/patches/csmcir_models_init_compat.patch",
+   "patch_sha256_declared": "3f2bac48fe1a1775d2e5e6a09f81affa3809a31ed6b7c4213d5da8c2a0ada3bd",
+   "patch_sha256_computed": "3f2bac48fe1a1775d2e5e6a09f81affa3809a31ed6b7c4213d5da8c2a0ada3bd",
+   "base_sha256": "9d8c914b551a7de614e062f9a241f44626fd591a31a0ccf1cc79f0ae23c9db01",
+   "derived_sha256": "0ec134431697af6f202b5256e4e30ab725a44191a279e3f8bfdb3a62495b3774",
+   "tree_sha256": "0ec134431697af6f202b5256e4e30ab725a44191a279e3f8bfdb3a62495b3774",
+   "tree_state": "DERIVED"
+  },
+  {
+   "model_id": "csmcir",
+   "path": "src/validate_blip_csmcir.py",
+   "patch_file": "workbench/patches/csmcir_validate_visualization_opt_in.patch",
+   "patch_sha256_declared": "0fcff28bf1f9abd31a14a06b0f200eecfa46af8c2d7624a3420a68204ef50fa8",
+   "patch_sha256_computed": "0fcff28bf1f9abd31a14a06b0f200eecfa46af8c2d7624a3420a68204ef50fa8",
+   "base_sha256": "aa7a4395cdb700fded0567e0969da774a331927eaea327b5a23da82fdc7506a9",
+   "derived_sha256": "a057e8f3ad7097adcfabb2b8fd8b4747588ff3461cfb43f00cd3483dfd6d512d",
+   "tree_sha256": "a057e8f3ad7097adcfabb2b8fd8b4747588ff3461cfb43f00cd3483dfd6d512d",
+   "tree_state": "DERIVED"
+  },
+  {
+   "model_id": "dcnet",
+   "path": "base/base_trainer.py",
+   "patch_file": "workbench/patches/dcnet_checkpoint_weights_only_optout.patch",
+   "patch_sha256_declared": "659eabf3c5b98352b3a09fa8291e24aedf090d806f2ada682e181fdc460fc0b8",
+   "patch_sha256_computed": "659eabf3c5b98352b3a09fa8291e24aedf090d806f2ada682e181fdc460fc0b8",
+   "base_sha256": "3edd98363f81d0efbac6f7b1dcf9690a5db714bcc588cd4b0d890c5bb865860b",
+   "derived_sha256": "f265cefec1795c92f6e64b6c652d60fcda7aed15071ee6817af2c1b035781a8b",
+   "tree_sha256": "f265cefec1795c92f6e64b6c652d60fcda7aed15071ee6817af2c1b035781a8b",
+   "tree_state": "DERIVED"
+  },
+  {
+   "model_id": "tme",
+   "path": "src/precompute.py",
+   "patch_file": "workbench/patches/tme_precompute_bounded_allocation.patch",
+   "patch_sha256_declared": "cdf7d98c439a2a372ebb0053783d55c5d2928eb5decfb3652cbf321eadccb85a",
+   "patch_sha256_computed": "cdf7d98c439a2a372ebb0053783d55c5d2928eb5decfb3652cbf321eadccb85a",
+   "base_sha256": "c3da9c9dc8c11b0616640f910435583471fe64f9190f6fb5abd4382bc2c48d27",
+   "derived_sha256": "97bdbc14c4d7ae1aa13222190e0056cb3557225fd73c51b455203898aa7ad963",
+   "tree_sha256": "97bdbc14c4d7ae1aa13222190e0056cb3557225fd73c51b455203898aa7ad963",
+   "tree_state": "DERIVED"
+  },
+  {
+   "model_id": "tme",
+   "path": "src/precompute_evaluation.py",
+   "patch_file": "workbench/patches/tme_eval_batch_override.patch",
+   "patch_sha256_declared": "0594b8896c051d351fdbefd4c4f3f7c31012eb2bab0b9e3462ed4fbd7035700a",
+   "patch_sha256_computed": "0594b8896c051d351fdbefd4c4f3f7c31012eb2bab0b9e3462ed4fbd7035700a",
+   "base_sha256": "0f6a0573bc82e5a8e34de8bd78d1da8970c21b917e1784a44be6781b7a5581f3",
+   "derived_sha256": "1f13dbd5e005621d723b4026ced17afb4f6ab1ace9b51f35e4e83023f375d81b",
+   "tree_sha256": "1f13dbd5e005621d723b4026ced17afb4f6ab1ace9b51f35e4e83023f375d81b",
+   "tree_state": "DERIVED"
+  }
+ ],
+ "gaps": [
+  {
+   "field": "dcnet/trained_model.pth state_dict contents",
+   "status": "UNVERIFIED",
+   "reason": "legacy non-zip pickle; reading requires executing it",
+   "resolves": "torch.load(weights_only=False) under a sandboxed interpreter, or a legacy-safe key extractor"
+  },
+  {
+   "field": "clvc_net 6-file internals",
+   "status": "UNVERIFIED",
+   "reason": "digests verified, pickle structure not read in this pass",
+   "resolves": "run the same stubbed-pickle reader over the 6 files"
+  },
+  {
+   "field": "tgcir/Fashioniq.pt internals",
+   "status": "UNVERIFIED",
+   "reason": "digest verified, structure not read in this pass",
+   "resolves": "same reader over the file"
+  },
+  {
+   "field": "upstream commit for 12 of 16 repos",
+   "status": "PROVENANCE_ONLY",
+   "reason": "no nested .git in workbench/third_party; pin rests on provenance.json + manifest re-hash",
+   "resolves": "git ls-remote against each upstream URL, or re-vendor with .git retained"
+  },
+  {
+   "field": "interpreter for 8 models",
+   "status": "UNRESOLVED",
+   "reason": "WORKBENCH_*_PYTHON unset and workbench/artifacts/environment_assignment.json absent",
+   "resolves": "set the 8 variables in workbench.env (operator-owned) or provision the assignment file"
+  },
+  {
+   "field": "tme cirr_0, sprc_fiq_unresolved, conesep/n0.5, conesep/n0.8",
+   "status": "NOT_STAGED_NO_DIGEST",
+   "reason": "expected_sha256 null in the registry and no bytes on disk",
+   "resolves": "author download + digest recorded, or explicit declaration that the variant is unsupported"
+  },
+  {
+   "field": "teacher/repos/TME upstream identity",
+   "status": "DISAGREES",
+   "reason": "clone remote is He-Changhao/2025-CVPR-TME @ 7fe81199; registry pins li-shuxian/TME @ 394aad79 (absent from that clone)",
+   "resolves": "vendor li-shuxian/TME@394aad79 into teacher/repos, or delete the stale clone and document that third_party is authoritative"
+  },
+  {
+   "field": "teacher/repos/CSMCIR/src/lavis/models/__init__.py state",
+   "status": "THIRD_STATE",
+   "reason": "sha256 8e9cd6a8 matches neither declared base (9d8c914b) nor derived (0ec13443); 102 uncommitted line edits",
+   "resolves": "git -C teacher/repos/CSMCIR checkout -- src/lavis/models/__init__.py, or record it as an approved variant with its own digest"
+  },
+  {
+   "field": "state_dict class provenance for whole-model pickles",
+   "status": "PARTIAL",
+   "reason": "the producing class name is known from the pickle, but no training-run metadata inside the file proves which upstream revision built it",
+   "resolves": "compare param-name sets against each candidate revision's class definition"
+  }
+ ]
+}

@@ -1,0 +1,142 @@
+gallery=(74381, 32, 256) queries=6003
+{
+  "multimodal": {
+    "r10_false": 35.61552557054806,
+    "r10_true": 35.61552557054806,
+    "r50_false": 54.3728135932034,
+    "r50_true": 54.3728135932034,
+    "ndcg_false": 0.32828280509551133,
+    "ndcg_true": 0.3282828064999273,
+    "ndcg_delta": 1.4044159724058147e-09,
+    "mrr_false": 0.20496768403872728,
+    "mrr_true": 0.20496768410229743,
+    "scored": 6003,
+    "selfcheck_mismatches": 0,
+    "selfcheck_n": 64,
+    "queries_changed_rank": 4,
+    "max_abs_drank": 1,
+    "true_path_seconds": 58.0,
+    "examples": [
+      [
+        "7:574",
+        1628,
+        1627
+      ],
+      [
+        "7:666",
+        42456,
+        42455
+      ],
+      [
+        "7:690",
+        63717,
+        63716
+      ],
+      [
+        "7:2253",
+        17475,
+        17474
+      ]
+    ]
+  }
+}
+{
+  "text_only_black_image": {
+    "r10_false": 15.292353823088456,
+    "r10_true": 15.292353823088456,
+    "r50_false": 27.053140096618357,
+    "r50_true": 27.053140096618357,
+    "ndcg_false": 0.2006777268917305,
+    "ndcg_true": 0.20067772844423498,
+    "ndcg_delta": 1.5525044860797976e-09,
+    "mrr_false": 0.08817990129679686,
+    "mrr_true": 0.08817990150606358,
+    "scored": 6003,
+    "selfcheck_mismatches": 0,
+    "selfcheck_n": 64,
+    "queries_changed_rank": 35,
+    "max_abs_drank": 2,
+    "true_path_seconds": 54.3,
+    "examples": [
+      [
+        "7:164",
+        53954,
+        53956
+      ],
+      [
+        "7:363",
+        64531,
+        64532
+      ],
+      [
+        "7:396",
+        2124,
+        2125
+      ],
+      [
+        "7:592",
+        52260,
+        52258
+      ],
+      [
+        "7:666",
+        46222,
+        46223
+      ]
+    ]
+  }
+}
+{
+  "image_only_empty_text": {
+    "r10_false": 3.315009162085624,
+    "r10_true": 3.315009162085624,
+    "r50_false": 10.31151091121106,
+    "r50_true": 10.31151091121106,
+    "ndcg_false": 0.11373588650412819,
+    "ndcg_true": 0.11373587075219026,
+    "ndcg_delta": 1.5751937934571636e-08,
+    "mrr_false": 0.013568380581241523,
+    "mrr_true": 0.013568377693147518,
+    "scored": 6003,
+    "selfcheck_mismatches": 0,
+    "selfcheck_n": 64,
+    "queries_changed_rank": 168,
+    "max_abs_drank": 5,
+    "true_path_seconds": 50.6,
+    "examples": [
+      [
+        "7:3",
+        26635,
+        26634
+      ],
+      [
+        "7:64",
+        24709,
+        24707
+      ],
+      [
+        "7:157",
+        53495,
+        53494
+      ],
+      [
+        "7:194",
+        55927,
+        55928
+      ],
+      [
+        "7:244",
+        50554,
+        50553
+      ]
+    ]
+  }
+}
+
+=== SUMMARY TABLE ===
+condition                    R@10 F   R@10 T   R@50 F   R@50 T         nDCG F         nDCG T    |dNDCG|  nchg  maxdR  chk
+multimodal                  35.6155  35.6155  54.3728  54.3728   0.3282828051   0.3282828065   1.40e-09     4      1    0
+text_only_black_image       15.2924  15.2924  27.0531  27.0531   0.2006777269   0.2006777284   1.55e-09    35      2    0
+image_only_empty_text        3.3150   3.3150  10.3115  10.3115   0.1137358865   0.1137358708   1.58e-08   168      5    0
+
+ACCEPT optimize=True = True  (R@10 identical AND R@50 identical AND |dNDCG|<=1e-6 AND selfcheck clean)

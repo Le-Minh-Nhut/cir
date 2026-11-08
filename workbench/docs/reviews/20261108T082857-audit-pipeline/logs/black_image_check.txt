@@ -1,0 +1,20 @@
+/home/heheboiz/data/cir/workbench/envs/encoder310-adapted/lib/python3.10/site-packages/timm/models/layers/__init__.py:49: FutureWarning: Importing from timm.models.layers is deprecated, please import via timm.layers
+  warnings.warn(f"Importing from {__name__} is deprecated, please import via timm.layers", FutureWarning)
+black->tensor shape (3, 224, 224) unique values [-1.7922625541687012, -1.7520971298217773, -1.480219841003418]
+mean/std of transformed black: -1.6748601198196411 0.13860508799552917
+
+def _stage_query_path(path: Path, query: Any, condition: str, work_root: Path) -> tuple[Path, str]:
+    with Image.open(path) as source:
+        image = source.copy()
+    adapted, text = adapt_query_inputs(image, query.query_txt, condition)
+    if condition == "text_only_black_image":
+        staged = work_root / "queries" / condition / f"{_component(query.qid)}.png"
+        staged.parent.mkdir(parents=True, exist_ok=True)
+        adapted.save(staged, format="PNG")
+        return staged, text
+    return path, text
+
+
+def _encode_queries(adapter: Any, queries: Sequence[Any], query_paths: Sequence[Path | None],
+                    indices: Sequence[int], condition: str, work_root: Path,
+       

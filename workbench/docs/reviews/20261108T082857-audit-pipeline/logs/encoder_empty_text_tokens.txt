@@ -1,0 +1,5 @@
+/home/heheboiz/data/cir/workbench/envs/encoder310-adapted/lib/python3.10/site-packages/timm/models/layers/__init__.py:49: FutureWarning: Importing from timm.models.layers is deprecated, please import via timm.layers
+  warnings.warn(f"Importing from {__name__} is deprecated, please import via timm.layers", FutureWarning)
+'is long and has a floral print' shape (1, 77) ids[:8] [49406, 533, 1538, 537, 791, 320, 10732, 3557] pad_count 68 eot_idx 8
+'' shape (1, 77) ids[:8] [49406, 49407, 0, 0, 0, 0, 0, 0] pad_count 75 eot_idx 1
+'   ' shape (1, 77) ids[:8] [49406, 49407, 0, 0, 0, 0, 0, 0] pad_count 75 eot_idx 1

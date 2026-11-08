@@ -1,0 +1,753 @@
+bringing up nodes...
+bringing up nodes...
+
+s....................................................................... [ 19%]
+.................................................F...................... [ 39%]
+..F..F.FFFF.................................s........................... [ 59%]
+........................................................................ [ 79%]
+...................ssss......................s.......................... [ 99%]
+..                                                                       [100%]
+=================================== FAILURES ===================================
+______ test_encoder_and_limn_failed_child_latch_and_preserve_log[encoder] ______
+[gw2] linux -- Python 3.12.11 /home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python
+
+tmp_path = PosixPath('/tmp/pytest-of-heheboiz/pytest-355/popen-gw2/test_encoder_and_limn_failed_c0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7fc040317bf0>
+kind = 'encoder'
+
+    @pytest.mark.parametrize("kind", ["encoder", "limn"])
+    def test_encoder_and_limn_failed_child_latch_and_preserve_log(tmp_path, monkeypatch, kind) -> None:
+        module = __import__(f"workbench.composition.model_{kind}", fromlist=["Adapter"])
+        adapter = _encoder_adapter(tmp_path) if kind == "encoder" else _limn_adapter(tmp_path)
+        marker = f"UNIQUE_TRACEBACK_{uuid.uuid4().hex}"
+        real_popen = subprocess.Popen
+        spawned: list[list[str]] = []
+    
+        def start(argv, **kwargs):
+            spawned.append(list(argv))
+            child = (f"import sys;sys.stderr.write({marker!r} + chr(10));"
+                     "sys.stderr.flush();sys.exit(9)")
+            return real_popen([sys.executable, "-c", child], **kwargs)
+    
+        monkeypatch.setattr(module.subprocess, "Popen", start)
+        for _ in range(2):
+            with pytest.raises(AdapterWorkerError,
+                               match=rf"model={kind}.*exit_status=9") as error:
+>               adapter.encode_queries([_image(tmp_path)], ["edit"], ["dress" if kind == "limn" else None])
+
+workbench/tests/test_circus_tme_lifecycle.py:213: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+workbench/composition/model_encoder.py:214: in encode_queries
+    return self._run_job("queries", image_paths, texts, categories)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+workbench/composition/model_encoder.py:139: in _run_job
+    self.require_verified_interpreter()
+workbench/composition/adapters.py:303: in require_verified_interpreter
+    verified = require_verified_model_interpreter(resolved, config=getattr(self, "config", None))
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+model = {'model_id': 'encoder', 'composition_adapter': 'workbench.composition.model_encoder', 'environment_required': True, 'e...r': 'WORKBENCH_ENCODER_PYTHON', 'confidence': 'VERIFIED_REQUIREMENTS', 'python': '3.9', 'pytorch': '1.13.1', ...}, ...}
+require_cuda = False
+config = namespace(WORKBENCH_CHECKPOINT_ROOT=PosixPath('/tmp/pytest-of-heheboiz/pytest-355/popen-gw2/test_encoder_and_limn_fail...z/pytest-355/popen-gw2/test_encoder_and_limn_failed_c0/FashionIQ'), CIR_REPO_ROOT=PosixPath('/home/heheboiz/data/cir'))
+
+    def require_verified_model_interpreter(model: dict[str, Any], *, require_cuda: bool = False,
+                                           config: Any | None = None) -> str:
+        """Return the model's verified interpreter, proving the runtime first.
+    
+        Raises when the environment is not *verified*: an interpreter that merely exists
+        or is isolated is not sufficient evidence to launch a real model run.
+        """
+        if not model.get("environment_required") and not (model.get("environment") or {}).get("python_env_var"):
+            # A declared model interpreter is authoritative even when autopilot must not provision it.
+            return sys.executable
+        probe_environment = globals().get("verify_environment", verify_environment)
+        report = probe_environment(model, probe=True, require_cuda=require_cuda, config=config)
+        variable = report.variable or "model-specific Python"
+        if report.tier in READY_TIERS and report.interpreter:
+            return report.interpreter
+>       raise RuntimeError(
+            f"execution environment not verified [{report.tier}/{report.status}]: "
+            f"{variable}={report.interpreter} ({report.reason})"
+        )
+E       RuntimeError: execution environment not verified [UNCONFIGURED/UNCONFIGURED]: WORKBENCH_ENCODER_PYTHON=None (WORKBENCH_ENCODER_PYTHON not set)
+
+workbench/backend/runtime.py:2309: RuntimeError
+_______ test_encoder_and_limn_failed_child_latch_and_preserve_log[limn] ________
+[gw2] linux -- Python 3.12.11 /home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python
+
+tmp_path = PosixPath('/tmp/pytest-of-heheboiz/pytest-355/popen-gw2/test_encoder_and_limn_failed_c1')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7fc040336f60>
+kind = 'limn'
+
+    @pytest.mark.parametrize("kind", ["encoder", "limn"])
+    def test_encoder_and_limn_failed_child_latch_and_preserve_log(tmp_path, monkeypatch, kind) -> None:
+        module = __import__(f"workbench.composition.model_{kind}", fromlist=["Adapter"])
+        adapter = _encoder_adapter(tmp_path) if kind == "encoder" else _limn_adapter(tmp_path)
+        marker = f"UNIQUE_TRACEBACK_{uuid.uuid4().hex}"
+        real_popen = subprocess.Popen
+        spawned: list[list[str]] = []
+    
+        def start(argv, **kwargs):
+            spawned.append(list(argv))
+            child = (f"import sys;sys.stderr.write({marker!r} + chr(10));"
+                     "sys.stderr.flush();sys.exit(9)")
+            return real_popen([sys.executable, "-c", child], **kwargs)
+    
+        monkeypatch.setattr(module.subprocess, "Popen", start)
+        for _ in range(2):
+            with pytest.raises(AdapterWorkerError,
+                               match=rf"model={kind}.*exit_status=9") as error:
+>               adapter.encode_queries([_image(tmp_path)], ["edit"], ["dress" if kind == "limn" else None])
+
+workbench/tests/test_circus_tme_lifecycle.py:213: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+workbench/composition/model_limn.py:352: in encode_queries
+    return self._run_job("queries", images, texts, categories)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+workbench/composition/model_limn.py:267: in _run_job
+    self.require_verified_interpreter()
+workbench/composition/adapters.py:303: in require_verified_interpreter
+    verified = require_verified_model_interpreter(resolved, config=getattr(self, "config", None))
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+model = {'model_id': 'limn', 'composition_adapter': 'workbench.composition.model_limn', 'replay_status': 'REPLAY_CODE_IMPLEMENTED', 'per_query_observer': 'LIMN_QUERY_OBSERVER_V1', ...}
+require_cuda = False
+config = WorkbenchConfig(CIR_REPO_ROOT=PosixPath('/home/heheboiz/data/cir'), CIR_DATA_ROOT=PosixPath('/home/heheboiz/data/cir/d...data/cir/workbench/artifacts'), WORKBENCH_CIRCUS_RELEASE_ROOT=PosixPath('/home/heheboiz/data/cir/data/circus_release'))
+
+    def require_verified_model_interpreter(model: dict[str, Any], *, require_cuda: bool = False,
+                                           config: Any | None = None) -> str:
+        """Return the model's verified interpreter, proving the runtime first.
+    
+        Raises when the environment is not *verified*: an interpreter that merely exists
+        or is isolated is not sufficient evidence to launch a real model run.
+        """
+        if not model.get("environment_required") and not (model.get("environment") or {}).get("python_env_var"):
+            # A declared model interpreter is authoritative even when autopilot must not provision it.
+            return sys.executable
+        probe_environment = globals().get("verify_environment", verify_environment)
+        report = probe_environment(model, probe=True, require_cuda=require_cuda, config=config)
+        variable = report.variable or "model-specific Python"
+        if report.tier in READY_TIERS and report.interpreter:
+            return report.interpreter
+>       raise RuntimeError(
+            f"execution environment not verified [{report.tier}/{report.status}]: "
+            f"{variable}={report.interpreter} ({report.reason})"
+        )
+E       RuntimeError: execution environment not verified [UNCONFIGURED/UNCONFIGURED]: WORKBENCH_LIMN_PYTHON=None (WORKBENCH_LIMN_PYTHON not set)
+
+workbench/backend/runtime.py:2309: RuntimeError
+_ test_resident_worker_reuse_and_cleanup[workbench.composition.model_conesep-conesep] _
+[gw3] linux -- Python 3.12.11 /home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python
+
+module = <module 'workbench.composition.model_conesep' from '/home/heheboiz/data/cir/workbench/composition/model_conesep.py'>
+model_id = 'conesep'
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x706a815a6690>
+tmp_path = PosixPath('/tmp/pytest-of-heheboiz/pytest-355/popen-gw3/test_resident_worker_reuse_and0')
+
+    @pytest.mark.parametrize(("module", "model_id"), [
+        (model_conesep, "conesep"), (model_ptha_mtst, "ptha_mtst"),
+    ])
+    def test_resident_worker_reuse_and_cleanup(module, model_id, monkeypatch, tmp_path) -> None:
+        adapter = _resident_adapter(module, model_id, tmp_path)
+        workers = []
+    
+        def start(argv, **kwargs):
+            worker = _ResidentFakeWorker(argv, **kwargs)
+            workers.append(worker)
+            return worker
+    
+        monkeypatch.setattr(module.subprocess, "Popen", start)
+        paths = []
+        for index in range(6):
+            path = tmp_path / f"image-{index}.png"
+            Image.new("RGB", (2, 2), (index, 0, 0)).save(path)
+            paths.append(str(path))
+>       results = [adapter.encode_targets([path], [None]) for path in paths[:3]]
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+workbench/tests/test_circus_adapters_blip.py:202: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+workbench/composition/model_conesep.py:70: in encode_targets
+    return _run(self, "targets", image_paths, (), categories)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+adapter = <workbench.composition.model_conesep.Adapter object at 0x706a815a7680>
+operation = 'targets'
+image_paths = ['/tmp/pytest-of-heheboiz/pytest-355/popen-gw3/test_resident_worker_reuse_and0/image-0.png']
+texts = (), categories = [None]
+
+    def _run(adapter: Adapter, operation: str, image_paths: Sequence[str], texts: Sequence[str],
+             categories: Sequence[str | None]) -> np.ndarray:
+        work_root = _check_work_root(adapter)
+        if not image_paths:
+            return np.empty((0, 8192), dtype=np.float32)
+        if adapter._worker_failed is not None:
+            raise AdapterWorkerError(adapter._worker_failed)
+        interpreter = adapter._interpreter
+        if not interpreter:
+            raise RuntimeError("no interpreter environment resolved for WORKBENCH_CONESEP_PYTHON")
+        checkpoint = adapter._checkpoint
+        checkpoint_path = Path(checkpoint["resolved_path"])
+        if not checkpoint_path.is_file():
+            raise FileNotFoundError(f"ConeSep checkpoint not staged at {checkpoint_path}")
+        if checkpoint.get("checkpoint_training_noise_pct") not in {20, 50, 80}:
+            raise ValueError(f"ConeSep checkpoint condition is not an author-released variant: {checkpoint['checkpoint_id']}")
+        if not adapter._interpreter_verified:
+            # Same gate, same code path, as every other adapter: see
+            # CompositionAdapter.require_verified_interpreter.
+            adapter.require_verified_interpreter()
+            adapter._interpreter_verified = True
+        if adapter._job_root is None:
+            work_root.mkdir(parents=True, exist_ok=True)
+            adapter._job_root = work_root / f".conesep-worker-{uuid.uuid4().hex}"
+            adapter._job_root.mkdir()
+        work = adapter._job_root
+        adapter._worker_counter += 1
+        job_path, output_path = (work / f"job-{adapter._worker_counter}.json",
+                                 work / f"output-{adapter._worker_counter}.npy")
+        source = Path(adapter.config.WORKBENCH_THIRD_PARTY_ROOT) / adapter._model["source_dir"]
+        job_path.write_text(json.dumps({"operation": operation,
+                                       "image_paths": [str(Path(path).resolve()) for path in image_paths],
+                                       "texts": list(texts), "categories": list(categories),
+                                       "output_path": str(output_path), "source_root": str(source),
+                                       "checkpoint_path": str(checkpoint_path),
+                                       "checkpoint_id": checkpoint["checkpoint_id"],
+>                                      "batch_size": adapter.batch_size}), encoding="utf-8")
+                                                     ^^^^^^^^^^^^^^^^^^
+E       AttributeError: 'Adapter' object has no attribute 'batch_size'
+
+workbench/composition/model_conesep.py:183: AttributeError
+_ test_resident_worker_reuse_and_cleanup[workbench.composition.model_ptha_mtst-ptha_mtst] _
+[gw3] linux -- Python 3.12.11 /home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python
+
+module = <module 'workbench.composition.model_ptha_mtst' from '/home/heheboiz/data/cir/workbench/composition/model_ptha_mtst.py'>
+model_id = 'ptha_mtst'
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x706a815b01d0>
+tmp_path = PosixPath('/tmp/pytest-of-heheboiz/pytest-355/popen-gw3/test_resident_worker_reuse_and1')
+
+    @pytest.mark.parametrize(("module", "model_id"), [
+        (model_conesep, "conesep"), (model_ptha_mtst, "ptha_mtst"),
+    ])
+    def test_resident_worker_reuse_and_cleanup(module, model_id, monkeypatch, tmp_path) -> None:
+        adapter = _resident_adapter(module, model_id, tmp_path)
+        workers = []
+    
+        def start(argv, **kwargs):
+            worker = _ResidentFakeWorker(argv, **kwargs)
+            workers.append(worker)
+            return worker
+    
+        monkeypatch.setattr(module.subprocess, "Popen", start)
+        paths = []
+        for index in range(6):
+            path = tmp_path / f"image-{index}.png"
+            Image.new("RGB", (2, 2), (index, 0, 0)).save(path)
+            paths.append(str(path))
+>       results = [adapter.encode_targets([path], [None]) for path in paths[:3]]
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+workbench/tests/test_circus_adapters_blip.py:202: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+workbench/composition/model_ptha_mtst.py:79: in encode_targets
+    return _run(self, "targets", image_paths, (), categories)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+adapter = <workbench.composition.model_ptha_mtst.Adapter object at 0x706a815b02f0>
+operation = 'targets'
+image_paths = ['/tmp/pytest-of-heheboiz/pytest-355/popen-gw3/test_resident_worker_reuse_and1/image-0.png']
+texts = (), categories = [None]
+
+    def _run(adapter: Adapter, operation: str, image_paths: Sequence[str], texts: Sequence[str],
+             categories: Sequence[str | None]) -> np.ndarray:
+        work_root = _check_work_root(adapter)
+        if not image_paths:
+            return np.empty((0, 8192), dtype=np.float32)
+        if adapter._worker_failed is not None:
+            raise AdapterWorkerError(adapter._worker_failed)
+        interpreter = adapter._interpreter
+        if not interpreter:
+            raise RuntimeError("no interpreter environment resolved for WORKBENCH_PTHA_MTST_PYTHON")
+        if not adapter._interpreter_verified:
+            # Same gate, same code path, as every other adapter: see
+            # CompositionAdapter.require_verified_interpreter.
+            adapter.require_verified_interpreter()
+            adapter._interpreter_verified = True
+        checkpoint_path = Path(adapter._checkpoint["resolved_path"])
+        if not checkpoint_path.is_file():
+            raise FileNotFoundError(f"PTHA+MTST checkpoint not staged at {checkpoint_path}")
+        source = Path(adapter.config.WORKBENCH_THIRD_PARTY_ROOT) / adapter._model["source_dir"]
+        if adapter._job_root is None:
+            work_root.mkdir(parents=True, exist_ok=True)
+            adapter._job_root = work_root / f".ptha_mtst-worker-{uuid.uuid4().hex}"
+            adapter._job_root.mkdir()
+        work = adapter._job_root
+        adapter._worker_counter += 1
+        job_path, output_path = (work / f"job-{adapter._worker_counter}.json",
+                                 work / f"output-{adapter._worker_counter}.npy")
+        job_path.write_text(json.dumps({"operation": operation,
+                                       "image_paths": [str(Path(path).resolve()) for path in image_paths],
+                                       "texts": list(texts), "categories": list(categories),
+                                       "output_path": str(output_path), "source_root": str(source),
+                                       "checkpoint_path": str(checkpoint_path),
+>                                      "batch_size": adapter.batch_size}), encoding="utf-8")
+                                                     ^^^^^^^^^^^^^^^^^^
+E       AttributeError: 'Adapter' object has no attribute 'batch_size'
+
+workbench/composition/model_ptha_mtst.py:188: AttributeError
+_____________________ test_worker_skips_empty_stdin_lines ______________________
+[gw2] linux -- Python 3.12.11 /home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python
+
+tmp_path = PosixPath('/tmp/pytest-of-heheboiz/pytest-355/popen-gw2/test_worker_skips_empty_stdin_0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7fc04034d130>
+capsys = <_pytest.capture.CaptureFixture object at 0x7fc04034f0e0>
+
+    def test_worker_skips_empty_stdin_lines(tmp_path: Path, monkeypatch, capsys) -> None:
+        source_root = tmp_path / "source"
+        (source_root / "src").mkdir(parents=True)
+        dataset_root = tmp_path / "dataset"
+        dataset_root.mkdir()
+        job_path = tmp_path / "job.json"
+        output_path = tmp_path / "output.npy"
+        job_path.write_text(json.dumps({
+            "source_root": str(source_root), "checkpoint_path": str(tmp_path / "checkpoint"),
+            "dataset_root": str(dataset_root), "image_paths": [], "output_path": str(output_path),
+            "operation": "targets", "batch_size": 1, "checkpoint": {"checkpoint_id": "fashioniq_0"},
+        }), encoding="utf-8")
+    
+        network = SimpleNamespace(
+            load_state_dict=lambda *_args, **_kwargs: SimpleNamespace(missing_keys=[], unexpected_keys=[]),
+            eval=lambda: None,
+        )
+        torch = types.ModuleType("torch")
+        torch.cuda = SimpleNamespace(is_available=lambda: True, empty_cache=lambda: None)
+        torch.device = lambda value: SimpleNamespace(type=value)
+        torch.no_grad = contextlib.nullcontext
+        torch.load = lambda *_args, **_kwargs: {}
+        lavis = types.ModuleType("lavis")
+        lavis.__path__ = []
+        lavis_models = types.ModuleType("lavis.models")
+        lavis_models.load_model_and_preprocess = lambda **_kwargs: (network, None, {"eval": str})
+        utility = types.ModuleType("utility")
+        utility.targetpad_transform = lambda **_kwargs: None
+        monkeypatch.setitem(sys.modules, "torch", torch)
+        monkeypatch.setitem(sys.modules, "lavis", lavis)
+        monkeypatch.setitem(sys.modules, "lavis.models", lavis_models)
+        monkeypatch.setitem(sys.modules, "utility", utility)
+        from workbench.backend import registry
+        from workbench.replay import tme
+    
+        monkeypatch.setattr(registry, "checkpoint_is_present", lambda *_args, **_kwargs: True)
+        monkeypatch.setattr(tme, "source_root_for", lambda _checkout: source_root)
+        monkeypatch.setattr(sys, "stdin", io.StringIO("\n{\"stop\": true}\n"))
+        original_cwd = Path.cwd()
+        try:
+            assert model_tme._worker_main(["--worker-job", str(job_path)]) == 0
+        finally:
+            os.chdir(original_cwd)
+>       assert np.load(output_path, allow_pickle=False).shape == (0, 32, 256)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+workbench/tests/test_circus_tme_precision.py:119: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+file = PosixPath('/tmp/pytest-of-heheboiz/pytest-355/popen-gw2/test_worker_skips_empty_stdin_0/output.npy')
+mmap_mode = None, allow_pickle = False, fix_imports = True, encoding = 'ASCII'
+max_header_size = 10000
+
+    @set_module('numpy')
+    def load(file, mmap_mode=None, allow_pickle=False, fix_imports=True,
+             encoding='ASCII', *, max_header_size=format._MAX_HEADER_SIZE):
+        """
+        Load arrays or pickled objects from ``.npy``, ``.npz`` or pickled files.
+    
+        .. warning:: Loading files that contain object arrays uses the ``pickle``
+                     module, which is not secure against erroneous or maliciously
+                     constructed data. Consider passing ``allow_pickle=False`` to
+                     load data that is known not to contain object arrays for the
+                     safer handling of untrusted sources.
+    
+        Parameters
+        ----------
+        file : file-like object, string, or pathlib.Path
+            The file to read. File-like objects must support the
+            ``seek()`` and ``read()`` methods and must always
+            be opened in binary mode.  Pickled files require that the
+            file-like object support the ``readline()`` method as well.
+        mmap_mode : {None, 'r+', 'r', 'w+', 'c'}, optional
+            If not None, then memory-map the file, using the given mode (see
+            `numpy.memmap` for a detailed description of the modes).  A
+            memory-mapped array is kept on disk. However, it can be accessed
+            and sliced like any ndarray.  Memory mapping is especially useful
+            for accessing small fragments of large files without reading the
+            entire file into memory.
+        allow_pickle : bool, optional
+            Allow loading pickled object arrays stored in npy files. Reasons for
+            disallowing pickles include security, as loading pickled data can
+            execute arbitrary code. If pickles are disallowed, loading object
+            arrays will fail. Default: False
+    
+            .. versionchanged:: 1.16.3
+                Made default False in response to CVE-2019-6446.
+    
+        fix_imports : bool, optional
+            Only useful when loading Python 2 generated pickled files on Python 3,
+            which includes npy/npz files containing object arrays. If `fix_imports`
+            is True, pickle will try to map the old Python 2 names to the new names
+            used in Python 3.
+        encoding : str, optional
+            What encoding to use when reading Python 2 strings. Only useful when
+            loading Python 2 generated pickled files in Python 3, which includes
+            npy/npz files containing object arrays. Values other than 'latin1',
+            'ASCII', and 'bytes' are not allowed, as they can corrupt numerical
+            data. Default: 'ASCII'
+        max_header_size : int, optional
+            Maximum allowed size of the header.  Large headers may not be safe
+            to load securely and thus require explicitly passing a larger value.
+            See :py:func:`ast.literal_eval()` for details.
+            This option is ignored when `allow_pickle` is passed.  In that case
+            the file is by definition trusted and the limit is unnecessary.
+    
+        Returns
+        -------
+        result : array, tuple, dict, etc.
+            Data stored in the file. For ``.npz`` files, the returned instance
+            of NpzFile class must be closed to avoid leaking file descriptors.
+    
+        Raises
+        ------
+        OSError
+            If the input file does not exist or cannot be read.
+        UnpicklingError
+            If ``allow_pickle=True``, but the file cannot be loaded as a pickle.
+        ValueError
+            The file contains an object array, but ``allow_pickle=False`` given.
+        EOFError
+            When calling ``np.load`` multiple times on the same file handle,
+            if all data has already been read
+    
+        See Also
+        --------
+        save, savez, savez_compressed, loadtxt
+        memmap : Create a memory-map to an array stored in a file on disk.
+        lib.format.open_memmap : Create or load a memory-mapped ``.npy`` file.
+    
+        Notes
+        -----
+        - If the file contains pickle data, then whatever object is stored
+          in the pickle is returned.
+        - If the file is a ``.npy`` file, then a single array is returned.
+        - If the file is a ``.npz`` file, then a dictionary-like object is
+          returned, containing ``{filename: array}`` key-value pairs, one for
+          each file in the archive.
+        - If the file is a ``.npz`` file, the returned value supports the
+          context manager protocol in a similar fashion to the open function::
+    
+            with load('foo.npz') as data:
+                a = data['a']
+    
+          The underlying file descriptor is closed when exiting the 'with'
+          block.
+    
+        Examples
+        --------
+        Store data to disk, and load it again:
+    
+        >>> np.save('/tmp/123', np.array([[1, 2, 3], [4, 5, 6]]))
+        >>> np.load('/tmp/123.npy')
+        array([[1, 2, 3],
+               [4, 5, 6]])
+    
+        Store compressed data to disk, and load it again:
+    
+        >>> a=np.array([[1, 2, 3], [4, 5, 6]])
+        >>> b=np.array([1, 2])
+        >>> np.savez('/tmp/123.npz', a=a, b=b)
+        >>> data = np.load('/tmp/123.npz')
+        >>> data['a']
+        array([[1, 2, 3],
+               [4, 5, 6]])
+        >>> data['b']
+        array([1, 2])
+        >>> data.close()
+    
+        Mem-map the stored array, and then access the second row
+        directly from disk:
+    
+        >>> X = np.load('/tmp/123.npy', mmap_mode='r')
+        >>> X[1, :]
+        memmap([4, 5, 6])
+    
+        """
+        if encoding not in ('ASCII', 'latin1', 'bytes'):
+            # The 'encoding' value for pickle also affects what encoding
+            # the serialized binary data of NumPy arrays is loaded
+            # in. Pickle does not pass on the encoding information to
+            # NumPy. The unpickling code in numpy.core.multiarray is
+            # written to assume that unicode data appearing where binary
+            # should be is in 'latin1'. 'bytes' is also safe, as is 'ASCII'.
+            #
+            # Other encoding values can corrupt binary data, and we
+            # purposefully disallow them. For the same reason, the errors=
+            # argument is not exposed, as values other than 'strict'
+            # result can similarly silently corrupt numerical data.
+            raise ValueError("encoding must be 'ASCII', 'latin1', or 'bytes'")
+    
+        pickle_kwargs = dict(encoding=encoding, fix_imports=fix_imports)
+    
+        with contextlib.ExitStack() as stack:
+            if hasattr(file, 'read'):
+                fid = file
+                own_fid = False
+            else:
+>               fid = stack.enter_context(open(os_fspath(file), "rb"))
+                                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E               FileNotFoundError: [Errno 2] No such file or directory: '/tmp/pytest-of-heheboiz/pytest-355/popen-gw2/test_worker_skips_empty_stdin_0/output.npy'
+
+workbench/envs/ctl312h/lib/python3.12/site-packages/numpy/lib/npyio.py:427: FileNotFoundError
+----------------------------- Captured stdout call -----------------------------
+CIRCUS_WORKER:{"ok": false, "error_type": "AttributeError", "error": "module 'torch' has no attribute 'set_num_threads'"}
+_ test_resident_worker_failure_uses_shared_error_and_stays_failed[workbench.composition.model_conesep-conesep] _
+[gw3] linux -- Python 3.12.11 /home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python
+
+module = <module 'workbench.composition.model_conesep' from '/home/heheboiz/data/cir/workbench/composition/model_conesep.py'>
+model_id = 'conesep'
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x706a815b0dd0>
+tmp_path = PosixPath('/tmp/pytest-of-heheboiz/pytest-355/popen-gw3/test_resident_worker_failure_u0')
+
+    @pytest.mark.parametrize(("module", "model_id"), [
+        (model_conesep, "conesep"), (model_ptha_mtst, "ptha_mtst"),
+    ])
+    def test_resident_worker_failure_uses_shared_error_and_stays_failed(module, model_id, monkeypatch, tmp_path) -> None:
+        adapter = _resident_adapter(module, model_id, tmp_path)
+        image = tmp_path / "image.png"
+        Image.new("RGB", (2, 2)).save(image)
+        workers = []
+    
+        class FailedWorker(_ResidentFakeWorker):
+            def __init__(self, argv, **kwargs):
+                self.returncode = 7
+                self.jobs = []
+                self.stdout = SimpleNamespace(readline=lambda: "")
+                self.stdin = SimpleNamespace(write=lambda value: len(value), flush=lambda: None, close=lambda: None)
+                workers.append(self)
+    
+        monkeypatch.setattr(module.subprocess, "Popen", FailedWorker)
+        for _ in range(2):
+            with pytest.raises(adapters.AdapterWorkerError, match=rf"model={model_id}.*7") as error:
+>               adapter.encode_queries([str(image)], ["edit"], [None])
+
+workbench/tests/test_circus_adapters_blip.py:238: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+workbench/composition/model_conesep.py:65: in encode_queries
+    return _run(self, "queries", image_paths, texts, categories)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+adapter = <workbench.composition.model_conesep.Adapter object at 0x706a815b0d10>
+operation = 'queries'
+image_paths = ['/tmp/pytest-of-heheboiz/pytest-355/popen-gw3/test_resident_worker_failure_u0/image.png']
+texts = ['edit'], categories = [None]
+
+    def _run(adapter: Adapter, operation: str, image_paths: Sequence[str], texts: Sequence[str],
+             categories: Sequence[str | None]) -> np.ndarray:
+        work_root = _check_work_root(adapter)
+        if not image_paths:
+            return np.empty((0, 8192), dtype=np.float32)
+        if adapter._worker_failed is not None:
+            raise AdapterWorkerError(adapter._worker_failed)
+        interpreter = adapter._interpreter
+        if not interpreter:
+            raise RuntimeError("no interpreter environment resolved for WORKBENCH_CONESEP_PYTHON")
+        checkpoint = adapter._checkpoint
+        checkpoint_path = Path(checkpoint["resolved_path"])
+        if not checkpoint_path.is_file():
+            raise FileNotFoundError(f"ConeSep checkpoint not staged at {checkpoint_path}")
+        if checkpoint.get("checkpoint_training_noise_pct") not in {20, 50, 80}:
+            raise ValueError(f"ConeSep checkpoint condition is not an author-released variant: {checkpoint['checkpoint_id']}")
+        if not adapter._interpreter_verified:
+            # Same gate, same code path, as every other adapter: see
+            # CompositionAdapter.require_verified_interpreter.
+            adapter.require_verified_interpreter()
+            adapter._interpreter_verified = True
+        if adapter._job_root is None:
+            work_root.mkdir(parents=True, exist_ok=True)
+            adapter._job_root = work_root / f".conesep-worker-{uuid.uuid4().hex}"
+            adapter._job_root.mkdir()
+        work = adapter._job_root
+        adapter._worker_counter += 1
+        job_path, output_path = (work / f"job-{adapter._worker_counter}.json",
+                                 work / f"output-{adapter._worker_counter}.npy")
+        source = Path(adapter.config.WORKBENCH_THIRD_PARTY_ROOT) / adapter._model["source_dir"]
+        job_path.write_text(json.dumps({"operation": operation,
+                                       "image_paths": [str(Path(path).resolve()) for path in image_paths],
+                                       "texts": list(texts), "categories": list(categories),
+                                       "output_path": str(output_path), "source_root": str(source),
+                                       "checkpoint_path": str(checkpoint_path),
+                                       "checkpoint_id": checkpoint["checkpoint_id"],
+>                                      "batch_size": adapter.batch_size}), encoding="utf-8")
+                                                     ^^^^^^^^^^^^^^^^^^
+E       AttributeError: 'Adapter' object has no attribute 'batch_size'
+
+workbench/composition/model_conesep.py:183: AttributeError
+_ test_resident_worker_failure_uses_shared_error_and_stays_failed[workbench.composition.model_ptha_mtst-ptha_mtst] _
+[gw3] linux -- Python 3.12.11 /home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python
+
+module = <module 'workbench.composition.model_ptha_mtst' from '/home/heheboiz/data/cir/workbench/composition/model_ptha_mtst.py'>
+model_id = 'ptha_mtst'
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x706a815c63c0>
+tmp_path = PosixPath('/tmp/pytest-of-heheboiz/pytest-355/popen-gw3/test_resident_worker_failure_u1')
+
+    @pytest.mark.parametrize(("module", "model_id"), [
+        (model_conesep, "conesep"), (model_ptha_mtst, "ptha_mtst"),
+    ])
+    def test_resident_worker_failure_uses_shared_error_and_stays_failed(module, model_id, monkeypatch, tmp_path) -> None:
+        adapter = _resident_adapter(module, model_id, tmp_path)
+        image = tmp_path / "image.png"
+        Image.new("RGB", (2, 2)).save(image)
+        workers = []
+    
+        class FailedWorker(_ResidentFakeWorker):
+            def __init__(self, argv, **kwargs):
+                self.returncode = 7
+                self.jobs = []
+                self.stdout = SimpleNamespace(readline=lambda: "")
+                self.stdin = SimpleNamespace(write=lambda value: len(value), flush=lambda: None, close=lambda: None)
+                workers.append(self)
+    
+        monkeypatch.setattr(module.subprocess, "Popen", FailedWorker)
+        for _ in range(2):
+            with pytest.raises(adapters.AdapterWorkerError, match=rf"model={model_id}.*7") as error:
+>               adapter.encode_queries([str(image)], ["edit"], [None])
+
+workbench/tests/test_circus_adapters_blip.py:238: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+workbench/composition/model_ptha_mtst.py:74: in encode_queries
+    return _run(self, "queries", image_paths, texts, categories)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+adapter = <workbench.composition.model_ptha_mtst.Adapter object at 0x706a815c53d0>
+operation = 'queries'
+image_paths = ['/tmp/pytest-of-heheboiz/pytest-355/popen-gw3/test_resident_worker_failure_u1/image.png']
+texts = ['edit'], categories = [None]
+
+    def _run(adapter: Adapter, operation: str, image_paths: Sequence[str], texts: Sequence[str],
+             categories: Sequence[str | None]) -> np.ndarray:
+        work_root = _check_work_root(adapter)
+        if not image_paths:
+            return np.empty((0, 8192), dtype=np.float32)
+        if adapter._worker_failed is not None:
+            raise AdapterWorkerError(adapter._worker_failed)
+        interpreter = adapter._interpreter
+        if not interpreter:
+            raise RuntimeError("no interpreter environment resolved for WORKBENCH_PTHA_MTST_PYTHON")
+        if not adapter._interpreter_verified:
+            # Same gate, same code path, as every other adapter: see
+            # CompositionAdapter.require_verified_interpreter.
+            adapter.require_verified_interpreter()
+            adapter._interpreter_verified = True
+        checkpoint_path = Path(adapter._checkpoint["resolved_path"])
+        if not checkpoint_path.is_file():
+            raise FileNotFoundError(f"PTHA+MTST checkpoint not staged at {checkpoint_path}")
+        source = Path(adapter.config.WORKBENCH_THIRD_PARTY_ROOT) / adapter._model["source_dir"]
+        if adapter._job_root is None:
+            work_root.mkdir(parents=True, exist_ok=True)
+            adapter._job_root = work_root / f".ptha_mtst-worker-{uuid.uuid4().hex}"
+            adapter._job_root.mkdir()
+        work = adapter._job_root
+        adapter._worker_counter += 1
+        job_path, output_path = (work / f"job-{adapter._worker_counter}.json",
+                                 work / f"output-{adapter._worker_counter}.npy")
+        job_path.write_text(json.dumps({"operation": operation,
+                                       "image_paths": [str(Path(path).resolve()) for path in image_paths],
+                                       "texts": list(texts), "categories": list(categories),
+                                       "output_path": str(output_path), "source_root": str(source),
+                                       "checkpoint_path": str(checkpoint_path),
+>                                      "batch_size": adapter.batch_size}), encoding="utf-8")
+                                                     ^^^^^^^^^^^^^^^^^^
+E       AttributeError: 'Adapter' object has no attribute 'batch_size'
+
+workbench/composition/model_ptha_mtst.py:188: AttributeError
+=============================== warnings summary ===============================
+workbench/backend/main.py:105
+workbench/backend/main.py:105
+workbench/backend/main.py:105
+workbench/backend/main.py:105
+workbench/tests/test_http_api_layer.py::test_the_certification_mode_is_part_of_the_cache_key
+  /home/heheboiz/data/cir/workbench/backend/main.py:105: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    @app.on_event("startup")
+
+workbench/envs/ctl312h/lib/python3.12/site-packages/fastapi/applications.py:4723: 8 warnings
+workbench/tests/test_http_api_layer.py: 2 warnings
+  /home/heheboiz/data/cir/workbench/envs/ctl312h/lib/python3.12/site-packages/fastapi/applications.py:4723: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    return self.router.on_event(event_type)  # ty: ignore[deprecated]
+
+workbench/backend/main.py:112
+workbench/backend/main.py:112
+workbench/backend/main.py:112
+workbench/backend/main.py:112
+workbench/tests/test_http_api_layer.py::test_the_certification_mode_is_part_of_the_cache_key
+  /home/heheboiz/data/cir/workbench/backend/main.py:112: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    @app.on_event("shutdown")
+
+workbench/envs/ctl312h/lib/python3.12/site-packages/fastapi/testclient.py:1
+workbench/envs/ctl312h/lib/python3.12/site-packages/fastapi/testclient.py:1
+workbench/envs/ctl312h/lib/python3.12/site-packages/fastapi/testclient.py:1
+workbench/envs/ctl312h/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /home/heheboiz/data/cir/workbench/envs/ctl312h/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+workbench/envs/ctl312h/lib/python3.12/site-packages/transformers/utils/generic.py:441
+workbench/envs/ctl312h/lib/python3.12/site-packages/transformers/utils/generic.py:441
+workbench/envs/ctl312h/lib/python3.12/site-packages/transformers/utils/generic.py:441
+workbench/envs/ctl312h/lib/python3.12/site-packages/transformers/utils/generic.py:441
+  /home/heheboiz/data/cir/workbench/envs/ctl312h/lib/python3.12/site-packages/transformers/utils/generic.py:441: FutureWarning: `torch.utils._pytree._register_pytree_node` is deprecated. Please use `torch.utils._pytree.register_pytree_node` instead.
+    _torch_pytree._register_pytree_node(
+
+workbench/tests/test_circus_inputs.py::test_black_image_preserves_size_mode_and_is_fresh
+  /home/heheboiz/data/cir/workbench/tests/test_circus_inputs.py:20: DeprecationWarning: Image.Image.getdata is deprecated and will be removed in Pillow 14 (2027-10-15). Use get_flattened_data instead.
+    assert all(pixel == (0, 0, 0) for pixel in black.getdata())
+
+workbench/tests/test_circus_inputs.py::test_staged_black_path_and_empty_text_cross_worker_seam
+  /home/heheboiz/data/cir/workbench/tests/test_circus_inputs.py:51: DeprecationWarning: Image.Image.getdata is deprecated and will be removed in Pillow 14 (2027-10-15). Use get_flattened_data instead.
+    assert all(pixel == (0, 0, 0) for pixel in black.getdata())
+
+workbench/tests/test_composition_image_identity.py::test_model_lock_serializes_processes
+workbench/tests/test_composition_image_identity.py::test_model_lock_assertion_fails_when_flock_is_noop
+  /home/heheboiz/.local/share/uv/python/cpython-3.12-linux-x86_64-gnu/lib/python3.12/multiprocessing/popen_fork.py:66: DeprecationWarning: This process (pid=370668) is multi-threaded, use of fork() may lead to deadlocks in the child.
+    self.pid = os.fork()
+
+workbench/tests/test_r23_cache_lifecycle.py::test_r23_02_hf_home_resolution_and_offline_library_agreement
+  /home/heheboiz/data/cir/workbench/envs/ctl312h/lib/python3.12/site-packages/huggingface_hub/file_download.py:949: FutureWarning: `resume_download` is deprecated and will be removed in version 1.0.0. Downloads always resume when possible. If you want to force a new download, use `force_download=True`.
+    warnings.warn(
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED workbench/tests/test_circus_tme_lifecycle.py::test_encoder_and_limn_failed_child_latch_and_preserve_log[encoder] - RuntimeError: execution environment not verified [UNCONFIGURED/UNCONFIGURED]: WORKBENCH_ENCODER_PYTHON=None (WORKBENCH_ENCODER_PYTHON not set)
+FAILED workbench/tests/test_circus_tme_lifecycle.py::test_encoder_and_limn_failed_child_latch_and_preserve_log[limn] - RuntimeError: execution environment not verified [UNCONFIGURED/UNCONFIGURED]: WORKBENCH_LIMN_PYTHON=None (WORKBENCH_LIMN_PYTHON not set)
+FAILED workbench/tests/test_circus_adapters_blip.py::test_resident_worker_reuse_and_cleanup[workbench.composition.model_conesep-conesep] - AttributeError: 'Adapter' object has no attribute 'batch_size'
+FAILED workbench/tests/test_circus_adapters_blip.py::test_resident_worker_reuse_and_cleanup[workbench.composition.model_ptha_mtst-ptha_mtst] - AttributeError: 'Adapter' object has no attribute 'batch_size'
+FAILED workbench/tests/test_circus_tme_precision.py::test_worker_skips_empty_stdin_lines - FileNotFoundError: [Errno 2] No such file or directory: '/tmp/pytest-of-heheboiz/pytest-355/popen-gw2/test_worker_skips_empty_stdin_0/output.npy'
+FAILED workbench/tests/test_circus_adapters_blip.py::test_resident_worker_failure_uses_shared_error_and_stays_failed[workbench.composition.model_conesep-conesep] - AttributeError: 'Adapter' object has no attribute 'batch_size'
+FAILED workbench/tests/test_circus_adapters_blip.py::test_resident_worker_failure_uses_shared_error_and_stays_failed[workbench.composition.model_ptha_mtst-ptha_mtst] - AttributeError: 'Adapter' object has no attribute 'batch_size'
+7 failed, 348 passed, 7 skipped, 33 warnings in 14.61s
+EXIT=1

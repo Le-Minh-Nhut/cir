@@ -1,0 +1,37 @@
+gallery rows 74381
+duplicate groups 851
+--- group size 54
+   pos 43572 id mbeir_images/fashioniq_images/B005FPBOYQ.jpg
+   pos 49515 id mbeir_images/fashioniq_images/B00ET8J06E.jpg
+   pos 50543 id mbeir_images/fashioniq_images/B005LWP4NK.jpg
+   pos 51087 id mbeir_images/fashioniq_images/B0037KIXK4.jpg
+   pos 52405 id mbeir_images/fashioniq_images/B0045PQDZW.jpg
+   pos 52493 id mbeir_images/fashioniq_images/B003A84UZU.jpg
+--- group size 26
+   pos 46617 id mbeir_images/fashioniq_images/B006K0I0PQ.jpg
+   pos 46618 id mbeir_images/fashioniq_images/B0002TI1QE.jpg
+   pos 51677 id mbeir_images/fashioniq_images/B0026HE9CU.jpg
+   pos 51679 id mbeir_images/fashioniq_images/B005UQ7VY2.jpg
+   pos 51681 id mbeir_images/fashioniq_images/B00CEU2T30.jpg
+   pos 53902 id mbeir_images/fashioniq_images/B00DU6GMRG.jpg
+--- group size 24
+   pos 48145 id mbeir_images/fashioniq_images/B007LAGVZ0.jpg
+   pos 48148 id mbeir_images/fashioniq_images/B0072BCE8G.jpg
+   pos 48421 id mbeir_images/fashioniq_images/B008CO7MZ2.jpg
+   pos 49023 id mbeir_images/fashioniq_images/B005LCMY1K.jpg
+   pos 49082 id mbeir_images/fashioniq_images/B003UPUYIA.jpg
+   pos 49086 id mbeir_images/fashioniq_images/B009RR253M.jpg
+--- group size 22
+   pos 40559 id mbeir_images/fashioniq_images/B008PVF5HO.jpg
+   pos 40560 id mbeir_images/fashioniq_images/B00CHV7X9G.jpg
+   pos 47325 id mbeir_images/fashioniq_images/B00C3XXETQ.jpg
+   pos 47326 id mbeir_images/fashioniq_images/B008DS1MQW.jpg
+   pos 47327 id mbeir_images/fashioniq_images/B00D6DPE40.jpg
+   pos 47329 id mbeir_images/fashioniq_images/B0084DEM2W.jpg
+--- group size 21
+   pos 51000 id mbeir_images/fashioniq_images/B007PWX7GA.jpg
+   pos 51001 id mbeir_images/fashioniq_images/B0039YOVK4.jpg
+   pos 52500 id mbeir_images/fashioniq_images/B008FIE4VU.jpg
+   pos 54505 id mbeir_images/fashioniq_images/B002EQ9EKU.jpg
+   pos 54991 id mbeir_images/fashioniq_images/B0062KIBWG.jpg
+   pos 55338 id mbeir_images/fashioniq_images/B008TZN2JE.jpg

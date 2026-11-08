@@ -1,0 +1,3 @@
+gallery cache reused with NO shape check: True shape (100, 4)
+query-style call with expected (200,4): False
+different fingerprint refused: True
