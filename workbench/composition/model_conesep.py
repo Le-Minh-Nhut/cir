@@ -17,7 +17,7 @@ import numpy as np
 
 from workbench.composition.adapters import (
     AdapterStatus, AdapterWorkRootError, AdapterWorkerError, CompositionAdapter,
-    worker_environment,
+    limit_torch_threads, prefetch_rows, resolved_decode_workers, worker_environment,
 )
 
 CONDITIONS = ("multimodal", "text_only_black_image", "image_only_empty_text")
@@ -32,6 +32,8 @@ class Adapter(CompositionAdapter):
 
     model_id = "conesep"
     reference_eligible = True
+    # score() reads a 32x256 token layout as an 8192-wide vector.
+    score_dimension = 8192
     category_scopes: tuple[str | None, ...] = (None,)
 
     def __init__(self, config: Any, checkpoint_id: str | None = None) -> None:
@@ -159,11 +161,9 @@ def _run(adapter: Adapter, operation: str, image_paths: Sequence[str], texts: Se
     if checkpoint.get("checkpoint_training_noise_pct") not in {20, 50, 80}:
         raise ValueError(f"ConeSep checkpoint condition is not an author-released variant: {checkpoint['checkpoint_id']}")
     if not adapter._interpreter_verified:
-        from workbench.backend.runtime import require_verified_model_interpreter
-
-        verified = require_verified_model_interpreter(adapter._model, config=adapter.config)
-        if Path(verified).resolve() != Path(interpreter).resolve():
-            raise RuntimeError(f"ConeSep resolved interpreter changed: {interpreter} -> {verified}")
+        # Same gate, same code path, as every other adapter: see
+        # CompositionAdapter.require_verified_interpreter.
+        adapter.require_verified_interpreter()
         adapter._interpreter_verified = True
     if adapter._job_root is None:
         work_root.mkdir(parents=True, exist_ok=True)
@@ -179,7 +179,8 @@ def _run(adapter: Adapter, operation: str, image_paths: Sequence[str], texts: Se
                                    "texts": list(texts), "categories": list(categories),
                                    "output_path": str(output_path), "source_root": str(source),
                                    "checkpoint_path": str(checkpoint_path),
-                                   "checkpoint_id": checkpoint["checkpoint_id"]}), encoding="utf-8")
+                                   "checkpoint_id": checkpoint["checkpoint_id"],
+                                   "batch_size": adapter.batch_size}), encoding="utf-8")
     scope = categories[0] if categories and len(set(categories)) == 1 else "global"
     try:
         if adapter._worker is not None and adapter._worker.poll() is not None:
@@ -294,6 +295,8 @@ def _worker_main(argv: Sequence[str] | None = None) -> int:
         expected = KNOWN_AUTHOR_SHA256.get(job["checkpoint_id"])
         model = load_trusted_whole_model(checkpoint, expected, torch).cuda().eval()
         transform = data_utils.targetpad_transform(1.25, 224)
+        limit_torch_threads()
+        workers = resolved_decode_workers()
     except Exception as error:
         reply(False, error_type=type(error).__name__, error=str(error))
         return 1
@@ -302,16 +305,25 @@ def _worker_main(argv: Sequence[str] | None = None) -> int:
         outputs = []
         try:
             with torch.no_grad():
-                for start in range(0, len(current["image_paths"]), 32):
-                    images = torch.stack([transform(_open_image(path)) for path in
-                                          current["image_paths"][start:start + 32]]).cuda()
+                batch_size = max(1, int(current.get("batch_size") or 32))
+                paths = current["image_paths"]
+                batches = [paths[start:start + batch_size]
+                           for start in range(0, len(paths), batch_size)]
+                # Same decode pool as HABIT, same transform, same ordering: only the serial
+                # `Image.open` + transform loop the GPU idled behind is parallelised.
+                decoded = prefetch_rows(lambda chunk: torch.stack(
+                    [transform(_open_image(path)) for path in chunk]), batches, workers)
+                for index, images in enumerate(decoded):
+                    images = images.cuda()
                     if current["operation"] == "queries":
+                        first = index * batch_size
                         texts = [txt_processors["eval"](text) for text in
-                                 current["texts"][start:start + 32]]
+                                 current["texts"][first:first + len(images)]]
                         features = model.extract_retrieval_compose(images, texts)[:, 0, 0, :].repeat(1, 32)
                     else:
                         features = model.extract_retrieval_target(images).permute(0, 2, 1)
                     outputs.append(features.float().cpu().numpy())
+                    del images
             result = np.concatenate(outputs, axis=0) if outputs else np.empty((0, 8192), dtype=np.float32)
             np.save(current["output_path"], result.reshape(len(current["image_paths"]), -1), allow_pickle=False)
             reply(True)

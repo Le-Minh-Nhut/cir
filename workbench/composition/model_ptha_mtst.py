@@ -18,6 +18,7 @@ import numpy as np
 
 from workbench.composition.adapters import (
     AdapterStatus, AdapterWorkRootError, AdapterWorkerError, CompositionAdapter,
+    limit_torch_threads, prefetch_rows, resolved_decode_workers,
     worker_environment,
 )
 
@@ -36,6 +37,8 @@ class Adapter(CompositionAdapter):
 
     model_id = "ptha_mtst"
     reference_eligible = True
+    # score() reads a 32x256 token layout as an 8192-wide vector.
+    score_dimension = 8192
     category_scopes: tuple[str | None, ...] = (None,)
 
     def __init__(self, config: Any, checkpoint_id: str | None = None) -> None:
@@ -52,6 +55,7 @@ class Adapter(CompositionAdapter):
         self._worker_log: Any | None = None
         self._worker_counter = 0
         self._worker_failed: str | None = None
+        self._interpreter_verified = False
 
     @classmethod
     def status(cls, config: Any | None = None) -> AdapterStatus:
@@ -159,6 +163,11 @@ def _run(adapter: Adapter, operation: str, image_paths: Sequence[str], texts: Se
     interpreter = adapter._interpreter
     if not interpreter:
         raise RuntimeError("no interpreter environment resolved for WORKBENCH_PTHA_MTST_PYTHON")
+    if not adapter._interpreter_verified:
+        # Same gate, same code path, as every other adapter: see
+        # CompositionAdapter.require_verified_interpreter.
+        adapter.require_verified_interpreter()
+        adapter._interpreter_verified = True
     checkpoint_path = Path(adapter._checkpoint["resolved_path"])
     if not checkpoint_path.is_file():
         raise FileNotFoundError(f"PTHA+MTST checkpoint not staged at {checkpoint_path}")
@@ -175,7 +184,8 @@ def _run(adapter: Adapter, operation: str, image_paths: Sequence[str], texts: Se
                                    "image_paths": [str(Path(path).resolve()) for path in image_paths],
                                    "texts": list(texts), "categories": list(categories),
                                    "output_path": str(output_path), "source_root": str(source),
-                                   "checkpoint_path": str(checkpoint_path)}), encoding="utf-8")
+                                   "checkpoint_path": str(checkpoint_path),
+                                   "batch_size": adapter.batch_size}), encoding="utf-8")
     try:
         if adapter._worker is not None and adapter._worker.poll() is not None:
             status = adapter._worker.returncode
@@ -308,6 +318,8 @@ def _worker_main(argv: Sequence[str] | None = None) -> int:
         _visual_processors, processors = load_preprocess(cfg.preprocess)
         from data_utils import targetpad_transform
         transform = targetpad_transform(1.25, 224)
+        limit_torch_threads()
+        workers = resolved_decode_workers()
         from PIL import Image
     except Exception as error:
         reply(False, error_type=type(error).__name__, error=str(error))
@@ -317,18 +329,29 @@ def _worker_main(argv: Sequence[str] | None = None) -> int:
         outputs = []
         try:
             with torch.no_grad():
-                for start in range(0, len(current["image_paths"]), 32):
-                    paths = current["image_paths"][start:start + 32]
+                batch_size = max(1, int(current.get("batch_size") or 32))
+                all_paths = current["image_paths"]
+                batches = [all_paths[start:start + batch_size]
+                           for start in range(0, len(all_paths), batch_size)]
+
+                def decode(paths: Sequence[str]) -> Any:
                     images = []
                     for path in paths:
                         with Image.open(path) as image:
                             images.append(transform(image.convert("RGB")))
-                    batch = torch.stack(images).cuda()
+                    return torch.stack(images)
+
+                # Same decode pool as the rest of the family; decode only, this model's own
+                # transform, autocast and score() stay untouched.
+                for index, batch in enumerate(prefetch_rows(decode, batches, workers)):
+                    batch = batch.cuda()
                     if current["operation"] == "queries":
                         with model.maybe_autocast():
                             visual = model.ln_vision(model.visual_encoder(batch))
                         visual = visual.float()
-                        text = [processors["eval"](value) for value in current["texts"][start:start + 32]]
+                        first = index * batch_size
+                        text = [processors["eval"](value)
+                                for value in current["texts"][first:first + len(batch)]]
                         features = model.inference_reference(visual, text)
                         if model_name == "blip2_cir_cat":
                             features = features / model.temp

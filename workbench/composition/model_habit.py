@@ -13,11 +13,16 @@ import numpy as np
 
 from .adapters import (
     AdapterStatus, AdapterWorkRootError, AdapterWorkerError, CompositionAdapter,
+    limit_torch_threads, prefetch_rows, require_batch_fits, resolved_decode_workers,
     worker_environment,
 )
 
 CONDITIONS = ("multimodal", "text_only_black_image", "image_only_empty_text")
 CHECKPOINT_ID = "fiq_n02"
+#: Peak activation memory per image, MEASURED on this box (RTX 5070 Ti, 16303 MiB) from the batch
+#: sweep in the throughput review: 6090 MiB peak allocated at batch 256, of which ~3000 MiB is the
+#: fixed model/context floor. Rounded up so the guard errs toward refusing.
+PER_IMAGE_VRAM_BYTES = 14 * 1024 * 1024
 REPO_ROOT = Path(__file__).resolve().parents[2]
 WORKER_PROBE = (
     "import json, torch; "
@@ -45,6 +50,8 @@ class Adapter(CompositionAdapter):
     model_id = "habit"
     category_scopes = (None,)
     reference_eligible = True
+    # score() is an einsum over 256-d query vectors against (G,Q,256) targets.
+    score_dimension = 256
     work_root: Path | None = None
 
 
@@ -147,11 +154,9 @@ class Adapter(CompositionAdapter):
         if self._worker_failed is not None:
             raise AdapterWorkerError(self._worker_failed)
         if not self._interpreter_verified:
-            from workbench.backend.runtime import require_verified_model_interpreter
-
-            verified = require_verified_model_interpreter(self.model, config=self.config)
-            if Path(verified).resolve() != Path(self.interpreter).resolve():
-                raise RuntimeError(f"HABIT resolved interpreter changed: {self.interpreter} -> {verified}")
+            # Same gate, same code path, as every other adapter: see
+            # CompositionAdapter.require_verified_interpreter.
+            self.require_verified_interpreter()
             self._interpreter_verified = True
         work = self._work_dir()
         self._worker_counter += 1
@@ -329,6 +334,12 @@ def _worker_main(argv: Sequence[str] | None = None) -> int:
         network = network.to(device).eval()
         transform = data_utils.targetpad_transform(1.25, 224)
         text_processor = processors[0]["eval"]
+        # Measured: the per-image transform runs at 27 img/s at torch's default 20 intra-op threads
+        # and 650 img/s at one. Parallelism belongs across images (the decode pool), not inside one
+        # transform, whose ops are too small to amortise thread launch.
+        limit_torch_threads()
+        workers = resolved_decode_workers()
+        total_vram = torch.cuda.get_device_properties(device).total_memory
     except Exception as error:
         reply(False, error_type=type(error).__name__, error=str(error))
         return 1
@@ -336,22 +347,40 @@ def _worker_main(argv: Sequence[str] | None = None) -> int:
     def run_one(current: dict[str, Any]) -> None:
         outputs = []
         try:
+            # Refuse an impossible batch BEFORE the first forward allocates it: an OOM 90 minutes
+            # into a 74k-image gallery costs the whole encode.
+            require_batch_fits(int(current["batch_size"]), PER_IMAGE_VRAM_BYTES, total_vram,
+                               context=f"habit {current['operation']}")
             with torch.no_grad():
-                for start in range(0, len(current["image_paths"]), current["batch_size"]):
-                    paths = current["image_paths"][start:start + current["batch_size"]]
+                batch_size = current["batch_size"]
+                batches = [current["image_paths"][start:start + batch_size]
+                           for start in range(0, len(current["image_paths"]), batch_size)]
+
+                def decode(paths: Sequence[str]) -> Any:
                     images = []
                     for path in paths:
                         with Image.open(path) as image:
                             images.append(transform(image.convert("RGB")))
-                    pixels = torch.stack(images).float().to(device)
+                    return torch.stack(images)
+
+                # Decode batches in a thread pool, then run the forwards in submission order. PIL
+                # releases the GIL on decode and the transform releases it on its resizes; the same
+                # transform measured bit-identical across worker counts (max abs delta 0.0), and
+                # `map` preserves order, so feature rows stay aligned with the released gallery
+                # under the unchanged serial decode the GPU sat idle behind.
+                pixels_by_batch = prefetch_rows(decode, batches, workers)
+                for index, pixels in enumerate(pixels_by_batch):
+                    pixels = pixels.float().to(device, non_blocking=True)
                     if current["operation"] == "queries":
+                        first = index * batch_size
                         texts = [text_processor(text) for text in
-                                 current["texts"][start:start + current["batch_size"]]]
+                                 current["texts"][first:first + len(pixels)]]
                         features = network.extract_retrieval_compose(pixels, texts)
-                        outputs.append(features.detach().cpu().numpy().reshape(len(paths), -1))
+                        outputs.append(features.detach().cpu().numpy().reshape(len(pixels), -1))
                     else:
                         features = network.extract_retrieval_target(pixels)
                         outputs.append(features.detach().cpu().numpy().transpose(0, 2, 1))
+                    del pixels
             width = 256 if current["operation"] == "queries" else 32 * 256
             result = np.concatenate(outputs, axis=0) if outputs else np.empty((0, width), dtype=np.float32)
             if current["operation"] == "targets" and result.size:

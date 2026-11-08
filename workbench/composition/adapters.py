@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import importlib
+import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping, Sequence
@@ -24,6 +25,13 @@ def worker_environment() -> dict[str, str]:
         environment["HF_HOME"] = str(root)
     else:
         environment.pop("HF_HOME", None)
+    # The scoring einsum runs on CPU inside the controller, and BLAS otherwise picks a thread
+    # count from the machine rather than from the half-box budget AGENTS.md sets. Pinned here so
+    # the parent and the worker agree and neither spawns a full-machine BLAS pool.
+    threads = str(resolved_decode_workers())
+    for variable in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS",
+                     "NUMEXPR_NUM_THREADS"):
+        environment.setdefault(variable, threads)
     return environment
 
 
@@ -39,6 +47,121 @@ class AdapterWorkRootError(RuntimeError):
 class AdapterWorkerError(RuntimeError):
     """A named per-scope subprocess worker or job failed."""
 
+#: Operator override for the forward-pass batch size. Unset keeps the historical 32, so a run that
+#: does not opt in produces the same ``adapter_batch_size`` and therefore the same run id.
+BATCH_SIZE_ENV = "WORKBENCH_COMPOSITION_BATCH_SIZE"
+BATCH_SIZE_DEFAULT = 32
+#: Fraction of total VRAM a batch must be projected to fit inside. A batch size is a request, not a
+#: guarantee: refusing an oversized one up front is cheaper than an OOM 90 minutes into a gallery.
+VRAM_SAFETY_FRACTION = 0.85
+
+def resolved_batch_size(default: int = BATCH_SIZE_DEFAULT) -> int:
+    """Forward-pass batch size from the operator override, or ``default`` when unset.
+
+    Refuses anything that is not a positive integer rather than silently falling back to a
+    different protocol setting than the one the operator asked for.
+    """
+    import os
+
+    raw = os.environ.get(BATCH_SIZE_ENV, "").strip()
+    if not raw:
+        return default
+    try:
+        value = int(raw)
+    except ValueError:
+        raise ValueError(f"{BATCH_SIZE_ENV} must be a positive integer, got {raw!r}") from None
+    if value < 1:
+        raise ValueError(f"{BATCH_SIZE_ENV} must be a positive integer, got {raw!r}")
+    return value
+
+def require_batch_fits(batch_size: int, per_image_bytes: int, total_bytes: int,
+                       context: str = "") -> dict[str, int]:
+    """Refuse a batch whose projected VRAM would not fit, instead of OOM-ing mid-run.
+
+    ``per_image_bytes`` is MEASURED peak activation memory per image at the batch size actually
+    used (see the throughput review under ``docs/reviews/20261108T-throughput``), not a guess. The
+    projection is linear in batch size, which is what the measurements show for this encoder.
+    """
+    projected = int(batch_size) * int(per_image_bytes)
+    budget = int(total_bytes * VRAM_SAFETY_FRACTION)
+    report = {"batch_size": int(batch_size), "per_image_bytes": int(per_image_bytes),
+              "projected_bytes": projected, "budget_bytes": budget,
+              "total_bytes": int(total_bytes)}
+    if projected > budget:
+        where = f" for {context}" if context else ""
+        raise ValueError(
+            f"batch size {batch_size}{where} would need ~{projected / 2**30:.1f} GiB of VRAM, "
+            f"above the {budget / 2**30:.1f} GiB safety budget of {total_bytes / 2**30:.1f} GiB "
+            f"({VRAM_SAFETY_FRACTION:.0%} of total); lower {BATCH_SIZE_ENV}")
+    return report
+
+
+#: Worker pool size for image decode. The host is shared with another project, so the default is half
+#: the box (AGENTS.md: never take more than half). Decode is I/O plus PIL; measured 2.4k img/s at 8
+#: workers and no gain at 10.
+DECODE_WORKERS_ENV = "WORKBENCH_DECODE_WORKERS"
+DECODE_WORKERS_DEFAULT = min(10, (os.cpu_count() or 8) // 2)
+
+def resolved_decode_workers(default: int = DECODE_WORKERS_DEFAULT) -> int:
+    """Decode worker count from the operator override, or ``default`` when unset."""
+    import os
+
+    raw = os.environ.get(DECODE_WORKERS_ENV, "").strip()
+    if not raw:
+        return default
+    try:
+        value = int(raw)
+    except ValueError:
+        raise ValueError(f"{DECODE_WORKERS_ENV} must be a positive integer, got {raw!r}") from None
+    if value < 1:
+        raise ValueError(f"{DECODE_WORKERS_ENV} must be a positive integer, got {raw!r}")
+    return value
+
+def prefetch_rows(map_fn: Any, batches: Sequence[Sequence[Any]], workers: int,
+                  depth: int | None = None) -> Any:
+    """Decode batches in parallel, YIELDING them in submission order.
+
+    Only the DECODE stage is parallel: PIL work releases the GIL, so threads beat processes here and
+    the transform objects stay shared. ``map`` returns results in input order regardless of
+    completion order, which is what keeps encoded feature rows aligned with the released gallery.
+
+    Bounded on purpose. Decoding every batch before the first forward would buffer the whole
+    gallery in RAM -- 74381 images as float32 224x224x3 is ~45 GB -- so at most ``workers * 2``
+    batches are in flight and the rest are pulled as the consumer advances.
+    """
+    from concurrent.futures import ThreadPoolExecutor
+    from itertools import islice
+
+    if workers <= 1 or len(batches) <= 1:
+        for batch in batches:
+            yield map_fn(batch)
+        return
+    pool = ThreadPoolExecutor(max_workers=workers)
+    try:
+        pending = pool.map(map_fn, batches)
+        window = max(1, workers * 2 if depth is None else int(depth))
+        while True:
+            chunk = list(islice(pending, window))
+            if not chunk:
+                return
+            yield from chunk
+    finally:
+        pool.shutdown(wait=True)
+
+def limit_torch_threads(threads: int | None = None) -> int:
+    """Pin torch's intra-op thread count for a data-parallel decode+forward loop.
+
+    MEASURED pathology, not a micro-optimisation: with torch's default 20 intra-op threads the
+    transform stage of one 224px image runs at 27 img/s, and at 1 thread the same transform runs at
+    650 img/s. The per-image transform releases tiny ops whose thread-launch overhead dwarfs the
+    work; parallelism belongs across images (the decode pool), not inside one transform. Pixel
+    output is bit-identical between the two settings (verified: max abs delta 0.0).
+    """
+    import torch
+
+    value = resolved_decode_workers() if threads is None else int(threads)
+    torch.set_num_threads(max(1, value))
+    return torch.get_num_threads()
 
 @dataclass(frozen=True)
 class AdapterStatus:
@@ -50,6 +173,56 @@ class AdapterStatus:
     checkpoint_ids: tuple[str, ...]
     per_mode: dict[str, tuple[bool, str | None]]
     notes: str = ""
+
+
+def _model_record_of(adapter: Any) -> dict[str, Any] | None:
+    """The registry row this adapter was constructed from, whatever attribute name it uses.
+
+    Adapters historically stored it as `model` (HABIT/INTENT/HINT/TME) or `_model_record`
+    (ENCODER/LIMN); the CSMCIR/ConeSep/PTHA family stores it as `_model`. One accessor keeps the
+    environment gate independent of that naming, so adding `require_verified_interpreter()` to a
+    new adapter cannot fail merely because it chose a different private attribute. When no
+    attribute carries it, the row is looked up by the class's own `model_id` -- the registry is
+    the authority the gate must consult anyway.
+    """
+    for name in ("model", "_model", "_model_record"):
+        value = getattr(adapter, name, None)
+        if isinstance(value, dict) and value.get("model_id"):
+            return value
+    model_id = getattr(type(adapter), "model_id", None)
+    if not model_id:
+        return None
+    try:
+        from workbench.backend.registry import load_registry
+
+        registry = getattr(getattr(adapter, "config", None), "registry", None) or load_registry()
+        return next(row for row in registry["models"] if row.get("model_id") == model_id)
+    except Exception:
+        return None
+
+
+def _environment_gate_reason(model: dict[str, Any], config: Any = None) -> str | None:
+    """The reason the execution gate WOULD refuse this model, or None if it would not.
+
+    F1(c): `--plan` used to report READY from artifact/interpreter/CUDA presence alone, while the
+    real run then died at `require_verified_model_interpreter` because the Python version or a
+    declared dependency did not match. The plan and the gate were checking different contracts, so
+    a plan could not be trusted. Calling the SAME probe the gate calls makes them one contract.
+
+    The probe is the advisory pass of the SAME `verify_environment` the gate runs, so plan and gate
+    cannot disagree. It executes the interpreter's identity + on-disk dependency inventory once
+    (~1 s per model, measured), never the model and never a GPU probe.
+    """
+    try:
+        from workbench.backend.runtime import READY_TIERS, verify_environment
+
+        report = verify_environment(model, probe=True, advisory=True, config=config)
+    except Exception as error:  # an unusable contract is itself a reason to refuse
+        return f"environment inspection failed: {type(error).__name__}: {error}"
+    if report.tier in READY_TIERS:
+        return None
+    detail = report.reason or "no reason reported"
+    return f"environment gate would refuse the run [{report.tier}/{report.status}]: {detail}"
 
 
 class CompositionAdapter:
@@ -73,7 +246,7 @@ class CompositionAdapter:
         self.checkpoint_id = checkpoint_id
         self.model: dict[str, Any] | None = None
         self.checkpoint: dict[str, Any] | None = None
-        self.batch_size = 32
+        self.batch_size = resolved_batch_size()
 
     @classmethod
     def status(cls, config: Any = None) -> AdapterStatus:
@@ -105,6 +278,34 @@ class CompositionAdapter:
 
     def mode_supported(self, condition: str) -> tuple[bool, str | None]:
         return True, None
+
+    def require_verified_interpreter(self) -> str:
+        """Return this adapter's model interpreter, proving its environment first.
+
+        Every adapter that launches a model subprocess MUST call this before the first launch.
+        The gate used to live in only five of the nine adapters, so the other four scored with
+        nothing but an advisory environment record. It lives here, once, so a new adapter cannot
+        silently skip it: `tests/test_circus_env_gate.py` asserts every `model_*.py` calls it.
+
+        There is deliberately no bypass argument. The only supported way to run under a different
+        contract is the registry's own `adapted_runtime` block, which changes what the gate checks
+        rather than turning it off, and which badges the run as an adaptation.
+        """
+        from workbench.backend.runtime import require_verified_model_interpreter
+
+        resolved = _model_record_of(self)
+        if resolved is None:
+            raise TypeError(f"{type(self).__name__} exposes no registry model record for the "
+                            "environment gate; set `model` or `_model_record`")
+        interpreter = getattr(self, "interpreter", None)
+        if not interpreter:
+            interpreter = getattr(self, "_interpreter", None)
+        verified = require_verified_model_interpreter(resolved, config=getattr(self, "config", None))
+        if interpreter and Path(verified).resolve() != Path(interpreter).resolve():
+            raise RuntimeError(
+                f"{self.model_id} resolved interpreter changed: {interpreter} -> {verified}")
+        self._verified_interpreter = verified
+        return verified
 
     def encode_queries(self, image_paths: Sequence[str | Path], texts: Sequence[str],
                        categories: Sequence[str | None]) -> Any:
@@ -145,14 +346,10 @@ class CompositionAdapter:
         target_values = target_values / np.maximum(target_norms, np.finfo(np.float32).tiny)
         return query_values @ target_values.T
 
-    def rank(self, queries: Any, targets: Any,
-             target_positions: Sequence[Sequence[int] | None] | None = None,
-             categories: Sequence[str | None] | None = None) -> list[int | None]:
-        """Return exact 1-based best-positive rank, breaking equal scores by gallery order."""
-        if target_positions is None:
-            raise ExactRankUnavailable("adapter rank requires positive target positions")
-        scores = (self.score(queries, targets, categories) if isinstance(targets, Mapping)
-                  else self.score(queries, targets))
+    @staticmethod
+    def _ranks_from_scores(scores: np.ndarray,
+                           target_positions: Sequence[Sequence[int] | None]) -> list[int | None]:
+        """Exact 1-based best-positive rank: ``1 + #greater + #earlier-equal`` per gallery order."""
         if scores.ndim != 2 or scores.shape[0] != len(target_positions):
             raise ValueError("score output shape does not match query and target positions")
         ranks: list[int | None] = []
@@ -168,8 +365,94 @@ class CompositionAdapter:
                              int(np.count_nonzero(row[:index] == row[index])) for index in valid))
         return ranks
 
+    def _score_matrix(self, queries: Any, targets: Any,
+                      categories: Sequence[str | None] | None) -> np.ndarray:
+        return self.score(queries, targets, categories) if isinstance(targets, Mapping) \
+            else self.score(queries, targets)
+
+    def rank_and_topk(self, queries: Any, targets: Any,
+                      target_positions: Sequence[Sequence[int] | None] | None,
+                      categories: Sequence[str | None] | None, depth: int) -> tuple[Any, Any]:
+        """Metric ranks AND the leading ``depth`` candidates from ONE scoring call.
+
+        This is the only supported way to obtain candidates: the score matrix that produced the
+        rank also produced the window, so a stored candidate cannot come from a different
+        nearest-neighbour method, gallery, preprocessing step or tie policy than the rank it
+        accompanies. ``rank`` remains the metric path; both use ``_ranks_from_scores``.
+        """
+        from workbench.composition.topk import topk_from_scores
+
+        if target_positions is None:
+            raise ExactRankUnavailable("adapter rank requires positive target positions")
+        scores = self._score_matrix(queries, targets, categories)
+        ranks = self._ranks_from_scores(scores, target_positions)
+        rows = [topk_from_scores(row, depth) for row in scores]
+        return ranks, rows
+
+    def rank(self, queries: Any, targets: Any,
+             target_positions: Sequence[Sequence[int] | None] | None = None,
+             categories: Sequence[str | None] | None = None) -> list[int | None]:
+        """Return exact 1-based best-positive rank, breaking equal scores by gallery order."""
+        if target_positions is None:
+            raise ExactRankUnavailable("adapter rank requires positive target positions")
+        return self._ranks_from_scores(self._score_matrix(queries, targets, categories),
+                                       target_positions)
+
     def close(self) -> None:
         """Release model-owned resources."""
+
+    def measured_reference_eligibility(self, *, probe_dimension: int | None = None) -> dict[str, Any]:
+        """MEASURE whether this adapter's own scoring keeps the reference eligible.
+
+        F7 exists because `reference_eligible` was a class-level literal (`= True` in all nine
+        adapters) that the runner copied into the artifact as if it were a result. Nothing ever
+        executed the claim, so an adapter that masked the reference row -- exactly what the
+        per-characteristic protocols do upstream -- would still have written
+        `reference_eligible: true` into a summary.
+
+        This probe runs the adapter's OWN `score`+`rank` on a synthetic gallery of
+        `probe_dimension`-wide vectors where the reference is the single, unambiguous best match.
+        A reference-eligible scorer returns rank 1; a scorer that masks the reference cannot
+        return 1 because the reference row is never the best-scoring row.
+
+        It is used ONLY as a measured cross-check of the declared literal, never as a
+        replacement for the real rank pass, and it never touches model weights. Adapters whose
+        `score` requires a real gallery (a Mapping of scope matrices) or a live worker are
+        reported as `unmeasurable` with the reason -- which is the honest answer, and is what
+        stops a runner from asserting the value.
+        """
+        # The scorer decides its own input width (ENCODER 512, the BLIP-2 family 8192 because
+        # their score reads a 32x256 token layout). Ask the adapter, then build the probe to fit;
+        # a wrong width would be reported as an unmeasurable probe rather than a false verdict.
+        dimension = probe_dimension or getattr(self, "score_dimension", None)
+        if dimension is None:
+            return {"measured": False, "reference_eligible": None,
+                    "reason": (f"{type(self).__name__} declares no `score_dimension`, so its "
+                               "scoring cannot be probed offline; the runner must not assert a "
+                               "reference policy for it"),
+                    "method": "score+rank probe"}
+        probe = np.zeros((1, dimension), dtype=np.float32)
+        probe[0, 0] = 1.0
+        targets = np.stack([
+            probe[0],                       # reference: identical to the query vector
+            np.eye(dimension, dtype=np.float32)[1],
+            np.eye(dimension, dtype=np.float32)[2 % dimension],
+        ])
+        try:
+            ranks = self.rank(probe, targets, [[0]])
+        except Exception as error:  # a live-worker or scoped adapter cannot answer offline
+            return {"measured": False, "reference_eligible": None,
+                    "reason": f"{type(error).__name__}: {error}", "method": "score+rank probe"}
+        except NotImplementedError as error:  # pragma: no cover - defensive
+            return {"measured": False, "reference_eligible": None,
+                    "reason": f"{type(error).__name__}: {error}", "method": "score+rank probe"}
+        eligible = bool(ranks and ranks[0] == 1)
+        return {"measured": True, "reference_eligible": eligible,
+                "reason": None if eligible else (
+                    f"the reference row is not the top-ranked candidate (rank {ranks!r}); this "
+                    "adapter's scoring excludes or masks the reference"),
+                "reference_rank": ranks[0] if ranks else None,
+                "method": "score+rank on a synthetic gallery whose reference is the exact match"}
 
 
 def _models(registry: dict[str, Any] | None = None) -> list[dict[str, Any]]:

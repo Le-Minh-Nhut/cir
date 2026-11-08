@@ -12,7 +12,7 @@ import numpy as np
 
 from .adapters import (
     AdapterStatus, AdapterWorkerError, AdapterWorkRootError, CompositionAdapter,
-    worker_environment,
+    limit_torch_threads, prefetch_rows, resolved_decode_workers, worker_environment,
 )
 
 CONDITIONS = ("multimodal", "text_only_black_image", "image_only_empty_text")
@@ -57,6 +57,8 @@ class Adapter(CompositionAdapter):
     model_id = "tme"
     category_scopes = (None,)
     reference_eligible = True
+    # score() is an einsum over 256-d query vectors against (G,Q,256) targets.
+    score_dimension = 256
     work_root: Path | None = None
 
     def __init__(self, config: Any = None, checkpoint_id: str | None = None) -> None:
@@ -159,12 +161,9 @@ class Adapter(CompositionAdapter):
         if self._worker_failed is not None:
             raise AdapterWorkerError(self._worker_failed)
         if self._verified_interpreter is None:
-            from workbench.backend.runtime import require_verified_model_interpreter
-
-            verified = require_verified_model_interpreter(self.model, config=self.config)
-            if Path(verified).resolve() != Path(self.interpreter).resolve():
-                raise RuntimeError(f"TME resolved interpreter changed: {self.interpreter} -> {verified}")
-            self._verified_interpreter = verified
+            # Same gate, same code path, as every other adapter: see
+            # CompositionAdapter.require_verified_interpreter.
+            self.require_verified_interpreter()
         self._counter += 1
         job_path = self._work_dir() / f"job-{self._counter}.json"
         output_path = self._job_dir / f"output-{self._counter}.npy"
@@ -368,6 +367,8 @@ def _worker_main(argv: Sequence[str] | None = None) -> int:
         network.eval()
         transform = targetpad_transform(target_ratio=1.25, dim=224)
         text_processor = processors["eval"]
+        limit_torch_threads()
+        workers = resolved_decode_workers()
     except Exception as error:
         reply(False, error_type=type(error).__name__, error=str(error))
         return 0
@@ -377,18 +378,29 @@ def _worker_main(argv: Sequence[str] | None = None) -> int:
         outputs = []
         try:
             with torch.no_grad():
-                for start in range(0, len(current["image_paths"]), current["batch_size"]):
-                    paths = current["image_paths"][start:start + current["batch_size"]]
+                batch_size = current["batch_size"]
+                batches = [current["image_paths"][start:start + batch_size]
+                           for start in range(0, len(current["image_paths"]), batch_size)]
+
+                def decode(paths: Sequence[str]) -> Any:
                     image_tensors = []
                     for image_path in paths:
                         with Image.open(image_path) as image:
                             image_tensors.append(transform(image.convert("RGB")))
-                    pixels = torch.stack(image_tensors).float().to(device)
+                    return torch.stack(image_tensors)
+
+                # Same decode pool as HABIT/CONESEP/INTENT/HINT. Decode only: this model's own
+                # transform object, its autocast path and its score() are untouched.
+                decoded = prefetch_rows(decode, batches, workers)
+                for index, pixels in enumerate(decoded):
+                    pixels = pixels.float().to(device, non_blocking=True)
                     with torch.cuda.amp.autocast():
                         vit_features = network.vit_encode(pixels)
                     reference = network.encode_image(vit_features)
                     if current["operation"] == "queries":
-                        texts = [text_processor(text) for text in current["texts"][start:start + current["batch_size"]]]
+                        first = index * batch_size
+                        texts = [text_processor(text) for text in
+                                 current["texts"][first:first + len(pixels)]]
                         tokens = network.tokenizer(
                             texts, padding="max_length", truncation=True,
                             max_length=network.max_txt_len, return_tensors="pt",

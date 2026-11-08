@@ -13,7 +13,7 @@ import numpy as np
 
 from .adapters import (
     AdapterStatus, AdapterWorkRootError, AdapterWorkerError, CompositionAdapter,
-    worker_environment,
+    limit_torch_threads, prefetch_rows, resolved_decode_workers, worker_environment,
 )
 
 CONDITIONS = ("multimodal", "text_only_black_image", "image_only_empty_text")
@@ -44,6 +44,8 @@ class Adapter(CompositionAdapter):
     model_id = "intent"
     category_scopes = (None,)
     reference_eligible = True
+    # score() is an einsum over 256-d query vectors against (G,Q,256) targets.
+    score_dimension = 256
     work_root: Path | None = None
 
     def __init__(self, config: Any = None, checkpoint_id: str | None = None) -> None:
@@ -143,11 +145,9 @@ class Adapter(CompositionAdapter):
         if self._worker_failed is not None:
             raise AdapterWorkerError(self._worker_failed)
         if not self._interpreter_verified:
-            from workbench.backend.runtime import require_verified_model_interpreter
-
-            verified = require_verified_model_interpreter(self.model, config=self.config)
-            if Path(verified).resolve() != Path(self.interpreter).resolve():
-                raise RuntimeError(f"INTENT resolved interpreter changed: {self.interpreter} -> {verified}")
+            # Same gate, same code path, as every other adapter: see
+            # CompositionAdapter.require_verified_interpreter.
+            self.require_verified_interpreter()
             self._interpreter_verified = True
         work = self._work_dir()
         self._worker_counter += 1
@@ -324,6 +324,8 @@ def _worker_main(argv: Sequence[str] | None = None) -> int:
         network = network.to(device).eval()
         transform = data_utils.targetpad_transform(1.25, 224)
         text_processor = processors[0]["eval"]
+        limit_torch_threads()
+        workers = resolved_decode_workers()
     except Exception as error:
         reply(False, error_type=type(error).__name__, error=str(error))
         return 1
@@ -332,21 +334,33 @@ def _worker_main(argv: Sequence[str] | None = None) -> int:
         outputs = []
         try:
             with torch.no_grad():
-                for start in range(0, len(current["image_paths"]), current["batch_size"]):
-                    paths = current["image_paths"][start:start + current["batch_size"]]
+                batch_size = current["batch_size"]
+                batches = [current["image_paths"][start:start + batch_size]
+                           for start in range(0, len(current["image_paths"]), batch_size)]
+
+                def decode(paths: Sequence[str]) -> Any:
                     images = []
                     for path in paths:
                         with Image.open(path) as image:
                             images.append(transform(image.convert("RGB")))
-                    pixels = torch.stack(images).float().to(device)
+                    return torch.stack(images)
+
+                # Same decode pool as HABIT and CONESEP: one convention, not a second idiom. Only
+                # the serial `Image.open` + transform loop the GPU idled behind is parallelised;
+                # `map` preserves order, so feature rows stay aligned with the released gallery.
+                pixels_by_batch = prefetch_rows(decode, batches, workers)
+                for index, pixels in enumerate(pixels_by_batch):
+                    pixels = pixels.float().to(device, non_blocking=True)
                     if current["operation"] == "queries":
+                        first = index * batch_size
                         texts = [text_processor(text) for text in
-                                 current["texts"][start:start + current["batch_size"]]]
+                                 current["texts"][first:first + len(pixels)]]
                         features = network.extract_retrieval_compose(pixels, texts)
-                        outputs.append(features.detach().cpu().numpy().reshape(len(paths), -1))
+                        outputs.append(features.detach().cpu().numpy().reshape(len(pixels), -1))
                     else:
                         features = network.extract_retrieval_target(pixels)
                         outputs.append(features.detach().cpu().numpy().transpose(0, 2, 1))
+                    del pixels
             shape = (0, 256) if current["operation"] == "queries" else (0, 32, 256)
             result = np.concatenate(outputs, axis=0) if outputs else np.empty(shape, dtype=np.float32)
             np.save(current["output_path"], result.astype(np.float32, copy=False), allow_pickle=False)

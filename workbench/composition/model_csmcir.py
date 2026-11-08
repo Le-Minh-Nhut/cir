@@ -65,6 +65,8 @@ class Adapter(CompositionAdapter):
 
     model_id = "csmcir"
     reference_eligible = True
+    # score() reads a 32x256 token layout as an 8192-wide vector.
+    score_dimension = 8192
     category_scopes: tuple[str | None, ...] = (None,)
 
     def __init__(self, config: Any, checkpoint_id: str | None = None) -> None:
@@ -77,6 +79,7 @@ class Adapter(CompositionAdapter):
         #: Runner-owned root; each adapter removes only its private child on close.
         self.work_root: Path | None = None
         self._job_root: Path | None = None
+        self._interpreter_verified = False
 
     @classmethod
     def status(cls, config: Any | None = None) -> AdapterStatus:
@@ -146,6 +149,11 @@ def _run(adapter: Adapter, operation: str, image_paths: Sequence[str], texts: Se
         return np.empty((0, 8192), dtype=np.float32)
     if not adapter._interpreter:
         raise RuntimeError("no interpreter environment resolved for WORKBENCH_CSMCIR_PYTHON")
+    if not getattr(adapter, "_interpreter_verified", False):
+        # Same gate, same code path, as every other adapter: see
+        # CompositionAdapter.require_verified_interpreter.
+        adapter.require_verified_interpreter()
+        adapter._interpreter_verified = True
     checkpoint = Path(adapter._checkpoint["resolved_path"])
     if not checkpoint.is_file():
         raise FileNotFoundError(f"csmcir checkpoint not staged at {checkpoint}")

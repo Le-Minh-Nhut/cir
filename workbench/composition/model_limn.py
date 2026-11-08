@@ -7,10 +7,18 @@ directory, never the run root. A query scope selects both its whole-model checkp
 matching embedding space for the entire released gallery. Target matrices from scopes are never
 mixed, candidates are never category-filtered, and checkpoint choice never consults positive targets.
 Persistent worker caches one model per scope.
+
+A released query whose garment category the release loader could not pin down (a reference image
+listed by two FashionIQ category splits) is still scoped here, from the author caption annotation:
+LIMN's native protocol is ``fashioniq_val_split``, and the M-BEIR task-7 query text is the two
+validation captions of its reference concatenated, so the caption row a query text came from names
+the category the FashionIQ authors assigned it. Text that reconstructs under two category files is
+left unscoped rather than defaulted.
 """
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import subprocess
 import sys
@@ -34,11 +42,77 @@ from workbench.composition.adapters import (
     AdapterWorkerError,
     CompositionAdapter,
     ExactRankUnavailable,
+    limit_torch_threads,
+    prefetch_rows,
+    resolved_decode_workers,
     worker_environment,
 )
 from workbench.composition.inputs import CONDITIONS
 
 BUNDLE_ID = "base_iter0_all_categories"
+
+def normalize_query_text(text: str) -> str:
+    """Casefold, strip punctuation, collapse whitespace: the release's own caption join."""
+    return " ".join(re.sub(r"[^a-z0-9 ]+", " ", str(text).strip().lower()).split())
+
+
+def caption_scope_index(fashioniq_root: Path) -> dict[tuple[str, str], frozenset[str]]:
+    """Map ``(image stem, joined validation caption text)`` to the annotating categories.
+
+    M-BEIR task-7 query text is the reference image's two FashionIQ validation captions joined by
+    " and ", so the row a query text came from names the category the authors annotated that image
+    under. Keyed by image *and* text: two images in different categories can carry identical
+    caption text, and the reference identity is what separates them. A ``(stem, text)`` pair that
+    still appears under two categories is genuinely undecidable and maps to both, so callers can
+    refuse instead of picking one.
+    """
+    index: dict[tuple[str, str], set[str]] = {}
+    for category in ("dress", "shirt", "toptee"):
+        path = Path(fashioniq_root) / "captions" / f"cap.{category}.val.json"
+        try:
+            rows = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        for row in rows if isinstance(rows, list) else ():
+            if not isinstance(row, dict) or not isinstance(row.get("candidate"), str):
+                continue
+            captions = row.get("captions")
+            if not isinstance(captions, list):
+                continue
+            text = normalize_query_text(" and ".join(
+                part for part in captions if isinstance(part, str) and part.strip()))
+            if text:
+                index.setdefault((Path(row["candidate"]).stem, text), set()).add(category)
+    return {key: frozenset(categories) for key, categories in index.items()}
+
+
+def query_reference_stem(query: Any, candidate_names: Mapping[str, str] | None) -> str | None:
+    """Return the reference image stem the release candidate table records for ``query``."""
+    if not isinstance(candidate_names, Mapping):
+        return None
+    name = candidate_names.get(getattr(query, "reference_id", None))
+    return Path(name).stem if isinstance(name, str) and name else None
+
+
+def resolve_query_category(scopes: Sequence[str | None], index: Mapping[tuple[str, str], frozenset[str]],
+                           query: Any, candidate_names: Mapping[str, str] | None) -> str | None:
+    """Route one query to its category checkpoint, or ``None`` when the release does not say.
+
+    A category the release loader already assigned is final: returned when it is one of ``scopes``
+    and refused otherwise, because an out-of-scope loader assignment is an adapter gap, not an
+    ambiguity to paper over with the annotation. Only an unscoped query falls through to its own
+    caption annotation, which has to name exactly one scope; anything short of that stays ``None``
+    and the query stays unscored.
+    """
+    category = getattr(query, "category", None)
+    if category is not None:
+        return category if category in scopes else None
+    stem = query_reference_stem(query, candidate_names)
+    if stem is None:
+        return None
+    categories = index.get((stem, normalize_query_text(getattr(query, "query_txt", ""))), frozenset())
+    resolved = next(iter(categories)) if len(categories) == 1 else None
+    return resolved if resolved in scopes else None
 
 
 class CategoryScopeError(ValueError):
@@ -80,11 +154,49 @@ class Adapter(CompositionAdapter):
         self.interpreter = resolve_model_interpreter(self._model_record, config) or setting(variable)
         self.source_root = Path(config.WORKBENCH_THIRD_PARTY_ROOT) / self._model_record["source_dir"]
         self.dataset_root = Path(config.FASHIONIQ_ROOT)
+        self._caption_scopes: dict[tuple[str, str], frozenset[str]] | None = None
+        self._candidate_names: dict[str, str] | None = None
         self._counter = 0
         self._job_dir: Path | None = None
         self._worker: subprocess.Popen[str] | None = None
         self._worker_log: Any | None = None
         self._worker_failed: str | None = None
+        self._interpreter_verified = False
+
+    def candidate_names(self) -> dict[str, str]:
+        """Lazily read the released candidate table: ``candidate id -> image path``."""
+        if self._candidate_names is None:
+            names: dict[str, str] = {}
+            path = (Path(self.config.WORKBENCH_CIRCUS_RELEASE_ROOT)
+                    / "mbeir_fashioniq_task7_cand_pool.jsonl")
+            try:
+                with path.open(encoding="utf-8") as stream:
+                    for line in stream:
+                        if not line.strip():
+                            continue
+                        row = json.loads(line)
+                        if isinstance(row, dict) and isinstance(row.get("did"), str) \
+                                and isinstance(row.get("img_path"), str):
+                            names[row["did"]] = row["img_path"]
+            except (OSError, ValueError):
+                names = {}
+            self._candidate_names = names
+        return self._candidate_names
+
+    def query_scope(self, query: Any,
+                    candidate_names: Mapping[str, str] | None = None) -> str | None:
+        """Route one released query to the checkpoint scope its own annotation names.
+
+        The runner calls this once per query where it used to read ``query.category`` directly.
+        Returns the category the release loader already assigned when there is one, otherwise the
+        category whose FashionIQ validation caption pair produced this query's text. ``None`` means
+        the release does not determine a scope, so the query stays unscored instead of defaulting.
+        """
+        if self._caption_scopes is None:
+            self._caption_scopes = caption_scope_index(self.dataset_root)
+        names = self.candidate_names() if candidate_names is None else candidate_names
+        return resolve_query_category(self.category_scopes, self._caption_scopes, query, names)
+
     @classmethod
     def status(cls, config: Any | None = None) -> AdapterStatus:
         """Check each bundle member, configured interpreter, its CUDA runtime, and bundle mapping."""
@@ -132,6 +244,12 @@ class Adapter(CompositionAdapter):
             reason = "CUDA unavailable in LIMN model interpreter; native forward requires CUDA"
         elif not mapping_present:
             reason = f"checkpoint bundle mapping unresolved: {mapping}"
+        if reason is None:
+            # F1(c): the presence checks above all pass on an interpreter that the execution gate
+            # would still refuse (wrong Python version, missing declared dependency). Ask the gate.
+            from workbench.composition.adapters import _environment_gate_reason
+
+            reason = _environment_gate_reason(model, config)
         return AdapterStatus(
             model_id=cls.model_id, ready=reason is None, reason=reason,
             checkpoint_ids=checkpoint_ids,
@@ -143,6 +261,11 @@ class Adapter(CompositionAdapter):
         if not self.interpreter or not Path(self.interpreter).is_file():
             variable = self._model_record["environment"]["python_env_var"]
             raise RuntimeError(f"model interpreter unavailable: {variable} is unset or missing")
+        if not self._interpreter_verified:
+            # Same gate, same code path, as every other adapter: see
+            # CompositionAdapter.require_verified_interpreter.
+            self.require_verified_interpreter()
+            self._interpreter_verified = True
         if self._worker_failed is not None:
             raise AdapterWorkerError(self._worker_failed)
         paths = [str(Path(path).expanduser().resolve()) for path in image_paths]
@@ -363,6 +486,9 @@ def _worker_main(job_path: Path) -> None:
     from workbench.backend.registry import checkpoint_by_id, checkpoint_path, model_by_id
     from workbench.replay.common import load_trusted_whole_model
 
+    limit_torch_threads()
+    workers = resolved_decode_workers()
+
     def reply(ok: bool, **values: Any) -> None:
         print("CIRCUS_WORKER:" + json.dumps({"ok": ok, **values}), flush=True)
 
@@ -415,14 +541,24 @@ def _worker_main(job_path: Path) -> None:
                 while stop < len(paths) and categories[stop] == category:
                     stop += 1
                 model = models[category]
-                for batch_start in range(start, stop, batch_size):
-                    batch_stop = min(batch_start + batch_size, stop)
+                category_transform = transforms[category]
+
+                def decode(chunk: list[str], _transform: Any = category_transform) -> Any:
                     images = []
-                    for path in paths[batch_start:batch_stop]:
+                    for path in chunk:
                         with Image.open(path) as image:
-                            images.append(transforms[category](image.copy()))
-                    batch = torch.stack(images).float().cuda()
-                    dataset_type = torch.ones(len(images)).cuda() * dataset_ids[category]
+                            images.append(_transform(image.copy()))
+                    return torch.stack(images)
+
+                spans = [(batch_start, min(batch_start + batch_size, stop))
+                         for batch_start in range(start, stop, batch_size)]
+                # Same decode pool as the rest of the family. LIMN's per-category open_clip
+                # transform is captured per group and used unchanged; only the serial
+                # `Image.open` + transform loop is parallelised.
+                for (batch_start, batch_stop), batch in zip(
+                        spans, prefetch_rows(decode, [paths[a:b] for a, b in spans], workers)):
+                    batch = batch.float().cuda()
+                    dataset_type = torch.ones(batch_stop - batch_start).cuda() * dataset_ids[category]
                     with torch.no_grad():
                         if current["phase"] == "queries":
                             encoded = model.compose_query(

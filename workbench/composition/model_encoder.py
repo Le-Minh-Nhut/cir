@@ -32,6 +32,9 @@ from workbench.composition.adapters import (
     AdapterStatus,
     AdapterWorkerError,
     CompositionAdapter,
+    limit_torch_threads,
+    prefetch_rows,
+    resolved_decode_workers,
     worker_environment,
 )
 from workbench.composition.inputs import CONDITIONS
@@ -43,6 +46,8 @@ class Adapter(CompositionAdapter):
     model_id = "encoder"
     category_scopes = (None,)
     reference_eligible = True
+    # score() is a plain normalized dot product over 512-d features.
+    score_dimension = 512
 
     def __init__(self, config: Any, checkpoint_id: str | None = None) -> None:
         super().__init__(config, checkpoint_id)
@@ -60,6 +65,7 @@ class Adapter(CompositionAdapter):
         self._worker: subprocess.Popen[str] | None = None
         self._worker_log: Any | None = None
         self._worker_failed: str | None = None
+        self._interpreter_verified = False
 
     @classmethod
     def status(cls, config: Any | None = None) -> AdapterStatus:
@@ -102,6 +108,13 @@ class Adapter(CompositionAdapter):
             source = Path(config.WORKBENCH_THIRD_PARTY_ROOT) / model["source_dir"]
             auxiliary = source / "open_clip_pytorch_model.bin"
             reason = None if auxiliary.is_file() else f"ENCODER auxiliary asset missing: {auxiliary}"
+        if reason is None:
+            # F1(c): every presence check above passes on an interpreter the execution gate still
+            # refuses (measured: pair-adapted is Python 3.11.15 against a declared 3.10). Ask the
+            # gate so `--plan` cannot print READY for a run that dies at launch.
+            from workbench.composition.adapters import _environment_gate_reason
+
+            reason = _environment_gate_reason(model, config)
         return AdapterStatus(
             model_id=cls.model_id, ready=reason is None, reason=reason,
             checkpoint_ids=(checkpoint_id,),
@@ -120,6 +133,11 @@ class Adapter(CompositionAdapter):
         if not self.interpreter or not Path(self.interpreter).is_file():
             variable = self._model_record["environment"]["python_env_var"]
             raise RuntimeError(f"model interpreter unavailable: {variable} is unset or missing")
+        if not self._interpreter_verified:
+            # Same gate, same code path, as every other adapter: see
+            # CompositionAdapter.require_verified_interpreter.
+            self.require_verified_interpreter()
+            self._interpreter_verified = True
         if self._worker_failed is not None:
             raise AdapterWorkerError(self._worker_failed)
         adapter_root = work_root / self.model_id
@@ -136,7 +154,9 @@ class Adapter(CompositionAdapter):
             "texts": list(texts), "categories": list(categories),
             "output_path": str(output_path), "checkpoint_path": str(self._checkpoint_path),
             "expected_sha256": self._checkpoint.get("expected_sha256"),
+            "checkpoint_mapping_status": self._checkpoint.get("checkpoint_mapping_status"),
             "source_root": str(self.source_root), "dataset_root": str(self.dataset_root),
+            "batch_size": self.batch_size,
         }
         job_path.write_text(json.dumps(payload), encoding="utf-8")
         if self._worker is not None and self._worker.poll() is not None:
@@ -283,8 +303,12 @@ def _worker_main(job_path: Path) -> None:
     try:
         job = json.loads(job_path.read_text(encoding="utf-8"))
         source_root = Path(job["source_root"])
+        # The mapping status is one of the four gates `_unused_checkpoint_keys` applies before the
+        # two provably-unread `binding_decoder.fc.0.*` tensors may be skipped. Asserting
+        # `VERIFIED_METADATA` here meant a registry downgrade could never tighten the loader; take
+        # the registry's value instead, so a downgrade reaches this decision by construction.
         checkpoint = {"checkpoint_id": "fashioniq", "expected_sha256": job["expected_sha256"],
-                      "checkpoint_mapping_status": "VERIFIED_METADATA"}
+                      "checkpoint_mapping_status": job.get("checkpoint_mapping_status")}
         torch_module, open_clip_module, _datasets, _test, model_try2 = _load_replay_modules(source_root)
         previous_cwd = Path.cwd()
         try:
@@ -304,6 +328,8 @@ def _worker_main(job_path: Path) -> None:
         model = model.cuda().eval()
         _, _, preprocess_val = open_clip_module.create_model_and_transforms(
             "ViT-B-32", pretrained=str(source_root / "open_clip_pytorch_model.bin"))
+        limit_torch_threads()
+        workers = resolved_decode_workers()
     except Exception as error:
         reply(False, error_type=type(error).__name__, error=str(error))
         return
@@ -311,15 +337,25 @@ def _worker_main(job_path: Path) -> None:
     def run_one(current: dict[str, Any]) -> None:
         paths, texts = current["image_paths"], current["texts"]
         features = []
+        batch_size = max(1, int(current.get("batch_size") or 32))
+        batches = [paths[start:start + batch_size]
+                   for start in range(0, len(paths), batch_size)]
+
+        def decode(chunk: Sequence[str]) -> Any:
+            images = []
+            for path in chunk:
+                with Image.open(path) as image:
+                    images.append(preprocess_val(image.copy()))
+            return torch.stack(images)
+
         try:
-            for start in range(0, len(paths), 32):
-                stop = min(start + 32, len(paths))
+            # Same decode pool as the rest of the family. This model's open_clip transform
+            # (`preprocess_val`) is used unchanged, and so is the forward.
+            for index, batch in enumerate(prefetch_rows(decode, batches, workers)):
+                start = index * batch_size
+                stop = start + len(batch)
                 with torch.no_grad():
-                    images = []
-                    for path in paths[start:stop]:
-                        with Image.open(path) as image:
-                            images.append(preprocess_val(image.copy()))
-                    batch = torch.stack(images).cuda()
+                    batch = batch.cuda()
                     if current["phase"] == "queries":
                         encoded = model.extract_retrieval_compose(batch, texts[start:stop])
                     else:
