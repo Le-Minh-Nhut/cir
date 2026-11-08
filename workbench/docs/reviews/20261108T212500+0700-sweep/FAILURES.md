@@ -75,7 +75,7 @@ That is not because 33 tests were fixed — the failures are largely the same *c
 So the honest comparison is: **33 → 18 failures, 0 of them shared by id.** 15 fewer, attributed as 31
 operator-state ids resolved by the test-isolation change, and the current 18 all attributed above with
 **0** new regressions from this round's production commits — every current failure either reproduces at
-`1a4cd32`/`b0f38bd` or is operator state, and 46 new tests were added this round, all passing.
+`1a4cd32`/`b0f38bd` or is operator state, and 38 test ids were added this round (`6eb4434`), all passing.
 
 A raw count comparison (33 → 18) is therefore not evidence that this round's code is better; the
 code-attributable failures in the current set are #1–#4 (fixture, category d) and #5 (ordering,
