@@ -131,6 +131,7 @@ models:
         status: URL_VERIFIED
         checkpoint_mapping_status: VERIFIED_METADATA
   - model_id: airknow
+    composition_adapter: workbench.composition.model_airknow
     environment:
       python_env_var: WORKBENCH_AIRKNOW_PYTHON
       confidence: VERIFIED_README
