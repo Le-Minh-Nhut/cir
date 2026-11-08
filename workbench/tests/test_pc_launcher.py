@@ -287,9 +287,22 @@ sys.exit(res.returncode)
 
     log_file = sandbox / "mock_tools.log"
     counter_file = sandbox / "curl_counter.txt"
+    # Every root the sandbox owns is named, not inferred. `pc.sh` and the `verify_run.py` it execs
+    # inside the shim resolve configuration through `operator_config`, which reads the operator's
+    # untracked `workbench/config/workbench.env` first. That file is this developer's machine
+    # state: its absolute `WORKBENCH_ARTIFACTS_ROOT` made the verifier look for this sandbox's
+    # reports under the real checkout, so every corroborated run refused as "aggregate report not
+    # found" and the launcher exited 1 in a sandbox that had in fact staged the run correctly.
     env = {
         "PATH": path_var,
         "CIR_REPO_ROOT": str(sandbox),
+        "CIR_DATA_ROOT": str(sandbox / "data"),
+        "FASHIONIQ_ROOT": str(ds_root),
+        "WORKBENCH_ARTIFACTS_ROOT": str(sandbox / "workbench" / "artifacts"),
+        "WORKBENCH_CHECKPOINT_ROOT": str(sandbox / "workbench" / "artifacts" / "checkpoints"),
+        "WORKBENCH_RESULTS_ROOT": str(sandbox / "workbench" / "artifacts" / "results"),
+        "WORKBENCH_THIRD_PARTY_ROOT": str(sandbox / "workbench" / "third_party"),
+        "WORKBENCH_CIRCUS_RELEASE_ROOT": str(sandbox / "workbench" / "artifacts" / "circus_release"),
         "WORKBENCH_DOCKER_DIR": str(docker_dir),
         "HOST_FASHIONIQ_ROOT": str(ds_root),
         "MOCK_LOG_FILE": str(log_file),

@@ -106,6 +106,7 @@ def test_nonzero_worker_exit_is_named_and_returns_no_matrix(module, tmp_path: Pa
     adapter._checkpoint = {"resolved_path": str(checkpoint), "checkpoint_id": "variant",
                            "checkpoint_training_noise_pct": 50}
     adapter.checkpoint_id = "variant"
+    adapter._interpreter_verified = True
     monkeypatch.setattr(module.subprocess, "run", lambda *args, **kwargs: SimpleNamespace(returncode=7))
     with pytest.raises(adapters.AdapterWorkerError, match=r"csmcir.*scope.*7"):
         adapter.encode_queries([str(checkpoint)], ["edit"], [None])
@@ -133,6 +134,7 @@ def _resident_adapter(module, model_id: str, tmp_path: Path):
         adapter._model = {"source_dir": "model-source"}
         adapter._checkpoint = {"resolved_path": str(checkpoint)}
         adapter._job_root = None
+        adapter._interpreter_verified = True
     return adapter
 
 

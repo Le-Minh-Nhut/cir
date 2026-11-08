@@ -113,7 +113,12 @@ def test_dcnet_reports_preparation_separately_from_checkpoint(tmp_path: Path) ->
     assert checks["preparation:dcnet"]["status"] == "BLOCKED"
     assert checks["preparation:dcnet"]["evidence"]["deterministic_status"] == "NONDETERMINISTIC_WITHOUT_AUTHOR_ARTIFACT"
     assert f"required generated artifact missing: {tmp_path / 'FashionIQ' / 'captions' / 'cap.dress.glove.val.pkl'}" in blockers
-    assert "checkpoint mapping unresolved" in blockers
+    # The DCNet mapping is now established from the checkpoint's own bytes (its embedded
+    # `arch: CENet` config plus a strict 518/518 load), so this precondition can no longer stand on
+    # an unresolved mapping. The test's point — preparation readiness reported SEPARATELY from the
+    # checkpoint — is carried by the checkpoint being absent under this temp root.
+    assert "checkpoint mapping unresolved" not in blockers
+    assert any("checkpoint missing" in blocker for blocker in blockers)
 
 
 def test_dcnet_preparation_readiness_does_not_clear_checkpoint_blocker(tmp_path: Path) -> None:
@@ -135,7 +140,10 @@ def test_dcnet_preparation_readiness_does_not_clear_checkpoint_blocker(tmp_path:
 
     assert checks["raw-dataset:dcnet"]["status"] == "OK"
     assert checks["preparation:dcnet"]["status"] == "MANUAL"
-    assert "checkpoint mapping unresolved" in blockers
+    # Completing preparation must not clear the CHECKPOINT blocker. The mapping is no longer the
+    # blocker (it is established from the bytes), so the surviving checkpoint fact is that the run
+    # directory is not under this temp root.
+    assert any("checkpoint missing" in blocker for blocker in blockers)
     assert not any("generated artifact missing" in blocker for blocker in blockers)
 
 

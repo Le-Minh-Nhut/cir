@@ -134,6 +134,16 @@ def master(tmp_path: Path):
         "WORKBENCH_CHECKPOINT_ROOT": str(checkpoints),
         "WORKBENCH_RESULTS_ROOT": str(ws / "results"),
         "WORKBENCH_THIRD_PARTY_ROOT": str(third_party),
+        # Pinned, not inherited. Every path the pipeline writes lives under the workspace, and the
+        # artifacts root is the one that used to be left implicit: it defaults to
+        # `CIR_REPO_ROOT/workbench/artifacts`, which is right, but the child ALSO reads the
+        # operator's untracked `workbench/config/workbench.env`, whose absolute
+        # `WORKBENCH_ARTIFACTS_ROOT` wins over that default. The run then wrote its ledger,
+        # reports and pipeline lock into the developer's checkout -- so the proof this test looks
+        # for was never in the sandbox, and concurrent cases met each other's `pipeline_state.json`
+        # lock. Naming both keys here makes the sandbox the only place a child can write.
+        "WORKBENCH_ARTIFACTS_ROOT": str(ws / "workbench" / "artifacts"),
+        "WORKBENCH_CIRCUS_RELEASE_ROOT": str(ws / "workbench" / "artifacts" / "circus_release"),
         "WORKBENCH_NO_ENV_CACHE": "1",
         # The evaluator child receives an allowlist; fixture switches are declared explicitly.
         "WORKBENCH_EVALUATOR_ENV_PASSTHROUGH": "SYNTHETIC_FAIL:SYNTHETIC_SILENT:SYNTHETIC_SLEEP",

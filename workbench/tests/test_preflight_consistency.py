@@ -46,6 +46,14 @@ def test_doctor_prepare_and_runtime_share_dataset_and_model_blockers(monkeypatch
         # entry. Closing the declared size to the fixture keeps the comparison about cross-consumer
         # AGREEMENT, which is what it asserts.
         checkpoint["expected_size_bytes"] = len(b"fixture")
+        # The same reasoning applies one level down now that these artifacts declare their members:
+        # a member digest compared against `b"fixture"` makes every consumer report the member as
+        # substituted, and the comparison would then be about the fixture's bytes rather than about
+        # the consumers agreeing.
+        checkpoint["bundle_members"] = [
+            {**member, "expected_sha256": None}
+            for member in (checkpoint.get("bundle_members") or [])
+        ]
         model["checkpoint_variants"] = [checkpoint]
         model["checkpoint_bundles"] = []
         artifact = checkpoint_path(model_id, checkpoint, config.WORKBENCH_CHECKPOINT_ROOT)

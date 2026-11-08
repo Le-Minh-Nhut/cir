@@ -86,7 +86,17 @@ def test_f10_encoder_checkpoint_schema_and_verification() -> None:
 def test_f11_clvc_net_assumed_names_and_whole_model_loader() -> None:
     clvc_meta = model_by_id("clvc_net")
     assert clvc_meta["checkpoint_serialization"] == "whole_model"
-    assert clvc_meta["category_checkpoint_structure"]["mapping_status"] == "UNVERIFIED"
+    # The per-category structure is no longer an assumption: each of the six staged pickles names
+    # the pinned `model.compose_local` / `model.compose_global` and loads strictly into it, and each
+    # category's own vocabulary matches its train captions. Faking an "assumed" mapping here would
+    # understate evidence that exists.
+    structure = clvc_meta["category_checkpoint_structure"]
+    assert structure["mapping_status"] == "VERIFIED_METADATA"
+    assert structure["member_count_expected"] == 6
+    variant = clvc_meta["checkpoint_variants"][0]
+    assert variant["artifact_type"] == "bundle_directory"
+    assert len(variant["required_files"]) == 6
+    assert all(member.get("expected_sha256") for member in variant["bundle_members"])
 
     # Forward-compat check: load_trusted_whole_model blocks unverified loads without author hash
     dummy_path = Path("/tmp/nonexistent_clvc_model.pt")

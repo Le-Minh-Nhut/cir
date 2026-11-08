@@ -339,12 +339,15 @@ def test_limn_adapter_runs_full_bundle_or_named_category(monkeypatch, tmp_path: 
     assert bundle[bundle.index("--checkpoint-root") + 1] == str(checkpoint_root)
     assert diagnostic[diagnostic.index("--category") + 1] == "dress"
 def test_tgcir_reports_the_archive_mapping_blocker_rather_than_launching() -> None:
-    """TG-CIR's member mapping is unresolved, and the reported reason must say so.
+    """TG-CIR's member mapping WAS unresolved; it is now established from the bytes.
 
-    This test previously asserted that the adapter was skipped as unaudited. TG-CIR now has a command
-    (its evaluator is a callable with no CLI, so the wrapper supplies one), which moves the model out
-    of the skip case and into having to name its real missing prerequisite. "We cannot launch" and
-    "we do not know which archive member to load" are different facts, and only the second is true.
+    This test previously asserted that the adapter was skipped as unaudited, then that the reason
+    named an unresolved archive mapping. The mapping is resolved: the extracted member is
+    `checkpoints/Fashioniq.pt`, it loads STRICTLY into `model.VCG_CIR` at the source's own default
+    geometry, and three of four token-count permutations are rejected by tensor shapes. What still
+    stops a launch is unrelated to the weight — the ViT-B/16 external asset's provenance and the
+    missing interpreter. Asserting the OLD reason here would now be false, so the test pins the
+    current one.
     """
     module = load_module()
     model = records()["tgcir"]
@@ -353,7 +356,10 @@ def test_tgcir_reports_the_archive_mapping_blocker_rather_than_launching() -> No
 
     assert plan is None
     joined = " ".join(reasons)
-    assert "checkpoint mapping unresolved" in joined, reasons
+    assert "checkpoint mapping unresolved" not in joined, reasons
+    assert model["checkpoint_variants"][0]["checkpoint_mapping_status"] == "VERIFIED_METADATA"
+    assert model["checkpoint_variants"][0]["filename"] == "Fashioniq.pt"
+    assert any("ViT-B/16" in reason for reason in reasons), reasons
     assert not any("not audited" in reason for reason in reasons), (
         "tgcir has an audited command now; reporting it as unaudited would be false")
 

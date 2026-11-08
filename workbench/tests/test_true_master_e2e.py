@@ -152,6 +152,13 @@ sys.exit(0)
     env["WORKBENCH_CHECKPOINT_ROOT"] = str(checkpoints)
     env["WORKBENCH_RESULTS_ROOT"] = str(results)
     env["WORKBENCH_THIRD_PARTY_ROOT"] = str(third_party)
+    # Named explicitly: this test asserts on `ws/workbench/artifacts/logs`, and that path is only
+    # used when the child resolves its artifacts root to the workspace. The child reads the
+    # operator's untracked `workbench/config/workbench.env` first, whose absolute
+    # `WORKBENCH_ARTIFACTS_ROOT` pointed the run's logs at the developer's checkout, so the
+    # directory the test inspects was never created.
+    env["WORKBENCH_ARTIFACTS_ROOT"] = str(ws / "workbench" / "artifacts")
+    env["WORKBENCH_CIRCUS_RELEASE_ROOT"] = str(ws / "workbench" / "artifacts" / "circus_release")
 
     # Register an adapter for synthetic_model dynamically in evaluate_models if needed
     from workbench.backend.adapters.base import EvalRequest

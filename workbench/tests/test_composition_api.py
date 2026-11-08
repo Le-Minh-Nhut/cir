@@ -171,6 +171,14 @@ def _real_summaries():
         if (data.get("is_synthetic") or data.get("synthetic")
                 or str(data.get("run_id") or "").startswith("SYNTHETIC_")):
             continue
+        # Rows imported from an external artifact are opt-in (`include_imported=true`) and are not
+        # measurements of ours: the default list excludes them by provenance, so this helper must
+        # exclude them by the same rule or it asserts a set the API is right not to return.
+        if (str(data.get("provenance_source") or "").strip().lower() in {
+                "released_audit_retriever", "released_artifact_import", "external_artifact"}
+                or str(data.get("reproduction_status") or "").strip().upper()
+                == "RELEASED_ARTIFACT_IMPORT"):
+            continue
         if isinstance(data.get("smoke"), dict) and data["smoke"].get("limited"):
             continue
         found.append((path, data))

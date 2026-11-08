@@ -66,7 +66,19 @@ def test_legacy_registry_protocols_and_blockers_are_explicit() -> None:
     # average 54.72; the registry records what the paper prints and keeps the discrepancy visible.
     assert models["sprc"]["reported_r10"] == 54.92
     assert "discrepancy" in models["sprc"]["reported_score_note"]
-    assert all(checkpoint["checkpoint_mapping_status"] != "VERIFIED_METADATA" for model_id in ("clvc_net", "dcnet", "combiner_rn50x4_noft", "clip4cir_rn50x4_fullft", "tgcir", "sprc") for checkpoint in models[model_id]["checkpoint_variants"])
+    # Mapping state is now a POSITIVE finding for six of these variants and a negative one for the
+    # rest, so the assertion names which is which instead of demanding that all stay unverified.
+    # The evidence is in docs/reviews/20261108T114646+0700-ckpt-mapping.
+    for model_id in ("clvc_net", "dcnet", "combiner_rn50x4_noft", "clip4cir_rn50x4_fullft", "tgcir"):
+        assert all(checkpoint["checkpoint_mapping_status"] == "VERIFIED_METADATA"
+                   for checkpoint in models[model_id]["checkpoint_variants"]), model_id
+    sprc_variants = {v["checkpoint_id"]: v for v in models["sprc"]["checkpoint_variants"]}
+    assert sprc_variants["sprc_fiq_vitl"]["checkpoint_mapping_status"] == "VERIFIED_METADATA"
+    # Absent artifact, so nothing could be established: this one must stay undetermined.
+    assert sprc_variants["sprc_fiq_unresolved"]["checkpoint_mapping_status"] == "UNVERIFIED"
+    # And PAIR stays unverified because the bytes CONTRADICT the pinned implementation.
+    assert all(checkpoint["checkpoint_mapping_status"] == "UNVERIFIED"
+               for checkpoint in models["pair"]["checkpoint_variants"])
     assert models["tgcir"]["reported_mean"] is None
     assert "neucore" not in models
 

@@ -147,10 +147,29 @@ def test_dcnet_missing_weights_blocks(tmp_path: Path):
     assert any("trained_model.pth" in str(path) for path in checkpoint_missing_paths(run_dir, checkpoint))
 
 
-def test_clip4cir_incomplete_bundle_blocks():
+def test_clip4cir_incomplete_bundle_blocks(tmp_path: Path):
+    """The bundle is the AUTHOR's two files, and an incomplete or substituted one must block.
+
+    The previous version asserted the old `bundle_placeholder` shape whose `required_files` were
+    `combiner_state.pt` / `clip_state.pt` — spellings the adapter invented and that no file on disk
+    ever had, so the check could only compare against names which do not exist. Asserting behaviour
+    (a half-populated directory blocks; a name-complete one with foreign bytes also blocks) is what
+    actually pins the requirement.
+    """
+    from workbench.backend.registry import checkpoint_missing_paths
+
     checkpoint = registry_models()["clip4cir_rn50x4_fullft"]["checkpoint_variants"][0]
-    assert checkpoint.get("artifact_type") == "bundle_placeholder"
-    assert "combiner_state.pt" in checkpoint.get("required_files", [])
+    assert checkpoint.get("artifact_type") in {"bundle_directory", "bundle_placeholder"}
+    assert checkpoint.get("required_files") == ["fiq_comb_RN50x4_fullft.pt",
+                                                "fiq_clip_RN50x4_fullft.pt"]
+    bundle = tmp_path / "RN50x4_fullft"
+    bundle.mkdir()
+    (bundle / "fiq_comb_RN50x4_fullft.pt").write_bytes(b"combiner")
+    assert checkpoint_missing_paths(bundle, checkpoint), "half a bundle must not read as present"
+    # Both names present, but these are not the author's bytes: the declared member digests are
+    # enforced, so a substituted file is refused rather than silently evaluated.
+    (bundle / "fiq_clip_RN50x4_fullft.pt").write_bytes(b"clip")
+    assert checkpoint_missing_paths(bundle, checkpoint), "a substituted member must not read as present"
 
 
 def test_sprc_checkpoint_mapping_blocks():

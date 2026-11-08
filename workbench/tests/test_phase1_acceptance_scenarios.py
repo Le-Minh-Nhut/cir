@@ -44,6 +44,7 @@ def _api_module(monkeypatch: pytest.MonkeyPatch, master: dict, request: pytest.F
     env = master["env"]
     for key in ("CIR_REPO_ROOT", "CIR_DATA_ROOT", "FASHIONIQ_ROOT", "WORKBENCH_CHECKPOINT_ROOT",
                 "WORKBENCH_RESULTS_ROOT", "WORKBENCH_THIRD_PARTY_ROOT",
+                "WORKBENCH_ARTIFACTS_ROOT", "WORKBENCH_CIRCUS_RELEASE_ROOT",
                 "WORKBENCH_REGISTRY_PATH", "WORKBENCH_LEDGER_KEY",
                 "WORKBENCH_ALLOW_SYNTHETIC_ADAPTERS", "WORKBENCH_NO_ENV_CACHE", "PYTHONPATH"):
         monkeypatch.setenv(key, env[key])
@@ -242,7 +243,9 @@ def test_scenario_e_duplicate_run_id_never_overwrites_a_run(master, monkeypatch,
     from workbench.scripts import evaluate_models as em
 
     for key in ("CIR_REPO_ROOT", "CIR_DATA_ROOT", "FASHIONIQ_ROOT", "WORKBENCH_CHECKPOINT_ROOT",
-                "WORKBENCH_RESULTS_ROOT", "WORKBENCH_THIRD_PARTY_ROOT", "WORKBENCH_LEDGER_KEY"):
+                "WORKBENCH_RESULTS_ROOT", "WORKBENCH_THIRD_PARTY_ROOT",
+                "WORKBENCH_ARTIFACTS_ROOT", "WORKBENCH_CIRCUS_RELEASE_ROOT",
+                "WORKBENCH_LEDGER_KEY"):
         monkeypatch.setenv(key, master["env"][key])
     config = resolve_config()
 
