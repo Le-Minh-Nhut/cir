@@ -1,0 +1,193 @@
+{
+  "schema": "gate-results/1",
+  "document": "workbench/docs/05_ACCEPTANCE_GATES.md (G0-G12)",
+  "checked_at": "2026-11-09T03:51:30+07:00",
+  "revision_assessed": "20a406a (worktree ffb6ae8 + five lane commits; TESTED_SOURCE_SHA still 80842661)",
+  "note": "States follow the vocabulary in 05_ACCEPTANCE_GATES.md. Unknown is never PASS. A gate covering several models is recorded per the weakest applicable scope, and the scope field names it.",
+  "gates": [
+    {
+      "gate": "G0",
+      "name": "inventory/scope",
+      "state": "PASS",
+      "scope": "all 17 model ids, 29 checkpoint variants, protocol assignment per registry",
+      "evidence": [
+        "workbench/docs/reviews/20261109-clean-rerun/MODEL_MATRIX.csv",
+        "workbench/docs/reviews/20261109-clean-rerun/RERUN_DECISIONS.csv",
+        "workbench/registry/models.yaml"
+      ],
+      "reject_reason": null,
+      "checked_at": "2026-11-09T03:51:30+07:00",
+      "detail": "MODEL_MATRIX.csv has 29 rows across 17 distinct model_id values, matching the registry count read directly. Each row records upstream URL/commit, checkpoint path and status, interpreter, last run id, whether that run is a model run, coverage, candidate depth, gate status, decision and blocker. Deferred (csmcir, sprc) and BLOCKED rows are present and labelled rather than dropped, so a model does not disappear because it has no run."
+    },
+    {
+      "gate": "G1",
+      "name": "input correctness",
+      "state": "NOT_RUN",
+      "scope": "all active models; no per-model native-vs-adapter input differential was executed in this session",
+      "evidence": [
+        "workbench/docs/reviews/20261109-clean-rerun/MODEL_MATRIX.csv"
+      ],
+      "reject_reason": "No ID/text/pixel/token/mask differential against a pinned upstream reference was run this session. Earlier rounds audited protocol assignment and adapter wiring, which is not full input parity. Static reading and matching shapes do not constitute G1 evidence, so PASS would be unsupported.",
+      "checked_at": "2026-11-09T03:51:30+07:00"
+    },
+    {
+      "gate": "G2",
+      "name": "forward/scoring",
+      "state": "NOT_RUN",
+      "scope": "all models; no forward pass was validated against a reference this session",
+      "evidence": [
+        "workbench/docs/reviews/20261109-clean-rerun/RUN_LOG.csv",
+        "workbench/docs/reviews/20261109-lane-a-evaluator/RERUN_IMPACT.md"
+      ],
+      "reject_reason": "No new forward pass was validated. The BLAS sensitivity measurement drove each adapter's score() on synthetic float32 matrices, which is arithmetic-path evidence for G7, not evidence that any model's forward output matches its native implementation.",
+      "checked_at": "2026-11-09T03:51:30+07:00"
+    },
+    {
+      "gate": "G3",
+      "name": "policy/identity",
+      "state": "PASS",
+      "scope": "the identity/policy CODE, verified by tests; NO published run yet carries identity v2",
+      "evidence": [
+        "workbench/backend/composition.py",
+        "workbench/composition/runner.py",
+        "workbench/tests/test_review_defects_evaluator.py",
+        "workbench/tests/test_capability_measurement_identity.py",
+        "workbench/docs/reviews/20261109-lane-a-evaluator/RERUN_IMPACT.md"
+      ],
+      "reject_reason": null,
+      "checked_at": "2026-11-09T03:51:30+07:00",
+      "detail": "Identity v2 records blas_threads_pinned, the verified blas_pin_capability (setter promoted only after a runtime readback), query_scope_resolution, query_order_identity and cache_verify_mode, and stamps identity_schema_version 2. Runs differing in any of those mint different group ids (6 identity tests). A recorded artifact predating v2 is labelled 'unknown (predates identity v2)' with group_id null and is never silently regrouped. IMPORTANT LIMIT: no published artifact carries v2 yet, so this is a PASS about the code path, not about any existing artifact. Only the encoder run in RUN_LOG.csv (identity_schema_version 2) exercises it end to end."
+    },
+    {
+      "gate": "G4",
+      "name": "cache/resume/fallback",
+      "state": "PASS",
+      "scope": "the cache-integrity and backfill mechanisms, by negative test",
+      "evidence": [
+        "workbench/composition/runner.py",
+        "workbench/tests/test_review_defects_evaluator.py",
+        "workbench/tests/test_audit_fix_f3_gallery_cache_shape.py",
+        "workbench/tests/test_composition_topk_runner.py",
+        "workbench/docs/reviews/20261109-lane-a-evaluator/LANE_A_REPORT.md"
+      ],
+      "reject_reason": null,
+      "checked_at": "2026-11-09T03:51:30+07:00",
+      "detail": "Negative tests prove rejection of: same-shape changed content, truncated file, stale sidecar shape, recorded byte_length mismatch, and a backfilled target rank that disagrees with the recorded run (BackfillRankDisagreement, reported as TOPK_EXPORT_BLOCKED). A legacy cache with no digest still loads but is reported content_digest 'absent' / verified false and is never called validated. NOTE: because the feature-cache key is the identity digest, every pre-v2 feature cache is now unreachable by design, so --resume cannot bridge the schema change; that is correct but it means no historical run can be backfilled."
+    },
+    {
+      "gate": "G5",
+      "name": "clean run/coverage",
+      "state": "NOT_RUN",
+      "scope": "the new policy; no full-cohort run has been produced under it",
+      "evidence": [
+        "workbench/docs/reviews/20261109-clean-rerun/RUN_LOG.csv",
+        "workbench/docs/reviews/20261109-clean-rerun/MODEL_MATRIX.csv"
+      ],
+      "reject_reason": "Existing runs are labelled 'unknown (predates the BLAS pin)' because every CIRCUS artifact predates commit bf6a448 (2026-11-08 20:33). Only encoder has been re-run under the new policy (RUN_LOG.csv: 6003/6003, coverage 1.0, depth 100, PASS) and that run is explicitly not a baseline (measured under concurrent load from two other lanes). No other model has a clean run under the current policy.",
+      "checked_at": "2026-11-09T03:51:30+07:00"
+    },
+    {
+      "gate": "G6",
+      "name": "rank/export",
+      "state": "FAIL",
+      "scope": "four models at depth 50, four with no export; Top-100 requires the reruns",
+      "evidence": [
+        "workbench/docs/reviews/20261109-clean-rerun/MODEL_MATRIX.csv",
+        "workbench/docs/reviews/20261109-clean-rerun/RERUN_DECISIONS.csv",
+        "workbench/tests/test_composition_topk_runner.py"
+      ],
+      "reject_reason": "The gate asks for at least Top 100 (or the eligible gallery size) per supported query/condition. On disk: conesep, habit, intent and hint have depth 50; encoder, limn, ptha_mtst and tme have no candidate export at all. No run reaches depth 100 except the single encoder re-run recorded in RUN_LOG.csv. The export MECHANISM is verified (candidates ordered by score, target rank equals the metric rank, missing export advertised as TOPK_EXPORT_NOT_REQUESTED, gallery digest compared and mismatch detectable), but coverage of the cohort is not there.",
+      "checked_at": "2026-11-09T03:51:30+07:00"
+    },
+    {
+      "gate": "G7",
+      "name": "optimization parity",
+      "state": "PASS",
+      "scope": "BLAS thread-count parity per adapter, and query-axis parallelism; no speedup is claimed",
+      "evidence": [
+        "workbench/docs/reviews/20261109-lane-a-evaluator/RERUN_IMPACT.md",
+        "workbench/tests/test_throughput_knobs.py",
+        "workbench/docs/reviews/20261109-clean-rerun/blas_gate.py"
+      ],
+      "reject_reason": null,
+      "checked_at": "2026-11-09T03:51:30+07:00",
+      "detail": "Measured, seed 20261109, gallery 3000, 8 queries, 6 planted near-ties per query, BLAS 1 vs 20 through the runtime setter: encoder changed 29/400 top-50 ranks (max |drank| 5, 6/8 tie clusters reordered, max |dscore| 1.788e-07); conesep, ptha_mtst, habit, intent, hint, limn and tme were bit-identical (0/400, 0.000e+00). Mechanism isolated: a batched GEMM (M>1) is thread-variant, a single-query matvec is not; np.linalg.norm(axis=1) is invariant. NO SPEEDUP IS CLAIMED because no uncontaminated timing was taken (see G8)."
+    },
+    {
+      "gate": "G8",
+      "name": "measured performance",
+      "state": "NOT_RUN",
+      "scope": "no timing was taken",
+      "evidence": [
+        "workbench/docs/reviews/20261109-clean-rerun/RUN_LOG.csv"
+      ],
+      "reject_reason": "Two other lanes were running during this session. The one available measurement (encoder, RUN_LOG.csv) states in its own wall_time_note that it was 'measured under concurrent load from two other lanes - not a baseline', and records throughput as not_measured. A contaminated baseline is worse than none, so no performance claim is made.",
+      "checked_at": "2026-11-09T03:51:30+07:00"
+    },
+    {
+      "gate": "G9",
+      "name": "frontend correctness",
+      "state": "PASS",
+      "scope": "the served production build at 127.0.0.1:5173 against real host data, four browser sessions",
+      "evidence": [
+        "workbench/frontend/tests/ui_smoke.py",
+        "workbench/frontend/tests/light-workspace.test.cjs",
+        "workbench/docs/reviews/20261109-clean-rerun/ui/composition-1440x900.png",
+        "workbench/docs/reviews/20261109-clean-rerun/ui/overview-1920x1080.png",
+        "workbench/docs/reviews/20261109-clean-rerun/ui/samples-top50-1920x1080.png"
+      ],
+      "reject_reason": null,
+      "checked_at": "2026-11-09T03:51:30+07:00",
+      "detail": "Re-run live against 127.0.0.1:5173, all exit 0: cold 3 checks (registry card 17 entries matching /api/models, 17 rendered rows, 14 blocker disclosures reading '<n> lý do'), composition 8 checks (9 rows fit their box, expansion does not widen the table, benchmark view never dead-ends, and the banner cannot claim Top-K unavailable over rows that have it while its count must equal the rows rendered), mobile 4 checks plus 1 documented SKIP, samples 2 checks (badge-vs-ranks agreement). 13 node contract tests pass. /api/models serves 17 entries and all 17 render."
+    },
+    {
+      "gate": "G10",
+      "name": "frontend usability",
+      "state": "PASS",
+      "scope": "light density, real viewports, clipped-cell count",
+      "evidence": [
+        "workbench/frontend/style.css",
+        "workbench/docs/reviews/20261109-clean-rerun/ui/overview-2560x1440.png",
+        "workbench/docs/reviews/20261109-clean-rerun/ui/mobile-390x844.png"
+      ],
+      "reject_reason": null,
+      "checked_at": "2026-11-09T03:51:30+07:00",
+      "detail": "style.css:51-52 give html { font-size: 17px } with html[data-density=large] { font-size: 19px }, and the base canvas is #f5f7fa = rgb(245,247,250) as asserted. Harness at 1440x900, 1920x1080 and 390x844 reports body.scrollWidth == innerWidth (no page-level horizontal overflow) and 0 cells narrower than 60px holding 200+ characters. Not verified: physical DPI/scaling of a 27-inch monitor, and an independent accessibility audit."
+    },
+    {
+      "gate": "G11",
+      "name": "integration/release",
+      "state": "FAIL",
+      "scope": "tests, build, served asset, remote SHA",
+      "evidence": [
+        "workbench/tests/test_handoff_commands.py",
+        "workbench/frontend/dist/assets/index-9MwV5MAk.js",
+        "workbench/composition/runner.py"
+      ],
+      "reject_reason": "The guard is RED: test_no_release_document_points_at_a_superseded_source_sha fails because TESTED_SOURCE_SHA is 80842661 while production has changed (1 failed, 7 passed). Advancing it requires a full serial sweep, which cannot run while a GPU evaluation is in flight. The other halves of this gate do hold: tests pass (25 evaluator + 5 clip4cir + all capability suites + 10 topk + 27 throughput + 3 cache), npm run build exits 0, and the served asset index-9MwV5MAk.js matches dist/assets exactly. Until the sweep lands, the revision is not gateable.",
+      "checked_at": "2026-11-09T03:51:30+07:00"
+    },
+    {
+      "gate": "G12",
+      "name": "coordination",
+      "state": "PASS",
+      "scope": "lane ownership, deduplicated work, single GPU owner",
+      "evidence": [
+        "workbench/docs/reviews/20261109-lane-a-evaluator/LANE_A_REPORT.md",
+        "workbench/docs/reviews/20261109-clean-rerun/RUN_LOG.csv"
+      ],
+      "reject_reason": null,
+      "checked_at": "2026-11-09T03:51:30+07:00",
+      "detail": "One recorded deviation, stated rather than hidden: four lanes ran concurrently at one point against a stated cap of three. The fourth was stood down and its task completed under the cap. File ownership held: the five integration commits are lane-pure (evaluator / CLIP4Cir / evidence / frontend / airknow), and the one file two lanes touched -- registry/models.yaml -- was split at hunk level so no commit contains another lane's change. GPU: a single composition_eval owned the device throughout; no duplicate evaluator was launched."
+    }
+  ],
+  "summary": {
+    "PASS": ["G0", "G3", "G4", "G7", "G9", "G10", "G12"],
+    "FAIL": ["G6", "G11"],
+    "NOT_RUN": ["G1", "G2", "G5", "G8"],
+    "BLOCKED": [],
+    "DEFERRED": [],
+    "NOT_APPLICABLE_WITH_REASON": [],
+    "headline": "7 PASS, 2 FAIL, 4 NOT_RUN. No gate is marked PASS without evidence on disk, and G3's PASS is explicitly about the code path rather than any published artifact."
+  }
+}
