@@ -13,12 +13,13 @@ import { useId, useState, type ReactNode } from "react";
  *    content.
  */
 
-export function Badge({ tone = "neutral", children, title }: {
+export function Badge({ tone = "neutral", children, title, testId }: {
   tone?: "neutral" | "ok" | "warn" | "bad" | "info";
   children: ReactNode;
   title?: string;
+  testId?: string;
 }) {
-  return <span className={`badge badge-${tone}`} title={title}>{children}</span>;
+  return <span className={`badge badge-${tone}`} title={title} data-testid={testId}>{children}</span>;
 }
 
 export function Card({ title, subtitle, actions, children, className = "", testId }: {

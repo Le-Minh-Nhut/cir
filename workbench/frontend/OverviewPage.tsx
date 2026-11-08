@@ -5,6 +5,7 @@ import { fmtDateStamp, fmtDenominator, fmtFractionPercent, fmtGap, fmtInt, fmtNd
 import { compositionGap, scoredCounts } from "./catalog";
 import type { Location } from "./routes";
 import { SUBSET_LABEL } from "./routes";
+import { ModelInventory } from "./ModelInventory";
 
 /** Tổng quan: what results exist, what does not, and how to continue.
  *
@@ -30,8 +31,15 @@ export function OverviewPage({ data, location, onOpenRun, onGoto }: {
   const ev = evidence.data;
 
   const compositionRuns = composition.data ?? [];
-  const activeSubset = compositionRuns.filter((run) => run.subset === location.subset);
+  // One protocol, one subset: the header must never say "FashionIQ Original" over CIRCUS rows.
+  const activeSubset = compositionRuns.filter((run) => run.subset === location.subset && run.protocol_id === location.protocol);
   const failed = activeSubset.filter((run) => run.is_failed || run.execution_status === "FAILED");
+
+  const browsable = data.catalog.filter((entry) => entry.family === "composition"
+    && entry.protocolId === location.protocol && entry.subset === location.subset
+    && entry.provenance.bucket !== "development" && entry.status !== "FAILED");
+  const browse = browsable.find((entry) => entry.capabilities.flags.candidate_topk)
+    ?? browsable.find((entry) => entry.capabilities.flags.per_query_target_ranks);
 
   const registry = models.data ?? [];
   const blockedModels = registry.filter((model) => (model.reproduction_status || "").startsWith("BLOCKED")
@@ -40,6 +48,27 @@ export function OverviewPage({ data, location, onOpenRun, onGoto }: {
 
   return (
     <div className="stack" data-testid="area-overview">
+      <div className="page-intro">
+        <div>
+          <h2>Từ kết quả đến từng ảnh truy hồi.</h2>
+          <p>Đối chiếu mô hình, mở một query và xem thứ tự ứng viên trong cùng một protocol và subset.</p>
+        </div>
+        {browse && (
+          <button className="primary" type="button"
+                  onClick={() => onGoto({ area: "samples", view: "explorer", runs: [browse.key], run: browse.runId, query: "", q: "", offset: 0 })}>
+            Khám phá query · {browse.modelId}
+          </button>
+        )}
+      </div>
+
+      <div className="scope-strip">
+        <strong>{protocolLabel(location.protocol)}</strong>
+        <span>{SUBSET_LABEL[location.subset]}</span>
+        <span>{activeSubset.length} lượt có dữ liệu ở phạm vi này, chưa gồm lượt lỗi</span>
+      </div>
+
+      <ModelInventory data={data} location={location} onGoto={onGoto} />
+
       <div className="grid-3" data-testid="overview-cards">
         <Card title="Lượt CIRCUS release" subtitle={`Subset ${SUBSET_LABEL[location.subset]} · ${protocolLabel(location.protocol)}`}>
           {capabilities.status === "error"
@@ -160,8 +189,10 @@ export function OverviewPage({ data, location, onOpenRun, onGoto }: {
                           </td>
                           <td className="num">{fmtDenominator(counts.scored, counts.total)}</td>
                           <td>
+                            {/* `runs` is what the explorer selects by; `run` alone left it on
+                                "— chọn lượt —" and the inspector empty. */}
                             <button type="button" className="ghost"
-                                    onClick={() => onGoto({ area: "samples", view: "explorer", run: run.run_id, query: "" })}
+                                    onClick={() => onGoto({ area: "samples", view: "explorer", runs: [key], run: run.run_id, query: "", q: "", offset: 0 })}
                                     disabled={!capabilities?.flags.per_query_target_ranks}
                                     title={capabilities?.flags.per_query_target_ranks ? "Mở inspector" : capabilities?.reasons.per_query_target_ranks}>
                               Inspector

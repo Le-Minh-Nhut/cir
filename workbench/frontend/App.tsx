@@ -12,6 +12,10 @@ import { Card, CopyLink, EmptyState } from "./ui";
 import { fmtInt } from "./format";
 import { evidenceBanner, evidenceState } from "./evidence";
 
+/** The one protocol whose circuit supports full/sf/validated subsets. Named once, from the parser's
+ *  own acceptance list, so the subset control cannot appear over a protocol that has no subset. */
+const CIRCUS_PROTOCOL = KNOWN_PROTOCOL_IDS[0];
+
 /** The shell: URL → context → area.
  *
  *  The URL is the source of truth for area, view, protocol, subset, selected runs, inspected query
@@ -28,6 +32,16 @@ export default function App() {
   const [problems, setProblems] = useState(initial.problems);
   const [menuOpen, setMenuOpen] = useState(false);
   const [dismissed, setDismissed] = useState(false);
+  // Reading size is a reader preference, not a browser zoom setting: 17px default, 19px on request,
+  // remembered across reloads. `data-density` on <html> is what style.css keys off.
+  const [density, setDensity] = useState(() => {
+    try { return localStorage.getItem("cir-density") === "large" ? "large" : "comfortable"; }
+    catch { return "comfortable"; }
+  });
+  useEffect(() => {
+    document.documentElement.dataset.density = density;
+    try { localStorage.setItem("cir-density", density); } catch { /* private browsing */ }
+  }, [density]);
 
   const data = useWorkbenchData({
     protocol: location.protocol,
@@ -41,6 +55,9 @@ export default function App() {
     limit: 20,
     query: location.q,
     imported: location.imported,
+    queryState: location.queryState,
+    // The whole-universe read is analysis input only; the explorer does not need 20k rows.
+    loadAnalysis: location.area === "failures",
   });
 
   // Protocols this deployment actually serves, from its own data. Kept in state so the URL parser
@@ -85,6 +102,9 @@ export default function App() {
       const next: Location = {
         ...current,
         runs,
+        // A run is an artifact OF one protocol: opening it must carry that protocol, or the page
+        // header keeps describing a different one while the rows come from this run.
+        protocol: entry.protocolId,
         run: entry.family === "composition" ? entry.runId : current.run,
         subset: entry.family === "composition" ? current.subset : current.subset,
         query: "",
@@ -197,11 +217,10 @@ export default function App() {
   // The selection-scoped claim that replaces the old app-wide banner: it is about the runs on
   // screen, not about the deployment, and it disappears when the selection does have per-query ranks.
   const selectedEntries = data.catalog.filter((entry) => location.runs.includes(entry.key));
-  const selectionNotice = selectedEntries.length === 0
-    ? "Chưa chọn lượt nào — số liệu bên dưới là của toàn bộ dữ liệu đang có."
-    : selectedEntries.every((entry) => !entry.capabilities.flags.per_query_target_ranks)
-      ? `${selectedEntries.length} lượt đang chọn không có rank từng query, nên không phân tích được query cá nhân.`
-      : null;
+  const selectionNotice = selectedEntries.length > 0
+    && selectedEntries.every((entry) => !entry.capabilities.flags.per_query_target_ranks)
+    ? "Các lượt đang chọn chỉ có số tổng hợp. Chọn một lượt có hạng từng query để khám phá ảnh."
+    : null;
 
   const area = areaDef(location.area);
   const openArea = (id: AreaId) => {
@@ -211,11 +230,12 @@ export default function App() {
 
   return (
     <div className="shell">
+      <a className="skip-link" href="#main-content">Đến nội dung chính</a>
       {menuOpen && <div className="scrim" onClick={() => setMenuOpen(false)} role="presentation" />}
       <nav className="sidebar" data-open={menuOpen} aria-label="Khu vực" data-testid="workbench-nav">
         <div className="brand">
-          <b>CIR Workbench</b>
-          <span>research</span>
+          <b>CIR<span className="brand-dot">.</span></b>
+          <span>Research workbench</span>
         </div>
         {AREAS.map((item) => (
           <button key={item.id} type="button" className="nav-item"
@@ -243,6 +263,14 @@ export default function App() {
             <p className="question">{area.question}</p>
           </div>
           <div className="topbar-actions">
+            <label className="density-control">Cỡ giao diện
+              <select aria-label="Cỡ giao diện" value={density}
+                      data-testid="density-select"
+                      onChange={(event) => setDensity(event.target.value)}>
+                <option value="comfortable">17px</option>
+                <option value="large">19px</option>
+              </select>
+            </label>
             <CopyLink href={hrefFor(location)} />
           </div>
         </header>
@@ -257,7 +285,7 @@ export default function App() {
               ))}
             </select>
           </div>
-          {(location.area === "evaluation" || location.area === "samples" || location.area === "failures") && (
+          {location.protocol === CIRCUS_PROTOCOL && (
             <div className="ctx">
               <label htmlFor="subset-select">Subset</label>
               <select id="subset-select" value={location.subset}
@@ -304,10 +332,9 @@ export default function App() {
 
         {(banner || selectionNotice) && !dismissed && (
           <div className="content" style={{ paddingBottom: 0 }}>
-            <div className={`empty ${banner ? "empty-partial" : "empty-capability"}`}
-                 data-testid="error-banner" data-notice-kind={banner ? "evidence" : "selection"}
-                 style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-              <div style={{ flex: 1 }}>
+            <div className={`empty banner ${banner ? "empty-partial" : "empty-capability"}`}
+                 data-testid="error-banner" data-notice-kind={banner ? "evidence" : "selection"}>
+              <div className="banner-text">
                 {banner && <b>{banner}</b>}
                 {selectionNotice && <span className="empty-detail" style={{ display: "block" }}>{selectionNotice}</span>}
               </div>
@@ -317,7 +344,7 @@ export default function App() {
           </div>
         )}
 
-        <main className="content">
+        <main className="content" id="main-content" tabIndex={-1}>
           {location.area === "overview" && (
             <OverviewPage data={data} location={location}
                           onOpenRun={(entry) => selectRun(entry)}
@@ -358,9 +385,10 @@ const GLYPHS: Record<AreaId, string> = {
 
 /** Sidebar counts are real counts from the loaded data, or nothing at all — never a placeholder. */
 const COUNTS: Partial<Record<AreaId, (data: ReturnType<typeof useWorkbenchData>, location: Location) => string>> = {
-  experiments: (data) => data.catalog.length ? fmtInt(data.catalog.length) : "",
+  experiments: (data) => data.models.region.data?.length ? fmtInt(data.models.region.data.length) : "",
   evaluation: (data, location) => {
-    const runs = (data.compositionRuns.region.data ?? []).filter((run) => run.subset === location.subset);
+    const runs = (data.compositionRuns.region.data ?? [])
+      .filter((run) => run.subset === location.subset && run.protocol_id === location.protocol);
     return runs.length ? fmtInt(runs.length) : "";
   },
   failures: (data) => {

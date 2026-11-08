@@ -546,13 +546,18 @@ export const COMPOSITION_COLUMNS: readonly CompositionColumn[] = [
   { key: "r10", label: "MM R@10", px: 112 },
   { key: "text", label: "Text nDCG", px: 82 },
   { key: "image", label: "Image nDCG", px: 88 },
-  { key: "gap", label: "Gap", px: 92 },
-  { key: "scored", label: "Đã chấm", px: 104 },
-  { key: "detail", label: "Chi tiết", px: 92 },
+  // Gap holds the literal "unavailable" when the cohort is empty: 92 px broke it mid-word
+  // ("unavailab / le"), which reads as a typo rather than a state.
+  { key: "gap", label: "Gap", px: 104 },
+  { key: "scored", label: "Đã chấm", px: 112 },
+  // The toggle must not wrap: "Chi / tiết" made the row taller than its content.
+  { key: "detail", label: "Chi tiết", px: 104 },
 ];
 
-/** The narrowest a flexible column may be before its header wraps mid-word. */
-export const COMPOSITION_FLEX_MIN = 148;
+/** The narrowest a flexible column may be before its header wraps mid-word.
+ *  148 px fit the old 216 px sidebar; the light shell uses a 260 px sidebar and 32 px content
+ *  padding, so the same container is ~80 px narrower and the declared minimum overflowed it. */
+export const COMPOSITION_FLEX_MIN = 112;
 
 /** Total width the table needs at least: every fixed column plus the flexible minimum. */
 export function compositionMinWidth(columns: readonly CompositionColumn[] = COMPOSITION_COLUMNS): number {
@@ -571,10 +576,12 @@ export const FIXED_CUTOFFS = {
 
 /** The distinct scoring implementations among the visible rows, sorted.
  *
- *  `einsum`, `einsum(..., optimize=True)` and `matmul` sum in different orders, so a run's rank is not
- *  comparable to another's at query level. A table that ranks rows from different implementations in
- *  one order, without saying so, asserts a comparability the arithmetic does not have. A row whose
- *  backend derivation is missing counts as its own `unknown` — never silently folded into a real one.
+ *  `einsum`, `einsum(..., optimize=True)` and `matmul` sum in different orders, so their raw scores
+ *  are not on a common scale and score differences must not be read as calibrated distances. The
+ *  evaluation contract (gallery, query set, cutoff, metric definitions) is the same, so ranks and
+ *  metrics of rows under one protocol remain comparable; the table names the implementations rather
+ *  than implying they were measured by one. A row whose backend derivation is missing counts as its
+ *  own `unknown` — never silently folded into a real one.
  */
 export function scoringImplsPresent(rows: readonly CompositionRunLike[]): string[] {
   return [...new Set(rows.map((run) => run.scoring_impl?.impl?.trim() || "unknown"))].sort();

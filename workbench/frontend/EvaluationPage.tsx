@@ -227,19 +227,21 @@ function CompositionTable({ data, location, onGoto, onSelectRun }: {
 
 /** One line naming the scoring implementations present when they are NOT all the same.
  *
- *  Not decoration: `einsum`, `einsum(..., optimize=True)` and `matmul` sum in different orders, so the
- *  rank of one run is not comparable to another's at query level even when the aggregate columns sit
- *  side by side. Ranking those rows in one order without saying so is the one thing the audit calls
- *  scientifically invalid, so the table says it instead of implying it.
+ *  What differs is the arithmetic (summation order, precision), so the raw scores are not on a
+ *  common scale and must not be read as one. What does NOT differ is the evaluation contract: the
+ *  same gallery, query set, cutoff and metric definitions, so ranks and metrics stay comparable
+ *  across these rows. Declaring them incomparable "at query level" was too strong — it would forbid
+ *  exactly the same-protocol comparison this table exists for.
  */
 function ScoringImplNotice({ rows }: { rows: CompositionRun[] }) {
   const present = scoringImplsPresent(rows);
   if (present.length <= 1) return null;
   return (
     <p className="hint" data-testid="scoring-impl-notice">
-      Các lượt dưới đây chấm bằng <b>{present.length} cách khác nhau</b> ({present.join(", ")}). Thứ tự
-      cộng dồn khác nhau nên hạng của chúng không so sánh được ở mức từng query; cột điểm chỉ là số
-      tổng hợp, không phải một bảng xếp hạng.
+      Các lượt dưới đây chấm bằng <b>{present.length} cách khác nhau</b> ({present.join(", ")}). Điểm
+      thô không cùng thang đo vì thứ tự cộng dồn khác nhau, nên đừng đọc chênh lệch điểm như một
+      khoảng cách chính xác. Hạng và metric vẫn so sánh được trong cùng protocol, cùng tập query và
+      cùng quy tắc đánh giá; cột điểm ở đây là số tổng hợp, không phải bảng xếp hạng độ chính xác.
     </p>
   );
 }

@@ -1,4 +1,6 @@
+import { useState } from "react";
 import type { WorkbenchData, RunCatalogEntry } from "./data";
+import { ModelInventory } from "./ModelInventory";
 import { protocolLabel } from "./data";
 import type { Location } from "./routes";
 import { Badge, Card, Detail, EmptyState, ErrorState, KeyValue, LoadingState, SortHeader, sortRows, useSort } from "./ui";
@@ -20,7 +22,7 @@ export function ExperimentsPage({ data, location, view, onSelectRun, onGoto }: {
   onSelectRun: (entry: RunCatalogEntry, additive?: boolean) => void;
   onGoto: (patch: Partial<Location>) => void;
 }) {
-  if (view === "models") return <ModelsView data={data} />;
+  if (view === "models") return <ModelInventory data={data} location={location} onGoto={onGoto} />;
   if (view === "queue") return <QueueView data={data} />;
   return <RunsView data={data} location={location} onSelectRun={onSelectRun} onGoto={onGoto} />;
 }
@@ -32,7 +34,10 @@ function RunsView({ data, location, onSelectRun, onGoto }: {
   onGoto: (patch: Partial<Location>) => void;
 }) {
   const { sort, toggle } = useSort({ key: "model", dir: "asc" });
-  const catalog = data.catalog;
+  // Test/refused artifacts stay opt-in: the default list is research evidence, and a development
+  // row is labelled rather than hidden when asked for.
+  const [showDevelopment, setShowDevelopment] = useState(false);
+  const catalog = data.catalog.filter((entry) => showDevelopment || entry.provenance.bucket !== "development");
   const selected = new Set(location.runs);
   const rows = sortRows(catalog, sort, (entry, key) => {
     switch (key) {
@@ -166,6 +171,11 @@ function RunsView({ data, location, onSelectRun, onGoto }: {
               </div>
             )}
       </Card>
+      <label className="row" style={{ marginTop: 8 }}>
+        <input type="checkbox" checked={showDevelopment} data-testid="include-development"
+               onChange={(event) => setShowDevelopment(event.target.checked)} />
+        Hiện artifact thử nghiệm / bị từ chối
+      </label>
       <p className="hint" data-testid="selected-run-count">
         Đã chọn <b>{location.runs.length}</b> lượt. Phân tích lỗi và so sánh dùng đúng các lượt này; mọi
         phép so sánh đều nêu cohort và mẫu số.
@@ -241,63 +251,6 @@ function RunDetail({ entry }: { entry: RunCatalogEntry }) {
         ["lý do unscored", run.metrics?.gap_unavailable_reason ?? "—"],
       ]} />
     </Detail>
-  );
-}
-
-function ModelsView({ data }: { data: WorkbenchData }) {
-  const region = data.models.region;
-  if (region.status === "error") return <ErrorState message={region.error ?? ""} onRetry={data.models.retry} />;
-  if (region.status === "loading" && !region.data) return <LoadingState label="Đang tải registry…" />;
-  const models = region.data ?? [];
-  return (
-    <div className="stack" data-testid="area-models">
-      <Card title="Mô hình trong registry" subtitle={`${fmtInt(models.length)} entry · trạng thái tái lập và lý do chặn`}>
-        <div className="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th scope="col">Mô hình</th>
-                <th scope="col">Protocol native</th>
-                <th scope="col">Tái lập</th>
-                <th scope="col">Checkpoint</th>
-                <th scope="col">Chặn bởi</th>
-              </tr>
-            </thead>
-            <tbody>
-              {models.map((model) => {
-                const checkpoints = model.checkpoints ?? [];
-                const runnable = checkpoints.filter((checkpoint) => checkpoint.runnable);
-                const blockers = [...new Set(checkpoints.flatMap((checkpoint) => checkpoint.blocking_reasons ?? []))];
-                return (
-                  <tr key={model.model_id} data-testid={`model-row-${model.model_id}`}>
-                    <td>
-                      <span className="cell-strong">{model.method_name || model.model_id}</span>
-                      <span className="cell-sub">{model.model_id} · {model.paper_title ?? "—"}</span>
-                    </td>
-                    <td><code>{model.native_protocol ?? "—"}</code></td>
-                    <td>
-                      <Badge tone={(model.reproduction_status || "").startsWith("BLOCKED") ? "warn" : model.reproduction_status === "NOT_RUN" ? "neutral" : "ok"}>
-                        {model.reproduction_status ?? "unknown"}
-                      </Badge>
-                    </td>
-                    <td className="num">{fmtInt(runnable.length)} / {fmtInt(checkpoints.length)}</td>
-                    <td>
-                      {blockers.length === 0
-                        ? <span className="hint">không có lý do chặn được ghi</span>
-                        : <Detail summary={`${blockers.length} lý do`}>
-                            <ul style={{ margin: 0, paddingLeft: 18 }}>
-                              {blockers.map((reason) => <li key={reason}><small>{reason}</small></li>)}
-                            </ul>
-                          </Detail>}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </Card>
-    </div>
   );
 }
 

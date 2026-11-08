@@ -40,9 +40,9 @@ export const AREAS: AreaDef[] = [
   },
   {
     id: "experiments",
-    label: "Thí nghiệm",
+    label: "Mô hình & lượt chạy",
     question: "Lượt chạy, mô hình, checkpoint và trạng thái sẵn sàng",
-    views: [{ id: "runs", label: "Lượt chạy" }, { id: "models", label: "Mô hình" }, { id: "queue", label: "Hàng đợi job" }],
+    views: [{ id: "models", label: "Tất cả mô hình" }, { id: "runs", label: "Lượt chạy" }, { id: "queue", label: "Hàng đợi job" }],
     legacy: ["Evaluation Runs", "Models", "Runs"],
   },
   {
@@ -101,13 +101,22 @@ export type ConditionId = (typeof CONDITIONS)[number]["id"];
 
 export const OUTCOMES = [
   { id: "composition_required", label: "Composition required" },
-  { id: "unresolved", label: "Unresolved" },
+  // "unresolved" is the protocol's word for "all three ranks exist and all are outside @10". It is
+  // NOT unscored, and an unlabelled `unresolved` badge next to a query with real ranks reads as
+  // "unscored" (one letter apart in reading, opposite meaning). The label says what it means.
+  { id: "unresolved", label: "Unresolved — mọi hạng ngoài @10" },
   { id: "text_only", label: "Text-only" },
   { id: "image_only", label: "Image-only" },
   { id: "both", label: "Both" },
   { id: "unscored", label: "Unscored (pipeline/mapping)" },
 ] as const;
 export type OutcomeId = (typeof OUTCOMES)[number]["id"];
+
+/** The human label for a served outcome id, so a badge never prints the protocol's bare word
+ *  (`unresolved`, which reads as `unscored`). Unknown ids fall back to the id, never to a guess. */
+export function outcomeLabel(id: string): string {
+  return OUTCOMES.find((outcome) => outcome.id === id)?.label ?? id;
+}
 
 export const ORDERS = [
   { id: "worst", label: "Hạng xấu nhất trước (bỏ qua unscored)" },
@@ -365,7 +374,9 @@ export function toSearch(location: Location): string {
   params.set("area", location.area);
   if (location.view) params.set("view", location.view);
   params.set("protocol", location.protocol);
-  if (location.subset !== "full") params.set("subset", location.subset);
+  // Always written. The parser defaults to SF, the serializer must not: omitting `subset=full` meant
+  // reload/copy-link/Back turned a Full reading into SF — a different cohort under the same heading.
+  params.set("subset", location.subset);
   if (location.run) params.set("run", location.run);
   if (location.runs.length) params.set("runs", location.runs.join(","));
   if (location.query) params.set("query", location.query);

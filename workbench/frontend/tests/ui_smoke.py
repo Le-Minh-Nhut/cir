@@ -20,6 +20,9 @@ Sessions and what they need
                published index runs to be LISTED as `index` rows with their real run_ids/model_ids
                from /api/runs even though no composition row exists. Then the injected-failure +
                recovery flow.
+  samples      a stack serving a CIRCUS run with per-query ranks. Opens one query card and asserts
+               its outcome badge agrees with its own ranks: no "unscored"/bare "unresolved" label on
+               a card that renders numeric ranks.
   composition  a stack that serves CIRCUS composition rows (production). Table fits its
                `.table-wrap` at 1440x900 and 1920x1080, expanding a detail neither widens the table
                nor triples the document height nor produces a 60px cell holding 200+ chars, and the
@@ -440,10 +443,10 @@ def session_composition(browser, base_url: str, shots: Path, recorder: Recorder)
     served = [run for run in runs
               if run.get("protocol_id") == CIRCUS_PROTOCOL and run.get("subset") == "full"]
     # Which of those rows actually carry candidate Top-K, from the same served field the table's
-    # badge reads. Two different scopes matter and must not be confused:
-    #  * the VISIBLE rows (this protocol, this subset) decide whether the banner's "unavailable"
-    #    claim contradicts what is on screen;
-    #  * the banner itself is deployment-wide, so its stated count is compared to the whole payload.
+    # badge reads. The banner counts inside the SAME protocol+subset scope the table is filtered to
+    # (`evidence.ts` CompositionScope), because a "N of M" the reader cannot reconcile with the rows
+    # beneath it is the defect one scope out. Both scopes are still reported: the visible count is
+    # what the banner must state, the deployment count is context for the operator.
     served_with_topk = sum(
         1 for run in served if (run.get("capabilities") or {}).get("candidate_topk") is True)
     deployment_with_topk = sum(
@@ -513,15 +516,15 @@ def session_composition(browser, base_url: str, shots: Path, recorder: Recorder)
                     f"{name}: the banner claims per-query Top-K is unavailable while "
                     f"{rows_with_candidates} of {len(served)} visible composition rows have "
                     f"capabilities.candidate_topk = true: {banner['text']!r}")
-            if deployment_with_topk > 0:
-                # The banner is deployment-wide, so its stated count is that scope's real count --
-                # not the visible subset's, and never a literal.
-                assert f"on {deployment_with_topk} of {len(runs)}" in banner["text"], (
-                    f"{name}: the banner does not state the served Top-K coverage "
-                    f"({deployment_with_topk} of {len(runs)}): {banner['text']!r}")
+            if served_with_topk > 0:
+                # The banner states the count for the rows in view, which is the scope the reader
+                # can verify by counting the table.
+                assert f"on {served_with_topk} of {len(served)}" in banner["text"], (
+                    f"{name}: the banner does not state the Top-K coverage of the visible rows "
+                    f"({served_with_topk} of {len(served)}): {banner['text']!r}")
             else:
                 assert "Top-K analysis unavailable" in banner["text"] or not banner["text"], (
-                    f"{name}: no served row has candidate Top-K, so the banner must say the "
+                    f"{name}: no visible row has candidate Top-K, so the banner must say the "
                     f"analysis is unavailable rather than implying it is fine: "
                     f"{banner['text']!r}")
 
@@ -566,6 +569,89 @@ def session_composition(browser, base_url: str, shots: Path, recorder: Recorder)
     assert not recorder.console, recorder.console
     assert not recorder.page_errors, recorder.page_errors
     return saved
+
+def session_samples(page, base_url: str, shots: Path, recorder: Recorder) -> list[str]:
+    """A query card may not claim `unscored` while it shows numeric ranks and real candidates.
+
+    The bug this exists for: an outcome badge printing the protocol's bare word `unresolved` next to
+    three numbered ranks read as `unscored` -- the exact banner-vs-content contradiction the
+    evidence banner assertion already guards against, one level down. The rule is semantic, not
+    typographic: whatever the badge says, it must agree with the ranks rendered in the same card.
+    """
+    saved: list[str] = []
+    runs = api_json(base_url, "/api/composition/runs")
+    usable = [run for run in runs
+              if run.get("protocol_id") == CIRCUS_PROTOCOL and run.get("subset") == "full"
+              and (run.get("capabilities") or {}).get("per_query_target_ranks") is True]
+    if not usable:
+        recorder.skip(f"samples: {base_url} serves no {CIRCUS_PROTOCOL}/full run with per-query "
+                      f"ranks, so there is no query card to inspect")
+        return saved
+
+    # Both shapes must be exercised: a scored query (numeric ranks -> badge may not say unscored)
+    # and, when the stack has one, an unscored query (no numeric rank -> badge must say so).
+    def read_card(run_id: str) -> dict:
+        page.goto(f"{base_url}/?area=samples&view=explorer&protocol={CIRCUS_PROTOCOL}"
+                  f"&subset=full&runs=c:{run_id}", wait_until="domcontentloaded")
+        page.wait_for_selector("[data-testid=query-inspector]", timeout=NAV_TIMEOUT_MS)
+        page.wait_for_selector("[data-testid=query-outcome]", timeout=NAV_TIMEOUT_MS)
+        page.wait_for_timeout(600)
+        return page.evaluate("""() => {
+            const card = document.querySelector('[data-testid=query-inspector]');
+            const badge = card.querySelector('[data-testid=query-outcome]');
+            const ranks = [...card.querySelectorAll('[data-testid^=rank-] b')]
+                .map(node => (node.textContent || '').trim());
+            return {
+                badge: (badge ? badge.textContent : '').trim(),
+                ranks,
+                numericRanks: ranks.filter(text => /^#[0-9][0-9,]*$/.test(text)).length,
+                title: (card.querySelector('[data-testid=query-title]')?.textContent || '').trim(),
+                candidates: card.querySelectorAll('[data-testid=topk-grid] .candidate').length,
+            };
+        }""")
+
+    scored = None
+    unscored_card = None
+    for run in usable[:6]:
+        state = read_card(run["run_id"])
+        recorder.note(f"samples {state['title']} ({run['model_id']}): outcome badge "
+                      f"{state['badge']!r}; ranks {state['ranks']}; {state['numericRanks']} numeric; "
+                      f"{state['candidates']} candidates", check=False)
+        if state["numericRanks"] > 0 and scored is None:
+            scored = state
+        elif state["numericRanks"] == 0 and unscored_card is None:
+            unscored_card = state
+        if scored and unscored_card:
+            break
+
+    if scored is None:
+        recorder.skip("samples: no served run rendered a query with numeric ranks, so the "
+                      "'badge must not claim unscored' assertion has nothing to bite on")
+    else:
+        lowered = scored["badge"].lower()
+        # `unsc` rather than `unscored`: a misspelling (`unscoered`, `unscorred`) must fail the same
+        # way, and no legitimate outcome label of a SCORED query starts with those four letters.
+        assert "unsc" not in lowered, (
+            f"{scored['title']}: outcome badge says {scored['badge']!r} while the same card renders "
+            f"{scored['numericRanks']} numeric rank(s) {scored['ranks']} -- that is a scored query")
+        assert scored["badge"] != "unresolved", (
+            f"{scored['title']}: the badge prints the bare protocol word {scored['badge']!r}, which "
+            "reads as 'unscored'")
+        recorder.note(f"samples {scored['title']}: badge {scored['badge']!r} agrees with "
+                      f"{scored['numericRanks']} numeric ranks and {scored['candidates']} candidates")
+
+    if unscored_card is not None:
+        lowered = unscored_card["badge"].lower()
+        assert "unscored" in lowered or "chưa chấm" in lowered, (
+            f"{unscored_card['title']}: no numeric rank on the card, so the badge must say "
+            f"unscored/chưa chấm, but says {unscored_card['badge']!r}")
+        recorder.note(f"samples {unscored_card['title']}: badge {unscored_card['badge']!r} matches "
+                      f"its unscored ranks {unscored_card['ranks']}")
+
+    saved.append(shot(page, shots, "query-outcome"))
+    assert not recorder.page_errors, recorder.page_errors
+    return saved
+
 
 def session_mobile(browser, base_url: str, shots: Path, recorder: Recorder) -> list[str]:
     """390x844: nav reachable, no page overflow, model blocker column inside its scroll box."""
@@ -693,6 +779,14 @@ def run_sessions(url: str, shots: Path, which: str) -> Recorder:
                     context.close()
             if which in ("composition", "all"):
                 saved += session_composition(browser, url, shots, recorder)
+            if which in ("samples", "all"):
+                context = browser.new_context(viewport=VIEWPORT_WIDE)
+                page = context.new_page()
+                recorder.attach(page)
+                try:
+                    saved += session_samples(page, url, shots, recorder)
+                finally:
+                    context.close()
             if which in ("mobile", "all"):
                 saved += session_mobile(browser, url, shots, recorder)
         finally:
@@ -708,7 +802,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--url", default=None)
     parser.add_argument("--shots", type=Path, default=Path("/tmp/ui-e2e/shots"))
     parser.add_argument("--session",
-                        choices=("cold", "fixture", "composition", "mobile", "all"), default="all")
+                        choices=("cold", "fixture", "composition", "samples", "mobile", "all"), default="all")
     args = parser.parse_args(argv)
 
     if args.build_fixture is not None:

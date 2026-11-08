@@ -221,6 +221,10 @@ export interface DataQuery {
   query: string;
   imported?: ImportedScope;
   queryState?: string;
+  /** Whether to load the whole query universe of the selected runs. Only the failure analysis needs
+   *  it (a consensus over one page would be a different, unstated cohort); loading 20k rows on every
+   *  visit to the explorer was pure cost. `undefined` keeps the old behaviour for callers that do. */
+  loadAnalysis?: boolean;
 }
 
 export function useWorkbenchData(query: DataQuery): WorkbenchData {
@@ -286,30 +290,30 @@ export function useWorkbenchData(query: DataQuery): WorkbenchData {
   // consensus computed over the first 20 rows would be a different, and unstated, cohort.
   const compositionUniverse = useRegion<Array<UniverseEntry<CompositionQuery>>>(
     "composition-universe",
-    `universe\u001f${query.subset}\u001f${selectedComposition.join(",")}`,
+    `universe\u001f${query.loadAnalysis}\u001f${query.subset}\u001f${selectedComposition.join(",")}`,
     useMemo(() => {
-      if (!selectedComposition.length) return null;
+      if (!selectedComposition.length || query.loadAnalysis === false) return null;
       return async (signal: AbortSignal) => Promise.all(selectedComposition.map(async (runId) => {
         const params = new URLSearchParams({ subset: query.subset, condition: "multimodal", order: "worst", limit: "20000", offset: "0" });
         const payload = await fetchJson<{ items: CompositionQuery[] }>(`/api/composition/runs/${encodeURIComponent(runId)}/queries?${params}`, signal);
         return { key: `c:${runId}`, items: payload.items ?? [] };
       }));
       // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [selectedComposition.join(","), query.subset]),
+    }, [selectedComposition.join(","), query.subset, query.loadAnalysis]),
   );
 
   const indexUniverse = useRegion<Array<UniverseEntry<Query>>>(
     "index-universe",
-    `universe\u001f${selectedIndex.join(",")}`,
+    `universe\u001f${query.loadAnalysis}\u001f${selectedIndex.join(",")}`,
     useMemo(() => {
-      if (!selectedIndex.length) return null;
+      if (!selectedIndex.length || query.loadAnalysis === false) return null;
       return async (signal: AbortSignal) => Promise.all(selectedIndex.map(async (runId) => {
         const params = new URLSearchParams({ run_id: runId, limit: "20000", offset: "0", order: "worst" });
         const payload = await fetchJson<{ items: Query[]; total: number }>(`/api/queries?${params}`, signal);
         return { key: `i:${runId}`, items: payload.items ?? [], total: payload.total ?? 0 };
       }));
       // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [selectedIndex.join(",")]),
+    }, [selectedIndex.join(","), query.loadAnalysis]),
   );
 
   // Jobs settle on their own; poll while any is live rather than on a fixed 2s tick forever.

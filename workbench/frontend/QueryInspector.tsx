@@ -1,9 +1,13 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BASE } from "./client";
 import { fetchJson, useRegion } from "./useRegion";
 import { conditionsOf, outcomeTone } from "./inspector";
 import { Badge, Card, Detail, EmptyState, ErrorState, KeyValue, LoadingState } from "./ui";
 import { fmtInt, fmtRank } from "./format";
+import { FIXED_CUTOFFS } from "./catalog";
+import { candidateDisplayOptions, candidateRequestPath, effectiveCandidateK } from "./candidateRequest";
+import { outcomeLabel } from "./routes";
+import type { CompositionQuery, CompositionRun } from "./types";
 
 /** How an imported candidate source is named to a reader. Never the model whose row it sits on. */
 const IMPORTED_LABEL: Record<string, string> = {
@@ -11,194 +15,258 @@ const IMPORTED_LABEL: Record<string, string> = {
   released_artifact_import: "released artifact import",
   external_artifact: "external artifact",
 };
-import { FIXED_CUTOFFS } from "./catalog";
-import type { CompositionQuery, CompositionRun } from "./types";
+
+const CONDITION_LABELS: Record<string, string> = {
+  multimodal: "Ảnh + văn bản (MM)",
+  text_only_black_image: "Chỉ văn bản",
+  image_only_empty_text: "Chỉ ảnh",
+};
 
 /** One query, in one run: reference image, edit text, target image, the three condition ranks, and
- *  the candidate list when the run actually exported one.
+ *  the candidate list the run actually exported for the selected condition.
  *
  *  The honesty rules that matter here:
  *  * a missing condition rank is `unscored` and says WHY it has no rank — it is never shown as a
- *    loss at rank 0 and never mixed into the failure statistics;
- *  * when `candidate_topk` is false the candidate region says "candidates not exported for this
- *    run" with the capability reason. No placeholder images, no synthesis;
+ *    loss at rank 0 and never mixed into the failure statistics; "every rank is present" is never
+ *    claimed when one is null;
+ *  * candidates come from a request that names run + subset + condition + query + K. The page
+ *    endpoint's own `top_k` used to cap the list at 10, so choosing "Top 50" could not add rows;
+ *    now K is part of the request identity and a superseded answer cannot overwrite a newer one;
+ *  * the menu never offers more than the export's depth, and no export is a stated reason with a
+ *    next step, never placeholder images;
  *  * images that 404 in this deployment render an explicit missing tile with the image id, so a
  *    coverage gap is visible instead of an empty box.
  */
-export function QueryInspector({ run, query, selectedCount, onAnnotate }: {
+export function QueryInspector({ run, query, condition = "multimodal", selectedCount, onAnnotate }: {
   run: CompositionRun | null;
   query: CompositionQuery | null;
+  condition?: string;
   selectedCount: number;
   onAnnotate: () => void;
 }) {
   const [k, setK] = useState(10);
-  const candidates = query?.top_results ?? [];
-  const hasCandidates = candidates.length > 0;
-  // The exact rank is a full-gallery fact and survives outside the stored window. It is never
-  // recomputed or clamped from `top_results`; this only says whether it lies outside it.
-  const depth = query?.candidate_depth ?? null;
-  const importedSource = run?.provenance_source ?? null;
-  const candidateReason = query?.candidate_reason
-    ?? run?.capability_detail?.candidate_topk?.reason
-    ?? (run?.capability_detail?.candidate_topk?.status
-      ? `Trạng thái do backend báo: ${run.capability_detail.candidate_topk.status}.`
-      : "Lượt này không lưu danh sách ứng viên.");
+  const depth = query?.candidate_depth
+    ?? run?.capability_detail?.candidate_topk?.depth
+    ?? query?.top_results?.length
+    ?? 0;
+  const options = candidateDisplayOptions(depth);
+  const effectiveK = effectiveCandidateK(k, depth);
+  const canRequest = !!(run && query && depth > 0 && (run.capabilities?.candidate_topk || (query.top_results?.length ?? 0) > 0));
+  const request = run && query
+    ? candidateRequestPath({ runId: run.run_id, subset: run.subset, condition, queryId: query.query_id, k: effectiveK })
+    : "none";
+  const requestKey = `${canRequest}:${request}`;
+  const candidatesRegion = useRegion<{ items: CompositionQuery[] }>(
+    "inspector-candidates", requestKey,
+    useMemo(() => (canRequest
+      ? (signal: AbortSignal) => fetchJson<{ items: CompositionQuery[] }>(request, signal)
+      : null), [request, canRequest]));
+  const current = candidatesRegion.region.key === requestKey;
+  const fetched = current && candidatesRegion.region.status === "ready"
+    ? candidatesRegion.region.data?.items.find((item) => item.query_id === query?.query_id) ?? null
+    : null;
+  // Never reuse another query/condition/K answer: a rank is not a candidate list.
+  const candidates = fetched?.top_results ?? [];
+  const shown = candidates.slice(0, effectiveK);
+  const loading = canRequest && (!current || candidatesRegion.region.status === "idle" || candidatesRegion.region.status === "loading");
 
-  useEffect(() => setK(10), [query?.query_id, run?.run_id]);
-
-  // Candidate images from the backend arrive as `/api/queries`-style `top_results` on the
-  // composition query payload. They are consumed only when present; absence is a stated capability
-  // gap, so nothing here fabricates a list.
-  const shown = useMemo(() => candidates.slice(0, k), [candidates, k]);
+  useEffect(() => setK(10), [query?.query_id, run?.run_id, condition]);
 
   if (!run) {
     return (
-      <Card title="Inspector">
-        <EmptyState kind="none-selected" detail="Chọn một lượt ở khu vực Đánh giá hoặc Thí nghiệm để xem query."
+      <Card title="Duyệt ảnh truy hồi">
+        <EmptyState kind="none-selected" detail="Chọn một mô hình có kết quả để bắt đầu."
                     next={<button type="button" onClick={onAnnotate}>Mở sổ nghiên cứu</button>} />
       </Card>
     );
   }
   if (!query) {
     return (
-      <Card title="Inspector" subtitle={`${run.model_id} / ${run.checkpoint_id}`}>
+      <Card title="Duyệt ảnh truy hồi" subtitle={`${run.model_id} / ${run.checkpoint_id}`}>
         <EmptyState kind="none-selected" detail="Chọn một query ở danh sách bên trái, hoặc nới bộ lọc để có query." />
       </Card>
     );
   }
 
   const conditions = conditionsOf(query);
-  const targetId = query.positive_ids[0] ?? "";
+  const unscored = conditions.some((item) => item.rank === null);
   const category = query.category || "circus";
+  const reason = fetched?.candidate_reason ?? query.candidate_reason
+    ?? run.capability_detail?.candidate_topk?.reason
+    ?? (run.capability_detail?.candidate_topk?.status
+      ? `Trạng thái do backend báo: ${run.capability_detail.candidate_topk.status}.`
+      : "Lượt này không lưu danh sách ứng viên.");
+  const isTarget = (imageId: string) => query.positive_ids.includes(imageId);
+  const hasExport = canRequest;
 
   return (
     <div className="inspector" data-testid="query-inspector">
       <Card
-        title={<span data-testid="query-title">{query.query_id}</span>}
-        subtitle={`${run.model_id} / ${run.checkpoint_id} · ${run.protocol_id} · subset ${run.subset}`}
+        title={<span data-testid="query-title">Query {query.query_id}</span>}
+        subtitle={`${run.model_id} · ${run.checkpoint_id} · ${run.protocol_id} · subset ${run.subset}`}
         actions={(
           <>
-            <Badge tone={outcomeTone(query.outcome)}>{query.outcome}</Badge>
+            {/* The label, not the id: a bare `unresolved` next to three numbered ranks reads as
+                `unscored`, the opposite of what it means. */}
+            <Badge tone={unscored ? "warn" : outcomeTone(query.outcome)} testId="query-outcome">
+              {unscored ? "Có điều kiện chưa chấm" : outcomeLabel(query.outcome)}
+            </Badge>
             {query.category && <Badge>{query.category}</Badge>}
           </>
         )}
       >
-        <div className="stack">
-          <div>
-            <div className="field-label">Văn bản sửa (edit text)</div>
-            <p style={{ marginTop: 4 }}>{query.query_txt}</p>
-          </div>
-
+        <div className="query-brief">
           <div className="shots">
             <Shot category={category} id={query.reference_id} label="Ảnh tham chiếu" />
-            <Shot category={category} id={targetId} label="Ảnh đích (ground truth)" target />
-            {query.positive_ids.slice(1).map((id) => (
-              <Shot key={id} category={category} id={id} label="Ảnh đích phụ" target />
+            {query.positive_ids.map((id, index) => (
+              <Shot key={id} category={category} id={id} target
+                    label={index === 0 ? "Ảnh đích" : "Ảnh đích bổ sung"} />
             ))}
           </div>
 
-          <div>
-            <div className="field-label" style={{ marginBottom: 6 }}>
-              Hạng theo điều kiện · phân loại outcome tại @{FIXED_CUTOFFS.compositionOutcomeK} (cố định)
+          <div className="query-instruction">
+            <div>
+              <div className="eyebrow">Yêu cầu chỉnh sửa</div>
+              <p className="edit-caption">{query.query_txt}</p>
             </div>
-            <div className="rankgrid">
-              {conditions.map((condition) => (
-                <div key={condition.id}
-                     className={`rankcell ${condition.rank === null ? "unscored-cell" : condition.rank <= FIXED_CUTOFFS.compositionOutcomeK ? "hit" : "miss"}`}
-                     data-testid={`rank-${condition.id}`}>
-                  <small>{condition.short}</small>
-                  <b>{fmtRank(condition.rank)}</b>
-                  <span className="hint">
-                    {condition.rank === null
-                      ? (query.unscored_kind
-                        ? `không có hạng chính xác (${query.unscored_kind}) — lỗi pipeline/ánh xạ, không phải lỗi truy hồi`
-                        : "không có hạng chính xác — lỗi pipeline/ánh xạ, không phải lỗi truy hồi")
-                      : condition.rank <= FIXED_CUTOFFS.compositionOutcomeK ? `trong @${FIXED_CUTOFFS.compositionOutcomeK}` : `ngoài @${FIXED_CUTOFFS.compositionOutcomeK}`}
-                    {condition.rank != null && depth != null && condition.rank > depth
-                      ? ` · ngoài cửa sổ ${fmtInt(depth)} ứng viên đã lưu`
-                      : ""}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
 
-          {query.failure && (
-            <p className="hint-bad">Lý do do evaluator ghi: {query.failure}</p>
-          )}
-
-          <div>
-            <div className="toolbar" style={{ marginBottom: 8 }}>
-              <div className="field">
-                <label className="field-label" htmlFor="candidate-depth">Số ứng viên hiển thị</label>
-                <select id="candidate-depth" data-testid="topk" value={k} onChange={(event) => setK(Number(event.target.value))}>
-                  {[1, 5, 10, 20, 50, 100].map((value) => <option key={value} value={value}>Top {value}</option>)}
-                </select>
+            <div>
+              <div className="eyebrow" style={{ marginBottom: 8 }}>
+                Hạng theo điều kiện · outcome phân loại tại @{FIXED_CUTOFFS.compositionOutcomeK} (cố định)
               </div>
-              <span className="hint" style={{ paddingBottom: 8 }}>{FIXED_CUTOFFS.candidateDisplayNote}</span>
+              <div className="rankgrid">
+                {conditions.map((item) => (
+                  <div key={item.id}
+                       className={`rankcell ${item.rank === null ? "unscored-cell" : item.rank <= FIXED_CUTOFFS.compositionOutcomeK ? "hit" : "miss"}`}
+                       data-testid={`rank-${item.id}`}>
+                    <small>{CONDITION_LABELS[item.id] ?? item.short}</small>
+                    <b>{item.rank === null ? "Chưa chấm" : fmtRank(item.rank)}</b>
+                    <span className="hint">
+                      {item.rank === null
+                        ? (query.unscored_kind ? `Không có hạng chính xác (${query.unscored_kind})` : "Không có hạng chính xác")
+                        : item.rank <= FIXED_CUTOFFS.compositionOutcomeK
+                          ? `trong @${FIXED_CUTOFFS.compositionOutcomeK}`
+                          : `ngoài @${FIXED_CUTOFFS.compositionOutcomeK}`}
+                      {item.rank != null && depth > 0 && item.rank > depth
+                        ? ` · ngoài cửa sổ ${fmtInt(depth)} ứng viên đã lưu`
+                        : ""}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              <p className="hint" style={{ marginTop: 8 }}>
+                Hạng đích trên toàn gallery, theo từng điều kiện. Số ứng viên hiển thị bên dưới không
+                đổi ngưỡng phân loại này.
+              </p>
             </div>
-
-            {!hasCandidates ? (
-              <EmptyState kind="capability" testId="candidates-unavailable"
-                          title="Ứng viên chưa được export cho lượt này"
-                          detail={<>
-                            <span className="mono" style={{ fontSize: 11.5 }}>{candidateReason}</span>
-                            <br />
-                            Lượt này vẫn có hạng chính xác cho từng query, nên đây là giới hạn của dữ liệu
-                            chứ không phải lỗi tải hay một lượt hỏng.
-                          </>}
-                          next={<span className="hint">Hạng MM / text / image ở trên vẫn đầy đủ cho query này.</span>} />
-            ) : (
-              <>
-                {importedSource && (
-                  <p className="hint" data-testid="candidates-provenance" style={{ marginBottom: 8 }}>
-                    <Badge tone="warn">NGUỒN: {importedSource}</Badge>{" "}
-                    Ứng viên dưới đây là đầu ra của <b>{IMPORTED_LABEL[importedSource] ?? importedSource}</b>,
-                    không phải đầu ra của mô hình <b>{run.model_id}</b>. Chỉ dùng để đọc hạng và thứ tự.
-                  </p>
-                )}
-                <div className="candidates" data-testid="topk-grid">
-                  {shown.map((candidate) => (
-                    <div key={candidate.rank}
-                         className={`candidate ${candidate.image_id === targetId ? "is-target" : ""}`}>
-                      <Shot category={category} id={candidate.image_id} label={`#${candidate.rank}`} compact target={candidate.image_id === targetId} />
-                      <small>
-                        <span>#{candidate.rank}</span>
-                        <span>{"gallery_position" in candidate && candidate.gallery_position != null
-                          ? `g ${candidate.gallery_position.toLocaleString("en-US")}`
-                          : ""}</span>
-                        {/* A stored order without scores must read "—", never 0.0. */}
-                        <span>{candidate.score == null ? "—" : candidate.score.toFixed(4)}</span>
-                      </small>
-                    </div>
-                  ))}
-                </div>
-                <p className="hint" style={{ marginTop: 6 }}>
-                  Hiển thị {shown.length} / {candidates.length} ứng viên trong cửa sổ đã lưu
-                  {depth ? ` (độ sâu lưu: ${fmtInt(depth)})` : ""}. Danh sách này KHÔNG phải ngưỡng phân
-                  loại outcome.
-                  {query.target_rank != null && depth != null && query.target_rank > depth && (
-                    <> Hạng đích <b>{fmtRank(query.target_rank)}</b> nằm ngoài cửa sổ hiển thị — đó là hạng
-                      trên toàn gallery, không phải vị trí trong danh sách này.</>
-                  )}
-                </p>
-              </>
-            )}
           </div>
         </div>
+
+        {unscored && (
+          <div className="pipeline-notice" data-testid="query-unscored-notice">
+            <strong>Query này chưa được chấm đầy đủ.</strong>
+            <p>
+              {query.failure?.includes("embedding scope")
+                ? "Evaluator chưa xác định được nhánh category để tạo embedding, nên chưa có hạng hợp lệ cho điều kiện bị ảnh hưởng. Chưa thể kết luận model truy hồi sai trên query này."
+                : "Một hoặc nhiều điều kiện chưa có hạng chính xác. Phần chưa chấm không phải lỗi truy hồi."}
+            </p>
+            <Detail summary="Nguyên nhân và bước xử lý">
+              <p className="diagnostic">{query.failure ?? query.unscored_kind ?? "Evaluator chưa cung cấp nguyên nhân."}</p>
+              <p>
+                Cần đối soát mapping/adapter với dữ liệu nguồn rồi chạy lại lượt bị ảnh hưởng. Sửa code
+                không tự cập nhật artifact cũ.
+              </p>
+            </Detail>
+          </div>
+        )}
+        {!unscored && query.failure && (
+          <Detail summary="Chẩn đoán evaluator"><p className="diagnostic">{query.failure}</p></Detail>
+        )}
+      </Card>
+
+      <Card
+        title={`Ứng viên xếp hạng · ${CONDITION_LABELS[condition] ?? condition}`}
+        subtitle="Thứ tự do lượt chạy xuất ra cho đúng điều kiện này; ảnh đích được đánh dấu."
+        actions={(
+          <label className="candidate-control">Hiển thị
+            <select data-testid="topk" aria-label="Số ứng viên hiển thị"
+                    value={hasExport ? effectiveK : "unavailable"}
+                    disabled={!hasExport}
+                    onChange={(event) => setK(Number(event.target.value))}>
+              {hasExport
+                ? options.map((value) => <option key={value} value={value}>Top {value}</option>)
+                : <option value="unavailable">Chưa có ứng viên</option>}
+            </select>
+          </label>
+        )}
+      >
+        {run.provenance_source && (
+          <p className="pipeline-notice" data-testid="candidates-provenance">
+            Nguồn ứng viên: <b>{IMPORTED_LABEL[run.provenance_source] ?? run.provenance_source}</b>.
+            Đây là artifact nhập vào, không phải đầu ra của model <b>{run.model_id}</b> chạy tại đây.
+            Chỉ dùng để đọc hạng và thứ tự.
+          </p>
+        )}
+
+        {loading ? <LoadingState label={`Đang tải Top ${effectiveK} cho query ${query.query_id}…`} />
+          : current && candidatesRegion.region.status === "error"
+            ? <ErrorState message={candidatesRegion.region.error ?? "Không tải được ứng viên"} onRetry={candidatesRegion.retry} />
+            : shown.length > 0 ? (
+              <>
+                <p className="candidate-count" aria-live="polite">
+                  Đang hiển thị <b>{shown.length}</b> ứng viên · độ sâu đã xuất {fmtInt(depth)} ·
+                  {" "}{CONDITION_LABELS[condition] ?? condition}
+                </p>
+                <div className="candidates" data-testid="topk-grid">
+                  {shown.map((candidate) => {
+                    const target = isTarget(candidate.image_id);
+                    return (
+                      <article key={`${candidate.rank}:${candidate.image_id}`}
+                               className={`candidate ${target ? "is-target" : ""}`}>
+                        <div className="candidate-rank">
+                          <b>#{candidate.rank}</b>
+                          {target && <span>Ảnh đích</span>}
+                        </div>
+                        <Shot category={category} id={candidate.image_id} compact target={target}
+                              label={`Ứng viên ${candidate.rank}`} />
+                        <small>
+                          <span>Điểm</span>
+                          {/* A stored order without scores must read "—", never 0.0. */}
+                          <b>{candidate.score == null ? "—" : candidate.score.toFixed(4)}</b>
+                        </small>
+                        {"gallery_position" in candidate && candidate.gallery_position != null && (
+                          <small><span>Vị trí gallery</span><b>{candidate.gallery_position.toLocaleString("en-US")}</b></small>
+                        )}
+                      </article>
+                    );
+                  })}
+                </div>
+                <p className="hint candidate-footnote">
+                  Đổi Top-K sẽ tải số ứng viên tương ứng, tối đa độ sâu đã xuất. Ảnh đích nằm ngoài
+                  danh sách này vẫn giữ nguyên hạng trên toàn gallery.
+                </p>
+              </>
+            ) : (
+              <EmptyState kind="capability" testId="candidates-unavailable"
+                          title={unscored ? "Chưa đủ kết quả để xem ứng viên" : "Lượt này chưa có danh sách ứng viên"}
+                          detail={unscored
+                            ? "Có điều kiện chưa được chấm. Cần sửa nguyên nhân rồi chạy lại để có cả hạng lẫn danh sách ứng viên."
+                            : "Hạng đích không chứa thứ tự của các ảnh khác. Cần xuất Top-K từ đúng scoring path của lượt này; nếu cache không xác minh được thì phải chạy lại."}
+                          next={reason ? <Detail summary="Chi tiết dữ liệu"><span className="diagnostic">{reason}</span></Detail> : undefined} />
+            )}
       </Card>
 
       <div className="inspector-secondary">
-        <Card title="So sánh trên cùng query" subtitle="Cùng protocol, cùng subset: cohort và mẫu số được nêu">
+        <Card title="So sánh cùng query" subtitle="Cùng protocol, cùng subset: cohort và mẫu số được nêu">
           <ComparePanel run={run} query={query} />
         </Card>
         <Card title="Ghi chú nghiên cứu" subtitle="Gắn đúng query + protocol, lưu qua reload">
           <p className="hint">
-            Query <code>{query.query_id}</code> · protocol <code>{run.protocol_id}</code> · lượt <code>{run.model_id}</code>.
-            {selectedCount > 1 ? ` Đang chọn ${selectedCount} lượt để phân tích.` : ""}
+            Query <code>{query.query_id}</code> · protocol <code>{run.protocol_id}</code> · lượt{" "}
+            <code>{run.model_id}</code>.{selectedCount > 1 ? ` Đang chọn ${selectedCount} lượt để phân tích.` : ""}
           </p>
           <button type="button" className="primary" style={{ marginTop: 10 }} onClick={onAnnotate}>
-            Mở sổ nghiên cứu cho query này
+            Ghi chú query này
           </button>
         </Card>
       </div>
@@ -206,6 +274,7 @@ export function QueryInspector({ run, query, selectedCount, onAnnotate }: {
   );
 }
 
+/** One image tile: explicit missing state, and a dialog that Escape closes. */
 function Shot({ category, id, label, target, compact }: {
   category: string;
   id: string;
@@ -214,20 +283,35 @@ function Shot({ category, id, label, target, compact }: {
   compact?: boolean;
 }) {
   const [failed, setFailed] = useState(false);
+  const dialog = useRef<HTMLDialogElement>(null);
   const clean = id.split("/").pop() || id;
-  useEffect(() => setFailed(false), [id]);
+  const src = `${BASE}/api/images/${category}/${encodeURIComponent(clean)}`;
+  useEffect(() => {
+    setFailed(false);
+    dialog.current?.close();
+  }, [id, category]);
   return (
-    <figure className={`shot ${target ? "target" : ""} ${compact ? "compact" : ""}`} style={{ margin: 0 }}>
-      {failed
+    <figure className={`shot ${target ? "target" : ""} ${compact ? "compact" : ""}`}>
+      {failed || !id
         ? <div className="shot-missing" data-testid="query-image" data-image-id={clean}>Ảnh không có trong deployment<br />{clean}</div>
-        : <img src={`${BASE}/api/images/${category}/${encodeURIComponent(clean)}`}
-               alt={`${label}: ${clean}`} loading="lazy" data-testid="query-image"
-               data-image-id={clean}
-               onError={() => setFailed(true)} />}
+        : (
+          <button type="button" className="shot-open" aria-label={`Phóng to ${label}: ${clean}`}
+                  onClick={() => dialog.current?.showModal()}>
+            <img src={src} alt={`${label}: ${clean}`} width="240" height="240" loading="lazy"
+                 data-testid="query-image" data-image-id={clean} onError={() => setFailed(true)} />
+          </button>
+        )}
       <figcaption className="shot-label">
         <span>{label}</span>
         <span className="mono" title={clean}>{clean.length > 16 ? `${clean.slice(0, 14)}…` : clean}</span>
       </figcaption>
+      <dialog className="image-dialog" ref={dialog} aria-label={`Ảnh phóng to: ${clean}`}>
+        <form method="dialog">
+          <span>{label} · {clean}</span>
+          <button type="submit" autoFocus>Đóng ảnh</button>
+        </form>
+        <img src={src} width="800" height="800" alt={`${label}: ${clean}`} />
+      </dialog>
     </figure>
   );
 }
@@ -305,8 +389,8 @@ function ComparePanel({ run, query }: { run: CompositionRun; query: CompositionQ
         </table>
       </div>
       <p className="hint">
-        Cohort: {rows.length} lượt, cùng protocol <code>{run.protocol_id}</code> và subset <code>{run.subset}</code>,
-        mỗi lượt đều có hạng cho đúng query này. Ảnh và rank của query không đổi khi so sánh.
+        Cohort: {rows.length} lượt, cùng protocol <code>{run.protocol_id}</code> và subset{" "}
+        <code>{run.subset}</code>; hạng thiếu được ghi riêng là chưa chấm.
       </p>
       <Detail summary="Mẫu số và giới hạn">
         <KeyValue rows={[
