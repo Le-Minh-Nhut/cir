@@ -1,23 +1,33 @@
 # BÁO CÁO CUỐI — round 20261108T015603+0700
 
 > **ĐÃ COMMIT, ĐÃ PUSH.** Branch `research/cir-failure-workbench`, HEAD
-> **`e697bff8653b10a3884a60c673a0fd95cf6114d6`** (`e697bff`), `HEAD == origin/research/cir-failure-workbench`,
-> working tree sạch. Ba commit của vòng này, theo thứ tự:
+> **`273abf1f245fbb89b945c10854a14c8a153d072f`** (`273abf1`), `HEAD == origin/research/cir-failure-workbench`,
+> working tree sạch. Bốn commit của vòng này, theo thứ tự:
 > `b0f38bd` — `Publish CIRCUS composition results and make the web honest about them`;
 > `d665951` — `Advance TESTED_SOURCE_SHA to b0f38bd; serial sweep pending`;
-> `e697bff` — `Record the serial sweep measured at b0f38bd`.
-> Range push: **`1716e81..e697bff`** (251 file, +90,042/−37).
+> `e697bff` — `Record the serial sweep measured at b0f38bd`;
+> `273abf1` — `Attribute the sweep failures to local operator state, not the code`.
+> Range push: **`1716e81..273abf1`** (251 file, +90,245/−37).
 
 Kiểm lại, output nguyên văn chạy lúc cập nhật báo cáo này:
 
 ```
 $ git rev-parse HEAD
-e697bff8653b10a3884a60c673a0fd95cf6114d6
+273abf1f245fbb89b945c10854a14c8a153d072f
 $ git rev-parse origin/research/cir-failure-workbench
-e697bff8653b10a3884a60c673a0fd95cf6114d6
+273abf1f245fbb89b945c10854a14c8a153d072f
 $ git status --short
             (rỗng — working tree sạch)
 ```
+
+**Con số quan trọng nhất về bộ test, nói ngay ở đây:** trên đúng 8 file test sinh ra failure của
+sweep, **`33 failed, 188 passed`** khi cây làm việc này **có** file untracked
+`workbench/config/workbench.env`, và **`221 passed, 0 failed`** khi **di chuyển file đó đi**. Trong
+worktree pristine tại `b0f38bd`: **`16 failed, 133 passed`** khi có bản copy file đó, **`1 failed,
+148 passed`** khi không có — failure duy nhất còn lại là thiếu build artifact
+`workbench/frontend/dist/assets`, không phải lỗi code. Vậy **33 là artifact của cấu hình cục bộ của
+operator này, không phải của code**; một fresh clone không có file đó nên sẽ báo con số khác.
+
 
 `git status --short` **trước khi commit** — chép lại nguyên văn từ bản báo cáo đầu, giữ để đối chiếu;
 mọi mục dưới đây giờ đã nằm trong `b0f38bd`:
@@ -45,7 +55,7 @@ mọi mục dưới đây giờ đã nằm trong `b0f38bd`:
 **Xong:** dữ liệu CIRCUS pinned, 4/9 model có số thật đủ 3 subset, web composition + native chạy
 trên dữ liệu thật, browser QA 3 viewport, review độc lập 21/21 metric khớp.
 **Chưa xong:** 4 model bị gate chặn (F1), CSMCIR bị chặn (contract scorer).
-**Đã xong sau khi viết bản này:** commit + push ba commit `b0f38bd` → `d665951` → `e697bff`
+**Đã xong sau khi viết bản này:** commit + push bốn commit `b0f38bd` → `d665951` → `e697bff` → `273abf1`
 (xem đầu file); frontend build `npm run build` exit 0.
 **Full test suite trên cây đã commit: ĐÃ CHẠY XONG tại `b0f38bd` — FAIL** (2186 passed, 33 failed,
 47 skipped = 2266, exit 1) — số đo và phân tích nguyên nhân ở §10.
@@ -101,7 +111,7 @@ Sau khi clone, thứ tự bắt buộc để dựng lại đúng bundle này:
 
 ```bash
 cd /home/heheboiz/data/cir
-git checkout e697bff8653b10a3884a60c673a0fd95cf6114d6
+git checkout 273abf1f245fbb89b945c10854a14c8a153d072f
 npm install --prefix workbench/frontend              # tạo node_modules (không track)
 npm run build --prefix workbench/frontend            # tạo dist/ (không track)
 WORKBENCH_CIRCUS_RELEASE_ROOT=/home/heheboiz/data/cir/workbench/artifacts/circus_release \
@@ -549,7 +559,7 @@ python3 -c "import json;d=json.load(open('composition_dom_check.json'));print(le
 | **Browser QA** | **PASS** | re-run trên stack live: `live/browser_qa.json` `ok: true`, 1440x900 + 390x844 đều `pass: true`, nodes 111, **overflow 0**, console/page/req/HTTP≥400 đều **0**; DOM check 16/16; sticky `partially_occluded: []` tại 4 vị trí scroll × 2 viewport. **Còn nợ:** harness đầy đủ 15 flow `flows.py` chưa chạy lại từ sau fix sticky |
 | **Independent review** | **PASS** | 21/21 metric + 18/18 bin, abs diff 0.0 |
 | **Test suite** | **FAIL, đã đo** — **không** phải PASS | Chạy serial trên `b0f38bd`, `workbench/envs/ctl312h/bin/python -m pytest workbench/tests -q -p no:cacheprovider -rfE --tb=no`, 2211.38 s, **exit 1**: **2186 passed, 33 failed, 47 skipped = 2266 collected**. Log: `20261108T015603+0700/tests/full_suite_b0f38bd.txt` (dòng summary 10 và 708). Không dòng nào trong báo cáo này được đọc là PASS. Trước đó đã có (đo ở round trước): `test_composition_api.py` + `test_csmcir_aggregate_api_parity.py` = **15 passed**; `test_circus_resume_stable.py` = **9 passed**. Frontend build trên cây đã commit: `npm run build --prefix workbench/frontend` exit 0, `tsc -b && vite build`, 24 module, ✓ built in 149 ms (xem §0) |
-| **Commit/push** | **PASS** | HEAD `e697bff8653b10a3884a60c673a0fd95cf6114d6` (`e697bff`), `HEAD == origin/research/cir-failure-workbench` (cùng sha), `git status --short` rỗng. Ba commit: `b0f38bd` (`Publish CIRCUS composition results and make the web honest about them`), `d665951` (`Advance TESTED_SOURCE_SHA to b0f38bd; serial sweep pending`), `e697bff` (`Record the serial sweep measured at b0f38bd`); push range `1716e81..e697bff` (251 file, +90,042/−37). Bundle evidence 213 file đã track |
+| **Commit/push** | **PASS** | HEAD `273abf1f245fbb89b945c10854a14c8a153d072f` (`273abf1`), `HEAD == origin/research/cir-failure-workbench` (cùng sha), `git status --short` rỗng. Bốn commit: `b0f38bd` (`Publish CIRCUS composition results and make the web honest about them`), `d665951` (`Advance TESTED_SOURCE_SHA to b0f38bd; serial sweep pending`), `e697bff` (`Record the serial sweep measured at b0f38bd`), `273abf1` (`Attribute the sweep failures to local operator state, not the code`); push range `1716e81..273abf1` (251 file, +90,245/−37). Bundle evidence 213 file đã track |
 
 ### 33 failure đó đến từ đâu — đo, không suy đoán
 
@@ -674,9 +684,10 @@ trước** khi sửa: **CHƯA XÁC MINH** — không có ảnh/DOM snapshot nào
 
 ## 11. Việc tiếp theo, xếp theo giá trị
 
-**Trạng thái hiện tại: đã commit và push** — HEAD `e697bff8653b10a3884a60c673a0fd95cf6114d6`
-(`e697bff`, `Record the serial sweep measured at b0f38bd`), sau `d665951` và `b0f38bd`; `HEAD ==
-origin/research/cir-failure-workbench`, working tree sạch, push range `1716e81..e697bff`. "Commit + push" **đã xong** nên đã bị bỏ
+**Trạng thái hiện tại: đã commit và push** — HEAD `273abf1f245fbb89b945c10854a14c8a153d072f`
+(`273abf1`, `Attribute the sweep failures to local operator state, not the code`), sau `e697bff`,
+`d665951` và `b0f38bd`; `HEAD == origin/research/cir-failure-workbench`, working tree sạch, push range
+`1716e81..273abf1` (251 file, +90,245/−37). "Commit + push" **đã xong** nên đã bị bỏ
 khỏi danh sách dưới đây; các mục được đánh số lại.
 
 1. **Provision Python 3.9 prefix** → mở khoá habit/intent/hint/conesep (4 model, ~1–2 h setup +
