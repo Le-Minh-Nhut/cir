@@ -38,7 +38,10 @@ def _write_cache(path, rows: int, fingerprint: str) -> None:
     mapped[:] = np.arange(rows, dtype=np.float32)[:, None]
     mapped.flush()
     del mapped
-    runner._write_memmap_metadata(path, fingerprint, np.zeros((rows, 4), dtype=np.float32))
+    # The sidecar's digest must describe the bytes that were written. It used to be built from a
+    # fresh `np.zeros`, which the content-integrity check now (correctly) rejects as a mismatch:
+    # a digest that does not cover the file is exactly the false assurance this check removes.
+    runner._write_memmap_metadata(path, fingerprint, np.load(path, allow_pickle=False))
 
 
 def _paths(tmp_path, count: int) -> list:

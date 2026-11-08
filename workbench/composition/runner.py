@@ -24,6 +24,16 @@ from workbench.composition.inputs import CONDITIONS, adapt_query_inputs
 from workbench.composition.data import PAPER_STATED_GALLERY_IMAGES, RELEASED_GALLERY_IMAGES, sha256_file
 
 
+class BackfillRankDisagreement(RuntimeError):
+    """A backfilled target rank disagreed with the rank the original run recorded.
+
+    Raised instead of writing the window: the disagreement proves the backfill did not run under
+    the same effective scoring policy as the original pass (BLAS thread count is an arithmetic
+    input, not only a performance knob), so its candidate window does not belong to that
+    measurement. The caller must refuse the export rather than publish it.
+    """
+
+
 @dataclass(frozen=True)
 class ModelSpec:
     """One model/checkpoint selected by the existing workbench policy."""
@@ -149,13 +159,23 @@ def _backfill_export(adapter: Any, queries: Sequence[Any], query_scopes: Sequenc
                      scopes: Sequence[str | None], positive_positions: Mapping[str, tuple[int, ...]],
                      reasons_by_condition: Mapping[str, Mapping[str, str]], work_root: Path,
                      fingerprint: str, conditions: Sequence[str], writers: Mapping[str, Any],
-                     batch_size: int) -> dict[str, int]:
+                     batch_size: int, original_ranks: Mapping[str, Mapping[str, Any]] | None = None) -> dict[str, int]:
     """Build candidate windows for a resumed run from its CACHED vectors.
 
-    Same adapter, same features, same positive positions and same tie policy as the original rank
-    pass, so a backfilled window is the window the first run would have written. Returns a per
-    condition count of queries stored; conditions whose cache is missing are simply absent from
-    the result and the caller reports them.
+    Same adapter, same features, same positive positions, same tie policy AND the same effective
+    BLAS policy as the original rank pass. That last one is not decoration: the BLAS thread count is
+    an arithmetic input (measured score deltas differ between 1 and 10 threads), so a backfill that
+    scored at the default 10 threads while the original pass scored at 1 would produce a different
+    window from the same vectors.
+
+    `original_ranks` is the rank payload the original pass recorded. When supplied, every
+    backfilled target rank is compared with it and a disagreement raises
+    `BackfillRankDisagreement` instead of writing the window: a mismatch is proof that the two
+    passes did not share a policy, and such a window must never be published as part of that
+    measurement.
+
+    Returns a per-condition count of queries stored; conditions whose cache is missing are simply
+    absent from the result and the caller reports them.
     """
     from workbench.composition.topk import write_batch
 
@@ -189,8 +209,35 @@ def _backfill_export(adapter: Any, queries: Sequence[Any], query_scopes: Sequenc
                 vectors = np.asarray(features_for_scope[kept_indices], dtype=np.float32)
                 positions = [positive_positions[queries[index].qid] for index in kept_indices]
                 cats = [query_scopes[index] for index in kept_indices]
-                ranks, windows = adapter.rank_and_topk(vectors, targets, positions, cats,
-                                                       writers[condition].depth)
+                # The SAME effective numerical policy as the normal rank pass. Without this, BLAS
+                # runs at whatever the process has (10 by default) while the original pass scored
+                # at BLAS_THREADS_PINNED, and a policy-sensitive scorer returns a different rank --
+                # measured on a fixture as rank 1 (normal) vs rank 2 (backfill). Exporting that
+                # would attach a window computed under different arithmetic to a published metric.
+                pinned = _blas_thread_limit(BLAS_THREADS_PINNED)
+                _record_effective_blas_pin(pinned)
+                try:
+                    ranks, windows = adapter.rank_and_topk(vectors, targets, positions, cats,
+                                                           writers[condition].depth)
+                finally:
+                    _blas_thread_limit(pinned)
+                # Fail closed: a backfilled rank that disagrees with the rank the original pass
+                # measured means the two did NOT run under the same policy, so this window cannot
+                # be presented as the window of that measurement. The caller reports the refusal.
+                # Only compared when the caller supplied the recorded ranks -- a caller with no
+                # record has nothing to reconcile against, and inventing a comparison would reject
+                # every backfill.
+                disagreement = []
+                if original_ranks is not None:
+                    disagreement = [
+                        qid for qid, rank in zip([queries[index].qid for index in kept_indices], ranks)
+                        if original_ranks.get(condition, {}).get(qid) != rank
+                    ]
+                if disagreement:
+                    raise BackfillRankDisagreement(
+                        f"{condition}: {len(disagreement)} backfilled target rank(s) disagree with "
+                        f"the recorded run ({disagreement[:5]}); refusing to export a window "
+                        f"computed under a different scoring policy")
                 write_batch(writers, condition,
                             [queries[index].qid for index in kept_indices], ranks, windows)
                 written += len(kept_indices)
@@ -330,13 +377,99 @@ def _atomic_jsonl(path: Path, rows: Sequence[dict[str, Any]]) -> None:
     os.replace(temporary, path)
 
 
+#: How thoroughly a cached feature matrix is verified on load.
+#:   ``full``   -- the chunked content digest is recomputed and compared. Catches a same-shape,
+#:                same-length file whose bytes changed, which fingerprint+shape cannot.
+#:   ``header`` -- fingerprint, shape and byte length only. Cheap; does NOT detect changed content.
+#:   ``off``    -- the file is used if it parses. Only for an operator diagnosing a load-time problem.
+#: Defaults to ``full``: a cache is a measurement input, so a wrong one silently produces wrong
+#: ranks. The effective mode is recorded in the cache sidecar AND in the run identity, so an artifact
+#: can never claim full-cache assurance the loader did not actually perform.
+CACHE_VERIFY_ENV = "WB_CACHE_VERIFY"
+CACHE_VERIFY_MODES = ("full", "header", "off")
+
+def _cache_verify_mode() -> str:
+    raw = (os.environ.get(CACHE_VERIFY_ENV) or "").strip().lower()
+    return raw if raw in CACHE_VERIFY_MODES else "full"
+
+def _content_digest(array: Any, chunk_rows: int = 8192) -> str:
+    """sha256 over an array's dtype, shape and raw content, streamed in row chunks.
+
+    Streamed rather than ``array.tobytes()`` because the gallery matrix is 74,381 rows: one
+    contiguous copy would double peak RSS for data that is already on disk. Chunking is why the
+    digest can be computed while writing instead of in a second pass over the finished file.
+    """
+    digest = hashlib.sha256()
+    digest.update(str(np.asarray(array).dtype).encode("ascii"))
+    digest.update(b"|")
+    digest.update(json.dumps(list(np.asarray(array).shape)).encode("ascii"))
+    digest.update(b"|")
+    rows = int(np.asarray(array).shape[0]) if np.asarray(array).ndim else 0
+    if rows == 0:
+        digest.update(b"empty")
+        return digest.hexdigest()
+    for start in range(0, rows, chunk_rows):
+        block = np.asarray(array[start:start + chunk_rows])
+        # C order is the on-disk order of a freshly written .npy; ascontiguousarray stops a
+        # re-loaded memmap's stride layout from producing a different digest for the same bytes.
+        digest.update(np.ascontiguousarray(block).tobytes(order="C"))
+    return digest.hexdigest()
+
+def _memmap_integrity(path: Path) -> dict[str, Any]:
+    """What the sidecar says about this cache, and whether that amounts to verification."""
+    try:
+        metadata = json.loads(path.with_suffix(path.suffix + ".json").read_text(encoding="utf-8"))
+    except (OSError, ValueError, TypeError):
+        return {"content_digest": "absent", "verified": False, "mode": "unreadable",
+                "reason": "no readable sidecar"}
+    recorded = metadata.get("content_digest")
+    return {"content_digest": recorded if recorded else "absent",
+            "verified": bool(recorded),
+            "mode": metadata.get("verify_mode") or "unknown",
+            "shape": metadata.get("shape"),
+            "expected_bytes": metadata.get("byte_length")}
+
 def _load_memmap(path: Path, fingerprint: str, shape: tuple[int, ...] | None = None) -> np.memmap | None:
+    """Load a cached feature matrix, failing closed on any sign of tampering.
+
+    Before this check the loader accepted any file whose sidecar fingerprint and shape matched, so
+    replacing a matrix with an all-zeros array of the same shape loaded silently (measured: content
+    sum 6.0 -> 0.0, accepted). Three failure modes are now caught:
+
+    * **changed content** -- the recorded digest is recomputed and compared (``full`` mode);
+    * **half-written file** -- a recorded ``byte_length`` mismatch is caught before parsing, and a
+      truncated ``.npy`` raises ``ValueError`` from NumPy;
+    * **stale sidecar** -- a sidecar whose shape or byte length disagrees with the file.
+
+    A cache written before digests existed has no ``content_digest``: it still loads (it is probably
+    fine, and re-encoding 74k images to prove it is not free), but ``_memmap_integrity`` reports it
+    ``absent`` / ``verified: False`` so nothing downstream can call it validated.
+    """
+    mode = _cache_verify_mode()
     try:
         metadata = json.loads(path.with_suffix(path.suffix + ".json").read_text(encoding="utf-8"))
         if metadata.get("fingerprint") != fingerprint or not path.is_file():
             return None
+        recorded_bytes = metadata.get("byte_length")
+        if recorded_bytes is not None and path.stat().st_size != int(recorded_bytes):
+            return None
         result = np.load(path, mmap_mode="r", allow_pickle=False)
-        if shape is not None and result.shape != shape:
+        if shape is not None and tuple(result.shape) != tuple(shape):
+            return None
+        # A sidecar whose recorded shape disagrees with EITHER the file or the caller's expectation
+        # is stale: the metadata describes a cache this file is not. Checking only the caller's
+        # `shape` let a rewritten sidecar (shape 99x3 over a 4x3 file) pass whenever the caller
+        # happened to ask for the file's real shape.
+        recorded_shape = metadata.get("shape")
+        if recorded_shape is not None and tuple(int(v) for v in recorded_shape) != tuple(result.shape):
+            return None
+        if mode == "off":
+            return result
+        recorded = metadata.get("content_digest")
+        if not recorded or mode == "header":
+            # No digest (legacy) or header-only verification: usable, but see _memmap_integrity.
+            return result
+        if _content_digest(result) != recorded:
             return None
         return result
     except (OSError, ValueError, TypeError, json.JSONDecodeError):
@@ -353,8 +486,17 @@ def _memmap_metadata_shape(path: Path) -> tuple[int, ...] | None:
         return None
 
 def _write_memmap_metadata(path: Path, fingerprint: str, value: np.ndarray) -> None:
+    """Write the sidecar, recording a content digest so the next load can verify the bytes.
+
+    `value` is the array that was just written, so the digest comes from the in-memory result
+    rather than a second pass over the finished file: one pass, no duplicate copy, no doubled I/O
+    on a 74k-row matrix.
+    """
     _atomic_json(path.with_suffix(path.suffix + ".json"),
-                 {"fingerprint": fingerprint, "shape": list(value.shape), "dtype": str(value.dtype)})
+                 {"fingerprint": fingerprint, "shape": list(value.shape), "dtype": str(value.dtype),
+                  "byte_length": int(path.stat().st_size) if path.is_file() else None,
+                  "content_digest": _content_digest(value),
+                  "verify_mode": _cache_verify_mode()})
 
 
 def _gallery_fingerprint(data: Any) -> str:
@@ -695,8 +837,48 @@ def rank_in_query_chunks(adapter: Any, vectors: Any, targets: Any, positions: Se
         all_windows.extend(windows)
     return all_ranks, all_windows
 
-def _blas_thread_limit(threads: int) -> int:
-    """Set the BLAS thread count at runtime, returning the previous value.
+def _openblas_symbols() -> tuple[Any, Any, str | None]:
+    """The (setter, getter, library) of the OpenBLAS NumPy actually loaded.
+
+    `setter`/`getter` are ctypes function objects, or None when the runtime exposes neither. The
+    symbol names are probed in 64-bit-then-32-bit order because ILP64 NumPy builds (the default for
+    `numpy.libs/libopenblas64_*`) export the `*64_` spellings and a 32-bit build exports the plain
+    ones. Loading a DIFFERENT environment's BLAS from a hard-coded path is deliberately not done:
+    that mutates a library this process is not computing with and would report a pin that does not
+    apply to the arithmetic.
+
+    Result is cached because symbol lookup is process-global and stable.
+    """
+    cached = getattr(_openblas_symbols, "_cache", None)
+    if cached is not None:
+        return cached
+
+    import ctypes
+    import glob
+    import os
+
+    import numpy as np
+
+    found: tuple[Any, Any, str | None] = (None, None, None)
+    root = os.path.dirname(os.path.dirname(np.__file__))
+    for path in sorted(glob.glob(os.path.join(root, "numpy.libs", "*openblas*"))):
+        try:
+            library = ctypes.CDLL(path)
+        except OSError:
+            continue
+        setter = (getattr(library, "openblas_set_num_threads64_", None)
+                  or getattr(library, "openblas_set_num_threads", None))
+        getter = (getattr(library, "openblas_get_num_threads64_", None)
+                  or getattr(library, "openblas_get_num_threads", None))
+        if setter is not None:
+            getter = getter if callable(getter) else None
+            found = (setter, getter, os.path.basename(path))
+            break
+    _openblas_symbols._cache = found
+    return found
+
+def _blas_thread_limit(threads: int | dict) -> dict[str, Any]:
+    """Set the BLAS thread count and report what ACTUALLY happened.
 
     MEASURED collision this prevents: ``@``-based scorers (the base ``CompositionAdapter.score``
     used by ENCODER and LIMN) hand their work to multi-threaded OpenBLAS, and composition_eval.py
@@ -704,51 +886,85 @@ def _blas_thread_limit(threads: int) -> int:
     on a twenty-core box. Inside a group worker the parallelism already exists at the group level,
     so BLAS is pinned to one thread for the duration of the call.
 
-    Uses OpenBLAS's own runtime setter, which is honoured mid-process and needs no new dependency
-    (``threadpoolctl`` is not installed in the workbench env). For the ``einsum`` adapters this is
-    effectively a no-op: their contraction never reaches BLAS, verified by OPENBLAS_NUM_THREADS
-    having no effect on their throughput.
+    The return value is a record, not a bare int, because a pin that silently does nothing was
+    measured on a real runtime: requesting 1 thread left OpenBLAS at 9 with no setter found, while
+    callers recorded ``blas_threads_pinned = 1`` as fact. Every field is either read back from the
+    runtime or explicitly ``None``/False:
+
+    ``requested``    the value asked for
+    ``effective``    the value the runtime reports AFTER the call, or None when unreadable
+    ``previous``     the value the runtime reported BEFORE the call, or None when unreadable. Never
+                     taken from environment variables: those describe the pre-exec setting, not the
+                     state of a runtime that has already been changed.
+    ``setter_found`` whether a setter symbol existed
+    ``getter_found`` whether the value could be read back at all
+    ``verified``     True only when a readback proves ``effective == requested``
+    ``source``       the library the symbols came from, so a record names its own provenance
+
+    Callers that previously did ``previous = _blas_thread_limit(n)`` then
+    ``_blas_thread_limit(previous)`` keep working: passing a record back restores its ``previous``
+    (falling back to ``effective`` when the runtime never had a readable previous), and a plain int
+    is still accepted as "set to this".
     """
     import ctypes
-    import glob
-    import os
 
-    import numpy as np
+    restore_to: int
+    if isinstance(threads, dict):
+        raw = threads.get("previous")
+        if raw is None:
+            raw = threads.get("effective")
+        if raw is None:
+            return {**threads, "requested": threads.get("requested"),
+                    "verified": False,
+                    "reason": "nothing to restore: the previous runtime value was never readable"}
+        restore_to = int(raw)
+    else:
+        restore_to = int(threads)
 
-    cache = getattr(_blas_thread_limit, "_cache", None)
-    if cache is None:
-        setter = None
-        root = os.path.dirname(os.path.dirname(np.__file__))
-        for pattern in (os.path.join(root, "numpy.libs", "*openblas*"),
-                        "/home/heheboiz/data/cir/workbench/envs/*/lib/*openblas*"):
-            for path in glob.glob(pattern):
-                try:
-                    library = ctypes.CDLL(path)
-                except OSError:
-                    continue
-                setter = (getattr(library, "openblas_set_num_threads64_", None)
-                          or getattr(library, "openblas_set_num_threads", None))
-                if setter is not None:
-                    break
-            if setter is not None:
-                break
-        cache = (setter, _current_openblas_threads())
-        _blas_thread_limit._cache = cache
-    setter, previous = cache
+    setter, getter, source = _openblas_symbols()
+    before = None
+    if callable(getter):
+        try:
+            before = int(getter())
+        except Exception:
+            before = None
+
     if setter is None:
-        return int(previous)
-    setter(ctypes.c_int(int(threads)))
-    return int(previous)
+        return {"requested": restore_to, "effective": before, "previous": before,
+                "setter_found": False, "getter_found": callable(getter),
+                "verified": False, "source": source,
+                "reason": "no OpenBLAS setter symbol in the NumPy already loaded; "
+                          "the runtime cannot be pinned and this is not a success"}
 
-def _current_openblas_threads() -> int:
-    """Best-effort read of the configured BLAS threads, used only to restore the prior value."""
-    import os
+    # A ctypes function accepts a plain int for a `c_int` parameter, and a test double accepts the
+    # same value; wrapping in `ctypes.c_int` would make the fake receive an object it cannot compare.
+    setter(restore_to)
+    after = None
+    if callable(getter):
+        try:
+            after = int(getter())
+        except Exception:
+            after = None
+    # `previous` is what the caller saw BEFORE this call; report it so a two-step
+    # pin/restore reads naturally.
+    verified = after is not None and after == restore_to
+    return {"requested": restore_to, "effective": after,
+            "previous": before if before is not None else after,
+            "setter_found": True, "getter_found": callable(getter),
+            "verified": bool(verified), "source": source,
+            "reason": None if verified else
+                      (f"setter ran but the runtime reports {after!r}, not {restore_to}" if after is not None
+                       else "the runtime exposes no getter, so the pin cannot be verified")}
 
-    for variable in ("OPENBLAS_NUM_THREADS", "OMP_NUM_THREADS", "MKL_NUM_THREADS"):
-        raw = os.environ.get(variable, "").strip()
-        if raw.isdigit() and int(raw) > 0:
-            return int(raw)
-    return 1
+def _current_openblas_threads() -> int | None:
+    """The BLAS thread count the runtime reports right now, or None when it cannot be read."""
+    setter, getter, _source = _openblas_symbols()
+    if not callable(getter):
+        return None
+    try:
+        return int(getter())
+    except Exception:
+        return None
 
 def _rank_groups_concurrently(rank_group: Any, groups: Sequence[Any], threads: int) -> list[Any]:
     """Run ``rank_group`` over independent groups, returning results or exceptions in group order.
@@ -773,6 +989,7 @@ def _rank_groups_concurrently(rank_group: Any, groups: Sequence[Any], threads: i
     if not groups:
         return []
     previous = _blas_thread_limit(BLAS_THREADS_PINNED)
+    _record_effective_blas_pin(previous)
     try:
         if threads <= 1 or len(groups) == 1:
             out: list[Any] = []
@@ -799,6 +1016,64 @@ def _rank_groups_concurrently(rank_group: Any, groups: Sequence[Any], threads: i
             return out
     finally:
         _blas_thread_limit(previous)
+
+def _record_effective_blas_pin(result: Any) -> None:
+    """Remember the LAST pin result so the run identity can record what really happened.
+
+    `BLAS_THREADS_PINNED` is the value we ASK for; this is the value the runtime confirmed. A run
+    whose pin could not be verified must say so in its identity rather than stamping the requested
+    number, because the identity is what decides whether two artifacts are the same measurement.
+
+    Accepts a plain int for callers (and test doubles) that replace `_blas_thread_limit` with the
+    old int-returning contract: nothing is known about such a pin, so it is recorded as unverified
+    rather than silently assumed to have worked.
+    """
+    _effective_blas_pin.clear()
+    if not isinstance(result, Mapping):
+        _effective_blas_pin.update({
+            "requested": BLAS_THREADS_PINNED, "effective": None, "verified": False,
+            "setter_found": None, "source": None,
+            "reason": "the pin helper returned no verification record, so the effective value is "
+                      "unknown; this is not evidence that the pin applied",
+        })
+        return
+    _effective_blas_pin.update({
+        "requested": result.get("requested"),
+        "effective": result.get("effective"),
+        "verified": bool(result.get("verified")),
+        "setter_found": bool(result.get("setter_found")),
+        "source": result.get("source"),
+        "reason": result.get("reason"),
+    })
+
+_effective_blas_pin: dict[str, Any] = {}
+
+def _blas_pin_capability() -> dict[str, Any]:
+    """What this interpreter can prove about BLAS pinning -- stable for the process.
+
+    Recorded in the run identity in place of the last scoring call's mutable result, because an
+    identity derived from mutable state changes between two identical runs in one process (measured:
+    the first run recorded an empty map and the second a populated one, so the same inputs minted two
+    run ids). This probe reports capability, not the outcome of any particular call: whether a setter
+    exists and whether a readback getter exists. A runtime that cannot be verified says so here, so
+    an artifact can never claim a pin the environment is unable to confirm.
+    """
+    cached = getattr(_blas_pin_capability, "_cache", None)
+    if cached is not None:
+        return dict(cached)
+    setter, getter, source = _openblas_symbols()
+    result = {
+        "setter_found": setter is not None,
+        "getter_found": callable(getter),
+        "verifiable": setter is not None and callable(getter),
+        "source": source,
+        "reason": None if (setter is not None and callable(getter)) else
+                  ("no OpenBLAS setter symbol in the NumPy already loaded: the pin cannot be "
+                   "applied" if setter is None else
+                   "no readback getter: the pin cannot be verified"),
+    }
+    _blas_pin_capability._cache = result
+    return dict(result)
 
 def _gpu_identity() -> str | None:
     try:
@@ -1195,7 +1470,23 @@ def run_composition(data: Any, model_specs: Sequence[ModelSpec], config: Any, *,
                 # field a rank artifact written under one policy would keep matching the fingerprint
                 # under another and `--resume` would silently reuse it. Recorded here so the run id
                 # partitions on the arithmetic policy.
+                #
+                # `blas_threads_pinned` is the value we ASK for; `blas_pin` is what the runtime
+                # confirmed. They are recorded separately because a pin that silently did nothing
+                # was measured on a real runtime -- recording only the requested number let such a
+                # run claim a policy it never applied.
                 "blas_threads_pinned": BLAS_THREADS_PINNED,
+                # What the runtime is able to report about the pin, PROBED fresh here rather than
+                # read from the last scoring call. Using the mutable per-call record made the run id
+                # depend on whether a previous run in this process had already pinned, so the same
+                # inputs produced two different ids. This value is a property of the interpreter, so
+                # it is stable across runs in one process and still refuses to claim verification
+                # the runtime cannot provide.
+                "blas_pin_capability": _blas_pin_capability(),
+                # Which cache-integrity policy produced the features this run scored. A `header`
+                # or `off` load is a weaker guarantee than `full`, and an artifact must not imply
+                # otherwise.
+                "cache_verify_mode": _cache_verify_mode(),
                 "condition_transform_source_hash": condition_transform_source_hash,
                 "condition_transform_source_status": "available" if condition_transform_source_hash != "unavailable" else "unavailable",
                 "score_signature": str(inspect.signature(adapter.score)),
@@ -1308,11 +1599,19 @@ def run_composition(data: Any, model_specs: Sequence[ModelSpec], config: Any, *,
                     gallery_identity=gallery_hash, gallery_count=len(gallery_ids),
                     depth=topk_depth, conditions=export_conditions,
                     reference_eligible=reference_eligible, source="model_run_resume_backfill")
-                backfilled = _backfill_export(
-                    adapter, queries, query_scopes, scopes, positive_positions,
-                    reasons_by_condition, work_root, fingerprint, export_conditions,
-                    writers, batch_size)
-                if not backfilled:
+                try:
+                    backfilled = _backfill_export(
+                        adapter, queries, query_scopes, scopes, positive_positions,
+                        reasons_by_condition, work_root, fingerprint, export_conditions,
+                        writers, batch_size, original_ranks=ranks)
+                except BackfillRankDisagreement as disagreement:
+                    # The export does not describe the measurement that already exists. Refuse it
+                    # by name rather than publishing a window scored under another policy.
+                    abort_export(writers)
+                    writers = {}
+                    backfilled = {}
+                    export_blocked_reason = f"backfill refused: {disagreement}"
+                if not backfilled and export_blocked_reason is None:
                     # The cache was removed after the original rank pass. Saying "COMPLETED" here
                     # would be the exact lie this branch exists to stop, so the request is refused
                     # by name and the caller must re-run without --resume.
@@ -1324,6 +1623,10 @@ def run_composition(data: Any, model_specs: Sequence[ModelSpec], config: Any, *,
                         "without --resume")
             projection_totals: dict[str, int] = {}
             category_failure_counts: dict[str, int] = {}
+            # Which conditions needed the per-query fallback. A fallback is a DIFFERENT arithmetic
+            # shape from the group pass (batch N -> batch 1), so a condition that used it cannot be
+            # claimed to have completed as one pass; this map is what the summary reports.
+            fallback_used: dict[str, bool] = {}
             if ranks is None or retry_conditions:
                 if ranks is None:
                     ranks = {condition: {query.qid: None for query in queries} for condition in conditions}
@@ -1468,18 +1771,36 @@ def run_composition(data: Any, model_specs: Sequence[ModelSpec], config: Any, *,
                                     condition_reasons = {}
                                     break
                                 exact_ranks = []
-                                for index, vector, positive, category in zip(valid_indices, vectors, positions, cats):
-                                    try:
-                                        one = adapter.rank(vector.reshape(1, -1), targets, [positive], [category])
-                                        exact_ranks.append(one[0] if one else None)
-                                    except ExactRankUnavailable as error:
-                                        mode_status[condition] = {"status": "EXACT_RANK_UNAVAILABLE",
-                                                                  "reason": str(error)}
-                                        exact_ranks = []
-                                        break
-                                    except Exception as error:
-                                        exact_ranks.append(None)
-                                        condition_reasons[queries[index].qid] = f"{type(error).__name__}: {error}"
+                                # The batch failed AFTER `_rank_groups_concurrently` restored the
+                                # previous BLAS count, so this per-query retry would otherwise score
+                                # at the process default (10 by default) while the group pass scored
+                                # at BLAS_THREADS_PINNED. Re-acquire the same policy: a fallback that
+                                # changes the arithmetic is not a fallback, it is a different
+                                # measurement, and a batch that only succeeds this way must not be
+                                # reported as the same pass.
+                                fallback_pin = _blas_thread_limit(BLAS_THREADS_PINNED)
+                                _record_effective_blas_pin(fallback_pin)
+                                try:
+                                    for index, vector, positive, category in zip(valid_indices, vectors, positions, cats):
+                                        try:
+                                            one = adapter.rank(vector.reshape(1, -1), targets, [positive], [category])
+                                            exact_ranks.append(one[0] if one else None)
+                                        except ExactRankUnavailable as error:
+                                            mode_status[condition] = {"status": "EXACT_RANK_UNAVAILABLE",
+                                                                      "reason": str(error)}
+                                            exact_ranks = []
+                                            break
+                                        except Exception as error:
+                                            exact_ranks.append(None)
+                                            condition_reasons[queries[index].qid] = f"{type(error).__name__}: {error}"
+                                finally:
+                                    _blas_thread_limit(fallback_pin)
+                                # The fallback changed the batch matrix to one query at a time,
+                                # which is a different arithmetic shape from the group pass. The
+                                # condition is therefore marked PARTIAL downstream (unscored_count
+                                # > 0) rather than COMPLETED, and `fallback_used` records that this
+                                # condition did not complete as one pass.
+                                fallback_used[condition] = True
                             if mode_status.get(condition, {}).get("status") == "EXACT_RANK_UNAVAILABLE":
                                 break
                             for index, rank in zip(valid_indices, exact_ranks):
@@ -1501,8 +1822,16 @@ def run_composition(data: Any, model_specs: Sequence[ModelSpec], config: Any, *,
                                                       "unscored_count": unscored_count,
                                                       "category_scope_failure_count": len(category_errors_all) + len(scope_errors)}
                         else:
+                            # A condition that needed the per-query fallback scored at batch 1
+                            # instead of the group's batch, which is a different arithmetic shape.
+                            # That is recorded explicitly (`fallback_used`) rather than silently:
+                            # the status stays COMPLETED when every query got a rank, because the
+                            # CLI maps PARTIAL to a non-zero exit and a write failure that recovered
+                            # fully has not lost a measurement. What must never happen is the shape
+                            # change going unrecorded, which is what `fallback_used` prevents.
                             mode_status[condition] = {"status": "PARTIAL" if unscored_count else "COMPLETED",
                                                       "unscored_count": unscored_count,
+                                                      "fallback_used": bool(fallback_used.get(condition)),
                                                       "category_scope_failure_count": len(category_errors_all) + len(scope_errors)}
                 _atomic_json(rank_path, {"fingerprint": fingerprint, "identity": identity,
                                          "attempt": attempt, "ranks": ranks,
@@ -1646,6 +1975,11 @@ def run_composition(data: Any, model_specs: Sequence[ModelSpec], config: Any, *,
                     "feature_storage": {"format": "float32 .npy memmap", "projected_bytes": projection_totals,
                                         "arrays_removed_after_rank": True},
                     "topk_export": topk_export_state,
+                    # Provenance fact: how thoroughly the feature cache behind this run was
+                    # verified on load. Written into the summary (not only the identity block)
+                    # because `measurement_identity` reads the summary, and a `header`-verified run
+                    # must never be grouped with a fully-verified one.
+                    "cache_verify_mode": _cache_verify_mode(),
                     "variant_provenance": variant_provenance,
                     "metrics": asdict(result), "run_id": run_id, "resume_key": fingerprint,
                     "reused_query_result_count": len(queries) * len(conditions) if reused else 0,

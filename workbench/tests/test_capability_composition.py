@@ -78,7 +78,14 @@ def test_ranks_only_run_reports_ranks_without_candidates(tmp_path: Path):
     assert flags["per_query_target_ranks"] is True
     assert flags["candidate_topk"] is False
     assert detail["candidate_topk"]["status"] == "TOPK_EXPORT_NOT_REQUESTED"
-    assert "ranks" not in (detail["candidate_topk"]["reason"] or "").lower() or True
+    # Was `... or True`, which can never fail. The real contract: a run that stored ranks but no
+    # candidate export must say the export was never requested -- not blame the ranks, which are
+    # present -- so a reader knows the numbers exist and only the image lists are missing.
+    reason = (detail["candidate_topk"]["reason"] or "").lower()
+    assert "top-k-depth" in reason or "without candidate top-k export" in reason, (
+        f"the reason must name the missing export request, got {reason!r}")
+    assert "no exact rank" not in reason and "ranks missing" not in reason, (
+        f"ranks ARE present for this run, so the reason must not blame them: {reason!r}")
 
 def test_run_with_candidates_reports_candidates_and_depth(tmp_path: Path):
     summary = _summary(tmp_path, "withcands")

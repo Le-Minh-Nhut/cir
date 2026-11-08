@@ -510,21 +510,56 @@ def transfer_facts(summary: Mapping[str, Any]) -> dict[str, Any]:
 _SCORING_IMPL_CACHE: dict[tuple[str, str], dict[str, Any]] = {}
 
 def scoring_implementation(model_id: str | None, scoring_hash: str | None,
-                           adapter_hash: str | None) -> dict[str, Any]:
-    """The scoring implementation behind a run, derived from that adapter's own source.
+                           adapter_hash: str | None, *,
+                           summary: Mapping[str, Any] | None = None,
+                           live: bool = True) -> dict[str, Any]:
+    """The scoring implementation behind a run, from that run's own immutable evidence.
 
     `optimize=True` selects numpy's contraction-order optimiser, which picks a different
     intermediate and therefore a different floating-point summation order than the plain
     `einsum`/matmul path. Two runs scored with different implementations are not bit-comparable,
     so this is a property of the measurement, not a display detail.
 
-    Derivation reads the registered adapter module's `score` body. It is never inferred from a hash
-    string, and a row whose model cannot be resolved reports `unknown` with the reason.
+    Precedence, strongest first:
+
+    1. ``summary["scoring_impl"]`` -- a value the artifact itself recorded. Always wins: it is what
+       the run actually did.
+    2. ``live=True`` -- the run is being measured NOW, so deriving from the registered adapter
+       module's current ``score`` body describes it correctly.
+    3. Otherwise ``unknown`` with the reason. Reading today's source and presenting it as a
+       historical run's implementation is the exact defect this signature exists to remove: a
+       refactor, a rename or an adapter swap today would silently relabel an old measurement.
+
+    A versioned mapping from scoring hash to implementation would be option 1.5; it does not exist
+    in this repository, so a historical run without a recorded value is honestly unknown rather
+    than approximately guessed.
     """
-    resolved = _scoring_impl_for(model_id, adapter_hash)
-    return {"impl": resolved["impl"], "basis": resolved["basis"],
+    recorded = None
+    if isinstance(summary, Mapping):
+        recorded = summary.get("scoring_impl")
+        if isinstance(recorded, Mapping):
+            recorded = recorded.get("impl")
+        if isinstance(recorded, str) and recorded and recorded != "unknown":
+            return {"impl": recorded,
+                    "basis": f"recorded by the artifact itself (scoring_impl={recorded})",
+                    "adapter_hash_known": adapter_hash is not None,
+                    "scoring_hash_known": scoring_hash is not None,
+                    "source": "artifact"}
+    if live:
+        resolved = _scoring_impl_for(model_id, adapter_hash)
+        return {"impl": resolved["impl"], "basis": resolved["basis"],
+                "adapter_hash_known": adapter_hash is not None,
+                "scoring_hash_known": scoring_hash is not None,
+                "source": "live"}
+    # Historical and not recorded. `adapter_hash` being present does NOT identify the
+    # implementation: it says which bytes were hashed, not how they contract, and no table maps
+    # this repository's adapter hashes to implementations.
+    return {"impl": "unknown",
+            "basis": ("historical run records no scoring_impl and no hash-to-implementation table "
+                      "exists, so today's adapter source cannot stand in for it"),
             "adapter_hash_known": adapter_hash is not None,
-            "scoring_hash_known": scoring_hash is not None}
+            "scoring_hash_known": scoring_hash is not None,
+            "source": "unavailable"}
 
 def _scoring_impl_for(model_id: str | None, adapter_hash: str | None) -> dict[str, Any]:
     from workbench.composition.adapters import capability
@@ -560,6 +595,38 @@ def _scoring_impl_for(model_id: str | None, adapter_hash: str | None) -> dict[st
                                               "contraction"}
     _SCORING_IMPL_CACHE[key] = result
     return result
+
+def _recorded_source_matches_disk(summary: Mapping[str, Any]) -> bool:
+    """Whether the artifact's recorded scoring hash still equals the module's hash on disk.
+
+    True means the source that produced the run and the source readable now are the same bytes, so
+    derivation from that source is evidence about the run. False (or unreadable) means the row is
+    historical and must not be labelled from today's code.
+    """
+    recorded = summary.get("scoring_module_source_hash")
+    if not recorded:
+        return False
+    model_id = summary.get("model_id")
+    if not model_id:
+        return False
+    from workbench.composition.adapters import capability
+    from workbench.composition.runner import _module_source_hash
+
+    module_name = capability(model_id)
+    if not module_name:
+        return False
+    import sys as _sys
+
+    module = _sys.modules.get(module_name)
+    if module is None:
+        try:
+            module = __import__(module_name, fromlist=["Adapter"])
+        except Exception:
+            return False
+    try:
+        return _module_source_hash(module) == recorded
+    except Exception:
+        return False
 
 def measurement_identity(summary: Mapping[str, Any],
                          identity_source: Mapping[str, Any] | None = None) -> dict[str, Any]:
@@ -608,18 +675,106 @@ def measurement_identity(summary: Mapping[str, Any],
         "evaluator_environment_knobs": knobs if isinstance(knobs, Mapping) and knobs else None,
         "measurement_denominator": (metrics.get("gap_cohort_count")
                                     or summary.get("query_count")),
+        # ---- identity v2 ----------------------------------------------------------------
+        # These three are ARITHMETIC inputs (see runner.py): the BLAS thread count changes the
+        # floating-point summation order, the resolved per-query scope decides which gallery matrix
+        # a query is scored against, and the query order identity binds membership and order. The
+        # independent review measured that changing any of them still produced
+        # `same_group: true, confidence: full`, i.e. two different measurements were reported as
+        # the same one. They are part of the payload and of the essential set below.
+        "blas_threads_pinned": _recorded_or_summary(summary, recorded, "blas_threads_pinned"),
+        "query_scope_resolution": _recorded_or_summary(summary, recorded, "query_scope_resolution"),
+        "query_order_identity": _recorded_or_summary(summary, recorded, "query_order_identity"),
+        # The policy that produced the features this run scored. A `header`-verified cache is a
+        # weaker guarantee than a `full` one; an artifact must not imply the stronger claim. Read
+        # through `_recorded_or_summary` like its siblings so a recorded v2 artifact keeps its own
+        # value even when the served summary carries none.
+        "cache_verify_mode": _recorded_or_summary(summary, recorded, "cache_verify_mode"),
     }
     # `scoring_module_source_hash` is essential for the same reason: without it an older artifact
     # cannot be proven different from a run whose scoring implementation changed, so the honest
     # answer is `partial`, not `unique` and certainly not `duplicate`.
+    #
+    # The v2 inputs are essential for the same reason: a run that does not record its BLAS policy,
+    # scope resolution and query-order identity cannot be proven equal to OR different from another
+    # run, so its confidence is `partial` by definition. An artifact written before v2 has none of
+    # them, which is exactly why it must not be handed a v2 group id -- see `_identity_schema`.
+    # The v2 inputs are NOT in this tuple. Absence downgrades nothing here, because a served
+    # summary legitimately carries only metadata -- for it the v2 fields are simply not part of the
+    # record. What they must do is SPLIT groups when they ARE present, which they do by being in
+    # the payload above. A recorded v1 artifact is handled separately below: it is labelled
+    # `unknown (predates identity v2)` rather than being handed a group id computed from fields it
+    # never had.
     essential = ("checkpoint_identity", "gallery_identity_sha256", "environment_fingerprint",
                  "scoring_module_source_hash")
+    # A v1 ARTIFACT is a recorded identity block that predates v2 -- that is the case the review
+    # measured (an artifact on disk with no v2 inputs). A summary that merely lacks the fields is
+    # not a v1 artifact: it is a row assembled from served metadata, and the caller's own summary is
+    # the whole record of it. Distinguishing the two is what stops every served row from being
+    # relabelled "predates identity v2".
+    schema = _identity_schema(identity, recorded=recorded)
+    if schema == 1:
+        # A v1 artifact has no v2 inputs at all. It is readable and explorable, but it can never be
+        # compared to a v2 group: computing a v2 group id from absent fields would silently assert
+        # that they matched. Label it and stop.
+        identity["identity_schema_version"] = "unknown (predates identity v2)"
+        return {"identity": identity,
+                "group_id": None,
+                "schema_version": "unknown",
+                "missing_identity_inputs": [name for name in essential if not identity.get(name)],
+                "confidence": "unknown",
+                "reason": "recorded identity predates identity v2: it has no blas_threads_pinned / "
+                          "query_scope_resolution / query_order_identity, so it cannot be proven the "
+                          "same as, or different from, any v2 measurement"}
+    identity["identity_schema_version"] = 2
     missing = [name for name in essential if not identity.get(name)]
     payload = json.dumps(identity, sort_keys=True, separators=(",", ":"), default=str)
     return {"identity": identity,
             "group_id": hashlib.sha256(payload.encode("utf-8")).hexdigest()[:24],
+            "schema_version": 2,
             "missing_identity_inputs": missing,
-            "confidence": "partial" if missing else "full"}
+            "confidence": "partial" if missing else "full",
+            "reason": None if not missing else
+                      f"identity v2 inputs missing: {missing}"}
+
+#: The identity fields added by schema v2. All three are arithmetic inputs, not metadata.
+IDENTITY_V2_INPUTS = ("blas_threads_pinned", "query_scope_resolution", "query_order_identity")
+
+def _recorded_or_summary(summary: Mapping[str, Any], recorded: Mapping[str, Any],
+                         name: str) -> Any:
+    """The value recorded with the run, falling back to the summary, never fabricated."""
+    value = recorded.get(name)
+    if value is None:
+        value = summary.get(name)
+    if isinstance(value, Mapping):
+        # `blas_pin` nested records are provenance, not the arithmetic value; hash only what
+        # actually changes the arithmetic.
+        value = value.get("requested", value.get("effective"))
+    return value
+
+#: Fields a real v2 run identity always carries, because the runner writes them unconditionally.
+#: Their presence is what proves a recorded block came from a v2-era runner, so their absence in a
+#: block that DOES contain other runner-only keys is proof the block predates v2.
+V2_MARKERS = ("blas_threads_pinned", "query_scope_resolution", "query_order_identity")
+
+def _identity_schema(identity: Mapping[str, Any],
+                     recorded: Mapping[str, Any] | None = None) -> int:
+    """1 when a RECORDED run identity predates v2, else 2.
+
+    Only a recorded block from a runner can be v1, and only when it is recognisably a runner block
+    (it carries runner-only keys) that lacks every v2 marker. A partial `recorded` mapping that a
+    caller assembled by hand -- e.g. just the two scoring hashes -- is not evidence of an old
+    artifact, so it stays v2 and is scored on its actual inputs.
+    """
+    if not isinstance(recorded, Mapping) or not recorded:
+        return 2
+    if any(identity.get(name) is not None for name in V2_MARKERS):
+        return 2
+    runner_keys = {"model_id", "checkpoint_id", "gallery_identity", "query_order_identity",
+                   "adapter_module_source_hash", "scoring_module_source_hash", "subset_memberships"}
+    if len(runner_keys & set(recorded)) < 3:
+        return 2
+    return 1
 
 def annotate_duplicate_attempts(summaries: list[dict[str, Any]],
                                 artifacts_root: Path | None = None) -> None:
@@ -646,11 +801,20 @@ def annotate_duplicate_attempts(summaries: list[dict[str, Any]],
         summary["measurement_group_id"] = facts["group_id"]
         summary["measurement_identity_confidence"] = facts["confidence"]
         summary["measurement_identity_missing_inputs"] = facts["missing_identity_inputs"]
+        summary["measurement_identity_schema_version"] = facts["identity"].get("identity_schema_version")
+        if facts["group_id"] is None:
+            # A pre-v2 artifact has no group: it is readable and explorable, but it must never be
+            # grouped with a v2 measurement (or with another pre-v2 artifact, since its arithmetic
+            # policy is unknown). `unknown (predates identity v2)` is the honest label; the row
+            # keeps its own identity block so nothing about it is lost.
+            summary["duplicate_attempt_count"] = 1
+            summary["duplicate_status"] = "unknown (predates identity v2)"
+            continue
         groups.setdefault(facts["group_id"], []).append(summary)
     for members in groups.values():
         count = len(members)
-        confidence = "partial" if any(member.get("measurement_identity_confidence") == "partial"
-                                      for member in members) else "full"
+        confidence = ("partial" if any(member.get("measurement_identity_confidence") == "partial"
+                                       for member in members) else "full")
         status = ("undetermined" if confidence == "partial"
                   else "duplicate" if count > 1 else "unique")
         for member in members:
@@ -764,9 +928,16 @@ def decorate_summary(artifacts_root: Path, summary: dict[str, Any],
     summary["provenance_label"] = (
         "released CIRCUS audit baseline (imported; not a model run of this workbench)"
         if is_imported_summary(summary) else None)
+    # Derive from the adapter on disk ONLY when the artifact's recorded scoring hash still equals
+    # today's hash for that same module: then "the source that produced it" and "the source I can
+    # read" are provably the same bytes, so the derivation is evidence rather than an assumption.
+    # Otherwise the row is historical and its implementation is unknown -- the recorded value in
+    # `summary["scoring_impl"]` (handled first inside the function) is the only acceptable source.
     summary["scoring_impl"] = scoring_implementation(
         summary.get("model_id"), summary["scoring_module_source_hash"],
-        summary["adapter_module_source_hash"])
+        summary["adapter_module_source_hash"],
+        summary=summary,
+        live=_recorded_source_matches_disk(summary))
     subset = str(summary.get("subset") or "full")
     qids = subset_qids(subset)
     # Scoped to the SAME subset `query_count` describes, so scored + unscored == sample_count and

@@ -128,7 +128,20 @@ def test_export_on_writes_candidates_consistent_with_the_metric_ranks(
     ranks = _ranks(artifacts)["ranks"]
     export = topk.read_candidates(artifacts, run_id, "multimodal")
     assert export["available"] is True, export["status"]
-    assert export["manifest"]["gallery_identity_sha256"] == _ranks(artifacts).get("fingerprint") or True
+    # Was `... == _ranks(artifacts).get("fingerprint") or True`, which can never fail. The export
+    # manifest's gallery digest must equal the RELEASE gallery digest the runner recorded -- not a
+    # run fingerprint, which is a different quantity -- and a mismatch must be detectable.
+    from workbench.composition.topk import gallery_digest
+
+    recorded_gallery = export["manifest"]["gallery_identity_sha256"]
+    assert recorded_gallery, "the manifest must record the gallery it ranked against"
+    assert recorded_gallery != _ranks(artifacts).get("fingerprint"), (
+        "the gallery digest and the run fingerprint are different quantities; comparing them was "
+        "the original defect")
+    # The same digest the rank artifact recorded for this run: both come from _gallery_fingerprint.
+    assert recorded_gallery == _ranks(artifacts)["identity"]["gallery_identity"], (
+        f"the export ranked against {recorded_gallery!r} but the run recorded "
+        f"{_ranks(artifacts)['identity']['gallery_identity']!r}")
     assert export["rows"], "the fixture run must export at least one query"
 
     for qid, row in export["rows"].items():
