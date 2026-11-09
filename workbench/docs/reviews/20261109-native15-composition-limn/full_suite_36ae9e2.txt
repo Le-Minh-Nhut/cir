@@ -1,0 +1,540 @@
+SERIAL FULL SUITE AT 36ae9e2
+============================
+revision    : 36ae9e215ad81960d7af90bd8a5edcf598b5b206
+branch      : research/cir-failure-workbench
+command     : python -m pytest workbench/tests -q -p no:cacheprovider -rfE --tb=no \
+              --basetemp=/tmp/sweep_basetemp_36ae9e2
+interpreter : workbench/envs/ctl312h/bin/python (CPython 3.12)
+duration    : 3647.11 s (1:00:47)
+exit code   : not captured by the launcher (pytest's status with 18 failures is 1)
+counts      : 2600 passed, 18 failed, 47 skipped = 2665 collected
+              (2600 + 18 + 47 = 2665, matches collection exactly)
+
+VALID RUN. Compared against 20261109-clean-rerun/full_suite_7a58ce6.txt
+(18 failed, 2581 passed, 51 skipped = 2650 collected):
+  failed ids: 18, identical set — 0 NEW, 0 DROPPED.
+
+The 18 include test_handoff_commands.py::test_no_release_document_points_at_a_superseded_source_sha,
+which fails BY DESIGN at this commit (TESTED_SOURCE_SHA still names 7a58ce6).
+
+Collection grew 2650 -> 2665 (+15 net) with the campaign's two new test files.
+
+--- raw log follows ---
+ssssssssss.s...............sssssssssssssssss......s..................... [  2%]
+........................................................................ [  5%]
+........................................................................ [  8%]
+........................................................................ [ 10%]
+...............................................................FFFF..... [ 13%]
+........F............................................................... [ 16%]
+..........................FF...F........................................ [ 18%]
+......................................................................s. [ 21%]
+........................................................................ [ 24%]
+........................................................................ [ 27%]
+........................................................................ [ 29%]
+........................................................................ [ 32%]
+...............................s..............F......................... [ 35%]
+........................................................................ [ 37%]
+........................................................................ [ 40%]
+...................F.................................................... [ 43%]
+........................................................................ [ 45%]
+......................................s................................. [ 48%]
+.............................................ss......sss................ [ 51%]
+........................................................................ [ 54%]
+........................................................................ [ 56%]
+........................................................................ [ 59%]
+........................................................................ [ 62%]
+........................................................................ [ 64%]
+...........................s.......................ssssss...........s... [ 67%]
+s....................................................................... [ 70%]
+........................................................................ [ 72%]
+........................................................................ [ 75%]
+..............................s......................................... [ 78%]
+..............................................................FFFFFF.... [ 81%]
+F....................................................................... [ 83%]
+........................................................................ [ 86%]
+........................................................................ [ 89%]
+........................................................................ [ 91%]
+.....................................................................F.. [ 94%]
+........................................................................ [ 97%]
+........................................................................ [ 99%]
+.                                                                        [100%]
+=============================== warnings summary ===============================
+workbench/backend/main.py:105: 1 warning
+workbench/tests/test_e2e_release_chain.py: 1 warning
+workbench/tests/test_failure_thresholds.py: 7 warnings
+workbench/tests/test_http_api_layer.py: 43 warnings
+workbench/tests/test_phase1_acceptance_scenarios.py: 5 warnings
+workbench/tests/test_release_blocker_cuda_readiness.py: 2 warnings
+  /home/heheboiz/data/cir/workbench/backend/main.py:105: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    @app.on_event("startup")
+
+workbench/envs/ctl312h/lib/python3.12/site-packages/fastapi/applications.py:4723: 2 warnings
+workbench/tests/test_e2e_release_chain.py: 2 warnings
+workbench/tests/test_failure_thresholds.py: 14 warnings
+workbench/tests/test_http_api_layer.py: 86 warnings
+workbench/tests/test_phase1_acceptance_scenarios.py: 10 warnings
+workbench/tests/test_release_blocker_cuda_readiness.py: 4 warnings
+  /home/heheboiz/data/cir/workbench/envs/ctl312h/lib/python3.12/site-packages/fastapi/applications.py:4723: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    return self.router.on_event(event_type)  # ty: ignore[deprecated]
+
+workbench/backend/main.py:112: 1 warning
+workbench/tests/test_e2e_release_chain.py: 1 warning
+workbench/tests/test_failure_thresholds.py: 7 warnings
+workbench/tests/test_http_api_layer.py: 43 warnings
+workbench/tests/test_phase1_acceptance_scenarios.py: 5 warnings
+workbench/tests/test_release_blocker_cuda_readiness.py: 2 warnings
+  /home/heheboiz/data/cir/workbench/backend/main.py:112: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    @app.on_event("shutdown")
+
+workbench/envs/ctl312h/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /home/heheboiz/data/cir/workbench/envs/ctl312h/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+workbench/envs/ctl312h/lib/python3.12/site-packages/transformers/utils/generic.py:441
+  /home/heheboiz/data/cir/workbench/envs/ctl312h/lib/python3.12/site-packages/transformers/utils/generic.py:441: FutureWarning: `torch.utils._pytree._register_pytree_node` is deprecated. Please use `torch.utils._pytree.register_pytree_node` instead.
+    _torch_pytree._register_pytree_node(
+
+workbench/tests/test_circus_inputs.py::test_black_image_preserves_size_mode_and_is_fresh
+  /home/heheboiz/data/cir/workbench/tests/test_circus_inputs.py:20: DeprecationWarning: Image.Image.getdata is deprecated and will be removed in Pillow 14 (2027-10-15). Use get_flattened_data instead.
+    assert all(pixel == (0, 0, 0) for pixel in black.getdata())
+
+workbench/tests/test_circus_inputs.py::test_staged_black_path_and_empty_text_cross_worker_seam
+  /home/heheboiz/data/cir/workbench/tests/test_circus_inputs.py:51: DeprecationWarning: Image.Image.getdata is deprecated and will be removed in Pillow 14 (2027-10-15). Use get_flattened_data instead.
+    assert all(pixel == (0, 0, 0) for pixel in black.getdata())
+
+workbench/tests/test_composition_image_identity.py::test_model_lock_serializes_processes
+workbench/tests/test_composition_image_identity.py::test_model_lock_assertion_fails_when_flock_is_noop
+  /home/heheboiz/.local/share/uv/python/cpython-3.12-linux-x86_64-gnu/lib/python3.12/multiprocessing/popen_fork.py:66: DeprecationWarning: This process (pid=2497116) is multi-threaded, use of fork() may lead to deadlocks in the child.
+    self.pid = os.fork()
+
+workbench/tests/test_e2e_release_chain.py: 1 warning
+workbench/tests/test_operator_contracts.py: 1 warning
+workbench/tests/test_pc_launcher.py: 1 warning
+workbench/tests/test_pc_readiness.py: 2 warnings
+workbench/tests/test_preparation_stages.py: 1 warning
+workbench/tests/test_ptha_mtst_preflight.py: 2 warnings
+workbench/tests/test_r19_tme_replay.py: 8 warnings
+workbench/tests/test_r20_shared_seams.py: 3 warnings
+workbench/tests/test_r23_cache_lifecycle.py: 1 warning
+workbench/tests/test_release_gate_scenarios.py: 2 warnings
+workbench/tests/test_standalone_operator_commands.py: 1 warning
+  /home/heheboiz/data/cir/workbench/envs/ctl312h/lib/python3.12/site-packages/huggingface_hub/file_download.py:949: FutureWarning: `resume_download` is deprecated and will be removed in version 1.0.0. Downloads always resume when possible. If you want to force a new download, use `force_download=True`.
+    warnings.warn(
+
+workbench/tests/test_limn_query_export_ranking.py::test_non_finite_similarity_check_is_defensive_and_documented_as_such
+  /home/heheboiz/data/cir/workbench/envs/ctl312h/lib/python3.12/site-packages/numpy/linalg/linalg.py:2582: RuntimeWarning: overflow encountered in multiply
+    s = (x.conj() * x).real
+
+workbench/tests/test_ptha_target_feature_contract.py::test_circat_boundary_projects_once_and_inference_consumes_projected_targets
+  /home/heheboiz/data/cir/workbench/replay/ptha_mtst.py:265: UserWarning: Converting a tensor with requires_grad=True to a scalar may lead to unexpected behavior.
+  Consider using tensor.detach() first. (Triggered internally at /__w/pytorch/pytorch/torch/csrc/autograd/generated/python_variable_methods.cpp:820.)
+    report["equivalence_vs_direct_projection_max_abs_diff"] = float(
+
+workbench/tests/test_r19_tme_replay.py::test_tme_preflight_checks_unverified_assets_against_registry_size_and_digest[EXISTS_UNVERIFIED_CHECKSUM-4-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-4-False]
+  /home/heheboiz/data/cir/workbench/tests/test_r19_tme_replay.py:109: UserWarning: Sparse invariant checks are implicitly disabled. Memory errors (e.g. SEGFAULT) will occur when operating on a sparse tensor which violates the invariants, but checks incur performance overhead. To silence this warning, explicitly opt in or out. See `torch.sparse.check_sparse_tensor_invariants.__doc__` for guidance.  (Triggered internally at /__w/pytorch/pytorch/aten/src/ATen/Context.cpp:916.)
+    features = torch.sparse_coo_tensor(
+
+workbench/tests/test_r19_tme_replay.py::test_tme_native_aggregate_runs_once_and_produces_complete_category_rows
+workbench/tests/test_r19_tme_replay.py::test_tme_refuses_partial_or_nonfinite_native_category_metrics[payload0]
+workbench/tests/test_r19_tme_replay.py::test_tme_refuses_partial_or_nonfinite_native_category_metrics[payload1]
+  /home/heheboiz/data/cir/workbench/envs/ctl312h/lib/python3.12/site-packages/torch/serialization.py:2263: UserWarning: Validating sparse tensor invariants because weights_only=True; this is an O(nnz) scan per sparse tensor and may be slow for large checkpoints.
+    torch._utils._validate_loaded_sparse_tensors(weights_only=weights_only)
+
+workbench/tests/test_r9_defect_regressions.py::test_the_pinned_processor_loads_without_root_bert_assets[airknow]
+  /home/heheboiz/data/cir/workbench/envs/ctl312h/lib/python3.12/site-packages/torch/jit/_script.py:1491: FutureWarning: `torch.jit.script` is deprecated. Please switch to `torch.compile` or `torch.export`.
+    warnings.warn(
+
+workbench/tests/test_r9_defect_regressions.py::test_the_pinned_processor_loads_without_root_bert_assets[airknow]
+  /home/heheboiz/data/cir/workbench/envs/ctl312h/lib/python3.12/site-packages/torch/jit/_script.py:1643: FutureWarning: `torch.jit.interface` is deprecated. Please use `torch.compile` instead.
+    warnings.warn(
+
+workbench/tests/test_r9_defect_regressions.py::test_the_pinned_processor_loads_without_root_bert_assets[airknow]
+  /home/heheboiz/data/cir/workbench/envs/ctl312h/lib/python3.12/site-packages/timm/models/hub.py:4: DeprecationWarning: Importing from timm.models.hub is deprecated, please import via timm.models
+    warnings.warn(f"Importing from {__name__} is deprecated, please import via timm.models", DeprecationWarning)
+
+workbench/tests/test_r9_defect_regressions.py::test_the_pinned_processor_loads_without_root_bert_assets[airknow]
+  /home/heheboiz/data/cir/workbench/third_party/AirKnow/lavis/common/utils.py:23: DeprecationWarning: 
+  Pyarrow will become a required dependency of pandas in the next major release of pandas (pandas 3.0),
+  (to allow more performant data types, such as the Arrow string type, and better interoperability with other libraries)
+  but was not found to be installed on your system.
+  If this would cause problems for you,
+  please provide us feedback at https://github.com/pandas-dev/pandas/issues/54466
+          
+    import pandas as pd
+
+workbench/tests/test_r9_defect_regressions.py::test_the_pinned_processor_loads_without_root_bert_assets[airknow]
+  /home/heheboiz/data/cir/workbench/envs/ctl312h/lib/python3.12/site-packages/timm/models/registry.py:4: DeprecationWarning: Importing from timm.models.registry is deprecated, please import via timm.models
+    warnings.warn(f"Importing from {__name__} is deprecated, please import via timm.models", DeprecationWarning)
+
+workbench/tests/test_r9_defect_regressions.py::test_the_pinned_processor_loads_without_root_bert_assets[airknow]
+  /home/heheboiz/data/cir/workbench/envs/ctl312h/lib/python3.12/site-packages/timm/models/layers/__init__.py:49: DeprecationWarning: Importing from timm.models.layers is deprecated, please import via timm.layers
+    warnings.warn(f"Importing from {__name__} is deprecated, please import via timm.layers", DeprecationWarning)
+
+workbench/tests/test_r9_defect_regressions.py::test_the_pinned_processor_loads_without_root_bert_assets[airknow]
+  /home/heheboiz/data/cir/workbench/envs/ctl312h/lib/python3.12/site-packages/timm/models/helpers.py:7: DeprecationWarning: Importing from timm.models.helpers is deprecated, please import via timm.models
+    warnings.warn(f"Importing from {__name__} is deprecated, please import via timm.models", DeprecationWarning)
+
+workbench/tests/test_r9_defect_regressions.py::test_the_pinned_processor_loads_without_root_bert_assets[airknow]
+workbench/tests/test_r9_defect_regressions.py::test_the_pinned_processor_loads_without_root_bert_assets[conesep]
+workbench/tests/test_r9_defect_regressions.py::test_the_pinned_processor_loads_without_root_bert_assets[habit]
+workbench/tests/test_r9_defect_regressions.py::test_the_pinned_processor_loads_without_root_bert_assets[hint]
+workbench/tests/test_r9_defect_regressions.py::test_the_pinned_processor_loads_without_root_bert_assets[intent]
+workbench/tests/test_r9_defect_regressions.py::test_the_integrated_loader_returns_the_native_processor
+  /home/heheboiz/data/cir/workbench/envs/ctl312h/lib/python3.12/site-packages/transformers/utils/generic.py:309: FutureWarning: `torch.utils._pytree._register_pytree_node` is deprecated. Please use `torch.utils._pytree.register_pytree_node` instead.
+    _torch_pytree._register_pytree_node(
+
+workbench/tests/test_release_blocker_interpreter.py::test_disk_contradiction_is_never_ready
+workbench/tests/test_release_blocker_interpreter.py::test_an_unreadable_installed_version_never_confirms_a_probe
+workbench/tests/test_release_blocker_interpreter.py::test_directory_egg_info_without_pkg_info_does_not_invent_phantom_row
+  /home/heheboiz/data/cir/workbench/backend/runtime.py:735: DeprecationWarning: Implicit None on return values is deprecated and will raise KeyErrors.
+    name = metadata["Name"]
+
+workbench/tests/test_release_blocker_interpreter.py::test_disk_contradiction_is_never_ready
+workbench/tests/test_release_blocker_interpreter.py::test_an_unreadable_installed_version_never_confirms_a_probe
+workbench/tests/test_release_blocker_interpreter.py::test_directory_egg_info_without_pkg_info_does_not_invent_phantom_row
+  /home/heheboiz/data/cir/workbench/backend/runtime.py:736: DeprecationWarning: Implicit None on return values is deprecated and will raise KeyErrors.
+    version = metadata["Version"]
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED workbench/tests/test_circus_adapters_blip.py::test_resident_worker_reuse_and_cleanup[workbench.composition.model_conesep-conesep] - AttributeError: 'Adapter' object has no attribute 'batch_size'
+FAILED workbench/tests/test_circus_adapters_blip.py::test_resident_worker_reuse_and_cleanup[workbench.composition.model_ptha_mtst-ptha_mtst] - AttributeError: 'Adapter' object has no attribute 'batch_size'
+FAILED workbench/tests/test_circus_adapters_blip.py::test_resident_worker_failure_uses_shared_error_and_stays_failed[workbench.composition.model_conesep-conesep] - AttributeError: 'Adapter' object has no attribute 'batch_size'
+FAILED workbench/tests/test_circus_adapters_blip.py::test_resident_worker_failure_uses_shared_error_and_stays_failed[workbench.composition.model_ptha_mtst-ptha_mtst] - AttributeError: 'Adapter' object has no attribute 'batch_size'
+FAILED workbench/tests/test_circus_cli.py::test_cli_3d_full_gallery_resume_and_gallery_invalidation - AssertionError: assert 'REUSED' == 'COMPLETED'
+  
+  - COMPLETED
+  + REUSED
+FAILED workbench/tests/test_circus_tme_lifecycle.py::test_encoder_and_limn_failed_child_latch_and_preserve_log[encoder] - RuntimeError: execution environment not verified [UNCONFIGURED/UNCONFIGURED]: WORKBENCH_ENCODER_PYTHON=None (WORKBENCH_ENCODER_PYTHON not set)
+FAILED workbench/tests/test_circus_tme_lifecycle.py::test_encoder_and_limn_failed_child_latch_and_preserve_log[limn] - RuntimeError: execution environment not verified [UNCONFIGURED/UNCONFIGURED]: WORKBENCH_LIMN_PYTHON=None (WORKBENCH_LIMN_PYTHON not set)
+FAILED workbench/tests/test_circus_tme_precision.py::test_worker_skips_empty_stdin_lines - FileNotFoundError: [Errno 2] No such file or directory: '/tmp/sweep_basetemp_36ae9e2/test_worker_skips_empty_stdin_0/output.npy'
+FAILED workbench/tests/test_f05_f08_f09_verification.py::test_f08_dcnet_config_data_dir_resolution - AssertionError: assert PosixPath('/home/heheboiz/data/cir/data/FashionIQ') == ((PosixPath('/home/heheboiz/data/cir/workbench/third_party/DCNet') / 'dataset') / 'fashioniq')
+FAILED workbench/tests/test_handoff_commands.py::test_no_release_document_points_at_a_superseded_source_sha - AssertionError: TESTED_SOURCE_SHA 7a58ce64a82b83bb126992fac5b9f784ffe97dd9 does not contain the production code currently on disk: production files changed after the revision the release documents name as tested. Advance the recorded source to a revision that includes them, or the handoff installs code that was never gated.
+assert 1 == 0
+ +  where 1 = CompletedProcess(args=['git', 'diff', '--quiet', '7a58ce64a82b83bb126992fac5b9f784ffe97dd9', '--', '.', ':(exclude)workbench/docs', ':(exclude)workbench/tests'], returncode=1, stdout='', stderr='').returncode
+FAILED workbench/tests/test_release_blocker_gpu_records.py::test_defect_b_g_with_no_target_gpu_verdict_is_pending_not_pass - AssertionError: ('== J1 clean startup: backend, frontend, all 16 models, no fake results ==
+    PENDING J1 boot state UNOBSERVED: no li...rget0/artifacts/offline_report.json verdict=RELEASE_BLOCKED
+  RELEASE VERIFIER: FAILED (verdict RELEASE_BLOCKED)
+  ', '')
+assert 1 == 0
+ +  where 1 = CompletedProcess(args=['bash', '/home/heheboiz/data/cir/workbench/docker/release_verify.sh', '--offline', '--report', ...rtifacts/offline_report.json verdict=RELEASE_BLOCKED\nRELEASE VERIFIER: FAILED (verdict RELEASE_BLOCKED)\n', stderr='').returncode
+FAILED workbench/tests/test_release_blocker_gpu_records.py::test_release_verify_documented_invocations_produce_parseable_report[<lambda>0] - AssertionError: Invocation failed: args=['--offline', '--report', '/tmp/sweep_basetemp_36ae9e2/test_release_verify_documented0/custom_report.json']
+  stdout:
+  == J1 clean startup: backend, frontend, all 16 models, no fake results ==
+    PENDING J1 boot state UNOBSERVED: no live stack (run compose up, or drop --offline for static checks)
+  == J2 volume mounts resolve to the intended host directories ==
+    PENDING J2 offline mode
+  == J3 preparation is writable inside the container, canonical inputs unchanged ==
+    PENDING J3 offline mode
+  == J4 pilot launcher: stdin JSON parse + complete bundle selection ==
+    PASS J4 stdin parse verified; bundle preference in run.sh (live API check skipped)
+  == J5 GPU contract: fail-closed without a verified capability ==
+    PASS J5 CUDA-declaring model is not GPU-ready without a probe (tier=UNCONFIGURED)
+  == J6 sm_120 adaptation changes the verified requirements, not just metadata ==
+    PASS J6 historical torch===1.12.1 -> adapted torch===2.7.1; unknown targets refused
+  == J7 complete-report rule via the synthetic evaluator (marked synthetic) ==
+    PASS J7 mock data refused; incomplete evaluation refused; 3-category bundle enforced; gate stays fail-closed
+  == J8 job lifecycle statuses are the backend enum ==
+    PENDING J8 no live stack
+  == J9 scientific gate cases incl. INCOMPLETE_METRIC_EVIDENCE ==
+    PASS J9 missing->incomplete, nan->invalid-alert, measured deviation still flagged
+  == J10 frontend: exactly two warning labels, built bundle present ==
+    FAIL J10 built bundle lacks audit-threshold copy; 
+  == J11 artifacts persist across a container restart (isolated disposable container) ==
+    PENDING J11 offline mode
+  == J12 resource failure: missing checkpoint recorded clearly, others intact ==
+    PASS J12 missing checkpoint -> blocked with named reason: raw benchmark input missing: /tmp/tmpvxcvrpqz/data/captions/...
+  
+  J1   PENDING  boot state UNOBSERVED: no live stack (run compose up, or drop --offline for static checks)
+  J2   PENDING  offline mode
+  J3   PENDING  offline mode
+  J4   PASS     stdin parse verified; bundle preference in run.sh (live API check skipped)
+  J5   PASS     CUDA-declaring model is not GPU-ready without a probe (tier=UNCONFIGURED)
+  J6   PASS     historical torch===1.12.1 -> adapted torch===2.7.1; unknown targets refused
+  J7   PASS     mock data refused; incomplete evaluation refused; 3-category bundle enforced; gate stays fail-closed
+  J8   PENDING  no live stack
+  J9   PASS     missing->incomplete, nan->invalid-alert, measured deviation still flagged
+  J10  FAIL     built bundle lacks audit-threshold copy; 
+  J11  PENDING  offline mode
+  J12  PASS     missing checkpoint -> blocked with named reason: raw benchmark input missing: /tmp/tmpvxcvrpqz/data/captions/...
+  
+  Acceptance dimensions:
+    STATIC_SOURCE        FAIL
+    DEPLOYMENT           PENDING
+    CONFIGURATION        PENDING
+    MODEL_ENVIRONMENT    PASS
+    OPERATIONS           PENDING
+    GPU_RUNTIME          PENDING
+    MODEL_INFERENCE      PENDING
+    MODEL_EVALUATION     PENDING
+    SCIENTIFIC_OUTPUT    PENDING
+    TARGET_BINDING       PASS
+  report written: /tmp/sweep_basetemp_36ae9e2/test_release_verify_documented0/custom_report.json verdict=RELEASE_BLOCKED
+  RELEASE VERIFIER: FAILED (verdict RELEASE_BLOCKED)
+  
+  stderr:
+  [WARN] capability record(s) that are not verified evidence: 001bafb5448d035275cea0033a7c0ce035b6a27da69f964c9977afbce47f52d9.json: probe_source=override is a synthetic test probe, not a real probe; 01d432846e2a813719ba7aaeca68f1907152b5062fd495a916bdf4b3149e2ed2.json: probe_source=override is a synthetic test probe, not a real probe; 0208a632ab2f43982be6cba1af8cc26bb86baf9b3619836deed3fc8434c751bb.json: probe_source=override is a synthetic test probe, not a real probe; 0216a3a855423021f269d900d300eb4517743ff4ab84a372f6cb1629263d141e.json: probe_source=override is a synthetic test probe, not a real probe; 02ca495724731725dc39627177dfc413074aaec557c8b2d51e672735a39f36d7.json: probe_source=override is a synthetic test probe, not a real probe; 0309e008302e5f0eb1ac8a6acc110e48ceee8af1ac78662156fe85e06b468148.json: probe_source=override is a synthetic test probe, not a real probe; 03ad6e72c2c580410b9d3bf542b76198e6ed3f1cd6fe662a6ab62f4d82aea471.json: probe_source=override is a synthetic test probe, not a real probe; 03bf5d58cb93e1471f1712083b876049e6f78506b60511db403b53d3f38f4d16.json: the record is not signed with this deployment's operator key; 03f37da70e786814e29303b4af939e36cfe161dc81f58b178de1c076193df030.json: probe_source=override is a synthetic test probe, not a real probe; 044402521745de65af6f7a7ad098837e0b2fe53ba2f12f86f0836adc6df3813c.json: probe_source=override is a synthetic test probe, not a real probe; ... and 750 more
+  
+assert 1 == 0
+ +  where 1 = CompletedProcess(args=['bash', '/tmp/sweep_basetemp_36ae9e2/test_release_verify_documented0/release_verify.sh', '--off...ba2f12f86f0836adc6df3813c.json: probe_source=override is a synthetic test probe, not a real probe; ... and 750 more\n").returncode
+FAILED workbench/tests/test_release_blocker_gpu_records.py::test_release_verify_documented_invocations_produce_parseable_report[<lambda>1] - AssertionError: Invocation failed: args=['--report', '/tmp/sweep_basetemp_36ae9e2/test_release_verify_documented1/custom_report.json', '--offline']
+  stdout:
+  == J1 clean startup: backend, frontend, all 16 models, no fake results ==
+    PENDING J1 boot state UNOBSERVED: no live stack (run compose up, or drop --offline for static checks)
+  == J2 volume mounts resolve to the intended host directories ==
+    PENDING J2 offline mode
+  == J3 preparation is writable inside the container, canonical inputs unchanged ==
+    PENDING J3 offline mode
+  == J4 pilot launcher: stdin JSON parse + complete bundle selection ==
+    PASS J4 stdin parse verified; bundle preference in run.sh (live API check skipped)
+  == J5 GPU contract: fail-closed without a verified capability ==
+    PASS J5 CUDA-declaring model is not GPU-ready without a probe (tier=UNCONFIGURED)
+  == J6 sm_120 adaptation changes the verified requirements, not just metadata ==
+    PASS J6 historical torch===1.12.1 -> adapted torch===2.7.1; unknown targets refused
+  == J7 complete-report rule via the synthetic evaluator (marked synthetic) ==
+    PASS J7 mock data refused; incomplete evaluation refused; 3-category bundle enforced; gate stays fail-closed
+  == J8 job lifecycle statuses are the backend enum ==
+    PENDING J8 no live stack
+  == J9 scientific gate cases incl. INCOMPLETE_METRIC_EVIDENCE ==
+    PASS J9 missing->incomplete, nan->invalid-alert, measured deviation still flagged
+  == J10 frontend: exactly two warning labels, built bundle present ==
+    FAIL J10 built bundle lacks audit-threshold copy; 
+  == J11 artifacts persist across a container restart (isolated disposable container) ==
+    PENDING J11 offline mode
+  == J12 resource failure: missing checkpoint recorded clearly, others intact ==
+    PASS J12 missing checkpoint -> blocked with named reason: raw benchmark input missing: /tmp/tmpeaxsvdyc/data/captions/...
+  
+  J1   PENDING  boot state UNOBSERVED: no live stack (run compose up, or drop --offline for static checks)
+  J2   PENDING  offline mode
+  J3   PENDING  offline mode
+  J4   PASS     stdin parse verified; bundle preference in run.sh (live API check skipped)
+  J5   PASS     CUDA-declaring model is not GPU-ready without a probe (tier=UNCONFIGURED)
+  J6   PASS     historical torch===1.12.1 -> adapted torch===2.7.1; unknown targets refused
+  J7   PASS     mock data refused; incomplete evaluation refused; 3-category bundle enforced; gate stays fail-closed
+  J8   PENDING  no live stack
+  J9   PASS     missing->incomplete, nan->invalid-alert, measured deviation still flagged
+  J10  FAIL     built bundle lacks audit-threshold copy; 
+  J11  PENDING  offline mode
+  J12  PASS     missing checkpoint -> blocked with named reason: raw benchmark input missing: /tmp/tmpeaxsvdyc/data/captions/...
+  
+  Acceptance dimensions:
+    STATIC_SOURCE        FAIL
+    DEPLOYMENT           PENDING
+    CONFIGURATION        PENDING
+    MODEL_ENVIRONMENT    PASS
+    OPERATIONS           PENDING
+    GPU_RUNTIME          PENDING
+    MODEL_INFERENCE      PENDING
+    MODEL_EVALUATION     PENDING
+    SCIENTIFIC_OUTPUT    PENDING
+    TARGET_BINDING       PASS
+  report written: /tmp/sweep_basetemp_36ae9e2/test_release_verify_documented1/custom_report.json verdict=RELEASE_BLOCKED
+  RELEASE VERIFIER: FAILED (verdict RELEASE_BLOCKED)
+  
+  stderr:
+  [WARN] capability record(s) that are not verified evidence: 001bafb5448d035275cea0033a7c0ce035b6a27da69f964c9977afbce47f52d9.json: probe_source=override is a synthetic test probe, not a real probe; 01d432846e2a813719ba7aaeca68f1907152b5062fd495a916bdf4b3149e2ed2.json: probe_source=override is a synthetic test probe, not a real probe; 0208a632ab2f43982be6cba1af8cc26bb86baf9b3619836deed3fc8434c751bb.json: probe_source=override is a synthetic test probe, not a real probe; 0216a3a855423021f269d900d300eb4517743ff4ab84a372f6cb1629263d141e.json: probe_source=override is a synthetic test probe, not a real probe; 02ca495724731725dc39627177dfc413074aaec557c8b2d51e672735a39f36d7.json: probe_source=override is a synthetic test probe, not a real probe; 0309e008302e5f0eb1ac8a6acc110e48ceee8af1ac78662156fe85e06b468148.json: probe_source=override is a synthetic test probe, not a real probe; 03ad6e72c2c580410b9d3bf542b76198e6ed3f1cd6fe662a6ab62f4d82aea471.json: probe_source=override is a synthetic test probe, not a real probe; 03bf5d58cb93e1471f1712083b876049e6f78506b60511db403b53d3f38f4d16.json: the record is not signed with this deployment's operator key; 03f37da70e786814e29303b4af939e36cfe161dc81f58b178de1c076193df030.json: probe_source=override is a synthetic test probe, not a real probe; 044402521745de65af6f7a7ad098837e0b2fe53ba2f12f86f0836adc6df3813c.json: probe_source=override is a synthetic test probe, not a real probe; ... and 750 more
+  
+assert 1 == 0
+ +  where 1 = CompletedProcess(args=['bash', '/tmp/sweep_basetemp_36ae9e2/test_release_verify_documented1/release_verify.sh', '--rep...ba2f12f86f0836adc6df3813c.json: probe_source=override is a synthetic test probe, not a real probe; ... and 750 more\n").returncode
+FAILED workbench/tests/test_release_blocker_gpu_records.py::test_release_verify_documented_invocations_produce_parseable_report[<lambda>2] - AssertionError: Invocation failed: args=['--offline', '--base', 'http://127.0.0.1:8000', '--report', '/tmp/sweep_basetemp_36ae9e2/test_release_verify_documented2/custom_report.json']
+  stdout:
+  == J1 clean startup: backend, frontend, all 16 models, no fake results ==
+    PENDING J1 boot state UNOBSERVED: no live stack (run compose up, or drop --offline for static checks)
+  == J2 volume mounts resolve to the intended host directories ==
+    PENDING J2 offline mode
+  == J3 preparation is writable inside the container, canonical inputs unchanged ==
+    PENDING J3 offline mode
+  == J4 pilot launcher: stdin JSON parse + complete bundle selection ==
+    PASS J4 stdin parse verified; bundle preference in run.sh (live API check skipped)
+  == J5 GPU contract: fail-closed without a verified capability ==
+    PASS J5 CUDA-declaring model is not GPU-ready without a probe (tier=UNCONFIGURED)
+  == J6 sm_120 adaptation changes the verified requirements, not just metadata ==
+    PASS J6 historical torch===1.12.1 -> adapted torch===2.7.1; unknown targets refused
+  == J7 complete-report rule via the synthetic evaluator (marked synthetic) ==
+    PASS J7 mock data refused; incomplete evaluation refused; 3-category bundle enforced; gate stays fail-closed
+  == J8 job lifecycle statuses are the backend enum ==
+    PENDING J8 no live stack
+  == J9 scientific gate cases incl. INCOMPLETE_METRIC_EVIDENCE ==
+    PASS J9 missing->incomplete, nan->invalid-alert, measured deviation still flagged
+  == J10 frontend: exactly two warning labels, built bundle present ==
+    FAIL J10 built bundle lacks audit-threshold copy; 
+  == J11 artifacts persist across a container restart (isolated disposable container) ==
+    PENDING J11 offline mode
+  == J12 resource failure: missing checkpoint recorded clearly, others intact ==
+    PASS J12 missing checkpoint -> blocked with named reason: raw benchmark input missing: /tmp/tmp0pgfnaxo/data/captions/...
+  
+  J1   PENDING  boot state UNOBSERVED: no live stack (run compose up, or drop --offline for static checks)
+  J2   PENDING  offline mode
+  J3   PENDING  offline mode
+  J4   PASS     stdin parse verified; bundle preference in run.sh (live API check skipped)
+  J5   PASS     CUDA-declaring model is not GPU-ready without a probe (tier=UNCONFIGURED)
+  J6   PASS     historical torch===1.12.1 -> adapted torch===2.7.1; unknown targets refused
+  J7   PASS     mock data refused; incomplete evaluation refused; 3-category bundle enforced; gate stays fail-closed
+  J8   PENDING  no live stack
+  J9   PASS     missing->incomplete, nan->invalid-alert, measured deviation still flagged
+  J10  FAIL     built bundle lacks audit-threshold copy; 
+  J11  PENDING  offline mode
+  J12  PASS     missing checkpoint -> blocked with named reason: raw benchmark input missing: /tmp/tmp0pgfnaxo/data/captions/...
+  
+  Acceptance dimensions:
+    STATIC_SOURCE        FAIL
+    DEPLOYMENT           PENDING
+    CONFIGURATION        PENDING
+    MODEL_ENVIRONMENT    PASS
+    OPERATIONS           PENDING
+    GPU_RUNTIME          PENDING
+    MODEL_INFERENCE      PENDING
+    MODEL_EVALUATION     PENDING
+    SCIENTIFIC_OUTPUT    PENDING
+    TARGET_BINDING       PASS
+  report written: /tmp/sweep_basetemp_36ae9e2/test_release_verify_documented2/custom_report.json verdict=RELEASE_BLOCKED
+  RELEASE VERIFIER: FAILED (verdict RELEASE_BLOCKED)
+  
+  stderr:
+  [WARN] capability record(s) that are not verified evidence: 001bafb5448d035275cea0033a7c0ce035b6a27da69f964c9977afbce47f52d9.json: probe_source=override is a synthetic test probe, not a real probe; 01d432846e2a813719ba7aaeca68f1907152b5062fd495a916bdf4b3149e2ed2.json: probe_source=override is a synthetic test probe, not a real probe; 0208a632ab2f43982be6cba1af8cc26bb86baf9b3619836deed3fc8434c751bb.json: probe_source=override is a synthetic test probe, not a real probe; 0216a3a855423021f269d900d300eb4517743ff4ab84a372f6cb1629263d141e.json: probe_source=override is a synthetic test probe, not a real probe; 02ca495724731725dc39627177dfc413074aaec557c8b2d51e672735a39f36d7.json: probe_source=override is a synthetic test probe, not a real probe; 0309e008302e5f0eb1ac8a6acc110e48ceee8af1ac78662156fe85e06b468148.json: probe_source=override is a synthetic test probe, not a real probe; 03ad6e72c2c580410b9d3bf542b76198e6ed3f1cd6fe662a6ab62f4d82aea471.json: probe_source=override is a synthetic test probe, not a real probe; 03bf5d58cb93e1471f1712083b876049e6f78506b60511db403b53d3f38f4d16.json: the record is not signed with this deployment's operator key; 03f37da70e786814e29303b4af939e36cfe161dc81f58b178de1c076193df030.json: probe_source=override is a synthetic test probe, not a real probe; 044402521745de65af6f7a7ad098837e0b2fe53ba2f12f86f0836adc6df3813c.json: probe_source=override is a synthetic test probe, not a real probe; ... and 750 more
+  
+assert 1 == 0
+ +  where 1 = CompletedProcess(args=['bash', '/tmp/sweep_basetemp_36ae9e2/test_release_verify_documented2/release_verify.sh', '--off...ba2f12f86f0836adc6df3813c.json: probe_source=override is a synthetic test probe, not a real probe; ... and 750 more\n").returncode
+FAILED workbench/tests/test_release_blocker_gpu_records.py::test_release_verify_documented_invocations_produce_parseable_report[<lambda>3] - AssertionError: Invocation failed: args=['--base', 'http://127.0.0.1:8000', '--report', '/tmp/sweep_basetemp_36ae9e2/test_release_verify_documented3/custom_report.json', '--offline']
+  stdout:
+  == J1 clean startup: backend, frontend, all 16 models, no fake results ==
+    PENDING J1 boot state UNOBSERVED: no live stack (run compose up, or drop --offline for static checks)
+  == J2 volume mounts resolve to the intended host directories ==
+    PENDING J2 offline mode
+  == J3 preparation is writable inside the container, canonical inputs unchanged ==
+    PENDING J3 offline mode
+  == J4 pilot launcher: stdin JSON parse + complete bundle selection ==
+    PASS J4 stdin parse verified; bundle preference in run.sh (live API check skipped)
+  == J5 GPU contract: fail-closed without a verified capability ==
+    PASS J5 CUDA-declaring model is not GPU-ready without a probe (tier=UNCONFIGURED)
+  == J6 sm_120 adaptation changes the verified requirements, not just metadata ==
+    PASS J6 historical torch===1.12.1 -> adapted torch===2.7.1; unknown targets refused
+  == J7 complete-report rule via the synthetic evaluator (marked synthetic) ==
+    PASS J7 mock data refused; incomplete evaluation refused; 3-category bundle enforced; gate stays fail-closed
+  == J8 job lifecycle statuses are the backend enum ==
+    PENDING J8 no live stack
+  == J9 scientific gate cases incl. INCOMPLETE_METRIC_EVIDENCE ==
+    PASS J9 missing->incomplete, nan->invalid-alert, measured deviation still flagged
+  == J10 frontend: exactly two warning labels, built bundle present ==
+    FAIL J10 built bundle lacks audit-threshold copy; 
+  == J11 artifacts persist across a container restart (isolated disposable container) ==
+    PENDING J11 offline mode
+  == J12 resource failure: missing checkpoint recorded clearly, others intact ==
+    PASS J12 missing checkpoint -> blocked with named reason: raw benchmark input missing: /tmp/tmp7qjbd9h1/data/captions/...
+  
+  J1   PENDING  boot state UNOBSERVED: no live stack (run compose up, or drop --offline for static checks)
+  J2   PENDING  offline mode
+  J3   PENDING  offline mode
+  J4   PASS     stdin parse verified; bundle preference in run.sh (live API check skipped)
+  J5   PASS     CUDA-declaring model is not GPU-ready without a probe (tier=UNCONFIGURED)
+  J6   PASS     historical torch===1.12.1 -> adapted torch===2.7.1; unknown targets refused
+  J7   PASS     mock data refused; incomplete evaluation refused; 3-category bundle enforced; gate stays fail-closed
+  J8   PENDING  no live stack
+  J9   PASS     missing->incomplete, nan->invalid-alert, measured deviation still flagged
+  J10  FAIL     built bundle lacks audit-threshold copy; 
+  J11  PENDING  offline mode
+  J12  PASS     missing checkpoint -> blocked with named reason: raw benchmark input missing: /tmp/tmp7qjbd9h1/data/captions/...
+  
+  Acceptance dimensions:
+    STATIC_SOURCE        FAIL
+    DEPLOYMENT           PENDING
+    CONFIGURATION        PENDING
+    MODEL_ENVIRONMENT    PASS
+    OPERATIONS           PENDING
+    GPU_RUNTIME          PENDING
+    MODEL_INFERENCE      PENDING
+    MODEL_EVALUATION     PENDING
+    SCIENTIFIC_OUTPUT    PENDING
+    TARGET_BINDING       PASS
+  report written: /tmp/sweep_basetemp_36ae9e2/test_release_verify_documented3/custom_report.json verdict=RELEASE_BLOCKED
+  RELEASE VERIFIER: FAILED (verdict RELEASE_BLOCKED)
+  
+  stderr:
+  [WARN] capability record(s) that are not verified evidence: 001bafb5448d035275cea0033a7c0ce035b6a27da69f964c9977afbce47f52d9.json: probe_source=override is a synthetic test probe, not a real probe; 01d432846e2a813719ba7aaeca68f1907152b5062fd495a916bdf4b3149e2ed2.json: probe_source=override is a synthetic test probe, not a real probe; 0208a632ab2f43982be6cba1af8cc26bb86baf9b3619836deed3fc8434c751bb.json: probe_source=override is a synthetic test probe, not a real probe; 0216a3a855423021f269d900d300eb4517743ff4ab84a372f6cb1629263d141e.json: probe_source=override is a synthetic test probe, not a real probe; 02ca495724731725dc39627177dfc413074aaec557c8b2d51e672735a39f36d7.json: probe_source=override is a synthetic test probe, not a real probe; 0309e008302e5f0eb1ac8a6acc110e48ceee8af1ac78662156fe85e06b468148.json: probe_source=override is a synthetic test probe, not a real probe; 03ad6e72c2c580410b9d3bf542b76198e6ed3f1cd6fe662a6ab62f4d82aea471.json: probe_source=override is a synthetic test probe, not a real probe; 03bf5d58cb93e1471f1712083b876049e6f78506b60511db403b53d3f38f4d16.json: the record is not signed with this deployment's operator key; 03f37da70e786814e29303b4af939e36cfe161dc81f58b178de1c076193df030.json: probe_source=override is a synthetic test probe, not a real probe; 044402521745de65af6f7a7ad098837e0b2fe53ba2f12f86f0836adc6df3813c.json: probe_source=override is a synthetic test probe, not a real probe; ... and 750 more
+  
+assert 1 == 0
+ +  where 1 = CompletedProcess(args=['bash', '/tmp/sweep_basetemp_36ae9e2/test_release_verify_documented3/release_verify.sh', '--bas...ba2f12f86f0836adc6df3813c.json: probe_source=override is a synthetic test probe, not a real probe; ... and 750 more\n").returncode
+FAILED workbench/tests/test_release_blocker_gpu_records.py::test_release_verify_documented_invocations_produce_parseable_report[<lambda>4] - AssertionError: Invocation failed: args=['--offline']
+  stdout:
+  == J1 clean startup: backend, frontend, all 16 models, no fake results ==
+    PENDING J1 boot state UNOBSERVED: no live stack (run compose up, or drop --offline for static checks)
+  == J2 volume mounts resolve to the intended host directories ==
+    PENDING J2 offline mode
+  == J3 preparation is writable inside the container, canonical inputs unchanged ==
+    PENDING J3 offline mode
+  == J4 pilot launcher: stdin JSON parse + complete bundle selection ==
+    PASS J4 stdin parse verified; bundle preference in run.sh (live API check skipped)
+  == J5 GPU contract: fail-closed without a verified capability ==
+    PASS J5 CUDA-declaring model is not GPU-ready without a probe (tier=UNCONFIGURED)
+  == J6 sm_120 adaptation changes the verified requirements, not just metadata ==
+    PASS J6 historical torch===1.12.1 -> adapted torch===2.7.1; unknown targets refused
+  == J7 complete-report rule via the synthetic evaluator (marked synthetic) ==
+    PASS J7 mock data refused; incomplete evaluation refused; 3-category bundle enforced; gate stays fail-closed
+  == J8 job lifecycle statuses are the backend enum ==
+    PENDING J8 no live stack
+  == J9 scientific gate cases incl. INCOMPLETE_METRIC_EVIDENCE ==
+    PASS J9 missing->incomplete, nan->invalid-alert, measured deviation still flagged
+  == J10 frontend: exactly two warning labels, built bundle present ==
+    FAIL J10 built bundle lacks audit-threshold copy; 
+  == J11 artifacts persist across a container restart (isolated disposable container) ==
+    PENDING J11 offline mode
+  == J12 resource failure: missing checkpoint recorded clearly, others intact ==
+    PASS J12 missing checkpoint -> blocked with named reason: raw benchmark input missing: /tmp/tmp4u2pq6mq/data/captions/...
+  
+  J1   PENDING  boot state UNOBSERVED: no live stack (run compose up, or drop --offline for static checks)
+  J2   PENDING  offline mode
+  J3   PENDING  offline mode
+  J4   PASS     stdin parse verified; bundle preference in run.sh (live API check skipped)
+  J5   PASS     CUDA-declaring model is not GPU-ready without a probe (tier=UNCONFIGURED)
+  J6   PASS     historical torch===1.12.1 -> adapted torch===2.7.1; unknown targets refused
+  J7   PASS     mock data refused; incomplete evaluation refused; 3-category bundle enforced; gate stays fail-closed
+  J8   PENDING  no live stack
+  J9   PASS     missing->incomplete, nan->invalid-alert, measured deviation still flagged
+  J10  FAIL     built bundle lacks audit-threshold copy; 
+  J11  PENDING  offline mode
+  J12  PASS     missing checkpoint -> blocked with named reason: raw benchmark input missing: /tmp/tmp4u2pq6mq/data/captions/...
+  
+  Acceptance dimensions:
+    STATIC_SOURCE        FAIL
+    DEPLOYMENT           PENDING
+    CONFIGURATION        PENDING
+    MODEL_ENVIRONMENT    PASS
+    OPERATIONS           PENDING
+    GPU_RUNTIME          PENDING
+    MODEL_INFERENCE      PENDING
+    MODEL_EVALUATION     PENDING
+    SCIENTIFIC_OUTPUT    PENDING
+    TARGET_BINDING       PASS
+  report written: /tmp/sweep_basetemp_36ae9e2/test_release_verify_documented4/release_verify_report.json verdict=RELEASE_BLOCKED
+  RELEASE VERIFIER: FAILED (verdict RELEASE_BLOCKED)
+  
+  stderr:
+  [WARN] capability record(s) that are not verified evidence: 001bafb5448d035275cea0033a7c0ce035b6a27da69f964c9977afbce47f52d9.json: probe_source=override is a synthetic test probe, not a real probe; 01d432846e2a813719ba7aaeca68f1907152b5062fd495a916bdf4b3149e2ed2.json: probe_source=override is a synthetic test probe, not a real probe; 0208a632ab2f43982be6cba1af8cc26bb86baf9b3619836deed3fc8434c751bb.json: probe_source=override is a synthetic test probe, not a real probe; 0216a3a855423021f269d900d300eb4517743ff4ab84a372f6cb1629263d141e.json: probe_source=override is a synthetic test probe, not a real probe; 02ca495724731725dc39627177dfc413074aaec557c8b2d51e672735a39f36d7.json: probe_source=override is a synthetic test probe, not a real probe; 0309e008302e5f0eb1ac8a6acc110e48ceee8af1ac78662156fe85e06b468148.json: probe_source=override is a synthetic test probe, not a real probe; 03ad6e72c2c580410b9d3bf542b76198e6ed3f1cd6fe662a6ab62f4d82aea471.json: probe_source=override is a synthetic test probe, not a real probe; 03bf5d58cb93e1471f1712083b876049e6f78506b60511db403b53d3f38f4d16.json: the record is not signed with this deployment's operator key; 03f37da70e786814e29303b4af939e36cfe161dc81f58b178de1c076193df030.json: probe_source=override is a synthetic test probe, not a real probe; 044402521745de65af6f7a7ad098837e0b2fe53ba2f12f86f0836adc6df3813c.json: probe_source=override is a synthetic test probe, not a real probe; ... and 750 more
+  
+assert 1 == 0
+ +  where 1 = CompletedProcess(args=['bash', '/tmp/sweep_basetemp_36ae9e2/test_release_verify_documented4/release_verify.sh', '--off...ba2f12f86f0836adc6df3813c.json: probe_source=override is a synthetic test probe, not a real probe; ... and 750 more\n").returncode
+FAILED workbench/tests/test_release_blocker_gpu_records.py::test_offline_verdict_names_deployment_reason - AssertionError: ('== J1 clean startup: backend, frontend, all 16 models, no fake results ==
+    PENDING J1 boot state UNOBSERVED: no li...ba2f12f86f0836adc6df3813c.json: probe_source=override is a synthetic test probe, not a real probe; ... and 750 more
+  ')
+assert 1 == 0
+ +  where 1 = CompletedProcess(args=['bash', '/home/heheboiz/data/cir/workbench/docker/release_verify.sh', '--offline', '--report', ...ba2f12f86f0836adc6df3813c.json: probe_source=override is a synthetic test probe, not a real probe; ... and 750 more\n").returncode
+FAILED workbench/tests/test_standalone_operator_commands.py::test_prepare_model_executes_only_declared_recipe_steps - AssertionError: ('[MANUAL] dcnet: policy=AUTHOR_ARTIFACT_PREFERRED deterministic=NONDETERMINISTIC_WITHOUT_AUTHOR_ARTIFACT
+    required ...tee image(s) to 256px into /tmp/sweep_basetemp_36ae9e2/test_prepare_model_executes_on0/FashionIQ/resized_images
+  ', '')
+assert 1 == 0
+18 failed, 2600 passed, 47 skipped, 290 warnings in 3647.11s (1:00:47)

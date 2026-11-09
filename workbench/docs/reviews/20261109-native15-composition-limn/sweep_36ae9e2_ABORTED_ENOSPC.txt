@@ -1,0 +1,138 @@
+ABORTED SWEEP — INVALID, NOT A RESULT
+=====================================
+revision      : 36ae9e215ad81960d7af90bd8a5edcf598b5b206
+launched      : 2026-11-09 23:16:39 +07:00
+ended         : 2026-11-09 23:31:37 +07:00
+duration      : ~14m58s (898 s)
+command       : python -m pytest workbench/tests -q -p no:cacheprovider -rfE --tb=no
+interpreter   : workbench/envs/ctl312h/bin/python (CPython 3.12)
+
+STATUS: INVALID — root filesystem hit ENOSPC during the run (2.4 G free at failure).
+
+984 tests were recorded as E (error), not failure. Those errors were environmental:
+fixtures could not create tmp_path trees. Verified by reproducing the same
+OSError [Errno 28] on a 3-file subset at this same commit, and by the same files
+passing cleanly once space was available (74 passed, 217 passed).
+
+The log is truncated at exactly 8192 bytes — one stdout buffer that never
+flushed. Therefore this run has NO summary line, NO exit code, and NO FAILED
+id list. Nothing in this file can be compared against a baseline.
+
+MUST NOT be used to advance TESTED_SOURCE_SHA.
+
+Superseded by the re-run at the same commit with an explicit --basetemp.
+
+--- raw log follows ---
+ssssssssss.s...............sssssssssssssssss......s..................... [  2%]
+........................................................................ [  5%]
+........................................................................ [  8%]
+........................................................................ [ 10%]
+...............................................................FFFF..... [ 13%]
+........F............................................................... [ 16%]
+..........................FF...F........................................ [ 18%]
+......................................................................s. [ 21%]
+........................................................................ [ 24%]
+........................................................................ [ 27%]
+........................................................................ [ 29%]
+........................................................................ [ 32%]
+...............................s..............F......................... [ 35%]
+........................................................................ [ 37%]
+........................................................................ [ 40%]
+...................F.................................................... [ 43%]
+........................................................................ [ 45%]
+......................................s................................. [ 48%]
+.............................................ss......sss................ [ 51%]
+........................................................................ [ 54%]
+........................................................................ [ 56%]
+........................................................................ [ 59%]
+........................................................................ [ 62%]
+........................FEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE [ 64%]
+EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE [ 67%]
+EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE [ 70%]
+EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE [ 72%]
+EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE [ 75%]
+EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE [ 78%]
+EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE [ 81%]
+EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE [ 83%]
+EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE [ 86%]
+EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE [ 89%]
+EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE [ 91%]
+EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE [ 94%]
+EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE [ 97%]
+EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE [ 99%]
+E                                                                        [100%]
+=============================== warnings summary ===============================
+workbench/backend/main.py:105: 1 warning
+workbench/tests/test_e2e_release_chain.py: 1 warning
+workbench/tests/test_failure_thresholds.py: 7 warnings
+workbench/tests/test_http_api_layer.py: 43 warnings
+workbench/tests/test_phase1_acceptance_scenarios.py: 5 warnings
+  /home/heheboiz/data/cir/workbench/backend/main.py:105: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    @app.on_event("startup")
+
+workbench/envs/ctl312h/lib/python3.12/site-packages/fastapi/applications.py:4723: 2 warnings
+workbench/tests/test_e2e_release_chain.py: 2 warnings
+workbench/tests/test_failure_thresholds.py: 14 warnings
+workbench/tests/test_http_api_layer.py: 86 warnings
+workbench/tests/test_phase1_acceptance_scenarios.py: 10 warnings
+  /home/heheboiz/data/cir/workbench/envs/ctl312h/lib/python3.12/site-packages/fastapi/applications.py:4723: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    return self.router.on_event(event_type)  # ty: ignore[deprecated]
+
+workbench/backend/main.py:112: 1 warning
+workbench/tests/test_e2e_release_chain.py: 1 warning
+workbench/tests/test_failure_thresholds.py: 7 warnings
+workbench/tests/test_http_api_layer.py: 43 warnings
+workbench/tests/test_phase1_acceptance_scenarios.py: 5 warnings
+  /home/heheboiz/data/cir/workbench/backend/main.py:112: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    @app.on_event("shutdown")
+
+workbench/envs/ctl312h/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /home/heheboiz/data/cir/workbench/envs/ctl312h/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+workbench/envs/ctl312h/lib/python3.12/site-packages/transformers/utils/generic.py:441
+  /home/heheboiz/data/cir/workbench/envs/ctl312h/lib/python3.12/site-packages/transformers/utils/generic.py:441: FutureWarning: `torch.utils._pytree._register_pytree_node` is deprecated. Please use `torch.utils._pytree.register_pytree_node` instead.
+    _torch_pytree._register_pytree_node(
+
+workbench/tests/test_circus_inputs.py::test_black_image_preserves_size_mode_and_is_fresh
+  /home/heheboiz/data/cir/workbench/tests/test_circus_inputs.py:20: DeprecationWarning: Image.Image.getdata is deprecated and will be removed in Pillow 14 (2027-10-15). Use get_flattened_data instead.
+    assert all(pixel == (0, 0, 0) for pixel in black.getdata())
+
+workbench/tests/test_circus_inputs.py::test_staged_black_path_and_empty_text_cross_worker_seam
+  /home/heheboiz/data/cir/workbench/tests/test_circus_inputs.py:51: DeprecationWarning: Image.Image.getdata is deprecated and will be removed in Pillow 14 (2027-10-15). Use get_flattened_data instead.
+    assert all(pixel == (0, 0, 0) for pixel in black.getdata())
+
+workbench/tests/test_composition_image_identity.py::test_model_lock_serializes_processes
+workbench/tests/test_composition_image_identity.py::test_model_lock_assertion_fails_when_flock_is_noop
+  /home/heheboiz/.local/share/uv/python/cpython-3.12-linux-x86_64-gnu/lib/python3.12/multiprocessing/popen_fork.py:66: DeprecationWarning: This process (pid=2393274) is multi-threaded, use of fork() may lead to deadlocks in the child.
+    self.pid = os.fork()
+
+workbench/tests/test_e2e_release_chain.py::test_the_real_chain_produces_a_certified_result_then_refuses_a_tampered_one
+workbench/tests/test_operator_contracts.py::test_evaluation_listing_and_dry_run_never_execute_models[arguments1-1]
+workbench/tests/test_pc_launcher.py::test_the_launcher_fixture_carries_the_real_api_schema
+workbench/tests/test_pc_readiness.py::test_the_report_is_read_only_and_covers_every_registered_model
+workbench/tests/test_pc_readiness.py::test_the_cli_accepts_the_autopilot_config
+workbench/tests/test_preparation_stages.py::test_an_explicit_selection_scopes_the_planned_stages
+  /home/heheboiz/data/cir/workbench/envs/ctl312h/lib/python3.12/site-packages/huggingface_hub/file_download.py:949: FutureWarning: `resume_download` is deprecated and will be removed in version 1.0.0. Downloads always resume when possible. If you want to force a new download, use `force_download=True`.
+    warnings.warn(
+
+workbench/tests/test_limn_query_export_ranking.py::test_non_finite_similarity_check_is_defensive_and_documented_as_such
+  /home/heheboiz/data/cir/workbench/envs/ctl312h/lib/python3.12/site-packages/numpy/linalg/linalg.py:2582: RuntimeWarning: overflow encountered in multiply
+    s = (x.conj() * x).real
+
+-- Docs: https://docs
