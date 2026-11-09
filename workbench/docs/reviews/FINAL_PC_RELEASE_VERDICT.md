@@ -33,7 +33,7 @@ commit on the research branch. No checkpoint, dataset, cache or secret is tracke
 | Field | Value |
 |---|---|
 | Branch | `research/cir-failure-workbench` |
-| Suite accounting | Guard-named source `085774488449e774df22e20fe410f30ad008f9d1`; **its own serial sweep was measured at that revision**: `workbench/tests` **2558 passed, 18 failed, 47 skipped = 2623 collected** (CPython 3.12, interpreter `workbench/envs/ctl312h/bin/python`, exit 1, 2962.52 s, one serial run; log at `20261109-clean-rerun/full_suite_0857744.txt`). Of the 21, **18 are the identical ids the three previous sweeps reported** and **3 are new**, each attributed to a named commit that postdates `80842661`: two stale adapter-count guards failing on the Air-Know adapter added by `20a406a`, and one frontend test pinned to the string `NGUỒN` that `87ff419` deliberately replaced. Attribution in `20261109-clean-rerun/SWEEP.md`. Not a pass. Historical: `80842661` measured 2480/18/47 = 2545 (18 ids), `1129c58` 2467/18/47 = 2532 (same 18), `c2d8cdeb` 2463/18/47 = 2528 (same 18), `b0f38bd` 2186/33/47 = 2266, `61f70b0` 2203/0/47 = 2250. Those describe those revisions only. |
+| Suite accounting | Guard-named source `085774488449e774df22e20fe410f30ad008f9d1`; **its own serial sweep was measured at that revision**: `workbench/tests` **2558 passed, 18 failed, 47 skipped = 2623 collected** (CPython 3.12, interpreter `workbench/envs/ctl312h/bin/python`, exit 1, 2962.52 s, one serial run; log at `20261109-clean-rerun/full_suite_0857744.txt`). All **18 are the identical ids the `80842661` baseline reported — 0 new, 0 dropped.** The three failures that were new at `2a832bc` (two adapter-count guards broken by the Air-Know adapter from `20a406a`, one frontend test pinned to the string `NGUỒN` that `87ff419` replaced) were fixed test-only in `3d576bf` and now pass. Attribution in `20261109-clean-rerun/SWEEP.md`. Not a pass. Historical: `80842661` measured 2480/18/47 = 2545 (18 ids), `2a832bc` 2510/21/47 = 2578 (18 + 3 drift), `1129c58` 2467/18/47 = 2532 (same 18), `c2d8cdeb` 2463/18/47 = 2528 (same 18), `b0f38bd` 2186/33/47 = 2266, `61f70b0` 2203/0/47 = 2250. Those describe those revisions only. |
 | Build/Playwright/image evidence | A36 round: `workbench/frontend` rebuilt after the in-flight loading placeholder change and the existing DOM-only smoke `workbench/frontend/tests/ui_smoke.py` re-run green (exit 0, 21 DOM-verified assertions; in-flight assertions recorded the `…` placeholder card and the `loading registry…` row during the fetch, then `17 registered models` with 17 rows after it settled, with the error path still not masked). A34/A35 round, on `1415e56`: `workbench/frontend` `npm run build` passed (Vite+TS, ~234 ms); the DOM-only smoke against the served production build passed all flows (cold inventory 17 models with verbatim blocker rows, query/Top-K, filter+pagination 20/24, annotation persist, injected-failure recovery, comparison ranks [4,45], cohort save/reload, stale-response guard; mobile 390×844 no overflow), desktop + mobile, zero unexpected console/page errors — the single recorded failure is the flow's own injected `Failed to fetch`. Supplementary screenshot reads (real image interpretation, tall full-page captures re-read via 1000-px crops at native resolution) agree with the DOM evidence: titles, 10 nav tabs, 17 model rows with truthful per-model blockers, LIMN bundle/partial cards, TME GPU_VERIFICATION_PENDING, no new rendering defect found; two initial tall-shot reads were superseded by the crop pass (downscale made them illegible; one confabulated reading was discarded). Screenshots are labelled mock-fixture artifacts, not research evidence. **Status — those runs are historical; the harness has since been rewritten and now passes.** `80842661` rewrote both browser harnesses against the `4e61f2f` page split (`ui_smoke.py` +618/-733, `e2e_lane.py` +439 changed lines), replacing label-based navigation with the `data-testid` ids `routes.ts` declares. Re-run at `80842661` against the live stack (both 200): `ui_smoke.py --url http://127.0.0.1:5173 --session cold` → exit 0, 3 checks; `--session composition` → exit 0, 6 checks; `--session mobile` → exit 0, 4 checks + 1 documented SKIP (blocker cells reachable by scrolling their table box, asserted); `--session fixture` against the fixture stack on `:5765` → exit 0, 5 checks (2 index runs, injected `/api/models` abort surfaced as "Yêu cầu thất bại", retry recovered, 0 unexpected console/page/request errors). `--session all` on the production stack stops at `fixture` by design — that session needs `fashioniq_val_split` fixture runs and production serves 0 runs — so it times out in `set_protocol`; it is not a UI failure. `e2e_lane.py --tmpdir /dev/shm/...` (its own isolated `:8775`/`:5775` servers) → exit 0, journeys A/B/H passing at all 4 viewports (1440×900, 1280×800, 390×844, 360×800) on 17 models. **Coverage, stated exactly: of the six areas in `routes.ts`, three are exercised — `overview`, `experiments` (models + runs) and `evaluation` (composition + benchmark, both viewports) — plus mobile containment. `samples`, `failures` and `notebook` are NOT covered**: their flows need a selected CIRCUS composition run, which the fixture stack does not serve and which `/api/queries?limit=20000` blocks at 400 `invalid_pagination`; the rewritten harness documents both as removed rather than silently skipped. The run's nine screenshots are filed at `20261109T012857+0700-sweep-final/ui_smoke_shots/` (1.8 MB), with per-file evidence in that directory's `UI_HARNESS_REVERIFY_80842661.md`, so the claim is checkable from the repo rather than from `/tmp`. Re-run at `66e93b6` (docs-only): cold exit 0 / 3 checks, composition exit 0 / 6 checks. See [`20261108T231500+0700-harness/UI_HARNESS_STALE.md`](20261108T231500+0700-harness/UI_HARNESS_STALE.md), whose state `80842661` fixed. |
 | TESTED_SOURCE_SHA | `085774488449e774df22e20fe410f30ad008f9d1` — latest production revision, and the revision the serial sweep was measured at: 2558 passed, 18 failed, 47 skipped = 2623 collected, exit 1, 2962.52 s; log at `20261109-clean-rerun/full_suite_0857744.txt`. |
 | Previous tested source | `1129c58ba8fa0566c5840cfe820292ae4e9e84f3` (the frontend `scoring_impl` round): 2467 passed, 18 failed, 47 skipped = 2532 collected, exit 1, 3483.79 s; log at `20261108T225338+0700-sweep/full_suite_1129c58b.txt`. Same 18 ids as the current sweep. Retained as historical measurement. |
@@ -92,15 +92,13 @@ No target sm_120 GPU or complete per-model CUDA installation is claimed.
 
 Earlier R23/R25/composition measurements are historical and do not certify this runtime profile.
 
-## The serial sweep at `2a832bc` (measured, 21 failures — 18 known + 3 new)
+## The serial sweep at `0857744` (measured, 18 failures — 0 new)
 
-Current serial run. `2a832bc` is the clean-rerun tip: eight composition models rerun under the recorded
-BLAS policy with Top-100 candidate export, the evidence pack, and the frontend screenshots that back
-G9/G10. `workbench/frontend/**` and the review pack are production paths to the release guard, so the
-previously recorded `80842661` no longer describes the tree and `test_handoff_commands.py` stayed red
-until this run advanced the record. One serial run, no `-n`, worktree clean before and after
-(`085774488449e774df22e20fe410f30ad008f9d1`), log filed at
-`20261109-clean-rerun/full_suite_0857744.txt`:
+Current serial run. `0857744` is the tip that carries the PAIR/CLIP4Cir adapters, the
+`policy_observed` payload and the reset-ordering fix on top of the clean-rerun round. Those are
+production paths to the release guard, so the previously recorded `2a832bc` no longer described the
+tree and `test_handoff_commands.py` stayed red until this run advanced the record. One serial run,
+no `-n`, log filed at `20261109-clean-rerun/full_suite_0857744.txt`:
 
 ```
 18 failed, 2558 passed, 47 skipped, 290 warnings in 2962.52s (0:49:22)
@@ -108,17 +106,20 @@ pytest_exit=1
 collected 2623 = 2558 + 18 + 47
 ```
 
-**Delta against the `80842661` sweep: 18 retained id-for-id, 0 dropped, 3 new.** The three are
-test-vs-code drift, each traced to a commit that postdates `80842661` — not to the rerun work:
+**Delta against the `80842661` baseline: 18 retained id-for-id, 0 dropped, 0 new.** The 18 are the
+same failures this project has carried across `80842661`, `1129c58` and `c2d8cdeb`; per-id
+attribution is in `20261109T012857+0700-sweep-final/FAILURES.md`.
 
-| new failure | introduced by | class |
+The three failures that were NEW at `2a832bc` are now green:
+
+| previously-new failure | was introduced by | resolution |
 |---|---|---|
-| `test_audit_fix_encoder_helpers_imported.py::test_every_adapter_is_discovered` (`assert 10 == 9`) | `20a406a` Air-Know adapter | stale hard-coded adapter population |
+| `test_audit_fix_encoder_helpers_imported.py::test_every_adapter_is_discovered` (`assert 10 == 9`) | `20a406a` Air-Know adapter | fixed test-only in `3d576bf`: population derived from the registry instead of a literal |
 | `test_circus_env_gate_omp.py::test_every_composition_adapter_is_discovered` (`assert 10 == 9`) | `20a406a` | same |
-| `test_frontend_catalog.py::test_the_inspector_renders_null_scores_as_a_dash_and_states_the_window` (`NGUỒN` missing) | `87ff419` Light workspace frontend rewrote the badge to `Nguồn ứng viên:` | test pinned to replaced copy; the contract it names still holds |
+| `test_frontend_catalog.py::test_the_inspector_renders_null_scores_as_a_dash_and_states_the_window` (`NGUỒN` missing) | `87ff419` Light workspace frontend | fixed test-only in `3d576bf`: asserts the provenance contract on symbols and gating, not one capitalisation |
 
-Full attribution, including why each is not a production defect, is in
-`20261109-clean-rerun/SWEEP.md`. None of the 21 is a pass.
+That fix is corroborated here rather than merely asserted: this sweep faced **13** registered
+adapters (the three new ones landed in `d53581b`) and neither discovery test needed an edit.
 
 ### Historical: the serial sweep at `80842661` (measured, 18 failures)
 
@@ -360,7 +361,7 @@ Hai cách giải thích cũ trong mục này đã bị đo bác bỏ và đượ
 
 | Gate | Command | Result |
 |---|---|---|
-| Backend suite | **RUN, FAILED at `2a832bc` — not a PASS.** One serial run of `workbench/tests` at `085774488449e774df22e20fe410f30ad008f9d1` (CPython 3.12, `workbench/envs/ctl312h/bin/python`, `-q -p no:cacheprovider -rfE --tb=no`, 3415.28 s, exit 1: **2558 passed, 18 failed, 47 skipped = 2623 collected**). 18 of the 21 are the identical ids the `80842661`, `1129c58` and `c2d8cdeb` sweeps reported (attribution in `20261109T012857+0700-sweep-final/FAILURES.md`). **3 are new**, each attributed in `20261109-clean-rerun/SWEEP.md` to a commit postdating `80842661`: two stale adapter-count guards failing on the Air-Know adapter (`20a406a`), one frontend test pinned to the string `NGUỒN` that `87ff419` replaced while keeping the labelled-provenance contract. None is a production defect; none is silenced. |
+| Backend suite | **RUN, FAILED at `0857744` — not a PASS.** One serial run of `workbench/tests` at `085774488449e774df22e20fe410f30ad008f9d1` (CPython 3.12, `workbench/envs/ctl312h/bin/python`, `-q -p no:cacheprovider -rfE --tb=no`, 3415.28 s, exit 1: **2558 passed, 18 failed, 47 skipped = 2623 collected**). All 18 are the identical ids the `80842661`, `1129c58` and `c2d8cdeb` sweeps reported (attribution in `20261109T012857+0700-sweep-final/FAILURES.md`) — **0 new, 0 dropped**. The three drift failures that appeared at `2a832bc` are fixed test-only in `3d576bf` and pass here. None is a production defect; none is silenced. |
 | Acceptance | `bash workbench/docker/acceptance.sh` | **ACCEPTANCE PASSED at `59949ff`** (1 honest skip: GPG status unverified). At `9a53ee1` group C fails only against the pre-existing `cir-workbench` container, whose image predates the vendoring and still serves the old registry (it reports `ptha_mtst source_available: false`); rerun against a backend started from current source and group C passes — `PASS 17 models, ids/protocols/environments match the registry`. Rebuild the image before re-running acceptance. |
 | Mutation checks | `bash workbench/docker/mutation_checks.sh` | **PASSED** M1 M2 M3 M4 M5 |
 | Offline release verification | `bash workbench/docker/release_verify.sh --offline` | exit 0, `ENGINEERING_INCOMPLETE`, **0 checks FAIL/UNRUN** |
@@ -486,7 +487,7 @@ static or fixture-level.
 ```bash
 git clone git@github.com:Le-Minh-Nhut/cir.git && cd cir
 git fetch origin research/cir-failure-workbench
-git checkout 2a832bc0       # the TESTED_SOURCE_SHA above; never `git reset --hard`
+git checkout 0857744        # the TESTED_SOURCE_SHA above; never `git reset --hard`
 git rev-parse HEAD             # must print 085774488449e774df22e20fe410f30ad008f9d1
 ./pc.sh                        # the one operator command
 ```

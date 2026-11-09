@@ -111,7 +111,6 @@ def build(raw_path: Path, perf_table: Path | None) -> str:
         verdicts.setdefault(count, "IDENTICAL")
         reference = next(item for item in parity if item.get("kind") == "steady")
         if not (row["ordered_paths_digest"] == reference["ordered_paths_digest"]
-                and row["blob_digest"] == reference["blob_digest"]
                 and row["array_digest"] == reference["array_digest"]):
             verdicts[count] = "REJECTED (content differs)"
 
@@ -134,10 +133,16 @@ def build(raw_path: Path, perf_table: Path | None) -> str:
         lines.append("")
     lines.append("## Phạm vi đo — đọc trước khi trích bất kỳ số nào")
     lines.append("")
-    lines.append("Đây là phép đo **producer stage** (decode → transform) trên một mẫu gallery cố định, "
-                 "không phải thời gian end-to-end của một lượt chạy đầy đủ. Model forward pass không nằm "
-                 "trong số nào ở đây. Trục query đã được chứng minh bit-identical ở sub-batch 2..128 "
-                 "trước đó; phép đo này kiểm trục **decode**.")
+    lines.append("Phép đo này đo **producer stage: decode + transform**, đúng hình dạng mà adapter chạy "
+                 "trong production — `map_fn` của thread pool làm `Image.open` → `convert(\"RGB\")` → "
+                 "`transform(...)` → stack, y như `model_habit.py:358-364`; không có vòng PNG nào. Nó "
+                 "**không** đo model forward pass, và **không** phải thời gian end-to-end của một lượt "
+                 "chạy đầy đủ.")
+    lines.append("")
+    lines.append("**Tám lượt composition run vẫn KHÔNG có timing.** Chúng chạy khi bốn lane khác đang "
+                 "hoạt động, nên wall-time của chúng ghi `not_measured (concurrent load)`. Phép đo "
+                 "producer stage dưới đây không biến chúng thành baseline, và không được trích thay cho "
+                 "một baseline end-to-end.")
     lines.append("")
     if sample:
         lines.append(f"- sample ids: `{sample.get('sample_ids')}` "
@@ -208,6 +213,25 @@ def build(raw_path: Path, perf_table: Path | None) -> str:
         lines.append("")
         lines.append("Hiệu lực **chỉ** cho producer stage; chưa chứng minh tăng tốc end-to-end. "
                      "Model forward pass không nằm trong phép đo này.")
+        lines.append("")
+        # Two facts a reader needs and that the fast setting alone would hide.
+        highest = max(count for count, _, _ in eligible)
+        if best[0] == highest and len(eligible) > 1:
+            second = sorted(eligible, key=lambda item: item[0])[-2]
+            gain = (best[1] - second[1]) / second[1] if second[1] else 0.0
+            lines.append(
+                f"**Đường cong CHƯA phẳng ở setting cao nhất đã đo.** {best[0]} vẫn nhanh hơn "
+                f"{second[0]} {gain:.0%}, nên đây là điểm cao nhất **đã thử**, không phải điểm tối ưu — "
+                "một setting cao hơn có thể còn nhanh hơn nhưng nằm ngoài ngân sách CPU nên không thử.")
+        lines.append("")
+        budget = sample.get("cpu_budget_threads") or 10
+        if best[0] >= budget - 2:
+            lines.append(
+                f"**Ràng buộc ngân sách:** `workers={best[0]}` trên tổng {budget} thread của CIR chỉ còn "
+                f"{budget - best[0]} thread cho tiến trình chính, torch intra-op và BLAS. Đây là **trần**, "
+                "không phải mức thoải mái: khi một lượt chạy thật vừa decode vừa chấm, tiến trình chính cần "
+                f"chỗ. Peak RSS ở setting này là {best[2] / 1024:.0f} MiB, tăng mạnh so với serial — "
+                "chọn theo end-to-end của một lượt thật, không chỉ theo img/s ở đây.")
     else:
         lines.append("**Không đề xuất setting nào**: không có setting nào vừa qua parity vừa đo được.")
     lines.append("")

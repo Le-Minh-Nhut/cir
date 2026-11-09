@@ -1,0 +1,48 @@
+2026-11-09T09:28:46+07:00 watcher start pid=1801129 ; waiting for sweep to exit
+2026-11-09T09:28:46+07:00 watching: pgrep -f 'pytest workbench/tests' ; pgrep -f composition_eval
+2026-11-09T09:33:47+07:00 still waiting (300s); pytest=[1781744] eval=[]
+2026-11-09T09:38:47+07:00 still waiting (600s); pytest=[1781744] eval=[]
+2026-11-09T09:43:47+07:00 still waiting (900s); pytest=[1781744] eval=[]
+2026-11-09T09:48:48+07:00 still waiting (1200s); pytest=[1781744] eval=[]
+2026-11-09T09:53:48+07:00 still waiting (1500s); pytest=[1781744] eval=[]
+2026-11-09T09:58:49+07:00 still waiting (1800s); pytest=[1781744] eval=[]
+2026-11-09T10:03:49+07:00 still waiting (2100s); pytest=[1781744] eval=[]
+2026-11-09T10:08:50+07:00 still waiting (2400s); pytest=[1781744] eval=[]
+2026-11-09T10:11:10+07:00 sweep exited after ~2540s of waiting
+2026-11-09T10:11:40+07:00 post-settle loadavg: 1.00 1.49 1.54 2/2456 1880127
+2026-11-09T10:11:40+07:00 starting measurement: encoder, workers 0,2,4,6,8, trials 3
+2026-11-09T10:11:40+07:00 loadavg at measurement start: 1.00 1.49 1.54 2/2456 1880127
+sample ids verified: 9 ids, ranks agree with /home/heheboiz/data/cir/workbench/artifacts/composition/runs/5dee7425dd46c5f154808aac/ranks/encoder_fashioniq.json
+  7:1004 (dress, dress): multimodal=1, image_only_empty_text=1800, text_only_black_image=1
+  7:2012 (shirt, shirt): multimodal=1, image_only_empty_text=3799, text_only_black_image=2
+  7:4050 (toptee, toptee): multimodal=1, image_only_empty_text=458, text_only_black_image=33
+  7:1039 (dress, near_k10): multimodal=9, image_only_empty_text=1325, text_only_black_image=1115
+  7:1069 (dress, near_k10): multimodal=9, image_only_empty_text=1071, text_only_black_image=774
+  7:1853 (dress, near_k50): multimodal=49, image_only_empty_text=781, text_only_black_image=282
+  7:2155 (shirt, near_k50): multimodal=49, image_only_empty_text=57213, text_only_black_image=16
+  7:6000 (toptee, last_batch): multimodal=2, image_only_empty_text=2461, text_only_black_image=3
+  7:6001 (toptee, last_batch): multimodal=1, image_only_empty_text=206, text_only_black_image=40
+  workers=0: 4 trials
+  workers=2: 4 trials
+  workers=4: 4 trials
+  workers=6: 4 trials
+  workers=8: 4 trials
+# Decode-worker sweep — encoder
+
+sample: 768 gallery images (first N-1 in released order plus the last entry), batch 32, transform 224px, 3 steady trials plus 1 cold. Wall-clock only; not a whole-run figure.
+
+| model | workers | trials | median img/s | min | max | cold img/s | peak RSS MiB | VRAM MiB | parity |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| encoder | 0 | 3 | 103.8 | 103.7 | 104.1 | 104.0 | 169.3 | 852 | IDENTICAL |
+| encoder | 2 | 3 | 235.9 | 235.1 | 236.4 | 236.0 | 170.9 | 852 | IDENTICAL |
+| encoder | 4 | 3 | 428.3 | 427.6 | 429.5 | 426.4 | 185.4 | 852 | IDENTICAL |
+| encoder | 6 | 3 | 432.0 | 431.3 | 432.5 | 434.2 | 210.2 | 852 | IDENTICAL |
+| encoder | 8 | 3 | 429.2 | 428.4 | 429.2 | 431.8 | 229.0 | 852 | IDENTICAL |
+
+A setting marked REJECTED changed decoded content or order and must not be adopted for a canonical run, however fast it looks.
+2026-11-09T10:12:46+07:00 perf_bench exit=0
+2026-11-09T10:12:46+07:00 measurement complete; loadavg after: 1.81 1.60 1.58 3/2459 1880732
+2026-11-09T10:12:46+07:00 generating PERFORMANCE.vi.md from perf_raw.jsonl
+wrote /home/heheboiz/data/cir/workbench/docs/reviews/20261109-clean-rerun/PERFORMANCE.vi.md (2685 bytes)
+2026-11-09T10:12:46+07:00 gen_performance_doc exit=0
+2026-11-09T10:12:46+07:00 outputs: perf_raw.jsonl PERF_TABLE.md PERFORMANCE.vi.md

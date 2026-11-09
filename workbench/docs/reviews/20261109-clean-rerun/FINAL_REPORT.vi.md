@@ -2,9 +2,9 @@
 
 Revision khi viết: worktree tại `20b83e5` (HEAD chuyển `ffb6ae8` → `20b83e5` lúc 03:53 do lane khác;
 bốn lượt chạy sớm hơn đã đối chiếu lại bằng `scoring_module_source_hash`, xem §6).
-`TESTED_SOURCE_SHA` đã tiến lên `2a832bc0efe482d1536e466232a3e2803929d1d8` sau một lượt sweep serial
-đầy đủ tại chính revision đó (2510 passed / 21 failed / 47 skipped = 2578 collected, exit 1,
-3415.28 s); guard `test_handoff_commands.py` sau đó **8 passed**, xem §7.
+`TESTED_SOURCE_SHA` đã tiến lên `085774488449e774df22e20fe410f30ad008f9d1` sau một lượt sweep serial
+đầy đủ tại chính revision đó (2558 passed / 18 failed / 47 skipped = 2623 collected, exit 1,
+2962.52 s); guard `test_handoff_commands.py` sau đó **8 passed**, xem §7.
 Mọi con số dưới đây dẫn từ file có trong `EVIDENCE_INDEX.md`; không có số nào là ước lượng.
 Bảng so sánh rank từng query nằm ở `rank_diffs/` — mỗi con số trong §3 dẫn về đúng một file ở đó.
 
@@ -177,17 +177,17 @@ mobile 4, samples 2 check — tất cả exit 0**. 13 test node pass. Ảnh ch�
 | G5 clean run/coverage | **PASS** (phạm vi: tám model đã rerun) | tám lượt đầy đủ dưới policy được ghi lại, verify từ artifact: 7×`6003/6003`, limn `6001/6003` khai đúng hai query không chấm được. 21 hàng registry còn lại vẫn BLOCKED/DEFERRED, **không** thuộc phạm vi PASS này. ptha_mtst có caveat: đường encode không pin được |
 | G6 rank/export | **PASS** | tám model đều export **Top-100**; manifest depth=100, record 6003/6003 `partial=false` (limn 6001/6003 `partial=true`). 18009 dòng ứng viên được kiểm: vị trí hợp lệ, thứ tự theo score, `target_rank` khớp nhánh metric — 0 vi phạm |
 | G7 optimization parity | **PASS** | bảng đo BLAS + chứng minh song song theo trục query; **không claim speedup** |
-| G8 measured performance | **PASS** (phạm vi: trục **decode**, một model family) | đo trên box **rảnh thật**: watcher đợi sweep thoát, ngủ 30 s, ghi loadavg `1.00 1.49 1.54`, **kiểm lại** không còn pytest/evaluator rồi mới đo. Kết quả (encoder, 768 ảnh cố định, batch 32, 3 trial steady + 1 cold, cold loại khỏi median): **103,8 img/s ở 0 worker → 235,9 ở 2 → 428,3 ở 4 → 432,0 ở 6 → 429,2 ở 8**; RSS 169→229 MiB; VRAM phẳng 852 MiB. **Cả 5 setting parity IDENTICAL** trên 3 digest độc lập (thứ tự hàng, byte decode, mảng sau transform). Đề xuất `workers=4`: nằm trong 2% của nhanh nhất và rẻ nhất trong nhóm đồng hạng, **gấp 4,1×** bản serial. **Không** phải baseline end-to-end — forward pass không nằm trong phép đo này |
+| G8 measured performance | **PASS** (phạm vi: **decode + transform** producer stage, một model family) | **Đo hai lần; lần đầu ĐÃ BỊ THAY THẾ** vì harness đo một workload production không chạy (vòng PNG encode+decode trong pool, transform chạy serial ở consumer) nên đường cong bỏ mất đúng stage song song hoá — con số 4,1× của nó không phải lợi ích pipeline. Harness đã viết lại để **khớp đúng `model_habit.py:358-364`**: `Image.open` → `convert("RGB")` → `targetpad_transform(1.25,224)` → stack, tất cả **trong pool**, không PNG. Đo lại trên box rảnh (loadavg 0,47; không pytest/evaluator): median **554,5 img/s ở 0 worker → 1032,8 ở 2 → 1756,2 ở 4 → 2282,1 ở 6 → 2688,1 ở 8**; RSS 231→603 MiB; VRAM phẳng 852 MiB. **Cả 5 setting parity IDENTICAL** (thứ tự hàng + mảng sau transform). **Đề xuất đổi từ `workers=4` sang `workers=8`**: đường cong vẫn tăng 18% từ 6 lên 8 và **chưa phẳng**, nên 8 là điểm cao nhất **đã thử** trong ngân sách 10 thread, không phải điểm tối ưu — và nó chỉ còn 2 thread cho tiến trình chính. Transform chiếm **64%** wall time serial, đó là lý do đường cong cũ sai. **Không** phải baseline end-to-end — forward pass không nằm trong phép đo này |
 | G9 frontend correctness | **PASS** | 4 session browser trên dữ liệu thật, exit 0 |
 | G10 frontend usability | **PASS** | sáng, 17/19px, 1920/2560/390, 0 ô cắt |
-| G11 integration/release | **PASS** | sweep serial tại `2a832bc` (2510/21/47 = 2578, exit 1, 3415.28 s, log `full_suite_2a832bc.txt`), `TESTED_SOURCE_SHA` đã tiến trong **cả hai** tài liệu, guard `test_handoff_commands.py` **8 passed**, `npm run build` exit 0 và tái tạo đúng asset `index-9MwV5MAk.js` mà server đang phục vụ. PASS **không** có nghĩa suite xanh: 21 failure được ghi lại (18 là bộ cũ, 3 là drift đã sửa test-only ở `3d576bf`) |
+| G11 integration/release | **PASS** | sweep serial tại `0857744` (2558/18/47 = 2623, exit 1, 2962.52 s, log `full_suite_0857744.txt`), `TESTED_SOURCE_SHA` đã tiến trong **cả hai** tài liệu, guard `test_handoff_commands.py` **8 passed**, `npm run build` exit 0 và tái tạo đúng asset `index-9MwV5MAk.js` mà server đang phục vụ. PASS **không** có nghĩa suite xanh: 18 failure được ghi lại, đúng bộ cũ, 0 mới |
 | G12 coordination | **PASS** | có một sai lệch đã ghi: 4 lane chạy song song so với cap 3, lane thứ tư đã dừng |
 
 **11 PASS · 0 FAIL · 2 NOT_RUN.** Không có gate nào được PASS mà thiếu bằng chứng trên đĩa.
 
-G11 chuyển từ FAIL sang PASS sau khi sweep tại `2a832bc` được đo, `TESTED_SOURCE_SHA` được tiến trong cả `FINAL_PC_RELEASE_VERDICT.md` và `PC_PILOT_HANDOFF.md`, rồi guard báo **8 passed** — trạng thái đỏ trước đó là **độ trễ ghi sổ**, đóng lại bằng đo lường chứ không bằng sửa guard. **G8 chuyển NOT_RUN → PASS** nhờ một phép đo trên box rảnh thật (xem hàng G8); tài liệu `PERFORMANCE.vi.md` **sinh tự động** từ `perf_raw.jsonl`, không gõ tay. G1/G2 vẫn NOT_RUN — không có differential native↔adapter.
+G11 chuyển từ FAIL sang PASS sau khi sweep tại `0857744` được đo, `TESTED_SOURCE_SHA` được tiến trong cả `FINAL_PC_RELEASE_VERDICT.md` và `PC_PILOT_HANDOFF.md`, rồi guard báo **8 passed** — trạng thái đỏ trước đó là **độ trễ ghi sổ**, đóng lại bằng đo lường chứ không bằng sửa guard. **G8 chuyển NOT_RUN → PASS** nhờ một phép đo trên box rảnh thật (xem hàng G8); tài liệu `PERFORMANCE.vi.md` **sinh tự động** từ `perf_raw.jsonl`, không gõ tay. G1/G2 vẫn NOT_RUN — không có differential native↔adapter.
 
-G5 và G6 chuyển trạng thái vì tám lượt chạy đã xong và invariant kiểm từ artifact. G1/G2 giữ NOT_RUN (không chạy differential native↔adapter nào). G8 giữ NOT_RUN (mọi wall-time đo khi hai lane khác đang chạy — **không phải baseline**).
+G5 và G6 chuyển trạng thái vì tám lượt chạy đã xong và invariant kiểm từ artifact. G1/G2 giữ NOT_RUN (không chạy differential native↔adapter nào). G8 chuyển NOT_RUN → PASS sau phép đo producer stage trên box rảnh (xem hàng G8 và §7; mọi wall-time đo khi hai lane khác đang chạy — **không phải baseline**).
 
 ## 6. Rerun: đã làm gì, chưa làm gì, vì sao
 
@@ -243,19 +243,20 @@ Cột `previous_run_id` giữ lại run id cũ cho cả tám, nên dòng dõi tr
 ## 7. Tồn đọng
 
 - **G11 nay là PASS, không còn đỏ.** Trình tự đã xảy ra và đều kiểm được: (1) một lượt sweep serial tại
-  `2a832bc` — **2510 passed / 21 failed / 47 skipped = 2578 collected**, exit 1, 3415.28 s, log
-  `full_suite_2a832bc.txt`; (2) `TESTED_SOURCE_SHA` tiến lên `2a832bc` trong **cả**
+  `0857744` — **2558 passed / 18 failed / 47 skipped = 2623 collected**, exit 1, 2962.52 s, log
+  `full_suite_0857744.txt`; (2) `TESTED_SOURCE_SHA` tiến lên `0857744` trong **cả**
   `FINAL_PC_RELEASE_VERDICT.md` và `PC_PILOT_HANDOFF.md` (kể cả dòng `git checkout`, vốn phải là revision
   cố định); (3) `test_handoff_commands.py` → **8 passed**. Guard trước đó đỏ vì **ghi sổ chậm**, và nó được
-  đóng bằng đo lường chứ không bằng sửa test hay nới gate. **PASS không có nghĩa suite xanh:** 21 failure
-  được ghi nguyên văn trong log và attribution ở `SWEEP.md` — 18 là đúng bộ id ba lượt trước đã báo, 3 là
-  drift test-vs-code phát sinh sau `80842661`, đã sửa **test-only** ở `3d576bf`.
-- **Sweep tại revision hiện tại: ĐÃ CÓ** (chính là `full_suite_2a832bc.txt` ở trên). Sweep tại `ffb6ae8`
+  đóng bằng đo lường chứ không bằng sửa test hay nới gate. **PASS không có nghĩa suite xanh:** 18 failure
+  được ghi nguyên văn trong log và attribution ở `SWEEP.md` — **đúng bộ id cũ, 0 mới**; 3 lỗi drift trước đó
+  đã sửa **test-only** ở `3d576bf` và nay pass.
+- **Sweep tại revision hiện tại: ĐÃ CÓ** (chính là `full_suite_0857744.txt` ở trên). Sweep tại `ffb6ae8`
   bị huỷ ở **22%** vẫn được giữ làm lịch sử (`sweep_ffb6ae8_ABORTED.txt`, không có count) — nó không phải
   lượt đo của cây hiện tại và không được trích làm bằng chứng.
-- **G8 nay là PASS, nhưng chỉ cho trục decode.** Sweep serial thoát lúc `10:11:00`; watcher đợi thêm 30 s,
-  ghi loadavg `1.00 1.49 1.54`, kiểm lại lần hai rồi mới đo. Kết quả và cảnh báo phạm vi ở hàng G8 và ở
-  `PERFORMANCE.vi.md`. **Tám lượt rerun vẫn không có timing** — chúng chạy khi bốn lane khác đang hoạt động,
+- **G8 nay là PASS, nhưng chỉ cho producer stage (decode + transform).** Đo lại sau khi phát hiện harness đầu
+  đo sai workload; số mới 554,5 → 2688,1 img/s từ 0 lên 8 worker, cả 5 setting parity-identical, và **lần đo
+  đầu đã bị thay thế** (xem hàng G8). Đề xuất đổi sang `workers=8`, kèm cảnh báo đường cong chưa phẳng và
+  ngân sách thread. Chi tiết ở `PERFORMANCE.vi.md`, sinh tự động từ `perf_raw.jsonl`. **Tám lượt rerun vẫn không có timing** — chúng chạy khi bốn lane khác đang hoạt động,
   nên wall-time của chúng vẫn ghi *"measured under concurrent load — not a baseline"* và `throughput`
   `not_measured`. Một phép đo producer stage không biến chúng thành baseline.
 - **Lỗi chưa sửa: artifact không tự chứng minh được policy BLAS của nó (task kế tiếp).**

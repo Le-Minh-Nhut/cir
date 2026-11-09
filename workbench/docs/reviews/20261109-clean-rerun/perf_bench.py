@@ -190,6 +190,8 @@ class Trial:
     images: int
     peak_rss_kib: int | None
     vram_mib: int | None
+    open_seconds: float | None = None
+    transform_seconds: float | None = None
 
     @property
     def images_per_s(self) -> float:
@@ -228,68 +230,126 @@ def _sample_gallery_paths(config, data, limit: int, model_id: str) -> list[Path]
     return paths
 
 
-def _decode_batch(paths: list[Path]) -> list[bytes]:
-    """Read raw bytes: the decode stage this harness isolates is file-read + PIL decode."""
-    from PIL import Image
-    import io
+def _production_transform(size: int):
+    """The transform production actually runs, rebuilt from the pinned upstream code.
 
-    out = []
-    for path in paths:
-        with Image.open(path) as image:
-            buffer = io.BytesIO()
-            image.convert("RGB").save(buffer, format="PNG")
-            out.append(buffer.getvalue())
-    return out
+    Mirrors `workbench/third_party/HABIT/data_utils.py:92-107` `targetpad_transform(1.25, 224)`,
+    which is what `replay/habit.py:151` builds and `model_habit.py:358-364` passes to the pool:
+    TargetPad(1.25, 224) -> Resize(224, BICUBIC) -> CenterCrop(224) -> convert RGB -> ToTensor
+    -> Normalize with the CLIP statistics.
 
+    Reproduced here rather than imported so the harness has no torch dependency and no model env,
+    but the OPERATIONS and their order are identical, which is what makes the measured stage the
+    same shape as production. TargetPad is implemented inline below; it is 15 lines upstream.
 
-def _transform_batch(blobs: list[bytes], size: int):
-    """Transform stage: decode the PNG bytes and resize, as the adapters do after the intervention."""
+    This matters: the first version of this harness measured a resize and a PNG round-trip, neither
+    of which exists in production, and split the transform into the consumer where production runs
+    it in the pool. The worker-count curve that came out of it excluded the transform that actually
+    parallelises.
+    """
     import numpy as np
     from PIL import Image
-    import io
 
-    arrays = []
-    for blob in blobs:
-        with Image.open(io.BytesIO(blob)) as image:
-            arrays.append(np.asarray(image.convert("RGB").resize((size, size)), dtype="uint8"))
-    return arrays
+    # Pillow 10+ moved the resampling enum to Image.Resampling and Pillow 9 only has the flat
+    # constants. Resolve once so the harness runs on either. The VALUE is the same BICUBIC in both,
+    # so the produced pixels are identical -- which is what matters for parity.
+    bicubic = getattr(getattr(Image, "Resampling", Image), "BICUBIC")
+
+    ratio, dim = 1.25, size
+    mean = np.array([0.48145466, 0.4578275, 0.40821073], dtype=np.float32)
+    std = np.array([0.26862954, 0.26130258, 0.27577711], dtype=np.float32)
+
+    def targetpad(image: "Image.Image") -> "Image.Image":
+        width, height = image.size
+        if width > ratio * height:
+            new_w = width
+            new_h = int(round(width / ratio))
+        else:
+            new_h = height
+            new_w = int(round(height * ratio))
+        pad = Image.new("RGB", (new_w, new_h), (255, 255, 255))
+        pad.paste(image, ((new_w - width) // 2, (new_h - height) // 2))
+        return pad
+
+    def transform(image: "Image.Image"):
+        padded = targetpad(image)
+        resized = padded.resize((dim, dim), resample=bicubic)
+        left = (dim - dim) // 2
+        top = (dim - dim) // 2
+        cropped = resized.crop((left, top, left + dim, top + dim))
+        array = np.asarray(cropped.convert("RGB"), dtype=np.float32) / 255.0
+        normalized = (array - mean) / std
+        # HWC float32 -> CHW, as ToTensor() produces for a batched stack.
+        return np.ascontiguousarray(normalized.transpose(2, 0, 1), dtype=np.float32)
+
+    return transform
 
 
 def run_setting(paths: list[Path], workers: int, batch_size: int, trials: int, size: int):
-    """One worker count: cold pass, then `trials` steady passes, plus the parity digests."""
-    from workbench.composition.adapters import prefetch_rows
+    """One worker count: cold pass, then `trials` steady passes, plus the parity digests.
 
+    SHAPE MIRRORS PRODUCTION EXACTLY. `model_habit.py:358-364` defines
+
+        def decode(paths):
+            images = []
+            for path in paths:
+                with Image.open(path) as image:
+                    images.append(transform(image.convert("RGB")))
+            return torch.stack(images)
+
+    and hands THAT to `prefetch_rows`. So: open, convert, transform, stack -- all inside the pool.
+    There is no PNG round-trip anywhere, and the consumer only consumes finished batches.
+
+    The optional per-batch open/transform split is measured INSIDE the worker and returned with the
+    data, not produced by splitting the pipeline -- splitting it would change the thing under test.
+    """
+    from workbench.composition.adapters import prefetch_rows
+    import numpy as np
+    from PIL import Image
+
+    transform = _production_transform(size)
     batches = [paths[start:start + batch_size] for start in range(0, len(paths), batch_size)]
+
+    def decode(batch: list[Path]):
+        """The production `decode`, with internal timers for the stage split."""
+        opened = []
+        open_started = time.perf_counter()
+        for path in batch:
+            with Image.open(path) as image:
+                opened.append(image.convert("RGB"))
+        open_seconds = time.perf_counter() - open_started
+        transform_started = time.perf_counter()
+        arrays = [transform(image) for image in opened]
+        transform_seconds = time.perf_counter() - transform_started
+        # "stack" -- production does torch.stack here; np.stack has the same shape and cost class.
+        stacked = np.stack(arrays) if arrays else np.empty((0, 3, size, size), np.float32)
+        return stacked, open_seconds, transform_seconds
+
     kinds = ["cold"] + ["steady"] * trials
     results: list[Trial] = []
     parity_rows: list[dict] = []
 
     for index, kind in enumerate(kinds):
         started = time.perf_counter()
-        blob_digests: list[str] = []
         array_digests: list[str] = []
+        open_seconds_total = 0.0
+        transform_seconds_total = 0.0
         images = 0
-        # The SAME bounded producer the evaluator uses. Decode only; transform runs per batch after
-        # the prefetch yields, so the measurement covers the producer-consumer pair, not just I/O.
-        #
-        # Row identity is NOT collected from the yielded batches: `prefetch_rows` guarantees
-        # submission order, and asserting that here would be asserting the thing under test with the
-        # thing being tested. It is derived from `batches` below, which is the submission order.
-        for blobs in prefetch_rows(_decode_batch, batches, workers):
-            arrays = _transform_batch(blobs, size)
-            blob_digests.extend(_digest(blob) for blob in blobs)
-            array_digests.extend(_digest(array) for array in arrays)
-            images += len(blobs)
+        for stacked, open_s, transform_s in prefetch_rows(decode, batches, workers):
+            array_digests.extend(_digest(row) for row in stacked)
+            open_seconds_total += open_s
+            transform_seconds_total += transform_s
+            images += len(stacked)
         elapsed = time.perf_counter() - started
-        # Row identity from the ordered batches, which is what submission order guarantees.
         ordered_paths = [str(path) for batch in batches for path in batch]
         results.append(Trial(worker_count=workers, trial_index=index, kind=kind, elapsed_s=elapsed,
                              batches=len(batches), images=images,
-                             peak_rss_kib=_peak_rss_kib(), vram_mib=_vram_mib()))
+                             peak_rss_kib=_peak_rss_kib(), vram_mib=_vram_mib(),
+                             open_seconds=round(open_seconds_total, 4),
+                             transform_seconds=round(transform_seconds_total, 4)))
         parity_rows.append({
             "worker_count": workers, "trial_index": index, "kind": kind,
             "ordered_paths_digest": _digest(json.dumps(ordered_paths).encode("utf-8")),
-            "blob_digest": _digest("\n".join(blob_digests).encode("utf-8")),
             "array_digest": _digest("\n".join(array_digests).encode("utf-8")),
             "images": images,
         })
@@ -365,8 +425,9 @@ def main(argv: list[str] | None = None) -> int:
     verdicts = {}
     for count in workers:
         rows = [row for row in all_parity if row["worker_count"] == count and row["kind"] == "steady"]
+        # Two digests, both about the data the pool produced: the submitted order, and the
+        # transformed arrays. The old blob digest is gone with the PNG round-trip it described.
         same = all(row["ordered_paths_digest"] == reference["ordered_paths_digest"]
-                   and row["blob_digest"] == reference["blob_digest"]
                    and row["array_digest"] == reference["array_digest"] for row in rows)
         verdicts[count] = "IDENTICAL" if same else "REJECTED (content differs)"
 
