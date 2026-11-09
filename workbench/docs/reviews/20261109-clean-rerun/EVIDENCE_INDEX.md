@@ -3,12 +3,13 @@
 Mỗi dòng là một file **có thật trên đĩa** (đã kiểm bằng `test -f`), kèm cái nó chứng minh và gate
 mà nó phục vụ. Không có mục nào là dự định.
 
-Revision khi lập chỉ mục: `TESTED_SOURCE_SHA` là `2a832bc0efe482d1536e466232a3e2803929d1d8`, đã đo bằng
-một lượt sweep serial tại chính revision đó (`full_suite_2a832bc.txt`: 2510 passed / 21 failed / 47 skipped
-= 2578 collected, exit 1) và guard `test_handoff_commands.py` sau đó **8 passed**. Bốn lượt chạy sớm hơn
-(trước khi HEAD chuyển `ffb6ae8` → `20b83e5` lúc 03:53 do lane khác) đã được đối chiếu lại:
-`scoring_module_source_hash` và `condition_transform_source_hash` ghi trong artifact bằng đúng file nguồn
-hiện tại.
+Revision khi lập chỉ mục: `TESTED_SOURCE_SHA` là `085774488449e774df22e20fe410f30ad008f9d1`, đã đo bằng
+một lượt sweep serial tại chính revision đó (`full_suite_0857744.txt`: 2558 passed / 18 failed / 47 skipped
+= 2623 collected, exit 1, 2962.52 s) và guard `test_handoff_commands.py` sau đó **8 passed**. Mười tám
+failure là **cùng một bộ id** với baseline `80842661` — 0 mới, 0 mất; ba failure drift từng xuất hiện ở
+`2a832bc` đã được sửa test-only trong `3d576bf`. Bốn lượt chạy sớm hơn (trước khi HEAD chuyển
+`ffb6ae8` → `20b83e5` lúc 03:53 do lane khác) đã được đối chiếu lại: `scoring_module_source_hash` và
+`condition_transform_source_hash` ghi trong artifact bằng đúng file nguồn hiện tại.
 
 Tám lượt chạy đã xong; mục 1 và 6 ghi run id + đường dẫn artifact cho từng lượt.
 
@@ -136,9 +137,11 @@ không suy ra số. Limn có số nhưng là **đọc tay**, và cột của nó
 
 - Không có differential native↔adapter theo từng model (G1 chưa chạy).
 - Không có forward pass nào được đối chứng (G2 chưa chạy).
-- Không có timing sạch (G8 chưa chạy — hai lane khác đang chạy).
-- **ĐÃ CÓ** sweep hoàn chỉnh tại revision hiện tại: `full_suite_2a832bc.txt` (G11 nay là PASS). Sweep tại
-  `ffb6ae8` bị huỷ ở 22% vẫn được giữ làm lịch sử, không phải lượt đo của cây hiện tại.
+- **G8 ĐÃ CHẠY**, nhưng phạm vi hẹp: chỉ producer stage (decode+transform) của một model family, trên
+  box rảnh. Không có timing end-to-end, và tám lượt composition run vẫn ghi `not_measured`.
+- **ĐÃ CÓ** sweep hoàn chỉnh tại các revision đã đo: `full_suite_2a832bc.txt` và bản hiện hành
+  `full_suite_0857744.txt` (xem §12 về bản mới nhất). Sweep tại `ffb6ae8` bị huỷ ở 22% vẫn được giữ
+  làm lịch sử, không phải lượt đo của cây hiện tại.
 
 ## 11. Phép đo hiệu năng (sau khi sweep thoát)
 
