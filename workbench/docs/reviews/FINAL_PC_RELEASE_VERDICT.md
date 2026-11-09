@@ -92,13 +92,13 @@ No target sm_120 GPU or complete per-model CUDA installation is claimed.
 
 Earlier R23/R25/composition measurements are historical and do not certify this runtime profile.
 
-## The serial sweep at `0857744` (measured, 18 failures — 0 new)
+### Historical: the serial sweep at `0857744` (measured, 18 failures — 0 new)
 
-Current serial run. `0857744` is the tip that carries the PAIR/CLIP4Cir adapters, the
+That serial run was measured at `0857744`, which was then the tip carrying the PAIR/CLIP4Cir adapters, the
 `policy_observed` payload and the reset-ordering fix on top of the clean-rerun round. Those are
 production paths to the release guard, so the previously recorded `2a832bc` no longer described the
 tree and `test_handoff_commands.py` stayed red until this run advanced the record. One serial run,
-no `-n`, log filed at `20261109-clean-rerun/full_suite_7a58ce6.txt`:
+no `-n`, log filed at `20261109-clean-rerun/full_suite_0857744.txt`:
 
 ```
 18 failed, 2558 passed, 47 skipped, 290 warnings in 2962.52s (0:49:22)
