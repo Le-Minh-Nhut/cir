@@ -141,10 +141,10 @@ class Adapter(CompositionAdapter):
 
         Valid only for rows the encoders produced, i.e. two unit-norm 1024-d halves each: there the
         whole-row L2 of ``:125`` is exactly ``sqrt(2)``, so the upstream expression equals the plain
-        cosine this inherits. The upstream reference mask (``:134-135``) is deliberately absent.
+        cosine this inherits. The upstream reference mask (``:134-135``) is deliberately absent, and
+        ``categories`` is forwarded because the base class needs it for scoped galleries.
         """
-        del categories
-        return super().score(queries, targets)
+        return super().score(queries, targets, categories)
 
 def _resolve(config: Any, checkpoint_id: str | None) -> tuple[dict[str, Any], dict[str, Any], str | None]:
     from workbench.backend.model_settings import setting

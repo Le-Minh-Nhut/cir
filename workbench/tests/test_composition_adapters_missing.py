@@ -206,8 +206,6 @@ def test_adapter_does_not_rewrite_the_texts_it_is_given(model_id: str, monkeypat
 
     # The transport lives in the module that DEFINES ``encode_queries``, which for the two
     # CLIP4Cir variants is the shared implementation, not the thin registry-facing module.
-    import sys
-
     owner = sys.modules[module.Adapter.encode_queries.__globals__["__name__"]]
     monkeypatch.setattr(owner, "_run", fake_run, raising=False)
     images = [str(tmp_path / f"image-{index}.png") for index in range(3)]

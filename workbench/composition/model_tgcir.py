@@ -104,10 +104,10 @@ class Adapter(CompositionAdapter):
 
         No max over tokens (the encoder already mean-pooled, ``model.py:201-210``); the upstream
         reference mask (``test.py:63-67``) is deliberately absent — see the module docstring. The
-        shared implementation is exactly this expression, so it is reused, not restated.
+        shared implementation is exactly this expression, so it is reused, not restated; the
+        ``categories`` argument is forwarded because the base class needs it for scoped galleries.
         """
-        del categories
-        return super().score(queries, targets)
+        return super().score(queries, targets, categories)
 
 def _resolve(config: Any, checkpoint_id: str | None) -> tuple[dict[str, Any], dict[str, Any], str | None]:
     from workbench.backend.model_settings import setting
