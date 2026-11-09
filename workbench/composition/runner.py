@@ -1031,8 +1031,8 @@ def _record_effective_blas_pin(result: Any) -> None:
     _effective_blas_pin.clear()
     if not isinstance(result, Mapping):
         _effective_blas_pin.update({
-            "requested": BLAS_THREADS_PINNED, "effective": None, "verified": False,
-            "setter_found": None, "source": None,
+            "requested": BLAS_THREADS_PINNED, "effective": None, "previous": None,
+            "verified": False, "setter_found": None, "getter_found": None, "source": None,
             "reason": "the pin helper returned no verification record, so the effective value is "
                       "unknown; this is not evidence that the pin applied",
         })
@@ -1040,13 +1040,91 @@ def _record_effective_blas_pin(result: Any) -> None:
     _effective_blas_pin.update({
         "requested": result.get("requested"),
         "effective": result.get("effective"),
+        # `previous` is the value the runtime reported BEFORE the pin. Carried into the observation
+        # because it is the only field that lets a reader confirm the pin CHANGED something -- an
+        # `effective == requested` on a runtime already at that count proves much less.
+        "previous": result.get("previous"),
         "verified": bool(result.get("verified")),
         "setter_found": bool(result.get("setter_found")),
+        "getter_found": bool(result.get("getter_found")),
         "source": result.get("source"),
         "reason": result.get("reason"),
     })
 
 _effective_blas_pin: dict[str, Any] = {}
+
+#: Marker for an artifact written before `policy_observed` existed, and for a run that recorded
+#: nothing. Kept as a string so it reads correctly in JSON without any consumer having to know a
+#: sentinel: an absent observation is never rendered as a boolean.
+NOT_RECORDED = "not_recorded (no readback captured for this run)"
+
+#: Field names of the readback record `_blas_thread_limit` returns and `_record_effective_blas_pin`
+#: stores. An artifact's `policy_observed` block is exactly these, plus a verdict, so a consumer can
+#: check it against what the pin helper is able to report at all.
+POLICY_OBSERVED_FIELDS = ("requested", "effective", "previous", "setter_found", "getter_found",
+                          "verified", "source")
+
+def _reset_effective_blas_pin() -> None:
+    """Drop any readback left in the module dict by an earlier run in this process.
+
+    REQUIRED before a run's scoring phase: `_effective_blas_pin` is process-global, so without this
+    a run that scored nothing (reused ranks, every condition unsupported) would publish the
+    PREVIOUS model's readback as its own observation. That is worse than publishing nothing --
+    it would claim a verified pin for a run whose scoring never happened.
+    """
+    _effective_blas_pin.clear()
+
+def observed_policy_record() -> dict[str, Any]:
+    """What the runtime ACTUALLY reported for this run's scoring calls, or an honest absence.
+
+    Deliberately NOT part of the run identity. The identity is hashed BEFORE scoring runs
+    (`run_id`/`fingerprint` at `runner.py:1510`), so a value only known afterwards cannot go into
+    that payload without making the id depend on process history -- the exact defect the
+    `_blas_pin_capability` docstring records ("the first run recorded an empty map and the second a
+    populated one, so the same inputs minted two run ids"). This record therefore travels OUTSIDE
+    the hash, in the rank payload and the summary, where it can describe a particular run without
+    re-keying it.
+
+    Three distinct facts, never collapsed:
+      * `blas_threads_pinned` (identity)  -- the value we ASKED for;
+      * `blas_pin_capability` (identity)  -- what this interpreter CAN do;
+      * `policy_observed`     (this)      -- what it DID for this run's scoring calls.
+    """
+    if not _effective_blas_pin:
+        return {"status": NOT_RECORDED,
+                "reason": ("no BLAS pin readback was recorded for this run: either the run reused "
+                           "ranks instead of scoring, or it produced no rank payload. This is an "
+                           "absence of evidence, not evidence the pin failed."),
+                "record": None}
+    record = {name: _effective_blas_pin.get(name) for name in POLICY_OBSERVED_FIELDS}
+    if record.get("verified") is True:
+        status = "verified"
+    elif record.get("setter_found") is False or record.get("getter_found") is False:
+        status = "unverifiable"
+    else:
+        status = "unverified"
+    return {"status": status, "reason": _effective_blas_pin.get("reason"), "record": record}
+
+def policy_observed_from_payload(payload: Any) -> dict[str, Any]:
+    """The `policy_observed` block of a stored rank payload, or an honest absence.
+
+    A legacy artifact (written before this field existed) has no block. It must be reported as
+    absent, never as `verified: false` -- those are different claims, and the eight artifacts
+    produced before this change have exactly this shape. Nothing is backfilled: a value that was
+    not observed is never invented.
+    """
+    if not isinstance(payload, Mapping):
+        return {"status": NOT_RECORDED,
+                "reason": "no rank payload was read, so no policy observation exists to report",
+                "record": None}
+    block = payload.get("policy_observed")
+    if not isinstance(block, Mapping):
+        return {"status": NOT_RECORDED,
+                "reason": "this artifact predates the policy_observed field; whether its pin was "
+                          "verified is not recorded here",
+                "record": None}
+    return {"status": block.get("status", NOT_RECORDED), "reason": block.get("reason"),
+            "record": block.get("record")}
 
 def _blas_pin_capability() -> dict[str, Any]:
     """What this interpreter can prove about BLAS pinning -- stable for the process.
@@ -1627,6 +1705,15 @@ def run_composition(data: Any, model_specs: Sequence[ModelSpec], config: Any, *,
             # shape from the group pass (batch N -> batch 1), so a condition that used it cannot be
             # claimed to have completed as one pass; this map is what the summary reports.
             fallback_used: dict[str, bool] = {}
+            # The pin readback is process-global. Clear it HERE, at the boundary of this run's
+            # scoring phase, so `policy_observed` can only ever report a pin applied by THIS run --
+            # never one left behind by the previous model or condition in the same process. This is
+            # the mirror of `_blas_pin_capability`'s cache, which is a property of the interpreter
+            # and survives the reset on purpose.
+            #
+            # Cleared even on the reuse path: a resumed run reports "not recorded", which is true,
+            # rather than inheriting a stale verification from whatever scored before it.
+            _reset_effective_blas_pin()
             if ranks is None or retry_conditions:
                 if ranks is None:
                     ranks = {condition: {query.qid: None for query in queries} for condition in conditions}
@@ -1836,7 +1923,15 @@ def run_composition(data: Any, model_specs: Sequence[ModelSpec], config: Any, *,
                 _atomic_json(rank_path, {"fingerprint": fingerprint, "identity": identity,
                                          "attempt": attempt, "ranks": ranks,
                                          "query_failures": reasons_by_condition,
-                                         "condition_status": mode_status})
+                                         "condition_status": mode_status,
+                                         # OUTSIDE the hashed `identity`: what the runtime actually
+                                         # reported for THIS run's scoring calls. Two fields in
+                                         # `identity` describe the request and the interpreter's
+                                         # capability; this one describes the observation. Keeping it
+                                         # out of the hash is deliberate -- see
+                                         # `observed_policy_record` for why putting it in would make
+                                         # the run id depend on process history.
+                                         "policy_observed": observed_policy_record()})
             # Published here -- after every condition has been ranked and before any summary is
             # written -- so a manifest exists exactly when the rows it describes exist. A condition
             # that the run did not re-score has no writer and is reported absent, not partial.
@@ -1888,6 +1983,11 @@ def run_composition(data: Any, model_specs: Sequence[ModelSpec], config: Any, *,
             # A requested export that produced nothing is a non-success outcome: the run measured
             # what it measured, but it did not deliver what was asked of it.
             export_blocked = bool(export_blocked_reason)
+            # Snapshot ONCE, after every scoring call for this run has returned and before any
+            # summary is written. Snapshotted rather than read inline per subset so all three
+            # subset summaries of one run report the same observation -- they describe one scoring
+            # phase, and a later mutation could not change that.
+            policy_observed = observed_policy_record()
             summary_by_subset = {}
             for subset in subsets:
                 selected = [query for query in queries if subset in query.subsets]
@@ -1980,6 +2080,11 @@ def run_composition(data: Any, model_specs: Sequence[ModelSpec], config: Any, *,
                     # because `measurement_identity` reads the summary, and a `header`-verified run
                     # must never be grouped with a fully-verified one.
                     "cache_verify_mode": _cache_verify_mode(),
+                    # What the runtime reported for THIS run's scoring calls, so a served row can
+                    # show it without reading the rank file. Deliberately outside `identity`:
+                    # `measurement_identity` reads the summary for grouping, and a value that is
+                    # only known after scoring must not change the group a run belongs to.
+                    "policy_observed": policy_observed,
                     "variant_provenance": variant_provenance,
                     "metrics": asdict(result), "run_id": run_id, "resume_key": fingerprint,
                     "reused_query_result_count": len(queries) * len(conditions) if reused else 0,
