@@ -30,6 +30,8 @@ from __future__ import annotations
 
 from importlib import import_module
 
+import sys
+
 import numpy as np
 import pytest
 from PIL import Image
@@ -39,17 +41,26 @@ from workbench.composition.inputs import CONDITIONS, adapt_query_inputs
 from workbench.backend.registry import load_registry
 
 #: Adapters added for models that previously had none. ``airknow`` is included because it was
-#: added in the same programme and has the same "not verified on GPU" status.
+#: added in the same programme and has the same "not verified on GPU" status. The last three
+#: (``tgcir``, ``clvc_net``, ``dcnet``) carry a blocker no adapter can remove, so what is asserted
+#: for them is a registered, machine-readable REFUSAL plus the scoring expression the pinned source
+#: does define (or, for ``dcnet``, an explicit refusal to guess one).
 NEW_ADAPTERS = {
     "airknow": "workbench.composition.model_airknow",
     "pair": "workbench.composition.model_pair",
     "combiner_rn50x4_noft": "workbench.composition.model_combiner_rn50x4_noft",
     "clip4cir_rn50x4_fullft": "workbench.composition.model_clip4cir_rn50x4_fullft",
+    "tgcir": "workbench.composition.model_tgcir",
+    "clvc_net": "workbench.composition.model_clvc_net",
+    "dcnet": "workbench.composition.model_dcnet",
 }
 
-#: Feature width each adapter's ``score()`` consumes, taken from its own declaration.
+#: Feature width each adapter's ``score()`` consumes, taken from its own declaration. ``tgcir`` is
+#: 512 (``model.py:48-49``), ``clvc_net`` 2048 (two concatenated 1024-d halves,
+#: ``test.py:30,48,100,116``), ``dcnet`` 1024 (``experts.ce_shared_dim`` in the staged config).
 DIMENSIONS = {"airknow": 256, "pair": 1024,
-              "combiner_rn50x4_noft": 640, "clip4cir_rn50x4_fullft": 640}
+              "combiner_rn50x4_noft": 640, "clip4cir_rn50x4_fullft": 640,
+              "tgcir": 512, "clvc_net": 2048, "dcnet": 1024}
 
 def _model_row(model_id: str) -> dict:
     return next(row for row in load_registry()["models"] if row["model_id"] == model_id)
@@ -110,12 +121,23 @@ def test_score_reproduces_the_declared_expression(model_id: str) -> None:
 
     ``airknow`` maxes over 32 target tokens (``test_BLIP2.py:142-144``); ``pair`` and the two
     CLIP4Cir variants are plain cosine (``PAIR/test.py:57-60``; ``CLIP4Cir/src/validate.py:41,44``).
+    ``tgcir`` (``TGCIR/test.py:53-61``) and ``clvc_net`` (``CLVCNet/test.py:122-129``) are the same
+    plain cosine over their own widths; ``dcnet`` must REFUSE because its reported ranking fuses a
+    per-query correction branch (``DCNet/trainer/trainer_joint.py:207-240``).
     """
     adapter = adapter_class(model_id).__new__(adapter_class(model_id))
     width = DIMENSIONS[model_id]
     rng = np.random.default_rng(0)
     queries = rng.random((4, width), dtype=np.float32)
-    if model_id == "airknow":
+    if model_id == "dcnet":
+        # DCNet's reported ranking is not a score over two fixed matrices
+        # (``trainer_joint.py:207-218,239-240``), so the adapter must REFUSE by name instead of
+        # returning a cosine and letting it be labelled DCNet.
+        from workbench.composition.model_dcnet import ScoringNotReproducible
+
+        with pytest.raises(ScoringNotReproducible, match="correction"):
+            adapter.score(queries, rng.random((6, width), dtype=np.float32))
+    elif model_id == "airknow":
         tokens = rng.random((6, 32, width), dtype=np.float32)
         scores = adapter.score(queries, tokens.reshape(6, 32 * width))
         expected = np.array([

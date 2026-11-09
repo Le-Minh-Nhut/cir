@@ -874,6 +874,7 @@ models:
         checkpoint_mapping_status: UNVERIFIED
         checkpoint_base_relative: ../../checkpoints/pair
   - model_id: clvc_net
+    composition_adapter: workbench.composition.model_clvc_net
     replay_status: BLOCKED_NO_SOURCE_REPLAY
     # The pinned trainer builds and saves a separate whole model per FashionIQ category
     # (`train.py:load_dataset`, `train_and_evaluate` over dress/shirt/toptee). One shared pair of
@@ -974,6 +975,7 @@ models:
         # Staged as `clvc/`, not `clvc_net/` — the directory name is the author archive's.
         checkpoint_base_relative: ../../checkpoints/clvc
   - model_id: dcnet
+    composition_adapter: workbench.composition.model_dcnet
     replay_status: REPLAY_CODE_IMPLEMENTED
     category_model_policy: shared
     checkpoint_serialization: run_directory
@@ -1249,6 +1251,7 @@ models:
         # instead would recreate the original defect: an artifact description that names no file
         # on disk. `test_clip4cir_checkpoint_resolution.py` pins the agreement.
   - model_id: tgcir
+    composition_adapter: workbench.composition.model_tgcir
     replay_status: PREFLIGHT_ONLY
     category_model_policy: shared
     checkpoint_serialization: whole_model
