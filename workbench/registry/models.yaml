@@ -793,6 +793,7 @@ models:
         status: URL_VERIFIED
         checkpoint_mapping_status: VERIFIED_METADATA
   - model_id: pair
+    composition_adapter: workbench.composition.model_pair
     environment:
       python_env_var: WORKBENCH_PAIR_PYTHON
       confidence: VERIFIED_README
@@ -1068,6 +1069,7 @@ models:
         checkpoint_mapping_status: VERIFIED_METADATA
         checkpoint_base_relative: ../../checkpoints/dcnet
   - model_id: combiner_rn50x4_noft
+    composition_adapter: workbench.composition.model_combiner_rn50x4_noft
     # The pinned validator has no dataset-root option: `src/data_utils.py:base_path` fixes the data root to
     # `<checkout>/fashionIQ_dataset` and opens `.jpg` images there. The canonical FashionIQ
     # root is staged at that path by an explicitly authorized preparation step, and the link
@@ -1150,6 +1152,7 @@ models:
         checkpoint_mapping_status: VERIFIED_METADATA
         checkpoint_base_relative: ../../checkpoints/clip4cir/FashionIQ/RN50x4_noft
   - model_id: clip4cir_rn50x4_fullft
+    composition_adapter: workbench.composition.model_clip4cir_rn50x4_fullft
     # The pinned validator has no dataset-root option: `src/data_utils.py:base_path` fixes the data root to
     # `<checkout>/fashionIQ_dataset` and opens `.jpg` images there. The canonical FashionIQ
     # root is staged at that path by an explicitly authorized preparation step, and the link
