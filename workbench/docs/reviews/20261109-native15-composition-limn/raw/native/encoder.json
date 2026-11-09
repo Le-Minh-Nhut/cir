@@ -1,0 +1,64 @@
+{
+  "model_id": "encoder",
+  "protocol": "fashioniq_val_split",
+  "results": [
+    {
+      "model_id": "encoder",
+      "checkpoint_id": "fashioniq",
+      "category": "dress",
+      "protocol": "fashioniq_val_split",
+      "r1": 21.46752602875558,
+      "r10": 51.95835399107585,
+      "r50": 76.35101636093208,
+      "complete": true,
+      "provenance": {
+        "checkpoint": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/encoder/fashioniq.pt",
+        "checkpoint_sha256": "0f31c50150a7bda3495e3378df13b4cec7924b52efd23b5e5dd9731459da9173",
+        "source_commit": "29a2a31d6a56f677bf450c3be7cdaef423fb7018"
+      },
+      "parity_mismatches": [],
+      "per_query_published": false
+    },
+    {
+      "model_id": "encoder",
+      "checkpoint_id": "fashioniq",
+      "category": "shirt",
+      "protocol": "fashioniq_val_split",
+      "r1": 25.515210991167812,
+      "r10": 54.9558390578999,
+      "r50": 75.4170755642787,
+      "complete": true,
+      "provenance": {
+        "checkpoint": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/encoder/fashioniq.pt",
+        "checkpoint_sha256": "0f31c50150a7bda3495e3378df13b4cec7924b52efd23b5e5dd9731459da9173",
+        "source_commit": "29a2a31d6a56f677bf450c3be7cdaef423fb7018"
+      },
+      "parity_mismatches": [],
+      "per_query_published": false
+    },
+    {
+      "model_id": "encoder",
+      "checkpoint_id": "fashioniq",
+      "category": "toptee",
+      "protocol": "fashioniq_val_split",
+      "r1": 29.372768995410503,
+      "r10": 61.958184599694036,
+      "r50": 81.13207547169812,
+      "complete": true,
+      "provenance": {
+        "checkpoint": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/encoder/fashioniq.pt",
+        "checkpoint_sha256": "0f31c50150a7bda3495e3378df13b4cec7924b52efd23b5e5dd9731459da9173",
+        "source_commit": "29a2a31d6a56f677bf450c3be7cdaef423fb7018"
+      },
+      "parity_mismatches": [],
+      "per_query_published": false
+    }
+  ],
+  "aggregate": {
+    "macro_r10": 56.29079254955659,
+    "macro_r50": 77.63338913230297,
+    "macro_mean": 66.96209084092978,
+    "complete": true
+  },
+  "recorded_at": "2026-11-09T13:23:23.661361+00:00"
+}

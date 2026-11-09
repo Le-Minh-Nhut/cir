@@ -1,0 +1,8 @@
+encoder    schema=2 group=c43c108bd782ff2820c628df conf=full missing=[]
+conesep    schema=2 group=042ae823b101f49630f066d6 conf=full missing=[]
+habit      schema=2 group=53391a2fe528718e1fd6c1bb conf=full missing=[]
+intent     schema=2 group=ac9e88ad1eff7fc2665e0d86 conf=full missing=[]
+hint       schema=2 group=26077707346eddc848ab9ec2 conf=full missing=[]
+limn       schema=2 group=1c4139f3fe80dcc1ad0b9afa conf=full missing=[]
+ptha_mtst  schema=2 group=c4c547c7dacede144321ac2f conf=full missing=[]
+tme        schema=2 group=749cc7c8b57cb74c77bd19e7 conf=full missing=[]

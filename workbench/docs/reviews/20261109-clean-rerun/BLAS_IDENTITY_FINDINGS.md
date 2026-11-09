@@ -112,7 +112,10 @@ the exact case where equal aggregates hide reordered ranks.
 
 ## Encoder
 
-Genuinely BLAS-sensitive: 12727 of 18009 ranks moved, max |drank| 1706, movement roughly symmetric
+CORRECTION 2026-11-09: the 12727 of 18009 rank movement is NOT BLAS pinning. A controlled A/B
+(`d3b_encoder_aggregate_scan.txt`, same vectors, only threads 1 vs 10) moves 1 rank/condition with
+r10/r50 delta 0.0. The 12727 delta is caused by a changed adapter RANK method (adapter_module_source_hash 1a8b0dd2->bf60d855, adapter_source_hashes.rank 5f828b13->f0914b12, score hash identical) plus an interpreter change (pair-adapted py3.11.15 unverified -> encoder310 py3.10.20 verified).
+R@10 rose (31.0178->31.0345) while R@50 fell (49.5752->49.4753), impossible for a thread-count change. Movement roughly symmetric
 (multimodal 1414 improved / 1405 worsened, image_only 2443 / 2771, text_only 2173 / 2521), so it is
 reordering rather than a shift in one direction. The pre-pin and pinned encoder runs are different
 measurements and must not be mixed.

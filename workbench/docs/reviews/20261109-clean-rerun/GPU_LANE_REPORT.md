@@ -69,6 +69,9 @@ Per-query rank diffs (not aggregate metrics) are in `BLAS_IDENTITY_FINDINGS.md`.
 
 * **encoder** — the only model with material movement: 12727 of 18009 ranks changed, max |Δ| 1706,
   gap 0.4723 → 0.4699. Pre-pin and pinned encoder runs are different measurements.
+  **CORRECTION 2026-11-09:** that movement is NOT the BLAS pin (a controlled A/B
+  `d3b_encoder_aggregate_scan.txt` moves 1 rank/condition, r10/r50 delta 0.0). It is a changed adapter RANK method (adapter_module_source_hash 1a8b0dd2->bf60d855, adapter_source_hashes.rank 5f828b13->f0914b12, score hash identical) plus an interpreter change (pair-adapted py3.11.15 unverified -> encoder310 py3.10.20 verified).
+  R@10 rose while R@50 fell, impossible for a thread-count change.
 * **conesep**, **ptha_mtst** — weakly sensitive: 17 and 46 ranks moved by 1–2, from ~1e-7 score
   ties, no k-boundary crossing, so R@10/R@50 unchanged. Not bit-identical.
 * **habit, intent, hint, tme** — bit-identical: 0/6003 ranks moved, per-query nDCG delta exactly 0.

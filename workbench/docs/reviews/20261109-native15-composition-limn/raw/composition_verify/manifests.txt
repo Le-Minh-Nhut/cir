@@ -1,0 +1,96 @@
+====================================================================================================
+MODEL encoder RUN 5dee7425dd46c5f154808aac
+  workbench/artifacts/composition/runs/5dee7425dd46c5f154808aac/candidates/encoder_fashioniq/multimodal.manifest.json
+    condition = "multimodal"
+    depth = 100
+    record_count = 6003
+    expected_record_count = 6003
+    missing_query_count = 0
+    partial = false
+    gallery_count = 74381
+    file_sha256 = "74257d25eb5d71b80451a5b92535a73dee33d43543389d642179e88af9f07d3d"
+    allkeys: ['artifact_type', 'attempt', 'checkpoint_id', 'condition', 'depth', 'expected_record_count', 'file', 'file_bytes', 'file_sha256', 'gallery_count', 'gallery_identity_sha256', 'missing_query_count', 'missing_query_examples', 'model_id', 'partial', 'protocol_id', 'record_count', 'reference_eligibility_measured', 'reference_eligible', 'run_id', 'schema_version', 'score_present', 'score_semantics', 'source', 'tie_policy']
+====================================================================================================
+MODEL conesep RUN a4f786d8af4d46ac2a85ab9c
+  workbench/artifacts/composition/runs/a4f786d8af4d46ac2a85ab9c/candidates/conesep_fiq_n02/multimodal.manifest.json
+    condition = "multimodal"
+    depth = 100
+    record_count = 6003
+    expected_record_count = 6003
+    missing_query_count = 0
+    partial = false
+    gallery_count = 74381
+    file_sha256 = "346e9ef66ba43ce08ad5e73169adfdc77da4161bc4afb1be66bd15734230896c"
+    allkeys: ['artifact_type', 'attempt', 'checkpoint_id', 'condition', 'depth', 'expected_record_count', 'file', 'file_bytes', 'file_sha256', 'gallery_count', 'gallery_identity_sha256', 'missing_query_count', 'missing_query_examples', 'model_id', 'partial', 'protocol_id', 'record_count', 'reference_eligibility_measured', 'reference_eligible', 'run_id', 'schema_version', 'score_present', 'score_semantics', 'source', 'tie_policy']
+====================================================================================================
+MODEL habit RUN c6eb9d5775ae636a3b8addbc
+  workbench/artifacts/composition/runs/c6eb9d5775ae636a3b8addbc/candidates/habit_fiq_n02/multimodal.manifest.json
+    condition = "multimodal"
+    depth = 100
+    record_count = 6003
+    expected_record_count = 6003
+    missing_query_count = 0
+    partial = false
+    gallery_count = 74381
+    file_sha256 = "8f92318c887dfde12476a68702c2ff68a4a95cd37b76ca15f24a215795163990"
+    allkeys: ['artifact_type', 'attempt', 'checkpoint_id', 'condition', 'depth', 'expected_record_count', 'file', 'file_bytes', 'file_sha256', 'gallery_count', 'gallery_identity_sha256', 'missing_query_count', 'missing_query_examples', 'model_id', 'partial', 'protocol_id', 'record_count', 'reference_eligibility_measured', 'reference_eligible', 'run_id', 'schema_version', 'score_present', 'score_semantics', 'source', 'tie_policy']
+====================================================================================================
+MODEL intent RUN 4901da139ac40b874d2363c5
+  workbench/artifacts/composition/runs/4901da139ac40b874d2363c5/candidates/intent_fiq_n02/multimodal.manifest.json
+    condition = "multimodal"
+    depth = 100
+    record_count = 6003
+    expected_record_count = 6003
+    missing_query_count = 0
+    partial = false
+    gallery_count = 74381
+    file_sha256 = "107b0fc048bb721659b15f65ec07daf4e881c172f4ac04598231b3061774196d"
+    allkeys: ['artifact_type', 'attempt', 'checkpoint_id', 'condition', 'depth', 'expected_record_count', 'file', 'file_bytes', 'file_sha256', 'gallery_count', 'gallery_identity_sha256', 'missing_query_count', 'missing_query_examples', 'model_id', 'partial', 'protocol_id', 'record_count', 'reference_eligibility_measured', 'reference_eligible', 'run_id', 'schema_version', 'score_present', 'score_semantics', 'source', 'tie_policy']
+====================================================================================================
+MODEL hint RUN f461f391c6d4696011be8067
+  workbench/artifacts/composition/runs/f461f391c6d4696011be8067/candidates/hint_fashioniq/multimodal.manifest.json
+    condition = "multimodal"
+    depth = 100
+    record_count = 6003
+    expected_record_count = 6003
+    missing_query_count = 0
+    partial = false
+    gallery_count = 74381
+    file_sha256 = "11260fb23f6a31ed19700dd3c2b4f55aa08127c7e35a3be4077263bd01798129"
+    allkeys: ['artifact_type', 'attempt', 'checkpoint_id', 'condition', 'depth', 'expected_record_count', 'file', 'file_bytes', 'file_sha256', 'gallery_count', 'gallery_identity_sha256', 'missing_query_count', 'missing_query_examples', 'model_id', 'partial', 'protocol_id', 'record_count', 'reference_eligibility_measured', 'reference_eligible', 'run_id', 'schema_version', 'score_present', 'score_semantics', 'source', 'tie_policy']
+====================================================================================================
+MODEL limn RUN 9e4918a6b5c243412cbc58c9
+  workbench/artifacts/composition/runs/9e4918a6b5c243412cbc58c9/candidates/limn_base_iter0_all_categories/multimodal.manifest.json
+    condition = "multimodal"
+    depth = 100
+    record_count = 6001
+    expected_record_count = 6003
+    missing_query_count = 2
+    partial = true
+    gallery_count = 74381
+    file_sha256 = "8d2a01b6255c831563b42b8877fa2d3278a3beb4a2f35c4fc245597d73480bee"
+    allkeys: ['artifact_type', 'attempt', 'checkpoint_id', 'condition', 'depth', 'expected_record_count', 'file', 'file_bytes', 'file_sha256', 'gallery_count', 'gallery_identity_sha256', 'missing_query_count', 'missing_query_examples', 'model_id', 'partial', 'protocol_id', 'record_count', 'reference_eligibility_measured', 'reference_eligible', 'run_id', 'schema_version', 'score_present', 'score_semantics', 'source', 'tie_policy']
+====================================================================================================
+MODEL ptha_mtst RUN f54a77450ebd2126590d4385
+  workbench/artifacts/composition/runs/f54a77450ebd2126590d4385/candidates/ptha_mtst_cirr_transfer/multimodal.manifest.json
+    condition = "multimodal"
+    depth = 100
+    record_count = 6003
+    expected_record_count = 6003
+    missing_query_count = 0
+    partial = false
+    gallery_count = 74381
+    file_sha256 = "c9ebea0bbb12a187dfedd30af4fb2576bbe69cbc01e3703dc299d31abd296f90"
+    allkeys: ['artifact_type', 'attempt', 'checkpoint_id', 'condition', 'depth', 'expected_record_count', 'file', 'file_bytes', 'file_sha256', 'gallery_count', 'gallery_identity_sha256', 'missing_query_count', 'missing_query_examples', 'model_id', 'partial', 'protocol_id', 'record_count', 'reference_eligibility_measured', 'reference_eligible', 'run_id', 'schema_version', 'score_present', 'score_semantics', 'source', 'tie_policy']
+====================================================================================================
+MODEL tme RUN cd1a696d8bca0fc4bce6925b
+  workbench/artifacts/composition/runs/cd1a696d8bca0fc4bce6925b/candidates/tme_fashioniq_0/multimodal.manifest.json
+    condition = "multimodal"
+    depth = 100
+    record_count = 6003
+    expected_record_count = 6003
+    missing_query_count = 0
+    partial = false
+    gallery_count = 74381
+    file_sha256 = "f09d2af0d1e608b75f0f06d37950d2251d556571976faaba72d75ddcfa54fb2b"
+    allkeys: ['artifact_type', 'attempt', 'checkpoint_id', 'condition', 'depth', 'expected_record_count', 'file', 'file_bytes', 'file_sha256', 'gallery_count', 'gallery_identity_sha256', 'missing_query_count', 'missing_query_examples', 'model_id', 'partial', 'protocol_id', 'record_count', 'reference_eligibility_measured', 'reference_eligible', 'run_id', 'schema_version', 'score_present', 'score_semantics', 'source', 'tie_policy']

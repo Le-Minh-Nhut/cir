@@ -1,0 +1,21 @@
+ts,phase,tool,command,status,note
+2026-11-09,T1,ctl312h,python scripts/t1_provenance.py,PASS,release record + caption rows + splits for 7:3038 and 7:3790
+2026-11-09,T2,ctl312h,python scripts/t2_dual_scope.py (first run),SUPERSEDED,"per-row JSONL open truncated each scope file to one query; ranks valid, exports incomplete"
+2026-11-09,T2,ctl312h,python scripts/t2_dual_scope.py,PASS,"12 condition rankings, 2 real query images, 2 scopes, full 74381 gallery, 60.5s; identical ranks to first run"
+2026-11-09,T3,limn310-adapted,python scripts/t3_native_eval.py --category shirt,KILLED,tool deadline 3000s during the 3-category-in-one-process run; dress had completed
+2026-11-09,T3,limn310-adapted,python scripts/t3_native_eval.py --category dress,PASS,"native test + observer, parity VERIFIED, 129.7s + observation"
+2026-11-09,T3,limn310-adapted,python scripts/t3_native_eval.py --category shirt,PASS,"parity VERIFIED, native 156.4s"
+2026-11-09,T3,limn310-adapted,python scripts/t3_native_eval.py --category toptee,PASS,parity VERIFIED
+2026-11-09,T3,limn310-adapted,python scripts/t3_native_eval.py --aggregate-only,PASS,"3 categories, macro R@10 55.7919, all parity VERIFIED"
+2026-11-09,T4,limn310-adapted,python scripts/t4_parity.py --phase native --category dress,PASS,"G1 layer 1: gallery order, ids, text, tokens, transform, sample tensors"
+2026-11-09,T4,ctl312h,python scripts/t4_parity.py --phase adapter --category dress,FAIL,harness bug: inputs pointed at the temporary replay cache; fixed to use data/FashionIQ/resized_image
+2026-11-09,T5,node/npm,npm run build --prefix workbench/frontend,PASS,"tsc -b && vite build, dist rebuilt"
+2026-11-09,T5,ctl312h,pytest workbench/tests/test_limn_dual_scope_diagnostic.py,PASS,10 passed
+2026-11-09,T4,limn310-adapted,python scripts/t4_parity.py --phase native --category shirt,PASS,"regenerated inputs after the adapter phase exposed a temporary-cache path bug"
+2026-11-09,T4,ctl312h,python scripts/t4_parity.py --phase adapter --category dress,FAIL,"harness: compared score() against the reference-MASKED matrix (-10e10) and used float64 where test.py uses float32"
+2026-11-09,T4,ctl312h,python scripts/t4_parity.py --phase adapter --category dress,PASS,"mask separated from tie convention; float32 end to end; 0 rank differences, 27 exact-tie orderings"
+2026-11-09,T4,ctl312h,python scripts/t4_parity.py --phase adapter --category shirt,PASS,"0 rank differences vs native aggregate, 7 exact ties"
+2026-11-09,T4,ctl312h,python scripts/t4_parity.py --phase adapter --category toptee,PASS,"0 rank differences vs native aggregate, 13 exact ties"
+2026-11-09,T5,npm,npm run build --prefix workbench/frontend,PASS,"after the diagnostic table CSS fix"
+2026-11-09,T5,.venv playwright,python scripts/ui_shots.py,PASS,"1920/2560/390 screenshots + DOM facts; mobile overflow found (478px table) then fixed and re-measured"
+2026-11-09,T5,ctl312h,pytest test_limn_scope_routing + test_limn_dual_scope_diagnostic + test_circus_data,PASS,"34 passed in 4.28s"

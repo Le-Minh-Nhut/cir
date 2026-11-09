@@ -1,0 +1,25 @@
+model      cond        R@10 recompute    R@10 json  R@50 recompute    R@50 json  nDCG recompute  nDCG json  MATCH
+encoder    multimodal       31.034483    31.034483       49.475262    49.475262      0.29606758   0.296068   True
+encoder    text_only_black_image        8.745627     8.745627       18.274196    18.274196      0.15695476   0.156955   True
+encoder    image_only_empty_text        2.665334     2.665334        7.462935     7.462935      0.10732000   0.107320   True
+conesep    multimodal       35.482259    35.482259       54.139597    54.139597      0.32944116   0.329441   True
+conesep    text_only_black_image       15.092454    15.092454       26.869898    26.869898      0.19955749   0.199557   True
+conesep    image_only_empty_text        3.198401     3.198401        9.611861     9.611861      0.11206403   0.112064   True
+habit      multimodal       35.615526    35.615526       54.372814    54.372814      0.32828281   0.328283   True
+habit      text_only_black_image       15.292354    15.292354       27.053140    27.053140      0.20067773   0.200678   True
+habit      image_only_empty_text        3.315009     3.315009       10.311511    10.311511      0.11373589   0.113736   True
+intent     multimodal       34.399467    34.399467       54.006330    54.006330      0.31849103   0.318491   True
+intent     text_only_black_image       15.325670    15.325670       26.736632    26.736632      0.19893507   0.198935   True
+intent     image_only_empty_text        2.865234     2.865234        9.128769     9.128769      0.11223297   0.112233   True
+hint       multimodal       32.816925    32.816925       51.774113    51.774113      0.30926917   0.309269   True
+hint       text_only_black_image       11.211061    11.211061       21.589205    21.589205      0.17359148   0.173591   True
+hint       image_only_empty_text        3.398301     3.398301        9.928369     9.928369      0.11427447   0.114274   True
+limn       multimodal       30.028329    30.028329       48.675221    48.675221      0.29039433   0.290394   True
+limn       text_only_black_image        6.382270     6.382270       14.380937    14.380937      0.13383001   0.133830   True
+limn       image_only_empty_text        2.499583     2.499583        6.932178     6.932178      0.09956977   0.099570   True
+ptha_mtst  multimodal       19.473597    19.473597       34.449442    34.449442      0.22493426   0.224934   True
+ptha_mtst  text_only_black_image       10.811261    10.811261       21.072797    21.072797      0.17013529   0.170135   True
+ptha_mtst  image_only_empty_text        1.332667     1.332667        4.647676     4.647676      0.09498087   0.094981   True
+tme        multimodal       34.016325    34.016325       53.956355    53.956355      0.32038841   0.320388   True
+tme        text_only_black_image       16.075296    16.075296       28.035982    28.035982      0.20549672   0.205497   True
+tme        image_only_empty_text        2.698651     2.698651        9.228719     9.228719      0.11170593   0.111706   True

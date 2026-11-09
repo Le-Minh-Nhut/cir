@@ -1,0 +1,1 @@
+RAMGUARD verdict=GO avail=28.46GiB predicted=17.00GiB headroom=4.00GiB need=21.00GiB anon=0.61GiB swapfree=4.97GiB

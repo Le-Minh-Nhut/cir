@@ -1,0 +1,162 @@
+ALL KEYS (50): ['adapter', 'adapter_module_source_status', 'adapter_query_scope_resolution', 'cache_verify_mode', 'category_resolution', 'category_scope_failures', 'category_scopes', 'checkpoint_id', 'checkpoint_identity', 'checkpoint_labels', 'checkpoint_mapping_status', 'checkpoint_training_dataset', 'checkpoint_training_noise_pct', 'checkpoint_transfer', 'condition_status', 'conditions', 'evaluation_noise_pct', 'execution_status', 'failed_expectations', 'feature_storage', 'gallery_candidate_basename_match', 'gallery_count', 'gallery_identity_sha256', 'hash_verification', 'is_synthetic', 'metrics', 'model_id', 'paper_vs_release_gallery', 'preprocessing', 'protocol_id', 'query_count', 'query_count_per_subset', 'reference_eligibility', 'reference_eligible', 'release_artifact_hashes', 'reproduction_status', 'resume_key', 'reused_query_result_count', 'run_id', 'runtime', 'schema_version', 'seed', 'seed_applied', 'smoke', 'subset', 'synthetic', 'synthetic_fixture', 'topk_export', 'unresolved_category_query_count', 'variant_provenance']
+
+####################################################################################################
+MODEL encoder DIR encoder_fashioniq_5dee7425dd46c5f154808aac
+  model_id = "encoder"
+  checkpoint_id = "fashioniq"
+  run_id = "5dee7425dd46c5f154808aac"
+  protocol_id = "circus_fashioniq_release_v1"
+  subset = "full"
+  execution_status = "COMPLETED"
+  failed_expectations = []
+  hash_verification = "matched"
+  query_count = 6003
+  query_count_per_subset = {"full": 6003, "sf": 4069, "validated": 586}
+  gallery_count = 74381
+  topk_export = {"conditions": ["image_only_empty_text", "multimodal", "text_only_black_image"], "depth": 100, "missing_query_count": 0, "partial": false, "reason": null, "requested": true, "status": "TOPK_EXPORT_COMPLETE"}
+  condition_status = {"image_only_empty_text": {"category_scope_failure_count": 0, "fallback_used": false, "status": "COMPLETED", "unscored_count": 0}, "multimodal": {"category_scope_failure_count": 0, "fallback_used": false, "status": "COMPLETED", "unscored_count": 0}, "text_only_black_image": {"category_scope_failure_count": 0, "fallback_used": false, "status": "COMPLETED", "unscored_count": 0}}
+  cache_verify_mode = "full"
+  identity_schema_version = "<<ABSENT>>"
+  policy_observed = "<<ABSENT>>"
+  schema_version = 1
+  is_synthetic = false
+####################################################################################################
+MODEL conesep DIR conesep_fiq_n02_a4f786d8af4d46ac2a85ab9c
+  model_id = "conesep"
+  checkpoint_id = "fiq_n02"
+  run_id = "a4f786d8af4d46ac2a85ab9c"
+  protocol_id = "circus_fashioniq_release_v1"
+  subset = "full"
+  execution_status = "COMPLETED"
+  failed_expectations = []
+  hash_verification = "matched"
+  query_count = 6003
+  query_count_per_subset = {"full": 6003, "sf": 4069, "validated": 586}
+  gallery_count = 74381
+  topk_export = {"conditions": ["image_only_empty_text", "multimodal", "text_only_black_image"], "depth": 100, "missing_query_count": 0, "partial": false, "reason": null, "requested": true, "status": "TOPK_EXPORT_COMPLETE"}
+  condition_status = {"image_only_empty_text": {"category_scope_failure_count": 0, "fallback_used": false, "status": "COMPLETED", "unscored_count": 0}, "multimodal": {"category_scope_failure_count": 0, "fallback_used": false, "status": "COMPLETED", "unscored_count": 0}, "text_only_black_image": {"category_scope_failure_count": 0, "fallback_used": false, "status": "COMPLETED", "unscored_count": 0}}
+  cache_verify_mode = "full"
+  identity_schema_version = "<<ABSENT>>"
+  policy_observed = "<<ABSENT>>"
+  schema_version = 1
+  is_synthetic = false
+####################################################################################################
+MODEL habit DIR habit_fiq_n02_c6eb9d5775ae636a3b8addbc
+  model_id = "habit"
+  checkpoint_id = "fiq_n02"
+  run_id = "c6eb9d5775ae636a3b8addbc"
+  protocol_id = "circus_fashioniq_release_v1"
+  subset = "full"
+  execution_status = "COMPLETED"
+  failed_expectations = []
+  hash_verification = "matched"
+  query_count = 6003
+  query_count_per_subset = {"full": 6003, "sf": 4069, "validated": 586}
+  gallery_count = 74381
+  topk_export = {"conditions": ["image_only_empty_text", "multimodal", "text_only_black_image"], "depth": 100, "missing_query_count": 0, "partial": false, "reason": null, "requested": true, "status": "TOPK_EXPORT_COMPLETE"}
+  condition_status = {"image_only_empty_text": {"category_scope_failure_count": 0, "fallback_used": false, "status": "COMPLETED", "unscored_count": 0}, "multimodal": {"category_scope_failure_count": 0, "fallback_used": false, "status": "COMPLETED", "unscored_count": 0}, "text_only_black_image": {"category_scope_failure_count": 0, "fallback_used": false, "status": "COMPLETED", "unscored_count": 0}}
+  cache_verify_mode = "full"
+  identity_schema_version = "<<ABSENT>>"
+  policy_observed = "<<ABSENT>>"
+  schema_version = 1
+  is_synthetic = false
+####################################################################################################
+MODEL intent DIR intent_fiq_n02_4901da139ac40b874d2363c5
+  model_id = "intent"
+  checkpoint_id = "fiq_n02"
+  run_id = "4901da139ac40b874d2363c5"
+  protocol_id = "circus_fashioniq_release_v1"
+  subset = "full"
+  execution_status = "COMPLETED"
+  failed_expectations = []
+  hash_verification = "matched"
+  query_count = 6003
+  query_count_per_subset = {"full": 6003, "sf": 4069, "validated": 586}
+  gallery_count = 74381
+  topk_export = {"conditions": ["image_only_empty_text", "multimodal", "text_only_black_image"], "depth": 100, "missing_query_count": 0, "partial": false, "reason": null, "requested": true, "status": "TOPK_EXPORT_COMPLETE"}
+  condition_status = {"image_only_empty_text": {"category_scope_failure_count": 0, "fallback_used": false, "status": "COMPLETED", "unscored_count": 0}, "multimodal": {"category_scope_failure_count": 0, "fallback_used": false, "status": "COMPLETED", "unscored_count": 0}, "text_only_black_image": {"category_scope_failure_count": 0, "fallback_used": false, "status": "COMPLETED", "unscored_count": 0}}
+  cache_verify_mode = "full"
+  identity_schema_version = "<<ABSENT>>"
+  policy_observed = "<<ABSENT>>"
+  schema_version = 1
+  is_synthetic = false
+####################################################################################################
+MODEL hint DIR hint_fashioniq_f461f391c6d4696011be8067
+  model_id = "hint"
+  checkpoint_id = "fashioniq"
+  run_id = "f461f391c6d4696011be8067"
+  protocol_id = "circus_fashioniq_release_v1"
+  subset = "full"
+  execution_status = "COMPLETED"
+  failed_expectations = []
+  hash_verification = "matched"
+  query_count = 6003
+  query_count_per_subset = {"full": 6003, "sf": 4069, "validated": 586}
+  gallery_count = 74381
+  topk_export = {"conditions": ["image_only_empty_text", "multimodal", "text_only_black_image"], "depth": 100, "missing_query_count": 0, "partial": false, "reason": null, "requested": true, "status": "TOPK_EXPORT_COMPLETE"}
+  condition_status = {"image_only_empty_text": {"category_scope_failure_count": 0, "fallback_used": false, "status": "COMPLETED", "unscored_count": 0}, "multimodal": {"category_scope_failure_count": 0, "fallback_used": false, "status": "COMPLETED", "unscored_count": 0}, "text_only_black_image": {"category_scope_failure_count": 0, "fallback_used": false, "status": "COMPLETED", "unscored_count": 0}}
+  cache_verify_mode = "full"
+  identity_schema_version = "<<ABSENT>>"
+  policy_observed = "<<ABSENT>>"
+  schema_version = 1
+  is_synthetic = false
+####################################################################################################
+MODEL limn DIR limn_base_iter0_all_categories_9e4918a6b5c243412cbc58c9
+  model_id = "limn"
+  checkpoint_id = "base_iter0_all_categories"
+  run_id = "9e4918a6b5c243412cbc58c9"
+  protocol_id = "circus_fashioniq_release_v1"
+  subset = "full"
+  execution_status = "PARTIAL"
+  failed_expectations = []
+  hash_verification = "matched"
+  query_count = 6003
+  query_count_per_subset = {"full": 6003, "sf": 4069, "validated": 586}
+  gallery_count = 74381
+  topk_export = {"conditions": ["image_only_empty_text", "multimodal", "text_only_black_image"], "depth": 100, "missing_query_count": 6, "partial": true, "reason": null, "requested": true, "status": "TOPK_EXPORT_COMPLETE_PARTIAL"}
+  condition_status = {"image_only_empty_text": {"category_scope_failure_count": 2, "fallback_used": false, "status": "PARTIAL", "unscored_count": 2}, "multimodal": {"category_scope_failure_count": 2, "fallback_used": false, "status": "PARTIAL", "unscored_count": 2}, "text_only_black_image": {"category_scope_failure_count": 2, "fallback_used": false, "status": "PARTIAL", "unscored_count": 2}}
+  cache_verify_mode = "full"
+  identity_schema_version = "<<ABSENT>>"
+  policy_observed = "<<ABSENT>>"
+  schema_version = 1
+  is_synthetic = false
+####################################################################################################
+MODEL ptha_mtst DIR ptha_mtst_cirr_transfer_f54a77450ebd2126590d4385
+  model_id = "ptha_mtst"
+  checkpoint_id = "cirr_transfer"
+  run_id = "f54a77450ebd2126590d4385"
+  protocol_id = "circus_fashioniq_release_v1"
+  subset = "full"
+  execution_status = "COMPLETED"
+  failed_expectations = []
+  hash_verification = "matched"
+  query_count = 6003
+  query_count_per_subset = {"full": 6003, "sf": 4069, "validated": 586}
+  gallery_count = 74381
+  topk_export = {"conditions": ["image_only_empty_text", "multimodal", "text_only_black_image"], "depth": 100, "missing_query_count": 0, "partial": false, "reason": null, "requested": true, "status": "TOPK_EXPORT_COMPLETE"}
+  condition_status = {"image_only_empty_text": {"category_scope_failure_count": 0, "fallback_used": false, "status": "COMPLETED", "unscored_count": 0}, "multimodal": {"category_scope_failure_count": 0, "fallback_used": false, "status": "COMPLETED", "unscored_count": 0}, "text_only_black_image": {"category_scope_failure_count": 0, "fallback_used": false, "status": "COMPLETED", "unscored_count": 0}}
+  cache_verify_mode = "full"
+  identity_schema_version = "<<ABSENT>>"
+  policy_observed = "<<ABSENT>>"
+  schema_version = 1
+  is_synthetic = false
+####################################################################################################
+MODEL tme DIR tme_fashioniq_0_cd1a696d8bca0fc4bce6925b
+  model_id = "tme"
+  checkpoint_id = "fashioniq_0"
+  run_id = "cd1a696d8bca0fc4bce6925b"
+  protocol_id = "circus_fashioniq_release_v1"
+  subset = "full"
+  execution_status = "COMPLETED"
+  failed_expectations = []
+  hash_verification = "matched"
+  query_count = 6003
+  query_count_per_subset = {"full": 6003, "sf": 4069, "validated": 586}
+  gallery_count = 74381
+  topk_export = {"conditions": ["image_only_empty_text", "multimodal", "text_only_black_image"], "depth": 100, "missing_query_count": 0, "partial": false, "reason": null, "requested": true, "status": "TOPK_EXPORT_COMPLETE"}
+  condition_status = {"image_only_empty_text": {"category_scope_failure_count": 0, "fallback_used": false, "status": "COMPLETED", "unscored_count": 0}, "multimodal": {"category_scope_failure_count": 0, "fallback_used": false, "status": "COMPLETED", "unscored_count": 0}, "text_only_black_image": {"category_scope_failure_count": 0, "fallback_used": false, "status": "COMPLETED", "unscored_count": 0}}
+  cache_verify_mode = "full"
+  identity_schema_version = "<<ABSENT>>"
+  policy_observed = "<<ABSENT>>"
+  schema_version = 1
+  is_synthetic = false

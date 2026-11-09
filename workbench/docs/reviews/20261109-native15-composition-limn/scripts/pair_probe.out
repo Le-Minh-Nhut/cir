@@ -1,0 +1,19 @@
+/home/heheboiz/miniconda3/envs/teacher-sprc/lib/python3.11/site-packages/transformers/utils/generic.py:441: FutureWarning: `torch.utils._pytree._register_pytree_node` is deprecated. Please use `torch.utils._pytree.register_pytree_node` instead.
+  _torch_pytree._register_pytree_node(
+/home/heheboiz/miniconda3/envs/teacher-sprc/lib/python3.11/site-packages/transformers/utils/generic.py:309: FutureWarning: `torch.utils._pytree._register_pytree_node` is deprecated. Please use `torch.utils._pytree.register_pytree_node` instead.
+  _torch_pytree._register_pytree_node(
+--- named_buffers ---
+BUFFER backbone.clip.attn_mask shape (77, 77) in_state_dict False
+--- non-persistent buffer search ---
+MOD backbone.clip BUF attn_mask non_persistent True
+--- raw pickle class names ---
+data.pkl entries: ['model_epoch_1_ShuffleTrue/data.pkl']
+  token present: model_vssp False
+  token present: MHTransformer_dis False
+  token present: MHTransformer False
+  token present: Encoder True
+  token present: Backbone True
+  token present: PAIR False
+STATE_DICT_ENTRIES 455
+NAMED_PARAMS 455
+NAMED_BUFFERS 1

@@ -1,0 +1,225 @@
+{
+  "artifact_type": "limn_native_evaluation",
+  "schema_version": 1,
+  "protocol": "fashioniq_val_split",
+  "coverage_note": "Native LIMN coverage is independent of CIRCUS coverage. LIMN's native protocol evaluates each category checkpoint on its own category's validation annotations; the two CIRCUS routing failures are a property of the released M-BEIR task-7 cohort and do not exist here.",
+  "invocation": {
+    "entrypoint": "workbench/third_party/LIMN/LIMN/test.py::test",
+    "runner": "workbench.replay.limn.replay_category -> native test.test(params, model, testset, category)",
+    "runner_module": "/home/heheboiz/data/cir/workbench/replay/limn.py",
+    "observer": "workbench.replay.limn_observer.observe_category + cross_check_with_native",
+    "interpreter": "/home/heheboiz/data/cir/workbench/envs/limn310-adapted/bin/python",
+    "interpreter_version": "3.10.20 (main, Apr 14 2026, 14:28:08) [Clang 22.1.3 ]",
+    "platform": "Linux-7.0.0-31-generic-x86_64-with-glibc2.39",
+    "source_root": "/home/heheboiz/data/cir/workbench/third_party/LIMN",
+    "dataset_root": "/home/heheboiz/data/cir/data/FashionIQ",
+    "checkpoint_root": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/limn",
+    "upstream_commit": "7d7bc9b116f594a65ac22457491edf28a88d3c3e",
+    "batch_size": 16,
+    "batch_size_env": {
+      "WORKBENCH_LIMN_BATCH_SIZE": "16"
+    },
+    "preflight_blockers": [],
+    "environment": {
+      "OMP_NUM_THREADS": "2",
+      "OPENBLAS_NUM_THREADS": "2",
+      "MKL_NUM_THREADS": "2",
+      "NUMEXPR_NUM_THREADS": "2",
+      "WORKBENCH_DECODE_WORKERS": "2",
+      "WORKBENCH_RUNTIME_ADAPTATION": "sm_120",
+      "WORKBENCH_LIMN_BATCH_SIZE": "16",
+      "WORKBENCH_LIMN_PYTHON": null,
+      "HF_HOME": null
+    },
+    "torch": "2.7.1+cu128",
+    "torch_cuda": "12.8",
+    "gpu": "NVIDIA GeForce RTX 5070 Ti"
+  },
+  "categories": {
+    "dress": {
+      "checkpoint_id": "base_iter0_dress",
+      "checkpoint_filename": "0_dress_best_model.pt",
+      "checkpoint_path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/limn/0_dress_best_model.pt",
+      "checkpoint_size_bytes": 1792010157,
+      "checkpoint_sha256": "96a335d4eb8b1e77d35575aab9177637208e2eb6c59e12f833f67e5cb0e7fc1c",
+      "checkpoint_sha256_source": "recomputed over the file on disk; equals the registry expected_sha256",
+      "checkpoint_mapping_status": "VERIFIED_METADATA",
+      "dataset_type_index": 0,
+      "manifests": {
+        "val_split_images": 3817,
+        "caption_rows": 2017,
+        "native_query_count": 2017,
+        "native_gallery_count": 2628,
+        "gallery_derivation": "ordered unique union of candidate and target ids over cap.<cat>.val.json, first appearance order",
+        "gallery_ids_absent_from_val_split": 0,
+        "manifest_source": {
+          "split": "/home/heheboiz/data/cir/data/FashionIQ/image_splits/split.dress.val.json",
+          "captions": "/home/heheboiz/data/cir/data/FashionIQ/captions/cap.dress.val.json",
+          "correction_dict": "/home/heheboiz/data/cir/data/FashionIQ/captions/correction_dict_dress.json"
+        }
+      },
+      "observed_query_count": 2017,
+      "observed_gallery_count": 2628,
+      "observer_gallery_size": 2628,
+      "observer_eligible_count": 2627,
+      "native_metrics": {
+        "dress_r1": 18.591968269707486,
+        "dress_r10": 51.165096678235,
+        "dress_r50": 74.26871591472484
+      },
+      "native_metrics_keys": [
+        "dress_r1",
+        "dress_r10",
+        "dress_r50"
+      ],
+      "recall_from_observed_ranks": {
+        "r1": 18.591968269707486,
+        "r10": 51.165096678235,
+        "r50": 74.26871591472484
+      },
+      "instrumentation_parity": "VERIFIED",
+      "instrumentation_mismatches": [],
+      "target_rank_summary": {
+        "count": 2017,
+        "min": 1,
+        "median": 10,
+        "max": 2439,
+        "equal_to_1": 375
+      },
+      "timing_seconds": {
+        "native_test": 123.08,
+        "observation": 108.36
+      },
+      "per_query_export": "/home/heheboiz/data/cir/workbench/docs/reviews/20261109-native15-composition-limn/limn_native.dress.jsonl"
+    },
+    "shirt": {
+      "checkpoint_id": "base_iter0_shirt",
+      "checkpoint_filename": "0_shirt_best_model.pt",
+      "checkpoint_path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/limn/0_shirt_best_model.pt",
+      "checkpoint_size_bytes": 1792010157,
+      "checkpoint_sha256": "9260c7f77d3017d8cc10e6652cc8cfe275dbc9704366fa2bf581a24808930d74",
+      "checkpoint_sha256_source": "recomputed over the file on disk; equals the registry expected_sha256",
+      "checkpoint_mapping_status": "VERIFIED_METADATA",
+      "dataset_type_index": 1,
+      "manifests": {
+        "val_split_images": 6346,
+        "caption_rows": 2038,
+        "native_query_count": 2038,
+        "native_gallery_count": 3089,
+        "gallery_derivation": "ordered unique union of candidate and target ids over cap.<cat>.val.json, first appearance order",
+        "gallery_ids_absent_from_val_split": 0,
+        "manifest_source": {
+          "split": "/home/heheboiz/data/cir/data/FashionIQ/image_splits/split.shirt.val.json",
+          "captions": "/home/heheboiz/data/cir/data/FashionIQ/captions/cap.shirt.val.json",
+          "correction_dict": "/home/heheboiz/data/cir/data/FashionIQ/captions/correction_dict_shirt.json"
+        }
+      },
+      "observed_query_count": 2038,
+      "observed_gallery_count": 3089,
+      "observer_gallery_size": 3089,
+      "observer_eligible_count": 3088,
+      "native_metrics": {
+        "shirt_r1": 25.36800785083415,
+        "shirt_r10": 55.986261040235526,
+        "shirt_r50": 76.59470068694799
+      },
+      "native_metrics_keys": [
+        "shirt_r1",
+        "shirt_r10",
+        "shirt_r50"
+      ],
+      "recall_from_observed_ranks": {
+        "r1": 25.36800785083415,
+        "r10": 55.986261040235526,
+        "r50": 76.59470068694799
+      },
+      "instrumentation_parity": "VERIFIED",
+      "instrumentation_mismatches": [],
+      "target_rank_summary": {
+        "count": 2038,
+        "min": 1,
+        "median": 7,
+        "max": 2999,
+        "equal_to_1": 517
+      },
+      "timing_seconds": {
+        "native_test": 156.44,
+        "observation": 119.04
+      },
+      "per_query_export": "/home/heheboiz/data/cir/workbench/docs/reviews/20261109-native15-composition-limn/limn_native.shirt.jsonl"
+    },
+    "toptee": {
+      "checkpoint_id": "base_iter0_toptee",
+      "checkpoint_filename": "0_toptee_best_model.pt",
+      "checkpoint_path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/limn/0_toptee_best_model.pt",
+      "checkpoint_size_bytes": 1792010157,
+      "checkpoint_sha256": "79f663a14d89d455fdc3612b0b36d011c06d7957d1475a654755e1053a6cece2",
+      "checkpoint_sha256_source": "recomputed over the file on disk; equals the registry expected_sha256",
+      "checkpoint_mapping_status": "VERIFIED_METADATA",
+      "dataset_type_index": 2,
+      "manifests": {
+        "val_split_images": 5373,
+        "caption_rows": 1961,
+        "native_query_count": 1961,
+        "native_gallery_count": 2902,
+        "gallery_derivation": "ordered unique union of candidate and target ids over cap.<cat>.val.json, first appearance order",
+        "gallery_ids_absent_from_val_split": 0,
+        "manifest_source": {
+          "split": "/home/heheboiz/data/cir/data/FashionIQ/image_splits/split.toptee.val.json",
+          "captions": "/home/heheboiz/data/cir/data/FashionIQ/captions/cap.toptee.val.json",
+          "correction_dict": "/home/heheboiz/data/cir/data/FashionIQ/captions/correction_dict_toptee.json"
+        }
+      },
+      "observed_query_count": 1961,
+      "observed_gallery_count": 2902,
+      "observer_gallery_size": 2902,
+      "observer_eligible_count": 2901,
+      "native_metrics": {
+        "toptee_r1": 26.058133605303418,
+        "toptee_r10": 60.22437531871494,
+        "toptee_r50": 82.04997450280469
+      },
+      "native_metrics_keys": [
+        "toptee_r1",
+        "toptee_r10",
+        "toptee_r50"
+      ],
+      "recall_from_observed_ranks": {
+        "r1": 26.058133605303418,
+        "r10": 60.22437531871494,
+        "r50": 82.04997450280469
+      },
+      "instrumentation_parity": "VERIFIED",
+      "instrumentation_mismatches": [],
+      "target_rank_summary": {
+        "count": 1961,
+        "min": 1,
+        "median": 5,
+        "max": 2583,
+        "equal_to_1": 511
+      },
+      "timing_seconds": {
+        "native_test": 127.95,
+        "observation": 113.08
+      },
+      "per_query_export": "/home/heheboiz/data/cir/workbench/docs/reviews/20261109-native15-composition-limn/limn_native.toptee.jsonl"
+    }
+  },
+  "aggregate": {
+    "macro_r1": 23.339369908615016,
+    "macro_r10": 55.79191101239516,
+    "macro_r50": 77.63779703482584,
+    "macro_definition": "unweighted mean over the three category results (each category weighted 1)",
+    "categories_averaged": [
+      "dress",
+      "shirt",
+      "toptee"
+    ]
+  },
+  "all_parity_verified": true,
+  "source_files": {
+    "dress": "/home/heheboiz/data/cir/workbench/docs/reviews/20261109-native15-composition-limn/limn_native.dress.json",
+    "shirt": "/home/heheboiz/data/cir/workbench/docs/reviews/20261109-native15-composition-limn/limn_native.shirt.json",
+    "toptee": "/home/heheboiz/data/cir/workbench/docs/reviews/20261109-native15-composition-limn/limn_native.toptee.json"
+  }
+}

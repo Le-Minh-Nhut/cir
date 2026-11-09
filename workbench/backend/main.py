@@ -1108,6 +1108,34 @@ def composition_run(run_id: str, subset: str = "full"):
     return run
 
 
+@app.get("/api/composition/diagnostics/limn-dual-scope")
+def limn_dual_scope_diagnostic():
+    """The two ambiguous CIRCUS queries scored under both candidate scopes (diagnostic only).
+
+    Served in the same payload as the canonical status it does NOT change, so a reader can never
+    see the comparison without seeing that the canonical metric leaves both queries unscored. A
+    missing or inconsistent evidence file answers 503 with a named status rather than an empty
+    comparison, because "no scopes" would read as "resolved to nothing".
+    """
+    from workbench.backend.limn_diagnostic import DiagnosticEvidenceError, load_diagnostic
+
+    try:
+        return load_diagnostic()
+    except DiagnosticEvidenceError as error:
+        raise HTTPException(503, {"error": "diagnostic_evidence_inconsistent",
+                                  "message": str(error)}) from error
+
+@app.get("/api/composition/diagnostics/limn-dual-scope/candidates")
+def limn_dual_scope_candidates(qid: str, scope: str, condition: str = "multimodal", depth: int = 100):
+    """Ordered candidates for ONE ambiguous query under ONE scope and ONE condition."""
+    from workbench.backend.limn_diagnostic import DiagnosticEvidenceError, load_candidates
+
+    try:
+        return load_candidates(qid, scope, condition, depth=depth)
+    except DiagnosticEvidenceError as error:
+        raise HTTPException(404, {"error": "diagnostic_candidates_unavailable",
+                                  "message": str(error)}) from error
+
 @app.get("/api/composition/runs/{run_id}/queries")
 def composition_queries(
     run_id: str,

@@ -1,0 +1,8 @@
+=== B1: state_dict_entries=456
+root class model_vssp.Encoder
+top modules ['backbone', 'affine']
+=== B2: state_dict_entries=456
+root class model_vssp.Encoder
+top modules ['backbone', 'affine']
+B1==B2 key sets: True shapes equal: True
+prefix counts {'backbone': 447, 'affine': 6, 'loss_T': 1, 'local_weight': 1, 'local_weight_dis': 1}

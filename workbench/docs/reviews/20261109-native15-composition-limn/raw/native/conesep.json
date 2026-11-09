@@ -1,0 +1,115 @@
+{
+  "model_id": "conesep",
+  "replay_type": "SOURCE_FAITHFUL_WORKBENCH_REPLAY",
+  "protocol": "fashioniq_full_gallery_ref_excluded",
+  "checkpoint_training_noise_pct": 20,
+  "evaluation_noise_pct": 0,
+  "category_model_policy": "shared",
+  "complete_benchmark": true,
+  "categories": [
+    {
+      "model_id": "conesep",
+      "checkpoint_id": "fiq_n02",
+      "category": "dress",
+      "protocol": "fashioniq_full_gallery_ref_excluded",
+      "r1": 20.823004462072383,
+      "r10": 49.62816063460585,
+      "r50": 72.68220128904314,
+      "complete": true,
+      "provenance": {
+        "native_evaluator": "test.py:test",
+        "native_output": {
+          "dress_r1": 20.823004462072383,
+          "dress_r10": 49.62816063460585,
+          "dress_r50": 72.68220128904314
+        },
+        "checkpoint_training_noise_pct": 20,
+        "evaluation_noise_pct": 0,
+        "checkpoint_sha256": "5a864ee5a78c1d249320c4f997cc7d14b529b329b2efba5577c82dbe019ed9d2",
+        "checkpoint_size_bytes": 2721428966,
+        "preprocessing": "targetpad transform, target_ratio 1.25, input_dim 224",
+        "text_processor": {
+          "config": "configs/models/blip2/blip2_pretrain.yaml",
+          "loaded_via": "lavis.models",
+          "note": "the pinned BlipCaptionProcessor from the model class's own config; no second BLIP-2 model is constructed and no /root/bert-base-uncased asset is read"
+        }
+      },
+      "parity_mismatches": [],
+      "per_query_published": false
+    },
+    {
+      "model_id": "conesep",
+      "checkpoint_id": "fiq_n02",
+      "category": "shirt",
+      "protocol": "fashioniq_full_gallery_ref_excluded",
+      "r1": 27.08537782139352,
+      "r10": 56.62414131501472,
+      "r50": 74.53385672227674,
+      "complete": true,
+      "provenance": {
+        "native_evaluator": "test.py:test",
+        "native_output": {
+          "shirt_r1": 27.08537782139352,
+          "shirt_r10": 56.62414131501472,
+          "shirt_r50": 74.53385672227674
+        },
+        "checkpoint_training_noise_pct": 20,
+        "evaluation_noise_pct": 0,
+        "checkpoint_sha256": "5a864ee5a78c1d249320c4f997cc7d14b529b329b2efba5577c82dbe019ed9d2",
+        "checkpoint_size_bytes": 2721428966,
+        "preprocessing": "targetpad transform, target_ratio 1.25, input_dim 224",
+        "text_processor": {
+          "config": "configs/models/blip2/blip2_pretrain.yaml",
+          "loaded_via": "lavis.models",
+          "note": "the pinned BlipCaptionProcessor from the model class's own config; no second BLIP-2 model is constructed and no /root/bert-base-uncased asset is read"
+        }
+      },
+      "parity_mismatches": [],
+      "per_query_published": false
+    },
+    {
+      "model_id": "conesep",
+      "checkpoint_id": "fiq_n02",
+      "category": "toptee",
+      "protocol": "fashioniq_full_gallery_ref_excluded",
+      "r1": 27.07802141764406,
+      "r10": 58.03161652218256,
+      "r50": 78.4293727689954,
+      "complete": true,
+      "provenance": {
+        "native_evaluator": "test.py:test",
+        "native_output": {
+          "toptee_r1": 27.07802141764406,
+          "toptee_r10": 58.03161652218256,
+          "toptee_r50": 78.4293727689954
+        },
+        "checkpoint_training_noise_pct": 20,
+        "evaluation_noise_pct": 0,
+        "checkpoint_sha256": "5a864ee5a78c1d249320c4f997cc7d14b529b329b2efba5577c82dbe019ed9d2",
+        "checkpoint_size_bytes": 2721428966,
+        "preprocessing": "targetpad transform, target_ratio 1.25, input_dim 224",
+        "text_processor": {
+          "config": "configs/models/blip2/blip2_pretrain.yaml",
+          "loaded_via": "lavis.models",
+          "note": "the pinned BlipCaptionProcessor from the model class's own config; no second BLIP-2 model is constructed and no /root/bert-base-uncased asset is read"
+        }
+      },
+      "parity_mismatches": [],
+      "per_query_published": false
+    }
+  ],
+  "aggregate": {
+    "macro_r10": 54.76130615726771,
+    "macro_r50": 75.21514359343843,
+    "macro_mean": 64.98822487535307,
+    "complete": true
+  },
+  "timestamp": "2026-11-09T13:54:04.650630+00:00",
+  "runtime": {
+    "python": "/home/heheboiz/data/cir/workbench/envs/ilearn39-adapted/bin/python",
+    "source_root": "/home/heheboiz/data/cir/workbench/third_party/ConeSep",
+    "dataset_root": "/home/heheboiz/data/cir/data/FashionIQ",
+    "checkpoint_root": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/conesep",
+    "variant": "fiq_n02"
+  }
+}

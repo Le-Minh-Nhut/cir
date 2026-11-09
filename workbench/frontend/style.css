@@ -680,3 +680,9 @@ pre {
 .query-list-caption {font-size:.9rem;line-height:1.5;color:var(--ink-2);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .query-list-ranks {font-size:.78rem;color:var(--ink-3)}
 @media(max-width:1180px) {.query-list {max-height:300px} .sample-primary-filters .field {width:100%;flex-basis:100%!important}}
+/* The LIMN dual-scope diagnostic is a wide comparison table (query × condition × 2 scopes) and must
+   scroll INSIDE its own box on a phone: at 390px the table is 478px wide and was overflowing the
+   page, which put a horizontal scrollbar on the whole document. `.table-wrap` already scrolls; this
+   gives its table a min-width so the columns stay readable instead of being crushed. */
+[data-testid="limn-diagnostic-table"] { min-width: 560px; }
+[data-testid="limn-diagnostic"] .table-wrap { max-width: 100%; }

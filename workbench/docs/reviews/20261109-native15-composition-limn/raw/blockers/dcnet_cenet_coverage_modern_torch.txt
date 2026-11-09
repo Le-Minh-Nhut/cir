@@ -1,0 +1,7 @@
+expert_dims OrderedDict({'im_feat': 2048, 'inter-1': 1024, 'spatial0': 2048, 'spatial1': 2048, 'spatial2': 2048, 'spatial3': 2048, 'spatial4': 2048})
+model_keys 518 ckpt_keys 518
+missing_in_model 0 []
+unexpected_in_ckpt 0 []
+shape_mismatch 0 []
+strict_false missing 0 unexpected 0
+MATCHED 518

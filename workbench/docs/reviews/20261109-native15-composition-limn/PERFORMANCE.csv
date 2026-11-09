@@ -1,0 +1,5 @@
+workload,stage,batch,threads,counts,gallery,seconds,native_test_s,observer_s,source
+"native dress: 2017 queries x 2628 gallery, CLIP-L whole model",native test.test + observer,16,"OMP/OPENBLAS/MKL=2, decode=2",2017,2628,231.44,123.08,108.36,limn_native.json
+"native shirt: 2038 queries x 3089 gallery, CLIP-L whole model",native test.test + observer,16,"OMP/OPENBLAS/MKL=2, decode=2",2038,3089,275.48,156.44,119.04,limn_native.json
+"native toptee: 1961 queries x 2902 gallery, CLIP-L whole model",native test.test + observer,16,"OMP/OPENBLAS/MKL=2, decode=2",1961,2902,241.03,127.95,113.08,limn_native.json
+dual-scope diagnostic: 2 queries x 2 scopes x 3 conditions + 36 rank crosschecks over 74381 gallery,adapter encode_queries + score/rank + cache verify,2,"OMP/OPENBLAS/MKL=2, decode=2",2,74381,60.47,,,limn_dual_scope.json

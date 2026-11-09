@@ -1,0 +1,125 @@
+{
+  "model_id": "ptha_mtst",
+  "protocol_id": "fashioniq_original_split",
+  "label": "PTHA+MTST | CIRR checkpoint -> FashionIQ | cross-dataset transfer | exploratory",
+  "train_dataset": "CIRR",
+  "evaluation_dataset": "FashionIQ",
+  "checkpoint_training_noise": "unknown",
+  "checkpoint_id": "cirr_transfer",
+  "checkpoint_sha256": "1c4dab86a9f66dfe10aff75b39790432eb6cc746cf27b6cfab74b66d93b7588f",
+  "checkpoint_top_level_model_key": "Blip2QformerCirCat",
+  "serialization_inspection": "torch.load(weights_only=True)",
+  "model_name": "blip2_cir_cat",
+  "backbone_config": "pretrain (EVA-CLIP ViT-g; 224 px, 32 Q-Former tokens)",
+  "load_report": {
+    "missing_keys": [],
+    "unexpected_keys": [],
+    "shape_mismatches": [],
+    "strict_false_would_hide": {
+      "missing_keys": [],
+      "unexpected_keys": []
+    },
+    "strict_false_shape_errors": [],
+    "strict_false_hid_anything": false,
+    "strict_load": true
+  },
+  "target_feature_contract": {
+    "dress": {
+      "contract": "project_at_boundary",
+      "loaded_class": "Blip2QformerCirCat",
+      "extracted_shape": [
+        3817,
+        32,
+        768
+      ],
+      "new_parameters_introduced": 0,
+      "frozen_vision_preserved": true,
+      "action": "projected_at_boundary_via_inference_target",
+      "reason": "effective extract_target_features returns unprojected Q-Former states while inference() does not project targets itself",
+      "projection_parameters_reused": 196864,
+      "projection_in_features": 768,
+      "projection_out_features": 256,
+      "output_shape": [
+        3817,
+        32,
+        256
+      ],
+      "equivalence_vs_direct_projection_max_abs_diff": 0.0
+    },
+    "shirt": {
+      "contract": "project_at_boundary",
+      "loaded_class": "Blip2QformerCirCat",
+      "extracted_shape": [
+        6346,
+        32,
+        768
+      ],
+      "new_parameters_introduced": 0,
+      "frozen_vision_preserved": true,
+      "action": "projected_at_boundary_via_inference_target",
+      "reason": "effective extract_target_features returns unprojected Q-Former states while inference() does not project targets itself",
+      "projection_parameters_reused": 196864,
+      "projection_in_features": 768,
+      "projection_out_features": 256,
+      "output_shape": [
+        6346,
+        32,
+        256
+      ],
+      "equivalence_vs_direct_projection_max_abs_diff": 0.0
+    },
+    "toptee": {
+      "contract": "project_at_boundary",
+      "loaded_class": "Blip2QformerCirCat",
+      "extracted_shape": [
+        5373,
+        32,
+        768
+      ],
+      "new_parameters_introduced": 0,
+      "frozen_vision_preserved": true,
+      "action": "projected_at_boundary_via_inference_target",
+      "reason": "effective extract_target_features returns unprojected Q-Former states while inference() does not project targets itself",
+      "projection_parameters_reused": 196864,
+      "projection_in_features": 768,
+      "projection_out_features": 256,
+      "output_shape": [
+        5373,
+        32,
+        256
+      ],
+      "equivalence_vs_direct_projection_max_abs_diff": 0.0
+    }
+  },
+  "category_metrics": {
+    "dress": {
+      "r10": 33.11849236488342,
+      "r50": 56.02380037307739
+    },
+    "shirt": {
+      "r10": 38.861629366874695,
+      "r50": 59.02845859527588
+    },
+    "toptee": {
+      "r10": 41.71341061592102,
+      "r50": 64.45690989494324
+    }
+  },
+  "macro_metrics": {
+    "r10": 37.897844115893044,
+    "r50": 59.83638962109884,
+    "mean": 48.86711686849594
+  },
+  "paper_fashioniq_context_only": {
+    "training_condition": "FashionIQ_MTST",
+    "r10": 54.99,
+    "r50": 76.28,
+    "mean": 65.64,
+    "mismatch": "training dataset/checkpoint differs; numerical context only, not reproduction",
+    "differences_transfer_minus_paper": {
+      "r10": -17.09215588410696,
+      "r50": -16.443610378901163,
+      "mean": -16.77288313150406
+    }
+  }
+}

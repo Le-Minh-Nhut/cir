@@ -1,0 +1,5 @@
+model_id,protocol,category,checkpoint_id,checkpoint_sha256,checkpoint_bytes,query_count,gallery_size,r1,r10,r50,parity,target_rank_median,target_rank_max
+limn,fashioniq_val_split,dress,base_iter0_dress,96a335d4eb8b1e77d35575aab9177637208e2eb6c59e12f833f67e5cb0e7fc1c,1792010157,2017,2628,18.592,51.1651,74.2687,VERIFIED,10,2439
+limn,fashioniq_val_split,shirt,base_iter0_shirt,9260c7f77d3017d8cc10e6652cc8cfe275dbc9704366fa2bf581a24808930d74,1792010157,2038,3089,25.368,55.9863,76.5947,VERIFIED,7,2999
+limn,fashioniq_val_split,toptee,base_iter0_toptee,79f663a14d89d455fdc3612b0b36d011c06d7957d1475a654755e1053a6cece2,1792010157,1961,2902,26.0581,60.2244,82.05,VERIFIED,5,2583
+limn,fashioniq_val_split,MACRO,base_iter0_all_categories,,,6016,,23.3394,55.7919,77.6378,True,,

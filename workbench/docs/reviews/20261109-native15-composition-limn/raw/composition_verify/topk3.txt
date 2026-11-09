@@ -1,0 +1,56 @@
+====================================================================================================
+MODEL encoder
+ qid: 7:1 target_rank: 11 len: 100
+ first: [47046, 0.6823006868362427]  last: [15147, 0.46935802698135376]
+ descending: True | strictly: False | unique ids: 100
+ id range: 6470 72462 | gallery=74381 so ids in range: True
+ rows=6003 not100=0
+====================================================================================================
+MODEL conesep
+ qid: 7:1 target_rank: 26 len: 100
+ first: [64047, 0.751333475112915]  last: [7229, 0.5459071397781372]
+ descending: True | strictly: False | unique ids: 100
+ id range: 6470 73373 | gallery=74381 so ids in range: True
+ rows=6003 not100=0
+====================================================================================================
+MODEL habit
+ qid: 7:1 target_rank: 15 len: 100
+ first: [19064, 0.7330475449562073]  last: [46351, 0.5085111260414124]
+ descending: True | strictly: False | unique ids: 100
+ id range: 6470 72462 | gallery=74381 so ids in range: True
+ rows=6003 not100=0
+====================================================================================================
+MODEL intent
+ qid: 7:1 target_rank: 26 len: 100
+ first: [7656, 0.7109485864639282]  last: [39326, 0.5607050657272339]
+ descending: True | strictly: False | unique ids: 100
+ id range: 6470 72843 | gallery=74381 so ids in range: True
+ rows=6003 not100=0
+====================================================================================================
+MODEL hint
+ qid: 7:1 target_rank: 5 len: 100
+ first: [19064, 0.6425619125366211]  last: [67110, 0.5394427180290222]
+ descending: True | strictly: False | unique ids: 100
+ id range: 6470 72843 | gallery=74381 so ids in range: True
+ rows=6003 not100=0
+====================================================================================================
+MODEL limn
+ qid: 7:1 target_rank: 15 len: 100
+ first: [46467, 0.775105357170105]  last: [42681, 0.518571674823761]
+ descending: True | strictly: False | unique ids: 100
+ id range: 6470 72849 | gallery=74381 so ids in range: True
+ rows=6001 not100=0
+====================================================================================================
+MODEL ptha_mtst
+ qid: 7:1 target_rank: 167 len: 100
+ first: [47205, 33.912410736083984]  last: [40905, 28.55925178527832]
+ descending: True | strictly: False | unique ids: 100
+ id range: 6470 74359 | gallery=74381 so ids in range: True
+ rows=6003 not100=0
+====================================================================================================
+MODEL tme
+ qid: 7:1 target_rank: 15 len: 100
+ first: [70209, 0.5429152250289917]  last: [50496, 0.4270550012588501]
+ descending: True | strictly: False | unique ids: 100
+ id range: 6470 72843 | gallery=74381 so ids in range: True
+ rows=6003 not100=0

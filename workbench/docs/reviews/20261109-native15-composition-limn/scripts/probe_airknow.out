@@ -1,0 +1,8 @@
+model.blip2_models.blip2 = FAIL ModuleNotFoundError("No module named 'model'")
+model.blip2_models.blip2_retriever = FAIL ModuleNotFoundError("No module named 'model'")
+lavis.models = FAIL ModuleNotFoundError("No module named 'moviepy'")
+torch = OK
+transformers = OK
+timm = OK
+fairscale = OK
+peft = OK

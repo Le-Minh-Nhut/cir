@@ -1,0 +1,153 @@
+{
+  "audit_schema_keys": [],
+  "audit_rows": null,
+  "queries": {
+    "7:3038": {
+      "release_record": {
+        "qid": "7:3038",
+        "query_txt": "Is darker and has a different graphic and is darker.",
+        "query_img_path": "mbeir_images/fashioniq_images/B004TMGDME.jpg",
+        "query_modality": "image,text",
+        "query_src_content": "{\"candidate_img_id\": \"B004TMGDME\"}",
+        "pos_cand_list": [
+          "7:3416"
+        ],
+        "neg_cand_list": [],
+        "task_id": 7
+      },
+      "query_src_content": {
+        "candidate_img_id": "B004TMGDME"
+      },
+      "reference_stem_from_path": "B004TMGDME",
+      "target": {
+        "did": "7:3416",
+        "img_path": "mbeir_images/fashioniq_images/B004D8QCN4.jpg",
+        "stem": "B004D8QCN4",
+        "src_content": {
+          "img_id": "B004D8QCN4"
+        }
+      },
+      "caption_rows": [
+        {
+          "category": "shirt",
+          "annotation_index": 217,
+          "candidate": "B004TMGDME",
+          "target": "B000WNEK7Y",
+          "captions_raw": [
+            "is lighter",
+            "it is blue"
+          ],
+          "captions_joined_raw": "is lighter and it is blue",
+          "captions_joined_normalized": "is lighter and it is blue",
+          "matches_release_text": false
+        },
+        {
+          "category": "shirt",
+          "annotation_index": 1027,
+          "candidate": "B004TMGDME",
+          "target": "B004D8QCN4",
+          "captions_raw": [
+            "is darker and has a different graphic",
+            "is darker"
+          ],
+          "captions_joined_raw": "is darker and has a different graphic and is darker",
+          "captions_joined_normalized": "is darker and has a different graphic and is darker",
+          "matches_release_text": true
+        },
+        {
+          "category": "toptee",
+          "annotation_index": 1595,
+          "candidate": "B004TMGDME",
+          "target": "B004D8QCN4",
+          "captions_raw": [
+            "is darker and has a different graphic",
+            "is darker"
+          ],
+          "captions_joined_raw": "is darker and has a different graphic and is darker",
+          "captions_joined_normalized": "is darker and has a different graphic and is darker",
+          "matches_release_text": true
+        }
+      ],
+      "split_membership": {
+        "dress": false,
+        "shirt": true,
+        "toptee": true
+      },
+      "test_split_membership": {
+        "dress": false,
+        "shirt": false,
+        "toptee": false
+      },
+      "normalized_text": "is darker and has a different graphic and is darker",
+      "audit_present": false,
+      "audit_row": null
+    },
+    "7:3790": {
+      "release_record": {
+        "qid": "7:3790",
+        "query_txt": "Is grey and has a less whimsical graphic and is lighter.",
+        "query_img_path": "mbeir_images/fashioniq_images/B0079K0YBO.jpg",
+        "query_modality": "image,text",
+        "query_src_content": "{\"candidate_img_id\": \"B0079K0YBO\"}",
+        "pos_cand_list": [
+          "7:42304"
+        ],
+        "neg_cand_list": [],
+        "task_id": 7
+      },
+      "query_src_content": {
+        "candidate_img_id": "B0079K0YBO"
+      },
+      "reference_stem_from_path": "B0079K0YBO",
+      "target": {
+        "did": "7:42304",
+        "img_path": "mbeir_images/fashioniq_images/B00E3WVAD2.jpg",
+        "stem": "B00E3WVAD2",
+        "src_content": {
+          "img_id": "B00E3WVAD2"
+        }
+      },
+      "caption_rows": [
+        {
+          "category": "shirt",
+          "annotation_index": 1780,
+          "candidate": "B0079K0YBO",
+          "target": "B00E3WVAD2",
+          "captions_raw": [
+            "Is grey and has a less whimsical graphic",
+            "is lighter"
+          ],
+          "captions_joined_raw": "Is grey and has a less whimsical graphic and is lighter",
+          "captions_joined_normalized": "is grey and has a less whimsical graphic and is lighter",
+          "matches_release_text": true
+        },
+        {
+          "category": "toptee",
+          "annotation_index": 1426,
+          "candidate": "B0079K0YBO",
+          "target": "B00E3WVAD2",
+          "captions_raw": [
+            "Is grey and has a less whimsical graphic",
+            "is lighter"
+          ],
+          "captions_joined_raw": "Is grey and has a less whimsical graphic and is lighter",
+          "captions_joined_normalized": "is grey and has a less whimsical graphic and is lighter",
+          "matches_release_text": true
+        }
+      ],
+      "split_membership": {
+        "dress": false,
+        "shirt": true,
+        "toptee": true
+      },
+      "test_split_membership": {
+        "dress": false,
+        "shirt": false,
+        "toptee": false
+      },
+      "normalized_text": "is grey and has a less whimsical graphic and is lighter",
+      "audit_present": false,
+      "audit_row": null
+    }
+  }
+}

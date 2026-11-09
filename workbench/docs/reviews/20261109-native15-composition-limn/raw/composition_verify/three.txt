@@ -1,0 +1,33 @@
+model      cond             R@10     R@50     nDCG      MRR  scored       cov
+encoder    multimodal    31.0345  49.4753   0.2961   0.1700    6003  1.000000
+encoder    text_only      8.7456  18.2742   0.1570   0.0476    6003  1.000000
+encoder    image_only     2.6653   7.4629   0.1073   0.0111    6003  1.000000
+encoder    GAP                              0.4699   0.1224 cohort=6003
+conesep    multimodal    35.4823  54.1396   0.3294   0.2064    6003  1.000000
+conesep    text_only     15.0925  26.8699   0.1996   0.0873    6003  1.000000
+conesep    image_only     3.1984   9.6119   0.1121   0.0127    6003  1.000000
+conesep    GAP                              0.3943   0.1192 cohort=6003
+habit      multimodal    35.6155  54.3728   0.3283   0.2050    6003  1.000000
+habit      text_only     15.2924  27.0531   0.2007   0.0882    6003  1.000000
+habit      image_only     3.3150  10.3115   0.1137   0.0136    6003  1.000000
+habit      GAP                              0.3887   0.1168 cohort=6003
+intent     multimodal    34.3995  54.0063   0.3185   0.1927    6003  1.000000
+intent     text_only     15.3257  26.7366   0.1989   0.0860    6003  1.000000
+intent     image_only     2.8652   9.1288   0.1122   0.0126    6003  1.000000
+intent     GAP                              0.3754   0.1067 cohort=6003
+hint       multimodal    32.8169  51.7741   0.3093   0.1841    6003  1.000000
+hint       text_only     11.2111  21.5892   0.1736   0.0644    6003  1.000000
+hint       image_only     3.3983   9.9284   0.1143   0.0140    6003  1.000000
+hint       GAP                              0.4387   0.1197 cohort=6003
+limn       multimodal    30.0283  48.6752   0.2904   0.1668    6001  0.999667
+limn       text_only      6.3823  14.3809   0.1338   0.0293    6001  0.999667
+limn       image_only     2.4996   6.9322   0.0996   0.0103    6001  0.999667
+limn       GAP                              0.5391   0.1375 cohort=6001
+ptha_mtst  multimodal    19.4736  34.4494   0.2249   0.1045    6003  1.000000
+ptha_mtst  text_only     10.8113  21.0728   0.1701   0.0609    6003  1.000000
+ptha_mtst  image_only     1.3327   4.6477   0.0950   0.0062    6003  1.000000
+ptha_mtst  GAP                              0.2436   0.0436 cohort=6003
+tme        multimodal    34.0163  53.9564   0.3204   0.1958    6003  1.000000
+tme        text_only     16.0753  28.0360   0.2055   0.0929    6003  1.000000
+tme        image_only     2.6987   9.2287   0.1117   0.0116    6003  1.000000
+tme        GAP                              0.3586   0.1029 cohort=6003

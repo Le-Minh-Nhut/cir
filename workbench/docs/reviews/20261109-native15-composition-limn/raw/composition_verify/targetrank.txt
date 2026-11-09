@@ -1,0 +1,8 @@
+encoder    rows=6003 target_rank_mismatch=0 target_rank<=100: 3564
+conesep    rows=6003 target_rank_mismatch=0 target_rank<=100: 3794
+habit      rows=6003 target_rank_mismatch=0 target_rank<=100: 3781
+intent     rows=6003 target_rank_mismatch=0 target_rank<=100: 3772
+hint       rows=6003 target_rank_mismatch=0 target_rank<=100: 3634
+limn       rows=6001 target_rank_mismatch=0 target_rank<=100: 3425
+ptha_mtst  rows=6003 target_rank_mismatch=0 target_rank<=100: 2573
+tme        rows=6003 target_rank_mismatch=0 target_rank<=100: 3731

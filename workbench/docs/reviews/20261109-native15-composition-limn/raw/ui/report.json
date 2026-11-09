@@ -1,0 +1,102 @@
+{
+  "url": "http://127.0.0.1:5173",
+  "sizes": {
+    "1920x1080": {
+      "viewport": [
+        1920,
+        1080
+      ],
+      "diagnostic_card_count": 1,
+      "title": "Ambiguous category \u2014 diagnostic comparison",
+      "canonical_badge": "Canonical: 6,001/6,003 scored",
+      "canonical_notice": "\u0110\u00e2y l\u00e0 ch\u1ea9n \u0111o\u00e1n, kh\u00f4ng ph\u1ea3i metric canonical.\n\nHai query 7:3038, 7:3790 v\u1eabn ch\u01b0a \u0111\u01b0\u1ee3c ch\u1ea5m trong l\u01b0\u1ee3t canonical: coverage gi\u1eef nguy\u00ean 6,001/6,003. B\u1ea3ng d\u01b0\u1edbi ch\u1ea5m c\u1ea3 hai checkpoint nh\u01b0 nhau v\u00e0 kh\u00f4ng ch\u1ecdn scope n\u00e0o; kh\u00f4ng c\u00f3 s\u1ed1 n\u00e0o \u1edf \u0111\u00e2y \u0111\u01b0\u1ee3c c\u1ed9ng v\u00e0o nDCG, Recall hay coverage canonical.\n\nBoth diagnostic scopes run; the canonical metrics stay 6001/6003 and both queries stay unscored there. No diagnostic number is folded into the canonical evaluator, no scope is chosen as 'the' answer.",
+      "table_visible": true,
+      "row_count": 6,
+      "row_texts": [
+        "7:3038\nloader category: kh\u00f4ng x\u00e1c \u0111\u1ecbnh\n\tMM\t#3\nscore 0.5704\ntr\u00ean 74,381 \u1ea3nh\nc\u00e1ch #1 0.2444\n\t#43\nscore 0.5678\ntr\u00ean 74,381 \u1ea3nh\nc\u00e1ch #1 0.2497",
+        "Text-only\t#88\nscore 0.4221\ntr\u00ean 74,381 \u1ea3nh\nc\u00e1ch #1 0.3184\n\t#389\nscore 0.3436\ntr\u00ean 74,381 \u1ea3nh\nc\u00e1ch #1 0.3461",
+        "Image-only\t#152\nscore 0.3678\ntr\u00ean 74,381 \u1ea3nh\nc\u00e1ch #1 0.3707\n\t#67\nscore 0.4541\ntr\u00ean 74,381 \u1ea3nh\nc\u00e1ch #1 0.2699",
+        "7:3790\nloader category: kh\u00f4ng x\u00e1c \u0111\u1ecbnh\n\tMM\t#65\nscore 0.5141\ntr\u00ean 74,381 \u1ea3nh\nc\u00e1ch #1 0.1302\n\t#43\nscore 0.6190\ntr\u00ean 74,381 \u1ea3nh\nc\u00e1ch #1 0.0835",
+        "Text-only\t#6,891\nscore 0.2173\ntr\u00ean 74,381 \u1ea3nh\nc\u00e1ch #1 0.3837\n\t#4,730\nscore 0.2725\ntr\u00ean 74,381 \u1ea3nh\nc\u00e1ch #1 0.3331",
+        "Image-only\t#2,200\nscore 0.3020\ntr\u00ean 74,381 \u1ea3nh\nc\u00e1ch #1 0.4840\n\t#4,047\nscore 0.3000\ntr\u00ean 74,381 \u1ea3nh\nc\u00e1ch #1 0.4202"
+      ],
+      "body_scroll_width": 1920,
+      "inner_width": 1920,
+      "table_box": {
+        "x": 316,
+        "y": 314.453125,
+        "width": 1548,
+        "height": 652
+      },
+      "horizontal_overflow": [],
+      "screenshot": "diagnostic-1920x1080.png"
+    },
+    "2560x1440": {
+      "viewport": [
+        2560,
+        1440
+      ],
+      "diagnostic_card_count": 1,
+      "title": "Ambiguous category \u2014 diagnostic comparison",
+      "canonical_badge": "Canonical: 6,001/6,003 scored",
+      "canonical_notice": "\u0110\u00e2y l\u00e0 ch\u1ea9n \u0111o\u00e1n, kh\u00f4ng ph\u1ea3i metric canonical.\n\nHai query 7:3038, 7:3790 v\u1eabn ch\u01b0a \u0111\u01b0\u1ee3c ch\u1ea5m trong l\u01b0\u1ee3t canonical: coverage gi\u1eef nguy\u00ean 6,001/6,003. B\u1ea3ng d\u01b0\u1edbi ch\u1ea5m c\u1ea3 hai checkpoint nh\u01b0 nhau v\u00e0 kh\u00f4ng ch\u1ecdn scope n\u00e0o; kh\u00f4ng c\u00f3 s\u1ed1 n\u00e0o \u1edf \u0111\u00e2y \u0111\u01b0\u1ee3c c\u1ed9ng v\u00e0o nDCG, Recall hay coverage canonical.\n\nBoth diagnostic scopes run; the canonical metrics stay 6001/6003 and both queries stay unscored there. No diagnostic number is folded into the canonical evaluator, no scope is chosen as 'the' answer.",
+      "table_visible": true,
+      "row_count": 6,
+      "row_texts": [
+        "7:3038\nloader category: kh\u00f4ng x\u00e1c \u0111\u1ecbnh\n\tMM\t#3\nscore 0.5704\ntr\u00ean 74,381 \u1ea3nh\nc\u00e1ch #1 0.2444\n\t#43\nscore 0.5678\ntr\u00ean 74,381 \u1ea3nh\nc\u00e1ch #1 0.2497",
+        "Text-only\t#88\nscore 0.4221\ntr\u00ean 74,381 \u1ea3nh\nc\u00e1ch #1 0.3184\n\t#389\nscore 0.3436\ntr\u00ean 74,381 \u1ea3nh\nc\u00e1ch #1 0.3461",
+        "Image-only\t#152\nscore 0.3678\ntr\u00ean 74,381 \u1ea3nh\nc\u00e1ch #1 0.3707\n\t#67\nscore 0.4541\ntr\u00ean 74,381 \u1ea3nh\nc\u00e1ch #1 0.2699",
+        "7:3790\nloader category: kh\u00f4ng x\u00e1c \u0111\u1ecbnh\n\tMM\t#65\nscore 0.5141\ntr\u00ean 74,381 \u1ea3nh\nc\u00e1ch #1 0.1302\n\t#43\nscore 0.6190\ntr\u00ean 74,381 \u1ea3nh\nc\u00e1ch #1 0.0835",
+        "Text-only\t#6,891\nscore 0.2173\ntr\u00ean 74,381 \u1ea3nh\nc\u00e1ch #1 0.3837\n\t#4,730\nscore 0.2725\ntr\u00ean 74,381 \u1ea3nh\nc\u00e1ch #1 0.3331",
+        "Image-only\t#2,200\nscore 0.3020\ntr\u00ean 74,381 \u1ea3nh\nc\u00e1ch #1 0.4840\n\t#4,047\nscore 0.3000\ntr\u00ean 74,381 \u1ea3nh\nc\u00e1ch #1 0.4202"
+      ],
+      "body_scroll_width": 2560,
+      "inner_width": 2560,
+      "table_box": {
+        "x": 324,
+        "y": 232.46875,
+        "width": 2172,
+        "height": 652
+      },
+      "horizontal_overflow": [],
+      "screenshot": "diagnostic-2560x1440.png"
+    },
+    "390x844": {
+      "viewport": [
+        390,
+        844
+      ],
+      "diagnostic_card_count": 1,
+      "title": "Ambiguous category \u2014 diagnostic comparison",
+      "canonical_badge": "Canonical: 6,001/6,003 scored",
+      "canonical_notice": "\u0110\u00e2y l\u00e0 ch\u1ea9n \u0111o\u00e1n, kh\u00f4ng ph\u1ea3i metric canonical.\n\nHai query 7:3038, 7:3790 v\u1eabn ch\u01b0a \u0111\u01b0\u1ee3c ch\u1ea5m trong l\u01b0\u1ee3t canonical: coverage gi\u1eef nguy\u00ean 6,001/6,003. B\u1ea3ng d\u01b0\u1edbi ch\u1ea5m c\u1ea3 hai checkpoint nh\u01b0 nhau v\u00e0 kh\u00f4ng ch\u1ecdn scope n\u00e0o; kh\u00f4ng c\u00f3 s\u1ed1 n\u00e0o \u1edf \u0111\u00e2y \u0111\u01b0\u1ee3c c\u1ed9ng v\u00e0o nDCG, Recall hay coverage canonical.\n\nBoth diagnostic scopes run; the canonical metrics stay 6001/6003 and both queries stay unscored there. No diagnostic number is folded into the canonical evaluator, no scope is chosen as 'the' answer.",
+      "table_visible": true,
+      "row_count": 6,
+      "row_texts": [
+        "7:3038\nloader category: kh\u00f4ng x\u00e1c \u0111\u1ecbnh\n\tMM\t#3\nscore 0.5704\ntr\u00ean 74,381 \u1ea3nh\nc\u00e1ch #1 0.2444\n\t#43\nscore 0.5678\ntr\u00ean 74,381 \u1ea3nh\nc\u00e1ch #1 0.2497",
+        "Text-only\t#88\nscore 0.4221\ntr\u00ean 74,381 \u1ea3nh\nc\u00e1ch #1 0.3184\n\t#389\nscore 0.3436\ntr\u00ean 74,381 \u1ea3nh\nc\u00e1ch #1 0.3461",
+        "Image-only\t#152\nscore 0.3678\ntr\u00ean 74,381 \u1ea3nh\nc\u00e1ch #1 0.3707\n\t#67\nscore 0.4541\ntr\u00ean 74,381 \u1ea3nh\nc\u00e1ch #1 0.2699",
+        "7:3790\nloader category: kh\u00f4ng x\u00e1c \u0111\u1ecbnh\n\tMM\t#65\nscore 0.5141\ntr\u00ean 74,381 \u1ea3nh\nc\u00e1ch #1 0.1302\n\t#43\nscore 0.6190\ntr\u00ean 74,381 \u1ea3nh\nc\u00e1ch #1 0.0835",
+        "Text-only\t#6,891\nscore 0.2173\ntr\u00ean 74,381 \u1ea3nh\nc\u00e1ch #1 0.3837\n\t#4,730\nscore 0.2725\ntr\u00ean 74,381 \u1ea3nh\nc\u00e1ch #1 0.3331",
+        "Image-only\t#2,200\nscore 0.3020\ntr\u00ean 74,381 \u1ea3nh\nc\u00e1ch #1 0.4840\n\t#4,047\nscore 0.3000\ntr\u00ean 74,381 \u1ea3nh\nc\u00e1ch #1 0.4202"
+      ],
+      "body_scroll_width": 390,
+      "inner_width": 390,
+      "table_box": {
+        "x": 32,
+        "y": -450.59375,
+        "width": 560,
+        "height": 652
+      },
+      "horizontal_overflow": [
+        "TABLE",
+        "THEAD",
+        "TR",
+        "num",
+        "CODE"
+      ],
+      "screenshot": "diagnostic-390x844.png"
+    }
+  },
+  "card_crop": "diagnostic-card-1920.png"
+}

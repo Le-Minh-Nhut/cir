@@ -1,0 +1,120 @@
+====================================================================================================
+MODEL encoder
+ query_count(summary)=6003
+  image_only_empty_text: rank_entries=6003 null_ranks=0 scored=6003 failures_recorded=0
+    6003 - scored = 0  vs failures=0  consistent=True
+    failure_keys=[]
+    failures_without_reason=[]
+  multimodal: rank_entries=6003 null_ranks=0 scored=6003 failures_recorded=0
+    6003 - scored = 0  vs failures=0  consistent=True
+    failure_keys=[]
+    failures_without_reason=[]
+  text_only_black_image: rank_entries=6003 null_ranks=0 scored=6003 failures_recorded=0
+    6003 - scored = 0  vs failures=0  consistent=True
+    failure_keys=[]
+    failures_without_reason=[]
+====================================================================================================
+MODEL conesep
+ query_count(summary)=6003
+  image_only_empty_text: rank_entries=6003 null_ranks=0 scored=6003 failures_recorded=0
+    6003 - scored = 0  vs failures=0  consistent=True
+    failure_keys=[]
+    failures_without_reason=[]
+  multimodal: rank_entries=6003 null_ranks=0 scored=6003 failures_recorded=0
+    6003 - scored = 0  vs failures=0  consistent=True
+    failure_keys=[]
+    failures_without_reason=[]
+  text_only_black_image: rank_entries=6003 null_ranks=0 scored=6003 failures_recorded=0
+    6003 - scored = 0  vs failures=0  consistent=True
+    failure_keys=[]
+    failures_without_reason=[]
+====================================================================================================
+MODEL habit
+ query_count(summary)=6003
+  image_only_empty_text: rank_entries=6003 null_ranks=0 scored=6003 failures_recorded=0
+    6003 - scored = 0  vs failures=0  consistent=True
+    failure_keys=[]
+    failures_without_reason=[]
+  multimodal: rank_entries=6003 null_ranks=0 scored=6003 failures_recorded=0
+    6003 - scored = 0  vs failures=0  consistent=True
+    failure_keys=[]
+    failures_without_reason=[]
+  text_only_black_image: rank_entries=6003 null_ranks=0 scored=6003 failures_recorded=0
+    6003 - scored = 0  vs failures=0  consistent=True
+    failure_keys=[]
+    failures_without_reason=[]
+====================================================================================================
+MODEL intent
+ query_count(summary)=6003
+  image_only_empty_text: rank_entries=6003 null_ranks=0 scored=6003 failures_recorded=0
+    6003 - scored = 0  vs failures=0  consistent=True
+    failure_keys=[]
+    failures_without_reason=[]
+  multimodal: rank_entries=6003 null_ranks=0 scored=6003 failures_recorded=0
+    6003 - scored = 0  vs failures=0  consistent=True
+    failure_keys=[]
+    failures_without_reason=[]
+  text_only_black_image: rank_entries=6003 null_ranks=0 scored=6003 failures_recorded=0
+    6003 - scored = 0  vs failures=0  consistent=True
+    failure_keys=[]
+    failures_without_reason=[]
+====================================================================================================
+MODEL hint
+ query_count(summary)=6003
+  image_only_empty_text: rank_entries=6003 null_ranks=0 scored=6003 failures_recorded=0
+    6003 - scored = 0  vs failures=0  consistent=True
+    failure_keys=[]
+    failures_without_reason=[]
+  multimodal: rank_entries=6003 null_ranks=0 scored=6003 failures_recorded=0
+    6003 - scored = 0  vs failures=0  consistent=True
+    failure_keys=[]
+    failures_without_reason=[]
+  text_only_black_image: rank_entries=6003 null_ranks=0 scored=6003 failures_recorded=0
+    6003 - scored = 0  vs failures=0  consistent=True
+    failure_keys=[]
+    failures_without_reason=[]
+====================================================================================================
+MODEL limn
+ query_count(summary)=6003
+  image_only_empty_text: rank_entries=6003 null_ranks=2 scored=6001 failures_recorded=2
+    6003 - scored = 2  vs failures=2  consistent=True
+    failure_keys=['7:3038', '7:3790']
+    failures_without_reason=[]
+  multimodal: rank_entries=6003 null_ranks=2 scored=6001 failures_recorded=2
+    6003 - scored = 2  vs failures=2  consistent=True
+    failure_keys=['7:3038', '7:3790']
+    failures_without_reason=[]
+  text_only_black_image: rank_entries=6003 null_ranks=2 scored=6001 failures_recorded=2
+    6003 - scored = 2  vs failures=2  consistent=True
+    failure_keys=['7:3038', '7:3790']
+    failures_without_reason=[]
+====================================================================================================
+MODEL ptha_mtst
+ query_count(summary)=6003
+  image_only_empty_text: rank_entries=6003 null_ranks=0 scored=6003 failures_recorded=0
+    6003 - scored = 0  vs failures=0  consistent=True
+    failure_keys=[]
+    failures_without_reason=[]
+  multimodal: rank_entries=6003 null_ranks=0 scored=6003 failures_recorded=0
+    6003 - scored = 0  vs failures=0  consistent=True
+    failure_keys=[]
+    failures_without_reason=[]
+  text_only_black_image: rank_entries=6003 null_ranks=0 scored=6003 failures_recorded=0
+    6003 - scored = 0  vs failures=0  consistent=True
+    failure_keys=[]
+    failures_without_reason=[]
+====================================================================================================
+MODEL tme
+ query_count(summary)=6003
+  image_only_empty_text: rank_entries=6003 null_ranks=0 scored=6003 failures_recorded=0
+    6003 - scored = 0  vs failures=0  consistent=True
+    failure_keys=[]
+    failures_without_reason=[]
+  multimodal: rank_entries=6003 null_ranks=0 scored=6003 failures_recorded=0
+    6003 - scored = 0  vs failures=0  consistent=True
+    failure_keys=[]
+    failures_without_reason=[]
+  text_only_black_image: rank_entries=6003 null_ranks=0 scored=6003 failures_recorded=0
+    6003 - scored = 0  vs failures=0  consistent=True
+    failure_keys=[]
+    failures_without_reason=[]

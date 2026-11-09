@@ -206,6 +206,9 @@ Ghi `unknown` thay vì suy đoán:
 - **7 trong 8** có `real differential` giữa hai lượt chạy (limn không, vì cohort khác).
 - **0 model** có differential native↔adapter. G1 và G2 giữ `NOT_RUN`.
 - **4 adapter mới** viết xong, test contract pass, **chưa chạy GPU lần nào**, tất cả `ready=False`.
-- Các con số BLAS-sensitive (encoder 12727 rank đổi) là **bằng chứng về tính bất định của phép tính**,
+- Các con số 12727 rank đổi của encoder **KHÔNG phải do BLAS** (đính chính 2026-11-09: A/B có kiểm soát
+  `d3b_encoder_aggregate_scan.txt` chỉ đổi 1 rank/điều kiện, ΔR@50=0; 12727 là do **đổi rank method của adapter**
+  (hash module/rank đổi, hash score giữ nguyên) cộng **đổi interpreter** py3.11.15→py3.10.20; R@10 tăng trong khi
+  R@50 giảm — thread-count không làm được vậy). Chúng là **bằng chứng về tính bất định của phép tính**,
   không phải bằng chứng rằng số mới đúng hơn số cũ về mặt khoa học — chỉ rằng số cũ được đo dưới một
   policy không được ghi lại.

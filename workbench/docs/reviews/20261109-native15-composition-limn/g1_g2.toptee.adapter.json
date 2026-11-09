@@ -1,0 +1,98 @@
+{
+  "category": "toptee",
+  "phase": "adapter",
+  "tolerances": {
+    "forward_max_abs": 1e-05,
+    "forward_max_rel": 0.0001,
+    "batch_max_abs": 0.0001,
+    "batch_max_rel": 0.001,
+    "score_max_abs": 1e-06,
+    "tie_epsilon": 1e-06
+  },
+  "layer2_4_forward": {
+    "sample_forward": {
+      "query": {
+        "max_abs": 0.0,
+        "max_rel": 0.0,
+        "min_cosine": 0.9999999999999998,
+        "bitwise_equal": true,
+        "within_tolerance": true
+      },
+      "target": {
+        "max_abs": 0.0,
+        "max_rel": 0.0,
+        "min_cosine": 1.0,
+        "bitwise_equal": true,
+        "within_tolerance": true
+      },
+      "adapter_dtype": "float32",
+      "adapter_shape": [
+        4,
+        768
+      ]
+    },
+    "batch_size_1_vs_n": {
+      "max_abs": 1.7136335372924805e-07,
+      "max_rel": 0.007509343787328878,
+      "min_cosine": 0.9999999999993434,
+      "bitwise_equal": false,
+      "within_tolerance": false
+    },
+    "cache_off_restart": {
+      "max_abs": 0.0,
+      "max_rel": 0.0,
+      "min_cosine": 0.9999999999999998,
+      "bitwise_equal": true,
+      "within_tolerance": true
+    },
+    "population": {
+      "query_count": 1961,
+      "gallery_count": 2902,
+      "finite": true
+    },
+    "scoring_ranking": {
+      "query_count": 1961,
+      "gallery_count": 2902,
+      "adapter_vs_argsort_unmasked_identical": false,
+      "adapter_vs_argsort_unmasked_differences": [
+        107,
+        406,
+        452,
+        459,
+        473,
+        592,
+        717,
+        840,
+        882,
+        959,
+        1100,
+        1365,
+        1606
+      ],
+      "adapter_vs_argsort_unmasked_difference_count": 13,
+      "mask_explained_rank_shift_count": 810,
+      "mask_explained_rank_shift_all_positive": false,
+      "mask_shift_is_exactly_one": false,
+      "adapter_style_recall": {
+        "r1": 22.182559918408977,
+        "r10": 59.61244263131056,
+        "r50": 81.74400815910249
+      },
+      "native_style_recall": {
+        "r1": 26.058133605303418,
+        "r10": 60.22437531871494,
+        "r50": 82.04997450280469
+      },
+      "adapter_vs_native_masked_identical": false,
+      "score_max_abs_delta_vs_dot": 4.172325134277344e-07,
+      "score_pairs_compared": 64,
+      "native_aggregate_ranks_compared": 1961,
+      "rank_differences": 0,
+      "rank_difference_indices_head": [],
+      "unexplained_rank_differences": 0,
+      "first_unexplained_index": null,
+      "max_abs_rank_delta": 0
+    },
+    "phase_seconds": 231.2
+  }
+}

@@ -1033,10 +1033,10 @@ models:
     approved_source_patches:
       - path: base/base_trainer.py
         patch_file: workbench/patches/dcnet_checkpoint_weights_only_optout.patch
-        patch_sha256: 659eabf3c5b98352b3a09fa8291e24aedf090d806f2ada682e181fdc460fc0b8
+        patch_sha256: 64c0c8dbf187ea40352798eb6a2cb0115bd81ffcb177f556e4d8722a7885c634
         base_sha256: 3edd98363f81d0efbac6f7b1dcf9690a5db714bcc588cd4b0d890c5bb865860b
-        derived_sha256: f265cefec1795c92f6e64b6c652d60fcda7aed15071ee6817af2c1b035781a8b
-        reason: "the author checkpoint embeds a numpy scalar, so torch >= 2.6 refuses it under the new weights_only=True default; the opt-out is scoped to this one hash-verified load instead of replacing torch.load process-wide"
+        derived_sha256: 6917e18fb3979cc7fabc322285ecf5565bb6860cc0c1c27624b0af04da27c15d
+        reason: "the author checkpoint was saved from CUDA and embeds a numpy scalar plus a pickled ConfigParser. The opt-out is conditional: map_location follows the trainer's selected device (a CPU-only host cannot deserialize CUDA storages otherwise), and weights_only=False is passed only when the installed torch accepts that keyword (torch >= 1.13; the pinned torch 1.4.0 rejects it). Scoped to this one hash-verified load instead of replacing torch.load process-wide"
     notes: Native evaluator masks references and fuses log-softmax branch scores. Standard run directory requires config.json plus trained_model.pth; standard config uses ImageNet-pretrained ResNet-50, not optional DeepFashion DenseNet.
     checkpoint_variants:
       - checkpoint_id: fashioniq_run_directory

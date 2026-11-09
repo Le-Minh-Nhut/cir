@@ -1,0 +1,28 @@
+{
+  "full": {
+    "badge": "Canonical (Full cohort): 6,001/6,003 scored",
+    "notice": "\u0110\u00e2y l\u00e0 ch\u1ea9n \u0111o\u00e1n, kh\u00f4ng ph\u1ea3i metric canonical.\n\nHai query 7:3038, 7:3790 v\u1eabn ch\u01b0a \u0111\u01b0\u1ee3c ch\u1ea5m trong l\u01b0\u1ee3t canonical: coverage gi\u1eef nguy\u00ean 6,001/6,003 c\u1ee7a cohort Full. B\u1ea3ng d\u01b0\u1edbi ch\u1ea5m c\u1ea3 hai checkpoint nh\u01b0 nhau v\u00e0 kh\u00f4ng ch\u1ecdn scope n\u00e0o; kh\u00f4ng c\u00f3 s\u1ed1 n\u00e0o \u1edf \u0111\u00e2y \u0111\u01b0\u1ee3c c\u1ed9ng v\u00e0o nDCG, Recall hay coverage canonical.\n\nBoth diagnostic scopes run; the canonical metrics stay 6001/6003 and both queries stay unscored there. No diagnostic number is folded into the canonical evaluator, no scope is chosen as 'the' answer.",
+    "mismatch_count": 0,
+    "source": "",
+    "body_scroll": 1920,
+    "inner": 1920
+  },
+  "sf": {
+    "badge": "Canonical (Full cohort): 6,001/6,003 scored",
+    "notice": "\u0110\u00e2y l\u00e0 ch\u1ea9n \u0111o\u00e1n, kh\u00f4ng ph\u1ea3i metric canonical.\n\nHai query 7:3038, 7:3790 v\u1eabn ch\u01b0a \u0111\u01b0\u1ee3c ch\u1ea5m trong l\u01b0\u1ee3t canonical: coverage gi\u1eef nguy\u00ean 6,001/6,003 c\u1ee7a cohort Full. B\u1ea3ng d\u01b0\u1edbi ch\u1ea5m c\u1ea3 hai checkpoint nh\u01b0 nhau v\u00e0 kh\u00f4ng ch\u1ecdn scope n\u00e0o; kh\u00f4ng c\u00f3 s\u1ed1 n\u00e0o \u1edf \u0111\u00e2y \u0111\u01b0\u1ee3c c\u1ed9ng v\u00e0o nDCG, Recall hay coverage canonical.\n\nS\u1ed1 canonical \u1edf tr\u00ean l\u00e0 c\u1ee7a cohort Full, kh\u00f4ng ph\u1ea3i c\u1ee7a trang n\u00e0y. Trang \u0111ang xem l\u00e0 subset sf (4,069 query), c\u00f2n s\u1ed1 canonical \u1edf tr\u00ean l\u00e0 c\u1ee7a to\u00e0n b\u1ed9 6,003 query. Hai m\u1eabu s\u1ed1 kh\u00e1c nhau l\u00e0 \u0111\u00fang thi\u1ebft k\u1ebf \u2014 kh\u00f4ng \u0111\u01b0\u1ee3c \u0111\u1ecdc s\u1ed1 6,001/6,003 nh\u01b0 c\u1ee7a subset n\u00e0y. S\u1ed1 \u0111\u00e3 ch\u1ea5m c\u1ee7a ri\u00eang subset n\u00e0y do b\u1ea3ng ph\u00eda ",
+    "mismatch_count": 1,
+    "source": "",
+    "body_scroll": 1920,
+    "inner": 1920,
+    "mismatch": "S\u1ed1 canonical \u1edf tr\u00ean l\u00e0 c\u1ee7a cohort Full, kh\u00f4ng ph\u1ea3i c\u1ee7a trang n\u00e0y. Trang \u0111ang xem l\u00e0 subset sf (4,069 query), c\u00f2n s\u1ed1 canonical \u1edf tr\u00ean l\u00e0 c\u1ee7a to\u00e0n b\u1ed9 6,003 query. Hai m\u1eabu s\u1ed1 kh\u00e1c nhau l\u00e0 \u0111\u00fang thi\u1ebft k\u1ebf \u2014 kh\u00f4ng \u0111\u01b0\u1ee3c \u0111\u1ecdc s\u1ed1 6,001/6,003 nh\u01b0 c\u1ee7a subset n\u00e0y. S\u1ed1 \u0111\u00e3 ch\u1ea5m c\u1ee7a ri\u00eang subset n\u00e0y do b\u1ea3ng ph\u00eda tr\u00ean t\u1ef1 b\u00e1o; panel n\u00e0y kh\u00f4ng suy ra n\u00f3."
+  },
+  "validated": {
+    "badge": "Canonical (Full cohort): 6,001/6,003 scored",
+    "notice": "\u0110\u00e2y l\u00e0 ch\u1ea9n \u0111o\u00e1n, kh\u00f4ng ph\u1ea3i metric canonical.\n\nHai query 7:3038, 7:3790 v\u1eabn ch\u01b0a \u0111\u01b0\u1ee3c ch\u1ea5m trong l\u01b0\u1ee3t canonical: coverage gi\u1eef nguy\u00ean 6,001/6,003 c\u1ee7a cohort Full. B\u1ea3ng d\u01b0\u1edbi ch\u1ea5m c\u1ea3 hai checkpoint nh\u01b0 nhau v\u00e0 kh\u00f4ng ch\u1ecdn scope n\u00e0o; kh\u00f4ng c\u00f3 s\u1ed1 n\u00e0o \u1edf \u0111\u00e2y \u0111\u01b0\u1ee3c c\u1ed9ng v\u00e0o nDCG, Recall hay coverage canonical.\n\nS\u1ed1 canonical \u1edf tr\u00ean l\u00e0 c\u1ee7a cohort Full, kh\u00f4ng ph\u1ea3i c\u1ee7a trang n\u00e0y. Trang \u0111ang xem l\u00e0 subset validated (586 query), c\u00f2n s\u1ed1 canonical \u1edf tr\u00ean l\u00e0 c\u1ee7a to\u00e0n b\u1ed9 6,003 query. Hai m\u1eabu s\u1ed1 kh\u00e1c nhau l\u00e0 \u0111\u00fang thi\u1ebft k\u1ebf \u2014 kh\u00f4ng \u0111\u01b0\u1ee3c \u0111\u1ecdc s\u1ed1 6,001/6,003 nh\u01b0 c\u1ee7a subset n\u00e0y. S\u1ed1 \u0111\u00e3 ch\u1ea5m c\u1ee7a ri\u00eang subset n\u00e0y do b\u1ea3ng ",
+    "mismatch_count": 1,
+    "source": "",
+    "body_scroll": 1920,
+    "inner": 1920,
+    "mismatch": "S\u1ed1 canonical \u1edf tr\u00ean l\u00e0 c\u1ee7a cohort Full, kh\u00f4ng ph\u1ea3i c\u1ee7a trang n\u00e0y. Trang \u0111ang xem l\u00e0 subset validated (586 query), c\u00f2n s\u1ed1 canonical \u1edf tr\u00ean l\u00e0 c\u1ee7a to\u00e0n b\u1ed9 6,003 query. Hai m\u1eabu s\u1ed1 kh\u00e1c nhau l\u00e0 \u0111\u00fang thi\u1ebft k\u1ebf \u2014 kh\u00f4ng \u0111\u01b0\u1ee3c \u0111\u1ecdc s\u1ed1 6,001/6,003 nh\u01b0 c\u1ee7a subset n\u00e0y. S\u1ed1 \u0111\u00e3 ch\u1ea5m c\u1ee7a ri\u00eang subset n\u00e0y do b\u1ea3ng ph\u00eda tr\u00ean t\u1ef1 b\u00e1o; panel n\u00e0y kh\u00f4ng suy ra n\u00f3."
+  }
+}

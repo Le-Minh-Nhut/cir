@@ -1,0 +1,21 @@
+model_vssp files in pinned repo: ABSENT
+MHTransformer_dis files in pinned repo: ABSENT
+/home/heheboiz/miniconda3/envs/teacher-sprc/lib/python3.11/site-packages/transformers/utils/generic.py:441: FutureWarning: `torch.utils._pytree._register_pytree_node` is deprecated. Please use `torch.utils._pytree.register_pytree_node` instead.
+  _torch_pytree._register_pytree_node(
+/home/heheboiz/miniconda3/envs/teacher-sprc/lib/python3.11/site-packages/transformers/utils/generic.py:309: FutureWarning: `torch.utils._pytree._register_pytree_node` is deprecated. Please use `torch.utils._pytree.register_pytree_node` instead.
+  _torch_pytree._register_pytree_node(
+ROOT_CLASS: model.PAIR
+STATE_DICT_ENTRIES: 455
+UNIQUE_TENSOR_OBJECTS_IN_STATE_DICT: 455
+NAMED_PARAMETERS: 455 NAMED_BUFFERS: 1 SUM: 456
+PREFIX_COUNTS: {'loss_T': 1, 'local_weight': 1, 'local_weight_dis': 1, 'backbone': 446, 'affine': 6} SUM: 455
+PREFIX_COUNTS_TOP2: {'backbone': 446, 'affine': 6}
+FRESH_MODEL_CLASS: model_public.PAIR
+FRESH_MODEL_KEY_COUNT: 381
+MISSING_IN_CKPT: 0 []
+UNEXPECTED_IN_CKPT: 74
+SHAPE_MISMATCH: 70
+PARAMS_TOTAL: 172814185
+PARAMS_BYPASSED: 8986448
+PARAMS_UNCLASSIFIED: 0
+PCT_BYPASSED_PLUS_UNCLASS: 5.2001

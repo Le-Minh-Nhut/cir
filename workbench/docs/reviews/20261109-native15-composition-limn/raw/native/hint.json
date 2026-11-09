@@ -1,0 +1,108 @@
+{
+  "model_id": "hint",
+  "replay_type": "SOURCE_FAITHFUL_WORKBENCH_REPLAY",
+  "protocol": "fashioniq_val_split",
+  "evaluation_noise_pct": 0,
+  "category_model_policy": "shared",
+  "complete_benchmark": true,
+  "categories": [
+    {
+      "model_id": "hint",
+      "checkpoint_id": "fashioniq",
+      "category": "dress",
+      "protocol": "fashioniq_val_split",
+      "r1": 21.417947446703025,
+      "r10": 51.26425384234011,
+      "r50": 75.60733763014377,
+      "complete": true,
+      "provenance": {
+        "native_evaluator": "test.py:test",
+        "native_output": {
+          "dress_r1": 21.417947446703025,
+          "dress_r10": 51.26425384234011,
+          "dress_r50": 75.60733763014377
+        },
+        "checkpoint_sha256": "bf9c72d42206b667ed586758c15c648970df821857e4067f26155a114a6517d4",
+        "checkpoint_size_bytes": 2724451182,
+        "preprocessing": "targetpad transform, target_ratio 1.25, input_dim 224 (blip_validate.py equivalent path)",
+        "text_processor": {
+          "config": "configs/models/blip2/blip2_pretrain.yaml",
+          "loaded_via": "lavis/models/__init__.py:load_preprocess",
+          "note": "the pinned BlipCaptionProcessor from the model class's own config; no second BLIP-2 model is constructed and no /root/bert-base-uncased asset is read"
+        }
+      },
+      "parity_mismatches": [],
+      "per_query_published": false
+    },
+    {
+      "model_id": "hint",
+      "checkpoint_id": "fashioniq",
+      "category": "shirt",
+      "protocol": "fashioniq_val_split",
+      "r1": 32.53189401373896,
+      "r10": 62.414131501472035,
+      "r50": 81.25613346418056,
+      "complete": true,
+      "provenance": {
+        "native_evaluator": "test.py:test",
+        "native_output": {
+          "shirt_r1": 32.53189401373896,
+          "shirt_r10": 62.414131501472035,
+          "shirt_r50": 81.25613346418056
+        },
+        "checkpoint_sha256": "bf9c72d42206b667ed586758c15c648970df821857e4067f26155a114a6517d4",
+        "checkpoint_size_bytes": 2724451182,
+        "preprocessing": "targetpad transform, target_ratio 1.25, input_dim 224 (blip_validate.py equivalent path)",
+        "text_processor": {
+          "config": "configs/models/blip2/blip2_pretrain.yaml",
+          "loaded_via": "lavis/models/__init__.py:load_preprocess",
+          "note": "the pinned BlipCaptionProcessor from the model class's own config; no second BLIP-2 model is constructed and no /root/bert-base-uncased asset is read"
+        }
+      },
+      "parity_mismatches": [],
+      "per_query_published": false
+    },
+    {
+      "model_id": "hint",
+      "checkpoint_id": "fashioniq",
+      "category": "toptee",
+      "protocol": "fashioniq_val_split",
+      "r1": 32.02447730749618,
+      "r10": 65.7317695053544,
+      "r50": 83.52881183069863,
+      "complete": true,
+      "provenance": {
+        "native_evaluator": "test.py:test",
+        "native_output": {
+          "toptee_r1": 32.02447730749618,
+          "toptee_r10": 65.7317695053544,
+          "toptee_r50": 83.52881183069863
+        },
+        "checkpoint_sha256": "bf9c72d42206b667ed586758c15c648970df821857e4067f26155a114a6517d4",
+        "checkpoint_size_bytes": 2724451182,
+        "preprocessing": "targetpad transform, target_ratio 1.25, input_dim 224 (blip_validate.py equivalent path)",
+        "text_processor": {
+          "config": "configs/models/blip2/blip2_pretrain.yaml",
+          "loaded_via": "lavis/models/__init__.py:load_preprocess",
+          "note": "the pinned BlipCaptionProcessor from the model class's own config; no second BLIP-2 model is constructed and no /root/bert-base-uncased asset is read"
+        }
+      },
+      "parity_mismatches": [],
+      "per_query_published": false
+    }
+  ],
+  "aggregate": {
+    "macro_r10": 59.80338494972219,
+    "macro_r50": 80.13076097500765,
+    "macro_mean": 69.96707296236491,
+    "complete": true
+  },
+  "timestamp": "2026-11-09T13:44:27.396690+00:00",
+  "runtime": {
+    "python": "/home/heheboiz/data/cir/workbench/envs/ilearn39-adapted/bin/python",
+    "source_root": "/home/heheboiz/data/cir/workbench/third_party/HINT",
+    "dataset_root": "/home/heheboiz/data/cir/data/FashionIQ",
+    "checkpoint_root": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/hint",
+    "backbone": "pretrain"
+  }
+}

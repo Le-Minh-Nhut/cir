@@ -1,0 +1,3 @@
+lavis.models FAIL ModuleNotFoundError("No module named 'moviepy'")
+datasets OK
+test_BLIP2 OK

@@ -1,0 +1,138 @@
+{
+ "airknow": {
+  "interpreter": "workbench/envs/airknow-adapted/bin/python",
+  "exists": true,
+  "python": "3.11.15",
+  "torch": "2.7.1+cu128",
+  "cuda": "True",
+  "stderr_tail": []
+ },
+ "conesep": {
+  "interpreter": "workbench/envs/ilearn39-adapted/bin/python",
+  "exists": true,
+  "python": "3.9.25",
+  "torch": "2.7.1+cu128",
+  "cuda": "True",
+  "stderr_tail": []
+ },
+ "ptha_mtst": {
+  "interpreter": "workbench/artifacts/environments/cir-005ef4e1b02999a5/bin/python",
+  "exists": true,
+  "python": "3.10.22",
+  "torch": "2.7.1+cu128",
+  "cuda": "True",
+  "stderr_tail": []
+ },
+ "habit": {
+  "interpreter": "workbench/envs/ilearn39-adapted/bin/python",
+  "exists": true,
+  "python": "3.9.25",
+  "torch": "2.7.1+cu128",
+  "cuda": "True",
+  "stderr_tail": []
+ },
+ "intent": {
+  "interpreter": "workbench/envs/ilearn39-adapted/bin/python",
+  "exists": true,
+  "python": "3.9.25",
+  "torch": "2.7.1+cu128",
+  "cuda": "True",
+  "stderr_tail": []
+ },
+ "hint": {
+  "interpreter": "workbench/envs/ilearn39-adapted/bin/python",
+  "exists": true,
+  "python": "3.9.25",
+  "torch": "2.7.1+cu128",
+  "cuda": "True",
+  "stderr_tail": []
+ },
+ "encoder": {
+  "interpreter": "workbench/envs/encoder310-adapted/bin/python",
+  "exists": true,
+  "python": "3.10.20",
+  "torch": "2.7.1+cu128",
+  "cuda": "True",
+  "stderr_tail": []
+ },
+ "pair": {
+  "interpreter": "workbench/envs/pair-adapted/bin/python",
+  "exists": true,
+  "python": "3.11.15",
+  "torch": "2.7.1+cu128",
+  "cuda": "True",
+  "stderr_tail": []
+ },
+ "clvc_net": {
+  "interpreter": null,
+  "exists": false,
+  "python": null,
+  "torch": null,
+  "cuda": null,
+  "note": "no interpreter path declared"
+ },
+ "dcnet": {
+  "interpreter": "workbench/artifacts/environments/dcnet-377/bin/python",
+  "exists": true,
+  "python": "3.7.7",
+  "torch": "1.4.0+cpu",
+  "cuda": "False",
+  "stderr_tail": []
+ },
+ "combiner_rn50x4_noft": {
+  "interpreter": "workbench/artifacts/environments/clip4cir-38/bin/python",
+  "exists": true,
+  "python": "3.8.20",
+  "torch": "1.11.0+cpu",
+  "cuda": "False",
+  "stderr_tail": []
+ },
+ "clip4cir_rn50x4_fullft": {
+  "interpreter": "workbench/artifacts/environments/clip4cir-38/bin/python",
+  "exists": true,
+  "python": "3.8.20",
+  "torch": "1.11.0+cpu",
+  "cuda": "False",
+  "stderr_tail": []
+ },
+ "tgcir": {
+  "interpreter": null,
+  "exists": false,
+  "python": null,
+  "torch": null,
+  "cuda": null,
+  "note": "no interpreter path declared"
+ },
+ "limn": {
+  "interpreter": "workbench/envs/limn310-adapted/bin/python",
+  "exists": true,
+  "python": "3.10.20",
+  "torch": "2.7.1+cu128",
+  "cuda": "True",
+  "stderr_tail": []
+ },
+ "tme": {
+  "interpreter": "workbench/envs/tme-adapted/bin/python",
+  "exists": true,
+  "python": "3.10.22",
+  "torch": "2.7.1+cu128",
+  "cuda": "True",
+  "stderr_tail": []
+ },
+ "csmcir": {
+  "interpreter": "workbench/artifacts/environments/cir-005ef4e1b02999a5/bin/python",
+  "exists": true,
+  "python": "3.10.22",
+  "torch": "2.7.1+cu128",
+  "cuda": "True",
+  "stderr_tail": []
+ },
+ "sprc": {
+  "interpreter": "workbench/artifacts/environments/sprc-39/bin/python",
+  "exists": true,
+  "python": "3.9.25",
+  "torch": "2.0.1+cpu",
+  "cuda": "False",
+  "stderr_tail": []
+ }
+}

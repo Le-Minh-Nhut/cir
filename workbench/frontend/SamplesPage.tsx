@@ -7,6 +7,7 @@ import { CONDITIONS, ORDERS, OUTCOMES, SUBSET_LABEL } from "./routes";
 import { Card, Detail, EmptyState, ErrorState, Field, LoadingState } from "./ui";
 import { fmtInt, fmtRank } from "./format";
 import { QueryInspector } from "./QueryInspector";
+import { LimnScopeDiagnostic } from "./LimnScopeDiagnostic";
 import { fetchJson, useRegion } from "./useRegion";
 import { candidateRequestPath, selectExactQuery } from "./candidateRequest";
 
@@ -234,6 +235,10 @@ export function SamplesPage({ data, location, onGoto, onAnnotate }: {
                 )}
         </div>
       </div>
+      {/* Not a per-query row: the two queries it covers have NO canonical row anywhere on this page.
+          It is rendered here so a reader looking for them finds the comparison instead of assuming
+          the query simply does not exist, and it states the canonical count it does not change. */}
+      <LimnScopeDiagnostic pageSubset={location.subset} />
     </div>
   );
 }

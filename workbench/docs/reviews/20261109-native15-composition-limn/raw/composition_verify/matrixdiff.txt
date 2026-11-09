@@ -1,0 +1,59 @@
+model      cell           matrix          full.json   rounded6   ok
+encoder    metrics_r10    31.0345      31.0344827586    31.0345 True
+encoder    metrics_r50    49.4753      49.4752623688    49.4753 True
+encoder    query_count       6003               6003            True
+encoder    export_depth        100                100            True
+encoder    coverage_ratio   1.000000       1.0000000000            True
+encoder    topk_avail TOPK_EXPORT_COMPLETE TOPK_EXPORT_COMPLETE            True
+encoder    subset           full               full
+conesep    metrics_r10    35.4823      35.4822588706    35.4823 True
+conesep    metrics_r50    54.1396      54.1395968682    54.1396 True
+conesep    query_count       6003               6003            True
+conesep    export_depth        100                100            True
+conesep    coverage_ratio   1.000000       1.0000000000            True
+conesep    topk_avail TOPK_EXPORT_COMPLETE TOPK_EXPORT_COMPLETE            True
+conesep    subset           full               full
+habit      metrics_r10    35.6155      35.6155255705    35.6155 True
+habit      metrics_r50    54.3728      54.3728135932    54.3728 True
+habit      query_count       6003               6003            True
+habit      export_depth        100                100            True
+habit      coverage_ratio   1.000000       1.0000000000            True
+habit      topk_avail TOPK_EXPORT_COMPLETE TOPK_EXPORT_COMPLETE            True
+habit      subset           full               full
+intent     metrics_r10    34.3995      34.3994669332    34.3995 True
+intent     metrics_r50    54.0063      54.0063301682    54.0063 True
+intent     query_count       6003               6003            True
+intent     export_depth        100                100            True
+intent     coverage_ratio   1.000000       1.0000000000            True
+intent     topk_avail TOPK_EXPORT_COMPLETE TOPK_EXPORT_COMPLETE            True
+intent     subset           full               full
+hint       metrics_r10    32.8169      32.8169248709    32.8169 True
+hint       metrics_r50    51.7741      51.7741129435    51.7741 True
+hint       query_count       6003               6003            True
+hint       export_depth        100                100            True
+hint       coverage_ratio   1.000000       1.0000000000            True
+hint       topk_avail TOPK_EXPORT_COMPLETE TOPK_EXPORT_COMPLETE            True
+hint       subset           full               full
+limn       metrics_r10    30.0283      30.0283286119    30.0283 True
+limn       metrics_r50    48.6752      48.6752207965    48.6752 True
+limn       query_count       6003               6003            True
+limn       export_depth        100                100            True
+limn       coverage_ratio   0.999667       0.9996668333            True
+limn       topk_avail TOPK_EXPORT_COMPLETE_PARTIAL TOPK_EXPORT_COMPLETE_PARTIAL            True
+limn       subset           full               full
+ptha_mtst  metrics_r10    19.4736      19.4735965351    19.4736 True
+ptha_mtst  metrics_r50    34.4494      34.4494419457    34.4494 True
+ptha_mtst  query_count       6003               6003            True
+ptha_mtst  export_depth        100                100            True
+ptha_mtst  coverage_ratio   1.000000       1.0000000000            True
+ptha_mtst  topk_avail TOPK_EXPORT_COMPLETE TOPK_EXPORT_COMPLETE            True
+ptha_mtst  subset           full               full
+tme        metrics_r10    34.0163      34.0163251707    34.0163 True
+tme        metrics_r50    53.9564      53.9563551558    53.9564 True
+tme        query_count       6003               6003            True
+tme        export_depth        100                100            True
+tme        coverage_ratio   1.000000       1.0000000000            True
+tme        topk_avail TOPK_EXPORT_COMPLETE TOPK_EXPORT_COMPLETE            True
+tme        subset           full               full
+
+MISMATCHES: NONE

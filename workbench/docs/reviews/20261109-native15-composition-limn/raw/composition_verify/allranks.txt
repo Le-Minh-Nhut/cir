@@ -1,0 +1,7 @@
+conesep    changed=    17 / compared= 18009  max|drank|=    1  bit_identical=False
+encoder    changed= 12727 / compared= 18009  max|drank|= 1706  bit_identical=False
+habit      changed=     0 / compared= 18009  max|drank|=    0  bit_identical=True
+hint       changed=     0 / compared= 18009  max|drank|=    0  bit_identical=True
+intent     changed=     0 / compared= 18009  max|drank|=    0  bit_identical=True
+ptha_mtst  changed=    46 / compared= 18009  max|drank|=    2  bit_identical=False
+tme        changed=     0 / compared= 18009  max|drank|=    0  bit_identical=True

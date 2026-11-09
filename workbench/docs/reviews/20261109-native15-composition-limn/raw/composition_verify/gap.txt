@@ -1,0 +1,8 @@
+encoder    gap_json=0.469868464471 recomputed=0.469868464471 diff=0.00e+00 cohort=6003 | mm_ndcg=0.2960675767 vs gap_mm=0.2960675767 same=True
+conesep    gap_json=0.394254550097 recomputed=0.394254550097 diff=0.00e+00 cohort=6003 | mm_ndcg=0.3294411637 vs gap_mm=0.3294411637 same=True
+habit      gap_json=0.388704727214 recomputed=0.388704727214 diff=0.00e+00 cohort=6003 | mm_ndcg=0.3282828051 vs gap_mm=0.3282828051 same=True
+intent     gap_json=0.375382500325 recomputed=0.375382500325 diff=0.00e+00 cohort=6003 | mm_ndcg=0.3184910254 vs gap_mm=0.3184910254 same=True
+hint       gap_json=0.438704208172 recomputed=0.438704208172 diff=0.00e+00 cohort=6003 | mm_ndcg=0.3092691669 vs gap_mm=0.3092691669 same=True
+limn       gap_json=0.539143851372 recomputed=0.539143851372 diff=0.00e+00 cohort=6001 | mm_ndcg=0.2903943323 vs gap_mm=0.2903943323 same=True
+ptha_mtst  gap_json=0.243622160610 recomputed=0.243622160610 diff=0.00e+00 cohort=6003 | mm_ndcg=0.2249342612 vs gap_mm=0.2249342612 same=True
+tme        gap_json=0.358601258162 recomputed=0.358601258162 diff=0.00e+00 cohort=6003 | mm_ndcg=0.3203884054 vs gap_mm=0.3203884054 same=True
