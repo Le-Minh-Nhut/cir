@@ -153,3 +153,41 @@ Both breaks were reverted; `workbench/registry/models.yaml` and
 `git diff --quiet` on the production paths).
 
 Post-fix state: the three files **64 passed**; `test_handoff_commands.py` **8 passed**.
+
+## Sweep at `0857744` (the adapters + policy_observed tip) — 18 known, 0 new
+
+One serial run, box otherwise idle, worktree clean at launch. Log: `full_suite_0857744.txt`
+(47,266 B, header carries revision / command / interpreter / start / end / duration / exit /
+summary / collected / delta).
+
+```
+revision    085774488449e774df22e20fe410f30ad008f9d1
+start       2026-11-09T09:21:37+07:00
+end         2026-11-09T10:11:00+07:00
+duration    2962.52 s (0:49:22)
+exit code   1
+summary     18 failed, 2558 passed, 47 skipped, 290 warnings
+collected   2623 = 2558 + 18 + 47
+```
+
+| comparison | result |
+|---|---|
+| vs `80842661` baseline (18) | **18 retained, 0 new, 0 dropped** — byte-identical id set |
+| vs `2a832bc` sweep (21) | those same 18, and the **3 drift failures are fixed** |
+
+The three that no longer fail are exactly the ones repaired test-only in `3d576bf`:
+
+- `test_audit_fix_encoder_helpers_imported.py::test_every_adapter_is_discovered`
+- `test_circus_env_gate_omp.py::test_every_composition_adapter_is_discovered`
+- `test_frontend_catalog.py::test_the_inspector_renders_null_scores_as_a_dash_and_states_the_window`
+
+This is also the first sweep where the derived adapter population faced **13** adapters (the three
+new ones landed in `d53581b`) without either discovery test needing an edit — which is the
+verification the earlier literal-bumping fix was written for.
+
+The two production commits after that sweep (`d6bb1d3` policy_observed, `0857744` reset ordering)
+added no failure and removed none: `test_policy_observed_record.py` (11 tests) is green here.
+
+**`TESTED_SOURCE_SHA` is now stale**: it names `2a832bc`, while three production commits have
+landed since. Advancing it is a documentation step gated on the release documents being refreshed,
+not on this sweep — recorded so the guard's red state is not mistaken for a new defect.

@@ -1,0 +1,22 @@
+# Fixed query sample for perf_bench.py -- DO NOT EDIT WITHOUT RE-MEASURING
+#
+# Chosen from the real encoder run 5dee7425dd46c5f154808aac (rank artifact), so every
+# id below has a NON-NULL target rank in all three conditions. Selection rule, stated
+# so the sample is reproducible rather than convenient:
+#   - one query per FashionIQ category (dress/shirt/toptee), first by multimodal rank
+#   - two queries whose multimodal rank is 9-11   (boundary at K=10)
+#   - two queries whose multimodal rank is 49-51  (boundary at K=50)
+#   - two of the last queries by index            (the final, partial batch)
+# A query is only eligible if it also has a rank in the OTHER two conditions, because
+# perf_bench runs all three and an unscored query would silently shrink the sample.
+#
+# format: <qid>\t<category>\t<rank_multimodal>\t<rank_image_only>\t<rank_text_only>\t<bucket>
+7:1004	dress	1	1800	1	dress
+7:2012	shirt	1	3799	2	shirt
+7:4050	toptee	1	458	33	toptee
+7:1039	dress	9	1325	1115	near_k10
+7:1069	dress	9	1071	774	near_k10
+7:1853	dress	49	781	282	near_k50
+7:2155	shirt	49	57213	16	near_k50
+7:6000	toptee	2	2461	3	last_batch
+7:6001	toptee	1	206	40	last_batch

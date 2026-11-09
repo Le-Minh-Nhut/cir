@@ -1,0 +1,466 @@
+{
+  "template_only": false,
+  "description": "Audit ledger populated from this session's actual tasks. This JSON is an audit record, NOT an atomic OS lock and NOT a scheduler. See gpu_lock_mechanism for what actually serialised GPU work.",
+  "lead_owner": "HeheBoiz (single human lead; integrated and pushed every commit)",
+  "allowed_subagent_provider": "DeepSeek",
+  "max_concurrent_subagents": 3,
+  "allow_nested_subagents": false,
+  "repo_root": "/home/heheboiz/data/cir",
+  "baseline_code_sha": "ffb6ae8a072f4f92ddd203bbebac8fa2cb4e3702",
+  "final_head_sha_at_write": "085774488449e774df22e20fe410f30ad008f9d1",
+  "resource_policy": {
+    "nominal_cpu_threads_reported_by_user": 20,
+    "effective_total_cpu_budget": 10,
+    "budget_reason_and_evidence": "AGENTS.md allocates half the box to CIR; the other 10 threads serve a second project. Enforced by exporting WORKBENCH_BLAS_THREADS=8, WORKBENCH_DECODE_WORKERS=8, WORKBENCH_SCORE_THREADS=8 on every evaluation, with runner.BLAS_THREADS_PINNED=1 read back and verified at scoring time. Aggregate stayed within 10: 8 decode workers + torch intra-op pinned to 8 + BLAS 1 during scoring.",
+    "max_concurrent_gpu_jobs": 1,
+    "gpu_identity": "NVIDIA GeForce RTX 5070 Ti, 16303 MiB",
+    "actual_gpu_lock_path": null,
+    "gpu_lock_mechanism": "NO dedicated GPU lock file was used for cross-agent serialisation. Two DIFFERENT mechanisms were in play and they must not be confused. (1) WITHIN a process, run_composition takes a real fcntl.flock(LOCK_EX) on <artifacts>/composition/runs/<run_id>/.<model_id>_<checkpoint_id>.lock (runner.py:86-99, acquired at :1633) — this genuinely serialises model work against another workbench process touching the same run. (2) ACROSS the session's agents, serialisation was PROCESS-LEVEL ONLY: the GPU lane ran one composition_eval at a time and verified emptiness with pgrep -af composition_eval before each launch. That is a convention plus a check, not a lock: two agents calling pgrep in the same instant would both see nothing and both launch. Recorded as a deviation, not as a guarantee.",
+    "evaluator_serialisation_evidence": "pgrep -af 'composition_eval|pytest workbench/tests' returned empty immediately before every sweep launch (four sweeps today) and before every model run; each sweep was launched only after the previous one exited."
+  },
+  "deviations": [
+    {
+      "deviation_id": "DEV-1",
+      "what": "Four lanes ran concurrently against a documented cap of three (max_concurrent_subagents: 3).",
+      "evidence": "Lane A (evaluator fixes), Lane B (frontend light workspace), Lane C (checkpoint mapping), Lane D (model inventory) were all active in the same window; commits 7ef4cc4, f6796b3, 87ff419 and the inventory evidence pack landed while the GPU lane was producing run 30f6de42 and later. The GPU lane itself was a fifth concurrent actor.",
+      "impact": "CPU contention contaminated every wall-time figure taken before ~09:20. Every RUN_LOG.csv row is labelled 'not_measured (concurrent load)' and G8 is NOT_RUN for this reason. No scientific result depends on those durations.",
+      "status": "ACCEPTED_AND_RECORDED — not remediated; the shared worktree made serialisation impractical mid-session and the affected numbers are labelled."
+    },
+    {
+      "deviation_id": "DEV-2",
+      "what": "The GPU lane took no timing measurements for most of the session.",
+      "evidence": "RUN_LOG.csv throughput column reads 'not_measured (concurrent load)' for all 8 rows; gpu_peak_vram_mib is 'not_sampled (no sampler wired for this run)' for hint, ptha_mtst and tme, and a hand-observed value for limn (logs/limn.vram.observed.txt, explicitly labelled not-a-sampler).",
+      "impact": "Required outcome #4 (measured wall-time improvement) is UNMET; G8 remains NOT_RUN. This is a deliberate deferral rather than an oversight: a baseline taken while three other lanes were compiling and running pytest would have been false, and the handoff's own rule (§A) forbids it.",
+      "status": "DEFERRED — harness prepared (perf_bench.py), measurement pending an idle box."
+    },
+    {
+      "deviation_id": "DEV-3",
+      "what": "GPU lane produced two false claims of its own, caught and corrected within the session.",
+      "evidence": "RUN_LOG.csv conesep row originally said 'bit-identical' while quoting a gap that differed; per-query diff showed 17/18009 ranks moved. Separately, two of the new policy_observed tests were VACUOUS when first written (one built its own identity dict instead of reading the production literal; one called a helper instead of checking the call site) and were rewritten after induced-break testing exposed it.",
+      "impact": "All three corrections are recorded in the artifacts rather than silently amended: BLAS_IDENTITY_FINDINGS.md, SWEEP.md and the commit message for 0857744 each state what was wrong.",
+      "status": "REMEDIATED_IN_SESSION"
+    }
+  ],
+  "tasks": [
+    {
+      "task_id": "T1",
+      "parent_task_id": null,
+      "owner": "GPU lane (this agent) + lead",
+      "purpose": "Rerun 8 composition models under the recorded BLAS policy with Top-100 candidate export, one GPU job at a time.",
+      "status": "DONE",
+      "base_sha": "ffb6ae8a072f4f92ddd203bbebac8fa2cb4e3702",
+      "worktree": "/home/heheboiz/data/cir (shared, dirty throughout — other lanes editing)",
+      "owned_files": [
+        "workbench/docs/reviews/20261109-clean-rerun/**"
+      ],
+      "read_only_paths": [
+        "workbench/composition/**",
+        "workbench/backend/**",
+        "workbench/registry/**"
+      ],
+      "dependency_task_ids": [],
+      "deduplication_key": "composition-rerun-pinned-blas-topk100",
+      "gpu_required": true,
+      "cpu_thread_budget": 10,
+      "environment": "workbench/envs/ctl312h/bin/python (control, CPython 3.12); model interpreters encoder310-adapted, ilearn39-adapted, limn310-adapted, tme-adapted, cir-005ef4e1b02999a5",
+      "command": "workbench/envs/ctl312h/bin/python workbench/scripts/composition_eval.py --config ~/cir_rerun_20261109.yaml --models <id> --subsets full --topk-depth 100 --keep-features",
+      "output_directory": "workbench/artifacts/composition/runs/",
+      "pid": "successive; see output paths",
+      "process_start_time": "2026-11-09T03:30:31+07:00 (first run)",
+      "heartbeat": "2026-11-09T09:21:37+07:00 (sweep relaunch)",
+      "source_and_config_identity": "runner scoring_module_source_hash ea50afef1203e46361a8305a7ab61c4b3085c8179a86436ebc637cc0469b6943 and condition_transform_source_hash 0454aecf9db3dbdc8c7245c1a4a55c467bb4227f69cfa946d890fcc5f97a0b73 recorded in every artifact, verified equal to the live files",
+      "acceptance_criteria": "6003/6003 scored (limn 6001/6003 with explicit reasons); candidate depth 100 with rows ordered by score; candidate target_rank equal to the metric path; identity schema v2 with verified BLAS capability; resume reuses the feature cache",
+      "result_sha": "92e337c04ff3d1e5c1a0d9d4ff92dc8b4c0a3e07",
+      "evidence_paths": [
+        "workbench/docs/reviews/20261109-clean-rerun/RUN_LOG.csv",
+        "workbench/docs/reviews/20261109-clean-rerun/rank_diffs/",
+        "workbench/docs/reviews/20261109-clean-rerun/logs/",
+        "workbench/docs/reviews/20261109-clean-rerun/GPU_LANE_REPORT.md",
+        "workbench/docs/reviews/20261109-clean-rerun/BLAS_IDENTITY_FINDINGS.md",
+        "workbench/artifacts/composition/runs/{5dee7425,a4f786d8,c6eb9d57,4901da13,f461f391,9e4918a6,f54a7745,cd1a696d}"
+      ],
+      "model_run_ids": {
+        "encoder": "5dee7425dd46c5f154808aac",
+        "conesep": "a4f786d8af4d46ac2a85ab9c",
+        "habit": "c6eb9d5775ae636a3b8addbc",
+        "intent": "4901da139ac40b874d2363c5",
+        "hint": "f461f391c6d4696011be8067",
+        "limn": "9e4918a6b5c243412cbc58c9",
+        "ptha_mtst": "f54a77450ebd2126590d4385",
+        "tme": "cd1a696d8bca0fc4bce6925b"
+      },
+      "review_owner": "lead (independently verified encoder 5dee7425 and conesep a4f786d8 on disk)",
+      "blocker": null,
+      "integration_status": "INTEGRATED"
+    },
+    {
+      "task_id": "T2",
+      "parent_task_id": null,
+      "owner": "Lane A",
+      "purpose": "Fix six evaluator correctness defects identified by the independent review at d699b66, each with a failing-first test.",
+      "status": "DONE",
+      "base_sha": "ffb6ae8a072f4f92ddd203bbebac8fa2cb4e3702",
+      "worktree": "/home/heheboiz/data/cir",
+      "owned_files": [
+        "workbench/composition/runner.py",
+        "workbench/backend/composition.py",
+        "workbench/tests/test_review_defects_evaluator.py"
+      ],
+      "read_only_paths": [
+        "workbench/frontend/**",
+        "workbench/registry/**"
+      ],
+      "dependency_task_ids": [],
+      "deduplication_key": "evaluator-six-defects-d699b66",
+      "gpu_required": false,
+      "cpu_thread_budget": 10,
+      "environment": "workbench/envs/ctl312h/bin/python",
+      "command": "workbench/envs/ctl312h/bin/python -m pytest workbench/tests/test_review_defects_evaluator.py -q -p no:cacheprovider",
+      "output_directory": "workbench/docs/reviews/20261109-lane-a-evaluator/",
+      "pid": null,
+      "process_start_time": null,
+      "heartbeat": "2026-11-09T03:51:30+07:00",
+      "source_and_config_identity": "19 failed / 2 passed with the two production files stashed; 25 passed after the fix",
+      "acceptance_criteria": "Each defect has a test that fails before and passes after.",
+      "result_sha": "7ef4cc4",
+      "evidence_paths": [
+        "workbench/docs/reviews/20261109-lane-a-evaluator/LANE_A_REPORT.md",
+        "workbench/docs/reviews/20261109-lane-a-evaluator/RERUN_IMPACT.md",
+        "workbench/tests/test_review_defects_evaluator.py"
+      ],
+      "review_owner": "lead",
+      "blocker": null,
+      "integration_status": "INTEGRATED"
+    },
+    {
+      "task_id": "T3",
+      "parent_task_id": null,
+      "owner": "Lane B",
+      "purpose": "Light workspace frontend: readable density, real Top-K, honest protocol/subset scope.",
+      "status": "DONE",
+      "base_sha": "ffb6ae8a072f4f92ddd203bbebac8fa2cb4e3702",
+      "worktree": "/home/heheboiz/data/cir",
+      "owned_files": [
+        "workbench/frontend/**"
+      ],
+      "read_only_paths": [
+        "workbench/composition/**",
+        "workbench/backend/**"
+      ],
+      "dependency_task_ids": [],
+      "deduplication_key": "frontend-light-workspace",
+      "gpu_required": false,
+      "cpu_thread_budget": 10,
+      "environment": "workbench/envs/ctl312h/bin/python + node",
+      "command": "workbench/envs/ctl312h/bin/python workbench/frontend/tests/ui_smoke.py --url http://127.0.0.1:5173 --session <s>",
+      "output_directory": "workbench/docs/reviews/20261109-clean-rerun/ui/",
+      "pid": null,
+      "process_start_time": null,
+      "heartbeat": "2026-11-09T03:49:18+07:00",
+      "source_and_config_identity": "13 node contract tests passed; ui_smoke cold 3 / composition 8 / mobile 4 / samples 2, all exit 0; npm run build exit 0 reproducing index-9MwV5MAk.js",
+      "acceptance_criteria": "17 models always visible; subset in URL; real Top-K per query; no horizontal overflow at 1920/2560/390.",
+      "result_sha": "87ff419",
+      "evidence_paths": [
+        "workbench/docs/reviews/20261109-clean-rerun/ui/",
+        "workbench/frontend/tests/light-workspace.test.cjs"
+      ],
+      "review_owner": "lead",
+      "blocker": null,
+      "integration_status": "INTEGRATED"
+    },
+    {
+      "task_id": "T4",
+      "parent_task_id": null,
+      "owner": "Lane C",
+      "purpose": "Establish checkpoint mappings from the bytes; resolve CLIP4Cir bundle members by role instead of hard-coded filenames.",
+      "status": "DONE",
+      "base_sha": "ffb6ae8a072f4f92ddd203bbebac8fa2cb4e3702",
+      "worktree": "/home/heheboiz/data/cir",
+      "owned_files": [
+        "workbench/backend/adapters/models.py",
+        "workbench/registry/models.yaml",
+        "workbench/tests/test_clip4cir_checkpoint_resolution.py"
+      ],
+      "read_only_paths": [
+        "workbench/composition/**"
+      ],
+      "dependency_task_ids": [],
+      "deduplication_key": "checkpoint-mapping-from-bytes",
+      "gpu_required": false,
+      "cpu_thread_budget": 10,
+      "environment": "workbench/envs/ctl312h/bin/python",
+      "command": "workbench/envs/ctl312h/bin/python -m pytest workbench/tests/test_clip4cir_checkpoint_resolution.py -q -p no:cacheprovider",
+      "output_directory": "workbench/artifacts/checkpoint_selection/",
+      "pid": null,
+      "process_start_time": null,
+      "heartbeat": null,
+      "source_and_config_identity": "5 tests passed; strict loads recorded per member (0 missing / 0 unexpected)",
+      "acceptance_criteria": "Adapter resolves members from the registry by role; no filename spelled in code.",
+      "result_sha": "f6796b3",
+      "evidence_paths": [
+        "workbench/tests/test_clip4cir_checkpoint_resolution.py",
+        "workbench/registry/models.yaml"
+      ],
+      "review_owner": "lead",
+      "blocker": null,
+      "integration_status": "INTEGRATED"
+    },
+    {
+      "task_id": "T5",
+      "parent_task_id": null,
+      "owner": "Lane D",
+      "purpose": "Model inventory: 29 rows across 17 model ids with upstream URL/commit, checkpoint status, decision and blocker.",
+      "status": "DONE",
+      "base_sha": "ffb6ae8a072f4f92ddd203bbebac8fa2cb4e3702",
+      "worktree": "/home/heheboiz/data/cir",
+      "owned_files": [
+        "workbench/docs/reviews/20261109-clean-rerun/MODEL_MATRIX.csv",
+        "workbench/docs/reviews/20261109-clean-rerun/RERUN_DECISIONS.csv"
+      ],
+      "read_only_paths": [
+        "workbench/registry/**",
+        "workbench/artifacts/**"
+      ],
+      "dependency_task_ids": [
+        "T1"
+      ],
+      "deduplication_key": "model-matrix-29-rows",
+      "gpu_required": false,
+      "cpu_thread_budget": 10,
+      "environment": "workbench/envs/ctl312h/bin/python",
+      "command": "derived from registry + artifacts + RUN_LOG.csv",
+      "output_directory": "workbench/docs/reviews/20261109-clean-rerun/",
+      "pid": null,
+      "process_start_time": null,
+      "heartbeat": null,
+      "source_and_config_identity": "29 rows / 17 distinct model_id verified by script; all 8 rerun ids present >= 1",
+      "acceptance_criteria": "Old and new run per variant; decision actually acted on; previous_run_id preserved.",
+      "result_sha": "755b466",
+      "evidence_paths": [
+        "workbench/docs/reviews/20261109-clean-rerun/MODEL_MATRIX.csv",
+        "workbench/docs/reviews/20261109-clean-rerun/RERUN_DECISIONS.csv"
+      ],
+      "review_owner": "lead",
+      "blocker": null,
+      "integration_status": "INTEGRATED"
+    },
+    {
+      "task_id": "T6",
+      "parent_task_id": "T1",
+      "owner": "GPU lane + lead",
+      "purpose": "Close the defect the GPU lane recorded itself: the observed BLAS policy never reached a durable artifact.",
+      "status": "DONE",
+      "base_sha": "d53581baab88d93ce589cc53e2223970a0cf4bdf",
+      "worktree": "/home/heheboiz/data/cir",
+      "owned_files": [
+        "workbench/composition/runner.py",
+        "workbench/tests/test_policy_observed_record.py"
+      ],
+      "read_only_paths": [
+        "workbench/frontend/**",
+        "workbench/composition/model_*.py",
+        "workbench/registry/models.yaml",
+        "workbench/backend/adapters/models.py"
+      ],
+      "dependency_task_ids": [
+        "T1"
+      ],
+      "deduplication_key": "policy-observed-outside-identity",
+      "gpu_required": false,
+      "cpu_thread_budget": 10,
+      "environment": "workbench/envs/ctl312h/bin/python",
+      "command": "workbench/envs/ctl312h/bin/python -m pytest workbench/tests/test_policy_observed_record.py -q -p no:cacheprovider",
+      "output_directory": "workbench/docs/reviews/20261109-clean-rerun/",
+      "pid": null,
+      "process_start_time": null,
+      "heartbeat": "2026-11-09T09:21:06+07:00",
+      "source_and_config_identity": "11 tests; 3 proven to fail against the pre-fix commit by git stash/restore",
+      "acceptance_criteria": "policy_observed carries the readback; identity digest is unchanged by it; legacy artifacts read not_recorded; backfilled exports record the pin they used.",
+      "result_sha": "085774488449e774df22e20fe410f30ad008f9d1",
+      "evidence_paths": [
+        "workbench/tests/test_policy_observed_record.py",
+        "workbench/docs/reviews/20261109-clean-rerun/BLAS_IDENTITY_FINDINGS.md"
+      ],
+      "review_owner": "lead (caught the v3 framing error and the reset-ordering defect)",
+      "blocker": null,
+      "integration_status": "INTEGRATED"
+    },
+    {
+      "task_id": "T7",
+      "parent_task_id": null,
+      "owner": "Adapter lane",
+      "purpose": "Add PAIR and CLIP4Cir composition adapters that refuse to score unverified checkpoints.",
+      "status": "DONE",
+      "base_sha": "085774488449e774df22e20fe410f30ad008f9d1",
+      "worktree": "/home/heheboiz/data/cir",
+      "owned_files": [
+        "workbench/composition/model_pair.py",
+        "workbench/composition/model_clip4cir.py",
+        "workbench/composition/model_combiner_rn50x4_noft.py",
+        "workbench/composition/model_clip4cir_rn50x4_fullft.py",
+        "workbench/tests/test_composition_adapters_missing.py",
+        "workbench/registry/models.yaml"
+      ],
+      "read_only_paths": [
+        "workbench/composition/runner.py",
+        "workbench/frontend/**"
+      ],
+      "dependency_task_ids": [
+        "T4"
+      ],
+      "deduplication_key": "pair-clip4cir-adapters",
+      "gpu_required": true,
+      "cpu_thread_budget": 10,
+      "environment": "pair-adapted (3.11.15 / torch 2.7.1+cu128 / open_clip); clip4cir-adapted (untested by these adapters — no interpreter resolved)",
+      "command": "workbench/envs/ctl312h/bin/python -m pytest workbench/tests/test_composition_adapters_missing.py -q -p no:cacheprovider",
+      "output_directory": "workbench/docs/reviews/20261109-clean-rerun/",
+      "pid": null,
+      "process_start_time": null,
+      "heartbeat": null,
+      "source_and_config_identity": "25 tests passed; all four adapters report ready=False with real reasons",
+      "acceptance_criteria": "Registered, subclass the base, positive score_dimension, condition contract at the runner seam, no filename spelled in code.",
+      "result_sha": "d53581baab88d93ce589cc53e2223970a0cf4bdf",
+      "evidence_paths": [
+        "workbench/tests/test_composition_adapters_missing.py"
+      ],
+      "review_owner": "lead",
+      "blocker": "NO GPU RUN: every adapter is ready=False (PAIR mapping UNVERIFIED; CLIP4Cir has no interpreter). None has produced a metric.",
+      "integration_status": "INTEGRATED_CODE_ONLY"
+    },
+    {
+      "task_id": "T8",
+      "parent_task_id": null,
+      "owner": "lead + GPU lane",
+      "purpose": "Serial full-suite sweeps to make the release guard green and keep it green across three production commits.",
+      "status": "RUNNING",
+      "base_sha": "2a832bc0efe482d1536e466232a3e2803929d1d8",
+      "worktree": "/home/heheboiz/data/cir",
+      "owned_files": [],
+      "read_only_paths": [
+        "workbench/**"
+      ],
+      "dependency_task_ids": [
+        "T1",
+        "T6",
+        "T7"
+      ],
+      "deduplication_key": "serial-full-suite-sweep",
+      "gpu_required": false,
+      "cpu_thread_budget": 10,
+      "environment": "workbench/envs/ctl312h/bin/python",
+      "command": "workbench/envs/ctl312h/bin/python -m pytest workbench/tests -q -p no:cacheprovider -rfE --tb=no",
+      "output_directory": "workbench/docs/reviews/20261109-clean-rerun/",
+      "pid": 1781744,
+      "process_start_time": "2026-11-09T09:21:37+07:00",
+      "heartbeat": "2026-11-09T09:23:28+07:00 (~5% progress, log growing)",
+      "source_and_config_identity": "tip 085774488449e774df22e20fe410f30ad008f9d1",
+      "acceptance_criteria": "Counts recorded, every failure attributed, TESTED_SOURCE_SHA advanced, guard 8 passed.",
+      "result_sha": null,
+      "evidence_paths": [
+        "/tmp/sweep_adapters_policy2.txt",
+        "workbench/docs/reviews/20261109-clean-rerun/full_suite_2a832bc.txt",
+        "workbench/docs/reviews/20261109-clean-rerun/SWEEP.md"
+      ],
+      "prior_sweep_results": [
+        {
+          "revision": "2a832bc",
+          "counts": "21 failed, 2510 passed, 47 skipped = 2578",
+          "duration_s": 3415.28,
+          "log": "full_suite_2a832bc.txt"
+        },
+        {
+          "revision": "80842661",
+          "counts": "18 failed, 2480 passed, 47 skipped = 2545",
+          "duration_s": 3484.3,
+          "log": "../20261109T012857+0700-sweep-final/full_suite_80842661.txt"
+        }
+      ],
+      "review_owner": "lead (polls the log)",
+      "blocker": null,
+      "integration_status": "PENDING_MEASUREMENT"
+    },
+    {
+      "task_id": "T9",
+      "parent_task_id": null,
+      "owner": "GPU lane",
+      "purpose": "Produce the three missing handoff deliverables and a performance harness.",
+      "status": "RUNNING",
+      "base_sha": "085774488449e774df22e20fe410f30ad008f9d1",
+      "worktree": "/home/heheboiz/data/cir",
+      "owned_files": [
+        "workbench/docs/reviews/20261109-clean-rerun/INPUT_PIPELINE_AUDIT.vi.md",
+        "workbench/docs/reviews/20261109-clean-rerun/AGENT_LEDGER.json",
+        "workbench/docs/reviews/20261109-clean-rerun/perf_bench.py",
+        "workbench/docs/reviews/20261109-clean-rerun/PERFORMANCE.vi.md"
+      ],
+      "read_only_paths": [
+        "workbench/composition/**",
+        "workbench/backend/**"
+      ],
+      "dependency_task_ids": [
+        "T8"
+      ],
+      "deduplication_key": "handoff-deliverables-and-perf",
+      "gpu_required": true,
+      "cpu_thread_budget": 10,
+      "environment": "workbench/envs/ctl312h/bin/python",
+      "command": "pending: perf_bench.py --model encoder ... (must not run while T8 runs)",
+      "output_directory": "workbench/docs/reviews/20261109-clean-rerun/",
+      "pid": null,
+      "process_start_time": null,
+      "heartbeat": null,
+      "source_and_config_identity": null,
+      "acceptance_criteria": "Measured table with median and range over >=3 trials, parity verdict per worker count, raw JSONL preserved.",
+      "result_sha": null,
+      "evidence_paths": [],
+      "review_owner": "lead",
+      "blocker": "CPU/GPU owned by T8 (pytest sweep). A benchmark taken now would be contaminated by design. Harness is prepared and will not be run until the box is idle.",
+      "integration_status": "PENDING"
+    }
+  ],
+  "notes": [
+    "One exclusive file owner, including across separate worktrees.",
+    "One GPU owner across evaluation, smoke tests, warmup, profiling and backfill — held by the GPU lane; see gpu_lock_mechanism for why it was a convention plus a pgrep check rather than a lock file.",
+    "Do not mutate shared environments or active evaluator source during a run.",
+    "Use actual existing locking primitives; a ledger entry alone cannot prevent a race. A real fcntl.flock exists per run (runner.py:86) but it does not serialise two agents against DIFFERENT runs.",
+    "Before retrying a stale job, verify PID and process start time and the owned process group.",
+    "Only the lead integrates shared changes and performs final push/service verification."
+  ],
+  "task_record_required_fields": [
+    "task_id",
+    "parent_task_id",
+    "owner",
+    "purpose",
+    "status",
+    "base_sha",
+    "worktree",
+    "owned_files",
+    "read_only_paths",
+    "dependency_task_ids",
+    "deduplication_key",
+    "gpu_required",
+    "cpu_thread_budget",
+    "environment",
+    "command",
+    "output_directory",
+    "pid",
+    "process_start_time",
+    "heartbeat",
+    "source_and_config_identity",
+    "acceptance_criteria",
+    "result_sha",
+    "evidence_paths",
+    "review_owner",
+    "blocker",
+    "integration_status"
+  ],
+  "allowed_task_states": [
+    "QUEUED",
+    "CLAIMED",
+    "RUNNING",
+    "REVIEW",
+    "DONE",
+    "BLOCKED",
+    "CANCELLED"
+  ]
+}

@@ -139,3 +139,21 @@ không suy ra số. Limn có số nhưng là **đọc tay**, và cột của nó
 - Không có timing sạch (G8 chưa chạy — hai lane khác đang chạy).
 - **ĐÃ CÓ** sweep hoàn chỉnh tại revision hiện tại: `full_suite_2a832bc.txt` (G11 nay là PASS). Sweep tại
   `ffb6ae8` bị huỷ ở 22% vẫn được giữ làm lịch sử, không phải lượt đo của cây hiện tại.
+
+## 11. Phép đo hiệu năng (sau khi sweep thoát)
+
+| file | bytes | chứng minh | gate | nguồn |
+|---|---:|---|---|---|
+| `perf_bench.py` | 16483 | harness: sweep decode worker 0/2/4/6/8 qua `adapters.prefetch_rows` thật, cold tách khỏi warm, **từ chối chạy khi box bận** (exit 2, đã kiểm), parity gate theo 3 digest | G8 | `python perf_bench.py …` |
+| `perf_watcher.sh` | 3425 | watcher detached: đợi sweep thoát, ngủ 30 s, ghi loadavg, **kiểm lại** idleness, rồi đo và sinh tài liệu; fail-closed ghi `perf_run.FAILED` | G8 | `setsid nohup bash perf_watcher.sh` |
+| `gen_performance_doc.py` | 11654 | sinh `PERFORMANCE.vi.md` **từ** `perf_raw.jsonl`; từ chối nếu <3 trial steady / thiếu cold / thiếu parity; đánh REJECTED và **không đề xuất** setting đổi digest | G8 | `python gen_performance_doc.py --raw … --out …` |
+| `perf_sample_ids.txt` | — | 9 query id cố định (3 category, 3 điều kiện, rank 9 gần K=10, rank 49 gần K=50, batch cuối); kiểm drift: sửa 1 rank → generator/harness từ chối | G8 | dẫn xuất từ `runs/5dee7425…/ranks/encoder_fashioniq.json` |
+| `perf_raw.jsonl` | 11645 | **dữ liệu thô**: 5 setting × (1 cold + 3 steady) + parity rows + provenance (sha `0857744`, loadavg `1.00 1.49 1.54`) | G8 | `perf_bench.py` |
+| `PERF_TABLE.md` | 883 | bảng do harness sinh: median 103.8→235.9→428.3→432.0→429.2 img/s, cả 5 setting IDENTICAL | G8 | `perf_bench.py` |
+| `PERFORMANCE.vi.md` | 3273 | tài liệu **sinh tự động**, không gõ tay; nêu rõ phạm vi (trục decode, không phải end-to-end) và đề xuất `workers=4` (gấp 4,1×, đồng hạng trong 2% nhiễu) | G8 | `gen_performance_doc.py` |
+| `logs/perf_run.log` | — | nhật ký watcher có timestamp: các lần "still waiting", `sweep exited after ~2540s`, `post-settle loadavg`, `perf_bench exit=0`, `gen_performance_doc exit=0` | G8 | watcher |
+| `logs/perf_run.first_attempt.log` | — | lần chạy watcher đầu, bị dừng vì tôi sửa script khi nó đang chạy (bash đọc file tăng dần) — giữ lại thay vì xoá | G8 | — |
+
+`INPUT_PIPELINE_AUDIT.vi.md` (14206 B) và `AGENT_LEDGER.json` (23400 B, 9 task, đủ 26 trường bắt buộc)
+là hai tài liệu bàn giao còn lại; mọi mục trong đó ghi **mức bằng chứng** (static review / synthetic
+differential / real differential / NOT VERIFIED), và G1/G2 vẫn NOT_RUN.

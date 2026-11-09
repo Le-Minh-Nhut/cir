@@ -33,7 +33,7 @@ Cuối cùng, một điều không thể làm: **không thể backfill** bất k
 digest của identity (giải thích ở §6) — nên tám lượt trên đều là rerun đầy đủ, không phải re-export.
 
 Tóm lại: code đúng hơn, giao diện thật hơn, và **tám model nay có số đo dưới policy được ghi lại** —
-và guard release đã xanh (G11 PASS), trong khi ba gate khoa học vẫn chưa chạy (G1, G2, G8).
+và guard release đã xanh (G11 PASS), trong khi hai gate khoa học vẫn chưa chạy (G1, G2).
 
 ## 2. Sáu lỗi evaluator đã sửa
 
@@ -177,15 +177,15 @@ mobile 4, samples 2 check — tất cả exit 0**. 13 test node pass. Ảnh ch�
 | G5 clean run/coverage | **PASS** (phạm vi: tám model đã rerun) | tám lượt đầy đủ dưới policy được ghi lại, verify từ artifact: 7×`6003/6003`, limn `6001/6003` khai đúng hai query không chấm được. 21 hàng registry còn lại vẫn BLOCKED/DEFERRED, **không** thuộc phạm vi PASS này. ptha_mtst có caveat: đường encode không pin được |
 | G6 rank/export | **PASS** | tám model đều export **Top-100**; manifest depth=100, record 6003/6003 `partial=false` (limn 6001/6003 `partial=true`). 18009 dòng ứng viên được kiểm: vị trí hợp lệ, thứ tự theo score, `target_rank` khớp nhánh metric — 0 vi phạm |
 | G7 optimization parity | **PASS** | bảng đo BLAS + chứng minh song song theo trục query; **không claim speedup** |
-| G8 measured performance | **NOT_RUN** | hai lane khác đang chạy → không có timing sạch |
+| G8 measured performance | **PASS** (phạm vi: trục **decode**, một model family) | đo trên box **rảnh thật**: watcher đợi sweep thoát, ngủ 30 s, ghi loadavg `1.00 1.49 1.54`, **kiểm lại** không còn pytest/evaluator rồi mới đo. Kết quả (encoder, 768 ảnh cố định, batch 32, 3 trial steady + 1 cold, cold loại khỏi median): **103,8 img/s ở 0 worker → 235,9 ở 2 → 428,3 ở 4 → 432,0 ở 6 → 429,2 ở 8**; RSS 169→229 MiB; VRAM phẳng 852 MiB. **Cả 5 setting parity IDENTICAL** trên 3 digest độc lập (thứ tự hàng, byte decode, mảng sau transform). Đề xuất `workers=4`: nằm trong 2% của nhanh nhất và rẻ nhất trong nhóm đồng hạng, **gấp 4,1×** bản serial. **Không** phải baseline end-to-end — forward pass không nằm trong phép đo này |
 | G9 frontend correctness | **PASS** | 4 session browser trên dữ liệu thật, exit 0 |
 | G10 frontend usability | **PASS** | sáng, 17/19px, 1920/2560/390, 0 ô cắt |
 | G11 integration/release | **PASS** | sweep serial tại `2a832bc` (2510/21/47 = 2578, exit 1, 3415.28 s, log `full_suite_2a832bc.txt`), `TESTED_SOURCE_SHA` đã tiến trong **cả hai** tài liệu, guard `test_handoff_commands.py` **8 passed**, `npm run build` exit 0 và tái tạo đúng asset `index-9MwV5MAk.js` mà server đang phục vụ. PASS **không** có nghĩa suite xanh: 21 failure được ghi lại (18 là bộ cũ, 3 là drift đã sửa test-only ở `3d576bf`) |
 | G12 coordination | **PASS** | có một sai lệch đã ghi: 4 lane chạy song song so với cap 3, lane thứ tư đã dừng |
 
-**10 PASS · 0 FAIL · 3 NOT_RUN.** Không có gate nào được PASS mà thiếu bằng chứng trên đĩa.
+**11 PASS · 0 FAIL · 2 NOT_RUN.** Không có gate nào được PASS mà thiếu bằng chứng trên đĩa.
 
-G11 chuyển từ FAIL sang PASS sau khi sweep tại `2a832bc` được đo, `TESTED_SOURCE_SHA` được tiến trong cả `FINAL_PC_RELEASE_VERDICT.md` và `PC_PILOT_HANDOFF.md`, rồi guard báo **8 passed** — trạng thái đỏ trước đó là **độ trễ ghi sổ**, đóng lại bằng đo lường chứ không bằng sửa guard. G1/G2/G8 vẫn NOT_RUN.
+G11 chuyển từ FAIL sang PASS sau khi sweep tại `2a832bc` được đo, `TESTED_SOURCE_SHA` được tiến trong cả `FINAL_PC_RELEASE_VERDICT.md` và `PC_PILOT_HANDOFF.md`, rồi guard báo **8 passed** — trạng thái đỏ trước đó là **độ trễ ghi sổ**, đóng lại bằng đo lường chứ không bằng sửa guard. **G8 chuyển NOT_RUN → PASS** nhờ một phép đo trên box rảnh thật (xem hàng G8); tài liệu `PERFORMANCE.vi.md` **sinh tự động** từ `perf_raw.jsonl`, không gõ tay. G1/G2 vẫn NOT_RUN — không có differential native↔adapter.
 
 G5 và G6 chuyển trạng thái vì tám lượt chạy đã xong và invariant kiểm từ artifact. G1/G2 giữ NOT_RUN (không chạy differential native↔adapter nào). G8 giữ NOT_RUN (mọi wall-time đo khi hai lane khác đang chạy — **không phải baseline**).
 
@@ -212,7 +212,8 @@ khớp, `content_digest` có và verify qua. Tức khoá cache **ổn định tr
 cũ vẫn không truy cập được, đúng như thiết kế.
 
 **Wall-time của cả tám lượt đều KHÔNG phải baseline:** đo khi hai lane khác đang chạy, cột
-`throughput` ghi `not_measured (concurrent load)`. Vì vậy G8 vẫn NOT_RUN. Ba lượt (hint, ptha_mtst,
+`throughput` ghi `not_measured (concurrent load)`. G8 chỉ được PASS ở phạm vi trục decode sau đó
+(§7). Ba lượt (hint, ptha_mtst,
 tme) còn không có file VRAM vì sampler không được nối lại sau khi HEAD đổi — `RUN_LOG.csv` ghi
 `not_sampled`, không suy ra số.
 
@@ -252,9 +253,11 @@ Cột `previous_run_id` giữ lại run id cũ cho cả tám, nên dòng dõi tr
 - **Sweep tại revision hiện tại: ĐÃ CÓ** (chính là `full_suite_2a832bc.txt` ở trên). Sweep tại `ffb6ae8`
   bị huỷ ở **22%** vẫn được giữ làm lịch sử (`sweep_ffb6ae8_ABORTED.txt`, không có count) — nó không phải
   lượt đo của cây hiện tại và không được trích làm bằng chứng.
-- **G8 NOT_RUN.** Không có timing sạch vì hai lane khác chạy đồng thời. Cả tám lượt rerun do đó đều
-  ghi wall-time kèm cảnh báo *"measured under concurrent load — not a baseline"* và `throughput`
-  `not_measured`.
+- **G8 nay là PASS, nhưng chỉ cho trục decode.** Sweep serial thoát lúc `10:11:00`; watcher đợi thêm 30 s,
+  ghi loadavg `1.00 1.49 1.54`, kiểm lại lần hai rồi mới đo. Kết quả và cảnh báo phạm vi ở hàng G8 và ở
+  `PERFORMANCE.vi.md`. **Tám lượt rerun vẫn không có timing** — chúng chạy khi bốn lane khác đang hoạt động,
+  nên wall-time của chúng vẫn ghi *"measured under concurrent load — not a baseline"* và `throughput`
+  `not_measured`. Một phép đo producer stage không biến chúng thành baseline.
 - **Lỗi chưa sửa: artifact không tự chứng minh được policy BLAS của nó (task kế tiếp).**
   `runner._record_effective_blas_pin()` (`workbench/composition/runner.py:1020`, dict ở `:1049`, được
   gọi tại `:218`, `:992`, `:1782`) có lưu giá trị readback thật, nhưng **không code path nào ghi dict
@@ -323,6 +326,7 @@ Dịch vụ: `http://127.0.0.1:5173` (200) và `http://127.0.0.1:8000` (200); as
 Push và trạng thái remote: xem mục cuối của `GATE_RESULTS.json` (G11) và xác nhận
 `git rev-parse HEAD` == `git rev-parse origin/research/cir-failure-workbench` sau khi push.
 
-**Không** claim "tất cả đã sạch": G1, G2, G8 chưa chạy (không có differential đầu vào/forward, không có
-timing sạch); G5 PASS chỉ trong phạm vi tám model đã rerun, không phải toàn cohort (14 hàng BLOCKED, 3
-DEFERRED); và G11 PASS **không** có nghĩa suite xanh — 21 failure vẫn được ghi nguyên văn.
+**Không** claim "tất cả đã sạch": G1, G2 chưa chạy (không có differential đầu vào/forward); G5 PASS chỉ
+trong phạm vi tám model đã rerun, không phải toàn cohort (14 hàng BLOCKED, 3 DEFERRED); G8 PASS chỉ cho
+trục decode của một model family, **không** phải baseline end-to-end, và tám lượt rerun vẫn không có
+timing; G11 PASS **không** có nghĩa suite xanh — 18 failure đã biết vẫn được ghi nguyên văn.

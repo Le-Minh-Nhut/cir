@@ -1,8 +1,8 @@
 {
  "schema": "gate-results/1",
  "document": "workbench/docs/05_ACCEPTANCE_GATES.md (G0-G12)",
- "checked_at": "2026-11-09T09:20:00+07:00",
- "revision_assessed": "20b83e5 worktree (HEAD moved ffb6ae8->20b83e5 at 03:53 by another lane mid-session; the four runs launched earlier were re-checked and their recorded scoring/inputs source hashes equal the live files); TESTED_SOURCE_SHA still 80842661",
+ "checked_at": "2026-11-09T10:20:00+07:00",
+ "revision_assessed": "085774488449e774df22e20fe410f30ad008f9d1 (three production commits after the 2a832bc sweep: policy_observed, the PAIR/CLIP4Cir adapters, and the reset-ordering fix). TESTED_SOURCE_SHA in the release documents still names 2a832bc and is STALE until advanced.",
  "note": "States follow the vocabulary in 05_ACCEPTANCE_GATES.md. Unknown is never PASS. A gate covering several models is recorded per the weakest applicable scope, and the scope field names it.",
  "gates": [
   {
@@ -150,13 +150,20 @@
   {
    "gate": "G8",
    "name": "measured performance",
-   "state": "NOT_RUN",
-   "scope": "no timing was taken",
+   "state": "PASS",
+   "scope": "the DECODE axis of the composition pipeline, on one model family (encoder), measured on an idle box. NOT a whole-run baseline: no end-to-end model forward pass was timed.",
    "evidence": [
-    "workbench/docs/reviews/20261109-clean-rerun/RUN_LOG.csv"
+    "workbench/docs/reviews/20261109-clean-rerun/PERFORMANCE.vi.md",
+    "workbench/docs/reviews/20261109-clean-rerun/PERF_TABLE.md",
+    "workbench/docs/reviews/20261109-clean-rerun/perf_raw.jsonl",
+    "workbench/docs/reviews/20261109-clean-rerun/perf_sample_ids.txt",
+    "workbench/docs/reviews/20261109-clean-rerun/perf_bench.py",
+    "workbench/docs/reviews/20261109-clean-rerun/gen_performance_doc.py",
+    "workbench/docs/reviews/20261109-clean-rerun/logs/perf_run.log"
    ],
-   "reject_reason": "Two other lanes were running during this session. The one available measurement (encoder, RUN_LOG.csv) states in its own wall_time_note that it was 'measured under concurrent load from two other lanes - not a baseline', and records throughput as not_measured. A contaminated baseline is worse than none, so no performance claim is made.",
-   "checked_at": "2026-11-09T03:51:30+07:00"
+   "reject_reason": null,
+   "checked_at": "2026-11-09T10:20:00+07:00",
+   "detail": "Measured, not estimated, and measured on a box that was verifiably idle: the watcher waited for the serial sweep to exit, slept 30 s, recorded loadavg 1.00 1.49 1.54, and RE-CHECKED that no pytest or composition_eval was running before starting. The harness independently refuses to run beside an evaluator or suite and would have exited 2. RESULT (encoder, 768-image fixed gallery sample, batch 32, 224px, 3 steady trials + 1 cold per setting, cold excluded from the median): decode throughput median 103.8 img/s at 0 workers, 235.9 at 2, 428.3 at 4, 432.0 at 6, 429.2 at 8. Peak RSS rises 169 -> 229 MiB. VRAM flat at 852 MiB (this is a CPU-side producer measurement). PARITY: all five settings IDENTICAL on three independent digests (ordered row identity, decoded byte content, transformed array), so the worker count changes concurrency and not arithmetic. RECOMMENDATION: workers=4 -- within 2% of the fastest (6 and 8 are tied within noise) and the cheapest of that tied set; 4.1x the serial rate. The spread from 0 to 8 workers is 76%, so the knob has a real effect. WHAT THIS DOES NOT ESTABLISH: no end-to-end wall time, no speedup claim for a full composition run, and no query-axis re-test (that axis was already proven bit-identical at sub-batch 2..128). The document is generated from perf_raw.jsonl by gen_performance_doc.py, which refuses to emit a table from fewer than 3 steady trials or without a cold trial, so a partly-finished measurement cannot become a document. Caveat recorded: the box was idle for this measurement but the SAME host ran four concurrent lanes for most of the session, which is why the eight composition runs carry no timing. This gate is PASS for the decode measurement only; it is not a whole-run performance baseline."
   },
   {
    "gate": "G9",
@@ -227,6 +234,7 @@
    "G5",
    "G6",
    "G7",
+   "G8",
    "G9",
    "G10",
    "G11",
@@ -235,12 +243,11 @@
   "FAIL": [],
   "NOT_RUN": [
    "G1",
-   "G2",
-   "G8"
+   "G2"
   ],
   "BLOCKED": [],
   "DEFERRED": [],
   "NOT_APPLICABLE_WITH_REASON": [],
-  "headline": "10 PASS, 0 FAIL, 3 NOT_RUN. G11 moved to PASS after the sweep at 2a832bc was measured, TESTED_SOURCE_SHA advanced in both release documents and test_handoff_commands.py then reported 8 passed - the guard's red state was a record lag, closed by measurement, not by editing the guard. PASS does not mean the suite is green: 21 failures are recorded, 18 retained and 3 drift now fixed test-only. G1/G2 keep NOT_RUN (no input or forward differential). G8 keeps NOT_RUN (every timing was taken with other lanes active). G5's PASS is scoped to the eight rerun models, not the whole cohort."
+  "headline": "11 PASS, 0 FAIL, 2 NOT_RUN. G8 moved after a clean on-idle-box measurement of the decode axis (4.1x from serial to 4 workers, all settings parity-identical), generated from the raw file rather than typed. G8's PASS is scoped to the decode axis of one model family and is NOT an end-to-end baseline. G1/G2 keep NOT_RUN: no native-vs-adapter input or forward differential exists. G11 PASS does not mean the suite is green - 18 known failures are recorded at 0857744, 0 new."
  }
 }
