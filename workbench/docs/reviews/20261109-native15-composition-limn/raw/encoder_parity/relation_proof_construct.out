@@ -1,0 +1,22 @@
+CHECKPOINT_SHA 0f31c50150a7bda3495e3378df13b4cec7924b52efd23b5e5dd9731459da9173
+CHECKPOINT_KEY_COUNT 417
+KEYS_MATCHING_learnable_relation []
+KEYS_MATCHING_relation []
+/home/heheboiz/data/cir/workbench/envs/encoder310-adapted/lib/python3.10/site-packages/timm/models/layers/__init__.py:49: FutureWarning: Importing from timm.models.layers is deprecated, please import via timm.layers
+  warnings.warn(f"Importing from {__name__} is deprecated, please import via timm.layers", FutureWarning)
+2
+2
+STATE_DICT_LEN 415
+IN_STATE_DICT False
+HASATTR True
+TYPE <class 'torch.Tensor'>
+SHAPE [2, 512]
+MIN -2.8431050777435303
+MAX 2.750112295150757
+NAMED_PARAMS_MATCHING_RELATION []
+TWO_CONSTRUCTIONS_MAX_ABS 4.208795070648193
+TWO_CONSTRUCTIONS_SUM_A 33.9351692199707
+TWO_CONSTRUCTIONS_SUM_B 7.737502098083496
+SEEDED_TWO_PROCESS_MAX_ABS 0.0
+SEEDED_EQUAL True
+SEEDED_VALUE_SUM -22.864234924316406

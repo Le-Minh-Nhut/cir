@@ -1,0 +1,272 @@
+{
+  "tags": [
+    "A",
+    "B"
+  ],
+  "layers": {
+    "pixels": {
+      "max_abs": 0.0,
+      "max_rel": 0.0,
+      "min_cosine": 0.9999999999999999,
+      "bitwise_equal": true,
+      "shape": [
+        4,
+        3,
+        224,
+        224
+      ]
+    },
+    "token_ids": {
+      "max_abs": 0.0,
+      "max_rel": 0.0,
+      "min_cosine": 0.9999999999999998,
+      "bitwise_equal": true,
+      "shape": [
+        4,
+        77
+      ]
+    },
+    "fc": {
+      "max_abs": 0.0,
+      "max_rel": 0.0,
+      "min_cosine": 0.9999999999999999,
+      "bitwise_equal": true,
+      "shape": [
+        4,
+        50,
+        512
+      ]
+    },
+    "text_fc": {
+      "max_abs": 0.0,
+      "max_rel": 0.0,
+      "min_cosine": 1.0,
+      "bitwise_equal": true,
+      "shape": [
+        4,
+        77,
+        512
+      ]
+    },
+    "weight_chanelImg": {
+      "max_abs": 0.0,
+      "max_rel": 0.0,
+      "min_cosine": 0.9999999999999998,
+      "bitwise_equal": true,
+      "shape": [
+        4,
+        49,
+        49
+      ]
+    },
+    "weight_cross": {
+      "max_abs": 0.0,
+      "max_rel": 0.0,
+      "min_cosine": 0.9999999999999998,
+      "bitwise_equal": true,
+      "shape": [
+        4,
+        77,
+        1
+      ]
+    },
+    "weight_chanelImg_t": {
+      "max_abs": 0.0,
+      "max_rel": 0.0,
+      "min_cosine": 1.0,
+      "bitwise_equal": true,
+      "shape": [
+        4,
+        77,
+        49
+      ]
+    },
+    "cross_t2i": {
+      "max_abs": 0.0,
+      "max_rel": 0.0,
+      "min_cosine": 0.9999999999999998,
+      "bitwise_equal": true,
+      "shape": [
+        4,
+        49,
+        49
+      ]
+    },
+    "sparse_net": {
+      "max_abs": 0.0,
+      "max_rel": 0.0,
+      "min_cosine": 0.9999999999999999,
+      "bitwise_equal": true,
+      "shape": [
+        4,
+        30,
+        512
+      ]
+    },
+    "fac_net": {
+      "max_abs": 0.0,
+      "max_rel": 0.0,
+      "min_cosine": 1.0,
+      "bitwise_equal": true,
+      "shape": [
+        4,
+        3,
+        512
+      ]
+    },
+    "binding_in_V": {
+      "max_abs": 0.0,
+      "max_rel": 0.0,
+      "min_cosine": 0.9999999999999999,
+      "bitwise_equal": true,
+      "shape": [
+        4,
+        4,
+        512
+      ]
+    },
+    "binding_product_cross": {
+      "max_abs": 32.27046775817871,
+      "max_rel": 192.0771047227926,
+      "min_cosine": -0.7113928220707346,
+      "bitwise_equal": false,
+      "shape": [
+        4,
+        2,
+        4
+      ]
+    },
+    "binding_S_cross": {
+      "max_abs": 1.2106337547302246,
+      "max_rel": 13.890399973013498,
+      "min_cosine": 0.5263452643333778,
+      "bitwise_equal": false,
+      "shape": [
+        4,
+        2,
+        4
+      ]
+    },
+    "binding_S_self": {
+      "max_abs": 1.1920928955078125e-07,
+      "max_rel": 1.4587887793468186e-07,
+      "min_cosine": 0.999999999999998,
+      "bitwise_equal": false,
+      "shape": [
+        1,
+        2,
+        2
+      ]
+    },
+    "binding_S_final": {
+      "max_abs": 0.7841182351112366,
+      "max_rel": 17.112667176229536,
+      "min_cosine": 0.5036649658554716,
+      "bitwise_equal": false,
+      "shape": [
+        4,
+        2,
+        4
+      ]
+    },
+    "binding_entity": {
+      "max_abs": 0.0063584670424461365,
+      "max_rel": 1.2495196030485434,
+      "min_cosine": 0.9890604885450471,
+      "bitwise_equal": false,
+      "shape": [
+        4,
+        2,
+        512
+      ]
+    },
+    "weight_chanelText_i": {
+      "max_abs": 0.0,
+      "max_rel": 0.0,
+      "min_cosine": 0.9999999999999998,
+      "bitwise_equal": true,
+      "shape": [
+        4,
+        49,
+        77
+      ]
+    },
+    "cross_i2t": {
+      "max_abs": 0.0,
+      "max_rel": 0.0,
+      "min_cosine": 1.0,
+      "bitwise_equal": true,
+      "shape": [
+        4,
+        77,
+        77
+      ]
+    },
+    "weight_chanelText": {
+      "max_abs": 0.0,
+      "max_rel": 0.0,
+      "min_cosine": 1.0,
+      "bitwise_equal": true,
+      "shape": [
+        4,
+        77,
+        77
+      ]
+    },
+    "sparse_net_text": {
+      "max_abs": 0.0,
+      "max_rel": 0.0,
+      "min_cosine": 0.9999999999999999,
+      "bitwise_equal": true,
+      "shape": [
+        4,
+        47,
+        512
+      ]
+    },
+    "affine_in_x": {
+      "max_abs": 0.0042451415210962296,
+      "max_rel": 0.7959933724642935,
+      "min_cosine": 0.9999996972144718,
+      "bitwise_equal": false,
+      "shape": [
+        4,
+        6,
+        512
+      ]
+    },
+    "affine_in_text": {
+      "max_abs": 0.0063584670424461365,
+      "max_rel": 1.2495196030485434,
+      "min_cosine": 0.9999997497724661,
+      "bitwise_equal": false,
+      "shape": [
+        4,
+        6,
+        512
+      ]
+    },
+    "affine": {
+      "max_abs": 0.14781418442726135,
+      "max_rel": 176.47139606807445,
+      "min_cosine": 0.999279516557741,
+      "bitwise_equal": false,
+      "shape": [
+        4,
+        6,
+        512
+      ]
+    },
+    "final": {
+      "max_abs": 0.010549813508987427,
+      "max_rel": 23.770054586536727,
+      "min_cosine": 0.9990085517319055,
+      "bitwise_equal": false,
+      "shape": [
+        4,
+        512
+      ]
+    }
+  },
+  "first_divergence": "binding_product_cross"
+}

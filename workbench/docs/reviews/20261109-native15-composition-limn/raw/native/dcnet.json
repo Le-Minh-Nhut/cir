@@ -1,0 +1,192 @@
+{
+  "model_id": "dcnet",
+  "replay_type": "SOURCE_NATIVE_ENTRYPOINT",
+  "protocol": "fashioniq_full_gallery_ref_excluded",
+  "protocol_source": "third_party/DCNet/trainer/trainer_joint.py::_valid_epoch — gallery = image_splits/split.{category}.val.json (val_trg loader, batch 100); the reference image is suppressed by setting score[ref_index] = -10e10 before topk",
+  "complete_benchmark": true,
+  "categories": [
+    {
+      "model_id": "dcnet",
+      "checkpoint_id": "fashioniq_run_directory",
+      "category": "dress",
+      "protocol": "fashioniq_full_gallery_ref_excluded",
+      "r1": null,
+      "r10": 0.2915220624690134,
+      "r50": 0.5458601883986118,
+      "query_count": 2017,
+      "gallery_count": 3817,
+      "complete": true,
+      "provenance": {
+        "native_evaluator": "test.py:test -> trainer_joint.py::_valid_epoch (--mode val)",
+        "native_output": {
+          "dress_comp_r10": 0.28011898859692613,
+          "dress_comp_r50": 0.5349529003470501,
+          "dress_corr_r10": 0.28805156172533464,
+          "dress_corr_r50": 0.5493306891422906,
+          "dress_comb_r10": 0.2915220624690134,
+          "dress_comb_r50": 0.5458601883986118
+        },
+        "reported_column": "comb (log-softmax(comp) + log-softmax(corr)); comp and corr columns recorded verbatim alongside",
+        "r1_note": "upstream prints only R@10/R@50 for FashionIQ; no R@1 is computed in _valid_epoch",
+        "query_count_source": "data/FashionIQ/captions/cap.dress.glove.val.pkl (2017 entries), cross-checked against val/att_result.pt: 253 batches, sum of batch sizes = 2017",
+        "gallery_count_source": "data/FashionIQ/image_splits/split.dress.val.json (3817 image ids)"
+      },
+      "parity_mismatches": [],
+      "per_query_published": false
+    },
+    {
+      "model_id": "dcnet",
+      "checkpoint_id": "fashioniq_run_directory",
+      "category": "shirt",
+      "protocol": "fashioniq_full_gallery_ref_excluded",
+      "r1": null,
+      "r10": 0.2281648675171737,
+      "r50": 0.4764474975466143,
+      "query_count": 2038,
+      "gallery_count": 6346,
+      "complete": true,
+      "provenance": {
+        "native_evaluator": "test.py:test -> trainer_joint.py::_valid_epoch (--mode val)",
+        "native_output": {
+          "shirt_comp_r10": 0.2198233562315996,
+          "shirt_comp_r50": 0.46270853778213933,
+          "shirt_corr_r10": 0.22718351324828262,
+          "shirt_corr_r50": 0.471540726202159,
+          "shirt_comb_r10": 0.2281648675171737,
+          "shirt_comb_r50": 0.4764474975466143
+        },
+        "reported_column": "comb (log-softmax(comp) + log-softmax(corr)); comp and corr columns recorded verbatim alongside",
+        "r1_note": "upstream prints only R@10/R@50 for FashionIQ; no R@1 is computed in _valid_epoch",
+        "query_count_source": "data/FashionIQ/captions/cap.shirt.glove.val.pkl (2038 entries), cross-checked against val/att_result.pt: 255 batches, sum of batch sizes = 2038",
+        "gallery_count_source": "data/FashionIQ/image_splits/split.shirt.val.json (6346 image ids)"
+      },
+      "parity_mismatches": [],
+      "per_query_published": false
+    },
+    {
+      "model_id": "dcnet",
+      "checkpoint_id": "fashioniq_run_directory",
+      "category": "toptee",
+      "protocol": "fashioniq_full_gallery_ref_excluded",
+      "r1": null,
+      "r10": 0.31820499745028047,
+      "r50": 0.590515043345232,
+      "query_count": 1961,
+      "gallery_count": 5373,
+      "complete": true,
+      "provenance": {
+        "native_evaluator": "test.py:test -> trainer_joint.py::_valid_epoch (--mode val)",
+        "native_output": {
+          "toptee_comp_r10": 0.3003569607343192,
+          "toptee_comp_r50": 0.5803161652218256,
+          "toptee_corr_r10": 0.31463539010708824,
+          "toptee_corr_r50": 0.5818459969403366,
+          "toptee_comb_r10": 0.31820499745028047,
+          "toptee_comb_r50": 0.590515043345232
+        },
+        "reported_column": "comb (log-softmax(comp) + log-softmax(corr)); comp and corr columns recorded verbatim alongside",
+        "r1_note": "upstream prints only R@10/R@50 for FashionIQ; no R@1 is computed in _valid_epoch",
+        "query_count_source": "data/FashionIQ/captions/cap.toptee.glove.val.pkl (1961 entries), cross-checked against val/att_result.pt: 246 batches, sum of batch sizes = 1961",
+        "gallery_count_source": "data/FashionIQ/image_splits/split.toptee.val.json (5373 image ids)"
+      },
+      "parity_mismatches": [],
+      "per_query_published": false
+    }
+  ],
+  "aggregate": {
+    "macro_r10": 0.27929730914548917,
+    "macro_r50": 0.5376075764301528,
+    "macro_r10_percent": 27.929730914548917,
+    "macro_r50_percent": 53.76075764301528,
+    "upstream_reported": {
+      "recall_avg": 0.3963794848189767,
+      "recall_avg_corr": 0.4054313128942486,
+      "comb_avg": 0.40845244278782095
+    },
+    "upstream_aggregate_note": "upstream 'recall_avg'/'recall_avg_corr'/'comb_avg' are means over all six R@10/R@50 cells (or per-branch pairs), NOT a macro over the reported comb column; the macro above is the 3-category mean of the comb column only",
+    "total_queries": 6016,
+    "gallery_note": "gallery_count per category is that category's own val_trg index size (3817/6346/5373, sum 15536 entries); unique images across the three split files = 15415",
+    "complete": true
+  },
+  "checkpoint": {
+    "bundle_dir": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/checkpoints/dcnet",
+    "members": ["config.json", "trained_model.pth"],
+    "sha256": {
+      "trained_model.pth": "130f031e0f7808ccf5f15630a691bd7af95ad9fadbf94f64acfce64e7d8b850f"
+    },
+    "size_bytes": {
+      "trained_model.pth": 2877310172
+    },
+    "sha256_method": "sha256sum run by this workstream; both values match the earlier record in workbench/docs/reviews/20261108T113348+0700-native-scope/checkpoint_sha256.tsv",
+    "training_checkpoint_epoch": 82,
+    "resume_log_line": "Ckpt loaded. Resume training from epoch 83"
+  },
+  "source": {
+    "upstream": "https://github.com/ozmig77/dcnet",
+    "commit": "68c79d38569f01ca39c3b4ea641b3b7eb2ccb5fb",
+    "entrypoint": "/home/heheboiz/data/cir/workbench/third_party/DCNet/test.py",
+    "argv": [
+      "/home/heheboiz/data/cir/workbench/artifacts/environments/dcnet-377/bin/python",
+      "test.py",
+      "--resume",
+      "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/checkpoints/dcnet/",
+      "--mode",
+      "val"
+    ],
+    "cwd": "/home/heheboiz/data/cir/workbench/third_party/DCNet",
+    "source_patch_applied": "workbench/third_party/DCNet/base/base_trainer.py::_resume_checkpoint — map_location=self.device, and weights_only=False passed only when inspect.signature(torch.load) exposes it. No other file in third_party/DCNet was touched."
+  },
+  "runtime": {
+    "python_executable": "/home/heheboiz/data/cir/workbench/artifacts/environments/dcnet-377/bin/python",
+    "python_version": "3.7.7",
+    "torch_version": "1.4.0+cpu",
+    "cuda_available": false,
+    "device_used": "cpu",
+    "thread_limits": "OMP_NUM_THREADS=4 OPENBLAS_NUM_THREADS=4 MKL_NUM_THREADS=4 NUMEXPR_NUM_THREADS=4",
+    "exit_code": 0,
+    "wall_seconds": 7656,
+    "wall_human": "2:07:35",
+    "user_cpu_seconds": 27975.41,
+    "effective_parallelism_percent": 376,
+    "peak_rss_kib": 13082084,
+    "peak_rss_gib": 12.476,
+    "stderr_bytes": 0,
+    "tmpdir": "/tmp/cir-native15-runs/dcnet (removed after the run)",
+    "completed_at": "2026-11-10T04:22:45+07:00"
+  },
+  "side_effects": {
+    "att_result_pt": {
+      "path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/checkpoints/dcnet/val/att_result.pt",
+      "rewritten_by_this_run": true,
+      "previous_mtime": "2026-11-07 00:02:45.026598380 +0700",
+      "new_mtime": "2026-11-10 04:22:45.358250989 +0700",
+      "new_size_bytes": 5340335,
+      "new_sha256": "6d776ffad3168e3f62105e07edfb954eb7ff320206cbd62a79c061db25160438",
+      "prior_run_metrics_used": false
+    },
+    "val_info_log": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/checkpoints/dcnet/val/info.log (appended to by this run)",
+    "val_config_json": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/checkpoints/dcnet/val/config.json (rewritten by ConfigParser, unchanged content)"
+  },
+  "cross_check_previous_run": {
+    "label": "NOT this campaign's output — a 2026-11-07 CUDA run left these numbers in val/info.log; recorded only as an ordering-consistency check",
+    "prior_comb": {
+      "dress": [0.2915220624690134, 0.5453644025780863],
+      "shirt": [0.2281648675171737, 0.4764474975466143],
+      "toptee": [0.31820499745028047, 0.5900050994390617]
+    },
+    "this_run_comb": {
+      "dress": [0.2915220624690134, 0.5458601883986118],
+      "shirt": [0.2281648675171737, 0.4764474975466143],
+      "toptee": [0.31820499745028047, 0.590515043345232]
+    },
+    "reading": "four of six cells are bit-identical; the two dress/toptee R@50 cells differ at the 4th decimal, i.e. a handful of borderline ranks moved between CPU and CUDA float paths. No cell moves by more than 5.5e-4."
+  },
+  "artifacts": {
+    "command_script": "workbench/docs/reviews/20261109-native15-composition-limn/raw/native/dcnet.command.sh",
+    "stdout": "raw/native/dcnet.stdout.log",
+    "stderr": "raw/native/dcnet.stderr.log (empty)",
+    "gnu_time": "raw/native/dcnet.time.log",
+    "models_metrics": "raw/native/dcnet.json"
+  },
+  "timestamp": "2026-11-10T04:30:00+07:00"
+}

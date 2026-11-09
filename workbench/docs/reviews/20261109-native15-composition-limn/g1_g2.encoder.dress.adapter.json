@@ -1,0 +1,281 @@
+{
+  "category": "dress",
+  "phase": "adapter",
+  "model_id": "encoder",
+  "protocol": "fashioniq_val_split",
+  "tolerances": {
+    "identity": "exact, zero tolerance",
+    "pixels": "bitwise equality expected (max_abs == 0, array_equal)",
+    "text_and_tokens": "exact equality",
+    "forward_max_abs": 1e-05,
+    "forward_max_rel": 0.0001,
+    "forward_min_cosine": 0.9999999,
+    "batch_max_abs": 0.0001,
+    "batch_max_rel": 0.001,
+    "score_max_abs": 1e-06,
+    "tie_epsilon": 1e-06,
+    "metrics": "exact hit-count equality"
+  },
+  "adapter": {
+    "batch_size": 32,
+    "interpreter": "/home/heheboiz/data/cir/workbench/envs/encoder310-adapted/bin/python",
+    "layer4_forward_sample": {
+      "query_val_pixels": {
+        "max_abs": 0.0,
+        "max_rel": 0.0,
+        "min_cosine": 0.9999999999999998,
+        "bitwise_equal": true,
+        "shape": [
+          4,
+          512
+        ],
+        "within_tolerance": true
+      },
+      "query_native_tensors": {
+        "max_abs": 0.02124939113855362,
+        "max_rel": 46.6752522471972,
+        "min_cosine": 0.9969422054518507,
+        "bitwise_equal": false,
+        "shape": [
+          4,
+          512
+        ],
+        "within_tolerance": false
+      },
+      "target": {
+        "max_abs": 0.0,
+        "max_rel": 0.0,
+        "min_cosine": 1.0,
+        "bitwise_equal": true,
+        "shape": [
+          4,
+          512
+        ],
+        "within_tolerance": true
+      },
+      "adapter_dtype": "float32",
+      "adapter_shape": [
+        4,
+        512
+      ]
+    },
+    "batch_size_1_vs_n": {
+      "max_abs": 3.203749656677246e-07,
+      "max_rel": 0.0077950176161260265,
+      "min_cosine": 0.9999999999991733,
+      "bitwise_equal": false,
+      "shape": [
+        4,
+        512
+      ],
+      "within_tolerance": false
+    },
+    "cache_off_restart": {
+      "max_abs": 0.0,
+      "max_rel": 0.0,
+      "min_cosine": 0.9999999999999998,
+      "bitwise_equal": true,
+      "shape": [
+        4,
+        512
+      ]
+    },
+    "layer2_pixels": {
+      "adapter_decode_vs_native_val_decode": {
+        "max_abs": 0.0,
+        "max_rel": 0.0,
+        "min_cosine": 0.9999999999999999,
+        "bitwise_equal": true,
+        "shape": [
+          4,
+          3,
+          224,
+          224
+        ]
+      },
+      "adapter_decode_vs_native_train_query_tensors": {
+        "max_abs": 3.8269808292388916,
+        "max_rel": 1610.9522180878273,
+        "min_cosine": 0.9398207890163393,
+        "bitwise_equal": false,
+        "shape": [
+          4,
+          3,
+          224,
+          224
+        ]
+      },
+      "adapter_decode_by": "probe phase in the model interpreter: Image.open + preprocess_val"
+    },
+    "population": {
+      "query_count": 2017,
+      "gallery_count": 2628,
+      "features_vs_native_val_control": {
+        "max_abs": 1.0998919606208801e-06,
+        "max_rel": 3.3548386852382883,
+        "min_cosine": 0.9999999999963554,
+        "bitwise_equal": false,
+        "shape": [
+          2017,
+          512
+        ],
+        "within_tolerance": false
+      },
+      "features_vs_native_train_query": {
+        "max_abs": 0.12039151974022388,
+        "max_rel": 223487.7287736603,
+        "min_cosine": 0.8833465225175526,
+        "bitwise_equal": false,
+        "shape": [
+          2017,
+          512
+        ],
+        "within_tolerance": false
+      },
+      "gallery_vs_native": {
+        "max_abs": 1.1324882507324219e-06,
+        "max_rel": 1.3636362821713672,
+        "min_cosine": 0.9999999999918108,
+        "bitwise_equal": false,
+        "shape": [
+          2628,
+          512
+        ],
+        "within_tolerance": true
+      },
+      "finite": true
+    },
+    "scoring_ranking": {
+      "query_count": 2017,
+      "gallery_count": 2628,
+      "score_max_abs_delta_vs_dot": 1.1920928955078125e-07,
+      "score_pairs_compared": 64,
+      "score_max_abs_declared": 1e-06,
+      "score_within_tolerance": true,
+      "adapter_vs_argsort_unmasked": {
+        "count": 30,
+        "head": [
+          49,
+          178,
+          211,
+          228,
+          230,
+          311,
+          317,
+          321,
+          331,
+          355,
+          365,
+          394,
+          411,
+          427,
+          471,
+          611,
+          728,
+          848,
+          919,
+          1066
+        ],
+        "non_tie_count": 0,
+        "non_tie_head": []
+      },
+      "adapter_style_recall": {
+        "r1": 17.402082300446207,
+        "r10": 50.966782350024786,
+        "r50": 76.00396628656421
+      },
+      "native_mask_only_effect": {
+        "count": 1093,
+        "recall_without_mask": {
+          "r1": 17.402082300446207,
+          "r10": 50.91720376797224,
+          "r50": 76.00396628656421
+        },
+        "recall_with_mask": {
+          "r1": 21.318790282597917,
+          "r10": 51.660882498760536,
+          "r50": 76.20228061477442
+        }
+      },
+      "native_convention_recall_on_adapter_features": {
+        "r1": 21.318790282597917,
+        "r10": 51.660882498760536,
+        "r50": 76.20228061477442
+      },
+      "native_convention_recall_val_control": {
+        "r1": 21.318790282597917,
+        "r10": 51.660882498760536,
+        "r50": 76.20228061477442
+      },
+      "native_convention_recall_native_primary": {
+        "r1": 21.269211700545366,
+        "r10": 51.95835399107585,
+        "r50": 76.35101636093208
+      },
+      "native_second_process_floor": {
+        "available": true,
+        "score_max_abs_vs_first_native_process": 0.0,
+        "rank_differences_vs_first_native_process": {
+          "count": 0,
+          "head": []
+        },
+        "recall": {
+          "r1": 21.318790282597917,
+          "r10": 51.660882498760536,
+          "r50": 76.20228061477442
+        }
+      },
+      "stored_native_metrics_raw/native/encoder.json": {
+        "r1": 21.46752602875558,
+        "r10": 51.95835399107585,
+        "r50": 76.35101636093208
+      },
+      "rank_differences_vs_native_val_control": {
+        "count": 1,
+        "head": [
+          1569
+        ],
+        "classification": [
+          {
+            "index": 1569,
+            "adapter_rank": 1216,
+            "native_rank": 1215,
+            "adapter_matrix_gap": 0.0006574243307113647,
+            "native_matrix_gap": 0.0006571710109710693,
+            "min_gap": 0.0006571710109710693,
+            "explained_by_tie_epsilon": false
+          }
+        ],
+        "non_tie_count": 1,
+        "min_gap_abs": 0.0006571710109710693
+      },
+      "rank_differences_vs_native_primary": {
+        "count": 1051,
+        "head": [
+          2,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          11,
+          12,
+          14,
+          15,
+          17,
+          18,
+          21,
+          22,
+          24,
+          26,
+          28,
+          29,
+          31
+        ]
+      },
+      "native_metrics_recheck_source": "raw/native/encoder.json"
+    },
+    "phase_seconds": 26.2
+  }
+}

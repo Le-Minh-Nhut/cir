@@ -21,7 +21,8 @@ báo cáo này đối chiếu chúng với artifact thô và ghi lại kết qu�
 | LIMN: chẩn đoán 2 scope | **12 / 12 ranking** | 2 query × 2 scope × 3 điều kiện |
 
 **Không phải 15/15.** 6 model còn thiếu native (§6). **Không** tuyên bố chiến dịch hoàn tất: G1/G2
-mới có 1/15, và 6 blocker còn nguyên.
+mới có **2/15** (`limn`, và `encoder` thêm ở lượt này — G1 PASS, G2 PASS-kèm-failure-đã-khai-báo, xem
+§6c), và 6 blocker còn nguyên.
 
 Danh sách 15 model active = 17 khai báo − 2 deferred (`csmcir`, `sprc`) theo `GATES.csv` dòng
 `Scope/accounting`. Đếm lại trên `NATIVE_EVAL_MATRIX.csv` (17 dòng) khớp 17, trừ 2 deferred còn 15.
@@ -83,8 +84,11 @@ làm bằng chứng — khớp §2.1–§2.3 của báo cáo này và khớp `ag
 
 Khác biệt `verified` là **phân biệt đúng, không phải defect**: 8 model executed giữ
 `native_verified = N` và `g1/g2 = NOT_RUN` vì chưa có parity nào được đo cho chúng; chỉ `limn` có
-`native_verified = Y` cùng `g1 = PASS`, `g2 = PASS-with-caveat`. Đó chính là điều §1 báo cáo (native
-9/15 nhưng G1/G2 chỉ 1/15) — một lần chạy hoàn tất không tự động là một lần chạy đã xác minh.
+`native_verified = Y` cùng `g1 = PASS`, `g2 = PASS-with-caveat`. `encoder` đã có parity đo được ở lượt
+này (`ENCODER_PARITY.vi.md`), nhưng **hàng của nó trong `NATIVE_EVAL_MATRIX.csv` chưa được cập nhật** —
+file đó do worker khác sở hữu — nên đọc CSV vẫn thấy `NOT_RUN` cho tới khi chủ sở hữu sửa. Đó chính là
+điều §1 báo cáo (native 9/15, G1/G2 **2/15** bằng chứng thật, 1/15 trong CSV cũ) — một lần chạy hoàn
+tất không tự động là một lần chạy đã xác minh.
 
 `csmcir` có `native_executed = Y` nhưng bị user defer nên **không** được tính vào 9 — và metric của
 nó không được dùng ở báo cáo này.
@@ -310,6 +314,77 @@ BLAS và giữ lại phần đo được.
 
 ---
 
+## 6c. Defect upstream của ENCODER: tham số không nằm trong checkpoint
+
+**Đây là defect của artifact upstream, KHÔNG phải defect của workbench.** Không file nào trong
+`workbench/composition/`, `workbench/replay/`, `workbench/backend/` gây ra nó, và không sửa gì ở đó
+có thể sửa được nó. Nó chỉ được phát hiện **vì** đã chạy G1/G2 cho `encoder`: trước lượt đó, mọi so
+sánh đều dừng ở mức metric aggregate và một tham số ngẫu nhiên không lộ ra.
+
+### Cơ chế
+
+`workbench/third_party/ENCODER/model_try2.py:93`:
+
+```python
+self.learnable_relation = nn.Parameter(torch.randn(N_p, dim, dtype=torch.float32)).cuda()
+```
+
+`.cuda()` gọi trên `nn.Parameter` **trả về một `torch.Tensor` thường**, và kết quả đó mới là thứ được
+gán vào attribute. Vì vậy `self.learnable_relation` **không bao giờ được đăng ký làm parameter**: nó
+không vào `state_dict()`, không vào `named_parameters()`, và do đó không có trong file checkpoint.
+
+### Hệ quả — đo được, từng dòng có file thô
+
+Nguồn: `ENCODER_PARITY.vi.md` §4.0.1, `raw/encoder_parity/relation_proof_construct.out`,
+`raw/encoder_parity/relation_proof_native_pair.txt`.
+
+| khẳng định | số đo |
+|---|---|
+| checkpoint `fashioniq.pt` (sha256 `0f31c501…9173`) | **417** key; **không** key nào chứa `relation`; **không** key nào chứa `learnable_relation` |
+| `model.state_dict()` của model dựng mới | **415** entry; `'learnable_relation' in state_dict()` → **False**; `named_parameters()` khớp `relation` → `[]` |
+| attribute có tồn tại? | `hasattr` → **True**, nhưng `type` → **`torch.Tensor`** (không phải `Parameter`), shape `[2, 512]` |
+| hai lần dựng trong cùng process | `(a − b).abs().max()` = **4.2088** (một lần đo khác: **5.1108**) — mỗi process tự rút một relation khác nhau |
+| đặt seed **trước khi dựng model**, hai process riêng | `max_abs = 0.0`, `torch.equal` → **True** — đây là bằng chứng nhân quả: nguồn duy nhất của khác biệt là phép rút RNG này |
+
+### Ảnh hưởng lên metric: hai lần chạy NATIVE, cùng code, cùng pixel
+
+Hai process chạy **chính code native**, cùng pixel đã bitwise-identical, cùng toàn bộ cờ determinism
+(`cudnn.deterministic=True`, `use_deterministic_algorithms(True)`, seed cố định, TF32 off):
+
+| | dress | shirt | toptee |
+|---|---|---|---|
+| hạng thay đổi | **540 / 2017** | **503 / 2038** | **375 / 1961** |
+| max rank delta | **24** | **28** | **41** |
+| query feature `max_abs` | 1.33e-02 | 2.39e-02 | 1.81e-02 |
+| score matrix `max_abs` | 2.33e-02 | 4.06e-02 | 3.36e-02 |
+| ΔR@1 / ΔR@10 / ΔR@50 | −0.0496 / +0.0992 / −0.0496 | 0.0000 / +0.0491 / −0.0491 | +0.1020 / −0.0510 / 0.0000 |
+
+**Rank churn lớn, ảnh hưởng metric thì không — và con số rank churn TUYỆT ĐỐI KHÔNG được trích như
+một sai số metric.** 20–27% query đổi hạng, nhưng các hạng bị đổi nằm sâu và triệt tiêu lẫn nhau, nên
+mọi Recall chỉ dịch trong khoảng **−0.05 … +0.10**. Đây cũng là toàn bộ biên độ của "độ lệch giữa các
+lần chạy ENCODER" từng bị quy nhầm cho BLAS (§6b): nó là **nhiễu do phép rút relation**, không phải
+defect mapping, không phải BLAS.
+
+### Hệ quả cho tính tái lập — nói thẳng
+
+- **`raw/native/encoder.json` (macro R@10 56.2908 / R@50 77.6334) không thể được tái lập bit-for-bit
+  bởi bất kỳ ai, kể cả chính tác giả**, trừ khi RNG state tại thời điểm `Encoder()` được dựng tình cờ
+  trùng. Con số đã công bố vẫn là **một measurement hợp lệ của một lần rút cụ thể**; chỉ việc replay
+  chính xác là không thể. Lượt đo lại có pin cho macro R@10 **56.2398** / R@50 **77.6157**
+  (Δ −0.051 / −0.018).
+- **Run CIRCUS `encoder` `5dee7425` chịu đúng hệ quả đó**: không thể replay bit-identical, cùng một lý
+  do. Số của nó vẫn là measurement hợp lệ của lần rút đã dùng để tính nó.
+- Cách pin **đủ** để so sánh hai bên: đặt seed **trước** khi dựng `Encoder(...)`. Điều này giải thích
+  vì sao `seeded_dataset_construction` sẵn có **không** che được lỗi: nó seed quanh lúc **dựng
+  dataset**, tức là **sau** khi `Encoder(...)` đã rút xong relation.
+
+**Không sửa.** Sửa tối thiểu (bỏ `.cuda()` để parameter được đăng ký) không cung cấp giá trị mà
+checkpoint thiếu, nên nếu không retrain hoặc can thiệp checkpoint thì "sửa" chỉ là thay một tensor
+ngẫu nhiên bằng một tensor ngẫu nhiên khác — và sẽ **đổi ngữ nghĩa đánh giá** mà không nói ra. Mọi số
+trong `ENCODER_PARITY.vi.md` §4–§5 đều ghi rõ là đo với relation được pin ở **cả hai phía**.
+
+---
+
 ## 7. Gates
 
 `GATES.csv` do worker `native15-inventory` sở hữu, và sau lượt hiệu chỉnh của nó file **đã khớp**
@@ -319,8 +394,8 @@ với artifact thô. Bảng dưới ghi trạng thái **hiện tại trong file*
 | gate | trạng thái trong `GATES.csv` | lượt này đóng góp gì | bằng chứng |
 |---|---|---|---|
 | Scope/accounting | PASS | không đổi | `GATES.csv` |
-| G1 input parity | NOT_RUN (gate as a whole) | **PASS cho `limn`** — file ghi rõ "LIMN is the ONLY model with a G1 PASS"; 14 model còn lại không có differential nào nên gate tổng vẫn NOT_RUN | `g1_g2.*.native.json` |
-| G2 forward/scoring | NOT_RUN (gate as a whole) | **PASS cho `limn`** + caveat batch-relative đã ghi trong file | `g1_g2.*.adapter.json` |
+| G1 input parity | NOT_RUN (gate as a whole) | **PASS cho `limn` VÀ `encoder`** — gate tổng vẫn NOT_RUN vì 13 model còn lại không có differential nào | `g1_g2.*.native.json`, `g1_g2.encoder.*.native.json` |
+| G2 forward/scoring | NOT_RUN (gate as a whole) | **PASS cho `limn`** + caveat batch-relative đã ghi trong file; **`encoder`: PASS-kèm-2-failure-đã-khai-báo** (§6c, `ENCODER_PARITY.vi.md` §4.2/§5.2) | `g1_g2.*.adapter.json`, `g1_g2.encoder.*.adapter.json` |
 | Native completeness | **FAIL** (gate = "all 15") | file đã ghi **9/15** với đúng 9 tên và nguồn; FAIL vì tiêu chí là *toàn bộ* 15, không phải *phần lớn* | `raw/native/*.json`, `limn_native.json`, report `combiner_…020a70b0` |
 | Composition correctness | PASS | 7 COMPLETED + 1 PARTIAL, 8/8 | `COMPOSITION_MATRIX.csv` |
 | **LIMN dual-scope** | **PASS** | 12 record, mỗi record có JSONL Top-100; `rank_convention_crosscheck all_agree = true` trên 36 | `limn_dual_scope.json` + 6 JSONL |
@@ -357,9 +432,10 @@ một gate định nghĩa là "cả 15" không được xanh chỉ vì 9 model x
 
 1. **6 model chưa có native run**: `pair`, `airknow`, `clvc_net`, `tgcir`, `dcnet` (timeout),
    `clip4cir_rn50x4_fullft` (chưa chạy full).
-2. **G1/G2 cho 14 model còn lại**: chỉ `limn` có. Không có suy luận nào từ `limn` sang model khác.
-3. **`limn` sub-check batch-size fail** theo ngưỡng tương đối đã khai — chưa đóng, và tôi không nới
-   ngưỡng.
+2. **G1/G2 cho 13 model còn lại**: `limn` và `encoder` đã có (**2/15**), 13 model kia chưa. Không có
+   suy luận nào từ hai model này sang model khác.
+3. **Sub-check FAIL đã khai báo, không đóng bằng cách nới ngưỡng**: `limn` batch-size `max_rel`; và với
+   `encoder` là **2 rank change không phải tie** + `max_rel` của batch 1-vs-N (§6c).
 4. **Canonical cho 2 query mơ hồ**: vẫn 0/2. Sẽ chỉ đóng được nếu tác giả FashionIQ/M-BEIR công bố
    mapping category per-query, hoặc nếu chấp nhận một tiên nghiệm có khai báo (hiện không được phép).
 5. **Không** chạy full test suite (chỉ 34 test liên quan, pass). Không chạy lại toàn cohort.

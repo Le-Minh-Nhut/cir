@@ -1,0 +1,130 @@
+{
+  "tag": "B",
+  "torch_threads": 4,
+  "cudnn_deterministic": false,
+  "cudnn_benchmark": false,
+  "deterministic_algorithms": false,
+  "matmul_allow_tf32": false,
+  "cudnn_allow_tf32": true,
+  "flags_after": {
+    "cudnn_deterministic": true,
+    "deterministic_algorithms": true,
+    "cublas_workspace": ":4096:8"
+  },
+  "flags_tf32_off": {
+    "cudnn_allow_tf32": false,
+    "matmul_allow_tf32": false
+  },
+  "in_process": {
+    "nondet_b4_a": {
+      "max_abs": 0.0,
+      "max_rel": 0.0,
+      "min_cosine": 0.9999999999999998,
+      "bitwise_equal": true,
+      "shape": [
+        4,
+        512
+      ]
+    },
+    "nondet_b4_b": {
+      "max_abs": 0.0,
+      "max_rel": 0.0,
+      "min_cosine": 0.9999999999999998,
+      "bitwise_equal": true,
+      "shape": [
+        4,
+        512
+      ]
+    },
+    "nondet_b32": {
+      "max_abs": 0.0,
+      "max_rel": 0.0,
+      "min_cosine": 0.9999999999999998,
+      "bitwise_equal": true,
+      "shape": [
+        4,
+        512
+      ]
+    },
+    "nondet_b1": {
+      "max_abs": 3.203749656677246e-07,
+      "max_rel": 0.0077950176161260265,
+      "min_cosine": 0.9999999999991733,
+      "bitwise_equal": false,
+      "shape": [
+        4,
+        512
+      ]
+    },
+    "nondet_b4_threads4": {
+      "max_abs": 0.0,
+      "max_rel": 0.0,
+      "min_cosine": 0.9999999999999998,
+      "bitwise_equal": true,
+      "shape": [
+        4,
+        512
+      ]
+    },
+    "det_b4_b": {
+      "max_abs": 0.0,
+      "max_rel": 0.0,
+      "min_cosine": 0.9999999999999998,
+      "bitwise_equal": true,
+      "shape": [
+        4,
+        512
+      ]
+    },
+    "det_b32": {
+      "max_abs": 0.0,
+      "max_rel": 0.0,
+      "min_cosine": 0.9999999999999998,
+      "bitwise_equal": true,
+      "shape": [
+        4,
+        512
+      ]
+    },
+    "det_b1": {
+      "max_abs": 3.203749656677246e-07,
+      "max_rel": 0.0077950176161260265,
+      "min_cosine": 0.9999999999991733,
+      "bitwise_equal": false,
+      "shape": [
+        4,
+        512
+      ]
+    },
+    "notf32_b4_a": {
+      "max_abs": 0.0,
+      "max_rel": 0.0,
+      "min_cosine": 0.9999999999999998,
+      "bitwise_equal": true,
+      "shape": [
+        4,
+        512
+      ]
+    },
+    "notf32_b4_b": {
+      "max_abs": 0.0,
+      "max_rel": 0.0,
+      "min_cosine": 0.9999999999999998,
+      "bitwise_equal": true,
+      "shape": [
+        4,
+        512
+      ]
+    },
+    "det_b4_b_vs_det_b4_a": {
+      "max_abs": 0.0,
+      "max_rel": 0.0,
+      "min_cosine": 0.9999999999999998,
+      "bitwise_equal": true,
+      "shape": [
+        4,
+        512
+      ]
+    }
+  }
+}

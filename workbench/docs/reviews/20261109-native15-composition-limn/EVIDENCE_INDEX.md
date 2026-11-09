@@ -506,3 +506,41 @@ are correct as written.
 - `clip4cir_rn50x4_fullft` adapter name mismatch was not re-executed; recorded as prior-audit claim.
 - TME `expected_sha256` is null in registry (Kaggle download), so only the on-disk digest is known,
   not an author-published value.
+
+## 8. Added with the encoder-parity and extra-native workstreams (2026-11-09)
+
+- `NATIVE_RUNS_EXTRA.vi.md` — the two additional native evaluations and the encoder G1/G2 work:
+  what ran, under which interpreter, and what it does and does not establish.
+- `ENCODER_PARITY.vi.md` — the encoder native-vs-adapter input/forward differential. G1 PASS;
+  G2 PASS with **two honestly-declared failures**, neither with a moved tolerance: 2 non-tie rank
+  changes at ranks far below 50 (no R@10/R@50 effect), and the batch 1-vs-N `max_rel` sub-check at
+  `1.165e-2` against its declared `1e-3` (`max_abs` within tolerance).
+- `g1_g2.encoder.{dress,shirt,toptee}.{native,adapter}.json` — the per-category evidence for that
+  differential, alongside the existing LIMN `g1_g2.*` files.
+- `raw/encoder_parity/` — `adapter.*.npz`, `relation_proof_*` and the supporting captures. The
+  `relation_proof_*` files exist because of the pinned upstream defect below.
+- `raw/native/dcnet.json` — dcnet's completed native run (after its checkpoint-load blocker was
+  fixed). **UNITS: fractions** — macro R@10 `0.27930`, R@50 `0.53761`. `R@1` is null because upstream
+  computes only R@10/R@50.
+- `raw/native/clip4cir_fullft.json` — `clip4cir_rn50x4_fullft`'s first completed native run.
+  **UNITS: percent** — macro R@10 `43.8017`, R@50 `66.9836`. `R@1` null for the same reason.
+
+### 8.1 Upstream defect: `learnable_relation` is drawn, not loaded
+
+In the pinned ENCODER upstream, `learnable_relation` is created by
+`nn.Parameter(torch.randn(N_p, dim, ...))` at model construction (`model_try2.py:93`) and is not
+restored from the checkpoint. Two constructions therefore draw *different* tensors, so a native-vs-
+adapter comparison can only be exact once that parameter is pinned on both sides. `raw/encoder_parity/
+relation_proof_*` record that pinning. This is a **defect in the pinned author code**, not in the
+adapter, and it is the reason the encoder G2 comparison reports any difference at all.
+
+### 8.2 Do not compare dcnet's numbers to clip4cir's
+
+`dcnet` reports R@10/R@50 as fractions (`0.27930`) and `clip4cir_rn50x4_fullft` as percentages
+(`43.8017`). They are the same kind of quantity in different units. Additionally, dcnet's
+`comb_avg 0.40845` in `info.log` is a mean over all six R@10/R@50 cells, **not** a macro over the
+three categories — never cite it as a macro. The macro is the 3-category mean of the comb column,
+`0.27930` / `0.53761`.
+
+> The false-null selector warning at §6 stands for these new files too: read scalars with a top-level
+> `?q=` selector, not a nested-object one.

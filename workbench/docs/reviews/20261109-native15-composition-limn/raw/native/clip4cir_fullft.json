@@ -1,0 +1,175 @@
+{
+  "model_id": "clip4cir_rn50x4_fullft",
+  "replay_type": "SOURCE_NATIVE_ENTRYPOINT",
+  "protocol": "fashioniq_full_gallery_ref_excluded",
+  "protocol_source": "third_party/CLIP4Cir/src/validate.py::compute_fiq_val_metrics — index_features over the whole split.{category}.val.json gallery; the reference is excluded by masking its own index entry rather than removing it from the gallery",
+  "complete_benchmark": true,
+  "categories": [
+    {
+      "model_id": "clip4cir_rn50x4_fullft",
+      "checkpoint_id": "rn50x4_fullft_unresolved",
+      "category": "shirt",
+      "protocol": "fashioniq_full_gallery_ref_excluded",
+      "r1": null,
+      "r10": 44.50441598892212,
+      "r50": 65.4563307762146,
+      "query_count": 2038,
+      "gallery_count": 6346,
+      "complete": true,
+      "provenance": {
+        "native_evaluator": "src/validate.py::main -> fashioniq_val_retrieval('shirt')",
+        "native_output": {
+          "shirt_recallat10": 44.50441598892212,
+          "shirt_recallat50": 65.4563307762146
+        },
+        "r1_note": "upstream computes only R@10/R@50 for FashionIQ (validate.py::compute_fiq_val_metrics); no R@1 exists in the source",
+        "query_count_source": "prepared clip4cir fashionIQ_dataset/captions/cap.shirt.val.json (2038 triplets)",
+        "gallery_count_source": "prepared clip4cir fashionIQ_dataset/image_splits/split.shirt.val.json (6346 image ids)",
+        "units": "percent, as printed by upstream (recall_at10 * 100)"
+      },
+      "parity_mismatches": [],
+      "per_query_published": false
+    },
+    {
+      "model_id": "clip4cir_rn50x4_fullft",
+      "checkpoint_id": "rn50x4_fullft_unresolved",
+      "category": "dress",
+      "protocol": "fashioniq_full_gallery_ref_excluded",
+      "r1": null,
+      "r10": 39.06792402267456,
+      "r50": 64.20426368713379,
+      "query_count": 2017,
+      "gallery_count": 3817,
+      "complete": true,
+      "provenance": {
+        "native_evaluator": "src/validate.py::main -> fashioniq_val_retrieval('dress')",
+        "native_output": {
+          "dress_recallat10": 39.06792402267456,
+          "dress_recallat50": 64.20426368713379
+        },
+        "r1_note": "upstream computes only R@10/R@50 for FashionIQ (validate.py::compute_fiq_val_metrics); no R@1 exists in the source",
+        "query_count_source": "prepared clip4cir fashionIQ_dataset/captions/cap.dress.val.json (2017 triplets)",
+        "gallery_count_source": "prepared clip4cir fashionIQ_dataset/image_splits/split.dress.val.json (3817 image ids)",
+        "units": "percent, as printed by upstream (recall_at10 * 100)"
+      },
+      "parity_mismatches": [],
+      "per_query_published": false
+    },
+    {
+      "model_id": "clip4cir_rn50x4_fullft",
+      "checkpoint_id": "rn50x4_fullft_unresolved",
+      "category": "toptee",
+      "protocol": "fashioniq_full_gallery_ref_excluded",
+      "r1": null,
+      "r10": 47.83273935317993,
+      "r50": 71.29015922546387,
+      "query_count": 1961,
+      "gallery_count": 5373,
+      "complete": true,
+      "provenance": {
+        "native_evaluator": "src/validate.py::main -> fashioniq_val_retrieval('toptee')",
+        "native_output": {
+          "toptee_recallat10": 47.83273935317993,
+          "toptee_recallat50": 71.29015922546387
+        },
+        "r1_note": "upstream computes only R@10/R@50 for FashionIQ (validate.py::compute_fiq_val_metrics); no R@1 exists in the source",
+        "query_count_source": "prepared clip4cir fashionIQ_dataset/captions/cap.toptee.val.json (1961 triplets)",
+        "gallery_count_source": "prepared clip4cir fashionIQ_dataset/image_splits/split.toptee.val.json (5373 image ids)",
+        "units": "percent, as printed by upstream (recall_at10 * 100)"
+      },
+      "parity_mismatches": [],
+      "per_query_published": false
+    }
+  ],
+  "aggregate": {
+    "macro_r10": 43.8016931215922,
+    "macro_r50": 66.98358456293742,
+    "upstream_reported": {
+      "average recall10": 43.8016931215922,
+      "average recall50": 66.98358456293742
+    },
+    "upstream_aggregate_note": "macro over the three categories (validate.py:351-352 uses statistics.mean over the three per-category recalls); this equals our independent recomputation",
+    "total_queries": 6016,
+    "gallery_note": "gallery_count per category is that category's own index size (3817/6346/5373, sum 15536 entries); unique images across the three split files = 15415, all present on disk",
+    "complete": true
+  },
+  "checkpoint": {
+    "bundle_dir": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/checkpoints/clip4cir/FashionIQ/RN50x4_fullft",
+    "members": ["fiq_comb_RN50x4_fullft.pt", "fiq_clip_RN50x4_fullft.pt"],
+    "sha256": {
+      "fiq_comb_RN50x4_fullft.pt": "7c7c0a10fb4c995cb1ded9ad70a58891d50c622263c54131523bfb232b493f8e",
+      "fiq_clip_RN50x4_fullft.pt": "4111ac139cf96ac0cf31b30bf8f55b654247b06f0f5fbee4fe8dcc8c1c7cfd2f"
+    },
+    "size_bytes": {
+      "fiq_comb_RN50x4_fullft.pt": 236017921,
+      "fiq_clip_RN50x4_fullft.pt": 713874695
+    },
+    "sha256_method": "sha256sum run by this workstream; both values match the earlier record in workbench/docs/reviews/20261108T113348+0700-native-scope/checkpoint_sha256.tsv",
+    "bundle_load_verification": {
+      "combiner_keys": 12,
+      "combiner_missing": 0,
+      "combiner_unexpected": 0,
+      "clip_keys": 669,
+      "clip_missing": 0,
+      "clip_unexpected": 0,
+      "clip_shape_mismatch": 0,
+      "tensors_differing_from_stock_clip": 413,
+      "max_abs_delta_vs_stock": 0.00072,
+      "note": "recorded by the earlier bundle inspection in this workstream; both .pt files loaded strict=True inside this run as well ('CLIP model loaded successfully')"
+    }
+  },
+  "source": {
+    "upstream": "https://github.com/ABaldrati/CLIP4Cir",
+    "commit": "dfed9f748a8a4d05abf613164e06d59b22dbdf13",
+    "entrypoint": "/home/heheboiz/data/cir/workbench/third_party/CLIP4Cir/src/validate.py",
+    "argv": [
+      "/home/heheboiz/data/cir/workbench/artifacts/environments/clip4cir-38/bin/python",
+      "src/validate.py",
+      "--dataset", "fashionIQ",
+      "--combining-function", "combiner",
+      "--combiner-path", "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/checkpoints/clip4cir/FashionIQ/RN50x4_fullft/fiq_comb_RN50x4_fullft.pt",
+      "--projection-dim", "2560",
+      "--hidden-dim", "5120",
+      "--clip-model-name", "RN50x4",
+      "--clip-model-path", "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/checkpoints/clip4cir/FashionIQ/RN50x4_fullft/fiq_clip_RN50x4_fullft.pt",
+      "--target-ratio", "1.25",
+      "--transform", "targetpad"
+    ],
+    "cwd": "/home/heheboiz/data/cir/workbench/third_party/CLIP4Cir",
+    "source_patch_applied": "none — upstream validate.py is used unmodified",
+    "sibling_difference": "identical to the completed combiner_rn50x4_noft invocation (--projection-dim 2560 --hidden-dim 5120 --target-ratio 1.25 --transform targetpad, same cwd), with --clip-model-path added so the fine-tuned tower replaces stock RN50x4"
+  },
+  "runtime": {
+    "python_executable": "/home/heheboiz/data/cir/workbench/artifacts/environments/clip4cir-38/bin/python",
+    "python_version": "3.8.20",
+    "torch_version": "1.11.0+cpu",
+    "cuda_available": false,
+    "device_used": "cpu",
+    "thread_limits": "OMP_NUM_THREADS=4 OPENBLAS_NUM_THREADS=4 MKL_NUM_THREADS=4 NUMEXPR_NUM_THREADS=4",
+    "exit_code": 0,
+    "wall_seconds": 2246,
+    "wall_human": "0:37:26",
+    "user_cpu_seconds": 6558.38,
+    "sys_cpu_seconds": 1860.5,
+    "effective_parallelism_percent": 374,
+    "peak_rss_kib": 3139724,
+    "peak_rss_gib": 2.994,
+    "stderr_bytes": 40425,
+    "stderr_content": "tqdm progress bars only; no traceback",
+    "tmpdir": "/tmp/cir-native15-runs/clip4cir_fullft (removed after the run)",
+    "started_at": "2026-11-10T01:32:55+07:00",
+    "completed_at": "2026-11-10T02:10:21+07:00"
+  },
+  "side_effects": {
+    "wrote_nothing_outside": true,
+    "note": "validate.py prints metrics to stdout and writes no files; no checkpoint or val/ artifact was modified"
+  },
+  "artifacts": {
+    "command_script": "workbench/docs/reviews/20261109-native15-composition-limn/raw/native/clip4cir_fullft.command.sh",
+    "stdout": "raw/native/clip4cir_fullft.stdout.log",
+    "stderr": "raw/native/clip4cir_fullft.stderr.log",
+    "gnu_time": "raw/native/clip4cir_fullft.time.log",
+    "models_metrics": "raw/native/clip4cir_fullft.json"
+  },
+  "timestamp": "2026-11-10T04:30:00+07:00"
+}

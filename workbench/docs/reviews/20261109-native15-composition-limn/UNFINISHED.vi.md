@@ -53,7 +53,7 @@ Những thứ đó nằm ở §4.
 | 4 | `tgcir` native run | `BLOCKED_COMMAND` + `BLOCKED_ENV` + `BLOCKED_DEVICE` | 1 launch shell + 1 venv + device guard | viết `__main__`/argparse/loader (shell `workbench/replay/tgcir.py` mới một phần) + interpreter + device guard |
 | 5 | `clip4cir_rn50x4_fullft` native eval | `READY_NOT_RUN` | 1 full FashionIQ eval | cấp ngân sách cho một lượt eval đầy đủ (hoặc GPU); per-query export là tuỳ chọn riêng |
 | 6 | `dcnet` native eval | `RESOLVED_BUT_CPU_TIMEOUT` | 1 full CPU pass (hoặc GPU pass) | ngân sách > 2400 s, hoặc chạy GPU, rồi ghi metric |
-| 7 | G1/G2 cho 14 model | `NOT_RUN` | 14 differential native-vs-adapter | differential trên một mẫu thật cố định, layer 1→5, tolerance khai báo trước khi đo |
+| 7 | G1/G2 cho 13 model | `NOT_RUN` | 13 differential native-vs-adapter | differential trên một mẫu thật cố định, layer 1→5, tolerance khai báo trước khi đo. `limn` + `encoder` đã xong ⇒ **2/15** |
 | 8 | LIMN 2 query mơ hồ | `PARTIAL 6001/6003` | 2 query canonical | metadata category per-query do tác giả publish, hoặc defect report lên maintainer release |
 | 9 | Performance end-to-end | `NOT_MEASURED` | 1 benchmark isolated | đo một lượt eval đầy đủ trên box rảnh, có lặp |
 | 10 | Test suite cho thay đổi của chiến dịch | `NOT_RUN` | 1 sweep serial | chạy sweep trên tree sạch sau khi tài liệu đóng băng |
@@ -451,12 +451,21 @@ metric kèm `run_id`/mtime của chính lượt đó.
 
 ---
 
-### 3.7 G1/G2 cho 14 model còn lại — `NOT_RUN`, không phải FAIL
+### 3.7 G1/G2 cho 13 model còn lại — `NOT_RUN`, không phải FAIL
 
-**Đang thiếu gì.** Không có differential native-vs-adapter nào cho 14 model ngoài `limn`.
+**Đang thiếu gì.** Không có differential native-vs-adapter nào cho 13 model ngoài `limn` và `encoder`.
 `GATES.csv` hàng `G1 input parity` = `NOT_RUN`, hàng `G2 forward/scoring` = `NOT_RUN`.
 
-**Bằng chứng — `limn` là cái duy nhất có, và nó có đủ 5 tầng.**
+**`encoder` đã có, nên bộ đếm G1/G2 chuyển từ 1/15 lên 2/15** — nhưng phải đọc đúng: **G1 của
+`encoder` là PASS, G2 là PASS-kèm-2-failure-đã-khai-báo**, không phải PASS sạch. Đây đúng là khuôn mẫu
+của `limn` (một gate PASS, một gate PASS có sub-check FAIL được ghi trung thực), nên **không được làm
+tròn thành "2/15 PASS"**. Hai failure của `encoder`: (a) **2 rank change không phải tie** (dress 1, gap
+6.57e-04; shirt 1, gap 1.60e-04) ở hạng ≫ 50 và không đổi hit count nào — ghi là FAIL theo đúng luật
+tie `1e-6` đã khai báo trước; (b) **sub-check `max_rel` của batch 1-vs-N FAIL** (tới 1.165e-02 so với
+khai báo `1e-3`; `max_abs` 3.28e-07 vẫn đạt `1e-4`), cùng nguyên nhân mẫu số gần 0 như `limn`.
+Nguồn: `ENCODER_PARITY.vi.md` §5.2 và §4.2.
+
+**Bằng chứng — `limn` có đủ 5 tầng, là khuôn mẫu; `encoder` theo cùng khuôn.**
 
 Từ `INPUT_FORWARD_PARITY.vi.md` và `g1_g2.<cat>.{native,adapter}.json`:
 
@@ -485,22 +494,29 @@ một thành phần cỡ 1.5e-05 đọc ra 1.1e-02 tương đối. Sai số tuy�
 Tolerance **không bị dịch**. Đây là điểm quan trọng: một sub-check FAIL được khai báo trung thực có
 giá trị hơn một PASS bằng cách nới ngưỡng.
 
-**Vì sao 14 model kia `NOT_RUN`.** Chưa từng chạy differential. `NATIVE_EVAL_MATRIX.csv` có 9 hàng
-`native_executed = Y`, nhưng **tất cả** trừ `limn` đều `native_verified = N` với lý do ghi nguyên văn
-"a completed run is not a verified reproduction". Ví dụ hàng `encoder`:
+**Vì sao 13 model kia `NOT_RUN`.** Chưa từng chạy differential. `NATIVE_EVAL_MATRIX.csv` có 9 hàng
+`native_executed = Y`, và trong file đó **mọi hàng trừ `limn`** vẫn ghi `native_verified = N` với lý do
+nguyên văn "a completed run is not a verified reproduction". **Hàng `encoder` trong CSV đó chưa được
+cập nhật theo lượt này** — file do worker khác sở hữu, nên nó vẫn còn đọc:
 
 > `native_verified=N because G1/G2 were not established for this model (a completed run is not a verified reproduction).`
 
+Đó là trạng thái **của file**, không phải của bằng chứng: `g1_g2.encoder.<cat>.{native,adapter}.json`
+và `ENCODER_PARITY.vi.md` đã tồn tại cho cả ba category. Ai đọc CSV phải biết điều này cho tới khi
+`NATIVE_EVAL_MATRIX.csv` được chủ sở hữu của nó cập nhật.
+
 **Một native run hoàn tất KHÔNG phải một reproduction đã xác minh.** Đây là câu phải đọc đúng: 9
-aggregate tồn tại, nhưng chỉ 1 trong 9 có bằng chứng đường adapter tính đúng cùng hàm với đường native.
+aggregate tồn tại, và **2 trong 9** (`limn`, `encoder`) giờ có bằng chứng đường adapter tính đúng cùng
+hàm với đường native; 7 còn lại thì chưa.
 
 **Điều kiện gỡ.** Với từng model: một differential trên **một mẫu thật cố định**, đi qua các tầng
 1→5 (identity → pixels → text → forward → score/rank), với tolerance **khai báo trước khi đo** như
-`INPUT_FORWARD_PARITY.vi.md` §0 đã làm cho `limn`.
+`INPUT_FORWARD_PARITY.vi.md` §0 đã làm cho `limn` và `ENCODER_PARITY.vi.md` §0 đã làm cho `encoder`.
 
-**Mức chắc chắn.** `limn` PASS/FAIL ở trên: **đo được**, có file JSON từng category. 14 model còn lại
-`NOT_RUN`: **đo được** (không có file `g1_g2.*` nào khác trong thư mục). Không có model nào trong 14
-bị coi là FAIL — `NOT_RUN` nghĩa là chưa có dữ liệu, và điều đó khác với "đã đo và trượt".
+**Mức chắc chắn.** `limn` và `encoder` PASS/FAIL ở trên: **đo được**, có file JSON từng category.
+13 model còn lại `NOT_RUN`: **đo được** (không có file `g1_g2.*` nào khác trong thư mục). Không có
+model nào trong 13 bị coi là FAIL — `NOT_RUN` nghĩa là chưa có dữ liệu, và điều đó khác với "đã đo và
+trượt".
 
 ---
 
@@ -733,6 +749,7 @@ Mục này để người đọc không nhầm một khác biệt đã giải th
 | `limn` G2 PASS nhưng batch sub-check FAIL | Không phải "PASS bị hạ" hay "FAIL bị nâng": cả hai sự thật đều được ghi, tolerance không dịch, nguyên nhân mẫu số đo được. | `INPUT_FORWARD_PARITY.vi.md` §4.1 |
 | 12 diagnostic ranking của LIMN | **Diagnostic only**, không phải metric canonical, không được cộng vào nDCG/Recall/coverage. | `limn_dual_scope.json` → `canonical_status.note` |
 | `dcnet` `comb_avg 0.40828` | Từ run **cũ** (mtime 2026-11-06/07) trên cùng checkpoint, dùng làm sanity. **Không** phải kết quả chiến dịch này. | `BLOCKER_RESOLUTION.vi.md` §1.6; `att_result.pt` mtime 2026-11-07 00:02:45 |
+| **`encoder`: `learnable_relation` không nằm trong checkpoint** — **đã chẩn đoán xong, là phát hiện nghiêm trọng, nhưng KHÔNG blocking** | Defect của **pinned upstream artifact**, không phải của workbench: `model_try2.py:93` gán `nn.Parameter(torch.randn(...)).cuda()`, tức kết quả là `torch.Tensor` thường nên không được đăng ký ⇒ checkpoint có **417** key, không key nào chứa `relation`; `state_dict()` có **415** entry và `'learnable_relation' in state_dict()` = **False**; mỗi process tự rút một relation `[2,512]` riêng. **Một dòng hệ quả:** hai lần chạy native cùng code/cùng pixel đổi hạng **540/2017 · 503/2038 · 375/1961** (max delta 24/28/41) nhưng metric chỉ dịch **−0.05…+0.10**, nên `raw/native/encoder.json` (56.2908 / 77.6334) và CIRCUS run `5dee7425` **không thể replay bit-identical bởi bất kỳ ai, kể cả tác giả**, trừ khi RNG state lúc `Encoder()` dựng tình cờ trùng — số đã công bố vẫn là measurement hợp lệ của một lần rút. **Không đưa vào bảng blocker**: nó không chặn việc gì, chỉ là giới hạn của artifact; seed trước khi dựng model là pin đủ. | `ENCODER_PARITY.vi.md` §4.0.1; `raw/encoder_parity/relation_proof_construct.out`; `raw/encoder_parity/relation_proof_native_pair.txt`; `FINAL_REPORT.vi.md` §6c |
 
 ---
 
@@ -940,9 +957,10 @@ Ghi thẳng, không làm mềm:
 
 ## 9. Tóm tắt một câu
 
-Chiến dịch đóng được 9/15 native aggregate và 1/15 G1-G2; phần còn mở chia thành **6 model thiếu
+Chiến dịch đóng được 9/15 native aggregate và **2/15 G1-G2** (`limn`, và `encoder` thêm ở lượt này —
+G1 PASS, G2 PASS-kèm-failure-đã-khai-báo); phần còn mở chia thành **6 model thiếu
 native run** (mỗi cái có một nguyên nhân đo được riêng: class thiếu, dependency thiếu, env thiếu, CLI
-thiếu, ngân sách thiếu, hoặc timeout), **14 model thiếu differential G1/G2**, **2 query không thể
+thiếu, ngân sách thiếu, hoặc timeout), **13 model thiếu differential G1/G2**, **2 query không thể
 route canonical**, và **ba khoảng trống đo lường** (end-to-end throughput, sweep cho thay đổi tài liệu,
 một UI defect tồn tại trước). Không mục nào trong số đó được gọi là "hoàn thành", và không mục nào bị
 đóng bằng cách nới ngưỡng hay chọn đáp án theo hướng có lợi.
