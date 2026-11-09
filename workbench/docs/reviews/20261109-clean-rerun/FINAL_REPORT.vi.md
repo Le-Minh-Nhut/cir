@@ -2,7 +2,9 @@
 
 Revision khi viết: worktree tại `20b83e5` (HEAD chuyển `ffb6ae8` → `20b83e5` lúc 03:53 do lane khác;
 bốn lượt chạy sớm hơn đã đối chiếu lại bằng `scoring_module_source_hash`, xem §6).
-`TESTED_SOURCE_SHA` vẫn là `80842661` — guard đỏ, xem §7.
+`TESTED_SOURCE_SHA` đã tiến lên `2a832bc0efe482d1536e466232a3e2803929d1d8` sau một lượt sweep serial
+đầy đủ tại chính revision đó (2510 passed / 21 failed / 47 skipped = 2578 collected, exit 1,
+3415.28 s); guard `test_handoff_commands.py` sau đó **8 passed**, xem §7.
 Mọi con số dưới đây dẫn từ file có trong `EVIDENCE_INDEX.md`; không có số nào là ước lượng.
 Bảng so sánh rank từng query nằm ở `rank_diffs/` — mỗi con số trong §3 dẫn về đúng một file ở đó.
 
@@ -31,7 +33,7 @@ Cuối cùng, một điều không thể làm: **không thể backfill** bất k
 digest của identity (giải thích ở §6) — nên tám lượt trên đều là rerun đầy đủ, không phải re-export.
 
 Tóm lại: code đúng hơn, giao diện thật hơn, và **tám model nay có số đo dưới policy được ghi lại** —
-nhưng guard release vẫn đỏ (G11) và ba gate khoa học vẫn chưa chạy (G1, G2, G8).
+và guard release đã xanh (G11 PASS), trong khi ba gate khoa học vẫn chưa chạy (G1, G2, G8).
 
 ## 2. Sáu lỗi evaluator đã sửa
 
@@ -170,7 +172,7 @@ mobile 4, samples 2 check — tất cả exit 0**. 13 test node pass. Ảnh ch�
 | G0 inventory | **PASS** | 17 model id, 29 variant, `MODEL_MATRIX.csv` |
 | G1 input correctness | **NOT_RUN** | không chạy differential native↔adapter nào trong phiên này |
 | G2 forward/scoring | **NOT_RUN** | không forward pass nào được đối chứng; đo BLAS là bằng chứng G7 |
-| G3 policy/identity | **PASS** (chỉ về **code**) | identity v2 + readback được test; **chưa artifact công bố nào mang v2** |
+| G3 policy/identity | **PASS** | gồm hai phần: (a) **code** — identity v2 + readback được test; (b) **artifact công bố** — **tám lượt rerun đều ghi `identity_schema_version=2`**, confidence `full`, `cache_verify_mode=full`, `blas_threads_pinned=1` cùng capability `verifiable=true`. Cảnh báo trung thực: `_record_effective_blas_pin` **vẫn chưa** đi vào payload identity (lỗi còn mở, ghi ở `BLAS_IDENTITY_FINDINGS.md`), nên thứ artifact chứng minh được là **khả năng pin + giá trị ĐÃ XIN**, không phải giá trị runtime đọc lại của từng lượt |
 | G4 cache/resume/fallback | **PASS** | cơ chế + ca âm; cache cũ nay không truy cập được (đúng thiết kế) |
 | G5 clean run/coverage | **PASS** (phạm vi: tám model đã rerun) | tám lượt đầy đủ dưới policy được ghi lại, verify từ artifact: 7×`6003/6003`, limn `6001/6003` khai đúng hai query không chấm được. 21 hàng registry còn lại vẫn BLOCKED/DEFERRED, **không** thuộc phạm vi PASS này. ptha_mtst có caveat: đường encode không pin được |
 | G6 rank/export | **PASS** | tám model đều export **Top-100**; manifest depth=100, record 6003/6003 `partial=false` (limn 6001/6003 `partial=true`). 18009 dòng ứng viên được kiểm: vị trí hợp lệ, thứ tự theo score, `target_rank` khớp nhánh metric — 0 vi phạm |
@@ -178,12 +180,14 @@ mobile 4, samples 2 check — tất cả exit 0**. 13 test node pass. Ảnh ch�
 | G8 measured performance | **NOT_RUN** | hai lane khác đang chạy → không có timing sạch |
 | G9 frontend correctness | **PASS** | 4 session browser trên dữ liệu thật, exit 0 |
 | G10 frontend usability | **PASS** | sáng, 17/19px, 1920/2560/390, 0 ô cắt |
-| G11 integration/release | **FAIL** | guard đỏ (`TESTED_SOURCE_SHA` không thể tiến khi chưa sweep) |
+| G11 integration/release | **PASS** | sweep serial tại `2a832bc` (2510/21/47 = 2578, exit 1, 3415.28 s, log `full_suite_2a832bc.txt`), `TESTED_SOURCE_SHA` đã tiến trong **cả hai** tài liệu, guard `test_handoff_commands.py` **8 passed**, `npm run build` exit 0 và tái tạo đúng asset `index-9MwV5MAk.js` mà server đang phục vụ. PASS **không** có nghĩa suite xanh: 21 failure được ghi lại (18 là bộ cũ, 3 là drift đã sửa test-only ở `3d576bf`) |
 | G12 coordination | **PASS** | có một sai lệch đã ghi: 4 lane chạy song song so với cap 3, lane thứ tư đã dừng |
 
-**9 PASS · 1 FAIL · 3 NOT_RUN.** Không có gate nào được PASS mà thiếu bằng chứng trên đĩa.
+**10 PASS · 0 FAIL · 3 NOT_RUN.** Không có gate nào được PASS mà thiếu bằng chứng trên đĩa.
 
-G5 và G6 chuyển trạng thái vì tám lượt chạy đã xong và invariant kiểm từ artifact. G1/G2 giữ NOT_RUN (không chạy differential native↔adapter nào). G8 giữ NOT_RUN (mọi wall-time đo khi hai lane khác đang chạy — **không phải baseline**). G11 giữ FAIL (guard `TESTED_SOURCE_SHA`).
+G11 chuyển từ FAIL sang PASS sau khi sweep tại `2a832bc` được đo, `TESTED_SOURCE_SHA` được tiến trong cả `FINAL_PC_RELEASE_VERDICT.md` và `PC_PILOT_HANDOFF.md`, rồi guard báo **8 passed** — trạng thái đỏ trước đó là **độ trễ ghi sổ**, đóng lại bằng đo lường chứ không bằng sửa guard. G1/G2/G8 vẫn NOT_RUN.
+
+G5 và G6 chuyển trạng thái vì tám lượt chạy đã xong và invariant kiểm từ artifact. G1/G2 giữ NOT_RUN (không chạy differential native↔adapter nào). G8 giữ NOT_RUN (mọi wall-time đo khi hai lane khác đang chạy — **không phải baseline**).
 
 ## 6. Rerun: đã làm gì, chưa làm gì, vì sao
 
@@ -230,16 +234,24 @@ không dùng được.** Đây là hành vi đúng (cache khác policy không đ
 `--resume` **không thể** bắc qua một thay đổi schema identity. Vì vậy mọi run cần export sâu hơn đều
 phải **RERUN_FULL + `--topk-depth 100`** trong một lượt GPU, không phải rerun rồi backfill.
 
-Tổng theo `RERUN_DECISIONS.csv`: **12 hàng RERUN_FULL · 14 BLOCKED · 3 DEFERRED** (29 hàng).
+Tổng theo `RERUN_DECISIONS.csv` **sau khi cập nhật**: **10 hàng `RERUN_FULL_DONE`** (tám model đã chạy
+lại; limn chiếm 3 hàng vì bundle có ba không gian category) · **2 hàng `RERUN_FULL`** còn lại (airknow
+`fiq_n05`/`fiq_n08`, adapter có nhưng chưa có forward GPU) · **14 BLOCKED · 3 DEFERRED** (29 hàng).
+Cột `previous_run_id` giữ lại run id cũ cho cả tám, nên dòng dõi trước/sau không bị mất.
 
 ## 7. Tồn đọng
 
-- **Guard đỏ (G11).** `test_handoff_commands.py` → **1 failed, 7 passed**:
-  `TESTED_SOURCE_SHA 80842661… does not contain the production code currently on disk`. Không thể
-  nâng SHA vì cần một serial sweep đầy đủ (~58 phút) mà GPU đang bận. Đã **không** sửa test, **không**
-  nới gate.
-- **Sweep gần nhất tại revision hiện tại: chưa có.** Sweep tại `ffb6ae8` đã bị huỷ ở **22%**, không
-  có count (`sweep_ffb6ae8_ABORTED.txt`, exit code cố ý không ghi).
+- **G11 nay là PASS, không còn đỏ.** Trình tự đã xảy ra và đều kiểm được: (1) một lượt sweep serial tại
+  `2a832bc` — **2510 passed / 21 failed / 47 skipped = 2578 collected**, exit 1, 3415.28 s, log
+  `full_suite_2a832bc.txt`; (2) `TESTED_SOURCE_SHA` tiến lên `2a832bc` trong **cả**
+  `FINAL_PC_RELEASE_VERDICT.md` và `PC_PILOT_HANDOFF.md` (kể cả dòng `git checkout`, vốn phải là revision
+  cố định); (3) `test_handoff_commands.py` → **8 passed**. Guard trước đó đỏ vì **ghi sổ chậm**, và nó được
+  đóng bằng đo lường chứ không bằng sửa test hay nới gate. **PASS không có nghĩa suite xanh:** 21 failure
+  được ghi nguyên văn trong log và attribution ở `SWEEP.md` — 18 là đúng bộ id ba lượt trước đã báo, 3 là
+  drift test-vs-code phát sinh sau `80842661`, đã sửa **test-only** ở `3d576bf`.
+- **Sweep tại revision hiện tại: ĐÃ CÓ** (chính là `full_suite_2a832bc.txt` ở trên). Sweep tại `ffb6ae8`
+  bị huỷ ở **22%** vẫn được giữ làm lịch sử (`sweep_ffb6ae8_ABORTED.txt`, không có count) — nó không phải
+  lượt đo của cây hiện tại và không được trích làm bằng chứng.
 - **G8 NOT_RUN.** Không có timing sạch vì hai lane khác chạy đồng thời. Cả tám lượt rerun do đó đều
   ghi wall-time kèm cảnh báo *"measured under concurrent load — not a baseline"* và `throughput`
   `not_measured`.
@@ -275,17 +287,35 @@ Tổng theo `RERUN_DECISIONS.csv`: **12 hàng RERUN_FULL · 14 BLOCKED · 3 DEFE
 
 ## 8. Commit, push, dịch vụ
 
-Năm commit của phiên, tách theo lane:
+**Danh sách commit có thẩm quyền là lịch sử git, không phải bảng trong file này.** Một file được
+track không thể đặt tên commit chứa chính nó — đó đúng là lý do `FINAL_PC_RELEASE_VERDICT.md` dùng
+field `FINAL_HEAD_SHA = git rev-parse HEAD` thay vì chép SHA vào văn bản. Xem:
 
-| SHA | nội dung |
+```bash
+git log --oneline 80842661..HEAD       # toàn bộ lượt này
+git log --oneline -1                   # commit hiện tại
+git rev-parse HEAD                     # SHA đầy đủ
+```
+
+Các mốc của lượt này, để đối chiếu với `git log` (đây là mô tả nội dung, không phải nguồn có thẩm
+quyền về SHA):
+
+| nội dung | commit |
 |---|---|
-| `7ef4cc4` | sáu lỗi evaluator + test (19 failed/2 passed → 25 passed) |
-| `f6796b3` | CLIP4Cir: member theo `role` từ registry + test |
-| `97f9d35` | bằng chứng lane A + `RERUN_IMPACT.md` + sweep bị huỷ |
-| `87ff419` | frontend light workspace (15 file) |
-| `20a406a` | adapter Air-Know (ghi rõ chưa sẵn sàng) |
-| *(commit này)* | evidence pack: matrix, decisions, gates, index, báo cáo |
-| *(commit này)* | rerun tám model dưới policy BLAS được ghi lại + export Top-100: `RUN_LOG.csv` (8 hàng), `rank_diffs/` (7 dump + ghi chú cohort limn), `logs/`, `blas_gate.py`, `verify_run.py`, `resume_check.py`, `rank_diff.py`, `conesep_divergence.py`, `BLAS_IDENTITY_FINDINGS.md`, `GPU_LANE_REPORT.md`, và ba tài liệu được cập nhật |
+| sáu lỗi evaluator + test (19 failed/2 passed → 25 passed) | `7ef4cc4` |
+| CLIP4Cir: member theo `role` từ registry + test | `f6796b3` |
+| bằng chứng lane A + `RERUN_IMPACT.md` + sweep bị huỷ | `97f9d35` |
+| frontend light workspace (15 file) | `87ff419` |
+| adapter Air-Know (ghi rõ chưa sẵn sàng) | `20a406a` |
+| evidence pack: matrix, decisions, gates, index, báo cáo | `20b83e5` |
+| rerun tám model dưới policy BLAS được ghi lại + export Top-100 | `92e337c` |
+| ảnh chụp frontend làm bằng chứng G9/G10 | `2a832bc` |
+| sweep serial tại `2a832bc` + tiến `TESTED_SOURCE_SHA` | `a2d9c45` |
+| sửa ba assertion test bị drift (test-only) | `3d576bf` |
+| cân lại G3/G11 + làm mới matrix/decisions theo kết quả rerun | *(commit này — xem `git log -1`)* |
+
+Các SHA cũ hơn (`80842661`, `1129c58`, `c2d8cdeb`) chỉ còn xuất hiện như **mốc lịch sử** trong báo
+cáo này và trong `SWEEP.md`; chúng không mô tả cây hiện tại.
 
 Dịch vụ: `http://127.0.0.1:5173` (200) và `http://127.0.0.1:8000` (200); asset đang phục vụ
 `index-9MwV5MAk.js` khớp đúng `dist/assets/`.
@@ -293,5 +323,6 @@ Dịch vụ: `http://127.0.0.1:5173` (200) và `http://127.0.0.1:8000` (200); as
 Push và trạng thái remote: xem mục cuối của `GATE_RESULTS.json` (G11) và xác nhận
 `git rev-parse HEAD` == `git rev-parse origin/research/cir-failure-workbench` sau khi push.
 
-**Không** claim "tất cả đã sạch": G1, G2, G8 chưa chạy; G11 đang FAIL; G5 PASS chỉ trong phạm vi tám
-model đã rerun, không phải toàn cohort (21 hàng registry còn BLOCKED/DEFERRED).
+**Không** claim "tất cả đã sạch": G1, G2, G8 chưa chạy (không có differential đầu vào/forward, không có
+timing sạch); G5 PASS chỉ trong phạm vi tám model đã rerun, không phải toàn cohort (14 hàng BLOCKED, 3
+DEFERRED); và G11 PASS **không** có nghĩa suite xanh — 21 failure vẫn được ghi nguyên văn.

@@ -3,10 +3,12 @@
 Mỗi dòng là một file **có thật trên đĩa** (đã kiểm bằng `test -f`), kèm cái nó chứng minh và gate
 mà nó phục vụ. Không có mục nào là dự định.
 
-Revision khi lập chỉ mục: worktree tại `20b83e5` (HEAD chuyển `ffb6ae8` → `20b83e5` lúc 03:53 do lane khác;
-bốn lượt chạy sớm hơn đã được đối chiếu lại: `scoring_module_source_hash` và
-`condition_transform_source_hash` ghi trong artifact bằng đúng file nguồn hiện tại).
-`TESTED_SOURCE_SHA` vẫn là `80842661` — xem G11.
+Revision khi lập chỉ mục: `TESTED_SOURCE_SHA` là `2a832bc0efe482d1536e466232a3e2803929d1d8`, đã đo bằng
+một lượt sweep serial tại chính revision đó (`full_suite_2a832bc.txt`: 2510 passed / 21 failed / 47 skipped
+= 2578 collected, exit 1) và guard `test_handoff_commands.py` sau đó **8 passed**. Bốn lượt chạy sớm hơn
+(trước khi HEAD chuyển `ffb6ae8` → `20b83e5` lúc 03:53 do lane khác) đã được đối chiếu lại:
+`scoring_module_source_hash` và `condition_transform_source_hash` ghi trong artifact bằng đúng file nguồn
+hiện tại.
 
 Tám lượt chạy đã xong; mục 1 và 6 ghi run id + đường dẫn artifact cho từng lượt.
 
@@ -14,8 +16,8 @@ Tám lượt chạy đã xong; mục 1 và 6 ghi run id + đường dẫn artifa
 
 | file | bytes | chứng minh | gate | nguồn sinh ra |
 |---|---:|---|---|---|
-| `MODEL_MATRIX.csv` | 14080 | 29 hàng / 17 `model_id`, mỗi hàng có upstream URL+commit, checkpoint path+trạng thái, interpreter, run id, coverage, export depth, gate_status, decision, blocker | G0, G5, G6 | đọc `registry/models.yaml` + `artifacts/composition/` + `checkpoint_selection` |
-| `RERUN_DECISIONS.csv` | 6749 | 29 quyết định REUSE/REEXPORT/RERUN_FULL/BLOCKED/DEFERRED kèm lý do và `required_depth` | G0, G6, §6 của FINAL_REPORT | dẫn xuất từ MODEL_MATRIX + luật trong `01_MASTER_PROMPT.en.md` §4 |
+| `MODEL_MATRIX.csv` | 14949 | 29 hàng / 17 `model_id`; mỗi hàng có upstream URL+commit, checkpoint path+trạng thái, interpreter, coverage, export depth, gate_status, decision, blocker, **và cột `previous_run_id` mới ngay sau `variant`**. Mười hàng đã rerun nay ghi run id MỚI, `candidate_topk=true`, `export_depth=100`, `decision=RERUN_FULL_DONE`, và `blocker` nêu **sự thật còn lại** thay vì việc phải làm: encoder 12727/18009 rank đổi (run cũ là measurement KHÁC); limn 6001/6003 với 2 query không chấm được (`7:3038`, `7:3790`) và cohort khác `10173dc4`; ptha_mtst encode không pin được (env chỉ có MKL) | G0, G5, G6 | `RUN_LOG.csv` + artifact; đã kiểm `grep -c` cho cả tám run id |
+| `RERUN_DECISIONS.csv` | 7063 | 29 hàng; mười hàng nay là `RERUN_FULL_DONE` với `requires_rerun=NO` và `required_depth=100` (đã đạt), `evidence_path` trỏ tới `RUN_LOG.csv` + `rank_diffs/` + thư mục run. Còn **2** hàng `RERUN_FULL` (airknow `fiq_n05`/`fiq_n08`: adapter có, chưa có forward GPU), **14** BLOCKED, **3** DEFERRED. Cột `previous_run_id` đã có sẵn từ trước và được giữ nguyên | G0, G6, §6 của FINAL_REPORT | dẫn xuất từ `RUN_LOG.csv` |
 | `RUN_LOG.csv` | 10295 | **8 hàng**, mỗi hàng: model, variant, run id, command, interpreter, env, HEAD lúc chạy, start/end, wall-time (mọi hàng ghi **"not a baseline"**), throughput `not_measured (concurrent load)`, VRAM, coverage, depth, pin, `identity_schema_version`, invariants, verdict, notes | G5, G6, G7, G8 | 8 lượt `composition_eval --subsets full --topk-depth 100 --keep-features` |
 | `GPU_LANE_REPORT.md` | 5860 | báo cáo lane GPU: bảng gate BLAS, bảng 8 lượt chạy, kiểm tra invariant, những gì KHÔNG làm | G5, G6, G7 | tổng hợp từ RUN_LOG + rank_diffs |
 | `GATE_RESULTS.json` | 18519 | trạng thái 13 gate G0–G12, mỗi gate có state/scope/evidence/reject_reason/checked_at | tất cả | tổng hợp từ các file trong chỉ mục này |
@@ -135,4 +137,5 @@ không suy ra số. Limn có số nhưng là **đọc tay**, và cột của nó
 - Không có differential native↔adapter theo từng model (G1 chưa chạy).
 - Không có forward pass nào được đối chứng (G2 chưa chạy).
 - Không có timing sạch (G8 chưa chạy — hai lane khác đang chạy).
-- Không có sweep hoàn chỉnh tại revision hiện tại → guard đỏ (G11).
+- **ĐÃ CÓ** sweep hoàn chỉnh tại revision hiện tại: `full_suite_2a832bc.txt` (G11 nay là PASS). Sweep tại
+  `ffb6ae8` bị huỷ ở 22% vẫn được giữ làm lịch sử, không phải lượt đo của cây hiện tại.
