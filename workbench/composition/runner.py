@@ -1074,8 +1074,14 @@ def _reset_effective_blas_pin() -> None:
     """
     _effective_blas_pin.clear()
 
-def observed_policy_record() -> dict[str, Any]:
-    """What the runtime ACTUALLY reported for this run's scoring calls, or an honest absence.
+def observed_policy_record(source: str = "rank_pass") -> dict[str, Any]:
+    """What the runtime ACTUALLY reported, tagged with WHERE the observation came from.
+
+    `source` is not decoration. A resumed run can score in two places -- the backfill that rebuilds
+    a candidate window from cached vectors, and the rank pass that may run in the same process --
+    and a bare record cannot tell a reader which one it describes. Measured on this tree: the
+    backfill pinned and recorded, then the reset cleared it, and the artifact said `not_recorded`
+    about a run that had genuinely scored under the pin.
 
     Deliberately NOT part of the run identity. The identity is hashed BEFORE scoring runs
     (`run_id`/`fingerprint` at `runner.py:1510`), so a value only known afterwards cannot go into
@@ -1088,10 +1094,10 @@ def observed_policy_record() -> dict[str, Any]:
     Three distinct facts, never collapsed:
       * `blas_threads_pinned` (identity)  -- the value we ASKED for;
       * `blas_pin_capability` (identity)  -- what this interpreter CAN do;
-      * `policy_observed`     (this)      -- what it DID for this run's scoring calls.
+      * `policy_observed`     (this)      -- what it DID, and where that was observed.
     """
     if not _effective_blas_pin:
-        return {"status": NOT_RECORDED,
+        return {"status": NOT_RECORDED, "source": NOT_RECORDED,
                 "reason": ("no BLAS pin readback was recorded for this run: either the run reused "
                            "ranks instead of scoring, or it produced no rank payload. This is an "
                            "absence of evidence, not evidence the pin failed."),
@@ -1103,7 +1109,36 @@ def observed_policy_record() -> dict[str, Any]:
         status = "unverifiable"
     else:
         status = "unverified"
-    return {"status": status, "reason": _effective_blas_pin.get("reason"), "record": record}
+    return {"status": status, "source": source,
+            "reason": _effective_blas_pin.get("reason"), "record": record}
+
+def merge_policy_observations(*observations: dict[str, Any] | None) -> dict[str, Any]:
+    """Combine the per-phase observations of ONE run, keyed by the phase that produced them.
+
+    A run can score in both phases: the backfill rebuilds an export from cache, then the rank loop
+    scores the queries whose ranks were missing. Silently preferring one would discard a real
+    observation, so both are kept:
+
+        {"phases": {"backfill": {...}, "rank_pass": {...}},
+         "status": <"verified" iff every recorded phase verified>,
+         "source": "backfill+rank_pass" | "backfill" | "rank_pass" | not_recorded}
+
+    `status` is the conjunction rather than the best case: a run is only "verified" if every phase
+    that recorded anything was verified, because the published metric depends on all of them.
+    """
+    phases = {observation["source"]: observation
+              for observation in observations
+              if isinstance(observation, Mapping) and observation.get("record") is not None}
+    if not phases:
+        return observed_policy_record(source=NOT_RECORDED)
+    statuses = [observation["status"] for observation in phases.values()]
+    combined = "verified" if all(item == "verified" for item in statuses) else \
+               ("unverifiable" if all(item == "unverifiable" for item in statuses) else "unverified")
+    reasons = [observation.get("reason") for observation in phases.values()
+               if observation.get("reason")]
+    return {"status": combined, "source": "+".join(sorted(phases)), "phases": phases,
+            "reason": "; ".join(reasons) if reasons else None,
+            "record": next(iter(phases.values()))["record"]}
 
 def policy_observed_from_payload(payload: Any) -> dict[str, Any]:
     """The `policy_observed` block of a stored rank payload, or an honest absence.
@@ -1668,8 +1703,13 @@ def run_composition(data: Any, model_specs: Sequence[ModelSpec], config: Any, *,
             export_blocked_reason: str | None = None
             # Only a RESUMED run needs a backfill: when the rank loop actually runs, the export is
             # written from the scoring call itself and this branch must not touch it.
-            if reused and topk_depth and not _export_complete(artifacts, run_id,
-                                                              export_conditions, topk_depth):
+            # Bound once so the branch and the readback snapshot below cannot disagree about
+            # whether the backfill path was taken. Two separate evaluations of the same predicate
+            # would eventually drift apart.
+            backfill_requested = bool(reused and topk_depth and
+                                      not _export_complete(artifacts, run_id,
+                                                           export_conditions, topk_depth))
+            if backfill_requested:
                 writers = open_export(
                     artifacts, run_id,
                     attempt=str(attempt), model_id=model_id, checkpoint_id=checkpoint_id,
@@ -1699,6 +1739,16 @@ def run_composition(data: Any, model_specs: Sequence[ModelSpec], config: Any, *,
                         "candidate Top-K was requested but this run's feature cache is gone, so the "
                         "window cannot be rebuilt without re-encoding the full gallery; re-run "
                         "without --resume")
+            # Snapshot the BACKFILL's readback HERE, before the reset below.
+            #
+            # MEASURED ORDERING DEFECT this fixes: `_backfill_export` pins and records its readback,
+            # and the reset then cleared it, so a resumed run that rebuilt its export from cache
+            # genuinely scored under the pin and published `not_recorded`. The reset's docstring
+            # ("cleared even on the reuse path") was true for a PURE reuse and false for
+            # reuse+backfill -- an artifact stating something false about its own execution.
+            #
+            # Empty when this branch did not run, which is what distinguishes the two paths.
+            backfill_policy = observed_policy_record() if backfill_requested else None
             projection_totals: dict[str, int] = {}
             category_failure_counts: dict[str, int] = {}
             # Which conditions needed the per-query fallback. A fallback is a DIFFERENT arithmetic
@@ -1711,8 +1761,13 @@ def run_composition(data: Any, model_specs: Sequence[ModelSpec], config: Any, *,
             # the mirror of `_blas_pin_capability`'s cache, which is a property of the interpreter
             # and survives the reset on purpose.
             #
-            # Cleared even on the reuse path: a resumed run reports "not recorded", which is true,
-            # rather than inheriting a stale verification from whatever scored before it.
+            # Cleared even on the reuse path, so a PURE reuse reports "not recorded" rather than
+            # inheriting a stale verification from whatever scored before it.
+            #
+            # NOT true of reuse+backfill: `_backfill_export` above pinned and recorded, so its
+            # readback was snapshotted into `backfill_policy` BEFORE this line for exactly that
+            # reason. An earlier version of this comment claimed the reset was harmless on the whole
+            # reuse path; it was harmless on one of the two.
             _reset_effective_blas_pin()
             if ranks is None or retry_conditions:
                 if ranks is None:
@@ -1931,7 +1986,8 @@ def run_composition(data: Any, model_specs: Sequence[ModelSpec], config: Any, *,
                                          # out of the hash is deliberate -- see
                                          # `observed_policy_record` for why putting it in would make
                                          # the run id depend on process history.
-                                         "policy_observed": observed_policy_record()})
+                                         "policy_observed": merge_policy_observations(
+                                             backfill_policy, observed_policy_record())})
             # Published here -- after every condition has been ranked and before any summary is
             # written -- so a manifest exists exactly when the rows it describes exist. A condition
             # that the run did not re-score has no writer and is reported absent, not partial.
@@ -1987,7 +2043,11 @@ def run_composition(data: Any, model_specs: Sequence[ModelSpec], config: Any, *,
             # summary is written. Snapshotted rather than read inline per subset so all three
             # subset summaries of one run report the same observation -- they describe one scoring
             # phase, and a later mutation could not change that.
-            policy_observed = observed_policy_record()
+            #
+            # `backfill_policy` is merged in rather than dropped: the same ordering defect that
+            # made the rank payload lie would otherwise reappear in the summary, since the reset
+            # below has already cleared the backfill's readback by the time we get here.
+            policy_observed = merge_policy_observations(backfill_policy, observed_policy_record())
             summary_by_subset = {}
             for subset in subsets:
                 selected = [query for query in queries if subset in query.subsets]

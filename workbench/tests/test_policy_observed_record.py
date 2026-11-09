@@ -130,13 +130,21 @@ def test_a_modern_payload_round_trips_through_json(tmp_path: Path):
 
 
 def test_the_runner_actually_resets_the_readback_before_scoring():
-    """The helper being correct is not enough -- the RUNNER must call it.
+    """The helper being correct is not enough -- the RUNNER must call it, in the right ORDER.
 
     Measured vacuity in this very file: with `_reset_effective_blas_pin()` deleted from
     `run_composition`, the behavioural test above still passed, because it invokes the helper
-    directly. A helper-only test proves nothing about the production path. So the call site is
-    asserted structurally, from source, together with its ORDER relative to the rank write: a reset
-    that ran AFTER scoring would clear the very record it is supposed to publish.
+    directly. A helper-only test proves nothing about the production path.
+
+    The order has TWO requirements that pull in opposite directions, which is why a single
+    "reset before every observation" assertion is wrong:
+
+      * the BACKFILL snapshot must come BEFORE the reset -- the backfill pinned and recorded, and
+        clearing first would make a genuinely-pinned export publish `not_recorded`;
+      * the RANK-PASS reads must come AFTER the reset -- otherwise a run that scored nothing would
+        inherit the previous model's verification.
+
+    Both are asserted here, from source.
     """
     import ast
     import inspect
@@ -151,16 +159,102 @@ def test_the_runner_actually_resets_the_readback_before_scoring():
     assert reset_lines, (
         "run_composition never calls _reset_effective_blas_pin(): a run that scores nothing would "
         "publish the previous model's readback as its own observation")
+    reset_line = min(reset_lines)
 
-    observed_lines = [node.lineno for node in ast.walk(tree)
+    backfill_snapshot = [node.lineno for node in ast.walk(tree)
+                         if isinstance(node, ast.Assign)
+                         and any(isinstance(target, ast.Name) and target.id == "backfill_policy"
+                                 for target in node.targets)]
+    assert backfill_snapshot, "run_composition never binds `backfill_policy`"
+    assert min(backfill_snapshot) < reset_line, (
+        f"`backfill_policy` is bound at line {min(backfill_snapshot)} but the reset runs at "
+        f"{reset_line}: the backfill's readback would be cleared before anyone snapshotted it, so a "
+        "genuinely pinned backfilled export would publish not_recorded")
+
+    # Every observation AFTER the backfill snapshot is a rank-pass read and must follow the reset.
+    later_reads = [node.lineno for node in ast.walk(tree)
+                   if isinstance(node, ast.Call)
+                   and isinstance(node.func, ast.Name)
+                   and node.func.id == "observed_policy_record"
+                   and node.lineno > min(backfill_snapshot)]
+    assert later_reads, "run_composition never reads the rank-pass observation"
+    assert reset_line < min(later_reads), (
+        f"the reset at line {reset_line} must precede the rank-pass reads at {later_reads}, or a "
+        "run that scored nothing inherits stale state")
+
+
+def test_a_backfilled_export_records_the_pin_it_actually_used():
+    """THE ORDERING DEFECT. A reuse+backfill run scored under the pin and published `not_recorded`.
+
+    Sequence in `run_composition`: `_backfill_export` pins and records, then
+    `_reset_effective_blas_pin()` clears the dict before the rank loop. Snapshotting the readback
+    only AFTER the reset therefore loses a pin that genuinely applied. This test reproduces the
+    order and asserts the observation survives, tagged with the phase that produced it.
+
+    Asserted structurally against the production source as well as behaviourally, because the
+    behavioural half alone passed against the broken commit: the helpers were correct, the CALL
+    ORDER was not.
+    """
+    import ast
+    import inspect
+
+    # --- behavioural: the snapshot taken before a reset is what a reader can still see
+    runner._record_effective_blas_pin(_pin_record())
+    backfill_policy = runner.observed_policy_record(source="backfill")
+    runner._reset_effective_blas_pin()                     # what the rank loop does next
+    rank_pass = runner.observed_policy_record()            # a pure reuse: nothing to report
+
+    merged = runner.merge_policy_observations(backfill_policy, rank_pass)
+    assert merged["status"] == "verified", (
+        "a backfilled export must not publish not_recorded: it scored under the pin")
+    assert merged["source"] == "backfill", (
+        f"the observation must name its phase, got {merged['source']!r}")
+    assert merged["phases"]["backfill"]["record"]["effective"] == 1
+
+    # --- structural: the production code must snapshot the backfill BEFORE the reset
+    source = inspect.getsource(runner.run_composition)
+    tree = ast.parse(source)
+
+    def call_lines(name: str) -> list[int]:
+        return sorted(node.lineno for node in ast.walk(tree)
                       if isinstance(node, ast.Call)
-                      and isinstance(node.func, ast.Name)
-                      and node.func.id == "observed_policy_record"]
-    assert observed_lines, (
-        "run_composition never calls observed_policy_record(): nothing would be published")
-    assert min(reset_lines) < min(observed_lines), (
-        f"the reset (line {min(reset_lines)}) must precede the first observation "
-        f"(line {min(observed_lines)}), or it clears the record it is meant to publish")
+                      and isinstance(node.func, ast.Name) and node.func.id == name)
+
+    snapshot = [node.lineno for node in ast.walk(tree)
+                if isinstance(node, ast.Assign)
+                and any(isinstance(target, ast.Name) and target.id == "backfill_policy"
+                        for target in node.targets)]
+    assert snapshot, (
+        "run_composition never binds `backfill_policy`; the backfill's readback is lost to the "
+        "reset that follows it")
+    reset_lines = call_lines("_reset_effective_blas_pin")
+    assert reset_lines and min(snapshot) < min(reset_lines), (
+        f"`backfill_policy` is bound at line {min(snapshot)} but the reset runs at "
+        f"{min(reset_lines)}: the snapshot must come first or it captures nothing")
+
+
+def test_a_run_that_scored_in_both_phases_records_both():
+    """Silently preferring one phase would discard a real observation.
+
+    When a resumed run backfills an export AND scores the queries whose ranks were missing, both
+    pins applied to published numbers. Both are kept, and the combined status is the conjunction --
+    a run is only `verified` if every phase that recorded anything was verified.
+    """
+    runner._record_effective_blas_pin(_pin_record())
+    backfill = runner.observed_policy_record(source="backfill")
+    runner._record_effective_blas_pin(_pin_record())
+    rank_pass = runner.observed_policy_record(source="rank_pass")
+
+    merged = runner.merge_policy_observations(backfill, rank_pass)
+    assert merged["source"] == "backfill+rank_pass"
+    assert set(merged["phases"]) == {"backfill", "rank_pass"}
+    assert merged["status"] == "verified"
+
+    # One phase unverified must downgrade the whole run, not be averaged away.
+    runner._record_effective_blas_pin(_pin_record(effective=9, verified=False))
+    degraded = runner.merge_policy_observations(backfill, runner.observed_policy_record(source="rank_pass"))
+    assert degraded["status"] == "unverified", (
+        "a verified backfill must not mask an unverified rank pass")
 
 
 def test_resetting_clears_the_readback_so_a_later_run_cannot_inherit_it():
