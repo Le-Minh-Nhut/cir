@@ -32,12 +32,50 @@ ADAPTER_MODULES = sorted(
 
 
 def test_every_composition_adapter_is_discovered() -> None:
-    """The registry, not a hard-coded list, decides which modules must be gated."""
-    model_ids = [row["model_id"] for row in
-                 yaml.safe_load(REGISTRY.read_text(encoding="utf-8"))["models"]
-                 if row.get("composition_adapter")]
-    assert len(model_ids) == 9
-    assert len(ADAPTER_MODULES) == 9
+    """The registry, not a hard-coded list, decides which modules must be gated.
+
+    This used to assert `len(...) == 9`, which contradicted its own docstring: adding the Air-Know
+    adapter (`20a406a`) made the real population 10 and the test went red while nothing was wrong.
+    A literal that must be bumped for every new model is the thing this docstring forbids, so the
+    population is now DERIVED from the registry and the assertions are about the invariant that
+    actually protects the gate:
+
+      * nothing is empty (a registry that silently lost every adapter would otherwise pass),
+      * no module is listed twice (a duplicate would gate one module twice and mask a missing one),
+      * every distinct module imports and exposes `ADAPTER`,
+      * the discovered count equals the distinct registry count, computed in the same test.
+    """
+    registry = yaml.safe_load(REGISTRY.read_text(encoding="utf-8"))
+    declared = [row["composition_adapter"] for row in registry["models"]
+                if row.get("composition_adapter")]
+
+    assert declared, "no model declares a composition adapter; the gate would cover nothing"
+    assert len(ADAPTER_MODULES) == len(set(ADAPTER_MODULES)), (
+        f"duplicate module(s) in the registry: "
+        f"{sorted({m for m in ADAPTER_MODULES if ADAPTER_MODULES.count(m) > 1})}")
+    # Derived, never a literal: the count is whatever the registry declares, checked twice from
+    # two independent readings so a parse difference cannot hide a drift.
+    assert len(ADAPTER_MODULES) == len(set(declared)), (
+        f"ADAPTER_MODULES has {len(ADAPTER_MODULES)} entries but the registry declares "
+        f"{len(set(declared))} distinct modules")
+
+    model_ids = [row["model_id"] for row in registry["models"] if row.get("composition_adapter")]
+    assert len(model_ids) == len(set(model_ids)), (
+        f"duplicate model_id(s) among adapter rows: "
+        f"{sorted({m for m in model_ids if model_ids.count(m) > 1})}")
+    assert len(model_ids) == len(set(declared)), (
+        f"{len(model_ids)} models declare an adapter but there are {len(set(declared))} distinct "
+        "modules; a model pointing at another model's module must be visible here")
+
+    for module_path in ADAPTER_MODULES:
+        module = importlib.import_module(module_path)
+        adapter = getattr(module, "ADAPTER", None)
+        assert isinstance(adapter, type), (
+            f"{module_path} does not export an ADAPTER class; it imports but cannot be resolved")
+        from workbench.composition.adapters import CompositionAdapter
+
+        assert issubclass(adapter, CompositionAdapter), (
+            f"{module_path}.ADAPTER does not subclass CompositionAdapter")
 
 
 @pytest.mark.parametrize("module_path", ADAPTER_MODULES)

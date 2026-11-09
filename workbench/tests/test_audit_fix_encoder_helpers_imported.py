@@ -119,8 +119,41 @@ def test_adapter_has_no_unexplained_unresolved_names(module_path: str) -> None:
 
 
 def test_every_adapter_is_discovered() -> None:
-    """The registry decides the population; nine adapters exist today."""
-    assert len(_adapter_modules()) == 9
+    """The registry decides the population; and every declared module must actually resolve.
+
+    This used to assert `len(_adapter_modules()) == 9`. Adding the Air-Know adapter (`20a406a`)
+    made the real population 10, so the literal failed while nothing was wrong — and it would have
+    to be bumped by hand for every future model, which is a guard that drifts rather than a guard
+    that protects. What must hold instead:
+
+      * the population is non-empty and duplicate-free,
+      * each registry module imports,
+      * each exports an `ADAPTER` class that subclasses the shared base,
+      * every model row's `composition_adapter` appears in the discovered set, so a typo in a
+        registry path cannot hide behind a count that happens to match.
+    """
+    from workbench.composition.adapters import CompositionAdapter
+
+    modules = _adapter_modules()
+    assert modules, "no composition adapter declared; this test would otherwise pass vacuously"
+    assert len(modules) == len(set(modules)), (
+        f"duplicate adapter module(s): "
+        f"{sorted({m for m in modules if modules.count(m) > 1})}")
+
+    registry = yaml.safe_load(REGISTRY.read_text(encoding="utf-8"))
+    declared_by_model = {row["model_id"]: row["composition_adapter"] for row in registry["models"]
+                         if row.get("composition_adapter")}
+    assert set(declared_by_model.values()) == set(modules), (
+        "the discovered module list disagrees with the per-model declarations")
+
+    for model_id, module_path in declared_by_model.items():
+        module = importlib.import_module(module_path)
+        adapter = getattr(module, "ADAPTER", None)
+        assert isinstance(adapter, type) and issubclass(adapter, CompositionAdapter), (
+            f"{model_id}: {module_path} does not export an ADAPTER subclassing CompositionAdapter")
+        assert getattr(adapter, "model_id", None) == model_id, (
+            f"{model_id}: {module_path}.ADAPTER declares model_id "
+            f"{getattr(adapter, 'model_id', None)!r}; the registry and the adapter disagree")
 
 
 def test_helper_set_is_not_empty_and_named() -> None:

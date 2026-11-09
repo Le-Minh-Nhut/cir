@@ -352,9 +352,29 @@ def test_the_inspector_renders_null_scores_as_a_dash_and_states_the_window() -> 
         "gallery_position is a different fact from rank and must be shown")
     assert "ngoài cửa sổ" in inspector, (
         "the inspector must state that the exact rank lies outside the shown window")
-    assert "IMPORTED_LABEL" in inspector and "released_audit_retriever" in inspector, (
-        "imported candidates must be labelled with their source, never as this model's output")
-    assert "NGUỒN" in inspector, "the imported provenance line must be visible"
+    # The contract: an IMPORTED run's candidates are labelled with their provenance and are never
+    # presented as this model's own output. This used to assert the literal "NGUỒN", which `87ff419`
+    # replaced with the fuller sentence "Nguồn ứng viên: …" — the copy changed, the contract did
+    # not. Asserting exact prose would break again on the next rewrite, so the assertions are on the
+    # symbols and the gating condition instead.
+    assert "IMPORTED_LABEL" in inspector, (
+        "imported candidates must map their source to a human label")
+    assert "released_audit_retriever" in inspector, (
+        "the imported-source discriminator must gate the label; without it a model run could be "
+        "labelled as an import")
+    # The label is only rendered when the run actually declares a provenance source: the gate is the
+    # condition, not the sentence. Both halves must be present, or the label leaks onto model runs
+    # (gate missing) or never renders at all (usage missing).
+    assert "run.provenance_source &&" in inspector, (
+        "the provenance notice must be gated on the run declaring a provenance_source")
+    assert "IMPORTED_LABEL[run.provenance_source]" in inspector, (
+        "the notice must render the label resolved from the run's own provenance_source")
+    # And it must say, in whatever words, that this is not this model's output. A label alone reads
+    # as a footnote; the disclaimer is the part that stops the row being read as a model result.
+    notice = inspector[inspector.index("IMPORTED_LABEL[run.provenance_source]"):]
+    notice = notice[:notice.index("</p>")] if "</p>" in notice else notice[:800]
+    assert "không phải đầu ra của model" in notice, (
+        "the provenance notice must state the candidates are not this model's output")
 
 
 def test_the_imported_scope_is_opt_in_and_never_the_default() -> None:

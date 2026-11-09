@@ -103,3 +103,53 @@ plus a decision about whether the assertion or the code moves. They are recorded
 - The 18 retained failures include `test_handoff_commands.py::test_no_release_document_points_at_a_
   superseded_source_sha`, which fails by construction until `TESTED_SOURCE_SHA` is advanced — which
   is the next step, not a defect.
+
+## Resolution of the three new failures (test-only, no new sweep required)
+
+Fixed after the sweep, in three test files only. `workbench/tests/**` is excluded from the release
+guard's production-tree comparison (`DOCS_AND_TESTS_EXCLUDED_PATHS` at
+`test_handoff_commands.py:351`), so a test-only edit does not change the production tree that
+`TESTED_SOURCE_SHA 2a832bc` names, and **the sweep above remains the measurement for that revision**.
+Confirmed, not assumed: `test_handoff_commands.py` still reports 8 passed after the change.
+
+**No production file was edited.** `git status` at commit time shows only these three paths.
+
+### `test_circus_env_gate_omp.py::test_every_composition_adapter_is_discovered`
+
+- **Before:** `assert len(model_ids) == 9` / `assert len(ADAPTER_MODULES) == 9` — a hard-coded
+  population contradicting the test's own docstring ("the registry, not a hard-coded list").
+- **After:** the population is derived from the registry and the assertions are the invariants that
+  actually protect the gate: non-empty, duplicate-free, `len(ADAPTER_MODULES) == len(set(declared))`,
+  a duplicate-free `model_id` list, and for every module: it imports, exports `ADAPTER`, and that
+  class subclasses `CompositionAdapter`.
+
+### `test_audit_fix_encoder_helpers_imported.py::test_every_adapter_is_discovered`
+
+- **Before:** `assert len(_adapter_modules()) == 9` — same literal, same drift.
+- **After:** asserts the set of declared modules equals the set discovered, no duplicates, and per
+  model: the module imports, its `ADAPTER` subclasses the base **and** `ADAPTER.model_id` equals the
+  registry row's `model_id` — so a model pointing at another model's adapter is caught, which a count
+  never could.
+
+### `test_frontend_catalog.py::test_the_inspector_renders_null_scores_as_a_dash_and_states_the_window`
+
+- **Before:** `assert "NGUỒN" in inspector` — pinned to one capitalisation of prose that `87ff419`
+  replaced.
+- **After:** asserts the contract on symbols and the gating condition: `IMPORTED_LABEL` is present,
+  `released_audit_retriever` still discriminates the imported source, the notice is gated on
+  `run.provenance_source &&`, it renders `IMPORTED_LABEL[run.provenance_source]`, and the notice text
+  states the candidates are **not** this model's output (`không phải đầu ra của model`). No exact
+  prose beyond that one contractual sentence.
+
+### Non-vacuity proof (induced failures, then restored)
+
+| break applied | test | result |
+|---|---|---|
+| registry `airknow` → `workbench.composition.model_does_not_exist` | both discovery tests | **both failed**: `ModuleNotFoundError: No module named 'workbench.composition.model_does_not_exist'` |
+| `QueryInspector.tsx`: `{run.provenance_source && (` → `{true && (` | frontend inspector test | **failed**: `AssertionError: the provenance notice must be gated on the run declaring a provenance_source` |
+
+Both breaks were reverted; `workbench/registry/models.yaml` and
+`workbench/frontend/QueryInspector.tsx` are byte-identical to `HEAD` afterwards (checked with
+`git diff --quiet` on the production paths).
+
+Post-fix state: the three files **64 passed**; `test_handoff_commands.py` **8 passed**.
