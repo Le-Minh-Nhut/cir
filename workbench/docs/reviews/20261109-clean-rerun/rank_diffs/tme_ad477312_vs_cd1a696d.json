@@ -1,0 +1,43 @@
+{
+ "model": "tme",
+ "old_run": "ad477312aa57c1b9114f9e51",
+ "new_run": "cd1a696d8bca0fc4bce6925b",
+ "conditions": {
+  "image_only_empty_text": {
+   "queries_compared": 6003,
+   "only_old": 0,
+   "only_new": 0,
+   "changed_rank_queries": 0,
+   "changed_examples": [],
+   "max_abs_delta_rank": 0,
+   "mean_delta_rank": 0.0,
+   "sum_ndcg_delta": 0.0,
+   "per_query_ndcg_identical": true,
+   "bit_identical_ranks": true
+  },
+  "multimodal": {
+   "queries_compared": 6003,
+   "only_old": 0,
+   "only_new": 0,
+   "changed_rank_queries": 0,
+   "changed_examples": [],
+   "max_abs_delta_rank": 0,
+   "mean_delta_rank": 0.0,
+   "sum_ndcg_delta": 0.0,
+   "per_query_ndcg_identical": true,
+   "bit_identical_ranks": true
+  },
+  "text_only_black_image": {
+   "queries_compared": 6003,
+   "only_old": 0,
+   "only_new": 0,
+   "changed_rank_queries": 0,
+   "changed_examples": [],
+   "max_abs_delta_rank": 0,
+   "mean_delta_rank": 0.0,
+   "sum_ndcg_delta": 0.0,
+   "per_query_ndcg_identical": true,
+   "bit_identical_ranks": true
+  }
+ }
+}

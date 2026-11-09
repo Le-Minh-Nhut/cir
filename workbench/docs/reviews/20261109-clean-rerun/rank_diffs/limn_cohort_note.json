@@ -1,0 +1,789 @@
+{
+ "model": "limn",
+ "variant": "base_iter0_all_categories",
+ "reason_not_comparable": "rank_diff.py cannot compare these two runs: the pre-pin run scored 5884 queries and the pinned run scored 6001, so their per-query rank maps cover different populations and any count would mix a coverage change with an arithmetic change.",
+ "runs": {
+  "pre_pin": {
+   "run_id": "10173dc45dea8c90fd2a284b",
+   "summary_path": "workbench/artifacts/composition/summary/limn_base_iter0_all_categories_10173dc45dea8c90fd2a284b/full.json",
+   "ranks_path": "workbench/artifacts/composition/runs/10173dc45dea8c90fd2a284b/ranks/limn_base_iter0_all_categories.json",
+   "query_count": 6003,
+   "gap_cohort_count": 5884,
+   "composition_gap_ndcg": 0.5417445849251903,
+   "scored_per_condition": {
+    "multimodal": 5884,
+    "image_only": 5884,
+    "text_only": 5884
+   },
+   "coverage": {
+    "multimodal": 0.980176578377478,
+    "image_only": 0.980176578377478,
+    "text_only": 0.980176578377478
+   },
+   "unresolved_category_query_count": 119,
+   "category_resolution": {
+    "resolved_count": 5884,
+    "unresolved_count": 0,
+    "ambiguous_count": 119
+   },
+   "unscored_qids": [
+    "7:2179",
+    "7:2211",
+    "7:2218",
+    "7:2228",
+    "7:2258",
+    "7:2285",
+    "7:2307",
+    "7:2309",
+    "7:2333",
+    "7:2463",
+    "7:2471",
+    "7:2486",
+    "7:2529",
+    "7:2575",
+    "7:2587",
+    "7:2637",
+    "7:2650",
+    "7:2679",
+    "7:2698",
+    "7:2717",
+    "7:2815",
+    "7:2959",
+    "7:2999",
+    "7:3005",
+    "7:3033",
+    "7:3038",
+    "7:3163",
+    "7:3177",
+    "7:3243",
+    "7:3280",
+    "7:3324",
+    "7:3367",
+    "7:3402",
+    "7:3464",
+    "7:3487",
+    "7:3493",
+    "7:3560",
+    "7:3601",
+    "7:3629",
+    "7:3635",
+    "7:3790",
+    "7:3800",
+    "7:3813",
+    "7:3906",
+    "7:3927",
+    "7:3993",
+    "7:4008",
+    "7:4013",
+    "7:4066",
+    "7:4086",
+    "7:4164",
+    "7:4171",
+    "7:4243",
+    "7:4246",
+    "7:4290",
+    "7:4294",
+    "7:4305",
+    "7:4322",
+    "7:4358",
+    "7:4397",
+    "7:4420",
+    "7:4425",
+    "7:4434",
+    "7:4487",
+    "7:4504",
+    "7:4510",
+    "7:4529",
+    "7:4540",
+    "7:4542",
+    "7:4582",
+    "7:4594",
+    "7:4641",
+    "7:4759",
+    "7:4765",
+    "7:4806",
+    "7:4808",
+    "7:4809",
+    "7:4838",
+    "7:4849",
+    "7:4871",
+    "7:4880",
+    "7:4884",
+    "7:4893",
+    "7:4956",
+    "7:4982",
+    "7:5048",
+    "7:5090",
+    "7:5101",
+    "7:5105",
+    "7:5109",
+    "7:5149",
+    "7:5170",
+    "7:5212",
+    "7:5228",
+    "7:5236",
+    "7:5239",
+    "7:5259",
+    "7:5329",
+    "7:5388",
+    "7:5415",
+    "7:5444",
+    "7:5512",
+    "7:5546",
+    "7:5584",
+    "7:5597",
+    "7:5607",
+    "7:5641",
+    "7:5654",
+    "7:5655",
+    "7:5700",
+    "7:5701",
+    "7:5711",
+    "7:5742",
+    "7:5764",
+    "7:5788",
+    "7:5798",
+    "7:5863",
+    "7:5896",
+    "7:5963"
+   ],
+   "unscored_reasons": {
+    "7:2179": {
+     "image_only_empty_text": "query 7:2179: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(2178,), qids=['7:2179']",
+     "multimodal": "query 7:2179: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(2178,), qids=['7:2179']",
+     "text_only_black_image": "query 7:2179: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(2178,), qids=['7:2179']"
+    },
+    "7:2211": {
+     "image_only_empty_text": "query 7:2211: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(2210,), qids=['7:2211']",
+     "multimodal": "query 7:2211: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(2210,), qids=['7:2211']",
+     "text_only_black_image": "query 7:2211: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(2210,), qids=['7:2211']"
+    },
+    "7:2218": {
+     "image_only_empty_text": "query 7:2218: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(2217,), qids=['7:2218']",
+     "multimodal": "query 7:2218: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(2217,), qids=['7:2218']",
+     "text_only_black_image": "query 7:2218: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(2217,), qids=['7:2218']"
+    },
+    "7:2228": {
+     "image_only_empty_text": "query 7:2228: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(2227,), qids=['7:2228']",
+     "multimodal": "query 7:2228: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(2227,), qids=['7:2228']",
+     "text_only_black_image": "query 7:2228: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(2227,), qids=['7:2228']"
+    },
+    "7:2258": {
+     "image_only_empty_text": "query 7:2258: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(2257,), qids=['7:2258']",
+     "multimodal": "query 7:2258: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(2257,), qids=['7:2258']",
+     "text_only_black_image": "query 7:2258: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(2257,), qids=['7:2258']"
+    },
+    "7:2285": {
+     "image_only_empty_text": "query 7:2285: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(2284,), qids=['7:2285']",
+     "multimodal": "query 7:2285: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(2284,), qids=['7:2285']",
+     "text_only_black_image": "query 7:2285: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(2284,), qids=['7:2285']"
+    },
+    "7:2307": {
+     "image_only_empty_text": "query 7:2307: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(2306,), qids=['7:2307']",
+     "multimodal": "query 7:2307: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(2306,), qids=['7:2307']",
+     "text_only_black_image": "query 7:2307: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(2306,), qids=['7:2307']"
+    },
+    "7:2309": {
+     "image_only_empty_text": "query 7:2309: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(2308,), qids=['7:2309']",
+     "multimodal": "query 7:2309: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(2308,), qids=['7:2309']",
+     "text_only_black_image": "query 7:2309: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(2308,), qids=['7:2309']"
+    },
+    "7:2333": {
+     "image_only_empty_text": "query 7:2333: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(2332,), qids=['7:2333']",
+     "multimodal": "query 7:2333: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(2332,), qids=['7:2333']",
+     "text_only_black_image": "query 7:2333: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(2332,), qids=['7:2333']"
+    },
+    "7:2463": {
+     "image_only_empty_text": "query 7:2463: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(2462,), qids=['7:2463']",
+     "multimodal": "query 7:2463: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(2462,), qids=['7:2463']",
+     "text_only_black_image": "query 7:2463: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(2462,), qids=['7:2463']"
+    },
+    "7:2471": {
+     "image_only_empty_text": "query 7:2471: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(2470,), qids=['7:2471']",
+     "multimodal": "query 7:2471: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(2470,), qids=['7:2471']",
+     "text_only_black_image": "query 7:2471: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(2470,), qids=['7:2471']"
+    },
+    "7:2486": {
+     "image_only_empty_text": "query 7:2486: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(2485,), qids=['7:2486']",
+     "multimodal": "query 7:2486: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(2485,), qids=['7:2486']",
+     "text_only_black_image": "query 7:2486: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(2485,), qids=['7:2486']"
+    },
+    "7:2529": {
+     "image_only_empty_text": "query 7:2529: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(2528,), qids=['7:2529']",
+     "multimodal": "query 7:2529: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(2528,), qids=['7:2529']",
+     "text_only_black_image": "query 7:2529: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(2528,), qids=['7:2529']"
+    },
+    "7:2575": {
+     "image_only_empty_text": "query 7:2575: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(2574,), qids=['7:2575']",
+     "multimodal": "query 7:2575: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(2574,), qids=['7:2575']",
+     "text_only_black_image": "query 7:2575: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(2574,), qids=['7:2575']"
+    },
+    "7:2587": {
+     "image_only_empty_text": "query 7:2587: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(2586,), qids=['7:2587']",
+     "multimodal": "query 7:2587: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(2586,), qids=['7:2587']",
+     "text_only_black_image": "query 7:2587: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(2586,), qids=['7:2587']"
+    },
+    "7:2637": {
+     "image_only_empty_text": "query 7:2637: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(2636,), qids=['7:2637']",
+     "multimodal": "query 7:2637: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(2636,), qids=['7:2637']",
+     "text_only_black_image": "query 7:2637: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(2636,), qids=['7:2637']"
+    },
+    "7:2650": {
+     "image_only_empty_text": "query 7:2650: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(2649,), qids=['7:2650']",
+     "multimodal": "query 7:2650: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(2649,), qids=['7:2650']",
+     "text_only_black_image": "query 7:2650: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(2649,), qids=['7:2650']"
+    },
+    "7:2679": {
+     "image_only_empty_text": "query 7:2679: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(2678,), qids=['7:2679']",
+     "multimodal": "query 7:2679: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(2678,), qids=['7:2679']",
+     "text_only_black_image": "query 7:2679: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(2678,), qids=['7:2679']"
+    },
+    "7:2698": {
+     "image_only_empty_text": "query 7:2698: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(2697,), qids=['7:2698']",
+     "multimodal": "query 7:2698: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(2697,), qids=['7:2698']",
+     "text_only_black_image": "query 7:2698: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(2697,), qids=['7:2698']"
+    },
+    "7:2717": {
+     "image_only_empty_text": "query 7:2717: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(2716,), qids=['7:2717']",
+     "multimodal": "query 7:2717: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(2716,), qids=['7:2717']",
+     "text_only_black_image": "query 7:2717: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(2716,), qids=['7:2717']"
+    },
+    "7:2815": {
+     "image_only_empty_text": "query 7:2815: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(2814,), qids=['7:2815']",
+     "multimodal": "query 7:2815: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(2814,), qids=['7:2815']",
+     "text_only_black_image": "query 7:2815: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(2814,), qids=['7:2815']"
+    },
+    "7:2959": {
+     "image_only_empty_text": "query 7:2959: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(2958,), qids=['7:2959']",
+     "multimodal": "query 7:2959: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(2958,), qids=['7:2959']",
+     "text_only_black_image": "query 7:2959: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(2958,), qids=['7:2959']"
+    },
+    "7:2999": {
+     "image_only_empty_text": "query 7:2999: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(2998,), qids=['7:2999']",
+     "multimodal": "query 7:2999: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(2998,), qids=['7:2999']",
+     "text_only_black_image": "query 7:2999: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(2998,), qids=['7:2999']"
+    },
+    "7:3005": {
+     "image_only_empty_text": "query 7:3005: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(3004,), qids=['7:3005']",
+     "multimodal": "query 7:3005: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(3004,), qids=['7:3005']",
+     "text_only_black_image": "query 7:3005: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(3004,), qids=['7:3005']"
+    },
+    "7:3033": {
+     "image_only_empty_text": "query 7:3033: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(3032,), qids=['7:3033']",
+     "multimodal": "query 7:3033: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(3032,), qids=['7:3033']",
+     "text_only_black_image": "query 7:3033: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(3032,), qids=['7:3033']"
+    },
+    "7:3038": {
+     "image_only_empty_text": "query 7:3038: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(3037,), qids=['7:3038']",
+     "multimodal": "query 7:3038: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(3037,), qids=['7:3038']",
+     "text_only_black_image": "query 7:3038: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(3037,), qids=['7:3038']"
+    },
+    "7:3163": {
+     "image_only_empty_text": "query 7:3163: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(3162,), qids=['7:3163']",
+     "multimodal": "query 7:3163: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(3162,), qids=['7:3163']",
+     "text_only_black_image": "query 7:3163: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(3162,), qids=['7:3163']"
+    },
+    "7:3177": {
+     "image_only_empty_text": "query 7:3177: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(3176,), qids=['7:3177']",
+     "multimodal": "query 7:3177: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(3176,), qids=['7:3177']",
+     "text_only_black_image": "query 7:3177: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(3176,), qids=['7:3177']"
+    },
+    "7:3243": {
+     "image_only_empty_text": "query 7:3243: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(3242,), qids=['7:3243']",
+     "multimodal": "query 7:3243: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(3242,), qids=['7:3243']",
+     "text_only_black_image": "query 7:3243: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(3242,), qids=['7:3243']"
+    },
+    "7:3280": {
+     "image_only_empty_text": "query 7:3280: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(3279,), qids=['7:3280']",
+     "multimodal": "query 7:3280: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(3279,), qids=['7:3280']",
+     "text_only_black_image": "query 7:3280: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(3279,), qids=['7:3280']"
+    },
+    "7:3324": {
+     "image_only_empty_text": "query 7:3324: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(3323,), qids=['7:3324']",
+     "multimodal": "query 7:3324: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(3323,), qids=['7:3324']",
+     "text_only_black_image": "query 7:3324: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(3323,), qids=['7:3324']"
+    },
+    "7:3367": {
+     "image_only_empty_text": "query 7:3367: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(3366,), qids=['7:3367']",
+     "multimodal": "query 7:3367: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(3366,), qids=['7:3367']",
+     "text_only_black_image": "query 7:3367: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(3366,), qids=['7:3367']"
+    },
+    "7:3402": {
+     "image_only_empty_text": "query 7:3402: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(3401,), qids=['7:3402']",
+     "multimodal": "query 7:3402: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(3401,), qids=['7:3402']",
+     "text_only_black_image": "query 7:3402: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(3401,), qids=['7:3402']"
+    },
+    "7:3464": {
+     "image_only_empty_text": "query 7:3464: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(3463,), qids=['7:3464']",
+     "multimodal": "query 7:3464: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(3463,), qids=['7:3464']",
+     "text_only_black_image": "query 7:3464: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(3463,), qids=['7:3464']"
+    },
+    "7:3487": {
+     "image_only_empty_text": "query 7:3487: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(3486,), qids=['7:3487']",
+     "multimodal": "query 7:3487: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(3486,), qids=['7:3487']",
+     "text_only_black_image": "query 7:3487: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(3486,), qids=['7:3487']"
+    },
+    "7:3493": {
+     "image_only_empty_text": "query 7:3493: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(3492,), qids=['7:3493']",
+     "multimodal": "query 7:3493: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(3492,), qids=['7:3493']",
+     "text_only_black_image": "query 7:3493: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(3492,), qids=['7:3493']"
+    },
+    "7:3560": {
+     "image_only_empty_text": "query 7:3560: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(3559,), qids=['7:3560']",
+     "multimodal": "query 7:3560: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(3559,), qids=['7:3560']",
+     "text_only_black_image": "query 7:3560: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(3559,), qids=['7:3560']"
+    },
+    "7:3601": {
+     "image_only_empty_text": "query 7:3601: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(3600,), qids=['7:3601']",
+     "multimodal": "query 7:3601: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(3600,), qids=['7:3601']",
+     "text_only_black_image": "query 7:3601: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(3600,), qids=['7:3601']"
+    },
+    "7:3629": {
+     "image_only_empty_text": "query 7:3629: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(3628,), qids=['7:3629']",
+     "multimodal": "query 7:3629: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(3628,), qids=['7:3629']",
+     "text_only_black_image": "query 7:3629: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(3628,), qids=['7:3629']"
+    },
+    "7:3635": {
+     "image_only_empty_text": "query 7:3635: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(3634,), qids=['7:3635']",
+     "multimodal": "query 7:3635: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(3634,), qids=['7:3635']",
+     "text_only_black_image": "query 7:3635: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(3634,), qids=['7:3635']"
+    },
+    "7:3790": {
+     "image_only_empty_text": "query 7:3790: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(3789,), qids=['7:3790']",
+     "multimodal": "query 7:3790: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(3789,), qids=['7:3790']",
+     "text_only_black_image": "query 7:3790: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(3789,), qids=['7:3790']"
+    },
+    "7:3800": {
+     "image_only_empty_text": "query 7:3800: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(3799,), qids=['7:3800']",
+     "multimodal": "query 7:3800: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(3799,), qids=['7:3800']",
+     "text_only_black_image": "query 7:3800: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(3799,), qids=['7:3800']"
+    },
+    "7:3813": {
+     "image_only_empty_text": "query 7:3813: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(3812,), qids=['7:3813']",
+     "multimodal": "query 7:3813: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(3812,), qids=['7:3813']",
+     "text_only_black_image": "query 7:3813: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(3812,), qids=['7:3813']"
+    },
+    "7:3906": {
+     "image_only_empty_text": "query 7:3906: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(3905,), qids=['7:3906']",
+     "multimodal": "query 7:3906: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(3905,), qids=['7:3906']",
+     "text_only_black_image": "query 7:3906: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(3905,), qids=['7:3906']"
+    },
+    "7:3927": {
+     "image_only_empty_text": "query 7:3927: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(3926,), qids=['7:3927']",
+     "multimodal": "query 7:3927: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(3926,), qids=['7:3927']",
+     "text_only_black_image": "query 7:3927: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(3926,), qids=['7:3927']"
+    },
+    "7:3993": {
+     "image_only_empty_text": "query 7:3993: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(3992,), qids=['7:3993']",
+     "multimodal": "query 7:3993: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(3992,), qids=['7:3993']",
+     "text_only_black_image": "query 7:3993: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(3992,), qids=['7:3993']"
+    },
+    "7:4008": {
+     "image_only_empty_text": "query 7:4008: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(4007,), qids=['7:4008']",
+     "multimodal": "query 7:4008: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(4007,), qids=['7:4008']",
+     "text_only_black_image": "query 7:4008: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(4007,), qids=['7:4008']"
+    },
+    "7:4013": {
+     "image_only_empty_text": "query 7:4013: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(4012,), qids=['7:4013']",
+     "multimodal": "query 7:4013: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(4012,), qids=['7:4013']",
+     "text_only_black_image": "query 7:4013: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(4012,), qids=['7:4013']"
+    },
+    "7:4066": {
+     "image_only_empty_text": "query 7:4066: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(4065,), qids=['7:4066']",
+     "multimodal": "query 7:4066: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(4065,), qids=['7:4066']",
+     "text_only_black_image": "query 7:4066: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(4065,), qids=['7:4066']"
+    },
+    "7:4086": {
+     "image_only_empty_text": "query 7:4086: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(4085,), qids=['7:4086']",
+     "multimodal": "query 7:4086: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(4085,), qids=['7:4086']",
+     "text_only_black_image": "query 7:4086: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(4085,), qids=['7:4086']"
+    },
+    "7:4164": {
+     "image_only_empty_text": "query 7:4164: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(4163,), qids=['7:4164']",
+     "multimodal": "query 7:4164: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(4163,), qids=['7:4164']",
+     "text_only_black_image": "query 7:4164: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(4163,), qids=['7:4164']"
+    },
+    "7:4171": {
+     "image_only_empty_text": "query 7:4171: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(4170,), qids=['7:4171']",
+     "multimodal": "query 7:4171: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(4170,), qids=['7:4171']",
+     "text_only_black_image": "query 7:4171: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(4170,), qids=['7:4171']"
+    },
+    "7:4243": {
+     "image_only_empty_text": "query 7:4243: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(4242,), qids=['7:4243']",
+     "multimodal": "query 7:4243: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(4242,), qids=['7:4243']",
+     "text_only_black_image": "query 7:4243: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(4242,), qids=['7:4243']"
+    },
+    "7:4246": {
+     "image_only_empty_text": "query 7:4246: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(4245,), qids=['7:4246']",
+     "multimodal": "query 7:4246: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(4245,), qids=['7:4246']",
+     "text_only_black_image": "query 7:4246: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(4245,), qids=['7:4246']"
+    },
+    "7:4290": {
+     "image_only_empty_text": "query 7:4290: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(4289,), qids=['7:4290']",
+     "multimodal": "query 7:4290: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(4289,), qids=['7:4290']",
+     "text_only_black_image": "query 7:4290: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(4289,), qids=['7:4290']"
+    },
+    "7:4294": {
+     "image_only_empty_text": "query 7:4294: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(4293,), qids=['7:4294']",
+     "multimodal": "query 7:4294: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(4293,), qids=['7:4294']",
+     "text_only_black_image": "query 7:4294: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(4293,), qids=['7:4294']"
+    },
+    "7:4305": {
+     "image_only_empty_text": "query 7:4305: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(4304,), qids=['7:4305']",
+     "multimodal": "query 7:4305: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(4304,), qids=['7:4305']",
+     "text_only_black_image": "query 7:4305: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(4304,), qids=['7:4305']"
+    },
+    "7:4322": {
+     "image_only_empty_text": "query 7:4322: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(4321,), qids=['7:4322']",
+     "multimodal": "query 7:4322: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(4321,), qids=['7:4322']",
+     "text_only_black_image": "query 7:4322: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(4321,), qids=['7:4322']"
+    },
+    "7:4358": {
+     "image_only_empty_text": "query 7:4358: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(4357,), qids=['7:4358']",
+     "multimodal": "query 7:4358: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(4357,), qids=['7:4358']",
+     "text_only_black_image": "query 7:4358: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(4357,), qids=['7:4358']"
+    },
+    "7:4397": {
+     "image_only_empty_text": "query 7:4397: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(4396,), qids=['7:4397']",
+     "multimodal": "query 7:4397: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(4396,), qids=['7:4397']",
+     "text_only_black_image": "query 7:4397: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(4396,), qids=['7:4397']"
+    },
+    "7:4420": {
+     "image_only_empty_text": "query 7:4420: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(4419,), qids=['7:4420']",
+     "multimodal": "query 7:4420: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(4419,), qids=['7:4420']",
+     "text_only_black_image": "query 7:4420: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(4419,), qids=['7:4420']"
+    },
+    "7:4425": {
+     "image_only_empty_text": "query 7:4425: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(4424,), qids=['7:4425']",
+     "multimodal": "query 7:4425: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(4424,), qids=['7:4425']",
+     "text_only_black_image": "query 7:4425: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(4424,), qids=['7:4425']"
+    },
+    "7:4434": {
+     "image_only_empty_text": "query 7:4434: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(4433,), qids=['7:4434']",
+     "multimodal": "query 7:4434: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(4433,), qids=['7:4434']",
+     "text_only_black_image": "query 7:4434: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(4433,), qids=['7:4434']"
+    },
+    "7:4487": {
+     "image_only_empty_text": "query 7:4487: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(4486,), qids=['7:4487']",
+     "multimodal": "query 7:4487: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(4486,), qids=['7:4487']",
+     "text_only_black_image": "query 7:4487: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(4486,), qids=['7:4487']"
+    },
+    "7:4504": {
+     "image_only_empty_text": "query 7:4504: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(4503,), qids=['7:4504']",
+     "multimodal": "query 7:4504: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(4503,), qids=['7:4504']",
+     "text_only_black_image": "query 7:4504: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(4503,), qids=['7:4504']"
+    },
+    "7:4510": {
+     "image_only_empty_text": "query 7:4510: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(4509,), qids=['7:4510']",
+     "multimodal": "query 7:4510: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(4509,), qids=['7:4510']",
+     "text_only_black_image": "query 7:4510: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(4509,), qids=['7:4510']"
+    },
+    "7:4529": {
+     "image_only_empty_text": "query 7:4529: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(4528,), qids=['7:4529']",
+     "multimodal": "query 7:4529: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(4528,), qids=['7:4529']",
+     "text_only_black_image": "query 7:4529: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(4528,), qids=['7:4529']"
+    },
+    "7:4540": {
+     "image_only_empty_text": "query 7:4540: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(4539,), qids=['7:4540']",
+     "multimodal": "query 7:4540: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(4539,), qids=['7:4540']",
+     "text_only_black_image": "query 7:4540: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(4539,), qids=['7:4540']"
+    },
+    "7:4542": {
+     "image_only_empty_text": "query 7:4542: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(4541,), qids=['7:4542']",
+     "multimodal": "query 7:4542: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(4541,), qids=['7:4542']",
+     "text_only_black_image": "query 7:4542: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(4541,), qids=['7:4542']"
+    },
+    "7:4582": {
+     "image_only_empty_text": "query 7:4582: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(4581,), qids=['7:4582']",
+     "multimodal": "query 7:4582: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(4581,), qids=['7:4582']",
+     "text_only_black_image": "query 7:4582: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(4581,), qids=['7:4582']"
+    },
+    "7:4594": {
+     "image_only_empty_text": "query 7:4594: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(4593,), qids=['7:4594']",
+     "multimodal": "query 7:4594: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(4593,), qids=['7:4594']",
+     "text_only_black_image": "query 7:4594: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(4593,), qids=['7:4594']"
+    },
+    "7:4641": {
+     "image_only_empty_text": "query 7:4641: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(4640,), qids=['7:4641']",
+     "multimodal": "query 7:4641: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(4640,), qids=['7:4641']",
+     "text_only_black_image": "query 7:4641: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(4640,), qids=['7:4641']"
+    },
+    "7:4759": {
+     "image_only_empty_text": "query 7:4759: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(4758,), qids=['7:4759']",
+     "multimodal": "query 7:4759: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(4758,), qids=['7:4759']",
+     "text_only_black_image": "query 7:4759: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(4758,), qids=['7:4759']"
+    },
+    "7:4765": {
+     "image_only_empty_text": "query 7:4765: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(4764,), qids=['7:4765']",
+     "multimodal": "query 7:4765: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(4764,), qids=['7:4765']",
+     "text_only_black_image": "query 7:4765: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(4764,), qids=['7:4765']"
+    },
+    "7:4806": {
+     "image_only_empty_text": "query 7:4806: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(4805,), qids=['7:4806']",
+     "multimodal": "query 7:4806: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(4805,), qids=['7:4806']",
+     "text_only_black_image": "query 7:4806: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(4805,), qids=['7:4806']"
+    },
+    "7:4808": {
+     "image_only_empty_text": "query 7:4808: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(4807,), qids=['7:4808']",
+     "multimodal": "query 7:4808: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(4807,), qids=['7:4808']",
+     "text_only_black_image": "query 7:4808: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(4807,), qids=['7:4808']"
+    },
+    "7:4809": {
+     "image_only_empty_text": "query 7:4809: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(4808,), qids=['7:4809']",
+     "multimodal": "query 7:4809: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(4808,), qids=['7:4809']",
+     "text_only_black_image": "query 7:4809: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(4808,), qids=['7:4809']"
+    },
+    "7:4838": {
+     "image_only_empty_text": "query 7:4838: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(4837,), qids=['7:4838']",
+     "multimodal": "query 7:4838: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(4837,), qids=['7:4838']",
+     "text_only_black_image": "query 7:4838: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(4837,), qids=['7:4838']"
+    },
+    "7:4849": {
+     "image_only_empty_text": "query 7:4849: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(4848,), qids=['7:4849']",
+     "multimodal": "query 7:4849: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(4848,), qids=['7:4849']",
+     "text_only_black_image": "query 7:4849: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(4848,), qids=['7:4849']"
+    },
+    "7:4871": {
+     "image_only_empty_text": "query 7:4871: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(4870,), qids=['7:4871']",
+     "multimodal": "query 7:4871: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(4870,), qids=['7:4871']",
+     "text_only_black_image": "query 7:4871: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(4870,), qids=['7:4871']"
+    },
+    "7:4880": {
+     "image_only_empty_text": "query 7:4880: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(4879,), qids=['7:4880']",
+     "multimodal": "query 7:4880: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(4879,), qids=['7:4880']",
+     "text_only_black_image": "query 7:4880: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(4879,), qids=['7:4880']"
+    },
+    "7:4884": {
+     "image_only_empty_text": "query 7:4884: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(4883,), qids=['7:4884']",
+     "multimodal": "query 7:4884: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(4883,), qids=['7:4884']",
+     "text_only_black_image": "query 7:4884: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(4883,), qids=['7:4884']"
+    },
+    "7:4893": {
+     "image_only_empty_text": "query 7:4893: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(4892,), qids=['7:4893']",
+     "multimodal": "query 7:4893: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(4892,), qids=['7:4893']",
+     "text_only_black_image": "query 7:4893: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(4892,), qids=['7:4893']"
+    },
+    "7:4956": {
+     "image_only_empty_text": "query 7:4956: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(4955,), qids=['7:4956']",
+     "multimodal": "query 7:4956: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(4955,), qids=['7:4956']",
+     "text_only_black_image": "query 7:4956: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(4955,), qids=['7:4956']"
+    },
+    "7:4982": {
+     "image_only_empty_text": "query 7:4982: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(4981,), qids=['7:4982']",
+     "multimodal": "query 7:4982: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(4981,), qids=['7:4982']",
+     "text_only_black_image": "query 7:4982: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(4981,), qids=['7:4982']"
+    },
+    "7:5048": {
+     "image_only_empty_text": "query 7:5048: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(5047,), qids=['7:5048']",
+     "multimodal": "query 7:5048: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(5047,), qids=['7:5048']",
+     "text_only_black_image": "query 7:5048: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(5047,), qids=['7:5048']"
+    },
+    "7:5090": {
+     "image_only_empty_text": "query 7:5090: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(5089,), qids=['7:5090']",
+     "multimodal": "query 7:5090: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(5089,), qids=['7:5090']",
+     "text_only_black_image": "query 7:5090: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(5089,), qids=['7:5090']"
+    },
+    "7:5101": {
+     "image_only_empty_text": "query 7:5101: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(5100,), qids=['7:5101']",
+     "multimodal": "query 7:5101: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(5100,), qids=['7:5101']",
+     "text_only_black_image": "query 7:5101: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(5100,), qids=['7:5101']"
+    },
+    "7:5105": {
+     "image_only_empty_text": "query 7:5105: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(5104,), qids=['7:5105']",
+     "multimodal": "query 7:5105: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(5104,), qids=['7:5105']",
+     "text_only_black_image": "query 7:5105: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(5104,), qids=['7:5105']"
+    },
+    "7:5109": {
+     "image_only_empty_text": "query 7:5109: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(5108,), qids=['7:5109']",
+     "multimodal": "query 7:5109: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(5108,), qids=['7:5109']",
+     "text_only_black_image": "query 7:5109: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(5108,), qids=['7:5109']"
+    },
+    "7:5149": {
+     "image_only_empty_text": "query 7:5149: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(5148,), qids=['7:5149']",
+     "multimodal": "query 7:5149: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(5148,), qids=['7:5149']",
+     "text_only_black_image": "query 7:5149: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(5148,), qids=['7:5149']"
+    },
+    "7:5170": {
+     "image_only_empty_text": "query 7:5170: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(5169,), qids=['7:5170']",
+     "multimodal": "query 7:5170: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(5169,), qids=['7:5170']",
+     "text_only_black_image": "query 7:5170: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(5169,), qids=['7:5170']"
+    },
+    "7:5212": {
+     "image_only_empty_text": "query 7:5212: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(5211,), qids=['7:5212']",
+     "multimodal": "query 7:5212: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(5211,), qids=['7:5212']",
+     "text_only_black_image": "query 7:5212: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(5211,), qids=['7:5212']"
+    },
+    "7:5228": {
+     "image_only_empty_text": "query 7:5228: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(5227,), qids=['7:5228']",
+     "multimodal": "query 7:5228: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(5227,), qids=['7:5228']",
+     "text_only_black_image": "query 7:5228: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(5227,), qids=['7:5228']"
+    },
+    "7:5236": {
+     "image_only_empty_text": "query 7:5236: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(5235,), qids=['7:5236']",
+     "multimodal": "query 7:5236: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(5235,), qids=['7:5236']",
+     "text_only_black_image": "query 7:5236: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(5235,), qids=['7:5236']"
+    },
+    "7:5239": {
+     "image_only_empty_text": "query 7:5239: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(5238,), qids=['7:5239']",
+     "multimodal": "query 7:5239: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(5238,), qids=['7:5239']",
+     "text_only_black_image": "query 7:5239: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(5238,), qids=['7:5239']"
+    },
+    "7:5259": {
+     "image_only_empty_text": "query 7:5259: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(5258,), qids=['7:5259']",
+     "multimodal": "query 7:5259: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(5258,), qids=['7:5259']",
+     "text_only_black_image": "query 7:5259: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(5258,), qids=['7:5259']"
+    },
+    "7:5329": {
+     "image_only_empty_text": "query 7:5329: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(5328,), qids=['7:5329']",
+     "multimodal": "query 7:5329: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(5328,), qids=['7:5329']",
+     "text_only_black_image": "query 7:5329: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(5328,), qids=['7:5329']"
+    },
+    "7:5388": {
+     "image_only_empty_text": "query 7:5388: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(5387,), qids=['7:5388']",
+     "multimodal": "query 7:5388: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(5387,), qids=['7:5388']",
+     "text_only_black_image": "query 7:5388: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(5387,), qids=['7:5388']"
+    },
+    "7:5415": {
+     "image_only_empty_text": "query 7:5415: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(5414,), qids=['7:5415']",
+     "multimodal": "query 7:5415: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(5414,), qids=['7:5415']",
+     "text_only_black_image": "query 7:5415: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(5414,), qids=['7:5415']"
+    },
+    "7:5444": {
+     "image_only_empty_text": "query 7:5444: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(5443,), qids=['7:5444']",
+     "multimodal": "query 7:5444: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(5443,), qids=['7:5444']",
+     "text_only_black_image": "query 7:5444: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(5443,), qids=['7:5444']"
+    },
+    "7:5512": {
+     "image_only_empty_text": "query 7:5512: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(5511,), qids=['7:5512']",
+     "multimodal": "query 7:5512: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(5511,), qids=['7:5512']",
+     "text_only_black_image": "query 7:5512: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(5511,), qids=['7:5512']"
+    },
+    "7:5546": {
+     "image_only_empty_text": "query 7:5546: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(5545,), qids=['7:5546']",
+     "multimodal": "query 7:5546: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(5545,), qids=['7:5546']",
+     "text_only_black_image": "query 7:5546: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(5545,), qids=['7:5546']"
+    },
+    "7:5584": {
+     "image_only_empty_text": "query 7:5584: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(5583,), qids=['7:5584']",
+     "multimodal": "query 7:5584: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(5583,), qids=['7:5584']",
+     "text_only_black_image": "query 7:5584: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(5583,), qids=['7:5584']"
+    },
+    "7:5597": {
+     "image_only_empty_text": "query 7:5597: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(5596,), qids=['7:5597']",
+     "multimodal": "query 7:5597: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(5596,), qids=['7:5597']",
+     "text_only_black_image": "query 7:5597: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(5596,), qids=['7:5597']"
+    },
+    "7:5607": {
+     "image_only_empty_text": "query 7:5607: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(5606,), qids=['7:5607']",
+     "multimodal": "query 7:5607: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(5606,), qids=['7:5607']",
+     "text_only_black_image": "query 7:5607: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(5606,), qids=['7:5607']"
+    },
+    "7:5641": {
+     "image_only_empty_text": "query 7:5641: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(5640,), qids=['7:5641']",
+     "multimodal": "query 7:5641: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(5640,), qids=['7:5641']",
+     "text_only_black_image": "query 7:5641: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(5640,), qids=['7:5641']"
+    },
+    "7:5654": {
+     "image_only_empty_text": "query 7:5654: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(5653,), qids=['7:5654']",
+     "multimodal": "query 7:5654: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(5653,), qids=['7:5654']",
+     "text_only_black_image": "query 7:5654: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(5653,), qids=['7:5654']"
+    },
+    "7:5655": {
+     "image_only_empty_text": "query 7:5655: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(5654,), qids=['7:5655']",
+     "multimodal": "query 7:5655: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(5654,), qids=['7:5655']",
+     "text_only_black_image": "query 7:5655: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(5654,), qids=['7:5655']"
+    },
+    "7:5700": {
+     "image_only_empty_text": "query 7:5700: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(5699,), qids=['7:5700']",
+     "multimodal": "query 7:5700: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(5699,), qids=['7:5700']",
+     "text_only_black_image": "query 7:5700: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(5699,), qids=['7:5700']"
+    },
+    "7:5701": {
+     "image_only_empty_text": "query 7:5701: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(5700,), qids=['7:5701']",
+     "multimodal": "query 7:5701: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(5700,), qids=['7:5701']",
+     "text_only_black_image": "query 7:5701: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(5700,), qids=['7:5701']"
+    },
+    "7:5711": {
+     "image_only_empty_text": "query 7:5711: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(5710,), qids=['7:5711']",
+     "multimodal": "query 7:5711: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(5710,), qids=['7:5711']",
+     "text_only_black_image": "query 7:5711: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(5710,), qids=['7:5711']"
+    },
+    "7:5742": {
+     "image_only_empty_text": "query 7:5742: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(5741,), qids=['7:5742']",
+     "multimodal": "query 7:5742: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(5741,), qids=['7:5742']",
+     "text_only_black_image": "query 7:5742: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(5741,), qids=['7:5742']"
+    },
+    "7:5764": {
+     "image_only_empty_text": "query 7:5764: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(5763,), qids=['7:5764']",
+     "multimodal": "query 7:5764: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(5763,), qids=['7:5764']",
+     "text_only_black_image": "query 7:5764: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(5763,), qids=['7:5764']"
+    },
+    "7:5788": {
+     "image_only_empty_text": "query 7:5788: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(5787,), qids=['7:5788']",
+     "multimodal": "query 7:5788: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(5787,), qids=['7:5788']",
+     "text_only_black_image": "query 7:5788: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(5787,), qids=['7:5788']"
+    },
+    "7:5798": {
+     "image_only_empty_text": "query 7:5798: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(5797,), qids=['7:5798']",
+     "multimodal": "query 7:5798: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(5797,), qids=['7:5798']",
+     "text_only_black_image": "query 7:5798: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(5797,), qids=['7:5798']"
+    },
+    "7:5863": {
+     "image_only_empty_text": "query 7:5863: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(5862,), qids=['7:5863']",
+     "multimodal": "query 7:5863: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(5862,), qids=['7:5863']",
+     "text_only_black_image": "query 7:5863: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(5862,), qids=['7:5863']"
+    },
+    "7:5896": {
+     "image_only_empty_text": "query 7:5896: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(5895,), qids=['7:5896']",
+     "multimodal": "query 7:5896: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(5895,), qids=['7:5896']",
+     "text_only_black_image": "query 7:5896: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(5895,), qids=['7:5896']"
+    },
+    "7:5963": {
+     "image_only_empty_text": "query 7:5963: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(5962,), qids=['7:5963']",
+     "multimodal": "query 7:5963: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(5962,), qids=['7:5963']",
+     "text_only_black_image": "query 7:5963: category None has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(5962,), qids=['7:5963']"
+    }
+   }
+  },
+  "pinned": {
+   "run_id": "9e4918a6b5c243412cbc58c9",
+   "summary_path": "workbench/artifacts/composition/summary/limn_base_iter0_all_categories_9e4918a6b5c243412cbc58c9/full.json",
+   "ranks_path": "workbench/artifacts/composition/runs/9e4918a6b5c243412cbc58c9/ranks/limn_base_iter0_all_categories.json",
+   "query_count": 6003,
+   "gap_cohort_count": 6001,
+   "composition_gap_ndcg": 0.5391438513723383,
+   "scored_per_condition": {
+    "multimodal": 6001,
+    "image_only": 6001,
+    "text_only": 6001
+   },
+   "coverage": {
+    "multimodal": 0.9996668332500417,
+    "image_only": 0.9996668332500417,
+    "text_only": 0.9996668332500417
+   },
+   "unresolved_category_query_count": 119,
+   "category_resolution": {
+    "resolved_count": 5884,
+    "unresolved_count": 0,
+    "ambiguous_count": 119
+   },
+   "unscored_qids": [
+    "7:3038",
+    "7:3790"
+   ],
+   "unscored_reasons": {
+    "7:3038": {
+     "image_only_empty_text": "query 7:3038: category unresolved has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(3037,), qids=['7:3038']",
+     "multimodal": "query 7:3038: category unresolved has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(3037,), qids=['7:3038']",
+     "text_only_black_image": "query 7:3038: category unresolved has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(3037,), qids=['7:3038']"
+    },
+    "7:3790": {
+     "image_only_empty_text": "query 7:3790: category unresolved has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(3789,), qids=['7:3790']",
+     "multimodal": "query 7:3790: category unresolved has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(3789,), qids=['7:3790']",
+     "text_only_black_image": "query 7:3790: category unresolved has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(3789,), qids=['7:3790']"
+    }
+   }
+  }
+ }
+}

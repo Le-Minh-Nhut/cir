@@ -1,0 +1,131 @@
+{
+ "model": "conesep",
+ "old_run": "30f6de423861cc1d6c78c361",
+ "new_run": "a4f786d8af4d46ac2a85ab9c",
+ "conditions": {
+  "image_only_empty_text": {
+   "queries_compared": 6003,
+   "only_old": 0,
+   "only_new": 0,
+   "changed_rank_queries": 10,
+   "changed_examples": [
+    [
+     "7:1521",
+     17918,
+     17917
+    ],
+    [
+     "7:4552",
+     1007,
+     1008
+    ],
+    [
+     "7:4681",
+     38747,
+     38746
+    ],
+    [
+     "7:4937",
+     7508,
+     7509
+    ],
+    [
+     "7:5118",
+     3770,
+     3769
+    ],
+    [
+     "7:5131",
+     49843,
+     49842
+    ],
+    [
+     "7:5419",
+     65087,
+     65086
+    ],
+    [
+     "7:5673",
+     62915,
+     62916
+    ],
+    [
+     "7:5680",
+     63657,
+     63658
+    ],
+    [
+     "7:968",
+     53236,
+     53237
+    ]
+   ],
+   "max_abs_delta_rank": 1,
+   "mean_delta_rank": 0.0,
+   "sum_ndcg_delta": -1.2336770089216298e-05,
+   "per_query_ndcg_identical": false,
+   "bit_identical_ranks": false
+  },
+  "multimodal": {
+   "queries_compared": 6003,
+   "only_old": 0,
+   "only_new": 0,
+   "changed_rank_queries": 3,
+   "changed_examples": [
+    [
+     "7:3039",
+     5169,
+     5170
+    ],
+    [
+     "7:3744",
+     30,
+     31
+    ],
+    [
+     "7:5116",
+     2791,
+     2790
+    ]
+   ],
+   "max_abs_delta_rank": 1,
+   "mean_delta_rank": 0.3333333333333333,
+   "sum_ndcg_delta": -0.0018469758362703592,
+   "per_query_ndcg_identical": false,
+   "bit_identical_ranks": false
+  },
+  "text_only_black_image": {
+   "queries_compared": 6003,
+   "only_old": 0,
+   "only_new": 0,
+   "changed_rank_queries": 4,
+   "changed_examples": [
+    [
+     "7:2495",
+     2926,
+     2925
+    ],
+    [
+     "7:3254",
+     16809,
+     16810
+    ],
+    [
+     "7:4513",
+     4079,
+     4078
+    ],
+    [
+     "7:5844",
+     3834,
+     3835
+    ]
+   ],
+   "max_abs_delta_rank": 1,
+   "mean_delta_rank": 0.0,
+   "sum_ndcg_delta": 3.0867627713593304e-06,
+   "per_query_ndcg_identical": false,
+   "bit_identical_ranks": false
+  }
+ }
+}

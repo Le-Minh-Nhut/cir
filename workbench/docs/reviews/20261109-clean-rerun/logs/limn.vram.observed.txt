@@ -1,0 +1,20 @@
+# limn VRAM observations — run 9e4918a6b5c243412cbc58c9
+
+NOT a continuous sampler. The automated 10 s sampler was only wired for encoder, conesep, habit and
+intent; limn's completed-job check ran it once, before the run was steady. These are the `nvidia-smi`
+readings captured by hand during the run, recorded here so the 7154 MiB figure in `RUN_LOG.csv`
+traces to a file instead of to memory.
+
+Wall-clock positions are approximate (taken between other commands, not stamped at capture):
+
+| approx. time (+07:00) | phase | memory.used | util |
+|---|---|---|---|
+| 06:20 | gallery encode, category 2 of 3 in flight | 5270 MiB | 56 % |
+| 06:45 | gallery encode, category 3 | 7036 MiB | 100 % |
+| 07:00 | still encoding/scoring | 7154 MiB | 100 % |
+
+Peak observed: **7154 MiB** (of 16303 MiB). The earlier readings show it climbing as each category
+space was materialised, which is the expected shape for a three-space model.
+
+No timing claim is made from this file. Two other lanes were active throughout, so nothing here is a
+baseline and none of it belongs to G8.

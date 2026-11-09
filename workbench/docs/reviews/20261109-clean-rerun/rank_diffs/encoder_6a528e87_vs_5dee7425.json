@@ -1,0 +1,196 @@
+{
+ "model": "encoder",
+ "old_run": "6a528e877c328772e2c7bb28",
+ "new_run": "5dee7425dd46c5f154808aac",
+ "conditions": {
+  "image_only_empty_text": {
+   "queries_compared": 6003,
+   "only_old": 0,
+   "only_new": 0,
+   "changed_rank_queries": 5214,
+   "changed_examples": [
+    [
+     "7:10",
+     9812,
+     9797
+    ],
+    [
+     "7:100",
+     9184,
+     9191
+    ],
+    [
+     "7:1000",
+     197,
+     196
+    ],
+    [
+     "7:1001",
+     346,
+     342
+    ],
+    [
+     "7:1002",
+     540,
+     543
+    ],
+    [
+     "7:1003",
+     1578,
+     1574
+    ],
+    [
+     "7:1004",
+     1796,
+     1800
+    ],
+    [
+     "7:1005",
+     8749,
+     8700
+    ],
+    [
+     "7:1007",
+     95,
+     93
+    ],
+    [
+     "7:1008",
+     3573,
+     3612
+    ]
+   ],
+   "max_abs_delta_rank": 852,
+   "mean_delta_rank": 1.64403528960491,
+   "sum_ndcg_delta": 0.2695268347154477,
+   "per_query_ndcg_identical": false,
+   "bit_identical_ranks": false
+  },
+  "multimodal": {
+   "queries_compared": 6003,
+   "only_old": 0,
+   "only_new": 0,
+   "changed_rank_queries": 2819,
+   "changed_examples": [
+    [
+     "7:10",
+     992,
+     984
+    ],
+    [
+     "7:100",
+     22,
+     20
+    ],
+    [
+     "7:1000",
+     37,
+     36
+    ],
+    [
+     "7:1001",
+     220,
+     224
+    ],
+    [
+     "7:1008",
+     118,
+     120
+    ],
+    [
+     "7:101",
+     416,
+     413
+    ],
+    [
+     "7:1014",
+     65,
+     64
+    ],
+    [
+     "7:1016",
+     125,
+     122
+    ],
+    [
+     "7:1019",
+     7,
+     6
+    ],
+    [
+     "7:102",
+     1156,
+     1169
+    ]
+   ],
+   "max_abs_delta_rank": 805,
+   "mean_delta_rank": -0.001418942887548776,
+   "sum_ndcg_delta": 1.2418009820916909,
+   "per_query_ndcg_identical": false,
+   "bit_identical_ranks": false
+  },
+  "text_only_black_image": {
+   "queries_compared": 6003,
+   "only_old": 0,
+   "only_new": 0,
+   "changed_rank_queries": 4694,
+   "changed_examples": [
+    [
+     "7:1",
+     88,
+     89
+    ],
+    [
+     "7:10",
+     18505,
+     18515
+    ],
+    [
+     "7:1000",
+     1781,
+     1757
+    ],
+    [
+     "7:1001",
+     11908,
+     11983
+    ],
+    [
+     "7:1002",
+     7507,
+     7503
+    ],
+    [
+     "7:1003",
+     369,
+     370
+    ],
+    [
+     "7:1006",
+     1785,
+     1796
+    ],
+    [
+     "7:1007",
+     4350,
+     4375
+    ],
+    [
+     "7:1008",
+     1939,
+     1931
+    ],
+    [
+     "7:101",
+     13630,
+     13666
+    ]
+   ],
+   "max_abs_delta_rank": 1706,
+   "mean_delta_rank": 2.818065615679591,
+   "sum_ndcg_delta": 4.980584816865913,
+   "per_query_ndcg_identical": false,
+   "bit_identical_ranks": false
+  }
+ }
+}
