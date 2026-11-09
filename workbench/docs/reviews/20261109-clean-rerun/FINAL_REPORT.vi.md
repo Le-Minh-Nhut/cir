@@ -1,10 +1,9 @@
 # CIR — báo cáo cuối phiên clean-rerun (2026-11-09)
 
-Revision khi viết: worktree tại `20b83e5` (HEAD chuyển `ffb6ae8` → `20b83e5` lúc 03:53 do lane khác;
-bốn lượt chạy sớm hơn đã đối chiếu lại bằng `scoring_module_source_hash`, xem §6).
-`TESTED_SOURCE_SHA` đã tiến lên `085774488449e774df22e20fe410f30ad008f9d1` sau một lượt sweep serial
-đầy đủ tại chính revision đó (2558 passed / 18 failed / 47 skipped = 2623 collected, exit 1,
-2962.52 s); guard `test_handoff_commands.py` sau đó **8 passed**, xem §7.
+Revision khi viết: branch tip `7a58ce6` (sweep đo tại đây); commit sau nó `5a1f456` chỉ sửa tài liệu.
+`TESTED_SOURCE_SHA` đã tiến lên `7a58ce64a82b83bb126992fac5b9f784ffe97dd9` sau một lượt sweep serial
+đầy đủ tại chính revision đó (2581 passed / 18 failed / 51 skipped = 2650 collected, exit 1,
+2950.22 s); guard `test_handoff_commands.py` sau đó **8 passed**, xem §7.
 Mọi con số dưới đây dẫn từ file có trong `EVIDENCE_INDEX.md`; không có số nào là ước lượng.
 Bảng so sánh rank từng query nằm ở `rank_diffs/` — mỗi con số trong §3 dẫn về đúng một file ở đó.
 
@@ -180,12 +179,12 @@ mobile 4, samples 2 check — tất cả exit 0**. 13 test node pass. Ảnh ch�
 | G8 measured performance | **PASS** (phạm vi: **decode + transform** producer stage, một model family) | **Đo hai lần; lần đầu ĐÃ BỊ THAY THẾ** vì harness đo một workload production không chạy (vòng PNG encode+decode trong pool, transform chạy serial ở consumer) nên đường cong bỏ mất đúng stage song song hoá — con số 4,1× của nó không phải lợi ích pipeline. Harness đã viết lại để **khớp đúng `model_habit.py:358-364`**: `Image.open` → `convert("RGB")` → `targetpad_transform(1.25,224)` → stack, tất cả **trong pool**, không PNG. Đo lại trên box rảnh (loadavg 0,47; không pytest/evaluator): median **554,5 img/s ở 0 worker → 1032,8 ở 2 → 1756,2 ở 4 → 2282,1 ở 6 → 2688,1 ở 8**; RSS 231→603 MiB; VRAM phẳng 852 MiB. **Cả 5 setting parity IDENTICAL** (thứ tự hàng + mảng sau transform). **Đề xuất đổi từ `workers=4` sang `workers=8`**: đường cong vẫn tăng 18% từ 6 lên 8 và **chưa phẳng**, nên 8 là điểm cao nhất **đã thử** trong ngân sách 10 thread, không phải điểm tối ưu — và nó chỉ còn 2 thread cho tiến trình chính. Transform chiếm **64%** wall time serial, đó là lý do đường cong cũ sai. **Không** phải baseline end-to-end — forward pass không nằm trong phép đo này |
 | G9 frontend correctness | **PASS** | 4 session browser trên dữ liệu thật, exit 0 |
 | G10 frontend usability | **PASS** | sáng, 17/19px, 1920/2560/390, 0 ô cắt |
-| G11 integration/release | **PASS** | sweep serial tại `0857744` (2558/18/47 = 2623, exit 1, 2962.52 s, log `full_suite_0857744.txt`), `TESTED_SOURCE_SHA` đã tiến trong **cả hai** tài liệu, guard `test_handoff_commands.py` **8 passed**, `npm run build` exit 0 và tái tạo đúng asset `index-9MwV5MAk.js` mà server đang phục vụ. PASS **không** có nghĩa suite xanh: 18 failure được ghi lại, đúng bộ cũ, 0 mới |
+| G11 integration/release | **PASS** | sweep serial tại `7a58ce6` (2581/18/51 = 2650, exit 1, 2950.22 s, log `full_suite_7a58ce6.txt`), `TESTED_SOURCE_SHA` đã tiến trong **cả hai** tài liệu, guard `test_handoff_commands.py` **8 passed**, `npm run build` exit 0 và tái tạo đúng asset `index-9MwV5MAk.js` mà server đang phục vụ. PASS **không** có nghĩa suite xanh: 18 failure được ghi lại, đúng bộ cũ, 0 mới |
 | G12 coordination | **PASS** | có một sai lệch đã ghi: 4 lane chạy song song so với cap 3, lane thứ tư đã dừng |
 
 **11 PASS · 0 FAIL · 2 NOT_RUN.** Không có gate nào được PASS mà thiếu bằng chứng trên đĩa.
 
-G11 chuyển từ FAIL sang PASS sau khi sweep tại `0857744` được đo, `TESTED_SOURCE_SHA` được tiến trong cả `FINAL_PC_RELEASE_VERDICT.md` và `PC_PILOT_HANDOFF.md`, rồi guard báo **8 passed** — trạng thái đỏ trước đó là **độ trễ ghi sổ**, đóng lại bằng đo lường chứ không bằng sửa guard. **G8 chuyển NOT_RUN → PASS** nhờ một phép đo trên box rảnh thật (xem hàng G8); tài liệu `PERFORMANCE.vi.md` **sinh tự động** từ `perf_raw.jsonl`, không gõ tay. G1/G2 vẫn NOT_RUN — không có differential native↔adapter.
+G11 chuyển từ FAIL sang PASS sau khi sweep tại `7a58ce6` được đo, `TESTED_SOURCE_SHA` được tiến trong cả `FINAL_PC_RELEASE_VERDICT.md` và `PC_PILOT_HANDOFF.md`, rồi guard báo **8 passed** — trạng thái đỏ trước đó là **độ trễ ghi sổ**, đóng lại bằng đo lường chứ không bằng sửa guard. **G8 chuyển NOT_RUN → PASS** nhờ một phép đo trên box rảnh thật (xem hàng G8); tài liệu `PERFORMANCE.vi.md` **sinh tự động** từ `perf_raw.jsonl`, không gõ tay. G1/G2 vẫn NOT_RUN — không có differential native↔adapter.
 
 G5 và G6 chuyển trạng thái vì tám lượt chạy đã xong và invariant kiểm từ artifact. G1/G2 giữ NOT_RUN (không chạy differential native↔adapter nào). G8 chuyển NOT_RUN → PASS sau phép đo producer stage trên box rảnh (xem hàng G8 và §7; mọi wall-time đo khi hai lane khác đang chạy — **không phải baseline**).
 
@@ -243,14 +242,14 @@ Cột `previous_run_id` giữ lại run id cũ cho cả tám, nên dòng dõi tr
 ## 7. Tồn đọng
 
 - **G11 nay là PASS, không còn đỏ.** Trình tự đã xảy ra và đều kiểm được: (1) một lượt sweep serial tại
-  `0857744` — **2558 passed / 18 failed / 47 skipped = 2623 collected**, exit 1, 2962.52 s, log
-  `full_suite_0857744.txt`; (2) `TESTED_SOURCE_SHA` tiến lên `0857744` trong **cả**
+  `7a58ce6` — **2581 passed / 18 failed / 51 skipped = 2650 collected**, exit 1, 2950.22 s, log
+  `full_suite_7a58ce6.txt`; (2) `TESTED_SOURCE_SHA` tiến lên `7a58ce6` trong **cả**
   `FINAL_PC_RELEASE_VERDICT.md` và `PC_PILOT_HANDOFF.md` (kể cả dòng `git checkout`, vốn phải là revision
   cố định); (3) `test_handoff_commands.py` → **8 passed**. Guard trước đó đỏ vì **ghi sổ chậm**, và nó được
   đóng bằng đo lường chứ không bằng sửa test hay nới gate. **PASS không có nghĩa suite xanh:** 18 failure
   được ghi nguyên văn trong log và attribution ở `SWEEP.md` — **đúng bộ id cũ, 0 mới**; 3 lỗi drift trước đó
   đã sửa **test-only** ở `3d576bf` và nay pass.
-- **Sweep tại revision hiện tại: ĐÃ CÓ** (chính là `full_suite_0857744.txt` ở trên). Sweep tại `ffb6ae8`
+- **Sweep tại revision hiện tại: ĐÃ CÓ** (chính là `full_suite_7a58ce6.txt` ở trên). Sweep tại `ffb6ae8`
   bị huỷ ở **22%** vẫn được giữ làm lịch sử (`sweep_ffb6ae8_ABORTED.txt`, không có count) — nó không phải
   lượt đo của cây hiện tại và không được trích làm bằng chứng.
 - **G8 nay là PASS, nhưng chỉ cho producer stage (decode + transform).** Đo lại sau khi phát hiện harness đầu
@@ -259,22 +258,25 @@ Cột `previous_run_id` giữ lại run id cũ cho cả tám, nên dòng dõi tr
   ngân sách thread. Chi tiết ở `PERFORMANCE.vi.md`, sinh tự động từ `perf_raw.jsonl`. **Tám lượt rerun vẫn không có timing** — chúng chạy khi bốn lane khác đang hoạt động,
   nên wall-time của chúng vẫn ghi *"measured under concurrent load — not a baseline"* và `throughput`
   `not_measured`. Một phép đo producer stage không biến chúng thành baseline.
-- **Lỗi chưa sửa: artifact không tự chứng minh được policy BLAS của nó (task kế tiếp).**
-  `runner._record_effective_blas_pin()` (`workbench/composition/runner.py:1020`, dict ở `:1049`, được
-  gọi tại `:218`, `:992`, `:1782`) có lưu giá trị readback thật, nhưng **không code path nào ghi dict
-  đó vào run identity**. Artifact vì vậy chỉ có `blas_threads_pinned` (số **xin**) + `blas_pin_capability`
-  (chứng minh interpreter **có khả năng** pin), chứ không có giá trị quan sát được của lượt chạy. Bằng
-  chứng pin thực sự áp dụng là phép đo gate riêng (`blas_gate.py`: 20 → 1 → readback 1 → restore 20)
-  cộng với việc số của encoder đổi — bằng chứng lân cận, không phải bản ghi của artifact.
-  **Sửa tối thiểu:** thêm `blas_pin_effective` vào identity payload cạnh `blas_pin_capability` (~`:1485`),
-  snapshot tại cùng điểm; vì thêm field được hash nên **phải nâng `identity_schema_version` lên 3**
-  trong `measurement_identity` (`workbench/backend/composition.py` ~`:729`) và mở rộng `V2_MARKERS` để
-  artifact v2 được nhãn `unknown (predates identity v3)`. **Chưa áp dụng** vì nó đổi run id của mọi lượt
-  và làm mồ côi đúng tám artifact báo cáo này dựa vào. Chi tiết ở `BLAS_IDENTITY_FINDINGS.md`.
+- **Đã sửa: artifact nay tự chứng minh được policy BLAS của nó.** `policy_observed` được ghi vào
+  **rank payload** (`runner.py`, dict `_atomic_json(rank_path, {...})`) và vào **summary**, chứa
+  `status`, `source` (`rank_pass` / `backfill` / `backfill+rank_pass` / `not_recorded`) và record
+  readback thật (`requested`, `effective`, `previous`, `setter_found`, `getter_found`, `verified`,
+  `source`). Nó **cố ý nằm ngoài identity đã hash**: identity được dựng trước khi scoring chạy, nên đưa
+  readback vào đó sẽ khiến `run_id` phụ thuộc lịch sử process — đúng lỗi mà comment `runner.py:1481-1486`
+  ghi lại và đã từng xảy ra. Vì vậy **không nâng schema v3, không đổi `run_id`**: tám artifact của phiên
+  này đọc `not_recorded (predates policy_observed)`, trung thực và không bị regroup.
+  Một lỗi ordering trong chính bản sửa này đã được tìm và sửa: `_reset_effective_blas_pin()` nằm sau
+  nhánh backfill nên một lượt resume+backfill **đã pin thật rồi bị xoá** và báo `not_recorded`.
+  Nay readback của backfill được snapshot trước khi reset, và `source` nói rõ phase nào quan sát được.
+  Xem `BLAS_IDENTITY_FINDINGS.md`.
 - **BLOCKED (14 hàng), lý do cụ thể trong `MODEL_MATRIX.csv`:** thiếu byte checkpoint (conesep n0.5/n0.8,
-  habit n0.5/n0.8, intent n0.5/n0.8, tme cirr_0); chưa có composition adapter (pair ×2, clvc_net,
-  dcnet, combiner_rn50x4_noft, clip4cir_rn50x4_fullft, tgcir); `dcnet` còn có blocker `weights_only`
-  và interpreter duy nhất không có torch.
+  habit n0.5/n0.8, intent n0.5/n0.8, tme cirr_0); adapter **đã có** cho pair ×2, clvc_net, dcnet, combiner_rn50x4_noft,
+  clip4cir_rn50x4_fullft và tgcir — tất cả báo `ready=False` với lý do riêng trong `MODEL_MATRIX.csv`.
+  Điều còn thiếu là **byte checkpoint hoặc interpreter được khai báo**, không phải file adapter.
+  `dcnet` đặc biệt: `CENet` import được và checkpoint load **strict 518/518 tensor** dưới torch 2.7.1;
+  `weights_only` TypeError là do torch 1.4.0 thiếu tham số, không phải checkpoint hỏng. Chỉ `sprc`
+  là model duy nhất **không có** adapter (deferred).
 - **DEFERRED (3 hàng):** `csmcir`, `sprc` — theo yêu cầu người dùng.
 - **`airknow`:** adapter đã có và contract score/rank **chỉ verify trên input tổng hợp**; **chưa có
   forward GPU**, layout target chưa xác nhận với checkpoint thật, `status()` trả `ready=False`
