@@ -47,7 +47,7 @@ nào ở phía server. Luôn `npm run build` trước khi restart.
 | frontend | `http://127.0.0.1:5173` (vite `preview`, proxy `/api` → `http://127.0.0.1:8000`) |
 | backend | `http://127.0.0.1:8000` |
 | restart | đúng **một lần**, `WORKBENCH_CIRCUS_RELEASE_ROOT=/home/heheboiz/data/cir/workbench/artifacts/circus_release` |
-| PID **đang phục vụ** | `serve_workbench.py` **4062950** → uvicorn **4062957** (superseded: `4040573/4040574`, `3390138/3390139`, `3316577/3316578`, `3212146`) |
+| PID **đang phục vụ** | `serve_workbench.py` **4082631** → uvicorn **4082632** (superseded: `4062950/4062957`, `4040573/4040574`, `3390138/3390139`, `3316577/3316578`, `3212146`) |
 | cảnh báo về pin PID | PID **không bền** trong đợt này: stack đã bị SIGTERM từ bên ngoài **hai lần** (`[WARN] npm exited with status -15` ở `/tmp/workbench_serve.log` lúc 02:25:51, và `/tmp/workbench_serve_final.log` sau đó), mỗi lần phải restart và PID đổi. **Digest bundle mới là pin bền**; PID chỉ đúng tại thời điểm đo |
 | readiness | `/api/benchmark-runs` → 200 sau 1 s; **không** dùng `/api/models` (cold start ~154 s vì hash mọi checkpoint) |
 | digest khớp | `sha256(served /assets/index-DWpK0yeS.js)` = `sha256(dist/assets/index-DWpK0yeS.js)` = `7e34724e…8a6a16`; `cmp` → IDENTICAL |
@@ -186,12 +186,18 @@ Live: `mapping rows` = 4 dòng `pair_*` với `EXPLORATORY_PUBLIC_MAPPING`; 45 d
 Live (sau restart):
 
 ```
-unit_declared      = 0
-unit_inferred      = 43
+unit_declared      = 4     # khai ở root document
+unit_sibling_key   = 2     # khai bằng key có hậu tố trong chính block (dcnet)
+unit_inferred      = 39    # còn lại: suy theo độ lớn — KHÔNG có khai báo nào tồn tại
 unit_undeclared    = 0     # không suy được độ lớn
-unit_not_declared  = 43    # KHÔNG có khai báo: 43/43 dòng đo
-undeclared_unit_rows = 43 entries
+unit_not_declared  = 39    # KHÔNG có khai báo: 39/43 dòng đo
+unbacked_counted   = 0
 ```
+
+Đo lại trên payload sống (`/api/native-measurements`, HTTP 200). Sáu dòng/blocks nay mang khai báo
+thật; **39** dòng vẫn dựa trên suy luận độ lớn, và từng dòng đã được audit: **0** khai báo bị bỏ sót
+(các key `*_pct` có mặt như `dead_parameters_pct`, `relative_error_pct`,
+`checkpoint_training_noise_pct` mô tả **đại lượng khác**, không phải thang macro).
 
 Nói cách khác: **toàn bộ** 43 dòng có macro trong deployment này đang được đọc trên thang suy ra
 theo độ lớn, không dòng nào khai đơn vị trong artifact. UI in con số này ở đầu bảng native kèm danh
@@ -319,13 +325,13 @@ Một giá trị được phục vụ **phải** là giá trị một artifact n
 
 Bằng chứng: `web_evidence/w01_native_measurements_after.json`.
 
-### `categories[].protocol` còn sai ở artifact CLIP4Cir đã migrate
+### `categories[].protocol` — nhận định cũ đã bị BÁC BỎ
 
-Artifact đã migrate sửa `protocol` ở cấp document nhưng để `categories[].protocol` là
-`fashioniq_full_gallery_ref_excluded` ở **từng category**. Người regenerate phải sửa **cả hai cấp**.
-Ghi ở đây, **không** sửa artifact lịch sử: sửa một artifact đã công bố là viết lại bằng chứng.
-Bộ đọc hiện tại không dùng `categories[].protocol` (nó lấy `protocol` cấp document), nên số phục vụ
-không bị ảnh hưởng bởi lỗi này.
+**Đã kiểm lại: không tái lập được.** Quét toàn bộ `workbench/artifacts/**/*.json` cho thấy **0**
+artifact có `categories[].protocol` khác `protocol` cấp document; `native/clip4cir_fullft.json` nhất
+quán ở cả hai cấp (`fashioniq_full_gallery_ref_excluded`, commit `323be19` ghi cả bốn dòng như vậy).
+Vì thế đây **không** phải việc còn lại — giữ mục này chỉ để ghi rằng nhận định cũ đã bị bác bỏ bằng
+đo đạc, không phải bằng lập luận.
 
 ### Đơn vị: declaration thắng magnitude inference
 
@@ -381,14 +387,16 @@ trong lượt này. Không sửa gì ở đây.
 
 | mục | giá trị |
 |---|---|
-| HEAD | `92ed66de4f359ef479da18bf8939723b6f9313e5` + thay đổi chưa commit |
+| HEAD khi đo | `92ed66de4f359ef479da18bf8939723b6f9313e5` + thay đổi chưa commit — **superseded** |
+| HEAD hiện tại | **`46d1e1a4fcf2a494e32905731f0fe4d5de3e89a0`**; revision đã được sweep là **`be14393c97b100390a9a45c6b0a46857b24a78b9`** (`TESTED_SOURCE_SHA`). Bảng bằng chứng dưới đây được thu trên cây tương ứng `be14393` |
 | bundle phục vụ | **`index-DWpK0yeS.js`**, sha256 **`7e34724ebf55092e36524b98980cca55e71f3ddbaa62489c65577f92e18a6a16`** |
 | dist | cùng hash (`cmp` → IDENTICAL giữa byte phục vụ và `dist/assets/index-DWpK0yeS.js`) |
 | superseded | `index-CEgaMiLf.js` sha256 `0b6b15a8…6eb87` (build trước `relation_state`/`relation_parity`; không còn trên đĩa) |
 | css | `index-DecQnta9.css` |
 | root | `WORKBENCH_CIRCUS_RELEASE_ROOT=/home/heheboiz/data/cir/workbench/artifacts/circus_release` |
 | proxy | vite `preview` proxy `/api` → `http://127.0.0.1:8000` (`vite.config.mts`, `WORKBENCH_BACKEND_URL`) |
-| PID | **4062950** (`serve_workbench.py`) → **4062957** (uvicorn); superseded `4040573`, `3228456`, `3316577`, `3390138`. PID không bền — xem cảnh báo ở bảng pin phía trên |
+| PID | **4082631** (`serve_workbench.py`) → **4082632** (uvicorn); superseded `4062950/4062957`, `4040573/4040574`, `3390138/3390139`, `3316577/3316578`, `3228456`, `3212146` |
+| quy tắc pin | **digest bundle là pin bền; PID chỉ đúng tại thời điểm đo.** PID đã cũ đi **ba lần** trong một đợt (mỗi lần service restart). Không bao giờ dùng hàng PID làm pin build |
 | readiness | `/api/benchmark-runs` 200 sau 1 s |
 
 ### Bằng chứng theo nhóm scope có dữ liệu
@@ -437,8 +445,14 @@ Log: `raw/w01_w03_targeted_tests.txt`. Không chạy toàn bộ suite (theo yêu
 
 * `clip4cir_rn50x4_noft` vẫn chỉ có roll-up: được liệt kê, `artifact_backed: false`, không đếm.
   Cần một lượt replay cho NoFT thì mới có số có artifact chống lưng.
-* `categories[].protocol` trong artifact CLIP4Cir đã migrate vẫn sai (xem mục W-01 bổ sung).
-* `unit_declared` vẫn là 0/43 trên cây `checkpoint_selection/`: bộ đọc **đã** hỗ trợ declaration
-  (root và hậu tố), nhưng không file nào trong cây này khai; 43 dòng còn lại vẫn là
-  `inferred_from_magnitude` và được liệt kê ở `undeclared_unit_rows`.
+* `categories[].protocol` — **đã kiểm lại và câu cũ SAI**: quét toàn bộ `workbench/artifacts/**/*.json`,
+  **0** artifact có `categories[].protocol` khác `protocol` cấp document. Cụ thể
+  `native/clip4cir_fullft.json` ghi `fashioniq_full_gallery_ref_excluded` ở cả document **và** cả ba
+  category (nhất quán). Ghi chú cũ ("đã sửa cấp document nhưng để nguyên category") không tái lập được
+  trên artifact đang có.
+* `unit_declared` **không còn là 0/43** (con số đó đã cũ): payload sống báo `unit_declared: 4`,
+  `unit_sibling_key: 2`, `unit_inferred: 39`, `unit_not_declared: 39`. Sáu dòng nay mang khai báo thật
+  (`clip4cir_fullft.json` khai `categories[*].provenance.units`; `dcnet.json` khai bằng hậu tố
+  `macro_r10_percent`). **39** dòng vẫn dựa trên suy luận độ lớn và đã được audit từng dòng: **0** khai
+  báo bị bỏ sót.
 * `.scratch/` đã xoá; nội dung có giá trị đã chuyển vào `raw/` và `scripts/`.
