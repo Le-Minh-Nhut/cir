@@ -1,0 +1,69 @@
+# shirt/adapter: start
+# shirt/adapter: wrote g1_g2.shirt.adapter.json
+{
+ "sample_query": {
+  "max_abs": 0.0,
+  "max_rel": 0.0,
+  "min_cosine": 0.9999999999999999,
+  "bitwise_equal": true,
+  "within_tolerance": true
+ },
+ "sample_target": {
+  "max_abs": 0.0,
+  "max_rel": 0.0,
+  "min_cosine": 0.9999999999999998,
+  "bitwise_equal": true,
+  "within_tolerance": true
+ },
+ "batch": {
+  "max_abs": 1.9744038581848145e-07,
+  "max_rel": 0.002698280178837889,
+  "min_cosine": 0.9999999999989382,
+  "bitwise_equal": false,
+  "within_tolerance": false
+ },
+ "restart": {
+  "max_abs": 0.0,
+  "max_rel": 0.0,
+  "min_cosine": 0.9999999999999999,
+  "bitwise_equal": true,
+  "within_tolerance": true
+ },
+ "rankings": {
+  "query_count": 2038,
+  "gallery_count": 3089,
+  "adapter_vs_argsort_unmasked_identical": false,
+  "adapter_vs_argsort_unmasked_differences": [
+   5,
+   279,
+   424,
+   442,
+   1232,
+   1584,
+   1736
+  ],
+  "adapter_vs_argsort_unmasked_difference_count": 7,
+  "mask_explained_rank_shift_count": 1110,
+  "mask_explained_rank_shift_all_positive": false,
+  "mask_shift_is_exactly_one": false,
+  "adapter_style_recall": {
+   "r1": 19.381746810598624,
+   "r10": 55.05397448478901,
+   "r50": 76.44749754661433
+  },
+  "native_style_recall": {
+   "r1": 25.36800785083415,
+   "r10": 55.986261040235526,
+   "r50": 76.59470068694799
+  },
+  "adapter_vs_native_masked_identical": false,
+  "score_max_abs_delta_vs_dot": 5.364418029785156e-07,
+  "score_pairs_compared": 64,
+  "native_aggregate_ranks_compared": 2038,
+  "rank_differences": 0,
+  "rank_difference_indices_head": [],
+  "unexplained_rank_differences": 0,
+  "first_unexplained_index": null,
+  "max_abs_rank_delta": 0
+ }
+}

@@ -1,0 +1,37 @@
+FF                                                                       [100%]
+=================================== FAILURES ===================================
+_______________ test_missing_annotation_source_refuses_to_route ________________
+
+fixture_root = PosixPath('/tmp/pytest-of-heheboiz/pytest-797/test_missing_annotation_source0')
+
+    def test_missing_annotation_source_refuses_to_route(fixture_root: Path) -> None:
+        """An annotation file that could not be read cannot prove its category is the only one.
+    
+        Measured on HEAD: with `cap.toptee.val.json` deleted or corrupt, `caption_scope_index` swallowed
+        the error, the surviving shirt row became the only entry, and `resolve_query_category` returned
+        `'shirt'` for the ambiguous pair -- silently choosing a category from incomplete provenance.
+        """
+        (fixture_root / "captions" / "cap.toptee.val.json").unlink()
+        index = caption_scope_index(fixture_root)
+>       assert index.unreadable == frozenset({"toptee"})
+               ^^^^^^^^^^^^^^^^
+E       AttributeError: 'dict' object has no attribute 'unreadable'
+
+workbench/tests/test_limn_scope_routing.py:212: AttributeError
+_______________ test_corrupt_annotation_source_refuses_to_route ________________
+
+fixture_root = PosixPath('/tmp/pytest-of-heheboiz/pytest-797/test_corrupt_annotation_source0')
+
+    def test_corrupt_annotation_source_refuses_to_route(fixture_root: Path) -> None:
+        (fixture_root / "captions" / "cap.shirt.val.json").write_text("{not json", encoding="utf-8")
+        index = caption_scope_index(fixture_root)
+>       assert index.unreadable == frozenset({"shirt"})
+               ^^^^^^^^^^^^^^^^
+E       AttributeError: 'dict' object has no attribute 'unreadable'
+
+workbench/tests/test_limn_scope_routing.py:222: AttributeError
+=========================== short test summary info ============================
+FAILED workbench/tests/test_limn_scope_routing.py::test_missing_annotation_source_refuses_to_route - AttributeError: 'dict' object has no attribute 'unreadable'
+FAILED workbench/tests/test_limn_scope_routing.py::test_corrupt_annotation_source_refuses_to_route - AttributeError: 'dict' object has no attribute 'unreadable'
+2 failed, 13 deselected in 0.15s
+exit=1

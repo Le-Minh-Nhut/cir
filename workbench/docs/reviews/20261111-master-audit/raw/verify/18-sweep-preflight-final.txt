@@ -1,0 +1,16 @@
+=== sweep preflight (FINAL, rerun after clearing killed-sweep zombie) 2026-11-10T22:35:10+07:00 ===
+--- pgrep -af pytest ---
+(pgrep exit=1  # 1 = none)
+--- df -h / ---
+Filesystem      Size  Used Avail Use% Mounted on
+/dev/nvme0n1p5  630G  478G  121G  80% /
+--- git status --porcelain -uall ---
+line_count=397
+  ?? =367
+  M  =30
+--- root scratch check ---
+none (correct)
+--- basetemp ---
+ls: cannot access '/tmp/sweep_basetemp_master': No such file or directory
+--- python ---
+Python 3.12.11

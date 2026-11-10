@@ -94,7 +94,7 @@ def _root(tmp_path: Path, payload: dict | None) -> Path:
                 {"qid": qid, "scope": scope, "condition": condition,
                  "target_rank": 10 * (CONDITIONS.index(condition) + 1) + offset,
                  "target_score": 0.5, "checkpoint_sha256": "a" * 64, "gallery_size": 74381,
-                 "depth": 100, "model_text": f"text {qid}",
+                 "depth": 1, "model_text": f"text {qid}",
                  "candidates": [{"rank": 1, "gallery_position": 0, "gallery_id": "IMG0",
                                  "image_path": "mbeir_images/fashioniq_images/IMG0.jpg",
                                  "score": 0.9, "is_target": False}],
@@ -250,3 +250,81 @@ def test_payload_declares_the_canonical_cohort(tmp_path: Path) -> None:
     # The per-subset denominators are what let a page say 'this page is sf, the number is full'.
     per_subset = cohort.get("query_count_per_subset") or {}
     assert per_subset.get("sf") and per_subset.get("validated"), per_subset
+
+def _deep_window(*, target_rank: int = 43, depth: int = 100) -> dict:
+    """An export whose target sits at `target_rank` and which stores `depth` rows.
+
+    The real finding: LIMN `7:3038/toptee/MM` has its target at rank 43 inside a 100-row export.
+    A depth=10 or depth=20 request serves ten or twenty rows that do NOT contain it, and the
+    response used to answer `in_window: true` because presence was decided against the stored
+    window instead of the served one.
+    """
+    payload = _payload()
+    for qid in QIDS:
+        offset = list(QIDS).index(qid)
+        row = payload["queries"][qid]
+        row["scopes"]["toptee"]["multimodal"].update({
+            "target_rank": target_rank, "target_score": 0.56,
+            "top100_export": "limn_dual_scope.toptee.multimodal.jsonl"})
+        payload["checkpoints"]["toptee"]["sha256"] = "a" * 64
+        del offset
+    return payload
+
+def _deep_root(tmp_path: Path, *, depth: int = 100, target_rank: int = 43) -> Path:
+    payload = _deep_window(target_rank=target_rank, depth=depth)
+    root = tmp_path.joinpath(*limn_diagnostic.EVIDENCE_RELATIVE)
+    root.mkdir(parents=True)
+    (root / "limn_dual_scope.json").write_text(json.dumps(payload), encoding="utf-8")
+    for scope in SCOPES:
+        for condition in CONDITIONS:
+            rows = []
+            for offset, qid in enumerate(QIDS):
+                target = target_rank if scope == "toptee" and condition == "multimodal" else 10 + offset
+                candidates = [
+                    {"rank": rank, "gallery_position": rank - 1,
+                     "gallery_id": f"IMG{rank}", "image_path": f"mbeir_images/fashioniq_images/IMG{rank}.jpg",
+                     "score": 0.9 - rank / 1000, "is_target": rank == target}
+                    for rank in range(1, depth + 1)
+                ]
+                rows.append({"qid": qid, "scope": scope, "condition": condition,
+                             "target_rank": target, "target_score": 0.56,
+                             "checkpoint_sha256": "a" * 64, "gallery_size": 74381,
+                             "depth": depth, "model_text": f"text {qid}",
+                             "candidates": candidates,
+                             "query_image_path": f"queries/{qid}.png"})
+            (root / f"limn_dual_scope.{scope}.{condition}.jsonl").write_text(
+                "\n".join(json.dumps(row) for row in rows) + "\n", encoding="utf-8")
+    return root
+
+@pytest.mark.parametrize("depth,expect_in_window", [(10, False), (20, False), (43, True), (100, True)])
+def test_presence_is_decided_on_the_window_that_is_served(tmp_path: Path, depth: int,
+                                                          expect_in_window: bool) -> None:
+    """W-03: a target at rank 43 must NOT read as in-window for K=10 or K=20."""
+    root = _deep_root(tmp_path)
+    payload = load_candidates("7:3038", "toptee", "multimodal", depth=depth, config=_config(root))
+    served_ranks = {row["rank"] for row in payload["candidates"]}
+    assert payload["target"]["in_window"] is expect_in_window, (
+        f"depth={depth}: in_window={payload['target']['in_window']} but the target rank "
+        f"{payload['target']['rank']} is {'in' if expect_in_window else 'not in'} "
+        f"{sorted(served_ranks)[:3]}…{sorted(served_ranks)[-3:]}")
+    # The claim must agree with the rows actually returned, which is the only thing a view shows.
+    assert payload["target"]["in_window"] == (payload["target"]["rank"] in served_ranks)
+    # Both depths are still reported, so the difference is visible rather than implied.
+    assert payload["depth_served"] == depth
+    assert payload["depth_stored"] == 100
+    assert payload["target"]["in_stored_window"] is True
+
+def test_the_stored_window_is_reported_even_when_the_served_one_excludes_the_target(tmp_path: Path) -> None:
+    """A target outside K but inside the stored export is a different fact from one outside both."""
+    root = _deep_root(tmp_path)
+    narrow = load_candidates("7:3038", "toptee", "multimodal", depth=10, config=_config(root))
+    assert narrow["target"]["in_window"] is False
+    assert narrow["target"]["in_stored_window"] is True
+    assert narrow["target"]["window_served"] == 10
+    assert narrow["target"]["window_stored"] == 100
+    # The target's own identity travels with it, so a view can render it without the candidate list.
+    # `image_url` is None here because this fixture config declares no FASHIONIQ_ROOT: the honest
+    # answer when no root is configured, not an invented path.
+    assert narrow["target"]["image_url"] is None, narrow["target"]
+    assert narrow["target"]["image_stem"] == "IMG43", narrow["target"]
+    assert narrow["target"]["gallery_id"] == "IMG43", narrow["target"]

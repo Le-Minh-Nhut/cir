@@ -1,0 +1,82 @@
+FFFF                                                                     [100%]
+=================================== FAILURES ===================================
+__ test_a_concurrent_writer_during_the_pinned_region_is_not_reported_verified __
+
+    def test_a_concurrent_writer_during_the_pinned_region_is_not_reported_verified() -> None:
+        """A sibling that sets the pool to 10 while we are inside must clear `verified`, not hide."""
+        if not callable(runner._openblas_symbols()[1]):
+            pytest.skip("no OpenBLAS readback getter on this interpreter")
+    
+        observed: dict[str, object] = {}
+        stolen = threading.Event()
+    
+        def sibling() -> None:
+            # A concurrent job that does NOT go through the scope: the case the guard cannot exclude
+            # (another library, another process-wide setter) and therefore must DETECT.
+            if stolen.wait(timeout=5):
+                runner._blas_thread_limit(10)
+    
+        thread = threading.Thread(target=sibling, daemon=True)
+        thread.start()
+        try:
+>           with runner.blas_pin_scope() as pin:
+                 ^^^^^^^^^^^^^^^^^^^^^
+E           AttributeError: module 'workbench.composition.runner' has no attribute 'blas_pin_scope'
+
+workbench/tests/test_composition_blas_pool_isolation.py:48: AttributeError
+______ test_the_pin_is_restored_after_the_scope_even_when_the_body_raises ______
+
+    def test_the_pin_is_restored_after_the_scope_even_when_the_body_raises() -> None:
+        if not callable(runner._openblas_symbols()[1]):
+            pytest.skip("no OpenBLAS readback getter on this interpreter")
+        before = runner._current_openblas_threads()
+        with pytest.raises(RuntimeError):
+>           with runner.blas_pin_scope() as pin:
+                 ^^^^^^^^^^^^^^^^^^^^^
+E           AttributeError: module 'workbench.composition.runner' has no attribute 'blas_pin_scope'
+
+workbench/tests/test_composition_blas_pool_isolation.py:76: AttributeError
+__________________ test_an_undisturbed_scope_reports_verified __________________
+
+    def test_an_undisturbed_scope_reports_verified() -> None:
+        if not callable(runner._openblas_symbols()[1]):
+            pytest.skip("no OpenBLAS readback getter on this interpreter")
+>       with runner.blas_pin_scope() as pin:
+             ^^^^^^^^^^^^^^^^^^^^^
+E       AttributeError: module 'workbench.composition.runner' has no attribute 'blas_pin_scope'
+
+workbench/tests/test_composition_blas_pool_isolation.py:85: AttributeError
+___ test_two_pinned_scopes_in_one_process_serialise_instead_of_interleaving ____
+
+    def test_two_pinned_scopes_in_one_process_serialise_instead_of_interleaving() -> None:
+        """Two concurrent scopes must not see each other's pool. Serialised, or one is unverified."""
+        if not callable(runner._openblas_symbols()[1]):
+            pytest.skip("no OpenBLAS readback getter on this interpreter")
+        seen: list[int | None] = []
+        errors: list[BaseException] = []
+    
+        def worker() -> None:
+            try:
+                with runner.blas_pin_scope() as pin:
+                    seen.append(runner._current_openblas_threads())
+                    assert pin["effective"] == runner._current_openblas_threads()
+            except BaseException as error:  # noqa: BLE001 - surfaced by the assert below
+                errors.append(error)
+    
+        threads = [threading.Thread(target=worker) for _ in range(2)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join(timeout=30)
+>       assert not errors, errors
+E       AssertionError: [AttributeError("module 'workbench.composition.runner' has no attribute 'blas_pin_scope'"), AttributeError("module 'workbench.composition.runner' has no attribute 'blas_pin_scope'")]
+E       assert not [AttributeError("module 'workbench.composition.runner' has no attribute 'blas_pin_scope'"), AttributeError("module 'workbench.composition.runner' has no attribute 'blas_pin_scope'")]
+
+workbench/tests/test_composition_blas_pool_isolation.py:111: AssertionError
+=========================== short test summary info ============================
+FAILED workbench/tests/test_composition_blas_pool_isolation.py::test_a_concurrent_writer_during_the_pinned_region_is_not_reported_verified - AttributeError: module 'workbench.composition.runner' has no attribute 'blas_pin_scope'
+FAILED workbench/tests/test_composition_blas_pool_isolation.py::test_the_pin_is_restored_after_the_scope_even_when_the_body_raises - AttributeError: module 'workbench.composition.runner' has no attribute 'blas_pin_scope'
+FAILED workbench/tests/test_composition_blas_pool_isolation.py::test_an_undisturbed_scope_reports_verified - AttributeError: module 'workbench.composition.runner' has no attribute 'blas_pin_scope'
+FAILED workbench/tests/test_composition_blas_pool_isolation.py::test_two_pinned_scopes_in_one_process_serialise_instead_of_interleaving - AssertionError: [AttributeError("module 'workbench.composition.runner' has no attribute 'blas_pin_scope'"), AttributeError("module 'workbench.composition.runner' has no attribute 'blas_pin_scope'")]
+assert not [AttributeError("module 'workbench.composition.runner' has no attribute 'blas_pin_scope'"), AttributeError("module 'workbench.composition.runner' has no attribute 'blas_pin_scope'")]
+4 failed in 5.29s

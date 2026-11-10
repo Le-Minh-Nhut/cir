@@ -1,0 +1,16 @@
+Traceback (most recent call last):
+  File "test.py", line 117, in <module>
+    test(test_config)
+  File "test.py", line 58, in test
+    lr_scheduler=None,
+  File "/home/heheboiz/data/cir/workbench/third_party/DCNet/trainer/trainer_joint.py", line 15, in __init__
+    super().__init__(model, loss, optimizer, config)
+  File "/home/heheboiz/data/cir/workbench/third_party/DCNet/base/base_trainer.py", line 49, in __init__
+    self._resume_checkpoint(config.resume)
+  File "/home/heheboiz/data/cir/workbench/third_party/DCNet/base/base_trainer.py", line 199, in _resume_checkpoint
+    checkpoint = torch.load(ckpt_path, weights_only=False)
+  File "/home/heheboiz/data/cir/workbench/artifacts/environments/dcnet-377/lib/python3.7/site-packages/torch/serialization.py", line 529, in load
+    return _legacy_load(opened_file, map_location, pickle_module, **pickle_load_args)
+  File "/home/heheboiz/data/cir/workbench/artifacts/environments/dcnet-377/lib/python3.7/site-packages/torch/serialization.py", line 692, in _legacy_load
+    magic_number = pickle_module.load(f, **pickle_load_args)
+TypeError: 'weights_only' is an invalid keyword argument for load()

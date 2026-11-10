@@ -1,0 +1,15 @@
+{
+  "model": "tgcir",
+  "cache_root": "/tmp/cirwarm-tgcir",
+  "warm_wall_s": 1067.5,
+  "model_inputs_materialised": 14635,
+  "cache_files": [
+    "fashion_iq_data.json",
+    "test_queries_dress.pkl",
+    "test_queries_shirt.pkl",
+    "test_queries_toptee.pkl",
+    "test_targets_dress.pkl",
+    "test_targets_shirt.pkl",
+    "test_targets_toptee.pkl"
+  ]
+}

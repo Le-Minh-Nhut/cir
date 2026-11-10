@@ -1,0 +1,70 @@
+{
+ "derived_run_id": "6a96c5c199526b61c1470b0e",
+ "schema": "circus-derived-subset/v1",
+ "subset": "sf",
+ "parent_run_id": "9e4918a6b5c243412cbc58c9",
+ "parent_rank_artifact": "workbench/artifacts/composition/runs/9e4918a6b5c243412cbc58c9/ranks/limn_base_iter0_all_categories.json",
+ "parent_rank_artifact_sha256": "d5794b027729abb3f58ac779f2b5407cfde7c51ba1094b4c76ff96aa27c869bc",
+ "parent_summary": "workbench/artifacts/composition/summary/limn_base_iter0_all_categories_9e4918a6b5c243412cbc58c9/full.json",
+ "parent_summary_sha256": "c446acc4f554d2e995e346ab837e553ea122068d1180387dcbf87426ea800bef",
+ "membership_definition": "workbench.composition.data.select_queries(subset='sf') over the pinned CIRCUS release membership columns",
+ "membership_sha256": "45e19ff14165e4de1ff57fd4dd9986cda55ac9f93552651b7eda39abf22d00e8",
+ "membership_count": 4069,
+ "declared_query_count": 4069,
+ "coverage": 0.9997542393708528,
+ "denominator": 4068,
+ "metrics": {
+  "multimodal": {
+   "condition": "multimodal",
+   "query_count": 4069,
+   "scored_count": 4068,
+   "coverage": 0.9997542393708528,
+   "recall_at_10": 18.3874139626352,
+   "recall_at_50": 35.96361848574238,
+   "ndcg_full": 0.21656188860953537,
+   "mrr": 0.0926272672040389,
+   "unavailable_reason": null
+  },
+  "text_only": {
+   "condition": "text_only_black_image",
+   "query_count": 4069,
+   "scored_count": 4068,
+   "coverage": 0.9997542393708528,
+   "recall_at_10": 0.6637168141592921,
+   "recall_at_50": 4.473942969518191,
+   "ndcg_full": 0.09928461609864697,
+   "mrr": 0.004932157311520556,
+   "unavailable_reason": null
+  },
+  "image_only": {
+   "condition": "image_only_empty_text",
+   "query_count": 4069,
+   "scored_count": 4068,
+   "coverage": 0.9997542393708528,
+   "recall_at_10": 0.5408062930186824,
+   "recall_at_50": 3.5152409046214355,
+   "ndcg_full": 0.0891793120309345,
+   "mrr": 0.003392618523290276,
+   "unavailable_reason": null
+  },
+  "composition_gap_ndcg": 0.5415416039446407,
+  "gap_unavailable_reason": null,
+  "mrr_gap": 0.08769510989251834,
+  "shortcut_outcomes": {
+   "text_only": 27,
+   "image_only": 22,
+   "both": 0,
+   "composition_required": 718,
+   "unresolved": 3301,
+   "neither_scored": 1
+  },
+  "gap_cohort_count": 4068,
+  "gap_multimodal_ndcg": 0.21656188860953537,
+  "gap_text_only_ndcg": 0.09928461609864697,
+  "gap_image_only_ndcg": 0.0891793120309345
+ },
+ "derivation": "select the parent's per-qid exact rank for every qid in the declared subset membership and recompute metrics with workbench.composition.metrics.compose; no query is re-encoded and no score is recomputed",
+ "gpu_used": false,
+ "installed_into_served_summaries": false,
+ "install_blocker": "`workbench/artifacts/composition/summary/` is read by the results index owned by another worker; this artifact carries everything the install needs, and the copy is left to that owner"
+}

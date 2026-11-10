@@ -1,0 +1,24 @@
+=== aborted ship-sweep F at position 204 — character arithmetic ===
+progress printed: 72 + 72 + 60 = 204 characters (203 pass/skip marks + 1 F)
+serial -q prints one char per COMPLETED test, no reordering -> F is the 204th collected test
+
+204th collected node id:
+   workbench/tests/test_autopilot_cold_start.py::test_mutation_invalidates_only_dependent_evaluations
+   total collected at time of check: 2865
+
+=== is that file campaign-modified? ===
+  (empty above = tracked CLEAN, campaign never touched it)
+
+=== measured results ===
+  single test alone      : 1 passed in 34.61s
+  whole file alone       : 10 passed in 85.70s
+
+=== interpretation, stated as inference not measurement ===
+  The candidate PASSES both alone and with its file. It is NOT reproducible read-only.
+  It is a cold-start/resume test (shells out to run.sh --apply/--resume, compares run_ids
+  across mutations), i.e. the same order/timing-sensitive shape that produced the earlier
+  test_web_scope_and_labels false alarm: passed alone, failed only inside a full sweep.
+  NOT CONFIRMED. Only a completed full sweep names the failure authoritatively.
+
+  If the ship sweep shows it: real traceback, diagnose it.
+  If not: the F was ordering-related and the sweep is clean.

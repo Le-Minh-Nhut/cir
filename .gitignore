@@ -114,6 +114,10 @@ cover/
 
 # Django stuff:
 *.log
+
+# Review evidence logs are claims' raw backing, not runtime noise: the repo-wide *.log rule above
+# would drop them silently and they do not even appear in `git status`.
+!workbench/docs/reviews/**/*.log
 local_settings.py
 db.sqlite3
 db.sqlite3-journal

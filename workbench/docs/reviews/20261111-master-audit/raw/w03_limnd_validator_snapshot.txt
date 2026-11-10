@@ -1,0 +1,101 @@
+    if summary_rank != row.get("target_rank"):
+        defects.append(_defect(
+            "rank_summary_vs_export",
+            f"summary target_rank={summary_rank!r} but {path_name} states "
+            f"{row.get('target_rank')!r}", **where))
+    if summary_score != row.get("target_score"):
+        defects.append(_defect(
+            "score_summary_vs_export",
+            f"summary target_score={summary_score!r} but {path_name} states "
+            f"{row.get('target_score')!r}", **where))
+
+    # Checkpoint identity: the rank is only meaningful for the checkpoint named beside it.
+    summary_ckpt = str((checks.get(scope) or {}).get("sha256") or "")
+    export_ckpt = str(row.get("checkpoint_sha256") or "")
+    if not export_ckpt:
+        defects.append(_defect("export_checkpoint_missing",
+                               f"{path_name} states no checkpoint_sha256", **where))
+    elif summary_ckpt and summary_ckpt != export_ckpt:
+        defects.append(_defect(
+            "checkpoint_summary_vs_export",
+            f"summary checkpoint {summary_ckpt[:16]}… but {path_name} states {export_ckpt[:16]}…",
+            **where))
+
+    # The window's flagged target, when the window reaches it. A window that stops before the target
+    # is not a defect -- it is reported as `target_in_window: False` so a view can say so.
+    flagged = [candidate for candidate in candidates if candidate.get("is_target")]
+    in_window = isinstance(summary_rank, int) and 1 <= summary_rank <= len(candidates)
+    if len(flagged) > 1:
+        defects.append(_defect(
+            "export_multiple_targets",
+            f"{path_name} flags {len(flagged)} candidates as the target", **where))
+    if in_window and not flagged:
+        defects.append(_defect(
+            "export_target_not_flagged",
+            f"target rank {summary_rank} is inside the stored window but no candidate is flagged "
+            "is_target", **where))
+    if flagged:
+        target_row = flagged[0]
+        if target_row.get("rank") != summary_rank:
+            defects.append(_defect(
+                "export_target_rank",
+                f"flagged target sits at rank {target_row.get('rank')!r}, summary says {summary_rank!r}",
+                **where))
+        if target_row.get("score") != summary_score:
+            defects.append(_defect(
+                "export_target_score",
+                f"flagged target score {target_row.get('score')!r}, summary says {summary_score!r}",
+                **where))
+        asset = Path(str(target_row.get("gallery_id") or "")).name
+        if declared_asset and asset and asset != Path(str(declared_asset)).name:
+            defects.append(_defect(
+                "target_asset_mismatch",
+                f"flagged target is {asset} but the query record names {Path(str(declared_asset)).name}",
+                **where))
+    else:
+        target_row = None
+
+    summary_position = declared.get("target_gallery_position")
+    if target_row is not None and summary_position is not None:
+        if summary_position != target_row.get("gallery_position"):
+            defects.append(_defect(
+                "target_position_mismatch",
+                f"summary target_gallery_position={summary_position!r} but the flagged row is at "
+                f"{target_row.get('gallery_position')!r}", **where))
+
+    if target_did is None:
+        defects.append(_defect("target_did_unavailable",
+                               f"{qid} has no positive id to name as the target", **where))
+    elif declared.get("target_did") not in (None, target_did):
+        # This is R5's shape: the row recorded another query's positive id. The served value comes
+        # from this query's own record, and the contradiction is named rather than repeated.
+        defects.append(_defect(
+            "target_did_not_own_query",
+            f"recorded target_did {declared.get('target_did')} is not a positive id of {qid} "
+            f"(own: {target_did}); serving the query's own id", **where))
+
+    return {
+        "qid": qid, "scope": scope, "condition": condition,
+        "label": f"diagnostic — {scope} scope, {condition} (not canonical)",
+        "root": root, "export_name": path_name, "row": row,
+        "candidates": candidates, "depth_stored": depth_stored,
+        "target_did": target_did,
+        "target_asset": (Path(str(declared_asset)).name if declared_asset else None),
+        "target": {
+            "rank": summary_rank, "score": summary_score,
+            "gallery_id": (target_row or {}).get("gallery_id") or declared_asset,
+            "gallery_position": (target_row or {}).get("gallery_position", summary_position),
+            "in_window": bool(flagged),
+            "delta_to_rank_1": declared.get("target_margin_vs_rank1"),
+        },
+        "checkpoint_sha256": (export_ckpt or summary_ckpt or None),
+        "gallery_size": row.get("gallery_size", declared.get("gallery_size_scored")),
+        "model_text": row.get("model_text", declared.get("model_text")),
+        "staged_query_image_is_evaluator_input": STAGED_PREFIX in str(row.get("query_image_path") or ""),
+    }
+
+
+def load_diagnostic(config: Any | None = None) -> dict[str, Any]:
+    """The full diagnostic payload, or a named absence.
+
+    The canonical status is never inferred from the diagnostic: it is read from the record the run

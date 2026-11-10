@@ -1,0 +1,17 @@
+M03VALIDATOR:{
+ "baseline": {
+  "complete": true,
+  "defects": [],
+  "status": "DIAGNOSTIC_COMPLETE"
+ },
+ "duplicate_qid_row": {
+  "complete": true,
+  "defects": [],
+  "status": "DIAGNOSTIC_COMPLETE"
+ },
+ "truncated_window": {
+  "complete": true,
+  "defects": [],
+  "status": "DIAGNOSTIC_COMPLETE"
+ }
+}

@@ -1,0 +1,16 @@
+=== A. test_throughput_knobs.py — ACTUAL failure messages BEFORE any change (from sweep run 1) ===
+
+--- root cause, read from source ---
+884:def _blas_thread_limit(threads: int | dict) -> dict[str, Any]:
+885-    """Set the BLAS thread count and report what ACTUALLY happened.
+886-
+            observed = _current_openblas_threads()
+            expected = pin.get("effective")
+            pin["observed_before_restore"] = observed
+
+=== C. test_controller_installation.py — ACTUAL failure message ===
+doctor.workbench_checks does not check all third-party dependencies imported by workbench/scripts: {'open_clip', 'clip', 'torchvision', 'data_utils', 'datasets'}
+
+=== B. test_web_scope_and_labels.py — ACTUAL failure messages ===
+FAILED workbench/tests/test_web_scope_and_labels.py::test_a_native_scope_and_an_aggregate_scope_are_two_links_not_one - KeyError: 'family'
+FAILED workbench/tests/test_web_scope_and_labels.py::test_a_row_that_names_no_family_is_still_a_composition_row - AssertionError: [{'protocol': 'circus_fashioniq_release_v1', 'subset': 'sf', 'rows': 1}]

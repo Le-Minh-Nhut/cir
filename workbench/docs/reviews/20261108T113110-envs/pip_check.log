@@ -1,0 +1,4 @@
+Using Python 3.9.25 environment at: workbench/envs/ilearn39-adapted
+Checked 85 packages in 1ms
+Found 1 incompatibility
+The package `decord` was built for a different platform

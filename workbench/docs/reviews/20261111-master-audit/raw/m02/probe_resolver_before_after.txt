@@ -1,0 +1,17 @@
+M-02 failing-first evidence (resolver, HEAD vs fixed), fixtures a-d from scripts/m02/probe_resolver.py
+
+BEFORE (HEAD 92ed66de, workbench/composition/model_limn.py):
+  a_both_present            -> None      (correct: refuses)
+  b_toptee_absent           -> 'shirt'   DEFECT: routes from a source that was never read
+  c_toptee_corrupt          -> 'shirt'   DEFECT: routes from a source that was never read
+  d_shirt_absent            -> 'toptee'  DEFECT: same, mirrored
+
+AFTER (this change):
+  a_both_present            -> None
+  b_toptee_absent           -> None      (index.unreadable = {toptee})
+  c_toptee_corrupt          -> None      (index.unreadable = {toptee})
+  d_shirt_absent            -> None      (index.unreadable = {shirt})
+
+Raw before-values: raw/m02/m02_resolver.txt  (probe run on HEAD, keys "resolved")
+Raw after-values : raw/m02/m02_resolver_after.txt ("resolved" for all four = null)
+Regression       : tests_failing_first.txt (2 fail on HEAD) -> tests_passing_after.txt (pass)

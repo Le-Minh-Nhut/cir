@@ -1,0 +1,9 @@
+ depth  served  stored target_rank in_window in_stored target_in_candidates  n_cands
+    10      10     100          43     False      True                False       10
+    20      20     100          43     False      True                False       20
+    43      43     100          43      True      True                 True       43
+   100     100     100          43      True      True                 True      100
+
+W-03 ASSERTION: PASS
+qid 7:3038 scope=toptee condition=multimodal; target rank: 43
+label: diagnostic — toptee scope, multimodal (not canonical) | target_did: 7:3416

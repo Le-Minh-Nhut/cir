@@ -1,0 +1,28 @@
+        # "why is this model absent" then has an answer sourced from an artifact.
+        model = _first_text(payload, "model_id", "model")
+        blocker = _first_text(payload, "conclusion", "verdict", "status", "error")
+        if not (model and blocker):
+            return []
+        return [{**base,
+                 "measurement_id": hashlib.sha256(f"{relative}#blocker".encode()).hexdigest()[:16],
+                 "source": {**base["source"], "sha256": _digest(path)},
+                 "model_id": model,
+                 "checkpoint_id": _first_text(payload, "checkpoint_id", "variant", "checkpoint_name"),
+                 "protocol_id": _first_text(payload, "protocol_id", "protocol"),
+                 "blocker": blocker,
+                 "categories": _categories(payload)}]
+
+    digest = _digest(path)
+    model_hint = _first_text(payload, "model_id", "model", "method_id")
+    checkpoint_hint = _first_text(payload, "checkpoint_id", "variant", "checkpoint_name", "label")
+    protocol_hint = _first_text(payload, "protocol_id", "protocol")
+    # Two or more blocks with DIFFERENT owners in one file is a roll-up by construction: a single
+    # measurement cannot be about two models.
+    owners = {_owner_key(trail) for trail, _numbers in blocks}
+    rollup = len(blocks) > 1 and len(owners - {None}) > 1
+
+    rows: list[dict[str, Any]] = []
+    for trail, numbers in blocks:
+        owner = _owner_key(trail)
+        # A roll-up entry names the MODEL in its key (`clip4cir_noft`, `B1/H_normal`,
+        # `combiner_rn50x4_noft`); a direct file names it in `model_id` or in its own stem.

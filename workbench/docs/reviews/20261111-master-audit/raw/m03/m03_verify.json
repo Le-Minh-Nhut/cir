@@ -1,0 +1,3242 @@
+{
+  "artifact": "m03_verify",
+  "target": "workbench/docs/reviews/20261109-native15-composition-limn (LIMN dual-scope artifact)",
+  "join": "candidate id: qid -> own positive_ids -> candidate_names[did] -> gallery position",
+  "release": {
+    "root": "/home/heheboiz/data/cir/workbench/artifacts/circus_release",
+    "gallery_count": 74381,
+    "gallery_id_unique": true,
+    "candidate_count": 74381,
+    "hash_verification": "matched",
+    "query_count": 6003
+  },
+  "score_recompute": "NOT performed: no query embeddings available. The run's query cache holds NaN rows for both qids (verified below), and recomputing them requires the GPU. Ordering verified from the stored window.",
+  "query_cache_nan_rows": {
+    "shirt/multimodal": {
+      "file": "/home/heheboiz/data/cir/workbench/artifacts/composition/runs/9e4918a6b5c243412cbc58c9/work/limn/features/query_multimodal_shirt.npy",
+      "exists": true,
+      "shape": [
+        6003,
+        768
+      ],
+      "qid_row_all_nan": {
+        "7:3038": true,
+        "7:3790": true
+      }
+    },
+    "toptee/multimodal": {
+      "file": "/home/heheboiz/data/cir/workbench/artifacts/composition/runs/9e4918a6b5c243412cbc58c9/work/limn/features/query_multimodal_toptee.npy",
+      "exists": true,
+      "shape": [
+        6003,
+        768
+      ],
+      "qid_row_all_nan": {
+        "7:3038": true,
+        "7:3790": true
+      }
+    },
+    "shirt/text_only_black_image": {
+      "file": "/home/heheboiz/data/cir/workbench/artifacts/composition/runs/9e4918a6b5c243412cbc58c9/work/limn/features/query_text_only_black_image_shirt.npy",
+      "exists": true,
+      "shape": [
+        6003,
+        768
+      ],
+      "qid_row_all_nan": {
+        "7:3038": true,
+        "7:3790": true
+      }
+    },
+    "toptee/text_only_black_image": {
+      "file": "/home/heheboiz/data/cir/workbench/artifacts/composition/runs/9e4918a6b5c243412cbc58c9/work/limn/features/query_text_only_black_image_toptee.npy",
+      "exists": true,
+      "shape": [
+        6003,
+        768
+      ],
+      "qid_row_all_nan": {
+        "7:3038": true,
+        "7:3790": true
+      }
+    },
+    "shirt/image_only_empty_text": {
+      "file": "/home/heheboiz/data/cir/workbench/artifacts/composition/runs/9e4918a6b5c243412cbc58c9/work/limn/features/query_image_only_empty_text_shirt.npy",
+      "exists": true,
+      "shape": [
+        6003,
+        768
+      ],
+      "qid_row_all_nan": {
+        "7:3038": true,
+        "7:3790": true
+      }
+    },
+    "toptee/image_only_empty_text": {
+      "file": "/home/heheboiz/data/cir/workbench/artifacts/composition/runs/9e4918a6b5c243412cbc58c9/work/limn/features/query_image_only_empty_text_toptee.npy",
+      "exists": true,
+      "shape": [
+        6003,
+        768
+      ],
+      "qid_row_all_nan": {
+        "7:3038": true,
+        "7:3790": true
+      }
+    }
+  },
+  "query_cache_cannot_recompute": true,
+  "gallery_matrices": {
+    "shirt": {
+      "file": "/home/heheboiz/data/cir/workbench/artifacts/composition/runs/9e4918a6b5c243412cbc58c9/work/limn/features/gallery_shirt.npy",
+      "shape": [
+        74381,
+        768
+      ],
+      "dtype": "float32",
+      "byte_length": 228498560,
+      "sidecar_digest": "1896231c9dbbbfe32c5205eaf33a3cd24430e56da63163db1b4c692830d9f576",
+      "declared_digest": "1896231c9dbbbfe32c5205eaf33a3cd24430e56da63163db1b4c692830d9f576",
+      "recomputed_digest": "1896231c9dbbbfe32c5205eaf33a3cd24430e56da63163db1b4c692830d9f576",
+      "digest_matches": true,
+      "declared_shape_matches": true,
+      "declared_byte_length_matches": true
+    },
+    "toptee": {
+      "file": "/home/heheboiz/data/cir/workbench/artifacts/composition/runs/9e4918a6b5c243412cbc58c9/work/limn/features/gallery_toptee.npy",
+      "shape": [
+        74381,
+        768
+      ],
+      "dtype": "float32",
+      "byte_length": 228498560,
+      "sidecar_digest": "fac3e6d7d3644ece8e742eaac86060452d973da0ccc647b1f68026c4b86e6a9f",
+      "declared_digest": "fac3e6d7d3644ece8e742eaac86060452d973da0ccc647b1f68026c4b86e6a9f",
+      "recomputed_digest": "fac3e6d7d3644ece8e742eaac86060452d973da0ccc647b1f68026c4b86e6a9f",
+      "digest_matches": true,
+      "declared_shape_matches": true,
+      "declared_byte_length_matches": true
+    }
+  },
+  "checkpoints": {
+    "shirt": {
+      "path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/limn/0_shirt_best_model.pt",
+      "exists": true,
+      "declared_sha256": "9260c7f77d3017d8cc10e6652cc8cfe275dbc9704366fa2bf581a24808930d74",
+      "recomputed_sha256": "9260c7f77d3017d8cc10e6652cc8cfe275dbc9704366fa2bf581a24808930d74",
+      "sha256_matches": true,
+      "size_bytes": 1792010157,
+      "declared_size_matches": true,
+      "checkpoint_id": "base_iter0_shirt"
+    },
+    "toptee": {
+      "path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/limn/0_toptee_best_model.pt",
+      "exists": true,
+      "declared_sha256": "79f663a14d89d455fdc3612b0b36d011c06d7957d1475a654755e1053a6cece2",
+      "recomputed_sha256": "79f663a14d89d455fdc3612b0b36d011c06d7957d1475a654755e1053a6cece2",
+      "sha256_matches": true,
+      "size_bytes": 1792010157,
+      "declared_size_matches": true,
+      "checkpoint_id": "base_iter0_toptee"
+    }
+  },
+  "exports": {
+    "limn_dual_scope.shirt.multimodal.jsonl": {
+      "exists": true,
+      "sha256": "4e4e9abf679dc2c28d71c94d2428d84ca7e2848902b743153513c8d3c7f916bf",
+      "row_count": 2,
+      "row_count_expected": 2,
+      "row_count_ok": true,
+      "qids": [
+        "7:3038",
+        "7:3790"
+      ],
+      "duplicate_qids": [],
+      "missing_qids": [],
+      "unexpected_qids": [],
+      "declared_depth": [
+        100
+      ],
+      "stored_candidate_counts": {
+        "7:3038": 100,
+        "7:3790": 100
+      },
+      "truncated": [],
+      "window_longer_than_depth": [],
+      "scope_condition_declared": [
+        [
+          "shirt",
+          "multimodal"
+        ]
+      ]
+    },
+    "limn_dual_scope.shirt.text_only_black_image.jsonl": {
+      "exists": true,
+      "sha256": "0af306976e1fd5cab0be781102f0412d2b705bb145f6d5e676c4a038331df1d5",
+      "row_count": 2,
+      "row_count_expected": 2,
+      "row_count_ok": true,
+      "qids": [
+        "7:3038",
+        "7:3790"
+      ],
+      "duplicate_qids": [],
+      "missing_qids": [],
+      "unexpected_qids": [],
+      "declared_depth": [
+        100
+      ],
+      "stored_candidate_counts": {
+        "7:3038": 100,
+        "7:3790": 100
+      },
+      "truncated": [],
+      "window_longer_than_depth": [],
+      "scope_condition_declared": [
+        [
+          "shirt",
+          "text_only_black_image"
+        ]
+      ]
+    },
+    "limn_dual_scope.shirt.image_only_empty_text.jsonl": {
+      "exists": true,
+      "sha256": "548dae274e33c544647c9036b79e60c14f634fc41b613f5a338e5a114a439542",
+      "row_count": 2,
+      "row_count_expected": 2,
+      "row_count_ok": true,
+      "qids": [
+        "7:3038",
+        "7:3790"
+      ],
+      "duplicate_qids": [],
+      "missing_qids": [],
+      "unexpected_qids": [],
+      "declared_depth": [
+        100
+      ],
+      "stored_candidate_counts": {
+        "7:3038": 100,
+        "7:3790": 100
+      },
+      "truncated": [],
+      "window_longer_than_depth": [],
+      "scope_condition_declared": [
+        [
+          "shirt",
+          "image_only_empty_text"
+        ]
+      ]
+    },
+    "limn_dual_scope.toptee.multimodal.jsonl": {
+      "exists": true,
+      "sha256": "2a5154805d46dc2aaef678a1cd825a85814ac9490550a51df99d62437431ef10",
+      "row_count": 2,
+      "row_count_expected": 2,
+      "row_count_ok": true,
+      "qids": [
+        "7:3038",
+        "7:3790"
+      ],
+      "duplicate_qids": [],
+      "missing_qids": [],
+      "unexpected_qids": [],
+      "declared_depth": [
+        100
+      ],
+      "stored_candidate_counts": {
+        "7:3038": 100,
+        "7:3790": 100
+      },
+      "truncated": [],
+      "window_longer_than_depth": [],
+      "scope_condition_declared": [
+        [
+          "toptee",
+          "multimodal"
+        ]
+      ]
+    },
+    "limn_dual_scope.toptee.text_only_black_image.jsonl": {
+      "exists": true,
+      "sha256": "d41145ccd5f657c0bfa30ee4f22e454c2d9cf22007f021b89b415b535a6b8dce",
+      "row_count": 2,
+      "row_count_expected": 2,
+      "row_count_ok": true,
+      "qids": [
+        "7:3038",
+        "7:3790"
+      ],
+      "duplicate_qids": [],
+      "missing_qids": [],
+      "unexpected_qids": [],
+      "declared_depth": [
+        100
+      ],
+      "stored_candidate_counts": {
+        "7:3038": 100,
+        "7:3790": 100
+      },
+      "truncated": [],
+      "window_longer_than_depth": [],
+      "scope_condition_declared": [
+        [
+          "toptee",
+          "text_only_black_image"
+        ]
+      ]
+    },
+    "limn_dual_scope.toptee.image_only_empty_text.jsonl": {
+      "exists": true,
+      "sha256": "c125e17693e3b95d5255b53937bb0ef16b39b7d3c9b034371967809a79d05301",
+      "row_count": 2,
+      "row_count_expected": 2,
+      "row_count_ok": true,
+      "qids": [
+        "7:3038",
+        "7:3790"
+      ],
+      "duplicate_qids": [],
+      "missing_qids": [],
+      "unexpected_qids": [],
+      "declared_depth": [
+        100
+      ],
+      "stored_candidate_counts": {
+        "7:3038": 100,
+        "7:3790": 100
+      },
+      "truncated": [],
+      "window_longer_than_depth": [],
+      "scope_condition_declared": [
+        [
+          "toptee",
+          "image_only_empty_text"
+        ]
+      ]
+    }
+  },
+  "cells": [
+    {
+      "qid": "7:3038",
+      "scope": "shirt",
+      "condition": "multimodal",
+      "join": {
+        "own_positives": [
+          "7:3416"
+        ],
+        "did": "7:3416",
+        "candidate_asset": "mbeir_images/fashioniq_images/B004D8QCN4.jpg",
+        "gallery_position": 13614
+      },
+      "checks": {
+        "own_positives_present": {
+          "ok": true,
+          "detail": "['7:3416']"
+        },
+        "did_has_candidate_asset": {
+          "ok": true,
+          "detail": "did=7:3416 asset=mbeir_images/fashioniq_images/B004D8QCN4.jpg"
+        },
+        "asset_found_in_release_gallery": {
+          "ok": true,
+          "detail": "mbeir_images/fashioniq_images/B004D8QCN4.jpg -> 13614"
+        },
+        "export_row_found": {
+          "ok": true,
+          "detail": "limn_dual_scope.shirt.multimodal.jsonl"
+        },
+        "export_row_identity": {
+          "ok": true,
+          "detail": "scope=shirt condition=multimodal"
+        },
+        "export_row_qid_unique": {
+          "ok": true
+        },
+        "declared_depth_is_int": {
+          "ok": true,
+          "detail": "100"
+        },
+        "declared_depth_equals_expected": {
+          "ok": true,
+          "detail": "100"
+        },
+        "stored_count_equals_declared": {
+          "ok": true,
+          "detail": "stored=100 declared=100"
+        },
+        "ranks_sequential_1_n": {
+          "ok": true,
+          "detail": "[1, 2, 3]..[100]"
+        },
+        "scores_all_finite": {
+          "ok": true
+        },
+        "scores_monotone_nonincreasing": {
+          "ok": true,
+          "detail": "[]"
+        },
+        "window_gallery_id_unique": {
+          "ok": true,
+          "detail": "[]"
+        },
+        "window_position_unique": {
+          "ok": true,
+          "detail": "[]"
+        },
+        "every_window_position_matches_release_gallery_id": {
+          "ok": true,
+          "detail": "[]"
+        },
+        "every_window_image_path_equals_gallery_id": {
+          "ok": true,
+          "detail": "[]"
+        },
+        "every_window_gallery_id_is_a_release_candidate_asset": {
+          "ok": true,
+          "detail": "[]"
+        },
+        "is_target_flag_count_leq_1": {
+          "ok": true,
+          "detail": "1"
+        },
+        "target_flagged_in_window": {
+          "ok": true,
+          "detail": "1"
+        },
+        "flagged_gallery_position_equals_join": {
+          "ok": true,
+          "detail": "flagged=13614 join=13614"
+        },
+        "flagged_gallery_id_equals_release_asset": {
+          "ok": true,
+          "detail": "flagged=mbeir_images/fashioniq_images/B004D8QCN4.jpg asset=mbeir_images/fashioniq_images/B004D8QCN4.jpg"
+        },
+        "flagged_rank_equals_summary_rank": {
+          "ok": true,
+          "detail": "flagged=3 summary=3"
+        },
+        "flagged_score_equals_summary_score": {
+          "ok": true,
+          "detail": "flagged=0.5703769326210022 summary=0.5703769326210022"
+        },
+        "summary_rank_is_rank_of_join_position_in_window": {
+          "ok": true,
+          "detail": "window_rank=[3] summary=3"
+        },
+        "score_at_rank_1_equals_window_rank1": {
+          "ok": true,
+          "detail": "summary=0.8147742748260498 window=0.8147742748260498"
+        },
+        "score_max_equals_window_rank1": {
+          "ok": true,
+          "detail": "summary_max=0.8147742748260498 window_rank1=0.8147742748260498"
+        },
+        "target_margin_equals_rank1_minus_target_score": {
+          "ok": true,
+          "detail": "declared=0.2443973422050476 derived=0.2443973422050476"
+        },
+        "target_score_within_min_max": {
+          "ok": true,
+          "detail": "-0.4139670431613922"
+        },
+        "gallery_size_scored_equals_release": {
+          "ok": true,
+          "detail": "summary=74381 export=74381 release=74381"
+        },
+        "summary_target_did_is_own_positive": {
+          "ok": true,
+          "detail": "summary=7:3416 own=['7:3416']"
+        },
+        "summary_target_did_equals_release_join": {
+          "ok": true,
+          "detail": "summary=7:3416 release=7:3416"
+        },
+        "query_record_target_gallery_id_equals_release_asset": {
+          "ok": true,
+          "detail": "query_record=mbeir_images/fashioniq_images/B004D8QCN4.jpg asset=mbeir_images/fashioniq_images/B004D8QCN4.jpg"
+        },
+        "summary_target_position_equals_join": {
+          "ok": true,
+          "detail": "summary=13614 join=13614"
+        },
+        "summary_position_in_query_target_positions": {
+          "ok": true,
+          "detail": "[13614]"
+        },
+        "summary_rank_equals_export_rank": {
+          "ok": true,
+          "detail": "summary=3 export=3"
+        },
+        "summary_score_equals_export_score": {
+          "ok": true,
+          "detail": "summary=0.5703769326210022 export=0.5703769326210022"
+        },
+        "export_checkpoint_equals_summary_checkpoint": {
+          "ok": true
+        },
+        "export_checkpoint_equals_disk_checkpoint": {
+          "ok": true
+        },
+        "top100_export_path_is_this_file": {
+          "ok": true,
+          "detail": "/home/heheboiz/data/cir/workbench/docs/reviews/20261109-native15-composition-limn/limn_dual_scope.shirt.multimodal.jsonl"
+        },
+        "query_embedding_norm_is_unit": {
+          "ok": true,
+          "detail": "1.0000000133374116"
+        },
+        "joined_gallery_row_is_unit_norm": {
+          "ok": true,
+          "detail": "1.000000049"
+        },
+        "joined_gallery_row_finite": {
+          "ok": true
+        }
+      },
+      "failures": [],
+      "verdict": "PASS",
+      "observed": {
+        "target_rank": 3,
+        "target_score": 0.5703769326210022,
+        "score_at_rank_1": 0.8147742748260498,
+        "target_gallery_position": 13614,
+        "target_did": "7:3416",
+        "target_gallery_id": null,
+        "in_window": true,
+        "depth": 100,
+        "stored_candidates": 100
+      }
+    },
+    {
+      "qid": "7:3038",
+      "scope": "shirt",
+      "condition": "text_only_black_image",
+      "join": {
+        "own_positives": [
+          "7:3416"
+        ],
+        "did": "7:3416",
+        "candidate_asset": "mbeir_images/fashioniq_images/B004D8QCN4.jpg",
+        "gallery_position": 13614
+      },
+      "checks": {
+        "own_positives_present": {
+          "ok": true,
+          "detail": "['7:3416']"
+        },
+        "did_has_candidate_asset": {
+          "ok": true,
+          "detail": "did=7:3416 asset=mbeir_images/fashioniq_images/B004D8QCN4.jpg"
+        },
+        "asset_found_in_release_gallery": {
+          "ok": true,
+          "detail": "mbeir_images/fashioniq_images/B004D8QCN4.jpg -> 13614"
+        },
+        "export_row_found": {
+          "ok": true,
+          "detail": "limn_dual_scope.shirt.text_only_black_image.jsonl"
+        },
+        "export_row_identity": {
+          "ok": true,
+          "detail": "scope=shirt condition=text_only_black_image"
+        },
+        "export_row_qid_unique": {
+          "ok": true
+        },
+        "declared_depth_is_int": {
+          "ok": true,
+          "detail": "100"
+        },
+        "declared_depth_equals_expected": {
+          "ok": true,
+          "detail": "100"
+        },
+        "stored_count_equals_declared": {
+          "ok": true,
+          "detail": "stored=100 declared=100"
+        },
+        "ranks_sequential_1_n": {
+          "ok": true,
+          "detail": "[1, 2, 3]..[100]"
+        },
+        "scores_all_finite": {
+          "ok": true
+        },
+        "scores_monotone_nonincreasing": {
+          "ok": true,
+          "detail": "[]"
+        },
+        "window_gallery_id_unique": {
+          "ok": true,
+          "detail": "[]"
+        },
+        "window_position_unique": {
+          "ok": true,
+          "detail": "[]"
+        },
+        "every_window_position_matches_release_gallery_id": {
+          "ok": true,
+          "detail": "[]"
+        },
+        "every_window_image_path_equals_gallery_id": {
+          "ok": true,
+          "detail": "[]"
+        },
+        "every_window_gallery_id_is_a_release_candidate_asset": {
+          "ok": true,
+          "detail": "[]"
+        },
+        "is_target_flag_count_leq_1": {
+          "ok": true,
+          "detail": "1"
+        },
+        "target_flagged_in_window": {
+          "ok": true,
+          "detail": "1"
+        },
+        "flagged_gallery_position_equals_join": {
+          "ok": true,
+          "detail": "flagged=13614 join=13614"
+        },
+        "flagged_gallery_id_equals_release_asset": {
+          "ok": true,
+          "detail": "flagged=mbeir_images/fashioniq_images/B004D8QCN4.jpg asset=mbeir_images/fashioniq_images/B004D8QCN4.jpg"
+        },
+        "flagged_rank_equals_summary_rank": {
+          "ok": true,
+          "detail": "flagged=88 summary=88"
+        },
+        "flagged_score_equals_summary_score": {
+          "ok": true,
+          "detail": "flagged=0.4220863878726959 summary=0.4220863878726959"
+        },
+        "summary_rank_is_rank_of_join_position_in_window": {
+          "ok": true,
+          "detail": "window_rank=[88] summary=88"
+        },
+        "score_at_rank_1_equals_window_rank1": {
+          "ok": true,
+          "detail": "summary=0.7404771447181702 window=0.7404771447181702"
+        },
+        "score_max_equals_window_rank1": {
+          "ok": true,
+          "detail": "summary_max=0.7404771447181702 window_rank1=0.7404771447181702"
+        },
+        "target_margin_equals_rank1_minus_target_score": {
+          "ok": true,
+          "detail": "declared=0.31839075684547424 derived=0.31839075684547424"
+        },
+        "target_score_within_min_max": {
+          "ok": true,
+          "detail": "-0.378568559885025"
+        },
+        "gallery_size_scored_equals_release": {
+          "ok": true,
+          "detail": "summary=74381 export=74381 release=74381"
+        },
+        "summary_target_did_is_own_positive": {
+          "ok": true,
+          "detail": "summary=7:3416 own=['7:3416']"
+        },
+        "summary_target_did_equals_release_join": {
+          "ok": true,
+          "detail": "summary=7:3416 release=7:3416"
+        },
+        "query_record_target_gallery_id_equals_release_asset": {
+          "ok": true,
+          "detail": "query_record=mbeir_images/fashioniq_images/B004D8QCN4.jpg asset=mbeir_images/fashioniq_images/B004D8QCN4.jpg"
+        },
+        "summary_target_position_equals_join": {
+          "ok": true,
+          "detail": "summary=13614 join=13614"
+        },
+        "summary_position_in_query_target_positions": {
+          "ok": true,
+          "detail": "[13614]"
+        },
+        "summary_rank_equals_export_rank": {
+          "ok": true,
+          "detail": "summary=88 export=88"
+        },
+        "summary_score_equals_export_score": {
+          "ok": true,
+          "detail": "summary=0.4220863878726959 export=0.4220863878726959"
+        },
+        "export_checkpoint_equals_summary_checkpoint": {
+          "ok": true
+        },
+        "export_checkpoint_equals_disk_checkpoint": {
+          "ok": true
+        },
+        "top100_export_path_is_this_file": {
+          "ok": true,
+          "detail": "/home/heheboiz/data/cir/workbench/docs/reviews/20261109-native15-composition-limn/limn_dual_scope.shirt.text_only_black_image.jsonl"
+        },
+        "query_embedding_norm_is_unit": {
+          "ok": true,
+          "detail": "0.9999999770165949"
+        },
+        "joined_gallery_row_is_unit_norm": {
+          "ok": true,
+          "detail": "1.000000049"
+        },
+        "joined_gallery_row_finite": {
+          "ok": true
+        }
+      },
+      "failures": [],
+      "verdict": "PASS",
+      "observed": {
+        "target_rank": 88,
+        "target_score": 0.4220863878726959,
+        "score_at_rank_1": 0.7404771447181702,
+        "target_gallery_position": 13614,
+        "target_did": "7:3416",
+        "target_gallery_id": null,
+        "in_window": true,
+        "depth": 100,
+        "stored_candidates": 100
+      }
+    },
+    {
+      "qid": "7:3038",
+      "scope": "shirt",
+      "condition": "image_only_empty_text",
+      "join": {
+        "own_positives": [
+          "7:3416"
+        ],
+        "did": "7:3416",
+        "candidate_asset": "mbeir_images/fashioniq_images/B004D8QCN4.jpg",
+        "gallery_position": 13614
+      },
+      "checks": {
+        "own_positives_present": {
+          "ok": true,
+          "detail": "['7:3416']"
+        },
+        "did_has_candidate_asset": {
+          "ok": true,
+          "detail": "did=7:3416 asset=mbeir_images/fashioniq_images/B004D8QCN4.jpg"
+        },
+        "asset_found_in_release_gallery": {
+          "ok": true,
+          "detail": "mbeir_images/fashioniq_images/B004D8QCN4.jpg -> 13614"
+        },
+        "export_row_found": {
+          "ok": true,
+          "detail": "limn_dual_scope.shirt.image_only_empty_text.jsonl"
+        },
+        "export_row_identity": {
+          "ok": true,
+          "detail": "scope=shirt condition=image_only_empty_text"
+        },
+        "export_row_qid_unique": {
+          "ok": true
+        },
+        "declared_depth_is_int": {
+          "ok": true,
+          "detail": "100"
+        },
+        "declared_depth_equals_expected": {
+          "ok": true,
+          "detail": "100"
+        },
+        "stored_count_equals_declared": {
+          "ok": true,
+          "detail": "stored=100 declared=100"
+        },
+        "ranks_sequential_1_n": {
+          "ok": true,
+          "detail": "[1, 2, 3]..[100]"
+        },
+        "scores_all_finite": {
+          "ok": true
+        },
+        "scores_monotone_nonincreasing": {
+          "ok": true,
+          "detail": "[]"
+        },
+        "window_gallery_id_unique": {
+          "ok": true,
+          "detail": "[]"
+        },
+        "window_position_unique": {
+          "ok": true,
+          "detail": "[]"
+        },
+        "every_window_position_matches_release_gallery_id": {
+          "ok": true,
+          "detail": "[]"
+        },
+        "every_window_image_path_equals_gallery_id": {
+          "ok": true,
+          "detail": "[]"
+        },
+        "every_window_gallery_id_is_a_release_candidate_asset": {
+          "ok": true,
+          "detail": "[]"
+        },
+        "is_target_flag_count_leq_1": {
+          "ok": true,
+          "detail": "0"
+        },
+        "target_flagged_in_window": {
+          "ok": true,
+          "detail": "target_rank 152 outside depth 100"
+        },
+        "summary_rank_beyond_depth": {
+          "ok": true,
+          "detail": "rank=152 depth=100"
+        },
+        "score_at_rank_1_equals_window_rank1": {
+          "ok": true,
+          "detail": "summary=0.7385141849517822 window=0.7385141849517822"
+        },
+        "score_max_equals_window_rank1": {
+          "ok": true,
+          "detail": "summary_max=0.7385141849517822 window_rank1=0.7385141849517822"
+        },
+        "target_margin_equals_rank1_minus_target_score": {
+          "ok": true,
+          "detail": "declared=0.37072229385375977 derived=0.37072229385375977"
+        },
+        "target_score_within_min_max": {
+          "ok": true,
+          "detail": "-0.33480337262153625"
+        },
+        "gallery_size_scored_equals_release": {
+          "ok": true,
+          "detail": "summary=74381 export=74381 release=74381"
+        },
+        "summary_target_did_is_own_positive": {
+          "ok": true,
+          "detail": "summary=7:3416 own=['7:3416']"
+        },
+        "summary_target_did_equals_release_join": {
+          "ok": true,
+          "detail": "summary=7:3416 release=7:3416"
+        },
+        "query_record_target_gallery_id_equals_release_asset": {
+          "ok": true,
+          "detail": "query_record=mbeir_images/fashioniq_images/B004D8QCN4.jpg asset=mbeir_images/fashioniq_images/B004D8QCN4.jpg"
+        },
+        "summary_target_position_equals_join": {
+          "ok": true,
+          "detail": "summary=13614 join=13614"
+        },
+        "summary_position_in_query_target_positions": {
+          "ok": true,
+          "detail": "[13614]"
+        },
+        "summary_rank_equals_export_rank": {
+          "ok": true,
+          "detail": "summary=152 export=152"
+        },
+        "summary_score_equals_export_score": {
+          "ok": true,
+          "detail": "summary=0.36779189109802246 export=0.36779189109802246"
+        },
+        "export_checkpoint_equals_summary_checkpoint": {
+          "ok": true
+        },
+        "export_checkpoint_equals_disk_checkpoint": {
+          "ok": true
+        },
+        "top100_export_path_is_this_file": {
+          "ok": true,
+          "detail": "/home/heheboiz/data/cir/workbench/docs/reviews/20261109-native15-composition-limn/limn_dual_scope.shirt.image_only_empty_text.jsonl"
+        },
+        "query_embedding_norm_is_unit": {
+          "ok": true,
+          "detail": "0.9999999526772363"
+        },
+        "joined_gallery_row_is_unit_norm": {
+          "ok": true,
+          "detail": "1.000000049"
+        },
+        "joined_gallery_row_finite": {
+          "ok": true
+        }
+      },
+      "failures": [],
+      "verdict": "PASS",
+      "observed": {
+        "target_rank": 152,
+        "target_score": 0.36779189109802246,
+        "score_at_rank_1": 0.7385141849517822,
+        "target_gallery_position": 13614,
+        "target_did": "7:3416",
+        "target_gallery_id": null,
+        "in_window": false,
+        "depth": 100,
+        "stored_candidates": 100
+      }
+    },
+    {
+      "qid": "7:3038",
+      "scope": "toptee",
+      "condition": "multimodal",
+      "join": {
+        "own_positives": [
+          "7:3416"
+        ],
+        "did": "7:3416",
+        "candidate_asset": "mbeir_images/fashioniq_images/B004D8QCN4.jpg",
+        "gallery_position": 13614
+      },
+      "checks": {
+        "own_positives_present": {
+          "ok": true,
+          "detail": "['7:3416']"
+        },
+        "did_has_candidate_asset": {
+          "ok": true,
+          "detail": "did=7:3416 asset=mbeir_images/fashioniq_images/B004D8QCN4.jpg"
+        },
+        "asset_found_in_release_gallery": {
+          "ok": true,
+          "detail": "mbeir_images/fashioniq_images/B004D8QCN4.jpg -> 13614"
+        },
+        "export_row_found": {
+          "ok": true,
+          "detail": "limn_dual_scope.toptee.multimodal.jsonl"
+        },
+        "export_row_identity": {
+          "ok": true,
+          "detail": "scope=toptee condition=multimodal"
+        },
+        "export_row_qid_unique": {
+          "ok": true
+        },
+        "declared_depth_is_int": {
+          "ok": true,
+          "detail": "100"
+        },
+        "declared_depth_equals_expected": {
+          "ok": true,
+          "detail": "100"
+        },
+        "stored_count_equals_declared": {
+          "ok": true,
+          "detail": "stored=100 declared=100"
+        },
+        "ranks_sequential_1_n": {
+          "ok": true,
+          "detail": "[1, 2, 3]..[100]"
+        },
+        "scores_all_finite": {
+          "ok": true
+        },
+        "scores_monotone_nonincreasing": {
+          "ok": true,
+          "detail": "[]"
+        },
+        "window_gallery_id_unique": {
+          "ok": true,
+          "detail": "[]"
+        },
+        "window_position_unique": {
+          "ok": true,
+          "detail": "[]"
+        },
+        "every_window_position_matches_release_gallery_id": {
+          "ok": true,
+          "detail": "[]"
+        },
+        "every_window_image_path_equals_gallery_id": {
+          "ok": true,
+          "detail": "[]"
+        },
+        "every_window_gallery_id_is_a_release_candidate_asset": {
+          "ok": true,
+          "detail": "[]"
+        },
+        "is_target_flag_count_leq_1": {
+          "ok": true,
+          "detail": "1"
+        },
+        "target_flagged_in_window": {
+          "ok": true,
+          "detail": "1"
+        },
+        "flagged_gallery_position_equals_join": {
+          "ok": true,
+          "detail": "flagged=13614 join=13614"
+        },
+        "flagged_gallery_id_equals_release_asset": {
+          "ok": true,
+          "detail": "flagged=mbeir_images/fashioniq_images/B004D8QCN4.jpg asset=mbeir_images/fashioniq_images/B004D8QCN4.jpg"
+        },
+        "flagged_rank_equals_summary_rank": {
+          "ok": true,
+          "detail": "flagged=43 summary=43"
+        },
+        "flagged_score_equals_summary_score": {
+          "ok": true,
+          "detail": "flagged=0.5678249001502991 summary=0.5678249001502991"
+        },
+        "summary_rank_is_rank_of_join_position_in_window": {
+          "ok": true,
+          "detail": "window_rank=[43] summary=43"
+        },
+        "score_at_rank_1_equals_window_rank1": {
+          "ok": true,
+          "detail": "summary=0.8175360560417175 window=0.8175360560417175"
+        },
+        "score_max_equals_window_rank1": {
+          "ok": true,
+          "detail": "summary_max=0.8175360560417175 window_rank1=0.8175360560417175"
+        },
+        "target_margin_equals_rank1_minus_target_score": {
+          "ok": true,
+          "detail": "declared=0.24971115589141846 derived=0.24971115589141846"
+        },
+        "target_score_within_min_max": {
+          "ok": true,
+          "detail": "-0.47393396496772766"
+        },
+        "gallery_size_scored_equals_release": {
+          "ok": true,
+          "detail": "summary=74381 export=74381 release=74381"
+        },
+        "summary_target_did_is_own_positive": {
+          "ok": true,
+          "detail": "summary=7:3416 own=['7:3416']"
+        },
+        "summary_target_did_equals_release_join": {
+          "ok": true,
+          "detail": "summary=7:3416 release=7:3416"
+        },
+        "query_record_target_gallery_id_equals_release_asset": {
+          "ok": true,
+          "detail": "query_record=mbeir_images/fashioniq_images/B004D8QCN4.jpg asset=mbeir_images/fashioniq_images/B004D8QCN4.jpg"
+        },
+        "summary_target_position_equals_join": {
+          "ok": true,
+          "detail": "summary=13614 join=13614"
+        },
+        "summary_position_in_query_target_positions": {
+          "ok": true,
+          "detail": "[13614]"
+        },
+        "summary_rank_equals_export_rank": {
+          "ok": true,
+          "detail": "summary=43 export=43"
+        },
+        "summary_score_equals_export_score": {
+          "ok": true,
+          "detail": "summary=0.5678249001502991 export=0.5678249001502991"
+        },
+        "export_checkpoint_equals_summary_checkpoint": {
+          "ok": true
+        },
+        "export_checkpoint_equals_disk_checkpoint": {
+          "ok": true
+        },
+        "top100_export_path_is_this_file": {
+          "ok": true,
+          "detail": "/home/heheboiz/data/cir/workbench/docs/reviews/20261109-native15-composition-limn/limn_dual_scope.toptee.multimodal.jsonl"
+        },
+        "query_embedding_norm_is_unit": {
+          "ok": true,
+          "detail": "1.0000000267611846"
+        },
+        "joined_gallery_row_is_unit_norm": {
+          "ok": true,
+          "detail": "0.999999980"
+        },
+        "joined_gallery_row_finite": {
+          "ok": true
+        }
+      },
+      "failures": [],
+      "verdict": "PASS",
+      "observed": {
+        "target_rank": 43,
+        "target_score": 0.5678249001502991,
+        "score_at_rank_1": 0.8175360560417175,
+        "target_gallery_position": 13614,
+        "target_did": "7:3416",
+        "target_gallery_id": null,
+        "in_window": true,
+        "depth": 100,
+        "stored_candidates": 100
+      }
+    },
+    {
+      "qid": "7:3038",
+      "scope": "toptee",
+      "condition": "text_only_black_image",
+      "join": {
+        "own_positives": [
+          "7:3416"
+        ],
+        "did": "7:3416",
+        "candidate_asset": "mbeir_images/fashioniq_images/B004D8QCN4.jpg",
+        "gallery_position": 13614
+      },
+      "checks": {
+        "own_positives_present": {
+          "ok": true,
+          "detail": "['7:3416']"
+        },
+        "did_has_candidate_asset": {
+          "ok": true,
+          "detail": "did=7:3416 asset=mbeir_images/fashioniq_images/B004D8QCN4.jpg"
+        },
+        "asset_found_in_release_gallery": {
+          "ok": true,
+          "detail": "mbeir_images/fashioniq_images/B004D8QCN4.jpg -> 13614"
+        },
+        "export_row_found": {
+          "ok": true,
+          "detail": "limn_dual_scope.toptee.text_only_black_image.jsonl"
+        },
+        "export_row_identity": {
+          "ok": true,
+          "detail": "scope=toptee condition=text_only_black_image"
+        },
+        "export_row_qid_unique": {
+          "ok": true
+        },
+        "declared_depth_is_int": {
+          "ok": true,
+          "detail": "100"
+        },
+        "declared_depth_equals_expected": {
+          "ok": true,
+          "detail": "100"
+        },
+        "stored_count_equals_declared": {
+          "ok": true,
+          "detail": "stored=100 declared=100"
+        },
+        "ranks_sequential_1_n": {
+          "ok": true,
+          "detail": "[1, 2, 3]..[100]"
+        },
+        "scores_all_finite": {
+          "ok": true
+        },
+        "scores_monotone_nonincreasing": {
+          "ok": true,
+          "detail": "[]"
+        },
+        "window_gallery_id_unique": {
+          "ok": true,
+          "detail": "[]"
+        },
+        "window_position_unique": {
+          "ok": true,
+          "detail": "[]"
+        },
+        "every_window_position_matches_release_gallery_id": {
+          "ok": true,
+          "detail": "[]"
+        },
+        "every_window_image_path_equals_gallery_id": {
+          "ok": true,
+          "detail": "[]"
+        },
+        "every_window_gallery_id_is_a_release_candidate_asset": {
+          "ok": true,
+          "detail": "[]"
+        },
+        "is_target_flag_count_leq_1": {
+          "ok": true,
+          "detail": "0"
+        },
+        "target_flagged_in_window": {
+          "ok": true,
+          "detail": "target_rank 389 outside depth 100"
+        },
+        "summary_rank_beyond_depth": {
+          "ok": true,
+          "detail": "rank=389 depth=100"
+        },
+        "score_at_rank_1_equals_window_rank1": {
+          "ok": true,
+          "detail": "summary=0.689705491065979 window=0.689705491065979"
+        },
+        "score_max_equals_window_rank1": {
+          "ok": true,
+          "detail": "summary_max=0.689705491065979 window_rank1=0.689705491065979"
+        },
+        "target_margin_equals_rank1_minus_target_score": {
+          "ok": true,
+          "detail": "declared=0.3460889160633087 derived=0.3460889160633087"
+        },
+        "target_score_within_min_max": {
+          "ok": true,
+          "detail": "-0.2906406819820404"
+        },
+        "gallery_size_scored_equals_release": {
+          "ok": true,
+          "detail": "summary=74381 export=74381 release=74381"
+        },
+        "summary_target_did_is_own_positive": {
+          "ok": true,
+          "detail": "summary=7:3416 own=['7:3416']"
+        },
+        "summary_target_did_equals_release_join": {
+          "ok": true,
+          "detail": "summary=7:3416 release=7:3416"
+        },
+        "query_record_target_gallery_id_equals_release_asset": {
+          "ok": true,
+          "detail": "query_record=mbeir_images/fashioniq_images/B004D8QCN4.jpg asset=mbeir_images/fashioniq_images/B004D8QCN4.jpg"
+        },
+        "summary_target_position_equals_join": {
+          "ok": true,
+          "detail": "summary=13614 join=13614"
+        },
+        "summary_position_in_query_target_positions": {
+          "ok": true,
+          "detail": "[13614]"
+        },
+        "summary_rank_equals_export_rank": {
+          "ok": true,
+          "detail": "summary=389 export=389"
+        },
+        "summary_score_equals_export_score": {
+          "ok": true,
+          "detail": "summary=0.3436165750026703 export=0.3436165750026703"
+        },
+        "export_checkpoint_equals_summary_checkpoint": {
+          "ok": true
+        },
+        "export_checkpoint_equals_disk_checkpoint": {
+          "ok": true
+        },
+        "top100_export_path_is_this_file": {
+          "ok": true,
+          "detail": "/home/heheboiz/data/cir/workbench/docs/reviews/20261109-native15-composition-limn/limn_dual_scope.toptee.text_only_black_image.jsonl"
+        },
+        "query_embedding_norm_is_unit": {
+          "ok": true,
+          "detail": "1.0000000280174877"
+        },
+        "joined_gallery_row_is_unit_norm": {
+          "ok": true,
+          "detail": "0.999999980"
+        },
+        "joined_gallery_row_finite": {
+          "ok": true
+        }
+      },
+      "failures": [],
+      "verdict": "PASS",
+      "observed": {
+        "target_rank": 389,
+        "target_score": 0.3436165750026703,
+        "score_at_rank_1": 0.689705491065979,
+        "target_gallery_position": 13614,
+        "target_did": "7:3416",
+        "target_gallery_id": null,
+        "in_window": false,
+        "depth": 100,
+        "stored_candidates": 100
+      }
+    },
+    {
+      "qid": "7:3038",
+      "scope": "toptee",
+      "condition": "image_only_empty_text",
+      "join": {
+        "own_positives": [
+          "7:3416"
+        ],
+        "did": "7:3416",
+        "candidate_asset": "mbeir_images/fashioniq_images/B004D8QCN4.jpg",
+        "gallery_position": 13614
+      },
+      "checks": {
+        "own_positives_present": {
+          "ok": true,
+          "detail": "['7:3416']"
+        },
+        "did_has_candidate_asset": {
+          "ok": true,
+          "detail": "did=7:3416 asset=mbeir_images/fashioniq_images/B004D8QCN4.jpg"
+        },
+        "asset_found_in_release_gallery": {
+          "ok": true,
+          "detail": "mbeir_images/fashioniq_images/B004D8QCN4.jpg -> 13614"
+        },
+        "export_row_found": {
+          "ok": true,
+          "detail": "limn_dual_scope.toptee.image_only_empty_text.jsonl"
+        },
+        "export_row_identity": {
+          "ok": true,
+          "detail": "scope=toptee condition=image_only_empty_text"
+        },
+        "export_row_qid_unique": {
+          "ok": true
+        },
+        "declared_depth_is_int": {
+          "ok": true,
+          "detail": "100"
+        },
+        "declared_depth_equals_expected": {
+          "ok": true,
+          "detail": "100"
+        },
+        "stored_count_equals_declared": {
+          "ok": true,
+          "detail": "stored=100 declared=100"
+        },
+        "ranks_sequential_1_n": {
+          "ok": true,
+          "detail": "[1, 2, 3]..[100]"
+        },
+        "scores_all_finite": {
+          "ok": true
+        },
+        "scores_monotone_nonincreasing": {
+          "ok": true,
+          "detail": "[]"
+        },
+        "window_gallery_id_unique": {
+          "ok": true,
+          "detail": "[]"
+        },
+        "window_position_unique": {
+          "ok": true,
+          "detail": "[]"
+        },
+        "every_window_position_matches_release_gallery_id": {
+          "ok": true,
+          "detail": "[]"
+        },
+        "every_window_image_path_equals_gallery_id": {
+          "ok": true,
+          "detail": "[]"
+        },
+        "every_window_gallery_id_is_a_release_candidate_asset": {
+          "ok": true,
+          "detail": "[]"
+        },
+        "is_target_flag_count_leq_1": {
+          "ok": true,
+          "detail": "1"
+        },
+        "target_flagged_in_window": {
+          "ok": true,
+          "detail": "1"
+        },
+        "flagged_gallery_position_equals_join": {
+          "ok": true,
+          "detail": "flagged=13614 join=13614"
+        },
+        "flagged_gallery_id_equals_release_asset": {
+          "ok": true,
+          "detail": "flagged=mbeir_images/fashioniq_images/B004D8QCN4.jpg asset=mbeir_images/fashioniq_images/B004D8QCN4.jpg"
+        },
+        "flagged_rank_equals_summary_rank": {
+          "ok": true,
+          "detail": "flagged=67 summary=67"
+        },
+        "flagged_score_equals_summary_score": {
+          "ok": true,
+          "detail": "flagged=0.45405110716819763 summary=0.45405110716819763"
+        },
+        "summary_rank_is_rank_of_join_position_in_window": {
+          "ok": true,
+          "detail": "window_rank=[67] summary=67"
+        },
+        "score_at_rank_1_equals_window_rank1": {
+          "ok": true,
+          "detail": "summary=0.7239910364151001 window=0.7239910364151001"
+        },
+        "score_max_equals_window_rank1": {
+          "ok": true,
+          "detail": "summary_max=0.7239910364151001 window_rank1=0.7239910364151001"
+        },
+        "target_margin_equals_rank1_minus_target_score": {
+          "ok": true,
+          "detail": "declared=0.26993992924690247 derived=0.26993992924690247"
+        },
+        "target_score_within_min_max": {
+          "ok": true,
+          "detail": "-0.39179307222366333"
+        },
+        "gallery_size_scored_equals_release": {
+          "ok": true,
+          "detail": "summary=74381 export=74381 release=74381"
+        },
+        "summary_target_did_is_own_positive": {
+          "ok": true,
+          "detail": "summary=7:3416 own=['7:3416']"
+        },
+        "summary_target_did_equals_release_join": {
+          "ok": true,
+          "detail": "summary=7:3416 release=7:3416"
+        },
+        "query_record_target_gallery_id_equals_release_asset": {
+          "ok": true,
+          "detail": "query_record=mbeir_images/fashioniq_images/B004D8QCN4.jpg asset=mbeir_images/fashioniq_images/B004D8QCN4.jpg"
+        },
+        "summary_target_position_equals_join": {
+          "ok": true,
+          "detail": "summary=13614 join=13614"
+        },
+        "summary_position_in_query_target_positions": {
+          "ok": true,
+          "detail": "[13614]"
+        },
+        "summary_rank_equals_export_rank": {
+          "ok": true,
+          "detail": "summary=67 export=67"
+        },
+        "summary_score_equals_export_score": {
+          "ok": true,
+          "detail": "summary=0.45405110716819763 export=0.45405110716819763"
+        },
+        "export_checkpoint_equals_summary_checkpoint": {
+          "ok": true
+        },
+        "export_checkpoint_equals_disk_checkpoint": {
+          "ok": true
+        },
+        "top100_export_path_is_this_file": {
+          "ok": true,
+          "detail": "/home/heheboiz/data/cir/workbench/docs/reviews/20261109-native15-composition-limn/limn_dual_scope.toptee.image_only_empty_text.jsonl"
+        },
+        "query_embedding_norm_is_unit": {
+          "ok": true,
+          "detail": "1.0000000512018716"
+        },
+        "joined_gallery_row_is_unit_norm": {
+          "ok": true,
+          "detail": "0.999999980"
+        },
+        "joined_gallery_row_finite": {
+          "ok": true
+        }
+      },
+      "failures": [],
+      "verdict": "PASS",
+      "observed": {
+        "target_rank": 67,
+        "target_score": 0.45405110716819763,
+        "score_at_rank_1": 0.7239910364151001,
+        "target_gallery_position": 13614,
+        "target_did": "7:3416",
+        "target_gallery_id": null,
+        "in_window": true,
+        "depth": 100,
+        "stored_candidates": 100
+      }
+    },
+    {
+      "qid": "7:3790",
+      "scope": "shirt",
+      "condition": "multimodal",
+      "join": {
+        "own_positives": [
+          "7:42304"
+        ],
+        "did": "7:42304",
+        "candidate_asset": "mbeir_images/fashioniq_images/B00E3WVAD2.jpg",
+        "gallery_position": 70410
+      },
+      "checks": {
+        "own_positives_present": {
+          "ok": true,
+          "detail": "['7:42304']"
+        },
+        "did_has_candidate_asset": {
+          "ok": true,
+          "detail": "did=7:42304 asset=mbeir_images/fashioniq_images/B00E3WVAD2.jpg"
+        },
+        "asset_found_in_release_gallery": {
+          "ok": true,
+          "detail": "mbeir_images/fashioniq_images/B00E3WVAD2.jpg -> 70410"
+        },
+        "export_row_found": {
+          "ok": true,
+          "detail": "limn_dual_scope.shirt.multimodal.jsonl"
+        },
+        "export_row_identity": {
+          "ok": true,
+          "detail": "scope=shirt condition=multimodal"
+        },
+        "export_row_qid_unique": {
+          "ok": true
+        },
+        "declared_depth_is_int": {
+          "ok": true,
+          "detail": "100"
+        },
+        "declared_depth_equals_expected": {
+          "ok": true,
+          "detail": "100"
+        },
+        "stored_count_equals_declared": {
+          "ok": true,
+          "detail": "stored=100 declared=100"
+        },
+        "ranks_sequential_1_n": {
+          "ok": true,
+          "detail": "[1, 2, 3]..[100]"
+        },
+        "scores_all_finite": {
+          "ok": true
+        },
+        "scores_monotone_nonincreasing": {
+          "ok": true,
+          "detail": "[]"
+        },
+        "window_gallery_id_unique": {
+          "ok": true,
+          "detail": "[]"
+        },
+        "window_position_unique": {
+          "ok": true,
+          "detail": "[]"
+        },
+        "every_window_position_matches_release_gallery_id": {
+          "ok": true,
+          "detail": "[]"
+        },
+        "every_window_image_path_equals_gallery_id": {
+          "ok": true,
+          "detail": "[]"
+        },
+        "every_window_gallery_id_is_a_release_candidate_asset": {
+          "ok": true,
+          "detail": "[]"
+        },
+        "is_target_flag_count_leq_1": {
+          "ok": true,
+          "detail": "1"
+        },
+        "target_flagged_in_window": {
+          "ok": true,
+          "detail": "1"
+        },
+        "flagged_gallery_position_equals_join": {
+          "ok": true,
+          "detail": "flagged=70410 join=70410"
+        },
+        "flagged_gallery_id_equals_release_asset": {
+          "ok": true,
+          "detail": "flagged=mbeir_images/fashioniq_images/B00E3WVAD2.jpg asset=mbeir_images/fashioniq_images/B00E3WVAD2.jpg"
+        },
+        "flagged_rank_equals_summary_rank": {
+          "ok": true,
+          "detail": "flagged=65 summary=65"
+        },
+        "flagged_score_equals_summary_score": {
+          "ok": true,
+          "detail": "flagged=0.5140696167945862 summary=0.5140696167945862"
+        },
+        "summary_rank_is_rank_of_join_position_in_window": {
+          "ok": true,
+          "detail": "window_rank=[65] summary=65"
+        },
+        "score_at_rank_1_equals_window_rank1": {
+          "ok": true,
+          "detail": "summary=0.644286572933197 window=0.644286572933197"
+        },
+        "score_max_equals_window_rank1": {
+          "ok": true,
+          "detail": "summary_max=0.644286572933197 window_rank1=0.644286572933197"
+        },
+        "target_margin_equals_rank1_minus_target_score": {
+          "ok": true,
+          "detail": "declared=0.13021695613861084 derived=0.13021695613861084"
+        },
+        "target_score_within_min_max": {
+          "ok": true,
+          "detail": "-0.34073030948638916"
+        },
+        "gallery_size_scored_equals_release": {
+          "ok": true,
+          "detail": "summary=74381 export=74381 release=74381"
+        },
+        "summary_target_did_is_own_positive": {
+          "ok": true,
+          "detail": "summary=7:42304 own=['7:42304']"
+        },
+        "summary_target_did_equals_release_join": {
+          "ok": true,
+          "detail": "summary=7:42304 release=7:42304"
+        },
+        "query_record_target_gallery_id_equals_release_asset": {
+          "ok": true,
+          "detail": "query_record=mbeir_images/fashioniq_images/B00E3WVAD2.jpg asset=mbeir_images/fashioniq_images/B00E3WVAD2.jpg"
+        },
+        "summary_target_position_equals_join": {
+          "ok": true,
+          "detail": "summary=70410 join=70410"
+        },
+        "summary_position_in_query_target_positions": {
+          "ok": true,
+          "detail": "[70410]"
+        },
+        "summary_rank_equals_export_rank": {
+          "ok": true,
+          "detail": "summary=65 export=65"
+        },
+        "summary_score_equals_export_score": {
+          "ok": true,
+          "detail": "summary=0.5140696167945862 export=0.5140696167945862"
+        },
+        "export_checkpoint_equals_summary_checkpoint": {
+          "ok": true
+        },
+        "export_checkpoint_equals_disk_checkpoint": {
+          "ok": true
+        },
+        "top100_export_path_is_this_file": {
+          "ok": true,
+          "detail": "/home/heheboiz/data/cir/workbench/docs/reviews/20261109-native15-composition-limn/limn_dual_scope.shirt.multimodal.jsonl"
+        },
+        "query_embedding_norm_is_unit": {
+          "ok": true,
+          "detail": "0.9999999774609021"
+        },
+        "joined_gallery_row_is_unit_norm": {
+          "ok": true,
+          "detail": "0.999999964"
+        },
+        "joined_gallery_row_finite": {
+          "ok": true
+        }
+      },
+      "failures": [],
+      "verdict": "PASS",
+      "observed": {
+        "target_rank": 65,
+        "target_score": 0.5140696167945862,
+        "score_at_rank_1": 0.644286572933197,
+        "target_gallery_position": 70410,
+        "target_did": "7:42304",
+        "target_gallery_id": null,
+        "in_window": true,
+        "depth": 100,
+        "stored_candidates": 100
+      }
+    },
+    {
+      "qid": "7:3790",
+      "scope": "shirt",
+      "condition": "text_only_black_image",
+      "join": {
+        "own_positives": [
+          "7:42304"
+        ],
+        "did": "7:42304",
+        "candidate_asset": "mbeir_images/fashioniq_images/B00E3WVAD2.jpg",
+        "gallery_position": 70410
+      },
+      "checks": {
+        "own_positives_present": {
+          "ok": true,
+          "detail": "['7:42304']"
+        },
+        "did_has_candidate_asset": {
+          "ok": true,
+          "detail": "did=7:42304 asset=mbeir_images/fashioniq_images/B00E3WVAD2.jpg"
+        },
+        "asset_found_in_release_gallery": {
+          "ok": true,
+          "detail": "mbeir_images/fashioniq_images/B00E3WVAD2.jpg -> 70410"
+        },
+        "export_row_found": {
+          "ok": true,
+          "detail": "limn_dual_scope.shirt.text_only_black_image.jsonl"
+        },
+        "export_row_identity": {
+          "ok": true,
+          "detail": "scope=shirt condition=text_only_black_image"
+        },
+        "export_row_qid_unique": {
+          "ok": true
+        },
+        "declared_depth_is_int": {
+          "ok": true,
+          "detail": "100"
+        },
+        "declared_depth_equals_expected": {
+          "ok": true,
+          "detail": "100"
+        },
+        "stored_count_equals_declared": {
+          "ok": true,
+          "detail": "stored=100 declared=100"
+        },
+        "ranks_sequential_1_n": {
+          "ok": true,
+          "detail": "[1, 2, 3]..[100]"
+        },
+        "scores_all_finite": {
+          "ok": true
+        },
+        "scores_monotone_nonincreasing": {
+          "ok": true,
+          "detail": "[]"
+        },
+        "window_gallery_id_unique": {
+          "ok": true,
+          "detail": "[]"
+        },
+        "window_position_unique": {
+          "ok": true,
+          "detail": "[]"
+        },
+        "every_window_position_matches_release_gallery_id": {
+          "ok": true,
+          "detail": "[]"
+        },
+        "every_window_image_path_equals_gallery_id": {
+          "ok": true,
+          "detail": "[]"
+        },
+        "every_window_gallery_id_is_a_release_candidate_asset": {
+          "ok": true,
+          "detail": "[]"
+        },
+        "is_target_flag_count_leq_1": {
+          "ok": true,
+          "detail": "0"
+        },
+        "target_flagged_in_window": {
+          "ok": true,
+          "detail": "target_rank 6891 outside depth 100"
+        },
+        "summary_rank_beyond_depth": {
+          "ok": true,
+          "detail": "rank=6891 depth=100"
+        },
+        "score_at_rank_1_equals_window_rank1": {
+          "ok": true,
+          "detail": "summary=0.6010594964027405 window=0.6010594964027405"
+        },
+        "score_max_equals_window_rank1": {
+          "ok": true,
+          "detail": "summary_max=0.6010594964027405 window_rank1=0.6010594964027405"
+        },
+        "target_margin_equals_rank1_minus_target_score": {
+          "ok": true,
+          "detail": "declared=0.38371944427490234 derived=0.38371944427490234"
+        },
+        "target_score_within_min_max": {
+          "ok": true,
+          "detail": "-0.3288184404373169"
+        },
+        "gallery_size_scored_equals_release": {
+          "ok": true,
+          "detail": "summary=74381 export=74381 release=74381"
+        },
+        "summary_target_did_is_own_positive": {
+          "ok": true,
+          "detail": "summary=7:42304 own=['7:42304']"
+        },
+        "summary_target_did_equals_release_join": {
+          "ok": true,
+          "detail": "summary=7:42304 release=7:42304"
+        },
+        "query_record_target_gallery_id_equals_release_asset": {
+          "ok": true,
+          "detail": "query_record=mbeir_images/fashioniq_images/B00E3WVAD2.jpg asset=mbeir_images/fashioniq_images/B00E3WVAD2.jpg"
+        },
+        "summary_target_position_equals_join": {
+          "ok": true,
+          "detail": "summary=70410 join=70410"
+        },
+        "summary_position_in_query_target_positions": {
+          "ok": true,
+          "detail": "[70410]"
+        },
+        "summary_rank_equals_export_rank": {
+          "ok": true,
+          "detail": "summary=6891 export=6891"
+        },
+        "summary_score_equals_export_score": {
+          "ok": true,
+          "detail": "summary=0.21734005212783813 export=0.21734005212783813"
+        },
+        "export_checkpoint_equals_summary_checkpoint": {
+          "ok": true
+        },
+        "export_checkpoint_equals_disk_checkpoint": {
+          "ok": true
+        },
+        "top100_export_path_is_this_file": {
+          "ok": true,
+          "detail": "/home/heheboiz/data/cir/workbench/docs/reviews/20261109-native15-composition-limn/limn_dual_scope.shirt.text_only_black_image.jsonl"
+        },
+        "query_embedding_norm_is_unit": {
+          "ok": true,
+          "detail": "1.000000035800694"
+        },
+        "joined_gallery_row_is_unit_norm": {
+          "ok": true,
+          "detail": "0.999999964"
+        },
+        "joined_gallery_row_finite": {
+          "ok": true
+        }
+      },
+      "failures": [],
+      "verdict": "PASS",
+      "observed": {
+        "target_rank": 6891,
+        "target_score": 0.21734005212783813,
+        "score_at_rank_1": 0.6010594964027405,
+        "target_gallery_position": 70410,
+        "target_did": "7:42304",
+        "target_gallery_id": null,
+        "in_window": false,
+        "depth": 100,
+        "stored_candidates": 100
+      }
+    },
+    {
+      "qid": "7:3790",
+      "scope": "shirt",
+      "condition": "image_only_empty_text",
+      "join": {
+        "own_positives": [
+          "7:42304"
+        ],
+        "did": "7:42304",
+        "candidate_asset": "mbeir_images/fashioniq_images/B00E3WVAD2.jpg",
+        "gallery_position": 70410
+      },
+      "checks": {
+        "own_positives_present": {
+          "ok": true,
+          "detail": "['7:42304']"
+        },
+        "did_has_candidate_asset": {
+          "ok": true,
+          "detail": "did=7:42304 asset=mbeir_images/fashioniq_images/B00E3WVAD2.jpg"
+        },
+        "asset_found_in_release_gallery": {
+          "ok": true,
+          "detail": "mbeir_images/fashioniq_images/B00E3WVAD2.jpg -> 70410"
+        },
+        "export_row_found": {
+          "ok": true,
+          "detail": "limn_dual_scope.shirt.image_only_empty_text.jsonl"
+        },
+        "export_row_identity": {
+          "ok": true,
+          "detail": "scope=shirt condition=image_only_empty_text"
+        },
+        "export_row_qid_unique": {
+          "ok": true
+        },
+        "declared_depth_is_int": {
+          "ok": true,
+          "detail": "100"
+        },
+        "declared_depth_equals_expected": {
+          "ok": true,
+          "detail": "100"
+        },
+        "stored_count_equals_declared": {
+          "ok": true,
+          "detail": "stored=100 declared=100"
+        },
+        "ranks_sequential_1_n": {
+          "ok": true,
+          "detail": "[1, 2, 3]..[100]"
+        },
+        "scores_all_finite": {
+          "ok": true
+        },
+        "scores_monotone_nonincreasing": {
+          "ok": true,
+          "detail": "[]"
+        },
+        "window_gallery_id_unique": {
+          "ok": true,
+          "detail": "[]"
+        },
+        "window_position_unique": {
+          "ok": true,
+          "detail": "[]"
+        },
+        "every_window_position_matches_release_gallery_id": {
+          "ok": true,
+          "detail": "[]"
+        },
+        "every_window_image_path_equals_gallery_id": {
+          "ok": true,
+          "detail": "[]"
+        },
+        "every_window_gallery_id_is_a_release_candidate_asset": {
+          "ok": true,
+          "detail": "[]"
+        },
+        "is_target_flag_count_leq_1": {
+          "ok": true,
+          "detail": "0"
+        },
+        "target_flagged_in_window": {
+          "ok": true,
+          "detail": "target_rank 2200 outside depth 100"
+        },
+        "summary_rank_beyond_depth": {
+          "ok": true,
+          "detail": "rank=2200 depth=100"
+        },
+        "score_at_rank_1_equals_window_rank1": {
+          "ok": true,
+          "detail": "summary=0.7860040068626404 window=0.7860040068626404"
+        },
+        "score_max_equals_window_rank1": {
+          "ok": true,
+          "detail": "summary_max=0.7860040068626404 window_rank1=0.7860040068626404"
+        },
+        "target_margin_equals_rank1_minus_target_score": {
+          "ok": true,
+          "detail": "declared=0.48401394486427307 derived=0.48401394486427307"
+        },
+        "target_score_within_min_max": {
+          "ok": true,
+          "detail": "-0.34740346670150757"
+        },
+        "gallery_size_scored_equals_release": {
+          "ok": true,
+          "detail": "summary=74381 export=74381 release=74381"
+        },
+        "summary_target_did_is_own_positive": {
+          "ok": true,
+          "detail": "summary=7:42304 own=['7:42304']"
+        },
+        "summary_target_did_equals_release_join": {
+          "ok": true,
+          "detail": "summary=7:42304 release=7:42304"
+        },
+        "query_record_target_gallery_id_equals_release_asset": {
+          "ok": true,
+          "detail": "query_record=mbeir_images/fashioniq_images/B00E3WVAD2.jpg asset=mbeir_images/fashioniq_images/B00E3WVAD2.jpg"
+        },
+        "summary_target_position_equals_join": {
+          "ok": true,
+          "detail": "summary=70410 join=70410"
+        },
+        "summary_position_in_query_target_positions": {
+          "ok": true,
+          "detail": "[70410]"
+        },
+        "summary_rank_equals_export_rank": {
+          "ok": true,
+          "detail": "summary=2200 export=2200"
+        },
+        "summary_score_equals_export_score": {
+          "ok": true,
+          "detail": "summary=0.3019900619983673 export=0.3019900619983673"
+        },
+        "export_checkpoint_equals_summary_checkpoint": {
+          "ok": true
+        },
+        "export_checkpoint_equals_disk_checkpoint": {
+          "ok": true
+        },
+        "top100_export_path_is_this_file": {
+          "ok": true,
+          "detail": "/home/heheboiz/data/cir/workbench/docs/reviews/20261109-native15-composition-limn/limn_dual_scope.shirt.image_only_empty_text.jsonl"
+        },
+        "query_embedding_norm_is_unit": {
+          "ok": true,
+          "detail": "0.9999999524724132"
+        },
+        "joined_gallery_row_is_unit_norm": {
+          "ok": true,
+          "detail": "0.999999964"
+        },
+        "joined_gallery_row_finite": {
+          "ok": true
+        }
+      },
+      "failures": [],
+      "verdict": "PASS",
+      "observed": {
+        "target_rank": 2200,
+        "target_score": 0.3019900619983673,
+        "score_at_rank_1": 0.7860040068626404,
+        "target_gallery_position": 70410,
+        "target_did": "7:42304",
+        "target_gallery_id": null,
+        "in_window": false,
+        "depth": 100,
+        "stored_candidates": 100
+      }
+    },
+    {
+      "qid": "7:3790",
+      "scope": "toptee",
+      "condition": "multimodal",
+      "join": {
+        "own_positives": [
+          "7:42304"
+        ],
+        "did": "7:42304",
+        "candidate_asset": "mbeir_images/fashioniq_images/B00E3WVAD2.jpg",
+        "gallery_position": 70410
+      },
+      "checks": {
+        "own_positives_present": {
+          "ok": true,
+          "detail": "['7:42304']"
+        },
+        "did_has_candidate_asset": {
+          "ok": true,
+          "detail": "did=7:42304 asset=mbeir_images/fashioniq_images/B00E3WVAD2.jpg"
+        },
+        "asset_found_in_release_gallery": {
+          "ok": true,
+          "detail": "mbeir_images/fashioniq_images/B00E3WVAD2.jpg -> 70410"
+        },
+        "export_row_found": {
+          "ok": true,
+          "detail": "limn_dual_scope.toptee.multimodal.jsonl"
+        },
+        "export_row_identity": {
+          "ok": true,
+          "detail": "scope=toptee condition=multimodal"
+        },
+        "export_row_qid_unique": {
+          "ok": true
+        },
+        "declared_depth_is_int": {
+          "ok": true,
+          "detail": "100"
+        },
+        "declared_depth_equals_expected": {
+          "ok": true,
+          "detail": "100"
+        },
+        "stored_count_equals_declared": {
+          "ok": true,
+          "detail": "stored=100 declared=100"
+        },
+        "ranks_sequential_1_n": {
+          "ok": true,
+          "detail": "[1, 2, 3]..[100]"
+        },
+        "scores_all_finite": {
+          "ok": true
+        },
+        "scores_monotone_nonincreasing": {
+          "ok": true,
+          "detail": "[]"
+        },
+        "window_gallery_id_unique": {
+          "ok": true,
+          "detail": "[]"
+        },
+        "window_position_unique": {
+          "ok": true,
+          "detail": "[]"
+        },
+        "every_window_position_matches_release_gallery_id": {
+          "ok": true,
+          "detail": "[]"
+        },
+        "every_window_image_path_equals_gallery_id": {
+          "ok": true,
+          "detail": "[]"
+        },
+        "every_window_gallery_id_is_a_release_candidate_asset": {
+          "ok": true,
+          "detail": "[]"
+        },
+        "is_target_flag_count_leq_1": {
+          "ok": true,
+          "detail": "1"
+        },
+        "target_flagged_in_window": {
+          "ok": true,
+          "detail": "1"
+        },
+        "flagged_gallery_position_equals_join": {
+          "ok": true,
+          "detail": "flagged=70410 join=70410"
+        },
+        "flagged_gallery_id_equals_release_asset": {
+          "ok": true,
+          "detail": "flagged=mbeir_images/fashioniq_images/B00E3WVAD2.jpg asset=mbeir_images/fashioniq_images/B00E3WVAD2.jpg"
+        },
+        "flagged_rank_equals_summary_rank": {
+          "ok": true,
+          "detail": "flagged=43 summary=43"
+        },
+        "flagged_score_equals_summary_score": {
+          "ok": true,
+          "detail": "flagged=0.6190158128738403 summary=0.6190158128738403"
+        },
+        "summary_rank_is_rank_of_join_position_in_window": {
+          "ok": true,
+          "detail": "window_rank=[43] summary=43"
+        },
+        "score_at_rank_1_equals_window_rank1": {
+          "ok": true,
+          "detail": "summary=0.7025628089904785 window=0.7025628089904785"
+        },
+        "score_max_equals_window_rank1": {
+          "ok": true,
+          "detail": "summary_max=0.7025628089904785 window_rank1=0.7025628089904785"
+        },
+        "target_margin_equals_rank1_minus_target_score": {
+          "ok": true,
+          "detail": "declared=0.08354699611663818 derived=0.08354699611663818"
+        },
+        "target_score_within_min_max": {
+          "ok": true,
+          "detail": "-0.35517796874046326"
+        },
+        "gallery_size_scored_equals_release": {
+          "ok": true,
+          "detail": "summary=74381 export=74381 release=74381"
+        },
+        "summary_target_did_is_own_positive": {
+          "ok": true,
+          "detail": "summary=7:42304 own=['7:42304']"
+        },
+        "summary_target_did_equals_release_join": {
+          "ok": true,
+          "detail": "summary=7:42304 release=7:42304"
+        },
+        "query_record_target_gallery_id_equals_release_asset": {
+          "ok": true,
+          "detail": "query_record=mbeir_images/fashioniq_images/B00E3WVAD2.jpg asset=mbeir_images/fashioniq_images/B00E3WVAD2.jpg"
+        },
+        "summary_target_position_equals_join": {
+          "ok": true,
+          "detail": "summary=70410 join=70410"
+        },
+        "summary_position_in_query_target_positions": {
+          "ok": true,
+          "detail": "[70410]"
+        },
+        "summary_rank_equals_export_rank": {
+          "ok": true,
+          "detail": "summary=43 export=43"
+        },
+        "summary_score_equals_export_score": {
+          "ok": true,
+          "detail": "summary=0.6190158128738403 export=0.6190158128738403"
+        },
+        "export_checkpoint_equals_summary_checkpoint": {
+          "ok": true
+        },
+        "export_checkpoint_equals_disk_checkpoint": {
+          "ok": true
+        },
+        "top100_export_path_is_this_file": {
+          "ok": true,
+          "detail": "/home/heheboiz/data/cir/workbench/docs/reviews/20261109-native15-composition-limn/limn_dual_scope.toptee.multimodal.jsonl"
+        },
+        "query_embedding_norm_is_unit": {
+          "ok": true,
+          "detail": "1.000000010069961"
+        },
+        "joined_gallery_row_is_unit_norm": {
+          "ok": true,
+          "detail": "1.000000001"
+        },
+        "joined_gallery_row_finite": {
+          "ok": true
+        }
+      },
+      "failures": [],
+      "verdict": "PASS",
+      "observed": {
+        "target_rank": 43,
+        "target_score": 0.6190158128738403,
+        "score_at_rank_1": 0.7025628089904785,
+        "target_gallery_position": 70410,
+        "target_did": "7:42304",
+        "target_gallery_id": null,
+        "in_window": true,
+        "depth": 100,
+        "stored_candidates": 100
+      }
+    },
+    {
+      "qid": "7:3790",
+      "scope": "toptee",
+      "condition": "text_only_black_image",
+      "join": {
+        "own_positives": [
+          "7:42304"
+        ],
+        "did": "7:42304",
+        "candidate_asset": "mbeir_images/fashioniq_images/B00E3WVAD2.jpg",
+        "gallery_position": 70410
+      },
+      "checks": {
+        "own_positives_present": {
+          "ok": true,
+          "detail": "['7:42304']"
+        },
+        "did_has_candidate_asset": {
+          "ok": true,
+          "detail": "did=7:42304 asset=mbeir_images/fashioniq_images/B00E3WVAD2.jpg"
+        },
+        "asset_found_in_release_gallery": {
+          "ok": true,
+          "detail": "mbeir_images/fashioniq_images/B00E3WVAD2.jpg -> 70410"
+        },
+        "export_row_found": {
+          "ok": true,
+          "detail": "limn_dual_scope.toptee.text_only_black_image.jsonl"
+        },
+        "export_row_identity": {
+          "ok": true,
+          "detail": "scope=toptee condition=text_only_black_image"
+        },
+        "export_row_qid_unique": {
+          "ok": true
+        },
+        "declared_depth_is_int": {
+          "ok": true,
+          "detail": "100"
+        },
+        "declared_depth_equals_expected": {
+          "ok": true,
+          "detail": "100"
+        },
+        "stored_count_equals_declared": {
+          "ok": true,
+          "detail": "stored=100 declared=100"
+        },
+        "ranks_sequential_1_n": {
+          "ok": true,
+          "detail": "[1, 2, 3]..[100]"
+        },
+        "scores_all_finite": {
+          "ok": true
+        },
+        "scores_monotone_nonincreasing": {
+          "ok": true,
+          "detail": "[]"
+        },
+        "window_gallery_id_unique": {
+          "ok": true,
+          "detail": "[]"
+        },
+        "window_position_unique": {
+          "ok": true,
+          "detail": "[]"
+        },
+        "every_window_position_matches_release_gallery_id": {
+          "ok": true,
+          "detail": "[]"
+        },
+        "every_window_image_path_equals_gallery_id": {
+          "ok": true,
+          "detail": "[]"
+        },
+        "every_window_gallery_id_is_a_release_candidate_asset": {
+          "ok": true,
+          "detail": "[]"
+        },
+        "is_target_flag_count_leq_1": {
+          "ok": true,
+          "detail": "0"
+        },
+        "target_flagged_in_window": {
+          "ok": true,
+          "detail": "target_rank 4730 outside depth 100"
+        },
+        "summary_rank_beyond_depth": {
+          "ok": true,
+          "detail": "rank=4730 depth=100"
+        },
+        "score_at_rank_1_equals_window_rank1": {
+          "ok": true,
+          "detail": "summary=0.6055787205696106 window=0.6055787205696106"
+        },
+        "score_max_equals_window_rank1": {
+          "ok": true,
+          "detail": "summary_max=0.6055787205696106 window_rank1=0.6055787205696106"
+        },
+        "target_margin_equals_rank1_minus_target_score": {
+          "ok": true,
+          "detail": "declared=0.33308809995651245 derived=0.33308809995651245"
+        },
+        "target_score_within_min_max": {
+          "ok": true,
+          "detail": "-0.39415714144706726"
+        },
+        "gallery_size_scored_equals_release": {
+          "ok": true,
+          "detail": "summary=74381 export=74381 release=74381"
+        },
+        "summary_target_did_is_own_positive": {
+          "ok": true,
+          "detail": "summary=7:42304 own=['7:42304']"
+        },
+        "summary_target_did_equals_release_join": {
+          "ok": true,
+          "detail": "summary=7:42304 release=7:42304"
+        },
+        "query_record_target_gallery_id_equals_release_asset": {
+          "ok": true,
+          "detail": "query_record=mbeir_images/fashioniq_images/B00E3WVAD2.jpg asset=mbeir_images/fashioniq_images/B00E3WVAD2.jpg"
+        },
+        "summary_target_position_equals_join": {
+          "ok": true,
+          "detail": "summary=70410 join=70410"
+        },
+        "summary_position_in_query_target_positions": {
+          "ok": true,
+          "detail": "[70410]"
+        },
+        "summary_rank_equals_export_rank": {
+          "ok": true,
+          "detail": "summary=4730 export=4730"
+        },
+        "summary_score_equals_export_score": {
+          "ok": true,
+          "detail": "summary=0.27249062061309814 export=0.27249062061309814"
+        },
+        "export_checkpoint_equals_summary_checkpoint": {
+          "ok": true
+        },
+        "export_checkpoint_equals_disk_checkpoint": {
+          "ok": true
+        },
+        "top100_export_path_is_this_file": {
+          "ok": true,
+          "detail": "/home/heheboiz/data/cir/workbench/docs/reviews/20261109-native15-composition-limn/limn_dual_scope.toptee.text_only_black_image.jsonl"
+        },
+        "query_embedding_norm_is_unit": {
+          "ok": true,
+          "detail": "0.9999999866289458"
+        },
+        "joined_gallery_row_is_unit_norm": {
+          "ok": true,
+          "detail": "1.000000001"
+        },
+        "joined_gallery_row_finite": {
+          "ok": true
+        }
+      },
+      "failures": [],
+      "verdict": "PASS",
+      "observed": {
+        "target_rank": 4730,
+        "target_score": 0.27249062061309814,
+        "score_at_rank_1": 0.6055787205696106,
+        "target_gallery_position": 70410,
+        "target_did": "7:42304",
+        "target_gallery_id": null,
+        "in_window": false,
+        "depth": 100,
+        "stored_candidates": 100
+      }
+    },
+    {
+      "qid": "7:3790",
+      "scope": "toptee",
+      "condition": "image_only_empty_text",
+      "join": {
+        "own_positives": [
+          "7:42304"
+        ],
+        "did": "7:42304",
+        "candidate_asset": "mbeir_images/fashioniq_images/B00E3WVAD2.jpg",
+        "gallery_position": 70410
+      },
+      "checks": {
+        "own_positives_present": {
+          "ok": true,
+          "detail": "['7:42304']"
+        },
+        "did_has_candidate_asset": {
+          "ok": true,
+          "detail": "did=7:42304 asset=mbeir_images/fashioniq_images/B00E3WVAD2.jpg"
+        },
+        "asset_found_in_release_gallery": {
+          "ok": true,
+          "detail": "mbeir_images/fashioniq_images/B00E3WVAD2.jpg -> 70410"
+        },
+        "export_row_found": {
+          "ok": true,
+          "detail": "limn_dual_scope.toptee.image_only_empty_text.jsonl"
+        },
+        "export_row_identity": {
+          "ok": true,
+          "detail": "scope=toptee condition=image_only_empty_text"
+        },
+        "export_row_qid_unique": {
+          "ok": true
+        },
+        "declared_depth_is_int": {
+          "ok": true,
+          "detail": "100"
+        },
+        "declared_depth_equals_expected": {
+          "ok": true,
+          "detail": "100"
+        },
+        "stored_count_equals_declared": {
+          "ok": true,
+          "detail": "stored=100 declared=100"
+        },
+        "ranks_sequential_1_n": {
+          "ok": true,
+          "detail": "[1, 2, 3]..[100]"
+        },
+        "scores_all_finite": {
+          "ok": true
+        },
+        "scores_monotone_nonincreasing": {
+          "ok": true,
+          "detail": "[]"
+        },
+        "window_gallery_id_unique": {
+          "ok": true,
+          "detail": "[]"
+        },
+        "window_position_unique": {
+          "ok": true,
+          "detail": "[]"
+        },
+        "every_window_position_matches_release_gallery_id": {
+          "ok": true,
+          "detail": "[]"
+        },
+        "every_window_image_path_equals_gallery_id": {
+          "ok": true,
+          "detail": "[]"
+        },
+        "every_window_gallery_id_is_a_release_candidate_asset": {
+          "ok": true,
+          "detail": "[]"
+        },
+        "is_target_flag_count_leq_1": {
+          "ok": true,
+          "detail": "0"
+        },
+        "target_flagged_in_window": {
+          "ok": true,
+          "detail": "target_rank 4047 outside depth 100"
+        },
+        "summary_rank_beyond_depth": {
+          "ok": true,
+          "detail": "rank=4047 depth=100"
+        },
+        "score_at_rank_1_equals_window_rank1": {
+          "ok": true,
+          "detail": "summary=0.7201340794563293 window=0.7201340794563293"
+        },
+        "score_max_equals_window_rank1": {
+          "ok": true,
+          "detail": "summary_max=0.7201340794563293 window_rank1=0.7201340794563293"
+        },
+        "target_margin_equals_rank1_minus_target_score": {
+          "ok": true,
+          "detail": "declared=0.4201589822769165 derived=0.4201589822769165"
+        },
+        "target_score_within_min_max": {
+          "ok": true,
+          "detail": "-0.32562077045440674"
+        },
+        "gallery_size_scored_equals_release": {
+          "ok": true,
+          "detail": "summary=74381 export=74381 release=74381"
+        },
+        "summary_target_did_is_own_positive": {
+          "ok": true,
+          "detail": "summary=7:42304 own=['7:42304']"
+        },
+        "summary_target_did_equals_release_join": {
+          "ok": true,
+          "detail": "summary=7:42304 release=7:42304"
+        },
+        "query_record_target_gallery_id_equals_release_asset": {
+          "ok": true,
+          "detail": "query_record=mbeir_images/fashioniq_images/B00E3WVAD2.jpg asset=mbeir_images/fashioniq_images/B00E3WVAD2.jpg"
+        },
+        "summary_target_position_equals_join": {
+          "ok": true,
+          "detail": "summary=70410 join=70410"
+        },
+        "summary_position_in_query_target_positions": {
+          "ok": true,
+          "detail": "[70410]"
+        },
+        "summary_rank_equals_export_rank": {
+          "ok": true,
+          "detail": "summary=4047 export=4047"
+        },
+        "summary_score_equals_export_score": {
+          "ok": true,
+          "detail": "summary=0.29997509717941284 export=0.29997509717941284"
+        },
+        "export_checkpoint_equals_summary_checkpoint": {
+          "ok": true
+        },
+        "export_checkpoint_equals_disk_checkpoint": {
+          "ok": true
+        },
+        "top100_export_path_is_this_file": {
+          "ok": true,
+          "detail": "/home/heheboiz/data/cir/workbench/docs/reviews/20261109-native15-composition-limn/limn_dual_scope.toptee.image_only_empty_text.jsonl"
+        },
+        "query_embedding_norm_is_unit": {
+          "ok": true,
+          "detail": "0.9999999620617145"
+        },
+        "joined_gallery_row_is_unit_norm": {
+          "ok": true,
+          "detail": "1.000000001"
+        },
+        "joined_gallery_row_finite": {
+          "ok": true
+        }
+      },
+      "failures": [],
+      "verdict": "PASS",
+      "observed": {
+        "target_rank": 4047,
+        "target_score": 0.29997509717941284,
+        "score_at_rank_1": 0.7201340794563293,
+        "target_gallery_position": 70410,
+        "target_did": "7:42304",
+        "target_gallery_id": null,
+        "in_window": false,
+        "depth": 100,
+        "stored_candidates": 100
+      }
+    }
+  ],
+  "cells_summary": {
+    "total": 12,
+    "pass": 12,
+    "fail": 0,
+    "failing_cells": [],
+    "failed_checks": [],
+    "checks_per_cell_min": 38,
+    "target_ranks": {
+      "7:3038/shirt/multimodal": 3,
+      "7:3038/shirt/text_only_black_image": 88,
+      "7:3038/shirt/image_only_empty_text": 152,
+      "7:3038/toptee/multimodal": 43,
+      "7:3038/toptee/text_only_black_image": 389,
+      "7:3038/toptee/image_only_empty_text": 67,
+      "7:3790/shirt/multimodal": 65,
+      "7:3790/shirt/text_only_black_image": 6891,
+      "7:3790/shirt/image_only_empty_text": 2200,
+      "7:3790/toptee/multimodal": 43,
+      "7:3790/toptee/text_only_black_image": 4730,
+      "7:3790/toptee/image_only_empty_text": 4047
+    }
+  },
+  "r5": {
+    "files": {
+      "current": "/home/heheboiz/data/cir/workbench/docs/reviews/20261109-native15-composition-limn/limn_dual_scope.json",
+      "pre_r5": "/home/heheboiz/data/cir/workbench/docs/reviews/20261109-native15-composition-limn/limn_dual_scope.json.pre-r5"
+    },
+    "leaf_counts": {
+      "current": 314,
+      "pre_r5": 302
+    },
+    "added_count": 12,
+    "removed_count": 0,
+    "changed_count": 6,
+    "added_paths": [
+      "provenance_correction_r5.artifact_sha256_before",
+      "provenance_correction_r5.cells_changed",
+      "provenance_correction_r5.changed",
+      "provenance_correction_r5.defect",
+      "provenance_correction_r5.fix",
+      "provenance_correction_r5.original_preserved_at",
+      "provenance_correction_r5.reranked",
+      "provenance_correction_r5.rescored",
+      "provenance_correction_r5.top_level_target_did_removed",
+      "provenance_correction_r5.unchanged",
+      "provenance_correction_r5.verification",
+      "provenance_correction_r5.what"
+    ],
+    "removed_paths": [],
+    "changed_paths": [
+      "queries.7:3038.scopes.shirt.image_only_empty_text.target_did",
+      "queries.7:3038.scopes.shirt.multimodal.target_did",
+      "queries.7:3038.scopes.shirt.text_only_black_image.target_did",
+      "queries.7:3038.scopes.toptee.image_only_empty_text.target_did",
+      "queries.7:3038.scopes.toptee.multimodal.target_did",
+      "queries.7:3038.scopes.toptee.text_only_black_image.target_did"
+    ],
+    "added_all_under_provenance_correction_r5": true,
+    "removed_none": true,
+    "changed_target_did_cells": 6,
+    "changed_non_target_did": [],
+    "changed_set_equals_declared_cells": true,
+    "declared_cells_changed_field": 6,
+    "declared_cells_count_matches": true,
+    "declared_changed_values_match": true,
+    "declared_unchanged_fields_changed": [],
+    "top_level_target_did_present_now": false,
+    "top_level_target_did_present_pre_r5": false,
+    "sha256": {
+      "current": "d1b4aadb6735b8b3c57e9fbfe234b1e12c15a13b977ace23500916af94473e3f",
+      "pre_r5": "04c4419e44ff555b909ad92ed0a8596520a0cb5cdcfc0467986baabf77bfabf0"
+    },
+    "declared_artifact_sha256_before": "04c4419e44ff555b909ad92ed0a8596520a0cb5cdcfc0467986baabf77bfabf0",
+    "artifact_sha256_before_matches_pre_r5": true,
+    "rescored_claimed": false,
+    "reranked_claimed": false,
+    "rank_score_position_leaves_unchanged": true,
+    "verdict": "PASS"
+  },
+  "depth": {
+    "rows": [
+      {
+        "export": "limn_dual_scope.shirt.multimodal.jsonl",
+        "qid": "7:3038",
+        "declared_depth": 100,
+        "stored_candidates": 100,
+        "truncated": false,
+        "window_longer_than_depth": false
+      },
+      {
+        "export": "limn_dual_scope.shirt.multimodal.jsonl",
+        "qid": "7:3790",
+        "declared_depth": 100,
+        "stored_candidates": 100,
+        "truncated": false,
+        "window_longer_than_depth": false
+      },
+      {
+        "export": "limn_dual_scope.shirt.text_only_black_image.jsonl",
+        "qid": "7:3038",
+        "declared_depth": 100,
+        "stored_candidates": 100,
+        "truncated": false,
+        "window_longer_than_depth": false
+      },
+      {
+        "export": "limn_dual_scope.shirt.text_only_black_image.jsonl",
+        "qid": "7:3790",
+        "declared_depth": 100,
+        "stored_candidates": 100,
+        "truncated": false,
+        "window_longer_than_depth": false
+      },
+      {
+        "export": "limn_dual_scope.shirt.image_only_empty_text.jsonl",
+        "qid": "7:3038",
+        "declared_depth": 100,
+        "stored_candidates": 100,
+        "truncated": false,
+        "window_longer_than_depth": false
+      },
+      {
+        "export": "limn_dual_scope.shirt.image_only_empty_text.jsonl",
+        "qid": "7:3790",
+        "declared_depth": 100,
+        "stored_candidates": 100,
+        "truncated": false,
+        "window_longer_than_depth": false
+      },
+      {
+        "export": "limn_dual_scope.toptee.multimodal.jsonl",
+        "qid": "7:3038",
+        "declared_depth": 100,
+        "stored_candidates": 100,
+        "truncated": false,
+        "window_longer_than_depth": false
+      },
+      {
+        "export": "limn_dual_scope.toptee.multimodal.jsonl",
+        "qid": "7:3790",
+        "declared_depth": 100,
+        "stored_candidates": 100,
+        "truncated": false,
+        "window_longer_than_depth": false
+      },
+      {
+        "export": "limn_dual_scope.toptee.text_only_black_image.jsonl",
+        "qid": "7:3038",
+        "declared_depth": 100,
+        "stored_candidates": 100,
+        "truncated": false,
+        "window_longer_than_depth": false
+      },
+      {
+        "export": "limn_dual_scope.toptee.text_only_black_image.jsonl",
+        "qid": "7:3790",
+        "declared_depth": 100,
+        "stored_candidates": 100,
+        "truncated": false,
+        "window_longer_than_depth": false
+      },
+      {
+        "export": "limn_dual_scope.toptee.image_only_empty_text.jsonl",
+        "qid": "7:3038",
+        "declared_depth": 100,
+        "stored_candidates": 100,
+        "truncated": false,
+        "window_longer_than_depth": false
+      },
+      {
+        "export": "limn_dual_scope.toptee.image_only_empty_text.jsonl",
+        "qid": "7:3790",
+        "declared_depth": 100,
+        "stored_candidates": 100,
+        "truncated": false,
+        "window_longer_than_depth": false
+      }
+    ],
+    "rows_total": 12,
+    "truncated_rows": [],
+    "window_longer_than_depth_rows": [],
+    "declared_depth_values": [
+      100
+    ],
+    "stored_count_values": [
+      100
+    ],
+    "runtime_top_k": 100
+  },
+  "top100_exports": {
+    "distinct_files_referenced": 6,
+    "expected_distinct_files": 6,
+    "names_match_expected_set": true,
+    "each_file_has_two_cells": {
+      "limn_dual_scope.shirt.image_only_empty_text.jsonl": 2,
+      "limn_dual_scope.shirt.multimodal.jsonl": 2,
+      "limn_dual_scope.shirt.text_only_black_image.jsonl": 2,
+      "limn_dual_scope.toptee.image_only_empty_text.jsonl": 2,
+      "limn_dual_scope.toptee.multimodal.jsonl": 2,
+      "limn_dual_scope.toptee.text_only_black_image.jsonl": 2
+    },
+    "cells_to_one_file_ok": true,
+    "all_reference_paths_resolve": true,
+    "missing": [],
+    "unexpected": [],
+    "absolute_paths_under_evidence_dir": true
+  },
+  "validator": {
+    "status": "DIAGNOSTIC_COMPLETE",
+    "complete": true,
+    "standard": "limn-diagnostic-evidence/v2",
+    "defect_count": 0,
+    "defects": [],
+    "defect_codes": [],
+    "manifest_digest": "9d1018524a89313da6abd98766c38403031c4505ae19aebe542fc0675e5827da",
+    "manifest_files": [
+      {
+        "name": "limn_dual_scope.json",
+        "sha256": "d1b4aadb6735b8b3c57e9fbfe234b1e12c15a13b977ace23500916af94473e3f",
+        "bytes": 29705
+      },
+      {
+        "name": "limn_dual_scope.shirt.multimodal.jsonl",
+        "sha256": "4e4e9abf679dc2c28d71c94d2428d84ca7e2848902b743153513c8d3c7f916bf",
+        "bytes": 41164
+      },
+      {
+        "name": "limn_dual_scope.shirt.text_only_black_image.jsonl",
+        "sha256": "0af306976e1fd5cab0be781102f0412d2b705bb145f6d5e676c4a038331df1d5",
+        "bytes": 41213
+      },
+      {
+        "name": "limn_dual_scope.shirt.image_only_empty_text.jsonl",
+        "sha256": "548dae274e33c544647c9036b79e60c14f634fc41b613f5a338e5a114a439542",
+        "bytes": 41097
+      },
+      {
+        "name": "limn_dual_scope.toptee.multimodal.jsonl",
+        "sha256": "2a5154805d46dc2aaef678a1cd825a85814ac9490550a51df99d62437431ef10",
+        "bytes": 41141
+      },
+      {
+        "name": "limn_dual_scope.toptee.text_only_black_image.jsonl",
+        "sha256": "d41145ccd5f657c0bfa30ee4f22e454c2d9cf22007f021b89b415b535a6b8dce",
+        "bytes": 41184
+      },
+      {
+        "name": "limn_dual_scope.toptee.image_only_empty_text.jsonl",
+        "sha256": "c125e17693e3b95d5255b53937bb0ef16b39b7d3c9b034371967809a79d05301",
+        "bytes": 41123
+      }
+    ],
+    "manifest_file_count": 7,
+    "manifest_declared_root": "/home/heheboiz/data/cir/workbench/docs/reviews/20261109-native15-composition-limn",
+    "depth_stored_per_combination": {
+      "7:3038/shirt/image_only_empty_text": 100,
+      "7:3038/shirt/multimodal": 100,
+      "7:3038/shirt/text_only_black_image": 100,
+      "7:3038/toptee/image_only_empty_text": 100,
+      "7:3038/toptee/multimodal": 100,
+      "7:3038/toptee/text_only_black_image": 100,
+      "7:3790/shirt/image_only_empty_text": 100,
+      "7:3790/shirt/multimodal": 100,
+      "7:3790/shirt/text_only_black_image": 100,
+      "7:3790/toptee/image_only_empty_text": 100,
+      "7:3790/toptee/multimodal": 100,
+      "7:3790/toptee/text_only_black_image": 100
+    },
+    "depth_stored_values": [
+      100
+    ],
+    "public_payload_exposes_depth_stored": false,
+    "defect_target_did_codes": []
+  },
+  "manifest_binding": {
+    "file_count": 7,
+    "expected_file_count": 7,
+    "files": [
+      {
+        "name": "limn_dual_scope.json",
+        "sha256": "d1b4aadb6735b8b3c57e9fbfe234b1e12c15a13b977ace23500916af94473e3f",
+        "bytes": 29705
+      },
+      {
+        "name": "limn_dual_scope.shirt.multimodal.jsonl",
+        "sha256": "4e4e9abf679dc2c28d71c94d2428d84ca7e2848902b743153513c8d3c7f916bf",
+        "bytes": 41164
+      },
+      {
+        "name": "limn_dual_scope.shirt.text_only_black_image.jsonl",
+        "sha256": "0af306976e1fd5cab0be781102f0412d2b705bb145f6d5e676c4a038331df1d5",
+        "bytes": 41213
+      },
+      {
+        "name": "limn_dual_scope.shirt.image_only_empty_text.jsonl",
+        "sha256": "548dae274e33c544647c9036b79e60c14f634fc41b613f5a338e5a114a439542",
+        "bytes": 41097
+      },
+      {
+        "name": "limn_dual_scope.toptee.multimodal.jsonl",
+        "sha256": "2a5154805d46dc2aaef678a1cd825a85814ac9490550a51df99d62437431ef10",
+        "bytes": 41141
+      },
+      {
+        "name": "limn_dual_scope.toptee.text_only_black_image.jsonl",
+        "sha256": "d41145ccd5f657c0bfa30ee4f22e454c2d9cf22007f021b89b415b535a6b8dce",
+        "bytes": 41184
+      },
+      {
+        "name": "limn_dual_scope.toptee.image_only_empty_text.jsonl",
+        "sha256": "c125e17693e3b95d5255b53937bb0ef16b39b7d3c9b034371967809a79d05301",
+        "bytes": 41123
+      }
+    ],
+    "independent_digest": "9d1018524a89313da6abd98766c38403031c4505ae19aebe542fc0675e5827da",
+    "served_digest": "9d1018524a89313da6abd98766c38403031c4505ae19aebe542fc0675e5827da",
+    "digest_matches_served": true,
+    "served_file_entries_match_disk": true,
+    "sha256_recorded_in_summary": {
+      "limn_dual_scope.json": "04c4419e44ff555b909ad92ed0a8596520a0cb5cdcfc0467986baabf77bfabf0",
+      "note": "the summary records only the PRE-r5 digest; the served manifest digest is computed from the bytes on disk and is not written into the artifact"
+    }
+  },
+  "validator_probes": {
+    "note": "each probe runs load_diagnostic() against a COPY of the evidence tree in a temp dir; the real tree is never modified",
+    "probes": {
+      "A_window_truncated_to_1_depth_100": {
+        "raised": null,
+        "status": "DIAGNOSTIC_EVIDENCE_DEFECT",
+        "complete": false,
+        "defect_count": 2,
+        "defects": [
+          {
+            "code": "export_depth_truncated",
+            "qid": "7:3038",
+            "scope": "shirt",
+            "condition": "multimodal",
+            "detail": "limn_dual_scope.shirt.multimodal.jsonl declares depth=100 over a gallery of 74381 (expected 100 rows) but stores 1; the missing window cannot be recovered from the file"
+          },
+          {
+            "code": "export_depth_truncated",
+            "qid": "7:3790",
+            "scope": "shirt",
+            "condition": "multimodal",
+            "detail": "limn_dual_scope.shirt.multimodal.jsonl declares depth=100 over a gallery of 74381 (expected 100 rows) but stores 1; the missing window cannot be recovered from the file"
+          }
+        ],
+        "defect_codes": [
+          "export_depth_truncated"
+        ],
+        "manifest_digest": "25e8dcb9e417bd40708885d0e2fed65c0f622217d4d1f3b67122807ab19bd1a3",
+        "tampered": "limn_dual_scope.shirt.multimodal.jsonl",
+        "tamper": "candidates[:1] with depth still 100",
+        "tampered_rows": {
+          "7:3038": {
+            "declared_depth": 100,
+            "stored_candidates": 1,
+            "target_rank": 3
+          },
+          "7:3790": {
+            "declared_depth": 100,
+            "stored_candidates": 1,
+            "target_rank": 65
+          }
+        },
+        "detected": true,
+        "silent_pass": false
+      },
+      "B_export_truncated_to_1_row": {
+        "raised": "DiagnosticEvidenceError",
+        "message": "limn_dual_scope.toptee.multimodal.jsonl has no row for 7:3790",
+        "status": null,
+        "complete": null,
+        "defects": [],
+        "defect_codes": [],
+        "tampered": "limn_dual_scope.toptee.multimodal.jsonl",
+        "tamper": "file cut to 1 of 2 qid rows",
+        "detected": true,
+        "silent_pass": false
+      },
+      "C_duplicate_qid_row_appended": {
+        "raised": null,
+        "status": "DIAGNOSTIC_COMPLETE",
+        "complete": true,
+        "defect_count": 0,
+        "defects": [],
+        "defect_codes": [],
+        "manifest_digest": "8b981cbe64a5d0079ce7721b015571fb7819dc3bcd4d0b2d74883de6b490429f",
+        "tampered": "limn_dual_scope.shirt.text_only_black_image.jsonl",
+        "tamper": "row_count 2 -> 3, duplicate qid identical",
+        "qids_after": [
+          "7:3038",
+          "7:3790",
+          "7:3038"
+        ],
+        "detected": false,
+        "silent_pass": true
+      },
+      "D_conflicting_duplicate_qid_row": {
+        "raised": null,
+        "status": "DIAGNOSTIC_COMPLETE",
+        "complete": true,
+        "defect_count": 0,
+        "defects": [],
+        "defect_codes": [],
+        "manifest_digest": "565b32698082c6fc7b3864fc26a0928c79130f51f8b025326f3c01e0138bc342",
+        "tampered": "limn_dual_scope.toptee.image_only_empty_text.jsonl",
+        "tamper": "row_count 2 -> 3, duplicate qid with target_rank+1000",
+        "rows_after": [
+          {
+            "qid": "7:3038",
+            "target_rank": 67,
+            "target_score": 0.45405110716819763
+          },
+          {
+            "qid": "7:3790",
+            "target_rank": 4047,
+            "target_score": 0.29997509717941284
+          },
+          {
+            "qid": "7:3038",
+            "target_rank": 1067,
+            "target_score": -1.0
+          }
+        ],
+        "detected": false,
+        "silent_pass": true
+      },
+      "E_export_file_missing_control": {
+        "raised": "DiagnosticEvidenceError",
+        "message": "per-scope export(s) missing: ['limn_dual_scope.toptee.text_only_black_image.jsonl']; a comparison whose evidence files are absent cannot be checked and must not be served as complete",
+        "status": null,
+        "complete": null,
+        "defects": [],
+        "defect_codes": [],
+        "tampered": "limn_dual_scope.toptee.text_only_black_image.jsonl",
+        "tamper": "file deleted",
+        "detected": true,
+        "silent_pass": false
+      }
+    },
+    "silently_accepted": [
+      "C_duplicate_qid_row_appended",
+      "D_conflicting_duplicate_qid_row"
+    ],
+    "refused_or_flagged": [
+      "A_window_truncated_to_1_depth_100",
+      "B_export_truncated_to_1_row",
+      "E_export_file_missing_control"
+    ]
+  },
+  "generations": {
+    "artifact": "limn (base_iter0_all_categories)",
+    "canonical_run_id_in_dual_scope": "9e4918a6b5c243412cbc58c9",
+    "generations": {
+      "limn_base_iter0_all_categories_10173dc45dea8c90fd2a284b": {
+        "full": {
+          "exists": true,
+          "path": "workbench/artifacts/composition/summary/limn_base_iter0_all_categories_10173dc45dea8c90fd2a284b/full.json",
+          "sha256": "024d0e6d992add1e1ec94bec14e7e1778edcdb878dcbc49045b7e0f06d3e7af5",
+          "run_id": "10173dc45dea8c90fd2a284b",
+          "subset": "full",
+          "query_count": 6003,
+          "scored_count": 5884,
+          "multimodal_recall_at_10": 30.064581917063222,
+          "checkpoint_identity": "12cbbf95d6c8a03e6174b560bca423f13aefe05fa50fad87ee197ae7d680ac06",
+          "gallery_identity_sha256": "1db68c59d96f014cdbecf936e108653de98abef0bd9a98a8abc2fe08b5dec4b4",
+          "smoke": {
+            "label": null,
+            "limited": false,
+            "query_limit": null
+          },
+          "execution_status": "PARTIAL",
+          "results_dir": "workbench/artifacts/composition/results/circus_fashioniq_release_v1/limn/base_iter0_all_categories/10173dc45dea8c90fd2a284b/full",
+          "results_dir_exists": true
+        },
+        "sf": {
+          "exists": true,
+          "path": "workbench/artifacts/composition/summary/limn_base_iter0_all_categories_10173dc45dea8c90fd2a284b/sf.json",
+          "sha256": "adc361f7c2fe182e2cca5afca2fbc4a957a3ac443833205efd7a2f767b96e7dc",
+          "run_id": "10173dc45dea8c90fd2a284b",
+          "subset": "sf",
+          "query_count": 4069,
+          "scored_count": 4000,
+          "multimodal_recall_at_10": 18.6,
+          "checkpoint_identity": "12cbbf95d6c8a03e6174b560bca423f13aefe05fa50fad87ee197ae7d680ac06",
+          "gallery_identity_sha256": "1db68c59d96f014cdbecf936e108653de98abef0bd9a98a8abc2fe08b5dec4b4",
+          "smoke": {
+            "label": null,
+            "limited": false,
+            "query_limit": null
+          },
+          "execution_status": "PARTIAL",
+          "results_dir": "workbench/artifacts/composition/results/circus_fashioniq_release_v1/limn/base_iter0_all_categories/10173dc45dea8c90fd2a284b/sf",
+          "results_dir_exists": true
+        },
+        "validated": {
+          "exists": true,
+          "path": "workbench/artifacts/composition/summary/limn_base_iter0_all_categories_10173dc45dea8c90fd2a284b/validated.json",
+          "sha256": "126aeceb4f391b3f09ad76600a7dd774e878d2fee8f768564c73b6f4e065d642",
+          "run_id": "10173dc45dea8c90fd2a284b",
+          "subset": "validated",
+          "query_count": 586,
+          "scored_count": 581,
+          "multimodal_recall_at_10": 30.292598967297764,
+          "checkpoint_identity": "12cbbf95d6c8a03e6174b560bca423f13aefe05fa50fad87ee197ae7d680ac06",
+          "gallery_identity_sha256": "1db68c59d96f014cdbecf936e108653de98abef0bd9a98a8abc2fe08b5dec4b4",
+          "smoke": {
+            "label": null,
+            "limited": false,
+            "query_limit": null
+          },
+          "execution_status": "PARTIAL",
+          "results_dir": "workbench/artifacts/composition/results/circus_fashioniq_release_v1/limn/base_iter0_all_categories/10173dc45dea8c90fd2a284b/validated",
+          "results_dir_exists": true
+        }
+      },
+      "limn_base_iter0_all_categories_3f86f58483b368377e2c151e": {
+        "full": {
+          "exists": true,
+          "path": "workbench/artifacts/composition/summary/limn_base_iter0_all_categories_3f86f58483b368377e2c151e/full.json",
+          "sha256": "d5de7b209c092829c10edec71d99c080736febfe71dca36e7d01546be40af5ae",
+          "run_id": "3f86f58483b368377e2c151e",
+          "subset": "full",
+          "query_count": 8,
+          "scored_count": 8,
+          "multimodal_recall_at_10": 25.0,
+          "checkpoint_identity": "12cbbf95d6c8a03e6174b560bca423f13aefe05fa50fad87ee197ae7d680ac06",
+          "gallery_identity_sha256": "1db68c59d96f014cdbecf936e108653de98abef0bd9a98a8abc2fe08b5dec4b4",
+          "smoke": {
+            "label": "SMOKE QUERY LIMIT; full released gallery preserved",
+            "limited": true,
+            "query_limit": 8
+          },
+          "execution_status": "COMPLETED",
+          "results_dir": "workbench/artifacts/composition/results/circus_fashioniq_release_v1/limn/base_iter0_all_categories/3f86f58483b368377e2c151e/full",
+          "results_dir_exists": true
+        },
+        "sf": {
+          "exists": true,
+          "path": "workbench/artifacts/composition/summary/limn_base_iter0_all_categories_3f86f58483b368377e2c151e/sf.json",
+          "sha256": "39a656090582b487430a41b57f48eef46c41185e2df5d08e543111c5d4595864",
+          "run_id": "3f86f58483b368377e2c151e",
+          "subset": "sf",
+          "query_count": 6,
+          "scored_count": 6,
+          "multimodal_recall_at_10": 0.0,
+          "checkpoint_identity": "12cbbf95d6c8a03e6174b560bca423f13aefe05fa50fad87ee197ae7d680ac06",
+          "gallery_identity_sha256": "1db68c59d96f014cdbecf936e108653de98abef0bd9a98a8abc2fe08b5dec4b4",
+          "smoke": {
+            "label": "SMOKE QUERY LIMIT; full released gallery preserved",
+            "limited": true,
+            "query_limit": 8
+          },
+          "execution_status": "COMPLETED",
+          "results_dir": "workbench/artifacts/composition/results/circus_fashioniq_release_v1/limn/base_iter0_all_categories/3f86f58483b368377e2c151e/sf",
+          "results_dir_exists": true
+        },
+        "validated": {
+          "exists": true,
+          "path": "workbench/artifacts/composition/summary/limn_base_iter0_all_categories_3f86f58483b368377e2c151e/validated.json",
+          "sha256": "252f6e9da3eed82cdf0045e71f671531e23bbee4e2e9d9070d8bb31013122ea9",
+          "run_id": "3f86f58483b368377e2c151e",
+          "subset": "validated",
+          "query_count": 0,
+          "scored_count": 0,
+          "multimodal_recall_at_10": null,
+          "checkpoint_identity": "12cbbf95d6c8a03e6174b560bca423f13aefe05fa50fad87ee197ae7d680ac06",
+          "gallery_identity_sha256": "1db68c59d96f014cdbecf936e108653de98abef0bd9a98a8abc2fe08b5dec4b4",
+          "smoke": {
+            "label": "SMOKE QUERY LIMIT; full released gallery preserved",
+            "limited": true,
+            "query_limit": 8
+          },
+          "execution_status": "COMPLETED",
+          "results_dir": "workbench/artifacts/composition/results/circus_fashioniq_release_v1/limn/base_iter0_all_categories/3f86f58483b368377e2c151e/validated",
+          "results_dir_exists": true
+        }
+      },
+      "limn_base_iter0_all_categories_9e4918a6b5c243412cbc58c9": {
+        "full": {
+          "exists": true,
+          "path": "workbench/artifacts/composition/summary/limn_base_iter0_all_categories_9e4918a6b5c243412cbc58c9/full.json",
+          "sha256": "c446acc4f554d2e995e346ab837e553ea122068d1180387dcbf87426ea800bef",
+          "run_id": "9e4918a6b5c243412cbc58c9",
+          "subset": "full",
+          "query_count": 6003,
+          "scored_count": 6001,
+          "multimodal_recall_at_10": 30.02832861189802,
+          "checkpoint_identity": "12cbbf95d6c8a03e6174b560bca423f13aefe05fa50fad87ee197ae7d680ac06",
+          "gallery_identity_sha256": "1db68c59d96f014cdbecf936e108653de98abef0bd9a98a8abc2fe08b5dec4b4",
+          "smoke": {
+            "label": null,
+            "limited": false,
+            "query_limit": null
+          },
+          "execution_status": "PARTIAL",
+          "results_dir": "workbench/artifacts/composition/results/circus_fashioniq_release_v1/limn/base_iter0_all_categories/9e4918a6b5c243412cbc58c9/full",
+          "results_dir_exists": true
+        },
+        "sf": {
+          "exists": false
+        },
+        "validated": {
+          "exists": false
+        }
+      }
+    },
+    "run_ids_by_generation": {
+      "limn_base_iter0_all_categories_10173dc45dea8c90fd2a284b": {
+        "full": "10173dc45dea8c90fd2a284b",
+        "sf": "10173dc45dea8c90fd2a284b",
+        "validated": "10173dc45dea8c90fd2a284b"
+      },
+      "limn_base_iter0_all_categories_3f86f58483b368377e2c151e": {
+        "full": "3f86f58483b368377e2c151e",
+        "sf": "3f86f58483b368377e2c151e",
+        "validated": "3f86f58483b368377e2c151e"
+      },
+      "limn_base_iter0_all_categories_9e4918a6b5c243412cbc58c9": {
+        "full": "9e4918a6b5c243412cbc58c9",
+        "sf": null,
+        "validated": null
+      }
+    },
+    "canonical_generation_has": {
+      "full": true,
+      "sf": false,
+      "validated": false
+    },
+    "sf_validated_same_run_as_full": {
+      "sf": false,
+      "validated": false
+    },
+    "sf_validated_absent_in_canonical_generation": [
+      "sf",
+      "validated"
+    ],
+    "mixing_risk": "canonical generation has full only; its sf/validated rows do not exist. Any sf/validated figure shown beside it comes from another run id.",
+    "source_run_id_consistency": {
+      "limn_dual_scope.json": "9e4918a6b5c243412cbc58c9",
+      "canonical_summary_full.json": "9e4918a6b5c243412cbc58c9",
+      "canonical_summary_path": "workbench/artifacts/composition/summary/limn_base_iter0_all_categories_9e4918a6b5c243412cbc58c9/full.json",
+      "equal": true
+    },
+    "canonical_cohort_claim": {
+      "subset": "full",
+      "query_count": 6003,
+      "query_count_per_subset": {
+        "full": 6003,
+        "sf": 4069,
+        "validated": 586
+      },
+      "scored_count": 6001,
+      "unscored_count": 2,
+      "multimodal_recall_at_10": 30.0283,
+      "source": "workbench/artifacts/composition/summary/limn_base_iter0_all_categories_9e4918a6b5c243412cbc58c9/full.json"
+    },
+    "canonical_cohort_matches_summary": {
+      "query_count": true,
+      "scored_count": true,
+      "multimodal_recall_at_10": true,
+      "source_field": "workbench/artifacts/composition/summary/limn_base_iter0_all_categories_9e4918a6b5c243412cbc58c9/full.json",
+      "query_count_per_subset": true,
+      "unscored_are_the_two_qids": true,
+      "summary_scored_plus_unscored_equals_full": true
+    },
+    "other_generations_ids": {
+      "limn_base_iter0_all_categories_10173dc45dea8c90fd2a284b": {
+        "full": "10173dc45dea8c90fd2a284b",
+        "sf": "10173dc45dea8c90fd2a284b",
+        "validated": "10173dc45dea8c90fd2a284b"
+      },
+      "limn_base_iter0_all_categories_3f86f58483b368377e2c151e": {
+        "full": "3f86f58483b368377e2c151e",
+        "sf": "3f86f58483b368377e2c151e",
+        "validated": "3f86f58483b368377e2c151e"
+      },
+      "limn_base_iter0_all_categories_9e4918a6b5c243412cbc58c9": {
+        "full": "9e4918a6b5c243412cbc58c9",
+        "sf": null,
+        "validated": null
+      }
+    },
+    "checkpoint_identity_shared_across_generations": [
+      "12cbbf95d6c8a03e6174b560bca423f13aefe05fa50fad87ee197ae7d680ac06"
+    ],
+    "gallery_identity_shared_across_generations": [
+      "1db68c59d96f014cdbecf936e108653de98abef0bd9a98a8abc2fe08b5dec4b4"
+    ]
+  },
+  "findings": [
+    {
+      "severity": "GAP",
+      "what": "validator silently accepts C_duplicate_qid_row_appended",
+      "detail": "row_count 2 -> 3, duplicate qid identical"
+    },
+    {
+      "severity": "GAP",
+      "what": "validator silently accepts D_conflicting_duplicate_qid_row",
+      "detail": "row_count 2 -> 3, duplicate qid with target_rank+1000"
+    },
+    {
+      "severity": "GAP",
+      "what": "canonical limn generation lacks ['sf', 'validated'] summary rows",
+      "detail": {
+        "limn_base_iter0_all_categories_10173dc45dea8c90fd2a284b": {
+          "full": "10173dc45dea8c90fd2a284b",
+          "sf": "10173dc45dea8c90fd2a284b",
+          "validated": "10173dc45dea8c90fd2a284b"
+        },
+        "limn_base_iter0_all_categories_3f86f58483b368377e2c151e": {
+          "full": "3f86f58483b368377e2c151e",
+          "sf": "3f86f58483b368377e2c151e",
+          "validated": "3f86f58483b368377e2c151e"
+        },
+        "limn_base_iter0_all_categories_9e4918a6b5c243412cbc58c9": {
+          "full": "9e4918a6b5c243412cbc58c9",
+          "sf": null,
+          "validated": null
+        }
+      }
+    }
+  ],
+  "verdict": "PASS"
+}

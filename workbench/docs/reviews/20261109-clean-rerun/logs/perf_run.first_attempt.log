@@ -1,0 +1,2 @@
+2026-11-09T09:27:39+07:00 watcher start pid=1800618 ; waiting for sweep to exit
+2026-11-09T09:27:39+07:00 watching: pgrep -f 'pytest workbench/tests' ; pgrep -f composition_eval

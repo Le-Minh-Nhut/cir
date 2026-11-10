@@ -1,0 +1,7 @@
+=== FINAL service identity 2026-11-11T01:20:44+07:00 ===
+3691345 /home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python -m uvicorn workbench.backend.main:app --host 127.0.0.1 --port 8000
+bundle: assets/index-DWpK0yeS.js
+sha256sum: /tmp/served_b.js: No such file or directory (os error 2)
+7e34724ebf55092e36524b98980cca55e71f3ddbaa62489c65577f92e18a6a16  workbench/frontend/dist/assets/index-DWpK0yeS.js
+cmp: /tmp/served_b.js: No such file or directory (os error 2)
+readiness /api/benchmark-runs HTTP 200

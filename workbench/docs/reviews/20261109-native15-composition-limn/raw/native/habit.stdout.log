@@ -1,0 +1,3 @@
+RAMGUARD verdict=GO avail=28.51GiB predicted=20.70GiB headroom=4.00GiB need=24.70GiB anon=0.72GiB swapfree=5.05GiB
+[OK] result written: /home/heheboiz/data/cir/workbench/docs/reviews/20261109-native15-composition-limn/raw/native/habit.json
+EXITCODE=0 WALL_SECONDS=421 PEAK_VMHWM_KB=28882668 PEAK_GiB=27.54

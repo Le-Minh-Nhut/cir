@@ -1,0 +1,4 @@
+=== ACCOUNTING (final sweep) 2026-11-11T01:15:52+07:00 ===
+failed=18 passed=2799 skipped=47 -> sum=2864
+collect-only: 2864 tests collected
+GAP = 0

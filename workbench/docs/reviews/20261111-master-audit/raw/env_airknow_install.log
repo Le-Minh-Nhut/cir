@@ -1,0 +1,6 @@
+Using CPython 3.10.20
+warning: The requested interpreter resolved to Python 3.10.20, which is incompatible with the project's Python requirement: `>=3.11` (from `project.requires-python`)
+Creating virtual environment at: workbench/envs/airknow310-la
+Activate with: source workbench/envs/airknow310-la/bin/activate
+OK airknow -> /home/heheboiz/data/cir/workbench/envs/airknow310-la
+/home/heheboiz/data/cir/workbench/envs/airknow310-la/bin/python 3.10.20 2.7.1+cu128 12.8 True

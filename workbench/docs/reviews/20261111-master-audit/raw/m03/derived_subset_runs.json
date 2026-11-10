@@ -1,0 +1,204 @@
+{
+ "parent_run_id": "9e4918a6b5c243412cbc58c9",
+ "parent_rank_artifact": "workbench/artifacts/composition/runs/9e4918a6b5c243412cbc58c9/ranks/limn_base_iter0_all_categories.json",
+ "parent_rank_artifact_sha256": "d5794b027729abb3f58ac779f2b5407cfde7c51ba1094b4c76ff96aa27c869bc",
+ "parent_summary": "workbench/artifacts/composition/summary/limn_base_iter0_all_categories_9e4918a6b5c243412cbc58c9/full.json",
+ "parent_summary_sha256": "c446acc4f554d2e995e346ab837e553ea122068d1180387dcbf87426ea800bef",
+ "parent_fingerprint": "9e4918a6b5c243412cbc58c9f8c2ded7f7fd785bde27c8a70c675ac749fb5e04",
+ "parent_conditions": [
+  "image_only_empty_text",
+  "multimodal",
+  "text_only_black_image"
+ ],
+ "derivation": "select the parent's per-qid exact rank for every qid in the declared subset membership and recompute metrics with workbench.composition.metrics.compose; no query is re-encoded and no score is recomputed",
+ "subsets": {
+  "full": {
+   "declared_query_count": 6003,
+   "membership_count": 6003,
+   "membership_sha256": "b1b1f21290b5995cd0a7f9abef4654265f67251b9ede82f500e83d6aa12f35d6",
+   "membership_definition": "workbench.composition.data.select_queries(subset='full') over the pinned CIRCUS release membership columns",
+   "coverage": 0.9996668332500417,
+   "denominator": 6001,
+   "metrics": {
+    "multimodal": {
+     "condition": "multimodal",
+     "query_count": 6003,
+     "scored_count": 6001,
+     "coverage": 0.9996668332500417,
+     "recall_at_10": 30.02832861189802,
+     "recall_at_50": 48.675220796533914,
+     "ndcg_full": 0.2903943323061926,
+     "mrr": 0.1667569760548875,
+     "unavailable_reason": null
+    },
+    "text_only": {
+     "condition": "text_only_black_image",
+     "query_count": 6003,
+     "scored_count": 6001,
+     "coverage": 0.9996668332500417,
+     "recall_at_10": 6.382269621729712,
+     "recall_at_50": 14.38093651058157,
+     "ndcg_full": 0.1338300135699333,
+     "mrr": 0.029294047058937654,
+     "unavailable_reason": null
+    },
+    "image_only": {
+     "condition": "image_only_empty_text",
+     "query_count": 6003,
+     "scored_count": 6001,
+     "coverage": 0.9996668332500417,
+     "recall_at_10": 2.4995834027662056,
+     "recall_at_50": 6.932177970338277,
+     "ndcg_full": 0.0995697739811913,
+     "mrr": 0.010265698227456396,
+     "unavailable_reason": null
+    },
+    "composition_gap_ndcg": 0.5391438513723383,
+    "gap_unavailable_reason": null,
+    "mrr_gap": 0.13746292899594986,
+    "shortcut_outcomes": {
+     "text_only": 379,
+     "image_only": 146,
+     "both": 4,
+     "composition_required": 1408,
+     "unresolved": 4064,
+     "neither_scored": 2
+    },
+    "gap_cohort_count": 6001,
+    "gap_multimodal_ndcg": 0.2903943323061926,
+    "gap_text_only_ndcg": 0.1338300135699333,
+    "gap_image_only_ndcg": 0.0995697739811913
+   },
+   "agrees_with_parent_summary": true
+  },
+  "sf": {
+   "declared_query_count": 4069,
+   "membership_count": 4069,
+   "membership_sha256": "45e19ff14165e4de1ff57fd4dd9986cda55ac9f93552651b7eda39abf22d00e8",
+   "membership_definition": "workbench.composition.data.select_queries(subset='sf') over the pinned CIRCUS release membership columns",
+   "coverage": 0.9997542393708528,
+   "denominator": 4068,
+   "metrics": {
+    "multimodal": {
+     "condition": "multimodal",
+     "query_count": 4069,
+     "scored_count": 4068,
+     "coverage": 0.9997542393708528,
+     "recall_at_10": 18.3874139626352,
+     "recall_at_50": 35.96361848574238,
+     "ndcg_full": 0.21656188860953537,
+     "mrr": 0.0926272672040389,
+     "unavailable_reason": null
+    },
+    "text_only": {
+     "condition": "text_only_black_image",
+     "query_count": 4069,
+     "scored_count": 4068,
+     "coverage": 0.9997542393708528,
+     "recall_at_10": 0.6637168141592921,
+     "recall_at_50": 4.473942969518191,
+     "ndcg_full": 0.09928461609864697,
+     "mrr": 0.004932157311520556,
+     "unavailable_reason": null
+    },
+    "image_only": {
+     "condition": "image_only_empty_text",
+     "query_count": 4069,
+     "scored_count": 4068,
+     "coverage": 0.9997542393708528,
+     "recall_at_10": 0.5408062930186824,
+     "recall_at_50": 3.5152409046214355,
+     "ndcg_full": 0.0891793120309345,
+     "mrr": 0.003392618523290276,
+     "unavailable_reason": null
+    },
+    "composition_gap_ndcg": 0.5415416039446407,
+    "gap_unavailable_reason": null,
+    "mrr_gap": 0.08769510989251834,
+    "shortcut_outcomes": {
+     "text_only": 27,
+     "image_only": 22,
+     "both": 0,
+     "composition_required": 718,
+     "unresolved": 3301,
+     "neither_scored": 1
+    },
+    "gap_cohort_count": 4068,
+    "gap_multimodal_ndcg": 0.21656188860953537,
+    "gap_text_only_ndcg": 0.09928461609864697,
+    "gap_image_only_ndcg": 0.0891793120309345
+   },
+   "agrees_with_parent_summary": null
+  },
+  "validated": {
+   "declared_query_count": 586,
+   "membership_count": 586,
+   "membership_sha256": "52e0cf3138a4eb9e98a52c524abcaec14bc81c14d3fb378df84eb7eaad684d66",
+   "membership_definition": "workbench.composition.data.select_queries(subset='validated') over the pinned CIRCUS release membership columns",
+   "coverage": 1.0,
+   "denominator": 586,
+   "metrics": {
+    "multimodal": {
+     "condition": "multimodal",
+     "query_count": 586,
+     "scored_count": 586,
+     "coverage": 1.0,
+     "recall_at_10": 30.034129692832764,
+     "recall_at_50": 53.58361774744027,
+     "ndcg_full": 0.2849270057021113,
+     "mrr": 0.15409934826257882,
+     "unavailable_reason": null
+    },
+    "text_only": {
+     "condition": "text_only_black_image",
+     "query_count": 586,
+     "scored_count": 586,
+     "coverage": 1.0,
+     "recall_at_10": 0.6825938566552902,
+     "recall_at_50": 4.948805460750854,
+     "ndcg_full": 0.10220338403778902,
+     "mrr": 0.00526572897422745,
+     "unavailable_reason": null
+    },
+    "image_only": {
+     "condition": "image_only_empty_text",
+     "query_count": 586,
+     "scored_count": 586,
+     "coverage": 1.0,
+     "recall_at_10": 1.3651877133105803,
+     "recall_at_50": 6.313993174061434,
+     "ndcg_full": 0.09716282120267149,
+     "mrr": 0.005889254807460719,
+     "unavailable_reason": null
+    },
+    "composition_gap_ndcg": 0.6412997645276146,
+    "gap_unavailable_reason": null,
+    "mrr_gap": 0.1482100934551181,
+    "shortcut_outcomes": {
+     "text_only": 4,
+     "image_only": 8,
+     "both": 0,
+     "composition_required": 169,
+     "unresolved": 405,
+     "neither_scored": 0
+    },
+    "gap_cohort_count": 586,
+    "gap_multimodal_ndcg": 0.2849270057021113,
+    "gap_text_only_ndcg": 0.10220338403778902,
+    "gap_image_only_ndcg": 0.09716282120267149
+   },
+   "agrees_with_parent_summary": null
+  }
+ },
+ "missing_per_query_artifacts": [],
+ "derived_runs": {
+  "sf": {
+   "derived_run_id": "6a96c5c199526b61c1470b0e",
+   "artifact": "workbench/docs/reviews/20261111-master-audit/raw/m03/derived_runs/6a96c5c199526b61c1470b0e/sf.json"
+  },
+  "validated": {
+   "derived_run_id": "aee2e8d39214d877a84d7c08",
+   "artifact": "workbench/docs/reviews/20261111-master-audit/raw/m03/derived_runs/aee2e8d39214d877a84d7c08/validated.json"
+  }
+ }
+}

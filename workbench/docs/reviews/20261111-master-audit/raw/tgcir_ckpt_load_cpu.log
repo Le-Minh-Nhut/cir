@@ -1,0 +1,6 @@
+PATCH torch.nn.modules.linear._LinearWithBias -> Linear (legacy unpickle)
+load_ok model.VCG_CIR 0.7s
+n_params 151859225
+local_token_num None global_token_num None
+backbone.img_encoder ViT-B/16
+mha_missing_batch_first 24

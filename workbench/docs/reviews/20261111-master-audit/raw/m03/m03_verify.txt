@@ -1,0 +1,113 @@
+M-03 LIMN DUAL-SCOPE VERIFICATION
+====================================================================================================
+target      : workbench/docs/reviews/20261109-native15-composition-limn (LIMN dual-scope artifact)
+join        : candidate id: qid -> own positive_ids -> candidate_names[did] -> gallery position
+release     : gallery=74381 candidates=74381 hash=matched gallery_id_unique=True
+verdict     : PASS
+
+1. PER-CELL (12 = 2 qids x 2 scopes x 3 conditions)
+----------------------------------------------------------------------------------------------------
+qid     scope   condition                  rank depth inWin    pos     did checks fail  verdict
+7:3038  shirt   multimodal                    3   100  True  13614  7:3416     42    0  PASS
+7:3038  shirt   text_only_black_image        88   100  True  13614  7:3416     42    0  PASS
+7:3038  shirt   image_only_empty_text       152   100 False  13614  7:3416     38    0  PASS
+7:3038  toptee  multimodal                   43   100  True  13614  7:3416     42    0  PASS
+7:3038  toptee  text_only_black_image       389   100 False  13614  7:3416     38    0  PASS
+7:3038  toptee  image_only_empty_text        67   100  True  13614  7:3416     42    0  PASS
+7:3790  shirt   multimodal                   65   100  True  70410 7:42304     42    0  PASS
+7:3790  shirt   text_only_black_image      6891   100 False  70410 7:42304     38    0  PASS
+7:3790  shirt   image_only_empty_text      2200   100 False  70410 7:42304     38    0  PASS
+7:3790  toptee  multimodal                   43   100  True  70410 7:42304     42    0  PASS
+7:3790  toptee  text_only_black_image      4730   100 False  70410 7:42304     38    0  PASS
+7:3790  toptee  image_only_empty_text      4047   100 False  70410 7:42304     38    0  PASS
+cells pass=12/12 fail=0 checks_per_cell>=38 failed_checks=none
+score recompute: NOT performed: no query embeddings available. The run's query cache holds NaN rows for both qids (verified below), and recomputing them requires the GPU. Ordering verified from the stored window.
+query cache NaN rows for both qids: True
+
+2. r5 CORRECTION (structural leaf diff)
+----------------------------------------------------------------------------------------------------
+leaves current=314 pre-r5=302 | added=12 removed=0 changed=6 | verdict=PASS
+added all under provenance_correction_r5: True
+changed are exactly target_did cells: 6/6, declared set equal=True, non-target_did changes=none
+  ~ queries.7:3038.scopes.shirt.image_only_empty_text.target_did
+  ~ queries.7:3038.scopes.shirt.multimodal.target_did
+  ~ queries.7:3038.scopes.shirt.text_only_black_image.target_did
+  ~ queries.7:3038.scopes.toptee.image_only_empty_text.target_did
+  ~ queries.7:3038.scopes.toptee.multimodal.target_did
+  ~ queries.7:3038.scopes.toptee.text_only_black_image.target_did
+  + provenance_correction_r5.artifact_sha256_before
+  + provenance_correction_r5.cells_changed
+  + provenance_correction_r5.changed
+  + provenance_correction_r5.defect
+  + provenance_correction_r5.fix
+  + provenance_correction_r5.original_preserved_at
+  + provenance_correction_r5.reranked
+  + provenance_correction_r5.rescored
+  + provenance_correction_r5.top_level_target_did_removed
+  + provenance_correction_r5.unchanged
+  + provenance_correction_r5.verification
+  + provenance_correction_r5.what
+sha256 current   = d1b4aadb6735b8b3c57e9fbfe234b1e12c15a13b977ace23500916af94473e3f
+sha256 pre-r5    = 04c4419e44ff555b909ad92ed0a8596520a0cb5cdcfc0467986baabf77bfabf0
+declared before  = 04c4419e44ff555b909ad92ed0a8596520a0cb5cdcfc0467986baabf77bfabf0 -> matches pre-r5: True
+rank/score/position leaves unchanged: True (rescored=False reranked=False)
+
+3. EXPORT FILES / DUPLICATE QIDS
+----------------------------------------------------------------------------------------------------
+file                                                 rows  depth    stored  dupQid dupPos  sha256[:16]
+limn_dual_scope.shirt.multimodal.jsonl                  2    100   100,100       -      -  4e4e9abf679dc2c2
+limn_dual_scope.shirt.text_only_black_image.jsonl       2    100   100,100       -      -  0af306976e1fd5ca
+limn_dual_scope.shirt.image_only_empty_text.jsonl       2    100   100,100       -      -  548dae274e33c544
+limn_dual_scope.toptee.multimodal.jsonl                 2    100   100,100       -      -  2a5154805d46dc2a
+limn_dual_scope.toptee.text_only_black_image.jsonl      2    100   100,100       -      -  d41145ccd5f657c0
+limn_dual_scope.toptee.image_only_empty_text.jsonl      2    100   100,100       -      -  c125e17693e3b95d
+duplicate qid per file: none
+duplicate gallery_id inside windows: none
+duplicate gallery_position inside windows: none
+
+4. DEPTH
+----------------------------------------------------------------------------------------------------
+rows=12 declared_depth=[100] stored=[100] runtime_top_k=100
+truncated rows (stored<declared): none
+windows longer than declared depth: none
+top100_export files: distinct=6 expected=6 names_match=True
+cells per file: {'limn_dual_scope.shirt.image_only_empty_text.jsonl': 2, 'limn_dual_scope.shirt.multimodal.jsonl': 2, 'limn_dual_scope.shirt.text_only_black_image.jsonl': 2, 'limn_dual_scope.toptee.image_only_empty_text.jsonl': 2, 'limn_dual_scope.toptee.multimodal.jsonl': 2, 'limn_dual_scope.toptee.text_only_black_image.jsonl': 2} all_resolve=True missing=none unexpected=none
+
+5. SERVED VALIDATOR + CORRUPT-COPY PROBES
+----------------------------------------------------------------------------------------------------
+status=DIAGNOSTIC_COMPLETE complete=True defects=0 codes=none standard=limn-diagnostic-evidence/v2
+manifest digest=9d1018524a89313da6abd98766c38403031c4505ae19aebe542fc0675e5827da files=7 root=/home/heheboiz/data/cir/workbench/docs/reviews/20261109-native15-composition-limn
+depth_stored per combination: {'7:3038/shirt/image_only_empty_text': 100, '7:3038/shirt/multimodal': 100, '7:3038/shirt/text_only_black_image': 100, '7:3038/toptee/image_only_empty_text': 100, '7:3038/toptee/multimodal': 100, '7:3038/toptee/text_only_black_image': 100, '7:3790/shirt/image_only_empty_text': 100, '7:3790/shirt/multimodal': 100, '7:3790/shirt/text_only_black_image': 100, '7:3790/toptee/image_only_empty_text': 100, '7:3790/toptee/multimodal': 100, '7:3790/toptee/text_only_black_image': 100}
+public load_diagnostic() exposes depth_stored: False
+manifest binding: files=7/7 independent_digest=9d1018524a89313da6abd98766c38403031c4505ae19aebe542fc0675e5827da matches_served=True entries_match_disk=True
+  A_window_truncated_to_1_depth_100: detected=True raised=None status=DIAGNOSTIC_EVIDENCE_DEFECT codes=['export_depth_truncated'] [candidates[:1] with depth still 100]
+  B_export_truncated_to_1_row: detected=True raised=DiagnosticEvidenceError status=None codes=none [file cut to 1 of 2 qid rows]
+  C_duplicate_qid_row_appended: detected=False raised=None status=DIAGNOSTIC_COMPLETE codes=none [row_count 2 -> 3, duplicate qid identical]
+  D_conflicting_duplicate_qid_row: detected=False raised=None status=DIAGNOSTIC_COMPLETE codes=none [row_count 2 -> 3, duplicate qid with target_rank+1000]
+  E_export_file_missing_control: detected=True raised=DiagnosticEvidenceError status=None codes=none [file deleted]
+silently accepted: ['C_duplicate_qid_row_appended', 'D_conflicting_duplicate_qid_row']
+
+6. GENERATION MIXING
+----------------------------------------------------------------------------------------------------
+limn_base_iter0_all_categories_10173dc45dea8c90fd2a284b: {'full': '10173dc45dea8c90fd2a284b', 'sf': '10173dc45dea8c90fd2a284b', 'validated': '10173dc45dea8c90fd2a284b'}
+    full       q=6003  scored=5884  mm_r10=30.064581917063222 ckpt=12cbbf95d6c8a03e smoke=False sha256=024d0e6d992add1e
+    sf         q=4069  scored=4000  mm_r10=18.6 ckpt=12cbbf95d6c8a03e smoke=False sha256=adc361f7c2fe182e
+    validated  q=586   scored=581   mm_r10=30.292598967297764 ckpt=12cbbf95d6c8a03e smoke=False sha256=126aeceb4f391b3f
+limn_base_iter0_all_categories_3f86f58483b368377e2c151e: {'full': '3f86f58483b368377e2c151e', 'sf': '3f86f58483b368377e2c151e', 'validated': '3f86f58483b368377e2c151e'}
+    full       q=8     scored=8     mm_r10=25.0 ckpt=12cbbf95d6c8a03e smoke=True sha256=d5de7b209c092829
+    sf         q=6     scored=6     mm_r10=0.0 ckpt=12cbbf95d6c8a03e smoke=True sha256=39a656090582b487
+    validated  q=0     scored=0     mm_r10=None ckpt=12cbbf95d6c8a03e smoke=True sha256=252f6e9da3eed82c
+limn_base_iter0_all_categories_9e4918a6b5c243412cbc58c9: {'full': '9e4918a6b5c243412cbc58c9', 'sf': 'ABSENT', 'validated': 'ABSENT'}
+    full       q=6003  scored=6001  mm_r10=30.02832861189802 ckpt=12cbbf95d6c8a03e smoke=False sha256=c446acc4f554d2e9
+canonical run=9e4918a6b5c243412cbc58c9 has={'full': True, 'sf': False, 'validated': False} absent=['sf', 'validated']
+source_run_id consistency: dual_scope=9e4918a6b5c243412cbc58c9 summary=9e4918a6b5c243412cbc58c9 equal=True
+canonical cohort vs summary: {'query_count': True, 'scored_count': True, 'multimodal_recall_at_10': True, 'source_field': 'workbench/artifacts/composition/summary/limn_base_iter0_all_categories_9e4918a6b5c243412cbc58c9/full.json', 'query_count_per_subset': True, 'unscored_are_the_two_qids': True, 'summary_scored_plus_unscored_equals_full': True}
+
+FINDINGS
+----------------------------------------------------------------------------------------------------
+[GAP] validator silently accepts C_duplicate_qid_row_appended :: "row_count 2 -> 3, duplicate qid identical"
+[GAP] validator silently accepts D_conflicting_duplicate_qid_row :: "row_count 2 -> 3, duplicate qid with target_rank+1000"
+[GAP] canonical limn generation lacks ['sf', 'validated'] summary rows :: {"limn_base_iter0_all_categories_10173dc45dea8c90fd2a284b": {"full": "10173dc45dea8c90fd2a284b", "sf": "10173dc45dea8c90fd2a284b", "validated": "10173dc45dea8c90fd2a284b"}, "limn_base_iter0_all_categories_3f86f58483b3683
+
+json: /home/heheboiz/data/cir/workbench/docs/reviews/20261111-master-audit/raw/m03/m03_verify.json
+txt : /home/heheboiz/data/cir/workbench/docs/reviews/20261111-master-audit/raw/m03/m03_verify.txt

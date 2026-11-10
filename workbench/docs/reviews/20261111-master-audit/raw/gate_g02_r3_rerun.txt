@@ -1,0 +1,484 @@
+R3SUPERSEDED:{
+ "dress": {
+  "sample_rows": 4,
+  "sample_indices": [
+   0,
+   3,
+   14,
+   2016
+  ],
+  "target_positions": [
+   1,
+   7,
+   29,
+   2627
+  ],
+  "reference_positions": [
+   0,
+   6,
+   28,
+   746
+  ],
+  "tie_epsilon_declared": 1e-06,
+  "rank_agreement_declared": "exact",
+  "rows": [
+   {
+    "sample_row": 0,
+    "query_index": 0,
+    "target_position": 1,
+    "reference_position": 0,
+    "rank_native_train": 3,
+    "rank_native_val": 3,
+    "ranks_agree": true,
+    "target_score_train": 0.6002562642097473,
+    "target_score_val": 0.6001136898994446,
+    "deep_cutoff": 100,
+    "target_inside_cutoff_train": true,
+    "target_inside_cutoff_val": true,
+    "crossings": [],
+    "rank_used_one_mask": true,
+    "mask_position": 0,
+    "join": "recorded gallery position (inputs.<category>.json), not vector equality",
+    "rank_adapter": 3,
+    "adapter_ranks_with_native_val": true
+   },
+   {
+    "sample_row": 1,
+    "query_index": 3,
+    "target_position": 7,
+    "reference_position": 6,
+    "rank_native_train": 1,
+    "rank_native_val": 1,
+    "ranks_agree": true,
+    "target_score_train": 0.42903798818588257,
+    "target_score_val": 0.42903798818588257,
+    "deep_cutoff": 100,
+    "target_inside_cutoff_train": true,
+    "target_inside_cutoff_val": true,
+    "crossings": [],
+    "rank_used_one_mask": true,
+    "mask_position": 6,
+    "join": "recorded gallery position (inputs.<category>.json), not vector equality",
+    "rank_adapter": 1,
+    "adapter_ranks_with_native_val": true
+   },
+   {
+    "sample_row": 2,
+    "query_index": 14,
+    "target_position": 29,
+    "reference_position": 28,
+    "rank_native_train": 101,
+    "rank_native_val": 103,
+    "ranks_agree": false,
+    "target_score_train": 0.35501012206077576,
+    "target_score_val": 0.35543879866600037,
+    "deep_cutoff": 100,
+    "target_inside_cutoff_train": false,
+    "target_inside_cutoff_val": false,
+    "crossings": [
+     {
+      "candidate_position": 705,
+      "outranked_target_in": "native_val",
+      "distance_to_target_train": 0.00031071901321411133,
+      "distance_to_target_val": 0.00042724609375,
+      "target_distance_to_cutoff_train": 0.19309940934181213,
+      "target_distance_to_cutoff_val": 0.19406583905220032
+     },
+     {
+      "candidate_position": 1038,
+      "outranked_target_in": "native_val",
+      "distance_to_target_train": 0.005462914705276489,
+      "distance_to_target_val": 0.0008566975593566895,
+      "target_distance_to_cutoff_train": 0.19309940934181213,
+      "target_distance_to_cutoff_val": 0.19406583905220032
+     },
+     {
+      "candidate_position": 1146,
+      "outranked_target_in": "native_train",
+      "distance_to_target_train": 0.007124036550521851,
+      "distance_to_target_val": 0.002147674560546875,
+      "target_distance_to_cutoff_train": 0.19309940934181213,
+      "target_distance_to_cutoff_val": 0.19406583905220032
+     },
+     {
+      "candidate_position": 1406,
+      "outranked_target_in": "native_train",
+      "distance_to_target_train": 0.0053327977657318115,
+      "distance_to_target_val": 0.00913289189338684,
+      "target_distance_to_cutoff_train": 0.19309940934181213,
+      "target_distance_to_cutoff_val": 0.19406583905220032
+     },
+     {
+      "candidate_position": 1586,
+      "outranked_target_in": "native_val",
+      "distance_to_target_train": 0.003437519073486328,
+      "distance_to_target_val": 0.0004341304302215576,
+      "target_distance_to_cutoff_train": 0.19309940934181213,
+      "target_distance_to_cutoff_val": 0.19406583905220032
+     },
+     {
+      "candidate_position": 1599,
+      "outranked_target_in": "native_val",
+      "distance_to_target_train": 0.0010311305522918701,
+      "distance_to_target_val": 0.0017457008361816406,
+      "target_distance_to_cutoff_train": 0.19309940934181213,
+      "target_distance_to_cutoff_val": 0.19406583905220032
+     }
+    ],
+    "rank_used_one_mask": true,
+    "mask_position": 28,
+    "join": "recorded gallery position (inputs.<category>.json), not vector equality",
+    "rank_adapter": 103,
+    "adapter_ranks_with_native_val": true
+   },
+   {
+    "sample_row": 3,
+    "query_index": 2016,
+    "target_position": 2627,
+    "reference_position": 746,
+    "rank_native_train": 28,
+    "rank_native_val": 31,
+    "ranks_agree": false,
+    "target_score_train": 0.5005840063095093,
+    "target_score_val": 0.49527445435523987,
+    "deep_cutoff": 100,
+    "target_inside_cutoff_train": true,
+    "target_inside_cutoff_val": true,
+    "crossings": [
+     {
+      "candidate_position": 595,
+      "outranked_target_in": "native_val",
+      "distance_to_target_train": 0.0015586018562316895,
+      "distance_to_target_val": 0.002376943826675415,
+      "target_distance_to_cutoff_train": 0.15016674995422363,
+      "target_distance_to_cutoff_val": 0.15725061297416687
+     },
+     {
+      "candidate_position": 1228,
+      "outranked_target_in": "native_val",
+      "distance_to_target_train": 0.004388093948364258,
+      "distance_to_target_val": 0.004016250371932983,
+      "target_distance_to_cutoff_train": 0.15016674995422363,
+      "target_distance_to_cutoff_val": 0.15725061297416687
+     },
+     {
+      "candidate_position": 2558,
+      "outranked_target_in": "native_val",
+      "distance_to_target_train": 0.0031086206436157227,
+      "distance_to_target_val": 0.00036385655403137207,
+      "target_distance_to_cutoff_train": 0.15016674995422363,
+      "target_distance_to_cutoff_val": 0.15725061297416687
+     }
+    ],
+    "rank_used_one_mask": true,
+    "mask_position": 746,
+    "join": "recorded gallery position (inputs.<category>.json), not vector equality",
+    "rank_adapter": 31,
+    "adapter_ranks_with_native_val": true
+   }
+  ],
+  "rank_disagreement_count": 2,
+  "all_ranks_agree": false,
+  "classification": "2 sampled target(s) change rank; each is reported with its crossing set and both distances"
+ },
+ "shirt": {
+  "sample_rows": 4,
+  "sample_indices": [
+   0,
+   2,
+   3,
+   2037
+  ],
+  "target_positions": [
+   1,
+   5,
+   7,
+   3088
+  ],
+  "reference_positions": [
+   0,
+   4,
+   6,
+   3087
+  ],
+  "tie_epsilon_declared": 1e-06,
+  "rank_agreement_declared": "exact",
+  "rows": [
+   {
+    "sample_row": 0,
+    "query_index": 0,
+    "target_position": 1,
+    "reference_position": 0,
+    "rank_native_train": 25,
+    "rank_native_val": 21,
+    "ranks_agree": false,
+    "target_score_train": 0.573153555393219,
+    "target_score_val": 0.5867941379547119,
+    "deep_cutoff": 100,
+    "target_inside_cutoff_train": true,
+    "target_inside_cutoff_val": true,
+    "crossings": [
+     {
+      "candidate_position": 262,
+      "outranked_target_in": "native_train",
+      "distance_to_target_train": 0.009324371814727783,
+      "distance_to_target_val": 0.012297272682189941,
+      "target_distance_to_cutoff_train": 0.08636826276779175,
+      "target_distance_to_cutoff_val": 0.08456480503082275
+     },
+     {
+      "candidate_position": 915,
+      "outranked_target_in": "native_val",
+      "distance_to_target_train": 0.007343709468841553,
+      "distance_to_target_val": 0.0014792084693908691,
+      "target_distance_to_cutoff_train": 0.08636826276779175,
+      "target_distance_to_cutoff_val": 0.08456480503082275
+     },
+     {
+      "candidate_position": 1567,
+      "outranked_target_in": "native_train",
+      "distance_to_target_train": 0.004662752151489258,
+      "distance_to_target_val": 0.022856473922729492,
+      "target_distance_to_cutoff_train": 0.08636826276779175,
+      "target_distance_to_cutoff_val": 0.08456480503082275
+     },
+     {
+      "candidate_position": 2775,
+      "outranked_target_in": "native_train",
+      "distance_to_target_train": 0.007052302360534668,
+      "distance_to_target_val": 0.013907670974731445,
+      "target_distance_to_cutoff_train": 0.08636826276779175,
+      "target_distance_to_cutoff_val": 0.08456480503082275
+     },
+     {
+      "candidate_position": 3007,
+      "outranked_target_in": "native_train",
+      "distance_to_target_train": 0.017484962940216064,
+      "distance_to_target_val": 0.015187680721282959,
+      "target_distance_to_cutoff_train": 0.08636826276779175,
+      "target_distance_to_cutoff_val": 0.08456480503082275
+     },
+     {
+      "candidate_position": 3069,
+      "outranked_target_in": "native_train",
+      "distance_to_target_train": 0.014678597450256348,
+      "distance_to_target_val": 0.008084416389465332,
+      "target_distance_to_cutoff_train": 0.08636826276779175,
+      "target_distance_to_cutoff_val": 0.08456480503082275
+     }
+    ],
+    "rank_used_one_mask": true,
+    "mask_position": 0,
+    "join": "recorded gallery position (inputs.<category>.json), not vector equality",
+    "rank_adapter": 21,
+    "adapter_ranks_with_native_val": true
+   },
+   {
+    "sample_row": 1,
+    "query_index": 2,
+    "target_position": 5,
+    "reference_position": 4,
+    "rank_native_train": 21,
+    "rank_native_val": 20,
+    "ranks_agree": false,
+    "target_score_train": 0.4406268298625946,
+    "target_score_val": 0.44812506437301636,
+    "deep_cutoff": 100,
+    "target_inside_cutoff_train": true,
+    "target_inside_cutoff_val": true,
+    "crossings": [
+     {
+      "candidate_position": 315,
+      "outranked_target_in": "native_train",
+      "distance_to_target_train": 0.01156643033027649,
+      "distance_to_target_val": 0.006587177515029907,
+      "target_distance_to_cutoff_train": 0.15245148539543152,
+      "target_distance_to_cutoff_val": 0.1486881971359253
+     },
+     {
+      "candidate_position": 2194,
+      "outranked_target_in": "native_val",
+      "distance_to_target_train": 0.0006241202354431152,
+      "distance_to_target_val": 0.0008359849452972412,
+      "target_distance_to_cutoff_train": 0.15245148539543152,
+      "target_distance_to_cutoff_val": 0.1486881971359253
+     },
+     {
+      "candidate_position": 2683,
+      "outranked_target_in": "native_train",
+      "distance_to_target_train": 0.011731058359146118,
+      "distance_to_target_val": 0.010233312845230103,
+      "target_distance_to_cutoff_train": 0.15245148539543152,
+      "target_distance_to_cutoff_val": 0.1486881971359253
+     }
+    ],
+    "rank_used_one_mask": true,
+    "mask_position": 4,
+    "join": "recorded gallery position (inputs.<category>.json), not vector equality",
+    "rank_adapter": 20,
+    "adapter_ranks_with_native_val": true
+   },
+   {
+    "sample_row": 2,
+    "query_index": 3,
+    "target_position": 7,
+    "reference_position": 6,
+    "rank_native_train": 1,
+    "rank_native_val": 1,
+    "ranks_agree": true,
+    "target_score_train": 0.659386932849884,
+    "target_score_val": 0.6749522686004639,
+    "deep_cutoff": 100,
+    "target_inside_cutoff_train": true,
+    "target_inside_cutoff_val": true,
+    "crossings": [],
+    "rank_used_one_mask": true,
+    "mask_position": 6,
+    "join": "recorded gallery position (inputs.<category>.json), not vector equality",
+    "rank_adapter": 1,
+    "adapter_ranks_with_native_val": true
+   },
+   {
+    "sample_row": 3,
+    "query_index": 2037,
+    "target_position": 3088,
+    "reference_position": 3087,
+    "rank_native_train": 7,
+    "rank_native_val": 11,
+    "ranks_agree": false,
+    "target_score_train": 0.6193377375602722,
+    "target_score_val": 0.6127861142158508,
+    "deep_cutoff": 100,
+    "target_inside_cutoff_train": true,
+    "target_inside_cutoff_val": true,
+    "crossings": [
+     {
+      "candidate_position": 1890,
+      "outranked_target_in": "native_val",
+      "distance_to_target_train": 0.0031247735023498535,
+      "distance_to_target_val": 0.004722952842712402,
+      "target_distance_to_cutoff_train": 0.06523609161376953,
+      "target_distance_to_cutoff_val": 0.07714998722076416
+     },
+     {
+      "candidate_position": 2083,
+      "outranked_target_in": "native_val",
+      "distance_to_target_train": 0.0051430463790893555,
+      "distance_to_target_val": 0.0018572211265563965,
+      "target_distance_to_cutoff_train": 0.06523609161376953,
+      "target_distance_to_cutoff_val": 0.07714998722076416
+     },
+     {
+      "candidate_position": 2176,
+      "outranked_target_in": "native_val",
+      "distance_to_target_train": 0.0051430463790893555,
+      "distance_to_target_val": 0.0018572211265563965,
+      "target_distance_to_cutoff_train": 0.06523609161376953,
+      "target_distance_to_cutoff_val": 0.07714998722076416
+     },
+     {
+      "candidate_position": 2867,
+      "outranked_target_in": "native_val",
+      "distance_to_target_train": 0.005509376525878906,
+      "distance_to_target_val": 0.003173649311065674,
+      "target_distance_to_cutoff_train": 0.06523609161376953,
+      "target_distance_to_cutoff_val": 0.07714998722076416
+     }
+    ],
+    "rank_used_one_mask": true,
+    "mask_position": 3087,
+    "join": "recorded gallery position (inputs.<category>.json), not vector equality",
+    "rank_adapter": 11,
+    "adapter_ranks_with_native_val": true
+   }
+  ],
+  "rank_disagreement_count": 3,
+  "all_ranks_agree": false,
+  "classification": "3 sampled target(s) change rank; each is reported with its crossing set and both distances"
+ },
+ "toptee": {
+  "sample_rows": 3,
+  "sample_indices": [
+   0,
+   3,
+   1960
+  ],
+  "target_positions": [
+   1,
+   7,
+   468
+  ],
+  "reference_positions": [
+   0,
+   6,
+   2763
+  ],
+  "tie_epsilon_declared": 1e-06,
+  "rank_agreement_declared": "exact",
+  "rows": [
+   {
+    "sample_row": 0,
+    "query_index": 0,
+    "target_position": 1,
+    "reference_position": 0,
+    "rank_native_train": 1,
+    "rank_native_val": 1,
+    "ranks_agree": true,
+    "target_score_train": 0.5461304187774658,
+    "target_score_val": 0.5477312803268433,
+    "deep_cutoff": 100,
+    "target_inside_cutoff_train": true,
+    "target_inside_cutoff_val": true,
+    "crossings": [],
+    "rank_used_one_mask": true,
+    "mask_position": 0,
+    "join": "recorded gallery position (inputs.<category>.json), not vector equality",
+    "rank_adapter": 1,
+    "adapter_ranks_with_native_val": true
+   },
+   {
+    "sample_row": 1,
+    "query_index": 3,
+    "target_position": 7,
+    "reference_position": 6,
+    "rank_native_train": 1,
+    "rank_native_val": 1,
+    "ranks_agree": true,
+    "target_score_train": 0.6212719082832336,
+    "target_score_val": 0.6135450005531311,
+    "deep_cutoff": 100,
+    "target_inside_cutoff_train": true,
+    "target_inside_cutoff_val": true,
+    "crossings": [],
+    "rank_used_one_mask": true,
+    "mask_position": 6,
+    "join": "recorded gallery position (inputs.<category>.json), not vector equality",
+    "rank_adapter": 1,
+    "adapter_ranks_with_native_val": true
+   },
+   {
+    "sample_row": 2,
+    "query_index": 1960,
+    "target_position": 468,
+    "reference_position": 2763,
+    "rank_native_train": 1,
+    "rank_native_val": 1,
+    "ranks_agree": true,
+    "target_score_train": 0.5634429454803467,
+    "target_score_val": 0.5721361041069031,
+    "deep_cutoff": 100,
+    "target_inside_cutoff_train": true,
+    "target_inside_cutoff_val": true,
+    "crossings": [],
+    "rank_used_one_mask": true,
+    "mask_position": 2763,
+    "join": "recorded gallery position (inputs.<category>.json), not vector equality",
+    "rank_adapter": 1,
+    "adapter_ranks_with_native_val": true
+   }
+  ],
+  "rank_disagreement_count": 0,
+  "all_ranks_agree": true,
+  "classification": "every sampled target gets the same rank under preprocess_train and preprocess_val"
+ }
+}

@@ -1,0 +1,12 @@
+[gpu_job] lock held, GPU empty, launching: workbench/envs/airknow310-la/bin/python /tmp/airknow_gpu_native.py
+GPU-9bc596d9-19e9-6f43-dc2c-a80da924263c, 372 MiB, 16303 MiB
+dtypes_before_to {'torch.float32': 585, 'torch.float16': 275}
+dtypes_after_to_cuda {'torch.float32': 585, 'torch.float16': 275} (no cast applied)
+load_s 2.6 params 1173280958
+maybe_autocast_enabled True device cuda:0
+/home/heheboiz/data/cir/workbench/third_party/AirKnow/lavis/models/blip2_models/blip2.py:42: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  return torch.cuda.amp.autocast(dtype=dtype)
+forward_s 0.42
+query_feat (1, 1, 1, 256) target_feat (1, 256, 32) score_native_matmul_max 0.5348384976387024 hash_q 30441dbb323b58b6
+peak_vram_MiB 2634
+ADAPTATIONS [] text_processor_via lavis.models

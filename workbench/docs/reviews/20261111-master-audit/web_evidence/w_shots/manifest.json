@@ -1,0 +1,106 @@
+[
+ {
+  "issue": "W-01",
+  "slug": "w01_native_overview",
+  "url": "http://127.0.0.1:5173/?area=overview&view=&protocol=fashioniq_full_gallery_ref_excluded&subset=full",
+  "png": "w01_native_overview.png",
+  "png_sha256": "3b8c89e901e5c02e1a96abeddb9d83ce11bf3583ffc6fd1127f1748e1126fee6",
+  "dom_text_sha256": "bdb75b72e664d108a2d3c77613d6b8246cae05d1de833c8bbde6549416c6a83e"
+ },
+ {
+  "issue": "W-01",
+  "slug": "w01_native_table",
+  "url": "http://127.0.0.1:5173/?area=evaluation&view=native&protocol=fashioniq_full_gallery_ref_excluded&subset=full",
+  "png": "w01_native_table.png",
+  "png_sha256": "149db74466c17bfe67c5985fbadca82654d93e0aeb705d77c1b5b942b24275fb",
+  "dom_text_sha256": "5c90c273f51f54ef38ca0aefcc8472c79f53000dc82f9a7a43540d727f68426b"
+ },
+ {
+  "issue": "W-02",
+  "slug": "w02_overview_circus",
+  "url": "http://127.0.0.1:5173/?area=overview&view=&protocol=circus_fashioniq_release_v1&subset=sf",
+  "png": "w02_overview_circus.png",
+  "png_sha256": "f553ed12b64b823813ce0cfe655c167cff239f60a863bb8e1ad2d8ea79fbc852",
+  "dom_text_sha256": "d76983defca136659ffff984f22440170b8211178138f58c49850c771e90a23c"
+ },
+ {
+  "issue": "W-02",
+  "slug": "w02_models_inventory",
+  "url": "http://127.0.0.1:5173/?area=experiments&view=models&protocol=circus_fashioniq_release_v1&subset=sf",
+  "png": "w02_models_inventory.png",
+  "png_sha256": "5bef6ed0cd1ab23ecf49601250ba650a72ca26d1bd8be638fac8c5018433b69c",
+  "dom_text_sha256": "f3ac525c36ca72e9846d31fbaa66b59b709450e94a9bd21846a7961cbd5d7571"
+ },
+ {
+  "issue": "W-02",
+  "slug": "w02_native_scope_populated",
+  "url": "http://127.0.0.1:5173/?area=evaluation&view=native&protocol=fashioniq_original_split&subset=full",
+  "png": "w02_native_scope_populated.png",
+  "png_sha256": "544171b78c4678b4ccbaf065f45d8b286ca63dccce796762aa30254863077eca",
+  "dom_text_sha256": "fa04f168fb31d4ed63fa11d954715631576297eaf3917d42a5f4d28fac55fb95"
+ },
+ {
+  "issue": "W-03",
+  "slug": "w03_inspector_7-3038_limn_full",
+  "url": "http://127.0.0.1:5173/?area=samples&view=explorer&protocol=circus_fashioniq_release_v1&subset=full&runs=c%3A9e4918a6b5c243412cbc58c9&run=9e4918a6b5c243412cbc58c9&query=7%3A3038",
+  "png": "w03_inspector_7-3038_limn_full.png",
+  "png_sha256": "d4c68df1ee8b7bc75c6b75554b1949fd7a63e848ae027b202daf9ebc3092c509",
+  "dom_text_sha256": "3fdb6651206cbc97cdbc4c1350ef22dc7b629bb55308cd9d2b30825c526c0a2a"
+ },
+ {
+  "issue": "W-03",
+  "slug": "w03_inspector_7-3038_limn_top50",
+  "url": "http://127.0.0.1:5173/?area=samples&view=explorer&protocol=circus_fashioniq_release_v1&subset=full&runs=c%3A9e4918a6b5c243412cbc58c9&run=9e4918a6b5c243412cbc58c9&query=7%3A3038&k=50",
+  "png": "w03_inspector_7-3038_limn_top50.png",
+  "png_sha256": "d4c68df1ee8b7bc75c6b75554b1949fd7a63e848ae027b202daf9ebc3092c509",
+  "dom_text_sha256": "3fdb6651206cbc97cdbc4c1350ef22dc7b629bb55308cd9d2b30825c526c0a2a"
+ },
+ {
+  "issue": "W-03",
+  "slug": "w03_inspector_midrank_encoder",
+  "url": "http://127.0.0.1:5173/?area=samples&view=explorer&protocol=circus_fashioniq_release_v1&subset=full&runs=c%3Ace89a9a27c4cceadeaaf30b0&run=ce89a9a27c4cceadeaaf30b0&query=7%3A3038&k=20",
+  "png": "w03_inspector_midrank_encoder.png",
+  "png_sha256": "c9b04e8150eacd0fa72a3db649f52880b71e867d0078ab1b6e3a6fd8fc3aa1d5",
+  "dom_text_sha256": "27e5b2db03dd83cd29e0f98d08eb40d12d16e9ac94dc136b1c8be0d964085fd4"
+ },
+ {
+  "issue": "W-03",
+  "slug": "w03_limn_diagnostic_toptee",
+  "url": "http://127.0.0.1:5173/?area=samples&view=explorer&protocol=circus_fashioniq_release_v1&subset=full&runs=c%3A9e4918a6b5c243412cbc58c9&run=9e4918a6b5c243412cbc58c9",
+  "png": "w03_limn_diagnostic_toptee.png",
+  "png_sha256": "ba34702b98ab39d9328f76fc762e2332e94c53632845ef5aed362b37a3b83373",
+  "dom_text_sha256": "ae52876260e99d2d515f9422d0041c0a74f858370bae9ef080a570950cee2581"
+ },
+ {
+  "issue": "W-04",
+  "slug": "w04_deeplink_out_of_range",
+  "url": "http://127.0.0.1:5173/?area=samples&view=explorer&protocol=circus_fashioniq_release_v1&subset=sf&runs=c%3A9e4918a6b5c243412cbc58c9&run=9e4918a6b5c243412cbc58c9&query=7:99999",
+  "png": "w04_deeplink_out_of_range.png",
+  "png_sha256": "b0028c969bdf3b69779af9af86c59485ae119db2c73a9ec527f250ed7d71d977",
+  "dom_text_sha256": "8de060e4821f71f801705f585d3f026059c51f007ae6633f06f79b13e5b00105"
+ },
+ {
+  "issue": "W-04",
+  "slug": "w04_reload_full",
+  "url": "http://127.0.0.1:5173/?area=evaluation&view=composition&protocol=circus_fashioniq_release_v1&subset=full",
+  "png": "w04_reload_full.png",
+  "png_sha256": "d790c06c08120e419a4f4481b3d2ccf2b0045fed2f0daf522399e6d50ed6aa15",
+  "dom_text_sha256": "cae631b491fa0e2e323d57973765b19fd24ff209e59922983dd1739696395a08"
+ },
+ {
+  "issue": "W-05",
+  "slug": "w05_benchmark_reports",
+  "url": "http://127.0.0.1:5173/?area=evaluation&view=benchmark&protocol=fashioniq_original_split&subset=full",
+  "png": "w05_benchmark_reports.png",
+  "png_sha256": "f2da026389592fae92252d16f74ea6acde9ba0b38aa2bad4c513df400c8a51c6",
+  "dom_text_sha256": "60b9b7dcbc3bd9063ad787ba153fd15d692f5bc4f1065c21867ed1a5a9b67dc4"
+ },
+ {
+  "issue": "W-05",
+  "slug": "w05_pe_histograms",
+  "url": "http://127.0.0.1:5173/?area=evaluation&view=composition&protocol=circus_fashioniq_release_v1&subset=validated",
+  "png": "w05_pe_histograms.png",
+  "png_sha256": "5e5d91fb37041c76e6e04688aeb641e0fabee46e18f08bfca4411c7dfb5ae163",
+  "dom_text_sha256": "d35ef1f59b1b7cfca8ce6f9c01c57007732e6d18f2c039c36134b669ebdb48ca"
+ }
+]

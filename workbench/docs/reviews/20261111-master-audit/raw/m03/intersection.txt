@@ -1,0 +1,10 @@
+image_only_empty_text scored 6001 missing 
+multimodal scored 6001 missing 
+text_only_black_image scored 6001 missing 
+conditions ['image_only_empty_text', 'multimodal', 'text_only_black_image']
+intersection 6001 union 6001
+  image_only_empty_text excluded_from_intersection []
+  multimodal excluded_from_intersection []
+  text_only_black_image excluded_from_intersection []
+metrics gap_cohort_count 6001
+per condition query_count/scored {'image_only': (6003, 6001, 0.9996668332500417), 'multimodal': (6003, 6001, 0.9996668332500417), 'text_only': (6003, 6001, 0.9996668332500417)}

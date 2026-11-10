@@ -1,0 +1,32 @@
+/home/heheboiz/data/cir/workbench/envs/ctl312h/lib/python3.12/site-packages/torch/jit/_script.py:1491: FutureWarning: `torch.jit.script` is deprecated. Please switch to `torch.compile` or `torch.export`.
+  warnings.warn(
+/home/heheboiz/data/cir/workbench/envs/ctl312h/lib/python3.12/site-packages/torch/jit/_script.py:1491: FutureWarning: `torch.jit.script` is deprecated. Please switch to `torch.compile` or `torch.export`.
+  warnings.warn(
+/home/heheboiz/data/cir/workbench/envs/ctl312h/lib/python3.12/site-packages/torch/jit/_script.py:1643: FutureWarning: `torch.jit.interface` is deprecated. Please use `torch.compile` instead.
+  warnings.warn(
+/home/heheboiz/data/cir/workbench/envs/ctl312h/lib/python3.12/site-packages/transformers/utils/generic.py:441: FutureWarning: `torch.utils._pytree._register_pytree_node` is deprecated. Please use `torch.utils._pytree.register_pytree_node` instead.
+  _torch_pytree._register_pytree_node(
+/home/heheboiz/data/cir/workbench/envs/ctl312h/lib/python3.12/site-packages/transformers/utils/generic.py:309: FutureWarning: `torch.utils._pytree._register_pytree_node` is deprecated. Please use `torch.utils._pytree.register_pytree_node` instead.
+  _torch_pytree._register_pytree_node(
+/home/heheboiz/data/cir/workbench/envs/ctl312h/lib/python3.12/site-packages/transformers/utils/generic.py:309: FutureWarning: `torch.utils._pytree._register_pytree_node` is deprecated. Please use `torch.utils._pytree.register_pytree_node` instead.
+  _torch_pytree._register_pytree_node(
+/home/heheboiz/data/cir/workbench/third_party/AirKnow/lavis/common/vqa_tools/vqa_eval.py:167: SyntaxWarning: invalid escape sequence '\d'
+  self.periodStrip = re.compile("(?!<=\d)(\.)(?!\d)")
+/home/heheboiz/data/cir/workbench/third_party/AirKnow/lavis/common/vqa_tools/vqa_eval.py:168: SyntaxWarning: invalid escape sequence '\d'
+  self.commaStrip = re.compile("(\d)(,)(\d)")
+FAIL ModuleNotFoundError No module named 'h5py'
+Traceback (most recent call last):
+  File "<stdin>", line 10, in <module>
+  File "/home/heheboiz/data/cir/workbench/third_party/AirKnow/lavis/__init__.py", line 15, in <module>
+    from lavis.datasets.builders import *
+  File "/home/heheboiz/data/cir/workbench/third_party/AirKnow/lavis/datasets/builders/__init__.py", line 8, in <module>
+    from lavis.datasets.builders.base_dataset_builder import load_dataset_config
+  File "/home/heheboiz/data/cir/workbench/third_party/AirKnow/lavis/datasets/builders/base_dataset_builder.py", line 18, in <module>
+    from lavis.processors.base_processor import BaseProcessor
+  File "/home/heheboiz/data/cir/workbench/third_party/AirKnow/lavis/processors/__init__.py", line 30, in <module>
+    from lavis.processors.ulip_processors import ULIPPCProcessor
+  File "/home/heheboiz/data/cir/workbench/third_party/AirKnow/lavis/processors/ulip_processors.py", line 16, in <module>
+    from lavis.models.ulip_models.utils.io import IO
+  File "/home/heheboiz/data/cir/workbench/third_party/AirKnow/lavis/models/ulip_models/utils/io.py", line 1, in <module>
+    import h5py
+ModuleNotFoundError: No module named 'h5py'

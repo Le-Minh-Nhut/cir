@@ -1,0 +1,4 @@
+pre_limn_3038_toptee_mm_depth10.json in_window= True rank= 43 served= 10 stored= 100 ncand= 10 rank43_present= False
+pre_limn_3038_toptee_mm_depth100.json in_window= True rank= 43 served= 100 stored= 100 ncand= 100 rank43_present= True
+pre_limn_3038_toptee_mm_depth20.json in_window= True rank= 43 served= 20 stored= 100 ncand= 20 rank43_present= False
+pre_limn_3038_toptee_mm_depth43.json in_window= True rank= 43 served= 43 stored= 100 ncand= 43 rank43_present= True

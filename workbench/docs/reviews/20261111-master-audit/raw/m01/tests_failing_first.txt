@@ -1,0 +1,57 @@
+FFFF                                                                     [100%]
+=================================== FAILURES ===================================
+___________ test_the_draw_is_seeded_before_the_model_is_constructed ____________
+
+    def test_the_draw_is_seeded_before_the_model_is_constructed() -> None:
+        """Seeding after construction would pin nothing: the draw happens in `Encoder.__init__`."""
+        worker = _worker_main()
+>       seed_line = _index_of_call(worker, "manual_seed")
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+workbench/tests/test_encoder_relation_seed.py:45: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+function = <ast.FunctionDef object at 0x700dfbb52210>, attribute = 'manual_seed'
+
+    def _index_of_call(function: ast.FunctionDef, attribute: str) -> int:
+        for node in ast.walk(function):
+            if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) \
+                    and node.func.attr == attribute:
+                return node.lineno
+>       raise AssertionError(f"no {attribute}(...) call in the worker")
+E       AssertionError: no manual_seed(...) call in the worker
+
+workbench/tests/test_encoder_relation_seed.py:39: AssertionError
+___________ test_the_seed_is_carried_by_the_job_not_a_module_default ___________
+
+    def test_the_seed_is_carried_by_the_job_not_a_module_default() -> None:
+        """A module-level default would be inherited silently by any other caller of the worker."""
+>       assert isinstance(model_encoder.RELATION_SEED, int)
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       AttributeError: module 'workbench.composition.model_encoder' has no attribute 'RELATION_SEED'
+
+workbench/tests/test_encoder_relation_seed.py:57: AttributeError
+______________ test_the_drawn_tensor_is_persisted_with_its_digest ______________
+
+    def test_the_drawn_tensor_is_persisted_with_its_digest() -> None:
+        """`state_dict()` cannot carry it, so the bytes plus a digest are the only provenance."""
+        worker = SOURCE.split("def _worker_main", 1)[1]
+>       assert "sha256" in worker and "relation.npy" in worker or "relation-seed" in worker
+E       assert (('sha256' in '(job_path: Path) -> None:\n    """Load verified ENCODER weights once, process jobs, and keep stdout for replies."""\n...kbench.composition.model_encoder --worker-job JOB.json")\n    _worker_main(Path(sys.argv[2]))\n\n\nADAPTER = Adapter\n' and 'relation.npy' in '(job_path: Path) -> None:\n    """Load verified ENCODER weights once, process jobs, and keep stdout for replies."""\n...kbench.composition.model_encoder --worker-job JOB.json")\n    _worker_main(Path(sys.argv[2]))\n\n\nADAPTER = Adapter\n') or 'relation-seed' in '(job_path: Path) -> None:\n    """Load verified ENCODER weights once, process jobs, and keep stdout for replies."""\n...kbench.composition.model_encoder --worker-job JOB.json")\n    _worker_main(Path(sys.argv[2]))\n\n\nADAPTER = Adapter\n')
+
+workbench/tests/test_encoder_relation_seed.py:65: AssertionError
+___________ test_a_different_draw_is_visible_in_the_reply_not_silent ___________
+
+    def test_a_different_draw_is_visible_in_the_reply_not_silent() -> None:
+        """The worker reports the digest it drew, so a run can be checked against its own record."""
+>       assert "relation_digest=relation_digest" in SOURCE
+E       assert 'relation_digest=relation_digest' in '"""ENCODER FashionIQ adapter and model-interpreter worker.\n\nRunner sets ``work_root`` after construction, before en...kbench.composition.model_encoder --worker-job JOB.json")\n    _worker_main(Path(sys.argv[2]))\n\n\nADAPTER = Adapter\n'
+
+workbench/tests/test_encoder_relation_seed.py:73: AssertionError
+=========================== short test summary info ============================
+FAILED workbench/tests/test_encoder_relation_seed.py::test_the_draw_is_seeded_before_the_model_is_constructed - AssertionError: no manual_seed(...) call in the worker
+FAILED workbench/tests/test_encoder_relation_seed.py::test_the_seed_is_carried_by_the_job_not_a_module_default - AttributeError: module 'workbench.composition.model_encoder' has no attribute 'RELATION_SEED'
+FAILED workbench/tests/test_encoder_relation_seed.py::test_the_drawn_tensor_is_persisted_with_its_digest - assert (('sha256' in '(job_path: Path) -> None:\n    """Load verified ENCODER weights once, process jobs, and keep stdout for replies."""\n...kbench.composition.model_encoder --worker-job JOB.json")\n    _worker_main(Path(sys.argv[2]))\n\n\nADAPTER = Adapter\n' and 'relation.npy' in '(job_path: Path) -> None:\n    """Load verified ENCODER weights once, process jobs, and keep stdout for replies."""\n...kbench.composition.model_encoder --worker-job JOB.json")\n    _worker_main(Path(sys.argv[2]))\n\n\nADAPTER = Adapter\n') or 'relation-seed' in '(job_path: Path) -> None:\n    """Load verified ENCODER weights once, process jobs, and keep stdout for replies."""\n...kbench.composition.model_encoder --worker-job JOB.json")\n    _worker_main(Path(sys.argv[2]))\n\n\nADAPTER = Adapter\n')
+FAILED workbench/tests/test_encoder_relation_seed.py::test_a_different_draw_is_visible_in_the_reply_not_silent - assert 'relation_digest=relation_digest' in '"""ENCODER FashionIQ adapter and model-interpreter worker.\n\nRunner sets ``work_root`` after construction, before en...kbench.composition.model_encoder --worker-job JOB.json")\n    _worker_main(Path(sys.argv[2]))\n\n\nADAPTER = Adapter\n'
+4 failed in 0.14s
+exit=1

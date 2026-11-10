@@ -1,0 +1,9 @@
+run: /home/heheboiz/data/cir/workbench/artifacts/composition/runs/10173dc45dea8c90fd2a284b/ranks/limn_base_iter0_all_categories.json
+conditions: ['image_only_empty_text', 'multimodal', 'text_only_black_image']
+qids per condition: {'image_only_empty_text': 6003, 'multimodal': 6003, 'text_only_black_image': 6003}
+multimodal vs text_only_black_image: identical_ranks=179/6003 identical_fraction=0.0298
+multimodal vs image_only_empty_text: identical_ranks=152/6003 identical_fraction=0.0253
+text_only_black_image vs image_only_empty_text: identical_ranks=120/6003 identical_fraction=0.0200
+all_three_conditions_identical: False
+verdict: NOT propagated: the three conditions carry different ranks
+harness artifact present: /home/heheboiz/data/cir/workbench/docs/reviews/20261108T-throughput/d3b_limn_aggregate_scan.json

@@ -11,7 +11,9 @@ Every assertion below therefore executes the code the bundle is built from, not 
 """
 from __future__ import annotations
 
+import hashlib
 import json
+import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -23,9 +25,22 @@ FRONTEND = REPO / "workbench" / "frontend"
 
 
 def compile_module(source: str, out_dir: Path) -> Path:
-    """Compile one shipping TypeScript module to ESM JavaScript and return the emitted file."""
+    """Compile one shipping TypeScript module to ESM JavaScript and return the emitted file.
+
+    Each call emits into a FRESH subdirectory of `out_dir`. The fixed path a caller names is a
+    scratch parent, not the artifact's identity: with a shared `/tmp/<name>/<module>.js`, bytes left
+    by an earlier campaign were served to a later run (`scope.js` without the W-02 `family` key made
+    two tests fail inside a full sweep while passing in isolation, because nothing that run did could
+    be shown to have replaced them). A unique directory makes the served artifact this run's output.
+    """
     if shutil.which("npx") is None:
         pytest.skip("npx is not installed: the pure module cannot be compiled here")
+    # A CONTENT digest, not `hash()`: `hash()` on str is salted per process via PYTHONHASHSEED, so
+    # the same module emitted into a different directory every run — unreproducible names, and the
+    # directories are never reusable or prunable by name. The digest is stable across processes and
+    # still unique per (out_dir, source).
+    token = hashlib.sha1(f"{out_dir}\x00{source}".encode()).hexdigest()[:12]
+    out_dir = out_dir / f"build-{os.getpid()}-{token}"
     out_dir.mkdir(parents=True, exist_ok=True)
     emitted = subprocess.run(
         ["npx", "tsc", source, "--ignoreConfig", "--outDir", str(out_dir),

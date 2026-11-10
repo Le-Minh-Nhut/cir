@@ -1,0 +1,17 @@
+M-01 pin: cross-process bit identity (CPU, .cuda() neutralised; only the draw is under test)
+
+process A  raw/m01/proc_a.txt  digest 5cb38445…  unseeded same-process max|Δ| 4.11787748336792
+process B  raw/m01/proc_b.txt  digest f9be8714…  unseeded same-process max|Δ| 4.744387149810791
+process C  (later run)         digest c29076be…  unseeded same-process max|Δ| 5.012038230895996
+process D  (later run)         digest e6498146…  unseeded same-process max|Δ| 4.727078914642334
+=> unseeded: every clean process draws a DIFFERENT tensor (4 distinct digests in 4 processes)
+
+seeded with 20261111 in all four processes: digest 20db0c27c979e9a0938c71af5142458dfa2070468d0ad3fcb6f24134c2f9ce92
+=> seeded: identical digest in every process; seeded same-process max|Δ| 0.0
+
+forward-state identity, two clean processes (raw/m01/forward_delta.json):
+  seeded   relation max|Δ| 0.0, gallery max|Δ| 0.0, query max|Δ| 0.0, gallery/query BIT-IDENTICAL
+  unseeded relation max|Δ| 4.571284, gallery 0.000223288, query 0.0103935
+
+the actual GPU rerun recorded the same digest before its record was moved:
+  runs/ce89a9a27c4cceadeaaf30b0/construction_state/relation-seed20261111.npy.json -> 20db0c27…ce92

@@ -1,0 +1,2 @@
+0 http://127.0.0.1:5173/ ?area=overview&protocol=circus_fashioniq_release_v1&subset=full
+1 http://127.0.0.1:5173/?area=overview&protocol=fashioniq_original_split ?area=overview&protocol=fashioniq_original_split

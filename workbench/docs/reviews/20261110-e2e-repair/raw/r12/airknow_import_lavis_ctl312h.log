@@ -1,0 +1,21 @@
+/home/heheboiz/data/cir/workbench/envs/ctl312h/lib/python3.12/site-packages/torch/jit/_script.py:1491: FutureWarning: `torch.jit.script` is deprecated. Please switch to `torch.compile` or `torch.export`.
+  warnings.warn(
+/home/heheboiz/data/cir/workbench/envs/ctl312h/lib/python3.12/site-packages/torch/jit/_script.py:1491: FutureWarning: `torch.jit.script` is deprecated. Please switch to `torch.compile` or `torch.export`.
+  warnings.warn(
+/home/heheboiz/data/cir/workbench/envs/ctl312h/lib/python3.12/site-packages/torch/jit/_script.py:1643: FutureWarning: `torch.jit.interface` is deprecated. Please use `torch.compile` instead.
+  warnings.warn(
+/home/heheboiz/data/cir/workbench/envs/ctl312h/lib/python3.12/site-packages/transformers/utils/generic.py:441: FutureWarning: `torch.utils._pytree._register_pytree_node` is deprecated. Please use `torch.utils._pytree.register_pytree_node` instead.
+  _torch_pytree._register_pytree_node(
+Traceback (most recent call last):
+  File "<string>", line 5, in <module>
+  File "/home/heheboiz/data/cir/workbench/third_party/AirKnow/lavis/__init__.py", line 15, in <module>
+    from lavis.datasets.builders import *
+  File "/home/heheboiz/data/cir/workbench/third_party/AirKnow/lavis/datasets/builders/__init__.py", line 8, in <module>
+    from lavis.datasets.builders.base_dataset_builder import load_dataset_config
+  File "/home/heheboiz/data/cir/workbench/third_party/AirKnow/lavis/datasets/builders/base_dataset_builder.py", line 18, in <module>
+    from lavis.processors.base_processor import BaseProcessor
+  File "/home/heheboiz/data/cir/workbench/third_party/AirKnow/lavis/processors/__init__.py", line 29, in <module>
+    from lavis.processors.audio_processors import BeatsAudioProcessor
+  File "/home/heheboiz/data/cir/workbench/third_party/AirKnow/lavis/processors/audio_processors.py", line 9, in <module>
+    import torchaudio
+ModuleNotFoundError: No module named 'torchaudio'

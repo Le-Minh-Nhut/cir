@@ -51,4 +51,41 @@ def test_tgcir_preflight_blocks_empty_environment(tmp_path: Path):
     blockers = preflight(source_dir, data_dir, ckpt_dir)
     assert any("source" in b.lower() for b in blockers)
     assert any("raw input missing" in b.lower() for b in blockers)
-    assert any("mapping unresolved" in b.lower() for b in blockers)
+    assert any("checkpoint missing or empty" in b.lower() for b in blockers)
+    # The replacement contract, both halves: the blocker must come from the BYTES, and a registry
+    # that is not VERIFIED_METADATA must still block even when the file is present and hashed.
+    assert not any("mapping unresolved" in b.lower() for b in blockers)
+
+
+def test_tgcir_preflight_fails_closed_on_a_wrong_digest(tmp_path: Path):
+    """A staged file whose bytes differ from the declared digest is refused, not warned about."""
+    import hashlib
+    from unittest.mock import patch
+
+    from workbench.replay import tgcir as module
+
+    (tmp_path / module.CHECKPOINT["filename"]).write_bytes(b"not the author's weights")
+    variant = dict(module.CHECKPOINT)
+    variant["expected_sha256"] = hashlib.sha256(b"the author's weights").hexdigest()
+    variant["expected_size_bytes"] = None
+    with patch.object(module, "CHECKPOINT", variant):
+        blockers = module.validate_checkpoint(tmp_path)
+    assert any("digest mismatch" in b for b in blockers), blockers
+
+
+def test_tgcir_preflight_still_blocks_when_the_registry_is_not_verified(tmp_path: Path):
+    """A verified digest plus an unverified registry status is still a refusal."""
+    import hashlib
+    from unittest.mock import patch
+
+    from workbench.replay import tgcir as module
+
+    payload = b"author bytes"
+    (tmp_path / module.CHECKPOINT["filename"]).write_bytes(payload)
+    variant = dict(module.CHECKPOINT)
+    variant["expected_sha256"] = hashlib.sha256(payload).hexdigest()
+    variant["expected_size_bytes"] = len(payload)
+    variant["checkpoint_mapping_status"] = "UNVERIFIED"
+    with patch.object(module, "CHECKPOINT", variant):
+        blockers = module.validate_checkpoint(tmp_path)
+    assert any("mapping unresolved" in b.lower() for b in blockers), blockers

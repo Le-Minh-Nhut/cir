@@ -1,0 +1,60 @@
+start 2026-11-09T03:30:31+07:00 head ffb6ae8
+{
+  "gallery_count": 74381,
+  "gallery_identity_sha256": "1db68c59d96f014cdbecf936e108653de98abef0bd9a98a8abc2fe08b5dec4b4",
+  "models": [
+    {
+      "adapter_module_source_status": "available",
+      "attempt": "5dee7425dd46c5f154808aac",
+      "category_scopes": [
+        null
+      ],
+      "checkpoint_id": "fashioniq",
+      "condition_status": {
+        "image_only_empty_text": {
+          "category_scope_failure_count": 0,
+          "fallback_used": false,
+          "status": "COMPLETED",
+          "unscored_count": 0
+        },
+        "multimodal": {
+          "category_scope_failure_count": 0,
+          "fallback_used": false,
+          "status": "COMPLETED",
+          "unscored_count": 0
+        },
+        "text_only_black_image": {
+          "category_scope_failure_count": 0,
+          "fallback_used": false,
+          "status": "COMPLETED",
+          "unscored_count": 0
+        }
+      },
+      "gallery_count": 74381,
+      "model_id": "encoder",
+      "query_count": 6003,
+      "reason": null,
+      "reused": false,
+      "reused_query_result_count": 0,
+      "run_id": "5dee7425dd46c5f154808aac",
+      "runtime": {
+        "model_interpreter": {
+          "environment_fingerprint": "9abbe9047d6d581959a324d9dad121c4d6520a22785204c2fdedcfe7da08b79a",
+          "path": "/home/heheboiz/data/cir/workbench/envs/encoder310-adapted/bin/python",
+          "source": "workbench_env",
+          "verification_reason": "CUDA capability must be verified on the GPU host with verify_gpu_runtime() before this model can be launched",
+          "verification_status": "GPU_VERIFICATION_PENDING",
+          "verified": true,
+          "version": "Python 3.10.20; torch 2.7.1+cu128"
+        }
+      },
+      "status": "COMPLETED",
+      "summaries": {
+        "full": "/home/heheboiz/data/cir/workbench/artifacts/composition/summary/encoder_fashioniq_5dee7425dd46c5f154808aac/full.json"
+      }
+    }
+  ],
+  "protocol_id": "circus_fashioniq_release_v1",
+  "run_count": 1,
+  "synthetic": false
+}

@@ -1,0 +1,238 @@
+M-02 LIMN CATEGORY ROUTING — VERIFICATION RECORD
+repo: /home/heheboiz/data/cir   date: 2026-11-11   evidence dir: workbench/docs/reviews/20261111-master-audit/
+resolver: workbench/composition/model_limn.py::resolve_query_category + caption_scope_index
+loader:   workbench/composition/data.py::load_release + assign_garment_categories
+scripts:  workbench/docs/reviews/20261111-master-audit/scripts/m02/{probe_resolver,recount_recovered,build_scope_map,upstream_keys,report}.py
+
+==============================================================================
+1. FIXTURE PROBE — synthetic FashionIQ roots (temp dirs, cap.<category>.val.json)
+==============================================================================
+shape: qid=7:3038 stem=B000AM loader_category=None
+       query_txt='Is darker and has a different graphic and is darker'
+       normalized key='is darker and has a different graphic and is darker'
+       both files carry captions ['is darker and has a different graphic', 'is darker']
+
+case                                    index_entry                 resolve_query_category()
+------------------------------------------------------------------------------
+a_both_present                          shirt,toptee                None
+b_toptee_absent                         shirt                       'shirt'
+c_toptee_corrupt                        shirt                       'shirt'
+d_shirt_absent                          toptee                      'toptee'
+
+Verdict on the claimed defect: CONFIRMED.
+  a) both present, same (stem, normalized text) pair -> returns None  (refuses, correct)
+  b) toptee file absent                               -> returns 'shirt' (silently routes)
+  c) toptee file present but invalid JSON             -> returns 'shirt' (silently routes)
+  d) shirt file absent (only toptee present)          -> returns 'toptee' (silently routes)
+  b/c/d quote raw return values 'shirt' / 'shirt' / 'toptee'; the resolver cannot tell
+  'the other source had no row' from 'the other source was never read', because
+  caption_scope_index swallows OSError/ValueError and continues (model_limn.py:71-75, except at :74).
+  Impact on the real release: measured in the degradation table at the end of section 2.
+
+==============================================================================
+2. INDEPENDENT RECOUNT OF THE '117 HISTORICALLY RECOVERED' QUERIES
+==============================================================================
+release query file : workbench/artifacts/circus_release/mbeir_fashioniq_task7_test.jsonl
+  sha256           : b601ef6a5411bf9385cff41e64bea863871ab1094cd09d78683de6a5141165ef
+  hash verification against EXPECTED_SHA256: matched
+cap.dress.val.json sha256: 5e5117d45695df9c3ca91fac3e0bc49e6422ae9c8b3793f0ac9b3ab83adb7de9
+cap.shirt.val.json sha256: 7b7ca3797b85dddfd83e74cdb4454cb63e3e7c09acef2590155efbacea6d7feb
+cap.toptee.val.json sha256: b4e09f428e6c255cc4b4ec46e77908305ab83075d82840c960be81af15cdc5eb
+
+ambiguous qids (query.category is None): 119
+resolved to exactly one of {dress,shirt,toptee}: 117
+  shirt=46  toptee=71  dress=0
+unresolved: 2 -> ['7:3038', '7:3790']
+
+reproduction of the claim: 117 = YES, remaining two = 7:3038, 7:3790 = YES
+  check ambiguous_count_is_119: True
+  check resolved_count_is_117: True
+  check unresolved_are_exactly_7:3038_7:3790: True
+  check resolved_scopes_subset_of_scopes: True
+  check resolver_matches_raw_rederivation: True
+  check index_matches_raw_files: True
+  check all_rederivations_pass: True
+
+Per-qid rederivation — raw cap.<category>.val.json bytes re-parsed, pair (stem, normalized text) looked up
+in each of the three files independently of any cached index. PASS_<cat>_only means the
+deciding file holds the pair AND the other two do not.
+
+  7:2179   shirt   stem=B0020Q11LE  raw_hits=shirt          PASS_shirt_only
+  7:2211   shirt   stem=B000X74R7C  raw_hits=shirt          PASS_shirt_only
+  7:2218   shirt   stem=B0020Q11LE  raw_hits=shirt          PASS_shirt_only
+  7:2228   shirt   stem=B004TMGDME  raw_hits=shirt          PASS_shirt_only
+  7:2258   shirt   stem=B003Y5LY76  raw_hits=shirt          PASS_shirt_only
+  7:2285   shirt   stem=B0046Q4F28  raw_hits=shirt          PASS_shirt_only
+  7:2307   shirt   stem=B00BGJ4OQA  raw_hits=shirt          PASS_shirt_only
+  7:2309   shirt   stem=B00AZ0180G  raw_hits=shirt          PASS_shirt_only
+  7:2333   shirt   stem=B0013F2JGE  raw_hits=shirt          PASS_shirt_only
+  7:2463   shirt   stem=B00GGR9BSS  raw_hits=shirt          PASS_shirt_only
+  7:2471   shirt   stem=B00B92J932  raw_hits=shirt          PASS_shirt_only
+  7:2486   shirt   stem=B006VJXGAU  raw_hits=shirt          PASS_shirt_only
+  7:2529   shirt   stem=B00DG9ISYM  raw_hits=shirt          PASS_shirt_only
+  7:2575   shirt   stem=B0020Q11LE  raw_hits=shirt          PASS_shirt_only
+  7:2587   shirt   stem=B0046Q4F28  raw_hits=shirt          PASS_shirt_only
+  7:2637   shirt   stem=B000RQO9S6  raw_hits=shirt          PASS_shirt_only
+  7:2650   shirt   stem=B008JVJI00  raw_hits=shirt          PASS_shirt_only
+  7:2679   shirt   stem=B006YDMYCY  raw_hits=shirt          PASS_shirt_only
+  7:2698   shirt   stem=B007RGHP1W  raw_hits=shirt          PASS_shirt_only
+  7:2717   shirt   stem=B00B92J932  raw_hits=shirt          PASS_shirt_only
+  7:2815   shirt   stem=B006VJXGAU  raw_hits=shirt          PASS_shirt_only
+  7:2959   shirt   stem=B00018AA74  raw_hits=shirt          PASS_shirt_only
+  7:2999   shirt   stem=B00ER9PWY4  raw_hits=shirt          PASS_shirt_only
+  7:3005   shirt   stem=B00CXV9H26  raw_hits=shirt          PASS_shirt_only
+  7:3033   shirt   stem=B000EOZGWE  raw_hits=shirt          PASS_shirt_only
+  7:3038   None    stem=B004TMGDME  raw_hits=shirt,toptee   UNRESOLVED_raw_duplicate
+  7:3163   shirt   stem=B008JVJI00  raw_hits=shirt          PASS_shirt_only
+  7:3177   shirt   stem=B000X74R7C  raw_hits=shirt          PASS_shirt_only
+  7:3243   shirt   stem=B00BFCV6A0  raw_hits=shirt          PASS_shirt_only
+  7:3280   shirt   stem=B006Z2HG0Y  raw_hits=shirt          PASS_shirt_only
+  7:3324   shirt   stem=B00AECN92K  raw_hits=shirt          PASS_shirt_only
+  7:3367   shirt   stem=B00BQZ7OCK  raw_hits=shirt          PASS_shirt_only
+  7:3402   shirt   stem=B001PIXJTA  raw_hits=shirt          PASS_shirt_only
+  7:3464   shirt   stem=B00DG9ISYM  raw_hits=shirt          PASS_shirt_only
+  7:3487   shirt   stem=B0067K5MNC  raw_hits=shirt          PASS_shirt_only
+  7:3493   shirt   stem=B006BZ8690  raw_hits=shirt          PASS_shirt_only
+  7:3560   shirt   stem=B006ZZV0L2  raw_hits=shirt          PASS_shirt_only
+  7:3601   shirt   stem=B000EOZGWE  raw_hits=shirt          PASS_shirt_only
+  7:3629   shirt   stem=B00BYIN01I  raw_hits=shirt          PASS_shirt_only
+  7:3635   shirt   stem=B00AECN92K  raw_hits=shirt          PASS_shirt_only
+  7:3790   None    stem=B0079K0YBO  raw_hits=shirt,toptee   UNRESOLVED_raw_duplicate
+  7:3800   shirt   stem=B006ZZV0L2  raw_hits=shirt          PASS_shirt_only
+  7:3813   shirt   stem=B001BISBCY  raw_hits=shirt          PASS_shirt_only
+  7:3906   shirt   stem=B008MC2GY6  raw_hits=shirt          PASS_shirt_only
+  7:3927   shirt   stem=B00BFCV6A0  raw_hits=shirt          PASS_shirt_only
+  7:3993   shirt   stem=B00BYIN01I  raw_hits=shirt          PASS_shirt_only
+  7:4008   shirt   stem=B006YDMYCY  raw_hits=shirt          PASS_shirt_only
+  7:4013   shirt   stem=B000RQO9S6  raw_hits=shirt          PASS_shirt_only
+  7:4066   toptee  stem=B004D8QCN4  raw_hits=toptee         PASS_toptee_only
+  7:4086   toptee  stem=B000F4U6QE  raw_hits=toptee         PASS_toptee_only
+  7:4164   toptee  stem=B001BISBCY  raw_hits=toptee         PASS_toptee_only
+  7:4171   toptee  stem=B007Z4WRC8  raw_hits=toptee         PASS_toptee_only
+  7:4243   toptee  stem=B00BXMUFWC  raw_hits=toptee         PASS_toptee_only
+  7:4246   toptee  stem=B00GIOKE8U  raw_hits=toptee         PASS_toptee_only
+  7:4290   toptee  stem=B004KSP3ZK  raw_hits=toptee         PASS_toptee_only
+  7:4294   toptee  stem=B006BZ8690  raw_hits=toptee         PASS_toptee_only
+  7:4305   toptee  stem=B0094I4IOI  raw_hits=toptee         PASS_toptee_only
+  7:4322   toptee  stem=B006YDMYCY  raw_hits=toptee         PASS_toptee_only
+  7:4358   toptee  stem=B006VJXGAU  raw_hits=toptee         PASS_toptee_only
+  7:4397   toptee  stem=B00092SAR4  raw_hits=toptee         PASS_toptee_only
+  7:4420   toptee  stem=B0051DQXH0  raw_hits=toptee         PASS_toptee_only
+  7:4425   toptee  stem=B00CMD9IKQ  raw_hits=toptee         PASS_toptee_only
+  7:4434   toptee  stem=B005E0TR32  raw_hits=toptee         PASS_toptee_only
+  7:4487   toptee  stem=B0045DTP72  raw_hits=toptee         PASS_toptee_only
+  7:4504   toptee  stem=B000FVAR52  raw_hits=toptee         PASS_toptee_only
+  7:4510   toptee  stem=B009ZYYBVG  raw_hits=toptee         PASS_toptee_only
+  7:4529   toptee  stem=B000EOZGWE  raw_hits=toptee         PASS_toptee_only
+  7:4540   toptee  stem=B00579WNTA  raw_hits=toptee         PASS_toptee_only
+  7:4542   toptee  stem=B0067F9A0S  raw_hits=toptee         PASS_toptee_only
+  7:4582   toptee  stem=B0067F94EK  raw_hits=toptee         PASS_toptee_only
+  7:4594   toptee  stem=B000GNYYDA  raw_hits=toptee         PASS_toptee_only
+  7:4641   toptee  stem=B0094I4IOI  raw_hits=toptee         PASS_toptee_only
+  7:4759   toptee  stem=B000A35AMK  raw_hits=toptee         PASS_toptee_only
+  7:4765   toptee  stem=B00H879A5Y  raw_hits=toptee         PASS_toptee_only
+  7:4806   toptee  stem=B003PD0G30  raw_hits=toptee         PASS_toptee_only
+  7:4808   toptee  stem=B005LIXPPI  raw_hits=toptee         PASS_toptee_only
+  7:4809   toptee  stem=B0001W1KSI  raw_hits=toptee         PASS_toptee_only
+  7:4838   toptee  stem=B00AZ0180G  raw_hits=toptee         PASS_toptee_only
+  7:4849   toptee  stem=B0089HEOHG  raw_hits=toptee         PASS_toptee_only
+  7:4871   toptee  stem=B003Y5LY76  raw_hits=toptee         PASS_toptee_only
+  7:4880   toptee  stem=B004KSP3ZK  raw_hits=toptee         PASS_toptee_only
+  7:4884   toptee  stem=B00AIAIO46  raw_hits=toptee         PASS_toptee_only
+  7:4893   toptee  stem=B00GGYKWFW  raw_hits=toptee         PASS_toptee_only
+  7:4956   toptee  stem=B00GIOKE8U  raw_hits=toptee         PASS_toptee_only
+  7:4982   toptee  stem=B00CMD9IKQ  raw_hits=toptee         PASS_toptee_only
+  7:5048   toptee  stem=B00C8S6TNE  raw_hits=toptee         PASS_toptee_only
+  7:5090   toptee  stem=B0045DTP72  raw_hits=toptee         PASS_toptee_only
+  7:5101   toptee  stem=B00699EPO8  raw_hits=toptee         PASS_toptee_only
+  7:5105   toptee  stem=B00GIOKE8U  raw_hits=toptee         PASS_toptee_only
+  7:5109   toptee  stem=B000EMDA1A  raw_hits=toptee         PASS_toptee_only
+  7:5149   toptee  stem=B009VI0H7S  raw_hits=toptee         PASS_toptee_only
+  7:5170   toptee  stem=B00GIOKE8U  raw_hits=toptee         PASS_toptee_only
+  7:5212   toptee  stem=B0094I4IOI  raw_hits=toptee         PASS_toptee_only
+  7:5228   toptee  stem=B00CXV9H26  raw_hits=toptee         PASS_toptee_only
+  7:5236   toptee  stem=B0077DN4P6  raw_hits=toptee         PASS_toptee_only
+  7:5239   toptee  stem=B00579WNTA  raw_hits=toptee         PASS_toptee_only
+  7:5259   toptee  stem=B00BGJ4OQA  raw_hits=toptee         PASS_toptee_only
+  7:5329   toptee  stem=B009VI0H7S  raw_hits=toptee         PASS_toptee_only
+  7:5388   toptee  stem=B00B7SB6RA  raw_hits=toptee         PASS_toptee_only
+  7:5415   toptee  stem=B006JW32N0  raw_hits=toptee         PASS_toptee_only
+  7:5444   toptee  stem=B009HU9HN0  raw_hits=toptee         PASS_toptee_only
+  7:5512   toptee  stem=B00GIOKE8U  raw_hits=toptee         PASS_toptee_only
+  7:5546   toptee  stem=B007738INY  raw_hits=toptee         PASS_toptee_only
+  7:5584   toptee  stem=B006VJXGAU  raw_hits=toptee         PASS_toptee_only
+  7:5597   toptee  stem=B001PJEI8U  raw_hits=toptee         PASS_toptee_only
+  7:5607   toptee  stem=B00CD5NHMI  raw_hits=toptee         PASS_toptee_only
+  7:5641   toptee  stem=B009ZYYBVG  raw_hits=toptee         PASS_toptee_only
+  7:5654   toptee  stem=B00945QZJM  raw_hits=toptee         PASS_toptee_only
+  7:5655   toptee  stem=B006WAP98U  raw_hits=toptee         PASS_toptee_only
+  7:5700   toptee  stem=B0089HEOHG  raw_hits=toptee         PASS_toptee_only
+  7:5701   toptee  stem=B005E0TR32  raw_hits=toptee         PASS_toptee_only
+  7:5711   toptee  stem=B0096HHMC2  raw_hits=toptee         PASS_toptee_only
+  7:5742   toptee  stem=B003YLKY12  raw_hits=toptee         PASS_toptee_only
+  7:5764   toptee  stem=B001LV9ZQM  raw_hits=toptee         PASS_toptee_only
+  7:5788   toptee  stem=B00GISBRL4  raw_hits=toptee         PASS_toptee_only
+  7:5798   toptee  stem=B000VX6TAG  raw_hits=toptee         PASS_toptee_only
+  7:5863   toptee  stem=B0089HEOHG  raw_hits=toptee         PASS_toptee_only
+  7:5896   toptee  stem=B009ZYYBVG  raw_hits=toptee         PASS_toptee_only
+  7:5963   toptee  stem=B006VJXGAU  raw_hits=toptee         PASS_toptee_only
+
+Degradation on the real 119 (shipped resolver, one caption file removed or corrupted):
+  removed/mode      resolved  scopes                     7:3038     7:3790
+  dress/absent      117       {"shirt": 46, "toptee": 71} None        None
+  dress/corrupt     117       {"shirt": 46, "toptee": 71} None        None
+  shirt/absent      73        {"toptee": 73}             'toptee'    'toptee'
+  shirt/corrupt     73        {"toptee": 73}             'toptee'    'toptee'
+  toptee/absent     48        {"shirt": 48}              'shirt'     'shirt'
+  toptee/corrupt    48        {"shirt": 48}              'shirt'     'shirt'
+  Reading: with cap.shirt.val.json unreadable the two genuinely ambiguous qids 7:3038 and
+  7:3790 silently become 'toptee'; with cap.toptee.val.json unreadable they silently become
+  'shirt'. The dress file is never the deciding source for these 119, so its loss is inert.
+
+==============================================================================
+3. MAPPING ARTIFACT raw/m02/qid_scope_map.json (under this review dir)
+==============================================================================
+cohort: full  size: 6003
+counts: {"caption_annotation": 117, "loader_identity": 5884}
+        scored=6001  unresolved=2
+groups (reason, scope, count, source_files):
+  caption_annotation shirt   n=46    data/FashionIQ/captions/cap.shirt.val.json
+  caption_annotation toptee  n=71    data/FashionIQ/captions/cap.toptee.val.json
+  loader_identity   dress   n=2010  data/FashionIQ/image_splits/split.dress.val.json, data/FashionIQ/captions/cap.dress.test.json
+  loader_identity   shirt   n=1989  data/FashionIQ/image_splits/split.shirt.val.json, data/FashionIQ/captions/cap.shirt.test.json
+  loader_identity   toptee  n=1885  data/FashionIQ/image_splits/split.toptee.val.json, data/FashionIQ/captions/cap.toptee.test.json
+  ambiguous_reference_and_caption None    n=2     data/FashionIQ/captions/cap.shirt.val.json, data/FashionIQ/captions/cap.toptee.val.json
+sha256 release query: b601ef6a5411bf9385cff41e64bea863871ab1094cd09d78683de6a5141165ef
+sha256 data/FashionIQ/captions/cap.dress.val.json: 5e5117d45695df9c3ca91fac3e0bc49e6422ae9c8b3793f0ac9b3ab83adb7de9
+sha256 data/FashionIQ/captions/cap.shirt.val.json: 7b7ca3797b85dddfd83e74cdb4454cb63e3e7c09acef2590155efbacea6d7feb
+sha256 data/FashionIQ/captions/cap.toptee.val.json: b4e09f428e6c255cc4b4ec46e77908305ab83075d82840c960be81af15cdc5eb
+file size: 220135 bytes (limit 5 MB)
+
+==============================================================================
+4. UPSTREAM RELEASE GENERATOR — garment-category key?
+==============================================================================
+source: https://github.com/TIGER-AI-Lab/UniIR/blob/98dc570c2645fec8e1fd42c7d4ac9853f46051fd/src/data/preprocessing/fashioniq_data_preprocessor.py
+commit: 98dc570c2645fec8e1fd42c7d4ac9853f46051fd  blob sha1: d815957ccff7fb75ca56a34ea9822d2a9065f634
+read via: https://raw.githubusercontent.com/TIGER-AI-Lab/UniIR/98dc570c2645fec8e1fd42c7d4ac9853f46051fd/src/data/preprocessing/fashioniq_data_preprocessor.py   sha256 of read bytes: 17091804658779d71c66049f5c12250123740c993ed4fde7b63315b0ed7e53b2
+no local copy exists in this repo (grep for fashioniq_data_preprocessor / UniIR under
+workbench/third_party and artifacts found only the LIMN vendor tree), so the pinned
+GitHub source was read.
+
+row builder: fashioniq_to_mbeir_entry(fashioniq_entry, candidate_pool, mbeir_data_dir, include_src_content=True, concatenate_captions=True)
+  query-row keys: ['candidate_img_id', 'did', 'img_path', 'modality', 'neg_cand_list', 'pos_cand_list', 'qid', 'query_img_path', 'query_modality', 'query_src_content', 'query_txt', 'src_content', 'txt']
+  query_src_content keys: ['candidate_img_id']
+candidate pool builder: generate_fashioniq_candidate_pool(fashioniq_images_dir, fashioniq_candidate_pool_path, mbeir_data_dir, include_src_content=True)
+  pool-row keys: ['did', 'img_id', 'img_path', 'modality', 'txt']
+every dict key in the module: ['__main__', 'candidate_img_id', 'did', 'img_id', 'img_path', 'modality', 'neg_cand_list', 'pos_cand_list', 'qid', 'query_img_path', 'query_modality', 'query_src_content', 'query_txt', 'src_content', 'txt']
+category/garment/subtask/source_file keys found: []
+verdict: UPSTREAM WRITES NO CATEGORY KEY: every query row lacks category/garment/subtask/source_file, so the release's garment category can only come from a downstream loader, never from the generator.
+
+Cross-check on the shipped release rows (6003 lines): keys are neg_cand_list, pos_cand_list,
+qid, query_img_path, query_modality, query_src_content, query_txt, task_id; all 6003 rows carry
+query_src_content == {"candidate_img_id": ...} only. 'task_id' is not written by the
+preprocessor above; it is added afterwards by src/data/mbeir_data_generator.py:374-375
+('entry["task_id"] = task_id' from get_mbeir_task_id(query_modality, pos_cand_modality) at
+src/data/preprocessing/utils.py:90-93), i.e. it encodes query and candidate modality, never garment category. No
+category/garment/subtask/source_file key exists at any stage, so the release's 'category' can
+only be a downstream loader inference.
+

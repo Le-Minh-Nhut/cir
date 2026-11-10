@@ -1,0 +1,7 @@
+[start] toptee 2026-11-09T19:51:38+07:00
+[done] toptee exit=0 2026-11-09T19:55:45+07:00
+[start] dress 2026-11-09T19:55:45+07:00
+[done] dress exit=0 2026-11-09T19:59:42+07:00
+[done] aggregate exit=0 2026-11-09T19:59:42+07:00
+[start] parity 2026-11-09T19:59:42+07:00
+[done] parity exit=1 2026-11-09T20:00:00+07:00

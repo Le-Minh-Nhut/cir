@@ -1,0 +1,4 @@
+== adapter_module_source_hash semantics (runner.py:1336-1342): sha256 of the adapter module file
+model_encoder.py sha256 now : df68824817293e56f9dbe6123baed6e3b4191ff950943abbfc99905e4a36bdf5
+model_encoder.py sha256 HEAD: bf60d855be3d72dd2ff0abc6d8b9dc12dbb5fad4a50aa87aaa774454f65a76ab
+differ: True

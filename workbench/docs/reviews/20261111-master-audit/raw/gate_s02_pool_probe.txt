@@ -1,0 +1,11 @@
+openblas_mapped_by_process: ['/home/heheboiz/data/cir/workbench/envs/ctl312h/lib/python3.12/site-packages/numpy.libs/libopenblas64_p-r0-0cf96a72.3.23.dev.so']
+openblas_globbed_by_helper: ['/home/heheboiz/data/cir/workbench/envs/ctl312h/lib/python3.12/site-packages/numpy.libs/libopenblas64_p-r0-0cf96a72.3.23.dev.so']
+helper_source: libopenblas64_p-r0-0cf96a72.3.23.dev.so
+source_is_the_mapped_library: True
+pool_before: 20
+record: {'requested': 1, 'previous': 20, 'effective': 1, 'verified': True, 'source': 'libopenblas64_p-r0-0cf96a72.3.23.dev.so'}
+pool_inside: 1
+pool_after: 20
+restored_verified: True restored_to: 20
+BLAS_THREADS_PINNED: 1
+torch_threads_untouched_by_blas_pin: 20

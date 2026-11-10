@@ -1,0 +1,6 @@
+torch 2.7.1+cu128 cuda_available True
+Parameter.cuda()  -> Tensor
+Parameter.to('cuda') -> Tensor
+named_parameters []
+'attr' in state_dict False
+isinstance(attr, nn.Parameter) False

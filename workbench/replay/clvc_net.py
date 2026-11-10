@@ -35,12 +35,14 @@ from workbench.backend.fashioniq_layout import CATEGORIES
 from workbench.backend.registry import model_by_id
 from workbench.replay.common import (
     ReplayResult,
-    isolated_cache_root,
+    run_cache_root,
     load_trusted_whole_model,
     macro_aggregate,
     sha256_file,
     source_pin_status,
 )
+
+CHECKPOINT_VARIANT = model_by_id("clvc_net")["checkpoint_variants"][0]
 
 MODEL = model_by_id("clvc_net")
 PROTOCOL = "fashioniq_val_split"
@@ -54,20 +56,35 @@ EXPECTED_CATEGORY_FILES = {
 
 
 def validate_checkpoint(checkpoint_root: Path, categories: tuple[str, ...] = CATEGORIES) -> list[str]:
+    """Bind the six staged files to the registry's own declaration.
+
+    The registry already records `checkpoint_mapping_status: VERIFIED_METADATA` plus one
+    `expected_sha256` per member, and all six are reproducible from the staged bytes
+    (`bench` evidence in the audit). Emitting a hard-coded "mapping unresolved" string regardless of
+    those bytes made a verified bundle read as unverified, so the CLI could never reach the evaluator
+    even when every declared digest matched. The check is now the digests themselves.
+    """
     blockers: list[str] = []
-    # CLVCNET archive mapping is unresolved in registry
-    blockers.append(
-        "CLVC-Net checkpoint mapping is unresolved: author Drive archive CLVCNET.zip "
-        "interior member mapping to per-category local/global models is unverified (status=UNVERIFIED)"
-    )
+    declared = {member["filename"]: member["expected_sha256"] for member in CHECKPOINT_VARIANT["bundle_members"]}
     for cat in categories:
         local_name, global_name = EXPECTED_CATEGORY_FILES[cat]
-        local_path = checkpoint_root / local_name
-        global_path = checkpoint_root / global_name
-        if not local_path.is_file() or local_path.stat().st_size == 0:
-            blockers.append(f"CLVC-Net checkpoint missing or empty for {cat}: {local_path}")
-        if not global_path.is_file() or global_path.stat().st_size == 0:
-            blockers.append(f"CLVC-Net checkpoint missing or empty for {cat}: {global_path}")
+        for name in (local_name, global_name):
+            path = checkpoint_root / name
+            if not path.is_file() or path.stat().st_size == 0:
+                blockers.append(f"CLVC-Net checkpoint missing or empty for {cat}: {path}")
+                continue
+            expected = declared.get(name)
+            if not expected:
+                blockers.append(f"CLVC-Net checkpoint has no declared digest: {name}")
+                continue
+            actual = sha256_file(path)
+            if actual != expected:
+                blockers.append(
+                    f"CLVC-Net checkpoint digest mismatch for {name}: expected {expected[:16]}..., found {actual[:16]}...")
+    if not blockers and CHECKPOINT_VARIANT.get("checkpoint_mapping_status") != "VERIFIED_METADATA":
+        blockers.append(
+            f"CLVC-Net checkpoint mapping is unresolved: registry status="
+            f"{CHECKPOINT_VARIANT.get('checkpoint_mapping_status')}")
     return blockers
 
 
@@ -116,6 +133,25 @@ def _load_replay_modules(source_root: Path) -> tuple[Any, Any, Any]:
     test_module = __import__("test")
     return torch, datasets, test_module
 
+def _cpu_device_patch(torch_module: Any) -> None:
+    """ADAPTED RUNTIME: make the pinned `.cuda()` calls device-neutral for a CPU smoke.
+
+    The evaluator hard-codes `.cuda()` at `test.py:28,47,99,115` and `text_model.py:96,108`.
+    Nothing about weights, module structure, arithmetic or ranking changes -- only where tensors
+    live. This is a device parameterisation, NOT the author's code path, and every artifact that
+    uses it must say so.
+    """
+    if getattr(torch_module.Tensor.cuda, "_workbench_device_neutral", False):
+        return
+    original = torch_module.Tensor.cuda
+
+    def cuda(self, *args, **kwargs):  # noqa: ANN001 - mirrors Tensor.cuda's signature loosely
+        return self
+
+    cuda._workbench_device_neutral = True
+    cuda._workbench_original = original
+    torch_module.Tensor.cuda = cuda
+
 
 def evaluate_categories(
     checkpoint_root: Path,
@@ -127,6 +163,9 @@ def evaluate_categories(
 ) -> tuple[list[ReplayResult], dict[str, Any]]:
     torch, datasets, test_module = _load_replay_modules(source_root)
     target_device = device or ("cuda" if torch.cuda.is_available() else "cpu")
+    adapted = target_device == "cpu"
+    if adapted:
+        _cpu_device_patch(torch)
 
     import torchvision.transforms as transforms
     # The NATIVE FashionIQ validation pipeline, copied from `train.py:90-96` (`load_dataset`, the
@@ -148,7 +187,9 @@ def evaluate_categories(
     ])
 
     results: list[ReplayResult] = []
-    with isolated_cache_root(dataset_root) as cache_root:
+    # See `replay/tgcir.py`: a warm cache is reused only when the caller names a root that
+    # `warm_replay_cache.py` built from the same pinned annotations.
+    with run_cache_root(dataset_root) as cache_root:
         root_str = str(cache_root).rstrip("/") + "/"
         params = SimpleNamespace(batch_size=batch_size)
 
@@ -156,9 +197,14 @@ def evaluate_categories(
             local_name, global_name = EXPECTED_CATEGORY_FILES[category]
             local_path = checkpoint_root / local_name
             global_path = checkpoint_root / global_name
+            declared = {member["filename"]: member["expected_sha256"]
+                        for member in CHECKPOINT_VARIANT["bundle_members"]}
 
-            local_model = torch.load(local_path, map_location=target_device)
-            global_model = torch.load(global_path, map_location=target_device)
+            # Whole pickled modules: unpickling is authorized only against the declared digest.
+            local_model = load_trusted_whole_model(local_path, declared[local_name], torch)
+            global_model = load_trusted_whole_model(global_path, declared[global_name], torch)
+            local_model = local_model.to(target_device)
+            global_model = global_model.to(target_device)
             local_model.eval()
             global_model.eval()
 
@@ -185,6 +231,14 @@ def evaluate_categories(
                         "local_checkpoint": str(local_path),
                         "global_checkpoint": str(global_path),
                         "source_commit": MODEL["upstream_commit_sha"],
+                        "native_evaluator": "test.py:test",
+                        "runtime_label": "ADAPTED_DEVICE_NEUTRAL" if adapted else "NATIVE_CUDA",
+                        "device": target_device,
+                        "adaptation": (
+                            "torch.Tensor.cuda() neutralised so the pinned `.cuda()` sites "
+                            "(test.py:28,47,99,115; text_model.py:96,108) run on CPU; weights, "
+                            "architecture, arithmetic and ranking untouched"
+                        ) if adapted else None,
                     },
                 )
             )

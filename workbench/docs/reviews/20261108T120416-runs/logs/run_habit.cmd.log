@@ -1,0 +1,63 @@
+CMD /home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python -u workbench/scripts/composition_eval.py --config workbench/docs/reviews/20261108T113610-eval/circus_cohort.yaml --models habit --subsets full,sf,validated --topk-depth 50 --keep-features --resume
+CWD /home/heheboiz/data/cir
+ENV {"WORKBENCH_CIRCUS_RELEASE_ROOT": "/home/heheboiz/data/cir/workbench/artifacts/circus_release", "WORKBENCH_CONESEP_PYTHON": "/home/heheboiz/data/cir/workbench/envs/ilearn39-adapted/bin/python", "WORKBENCH_ENCODER_PYTHON": "/home/heheboiz/data/cir/workbench/envs/encoder310-adapted/bin/python", "WORKBENCH_HABIT_PYTHON": "/home/heheboiz/data/cir/workbench/envs/ilearn39-adapted/bin/python", "WORKBENCH_HINT_PYTHON": "/home/heheboiz/data/cir/workbench/envs/ilearn39-adapted/bin/python", "WORKBENCH_INTENT_PYTHON": "/home/heheboiz/data/cir/workbench/envs/ilearn39-adapted/bin/python", "WORKBENCH_LIMN_PYTHON": "/home/heheboiz/data/cir/workbench/envs/limn310-adapted/bin/python", "WORKBENCH_PTHA_MTST_PYTHON": "/home/heheboiz/data/cir/workbench/artifacts/environments/cir-005ef4e1b02999a5/bin/python", "WORKBENCH_RUNTIME_ADAPTATION": "sm_120", "WORKBENCH_TME_PYTHON": "/home/heheboiz/data/cir/workbench/envs/tme-adapted/bin/python"}
+{
+  "gallery_count": 74381,
+  "gallery_identity_sha256": "1db68c59d96f014cdbecf936e108653de98abef0bd9a98a8abc2fe08b5dec4b4",
+  "models": [
+    {
+      "adapter_module_source_status": "available",
+      "attempt": "497c25c57fbeba885ecfb9d1",
+      "category_scopes": [
+        null
+      ],
+      "checkpoint_id": "fiq_n02",
+      "condition_status": {
+        "image_only_empty_text": {
+          "category_scope_failure_count": 0,
+          "status": "COMPLETED",
+          "unscored_count": 0
+        },
+        "multimodal": {
+          "category_scope_failure_count": 0,
+          "status": "COMPLETED",
+          "unscored_count": 0
+        },
+        "text_only_black_image": {
+          "category_scope_failure_count": 0,
+          "status": "COMPLETED",
+          "unscored_count": 0
+        }
+      },
+      "gallery_count": 74381,
+      "model_id": "habit",
+      "query_count": 6003,
+      "reason": null,
+      "reused": false,
+      "reused_query_result_count": 0,
+      "run_id": "497c25c57fbeba885ecfb9d1",
+      "runtime": {
+        "model_interpreter": {
+          "environment_fingerprint": "81cdc0f743ac7457809ac2884391a15e40a67b6794a151709013b79eab27ae5e",
+          "path": "/home/heheboiz/data/cir/workbench/envs/ilearn39-adapted/bin/python",
+          "source": "process_environment",
+          "verification_reason": null,
+          "verification_status": "GPU_RUNTIME_READY",
+          "verified": true,
+          "version": "Python 3.9.25; torch 2.7.1+cu128"
+        }
+      },
+      "status": "COMPLETED",
+      "summaries": {
+        "full": "/home/heheboiz/data/cir/workbench/artifacts/composition/summary/habit_fiq_n02_497c25c57fbeba885ecfb9d1/full.json",
+        "sf": "/home/heheboiz/data/cir/workbench/artifacts/composition/summary/habit_fiq_n02_497c25c57fbeba885ecfb9d1/sf.json",
+        "validated": "/home/heheboiz/data/cir/workbench/artifacts/composition/summary/habit_fiq_n02_497c25c57fbeba885ecfb9d1/validated.json"
+      }
+    }
+  ],
+  "protocol_id": "circus_fashioniq_release_v1",
+  "run_count": 1,
+  "synthetic": false
+}
+
+EXIT=0 model=habit timed_out=False

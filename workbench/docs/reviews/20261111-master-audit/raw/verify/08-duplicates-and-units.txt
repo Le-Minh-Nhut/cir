@@ -1,0 +1,43 @@
+=== precision-duplicate collapse ===
+airknow    rows=3 counted=2 distinct_counted_values=2
+    counted=False backed=False              52.5466 selection_decisions.json         dup=None
+    counted=True  backed=True     52.54661498980954 airknow_fiq_n05_run1.json        dup=None
+    counted=True  backed=True     50.64166565555885 airknow_fiq_n08_run1.json        dup=None
+clvc_net   rows=3 counted=1 distinct_counted_values=1
+    counted=False backed=False              29.9707 all_measured_summary.json        dup=None
+    counted=False backed=False              29.9707 selection_decisions.json         dup=all_measured_summary.json
+    counted=True  backed=True    29.970746517160162 clvc_run1.json                   dup=None
+tgcir      rows=3 counted=1 distinct_counted_values=1
+    counted=False backed=False              49.7208 all_measured_summary.json        dup=None
+    counted=False backed=False              49.7208 selection_decisions.json         dup=all_measured_summary.json
+    counted=True  backed=True    49.720772235486656 tgcir_run1.json                  dup=None
+sprc       rows=2 counted=1 distinct_counted_values=1
+    counted=False backed=False              51.0386 selection_decisions.json         dup=None
+    counted=True  backed=True    51.038571198781334 sprc_vitl_run1.json              dup=None
+pair       rows=4 counted=4 distinct_counted_values=4
+    counted=True  backed=True     34.03503453772374 pair_b1_H_normal.json            dup=None
+    counted=True  backed=True    35.014736041655844 pair_b1_H_rev.json               dup=None
+    counted=True  backed=True    22.156393011046543 pair_b2_H_normal.json            dup=None
+    counted=True  backed=True    20.086769084793715 pair_b2_H_rev.json               dup=None
+limn       rows=1 counted=1 distinct_counted_values=1
+    counted=True  backed=True     55.79193333333333 limn_base_iter0.json             dup=None
+
+=== unbacked AND counted === 0
+
+=== counted rows still inferred_from_magnitude, with declaration availability ===
+count: 19
+  airknow                  declaration_sites=[]  artifact=airknow_fiq_n05_run1.json
+  clvc_net                 declaration_sites=[]  artifact=clvc_run1.json
+  combiner_rn50x4_noft     declaration_sites=[]  artifact=combiner_rn50x4_noft_rn50x4_noft_unresolved_20261108T064137301769Z_combiner_rn50x4_noft_rn50x4_noft_unresolved_020a70b0_aggregate.json
+  conesep                  declaration_sites=[]  artifact=conesep.json
+  csmcir                   declaration_sites=[]  artifact=csmcir_fashioniq_20261107T054343058424Z_csmcir_fashioniq_f564570e_aggregate.json
+  encoder                  declaration_sites=[]  artifact=encoder_fashioniq.json
+  habit                    declaration_sites=[]  artifact=habit.json
+  hint                     declaration_sites=[]  artifact=hint.json
+  intent                   declaration_sites=[]  artifact=intent.json
+  limn                     declaration_sites=[]  artifact=limn_base_iter0.json
+  pair                     declaration_sites=[]  artifact=pair_b1_H_normal.json
+  ptha_mtst                declaration_sites=[]  artifact=ptha_transfer_run1.json
+  sprc                     declaration_sites=[]  artifact=sprc_vitl_run1.json
+  tgcir                    declaration_sites=[]  artifact=tgcir_run1.json
+  tme                      declaration_sites=[]  artifact=tme_fashioniq_0.json

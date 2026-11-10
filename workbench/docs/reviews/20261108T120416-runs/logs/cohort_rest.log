@@ -1,0 +1,156 @@
+[drive 15:21:38] START intent at 2026-11-08T15:21:38+0700 log=/tmp/evalwork/run_intent.log
+[drive 15:21:38] intent child pid=264541
+[drive 15:21:38] intent candidate export advancing: files=0 0.0MiB
+[drive 15:22:38] intent progress cpu=41s (+41s/min) disk=2372MiB (+2368.4MiB/min) jobs=1 memmap=2324.4MiB ranks=0 cand=0/0.0MiB gpu=4800 MiB, 16303 MiB elapsed=60s
+[drive 15:23:38] intent progress cpu=168s (+127s/min) disk=2372MiB (+0.0MiB/min) jobs=1 memmap=2324.4MiB ranks=0 cand=0/0.0MiB gpu=4759 MiB, 16303 MiB elapsed=60s
+[drive 15:24:39] intent progress cpu=300s (+131s/min) disk=2372MiB (+0.0MiB/min) jobs=1 memmap=2324.4MiB ranks=0 cand=0/0.0MiB gpu=4707 MiB, 16303 MiB elapsed=60s
+[drive 15:25:39] intent progress cpu=436s (+136s/min) disk=2372MiB (+0.0MiB/min) jobs=1 memmap=2324.4MiB ranks=0 cand=0/0.0MiB gpu=4771 MiB, 16303 MiB elapsed=60s
+[drive 15:26:39] intent progress cpu=586s (+149s/min) disk=2372MiB (+0.0MiB/min) jobs=1 memmap=2324.4MiB ranks=0 cand=0/0.0MiB gpu=4769 MiB, 16303 MiB elapsed=60s
+[drive 15:27:39] intent progress cpu=761s (+175s/min) disk=2372MiB (+0.0MiB/min) jobs=1 memmap=2324.4MiB ranks=0 cand=0/0.0MiB gpu=4793 MiB, 16303 MiB elapsed=60s
+[drive 15:28:39] intent progress cpu=939s (+178s/min) disk=2372MiB (+0.0MiB/min) jobs=1 memmap=2324.4MiB ranks=0 cand=0/0.0MiB gpu=4837 MiB, 16303 MiB elapsed=60s
+[drive 15:29:39] intent progress cpu=1087s (+147s/min) disk=2372MiB (+0.0MiB/min) jobs=1 memmap=2324.4MiB ranks=0 cand=0/0.0MiB gpu=4691 MiB, 16303 MiB elapsed=60s
+[drive 15:30:39] intent progress cpu=1282s (+195s/min) disk=2372MiB (+0.0MiB/min) jobs=1 memmap=2324.4MiB ranks=0 cand=0/0.0MiB gpu=4754 MiB, 16303 MiB elapsed=60s
+[drive 15:31:40] intent progress cpu=1530s (+247s/min) disk=2372MiB (+0.0MiB/min) jobs=1 memmap=2324.4MiB ranks=0 cand=0/0.0MiB gpu=4776 MiB, 16303 MiB elapsed=60s
+[drive 15:32:40] intent progress cpu=1718s (+187s/min) disk=2372MiB (+0.0MiB/min) jobs=1 memmap=2324.4MiB ranks=0 cand=0/0.0MiB gpu=4701 MiB, 16303 MiB elapsed=60s
+[drive 15:33:40] intent progress cpu=1879s (+161s/min) disk=2372MiB (+0.0MiB/min) jobs=1 memmap=2324.4MiB ranks=0 cand=0/0.0MiB gpu=4701 MiB, 16303 MiB elapsed=60s
+[drive 15:34:40] intent progress cpu=2176s (+296s/min) disk=2372MiB (+0.0MiB/min) jobs=1 memmap=2324.4MiB ranks=0 cand=0/0.0MiB gpu=4693 MiB, 16303 MiB elapsed=60s
+[drive 15:35:40] intent progress cpu=2435s (+259s/min) disk=2372MiB (+0.0MiB/min) jobs=1 memmap=2324.4MiB ranks=0 cand=0/0.0MiB gpu=4693 MiB, 16303 MiB elapsed=60s
+[drive 15:36:40] intent progress cpu=2688s (+252s/min) disk=2372MiB (+0.0MiB/min) jobs=1 memmap=2324.4MiB ranks=0 cand=0/0.0MiB gpu=4739 MiB, 16303 MiB elapsed=60s
+[drive 15:37:41] intent progress cpu=2899s (+210s/min) disk=2372MiB (+0.0MiB/min) jobs=1 memmap=2324.4MiB ranks=0 cand=0/0.0MiB gpu=4798 MiB, 16303 MiB elapsed=60s
+[drive 15:38:41] intent progress cpu=3080s (+181s/min) disk=2372MiB (+0.0MiB/min) jobs=1 memmap=2324.4MiB ranks=0 cand=0/0.0MiB gpu=4696 MiB, 16303 MiB elapsed=60s
+[drive 15:39:41] intent progress cpu=3235s (+155s/min) disk=2372MiB (+0.0MiB/min) jobs=1 memmap=2324.4MiB ranks=0 cand=0/0.0MiB gpu=4626 MiB, 16303 MiB elapsed=60s
+[drive 15:40:41] intent progress cpu=3379s (+144s/min) disk=2372MiB (+0.0MiB/min) jobs=1 memmap=2324.4MiB ranks=0 cand=0/0.0MiB gpu=4626 MiB, 16303 MiB elapsed=60s
+[drive 15:41:41] intent progress cpu=3521s (+142s/min) disk=2372MiB (+0.0MiB/min) jobs=1 memmap=2324.4MiB ranks=0 cand=0/0.0MiB gpu=4653 MiB, 16303 MiB elapsed=60s
+[drive 15:42:41] intent progress cpu=3676s (+155s/min) disk=2372MiB (+0.0MiB/min) jobs=1 memmap=2324.4MiB ranks=0 cand=0/0.0MiB gpu=4758 MiB, 16303 MiB elapsed=60s
+[drive 15:43:41] intent progress cpu=3807s (+131s/min) disk=2372MiB (+0.0MiB/min) jobs=1 memmap=2324.4MiB ranks=0 cand=0/0.0MiB gpu=4743 MiB, 16303 MiB elapsed=60s
+[drive 15:44:41] intent progress cpu=3926s (+119s/min) disk=2377MiB (+5.9MiB/min) jobs=1 memmap=2330.3MiB ranks=0 cand=0/0.0MiB gpu=4695 MiB, 16303 MiB elapsed=60s
+[drive 15:45:42] intent progress cpu=4028s (+101s/min) disk=2377MiB (+0.0MiB/min) jobs=1 memmap=2330.3MiB ranks=0 cand=0/0.0MiB gpu=4761 MiB, 16303 MiB elapsed=60s
+[drive 15:46:42] intent progress cpu=4091s (+62s/min) disk=2378MiB (+0.3MiB/min) jobs=0 memmap=2330.3MiB ranks=0 cand=0/0.0MiB gpu=4765 MiB, 16303 MiB elapsed=60s
+[drive 15:47:42] intent progress cpu=4151s (+60s/min) disk=2378MiB (+0.4MiB/min) jobs=0 memmap=2330.3MiB ranks=0 cand=0/0.0MiB gpu=4742 MiB, 16303 MiB elapsed=60s
+[drive 15:48:42] intent progress cpu=4212s (+60s/min) disk=2378MiB (+0.4MiB/min) jobs=0 memmap=2330.3MiB ranks=0 cand=0/0.0MiB gpu=4751 MiB, 16303 MiB elapsed=60s
+[drive 15:49:42] intent progress cpu=4272s (+60s/min) disk=2379MiB (+0.4MiB/min) jobs=0 memmap=2330.3MiB ranks=0 cand=0/0.0MiB gpu=4755 MiB, 16303 MiB elapsed=60s
+[drive 15:50:42] intent progress cpu=4333s (+60s/min) disk=2379MiB (+0.3MiB/min) jobs=0 memmap=2330.3MiB ranks=0 cand=0/0.0MiB gpu=4653 MiB, 16303 MiB elapsed=60s
+[drive 15:51:42] intent progress cpu=4393s (+60s/min) disk=2380MiB (+0.3MiB/min) jobs=0 memmap=2330.3MiB ranks=0 cand=0/0.0MiB gpu=4757 MiB, 16303 MiB elapsed=60s
+[drive 15:52:43] intent progress cpu=4453s (+60s/min) disk=2380MiB (+0.3MiB/min) jobs=0 memmap=2330.3MiB ranks=0 cand=0/0.0MiB gpu=4843 MiB, 16303 MiB elapsed=60s
+[drive 15:53:43] intent progress cpu=4512s (+59s/min) disk=2380MiB (+0.4MiB/min) jobs=0 memmap=2330.3MiB ranks=0 cand=0/0.0MiB gpu=4843 MiB, 16303 MiB elapsed=60s
+[drive 15:54:43] intent progress cpu=4572s (+60s/min) disk=2381MiB (+0.4MiB/min) jobs=0 memmap=2330.3MiB ranks=0 cand=0/0.0MiB gpu=4759 MiB, 16303 MiB elapsed=60s
+[drive 15:55:43] intent progress cpu=4631s (+58s/min) disk=2381MiB (+0.3MiB/min) jobs=0 memmap=2330.3MiB ranks=0 cand=0/0.0MiB gpu=4671 MiB, 16303 MiB elapsed=60s
+[drive 15:56:43] intent progress cpu=4687s (+56s/min) disk=2381MiB (+0.4MiB/min) jobs=0 memmap=2330.3MiB ranks=0 cand=0/0.0MiB gpu=4671 MiB, 16303 MiB elapsed=60s
+[drive 15:57:43] intent progress cpu=4747s (+59s/min) disk=2382MiB (+0.4MiB/min) jobs=0 memmap=2330.3MiB ranks=0 cand=0/0.0MiB gpu=4669 MiB, 16303 MiB elapsed=60s
+[drive 15:58:44] intent progress cpu=4807s (+60s/min) disk=2382MiB (+0.6MiB/min) jobs=0 memmap=2330.3MiB ranks=0 cand=0/0.0MiB gpu=4669 MiB, 16303 MiB elapsed=60s
+[drive 15:59:44] intent progress cpu=4868s (+60s/min) disk=2383MiB (+0.5MiB/min) jobs=0 memmap=2330.3MiB ranks=0 cand=0/0.0MiB gpu=4601 MiB, 16303 MiB elapsed=60s
+[drive 16:00:44] intent progress cpu=4928s (+60s/min) disk=2383MiB (+0.5MiB/min) jobs=0 memmap=2330.3MiB ranks=0 cand=0/0.0MiB gpu=4601 MiB, 16303 MiB elapsed=60s
+[drive 16:01:44] intent progress cpu=4988s (+60s/min) disk=2384MiB (+0.6MiB/min) jobs=0 memmap=2330.3MiB ranks=0 cand=0/0.0MiB gpu=4601 MiB, 16303 MiB elapsed=60s
+[drive 16:02:44] intent progress cpu=5048s (+60s/min) disk=2384MiB (+0.6MiB/min) jobs=0 memmap=2330.3MiB ranks=0 cand=0/0.0MiB gpu=4601 MiB, 16303 MiB elapsed=60s
+[drive 16:03:44] intent progress cpu=5108s (+60s/min) disk=2385MiB (+0.6MiB/min) jobs=0 memmap=2330.3MiB ranks=0 cand=0/0.0MiB gpu=4601 MiB, 16303 MiB elapsed=60s
+[drive 16:04:44] intent progress cpu=5258s (+149s/min) disk=2392MiB (+6.5MiB/min) jobs=1 memmap=2336.1MiB ranks=0 cand=0/0.0MiB gpu=4597 MiB, 16303 MiB elapsed=60s
+[drive 16:05:45] intent progress cpu=5432s (+174s/min) disk=2392MiB (+0.6MiB/min) jobs=1 memmap=2336.1MiB ranks=0 cand=0/0.0MiB gpu=4597 MiB, 16303 MiB elapsed=60s
+[drive 16:06:45] intent progress cpu=5607s (+174s/min) disk=2393MiB (+0.6MiB/min) jobs=0 memmap=2336.1MiB ranks=0 cand=0/0.0MiB gpu=4597 MiB, 16303 MiB elapsed=60s
+[drive 16:07:45] intent progress cpu=5667s (+60s/min) disk=2393MiB (+0.6MiB/min) jobs=0 memmap=2336.1MiB ranks=0 cand=0/0.0MiB gpu=4597 MiB, 16303 MiB elapsed=60s
+[drive 16:08:45] intent progress cpu=5728s (+60s/min) disk=2394MiB (+0.5MiB/min) jobs=0 memmap=2336.1MiB ranks=0 cand=0/0.0MiB gpu=4597 MiB, 16303 MiB elapsed=60s
+[drive 16:09:45] intent progress cpu=5788s (+60s/min) disk=2394MiB (+0.4MiB/min) jobs=0 memmap=2336.1MiB ranks=0 cand=0/0.0MiB gpu=4597 MiB, 16303 MiB elapsed=60s
+[drive 16:10:46] intent progress cpu=5849s (+60s/min) disk=2395MiB (+0.5MiB/min) jobs=0 memmap=2336.1MiB ranks=0 cand=0/0.0MiB gpu=4597 MiB, 16303 MiB elapsed=60s
+[drive 16:11:46] intent progress cpu=5909s (+60s/min) disk=2395MiB (+0.5MiB/min) jobs=0 memmap=2336.1MiB ranks=0 cand=0/0.0MiB gpu=4597 MiB, 16303 MiB elapsed=60s
+[drive 16:12:46] intent progress cpu=5970s (+60s/min) disk=2396MiB (+0.6MiB/min) jobs=0 memmap=2336.1MiB ranks=0 cand=0/0.0MiB gpu=4597 MiB, 16303 MiB elapsed=60s
+[drive 16:13:46] intent progress cpu=6030s (+60s/min) disk=2396MiB (+0.4MiB/min) jobs=0 memmap=2336.1MiB ranks=0 cand=0/0.0MiB gpu=4597 MiB, 16303 MiB elapsed=60s
+[drive 16:14:47] intent progress cpu=6091s (+60s/min) disk=2397MiB (+0.6MiB/min) jobs=0 memmap=2336.1MiB ranks=0 cand=0/0.0MiB gpu=4523 MiB, 16303 MiB elapsed=60s
+[drive 16:15:47] intent progress cpu=6151s (+60s/min) disk=2397MiB (+0.5MiB/min) jobs=0 memmap=2336.1MiB ranks=0 cand=0/0.0MiB gpu=4525 MiB, 16303 MiB elapsed=60s
+[drive 16:16:47] intent progress cpu=6212s (+60s/min) disk=2398MiB (+0.6MiB/min) jobs=0 memmap=2336.1MiB ranks=0 cand=0/0.0MiB gpu=4525 MiB, 16303 MiB elapsed=60s
+[drive 16:17:47] intent progress cpu=6272s (+60s/min) disk=2398MiB (+0.5MiB/min) jobs=0 memmap=2336.1MiB ranks=0 cand=0/0.0MiB gpu=4523 MiB, 16303 MiB elapsed=60s
+[drive 16:18:48] intent progress cpu=6333s (+60s/min) disk=2399MiB (+0.6MiB/min) jobs=0 memmap=2336.1MiB ranks=0 cand=0/0.0MiB gpu=4523 MiB, 16303 MiB elapsed=60s
+[drive 16:19:48] intent progress cpu=6393s (+60s/min) disk=2400MiB (+0.5MiB/min) jobs=0 memmap=2336.1MiB ranks=0 cand=0/0.0MiB gpu=4523 MiB, 16303 MiB elapsed=60s
+[drive 16:20:48] intent progress cpu=6454s (+60s/min) disk=2400MiB (+0.6MiB/min) jobs=0 memmap=2336.1MiB ranks=0 cand=0/0.0MiB gpu=4523 MiB, 16303 MiB elapsed=60s
+[drive 16:21:48] intent progress cpu=6518s (+64s/min) disk=2406MiB (+6.3MiB/min) jobs=1 memmap=2342.0MiB ranks=0 cand=0/0.0MiB gpu=4523 MiB, 16303 MiB elapsed=60s
+[drive 16:22:49] intent progress cpu=6621s (+103s/min) disk=2406MiB (+0.0MiB/min) jobs=1 memmap=2342.0MiB ranks=0 cand=0/0.0MiB gpu=4523 MiB, 16303 MiB elapsed=60s
+[drive 16:23:49] intent progress cpu=6691s (+70s/min) disk=2407MiB (+0.4MiB/min) jobs=0 memmap=2342.0MiB ranks=0 cand=0/0.0MiB gpu=4525 MiB, 16303 MiB elapsed=60s
+[drive 16:24:49] intent progress cpu=6752s (+60s/min) disk=2407MiB (+0.5MiB/min) jobs=0 memmap=2342.0MiB ranks=0 cand=0/0.0MiB gpu=4525 MiB, 16303 MiB elapsed=60s
+[drive 16:25:49] intent progress cpu=6812s (+60s/min) disk=2408MiB (+0.5MiB/min) jobs=0 memmap=2342.0MiB ranks=0 cand=0/0.0MiB gpu=4525 MiB, 16303 MiB elapsed=60s
+[drive 16:26:50] intent progress cpu=6873s (+60s/min) disk=2408MiB (+0.5MiB/min) jobs=0 memmap=2342.0MiB ranks=0 cand=0/0.0MiB gpu=4525 MiB, 16303 MiB elapsed=60s
+[drive 16:27:50] intent progress cpu=6934s (+60s/min) disk=2409MiB (+0.5MiB/min) jobs=0 memmap=2342.0MiB ranks=0 cand=0/0.0MiB gpu=4525 MiB, 16303 MiB elapsed=60s
+[drive 16:28:50] intent progress cpu=6994s (+60s/min) disk=2409MiB (+0.5MiB/min) jobs=0 memmap=2342.0MiB ranks=0 cand=0/0.0MiB gpu=4525 MiB, 16303 MiB elapsed=60s
+[drive 16:29:50] intent progress cpu=7055s (+60s/min) disk=2410MiB (+0.5MiB/min) jobs=0 memmap=2342.0MiB ranks=0 cand=0/0.0MiB gpu=4525 MiB, 16303 MiB elapsed=60s
+[drive 16:30:51] intent progress cpu=7115s (+60s/min) disk=2410MiB (+0.5MiB/min) jobs=0 memmap=2342.0MiB ranks=0 cand=0/0.0MiB gpu=4525 MiB, 16303 MiB elapsed=60s
+[drive 16:31:51] intent progress cpu=7176s (+60s/min) disk=2411MiB (+0.6MiB/min) jobs=0 memmap=2342.0MiB ranks=0 cand=0/0.0MiB gpu=4525 MiB, 16303 MiB elapsed=60s
+[drive 16:32:51] intent progress cpu=7236s (+60s/min) disk=2412MiB (+0.5MiB/min) jobs=0 memmap=2342.0MiB ranks=0 cand=0/0.0MiB gpu=4523 MiB, 16303 MiB elapsed=60s
+[drive 16:33:51] intent progress cpu=7296s (+60s/min) disk=2412MiB (+0.6MiB/min) jobs=0 memmap=2342.0MiB ranks=0 cand=0/0.0MiB gpu=4525 MiB, 16303 MiB elapsed=60s
+[drive 16:34:52] intent progress cpu=7357s (+60s/min) disk=2413MiB (+0.6MiB/min) jobs=0 memmap=2342.0MiB ranks=0 cand=0/0.0MiB gpu=4525 MiB, 16303 MiB elapsed=60s
+[drive 16:35:52] intent progress cpu=7417s (+60s/min) disk=2413MiB (+0.5MiB/min) jobs=0 memmap=2342.0MiB ranks=0 cand=0/0.0MiB gpu=4525 MiB, 16303 MiB elapsed=60s
+[drive 16:36:52] intent progress cpu=7478s (+60s/min) disk=2414MiB (+0.5MiB/min) jobs=0 memmap=2342.0MiB ranks=0 cand=0/0.0MiB gpu=4525 MiB, 16303 MiB elapsed=60s
+[drive 16:37:52] intent progress cpu=7538s (+60s/min) disk=2414MiB (+0.5MiB/min) jobs=0 memmap=2342.0MiB ranks=0 cand=0/0.0MiB gpu=4523 MiB, 16303 MiB elapsed=60s
+[drive 16:38:23] intent candidate export advancing: files=3 23.79MiB
+[drive 16:38:38] END intent exit=0 duration=4619s ok=True artifact=37ee72aa298b276d1bfda0fa candidate_topk=True status=AVAILABLE
+[drive 16:38:38] START hint at 2026-11-08T16:38:38+0700 log=/tmp/evalwork/run_hint.log
+[drive 16:38:38] hint child pid=388477
+[drive 16:38:38] hint candidate export advancing: files=0 0.0MiB
+[drive 16:39:38] hint progress cpu=66s (+66s/min) disk=2395MiB (+2391.4MiB/min) jobs=1 memmap=2324.4MiB ranks=0 cand=0/0.0MiB gpu=4519 MiB, 16303 MiB elapsed=60s
+[drive 16:40:38] hint progress cpu=207s (+140s/min) disk=2395MiB (+0.0MiB/min) jobs=1 memmap=2324.4MiB ranks=0 cand=0/0.0MiB gpu=4519 MiB, 16303 MiB elapsed=60s
+[drive 16:41:38] hint progress cpu=351s (+144s/min) disk=2395MiB (+0.0MiB/min) jobs=1 memmap=2324.4MiB ranks=0 cand=0/0.0MiB gpu=4519 MiB, 16303 MiB elapsed=60s
+[drive 16:42:38] hint progress cpu=497s (+145s/min) disk=2395MiB (+0.0MiB/min) jobs=1 memmap=2324.4MiB ranks=0 cand=0/0.0MiB gpu=4517 MiB, 16303 MiB elapsed=60s
+[drive 16:43:38] hint progress cpu=643s (+146s/min) disk=2395MiB (+0.0MiB/min) jobs=1 memmap=2324.4MiB ranks=0 cand=0/0.0MiB gpu=4517 MiB, 16303 MiB elapsed=60s
+[drive 16:44:39] hint progress cpu=785s (+142s/min) disk=2395MiB (+0.0MiB/min) jobs=1 memmap=2324.4MiB ranks=0 cand=0/0.0MiB gpu=4517 MiB, 16303 MiB elapsed=60s
+[drive 16:45:39] hint progress cpu=922s (+136s/min) disk=2395MiB (+0.0MiB/min) jobs=1 memmap=2324.4MiB ranks=0 cand=0/0.0MiB gpu=4517 MiB, 16303 MiB elapsed=60s
+[drive 16:46:39] hint progress cpu=1060s (+138s/min) disk=2395MiB (+0.0MiB/min) jobs=1 memmap=2324.4MiB ranks=0 cand=0/0.0MiB gpu=4517 MiB, 16303 MiB elapsed=60s
+[drive 16:47:39] hint progress cpu=1199s (+139s/min) disk=2395MiB (+0.0MiB/min) jobs=1 memmap=2324.4MiB ranks=0 cand=0/0.0MiB gpu=4519 MiB, 16303 MiB elapsed=60s
+[drive 16:48:39] hint progress cpu=1347s (+147s/min) disk=2395MiB (+0.0MiB/min) jobs=1 memmap=2324.4MiB ranks=0 cand=0/0.0MiB gpu=4519 MiB, 16303 MiB elapsed=60s
+[drive 16:49:39] hint progress cpu=1495s (+148s/min) disk=2395MiB (+0.0MiB/min) jobs=1 memmap=2324.4MiB ranks=0 cand=0/0.0MiB gpu=4519 MiB, 16303 MiB elapsed=60s
+[drive 16:50:39] hint progress cpu=1642s (+146s/min) disk=2395MiB (+0.0MiB/min) jobs=1 memmap=2324.4MiB ranks=0 cand=0/0.0MiB gpu=4519 MiB, 16303 MiB elapsed=60s
+[drive 16:51:39] hint progress cpu=1787s (+145s/min) disk=2395MiB (+0.0MiB/min) jobs=1 memmap=2324.4MiB ranks=0 cand=0/0.0MiB gpu=4519 MiB, 16303 MiB elapsed=60s
+[drive 16:52:40] hint progress cpu=1932s (+145s/min) disk=2395MiB (+0.0MiB/min) jobs=1 memmap=2324.4MiB ranks=0 cand=0/0.0MiB gpu=4517 MiB, 16303 MiB elapsed=60s
+[drive 16:53:40] hint progress cpu=2078s (+145s/min) disk=2395MiB (+0.0MiB/min) jobs=1 memmap=2324.4MiB ranks=0 cand=0/0.0MiB gpu=4517 MiB, 16303 MiB elapsed=60s
+[drive 16:54:40] hint progress cpu=2223s (+145s/min) disk=2395MiB (+0.0MiB/min) jobs=1 memmap=2324.4MiB ranks=0 cand=0/0.0MiB gpu=4517 MiB, 16303 MiB elapsed=60s
+[drive 16:55:40] hint progress cpu=2368s (+145s/min) disk=2395MiB (+0.0MiB/min) jobs=1 memmap=2324.4MiB ranks=0 cand=0/0.0MiB gpu=4519 MiB, 16303 MiB elapsed=60s
+[drive 16:56:40] hint progress cpu=2486s (+118s/min) disk=2401MiB (+5.9MiB/min) jobs=1 memmap=2330.3MiB ranks=0 cand=0/0.0MiB gpu=4527 MiB, 16303 MiB elapsed=60s
+[drive 16:57:40] hint progress cpu=2673s (+186s/min) disk=2402MiB (+0.7MiB/min) jobs=0 memmap=2330.3MiB ranks=0 cand=0/0.0MiB gpu=4525 MiB, 16303 MiB elapsed=60s
+[drive 16:58:40] hint progress cpu=3144s (+470s/min) disk=2405MiB (+3.4MiB/min) jobs=0 memmap=2330.3MiB ranks=0 cand=0/0.0MiB gpu=4525 MiB, 16303 MiB elapsed=60s
+[drive 16:59:41] hint progress cpu=3614s (+469s/min) disk=2408MiB (+3.2MiB/min) jobs=0 memmap=2330.3MiB ranks=0 cand=0/0.0MiB gpu=4525 MiB, 16303 MiB elapsed=60s
+[drive 17:00:41] hint progress cpu=3784s (+170s/min) disk=2416MiB (+7.5MiB/min) jobs=1 memmap=2336.1MiB ranks=0 cand=0/0.0MiB gpu=4525 MiB, 16303 MiB elapsed=60s
+[drive 17:01:41] hint progress cpu=4055s (+269s/min) disk=2418MiB (+2.1MiB/min) jobs=0 memmap=2336.1MiB ranks=0 cand=0/0.0MiB gpu=4525 MiB, 16303 MiB elapsed=60s
+[drive 17:02:41] hint progress cpu=4526s (+470s/min) disk=2422MiB (+3.4MiB/min) jobs=0 memmap=2336.1MiB ranks=0 cand=0/0.0MiB gpu=4525 MiB, 16303 MiB elapsed=60s
+[drive 17:03:41] hint progress cpu=4985s (+456s/min) disk=2430MiB (+9.0MiB/min) jobs=1 memmap=2342.0MiB ranks=0 cand=0/0.0MiB gpu=4525 MiB, 16303 MiB elapsed=60s
+[drive 17:04:42] hint progress cpu=5089s (+104s/min) disk=2430MiB (+0.0MiB/min) jobs=1 memmap=2342.0MiB ranks=0 cand=0/0.0MiB gpu=4525 MiB, 16303 MiB elapsed=60s
+[drive 17:05:42] hint progress cpu=5462s (+372s/min) disk=2433MiB (+2.2MiB/min) jobs=0 memmap=2342.0MiB ranks=0 cand=0/0.0MiB gpu=4525 MiB, 16303 MiB elapsed=60s
+[drive 17:06:42] hint progress cpu=5926s (+462s/min) disk=2436MiB (+3.0MiB/min) jobs=0 memmap=2342.0MiB ranks=0 cand=0/0.0MiB gpu=4525 MiB, 16303 MiB elapsed=60s
+[drive 17:07:42] hint candidate export advancing: files=3 23.99MiB
+[drive 17:07:43] hint progress cpu=0s (+-5906s/min) disk=2437MiB (+1.2MiB/min) jobs=0 memmap=2342.0MiB ranks=1 cand=3/23.99MiB gpu=853 MiB, 16303 MiB elapsed=60s
+[drive 17:07:43] END hint exit=0 duration=1744s ok=True artifact=4bc9893a977e501b82378e76 candidate_topk=True status=AVAILABLE
+[drive 17:07:43] START conesep at 2026-11-08T17:07:43+0700 log=/tmp/evalwork/run_conesep.log
+[drive 17:07:43] conesep child pid=416428
+[drive 17:07:43] conesep candidate export advancing: files=0 0.0MiB
+[drive 17:08:43] conesep progress cpu=83s (+83s/min) disk=2419MiB (+2414.9MiB/min) jobs=1 memmap=2324.4MiB ranks=0 cand=0/0.0MiB gpu=4515 MiB, 16303 MiB elapsed=60s
+[drive 17:09:43] conesep progress cpu=214s (+130s/min) disk=2419MiB (+0.0MiB/min) jobs=1 memmap=2324.4MiB ranks=0 cand=0/0.0MiB gpu=4515 MiB, 16303 MiB elapsed=60s
+[drive 17:10:43] conesep progress cpu=347s (+133s/min) disk=2419MiB (+0.0MiB/min) jobs=1 memmap=2324.4MiB ranks=0 cand=0/0.0MiB gpu=4515 MiB, 16303 MiB elapsed=60s
+[drive 17:11:43] conesep progress cpu=481s (+133s/min) disk=2419MiB (+0.0MiB/min) jobs=1 memmap=2324.4MiB ranks=0 cand=0/0.0MiB gpu=4517 MiB, 16303 MiB elapsed=60s
+[drive 17:12:43] conesep progress cpu=614s (+133s/min) disk=2419MiB (+0.0MiB/min) jobs=1 memmap=2324.4MiB ranks=0 cand=0/0.0MiB gpu=4515 MiB, 16303 MiB elapsed=60s
+[drive 17:13:43] conesep progress cpu=747s (+133s/min) disk=2419MiB (+0.0MiB/min) jobs=1 memmap=2324.4MiB ranks=0 cand=0/0.0MiB gpu=4515 MiB, 16303 MiB elapsed=60s
+[drive 17:14:44] conesep progress cpu=888s (+140s/min) disk=2419MiB (+0.0MiB/min) jobs=1 memmap=2324.4MiB ranks=0 cand=0/0.0MiB gpu=4517 MiB, 16303 MiB elapsed=60s
+[drive 17:15:44] conesep progress cpu=1036s (+148s/min) disk=2419MiB (+0.0MiB/min) jobs=1 memmap=2324.4MiB ranks=0 cand=0/0.0MiB gpu=4517 MiB, 16303 MiB elapsed=60s
+[drive 17:16:44] conesep progress cpu=1184s (+147s/min) disk=2419MiB (+0.0MiB/min) jobs=1 memmap=2324.4MiB ranks=0 cand=0/0.0MiB gpu=4517 MiB, 16303 MiB elapsed=60s
+[drive 17:17:44] conesep progress cpu=1324s (+140s/min) disk=2419MiB (+0.0MiB/min) jobs=1 memmap=2324.4MiB ranks=0 cand=0/0.0MiB gpu=4515 MiB, 16303 MiB elapsed=60s
+[drive 17:18:44] conesep progress cpu=1463s (+138s/min) disk=2419MiB (+0.0MiB/min) jobs=1 memmap=2324.4MiB ranks=0 cand=0/0.0MiB gpu=4515 MiB, 16303 MiB elapsed=60s
+[drive 17:19:44] conesep progress cpu=1601s (+138s/min) disk=2419MiB (+0.0MiB/min) jobs=1 memmap=2324.4MiB ranks=0 cand=0/0.0MiB gpu=4515 MiB, 16303 MiB elapsed=60s
+[drive 17:20:44] conesep progress cpu=1738s (+136s/min) disk=2419MiB (+0.0MiB/min) jobs=1 memmap=2324.4MiB ranks=0 cand=0/0.0MiB gpu=4515 MiB, 16303 MiB elapsed=60s
+[drive 17:21:44] conesep progress cpu=1875s (+137s/min) disk=2419MiB (+0.0MiB/min) jobs=1 memmap=2324.4MiB ranks=0 cand=0/0.0MiB gpu=4515 MiB, 16303 MiB elapsed=60s
+[drive 17:22:45] conesep progress cpu=2011s (+136s/min) disk=2419MiB (+0.0MiB/min) jobs=1 memmap=2324.4MiB ranks=0 cand=0/0.0MiB gpu=4515 MiB, 16303 MiB elapsed=60s
+[drive 17:23:45] conesep progress cpu=2148s (+137s/min) disk=2419MiB (+0.0MiB/min) jobs=1 memmap=2324.4MiB ranks=0 cand=0/0.0MiB gpu=4515 MiB, 16303 MiB elapsed=60s
+[drive 17:24:45] conesep progress cpu=2286s (+137s/min) disk=2419MiB (+0.0MiB/min) jobs=1 memmap=2324.4MiB ranks=0 cand=0/0.0MiB gpu=4517 MiB, 16303 MiB elapsed=60s
+[drive 17:25:45] conesep progress cpu=2389s (+103s/min) disk=2607MiB (+187.3MiB/min) jobs=1 memmap=2512.0MiB ranks=0 cand=0/0.0MiB gpu=4525 MiB, 16303 MiB elapsed=60s
+[drive 17:26:45] conesep progress cpu=2842s (+452s/min) disk=2608MiB (+1.1MiB/min) jobs=0 memmap=2512.0MiB ranks=0 cand=0/0.0MiB gpu=4525 MiB, 16303 MiB elapsed=60s
+[drive 17:27:45] conesep progress cpu=3460s (+617s/min) disk=2610MiB (+1.7MiB/min) jobs=0 memmap=2512.0MiB ranks=0 cand=0/0.0MiB gpu=4525 MiB, 16303 MiB elapsed=60s
+[drive 17:28:45] conesep progress cpu=4078s (+617s/min) disk=2611MiB (+1.6MiB/min) jobs=0 memmap=2512.0MiB ranks=0 cand=0/0.0MiB gpu=4525 MiB, 16303 MiB elapsed=60s
+[drive 17:29:46] conesep progress cpu=4696s (+617s/min) disk=2613MiB (+1.7MiB/min) jobs=0 memmap=2512.0MiB ranks=0 cand=0/0.0MiB gpu=4525 MiB, 16303 MiB elapsed=60s
+[drive 17:30:46] conesep progress cpu=5314s (+617s/min) disk=2615MiB (+1.7MiB/min) jobs=0 memmap=2512.0MiB ranks=0 cand=0/0.0MiB gpu=4525 MiB, 16303 MiB elapsed=60s
+[drive 17:31:46] conesep progress cpu=5452s (+137s/min) disk=2804MiB (+188.3MiB/min) jobs=1 memmap=2699.6MiB ranks=0 cand=0/0.0MiB gpu=4525 MiB, 16303 MiB elapsed=60s
+[drive 17:32:46] conesep progress cpu=5856s (+402s/min) disk=2805MiB (+1.4MiB/min) jobs=0 memmap=2699.6MiB ranks=0 cand=0/0.0MiB gpu=4523 MiB, 16303 MiB elapsed=60s
+[drive 17:33:46] conesep progress cpu=6476s (+617s/min) disk=2806MiB (+1.6MiB/min) jobs=0 memmap=2699.6MiB ranks=0 cand=0/0.0MiB gpu=4525 MiB, 16303 MiB elapsed=60s
+[drive 17:34:47] conesep progress cpu=7095s (+617s/min) disk=2808MiB (+1.7MiB/min) jobs=0 memmap=2699.6MiB ranks=0 cand=0/0.0MiB gpu=4525 MiB, 16303 MiB elapsed=60s
+[drive 17:35:47] conesep progress cpu=7715s (+617s/min) disk=2810MiB (+1.6MiB/min) jobs=0 memmap=2699.6MiB ranks=0 cand=0/0.0MiB gpu=4525 MiB, 16303 MiB elapsed=60s
+[drive 17:36:47] conesep progress cpu=8336s (+617s/min) disk=2812MiB (+1.7MiB/min) jobs=0 memmap=2699.6MiB ranks=0 cand=0/0.0MiB gpu=4525 MiB, 16303 MiB elapsed=60s
+[drive 17:37:48] conesep progress cpu=8558s (+222s/min) disk=3000MiB (+187.3MiB/min) jobs=1 memmap=2887.2MiB ranks=0 cand=0/0.0MiB gpu=4523 MiB, 16303 MiB elapsed=60s
+[drive 17:38:48] conesep progress cpu=8909s (+349s/min) disk=3000MiB (+0.8MiB/min) jobs=0 memmap=2887.2MiB ranks=0 cand=0/0.0MiB gpu=4523 MiB, 16303 MiB elapsed=60s
+[drive 17:39:48] conesep progress cpu=9529s (+618s/min) disk=3002MiB (+1.8MiB/min) jobs=0 memmap=2887.2MiB ranks=0 cand=0/0.0MiB gpu=4523 MiB, 16303 MiB elapsed=60s
+[drive 17:40:48] conesep progress cpu=10149s (+617s/min) disk=3004MiB (+1.7MiB/min) jobs=0 memmap=2887.2MiB ranks=0 cand=0/0.0MiB gpu=4525 MiB, 16303 MiB elapsed=60s
+[drive 17:41:49] conesep progress cpu=10770s (+617s/min) disk=3006MiB (+1.7MiB/min) jobs=0 memmap=2887.2MiB ranks=0 cand=0/0.0MiB gpu=4525 MiB, 16303 MiB elapsed=60s
+[drive 17:42:49] conesep progress cpu=11390s (+618s/min) disk=3007MiB (+1.8MiB/min) jobs=0 memmap=2887.2MiB ranks=0 cand=0/0.0MiB gpu=4525 MiB, 16303 MiB elapsed=60s
+[drive 17:43:04] conesep candidate export advancing: files=3 23.76MiB
+[drive 17:43:04] END conesep exit=0 duration=2121s ok=True artifact=30f6de423861cc1d6c78c361 candidate_topk=True status=AVAILABLE
+[drive 17:43:04] summary -> /tmp/evalwork/drive_summary.json

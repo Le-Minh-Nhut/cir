@@ -1,0 +1,159 @@
+/home/heheboiz/data/cir/workbench/envs/encoder310-adapted/lib/python3.10/site-packages/timm/models/layers/__init__.py:49: FutureWarning: Importing from timm.models.layers is deprecated, please import via timm.layers
+  warnings.warn(f"Importing from {__name__} is deprecated, please import via timm.layers", FutureWarning)
+2
+/home/heheboiz/data/cir/workbench/third_party/ENCODER/model_try2.py:330: UserWarning: Deterministic behavior was enabled with either `torch.use_deterministic_algorithms(True)` or `at::Context::setDeterministicAlgorithms(true)`, but this operation is not deterministic because it uses CuBLAS and you have CUDA >= 10.2. To enable deterministic behavior in this case, you must set an environment variable before running your PyTorch application: CUBLAS_WORKSPACE_CONFIG=:4096:8 or CUBLAS_WORKSPACE_CONFIG=:16:8. For more information, go to https://docs.nvidia.com/cuda/cublas/index.html#results-reproducibility (Triggered internally at /pytorch/aten/src/ATen/Context.cpp:233.)
+  pooled = pooled @ self.clip.visual.proj
+/home/heheboiz/data/cir/workbench/third_party/ENCODER/model_try2.py:350: UserWarning: Deterministic behavior was enabled with either `torch.use_deterministic_algorithms(True)` or `at::Context::setDeterministicAlgorithms(true)`, but this operation is not deterministic because it uses CuBLAS and you have CUDA >= 10.2. To enable deterministic behavior in this case, you must set an environment variable before running your PyTorch application: CUBLAS_WORKSPACE_CONFIG=:4096:8 or CUBLAS_WORKSPACE_CONFIG=:16:8. For more information, go to https://docs.nvidia.com/cuda/cublas/index.html#results-reproducibility (Triggered internally at /pytorch/aten/src/ATen/Context.cpp:233.)
+  pooled = pooled @ self.clip.text_projection
+/home/heheboiz/data/cir/workbench/third_party/ENCODER/model_try2.py:395: UserWarning: Deterministic behavior was enabled with either `torch.use_deterministic_algorithms(True)` or `at::Context::setDeterministicAlgorithms(true)`, but this operation is not deterministic because it uses CuBLAS and you have CUDA >= 10.2. To enable deterministic behavior in this case, you must set an environment variable before running your PyTorch application: CUBLAS_WORKSPACE_CONFIG=:4096:8 or CUBLAS_WORKSPACE_CONFIG=:16:8. For more information, go to https://docs.nvidia.com/cuda/cublas/index.html#results-reproducibility (Triggered internally at /pytorch/aten/src/ATen/Context.cpp:233.)
+  img_spatial_glo_norm = torch.matmul(self.weight_chanelImg(img_spatial_embs).transpose(1, 2), img_spatial_embs)
+/home/heheboiz/data/cir/workbench/envs/encoder310-adapted/lib/python3.10/site-packages/torch/nn/modules/linear.py:125: UserWarning: Deterministic behavior was enabled with either `torch.use_deterministic_algorithms(True)` or `at::Context::setDeterministicAlgorithms(true)`, but this operation is not deterministic because it uses CuBLAS and you have CUDA >= 10.2. To enable deterministic behavior in this case, you must set an environment variable before running your PyTorch application: CUBLAS_WORKSPACE_CONFIG=:4096:8 or CUBLAS_WORKSPACE_CONFIG=:16:8. For more information, go to https://docs.nvidia.com/cuda/cublas/index.html#results-reproducibility (Triggered internally at /pytorch/aten/src/ATen/Context.cpp:233.)
+  return F.linear(input, self.weight, self.bias)
+/home/heheboiz/data/cir/workbench/third_party/ENCODER/model_try2.py:401: UserWarning: Deterministic behavior was enabled with either `torch.use_deterministic_algorithms(True)` or `at::Context::setDeterministicAlgorithms(true)`, but this operation is not deterministic because it uses CuBLAS and you have CUDA >= 10.2. To enable deterministic behavior in this case, you must set an environment variable before running your PyTorch application: CUBLAS_WORKSPACE_CONFIG=:4096:8 or CUBLAS_WORKSPACE_CONFIG=:16:8. For more information, go to https://docs.nvidia.com/cuda/cublas/index.html#results-reproducibility (Triggered internally at /pytorch/aten/src/ATen/Context.cpp:233.)
+  cap_i_glo = torch.matmul(self.cross_t2i(self.weight_chanelImg_t(text_local_fea).transpose(1, 2)), img_spatial_embs)
+/home/heheboiz/data/cir/workbench/third_party/ENCODER/model_try2.py:84: UserWarning: Deterministic behavior was enabled with either `torch.use_deterministic_algorithms(True)` or `at::Context::setDeterministicAlgorithms(true)`, but this operation is not deterministic because it uses CuBLAS and you have CUDA >= 10.2. To enable deterministic behavior in this case, you must set an environment variable before running your PyTorch application: CUBLAS_WORKSPACE_CONFIG=:4096:8 or CUBLAS_WORKSPACE_CONFIG=:16:8. For more information, go to https://docs.nvidia.com/cuda/cublas/index.html#results-reproducibility (Triggered internally at /pytorch/aten/src/ATen/Context.cpp:233.)
+  x = torch.bmm(weight, x)
+/home/heheboiz/data/cir/workbench/third_party/ENCODER/model_try2.py:121: UserWarning: Deterministic behavior was enabled with either `torch.use_deterministic_algorithms(True)` or `at::Context::setDeterministicAlgorithms(true)`, but this operation is not deterministic because it uses CuBLAS and you have CUDA >= 10.2. To enable deterministic behavior in this case, you must set an environment variable before running your PyTorch application: CUBLAS_WORKSPACE_CONFIG=:4096:8 or CUBLAS_WORKSPACE_CONFIG=:16:8. For more information, go to https://docs.nvidia.com/cuda/cublas/index.html#results-reproducibility (Triggered internally at /pytorch/aten/src/ATen/Context.cpp:233.)
+  S_cross = self.mlp_v(torch.matmul(relation, V.transpose(-2, -1)) / (self.dim ** 0.5))
+/home/heheboiz/data/cir/workbench/third_party/ENCODER/model_try2.py:122: UserWarning: Deterministic behavior was enabled with either `torch.use_deterministic_algorithms(True)` or `at::Context::setDeterministicAlgorithms(true)`, but this operation is not deterministic because it uses CuBLAS and you have CUDA >= 10.2. To enable deterministic behavior in this case, you must set an environment variable before running your PyTorch application: CUBLAS_WORKSPACE_CONFIG=:4096:8 or CUBLAS_WORKSPACE_CONFIG=:16:8. For more information, go to https://docs.nvidia.com/cuda/cublas/index.html#results-reproducibility (Triggered internally at /pytorch/aten/src/ATen/Context.cpp:233.)
+  S_self = self.mlp_p(torch.matmul(relation, relation.transpose(-2, -1)) / (self.dim ** 0.5))
+/home/heheboiz/data/cir/workbench/third_party/ENCODER/model_try2.py:124: UserWarning: Deterministic behavior was enabled with either `torch.use_deterministic_algorithms(True)` or `at::Context::setDeterministicAlgorithms(true)`, but this operation is not deterministic because it uses CuBLAS and you have CUDA >= 10.2. To enable deterministic behavior in this case, you must set an environment variable before running your PyTorch application: CUBLAS_WORKSPACE_CONFIG=:4096:8 or CUBLAS_WORKSPACE_CONFIG=:16:8. For more information, go to https://docs.nvidia.com/cuda/cublas/index.html#results-reproducibility (Triggered internally at /pytorch/aten/src/ATen/Context.cpp:233.)
+  S_final = self.sigmoid(torch.matmul(S_self, S_cross)) * S_cross
+/home/heheboiz/data/cir/workbench/third_party/ENCODER/model_try2.py:125: UserWarning: Deterministic behavior was enabled with either `torch.use_deterministic_algorithms(True)` or `at::Context::setDeterministicAlgorithms(true)`, but this operation is not deterministic because it uses CuBLAS and you have CUDA >= 10.2. To enable deterministic behavior in this case, you must set an environment variable before running your PyTorch application: CUBLAS_WORKSPACE_CONFIG=:4096:8 or CUBLAS_WORKSPACE_CONFIG=:16:8. For more information, go to https://docs.nvidia.com/cuda/cublas/index.html#results-reproducibility (Triggered internally at /pytorch/aten/src/ATen/Context.cpp:233.)
+  entity = torch.matmul(self.softmax(S_final), V)
+/home/heheboiz/data/cir/workbench/third_party/ENCODER/model_try2.py:414: UserWarning: Deterministic behavior was enabled with either `torch.use_deterministic_algorithms(True)` or `at::Context::setDeterministicAlgorithms(true)`, but this operation is not deterministic because it uses CuBLAS and you have CUDA >= 10.2. To enable deterministic behavior in this case, you must set an environment variable before running your PyTorch application: CUBLAS_WORKSPACE_CONFIG=:4096:8 or CUBLAS_WORKSPACE_CONFIG=:16:8. For more information, go to https://docs.nvidia.com/cuda/cublas/index.html#results-reproducibility (Triggered internally at /pytorch/aten/src/ATen/Context.cpp:233.)
+  img_2_Text_w = torch.matmul(self.cross_i2t(self.weight_chanelText_i(img_spatial_embs).transpose(1,2)), text_local_fea)
+/home/heheboiz/data/cir/workbench/third_party/ENCODER/model_try2.py:415: UserWarning: Deterministic behavior was enabled with either `torch.use_deterministic_algorithms(True)` or `at::Context::setDeterministicAlgorithms(true)`, but this operation is not deterministic because it uses CuBLAS and you have CUDA >= 10.2. To enable deterministic behavior in this case, you must set an environment variable before running your PyTorch application: CUBLAS_WORKSPACE_CONFIG=:4096:8 or CUBLAS_WORKSPACE_CONFIG=:16:8. For more information, go to https://docs.nvidia.com/cuda/cublas/index.html#results-reproducibility (Triggered internally at /pytorch/aten/src/ATen/Context.cpp:233.)
+  text_2_Text_w = torch.matmul(self.weight_chanelText(text_local_fea).transpose(1, 2), text_local_fea)
+/home/heheboiz/data/cir/workbench/envs/encoder310-adapted/lib/python3.10/site-packages/torch/functional.py:422: UserWarning: Deterministic behavior was enabled with either `torch.use_deterministic_algorithms(True)` or `at::Context::setDeterministicAlgorithms(true)`, but this operation is not deterministic because it uses CuBLAS and you have CUDA >= 10.2. To enable deterministic behavior in this case, you must set an environment variable before running your PyTorch application: CUBLAS_WORKSPACE_CONFIG=:4096:8 or CUBLAS_WORKSPACE_CONFIG=:16:8. For more information, go to https://docs.nvidia.com/cuda/cublas/index.html#results-reproducibility (Triggered internally at /pytorch/aten/src/ATen/Context.cpp:233.)
+  return _VF.einsum(equation, operands)  # type: ignore[attr-defined]
+{
+ "tag": "B",
+ "torch_threads": 4,
+ "cudnn_deterministic": false,
+ "cudnn_benchmark": false,
+ "deterministic_algorithms": false,
+ "matmul_allow_tf32": false,
+ "cudnn_allow_tf32": true,
+ "flags_after": {
+  "cudnn_deterministic": true,
+  "deterministic_algorithms": true,
+  "cublas_workspace": ":4096:8"
+ },
+ "flags_tf32_off": {
+  "cudnn_allow_tf32": false,
+  "matmul_allow_tf32": false
+ },
+ "in_process": {
+  "nondet_b4_a": {
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "min_cosine": 0.9999999999999998,
+   "bitwise_equal": true,
+   "shape": [
+    4,
+    512
+   ]
+  },
+  "nondet_b4_b": {
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "min_cosine": 0.9999999999999998,
+   "bitwise_equal": true,
+   "shape": [
+    4,
+    512
+   ]
+  },
+  "nondet_b32": {
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "min_cosine": 0.9999999999999998,
+   "bitwise_equal": true,
+   "shape": [
+    4,
+    512
+   ]
+  },
+  "nondet_b1": {
+   "max_abs": 3.203749656677246e-07,
+   "max_rel": 0.0077950176161260265,
+   "min_cosine": 0.9999999999991733,
+   "bitwise_equal": false,
+   "shape": [
+    4,
+    512
+   ]
+  },
+  "nondet_b4_threads4": {
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "min_cosine": 0.9999999999999998,
+   "bitwise_equal": true,
+   "shape": [
+    4,
+    512
+   ]
+  },
+  "det_b4_b": {
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "min_cosine": 0.9999999999999998,
+   "bitwise_equal": true,
+   "shape": [
+    4,
+    512
+   ]
+  },
+  "det_b32": {
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "min_cosine": 0.9999999999999998,
+   "bitwise_equal": true,
+   "shape": [
+    4,
+    512
+   ]
+  },
+  "det_b1": {
+   "max_abs": 3.203749656677246e-07,
+   "max_rel": 0.0077950176161260265,
+   "min_cosine": 0.9999999999991733,
+   "bitwise_equal": false,
+   "shape": [
+    4,
+    512
+   ]
+  },
+  "notf32_b4_a": {
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "min_cosine": 0.9999999999999998,
+   "bitwise_equal": true,
+   "shape": [
+    4,
+    512
+   ]
+  },
+  "notf32_b4_b": {
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "min_cosine": 0.9999999999999998,
+   "bitwise_equal": true,
+   "shape": [
+    4,
+    512
+   ]
+  },
+  "det_b4_b_vs_det_b4_a": {
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "min_cosine": 0.9999999999999998,
+   "bitwise_equal": true,
+   "shape": [
+    4,
+    512
+   ]
+  }
+ }
+}

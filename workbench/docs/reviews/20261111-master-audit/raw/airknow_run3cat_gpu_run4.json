@@ -1,0 +1,160 @@
+{
+  "model_id": "airknow",
+  "replay_type": "SOURCE_FAITHFUL_WORKBENCH_REPLAY",
+  "protocol": "fashioniq_full_gallery_ref_excluded",
+  "checkpoint_training_noise_pct": 50,
+  "evaluation_noise_pct": 0,
+  "eval_mode_variant": false,
+  "determinism": {
+    "eval_mode": "train",
+    "dropout_active": true,
+    "seed": "unset",
+    "repeat_count": 4,
+    "run_to_run_delta_macro_r10": 0.4744,
+    "measured_two_run_macro_r10": [
+      52.9241,
+      52.4497
+    ],
+    "four_run_macro_r10_mean": 52.5468,
+    "four_run_macro_r10_sd": 0.2673,
+    "four_run_macro_r10_spread": 0.6253,
+    "note": "this artifact's macro is one draw; A-12 in docs/reviews/20261111-master-audit/BLOCKED_MODELS_VERIFICATION.vi.md",
+    "_backfilled": "variance fields added after the run from the four-run measurement; metrics unchanged"
+  },
+  "category_model_policy": "shared",
+  "complete_benchmark": true,
+  "categories": [
+    {
+      "model_id": "airknow",
+      "checkpoint_id": "fiq_n05",
+      "category": "dress",
+      "protocol": "fashioniq_full_gallery_ref_excluded",
+      "r1": 19.484382746653445,
+      "r10": 48.04164600892415,
+      "r50": 69.60832920178483,
+      "complete": true,
+      "provenance": {
+        "native_evaluator": "test_BLIP2.py:test",
+        "native_output": {
+          "dress_r1": 19.484382746653445,
+          "dress_r10": 48.04164600892415,
+          "dress_r50": 69.60832920178483
+        },
+        "checkpoint_training_noise_pct": 50,
+        "evaluation_noise_pct": 0,
+        "model_mode": "train (native behavior)",
+        "checkpoint_sha256": "f4d25ed9e532f2ee3671f6edadb1048e73113246ec056b413bde75dfe3f79bc6",
+        "checkpoint_size_bytes": 2724056638,
+        "preprocessing": "targetpad transform, target_ratio 1.25, input_dim 224",
+        "determinism": {
+          "eval_mode": "train",
+          "dropout_active": true,
+          "seed": "unset",
+          "repeat_count": 4,
+          "run_to_run_delta_macro_r10": 0.4744,
+          "note": "repeat_count=1 means no variance was measured for THIS artifact; the recorded delta is the campaign's two-run measurement and must not be read as this run's error bar"
+        },
+        "text_processor": {
+          "config": "configs/models/blip2/blip2_pretrain.yaml",
+          "loaded_via": "lavis.models",
+          "note": "the pinned BlipCaptionProcessor from the model class's own config; no second BLIP-2 model is constructed and no /root/bert-base-uncased asset is read"
+        }
+      },
+      "parity_mismatches": [],
+      "per_query_published": false
+    },
+    {
+      "model_id": "airknow",
+      "checkpoint_id": "fiq_n05",
+      "category": "shirt",
+      "protocol": "fashioniq_full_gallery_ref_excluded",
+      "r1": 24.92639842983317,
+      "r10": 54.12168792934249,
+      "r50": 72.4730127576055,
+      "complete": true,
+      "provenance": {
+        "native_evaluator": "test_BLIP2.py:test",
+        "native_output": {
+          "shirt_r1": 24.92639842983317,
+          "shirt_r10": 54.12168792934249,
+          "shirt_r50": 72.4730127576055
+        },
+        "checkpoint_training_noise_pct": 50,
+        "evaluation_noise_pct": 0,
+        "model_mode": "train (native behavior)",
+        "checkpoint_sha256": "f4d25ed9e532f2ee3671f6edadb1048e73113246ec056b413bde75dfe3f79bc6",
+        "checkpoint_size_bytes": 2724056638,
+        "preprocessing": "targetpad transform, target_ratio 1.25, input_dim 224",
+        "determinism": {
+          "eval_mode": "train",
+          "dropout_active": true,
+          "seed": "unset",
+          "repeat_count": 4,
+          "run_to_run_delta_macro_r10": 0.4744,
+          "note": "repeat_count=1 means no variance was measured for THIS artifact; the recorded delta is the campaign's two-run measurement and must not be read as this run's error bar"
+        },
+        "text_processor": {
+          "config": "configs/models/blip2/blip2_pretrain.yaml",
+          "loaded_via": "lavis.models",
+          "note": "the pinned BlipCaptionProcessor from the model class's own config; no second BLIP-2 model is constructed and no /root/bert-base-uncased asset is read"
+        }
+      },
+      "parity_mismatches": [],
+      "per_query_published": false
+    },
+    {
+      "model_id": "airknow",
+      "checkpoint_id": "fiq_n05",
+      "category": "toptee",
+      "protocol": "fashioniq_full_gallery_ref_excluded",
+      "r1": 24.630290668026518,
+      "r10": 55.379908210096886,
+      "r50": 75.98164201937787,
+      "complete": true,
+      "provenance": {
+        "native_evaluator": "test_BLIP2.py:test",
+        "native_output": {
+          "toptee_r1": 24.630290668026518,
+          "toptee_r10": 55.379908210096886,
+          "toptee_r50": 75.98164201937787
+        },
+        "checkpoint_training_noise_pct": 50,
+        "evaluation_noise_pct": 0,
+        "model_mode": "train (native behavior)",
+        "checkpoint_sha256": "f4d25ed9e532f2ee3671f6edadb1048e73113246ec056b413bde75dfe3f79bc6",
+        "checkpoint_size_bytes": 2724056638,
+        "preprocessing": "targetpad transform, target_ratio 1.25, input_dim 224",
+        "determinism": {
+          "eval_mode": "train",
+          "dropout_active": true,
+          "seed": "unset",
+          "repeat_count": 4,
+          "run_to_run_delta_macro_r10": 0.4744,
+          "note": "repeat_count=1 means no variance was measured for THIS artifact; the recorded delta is the campaign's two-run measurement and must not be read as this run's error bar"
+        },
+        "text_processor": {
+          "config": "configs/models/blip2/blip2_pretrain.yaml",
+          "loaded_via": "lavis.models",
+          "note": "the pinned BlipCaptionProcessor from the model class's own config; no second BLIP-2 model is constructed and no /root/bert-base-uncased asset is read"
+        }
+      },
+      "parity_mismatches": [],
+      "per_query_published": false
+    }
+  ],
+  "aggregate": {
+    "macro_r10": 52.51441404945451,
+    "macro_r50": 72.68766132625608,
+    "macro_mean": 62.601037687855296,
+    "complete": true
+  },
+  "timestamp": "2026-11-10T14:09:15.998158+00:00",
+  "runtime": {
+    "python": "/home/heheboiz/data/cir/workbench/envs/airknow310-la/bin/python",
+    "source_root": "/home/heheboiz/data/cir/workbench/third_party/AirKnow",
+    "dataset_root": "/home/heheboiz/data/cir/data/FashionIQ",
+    "checkpoint_root": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/checkpoints/airknow",
+    "variant": "fiq_n05",
+    "eval_mode": false
+  }
+}

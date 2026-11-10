@@ -1,0 +1,6 @@
+Using CPython 3.9.25
+warning: The requested interpreter resolved to Python 3.9.25, which is incompatible with the project's Python requirement: `>=3.11` (from `project.requires-python`)
+Creating virtual environment at: workbench/envs/clvc39-la
+Activate with: source workbench/envs/clvc39-la/bin/activate
+OK clvc -> /home/heheboiz/data/cir/workbench/envs/clvc39-la
+/home/heheboiz/data/cir/workbench/envs/clvc39-la/bin/python 3.9.25 2.7.1+cu128 12.8 True

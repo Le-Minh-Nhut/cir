@@ -1,0 +1,57 @@
+{
+  "upstream_repo": "TIGER-AI-Lab/UniIR",
+  "path": "src/data/preprocessing/fashioniq_data_preprocessor.py",
+  "commit": "98dc570c2645fec8e1fd42c7d4ac9853f46051fd",
+  "blob_sha1_at_commit": "d815957ccff7fb75ca56a34ea9822d2a9065f634",
+  "url": "https://github.com/TIGER-AI-Lab/UniIR/blob/98dc570c2645fec8e1fd42c7d4ac9853f46051fd/src/data/preprocessing/fashioniq_data_preprocessor.py",
+  "raw_url": "https://raw.githubusercontent.com/TIGER-AI-Lab/UniIR/98dc570c2645fec8e1fd42c7d4ac9853f46051fd/src/data/preprocessing/fashioniq_data_preprocessor.py",
+  "origin_read": "https://raw.githubusercontent.com/TIGER-AI-Lab/UniIR/98dc570c2645fec8e1fd42c7d4ac9853f46051fd/src/data/preprocessing/fashioniq_data_preprocessor.py",
+  "sha256_of_read_bytes": "17091804658779d71c66049f5c12250123740c993ed4fde7b63315b0ed7e53b2",
+  "line_count": 428,
+  "row_builder": "fashioniq_to_mbeir_entry(fashioniq_entry, candidate_pool, mbeir_data_dir, include_src_content=True, concatenate_captions=True)",
+  "row_builder_keys": [
+    "candidate_img_id",
+    "did",
+    "img_path",
+    "modality",
+    "neg_cand_list",
+    "pos_cand_list",
+    "qid",
+    "query_img_path",
+    "query_modality",
+    "query_src_content",
+    "query_txt",
+    "src_content",
+    "txt"
+  ],
+  "query_src_content_keys": [
+    "candidate_img_id"
+  ],
+  "candidate_pool_builder": "generate_fashioniq_candidate_pool(fashioniq_images_dir, fashioniq_candidate_pool_path, mbeir_data_dir, include_src_content=True)",
+  "candidate_pool_keys": [
+    "did",
+    "img_id",
+    "img_path",
+    "modality",
+    "txt"
+  ],
+  "all_dict_keys_in_module": [
+    "__main__",
+    "candidate_img_id",
+    "did",
+    "img_id",
+    "img_path",
+    "modality",
+    "neg_cand_list",
+    "pos_cand_list",
+    "qid",
+    "query_img_path",
+    "query_modality",
+    "query_src_content",
+    "query_txt",
+    "src_content",
+    "txt"
+  ],
+  "garment_or_category_keys_found": [],
+  "verdict": "UPSTREAM WRITES NO CATEGORY KEY: every query row lacks category/garment/subtask/source_file, so the release's garment category can only come from a downstream loader, never from the generator."
+}

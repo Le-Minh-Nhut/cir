@@ -1,0 +1,6 @@
+identity subset_memberships ['full']
+identity conditions ['multimodal', 'text_only_black_image', 'image_only_empty_text']
+identity adapter_batch_size 32
+=> an sf-only run hashes a different subset_memberships, so it mints a NEW run id and cannot
+   append sf.json/validated.json to 9e4918a6…; closing M-03-d needs a full+sf+validated run.
+canonical run feature_storage projected_bytes {'dress': 740818944, 'shirt': 512320512, 'toptee': 283822080}

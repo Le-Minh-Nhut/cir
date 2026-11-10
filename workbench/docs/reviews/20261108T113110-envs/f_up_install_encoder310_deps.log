@@ -1,0 +1,21 @@
+Using Python 3.10.20 environment at: workbench/envs/encoder310-adapted
+Resolved 21 packages in 517ms
+Downloading tokenizers (7.4MiB)
+Downloading transformers (6.8MiB)
+ Downloaded transformers
+ Downloaded tokenizers
+Prepared 4 packages in 718ms
+Uninstalled 2 packages in 8ms
+Installed 10 packages in 13ms
+ + certifi==2026.10.23
+ + charset-normalizer==3.5.2
+ + einops==0.4.1
+ - huggingface-hub==2.4.0
+ + huggingface-hub==0.36.2
+ - numpy==2.2.6
+ + numpy==1.26.4
+ + opencv-python-headless==4.5.5.64
+ + requests==2.34.2
+ + tokenizers==0.13.3
+ + transformers==4.30.2
+ + urllib3==2.8.0

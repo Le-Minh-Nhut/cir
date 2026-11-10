@@ -1,0 +1,11 @@
+=== served bundle identity 2026-11-10T21:48:12+07:00 ===
+backend PID 3228457 (uvicorn child of 3228456 serve_workbench.py), started 2026-11-10T21:43:50+07:00
+frontend :5173 bundle:
+0b6b15a80782d04459e78e3bd71fc0d2532a8c16bb09d01987814d16bab6eb87  /tmp/served.js
+dist:
+0b6b15a80782d04459e78e3bd71fc0d2532a8c16bb09d01987814d16bab6eb87  workbench/frontend/dist/assets/index-CEgaMiLf.js
+cmp:
+IDENTICAL
+served index.html sha256:
+b837dd0e02fe49501ca3431322ead6ba14000a5044809eebb00168aa2f382ddf  /tmp/served_html.html
+b837dd0e02fe49501ca3431322ead6ba14000a5044809eebb00168aa2f382ddf  workbench/frontend/dist/index.html

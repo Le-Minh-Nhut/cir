@@ -1,0 +1,18 @@
+7:3038 release positives ('7:3416',) assets ['mbeir_images/fashioniq_images/B004D8QCN4.jpg']
+   summary release positive_ids ['7:3416'] target_gallery_id mbeir_images/fashioniq_images/B004D8QCN4.jpg
+    shirt multimodal did 7:3416 rank 3 pos 13614
+    shirt text_only_black_image did 7:3416 rank 88 pos 13614
+    shirt image_only_empty_text did 7:3416 rank 152 pos 13614
+    toptee multimodal did 7:3416 rank 43 pos 13614
+    toptee text_only_black_image did 7:3416 rank 389 pos 13614
+    toptee image_only_empty_text did 7:3416 rank 67 pos 13614
+7:3790 release positives ('7:42304',) assets ['mbeir_images/fashioniq_images/B00E3WVAD2.jpg']
+   summary release positive_ids ['7:42304'] target_gallery_id mbeir_images/fashioniq_images/B00E3WVAD2.jpg
+    shirt multimodal did 7:42304 rank 65 pos 70410
+    shirt text_only_black_image did 7:42304 rank 6891 pos 70410
+    shirt image_only_empty_text did 7:42304 rank 2200 pos 70410
+    toptee multimodal did 7:42304 rank 43 pos 70410
+    toptee text_only_black_image did 7:42304 rank 4730 pos 70410
+    toptee image_only_empty_text did 7:42304 rank 4047 pos 70410
+pre-r5 7:3038 dids ['7:42304', '7:42304', '7:42304', '7:42304', '7:42304', '7:42304']
+pre-r5 7:3790 dids ['7:42304', '7:42304', '7:42304', '7:42304', '7:42304', '7:42304']

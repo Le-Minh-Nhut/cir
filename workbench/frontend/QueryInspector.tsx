@@ -70,6 +70,12 @@ export function QueryInspector({ run, query, condition = "multimodal", selectedC
   // Never reuse another query/condition/K answer: a rank is not a candidate list.
   const candidates = fetched?.top_results ?? [];
   const shown = candidates.slice(0, effectiveK);
+  // W-03: presence is decided on the window that is RENDERED, never on a rank comparison against a
+  // depth the export advertises. `shown` can be shorter than `effectiveK` (a run that exported
+  // fewer rows, or one whose export starts late), and in that case a target at rank <= effectiveK
+  // is still NOT in the list a reader is looking at.
+  const servedDepth = shown.length;
+  const targetInShown = shown.some((candidate) => query ? query.positive_ids.includes(candidate.image_id) : false);
   const loading = canRequest && (!current || candidatesRegion.region.status === "idle" || candidatesRegion.region.status === "loading");
 
   useEffect(() => setK(10), [query?.query_id, run?.run_id, condition]);
@@ -137,15 +143,25 @@ export function QueryInspector({ run, query, condition = "multimodal", selectedC
             </div>
             {(() => {
               // The target image is rendered from the query record, never from the candidate window,
-              // so it survives a rank outside the exported depth. Say so where the image is.
+              // so it survives a rank outside the exported depth. Say so where the image is, and
+              // name BOTH windows: what the export stored and what is on screen.
+              //
+              // W-03: the decision is PRESENCE IN THE RENDERED WINDOW, not `best > K`. Those differ
+              // exactly where it matters — a run that exported 50 rows while the menu offers Top-100
+              // has a target at #43 that is inside the export and outside the served list, and a
+              // bare rank comparison called that "outside the 100 stored rows".
               const ranks = conditions.map((item) => item.rank).filter((rank): rank is number => rank != null);
               if (!ranks.length || !depth) return null;
               const best = Math.min(...ranks);
-              if (best <= depth) return null;
+              if (targetInShown) return null;
               return (
                 <p className="hint" data-testid="target-outside-window">
-                  Ảnh đích ở hạng tốt nhất {fmtRank(best)}, <b>ngoài cửa sổ {fmtInt(depth)} ứng viên đã xuất</b> —
-                  vẫn hiện ở đây vì hạng là hạng toàn gallery.
+                  Ảnh đích ở hạng tốt nhất {fmtRank(best)} — <b>ngoài cửa sổ Top-{fmtInt(effectiveK)} đang hiện</b>
+                  {" "}({fmtInt(servedDepth)} ứng viên được serve, export lưu {fmtInt(depth)} dòng)
+                  {best > effectiveK
+                    ? ` · Với K=10 hay K=20 thì ảnh đích không nằm trong danh sách`
+                    : ` · hạng ${fmtRank(best)} nằm trong K nhưng export của lượt này không chứa đúng ảnh đó`}.
+                  {" "}Vẫn hiện ở đây vì hạng là hạng toàn gallery, không phải vị trí trong danh sách ứng viên.
                 </p>
               );
             })()}
@@ -171,8 +187,10 @@ export function QueryInspector({ run, query, condition = "multimodal", selectedC
                           ? `trong @${FIXED_CUTOFFS.compositionOutcomeK}`
                           : `ngoài @${FIXED_CUTOFFS.compositionOutcomeK}`}
                       {item.rank != null && depth > 0 && item.rank > depth
-                        ? ` · ngoài cửa sổ ${fmtInt(depth)} ứng viên đã lưu`
-                        : ""}
+                        ? ` · ngoài ${fmtInt(depth)} dòng export đã lưu`
+                        : item.rank != null && item.rank > effectiveK
+                          ? ` · ngoài Top-${fmtInt(effectiveK)} đang hiện`
+                          : ""}
                     </span>
                   </div>
                 ))}
@@ -237,8 +255,12 @@ export function QueryInspector({ run, query, condition = "multimodal", selectedC
             : shown.length > 0 ? (
               <>
                 <p className="candidate-count" aria-live="polite">
-                  Đang hiển thị <b>{shown.length}</b> ứng viên · độ sâu đã xuất {fmtInt(depth)} ·
+                  Đang hiển thị <b>{shown.length}</b> ứng viên · export lưu {fmtInt(depth)} dòng
+                  {candidates.length !== shown.length ? `, API serve ${fmtInt(candidates.length)}` : ""} ·
                   {" "}{CONDITION_LABELS[condition] ?? condition}
+                  {targetInShown
+                    ? " · ảnh đích nằm trong danh sách"
+                    : " · ảnh đích KHÔNG nằm trong danh sách này"}
                 </p>
                 <div className="candidates" data-testid="topk-grid">
                   {shown.map((candidate) => {

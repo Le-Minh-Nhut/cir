@@ -1,0 +1,31 @@
+{
+ "aggregate": {
+  "macro_r1": 23.339369908615016,
+  "macro_r10": 55.79191101239516,
+  "macro_r50": 77.63779703482584,
+  "macro_definition": "unweighted mean over the three category results (each category weighted 1)",
+  "categories_averaged": [
+   "dress",
+   "shirt",
+   "toptee"
+  ]
+ },
+ "parity": true,
+ "metrics": {
+  "dress": {
+   "dress_r1": 18.591968269707486,
+   "dress_r10": 51.165096678235,
+   "dress_r50": 74.26871591472484
+  },
+  "shirt": {
+   "shirt_r1": 25.36800785083415,
+   "shirt_r10": 55.986261040235526,
+   "shirt_r50": 76.59470068694799
+  },
+  "toptee": {
+   "toptee_r1": 26.058133605303418,
+   "toptee_r10": 60.22437531871494,
+   "toptee_r50": 82.04997450280469
+  }
+ }
+}

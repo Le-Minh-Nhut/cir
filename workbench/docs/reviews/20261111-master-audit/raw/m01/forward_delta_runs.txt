@@ -1,0 +1,17 @@
+== /tmp/m01delta_g1.txt
+{"gallery_sha256": "b2c3c5f8b0a7675235eb8ae4013667682857891af33896af9e6055180a688546", "gallery_size": 60, "margin_to_rank1": [0.0, 0.03493446111679077, 0.08892637491226196, 0.23019906878471375], "pid": 3167402, "query_count": 4, "ranks": [1, 2, 2, 2], "recall_at_10": 100.0, "relation_sha256": "1ae18204fa5bc96c0457030dc3a38d786f84594294ef6feaa80154b7ff8be0da", "relation_sum": 12.962209507240914, "seed": null}
+== /tmp/m01delta_g2.txt
+{"gallery_sha256": "0de8f6d0eb16127b2702a1e15ce4d6014e474e7c47dce380d71087d8cabe973b", "gallery_size": 60, "margin_to_rank1": [0.0, 0.035109639167785645, 0.09087410569190979, 0.2314056158065796], "pid": 3167441, "query_count": 4, "ranks": [1, 2, 2, 2], "recall_at_10": 100.0, "relation_sha256": "4312ec17dfd9b107cff02beedddc918cb79a528a6dc39347ceef3a4fb499bbd8", "relation_sum": -2.116390513328952, "seed": null}
+== /tmp/m01delta_s1.txt
+{"gallery_sha256": "e6225cbafc86ff7ce7d9d1419261c33be34d0a770ddb742a078d95c2916dd119", "gallery_size": 60, "margin_to_rank1": [0.0, 0.034524500370025635, 0.10061955451965332, 0.22854548692703247], "pid": 3167519, "query_count": 4, "ranks": [1, 2, 2, 2], "recall_at_10": 100.0, "relation_sha256": "20db0c27c979e9a0938c71af5142458dfa2070468d0ad3fcb6f24134c2f9ce92", "relation_sum": -8.237871632445604, "seed": 20261111}
+== /tmp/m01delta_s2.txt
+{"gallery_sha256": "e6225cbafc86ff7ce7d9d1419261c33be34d0a770ddb742a078d95c2916dd119", "gallery_size": 60, "margin_to_rank1": [0.0, 0.034524500370025635, 0.10061955451965332, 0.22854548692703247], "pid": 3167577, "query_count": 4, "ranks": [1, 2, 2, 2], "recall_at_10": 100.0, "relation_sha256": "20db0c27c979e9a0938c71af5142458dfa2070468d0ad3fcb6f24134c2f9ce92", "relation_sum": -8.237871632445604, "seed": 20261111}
+== /tmp/m01delta_a.txt
+/home/heheboiz/data/cir/workbench/envs/encoder310-adapted/lib/python3.10/site-packages/timm/models/layers/__init__.py:49: FutureWarning: Importing from timm.models.layers is deprecated, please import via timm.layers
+  warnings.warn(f"Importing from {__name__} is deprecated, please import via timm.layers", FutureWarning)
+2
+{"gallery_sha256": "00019f3b490cb90897d6b0f29decad29363adc97e5acc6eab275e24d642fe8a5", "gallery_size": 60, "margin_to_rank1": [0.0, 0.03411668539047241, 0.09383001923561096, 0.22842556238174438], "pid": 3166735, "query_count": 4, "ranks": [1, 2, 2, 2], "recall_at_10": 100.0, "relation_sha256": "b9dec93ee315f74aa92765432472799f8c6a9e2323c2dc95f0b5734346552309", "relation_sum": 13.03959021843184, "seed": null}
+== /tmp/m01delta_unseeded_b.txt
+{"gallery_sha256": "b0976b5903f1491e9160c8b39e6bc4ad7981dd296ef8dafa867610cba491922b", "gallery_size": 60, "margin_to_rank1": [0.0, 0.034321725368499756, 0.09847274422645569, 0.22931665182113647], "pid": 3166864, "query_count": 4, "ranks": [1, 2, 2, 2], "recall_at_10": 100.0, "relation_sha256": "ea2742bde3792d5fae9c4788503eeef3b3c730670766c427f6db7c1e89488bb4", "relation_sum": -5.6051893102112444, "seed": null}
+== /tmp/m01delta_unseeded_c.txt
+{"gallery_sha256": "295a095b59b66552dbd0093838750da386ef91eea166d73bd53dde4f6f4e5fc7", "gallery_size": 60, "margin_to_rank1": [0.0, 0.03497719764709473, 0.09480148553848267, 0.23032617568969727], "pid": 3166958, "query_count": 4, "ranks": [1, 2, 2, 2], "recall_at_10": 100.0, "relation_sha256": "20a501196fb0de37a6d0d57d90556b335f67ebbbc04ae46d87dea5089f930a2c", "relation_sum": -8.57378347015765, "seed": null}

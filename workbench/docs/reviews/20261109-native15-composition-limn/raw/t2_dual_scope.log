@@ -1,0 +1,43 @@
+# loading release
+# verifying gallery cache gallery_shirt.npy
+# hashing checkpoint 0_shirt_best_model.pt
+# verifying gallery cache gallery_toptee.npy
+# hashing checkpoint 0_toptee_best_model.pt
+# rank crosscheck: 36 recomputed, all_agree=True
+# decode workers 2, torch threads pinned by adapter
+# encoding shirt/multimodal: 2 queries
+# encoding shirt/text_only_black_image: 2 queries
+# encoding shirt/image_only_empty_text: 2 queries
+# encoding toptee/multimodal: 2 queries
+# encoding toptee/text_only_black_image: 2 queries
+# encoding toptee/image_only_empty_text: 2 queries
+{
+ "ranks": {
+  "7:3038": {
+   "shirt": {
+    "multimodal": 3,
+    "text_only_black_image": 88,
+    "image_only_empty_text": 152
+   },
+   "toptee": {
+    "multimodal": 43,
+    "text_only_black_image": 389,
+    "image_only_empty_text": 67
+   }
+  },
+  "7:3790": {
+   "shirt": {
+    "multimodal": 65,
+    "text_only_black_image": 6891,
+    "image_only_empty_text": 2200
+   },
+   "toptee": {
+    "multimodal": 43,
+    "text_only_black_image": 4730,
+    "image_only_empty_text": 4047
+   }
+  }
+ },
+ "crosscheck_all_agree": true,
+ "seconds": 60.47
+}

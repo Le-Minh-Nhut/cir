@@ -1,0 +1,76 @@
+leaf counts old/new 560 616
+added 56
+removed 0
+changed 6
+  CHANGED queries.7:3038.scopes.shirt.image_only_empty_text.target_did | 7:42304 -> 7:3416
+  CHANGED queries.7:3038.scopes.shirt.multimodal.target_did | 7:42304 -> 7:3416
+  CHANGED queries.7:3038.scopes.shirt.text_only_black_image.target_did | 7:42304 -> 7:3416
+  CHANGED queries.7:3038.scopes.toptee.image_only_empty_text.target_did | 7:42304 -> 7:3416
+  CHANGED queries.7:3038.scopes.toptee.multimodal.target_did | 7:42304 -> 7:3416
+  CHANGED queries.7:3038.scopes.toptee.text_only_black_image.target_did | 7:42304 -> 7:3416
+  ADDED provenance_correction_r5.artifact_sha256_before | '04c4419e44ff555b909ad92ed0a8596520a0cb5cdcfc0467986baabf77bfabf0'
+  ADDED provenance_correction_r5.cells_changed | 6
+  ADDED provenance_correction_r5.changed[0].condition | 'multimodal'
+  ADDED provenance_correction_r5.changed[0].now | '7:3416'
+  ADDED provenance_correction_r5.changed[0].qid | '7:3038'
+  ADDED provenance_correction_r5.changed[0].scope | 'shirt'
+  ADDED provenance_correction_r5.changed[0].was | '7:42304'
+  ADDED provenance_correction_r5.changed[1].condition | 'text_only_black_image'
+  ADDED provenance_correction_r5.changed[1].now | '7:3416'
+  ADDED provenance_correction_r5.changed[1].qid | '7:3038'
+  ADDED provenance_correction_r5.changed[1].scope | 'shirt'
+  ADDED provenance_correction_r5.changed[1].was | '7:42304'
+  ADDED provenance_correction_r5.changed[2].condition | 'image_only_empty_text'
+  ADDED provenance_correction_r5.changed[2].now | '7:3416'
+  ADDED provenance_correction_r5.changed[2].qid | '7:3038'
+  ADDED provenance_correction_r5.changed[2].scope | 'shirt'
+  ADDED provenance_correction_r5.changed[2].was | '7:42304'
+  ADDED provenance_correction_r5.changed[3].condition | 'multimodal'
+  ADDED provenance_correction_r5.changed[3].now | '7:3416'
+  ADDED provenance_correction_r5.changed[3].qid | '7:3038'
+  ADDED provenance_correction_r5.changed[3].scope | 'toptee'
+  ADDED provenance_correction_r5.changed[3].was | '7:42304'
+  ADDED provenance_correction_r5.changed[4].condition | 'text_only_black_image'
+  ADDED provenance_correction_r5.changed[4].now | '7:3416'
+  ADDED provenance_correction_r5.changed[4].qid | '7:3038'
+  ADDED provenance_correction_r5.changed[4].scope | 'toptee'
+  ADDED provenance_correction_r5.changed[4].was | '7:42304'
+  ADDED provenance_correction_r5.changed[5].condition | 'image_only_empty_text'
+  ADDED provenance_correction_r5.changed[5].now | '7:3416'
+  ADDED provenance_correction_r5.changed[5].qid | '7:3038'
+  ADDED provenance_correction_r5.changed[5].scope | 'toptee'
+  ADDED provenance_correction_r5.changed[5].was | '7:42304'
+  ADDED provenance_correction_r5.defect | 'R5'
+  ADDED provenance_correction_r5.fix | "each cell's target_did is that query's own positive id, cross-checked against the release loader; the serve layer addit
+  ADDED provenance_correction_r5.original_preserved_at | 'limn_dual_scope.json.pre-r5'
+  ADDED provenance_correction_r5.reranked | False
+  ADDED provenance_correction_r5.rescored | False
+  ADDED provenance_correction_r5.top_level_target_did_removed | 'a top-level target_did was added to queries["7:3038"] only; the pre-patch artifact carried it per cell only, so it was 
+  ADDED provenance_correction_r5.unchanged[0] | 'target_rank'
+  ADDED provenance_correction_r5.unchanged[10] | 'score_min'
+  ADDED provenance_correction_r5.unchanged[11] | 'score_max'
+  ADDED provenance_correction_r5.unchanged[12] | 'scope'
+  ADDED provenance_correction_r5.unchanged[13] | 'condition'
+  ADDED provenance_correction_r5.unchanged[14] | 'staged_image_path'
+  ADDED provenance_correction_r5.unchanged[15] | 'query_embedding_norm'
+  ADDED provenance_correction_r5.unchanged[1] | 'target_score'
+  ADDED provenance_correction_r5.unchanged[2] | 'target_gallery_position'
+  ADDED provenance_correction_r5.unchanged[3] | 'score_at_rank_1'
+  ADDED provenance_correction_r5.unchanged[4] | 'target_margin_vs_rank1'
+  ADDED provenance_correction_r5.unchanged[5] | 'top100_export'
+  ADDED provenance_correction_r5.unchanged[6] | 'gallery_size_scored'
+  ADDED provenance_correction_r5.unchanged[7] | 'model_text'
+  ADDED provenance_correction_r5.unchanged[8] | 'encode_seconds'
+  ADDED provenance_correction_r5.unchanged[9] | 'query_embedding_norm'
+  ADDED provenance_correction_r5.verification | "rank/score/position/asset of all 12 cells re-derived from each scope's own export plus the release loader; raw/guards/r
+  ADDED provenance_correction_r5.what | "`target_did` repeated one query's positive id across every cell because the producer read a shared loop variable (t2_du
+sha256 new d1b4aadb6735b8b3c57e9fbfe234b1e12c15a13b977ace23500916af94473e3f
+sha256 pre-r5 04c4419e44ff555b909ad92ed0a8596520a0cb5cdcfc0467986baabf77bfabf0
+recorded artifact_sha256_before 04c4419e44ff555b909ad92ed0a8596520a0cb5cdcfc0467986baabf77bfabf0
+sha256 of 6 exports:
+   limn_dual_scope.shirt.image_only_empty_text.jsonl 548dae274e33c544647c9036b79e60c14f634fc41b613f5a338e5a114a439542
+   limn_dual_scope.shirt.multimodal.jsonl 4e4e9abf679dc2c28d71c94d2428d84ca7e2848902b743153513c8d3c7f916bf
+   limn_dual_scope.shirt.text_only_black_image.jsonl 0af306976e1fd5cab0be781102f0412d2b705bb145f6d5e676c4a038331df1d5
+   limn_dual_scope.toptee.image_only_empty_text.jsonl c125e17693e3b95d5255b53937bb0ef16b39b7d3c9b034371967809a79d05301
+   limn_dual_scope.toptee.multimodal.jsonl 2a5154805d46dc2aaef678a1cd825a85814ac9490550a51df99d62437431ef10
+   limn_dual_scope.toptee.text_only_black_image.jsonl d41145ccd5f657c0bfa30ee4f22e454c2d9cf22007f021b89b415b535a6b8dce

@@ -49,7 +49,8 @@ export const AREAS: AreaDef[] = [
     id: "evaluation",
     label: "Đánh giá",
     question: "Chỉ số đo được theo protocol và subset, kèm mẫu số",
-    views: [{ id: "composition", label: "CIRCUS composition" }, { id: "benchmark", label: "Benchmark tổng hợp" }],
+    views: [{ id: "composition", label: "CIRCUS composition" }, { id: "benchmark", label: "Benchmark tổng hợp" },
+            { id: "native", label: "Số đo native (chưa xác minh)" }],
     legacy: ["Composition", "Benchmark"],
   },
   {

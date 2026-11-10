@@ -1,0 +1,101 @@
+{
+ "first_divergence": "binding_product_cross",
+ "layers": {
+  "pixels": {
+   "max_abs": 0.0,
+   "bitwise": true
+  },
+  "token_ids": {
+   "max_abs": 0.0,
+   "bitwise": true
+  },
+  "fc": {
+   "max_abs": 0.0,
+   "bitwise": true
+  },
+  "text_fc": {
+   "max_abs": 0.0,
+   "bitwise": true
+  },
+  "weight_chanelImg": {
+   "max_abs": 0.0,
+   "bitwise": true
+  },
+  "weight_cross": {
+   "max_abs": 0.0,
+   "bitwise": true
+  },
+  "weight_chanelImg_t": {
+   "max_abs": 0.0,
+   "bitwise": true
+  },
+  "cross_t2i": {
+   "max_abs": 0.0,
+   "bitwise": true
+  },
+  "sparse_net": {
+   "max_abs": 0.0,
+   "bitwise": true
+  },
+  "fac_net": {
+   "max_abs": 0.0,
+   "bitwise": true
+  },
+  "binding_in_V": {
+   "max_abs": 0.0,
+   "bitwise": true
+  },
+  "binding_product_cross": {
+   "max_abs": 32.27046775817871,
+   "bitwise": false
+  },
+  "binding_S_cross": {
+   "max_abs": 1.2106337547302246,
+   "bitwise": false
+  },
+  "binding_S_self": {
+   "max_abs": 1.1920928955078125e-07,
+   "bitwise": false
+  },
+  "binding_S_final": {
+   "max_abs": 0.7841182351112366,
+   "bitwise": false
+  },
+  "binding_entity": {
+   "max_abs": 0.0063584670424461365,
+   "bitwise": false
+  },
+  "weight_chanelText_i": {
+   "max_abs": 0.0,
+   "bitwise": true
+  },
+  "cross_i2t": {
+   "max_abs": 0.0,
+   "bitwise": true
+  },
+  "weight_chanelText": {
+   "max_abs": 0.0,
+   "bitwise": true
+  },
+  "sparse_net_text": {
+   "max_abs": 0.0,
+   "bitwise": true
+  },
+  "affine_in_x": {
+   "max_abs": 0.0042451415210962296,
+   "bitwise": false
+  },
+  "affine_in_text": {
+   "max_abs": 0.0063584670424461365,
+   "bitwise": false
+  },
+  "affine": {
+   "max_abs": 0.14781418442726135,
+   "bitwise": false
+  },
+  "final": {
+   "max_abs": 0.010549813508987427,
+   "bitwise": false
+  }
+ }
+}

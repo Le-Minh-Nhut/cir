@@ -176,6 +176,20 @@ def _load_record(config: Any | None = None) -> dict[str, Any]:
                     raise DiagnosticEvidenceError(
                         f"{path.name}:{line_number} is not valid JSON: {error}") from error
             exports[(scope, condition)] = rows
+    # A second row for the same qid is not a longer export, it is two claims about one query. The
+    # reader below takes the FIRST row by qid, so without this the second row is silently dropped.
+    for (scope, condition), rows in exports.items():
+        seen: dict[str, int] = {}
+        for row in rows:
+            row_qid = str(row.get("qid"))
+            seen[row_qid] = seen.get(row_qid, 0) + 1
+        for row_qid, count in sorted(seen.items()):
+            if count > 1:
+                defects.append(_defect(
+                    "export_duplicate_qid",
+                    f"limn_dual_scope.{scope}.{condition}.jsonl stores {count} rows for {row_qid}; "
+                    "only one window per query can be the recorded evidence",
+                    qid=row_qid, scope=scope, condition=condition))
 
     queries: dict[str, Any] = {}
     combinations: dict[tuple[str, str, str], dict[str, Any]] = {}
@@ -294,6 +308,17 @@ def _validate_combination(*, qid: str, scope: str, condition: str, declared: dic
             "export_depth_short",
             f"{path_name} stores {len(candidates)} candidates but declares depth={depth_stored}; "
             "a window longer than its own declared depth cannot be reproduced from it", **where))
+    # The opposite direction is the truncation this whole file exists to catch: a row that declares
+    # the full depth while storing fewer rows. The expected window is bounded by the gallery the row
+    # itself states, so a genuinely short gallery is not reported as a truncation.
+    gallery_size = row.get("gallery_size")
+    expected_stored = depth_stored if not isinstance(gallery_size, int) else min(depth_stored, gallery_size)
+    if candidates and len(candidates) < expected_stored:
+        defects.append(_defect(
+            "export_depth_truncated",
+            f"{path_name} declares depth={depth_stored} over a gallery of {gallery_size!r} "
+            f"(expected {expected_stored} rows) but stores {len(candidates)}; the missing window "
+            "cannot be recovered from the file", **where))
     if not candidates:
         defects.append(_defect("export_candidates_empty",
                                f"{path_name} row for {qid} stores no candidates", **where))
@@ -584,6 +609,14 @@ def load_candidates(qid: str, scope: str, condition: str, depth: int | None = No
 
     target = combination["target"]
     target_url, target_category = _image_url(target["gallery_id"], scope, fashioniq_root)
+    # W-03: presence must be computed on the window THIS response serves, not on the whole stored
+    # export. `combination["target"]["in_window"]` was decided against all 100 stored rows, so a
+    # depth=10 request for a target at rank 43 answered `in_window: true` and a view printed "the
+    # target is inside the 10 candidates shown" over ten rows that do not contain it.
+    served_ranks = {row.get("rank") for row in window}
+    target_rank = target["rank"]
+    in_window = isinstance(target_rank, int) and not isinstance(target_rank, bool) \
+        and target_rank in served_ranks
     return {
         "qid": qid, "scope": scope, "condition": condition,
         "label": combination["label"],
@@ -603,7 +636,10 @@ def load_candidates(qid: str, scope: str, condition: str, depth: int | None = No
         # The target is ALWAYS returned separately from the window, because it frequently is not in
         # it: at depth 100 the rank-6891 target is not a candidate row, and a view that can only show
         # the target when it happens to be in the top K cannot show the finding.
-        "target": {**target, "image_url": target_url, "image_category": target_category,
+        "target": {**target, "in_window": in_window,
+                   "in_stored_window": bool(target.get("in_window")),
+                   "window_served": served, "window_stored": stored,
+                   "image_url": target_url, "image_category": target_category,
                    "image_stem": Path(str(target["gallery_id"] or "")).stem},
         "checkpoint_sha256": combination["checkpoint_sha256"],
         "gallery_size": combination["gallery_size"],

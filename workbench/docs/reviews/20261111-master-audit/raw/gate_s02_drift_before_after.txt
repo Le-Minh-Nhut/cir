@@ -1,0 +1,7 @@
+pre-fix runner from 92ed66de
+HEAD pin record: {'requested': 1, 'previous': 20, 'effective': 1, 'verified': True}
+pool after a concurrent setter: 10
+policy_observed on HEAD: verified
+HEAD has blas_pin_scope: False
+FIXED drift_detected: True verified: False
+FIXED reason: concurrent change to the process-global BLAS pool: it was pinned to 1 but read back 10 before restore, so the 

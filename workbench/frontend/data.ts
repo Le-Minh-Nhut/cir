@@ -210,12 +210,44 @@ export interface NativeMeasurement {
   model_id: string | null;
   checkpoint_id: string | null;
   protocol_id: string | null;
+  /** The key path that reached the macro block (`aggregate`, `macro_metrics`, `(top level)`), so a
+   *  reader can see WHICH block of the file the number came from instead of trusting the model id. */
+  metric_path?: string | null;
   metrics: { r10?: number; r50?: number; mean?: number } | null;
+  /** The scale `metrics` is on, as the artifact states it. `null` means the artifact does not say;
+   *  `unit_source` says whether it was declared or inferred from magnitude. A consumer MUST NOT
+   *  print a `fraction` value as a percent number without scaling it first (W-01). */
+  unit?: "fraction" | "percent" | null;
+  /** `declared` (the document says so) | `sibling_key` (a suffixed sibling names the scale) |
+   *  `inferred_from_magnitude` (last resort) | `undeclared`. The two declared forms are both
+   *  declarations: neither may be rendered as a guess. */
+  unit_source?: "declared" | "sibling_key" | "inferred_from_magnitude" | "undeclared" | null;
+  /** `EXPLORATORY_PUBLIC_MAPPING` on the PAIR fixtures: the class mapping is not verified, so the
+   *  number must not be read as a reproduction. */
+  mapping_status?: string | null;
   complete: boolean | null;
   categories: string[];
   recorded_at: string | null;
   label: string | null;
   blocker: string | null;
+  /** `true` when this row repeats a number another file states; excluded from the per-model count. */
+  rollup?: boolean;
+  rollup_entry?: string | null;
+  /** W-01: the served value is one an ARTIFACT states. A `false` row is still listed — a reader must
+   *  see what the tree claims — but it is not a measurement of a model and never counts as one. */
+  artifact_backed?: boolean;
+  /** `artifact` | `rollup:<file>` — which file the served decision came from. */
+  source_kind?: string | null;
+  /** The artifact this value was taken from, when it was replaced. */
+  backed_by?: string | null;
+  backed_by_sha256?: string | null;
+  backed_by_run_id?: string | null;
+  backed_by_kind?: string | null;
+  /** The number the row's own file wrote, before any replacement — present only when replaced. */
+  raw_metrics?: NativeMeasurement["metrics"];
+  /** `false` on a row that states the same identity as another row; `duplicate_of` names it. */
+  counted?: boolean;
+  duplicate_of?: string | null;
 }
 
 export interface NativeMeasurementCatalog {
@@ -225,8 +257,30 @@ export interface NativeMeasurementCatalog {
     with_metrics: number;
     unreadable: number;
     signposted_blockers: number;
+    /** Rows whose unit the artifact declares / leaves to inference / does not state at all. */
+    unit_declared?: number;
+    unit_inferred?: number;
+    unit_undeclared?: number;
+    /** Rows whose scale the artifact never declares: every one of them, not only a count. */
+    unit_not_declared?: number;
+    /** Blocks the tree states, distinct backed measurements behind them, unbacked claims, repeats. */
+    blocks_with_metrics?: number;
+    duplicate_rows?: number;
+    unbacked_rows?: number;
+    rollup_rows?: number;
     verified: number;
   };
+  /** The rows behind `counts.unit_not_declared`, so a reader can audit the list instead of
+   *  re-deriving which numbers are on an inferred scale. */
+  undeclared_unit_rows?: Array<{
+    measurement_id: string;
+    model_id: string | null;
+    metric_path: string | null;
+    metrics: NativeMeasurement["metrics"];
+    unit: NativeMeasurement["unit"];
+    unit_source: NativeMeasurement["unit_source"];
+    source: string;
+  }>;
   verified: false;
   note: string;
 }

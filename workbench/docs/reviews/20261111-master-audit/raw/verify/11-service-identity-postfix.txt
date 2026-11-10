@@ -1,0 +1,18 @@
+=== service identity post-fix 2026-11-10T22:21:31+07:00 ===
+3316577 workbench/envs/ctl312h/bin/python workbench/scripts/serve_workbench.py --production-frontend --host 127.0.0.1 --backend-port 8000 --frontend-port 5173
+3316578 /home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python -m uvicorn workbench.backend.main:app --host 127.0.0.1 --port 8000
+
+    PID STARTED                  COMMAND
+3316578 Tue Nov 10 22:20:58 2026 /home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python -m uvicorn workbench.backend.main:app --host 127.0.0.1 --port 8000
+
+bundle:
+7e34724ebf55092e36524b98980cca55e71f3ddbaa62489c65577f92e18a6a16  /tmp/served2.js
+7e34724ebf55092e36524b98980cca55e71f3ddbaa62489c65577f92e18a6a16  workbench/frontend/dist/assets/index-DWpK0yeS.js
+IDENTICAL
+
+<script type="module" crossorigin src="/assets/index-DWpK0yeS.js"></script>
+<link rel="stylesheet" crossorigin href="/assets/index-DecQnta9.css">
+<meta name="viewport" content="width=device-width, initial-scale=1" /><link rel="icon" href="data:," /><div id="root"></div>
+
+readiness /api/benchmark-runs:
+HTTP 200 t=0.006885s

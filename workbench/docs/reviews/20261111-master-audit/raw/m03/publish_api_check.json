@@ -1,0 +1,401 @@
+{
+ "note": "live API :8000, service NOT restarted (owned by web-api)",
+ "status_decision": "option (b): execution_status is INHERITED from the parent and stays inside COMPLETED|PARTIAL|REUSED|FAILED; this subset own completeness lives in derived_from.own_coverage / own_scored_count / own_unscored_count / own_complete",
+ "invariant": "adapter_query_scope_resolution.still_unscoped == condition_status[*].unscored_count (publisher refuses otherwise)",
+ "unscoped_parent_qids": [
+  "7:3038",
+  "7:3790"
+ ],
+ "list_rows_for_derived_runs": [
+  {
+   "run_id": "6a96c5c199526b61c1470b0e",
+   "subset": "sf",
+   "execution_status": "PARTIAL",
+   "derived_from": {
+    "schema": "circus-derived-subset/v1",
+    "derivation": "select the parent's per-qid exact ranks for the declared subset membership and re-aggregate with workbench.composition.metrics.compose; no image decoded, no forward pass, no score recomputed",
+    "derived_run_id": "6a96c5c199526b61c1470b0e",
+    "parent_run_id": "9e4918a6b5c243412cbc58c9",
+    "parent_rank_artifact": "workbench/artifacts/composition/runs/9e4918a6b5c243412cbc58c9/ranks/limn_base_iter0_all_categories.json",
+    "parent_rank_artifact_sha256": "d5794b027729abb3f58ac779f2b5407cfde7c51ba1094b4c76ff96aa27c869bc",
+    "parent_summary": "workbench/artifacts/composition/summary/limn_base_iter0_all_categories_9e4918a6b5c243412cbc58c9/full.json",
+    "parent_summary_sha256": "c446acc4f554d2e995e346ab837e553ea122068d1180387dcbf87426ea800bef",
+    "subset": "sf",
+    "membership_definition": "workbench.composition.data.select_queries(subset='sf') over the pinned CIRCUS release membership columns",
+    "membership_sha256": "45e19ff14165e4de1ff57fd4dd9986cda55ac9f93552651b7eda39abf22d00e8",
+    "membership_count": 4069,
+    "declared_query_count": 4069,
+    "coverage": 0.9997542393708528,
+    "scored_count": 4068,
+    "denominator": 4068,
+    "denominator_note": "metrics are means over the SCORED queries of this subset; the declared membership is the larger number in declared_query_count",
+    "gpu_used": false,
+    "re_encoded": false,
+    "rescored": false,
+    "parent_execution_status": "PARTIAL",
+    "parent_coverage": 0.9996668332500417,
+    "parent_unscoped_qids": [
+     "7:3038",
+     "7:3790"
+    ],
+    "parent_unscoped_count": 2,
+    "parent_unscoped_qids_in_this_subset": [
+     "7:3790"
+    ],
+    "parent_unscored_qids": [
+     "7:3038",
+     "7:3790"
+    ],
+    "parent_unscored_qids_in_this_subset": [
+     "7:3790"
+    ],
+    "parent_unscored_count": null,
+    "own_coverage": 0.9997542393708528,
+    "own_scored_count": 4068,
+    "own_unscored_count": 1,
+    "own_complete": false,
+    "own_status_label": "DERIVED_PARTIAL",
+    "own_status_note": "read this, not execution_status: execution_status is inherited from the parent so it stays inside COMPLETED|PARTIAL|REUSED|FAILED"
+   },
+   "adapter_query_scope_resolution": {
+    "resolver": "workbench.composition.model_limn.Adapter.query_scope",
+    "loader_scoped": 4000,
+    "adapter_routed": 4068,
+    "still_unscoped": 1,
+    "unscoped_qids": [
+     "7:3790"
+    ],
+    "scope_note": "counts recomputed over THIS subset's membership",
+    "parent_adapter_query_scope_resolution": {
+     "adapter_routed": 6001,
+     "loader_scoped": 5884,
+     "resolver": "workbench.composition.model_limn.Adapter.query_scope",
+     "still_unscoped": 2,
+     "unscoped_qids": [
+      "7:3038",
+      "7:3790"
+     ]
+    }
+   },
+   "condition_status": {
+    "multimodal": {
+     "status": "PARTIAL",
+     "unscored_count": 1,
+     "category_scope_failure_count": 0,
+     "fallback_used": false
+    },
+    "text_only_black_image": {
+     "status": "PARTIAL",
+     "unscored_count": 1,
+     "category_scope_failure_count": 0,
+     "fallback_used": false
+    },
+    "image_only_empty_text": {
+     "status": "PARTIAL",
+     "unscored_count": 1,
+     "category_scope_failure_count": 0,
+     "fallback_used": false
+    }
+   },
+   "category_scope_failures": {
+    "image_only_empty_text": 1,
+    "multimodal": 1,
+    "text_only_black_image": 1
+   },
+   "multimodal_recall_at_10": 18.3874139626352
+  },
+  {
+   "run_id": "aee2e8d39214d877a84d7c08",
+   "subset": "validated",
+   "execution_status": "PARTIAL",
+   "derived_from": {
+    "schema": "circus-derived-subset/v1",
+    "derivation": "select the parent's per-qid exact ranks for the declared subset membership and re-aggregate with workbench.composition.metrics.compose; no image decoded, no forward pass, no score recomputed",
+    "derived_run_id": "aee2e8d39214d877a84d7c08",
+    "parent_run_id": "9e4918a6b5c243412cbc58c9",
+    "parent_rank_artifact": "workbench/artifacts/composition/runs/9e4918a6b5c243412cbc58c9/ranks/limn_base_iter0_all_categories.json",
+    "parent_rank_artifact_sha256": "d5794b027729abb3f58ac779f2b5407cfde7c51ba1094b4c76ff96aa27c869bc",
+    "parent_summary": "workbench/artifacts/composition/summary/limn_base_iter0_all_categories_9e4918a6b5c243412cbc58c9/full.json",
+    "parent_summary_sha256": "c446acc4f554d2e995e346ab837e553ea122068d1180387dcbf87426ea800bef",
+    "subset": "validated",
+    "membership_definition": "workbench.composition.data.select_queries(subset='validated') over the pinned CIRCUS release membership columns",
+    "membership_sha256": "52e0cf3138a4eb9e98a52c524abcaec14bc81c14d3fb378df84eb7eaad684d66",
+    "membership_count": 586,
+    "declared_query_count": 586,
+    "coverage": 1.0,
+    "scored_count": 586,
+    "denominator": 586,
+    "denominator_note": "metrics are means over the SCORED queries of this subset; the declared membership is the larger number in declared_query_count",
+    "gpu_used": false,
+    "re_encoded": false,
+    "rescored": false,
+    "parent_execution_status": "PARTIAL",
+    "parent_coverage": 0.9996668332500417,
+    "parent_unscoped_qids": [
+     "7:3038",
+     "7:3790"
+    ],
+    "parent_unscoped_count": 2,
+    "parent_unscoped_qids_in_this_subset": [],
+    "parent_unscored_qids": [
+     "7:3038",
+     "7:3790"
+    ],
+    "parent_unscored_qids_in_this_subset": [],
+    "parent_unscored_count": null,
+    "own_coverage": 1.0,
+    "own_scored_count": 586,
+    "own_unscored_count": 0,
+    "own_complete": true,
+    "own_status_label": "DERIVED_COMPLETE",
+    "own_status_note": "read this, not execution_status: execution_status is inherited from the parent so it stays inside COMPLETED|PARTIAL|REUSED|FAILED"
+   },
+   "adapter_query_scope_resolution": {
+    "resolver": "workbench.composition.model_limn.Adapter.query_scope",
+    "loader_scoped": 581,
+    "adapter_routed": 586,
+    "still_unscoped": 0,
+    "unscoped_qids": [],
+    "scope_note": "counts recomputed over THIS subset's membership",
+    "parent_adapter_query_scope_resolution": {
+     "adapter_routed": 6001,
+     "loader_scoped": 5884,
+     "resolver": "workbench.composition.model_limn.Adapter.query_scope",
+     "still_unscoped": 2,
+     "unscoped_qids": [
+      "7:3038",
+      "7:3790"
+     ]
+    }
+   },
+   "condition_status": {
+    "multimodal": {
+     "status": "COMPLETED",
+     "unscored_count": 0,
+     "category_scope_failure_count": 0,
+     "fallback_used": false
+    },
+    "text_only_black_image": {
+     "status": "COMPLETED",
+     "unscored_count": 0,
+     "category_scope_failure_count": 0,
+     "fallback_used": false
+    },
+    "image_only_empty_text": {
+     "status": "COMPLETED",
+     "unscored_count": 0,
+     "category_scope_failure_count": 0,
+     "fallback_used": false
+    }
+   },
+   "category_scope_failures": {
+    "image_only_empty_text": 0,
+    "multimodal": 0,
+    "text_only_black_image": 0
+   },
+   "multimodal_recall_at_10": 30.034129692832764
+  }
+ ],
+ "inspector": {
+  "6a96c5c199526b61c1470b0e": {
+   "http_status": 200,
+   "subset": "sf",
+   "execution_status": "PARTIAL",
+   "derived_from": {
+    "schema": "circus-derived-subset/v1",
+    "derivation": "select the parent's per-qid exact ranks for the declared subset membership and re-aggregate with workbench.composition.metrics.compose; no image decoded, no forward pass, no score recomputed",
+    "derived_run_id": "6a96c5c199526b61c1470b0e",
+    "parent_run_id": "9e4918a6b5c243412cbc58c9",
+    "parent_rank_artifact": "workbench/artifacts/composition/runs/9e4918a6b5c243412cbc58c9/ranks/limn_base_iter0_all_categories.json",
+    "parent_rank_artifact_sha256": "d5794b027729abb3f58ac779f2b5407cfde7c51ba1094b4c76ff96aa27c869bc",
+    "parent_summary": "workbench/artifacts/composition/summary/limn_base_iter0_all_categories_9e4918a6b5c243412cbc58c9/full.json",
+    "parent_summary_sha256": "c446acc4f554d2e995e346ab837e553ea122068d1180387dcbf87426ea800bef",
+    "subset": "sf",
+    "membership_definition": "workbench.composition.data.select_queries(subset='sf') over the pinned CIRCUS release membership columns",
+    "membership_sha256": "45e19ff14165e4de1ff57fd4dd9986cda55ac9f93552651b7eda39abf22d00e8",
+    "membership_count": 4069,
+    "declared_query_count": 4069,
+    "coverage": 0.9997542393708528,
+    "scored_count": 4068,
+    "denominator": 4068,
+    "denominator_note": "metrics are means over the SCORED queries of this subset; the declared membership is the larger number in declared_query_count",
+    "gpu_used": false,
+    "re_encoded": false,
+    "rescored": false,
+    "parent_execution_status": "PARTIAL",
+    "parent_coverage": 0.9996668332500417,
+    "parent_unscoped_qids": [
+     "7:3038",
+     "7:3790"
+    ],
+    "parent_unscoped_count": 2,
+    "parent_unscoped_qids_in_this_subset": [
+     "7:3790"
+    ],
+    "parent_unscored_qids": [
+     "7:3038",
+     "7:3790"
+    ],
+    "parent_unscored_qids_in_this_subset": [
+     "7:3790"
+    ],
+    "parent_unscored_count": null,
+    "own_coverage": 0.9997542393708528,
+    "own_scored_count": 4068,
+    "own_unscored_count": 1,
+    "own_complete": false,
+    "own_status_label": "DERIVED_PARTIAL",
+    "own_status_note": "read this, not execution_status: execution_status is inherited from the parent so it stays inside COMPLETED|PARTIAL|REUSED|FAILED"
+   },
+   "adapter_query_scope_resolution": {
+    "resolver": "workbench.composition.model_limn.Adapter.query_scope",
+    "loader_scoped": 4000,
+    "adapter_routed": 4068,
+    "still_unscoped": 1,
+    "unscoped_qids": [
+     "7:3790"
+    ],
+    "scope_note": "counts recomputed over THIS subset's membership",
+    "parent_adapter_query_scope_resolution": {
+     "adapter_routed": 6001,
+     "loader_scoped": 5884,
+     "resolver": "workbench.composition.model_limn.Adapter.query_scope",
+     "still_unscoped": 2,
+     "unscoped_qids": [
+      "7:3038",
+      "7:3790"
+     ]
+    }
+   },
+   "condition_status": {
+    "multimodal": {
+     "status": "PARTIAL",
+     "unscored_count": 1,
+     "category_scope_failure_count": 0,
+     "fallback_used": false
+    },
+    "text_only_black_image": {
+     "status": "PARTIAL",
+     "unscored_count": 1,
+     "category_scope_failure_count": 0,
+     "fallback_used": false
+    },
+    "image_only_empty_text": {
+     "status": "PARTIAL",
+     "unscored_count": 1,
+     "category_scope_failure_count": 0,
+     "fallback_used": false
+    }
+   },
+   "unresolved_category_query_count": 1,
+   "multimodal": {
+    "condition": "multimodal",
+    "query_count": 4069,
+    "scored_count": 4068,
+    "coverage": 0.9997542393708528,
+    "recall_at_10": 18.3874139626352,
+    "recall_at_50": 35.96361848574238,
+    "ndcg_full": 0.21656188860953537,
+    "mrr": 0.0926272672040389,
+    "unavailable_reason": null
+   }
+  },
+  "aee2e8d39214d877a84d7c08": {
+   "http_status": 200,
+   "subset": "validated",
+   "execution_status": "PARTIAL",
+   "derived_from": {
+    "schema": "circus-derived-subset/v1",
+    "derivation": "select the parent's per-qid exact ranks for the declared subset membership and re-aggregate with workbench.composition.metrics.compose; no image decoded, no forward pass, no score recomputed",
+    "derived_run_id": "aee2e8d39214d877a84d7c08",
+    "parent_run_id": "9e4918a6b5c243412cbc58c9",
+    "parent_rank_artifact": "workbench/artifacts/composition/runs/9e4918a6b5c243412cbc58c9/ranks/limn_base_iter0_all_categories.json",
+    "parent_rank_artifact_sha256": "d5794b027729abb3f58ac779f2b5407cfde7c51ba1094b4c76ff96aa27c869bc",
+    "parent_summary": "workbench/artifacts/composition/summary/limn_base_iter0_all_categories_9e4918a6b5c243412cbc58c9/full.json",
+    "parent_summary_sha256": "c446acc4f554d2e995e346ab837e553ea122068d1180387dcbf87426ea800bef",
+    "subset": "validated",
+    "membership_definition": "workbench.composition.data.select_queries(subset='validated') over the pinned CIRCUS release membership columns",
+    "membership_sha256": "52e0cf3138a4eb9e98a52c524abcaec14bc81c14d3fb378df84eb7eaad684d66",
+    "membership_count": 586,
+    "declared_query_count": 586,
+    "coverage": 1.0,
+    "scored_count": 586,
+    "denominator": 586,
+    "denominator_note": "metrics are means over the SCORED queries of this subset; the declared membership is the larger number in declared_query_count",
+    "gpu_used": false,
+    "re_encoded": false,
+    "rescored": false,
+    "parent_execution_status": "PARTIAL",
+    "parent_coverage": 0.9996668332500417,
+    "parent_unscoped_qids": [
+     "7:3038",
+     "7:3790"
+    ],
+    "parent_unscoped_count": 2,
+    "parent_unscoped_qids_in_this_subset": [],
+    "parent_unscored_qids": [
+     "7:3038",
+     "7:3790"
+    ],
+    "parent_unscored_qids_in_this_subset": [],
+    "parent_unscored_count": null,
+    "own_coverage": 1.0,
+    "own_scored_count": 586,
+    "own_unscored_count": 0,
+    "own_complete": true,
+    "own_status_label": "DERIVED_COMPLETE",
+    "own_status_note": "read this, not execution_status: execution_status is inherited from the parent so it stays inside COMPLETED|PARTIAL|REUSED|FAILED"
+   },
+   "adapter_query_scope_resolution": {
+    "resolver": "workbench.composition.model_limn.Adapter.query_scope",
+    "loader_scoped": 581,
+    "adapter_routed": 586,
+    "still_unscoped": 0,
+    "unscoped_qids": [],
+    "scope_note": "counts recomputed over THIS subset's membership",
+    "parent_adapter_query_scope_resolution": {
+     "adapter_routed": 6001,
+     "loader_scoped": 5884,
+     "resolver": "workbench.composition.model_limn.Adapter.query_scope",
+     "still_unscoped": 2,
+     "unscoped_qids": [
+      "7:3038",
+      "7:3790"
+     ]
+    }
+   },
+   "condition_status": {
+    "multimodal": {
+     "status": "COMPLETED",
+     "unscored_count": 0,
+     "category_scope_failure_count": 0,
+     "fallback_used": false
+    },
+    "text_only_black_image": {
+     "status": "COMPLETED",
+     "unscored_count": 0,
+     "category_scope_failure_count": 0,
+     "fallback_used": false
+    },
+    "image_only_empty_text": {
+     "status": "COMPLETED",
+     "unscored_count": 0,
+     "category_scope_failure_count": 0,
+     "fallback_used": false
+    }
+   },
+   "unresolved_category_query_count": 0,
+   "multimodal": {
+    "condition": "multimodal",
+    "query_count": 586,
+    "scored_count": 586,
+    "coverage": 1.0,
+    "recall_at_10": 30.034129692832764,
+    "recall_at_50": 53.58361774744027,
+    "ndcg_full": 0.2849270057021113,
+    "mrr": 0.15409934826257882,
+    "unavailable_reason": null
+   }
+  }
+ }
+}

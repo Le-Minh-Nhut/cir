@@ -1,0 +1,673 @@
+{
+ "issue": "W-03",
+ "slug": "w03_limn_diagnostic_toptee",
+ "url": "http://127.0.0.1:5173/?area=samples&view=explorer&protocol=circus_fashioniq_release_v1&subset=full&runs=c%3A9e4918a6b5c243412cbc58c9&run=9e4918a6b5c243412cbc58c9",
+ "viewport": "1920x1080@1",
+ "png": "w03_limn_diagnostic_toptee.png",
+ "png_sha256": "ba34702b98ab39d9328f76fc762e2332e94c53632845ef5aed362b37a3b83373",
+ "dom_text_sha256": "ae52876260e99d2d515f9422d0041c0a74f858370bae9ef080a570950cee2581",
+ "dom_text_excerpt": "Đến nội dung chính\nCIR.\nResearch workbench\n◎\nTổng quan\n▤\nMô hình & lượt chạy\n◑\nĐánh giá\n18\n▦\nKhám phá mẫu\n△\nPhân tích lỗi\n18\n✎\nSổ nghiên cứu\nCIRCUS FashionIQ Release v1\nSubset Full\n31 lượt khả dụng ở phạm vi này\nKhám phá mẫu\n\nTừng query: ảnh, văn bản sửa, hạng theo điều kiện, ứng viên\n\nCỡ giao diện\n17px\n19px\n⧉ Sao chép liên kết\nProtocol\nCIRCUS FashionIQ Release v1\nFashionIQ — Original Split (Full Gallery)\nSubset\nFull\nShortcut-Free (SF)\nValidated\nLượt chọn\n1\nInspector\nSo sánh mô hình\nAGGREGATE-ONLY REAL EVALUATION — 2 certified research results (11 further aggregate runs uncertified); per-query candidate Top-K available on 13 of 18 composed runs in view\nẨn\nBộ lọc mẫu\n\nlimn / base_iter0_all_categories · CIRCUS FashionIQ Release v1 · Full\n\nXoá bộ lọc\nLƯỢT\n— chọn lượt —\nlimn / base_iter0_all_categories\nconesep / fiq_n02\nptha_mtst / cirr_transfer (TRANSFER)\nintent / fiq_n02\nintent / fiq_n02\nhabit / fiq_n02\nhint / fashioniq\nencoder / fashioniq\nencoder / fashioniq\nlimn / base_iter0_all_categories\nconesep / fiq_n02\ntme / fashioniq_0\nhabit / fiq_n02\ntme / fashioniq_0\nencoder / fashioniq\nhint / fashioniq\nptha_mtst / cirr_transfer (TRANSFER)\nhabit / fiq_n02\nĐIỀU KIỆN\nMultimodal (MM)\nText-only (ảnh đen)\nImage-only (text rỗng)\nĐổi điều kiện sẽ tải xếp hạng ứng viên riêng của điều kiện đó\nMÃ QUERY\nBộ lọc nâng cao và nguồn dữ liệu\nDanh sách query\n\n6,003 query khớp bộ lọc\n\nTất cả6,003\nCorrect@101,802\nMiss@104,199\nUnscored2\n7:3038\nChưa chấm\nIs darker and has a different graphic and is darker.\nText unscored · Ảnh unscored\n7:3790\nChưa chấm\nIs grey and has a less whimsical graphic and is lighter.\nText unscored · Ảnh unscored\n7:3045\nMM #73,369\nBright red with a larger and is darker.\nText #54,098 · Ảnh #66,246\n7:1466\nMM #72,587\nLooser and has longer sleeves and has much shorter sleeves.\nText #73,884 · Ảnh #66,075\n7:286\nMM #68,813\nHas longer sleeves and white.\nText #71,703 · Ảnh #12,343\n7:4082\nMM #66,351\nIs darker with no print and white t-shirt.\nText #21,968 · Ảnh #52,375\n7:950\nMM #61,144\nIs more stylish and preppy and is more chic and less flashy.\nText #65,581 · Ảnh #67,250\n7:4962\nMM #60,876\nIs lighter and has shorter sleeves and wider neck.\nText #47,152 · Ảnh #73,166\n7:3620\nMM #60,708\nHas sleeves and is plainer and has more grey.\nText #4,582 · Ảnh #63,851\n7:2934\nMM #60,625\nIs more casual with shorter sleeves and has shorter sleeves.\nText #70,921 · Ảnh #61,912\n7:1824\nMM #59,958\nIs more casual and bubbly and is looser fitted and more colorful.\nText #73,697 · Ảnh #61,137\n7:1769\nMM #59,863\nHas longer sleeves and black and white blocks.\nText #70,243 · Ảnh #18,864\n7:1167\nMM #59,215\nHas shorter sleeves and is lighter and is a darker deeper red with long sleeves.\nText #73,390 · Ảnh #53,578\n7:83\nMM #59,008\nIs darker and has shorter sleeves and does not cover the sholders.\nText #20,366 · Ảnh #67,093\n7:690\nMM #58,888\nHas no sleeves and is solid black and has more belt aspects.\nText #56,043 · Ảnh #58,615\n7:3254\nMM #58,762\nIs official and with short sleeves and is more formal.\nText #28,282 · Ảnh #73,995\n7:735\nMM #58,069\nIs short and is shorter and fitted.\nText #43,644 · Ảnh #74,074\n7:5686\nMM #57,487\nHas shorter sleeves and is tighter and is lighter and has shorter sleeves.\nText #46,353 · Ảnh #66,165\n7:179\nMM #56,282\nA solid and is much shorter.\nText #63,617 · Ảnh #23,297\n7:2894\nMM #56,028\nIs more casual and nont patterned and it is more casual and has a short sleeve.\nText #67,517 · Ảnh #54,429\n1–20 / 6,003\nTrước\nSau\nQuery 7:3038\n\nlimn · base_iter0_all_categories · circus_fashioniq_release_v1 · subset full\n\nCó điều kiện chưa chấm\nẢnh tham chiếu\nB004TMGDME.jpg\nYÊU CẦU CHỈNH SỬA\n\nIs darker and has a different graphic and is darker.\n\nẢnh đích\nB004D8QCN4.jpg\nHẠNG THEO ĐIỀU KIỆN · OUTCOME PHÂN LOẠI TẠI @10 (CỐ ĐỊNH)\nẢnh + văn bản (MM)\nChưa chấm\nKhông có hạng chính xác (category_unresolved)\nChỉ văn bản\nChưa chấm\nKhông có hạng chính xác (category_unresolved)\nChỉ ảnh\nChưa chấm\nKhông có hạng chính xác (category_unresolved)\n\nHạng đích trên toàn gallery, theo từng điều k",
+ "console": [],
+ "api": {
+  "/api/composition/diagnostics/limn-dual-scope": {
+   "available": true,
+   "status": "DIAGNOSTIC_COMPLETE",
+   "complete": true,
+   "standard": "limn-diagnostic-evidence/v2",
+   "defects": [],
+   "manifest": {
+    "standard": "limn-diagnostic-evidence/v2",
+    "digest": "9d1018524a89313da6abd98766c38403031c4505ae19aebe542fc0675e5827da",
+    "files": [
+     {
+      "name": "limn_dual_scope.json",
+      "sha256": "d1b4aadb6735b8b3c57e9fbfe234b1e12c15a13b977ace23500916af94473e3f",
+      "bytes": 29705
+     },
+     {
+      "name": "limn_dual_scope.shirt.multimodal.jsonl",
+      "sha256": "4e4e9abf679dc2c28d71c94d2428d84ca7e2848902b743153513c8d3c7f916bf",
+      "bytes": 41164
+     },
+     {
+      "name": "limn_dual_scope.shirt.text_only_black_image.jsonl",
+      "sha256": "0af306976e1fd5cab0be781102f0412d2b705bb145f6d5e676c4a038331df1d5",
+      "bytes": 41213
+     },
+     {
+      "name": "limn_dual_scope.shirt.image_only_empty_text.jsonl",
+      "sha256": "548dae274e33c544647c9036b79e60c14f634fc41b613f5a338e5a114a439542",
+      "bytes": 41097
+     },
+     {
+      "name": "limn_dual_scope.toptee.multimodal.jsonl",
+      "sha256": "2a5154805d46dc2aaef678a1cd825a85814ac9490550a51df99d62437431ef10",
+      "bytes": 41141
+     },
+     {
+      "name": "limn_dual_scope.toptee.text_only_black_image.jsonl",
+      "sha256": "d41145ccd5f657c0bfa30ee4f22e454c2d9cf22007f021b89b415b535a6b8dce",
+      "bytes": 41184
+     },
+     {
+      "name": "limn_dual_scope.toptee.image_only_empty_text.jsonl",
+      "sha256": "c125e17693e3b95d5255b53937bb0ef16b39b7d3c9b034371967809a79d05301",
+      "bytes": 41123
+     }
+    ],
+    "declared_root": "/home/heheboiz/data/cir/workbench/docs/reviews/20261109-native15-composition-limn"
+   },
+   "canonical_status": {
+    "status": "PARTIAL",
+    "scored_count": 6001,
+    "unscored_count": 2,
+    "unscored_qids": [
+     "7:3038",
+     "7:3790"
+    ],
+    "note": "Both diagnostic scopes run; the canonical metrics stay 6001/6003 and both queries stay unscored there. No diagnostic number is folded into the canonical evaluator, no scope is chosen as 'the' answer."
+   },
+   "label": "ambiguous category — diagnostic comparison",
+   "canonical_cohort": {
+    "subset": "full",
+    "query_count": 6003,
+    "query_count_per_subset": {
+     "full": 6003,
+     "sf": 4069,
+     "validated": 586
+    },
+    "scored_count": 6001,
+    "unscored_count": 2,
+    "multimodal_recall_at_10": 30.0283,
+    "source": "workbench/artifacts/composition/summary/limn_base_iter0_all_categories_9e4918a6b5c243412cbc58c9/full.json"
+   },
+   "reason": "each query's reference image and normalized caption pair appear in BOTH the shirt and toptee FashionIQ validation captions, so the release determines no single checkpoint; both scopes are scored separately and NEITHER replaces the canonical unscored state",
+   "gallery": {
+    "count": 74381,
+    "protocol_id": "circus_fashioniq_release_v1",
+    "note": "the FULL released gallery for every scope: no category filtering, the checkpoint being category-specific does not restrict candidates"
+   },
+   "conditions": [
+    "multimodal",
+    "text_only_black_image",
+    "image_only_empty_text"
+   ],
+   "scopes": [
+    "shirt",
+    "toptee"
+   ],
+   "checkpoints": {
+    "shirt": {
+     "checkpoint_id": "base_iter0_shirt",
+     "filename": "0_shirt_best_model.pt",
+     "path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/limn/0_shirt_best_model.pt",
+     "size_bytes": 1792010157,
+     "sha256": "9260c7f77d3017d8cc10e6652cc8cfe275dbc9704366fa2bf581a24808930d74",
+     "sha256_source": "recomputed over the file on disk; equals the registry expected_sha256",
+     "mapping_status": "VERIFIED_METADATA",
+     "bundle_id": "base_iter0_all_categories",
+     "dataset_type_index": 1
+    },
+    "toptee": {
+     "checkpoint_id": "base_iter0_toptee",
+     "filename": "0_toptee_best_model.pt",
+     "path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/limn/0_toptee_best_model.pt",
+     "size_bytes": 1792010157,
+     "sha256": "79f663a14d89d455fdc3612b0b36d011c06d7957d1475a654755e1053a6cece2",
+     "sha256_source": "recomputed over the file on disk; equals the registry expected_sha256",
+     "mapping_status": "VERIFIED_METADATA",
+     "bundle_id": "base_iter0_all_categories",
+     "dataset_type_index": 2
+    }
+   },
+   "release_provenance": {
+    "hash_verification": "matched",
+    "sha256": {
+     "mbeir_query": "b601ef6a5411bf9385cff41e64bea863871ab1094cd09d78683de6a5141165ef",
+     "mbeir_candidates": "121ec284832c33289ee13bfac19d5d59dc3f8aeddf672d784fd5eb8bcdf79eef",
+     "sf": "95a93883334e351e4d3aaaf25e47e89b48d4daf02bdb786e8f00d58165ace37d",
+     "validated_solved": "18f829da4d3b1ee8439f43998bae43dbbe8924c2eaafba84473ae849f564f5c7",
+     "validated_unsolved": "ba019a30d3b45f4b29c34d2d48638dbeeed2e2a42409f625922c65de5b2a7efa",
+     "aggregated_audit": "27bdbef041200dc393b5478d3e57121bc16c70a9acc2e98a19fb48408a99533c"
+    },
+    "counts": {
+     "candidate": 74381,
+     "gallery": 74381,
+     "full": 6003,
+     "sf": 4069,
+     "validated": 586,
+     "validated_solved": 368,
+     "validated_unsolved": 218
+    },
+    "category_resolution_counts": {
+     "considered_count": 6003,
+     "resolved_count": 5884,
+     "ambiguous_count": 119,
+     "unresolved_count": 0
+    }
+   },
+   "rank_convention_crosscheck": {
+    "method": "recompute the recorded canonical target rank of already-scored queries from this run's own cached query matrix + cached gallery matrix, using the adapter's score/rank; agreement proves gallery ORDER and the tie rule are the recorded ones",
+    "checked": 36,
+    "all_agree": true
+   },
+   "runtime": {
+    "controller_python": "3.12.11 (main, Oct  7 2025, 15:34:39) [Clang 20.1.4 ]",
+    "model_interpreter": "/home/heheboiz/data/cir/workbench/envs/limn310-adapted/bin/python",
+    "decode_workers": 2,
+    "elapsed_seconds": 60.47,
+    "top_k": 100,
+    "scoring": "adapter.score: L2-normalized query row dot composed target row (target rows are already L2-normalized by compose_target)",
+    "rank": "adapter.rank: 1 + count(row > v) + count(row[:i] == v), same as the evaluator"
+   },
+   "queries": {
+    "7:3038": {
+     "qid": "7:3038",
+     "label": "diagnostic for ambiguous query 7:3038 (not canonical)",
+     "release": {
+      "index": 3037,
+      "query_txt": "Is darker and has a different graphic and is darker.",
+      "reference_id": "7:53224",
+      "positive_ids": [
+       "7:3416"
+      ],
+      "loader_category": null,
+      "matched_subsets": [
+       "full"
+      ]
+     },
+     "target_did": "7:3416",
+     "declared_target_did": null,
+     "target_gallery_id": "mbeir_images/fashioniq_images/B004D8QCN4.jpg",
+     "target_position_in_gallery": [
+      13614
+     ],
+     "scopes": {
+      "shirt": {
+       "multimodal": {
+        "target_rank": 3,
+        "target_score": 0.5703769326210022,
+        "score_at_rank_1": 0.8147742748260498,
+        "target_margin_vs_rank1": 0.2443973422050476,
+        "gallery_size_scored": 74381,
+        "model_text": "Is darker and has a different graphic and is darker.",
+        "export": "limn_dual_scope.shirt.multimodal.jsonl",
+        "target_did": "7:3416",
+        "label": "diagnostic — shirt scope, multimodal (not canonical)"
+       },
+       "text_only_black_image": {
+        "target_rank": 88,
+        "target_score": 0.4220863878726959,
+        "score_at_rank_1": 0.7404771447181702,
+        "target_margin_vs_rank1": 0.31839075684547424,
+        "gallery_size_scored": 74381,
+        "model_text": "Is darker and has a different graphic and is darker.",
+        "export": "limn_dual_scope.shirt.text_only_black_image.jsonl",
+        "target_did": "7:3416",
+        "label": "diagnostic — shirt scope, text_only_black_image (not canonical)"
+       },
+       "image_only_empty_text": {
+        "target_rank": 152,
+        "target_score": 0.36779189109802246,
+        "score_at_rank_1": 0.7385141849517822,
+        "target_margin_vs_rank1": 0.37072229385375977,
+        "gallery_size_scored": 74381,
+        "model_text": "",
+        "export": "limn_dual_scope.shirt.image_only_empty_text.jsonl",
+        "target_did": "7:3416",
+        "label": "diagnostic — shirt scope, image_only_empty_text (not canonical)"
+       }
+      },
+      "toptee": {
+       "multimodal": {
+        "target_rank": 43,
+        "target_score": 0.5678249001502991,
+        "score_at_rank_1": 0.8175360560417175,
+        "target_margin_vs_rank1": 0.24971115589141846,
+        "gallery_size_scored": 74381,
+        "model_text": "Is darker and has a different graphic and is darker.",
+        "export": "limn_dual_scope.toptee.multimodal.jsonl",
+        "target_did": "7:3416",
+        "label": "diagnostic — toptee scope, multimodal (not canonical)"
+       },
+       "text_only_black_image": {
+        "target_rank": 389,
+        "target_score": 0.3436165750026703,
+        "score_at_rank_1": 0.689705491065979,
+        "target_margin_vs_rank1": 0.3460889160633087,
+        "gallery_size_scored": 74381,
+        "model_text": "Is darker and has a different graphic and is darker.",
+        "export": "limn_dual_scope.toptee.text_only_black_image.jsonl",
+        "target_did": "7:3416",
+        "label": "diagnostic — toptee scope, text_only_black_image (not canonical)"
+       },
+       "image_only_empty_text": {
+        "target_rank": 67,
+        "target_score": 0.45405110716819763,
+        "score_at_rank_1": 0.7239910364151001,
+        "target_margin_vs_rank1": 0.26993992924690247,
+        "gallery_size_scored": 74381,
+        "model_text": "",
+        "export": "limn_dual_scope.toptee.image_only_empty_text.jsonl",
+        "target_did": "7:3416",
+        "label": "diagnostic — toptee scope, image_only_empty_text (not canonical)"
+       }
+      }
+     }
+    },
+    "7:3790": {
+     "qid": "7:3790",
+     "label": "diagnostic for ambiguous query 7:3790 (not canonical)",
+     "release": {
+      "index": 3789,
+      "query_txt": "Is grey and has a less whimsical graphic and is lighter.",
+      "reference_id": "7:33523",
+      "positive_ids": [
+       "7:42304"
+      ],
+      "loader_category": null,
+      "matched_subsets": [
+       "full",
+       "sf"
+      ]
+     },
+     "target_did": "7:42304",
+     "declared_target_did": null,
+     "target_gallery_id": "mbeir_images/fashioniq_images/B00E3WVAD2.jpg",
+     "target_position_in_gallery": [
+      70410
+     ],
+     "scopes": {
+      "shirt": {
+       "multimodal": {
+        "target_rank": 65,
+        "target_score": 0.5140696167945862,
+        "score_at_rank_1": 0.644286572933197,
+        "target_margin_vs_rank1": 0.13021695613861084,
+        "gallery_size_scored": 74381,
+        "model_text": "Is grey and has a less whimsical graphic and is lighter.",
+        "export": "limn_dual_scope.shirt.multimodal.jsonl",
+        "target_did": "7:42304",
+        "label": "diagnostic — shirt scope, multimodal (not canonical)"
+       },
+       "text_only_black_image": {
+        "target_rank": 6891,
+        "target_score": 0.21734005212783813,
+        "score_at_rank_1": 0.6010594964027405,
+        "target_margin_vs_rank1": 0.38371944427490234,
+        "gallery_size_scored": 74381,
+        "model_text": "Is grey and has a less whimsical graphic and is lighter.",
+        "export": "limn_dual_scope.shirt.text_only_black_image.jsonl",
+        "target_did": "7:42304",
+        "label": "diagnostic — shirt scope, text_only_black_image (not canonical)"
+       },
+       "image_only_empty_text": {
+        "target_rank": 2200,
+        "target_score": 0.3019900619983673,
+        "score_at_rank_1": 0.7860040068626404,
+        "target_margin_vs_rank1": 0.48401394486427307,
+        "gallery_size_scored": 74381,
+        "model_text": "",
+        "export": "limn_dual_scope.shirt.image_only_empty_text.jsonl",
+        "target_did": "7:42304",
+        "label": "diagnostic — shirt scope, image_only_empty_text (not canonical)"
+       }
+      },
+      "toptee": {
+       "multimodal": {
+        "target_rank": 43,
+        "target_score": 0.6190158128738403,
+        "score_at_rank_1": 0.7025628089904785,
+        "target_margin_vs_rank1": 0.08354699611663818,
+        "gallery_size_scored": 74381,
+        "model_text": "Is grey and has a less whimsical graphic and is lighter.",
+        "export": "limn_dual_scope.toptee.multimodal.jsonl",
+        "target_did": "7:42304",
+        "label": "diagnostic — toptee scope, multimodal (not canonical)"
+       },
+       "text_only_black_image": {
+        "target_rank": 4730,
+        "target_score": 0.27249062061309814,
+        "score_at_rank_1": 0.6055787205696106,
+        "target_margin_vs_rank1": 0.33308809995651245,
+        "gallery_size_scored": 74381,
+        "model_text": "Is grey and has a less whimsical graphic and is lighter.",
+        "export": "limn_dual_scope.toptee.text_only_black_image.jsonl",
+        "target_did": "7:42304",
+        "label": "diagnostic — toptee scope, text_only_black_image (not canonical)"
+       },
+       "image_only_empty_text": {
+        "target_rank": 4047,
+        "target_score": 0.29997509717941284,
+        "score_at_rank_1": 0.7201340794563293,
+        "target_margin_vs_rank1": 0.4201589822769165,
+        "gallery_size_scored": 74381,
+        "model_text": "",
+        "export": "limn_dual_scope.toptee.image_only_empty_text.jsonl",
+        "target_did": "7:42304",
+        "label": "diagnostic — toptee scope, image_only_empty_text (not canonical)"
+       }
+      }
+     }
+    }
+   },
+   "evidence_files": {
+    "summary": "/home/heheboiz/data/cir/workbench/docs/reviews/20261109-native15-composition-limn/limn_dual_scope.json",
+    "per_scope": [
+     "limn_dual_scope.shirt.multimodal.jsonl",
+     "limn_dual_scope.shirt.text_only_black_image.jsonl",
+     "limn_dual_scope.shirt.image_only_empty_text.jsonl",
+     "limn_dual_scope.toptee.multimodal.jsonl",
+     "limn_dual_scope.toptee.text_only_black_image.jsonl",
+     "limn_dual_scope.toptee.image_only_empty_text.jsonl"
+    ]
+   }
+  },
+  "/api/composition/diagnostics/limn-dual-scope/candidates?qid=7%3A3038&scope=toptee&condition=multimodal&depth=20": {
+   "qid": "7:3038",
+   "scope": "toptee",
+   "condition": "multimodal",
+   "label": "diagnostic — toptee scope, multimodal (not canonical)",
+   "identity": {
+    "qid": "7:3038",
+    "scope": "toptee",
+    "condition": "multimodal",
+    "standard": "limn-diagnostic-evidence/v2",
+    "manifest_digest": "9d1018524a89313da6abd98766c38403031c4505ae19aebe542fc0675e5827da"
+   },
+   "complete": true,
+   "defects": [],
+   "manifest": {
+    "standard": "limn-diagnostic-evidence/v2",
+    "digest": "9d1018524a89313da6abd98766c38403031c4505ae19aebe542fc0675e5827da",
+    "files": [
+     {
+      "name": "limn_dual_scope.json",
+      "sha256": "d1b4aadb6735b8b3c57e9fbfe234b1e12c15a13b977ace23500916af94473e3f",
+      "bytes": 29705
+     },
+     {
+      "name": "limn_dual_scope.shirt.multimodal.jsonl",
+      "sha256": "4e4e9abf679dc2c28d71c94d2428d84ca7e2848902b743153513c8d3c7f916bf",
+      "bytes": 41164
+     },
+     {
+      "name": "limn_dual_scope.shirt.text_only_black_image.jsonl",
+      "sha256": "0af306976e1fd5cab0be781102f0412d2b705bb145f6d5e676c4a038331df1d5",
+      "bytes": 41213
+     },
+     {
+      "name": "limn_dual_scope.shirt.image_only_empty_text.jsonl",
+      "sha256": "548dae274e33c544647c9036b79e60c14f634fc41b613f5a338e5a114a439542",
+      "bytes": 41097
+     },
+     {
+      "name": "limn_dual_scope.toptee.multimodal.jsonl",
+      "sha256": "2a5154805d46dc2aaef678a1cd825a85814ac9490550a51df99d62437431ef10",
+      "bytes": 41141
+     },
+     {
+      "name": "limn_dual_scope.toptee.text_only_black_image.jsonl",
+      "sha256": "d41145ccd5f657c0bfa30ee4f22e454c2d9cf22007f021b89b415b535a6b8dce",
+      "bytes": 41184
+     },
+     {
+      "name": "limn_dual_scope.toptee.image_only_empty_text.jsonl",
+      "sha256": "c125e17693e3b95d5255b53937bb0ef16b39b7d3c9b034371967809a79d05301",
+      "bytes": 41123
+     }
+    ],
+    "declared_root": "/home/heheboiz/data/cir/workbench/docs/reviews/20261109-native15-composition-limn"
+   },
+   "target_rank": 43,
+   "target_score": 0.5678249001502991,
+   "target_did": "7:3416",
+   "target_asset": "B004D8QCN4.jpg",
+   "target": {
+    "rank": 43,
+    "score": 0.5678249001502991,
+    "gallery_id": "mbeir_images/fashioniq_images/B004D8QCN4.jpg",
+    "gallery_position": 13614,
+    "in_window": false,
+    "delta_to_rank_1": 0.24971115589141846,
+    "in_stored_window": true,
+    "window_served": 20,
+    "window_stored": 100,
+    "image_url": "/api/images/toptee/B004D8QCN4.jpg",
+    "image_category": "toptee",
+    "image_stem": "B004D8QCN4"
+   },
+   "checkpoint_sha256": "79f663a14d89d455fdc3612b0b36d011c06d7957d1475a654755e1053a6cece2",
+   "gallery_size": 74381,
+   "model_text": "Is darker and has a different graphic and is darker.",
+   "depth_requested": 20,
+   "depth_served": 20,
+   "depth_stored": 100,
+   "depth_truncated": false,
+   "candidates": [
+    {
+     "rank": 1,
+     "gallery_position": 16809,
+     "gallery_id": "mbeir_images/fashioniq_images/B004TMGDME.jpg",
+     "image_path": "mbeir_images/fashioniq_images/B004TMGDME.jpg",
+     "image_stem": "B004TMGDME",
+     "image_url": "/api/images/toptee/B004TMGDME.jpg",
+     "image_category": "toptee",
+     "score": 0.8175360560417175,
+     "is_target": false
+    },
+    {
+     "rank": 2,
+     "gallery_position": 24772,
+     "gallery_id": "mbeir_images/fashioniq_images/B0065QRUPG.jpg",
+     "image_path": "mbeir_images/fashioniq_images/B0065QRUPG.jpg",
+     "image_stem": "B0065QRUPG",
+     "image_url": "/api/images/toptee/B0065QRUPG.jpg",
+     "image_category": "toptee",
+     "score": 0.6710162162780762,
+     "is_target": false
+    },
+    {
+     "rank": 3,
+     "gallery_position": 51081,
+     "gallery_id": "mbeir_images/fashioniq_images/B00ABBX8FW.jpg",
+     "image_path": "mbeir_images/fashioniq_images/B00ABBX8FW.jpg",
+     "image_stem": "B00ABBX8FW",
+     "image_url": "/api/images/toptee/B00ABBX8FW.jpg",
+     "image_category": "toptee",
+     "score": 0.6566938757896423,
+     "is_target": false
+    },
+    {
+     "rank": 4,
+     "gallery_position": 59245,
+     "gallery_id": "mbeir_images/fashioniq_images/B00BONT774.jpg",
+     "image_path": "mbeir_images/fashioniq_images/B00BONT774.jpg",
+     "image_stem": "B00BONT774",
+     "image_url": "/api/images/toptee/B00BONT774.jpg",
+     "image_category": "toptee",
+     "score": 0.6389215588569641,
+     "is_target": false
+    },
+    {
+     "rank": 5,
+     "gallery_position": 43526,
+     "gallery_id": "mbeir_images/fashioniq_images/B008Z398FC.jpg",
+     "image_path": "mbeir_images/fashioniq_images/B008Z398FC.jpg",
+     "image_stem": "B008Z398FC",
+     "image_url": "/api/images/toptee/B008Z398FC.jpg",
+     "image_category": "toptee",
+     "score": 0.6359667181968689,
+     "is_target": false
+    },
+    {
+     "rank": 6,
+     "gallery_position": 34115,
+     "gallery_id": "mbeir_images/fashioniq_images/B007W2RXPY.jpg",
+     "image_path": "mbeir_images/fashioniq_images/B007W2RXPY.jpg",
+     "image_stem": "B007W2RXPY",
+     "image_url": "/api/images/toptee/B007W2RXPY.jpg",
+     "image_category": "toptee",
+     "score": 0.6328297257423401,
+     "is_target": false
+    },
+    {
+     "rank": 7,
+     "gallery_position": 4858,
+     "gallery_id": "mbeir_images/fashioniq_images/B001RNO3DE.jpg",
+     "image_path": "mbeir_images/fashioniq_images/B001RNO3DE.jpg",
+     "image_stem": "B001RNO3DE",
+     "image_url": "/api/images/toptee/B001RNO3DE.jpg",
+     "image_category": "toptee",
+     "score": 0.6295500993728638,
+     "is_target": false
+    },
+    {
+     "rank": 8,
+     "gallery_position": 2631,
+     "gallery_id": "mbeir_images/fashioniq_images/B00100Z0FO.jpg",
+     "image_path": "mbeir_images/fashioniq_images/B00100Z0FO.jpg",
+     "image_stem": "B00100Z0FO",
+     "image_url": "/api/images/toptee/B00100Z0FO.jpg",
+     "image_category": "toptee",
+     "score": 0.621811032295227,
+     "is_target": false
+    },
+    {
+     "rank": 9,
+     "gallery_position": 18386,
+     "gallery_id": "mbeir_images/fashioniq_images/B0051HUJ3U.jpg",
+     "image_path": "mbeir_images/fashioniq_images/B0051HUJ3U.jpg",
+     "image_stem": "B0051HUJ3U",
+     "image_url": "/api/images/toptee/B0051HUJ3U.jpg",
+     "image_category": "toptee",
+     "score": 0.619566023349762,
+     "is_target": false
+    },
+    {
+     "rank": 10,
+     "gallery_position": 14282,
+     "gallery_id": "mbeir_images/fashioniq_images/B004HHO2DI.jpg",
+     "image_path": "mbeir_images/fashioniq_images/B004HHO2DI.jpg",
+     "image_stem": "B004HHO2DI",
+     "image_url": "/api/images/toptee/B004HHO2DI.jpg",
+     "image_category": "toptee",
+     "score": 0.6183962821960449,
+     "is_target": false
+    },
+    {
+     "rank": 11,
+     "gallery_position": 36258,
+     "gallery_id": "mbeir_images/fashioniq_images/B0083G1T9Y.jpg",
+     "image_path": "mbeir_images/fashioniq_images/B0083G1T9Y.jpg",
+     "image_stem": "B0083G1T9Y",
+     "image_url": "/api/images/toptee/B0083G1T9Y.jpg",
+     "image_category": "toptee",
+     "score": 0.6157445311546326,
+     "is_target": false
+    },
+    {
+     "rank": 12,
+     "gallery_position": 38757,
+     "gallery_id": "mbeir_images/fashioniq_images/B008BQNKW0.jpg",
+     "image_path": "mbeir_images/fashioniq_images/B008BQNKW0.jpg",
+     "image_stem": "B008BQNKW0",
+     "image_url": "/api/images/toptee/B008BQNKW0.jpg",
+     "image_category": "toptee",
+     "score": 0.6157445311546326,
+     "is_target": false
+    },
+    {
+     "rank": 13,
+     "gallery_position": 51080,
+     "gallery_id": "mbeir_images/fashioniq_images/B00ABBUFH6.jpg",
+     "image_path": "mbeir_images/fashioniq_images/B00ABBUFH6.jpg",
+     "image_stem": "B00ABBUFH6",
+     "image_url": "/api/images/toptee/B00ABBUFH6.jpg",
+     "image_category": "toptee",
+     "score": 0.6104382872581482,
+     "is_target": false
+    },
+    {
+     "rank": 14,
+     "gallery_position": 15614,
+     "gallery_id": "mbeir_images/fashioniq_images/B004NIZR44.jpg",
+     "image_path": "mbeir_images/fashioniq_images/B004NIZR44.jpg",
+     "image_stem": "B004NIZR44",
+     "image_url": "/api/images/toptee/B004NIZR44.jpg",
+     "image_category": "toptee",
+     "score": 0.6077905893325806,
+     "is_target": false
+    },
+    {
+     "rank": 15,
+     "gallery_position": 14125,
+     "gallery_id": "mbeir_images/fashioniq_images/B004GRZDGO.jpg",
+     "image_path": "mbeir_images/fashioniq_images/B004GRZDGO.jpg",
+     "image_stem": "B004GRZDGO",
+     "image_url": "/api/images/toptee/B004GRZDGO.jpg",
+     "image_category": "toptee",
+     "score": 0.6030682921409607,
+     "is_target": false
+    },
+    {
+     "rank": 16,
+     "gallery_position": 39446,
+     "gallery_id": "mbeir_images/fashioniq_images/B008EA4VL2.jpg",
+     "image_path": "mbeir_images/fashioniq_images/B008EA4VL2.jpg",
+     "image_stem": "B008EA4VL2",
+     "image_url": "/api/images/toptee/B008EA4VL2.jpg",
+     "image_category": "toptee",
+     "score": 0.6023697257041931,
+     "is_target": false
+    },
+    {
+     "rank": 17,
+     "gallery_position": 26914,
+     "gallery_id": "mbeir_images/fashioniq_images/B006SDZ0JY.jpg",
+     "image_path": "mbeir_images/fashioniq_images/B006SDZ0JY.jpg",
+     "image_stem": "B006SDZ0JY",
+     "image_url": "/api/images/toptee/B006SDZ0JY.jpg",
+     "image_category": "toptee",
+     "score": 0.6020621657371521,
+     "is_target": false
+    },
+    {
+     "rank": 18,
+     "gallery_position": 67148,
+     "gallery_id": "mbeir_images/fashioniq_images/B00D5PO0XU.jpg",
+     "image_path": "mbeir_images/fashioniq_images/B00D5PO0XU.jpg",
+     "image_stem": "B00D5PO0XU",
+     "image_url": "/api/images/toptee/B00D5PO0XU.jpg",
+     "image_category": "toptee",
+     "score": 0.5987582206726074,
+     "is_target": false
+    },
+    {
+     "rank": 19,
+     "gallery_position": 13022,
+     "gallery_id": "mbeir_images/fashioniq_images/B0048KUVYS.jpg",
+     "image_path": "mbeir_images/fashioniq_images/B0048KUVYS.jpg",
+     "image_stem": "B0048KUVYS",
+     "image_url": "/api/images/toptee/B0048KUVYS.jpg",
+     "image_category": "toptee",
+     "score": 0.5952625274658203,
+     "is_target": false
+    },
+    {
+     "rank": 20,
+     "gallery_position": 969,
+     "gallery_id": "mbeir_images/fashioniq_images/B000FL2RVE.jpg",
+     "image_path": "mbeir_images/fashioniq_images/B000FL2RVE.jpg",
+     "image_stem": "B000FL2RVE",
+     "image_url": "/api/images/toptee/B000FL2RVE.jpg",
+     "image_category": "toptee",
+     "score": 0.5938317775726318,
+     "is_target": false
+    }
+   ],
+   "staged_query_image_is_evaluator_input": false,
+   "canonical_status_note": "diagnostic ranking for a query the canonical evaluation leaves unscored; not a canonical per-query row"
+  }
+ }
+}

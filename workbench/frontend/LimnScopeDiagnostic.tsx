@@ -105,6 +105,10 @@ interface DiagnosticCandidates {
     gallery_id: string;
     gallery_position: number;
     in_window: boolean;
+    /** Whether the target was inside the FULL stored export, independent of the depth served. */
+    in_stored_window?: boolean;
+    window_served?: number;
+    window_stored?: number;
     delta_to_rank_1: number | null;
     image_url: string | null;
     image_category: string | null;
@@ -329,17 +333,22 @@ function CandidateProbe({ queries, scopes, conditions }: {
   const [qid, setQid] = useState(queries[0] ?? "");
   const [scope, setScope] = useState(scopes[0] ?? "");
   const [condition, setCondition] = useState(conditions[0] ?? "multimodal");
-  const key = `${qid}\u001f${scope}\u001f${condition}`;
-  // No `depth` parameter: the backend serves the window the export actually STORED and reports
-  // `depth_served`. A hardcoded 20 here requested a window that did not exist and hid the fact that
-  // the target sits at rank 6891.
+  // W-03: K is a real control here, not a constant. Serving the whole stored export and calling the
+  // rank-43 target "in window" is TRUE for 100 rows and would be misread as "in Top-10": the finding
+  // is that it is outside K=10 and K=20. Default 10 = the protocol's own outcome cutoff.
+  const [depth, setDepth] = useState(10);
+  const key = `${qid}\u001f${scope}\u001f${condition}\u001f${depth}`;
+  // `depth` is part of BOTH the request and its identity: two K values are two different windows,
+  // and a late answer for K=100 must not paint under a K=10 label. The backend validates depth
+  // rather than clamping it, and reports `depth_served` / `depth_stored` separately.
   const region = useRegion<DiagnosticCandidates>(
     "limn-diagnostic-candidates", key,
     useMemo(() => ((signal: AbortSignal) =>
       fetchJson<DiagnosticCandidates>(
         `/api/composition/diagnostics/limn-dual-scope/candidates?qid=${encodeURIComponent(qid)}`
-        + `&scope=${encodeURIComponent(scope)}&condition=${encodeURIComponent(condition)}`,
-        signal)), [qid, scope, condition]));
+        + `&scope=${encodeURIComponent(scope)}&condition=${encodeURIComponent(condition)}`
+        + `&depth=${depth}`,
+        signal)), [qid, scope, condition, depth]));
   // A response for another qid/scope/condition may never paint under these labels.
   const current = region.region.key === key;
   const data = current ? region.region.data : null;
@@ -362,6 +371,12 @@ function CandidateProbe({ queries, scopes, conditions }: {
             {conditions.map((value) => <option key={value} value={value}>{CONDITION_SHORT[value] ?? value}</option>)}
           </select>
         </label>
+        <label className="field">Top-K hiển thị
+          <select value={depth} onChange={(event) => setDepth(Number(event.target.value))}
+                  data-testid="limn-probe-depth" aria-label="Số ứng viên hiển thị">
+            {[10, 20, 50, 100].map((value) => <option key={value} value={value}>Top {value}</option>)}
+          </select>
+        </label>
       </div>
       {!current || region.region.status === "loading"
         ? <LoadingState label="Đang tải cửa sổ ứng viên đã xuất…" />
@@ -372,7 +387,11 @@ function CandidateProbe({ queries, scopes, conditions }: {
               <p className="hint" data-testid="limn-probe-note">
                 {data.label} · hạng đích <b>{fmtRank(data.target_rank)}</b> trên{" "}
                 {data.gallery_size == null ? "gallery không ghi" : `${fmtInt(data.gallery_size)} ảnh`} · cửa sổ đã
-                xuất <b>{fmtInt(data.depth_served)}</b>/{fmtInt(data.depth_stored)} (yêu cầu {fmtInt(data.depth_requested)})
+                xuất <b>{fmtInt(data.depth_served)}</b>/{fmtInt(data.depth_stored)} (yêu cầu {fmtInt(data.depth_requested)}) ·
+                đích <b>{data.target.in_window ? "nằm trong" : "ngoài"}</b> cửa sổ này
+                {data.target.in_stored_window !== data.target.in_window
+                  ? ` (trong toàn bộ ${fmtInt(data.depth_stored)} dòng đã lưu thì ${data.target.in_stored_window ? "có" : "không"})`
+                  : ""}
                 {data.depth_truncated ? " · bị cắt theo độ sâu đã lưu" : ""} · checkpoint{" "}
                 <code>{data.checkpoint_sha256?.slice(0, 16) ?? "không ghi"}…</code>
               </p>
@@ -415,7 +434,10 @@ function CandidateProbe({ queries, scopes, conditions }: {
                       Ảnh đích nằm trong cửa sổ {fmtInt(data.depth_served)} ứng viên đang hiện (hạng {fmtRank(data.target.rank)}).
                     </p>
                   : <p className="hint" data-testid="limn-probe-target-outside">
-                      Ảnh đích ở hạng {fmtRank(data.target.rank)}, <b>ngoài cửa sổ {fmtInt(data.depth_served)} ứng viên đang hiện</b>.
+                      Ảnh đích ở hạng {fmtRank(data.target.rank)} — <b>ngoài cửa sổ Top-{fmtInt(data.depth_served)}
+                      {" "}đang hiện</b> (export lưu {fmtInt(data.depth_stored)} dòng). Với K=10 hay K=20 thì
+                      ảnh đích <b>không</b> nằm trong cửa sổ; hạng {fmtRank(data.target.rank)} là hạng toàn gallery,
+                      không phải vị trí trong danh sách ứng viên.
                     </p>}
               </div>
 

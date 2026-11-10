@@ -1,0 +1,32 @@
+{
+ "issue": "W-05",
+ "slug": "w05_pe_histograms",
+ "url": "http://127.0.0.1:5173/?area=evaluation&view=composition&protocol=circus_fashioniq_release_v1&subset=validated",
+ "viewport": "1920x1080@1",
+ "png": "w05_pe_histograms.png",
+ "png_sha256": "5e5d91fb37041c76e6e04688aeb641e0fabee46e18f08bfca4411c7dfb5ae163",
+ "dom_text_sha256": "d35ef1f59b1b7cfca8ce6f9c01c57007732e6d18f2c039c36134b669ebdb48ca",
+ "dom_text_excerpt": "Đến nội dung chính\nCIR.\nResearch workbench\n◎\nTổng quan\n▤\nMô hình & lượt chạy\n◑\nĐánh giá\n11\n▦\nKhám phá mẫu\n△\nPhân tích lỗi\n11\n✎\nSổ nghiên cứu\nCIRCUS FashionIQ Release v1\nSubset Validated\n24 lượt khả dụng ở phạm vi này\nĐánh giá\n\nChỉ số đo được theo protocol và subset, kèm mẫu số\n\nCỡ giao diện\n17px\n19px\n⧉ Sao chép liên kết\nProtocol\nCIRCUS FashionIQ Release v1\nFashionIQ — Original Split (Full Gallery)\nSubset\nFull\nShortcut-Free (SF)\nValidated\nLượt chọn\n0\nCIRCUS composition\nBenchmark tổng hợp\nSố đo native (chưa xác minh)\nAGGREGATE-ONLY REAL EVALUATION — 2 certified research results (11 further aggregate runs uncertified); per-query candidate Top-K available on 5 of 11 composed runs in view\nẨn\nG1/G2 — cổng chẵn lẻ (từ artifact)\n\nChuẩn parity-relative/v1 · tính từ artifact đo, không đọc từ văn bản\n\nKHÔNG mô hình nào PASS (0/2)\n\nKhông mô hình nào đạt: 2/2 mô hình có subcheck bắt buộc FAIL. Đây là kết luận từ artifact, không phải lỗi tải.\n\nKết luận G1/G2 theo mô hình, kèm subcheck bắt buộc thất bại\nMÔ HÌNH\tKẾT LUẬN\tSUBCHECK FAIL\tCHIỀU ĐẠT\nencoder\tPARITY_MANDATORY_SUBCHECK_FAILED\t\n13 subcheck\n\t\ninput_parity ✓forward_parity ✗batch_parity ✗scoring_parity ✗metrics_parity ✓\n\nlimn\tPARITY_MANDATORY_SUBCHECK_FAILED\t\n3 subcheck\n\t\ninput_parity ✓forward_parity ✓batch_parity ✗scoring_parity ✓\n\n`passed` is True only when every mandatory dimension was measured and no mandatory subcheck failed. No artifact is PARITY_NOT_RUN; nothing measured held is PARITY_INCOMPLETE; a measured subcheck outside its tolerance is PARITY_MANDATORY_SUBCHECK_FAILED. Only PARITY_PASS claims a pass, and `standard` is the standard the artifacts declare.\n\nCIRCUS composition\n\nCIRCUS FashionIQ Release v1 · 11 lượt ở subset Validated\n\nFull\nShortcut-Free (SF)\nValidated\nComposition gap = 1 − max(mean nDCG_image, mean nDCG_text) / mean nDCG_multimodal. Giá trị là phân số không đơn vị, tính trên cohort có đủ ba hạng chính xác. Outcome phân loại ở @10 (cố định theo protocol) theo protocol release — không đổi bằng Top-K.\nChỉ số composition theo lượt\n\t\nMÔ HÌNH / CHECKPOINT\n↕\n\tNGUỒN / TRANSFER\tTRẠNG THÁI\t\nMM NDCG [0,1]\n▼\n\t\nMM R@10 %\n↕\n\tTEXT NDCG\tIMAGE NDCG\t\nGAP\n↕\n\t\nĐÃ CHẤM\n↕\n\tCHI TIẾT\n\ttme\nfashioniq_0\n\ttrained on FashionIQ\tCOMPLETED\t0.3110\t34.0%\t0.1368\t0.1102\t+0.560\t586 / 586\n100.0%\n\t\n▸\nChi tiết\n\tconesep\nfiq_n02\n\ttrained on FashionIQ\tCOMPLETED\t0.3105\t34.5%\t0.1310\t0.1086\t+0.578\t586 / 586\n100.0%\n\t\n▸\nChi tiết\n\thabit\nfiq_n02\n\ttrained on FashionIQ\tCOMPLETED\t0.3090\t34.1%\t0.1299\t0.1118\t+0.580\t586 / 586\n100.0%\n\t\n▸\nChi tiết\n\tencoder\nfashioniq\n\ttrained on FashionIQ\tCOMPLETED\t0.2965\t34.6%\t0.1161\t0.1078\t+0.608\t586 / 586\n100.0%\n\t\n▸\nChi tiết\n\tencoder\nfashioniq\n\ttrained on FashionIQ\tCOMPLETED\t0.2962\t34.5%\t0.1159\t0.1078\t+0.609\t586 / 586\n100.0%\n\t\n▸\nChi tiết\n\tintent\nfiq_n02\n\ttrained on FashionIQ\tCOMPLETED\t0.2938\t33.8%\t0.1311\t0.1092\t+0.554\t586 / 586\n100.0%\n\t\n▸\nChi tiết\n\tlimn\nbase_iter0_all_categories\n\ttrained on FashionIQ\tPARTIAL\t0.2862\t30.3%\t0.1022\t0.0973\t+0.643\t581 / 586\n99.1%\n\t\n▸\nChi tiết\n\tlimn\nbase_iter0_all_categories\n\ttrained on FashionIQ\tDERIVED_COMPLETE\t0.2849\t30.0%\t0.1022\t0.0972\t+0.641\t586 / 586\n100.0%\n\t\n▸\nChi tiết\n\thint\nfashioniq\n\ttrained on FashionIQ\tCOMPLETED\t0.2825\t29.4%\t0.1192\t0.1107\t+0.578\t586 / 586\n100.0%\n\t\n▸\nChi tiết\n\tptha_mtst\ncirr_transfer\n\tTRANSFER · CIRR→FashionIQ transfer\tCOMPLETED\t0.1877\t13.0%\t0.1166\t0.0952\t+0.379\t586 / 586\n100.0%\n\t\n▸\nChi tiết\n\thabit\nfiq_n02\n\ttrained on FashionIQ\tFAILED\t—\t—\t—\t—\tunavailable\t0 / 586\n0.0%\n\t\n▸\nChi tiết\n1 lượt không đo được gì\nhabit: RuntimeError: execution environment not verified [BLOCKED/PYTHON_VERSION_MISMATCH]: WORKBENCH_HABIT_PYTHON=/home/heheboiz/data/cir/workbench/envs/airknow-adapted/bin/python (expected Python 3.8.10, found 3.11.15)\nXem lý do trong danh sách lượt\n\n1 lượt là transfer (ptha_mtst: TRANSFER · CIRR→FashionIQ transfer). Chúng không phải dòng paper của FashionIQ và không được so trực tiếp với bảng paper.",
+ "console": [],
+ "api": {
+  "/api/composition/capabilities?subset=validated": {
+   "run_count": 11,
+   "capability_counts": {
+    "aggregate_metrics": 10,
+    "per_query_target_ranks": 11,
+    "candidate_topk": 5,
+    "image_availability": 11
+   },
+   "artifact_count": 11,
+   "measured_artifact_count": 11,
+   "unique_measurement_count": 11,
+   "undetermined_artifact_count": 6,
+   "confidence": "partial",
+   "image_availability_is_sample": true
+  },
+  "/api/parity-gate": {
+   "http_status": 404,
+   "body": "{\"detail\":\"Not Found\"}"
+  }
+ }
+}

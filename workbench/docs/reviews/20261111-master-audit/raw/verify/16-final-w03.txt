@@ -1,0 +1,7 @@
+ depth  served  stored  trank  in_window  in_stored  in_cands
+    10      10     100     43      False       True     False
+    20      20     100     43      False       True     False
+    43      43     100     43       True       True      True
+   100     100     100     43       True       True      True
+
+W-03: PASS

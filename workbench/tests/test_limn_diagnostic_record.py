@@ -115,9 +115,14 @@ def _payload(*, target_did_leak: bool = False, mismatch_checkpoint: bool = False
 
 
 def _root(tmp_path: Path, payload: dict | None, *, target_flags: dict | None = None,
-          duplicates: bool = False, scores_descending: bool = True, depth: int = 100,
+          duplicates: bool = False, scores_descending: bool = True, depth: int | None = None,
           export_patch: dict | None = None) -> Path:
-    """The evidence directory at the REAL repo-relative location, under a temp repo root."""
+    """The evidence directory at the REAL repo-relative location, under a temp repo root.
+
+    ``depth`` defaults to the number of rows the fixture actually stores: a fixture that declares a
+    full window while holding a short one is itself the truncation defect this reader now reports,
+    so the positive cases must not accidentally be defect cases.
+    """
     root = tmp_path.joinpath(*limn_diagnostic.EVIDENCE_RELATIVE)
     root.mkdir(parents=True)
     if payload is not None:
@@ -148,7 +153,7 @@ def _root(tmp_path: Path, payload: dict | None, *, target_flags: dict | None = N
                     "gallery_size": 74381,
                     "target_rank": rank,
                     "target_score": 0.5,
-                    "depth": depth,
+                    "depth": len(candidates) if depth is None else depth,
                     "candidates": candidates,
                 }
                 # A caller that means to contradict the summary edits the export row, so the row is
@@ -415,3 +420,30 @@ def test_shipped_evidence_reconciles_if_present() -> None:
                 assert window["target"]["gallery_id"]
                 assert reading["target_did"], f"{qid}/{scope}/{condition} has no target id"
     assert result["manifest"]["digest"]
+
+
+# ---------------------------------------------------------- M-03: truncation and duplicate rows
+
+def test_a_window_shorter_than_its_declared_depth_is_a_defect(tmp_path: Path) -> None:
+    """The producer's own failure mode: declare depth=100, store fewer rows.
+
+    Measured on HEAD before this test existed: exporting `candidates[:1]` from a row that still
+    declared `depth=100` left the record COMPLETE with zero defects, so a truncated export read as
+    a complete window.
+    """
+    root = _root(tmp_path, _payload(), depth=100)
+    result = load_diagnostic(_config(root))
+    assert result["complete"] is False
+    assert any(defect["code"] == "export_depth_truncated" for defect in result["defects"])
+
+
+def test_a_duplicate_export_row_for_one_qid_is_a_defect(tmp_path: Path) -> None:
+    """Two rows for one qid are two claims about one query; the reader took the first silently."""
+    root = _root(tmp_path, _payload())
+    path = root / "limn_dual_scope.shirt.multimodal.jsonl"
+    rows = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    clone = dict(rows[0], target_rank=rows[0]["target_rank"] + 1000)
+    path.write_text("\n".join(json.dumps(row) for row in rows + [clone]) + "\n", encoding="utf-8")
+    result = load_diagnostic(_config(root))
+    assert result["complete"] is False
+    assert any(defect["code"] == "export_duplicate_qid" for defect in result["defects"])

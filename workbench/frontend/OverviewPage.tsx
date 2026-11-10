@@ -1,7 +1,7 @@
 import type { WorkbenchData, RunCatalogEntry } from "./data";
 import { protocolLabel } from "./data";
 import { Badge, Card, EmptyState, ErrorState, KeyValue, LoadingState, Progress, Detail } from "./ui";
-import { fmtDateStamp, fmtDenominator, fmtFractionPercent, fmtGap, fmtInt, fmtNdcg, fmtPercentValue, fmtRank } from "./format";
+import { fmtDateStamp, fmtDenominator, fmtFractionPercent, fmtGap, fmtInt, fmtNdcg, fmtRecall, fmtRank } from "./format";
 import { compositionGap, scoredCounts } from "./catalog";
 import { protocolHasSubsets, scopeCounts } from "./scope";
 import type { Location } from "./routes";
@@ -122,14 +122,24 @@ export function OverviewPage({ data, location, onOpenRun, onGoto }: {
                       <KeyValue rows={nativeRows.slice(0, 8).map((row): [string, React.ReactNode] => [
                         String(row.model_id ?? row.source.path.split("/").pop() ?? ""),
                         <span key={row.measurement_id}>
-                          R@10 {fmtPercentValue(row.metrics?.r10 ?? null, 2)} · R@50 {fmtPercentValue(row.metrics?.r50 ?? null, 2)}
+                          {/* The unit travels with the row (W-01): a fraction and a percent of the
+                              same measurement must not print as two different scores. */}
+                          R@10 {fmtRecall(row.metrics?.r10 ?? null, row.unit, 2)} · R@50 {fmtRecall(row.metrics?.r50 ?? null, row.unit, 2)}
+                          {row.mapping_status && (
+                            <span className="cell-sub" data-testid={`native-mapping-${row.measurement_id}`}>
+                              mapping: {row.mapping_status}
+                            </span>
+                          )}
                           <span className="cell-sub mono">{row.source.path.split("/").pop()}</span>
                         </span>,
                       ])} />
                       <p className="hint" style={{ marginTop: 10 }}>
                         Nguồn: <code>/api/native-measurements</code> — {nativeRegion.data?.counts.with_metrics ?? 0} file có số,
                         {" "}{nativeRegion.data?.counts.signposted_blockers ?? 0} file chỉ ghi blocker,
-                        {" "}{nativeRegion.data?.counts.verified ?? 0} đã xác minh. {nativeRegion.data?.note ?? ""}
+                        {" "}{nativeRegion.data?.counts.verified ?? 0} đã xác minh.
+                        {" "}<b data-testid="native-unit-counts">{nativeRegion.data?.counts.unit_undeclared ?? 0}</b> dòng
+                        không khai đơn vị, {nativeRegion.data?.counts.unit_declared ?? 0} khai rõ,
+                        {" "}{nativeRegion.data?.counts.unit_inferred ?? 0} suy theo độ lớn. {nativeRegion.data?.note ?? ""}
                       </p>
                     </>
                   ))
@@ -243,7 +253,7 @@ export function OverviewPage({ data, location, onOpenRun, onGoto }: {
                             </Badge>
                           </td>
                           <td className="num">{run.is_failed ? "—" : fmtNdcg(run.metrics?.ndcg_multimodal)}</td>
-                          <td className="num">{run.is_failed ? "—" : fmtPercentValue(run.metrics?.recall_at_10_multimodal)}</td>
+                          <td className="num">{run.is_failed ? "—" : fmtRecall(run.metrics?.recall_at_10_multimodal, "percent", 1)}</td>
                           <td className="num">
                             {gap.state === "available"
                               ? <span title={gap.formula}>{fmtGap(gap.value)}</span>

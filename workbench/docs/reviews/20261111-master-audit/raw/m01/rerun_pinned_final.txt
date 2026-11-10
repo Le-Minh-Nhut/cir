@@ -1,0 +1,27 @@
+== ENCODER pinned-relation run ce89a9a27c4cceadeaaf30b0
+
+full.json run=ce89a9a27c4cceadeaaf30b0 status=COMPLETED reused=0 cache=full
+   multimodal: scored=6003 coverage=1.000000 R@10=31.0178 R@50=49.5586 nDCG=0.295680 MRR=0.169458
+   text_only: scored=6003 coverage=1.000000 R@10=8.5124 R@50=18.0243 nDCG=0.155412 MRR=0.045982
+   image_only: scored=6003 coverage=1.000000 R@10=2.6487 R@50=7.5129 nDCG=0.107327 MRR=0.011066
+   composition_gap_ndcg=0.474394 gap_cohort_count=6003
+
+sf.json run=ce89a9a27c4cceadeaaf30b0 status=COMPLETED reused=0 cache=full
+   multimodal: scored=4069 coverage=1.000000 R@10=18.7270 R@50=36.3234 nDCG=0.218785 MRR=0.091253
+   text_only: scored=4069 coverage=1.000000 R@10=1.0322 R@50=5.5296 nDCG=0.107574 MRR=0.006701
+   image_only: scored=4069 coverage=1.000000 R@10=0.5407 R@50=4.1779 nDCG=0.097657 MRR=0.003860
+   composition_gap_ndcg=0.508313 gap_cohort_count=4069
+
+validated.json run=ce89a9a27c4cceadeaaf30b0 status=COMPLETED reused=0 cache=full
+   multimodal: scored=586 coverage=1.000000 R@10=34.4710 R@50=55.2901 nDCG=0.296207 MRR=0.161541
+   text_only: scored=586 coverage=1.000000 R@10=1.8771 R@50=7.6792 nDCG=0.115890 MRR=0.008758
+   image_only: scored=586 coverage=1.000000 R@10=1.0239 R@50=6.9966 nDCG=0.107763 MRR=0.006141
+   composition_gap_ndcg=0.608755 gap_cohort_count=586
+
+== persisted construction state (not in the checkpoint)
+relation-seed20261111.npy.json shape=[2, 512] seed=20261111 sha256=20db0c27c979e9a0938c71af5142458dfa2070468d0ad3fcb6f24134c2f9ce92 in_state_dict=False
+
+== superseded runs, bytes untouched
+5dee7425dd46c5f154808aac mm_R@10=31.0345 bytes=106781
+6a528e877c328772e2c7bb28 mm_R@10=31.0178 bytes=10319
+reason: relation drawn from an unpinned generator

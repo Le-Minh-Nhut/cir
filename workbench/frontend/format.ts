@@ -40,6 +40,22 @@ export function fmtFractionPercent(value: number | null | undefined, digits = 1)
   return `${(value * 100).toFixed(digits)}%`;
 }
 
+/** Recall@K on the scale the SERVED ARTIFACT states.
+ *
+ *  W-01: `0.2793` (a fraction) and `27.93` (a percent) are the same measurement, and printing both
+ *  with `fmtPercentValue` showed them as 0.28 % and 27.93 % — two different scores for one number.
+ *  The unit is a property of the row, not of the caller's guess, so it is a required argument: a
+ *  `null` unit renders the raw value with an explicit "đơn vị không ghi" marker instead of a `%`
+ *  the artifact never promised.
+ */
+export function fmtRecall(value: number | null | undefined, unit: "fraction" | "percent" | null | undefined,
+                          digits = 2): string {
+  if (value === null || value === undefined || !Number.isFinite(value)) return DASH;
+  if (unit === "fraction") return `${(value * 100).toFixed(digits)}%`;
+  if (unit === "percent") return `${value.toFixed(digits)}%`;
+  return `${value.toFixed(digits)} (đơn vị không ghi)`;
+}
+
 /** The composition gap: dimensionless, sign preserved, 3 decimals. */
 export function fmtGap(value: number | null | undefined): string {
   if (value === null || value === undefined || !Number.isFinite(value)) return DASH;

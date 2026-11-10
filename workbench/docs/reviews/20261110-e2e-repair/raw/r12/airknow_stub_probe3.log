@@ -1,0 +1,18 @@
+/home/heheboiz/data/cir/workbench/envs/ctl312h/lib/python3.12/site-packages/torch/jit/_script.py:1491: FutureWarning: `torch.jit.script` is deprecated. Please switch to `torch.compile` or `torch.export`.
+  warnings.warn(
+/home/heheboiz/data/cir/workbench/envs/ctl312h/lib/python3.12/site-packages/torch/jit/_script.py:1491: FutureWarning: `torch.jit.script` is deprecated. Please switch to `torch.compile` or `torch.export`.
+  warnings.warn(
+/home/heheboiz/data/cir/workbench/envs/ctl312h/lib/python3.12/site-packages/torch/jit/_script.py:1643: FutureWarning: `torch.jit.interface` is deprecated. Please use `torch.compile` instead.
+  warnings.warn(
+/home/heheboiz/data/cir/workbench/envs/ctl312h/lib/python3.12/site-packages/transformers/utils/generic.py:441: FutureWarning: `torch.utils._pytree._register_pytree_node` is deprecated. Please use `torch.utils._pytree.register_pytree_node` instead.
+  _torch_pytree._register_pytree_node(
+/home/heheboiz/data/cir/workbench/envs/ctl312h/lib/python3.12/site-packages/transformers/utils/generic.py:309: FutureWarning: `torch.utils._pytree._register_pytree_node` is deprecated. Please use `torch.utils._pytree.register_pytree_node` instead.
+  _torch_pytree._register_pytree_node(
+MISSING sklearn | No module named 'sklearn'
+MISSING sklearn.cluster | No module named 'sklearn.cluster'; 'sklearn' is not a package
+OTHER_FAIL ImportError cannot import name 'KMeans' from 'sklearn.cluster' (unknown location)
+Traceback (most recent call last):
+  File "<stdin>", line 14, in <module>
+  File "/home/heheboiz/data/cir/workbench/third_party/AirKnow/lavis/models/blip2_models/blip2_cir.py", line 19, in <module>
+    from sklearn.cluster import KMeans
+ImportError: cannot import name 'KMeans' from 'sklearn.cluster' (unknown location)

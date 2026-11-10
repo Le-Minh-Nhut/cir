@@ -1,0 +1,26 @@
+.F..                                                                     [100%]
+=================================== FAILURES ===================================
+________________ test_a_complete_subset_is_not_labelled_partial ________________
+
+    def test_a_complete_subset_is_not_labelled_partial() -> None:
+        for subset, (run_id, expected_status, scored, membership) in DERIVED.items():
+            summary = _summary(subset)
+            assert summary["run_id"] == run_id
+>           assert summary["execution_status"] == expected_status, (
+                f"{subset} is labelled {summary['execution_status']}; its own coverage is "
+                f"{summary['metrics']['multimodal']['coverage']}")
+E           AssertionError: sf is labelled PARTIAL; its own coverage is 0.9997542393708528
+E           assert 'PARTIAL' == 'DERIVED_PARTIAL'
+E             
+E             - DERIVED_PARTIAL
+E             + PARTIAL
+
+workbench/tests/test_derived_subset_status.py:63: AssertionError
+=========================== short test summary info ============================
+FAILED workbench/tests/test_derived_subset_status.py::test_a_complete_subset_is_not_labelled_partial - AssertionError: sf is labelled PARTIAL; its own coverage is 0.9997542393708528
+assert 'PARTIAL' == 'DERIVED_PARTIAL'
+  
+  - DERIVED_PARTIAL
+  + PARTIAL
+1 failed, 3 passed in 0.62s
+exit=1

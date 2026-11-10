@@ -1,0 +1,36 @@
+{
+ "parent_run_id": "9e4918a6b5c243412cbc58c9",
+ "parent_bytes_touched": false,
+ "published": {
+  "sf": {
+   "derived_run_id": "6a96c5c199526b61c1470b0e",
+   "summary_path": "workbench/artifacts/composition/summary/limn_base_iter0_all_categories_6a96c5c199526b61c1470b0e/sf.json",
+   "metrics_denominator": 4068,
+   "coverage": 0.9997542393708528,
+   "multimodal_recall_at_10": 18.3874139626352,
+   "membership_count": 4069,
+   "membership_sha256": "45e19ff14165e4de1ff57fd4dd9986cda55ac9f93552651b7eda39abf22d00e8",
+   "parent_run_id": "9e4918a6b5c243412cbc58c9",
+   "per_query_rows": {
+    "image_only_empty_text": 4069,
+    "multimodal": 4069,
+    "text_only_black_image": 4069
+   }
+  },
+  "validated": {
+   "derived_run_id": "aee2e8d39214d877a84d7c08",
+   "summary_path": "workbench/artifacts/composition/summary/limn_base_iter0_all_categories_aee2e8d39214d877a84d7c08/validated.json",
+   "metrics_denominator": 586,
+   "coverage": 1.0,
+   "multimodal_recall_at_10": 30.034129692832764,
+   "membership_count": 586,
+   "membership_sha256": "52e0cf3138a4eb9e98a52c524abcaec14bc81c14d3fb378df84eb7eaad684d66",
+   "parent_run_id": "9e4918a6b5c243412cbc58c9",
+   "per_query_rows": {
+    "image_only_empty_text": 586,
+    "multimodal": 586,
+    "text_only_black_image": 586
+   }
+  }
+ }
+}

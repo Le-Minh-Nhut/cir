@@ -1,0 +1,484 @@
+{
+  "generated_at": "2026-11-09",
+  "served_by": {
+    "frontend": "http://127.0.0.1:5173",
+    "api": "http://127.0.0.1:8000",
+    "server_pid_start": "Mon Nov  9 20:45:11 2026"
+  },
+  "bundle": {
+    "served_index_html_assets": [
+      "assets/index-KjvBRIjz.js",
+      "assets/index-DAZAlgSy.css"
+    ],
+    "served_index_html_md5": "5212135a8aa553f4c558dbbf602583d2",
+    "dist_index_html_md5": "5212135a8aa553f4c558dbbf602583d2",
+    "dist_assets_present": [
+      "index-DAZAlgSy.css",
+      "index-KjvBRIjz.js"
+    ],
+    "served_js_md5": "e076fe9f59c28e4fca141b6ab7338c85",
+    "dist_js_md5": "e076fe9f59c28e4fca141b6ab7338c85",
+    "match": true,
+    "dist_newer_than_newest_source": true,
+    "bundle_contains_endpoint": "limn-dual-scope",
+    "bundle_contains_title": "Ambiguous category — diagnostic comparison",
+    "css_rule_present": "[data-testid=\"limn-diagnostic-table\"]{min-width:560px}"
+  },
+  "endpoints": {
+    "GET /api/composition/diagnostics/limn-dual-scope": {
+      "status": 200,
+      "status_field": "DIAGNOSTIC_COMPLETE",
+      "available": true,
+      "canonical_status": {
+        "status": "PARTIAL",
+        "scored_count": 6001,
+        "unscored_count": 2,
+        "unscored_qids": [
+          "7:3038",
+          "7:3790"
+        ],
+        "note": "Both diagnostic scopes run; the canonical metrics stay 6001/6003 and both queries stay unscored there. No diagnostic number is folded into the canonical evaluator, no scope is chosen as 'the' answer."
+      },
+      "scopes": [
+        "shirt",
+        "toptee"
+      ],
+      "conditions": [
+        "multimodal",
+        "text_only_black_image",
+        "image_only_empty_text"
+      ],
+      "evidence_files": {
+        "summary": "/home/heheboiz/data/cir/workbench/docs/reviews/20261109-native15-composition-limn/limn_dual_scope.json",
+        "per_scope": [
+          "limn_dual_scope.shirt.image_only_empty_text.jsonl",
+          "limn_dual_scope.shirt.multimodal.jsonl",
+          "limn_dual_scope.shirt.text_only_black_image.jsonl",
+          "limn_dual_scope.toptee.image_only_empty_text.jsonl",
+          "limn_dual_scope.toptee.multimodal.jsonl",
+          "limn_dual_scope.toptee.text_only_black_image.jsonl"
+        ]
+      }
+    },
+    "GET /api/composition/diagnostics/limn-dual-scope/candidates": {
+      "status": 200,
+      "all_12_combinations_status_200": true,
+      "all_12_ranks_equal_summary": true
+    },
+    "GET /api/models": {
+      "status": 200,
+      "count": 17
+    },
+    "GET /api/benchmark-runs (readiness)": {
+      "status": 200
+    }
+  },
+  "evidence_12_ranks": {
+    "7:3038|shirt|multimodal": {
+      "target_rank": 3,
+      "target_score": 0.5703769326210022,
+      "margin_vs_rank1": 0.2443973422050476,
+      "gallery_size_scored": 74381
+    },
+    "7:3038|shirt|text_only_black_image": {
+      "target_rank": 88,
+      "target_score": 0.4220863878726959,
+      "margin_vs_rank1": 0.31839075684547424,
+      "gallery_size_scored": 74381
+    },
+    "7:3038|shirt|image_only_empty_text": {
+      "target_rank": 152,
+      "target_score": 0.36779189109802246,
+      "margin_vs_rank1": 0.37072229385375977,
+      "gallery_size_scored": 74381
+    },
+    "7:3038|toptee|multimodal": {
+      "target_rank": 43,
+      "target_score": 0.5678249001502991,
+      "margin_vs_rank1": 0.24971115589141846,
+      "gallery_size_scored": 74381
+    },
+    "7:3038|toptee|text_only_black_image": {
+      "target_rank": 389,
+      "target_score": 0.3436165750026703,
+      "margin_vs_rank1": 0.3460889160633087,
+      "gallery_size_scored": 74381
+    },
+    "7:3038|toptee|image_only_empty_text": {
+      "target_rank": 67,
+      "target_score": 0.45405110716819763,
+      "margin_vs_rank1": 0.26993992924690247,
+      "gallery_size_scored": 74381
+    },
+    "7:3790|shirt|multimodal": {
+      "target_rank": 65,
+      "target_score": 0.5140696167945862,
+      "margin_vs_rank1": 0.13021695613861084,
+      "gallery_size_scored": 74381
+    },
+    "7:3790|shirt|text_only_black_image": {
+      "target_rank": 6891,
+      "target_score": 0.21734005212783813,
+      "margin_vs_rank1": 0.38371944427490234,
+      "gallery_size_scored": 74381
+    },
+    "7:3790|shirt|image_only_empty_text": {
+      "target_rank": 2200,
+      "target_score": 0.3019900619983673,
+      "margin_vs_rank1": 0.48401394486427307,
+      "gallery_size_scored": 74381
+    },
+    "7:3790|toptee|multimodal": {
+      "target_rank": 43,
+      "target_score": 0.6190158128738403,
+      "margin_vs_rank1": 0.08354699611663818,
+      "gallery_size_scored": 74381
+    },
+    "7:3790|toptee|text_only_black_image": {
+      "target_rank": 4730,
+      "target_score": 0.27249062061309814,
+      "margin_vs_rank1": 0.33308809995651245,
+      "gallery_size_scored": 74381
+    },
+    "7:3790|toptee|image_only_empty_text": {
+      "target_rank": 4047,
+      "target_score": 0.29997509717941284,
+      "margin_vs_rank1": 0.4201589822769165,
+      "gallery_size_scored": 74381
+    }
+  },
+  "viewports": {
+    "1920x1080": {
+      "body_scrollWidth": 1920,
+      "documentElement_scrollWidth": 1920,
+      "window_innerWidth": 1920,
+      "no_horizontal_overflow": true,
+      "diagnostic_row_count": 6,
+      "diagnostic_card_count": 1,
+      "table_wrap_scrollWidth": 1548,
+      "table_wrap_clientWidth": 1548,
+      "table_scrolls_inside_wrap": false,
+      "page_errors": [],
+      "http_ge_400": [],
+      "screenshots": [
+        "verify-1920x1080.png",
+        "verify-card-1920x1080.png",
+        "verify-table-1920x1080.png"
+      ],
+      "rows_text": [
+        [
+          "7:3038 loader category: không xác định",
+          "MM",
+          "#3 score 0.5704 trên 74,381 ảnh cách #1 0.2444",
+          "#43 score 0.5678 trên 74,381 ảnh cách #1 0.2497"
+        ],
+        [
+          "Text-only",
+          "#88 score 0.4221 trên 74,381 ảnh cách #1 0.3184",
+          "#389 score 0.3436 trên 74,381 ảnh cách #1 0.3461"
+        ],
+        [
+          "Image-only",
+          "#152 score 0.3678 trên 74,381 ảnh cách #1 0.3707",
+          "#67 score 0.4541 trên 74,381 ảnh cách #1 0.2699"
+        ],
+        [
+          "7:3790 loader category: không xác định",
+          "MM",
+          "#65 score 0.5141 trên 74,381 ảnh cách #1 0.1302",
+          "#43 score 0.6190 trên 74,381 ảnh cách #1 0.0835"
+        ],
+        [
+          "Text-only",
+          "#6,891 score 0.2173 trên 74,381 ảnh cách #1 0.3837",
+          "#4,730 score 0.2725 trên 74,381 ảnh cách #1 0.3331"
+        ],
+        [
+          "Image-only",
+          "#2,200 score 0.3020 trên 74,381 ảnh cách #1 0.4840",
+          "#4,047 score 0.3000 trên 74,381 ảnh cách #1 0.4202"
+        ]
+      ]
+    },
+    "2560x1440": {
+      "body_scrollWidth": 2560,
+      "documentElement_scrollWidth": 2560,
+      "window_innerWidth": 2560,
+      "no_horizontal_overflow": true,
+      "diagnostic_row_count": 6,
+      "diagnostic_card_count": 1,
+      "table_wrap_scrollWidth": 2172,
+      "table_wrap_clientWidth": 2172,
+      "table_scrolls_inside_wrap": false,
+      "page_errors": [],
+      "http_ge_400": [],
+      "screenshots": [
+        "verify-2560x1440.png",
+        "verify-card-2560x1440.png",
+        "verify-table-2560x1440.png"
+      ],
+      "rows_text": [
+        [
+          "7:3038 loader category: không xác định",
+          "MM",
+          "#3 score 0.5704 trên 74,381 ảnh cách #1 0.2444",
+          "#43 score 0.5678 trên 74,381 ảnh cách #1 0.2497"
+        ],
+        [
+          "Text-only",
+          "#88 score 0.4221 trên 74,381 ảnh cách #1 0.3184",
+          "#389 score 0.3436 trên 74,381 ảnh cách #1 0.3461"
+        ],
+        [
+          "Image-only",
+          "#152 score 0.3678 trên 74,381 ảnh cách #1 0.3707",
+          "#67 score 0.4541 trên 74,381 ảnh cách #1 0.2699"
+        ],
+        [
+          "7:3790 loader category: không xác định",
+          "MM",
+          "#65 score 0.5141 trên 74,381 ảnh cách #1 0.1302",
+          "#43 score 0.6190 trên 74,381 ảnh cách #1 0.0835"
+        ],
+        [
+          "Text-only",
+          "#6,891 score 0.2173 trên 74,381 ảnh cách #1 0.3837",
+          "#4,730 score 0.2725 trên 74,381 ảnh cách #1 0.3331"
+        ],
+        [
+          "Image-only",
+          "#2,200 score 0.3020 trên 74,381 ảnh cách #1 0.4840",
+          "#4,047 score 0.3000 trên 74,381 ảnh cách #1 0.4202"
+        ]
+      ]
+    },
+    "390x844": {
+      "body_scrollWidth": 390,
+      "documentElement_scrollWidth": 390,
+      "window_innerWidth": 390,
+      "no_horizontal_overflow": true,
+      "diagnostic_row_count": 6,
+      "diagnostic_card_count": 1,
+      "table_wrap_scrollWidth": 560,
+      "table_wrap_clientWidth": 326,
+      "table_scrolls_inside_wrap": true,
+      "page_errors": [],
+      "http_ge_400": [],
+      "screenshots": [
+        "verify-390x844.png",
+        "verify-card-390x844.png",
+        "verify-table-390x844.png"
+      ],
+      "rows_text": [
+        [
+          "7:3038 loader category: không xác định",
+          "MM",
+          "#3 score 0.5704 trên 74,381 ảnh cách #1 0.2444",
+          "#43 score 0.5678 trên 74,381 ảnh cách #1 0.2497"
+        ],
+        [
+          "Text-only",
+          "#88 score 0.4221 trên 74,381 ảnh cách #1 0.3184",
+          "#389 score 0.3436 trên 74,381 ảnh cách #1 0.3461"
+        ],
+        [
+          "Image-only",
+          "#152 score 0.3678 trên 74,381 ảnh cách #1 0.3707",
+          "#67 score 0.4541 trên 74,381 ảnh cách #1 0.2699"
+        ],
+        [
+          "7:3790 loader category: không xác định",
+          "MM",
+          "#65 score 0.5141 trên 74,381 ảnh cách #1 0.1302",
+          "#43 score 0.6190 trên 74,381 ảnh cách #1 0.0835"
+        ],
+        [
+          "Text-only",
+          "#6,891 score 0.2173 trên 74,381 ảnh cách #1 0.3837",
+          "#4,730 score 0.2725 trên 74,381 ảnh cách #1 0.3331"
+        ],
+        [
+          "Image-only",
+          "#2,200 score 0.3020 trên 74,381 ảnh cách #1 0.4840",
+          "#4,047 score 0.3000 trên 74,381 ảnh cách #1 0.4202"
+        ]
+      ]
+    }
+  },
+  "fail_closed_guard": {
+    "module": "workbench/backend/limn_diagnostic.py",
+    "guards_present": [
+      "canonical unscored set must equal {7:3038, 7:3790}",
+      "each scope key must exist for each query",
+      "each of 3 conditions must exist per scope",
+      "artifact_type must be limn_dual_scope_diagnostic",
+      "absent summary file -> available=False / DIAGNOSTIC_NOT_PUBLISHED (named absence)",
+      "load_candidates refuses unknown qid/scope/condition and a missing per-scope .jsonl"
+    ],
+    "guards_absent": [
+      "load_diagnostic does NOT stat the per-scope .jsonl files it names in each cell's `export`"
+    ],
+    "unit_tests": {
+      "file": "workbench/tests/test_limn_dual_scope_diagnostic.py",
+      "result": "10 passed in 0.13s",
+      "covering_missing_scope": "test_one_scope_alone_is_refused",
+      "covering_missing_condition": "test_missing_condition_is_refused",
+      "covering_absent_summary": "test_absent_evidence_is_a_named_absence_not_an_empty_comparison",
+      "covering_missing_per_scope_file": null
+    },
+    "probe_temp_root": {
+      "case_A_summary_present_0_of_6_jsonl": {
+        "served": true,
+        "available": true,
+        "status": "DIAGNOSTIC_COMPLETE",
+        "ranks_served": 12,
+        "per_scope_files_listed": 0,
+        "candidates_endpoint": "404 no per-scope export at limn_dual_scope.shirt.multimodal.jsonl"
+      },
+      "case_B_scope_key_deleted": "REFUSED: diagnostic evidence is missing scope toptee for 7:3038",
+      "case_C_condition_deleted": "REFUSED: 7:3038/toptee is missing condition(s) ['image_only_empty_text']",
+      "real_evidence_untouched": true
+    }
+  },
+  "model_inventory": {
+    "rows": 17,
+    "deferred": [
+      "csmcir",
+      "sprc"
+    ],
+    "stats": "17 Mô hình đăng ký 8 Có số đo trong phạm vi này 8 Lượt CIRCUS có dữ liệu ở phạm vi này 7 Cần chạy hoặc xử lý blocker 2 Tạm gác theo yêu cầu",
+    "ids_api_equal_ui_equal_yaml": true,
+    "row_detail": [
+      {
+        "id": "conesep",
+        "badge": "Có số đo",
+        "text": "ConeSep fiq_n02 Xem query Có số đo mọi query trong mẫu đều có hạng 20.1% · 0.2321 4,069 / 4,069 (100.0%) Đã xuất ứng viên 2 lý do"
+      },
+      {
+        "id": "encoder",
+        "badge": "Có số đo",
+        "text": "ENCODER fashioniq Xem query Có số đo mọi query trong mẫu đều có hạng 18.7% · 0.2189 4,069 / 4,069 (100.0%) Cần xuất Top-K 1 lý do"
+      },
+      {
+        "id": "habit",
+        "badge": "Có số đo",
+        "text": "HABIT fiq_n02 Xem query Có số đo mọi query trong mẫu đều có hạng 20.5% · 0.2294 4,069 / 4,069 (100.0%) Đã xuất ứng viên 2 lý do"
+      },
+      {
+        "id": "hint",
+        "badge": "Có số đo",
+        "text": "HINT fashioniq Xem query Có số đo mọi query trong mẫu đều có hạng 18.4% · 0.2177 4,069 / 4,069 (100.0%) Đã xuất ứng viên không có lý do chặn được ghi"
+      },
+      {
+        "id": "intent",
+        "badge": "Có số đo",
+        "text": "INTENT fiq_n02 Xem query Có số đo mọi query trong mẫu đều có hạng 18.8% · 0.2201 4,069 / 4,069 (100.0%) Đã xuất ứng viên 2 lý do"
+      },
+      {
+        "id": "limn",
+        "badge": "Chấm thiếu",
+        "text": "LIMN base_iter0_all_categories Xem query Chấm thiếu 69 / 4,069 query chưa chấm 18.6% · 0.2177 4,000 / 4,069 (98.3%) Cần xuất Top-K 1 lý do"
+      },
+      {
+        "id": "ptha_mtst",
+        "badge": "Có số đo",
+        "text": "PTHA + MTST cirr_transfer Xem query Có số đo mọi query trong mẫu đều có hạng 7.1% · 0.1498 4,069 / 4,069 (100.0%) Cần xuất Top-K không có lý do chặn được ghi"
+      },
+      {
+        "id": "tme",
+        "badge": "Có số đo",
+        "text": "TME fashioniq_0 Xem query Có số đo mọi query trong mẫu đều có hạng 19.0% · 0.2251 4,069 / 4,069 (100.0%) Cần xuất Top-K 1 lý do"
+      },
+      {
+        "id": "airknow",
+        "badge": "Chưa có số đo",
+        "text": "Air-Know airknow Adapter đã khai báo nhưng runtime chưa được xác minh trên host này.Mở các lượt chạy Chưa có số đo 2 / 2 checkpoint đã có · NOT_RUN — Chưa có kết quả 1 lý do"
+      },
+      {
+        "id": "clip4cir_rn50x4_fullft",
+        "badge": "Chưa có số đo",
+        "text": "CLIP4Cir RN50x4 fullft clip4cir_rn50x4_fullft Adapter đã khai báo nhưng runtime chưa được xác minh trên host này.Mở các lượt chạy Chưa có số đo 1 / 1 checkpoint đã có · BLOCKED_CHECKPOINT_BUNDLE — Chưa có kết quả 5 lý do"
+      },
+      {
+        "id": "clvc_net",
+        "badge": "Chưa có số đo",
+        "text": "CLVC-Net clvc_net Có 1 checkpoint đã tải nhưng chưa adapter nào ở trạng thái chạy được.Mở các lượt chạy Chưa có số đo 1 / 1 checkpoint đã có · BLOCKED_CHECKPOINT_MAPPING — Chưa có kết quả 4 lý do"
+      },
+      {
+        "id": "combiner_rn50x4_noft",
+        "badge": "Chưa có số đo",
+        "text": "Combiner RN50x4 noft combiner_rn50x4_noft Adapter đã khai báo nhưng runtime chưa được xác minh trên host này.Mở các lượt chạy Chưa có số đo 1 / 1 checkpoint đã có · BLOCKED_CHECKPOINT_MAPPING — Chưa có kết quả 5 lý do"
+      },
+      {
+        "id": "dcnet",
+        "badge": "Chưa có số đo",
+        "text": "DCNet dcnet Adapter đã khai báo nhưng runtime chưa được xác minh trên host này.Mở các lượt chạy Chưa có số đo 1 / 1 checkpoint đã có · BLOCKED_CHECKPOINT_MAPPING — Chưa có kết quả 2 lý do"
+      },
+      {
+        "id": "pair",
+        "badge": "Chưa có số đo",
+        "text": "PAIR pair Có 2 checkpoint đã tải nhưng chưa adapter nào ở trạng thái chạy được.Mở các lượt chạy Chưa có số đo 2 / 2 checkpoint đã có · BLOCKED_CHECKPOINT_MAPPING_UNVERIFIED — Chưa có kết quả 3 lý do"
+      },
+      {
+        "id": "tgcir",
+        "badge": "Chưa có số đo",
+        "text": "TG-CIR tgcir Có 1 checkpoint đã tải nhưng chưa adapter nào ở trạng thái chạy được.Mở các lượt chạy Chưa có số đo 1 / 1 checkpoint đã có · BLOCKED_COMMAND — Chưa có kết quả 3 lý do"
+      },
+      {
+        "id": "csmcir",
+        "badge": "Tạm gác",
+        "text": "CSMCIR csmcir Ngoài đợt chạy này Tạm gác Tạm gác theo yêu cầu: thiếu dữ liệu phụ trợ — Ngoài đợt chạy này không có lý do chặn được ghi"
+      },
+      {
+        "id": "sprc",
+        "badge": "Tạm gác",
+        "text": "SPRC sprc Ngoài đợt chạy này Tạm gác Tạm gác theo yêu cầu: chưa tải checkpoint — Ngoài đợt chạy này 6 lý do"
+      }
+    ],
+    "badge_counts": {
+      "Có số đo": 7,
+      "Chấm thiếu": 1,
+      "Chưa có số đo": 7,
+      "Tạm gác": 2
+    }
+  },
+  "defects": [
+    {
+      "id": "D1",
+      "severity": "medium",
+      "title": "load_diagnostic serves the 12 ranks even when 0/6 per-scope .jsonl evidence files exist",
+      "measurement": "temp repo root, summary present, 0 of 6 files: available=True, status=DIAGNOSTIC_COMPLETE, 12/12 ranks served, evidence_files.per_scope=[], while /candidates returns 404",
+      "contradicts": "module docstring rule 2 and the panel's '6 file per-scope' line"
+    },
+    {
+      "id": "D2",
+      "severity": "low",
+      "pre_existing": true,
+      "title": "sticky .topbar overlaps a table's thead (and the card title) when scrolled to viewport top",
+      "measurement": "390x844: topbar_bottom=126px, thead_top=0 -> 125px overlap; 1920x1080 title_top=24 vs topbar_bottom=89 -> 65px overlap. Reproduced identically on composition-table (103px) and inventory-table (125px), so not introduced by this panel; no scroll-margin-top anywhere."
+    },
+    {
+      "id": "D3",
+      "severity": "low",
+      "title": "Panel's canonical badge/notice is fixed to the Full subset (6,001/6,003) but the panel renders on every subset page without naming its subset",
+      "measurement": {
+        "sf_page": {
+          "limn_row": "4,000 / 4,069 (98.3%), 69 unscored",
+          "panel_badge": "Canonical: 6,001/6,003 scored",
+          "qid_7:3038_in_subset": "absent (total=0)"
+        },
+        "validated_page": {
+          "limn_row": "581 / 586 (99.1%), 5 unscored",
+          "panel_badge": "Canonical: 6,001/6,003 scored"
+        },
+        "full_page": {
+          "limn_row": "2 runs to choose",
+          "panel_badge": "Canonical: 6,001/6,003 scored"
+        },
+        "payload_has_subset_field": false,
+        "evidence_subset": "Full (6003 queries; 9e4918a6… run)"
+      },
+      "note": "Two different canonical coverages are visible on the same SF page; the panel text says 'coverage giữ nguyên 6,001/6,003' with no subset qualifier."
+    }
+  ]
+}

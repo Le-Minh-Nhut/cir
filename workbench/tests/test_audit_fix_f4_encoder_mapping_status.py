@@ -33,6 +33,28 @@ class _FakeStateDict(dict):
     pass
 
 
+class _FakeRelation:
+    """`learnable_relation` stand-in: the shape/dtype the real draw produces."""
+
+    def detach(self):
+        return self
+
+    def float(self):
+        return self
+
+    def cpu(self):
+        return self
+
+    def contiguous(self):
+        return self
+
+    shape = (2, 512)
+    dtype = "torch.float32"
+
+    def numpy(self):
+        return np.zeros((2, 512), dtype=np.float32)
+
+
 class _FakeReport:
     """A load report whose only unusual entries are the two whitelistable tensors."""
 
@@ -42,10 +64,16 @@ class _FakeReport:
 
 
 class _FakeModel:
-    """Stands in for `model_try2.Encoder`; records that the gate let it through."""
+    """Stands in for `model_try2.Encoder`; records that the gate let it through.
+
+    It also carries the `learnable_relation` attribute the worker now reads and persists: that
+    tensor is not in any checkpoint, so the worker records what its constructor actually drew.
+    """
 
     def __init__(self) -> None:
         self.loaded = False
+        self.backbone = SimpleNamespace(binding_decoder=SimpleNamespace(
+            learnable_relation=_FakeRelation()))
 
     def load_state_dict(self, state, strict=False):
         self.loaded = True
@@ -102,6 +130,10 @@ def encoder_job(tmp_path, monkeypatch):
             "source_root": str(tmp_path),
             "dataset_root": str(tmp_path),
             "batch_size": 1,
+            # The worker pins the unseeded `learnable_relation` draw before construction and writes
+            # the tensor it drew; both paths come from the job the adapter builds.
+            "relation_seed": model_encoder.RELATION_SEED,
+            "relation_root": str(worker_dir / "construction_state"),
         }), encoding="utf-8")
 
         monkeypatch.setattr(replay_encoder, "_load_replay_modules", _fake_replay_modules(model))

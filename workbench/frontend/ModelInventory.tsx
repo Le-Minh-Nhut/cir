@@ -43,6 +43,15 @@ export function ModelInventory({ data, location, onGoto }: {
   const pending = active.filter((model) => !measuredIds.has(model.model_id));
   const deferred = models.filter((model) => DEFERRED_MODELS[model.model_id]);
   const runCount = entries.filter((entry) => entry.family === "composition" && entry.status !== "FAILED").length;
+  // W-02: five different questions, five different numbers. The old header printed one "17" that a
+  // reader could only interpret by guessing which of these it meant.
+  //  * attempts: rows the API published, duplicates included — a rerun is an attempt, not a run.
+  //  * measurements: native macro blocks with a number, the only rows this deployment MEASURED.
+  //  * blockers: files that only signpost a blocker, i.e. models with a named reason and no number.
+  const attemptCount = entries.length + (data.nativeMeasurements.region.data?.measurements ?? []).length;
+  const measurementCount = (data.nativeMeasurements.region.data?.measurements ?? [])
+    .filter((row) => row.metrics && !row.rollup).length;
+  const blockerCount = data.nativeMeasurements.region.data?.counts.signposted_blockers ?? 0;
 
   const ordered = useMemo(() => [...models].sort((a, b) => {
     const priority = (id: string) => DEFERRED_MODELS[id] ? 2 : measuredIds.has(id) ? 0 : 1;
@@ -54,15 +63,20 @@ export function ModelInventory({ data, location, onGoto }: {
   // sources, because this deployment measures in three places: composition runs (CIRCUS subsets),
   // native measurements (macro numbers, unverified) and aggregate reports (FashionIQ protocols).
   const allRows = useMemo(() => {
-    const composition = (data.compositionRuns.region.data ?? []) as ScopeRow[];
+    const composition = (data.compositionRuns.region.data ?? [])
+      .map((row): ScopeRow => ({ ...(row as ScopeRow), family: "composition" }));
     const native = (data.nativeMeasurements.region.data?.measurements ?? [])
       .filter((row) => row.model_id && row.metrics && row.protocol_id)
       .map((row): ScopeRow => ({ model_id: row.model_id, protocol_id: row.protocol_id,
-                                 subset: "", metrics: row.metrics as Record<string, unknown> }));
+                                 subset: "", metrics: row.metrics as Record<string, unknown>,
+                                 // A native macro is listed in the native table, NOT in the
+                                 // benchmark table: the link has to name the family that holds it.
+                                 family: "native" }));
     const aggregate = (data.aggregates.region.data ?? [])
       .filter((row) => row.model_id && row.protocol_id && !row.is_synthetic)
       .map((row): ScopeRow => ({ model_id: row.model_id, protocol_id: row.protocol_id,
-                                 subset: "", metrics: (row.observed_metrics ?? {}) as Record<string, unknown> }));
+                                 subset: "", metrics: (row.observed_metrics ?? {}) as Record<string, unknown>,
+                                 family: "aggregate" }));
     return [...composition, ...native, ...aggregate];
   }, [data.compositionRuns.region.data, data.nativeMeasurements.region.data, data.aggregates.region.data]);
 
@@ -93,11 +107,15 @@ export function ModelInventory({ data, location, onGoto }: {
   return (
     <section className="model-inventory" aria-label="Toàn bộ mô hình" data-testid="model-inventory">
       <div className="inventory-stats" data-testid="inventory-stats">
-        <div><strong>{models.length}</strong><span>Mô hình đăng ký</span></div>
-        <div><strong>{active.filter((model) => measuredIds.has(model.model_id)).length}</strong><span>Có số đo trong phạm vi này</span></div>
-        <div><strong>{runCount}</strong><span>Lượt CIRCUS có dữ liệu ở phạm vi này</span></div>
-        <div><strong>{pending.length}</strong><span>Cần chạy hoặc xử lý blocker</span></div>
-        <div><strong>{deferred.length}</strong><span>Tạm gác theo yêu cầu</span></div>
+        <div><strong data-testid="count-models">{models.length}</strong><span>Mô hình đăng ký</span></div>
+        <div><strong data-testid="count-runs">{runCount}</strong><span>Lượt CIRCUS có dữ liệu ở phạm vi này</span></div>
+        <div><strong data-testid="count-composition-rows">{entries.filter((entry) => entry.family === "composition").length}</strong><span>Dòng composition (mọi trạng thái)</span></div>
+        <div><strong data-testid="count-attempts">{attemptCount}</strong><span>Lần thử ghi nhận (kể cả trùng)</span></div>
+        <div><strong data-testid="count-measurements">{measurementCount}</strong><span>Số đo native có macro</span></div>
+        <div><strong data-testid="count-blockers">{blockerCount}</strong><span>File chỉ ghi blocker</span></div>
+        <div><strong data-testid="count-active-measured">{active.filter((model) => measuredIds.has(model.model_id)).length}</strong><span>Có số đo trong phạm vi này</span></div>
+        <div><strong data-testid="count-pending">{pending.length}</strong><span>Cần chạy hoặc xử lý blocker</span></div>
+        <div><strong data-testid="count-deferred">{deferred.length}</strong><span>Tạm gác theo yêu cầu</span></div>
       </div>
 
       <div className="inventory-toolbar">
@@ -177,21 +195,27 @@ export function ModelInventory({ data, location, onGoto }: {
                               <span>Có kết quả ở {elsewhere.length} phạm vi khác — mở đúng phạm vi đó:</span>
                               <div className="scope-links">
                                 {elsewhere.map((scope) => (
-                                  <button key={`${scope.protocol}:${scope.subset}`} type="button"
+                                  <button key={`${scope.protocol}:${scope.subset}:${scope.family ?? ""}`} type="button"
                                           className="ghost"
-                                          data-testid={`other-scope-${model.model_id}-${scope.protocol}-${scope.subset || "all"}`}
-                                          // A composition subset opens the composition table; an empty
-                                          // subset means the rows came from a source without subsets
-                                          // (native measurements / aggregate reports), so it opens the
-                                          // view that actually lists them.
-                                          onClick={() => onGoto(scope.subset
-                                            ? { area: "evaluation", view: "composition", protocol: scope.protocol,
-                                                subset: scope.subset as Location["subset"], runs: [], run: "", query: "", offset: 0 }
-                                            : { area: "evaluation", view: "benchmark", protocol: scope.protocol,
-                                                runs: [], run: "", query: "", offset: 0 })}>
+                                          data-testid={`other-scope-${model.model_id}-${scope.protocol}-${scope.family ?? "composition"}-${scope.subset || "all"}`}
+                                          // The view that actually LISTS these rows. A composition
+                                          // subset opens the composition table; a native macro opens
+                                          // the native table (which the benchmark table never lists);
+                                          // an aggregate report opens the benchmark table. Opening
+                                          // "the protocol" was not enough: two families can share one
+                                          // protocol id and only one of them has a row there (W-02).
+                                          onClick={() => onGoto(scope.family === "native"
+                                            ? { area: "evaluation", view: "native", protocol: scope.protocol,
+                                                runs: [], run: "", query: "", offset: 0 }
+                                            : scope.subset
+                                              ? { area: "evaluation", view: "composition", protocol: scope.protocol,
+                                                  subset: scope.subset as Location["subset"], runs: [], run: "", query: "", offset: 0 }
+                                              : { area: "evaluation", view: "benchmark", protocol: scope.protocol,
+                                                  runs: [], run: "", query: "", offset: 0 })}>
                                     {protocolLabel(scope.protocol)}
                                     {protocolHasSubsets(scope.protocol) && scope.subset
                                       ? ` · ${SUBSET_LABEL[scope.subset as keyof typeof SUBSET_LABEL] ?? scope.subset}` : ""}
+                                    {scope.family === "native" ? " · số đo native" : ""}
                                     {" · "}{fmtInt(scope.rows)} {scope.subset ? "lượt" : "số đo (toàn phạm vi)"}
                                   </button>
                                 ))}

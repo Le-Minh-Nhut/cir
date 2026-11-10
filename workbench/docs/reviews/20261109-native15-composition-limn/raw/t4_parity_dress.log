@@ -1,0 +1,7 @@
+{
+  "preflight_blockers": [
+    "LIMN environment version mismatch: expected torch ==2.7.1, found 2.15.0",
+    "LIMN environment version mismatch: expected torchvision ==0.22.1, found 0.29.2",
+    "LIMN environment package missing: open_clip_torch ==2.20.0"
+  ]
+}

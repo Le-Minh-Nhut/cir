@@ -1,0 +1,122 @@
+  membershipDerived: number;
+  /** Rows that hold a verifier receipt. Composition rows hold none: they are run summaries, not
+   *  certified reports, and claiming otherwise is the defect this field exists to prevent. */
+  verified: number;
+  failed: number;
+}
+
+/** Six separate counts, never collapsed: "9 rows" says nothing about how many of them can be
+ *  opened, re-derived, or trusted. */
+export function scopeCounts(rows: ScopeRow[], protocol: string, subset: string): ScopeCounts {
+  const scoped = rows.filter((row) => row.protocol_id === protocol
+    && (protocolHasSubsets(protocol) ? row.subset === subset : true));
+  return {
+    served: scoped.length,
+    completed: scoped.filter((row) => row.execution_status === "COMPLETED").length,
+    artifactPresent: scoped.filter((row) => row.capabilities?.per_query_target_ranks === true).length,
+    membershipDerived: scoped.filter((row) =>
+      row.subset_provenance?.own?.evidence === "PER_QUERY_ARTIFACT").length,
+    verified: 0,
+    failed: scoped.filter((row) => row.execution_status === "FAILED" || row.is_failed === true).length,
+  };
+}
+
+/** Where a model DOES have results, when it has none in the scope on screen.
+ *
+ *  The old inventory rendered "Chưa có số đo / Cần chạy" for a model whose rows simply lived in
+ *  another protocol or subset, which reads as "nobody ran it". A real row elsewhere is a link, and
+ *  the link names the scope so the reader can see the cohort change before they follow it.
+ */
+export function otherScopeFor(rows: ScopeRow[], model?: string | null): ScopeChoice[] {
+  const research = rows.filter(rowIsResearch);
+  const byScope = new Map<string, ScopeRow[]>();
+  for (const row of research) {
+    const protocol = row.protocol_id ?? "";
+    if (!protocol) continue;
+    const key = `${protocol}\u001f${row.subset ?? ""}`;
+    byScope.set(key, [...(byScope.get(key) ?? []), row]);
+  }
+  if (!model) return [];
+  return [...byScope.entries()]
+    .filter(([, scoped]) => scoped.some((row) => row.model_id === model))
+    .map(([key, scoped]) => {
+      const [protocol, subset] = key.split("\u001f");
+      return { protocol, subset, rows: scoped.length };
+    })
+    .sort((left, right) => left.protocol.localeCompare(right.protocol)
+      || SUBSET_SEQUENCE.indexOf(left.subset as never) - SUBSET_SEQUENCE.indexOf(right.subset as never));
+}
+
+/** The five independent parts of one result label. Each is a separate sentence because each can be
+ *  true while its neighbour is false: a run can be measured and unverified, or verified with no
+ *  exported candidates, and a single combined badge cannot say that. */
+export interface ResultLabels {
+  measurement: string;
+  verification: string;
+  coverage: string;
+  blocker: string;
+  samples: string;
+}
+
+export interface LabelInput {
+  execution_status?: string | null;
+  is_failed?: boolean | null;
+  aggregate_metrics?: boolean | null;
+  per_query_target_ranks?: boolean | null;
+  candidate_topk?: boolean | null;
+  scored?: number | null;
+  total?: number | null;
+  parsed_scored?: number | null;
+  is_transfer?: boolean | null;
+  verified?: boolean | null;
+  verification_state?: string | null;
+  blocker_reason?: string | null;
+  reproduction_status?: string | null;
+}
+
+export function resultLabels(input: LabelInput): ResultLabels {
+  const failed = input.is_failed === true || (input.execution_status ?? "").toUpperCase() === "FAILED";
+  const measured = !failed && input.aggregate_metrics === true;
+  const measurement = failed
+    ? "Lượt lỗi · không có số đo"
+    : measured ? "Đã đo" : "Chỉ có số tổng hợp chưa đủ";
+  const verification = input.verified === true
+    ? `Đã xác minh${input.verification_state ? ` (${input.verification_state})` : ""}`
+    : input.verification_state
+      ? `Chưa xác minh (${input.verification_state})`
+      : "Chưa xác minh";
+  const scored = input.scored ?? null;
+  const total = input.total ?? null;
+  const coverage = scored != null && total != null
+    ? `Đã chấm ${scored.toLocaleString("en-US")}/${total.toLocaleString("en-US")}`
+    : "Chưa có mẫu số";
+  const blocker = failed
+    ? (input.blocker_reason ? `Chặn: ${input.blocker_reason}` : "Chặn: lượt không hoàn tất")
+    : input.reproduction_status
+      ? `Rerun: ${input.reproduction_status}`
+      : "Rerun: chưa ghi blocker";
+  const samples = !input.per_query_target_ranks
+    ? "Không có hạng từng query"
+    : input.candidate_topk
+      ? "Có hạng · đã xuất ứng viên"
+      : "Có hạng · chưa xuất ứng viên";
+  return { measurement, verification, coverage, blocker, samples };
+}
+
+/** The subset label a protocol is allowed to print. A protocol without subsets prints nothing,
+ *  because "" is a statement ("one cohort") and "Full" would be a false one. */
+export function subsetLabelFor(protocolId: string, subset: string, labels: Record<string, string>): string {
+  return protocolHasSubsets(protocolId) ? (labels[subset] ?? subset) : "";
+}
+
+/** The explorer chip row: the four authoritative query states, in one control.
+ *
+ *  `query_state` is the backend's own classification (`hit` / `retrieval_failure` / `unscored`), so
+ *  the chips filter on the contract rather than on a UI-side re-derivation of it. `all` is not a
+ *  state and is spelled as the empty string, which is also what the URL omits. */
+export const QUERY_STATE_CHIPS: ReadonlyArray<{ id: string; label: string; hint: string }> = [
+  { id: "", label: "Tất cả", hint: "không lọc theo trạng thái" },
+  { id: "hit", label: "Correct@10", hint: "hạng đích trong @10" },
+  { id: "retrieval_failure", label: "Miss@10", hint: "có hạng thật nhưng ngoài @10" },
+  { id: "unscored", label: "Unscored", hint: "không có hạng chính xác (pipeline/ánh xạ)" },
+];

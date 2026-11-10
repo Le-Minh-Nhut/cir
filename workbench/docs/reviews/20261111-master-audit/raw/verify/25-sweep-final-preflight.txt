@@ -1,0 +1,14 @@
+=== FINAL sweep preflight 2026-11-11T00:20:43+07:00 ===
+--- pgrep -af pytest ---
+(exit=1 # 1 = none)
+--- stray xdist workers ---
+(exit=1 # 1 = none)
+--- df -h / ---
+Filesystem      Size  Used Avail Use% Mounted on
+/dev/nvme0n1p5  630G  478G  121G  80% /
+--- basetemp absent ---
+ls: cannot access '/tmp/sweep_basetemp_final': No such file or directory
+--- git status --porcelain -uall count ---
+408
+--- root scratch ---
+none (correct)

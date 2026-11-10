@@ -56,7 +56,18 @@ def normalize_query_text(text: str) -> str:
     return " ".join(re.sub(r"[^a-z0-9 ]+", " ", str(text).strip().lower()).split())
 
 
-def caption_scope_index(fashioniq_root: Path) -> dict[tuple[str, str], frozenset[str]]:
+class CaptionScopeIndex(dict):
+    """``(image stem, normalized text) -> frozenset(categories)`` plus the sources that were NOT read.
+
+    A plain ``dict`` mapping keeps every existing reader working, while ``unreadable`` records which
+    annotation files the index could not read. Without it, "the other category has no row for this
+    pair" and "the other category was never opened" are the same state, and a resolver can then route
+    an ambiguous query to the one category whose file happened to exist.
+    """
+
+    unreadable: frozenset[str] = frozenset()
+
+def caption_scope_index(fashioniq_root: Path) -> CaptionScopeIndex:
     """Map ``(image stem, joined validation caption text)`` to the annotating categories.
 
     M-BEIR task-7 query text is the reference image's two FashionIQ validation captions joined by
@@ -65,15 +76,24 @@ def caption_scope_index(fashioniq_root: Path) -> dict[tuple[str, str], frozenset
     caption text, and the reference identity is what separates them. A ``(stem, text)`` pair that
     still appears under two categories is genuinely undecidable and maps to both, so callers can
     refuse instead of picking one.
+
+    Annotation files that are absent or unparseable are named in ``unreadable``. Their rows are not
+    in the index, so a pair that would have been ambiguous can look unique; consumers that route a
+    query must treat a non-empty ``unreadable`` as incomplete provenance.
     """
     index: dict[tuple[str, str], set[str]] = {}
+    unreadable: set[str] = set()
     for category in ("dress", "shirt", "toptee"):
         path = Path(fashioniq_root) / "captions" / f"cap.{category}.val.json"
         try:
             rows = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, ValueError):
+            unreadable.add(category)
             continue
-        for row in rows if isinstance(rows, list) else ():
+        if not isinstance(rows, list):
+            unreadable.add(category)
+            continue
+        for row in rows:
             if not isinstance(row, dict) or not isinstance(row.get("candidate"), str):
                 continue
             captions = row.get("captions")
@@ -83,7 +103,9 @@ def caption_scope_index(fashioniq_root: Path) -> dict[tuple[str, str], frozenset
                 part for part in captions if isinstance(part, str) and part.strip()))
             if text:
                 index.setdefault((Path(row["candidate"]).stem, text), set()).add(category)
-    return {key: frozenset(categories) for key, categories in index.items()}
+    result = CaptionScopeIndex({key: frozenset(categories) for key, categories in index.items()})
+    result.unreadable = frozenset(unreadable)
+    return result
 
 
 def query_reference_stem(query: Any, candidate_names: Mapping[str, str] | None) -> str | None:
@@ -103,12 +125,19 @@ def resolve_query_category(scopes: Sequence[str | None], index: Mapping[tuple[st
     ambiguity to paper over with the annotation. Only an unscoped query falls through to its own
     caption annotation, which has to name exactly one scope; anything short of that stays ``None``
     and the query stays unscored.
+
+    An annotation index that could not read one of its sources cannot prove uniqueness: the missing
+    file's rows are absent, so the surviving category looks like the only one. That case returns
+    ``None`` for every query the loader left unscoped, because "the other file had no row" and "the
+    other file was never opened" must not produce the same answer.
     """
     category = getattr(query, "category", None)
     if category is not None:
         return category if category in scopes else None
     stem = query_reference_stem(query, candidate_names)
     if stem is None:
+        return None
+    if getattr(index, "unreadable", frozenset()):
         return None
     categories = index.get((stem, normalize_query_text(getattr(query, "query_txt", ""))), frozenset())
     resolved = next(iter(categories)) if len(categories) == 1 else None

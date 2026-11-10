@@ -1,0 +1,31 @@
+=== FINAL SWEEP 2026-11-11T01:15:37+07:00 ===
+summary: 18 failed, 2799 passed, 47 skipped, 350 warnings in 3194.17s (0:53:14)
+lines: 540
+ends_with_newline: \n
+
+=== E / ERROR rows ===
+lines starting 'E ': 0
+lines starting 'ERROR ': 0
+
+=== OSError Errno 28 ===
+0
+
+=== FAILED (18) ===
+FAILED workbench/tests/test_circus_adapters_blip.py::test_resident_worker_reuse_and_cleanup[workbench.composition.model_conesep-conesep]
+FAILED workbench/tests/test_circus_adapters_blip.py::test_resident_worker_reuse_and_cleanup[workbench.composition.model_ptha_mtst-ptha_mtst]
+FAILED workbench/tests/test_circus_adapters_blip.py::test_resident_worker_failure_uses_shared_error_and_stays_failed[workbench.composition.model_conesep-conesep]
+FAILED workbench/tests/test_circus_adapters_blip.py::test_resident_worker_failure_uses_shared_error_and_stays_failed[workbench.composition.model_ptha_mtst-ptha_mtst]
+FAILED workbench/tests/test_circus_cli.py::test_cli_3d_full_gallery_resume_and_gallery_invalidation
+FAILED workbench/tests/test_circus_tme_lifecycle.py::test_encoder_and_limn_failed_child_latch_and_preserve_log[encoder]
+FAILED workbench/tests/test_circus_tme_lifecycle.py::test_encoder_and_limn_failed_child_latch_and_preserve_log[limn]
+FAILED workbench/tests/test_circus_tme_precision.py::test_worker_skips_empty_stdin_lines
+FAILED workbench/tests/test_f05_f08_f09_verification.py::test_f08_dcnet_config_data_dir_resolution
+FAILED workbench/tests/test_handoff_commands.py::test_no_release_document_points_at_a_superseded_source_sha
+FAILED workbench/tests/test_release_blocker_gpu_records.py::test_defect_b_g_with_no_target_gpu_verdict_is_pending_not_pass
+FAILED workbench/tests/test_release_blocker_gpu_records.py::test_release_verify_documented_invocations_produce_parseable_report[<lambda>0]
+FAILED workbench/tests/test_release_blocker_gpu_records.py::test_release_verify_documented_invocations_produce_parseable_report[<lambda>1]
+FAILED workbench/tests/test_release_blocker_gpu_records.py::test_release_verify_documented_invocations_produce_parseable_report[<lambda>2]
+FAILED workbench/tests/test_release_blocker_gpu_records.py::test_release_verify_documented_invocations_produce_parseable_report[<lambda>3]
+FAILED workbench/tests/test_release_blocker_gpu_records.py::test_release_verify_documented_invocations_produce_parseable_report[<lambda>4]
+FAILED workbench/tests/test_release_blocker_gpu_records.py::test_offline_verdict_names_deployment_reason
+FAILED workbench/tests/test_standalone_operator_commands.py::test_prepare_model_executes_only_declared_recipe_steps

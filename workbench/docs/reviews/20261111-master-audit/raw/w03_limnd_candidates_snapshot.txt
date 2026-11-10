@@ -1,0 +1,100 @@
+
+
+def load_candidates(qid: str, scope: str, condition: str, depth: int | None = None,
+                    config: Any | None = None) -> dict[str, Any]:
+    """Ordered candidates for one query/scope/condition, from that scope's own export.
+
+    ``depth`` bounds how many stored rows are returned. It is validated, not clamped silently: an
+    out-of-range or non-positive depth used to be absorbed into a 1-row window with nothing in the
+    response saying so. The target's rank is the rank recorded for that scope and is never recomputed
+    from the returned window.
+    """
+    if qid not in QUERIES:
+        raise DiagnosticEvidenceError(f"{qid} is not one of the ambiguous queries")
+    if scope not in SCOPES:
+        raise DiagnosticEvidenceError(f"{scope} is not a diagnostic scope")
+    if condition not in CONDITIONS:
+        raise DiagnosticEvidenceError(f"{condition} is not a supported condition")
+    if depth is not None:
+        if isinstance(depth, bool) or not isinstance(depth, int):
+            raise DiagnosticEvidenceError(f"depth must be an integer, got {depth!r}")
+        if depth < 1:
+            raise DiagnosticEvidenceError(
+                f"depth must be at least 1, got {depth}; a zero or negative depth cannot return a "
+                "window and silently returning one row would misstate the request")
+        if depth > MAX_DEPTH:
+            raise DiagnosticEvidenceError(
+                f"depth {depth} exceeds the {MAX_DEPTH}-row limit this endpoint serves")
+
+    record = _load_record(config)
+    if not record["available"]:
+        raise DiagnosticEvidenceError(f"no per-scope export at {evidence_root(config)}")
+    combination = record["combinations"].get((qid, scope, condition))
+    if combination is None:
+        raise DiagnosticEvidenceError(
+            f"no per-scope export row for {qid}/{scope}/{condition}")
+
+    stored = combination["depth_stored"]
+    requested = stored if depth is None else depth
+    # K comes from the actual export depth: what the file stores bounds what can be served.
+    served = min(requested, stored, len(combination["candidates"]))
+    window = combination["candidates"][:served]
+    defects = [item for item in record["defects"]
+               if item["qid"] in (None, qid)
+               and item["scope"] in (None, scope)
+               and item["condition"] in (None, condition)]
+
+    # A config that declares no FashionIQ root cannot resolve an image; the window still serves, with
+    # `image_url: None`, and no tile is invented.
+    fashioniq_root = getattr(config or resolve_config(), "FASHIONIQ_ROOT", None)
+    candidate_rows = []
+    for candidate in window:
+        image_id = candidate.get("gallery_id")
+        url, category = _image_url(image_id, scope, fashioniq_root)
+        candidate_rows.append({
+            "rank": candidate.get("rank"),
+            "gallery_position": candidate.get("gallery_position"),
+            "gallery_id": image_id,
+            "image_path": candidate.get("image_path"),
+            "image_stem": Path(str(image_id or "")).stem,
+            "image_url": url,
+            "image_category": category,
+            "score": candidate.get("score"),
+            "is_target": bool(candidate.get("is_target")),
+        })
+
+    target = combination["target"]
+    target_url, target_category = _image_url(target["gallery_id"], scope, fashioniq_root)
+    return {
+        "qid": qid, "scope": scope, "condition": condition,
+        "label": combination["label"],
+        # Request and response identity are the same triple, echoed from the validated record.
+        "identity": {"qid": qid, "scope": scope, "condition": condition,
+                     "standard": record["standard"],
+                     "manifest_digest": (record["manifest"] or {}).get("digest")},
+        "complete": record["complete"] and not defects,
+        "defects": defects,
+        "manifest": record["manifest"],
+        "target_rank": target["rank"],
+        "target_score": target["score"],
+        # The query's own positive id, from its own record: the summary's identity field, so a caller
+        # can check qid -> positive DID -> asset -> rank without opening the summary.
+        "target_did": combination["target_did"],
+        "target_asset": combination["target_asset"],
+        # The target is ALWAYS returned separately from the window, because it frequently is not in
+        # it: at depth 100 the rank-6891 target is not a candidate row, and a view that can only show
+        # the target when it happens to be in the top K cannot show the finding.
+        "target": {**target, "image_url": target_url, "image_category": target_category,
+                   "image_stem": Path(str(target["gallery_id"] or "")).stem},
+        "checkpoint_sha256": combination["checkpoint_sha256"],
+        "gallery_size": combination["gallery_size"],
+        "model_text": combination["model_text"],
+        "depth_requested": requested,
+        "depth_served": served,
+        "depth_stored": stored,
+        "depth_truncated": served < requested,
+        "candidates": candidate_rows,
+        "staged_query_image_is_evaluator_input": combination["staged_query_image_is_evaluator_input"],
+        "canonical_status_note": ("diagnostic ranking for a query the canonical evaluation leaves "
+                                  "unscored; not a canonical per-query row"),
+    }

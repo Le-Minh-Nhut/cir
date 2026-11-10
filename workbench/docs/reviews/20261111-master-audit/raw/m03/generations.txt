@@ -1,0 +1,38 @@
+== all limn summary dirs
+workbench/artifacts/composition/summary/limn_base_iter0_all_categories_10173dc45dea8c90fd2a284b ['full.json', 'sf.json', 'validated.json']
+workbench/artifacts/composition/summary/limn_base_iter0_all_categories_3f86f58483b368377e2c151e ['full.json', 'sf.json', 'validated.json']
+workbench/artifacts/composition/summary/limn_base_iter0_all_categories_9e4918a6b5c243412cbc58c9 ['full.json']
+== all model summary dirs and subsets + run ids
+SYNTHETIC_encoder_fashioniq_fixture001 [('full.json', 'SYNTHETIC_encoder_fashioniq_fixture001', '', 'COMPLETED'), ('sf.json', 'SYNTHETIC_encoder_fashioniq_fixture001', '', 'COMPLETED'), ('validated.json', 'SYNTHETIC_encoder_fashioniq_fixture001', '', 'COMPLETED')]
+SYNTHETIC_habit_fiq_n02_fixture002 [('full.json', 'SYNTHETIC_habit_fiq_n02_fixture002', '', 'COMPLETED'), ('sf.json', 'SYNTHETIC_habit_fiq_n02_fixture002', '', 'COMPLETED'), ('validated.json', 'SYNTHETIC_habit_fiq_n02_fixture002', '', 'COMPLETED')]
+conesep_fiq_n02_30f6de423861cc1d6c78c361 [('full.json', '30f6de423861cc1d6c78c361', '5a864ee5a78c', 'COMPLETED'), ('sf.json', '30f6de423861cc1d6c78c361', '5a864ee5a78c', 'COMPLETED'), ('validated.json', '30f6de423861cc1d6c78c361', '5a864ee5a78c', 'COMPLETED')]
+conesep_fiq_n02_a4f786d8af4d46ac2a85ab9c [('full.json', 'a4f786d8af4d46ac2a85ab9c', '5a864ee5a78c', 'COMPLETED')]
+encoder_fashioniq_5dee7425dd46c5f154808aac [('full.json', '5dee7425dd46c5f154808aac', '0f31c50150a7', 'COMPLETED')]
+encoder_fashioniq_6a528e877c328772e2c7bb28 [('full.json', '6a528e877c328772e2c7bb28', '0f31c50150a7', 'COMPLETED'), ('sf.json', '6a528e877c328772e2c7bb28', '0f31c50150a7', 'COMPLETED'), ('validated.json', '6a528e877c328772e2c7bb28', '0f31c50150a7', 'COMPLETED')]
+encoder_fashioniq_eda30a37c0bc17ac43844f09 [('full.json', 'eda30a37c0bc17ac43844f09', '0f31c50150a7', 'COMPLETED'), ('sf.json', 'eda30a37c0bc17ac43844f09', '0f31c50150a7', 'COMPLETED'), ('validated.json', 'eda30a37c0bc17ac43844f09', '0f31c50150a7', 'COMPLETED')]
+habit_fiq_n02_497c25c57fbeba885ecfb9d1 [('full.json', '497c25c57fbeba885ecfb9d1', '814d2d0ceb29', 'COMPLETED'), ('sf.json', '497c25c57fbeba885ecfb9d1', '814d2d0ceb29', 'COMPLETED'), ('validated.json', '497c25c57fbeba885ecfb9d1', '814d2d0ceb29', 'COMPLETED')]
+habit_fiq_n02_c6eb9d5775ae636a3b8addbc [('full.json', 'c6eb9d5775ae636a3b8addbc', '814d2d0ceb29', 'COMPLETED')]
+habit_fiq_n02_e0dd04a46ef7a58334b9e353 [('full.json', 'e0dd04a46ef7a58334b9e353', '814d2d0ceb29', 'FAILED'), ('sf.json', 'e0dd04a46ef7a58334b9e353', '814d2d0ceb29', 'FAILED'), ('validated.json', 'e0dd04a46ef7a58334b9e353', '814d2d0ceb29', 'FAILED')]
+hint_fashioniq_4bc9893a977e501b82378e76 [('full.json', '4bc9893a977e501b82378e76', 'bf9c72d42206', 'COMPLETED'), ('sf.json', '4bc9893a977e501b82378e76', 'bf9c72d42206', 'COMPLETED'), ('validated.json', '4bc9893a977e501b82378e76', 'bf9c72d42206', 'COMPLETED')]
+hint_fashioniq_f461f391c6d4696011be8067 [('full.json', 'f461f391c6d4696011be8067', 'bf9c72d42206', 'COMPLETED')]
+intent_fiq_n02_37ee72aa298b276d1bfda0fa [('full.json', '37ee72aa298b276d1bfda0fa', '2a504cadfd6b', 'COMPLETED'), ('sf.json', '37ee72aa298b276d1bfda0fa', '2a504cadfd6b', 'COMPLETED'), ('validated.json', '37ee72aa298b276d1bfda0fa', '2a504cadfd6b', 'COMPLETED')]
+intent_fiq_n02_4901da139ac40b874d2363c5 [('full.json', '4901da139ac40b874d2363c5', '2a504cadfd6b', 'COMPLETED')]
+limn_base_iter0_all_categories_10173dc45dea8c90fd2a284b [('full.json', '10173dc45dea8c90fd2a284b', '12cbbf95d6c8', 'PARTIAL'), ('sf.json', '10173dc45dea8c90fd2a284b', '12cbbf95d6c8', 'PARTIAL'), ('validated.json', '10173dc45dea8c90fd2a284b', '12cbbf95d6c8', 'PARTIAL')]
+limn_base_iter0_all_categories_3f86f58483b368377e2c151e [('full.json', '3f86f58483b368377e2c151e', '12cbbf95d6c8', 'COMPLETED'), ('sf.json', '3f86f58483b368377e2c151e', '12cbbf95d6c8', 'COMPLETED'), ('validated.json', '3f86f58483b368377e2c151e', '12cbbf95d6c8', 'COMPLETED')]
+limn_base_iter0_all_categories_9e4918a6b5c243412cbc58c9 [('full.json', '9e4918a6b5c243412cbc58c9', '12cbbf95d6c8', 'PARTIAL')]
+ptha_mtst_cirr_transfer_315dd590eeb03d2c78d7937a [('full.json', '315dd590eeb03d2c78d7937a', '1c4dab86a9f6', 'COMPLETED'), ('sf.json', '315dd590eeb03d2c78d7937a', '1c4dab86a9f6', 'COMPLETED'), ('validated.json', '315dd590eeb03d2c78d7937a', '1c4dab86a9f6', 'COMPLETED')]
+ptha_mtst_cirr_transfer_f54a77450ebd2126590d4385 [('full.json', 'f54a77450ebd2126590d4385', '1c4dab86a9f6', 'COMPLETED')]
+released_audit_task7_mm_any_released_audit_task7_mm_any [('full.json', 'released_audit_task7_mm_any', '', 'COMPLETED'), ('sf.json', 'released_audit_task7_mm_any', '', 'COMPLETED'), ('validated.json', 'released_audit_task7_mm_any', '', 'COMPLETED')]
+tme_fashioniq_0_ad477312aa57c1b9114f9e51 [('full.json', 'ad477312aa57c1b9114f9e51', 'fea7fc08760d', 'COMPLETED'), ('sf.json', 'ad477312aa57c1b9114f9e51', 'fea7fc08760d', 'COMPLETED'), ('validated.json', 'ad477312aa57c1b9114f9e51', 'fea7fc08760d', 'COMPLETED')]
+tme_fashioniq_0_cd1a696d8bca0fc4bce6925b [('full.json', 'cd1a696d8bca0fc4bce6925b', 'fea7fc08760d', 'COMPLETED')]
+== dual scope source run
+source_run_id 9e4918a6b5c243412cbc58c9
+summary run_id 9e4918a6b5c243412cbc58c9 cohort 6003 scored 6001
+dual cohort {'subset': 'full', 'query_count': 6003, 'query_count_per_subset': {'full': 6003, 'sf': 4069, 'validated': 586}, 'scored_count': 6001, 'unscored_count': 2, 'multimodal_recall_at_10': 30.0283, 'source': 'workbench/artifacts/composition/summary/limn_base_iter0_all_categories_9e4918a6b5c243412cbc58c9/full.json'}
+== export depths
+shirt multimodal [('7:3038', 100, 100, 100), ('7:3790', 100, 100, 100)]
+shirt text_only_black_image [('7:3038', 100, 100, 100), ('7:3790', 100, 100, 100)]
+shirt image_only_empty_text [('7:3038', 100, 100, 100), ('7:3790', 100, 100, 100)]
+toptee multimodal [('7:3038', 100, 100, 100), ('7:3790', 100, 100, 100)]
+toptee text_only_black_image [('7:3038', 100, 100, 100), ('7:3790', 100, 100, 100)]
+toptee image_only_empty_text [('7:3038', 100, 100, 100), ('7:3790', 100, 100, 100)]

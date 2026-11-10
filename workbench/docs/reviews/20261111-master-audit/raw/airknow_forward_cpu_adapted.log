@@ -1,0 +1,12 @@
+ADAPTED: torch.Tensor.cuda neutralised (test_BLIP2.py:111,128)
+ADAPTED: model.float() (mixed-precision checkpoint -> float32; half->float is lossless) because the pinned CPU autocast is nullcontext
+load lavis.models.blip2_models.blip2_cir.Blip2QformerCir 2.1s params 1173280958
+n_val_queries_dress 2017 n_split_dress 3817
+candidate B005X4PL1G target B0084Y8XIU captions ['is shiny and silver with shorter sleeves', 'fit and flare']
+text 'is shiny and silver with shorter sleeves and fit and flare'
+input shape (1, 3, 224, 224) (1, 3, 224, 224)
+forward_s 11.5
+query_feat (1, 1, 1, 256) target_feat (1, 256, 32)
+hash_q 6457cf0a2ba52688 hash_t ba2e501d7e56c19f
+score_native_matmul_max 0.557739794254303 sims_shape (1, 1, 1, 32)
+ADAPTATIONS ['torch.Tensor.cuda neutralised (test_BLIP2.py:111,128)', 'model.float() (mixed-precision checkpoint -> float32; half->float is lossless) because the pinned CPU autocast is nullcontext'] text_processor_via lavis.models

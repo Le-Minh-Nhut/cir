@@ -36,6 +36,9 @@ export interface ScopeRow {
   is_synthetic?: boolean | null;
   synthetic_fixture?: boolean | null;
   smoke?: { limited?: boolean | null } | null;
+  /** Which served table this row came from. Optional so existing callers keep working; when it is
+   *  absent the row is treated as a composition row, which is what every pre-existing caller meant. */
+  family?: "composition" | "native" | "aggregate";
 }
 
 /** Subset order the release defines, widest first. */
@@ -61,6 +64,10 @@ export interface ScopeChoice {
   subset: string;
   /** How many comparable rows the choice was made on, so the reason is inspectable. */
   rows: number;
+  /** Which served table actually lists these rows. A native macro measurement and an aggregate
+   *  report can share a protocol id but live in different views, so following a link to "the
+   *  protocol" is not enough: it has to be the table that holds the row (W-02). */
+  family?: "composition" | "native" | "aggregate";
 }
 
 /** The scope an unnamed URL should open: the one this deployment actually measured most of.
@@ -162,15 +169,21 @@ export function otherScopeFor(rows: ScopeRow[], model?: string | null): ScopeCho
   for (const row of research) {
     const protocol = row.protocol_id ?? "";
     if (!protocol) continue;
-    const key = `${protocol}\u001f${row.subset ?? ""}`;
+    // `family` is part of the identity: one model can hold a native macro AND an aggregate report
+    // under the same protocol, and those are listed in two different tables. Collapsing them into
+    // one link sent the reader to whichever table happened to be grouped first (W-02).
+    const key = `${protocol}\u001f${row.subset ?? ""}\u001f${row.family ?? "composition"}`;
     byScope.set(key, [...(byScope.get(key) ?? []), row]);
   }
   if (!model) return [];
   return [...byScope.entries()]
     .filter(([, scoped]) => scoped.some((row) => row.model_id === model))
     .map(([key, scoped]) => {
-      const [protocol, subset] = key.split("\u001f");
-      return { protocol, subset, rows: scoped.length };
+      const [protocol, subset, family] = key.split("\u001f");
+      return {
+        protocol, subset, rows: scoped.length,
+        family: family as ScopeChoice["family"],
+      };
     })
     .sort((left, right) => left.protocol.localeCompare(right.protocol)
       || SUBSET_SEQUENCE.indexOf(left.subset as never) - SUBSET_SEQUENCE.indexOf(right.subset as never));

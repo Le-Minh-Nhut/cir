@@ -1,0 +1,120 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { BASE } from "./client";
+import { fetchJson, useRegion } from "./useRegion";
+import { conditionsOf, outcomeTone } from "./inspector";
+import { Badge, Card, Detail, EmptyState, ErrorState, KeyValue, LoadingState } from "./ui";
+import { fmtInt, fmtRank } from "./format";
+import { FIXED_CUTOFFS } from "./catalog";
+import { candidateDisplayOptions, candidateRequestPath, effectiveCandidateK } from "./candidateRequest";
+import { outcomeLabel } from "./routes";
+import type { CompositionQuery, CompositionRun } from "./types";
+
+/** How an imported candidate source is named to a reader. Never the model whose row it sits on. */
+const IMPORTED_LABEL: Record<string, string> = {
+  released_audit_retriever: "released CIRCUS audit retriever",
+  released_artifact_import: "released artifact import",
+  external_artifact: "external artifact",
+};
+
+const CONDITION_LABELS: Record<string, string> = {
+  multimodal: "Ảnh + văn bản (MM)",
+  text_only_black_image: "Chỉ văn bản",
+  image_only_empty_text: "Chỉ ảnh",
+};
+
+/** One query, in one run: reference image, edit text, target image, the three condition ranks, and
+ *  the candidate list the run actually exported for the selected condition.
+ *
+ *  The honesty rules that matter here:
+ *  * a missing condition rank is `unscored` and says WHY it has no rank — it is never shown as a
+ *    loss at rank 0 and never mixed into the failure statistics; "every rank is present" is never
+ *    claimed when one is null;
+ *  * candidates come from a request that names run + subset + condition + query + K. The page
+ *    endpoint's own `top_k` used to cap the list at 10, so choosing "Top 50" could not add rows;
+ *    now K is part of the request identity and a superseded answer cannot overwrite a newer one;
+ *  * the menu never offers more than the export's depth, and no export is a stated reason with a
+ *    next step, never placeholder images;
+ *  * images that 404 in this deployment render an explicit missing tile with the image id, so a
+ *    coverage gap is visible instead of an empty box.
+ */
+export function QueryInspector({ run, query, condition = "multimodal", selectedCount, onAnnotate }: {
+  run: CompositionRun | null;
+  query: CompositionQuery | null;
+  condition?: string;
+  selectedCount: number;
+  onAnnotate: () => void;
+}) {
+  const [k, setK] = useState(10);
+  const depth = query?.candidate_depth
+    ?? run?.capability_detail?.candidate_topk?.depth
+    ?? query?.top_results?.length
+    ?? 0;
+  const options = candidateDisplayOptions(depth);
+  const effectiveK = effectiveCandidateK(k, depth);
+  const canRequest = !!(run && query && depth > 0 && (run.capabilities?.candidate_topk || (query.top_results?.length ?? 0) > 0));
+  const request = run && query
+    ? candidateRequestPath({ runId: run.run_id, subset: run.subset, condition, queryId: query.query_id, k: effectiveK })
+    : "none";
+  // The FULL identity, protocol included: two protocols can serve the same run id shape, and an
+  // answer is only valid for the protocol whose export produced it.
+  const requestKey = `${canRequest}:${run?.protocol_id ?? ""}:${request}`;
+  const candidatesRegion = useRegion<{ items: CompositionQuery[] }>(
+    "inspector-candidates", requestKey,
+    useMemo(() => (canRequest
+      ? (signal: AbortSignal) => fetchJson<{ items: CompositionQuery[] }>(request, signal)
+      : null), [request, canRequest]));
+  const current = candidatesRegion.region.key === requestKey;
+  const fetched = current && candidatesRegion.region.status === "ready"
+    ? candidatesRegion.region.data?.items.find((item) => item.query_id === query?.query_id) ?? null
+    : null;
+  // Never reuse another query/condition/K answer: a rank is not a candidate list.
+  const candidates = fetched?.top_results ?? [];
+  const shown = candidates.slice(0, effectiveK);
+  const loading = canRequest && (!current || candidatesRegion.region.status === "idle" || candidatesRegion.region.status === "loading");
+
+  useEffect(() => setK(10), [query?.query_id, run?.run_id, condition]);
+
+  if (!run) {
+    return (
+      <Card title="Duyệt ảnh truy hồi">
+        <EmptyState kind="none-selected" detail="Chọn một mô hình có kết quả để bắt đầu."
+                    next={<button type="button" onClick={onAnnotate}>Mở sổ nghiên cứu</button>} />
+      </Card>
+    );
+  }
+  if (!query) {
+    return (
+      <Card title="Duyệt ảnh truy hồi" subtitle={`${run.model_id} / ${run.checkpoint_id}`}>
+        <EmptyState kind="none-selected" detail="Chọn một query ở danh sách bên trái, hoặc nới bộ lọc để có query." />
+      </Card>
+    );
+  }
+
+  const conditions = conditionsOf(query);
+  const unscored = conditions.some((item) => item.rank === null);
+  const category = query.category || "circus";
+  const reason = fetched?.candidate_reason ?? query.candidate_reason
+    ?? run.capability_detail?.candidate_topk?.reason
+    ?? (run.capability_detail?.candidate_topk?.status
+      ? `Trạng thái do backend báo: ${run.capability_detail.candidate_topk.status}.`
+      : "Lượt này không lưu danh sách ứng viên.");
+  const isTarget = (imageId: string) => query.positive_ids.includes(imageId);
+  const hasExport = canRequest;
+
+  return (
+    <div className="inspector" data-testid="query-inspector">
+      <Card
+        title={<span data-testid="query-title">Query {query.query_id}</span>}
+        subtitle={`${run.model_id} · ${run.checkpoint_id} · ${run.protocol_id} · subset ${run.subset}`}
+        actions={(
+          <>
+            {/* The label, not the id: a bare `unresolved` next to three numbered ranks reads as
+                `unscored`, the opposite of what it means. */}
+            <Badge tone={unscored ? "warn" : outcomeTone(query.outcome)} testId="query-outcome">
+              {unscored ? "Có điều kiện chưa chấm" : outcomeLabel(query.outcome)}
+            </Badge>
+            {query.category && <Badge>{query.category}</Badge>}
+          </>
+        )}
+      >
+        <div className="query-brief">

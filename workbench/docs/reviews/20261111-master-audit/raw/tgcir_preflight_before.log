@@ -1,0 +1,11 @@
+Traceback (most recent call last):
+  File "/home/heheboiz/.local/share/uv/python/cpython-3.9-linux-x86_64-gnu/lib/python3.9/runpy.py", line 197, in _run_module_as_main
+    return _run_code(code, main_globals, None,
+  File "/home/heheboiz/.local/share/uv/python/cpython-3.9-linux-x86_64-gnu/lib/python3.9/runpy.py", line 87, in _run_code
+    exec(code, run_globals)
+  File "/home/heheboiz/data/cir/workbench/replay/tgcir.py", line 15, in <module>
+    from workbench.backend.registry import model_by_id
+  File "/home/heheboiz/data/cir/workbench/backend/registry.py", line 9, in <module>
+    import yaml
+ModuleNotFoundError: No module named 'yaml'
+EXIT=1

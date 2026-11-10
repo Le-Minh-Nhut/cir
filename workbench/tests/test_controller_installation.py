@@ -48,19 +48,35 @@ def _has_main_guard(tree: ast.AST) -> bool:
 
 
 def _scripts_third_party_imports() -> set[str]:
-    """Derive direct third-party imports from all workbench/scripts/*.py via AST."""
+    """Direct third-party imports a script needs from the CONTROLLER environment.
+
+    Module-level imports only. A function-scoped import is a DEFERRED dependency: it runs against an
+    interpreter, source tree or `sys.path` the caller supplies at that moment, not against the
+    controller venv `doctor` inspects. `warm_replay_cache.py` imports `open_clip`, `datasets`,
+    `torchvision`, `clip` and `data_utils` inside `main()` after resolving a caller-supplied
+    `--source-root`; none of them exists in the controller env by design, so requiring `doctor` to
+    report them would make it BLOCKED forever and hide the checks that matter.
+    """
     scripts_dir = ROOT / "workbench" / "scripts"
     stdlib = sys.stdlib_module_names
     imported = set()
-    for p in scripts_dir.glob("*.py"):
-        tree = ast.parse(p.read_text(encoding="utf-8"))
-        for node in ast.walk(tree):
+    def collect(body: list[ast.stmt]) -> None:
+        for node in body:
             if isinstance(node, ast.Import):
                 for alias in node.names:
                     imported.add(alias.name.split(".")[0])
-            elif isinstance(node, ast.ImportFrom):
-                if node.module and node.level == 0:
-                    imported.add(node.module.split(".")[0])
+            elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
+                imported.add(node.module.split(".")[0])
+            elif isinstance(node, ast.If):
+                # `if TYPE_CHECKING:` / `if sys.version_info` blocks still execute at import time.
+                collect(node.body)
+                collect(node.orelse)
+            elif isinstance(node, ast.Try):
+                collect(node.body)
+                collect(node.orelse)
+                collect(node.finalbody)
+    for p in scripts_dir.glob("*.py"):
+        collect(ast.parse(p.read_text(encoding="utf-8")).body)
     return {m for m in imported if m not in stdlib and m not in {"workbench", "src"}}
 
 

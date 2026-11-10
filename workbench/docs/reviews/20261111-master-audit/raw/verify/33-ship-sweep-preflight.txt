@@ -1,0 +1,17 @@
+=== SHIP-TREE sweep preflight 2026-11-11T01:55:36+07:00 ===
+--- pgrep -af pytest ---
+(exit=1 # 1 = none)
+--- pgrep xdist ---
+(exit=1 # 1 = none)
+--- df -h / ---
+Filesystem      Size  Used Avail Use% Mounted on
+/dev/nvme0n1p5  630G  478G  121G  80% /
+--- basetemp absent ---
+ls: cannot access '/tmp/sweep_basetemp_ship': No such file or directory
+--- HEAD ---
+92ed66de4f359ef479da18bf8939723b6f9313e5
+--- git status -uall baseline snapshot (for drift detection during run) ---
+422
+d271b76baedf98ec154761061051cd847294ed6f9cb34ba5ce22c43ad6d16115  /tmp/status_before_ship.txt
+--- collect-only total BEFORE run ---
+collect-only BEFORE ship run: 2865 tests collected

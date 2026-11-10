@@ -58,3 +58,21 @@ def test_a_metric_carries_its_denominator_and_coverage() -> None:
     assert out[0] == "5,884 / 6,003 (98.0%)", out
     assert out[1] == "0 / 4,069 (0.0%)", out
     assert "—" in out[2], out
+
+def test_recall_names_the_scale_the_artifact_states() -> None:
+    """W-01: `0.2793` (fraction) and `27.93` (percent) are ONE measurement, not two scores.
+
+    `fmtPercentValue` printed them as `0.28%` and `27.93%`. The unit is a property of the row, so
+    the formatter takes it and a row without one refuses to invent a `%`.
+    """
+    out = _fmt("""[
+      F.fmtRecall(0.2793, "fraction", 2),
+      F.fmtRecall(27.93, "percent", 2),
+      F.fmtRecall(0.2793, null, 2),
+      F.fmtRecall(null, "percent", 2),
+    ]""")
+    assert out[0] == "27.93%", out
+    assert out[1] == "27.93%", out
+    assert out[0] == out[1], "a fraction and a percent of one value must not read as two scores"
+    assert "đơn vị không ghi" in out[2] and "%" not in out[2], out
+    assert out[3] == "—", out

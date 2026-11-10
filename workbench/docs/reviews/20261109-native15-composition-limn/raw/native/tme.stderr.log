@@ -1,0 +1,22 @@
+[WARNING] TME runtime asset BLIP-2 pretrain weights EXISTS_UNVERIFIED_CHECKSUM (/home/heheboiz/data/cir/workbench/third_party/TME/weight/blip2_pretrained.pth); source: https://storage.googleapis.com/sfr-vision-language-research/LAVIS/models/BLIP2/blip2_pretrained.pth; author digest unavailable; local digest recorded, not verified against a published value
+[WARNING] TME runtime asset EVA-ViT-g backbone weights EXISTS_UNVERIFIED_CHECKSUM (/home/heheboiz/data/cir/workbench/third_party/TME/weight/eva_vit_g.pth); source: https://storage.googleapis.com/sfr-vision-language-research/LAVIS/models/BLIP2/eva_vit_g.pth; author digest unavailable; local digest recorded, not verified against a published value
+/home/heheboiz/data/cir/workbench/envs/tme-adapted/lib/python3.10/site-packages/transformers/utils/generic.py:441: FutureWarning: `torch.utils._pytree._register_pytree_node` is deprecated. Please use `torch.utils._pytree.register_pytree_node` instead.
+  _torch_pytree._register_pytree_node(
+/home/heheboiz/data/cir/workbench/envs/tme-adapted/lib/python3.10/site-packages/huggingface_hub/file_download.py:949: FutureWarning: `resume_download` is deprecated and will be removed in version 1.0.0. Downloads always resume when possible. If you want to force a new download, use `force_download=True`.
+  warnings.warn(
+[WARNING] TME feature cache preparation receipt does not bind current inputs; cache origin remains UNVERIFIED
+/home/heheboiz/data/cir/workbench/envs/tme-adapted/lib/python3.10/site-packages/transformers/utils/generic.py:309: FutureWarning: `torch.utils._pytree._register_pytree_node` is deprecated. Please use `torch.utils._pytree.register_pytree_node` instead.
+  _torch_pytree._register_pytree_node(
+/home/heheboiz/data/cir/workbench/envs/tme-adapted/lib/python3.10/site-packages/transformers/utils/generic.py:309: FutureWarning: `torch.utils._pytree._register_pytree_node` is deprecated. Please use `torch.utils._pytree.register_pytree_node` instead.
+  _torch_pytree._register_pytree_node(
+/home/heheboiz/data/cir/workbench/envs/tme-adapted/lib/python3.10/site-packages/huggingface_hub/file_download.py:949: FutureWarning: `resume_download` is deprecated and will be removed in version 1.0.0. Downloads always resume when possible. If you want to force a new download, use `force_download=True`.
+  warnings.warn(
+[WARNING] TME feature cache provenance UNVERIFIED for this run: no prior run provenance
+  0%|                                                                                            | 0/15 [00:00<?, ?it/s]/home/heheboiz/data/cir/workbench/third_party/TME/src/lavis/models/blip2_models/blip2.py:42: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  return torch.cuda.amp.autocast(dtype=dtype)
+100%|███████████████████████████████████████████████████████████████████████████████████| 15/15 [00:06<00:00,  2.30it/s]
+  0%|                                                                                           | 0/253 [00:00<?, ?it/s]100%|█████████████████████████████████████████████████████████████████████████████████| 253/253 [00:05<00:00, 49.21it/s]
+  0%|                                                                                            | 0/25 [00:00<?, ?it/s]100%|███████████████████████████████████████████████████████████████████████████████████| 25/25 [00:10<00:00,  2.27it/s]
+  0%|                                                                                           | 0/255 [00:00<?, ?it/s]100%|█████████████████████████████████████████████████████████████████████████████████| 255/255 [00:07<00:00, 34.97it/s]
+  0%|                                                                                            | 0/21 [00:00<?, ?it/s]100%|███████████████████████████████████████████████████████████████████████████████████| 21/21 [00:09<00:00,  2.27it/s]
+  0%|                                                                                           | 0/246 [00:00<?, ?it/s]100%|█████████████████████████████████████████████████████████████████████████████████| 246/246 [00:06<00:00, 38.21it/s]

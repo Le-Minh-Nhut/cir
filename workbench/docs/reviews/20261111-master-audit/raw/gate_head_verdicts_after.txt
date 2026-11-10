@@ -1,0 +1,35 @@
+{
+ "standard": "parity-relative/v1",
+ "requested_standard": "parity-relative/v1",
+ "advisory_standards": [
+  "parity-absolute-relative/v2"
+ ],
+ "passed_models": [],
+ "models": {
+  "encoder": {
+   "status": "PARITY_MANDATORY_SUBCHECK_FAILED",
+   "passed": false,
+   "complete": false,
+   "failure_count": 13,
+   "missing": [],
+   "applied_standard": "parity-relative/v1"
+  },
+  "limn": {
+   "status": "PARITY_MANDATORY_SUBCHECK_FAILED",
+   "passed": false,
+   "complete": false,
+   "failure_count": 3,
+   "missing": [
+    "metrics_parity"
+   ],
+   "applied_standard": "parity-relative/v1"
+  }
+ }
+}
+{
+ "v2_request_standard": "parity-relative/v1",
+ "v2_request_advisory": [
+  "parity-absolute-relative/v2"
+ ],
+ "v2_request_passed": []
+}

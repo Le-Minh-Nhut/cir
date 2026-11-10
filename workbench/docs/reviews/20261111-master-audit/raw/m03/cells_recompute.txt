@@ -1,0 +1,728 @@
+{
+ "cells": 12,
+ "verdicts_all_pass": false,
+ "failing": [
+  {
+   "qid": "7:3038",
+   "scope": "shirt",
+   "condition": "multimodal",
+   "verdict": false,
+   "checks": {
+    "target_did_is_own_positive": true,
+    "all_12_cells_did": "7:3416",
+    "target_asset_maps_to_own_did": true,
+    "summary_pos_matches_release": true,
+    "summary_pos_list": [
+     13614
+    ],
+    "pos_in_list": true,
+    "candidate_pos_id_mismatch": 0,
+    "ranks_sequential": true,
+    "scores_desc": true,
+    "dupe_ids": false,
+    "dupe_pos": false,
+    "depth_vs_stored": [
+     100,
+     100
+    ],
+    "flagged_targets": 1,
+    "target_row_matches_summary": true,
+    "rank1_score_matches": true,
+    "export_ckpt_matches_summary": true,
+    "cell_cond_scope": true
+   }
+  },
+  {
+   "qid": "7:3038",
+   "scope": "shirt",
+   "condition": "text_only_black_image",
+   "verdict": false,
+   "checks": {
+    "target_did_is_own_positive": true,
+    "all_12_cells_did": "7:3416",
+    "target_asset_maps_to_own_did": true,
+    "summary_pos_matches_release": true,
+    "summary_pos_list": [
+     13614
+    ],
+    "pos_in_list": true,
+    "candidate_pos_id_mismatch": 0,
+    "ranks_sequential": true,
+    "scores_desc": true,
+    "dupe_ids": false,
+    "dupe_pos": false,
+    "depth_vs_stored": [
+     100,
+     100
+    ],
+    "flagged_targets": 1,
+    "target_row_matches_summary": true,
+    "rank1_score_matches": true,
+    "export_ckpt_matches_summary": true,
+    "cell_cond_scope": true
+   }
+  },
+  {
+   "qid": "7:3038",
+   "scope": "shirt",
+   "condition": "image_only_empty_text",
+   "verdict": false,
+   "checks": {
+    "target_did_is_own_positive": true,
+    "all_12_cells_did": "7:3416",
+    "target_asset_maps_to_own_did": true,
+    "summary_pos_matches_release": true,
+    "summary_pos_list": [
+     13614
+    ],
+    "pos_in_list": true,
+    "candidate_pos_id_mismatch": 0,
+    "ranks_sequential": true,
+    "scores_desc": true,
+    "dupe_ids": false,
+    "dupe_pos": false,
+    "depth_vs_stored": [
+     100,
+     100
+    ],
+    "flagged_targets": 0,
+    "target_row_matches_summary": "target outside window (rank 152 > depth 100)",
+    "rank1_score_matches": true,
+    "export_ckpt_matches_summary": true,
+    "cell_cond_scope": true
+   }
+  },
+  {
+   "qid": "7:3038",
+   "scope": "toptee",
+   "condition": "multimodal",
+   "verdict": false,
+   "checks": {
+    "target_did_is_own_positive": true,
+    "all_12_cells_did": "7:3416",
+    "target_asset_maps_to_own_did": true,
+    "summary_pos_matches_release": true,
+    "summary_pos_list": [
+     13614
+    ],
+    "pos_in_list": true,
+    "candidate_pos_id_mismatch": 0,
+    "ranks_sequential": true,
+    "scores_desc": true,
+    "dupe_ids": false,
+    "dupe_pos": false,
+    "depth_vs_stored": [
+     100,
+     100
+    ],
+    "flagged_targets": 1,
+    "target_row_matches_summary": true,
+    "rank1_score_matches": true,
+    "export_ckpt_matches_summary": true,
+    "cell_cond_scope": true
+   }
+  },
+  {
+   "qid": "7:3038",
+   "scope": "toptee",
+   "condition": "text_only_black_image",
+   "verdict": false,
+   "checks": {
+    "target_did_is_own_positive": true,
+    "all_12_cells_did": "7:3416",
+    "target_asset_maps_to_own_did": true,
+    "summary_pos_matches_release": true,
+    "summary_pos_list": [
+     13614
+    ],
+    "pos_in_list": true,
+    "candidate_pos_id_mismatch": 0,
+    "ranks_sequential": true,
+    "scores_desc": true,
+    "dupe_ids": false,
+    "dupe_pos": false,
+    "depth_vs_stored": [
+     100,
+     100
+    ],
+    "flagged_targets": 0,
+    "target_row_matches_summary": "target outside window (rank 389 > depth 100)",
+    "rank1_score_matches": true,
+    "export_ckpt_matches_summary": true,
+    "cell_cond_scope": true
+   }
+  },
+  {
+   "qid": "7:3038",
+   "scope": "toptee",
+   "condition": "image_only_empty_text",
+   "verdict": false,
+   "checks": {
+    "target_did_is_own_positive": true,
+    "all_12_cells_did": "7:3416",
+    "target_asset_maps_to_own_did": true,
+    "summary_pos_matches_release": true,
+    "summary_pos_list": [
+     13614
+    ],
+    "pos_in_list": true,
+    "candidate_pos_id_mismatch": 0,
+    "ranks_sequential": true,
+    "scores_desc": true,
+    "dupe_ids": false,
+    "dupe_pos": false,
+    "depth_vs_stored": [
+     100,
+     100
+    ],
+    "flagged_targets": 1,
+    "target_row_matches_summary": true,
+    "rank1_score_matches": true,
+    "export_ckpt_matches_summary": true,
+    "cell_cond_scope": true
+   }
+  },
+  {
+   "qid": "7:3790",
+   "scope": "shirt",
+   "condition": "multimodal",
+   "verdict": false,
+   "checks": {
+    "target_did_is_own_positive": true,
+    "all_12_cells_did": "7:42304",
+    "target_asset_maps_to_own_did": true,
+    "summary_pos_matches_release": true,
+    "summary_pos_list": [
+     70410
+    ],
+    "pos_in_list": true,
+    "candidate_pos_id_mismatch": 0,
+    "ranks_sequential": true,
+    "scores_desc": true,
+    "dupe_ids": false,
+    "dupe_pos": false,
+    "depth_vs_stored": [
+     100,
+     100
+    ],
+    "flagged_targets": 1,
+    "target_row_matches_summary": true,
+    "rank1_score_matches": true,
+    "export_ckpt_matches_summary": true,
+    "cell_cond_scope": true
+   }
+  },
+  {
+   "qid": "7:3790",
+   "scope": "shirt",
+   "condition": "text_only_black_image",
+   "verdict": false,
+   "checks": {
+    "target_did_is_own_positive": true,
+    "all_12_cells_did": "7:42304",
+    "target_asset_maps_to_own_did": true,
+    "summary_pos_matches_release": true,
+    "summary_pos_list": [
+     70410
+    ],
+    "pos_in_list": true,
+    "candidate_pos_id_mismatch": 0,
+    "ranks_sequential": true,
+    "scores_desc": true,
+    "dupe_ids": false,
+    "dupe_pos": false,
+    "depth_vs_stored": [
+     100,
+     100
+    ],
+    "flagged_targets": 0,
+    "target_row_matches_summary": "target outside window (rank 6891 > depth 100)",
+    "rank1_score_matches": true,
+    "export_ckpt_matches_summary": true,
+    "cell_cond_scope": true
+   }
+  },
+  {
+   "qid": "7:3790",
+   "scope": "shirt",
+   "condition": "image_only_empty_text",
+   "verdict": false,
+   "checks": {
+    "target_did_is_own_positive": true,
+    "all_12_cells_did": "7:42304",
+    "target_asset_maps_to_own_did": true,
+    "summary_pos_matches_release": true,
+    "summary_pos_list": [
+     70410
+    ],
+    "pos_in_list": true,
+    "candidate_pos_id_mismatch": 0,
+    "ranks_sequential": true,
+    "scores_desc": true,
+    "dupe_ids": false,
+    "dupe_pos": false,
+    "depth_vs_stored": [
+     100,
+     100
+    ],
+    "flagged_targets": 0,
+    "target_row_matches_summary": "target outside window (rank 2200 > depth 100)",
+    "rank1_score_matches": true,
+    "export_ckpt_matches_summary": true,
+    "cell_cond_scope": true
+   }
+  },
+  {
+   "qid": "7:3790",
+   "scope": "toptee",
+   "condition": "multimodal",
+   "verdict": false,
+   "checks": {
+    "target_did_is_own_positive": true,
+    "all_12_cells_did": "7:42304",
+    "target_asset_maps_to_own_did": true,
+    "summary_pos_matches_release": true,
+    "summary_pos_list": [
+     70410
+    ],
+    "pos_in_list": true,
+    "candidate_pos_id_mismatch": 0,
+    "ranks_sequential": true,
+    "scores_desc": true,
+    "dupe_ids": false,
+    "dupe_pos": false,
+    "depth_vs_stored": [
+     100,
+     100
+    ],
+    "flagged_targets": 1,
+    "target_row_matches_summary": true,
+    "rank1_score_matches": true,
+    "export_ckpt_matches_summary": true,
+    "cell_cond_scope": true
+   }
+  },
+  {
+   "qid": "7:3790",
+   "scope": "toptee",
+   "condition": "text_only_black_image",
+   "verdict": false,
+   "checks": {
+    "target_did_is_own_positive": true,
+    "all_12_cells_did": "7:42304",
+    "target_asset_maps_to_own_did": true,
+    "summary_pos_matches_release": true,
+    "summary_pos_list": [
+     70410
+    ],
+    "pos_in_list": true,
+    "candidate_pos_id_mismatch": 0,
+    "ranks_sequential": true,
+    "scores_desc": true,
+    "dupe_ids": false,
+    "dupe_pos": false,
+    "depth_vs_stored": [
+     100,
+     100
+    ],
+    "flagged_targets": 0,
+    "target_row_matches_summary": "target outside window (rank 4730 > depth 100)",
+    "rank1_score_matches": true,
+    "export_ckpt_matches_summary": true,
+    "cell_cond_scope": true
+   }
+  },
+  {
+   "qid": "7:3790",
+   "scope": "toptee",
+   "condition": "image_only_empty_text",
+   "verdict": false,
+   "checks": {
+    "target_did_is_own_positive": true,
+    "all_12_cells_did": "7:42304",
+    "target_asset_maps_to_own_did": true,
+    "summary_pos_matches_release": true,
+    "summary_pos_list": [
+     70410
+    ],
+    "pos_in_list": true,
+    "candidate_pos_id_mismatch": 0,
+    "ranks_sequential": true,
+    "scores_desc": true,
+    "dupe_ids": false,
+    "dupe_pos": false,
+    "depth_vs_stored": [
+     100,
+     100
+    ],
+    "flagged_targets": 0,
+    "target_row_matches_summary": "target outside window (rank 4047 > depth 100)",
+    "rank1_score_matches": true,
+    "export_ckpt_matches_summary": true,
+    "cell_cond_scope": true
+   }
+  }
+ ],
+ "detail": [
+  {
+   "qid": "7:3038",
+   "scope": "shirt",
+   "condition": "multimodal",
+   "verdict": false,
+   "checks": {
+    "target_did_is_own_positive": true,
+    "all_12_cells_did": "7:3416",
+    "target_asset_maps_to_own_did": true,
+    "summary_pos_matches_release": true,
+    "summary_pos_list": [
+     13614
+    ],
+    "pos_in_list": true,
+    "candidate_pos_id_mismatch": 0,
+    "ranks_sequential": true,
+    "scores_desc": true,
+    "dupe_ids": false,
+    "dupe_pos": false,
+    "depth_vs_stored": [
+     100,
+     100
+    ],
+    "flagged_targets": 1,
+    "target_row_matches_summary": true,
+    "rank1_score_matches": true,
+    "export_ckpt_matches_summary": true,
+    "cell_cond_scope": true
+   }
+  },
+  {
+   "qid": "7:3038",
+   "scope": "shirt",
+   "condition": "text_only_black_image",
+   "verdict": false,
+   "checks": {
+    "target_did_is_own_positive": true,
+    "all_12_cells_did": "7:3416",
+    "target_asset_maps_to_own_did": true,
+    "summary_pos_matches_release": true,
+    "summary_pos_list": [
+     13614
+    ],
+    "pos_in_list": true,
+    "candidate_pos_id_mismatch": 0,
+    "ranks_sequential": true,
+    "scores_desc": true,
+    "dupe_ids": false,
+    "dupe_pos": false,
+    "depth_vs_stored": [
+     100,
+     100
+    ],
+    "flagged_targets": 1,
+    "target_row_matches_summary": true,
+    "rank1_score_matches": true,
+    "export_ckpt_matches_summary": true,
+    "cell_cond_scope": true
+   }
+  },
+  {
+   "qid": "7:3038",
+   "scope": "shirt",
+   "condition": "image_only_empty_text",
+   "verdict": false,
+   "checks": {
+    "target_did_is_own_positive": true,
+    "all_12_cells_did": "7:3416",
+    "target_asset_maps_to_own_did": true,
+    "summary_pos_matches_release": true,
+    "summary_pos_list": [
+     13614
+    ],
+    "pos_in_list": true,
+    "candidate_pos_id_mismatch": 0,
+    "ranks_sequential": true,
+    "scores_desc": true,
+    "dupe_ids": false,
+    "dupe_pos": false,
+    "depth_vs_stored": [
+     100,
+     100
+    ],
+    "flagged_targets": 0,
+    "target_row_matches_summary": "target outside window (rank 152 > depth 100)",
+    "rank1_score_matches": true,
+    "export_ckpt_matches_summary": true,
+    "cell_cond_scope": true
+   }
+  },
+  {
+   "qid": "7:3038",
+   "scope": "toptee",
+   "condition": "multimodal",
+   "verdict": false,
+   "checks": {
+    "target_did_is_own_positive": true,
+    "all_12_cells_did": "7:3416",
+    "target_asset_maps_to_own_did": true,
+    "summary_pos_matches_release": true,
+    "summary_pos_list": [
+     13614
+    ],
+    "pos_in_list": true,
+    "candidate_pos_id_mismatch": 0,
+    "ranks_sequential": true,
+    "scores_desc": true,
+    "dupe_ids": false,
+    "dupe_pos": false,
+    "depth_vs_stored": [
+     100,
+     100
+    ],
+    "flagged_targets": 1,
+    "target_row_matches_summary": true,
+    "rank1_score_matches": true,
+    "export_ckpt_matches_summary": true,
+    "cell_cond_scope": true
+   }
+  },
+  {
+   "qid": "7:3038",
+   "scope": "toptee",
+   "condition": "text_only_black_image",
+   "verdict": false,
+   "checks": {
+    "target_did_is_own_positive": true,
+    "all_12_cells_did": "7:3416",
+    "target_asset_maps_to_own_did": true,
+    "summary_pos_matches_release": true,
+    "summary_pos_list": [
+     13614
+    ],
+    "pos_in_list": true,
+    "candidate_pos_id_mismatch": 0,
+    "ranks_sequential": true,
+    "scores_desc": true,
+    "dupe_ids": false,
+    "dupe_pos": false,
+    "depth_vs_stored": [
+     100,
+     100
+    ],
+    "flagged_targets": 0,
+    "target_row_matches_summary": "target outside window (rank 389 > depth 100)",
+    "rank1_score_matches": true,
+    "export_ckpt_matches_summary": true,
+    "cell_cond_scope": true
+   }
+  },
+  {
+   "qid": "7:3038",
+   "scope": "toptee",
+   "condition": "image_only_empty_text",
+   "verdict": false,
+   "checks": {
+    "target_did_is_own_positive": true,
+    "all_12_cells_did": "7:3416",
+    "target_asset_maps_to_own_did": true,
+    "summary_pos_matches_release": true,
+    "summary_pos_list": [
+     13614
+    ],
+    "pos_in_list": true,
+    "candidate_pos_id_mismatch": 0,
+    "ranks_sequential": true,
+    "scores_desc": true,
+    "dupe_ids": false,
+    "dupe_pos": false,
+    "depth_vs_stored": [
+     100,
+     100
+    ],
+    "flagged_targets": 1,
+    "target_row_matches_summary": true,
+    "rank1_score_matches": true,
+    "export_ckpt_matches_summary": true,
+    "cell_cond_scope": true
+   }
+  },
+  {
+   "qid": "7:3790",
+   "scope": "shirt",
+   "condition": "multimodal",
+   "verdict": false,
+   "checks": {
+    "target_did_is_own_positive": true,
+    "all_12_cells_did": "7:42304",
+    "target_asset_maps_to_own_did": true,
+    "summary_pos_matches_release": true,
+    "summary_pos_list": [
+     70410
+    ],
+    "pos_in_list": true,
+    "candidate_pos_id_mismatch": 0,
+    "ranks_sequential": true,
+    "scores_desc": true,
+    "dupe_ids": false,
+    "dupe_pos": false,
+    "depth_vs_stored": [
+     100,
+     100
+    ],
+    "flagged_targets": 1,
+    "target_row_matches_summary": true,
+    "rank1_score_matches": true,
+    "export_ckpt_matches_summary": true,
+    "cell_cond_scope": true
+   }
+  },
+  {
+   "qid": "7:3790",
+   "scope": "shirt",
+   "condition": "text_only_black_image",
+   "verdict": false,
+   "checks": {
+    "target_did_is_own_positive": true,
+    "all_12_cells_did": "7:42304",
+    "target_asset_maps_to_own_did": true,
+    "summary_pos_matches_release": true,
+    "summary_pos_list": [
+     70410
+    ],
+    "pos_in_list": true,
+    "candidate_pos_id_mismatch": 0,
+    "ranks_sequential": true,
+    "scores_desc": true,
+    "dupe_ids": false,
+    "dupe_pos": false,
+    "depth_vs_stored": [
+     100,
+     100
+    ],
+    "flagged_targets": 0,
+    "target_row_matches_summary": "target outside window (rank 6891 > depth 100)",
+    "rank1_score_matches": true,
+    "export_ckpt_matches_summary": true,
+    "cell_cond_scope": true
+   }
+  },
+  {
+   "qid": "7:3790",
+   "scope": "shirt",
+   "condition": "image_only_empty_text",
+   "verdict": false,
+   "checks": {
+    "target_did_is_own_positive": true,
+    "all_12_cells_did": "7:42304",
+    "target_asset_maps_to_own_did": true,
+    "summary_pos_matches_release": true,
+    "summary_pos_list": [
+     70410
+    ],
+    "pos_in_list": true,
+    "candidate_pos_id_mismatch": 0,
+    "ranks_sequential": true,
+    "scores_desc": true,
+    "dupe_ids": false,
+    "dupe_pos": false,
+    "depth_vs_stored": [
+     100,
+     100
+    ],
+    "flagged_targets": 0,
+    "target_row_matches_summary": "target outside window (rank 2200 > depth 100)",
+    "rank1_score_matches": true,
+    "export_ckpt_matches_summary": true,
+    "cell_cond_scope": true
+   }
+  },
+  {
+   "qid": "7:3790",
+   "scope": "toptee",
+   "condition": "multimodal",
+   "verdict": false,
+   "checks": {
+    "target_did_is_own_positive": true,
+    "all_12_cells_did": "7:42304",
+    "target_asset_maps_to_own_did": true,
+    "summary_pos_matches_release": true,
+    "summary_pos_list": [
+     70410
+    ],
+    "pos_in_list": true,
+    "candidate_pos_id_mismatch": 0,
+    "ranks_sequential": true,
+    "scores_desc": true,
+    "dupe_ids": false,
+    "dupe_pos": false,
+    "depth_vs_stored": [
+     100,
+     100
+    ],
+    "flagged_targets": 1,
+    "target_row_matches_summary": true,
+    "rank1_score_matches": true,
+    "export_ckpt_matches_summary": true,
+    "cell_cond_scope": true
+   }
+  },
+  {
+   "qid": "7:3790",
+   "scope": "toptee",
+   "condition": "text_only_black_image",
+   "verdict": false,
+   "checks": {
+    "target_did_is_own_positive": true,
+    "all_12_cells_did": "7:42304",
+    "target_asset_maps_to_own_did": true,
+    "summary_pos_matches_release": true,
+    "summary_pos_list": [
+     70410
+    ],
+    "pos_in_list": true,
+    "candidate_pos_id_mismatch": 0,
+    "ranks_sequential": true,
+    "scores_desc": true,
+    "dupe_ids": false,
+    "dupe_pos": false,
+    "depth_vs_stored": [
+     100,
+     100
+    ],
+    "flagged_targets": 0,
+    "target_row_matches_summary": "target outside window (rank 4730 > depth 100)",
+    "rank1_score_matches": true,
+    "export_ckpt_matches_summary": true,
+    "cell_cond_scope": true
+   }
+  },
+  {
+   "qid": "7:3790",
+   "scope": "toptee",
+   "condition": "image_only_empty_text",
+   "verdict": false,
+   "checks": {
+    "target_did_is_own_positive": true,
+    "all_12_cells_did": "7:42304",
+    "target_asset_maps_to_own_did": true,
+    "summary_pos_matches_release": true,
+    "summary_pos_list": [
+     70410
+    ],
+    "pos_in_list": true,
+    "candidate_pos_id_mismatch": 0,
+    "ranks_sequential": true,
+    "scores_desc": true,
+    "dupe_ids": false,
+    "dupe_pos": false,
+    "depth_vs_stored": [
+     100,
+     100
+    ],
+    "flagged_targets": 0,
+    "target_row_matches_summary": "target outside window (rank 4047 > depth 100)",
+    "rank1_score_matches": true,
+    "export_ckpt_matches_summary": true,
+    "cell_cond_scope": true
+   }
+  }
+ ]
+}

@@ -1,0 +1,6 @@
+*** Error compiling 'workbench/backend/environment_planner.py'...
+  File "workbench/backend/environment_planner.py", line 669
+    f"{', '.join(sorted(_distribution_names(module, set())
+                                                          ^
+SyntaxError: EOL while scanning string literal
+

@@ -1,0 +1,74 @@
+{
+  "module": "workbench/composition/model_limn.py",
+  "scopes": [
+    "dress",
+    "shirt",
+    "toptee"
+  ],
+  "query": {
+    "qid": "7:3038",
+    "query_txt": "Is darker and has a different graphic and is darker",
+    "reference_stem": "B000AM",
+    "loader_category": null,
+    "normalized_key": "is darker and has a different graphic and is darker"
+  },
+  "fixture_captions": {
+    "shirt": [
+      "is darker and has a different graphic",
+      "is darker"
+    ],
+    "toptee": [
+      "is darker and has a different graphic",
+      "is darker"
+    ]
+  },
+  "probes": [
+    {
+      "fixture": "a_both_present",
+      "files": [
+        "cap.shirt.val.json",
+        "cap.toptee.val.json"
+      ],
+      "toptee_bytes": "[{\"candidate\": \"B000AM\", \"captions\": [\"is darker and has a different graphic\", \"is darker\"]}]",
+      "index_entry": [
+        "shirt",
+        "toptee"
+      ],
+      "resolved": null
+    },
+    {
+      "fixture": "b_toptee_absent",
+      "files": [
+        "cap.shirt.val.json"
+      ],
+      "toptee_bytes": null,
+      "index_entry": [
+        "shirt"
+      ],
+      "resolved": "shirt"
+    },
+    {
+      "fixture": "c_toptee_corrupt",
+      "files": [
+        "cap.shirt.val.json",
+        "cap.toptee.val.json"
+      ],
+      "toptee_bytes": "{\"rows\": [",
+      "index_entry": [
+        "shirt"
+      ],
+      "resolved": "shirt"
+    },
+    {
+      "fixture": "d_shirt_absent",
+      "files": [
+        "cap.toptee.val.json"
+      ],
+      "toptee_bytes": "[{\"candidate\": \"B000AM\", \"captions\": [\"is darker and has a different graphic\", \"is darker\"]}]",
+      "index_entry": [
+        "toptee"
+      ],
+      "resolved": "toptee"
+    }
+  ]
+}

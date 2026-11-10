@@ -1,0 +1,34 @@
+/home/heheboiz/data/cir/workbench/envs/encoder310-adapted/lib/python3.10/site-packages/timm/models/layers/__init__.py:49: FutureWarning: Importing from timm.models.layers is deprecated, please import via timm.layers
+  warnings.warn(f"Importing from {__name__} is deprecated, please import via timm.layers", FutureWarning)
+2
+{
+ "tag": "U2",
+ "layers": [
+  "pixels",
+  "token_ids",
+  "fc",
+  "text_fc",
+  "weight_chanelImg",
+  "weight_cross",
+  "weight_chanelImg_t",
+  "cross_t2i",
+  "sparse_net",
+  "fac_net",
+  "binding_in_V",
+  "binding_product_cross",
+  "binding_product_cross_truth",
+  "binding_relation",
+  "binding_S_cross",
+  "binding_S_self",
+  "binding_S_final",
+  "binding_entity",
+  "weight_chanelText_i",
+  "cross_i2t",
+  "weight_chanelText",
+  "sparse_net_text",
+  "affine_in_x",
+  "affine_in_text",
+  "affine",
+  "final"
+ ]
+}

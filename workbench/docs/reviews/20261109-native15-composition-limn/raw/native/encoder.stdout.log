@@ -1,0 +1,3 @@
+RAMGUARD verdict=GO avail=28.56GiB predicted=11.60GiB headroom=6.00GiB need=17.60GiB anon=0.66GiB swapfree=4.83GiB
+2
+EXITCODE=0 WALL_SECONDS=131 PEAK_VMHWM_KB=19539764 PEAK_GiB=18.63

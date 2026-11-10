@@ -1,0 +1,6 @@
+lavis_ctx /home/heheboiz/data/cir/workbench/third_party/AirKnow/lavis reused False
+load_ok lavis.models.blip2_models.blip2_cir.Blip2QformerCir 3.2s
+n_state_dict_entries 863
+n_params 1196753657
+model_type None
+has_visual_encoder True has_Qformer True device cpu

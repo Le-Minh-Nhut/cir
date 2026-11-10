@@ -1,0 +1,64 @@
+counts: {"files_scanned": 71, "files": 32, "blocks_with_metrics": 43, "with_metrics": 21, "rollup_rows": 12, "duplicate_rows": 10, "unbacked_rows": 18, "unit_declared": 0, "unit_inferred": 43, "unit_undeclared": 0, "unit_not_declared": 43, "unreadable": 2, "signposted_blockers": 4, "models_with_metrics": 17, "models_rollup_only": 8, "verified": 0}
+
+=== A1 clip4cir_rn50x4_fullft ===
+{"measurement_id": "ff7496d7aaee6242", "model_id": "clip4cir_rn50x4_fullft", "metrics": {"r10": 43.8016931215922, "r50": 66.98358456293742}, "artifact_backed": true, "counted": true, "duplicate_of": null, "rollup": true, "source": {"path": "checkpoint_selection/20261106T002617+0700/measurements/clip4cir_parsed.json", "sha256": "e49be6e34a7cab282c9ccf1590988c380af229d495f495126838416e6a89bb53", "bytes": 709, "artifact_type": "native_measurement"}}
+{"measurement_id": "5599f0cc6399107b", "model_id": "clip4cir_rn50x4_fullft", "metrics": {"r10": 43.8016931215922, "r50": 66.98358456293742}, "artifact_backed": true, "counted": false, "duplicate_of": "checkpoint_selection/20261106T002617+0700/measurements/clip4cir_parsed.json", "rollup": true, "source": {"path": "checkpoint_selection/20261106T002617+0700/measurements/selection_decisions.json", "sha256": "ef34f34c44b7a50a6d78f01602863a8723fc1b5d7b949c27412e4f6c7b82eacc", "bytes": 1965, "artifact_type": "native_measurement"}}
+
+=== A1b any model_id clip4cir_fullft ===
+[]
+clip4cir_fullft rows: 0
+
+=== A2 combiner_rn50x4_noft ===
+{"measurement_id": "df785c5847244b67", "metrics": {"r10": 35.1078, "r50": 58.4756, "mean": 46.7917}, "artifact_backed": true, "counted": true, "duplicate_of": null, "rollup": true, "protocol_id": "fashioniq_original_split", "source": {"path": "checkpoint_selection/20261106T002617+0700/measurements/selection_decisions.json", "sha256": "ef34f34c44b7a50a6d78f01602863a8723fc1b5d7b949c27412e4f6c7b82eacc", "bytes": 1965, "artifact_type": "native_measurement"}}
+
+=== A3 duplicate accounting ===
+uncounted rows (counted=false):
+   B1/H_normal <- duplicate_of checkpoint_selection/20261106T002617+0700/pair_compat/manifests/pair_compat_verdict.json {'r10': 34.035, 'r50': 56.5957, 'mean': 45.3154}
+   B1/H_rev <- duplicate_of checkpoint_selection/20261106T002617+0700/pair_compat/manifests/pair_compat_verdict.json {'r10': 35.0147, 'r50': 57.5753, 'mean': 46.295}
+   B2/H_normal <- duplicate_of checkpoint_selection/20261106T002617+0700/pair_compat/manifests/pair_compat_verdict.json {'r10': 22.1564, 'r50': 43.4864, 'mean': 32.8214}
+   B2/H_rev <- duplicate_of checkpoint_selection/20261106T002617+0700/pair_compat/manifests/pair_compat_verdict.json {'r10': 20.0868, 'r50': 41.4988, 'mean': 30.7928}
+   clip4cir_rn50x4_fullft <- duplicate_of checkpoint_selection/20261106T002617+0700/measurements/clip4cir_parsed.json {'r10': 43.8016931215922, 'r50': 66.98358456293742}
+   clvc_net <- duplicate_of checkpoint_selection/20261106T002617+0700/measurements/all_measured_summary.json {'r10': 29.9707, 'r50': 58.6217, 'mean': 44.2962}
+   dcnet <- duplicate_of checkpoint_selection/20261106T002617+0700/measurements/dcnet_run1.json {'r10': 0.27929730914548917, 'r50': 0.5376075764301528}
+   hint <- duplicate_of checkpoint_selection/20261106T002617+0700/cohort/measurements/hint_fashioniq.json {'r10': 59.80338494972219, 'r50': 80.13076097500765, 'mean': 69.96707296236491}
+   tgcir <- duplicate_of checkpoint_selection/20261106T002617+0700/measurements/all_measured_summary.json {'r10': 49.7208, 'r50': 71.1023, 'mean': 60.4115}
+   tme <- duplicate_of checkpoint_selection/20261106T002617+0700/cohort/measurements/tme_fashioniq_0.json {'r10': 54.922901590665184, 'r50': 74.83842174212138, 'mean': 64.88066166639328}
+rows where model_id appears >1 with same metrics:
+   B1/H_normal rows= 2 counted= 1 values= {'{"mean": 45.3154, "r10": 34.035, "r50": 56.5957}'}
+   B1/H_rev rows= 2 counted= 1 values= {'{"mean": 46.295, "r10": 35.0147, "r50": 57.5753}'}
+   B2/H_normal rows= 2 counted= 1 values= {'{"mean": 32.8214, "r10": 22.1564, "r50": 43.4864}'}
+   B2/H_rev rows= 2 counted= 1 values= {'{"mean": 30.7928, "r10": 20.0868, "r50": 41.4988}'}
+   airknow rows= 3 counted= 3 values= {'{"mean": 62.7246, "r10": 52.5466, "r50": 72.9026}', '{"mean": 62.72461681777642, "r10": 52.54661498980954, "r50": 72.9026186457433}', '{"mean": 61.048630680057066, "r10": 50.64166565555885, "r50": 71.45559570455528}'}
+   clip4cir_rn50x4_fullft rows= 2 counted= 1 values= {'{"r10": 43.8016931215922, "r50": 66.98358456293742}'}
+   clvc_net rows= 3 counted= 2 values= {'{"mean": 44.2962, "r10": 29.9707, "r50": 58.6217}', '{"mean": 44.29622932308766, "r10": 29.970746517160162, "r50": 58.62171212901515}'}
+   dcnet rows= 2 counted= 1 values= {'{"r10": 0.27929730914548917, "r50": 0.5376075764301528}'}
+   hint rows= 2 counted= 1 values= {'{"mean": 69.96707296236491, "r10": 59.80338494972219, "r50": 80.13076097500765}'}
+   pair rows= 4 counted= 4 values= {'{"mean": 46.29502588597325, "r10": 35.014736041655844, "r50": 57.57531573029066}', '{"mean": 32.821397573852956, "r10": 22.156393011046543, "r50": 43.486402136659365}', '{"mean": 30.792780206063448, "r10": 20.086769084793715, "r50": 41.49879132733318}', '{"mean": 45.31535603453267, "r10": 34.03503453772374, "r50": 56.59567753134161}'}
+   sprc rows= 2 counted= 2 values= {'{"mean": 62.1825, "r10": 51.0386, "r50": 73.3263}', '{"mean": 62.182455261548355, "r10": 51.038571198781334, "r50": 73.32633932431538}'}
+   tgcir rows= 3 counted= 2 values= {'{"mean": 60.411545827903154, "r10": 49.720772235486656, "r50": 71.10231942031965}', '{"mean": 60.4115, "r10": 49.7208, "r50": 71.1023}'}
+   tme rows= 2 counted= 1 values= {'{"mean": 64.88066166639328, "r10": 54.922901590665184, "r50": 74.83842174212138}'}
+
+=== A4 artifact_backed:false rows that could count ===
+unbacked AND counted: 18
+   B1/H_normal True {'r10': 34.035, 'r50': 56.5957, 'mean': 45.3154} checkpoint_selection/20261106T002617+0700/pair_compat/manifests/pair_compat_verdict.json
+   B1/H_rev True {'r10': 35.0147, 'r50': 57.5753, 'mean': 46.295} checkpoint_selection/20261106T002617+0700/pair_compat/manifests/pair_compat_verdict.json
+   B2/H_normal True {'r10': 22.1564, 'r50': 43.4864, 'mean': 32.8214} checkpoint_selection/20261106T002617+0700/pair_compat/manifests/pair_compat_verdict.json
+   B2/H_rev True {'r10': 20.0868, 'r50': 41.4988, 'mean': 30.7928} checkpoint_selection/20261106T002617+0700/pair_compat/manifests/pair_compat_verdict.json
+   None False None checkpoint_selection/20261106T233409+0700/measurements/ptha_transfer_run2.json
+   None False None checkpoint_selection/20261107T021500+0700/csmcir/call_path_probe.json
+   airknow True {'r10': 52.5466, 'r50': 72.9026, 'mean': 62.7246} checkpoint_selection/20261106T002617+0700/measurements/selection_decisions.json
+   airknow_n05 True {'r10': 52.5466, 'r50': 72.9026, 'mean': 62.7246} checkpoint_selection/20261106T002617+0700/measurements/all_measured_summary.json
+   airknow_n08 True {'r10': 50.6417, 'r50': 71.4556, 'mean': 61.0486} checkpoint_selection/20261106T002617+0700/measurements/all_measured_summary.json
+   airknow_variant_80 True {'r10': 50.6417, 'r50': 71.4556, 'mean': 61.0487} checkpoint_selection/20261106T002617+0700/measurements/selection_decisions.json
+   clip4cir_rn50x4_noft True {'r10': 35.14068226019541, 'r50': 58.44364364941915, 'mean': 46.79216295480728} checkpoint_selection/20261106T002617+0700/measurements/clip4cir_parsed.json
+   clvc_net True {'r10': 29.9707, 'r50': 58.6217, 'mean': 44.2962} checkpoint_selection/20261106T002617+0700/measurements/all_measured_summary.json
+   csmcir False None checkpoint_selection/20261106T002617+0700/cohort/measurements/csmcir_blocker.json
+   pair False None checkpoint_selection/20261106T002617+0700/measurements/pair_blocker.json
+   ptha_mtst False None checkpoint_selection/20261106T002617+0700/cohort/measurements/ptha_mtst_transfer_blocker.json
+   sprc True {'r10': 51.0386, 'r50': 73.3263, 'mean': 62.1825} checkpoint_selection/20261106T002617+0700/measurements/selection_decisions.json
+   tgcir True {'r10': 49.7208, 'r50': 71.1023, 'mean': 60.4115} checkpoint_selection/20261106T002617+0700/measurements/all_measured_summary.json
+   tme False None checkpoint_selection/20261106T002617+0700/cohort/measurements/tme_blocker.json
+counted+backed+metrics rows: 21
+distinct models in that set: 17
+counts.models_with_metrics: 17
+SET-EQUAL: True

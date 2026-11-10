@@ -1,0 +1,64 @@
+start 2026-11-09T07:29:19+07:00 head 20b83e5 dirty 9
+/home/heheboiz/data/cir/workbench/envs/ctl312h/lib/python3.12/site-packages/transformers/utils/generic.py:441: FutureWarning: `torch.utils._pytree._register_pytree_node` is deprecated. Please use `torch.utils._pytree.register_pytree_node` instead.
+  _torch_pytree._register_pytree_node(
+/home/heheboiz/data/cir/workbench/envs/ctl312h/lib/python3.12/site-packages/huggingface_hub/file_download.py:949: FutureWarning: `resume_download` is deprecated and will be removed in version 1.0.0. Downloads always resume when possible. If you want to force a new download, use `force_download=True`.
+  warnings.warn(
+{
+  "gallery_count": 74381,
+  "gallery_identity_sha256": "1db68c59d96f014cdbecf936e108653de98abef0bd9a98a8abc2fe08b5dec4b4",
+  "models": [
+    {
+      "adapter_module_source_status": "available",
+      "attempt": "cd1a696d8bca0fc4bce6925b",
+      "category_scopes": [
+        null
+      ],
+      "checkpoint_id": "fashioniq_0",
+      "condition_status": {
+        "image_only_empty_text": {
+          "category_scope_failure_count": 0,
+          "fallback_used": false,
+          "status": "COMPLETED",
+          "unscored_count": 0
+        },
+        "multimodal": {
+          "category_scope_failure_count": 0,
+          "fallback_used": false,
+          "status": "COMPLETED",
+          "unscored_count": 0
+        },
+        "text_only_black_image": {
+          "category_scope_failure_count": 0,
+          "fallback_used": false,
+          "status": "COMPLETED",
+          "unscored_count": 0
+        }
+      },
+      "gallery_count": 74381,
+      "model_id": "tme",
+      "query_count": 6003,
+      "reason": null,
+      "reused": false,
+      "reused_query_result_count": 0,
+      "run_id": "cd1a696d8bca0fc4bce6925b",
+      "runtime": {
+        "model_interpreter": {
+          "environment_fingerprint": "c8367a39c3f521c017feea546013d4b62f84e4c1962d4b9068737119e75014c7",
+          "path": "/home/heheboiz/data/cir/workbench/envs/tme-adapted/bin/python",
+          "source": "workbench_env",
+          "verification_reason": null,
+          "verification_status": "GPU_RUNTIME_READY",
+          "verified": true,
+          "version": "Python 3.10.22; torch 2.7.1+cu128"
+        }
+      },
+      "status": "COMPLETED",
+      "summaries": {
+        "full": "/home/heheboiz/data/cir/workbench/artifacts/composition/summary/tme_fashioniq_0_cd1a696d8bca0fc4bce6925b/full.json"
+      }
+    }
+  ],
+  "protocol_id": "circus_fashioniq_release_v1",
+  "run_count": 1,
+  "synthetic": false
+}

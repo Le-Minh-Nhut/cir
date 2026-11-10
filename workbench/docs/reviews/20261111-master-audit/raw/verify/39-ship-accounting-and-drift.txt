@@ -1,0 +1,26 @@
+=== accounting ===
+failed=18 passed=2800 skipped=47 -> sum=2865
+collect-only (after run): 2865
+collect-only (before run): 2865
+GAP = 0
+
+=== collected total grew vs 2864 (previous sweep)? ===
+  +1 => 2865
+  attributable to workbench/tests/test_derived_subset_status.py, rewritten by limn-encoder at 01:22:41
+  (option (a) -> option (b) assertion update; it now collects 5 nodes)
+  NOT provable as an exact delta: the file is untracked, so no git snapshot of its prior node count exists.
+
+=== the position-204 test from the aborted run ===
+0
+  ^ 0 matches => it did NOT recur in the ship sweep
+
+=== drift during run ===
+d271b76baedf98ec154761061051cd847294ed6f9cb34ba5ce22c43ad6d16115  /tmp/status_before_ship.txt
+b9379968ba8d6d5e54b9dda50287f49158cdee94663ef35c32170d5151d2c505  /tmp/status_after_ship.txt
+  DRIFT:
+193a194
+> ?? workbench/docs/reviews/20261111-master-audit/raw/full_suite_ship_sweep.txt
+310a312,314
+> ?? workbench/docs/reviews/20261111-master-audit/raw/verify/37-ship-sweep-result.txt
+> ?? workbench/docs/reviews/20261111-master-audit/raw/verify/38-ship-failure-diff.txt
+> ?? workbench/docs/reviews/20261111-master-audit/raw/verify/39-ship-accounting-and-drift.txt

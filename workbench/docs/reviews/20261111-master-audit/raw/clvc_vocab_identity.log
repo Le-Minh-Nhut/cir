@@ -1,0 +1,8 @@
+expected {'dress': 1602, 'shirt': 2294, 'toptee': 2152}
+dress  local  vocab=1602 matches=['dress']
+dress  global vocab=1602 matches=['dress']
+shirt  local  vocab=2294 matches=['shirt']
+shirt  global vocab=2294 matches=['shirt']
+toptee local  vocab=2152 matches=['toptee']
+toptee global vocab=2152 matches=['toptee']
+ASSERT_OK: every staged member's vocab size identifies exactly its own category

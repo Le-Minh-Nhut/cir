@@ -1,0 +1,230 @@
+ M workbench/backend/limn_diagnostic.py
+ M workbench/backend/native_measurements.py
+ M workbench/backend/parity_gate.py
+ M workbench/composition/model_encoder.py
+ M workbench/composition/model_limn.py
+ M workbench/composition/runner.py
+ M workbench/docs/reviews/20261110-e2e-repair/scripts/pc_r3_real_case.py
+ M workbench/frontend/EvaluationPage.tsx
+ M workbench/frontend/LimnScopeDiagnostic.tsx
+ M workbench/frontend/ModelInventory.tsx
+ M workbench/frontend/OverviewPage.tsx
+ M workbench/frontend/QueryInspector.tsx
+ M workbench/frontend/data.ts
+ M workbench/frontend/format.ts
+ M workbench/frontend/routes.ts
+ M workbench/frontend/scope.ts
+ M workbench/replay/airknow.py
+ M workbench/replay/clvc_net.py
+ M workbench/replay/tgcir.py
+ M workbench/tests/test_audit_fix_f4_encoder_mapping_status.py
+ M workbench/tests/test_clvc_net_replay.py
+ M workbench/tests/test_frontend_format.py
+ M workbench/tests/test_frontend_routes.py
+ M workbench/tests/test_limn_diagnostic_record.py
+ M workbench/tests/test_limn_dual_scope_diagnostic.py
+ M workbench/tests/test_limn_scope_routing.py
+ M workbench/tests/test_native_measurements_census.py
+ M workbench/tests/test_tgcir_replay.py
+ M workbench/tests/test_web_scope_and_labels.py
+?? CLEANUP_REPORT.md.save
+?? workbench/docs/reviews/20261111-master-audit/BASELINE.vi.md
+?? workbench/docs/reviews/20261111-master-audit/BLOCKED_MODELS_VERIFICATION.vi.md
+?? workbench/docs/reviews/20261111-master-audit/GATE_SCORING_VERIFICATION.vi.md
+?? workbench/docs/reviews/20261111-master-audit/INVENTORY.csv
+?? workbench/docs/reviews/20261111-master-audit/MODELS_REST_VERIFICATION.vi.md
+?? workbench/docs/reviews/20261111-master-audit/MODEL_LIMN_ENCODER_VERIFICATION.vi.md
+?? workbench/docs/reviews/20261111-master-audit/UPSTREAM_INPUT_AND_PROTOCOL_MATRIX.vi.md
+?? workbench/docs/reviews/20261111-master-audit/WEB_SURFACE_VERIFICATION.vi.md
+?? workbench/docs/reviews/20261111-master-audit/raw/airknow_run3cat_gpu_run1.json
+?? workbench/docs/reviews/20261111-master-audit/raw/airknow_run3cat_gpu_run2.json
+?? workbench/docs/reviews/20261111-master-audit/raw/airknow_run3cat_gpu_run3.json
+?? workbench/docs/reviews/20261111-master-audit/raw/airknow_run3cat_gpu_run4.json
+?? workbench/docs/reviews/20261111-master-audit/raw/clvc_run3cat_gpu.json
+?? workbench/docs/reviews/20261111-master-audit/raw/clvc_run3cat_gpu_run1.json
+?? workbench/docs/reviews/20261111-master-audit/raw/clvc_run3cat_gpu_run2.json
+?? workbench/docs/reviews/20261111-master-audit/raw/gate_api_regression.txt
+?? workbench/docs/reviews/20261111-master-audit/raw/gate_existing_after.txt
+?? workbench/docs/reviews/20261111-master-audit/raw/gate_final_regression.txt
+?? workbench/docs/reviews/20261111-master-audit/raw/gate_followup_regression.txt
+?? workbench/docs/reviews/20261111-master-audit/raw/gate_g02_mask_sign.txt
+?? workbench/docs/reviews/20261111-master-audit/raw/gate_g02_r3_fixtures.txt
+?? workbench/docs/reviews/20261111-master-audit/raw/gate_g02_r3_rerun.txt
+?? workbench/docs/reviews/20261111-master-audit/raw/gate_head_verdicts_after.txt
+?? workbench/docs/reviews/20261111-master-audit/raw/gate_live_safety.txt
+?? workbench/docs/reviews/20261111-master-audit/raw/gate_negatives_after.txt
+?? workbench/docs/reviews/20261111-master-audit/raw/gate_negatives_before.txt
+?? workbench/docs/reviews/20261111-master-audit/raw/gate_s01_backfill_refusal.txt
+?? workbench/docs/reviews/20261111-master-audit/raw/gate_s01_runner_regression.txt
+?? workbench/docs/reviews/20261111-master-audit/raw/gate_s01_s03_s04_regression.txt
+?? workbench/docs/reviews/20261111-master-audit/raw/gate_s02_drift_before_after.txt
+?? workbench/docs/reviews/20261111-master-audit/raw/gate_s02_isolation_after.txt
+?? workbench/docs/reviews/20261111-master-audit/raw/gate_s02_isolation_before.txt
+?? workbench/docs/reviews/20261111-master-audit/raw/gate_s02_pool_probe.txt
+?? workbench/docs/reviews/20261111-master-audit/raw/gate_s02_regression.txt
+?? workbench/docs/reviews/20261111-master-audit/raw/gate_s03_s04_lock.txt
+?? workbench/docs/reviews/20261111-master-audit/raw/gate_s05_limn_conditions.txt
+?? workbench/docs/reviews/20261111-master-audit/raw/m01/cross_process_bit_identity.txt
+?? workbench/docs/reviews/20261111-master-audit/raw/m01/forward_delta.json
+?? workbench/docs/reviews/20261111-master-audit/raw/m01/forward_delta_runs.txt
+?? workbench/docs/reviews/20261111-master-audit/raw/m01/m01_proc1.txt
+?? workbench/docs/reviews/20261111-master-audit/raw/m01/m01_proc2.txt
+?? workbench/docs/reviews/20261111-master-audit/raw/m01/parameter_cuda_type.txt
+?? workbench/docs/reviews/20261111-master-audit/raw/m01/proc_a.txt
+?? workbench/docs/reviews/20261111-master-audit/raw/m01/proc_b.txt
+?? workbench/docs/reviews/20261111-master-audit/raw/m01/rerun_pinned_final.txt
+?? workbench/docs/reviews/20261111-master-audit/raw/m01/source_hash.txt
+?? workbench/docs/reviews/20261111-master-audit/raw/m01/tests_encoder.txt
+?? workbench/docs/reviews/20261111-master-audit/raw/m01/tests_failing_first.txt
+?? workbench/docs/reviews/20261111-master-audit/raw/m01/transform_control.txt
+?? workbench/docs/reviews/20261111-master-audit/raw/m02/m02_recount.json
+?? workbench/docs/reviews/20261111-master-audit/raw/m02/m02_resolver.json
+?? workbench/docs/reviews/20261111-master-audit/raw/m02/m02_resolver.txt
+?? workbench/docs/reviews/20261111-master-audit/raw/m02/m02_resolver_after.txt
+?? workbench/docs/reviews/20261111-master-audit/raw/m02/m02_upstream.json
+?? workbench/docs/reviews/20261111-master-audit/raw/m02/probe_resolver_before_after.txt
+?? workbench/docs/reviews/20261111-master-audit/raw/m02/qid_scope_map.json
+?? workbench/docs/reviews/20261111-master-audit/raw/m02/tests_failing_first.txt
+?? workbench/docs/reviews/20261111-master-audit/raw/m02/tests_passing_after.txt
+?? workbench/docs/reviews/20261111-master-audit/raw/m03/cells_did_dump.txt
+?? workbench/docs/reviews/20261111-master-audit/raw/m03/cells_recompute.txt
+?? workbench/docs/reviews/20261111-master-audit/raw/m03/derived_runs/6a96c5c199526b61c1470b0e/sf.json
+?? workbench/docs/reviews/20261111-master-audit/raw/m03/derived_runs/aee2e8d39214d877a84d7c08/validated.json
+?? workbench/docs/reviews/20261111-master-audit/raw/m03/derived_subset_runs.json
+?? workbench/docs/reviews/20261111-master-audit/raw/m03/derived_subset_runs.txt
+?? workbench/docs/reviews/20261111-master-audit/raw/m03/generations.txt
+?? workbench/docs/reviews/20261111-master-audit/raw/m03/intersection.txt
+?? workbench/docs/reviews/20261111-master-audit/raw/m03/leafdiff.txt
+?? workbench/docs/reviews/20261111-master-audit/raw/m03/m03_verify.json
+?? workbench/docs/reviews/20261111-master-audit/raw/m03/m03_verify.txt
+?? workbench/docs/reviews/20261111-master-audit/raw/m03/publish_api_check.json
+?? workbench/docs/reviews/20261111-master-audit/raw/m03/publish_derived_runs.txt
+?? workbench/docs/reviews/20261111-master-audit/raw/m03/published_derived_runs.json
+?? workbench/docs/reviews/20261111-master-audit/raw/m03/subset_rerun_cost.txt
+?? workbench/docs/reviews/20261111-master-audit/raw/m03/tests_derived_status_after.txt
+?? workbench/docs/reviews/20261111-master-audit/raw/m03/tests_derived_status_failing_first.txt
+?? workbench/docs/reviews/20261111-master-audit/raw/m03/tests_failing_first.txt
+?? workbench/docs/reviews/20261111-master-audit/raw/m03/tests_limn.txt
+?? workbench/docs/reviews/20261111-master-audit/raw/m03/tests_passing_after.txt
+?? workbench/docs/reviews/20261111-master-audit/raw/m03/validator_probe_after.txt
+?? workbench/docs/reviews/20261111-master-audit/raw/m03/validator_probe_before.txt
+?? workbench/docs/reviews/20261111-master-audit/raw/pair_absence_evidence.json
+?? workbench/docs/reviews/20261111-master-audit/raw/targeted_tests_final.txt
+?? workbench/docs/reviews/20261111-master-audit/raw/tgcir_run3cat_gpu.json
+?? workbench/docs/reviews/20261111-master-audit/raw/verify/01-git-status.txt
+?? workbench/docs/reviews/20261111-master-audit/raw/verify/02-git-diffstat.txt
+?? workbench/docs/reviews/20261111-master-audit/raw/verify/03-frontend-build.txt
+?? workbench/docs/reviews/20261111-master-audit/raw/verify/04-api-native-measurements.txt
+?? workbench/docs/reviews/20261111-master-audit/raw/verify/05-limn-w03-depths.txt
+?? workbench/docs/reviews/20261111-master-audit/raw/w01_dcnet_mixed_scale_artifact.txt
+?? workbench/docs/reviews/20261111-master-audit/raw/w01_native_measurements_mid.txt
+?? workbench/docs/reviews/20261111-master-audit/raw/w01_w03_prescratch/fx_paper_nested.json
+?? workbench/docs/reviews/20261111-master-audit/raw/w01_w03_targeted_tests.txt
+?? workbench/docs/reviews/20261111-master-audit/raw/w02_data_notes.txt
+?? workbench/docs/reviews/20261111-master-audit/raw/w02_overview_notes.txt
+?? workbench/docs/reviews/20261111-master-audit/raw/w02_routes_notes.txt
+?? workbench/docs/reviews/20261111-master-audit/raw/w02_scope_notes.txt
+?? workbench/docs/reviews/20261111-master-audit/raw/w03_after_summary.txt
+?? workbench/docs/reviews/20261111-master-audit/raw/w03_before_summary.txt
+?? workbench/docs/reviews/20261111-master-audit/raw/w03_candidate_request_notes.txt
+?? workbench/docs/reviews/20261111-master-audit/raw/w03_limn_diagnostic_view_notes.txt
+?? workbench/docs/reviews/20261111-master-audit/raw/w03_limnd_candidates_snapshot.txt
+?? workbench/docs/reviews/20261111-master-audit/raw/w03_limnd_validator_snapshot.txt
+?? workbench/docs/reviews/20261111-master-audit/raw/w03_ordinary_inspector_7-3038_before.json
+?? workbench/docs/reviews/20261111-master-audit/raw/w03_ordinary_inspector_7-3038_beforelimit.json
+?? workbench/docs/reviews/20261111-master-audit/raw/w03_ordinary_inspector_7-3038_beforelimit_b.json
+?? workbench/docs/reviews/20261111-master-audit/raw/w03_query_inspector_notes.txt
+?? workbench/docs/reviews/20261111-master-audit/raw/w03_query_inspector_notes_b.txt
+?? workbench/docs/reviews/20261111-master-audit/raw/w04_request_identity_notes.txt
+?? workbench/docs/reviews/20261111-master-audit/raw/w04_use_region_notes.txt
+?? workbench/docs/reviews/20261111-master-audit/scripts/g02_harness_mask_sign.py
+?? workbench/docs/reviews/20261111-master-audit/scripts/gate_head_verdicts.py
+?? workbench/docs/reviews/20261111-master-audit/scripts/gate_live_safety.py
+?? workbench/docs/reviews/20261111-master-audit/scripts/gate_negatives_before.py
+?? workbench/docs/reviews/20261111-master-audit/scripts/limnd.py
+?? workbench/docs/reviews/20261111-master-audit/scripts/m01/collect_rerun.py
+?? workbench/docs/reviews/20261111-master-audit/scripts/m01/m01_forward_delta.py
+?? workbench/docs/reviews/20261111-master-audit/scripts/m01/m01_transform_control.py
+?? workbench/docs/reviews/20261111-master-audit/scripts/m01/m01_unseeded_construct.py
+?? workbench/docs/reviews/20261111-master-audit/scripts/m01/restore_relation_record.py
+?? workbench/docs/reviews/20261111-master-audit/scripts/m02/build_scope_map.py
+?? workbench/docs/reviews/20261111-master-audit/scripts/m02/probe_resolver.py
+?? workbench/docs/reviews/20261111-master-audit/scripts/m02/recount_recovered.py
+?? workbench/docs/reviews/20261111-master-audit/scripts/m02/report.py
+?? workbench/docs/reviews/20261111-master-audit/scripts/m02/upstream_keys.py
+?? workbench/docs/reviews/20261111-master-audit/scripts/m03/derive_subset_runs.py
+?? workbench/docs/reviews/20261111-master-audit/scripts/m03/m03_validator_probe.py
+?? workbench/docs/reviews/20261111-master-audit/scripts/m03/m03_verify.py
+?? workbench/docs/reviews/20261111-master-audit/scripts/m03/publish_derived_runs.py
+?? workbench/docs/reviews/20261111-master-audit/scripts/s02_drift_before.py
+?? workbench/docs/reviews/20261111-master-audit/scripts/s02_pool_probe.py
+?? workbench/docs/reviews/20261111-master-audit/scripts/s05_limn_condition_duplicate.py
+?? workbench/docs/reviews/20261111-master-audit/scripts/w04_web_regression.py
+?? workbench/docs/reviews/20261111-master-audit/scripts/w_web_evidence.py
+?? workbench/docs/reviews/20261111-master-audit/web_evidence/_probe.txt
+?? workbench/docs/reviews/20261111-master-audit/web_evidence/api_benchmark_runs.json
+?? workbench/docs/reviews/20261111-master-audit/web_evidence/api_composition_runs.json
+?? workbench/docs/reviews/20261111-master-audit/web_evidence/api_limn_7-3038_full_multimodal.json
+?? workbench/docs/reviews/20261111-master-audit/web_evidence/api_limn_run_9e4918.json
+?? workbench/docs/reviews/20261111-master-audit/web_evidence/api_native_measurements.json
+?? workbench/docs/reviews/20261111-master-audit/web_evidence/pre_limn_3038_toptee_mm_depth10.json
+?? workbench/docs/reviews/20261111-master-audit/web_evidence/pre_limn_3038_toptee_mm_depth100.json
+?? workbench/docs/reviews/20261111-master-audit/web_evidence/pre_limn_3038_toptee_mm_depth20.json
+?? workbench/docs/reviews/20261111-master-audit/web_evidence/pre_limn_3038_toptee_mm_depth43.json
+?? workbench/docs/reviews/20261111-master-audit/web_evidence/w01_native_measurements_BEFORE_backing.json
+?? workbench/docs/reviews/20261111-master-audit/web_evidence/w01_native_measurements_after.json
+?? workbench/docs/reviews/20261111-master-audit/web_evidence/w03_limn_3038_toptee_mm_depth10.json
+?? workbench/docs/reviews/20261111-master-audit/web_evidence/w03_limn_3038_toptee_mm_depth100.json
+?? workbench/docs/reviews/20261111-master-audit/web_evidence/w03_limn_3038_toptee_mm_depth20.json
+?? workbench/docs/reviews/20261111-master-audit/web_evidence/w03_limn_3038_toptee_mm_depth43.json
+?? workbench/docs/reviews/20261111-master-audit/web_evidence/w04/w04_deeplink_out_of_range.png
+?? workbench/docs/reviews/20261111-master-audit/web_evidence/w04/w04_induced_api_error.png
+?? workbench/docs/reviews/20261111-master-audit/web_evidence/w04/w04_late_answer_a_after_b.png
+?? workbench/docs/reviews/20261111-master-audit/web_evidence/w04/w04_reload_and_history.png
+?? workbench/docs/reviews/20261111-master-audit/web_evidence/w04/w04_results.json
+?? workbench/docs/reviews/20261111-master-audit/web_evidence/w05_benchmark_runs_after.json
+?? workbench/docs/reviews/20261111-master-audit/web_evidence/w05_evidence_summary_after.json
+?? workbench/docs/reviews/20261111-master-audit/web_evidence/w05_parity_gate_after.json
+?? workbench/docs/reviews/20261111-master-audit/web_evidence/w_shots/manifest.json
+?? workbench/docs/reviews/20261111-master-audit/web_evidence/w_shots/w01_native_overview.json
+?? workbench/docs/reviews/20261111-master-audit/web_evidence/w_shots/w01_native_overview.png
+?? workbench/docs/reviews/20261111-master-audit/web_evidence/w_shots/w01_native_table.json
+?? workbench/docs/reviews/20261111-master-audit/web_evidence/w_shots/w01_native_table.png
+?? workbench/docs/reviews/20261111-master-audit/web_evidence/w_shots/w02_models_inventory.json
+?? workbench/docs/reviews/20261111-master-audit/web_evidence/w_shots/w02_models_inventory.png
+?? workbench/docs/reviews/20261111-master-audit/web_evidence/w_shots/w02_native_scope_populated.json
+?? workbench/docs/reviews/20261111-master-audit/web_evidence/w_shots/w02_native_scope_populated.png
+?? workbench/docs/reviews/20261111-master-audit/web_evidence/w_shots/w02_overview_circus.json
+?? workbench/docs/reviews/20261111-master-audit/web_evidence/w_shots/w02_overview_circus.png
+?? workbench/docs/reviews/20261111-master-audit/web_evidence/w_shots/w03_inspector_7-3038_limn_full.json
+?? workbench/docs/reviews/20261111-master-audit/web_evidence/w_shots/w03_inspector_7-3038_limn_full.png
+?? workbench/docs/reviews/20261111-master-audit/web_evidence/w_shots/w03_inspector_7-3038_limn_top50.json
+?? workbench/docs/reviews/20261111-master-audit/web_evidence/w_shots/w03_inspector_7-3038_limn_top50.png
+?? workbench/docs/reviews/20261111-master-audit/web_evidence/w_shots/w03_inspector_midrank_encoder.json
+?? workbench/docs/reviews/20261111-master-audit/web_evidence/w_shots/w03_inspector_midrank_encoder.png
+?? workbench/docs/reviews/20261111-master-audit/web_evidence/w_shots/w03_inspector_ordinary_7-3038_K50.png
+?? workbench/docs/reviews/20261111-master-audit/web_evidence/w_shots/w03_limn_diagnostic_toptee.json
+?? workbench/docs/reviews/20261111-master-audit/web_evidence/w_shots/w03_limn_diagnostic_toptee.png
+?? workbench/docs/reviews/20261111-master-audit/web_evidence/w_shots/w03_limn_probe_target_tile.png
+?? workbench/docs/reviews/20261111-master-audit/web_evidence/w_shots/w03_limn_probe_toptee_mm.png
+?? workbench/docs/reviews/20261111-master-audit/web_evidence/w_shots/w03_limn_probe_toptee_mm_K10.png
+?? workbench/docs/reviews/20261111-master-audit/web_evidence/w_shots/w04_deeplink_out_of_range.json
+?? workbench/docs/reviews/20261111-master-audit/web_evidence/w_shots/w04_deeplink_out_of_range.png
+?? workbench/docs/reviews/20261111-master-audit/web_evidence/w_shots/w04_reload_full.json
+?? workbench/docs/reviews/20261111-master-audit/web_evidence/w_shots/w04_reload_full.png
+?? workbench/docs/reviews/20261111-master-audit/web_evidence/w_shots/w05_benchmark_reports.json
+?? workbench/docs/reviews/20261111-master-audit/web_evidence/w_shots/w05_benchmark_reports.png
+?? workbench/docs/reviews/20261111-master-audit/web_evidence/w_shots/w05_pe_histograms.json
+?? workbench/docs/reviews/20261111-master-audit/web_evidence/w_shots/w05_pe_histograms.png
+?? workbench/replay/pair_absence.py
+?? workbench/scripts/gpu_job.sh
+?? workbench/scripts/setup_blocked_model_envs.sh
+?? workbench/scripts/warm_replay_cache.py
+?? workbench/tests/test_blocked_models_verification.py
+?? workbench/tests/test_composition_backfill_refusal.py
+?? workbench/tests/test_composition_blas_pool_isolation.py
+?? workbench/tests/test_composition_cache_and_identity_lock.py
+?? workbench/tests/test_derived_subset_status.py
+?? workbench/tests/test_encoder_relation_seed.py
+?? workbench/tests/test_gate_contract_negatives.py
+?? workbench/tests/test_gate_r3_mask_join.py

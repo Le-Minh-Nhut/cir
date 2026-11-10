@@ -1,0 +1,135 @@
+{
+ "issue": "W-03",
+ "slug": "w03_inspector_7-3038_limn_top50",
+ "url": "http://127.0.0.1:5173/?area=samples&view=explorer&protocol=circus_fashioniq_release_v1&subset=full&runs=c%3A9e4918a6b5c243412cbc58c9&run=9e4918a6b5c243412cbc58c9&query=7%3A3038&k=50",
+ "viewport": "1920x1080@1",
+ "png": "w03_inspector_7-3038_limn_top50.png",
+ "png_sha256": "d4c68df1ee8b7bc75c6b75554b1949fd7a63e848ae027b202daf9ebc3092c509",
+ "dom_text_sha256": "3fdb6651206cbc97cdbc4c1350ef22dc7b629bb55308cd9d2b30825c526c0a2a",
+ "dom_text_excerpt": "Đến nội dung chính\nCIR.\nResearch workbench\n◎\nTổng quan\n▤\nMô hình & lượt chạy\n◑\nĐánh giá\n18\n▦\nKhám phá mẫu\n△\nPhân tích lỗi\n18\n✎\nSổ nghiên cứu\nCIRCUS FashionIQ Release v1\nSubset Full\n31 lượt khả dụng ở phạm vi này\nKhám phá mẫu\n\nTừng query: ảnh, văn bản sửa, hạng theo điều kiện, ứng viên\n\nCỡ giao diện\n17px\n19px\n⧉ Sao chép liên kết\nProtocol\nCIRCUS FashionIQ Release v1\nFashionIQ — Original Split (Full Gallery)\nSubset\nFull\nShortcut-Free (SF)\nValidated\nLượt chọn\n1\nQuery\n7:3038\nInspector\nSo sánh mô hình\nAGGREGATE-ONLY REAL EVALUATION — 2 certified research results (11 further aggregate runs uncertified); per-query candidate Top-K available on 13 of 18 composed runs in view\nẨn\nBộ lọc mẫu\n\nlimn / base_iter0_all_categories · CIRCUS FashionIQ Release v1 · Full\n\nXoá bộ lọc\nLƯỢT\n— chọn lượt —\nlimn / base_iter0_all_categories\nconesep / fiq_n02\nptha_mtst / cirr_transfer (TRANSFER)\nintent / fiq_n02\nintent / fiq_n02\nhabit / fiq_n02\nhint / fashioniq\nencoder / fashioniq\nencoder / fashioniq\nlimn / base_iter0_all_categories\nconesep / fiq_n02\ntme / fashioniq_0\nhabit / fiq_n02\ntme / fashioniq_0\nencoder / fashioniq\nhint / fashioniq\nptha_mtst / cirr_transfer (TRANSFER)\nhabit / fiq_n02\nĐIỀU KIỆN\nMultimodal (MM)\nText-only (ảnh đen)\nImage-only (text rỗng)\nĐổi điều kiện sẽ tải xếp hạng ứng viên riêng của điều kiện đó\nMÃ QUERY\nBộ lọc nâng cao và nguồn dữ liệu\nDanh sách query\n\n6,003 query khớp bộ lọc\n\nTất cả6,003\nCorrect@101,802\nMiss@104,199\nUnscored2\n7:3038\nChưa chấm\nIs darker and has a different graphic and is darker.\nText unscored · Ảnh unscored\n7:3790\nChưa chấm\nIs grey and has a less whimsical graphic and is lighter.\nText unscored · Ảnh unscored\n7:3045\nMM #73,369\nBright red with a larger and is darker.\nText #54,098 · Ảnh #66,246\n7:1466\nMM #72,587\nLooser and has longer sleeves and has much shorter sleeves.\nText #73,884 · Ảnh #66,075\n7:286\nMM #68,813\nHas longer sleeves and white.\nText #71,703 · Ảnh #12,343\n7:4082\nMM #66,351\nIs darker with no print and white t-shirt.\nText #21,968 · Ảnh #52,375\n7:950\nMM #61,144\nIs more stylish and preppy and is more chic and less flashy.\nText #65,581 · Ảnh #67,250\n7:4962\nMM #60,876\nIs lighter and has shorter sleeves and wider neck.\nText #47,152 · Ảnh #73,166\n7:3620\nMM #60,708\nHas sleeves and is plainer and has more grey.\nText #4,582 · Ảnh #63,851\n7:2934\nMM #60,625\nIs more casual with shorter sleeves and has shorter sleeves.\nText #70,921 · Ảnh #61,912\n7:1824\nMM #59,958\nIs more casual and bubbly and is looser fitted and more colorful.\nText #73,697 · Ảnh #61,137\n7:1769\nMM #59,863\nHas longer sleeves and black and white blocks.\nText #70,243 · Ảnh #18,864\n7:1167\nMM #59,215\nHas shorter sleeves and is lighter and is a darker deeper red with long sleeves.\nText #73,390 · Ảnh #53,578\n7:83\nMM #59,008\nIs darker and has shorter sleeves and does not cover the sholders.\nText #20,366 · Ảnh #67,093\n7:690\nMM #58,888\nHas no sleeves and is solid black and has more belt aspects.\nText #56,043 · Ảnh #58,615\n7:3254\nMM #58,762\nIs official and with short sleeves and is more formal.\nText #28,282 · Ảnh #73,995\n7:735\nMM #58,069\nIs short and is shorter and fitted.\nText #43,644 · Ảnh #74,074\n7:5686\nMM #57,487\nHas shorter sleeves and is tighter and is lighter and has shorter sleeves.\nText #46,353 · Ảnh #66,165\n7:179\nMM #56,282\nA solid and is much shorter.\nText #63,617 · Ảnh #23,297\n7:2894\nMM #56,028\nIs more casual and nont patterned and it is more casual and has a short sleeve.\nText #67,517 · Ảnh #54,429\n1–20 / 6,003\nTrước\nSau\nQuery 7:3038\n\nlimn · base_iter0_all_categories · circus_fashioniq_release_v1 · subset full\n\nCó điều kiện chưa chấm\nẢnh tham chiếu\nB004TMGDME.jpg\nYÊU CẦU CHỈNH SỬA\n\nIs darker and has a different graphic and is darker.\n\nẢnh đích\nB004D8QCN4.jpg\nHẠNG THEO ĐIỀU KIỆN · OUTCOME PHÂN LOẠI TẠI @10 (CỐ ĐỊNH)\nẢnh + văn bản (MM)\nChưa chấm\nKhông có hạng chính xác (category_unresolved)\nChỉ văn bản\nChưa chấm\nKhông có hạng chính xác (category_unresolved)\nChỉ ảnh\nChưa chấm\nKhông có hạng chính xác (category_unresolved)\n\nHạng đích trên toàn gallery, the",
+ "console": [],
+ "api": {
+  "/api/composition/runs/9e4918a6b5c243412cbc58c9/queries?subset=full&condition=multimodal&query_id=7%3A3038&top_k=50&limit=1&offset=0": {
+   "items": [
+    {
+     "query_id": "7:3038",
+     "category": null,
+     "query_txt": "Is darker and has a different graphic and is darker.",
+     "reference_id": "mbeir_images/fashioniq_images/B004TMGDME.jpg",
+     "positive_ids": [
+      "mbeir_images/fashioniq_images/B004D8QCN4.jpg"
+     ],
+     "reference_name": "mbeir_images/fashioniq_images/B004TMGDME.jpg",
+     "positive_names": [
+      "mbeir_images/fashioniq_images/B004D8QCN4.jpg"
+     ],
+     "ranks": {
+      "multimodal": null,
+      "text_only_black_image": null,
+      "image_only_empty_text": null
+     },
+     "target_rank": null,
+     "outcome": "unscored",
+     "query_state": "unscored",
+     "unscored": true,
+     "unscored_kind": "category_unresolved",
+     "retrieval_failure": false,
+     "failure": "query 7:3038: category unresolved has no adapter embedding scope ('dress', 'shirt', 'toptee'); batch_indices=(3037,), qids=['7:3038']",
+     "top_results": [],
+     "candidate_status": "NO_CANDIDATES_FOR_QUERY",
+     "candidate_reason": "this query has no stored candidate window (unscored, or the export did not reach it)",
+     "candidate_depth": 100
+    }
+   ],
+   "total": 1,
+   "limit": 1,
+   "offset": 0,
+   "condition": "multimodal",
+   "counters": {
+    "scored": 0,
+    "unscored": 1,
+    "hit_at_k": 0,
+    "retrieval_failure": 0,
+    "unscored_by_kind": {
+     "category_unresolved": 1
+    },
+    "candidates_available": 0
+   },
+   "state_counts": {
+    "hit": 0,
+    "retrieval_failure": 0,
+    "unscored": 1
+   },
+   "candidates": {
+    "available": true,
+    "status": "AVAILABLE",
+    "reason": null,
+    "depth": 100
+   },
+   "statistics": {
+    "conditions": {
+     "image_only_empty_text": {
+      "denominator": 6003,
+      "scored_count": 6001,
+      "unscored_count": 2,
+      "unscored_by_kind": {
+       "category_unresolved": 2
+      },
+      "coverage": 0.9996668332500417
+     },
+     "multimodal": {
+      "denominator": 6003,
+      "scored_count": 6001,
+      "unscored_count": 2,
+      "unscored_by_kind": {
+       "category_unresolved": 2
+      },
+      "coverage": 0.9996668332500417
+     },
+     "text_only_black_image": {
+      "denominator": 6003,
+      "scored_count": 6001,
+      "unscored_count": 2,
+      "unscored_by_kind": {
+       "category_unresolved": 2
+      },
+      "coverage": 0.9996668332500417
+     }
+    },
+    "query_count": 6003
+   },
+   "statistics_whole_run": {
+    "conditions": {
+     "image_only_empty_text": {
+      "denominator": 6003,
+      "scored_count": 6001,
+      "unscored_count": 2,
+      "unscored_by_kind": {
+       "category_unresolved": 2
+      },
+      "coverage": 0.9996668332500417
+     },
+     "multimodal": {
+      "denominator": 6003,
+      "scored_count": 6001,
+      "unscored_count": 2,
+      "unscored_by_kind": {
+       "category_unresolved": 2
+      },
+      "coverage": 0.9996668332500417
+     },
+     "text_only_black_image": {
+      "denominator": 6003,
+      "scored_count": 6001,
+      "unscored_count": 2,
+      "unscored_by_kind": {
+       "category_unresolved": 2
+      },
+      "coverage": 0.9996668332500417
+     }
+    },
+    "query_count": 6003
+   }
+  }
+ }
+}

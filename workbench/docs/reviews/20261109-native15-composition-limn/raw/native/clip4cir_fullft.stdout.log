@@ -1,0 +1,27 @@
+Trying to load the CLIP model
+CLIP model loaded successfully
+Target pad preprocess pipeline is used
+FashionIQ val - ['shirt'] dataset in classic mode initialized
+extracting fashionIQ ['shirt'] - val index features
+FashionIQ val - ['shirt'] dataset in relative mode initialized
+Compute FashionIQ ['shirt'] validation predictions
+Compute FashionIQ ['shirt'] validation metrics
+FashionIQ val - ['dress'] dataset in classic mode initialized
+extracting fashionIQ ['dress'] - val index features
+FashionIQ val - ['dress'] dataset in relative mode initialized
+Compute FashionIQ ['dress'] validation predictions
+Compute FashionIQ ['dress'] validation metrics
+FashionIQ val - ['toptee'] dataset in classic mode initialized
+extracting fashionIQ ['toptee'] - val index features
+FashionIQ val - ['toptee'] dataset in relative mode initialized
+Compute FashionIQ ['toptee'] validation predictions
+Compute FashionIQ ['toptee'] validation metrics
+
+shirt_recallat10 = 44.50441598892212
+shirt_recallat50 = 65.4563307762146
+dress_recallat10 = 39.06792402267456
+dress_recallat50 = 64.20426368713379
+toptee_recallat10 = 47.83273935317993
+toptee_recallat50 = 71.29015922546387
+average recall10 = 43.8016931215922
+average recall50 = 66.98358456293742

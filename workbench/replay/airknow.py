@@ -12,6 +12,7 @@ for `fashion200k` (line 13) and `test_lasco` (line 220), leaving FashionIQ evalu
 from __future__ import annotations
 
 import json
+import os
 import sys
 from argparse import ArgumentParser
 from dataclasses import asdict
@@ -26,7 +27,7 @@ from workbench.backend.fashioniq_layout import CATEGORIES
 from workbench.backend.registry import model_by_id
 from workbench.replay.common import (
     ReplayResult,
-    isolated_cache_root,
+    run_cache_root,
     load_trusted_whole_model,
     macro_aggregate,
     sha256_file,
@@ -47,6 +48,11 @@ PROCESSOR_CONFIGS = {
 }
 
 DEFAULT_VARIANT = "fiq_n05"
+#: Set to make a run reproducible; unset is recorded rather than silently assumed.
+SEED_ENV = "WORKBENCH_AIRKNOW_SEED"
+#: The campaign's measured spread between two identical runs (macro_r10, pp). Recorded so a single
+#: artifact carries the variance it belongs to instead of leaving it in a report nobody opens.
+MEASURED_RUN_TO_RUN_DELTA_MACRO_R10 = 0.4744
 DATASET_LABEL = "fashioniq"
 PROTOCOL = "fashioniq_full_gallery_ref_excluded"
 
@@ -153,6 +159,7 @@ def evaluate_categories(
     batch_size: int = 64,
     device: str | None = None,
     eval_mode: bool = False,
+    repeat_count: int = 1,
 ) -> tuple[list[ReplayResult], dict[str, Any]]:
     torch, datasets, data_utils, test_module, processors = _load_replay_modules(source_root)
     txt_processors, processor_boundary = processors
@@ -171,11 +178,27 @@ def evaluate_categories(
         # Native behavior: test_BLIP2.py:10 calls model.train()
         model.train()
 
+    seed = os.environ.get(SEED_ENV)
+    if seed:
+        # Opt-in only: seeding changes the native behaviour, so it is a caller decision recorded in
+        # the artifact rather than a default this wrapper imposes.
+        import random as _random
+        import numpy as _np
+        torch.manual_seed(int(seed))
+        _random.seed(int(seed))
+        _np.random.seed(int(seed))
+
+    run_to_run_delta = 0.0 if eval_mode else MEASURED_RUN_TO_RUN_DELTA_MACRO_R10
     transform = data_utils.targetpad_transform(1.25, 224)
     params = SimpleNamespace(batch_size=batch_size, dataset=DATASET_LABEL)
 
     results: list[ReplayResult] = []
-    with isolated_cache_root(dataset_root) as cache_root:
+    # `run_cache_root` honours WORKBENCH_REPLAY_CACHE_ROOT and otherwise behaves exactly like
+    # `isolated_cache_root`. It is required here: the pinned constructor materialises all three
+    # categories' queries AND galleries before the first forward -- measured 21 552 inputs /
+    # 12.98 GB of tensors / 14 957 MB peak RSS -- which is minutes of CPU that must not be counted
+    # as GPU time, and which SIGKILLs the process when it overlaps another worker's memory.
+    with run_cache_root(dataset_root) as cache_root:
         root_str = str(cache_root).rstrip("/") + "/"
         dataset = datasets.FashionIQ(path=root_str, transform=transform, noise_ratio=0)
 
@@ -202,6 +225,23 @@ def evaluate_categories(
                         ),
                         "checkpoint_size_bytes": model_path.stat().st_size if model_path.is_file() else None,
                         "preprocessing": "targetpad transform, target_ratio 1.25, input_dim 224",
+                        # A-12: the numbers above are ONE DRAW, not a value. `test_BLIP2.py:10`
+                        # calls `model.train()` for FashionIQ, `blip2_cir.py:58,61` carry
+                        # Dropout(0.1), and nothing on the path seeds. Two identical runs measured
+                        # 0.4744 pp apart in macro_r10 (toptee 1.0709 pp), so a reader comparing
+                        # this model to another must see the spread or the comparison is unfounded.
+                        "determinism": {
+                            "eval_mode": "eval (experimental variant)" if eval_mode else "train",
+                            "dropout_active": not eval_mode,
+                            "seed": os.environ.get(SEED_ENV, "unset"),
+                            "repeat_count": repeat_count,
+                            "run_to_run_delta_macro_r10": run_to_run_delta,
+                            "note": (
+                                "repeat_count=1 means no variance was measured for THIS artifact; "
+                                "the recorded delta is the campaign's two-run measurement and must "
+                                "not be read as this run's error bar"
+                            ),
+                        },
                         "text_processor": {
                             "config": PROCESSOR_CONFIGS["pretrain"],
                             "loaded_via": processor_boundary,
@@ -230,6 +270,12 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Experimental variant: neutralize model.train() at test_BLIP2.py:10 to evaluate in eval mode",
     )
+    parser.add_argument(
+        "--repeat-count",
+        type=int,
+        default=1,
+        help="How many identical runs this artifact's number represents (recorded, not averaged here).",
+    )
     parser.add_argument("--preflight-only", action="store_true")
     parser.add_argument("--output", type=Path)
     args = parser.parse_args(argv)
@@ -253,6 +299,7 @@ def main(argv: list[str] | None = None) -> int:
         batch_size=args.batch_size,
         device=args.device,
         eval_mode=args.eval_mode,
+        repeat_count=args.repeat_count,
     )
     variant = CHECKPOINTS[args.variant]
     output = {
@@ -262,6 +309,16 @@ def main(argv: list[str] | None = None) -> int:
         "checkpoint_training_noise_pct": variant["checkpoint_training_noise_pct"],
         "evaluation_noise_pct": 0,
         "eval_mode_variant": args.eval_mode,
+        "determinism": {
+            "eval_mode": "eval (experimental variant)" if args.eval_mode else "train",
+            "dropout_active": not args.eval_mode,
+            "seed": os.environ.get(SEED_ENV, "unset"),
+            "repeat_count": args.repeat_count,
+            "run_to_run_delta_macro_r10": 0.0 if args.eval_mode else MEASURED_RUN_TO_RUN_DELTA_MACRO_R10,
+            "measured_two_run_macro_r10": [52.9241, 52.4497],
+            "note": "this artifact's macro is one draw; see A-12 in "
+                    "docs/reviews/20261111-master-audit/BLOCKED_MODELS_VERIFICATION.vi.md",
+        },
         "category_model_policy": "shared",
         "complete_benchmark": aggregate["complete"],
         "categories": [asdict(r) for r in results],

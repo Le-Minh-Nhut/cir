@@ -1,0 +1,24 @@
+.............................                                            [100%]
+=============================== warnings summary ===============================
+workbench/tests/test_blocked_models_verification.py: 10 warnings
+  <unknown>:191: SyntaxWarning: invalid escape sequence '\s'
+
+workbench/tests/test_blocked_models_verification.py: 10 warnings
+  <unknown>:226: SyntaxWarning: invalid escape sequence '\s'
+
+workbench/tests/test_blocked_models_verification.py: 18 warnings
+  <unknown>:167: SyntaxWarning: invalid escape sequence '\d'
+
+workbench/tests/test_blocked_models_verification.py: 18 warnings
+  <unknown>:168: SyntaxWarning: invalid escape sequence '\d'
+
+workbench/tests/test_blocked_models_verification.py::test_pair_required_modules_are_absent_from_the_pinned_tree
+workbench/tests/test_blocked_models_verification.py::test_pair_evidence_does_not_claim_a_score
+  <unknown>:100: SyntaxWarning: invalid escape sequence '\D'
+
+workbench/tests/test_blocked_models_verification.py::test_pair_required_modules_are_absent_from_the_pinned_tree
+workbench/tests/test_blocked_models_verification.py::test_pair_evidence_does_not_claim_a_score
+  <unknown>:356: SyntaxWarning: invalid escape sequence '\D'
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+29 passed, 60 warnings in 10.94s

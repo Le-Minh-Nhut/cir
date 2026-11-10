@@ -1,0 +1,99 @@
+=== CLOSE-OUT INVENTORY (read-only) 2026-11-11T01:51:55+07:00 ===
+HEAD: 92ed66de4f359ef479da18bf8939723b6f9313e5
+total entries: 421
+
+--- (a) PRODUCTION SOURCE CHANGED (tracked M) ---
+  .gitignore
+  workbench/backend/limn_diagnostic.py
+  workbench/backend/native_measurements.py
+  workbench/backend/parity_gate.py
+  workbench/composition/model_encoder.py
+  workbench/composition/model_limn.py
+  workbench/composition/runner.py
+  workbench/frontend/EvaluationPage.tsx
+  workbench/frontend/LimnScopeDiagnostic.tsx
+  workbench/frontend/ModelInventory.tsx
+  workbench/frontend/OverviewPage.tsx
+  workbench/frontend/QueryInspector.tsx
+  workbench/frontend/data.ts
+  workbench/frontend/format.ts
+  workbench/frontend/routes.ts
+  workbench/frontend/scope.ts
+  workbench/replay/airknow.py
+  workbench/replay/clvc_net.py
+  workbench/replay/tgcir.py
+  count: 19
+
+--- (b) TESTS CHANGED (tracked M or new ?? under workbench/tests) ---
+   M workbench/tests/test_audit_fix_f4_encoder_mapping_status.py
+   M workbench/tests/test_clvc_net_replay.py
+   M workbench/tests/test_controller_installation.py
+   M workbench/tests/test_frontend_format.py
+   M workbench/tests/test_frontend_routes.py
+   M workbench/tests/test_frontend_support.py
+   M workbench/tests/test_limn_diagnostic_record.py
+   M workbench/tests/test_limn_dual_scope_diagnostic.py
+   M workbench/tests/test_limn_scope_routing.py
+   M workbench/tests/test_native_measurements_census.py
+   M workbench/tests/test_tgcir_replay.py
+   M workbench/tests/test_throughput_knobs.py
+   M workbench/tests/test_web_scope_and_labels.py
+  ?? workbench/tests/test_blocked_models_verification.py
+  ?? workbench/tests/test_composition_backfill_refusal.py
+  ?? workbench/tests/test_composition_blas_pool_isolation.py
+  ?? workbench/tests/test_composition_cache_and_identity_lock.py
+  ?? workbench/tests/test_derived_subset_status.py
+  ?? workbench/tests/test_encoder_relation_seed.py
+  ?? workbench/tests/test_gate_contract_negatives.py
+  ?? workbench/tests/test_gate_r3_mask_join.py
+  count: 21
+
+--- (c) DOCS / EVIDENCE (workbench/docs/reviews) ---
+  entries: 376
+  of which .log now visible: 151
+
+--- (d) UNTRACKED SCRATCH / OTHER (outside docs+backlog) ---
+  CLEANUP_REPORT.md.save
+  workbench/replay/pair_absence.py
+  workbench/scripts/gpu_job.sh
+  workbench/scripts/setup_blocked_model_envs.sh
+  workbench/scripts/warm_replay_cache.py
+  count: 5
+
+--- operator file ---
+  ?? CLEANUP_REPORT.md.save
+
+--- repo-root scratch (must be none) ---
+  none (correct)
+
+=== detail: (d) items — are these production, or scratch? ===
+--- workbench/replay/pair_absence.py
+    """Evidence of absence for the PAIR released checkpoints.
+    
+    PAIR's two released files are whole pickled modules whose classes live in `model_vssp` and
+    lines: 173
+--- workbench/scripts/gpu_job.sh
+    #!/usr/bin/env bash
+    # Run one GPU job under a campaign-wide lock, refusing to start while another process holds the GPU.
+    #
+    lines: 48
+--- workbench/scripts/setup_blocked_model_envs.sh
+    #!/usr/bin/env bash
+    # Fresh, non-colliding interpreters for the four blocked models (M-04..M-07).
+    #
+    lines: 65
+--- workbench/scripts/warm_replay_cache.py
+    """Warm the pinned dataset constructor's cache OFF the GPU clock, so a timed GPU run measures encoding.
+    
+    Why: every replay runs the native constructor, and for the ilearn/CLVC layouts that means decoding and
+    lines: 85
+
+=== CLEANUP_REPORT.md.save integrity ===
+5a406501fe15a2d76aabedefbf1c4aed1cfd50562e30bfcbd8538d5a16a766d2  CLEANUP_REPORT.md.save
+    mtime: 2026-11-09 12:29 size: 2937
+    status: ?? CLEANUP_REPORT.md.save
+
+=== repo-root scratch ===
+ls: cannot access 'raw': No such file or directory
+ls: cannot access 'scripts': No such file or directory
+ls: cannot access '.scratch': No such file or directory

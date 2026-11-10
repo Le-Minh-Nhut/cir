@@ -1,0 +1,4 @@
+full: declared 6003 membership 6003 scored 6001 coverage 0.999667 mm_r10 30.0283
+sf: declared 4069 membership 4069 scored 4068 coverage 0.999754 mm_r10 18.3874
+validated: declared 586 membership 586 scored 586 coverage 1.000000 mm_r10 30.0341
+full agrees with parent summary: True

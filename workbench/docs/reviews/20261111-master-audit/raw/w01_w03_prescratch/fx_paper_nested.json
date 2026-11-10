@@ -1,0 +1,9 @@
+{
+  "model_id": "fixture_model",
+  "protocol_id": "fashioniq_val_split",
+  "aggregate": {"macro_r10": 42.0, "macro_r50": 60.0, "macro_mean": 51.0},
+  "paper_reference": {
+    "aggregate": {"macro_r10": 52.76, "macro_r50": 74.51},
+    "note": "published numbers, not this deployment"
+  }
+}

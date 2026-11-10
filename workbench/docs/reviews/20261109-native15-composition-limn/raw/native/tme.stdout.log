@@ -1,0 +1,14 @@
+RAMGUARD verdict=GO avail=28.50GiB predicted=24.00GiB headroom=2.00GiB need=26.00GiB anon=0.57GiB swapfree=4.94GiB
+Evaluation for dress
+compute image last hidden states
+num_targets:  3817	num_queries:  2017
+Compute simlarity: 
+Evaluation for shirt
+compute image last hidden states
+num_targets:  6346	num_queries:  2038
+Compute simlarity: 
+Evaluation for toptee
+compute image last hidden states
+num_targets:  5373	num_queries:  1961
+Compute simlarity: 
+EXITCODE=0 WALL_SECONDS=120 PEAK_VMHWM_KB=26776836 PEAK_GiB=25.54 PEAK_VRAM_MIB=11014

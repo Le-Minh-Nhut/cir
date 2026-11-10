@@ -1,0 +1,8 @@
+mapping_status VERIFIED_METADATA
+required_files ['dress_local_model.pt', 'dress_global_model.pt', 'shirt_local_model.pt', 'shirt_global_model.pt', 'toptee_local_model.pt', 'toptee_global_model.pt']
+dress_local_model.pt MATCH 33d44186efd6a25c 217168235
+dress_global_model.pt MATCH be41c2ba81b803fd 176437419
+shirt_local_model.pt MATCH 2ba8e320b08ebb97 218603243
+shirt_global_model.pt MATCH 78b1d660227ab692 177872427
+toptee_local_model.pt MATCH d1fa9170496f73a0 218308843
+toptee_global_model.pt MATCH c78a58c4becafee3 177578027

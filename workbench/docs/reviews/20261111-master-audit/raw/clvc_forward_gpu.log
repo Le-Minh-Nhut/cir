@@ -1,0 +1,5 @@
+load_class model.compose_local params_local 54170563 params_global 43992003 0.2s
+n_queries 2017 gallery_ids 2628
+first_qid_source 314 target 1 text '<BOS> is shiny and silver with shorter sleeves <AND> fit and flare <EOS>'
+query_feat (1, 2048) target_feat (1, 2048) score 1.033929705619812 hash c57658b56701abf8
+peak_vram_MiB 419

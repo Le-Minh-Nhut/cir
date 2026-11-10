@@ -1,0 +1,18 @@
+/home/heheboiz/data/cir/workbench/envs/ctl312h/lib/python3.12/site-packages/torch/jit/_script.py:1491: FutureWarning: `torch.jit.script` is deprecated. Please switch to `torch.compile` or `torch.export`.
+  warnings.warn(
+/home/heheboiz/data/cir/workbench/envs/ctl312h/lib/python3.12/site-packages/torch/jit/_script.py:1491: FutureWarning: `torch.jit.script` is deprecated. Please switch to `torch.compile` or `torch.export`.
+  warnings.warn(
+/home/heheboiz/data/cir/workbench/envs/ctl312h/lib/python3.12/site-packages/torch/jit/_script.py:1643: FutureWarning: `torch.jit.interface` is deprecated. Please use `torch.compile` instead.
+  warnings.warn(
+/home/heheboiz/data/cir/workbench/envs/ctl312h/lib/python3.12/site-packages/transformers/utils/generic.py:441: FutureWarning: `torch.utils._pytree._register_pytree_node` is deprecated. Please use `torch.utils._pytree.register_pytree_node` instead.
+  _torch_pytree._register_pytree_node(
+/home/heheboiz/data/cir/workbench/envs/ctl312h/lib/python3.12/site-packages/transformers/utils/generic.py:309: FutureWarning: `torch.utils._pytree._register_pytree_node` is deprecated. Please use `torch.utils._pytree.register_pytree_node` instead.
+  _torch_pytree._register_pytree_node(
+/home/heheboiz/data/cir/workbench/envs/ctl312h/lib/python3.12/site-packages/transformers/utils/generic.py:309: FutureWarning: `torch.utils._pytree._register_pytree_node` is deprecated. Please use `torch.utils._pytree.register_pytree_node` instead.
+  _torch_pytree._register_pytree_node(
+CLASS lavis.models.blip2_models.blip2_cir.Blip2QformerCir
+MRO ['lavis.models.blip2_models.blip2_cir.Blip2QformerCir', 'lavis.models.blip2_models.blip2.Blip2Base', 'lavis.models.base_model.BaseModel', 'torch.nn.modules.module.Module', 'builtins.object']
+INIT (self, vit_model='eva_clip_g', img_size=224, drop_path_rate=0, use_grad_checkpoint=False, vit_precision='fp16', freeze_vit=True, num_query_token=32, cross_attention_freq=2, embed_dim=256, max_txt_len=32, alpha=0.5)
+CONFIG_DICT {'pretrain': 'configs/models/blip2/blip2_pretrain.yaml', 'pretrain_vitL': 'configs/models/blip2/blip2_pretrain_vitL.yaml', 'coco': 'configs/models/blip2/blip2_coco.yaml'}
+MODEL_TYPE None
+SRC_LINES 624

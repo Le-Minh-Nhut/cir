@@ -1,0 +1,16 @@
+FashionIQ dataset initialized with 18000 samples.
+{
+  "model": "airknow",
+  "cache_root": "/tmp/cirwarm-airknow",
+  "warm_wall_s": 349.7,
+  "model_inputs_materialised": 21552,
+  "cache_files": [
+    "fashion_iq_data.json",
+    "test_queries_dress.pkl",
+    "test_queries_shirt.pkl",
+    "test_queries_toptee.pkl",
+    "test_targets_dress.pkl",
+    "test_targets_shirt.pkl",
+    "test_targets_toptee.pkl"
+  ]
+}

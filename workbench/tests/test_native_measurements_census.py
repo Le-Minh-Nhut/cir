@@ -83,23 +83,32 @@ def test_top_level_macro_is_read() -> None:
 
 
 def test_a_rollup_is_served_as_a_rollup_not_as_one_model() -> None:
-    """`clip4cir_parsed.json` carries two variants in one file; they must not collapse into one."""
-    payload = _catalog()
-    noft = _for_model(payload, "clip4cir_noft")
-    fullft = _for_model(payload, "clip4cir_fullft")
-    assert noft and fullft, "clip4cir variants are missing"
-    assert noft[0]["metrics"]["r10"] == pytest.approx(35.14068226019541), noft[0]
-    assert fullft[0]["metrics"]["r10"] == pytest.approx(43.81821850935618), fullft[0]
-    assert noft[0]["rollup"] and fullft[0]["rollup"], (noft[0], fullft[0])
-    assert noft[0]["rollup_entry"] == "clip4cir_noft", noft[0]
-    assert fullft[0]["rollup_entry"] == "clip4cir_fullft", fullft[0]
-    # Both name the same file, and neither is counted as a per-model measurement.
-    assert {row["source"]["path"] for row in noft + fullft} == {
-        "checkpoint_selection/20261106T002617+0700/measurements/clip4cir_parsed.json"}
-    per_model_models = {row["model_id"] for row in _rows_with_metrics(payload)
-                        if not row["rollup"]}
-    assert "clip4cir_fullft" not in per_model_models, per_model_models
+    """`clip4cir_parsed.json` carries two variants in one file; they must not collapse into one.
 
+    W-01 (mandatory): the variant name `clip4cir_fullft` is an ALIAS of `clip4cir_rn50x4_fullft`.
+    Serving both names for one number read as two configurations that agree, so they are canonicalised
+    to one model. The two variants (noft / fullft) stay two rows: they are different checkpoints.
+    """
+    payload = _catalog()
+    fullft = _for_model(payload, "clip4cir_rn50x4_fullft")
+    noft = _for_model(payload, "clip4cir_rn50x4_noft")
+    assert fullft and noft, "clip4cir variants are missing"
+    # No row may be served under the uncanonicalised variant name any more.
+    assert _for_model(payload, "clip4cir_fullft") == [], "the alias is still served as its own model"
+    # The FullFT value is the ARTIFACT's number, not the roll-up's.
+    backed = [row for row in fullft if row["artifact_backed"]]
+    assert backed, fullft
+    assert backed[0]["metrics"]["r10"] == pytest.approx(43.8016931215922), backed[0]
+    # The roll-up's 43.8182 survives only as `raw_metrics` on the replaced row, and as an
+    # uncounted duplicate — never as a served value.
+    assert all(row["metrics"]["r10"] != pytest.approx(43.81821850935618) for row in fullft), fullft
+    assert any(row.get("raw_metrics", {}) and
+               row["raw_metrics"]["r10"] == pytest.approx(43.81821850935618) for row in fullft), fullft
+    assert {row["source"]["path"] for row in fullft if row["rollup"]} == {
+        "checkpoint_selection/20261106T002617+0700/measurements/clip4cir_parsed.json",
+        "checkpoint_selection/20261106T002617+0700/measurements/selection_decisions.json"}
+    # One counted row for the one configuration.
+    assert len([row for row in fullft if row.get("counted", True)]) == 1, fullft
 
 def test_a_rollup_is_exposed_and_named_as_one() -> None:
     payload = _catalog()
@@ -114,24 +123,36 @@ def test_a_rollup_is_exposed_and_named_as_one() -> None:
 def test_a_rollup_entry_is_not_double_counted_as_a_second_measurement() -> None:
     """`all_measured_summary.json` repeats conesep/clvc/tgcir numbers other files state.
 
-    Those files are individual measurements; the summary is a roll-up. Neither the counts nor the
-    per-model set may treat the pair as two measurements of one model.
+    Those files are individual measurements; the summary is a roll-up. W-01 (mandatory) went further:
+    a repeat is marked `counted: false` and an unbacked claim is marked `artifact_backed: false`, so
+    neither can inflate a model count — while BOTH stay in `measurements`, because a reader has to be
+    able to see that two files state one number.
     """
     payload = _catalog()
-    direct = [row for row in _rows_with_metrics(payload) if not row["rollup"]]
-    rollups = [row for row in _rows_with_metrics(payload) if row["rollup"]]
-    assert payload["counts"]["with_metrics"] == len(direct), payload["counts"]
-    assert payload["counts"]["rollup_rows"] == len(rollups), payload["counts"]
-    # Every roll-up row either repeats a number a direct row already states (roll-ups round to four
-    # decimals, hence the tolerance) or names a model that has no direct file at all. Nothing may be a
-    # third case: a roll-up is not a second measurement of a model that already has one.
-    direct_pairs = {(row["model_id"], row["metrics"]["r10"]) for row in direct}
-    direct_models = {model for model, _value in direct_pairs}
-    for row in rollups:
-        overlaps = any(model == row["model_id"] and abs(row["metrics"]["r10"] - value) < 5e-3
-                       for model, value in direct_pairs)
-        assert overlaps or row["model_id"] not in direct_models, row
-
+    measured = _rows_with_metrics(payload)
+    counted = [row for row in measured if row.get("counted", True)]
+    assert payload["counts"]["with_metrics"] == len([row for row in counted if row["artifact_backed"]]), \
+        payload["counts"]
+    assert payload["counts"]["duplicate_rows"] == len([row for row in measured
+                                                       if not row.get("counted", True)]), payload["counts"]
+    assert payload["counts"]["unbacked_rows"] == len([row for row in measured
+                                                      if not row["artifact_backed"]]), payload["counts"]
+    # No identity may be counted twice, and identity is a TOLERANCE: `airknow` writes the same run as
+    # 52.5466 in a roll-up and 52.54661498980954 in the run file.
+    identities = [(row["model_id"], row["protocol_id"],
+                   tuple(sorted((name, round(value, 4)) for name, value in row["metrics"].items())))
+                  for row in counted]
+    assert len(identities) == len(set(identities)), "an identity is counted twice"
+    # And a marked DUPLICATE names the row it duplicates. An unbacked row is not marked as a
+    # duplicate — it is uncounted for a different reason, which it states in `source_kind`.
+    for row in measured:
+        if not row.get("counted", True) and row["artifact_backed"]:
+            assert row["duplicate_of"], row
+    # W-01: an unbacked number must never reach a model count.
+    assert payload["counts"]["unbacked_counted"] == 0, payload["counts"]
+    for row in measured:
+        if not row["artifact_backed"]:
+            assert row.get("counted", True) is False, row
 
 # --------------------------------------------------------------------------- the census itself
 
@@ -235,3 +256,226 @@ def test_the_endpoint_serves_the_whole_catalog(tmp_path: Path) -> None:
     assert payload["counts"]["verified"] == 0
     # A settlement check: the JSON round-trips, so nothing un-serializable is in a row.
     assert json.loads(response.text)["counts"] == payload["counts"]
+
+# --------------------------------------------------------------------------- W-01: unit and mapping
+
+def test_a_paper_reference_block_anywhere_in_the_path_is_not_a_measurement(tmp_path: Path) -> None:
+    """`paper_reference.aggregate.macro_r10` is the publication's number, not this deployment's.
+
+    The gate used to test only the LEAF key, so `aggregate` -- a macro-block key -- satisfied it and
+    the paper's 42.0 was counted as a measurement. The whole path decides now.
+    """
+    root = tmp_path / "checkpoint_selection"
+    root.mkdir()
+    (root / "fx_paper_nested.json").write_text(json.dumps({
+        "model_id": "fixture_model",
+        "protocol_id": "fashioniq_val_split",
+        "aggregate": {"macro_r10": 42.0, "macro_r50": 60.0, "macro_mean": 51.0},
+        "paper_reference": {"aggregate": {"macro_r10": 52.76, "macro_r50": 74.51},
+                            "note": "published numbers, not this deployment"},
+    }))
+    payload = nm.list_native_measurements(tmp_path)
+    paths = [row["metric_path"] for row in payload["measurements"] if row["metrics"]]
+    assert paths == ["aggregate"], paths
+    assert payload["measurements"][0]["metrics"]["r10"] == 42.0
+    # 42.0 is the fixture's own number; 52.76 must appear nowhere.
+    assert all(row["metrics"]["r10"] != 52.76 for row in payload["measurements"] if row["metrics"])
+
+def test_a_fraction_and_a_percent_are_one_measurement_not_two_scores(tmp_path: Path) -> None:
+    """`0.2793` and `27.93` are the same recall. Each row states its scale so a view prints them
+    identically, and the scale is never inferred from the OTHER row in the file."""
+    root = tmp_path / "checkpoint_selection"
+    root.mkdir()
+    (root / "declared_fraction.json").write_text(json.dumps({
+        "model_id": "fx_fraction", "protocol_id": "fashioniq_val_split", "metric_unit": "fraction",
+        "aggregate": {"macro_r10": 0.2793, "macro_r50": 0.5373}}))
+    (root / "declared_percent.json").write_text(json.dumps({
+        "model_id": "fx_percent", "protocol_id": "fashioniq_val_split", "metric_unit": "percent",
+        "aggregate": {"macro_r10": 27.93, "macro_r50": 53.73}}))
+    # A document whose ONLY self-consistent reading is percent (no value fits 0..1) still does not
+    # get a declaration: the row says `inferred_from_magnitude` and appears in the audited list.
+    (root / "undeclared.json").write_text(json.dumps({
+        "model_id": "fx_undeclared", "protocol_id": "fashioniq_val_split",
+        "aggregate": {"macro_r10": 0.2793, "macro_r50": 53.73}}))
+    rows = {row["model_id"]: row for row in nm.list_native_measurements(tmp_path)["measurements"]}
+    assert rows["fx_fraction"]["unit"] == "fraction", rows["fx_fraction"]
+    assert rows["fx_fraction"]["unit_source"] == "declared", rows["fx_fraction"]
+    assert rows["fx_percent"]["unit"] == "percent", rows["fx_percent"]
+    assert rows["fx_percent"]["unit_source"] == "declared", rows["fx_percent"]
+    # 0.2793 sits inside 0..1 but 53.73 does not, so "fraction" is excluded by the block's own
+    # numbers and the reading is percent -- stated as an INFERENCE, never as a declaration.
+    assert rows["fx_undeclared"]["unit"] == "percent", rows["fx_undeclared"]
+    assert rows["fx_undeclared"]["unit_source"] == "inferred_from_magnitude", rows["fx_undeclared"]
+
+def test_every_row_without_a_declared_unit_is_listed_not_only_counted(tmp_path: Path) -> None:
+    """A count cannot be audited; the rows behind it can. W-01 asks for the list."""
+    root = tmp_path / "checkpoint_selection"
+    root.mkdir()
+    (root / "a.json").write_text(json.dumps({
+        "model_id": "fx_a", "protocol_id": "fashioniq_val_split",
+        "aggregate": {"macro_r10": 27.93, "macro_r50": 53.73}}))
+    (root / "b.json").write_text(json.dumps({
+        "model_id": "fx_b", "protocol_id": "fashioniq_val_split", "unit": "percent",
+        "aggregate": {"macro_r10": 30.0, "macro_r50": 55.0}}))
+    payload = nm.list_native_measurements(tmp_path)
+    assert payload["counts"]["unit_declared"] == 1, payload["counts"]
+    assert payload["counts"]["unit_not_declared"] == 1, payload["counts"]
+    assert [row["model_id"] for row in payload["undeclared_unit_rows"]] == ["fx_a"], payload["undeclared_unit_rows"]
+    # Every listed row names its own scale decision, not just its model.
+    assert payload["undeclared_unit_rows"][0]["unit_source"] == "inferred_from_magnitude"
+
+def test_the_pair_exploratory_run_keeps_its_mapping_status() -> None:
+    """`EXPLORATORY_PUBLIC_MAPPING` is why a PAIR number is not a reproduction. Dropping it made an
+    unverified class mapping read as a measured result."""
+    payload = _catalog()
+    with_mapping = [row for row in payload["measurements"] if row.get("mapping_status")]
+    assert with_mapping, "no row carries mapping_status: the PAIR exploratory label is lost"
+    assert {row["mapping_status"] for row in with_mapping} == {"EXPLORATORY_PUBLIC_MAPPING"}
+    assert all(row["source"]["path"].endswith(".json") for row in with_mapping)
+    assert all("pair_b" in row["source"]["path"] for row in with_mapping), with_mapping
+
+# --------------------------------------------------------------------------- W-01 mandatory: backing
+
+def test_an_unbacked_rollup_number_is_replaced_by_the_artifacts_value() -> None:
+    """CLIP4Cir FullFT: the roll-up says 43.8182, the replay artifact says 43.8017.
+
+    They are two different runs — shirt matches to every digit, dress and toptee_r50 do not, and no
+    file under `checkpoint_selection/` corresponds to the roll-up's dress/toptee cells. The served
+    value is the backed one; the roll-up's survives only as `raw_metrics`.
+    """
+    payload = _catalog()
+    rows = [row for row in _for_model(payload, "clip4cir_rn50x4_fullft") if row.get("counted", True)]
+    assert len(rows) == 1, rows
+    row = rows[0]
+    assert row["metrics"]["r10"] == pytest.approx(43.8016931215922), row
+    assert row["metrics"]["r50"] == pytest.approx(66.98358456293742), row
+    assert row["artifact_backed"] is True, row
+    assert row["raw_metrics"]["r10"] == pytest.approx(43.81821850935618), row
+    assert "native/clip4cir_fullft.json" in row["backed_by"], row
+    assert row["backed_by_kind"] == "native_replay", row
+
+def test_an_unbacked_combiner_value_is_replaced_by_its_run() -> None:
+    """Combiner NoFT: the roll-up says 35.1407, its own aggregate report says 35.1078."""
+    payload = _catalog()
+    rows = [row for row in _for_model(payload, "combiner_rn50x4_noft") if row.get("counted", True)]
+    assert len(rows) == 1, rows
+    row = rows[0]
+    assert row["metrics"]["r10"] == pytest.approx(35.1078), row
+    assert row["artifact_backed"] is True, row
+    assert row["raw_metrics"]["r10"] == pytest.approx(35.1407), row
+    assert row["backed_by"].startswith("reports/"), row
+    assert row["backed_by_run_id"], row
+
+def test_a_number_no_artifact_backs_says_so_and_does_not_count() -> None:
+    """CLIP4Cir NoFT's only source is a roll-up: it is served, marked, and excluded from the count."""
+    payload = _catalog()
+    rows = [row for row in _for_model(payload, "clip4cir_rn50x4_noft") if row.get("metrics")]
+    assert rows, "the roll-up row must still be listed"
+    unbacked = [row for row in rows if not row["artifact_backed"]]
+    assert unbacked, rows
+    for row in unbacked:
+        assert row["source_kind"].startswith("rollup:"), row
+        assert row["counted"] is False, "an unbacked row is displayed and labelled, never counted"
+    models = {row["model_id"] for row in _rows_with_metrics(payload)
+              if row["artifact_backed"] and row.get("counted", True)}
+    assert "clip4cir_rn50x4_noft" not in models, sorted(models)
+
+def test_the_alias_pair_is_one_configuration_of_one_upstream() -> None:
+    """`clip4cir_fullft` and `clip4cir_rn50x4_fullft` must never be two served model names."""
+    payload = _catalog()
+    models = {row["model_id"] for row in _rows_with_metrics(payload)}
+    assert "clip4cir_fullft" not in models, sorted(models)
+    assert "clip4cir_rn50x4_fullft" in models, sorted(models)
+    assert payload["counts"]["models_with_metrics"] == len(
+        {row["model_id"] for row in _rows_with_metrics(payload)
+         if row["artifact_backed"] and row.get("counted", True)}), payload["counts"]
+
+def test_a_suffixed_sibling_key_declares_the_unit(tmp_path: Path) -> None:
+    """`macro_r10_percent` is a DECLARATION, and it must beat magnitude inference.
+
+    Without it, a percent block whose three categories all happen to score under 1 % reads as a
+    fraction and renders 100x too small.
+    """
+    root = tmp_path / "checkpoint_selection"
+    root.mkdir()
+    (root / "suffixed.json").write_text(json.dumps({
+        "model_id": "fx_suffixed", "protocol_id": "fashioniq_val_split",
+        "aggregate": {"macro_r10": 0.6, "macro_r10_percent": 0.6, "macro_r50": 0.9}}))
+    (root / "suffixed_fraction.json").write_text(json.dumps({
+        "model_id": "fx_fraction_block", "protocol_id": "fashioniq_val_split",
+        "aggregate": {"macro_r10": 0.6, "macro_r10_fraction": 0.6}}))
+    rows = {row["model_id"]: row for row in nm.list_native_measurements(tmp_path)["measurements"]
+            if row.get("metrics")}
+    assert rows["fx_suffixed"]["unit"] == "percent", rows["fx_suffixed"]
+    assert rows["fx_suffixed"]["unit_source"] == "sibling_key", rows["fx_suffixed"]
+    assert rows["fx_suffixed"]["metrics"]["r10"] == pytest.approx(0.6), rows["fx_suffixed"]
+    assert rows["fx_fraction_block"]["unit"] == "fraction", rows["fx_fraction_block"]
+    assert rows["fx_fraction_block"]["unit_source"] == "sibling_key", rows["fx_fraction_block"]
+
+def test_dcnet_is_served_on_the_scale_its_sibling_key_declares() -> None:
+    """W-01 BLOCKER: `dcnet.json` states `macro_r10: 0.2793` beside `macro_r10_percent: 27.9297`.
+
+    The served row used the bare key while its `unit` came from the roll-up of a different run, so
+    `/api/native-measurements` + `fmtRecall` rendered DCNet as **0.28 %** against every other model's
+    ~50 % — a live 100x-wrong number, with the unit field asserting the wrong thing. The declared
+    percent wins, and the unit is re-derived from the report AFTER the value is replaced.
+    """
+    payload = _catalog()
+    rows = [row for row in _for_model(payload, "dcnet") if row.get("counted", True) and row["metrics"]]
+    assert len(rows) == 1, rows
+    row = rows[0]
+    assert row["metrics"]["r10"] == pytest.approx(27.9297, abs=1e-4), row["metrics"]
+    assert row["unit"] == "percent", row
+    assert row["unit_source"] == "sibling_key", row
+    # The fraction must never travel with a percent unit.
+    assert not (row["metrics"]["r10"] < 1.0 and row["unit"] == "percent"), row
+    assert row["unit_source"] in nm.DECLARED_UNIT_SOURCES, row
+
+def test_no_counted_row_carries_an_inference_where_a_declaration_exists() -> None:
+    """A declaration outranks an inference at EVERY point, including after value replacement."""
+    payload = _catalog()
+    measured = _rows_with_metrics(payload)
+    for row in measured:
+        if row["artifact_backed"] and row.get("counted", True):
+            assert row["unit_source"] in nm.DECLARED_UNIT_SOURCES or \
+                row["unit_source"] == "inferred_from_magnitude", row
+    # `unit_inferred` counts EVERY measured row on an inferred scale (the audit total); the counted
+    # subset is what a reader compares, and each of those must have no declaration available.
+    assert payload["counts"]["unit_inferred"] == len(
+        [row for row in measured if row["unit_source"] == "inferred_from_magnitude"]), payload["counts"]
+    counted_inferred = {row["model_id"] for row in measured
+                        if row.get("counted", True) and row["unit_source"] == "inferred_from_magnitude"}
+    print("counted rows still inferred:", len(counted_inferred), sorted(counted_inferred))
+    assert payload["counts"]["unbacked_counted"] == 0, payload["counts"]
+
+def test_no_artifact_declaring_a_macro_scale_is_labelled_inferred() -> None:
+    """The 39 `inferred_from_magnitude` rows must be rows whose artifact declares NOTHING.
+
+    Three declaration forms are recognised — a document-root unit key, a unanimous
+    `categories[*].provenance.units`, and a `*_percent`/`*_pct`/`*_fraction` sibling of the served
+    macro key. A row may only be called inferred when none of the three exists in its backing
+    artifact; otherwise a real declaration is being missed and the row would render 100x wrong.
+    """
+    payload = _catalog()
+    measured = _rows_with_metrics(payload)
+    for row in measured:
+        if row["unit_source"] != "inferred_from_magnitude":
+            continue
+        backing = row.get("backed_by") or row["source"]["path"]
+        path = Path(backing) if Path(backing).is_file() else Path("workbench") / backing
+        if not path.is_file():
+            path = Path("workbench/artifacts") / backing
+        assert path.is_file(), (row["model_id"], backing)
+        document = json.loads(path.read_text())
+        assert not any(isinstance(document.get(key), str) and document[key].strip()
+                       for key in nm.UNIT_KEYS), (row["model_id"], "root unit key exists")
+        provenance = {((category.get("provenance") or {}).get("units") or "").strip().lower()
+                      for category in document.get("categories") or [] if isinstance(category, dict)}
+        assert len({text for text in provenance if text}) != 1, (row["model_id"],
+                                                                 f"provenance.units={provenance}")
+        # A suffixed sibling of the SERVED macro key would be a declaration; a `*_pct` about some
+        # other quantity (dead parameters, relative error, training noise) is not.
+        for name in ("macro_r10", "macro_r50", "macro_mean"):
+            for suffix, _unit in nm.UNIT_SUFFIX_DECLARATIONS:
+                assert f"{name}{suffix}" not in json.dumps(document), (
+                    row["model_id"], f"{name}{suffix} declares the macro scale")

@@ -237,3 +237,41 @@ def test_the_query_state_chips_are_the_backend_contract() -> None:
     labels = {chip["id"]: chip["label"] for chip in out["chips"]}
     assert labels["hit"] == "Correct@10" and labels["retrieval_failure"] == "Miss@10", labels
     assert labels[""] == "Tất cả", labels
+
+
+def test_a_native_scope_and_an_aggregate_scope_are_two_links_not_one() -> None:
+    """W-02: one model can hold a native macro AND an aggregate report under the same protocol.
+
+    Grouping only by (protocol, subset) collapsed them into ONE link, and that link opened whichever
+    table happened to be grouped first. `family` is part of the identity now, so each row opens the
+    table that lists it.
+    """
+    rows = [
+        {"model_id": "dcnet", "protocol_id": FIQ, "subset": "", "family": "native",
+         "execution_status": "COMPLETED", "metrics": {"r10": 27.93}},
+        {"model_id": "dcnet", "protocol_id": FIQ, "subset": "", "family": "aggregate",
+         "execution_status": "COMPLETED", "metrics": {"r10": 27.93},
+         "verification": {"state": "certified", "certified": True}},
+    ]
+    out = _run(f"""
+const rows = {json.dumps(rows)};
+console.log('__R__' + JSON.stringify(S.otherScopeFor(rows, "dcnet")));
+""")
+    families = sorted(entry["family"] for entry in out)
+    assert families == ["aggregate", "native"], out
+    assert all(entry["protocol"] == FIQ for entry in out), out
+    assert all(entry["rows"] == 1 for entry in out), out
+
+def test_a_row_that_names_no_family_is_still_a_composition_row() -> None:
+    """Backwards compatibility: every pre-existing caller passed bare composition rows.
+
+    `otherScopeFor` answers "where ELSE is this model", so the answer includes the row itself; the
+    caller is what removes the current scope. What matters here is that the default family is
+    `composition` and not a new, invented bucket.
+    """
+    rows = [_row("limn", "sf")]
+    out = _run(f"""
+const rows = {json.dumps(rows)};
+console.log('__R__' + JSON.stringify(S.otherScopeFor(rows, "limn")));
+""")
+    assert out == [{"protocol": CIRCUS, "subset": "sf", "rows": 1, "family": "composition"}], out

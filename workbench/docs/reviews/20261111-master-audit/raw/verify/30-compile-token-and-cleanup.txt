@@ -1,0 +1,22 @@
+=== BEFORE cleanup: build-* accumulated ===
+50
+1016K	total
+per scope dir:
+  cir_frontend_analysis: build_dirs=5 total=72K
+  cir_frontend_build.log: build_dirs=0 total=4.0K
+  cir_frontend_catalog: build_dirs=6 total=224K
+  cir_frontend_catalog_scoring: build_dirs=5 total=192K
+  cir_frontend_evidence_loading: build_dirs=5 total=96K
+  cir_frontend_format: build_dirs=5 total=68K
+  cir_frontend_format2: build_dirs=5 total=72K
+  cir_frontend_layout_catalog: build_dirs=5 total=192K
+  cir_frontend_requests: build_dirs=5 total=72K
+  cir_frontend_routes: build_dirs=5 total=144K
+  cir_frontend_scope: build_dirs=2 total=48K
+  cir_frontend_scope_det: build_dirs=2 total=36K
+=== determinism proof: two SEPARATE python invocations ===
+  invocation 1 -> build-3686400-53d4f6eec7d6
+  invocation 2 -> build-3686445-53d4f6eec7d6
+--- artifacts after cleanup ---
+2
+32K	total

@@ -250,8 +250,22 @@ def test_both_serial_and_concurrent_branches_pin_blas(monkeypatch):
     calls = []
 
     def fake_limit(threads):
+        """Faithful double: `_blas_thread_limit` returns a RECORD, never a bare int.
+
+        A dict argument means "restore this record's previous value"; `blas_pin_scope` reads the
+        readback out of the record it gets back, so an int-returning stub cannot exercise it.
+        """
+        if isinstance(threads, dict):
+            previous = threads.get("previous")
+            calls.append(previous)
+            return {**threads, "requested": previous, "effective": previous,
+                    "previous": previous, "setter_found": True, "getter_found": True,
+                    "verified": True, "source": "double", "reason": None}
         calls.append(int(threads))
-        return 7  # a distinctive "previous" value
+        return {"requested": int(threads), "effective": int(threads),
+                "previous": 7,  # a distinctive "previous" value
+                "setter_found": True, "getter_found": True, "verified": True,
+                "source": "double", "reason": None}
 
     monkeypatch.setattr(runner_module, "_blas_thread_limit", fake_limit)
     groups = [("g0",), ("g1",), ("g2",), ("g3",)]
@@ -273,8 +287,16 @@ def test_blas_pin_applies_with_a_single_group():
     calls = []
 
     def fake_limit(threads):
+        if isinstance(threads, dict):  # restore: report the record's own previous value
+            previous = threads.get("previous")
+            calls.append(previous)
+            return {**threads, "requested": previous, "effective": previous,
+                    "previous": previous, "setter_found": True, "getter_found": True,
+                    "verified": True, "source": "double", "reason": None}
         calls.append(int(threads))
-        return 3
+        return {"requested": int(threads), "effective": int(threads), "previous": 3,
+                "setter_found": True, "getter_found": True, "verified": True,
+                "source": "double", "reason": None}
 
     original = runner_module._blas_thread_limit
     runner_module._blas_thread_limit = fake_limit
@@ -312,9 +334,16 @@ def test_both_branches_execute_under_the_pinned_value(monkeypatch):
     seen = []
 
     def fake_limit(threads):
-        seen.append((int(threads), "pin"
-                     if int(threads) == BLAS_THREADS_PINNED else "restore"))
-        return 4
+        if isinstance(threads, dict):  # restore path
+            previous = threads.get("previous")
+            seen.append((previous, "pin" if previous == BLAS_THREADS_PINNED else "restore"))
+            return {**threads, "requested": previous, "effective": previous,
+                    "previous": previous, "setter_found": True, "getter_found": True,
+                    "verified": True, "source": "double", "reason": None}
+        seen.append((int(threads), "pin" if int(threads) == BLAS_THREADS_PINNED else "restore"))
+        return {"requested": int(threads), "effective": int(threads), "previous": 4,
+                "setter_found": True, "getter_found": True, "verified": True,
+                "source": "double", "reason": None}
 
     monkeypatch.setattr(runner_module, "_blas_thread_limit", fake_limit)
     groups = [("g",)] * 4

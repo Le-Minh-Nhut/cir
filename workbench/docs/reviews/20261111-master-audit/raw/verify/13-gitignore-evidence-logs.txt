@@ -1,0 +1,22 @@
+=== .gitignore evidence-log negation 2026-11-10T22:33:33+07:00 ===
+--- rule added after *.log ---
+
+# Django stuff:
+*.log
+
+# Review evidence logs are claims' raw backing, not runtime noise: the repo-wide *.log rule above
+# would drop them silently and they do not even appear in `git status`.
+!workbench/docs/reviews/**/*.log
+local_settings.py
+
+--- git check-ignore -v (master-audit sample) ---
+.gitignore:120:!workbench/docs/reviews/**/*.log	workbench/docs/reviews/20261111-master-audit/raw/airknow_forward_gpu_native.log
+quiet exit=$?   # 1 = NOT ignored
+
+--- per-tree: visible_in_git / on_disk / still_ignored ---
+20261111-master-audit/raw: visible_in_git=25 on_disk=25 still_ignored=0
+20261110-e2e-repair: visible_in_git=24 on_disk=24 still_ignored=0
+20261109-native15-composition-limn: visible_in_git=72 on_disk=72 still_ignored=0
+
+--- tracked .log repo-wide (BEFORE this fix: 0; none had ever been committed) ---
+0

@@ -10,10 +10,12 @@ import subprocess
 import shutil
 import sys
 import inspect
+import threading
+import contextlib
 import uuid
 from dataclasses import asdict, dataclass
 from pathlib import Path, PurePosixPath
-from typing import Any, Callable, Mapping, Sequence
+from typing import Any, Callable, Iterator, Mapping, Sequence
 
 import fcntl
 import numpy as np
@@ -214,13 +216,15 @@ def _backfill_export(adapter: Any, queries: Sequence[Any], query_scopes: Sequenc
                 # at BLAS_THREADS_PINNED, and a policy-sensitive scorer returns a different rank --
                 # measured on a fixture as rank 1 (normal) vs rank 2 (backfill). Exporting that
                 # would attach a window computed under different arithmetic to a published metric.
-                pinned = _blas_thread_limit(BLAS_THREADS_PINNED)
-                _record_effective_blas_pin(pinned)
+                pinned: dict[str, Any] = {}
                 try:
-                    ranks, windows = adapter.rank_and_topk(vectors, targets, positions, cats,
-                                                           writers[condition].depth)
+                    with blas_pin_scope() as active_pin:
+                        pinned = active_pin
+                        ranks, windows = adapter.rank_and_topk(vectors, targets, positions, cats,
+                                                              writers[condition].depth)
                 finally:
-                    _blas_thread_limit(pinned)
+                    if pinned:
+                        _record_effective_blas_pin(pinned)
                 # Fail closed: a backfilled rank that disagrees with the rank the original pass
                 # measured means the two did NOT run under the same policy, so this window cannot
                 # be presented as the window of that measurement. The caller reports the refusal.
@@ -966,6 +970,47 @@ def _current_openblas_threads() -> int | None:
     except Exception:
         return None
 
+#: Serialises pinned scoring regions inside ONE process. The OpenBLAS pool is process-global, so two
+#: regions that overlap would each compute inside the other's thread count; the lock makes the
+#: regions exclusive instead of hoping they do not collide.
+_BLAS_PIN_LOCK = threading.RLock()
+
+@contextlib.contextmanager
+def blas_pin_scope(threads: int | None = None) -> Iterator[dict[str, Any]]:
+    """Pin BLAS for a scoring region and report whether the pin actually GOVERNED the arithmetic.
+
+    `_blas_thread_limit` reports the readback taken immediately after its setter, which is the best a
+    single call can know. A scoring region lasts much longer than that, and the pool is
+    process-global: another thread, another library, or a nested call can change it while the region
+    runs. This scope re-reads the pool on the way out and, when it differs from the value the region
+    was supposed to compute under, clears `verified` and sets `drift_detected` -- so the artifact
+    says `unverified` instead of publishing a pin that did not hold.
+
+    Serialisation inside the process is what makes an overlapping SIBLING scope safe; drift
+    detection is what catches everything the lock cannot exclude. A process-wide pool shared with a
+    DIFFERENT process still cannot be pinned from here, and the record never claims it was.
+    """
+    target = BLAS_THREADS_PINNED if threads is None else int(threads)
+    with _BLAS_PIN_LOCK:
+        pin = _blas_thread_limit(target)
+        try:
+            yield pin
+        finally:
+            observed = _current_openblas_threads()
+            expected = pin.get("effective")
+            pin["observed_before_restore"] = observed
+            drifted = (pin.get("setter_found") is True and observed is not None
+                       and expected is not None and observed != expected)
+            pin["drift_detected"] = bool(drifted)
+            if drifted:
+                pin["verified"] = False
+                pin["reason"] = (
+                    f"concurrent change to the process-global BLAS pool: it was pinned to "
+                    f"{expected} but read back {observed} before restore, so the arithmetic was not "
+                    "governed by the declared pin. An artifact from this region must report the pin "
+                    "as unverified")
+            pin["restored_to"] = _blas_thread_limit(pin).get("effective")
+
 def _rank_groups_concurrently(rank_group: Any, groups: Sequence[Any], threads: int) -> list[Any]:
     """Run ``rank_group`` over independent groups, returning results or exceptions in group order.
 
@@ -988,34 +1033,38 @@ def _rank_groups_concurrently(rank_group: Any, groups: Sequence[Any], threads: i
     """
     if not groups:
         return []
-    previous = _blas_thread_limit(BLAS_THREADS_PINNED)
-    _record_effective_blas_pin(previous)
+    # The record is taken AFTER the scope closes: drift is only known on the way out, and a record
+    # snapshotted on the way in would publish `verified` for a region a sibling had already stolen.
+    pin: dict[str, Any] = {}
     try:
-        if threads <= 1 or len(groups) == 1:
-            out: list[Any] = []
-            for group in groups:
-                try:
-                    out.append(rank_group(group))
-                except BaseException as error:  # noqa: BLE001 - reported per group by the caller
-                    out.append(error)
-            return out
-        from concurrent.futures import ThreadPoolExecutor
+        with blas_pin_scope() as active_pin:
+            pin = active_pin
+            if threads <= 1 or len(groups) == 1:
+                out: list[Any] = []
+                for group in groups:
+                    try:
+                        out.append(rank_group(group))
+                    except BaseException as error:  # noqa: BLE001 - reported per group by the caller
+                        out.append(error)
+                return out
+            from concurrent.futures import ThreadPoolExecutor
 
-        # MEASURED collision: `@`-based scorers (the base CompositionAdapter.score used by ENCODER
-        # and LIMN) hand their work to multi-threaded BLAS, and composition_eval.py pins
-        # OPENBLAS/OMP to 10 by default, so 8 group threads x 10 BLAS threads would be 80 threads
-        # on 20 cores. Inside one thread per group the parallelism already exists at group level.
-        with ThreadPoolExecutor(max_workers=min(int(threads), len(groups))) as pool:
-            futures = [pool.submit(rank_group, group) for group in groups]
-            out = []
-            for future in futures:
-                try:
-                    out.append(future.result())
-                except BaseException as error:  # noqa: BLE001 - reported per group by the caller
-                    out.append(error)
-            return out
+            # MEASURED collision: `@`-based scorers (the base CompositionAdapter.score used by
+            # ENCODER and LIMN) hand their work to multi-threaded BLAS, and composition_eval.py pins
+            # OPENBLAS/OMP to 10 by default, so 8 group threads x 10 BLAS threads would be 80 threads
+            # on 20 cores. Inside one thread per group the parallelism already exists at group level.
+            with ThreadPoolExecutor(max_workers=min(int(threads), len(groups))) as pool:
+                futures = [pool.submit(rank_group, group) for group in groups]
+                out = []
+                for future in futures:
+                    try:
+                        out.append(future.result())
+                    except BaseException as error:  # noqa: BLE001 - reported per group by the caller
+                        out.append(error)
+                return out
     finally:
-        _blas_thread_limit(previous)
+        if pin:
+            _record_effective_blas_pin(pin)
 
 def _record_effective_blas_pin(result: Any) -> None:
     """Remember the LAST pin result so the run identity can record what really happened.
@@ -1160,6 +1209,50 @@ def policy_observed_from_payload(payload: Any) -> dict[str, Any]:
                 "record": None}
     return {"status": block.get("status", NOT_RECORDED), "reason": block.get("reason"),
             "record": block.get("record")}
+
+#: The `relation_state` a run records when its model constructed NO relation tensor. Distinct from
+#: a recorded-but-unverified draw: "this model draws nothing" and "this model's draw was not
+#: recorded" are different claims, and only a recorded digest can partition a run id.
+RELATION_NOT_RECORDED = "not_recorded"
+
+def _relation_identity(state: Any) -> dict[str, Any]:
+    """The stable, identity-bearing part of an adapter's `relation_state`.
+
+    The adapter hands back a mutable per-call record (path, expected digest, transform policy). Only
+    the three fields that describe WHAT was drawn go into the identity, so the run id depends on the
+    measurement rather than on where the file happened to land. A model that draws no relation, or
+    one that recorded none, yields `status: not_recorded` -- never `matches_pinned_digest: true`.
+    """
+    if not isinstance(state, Mapping):
+        return {"status": RELATION_NOT_RECORDED,
+                "reason": "this model's construction draws no relation tensor, or the draw was not "
+                          "recorded; nothing about its relation state is claimed"}
+    return {
+        "status": "recorded",
+        "seed": state.get("seed"),
+        "sha256": state.get("sha256"),
+        # `None` (not False, not True) when the artifact never named a pinned digest: an unknown
+        # expected value cannot support a match claim.
+        "expected_sha256": state.get("expected_sha256"),
+        "matches_pinned_digest": (state.get("matches_pinned_digest")
+                                  if state.get("expected_sha256") else None),
+    }
+
+def relation_state_from_summary(summary: Any) -> dict[str, Any]:
+    """The `relation_state` block of a stored summary, or an honest absence.
+
+    Same contract as `policy_observed_from_payload`: an artifact predating this field is reported
+    `not_recorded`, which is never a pass.
+    """
+    if not isinstance(summary, Mapping):
+        return {"status": RELATION_NOT_RECORDED,
+                "reason": "no summary was read, so no relation state exists to report"}
+    block = summary.get("relation_state")
+    if not isinstance(block, Mapping):
+        return {"status": RELATION_NOT_RECORDED,
+                "reason": "this artifact predates the relation_state field; whether its relation "
+                          "tensor matched the pinned digest is not recorded here"}
+    return dict(block)
 
 def _blas_pin_capability() -> dict[str, Any]:
     """What this interpreter can prove about BLAS pinning -- stable for the process.
@@ -1609,17 +1702,31 @@ def run_composition(data: Any, model_specs: Sequence[ModelSpec], config: Any, *,
                 "category_scopes": list(scopes),
                 "reference_eligible": reference_eligible,
                 "reference_eligibility": reference_eligibility,
-                # `seed` is deliberately NOT hashed here. It is recorded in the summary for
-                # provenance, but no seeding call exists anywhere in the composition path: every
-                # encode-time transform is deterministic, every adapter encodes under `.eval()` +
-                # `torch.no_grad()`, and no forward pass draws randomness. A field that mints a new
-                # run_id while controlling nothing is worse than no field, so `--seed` no longer
-                # partitions the artifact tree. `metrics.paired_bootstrap_gap` keeps its own
-                # explicit seed argument; it is a function parameter, not a run variable.
+                # `seed` (`--seed`) is deliberately NOT hashed here: it is recorded for provenance,
+                # and no FORWARD pass draws randomness (every adapter encodes under `.eval()` +
+                # `torch.no_grad()`, every encode-time transform is deterministic).
+                #
+                # Seeding DOES exist in this path, but it is MODEL-SPECIFIC, so it cannot be keyed
+                # on a generic `--seed`: ENCODER's worker pins `torch.manual_seed(RELATION_SEED)`
+                # immediately before `Encoder(...)` (`model_encoder.py:392`), because that
+                # constructor draws `learnable_relation` from the global RNG and the draw is not
+                # restorable from any checkpoint. A model whose construction draws from the global
+                # RNG must pin it the same way and RECORD the result -- the record is
+                # `relation_state`, and `relation_state` is in the identity below, so a different
+                # draw partitions the run id. `metrics.paired_bootstrap_gap` keeps its own explicit
+                # seed argument; it is a function parameter, not a run variable.
                 "batch_size": batch_size,
                 # LIMN's own encoder batch (WORKBENCH_LIMN_BATCH_SIZE) changes the forward pass
                 # only, but it is part of the run's configuration and must key the run id.
                 "adapter_batch_size": getattr(adapter, "batch_size", None),
+                # M-01: the relation tensor a model CONSTRUCTS is an arithmetic input. ENCODER draws
+                # `learnable_relation` from the global RNG at construction, it is NOT in
+                # `state_dict()`, and no checkpoint can restore it -- so two runs that drew different
+                # bytes computed their features with different relations and are different
+                # measurements. Keyed on the DIGEST, never on the mutable per-call record: the value
+                # must be a property of the model, or the same inputs would mint two run ids.
+                # `_relation_identity` reports absence honestly for a model that draws nothing.
+                "relation_state": _relation_identity(getattr(adapter, "relation_state", None)),
             }
             run_id = _digest(identity)[:24]
             fingerprint = _digest(identity)
@@ -1920,23 +2027,25 @@ def run_composition(data: Any, model_specs: Sequence[ModelSpec], config: Any, *,
                                 # changes the arithmetic is not a fallback, it is a different
                                 # measurement, and a batch that only succeeds this way must not be
                                 # reported as the same pass.
-                                fallback_pin = _blas_thread_limit(BLAS_THREADS_PINNED)
-                                _record_effective_blas_pin(fallback_pin)
+                                fallback_pin: dict[str, Any] = {}
                                 try:
-                                    for index, vector, positive, category in zip(valid_indices, vectors, positions, cats):
-                                        try:
-                                            one = adapter.rank(vector.reshape(1, -1), targets, [positive], [category])
-                                            exact_ranks.append(one[0] if one else None)
-                                        except ExactRankUnavailable as error:
-                                            mode_status[condition] = {"status": "EXACT_RANK_UNAVAILABLE",
-                                                                      "reason": str(error)}
-                                            exact_ranks = []
-                                            break
-                                        except Exception as error:
-                                            exact_ranks.append(None)
-                                            condition_reasons[queries[index].qid] = f"{type(error).__name__}: {error}"
+                                    with blas_pin_scope() as active_fallback_pin:
+                                        fallback_pin = active_fallback_pin
+                                        for index, vector, positive, category in zip(valid_indices, vectors, positions, cats):
+                                            try:
+                                                one = adapter.rank(vector.reshape(1, -1), targets, [positive], [category])
+                                                exact_ranks.append(one[0] if one else None)
+                                            except ExactRankUnavailable as error:
+                                                mode_status[condition] = {"status": "EXACT_RANK_UNAVAILABLE",
+                                                                          "reason": str(error)}
+                                                exact_ranks = []
+                                                break
+                                            except Exception as error:
+                                                exact_ranks.append(None)
+                                                condition_reasons[queries[index].qid] = f"{type(error).__name__}: {error}"
                                 finally:
-                                    _blas_thread_limit(fallback_pin)
+                                    if fallback_pin:
+                                        _record_effective_blas_pin(fallback_pin)
                                 # The fallback changed the batch matrix to one query at a time,
                                 # which is a different arithmetic shape from the group pass. The
                                 # condition is therefore marked PARTIAL downstream (unscored_count
@@ -2088,6 +2197,10 @@ def run_composition(data: Any, model_specs: Sequence[ModelSpec], config: Any, *,
                                       "ablation_policy": "black PIL replacement is staged before adapter transform; empty text for image-only"},
                     "adapter": f"{type(adapter).__module__}.{type(adapter).__qualname__}",
                     "category_scopes": list(scopes),
+                    # M-01: surfaced under its own key so the gate can read it without parsing the
+                    # identity hash. Same value that partitions the run id, so the two can never
+                    # disagree about which relation produced the features.
+                    "relation_state": identity["relation_state"],
                     "category_resolution": data.provenance.get("category_resolution", {}),
                     "unresolved_category_query_count": sum(query.category is None for query in queries),
                     # `category_resolution` above is the RELEASE-level fact and keeps saying 119

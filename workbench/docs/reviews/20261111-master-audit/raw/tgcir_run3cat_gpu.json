@@ -1,0 +1,98 @@
+{
+  "model_id": "tgcir",
+  "protocol": "fashioniq_val_split",
+  "evaluation_path": "WORKBENCH_ADDED_EVAL_PATH",
+  "results": [
+    {
+      "model_id": "tgcir",
+      "checkpoint_id": "tgcir_archive_unresolved",
+      "category": "dress",
+      "protocol": "fashioniq_val_split",
+      "r1": 14.328210213187903,
+      "r10": 43.38125929598414,
+      "r50": 68.368864650471,
+      "complete": true,
+      "provenance": {
+        "source_commit": "65fa78eaf8cabe8197fcc22ccab42207c591bdee",
+        "checkpoint": "workbench/artifacts/checkpoint_selection/20261106T002617+0700/downloads/tgcir/x/checkpoints/Fashioniq.pt",
+        "checkpoint_sha256": "c37768f374c75bebff1299e870518c23bf6db3dc8a75c4d1f729ccd6dd02e966",
+        "checkpoint_digest_kind": "STAGED_WORKBENCH_DIGEST (author publishes metrics json, not a checksum)",
+        "native_evaluator": "test.py:test",
+        "evaluation_path": "WORKBENCH_ADDED_EVAL_PATH (author ships no evaluable CLI; --restore_file is dead)",
+        "img_encoder": "ViT-B/16",
+        "transform": "clip.load('ViT-B/16').preprocess (train.py:87,90)",
+        "runtime_label": "NATIVE_CUDA",
+        "adaptations": [
+          "torch.nn.modules.linear._LinearWithBias -> torch.nn.Linear (1.7 pickle alias)",
+          "batch_first=False restored on 24 nn.MultiheadAttention modules (torch 1.7 state)"
+        ],
+        "clip_cache": "/home/heheboiz/.cache/clip/ViT-B-16.pt"
+      },
+      "parity_mismatches": [],
+      "per_query_published": false
+    },
+    {
+      "model_id": "tgcir",
+      "checkpoint_id": "tgcir_archive_unresolved",
+      "category": "shirt",
+      "protocol": "fashioniq_val_split",
+      "r1": 22.42394504416094,
+      "r10": 51.47203140333661,
+      "r50": 69.8233562315996,
+      "complete": true,
+      "provenance": {
+        "source_commit": "65fa78eaf8cabe8197fcc22ccab42207c591bdee",
+        "checkpoint": "workbench/artifacts/checkpoint_selection/20261106T002617+0700/downloads/tgcir/x/checkpoints/Fashioniq.pt",
+        "checkpoint_sha256": "c37768f374c75bebff1299e870518c23bf6db3dc8a75c4d1f729ccd6dd02e966",
+        "checkpoint_digest_kind": "STAGED_WORKBENCH_DIGEST (author publishes metrics json, not a checksum)",
+        "native_evaluator": "test.py:test",
+        "evaluation_path": "WORKBENCH_ADDED_EVAL_PATH (author ships no evaluable CLI; --restore_file is dead)",
+        "img_encoder": "ViT-B/16",
+        "transform": "clip.load('ViT-B/16').preprocess (train.py:87,90)",
+        "runtime_label": "NATIVE_CUDA",
+        "adaptations": [
+          "torch.nn.modules.linear._LinearWithBias -> torch.nn.Linear (1.7 pickle alias)",
+          "batch_first=False restored on 24 nn.MultiheadAttention modules (torch 1.7 state)"
+        ],
+        "clip_cache": "/home/heheboiz/.cache/clip/ViT-B-16.pt"
+      },
+      "parity_mismatches": [],
+      "per_query_published": false
+    },
+    {
+      "model_id": "tgcir",
+      "checkpoint_id": "tgcir_archive_unresolved",
+      "category": "toptee",
+      "protocol": "fashioniq_val_split",
+      "r1": 22.59051504334523,
+      "r10": 54.30902600713922,
+      "r50": 75.11473737888832,
+      "complete": true,
+      "provenance": {
+        "source_commit": "65fa78eaf8cabe8197fcc22ccab42207c591bdee",
+        "checkpoint": "workbench/artifacts/checkpoint_selection/20261106T002617+0700/downloads/tgcir/x/checkpoints/Fashioniq.pt",
+        "checkpoint_sha256": "c37768f374c75bebff1299e870518c23bf6db3dc8a75c4d1f729ccd6dd02e966",
+        "checkpoint_digest_kind": "STAGED_WORKBENCH_DIGEST (author publishes metrics json, not a checksum)",
+        "native_evaluator": "test.py:test",
+        "evaluation_path": "WORKBENCH_ADDED_EVAL_PATH (author ships no evaluable CLI; --restore_file is dead)",
+        "img_encoder": "ViT-B/16",
+        "transform": "clip.load('ViT-B/16').preprocess (train.py:87,90)",
+        "runtime_label": "NATIVE_CUDA",
+        "adaptations": [
+          "torch.nn.modules.linear._LinearWithBias -> torch.nn.Linear (1.7 pickle alias)",
+          "batch_first=False restored on 24 nn.MultiheadAttention modules (torch 1.7 state)"
+        ],
+        "clip_cache": "/home/heheboiz/.cache/clip/ViT-B-16.pt"
+      },
+      "parity_mismatches": [],
+      "per_query_published": false
+    }
+  ],
+  "aggregate": {
+    "macro_r10": 49.720772235486656,
+    "macro_r50": 71.10231942031965,
+    "macro_mean": 60.411545827903154,
+    "complete": true
+  },
+  "recorded_at": "2026-11-10T13:24:47.518951+00:00"
+}

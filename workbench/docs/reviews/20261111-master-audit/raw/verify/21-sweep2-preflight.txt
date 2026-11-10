@@ -1,0 +1,12 @@
+=== sweep preflight (RUN 2, after fixing 6 NEW failures) 2026-11-10T23:43:42+07:00 ===
+--- pgrep -af pytest ---
+(exit=1 # 1 = none)
+--- df -h / ---
+Filesystem      Size  Used Avail Use% Mounted on
+/dev/nvme0n1p5  630G  478G  121G  80% /
+--- git status --porcelain -uall ---
+line_count=404
+--- root scratch ---
+none (correct)
+--- basetemp ---
+ls: cannot access '/tmp/sweep_basetemp_master': No such file or directory

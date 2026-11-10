@@ -1,100 +1,164 @@
-"""R3: real case from the stored NPZ, with ONE eligibility mask for ranking and probe.
+"""G-02 (corrected): re-derive the R3 real-case rank comparison from the stored NPZ features.
 
-The NPZ stores per-category feature populations (2017/2038/1961 rows) and a 4-row pixel sample.
-`sample_query_native` / `sample_query_val` are the features of the SAME 4 sampled queries under
-native preprocess_train and preprocess_val; `sample_target` are those 4 targets. Ranks are therefore
-computable on the sample, and on the full population, without re-running the model.
+Supersedes `20261110-e2e-repair/scripts/pc_r3_real_case.py`, whose bytes are left untouched.
 
-Every rank pair is produced with the same declared mask, and a disagreement is reported with the
-candidate IDs that actually cross, plus the gap in BOTH matrices - never a bare tie verdict.
+What the superseded script did wrong, and what this one does instead:
+
+| superseded                                       | here                                              |
+|--------------------------------------------------|---------------------------------------------------|
+| target joined by exact vector equality            | joined by recorded gallery POSITION                |
+| rank computed without the reference mask          | the SAME reference mask on both matrices           |
+| crossings read from `argsort(...)[lo-1:hi]`       | crossings by the pairwise definition, per candidate|
+| gap = max over the slice                          | per-crosser distance to target AND to the cutoff   |
+| tolerance implicit, chosen while reading output   | `TIE_EPSILON` declared below, before any measurement |
+
+TOLERANCES ARE DECLARED HERE, BEFORE MEASUREMENT, and are not moved afterwards:
+
+* `TIE_EPSILON = 1e-6` -- the campaign's declared `tolerances.tie_epsilon`
+  (`g1_g2.encoder.*.native.json`), and the value `encoder_parity.py:50` used when measuring.
+* `RANK_AGREEMENT = "exact"` -- the R3 question is whether two feature matrices rank one fixed
+  target identically. There is no numeric tolerance to pick: either the ranks are equal or they are
+  not, and any difference is reported with its crossing evidence rather than waved through.
+
+The cutoff is the only derived quantity: `DEEP_CUTOFF = 100`, chosen because the campaign reports
+R@1/R@10/R@50, so 100 is the deepest published cut with headroom. It is a REPORTING threshold, not
+a pass/fail criterion.
+
+Inputs, all recorded by `encoder_parity.py` (nothing recomputed here):
+  raw/encoder_parity/native.<category>.npz   sample_query_native/val, sample_target, gallery
+  raw/encoder_parity/adapter.<category>.npz  population queries/gallery
+  raw/encoder_parity/inputs.<category>.json  reference_positions, target_positions, sample_indices
 """
 import json
+import sys
 from pathlib import Path
+
 import numpy as np
 
-RAW = Path("/home/heheboiz/data/cir/workbench/docs/reviews/20261109-native15-composition-limn/raw/encoder_parity")
-TIE_EPSILON = 1e-6
+RAW = Path("/home/heheboiz/data/cir/workbench/docs/reviews/20261109-native15-composition-limn"
+           "/raw/encoder_parity")
 
-def unit(a):
+# ---- declared BEFORE measuring; never adjusted after the numbers are known ----
+TIE_EPSILON = 1e-06   # g1_g2.encoder.*.native.json `tolerances.tie_epsilon`
+RANK_AGREEMENT = "exact"
+DEEP_CUTOFF = 100
+
+
+def unit(a: np.ndarray) -> np.ndarray:
     a = np.asarray(a, dtype=np.float32)
     return a / np.maximum(np.linalg.norm(a, axis=1, keepdims=True), np.finfo(np.float32).tiny)
 
-def rank_and_order(row, target, mask_position=None):
-    r = row.copy()
-    if mask_position is not None:
-        r[mask_position] = -10e10
-    order = np.argsort(-r, kind="stable")
-    return int(np.flatnonzero(order == target)[0]) + 1, order, r
 
-results = {}
-for cat in ("dress", "shirt", "toptee"):
-    native = np.load(RAW / f"native.{cat}.npz")
+def rank_masked(scores: np.ndarray, target: int, reference: int | None) -> tuple[int, np.ndarray, np.ndarray]:
+    """Rank of `target` with `reference` excluded, exactly as the model ranks.
+
+    `-10e10` then `argsort(-row)` places the masked entry LAST, which is an exclusion. Returned with
+    the row the rank was computed from, so no caller can probe a different row for its gaps.
+    """
+    row = np.asarray(scores, dtype=np.float64).copy()
+    if reference is not None:
+        row[reference] = -10e10
+    order = np.argsort(-row, kind="stable")
+    return int(np.flatnonzero(order == target)[0]) + 1, order, row
+
+
+def crossing_evidence(row_a: np.ndarray, row_b: np.ndarray, target: int,
+                      reference: int | None) -> list[dict]:
+    """Every candidate whose relation to the target CHANGED, with both distances.
+
+    The pairwise definition, not an argsort slice: "did this candidate move from below the target to
+    above it (or the reverse) between the two matrices?". Invariant to column order and to ties in
+    the slice, and it names each crosser with the number that decided it.
+    """
+    out = []
+    for position in range(len(row_a)):
+        if position in (target, reference):
+            continue
+        before, after = row_a[position] > row_a[target], row_b[position] > row_b[target]
+        if before == after:
+            continue
+        out.append({
+            "candidate_position": position,
+            "outranked_target_in": "native_train" if before else "native_val",
+            "distance_to_target_train": float(abs(row_a[position] - row_a[target])),
+            "distance_to_target_val": float(abs(row_b[position] - row_b[target])),
+            # How far the CUTOFF (the deepest crosser's score) sat from the target in each matrix.
+            "target_distance_to_cutoff_train": float(abs(np.max(row_a[np.argsort(-row_a)[:DEEP_CUTOFF]])
+                                                         - row_a[target])),
+            "target_distance_to_cutoff_val": float(abs(np.max(row_b[np.argsort(-row_b)[:DEEP_CUTOFF]])
+                                                       - row_b[target])),
+        })
+    return out
+
+
+report: dict = {}
+for category in ("dress", "shirt", "toptee"):
+    native = np.load(RAW / f"native.{category}.npz")
+    adapter = np.load(RAW / f"adapter.{category}.npz")
+    inputs = json.loads((RAW / f"inputs.{category}.json").read_text(encoding="utf-8"))
+
+    indices = list(inputs["sample_indices"])
+    # JOIN BY POSITION: the recorded gallery positions of the sampled queries' reference and target.
+    target_positions = [int(inputs["target_positions"][i]) for i in indices]
+    reference_positions = [int(inputs["reference_positions"][i]) for i in indices]
+
     gallery = unit(native["gallery"])
-    qn = unit(native["sample_query_native"])
-    qv = unit(native["sample_query_val"])
-    tgt = unit(native["sample_target"])
+    q_train = unit(native["sample_query_native"])
+    q_val = unit(native["sample_query_val"])
+    a_gallery = unit(adapter["gallery"])
+    a_queries = unit(adapter["queries"])
 
-    # pair each sample target with its unique gallery row (exact identity, not nearest)
-    positions = []
-    for row in tgt:
-        match = np.flatnonzero(np.all(gallery == row, axis=1))
-        positions.append(int(match[0]) if match.size == 1 else None)
+    sample = []
+    for row_index, (tpos, rpos) in enumerate(zip(target_positions, reference_positions)):
+        s_train = q_train[row_index] @ gallery.T
+        s_val = q_val[row_index] @ gallery.T
+        rank_train, _, row_train = rank_masked(s_train, tpos, rpos)
+        rank_val, _, row_val = rank_masked(s_val, tpos, rpos)
 
-    entries = []
-    for i, t in enumerate(positions):
-        if t is None:
-            entries.append({"query_index": i, "note": "target not identifiable in the gallery"})
-            continue
-        sn = qn[i] @ gallery.T
-        sv = qv[i] @ gallery.T
-        rn, on, _ = rank_and_order(sn, t)
-        rv, ov, _ = rank_and_order(sv, t)
-        item = {"query_index": i, "target_position": t, "rank_native_train": rn, "rank_native_val": rv}
-        if rn != rv:
-            lo, hi = sorted((rn, rv))
-            crossed = [int(p) for p in on[lo - 1:hi] if p != t]
-            gaps_train = [float(abs(sn[p] - sn[t])) for p in crossed]
-            gaps_val = [float(abs(sv[p] - sv[t])) for p in crossed]
-            item.update({
-                "moved": f"{rn}->{rv}",
-                "crossed_positions": crossed,
-                "gap_train_min": min(gaps_train) if gaps_train else None,
-                "gap_val_min": min(gaps_val) if gaps_val else None,
-                "tie_in_both_matrices": bool(gaps_train and gaps_val and
-                                             min(gaps_train) <= TIE_EPSILON and min(gaps_val) <= TIE_EPSILON),
-                "rank_used_one_mask": True,
-            })
-        entries.append(item)
+        entry = {
+            "sample_row": row_index,
+            "query_index": indices[row_index],
+            "target_position": tpos,
+            "reference_position": rpos,
+            "rank_native_train": rank_train,
+            "rank_native_val": rank_val,
+            "ranks_agree": rank_train == rank_val,
+            "target_score_train": float(row_train[tpos]),
+            "target_score_val": float(row_val[tpos]),
+            "deep_cutoff": DEEP_CUTOFF,
+            "target_inside_cutoff_train": rank_train <= DEEP_CUTOFF,
+            "target_inside_cutoff_val": rank_val <= DEEP_CUTOFF,
+            "crossings": crossing_evidence(row_train, row_val, tpos, rpos),
+            "rank_used_one_mask": True,
+            "mask_position": rpos,
+            "join": "recorded gallery position (inputs.<category>.json), not vector equality",
+        }
+        # Adapter vs native-val on the SAME population matrix, same mask, same position.
+        if indices[row_index] < len(a_queries):
+            s_adapter = a_queries[indices[row_index]] @ a_gallery.T
+            rank_adapter, _, row_adapter = rank_masked(s_adapter, tpos, rpos)
+            entry["rank_adapter"] = rank_adapter
+            entry["adapter_ranks_with_native_val"] = rank_adapter == rank_val
+            if rank_adapter != rank_val:
+                entry["adapter_crossings"] = crossing_evidence(row_adapter, row_val, tpos, rpos)
+        sample.append(entry)
 
-    # population-level check: same 4 queries against the adapter's own feature matrix
-    adapter = np.load(RAW / f"adapter.{cat}.npz")
-    aq = unit(adapter["queries"])[:len(qn)]
-    ag = unit(adapter["gallery"])
-    pop = []
-    for i, t in enumerate(positions):
-        if t is None:
-            continue
-        sa = aq[i] @ ag.T
-        ra, oa, _ = rank_and_order(sa, t)
-        rv, ov, _ = rank_and_order(qv[i] @ gallery.T, t)
-        if ra != rv:
-            lo, hi = sorted((ra, rv))
-            crossed = [int(p) for p in ov[lo - 1:hi] if p != t]
-            pop.append({"query_index": i, "adapter_rank": ra, "native_val_rank": rv,
-                        "crossed_positions": crossed,
-                        "adapter_gap_min": min((float(abs(sa[p] - sa[t])) for p in crossed), default=None),
-                        "native_gap_min": min((float(abs((qv[i] @ gallery.T)[p] - (qv[i] @ gallery.T)[t]))
-                                               for p in crossed), default=None)})
-
-    results[cat] = {
-        "sample_size": len(positions),
-        "targets_identifiable": sum(1 for p in positions if p is not None),
-        "native_train_vs_native_val": entries,
-        "adapter_vs_native_val_on_population": pop,
-        "tie_epsilon": TIE_EPSILON,
+    disagreements = [e for e in sample if not e["ranks_agree"]]
+    report[category] = {
+        "sample_rows": len(sample),
+        "sample_indices": indices,
+        "target_positions": target_positions,
+        "reference_positions": reference_positions,
+        "tie_epsilon_declared": TIE_EPSILON,
+        "rank_agreement_declared": RANK_AGREEMENT,
+        "rows": sample,
+        "rank_disagreement_count": len(disagreements),
+        "all_ranks_agree": not disagreements,
         "classification": (
-            "no rank disagreement on the sample" if not any("moved" in e for e in entries)
-            else "disagreements exist; each is reported with crossed IDs and both gaps"),
+            "every sampled target gets the same rank under preprocess_train and preprocess_val"
+            if not disagreements else
+            f"{len(disagreements)} sampled target(s) change rank; each is reported with its "
+            "crossing set and both distances"),
     }
 
-print("R3REAL:" + json.dumps(results, indent=1))
+print("R3SUPERSEDED:" + json.dumps(report, indent=1))

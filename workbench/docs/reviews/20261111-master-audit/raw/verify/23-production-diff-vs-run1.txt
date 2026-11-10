@@ -1,0 +1,25 @@
+=== production-diff evidence: files changed AFTER sweep-run1 start (2026-11-10 22:35:10) ===
+method: mtime > run-1 launch; run-1 summary written 23:30:40, all edits made after that.
+
+workbench/backend: 0 changed files
+workbench/composition: 1 changed files
+    workbench/composition/inputs.py
+workbench/frontend: 0 changed files
+workbench/scripts: 0 changed files
+workbench/replay: 0 changed files
+workbench/registry: 0 changed files
+
+=== workbench/tests (expected: the 3 fix targets) ===
+    workbench/tests/test_frontend_support.py
+    workbench/tests/test_throughput_knobs.py
+    workbench/tests/test_controller_installation.py
+
+=== key production file mtimes (all must predate 2026-11-10 22:35:10) ===
+    2026-11-10 19:37 workbench/backend/limn_diagnostic.py
+    2026-11-10 22:19 workbench/backend/native_measurements.py
+    2026-11-10 19:35 workbench/composition/runner.py
+    2026-11-10 21:24 workbench/frontend/scope.ts
+
+=== runner.py diff stat (campaign change, made BEFORE run 1) ===
+ workbench/composition/runner.py | 145 +++++++++++++++++++++++++++-------------
+ 1 file changed, 98 insertions(+), 47 deletions(-)

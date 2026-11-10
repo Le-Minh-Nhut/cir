@@ -1,0 +1,40 @@
+FF                                                                       [100%]
+=================================== FAILURES ===================================
+__________ test_a_window_shorter_than_its_declared_depth_is_a_defect ___________
+
+tmp_path = PosixPath('/tmp/pytest-of-heheboiz/pytest-777/test_a_window_shorter_than_its0')
+
+    def test_a_window_shorter_than_its_declared_depth_is_a_defect(tmp_path: Path) -> None:
+        """The producer's own failure mode: declare depth=100, store fewer rows.
+    
+        Measured on HEAD before this test existed: exporting `candidates[:1]` from a row that still
+        declared `depth=100` left the record COMPLETE with zero defects, so a truncated export read as
+        a complete window.
+        """
+        root = _root(tmp_path, _payload(), depth=100)
+        result = load_diagnostic(_config(root))
+>       assert result["complete"] is False
+E       assert True is False
+
+workbench/tests/test_limn_diagnostic_record.py:436: AssertionError
+_____________ test_a_duplicate_export_row_for_one_qid_is_a_defect ______________
+
+tmp_path = PosixPath('/tmp/pytest-of-heheboiz/pytest-777/test_a_duplicate_export_row_fo0')
+
+    def test_a_duplicate_export_row_for_one_qid_is_a_defect(tmp_path: Path) -> None:
+        """Two rows for one qid are two claims about one query; the reader took the first silently."""
+        root = _root(tmp_path, _payload())
+        path = root / "limn_dual_scope.shirt.multimodal.jsonl"
+        rows = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+        clone = dict(rows[0], target_rank=rows[0]["target_rank"] + 1000)
+        path.write_text("\n".join(json.dumps(row) for row in rows + [clone]) + "\n", encoding="utf-8")
+        result = load_diagnostic(_config(root))
+>       assert result["complete"] is False
+E       assert True is False
+
+workbench/tests/test_limn_diagnostic_record.py:448: AssertionError
+=========================== short test summary info ============================
+FAILED workbench/tests/test_limn_diagnostic_record.py::test_a_window_shorter_than_its_declared_depth_is_a_defect - assert True is False
+FAILED workbench/tests/test_limn_diagnostic_record.py::test_a_duplicate_export_row_for_one_qid_is_a_defect - assert True is False
+2 failed, 28 deselected in 0.10s
+exit=1

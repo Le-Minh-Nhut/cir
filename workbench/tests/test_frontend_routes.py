@@ -140,3 +140,18 @@ def test_the_shell_reads_and_writes_the_url() -> None:
     assert "parseLocation(" in app and "toSearch(" in app, "the URL is not the source of truth"
     assert "popstate" in app, "Back/Forward cannot restore context without a popstate listener"
     assert "pushState" in app, "navigating must push history, or Back skips whole areas"
+
+
+def test_the_native_scope_has_a_view_that_lists_it() -> None:
+    """W-02: a native-only row must open a table that actually contains it.
+
+    The link used to be `?view=benchmark&protocol=…`, and the benchmark table lists `aggregate`
+    reports only — so a native macro row opened an empty page under a protocol label. The view has
+    to exist in the area's own view list, or `parseLocation` rejects the URL that links to it.
+    """
+    out = _parse("?area=evaluation&view=native&protocol=fashioniq_full_gallery_ref_excluded")
+    assert out["problems"] == [], out["problems"]
+    assert out["location"]["area"] == "evaluation"
+    assert out["location"]["view"] == "native", out["location"]
+    # And it round-trips, so a copied link to a native row stays on that view.
+    assert "view=native" in out["roundTrip"], out["roundTrip"]

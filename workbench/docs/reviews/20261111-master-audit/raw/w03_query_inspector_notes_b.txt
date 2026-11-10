@@ -1,0 +1,181 @@
+        <div className="query-brief">
+          {/* DOM order is the reading order the evidence requires: the reference image, then the
+              edit caption, THEN the target. A reader who sees the target first reads the caption as
+              a post-hoc description of it. */}
+          <div className="query-sequence" data-testid="query-sequence">
+            <div className="shots">
+              <Shot category={category} id={query.reference_id} label="Ảnh tham chiếu" />
+            </div>
+            <div className="query-instruction-caption">
+              <div className="eyebrow">Yêu cầu chỉnh sửa</div>
+              <p className="edit-caption" data-testid="query-caption">{query.query_txt}</p>
+            </div>
+            <div className="shots" data-testid="query-targets">
+              {query.positive_ids.map((id, index) => (
+                <Shot key={id} category={category} id={id} target
+                      label={index === 0 ? "Ảnh đích" : "Ảnh đích bổ sung"} />
+              ))}
+            </div>
+            {(() => {
+              // The target image is rendered from the query record, never from the candidate window,
+              // so it survives a rank outside the exported depth. Say so where the image is.
+              const ranks = conditions.map((item) => item.rank).filter((rank): rank is number => rank != null);
+              if (!ranks.length || !depth) return null;
+              const best = Math.min(...ranks);
+              if (best <= depth) return null;
+              return (
+                <p className="hint" data-testid="target-outside-window">
+                  Ảnh đích ở hạng tốt nhất {fmtRank(best)}, <b>ngoài cửa sổ {fmtInt(depth)} ứng viên đã xuất</b> —
+                  vẫn hiện ở đây vì hạng là hạng toàn gallery.
+                </p>
+              );
+            })()}
+          </div>
+
+          <div className="query-instruction">
+            <div>
+              <div className="eyebrow" style={{ marginBottom: 8 }}>
+                Hạng theo điều kiện · outcome phân loại tại @{FIXED_CUTOFFS.compositionOutcomeK} (cố định)
+              </div>
+              <div className="rankgrid">
+                {conditions.map((item) => (
+                  <div key={item.id}
+                       className={`rankcell ${item.rank === null ? "unscored-cell" : item.rank <= FIXED_CUTOFFS.compositionOutcomeK ? "hit" : "miss"}`}
+                       data-testid={`rank-${item.id}`}
+                       data-rank-state={item.rank === null ? "missing-rank" : item.rank <= FIXED_CUTOFFS.compositionOutcomeK ? "hit" : "miss"}>
+                    <small>{CONDITION_LABELS[item.id] ?? item.short}</small>
+                    <b>{item.rank === null ? "Chưa chấm" : fmtRank(item.rank)}</b>
+                    <span className="hint">
+                      {item.rank === null
+                        ? (query.unscored_kind ? `Không có hạng chính xác (${query.unscored_kind})` : "Không có hạng chính xác")
+                        : item.rank <= FIXED_CUTOFFS.compositionOutcomeK
+                          ? `trong @${FIXED_CUTOFFS.compositionOutcomeK}`
+                          : `ngoài @${FIXED_CUTOFFS.compositionOutcomeK}`}
+                      {item.rank != null && depth > 0 && item.rank > depth
+                        ? ` · ngoài cửa sổ ${fmtInt(depth)} ứng viên đã lưu`
+                        : ""}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              <p className="hint" style={{ marginTop: 8 }}>
+                Hạng đích trên toàn gallery, theo từng điều kiện. Số ứng viên hiển thị bên dưới không
+                đổi ngưỡng phân loại này.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {unscored && (
+          <div className="pipeline-notice" data-testid="query-unscored-notice">
+            <strong>Query này chưa được chấm đầy đủ.</strong>
+            <p>
+              {query.failure?.includes("embedding scope")
+                ? "Evaluator chưa xác định được nhánh category để tạo embedding, nên chưa có hạng hợp lệ cho điều kiện bị ảnh hưởng. Chưa thể kết luận model truy hồi sai trên query này."
+                : "Một hoặc nhiều điều kiện chưa có hạng chính xác. Phần chưa chấm không phải lỗi truy hồi."}
+            </p>
+            <Detail summary="Nguyên nhân và bước xử lý">
+              <p className="diagnostic">{query.failure ?? query.unscored_kind ?? "Evaluator chưa cung cấp nguyên nhân."}</p>
+              <p>
+                Cần đối soát mapping/adapter với dữ liệu nguồn rồi chạy lại lượt bị ảnh hưởng. Sửa code
+                không tự cập nhật artifact cũ.
+              </p>
+            </Detail>
+          </div>
+        )}
+        {!unscored && query.failure && (
+          <Detail summary="Chẩn đoán evaluator"><p className="diagnostic">{query.failure}</p></Detail>
+        )}
+      </Card>
+
+      <Card
+        title={`Ứng viên xếp hạng · ${CONDITION_LABELS[condition] ?? condition}`}
+        subtitle="Thứ tự do lượt chạy xuất ra cho đúng điều kiện này; ảnh đích được đánh dấu."
+        actions={(
+          <label className="candidate-control">Hiển thị
+            <select data-testid="topk" aria-label="Số ứng viên hiển thị"
+                    value={hasExport ? effectiveK : "unavailable"}
+                    disabled={!hasExport}
+                    onChange={(event) => setK(Number(event.target.value))}>
+              {hasExport
+                ? options.map((value) => <option key={value} value={value}>Top {value}</option>)
+                : <option value="unavailable">Chưa có ứng viên</option>}
+            </select>
+          </label>
+        )}
+      >
+        {run.provenance_source && (
+          <p className="pipeline-notice" data-testid="candidates-provenance">
+            Nguồn ứng viên: <b>{IMPORTED_LABEL[run.provenance_source] ?? run.provenance_source}</b>.
+            Đây là artifact nhập vào, không phải đầu ra của model <b>{run.model_id}</b> chạy tại đây.
+            Chỉ dùng để đọc hạng và thứ tự.
+          </p>
+        )}
+
+        {loading ? <LoadingState label={`Đang tải Top ${effectiveK} cho query ${query.query_id}…`} />
+          : current && candidatesRegion.region.status === "error"
+            ? <ErrorState message={candidatesRegion.region.error ?? "Không tải được ứng viên"} onRetry={candidatesRegion.retry} />
+            : shown.length > 0 ? (
+              <>
+                <p className="candidate-count" aria-live="polite">
+                  Đang hiển thị <b>{shown.length}</b> ứng viên · độ sâu đã xuất {fmtInt(depth)} ·
+                  {" "}{CONDITION_LABELS[condition] ?? condition}
+                </p>
+                <div className="candidates" data-testid="topk-grid">
+                  {shown.map((candidate) => {
+                    const target = isTarget(candidate.image_id);
+                    return (
+                      <article key={`${candidate.rank}:${candidate.image_id}`}
+                               className={`candidate ${target ? "is-target" : ""}`}>
+                        <div className="candidate-rank">
+                          <b>#{candidate.rank}</b>
+                          {target && <span>Ảnh đích</span>}
+                        </div>
+                        <Shot category={category} id={candidate.image_id} compact target={target}
+                              label={`Ứng viên ${candidate.rank}`} />
+                        <small>
+                          <span>Điểm</span>
+                          {/* A stored order without scores must read "—", never 0.0. */}
+                          <b>{candidate.score == null ? "—" : candidate.score.toFixed(4)}</b>
+                        </small>
+                        {"gallery_position" in candidate && candidate.gallery_position != null && (
+                          <small><span>Vị trí gallery</span><b>{candidate.gallery_position.toLocaleString("en-US")}</b></small>
+                        )}
+                      </article>
+                    );
+                  })}
+                </div>
+                <p className="hint candidate-footnote">
+                  Đổi Top-K sẽ tải số ứng viên tương ứng, tối đa độ sâu đã xuất. Ảnh đích nằm ngoài
+                  danh sách này vẫn giữ nguyên hạng trên toàn gallery.
+                </p>
+              </>
+            ) : (
+              <EmptyState kind="capability" testId="candidates-unavailable"
+                          title={unscored ? "Chưa đủ kết quả để xem ứng viên" : "Lượt này chưa có danh sách ứng viên"}
+                          detail={unscored
+                            ? "Có điều kiện chưa được chấm. Cần sửa nguyên nhân rồi chạy lại để có cả hạng lẫn danh sách ứng viên."
+                            : "Hạng đích không chứa thứ tự của các ảnh khác. Cần xuất Top-K từ đúng scoring path của lượt này; nếu cache không xác minh được thì phải chạy lại."}
+                          next={reason ? <Detail summary="Chi tiết dữ liệu"><span className="diagnostic">{reason}</span></Detail> : undefined} />
+            )}
+      </Card>
+
+      <div className="inspector-secondary">
+        <Card title="So sánh cùng query" subtitle="Cùng protocol, cùng subset: cohort và mẫu số được nêu">
+          <ComparePanel run={run} query={query} />
+        </Card>
+        <Card title="Ghi chú nghiên cứu" subtitle="Gắn đúng query + protocol, lưu qua reload">
+          <p className="hint">
+            Query <code>{query.query_id}</code> · protocol <code>{run.protocol_id}</code> · lượt{" "}
+            <code>{run.model_id}</code>.{selectedCount > 1 ? ` Đang chọn ${selectedCount} lượt để phân tích.` : ""}
+          </p>
+          <button type="button" className="primary" style={{ marginTop: 10 }} onClick={onAnnotate}>
+            Ghi chú query này
+          </button>
+        </Card>
+      </div>
+    </div>
+  );
+}
+
+/** One image tile: explicit missing state, and a dialog that Escape closes.

@@ -1,0 +1,29 @@
+counts: {"files_scanned": 71, "files": 32, "blocks_with_metrics": 43, "with_metrics": 21, "rollup_rows": 18, "duplicate_rows": 22, "unbacked_rows": 18, "unbacked_counted": 0, "unit_declared": 4, "unit_sibling_key": 2, "unit_inferred": 39, "unit_undeclared": 0, "unit_not_declared": 39, "unreadable": 2, "signposted_blockers": 4, "models_with_metrics": 17, "models_rollup_only": 8, "verified": 0}
+
+=== A1: clip4cir_rn50x4_fullft macro R@10 must be 43.8016931215922 ===
+  metrics={'r10': 43.8016931215922, 'r50': 66.98358456293742} counted=True unit=percent/declared backed_by=clip4cir_fullft.json
+  metrics={'r10': 43.8016931215922, 'r50': 66.98358456293742} counted=False unit=percent/declared backed_by=clip4cir_fullft.json
+  rows serving 43.81821850935618 as metrics: 0
+  model_id clip4cir_fullft rows: 0
+  A1: PASS
+
+=== A2: combiner_rn50x4_noft must be 35.1078 ===
+  metrics={'r10': 35.1078, 'r50': 58.4756, 'mean': 46.7917} unit=percent/inferred_from_magnitude counted=True backed_by=combiner_rn50x4_noft_rn50x4_noft_unresolved_20261108T064137301769Z_combiner_rn50x4_noft_rn50x4_noft_unresolved_020a70b0_aggregate.json
+  A2: PASS
+
+=== A3: 35.14068226019541 location audit ===
+  model=clip4cir_rn50x4_noft counted=False artifact_backed=False duplicate_of=None src=clip4cir_parsed.json
+  -> only allowed as a NON-counted, non-backed, distinctly-named row (different run of same ckpt).
+  A3: PASS
+
+=== A4: no artifact_backed:false row contributes to a model count ===
+  unbacked rows with metrics: 18; of them counted: 0
+  counted∧backed rows=21 distinct models=17 counts.models_with_metrics=17
+  unbacked_counted field=0
+  A4: PASS
+
+=== scales: every counted row, unit + value magnitude ===
+  counted rows with r10<1.0 AND unit=percent: 0  []
+  SCALE: PASS
+
+=== paper refs: 0

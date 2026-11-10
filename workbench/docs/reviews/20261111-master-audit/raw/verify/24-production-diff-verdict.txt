@@ -1,0 +1,23 @@
+=== VERDICT: production-diff run-1 tree vs current tree 2026-11-11T00:20:41+07:00 ===
+Method: (a) mtime vs run-1 launch 2026-11-10T22:35:10; (b) git diff vs HEAD for tracked files.
+
+PRODUCTION PATHS — content changed since run 1: NONE
+  workbench/backend: tracked-modified-or-new entries now = 3 (all were already present before run 1)
+  workbench/composition: tracked-modified-or-new entries now = 3 (all were already present before run 1)
+  workbench/frontend: tracked-modified-or-new entries now = 9 (all were already present before run 1)
+  workbench/scripts: tracked-modified-or-new entries now = 3 (all were already present before run 1)
+  workbench/replay: tracked-modified-or-new entries now = 4 (all were already present before run 1)
+  workbench/registry: tracked-modified-or-new entries now = 0 (all were already present before run 1)
+
+workbench/composition/inputs.py mtime 2026-11-10 23:48 is NEWER than run 1 but CONTENT IS UNCHANGED:
+  git diff: IDENTICAL TO HEAD (mtime touched by a test's write, content never changed)
+  status: (clean)
+
+FILES THAT ACTUALLY DIFFER since run 1 (all test/harness):
+  workbench/tests/test_throughput_knobs.py      (3 BLAS doubles made faithful)
+  workbench/tests/test_controller_installation.py (import scanner: module-level only)
+  workbench/tests/test_frontend_support.py       (emit into fresh build-<pid>-<hash> dir)
+  .gitignore                                     (evidence-log negation; ALREADY in place before run 1 at 22:33)
+
+LIMITATION, stated plainly: no byte snapshot of the run-1 tree was taken. The proof is
+mtime ordering plus git's content comparison against HEAD, not a saved copy.

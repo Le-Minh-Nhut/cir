@@ -1,0 +1,19 @@
+{
+ "unseeded_two_clean_processes": {
+  "relation_max_abs": 4.57128381729126,
+  "gallery_feature_max_abs": 0.00022328831255435944,
+  "query_feature_max_abs": 0.010393515229225159,
+  "gallery_bit_identical": false,
+  "query_bit_identical": false
+ },
+ "seeded_two_clean_processes": {
+  "relation_max_abs": 0.0,
+  "gallery_feature_max_abs": 0.0,
+  "query_feature_max_abs": 0.0,
+  "gallery_bit_identical": true,
+  "query_bit_identical": true
+ },
+ "seed_20261111": 20261111,
+ "gallery_size": 60,
+ "query_count": 4
+}

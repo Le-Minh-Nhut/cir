@@ -1,0 +1,18 @@
+=== sf (sf.json) exists=True ===
+  execution_status            = 'PARTIAL'   (spec: 'PARTIAL' in enum)
+  derived_from.own_status_label = 'DERIVED_PARTIAL'  (spec: 'DERIVED_PARTIAL')
+  derived_from.own_scored_count = 4068   (spec: 4068)
+  derived_from.own_unscored_count = 1 (spec: 1)
+  derived_from.own_coverage   = 0.9997542393708528  (spec ~0.999754)
+  derived_from.own_complete   = False
+  ALL-5-MATCH=True [True, True, True, True, True]
+=== validated (validated.json) exists=True ===
+  execution_status            = 'PARTIAL'   (spec: 'PARTIAL' in enum)
+  derived_from.own_status_label = 'DERIVED_COMPLETE'  (spec: 'DERIVED_COMPLETE')
+  derived_from.own_scored_count = 586   (spec: 586)
+  derived_from.own_unscored_count = 0 (spec: 0)
+  derived_from.own_coverage   = 1.0  (spec ~1.0)
+  derived_from.own_complete   = True
+  ALL-5-MATCH=True [True, True, True, True, True]
+
+VERDICT: PASS — test asserts option (b) against real published values

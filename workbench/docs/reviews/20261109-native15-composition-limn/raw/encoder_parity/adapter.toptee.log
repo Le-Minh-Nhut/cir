@@ -1,0 +1,192 @@
+# toptee/adapter: start
+# toptee/adapter: wrote g1_g2.encoder.toptee.adapter.json
+{
+ "sample_forward": {
+  "query_val_pixels": {
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "min_cosine": 1.0,
+   "bitwise_equal": true,
+   "shape": [
+    3,
+    512
+   ],
+   "within_tolerance": true
+  },
+  "query_native_tensors": {
+   "max_abs": 0.023707862943410873,
+   "max_rel": 207.29014469512612,
+   "min_cosine": 0.9897858192936269,
+   "bitwise_equal": false,
+   "shape": [
+    3,
+    512
+   ],
+   "within_tolerance": false
+  },
+  "target": {
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "min_cosine": 0.9999999999999998,
+   "bitwise_equal": true,
+   "shape": [
+    3,
+    512
+   ],
+   "within_tolerance": true
+  },
+  "adapter_dtype": "float32",
+  "adapter_shape": [
+   3,
+   512
+  ]
+ },
+ "pixels": {
+  "adapter_decode_vs_native_val_decode": {
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "min_cosine": 0.9999999999999999,
+   "bitwise_equal": true,
+   "shape": [
+    3,
+    3,
+    224,
+    224
+   ]
+  },
+  "adapter_decode_vs_native_train_query_tensors": {
+   "max_abs": 3.8269808292388916,
+   "max_rel": 1610.9522180878273,
+   "min_cosine": 0.9332697006677526,
+   "bitwise_equal": false,
+   "shape": [
+    3,
+    3,
+    224,
+    224
+   ]
+  },
+  "adapter_decode_by": "probe phase in the model interpreter: Image.open + preprocess_val"
+ },
+ "batch": {
+  "max_abs": 3.2782554626464844e-07,
+  "max_rel": 0.011646653843520266,
+  "min_cosine": 0.999999999999057,
+  "bitwise_equal": false,
+  "shape": [
+   3,
+   512
+  ],
+  "within_tolerance": false
+ },
+ "population": {
+  "query_count": 1961,
+  "gallery_count": 2902
+ },
+ "rankings": {
+  "query_count": 1961,
+  "gallery_count": 2902,
+  "score_max_abs_delta_vs_dot": 1.1920928955078125e-07,
+  "score_pairs_compared": 64,
+  "score_max_abs_declared": 1e-06,
+  "score_within_tolerance": true,
+  "adapter_vs_argsort_unmasked": {
+   "count": 7,
+   "head": [
+    452,
+    459,
+    473,
+    717,
+    882,
+    1365,
+    1606
+   ],
+   "non_tie_count": 0,
+   "non_tie_head": []
+  },
+  "adapter_style_recall": {
+   "r1": 22.641509433962263,
+   "r10": 61.04028556858746,
+   "r50": 80.77511473737889
+  },
+  "native_mask_only_effect": {
+   "count": 1027,
+   "recall_without_mask": {
+    "r1": 22.74349821519633,
+    "r10": 61.04028556858746,
+    "r50": 80.77511473737889
+   },
+   "recall_with_mask": {
+    "r1": 29.21978582355941,
+    "r10": 61.80520142784294,
+    "r50": 80.87710351861296
+   }
+  },
+  "native_convention_recall_on_adapter_features": {
+   "r1": 29.21978582355941,
+   "r10": 61.80520142784294,
+   "r50": 80.87710351861296
+  },
+  "native_convention_recall_val_control": {
+   "r1": 29.21978582355941,
+   "r10": 61.80520142784294,
+   "r50": 80.87710351861296
+  },
+  "native_convention_recall_native_primary": {
+   "r1": 29.372768995410503,
+   "r10": 61.80520142784294,
+   "r50": 81.03008669046405
+  },
+  "native_second_process_floor": {
+   "available": true,
+   "score_max_abs_vs_first_native_process": 0.0,
+   "rank_differences_vs_first_native_process": {
+    "count": 0,
+    "head": []
+   },
+   "recall": {
+    "r1": 29.21978582355941,
+    "r10": 61.80520142784294,
+    "r50": 80.87710351861296
+   }
+  },
+  "stored_native_metrics_raw/native/encoder.json": {
+   "r1": 29.372768995410503,
+   "r10": 61.958184599694036,
+   "r50": 81.13207547169812
+  },
+  "rank_differences_vs_native_val_control": {
+   "count": 0,
+   "head": [],
+   "classification": [],
+   "non_tie_count": 0,
+   "min_gap_abs": 0.0
+  },
+  "rank_differences_vs_native_primary": {
+   "count": 850,
+   "head": [
+    1,
+    12,
+    19,
+    20,
+    22,
+    23,
+    26,
+    27,
+    28,
+    30,
+    32,
+    33,
+    34,
+    36,
+    37,
+    38,
+    41,
+    44,
+    46,
+    47
+   ]
+  },
+  "native_metrics_recheck_source": "raw/native/encoder.json"
+ }
+}

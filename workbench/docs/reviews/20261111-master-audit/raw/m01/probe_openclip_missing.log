@@ -1,0 +1,7 @@
+/home/heheboiz/data/cir/workbench/envs/encoder310-adapted/lib/python3.10/site-packages/timm/models/layers/__init__.py:49: FutureWarning: Importing from timm.models.layers is deprecated, please import via timm.layers
+  warnings.warn(f"Importing from {__name__} is deprecated, please import via timm.layers", FutureWarning)
+2
+2
+2
+2
+M01:{"digest_first": "76a679b72ab8711b2e95e1e19b46bef3fdba3d6f8ee56c08adc47a983dea96b8", "digest_second_same_process": "df1fc63aaaa62f3e334c60af97b399263c6f3c18a9f4bd98c23c944049f02ebf", "digest_seeded": "20db0c27c979e9a0938c71af5142458dfa2070468d0ad3fcb6f24134c2f9ce92", "pid": 3159810, "relation_shape": [2, 512], "relation_type": "Parameter", "seeded_same_process_max_abs": 0.0, "unseeded_same_process_max_abs": 4.805991172790527}

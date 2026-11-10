@@ -9,8 +9,9 @@ import {
   protocolsWithReports,
   scoredCounts, scoringImplsPresent, testWorkspaceOrigin, transferLabel,
 } from "./catalog";
-import { fmtDateStamp, fmtDenominator, fmtFractionPercent, fmtGap, fmtInt, fmtNdcg, fmtPercentValue, fmtPp, shortId } from "./format";
+import { fmtDateStamp, fmtDenominator, fmtFractionPercent, fmtGap, fmtInt, fmtNdcg, fmtPercentValue, fmtPp, fmtRecall, shortId } from "./format";
 import type { CompositionRun } from "./types";
+import type { NativeMeasurement } from "./data";
 import type { WarningLabel } from "./gate";
 import { warningLabels } from "./gate";
 import { protocolHasSubsets } from "./scope";
@@ -33,6 +34,7 @@ export function EvaluationPage({ data, location, view, onGoto, onSelectRun }: {
   onSelectRun: (entry: RunCatalogEntry, additive?: boolean) => void;
 }) {
   if (view === "benchmark") return <BenchmarkTable data={data} location={location} onGoto={onGoto} />;
+  if (view === "native") return <NativeMeasurementTable data={data} location={location} onGoto={onGoto} />;
   return <CompositionTable data={data} location={location} onGoto={onGoto} onSelectRun={onSelectRun} />;
 }
 
@@ -504,5 +506,204 @@ function BenchmarkTable({ data, location, onGoto }: {
         tham chiếu, không phải phần trăm tương đối.
       </p>
     </div>
+  );
+}
+
+/** Số đo native — the served table for rows `/api/native-measurements` holds.
+ *
+ *  W-02: a model whose only numbers are native macros had no view to open. Its "elsewhere" link
+ *  went to the benchmark table, which lists `aggregate` reports and therefore showed an EMPTY page
+ *  under a label promising results. This view is the destination of that link, and the anchor a
+ *  native row can be opened at (`?view=native&model=…`).
+ *
+ *  W-01: the unit travels with each row. `fmtRecall` renders a `fraction` row as a percent of the
+ *  same value and a `percent` row as-is, so `0.2793` and `27.93` print as one number. A row whose
+ *  artifact never declares a unit prints its raw value with "đơn vị không ghi" instead of a `%` the
+ *  artifact never promised, and `counts.unit_not_declared` names every such row at the top.
+ */
+function NativeMeasurementTable({ data, location, onGoto }: {
+  data: WorkbenchData;
+  location: Location;
+  onGoto: (patch: Partial<Location>) => void;
+}) {
+  const region = data.nativeMeasurements.region;
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const all = region.data?.measurements ?? [];
+  const rows = all.filter((row) => row.metrics && row.protocol_id === location.protocol);
+  const undeclared = region.data?.undeclared_unit_rows ?? [];
+  const protocols = [...new Set(all.filter((row) => row.metrics && row.protocol_id)
+    .map((row) => row.protocol_id as string))];
+  const model = new URLSearchParams(window.location.search).get("model");
+
+  return (
+    <div className="stack" data-testid="area-native">
+      <Card
+        title="Số đo native (chưa xác minh)"
+        subtitle={region.status === "ready"
+          // A zero printed for a region that FAILED or is still loading is a count of nothing that
+          // was counted. Name the state instead of the number.
+          ? `${rows.length} dòng có số cho ${protocolLabel(location.protocol)} · không vào leaderboard đã xác minh`
+          : region.status === "error"
+            ? `không đọc được catalog native cho ${protocolLabel(location.protocol)} — đây là lỗi yêu cầu, không phải 0 dòng`
+            : `đang đọc catalog native cho ${protocolLabel(location.protocol)}…`}
+      >
+        {region.status === "error"
+          ? <ErrorState message={region.error ?? "Không tải được catalog native"} onRetry={data.nativeMeasurements.retry} />
+          : region.status !== "ready"
+            ? <LoadingState label="Đang đọc catalog native…" />
+            : rows.length === 0
+              ? <EmptyState kind="no-results" testId="native-empty"
+                           detail={`Không có số đo native nào cho ${protocolLabel(location.protocol)}. Đây là dữ liệu, không phải lỗi tải.`}
+                           next={<>
+                             {protocols.map((id) => (
+                               <button key={id} type="button" data-testid={`native-goto-${id}`}
+                                       onClick={() => onGoto({ protocol: id, runs: [], run: "", query: "", offset: 0 })}>
+                                 {protocolLabel(id)}
+                               </button>
+                             ))}
+                           </>} />
+              : (
+                <>
+                  <div className="pipeline-notice" data-testid="native-unit-notice">
+                    <strong>{fmtInt(region.data?.counts.unit_not_declared ?? 0)} dòng không khai đơn vị trong artifact.</strong>
+                    <p className="hint">
+                      <b>{fmtInt(region.data?.counts.duplicate_rows ?? 0)}</b> dòng trùng bị bỏ khỏi đếm,{" "}
+                      <b>{fmtInt(region.data?.counts.unbacked_rows ?? 0)}</b> dòng không có artifact chống lưng.
+                    </p>
+                    <p className="hint">
+                      Đơn vị đọc từ chính file (<code>metric_unit</code>/<code>unit</code>…). Không file nào khai, nên mọi giá trị
+                      dưới đây được render đúng thang đã suy theo độ lớn:{" "}
+                      {fmtInt(region.data?.counts.unit_inferred ?? 0)} dòng suy là percent,{" "}
+                      {fmtInt(region.data?.counts.unit_undeclared ?? 0)} dòng không suy được.
+                      Một fraction <code>0.2793</code> và một percent <code>27.93</code> là cùng một số đo, và cả hai render
+                      thành <b>27.93 %</b> ở đây.
+                    </p>
+                    {undeclared.length > 0 && (
+                      <Detail summary={`${fmtInt(undeclared.length)} dòng thiếu đơn vị khai báo`} testId="native-undeclared-list">
+                        <ul style={{ margin: 0, paddingLeft: 18 }}>
+                          {undeclared.map((row) => (
+                            <li key={row.measurement_id}>
+                              <code>{row.model_id ?? "?"}</code> · {row.metric_path ?? "(không rõ block)"} ·{" "}
+                              R@10 {fmtRecall(row.metrics?.r10 ?? null, row.unit, 2)} ({row.unit_source ?? "không ghi"}) ·{" "}
+                              <span className="mono">{row.source.split("/").pop()}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </Detail>
+                    )}
+                  </div>
+
+                  <div className="table-wrap">
+                    <table data-testid="native-table">
+                      <thead>
+                        <tr>
+                          <th scope="col">Mô hình</th>
+                          <th scope="col">Nguồn</th>
+                          <th scope="col" className="num">R@10</th>
+                          <th scope="col" className="num">R@50</th>
+                          <th scope="col">Đơn vị</th>
+                          <th scope="col">Mapping</th>
+                          <th scope="col">Chi tiết</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {rows.map((row) => (
+                          <tr key={row.measurement_id}
+                              data-testid={`native-row-${row.measurement_id}`}
+                              aria-selected={model ? row.model_id === model : undefined}>
+                            <td>
+                              <span className="cell-strong">{row.model_id ?? "?"}</span>
+                              <span className="cell-sub">{row.metric_path ?? "(không rõ block)"}</span>
+                              {row.rollup && <span className="cell-sub">roll-up: lặp lại số của file khác</span>}
+                            </td>
+                            <td>
+                              <span className="mono cell-sub">{row.source.path.split("/").pop()}</span>
+                              <span className="cell-sub mono">{row.source.sha256?.slice(0, 16) ?? "không digest"}…</span>
+                              {/* W-01: a roll-up states a number; it does not back one. Saying which
+                                  file the served value came from is what stops a roll-up's number
+                                  reading as a measurement. */}
+                              <span className="cell-sub">
+                                <Badge tone={row.artifact_backed ? "ok" : "bad"}>
+                                  {row.artifact_backed ? "có artifact" : "không artifact"}
+                                </Badge>
+                              </span>
+                              {row.backed_by && (
+                                <span className="cell-sub mono" title={row.backed_by_sha256 ?? ""}>
+                                  ← {row.backed_by.split("/").pop()}
+                                </span>
+                              )}
+                              {row.raw_metrics && (
+                                <span className="cell-sub" data-testid={`native-replaced-${row.measurement_id}`}>
+                                  roll-up ghi R@10 {fmtRecall(row.raw_metrics.r10 ?? null, row.unit, 4)} — đã thay
+                                  bằng số của artifact
+                                </span>
+                              )}
+                              {/* Two different reasons a row is not counted, told apart: a repeat
+                                  names the row it duplicates, an unbacked claim names no artifact. */}
+                              {row.counted === false && (
+                                <span className="cell-sub">
+                                  {row.duplicate_of
+                                    ? `trùng với ${row.duplicate_of.split("/").pop()} · không đếm`
+                                    : "không có artifact chống lưng · không đếm"}
+                                </span>
+                              )}
+                            </td>
+                            <td className="num">{fmtRecall(row.metrics?.r10 ?? null, row.unit, 2)}</td>
+                            <td className="num">{fmtRecall(row.metrics?.r50 ?? null, row.unit, 2)}</td>
+                            <td>
+                              <Badge tone={row.unit_source === "declared"
+                                || row.unit_source === "sibling_key" ? "ok" : "warn"}>
+                                {row.unit ?? "không ghi"}
+                              </Badge>
+                              <span className="cell-sub">{row.unit_source ?? "không ghi"}</span>
+                            </td>
+                            <td>
+                              {/* A mapping status is why an exploratory number is not a reproduction:
+                                  without it the row reads as a measurement of the paper's protocol. */}
+                              {row.mapping_status
+                                ? <Badge tone="warn">{row.mapping_status}</Badge>
+                                : <span className="hint">không ghi</span>}
+                            </td>
+                            <td><DetailToggle open={expanded === row.measurement_id}
+                                              onToggle={() => setExpanded(expanded === row.measurement_id ? null : row.measurement_id)} /></td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <NativeMeasurementDetail measurement={rows.find((row) => row.measurement_id === expanded) ?? null} />
+                </>
+              )}
+        <p className="hint" style={{ marginTop: 10 }}>
+          Nguồn: <code>/api/native-measurements</code>. {region.data?.note ?? ""}
+        </p>
+      </Card>
+    </div>
+  );
+}
+
+/** One native row, opened: the record itself, not a re-statement of the table. */
+function NativeMeasurementDetail({ measurement }: { measurement: NativeMeasurement | null }) {
+  if (!measurement) return null;
+  return (
+    <section className="row-detail" data-testid="native-detail">
+      <header className="row-detail-head">
+        <b>{measurement.model_id ?? "?"} / {measurement.checkpoint_id ?? "không checkpoint"}</b>
+        <span className="hint mono">{measurement.measurement_id}</span>
+      </header>
+      <KeyValue rows={[
+        ["đường dẫn số đo", <code key="p">{measurement.metric_path ?? "—"}</code>],
+        ["file", <span key="f" className="mono">{measurement.source.path}</span>],
+        ["digest", <span key="d" className="mono">{measurement.source.sha256 ?? "không có (file không đọc được)"}</span>],
+        ["bytes", fmtInt(measurement.source.bytes)],
+        ["R@10", fmtRecall(measurement.metrics?.r10 ?? null, measurement.unit, 2)],
+        ["R@50", fmtRecall(measurement.metrics?.r50 ?? null, measurement.unit, 2)],
+        ["đơn vị", `${measurement.unit ?? "không ghi"} (${measurement.unit_source ?? "không ghi"})`],
+        ["mapping", measurement.mapping_status ?? "không ghi"],
+        ["xác minh", `${measurement.verification.state} — ${measurement.verification.reason}`],
+        ["category", measurement.categories.length ? measurement.categories.join(", ") : "không ghi"],
+        ["roll-up", measurement.rollup ? `có — entry ${measurement.rollup_entry ?? "?"}` : "không"],
+      ]} />
+    </section>
   );
 }

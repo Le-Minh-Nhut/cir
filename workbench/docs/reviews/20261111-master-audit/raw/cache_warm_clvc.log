@@ -1,0 +1,7 @@
+{
+  "model": "clvc_net",
+  "cache_root": "/tmp/cirwarm-clvc",
+  "warm_wall_s": 347.6,
+  "model_inputs_materialised": 14635,
+  "cache_files": []
+}

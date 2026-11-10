@@ -1,0 +1,12 @@
+=== preflight 2026-11-10T21:47:42+07:00 ===
+--- pgrep -af pytest ---
+(exit=1)
+--- df -h / ---
+Filesystem      Size  Used Avail Use% Mounted on
+/dev/nvme0n1p5  630G  477G  121G  80% /
+--- git status --porcelain line count ---
+232
+--- basetemp pre-existing ---
+ls: cannot access '/tmp/sweep_basetemp_master': No such file or directory
+--- python ---
+Python 3.12.11

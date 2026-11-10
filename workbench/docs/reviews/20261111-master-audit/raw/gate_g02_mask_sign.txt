@@ -1,0 +1,7 @@
+scores: [0.8999999761581421, 0.800000011920929, 0.10000000149011612]
+harness unmasked rank: 2 order: [0, 1, 2]
+harness masked   rank: 1 order: [1, 2, 0]
+true 'exclude reference' rank: 1 order: [1, 2]
+masked_order_puts_reference_first: False
+harness_mask_equals_exclusion: True
+conclusion: the mask behaves as an exclusion here

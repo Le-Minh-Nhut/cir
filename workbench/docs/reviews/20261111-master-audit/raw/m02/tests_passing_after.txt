@@ -1,0 +1,34 @@
+........................................................................ [ 97%]
+..                                                                       [100%]
+=============================== warnings summary ===============================
+workbench/tests/test_limn_dual_scope_diagnostic.py::test_shipped_evidence_is_consistent_if_present
+  /home/heheboiz/data/cir/workbench/backend/main.py:107: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    @app.on_event("startup")
+
+workbench/tests/test_limn_dual_scope_diagnostic.py::test_shipped_evidence_is_consistent_if_present
+workbench/tests/test_limn_dual_scope_diagnostic.py::test_shipped_evidence_is_consistent_if_present
+  /home/heheboiz/data/cir/workbench/envs/ctl312h/lib/python3.12/site-packages/fastapi/applications.py:4723: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    return self.router.on_event(event_type)  # ty: ignore[deprecated]
+
+workbench/tests/test_limn_dual_scope_diagnostic.py::test_shipped_evidence_is_consistent_if_present
+  /home/heheboiz/data/cir/workbench/backend/main.py:114: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    @app.on_event("shutdown")
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+74 passed, 4 warnings in 2.00s
+exit=0

@@ -199,3 +199,26 @@ def test_rescoring_arithmetic_closes_at_6003() -> None:
     assert (scored, unscored) == (6001, 2)
     assert scored + unscored == len(assigned.queries) == 6003
     assert all(scope in SCOPES for scope in routed if scope is not None)
+
+def test_missing_annotation_source_refuses_to_route(fixture_root: Path) -> None:
+    """An annotation file that could not be read cannot prove its category is the only one.
+
+    Measured on HEAD: with `cap.toptee.val.json` deleted or corrupt, `caption_scope_index` swallowed
+    the error, the surviving shirt row became the only entry, and `resolve_query_category` returned
+    `'shirt'` for the ambiguous pair -- silently choosing a category from incomplete provenance.
+    """
+    (fixture_root / "captions" / "cap.toptee.val.json").unlink()
+    index = caption_scope_index(fixture_root)
+    assert index.unreadable == frozenset({"toptee"})
+    query = _query("Is darker and has a different graphic and is darker", "7:3")
+    assert resolve_query_category(SCOPES, index, query, NAMES) is None
+    # A loader-assigned category is still final: the annotation is not consulted for it at all.
+    assert resolve_query_category(SCOPES, index, _query("Is blue and is long", "7:1", "shirt"),
+                                  NAMES) == "shirt"
+
+def test_corrupt_annotation_source_refuses_to_route(fixture_root: Path) -> None:
+    (fixture_root / "captions" / "cap.shirt.val.json").write_text("{not json", encoding="utf-8")
+    index = caption_scope_index(fixture_root)
+    assert index.unreadable == frozenset({"shirt"})
+    query = _query("Is green and is sleeveless", "7:2")
+    assert resolve_query_category(SCOPES, index, query, NAMES) is None

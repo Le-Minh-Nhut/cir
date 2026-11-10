@@ -1,0 +1,12 @@
+=== FINAL service identity 2026-11-10T22:34:49+07:00 ===
+3390138 workbench/envs/ctl312h/bin/python workbench/scripts/serve_workbench.py --production-frontend --host 127.0.0.1 --backend-port 8000 --frontend-port 5173
+3390139 /home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python -m uvicorn workbench.backend.main:app --host 127.0.0.1 --port 8000
+
+backend start time:
+Tue Nov 10 22:34:23 2026
+bundle served: assets/index-DWpK0yeS.js
+7e34724ebf55092e36524b98980cca55e71f3ddbaa62489c65577f92e18a6a16  /tmp/served_final.js
+dist:
+7e34724ebf55092e36524b98980cca55e71f3ddbaa62489c65577f92e18a6a16  workbench/frontend/dist/assets/index-DWpK0yeS.js
+IDENTICAL
+readiness /api/benchmark-runs HTTP 200 t=0.006923s

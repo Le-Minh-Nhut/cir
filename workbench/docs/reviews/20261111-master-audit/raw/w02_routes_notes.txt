@@ -1,0 +1,181 @@
+
+export const ORDERS = [
+  { id: "worst", label: "Hạng xấu nhất trước (bỏ qua unscored)" },
+  { id: "best", label: "Hạng tốt nhất trước" },
+  { id: "asc", label: "Hạng tăng dần" },
+  { id: "desc", label: "Hạng giảm dần" },
+] as const;
+export type OrderId = (typeof ORDERS)[number]["id"];
+
+/** Consensus cutoffs for the per-query failure analysis. These are real controls: `/api/analysis`
+ *  takes `k`. Distinct from the fixed @10 composition outcome cutoff. */
+export const ANALYSIS_K = [1, 5, 10, 20, 50, 100, 200];
+
+export type ProtocolId = string;
+
+export interface Location {
+  area: AreaId;
+  view: string;
+  protocol: ProtocolId;
+  subset: Subset;
+  /** Composition release run under inspection, when the protocol is the CIRCUS release. */
+  run: string;
+  /** Selected per-query index runs (ordered). */
+  runs: string[];
+  query: string;
+  condition: ConditionId;
+  outcome: string;
+  category: string;
+  order: OrderId;
+  offset: number;
+  /** Query-id search inside the explorer. */
+  q: string;
+  /** Candidate-display depth. NEVER the composition outcome cutoff. */
+  k: number;
+  preset: string;
+  /** `exclude` (default) hides imported released-audit rows; `include` shows them, labelled. */
+  imported: "exclude" | "include";
+  /** Authoritative per-query state filter from the backend contract. */
+  queryState: "" | "unscored" | "retrieval_failure" | "hit";
+}
+
+export interface UrlProblem { param: string; value: string; message: string }
+
+/** Protocols this UI knows how to label and link, independent of what is served right now.
+ *  `protocolsWithData` (data.ts) narrows the SELECTOR to protocols with results; this list is the
+ *  parser's acceptance set, so a bookmark or a link naming a registry protocol still resolves
+ *  before the first fetch lands. One list, two uses — the registry cross-check test reads it. */
+export const KNOWN_PROTOCOL_IDS = [
+  "circus_fashioniq_release_v1",
+  "fashioniq_original_split",
+  "fashioniq_val_split",
+  "fashioniq_full_gallery_ref_excluded",
+] as const;
+
+const DEFAULT_PROTOCOL = "circus_fashioniq_release_v1";
+
+export function defaultLocation(): Location {
+  return {
+    area: "overview",
+    view: "",
+    protocol: DEFAULT_PROTOCOL,
+    subset: "sf",
+    run: "",
+    runs: [],
+    query: "",
+    condition: "multimodal",
+    outcome: "",
+    category: "",
+    order: "worst",
+    offset: 0,
+    q: "",
+    k: 10,
+    preset: "all",
+    imported: "exclude",
+    queryState: "",
+  };
+}
+
+export function areaDef(id: AreaId): AreaDef {
+  return AREAS.find((area) => area.id === id) ?? AREAS[0];
+}
+
+function oneOf<T extends string>(values: readonly T[], raw: string): T | null {
+  return (values as readonly string[]).includes(raw) ? (raw as T) : null;
+}
+
+function legacyArea(page: string): { area: AreaId; view: string } | null {
+  for (const area of AREAS) {
+    if (area.legacy.some((name) => name.toLowerCase() === page.toLowerCase())) {
+      const exact = Object.keys(LEGACY_VIEW).find((name) => name.toLowerCase() === page.toLowerCase());
+      // Prefer the tab's own view; fall back to the area's first only when the map has none.
+      const mapped = exact ? LEGACY_VIEW[exact] : "";
+      const view = mapped && area.views.some((candidate) => candidate.id === mapped)
+        ? mapped
+        : (area.views[0]?.id ?? "");
+      return { area: area.id, view };
+    }
+  }
+  return null;
+}
+
+/** Which view each legacy tab belongs to.
+ *
+ *  `AREAS[].legacy` answers "which area", which is enough for navigation but NOT for where a
+ *  bookmarked URL should land: `?page=Benchmark` was resolving to the area's FIRST view
+ *  (composition), and `?page=Disagreement` to the consensus table. Both silent misroutes. This map
+ *  is the authoritative tab -> view table, and it is the one the test asserts against.
+ */
+export const LEGACY_VIEW: Record<string, string> = {
+  Dashboard: "",
+  Models: "models",
+  "Evaluation Runs": "runs",
+  Benchmark: "benchmark",
+  Composition: "composition",
+  "Sample Explorer": "explorer",
+  "Compare Models": "compare",
+  "Common Failures": "consensus",
+  Disagreement: "disagreement",
+  "Failure Analytics": "analytics",
+  Annotations: "annotations",
+  Hypotheses: "cohorts",
+};
+
+/** Which of the two scope facts the URL actually named.
+ *
+ *  The shell must not invent a scope when the URL named none (it then opens the one this deployment
+ *  measured most of), but it must never override an explicit choice — so the parse has to report
+ *  whether a value was stated rather than only what it resolved to. */
+export interface ParsedScope {
+  protocolNamed: boolean;
+  subsetNamed: boolean;
+}
+
+/** Parse a `location.search` string into normalized state plus every rejected value. */
+export function parseLocation(search: string, knownProtocols: string[]): { location: Location; problems: UrlProblem[]; scope: ParsedScope } {
+  const params = new URLSearchParams(search.startsWith("?") ? search.slice(1) : search);
+  const location = defaultLocation();
+  const problems: UrlProblem[] = [];
+
+  const legacyPage = params.get("page") ?? params.get("tab");
+  const rawArea = params.get("area");
+  if (rawArea !== null) {
+    const area = oneOf(AREA_IDS, rawArea);
+    if (area) location.area = area;
+    else problems.push({ param: "area", value: rawArea, message: `không phải khu vực hợp lệ (${AREA_IDS.join(", ")})` });
+  } else if (legacyPage !== null) {
+    const mapped = legacyArea(legacyPage);
+    if (mapped) location.area = mapped.area;
+    else problems.push({ param: "page", value: legacyPage, message: "không thuộc 12 tab cũ nên không ánh xạ được" });
+  }
+
+  const rawView = params.get("view");
+  const views = areaDef(location.area).views.map((view) => view.id);
+  if (rawView !== null && views.length) {
+    const view = oneOf(views, rawView);
+    if (view) location.view = view;
+    else problems.push({ param: "view", value: rawView, message: `khu vực ${location.area} chỉ có: ${views.join(", ")}` });
+  }
+  if (!location.view) {
+    const mapped = legacyPage !== null ? legacyArea(legacyPage) : null;
+    location.view = mapped && mapped.area === location.area
+      ? mapped.view
+      : (areaDef(location.area).views[0]?.id ?? "");
+  }
+
+  const rawProtocol = params.get("protocol");
+  if (rawProtocol !== null) {
+    if (knownProtocols.includes(rawProtocol)) location.protocol = rawProtocol;
+    else problems.push({ param: "protocol", value: rawProtocol, message: `không có trong registry (${knownProtocols.join(", ")})` });
+  }
+  // The legacy composition links carried no protocol at all; their content is CIRCUS release data.
+  if (rawProtocol === null && legacyPage !== null && /composition/i.test(legacyPage)) {
+    location.protocol = DEFAULT_PROTOCOL;
+  }
+
+  const rawSubset = params.get("subset") ?? params.get("comp_subset");
+  if (rawSubset !== null) {
+    const subset = oneOf(SUBSETS, rawSubset);
+    if (subset) location.subset = subset;
+    else problems.push({ param: "subset", value: rawSubset, message: `chỉ nhận ${SUBSETS.join(", ")}` });
+  }

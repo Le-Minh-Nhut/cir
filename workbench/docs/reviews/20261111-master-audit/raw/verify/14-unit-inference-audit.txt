@@ -1,0 +1,53 @@
+unit_inferred (all measured rows): 39   measured rows: 43
+counted ∧ inferred: 19
+
+=== A. HAVE a declaration that is still being missed: 0  (MUST BE 0) ===
+
+=== B. NO declaration anywhere — inference is honest: 39 ===
+  model=B1/H_normal              counted=False artifact=pair_compat_verdict.json                                   why=suffixed keys exist but NONE declares the macro: incompatibility_found.dead_parameters_pct, dead_parameters_under_public_forward_pct
+  model=B1/H_normal              counted=False artifact=summary.json                                               why=no unit key, no suffix, no provenance.units anywhere in the artifact
+  model=B1/H_rev                 counted=False artifact=pair_compat_verdict.json                                   why=suffixed keys exist but NONE declares the macro: incompatibility_found.dead_parameters_pct, dead_parameters_under_public_forward_pct
+  model=B1/H_rev                 counted=False artifact=summary.json                                               why=no unit key, no suffix, no provenance.units anywhere in the artifact
+  model=B2/H_normal              counted=False artifact=pair_compat_verdict.json                                   why=suffixed keys exist but NONE declares the macro: incompatibility_found.dead_parameters_pct, dead_parameters_under_public_forward_pct
+  model=B2/H_normal              counted=False artifact=summary.json                                               why=no unit key, no suffix, no provenance.units anywhere in the artifact
+  model=B2/H_rev                 counted=False artifact=pair_compat_verdict.json                                   why=suffixed keys exist but NONE declares the macro: incompatibility_found.dead_parameters_pct, dead_parameters_under_public_forward_pct
+  model=B2/H_rev                 counted=False artifact=summary.json                                               why=no unit key, no suffix, no provenance.units anywhere in the artifact
+  model=airknow                  counted=False artifact=selection_decisions.json                                   why=no unit key, no suffix, no provenance.units anywhere in the artifact
+  model=airknow                  counted=True  artifact=airknow_fiq_n05_run1.json                                  why=suffixed keys exist but NONE declares the macro: checkpoint_training_noise_pct, evaluation_noise_pct, categories.0.provenance.checkpoint_training_noise_pct, categories.0.provenance.evaluation_noise_pct
+  model=airknow                  counted=True  artifact=airknow_fiq_n08_run1.json                                  why=suffixed keys exist but NONE declares the macro: checkpoint_training_noise_pct, evaluation_noise_pct, categories.0.provenance.checkpoint_training_noise_pct, categories.0.provenance.evaluation_noise_pct
+  model=airknow_n05              counted=False artifact=all_measured_summary.json                                  why=no unit key, no suffix, no provenance.units anywhere in the artifact
+  model=airknow_n08              counted=False artifact=all_measured_summary.json                                  why=no unit key, no suffix, no provenance.units anywhere in the artifact
+  model=airknow_variant_80       counted=False artifact=selection_decisions.json                                   why=no unit key, no suffix, no provenance.units anywhere in the artifact
+  model=clip4cir_rn50x4_noft     counted=False artifact=clip4cir_parsed.json                                       why=no unit key, no suffix, no provenance.units anywhere in the artifact
+  model=clvc_net                 counted=False artifact=all_measured_summary.json                                  why=no unit key, no suffix, no provenance.units anywhere in the artifact
+  model=clvc_net                 counted=False artifact=selection_decisions.json                                   why=no unit key, no suffix, no provenance.units anywhere in the artifact
+  model=clvc_net                 counted=True  artifact=clvc_run1.json                                             why=no unit key, no suffix, no provenance.units anywhere in the artifact
+  model=combiner_rn50x4_noft     counted=True  artifact=combiner_rn50x4_noft_rn50x4_noft_unresolved_20261108T06413 why=no unit key, no suffix, no provenance.units anywhere in the artifact
+  model=conesep                  counted=True  artifact=conesep.json                                               why=suffixed keys exist but NONE declares the macro: checkpoint_training_noise_pct, evaluation_noise_pct, categories.0.provenance.checkpoint_training_noise_pct, categories.0.provenance.evaluation_noise_pct
+  model=csmcir                   counted=True  artifact=csmcir_fashioniq_20261107T054343058424Z_csmcir_fashioniq_f why=suffixed keys exist but NONE declares the macro: benchmark_gate.reference_evidence.checkpoint_training_noise_pct, benchmark_gate.comparisons.0.relative_error_pct, benchmark_gate.comparisons.1.relative_error_pct, benchmark_gate.comparisons.2.relative_error_pct
+  model=encoder                  counted=True  artifact=encoder_fashioniq.json                                     why=no unit key, no suffix, no provenance.units anywhere in the artifact
+  model=habit                    counted=True  artifact=habit.json                                                 why=suffixed keys exist but NONE declares the macro: checkpoint_training_noise_pct, evaluation_noise_pct, categories.0.provenance.checkpoint_training_noise_pct, categories.0.provenance.evaluation_noise_pct
+  model=hint                     counted=True  artifact=hint.json                                                  why=suffixed keys exist but NONE declares the macro: evaluation_noise_pct
+  model=hint                     counted=False artifact=hint.json                                                  why=suffixed keys exist but NONE declares the macro: evaluation_noise_pct
+  model=intent                   counted=True  artifact=intent.json                                                why=suffixed keys exist but NONE declares the macro: checkpoint_training_noise_pct, evaluation_noise_pct, categories.0.provenance.checkpoint_training_noise_pct, categories.0.provenance.evaluation_noise_pct
+  model=limn                     counted=True  artifact=limn_base_iter0.json                                       why=suffixed keys exist but NONE declares the macro: evaluation_noise_pct
+  model=pair                     counted=True  artifact=pair_b1_H_normal.json                                      why=no unit key, no suffix, no provenance.units anywhere in the artifact
+  model=pair                     counted=True  artifact=pair_b1_H_rev.json                                         why=no unit key, no suffix, no provenance.units anywhere in the artifact
+  model=pair                     counted=True  artifact=pair_b2_H_normal.json                                      why=no unit key, no suffix, no provenance.units anywhere in the artifact
+  model=pair                     counted=True  artifact=pair_b2_H_rev.json                                         why=no unit key, no suffix, no provenance.units anywhere in the artifact
+  model=ptha_mtst                counted=True  artifact=ptha_transfer_run1.json                                    why=no unit key, no suffix, no provenance.units anywhere in the artifact
+  model=sprc                     counted=False artifact=selection_decisions.json                                   why=no unit key, no suffix, no provenance.units anywhere in the artifact
+  model=sprc                     counted=True  artifact=sprc_vitl_run1.json                                        why=no unit key, no suffix, no provenance.units anywhere in the artifact
+  model=tgcir                    counted=False artifact=all_measured_summary.json                                  why=no unit key, no suffix, no provenance.units anywhere in the artifact
+  model=tgcir                    counted=False artifact=selection_decisions.json                                   why=no unit key, no suffix, no provenance.units anywhere in the artifact
+  model=tgcir                    counted=True  artifact=tgcir_run1.json                                            why=no unit key, no suffix, no provenance.units anywhere in the artifact
+  model=tme                      counted=True  artifact=tme_fashioniq_0.json                                       why=suffixed keys exist but NONE declares the macro: results.0.provenance.checkpoint_training_noise_pct, results.1.provenance.checkpoint_training_noise_pct, results.2.provenance.checkpoint_training_noise_pct
+  model=tme                      counted=False artifact=tme_normal_path_full.json                                  why=suffixed keys exist but NONE declares the macro: results.0.provenance.checkpoint_training_noise_pct, results.1.provenance.checkpoint_training_noise_pct, results.2.provenance.checkpoint_training_noise_pct
+
+=== C. contradiction check: rows already labelled declared/sibling_key ===
+  clip4cir_rn50x4_fullft   declared     unit=percent <- clip4cir_fullft.json
+  clip4cir_rn50x4_fullft   declared     unit=percent <- clip4cir_fullft.json
+  dcnet                    sibling_key  unit=percent <- dcnet.json
+  dcnet                    sibling_key  unit=percent <- dcnet.json
+
+VERDICT: PASS (0 declarations missed)

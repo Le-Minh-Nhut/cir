@@ -1,0 +1,465 @@
+FFFF.FFFFFFFFFF.FFFFFFFFF                                                [100%]
+=================================== FAILURES ===================================
+_______ test_an_empty_adapter_artifact_does_not_pass_and_is_not_complete _______
+
+tmp_path = PosixPath('/tmp/pytest-of-heheboiz/pytest-755/test_an_empty_adapter_artifact0')
+
+    def test_an_empty_adapter_artifact_does_not_pass_and_is_not_complete(tmp_path: Path) -> None:
+        """`{}` plus G1 identity is not evidence: no forward, batch, scoring or metric measurement."""
+        _write(tmp_path, "testmodel", _native(), {"category": CATEGORY, "phase": "adapter",
+                                                  "tolerances": dict(TOLERANCES), "adapter": {}})
+        verdict = _evaluate(tmp_path)
+        assert verdict.status != gate.PASS, verdict.detail
+        assert verdict.passed is False
+        assert verdict.complete is False, "an artifact with no measurement must not report complete"
+>       assert verdict.status == gate.INCOMPLETE, verdict.status
+                                 ^^^^^^^^^^^^^^^
+E       AttributeError: module 'workbench.backend.parity_gate' has no attribute 'INCOMPLETE'
+
+workbench/tests/test_gate_contract_negatives.py:139: AttributeError
+___ test_an_artifact_missing_one_mandatory_dimension_is_incomplete_not_pass ____
+
+tmp_path = PosixPath('/tmp/pytest-of-heheboiz/pytest-755/test_an_artifact_missing_one_m0')
+
+    def test_an_artifact_missing_one_mandatory_dimension_is_incomplete_not_pass(tmp_path: Path) -> None:
+        """No batch comparison and no hit-count equality: two dimensions were never measured."""
+        _write(tmp_path, "testmodel", _native(metrics=False), _adapter(metrics_present=False))
+        verdict = _evaluate(tmp_path)
+        assert verdict.status != gate.PASS
+        assert verdict.passed is False and verdict.complete is False
+>       assert verdict.status == gate.INCOMPLETE
+                                 ^^^^^^^^^^^^^^^
+E       AttributeError: module 'workbench.backend.parity_gate' has no attribute 'INCOMPLETE'
+
+workbench/tests/test_gate_contract_negatives.py:150: AttributeError
+____ test_a_self_declared_within_tolerance_flag_cannot_override_the_numbers ____
+
+tmp_path = PosixPath('/tmp/pytest-of-heheboiz/pytest-755/test_a_self_declared_within_to0')
+
+    def test_a_self_declared_within_tolerance_flag_cannot_override_the_numbers(tmp_path: Path) -> None:
+        """`0.1` against a declared `1e-6`, with the artifact claiming `within_tolerance: true`."""
+        scoring = {"score_max_abs_delta_vs_dot": 0.1, "score_pairs_compared": 8,
+                   "score_max_abs_declared": 1e-06, "score_within_tolerance": True,
+                   "adapter_vs_argsort_unmasked": {"non_tie_count": 0},
+                   "rank_differences_vs_native_val_control": {"count": 0, "non_tie_count": 0,
+                                                              "min_gap_abs": 0.0}}
+        _write(tmp_path, "testmodel", _native(), _adapter(scoring=scoring))
+        verdict = _evaluate(tmp_path)
+>       assert verdict.status == gate.MANDATORY_FAILED, verdict.detail
+E       AssertionError: no G1/G2 artifact exists for testmodel; absent evidence is never a pass, so the gate stays NOT_RUN
+E       assert 'PARITY_NOT_RUN' == 'PARITY_MANDA...BCHECK_FAILED'
+E         
+E         - PARITY_MANDATORY_SUBCHECK_FAILED
+E         + PARITY_NOT_RUN
+
+workbench/tests/test_gate_contract_negatives.py:165: AssertionError
+____ test_a_self_declared_flag_also_cannot_override_a_failing_forward_delta ____
+
+tmp_path = PosixPath('/tmp/pytest-of-heheboiz/pytest-755/test_a_self_declared_flag_also0')
+
+    def test_a_self_declared_flag_also_cannot_override_a_failing_forward_delta(tmp_path: Path) -> None:
+        _write(tmp_path, "testmodel", _native(), _adapter(forward=_forward(0.1, flag=True)))
+        verdict = _evaluate(tmp_path)
+>       assert verdict.status == gate.MANDATORY_FAILED
+E       AssertionError: assert 'PARITY_NOT_RUN' == 'PARITY_MANDA...BCHECK_FAILED'
+E         
+E         - PARITY_MANDATORY_SUBCHECK_FAILED
+E         + PARITY_NOT_RUN
+
+workbench/tests/test_gate_contract_negatives.py:176: AssertionError
+____________ test_a_third_model_with_artifacts_is_gated_not_not_run ____________
+
+tmp_path = PosixPath('/tmp/pytest-of-heheboiz/pytest-755/test_a_third_model_with_artifa0')
+
+    def test_a_third_model_with_artifacts_is_gated_not_not_run(tmp_path: Path) -> None:
+        """`EVIDENCED_MODELS` is a discovery seed, never the set of models the gate will judge."""
+        _write(tmp_path, "habit", _native(), _adapter())
+        verdict = _evaluate(tmp_path, model="habit", **{})
+>       assert verdict.status != gate.NOT_RUN, verdict.detail
+E       AssertionError: no G1/G2 artifact exists for habit; absent evidence is never a pass, so the gate stays NOT_RUN
+E       assert 'PARITY_NOT_RUN' != 'PARITY_NOT_RUN'
+E        +  where 'PARITY_NOT_RUN' = ParityVerdict(model_id='habit', status='PARITY_NOT_RUN', passed=False, complete=False, checks=[], failures=[], dimensi..., evidence=[], detail='no G1/G2 artifact exists for habit; absent evidence is never a pass, so the gate stays NOT_RUN').status
+E        +  and   'PARITY_NOT_RUN' = gate.NOT_RUN
+
+workbench/tests/test_gate_contract_negatives.py:198: AssertionError
+________________ test_a_third_model_with_failing_evidence_fails ________________
+
+tmp_path = PosixPath('/tmp/pytest-of-heheboiz/pytest-755/test_a_third_model_with_failin0')
+
+    def test_a_third_model_with_failing_evidence_fails(tmp_path: Path) -> None:
+        _write(tmp_path, "pair", _native(), _adapter(forward=_forward(0.1)))
+        verdict = gate.evaluate_model("pair", root=tmp_path, categories=(CATEGORY,))
+>       assert verdict.status == gate.MANDATORY_FAILED
+E       AssertionError: assert 'PARITY_NOT_RUN' == 'PARITY_MANDA...BCHECK_FAILED'
+E         
+E         - PARITY_MANDATORY_SUBCHECK_FAILED
+E         + PARITY_NOT_RUN
+
+workbench/tests/test_gate_contract_negatives.py:206: AssertionError
+_________ test_evaluate_all_discovers_models_beyond_the_hardcoded_two __________
+
+tmp_path = PosixPath('/tmp/pytest-of-heheboiz/pytest-755/test_evaluate_all_discovers_mo0')
+
+    def test_evaluate_all_discovers_models_beyond_the_hardcoded_two(tmp_path: Path) -> None:
+        _write(tmp_path, "encoder", _native(), _adapter())
+        _write(tmp_path, "habl", _native(), _adapter())
+        result = gate.evaluate_all(root=tmp_path)
+>       assert "habl" in result["models"], sorted(result["models"])
+E       AssertionError: ['encoder', 'limn']
+E       assert 'habl' in {'limn': {'model_id': 'limn', 'status': 'PARITY_EVIDENCE_MISSING', 'passed': False, 'complete': False, ...}, 'encoder': {'model_id': 'encoder', 'status': 'PARITY_EVIDENCE_MISSING', 'passed': False, 'complete': False, ...}}
+
+workbench/tests/test_gate_contract_negatives.py:214: AssertionError
+______________ test_a_malformed_document_is_malformed_not_a_crash ______________
+
+tmp_path = PosixPath('/tmp/pytest-of-heheboiz/pytest-755/test_a_malformed_document_is_m0')
+
+    def test_a_malformed_document_is_malformed_not_a_crash(tmp_path: Path) -> None:
+        _write(tmp_path, "testmodel", "[1, 2, 3]", _adapter())
+        verdict = _evaluate(tmp_path)
+>       assert verdict.status == gate.MALFORMED, verdict.detail
+E       AssertionError: no G1/G2 artifact exists for testmodel; absent evidence is never a pass, so the gate stays NOT_RUN
+E       assert 'PARITY_NOT_RUN' == 'PARITY_EVIDENCE_MALFORMED'
+E         
+E         - PARITY_EVIDENCE_MALFORMED
+E         + PARITY_NOT_RUN
+
+workbench/tests/test_gate_contract_negatives.py:223: AssertionError
+___________ test_an_infinite_tolerance_cannot_accept_any_measurement ___________
+
+tmp_path = PosixPath('/tmp/pytest-of-heheboiz/pytest-755/test_an_infinite_tolerance_can0')
+
+    def test_an_infinite_tolerance_cannot_accept_any_measurement(tmp_path: Path) -> None:
+        tolerances = dict(TOLERANCES)
+        tolerances["forward_max_abs"] = math.inf
+        _write(tmp_path, "testmodel", _native(tolerances=tolerances),
+               _adapter(tolerances=tolerances, forward=_forward(999.0)))
+        verdict = _evaluate(tmp_path)
+>       assert verdict.status == gate.MALFORMED, verdict.detail
+E       AssertionError: no G1/G2 artifact exists for testmodel; absent evidence is never a pass, so the gate stays NOT_RUN
+E       assert 'PARITY_NOT_RUN' == 'PARITY_EVIDENCE_MALFORMED'
+E         
+E         - PARITY_EVIDENCE_MALFORMED
+E         + PARITY_NOT_RUN
+
+workbench/tests/test_gate_contract_negatives.py:234: AssertionError
+_______________ test_a_nan_measurement_fails_rather_than_passing _______________
+
+tmp_path = PosixPath('/tmp/pytest-of-heheboiz/pytest-755/test_a_nan_measurement_fails_r0')
+
+    def test_a_nan_measurement_fails_rather_than_passing(tmp_path: Path) -> None:
+        _write(tmp_path, "testmodel", _native(),
+               _adapter(forward=_forward(math.nan, cosine=math.nan)))
+        verdict = _evaluate(tmp_path)
+>       assert verdict.status in {gate.MALFORMED, gate.MANDATORY_FAILED}, verdict.status
+E       AssertionError: PARITY_NOT_RUN
+E       assert 'PARITY_NOT_RUN' in {'PARITY_EVIDENCE_MALFORMED', 'PARITY_MANDATORY_SUBCHECK_FAILED'}
+E        +  where 'PARITY_NOT_RUN' = ParityVerdict(model_id='testmodel', status='PARITY_NOT_RUN', passed=False, complete=False, checks=[], failures=[], dim...idence=[], detail='no G1/G2 artifact exists for testmodel; absent evidence is never a pass, so the gate stays NOT_RUN').status
+
+workbench/tests/test_gate_contract_negatives.py:242: AssertionError
+_______ test_a_non_numeric_measurement_is_malformed_not_silently_dropped _______
+
+tmp_path = PosixPath('/tmp/pytest-of-heheboiz/pytest-755/test_a_non_numeric_measurement0')
+
+    def test_a_non_numeric_measurement_is_malformed_not_silently_dropped(tmp_path: Path) -> None:
+        forward = _forward()
+        forward["max_abs"] = "0.1"
+        _write(tmp_path, "testmodel", _native(), _adapter(forward=forward))
+        verdict = _evaluate(tmp_path)
+>       assert verdict.status == gate.MALFORMED, verdict.detail
+E       AssertionError: no G1/G2 artifact exists for testmodel; absent evidence is never a pass, so the gate stays NOT_RUN
+E       assert 'PARITY_NOT_RUN' == 'PARITY_EVIDENCE_MALFORMED'
+E         
+E         - PARITY_EVIDENCE_MALFORMED
+E         + PARITY_NOT_RUN
+
+workbench/tests/test_gate_contract_negatives.py:251: AssertionError
+_____________________ test_a_negative_tolerance_is_refused _____________________
+
+tmp_path = PosixPath('/tmp/pytest-of-heheboiz/pytest-755/test_a_negative_tolerance_is_r0')
+
+    def test_a_negative_tolerance_is_refused(tmp_path: Path) -> None:
+        tolerances = dict(TOLERANCES)
+        tolerances["batch_max_rel"] = -1e-03
+        _write(tmp_path, "testmodel", _native(tolerances=tolerances),
+               _adapter(tolerances=tolerances))
+        verdict = _evaluate(tmp_path)
+>       assert verdict.status == gate.MALFORMED, verdict.detail
+E       AssertionError: no G1/G2 artifact exists for testmodel; absent evidence is never a pass, so the gate stays NOT_RUN
+E       assert 'PARITY_NOT_RUN' == 'PARITY_EVIDENCE_MALFORMED'
+E         
+E         - PARITY_EVIDENCE_MALFORMED
+E         + PARITY_NOT_RUN
+
+workbench/tests/test_gate_contract_negatives.py:261: AssertionError
+___________________ test_non_object_native_body_is_malformed ___________________
+
+tmp_path = PosixPath('/tmp/pytest-of-heheboiz/pytest-755/test_non_object_native_body_is0')
+
+    def test_non_object_native_body_is_malformed(tmp_path: Path) -> None:
+        native = _native()
+        native["native"] = [1, 2, 3]
+        _write(tmp_path, "testmodel", native, _adapter())
+        verdict = _evaluate(tmp_path)
+>       assert verdict.status == gate.MALFORMED, verdict.detail
+E       AssertionError: no G1/G2 artifact exists for testmodel; absent evidence is never a pass, so the gate stays NOT_RUN
+E       assert 'PARITY_NOT_RUN' == 'PARITY_EVIDENCE_MALFORMED'
+E         
+E         - PARITY_EVIDENCE_MALFORMED
+E         + PARITY_NOT_RUN
+
+workbench/tests/test_gate_contract_negatives.py:269: AssertionError
+__________________ test_the_four_verdicts_are_distinct_values __________________
+
+    def test_the_four_verdicts_are_distinct_values() -> None:
+>       assert len({gate.PASS, gate.INCOMPLETE, gate.MANDATORY_FAILED, gate.NOT_RUN}) == 4
+                               ^^^^^^^^^^^^^^^
+E       AttributeError: module 'workbench.backend.parity_gate' has no attribute 'INCOMPLETE'
+
+workbench/tests/test_gate_contract_negatives.py:275: AttributeError
+___________________ test_a_bool_measurement_is_not_a_number ____________________
+
+tmp_path = PosixPath('/tmp/pytest-of-heheboiz/pytest-755/test_a_bool_measurement_is_not0')
+
+    def test_a_bool_measurement_is_not_a_number(tmp_path: Path) -> None:
+        forward = _forward()
+        forward["max_abs"] = False  # `False == 0` would pass a numeric comparison
+        _write(tmp_path, "testmodel", _native(), _adapter(forward=forward))
+        verdict = _evaluate(tmp_path)
+>       assert verdict.status == gate.MALFORMED, verdict.detail
+E       AssertionError: no G1/G2 artifact exists for testmodel; absent evidence is never a pass, so the gate stays NOT_RUN
+E       assert 'PARITY_NOT_RUN' == 'PARITY_EVIDENCE_MALFORMED'
+E         
+E         - PARITY_EVIDENCE_MALFORMED
+E         + PARITY_NOT_RUN
+
+workbench/tests/test_gate_contract_negatives.py:296: AssertionError
+__________ test_the_applied_standard_is_the_one_the_artifact_declares __________
+
+tmp_path = PosixPath('/tmp/pytest-of-heheboiz/pytest-755/test_the_applied_standard_is_t0')
+
+    def test_the_applied_standard_is_the_one_the_artifact_declares(tmp_path: Path) -> None:
+        native = _native()
+        native["standard"] = gate.STANDARD_RELATIVE_V1
+        adapter_body = _adapter()
+        adapter_body["standard"] = gate.STANDARD_RELATIVE_V1
+        _write(tmp_path, "testmodel", native, adapter_body)
+        verdict = _evaluate(tmp_path, standard=gate.STANDARD_ABS_REL_V2)
+>       assert verdict.applied_standard == gate.STANDARD_RELATIVE_V1
+               ^^^^^^^^^^^^^^^^^^^^^^^^
+E       AttributeError: 'ParityVerdict' object has no attribute 'applied_standard'
+
+workbench/tests/test_gate_contract_negatives.py:308: AttributeError
+_____________ test_a_v1_failure_is_not_relabelled_by_a_v2_request ______________
+
+tmp_path = PosixPath('/tmp/pytest-of-heheboiz/pytest-755/test_a_v1_failure_is_not_relab0')
+
+    def test_a_v1_failure_is_not_relabelled_by_a_v2_request(tmp_path: Path) -> None:
+        _write(tmp_path, "testmodel", _native(),
+               _adapter(forward=_forward(0.1, flag=False)))
+        verdict = _evaluate(tmp_path, standard=gate.STANDARD_ABS_REL_V2)
+>       assert verdict.status == gate.MANDATORY_FAILED
+E       AssertionError: assert 'PARITY_NOT_RUN' == 'PARITY_MANDA...BCHECK_FAILED'
+E         
+E         - PARITY_MANDATORY_SUBCHECK_FAILED
+E         + PARITY_NOT_RUN
+
+workbench/tests/test_gate_contract_negatives.py:318: AssertionError
+______________ test_evaluate_all_separates_applied_from_requested ______________
+
+tmp_path = PosixPath('/tmp/pytest-of-heheboiz/pytest-755/test_evaluate_all_separates_ap0')
+
+    def test_evaluate_all_separates_applied_from_requested(tmp_path: Path) -> None:
+        _write(tmp_path, "encoder", _native(), _adapter())
+        result = gate.evaluate_all(root=tmp_path, standard=gate.STANDARD_ABS_REL_V2)
+>       assert result["standard"] == gate.STANDARD_RELATIVE_V1, "applied standard, never the request"
+E       AssertionError: applied standard, never the request
+E       assert 'parity-absolute-relative/v2' == 'parity-relative/v1'
+E         
+E         - parity-relative/v1
+E         ?                  ^
+E         + parity-absolute-relative/v2
+E         ?       +++++++++           ^
+
+workbench/tests/test_gate_contract_negatives.py:326: AssertionError
+_ test_an_artifact_declaring_v2_but_recording_only_maxima_is_not_applied_as_v2 _
+
+tmp_path = PosixPath('/tmp/pytest-of-heheboiz/pytest-755/test_an_artifact_declaring_v2_0')
+
+    def test_an_artifact_declaring_v2_but_recording_only_maxima_is_not_applied_as_v2(
+            tmp_path: Path) -> None:
+        native = _native()
+        native["standard"] = gate.STANDARD_ABS_REL_V2
+        adapter_body = _adapter()
+        adapter_body["standard"] = gate.STANDARD_ABS_REL_V2
+        _write(tmp_path, "testmodel", native, adapter_body)
+        verdict = _evaluate(tmp_path)
+>       assert verdict.status == gate.MALFORMED, verdict.detail
+E       AssertionError: no G1/G2 artifact exists for testmodel; absent evidence is never a pass, so the gate stays NOT_RUN
+E       assert 'PARITY_NOT_RUN' == 'PARITY_EVIDENCE_MALFORMED'
+E         
+E         - PARITY_EVIDENCE_MALFORMED
+E         + PARITY_NOT_RUN
+
+workbench/tests/test_gate_contract_negatives.py:338: AssertionError
+_____ test_the_two_sides_disagreeing_on_the_declared_standard_is_malformed _____
+
+tmp_path = PosixPath('/tmp/pytest-of-heheboiz/pytest-755/test_the_two_sides_disagreeing0')
+
+    def test_the_two_sides_disagreeing_on_the_declared_standard_is_malformed(tmp_path: Path) -> None:
+        native = _native()
+        native["standard"] = gate.STANDARD_RELATIVE_V1
+        adapter_body = _adapter()
+        adapter_body["standard"] = gate.STANDARD_ABS_REL_V2
+        _write(tmp_path, "testmodel", native, adapter_body)
+        verdict = _evaluate(tmp_path)
+>       assert verdict.status == gate.MALFORMED, verdict.detail
+E       AssertionError: no G1/G2 artifact exists for testmodel; absent evidence is never a pass, so the gate stays NOT_RUN
+E       assert 'PARITY_NOT_RUN' == 'PARITY_EVIDENCE_MALFORMED'
+E         
+E         - PARITY_EVIDENCE_MALFORMED
+E         + PARITY_NOT_RUN
+
+workbench/tests/test_gate_contract_negatives.py:349: AssertionError
+_________ test_native_and_adapter_tolerances_that_disagree_are_refused _________
+
+tmp_path = PosixPath('/tmp/pytest-of-heheboiz/pytest-755/test_native_and_adapter_tolera0')
+
+    def test_native_and_adapter_tolerances_that_disagree_are_refused(tmp_path: Path) -> None:
+        """The looser side must never silently win: the gate refuses and names both values."""
+        loose = dict(TOLERANCES)
+        loose["forward_max_abs"] = 1.0
+        _write(tmp_path, "testmodel", _native(),
+               _adapter(tolerances=loose, forward=_forward(0.5, flag=False)))
+        verdict = _evaluate(tmp_path)
+>       assert verdict.status == gate.MALFORMED, verdict.detail
+E       AssertionError: no G1/G2 artifact exists for testmodel; absent evidence is never a pass, so the gate stays NOT_RUN
+E       assert 'PARITY_NOT_RUN' == 'PARITY_EVIDENCE_MALFORMED'
+E         
+E         - PARITY_EVIDENCE_MALFORMED
+E         + PARITY_NOT_RUN
+
+workbench/tests/test_gate_contract_negatives.py:361: AssertionError
+___________ test_identical_tolerances_on_both_sides_are_not_refused ____________
+
+tmp_path = PosixPath('/tmp/pytest-of-heheboiz/pytest-755/test_identical_tolerances_on_b0')
+
+    def test_identical_tolerances_on_both_sides_are_not_refused(tmp_path: Path) -> None:
+        _write(tmp_path, "testmodel", _native(), _adapter())
+>       assert _evaluate(tmp_path).status == gate.PASS
+E       AssertionError: assert 'PARITY_NOT_RUN' == 'PARITY_PASS'
+E         
+E         - PARITY_PASS
+E         + PARITY_NOT_RUN
+
+workbench/tests/test_gate_contract_negatives.py:369: AssertionError
+_____ test_a_tolerance_declared_on_one_side_only_is_accepted_and_recorded ______
+
+tmp_path = PosixPath('/tmp/pytest-of-heheboiz/pytest-755/test_a_tolerance_declared_on_o0')
+
+    def test_a_tolerance_declared_on_one_side_only_is_accepted_and_recorded(tmp_path: Path) -> None:
+        """One-sided declaration is not a conflict: nothing disagrees, and the value is recorded."""
+        adapter_tolerances = dict(TOLERANCES)
+        adapter_tolerances.pop("tie_epsilon")
+        _write(tmp_path, "testmodel", _native(), _adapter(tolerances=adapter_tolerances))
+        verdict = _evaluate(tmp_path)
+>       assert verdict.status == gate.PASS, verdict.detail
+E       AssertionError: no G1/G2 artifact exists for testmodel; absent evidence is never a pass, so the gate stays NOT_RUN
+E       assert 'PARITY_NOT_RUN' == 'PARITY_PASS'
+E         
+E         - PARITY_PASS
+E         + PARITY_NOT_RUN
+
+workbench/tests/test_gate_contract_negatives.py:378: AssertionError
+=========================== short test summary info ============================
+FAILED workbench/tests/test_gate_contract_negatives.py::test_an_empty_adapter_artifact_does_not_pass_and_is_not_complete - AttributeError: module 'workbench.backend.parity_gate' has no attribute 'INCOMPLETE'
+FAILED workbench/tests/test_gate_contract_negatives.py::test_an_artifact_missing_one_mandatory_dimension_is_incomplete_not_pass - AttributeError: module 'workbench.backend.parity_gate' has no attribute 'INCOMPLETE'
+FAILED workbench/tests/test_gate_contract_negatives.py::test_a_self_declared_within_tolerance_flag_cannot_override_the_numbers - AssertionError: no G1/G2 artifact exists for testmodel; absent evidence is never a pass, so the gate stays NOT_RUN
+assert 'PARITY_NOT_RUN' == 'PARITY_MANDA...BCHECK_FAILED'
+  
+  - PARITY_MANDATORY_SUBCHECK_FAILED
+  + PARITY_NOT_RUN
+FAILED workbench/tests/test_gate_contract_negatives.py::test_a_self_declared_flag_also_cannot_override_a_failing_forward_delta - AssertionError: assert 'PARITY_NOT_RUN' == 'PARITY_MANDA...BCHECK_FAILED'
+  
+  - PARITY_MANDATORY_SUBCHECK_FAILED
+  + PARITY_NOT_RUN
+FAILED workbench/tests/test_gate_contract_negatives.py::test_a_third_model_with_artifacts_is_gated_not_not_run - AssertionError: no G1/G2 artifact exists for habit; absent evidence is never a pass, so the gate stays NOT_RUN
+assert 'PARITY_NOT_RUN' != 'PARITY_NOT_RUN'
+ +  where 'PARITY_NOT_RUN' = ParityVerdict(model_id='habit', status='PARITY_NOT_RUN', passed=False, complete=False, checks=[], failures=[], dimensi..., evidence=[], detail='no G1/G2 artifact exists for habit; absent evidence is never a pass, so the gate stays NOT_RUN').status
+ +  and   'PARITY_NOT_RUN' = gate.NOT_RUN
+FAILED workbench/tests/test_gate_contract_negatives.py::test_a_third_model_with_failing_evidence_fails - AssertionError: assert 'PARITY_NOT_RUN' == 'PARITY_MANDA...BCHECK_FAILED'
+  
+  - PARITY_MANDATORY_SUBCHECK_FAILED
+  + PARITY_NOT_RUN
+FAILED workbench/tests/test_gate_contract_negatives.py::test_evaluate_all_discovers_models_beyond_the_hardcoded_two - AssertionError: ['encoder', 'limn']
+assert 'habl' in {'limn': {'model_id': 'limn', 'status': 'PARITY_EVIDENCE_MISSING', 'passed': False, 'complete': False, ...}, 'encoder': {'model_id': 'encoder', 'status': 'PARITY_EVIDENCE_MISSING', 'passed': False, 'complete': False, ...}}
+FAILED workbench/tests/test_gate_contract_negatives.py::test_a_malformed_document_is_malformed_not_a_crash - AssertionError: no G1/G2 artifact exists for testmodel; absent evidence is never a pass, so the gate stays NOT_RUN
+assert 'PARITY_NOT_RUN' == 'PARITY_EVIDENCE_MALFORMED'
+  
+  - PARITY_EVIDENCE_MALFORMED
+  + PARITY_NOT_RUN
+FAILED workbench/tests/test_gate_contract_negatives.py::test_an_infinite_tolerance_cannot_accept_any_measurement - AssertionError: no G1/G2 artifact exists for testmodel; absent evidence is never a pass, so the gate stays NOT_RUN
+assert 'PARITY_NOT_RUN' == 'PARITY_EVIDENCE_MALFORMED'
+  
+  - PARITY_EVIDENCE_MALFORMED
+  + PARITY_NOT_RUN
+FAILED workbench/tests/test_gate_contract_negatives.py::test_a_nan_measurement_fails_rather_than_passing - AssertionError: PARITY_NOT_RUN
+assert 'PARITY_NOT_RUN' in {'PARITY_EVIDENCE_MALFORMED', 'PARITY_MANDATORY_SUBCHECK_FAILED'}
+ +  where 'PARITY_NOT_RUN' = ParityVerdict(model_id='testmodel', status='PARITY_NOT_RUN', passed=False, complete=False, checks=[], failures=[], dim...idence=[], detail='no G1/G2 artifact exists for testmodel; absent evidence is never a pass, so the gate stays NOT_RUN').status
+FAILED workbench/tests/test_gate_contract_negatives.py::test_a_non_numeric_measurement_is_malformed_not_silently_dropped - AssertionError: no G1/G2 artifact exists for testmodel; absent evidence is never a pass, so the gate stays NOT_RUN
+assert 'PARITY_NOT_RUN' == 'PARITY_EVIDENCE_MALFORMED'
+  
+  - PARITY_EVIDENCE_MALFORMED
+  + PARITY_NOT_RUN
+FAILED workbench/tests/test_gate_contract_negatives.py::test_a_negative_tolerance_is_refused - AssertionError: no G1/G2 artifact exists for testmodel; absent evidence is never a pass, so the gate stays NOT_RUN
+assert 'PARITY_NOT_RUN' == 'PARITY_EVIDENCE_MALFORMED'
+  
+  - PARITY_EVIDENCE_MALFORMED
+  + PARITY_NOT_RUN
+FAILED workbench/tests/test_gate_contract_negatives.py::test_non_object_native_body_is_malformed - AssertionError: no G1/G2 artifact exists for testmodel; absent evidence is never a pass, so the gate stays NOT_RUN
+assert 'PARITY_NOT_RUN' == 'PARITY_EVIDENCE_MALFORMED'
+  
+  - PARITY_EVIDENCE_MALFORMED
+  + PARITY_NOT_RUN
+FAILED workbench/tests/test_gate_contract_negatives.py::test_the_four_verdicts_are_distinct_values - AttributeError: module 'workbench.backend.parity_gate' has no attribute 'INCOMPLETE'
+FAILED workbench/tests/test_gate_contract_negatives.py::test_a_bool_measurement_is_not_a_number - AssertionError: no G1/G2 artifact exists for testmodel; absent evidence is never a pass, so the gate stays NOT_RUN
+assert 'PARITY_NOT_RUN' == 'PARITY_EVIDENCE_MALFORMED'
+  
+  - PARITY_EVIDENCE_MALFORMED
+  + PARITY_NOT_RUN
+FAILED workbench/tests/test_gate_contract_negatives.py::test_the_applied_standard_is_the_one_the_artifact_declares - AttributeError: 'ParityVerdict' object has no attribute 'applied_standard'
+FAILED workbench/tests/test_gate_contract_negatives.py::test_a_v1_failure_is_not_relabelled_by_a_v2_request - AssertionError: assert 'PARITY_NOT_RUN' == 'PARITY_MANDA...BCHECK_FAILED'
+  
+  - PARITY_MANDATORY_SUBCHECK_FAILED
+  + PARITY_NOT_RUN
+FAILED workbench/tests/test_gate_contract_negatives.py::test_evaluate_all_separates_applied_from_requested - AssertionError: applied standard, never the request
+assert 'parity-absolute-relative/v2' == 'parity-relative/v1'
+  
+  - parity-relative/v1
+  ?                  ^
+  + parity-absolute-relative/v2
+  ?       +++++++++           ^
+FAILED workbench/tests/test_gate_contract_negatives.py::test_an_artifact_declaring_v2_but_recording_only_maxima_is_not_applied_as_v2 - AssertionError: no G1/G2 artifact exists for testmodel; absent evidence is never a pass, so the gate stays NOT_RUN
+assert 'PARITY_NOT_RUN' == 'PARITY_EVIDENCE_MALFORMED'
+  
+  - PARITY_EVIDENCE_MALFORMED
+  + PARITY_NOT_RUN
+FAILED workbench/tests/test_gate_contract_negatives.py::test_the_two_sides_disagreeing_on_the_declared_standard_is_malformed - AssertionError: no G1/G2 artifact exists for testmodel; absent evidence is never a pass, so the gate stays NOT_RUN
+assert 'PARITY_NOT_RUN' == 'PARITY_EVIDENCE_MALFORMED'
+  
+  - PARITY_EVIDENCE_MALFORMED
+  + PARITY_NOT_RUN
+FAILED workbench/tests/test_gate_contract_negatives.py::test_native_and_adapter_tolerances_that_disagree_are_refused - AssertionError: no G1/G2 artifact exists for testmodel; absent evidence is never a pass, so the gate stays NOT_RUN
+assert 'PARITY_NOT_RUN' == 'PARITY_EVIDENCE_MALFORMED'
+  
+  - PARITY_EVIDENCE_MALFORMED
+  + PARITY_NOT_RUN
+FAILED workbench/tests/test_gate_contract_negatives.py::test_identical_tolerances_on_both_sides_are_not_refused - AssertionError: assert 'PARITY_NOT_RUN' == 'PARITY_PASS'
+  
+  - PARITY_PASS
+  + PARITY_NOT_RUN
+FAILED workbench/tests/test_gate_contract_negatives.py::test_a_tolerance_declared_on_one_side_only_is_accepted_and_recorded - AssertionError: no G1/G2 artifact exists for testmodel; absent evidence is never a pass, so the gate stays NOT_RUN
+assert 'PARITY_NOT_RUN' == 'PARITY_PASS'
+  
+  - PARITY_PASS
+  + PARITY_NOT_RUN
+23 failed, 2 passed in 0.21s

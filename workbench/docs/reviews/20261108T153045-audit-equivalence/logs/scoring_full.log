@@ -1,0 +1,11 @@
+Traceback (most recent call last):
+  File "/home/heheboiz/data/cir/workbench/scripts/audit/equivalence_scoring.py", line 296, in <module>
+    return {str(q): float(np.percentile(array, q)) for q in (0, 1, 5, 25, 50, 75, 95, 99, 100)}
+                     ^^^^^^
+  File "/home/heheboiz/data/cir/workbench/scripts/audit/equivalence_scoring.py", line 260, in main
+    "queries_per_s": round(len(qids) / max(elapsed.get(name, 1e-9), 1e-9), 3),
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/heheboiz/data/cir/workbench/scripts/audit/equivalence_scoring.py", line 131, in margin_diagnosis
+    else old["positive_score"] - new["positive_score"])
+                                 ~~~^^^^^^^^^^^^^^^^^^
+TypeError: 'int' object is not subscriptable

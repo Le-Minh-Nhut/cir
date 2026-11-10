@@ -1,0 +1,47 @@
+[drive 14:39:42] START habit at 2026-11-08T14:39:42+0700 log=/tmp/evalwork/run_habit.log
+[drive 14:39:42] habit child pid=184129
+[drive 14:39:42] habit candidate export advancing: files=0 0.0MiB
+[drive 14:40:42] habit progress cpu=44s (+44s/min) disk=2367MiB (+2359.3MiB/min) jobs=0 memmap=2342.0MiB ranks=1 cand=0/0.0MiB gpu=852 MiB, 16303 MiB elapsed=60s
+[drive 14:41:42] habit progress cpu=104s (+60s/min) disk=2368MiB (+0.8MiB/min) jobs=0 memmap=2342.0MiB ranks=1 cand=0/0.0MiB gpu=852 MiB, 16303 MiB elapsed=60s
+[drive 14:42:42] habit progress cpu=165s (+60s/min) disk=2369MiB (+0.7MiB/min) jobs=0 memmap=2342.0MiB ranks=1 cand=0/0.0MiB gpu=852 MiB, 16303 MiB elapsed=60s
+[drive 14:43:43] habit progress cpu=225s (+60s/min) disk=2369MiB (+0.7MiB/min) jobs=0 memmap=2342.0MiB ranks=1 cand=0/0.0MiB gpu=852 MiB, 16303 MiB elapsed=60s
+[drive 14:44:43] habit progress cpu=285s (+60s/min) disk=2370MiB (+0.7MiB/min) jobs=0 memmap=2342.0MiB ranks=1 cand=0/0.0MiB gpu=852 MiB, 16303 MiB elapsed=60s
+[drive 14:45:43] habit progress cpu=345s (+60s/min) disk=2371MiB (+0.7MiB/min) jobs=0 memmap=2342.0MiB ranks=1 cand=0/0.0MiB gpu=852 MiB, 16303 MiB elapsed=60s
+[drive 14:46:43] habit progress cpu=405s (+60s/min) disk=2371MiB (+0.6MiB/min) jobs=0 memmap=2342.0MiB ranks=1 cand=0/0.0MiB gpu=852 MiB, 16303 MiB elapsed=60s
+[drive 14:47:43] habit progress cpu=466s (+60s/min) disk=2372MiB (+0.6MiB/min) jobs=0 memmap=2342.0MiB ranks=1 cand=0/0.0MiB gpu=867 MiB, 16303 MiB elapsed=60s
+[drive 14:48:43] habit progress cpu=525s (+60s/min) disk=2373MiB (+0.7MiB/min) jobs=0 memmap=2342.0MiB ranks=1 cand=0/0.0MiB gpu=852 MiB, 16303 MiB elapsed=60s
+[drive 14:49:44] habit progress cpu=585s (+59s/min) disk=2373MiB (+0.7MiB/min) jobs=0 memmap=2342.0MiB ranks=1 cand=0/0.0MiB gpu=852 MiB, 16303 MiB elapsed=60s
+[drive 14:50:44] habit progress cpu=645s (+60s/min) disk=2374MiB (+0.7MiB/min) jobs=0 memmap=2342.0MiB ranks=1 cand=0/0.0MiB gpu=852 MiB, 16303 MiB elapsed=60s
+[drive 14:51:44] habit progress cpu=705s (+60s/min) disk=2375MiB (+0.6MiB/min) jobs=0 memmap=2342.0MiB ranks=1 cand=0/0.0MiB gpu=3887 MiB, 16303 MiB elapsed=60s
+[drive 14:52:44] habit progress cpu=765s (+60s/min) disk=2375MiB (+0.7MiB/min) jobs=0 memmap=2342.0MiB ranks=1 cand=0/0.0MiB gpu=850 MiB, 16303 MiB elapsed=60s
+[drive 14:53:44] habit progress cpu=825s (+60s/min) disk=2376MiB (+0.6MiB/min) jobs=0 memmap=2342.0MiB ranks=1 cand=0/0.0MiB gpu=850 MiB, 16303 MiB elapsed=60s
+[drive 14:54:45] habit progress cpu=885s (+60s/min) disk=2376MiB (+0.5MiB/min) jobs=0 memmap=2342.0MiB ranks=1 cand=0/0.0MiB gpu=3887 MiB, 16303 MiB elapsed=60s
+[drive 14:55:45] habit progress cpu=945s (+59s/min) disk=2377MiB (+0.6MiB/min) jobs=0 memmap=2342.0MiB ranks=1 cand=0/0.0MiB gpu=5079 MiB, 16303 MiB elapsed=60s
+[drive 14:56:45] habit progress cpu=1004s (+59s/min) disk=2378MiB (+0.6MiB/min) jobs=0 memmap=2342.0MiB ranks=1 cand=0/0.0MiB gpu=6199 MiB, 16303 MiB elapsed=60s
+[drive 14:57:45] habit progress cpu=1064s (+60s/min) disk=2378MiB (+0.6MiB/min) jobs=0 memmap=2342.0MiB ranks=1 cand=0/0.0MiB gpu=6197 MiB, 16303 MiB elapsed=60s
+[drive 14:58:45] habit progress cpu=1123s (+60s/min) disk=2379MiB (+0.6MiB/min) jobs=0 memmap=2342.0MiB ranks=1 cand=0/0.0MiB gpu=8439 MiB, 16303 MiB elapsed=60s
+[drive 14:59:46] habit progress cpu=1182s (+59s/min) disk=2379MiB (+0.5MiB/min) jobs=0 memmap=2342.0MiB ranks=1 cand=0/0.0MiB gpu=8439 MiB, 16303 MiB elapsed=60s
+[drive 15:00:46] habit progress cpu=1242s (+60s/min) disk=2380MiB (+0.6MiB/min) jobs=0 memmap=2342.0MiB ranks=1 cand=0/0.0MiB gpu=12917 MiB, 16303 MiB elapsed=60s
+[drive 15:01:46] habit progress cpu=1302s (+60s/min) disk=2380MiB (+0.5MiB/min) jobs=0 memmap=2342.0MiB ranks=1 cand=0/0.0MiB gpu=12924 MiB, 16303 MiB elapsed=60s
+[drive 15:02:46] habit progress cpu=1361s (+59s/min) disk=2381MiB (+0.5MiB/min) jobs=0 memmap=2342.0MiB ranks=1 cand=0/0.0MiB gpu=5084 MiB, 16303 MiB elapsed=60s
+[drive 15:03:46] habit progress cpu=1421s (+59s/min) disk=2382MiB (+0.5MiB/min) jobs=0 memmap=2342.0MiB ranks=1 cand=0/0.0MiB gpu=5084 MiB, 16303 MiB elapsed=60s
+[drive 15:04:46] habit progress cpu=1479s (+58s/min) disk=2382MiB (+0.5MiB/min) jobs=0 memmap=2342.0MiB ranks=1 cand=0/0.0MiB gpu=6202 MiB, 16303 MiB elapsed=60s
+[drive 15:05:47] habit progress cpu=1538s (+59s/min) disk=2382MiB (+0.4MiB/min) jobs=0 memmap=2342.0MiB ranks=1 cand=0/0.0MiB gpu=6204 MiB, 16303 MiB elapsed=60s
+[drive 15:06:47] habit progress cpu=1597s (+59s/min) disk=2383MiB (+0.4MiB/min) jobs=0 memmap=2342.0MiB ranks=1 cand=0/0.0MiB gpu=8444 MiB, 16303 MiB elapsed=60s
+[drive 15:07:47] habit progress cpu=1654s (+58s/min) disk=2383MiB (+0.5MiB/min) jobs=0 memmap=2342.0MiB ranks=1 cand=0/0.0MiB gpu=8441 MiB, 16303 MiB elapsed=60s
+[drive 15:08:47] habit progress cpu=1713s (+58s/min) disk=2384MiB (+0.4MiB/min) jobs=0 memmap=2342.0MiB ranks=1 cand=0/0.0MiB gpu=12921 MiB, 16303 MiB elapsed=60s
+[drive 15:09:48] habit progress cpu=1765s (+52s/min) disk=2384MiB (+0.3MiB/min) jobs=0 memmap=2342.0MiB ranks=1 cand=0/0.0MiB gpu=12921 MiB, 16303 MiB elapsed=60s
+[drive 15:10:48] habit progress cpu=1816s (+51s/min) disk=2384MiB (+0.4MiB/min) jobs=0 memmap=2342.0MiB ranks=1 cand=0/0.0MiB gpu=854 MiB, 16303 MiB elapsed=60s
+[drive 15:11:48] habit progress cpu=1876s (+60s/min) disk=2385MiB (+0.7MiB/min) jobs=0 memmap=2342.0MiB ranks=1 cand=0/0.0MiB gpu=854 MiB, 16303 MiB elapsed=60s
+[drive 15:12:48] habit progress cpu=1934s (+58s/min) disk=2386MiB (+0.7MiB/min) jobs=0 memmap=2342.0MiB ranks=1 cand=0/0.0MiB gpu=852 MiB, 16303 MiB elapsed=60s
+[drive 15:13:48] habit progress cpu=1985s (+51s/min) disk=2386MiB (+0.6MiB/min) jobs=0 memmap=2342.0MiB ranks=1 cand=0/0.0MiB gpu=854 MiB, 16303 MiB elapsed=60s
+[drive 15:14:48] habit progress cpu=2036s (+51s/min) disk=2387MiB (+0.6MiB/min) jobs=0 memmap=2342.0MiB ranks=1 cand=0/0.0MiB gpu=854 MiB, 16303 MiB elapsed=60s
+[drive 15:15:49] habit progress cpu=2096s (+59s/min) disk=2388MiB (+0.5MiB/min) jobs=0 memmap=2342.0MiB ranks=1 cand=0/0.0MiB gpu=854 MiB, 16303 MiB elapsed=60s
+[drive 15:16:49] habit progress cpu=2156s (+60s/min) disk=2388MiB (+0.6MiB/min) jobs=0 memmap=2342.0MiB ranks=1 cand=0/0.0MiB gpu=854 MiB, 16303 MiB elapsed=60s
+[drive 15:17:49] habit progress cpu=2216s (+60s/min) disk=2389MiB (+0.5MiB/min) jobs=0 memmap=2342.0MiB ranks=1 cand=0/0.0MiB gpu=1099 MiB, 16303 MiB elapsed=60s
+[drive 15:18:49] habit progress cpu=2276s (+60s/min) disk=2389MiB (+0.6MiB/min) jobs=0 memmap=2342.0MiB ranks=1 cand=0/0.0MiB gpu=1148 MiB, 16303 MiB elapsed=60s
+[drive 15:19:50] habit progress cpu=2336s (+59s/min) disk=2390MiB (+0.6MiB/min) jobs=0 memmap=2342.0MiB ranks=1 cand=0/0.0MiB gpu=1178 MiB, 16303 MiB elapsed=60s
+[drive 15:20:50] habit progress cpu=2396s (+60s/min) disk=2390MiB (+0.5MiB/min) jobs=0 memmap=2342.0MiB ranks=1 cand=0/0.0MiB gpu=1191 MiB, 16303 MiB elapsed=60s
+[drive 15:21:35] habit candidate export advancing: files=3 23.79MiB
+[drive 15:21:35] END habit exit=0 duration=2513s ok=True artifact=497c25c57fbeba885ecfb9d1 candidate_topk=True status=AVAILABLE
+[drive 15:21:35] summary -> /tmp/evalwork/drive_summary.json

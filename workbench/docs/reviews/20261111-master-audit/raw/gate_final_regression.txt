@@ -1,0 +1,12 @@
+........................................................................ [ 29%]
+........................................................................ [ 59%]
+........................................................................ [ 88%]
+...........................                                              [100%]
+=============================== warnings summary ===============================
+workbench/tests/test_composition_image_identity.py::test_model_lock_serializes_processes
+workbench/tests/test_composition_image_identity.py::test_model_lock_assertion_fails_when_flock_is_noop
+  /home/heheboiz/.local/share/uv/python/cpython-3.12-linux-x86_64-gnu/lib/python3.12/multiprocessing/popen_fork.py:66: DeprecationWarning: This process (pid=3164972) is multi-threaded, use of fork() may lead to deadlocks in the child.
+    self.pid = os.fork()
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+243 passed, 2 warnings in 3.30s

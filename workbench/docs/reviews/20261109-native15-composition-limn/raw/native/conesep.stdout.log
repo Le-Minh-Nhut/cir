@@ -1,0 +1,3 @@
+RAMGUARD verdict=GO avail=28.52GiB predicted=25.90GiB headroom=2.00GiB need=27.90GiB anon=0.71GiB swapfree=5.54GiB
+[OK] result written: /home/heheboiz/data/cir/workbench/docs/reviews/20261109-native15-composition-limn/raw/native/conesep.json
+EXITCODE=0 WALL_SECONDS=441 PEAK_VMHWM_KB=28361892 PEAK_GiB=27.05

@@ -1,0 +1,9 @@
+Using Python 3.10.20 environment at: workbench/envs/limn310-adapted
+Resolved 3 packages in 246ms
+Downloading numpy (17.4MiB)
+ Downloaded numpy
+Prepared 1 package in 888ms
+Uninstalled 1 package in 6ms
+Installed 1 package in 7ms
+ - numpy==2.2.6
+ + numpy==1.26.4

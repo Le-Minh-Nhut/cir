@@ -39,7 +39,55 @@ def test_clvc_net_preflight_fails_on_empty_paths(tmp_path: Path):
     assert any("source" in b.lower() for b in blockers)
     assert any("checkpoint" in b.lower() for b in blockers)
     assert any("dataset" in b.lower() for b in blockers)
-    assert any("unresolved" in b.lower() for b in blockers)
+    # The old contract required a hard-coded "mapping unresolved" blocker on every call, which
+    # refused a complete bundle (all six registry digests matching) with a string instead of the
+    # bytes. The blocker now names the missing files, and a mapping-status blocker appears only when
+    # the files are present and the registry status is not VERIFIED_METADATA.
+    assert any("missing or empty" in b.lower() for b in blockers)
+    # The replacement contract, both halves: the blocker must come from the BYTES, and a registry
+    # that is not VERIFIED_METADATA must still block even when every file is present and hashed.
+    assert not any("checkpoint mapping is unresolved" in b.lower() for b in blockers)
+
+
+def test_clvc_net_preflight_fails_closed_on_a_wrong_digest(tmp_path: Path):
+    """Present files with wrong bytes must be refused: a substituted bundle is not a bundle."""
+    import hashlib
+    from unittest.mock import patch
+
+    from workbench.replay import clvc_net as module
+
+    names = [name for cat in CATEGORIES for name in EXPECTED_CATEGORY_FILES[cat]]
+    for name in names:
+        (tmp_path / name).write_bytes(f"not {name}".encode())
+    variant = dict(module.CHECKPOINT_VARIANT)
+    variant["bundle_members"] = [
+        {"filename": name, "expected_sha256": hashlib.sha256(b"something else").hexdigest()}
+        for name in names
+    ]
+    with patch.object(module, "CHECKPOINT_VARIANT", variant):
+        blockers = module.validate_checkpoint(tmp_path)
+    assert sum("digest mismatch" in b for b in blockers) == len(names), blockers
+
+
+def test_clvc_net_preflight_still_blocks_when_the_registry_is_not_verified(tmp_path: Path):
+    """A verified digest plus an unverified registry status is still a refusal."""
+    import hashlib
+    from unittest.mock import patch
+
+    from workbench.replay import clvc_net as module
+
+    names = [name for cat in CATEGORIES for name in EXPECTED_CATEGORY_FILES[cat]]
+    members = []
+    for name in names:
+        (tmp_path / name).write_bytes(f"bytes of {name}".encode())
+        members.append({"filename": name,
+                        "expected_sha256": hashlib.sha256(f"bytes of {name}".encode()).hexdigest()})
+    variant = dict(module.CHECKPOINT_VARIANT)
+    variant["bundle_members"] = members
+    variant["checkpoint_mapping_status"] = "UNVERIFIED"
+    with patch.object(module, "CHECKPOINT_VARIANT", variant):
+        blockers = module.validate_checkpoint(tmp_path)
+    assert any("mapping is unresolved" in b.lower() for b in blockers), blockers
 
 
 def test_clvc_net_test_function_signature():

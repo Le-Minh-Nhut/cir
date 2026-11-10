@@ -1,0 +1,14 @@
+
+> cir-failure-workbench@0.1.0 build
+> tsc -b && vite build
+
+vite v8.3.2 building client environment for production...
+transforming...
+✓ 39 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                   0.27 kB │ gzip:   0.20 kB
+dist/assets/index-DAZAlgSy.css   26.00 kB │ gzip:   6.07 kB
+dist/assets/index-CG4hbuvP.js   357.68 kB │ gzip: 105.96 kB
+
+✓ built in 307ms

@@ -1,0 +1,2691 @@
+{
+  "source": {
+    "release_root": "workbench/artifacts/circus_release",
+    "release_query_file": "workbench/artifacts/circus_release/mbeir_fashioniq_task7_test.jsonl",
+    "release_query_sha256": "b601ef6a5411bf9385cff41e64bea863871ab1094cd09d78683de6a5141165ef",
+    "fashioniq_root": "data/FashionIQ",
+    "caption_file_sha256": {
+      "dress": "5e5117d45695df9c3ca91fac3e0bc49e6422ae9c8b3793f0ac9b3ab83adb7de9",
+      "shirt": "7b7ca3797b85dddfd83e74cdb4454cb63e3e7c09acef2590155efbacea6d7feb",
+      "toptee": "b4e09f428e6c255cc4b4ec46e77908305ab83075d82840c960be81af15cdc5eb"
+    },
+    "loader": "workbench/composition/data.py::load_release + assign_garment_categories",
+    "loader_hash_verification": "matched",
+    "resolver": "workbench/composition/model_limn.py::resolve_query_category + caption_scope_index",
+    "provenance_category_resolution": {
+      "status": "resolved",
+      "considered_count": 6003,
+      "resolved_count": 5884,
+      "ambiguous_count": 119,
+      "unresolved_count": 0,
+      "ambiguous_qids": [
+        "7:2179",
+        "7:2211",
+        "7:2218",
+        "7:2228",
+        "7:2258",
+        "7:2285",
+        "7:2307",
+        "7:2309",
+        "7:2333",
+        "7:2463",
+        "7:2471",
+        "7:2486",
+        "7:2529",
+        "7:2575",
+        "7:2587",
+        "7:2637",
+        "7:2650",
+        "7:2679",
+        "7:2698",
+        "7:2717",
+        "7:2815",
+        "7:2959",
+        "7:2999",
+        "7:3005",
+        "7:3033",
+        "7:3038",
+        "7:3163",
+        "7:3177",
+        "7:3243",
+        "7:3280",
+        "7:3324",
+        "7:3367",
+        "7:3402",
+        "7:3464",
+        "7:3487",
+        "7:3493",
+        "7:3560",
+        "7:3601",
+        "7:3629",
+        "7:3635",
+        "7:3790",
+        "7:3800",
+        "7:3813",
+        "7:3906",
+        "7:3927",
+        "7:3993",
+        "7:4008",
+        "7:4013",
+        "7:4066",
+        "7:4086",
+        "7:4164",
+        "7:4171",
+        "7:4243",
+        "7:4246",
+        "7:4290",
+        "7:4294",
+        "7:4305",
+        "7:4322",
+        "7:4358",
+        "7:4397",
+        "7:4420",
+        "7:4425",
+        "7:4434",
+        "7:4487",
+        "7:4504",
+        "7:4510",
+        "7:4529",
+        "7:4540",
+        "7:4542",
+        "7:4582",
+        "7:4594",
+        "7:4641",
+        "7:4759",
+        "7:4765",
+        "7:4806",
+        "7:4808",
+        "7:4809",
+        "7:4838",
+        "7:4849",
+        "7:4871",
+        "7:4880",
+        "7:4884",
+        "7:4893",
+        "7:4956",
+        "7:4982",
+        "7:5048",
+        "7:5090",
+        "7:5101",
+        "7:5105",
+        "7:5109",
+        "7:5149",
+        "7:5170",
+        "7:5212",
+        "7:5228",
+        "7:5236",
+        "7:5239",
+        "7:5259",
+        "7:5329",
+        "7:5388",
+        "7:5415",
+        "7:5444",
+        "7:5512",
+        "7:5546",
+        "7:5584",
+        "7:5597",
+        "7:5607",
+        "7:5641",
+        "7:5654",
+        "7:5655",
+        "7:5700",
+        "7:5701",
+        "7:5711",
+        "7:5742",
+        "7:5764",
+        "7:5788",
+        "7:5798",
+        "7:5863",
+        "7:5896",
+        "7:5963"
+      ],
+      "ambiguous_examples": [
+        {
+          "qid": "7:2179",
+          "categories": [
+            "shirt",
+            "toptee"
+          ]
+        },
+        {
+          "qid": "7:2211",
+          "categories": [
+            "shirt",
+            "toptee"
+          ]
+        },
+        {
+          "qid": "7:2218",
+          "categories": [
+            "shirt",
+            "toptee"
+          ]
+        },
+        {
+          "qid": "7:2228",
+          "categories": [
+            "shirt",
+            "toptee"
+          ]
+        },
+        {
+          "qid": "7:2258",
+          "categories": [
+            "shirt",
+            "toptee"
+          ]
+        },
+        {
+          "qid": "7:2285",
+          "categories": [
+            "shirt",
+            "toptee"
+          ]
+        },
+        {
+          "qid": "7:2307",
+          "categories": [
+            "shirt",
+            "toptee"
+          ]
+        },
+        {
+          "qid": "7:2309",
+          "categories": [
+            "shirt",
+            "toptee"
+          ]
+        },
+        {
+          "qid": "7:2333",
+          "categories": [
+            "shirt",
+            "toptee"
+          ]
+        },
+        {
+          "qid": "7:2463",
+          "categories": [
+            "shirt",
+            "toptee"
+          ]
+        },
+        {
+          "qid": "7:2471",
+          "categories": [
+            "shirt",
+            "toptee"
+          ]
+        },
+        {
+          "qid": "7:2486",
+          "categories": [
+            "shirt",
+            "toptee"
+          ]
+        },
+        {
+          "qid": "7:2529",
+          "categories": [
+            "shirt",
+            "toptee"
+          ]
+        },
+        {
+          "qid": "7:2575",
+          "categories": [
+            "shirt",
+            "toptee"
+          ]
+        },
+        {
+          "qid": "7:2587",
+          "categories": [
+            "shirt",
+            "toptee"
+          ]
+        },
+        {
+          "qid": "7:2637",
+          "categories": [
+            "shirt",
+            "toptee"
+          ]
+        },
+        {
+          "qid": "7:2650",
+          "categories": [
+            "shirt",
+            "toptee"
+          ]
+        },
+        {
+          "qid": "7:2679",
+          "categories": [
+            "shirt",
+            "toptee"
+          ]
+        },
+        {
+          "qid": "7:2698",
+          "categories": [
+            "shirt",
+            "toptee"
+          ]
+        },
+        {
+          "qid": "7:2717",
+          "categories": [
+            "shirt",
+            "toptee"
+          ]
+        }
+      ],
+      "unresolved_qids": [],
+      "identity_source": "reference in FashionIQ validation splits or test-caption annotations"
+    }
+  },
+  "ambiguous_qid_count": 119,
+  "resolved_count": 117,
+  "unresolved_count": 2,
+  "resolved_scope_counts": {
+    "shirt": 46,
+    "toptee": 71
+  },
+  "unresolved_qids": [
+    "7:3038",
+    "7:3790"
+  ],
+  "unresolved_detail": [
+    {
+      "qid": "7:3038",
+      "reference_stem": "B004TMGDME",
+      "reference_id": "7:53224",
+      "query_txt": "Is darker and has a different graphic and is darker.",
+      "normalized_text": "is darker and has a different graphic and is darker",
+      "loader_category": null,
+      "index_categories": [
+        "shirt",
+        "toptee"
+      ],
+      "raw_file_categories": [
+        "shirt",
+        "toptee"
+      ],
+      "resolved": null,
+      "raw_rederived_scope": null,
+      "rederivation": "UNRESOLVED_raw_duplicate"
+    },
+    {
+      "qid": "7:3790",
+      "reference_stem": "B0079K0YBO",
+      "reference_id": "7:33523",
+      "query_txt": "Is grey and has a less whimsical graphic and is lighter.",
+      "normalized_text": "is grey and has a less whimsical graphic and is lighter",
+      "loader_category": null,
+      "index_categories": [
+        "shirt",
+        "toptee"
+      ],
+      "raw_file_categories": [
+        "shirt",
+        "toptee"
+      ],
+      "resolved": null,
+      "raw_rederived_scope": null,
+      "rederivation": "UNRESOLVED_raw_duplicate"
+    }
+  ],
+  "checks": {
+    "ambiguous_count_is_119": true,
+    "resolved_count_is_117": true,
+    "unresolved_are_exactly_7:3038_7:3790": true,
+    "resolved_scopes_subset_of_scopes": true,
+    "resolver_matches_raw_rederivation": true,
+    "index_matches_raw_files": true,
+    "all_rederivations_pass": true
+  },
+  "degraded_real_data": [
+    {
+      "removed": "dress",
+      "mode": "absent",
+      "resolved_count": 117,
+      "unresolved": [
+        "7:3038",
+        "7:3790"
+      ],
+      "scope_counts": {
+        "shirt": 46,
+        "toptee": 71
+      },
+      "7:3038": null,
+      "7:3790": null
+    },
+    {
+      "removed": "dress",
+      "mode": "corrupt",
+      "resolved_count": 117,
+      "unresolved": [
+        "7:3038",
+        "7:3790"
+      ],
+      "scope_counts": {
+        "shirt": 46,
+        "toptee": 71
+      },
+      "7:3038": null,
+      "7:3790": null
+    },
+    {
+      "removed": "shirt",
+      "mode": "absent",
+      "resolved_count": 73,
+      "unresolved": [
+        "7:2179",
+        "7:2211",
+        "7:2218",
+        "7:2228",
+        "7:2258",
+        "7:2285",
+        "7:2307",
+        "7:2309",
+        "7:2333",
+        "7:2463",
+        "7:2471",
+        "7:2486",
+        "7:2529",
+        "7:2575",
+        "7:2587",
+        "7:2637",
+        "7:2650",
+        "7:2679",
+        "7:2698",
+        "7:2717",
+        "7:2815",
+        "7:2959",
+        "7:2999",
+        "7:3005",
+        "7:3033",
+        "7:3163",
+        "7:3177",
+        "7:3243",
+        "7:3280",
+        "7:3324",
+        "7:3367",
+        "7:3402",
+        "7:3464",
+        "7:3487",
+        "7:3493",
+        "7:3560",
+        "7:3601",
+        "7:3629",
+        "7:3635",
+        "7:3800",
+        "7:3813",
+        "7:3906",
+        "7:3927",
+        "7:3993",
+        "7:4008",
+        "7:4013"
+      ],
+      "scope_counts": {
+        "toptee": 73
+      },
+      "7:3038": "toptee",
+      "7:3790": "toptee"
+    },
+    {
+      "removed": "shirt",
+      "mode": "corrupt",
+      "resolved_count": 73,
+      "unresolved": [
+        "7:2179",
+        "7:2211",
+        "7:2218",
+        "7:2228",
+        "7:2258",
+        "7:2285",
+        "7:2307",
+        "7:2309",
+        "7:2333",
+        "7:2463",
+        "7:2471",
+        "7:2486",
+        "7:2529",
+        "7:2575",
+        "7:2587",
+        "7:2637",
+        "7:2650",
+        "7:2679",
+        "7:2698",
+        "7:2717",
+        "7:2815",
+        "7:2959",
+        "7:2999",
+        "7:3005",
+        "7:3033",
+        "7:3163",
+        "7:3177",
+        "7:3243",
+        "7:3280",
+        "7:3324",
+        "7:3367",
+        "7:3402",
+        "7:3464",
+        "7:3487",
+        "7:3493",
+        "7:3560",
+        "7:3601",
+        "7:3629",
+        "7:3635",
+        "7:3800",
+        "7:3813",
+        "7:3906",
+        "7:3927",
+        "7:3993",
+        "7:4008",
+        "7:4013"
+      ],
+      "scope_counts": {
+        "toptee": 73
+      },
+      "7:3038": "toptee",
+      "7:3790": "toptee"
+    },
+    {
+      "removed": "toptee",
+      "mode": "absent",
+      "resolved_count": 48,
+      "unresolved": [
+        "7:4066",
+        "7:4086",
+        "7:4164",
+        "7:4171",
+        "7:4243",
+        "7:4246",
+        "7:4290",
+        "7:4294",
+        "7:4305",
+        "7:4322",
+        "7:4358",
+        "7:4397",
+        "7:4420",
+        "7:4425",
+        "7:4434",
+        "7:4487",
+        "7:4504",
+        "7:4510",
+        "7:4529",
+        "7:4540",
+        "7:4542",
+        "7:4582",
+        "7:4594",
+        "7:4641",
+        "7:4759",
+        "7:4765",
+        "7:4806",
+        "7:4808",
+        "7:4809",
+        "7:4838",
+        "7:4849",
+        "7:4871",
+        "7:4880",
+        "7:4884",
+        "7:4893",
+        "7:4956",
+        "7:4982",
+        "7:5048",
+        "7:5090",
+        "7:5101",
+        "7:5105",
+        "7:5109",
+        "7:5149",
+        "7:5170",
+        "7:5212",
+        "7:5228",
+        "7:5236",
+        "7:5239",
+        "7:5259",
+        "7:5329",
+        "7:5388",
+        "7:5415",
+        "7:5444",
+        "7:5512",
+        "7:5546",
+        "7:5584",
+        "7:5597",
+        "7:5607",
+        "7:5641",
+        "7:5654",
+        "7:5655",
+        "7:5700",
+        "7:5701",
+        "7:5711",
+        "7:5742",
+        "7:5764",
+        "7:5788",
+        "7:5798",
+        "7:5863",
+        "7:5896",
+        "7:5963"
+      ],
+      "scope_counts": {
+        "shirt": 48
+      },
+      "7:3038": "shirt",
+      "7:3790": "shirt"
+    },
+    {
+      "removed": "toptee",
+      "mode": "corrupt",
+      "resolved_count": 48,
+      "unresolved": [
+        "7:4066",
+        "7:4086",
+        "7:4164",
+        "7:4171",
+        "7:4243",
+        "7:4246",
+        "7:4290",
+        "7:4294",
+        "7:4305",
+        "7:4322",
+        "7:4358",
+        "7:4397",
+        "7:4420",
+        "7:4425",
+        "7:4434",
+        "7:4487",
+        "7:4504",
+        "7:4510",
+        "7:4529",
+        "7:4540",
+        "7:4542",
+        "7:4582",
+        "7:4594",
+        "7:4641",
+        "7:4759",
+        "7:4765",
+        "7:4806",
+        "7:4808",
+        "7:4809",
+        "7:4838",
+        "7:4849",
+        "7:4871",
+        "7:4880",
+        "7:4884",
+        "7:4893",
+        "7:4956",
+        "7:4982",
+        "7:5048",
+        "7:5090",
+        "7:5101",
+        "7:5105",
+        "7:5109",
+        "7:5149",
+        "7:5170",
+        "7:5212",
+        "7:5228",
+        "7:5236",
+        "7:5239",
+        "7:5259",
+        "7:5329",
+        "7:5388",
+        "7:5415",
+        "7:5444",
+        "7:5512",
+        "7:5546",
+        "7:5584",
+        "7:5597",
+        "7:5607",
+        "7:5641",
+        "7:5654",
+        "7:5655",
+        "7:5700",
+        "7:5701",
+        "7:5711",
+        "7:5742",
+        "7:5764",
+        "7:5788",
+        "7:5798",
+        "7:5863",
+        "7:5896",
+        "7:5963"
+      ],
+      "scope_counts": {
+        "shirt": 48
+      },
+      "7:3038": "shirt",
+      "7:3790": "shirt"
+    }
+  ],
+  "queries": [
+    {
+      "qid": "7:2179",
+      "reference_stem": "B0020Q11LE",
+      "reference_id": "7:37413",
+      "query_txt": "Has writing on the t-shirt and is gray with black lettering.",
+      "normalized_text": "has writing on the t shirt and is gray with black lettering",
+      "loader_category": null,
+      "index_categories": [
+        "shirt"
+      ],
+      "raw_file_categories": [
+        "shirt"
+      ],
+      "resolved": "shirt",
+      "raw_rederived_scope": "shirt",
+      "rederivation": "PASS_shirt_only"
+    },
+    {
+      "qid": "7:2211",
+      "reference_stem": "B000X74R7C",
+      "reference_id": "7:55321",
+      "query_txt": "Black and has a video game character and is darker.",
+      "normalized_text": "black and has a video game character and is darker",
+      "loader_category": null,
+      "index_categories": [
+        "shirt"
+      ],
+      "raw_file_categories": [
+        "shirt"
+      ],
+      "resolved": "shirt",
+      "raw_rederived_scope": "shirt",
+      "rederivation": "PASS_shirt_only"
+    },
+    {
+      "qid": "7:2218",
+      "reference_stem": "B0020Q11LE",
+      "reference_id": "7:37413",
+      "query_txt": "Is blue in color with a different logo and wrestling.",
+      "normalized_text": "is blue in color with a different logo and wrestling",
+      "loader_category": null,
+      "index_categories": [
+        "shirt"
+      ],
+      "raw_file_categories": [
+        "shirt"
+      ],
+      "resolved": "shirt",
+      "raw_rederived_scope": "shirt",
+      "rederivation": "PASS_shirt_only"
+    },
+    {
+      "qid": "7:2228",
+      "reference_stem": "B004TMGDME",
+      "reference_id": "7:53224",
+      "query_txt": "Is lighter and it is blue.",
+      "normalized_text": "is lighter and it is blue",
+      "loader_category": null,
+      "index_categories": [
+        "shirt"
+      ],
+      "raw_file_categories": [
+        "shirt"
+      ],
+      "resolved": "shirt",
+      "raw_rederived_scope": "shirt",
+      "rederivation": "PASS_shirt_only"
+    },
+    {
+      "qid": "7:2258",
+      "reference_stem": "B003Y5LY76",
+      "reference_id": "7:15286",
+      "query_txt": "Is green with a character and is brighter in color.",
+      "normalized_text": "is green with a character and is brighter in color",
+      "loader_category": null,
+      "index_categories": [
+        "shirt"
+      ],
+      "raw_file_categories": [
+        "shirt"
+      ],
+      "resolved": "shirt",
+      "raw_rederived_scope": "shirt",
+      "rederivation": "PASS_shirt_only"
+    },
+    {
+      "qid": "7:2285",
+      "reference_stem": "B0046Q4F28",
+      "reference_id": "7:30739",
+      "query_txt": "Its cream colored and minimal print and tan.",
+      "normalized_text": "its cream colored and minimal print and tan",
+      "loader_category": null,
+      "index_categories": [
+        "shirt"
+      ],
+      "raw_file_categories": [
+        "shirt"
+      ],
+      "resolved": "shirt",
+      "raw_rederived_scope": "shirt",
+      "rederivation": "PASS_shirt_only"
+    },
+    {
+      "qid": "7:2307",
+      "reference_stem": "B00BGJ4OQA",
+      "reference_id": "7:32038",
+      "query_txt": "Is white with california republic writing and is lighter.",
+      "normalized_text": "is white with california republic writing and is lighter",
+      "loader_category": null,
+      "index_categories": [
+        "shirt"
+      ],
+      "raw_file_categories": [
+        "shirt"
+      ],
+      "resolved": "shirt",
+      "raw_rederived_scope": "shirt",
+      "rederivation": "PASS_shirt_only"
+    },
+    {
+      "qid": "7:2309",
+      "reference_stem": "B00AZ0180G",
+      "reference_id": "7:60438",
+      "query_txt": "Is navy blue with yellow lettering and is navy in color.",
+      "normalized_text": "is navy blue with yellow lettering and is navy in color",
+      "loader_category": null,
+      "index_categories": [
+        "shirt"
+      ],
+      "raw_file_categories": [
+        "shirt"
+      ],
+      "resolved": "shirt",
+      "raw_rederived_scope": "shirt",
+      "rederivation": "PASS_shirt_only"
+    },
+    {
+      "qid": "7:2333",
+      "reference_stem": "B0013F2JGE",
+      "reference_id": "7:19038",
+      "query_txt": "Has dolphins on a light blue tee shirt and is lighter.",
+      "normalized_text": "has dolphins on a light blue tee shirt and is lighter",
+      "loader_category": null,
+      "index_categories": [
+        "shirt"
+      ],
+      "raw_file_categories": [
+        "shirt"
+      ],
+      "resolved": "shirt",
+      "raw_rederived_scope": "shirt",
+      "rederivation": "PASS_shirt_only"
+    },
+    {
+      "qid": "7:2463",
+      "reference_stem": "B00GGR9BSS",
+      "reference_id": "7:51924",
+      "query_txt": "Is white with shorter sleeves and is short sleeved and white.",
+      "normalized_text": "is white with shorter sleeves and is short sleeved and white",
+      "loader_category": null,
+      "index_categories": [
+        "shirt"
+      ],
+      "raw_file_categories": [
+        "shirt"
+      ],
+      "resolved": "shirt",
+      "raw_rederived_scope": "shirt",
+      "rederivation": "PASS_shirt_only"
+    },
+    {
+      "qid": "7:2471",
+      "reference_stem": "B00B92J932",
+      "reference_id": "7:71527",
+      "query_txt": "Is more formal and lighter and is a light colored button up.",
+      "normalized_text": "is more formal and lighter and is a light colored button up",
+      "loader_category": null,
+      "index_categories": [
+        "shirt"
+      ],
+      "raw_file_categories": [
+        "shirt"
+      ],
+      "resolved": "shirt",
+      "raw_rederived_scope": "shirt",
+      "rederivation": "PASS_shirt_only"
+    },
+    {
+      "qid": "7:2486",
+      "reference_stem": "B006VJXGAU",
+      "reference_id": "7:3964",
+      "query_txt": "Has writing on front and is more black and is darker in color.",
+      "normalized_text": "has writing on front and is more black and is darker in color",
+      "loader_category": null,
+      "index_categories": [
+        "shirt"
+      ],
+      "raw_file_categories": [
+        "shirt"
+      ],
+      "resolved": "shirt",
+      "raw_rederived_scope": "shirt",
+      "rederivation": "PASS_shirt_only"
+    },
+    {
+      "qid": "7:2529",
+      "reference_stem": "B00DG9ISYM",
+      "reference_id": "7:30263",
+      "query_txt": "Is specifically for hiking and a grey and black vest.",
+      "normalized_text": "is specifically for hiking and a grey and black vest",
+      "loader_category": null,
+      "index_categories": [
+        "shirt"
+      ],
+      "raw_file_categories": [
+        "shirt"
+      ],
+      "resolved": "shirt",
+      "raw_rederived_scope": "shirt",
+      "rederivation": "PASS_shirt_only"
+    },
+    {
+      "qid": "7:2575",
+      "reference_stem": "B0020Q11LE",
+      "reference_id": "7:37413",
+      "query_txt": "Is a black T shirt with a logo and is black with red circular motif.",
+      "normalized_text": "is a black t shirt with a logo and is black with red circular motif",
+      "loader_category": null,
+      "index_categories": [
+        "shirt"
+      ],
+      "raw_file_categories": [
+        "shirt"
+      ],
+      "resolved": "shirt",
+      "raw_rederived_scope": "shirt",
+      "rederivation": "PASS_shirt_only"
+    },
+    {
+      "qid": "7:2587",
+      "reference_stem": "B0046Q4F28",
+      "reference_id": "7:30739",
+      "query_txt": "Is dark grey with pi on it and is darker colored and fewer fonts.",
+      "normalized_text": "is dark grey with pi on it and is darker colored and fewer fonts",
+      "loader_category": null,
+      "index_categories": [
+        "shirt"
+      ],
+      "raw_file_categories": [
+        "shirt"
+      ],
+      "resolved": "shirt",
+      "raw_rederived_scope": "shirt",
+      "rederivation": "PASS_shirt_only"
+    },
+    {
+      "qid": "7:2637",
+      "reference_stem": "B000RQO9S6",
+      "reference_id": "7:3894",
+      "query_txt": "Is just a plain smooth brown color and is a brown belt that is not distressed.",
+      "normalized_text": "is just a plain smooth brown color and is a brown belt that is not distressed",
+      "loader_category": null,
+      "index_categories": [
+        "shirt"
+      ],
+      "raw_file_categories": [
+        "shirt"
+      ],
+      "resolved": "shirt",
+      "raw_rederived_scope": "shirt",
+      "rederivation": "PASS_shirt_only"
+    },
+    {
+      "qid": "7:2650",
+      "reference_stem": "B008JVJI00",
+      "reference_id": "7:65818",
+      "query_txt": "Is green and is green with a yellow motif.",
+      "normalized_text": "is green and is green with a yellow motif",
+      "loader_category": null,
+      "index_categories": [
+        "shirt"
+      ],
+      "raw_file_categories": [
+        "shirt"
+      ],
+      "resolved": "shirt",
+      "raw_rederived_scope": "shirt",
+      "rederivation": "PASS_shirt_only"
+    },
+    {
+      "qid": "7:2679",
+      "reference_stem": "B006YDMYCY",
+      "reference_id": "7:56980",
+      "query_txt": "Has its an anime thing written on it and has a graphic that says its an anime thing.",
+      "normalized_text": "has its an anime thing written on it and has a graphic that says its an anime thing",
+      "loader_category": null,
+      "index_categories": [
+        "shirt"
+      ],
+      "raw_file_categories": [
+        "shirt"
+      ],
+      "resolved": "shirt",
+      "raw_rederived_scope": "shirt",
+      "rederivation": "PASS_shirt_only"
+    },
+    {
+      "qid": "7:2698",
+      "reference_stem": "B007RGHP1W",
+      "reference_id": "7:70678",
+      "query_txt": "Has more print work and is darker.",
+      "normalized_text": "has more print work and is darker",
+      "loader_category": null,
+      "index_categories": [
+        "shirt"
+      ],
+      "raw_file_categories": [
+        "shirt"
+      ],
+      "resolved": "shirt",
+      "raw_rederived_scope": "shirt",
+      "rederivation": "PASS_shirt_only"
+    },
+    {
+      "qid": "7:2717",
+      "reference_stem": "B00B92J932",
+      "reference_id": "7:71527",
+      "query_txt": "Is short sleeved and has a larger design on it.",
+      "normalized_text": "is short sleeved and has a larger design on it",
+      "loader_category": null,
+      "index_categories": [
+        "shirt"
+      ],
+      "raw_file_categories": [
+        "shirt"
+      ],
+      "resolved": "shirt",
+      "raw_rederived_scope": "shirt",
+      "rederivation": "PASS_shirt_only"
+    },
+    {
+      "qid": "7:2815",
+      "reference_stem": "B006VJXGAU",
+      "reference_id": "7:3964",
+      "query_txt": "Has a logo on the pocket and has a simpler graphic.",
+      "normalized_text": "has a logo on the pocket and has a simpler graphic",
+      "loader_category": null,
+      "index_categories": [
+        "shirt"
+      ],
+      "raw_file_categories": [
+        "shirt"
+      ],
+      "resolved": "shirt",
+      "raw_rederived_scope": "shirt",
+      "rederivation": "PASS_shirt_only"
+    },
+    {
+      "qid": "7:2959",
+      "reference_stem": "B00018AA74",
+      "reference_id": "7:26839",
+      "query_txt": "Is green and has a cartoon figure on it and is more colorful.",
+      "normalized_text": "is green and has a cartoon figure on it and is more colorful",
+      "loader_category": null,
+      "index_categories": [
+        "shirt"
+      ],
+      "raw_file_categories": [
+        "shirt"
+      ],
+      "resolved": "shirt",
+      "raw_rederived_scope": "shirt",
+      "rederivation": "PASS_shirt_only"
+    },
+    {
+      "qid": "7:2999",
+      "reference_stem": "B00ER9PWY4",
+      "reference_id": "7:51190",
+      "query_txt": "Is more black and has longer sleeves and is long sleeved.",
+      "normalized_text": "is more black and has longer sleeves and is long sleeved",
+      "loader_category": null,
+      "index_categories": [
+        "shirt"
+      ],
+      "raw_file_categories": [
+        "shirt"
+      ],
+      "resolved": "shirt",
+      "raw_rederived_scope": "shirt",
+      "rederivation": "PASS_shirt_only"
+    },
+    {
+      "qid": "7:3005",
+      "reference_stem": "B00CXV9H26",
+      "reference_id": "7:44777",
+      "query_txt": "Is white and has a fish image on it and is light gray colored.",
+      "normalized_text": "is white and has a fish image on it and is light gray colored",
+      "loader_category": null,
+      "index_categories": [
+        "shirt"
+      ],
+      "raw_file_categories": [
+        "shirt"
+      ],
+      "resolved": "shirt",
+      "raw_rederived_scope": "shirt",
+      "rederivation": "PASS_shirt_only"
+    },
+    {
+      "qid": "7:3033",
+      "reference_stem": "B000EOZGWE",
+      "reference_id": "7:58401",
+      "query_txt": "Is red with yellow stars and has stars and a red background.",
+      "normalized_text": "is red with yellow stars and has stars and a red background",
+      "loader_category": null,
+      "index_categories": [
+        "shirt"
+      ],
+      "raw_file_categories": [
+        "shirt"
+      ],
+      "resolved": "shirt",
+      "raw_rederived_scope": "shirt",
+      "rederivation": "PASS_shirt_only"
+    },
+    {
+      "qid": "7:3038",
+      "reference_stem": "B004TMGDME",
+      "reference_id": "7:53224",
+      "query_txt": "Is darker and has a different graphic and is darker.",
+      "normalized_text": "is darker and has a different graphic and is darker",
+      "loader_category": null,
+      "index_categories": [
+        "shirt",
+        "toptee"
+      ],
+      "raw_file_categories": [
+        "shirt",
+        "toptee"
+      ],
+      "resolved": null,
+      "raw_rederived_scope": null,
+      "rederivation": "UNRESOLVED_raw_duplicate"
+    },
+    {
+      "qid": "7:3163",
+      "reference_stem": "B008JVJI00",
+      "reference_id": "7:65818",
+      "query_txt": "Is a darker solid gray in color and gray with words.",
+      "normalized_text": "is a darker solid gray in color and gray with words",
+      "loader_category": null,
+      "index_categories": [
+        "shirt"
+      ],
+      "raw_file_categories": [
+        "shirt"
+      ],
+      "resolved": "shirt",
+      "raw_rederived_scope": "shirt",
+      "rederivation": "PASS_shirt_only"
+    },
+    {
+      "qid": "7:3177",
+      "reference_stem": "B000X74R7C",
+      "reference_id": "7:55321",
+      "query_txt": "Is a black collared shirt and is black with wide sleeves.",
+      "normalized_text": "is a black collared shirt and is black with wide sleeves",
+      "loader_category": null,
+      "index_categories": [
+        "shirt"
+      ],
+      "raw_file_categories": [
+        "shirt"
+      ],
+      "resolved": "shirt",
+      "raw_rederived_scope": "shirt",
+      "rederivation": "PASS_shirt_only"
+    },
+    {
+      "qid": "7:3243",
+      "reference_stem": "B00BFCV6A0",
+      "reference_id": "7:7478",
+      "query_txt": "Is navy blue with a Might Mouse logo and is darker and masculine.",
+      "normalized_text": "is navy blue with a might mouse logo and is darker and masculine",
+      "loader_category": null,
+      "index_categories": [
+        "shirt"
+      ],
+      "raw_file_categories": [
+        "shirt"
+      ],
+      "resolved": "shirt",
+      "raw_rederived_scope": "shirt",
+      "rederivation": "PASS_shirt_only"
+    },
+    {
+      "qid": "7:3280",
+      "reference_stem": "B006Z2HG0Y",
+      "reference_id": "7:52642",
+      "query_txt": "Is white handbag and is a bag.",
+      "normalized_text": "is white handbag and is a bag",
+      "loader_category": null,
+      "index_categories": [
+        "shirt"
+      ],
+      "raw_file_categories": [
+        "shirt"
+      ],
+      "resolved": "shirt",
+      "raw_rederived_scope": "shirt",
+      "rederivation": "PASS_shirt_only"
+    },
+    {
+      "qid": "7:3324",
+      "reference_stem": "B00AECN92K",
+      "reference_id": "7:30065",
+      "query_txt": "Is black with long sleeves and with a hood and longer sleeves.",
+      "normalized_text": "is black with long sleeves and with a hood and longer sleeves",
+      "loader_category": null,
+      "index_categories": [
+        "shirt"
+      ],
+      "raw_file_categories": [
+        "shirt"
+      ],
+      "resolved": "shirt",
+      "raw_rederived_scope": "shirt",
+      "rederivation": "PASS_shirt_only"
+    },
+    {
+      "qid": "7:3367",
+      "reference_stem": "B00BQZ7OCK",
+      "reference_id": "7:58540",
+      "query_txt": "Is similar and has a larger car on it.",
+      "normalized_text": "is similar and has a larger car on it",
+      "loader_category": null,
+      "index_categories": [
+        "shirt"
+      ],
+      "raw_file_categories": [
+        "shirt"
+      ],
+      "resolved": "shirt",
+      "raw_rederived_scope": "shirt",
+      "rederivation": "PASS_shirt_only"
+    },
+    {
+      "qid": "7:3402",
+      "reference_stem": "B001PIXJTA",
+      "reference_id": "7:16463",
+      "query_txt": "Is a Jesus loves Iceland T shirt and is white and has more graphics.",
+      "normalized_text": "is a jesus loves iceland t shirt and is white and has more graphics",
+      "loader_category": null,
+      "index_categories": [
+        "shirt"
+      ],
+      "raw_file_categories": [
+        "shirt"
+      ],
+      "resolved": "shirt",
+      "raw_rederived_scope": "shirt",
+      "rederivation": "PASS_shirt_only"
+    },
+    {
+      "qid": "7:3464",
+      "reference_stem": "B00DG9ISYM",
+      "reference_id": "7:30263",
+      "query_txt": "Is light blue and also larger and is blue and has a white text logo.",
+      "normalized_text": "is light blue and also larger and is blue and has a white text logo",
+      "loader_category": null,
+      "index_categories": [
+        "shirt"
+      ],
+      "raw_file_categories": [
+        "shirt"
+      ],
+      "resolved": "shirt",
+      "raw_rederived_scope": "shirt",
+      "rederivation": "PASS_shirt_only"
+    },
+    {
+      "qid": "7:3487",
+      "reference_stem": "B0067K5MNC",
+      "reference_id": "7:13203",
+      "query_txt": "The shirt is black in color with white and black symbols and has short sleeves and no hood.",
+      "normalized_text": "the shirt is black in color with white and black symbols and has short sleeves and no hood",
+      "loader_category": null,
+      "index_categories": [
+        "shirt"
+      ],
+      "raw_file_categories": [
+        "shirt"
+      ],
+      "resolved": "shirt",
+      "raw_rederived_scope": "shirt",
+      "rederivation": "PASS_shirt_only"
+    },
+    {
+      "qid": "7:3493",
+      "reference_stem": "B006BZ8690",
+      "reference_id": "7:59691",
+      "query_txt": "Is white with red designs and is white with a Leroy Jenkins design.",
+      "normalized_text": "is white with red designs and is white with a leroy jenkins design",
+      "loader_category": null,
+      "index_categories": [
+        "shirt"
+      ],
+      "raw_file_categories": [
+        "shirt"
+      ],
+      "resolved": "shirt",
+      "raw_rederived_scope": "shirt",
+      "rederivation": "PASS_shirt_only"
+    },
+    {
+      "qid": "7:3560",
+      "reference_stem": "B006ZZV0L2",
+      "reference_id": "7:5300",
+      "query_txt": "Is political and is black and different phrase.",
+      "normalized_text": "is political and is black and different phrase",
+      "loader_category": null,
+      "index_categories": [
+        "shirt"
+      ],
+      "raw_file_categories": [
+        "shirt"
+      ],
+      "resolved": "shirt",
+      "raw_rederived_scope": "shirt",
+      "rederivation": "PASS_shirt_only"
+    },
+    {
+      "qid": "7:3601",
+      "reference_stem": "B000EOZGWE",
+      "reference_id": "7:58401",
+      "query_txt": "The shirt is gray with the word Croatia and the Croatian Flag and is darker.",
+      "normalized_text": "the shirt is gray with the word croatia and the croatian flag and is darker",
+      "loader_category": null,
+      "index_categories": [
+        "shirt"
+      ],
+      "raw_file_categories": [
+        "shirt"
+      ],
+      "resolved": "shirt",
+      "raw_rederived_scope": "shirt",
+      "rederivation": "PASS_shirt_only"
+    },
+    {
+      "qid": "7:3629",
+      "reference_stem": "B00BYIN01I",
+      "reference_id": "7:24535",
+      "query_txt": "Is dark blue with a Doctor Who logo on front and is blue with DW and multiple hash marks on front.",
+      "normalized_text": "is dark blue with a doctor who logo on front and is blue with dw and multiple hash marks on front",
+      "loader_category": null,
+      "index_categories": [
+        "shirt"
+      ],
+      "raw_file_categories": [
+        "shirt"
+      ],
+      "resolved": "shirt",
+      "raw_rederived_scope": "shirt",
+      "rederivation": "PASS_shirt_only"
+    },
+    {
+      "qid": "7:3635",
+      "reference_stem": "B00AECN92K",
+      "reference_id": "7:30065",
+      "query_txt": "Is red in color and is red with different facial drawings.",
+      "normalized_text": "is red in color and is red with different facial drawings",
+      "loader_category": null,
+      "index_categories": [
+        "shirt"
+      ],
+      "raw_file_categories": [
+        "shirt"
+      ],
+      "resolved": "shirt",
+      "raw_rederived_scope": "shirt",
+      "rederivation": "PASS_shirt_only"
+    },
+    {
+      "qid": "7:3790",
+      "reference_stem": "B0079K0YBO",
+      "reference_id": "7:33523",
+      "query_txt": "Is grey and has a less whimsical graphic and is lighter.",
+      "normalized_text": "is grey and has a less whimsical graphic and is lighter",
+      "loader_category": null,
+      "index_categories": [
+        "shirt",
+        "toptee"
+      ],
+      "raw_file_categories": [
+        "shirt",
+        "toptee"
+      ],
+      "resolved": null,
+      "raw_rederived_scope": null,
+      "rederivation": "UNRESOLVED_raw_duplicate"
+    },
+    {
+      "qid": "7:3800",
+      "reference_stem": "B006ZZV0L2",
+      "reference_id": "7:5300",
+      "query_txt": "Is more of a costume and is redder and is a red costume.",
+      "normalized_text": "is more of a costume and is redder and is a red costume",
+      "loader_category": null,
+      "index_categories": [
+        "shirt"
+      ],
+      "raw_file_categories": [
+        "shirt"
+      ],
+      "resolved": "shirt",
+      "raw_rederived_scope": "shirt",
+      "rederivation": "PASS_shirt_only"
+    },
+    {
+      "qid": "7:3813",
+      "reference_stem": "B001BISBCY",
+      "reference_id": "7:23866",
+      "query_txt": "Is grey with batman logo on it and is gray colored.",
+      "normalized_text": "is grey with batman logo on it and is gray colored",
+      "loader_category": null,
+      "index_categories": [
+        "shirt"
+      ],
+      "raw_file_categories": [
+        "shirt"
+      ],
+      "resolved": "shirt",
+      "raw_rederived_scope": "shirt",
+      "rederivation": "PASS_shirt_only"
+    },
+    {
+      "qid": "7:3906",
+      "reference_stem": "B008MC2GY6",
+      "reference_id": "7:2688",
+      "query_txt": "Is a collared shirt and is totally plain with no picture.",
+      "normalized_text": "is a collared shirt and is totally plain with no picture",
+      "loader_category": null,
+      "index_categories": [
+        "shirt"
+      ],
+      "raw_file_categories": [
+        "shirt"
+      ],
+      "resolved": "shirt",
+      "raw_rederived_scope": "shirt",
+      "rederivation": "PASS_shirt_only"
+    },
+    {
+      "qid": "7:3927",
+      "reference_stem": "B00BFCV6A0",
+      "reference_id": "7:7478",
+      "query_txt": "Is black with white words and is black with a white logo.",
+      "normalized_text": "is black with white words and is black with a white logo",
+      "loader_category": null,
+      "index_categories": [
+        "shirt"
+      ],
+      "raw_file_categories": [
+        "shirt"
+      ],
+      "resolved": "shirt",
+      "raw_rederived_scope": "shirt",
+      "rederivation": "PASS_shirt_only"
+    },
+    {
+      "qid": "7:3993",
+      "reference_stem": "B00BYIN01I",
+      "reference_id": "7:24535",
+      "query_txt": "Is more wordy and has less color on it.",
+      "normalized_text": "is more wordy and has less color on it",
+      "loader_category": null,
+      "index_categories": [
+        "shirt"
+      ],
+      "raw_file_categories": [
+        "shirt"
+      ],
+      "resolved": "shirt",
+      "raw_rederived_scope": "shirt",
+      "rederivation": "PASS_shirt_only"
+    },
+    {
+      "qid": "7:4008",
+      "reference_stem": "B006YDMYCY",
+      "reference_id": "7:56980",
+      "query_txt": "Is a checked shirt with front pockets and is more formal.",
+      "normalized_text": "is a checked shirt with front pockets and is more formal",
+      "loader_category": null,
+      "index_categories": [
+        "shirt"
+      ],
+      "raw_file_categories": [
+        "shirt"
+      ],
+      "resolved": "shirt",
+      "raw_rederived_scope": "shirt",
+      "rederivation": "PASS_shirt_only"
+    },
+    {
+      "qid": "7:4013",
+      "reference_stem": "B000RQO9S6",
+      "reference_id": "7:3894",
+      "query_txt": "Is made of fabric and has no studs and is a t shirt that resembles a vest.",
+      "normalized_text": "is made of fabric and has no studs and is a t shirt that resembles a vest",
+      "loader_category": null,
+      "index_categories": [
+        "shirt"
+      ],
+      "raw_file_categories": [
+        "shirt"
+      ],
+      "resolved": "shirt",
+      "raw_rederived_scope": "shirt",
+      "rederivation": "PASS_shirt_only"
+    },
+    {
+      "qid": "7:4066",
+      "reference_stem": "B004D8QCN4",
+      "reference_id": "7:3416",
+      "query_txt": "Is navy blue with a mustang on it and is a lighter color.",
+      "normalized_text": "is navy blue with a mustang on it and is a lighter color",
+      "loader_category": null,
+      "index_categories": [
+        "toptee"
+      ],
+      "raw_file_categories": [
+        "toptee"
+      ],
+      "resolved": "toptee",
+      "raw_rederived_scope": "toptee",
+      "rederivation": "PASS_toptee_only"
+    },
+    {
+      "qid": "7:4086",
+      "reference_stem": "B000F4U6QE",
+      "reference_id": "7:35333",
+      "query_txt": "Is darker and is an elegant black and gray top with embroidered neckline.",
+      "normalized_text": "is darker and is an elegant black and gray top with embroidered neckline",
+      "loader_category": null,
+      "index_categories": [
+        "toptee"
+      ],
+      "raw_file_categories": [
+        "toptee"
+      ],
+      "resolved": "toptee",
+      "raw_rederived_scope": "toptee",
+      "rederivation": "PASS_toptee_only"
+    },
+    {
+      "qid": "7:4164",
+      "reference_stem": "B001BISBCY",
+      "reference_id": "7:23866",
+      "query_txt": "The shirt is white with black writing and is a white crew neck with black lettering.",
+      "normalized_text": "the shirt is white with black writing and is a white crew neck with black lettering",
+      "loader_category": null,
+      "index_categories": [
+        "toptee"
+      ],
+      "raw_file_categories": [
+        "toptee"
+      ],
+      "resolved": "toptee",
+      "raw_rederived_scope": "toptee",
+      "rederivation": "PASS_toptee_only"
+    },
+    {
+      "qid": "7:4171",
+      "reference_stem": "B007Z4WRC8",
+      "reference_id": "7:64478",
+      "query_txt": "Is brighter in color and is lighter and masculine.",
+      "normalized_text": "is brighter in color and is lighter and masculine",
+      "loader_category": null,
+      "index_categories": [
+        "toptee"
+      ],
+      "raw_file_categories": [
+        "toptee"
+      ],
+      "resolved": "toptee",
+      "raw_rederived_scope": "toptee",
+      "rederivation": "PASS_toptee_only"
+    },
+    {
+      "qid": "7:4243",
+      "reference_stem": "B00BXMUFWC",
+      "reference_id": "7:71041",
+      "query_txt": "Is purple and is more colorful.",
+      "normalized_text": "is purple and is more colorful",
+      "loader_category": null,
+      "index_categories": [
+        "toptee"
+      ],
+      "raw_file_categories": [
+        "toptee"
+      ],
+      "resolved": "toptee",
+      "raw_rederived_scope": "toptee",
+      "rederivation": "PASS_toptee_only"
+    },
+    {
+      "qid": "7:4246",
+      "reference_stem": "B00GIOKE8U",
+      "reference_id": "7:17028",
+      "query_txt": "The long sleeve shirt is white and is lighter color and has no graphic.",
+      "normalized_text": "the long sleeve shirt is white and is lighter color and has no graphic",
+      "loader_category": null,
+      "index_categories": [
+        "toptee"
+      ],
+      "raw_file_categories": [
+        "toptee"
+      ],
+      "resolved": "toptee",
+      "raw_rederived_scope": "toptee",
+      "rederivation": "PASS_toptee_only"
+    },
+    {
+      "qid": "7:4290",
+      "reference_stem": "B004KSP3ZK",
+      "reference_id": "7:1483",
+      "query_txt": "The shirt is blue with a white emblem and is dark blue with white emblem.",
+      "normalized_text": "the shirt is blue with a white emblem and is dark blue with white emblem",
+      "loader_category": null,
+      "index_categories": [
+        "toptee"
+      ],
+      "raw_file_categories": [
+        "toptee"
+      ],
+      "resolved": "toptee",
+      "raw_rederived_scope": "toptee",
+      "rederivation": "PASS_toptee_only"
+    },
+    {
+      "qid": "7:4294",
+      "reference_stem": "B006BZ8690",
+      "reference_id": "7:59691",
+      "query_txt": "Numbered colts shirt blue white and it is a lighter blue.",
+      "normalized_text": "numbered colts shirt blue white and it is a lighter blue",
+      "loader_category": null,
+      "index_categories": [
+        "toptee"
+      ],
+      "raw_file_categories": [
+        "toptee"
+      ],
+      "resolved": "toptee",
+      "raw_rederived_scope": "toptee",
+      "rederivation": "PASS_toptee_only"
+    },
+    {
+      "qid": "7:4305",
+      "reference_stem": "B0094I4IOI",
+      "reference_id": "7:35414",
+      "query_txt": "Is more wordy and is a grey crew neck with print.",
+      "normalized_text": "is more wordy and is a grey crew neck with print",
+      "loader_category": null,
+      "index_categories": [
+        "toptee"
+      ],
+      "raw_file_categories": [
+        "toptee"
+      ],
+      "resolved": "toptee",
+      "raw_rederived_scope": "toptee",
+      "rederivation": "PASS_toptee_only"
+    },
+    {
+      "qid": "7:4322",
+      "reference_stem": "B006YDMYCY",
+      "reference_id": "7:56980",
+      "query_txt": "The shirt is white with the word California in red and white and is light colored and fitted.",
+      "normalized_text": "the shirt is white with the word california in red and white and is light colored and fitted",
+      "loader_category": null,
+      "index_categories": [
+        "toptee"
+      ],
+      "raw_file_categories": [
+        "toptee"
+      ],
+      "resolved": "toptee",
+      "raw_rederived_scope": "toptee",
+      "rederivation": "PASS_toptee_only"
+    },
+    {
+      "qid": "7:4358",
+      "reference_stem": "B006VJXGAU",
+      "reference_id": "7:3964",
+      "query_txt": "Is lighter in color with a different print and is a lighter color.",
+      "normalized_text": "is lighter in color with a different print and is a lighter color",
+      "loader_category": null,
+      "index_categories": [
+        "toptee"
+      ],
+      "raw_file_categories": [
+        "toptee"
+      ],
+      "resolved": "toptee",
+      "raw_rederived_scope": "toptee",
+      "rederivation": "PASS_toptee_only"
+    },
+    {
+      "qid": "7:4397",
+      "reference_stem": "B00092SAR4",
+      "reference_id": "7:26337",
+      "query_txt": "Is purple and is blue Batman t-shirt.",
+      "normalized_text": "is purple and is blue batman t shirt",
+      "loader_category": null,
+      "index_categories": [
+        "toptee"
+      ],
+      "raw_file_categories": [
+        "toptee"
+      ],
+      "resolved": "toptee",
+      "raw_rederived_scope": "toptee",
+      "rederivation": "PASS_toptee_only"
+    },
+    {
+      "qid": "7:4420",
+      "reference_stem": "B0051DQXH0",
+      "reference_id": "7:8389",
+      "query_txt": "Is blue with no sleeves and is blue and a tank top.",
+      "normalized_text": "is blue with no sleeves and is blue and a tank top",
+      "loader_category": null,
+      "index_categories": [
+        "toptee"
+      ],
+      "raw_file_categories": [
+        "toptee"
+      ],
+      "resolved": "toptee",
+      "raw_rederived_scope": "toptee",
+      "rederivation": "PASS_toptee_only"
+    },
+    {
+      "qid": "7:4425",
+      "reference_stem": "B00CMD9IKQ",
+      "reference_id": "7:74189",
+      "query_txt": "Is darker and is dark gray colored.",
+      "normalized_text": "is darker and is dark gray colored",
+      "loader_category": null,
+      "index_categories": [
+        "toptee"
+      ],
+      "raw_file_categories": [
+        "toptee"
+      ],
+      "resolved": "toptee",
+      "raw_rederived_scope": "toptee",
+      "rederivation": "PASS_toptee_only"
+    },
+    {
+      "qid": "7:4434",
+      "reference_stem": "B005E0TR32",
+      "reference_id": "7:63369",
+      "query_txt": "Is feminine fitting and pink and is pink with shorter sleeves.",
+      "normalized_text": "is feminine fitting and pink and is pink with shorter sleeves",
+      "loader_category": null,
+      "index_categories": [
+        "toptee"
+      ],
+      "raw_file_categories": [
+        "toptee"
+      ],
+      "resolved": "toptee",
+      "raw_rederived_scope": "toptee",
+      "rederivation": "PASS_toptee_only"
+    },
+    {
+      "qid": "7:4487",
+      "reference_stem": "B0045DTP72",
+      "reference_id": "7:34218",
+      "query_txt": "Is light blue and shorter sleeves and womens fit rounded neck light blue with graphic.",
+      "normalized_text": "is light blue and shorter sleeves and womens fit rounded neck light blue with graphic",
+      "loader_category": null,
+      "index_categories": [
+        "toptee"
+      ],
+      "raw_file_categories": [
+        "toptee"
+      ],
+      "resolved": "toptee",
+      "raw_rederived_scope": "toptee",
+      "rederivation": "PASS_toptee_only"
+    },
+    {
+      "qid": "7:4504",
+      "reference_stem": "B000FVAR52",
+      "reference_id": "7:54199",
+      "query_txt": "Is darker and is a lighter black with a British flag on it.",
+      "normalized_text": "is darker and is a lighter black with a british flag on it",
+      "loader_category": null,
+      "index_categories": [
+        "toptee"
+      ],
+      "raw_file_categories": [
+        "toptee"
+      ],
+      "resolved": "toptee",
+      "raw_rederived_scope": "toptee",
+      "rederivation": "PASS_toptee_only"
+    },
+    {
+      "qid": "7:4510",
+      "reference_stem": "B009ZYYBVG",
+      "reference_id": "7:19343",
+      "query_txt": "Is white colored and is white with a more colorful pattern.",
+      "normalized_text": "is white colored and is white with a more colorful pattern",
+      "loader_category": null,
+      "index_categories": [
+        "toptee"
+      ],
+      "raw_file_categories": [
+        "toptee"
+      ],
+      "resolved": "toptee",
+      "raw_rederived_scope": "toptee",
+      "rederivation": "PASS_toptee_only"
+    },
+    {
+      "qid": "7:4529",
+      "reference_stem": "B000EOZGWE",
+      "reference_id": "7:58401",
+      "query_txt": "Has greek letters on it and is less graphic and more collegate.",
+      "normalized_text": "has greek letters on it and is less graphic and more collegate",
+      "loader_category": null,
+      "index_categories": [
+        "toptee"
+      ],
+      "raw_file_categories": [
+        "toptee"
+      ],
+      "resolved": "toptee",
+      "raw_rederived_scope": "toptee",
+      "rederivation": "PASS_toptee_only"
+    },
+    {
+      "qid": "7:4540",
+      "reference_stem": "B00579WNTA",
+      "reference_id": "7:35600",
+      "query_txt": "Is black with red words and black with a print.",
+      "normalized_text": "is black with red words and black with a print",
+      "loader_category": null,
+      "index_categories": [
+        "toptee"
+      ],
+      "raw_file_categories": [
+        "toptee"
+      ],
+      "resolved": "toptee",
+      "raw_rederived_scope": "toptee",
+      "rederivation": "PASS_toptee_only"
+    },
+    {
+      "qid": "7:4542",
+      "reference_stem": "B0067F9A0S",
+      "reference_id": "7:71456",
+      "query_txt": "The short sleeve shirt is white with a white and black ball and is white with a different graphic.",
+      "normalized_text": "the short sleeve shirt is white with a white and black ball and is white with a different graphic",
+      "loader_category": null,
+      "index_categories": [
+        "toptee"
+      ],
+      "raw_file_categories": [
+        "toptee"
+      ],
+      "resolved": "toptee",
+      "raw_rederived_scope": "toptee",
+      "rederivation": "PASS_toptee_only"
+    },
+    {
+      "qid": "7:4582",
+      "reference_stem": "B0067F94EK",
+      "reference_id": "7:8458",
+      "query_txt": "`has large painting and deeply purple and has native-folklore graphic and purple background.",
+      "normalized_text": "has large painting and deeply purple and has native folklore graphic and purple background",
+      "loader_category": null,
+      "index_categories": [
+        "toptee"
+      ],
+      "raw_file_categories": [
+        "toptee"
+      ],
+      "resolved": "toptee",
+      "raw_rederived_scope": "toptee",
+      "rederivation": "PASS_toptee_only"
+    },
+    {
+      "qid": "7:4594",
+      "reference_stem": "B000GNYYDA",
+      "reference_id": "7:27773",
+      "query_txt": "Is white and is white woman's tee.",
+      "normalized_text": "is white and is white woman s tee",
+      "loader_category": null,
+      "index_categories": [
+        "toptee"
+      ],
+      "raw_file_categories": [
+        "toptee"
+      ],
+      "resolved": "toptee",
+      "raw_rederived_scope": "toptee",
+      "rederivation": "PASS_toptee_only"
+    },
+    {
+      "qid": "7:4641",
+      "reference_stem": "B0094I4IOI",
+      "reference_id": "7:35414",
+      "query_txt": "Is blue and red colored and american tie dye.",
+      "normalized_text": "is blue and red colored and american tie dye",
+      "loader_category": null,
+      "index_categories": [
+        "toptee"
+      ],
+      "raw_file_categories": [
+        "toptee"
+      ],
+      "resolved": "toptee",
+      "raw_rederived_scope": "toptee",
+      "rederivation": "PASS_toptee_only"
+    },
+    {
+      "qid": "7:4759",
+      "reference_stem": "B000A35AMK",
+      "reference_id": "7:72115",
+      "query_txt": "Has no sleeves and is darker in color.",
+      "normalized_text": "has no sleeves and is darker in color",
+      "loader_category": null,
+      "index_categories": [
+        "toptee"
+      ],
+      "raw_file_categories": [
+        "toptee"
+      ],
+      "resolved": "toptee",
+      "raw_rederived_scope": "toptee",
+      "rederivation": "PASS_toptee_only"
+    },
+    {
+      "qid": "7:4765",
+      "reference_stem": "B00H879A5Y",
+      "reference_id": "7:50227",
+      "query_txt": "Has more images in the middle and is lighter in color.",
+      "normalized_text": "has more images in the middle and is lighter in color",
+      "loader_category": null,
+      "index_categories": [
+        "toptee"
+      ],
+      "raw_file_categories": [
+        "toptee"
+      ],
+      "resolved": "toptee",
+      "raw_rederived_scope": "toptee",
+      "rederivation": "PASS_toptee_only"
+    },
+    {
+      "qid": "7:4806",
+      "reference_stem": "B003PD0G30",
+      "reference_id": "7:55097",
+      "query_txt": "Is dark blue colored and is blue and lighter in color.",
+      "normalized_text": "is dark blue colored and is blue and lighter in color",
+      "loader_category": null,
+      "index_categories": [
+        "toptee"
+      ],
+      "raw_file_categories": [
+        "toptee"
+      ],
+      "resolved": "toptee",
+      "raw_rederived_scope": "toptee",
+      "rederivation": "PASS_toptee_only"
+    },
+    {
+      "qid": "7:4808",
+      "reference_stem": "B005LIXPPI",
+      "reference_id": "7:73545",
+      "query_txt": "The shirt is black with red writing and a woman in red and has redder colors on the graphic.",
+      "normalized_text": "the shirt is black with red writing and a woman in red and has redder colors on the graphic",
+      "loader_category": null,
+      "index_categories": [
+        "toptee"
+      ],
+      "raw_file_categories": [
+        "toptee"
+      ],
+      "resolved": "toptee",
+      "raw_rederived_scope": "toptee",
+      "rederivation": "PASS_toptee_only"
+    },
+    {
+      "qid": "7:4809",
+      "reference_stem": "B0001W1KSI",
+      "reference_id": "7:43598",
+      "query_txt": "A tie dye tank top with light and dark colors and has no sleeves.",
+      "normalized_text": "a tie dye tank top with light and dark colors and has no sleeves",
+      "loader_category": null,
+      "index_categories": [
+        "toptee"
+      ],
+      "raw_file_categories": [
+        "toptee"
+      ],
+      "resolved": "toptee",
+      "raw_rederived_scope": "toptee",
+      "rederivation": "PASS_toptee_only"
+    },
+    {
+      "qid": "7:4838",
+      "reference_stem": "B00AZ0180G",
+      "reference_id": "7:60438",
+      "query_txt": "The shirt is short sleeved gray in color with red writing and is grey with red print.",
+      "normalized_text": "the shirt is short sleeved gray in color with red writing and is grey with red print",
+      "loader_category": null,
+      "index_categories": [
+        "toptee"
+      ],
+      "raw_file_categories": [
+        "toptee"
+      ],
+      "resolved": "toptee",
+      "raw_rederived_scope": "toptee",
+      "rederivation": "PASS_toptee_only"
+    },
+    {
+      "qid": "7:4849",
+      "reference_stem": "B0089HEOHG",
+      "reference_id": "7:72217",
+      "query_txt": "The shirt is pink with a black camel and wording of Hump Daaay! and is pink with black image.",
+      "normalized_text": "the shirt is pink with a black camel and wording of hump daaay and is pink with black image",
+      "loader_category": null,
+      "index_categories": [
+        "toptee"
+      ],
+      "raw_file_categories": [
+        "toptee"
+      ],
+      "resolved": "toptee",
+      "raw_rederived_scope": "toptee",
+      "rederivation": "PASS_toptee_only"
+    },
+    {
+      "qid": "7:4871",
+      "reference_stem": "B003Y5LY76",
+      "reference_id": "7:15286",
+      "query_txt": "Blue tee with logo and is navy with a different graphic.",
+      "normalized_text": "blue tee with logo and is navy with a different graphic",
+      "loader_category": null,
+      "index_categories": [
+        "toptee"
+      ],
+      "raw_file_categories": [
+        "toptee"
+      ],
+      "resolved": "toptee",
+      "raw_rederived_scope": "toptee",
+      "rederivation": "PASS_toptee_only"
+    },
+    {
+      "qid": "7:4880",
+      "reference_stem": "B004KSP3ZK",
+      "reference_id": "7:1483",
+      "query_txt": "Is lighter and is white with black letters.",
+      "normalized_text": "is lighter and is white with black letters",
+      "loader_category": null,
+      "index_categories": [
+        "toptee"
+      ],
+      "raw_file_categories": [
+        "toptee"
+      ],
+      "resolved": "toptee",
+      "raw_rederived_scope": "toptee",
+      "rederivation": "PASS_toptee_only"
+    },
+    {
+      "qid": "7:4884",
+      "reference_stem": "B00AIAIO46",
+      "reference_id": "7:13431",
+      "query_txt": "Is more wordy and has no sleeves and has no sleeves.",
+      "normalized_text": "is more wordy and has no sleeves and has no sleeves",
+      "loader_category": null,
+      "index_categories": [
+        "toptee"
+      ],
+      "raw_file_categories": [
+        "toptee"
+      ],
+      "resolved": "toptee",
+      "raw_rederived_scope": "toptee",
+      "rederivation": "PASS_toptee_only"
+    },
+    {
+      "qid": "7:4893",
+      "reference_stem": "B00GGYKWFW",
+      "reference_id": "7:690",
+      "query_txt": "Has more dense text and is black with a World War Champs design.",
+      "normalized_text": "has more dense text and is black with a world war champs design",
+      "loader_category": null,
+      "index_categories": [
+        "toptee"
+      ],
+      "raw_file_categories": [
+        "toptee"
+      ],
+      "resolved": "toptee",
+      "raw_rederived_scope": "toptee",
+      "rederivation": "PASS_toptee_only"
+    },
+    {
+      "qid": "7:4956",
+      "reference_stem": "B00GIOKE8U",
+      "reference_id": "7:17028",
+      "query_txt": "Is light colored and has lacey sleeves and is more open around the neck.",
+      "normalized_text": "is light colored and has lacey sleeves and is more open around the neck",
+      "loader_category": null,
+      "index_categories": [
+        "toptee"
+      ],
+      "raw_file_categories": [
+        "toptee"
+      ],
+      "resolved": "toptee",
+      "raw_rederived_scope": "toptee",
+      "rederivation": "PASS_toptee_only"
+    },
+    {
+      "qid": "7:4982",
+      "reference_stem": "B00CMD9IKQ",
+      "reference_id": "7:74189",
+      "query_txt": "Is a t-shirt and is a grey graphic tee.",
+      "normalized_text": "is a t shirt and is a grey graphic tee",
+      "loader_category": null,
+      "index_categories": [
+        "toptee"
+      ],
+      "raw_file_categories": [
+        "toptee"
+      ],
+      "resolved": "toptee",
+      "raw_rederived_scope": "toptee",
+      "rederivation": "PASS_toptee_only"
+    },
+    {
+      "qid": "7:5048",
+      "reference_stem": "B00C8S6TNE",
+      "reference_id": "7:37706",
+      "query_txt": "Has a darker background and is black with yellow lettering.",
+      "normalized_text": "has a darker background and is black with yellow lettering",
+      "loader_category": null,
+      "index_categories": [
+        "toptee"
+      ],
+      "raw_file_categories": [
+        "toptee"
+      ],
+      "resolved": "toptee",
+      "raw_rederived_scope": "toptee",
+      "rederivation": "PASS_toptee_only"
+    },
+    {
+      "qid": "7:5090",
+      "reference_stem": "B0045DTP72",
+      "reference_id": "7:34218",
+      "query_txt": "Has no sleeves and is brigther and shorter sleeved.",
+      "normalized_text": "has no sleeves and is brigther and shorter sleeved",
+      "loader_category": null,
+      "index_categories": [
+        "toptee"
+      ],
+      "raw_file_categories": [
+        "toptee"
+      ],
+      "resolved": "toptee",
+      "raw_rederived_scope": "toptee",
+      "rederivation": "PASS_toptee_only"
+    },
+    {
+      "qid": "7:5101",
+      "reference_stem": "B00699EPO8",
+      "reference_id": "7:4120",
+      "query_txt": "Has longer sleeves with a monkey in it and has long sleeves.",
+      "normalized_text": "has longer sleeves with a monkey in it and has long sleeves",
+      "loader_category": null,
+      "index_categories": [
+        "toptee"
+      ],
+      "raw_file_categories": [
+        "toptee"
+      ],
+      "resolved": "toptee",
+      "raw_rederived_scope": "toptee",
+      "rederivation": "PASS_toptee_only"
+    },
+    {
+      "qid": "7:5105",
+      "reference_stem": "B00GIOKE8U",
+      "reference_id": "7:17028",
+      "query_txt": "Is longer and darker and is a darker color and sexier with long bell sleeves.",
+      "normalized_text": "is longer and darker and is a darker color and sexier with long bell sleeves",
+      "loader_category": null,
+      "index_categories": [
+        "toptee"
+      ],
+      "raw_file_categories": [
+        "toptee"
+      ],
+      "resolved": "toptee",
+      "raw_rederived_scope": "toptee",
+      "rederivation": "PASS_toptee_only"
+    },
+    {
+      "qid": "7:5109",
+      "reference_stem": "B000EMDA1A",
+      "reference_id": "7:37969",
+      "query_txt": "Is brown colored with image of giraffe and has more of a brownish color.",
+      "normalized_text": "is brown colored with image of giraffe and has more of a brownish color",
+      "loader_category": null,
+      "index_categories": [
+        "toptee"
+      ],
+      "raw_file_categories": [
+        "toptee"
+      ],
+      "resolved": "toptee",
+      "raw_rederived_scope": "toptee",
+      "rederivation": "PASS_toptee_only"
+    },
+    {
+      "qid": "7:5149",
+      "reference_stem": "B009VI0H7S",
+      "reference_id": "7:22680",
+      "query_txt": "Is brighter and has a motivational quote and is brighter in color.",
+      "normalized_text": "is brighter and has a motivational quote and is brighter in color",
+      "loader_category": null,
+      "index_categories": [
+        "toptee"
+      ],
+      "raw_file_categories": [
+        "toptee"
+      ],
+      "resolved": "toptee",
+      "raw_rederived_scope": "toptee",
+      "rederivation": "PASS_toptee_only"
+    },
+    {
+      "qid": "7:5170",
+      "reference_stem": "B00GIOKE8U",
+      "reference_id": "7:17028",
+      "query_txt": "Is a long sleeve brown shirt and is tan with shorter sleeves.",
+      "normalized_text": "is a long sleeve brown shirt and is tan with shorter sleeves",
+      "loader_category": null,
+      "index_categories": [
+        "toptee"
+      ],
+      "raw_file_categories": [
+        "toptee"
+      ],
+      "resolved": "toptee",
+      "raw_rederived_scope": "toptee",
+      "rederivation": "PASS_toptee_only"
+    },
+    {
+      "qid": "7:5212",
+      "reference_stem": "B0094I4IOI",
+      "reference_id": "7:35414",
+      "query_txt": "Has no sleeve and multiple green colors and has less graphics on it.",
+      "normalized_text": "has no sleeve and multiple green colors and has less graphics on it",
+      "loader_category": null,
+      "index_categories": [
+        "toptee"
+      ],
+      "raw_file_categories": [
+        "toptee"
+      ],
+      "resolved": "toptee",
+      "raw_rederived_scope": "toptee",
+      "rederivation": "PASS_toptee_only"
+    },
+    {
+      "qid": "7:5228",
+      "reference_stem": "B00CXV9H26",
+      "reference_id": "7:44777",
+      "query_txt": "Is dark blue in color and is more of a navy color.",
+      "normalized_text": "is dark blue in color and is more of a navy color",
+      "loader_category": null,
+      "index_categories": [
+        "toptee"
+      ],
+      "raw_file_categories": [
+        "toptee"
+      ],
+      "resolved": "toptee",
+      "raw_rederived_scope": "toptee",
+      "rederivation": "PASS_toptee_only"
+    },
+    {
+      "qid": "7:5236",
+      "reference_stem": "B0077DN4P6",
+      "reference_id": "7:44443",
+      "query_txt": "Is blue and comes in blue.",
+      "normalized_text": "is blue and comes in blue",
+      "loader_category": null,
+      "index_categories": [
+        "toptee"
+      ],
+      "raw_file_categories": [
+        "toptee"
+      ],
+      "resolved": "toptee",
+      "raw_rederived_scope": "toptee",
+      "rederivation": "PASS_toptee_only"
+    },
+    {
+      "qid": "7:5239",
+      "reference_stem": "B00579WNTA",
+      "reference_id": "7:35600",
+      "query_txt": "The shirt is short sleeves and is pink and is pink and says fight like a girl.",
+      "normalized_text": "the shirt is short sleeves and is pink and is pink and says fight like a girl",
+      "loader_category": null,
+      "index_categories": [
+        "toptee"
+      ],
+      "raw_file_categories": [
+        "toptee"
+      ],
+      "resolved": "toptee",
+      "raw_rederived_scope": "toptee",
+      "rederivation": "PASS_toptee_only"
+    },
+    {
+      "qid": "7:5259",
+      "reference_stem": "B00BGJ4OQA",
+      "reference_id": "7:32038",
+      "query_txt": "Is sleeveless and is sleeveless and has more white.",
+      "normalized_text": "is sleeveless and is sleeveless and has more white",
+      "loader_category": null,
+      "index_categories": [
+        "toptee"
+      ],
+      "raw_file_categories": [
+        "toptee"
+      ],
+      "resolved": "toptee",
+      "raw_rederived_scope": "toptee",
+      "rederivation": "PASS_toptee_only"
+    },
+    {
+      "qid": "7:5329",
+      "reference_stem": "B009VI0H7S",
+      "reference_id": "7:22680",
+      "query_txt": "Lace and more form fitting and has stripes that go horizontal.",
+      "normalized_text": "lace and more form fitting and has stripes that go horizontal",
+      "loader_category": null,
+      "index_categories": [
+        "toptee"
+      ],
+      "raw_file_categories": [
+        "toptee"
+      ],
+      "resolved": "toptee",
+      "raw_rederived_scope": "toptee",
+      "rederivation": "PASS_toptee_only"
+    },
+    {
+      "qid": "7:5388",
+      "reference_stem": "B00B7SB6RA",
+      "reference_id": "7:5947",
+      "query_txt": "Is brown with a v neck and is a shorter sleeved blouse.",
+      "normalized_text": "is brown with a v neck and is a shorter sleeved blouse",
+      "loader_category": null,
+      "index_categories": [
+        "toptee"
+      ],
+      "raw_file_categories": [
+        "toptee"
+      ],
+      "resolved": "toptee",
+      "raw_rederived_scope": "toptee",
+      "rederivation": "PASS_toptee_only"
+    },
+    {
+      "qid": "7:5415",
+      "reference_stem": "B006JW32N0",
+      "reference_id": "7:2546",
+      "query_txt": "Has short sleeves and is blue and is lighter and has shorter sleeves.",
+      "normalized_text": "has short sleeves and is blue and is lighter and has shorter sleeves",
+      "loader_category": null,
+      "index_categories": [
+        "toptee"
+      ],
+      "raw_file_categories": [
+        "toptee"
+      ],
+      "resolved": "toptee",
+      "raw_rederived_scope": "toptee",
+      "rederivation": "PASS_toptee_only"
+    },
+    {
+      "qid": "7:5444",
+      "reference_stem": "B009HU9HN0",
+      "reference_id": "7:32316",
+      "query_txt": "Is more of a tank top and with no polka dots.",
+      "normalized_text": "is more of a tank top and with no polka dots",
+      "loader_category": null,
+      "index_categories": [
+        "toptee"
+      ],
+      "raw_file_categories": [
+        "toptee"
+      ],
+      "resolved": "toptee",
+      "raw_rederived_scope": "toptee",
+      "rederivation": "PASS_toptee_only"
+    },
+    {
+      "qid": "7:5512",
+      "reference_stem": "B00GIOKE8U",
+      "reference_id": "7:17028",
+      "query_txt": "Is two different color stripes and has black and white stripes.",
+      "normalized_text": "is two different color stripes and has black and white stripes",
+      "loader_category": null,
+      "index_categories": [
+        "toptee"
+      ],
+      "raw_file_categories": [
+        "toptee"
+      ],
+      "resolved": "toptee",
+      "raw_rederived_scope": "toptee",
+      "rederivation": "PASS_toptee_only"
+    },
+    {
+      "qid": "7:5546",
+      "reference_stem": "B007738INY",
+      "reference_id": "7:16488",
+      "query_txt": "Has short sleeves and is black and is darker and sleeveless.",
+      "normalized_text": "has short sleeves and is black and is darker and sleeveless",
+      "loader_category": null,
+      "index_categories": [
+        "toptee"
+      ],
+      "raw_file_categories": [
+        "toptee"
+      ],
+      "resolved": "toptee",
+      "raw_rederived_scope": "toptee",
+      "rederivation": "PASS_toptee_only"
+    },
+    {
+      "qid": "7:5584",
+      "reference_stem": "B006VJXGAU",
+      "reference_id": "7:3964",
+      "query_txt": "Has a graphic design and is darker and has bolder font.",
+      "normalized_text": "has a graphic design and is darker and has bolder font",
+      "loader_category": null,
+      "index_categories": [
+        "toptee"
+      ],
+      "raw_file_categories": [
+        "toptee"
+      ],
+      "resolved": "toptee",
+      "raw_rederived_scope": "toptee",
+      "rederivation": "PASS_toptee_only"
+    },
+    {
+      "qid": "7:5597",
+      "reference_stem": "B001PJEI8U",
+      "reference_id": "7:4500",
+      "query_txt": "Has a humorous message in the center and has a different graphic.",
+      "normalized_text": "has a humorous message in the center and has a different graphic",
+      "loader_category": null,
+      "index_categories": [
+        "toptee"
+      ],
+      "raw_file_categories": [
+        "toptee"
+      ],
+      "resolved": "toptee",
+      "raw_rederived_scope": "toptee",
+      "rederivation": "PASS_toptee_only"
+    },
+    {
+      "qid": "7:5607",
+      "reference_stem": "B00CD5NHMI",
+      "reference_id": "7:3313",
+      "query_txt": "Has longer sleeves and is more geometric and a solid darker color and has shorter sleeves.",
+      "normalized_text": "has longer sleeves and is more geometric and a solid darker color and has shorter sleeves",
+      "loader_category": null,
+      "index_categories": [
+        "toptee"
+      ],
+      "raw_file_categories": [
+        "toptee"
+      ],
+      "resolved": "toptee",
+      "raw_rederived_scope": "toptee",
+      "rederivation": "PASS_toptee_only"
+    },
+    {
+      "qid": "7:5641",
+      "reference_stem": "B009ZYYBVG",
+      "reference_id": "7:19343",
+      "query_txt": "Is blue colored with a meme picture and is blue and has undersea graphic.",
+      "normalized_text": "is blue colored with a meme picture and is blue and has undersea graphic",
+      "loader_category": null,
+      "index_categories": [
+        "toptee"
+      ],
+      "raw_file_categories": [
+        "toptee"
+      ],
+      "resolved": "toptee",
+      "raw_rederived_scope": "toptee",
+      "rederivation": "PASS_toptee_only"
+    },
+    {
+      "qid": "7:5654",
+      "reference_stem": "B00945QZJM",
+      "reference_id": "7:4378",
+      "query_txt": "Is darker and is black colored with font graphic design.",
+      "normalized_text": "is darker and is black colored with font graphic design",
+      "loader_category": null,
+      "index_categories": [
+        "toptee"
+      ],
+      "raw_file_categories": [
+        "toptee"
+      ],
+      "resolved": "toptee",
+      "raw_rederived_scope": "toptee",
+      "rederivation": "PASS_toptee_only"
+    },
+    {
+      "qid": "7:5655",
+      "reference_stem": "B006WAP98U",
+      "reference_id": "7:32806",
+      "query_txt": "A badge and white with scoop neck and tulip sleeves.",
+      "normalized_text": "a badge and white with scoop neck and tulip sleeves",
+      "loader_category": null,
+      "index_categories": [
+        "toptee"
+      ],
+      "raw_file_categories": [
+        "toptee"
+      ],
+      "resolved": "toptee",
+      "raw_rederived_scope": "toptee",
+      "rederivation": "PASS_toptee_only"
+    },
+    {
+      "qid": "7:5700",
+      "reference_stem": "B0089HEOHG",
+      "reference_id": "7:72217",
+      "query_txt": "Has longer sleeves and is grey and purple and has long sleeve and is dark grey color.",
+      "normalized_text": "has longer sleeves and is grey and purple and has long sleeve and is dark grey color",
+      "loader_category": null,
+      "index_categories": [
+        "toptee"
+      ],
+      "raw_file_categories": [
+        "toptee"
+      ],
+      "resolved": "toptee",
+      "raw_rederived_scope": "toptee",
+      "rederivation": "PASS_toptee_only"
+    },
+    {
+      "qid": "7:5701",
+      "reference_stem": "B005E0TR32",
+      "reference_id": "7:63369",
+      "query_txt": "Has a different graphic and is more blue in colour and has a feminine cut and blue.",
+      "normalized_text": "has a different graphic and is more blue in colour and has a feminine cut and blue",
+      "loader_category": null,
+      "index_categories": [
+        "toptee"
+      ],
+      "raw_file_categories": [
+        "toptee"
+      ],
+      "resolved": "toptee",
+      "raw_rederived_scope": "toptee",
+      "rederivation": "PASS_toptee_only"
+    },
+    {
+      "qid": "7:5711",
+      "reference_stem": "B0096HHMC2",
+      "reference_id": "7:32941",
+      "query_txt": "The shirt is the torso of a hula dancer and has sleeves and has a design of a body.",
+      "normalized_text": "the shirt is the torso of a hula dancer and has sleeves and has a design of a body",
+      "loader_category": null,
+      "index_categories": [
+        "toptee"
+      ],
+      "raw_file_categories": [
+        "toptee"
+      ],
+      "resolved": "toptee",
+      "raw_rederived_scope": "toptee",
+      "rederivation": "PASS_toptee_only"
+    },
+    {
+      "qid": "7:5742",
+      "reference_stem": "B003YLKY12",
+      "reference_id": "7:60125",
+      "query_txt": "Has long sleeves and is denim with long sleeves.",
+      "normalized_text": "has long sleeves and is denim with long sleeves",
+      "loader_category": null,
+      "index_categories": [
+        "toptee"
+      ],
+      "raw_file_categories": [
+        "toptee"
+      ],
+      "resolved": "toptee",
+      "raw_rederived_scope": "toptee",
+      "rederivation": "PASS_toptee_only"
+    },
+    {
+      "qid": "7:5764",
+      "reference_stem": "B001LV9ZQM",
+      "reference_id": "7:45282",
+      "query_txt": "Is much darker and is black with white logo.",
+      "normalized_text": "is much darker and is black with white logo",
+      "loader_category": null,
+      "index_categories": [
+        "toptee"
+      ],
+      "raw_file_categories": [
+        "toptee"
+      ],
+      "resolved": "toptee",
+      "raw_rederived_scope": "toptee",
+      "rederivation": "PASS_toptee_only"
+    },
+    {
+      "qid": "7:5788",
+      "reference_stem": "B00GISBRL4",
+      "reference_id": "7:54621",
+      "query_txt": "Is purple with white designs and is purple with white text.",
+      "normalized_text": "is purple with white designs and is purple with white text",
+      "loader_category": null,
+      "index_categories": [
+        "toptee"
+      ],
+      "raw_file_categories": [
+        "toptee"
+      ],
+      "resolved": "toptee",
+      "raw_rederived_scope": "toptee",
+      "rederivation": "PASS_toptee_only"
+    },
+    {
+      "qid": "7:5798",
+      "reference_stem": "B000VX6TAG",
+      "reference_id": "7:35469",
+      "query_txt": "Is red with white lettering and has a red tone to it.",
+      "normalized_text": "is red with white lettering and has a red tone to it",
+      "loader_category": null,
+      "index_categories": [
+        "toptee"
+      ],
+      "raw_file_categories": [
+        "toptee"
+      ],
+      "resolved": "toptee",
+      "raw_rederived_scope": "toptee",
+      "rederivation": "PASS_toptee_only"
+    },
+    {
+      "qid": "7:5863",
+      "reference_stem": "B0089HEOHG",
+      "reference_id": "7:72217",
+      "query_txt": "Is for a  female with scoupe neck and black and is black with an american flag.",
+      "normalized_text": "is for a female with scoupe neck and black and is black with an american flag",
+      "loader_category": null,
+      "index_categories": [
+        "toptee"
+      ],
+      "raw_file_categories": [
+        "toptee"
+      ],
+      "resolved": "toptee",
+      "raw_rederived_scope": "toptee",
+      "rederivation": "PASS_toptee_only"
+    },
+    {
+      "qid": "7:5896",
+      "reference_stem": "B009ZYYBVG",
+      "reference_id": "7:19343",
+      "query_txt": "Is a dark blue shirt with a picture of a crescent and no dogs and brighter colors.",
+      "normalized_text": "is a dark blue shirt with a picture of a crescent and no dogs and brighter colors",
+      "loader_category": null,
+      "index_categories": [
+        "toptee"
+      ],
+      "raw_file_categories": [
+        "toptee"
+      ],
+      "resolved": "toptee",
+      "raw_rederived_scope": "toptee",
+      "rederivation": "PASS_toptee_only"
+    },
+    {
+      "qid": "7:5963",
+      "reference_stem": "B006VJXGAU",
+      "reference_id": "7:3964",
+      "query_txt": "The shirt is black with red and white wording and is black with a different logo.",
+      "normalized_text": "the shirt is black with red and white wording and is black with a different logo",
+      "loader_category": null,
+      "index_categories": [
+        "toptee"
+      ],
+      "raw_file_categories": [
+        "toptee"
+      ],
+      "resolved": "toptee",
+      "raw_rederived_scope": "toptee",
+      "rederivation": "PASS_toptee_only"
+    }
+  ]
+}

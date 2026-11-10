@@ -1,0 +1,62 @@
+start 2026-11-09T05:25:36+07:00 head 20b83e5 dirty 9
+{
+  "gallery_count": 74381,
+  "gallery_identity_sha256": "1db68c59d96f014cdbecf936e108653de98abef0bd9a98a8abc2fe08b5dec4b4",
+  "models": [
+    {
+      "adapter_module_source_status": "available",
+      "attempt": "9e4918a6b5c243412cbc58c9",
+      "category_scopes": [
+        "dress",
+        "shirt",
+        "toptee"
+      ],
+      "checkpoint_id": "base_iter0_all_categories",
+      "condition_status": {
+        "image_only_empty_text": {
+          "category_scope_failure_count": 2,
+          "fallback_used": false,
+          "status": "PARTIAL",
+          "unscored_count": 2
+        },
+        "multimodal": {
+          "category_scope_failure_count": 2,
+          "fallback_used": false,
+          "status": "PARTIAL",
+          "unscored_count": 2
+        },
+        "text_only_black_image": {
+          "category_scope_failure_count": 2,
+          "fallback_used": false,
+          "status": "PARTIAL",
+          "unscored_count": 2
+        }
+      },
+      "gallery_count": 74381,
+      "model_id": "limn",
+      "query_count": 6003,
+      "reason": null,
+      "reused": false,
+      "reused_query_result_count": 0,
+      "run_id": "9e4918a6b5c243412cbc58c9",
+      "runtime": {
+        "model_interpreter": {
+          "environment_fingerprint": "2865c46946a0d66054b5a7bb9f12987e4e63dfef0989994f30638ee8be1e28de",
+          "path": "/home/heheboiz/data/cir/workbench/envs/limn310-adapted/bin/python",
+          "source": "workbench_env",
+          "verification_reason": "CUDA capability must be verified on the GPU host with verify_gpu_runtime() before this model can be launched",
+          "verification_status": "GPU_VERIFICATION_PENDING",
+          "verified": true,
+          "version": "Python 3.10.20; torch 2.7.1+cu128"
+        }
+      },
+      "status": "PARTIAL",
+      "summaries": {
+        "full": "/home/heheboiz/data/cir/workbench/artifacts/composition/summary/limn_base_iter0_all_categories_9e4918a6b5c243412cbc58c9/full.json"
+      }
+    }
+  ],
+  "protocol_id": "circus_fashioniq_release_v1",
+  "run_count": 1,
+  "synthetic": false
+}

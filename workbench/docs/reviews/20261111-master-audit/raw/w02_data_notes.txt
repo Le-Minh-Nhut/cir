@@ -1,0 +1,120 @@
+import { useCallback, useEffect, useMemo, useRef } from "react";
+import { fetchJson, useRegion, type RegionHandle } from "./useRegion";
+import type { BenchmarkRun, ParityGatePayload, RunGate } from "./gate";
+import type { Cohort, CompositionQuery, CompositionRun, DuplicateStatus, Job, Measurement, Model, Query, Run } from "./types";
+import type { CapabilityFlags, CapabilityReport, Provenance } from "./catalog";
+import { compositionCapabilities, benchmarkCapabilities, indexCapabilities, provenanceOf, testWorkspaceOrigin, transferLabel } from "./catalog";
+import type { Subset } from "./routes";
+
+/** Every source the workbench reads, each as its own keyed region.
+ *
+ *  The previous shell fetched once on mount and refreshed on a 10-second timer, so a page could not
+ *  say "this failed" or "this is loading" for the region it was rendering, and a slow answer could
+ *  land after the context changed. Each source here has its own request identity; a failure is
+ *  local to the region that needed it.
+ */
+
+/** Whether imported released-audit rows are in scope. Off by default: they are real released data
+ *  but they are not evidence about a model this deployment ran, so they must be asked for and are
+ *  labelled with their source whenever shown. */
+export type ImportedScope = "exclude" | "include";
+
+export interface RunCatalogEntry {
+  /** Stable key used in URLs and selection: prefixed so a composition run and an index run can
+   *  never be confused even if two hashes collide. */
+  key: string;
+  family: "composition" | "index" | "aggregate";
+  runId: string;
+  label: string;
+  modelId: string;
+  checkpointId: string;
+  protocolId: string;
+  subset: Subset | "all";
+  status: string;
+  capabilities: CapabilityReport;
+  provenance: Provenance;
+  isTransfer: boolean;
+  transferLabel: string | null;
+  duplicateStatus: DuplicateStatus | null;
+  duplicateAttempts: number | null;
+  /** Where a non-research artifact was produced (`/pytest-of-…/pytest-87`), when the served
+   *  evaluator environment proves it. Null for a row that is evidence about a real model run. */
+  testOrigin: string | null;
+  measurement: Measurement | null;
+  importedSource: string | null;
+  composition?: CompositionRun;
+  indexRun?: Run;
+  aggregate?: BenchmarkRun;
+}
+
+const PROTOCOL_LABELS: Record<string, string> = {
+  circus_fashioniq_release_v1: "CIRCUS FashionIQ Release v1",
+  fashioniq_original_split: "FashionIQ — Original Split (Full Gallery)",
+  fashioniq_val_split: "FashionIQ — Val Split (Pair-Union Gallery)",
+  fashioniq_full_gallery_ref_excluded: "FashionIQ — Full Gallery, Reference Excluded",
+};
+
+export function protocolLabel(id: string): string {
+  return PROTOCOL_LABELS[id] ?? id;
+}
+
+/** The protocols this deployment can offer, derived from the data that is actually present.
+ *  A protocol the registry knows but nothing was served for must not be selectable as if it had
+ *  results, and a protocol with results must never be hidden behind a label for a different one. */
+export function protocolsWithData(compositionRuns: CompositionRun[], indexRuns: Run[], aggregates: BenchmarkRun[]): string[] {
+  const ids = new Set<string>();
+  for (const run of compositionRuns) if (run.protocol_id) ids.add(run.protocol_id);
+  for (const run of indexRuns) if (run.protocol_id) ids.add(run.protocol_id);
+  for (const run of aggregates) if (run.protocol_id) ids.add(run.protocol_id);
+  return [...ids];
+}
+
+export function buildCatalog(compositionRuns: CompositionRun[], indexRuns: Run[], aggregates: BenchmarkRun[], subset: Subset, imported: ImportedScope = "exclude"): RunCatalogEntry[] {
+  const entries: RunCatalogEntry[] = [];
+  const seenComposition = new Set<string>();
+  for (const run of compositionRuns) {
+    // The API returns one summary per (run, subset); only the active subset's rows are selectable,
+    // so a "selected run" always means "this run at this subset" and cannot silently be another.
+    if (run.subset !== subset || seenComposition.has(run.run_id)) continue;
+    const provenance = provenanceOf(run);
+    // Imported released-audit rows are opt-in: they are real released data, but not evidence about
+    // a model this deployment ran, so they never enter the default list.
+    if (provenance.bucket === "imported" && imported === "exclude") continue;
+    seenComposition.add(run.run_id);
+    const capabilities = compositionCapabilities(run);
+    entries.push({
+      key: `c:${run.run_id}`,
+      family: "composition",
+      runId: run.run_id,
+      label: `${run.model_id} / ${run.checkpoint_id}`,
+      modelId: run.model_id,
+      checkpointId: run.checkpoint_id,
+      protocolId: run.protocol_id,
+      subset,
+      status: run.execution_status || "UNKNOWN",
+      capabilities,
+      provenance,
+      isTransfer: transferLabel(run).isTransfer,
+      transferLabel: transferLabel(run).label,
+      duplicateStatus: run.duplicate_status ?? null,
+      duplicateAttempts: run.duplicate_attempt_count ?? null,
+      testOrigin: testWorkspaceOrigin(run),
+      measurement: run.measurement ?? null,
+      importedSource: run.provenance_source ?? null,
+      composition: run,
+    });
+  }
+  for (const run of indexRuns) {
+    entries.push({
+      key: `i:${run.run_id}`,
+      family: "index",
+      runId: run.run_id,
+      label: `${run.model_id} / ${run.method_name} / ${run.checkpoint_id}`,
+      modelId: run.model_id,
+      checkpointId: run.checkpoint_id,
+      protocolId: run.protocol_id,
+      subset: "all",
+      status: run.evidence_status || run.data_kind.toUpperCase(),
+      capabilities: indexCapabilities(run),
+      provenance: provenanceOf(run),
+      isTransfer: false,

@@ -1,0 +1,46 @@
+LIVE payload (not a fixture). counts.unit_*: {"unit_declared": 4, "unit_sibling_key": 2, "unit_inferred": 39, "unit_undeclared": 0, "unit_not_declared": 39}
+
+=== every artifact_backed:true row, grouped by unit_source ===
+
+declared: 2 rows
+   clip4cir_rn50x4_fullft   percent   counted=True  r10=43.8016931215922
+   clip4cir_rn50x4_fullft   percent   counted=False r10=43.8016931215922
+
+inferred_from_magnitude: 21 rows
+   airknow                  percent   counted=True  r10=52.54661498980954
+   airknow                  percent   counted=True  r10=50.64166565555885
+   clvc_net                 percent   counted=True  r10=29.970746517160162
+   combiner_rn50x4_noft     percent   counted=True  r10=35.1078
+   conesep                  percent   counted=True  r10=54.76130615726771
+   csmcir                   percent   counted=True  r10=57.0507
+   encoder                  percent   counted=True  r10=56.223101675386054
+   habit                    percent   counted=True  r10=54.87332239571265
+   hint                     percent   counted=True  r10=59.80338494972219
+   hint                     percent   counted=False r10=59.80338494972219
+   intent                   percent   counted=True  r10=54.86624335289025
+   limn                     percent   counted=True  r10=55.79193333333333
+   pair                     percent   counted=True  r10=34.03503453772374
+   pair                     percent   counted=True  r10=35.014736041655844
+   pair                     percent   counted=True  r10=22.156393011046543
+   pair                     percent   counted=True  r10=20.086769084793715
+   ptha_mtst                percent   counted=True  r10=37.897844115893044
+   sprc                     percent   counted=True  r10=51.038571198781334
+   tgcir                    percent   counted=True  r10=49.720772235486656
+   tme                      percent   counted=True  r10=54.922901590665184
+   tme                      percent   counted=False r10=54.922901590665184
+
+sibling_key: 2 rows
+   dcnet                    percent   counted=True  r10=27.929730914548916
+   dcnet                    percent   counted=False r10=27.929730914548916
+
+=== the advisory's specific claims ===
+  clip4cir_rn50x4_fullft: unit='percent' unit_source='declared' artifact_backed=True
+  combiner_rn50x4_noft: unit='percent' unit_source='inferred_from_magnitude' artifact_backed=True
+  dcnet: unit='percent' unit_source='sibling_key' artifact_backed=True
+
+=== TOTALS ===
+  backed + declared           : 2
+  backed + sibling_key        : 2
+  backed + inferred (no decl) : 21
+  backed total                : 25
+  identity: 2+2+21 = 25 == 25 -> True

@@ -1,0 +1,60 @@
+start 2026-11-09T04:57:01+07:00 head 20b83e5 dirty 9
+{
+  "gallery_count": 74381,
+  "gallery_identity_sha256": "1db68c59d96f014cdbecf936e108653de98abef0bd9a98a8abc2fe08b5dec4b4",
+  "models": [
+    {
+      "adapter_module_source_status": "available",
+      "attempt": "f461f391c6d4696011be8067",
+      "category_scopes": [
+        null
+      ],
+      "checkpoint_id": "fashioniq",
+      "condition_status": {
+        "image_only_empty_text": {
+          "category_scope_failure_count": 0,
+          "fallback_used": false,
+          "status": "COMPLETED",
+          "unscored_count": 0
+        },
+        "multimodal": {
+          "category_scope_failure_count": 0,
+          "fallback_used": false,
+          "status": "COMPLETED",
+          "unscored_count": 0
+        },
+        "text_only_black_image": {
+          "category_scope_failure_count": 0,
+          "fallback_used": false,
+          "status": "COMPLETED",
+          "unscored_count": 0
+        }
+      },
+      "gallery_count": 74381,
+      "model_id": "hint",
+      "query_count": 6003,
+      "reason": null,
+      "reused": false,
+      "reused_query_result_count": 0,
+      "run_id": "f461f391c6d4696011be8067",
+      "runtime": {
+        "model_interpreter": {
+          "environment_fingerprint": "5c5f4573b4a65cd5c19e8d3adf34003e96b1bc0ef07616a1c4779fec8b0acabe",
+          "path": "/home/heheboiz/data/cir/workbench/envs/ilearn39-adapted/bin/python",
+          "source": "workbench_env",
+          "verification_reason": null,
+          "verification_status": "GPU_RUNTIME_READY",
+          "verified": true,
+          "version": "Python 3.9.25; torch 2.7.1+cu128"
+        }
+      },
+      "status": "COMPLETED",
+      "summaries": {
+        "full": "/home/heheboiz/data/cir/workbench/artifacts/composition/summary/hint_fashioniq_f461f391c6d4696011be8067/full.json"
+      }
+    }
+  ],
+  "protocol_id": "circus_fashioniq_release_v1",
+  "run_count": 1,
+  "synthetic": false
+}

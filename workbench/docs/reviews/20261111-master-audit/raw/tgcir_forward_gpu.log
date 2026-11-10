@@ -1,0 +1,8 @@
+ADAPTED: torch.nn.modules.linear._LinearWithBias -> Linear (torch1.7 unpickle alias)
+class model.VCG_CIR params 151859225
+ADAPTED: set batch_first=False on 24 nn.MultiheadAttention modules (torch 1.7 state)
+n_queries 2017 n_pair_union_gallery 2628
+first_text 'is shiny and silver with shorter sleeves and fit and flare'
+query_feat (1, 512) target_feat (1, 512) score 0.3138742446899414 hash b7ca3149d7571ed5
+peak_vram_MiB 950
+ADAPTATIONS ['batch_first=False restored on 24 nn.MultiheadAttention modules']

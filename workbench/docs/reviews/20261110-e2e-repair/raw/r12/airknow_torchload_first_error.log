@@ -1,0 +1,7 @@
+FIRST_ERROR ModuleNotFoundError : No module named 'lavis'
+    result = unpickler.load()
+             ^^^^^^^^^^^^^^^^
+  File "/home/heheboiz/data/cir/workbench/envs/ctl312h/lib/python3.12/site-packages/torch/serialization.py", line 2249, in find_class
+    return super().find_class(mod_name, name)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ModuleNotFoundError: No module named 'lavis'

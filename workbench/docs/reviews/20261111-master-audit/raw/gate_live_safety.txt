@@ -1,0 +1,23 @@
+served_keys=['models', 'note', 'passed_models', 'standard']
+local_keys=['advisory_standards', 'models', 'note', 'passed_models', 'requested_standard', 'standard']
+served_standard='parity-relative/v1' local_standard='parity-relative/v1'
+served_requested=None local_requested='parity-relative/v1'
+served_passed_models=[] local_passed_models=[]
+
+encoder: status served='PARITY_MANDATORY_SUBCHECK_FAILED' local='PARITY_MANDATORY_SUBCHECK_FAILED' failure_count served=13 local=13
+    missing served=None
+    missing local =[]
+    differing fields: {"missing": [null, []], "applied_standard": [null, "parity-relative/v1"], "requested_standard": [null, "parity-relative/v1"]}
+    checks served=96 local=96
+    passed served=False local=False
+
+limn: status served='PARITY_MANDATORY_SUBCHECK_FAILED' local='PARITY_MANDATORY_SUBCHECK_FAILED' failure_count served=3 local=3
+    missing served=None
+    missing local =['metrics_parity']
+    differing fields: {"missing": [null, ["metrics_parity"]], "applied_standard": [null, "parity-relative/v1"], "requested_standard": [null, "parity-relative/v1"]}
+    checks served=48 local=51
+    passed served=False local=False
+
+ALL_COMPARED_FIELDS_IDENTICAL=False
+
+VERDICT: the two disagree; the service must be restarted by its owner and the UI re-checked before publishing

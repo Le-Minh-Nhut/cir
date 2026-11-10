@@ -1,0 +1,242 @@
+{
+ "issue": "W-03",
+ "slug": "w03_inspector_midrank_encoder",
+ "url": "http://127.0.0.1:5173/?area=samples&view=explorer&protocol=circus_fashioniq_release_v1&subset=full&runs=c%3Ace89a9a27c4cceadeaaf30b0&run=ce89a9a27c4cceadeaaf30b0&query=7%3A3038&k=20",
+ "viewport": "1920x1080@1",
+ "png": "w03_inspector_midrank_encoder.png",
+ "png_sha256": "c9b04e8150eacd0fa72a3db649f52880b71e867d0078ab1b6e3a6fd8fc3aa1d5",
+ "dom_text_sha256": "27e5b2db03dd83cd29e0f98d08eb40d12d16e9ac94dc136b1c8be0d964085fd4",
+ "dom_text_excerpt": "Đến nội dung chính\nCIR.\nResearch workbench\n◎\nTổng quan\n▤\nMô hình & lượt chạy\n◑\nĐánh giá\n18\n▦\nKhám phá mẫu\n△\nPhân tích lỗi\n18\n✎\nSổ nghiên cứu\nCIRCUS FashionIQ Release v1\nSubset Full\n31 lượt khả dụng ở phạm vi này\nKhám phá mẫu\n\nTừng query: ảnh, văn bản sửa, hạng theo điều kiện, ứng viên\n\nCỡ giao diện\n17px\n19px\n⧉ Sao chép liên kết\nProtocol\nCIRCUS FashionIQ Release v1\nFashionIQ — Original Split (Full Gallery)\nSubset\nFull\nShortcut-Free (SF)\nValidated\nLượt chọn\n1\nQuery\n7:3038\nInspector\nSo sánh mô hình\nAGGREGATE-ONLY REAL EVALUATION — 2 certified research results (11 further aggregate runs uncertified); per-query candidate Top-K available on 13 of 18 composed runs in view\nẨn\nBộ lọc mẫu\n\nencoder / fashioniq · CIRCUS FashionIQ Release v1 · Full\n\nXoá bộ lọc\nLƯỢT\n— chọn lượt —\nlimn / base_iter0_all_categories\nconesep / fiq_n02\nptha_mtst / cirr_transfer (TRANSFER)\nintent / fiq_n02\nintent / fiq_n02\nhabit / fiq_n02\nhint / fashioniq\nencoder / fashioniq\nencoder / fashioniq\nlimn / base_iter0_all_categories\nconesep / fiq_n02\ntme / fashioniq_0\nhabit / fiq_n02\ntme / fashioniq_0\nencoder / fashioniq\nhint / fashioniq\nptha_mtst / cirr_transfer (TRANSFER)\nhabit / fiq_n02\nĐIỀU KIỆN\nMultimodal (MM)\nText-only (ảnh đen)\nImage-only (text rỗng)\nĐổi điều kiện sẽ tải xếp hạng ứng viên riêng của điều kiện đó\nMÃ QUERY\nBộ lọc nâng cao và nguồn dữ liệu\nDanh sách query\n\n6,003 query khớp bộ lọc\n\nTất cả6,003\nCorrect@101,862\nMiss@104,141\nUnscored0\n7:3045\nMM #50,762\nBright red with a larger and is darker.\nText #19,041 · Ảnh #37,602\n7:2894\nMM #37,666\nIs more casual and nont patterned and it is more casual and has a short sleeve.\nText #46,426 · Ảnh #44,345\n7:4724\nMM #36,589\nThe button up shirt has long sleeves and is black in color and is less humorous and more junior.\nText #51,670 · Ảnh #16,207\n7:1769\nMM #35,900\nHas longer sleeves and black and white blocks.\nText #72,065 · Ảnh #8,307\n7:3064\nMM #35,345\nIs a shirt and is a shirt.\nText #15,352 · Ảnh #43,385\n7:603\nMM #35,224\nA v neck and is much shorter and no comparison to words.\nText #11,397 · Ảnh #17,808\n7:2934\nMM #34,954\nIs more casual with shorter sleeves and has shorter sleeves.\nText #55,432 · Ảnh #34,712\n7:4564\nMM #33,966\nHas shorter sleeves and shorter.\nText #61,764 · Ảnh #17,659\n7:2709\nMM #32,315\nIs button-up and plaid and is t shirts with no buttons.\nText #33,103 · Ảnh #49,586\n7:3116\nMM #31,203\nIs darker and is more formal.\nText #16,008 · Ảnh #58,642\n7:4823\nMM #29,308\nThe short sleeved shirt is white and has no sleeves.\nText #12,359 · Ảnh #36,997\n7:3620\nMM #29,280\nHas sleeves and is plainer and has more grey.\nText #1,836 · Ảnh #46,596\n7:83\nMM #28,927\nIs darker and has shorter sleeves and does not cover the sholders.\nText #38,211 · Ảnh #18,406\n7:826\nMM #27,738\nHas summery straps and wild print and patterned and much darker in colour.\nText #32,241 · Ảnh #4,620\n7:4436\nMM #27,306\nIs less see-thru and less feminine and draped.\nText #61,488 · Ảnh #25,951\n7:4925\nMM #26,850\nIs longer and has shorter sleeves and has off shoulder and is black color.\nText #23,826 · Ảnh #28,572\n7:5684\nMM #26,394\nIs more masculine and is lighter.\nText #36,870 · Ảnh #61,359\n7:5209\nMM #25,738\nPurple with black strips and deep pink.\nText #40,379 · Ảnh #17,754\n7:4535\nMM #25,271\nIs less black and has short sleeves and has smaller graphics on it.\nText #9,797 · Ảnh #56,429\n7:3934\nMM #25,209\nIs more dark and minimal and a collar.\nText #32,941 · Ảnh #18,215\n1–20 / 6,003\nTrước\nSau\nQuery 7:3038\n\nencoder · fashioniq · circus_fashioniq_release_v1 · subset full\n\nUnresolved — mọi hạng ngoài @10\nẢnh tham chiếu\nB004TMGDME.jpg\nYÊU CẦU CHỈNH SỬA\n\nIs darker and has a different graphic and is darker.\n\nẢnh đích\nB004D8QCN4.jpg\n\nẢnh đích ở hạng tốt nhất #147 — ngoài cửa sổ Top-10 đang hiện (10 ứng viên được serve, export lưu 100 dòng) · Với K=10 hay K=20 thì ảnh đích không nằm trong danh sách. Vẫn hiện ở đây vì hạng là hạng toàn gallery, không phải vị trí trong danh sách ứng viên.\n\nHẠNG THEO ĐIỀU KIỆN · OUTCOME PHÂN LOẠI TẠI @10 (CỐ ĐỊNH)\nẢnh + văn bản (MM)\n#147\nngo",
+ "console": [],
+ "api": {
+  "/api/composition/runs/ce89a9a27c4cceadeaaf30b0/queries?subset=full&condition=multimodal&query_id=7%3A3038&top_k=20&limit=1&offset=0": {
+   "items": [
+    {
+     "query_id": "7:3038",
+     "category": null,
+     "query_txt": "Is darker and has a different graphic and is darker.",
+     "reference_id": "mbeir_images/fashioniq_images/B004TMGDME.jpg",
+     "positive_ids": [
+      "mbeir_images/fashioniq_images/B004D8QCN4.jpg"
+     ],
+     "reference_name": "mbeir_images/fashioniq_images/B004TMGDME.jpg",
+     "positive_names": [
+      "mbeir_images/fashioniq_images/B004D8QCN4.jpg"
+     ],
+     "ranks": {
+      "multimodal": 147,
+      "text_only_black_image": 789,
+      "image_only_empty_text": 659
+     },
+     "target_rank": 147,
+     "outcome": "unresolved",
+     "query_state": "retrieval_failure",
+     "unscored": false,
+     "unscored_kind": null,
+     "retrieval_failure": true,
+     "failure": null,
+     "top_results": [
+      {
+       "rank": 1,
+       "image_id": "mbeir_images/fashioniq_images/B004TMGDME.jpg",
+       "gallery_position": 16809,
+       "score": 0.8393693566322327
+      },
+      {
+       "rank": 2,
+       "image_id": "mbeir_images/fashioniq_images/B00BRZ9HEW.jpg",
+       "gallery_position": 59898,
+       "score": 0.6281993985176086
+      },
+      {
+       "rank": 3,
+       "image_id": "mbeir_images/fashioniq_images/B00AFJT79Q.jpg",
+       "gallery_position": 51612,
+       "score": 0.6195878386497498
+      },
+      {
+       "rank": 4,
+       "image_id": "mbeir_images/fashioniq_images/B00BRPEZOE.jpg",
+       "gallery_position": 59884,
+       "score": 0.6107228994369507
+      },
+      {
+       "rank": 5,
+       "image_id": "mbeir_images/fashioniq_images/B0065QRUPG.jpg",
+       "gallery_position": 24772,
+       "score": 0.5953134894371033
+      },
+      {
+       "rank": 6,
+       "image_id": "mbeir_images/fashioniq_images/B007W2RXPY.jpg",
+       "gallery_position": 34115,
+       "score": 0.5838983654975891
+      },
+      {
+       "rank": 7,
+       "image_id": "mbeir_images/fashioniq_images/B006X4L4UW.jpg",
+       "gallery_position": 27638,
+       "score": 0.5817140340805054
+      },
+      {
+       "rank": 8,
+       "image_id": "mbeir_images/fashioniq_images/B002U0KQS4.jpg",
+       "gallery_position": 7241,
+       "score": 0.5748999118804932
+      },
+      {
+       "rank": 9,
+       "image_id": "mbeir_images/fashioniq_images/B00ABBUFH6.jpg",
+       "gallery_position": 51080,
+       "score": 0.5670368075370789
+      },
+      {
+       "rank": 10,
+       "image_id": "mbeir_images/fashioniq_images/B000KMCCVI.jpg",
+       "gallery_position": 1377,
+       "score": 0.5670319199562073
+      },
+      {
+       "rank": 11,
+       "image_id": "mbeir_images/fashioniq_images/B000FL2RVE.jpg",
+       "gallery_position": 969,
+       "score": 0.5653359889984131
+      },
+      {
+       "rank": 12,
+       "image_id": "mbeir_images/fashioniq_images/B006Y2I7H6.jpg",
+       "gallery_position": 27666,
+       "score": 0.5644103288650513
+      },
+      {
+       "rank": 13,
+       "image_id": "mbeir_images/fashioniq_images/B006ZB2WJK.jpg",
+       "gallery_position": 27822,
+       "score": 0.5643889307975769
+      },
+      {
+       "rank": 14,
+       "image_id": "mbeir_images/fashioniq_images/B0051HUJ3U.jpg",
+       "gallery_position": 18386,
+       "score": 0.5640376806259155
+      },
+      {
+       "rank": 15,
+       "image_id": "mbeir_images/fashioniq_images/B000AT4JC6.jpg",
+       "gallery_position": 583,
+       "score": 0.5638752579689026
+      },
+      {
+       "rank": 16,
+       "image_id": "mbeir_images/fashioniq_images/B0085PJDJG.jpg",
+       "gallery_position": 37116,
+       "score": 0.5594216585159302
+      },
+      {
+       "rank": 17,
+       "image_id": "mbeir_images/fashioniq_images/B007LVN198.jpg",
+       "gallery_position": 31977,
+       "score": 0.5583902597427368
+      },
+      {
+       "rank": 18,
+       "image_id": "mbeir_images/fashioniq_images/B00APZCXBE.jpg",
+       "gallery_position": 53139,
+       "score": 0.5568125247955322
+      },
+      {
+       "rank": 19,
+       "image_id": "mbeir_images/fashioniq_images/B0083G1T9Y.jpg",
+       "gallery_position": 36258,
+       "score": 0.5562205910682678
+      },
+      {
+       "rank": 20,
+       "image_id": "mbeir_images/fashioniq_images/B008BQNKW0.jpg",
+       "gallery_position": 38757,
+       "score": 0.5562205910682678
+      }
+     ],
+     "candidate_status": "AVAILABLE",
+     "candidate_reason": null,
+     "candidate_depth": 100
+    }
+   ],
+   "total": 1,
+   "limit": 1,
+   "offset": 0,
+   "condition": "multimodal",
+   "counters": {
+    "scored": 1,
+    "unscored": 0,
+    "hit_at_k": 0,
+    "retrieval_failure": 1,
+    "unscored_by_kind": {},
+    "candidates_available": 1
+   },
+   "state_counts": {
+    "hit": 0,
+    "retrieval_failure": 1,
+    "unscored": 0
+   },
+   "candidates": {
+    "available": true,
+    "status": "AVAILABLE",
+    "reason": null,
+    "depth": 100
+   },
+   "statistics": {
+    "conditions": {
+     "image_only_empty_text": {
+      "denominator": 6003,
+      "scored_count": 6003,
+      "unscored_count": 0,
+      "unscored_by_kind": {},
+      "coverage": 1.0
+     },
+     "multimodal": {
+      "denominator": 6003,
+      "scored_count": 6003,
+      "unscored_count": 0,
+      "unscored_by_kind": {},
+      "coverage": 1.0
+     },
+     "text_only_black_image": {
+      "denominator": 6003,
+      "scored_count": 6003,
+      "unscored_count": 0,
+      "unscored_by_kind": {},
+      "coverage": 1.0
+     }
+    },
+    "query_count": 6003
+   },
+   "statistics_whole_run": {
+    "conditions": {
+     "image_only_empty_text": {
+      "denominator": 6003,
+      "scored_count": 6003,
+      "unscored_count": 0,
+      "unscored_by_kind": {},
+      "coverage": 1.0
+     },
+     "multimodal": {
+      "denominator": 6003,
+      "scored_count": 6003,
+      "unscored_count": 0,
+      "unscored_by_kind": {},
+      "coverage": 1.0
+     },
+     "text_only_black_image": {
+      "denominator": 6003,
+      "scored_count": 6003,
+      "unscored_count": 0,
+      "unscored_by_kind": {},
+      "coverage": 1.0
+     }
+    },
+    "query_count": 6003
+   }
+  }
+ }
+}

@@ -1,0 +1,2 @@
+ADAPTED: torch.Tensor.cuda neutralised for CPU run (test_BLIP2.py:111,128); weights/architecture/arithmetic untouched
+load lavis.models.blip2_models.blip2_cir.Blip2QformerCir 2.6s params 1173280958

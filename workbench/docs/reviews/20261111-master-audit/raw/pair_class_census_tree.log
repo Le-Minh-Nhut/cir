@@ -1,0 +1,91 @@
+<unknown>:191: SyntaxWarning: invalid escape sequence '\s'
+<unknown>:226: SyntaxWarning: invalid escape sequence '\s'
+<unknown>:167: SyntaxWarning: invalid escape sequence '\d'
+<unknown>:168: SyntaxWarning: invalid escape sequence '\d'
+<unknown>:100: SyntaxWarning: invalid escape sequence '\D'
+<unknown>:356: SyntaxWarning: invalid escape sequence '\D'
+Transformer	AirKnow/lavis/models/clip_models/model.py:288
+Transformer	AirKnow/lavis/models/clip_vit.py:142
+Transformer	AirKnow/lavis/models/ulip_models/ULIP_models.py:62
+Encoder	AirKnow/lavis/models/ulip_models/pointbert/dvae.py:177
+<unknown>:167: SyntaxWarning: invalid escape sequence '\d'
+<unknown>:168: SyntaxWarning: invalid escape sequence '\d'
+Transformer	CSMCIR/src/lavis/models/clip_models/model.py:288
+Transformer	CSMCIR/src/lavis/models/clip_vit.py:142
+<unknown>:191: SyntaxWarning: invalid escape sequence '\s'
+<unknown>:226: SyntaxWarning: invalid escape sequence '\s'
+<unknown>:167: SyntaxWarning: invalid escape sequence '\d'
+<unknown>:168: SyntaxWarning: invalid escape sequence '\d'
+Transformer	ConeSep/lavis/models/clip_models/model.py:288
+Transformer	ConeSep/lavis/models/clip_vit.py:142
+Transformer	ConeSep/lavis/models/ulip_models/ULIP_models.py:62
+Encoder	ConeSep/lavis/models/ulip_models/pointbert/dvae.py:177
+Backbone	ENCODER/model_try2.py:131
+FeatureWiseAffine	ENCODER/model_try2.py:435
+Encoder	ENCODER/model_try2.py:464
+<unknown>:191: SyntaxWarning: invalid escape sequence '\s'
+<unknown>:226: SyntaxWarning: invalid escape sequence '\s'
+<unknown>:167: SyntaxWarning: invalid escape sequence '\d'
+<unknown>:168: SyntaxWarning: invalid escape sequence '\d'
+Transformer	HABIT/lavis/models/clip_models/model.py:288
+Transformer	HABIT/lavis/models/clip_vit.py:142
+Transformer	HABIT/lavis/models/ulip_models/ULIP_models.py:62
+Encoder	HABIT/lavis/models/ulip_models/pointbert/dvae.py:177
+<unknown>:191: SyntaxWarning: invalid escape sequence '\s'
+<unknown>:226: SyntaxWarning: invalid escape sequence '\s'
+<unknown>:167: SyntaxWarning: invalid escape sequence '\d'
+<unknown>:168: SyntaxWarning: invalid escape sequence '\d'
+Transformer	HINT/lavis/models/clip_models/model.py:288
+Transformer	HINT/lavis/models/clip_vit.py:142
+Transformer	HINT/lavis/models/ulip_models/ULIP_models.py:62
+Encoder	HINT/lavis/models/ulip_models/pointbert/dvae.py:177
+<unknown>:191: SyntaxWarning: invalid escape sequence '\s'
+<unknown>:226: SyntaxWarning: invalid escape sequence '\s'
+<unknown>:167: SyntaxWarning: invalid escape sequence '\d'
+<unknown>:168: SyntaxWarning: invalid escape sequence '\d'
+Transformer	INTENT/lavis/models/clip_models/model.py:288
+Transformer	INTENT/lavis/models/clip_vit.py:142
+Transformer	INTENT/lavis/models/ulip_models/ULIP_models.py:62
+Encoder	INTENT/lavis/models/ulip_models/pointbert/dvae.py:177
+MlpTransformer	LIMN/LIMN/MHTransformer.py:7
+MultiHeadAttention	LIMN/LIMN/MHTransformer.py:24
+TransformerLayer	LIMN/LIMN/MHTransformer.py:63
+Transformer	LIMN/LIMN/MHTransformer.py:84
+MlpTransformer	LIMN/LIMN/Transformer.py:6
+MultiHeadAttention	LIMN/LIMN/Transformer.py:21
+TransformerLayer	LIMN/LIMN/Transformer.py:55
+Transformer	LIMN/LIMN/Transformer.py:74
+Backbone	LIMN/LIMN/model.py:12
+MlpTransformer	LIMN/LIMN+/MHTransformer.py:7
+MultiHeadAttention	LIMN/LIMN+/MHTransformer.py:24
+TransformerLayer	LIMN/LIMN+/MHTransformer.py:63
+Transformer	LIMN/LIMN+/MHTransformer.py:84
+MlpTransformer	LIMN/LIMN+/Transformer.py:6
+MultiHeadAttention	LIMN/LIMN+/Transformer.py:21
+TransformerLayer	LIMN/LIMN+/Transformer.py:55
+Transformer	LIMN/LIMN+/Transformer.py:74
+Backbone	LIMN/LIMN+/model.py:15
+<unknown>:167: SyntaxWarning: invalid escape sequence '\d'
+<unknown>:168: SyntaxWarning: invalid escape sequence '\d'
+Transformer	MTST_PTHA/MTST_PTHA/src/lavis/models/clip_models/model.py:288
+Transformer	MTST_PTHA/MTST_PTHA/src/lavis/models/clip_vit.py:142
+MlpTransformer	PAIR/models/MHTransformer.py:7
+MultiHeadAttention	PAIR/models/MHTransformer.py:24
+MultiHeadAttentionRev	PAIR/models/MHTransformer.py:61
+TransformerLayer	PAIR/models/MHTransformer.py:98
+Transformer	PAIR/models/MHTransformer.py:119
+MlpTransformer	PAIR/models/MHTransformer_rev.py:18
+MultiHeadAttentionRev	PAIR/models/MHTransformer_rev.py:36
+TransformerLayer	PAIR/models/MHTransformer_rev.py:73
+Transformer	PAIR/models/MHTransformer_rev.py:95
+Backbone	PAIR/models/model.py:34
+FeatureWiseAffine	PAIR/models/model.py:175
+<unknown>:167: SyntaxWarning: invalid escape sequence '\d'
+<unknown>:168: SyntaxWarning: invalid escape sequence '\d'
+Transformer	SPRC/src/lavis/models/clip_models/model.py:288
+Transformer	SPRC/src/lavis/models/clip_vit.py:142
+Backbone	TGCIR/model.py:38
+<unknown>:167: SyntaxWarning: invalid escape sequence '\d'
+<unknown>:168: SyntaxWarning: invalid escape sequence '\d'
+Transformer	TME/src/lavis/models/clip_models/model.py:288
+Transformer	TME/src/lavis/models/clip_vit.py:142
