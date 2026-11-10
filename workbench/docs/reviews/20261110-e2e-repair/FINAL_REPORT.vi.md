@@ -1,16 +1,16 @@
 # FINAL REPORT — chiến dịch sửa lỗi `20261110-e2e-repair`
 
-Nhánh `research/cir-failure-workbench`, HEAD `382816315d0ab7c2e13d7a92d2fd68bc61a11a97` (`3828163`).
-Mốc trước đó là `2e2e2d2`; mọi kết luận đo ở mốc cũ được ghi rõ là **`2e2e2d2`**.
+Nhánh `research/cir-failure-workbench`, HEAD `d850f9811f7670fa7c0485cd6618ec59dd662ae3` (`d850f98`),
+bằng `origin/research/cir-failure-workbench`. Hai mốc trước: `3828163` (commit chiến dịch) và
+`2e2e2d2` (mốc đầu chiến dịch); kết luận nào chỉ đúng ở mốc cũ đều được gọi tên đích danh.
 Báo cáo này thay thế phần kết luận của
 `workbench/docs/reviews/20261109-native15-composition-limn/FINAL_REPORT.vi.md` (gọi tắt **BC-cũ**).
 Mọi số dưới đây ghi kèm file. Bản đồ artifact → phát biểu ở `EVIDENCE_INDEX.md` cùng thư mục.
 Sổ phát hiện đầy đủ 14 dòng: `FINDINGS_AND_FIXES.md`.
 
-> **Quy ước hai trạng thái (đã cập nhật).** `HEAD` = `3828163` — commit `Close the E2E repair campaign`,
-> 182 file, `2e2e2d2..3828163`, `HEAD == origin/research/cir-failure-workbench`. `2e2e2d2` = mốc trước,
-> được gọi đích danh mỗi khi một phát hiện chỉ đúng ở đó. Cột "working tree" của bản trước đã hết:
-> trạng thái đó nay **là** `3828163`, nên "đã sửa" chỉ còn nghĩa "có trong `3828163`".
+> **Quy ước trạng thái (đã cập nhật lần cuối).** `HEAD` = `d850f98`. Toàn bộ 14 phát hiện được sửa ở
+> `3828163` hoặc `68ad75e`; phần còn mở **không** phải "chưa sửa code" mà là "sửa rồi nhưng chưa nghiệm
+> thu" hoặc "không thể sửa vì upstream". Mọi tuyên bố "còn mở" dưới đây đều nêu đúng lý do đó.
 > Không file nào trong báo cáo này commit gì; git do phiên khác sở hữu.
 
 > **Tầng bằng chứng.** `EXEC` = log/command+meta của lần chạy thật · `MEAS` = file measurement mang
@@ -31,6 +31,9 @@ Sổ phát hiện đầy đủ 14 dòng: `FINDINGS_AND_FIXES.md`.
 | R13 (native artifact không lên web) | **đã sửa** | 32 file / 43 block / 28 model có số, `verified: 0`; 5 model từng bị bỏ nay đều có mặt | `web_evidence/after-native-measurements.json`, §3.5 |
 | R9 (gate) | **đã code hoá + đã commit** | `parity_gate.py` + route ở `3828163`; `GET /api/runs/parity-gate` → **200**, `passed_models: []` | `web_evidence/after-parity-gate.json`, `web_evidence/1920-14-parity-gate.png`, §4.3 |
 | R12 (5 model) | **4 BLOCKED + 1 NOT_A_BLOCKER** | nguyên nhân đo được từng cái | `BLOCKERS_R12.vi.md` §6 |
+| R5 (LIMN ghi sai target) | **đã sửa + đã vá artifact** | producer lấy DID theo qid lúc serialize + assert 12 ô; artifact lệch đúng **6 ô**, rank/score 0 đổi | `limn_dual_scope.json` sha256 `d1b4aadb…73e3f`, §10.2 |
+| R1 (CLIP4Cir label) | **đã sửa, chưa re-ingest** | migration sửa được câu trích sai, giữ bản cũ ở `superseded_protocol_source`; artifact đã sửa mới là **bản sao** | `raw/guards/clip4cir_fullft.migrated.r1.json`, §10.2 |
+| Sweep đầy đủ ở `68ad75e` | **18 failed / 2701 passed / 47 skipped** | gap accounting **0**; diff so baseline **0 new / 0 dropped**; guard **8 passed** | `full_suite_68ad75e.txt`, `full_suite_68ad75e.failure_diff.txt`, §10.1 |
 
 **Không tuyên bố chiến dịch đã pass.** Gate bắt buộc còn `FAIL` (G1/G2), `NOT_RUN` (13 model G1/G2,
 toàn bộ 41 dòng validation composition, 10/11 dòng native validation), và `BLOCKED` (4 model).
@@ -537,7 +540,7 @@ return a window and silently returning one row would misstate the request"). Ở
 trên artifact thật là 6 defect R5 còn lại, không phải lỗi mới. Chi tiết: `FINDINGS_AND_FIXES.md`
 §3.3b–3.3c.
 
-### 7.5 R5 — chỉ một field sai, và artifact trên đĩa vẫn còn sai
+### 7.5 R5 — chỉ một field sai, và nó đã được vá
 
 `raw/guards/r5_reconcile.json`: 12 ô (2 query × 2 scope × 3 condition), `problems: 6` — **cả 6** đều
 `did_matches_own_query` ở `7:3038`. Chín kiểm tra còn lại đạt **12/12**:
@@ -560,10 +563,18 @@ defect `target_did_not_own_query` nếu lệch; (b) sinh **bản sao** artifact 
 không đổi rank/score/position/candidate), file gốc sha256 `04c4419e…`, `"source_untouched": true`.
 Verify: đặt bản sửa vào repo root tạm → `DIAGNOSTIC_COMPLETE`, `complete: true`, **0 defect**.
 
-**Nhưng (vẫn đúng ở `3828163`):** `limn_dual_scope.json` trên đĩa **vẫn** chứa 12 lần `7:42304` và
-`t2_dual_scope.py:273` **vẫn** còn `"target_did": query.positive_ids[0]` (đã kiểm lại sau commit).
-Regenerate bằng script cũ sẽ tái sinh đúng lỗi. Phải sửa script **trước**, rồi regenerate, và thêm
-assert `target_did in release.positive_ids` cho từng ô.
+**Đã đóng ở `68ad75e`** (§10.2): `t2_dual_scope.py` lấy DID theo qid **tại thời điểm serialize**
+(`cell_target_did`) và có `assert_cells_target_own_query()` chạy trên **cả 12 ô trước khi ghi file**,
+nên regenerate bằng script cũ không còn tái sinh lỗi — nếu một ô sai, script **từ chối ghi**.
+Artifact trên đĩa đã vá: đúng **6** ô `7:42304 → 7:3416`, leaf diff đệ quy **62** = 6 ô + 56 field
+của `provenance_correction_r5`, **0 khác**; bản gốc giữ ở `limn_dual_scope.json.pre-r5`
+(`04c4419e…abf0`), bản vá `d1b4aadb…73e3f`. Rank / score / gallery position / asset / export / model
+text **không đổi một byte**. `test_limn_dual_scope_producer.py` = 8 test; serve layer trả
+`DIAGNOSTIC_COMPLETE`, `complete: true`, `defects: 0`.
+
+Điều **không** được tuyên bố: artifact được **vá**, không được **sinh lại** — không có lần suy luận
+mới nào. Đó là lựa chọn đúng vì ranking đã được chứng minh khớp export + release (6/6 ô trong cửa sổ,
+36/36 crosscheck) trước khi vá, nên chạy lại chỉ để đổi một nhãn là lãng phí và tạo rủi ro mới.
 
 ## 8. Blocker còn lại, kèm lý do đo được
 
@@ -632,54 +643,113 @@ phục vụ. Chúng chứng minh landing đã đổi sang CIRCUS Full, **không*
    còn khai `fashioniq_val_split_ref_included` cho `tme` trong khi `models.yaml:1669` nói
    `fashioniq_original_split`; alias **resolve** trong evaluator (`src/evaluation/fashioniq.py:186`)
    nhưng **bị từ chối** cho artifact đã lưu (`schemas/results.py:12-16,136`). Diff: `HANDBACK.vi.md` §1.
-7. **Không** chạy full test suite ở `3828163`. Đã chạy: **105** test batch campaign, **41** frontend,
-   riêng `test_handoff_commands.py` **1 failed / 7 passed** (§10.1). Không chạy lại cohort, không job GPU.
+7. **Không** chạy full test suite ở `d850f98`. Sweep đầy đủ chạy ở `68ad75e` — **18 failed / 2701
+   passed / 47 skipped**, gap accounting **0**, diff so baseline **0 new / 0 dropped** (§10.1).
+   Commit `d850f98` là **docs-only** (4 file, chỉ `TESTED_SOURCE_SHA` + chuỗi đếm test), nên theo quy
+   ước release guard nó **không** làm luật sweep cũ. Ngoài sweep: **105** test batch campaign, **41**
+   frontend, **28** focused sau khi sửa R5/R1, guard **8 passed**. Không chạy lại cohort, không job GPU.
 8. **Không** nói `9e4918a6` (LIMN canonical) là số duy nhất đúng: nó phụ thuộc một routing policy chỉ
    tồn tại dưới dạng digest (§5.5); run `10173dc4` có routing hiện rõ nhưng mẫu số 5884 và R@10 30.0646.
 9. **Không** nói sub-check FAIL đã đóng. Không tolerance nào bị dời; nhãn `False` của
    `parity-relative/v1` được **giữ nguyên** và phải giữ, kể cả sau khi có chuẩn v2.
 10. **Không** nói provenance đã sạch: 5 file lệch `file_manifest` là `approved_source_patches` (khớp
     `derived_sha256`) — kiểm chỉ bằng `file_manifest` sẽ báo sai 5 "local modification".
-11. **Không** nói R1 đã đóng trọn: nhãn đã migrate có kiểm chứng, nhưng `protocol_source` — câu **sai**
-    của artifact — bị migration **đóng băng** và bị test khoá lại (§2.3).
-12. **Không** nói R5 đã đóng trọn: `t2_dual_scope.py:273` **vẫn** còn lỗi và `limn_dual_scope.json`
-    trên đĩa **vẫn** chứa 12 lần `7:42304` — kể cả ở `3828163` (§7.5).
-13. **Không** nói release đã sẵn sàng: `TESTED_SOURCE_SHA` cố ý **không** nâng (§10.1); guard đỏ là
-    trạng thái đúng cho tới khi có một lượt sweep đầy đủ trên `3828163`.
+11. **Không** nói R1 đã được đưa vào endpoint sống: migration **đã** sửa được câu trích sai (xem
+    §10.2), nhưng bản đã sửa mới nằm ở `raw/guards/clip4cir_fullft.migrated.r1.json`; **chưa**
+    re-ingest vào service đang chạy, và artifact gốc `raw/native/clip4cir_fullft.json` giữ nguyên
+    bytes (sha256 `fb97cfab…8e`) để bảo toàn lịch sử.
+12. **Không** nói R5 đã được sinh lại: `t2_dual_scope.py` **đã** sửa và `limn_dual_scope.json` **đã**
+    hết `7:42304` ở ô của `7:3038` (xem §10.2), nhưng artifact được **vá 6 ô**, không phải chạy lại
+    producer. Không có lần suy luận mới nào; rank/score/asset của cả 12 ô là bytes cũ, và đó là điều
+    đúng vì chúng đã được chứng minh khớp export + release trước khi vá.
+13. **Không** nói release đã sẵn sàng: `TESTED_SOURCE_SHA` **đã** nâng lên `68ad75e` cùng một lượt
+    sweep đầy đủ (xem §10.1), guard **8 passed**; nhưng đó là sweep ở `68ad75e`, và mọi prose trong
+    báo cáo này viết ở `d850f98` — chênh lệch đó là commit **docs-only**, đúng loại được miễn sweep.
 
-## 10. Commit và release guard — blocker thật còn mở
+## 10. Commit, sweep và release guard — trạng thái đóng
 
-Chiến dịch đã được commit và push, **không** phải bởi phiên này:
+Ba commit, **không** phải bởi phiên viết báo cáo này:
 
-| thứ | giá trị |
+| # | commit | nội dung | push |
+|---|---|---|---|
+| 1 | `3828163` | `Close the E2E repair campaign: gate, protocol labels, LIMN guards, web scope` — 182 file, `21378 insertions(+), 177 deletions(-)` | `2e2e2d2..3828163` |
+| 2 | `68ad75e` | `Fix the R5 producer's target DID and allow cited protocol_source correction` — 20 file | `3828163..68ad75e` |
+| 3 | `d850f98` | `Advance TESTED_SOURCE_SHA to 68ad75e with the serial sweep's own numbers` — docs-only, 4 file | `68ad75e..d850f98` |
+
+**HEAD cuối = `d850f9811f7670fa7c0485cd6618ec59dd662ae3` = `origin/research/cir-failure-workbench`.**
+Không còn đường nào khác biệt; chỉ `CLEANUP_REPORT.md.save` (file của operator) là untracked.
+
+Bốn thứ báo cáo này từng ghi là "còn mở" đã đóng ở `3828163`: route gate phục vụ được (§4.3), banner
+có nhánh loading (§7.2), catalog native nhận 5 hình dạng macro (§3.5, §7.3), `ModelInventory` dùng
+`otherScopeFor` (§7.1). Hai thứ nữa đóng ở `68ad75e`, ghi ở §10.2.
+
+### 10.1 Sweep ở `68ad75e` và release guard **xanh**
+
+Điều kiện trước khi đo, cả ba đều đạt: `git status --porcelain` chỉ còn `?? CLEANUP_REPORT.md.save`
+(không path production/docs/test nào chưa commit) · `pgrep -af pytest` = 0 khớp · `df` = **153 GiB**
+trống (ngưỡng 45 GiB).
+
+```
+18 failed, 2701 passed, 47 skipped, 290 warnings in 2846.09s (0:47:26)
+```
+
+| kiểm | giá trị |
 |---|---|
-| commit | `382816315d0ab7c2e13d7a92d2fd68bc61a11a97` — `Close the E2E repair campaign: gate, protocol labels, LIMN guards, web scope` |
-| quy mô | **182 file**, `21378 insertions(+), 177 deletions(-)` (`git show --stat HEAD`) |
-| push | `2e2e2d2..3828163`; `HEAD == origin/research/cir-failure-workbench` |
-| test | campaign **105 passed** · frontend **41 passed** (phiên sở hữu git chạy) |
+| accounting | `2701 + 18 + 47 = 2766` == `2766` thu thập riêng bằng `--collect-only -q` ⇒ **gap 0** |
+| dòng `E` | **0** |
+| ENOSPC | **0** (153 GiB lúc bắt đầu, mẫu giữa lượt 153 GiB, 123 GiB sau) |
+| cụt log | **không** |
+| cây đổi trong lúc chạy | **không** |
+| diff so `full_suite_36ae9e2.txt` | **0 new / 0 dropped / 18 common** |
 
-Bốn thứ báo cáo này từng ghi là "còn mở" nay **đã đóng ở `3828163`**: route gate phục vụ được
-(§4.3), banner có nhánh loading (§7.2), catalog native nhận 5 hình dạng macro (§3.5, §7.3), và
-`ModelInventory` dùng `otherScopeFor` (§7.1).
+Log: `full_suite_68ad75e.txt`; diff: `full_suite_68ad75e.failure_diff.txt`. Guard sau khi nâng:
+`test_handoff_commands.py` → **8 passed**. Chuỗi `**2701 passed, 18 failed**` xuất hiện **đúng một
+lần** trong mỗi file và **giống nhau** giữa `FINAL_PC_RELEASE_VERDICT.md` và `PC_PILOT_HANDOFF.md`.
 
-### 10.1 Release guard đang **đỏ**, và đó là trạng thái đúng
+**Vì sao phải bỏ sweep trước đó ở `3828163`:** lượt đó chạy 09:01–09:51 trong khi session khác còn
+sửa `migrate_protocol_label.py` (mtime 09:07:51), `test_limn_dual_scope_producer.py` (09:07:43) và
+`test_protocol_label_migration.py` (09:08:10). Bằng chứng không thể chối: nó đếm `2690+18+47 = 2755`
+trong khi cây lúc đó thu thập **2766** — hụt đúng **11** = 8 test file mới + 3 test thêm. Một lượt đo
+trên cây đang đổi thì không đo revision nào cả. Nó **không** được ghi là pass.
 
-```
-workbench/envs/ctl312h/bin/python -m pytest workbench/tests/test_handoff_commands.py -q
-→ 1 failed, 7 passed
-   FAILED test_no_release_document_points_at_a_superseded_source_sha
-   AssertionError: TESTED_SOURCE_SHA 36ae9e215ad81960d7af90bd8a5edcf598b5b206 does not contain the
-   production code currently on disk
-```
+### 10.2 Hai lỗi còn lại đã sửa ở `68ad75e`
 
-Guard so `TESTED_SOURCE_SHA` với `git diff --quiet 36ae9e2… -- . ':(exclude)workbench/docs'
-':(exclude)workbench/tests'`, nhận `returncode 1`. Nó **đúng**: production code đã đổi sau revision mà
-handoff gọi là "đã test".
+**R5 — producer dùng biến vòng lặp.** `t2_dual_scope.py` có `cell_target_did(qid, by_qid)` lấy DID
+theo qid **tại thời điểm serialize**, cộng `assert_cells_target_own_query()` chạy trên **cả 12 ô**
+trước khi ghi file, nên một lần merge/copy tái đưa giá trị dùng chung vào sẽ **từ chối ghi**.
+`test_limn_dual_scope_producer.py` = **8 test**. Artifact vá bằng script có ghi digest
+(`r5_patch_artifact.py`, `--dry-run` trước):
 
-**`TESTED_SOURCE_SHA` đã KHÔNG được nâng, và đó là lựa chọn đúng.** Nâng nó lúc này sẽ tuyên bố một
-full sweep đã chạy trên `3828163` — điều chưa xảy ra. Chỉ được nâng sau khi một lượt đầy đủ chạy trên
-`3828163` và pass. Ghi nhận trung thực: **đây là gate duy nhất trong báo cáo này đỏ vì lý do hợp lệ,
-và nó chặn release, không chặn việc đọc số.**
+| | |
+|---|---|
+| ô đổi | **6**, tất cả của `7:3038`, `7:42304 → 7:3416` |
+| leaf diff đệ quy | **62** leaf = 6 ô + 56 field của `provenance_correction_r5`, **0 khác** |
+| rank / score / gallery position / asset / export / model text | **không đổi một byte** |
+| bản gốc | `limn_dual_scope.json.pre-r5`, sha256 `04c4419e…abf0` |
+| bản vá | sha256 `d1b4aadb6735b8b3c57e9fbfe234b1e12c15a13b977ace23500916af94473e3f` |
+| serve layer | `DIAGNOSTIC_COMPLETE`, `complete: true`, `defects: 0` |
+
+Một lỗi do chính bản vá đầu gây ra và đã sửa: nó thêm `target_did` top-level vào block `7:3038` mà
+không thêm vào `7:3790`, phá tính đối xứng và vượt tuyên bố "chỉ 6 ô". Đã bỏ; hai block nay cùng tập
+khoá `qid, release, resolved_query_image_path, scopes, target_gallery_id, target_position_in_gallery`.
+
+**R1 — migration đóng băng câu trích sai.** `protocol_source` ra khỏi `FROZEN_FIELDS`; thêm
+`CORRECTABLE_FIELDS` + đường hiệu chỉnh **bắt buộc có citation**, ghi bản cũ nguyên văn vào
+`superseded_protocol_source` và một block `protocol_source_correction`. Chạy lại trên **bản sao**
+(`raw/guards/clip4cir_fullft.migrated.r1.json`), artifact gốc không chạm: **11/11 check pass**, nhãn
+thành `fashioniq_original_split`. Câu trích mới nói full-split gallery không mask và chỉ ra
+`validate.py:162-166` là nhánh CIRR. Khi **không** đưa correction thì câu trích vẫn **không** bị sửa
+— im lặng không đổi gì.
+
+### 10.3 Defect có sẵn, cố ý **không** sửa
+
+`workbench/tests/test_handoff_commands.py` cụt ở **703 dòng** trong cả `2e2e2d2`, `36ae9e2` và
+`3828163`. Hệ quả: `test_the_verdict_names_the_same_test_count_the_handoff_does` dừng sau
+`assert counts` và **không** có phép so chéo hai tài liệu, nên verdict và handoff có thể ghi hai con
+số khác nhau mà không ai bắt được.
+
+Không sửa trong chiến dịch này vì sửa nó biến commit docs-only `d850f98` thành thay đổi production,
+làm vô hiệu lượt sweep vừa chạy. Nó cần một lượt riêng + một sweep mới.
 
 ### Phụ lục — lệnh chạy lại
 
