@@ -58,7 +58,7 @@
             "target_rank": 3,
             "target_score": 0.5703769326210022,
             "target_gallery_position": 13614,
-            "target_did": "7:42304",
+            "target_did": "7:3416",
             "gallery_size_scored": 74381,
             "score_min": -0.4139670431613922,
             "score_max": 0.8147742748260498,
@@ -76,7 +76,7 @@
             "target_rank": 88,
             "target_score": 0.4220863878726959,
             "target_gallery_position": 13614,
-            "target_did": "7:42304",
+            "target_did": "7:3416",
             "gallery_size_scored": 74381,
             "score_min": -0.378568559885025,
             "score_max": 0.7404771447181702,
@@ -94,7 +94,7 @@
             "target_rank": 152,
             "target_score": 0.36779189109802246,
             "target_gallery_position": 13614,
-            "target_did": "7:42304",
+            "target_did": "7:3416",
             "gallery_size_scored": 74381,
             "score_min": -0.33480337262153625,
             "score_max": 0.7385141849517822,
@@ -114,7 +114,7 @@
             "target_rank": 43,
             "target_score": 0.5678249001502991,
             "target_gallery_position": 13614,
-            "target_did": "7:42304",
+            "target_did": "7:3416",
             "gallery_size_scored": 74381,
             "score_min": -0.47393396496772766,
             "score_max": 0.8175360560417175,
@@ -132,7 +132,7 @@
             "target_rank": 389,
             "target_score": 0.3436165750026703,
             "target_gallery_position": 13614,
-            "target_did": "7:42304",
+            "target_did": "7:3416",
             "gallery_size_scored": 74381,
             "score_min": -0.2906406819820404,
             "score_max": 0.689705491065979,
@@ -150,7 +150,7 @@
             "target_rank": 67,
             "target_score": 0.45405110716819763,
             "target_gallery_position": 13614,
-            "target_did": "7:42304",
+            "target_did": "7:3416",
             "gallery_size_scored": 74381,
             "score_min": -0.39179307222366333,
             "score_max": 0.7239910364151001,
@@ -732,5 +732,79 @@
     "unscored_count": 2,
     "multimodal_recall_at_10": 30.0283,
     "source": "workbench/artifacts/composition/summary/limn_base_iter0_all_categories_9e4918a6b5c243412cbc58c9/full.json"
+  },
+  "provenance_correction_r5": {
+    "defect": "R5",
+    "what": "`target_did` repeated one query's positive id across every cell because the producer read a shared loop variable (t2_dual_scope.py:273, fixed there too)",
+    "fix": "each cell's target_did is that query's own positive id, cross-checked against the release loader; the serve layer additionally refuses a stale value and reports it as a defect",
+    "cells_changed": 6,
+    "changed": [
+      {
+        "qid": "7:3038",
+        "scope": "shirt",
+        "condition": "multimodal",
+        "was": "7:42304",
+        "now": "7:3416"
+      },
+      {
+        "qid": "7:3038",
+        "scope": "shirt",
+        "condition": "text_only_black_image",
+        "was": "7:42304",
+        "now": "7:3416"
+      },
+      {
+        "qid": "7:3038",
+        "scope": "shirt",
+        "condition": "image_only_empty_text",
+        "was": "7:42304",
+        "now": "7:3416"
+      },
+      {
+        "qid": "7:3038",
+        "scope": "toptee",
+        "condition": "multimodal",
+        "was": "7:42304",
+        "now": "7:3416"
+      },
+      {
+        "qid": "7:3038",
+        "scope": "toptee",
+        "condition": "text_only_black_image",
+        "was": "7:42304",
+        "now": "7:3416"
+      },
+      {
+        "qid": "7:3038",
+        "scope": "toptee",
+        "condition": "image_only_empty_text",
+        "was": "7:42304",
+        "now": "7:3416"
+      }
+    ],
+    "unchanged": [
+      "target_rank",
+      "target_score",
+      "target_gallery_position",
+      "score_at_rank_1",
+      "target_margin_vs_rank1",
+      "top100_export",
+      "gallery_size_scored",
+      "model_text",
+      "encode_seconds",
+      "query_embedding_norm",
+      "score_min",
+      "score_max",
+      "scope",
+      "condition",
+      "staged_image_path",
+      "query_embedding_norm"
+    ],
+    "original_preserved_at": "limn_dual_scope.json.pre-r5",
+    "rescored": false,
+    "reranked": false,
+    "verification": "rank/score/position/asset of all 12 cells re-derived from each scope's own export plus the release loader; raw/guards/r5_reconcile.json",
+    "top_level_target_did_removed": "a top-level target_did was added to queries[\"7:3038\"] only; the pre-patch artifact carried it per cell only, so it was removed to keep both blocks symmetric",
+    "artifact_sha256_before": "04c4419e44ff555b909ad92ed0a8596520a0cb5cdcfc0467986baabf77bfabf0"
   }
 }

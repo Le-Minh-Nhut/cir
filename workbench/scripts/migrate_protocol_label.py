@@ -8,8 +8,14 @@ disagree with the requested label, so a label can only be fixed where the bytes 
 truth.
 
 What it writes:
-  * the artifact with ``protocol``/``protocol_id`` set to the new id (and, when present,
-    ``protocol_source`` untouched -- it cites source, and source does not change);
+  * the artifact with ``protocol``/``protocol_id`` set to the new id;
+  * when the caller supplies a verified ``protocol_source`` correction, that field is REWRITTEN and
+    the original is preserved verbatim under ``superseded_protocol_source``, with a
+    ``protocol_source_correction`` block naming the file:line that disproves it. Freezing a FALSE
+    citation to preserve "history" is not history preservation -- it propagates the error, and every
+    reader of the migrated artifact would inherit a claim the source contradicts. A citation is not a
+    measurement: correcting it moves no number. When no correction is supplied, the field is frozen
+    as before, so nothing changes silently;
   * a ``<artifact>.migration.json`` sidecar recording from/to, the original bytes' digest, the
     new bytes' digest, the declared evidence that authorized it, and the untouched metric fields;
   * ``migrated_from`` in the artifact, so history survives inside the migrated file too.
@@ -31,8 +37,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 #: Fields that describe the measurement itself. A migration may not touch any of them; the tool
 #: asserts equality on every one that exists in both documents.
 FROZEN_FIELDS = ("aggregate", "categories", "results", "checkpoint", "source", "runtime", "side_effects",
-                 "complete_benchmark", "model_id", "protocol_source")
+                 "complete_benchmark", "model_id")
 LABEL_FIELDS = ("protocol", "protocol_id")
+#: Fields a correction may rewrite, and ONLY through the recorded path below: the original value is
+#: kept verbatim beside the new one and the reason is cited. `protocol_source` is a citation, not a
+#: measurement -- a wrong citation left in place would be inherited by every reader.
+CORRECTABLE_FIELDS = {"protocol_source": "superseded_protocol_source"}
+CORRECTION_BLOCK = "protocol_source_correction"
 
 
 def sha256(path: Path) -> str:
@@ -84,6 +95,33 @@ def migrate(artifact: Path, to_label: str, *, evidence: dict, dry_run: bool) -> 
     for name in LABEL_FIELDS:
         if name in migrated:
             migrated[name] = to_label
+
+    # A citation correction is opt-in and must carry its own disproof. The original is never lost.
+    correction = evidence.get(CORRECTION_BLOCK)
+    if correction is not None:
+        if not isinstance(correction, dict):
+            raise SystemExit(f"refusing: {CORRECTION_BLOCK} must be an object")
+        new_text = correction.get("protocol_source")
+        citations = correction.get("citations") or []
+        if not isinstance(new_text, str) or not new_text.strip():
+            raise SystemExit(f"refusing: {CORRECTION_BLOCK} states no corrected protocol_source")
+        if not citations:
+            raise SystemExit(f"refusing: {CORRECTION_BLOCK} carries no citation, and an uncited "
+                             "correction is one claim replacing another")
+        for name, backup_field in CORRECTABLE_FIELDS.items():
+            if name not in document or name not in migrated:
+                continue
+            original = document[name]
+            migrated[backup_field] = original
+            migrated[name] = new_text
+        migrated[CORRECTION_BLOCK] = {
+            "field": "protocol_source",
+            "superseded_field": "superseded_protocol_source",
+            "reason": correction.get("reason"),
+            "citations": list(citations),
+            "corrected_at": datetime.now(timezone.utc).isoformat(),
+        }
+
     migrated["migrated_from"] = {
         "artifact_sha256": before_digest,
         "protocol_label": from_label,
@@ -92,7 +130,9 @@ def migrate(artifact: Path, to_label: str, *, evidence: dict, dry_run: bool) -> 
         "evidence": evidence,
     }
 
-    # The measurement must be untouched, field by field.
+    # The measurement must be untouched, field by field. `protocol_source` is deliberately NOT in
+    # FROZEN_FIELDS: it is a citation, and the correction path above records both versions. It is
+    # still guarded -- it can only change through that path, which sets the superseded field too.
     for name in FROZEN_FIELDS:
         if name in document and document[name] != migrated.get(name):
             raise SystemExit(f"refusing: migration would change frozen field {name!r}")
@@ -111,6 +151,10 @@ def migrate(artifact: Path, to_label: str, *, evidence: dict, dry_run: bool) -> 
             "artifact_sha256_before": before_digest,
             "artifact_sha256_after": after_digest,
             "frozen_fields_verified": [name for name in FROZEN_FIELDS if name in document],
+            "protocol_source_corrected": CORRECTION_BLOCK in migrated,
+            "superseded_protocol_source_sha256": (
+                hashlib.sha256(str(document.get("protocol_source", "")).encode("utf-8")).hexdigest()
+                if CORRECTION_BLOCK in migrated else None),
             "evidence": evidence,
             "migrated_at": migrated["migrated_from"]["migrated_at"],
         }, indent=2) + "\n", encoding="utf-8")

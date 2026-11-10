@@ -1,0 +1,19 @@
+{
+ "sha256_before": "fb97cfabdc6976b1e582f89fd2db66a7e15b9f756561b9ad5e04b96bd02e398e",
+ "sha256_after": "5d1e605a95dac8ee849d669406fbb70fb557566a9c9016f5e75cd22a9dc0d199",
+ "protocol_before": "fashioniq_full_gallery_ref_excluded",
+ "protocol_after": "fashioniq_original_split",
+ "verdict": "R1_FIXED_AND_VERIFIED",
+ "failed_checks": []
+}
+  PASS  protocol_is_original_split
+  PASS  from_label_was_full_gallery
+  PASS  active_source_drops_the_mask_claim
+  PASS  active_source_cites_cirr_lines
+  PASS  active_source_states_full_split
+  PASS  false_text_preserved_verbatim
+  PASS  correction_block_present
+  PASS  correction_cites_the_disproof
+  PASS  measured_fields_identical
+  PASS  sidecar_records_correction
+  PASS  source_artifact_untouched

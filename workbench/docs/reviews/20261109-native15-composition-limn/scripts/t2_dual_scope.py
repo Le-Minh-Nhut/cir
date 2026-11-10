@@ -58,6 +58,48 @@ def sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
+def cell_target_did(qid: str, by_qid: dict) -> str:
+    """The target data identifier for ONE cell, taken from THAT query's own record.
+
+    A previous version of this serializer read ``query.positive_ids[0]`` from a ``query`` variable
+    left over by the outer ``for qid in QIDS`` loop, so every cell of a scope/condition batch recorded
+    the LAST query's positive. All twelve cells came out as ``7:42304`` -- the positive of ``7:3790``
+    -- even for ``7:3038``, whose own positive is ``7:3416``.
+
+    The lookup is by qid at serialize time, and the result is asserted to be one of that query's own
+    release positive ids, so a future regeneration cannot silently emit another query's target.
+    """
+    query = by_qid[qid]
+    positives = tuple(str(value) for value in (getattr(query, "positive_ids", ()) or ()))
+    if not positives:
+        raise SystemExit(f"REFUSING {qid}: the release record states no positive id, so the cell has "
+                         "no target to name")
+    target_did = positives[0]
+    if target_did not in positives:  # cannot happen; kept so the contract is explicit
+        raise SystemExit(f"REFUSING {qid}: target_did {target_did!r} is not one of its positives")
+    return target_did
+
+
+def assert_cells_target_own_query(report_queries: dict, by_qid: dict,
+                                  qids=QIDS, scopes=SCOPES, conditions=CONDITIONS) -> None:
+    """Refuse a report in which any cell records another query's positive id.
+
+    Runs over the whole report, not per cell: a per-cell lookup can be correct while a later copy,
+    a default, or a merge puts the wrong value back. Raising here means no file is written.
+    """
+    for cell_qid in qids:
+        own = tuple(str(value) for value in (by_qid[cell_qid].positive_ids or ()))
+        record = report_queries.get(cell_qid) or {}
+        for cell_scope in scopes:
+            for cell_condition in conditions:
+                recorded = ((record.get("scopes") or {}).get(cell_scope) or {}).get(
+                    cell_condition, {}).get("target_did")
+                if recorded not in own:
+                    raise SystemExit(
+                        f"REFUSING to write: {cell_qid}/{cell_scope}/{cell_condition} records "
+                        f"target_did {recorded!r}, which is not one of {cell_qid}'s positives {own}")
+
+
 def load_verified(path: Path) -> tuple[np.memmap, dict]:
     """Load a feature cache only if its recorded content digest is the digest of the bytes on disk."""
     sidecar = json.loads(Path(str(path) + ".json").read_text(encoding="utf-8"))
@@ -261,6 +303,13 @@ def main() -> int:
                 top = [(int(position), float(score_row[position]))
                        for position in order[:TOP_K]]
                 query_scope = report["queries"][qid]["scopes"].setdefault(scope, {})
+                # Taken by qid here, inside the serialization loop -- never from the outer loop's
+                # `query`, which is the R5 defect.
+                cell_did = cell_target_did(qid, by_qid)
+                positives = tuple(str(value) for value in (by_qid[qid].positive_ids or ()))
+                if cell_did not in positives:
+                    raise SystemExit(f"REFUSING {qid}/{scope}/{condition}: target_did {cell_did!r} "
+                                     f"is not one of the query's positives {positives}")
                 query_scope[condition] = {
                     "scope": scope,
                     "condition": condition,
@@ -270,7 +319,7 @@ def main() -> int:
                     "target_rank": ranks[row],
                     "target_score": float(score_row[target_position]),
                     "target_gallery_position": int(target_position),
-                    "target_did": query.positive_ids[0],
+                    "target_did": cell_did,
                     "gallery_size_scored": int(score_row.size),
                     "score_min": float(score_row.min()),
                     "score_max": float(score_row.max()),
@@ -305,6 +354,10 @@ def main() -> int:
                 report["queries"][record["qid"]]["scopes"][scope][condition]["top100_export"] = str(jsonl)
 
     adapter.close()
+    # Everything about to be written is checked once more as a whole: for every cell, across both
+    # queries and all six scope/condition files, the recorded target must be that cell's own query's
+    # positive. A per-cell lookup can be right while a copy is wrong; this catches the copy.
+    assert_cells_target_own_query(report["queries"], by_qid)
     report["runtime"] = {
         "controller_python": sys.version,
         "model_interpreter": adapter.interpreter,

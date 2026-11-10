@@ -1,0 +1,39 @@
+{
+ "source_artifact": "/home/heheboiz/data/cir/workbench/docs/reviews/20261109-native15-composition-limn/raw/native/clip4cir_fullft.json",
+ "source_sha256": "fb97cfabdc6976b1e582f89fd2db66a7e15b9f756561b9ad5e04b96bd02e398e",
+ "source_untouched": true,
+ "migrated_copy": "/home/heheboiz/data/cir/workbench/docs/reviews/20261110-e2e-repair/raw/guards/clip4cir_fullft.migrated.r1.json",
+ "sha256_before": "fb97cfabdc6976b1e582f89fd2db66a7e15b9f756561b9ad5e04b96bd02e398e",
+ "sha256_after": "5d1e605a95dac8ee849d669406fbb70fb557566a9c9016f5e75cd22a9dc0d199",
+ "superseded_protocol_source": "third_party/CLIP4Cir/src/validate.py::compute_fiq_val_metrics \u2014 index_features over the whole split.{category}.val.json gallery; the reference is excluded by masking its own index entry rather than removing it from the gallery",
+ "active_protocol_source": "third_party/CLIP4Cir/src/validate.py::compute_fiq_val_metrics \u2014 index_features over the whole split.{category}.val.json gallery (the full released gallery, no category filter, no reference mask); recall@10/@50 counted directly from the sorted index. The reference-mask branch cited by the superseded text exists only in compute_cirr_val_metrics (validate.py:162-166), which the FashionIQ branch never calls",
+ "protocol_before": "fashioniq_full_gallery_ref_excluded",
+ "protocol_after": "fashioniq_original_split",
+ "protocol_source_correction": {
+  "field": "protocol_source",
+  "superseded_field": "superseded_protocol_source",
+  "reason": "the superseded citation asserts a reference mask that compute_fiq_val_metrics does not contain; freezing it would propagate a false statement into the migrated artifact",
+  "citations": [
+   "workbench/third_party/CLIP4Cir/src/validate.py:21-57 \u2014 no reference write in the FashionIQ branch (normalize :41, distances :44, argsort :45, labels :49-50)",
+   "workbench/third_party/CLIP4Cir/src/validate.py:162-166 \u2014 the only reference_mask is in compute_cirr_val_metrics, a different metric function"
+  ],
+  "corrected_at": "2026-11-10T02:08:22.036297+00:00"
+ },
+ "measured_fields_identical": true,
+ "checks": {
+  "protocol_is_original_split": true,
+  "from_label_was_full_gallery": true,
+  "active_source_drops_the_mask_claim": true,
+  "active_source_cites_cirr_lines": true,
+  "active_source_states_full_split": true,
+  "false_text_preserved_verbatim": true,
+  "correction_block_present": true,
+  "correction_cites_the_disproof": true,
+  "measured_fields_identical": true,
+  "sidecar_records_correction": true,
+  "source_artifact_untouched": true
+ },
+ "failed_checks": [],
+ "verdict": "R1_FIXED_AND_VERIFIED",
+ "note": "the migration was re-run on a COPY. The historical artifact and its sidecar under raw/native/ are not modified; only the copied file was migrated."
+}

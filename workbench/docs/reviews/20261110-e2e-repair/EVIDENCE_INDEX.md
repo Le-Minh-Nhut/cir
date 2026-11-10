@@ -1,6 +1,7 @@
 # EVIDENCE_INDEX — mỗi artifact chứng minh điều gì
 
-Lượt 2026-11-10. HEAD `2e2e2d229e0cd3f27d6bcaff09fdf64d7c778dc6` (`2e2e2d2`).
+Lượt 2026-11-10. HEAD `382816315d0ab7c2e13d7a92d2fd68bc61a11a97` (`3828163`); mốc trước là `2e2e2d2`.
+Bằng chứng nào đo ở `2e2e2d2` thì ghi đích danh `2e2e2d2` ở cột hoặc trong ô.
 Đường dẫn dưới đây tương đối với `workbench/docs/reviews/20261110-e2e-repair/` trừ khi ghi `repo:`.
 
 Quy ước: **một dòng = một artifact = một phát biểu được phép rút ra**. Artifact không nằm trong
@@ -18,7 +19,7 @@ không phải phát biểu rộng nhất người đọc muốn.
 | artifact | tầng | chứng minh |
 |---|---|---|
 | `BASELINE.md` | MEAS | HEAD, nhánh, upstream, 0 commit chưa push; service config 8000/5173; 17 model × interpreter; bundle 271 byte; disk 156 G trống |
-| `raw/baseline_git.txt` | MEAS | `git rev-parse HEAD` = `2e2e2d2…`; `git status --short` lúc chụp |
+| `raw/baseline_git.txt` | MEAS | `git rev-parse HEAD` = `2e2e2d2…` **(mốc trước)**; `git status --short` lúc chụp |
 | `raw/baseline_provenance.txt` | MEAS | 16 repo vendor: `upstream_commit` + băm lại `file_manifest` |
 | `raw/baseline_provenance_drift.txt` | MEAS | 5 file lệch manifest **khớp** `derived_sha256` của `approved_source_patches` ⇒ không phải drift |
 | `raw/baseline_services.txt`, `raw/baseline_env.txt`, `raw/baseline_log.txt` | MEAS | pid 2759507/2759510, bind 8000/5173, chỉ 1 biến `WORKBENCH_CIRCUS_RELEASE_ROOT` được export, log `/tmp/workbench_serve.log` |
@@ -138,12 +139,34 @@ Lưu ý định dạng: `RUN_MATRIX.csv` có **một** dòng hỏng do `ptha_mts
 | `raw/r12/combiner_gate_full.txt`, `combiner_verify_run.json` | MEAS | `METRIC_REFERENCE_UNVERIFIED`, `passed: false`, `is_research_evidence: false`; run vẫn `EXECUTION_COMPLETED`, `return_code 0` |
 | `raw/r12/combiner_completion.txt` | MEAS | `EXECUTION_COMPLETED` / `PROOF_VALIDATED` / `EXTRACTED_VERIFIED`, metric 35.1078 / 58.4756 / 46.7917 |
 
+## 7bis. Bằng chứng phát sinh sau commit `3828163`
+
+Ba defect mà báo cáo từng ghi là mở đã được sửa và **commit**; mỗi cái có bằng chứng riêng, đo trên
+process backend `:8000` khởi động **08:47:09** (pid 2820650, sau `main.py` 08:29:09).
+
+| artifact | tầng | chứng minh |
+|---|---|---|
+| `web_evidence/after-parity-gate.json` | MEAS | `GET /api/runs/parity-gate` → **200**; `standard: parity-relative/v1`; `passed_models: []`; `limn` 3 failure, `encoder` 13 failure, cả hai `PARITY_MANDATORY_SUBCHECK_FAILED`. Ở `2e2e2d2` route **không tồn tại** |
+| `web_evidence/1920-14-parity-gate.png` | MEAS | ảnh chụp route đó ở 1920px — bằng chứng định dạng hiển thị, không phải nguồn số |
+| `web_evidence/after-banner-loading.txt` | MEAS | trace 3 mốc: `Đang tải bằng chứng` → `Đang tải bằng chứng · 2 đã chứng nhận trong 13 report đã về` → banner settled; `false-claim-seen: False`. Chứng minh banner **không** còn nói "không có bằng chứng" khi đang tải |
+| `repo:workbench/tests/test_web_evidence_banner_loading.py` | MEAS | `test_a_loading_source_is_never_reported_as_no_evidence`; failing-first 6 failure trên `evidence.ts` cũ, **8 pass** sau sửa |
+| `web_evidence/after-native-measurements.json` | MEAS | `{files_scanned 71, files 32, blocks_with_metrics 43, with_metrics 21, rollup_rows 22, unreadable 2, signposted_blockers 4, models_with_metrics 15, models_rollup_only 13, verified 0}`; `rollup: true` = 22/49 row; `ptha_mtst`/`pair`/`clip4cir_rn50x4_fullft`/`combiner_rn50x4_noft`/`csmcir` đều có mặt với `verified: false` |
+| `repo:workbench/tests/test_native_measurements_census.py` | MEAS | 16 test, gồm năm hình dạng macro và việc loại roll-up khỏi `with_metrics` |
+| `web_evidence/after-release-chain-banner-contract.txt` | MEAS | `aggregate-only: True`, `claims-absent: False` — banner đúng hợp đồng trên một deployment chỉ có aggregate |
+
+Lưu ý đếm: `models_with_metrics 15` là **model không tính roll-up** (khớp `with_metrics 21` trừ phần
+trùng); 28 là số `model_id` phân biệt nếu tính **cả** roll-up. Hai con số đo hai thứ khác nhau và
+không được tráo cho nhau.
+
+---
+
 ## 8. Artifact không được dùng làm bằng chứng
 
 | artifact | lý do |
 |---|---|
-| `repo:workbench/docs/reviews/r13/R13_REMEDIATION.md`, `r8/*`, `r9/*`, `r10/*`, `r11/*`, `r12/*` (thư mục review cũ) | tài liệu lịch sử trên baseline khác; không phải số đo của HEAD `2e2e2d2` |
+| `repo:workbench/docs/reviews/r13/R13_REMEDIATION.md`, `r8/*`, `r9/*`, `r10/*`, `r11/*`, `r12/*` (thư mục review cũ) | tài liệu lịch sử trên baseline khác; không phải số đo của `2e2e2d2` hay `3828163` |
 | `CLEANUP_REPORT.md.save` | không rõ nguồn, không phải artifact của lượt |
 | `raw/native/ptha_mtst.json` | JSON hỏng cú pháp (4715 byte); bản đọc được là `ptha_mtst.result.json` |
+| `repo:workbench/tests/test_handoff_commands.py` (kết quả chạy) | **1 failed, 7 passed** — guard ĐỎ có chủ ý: `TESTED_SOURCE_SHA 36ae9e2…` không chứa production code hiện tại; SHA **không** được nâng |
 | `raw/native/encoder.json` | measurement **khác** với file đang phục vụ (`cohort/measurements/encoder_fashioniq.json`); chỉ dùng khi nói rõ là bản thứ hai |
 | `repo:workbench/artifacts/composition/summary/limn_base_iter0_all_categories_3f86f58483b368377e2c151e/` | run smoke q=8 (`COMPLETED` nhưng 8 query, R@10 25.0); không dùng làm metric |

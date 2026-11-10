@@ -1,0 +1,13 @@
+{
+ "sha256_before": "04c4419e44ff555b909ad92ed0a8596520a0cb5cdcfc0467986baabf77bfabf0",
+ "sha256_after": "e6c554a4fcfefb917928552a115f2f2a31f3a6de1ee1bf60da6ffe5f3ee919b3",
+ "cells_changed": 6,
+ "rescored": false,
+ "dry_run": false
+}
+  7:3038 shirt multimodal 7:42304 -> 7:3416
+  7:3038 shirt text_only_black_image 7:42304 -> 7:3416
+  7:3038 shirt image_only_empty_text 7:42304 -> 7:3416
+  7:3038 toptee multimodal 7:42304 -> 7:3416
+  7:3038 toptee text_only_black_image 7:42304 -> 7:3416
+  7:3038 toptee image_only_empty_text 7:42304 -> 7:3416

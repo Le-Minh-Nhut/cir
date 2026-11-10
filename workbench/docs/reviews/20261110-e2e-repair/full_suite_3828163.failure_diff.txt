@@ -1,0 +1,76 @@
+FAILURE-SET DIFF — 36ae9e2 vs 7a58ce6 baseline
+============================================================
+new log      : 20261110-e2e-repair/full_suite_3828163.txt
+baseline log : 20261109-native15-composition-limn/full_suite_36ae9e2.txt
+
+new failed count      : 18
+baseline failed count : 18
+NEW (only in 36ae9e2) : 0
+DROPPED (only in base): 0
+COMMON                : 18
+
+--- NEW (regressions relative to the baseline) ---
+(none)
+
+--- DROPPED (present in baseline, absent now) ---
+(none)
+
+--- COMMON ---
+workbench/tests/test_circus_adapters_blip.py::test_resident_worker_failure_uses_shared_error_and_stays_failed[workbench.composition.model_conesep-conesep]
+workbench/tests/test_circus_adapters_blip.py::test_resident_worker_failure_uses_shared_error_and_stays_failed[workbench.composition.model_ptha_mtst-ptha_mtst]
+workbench/tests/test_circus_adapters_blip.py::test_resident_worker_reuse_and_cleanup[workbench.composition.model_conesep-conesep]
+workbench/tests/test_circus_adapters_blip.py::test_resident_worker_reuse_and_cleanup[workbench.composition.model_ptha_mtst-ptha_mtst]
+workbench/tests/test_circus_cli.py::test_cli_3d_full_gallery_resume_and_gallery_invalidation
+workbench/tests/test_circus_tme_lifecycle.py::test_encoder_and_limn_failed_child_latch_and_preserve_log[encoder]
+workbench/tests/test_circus_tme_lifecycle.py::test_encoder_and_limn_failed_child_latch_and_preserve_log[limn]
+workbench/tests/test_circus_tme_precision.py::test_worker_skips_empty_stdin_lines
+workbench/tests/test_f05_f08_f09_verification.py::test_f08_dcnet_config_data_dir_resolution
+workbench/tests/test_handoff_commands.py::test_no_release_document_points_at_a_superseded_source_sha
+workbench/tests/test_release_blocker_gpu_records.py::test_defect_b_g_with_no_target_gpu_verdict_is_pending_not_pass
+workbench/tests/test_release_blocker_gpu_records.py::test_offline_verdict_names_deployment_reason
+workbench/tests/test_release_blocker_gpu_records.py::test_release_verify_documented_invocations_produce_parseable_report[<lambda>0]
+workbench/tests/test_release_blocker_gpu_records.py::test_release_verify_documented_invocations_produce_parseable_report[<lambda>1]
+workbench/tests/test_release_blocker_gpu_records.py::test_release_verify_documented_invocations_produce_parseable_report[<lambda>2]
+workbench/tests/test_release_blocker_gpu_records.py::test_release_verify_documented_invocations_produce_parseable_report[<lambda>3]
+workbench/tests/test_release_blocker_gpu_records.py::test_release_verify_documented_invocations_produce_parseable_report[<lambda>4]
+workbench/tests/test_standalone_operator_commands.py::test_prepare_model_executes_only_declared_recipe_steps
+
+--- full new list ---
+workbench/tests/test_circus_adapters_blip.py::test_resident_worker_failure_uses_shared_error_and_stays_failed[workbench.composition.model_conesep-conesep]
+workbench/tests/test_circus_adapters_blip.py::test_resident_worker_failure_uses_shared_error_and_stays_failed[workbench.composition.model_ptha_mtst-ptha_mtst]
+workbench/tests/test_circus_adapters_blip.py::test_resident_worker_reuse_and_cleanup[workbench.composition.model_conesep-conesep]
+workbench/tests/test_circus_adapters_blip.py::test_resident_worker_reuse_and_cleanup[workbench.composition.model_ptha_mtst-ptha_mtst]
+workbench/tests/test_circus_cli.py::test_cli_3d_full_gallery_resume_and_gallery_invalidation
+workbench/tests/test_circus_tme_lifecycle.py::test_encoder_and_limn_failed_child_latch_and_preserve_log[encoder]
+workbench/tests/test_circus_tme_lifecycle.py::test_encoder_and_limn_failed_child_latch_and_preserve_log[limn]
+workbench/tests/test_circus_tme_precision.py::test_worker_skips_empty_stdin_lines
+workbench/tests/test_f05_f08_f09_verification.py::test_f08_dcnet_config_data_dir_resolution
+workbench/tests/test_handoff_commands.py::test_no_release_document_points_at_a_superseded_source_sha
+workbench/tests/test_release_blocker_gpu_records.py::test_defect_b_g_with_no_target_gpu_verdict_is_pending_not_pass
+workbench/tests/test_release_blocker_gpu_records.py::test_offline_verdict_names_deployment_reason
+workbench/tests/test_release_blocker_gpu_records.py::test_release_verify_documented_invocations_produce_parseable_report[<lambda>0]
+workbench/tests/test_release_blocker_gpu_records.py::test_release_verify_documented_invocations_produce_parseable_report[<lambda>1]
+workbench/tests/test_release_blocker_gpu_records.py::test_release_verify_documented_invocations_produce_parseable_report[<lambda>2]
+workbench/tests/test_release_blocker_gpu_records.py::test_release_verify_documented_invocations_produce_parseable_report[<lambda>3]
+workbench/tests/test_release_blocker_gpu_records.py::test_release_verify_documented_invocations_produce_parseable_report[<lambda>4]
+workbench/tests/test_standalone_operator_commands.py::test_prepare_model_executes_only_declared_recipe_steps
+
+--- full baseline list ---
+workbench/tests/test_circus_adapters_blip.py::test_resident_worker_failure_uses_shared_error_and_stays_failed[workbench.composition.model_conesep-conesep]
+workbench/tests/test_circus_adapters_blip.py::test_resident_worker_failure_uses_shared_error_and_stays_failed[workbench.composition.model_ptha_mtst-ptha_mtst]
+workbench/tests/test_circus_adapters_blip.py::test_resident_worker_reuse_and_cleanup[workbench.composition.model_conesep-conesep]
+workbench/tests/test_circus_adapters_blip.py::test_resident_worker_reuse_and_cleanup[workbench.composition.model_ptha_mtst-ptha_mtst]
+workbench/tests/test_circus_cli.py::test_cli_3d_full_gallery_resume_and_gallery_invalidation
+workbench/tests/test_circus_tme_lifecycle.py::test_encoder_and_limn_failed_child_latch_and_preserve_log[encoder]
+workbench/tests/test_circus_tme_lifecycle.py::test_encoder_and_limn_failed_child_latch_and_preserve_log[limn]
+workbench/tests/test_circus_tme_precision.py::test_worker_skips_empty_stdin_lines
+workbench/tests/test_f05_f08_f09_verification.py::test_f08_dcnet_config_data_dir_resolution
+workbench/tests/test_handoff_commands.py::test_no_release_document_points_at_a_superseded_source_sha
+workbench/tests/test_release_blocker_gpu_records.py::test_defect_b_g_with_no_target_gpu_verdict_is_pending_not_pass
+workbench/tests/test_release_blocker_gpu_records.py::test_offline_verdict_names_deployment_reason
+workbench/tests/test_release_blocker_gpu_records.py::test_release_verify_documented_invocations_produce_parseable_report[<lambda>0]
+workbench/tests/test_release_blocker_gpu_records.py::test_release_verify_documented_invocations_produce_parseable_report[<lambda>1]
+workbench/tests/test_release_blocker_gpu_records.py::test_release_verify_documented_invocations_produce_parseable_report[<lambda>2]
+workbench/tests/test_release_blocker_gpu_records.py::test_release_verify_documented_invocations_produce_parseable_report[<lambda>3]
+workbench/tests/test_release_blocker_gpu_records.py::test_release_verify_documented_invocations_produce_parseable_report[<lambda>4]
+workbench/tests/test_standalone_operator_commands.py::test_prepare_model_executes_only_declared_recipe_steps

@@ -1,19 +1,20 @@
 # FINAL REPORT — chiến dịch sửa lỗi `20261110-e2e-repair`
 
-Nhánh `research/cir-failure-workbench`, HEAD `2e2e2d299e0cd3f27d6bcaff09fdf64d7c778dc6` (`2e2e2d2`).
+Nhánh `research/cir-failure-workbench`, HEAD `382816315d0ab7c2e13d7a92d2fd68bc61a11a97` (`3828163`).
+Mốc trước đó là `2e2e2d2`; mọi kết luận đo ở mốc cũ được ghi rõ là **`2e2e2d2`**.
 Báo cáo này thay thế phần kết luận của
 `workbench/docs/reviews/20261109-native15-composition-limn/FINAL_REPORT.vi.md` (gọi tắt **BC-cũ**).
 Mọi số dưới đây ghi kèm file. Bản đồ artifact → phát biểu ở `EVIDENCE_INDEX.md` cùng thư mục.
 Sổ phát hiện đầy đủ 14 dòng: `FINDINGS_AND_FIXES.md`.
 
-> **Quy ước hai trạng thái.** `HEAD` = bytes đã commit `2e2e2d2`. `WT` = working tree lúc
-> 2026-11-10 08:30 (16 file tracked bị sửa, 11 file untracked). Kết luận nào khác nhau thì ghi cả hai.
-> Không file nào trong báo cáo này commit gì.
+> **Quy ước hai trạng thái (đã cập nhật).** `HEAD` = `3828163` — commit `Close the E2E repair campaign`,
+> 182 file, `2e2e2d2..3828163`, `HEAD == origin/research/cir-failure-workbench`. `2e2e2d2` = mốc trước,
+> được gọi đích danh mỗi khi một phát hiện chỉ đúng ở đó. Cột "working tree" của bản trước đã hết:
+> trạng thái đó nay **là** `3828163`, nên "đã sửa" chỉ còn nghĩa "có trong `3828163`".
+> Không file nào trong báo cáo này commit gì; git do phiên khác sở hữu.
 
 > **Tầng bằng chứng.** `EXEC` = log/command+meta của lần chạy thật · `MEAS` = file measurement mang
 > số · `READ` = chỉ đọc source · `NOT_RUN` = không có gì.
-
----
 
 ## 1. Tổng quan — cái gì xong, cái gì không
 
@@ -26,9 +27,9 @@ Sổ phát hiện đầy đủ 14 dòng: `FINDINGS_AND_FIXES.md`.
 | G1/G2 **PASS** | **0 / 15** | cả hai model có artifact đều `PARITY_MANDATORY_SUBCHECK_FAILED`, `passed_models = []` | `raw/guards/r9_after.txt` |
 | Composition CIRCUS phục vụ được | **35 row** (17 full / 9 sf / 9 validated) | 14 `COMPLETED`, 2 `PARTIAL`, 1 `FAILED` ở subset full | `/api/composition/runs`, `RUN_MATRIX.csv` |
 | LIMN canonical | **PARTIAL 6001/6003** | 2 query mơ hồ vẫn chưa chấm | `limn_dual_scope.json` |
-| W1 (web báo 0) | **sửa phần lớn** | landing còn in banner "MOCK …" khi đang tải | `web_evidence/after00.txt:37` |
-| R13 (native artifact không lên web) | **một phần** | 15 file có số được phục vụ; 4 model có macro **không** được phục vụ | mục 7 |
-| R9 (gate) | **đã code hoá** | sống ở `HEAD`? **không** — `WT` có `parity_gate.py`; endpoint trên service đang chạy trả **404** | mục 4 |
+| W1 (web báo 0) | **đã sửa** | landing = CIRCUS Full; banner có nhánh loading, `false-claim-seen: False` | `web_evidence/after-banner-loading.txt`, §7.2 |
+| R13 (native artifact không lên web) | **đã sửa** | 32 file / 43 block / 28 model có số, `verified: 0`; 5 model từng bị bỏ nay đều có mặt | `web_evidence/after-native-measurements.json`, §3.5 |
+| R9 (gate) | **đã code hoá + đã commit** | `parity_gate.py` + route ở `3828163`; `GET /api/runs/parity-gate` → **200**, `passed_models: []` | `web_evidence/after-parity-gate.json`, `web_evidence/1920-14-parity-gate.png`, §4.3 |
 | R12 (5 model) | **4 BLOCKED + 1 NOT_A_BLOCKER** | nguyên nhân đo được từng cái | `BLOCKERS_R12.vi.md` §6 |
 
 **Không tuyên bố chiến dịch đã pass.** Gate bắt buộc còn `FAIL` (G1/G2), `NOT_RUN` (13 model G1/G2,
@@ -38,8 +39,6 @@ Số model G1/G2 phải đọc là **0/15 pass**, không phải "2/15". BC-cũ g
 gọi limn `PASS` / encoder `PASS-with-caveat`; gate gọi **cả hai FAIL**. Đây là mâu thuẫn
 report-vs-code trực tiếp, và cái đúng là của gate (xem §4.3).
 
----
-
 ## 2. Ba đính chính bắt buộc (đảo lại BC-cũ)
 
 ### 2.1 Census native đã sai — "11/15, bốn model thiếu" là đếm thiếu
@@ -47,145 +46,98 @@ report-vs-code trực tiếp, và cái đúng là của gate (xem §4.3).
 **BC-cũ `:1`, `:15`, `:308`** nói `airknow`, `clvc_net`, `tgcir`, `pair` chưa có native run.
 
 **Đo lại.** `raw/r13_census_v2.md` quét **toàn bộ** JSON dưới `checkpoint_selection/` (trừ
-`downloads/`, `site-packages/`) và tìm `macro_r10` ở **mọi độ sâu**: **17/17** model khai trong
-registry đều có ≥1 file mang macro. `raw/r13_extra_measurements_audit.md` chứng minh bằng log thực thi
-rằng ba trong bốn cái "thiếu" **đã chạy**:
+`downloads/`, `site-packages/`) tìm `macro_r10` ở **mọi độ sâu**: **17/17** model trong registry có
+≥1 file mang macro. `raw/r13_extra_measurements_audit.md` chứng minh bằng log thực thi rằng ba trong
+bốn cái "thiếu" **đã chạy** (`$D1` = `…/checkpoint_selection/20261106T002617+0700`):
 
-| model | log chứng minh | nội dung quyết định |
+| model | log | nội dung quyết định |
 |---|---|---|
 | `airknow` | `$D1/logs/airknow_n05_run1.log` | dòng cuối `[OK] result written: …/airknow_fiq_n05_run1.json`; measurement tự khai `native_evaluator = test_BLIP2.py:test` |
-| `clvc_net` | `$D1/logs/clvc_run1.log` | 3 dòng per-category + `aggregate {"macro_r10": 29.970746517160162, …}` + **`EXIT=0`**, trùng từng chữ số với `measurements/clvc_run1.json` |
-| `tgcir` | `$D1/logs/tgcir_run2.log` | 3 dòng per-category + `aggregate {"macro_r10": 49.720772235486656, …}` + **`EXIT=0`**; `tgcir_run1.log` là traceback `EXIT=1` |
+| `clvc_net` | `$D1/logs/clvc_run1.log` | 3 dòng per-category + `aggregate {"macro_r10": 29.970746517160162 …}` + **`EXIT=0`**, trùng từng chữ số với `measurements/clvc_run1.json` |
+| `tgcir` | `$D1/logs/tgcir_run2.log` | 3 dòng per-category + `aggregate {"macro_r10": 49.720772235486656 …}` + **`EXIT=0`**; `tgcir_run1.log` là traceback `EXIT=1` |
 
-`$D1` = `workbench/artifacts/checkpoint_selection/20261106T002617+0700`.
-
-**Vì sao BC-cũ sai.** Nó chỉ đọc thư mục `raw/native/` **của chính nó**; `artifacts/logs/` không có
-thư mục nào cho tgcir/clvc/airknow (ba model này chạy **trước** quy ước đó; log nằm ở
-`$D1/logs/`, 18 file, mtime 2026-11-06 00:44–01:17).
-
-**Phát biểu bảo vệ được (nguyên văn của campaign):**
-
-> 14/15 target active có native evaluation đã thực thi, mỗi cái có log stdout **hoặc** command+meta
-> với `EXITCODE=0`, khớp với measurement mang macro. `pair` là cái duy nhất còn thiếu.
+**Vì sao BC-cũ sai:** nó chỉ đọc `raw/native/` **của chính nó**; `artifacts/logs/` không có thư mục cho
+ba model này (chạy **trước** quy ước đó; log ở `$D1/logs/`, 18 file, mtime 11-06 00:44–01:17).
+**Phát biểu bảo vệ được:** 14/15 target active có native evaluation đã thực thi, mỗi cái có log stdout
+**hoặc** command+meta với `EXITCODE=0` khớp measurement mang macro; `pair` là cái duy nhất còn thiếu.
 
 **Carve-out tôi tự đo, chưa worker nào ghi** — vế `EXITCODE=0` **không đúng cho `limn`**:
 `$D1/cohort/logs/limn_run2.log` có đủ 3 dòng `{"r10": 51.1651 …}` nhưng **kết thúc bằng traceback**
 `AttributeError: 'dict' object has no attribute 'complete'` tại `run_limn_oc220.py:73`, **không** có
-`EXIT=0`. Measurement `limn_base_iter0.json` mtime `22:36:11`, log mtime `22:35:49` — ghi **sau** log
-22 giây, bởi một lần chạy khác (dòng 73 crash **trước** `out.write_text`). Nên nếu đọc chặt vế
-`EXITCODE=0` thì con số là **13/15**, và 14/15 chỉ đứng nếu chấp nhận "số có trong log, không có exit
-code". Cả hai đều phải nói; `limn` là **EXEC_WEAK**, không phải EXEC.
+`EXIT=0`. Measurement mtime `22:36:11` **sau** log `22:35:49` 22 giây, tức do một lần chạy khác (dòng
+73 crash **trước** `out.write_text`). Đọc chặt vế `EXITCODE=0` thì con số là **13/15**; 14/15 chỉ đứng
+nếu chấp nhận "số có trong log, không có exit code". `limn` là **EXEC_WEAK**, không phải EXEC.
 
-Hai khiếm khuyết ghi chép khác, không phải khiếm khuyết số: (i) measurement `tgcir_run1.json` được
-sinh bởi `run2.log`; (ii) `clvc_net`/`tgcir` thiếu field `provenance.native_evaluator`.
+Hai khiếm khuyết ghi chép (không phải số): `tgcir_run1.json` sinh bởi `run2.log`;
+`clvc_net`/`tgcir` thiếu `provenance.native_evaluator`.
 
-**Cạm bẫy của census v1 phải ghi lại** (`raw/native_measurement_census.txt`, `raw/r13_census_v2.md`):
-bản v1 chỉ quét `**/measurements/*.json` và chỉ đúng một hình dạng `aggregate.macro_r10`. Nó bỏ sót
-**bốn** hình dạng, và mỗi cái đều làm một model "biến mất":
-
-| hình dạng bị bỏ sót | model bị bỏ | file |
-|---|---|---|
-| `macro.macro_r10` | `pair` | `$D1/pair_compat/measurements/pair_b1_H_normal.json` |
-| `macro_metrics.{r10,r50}` | `ptha_mtst` | `$D2/measurements/ptha_transfer_run1.json` |
-| top-level `macro_r10` | `csmcir` | `checkpoint_selection/20261107T021500+0700/csmcir/measurement.json` |
-| `clip4cir_noft/fullft.macro_r10` (nested) | 2 entry CLIP4Cir | `$D1/measurements/clip4cir_parsed.json` |
-
-`$D2` = `workbench/artifacts/checkpoint_selection/20261106T233409+0700`.
-Đây **đúng cùng một lớp lỗi** với ca `?q=` FALSE NULL: selector sai bị đọc thành dữ liệu vắng.
-Tôi đã tự tái lập cạm bẫy này khi kiểm `native_measurements.py` (§3.3).
+**Cạm bẫy census v1** (`raw/native_measurement_census.txt`, `raw/r13_census_v2.md`): chỉ quét
+`**/measurements/*.json` với đúng một hình dạng `aggregate.macro_r10`, bỏ sót **bốn** hình dạng — mỗi
+cái làm một model "biến mất": `macro.macro_r10` (`pair`), `macro_metrics.{r10,r50}` (`ptha_mtst`),
+top-level `macro_r10` (`csmcir`), `clip4cir_{noft,fullft}.macro_r10` (hai entry CLIP4Cir). Đây **cùng
+một lớp lỗi** với ca `?q=` FALSE NULL: selector sai bị đọc thành dữ liệu vắng.
 
 ### 2.2 Nhãn G1/G2 đã sai — không phải "2", encoder là **5**, limn là **3**
 
-`PARITY.vi.md` §"R2 × R9" đo sàn native-vs-native trực tiếp từ
-`raw/encoder_parity/native.{cat}.npz` (file có **cả** population train-transform và val-transform), rồi
-phân loại 4 block `within_tolerance: false` mỗi category của encoder:
+`PARITY.vi.md` §"R2 × R9" đo sàn native-vs-native trực tiếp từ `raw/encoder_parity/native.{cat}.npz`
+(file có **cả** population train-transform và val-transform), rồi phân loại 4 block
+`within_tolerance: false` mỗi category của encoder:
 
 | block | số đo (dress / shirt / toptee) | phân loại |
 |---|---|---|
-| `layer4_forward_sample.query_native_tensors` | max_abs 0.021249 / 0.041421 / 0.023708 — **trùng 6 chữ số** với sàn sample-level | `NOT_COMPARABLE` |
+| `layer4_forward_sample.query_native_tensors` | 0.021249 / 0.041421 / 0.023708 — **trùng 6 chữ số** với sàn sample-level | `NOT_COMPARABLE` |
 | `population.features_vs_native_train_query` | 0.120392 / 0.122951 / 0.125173 — **trùng 6 chữ số** với sàn population | `NOT_COMPARABLE` |
-| `population.features_vs_native_val_control` | max_abs 1.10e-6 / 1.28e-6 / 0.99e-6 (**dưới** `forward_max_abs=1e-5`); chỉ `max_rel` fail với mẫu số 3.3e-7 | `DENOMINATOR_ARTEFACT` |
+| `population.features_vs_native_val_control` | max_abs 1.10e-6 / 1.28e-6 / 0.99e-6 (**dưới** `forward_max_abs=1e-5`); chỉ `max_rel` fail, mẫu số 3.3e-7 | `DENOMINATOR_ARTEFACT` |
 | `batch_size_1_vs_n` | max_abs 3.20e-7 / 2.81e-7 / 3.28e-7; `max_rel` 7.80e-3 / 3.13e-3 / 1.16e-2 vs khai 1e-3 | `GENUINE_FAIL` |
 
-Hai block đầu **không phải phép kiểm parity**: chúng so native-train-transform với adapter, mà
-train transform là `RandomResizedCrop` **ngẫu nhiên** (`raw/r2_transform_tensors.json`: hai lần rút
-cùng ảnh lệch `max_abs 3.8270`, control val-vs-val `0.0`). Chúng trùng sàn tới 6 chữ số vì chúng
-**chính là** sàn đó.
+Hai block đầu **không phải phép kiểm parity**: chúng so native-train-transform với adapter, mà train
+transform là `RandomResizedCrop` **ngẫu nhiên** (`raw/r2_transform_tensors.json`: hai lần rút cùng ảnh
+lệch `max_abs 3.8270`, control val-vs-val `0.0`). Chúng trùng sàn tới 6 chữ số vì chúng **chính là**
+sàn đó.
 
-**Đếm bảo vệ được:**
+**Đếm bảo vệ được:** `encoder` **5** (3 block `batch_size_1_vs_n` + 2 thay đổi hạng **không-tie**),
+`limn` **3** (1 block `batch_size_1_vs_n` mỗi category), và **0** đổi R@10/R@50 ở cả hai. Hai thay đổi
+hạng của encoder, đọc từ `g1_g2.encoder.{dress,shirt}.adapter.json` →
+`scoring_ranking.rank_differences_vs_native_val_control`: dress index 1569 (adapter 1216 vs native
+1215, `min_gap_abs 6.5717e-4`), shirt index 1352 (1372 vs 1373, `1.6041e-4`), toptee **0**.
 
-| model | số sai lệch thật | thành phần | đổi R@10/R@50? |
-|---|---:|---|---|
-| `encoder` | **5** | 3 block `batch_size_1_vs_n` + 2 thay đổi hạng **không-tie** | **0** |
-| `limn` | **3** | 1 block `batch_size_1_vs_n` mỗi category | **0** |
-
-Hai thay đổi hạng không-tie của encoder, đọc từ
-`g1_g2.encoder.{dress,shirt}.adapter.json` → `scoring_ranking.rank_differences_vs_native_val_control`:
-dress index 1569 (adapter 1216 vs native 1215, `min_gap_abs 6.5717e-4`), shirt index 1352
-(1372 vs 1373, `min_gap_abs 1.6041e-4`), toptee **0**. Cả hai ở hạng ≫ 50.
-
-Ba con số đã lưu hành, và hai trong ba sai:
-
-* **"2"** (BC-cũ `:207`, `GATES.csv:4`) — bỏ sót 3 block `batch_size_1_vs_n`. Sai.
-* **"13"** (gate, `parity_gate.evaluate_all()`) — đếm **theo check**, không theo sai lệch: mỗi
-  category 5 check (2 population max_rel + 1 batch + 2 check cho mỗi thay đổi hạng), toptee 3 ⇒ 13.
-  Nó **bao gồm** 3 `DENOMINATOR_ARTEFACT` + 3 `LABEL-DISAGREEMENT` + 3 batch + 4 check hạng. Không
-  dùng làm "số sai lệch" được.
-* **"5"** (encoder) và **"3"** (limn) — số duy nhất đứng được.
-* **"1"** cho limn (BC-cũ) — sai, nó đếm một block chung cho ba category.
+Ba con số đã lưu hành, hai trong ba sai: **"2"** (BC-cũ `:207`, `GATES.csv:4`) bỏ sót 3 block batch;
+**"13"** (gate) đếm **theo check** không theo sai lệch — 5 check/category + 3 cho toptee, gồm cả
+`DENOMINATOR_ARTEFACT` và `LABEL-DISAGREEMENT`, nên không dùng làm "số sai lệch" được; **"1"** cho
+limn (BC-cũ) đếm một block chung cho ba category.
 
 ### 2.3 CLIP4Cir FullFT bị dán nhãn sai, và "đính chính" của BC-cũ cũng sai
 
-BC-cũ §2.2 đặt `clip4cir_rn50x4_fullft` dưới `fashioniq_full_gallery_ref_excluded` và **gọi đó là
-một đính chính**. Sai hai lần.
+BC-cũ §2.2 đặt `clip4cir_rn50x4_fullft` dưới `fashioniq_full_gallery_ref_excluded` và **gọi đó là một
+đính chính**. Sai hai lần. Đọc source upstream đã pin (`third_party/CLIP4Cir`, `dfed9f74…`):
 
-**Bằng chứng, đọc source upstream đã pin** (`workbench/third_party/CLIP4Cir`, commit `dfed9f74…`):
-
-* `src/validate.py:21-57` `compute_fiq_val_metrics` — **không có** lệnh ghi mask nào. Nó
-  `F.normalize(index)` (`:41`), `distances = 1 - pred @ index.T` (`:44`), `argsort` ascending (`:45`),
-  label theo target (`:49-50`).
+* `src/validate.py:21-57` `compute_fiq_val_metrics` — **không** ghi mask nào: `F.normalize(index)`
+  (`:41`), `distances = 1 - pred @ index.T` (`:44`), `argsort` ascending (`:45`), label theo target
+  (`:49-50`).
 * `reference_mask` xuất hiện **đúng hai dòng**, `:163-165`, **bên trong** `compute_cirr_val_metrics`
-  (hàm bắt đầu `:135`) — nhánh CIRR, không chạy cho FashionIQ.
-* Gallery của chính run: **3817 / 6346 / 5373** (`raw/native/clip4cir_fullft.json`,
-  `categories[].gallery_count`) = full split, không phải pair-union.
-* `workbench/registry/models.yaml:1184` đã khai `native_protocol: fashioniq_original_split`,
-  `supported_protocols: [fashioniq_original_split]` — registry **đúng từ trước**.
+  (bắt đầu `:135`) — nhánh CIRR, không chạy cho FashionIQ.
+* Gallery của chính run: **3817 / 6346 / 5373** (`raw/native/clip4cir_fullft.json`) = full split.
+* `registry/models.yaml:1184` đã khai `native_protocol: fashioniq_original_split` — registry **đúng
+  từ trước**.
 
-⇒ Nhãn đúng là `fashioniq_original_split`. Câu `protocol_source` trong artifact
-("the reference is excluded by masking its own index entry rather than removing it from the gallery")
-là **sai**, và nó là **câu tự khai của artifact**, không phải của registry.
+⇒ Nhãn đúng là `fashioniq_original_split`. Câu `protocol_source` của artifact ("the reference is
+excluded by masking its own index entry") **sai**, và nó là câu **tự khai của artifact**.
 
-**Đã sửa bằng migration có kiểm chứng, không rerun** (xếp hạng không sai; chỉ nhãn sai):
-
-```
-workbench/scripts/migrate_protocol_label.py                     # công cụ
-workbench/tests/test_protocol_label_migration.py                # 5 test
-raw/clip4cir_fullft.migrated.json                               # bản đã migrate
-raw/clip4cir_fullft.migrated.json.migration.json                # sidecar
-raw/r1_migration_evidence.json                                  # citation + gallery_counts
-```
-
-Công cụ **từ chối** khi (a) không có citation, (b) `gallery_count` mâu thuẫn cohort được yêu cầu,
-(c) đổi sang chính nhãn cũ. Nó đóng băng `aggregate`, `categories`, `checkpoint`, `source`, `runtime`,
-`side_effects`, `complete_benchmark`, `model_id`, `protocol_source` và **assert bằng nhau**.
-Đo được: sha256 trước `fb97cfabdc69…` → sau `dd9176cf3778…`; `aggregate.macro_r10` giữ nguyên
-`43.8016931215922`, `macro_r50` `66.98358456293742`, mọi `categories[]` không đổi; chỉ thêm
-`migrated_from` và đổi nhãn. 5 test pass (chạy lại lượt này). Artifact gốc của chiến dịch trước
-**không** bị chạm.
+**Đã sửa bằng migration có kiểm chứng, không rerun:** `scripts/migrate_protocol_label.py`,
+`tests/test_protocol_label_migration.py`, `raw/clip4cir_fullft.migrated.json` + `.migration.json`,
+`raw/r1_migration_evidence.json`. Công cụ **từ chối** khi thiếu citation / `gallery_count` mâu thuẫn /
+đổi sang chính nhãn cũ; đóng băng `aggregate`, `categories`, `checkpoint`, `source`, `runtime`,
+`side_effects`, `complete_benchmark`, `model_id`, `protocol_source` và **assert bằng nhau**. Đo được:
+sha256 `fb97cfabdc69…` → `dd9176cf3778…`; `macro_r10` giữ `43.8016931215922`, `macro_r50`
+`66.98358456293742`, mọi `categories[]` không đổi; 5 test pass. Artifact gốc **không** bị chạm.
 
 **Khiếm khuyết của chính remedy, tôi đo được:** `protocol_source` nằm trong `FROZEN_FIELDS`
-(`migrate_protocol_label.py:33-34`) với lý do "it cites source, and source does not change" — nhưng
-ở ca này **câu đó sai về source**: nó mô tả một mask không tồn tại. Test
-`test_protocol_label_migration.py:57` khẳng định `after["protocol_source"] == before["protocol_source"]`,
-tức nó **khoá câu sai vào bản đã migrate**. Kết quả: `raw/clip4cir_fullft.migrated.json` mang nhãn
-đúng **và** câu citation sai. Phải sửa tay `protocol_source` (hoặc cho phép migrate trường này khi
-citation được đính kèm) trước khi bản migrate được dùng làm bằng chứng.
+(`:33-34`) với lý do "source does not change" — nhưng ở ca này **câu đó sai về source**. Test
+`:57` khẳng định `after["protocol_source"] == before[...]`, tức **khoá câu sai vào bản đã migrate**.
+Kết quả: file migrate mang nhãn đúng **và** citation sai; phải sửa tay trước khi dùng làm bằng chứng.
 
-**Trả lời câu "reference có xếp trên target của nó không":** trong cohort này reference **là** ứng
-viên hợp lệ; nó không phải target và không có mask nào loại nó — đúng như source nói. Nhưng cùng
-lý do đó, nhãn `…_ref_excluded` **không** mô tả được phép chấm nào đã chạy.
-
----
+**Reference có xếp trên target của nó không:** reference **là** ứng viên hợp lệ, không phải target,
+không mask nào loại nó — đúng như source; cùng lý do đó nhãn `…_ref_excluded` không mô tả phép chấm nào.
 
 ## 3. Native — kết quả theo protocol, đơn vị, mức xác minh
 
@@ -204,9 +156,9 @@ model đó**.
 | `airknow` `fiq_n08` | 50.6417 | 71.4556 | percent | EXEC (idem) | `$D1/measurements/airknow_fiq_n08_run1.json` |
 | `dcnet` | **27.9297** | **53.7272** | percent ở file measurement, **fraction** ở file raw (`0.27929730914548917` / `0.5376075764301528`) | EXEC (`dcnet.time.log`: `Exit status: 0`, `Elapsed 2:07:35`) | `$D1/measurements/dcnet_run1.json`, `raw/native/dcnet.json` |
 
-`dcnet` là **cái bẫy đơn vị**: hai file cùng lần chạy, một file ghi `0.2793` và một ghi `27.9297`.
-Cả `r1 = null` ở ba category là **đúng** — evaluator FashionIQ của DCNet chỉ tính R@10/R@50.
-`comb_avg 0.40845` là trung bình trên sáu ô, **không** phải macro; không được trích.
+`dcnet` là **cái bẫy đơn vị**: hai file cùng lần chạy, một ghi `0.2793`, một ghi `27.9297`. `r1 = null`
+ở cả ba category là **đúng** (evaluator DCNet chỉ tính R@10/R@50). `comb_avg 0.40845` là trung bình
+sáu ô, **không** phải macro.
 
 ### 3.2 `fashioniq_val_split` — gallery pair-union
 
@@ -234,15 +186,19 @@ dấu hiệu mapping sai, không phải model yếu; nó **không** được và
 | `sprc` | 51.0386 | 73.3263 | deferred, ngoài 15 active | MEAS (`sprc_vitl_run5.log` có dòng aggregate khớp, **không** có `EXIT=`) |
 
 **Hai cặp số cho cùng một checkpoint — chưa worker nào ghi.** Cùng `combiner`/`clip4cir` có **hai**
-lần đo khác nhau và web chỉ thấy một cặp hoặc không thấy cặp nào:
+lần đo khác nhau:
 
 | model | nguồn A | nguồn B | Δ R@10 |
 |---|---|---|---|
 | `clip4cir_rn50x4_fullft` | `43.8016931215922` (`raw/native/clip4cir_fullft.json`, có provenance, đã migrate nhãn) | `43.81821850935618` (`$D1/measurements/clip4cir_parsed.json`, **không** có `aggregate`, **không** provenance) | **0.0165** |
 | `combiner_rn50x4_noft` | `35.14068226019541` (`clip4cir_parsed.json`) | `35.1078` (queue proof `…020a70b0`, `EXTRACTED_VERIFIED`) | **0.0329** |
 
-Nguồn B **không được** `/api/native-measurements` phục vụ (§7.2), nên web không có hai entry CLIP4Cir.
-Không được cộng/gộp hai cặp này; phải nói rõ đang trích lần chạy nào.
+**Sửa lại sau `3828163`:** câu "nguồn B không được phục vụ" chỉ đúng ở `2e2e2d2`. Catalog native hiện
+nhận cả `clip4cir_parsed.json` và các roll-up (đánh dấu `rollup: true`), nên `clip4cir_parsed.json`
+**có** row với `clip4cir_fullft 43.8182` / `clip4cir_noft 35.1407`
+(`web_evidence/after-native-measurements.json`). Vẫn đúng và quan trọng: hai cặp là **hai lần chạy
+khác nhau**, không cộng/gộp, và phải nói rõ đang trích lần nào — roll-up chỉ lặp lại số một file
+khác đã nêu, không phải lần đo thứ ba.
 
 ### 3.4 `encoder` — hai macro cho một checkpoint, và đó là đúng như dự đoán R4
 
@@ -258,11 +214,32 @@ mỗi process (R4, §5.2): BC-cũ §6c đo Δ nằm trong −0.05 … +0.10 mỗ
 đúng trong khoảng đó. Hệ quả phải nói: **không có "con số native của encoder"**; có hai lần rút. Web
 phục vụ lần rút 2026-11-06 mà không nói điều đó.
 
-### 3.5 Bốn model có macro mà service không đọc được
+### 3.5 Catalog native — năm hình dạng macro, và bốn model từng bị bỏ
+**`2e2e2d2`:** `native_measurements.py` chỉ đọc `aggregate.{macro_r10,macro_r50,macro_mean}` trên hai
+glob ⇒ `ptha_mtst` (`macro_metrics`), `combiner_rn50x4_noft` + `clip4cir_rn50x4_fullft` (nested trong
+`clip4cir_parsed.json`, bị `_is_measurement()` loại) và `pair` (`pair_compat/measurements/`, ngoài glob)
+không có số trên web: 12 model.
 
-`native_measurements.py` chỉ đọc `aggregate.{macro_r10,macro_r50,macro_mean}` trên hai glob. Hệ quả: `ptha_mtst` (số ở `macro_metrics`), `combiner_rn50x4_noft` + `clip4cir_rn50x4_fullft` (nested trong `clip4cir_parsed.json`, bị `_is_measurement()` loại), `pair` (ngoài glob). 12 model có số trên web; 4 model active có macro mà web không thấy. Chi tiết + file: §7.3.
+**`3828163`:** reader được viết lại để nhận cả năm hình dạng — `aggregate.*`, `macro.*`, `macro_metrics`,
+top-level `macro_r10`, `<variant>.macro_r10` — và gắn `rollup: true` cho các file tổng hợp, loại chúng
+khỏi `counts.with_metrics`. Đo trên service (`web_evidence/after-native-measurements.json`):
 
----
+| đại lượng | `2e2e2d2` | `3828163` |
+|---|---:|---:|
+| file có row | 21 | **32** |
+| block mang metric | 15 | **43** |
+| measurement/row không phải roll-up | 15 | **21** |
+| model có metric (tính cả roll-up) | 12 | **28** |
+
+`ptha_mtst`, `pair`, `clip4cir_rn50x4_fullft`, `combiner_rn50x4_noft`, `csmcir` nay đều có mặt với
+`verified: false`; `csmcir 57.05073873202006` và `ptha_mtst 37.897844115893044` đã được đối chiếu lại
+với chính file nguồn tới 1e-12. `rollup: true` là 22/49 row và **không** vào `with_metrics`.
+Test: `workbench/tests/test_native_measurements_census.py` (16 test).
+
+**Bài học giữ nguyên, đây là lý do phần này tồn tại:** census v1 (`raw/native_measurement_census.txt`)
+chỉ quét `**/measurements/*.json` với đúng một hình dạng, nên báo "5 config không có file" — sai.
+Lỗi lặp lại lần hai trong `native_measurements.py`, và lần đó cũng đã được sửa bằng danh sách hình
+dạng thay vì thêm một `if` cho từng model.
 
 ## 4. G1/G2 theo model, tách theo dimension
 
@@ -274,10 +251,8 @@ phục vụ lần rút 2026-11-06 mà không nói điều đó.
 | `encoder` | **PASS** | **FAIL** | **FAIL** | **FAIL** | PASS | `PARITY_MANDATORY_SUBCHECK_FAILED`, 13 failure | **5** |
 | 13 model còn lại | — | — | — | — | — | `PARITY_NOT_RUN` | 0 (không đo) |
 
-`raw/guards/r9_after.txt`:
-`ALL standard=parity-relative/v1 passed_models=[]` · `limn … failure_count=3` · `encoder … 13`.
-
-limn: mỗi category **đúng một** block fail, cùng một block `layer2_4_forward/batch_size_1_vs_n`:
+`raw/guards/r9_after.txt`: `ALL standard=parity-relative/v1 passed_models=[]`. limn: mỗi category
+**đúng một** block fail, cùng block `layer2_4_forward/batch_size_1_vs_n`:
 
 | category | max_abs | max_rel | khai `batch_max_rel` | min_cosine |
 |---|---:|---:|---:|---:|
@@ -308,8 +283,8 @@ nhưng `evaluate_all()` mặc định vẫn `parity-relative/v1`.
 
 ### 4.3 Lỗi thật của R9 là **không có code nào nối verdict với artifact**
 
-Trước lượt này, trạng thái gate chỉ là văn xuôi trong `GATES.csv` dòng 3–4 và các `*.vi.md`; không
-có aggregator, không có test nào đọc `g1_g2.*.json` để quyết định PASS/FAIL. Hệ quả đo được:
+Ở `2e2e2d2`, trạng thái gate chỉ là văn xuôi (`GATES.csv` dòng 3–4, các `*.vi.md`); không aggregator,
+không test nào đọc `g1_g2.*.json` để quyết định PASS/FAIL. Hệ quả đo được:
 
 * `GATES.csv:4` ghi "TWO honestly-declared failures" trong khi artifact mang **4** cờ
   `False`/category (`raw/r9_encoder_false_flags.txt`).
@@ -317,23 +292,24 @@ có aggregator, không có test nào đọc `g1_g2.*.json` để quyết định
   việc 6/12 ô ghi DID của query kia (R5, `raw/guards/r5_reconcile.json`: `problems: 6`).
 * Một cờ `False` không thể xuất hiện ở bất kỳ surface nào vì không surface nào đọc nó.
 
-`workbench/backend/parity_gate.py` (WT, untracked) sửa đúng chỗ đó: verdict suy từ artifact, 6
+`workbench/backend/parity_gate.py` (ở `3828163`; untracked tại `2e2e2d2`) sửa đúng chỗ đó: verdict suy từ artifact, 6
 dimension tách rời (`input/forward/batch/scoring/metrics/observer`), `passed` chỉ True khi không
 mandatory nào fail, `None` không được coi là pass, và nó in `LABEL-DISAGREEMENT` khi boolean của
 harness nói `True` còn số của chính nó vượt tolerance khai — 3 ca `population.gallery_vs_native`
 của encoder. 21 test pass (`tests/test_gate_parity_subchecks.py`, chạy lại lượt này).
 
-**Nhưng**: `main.py` (WT) có `@app.get("/api/runs/parity-gate")` ở `:1044`, mà process backend đang
-nghe `:8000` khởi động **08:16:44** trong khi `main.py` sửa lúc **08:29:09** ⇒ endpoint trả **404**
-trên service sống. Gate hiện chỉ **import được**, chưa **phục vụ được**. Đây là trạng thái WT, không
-phải HEAD — ở HEAD cả module lẫn route đều không tồn tại.
+**Trạng thái phục vụ, đo lại sau khi commit:** `3828163` chứa **cả** module **cả** route
+(`main.py:1044`); backend `:8000` khởi động lại **08:47:09** (pid 2820650) và
+`GET /api/runs/parity-gate` trả **200** với `standard: parity-relative/v1`, `passed_models: []`,
+`limn` 3 failure / `encoder` 13 failure — đúng bằng số của `evaluate_all()` import trực tiếp.
+Bằng chứng: `web_evidence/after-parity-gate.json`, `web_evidence/1920-14-parity-gate.png`.
+Ở `2e2e2d2` route **không tồn tại**; trong khoảng 08:16:44–08:29:09 nó từng trả 404 vì process cũ —
+đó là trạng thái lịch sử, không phải trạng thái hiện tại.
 
 Một điểm phải nói kèm: `evaluate_all()` chỉ chạy cho `EVIDENCED_MODELS = ("limn", "encoder")`; 13
 model còn lại **không** xuất hiện trong `models`, nên `passed_models: []` là phát biểu về 2 model đã
 đo, không phải về 15. `evaluate_model("hint")` trả `PARITY_NOT_RUN` đúng, nhưng `evaluate_all()`
 không liệt kê nó.
-
----
 
 ## 5. Phase C — bốn phát hiện còn lại
 
@@ -359,25 +335,16 @@ Nguồn: `third_party/ENCODER/model_try2.py:93` — `.cuda()` trên `nn.Paramete
 ### 5.3 R3 — tie probe dùng sai mask; và "hai ca thật là tie" bị **bác**
 
 `raw/r3_tie_harness.json`, ca đồ chơi (reference 1.0, ảnh khác 0.8, target 0.5,
-candidate 0.5000001):
+candidate 0.5000001): rank **không** mask **4**, **có** mask **3** (target #4 → #3); gap trong ma
+trận không mask **1.192e-07** (≈ float32), trong ma trận có mask **99999997952.0** (= do `-10e10`);
+vị trí thực sự vượt **chỉ `0`** (chính reference); bản 3 phần tử #3 → #2 cùng delta **1.192e-07**.
+⇒ "gap đổi ~1e-7" và "rank đổi" là **hai phép đo khác mask**; mask cho rank phải là mask cho probe.
+Cơ chế harness **CONFIRMED**.
 
-| đại lượng | giá trị |
-|---|---|
-| rank **không** mask | **4** |
-| rank **có** mask reference | **3** ⇒ target #4 → #3 |
-| gap trong ma trận **không** mask | **1.192e-07** (≈ float32, dưới 1e-6) |
-| gap trong ma trận **có** mask | **99999997952.0** (= do `-10e10`) |
-| vị trí thực sự vượt | **chỉ `0`** (chính reference) |
-| bản 3 phần tử | #3 → #2, cùng delta **1.192e-07** |
-
-⇒ "gap đổi ~1e-7" và "rank đổi" là **hai phép đo khác mask**. Mask dùng cho rank phải là mask dùng
-cho probe; nếu không, gap bị chi phối bởi `-10e10`, không bởi score. Cơ chế harness **CONFIRMED**.
-
-Nhưng kết luận "hai ca thật là tie" bị **DISPROVED** cho ca đo được (`raw/r3_real_case.txt`, dress,
-query 3, target position 2627): `preprocess_train` rank **28**, `preprocess_val` rank **31**, gap nhỏ
-nhất **1.559e-3** / **3.639e-4** — lớn hơn epsilon 1559× / 364×. Sửa harness **không** cứu verdict
-"tie", chỉ làm phép đo trung thực hơn. Giới hạn phạm vi phải nói: chỉ **1/4** target của sample khớp
-chính xác một hàng gallery, nên đây là **một ca**, không phải population.
+Nhưng "hai ca thật là tie" bị **DISPROVED** cho ca đo được (`raw/r3_real_case.txt`, dress, query 3,
+target position 2627): `preprocess_train` rank **28**, `preprocess_val` rank **31**, gap nhỏ nhất
+**1.559e-3** / **3.639e-4** — lớn hơn epsilon 1559× / 364×. Sửa harness **không** cứu verdict "tie".
+Phạm vi: chỉ **1/4** target của sample khớp chính xác một hàng gallery ⇒ **một** ca, không population.
 
 ### 5.4 R11 — BLAS: `encoder` **bị loại trừ**, `conesep` có near-tie thật, `limn` **0 ca**
 
@@ -389,11 +356,10 @@ chính xác một hàng gallery, nên đây là **một ca**, không phải popu
 | `conesep` | 1/1 | `np.einsum(optimize=True)` → gemm | 17/18009 rank đổi **1** bậc, ndcg ~1e-7, R@10/R@50 **y hệt**, cùng interpreter | near-tie GEMM **thật**, không đổi metric |
 | `limn` | 1/1 | `query @ gallery.T` theo block 8192 dòng | `changed=0`, `max_drank=0`, delta **0.0** | không có ca nào để kết luận |
 
-Nguồn A/B đầy đủ: `workbench/docs/reviews/20261108T-throughput/d3b_encoder_aggregate_scan.txt`
-(multimodal / text_only_black_image / image_only_empty_text đều `changed 1`, `r10_delta 0.0`).
-`ptha_mtst` có 12/20/14 rank đổi 1–2 bậc — cùng lớp 1e-7 như conesep — nhưng **đường encode
-UNPINNABLE** (`mkl_set_num_threads` segfault exit 139; chỉ biến môi trường `MKL_NUM_THREADS` có tác
-dụng và không set được giữa process).
+A/B đầy đủ: `20261108T-throughput/d3b_encoder_aggregate_scan.txt` (cả ba condition đều `changed 1`,
+`r10_delta 0.0`). `ptha_mtst` có 12/20/14 rank đổi 1–2 bậc — cùng lớp 1e-7 — nhưng **encode
+UNPINNABLE** (`mkl_set_num_threads` segfault exit 139; chỉ `MKL_NUM_THREADS` có tác dụng, không set
+được giữa process).
 
 Ba cách suy luận **không** được dùng (theo đúng bài học): margin tới #1, cùng source hash, hay
 R@10/R@50 ngược chiều — mỗi thứ **không đủ** để chỉ định nguyên nhân. Ngoài ba model này **không** có
@@ -401,53 +367,42 @@ phạm vi nào được tuyên bố.
 
 ### 5.5 R10 — LIMN: canonical giữ PARTIAL, nhưng con số canonical phụ thuộc một routing không đọc được
 
-Đo trên `workbench/docs/reviews/20261109-native15-composition-limn/limn_dual_scope.json`:
-
-* `canonical_status.status = PARTIAL`, `scored_count = 6001`, `unscored_count = 2`,
-  `unscored_qids = ["7:3038","7:3790"]`; `canonical_cohort.full.query_count = 6003`.
-* `gallery.count = 74381`, `protocol_id = circus_fashioniq_release_v1`, nguyên văn: "the FULL released
-  gallery for every scope: no category filtering". Scope quyết định **checkpoint/embedding space**,
-  **không** quyết định gallery.
-* `queries["7:3038"].release.loader_category = null`, `matched_subsets = ["full"]` ⇒ loader **không**
-  gán được category, đó là lý do unscored, **không** phải rank kém.
-* `rank_convention_crosscheck`: `checked = 36`, `all_agree = true`.
-* 12 ranking chẩn đoán, không ô nào trùng scope: `7:3038` shirt 3/88/152, toptee 43/389/67;
-  `7:3790` shirt 65/6891/2200, toptee 43/4730/4047 (multimodal / text-only / image-only).
-
-Không scope nào được chọn làm canonical; không có số chẩn đoán nào bị cộng vào canonical.
+`limn_dual_scope.json`: `canonical_status.status = PARTIAL`, `scored_count = 6001`,
+`unscored_count = 2`, `unscored_qids = ["7:3038","7:3790"]`,
+`canonical_cohort.full.query_count = 6003`; `gallery.count = 74381`, note nguyên văn "the FULL
+released gallery for every scope: no category filtering" ⇒ scope quyết định **embedding space**,
+**không** quyết định gallery; `queries["7:3038"].release.loader_category = null`,
+`matched_subsets = ["full"]` ⇒ unscored vì loader không gán được category, **không** vì rank kém;
+`rank_convention_crosscheck`: `checked = 36`, `all_agree = true`. 12 ranking chẩn đoán:
+`7:3038` shirt 3/88/152, toptee 43/389/67; `7:3790` shirt 65/6891/2200, toptee 43/4730/4047
+(multimodal / text-only / image-only). Không scope nào được chọn canonical.
 
 **Phát hiện tôi tự đo, chưa worker nào ghi.** Cùng model + checkpoint `base_iter0_all_categories`,
-hai run `limn` trong `summary/` có **chính sách routing khác nhau**, cùng `query_count 6003`,
-cùng `query_order_identity 8214a154…`:
+hai run trong `summary/` có **chính sách routing khác nhau**, cùng `query_count 6003`, cùng
+`query_order_identity 8214a154…`:
 
-| run | rescored | unscored | `category_scope_failure_count` | R@10 | `query_scope_resolution` |
+| run | scored | unscored | `category_scope_failure_count` | R@10 | `query_scope_resolution` |
 |---|---:|---:|---:|---:|---|
-| `9e4918a6b5c2…` (canonical, 2026-11-09) | 6001 | **2** | 2 | 30.0283 | có: `3a1c5a6763154870536f3586491d5bea9d87b73a9836363dc298d2accdd34d87` |
-| `10173dc45dea…` (2026-11-08) | 5884 | **119** | 119 | 30.0646 | **vắng mặt** |
+| `9e4918a6b5c2…` (canonical, 11-09) | 6001 | **2** | 2 | 30.0283 | có: `3a1c5a67…` |
+| `10173dc45dea…` (11-08) | 5884 | **119** | 119 | 30.0646 | **vắng mặt** |
 
-Tập unscored của `10173dc4` **đúng bằng** 119 `ambiguous_qids` của `circus_cohorts.json`; tập unscored
-của `9e4918a6` chỉ còn 2. Nghĩa là **117 query mà cohort khai là mơ hồ đã được chấm** trong run
-canonical — mỗi query như vậy buộc phải chọn **một** trong ba embedding space, và bản ghi duy nhất
-của lựa chọn đó là một **digest** (`query_scope_resolution`), không phải một mapping đọc được.
-R10 yêu cầu "never choose scope by rank/score"; báo cáo này **không** cáo buộc điều đó, nhưng nó
-**không kiểm được** — và đó là lý do con số canonical 30.0283 phải được đọc kèm câu "phụ thuộc một
-routing policy chỉ tồn tại dưới dạng digest". Run `10173dc4` thì routing hiện rõ và trung thực
-(6003 query, 119 unscored, mẫu số 5884).
-
-Cả hai row đều được phục vụ trên web (`/api/composition/runs`, subset `full`), cạnh nhau.
+Tập unscored của `10173dc4` **đúng bằng** 119 `ambiguous_qids` của `circus_cohorts.json`; của
+`9e4918a6` chỉ còn 2 ⇒ **117 query mà cohort khai là mơ hồ đã được chấm**, mỗi query buộc phải chọn
+**một** trong ba embedding space, và bản ghi duy nhất của lựa chọn đó là một **digest**, không phải
+mapping đọc được. R10 cấm chọn scope theo rank/score; báo cáo này **không cáo buộc** điều đó, nhưng
+**không kiểm được** — nên 30.0283 phải đọc kèm câu đó. Run `10173dc4` có routing hiện rõ và trung
+thực (119 unscored, mẫu số 5884). Cả hai row đều được phục vụ cạnh nhau.
 
 ### 5.6 R7 — subset **không** trộn thế hệ; nhưng "thế hệ" có thật ở tầng run
 
 `web_evidence/r7-api-counters.json` (17 run × 3 subset) + `r7-subset-provenance.txt` (35 row, đọc từ chính `multimodal.jsonl`): **không** run nào có `sf_total > full_total` hay `sf_unscored > full_unscored`; `sf ⊂ full`, `validated ⊂ full`, `validated ⊂ sf` đều True; R@10 phục dựng khớp số phục vụ tới **1e-9** trên mọi row có metric (35/35; `e0dd04a46ef7` FAILED có `scored=0`). ⇒ **NOT_REPRODUCED** cho "trộn thế hệ" và cho "metric không phục dựng được".
 
-Cái **CONFIRMED** là thiếu **khai báo**: trước lượt này không row nào nêu `source_run_id` / membership hash / mẫu số. `backend/subset_provenance.py` (WT) nay trả `own` (path, `membership_sha256`, counts), `containment`, `metric_check` (served vs recomputed, tri-state), `consistent`, `reasons[]`; 0.29 s/35 row cold, 0.20 s warm. **Số phục vụ không đổi** — `metric_check` là đối chứng, không phải nguồn; `ndcg_full` cố ý **không** phục dựng.
-
----
+Cái **CONFIRMED** là thiếu **khai báo**: trước lượt này không row nào nêu `source_run_id` / membership hash / mẫu số. `backend/subset_provenance.py` (ở `3828163`) nay trả `own` (path, `membership_sha256`, counts), `containment`, `metric_check` (served vs recomputed, tri-state), `consistent`, `reasons[]`; 0.29 s/35 row cold, 0.20 s warm. **Số phục vụ không đổi** — `metric_check` là đối chứng, không phải nguồn; `ndcg_full` cố ý **không** phục dựng.
 
 ## 6. Thành phần CIRCUS theo subset
 
-Nguồn: `/api/composition/runs` (35 row) và `RUN_MATRIX.csv`. Đây là **R@10/R@50 multimodal trên
-cohort CIRCUS 74381**, **không** phải metric native; **không** so trực tiếp với §3.
+Nguồn: `/api/composition/runs` (35 row) + `RUN_MATRIX.csv`. **R@10/R@50 multimodal trên cohort CIRCUS 74381**,
+**không** phải metric native; **không** so với §3.
 
 | model | checkpoint | full (n/scored → R@10 / R@50) | sf (4069) | validated (586) |
 |---|---|---|---|---|
@@ -460,41 +415,47 @@ cohort CIRCUS 74381**, **không** phải metric native; **không** so trực ti�
 | `limn` | `base_iter0_all_categories` | 6003/**6001** → **30.028 / 48.675** (`9e4918a6`) · 6003/5884 → 30.065 / 48.759 (`10173dc4`) | 18.600 / 36.225 (chỉ `10173dc4`) | 30.293 / 53.701 (chỉ `10173dc4`) |
 | `ptha_mtst` | `cirr_transfer` | 6003/6003 → **19.474 / 34.449** — **TRANSFER CIRR→FashionIQ**, không phải tái lập | 7.078 / 18.899 | 12.969 / 30.375 |
 
-**Hình dạng:** 35 row = **17 full + 9 sf + 9 validated**; `full` chỉ có **8 cặp** model+checkpoint ⇒ mỗi cặp có 1–3 lần chạy. `duplicate_status` được phục vụ cho cả 17 row full (`unique` 5, `undetermined` 12). Không cặp nào bị tự động xoá.
+**Hình dạng:** 35 row = **17 full + 9 sf + 9 validated**; `full` chỉ có **8 cặp** model+checkpoint ⇒
+mỗi cặp 1–3 lần chạy. `duplicate_status` phục vụ cho cả 17 row full (`unique` 5, `undetermined` 12).
 
-**Bốn nhóm trùng, xác định bằng số** (`PHASE_B.vi.md`), cùng model + checkpoint + subset + `query_count` + `gap` trùng tới chữ số cuối: `habit 497c25c5 ≡ c6eb9d57` (gap `0.388704727214254`), `hint 4bc9893a ≡ f461f391`, `intent 37ee72aa ≡ 4901da13`, `tme ad477312 ≡ cd1a696d`. **Không** trùng: ba run `encoder` (gap 0.46986… / 0.47230… / 0.53293… q=8 smoke) — khác `resume_key`, cùng `checkpoint_identity 0f31c50150a7…`.
+**Bốn nhóm trùng, xác định bằng số** (`PHASE_B.vi.md`), cùng model + checkpoint + subset +
+`query_count` + `gap` trùng tới chữ số cuối: `habit 497c25c5 ≡ c6eb9d57` (gap `0.388704727214254`),
+`hint 4bc9893a ≡ f461f391`, `intent 37ee72aa ≡ 4901da13`, `tme ad477312 ≡ cd1a696d`. **Không** trùng:
+ba run `encoder` (gap 0.46986… / 0.47230… / 0.53293… q=8 smoke) — khác `resume_key`, cùng
+`checkpoint_identity 0f31c50150a7…`.
 
-**Hai "thế hệ" không phải cùng một phép tính:** `encoder` `6a528e87` → `5dee7425` khác `adapter_source_hashes.rank` (`5f828b13…` → `f0914b12…`) trong khi `score` **giống hệt** (`0ab4fe1d…`), cộng interpreter đổi (`pair-adapted` 3.11.15 → `encoder310-adapted` 3.10.20). Không có metric nào bị sửa; chỉ attribution.
+**Hai "thế hệ" không phải cùng một phép tính:** `encoder` `6a528e87` → `5dee7425` khác
+`adapter_source_hashes.rank` (`5f828b13…` → `f0914b12…`) trong khi `score` **giống hệt**
+(`0ab4fe1d…`), cộng interpreter đổi (`pair-adapted` 3.11.15 → `encoder310-adapted` 3.10.20). Không
+metric nào bị sửa; chỉ attribution.
 
-**Ngữ nghĩa subset (đã kiểm):** `sf` = shortcut-free, `validated` = validated_solved ∪ validated_unsolved (368 + 218 = 586, `raw/circus_cohorts.json`); cả hai là **tập con của `full`** trên cùng gallery 74381; gallery **không** lọc category (32/74381 ảnh là mode `L` — nên "mọi ảnh đều RGB" chỉ đúng cho sample native).
-
----
+**Ngữ nghĩa subset (đã kiểm):** `sf` = shortcut-free, `validated` = validated_solved ∪
+validated_unsolved (368 + 218 = 586, `raw/circus_cohorts.json`); cả hai là **tập con của `full`**
+trên cùng gallery 74381; gallery **không** lọc category (32/74381 ảnh là mode `L`).
 
 ## 7. Bề mặt web
 
 ### 7.1 URL và trạng thái sau sửa
 
 `http://127.0.0.1:5173/` → `?area=overview&protocol=circus_fashioniq_release_v1&subset=full`
-(`web_evidence/after-shots.log` dòng 0). Trước khi sửa:
+(`web_evidence/after-shots.log` dòng 0). Trước sửa:
 `?area=overview&protocol=fashioniq_original_split&subset=sf` với `subset_select: 0` và "0 lượt có dữ
-liệu ở phạm vi này" (`web_evidence/before-bare-url-probe.json`).
+liệu ở phạm vi này" (`before-bare-url-probe.json`).
 
-Thay đổi đã landing (`WT`): `scope.ts` (mới), `routes.ts` (`scope: {protocolNamed, subsetNamed}`),
-`App.tsx` (điền **nửa scope chưa được nêu**, `replaceState`, control subset chỉ render khi
-`protocolHasSubsets()`), `ModelInventory.tsx` (`otherScopeFor`), 12 test ở
-`tests/test_web_scope_and_labels.py`; tổng 51 test frontend pass (`web_evidence/after-tests.log`).
+Đã landing (`3828163`): `scope.ts`, `routes.ts` (`scope: {protocolNamed, subsetNamed}`), `App.tsx`
+(điền **nửa scope chưa nêu**, `replaceState`, control subset chỉ render khi `protocolHasSubsets()`),
+`ModelInventory.tsx` (`otherScopeFor`), 12 test `test_web_scope_and_labels.py`; 51 test frontend pass
+(`after-tests.log`).
 
-**Đính chính `WEB_SURFACE_AUDIT.vi.md` §4.1 mục 1.** Audit ghi "`ModelInventory` chưa dùng
-`otherScopeFor` — hàm + test đã có, chưa nối vào JSX". Ở `WT` điều đó **không còn đúng**:
-`ModelInventory.tsx:8` import `otherScopeFor`, `:137` dùng nó và sinh nhãn "Có kết quả ở scope khác";
-bundle đang phục vụ `dist/assets/index-C35K848A.js` (build 08:33) chứa chuỗi đó **1** lần. Mục này
-đóng ở WT, không đóng ở HEAD.
+**Đính chính `WEB_SURFACE_AUDIT.vi.md` §4.1 mục 1**, vốn ghi "`ModelInventory` chưa dùng
+`otherScopeFor`": ở `3828163` điều đó **không còn đúng** — `ModelInventory.tsx:8` import nó, `:137`
+dùng nó và sinh nhãn "Có kết quả ở scope khác"; bundle phục vụ chứa chuỗi đó. Mục này đóng.
 
-Bốn thứ **còn** hở ở §6 display contract (không đổi so với audit): chip trong explorer;
-`SamplesPage` dùng select trạng thái thay vì chip; "Xem mẫu" cho mọi run có dữ liệu; hạng
-per-positive cho ảnh đích (dữ liệu không có — không được bịa); clamp K + MM/Text/Image cùng hàng gallery.
+Bốn thứ **còn** hở ở §6 display contract: chip trong explorer; `SamplesPage` dùng select thay vì chip;
+"Xem mẫu" cho mọi run có dữ liệu; hạng per-positive cho ảnh đích (dữ liệu không có — không bịa);
+clamp K + MM/Text/Image cùng hàng gallery.
 
-### 7.2 W1 — nguyên nhân và điều còn sai
+### 7.2 W1 — nguyên nhân, và banner đã đóng
 
 Ba nguyên nhân, mỗi cái có dòng code:
 
@@ -505,21 +466,32 @@ Ba nguyên nhân, mỗi cái có dòng code:
 3. `ModelInventory` chỉ tra `catalog` đã lọc theo `protocol + subset` ⇒ model có row ở scope khác rơi
    vào nhánh "Chưa có số đo" mà không nói nó **có** kết quả ở nơi khác.
 
-**Đối chiếu ID: không có ID nào lệch.** `/api/models` 17 (khớp registry, 2 deferred `csmcir`/`sprc`);
-`/api/runs` `[]` (DuckDB index rỗng: 0 run / 0 query / 0 top_results — `WORKBENCH_RESULTS_ROOT` rỗng,
-`ls` = 0 entry); `/api/benchmark-runs` 13 report **tất cả** `fashioniq_original_split` (2 certified,
-11 refused); `/api/composition/runs` 35 row **tất cả** `circus_fashioniq_release_v1` (full 17 / sf 9 /
-validated 9); `/api/composition/capabilities?subset=sf` khớp 9. Hai nguồn đo **hai tập rời nhau**;
-defect là **landing scope**, không phải số.
+**Đối chiếu ID: không ID nào lệch.** `/api/models` 17 (khớp registry, 2 deferred); `/api/runs` `[]`
+(DuckDB index rỗng — `WORKBENCH_RESULTS_ROOT` rỗng); `/api/benchmark-runs` 13 report **tất cả**
+`fashioniq_original_split` (2 certified, 11 refused); `/api/composition/runs` 35 row **tất cả**
+`circus_fashioniq_release_v1` (full 17 / sf 9 / validated 9); `capabilities?subset=sf` khớp 9. Hai
+nguồn đo **hai tập rời nhau**; defect là **landing scope**, không phải số.
 
-**Điều W1 còn sai, tôi đo được và audit không nêu.** `web_evidence/after00.txt:37` in
-`MOCK DEVELOPMENT DATA — no real evaluation results are loaded` **ngay trên** một trang đang có 17
-dòng CIRCUS thật và đang in "Đang đọc danh sách mô hình…". Nguyên nhân:
-`evidenceState()` (`workbench/frontend/evidence.ts:141,163`) tính `aggregateRuns`/`experimentRuns` từ
-`region.data ?? []`, tức `[]` khi request còn bay ⇒ `noRealEvidence = true` ⇒ `evidenceBanner()`
-(`:178-181`) trả nhánh MOCK. `evidenceBanner` **không có nhánh loading**. Đây đúng **cùng một lớp lỗi**
-mà §3bis.a của audit đã sửa cho `scope-strip` ("0 lượt" khi đang tải), và nó **chưa** được sửa cho
-banner bằng chứng. Một trang trắng và một trang "không có bằng chứng thật" phải đọc khác nhau.
+**Điều audit không nêu:** `after00.txt:37` in `MOCK DEVELOPMENT DATA — no real evaluation results are
+loaded` **ngay trên** một trang có 17 dòng CIRCUS thật. Nguyên nhân: `evidenceState()` tính
+`aggregateRuns`/`experimentRuns` từ `region.data ?? []` ⇒ `[]` khi request còn bay ⇒
+`noRealEvidence = true` ⇒ `evidenceBanner()` trả nhánh MOCK; nó **không có nhánh loading**.
+
+**Đã sửa ở `3828163`:** `evidenceBanner` có nhánh loading riêng, chứng minh theo kiểu failing-first —
+6 failure với `evidence.ts` cũ, **8 pass** sau khi sửa
+(`test_web_evidence_banner_loading.py::test_a_loading_source_is_never_reported_as_no_evidence`).
+Trace trên service (`web_evidence/after-banner-loading.txt`):
+
+```
+t=0 loading=true   Đang tải bằng chứng | Ẩn
+t=1 loading=true   Đang tải bằng chứng · 2 đã chứng nhận trong 13 report đã về | Ẩn
+t=3 loading=None   AGGREGATE-ONLY REAL EVALUATION — 2 certified research results … | Ẩn
+false-claim-seen: False
+```
+
+Tức một trang đang tải **không còn** bị đọc thành "không có bằng chứng thật" — cùng lớp lỗi mà
+§3bis.a của audit đã sửa cho `scope-strip`, nay đóng cho cả banner. Xem thêm
+`web_evidence/after-release-chain-banner-contract.txt` (`aggregate-only: True`, banner đúng hợp đồng).
 
 ### 7.3 R13 — nội dung finding đúng một nửa; và catalog tự nó đếm thiếu
 
@@ -534,27 +506,36 @@ remedy: mỗi row mang `source.path` + `source.sha256` + `bytes`, `verified: fal
 `completion.json`/`invocation_outcome.json` (cấm tạo receipt giả), **không** chèn row vào `reports/`,
 **không** cộng vào `/api/evidence/summary` — `counts.verified` trả **0** tường minh.
 
-Đo trên service: `{ "files": 21, "with_metrics": 15, "unreadable": 1, "signposted_blockers": 4,
-"verified": 0 }`, 12 `model_id` có số. Bốn model active có macro mà catalog **không** phục vụ:
-`ptha_mtst` (shape `macro_metrics`, hiện diện nhưng `metrics: null`), `combiner_rn50x4_noft` +
-`clip4cir_rn50x4_fullft` (nested trong `clip4cir_parsed.json`, bị `_is_measurement()` loại),
-`pair` (`pair_compat/measurements/` ngoài glob — và đúng là không nên phục vụ như native, chỉ nên
-phục vụ như "exploratory mapping"). `csmcir` ngoài glob nhưng là deferred.
+**Đo ở `2e2e2d2`** (bản reader đầu tiên): `{ "files": 21, "with_metrics": 15, "unreadable": 1,
+"signposted_blockers": 4, "verified": 0 }`, 12 `model_id` có số. Bốn model active có macro mà catalog
+**không** phục vụ: `ptha_mtst` (shape `macro_metrics`, hiện diện nhưng `metrics: null`),
+`combiner_rn50x4_noft` + `clip4cir_rn50x4_fullft` (nested trong `clip4cir_parsed.json`, bị
+`_is_measurement()` loại), `pair` (`pair_compat/measurements/` ngoài glob). `csmcir` ngoài glob.
 
-⇒ R13 **một phần**: đường ingest đúng và trung thực, nhưng nó là **bản sao lỗi census v1** — chỉ đọc
-`aggregate.{macro_r10,macro_r50}` và chỉ hai glob. Bốn hình dạng ở §2.1 vẫn chưa có đường đọc.
+⇒ Ở `2e2e2d2`, R13 chỉ **một phần**: đường ingest đúng và trung thực, nhưng nó là **bản sao lỗi
+census v1** — chỉ đọc `aggregate.{macro_r10,macro_r50}` và chỉ hai glob.
 
-### 7.4 R6 / R8 — backend đã sửa, tôi kiểm lại trên instance sống
+**Đã sửa ở `3828163`** (`web_evidence/after-native-measurements.json`): reader nhận cả năm hình dạng
+(`aggregate.*`, `macro.*`, `macro_metrics`, top-level `macro_r10`, `<variant>.macro_r10`); row tổng hợp
+mang `rollup: true` và bị loại khỏi `counts.with_metrics`. Bảng đối chiếu `2e2e2d2` → `3828163` ở §3.5.
 
-WT (process `:8000` mang code mới): `depth=100` → 200 với `depth_requested/served/stored = 
-100/100/100`; candidate có `image_url` (resolve được HTTP 200 `image/png`); `target` tách riêng
-(`rank 6891`, `in_window false`, `delta_to_rank_1 0.3837`); `depth=0` → **404** với lý do nguyên văn
-("a zero or negative depth cannot return a window and silently returning one row would misstate the
-request"). HEAD thì `depth=0` trả 200 với **1 dòng**, và export JSONL hỏng gây **500**. Bundle
-`index-C35K848A.js` không còn `depth=20`. Quy tắc từ chối ảnh query staged **giữ nguyên**
-(`STAGED_PREFIX`, `limn_diagnostic.py:34-36`) — hiện ảnh đích hợp lệ, hiện ảnh query đen thì không.
-`complete: false` trên artifact thật là 6 defect R5 còn lại, không phải lỗi mới. Chi tiết đầy đủ:
-`FINDINGS_AND_FIXES.md` §3.3b–3.3c.
+Năm model từng bị bỏ nay đều có mặt với `verified: false`: `ptha_mtst 37.897844115893044`,
+`clip4cir_rn50x4_fullft 43.8182`, `combiner_rn50x4_noft 35.1407`, `pair 34.03503453772374`,
+`csmcir 57.05073873202006` — hai giá trị `ptha_mtst`/`csmcir` đã đối chiếu lại với file nguồn tới
+1e-12. Test: `workbench/tests/test_native_measurements_census.py` (16 test). Các bất biến của remedy
+**không đổi**: không receipt giả, không chèn `reports/`, `counts.verified` = **0**.
+
+### 7.4 R6 / R8 — backend đã sửa, kiểm lại trên instance sống
+
+Process `:8000`: `depth=100` → 200 với `depth_requested/served/stored = 100/100/100`; candidate có
+`image_url` (resolve HTTP 200 `image/png`); `target` tách riêng (`rank 6891`, `in_window false`,
+`delta_to_rank_1 0.3837`); `depth=0` → **404** với lý do nguyên văn ("a zero or negative depth cannot
+return a window and silently returning one row would misstate the request"). Ở `2e2e2d2`,
+`depth=0` trả 200 với **1 dòng**, và export JSONL hỏng gây **500**. Bundle phục vụ không còn
+`depth=20`. Quy tắc từ chối ảnh query staged **giữ nguyên** (`STAGED_PREFIX`,
+`limn_diagnostic.py:34-36`) — hiện ảnh đích hợp lệ, hiện ảnh query đen thì không. `complete: false`
+trên artifact thật là 6 defect R5 còn lại, không phải lỗi mới. Chi tiết: `FINDINGS_AND_FIXES.md`
+§3.3b–3.3c.
 
 ### 7.5 R5 — chỉ một field sai, và artifact trên đĩa vẫn còn sai
 
@@ -566,8 +547,7 @@ request"). HEAD thì `depth=0` trả 200 với **1 dòng**, và export JSONL h�
 
 | | `7:3038` | `7:3790` |
 |---|---|---|
-| positive id **của chính query** | `7:3416` | `7:42304` |
-| asset | `B004D8QCN4` | `B00E3WVAD2` |
+| positive id **của chính query** | `7:3416` (`B004D8QCN4`) | `7:42304` (`B00E3WVAD2`) |
 | `target_did` **đã ghi** ở cả 6 ô | `7:42304` ❌ | `7:42304` ✅ |
 
 Nguyên nhân ở producer: `t2_dual_scope.py:273` `"target_did": query.positive_ids[0]`, với `query` còn
@@ -575,119 +555,144 @@ nguyên giá trị lần lặp cuối vòng ngoài (`7:3790`). 6/12 ô có targe
 2200, 4047, 4730, 6891) nên **không** candidate nào mang `is_target` — đúng thiết kế, không phải
 thiếu sót.
 
-Sửa hai lớp, cả hai **không** rescore: (a) tầng phục vụ lấy `target_did` từ record của chính qid và
-báo defect `target_did_not_own_query` nếu lệch; (b) artifact sinh lại **bản sao** (6 record
-`7:42304`→`7:3416`, không đổi rank/score/position/candidate), file gốc sha256 `04c4419e…` với
-`"source_untouched": true`. Verify: đặt bản sửa vào repo root tạm → `DIAGNOSTIC_COMPLETE`,
-`complete: true`, **0 defect**.
+Sửa hai lớp, cả hai **không** rescore: (a) tầng phục vụ lấy `target_did` từ record của chính qid, báo
+defect `target_did_not_own_query` nếu lệch; (b) sinh **bản sao** artifact (6 record `7:42304`→`7:3416`,
+không đổi rank/score/position/candidate), file gốc sha256 `04c4419e…`, `"source_untouched": true`.
+Verify: đặt bản sửa vào repo root tạm → `DIAGNOSTIC_COMPLETE`, `complete: true`, **0 defect**.
 
-**Nhưng**: `limn_dual_scope.json` trên đĩa **vẫn** chứa 12 lần `7:42304`, và `t2_dual_scope.py:273`
-**vẫn** còn lỗi. Ai đọc thẳng JSON (như `LIMN_SCOPE_AUDIT.vi.md`) vẫn gặp số sai; regenerate bằng
-script cũ sẽ tái sinh đúng lỗi. Phải sửa script **trước**, rồi regenerate, và thêm assert
-`target_did in release.positive_ids` cho từng ô.
-
----
+**Nhưng (vẫn đúng ở `3828163`):** `limn_dual_scope.json` trên đĩa **vẫn** chứa 12 lần `7:42304` và
+`t2_dual_scope.py:273` **vẫn** còn `"target_did": query.positive_ids[0]` (đã kiểm lại sau commit).
+Regenerate bằng script cũ sẽ tái sinh đúng lỗi. Phải sửa script **trước**, rồi regenerate, và thêm
+assert `target_did in release.positive_ids` cho từng ô.
 
 ## 8. Blocker còn lại, kèm lý do đo được
 
 ### 8.1 Bốn model không chạy được native
 
-| model | blocker đo được | verdict |
+| model | blocker đo được (nguồn: `BLOCKERS_R12.vi.md`, `raw/r12/*`) | verdict |
 |---|---|---|
 | `airknow` | interpreter **mất** (symlink gãy → `teacher-sprc` đã xoá; "3.11.15 / torch 2.7.1" của BC-cũ **không tái lập**); **11** biểu thức `.cuda()` cứng trên scoring path. Lỗi import đầu tiên là `torchaudio` (`audio_processors.py:9`), **không** phải `moviepy` (dòng 11, ngoài inference path); `sklearn` (`blip2_cir.py:19`) chặn class. `clavis` là **false positive grep nhị phân** (`0x63`=`c`=GLOBAL). Checkpoint load **được** CPU: 863 tensor / 1 196 753 657 param | **BLOCKED** |
-| `clvc_net` | không có env `clvc*`; **14 dòng / 15 biểu thức** `.cuda()` toàn tree, **6 dòng / 7** trên scoring path; không `cuda.is_available()` ⇒ chết ở `test.py:28`; `test.py` 0 `__main__`; device-shim **trung thực về số** (eval không `autocast`/`.half()`, toàn fp32 matmul) nhưng **không trung thực về provenance** nếu không dán nhãn "adapted runtime" | **BLOCKED** |
-| `tgcir` | không có env; `ilearn39` thiếu `clip`. Tác giả **không** phát hành script eval cho checkpoint phát hành: `test.py` 162 dòng, **0** `__main__`/argparse/`torch.load`; eval nằm trong training loop (`train.py:200`, `:242`); `--restore_file` khai `:74` **không bao giờ dùng** (`grep` = 1 khớp, chính dòng khai) | **BLOCKED / upstream-only** |
+| `clvc_net` | không có env `clvc*`; **14 dòng / 15 biểu thức** `.cuda()` toàn tree, **6 dòng / 7** trên scoring path; không `cuda.is_available()` ⇒ chết ở `test.py:28`; `test.py` 0 `__main__`. Device-shim **trung thực về số** (eval không `autocast`/`.half()`, fp32 matmul) nhưng **không trung thực về provenance** nếu không dán nhãn "adapted runtime" | **BLOCKED** |
+| `tgcir` | không env; `ilearn39` thiếu `clip`. Tác giả **không** phát hành script eval: `test.py` 162 dòng, **0** `__main__`/argparse/`torch.load`; eval nằm trong training loop (`train.py:200`, `:242`); `--restore_file` khai `:74` **không bao giờ dùng** (`grep` = 1 khớp, chính dòng khai) | **BLOCKED / upstream-only** |
 | `pair` | interpreter **mất**; pickle cần 38 GLOBAL op gồm `model_vssp.Encoder/Backbone/FeatureWiseAffine` + `MHTransformer_dis.*`, **không** có trong repo pin; chỉ load qua alias loader của workbench ⇒ `EXPLORATORY_PUBLIC_MAPPING`. 455 state-dict (456 = +1 buffer); dưới mapping giả thuyết: 381 key, **74 unexpected**, **70 shape mismatch**, **5.2001 %** param không qua forward. Không reconstruct được: repo có **hai** biến thể `MHTransformer{,_rev}.py` mà pickle không nói biến thể nào | **BLOCKED / upstream-only** |
 
-Nguồn: `BLOCKERS_R12.vi.md` §1–§4, `raw/r12/*`. "repo không có entrypoint" của BC-cũ **sai một phần** cho `tgcir`; "`model.py:41 clip.load(device=cuda)`" **không tái lập** (quan sát được `train.py:88`).
+Hai claim BC-cũ bị sửa: "repo không có entrypoint" **sai một phần** cho `tgcir`; "`model.py:41
+clip.load(device='cuda')`" **không tái lập** (quan sát được `train.py:88`).
 
-### 8.2 `combiner_rn50x4_noft` — không phải blocker chạy, nhưng là vĩnh viễn không-phải-paper-evidence
+### 8.2 `combiner_rn50x4_noft` — không blocker chạy, nhưng vĩnh viễn không-phải-paper-evidence
 
-Run đã hoàn tất thật: `EXECUTION_COMPLETED`, `INVOCATION_COMPLETED`, `return_code 0`,
-`verdict: PROOF_VALIDATED`, `extraction_status: EXTRACTED_VERIFIED`, metric
-35.1078 / 58.4756 / mean 46.7917. Web hiện **REFUSED** vì gate `METRIC_REFERENCE_UNVERIFIED`
-(`paper_gate.py:333-335`), `blockers: ["no committed reference describes this experiment"]`, và
-`unbenchmarked('combiner_rn50x4_noft') = True` (`benchmark_references.py:207-225`) — **không có dòng
-paper nào mô tả cấu hình noft RN50x4**. Đây là **thuộc tính thường trực của những gì tác giả đã công
-bố**, không phải lỗi của run. Đóng đúng cách **không phải** nới gate: hoặc (a) chấp nhận vĩnh viễn
-nhãn "no publishable comparison" và chỉ dùng số này nội bộ, hoặc (b) commit một row `VERIFIED` từ
-nguồn tác giả khác — quyết định của operator.
+Run hoàn tất thật: `EXECUTION_COMPLETED`, `INVOCATION_COMPLETED`, `return_code 0`,
+`PROOF_VALIDATED`, `EXTRACTED_VERIFIED`, metric 35.1078 / 58.4756 / mean 46.7917. Web hiện **REFUSED**
+vì gate `METRIC_REFERENCE_UNVERIFIED` (`paper_gate.py:333-335`), `blockers: ["no committed reference
+describes this experiment"]`, và `unbenchmarked('combiner_rn50x4_noft') = True`
+(`benchmark_references.py:207-225`) — **không dòng paper nào** mô tả cấu hình noft RN50x4. Đó là
+thuộc tính thường trực của những gì tác giả công bố, không phải lỗi run. Đóng đúng cách **không
+phải** nới gate: hoặc chấp nhận vĩnh viễn nhãn "no publishable comparison" và dùng số này nội bộ,
+hoặc commit một row `VERIFIED` từ nguồn tác giả khác — quyết định của operator.
 
 ### 8.3 Các ô `NOT_RUN` phải đọc là trống, không phải "pass"
 
 `RUN_MATRIX.csv` (61 dòng = 50 composition + 11 native), bảy cột surface tách rời: execution (37 `COMPLETED`, 9 `EXECUTION_COMPLETED`, 4 `PARTIAL`, 3 `FAILED`, 6 fixture, 1 `UNREADABLE_JSON`, 1 `NO_AGGREGATE`); validation (**41** `NOT_RUN` — không receipt nào trong `artifacts/receipts/`, 9 `NOT_RUN` native `native_verified=N`, 6 `N/A fixture`, 3 `NOT_APPLICABLE`, **1** `PARITY_VERIFIED` = `limn_native`); export (12 `EXPORTED`, 8 `COVERED BY RUN EXPORT`, 21 `NOT_EXPORTED`, 19 `N/A`); serving (41 `RANKS_PRESENT`, 6 `NO_RANKS`, 3 `IMPORTED_ARTIFACT`); rerun (12 `KEEP`, 17 `EXPORT ONLY`, 9 `KEEP unless…`, 8 `DO_NOT_RERUN`, 6 `NEVER`, 4 `RESUME`, 3 `RERUN`); cache (`resume_key` + `gallery_identity_sha256 1db68c59…` trên mọi run thật). Một dòng **hỏng**: `native:…/raw/native/ptha_mtst.json` = `UNREADABLE_JSON` (bản đọc được là `ptha_mtst.result.json`) — không dùng làm bằng chứng.
 
-### 8.4 Trạng thái dịch vụ — hai chữ ký khác nhau
+### 8.4 Trạng thái dịch vụ — đo lại sau khi commit
 
-| thứ | giá trị đo được | hệ quả |
+| thứ | giá trị đo được (`3828163`) | hệ quả |
 |---|---|---|
-| backend `:8000` | pid 2788121, khởi động **08:16:44** | `main.py` sửa lúc **08:29:09** ⇒ `/api/runs/parity-gate` **404** (route chỉ mới import được) |
-| backend `:8765` | pid 1227919, khởi động **09-11 01:02** | là process **cũ**, không có `/api/native-measurements` (404) — không rõ chủ, **không** được dùng để đo |
-| frontend `:5173` | phục vụ `dist/assets/index-C35K848A.js` (build 08:33) 365 821 byte | **mới hơn** backend ⇒ UI gọi endpoint mà backend cũ không có |
-| `dist/` cũ | `index-CG4hbuvP.js` (08:16) đã bị thay | bằng chứng `web_evidence/after-build.log` trỏ bundle cũ; **không** dùng để nói về bundle đang phục vụ |
+| backend `:8000` | pid 2820650, khởi động **08:47:09** (sau `main.py` 08:29) | `/api/runs/parity-gate` → **200**, `passed_models: []`; `/api/native-measurements` → 200 |
+| backend `:8765` | pid 1227919, khởi động **09-11 01:02** | process **cũ**, không có các route mới — không rõ chủ, **không** dùng để đo |
+| frontend `:5173` | phục vụ `dist/assets/index-DjAje2d2.js` (08:54, 367 327 byte) | mới hơn backend ⇒ UI gọi endpoint backend thiếu |
+| bundle trong ảnh chụp | `index-CG4hbuvP.js` (08:16) và `index-C35K848A.js` (08:33) là các bản **trước** | ảnh `after00/after01` chụp tổ hợp build **cũ hơn** bundle đang phục vụ |
 
-Nghĩa là **bằng chứng web trong lượt này chụp một tổ hợp build không đồng thời**: `after00/after01`
-ở 08:17–08:18 (bundle 08:16), còn `dist/` hiện tại 08:33 và `ModelInventory` 08:29. Mọi kết luận
-"đã lên web" trong báo cáo này chỉ được nói ở mức **source + bundle chứa chuỗi**, trừ hai probe
-`after00/after01` (đó là ảnh chụp thật của một tổ hợp cụ thể, đã ghi rõ mốc).
+Hai điều phải nói, và chúng khác nhau:
 
----
+* **Lịch sử:** 08:16:44–08:29:09 backend cũ phục vụ `main.py` cũ nên route gate **404** — lý do §7 ghi
+  mốc cho từng ảnh; không phải trạng thái hiện tại.
+* **Hiện tại:** gate và catalog native **đều 200** trên `:8000`; số trong
+  `after-parity-gate.json` / `after-native-measurements.json` đến từ process này.
+
+Ảnh chụp `after00/after01` (08:17–08:18) vẫn là ảnh thật của một tổ hợp bundle **cũ hơn** bản đang
+phục vụ. Chúng chứng minh landing đã đổi sang CIRCUS Full, **không** chứng minh banner/native catalog
+đã sửa — hai thứ đó có bằng chứng riêng (`after-banner-loading.txt`,
+`after-native-measurements.json`) ghi đúng mốc sau commit.
 
 ## 9. Cái gì **không** được tuyên bố
 
-1. **Không** 15/15 native. Đếm được: 14/15 theo nghĩa "có số trong log/command+meta khớp measurement";
-   **13/15** nếu đòi đúng vế `EXITCODE=0` (limn không có exit code, log kết thúc bằng traceback).
-   `pair` không có gì.
-2. **Không** model nào đạt G1/G2 PASS. Gate: `passed_models = []`. Ba cách đếm sai đã lưu hành
-   ("2", "13", "1") — dùng **5** cho encoder, **3** cho limn, và luôn nói **0** đổi R@10/R@50.
-3. **Không** metric native nào là tái lập paper. Tất cả là chạy lại trên dữ liệu thật với runtime đã
-   adapted (`sm_120`, torch 2.7.1) trừ `combiner`/`clip4cir`/`csmcir`/`sprc` dùng stack cũ hơn.
-   `ptha_mtst` là **transfer**, không phải reproduction. `pair` là **exploratory**, không phải native.
-4. **Không** xếp 15 model native thành một leaderboard. Bốn protocol khác nhau; `dcnet` báo **phân số**
+1. **Không** 15/15 native: **14/15** theo nghĩa "có số trong log/command+meta khớp measurement";
+   **13/15** nếu đòi đúng `EXITCODE=0` (limn không có exit code, log kết thúc bằng traceback). `pair`
+   không có gì.
+2. **Không** model nào đạt G1/G2 PASS. `passed_models = []`. Ba cách đếm đã lưu hành ("2", "13",
+   "1") đều sai — dùng **5** cho encoder, **3** cho limn, và luôn nói **0** đổi R@10/R@50.
+3. **Không** metric native nào là tái lập paper: chạy lại trên dữ liệu thật với runtime adapted
+   (`sm_120`, torch 2.7.1), trừ `combiner`/`clip4cir`/`csmcir`/`sprc` dùng stack cũ hơn.
+   `ptha_mtst` là **transfer**, `pair` là **exploratory**.
+4. **Không** xếp 15 model native thành leaderboard: bốn protocol khác nhau; `dcnet` báo **phân số**
    trong `raw/native/dcnet.json` và **phần trăm** trong `$D1/measurements/dcnet_run1.json`.
 5. **Không** dùng metric CIRCUS để nói về native, và ngược lại.
 6. **Không** sửa registry. Đề nghị cho người sở hữu: `tests/fixtures/pc_launcher/models.json:1722-1725`
-   còn khai `native_protocol: fashioniq_val_split_ref_included` cho `tme` trong khi
-   `models.yaml:1669` nói `fashioniq_original_split`; alias đó vẫn **resolve** trong evaluator
-   (`src/evaluation/fashioniq.py:186`) nhưng **bị từ chối** cho artifact đã lưu
-   (`schemas/results.py:12-16,136`). Diff chính xác ở `HANDBACK.vi.md` §1.
-7. **Không** chạy full test suite. Đã chạy trong lượt này: `test_gate_parity_subchecks.py` (21 pass),
-   `test_protocol_label_migration.py` (5 pass); worker khác: 28 + 51 test frontend/diagnostic. Không
-   chạy lại cohort, không chạy job GPU nào.
-8. **Không** tuyên bố `9e4918a6` (LIMN canonical) là số duy nhất đúng. Nó là run **đã chọn** làm
-   canonical và nó phụ thuộc một routing policy chỉ tồn tại dưới dạng digest (§5.5); run `10173dc4`
-   có routing hiện rõ nhưng mẫu số 5884 và R@10 30.0646 khác. Hai row cùng được phục vụ.
-9. **Không** nói "sub-check FAIL đã đóng". Không tolerance nào bị dời; nhãn `False` của chuẩn
+   còn khai `fashioniq_val_split_ref_included` cho `tme` trong khi `models.yaml:1669` nói
+   `fashioniq_original_split`; alias **resolve** trong evaluator (`src/evaluation/fashioniq.py:186`)
+   nhưng **bị từ chối** cho artifact đã lưu (`schemas/results.py:12-16,136`). Diff: `HANDBACK.vi.md` §1.
+7. **Không** chạy full test suite ở `3828163`. Đã chạy: **105** test batch campaign, **41** frontend,
+   riêng `test_handoff_commands.py` **1 failed / 7 passed** (§10.1). Không chạy lại cohort, không job GPU.
+8. **Không** nói `9e4918a6` (LIMN canonical) là số duy nhất đúng: nó phụ thuộc một routing policy chỉ
+   tồn tại dưới dạng digest (§5.5); run `10173dc4` có routing hiện rõ nhưng mẫu số 5884 và R@10 30.0646.
+9. **Không** nói sub-check FAIL đã đóng. Không tolerance nào bị dời; nhãn `False` của
    `parity-relative/v1` được **giữ nguyên** và phải giữ, kể cả sau khi có chuẩn v2.
-10. **Không** nói provenance đã sạch. 5 file lệch `file_manifest` là `approved_source_patches` (khớp
-    `derived_sha256`) — ai kiểm chỉ bằng `file_manifest` sẽ báo sai 5 "local modification".
-11. **Không** nói web đã đồng bộ. Bundle mới hơn backend, và route gate trả 404 trên service sống
-    (§8.4).
-12. **Không** nói R13 đã đóng. Catalog đúng về thái độ (không receipt giả, `verified: 0`) nhưng vẫn
-    bỏ sót 4 hình dạng macro và 4 model active (§7.3).
-13. **Không** nói R1 đã đóng trọn. Nhãn đã migrate có kiểm chứng, nhưng `protocol_source` — câu **sai**
-    của artifact — bị migration **đóng băng** và bị test khoá lại (§2.3). Bản migrate **chưa** được
-    dùng làm bằng chứng cho tới khi sửa được câu đó.
+10. **Không** nói provenance đã sạch: 5 file lệch `file_manifest` là `approved_source_patches` (khớp
+    `derived_sha256`) — kiểm chỉ bằng `file_manifest` sẽ báo sai 5 "local modification".
+11. **Không** nói R1 đã đóng trọn: nhãn đã migrate có kiểm chứng, nhưng `protocol_source` — câu **sai**
+    của artifact — bị migration **đóng băng** và bị test khoá lại (§2.3).
+12. **Không** nói R5 đã đóng trọn: `t2_dual_scope.py:273` **vẫn** còn lỗi và `limn_dual_scope.json`
+    trên đĩa **vẫn** chứa 12 lần `7:42304` — kể cả ở `3828163` (§7.5).
+13. **Không** nói release đã sẵn sàng: `TESTED_SOURCE_SHA` cố ý **không** nâng (§10.1); guard đỏ là
+    trạng thái đúng cho tới khi có một lượt sweep đầy đủ trên `3828163`.
 
----
+## 10. Commit và release guard — blocker thật còn mở
+
+Chiến dịch đã được commit và push, **không** phải bởi phiên này:
+
+| thứ | giá trị |
+|---|---|
+| commit | `382816315d0ab7c2e13d7a92d2fd68bc61a11a97` — `Close the E2E repair campaign: gate, protocol labels, LIMN guards, web scope` |
+| quy mô | **182 file**, `21378 insertions(+), 177 deletions(-)` (`git show --stat HEAD`) |
+| push | `2e2e2d2..3828163`; `HEAD == origin/research/cir-failure-workbench` |
+| test | campaign **105 passed** · frontend **41 passed** (phiên sở hữu git chạy) |
+
+Bốn thứ báo cáo này từng ghi là "còn mở" nay **đã đóng ở `3828163`**: route gate phục vụ được
+(§4.3), banner có nhánh loading (§7.2), catalog native nhận 5 hình dạng macro (§3.5, §7.3), và
+`ModelInventory` dùng `otherScopeFor` (§7.1).
+
+### 10.1 Release guard đang **đỏ**, và đó là trạng thái đúng
+
+```
+workbench/envs/ctl312h/bin/python -m pytest workbench/tests/test_handoff_commands.py -q
+→ 1 failed, 7 passed
+   FAILED test_no_release_document_points_at_a_superseded_source_sha
+   AssertionError: TESTED_SOURCE_SHA 36ae9e215ad81960d7af90bd8a5edcf598b5b206 does not contain the
+   production code currently on disk
+```
+
+Guard so `TESTED_SOURCE_SHA` với `git diff --quiet 36ae9e2… -- . ':(exclude)workbench/docs'
+':(exclude)workbench/tests'`, nhận `returncode 1`. Nó **đúng**: production code đã đổi sau revision mà
+handoff gọi là "đã test".
+
+**`TESTED_SOURCE_SHA` đã KHÔNG được nâng, và đó là lựa chọn đúng.** Nâng nó lúc này sẽ tuyên bố một
+full sweep đã chạy trên `3828163` — điều chưa xảy ra. Chỉ được nâng sau khi một lượt đầy đủ chạy trên
+`3828163` và pass. Ghi nhận trung thực: **đây là gate duy nhất trong báo cáo này đỏ vì lý do hợp lệ,
+và nó chặn release, không chặn việc đọc số.**
 
 ### Phụ lục — lệnh chạy lại
 
 ```bash
 cd /home/heheboiz/data/cir
-
-# R1 migration · R9 gate
 PYTHONPATH=$PWD workbench/envs/ctl312h/bin/python -m pytest \
-  workbench/tests/test_protocol_label_migration.py \
-  workbench/tests/test_gate_parity_subchecks.py -q
-
-# R5 reconcile + bản sửa; R6 probe (cần service)
-workbench/envs/ctl312h/bin/python workbench/docs/reviews/20261110-e2e-repair/raw/guards/r5_reconcile.py
-workbench/envs/ctl312h/bin/python workbench/docs/reviews/20261110-e2e-repair/raw/guards/r5_correct_summary.py
-workbench/envs/ctl312h/bin/python workbench/docs/reviews/20261110-e2e-repair/raw/guards/r6_probe.py
-
-# R2 / R3 / R4
-PYTHONPATH=$PWD workbench/envs/encoder310-adapted/bin/python workbench/docs/reviews/20261110-e2e-repair/scripts/pc_r2_transform_tensors.py
-PYTHONPATH=$PWD workbench/envs/ctl312h/bin/python workbench/docs/reviews/20261110-e2e-repair/scripts/pc_r3_tie_harness.py
-PYTHONPATH=$PWD workbench/envs/encoder310-adapted/bin/python workbench/docs/reviews/20261110-e2e-repair/scripts/pc_r4_relation.py --seed 0 --repeat 2
+  workbench/tests/test_protocol_label_migration.py workbench/tests/test_gate_parity_subchecks.py -q
+G=workbench/docs/reviews/20261110-e2e-repair/raw/guards
+workbench/envs/ctl312h/bin/python $G/r5_reconcile.py
+workbench/envs/ctl312h/bin/python $G/r5_correct_summary.py
+workbench/envs/ctl312h/bin/python $G/r6_probe.py          # cần service
+S=workbench/docs/reviews/20261110-e2e-repair/scripts
+PYTHONPATH=$PWD workbench/envs/encoder310-adapted/bin/python $S/pc_r2_transform_tensors.py
+PYTHONPATH=$PWD workbench/envs/ctl312h/bin/python             $S/pc_r3_tie_harness.py
+PYTHONPATH=$PWD workbench/envs/encoder310-adapted/bin/python $S/pc_r4_relation.py --seed 0 --repeat 2
 ```

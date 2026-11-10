@@ -1,0 +1,41 @@
+{
+  "artifact": "/home/heheboiz/data/cir/workbench/docs/reviews/20261110-e2e-repair/raw/guards/clip4cir_fullft.migrated.r1.json",
+  "from_label": "fashioniq_full_gallery_ref_excluded",
+  "to_label": "fashioniq_original_split",
+  "artifact_sha256_before": "fb97cfabdc6976b1e582f89fd2db66a7e15b9f756561b9ad5e04b96bd02e398e",
+  "artifact_sha256_after": "5d1e605a95dac8ee849d669406fbb70fb557566a9c9016f5e75cd22a9dc0d199",
+  "frozen_fields_verified": [
+    "aggregate",
+    "categories",
+    "checkpoint",
+    "source",
+    "runtime",
+    "side_effects",
+    "complete_benchmark",
+    "model_id"
+  ],
+  "protocol_source_corrected": true,
+  "superseded_protocol_source_sha256": "2cf58782e32e20b858019574e088f43d4e1168df9d9ef630f03570d6916d0ac3",
+  "evidence": {
+    "verdict": "MISLABELED",
+    "reason": "The recorded protocol excludes the reference, but the evaluator branch that ran has no reference mask at all. The candidate universe is identical either way, so only the label (and the name a reader files the number under) is wrong.",
+    "citations": [
+      "workbench/third_party/CLIP4Cir/src/validate.py:21-57 compute_fiq_val_metrics has no reference write; it normalizes index features (:41), sorts ascending over 1 - cos (:44-45), labels vs targets only (:49-50)",
+      "workbench/third_party/CLIP4Cir/src/validate.py:162-166 reference_mask exists ONLY inside compute_cirr_val_metrics"
+    ],
+    "gallery_counts": {
+      "dress": 3817,
+      "shirt": 6346,
+      "toptee": 5373
+    },
+    "protocol_source_correction": {
+      "protocol_source": "third_party/CLIP4Cir/src/validate.py::compute_fiq_val_metrics \u2014 index_features over the whole split.{category}.val.json gallery (the full released gallery, no category filter, no reference mask); recall@10/@50 counted directly from the sorted index. The reference-mask branch cited by the superseded text exists only in compute_cirr_val_metrics (validate.py:162-166), which the FashionIQ branch never calls",
+      "reason": "the superseded citation asserts a reference mask that compute_fiq_val_metrics does not contain; freezing it would propagate a false statement into the migrated artifact",
+      "citations": [
+        "workbench/third_party/CLIP4Cir/src/validate.py:21-57 \u2014 no reference write in the FashionIQ branch (normalize :41, distances :44, argsort :45, labels :49-50)",
+        "workbench/third_party/CLIP4Cir/src/validate.py:162-166 \u2014 the only reference_mask is in compute_cirr_val_metrics, a different metric function"
+      ]
+    }
+  },
+  "migrated_at": "2026-11-10T02:08:22.036304+00:00"
+}
