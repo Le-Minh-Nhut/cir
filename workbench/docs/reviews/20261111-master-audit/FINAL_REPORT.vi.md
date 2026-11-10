@@ -150,9 +150,11 @@ artifact. Gate cũ báo `PARITY_PASS` cho cả hai; gate mới báo đúng.
   `checkpoint_training_noise_pct`) mô tả **đại lượng khác**, không được dùng làm khai báo thang macro.
 - **Derived row chưa có marker `DERIVED` trên UI** — dữ liệu đúng (`derived_from`), bề mặt web chưa hiện.
 - **`:8765` stale uvicorn** (PID 1227919) vẫn sống, thiếu route mới.
-- **Stack không tự hồi phục.** Trong đợt này service `:8000`/`:5173` đã chết **hai lần** bởi SIGTERM từ
+- **Stack không tự hồi phục.** Trong đợt này service `:8000`/`:5173` đã chết **ba lần** bởi SIGTERM từ
   bên ngoài (`[WARN] npm exited with status -15` rồi shutdown êm), **nguyên nhân chưa được xác định** —
-  không có commit nào xen vào giữa hai lần. Người đọc có thể gặp service đang **down**:
+  không có commit nào xen vào giữa các lần, và lần thứ ba xảy ra **sau** khi báo cáo này được viết (đó là
+  lý do con số ở đây là 3 chứ không phải 2: nó được cập nhật lại, không phải đoán trước). Người đọc có
+  thể gặp service đang **down**:
   `curl /api/benchmark-runs` trả **000** nghĩa là phải restart bằng lệnh ở §7. **PID không phải pin bền**
   (mỗi lần restart đổi PID); **digest bundle mới là pin** — hiện tại
   `assets/index-DWpK0yeS.js` sha256 `7e34724ebf55092e36524b98980cca55e71f3ddbaa62489c65577f92e18a6a16`.
