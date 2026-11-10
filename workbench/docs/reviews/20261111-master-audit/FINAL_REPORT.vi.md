@@ -150,14 +150,20 @@ artifact. Gate cũ báo `PARITY_PASS` cho cả hai; gate mới báo đúng.
   `checkpoint_training_noise_pct`) mô tả **đại lượng khác**, không được dùng làm khai báo thang macro.
 - **Derived row chưa có marker `DERIVED` trên UI** — dữ liệu đúng (`derived_from`), bề mặt web chưa hiện.
 - **`:8765` stale uvicorn** (PID 1227919) vẫn sống, thiếu route mới.
-- **Stack không tự hồi phục.** Trong đợt này service `:8000`/`:5173` đã chết **ba lần** bởi SIGTERM từ
-  bên ngoài (`[WARN] npm exited with status -15` rồi shutdown êm), **nguyên nhân chưa được xác định** —
-  không có commit nào xen vào giữa các lần, và lần thứ ba xảy ra **sau** khi báo cáo này được viết (đó là
-  lý do con số ở đây là 3 chứ không phải 2: nó được cập nhật lại, không phải đoán trước). Người đọc có
-  thể gặp service đang **down**:
-  `curl /api/benchmark-runs` trả **000** nghĩa là phải restart bằng lệnh ở §7. **PID không phải pin bền**
-  (mỗi lần restart đổi PID); **digest bundle mới là pin** — hiện tại
-  `assets/index-DWpK0yeS.js` sha256 `7e34724ebf55092e36524b98980cca55e71f3ddbaa62489c65577f92e18a6a16`.
+- **Stack không tự hồi phục — cơ chế đã xác định một phần, thủ phạm thì chưa.** Service `:8000`/`:5173`
+  đã chết **bốn lần** trong đợt này, đều cùng một chữ ký log: `[WARN] npm exited with status -15` (bị
+  SIGTERM) rồi backend `Shutting down` êm. **Đã xác định:** đó chính xác là đường
+  `serve_workbench.py:152-166` — `forward_stop` nhận SIGTERM/SIGHUP, gửi `os.kill(child.pid, SIGTERM)`
+  cho từng child rồi `raise_signal(SIGINT)`. Nghĩa là launcher **của chính nó** nhận SIGTERM; child
+  không tự chết. **Chưa xác định:** ai gửi SIGTERM đó. Đã kiểm và loại trừ: `jobs.py` spawn job bằng
+  `start_new_session=True` nên `killpg` của nó chỉ chạm group riêng của job; không có test/script nào
+  gửi tín hiệu tới npm/uvicorn theo tên; instance hiện tại có `SID == PGID == PID` (session riêng) nên
+  miễn nhiễm với việc group của một shell khác bị reap. **Không suy đoán thêm.**
+  Người đọc có thể gặp service **down**: `curl /api/benchmark-runs` trả **000** nghĩa là restart bằng
+  lệnh ở §7. **PID không phải pin bền** (mỗi restart đổi PID); **digest bundle mới là pin** — hiện tại
+  `assets/index-DWpK0yeS.js` sha256 `7e34724ebf55092e36524b98980cca55e71f3ddbaa62489c65577f92e18a6a16`
+  (đo lại sau restart: `/api/benchmark-runs` 200 với 13 mục, `/api/native-measurements` 200 với
+  `unbacked_counted: 0`, DCNet `27.929730914548916` / `percent` / `sibling_key`).
 - **`/api/models` cold 154 s** — đừng dùng để poll; dùng `/api/benchmark-runs`.
 
 ---
