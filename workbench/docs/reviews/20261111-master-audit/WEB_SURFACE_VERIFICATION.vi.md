@@ -38,16 +38,19 @@ nào ở phía server. Luôn `npm run build` trước khi restart.
 
 | mục | giá trị |
 |---|---|
-| bundle trước khi nhận | `index-DjAje2d2.js` sha256 `74a9319ed6f05ce0508cf93424d5a0dcd8909e9a0116dcec4e87a1f24d50f867` |
-| bundle để lại phục vụ | `index-Bpang-Qk.js` sha256 `81371928af647c4a8ee994f060a2fd268ed76a04c2dc4855928692b32626b414` |
+| bundle **đang phục vụ** | **`assets/index-DWpK0yeS.js`** sha256 **`7e34724ebf55092e36524b98980cca55e71f3ddbaa62489c65577f92e18a6a16`** |
 | css | `index-DecQnta9.css` |
-| lý do phải pin | `workbench/frontend/dist/` bị gitignore và `dist/index.html` KHÔNG được track, nên build đang phục vụ **không** tái lập được từ HEAD |
+| lý do phải pin | `workbench/frontend/dist/` bị gitignore nên **artifact build không được track**; build thì tái lập được (`npm run build --prefix workbench/frontend` — nguồn, `tsconfig.json`, `vite.config.mts`, `package.json`/`package-lock.json` đều tracked và `tsc`/`vite` đã cài), nhưng **byte đang phục vụ phải được pin bằng digest tại mỗi lần đo** |
+| superseded — bundle phục vụ trước `relation_state`/`relation_parity` | `index-CEgaMiLf.js` sha256 `0b6b15a80782d04459e78e3bd71fc0d2532a8c16bb09d01987814d16bab6eb87` — **không còn trên đĩa**, đã bị build mới ghi đè |
+| superseded — bundle của lần W-05 đầu | `index-Bpang-Qk.js` sha256 `81371928af647c4a8ee994f060a2fd268ed76a04c2dc4855928692b32626b414` — **không còn trên đĩa** (tệp không tồn tại); đây là build trước khi có các bản sửa ingest/`relation_state`/`relation_parity` |
+| superseded — bundle trước lần nhận W-05 | `index-DjAje2d2.js` sha256 `74a9319ed6f05ce0508cf93424d5a0dcd8909e9a0116dcec4e87a1f24d50f867` — **không còn trên đĩa** |
 | frontend | `http://127.0.0.1:5173` (vite `preview`, proxy `/api` → `http://127.0.0.1:8000`) |
 | backend | `http://127.0.0.1:8000` |
 | restart | đúng **một lần**, `WORKBENCH_CIRCUS_RELEASE_ROOT=/home/heheboiz/data/cir/workbench/artifacts/circus_release` |
-| PID | `3212146` |
+| PID **đang phục vụ** | `serve_workbench.py` **4062950** → uvicorn **4062957** (superseded: `4040573/4040574`, `3390138/3390139`, `3316577/3316578`, `3212146`) |
+| cảnh báo về pin PID | PID **không bền** trong đợt này: stack đã bị SIGTERM từ bên ngoài **hai lần** (`[WARN] npm exited with status -15` ở `/tmp/workbench_serve.log` lúc 02:25:51, và `/tmp/workbench_serve_final.log` sau đó), mỗi lần phải restart và PID đổi. **Digest bundle mới là pin bền**; PID chỉ đúng tại thời điểm đo |
 | readiness | `/api/benchmark-runs` → 200 sau 1 s; **không** dùng `/api/models` (cold start ~154 s vì hash mọi checkpoint) |
-| digest khớp | `sha256(served /assets/index-Bpang-Qk.js)` = `sha256(dist/index-Bpang-Qk.js)` |
+| digest khớp | `sha256(served /assets/index-DWpK0yeS.js)` = `sha256(dist/assets/index-DWpK0yeS.js)` = `7e34724e…8a6a16`; `cmp` → IDENTICAL |
 
 Lần restart này cũng là lần duy nhất nạp `workbench/backend/parity_gate.py` và
 `workbench/composition/runner.py` do worker khác sửa. Verdict của gate **không đổi**:
@@ -379,12 +382,13 @@ trong lượt này. Không sửa gì ở đây.
 | mục | giá trị |
 |---|---|
 | HEAD | `92ed66de4f359ef479da18bf8939723b6f9313e5` + thay đổi chưa commit |
-| bundle phục vụ | `index-CEgaMiLf.js`, sha256 `0b6b15a80782d04459e78e3bd71fc0d2532a8c16bb09d01987814d16bab6eb87` |
-| dist | cùng hash (đã so `sha256` của file serve với file trên đĩa) |
+| bundle phục vụ | **`index-DWpK0yeS.js`**, sha256 **`7e34724ebf55092e36524b98980cca55e71f3ddbaa62489c65577f92e18a6a16`** |
+| dist | cùng hash (`cmp` → IDENTICAL giữa byte phục vụ và `dist/assets/index-DWpK0yeS.js`) |
+| superseded | `index-CEgaMiLf.js` sha256 `0b6b15a8…6eb87` (build trước `relation_state`/`relation_parity`; không còn trên đĩa) |
 | css | `index-DecQnta9.css` |
 | root | `WORKBENCH_CIRCUS_RELEASE_ROOT=/home/heheboiz/data/cir/workbench/artifacts/circus_release` |
 | proxy | vite `preview` proxy `/api` → `http://127.0.0.1:8000` (`vite.config.mts`, `WORKBENCH_BACKEND_URL`) |
-| PID | `3228456` |
+| PID | **4062950** (`serve_workbench.py`) → **4062957** (uvicorn); superseded `4040573`, `3228456`, `3316577`, `3390138`. PID không bền — xem cảnh báo ở bảng pin phía trên |
 | readiness | `/api/benchmark-runs` 200 sau 1 s |
 
 ### Bằng chứng theo nhóm scope có dữ liệu

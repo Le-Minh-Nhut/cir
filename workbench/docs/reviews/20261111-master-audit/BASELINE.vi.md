@@ -188,7 +188,21 @@ sha256sum /tmp/served.js workbench/frontend/dist/assets/index-DjAje2d2.js
 74a9319ed6f05ce0508cf93424d5a0dcd8909e9a0116dcec4e87a1f24d50f867  workbench/frontend/dist/assets/index-DjAje2d2.js
 ```
 
-Lưu ý: `workbench/frontend/dist/index.html` **không** được git track (`git ls-files --error-unmatch` → rc=1). Build này là hiện vật trên đĩa, không tái lập được từ HEAD.
+Lưu ý: `workbench/frontend/dist/index.html` **không** được git track (`git ls-files --error-unmatch` → rc=1).
+
+Sửa lại một cách nói sai trước đây: build **tái lập được từ HEAD**, không phải "không tái lập được".
+Chỉ `workbench/frontend/dist/` và `workbench/frontend/node_modules/` bị gitignore; còn
+`package.json`, `package-lock.json`, `tsconfig.json`, `vite.config.mts` và toàn bộ nguồn `.ts`/`.tsx`
+đều **tracked**, và `tsc` (7.0.2) + `vite` đã cài trong `node_modules`. Nên
+`npm run build --prefix workbench/frontend` cho lại đúng bundle đó.
+
+Điều **đúng** cần nói: **artifact build không được track**, nên byte đang phục vụ phải được **pin bằng
+`sha256` tại mỗi lần đo** — một bản build từ cây khác vẫn phục vụ được mà không có lỗi nào ở phía
+server, và đó chính là cách W-05 phát hiện bundle hỏng. Pin hiện hành nằm ở
+`WEB_SURFACE_VERIFICATION.vi.md` §"Service được phục vụ".
+
+Cũng vì vậy con số `index-DjAje2d2.js` ghi bên trên là **superseded**: bundle đang phục vụ là
+`assets/index-DWpK0yeS.js`, sha256 `7e34724ebf55092e36524b98980cca55e71f3ddbaa62489c65577f92e18a6a16`.
 
 Backend trả lời (dùng `/api/benchmark-runs` làm readiness, **không** dùng `/api/models`):
 
