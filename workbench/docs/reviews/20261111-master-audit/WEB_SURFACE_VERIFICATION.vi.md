@@ -325,13 +325,35 @@ Một giá trị được phục vụ **phải** là giá trị một artifact n
 
 Bằng chứng: `web_evidence/w01_native_measurements_after.json`.
 
-### `categories[].protocol` — nhận định cũ đã bị BÁC BỎ
+### `categories[].protocol` còn sai ở artifact CLIP4Cir đã migrate
 
-**Đã kiểm lại: không tái lập được.** Quét toàn bộ `workbench/artifacts/**/*.json` cho thấy **0**
-artifact có `categories[].protocol` khác `protocol` cấp document; `native/clip4cir_fullft.json` nhất
-quán ở cả hai cấp (`fashioniq_full_gallery_ref_excluded`, commit `323be19` ghi cả bốn dòng như vậy).
-Vì thế đây **không** phải việc còn lại — giữ mục này chỉ để ghi rằng nhận định cũ đã bị bác bỏ bằng
-đo đạc, không phải bằng lập luận.
+**Nhận định gốc là ĐÚNG, và tôi đã từng ghi sai nó thành "bị bác bỏ"** — vì tôi quét sai cây. Ghi lại
+đúng, kèm phạm vi quét để lỗi này không tái diễn:
+
+**Phạm vi quét — phải đọc kỹ.** `workbench/artifacts/**/*.json` **không** chứa artifact đã migrate, nên
+quét cây đó thấy **0** artifact lệch cấp category. Artifact bị ảnh hưởng nằm ở
+`workbench/docs/reviews/**/raw/**`, **ngoài** phạm vi quét đó. Kết luận "không tái lập được" của tôi là
+**vắng bằng chứng do tìm sai chỗ**, không phải bằng chứng vắng mặt.
+
+Quét đúng phạm vi (`workbench/docs/reviews/**/raw/**/*.json`, 291 file; 14 file khai protocol ở **cả hai**
+cấp): **2 file lệch**, cả hai là cùng một model:
+
+| file | document | `categories[].protocol` |
+|---|---|---|
+| `20261110-e2e-repair/raw/clip4cir_fullft.migrated.json` | `fashioniq_original_split` | `fashioniq_full_gallery_ref_excluded` (cả 3 category) |
+| `20261110-e2e-repair/raw/guards/clip4cir_fullft.migrated.r1.json` | `fashioniq_original_split` | `fashioniq_full_gallery_ref_excluded` (cả 3 category) |
+
+Vậy: migration sửa **cấp document**, để nguyên **cấp category** — đúng như nhận định ban đầu.
+
+**Không sửa hai file đó.** `20261110-e2e-repair` là bản ghi bất biến của chiến dịch trước; viết lại nó là
+sửa bằng chứng đã công bố. Nhãn đã sửa chỉ tồn tại ở trường cấp document; phần lệch cấp category được
+ghi ở đây như **defect đã biết trong artifact lịch sử**.
+
+**Có phải chỉ là chuyện hình thức không?** Không có consumer nào đọc `categories[].protocol`: bộ đọc
+(`backend/native_measurements.py:282,289`) lấy `protocol_id`/`protocol` ở **cấp document**, và
+`grep` trên `backend/`, `composition/`, `scripts/`, `replay/` không tìm thấy chỗ nào đọc protocol theo
+từng category. Nên số **phục vụ** không bị ảnh hưởng. Nhưng một người đọc artifact muốn biết "category
+này chạy protocol nào" sẽ gặp giá trị sai, nên nó vẫn là defect dữ liệu, chỉ không phải defect hiển thị.
 
 ### Đơn vị: declaration thắng magnitude inference
 
@@ -445,11 +467,12 @@ Log: `raw/w01_w03_targeted_tests.txt`. Không chạy toàn bộ suite (theo yêu
 
 * `clip4cir_rn50x4_noft` vẫn chỉ có roll-up: được liệt kê, `artifact_backed: false`, không đếm.
   Cần một lượt replay cho NoFT thì mới có số có artifact chống lưng.
-* `categories[].protocol` — **đã kiểm lại và câu cũ SAI**: quét toàn bộ `workbench/artifacts/**/*.json`,
-  **0** artifact có `categories[].protocol` khác `protocol` cấp document. Cụ thể
-  `native/clip4cir_fullft.json` ghi `fashioniq_full_gallery_ref_excluded` ở cả document **và** cả ba
-  category (nhất quán). Ghi chú cũ ("đã sửa cấp document nhưng để nguyên category") không tái lập được
-  trên artifact đang có.
+* `categories[].protocol` trong artifact CLIP4Cir đã migrate **vẫn sai** — nhận định gốc đúng.
+  Hai file: `20261110-e2e-repair/raw/clip4cir_fullft.migrated.json` và
+  `…/raw/guards/clip4cir_fullft.migrated.r1.json`, document `fashioniq_original_split` nhưng cả 3
+  category vẫn `fashioniq_full_gallery_ref_excluded`. Không sửa (bản ghi cũ là bất biến). Không consumer
+  nào đọc trường này, nên số phục vụ không đổi — xem mục W-01 bổ sung để biết **phạm vi quét** và vì sao
+  một lần quét `workbench/artifacts/**` không thể thấy nó.
 * `unit_declared` **không còn là 0/43** (con số đó đã cũ): payload sống báo `unit_declared: 4`,
   `unit_sibling_key: 2`, `unit_inferred: 39`, `unit_not_declared: 39`. Sáu dòng nay mang khai báo thật
   (`clip4cir_fullft.json` khai `categories[*].provenance.units`; `dcnet.json` khai bằng hậu tố
