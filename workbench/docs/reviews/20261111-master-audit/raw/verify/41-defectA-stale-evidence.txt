@@ -1,0 +1,32 @@
+=== DEFECT A: stale w_shots evidence 2026-11-11T04:53:48 ===
+scanned 14 JSON files
+
+A1. non-200 API records in embedded `api` blocks: 2
+    ('w04_deeplink_out_of_range.json', '/api/composition/runs/9e4918a6b5c243412cbc58c9/queries?subset=sf&condition=multimodal&query_id=7%3A99999&top_k=10&limit=1&offset=0', 404)
+    ('w05_pe_histograms.json', '/api/parity-gate', 404)
+
+A2. files with DERIVED_* inside execution_status (option-(a) rendering): 3
+    w02_models_inventory.json
+    w02_overview_circus.json
+    w04_reload_full.json
+
+A3. counter-check on the LIVE API (why A2 is genuinely stale):
+    GET /api/composition/runs?subset=validated -> DERIVED_* appears ONLY at
+      [8].derived_from.own_status_label and _recorded_identity.derived_from.own_status_label
+    execution_status is 'PARTIAL' for both derived runs (option b).
+
+A4. the /api/parity-gate 404 is a WRONG URL, not a missing route:
+    real route is @app.get('/api/runs/parity-gate')  (backend/main.py:1044)
+    200 there with passed_models: [], encoder 13 failures, limn 3 failures.
+Traceback (most recent call last):
+  File "<stdin>", line 6, in <module>
+AttributeError: 'list' object has no attribute 'get'
+A5. DOM-RENDERED DERIVED_* badges (UI prints only execution_status): 2
+    w02_overview_circus.json
+    w05_pe_histograms.json
+
+A6. FINAL COUNT of stale w_shots evidence:
+    non-200 API: 2 records in 2 files
+      w04_deeplink_out_of_range -> 404 is the INTENDED out-of-range probe (valid evidence)
+      w05_pe_histograms -> /api/parity-gate 404 is a WRONG URL (real: /api/runs/parity-gate)
+    option-(a) DERIVED_* rendering: 4 files (see A5 list)
