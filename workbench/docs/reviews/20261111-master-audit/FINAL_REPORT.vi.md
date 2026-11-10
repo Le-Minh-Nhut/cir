@@ -22,11 +22,11 @@ báo cáo/raw tương ứng. Đọc kèm:
 |---|---|
 | base HEAD | `92ed66de4f359ef479da18bf8939723b6f9313e5` |
 | branch | `research/cir-failure-workbench` |
-| cây phát hành | HEAD trên + work chưa commit của đợt này (xem §8 bảng sweep) |
+| cây phát hành | **9 commit** trên base `92ed66de`: `be14393c97b100390a9a45c6b0a46857b24a78b9` là revision sweep đo (= `TESTED_SOURCE_SHA`), HEAD hiện tại `abb6fbbfdb396972ed878e9a2d332f6f7fc2de69` **== `origin/research/cir-failure-workbench`**. Đợt này **đã commit hết**, không còn work chưa commit (chỉ còn file operator `CLEANUP_REPORT.md.save` không track) |
 | Python | `workbench/envs/ctl312h/bin/python` — CPython **3.12.11** |
 | torch | **2.15.0+cu132** |
 | GPU | **NVIDIA GeForce RTX 5070 Ti** |
-| backend | `:8000`, PID **3691345** (con của `serve_workbench.py` PID 3691344), env `WORKBENCH_CIRCUS_RELEASE_ROOT=…/artifacts/circus_release` |
+| backend | `:8000`, uvicorn PID **4082632** (con của `serve_workbench.py` PID 4082631), env `WORKBENCH_CIRCUS_RELEASE_ROOT=…/artifacts/circus_release`. **PID chỉ đúng tại thời điểm đo** (mỗi restart đổi PID; stack đã chết/restart nhiều lần trong đợt) — **pin bền là digest bundle ở hàng frontend**, không phải PID |
 | frontend | `:5173`, bundle **`assets/index-DWpK0yeS.js`**, sha256 **`7e34724ebf55092e36524b98980cca55e71f3ddbaa62489c65577f92e18a6a16`** (bytes phục vụ `cmp`-identical với `dist/`) |
 
 Sẵn sàng đo bằng `/api/benchmark-runs` (HTTP 200). **Không** dùng `/api/models` để poll: 154 s cold vì nó
@@ -121,7 +121,7 @@ Chỉ những số dưới đây đủ căn cứ để trích. Mỗi số kèm n
 | **Air-Know** | **52.5468 ± 0.2673** (4 run) | **kèm công bố** nondeterminism của upstream, không giấu | cùng báo cáo |
 | **ENCODER** | **31.0178 / 49.5586** | run pinned `ce89a9a2…` | `MODEL_LIMN_ENCODER_VERIFICATION.vi.md` |
 | **LIMN** canonical `9e4918a6` | **PARTIAL 6001/6003** | + hai subset derived (sf: 4068/4069 `DERIVED_PARTIAL`; validated: 586/586 `DERIVED_COMPLETE`) | cùng báo cáo; `tests/test_derived_subset_status.py` |
-| **Gate** | **0/15 PASS**, 2 model được gate | `passed_models: []`; `failure_count` **13** (encoder) và **3** (limn) — đều là **discrepancy thật**, không phải thiếu dữ liệu | `GATE_SCORING_VERIFICATION.vi.md`; `/api/runs/parity-gate` |
+| **Gate** | **0 / 2 mô hình có artifact parity; 0 / 17 cấu hình PASS** | `passed_models: []`; `failure_count` **13** (encoder) và **3** (limn) — đều là **discrepancy thật**, không phải thiếu dữ liệu. Mẫu số là cohort **17** cấu hình như §6: 13 model G1/G2 `NOT_RUN` chưa có artifact parity nên không thể pass | `GATE_SCORING_VERIFICATION.vi.md`; `/api/runs/parity-gate` |
 
 Nói rõ: **0 PASS không phải lỗi của gate** — đó là 16 discrepancy thật (13 + 3) giữa hai phía, đọc từ
 artifact. Gate cũ báo `PARITY_PASS` cho cả hai; gate mới báo đúng.
