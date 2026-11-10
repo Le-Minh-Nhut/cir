@@ -6,7 +6,10 @@ Thư mục: `workbench/docs/reviews/20261109-native15-composition-limn/`.
 Quy ước nguồn: mỗi con số dưới đây ghi kèm file trong **thư mục này** đã chứa nó. Con số nào không
 truy được về file thì bị loại khỏi báo cáo, không được thay bằng ước lượng. Các bảng tổng hợp
 `NATIVE_EVAL_MATRIX.csv`, `COMPOSITION_MATRIX.csv`, `GATES.csv` do worker `native15-inventory` sở hữu;
-báo cáo này đối chiếu chúng với artifact thô và ghi lại kết quả đối chiếu ở §2.5 và §7.
+báo cáo này đối chiếu chúng với artifact thô và ghi lại kết quả đối chiếu ở §2.5 và §7. Tường thuật
+chi tiết của hai native run thêm trong lượt này (`dcnet`, `clip4cir_rn50x4_fullft`) nằm ở
+`NATIVE_RUNS_EXTRA.vi.md`; bằng thô ở `raw/native/dcnet.json` và `raw/native/clip4cir_fullft.json`.
+Bằng chứng parity của `encoder` ở `ENCODER_PARITY.vi.md` + `g1_g2.encoder.*.json` + `raw/encoder_parity/`.
 
 ---
 
@@ -14,15 +17,15 @@ báo cáo này đối chiếu chúng với artifact thô và ghi lại kết qu�
 
 | hạng mục | đạt / tổng | nghĩa |
 |---|---|---|
-| Native FashionIQ có aggregate hoàn tất | **9 / 15** | 8 chạy trong chiến dịch này (7 ở workstream A + `limn`), cộng `combiner_rn50x4_noft` có run hoàn tất **từ trước** chiến dịch và được xác minh lại ở đây |
-| G1 + G2 | **1 / 15** | chỉ `limn`; và chính nó mang **một sub-check fail thật** (§3.4) |
+| Native FashionIQ có aggregate hoàn tất | **11 / 15** | 10 chạy trong chiến dịch này (7 ở workstream A + `limn` + `dcnet` + `clip4cir_rn50x4_fullft`), cộng `combiner_rn50x4_noft` có run hoàn tất **từ trước** chiến dịch và được xác minh lại ở đây |
+| G1 + G2 | **2 / 15** | `limn` và `encoder`; **cả hai** mang failure đã khai báo một cách trung thực (§3.4, §3.6) |
 | Composition CIRCUS (8 run được chọn) | **8 / 8** | 7 `COMPLETED`, 1 `PARTIAL` (limn 6001/6003) |
 | LIMN: 2 query mơ hồ được resolve canonical | **0 / 2** | provenance không cho phép; canonical giữ `PARTIAL 6001/6003` |
 | LIMN: chẩn đoán 2 scope | **12 / 12 ranking** | 2 query × 2 scope × 3 điều kiện |
 
-**Không phải 15/15.** 6 model còn thiếu native (§6). **Không** tuyên bố chiến dịch hoàn tất: G1/G2
-mới có **2/15** (`limn`, và `encoder` thêm ở lượt này — G1 PASS, G2 PASS-kèm-failure-đã-khai-báo, xem
-§6c), và 6 blocker còn nguyên.
+**Không phải 15/15.** **4** model còn thiếu native (`pair`, `airknow`, `clvc_net`, `tgcir` — §6).
+**Không** tuyên bố chiến dịch hoàn tất: G1/G2 mới có **2/15** (`limn`, và `encoder` thêm ở lượt này —
+G1 PASS, G2 PASS-kèm-failure-đã-khai-báo, xem §3.6 và §6c), và **4** blocker còn nguyên.
 
 Danh sách 15 model active = 17 khai báo − 2 deferred (`csmcir`, `sprc`) theo `GATES.csv` dòng
 `Scope/accounting`. Đếm lại trên `NATIVE_EVAL_MATRIX.csv` (17 dòng) khớp 17, trừ 2 deferred còn 15.
@@ -52,6 +55,30 @@ không trọng số trên 3 category của **chính model đó**, không phải 
 | `habit` | **54.8733** | **74.5034** | `raw/native/habit.json` |
 | `intent` | **54.8662** | **75.4319** | `raw/native/intent.json` |
 | `conesep` | **54.7613** | **75.2151** | `raw/native/conesep.json` |
+| `dcnet` | **0.27930** (27.93%) | **0.53761** (53.76%) | `raw/native/dcnet.json` |
+| `clip4cir_rn50x4_fullft` | **43.8017** | **66.9836** | `raw/native/clip4cir_fullft.json` |
+
+**Đơn vị của hai dòng mới KHÁC nhau, và đây là cái bẫy phải đọc kỹ.** `raw/native/dcnet.json` →
+`aggregate.macro_r10 = 0.27929730914548917` / `macro_r50 = 0.5376075764301528`: đây là **phân số**,
+không phải phần trăm — 0.27930 nghĩa là **27.93%**, không phải 0.279%. `raw/native/clip4cir_fullft.json`
+→ `aggregate.macro_r10 = 43.8016931215922` / `macro_r50 = 66.98358456293742`: đây là **phần trăm**
+(upstream `validate.py:351-352` dùng `statistics.mean` trên recall đã nhân 100). Vì vậy **hai cột này
+tuyệt đối không được so trực tiếp với nhau**, và không dòng nào được đem trung bình với dòng kia.
+
+Thêm hai cảnh báo về `dcnet`, cả hai đều từ chính JSON của nó:
+
+* `comb_avg 0.40845` trong `info.log` là **trung bình trên sáu ô R@10/R@50** (hoặc trên cặp
+  per-branch), **KHÔNG phải macro** trên cột comb; `aggregate.upstream_aggregate_note` nói nguyên văn
+  điều đó, và macro đúng của báo cáo này là trung bình 3 category của **riêng cột comb** =
+  **0.27930 / 0.53761**. `comb_avg` **không bao giờ được trích như một macro**.
+* `r1 = null` ở cả ba category là **đúng theo upstream**: evaluator FashionIQ của DCNet chỉ tính
+  R@10/R@50, nên R@1 **không tồn tại** — không phải thiếu sót của lượt chạy này.
+
+`clip4cir_rn50x4_fullft` nằm ở bảng này vì **chính file bằng chứng của nó khai protocol đó**:
+`protocol: "fashioniq_full_gallery_ref_excluded"`, `protocol_source: "third_party/CLIP4Cir/src/validate.py
+::compute_fiq_val_metrics — index_features over the whole split.{category}.val.json gallery; the
+reference is excluded by masking its own index entry rather than removing it from the gallery"`. Đây
+**đính chính** cách xếp trước đó của báo cáo dưới `fashioniq_original_split`.
 
 ### 2.3 `fashioniq_original_split`
 
@@ -65,40 +92,64 @@ không trọng số trên 3 category của **chính model đó**, không phải 
 exploratory"` và `train_dataset: CIRR` trong chính JSON của nó. Con số 37.8978 **không** so sánh được
 với các dòng `fashioniq_*` như một kết quả tái lập; nó là bằng chứng transfer.
 
-### 2.4 Đếm chính xác 9/15
+### 2.4 Đếm chính xác 11/15
 
-8 chạy mới: `encoder`, `hint`, `habit`, `intent`, `conesep`, `tme`, `ptha_mtst` (7, đủ 3 category,
-`complete = true` trong từng JSON) + `limn` (3 category, `instrumentation_parity = VERIFIED` cả ba,
-`limn_native.json` → `all_parity_verified = true`).
+10 chạy trong chiến dịch này:
+
+* `encoder`, `hint`, `habit`, `intent`, `conesep`, `tme`, `ptha_mtst` — 7 model, đủ 3 category,
+  `complete = true` trong từng JSON.
+* `limn` — 3 category, `instrumentation_parity = VERIFIED` cả ba; `limn_native.json` →
+  `all_parity_verified = true`.
+* `dcnet` — hoàn tất **sau khi blocker được sửa**, `exit_code 0`, `wall_human "2:07:35"` (7656 s),
+  `raw/native/dcnet.json` → `complete_benchmark = true`, `aggregate.complete = true`. Run này **ghi lại**
+  `checkpoints/dcnet/val/att_result.pt`: `side_effects.att_result_pt.previous_mtime`
+  `2026-11-07 00:02:45`, `new_mtime` **`2026-11-10 04:22:45`**, sha256 mới `6d776ffa…60438`. Vì vậy
+  **số cũ của run 2026-11-07 (`comb_avg 0.40828`) KHÔNG phải output của run này**, và không được trích
+  như vậy.
+* `clip4cir_rn50x4_fullft` — `exit_code 0`, `wall_human "0:37:26"` (2246 s),
+  `raw/native/clip4cir_fullft.json` → `complete_benchmark = true`; `side_effects.wrote_nothing_outside
+  = true` (eval chỉ in ra stdout, không ghi file nào).
+
 1 có sẵn từ trước: `combiner_rn50x4_noft` (`execution_status: EXECUTION_COMPLETED`,
 `reproduction_status: EXTRACTED_VERIFIED`, `metric_extraction_available: true`).
-**Tổng 9/15.** `csmcir` cũng có `native_executed=Y` nhưng bị user defer, nên **không** được tính
-vào 9 (§2.5).
+
+**Tổng 11/15.** `csmcir` cũng có `native_executed=Y` nhưng bị user defer, nên **không** được tính
+vào 11 (§2.5).
 
 ### 2.5 `NATIVE_EVAL_MATRIX.csv` khớp với artifact thô
 
-Sau lượt hiệu chỉnh của worker `native15-inventory`, matrix ghi `native_executed = Y` cho
-`encoder`, `hint`, `habit`, `intent`, `conesep`, `tme`, `ptha_mtst`, `limn`, `combiner_rn50x4_noft`
-(và `csmcir`, model deferred), với metric macro và đường dẫn `raw/native/*.json` / `limn_native.json`
-làm bằng chứng — khớp §2.1–§2.3 của báo cáo này và khớp `aggregate.complete = true` trong các JSON.
+Đọc trực tiếp file (17 dòng, 17 khai báo): `native_executed = Y` cho **12** model —
+`conesep`, `ptha_mtst`, `habit`, `intent`, `hint`, `encoder`, `dcnet`, `combiner_rn50x4_noft`,
+`clip4cir_rn50x4_fullft`, `limn`, `tme`, `csmcir`. Trừ `csmcir` (user defer) còn **11/15** — khớp
+§2.1–§2.3. Cột `g1_status`/`g2_status` hiện ghi:
 
-Khác biệt `verified` là **phân biệt đúng, không phải defect**: 8 model executed giữ
-`native_verified = N` và `g1/g2 = NOT_RUN` vì chưa có parity nào được đo cho chúng; chỉ `limn` có
-`native_verified = Y` cùng `g1 = PASS`, `g2 = PASS-with-caveat`. `encoder` đã có parity đo được ở lượt
-này (`ENCODER_PARITY.vi.md`), nhưng **hàng của nó trong `NATIVE_EVAL_MATRIX.csv` chưa được cập nhật** —
-file đó do worker khác sở hữu — nên đọc CSV vẫn thấy `NOT_RUN` cho tới khi chủ sở hữu sửa. Đó chính là
-điều §1 báo cáo (native 9/15, G1/G2 **2/15** bằng chứng thật, 1/15 trong CSV cũ) — một lần chạy hoàn
-tất không tự động là một lần chạy đã xác minh.
+| model | `g1_status` | `g2_status` |
+|---|---|---|
+| `limn` | `PASS` | `PASS-with-caveat` |
+| `encoder` | `PASS` | `PASS_WITH_DECLARED_FAILURES` |
+| 10 model còn lại | `NOT_RUN` | `NOT_RUN` |
 
-`csmcir` có `native_executed = Y` nhưng bị user defer nên **không** được tính vào 9 — và metric của
+Hàng `encoder` **đã được worker `native15-inventory` cập nhật** theo `ENCODER_PARITY.vi.md`, và
+`dcnet`/`clip4cir_rn50x4_fullft` đã được đặt `native_executed = Y`. Mô tả cũ trong báo cáo này
+("hàng `encoder` vẫn `NOT_RUN`") **không còn đúng** và đã bị thay bằng bảng trên.
+
+Khác biệt `verified` là **phân biệt đúng, không phải defect**: 10 model executed vẫn giữ
+`native_verified = N` vì chưa có parity nào được đo cho chúng; chỉ `limn` có `native_verified = Y`, và
+`encoder` có G1/G2 đo được nhưng cột `native_verified` vẫn `N` cho tới khi chủ sở hữu quyết định có
+nâng nó theo `g1/g2` hay không — báo cáo này không tự nâng. Đó chính là điều §1 báo cáo (native 11/15,
+G1/G2 **2/15**) — một lần chạy hoàn tất không tự động là một lần chạy đã xác minh.
+
+`csmcir` có `native_executed = Y` nhưng bị user defer nên **không** được tính vào 11 — và metric của
 nó không được dùng ở báo cáo này.
 
 ---
 
-## 3. G1 / G2 — chi tiết LIMN
+## 3. G1 / G2 — chi tiết `limn` và `encoder`
 
-Chỉ `limn` có G1/G2. Tolerance được **khai trước khi đo**, trong `INPUT_FORWARD_PARITY.vi.md` §0.
-File kết quả: `g1_g2.{dress,shirt,toptee}.{native,adapter}.json`.
+**Hai** model có G1/G2: `limn` (§3.1–§3.5) và `encoder` (§3.6). Tolerance của **mỗi** model được
+**khai trước khi đo**: `INPUT_FORWARD_PARITY.vi.md` §0 cho `limn`,
+`ENCODER_PARITY.vi.md` §0 cho `encoder`. File kết quả: `g1_g2.{dress,shirt,toptee}.{native,adapter}.json`
+(`limn`) và `g1_g2.encoder.{dress,shirt,toptee}.{native,adapter}.json` (`encoder`).
 
 ### 3.1 G1 input parity — **PASS**
 
@@ -151,6 +202,50 @@ Nhưng đúng như đã khai trước, sub-check này **fail**, và báo cáo gi
 `text_only_black_image` và `image_only_empty_text` là định nghĩa của workbench, không có tương
 đương upstream (không code upstream nào đưa ảnh zero vào). G1/G2 đo đường native. Không có kết quả
 nào ở §3 nói gì về CIRCUS.
+
+### 3.6 `encoder` — G1 PASS, G2 PASS với **hai failure đã khai báo**
+
+Toàn bộ chi tiết ở `ENCODER_PARITY.vi.md`; file kết quả
+`g1_g2.encoder.{dress,shirt,toptee}.{native,adapter}.json`; log + npz ở `raw/encoder_parity/`.
+Protocol `fashioniq_val_split`, cùng checkpoint `fashioniq.pt`
+(sha256 `0f31c501…9173`), mẫu thật cố định chọn trước khi đo: index 0, hàng đầu có caption 1 viết hoa,
+hàng có dấu câu/apostrophe, hàng cuối.
+
+**G1 — PASS.** ids / thứ tự gallery / thứ tự annotation / model text **exact**: 2017 / 2038 / 1961 hàng,
+**0 mismatch**; gallery dựng lại từ `cap.<cat>.val.json` khớp tuyệt đối và không có ảnh trùng.
+Tokenizer `open_clip.tokenizer.SimpleTokenizer`, vocab **49408**, context **77**, `attn_mask` `[77,77]`
+float32. Pixel: biểu thức decode của adapter (`Image.open` + `preprocess_val`) **bitwise** bằng decode
+`preprocess_val` của native (`max_abs = 0.0`), và feature gallery hai phía **bitwise**.
+
+**G2 forward.** Mẫu cố định: **bitwise `0.0`** cho cả query và target ở cả ba category, **qua hai
+process khác nhau**. Toàn population: query `max_abs` **1.10e-06 / 1.28e-06 / 9.87e-07**, gallery
+**1.13e-06 / 1.65e-06 / 9.98e-07** — nằm trong `1e-5` đã khai; `min_cosine` ≥ 0.999999999916 (khai
+`1 − 1e-7`). **`max_rel` của population FAIL** (tới 7.85) vì mẫu số gần 0 — báo là FAIL, không dời
+ngưỡng.
+
+**G2 scoring.** `max_abs = 1.19e-07` (khai `1e-6`) ở cả ba category.
+
+**G2 ranking.** Không đổi hit count nào, nhưng **2 rank change KHÔNG phải tie**, báo là **FAIL đã khai**:
+dress 1 (gap `6.57e-04`), shirt 1 (gap `1.60e-04`), toptee 0; đều ở hạng ≫ 50 nên không ảnh hưởng
+R@1/R@10/R@50. So sánh tie-convention trên **cùng** ma trận: 47 khác biệt, **tất cả gap `0.0`**, 0
+non-tie.
+
+**G2 batch 1-vs-N.** `max_abs` **3.20e-07 / 2.81e-07 / 3.28e-07** nằm trong `1e-4`; nhưng `max_rel`
+**1.165e-02** (toptee) / 7.795e-03 (dress) / 3.131e-03 (shirt) so với khai `1e-3` ⇒ **FAIL đã khai**,
+cùng nguyên nhân mẫu số gần 0.
+
+**Hai failure trung thực, không nới ngưỡng, gate KHÔNG được nâng thành PASS sạch.** Đây đúng khuôn
+mẫu của `limn`.
+
+**Hạn chế đã khai (protocol, không phải bug).** Native val-split đưa **ảnh query** qua
+`preprocess_train` (`RandomResizedCrop`), adapter dùng `preprocess_val` cho mọi input. Ảnh hưởng đo
+được: ΔR@10 / ΔR@50 tối đa **0.2975 / 0.1530**, dấu không nhất quán ⇒ là nhiễu của crop ngẫu nhiên,
+không phải thiên lệch. Vì vậy nó được ghi là **protocol divergence**, không phải lỗi mapping.
+
+**Một defect upstream được phát hiện, ghi ở §6c**: `BindingDecoder.learnable_relation` không nằm trong
+checkpoint và không được đăng ký, nên mỗi process rút một giá trị khác nhau ⇒ ENCODER **không thể
+replay bit-identical** trừ khi seed trước khi dựng model. Mọi số ở §3.6 đo với relation được **pin ở
+cả hai phía**.
 
 ---
 
@@ -248,6 +343,7 @@ phải tái lập — nên thứ hạng thấp của nó là kỳ vọng, không
 ## 6. Blocker còn lại — mỗi cái kèm bằng chứng đo
 
 Nguồn chính: `BLOCKER_RESOLUTION.vi.md`, log `raw/blockers/`.
+**Còn đúng 4 model bị chặn**; hai model từng nằm ở đây đã chạy xong trong lượt này, ghi ở §6a ngay dưới.
 
 | model | trạng thái | bằng chứng đo |
 |---|---|---|
@@ -255,11 +351,14 @@ Nguồn chính: `BLOCKER_RESOLUTION.vi.md`, log `raw/blockers/`.
 | `airknow` | **STILL_BLOCKED** | Env thật **Python 3.11.15 / torch 2.7.1+cu128**, registry khai 3.8.10. `import lavis.models` → `ModuleNotFoundError: moviepy`; `pip list` không có moviepy. Hỏng ở import, **trước** khi chạm `Blip2QformerCir`. |
 | `clvc_net` | **STILL_BLOCKED** | Không có interpreter trong registry. `.cuda()` cứng: **14 dòng / 15 biểu thức** toàn tree; **6 dòng / 7 biểu thức** trên scoring path (`test.py:28,47,99,115`; `text_model.py:96,108`). Không có `cuda.is_available()` guard ⇒ không chạy CPU. 6 checkpoint đã ánh xạ category đúng (RESOLVED phần đó). |
 | `tgcir` | **STILL_BLOCKED** | `third_party/TGCIR/test.py` (162 dòng): **0** `__main__`, **0** argparse, **0** `load_state_dict`, **0** `torch.load`. `.cuda()` cứng `test.py:31,47,101,115` + `model.py:32,107,120,136,244,251`, và `model.py:41` `clip.load(..., device='cuda')`. Không interpreter. |
-| `dcnet` | **RESOLVED_BUT_CPU_TIMEOUT** | Blocker đã sửa thật: `weights_only` có điều kiện + `map_location=self.device` (`base_trainer.py`). Chạy lại **vượt** chỗ chết cũ và tới `Running test on cpu`, nhưng **bị timeout 2400 s của chính tôi cắt** (`EXIT=124`), **không metric nào** từ run đó. `comb_avg 0.40828` là của **run cũ** cùng checkpoint (mtime 2026-11-06/07), dùng làm sanity, **không** phải kết quả run này. Vì vậy `dcnet` **không** được tính trong 9/15. `GATES.csv` gọi lần đó là `EXECUTION_FAILED`; nguyên
-nhân bên dưới là timeout 2400 s của chính tôi (`EXIT=124`), không phải lỗi model — hai cách ghi này
-không xung đột, nhưng nên đọc cùng nhau. |
-| `clip4cir_rn50x4_fullft` | **RESOLVED_BUT_GPU_NEEDED** | Bundle load sạch: Combiner **12 key, 0 missing, 0 unexpected**; CLIP **669 key, 0 missing, 0 unexpected**, và **413/669** tensor khác stock CLIP (max \|Δ\| 7.20e-4) ⇒ thật là fine-tuned. Chưa chạy full eval (74,381 ảnh × RN50x4 trên CPU quá lâu); upstream `validate.py` chỉ in aggregate (`compute_fiq_val_metrics` dòng 21-57) nhưng `generate_fiq_val_predictions` (dòng 60-110) đã có đủ mảng cho per-query export ⇒ export khả thi mà không đổi metric. |
 | `csmcir`, `sprc` | **USER-DEFERRED** | Không xoá, không tính vào 15 active. `sprc` còn thiếu `composition_adapter` và registry `BLOCKED_CHECKPOINT_MAPPING`. |
+
+### 6a. Đã gỡ trong lượt này — hai model từng nằm trong bảng trên
+
+| model | kết quả đo | bằng chứng |
+|---|---|---|
+| `dcnet` | **Đã chạy xong, không còn timeout.** Blocker được sửa thật (`weights_only` có điều kiện + `map_location=self.device` trong `base_trainer.py`), rồi run hoàn tất: `exit_code 0`, `wall_human "2:07:35"` (7656 s), 3 category, macro R@10 **0.27930** / R@50 **0.53761** (**phân số** — tức 27.93% / 53.76%). Ghi lại `val/att_result.pt`: mtime cũ `2026-11-07 00:02:45` → mới **`2026-11-10 04:22:45`**, sha256 `6d776ffa…60438`; `prior_run_metrics_used: false`. | `raw/native/dcnet.json`, `raw/native/dcnet.stdout.log`, `raw/native/dcnet.time.log` |
+| `clip4cir_rn50x4_fullft` | **Đã chạy full, không còn "GPU needed".** `exit_code 0`, `wall_human "0:37:26"` (2246 s) trên CPU (torch 1.11.0+cpu), 3 category, macro R@10 **43.8017** / R@50 **66.9836** (**phần trăm**). `side_effects.wrote_nothing_outside = true` — eval chỉ in stdout, không ghi file nào. | `raw/native/clip4cir_fullft.json`, `.stdout.log`, `.time.log` |
 
 Ba claim cũ **sai** đã đính chính bằng đo, ghi ở `BLOCKER_RESOLUTION.vi.md` §4: patch dcnet vô điều
 kiện chết trên torch 1.4.0; registry mô tả checkpoint dcnet thiếu `ConfigParser` + nguồn CUDA; và
@@ -396,7 +495,7 @@ với artifact thô. Bảng dưới ghi trạng thái **hiện tại trong file*
 | Scope/accounting | PASS | không đổi | `GATES.csv` |
 | G1 input parity | NOT_RUN (gate as a whole) | **PASS cho `limn` VÀ `encoder`** — gate tổng vẫn NOT_RUN vì 13 model còn lại không có differential nào | `g1_g2.*.native.json`, `g1_g2.encoder.*.native.json` |
 | G2 forward/scoring | NOT_RUN (gate as a whole) | **PASS cho `limn`** + caveat batch-relative đã ghi trong file; **`encoder`: PASS-kèm-2-failure-đã-khai-báo** (§6c, `ENCODER_PARITY.vi.md` §4.2/§5.2) | `g1_g2.*.adapter.json`, `g1_g2.encoder.*.adapter.json` |
-| Native completeness | **FAIL** (gate = "all 15") | file đã ghi **9/15** với đúng 9 tên và nguồn; FAIL vì tiêu chí là *toàn bộ* 15, không phải *phần lớn* | `raw/native/*.json`, `limn_native.json`, report `combiner_…020a70b0` |
+| Native completeness | **FAIL** (gate = "all 15") | file đã ghi **11/15** với đúng 11 tên và nguồn; FAIL vì tiêu chí là *toàn bộ* 15, không phải *phần lớn* | `raw/native/*.json`, `raw/native/dcnet.json`, `raw/native/clip4cir_fullft.json`, `limn_native.json`, report `combiner_…020a70b0` |
 | Composition correctness | PASS | 7 COMPLETED + 1 PARTIAL, 8/8 | `COMPOSITION_MATRIX.csv` |
 | **LIMN dual-scope** | **PASS** | 12 record, mỗi record có JSONL Top-100; `rank_convention_crosscheck all_agree = true` trên 36 | `limn_dual_scope.json` + 6 JSONL |
 | Data/cache integrity | PASS | 8/8 feature cache digest recomputed & matched | `limn_dual_scope.json` |
@@ -405,8 +504,8 @@ với artifact thô. Bảng dưới ghi trạng thái **hiện tại trong file*
 | Browser usability | NOT_RUN | **PASS cho panel mới** (1920/2560/390, không tràn ngang) | `raw/ui/report.json` |
 | Regression/release | NOT_RUN | **một phần**: 34 test liên quan pass; **không** chạy full suite | `RUN_LOG.csv` |
 
-`Native completeness` vẫn **FAIL** và đó là trạng thái đúng: 6 model chưa có run hoàn tất (§6), nên
-một gate định nghĩa là "cả 15" không được xanh chỉ vì 9 model xong. Ba gate còn `NOT_RUN`
+`Native completeness` vẫn **FAIL** và đó là trạng thái đúng: **4** model chưa có run hoàn tất (§6), nên
+một gate định nghĩa là "cả 15" không được xanh chỉ vì 11 model xong. Ba gate còn `NOT_RUN`
 (`Numerical reproducibility`, `Performance`, `Regression/release`) cũng đúng như vậy — lượt này đo
 được một phần nhưng không đủ để đóng.
 
@@ -416,22 +515,28 @@ một gate định nghĩa là "cả 15" không được xanh chỉ vì 9 model x
 
 ### Đã chứng minh (có file)
 
-1. 9/15 model active có ít nhất một aggregate native hoàn tất; 8 trong số đó chạy trong chiến dịch này.
-2. `limn` đạt G1 và G2 native parity: ids/order/text exact, tensor ảnh bit-identical, feature bitwise
-   `0.0`, score `≤ 5.4e-07`, **0** khác biệt hạng so với native aggregate.
+1. 11/15 model active có ít nhất một aggregate native hoàn tất; 10 trong số đó chạy trong chiến dịch này.
+2. **Hai** model đạt G1, và G2 đo được với failure đã khai báo: `limn` (ids/order/text exact, tensor ảnh
+   bit-identical, feature bitwise `0.0`, score `≤ 5.4e-07`, **0** khác biệt hạng so với native
+   aggregate) và `encoder` (§3.6: G1 PASS, sample forward bitwise `0.0` qua hai process, population
+   `max_abs ≤ 1.65e-06`, score `1.19e-07`, **0** thay đổi hit count — nhưng **2 rank change non-tie** và
+   `max_rel` batch **FAIL**, cả hai báo là FAIL đã khai).
 3. 12 ranking chẩn đoán cho 2 query mơ hồ, đủ 2 scope × 3 điều kiện, trên nguyên gallery 74,381.
 4. Category của `7:3038`/`7:3790` **không** xác định được, và tôi chỉ ra được vì sao ở mức code
    upstream + dữ liệu (không phải "không tìm ra").
 5. 8/8 run CIRCUS được chọn có metric thật; 1 run PARTIAL đúng 2 query, không giấu. **Con số CIRCUS
    đứng vững như đã đo — nhưng lời giải thích từng gắn vào thay đổi của chúng thì không** (§6b:
    quy cho BLAS là sai; nguyên nhân thật là hàm `rank` của adapter đổi).
-6. `dcnet` blocker đã sửa và evaluator **vượt** chỗ chết cũ (không metric vì timeout của chính tôi).
-7. `clip4cir_rn50x4_fullft` bundle load sạch 0/0, và 413/669 tensor CLIP thật sự fine-tuned.
+6. `dcnet` blocker đã sửa **và run đã hoàn tất**: `exit_code 0`, 2 h 07 m, macro R@10 **0.27930** /
+   R@50 **0.53761** (phân số ⇒ 27.93% / 53.76%), `att_result.pt` được ghi lại với mtime
+   **2026-11-10 04:22:45** — nên metric của run 2026-11-07 **không** dùng cho run này.
+7. `clip4cir_rn50x4_fullft` bundle load sạch 0/0, **413/669** tensor CLIP thật sự fine-tuned, **và** full
+   eval đã chạy: `exit_code 0`, 37 m 26 s, macro R@10 **43.8017** / R@50 **66.9836** (phần trăm).
 
 ### Chưa chứng minh / còn mở
 
-1. **6 model chưa có native run**: `pair`, `airknow`, `clvc_net`, `tgcir`, `dcnet` (timeout),
-   `clip4cir_rn50x4_fullft` (chưa chạy full).
+1. **4 model chưa có native run**: `pair`, `airknow`, `clvc_net`, `tgcir` (§6) — mỗi cái có nguyên nhân
+   đo được riêng, không cái nào là "chưa thử".
 2. **G1/G2 cho 13 model còn lại**: `limn` và `encoder` đã có (**2/15**), 13 model kia chưa. Không có
    suy luận nào từ hai model này sang model khác.
 3. **Sub-check FAIL đã khai báo, không đóng bằng cách nới ngưỡng**: `limn` batch-size `max_rel`; và với
@@ -453,6 +558,9 @@ một gate định nghĩa là "cả 15" không được xanh chỉ vì 9 model x
 
 ### Cái báo cáo này cố ý không làm
 
-Không xếp 9 model native thành một leaderboard (ba protocol khác nhau). Không lấy trung bình chéo
+Không xếp 11 model native thành một leaderboard (ba protocol khác nhau, và `dcnet` báo phân số trong khi
+`clip4cir_rn50x4_fullft` báo phần trăm). Không lấy trung bình chéo
 protocol. Không dùng metric CIRCUS để nói về native. Không dùng `ptha_mtst` như tái lập FashionIQ.
-Không gán metric của run cũ cho run mới (như ca `dcnet`). Không tuyên bố 15/15.
+Không gán metric của run cũ cho run mới (như ca `dcnet`: `comb_avg 0.40845` là trung bình trên sáu ô
+R@10/R@50, **không phải** macro, và số 2026-11-07 **không** phải output của run 2026-11-10).
+Không tuyên bố 15/15.
