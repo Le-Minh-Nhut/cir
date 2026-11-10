@@ -1,0 +1,100 @@
+Đến nội dung chính
+CIR.
+Research workbench
+◎
+Tổng quan
+▤
+Mô hình & lượt chạy
+◑
+Đánh giá
+▦
+Khám phá mẫu
+△
+Phân tích lỗi
+9
+✎
+Sổ nghiên cứu
+FashionIQ — Original Split (Full Gallery)
+22 lượt khả dụng ở phạm vi này
+Tổng quan
+
+Kết quả thật đang có gì, thiếu gì, và đi tiếp từ đâu
+
+Cỡ giao diện
+17px
+19px
+⧉ Sao chép liên kết
+Protocol
+CIRCUS FashionIQ Release v1
+FashionIQ — Original Split (Full Gallery)
+Lượt chọn
+0
+AGGREGATE-ONLY REAL EVALUATION — 2 certified research results (11 further aggregate runs uncertified); per-query Top-K analysis unavailable
+Ẩn
+Từ kết quả đến từng ảnh truy hồi.
+
+Đối chiếu mô hình, mở một query và xem thứ tự ứng viên trong cùng một protocol và subset.
+
+FashionIQ — Original Split (Full Gallery)
+0 lượt composition (protocol này không có) · 13 báo cáo tổng hợp có số đo
+Mở 13 báo cáo tổng hợp
+Đang đọc danh sách mô hình…
+Số đo native (chưa xác minh)
+
+FashionIQ — Original Split (Full Gallery) · 3 file có số · KHÔNG vào leaderboard đã xác minh
+
+sprc
+R@10 51.04% · R@50 73.33%sprc_vitl_run1.json
+tme
+R@10 54.92% · R@50 74.84%tme_fashioniq_0.json
+tme
+R@10 54.92% · R@50 74.84%tme_normal_path_full.json
+
+Nguồn: /api/native-measurements — 15 file có số, 4 file chỉ ghi blocker, 0 đã xác minh. Native measurements are served here as UNVERIFIED. They carry no completion proof, evidence-ledger entry or verifier receipt, are not counted by /api/evidence/summary, and must not be read as a leaderboard position.
+
+Bằng chứng tổng hợp
+
+Báo cáo macro; không có rank từng query
+
+unique measurement
+13
+undetermined
+0
+được chứng nhận
+2
+report
+13
+
+Nguồn: /api/evidence/summary. Không có lần thử lặp nào được phát hiện.
+
+Registry mô hình
+
+Mô hình chạy được hay bị chặn, kèm lý do
+
+Đang tải…
+Lượt có kết quả và lượt bị chặn
+
+Chọn một lượt để mở inspector; chỉ số kèm mẫu số.
+
+Mở bảng đánh giá
+Chưa có kết quả
+Không có lượt CIRCUS nào cho subset này.
+Xem subset Full
+Đi tiếp từ đây
+
+Ba bước dùng được ngay với dữ liệu đang có
+
+So sánh các lượt trên cùng subset và đọc composition gap
+Mở một query: ảnh tham chiếu, văn bản sửa, hạng MM / text / image
+Lọc query trượt ở mọi lượt rồi lưu thành cohort
+Giới hạn của dữ liệu này
+
+Điều KHÔNG suy ra được từ những gì đang có
+
+Ứng viên Top-K ảnh chưa được export cho mọi lượt CIRCUS release trên máy này: mỗi query có đúng hạng nhưng danh sách ứng viên rỗng. Inspector sẽ nói rõ điều đó thay vì vẽ ảnh giả.
+
+Outcome (composition_required, unresolved, …) được phân loại ở @10 cố định theo protocol release. Top-K chỉ đổi số ứng viên hiển thị.
+
+Composition gap là phân số không đơn vị tính trên cohort có đủ ba hạng chính xác; gap âm là kết quả thật (điều kiện bị cắt bỏ tốt hơn), không bị kẹp về 0.
+
+Vì sao các số này khác bảng paper

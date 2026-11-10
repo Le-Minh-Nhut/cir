@@ -1,0 +1,9 @@
+/execution_status = EXECUTION_COMPLETED
+/invocation_status = INVOCATION_COMPLETED
+/reproduction_status = EXTRACTED_VERIFIED
+/per_query_export_reason = CAPABILITY_ABSENT
+/extraction_status = EXTRACTED_VERIFIED
+/parity_status = PARITY_NOT_EVALUATED
+/benchmark_gate/status = METRIC_REFERENCE_UNVERIFIED
+/benchmark_gate/selection_reason = combiner_rn50x4_noft: no publishable comparison -- every committed row for it is ['UNVERIFIED'], so no published value describes the experiment this run performed: there is nothing to compare a reproduction against, and no value would be reported as if there were. Rows: ['clip4cir_rn50x4_noft_fiq_absent_in_paper', 'combiner_rn50x4_noft__clip4cir_paper_note_backbone_inventory_and_version', 'combine
+TOPKEYS ['artifact_type', 'schema_version', 'run_id', 'run_directory', 'model_id', 'checkpoint_id', 'protocol_id', 'execution_status', 'invocation_status', 'reproduction_status', 'per_query_export_available', 'per_query_export_reason', 'per_query_capability', 'per_query_state', 'per_query_artifact', 'per_query_artifact_digest', 'instrumentation_parity', 'extraction_status', 'metric_extraction_available', 'parser_id']

@@ -1,0 +1,184 @@
+`composition|field|value|path:line|snippet`
+
+Summary fields written by the runner (50-key summary object):
+
+composition|checkpoint_labels|registry-derived training/transfer labels|workbench/composition/runner.py:2077|"checkpoint_labels": labels,
+composition|synthetic|synthetic-run flag|workbench/composition/runner.py:2078|"synthetic": is_synthetic,
+composition|adapter_module_source_status|available/unavailable digest status|workbench/composition/runner.py:2079|"adapter_module_source_status": identity["adapter_module_source_status"],
+composition|schema_version|summary schema = 1|workbench/composition/runner.py:2080|"schema_version": 1, "model_id": model_id, "checkpoint_id": checkpoint_id,
+composition|model_id|selected model id|workbench/composition/runner.py:2080|"schema_version": 1, "model_id": model_id, "checkpoint_id": checkpoint_id,
+composition|checkpoint_id|selected checkpoint id|workbench/composition/runner.py:2080|"schema_version": 1, "model_id": model_id, "checkpoint_id": checkpoint_id,
+composition|checkpoint_identity|content identity of checkpoint|workbench/composition/runner.py:2081|"checkpoint_identity": checkpoint_identity, "protocol_id": data.gallery.protocol_id,
+composition|protocol_id|circus_fashioniq_release_v1|workbench/composition/data.py:11|RELEASE_PROTOCOL_ID = "circus_fashioniq_release_v1"
+composition|gallery_identity_sha256|SHA-256 of ordered gallery fingerprint|workbench/composition/runner.py:2082|"gallery_identity_sha256": gallery_hash, "gallery_count": len(gallery_ids),
+composition|gallery_count|released gallery size 74381|workbench/composition/runner.py:2082|"gallery_identity_sha256": gallery_hash, "gallery_count": len(gallery_ids),
+composition|query_count|queries in this subset|workbench/composition/runner.py:2083|"query_count": len(qids),
+composition|query_count_per_subset|full/sf/validated membership counts|workbench/composition/runner.py:2084|"query_count_per_subset": {name: sum(name in query.subsets for query in queries)
+composition|subset|full, sf or validated|workbench/composition/runner.py:2086|"subset": subset, "conditions": list(conditions),
+composition|conditions|three ablation conditions|workbench/composition/runner.py:2086|"subset": subset, "conditions": list(conditions),
+composition|preprocessing|adapter-native transform after raw PIL intervention|workbench/composition/runner.py:2087|"preprocessing": {"policy": "adapter-native transform after path-based
+composition|adapter|adapter module.qualname|workbench/composition/runner.py:2089|"adapter": f"{type(adapter).__module__}.{type(adapter).__qualname__}",
+composition|category_scopes|resolved scoring scopes|workbench/composition/runner.py:2090|"category_scopes": list(scopes),
+composition|category_resolution|release-level category provenance|workbench/composition/runner.py:2091|"category_resolution": data.provenance.get("category_resolution", {}),
+composition|unresolved_category_query_count|queries with category None|workbench/composition/runner.py:2092|"unresolved_category_query_count": sum(query.category is None for query in queries),
+composition|adapter_query_scope_resolution|resolver + routed/still_unscoped counts|workbench/composition/runner.py:2097|"adapter_query_scope_resolution": {
+composition|loader_scoped|queries scoped by release loader|workbench/composition/runner.py:2101|"loader_scoped": sum(query.category is not None for query in queries),
+composition|adapter_routed|queries scoped by adapter resolver|workbench/composition/runner.py:2102|"adapter_routed": sum(scope is not None for scope in query_scopes),
+composition|still_unscoped|queries left unscored for lack of scope|workbench/composition/runner.py:2103|"still_unscoped": sum(scope is None for scope in query_scopes),
+composition|reference_eligible|declared reference-eligibility literal|workbench/composition/runner.py:2106|"reference_eligible": reference_eligible,
+composition|reference_eligibility|measured probe result|workbench/composition/runner.py:2107|"reference_eligibility": reference_eligibility,
+composition|runtime|controller python, platform, gpu, interpreter|workbench/composition/runner.py:2108|"runtime": {"controller_python": sys.version, "platform": platform.platform(),
+composition|seed|recorded operator seed|workbench/composition/runner.py:2112|"seed": seed, "seed_applied": False,
+composition|seed_applied|always false; no RNG in path|workbench/composition/runner.py:2112|"seed": seed, "seed_applied": False,
+composition|release_artifact_hashes|per-file sha256 of release inputs|workbench/composition/runner.py:2113|"release_artifact_hashes": data.provenance.get("sha256", {}),
+composition|hash_verification|matched / mismatch / skipped|workbench/composition/runner.py:2114|"hash_verification": data.provenance.get("hash_verification"),
+composition|failed_expectations|unmet pinned counts/memberships|workbench/composition/runner.py:2115|"failed_expectations": data.provenance.get("failed_expectations", ()),
+composition|gallery_candidate_basename_match|gallery and candidate basenames agree|workbench/composition/runner.py:2116|"gallery_candidate_basename_match": data.provenance.get(
+composition|paper_vs_release_gallery|paper 18853 vs released 74381|workbench/composition/runner.py:2117|"paper_vs_release_gallery": data.provenance.get("gallery_note", {
+composition|execution_status|COMPLETED/PARTIAL/REUSED/FAILED/EXPORT_INCOMPLETE|workbench/composition/runner.py:2120|"execution_status": execution_status,
+composition|condition_status|per-condition status map|workbench/composition/runner.py:2121|"condition_status": mode_status,
+composition|checkpoint_training_noise_pct|declared training noise label|workbench/composition/runner.py:2122|"checkpoint_training_noise_pct": labels["checkpoint_training_noise_pct"],
+composition|reproduction_status|declared reproduction label|workbench/composition/runner.py:2123|"reproduction_status": labels["reproduction_status"],
+composition|evaluation_noise_pct|declared evaluation noise label|workbench/composition/runner.py:2124|"evaluation_noise_pct": labels["evaluation_noise_pct"],
+composition|checkpoint_training_dataset|declared training dataset|workbench/composition/runner.py:2125|"checkpoint_training_dataset": labels["checkpoint_training_dataset"],
+composition|checkpoint_transfer|transfer label|workbench/composition/runner.py:2126|"checkpoint_transfer": labels["checkpoint_transfer"],
+composition|checkpoint_mapping_status|VERIFIED_METADATA or other|workbench/composition/runner.py:2127|"checkpoint_mapping_status": labels["checkpoint_mapping_status"],
+composition|category_scope_failures|per-condition scope-failure counts|workbench/composition/runner.py:2128|"category_scope_failures": {condition: category_failure_counts.get(condition,
+composition|smoke|query-limited smoke slice marker|workbench/composition/runner.py:2132|"smoke": {"limited": smoke is not None, "query_limit": smoke,
+composition|is_synthetic|fixture flag|workbench/composition/runner.py:2134|"is_synthetic": is_synthetic, "synthetic_fixture": is_synthetic,
+composition|synthetic_fixture|fixture flag alias|workbench/composition/runner.py:2134|"is_synthetic": is_synthetic, "synthetic_fixture": is_synthetic,
+composition|feature_storage|float32 .npy memmap + projected bytes|workbench/composition/runner.py:2135|"feature_storage": {"format": "float32 .npy memmap",
+composition|topk_export|candidate export state|workbench/composition/runner.py:2137|"topk_export": topk_export_state,
+composition|cache_verify_mode|full / header / off|workbench/composition/runner.py:2142|"cache_verify_mode": _cache_verify_mode(),
+composition|policy_observed|BLAS pin readback for this run|workbench/composition/runner.py:2147|"policy_observed": policy_observed,
+composition|variant_provenance|adapted-runtime provenance|workbench/composition/runner.py:2148|"variant_provenance": variant_provenance,
+composition|metrics|asdict(CompositionResult)|workbench/composition/runner.py:2149|"metrics": asdict(result), "run_id": run_id, "resume_key": fingerprint,
+composition|run_id|first 24 hex of identity digest|workbench/composition/runner.py:1624|run_id = _digest(identity)[:24]
+composition|resume_key|full identity digest|workbench/composition/runner.py:2149|"metrics": asdict(result), "run_id": run_id, "resume_key": fingerprint,
+composition|reused_query_result_count|queries*conditions when reused|workbench/composition/runner.py:2150|"reused_query_result_count": len(queries) * len(conditions) if reused else 0,
+
+Per-condition metric fields (`ConditionMetrics`):
+
+composition|condition|condition name|workbench/composition/metrics.py:41|condition: str
+composition|query_count|expected queries in cohort|workbench/composition/metrics.py:42|query_count: int
+composition|scored_count|queries with an exact rank|workbench/composition/metrics.py:43|scored_count: int
+composition|coverage|scored_count / query_count|workbench/composition/metrics.py:44|coverage: float
+composition|recall_at_10|percent of scored with rank<=10|workbench/composition/metrics.py:45|recall_at_10: float | None
+composition|recall_at_50|percent of scored with rank<=50|workbench/composition/metrics.py:46|recall_at_50: float | None
+composition|ndcg_full|mean 1/log2(rank+1)|workbench/composition/metrics.py:47|ndcg_full: float | None
+composition|mrr|mean 1/rank|workbench/composition/metrics.py:48|mrr: float | None
+composition|unavailable_reason|named reason when no numbers|workbench/composition/metrics.py:49|unavailable_reason: str | None
+
+`CompositionResult` fields:
+
+composition|multimodal|multimodal ConditionMetrics|workbench/composition/metrics.py:83|multimodal: ConditionMetrics
+composition|text_only|text_only_black_image ConditionMetrics|workbench/composition/metrics.py:84|text_only: ConditionMetrics
+composition|image_only|image_only_empty_text ConditionMetrics|workbench/composition/metrics.py:85|image_only: ConditionMetrics
+composition|composition_gap_ndcg|1 - max(text,image)/multimodal|workbench/composition/metrics.py:86|composition_gap_ndcg: float | None
+composition|gap_unavailable_reason|named gap refusal|workbench/composition/metrics.py:87|gap_unavailable_reason: str | None
+composition|mrr_gap|mm_mrr - max(text_mrr,image_mrr)|workbench/composition/metrics.py:88|mrr_gap: float | None
+composition|shortcut_outcomes|mutually exclusive K-hit bins|workbench/composition/metrics.py:89|shortcut_outcomes: dict[str, int]
+composition|gap_cohort_count|queries scored in all three|workbench/composition/metrics.py:90|gap_cohort_count: int
+composition|gap_multimodal_ndcg|common-cohort multimodal mean nDCG|workbench/composition/metrics.py:91|gap_multimodal_ndcg: float | None
+composition|gap_text_only_ndcg|common-cohort text mean nDCG|workbench/composition/metrics.py:92|gap_text_only_ndcg: float | None
+composition|gap_image_only_ndcg|common-cohort image mean nDCG|workbench/composition/metrics.py:93|gap_image_only_ndcg: float | None
+
+Backend-derived/read fields:
+
+composition|is_failed|FAILED or no measured numbers|workbench/backend/composition.py:139|data["is_failed"] = is_failed_summary(data)
+composition|training_or_transfer_label|concise scientific label|workbench/backend/composition.py:140|data["training_or_transfer_label"] = training_or_transfer_label(data)
+composition|interpreter_verification_status|model interpreter verification|workbench/backend/composition.py:145|data["interpreter_verification_status"] = (
+composition|measurement|subset-scoped scored/unscored block|workbench/backend/composition.py:964|summary["measurement"] = {
+composition|sample_count|query_count of the view|workbench/backend/composition.py:967|"sample_count": summary.get("query_count"),
+composition|denominator|gap_cohort_count or query_count|workbench/backend/composition.py:968|"denominator": denominator,
+composition|scored_count|multimodal scored count in view|workbench/backend/composition.py:970|"scored_count": (statistics["conditions"].get("multimodal", {}).get("scored_count")
+composition|unscored_query_count|sum of unscored kinds|workbench/backend/composition.py:972|"unscored_query_count": sum(unscored.values()) if statistics else None,
+composition|unscored_by_kind|stage names for missing ranks|workbench/backend/composition.py:973|"unscored_by_kind": dict(sorted(unscored.items())) if statistics else None,
+composition|image_availability_sample_size|deterministic sample size|workbench/backend/composition.py:974|"image_availability_sample_size": detail["image_availability"].get("sampled"),
+composition|whole_run|unscoped whole-artifact counters|workbench/backend/composition.py:977|"whole_run": ({"query_count": whole_run["query_count"],
+composition|measurement_identity|defensible identity inputs|workbench/backend/composition.py:800|summary["measurement_identity"] = facts["identity"]
+composition|measurement_group_id|24-hex identity group|workbench/backend/composition.py:801|summary["measurement_group_id"] = facts["group_id"]
+composition|measurement_identity_confidence|full / partial / unknown|workbench/backend/composition.py:802|summary["measurement_identity_confidence"] = facts["confidence"]
+composition|measurement_identity_missing_inputs|essential inputs absent|workbench/backend/composition.py:803|summary["measurement_identity_missing_inputs"] = facts["missing_identity_inputs"]
+composition|measurement_identity_schema_version|1 or 2|workbench/backend/composition.py:804|summary["measurement_identity_schema_version"] = facts["identity"].get("identity_schema_version")
+composition|duplicate_attempt_count|attempts in this group|workbench/backend/composition.py:793|summary["duplicate_attempt_count"] = 0
+composition|duplicate_status|unique/duplicate/undetermined|workbench/backend/composition.py:818|status = ("undetermined" if confidence == "partial"
+
+Extra required fields:
+
+composition|gallery_hash_rule|SHA-256 over canonical JSON of protocol_id, ordered gallery image_ids, and sorted candidate_names; compact separators, sort_keys, via _digest|workbench/composition/runner.py:502|def _gallery_fingerprint(data: Any) -> str:
+composition|gallery_hash_rule|same payload hashed by gallery_digest with hashlib.sha256(payload).hexdigest()|workbench/composition/topk.py:60|return hashlib.sha256(payload).hexdigest()
+composition|gallery_hash_rule|_digest canonicalizes with sort_keys and compact separators then SHA-256|workbench/composition/runner.py:73|payload = json.dumps(value, sort_keys=True, separators=(",", ":"), default=str).encode("utf-8")
+composition|gallery_order_source|ordered gallery comes from aggregated audit gallery_paths list, in released order|workbench/composition/data.py:211|gallery_paths = audit.get("gallery_paths") if isinstance(audit, dict) else None
+composition|gallery_order_source|each path stripped of placeholder prefix, order preserved|workbench/composition/data.py:214|gallery_ids = tuple(_normalize_gallery_path(path) for path in gallery_paths)
+composition|gallery_order_source|normalization only removes <path_to_M-BEIR>/|workbench/composition/data.py:175|"""Remove literal released placeholder root and preserve relative path identity/order."""
+composition|gallery_order_source|provenance records released order retained|workbench/composition/data.py:310|"identity_normalization": "removed <path_to_M-BEIR>/; retained released order",
+composition|gallery_order_source|positive positions index by gallery position|workbench/composition/runner.py:526|index = {identity: position for position, identity in enumerate(data.gallery.image_ids)}
+composition|condition_inputs|pure PIL intervention; one condition per query encode|workbench/composition/inputs.py:19|def adapt_query_inputs(image: Image.Image, text: str, condition: str) -> tuple[Image.Image, str]:
+composition|per_condition_image|multimodal feeds original PIL image unchanged|workbench/composition/inputs.py:21|if condition == "multimodal":
+composition|per_condition_image|multimodal returns image as-is|workbench/composition/inputs.py:22|return image, text
+composition|per_condition_image|text_only_black_image feeds zero-valued image of same size/mode|workbench/composition/inputs.py:24|return black_image_like(image), text
+composition|per_condition_image|black_image_like builds Image.new(mode, size, 0)|workbench/composition/inputs.py:16|return Image.new(image.mode, image.size, 0)
+composition|per_condition_image|image_only_empty_text feeds original image|workbench/composition/inputs.py:25|if condition == "image_only_empty_text":
+composition|per_condition_text|multimodal feeds the released query text|workbench/composition/inputs.py:22|return image, text
+composition|per_condition_text|text_only_black_image feeds the released query text|workbench/composition/inputs.py:24|return black_image_like(image), text
+composition|per_condition_text|image_only_empty_text feeds empty string|workbench/composition/inputs.py:26|return image, ""
+composition|per_condition_image|runner stages the adapted PIL to PNG before adapter transform|workbench/composition/runner.py:622|adapted, text = adapt_query_inputs(image, query.query_txt, condition)
+composition|per_condition_image|black condition saved under work/queries/<condition>/<qid>.png|workbench/composition/runner.py:624|staged = work_root / "queries" / condition / f"{_component(query.qid)}.png"
+composition|mask_scope|base score is unmasked cosine over the whole gallery|workbench/composition/adapters.py:346|"""Compute cosine scores; specialized adapters override native candidate scoring.
+composition|mask_scope|ENCODER explicitly does not inherit native reference mask|workbench/composition/model_encoder.py:227|"""Normalized-dot scores, unmasked; native replay `test.py:67-68` mask is not inherited."""
+composition|mask_scope|ENCODER score dimension 512|workbench/composition/model_encoder.py:50|score_dimension = 512
+composition|mask_scope|LIMN declares reference eligible, scoped per category|workbench/composition/model_limn.py:135|reference_eligible = True
+composition|mask_scope|LIMN scores in each query's matching category space|workbench/composition/model_limn.py:372|"""Controller-side chunked normalized-dot scores in each query's matching space."""
+composition|mask_scope|DCNet declares reference ineligible because upstream masks the reference row|workbench/composition/model_dcnet.py:96|reference_eligible = False
+composition|mask_scope|DCNet ref mask at trainer_joint.py:217-218 conflicts with CIRCUS|workbench/composition/model_dcnet.py:31|fashioniq_full_gallery_ref_excluded``) while CIRCUS requires a reference-eligible gallery. The
+composition|rank_definition|exact 1-based best-positive rank = 1 + #greater + #earlier-equal|workbench/composition/adapters.py:371|"""Exact 1-based best-positive rank: ``1 + #greater + #earlier-equal`` per gallery order."""
+composition|rank_definition|counts strictly greater scores plus earlier equal scores|workbench/composition/adapters.py:383|ranks.append(min(1 + int(np.count_nonzero(row > row[index])) +
+composition|rank_definition|earlier-equal term scans row[:index]|workbench/composition/adapters.py:384|int(np.count_nonzero(row[:index] == row[index])) for index in valid))
+composition|rank_definition|rank and topk come from one scoring call|workbench/composition/adapters.py:392|def rank_and_topk(self, queries: Any, targets: Any,
+composition|topk_tie_break|declared policy: descending score, earlier gallery position first|workbench/composition/topk.py:39|TIE_POLICY = "descending score, ties broken by earlier gallery position"
+composition|topk_tie_break|tie boundary resolved by ascending position (earlier first)|workbench/composition/topk.py:98|tied = np.flatnonzero(row == boundary)  # ascending position == "earlier first"
+composition|topk_tie_break|final order re-sorted by descending score with stable argsort|workbench/composition/topk.py:101|order = order[np.argsort(-row[order], kind="stable")]
+composition|topk_tie_break|full-depth branch uses stable descending argsort|workbench/composition/topk.py:95|order = np.argsort(-row, kind="stable")
+composition|ndcg_definition|single-positive full-catalogue nDCG = 1/log2(rank+1)|workbench/composition/metrics.py:27|def ndcg_full(rank: int) -> float:
+composition|ndcg_definition|exact formula|workbench/composition/metrics.py:30|return 1.0 / math.log2(rank + 1)
+composition|ndcg_definition|condition nDCG is mean over scored ranks|workbench/composition/metrics.py:75|sum(ndcg_full(rank) for rank in scored) / scored_count,
+composition|recall_definition|hit is binary rank <= k|workbench/composition/metrics.py:24|return int(rank <= k)
+composition|recall_definition|Recall@10 and Recall@50 are percentages over scored queries|workbench/composition/metrics.py:73|100.0 * sum(hit_at_k(rank, 10) for rank in scored) / scored_count,
+composition|recall_definition|Recall@50|workbench/composition/metrics.py:74|100.0 * sum(hit_at_k(rank, 50) for rank in scored) / scored_count,
+composition|coverage_definition|coverage = scored_count / query_count|workbench/composition/metrics.py:72|scored_count / query_count,
+composition|coverage_definition|unscored reduce coverage and are excluded from means|workbench/composition/metrics.py:55|Unscored queries reduce coverage and are excluded from score means. Empty cohorts have
+composition|coverage_definition|empty cohort has coverage 1.0|workbench/composition/metrics.py:56|coverage 1.0, since no query was expected but left unscored. Exact-rank ties are resolved
+composition|coverage_definition|recomputed coverage when query_count exceeds mapped qids|workbench/composition/metrics.py:162|coverage=metrics.scored_count / query_count if query_count else 1.0)
+composition|coverage_definition|artifact view coverage over the requested denominator|workbench/backend/composition.py:471|"coverage": (len(scored) / denominator) if denominator else 1.0,
+composition|gap_cohort_rule|gap cohort = qids with non-None rank in all three conditions|workbench/composition/metrics.py:126|common = [qid for qid in qids if mm_ranks[qid] is not None
+composition|gap_cohort_rule|text condition must also be scored|workbench/composition/metrics.py:126|common = [qid for qid in qids if mm_ranks[qid] is not None
+composition|gap_cohort_rule|image condition must also be scored|workbench/composition/metrics.py:127|and image_ranks[qid] is not None]
+composition|gap_cohort_rule|gap cohort size recorded|workbench/composition/metrics.py:128|gap_count = len(common)
+composition|gap_cohort_rule|gap = 1 - max(text,image)/multimodal on that cohort|workbench/composition/metrics.py:148|gap = 1.0 - max(gap_text, gap_image) / gap_mm
+composition|gap_cohort_rule|extra known cohort members only lower coverage|workbench/composition/metrics.py:100|absent from all mappings reduce coverage only; they never enter any mean. Missing condition/qid
+composition|unscored_vs_miss|missing condition rank is unscored, never a retrieval miss|workbench/composition/metrics.py:168|A qid missing any condition rank is excluded from outcome bins and counted in
+composition|unscored_vs_miss|counted in neither_scored, not a miss|workbench/composition/metrics.py:169|`neither_scored`; it is not treated as a retrieval miss. Ties are producer-resolved.
+composition|unscored_vs_miss|unscored is a mapping/pipeline fact distinct from bad retrieval|workbench/backend/composition.py:307|#: is a MAPPING/pipeline fact (an ambiguous garment category, a missing reference image); it is a
+composition|unscored_vs_miss|unscored kind markers name the pipeline stage|workbench/backend/composition.py:310|_UNSCORED_KIND_MARKERS = (
+composition|unscored_vs_miss|no rank means state=unscored|workbench/backend/composition.py:1181|if target_rank is None:
+composition|unscored_vs_miss|real rank worse than K means retrieval_failure|workbench/backend/composition.py:1186|state = "retrieval_failure"
+composition|unscored_vs_miss|API exposes both flags separately|workbench/backend/composition.py:1230|"unscored": target_rank is None,
+composition|unscored_vs_miss|retrieval_failure is its own counter|workbench/backend/composition.py:1232|"retrieval_failure": state == "retrieval_failure",
+composition|duplicate_policy|group rows by measurement identity group_id|workbench/backend/composition.py:813|groups.setdefault(facts["group_id"], []).append(summary)
+composition|duplicate_policy|partial identity confidence => undetermined|workbench/backend/composition.py:818|status = ("undetermined" if confidence == "partial"
+composition|duplicate_policy|more than one member => duplicate, else unique|workbench/backend/composition.py:819|else "duplicate" if count > 1 else "unique")
+composition|duplicate_policy|fixtures never grouped|workbench/backend/composition.py:794|summary["duplicate_status"] = "synthetic_fixture"
+composition|duplicate_policy|pre-v2 artifacts labelled unknown, never duplicate|workbench/backend/composition.py:811|summary["duplicate_status"] = "unknown (predates identity v2)"
+composition|duplicate_policy|identity includes gallery_identity_sha256|workbench/backend/composition.py:652|"gallery_identity_sha256": summary.get("gallery_identity_sha256"),
+composition|duplicate_policy|identity includes measurement_denominator|workbench/backend/composition.py:676|"measurement_denominator": (metrics.get("gap_cohort_count")
+composition|duplicate_policy|essential identity inputs|workbench/backend/composition.py:708|essential = ("checkpoint_identity", "gallery_identity_sha256", "environment_fingerprint",
+
+Pinned answers, in one line each:
+
+composition|pinned_a|ordered gallery identity = audit.gallery_paths minus placeholder, in released order; hash = SHA-256 of canonical JSON {protocol_id, ordered_gallery, sorted candidate_names}|workbench/composition/runner.py:503|"protocol_id": data.gallery.protocol_id,
+composition|pinned_b|multimodal = original image + released text; text_only_black_image = zero image + released text; image_only_empty_text = original image + empty text|workbench/composition/inputs.py:21|if condition == "multimodal":
+composition|pinned_c|gap cohort = queries with a non-None exact rank in all three conditions|workbench/composition/metrics.py:126|common = [qid for qid in qids if mm_ranks[qid] is not None
+composition|pinned_d|unscored = no rank exists (pipeline/mapping failure, named unscored_kind); miss = a real rank worse than K (retrieval_failure)|workbench/backend/composition.py:307|#: is a MAPPING/pipeline fact (an ambiguous garment category, a missing reference image); it is a
+composition|pinned_e|rank tie-break counts earlier gallery positions among equals; topk tie-break keeps earlier gallery position first|workbench/composition/adapters.py:383|ranks.append(min(1 + int(np.count_nonzero(row > row[index])) +
+composition|pinned_e|same tie policy stated for topk|workbench/composition/topk.py:39|TIE_POLICY = "descending score, ties broken by earlier gallery position"

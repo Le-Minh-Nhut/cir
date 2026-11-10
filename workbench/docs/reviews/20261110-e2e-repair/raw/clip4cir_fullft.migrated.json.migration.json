@@ -1,0 +1,38 @@
+{
+  "artifact": "workbench/docs/reviews/20261110-e2e-repair/raw/clip4cir_fullft.migrated.json",
+  "from_label": "fashioniq_full_gallery_ref_excluded",
+  "to_label": "fashioniq_original_split",
+  "artifact_sha256_before": "fb97cfabdc6976b1e582f89fd2db66a7e15b9f756561b9ad5e04b96bd02e398e",
+  "artifact_sha256_after": "dd9176cf3778c5a8be790b304628b8e122f7e972a71c4deb5c286aa67baea3a2",
+  "frozen_fields_verified": [
+    "aggregate",
+    "categories",
+    "checkpoint",
+    "source",
+    "runtime",
+    "side_effects",
+    "complete_benchmark",
+    "model_id",
+    "protocol_source"
+  ],
+  "evidence": {
+    "verdict": "MISLABELED",
+    "reason": "The recorded protocol excludes the reference, but the evaluator branch that ran has no reference mask at all. The candidate universe is identical either way, so only the label (and the name a reader files the number under) is wrong.",
+    "citations": [
+      "workbench/third_party/CLIP4Cir/src/validate.py:21-57 compute_fiq_val_metrics has no reference write; it normalizes index features (:41), sorts ascending over 1 - cos (:44-45), labels vs targets only (:49-50)",
+      "workbench/third_party/CLIP4Cir/src/validate.py:162-166 reference_mask exists ONLY inside compute_cirr_val_metrics (:135-187)",
+      "workbench/third_party/CLIP4Cir/src/validate.py:127-131 the FashionIQ path builds classic+relative val datasets over split.<cat>.val.json and calls compute_fiq_val_metrics",
+      "workbench/third_party/CLIP4Cir/src/data_utils.py:144-147 gallery = the whole split.<cat>.val.json in file order (15536 entries across three categories)",
+      "workbench/registry/models.yaml:1184 clip4cir_rn50x4_fullft native_protocol: fashioniq_original_split (supported_protocols: [fashioniq_original_split])",
+      "workbench/registry/models.yaml:15-22 fashioniq_original_split and fashioniq_full_gallery_ref_excluded share the same gallery kind; only reference eligibility differs",
+      "raw/native/clip4cir_fullft.json categories[].gallery_count = 6346/3817/5373 (full split), matching models.yaml:1184 and NOT the pair-union cohort"
+    ],
+    "gallery_counts": {
+      "shirt": 6346,
+      "dress": 3817,
+      "toptee": 5373
+    },
+    "preserved": "aggregate.macro_r10=43.8016931215922, macro_r50=66.98358456293742 and every categories[] row are copied unchanged; only the label is rewritten, and a migration sidecar records the original digest."
+  },
+  "migrated_at": "2026-11-10T01:09:29.231006+00:00"
+}

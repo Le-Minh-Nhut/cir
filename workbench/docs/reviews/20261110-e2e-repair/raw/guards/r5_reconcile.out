@@ -1,0 +1,22 @@
+# 7:3038: reference=7:53224 positive_did=7:3416 -> asset=mbeir_images/fashioniq_images/B004D8QCN4.jpg | summary target_gallery_id=mbeir_images/fashioniq_images/B004D8QCN4.jpg
+  shirt  multimodal             rank=    3 score=0.570377 did=7:42304 asset=B004D8QCN4.jpg -> FAIL did_matches_own_query
+  shirt  text_only_black_image  rank=   88 score=0.422086 did=7:42304 asset=B004D8QCN4.jpg -> FAIL did_matches_own_query
+  shirt  image_only_empty_text  rank=  152 score=0.367792 did=7:42304 asset=B004D8QCN4.jpg -> FAIL did_matches_own_query
+  toptee multimodal             rank=   43 score=0.567825 did=7:42304 asset=B004D8QCN4.jpg -> FAIL did_matches_own_query
+  toptee text_only_black_image  rank=  389 score=0.343617 did=7:42304 asset=B004D8QCN4.jpg -> FAIL did_matches_own_query
+  toptee image_only_empty_text  rank=   67 score=0.454051 did=7:42304 asset=B004D8QCN4.jpg -> FAIL did_matches_own_query
+# 7:3790: reference=7:33523 positive_did=7:42304 -> asset=mbeir_images/fashioniq_images/B00E3WVAD2.jpg | summary target_gallery_id=mbeir_images/fashioniq_images/B00E3WVAD2.jpg
+  shirt  multimodal             rank=   65 score=0.514070 did=7:42304 asset=B00E3WVAD2.jpg -> OK
+  shirt  text_only_black_image  rank= 6891 score=0.217340 did=7:42304 asset=B00E3WVAD2.jpg -> OK
+  shirt  image_only_empty_text  rank= 2200 score=0.301990 did=7:42304 asset=B00E3WVAD2.jpg -> OK
+  toptee multimodal             rank=   43 score=0.619016 did=7:42304 asset=B00E3WVAD2.jpg -> OK
+  toptee text_only_black_image  rank= 4730 score=0.272491 did=7:42304 asset=B00E3WVAD2.jpg -> OK
+  toptee image_only_empty_text  rank= 4047 score=0.299975 did=7:42304 asset=B00E3WVAD2.jpg -> OK
+
+VERDICT R5_CONFIRMED problems=6
+  - 7:3038/shirt/multimodal: ['did_matches_own_query']
+  - 7:3038/shirt/text_only_black_image: ['did_matches_own_query']
+  - 7:3038/shirt/image_only_empty_text: ['did_matches_own_query']
+  - 7:3038/toptee/multimodal: ['did_matches_own_query']
+  - 7:3038/toptee/text_only_black_image: ['did_matches_own_query']
+  - 7:3038/toptee/image_only_empty_text: ['did_matches_own_query']

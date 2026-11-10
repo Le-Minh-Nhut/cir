@@ -1,0 +1,21 @@
+=== log path ===
+l-wx------ 1 heheboiz heheboiz 64 Nov 10 07:24 /proc/2759510/fd/1 -> /tmp/workbench_serve.log
+l-wx------ 1 heheboiz heheboiz 64 Nov 10 07:24 /proc/2759510/fd/2 -> /tmp/workbench_serve.log
+=== log size / mtime ===
+/tmp/workbench_serve.log 61859 bytes mtime=2026-11-10 07:55:48.987677773 +0700
+=== last 15 lines ===
+workbench: skipping aggregate report /home/heheboiz/data/cir/workbench/artifacts/reports/csmcir_fashioniq_20261106T192313801249Z_csmcir_fashioniq_a24ea590_aggregate.json: disagrees with its evidence-ledger entry
+workbench: skipping aggregate report /home/heheboiz/data/cir/workbench/artifacts/reports/csmcir_fashioniq_20261107T054051886663Z_csmcir_fashioniq_2d0369f2_aggregate.json: disagrees with its evidence-ledger entry
+workbench: skipping aggregate report /home/heheboiz/data/cir/workbench/artifacts/reports/csmcir_fashioniq_20261107T053916718195Z_csmcir_fashioniq_c340acd3_aggregate.json: disagrees with its evidence-ledger entry
+workbench: skipping aggregate report /home/heheboiz/data/cir/workbench/artifacts/reports/csmcir_fashioniq_20261107T054051886663Z_csmcir_fashioniq_2d0369f2_aggregate.json: disagrees with its evidence-ledger entry
+workbench: skipping aggregate report /home/heheboiz/data/cir/workbench/artifacts/reports/dcnet_fashioniq_run_directory_20261108T072226547971Z_dcnet_fashioniq_run_directory_f969aef3_aggregate.json: disagrees with its evidence-ledger entry
+workbench: skipping aggregate report /home/heheboiz/data/cir/workbench/artifacts/reports/mock_c1_burn-probe-final_aggregate.json: disagrees with its evidence-ledger entry
+workbench: skipping aggregate report /home/heheboiz/data/cir/workbench/artifacts/reports/dcnet_fashioniq_run_directory_20261108T072226547971Z_dcnet_fashioniq_run_directory_f969aef3_aggregate.json: disagrees with its evidence-ledger entry
+workbench: skipping aggregate report /home/heheboiz/data/cir/workbench/artifacts/reports/mock_c1_burn-probe-final_aggregate.json: disagrees with its evidence-ledger entry
+workbench: skipping aggregate report /home/heheboiz/data/cir/workbench/artifacts/reports/dcnet_fashioniq_run_directory_20261108T072226547971Z_dcnet_fashioniq_run_directory_f969aef3_aggregate.json: disagrees with its evidence-ledger entry
+workbench: skipping aggregate report /home/heheboiz/data/cir/workbench/artifacts/reports/mock_c1_burn-probe-final_aggregate.json: disagrees with its evidence-ledger entry
+INFO:     127.0.0.1:40892 - "GET /api/benchmark-runs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40958 - "GET /api/runs/gate HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40920 - "GET /api/evidence/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40918 - "GET /api/composition/capabilities?subset=full HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40902 - "GET /api/composition/runs HTTP/1.1" 200 OK

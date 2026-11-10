@@ -7,6 +7,7 @@ import { Badge, Card, Detail, EmptyState, ErrorState, KeyValue, LoadingState, So
 import { fmtDenominator, fmtDateStamp, fmtInt, fmtNdcg, fmtPercentValue, shortId } from "./format";
 import { duplicateLabel, scoredCounts } from "./catalog";
 import { SUBSET_LABEL } from "./routes";
+import { protocolHasSubsets } from "./scope";
 
 /** Thí nghiệm: the runs and models that exist, what each can answer, and the job queue.
  *
@@ -63,7 +64,7 @@ function RunsView({ data, location, onSelectRun, onGoto }: {
     <div className="stack" data-testid="area-experiments">
       <Card
         title="Lượt chạy"
-        subtitle={`${fmtInt(catalog.length)} lượt cho ${protocolLabel(location.protocol)} · subset ${SUBSET_LABEL[location.subset]} · ${failedCount} lượt lỗi · ${capabilityMissing} lượt không có rank từng query`}
+        subtitle={`${fmtInt(catalog.length)} lượt cho ${protocolLabel(location.protocol)}${protocolHasSubsets(location.protocol) ? ` · subset ${SUBSET_LABEL[location.subset]}` : ""} · ${failedCount} lượt lỗi · ${capabilityMissing} lượt không có rank từng query`}
         actions={(
           <>
             <button type="button" onClick={data.refreshAll}>Làm mới</button>

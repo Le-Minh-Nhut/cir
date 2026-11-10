@@ -618,6 +618,13 @@ pre {
 .inventory-table .badge {font-size:.8rem;padding:4px 9px;border:0;border-radius:5px}
 .model-inventory > .hint {margin-top:18px}
 .inspect-button {color:var(--accent);background:var(--accent-soft);border-color:transparent;white-space:nowrap;font-weight:550}
+.scope-links {display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.scope-links button {font-size:.78rem;padding:4px 9px}
+.chiprow {display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:14px}
+.chiprow .chip {min-height:36px;font-size:.88rem;border-radius:999px;padding:6px 14px}
+.chiprow .chip[aria-pressed="true"] {background:var(--accent-soft);border-color:var(--line-strong);color:var(--ink);font-weight:600}
+.chiprow .chip-count {color:var(--ink-3);font-size:.8rem;font-variant-numeric:tabular-nums;margin-left:5px}
+.chiprow .chip-spacer {flex:1}
 .diagnostic {overflow-wrap:anywhere;font-family:var(--mono);font-size:.82rem;line-height:1.65}
 .query-brief {display:grid;grid-template-columns:minmax(340px,44%) minmax(0,1fr);gap:28px;align-items:start}
 .query-instruction {display:grid;gap:20px;padding-top:6px;min-width:0}

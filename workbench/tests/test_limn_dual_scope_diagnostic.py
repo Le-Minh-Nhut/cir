@@ -68,7 +68,9 @@ def _payload(*, scopes: tuple[str, ...] = SCOPES, queries: tuple[str, ...] = QID
         "gallery": {"count": 74381, "protocol_id": "circus_fashioniq_release_v1", "note": "full gallery"},
         "conditions": list(CONDITIONS),
         "scopes": list(SCOPES),
-        "checkpoints": {scope: {"checkpoint_id": f"base_iter0_{scope}", "sha256": "0" * 64,
+        # The export rows below carry `"a"*64`; a fixture whose summary and export state different
+        # checkpoints is a DEFECT fixture, so the consistent one must agree with its own exports.
+        "checkpoints": {scope: {"checkpoint_id": f"base_iter0_{scope}", "sha256": "a" * 64,
                                 "filename": f"0_{scope}_best_model.pt"} for scope in SCOPES},
         "rank_convention_crosscheck": {"checked": 36, "all_agree": True, "method": "recompute"},
         "canonical_cohort": {"subset": "full", "query_count": 6003,

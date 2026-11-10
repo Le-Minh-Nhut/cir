@@ -1,0 +1,59 @@
+== summary.queries ==
+qid=7:3038 release={'index': 3037, 'query_txt': 'Is darker and has a different graphic and is darker.', 'reference_id': '7:53224', 'positive_ids': ['7:3416'], 'loader_category': None, 'matched_subsets': ['full']} target_gallery_id=mbeir_images/fashioniq_images/B004D8QCN4.jpg target_position_in_gallery=[13614]
+   shirt   multimodal             rank=3      score=0.5703769326210022 gallery=74381 export=limn_dual_scope.shirt.multimodal.jsonl
+   shirt   text_only_black_image  rank=88     score=0.4220863878726959 gallery=74381 export=limn_dual_scope.shirt.text_only_black_image.jsonl
+   shirt   image_only_empty_text  rank=152    score=0.36779189109802246 gallery=74381 export=limn_dual_scope.shirt.image_only_empty_text.jsonl
+   toptee  multimodal             rank=43     score=0.5678249001502991 gallery=74381 export=limn_dual_scope.toptee.multimodal.jsonl
+   toptee  text_only_black_image  rank=389    score=0.3436165750026703 gallery=74381 export=limn_dual_scope.toptee.text_only_black_image.jsonl
+   toptee  image_only_empty_text  rank=67     score=0.45405110716819763 gallery=74381 export=limn_dual_scope.toptee.image_only_empty_text.jsonl
+qid=7:3790 release={'index': 3789, 'query_txt': 'Is grey and has a less whimsical graphic and is lighter.', 'reference_id': '7:33523', 'positive_ids': ['7:42304'], 'loader_category': None, 'matched_subsets': ['full', 'sf']} target_gallery_id=mbeir_images/fashioniq_images/B00E3WVAD2.jpg target_position_in_gallery=[70410]
+   shirt   multimodal             rank=65     score=0.5140696167945862 gallery=74381 export=limn_dual_scope.shirt.multimodal.jsonl
+   shirt   text_only_black_image  rank=6891   score=0.21734005212783813 gallery=74381 export=limn_dual_scope.shirt.text_only_black_image.jsonl
+   shirt   image_only_empty_text  rank=2200   score=0.3019900619983673 gallery=74381 export=limn_dual_scope.shirt.image_only_empty_text.jsonl
+   toptee  multimodal             rank=43     score=0.6190158128738403 gallery=74381 export=limn_dual_scope.toptee.multimodal.jsonl
+   toptee  text_only_black_image  rank=4730   score=0.27249062061309814 gallery=74381 export=limn_dual_scope.toptee.text_only_black_image.jsonl
+   toptee  image_only_empty_text  rank=4047   score=0.29997509717941284 gallery=74381 export=limn_dual_scope.toptee.image_only_empty_text.jsonl
+
+== per-scope exports: first rows ==
+-- limn_dual_scope.shirt.multimodal.jsonl: rows=2
+   qid='7:3038' target_rank=3 target_score=0.5703769326210022 depth=100 gallery_size=74381 n_cand=100
+      keys=['candidates', 'checkpoint_sha256', 'condition', 'depth', 'gallery_size', 'model_text', 'qid', 'query_image_path', 'scope', 'target_rank', 'target_score']
+      top3=[(1, 'mbeir_images/fashioniq_images/B004TMGDME.jpg', 0.814774), (2, 'mbeir_images/fashioniq_images/B00APZCXBE.jpg', 0.599453), (3, 'mbeir_images/fashioniq_images/B004D8QCN4.jpg', 0.570377)]
+   qid='7:3790' target_rank=65 target_score=0.5140696167945862 depth=100 gallery_size=74381 n_cand=100
+      keys=['candidates', 'checkpoint_sha256', 'condition', 'depth', 'gallery_size', 'model_text', 'qid', 'query_image_path', 'scope', 'target_rank', 'target_score']
+      top3=[(1, 'mbeir_images/fashioniq_images/B006LC5M68.jpg', 0.644287), (2, 'mbeir_images/fashioniq_images/B00251GL3M.jpg', 0.636497), (3, 'mbeir_images/fashioniq_images/B00861KWY4.jpg', 0.620055)]
+-- limn_dual_scope.shirt.text_only_black_image.jsonl: rows=2
+   qid='7:3038' target_rank=88 target_score=0.4220863878726959 depth=100 gallery_size=74381 n_cand=100
+      keys=['candidates', 'checkpoint_sha256', 'condition', 'depth', 'gallery_size', 'model_text', 'qid', 'query_image_path', 'scope', 'target_rank', 'target_score']
+      top3=[(1, 'mbeir_images/fashioniq_images/B005E9GLIC.jpg', 0.740477), (2, 'mbeir_images/fashioniq_images/B008SFJM5S.jpg', 0.621101), (3, 'mbeir_images/fashioniq_images/B00ENXGSVA.jpg', 0.580159)]
+   qid='7:3790' target_rank=6891 target_score=0.21734005212783813 depth=100 gallery_size=74381 n_cand=100
+      keys=['candidates', 'checkpoint_sha256', 'condition', 'depth', 'gallery_size', 'model_text', 'qid', 'query_image_path', 'scope', 'target_rank', 'target_score']
+      top3=[(1, 'mbeir_images/fashioniq_images/B00ENXGSVA.jpg', 0.601059), (2, 'mbeir_images/fashioniq_images/B00EVS4Z5I.jpg', 0.527242), (3, 'mbeir_images/fashioniq_images/B005E9GLIC.jpg', 0.523417)]
+-- limn_dual_scope.shirt.image_only_empty_text.jsonl: rows=2
+   qid='7:3038' target_rank=152 target_score=0.36779189109802246 depth=100 gallery_size=74381 n_cand=100
+      keys=['candidates', 'checkpoint_sha256', 'condition', 'depth', 'gallery_size', 'model_text', 'qid', 'query_image_path', 'scope', 'target_rank', 'target_score']
+      top3=[(1, 'mbeir_images/fashioniq_images/B004TMGDME.jpg', 0.738514), (2, 'mbeir_images/fashioniq_images/B009GJSBNE.jpg', 0.518684), (3, 'mbeir_images/fashioniq_images/B009GJSE18.jpg', 0.518684)]
+   qid='7:3790' target_rank=2200 target_score=0.3019900619983673 depth=100 gallery_size=74381 n_cand=100
+      keys=['candidates', 'checkpoint_sha256', 'condition', 'depth', 'gallery_size', 'model_text', 'qid', 'query_image_path', 'scope', 'target_rank', 'target_score']
+      top3=[(1, 'mbeir_images/fashioniq_images/B0079K0YBO.jpg', 0.786004), (2, 'mbeir_images/fashioniq_images/B00EHYJ0Q0.jpg', 0.582725), (3, 'mbeir_images/fashioniq_images/B00ACOICKO.jpg', 0.57865)]
+-- limn_dual_scope.toptee.multimodal.jsonl: rows=2
+   qid='7:3038' target_rank=43 target_score=0.5678249001502991 depth=100 gallery_size=74381 n_cand=100
+      keys=['candidates', 'checkpoint_sha256', 'condition', 'depth', 'gallery_size', 'model_text', 'qid', 'query_image_path', 'scope', 'target_rank', 'target_score']
+      top3=[(1, 'mbeir_images/fashioniq_images/B004TMGDME.jpg', 0.817536), (2, 'mbeir_images/fashioniq_images/B0065QRUPG.jpg', 0.671016), (3, 'mbeir_images/fashioniq_images/B00ABBX8FW.jpg', 0.656694)]
+   qid='7:3790' target_rank=43 target_score=0.6190158128738403 depth=100 gallery_size=74381 n_cand=100
+      keys=['candidates', 'checkpoint_sha256', 'condition', 'depth', 'gallery_size', 'model_text', 'qid', 'query_image_path', 'scope', 'target_rank', 'target_score']
+      top3=[(1, 'mbeir_images/fashioniq_images/B002LFO9KY.jpg', 0.702563), (2, 'mbeir_images/fashioniq_images/B006JARC9C.jpg', 0.698411), (3, 'mbeir_images/fashioniq_images/B00BYHIIBQ.jpg', 0.69233)]
+-- limn_dual_scope.toptee.text_only_black_image.jsonl: rows=2
+   qid='7:3038' target_rank=389 target_score=0.3436165750026703 depth=100 gallery_size=74381 n_cand=100
+      keys=['candidates', 'checkpoint_sha256', 'condition', 'depth', 'gallery_size', 'model_text', 'qid', 'query_image_path', 'scope', 'target_rank', 'target_score']
+      top3=[(1, 'mbeir_images/fashioniq_images/B005E9GLIC.jpg', 0.689705), (2, 'mbeir_images/fashioniq_images/B00ENXGSVA.jpg', 0.559577), (3, 'mbeir_images/fashioniq_images/B008SFJM5S.jpg', 0.548263)]
+   qid='7:3790' target_rank=4730 target_score=0.27249062061309814 depth=100 gallery_size=74381 n_cand=100
+      keys=['candidates', 'checkpoint_sha256', 'condition', 'depth', 'gallery_size', 'model_text', 'qid', 'query_image_path', 'scope', 'target_rank', 'target_score']
+      top3=[(1, 'mbeir_images/fashioniq_images/B00ENXGSVA.jpg', 0.605579), (2, 'mbeir_images/fashioniq_images/B00EHKCKXO.jpg', 0.548647), (3, 'mbeir_images/fashioniq_images/B0095YCPG4.jpg', 0.547108)]
+-- limn_dual_scope.toptee.image_only_empty_text.jsonl: rows=2
+   qid='7:3038' target_rank=67 target_score=0.45405110716819763 depth=100 gallery_size=74381 n_cand=100
+      keys=['candidates', 'checkpoint_sha256', 'condition', 'depth', 'gallery_size', 'model_text', 'qid', 'query_image_path', 'scope', 'target_rank', 'target_score']
+      top3=[(1, 'mbeir_images/fashioniq_images/B004TMGDME.jpg', 0.723991), (2, 'mbeir_images/fashioniq_images/B007W2RXPY.jpg', 0.555652), (3, 'mbeir_images/fashioniq_images/B000W34L2I.jpg', 0.540533)]
+   qid='7:3790' target_rank=4047 target_score=0.29997509717941284 depth=100 gallery_size=74381 n_cand=100
+      keys=['candidates', 'checkpoint_sha256', 'condition', 'depth', 'gallery_size', 'model_text', 'qid', 'query_image_path', 'scope', 'target_rank', 'target_score']
+      top3=[(1, 'mbeir_images/fashioniq_images/B0079K0YBO.jpg', 0.720134), (2, 'mbeir_images/fashioniq_images/B0087V1M4W.jpg', 0.568956), (3, 'mbeir_images/fashioniq_images/B003BWWH8M.jpg', 0.556222)]

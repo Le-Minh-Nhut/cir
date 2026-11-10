@@ -1,0 +1,21 @@
+=== workbench/config/workbench.env (read-only) ===
+CIR_REPO_ROOT=/home/heheboiz/data/cir
+CIR_DATA_ROOT=/home/heheboiz/data/cir/data
+FASHIONIQ_ROOT=/home/heheboiz/data/cir/data/FashionIQ
+WORKBENCH_ARTIFACTS_ROOT=/home/heheboiz/data/cir/workbench/artifacts
+WORKBENCH_CHECKPOINT_ROOT=/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads
+WORKBENCH_RESULTS_ROOT=/home/heheboiz/data/cir/workbench/artifacts/results
+WORKBENCH_THIRD_PARTY_ROOT=/home/heheboiz/data/cir/workbench/third_party
+WORKBENCH_CIRCUS_RELEASE_ROOT=/home/heheboiz/data/cir/workbench/artifacts/circus_release
+
+WORKBENCH_ENCODER_PYTHON=/home/heheboiz/data/cir/workbench/envs/encoder310-adapted/bin/python
+WORKBENCH_LIMN_PYTHON=/home/heheboiz/data/cir/workbench/envs/limn310-adapted/bin/python
+WORKBENCH_HABIT_PYTHON=/home/heheboiz/data/cir/workbench/envs/ilearn39-adapted/bin/python
+WORKBENCH_INTENT_PYTHON=/home/heheboiz/data/cir/workbench/envs/ilearn39-adapted/bin/python
+WORKBENCH_HINT_PYTHON=/home/heheboiz/data/cir/workbench/envs/ilearn39-adapted/bin/python
+WORKBENCH_CONESEP_PYTHON=/home/heheboiz/data/cir/workbench/envs/ilearn39-adapted/bin/python
+WORKBENCH_PTHA_MTST_PYTHON=/home/heheboiz/data/cir/workbench/artifacts/environments/cir-005ef4e1b02999a5/bin/python
+WORKBENCH_TME_PYTHON=/home/heheboiz/data/cir/workbench/envs/tme-adapted/bin/python
+WORKBENCH_CSMCIR_PYTHON=/home/heheboiz/data/cir/workbench/artifacts/environments/cir-005ef4e1b02999a5/bin/python
+
+WORKBENCH_RUNTIME_ADAPTATION=sm_120

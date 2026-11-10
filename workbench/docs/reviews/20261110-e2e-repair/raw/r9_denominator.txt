@@ -1,0 +1,16 @@
+Reproduce the near-zero-denominator standard: max_rel = max(|a-b| / max(|b|,1e-12)).
+The reported (max_abs, max_rel) pair pins the magnitude of the reference element that produced max_rel:
+  |b|_at_max_rel ~= max_abs / max_rel
+
+g1_g2.dress.adapter.json           batch_size_1_vs_n    max_abs=1.751e-07 max_rel=1.139977e-02 within_tolerance=False  implied |b| at max_rel = 1.536e-05
+g1_g2.dress.adapter.json           scoring: score_max_abs_vs_dot=5.364418029785156e-07 rank_differences=0 unexplained=0 r10 adapter=50.52057511155181 native=51.165096678235
+
+
+
+
+g1_g2.shirt.adapter.json           batch_size_1_vs_n    max_abs=1.974e-07 max_rel=2.698280e-03 within_tolerance=False  implied |b| at max_rel = 7.317e-05
+g1_g2.shirt.adapter.json           scoring: score_max_abs_vs_dot=5.364418029785156e-07 rank_differences=0 unexplained=0 r10 adapter=55.05397448478901 native=55.986261040235526
+
+g1_g2.toptee.adapter.json          batch_size_1_vs_n    max_abs=1.714e-07 max_rel=7.509344e-03 within_tolerance=False  implied |b| at max_rel = 2.282e-05
+g1_g2.toptee.adapter.json          scoring: score_max_abs_vs_dot=4.172325134277344e-07 rank_differences=0 unexplained=0 r10 adapter=59.61244263131056 native=60.22437531871494
+

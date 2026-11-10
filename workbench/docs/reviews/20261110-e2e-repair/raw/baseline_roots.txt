@@ -1,0 +1,7 @@
+=== du (targets only) ===
+1.1M	workbench/artifacts/composition/summary
+34M	workbench/artifacts/circus_release
+860M	workbench/artifacts/composition/runs/9e4918a6b5c243412cbc58c9
+=== digest: composition summary dir listing + full.json sha256 ===
+full.json
+c446acc4f554d2e995e346ab837e553ea122068d1180387dcbf87426ea800bef  workbench/artifacts/composition/summary/limn_base_iter0_all_categories_9e4918a6b5c243412cbc58c9/full.json

@@ -1,0 +1,53 @@
+== A. summary target_did vs release positive_ids ==
+qid=7:3038 positive_ids=['7:3416'] target_gallery_id=mbeir_images/fashioniq_images/B004D8QCN4.jpg
+   shirt   multimodal             target_did='7:42304' MATCH=False
+   shirt   text_only_black_image  target_did='7:42304' MATCH=False
+   shirt   image_only_empty_text  target_did='7:42304' MATCH=False
+   toptee  multimodal             target_did='7:42304' MATCH=False
+   toptee  text_only_black_image  target_did='7:42304' MATCH=False
+   toptee  image_only_empty_text  target_did='7:42304' MATCH=False
+qid=7:3790 positive_ids=['7:42304'] target_gallery_id=mbeir_images/fashioniq_images/B00E3WVAD2.jpg
+   shirt   multimodal             target_did='7:42304' MATCH=True
+   shirt   text_only_black_image  target_did='7:42304' MATCH=True
+   shirt   image_only_empty_text  target_did='7:42304' MATCH=True
+   toptee  multimodal             target_did='7:42304' MATCH=True
+   toptee  text_only_black_image  target_did='7:42304' MATCH=True
+   toptee  image_only_empty_text  target_did='7:42304' MATCH=True
+
+== B. per-cell rank/score vs the stored window (is_target row) ==
+shirt   multimodal             qid=7:3038 rank=    3 n_is_target_flags=1 window_check=PASS
+        rank3 gid=mbeir_images/fashioniq_images/B004D8QCN4.jpg is_target=True score=0.570377 target_score=0.570377
+        window_sorted_desc=True ranks_1..n=1..100
+shirt   multimodal             qid=7:3790 rank=   65 n_is_target_flags=1 window_check=PASS
+        rank65 gid=mbeir_images/fashioniq_images/B00E3WVAD2.jpg is_target=True score=0.514070 target_score=0.514070
+        window_sorted_desc=True ranks_1..n=1..100
+shirt   text_only_black_image  qid=7:3038 rank=   88 n_is_target_flags=1 window_check=PASS
+        rank88 gid=mbeir_images/fashioniq_images/B004D8QCN4.jpg is_target=True score=0.422086 target_score=0.422086
+        window_sorted_desc=True ranks_1..n=1..100
+shirt   text_only_black_image  qid=7:3790 rank= 6891 n_is_target_flags=0 window_check=n/a
+        n/a (rank beyond stored depth)
+        window_sorted_desc=True ranks_1..n=1..100
+shirt   image_only_empty_text  qid=7:3038 rank=  152 n_is_target_flags=0 window_check=n/a
+        n/a (rank beyond stored depth)
+        window_sorted_desc=True ranks_1..n=1..100
+shirt   image_only_empty_text  qid=7:3790 rank= 2200 n_is_target_flags=0 window_check=n/a
+        n/a (rank beyond stored depth)
+        window_sorted_desc=True ranks_1..n=1..100
+toptee  multimodal             qid=7:3038 rank=   43 n_is_target_flags=1 window_check=PASS
+        rank43 gid=mbeir_images/fashioniq_images/B004D8QCN4.jpg is_target=True score=0.567825 target_score=0.567825
+        window_sorted_desc=True ranks_1..n=1..100
+toptee  multimodal             qid=7:3790 rank=   43 n_is_target_flags=1 window_check=PASS
+        rank43 gid=mbeir_images/fashioniq_images/B00E3WVAD2.jpg is_target=True score=0.619016 target_score=0.619016
+        window_sorted_desc=True ranks_1..n=1..100
+toptee  text_only_black_image  qid=7:3038 rank=  389 n_is_target_flags=0 window_check=n/a
+        n/a (rank beyond stored depth)
+        window_sorted_desc=True ranks_1..n=1..100
+toptee  text_only_black_image  qid=7:3790 rank= 4730 n_is_target_flags=0 window_check=n/a
+        n/a (rank beyond stored depth)
+        window_sorted_desc=True ranks_1..n=1..100
+toptee  image_only_empty_text  qid=7:3038 rank=   67 n_is_target_flags=1 window_check=PASS
+        rank67 gid=mbeir_images/fashioniq_images/B004D8QCN4.jpg is_target=True score=0.454051 target_score=0.454051
+        window_sorted_desc=True ranks_1..n=1..100
+toptee  image_only_empty_text  qid=7:3790 rank= 4047 n_is_target_flags=0 window_check=n/a
+        n/a (rank beyond stored depth)
+        window_sorted_desc=True ranks_1..n=1..100

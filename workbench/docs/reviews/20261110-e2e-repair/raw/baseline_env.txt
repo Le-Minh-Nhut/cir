@@ -1,0 +1,15 @@
+=== env of PID 2759507 (serve_workbench.py) — WORKBENCH_*/CIR_*/FASHIONIQ_* only ===
+PATH=<elided>
+WORKBENCH_CIRCUS_RELEASE_ROOT=/home/heheboiz/data/cir/workbench/artifacts/circus_release
+=== env of PID 2759510 (uvicorn backend) ===
+WORKBENCH_CIRCUS_RELEASE_ROOT=/home/heheboiz/data/cir/workbench/artifacts/circus_release
+=== cwd ===
+/home/heheboiz/data/cir
+/home/heheboiz/data/cir
+=== cmdline ===
+workbench/envs/ctl312h/bin/python workbench/scripts/serve_workbench.py --production-frontend --host 127.0.0.1 --backend-port 8000 --frontend-port 5173 
+/home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python -m uvicorn workbench.backend.main:app --host 127.0.0.1 --port 8000 
+=== start time ===
+    PID STARTED                  ELAPSED COMMAND
+2759507 Tue Nov 10 07:24:34 2026 27:07   workbench/envs/ctl312h/bin/python workbench/scripts/serve_workbench.py --production-frontend --host 127.0.0.1 --backend-port 8000 --frontend-port 5173
+2759510 Tue Nov 10 07:24:34 2026 27:07   /home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python -m uvicorn workbench.backend.main:app --host 127.0.0.1 --port 8000

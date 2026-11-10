@@ -1,10 +1,12 @@
 import { useMemo, useState } from "react";
-import type { WorkbenchData } from "./data";
+import { protocolLabel, type WorkbenchData } from "./data";
 import type { Location } from "./routes";
 import type { Model } from "./types";
 import { Badge, Detail, ErrorState, LoadingState } from "./ui";
 import { fmtDenominator, fmtInt, fmtNdcg, fmtPercentValue } from "./format";
 import { scoredCounts } from "./catalog";
+import { otherScopeFor, protocolHasSubsets, type ScopeRow } from "./scope";
+import { SUBSET_LABEL } from "./routes";
 
 /** Operator scope for this review. Not a registry fact and not a measurement: the two models whose
  *  auxiliary data or checkpoints are missing stay LISTED with this reason attached, so "why is it
@@ -46,6 +48,23 @@ export function ModelInventory({ data, location, onGoto }: {
     const priority = (id: string) => DEFERRED_MODELS[id] ? 2 : measuredIds.has(id) ? 0 : 1;
     return priority(a.model_id) - priority(b.model_id) || a.model_id.localeCompare(b.model_id);
   }), [models, measuredIds]);
+
+  // EVERY row the API served that can hold a model's numbers, across all protocols and subsets: the
+  // input `otherScopeFor` needs to find where a model absent HERE actually has numbers. Three
+  // sources, because this deployment measures in three places: composition runs (CIRCUS subsets),
+  // native measurements (macro numbers, unverified) and aggregate reports (FashionIQ protocols).
+  const allRows = useMemo(() => {
+    const composition = (data.compositionRuns.region.data ?? []) as ScopeRow[];
+    const native = (data.nativeMeasurements.region.data?.measurements ?? [])
+      .filter((row) => row.model_id && row.metrics && row.protocol_id)
+      .map((row): ScopeRow => ({ model_id: row.model_id, protocol_id: row.protocol_id,
+                                 subset: "", metrics: row.metrics as Record<string, unknown> }));
+    const aggregate = (data.aggregates.region.data ?? [])
+      .filter((row) => row.model_id && row.protocol_id && !row.is_synthetic)
+      .map((row): ScopeRow => ({ model_id: row.model_id, protocol_id: row.protocol_id,
+                                 subset: "", metrics: (row.observed_metrics ?? {}) as Record<string, unknown> }));
+    return [...composition, ...native, ...aggregate];
+  }, [data.compositionRuns.region.data, data.nativeMeasurements.region.data, data.aggregates.region.data]);
 
   const matching = ordered.filter((model) => {
     const text = `${model.model_id} ${model.method_name}`.toLowerCase();
@@ -122,10 +141,19 @@ export function ModelInventory({ data, location, onGoto }: {
               const downloaded = checkpoints.filter((checkpoint) => checkpoint.checkpoint_downloaded).length;
               const blockers = [...new Set(checkpoints.flatMap((checkpoint) => checkpoint.blocking_reasons ?? []))];
               const missingScored = counts != null && counts.scored < counts.total;
+              // Scopes this model DOES have numbers in, from composition rows, native measurements and
+              // aggregate reports. Never let "no run here" be the whole answer when a real row exists
+              // elsewhere: the reader gets the scope, its size, and a link that opens it.
+              const elsewhere = entry || deferredReason
+                ? []
+                : otherScopeFor(allRows, model.model_id).filter((scope) =>
+                    scope.protocol !== location.protocol
+                    || (protocolHasSubsets(location.protocol) ? scope.subset !== location.subset : false));
               const status = deferredReason ? "Tạm gác"
                 : run ? (missingScored ? "Chấm thiếu" : "Có số đo")
                 : entry ? "Có dữ liệu native"
                 : usable.length > 1 ? `${usable.length} lượt cần chọn`
+                : elsewhere.length ? "Có kết quả ở scope khác"
                 : downloaded ? "Chưa có số đo" : "Chưa có checkpoint xác nhận";
               const openRun = () => {
                 if (!entry) return;
@@ -144,13 +172,38 @@ export function ModelInventory({ data, location, onGoto }: {
                         </button>
                       : deferredReason
                         ? <span className="cell-sub">Ngoài đợt chạy này</span>
-                        : <div className="cell-sub" data-testid={`todo-${model.model_id}`} style={{ marginTop: 6 }}>
-                            <span>{usable.length > 1
-                              ? `${usable.length} lượt trong phạm vi này; chọn một lượt ở khu vực Lượt chạy.`
-                              : nextStep(model)}</span>
-                            <button type="button" style={{ marginTop: 6 }}
-                                    onClick={() => onGoto({ area: "experiments", view: "runs" })}>Mở các lượt chạy</button>
-                          </div>}
+                        : elsewhere.length
+                          ? <div className="cell-sub" data-testid={`other-scope-${model.model_id}`} style={{ marginTop: 6 }}>
+                              <span>Có kết quả ở {elsewhere.length} phạm vi khác — mở đúng phạm vi đó:</span>
+                              <div className="scope-links">
+                                {elsewhere.map((scope) => (
+                                  <button key={`${scope.protocol}:${scope.subset}`} type="button"
+                                          className="ghost"
+                                          data-testid={`other-scope-${model.model_id}-${scope.protocol}-${scope.subset || "all"}`}
+                                          // A composition subset opens the composition table; an empty
+                                          // subset means the rows came from a source without subsets
+                                          // (native measurements / aggregate reports), so it opens the
+                                          // view that actually lists them.
+                                          onClick={() => onGoto(scope.subset
+                                            ? { area: "evaluation", view: "composition", protocol: scope.protocol,
+                                                subset: scope.subset as Location["subset"], runs: [], run: "", query: "", offset: 0 }
+                                            : { area: "evaluation", view: "benchmark", protocol: scope.protocol,
+                                                runs: [], run: "", query: "", offset: 0 })}>
+                                    {protocolLabel(scope.protocol)}
+                                    {protocolHasSubsets(scope.protocol) && scope.subset
+                                      ? ` · ${SUBSET_LABEL[scope.subset as keyof typeof SUBSET_LABEL] ?? scope.subset}` : ""}
+                                    {" · "}{fmtInt(scope.rows)} {scope.subset ? "lượt" : "số đo (toàn phạm vi)"}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          : <div className="cell-sub" data-testid={`todo-${model.model_id}`} style={{ marginTop: 6 }}>
+                              <span>{usable.length > 1
+                                ? `${usable.length} lượt trong phạm vi này; chọn một lượt ở khu vực Lượt chạy.`
+                                : nextStep(model)}</span>
+                              <button type="button" style={{ marginTop: 6 }}
+                                      onClick={() => onGoto({ area: "experiments", view: "runs" })}>Mở các lượt chạy</button>
+                            </div>}
                   </td>
                   <td>
                     <Badge tone={deferredReason ? "neutral" : run && !missingScored ? "ok" : "warn"}>{status}</Badge>

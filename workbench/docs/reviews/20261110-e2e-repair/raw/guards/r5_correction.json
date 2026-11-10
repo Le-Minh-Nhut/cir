@@ -1,0 +1,55 @@
+{
+ "corrected_file": "/home/heheboiz/data/cir/workbench/docs/reviews/20261110-e2e-repair/raw/guards/limn_dual_scope.corrected.json",
+ "corrected_sha256": "7efb49dfb92be774f06ea13996e9081ca19c3dd7974e7dd8e07a3e069bbec9aa",
+ "source_file": "/home/heheboiz/data/cir/workbench/docs/reviews/20261109-native15-composition-limn/limn_dual_scope.json",
+ "source_sha256": "04c4419e44ff555b909ad92ed0a8596520a0cb5cdcfc0467986baabf77bfabf0",
+ "source_untouched": true,
+ "records_changed": 6,
+ "changes": [
+  {
+   "qid": "7:3038",
+   "scope": "shirt",
+   "condition": "multimodal",
+   "was": "7:42304",
+   "now": "7:3416"
+  },
+  {
+   "qid": "7:3038",
+   "scope": "shirt",
+   "condition": "text_only_black_image",
+   "was": "7:42304",
+   "now": "7:3416"
+  },
+  {
+   "qid": "7:3038",
+   "scope": "shirt",
+   "condition": "image_only_empty_text",
+   "was": "7:42304",
+   "now": "7:3416"
+  },
+  {
+   "qid": "7:3038",
+   "scope": "toptee",
+   "condition": "multimodal",
+   "was": "7:42304",
+   "now": "7:3416"
+  },
+  {
+   "qid": "7:3038",
+   "scope": "toptee",
+   "condition": "text_only_black_image",
+   "was": "7:42304",
+   "now": "7:3416"
+  },
+  {
+   "qid": "7:3038",
+   "scope": "toptee",
+   "condition": "image_only_empty_text",
+   "was": "7:42304",
+   "now": "7:3416"
+  }
+ ],
+ "rescored": false,
+ "reranked": false,
+ "note": "No rank, score, asset or candidate was recomputed. Only the mis-recorded identity field changed; the historical file is preserved byte-for-byte."
+}

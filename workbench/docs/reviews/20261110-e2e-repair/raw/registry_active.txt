@@ -1,0 +1,193 @@
+## airknow
+   native_protocol = "fashioniq_full_gallery_ref_excluded"
+   literature_split_label = "original"
+   reproduction_status = "NOT_RUN"
+   fashioniq_layout = "fashioniq_ilearn_resized_training"
+   fashioniq_image_extensions = [".jpg"]
+   env: {'python': '3.8.10', 'pytorch': '2.1.0', 'torchvision': '0.16.0', 'cuda': '12.6', 'confidence': 'VERIFIED_README', 'python_env_var': 'WORKBENCH_AIRKNOW_PYTHON'}
+    checkpoint_variants {"checkpoint_id": "fiq_n05", "filename": "airknow_fiq_0.5.pt", "expected_sha256": "f4d25ed9e532f2ee3671f6edadb1048e73113246ec056b413bde75dfe3f79bc6", "status": "NO_CLEAN_CHECKPOINT", "checkpoint_mapping_status": "VERIFIED_METADATA", "checkpoint_training_noise_pct": 50, "evaluation_noise_pct": 0, "artifact_type": null, "required_files": null}
+    checkpoint_variants {"checkpoint_id": "fiq_n08", "filename": "airknow_fiq_0.8.pt", "expected_sha256": "756fc0bdc43d9e0f0cae13c8a02b0279f64e62092ce465c1e60bda45e179c54e", "status": "NO_CLEAN_CHECKPOINT", "checkpoint_mapping_status": "VERIFIED_METADATA", "checkpoint_training_noise_pct": 80, "evaluation_noise_pct": 0, "artifact_type": null, "required_files": null}
+## conesep
+   native_protocol = "fashioniq_full_gallery_ref_excluded"
+   literature_split_label = "original"
+   reproduction_status = "NOT_RUN"
+   fashioniq_layout = "fashioniq_ilearn_resized_training"
+   fashioniq_image_extensions = [".jpg"]
+   env: {'python': '3.8.10', 'pytorch': '2.1.0', 'torchvision': '0.16.0', 'cuda': '12.6', 'confidence': 'VERIFIED_README', 'python_env_var': 'WORKBENCH_CONESEP_PYTHON'}
+   adapted: {"target_compute_capability": "sm_120", "python": "3.9", "pytorch": "==2.7.1", "torchvision": "==0.22.1", "cuda": "12.8", "packages": ["transformers==4.25.0", "timm==0.9.16", "fairscale==0.4.13", "numpy<2"], "pip_index_url": "https://download.pytorch.org/whl/cu128"}
+    checkpoint_variants {"checkpoint_id": "fiq_n02", "filename": "ConeSep-FIQ-N0.2.pt", "expected_sha256": "5a864ee5a78c1d249320c4f997cc7d14b529b329b2efba5577c82dbe019ed9d2", "status": "NO_CLEAN_CHECKPOINT", "checkpoint_mapping_status": "VERIFIED_METADATA", "checkpoint_training_noise_pct": 20, "evaluation_noise_pct": 0, "artifact_type": null, "required_files": null}
+    checkpoint_variants {"checkpoint_id": "fiq_n05", "filename": "ConeSep-FIQ-N0.5.pt", "expected_sha256": null, "status": "NO_CLEAN_CHECKPOINT", "checkpoint_mapping_status": "VERIFIED_METADATA", "checkpoint_training_noise_pct": 50, "evaluation_noise_pct": 0, "artifact_type": null, "required_files": null}
+    checkpoint_variants {"checkpoint_id": "fiq_n08", "filename": "ConeSep-FIQ_N0.8.pt", "expected_sha256": null, "status": "NO_CLEAN_CHECKPOINT", "checkpoint_mapping_status": "VERIFIED_METADATA", "checkpoint_training_noise_pct": 80, "evaluation_noise_pct": 0, "artifact_type": null, "required_files": null}
+## ptha_mtst
+   native_protocol = "fashioniq_original_split"
+   literature_split_label = "original"
+   reproduction_status = "SELECTED_TRANSFER_ONLY"
+   fashioniq_layout = "fashioniq_standard"
+   preparation_id = "ptha_mtst_fashioniq"
+   fashioniq_image_extensions = [".png"]
+   env: {'python': '3.9', 'pytorch': '2.0.1', 'torchvision': '0.15.2', 'cuda': None, 'confidence': 'VERIFIED_REQUIREMENTS', 'python_env_var': 'WORKBENCH_PTHA_MTST_PYTHON'}
+   adapted: {"target_compute_capability": "sm_120", "python": "3.10", "pytorch": "==2.7.1", "torchvision": "==0.22.1", "cuda": "12.8", "packages": ["transformers==4.36.2", "timm==0.9.12", "fairscale==0.4.13", "numpy<2"], "pip_index_url": "https://download.pytorch.org/whl/cu128"}
+    checkpoint_variants {"checkpoint_id": "cirr_transfer", "filename": "tuned_mtst_cirr.pt", "expected_sha256": "1c4dab86a9f66dfe10aff75b39790432eb6cc746cf27b6cfab74b66d93b7588f", "status": "URL_VERIFIED", "checkpoint_mapping_status": "VERIFIED_METADATA", "checkpoint_training_noise_pct": null, "evaluation_noise_pct": 0, "artifact_type": null, "required_files": null}
+## habit
+   native_protocol = "fashioniq_full_gallery_ref_excluded"
+   literature_split_label = "original"
+   reproduction_status = "NOT_RUN"
+   fashioniq_layout = "fashioniq_ilearn_resized_training"
+   fashioniq_image_extensions = [".jpg"]
+   env: {'python': '3.8.10', 'pytorch': '2.1.0', 'torchvision': '0.16.0', 'cuda': '12.6', 'confidence': 'VERIFIED_README', 'python_env_var': 'WORKBENCH_HABIT_PYTHON'}
+   adapted: {"target_compute_capability": "sm_120", "python": "3.9", "pytorch": "==2.7.1", "torchvision": "==0.22.1", "cuda": "12.8", "packages": ["transformers==4.25.0", "timm==0.9.16", "fairscale==0.4.13", "numpy<2"], "pip_index_url": "https://download.pytorch.org/whl/cu128"}
+    checkpoint_variants {"checkpoint_id": "fiq_n02", "filename": "HABIT-FIQ_N0.2.pt", "expected_sha256": "814d2d0ceb29ef910f37562e8bea8a76cf38aa546fbc2102e495df687c276b03", "status": "NO_CLEAN_CHECKPOINT", "checkpoint_mapping_status": "VERIFIED_METADATA", "checkpoint_training_noise_pct": 20, "evaluation_noise_pct": 0, "artifact_type": null, "required_files": null}
+    checkpoint_variants {"checkpoint_id": "fiq_n05", "filename": "HABIT-FIQ_N0.5.pt", "expected_sha256": "8a0d3bd27cf46d8334f9596404d89ebf803da0fa65236d89815bb3929b9a4216", "status": "NO_CLEAN_CHECKPOINT", "checkpoint_mapping_status": "VERIFIED_METADATA", "checkpoint_training_noise_pct": 50, "evaluation_noise_pct": 0, "artifact_type": null, "required_files": null}
+    checkpoint_variants {"checkpoint_id": "fiq_n08", "filename": "HABIT-FIQ_N0.8.pt", "expected_sha256": "763885de6907bca4f017b336ed7ec3740cb9305c5adb6a135da45c158ddb9717", "status": "NO_CLEAN_CHECKPOINT", "checkpoint_mapping_status": "VERIFIED_METADATA", "checkpoint_training_noise_pct": 80, "evaluation_noise_pct": 0, "artifact_type": null, "required_files": null}
+## intent
+   native_protocol = "fashioniq_full_gallery_ref_excluded"
+   literature_split_label = "original"
+   reproduction_status = "NOT_RUN"
+   fashioniq_layout = "fashioniq_ilearn_resized_training"
+   fashioniq_image_extensions = [".jpg"]
+   env: {'python': '3.9', 'pytorch': '2.1.0', 'torchvision': '0.16.0', 'cuda': '12.6', 'confidence': 'VERIFIED_README', 'python_env_var': 'WORKBENCH_INTENT_PYTHON'}
+   adapted: {"target_compute_capability": "sm_120", "python": "3.9", "pytorch": "==2.7.1", "torchvision": "==0.22.1", "cuda": "12.8", "packages": ["transformers==4.25.0", "timm==0.9.16", "fairscale==0.4.13", "numpy<2"], "pip_index_url": "https://download.pytorch.org/whl/cu128"}
+    checkpoint_variants {"checkpoint_id": "fiq_n02", "filename": "intent_fiq_0.2.pt", "expected_sha256": "2a504cadfd6b1c2486a2c508538b0160c5653f62c7cd11f4f3d8a9534dc26afc", "status": "NO_CLEAN_CHECKPOINT", "checkpoint_mapping_status": "VERIFIED_METADATA", "checkpoint_training_noise_pct": 20, "evaluation_noise_pct": 0, "artifact_type": null, "required_files": null}
+    checkpoint_variants {"checkpoint_id": "fiq_n05", "filename": "intent_fiq_0.5.pt", "expected_sha256": "2d59ae002ecbf645a52c7e93bf8afd914e3061e2304413b97a0bf15ca43e39a9", "status": "NO_CLEAN_CHECKPOINT", "checkpoint_mapping_status": "VERIFIED_METADATA", "checkpoint_training_noise_pct": 50, "evaluation_noise_pct": 0, "artifact_type": null, "required_files": null}
+    checkpoint_variants {"checkpoint_id": "fiq_n08", "filename": "intent_fiq_0.8.pt", "expected_sha256": "671bb217d3fdf32e6133fcb98eef4e80ebf831b5a203493c54507ef3c23b5cd2", "status": "NO_CLEAN_CHECKPOINT", "checkpoint_mapping_status": "VERIFIED_METADATA", "checkpoint_training_noise_pct": 80, "evaluation_noise_pct": 0, "artifact_type": null, "required_files": null}
+## hint
+   native_protocol = "fashioniq_val_split"
+   literature_split_label = "val"
+   reproduction_status = "NOT_RUN"
+   fashioniq_layout = "fashioniq_ilearn_resized_training"
+   fashioniq_image_extensions = [".jpg"]
+   env: {'python': '3.8.10', 'pytorch': '2.1.0', 'torchvision': '0.16.0', 'cuda': '12.6', 'confidence': 'VERIFIED_README', 'python_env_var': 'WORKBENCH_HINT_PYTHON'}
+   adapted: {"target_compute_capability": "sm_120", "python": "3.9", "pytorch": "==2.7.1", "torchvision": "==0.22.1", "cuda": "12.8", "packages": ["transformers==4.25.0", "timm==0.9.16", "fairscale==0.4.13", "numpy<2"], "pip_index_url": "https://download.pytorch.org/whl/cu128"}
+    checkpoint_variants {"checkpoint_id": "fashioniq", "filename": "fashioniq.pt", "expected_sha256": "bf9c72d42206b667ed586758c15c648970df821857e4067f26155a114a6517d4", "status": "URL_VERIFIED", "checkpoint_mapping_status": "VERIFIED_METADATA", "checkpoint_training_noise_pct": null, "evaluation_noise_pct": 0, "artifact_type": null, "required_files": null}
+## encoder
+   native_protocol = "fashioniq_val_split"
+   literature_split_label = "val"
+   checkpoint_serialization = "state_dict"
+   category_model_policy = "shared"
+   reproduction_status = "METRICS_MEASURED_MAPPING_UNVERIFIED"
+   per_query_observer = "ENCODER_QUERY_OBSERVER_V1"
+   per_query_checkpoint = "fashioniq"
+   fashioniq_layout = "fashioniq_ilearn_resized_training"
+   fashioniq_image_extensions = [".jpg"]
+   env: {'python': '3.9', 'pytorch': '1.13.1', 'torchvision': '0.14.1', 'cuda': '12.6', 'confidence': 'VERIFIED_REQUIREMENTS', 'python_env_var': 'WORKBENCH_ENCODER_PYTHON'}
+   adapted: {"target_compute_capability": "sm_120", "python": "3.10", "pytorch": "==2.7.1", "torchvision": "==0.22.1", "cuda": "12.8", "packages": ["open_clip_torch==2.24.0"], "pip_index_url": "https://download.pytorch.org/whl/cu128"}
+    checkpoint_variants {"checkpoint_id": "fashioniq", "filename": "fashioniq.pt", "expected_sha256": "0f31c50150a7bda3495e3378df13b4cec7924b52efd23b5e5dd9731459da9173", "status": "URL_VERIFIED", "checkpoint_mapping_status": "VERIFIED_METADATA", "checkpoint_training_noise_pct": null, "evaluation_noise_pct": 0, "artifact_type": null, "required_files": null}
+## pair
+   native_protocol = "fashioniq_val_split"
+   literature_split_label = "val"
+   command_status = "COMMAND_BLOCKED_SOURCE_ENTRYPOINT"
+   reproduction_status = "BLOCKED_CHECKPOINT_MAPPING_UNVERIFIED"
+   fashioniq_layout = "fashioniq_ilearn_resized_training"
+   preparation_id = "pair_fashioniq"
+   fashioniq_image_extensions = [".jpg"]
+   env: {'python': '3.8.10', 'pytorch': '2.0.0', 'torchvision': 'UNKNOWN', 'cuda': '11.8', 'confidence': 'VERIFIED_README', 'python_env_var': 'WORKBENCH_PAIR_PYTHON'}
+    checkpoint_variants {"checkpoint_id": "pair_b1", "filename": "pair-B1.pt", "expected_sha256": "c4d861ecd0baa3f1427fc7a853943f5614baf87def1cdd9c4bb7583ee925fbf2", "status": "CHECKPOINT_MAPPING_UNVERIFIED", "checkpoint_mapping_status": "UNVERIFIED", "checkpoint_training_noise_pct": null, "evaluation_noise_pct": 0, "artifact_type": null, "required_files": null}
+    checkpoint_variants {"checkpoint_id": "pair_b2", "filename": "pair-B2.pt", "expected_sha256": "74346fd7de6efdafe8dde70458316286a60ceb2d7b419efed55193418aeb3f03", "status": "CHECKPOINT_MAPPING_UNVERIFIED", "checkpoint_mapping_status": "UNVERIFIED", "checkpoint_training_noise_pct": null, "evaluation_noise_pct": 0, "artifact_type": null, "required_files": null}
+## clvc_net
+   native_protocol = "fashioniq_val_split"
+   literature_split_label = "val"
+   replay_status = "BLOCKED_NO_SOURCE_REPLAY"
+   checkpoint_serialization = "whole_model"
+   category_model_policy = "independent"
+   command_status = "COMMAND_BLOCKED_SOURCE_ENTRYPOINT"
+   reproduction_status = "BLOCKED_CHECKPOINT_MAPPING"
+   fashioniq_layout = "fashioniq_clvc_resized"
+   preparation_id = "clvc_net_fashioniq"
+   fashioniq_image_extensions = [".jpg"]
+   category_checkpoint_structure = {"categories": ["dress", "shirt", "toptee"], "per_category_members": ["local", "global"], "member_count_expected": 6, "mapping_status": "VERIFIED_METADATA", "notes": "six files present and structurally confirmed; three per-category vocabularies recovered from the checkpoints matc
+   env: {'python': '3.7.6', 'pytorch': '1.6.0', 'torchvision': 'UNKNOWN', 'cuda': '10.2', 'confidence': 'VERIFIED_README', 'python_env_var': 'WORKBENCH_CLVC_PYTHON'}
+    checkpoint_variants {"checkpoint_id": "author_drive_unresolved", "filename": ".", "expected_sha256": null, "status": "URL_VERIFIED", "checkpoint_mapping_status": "VERIFIED_METADATA", "checkpoint_training_noise_pct": null, "evaluation_noise_pct": 0, "artifact_type": "bundle_directory", "required_files": ["dress_local_model.pt", "dress_global_model.pt", "shirt_local_model.pt", "shirt_global_model.pt", "toptee_local_mod
+## dcnet
+   native_protocol = "fashioniq_full_gallery_ref_excluded"
+   literature_split_label = "original"
+   replay_type = "OFFICIAL_CLI"
+   replay_status = "REPLAY_CODE_IMPLEMENTED"
+   checkpoint_serialization = "run_directory"
+   category_model_policy = "shared"
+   command_status = "COMMAND_AUDITED"
+   reproduction_status = "BLOCKED_CHECKPOINT_MAPPING"
+   approved_source_patches = [{"path": "base/base_trainer.py", "patch_file": "workbench/patches/dcnet_checkpoint_weights_only_optout.patch", "patch_sha256": "64c0c8dbf187ea40352798eb6a2cb0115bd81ffcb177f556e4d8722a7885c634", "base_sha256": "3edd98363f81d0efbac6f7b1dcf9690a5db714bcc588cd4b0d890c5bb865860b", "
+   fashioniq_layout = "fashioniq_dcnet"
+   preparation_id = "dcnet_fashioniq"
+   fashioniq_image_extensions = [".jpg"]
+   canonical_dataset_link = "dataset/fashioniq"
+   env: {'python': '3.7.7', 'pytorch': '1.4.0', 'torchvision': '0.5.0', 'cuda': 'UNKNOWN', 'confidence': 'VERIFIED_REQUIREMENTS', 'python_env_var': 'WORKBENCH_DCNET_PYTHON'}
+    checkpoint_variants {"checkpoint_id": "fashioniq_run_directory", "filename": ".", "expected_sha256": null, "status": "URL_VERIFIED", "checkpoint_mapping_status": "VERIFIED_METADATA", "checkpoint_training_noise_pct": null, "evaluation_noise_pct": 0, "artifact_type": "run_directory", "required_files": ["config.json", "trained_model.pth"]}
+## combiner_rn50x4_noft
+   native_protocol = "fashioniq_original_split"
+   literature_split_label = "original"
+   replay_type = "OFFICIAL_CLI"
+   replay_status = "REPLAY_CODE_IMPLEMENTED"
+   checkpoint_serialization = "state_dict"
+   category_model_policy = "shared"
+   command_status = "COMMAND_AUDITED"
+   reproduction_status = "BLOCKED_CHECKPOINT_MAPPING"
+   fashioniq_layout = "fashioniq_standard"
+   preparation_id = "clip4cir_fashioniq"
+   fashioniq_image_extensions = [".jpg"]
+   canonical_dataset_link = "fashionIQ_dataset"
+   env: {'python': '3.8', 'pytorch': '1.11.0', 'torchvision': '0.12.0', 'cuda': 'UNKNOWN', 'confidence': 'VERIFIED_README', 'python_env_var': 'WORKBENCH_CLIP4CIR_PYTHON'}
+    checkpoint_variants {"checkpoint_id": "rn50x4_noft_unresolved", "filename": "fiq_comb_RN50x4_noft.pt", "expected_sha256": "b31882fe6f7e3e194cb9cfda048926844ee0ccc9d4ebc5483fb3bacfa5972955", "status": "URL_VERIFIED", "checkpoint_mapping_status": "VERIFIED_METADATA", "checkpoint_training_noise_pct": 0, "evaluation_noise_pct": 0, "artifact_type": "file", "required_files": null}
+## clip4cir_rn50x4_fullft
+   native_protocol = "fashioniq_original_split"
+   literature_split_label = "original"
+   replay_type = "OFFICIAL_CLI"
+   replay_status = "BLOCKED_CHECKPOINT_MAPPING"
+   checkpoint_serialization = "state_dict"
+   category_model_policy = "shared"
+   command_status = "COMMAND_AUDITED"
+   reproduction_status = "BLOCKED_CHECKPOINT_BUNDLE"
+   fashioniq_layout = "fashioniq_standard"
+   preparation_id = "clip4cir_fashioniq"
+   fashioniq_image_extensions = [".jpg"]
+   canonical_dataset_link = "fashionIQ_dataset"
+   env: {'python': '3.8', 'pytorch': '1.11.0', 'torchvision': '0.12.0', 'cuda': 'UNKNOWN', 'confidence': 'VERIFIED_README', 'python_env_var': 'WORKBENCH_CLIP4CIR_PYTHON'}
+    checkpoint_variants {"checkpoint_id": "rn50x4_fullft_unresolved", "filename": ".", "expected_sha256": null, "status": "URL_VERIFIED", "checkpoint_mapping_status": "VERIFIED_METADATA", "checkpoint_training_noise_pct": 0, "evaluation_noise_pct": 0, "artifact_type": "bundle_directory", "required_files": ["fiq_comb_RN50x4_fullft.pt", "fiq_clip_RN50x4_fullft.pt"]}
+## tgcir
+   native_protocol = "fashioniq_val_split"
+   literature_split_label = "val"
+   replay_type = "PREFLIGHT_ONLY"
+   replay_status = "PREFLIGHT_ONLY"
+   checkpoint_serialization = "whole_model"
+   category_model_policy = "shared"
+   command_status = "COMMAND_BLOCKED_SOURCE_ENTRYPOINT"
+   reproduction_status = "BLOCKED_COMMAND"
+   fashioniq_layout = "fashioniq_ilearn_resized_training"
+   preparation_id = "tgcir_fashioniq"
+   fashioniq_image_extensions = [".jpg"]
+   env: {'python': 'UNKNOWN', 'pytorch': '1.7.0', 'torchvision': '0.8.0', 'cuda': '11.0', 'confidence': 'VERIFIED_README', 'python_env_var': 'WORKBENCH_TGCIR_PYTHON'}
+    checkpoint_variants {"checkpoint_id": "tgcir_archive_unresolved", "filename": "Fashioniq.pt", "expected_sha256": "c37768f374c75bebff1299e870518c23bf6db3dc8a75c4d1f729ccd6dd02e966", "status": "URL_VERIFIED", "checkpoint_mapping_status": "VERIFIED_METADATA", "checkpoint_training_noise_pct": null, "evaluation_noise_pct": 0, "artifact_type": null, "required_files": null}
+## limn
+   native_protocol = "fashioniq_val_split"
+   literature_split_label = "val"
+   replay_type = "SOURCE_FAITHFUL_WORKBENCH_REPLAY"
+   replay_status = "REPLAY_CODE_IMPLEMENTED"
+   checkpoint_serialization = "whole_model"
+   category_model_policy = "independent"
+   command_status = "REPLAY_COMMAND_IMPLEMENTED"
+   reproduction_status = "BLOCKED_RUNTIME_PREREQUISITES"
+   per_query_observer = "LIMN_QUERY_OBSERVER_V1"
+   per_query_checkpoint = "base_iter0_all_categories"
+   fashioniq_layout = "fashioniq_ilearn_resized_training"
+   preparation_id = "limn_fashioniq"
+   fashioniq_image_extensions = [".jpg"]
+   env: {'python': 'UNKNOWN', 'pytorch': '1.12.1', 'torchvision': '0.13.1', 'cuda': '12.4', 'confidence': 'VERIFIED_README', 'python_env_var': 'WORKBENCH_LIMN_PYTHON'}
+   adapted: {"target_compute_capability": "sm_120", "python": "3.10", "pytorch": "==2.7.1", "torchvision": "==0.22.1", "cuda": "12.8", "packages": ["open_clip_torch==2.20.0"], "pip_index_url": "https://download.pytorch.org/whl/cu128"}
+    checkpoint_variants {"checkpoint_id": "base_iter0_dress", "filename": "0_dress_best_model.pt", "expected_sha256": "96a335d4eb8b1e77d35575aab9177637208e2eb6c59e12f833f67e5cb0e7fc1c", "status": "URL_VERIFIED", "checkpoint_mapping_status": "VERIFIED_METADATA", "checkpoint_training_noise_pct": null, "evaluation_noise_pct": 0, "artifact_type": null, "required_files": null}
+    checkpoint_variants {"checkpoint_id": "base_iter0_shirt", "filename": "0_shirt_best_model.pt", "expected_sha256": "9260c7f77d3017d8cc10e6652cc8cfe275dbc9704366fa2bf581a24808930d74", "status": "URL_VERIFIED", "checkpoint_mapping_status": "VERIFIED_METADATA", "checkpoint_training_noise_pct": null, "evaluation_noise_pct": 0, "artifact_type": null, "required_files": null}
+    checkpoint_variants {"checkpoint_id": "base_iter0_toptee", "filename": "0_toptee_best_model.pt", "expected_sha256": "79f663a14d89d455fdc3612b0b36d011c06d7957d1475a654755e1053a6cece2", "status": "URL_VERIFIED", "checkpoint_mapping_status": "VERIFIED_METADATA", "checkpoint_training_noise_pct": null, "evaluation_noise_pct": 0, "artifact_type": null, "required_files": null}
+    checkpoint_bundles {"checkpoint_id": null, "filename": null, "expected_sha256": null, "status": null, "checkpoint_mapping_status": null, "checkpoint_training_noise_pct": null, "evaluation_noise_pct": null, "artifact_type": null, "required_files": null}
+## tme
+   native_protocol = "fashioniq_original_split"
+   literature_split_label = "original"
+   command_status = "REPLAY_COMMAND_IMPLEMENTED"
+   reproduction_status = "NOT_RUN"
+   approved_source_patches = [{"path": "src/precompute.py", "patch_file": "workbench/patches/tme_precompute_bounded_allocation.patch", "patch_sha256": "cdf7d98c439a2a372ebb0053783d55c5d2928eb5decfb3652cbf321eadccb85a", "base_sha256": "c3da9c9dc8c11b0616640f910435583471fe64f9190f6fb5abd4382bc2c48d27", "derive
+   fashioniq_layout = "fashioniq_standard"
+   preparation_id = "tme_fashioniq"
+   checkpoint_selection_preference = "fashioniq_0"
+   requested_conditions_unavailable = [{"checkpoint_training_noise_pct": 20, "reason": "CHECKPOINT_UNAVAILABLE", "detail": "The author publishes `fashioniq-0.0-best` and `cirr-0.0-best` on Kaggle and nothing else; no 20%-noise TME checkpoint exists at any author-linked location. Relabelling the 0% artifact, adding no
+   env: {'python': '3.10', 'pytorch': '2.1.2', 'torchvision': '0.16.2', 'cuda': '12.1', 'confidence': 'VERIFIED_README', 'python_env_var': 'WORKBENCH_TME_PYTHON'}
+   adapted: {"target_compute_capability": "sm_120", "pytorch": ">=2.7.1,<2.9", "torchvision": ">=0.22.1,<0.24", "cuda": "12.8", "packages": ["transformers==4.36.0", "timm==0.9.12", "fairscale==0.4.13", "numpy<2"], "pip_index_url": "https://download.pytorch.org/whl/cu128"}
+    checkpoint_variants {"checkpoint_id": "fashioniq_0", "filename": "fashioniq_0_best_model.pth", "expected_sha256": null, "status": "URL_VERIFIED", "checkpoint_mapping_status": "VERIFIED_METADATA", "checkpoint_training_noise_pct": 0, "evaluation_noise_pct": 0, "artifact_type": null, "required_files": null}
+    checkpoint_variants {"checkpoint_id": "cirr_0", "filename": "cirr_0_best_model.pth", "expected_sha256": null, "status": "URL_VERIFIED", "checkpoint_mapping_status": "VERIFIED_METADATA", "checkpoint_training_noise_pct": 0, "evaluation_noise_pct": 0, "artifact_type": null, "required_files": null}

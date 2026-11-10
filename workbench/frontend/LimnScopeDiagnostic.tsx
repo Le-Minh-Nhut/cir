@@ -3,6 +3,7 @@ import { fetchJson, useRegion } from "./useRegion";
 import { Badge, Card, Detail, EmptyState, ErrorState, LoadingState } from "./ui";
 import { fmtInt, fmtRank } from "./format";
 import { CONDITIONS, SUBSET_LABEL, type Subset } from "./routes";
+import { Shot } from "./QueryInspector";
 
 /** Diagnostic comparison for the two CIRCUS queries whose garment category the release cannot pin.
  *
@@ -68,18 +69,60 @@ interface DiagnosticPayload {
     scopes: Record<string, Record<string, ScopeReading>>;
   }>;
   evidence_files?: { per_scope?: string[] };
+  /** Whether the diagnostic evidence is internally consistent. False means the comparison below
+   *  contradicts itself somewhere, so it is rendered with the reason rather than silently. */
+  complete?: boolean;
+  defects?: Array<{ code: string; qid: string | null; scope: string | null; condition: string | null; detail: string }>;
+}
+
+interface DiagnosticCandidate {
+  rank: number;
+  gallery_position: number;
+  gallery_id: string;
+  image_path: string;
+  image_stem: string;
+  /** Resolved by the backend against the real gallery; `null` means this deployment cannot serve
+   *  that image, which is a fact the tile states instead of rendering an empty box. */
+  image_url: string | null;
+  image_category: string | null;
+  score: number;
+  is_target: boolean;
 }
 
 interface DiagnosticCandidates {
   qid: string;
   scope: string;
   condition: string;
+  /** "diagnostic — <scope> scope, <condition> (not canonical)": rendered as the block title so no
+   *  tile can be read as a canonical per-query row. */
+  label: string;
+  identity: { qid: string; scope: string; condition: string; standard: string; manifest_digest: string | null };
+  complete: boolean;
+  defects: Array<{ code: string; qid: string | null; scope: string | null; condition: string | null; detail: string }>;
+  target: {
+    rank: number;
+    score: number;
+    gallery_id: string;
+    gallery_position: number;
+    in_window: boolean;
+    delta_to_rank_1: number | null;
+    image_url: string | null;
+    image_category: string | null;
+    image_stem: string;
+  };
+  target_did: string | null;
+  target_asset: string | null;
   target_rank: number;
   target_score: number;
   checkpoint_sha256: string | null;
   gallery_size: number | null;
-  depth_stored: number | null;
-  candidates: Array<{ rank: number; gallery_position: number; gallery_id: string; score: number; is_target: boolean }>;
+  model_text: string;
+  depth_requested: number;
+  depth_served: number;
+  depth_stored: number;
+  depth_truncated: boolean;
+  candidates: DiagnosticCandidate[];
+  staged_query_image_is_evaluator_input: boolean;
   canonical_status_note: string;
 }
 
@@ -162,6 +205,13 @@ export function LimnScopeDiagnostic({ pageSubset }: { pageSubset?: string }) {
           </p>
         )}
         <p className="hint">{canonical.note}</p>
+        {payload.complete === false && (
+          <p data-testid="limn-diagnostic-defects">
+            <b>Bằng chứng chẩn đoán tự mâu thuẫn</b> ({fmtInt((payload.defects ?? []).length)} defect):
+            {" "}{(payload.defects ?? []).map((defect) => defect.code).filter((code, index, all) => all.indexOf(code) === index).join(", ")}.
+            Chi tiết ở phần chọn query bên dưới.
+          </p>
+        )}
       </div>
 
       <div className="table-wrap" style={{ marginTop: 16 }}>
@@ -280,14 +330,19 @@ function CandidateProbe({ queries, scopes, conditions }: {
   const [scope, setScope] = useState(scopes[0] ?? "");
   const [condition, setCondition] = useState(conditions[0] ?? "multimodal");
   const key = `${qid}\u001f${scope}\u001f${condition}`;
+  // No `depth` parameter: the backend serves the window the export actually STORED and reports
+  // `depth_served`. A hardcoded 20 here requested a window that did not exist and hid the fact that
+  // the target sits at rank 6891.
   const region = useRegion<DiagnosticCandidates>(
     "limn-diagnostic-candidates", key,
     useMemo(() => ((signal: AbortSignal) =>
       fetchJson<DiagnosticCandidates>(
         `/api/composition/diagnostics/limn-dual-scope/candidates?qid=${encodeURIComponent(qid)}`
-        + `&scope=${encodeURIComponent(scope)}&condition=${encodeURIComponent(condition)}&depth=20`,
+        + `&scope=${encodeURIComponent(scope)}&condition=${encodeURIComponent(condition)}`,
         signal)), [qid, scope, condition]));
+  // A response for another qid/scope/condition may never paint under these labels.
   const current = region.region.key === key;
+  const data = current ? region.region.data : null;
 
   return (
     <div className="stack" style={{ marginTop: 16 }} data-testid="limn-diagnostic-probe">
@@ -309,47 +364,88 @@ function CandidateProbe({ queries, scopes, conditions }: {
         </label>
       </div>
       {!current || region.region.status === "loading"
-        ? <LoadingState label="Đang tải Top-20 đã xuất…" />
+        ? <LoadingState label="Đang tải cửa sổ ứng viên đã xuất…" />
         : region.region.status === "error"
           ? <ErrorState message={region.region.error ?? "Không tải được ứng viên chẩn đoán"} onRetry={region.retry} />
-          : region.region.data && (
+          : data && (
             <>
               <p className="hint" data-testid="limn-probe-note">
-                Hạng đích <b>{fmtRank(region.region.data.target_rank)}</b> trên{" "}
-                {fmtInt(region.region.data.gallery_size)} ảnh · checkpoint{" "}
-                <code>{region.region.data.checkpoint_sha256?.slice(0, 16) ?? "không ghi"}…</code> ·{" "}
-                {region.region.data.canonical_status_note}
+                {data.label} · hạng đích <b>{fmtRank(data.target_rank)}</b> trên{" "}
+                {data.gallery_size == null ? "gallery không ghi" : `${fmtInt(data.gallery_size)} ảnh`} · cửa sổ đã
+                xuất <b>{fmtInt(data.depth_served)}</b>/{fmtInt(data.depth_stored)} (yêu cầu {fmtInt(data.depth_requested)})
+                {data.depth_truncated ? " · bị cắt theo độ sâu đã lưu" : ""} · checkpoint{" "}
+                <code>{data.checkpoint_sha256?.slice(0, 16) ?? "không ghi"}…</code>
               </p>
-              <div className="table-wrap">
-                <table>
-                  <caption className="sr-only">20 ứng viên đầu tiên của một scope và một điều kiện</caption>
-                  <thead>
-                    <tr>
-                      <th scope="col" className="num">#</th>
-                      <th scope="col">Ảnh</th>
-                      <th scope="col" className="num">Score</th>
-                      <th scope="col" className="num">Vị trí gallery</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {region.region.data.candidates.map((candidate) => (
-                      <tr key={`${candidate.rank}:${candidate.gallery_id}`} aria-selected={candidate.is_target}>
-                        <td className="num">{candidate.rank}</td>
-                        <td>
-                          <code>{candidate.gallery_id}</code>
-                          {candidate.is_target && <> <Badge tone="ok">ảnh đích</Badge></>}
-                        </td>
-                        <td className="num mono">{candidate.score.toFixed(4)}</td>
-                        <td className="num mono">{fmtInt(candidate.gallery_position)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              <p className="hint" data-testid="limn-probe-canonical-note">{data.canonical_status_note}</p>
+
+              {!data.complete && (
+                <div className="pipeline-notice" data-testid="limn-probe-incomplete">
+                  <strong>Bằng chứng chẩn đoán chưa hoàn tất.</strong>
+                  {data.defects.length
+                    ? <>
+                        <span> {fmtInt(data.defects.length)} defect liên quan tới ô này:</span>
+                        <ul style={{ margin: "6px 0 0", paddingLeft: 18 }}>
+                          {data.defects.map((defect, index) => (
+                            <li key={`${defect.code}-${index}`}>
+                              <code>{defect.code}</code>
+                              {defect.detail ? <> — {defect.detail}</> : null}
+                            </li>
+                          ))}
+                        </ul>
+                      </>
+                    : <span> Không defect nào áp riêng cho ô này; file bằng chứng đánh dấu
+                        <code> complete=false</code>, nên cửa sổ dưới đây là số đo thật nhưng chưa được
+                        coi là đầy đủ.</span>}
+                </div>
+              )}
+
+              {/* The target ALWAYS renders, separately from the window, because it frequently is not
+                  in it: at rank 6891 no Top-100 window contains it, and a gallery that can only show
+                  the target when it happens to be a candidate cannot show the finding. */}
+              <div className="stack" data-testid="limn-probe-target">
+                <div className="eyebrow">Ảnh đích của query — luôn hiện, tách khỏi cửa sổ</div>
+                <div className="shots">
+                  <Shot category={data.target.image_category ?? data.scope}
+                        id={data.target.gallery_id}
+                        label={`ảnh đích ${data.target_did ?? ""} (hạng ${fmtRank(data.target.rank)})`.trim()}
+                        target />
+                </div>
+                {data.target.in_window
+                  ? <p className="hint" data-testid="limn-probe-target-in-window">
+                      Ảnh đích nằm trong cửa sổ {fmtInt(data.depth_served)} ứng viên đang hiện (hạng {fmtRank(data.target.rank)}).
+                    </p>
+                  : <p className="hint" data-testid="limn-probe-target-outside">
+                      Ảnh đích ở hạng {fmtRank(data.target.rank)}, <b>ngoài cửa sổ {fmtInt(data.depth_served)} ứng viên đang hiện</b>.
+                    </p>}
               </div>
-              <p className="hint">
-                Ảnh không được render ở đây: đây là chẩn đoán, và một tile ảnh cạnh metric canonical dễ bị
-                đọc như một hàng canonical. Đường dẫn ảnh nằm trong file JSONL của scope tương ứng.
-              </p>
+
+              {data.candidates.length
+                ? (
+                  <>
+                    <p className="candidate-count">
+                      {fmtInt(data.candidates.length)} ứng viên theo đúng thứ tự export · {data.label}
+                    </p>
+                    <div className="candidates" data-testid="limn-probe-grid">
+                      {data.candidates.map((candidate) => (
+                        <article key={`${candidate.rank}:${candidate.gallery_id}`}
+                                 className={`candidate ${candidate.is_target ? "is-target" : ""}`}>
+                          <div className="candidate-rank">
+                            <b>#{candidate.rank}</b>
+                            {candidate.is_target && <span>Ảnh đích</span>}
+                          </div>
+                          <Shot category={candidate.image_category ?? data.scope}
+                                id={candidate.gallery_id} compact target={candidate.is_target}
+                                label={`Ứng viên ${candidate.rank}`} />
+                          <small><span>Điểm</span><b>{candidate.score.toFixed(4)}</b></small>
+                          <small><span>Vị trí gallery</span><b>{fmtInt(candidate.gallery_position)}</b></small>
+                          <small className="mono"><span>stem</span><b>{candidate.image_stem}</b></small>
+                        </article>
+                      ))}
+                    </div>
+                  </>
+                )
+                : <EmptyState kind="capability" testId="limn-probe-no-window"
+                              detail="Export của scope/điều kiện này không lưu ứng viên nào cho query này. Ảnh đích ở trên vẫn là hạng thật trên toàn gallery." />}
             </>
           )}
     </div>

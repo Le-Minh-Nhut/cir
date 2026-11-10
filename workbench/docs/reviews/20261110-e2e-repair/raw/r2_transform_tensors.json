@@ -1,0 +1,34 @@
+{
+ "image": "data/FashionIQ/resized_image/dress/B0007WIZYE.jpg",
+ "image_size": [
+  256,
+  256
+ ],
+ "preprocess_train_repeatable": {
+  "max_abs": 3.8269808292388916,
+  "mean_abs": 0.24710695248494688,
+  "equal": false
+ },
+ "preprocess_val_repeatable": {
+  "max_abs": 0.0,
+  "mean_abs": 0.0,
+  "equal": true
+ },
+ "control_val_vs_val": {
+  "max_abs": 0.0,
+  "mean_abs": 0.0,
+  "equal": true
+ },
+ "train_vs_val_same_image": {
+  "max_abs": 3.8269808292388916,
+  "mean_abs": 0.2791810097199968,
+  "equal": false
+ },
+ "train_vs_train_second_draw": {
+  "max_abs": 3.811972975730896,
+  "mean_abs": 0.29288756317578424,
+  "equal": false
+ },
+ "train_transform_repr": "Compose(\n    RandomResizedCrop(size=(224, 224), scale=(0.9, 1.0), ratio=(0.75, 1.3333), interpolation=bicubic, antialias=True)\n    <function _convert_to_rgb at 0x7436945d03a0>\n    ToTensor()\n    Normalize(mean=(0.48145466, 0.4578275, 0.40821073), std=(0.26862954, 0.26130258, 0.27577711))\n)",
+ "val_transform_repr": "Compose(\n    Resize(size=224, interpolation=bicubic, max_size=None, antialias=True)\n    CenterCrop(size=(224, 224))\n    <function _convert_to_rgb at 0x7436945d03a0>\n    ToTensor()\n    Normalize(mean=(0.48145466, 0.4578275, 0.40821073), std=(0.26862954, 0.26130258, 0.27577711))\n)"
+}

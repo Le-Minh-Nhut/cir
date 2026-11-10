@@ -1,0 +1,17 @@
+GATE {
+ "status": "METRIC_REFERENCE_UNVERIFIED",
+ "passed": false,
+ "variant": false,
+ "blockers": [
+  "no committed reference describes this experiment"
+ ],
+ "detail": "without a verified published row there is nothing to reproduce",
+ "reference_evidence": null,
+ "comparisons": [],
+ "selection_reason": "combiner_rn50x4_noft: no publishable comparison -- every committed row for it is ['UNVERIFIED'], so no published value describes the experiment this run performed: there is nothing to compare a reproduction against, and no value would be reported as if there were. Rows: ['clip4cir_rn50x4_noft_fiq_absent_in_paper', 'combiner_rn50x4_noft__clip4cir_paper_note_backbone_inventory_and_version', 'combiner_rn50x4_noft__clip4cir_rn50x4_fiq_gallery_protocol']"
+}
+METRICS {
+ "r10": 35.1078,
+ "r50": 58.4756,
+ "mean": 46.7917
+}

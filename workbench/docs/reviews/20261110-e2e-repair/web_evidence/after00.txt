@@ -1,0 +1,148 @@
+Đến nội dung chính
+CIR.
+Research workbench
+◎
+Tổng quan
+▤
+Mô hình & lượt chạy
+◑
+Đánh giá
+17
+▦
+Khám phá mẫu
+△
+Phân tích lỗi
+17
+✎
+Sổ nghiên cứu
+CIRCUS FashionIQ Release v1
+Subset Full
+17 lượt khả dụng ở phạm vi này
+Tổng quan
+
+Kết quả thật đang có gì, thiếu gì, và đi tiếp từ đâu
+
+Cỡ giao diện
+17px
+19px
+⧉ Sao chép liên kết
+Protocol
+CIRCUS FashionIQ Release v1
+Subset
+Full
+Shortcut-Free (SF)
+Validated
+Lượt chọn
+0
+MOCK DEVELOPMENT DATA — no real evaluation results are loaded
+Ẩn
+Từ kết quả đến từng ảnh truy hồi.
+
+Đối chiếu mô hình, mở một query và xem thứ tự ứng viên trong cùng một protocol và subset.
+
+Khám phá query · conesep
+CIRCUS FashionIQ Release v1
+Full
+17 lượt phục vụ · 17 có dữ liệu ở phạm vi này, chưa gồm lượt lỗi
+Đang đọc danh sách mô hình…
+Lượt CIRCUS release
+
+CIRCUS FashionIQ Release v1 · subset Full
+
+artifact
+17
+measurement
+17
+chưa xác định danh tính
+6
+có rank từng query
+17
+
+Nguồn: /api/composition/capabilities?subset=full. Số liệu ảnh lấy trên mẫu, không phải đếm toàn bộ.
+
+Bằng chứng tổng hợp
+
+Báo cáo macro; không có rank từng query
+
+Đang tải…
+Registry mô hình
+
+Mô hình chạy được hay bị chặn, kèm lý do
+
+Đang tải…
+Lượt có kết quả và lượt bị chặn
+
+Chọn một lượt để mở inspector; chỉ số kèm mẫu số.
+
+Mở bảng đánh giá
+Lượt CIRCUS, subset Full
+MÔ HÌNH / CHECKPOINT	TRẠNG THÁI	MM NDCG	MM R@10	COMPOSITION GAP	ĐÃ CHẤM / MẪU	HÀNH ĐỘNG
+limn
+base_iter0_all_categories
+	PARTIAL	0.2908	30.1%	+0.542	5,884 / 6,003 (98.0%)	Inspector
+conesep
+fiq_n02
+	COMPLETED	0.3294	35.5%	+0.394	6,003 / 6,003 (100.0%)	Inspector
+ptha_mtst
+cirr_transfer · TRANSFER
+	COMPLETED	0.2249	19.5%	+0.244	6,003 / 6,003 (100.0%)	Inspector
+intent
+fiq_n02
+	COMPLETED	0.3185	34.4%	+0.375	6,003 / 6,003 (100.0%)	Inspector
+intent
+fiq_n02
+	COMPLETED	0.3185	34.4%	+0.375	6,003 / 6,003 (100.0%)	Inspector
+habit
+fiq_n02
+	COMPLETED	0.3283	35.6%	+0.389	6,003 / 6,003 (100.0%)	Inspector
+hint
+fashioniq
+	COMPLETED	0.3093	32.8%	+0.439	6,003 / 6,003 (100.0%)	Inspector
+encoder
+fashioniq
+	COMPLETED	0.2961	31.0%	+0.470	6,003 / 6,003 (100.0%)	Inspector
+encoder
+fashioniq
+	COMPLETED	0.2959	31.0%	+0.472	6,003 / 6,003 (100.0%)	Inspector
+limn
+base_iter0_all_categories
+	PARTIAL	0.2904	30.0%	+0.539	6,001 / 6,003 (100.0%)	Inspector
+conesep
+fiq_n02
+	COMPLETED	0.3294	35.5%	+0.394	6,003 / 6,003 (100.0%)	Inspector
+tme
+fashioniq_0
+	COMPLETED	0.3204	34.0%	+0.359	6,003 / 6,003 (100.0%)	Inspector
+habit
+fiq_n02
+	COMPLETED	0.3283	35.6%	+0.389	6,003 / 6,003 (100.0%)	Inspector
+tme
+fashioniq_0
+	COMPLETED	0.3204	34.0%	+0.359	6,003 / 6,003 (100.0%)	Inspector
+hint
+fashioniq
+	COMPLETED	0.3093	32.8%	+0.439	6,003 / 6,003 (100.0%)	Inspector
+ptha_mtst
+cirr_transfer · TRANSFER
+	COMPLETED	0.2249	19.5%	+0.244	6,003 / 6,003 (100.0%)	Inspector
+habit
+fiq_n02
+	FAILED	—	—	unavailable	0 / 6,003 (0.0%)	Inspector
+Đi tiếp từ đây
+
+Ba bước dùng được ngay với dữ liệu đang có
+
+So sánh các lượt trên cùng subset và đọc composition gap
+Mở một query: ảnh tham chiếu, văn bản sửa, hạng MM / text / image
+Lọc query trượt ở mọi lượt rồi lưu thành cohort
+Giới hạn của dữ liệu này
+
+Điều KHÔNG suy ra được từ những gì đang có
+
+Ứng viên Top-K ảnh chưa được export cho mọi lượt CIRCUS release trên máy này: mỗi query có đúng hạng nhưng danh sách ứng viên rỗng. Inspector sẽ nói rõ điều đó thay vì vẽ ảnh giả.
+
+Outcome (composition_required, unresolved, …) được phân loại ở @10 cố định theo protocol release. Top-K chỉ đổi số ứng viên hiển thị.
+
+Composition gap là phân số không đơn vị tính trên cohort có đủ ba hạng chính xác; gap âm là kết quả thật (điều kiện bị cắt bỏ tốt hơn), không bị kẹp về 0.
+
+Vì sao các số này khác bảng paper

@@ -1,0 +1,2 @@
+[{'t': 0, 'loading': 'true', 'text': 'Đang tải bằng chứng | Ẩn'}, {'t': 1, 'loading': 'true', 'text': 'Đang tải bằng chứng · 2 đã chứng nhận trong 13 report đã về | Ẩn'}, {'t': 3, 'loading': None, 'text': 'AGGREGATE-ONLY REAL EVALUATION — 2 certified research results (11 further aggregate runs uncertified); per-query candidate Top-K available on 12 of 17 composed runs in view | Ẩn'}]
+false-claim-seen: False

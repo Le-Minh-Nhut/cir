@@ -1,0 +1,28 @@
+== encoder PARITY_MANDATORY_SUBCHECK_FAILED passed=False failures=13 nchecks=96
+   dims {'input_parity': True, 'forward_parity': False, 'batch_parity': False, 'scoring_parity': False, 'metrics_parity': True}
+   FAIL dress.population.features_vs_native_val_control.max_rel declared=0.0001 measured=3.3548386852382883 dim=forward_parity
+   FAIL dress.population.gallery_vs_native.max_rel declared=0.0001 measured=1.3636362821713672 dim=forward_parity
+   FAIL dress.batch_1_vs_n.max_rel declared=0.001 measured=0.0077950176161260265 dim=batch_parity
+   FAIL dress.ranks.non_tie_changes declared='0 non-tie rank changes (tie_epsilon 1e-06)' measured=1 dim=scoring_parity
+   FAIL dress.ranks.min_gap_vs_tie_epsilon declared=1e-06 measured=0.0006571710109710693 dim=scoring_parity
+   FAIL shirt.population.features_vs_native_val_control.max_rel declared=0.0001 measured=0.7519744456046599 dim=forward_parity
+   FAIL shirt.population.gallery_vs_native.max_rel declared=0.0001 measured=7.7499972070904795 dim=forward_parity
+   FAIL shirt.batch_1_vs_n.max_rel declared=0.001 measured=0.0031308995258445375 dim=batch_parity
+   FAIL shirt.ranks.non_tie_changes declared='0 non-tie rank changes (tie_epsilon 1e-06)' measured=1 dim=scoring_parity
+   FAIL shirt.ranks.min_gap_vs_tie_epsilon declared=1e-06 measured=0.00016041100025177002 dim=scoring_parity
+   FAIL toptee.population.features_vs_native_val_control.max_rel declared=0.0001 measured=7.850000984209719 dim=forward_parity
+   FAIL toptee.population.gallery_vs_native.max_rel declared=0.0001 measured=3.897590520814516 dim=forward_parity
+   FAIL toptee.batch_1_vs_n.max_rel declared=0.001 measured=0.011646653843520266 dim=batch_parity
+   LABEL-DISAGREEMENT dress.population.gallery_vs_native.max_rel declared=0.0001 measured=1.3636362821713672 harness_recorded=True gate_verdict=False
+   LABEL-DISAGREEMENT shirt.population.gallery_vs_native.max_rel declared=0.0001 measured=7.7499972070904795 harness_recorded=True gate_verdict=False
+   LABEL-DISAGREEMENT toptee.population.gallery_vs_native.max_rel declared=0.0001 measured=3.897590520814516 harness_recorded=True gate_verdict=False
+== limn PARITY_MANDATORY_SUBCHECK_FAILED passed=False failures=3 nchecks=48
+   dims {'input_parity': True, 'forward_parity': True, 'batch_parity': False, 'scoring_parity': True}
+   FAIL dress.batch_1_vs_n.max_rel declared=0.001 measured=0.011399774792037631 dim=batch_parity
+   FAIL shirt.batch_1_vs_n.max_rel declared=0.001 measured=0.002698280178837889 dim=batch_parity
+   FAIL toptee.batch_1_vs_n.max_rel declared=0.001 measured=0.007509343787328878 dim=batch_parity
+== hint PARITY_NOT_RUN passed=False failures=0 nchecks=0
+   dims {}
+ALL standard=parity-relative/v1 passed_models=[]
+   limn: status=PARITY_MANDATORY_SUBCHECK_FAILED passed=False failure_count=3
+   encoder: status=PARITY_MANDATORY_SUBCHECK_FAILED passed=False failure_count=13

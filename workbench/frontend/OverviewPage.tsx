@@ -3,6 +3,7 @@ import { protocolLabel } from "./data";
 import { Badge, Card, EmptyState, ErrorState, KeyValue, LoadingState, Progress, Detail } from "./ui";
 import { fmtDateStamp, fmtDenominator, fmtFractionPercent, fmtGap, fmtInt, fmtNdcg, fmtPercentValue, fmtRank } from "./format";
 import { compositionGap, scoredCounts } from "./catalog";
+import { protocolHasSubsets, scopeCounts } from "./scope";
 import type { Location } from "./routes";
 import { SUBSET_LABEL } from "./routes";
 import { ModelInventory } from "./ModelInventory";
@@ -41,6 +42,14 @@ export function OverviewPage({ data, location, onOpenRun, onGoto }: {
   const browse = browsable.find((entry) => entry.capabilities.flags.candidate_topk)
     ?? browsable.find((entry) => entry.capabilities.flags.per_query_target_ranks);
 
+  const served = scopeCounts(compositionRuns, location.protocol, location.subset).served;
+  const native = data.nativeMeasurements;
+  const nativeRegion = native.region;
+  const nativeRows = (nativeRegion.data?.measurements ?? []).filter((row) =>
+    row.protocol_id === location.protocol && row.metrics != null);
+  const aggregateReports = (data.aggregates.region.data ?? [])
+    .filter((run) => run.protocol_id === location.protocol).length;
+
   const registry = models.data ?? [];
   const blockedModels = registry.filter((model) => (model.reproduction_status || "").startsWith("BLOCKED")
     || (model.checkpoints || []).every((checkpoint) => !checkpoint.runnable));
@@ -61,17 +70,70 @@ export function OverviewPage({ data, location, onOpenRun, onGoto }: {
         )}
       </div>
 
-      <div className="scope-strip">
+      <div className="scope-strip" data-testid="scope-strip">
         <strong>{protocolLabel(location.protocol)}</strong>
-        <span>{SUBSET_LABEL[location.subset]}</span>
-        <span>{activeSubset.length} lượt có dữ liệu ở phạm vi này, chưa gồm lượt lỗi</span>
+        {/* A protocol with one cohort must not print a subset: "Shortcut-Free (SF)" over FashionIQ
+            Original named a cohort this protocol does not have. */}
+        {protocolHasSubsets(location.protocol) && <span>{SUBSET_LABEL[location.subset]}</span>}
+        {/* Three states the old strip merged into one "0": still loading, failed, and genuinely
+            empty. A zero printed while the request is in flight is the W1 defect in miniature. */}
+        <span data-testid="scope-counts" data-scope-state={composition.status}>
+          {composition.status === "error"
+            ? "Không tải được danh sách lượt — đây là lỗi yêu cầu, không phải 0 lượt"
+            : composition.status !== "ready"
+              ? "Đang tải danh sách lượt…"
+              : served === 0 && data.aggregates.region.status !== "ready"
+                // Both halves of the scope are still arriving. Claiming "0 lượt" here is the same
+                // defect one layer down: a zero printed for a scope that has not been counted yet.
+                ? "0 lượt composition · đang tải báo cáo tổng hợp…"
+              : served === 0 && aggregateReports > 0
+                // A protocol whose data is aggregate reports has ZERO composition rows — and saying
+                // only "0 lượt" over 13 measured reports is the W1 complaint itself. Name what
+                // this protocol DOES have, and give the link that opens it.
+                ? `${served} lượt composition (protocol này không có) · ${aggregateReports} báo cáo tổng hợp có số đo`
+                : `${served} lượt phục vụ · ${activeSubset.length} có dữ liệu ở phạm vi này, chưa gồm lượt lỗi`}
+        </span>
+        {composition.status === "ready" && data.aggregates.region.status === "ready"
+          && served === 0 && aggregateReports > 0 && (
+          <button type="button" className="ghost" data-testid="scope-strip-open-benchmark"
+                  onClick={() => onGoto({ area: "evaluation", view: "benchmark", runs: [], run: "", query: "", offset: 0 })}>
+            Mở {aggregateReports} báo cáo tổng hợp
+          </button>
+        )}
       </div>
 
       <ModelInventory data={data} location={location} onGoto={onGoto} />
 
       <div className="grid-3" data-testid="overview-cards">
-        <Card title="Lượt CIRCUS release" subtitle={`Subset ${SUBSET_LABEL[location.subset]} · ${protocolLabel(location.protocol)}`}>
-          {capabilities.status === "error"
+        <Card title={protocolHasSubsets(location.protocol) ? "Lượt CIRCUS release" : "Số đo native (chưa xác minh)"}
+              subtitle={protocolHasSubsets(location.protocol)
+                ? `${protocolLabel(location.protocol)} · subset ${SUBSET_LABEL[location.subset]}`
+                : `${protocolLabel(location.protocol)} · ${nativeRegion.status === "ready" ? `${nativeRows.length} file có số` : "đang đọc"} · KHÔNG vào leaderboard đã xác minh`}>
+          {!protocolHasSubsets(location.protocol)
+            ? (nativeRegion.status === "error"
+              ? <ErrorState message={nativeRegion.error ?? ""} onRetry={data.nativeMeasurements.retry} />
+              : nativeRegion.status !== "ready"
+                ? <LoadingState label="Đang đọc measurement native…" />
+                : nativeRows.length === 0
+                  ? <EmptyState kind="no-results"
+                                detail={`Không có measurement native nào cho ${protocolLabel(location.protocol)}.`} />
+                  : (
+                    <>
+                      <KeyValue rows={nativeRows.slice(0, 8).map((row): [string, React.ReactNode] => [
+                        String(row.model_id ?? row.source.path.split("/").pop() ?? ""),
+                        <span key={row.measurement_id}>
+                          R@10 {fmtPercentValue(row.metrics?.r10 ?? null, 2)} · R@50 {fmtPercentValue(row.metrics?.r50 ?? null, 2)}
+                          <span className="cell-sub mono">{row.source.path.split("/").pop()}</span>
+                        </span>,
+                      ])} />
+                      <p className="hint" style={{ marginTop: 10 }}>
+                        Nguồn: <code>/api/native-measurements</code> — {nativeRegion.data?.counts.with_metrics ?? 0} file có số,
+                        {" "}{nativeRegion.data?.counts.signposted_blockers ?? 0} file chỉ ghi blocker,
+                        {" "}{nativeRegion.data?.counts.verified ?? 0} đã xác minh. {nativeRegion.data?.note ?? ""}
+                      </p>
+                    </>
+                  ))
+            : capabilities.status === "error"
             ? <ErrorState message={capabilities.error ?? ""} onRetry={data.compositionCapabilitiesSummary.retry} />
             : capabilities.status === "loading" && !capabilities.data ? <LoadingState />
             : !caps

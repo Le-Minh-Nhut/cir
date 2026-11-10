@@ -1,0 +1,33 @@
+=== pgrep -af python ===
+1729 /usr/bin/python3 /usr/share/unattended-upgrades/unattended-upgrade-shutdown --wait-for-signal
+1227919 workbench/envs/ctl312h/bin/python -m uvicorn workbench.backend.main:app --host 127.0.0.1 --port 8765
+2329576 /usr/bin/python3 /usr/bin/gnome-terminal --wait
+2759507 workbench/envs/ctl312h/bin/python workbench/scripts/serve_workbench.py --production-frontend --host 127.0.0.1 --backend-port 8000 --frontend-port 5173
+2759510 /home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python -m uvicorn workbench.backend.main:app --host 127.0.0.1 --port 8000
+2766810 /home/heheboiz/data/cir/.venv/bin/python -u /tmp/omp-python-runner-1000/runner-2gcnasrh1f37g.py
+2766842 /home/heheboiz/data/cir/.venv/bin/python -u /tmp/omp-python-runner-1000/runner-2gcnasrh1f37g.py
+2766994 /home/heheboiz/data/cir/.venv/bin/python -u /tmp/omp-python-runner-1000/runner-2gcnasrh1f37g.py
+2768343 /home/heheboiz/data/cir/.venv/bin/python -u /tmp/omp-python-runner-1000/runner-2gcnasrh1f37g.py
+=== nvidia-smi ===
+Tue Nov 10 07:51:30 2026       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 580.173.02             Driver Version: 580.173.02     CUDA Version: 13.0     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA GeForce RTX 5070 Ti     Off |   00000000:02:00.0  On |                  N/A |
+|  0%   50C    P5             32W /  300W |     430MiB /  16303MiB |     29%      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|    0   N/A  N/A            2693      G   /usr/lib/xorg/Xorg                      252MiB |
+|    0   N/A  N/A            2883      G   /usr/bin/gnome-shell                     77MiB |
+|    0   N/A  N/A            3418      G   ...exec/xdg-desktop-portal-gnome          5MiB |
++-----------------------------------------------------------------------------------------+

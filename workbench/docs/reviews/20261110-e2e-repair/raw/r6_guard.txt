@@ -1,0 +1,34 @@
+0 control (unmodified copy)                          summary=ACCEPTED               candidates=ACCEPTED
+1 empty payload (queries={})                         summary=REFUSED (diagnostic evidence is missing query 7:3038) candidates=ACCEPTED
+2 summary checkpoint id/sha swapped (shirt<-toptee)  summary=ACCEPTED               candidates=ACCEPTED
+3 export checkpoint_sha256 = 0*64 (wrong checkpoint) summary=ACCEPTED               candidates=ACCEPTED
+4 wrong qid                                          summary=-                      candidates=REFUSED (7:9999 is not one of the ambiguous queries)
+4 wrong scope                                        summary=-                      candidates=REFUSED (dress is not a diagnostic scope)
+4 wrong condition                                    summary=-                      candidates=REFUSED (bogus is not a supported condition)
+5 rank/score contradiction (rank 3->77, window kept) summary=ACCEPTED               candidates=ACCEPTED
+5b rank=1 while window rank1 is_target=false         summary=ACCEPTED               candidates=ACCEPTED
+6 duplicate qid row (2nd says rank 999)              summary=-                      candidates=ACCEPTED returning rank=3 (first match wins, silently)
+7 broken depth (depth=100, 3 candidates stored)      summary=ACCEPTED               candidates=ACCEPTED
+7b depth=0                                           candidates=ACCEPTED n=1 depth_stored=100
+7b depth=-5                                          candidates=ACCEPTED n=1 depth_stored=100
+7b depth=500                                         candidates=ACCEPTED n=100 depth_stored=100
+8 one per-scope export deleted                       summary=REFUSED (per-scope export(s) missing: ['limn_dual_scope.shirt.multimodal.jsonl']; a comparison whos) candidates=-
+9 per-scope export truncated to 0 bytes              summary=ACCEPTED               candidates=REFUSED (limn_dual_scope.shirt.multimodal.jsonl has no row for 7:3038)
+Traceback (most recent call last):
+  File "/home/heheboiz/data/cir/workbench/docs/reviews/20261110-e2e-repair/raw/audit_r6_guard.py", line 151, in <module>
+    probe("10 per-scope export is unparseable JSON", cfg, True, ((Q, SCOPE, COND), 100))
+  File "/home/heheboiz/data/cir/workbench/docs/reviews/20261110-e2e-repair/raw/audit_r6_guard.py", line 42, in probe
+    load_candidates(*cand_fn[0], depth=cand_fn[1], config=cfg)
+  File "/home/heheboiz/data/cir/workbench/backend/limn_diagnostic.py", line 201, in load_candidates
+    rows.append(json.loads(line))
+                ^^^^^^^^^^^^^^^^
+  File "/home/heheboiz/.local/share/uv/python/cpython-3.12-linux-x86_64-gnu/lib/python3.12/json/__init__.py", line 346, in loads
+    return _default_decoder.decode(s)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/heheboiz/.local/share/uv/python/cpython-3.12-linux-x86_64-gnu/lib/python3.12/json/decoder.py", line 338, in decode
+    obj, end = self.raw_decode(s, idx=_w(s, 0).end())
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/heheboiz/.local/share/uv/python/cpython-3.12-linux-x86_64-gnu/lib/python3.12/json/decoder.py", line 354, in raw_decode
+    obj, end = self.scan_once(s, idx)
+               ^^^^^^^^^^^^^^^^^^^^^^
+json.decoder.JSONDecodeError: Expecting property name enclosed in double quotes: line 1 column 2 (char 1)

@@ -240,8 +240,18 @@ export const LEGACY_VIEW: Record<string, string> = {
   Hypotheses: "cohorts",
 };
 
+/** Which of the two scope facts the URL actually named.
+ *
+ *  The shell must not invent a scope when the URL named none (it then opens the one this deployment
+ *  measured most of), but it must never override an explicit choice — so the parse has to report
+ *  whether a value was stated rather than only what it resolved to. */
+export interface ParsedScope {
+  protocolNamed: boolean;
+  subsetNamed: boolean;
+}
+
 /** Parse a `location.search` string into normalized state plus every rejected value. */
-export function parseLocation(search: string, knownProtocols: string[]): { location: Location; problems: UrlProblem[] } {
+export function parseLocation(search: string, knownProtocols: string[]): { location: Location; problems: UrlProblem[]; scope: ParsedScope } {
   const params = new URLSearchParams(search.startsWith("?") ? search.slice(1) : search);
   const location = defaultLocation();
   const problems: UrlProblem[] = [];
@@ -364,7 +374,8 @@ export function parseLocation(search: string, knownProtocols: string[]): { locat
     else problems.push({ param: "preset", value: rawPreset, message: "chỉ nhận all, allfail, 80, 50, winner, easy" });
   }
 
-  return { location, problems };
+  return { location, problems,
+           scope: { protocolNamed: rawProtocol !== null, subsetNamed: rawSubset !== null } };
 }
 
 /** Canonical search string. Only meaningful values are written, so two URLs that mean the same

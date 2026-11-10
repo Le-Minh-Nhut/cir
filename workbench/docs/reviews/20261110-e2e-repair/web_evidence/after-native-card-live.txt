@@ -1,0 +1,17 @@
+Số đo native (chưa xác minh)
+
+FashionIQ — Original Split (Full Gallery) · 5 file có số · KHÔNG vào leaderboard đã xác minh
+
+csmcir
+R@10 57.05% · R@50 77.30%measurement.json
+ptha_mtst
+R@10 37.90% · R@50 59.84%ptha_transfer_run1.json
+sprc
+R@10 51.04% · R@50 73.33%sprc_vitl_run1.json
+tme
+R@10 54.92% · R@50 74.84%tme_fashioniq_0.json
+tme
+R@10 54.92% · R@50 74.84%tme_normal_path_full.json
+
+Nguồn: /api/native-measurements — 21 file có số, 4 file chỉ ghi blocker, 0 đã xác minh. Native measurements are served here as UNVERIFIED. They carry no completion proof, evidence-ledger entry or verifier receipt, are not counted by /api/evidence/summary, and must not be read as a leaderboard position. `rollup:
+=====

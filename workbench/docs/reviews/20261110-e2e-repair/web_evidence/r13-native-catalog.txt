@@ -1,0 +1,23 @@
+ptha_transfer_run2.json                      None       None                                   None                 [] unread=True
+csmcir_blocker.json                          csmcir     None                                   fashioniq            [] unread=False
+pair_blocker.json                            pair       None                                   None                 [] unread=False
+ptha_mtst_transfer_blocker.json              ptha_mtst  None                                   cirr_transfer        [] unread=False
+tme_blocker.json                             tme        None                                   fashioniq_0          [] unread=False
+airknow_fiq_n05_run1.json                    airknow    fashioniq_full_gallery_ref_excluded    None                 ['r10', 'r50', 'mean'] unread=False
+airknow_fiq_n08_run1.json                    airknow    fashioniq_full_gallery_ref_excluded    None                 ['r10', 'r50', 'mean'] unread=False
+conesep_fiq_n02.json                         conesep    fashioniq_full_gallery_ref_excluded    None                 ['r10', 'r50', 'mean'] unread=False
+dcnet_run1.json                              dcnet      fashioniq_full_gallery_ref_excluded    None                 ['r10', 'r50', 'mean'] unread=False
+habit_fiq_n02.json                           habit      fashioniq_full_gallery_ref_excluded    None                 ['r10', 'r50', 'mean'] unread=False
+intent_fiq_n02.json                          intent     fashioniq_full_gallery_ref_excluded    None                 ['r10', 'r50', 'mean'] unread=False
+ptha_transfer_run1.json                      ptha_mtst  fashioniq_original_split               cirr_transfer        [] unread=False
+sprc_vitl_run1.json                          sprc       fashioniq_original_split               sprc_fiq_vitl        ['r10', 'r50', 'mean'] unread=False
+tme_fashioniq_0.json                         tme        fashioniq_original_split               None                 ['r10', 'r50', 'mean'] unread=False
+tme_normal_path_full.json                    tme        fashioniq_original_split               None                 ['r10', 'r50', 'mean'] unread=False
+clvc_run1.json                               clvc_net   fashioniq_val_split                    None                 ['r10', 'r50', 'mean'] unread=False
+encoder_fashioniq.json                       encoder    fashioniq_val_split                    None                 ['r10', 'r50', 'mean'] unread=False
+hint_fashioniq.json                          hint       fashioniq_val_split                    None                 ['r10', 'r50', 'mean'] unread=False
+hint_doc_command.json                        hint       fashioniq_val_split                    None                 ['r10', 'r50', 'mean'] unread=False
+limn_base_iter0.json                         limn       fashioniq_val_split                    None                 ['r10', 'r50', 'mean'] unread=False
+tgcir_run1.json                              tgcir      fashioniq_val_split                    None                 ['r10', 'r50', 'mean'] unread=False
+{'files': 21, 'with_metrics': 15, 'unreadable': 1, 'signposted_blockers': 4, 'verified': 0}
+['fashioniq_full_gallery_ref_excluded', 'fashioniq_val_split', 'fashioniq_original_split']

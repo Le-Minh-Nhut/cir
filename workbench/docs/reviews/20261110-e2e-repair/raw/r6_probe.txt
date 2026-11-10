@@ -1,0 +1,45 @@
+### R6 live probe (read-only GETs, no writes)
+--- GET http://127.0.0.1:8000/api/composition/diagnostics/limn-dual-scope/candidates
+HTTP 422 bytes=168
+  keys= ['detail']
+  err= {'detail': [{'type': 'missing', 'loc': ['query', 'qid'], 'msg': 'Field required', 'input': None}, {'type': 'missing', 'loc': ['query', 'scope'], 'msg': 'Field required', 'input': None}]}
+--- GET http://127.0.0.1:8000/api/composition/diagnostics/limn-dual-scope/candidates?qid=7:3038&scope=shirt&condition=multimodal
+HTTP 200 bytes=20678
+  keys= ['qid', 'scope', 'condition', 'target_rank', 'target_score', 'checkpoint_sha256', 'gallery_size', 'model_text', 'depth_stored', 'staged_query_image_is_evaluator_input', 'canonical_status_note']
+  n_candidates= 100 first_rank= 1 last_rank= 100
+--- GET http://127.0.0.1:8000/api/composition/diagnostics/limn-dual-scope/candidates?qid=7:9999&scope=shirt&condition=multimodal
+HTTP 404 bytes=111
+  keys= ['detail']
+  err= {'detail': {'error': 'diagnostic_candidates_unavailable', 'message': '7:9999 is not one of the ambiguous queries'}}
+--- GET http://127.0.0.1:8000/api/composition/diagnostics/limn-dual-scope/candidates?qid=7:3038&scope=dress&condition=multimodal
+HTTP 404 bytes=100
+  keys= ['detail']
+  err= {'detail': {'error': 'diagnostic_candidates_unavailable', 'message': 'dress is not a diagnostic scope'}}
+--- GET http://127.0.0.1:8000/api/composition/diagnostics/limn-dual-scope/candidates?qid=7:3038&scope=shirt&condition=bogus
+HTTP 404 bytes=103
+  keys= ['detail']
+  err= {'detail': {'error': 'diagnostic_candidates_unavailable', 'message': 'bogus is not a supported condition'}}
+--- GET http://127.0.0.1:8000/api/composition/diagnostics/limn-dual-scope/candidates?qid=7:3038&scope=shirt&condition=multimodal&depth=0
+HTTP 200 bytes=693
+  keys= ['qid', 'scope', 'condition', 'target_rank', 'target_score', 'checkpoint_sha256', 'gallery_size', 'model_text', 'depth_stored', 'staged_query_image_is_evaluator_input', 'canonical_status_note']
+  n_candidates= 1 first_rank= 1 last_rank= 1
+--- GET http://127.0.0.1:8000/api/composition/diagnostics/limn-dual-scope/candidates?qid=7:3038&scope=shirt&condition=multimodal&depth=-5
+HTTP 200 bytes=693
+  keys= ['qid', 'scope', 'condition', 'target_rank', 'target_score', 'checkpoint_sha256', 'gallery_size', 'model_text', 'depth_stored', 'staged_query_image_is_evaluator_input', 'canonical_status_note']
+  n_candidates= 1 first_rank= 1 last_rank= 1
+--- GET http://127.0.0.1:8000/api/composition/diagnostics/limn-dual-scope/candidates?qid=7:3038&scope=shirt&condition=multimodal&depth=999999
+HTTP 200 bytes=20678
+  keys= ['qid', 'scope', 'condition', 'target_rank', 'target_score', 'checkpoint_sha256', 'gallery_size', 'model_text', 'depth_stored', 'staged_query_image_is_evaluator_input', 'canonical_status_note']
+  n_candidates= 100 first_rank= 1 last_rank= 100
+--- GET http://127.0.0.1:8000/api/composition/diagnostics/limn-dual-scope/candidates?qid=7:3038&scope=shirt&condition=multimodal&depth=abc
+HTTP 422 bytes=151
+  keys= ['detail']
+  err= {'detail': [{'type': 'int_parsing', 'loc': ['query', 'depth'], 'msg': 'Input should be a valid integer, unable to parse string as an integer', 'input': 'abc'}]}
+--- GET http://127.0.0.1:8000/api/composition/diagnostics/limn-dual-scope/candidates?qid=&scope=&condition=
+HTTP 404 bytes=105
+  keys= ['detail']
+  err= {'detail': {'error': 'diagnostic_candidates_unavailable', 'message': ' is not one of the ambiguous queries'}}
+--- GET http://127.0.0.1:8000/api/composition/diagnostics/limn-dual-scope/candidates?qid=7:3038
+HTTP 422 bytes=91
+  keys= ['detail']
+  err= {'detail': [{'type': 'missing', 'loc': ['query', 'scope'], 'msg': 'Field required', 'input': None}]}

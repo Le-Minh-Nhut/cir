@@ -1,0 +1,349 @@
+{
+  "gallery": {
+    "protocol_id": "circus_fashioniq_release_v1",
+    "size": 74381,
+    "sha256_ordered": "232d3b365e0579a9dcebca94d613047983abee8c9b6ecf0bbe982c8f8f703b3c",
+    "topk_gallery_digest": "1db68c59d96f014cdbecf936e108653de98abef0bd9a98a8abc2fe08b5dec4b4",
+    "duplicates": 0
+  },
+  "queries": {
+    "full": {
+      "count": 6003,
+      "qid_sha256": "e0638fbc0cfb81b237af15aa7a3cc5a4574b35b7342e5ecfc9bcded2686db46a",
+      "identity_sha256": "9890c7ac924dba09f88b1b953b16067d840a6a65dd092e9a950c20fd0f837574",
+      "multi_positive": 9,
+      "reference_is_positive": 0,
+      "reference_in_gallery": 6003,
+      "positives_all_in_gallery": 6003,
+      "all_one_token_query": 0,
+      "query_txt_sha256": "35bfd0ddaaef6c47e15907b38b28cc8744e90c973aafccdf65562d54fabee451"
+    },
+    "sf": {
+      "count": 4069,
+      "qid_sha256": "cea69d08f8f939e14f1ed2154288858dcf921665cfa95ef77c5edf1b49f6c820",
+      "identity_sha256": "7b0d34efd73b4bd570fdca1dbe6c2289d45256e1af46a9309b18d77f7c104aaf",
+      "multi_positive": 5,
+      "reference_is_positive": 0,
+      "reference_in_gallery": 4069,
+      "positives_all_in_gallery": 4069,
+      "all_one_token_query": 0,
+      "query_txt_sha256": "46ebc7a5debec5018f5170e3170cb0c74cfb7381d4ac0b4e42ab08749313ae13"
+    },
+    "validated": {
+      "count": 586,
+      "qid_sha256": "e2dcd367dbebd85eb3a0f81e9710563ff82d5e635de4dba98e74bc610a3e4a4d",
+      "identity_sha256": "90b2c8ef98afab9e8cd356799dcc4db8783727eff0e4a4f555ef62b404b46a0c",
+      "multi_positive": 1,
+      "reference_is_positive": 0,
+      "reference_in_gallery": 586,
+      "positives_all_in_gallery": 586,
+      "all_one_token_query": 0,
+      "query_txt_sha256": "e02910f328765a3f296e61924d0ed2d62f848a0f8e64f83105b8e551d2819738"
+    }
+  },
+  "provenance": {
+    "hash_verification": "matched",
+    "sha256": {
+      "mbeir_query": "b601ef6a5411bf9385cff41e64bea863871ab1094cd09d78683de6a5141165ef",
+      "mbeir_candidates": "121ec284832c33289ee13bfac19d5d59dc3f8aeddf672d784fd5eb8bcdf79eef",
+      "sf": "95a93883334e351e4d3aaaf25e47e89b48d4daf02bdb786e8f00d58165ace37d",
+      "validated_solved": "18f829da4d3b1ee8439f43998bae43dbbe8924c2eaafba84473ae849f564f5c7",
+      "validated_unsolved": "ba019a30d3b45f4b29c34d2d48638dbeeed2e2a42409f625922c65de5b2a7efa",
+      "aggregated_audit": "27bdbef041200dc393b5478d3e57121bc16c70a9acc2e98a19fb48408a99533c"
+    },
+    "counts": {
+      "candidate": 74381,
+      "gallery": 74381,
+      "full": 6003,
+      "sf": 4069,
+      "validated": 586,
+      "validated_solved": 368,
+      "validated_unsolved": 218
+    },
+    "gallery_note": {
+      "paper_stated_images": 18853,
+      "released_images": 74381,
+      "discrepancy": "paper states 18,853; pinned released audit artifact contains 74,381",
+      "identity_normalization": "removed <path_to_M-BEIR>/; retained released order"
+    },
+    "gallery_candidate_basename_count": 74381
+  },
+  "category_resolution": {
+    "status": "resolved",
+    "considered_count": 6003,
+    "resolved_count": 5884,
+    "ambiguous_count": 119,
+    "unresolved_count": 0,
+    "ambiguous_qids": [
+      "7:2179",
+      "7:2211",
+      "7:2218",
+      "7:2228",
+      "7:2258",
+      "7:2285",
+      "7:2307",
+      "7:2309",
+      "7:2333",
+      "7:2463",
+      "7:2471",
+      "7:2486",
+      "7:2529",
+      "7:2575",
+      "7:2587",
+      "7:2637",
+      "7:2650",
+      "7:2679",
+      "7:2698",
+      "7:2717",
+      "7:2815",
+      "7:2959",
+      "7:2999",
+      "7:3005",
+      "7:3033",
+      "7:3038",
+      "7:3163",
+      "7:3177",
+      "7:3243",
+      "7:3280",
+      "7:3324",
+      "7:3367",
+      "7:3402",
+      "7:3464",
+      "7:3487",
+      "7:3493",
+      "7:3560",
+      "7:3601",
+      "7:3629",
+      "7:3635",
+      "7:3790",
+      "7:3800",
+      "7:3813",
+      "7:3906",
+      "7:3927",
+      "7:3993",
+      "7:4008",
+      "7:4013",
+      "7:4066",
+      "7:4086",
+      "7:4164",
+      "7:4171",
+      "7:4243",
+      "7:4246",
+      "7:4290",
+      "7:4294",
+      "7:4305",
+      "7:4322",
+      "7:4358",
+      "7:4397",
+      "7:4420",
+      "7:4425",
+      "7:4434",
+      "7:4487",
+      "7:4504",
+      "7:4510",
+      "7:4529",
+      "7:4540",
+      "7:4542",
+      "7:4582",
+      "7:4594",
+      "7:4641",
+      "7:4759",
+      "7:4765",
+      "7:4806",
+      "7:4808",
+      "7:4809",
+      "7:4838",
+      "7:4849",
+      "7:4871",
+      "7:4880",
+      "7:4884",
+      "7:4893",
+      "7:4956",
+      "7:4982",
+      "7:5048",
+      "7:5090",
+      "7:5101",
+      "7:5105",
+      "7:5109",
+      "7:5149",
+      "7:5170",
+      "7:5212",
+      "7:5228",
+      "7:5236",
+      "7:5239",
+      "7:5259",
+      "7:5329",
+      "7:5388",
+      "7:5415",
+      "7:5444",
+      "7:5512",
+      "7:5546",
+      "7:5584",
+      "7:5597",
+      "7:5607",
+      "7:5641",
+      "7:5654",
+      "7:5655",
+      "7:5700",
+      "7:5701",
+      "7:5711",
+      "7:5742",
+      "7:5764",
+      "7:5788",
+      "7:5798",
+      "7:5863",
+      "7:5896",
+      "7:5963"
+    ],
+    "ambiguous_examples": [
+      {
+        "qid": "7:2179",
+        "categories": [
+          "shirt",
+          "toptee"
+        ]
+      },
+      {
+        "qid": "7:2211",
+        "categories": [
+          "shirt",
+          "toptee"
+        ]
+      },
+      {
+        "qid": "7:2218",
+        "categories": [
+          "shirt",
+          "toptee"
+        ]
+      },
+      {
+        "qid": "7:2228",
+        "categories": [
+          "shirt",
+          "toptee"
+        ]
+      },
+      {
+        "qid": "7:2258",
+        "categories": [
+          "shirt",
+          "toptee"
+        ]
+      },
+      {
+        "qid": "7:2285",
+        "categories": [
+          "shirt",
+          "toptee"
+        ]
+      },
+      {
+        "qid": "7:2307",
+        "categories": [
+          "shirt",
+          "toptee"
+        ]
+      },
+      {
+        "qid": "7:2309",
+        "categories": [
+          "shirt",
+          "toptee"
+        ]
+      },
+      {
+        "qid": "7:2333",
+        "categories": [
+          "shirt",
+          "toptee"
+        ]
+      },
+      {
+        "qid": "7:2463",
+        "categories": [
+          "shirt",
+          "toptee"
+        ]
+      },
+      {
+        "qid": "7:2471",
+        "categories": [
+          "shirt",
+          "toptee"
+        ]
+      },
+      {
+        "qid": "7:2486",
+        "categories": [
+          "shirt",
+          "toptee"
+        ]
+      },
+      {
+        "qid": "7:2529",
+        "categories": [
+          "shirt",
+          "toptee"
+        ]
+      },
+      {
+        "qid": "7:2575",
+        "categories": [
+          "shirt",
+          "toptee"
+        ]
+      },
+      {
+        "qid": "7:2587",
+        "categories": [
+          "shirt",
+          "toptee"
+        ]
+      },
+      {
+        "qid": "7:2637",
+        "categories": [
+          "shirt",
+          "toptee"
+        ]
+      },
+      {
+        "qid": "7:2650",
+        "categories": [
+          "shirt",
+          "toptee"
+        ]
+      },
+      {
+        "qid": "7:2679",
+        "categories": [
+          "shirt",
+          "toptee"
+        ]
+      },
+      {
+        "qid": "7:2698",
+        "categories": [
+          "shirt",
+          "toptee"
+        ]
+      },
+      {
+        "qid": "7:2717",
+        "categories": [
+          "shirt",
+          "toptee"
+        ]
+      }
+    ],
+    "unresolved_qids": [],
+    "identity_source": "reference in FashionIQ validation splits or test-caption annotations"
+  },
+  "category_counts": {
+    "dress": 2010,
+    "shirt": 1989,
+    "None": 119,
+    "toptee": 1885
+  }
+}

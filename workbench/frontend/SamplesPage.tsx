@@ -7,6 +7,7 @@ import { CONDITIONS, ORDERS, OUTCOMES, SUBSET_LABEL } from "./routes";
 import { Card, Detail, EmptyState, ErrorState, Field, LoadingState } from "./ui";
 import { fmtInt, fmtRank } from "./format";
 import { QueryInspector } from "./QueryInspector";
+import { QUERY_STATE_CHIPS, protocolHasSubsets } from "./scope";
 import { LimnScopeDiagnostic } from "./LimnScopeDiagnostic";
 import { fetchJson, useRegion } from "./useRegion";
 import { candidateRequestPath, selectExactQuery } from "./candidateRequest";
@@ -80,7 +81,7 @@ export function SamplesPage({ data, location, onGoto, onAnnotate }: {
     <div className="stack" data-testid="area-samples">
       <Card
         title="Bộ lọc mẫu"
-        subtitle={`${run ? `${run.model_id} / ${run.checkpoint_id}` : "chưa chọn lượt"} · ${protocolLabel(location.protocol)} · ${SUBSET_LABEL[location.subset]}`}
+        subtitle={`${run ? `${run.model_id} / ${run.checkpoint_id}` : "chưa chọn lượt"} · ${protocolLabel(location.protocol)}${protocolHasSubsets(location.protocol) ? ` · ${SUBSET_LABEL[location.subset]}` : ""}`}
         actions={<button type="button" className="ghost"
                          onClick={() => onGoto({ category: "", outcome: "", query: "", q: "", queryState: "", order: "worst", offset: 0 })}>Xoá bộ lọc</button>}
       >
@@ -111,16 +112,6 @@ export function SamplesPage({ data, location, onGoto, onAnnotate }: {
 
         <Detail summary="Bộ lọc nâng cao và nguồn dữ liệu">
           <div className="toolbar">
-            <Field label="Trạng thái query" htmlFor="state-select"
-                   hint="Phân loại của backend, tách unscored khỏi lỗi truy hồi">
-              <select id="state-select" value={location.queryState} data-testid="filter-query-state"
-                      onChange={(event) => onGoto({ queryState: event.target.value as Location["queryState"], offset: 0 })}>
-                <option value="">Tất cả</option>
-                <option value="hit">Hit (trong @10)</option>
-                <option value="retrieval_failure">Retrieval failure (có hạng, ngoài @10)</option>
-                <option value="unscored">Unscored (pipeline/ánh xạ)</option>
-              </select>
-            </Field>
             <Field label="Outcome (@10 cố định)" htmlFor="outcome-select">
               <select id="outcome-select" value={location.outcome} data-testid="filter-outcome"
                       onChange={(event) => onGoto({ outcome: event.target.value, offset: 0 })}>
@@ -167,6 +158,37 @@ export function SamplesPage({ data, location, onGoto, onAnnotate }: {
       <div className="samples-layout">
         <Card title="Danh sách query"
               subtitle={page.status === "ready" ? `${fmtInt(total)} query khớp bộ lọc` : undefined}>
+          {/* The backend's own three query states plus "all", as one control. Counts come from the
+              page response and are computed BEFORE the state filter, so each chip shows its own
+              total even while another chip is active. The selection lives in the URL
+              (`query_state=`), so a reload and Back restore the same view; paging below keeps it. */}
+          <div className="chiprow" role="group" aria-label="Trạng thái query" data-testid="query-state-chips"
+               data-active={location.queryState || "all"}>
+            {QUERY_STATE_CHIPS.map((chip) => {
+              const counts = page.data?.state_counts;
+              const count = chip.id === ""
+                ? (counts ? counts.hit + counts.retrieval_failure + counts.unscored : (page.status === "ready" ? total : null))
+                : counts?.[chip.id as keyof typeof counts] ?? null;
+              return (
+                <button key={chip.id || "all"} type="button" className="ghost chip"
+                        aria-pressed={location.queryState === chip.id}
+                        title={chip.hint}
+                        data-testid={`chip-${chip.id || "all"}`}
+                        disabled={!run}
+                        onClick={() => onGoto({ queryState: chip.id as Location["queryState"], offset: 0 })}>
+                  {chip.label}
+                  {count != null && <span className="chip-count" data-testid={`chip-count-${chip.id || "all"}`}>{fmtInt(count)}</span>}
+                </button>
+              );
+            })}
+            <span className="chip-spacer" />
+            {location.queryState && (
+              <button type="button" className="ghost" data-testid="chip-clear"
+                      onClick={() => onGoto({ queryState: "", offset: 0 })}>
+                Xoá lọc trạng thái
+              </button>
+            )}
+          </div>
           {!run
             ? <EmptyState kind="none-selected" detail="Chọn một lượt ở trên. Chỉ lượt có rank từng query mới duyệt được." />
             : page.status === "error"

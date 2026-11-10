@@ -1,0 +1,4 @@
+line 3416 did 7:3416 img_path mbeir_images/fashioniq_images/B004D8QCN4.jpg
+line 33523 did 7:33523 img_path mbeir_images/fashioniq_images/B0079K0YBO.jpg
+line 42304 did 7:42304 img_path mbeir_images/fashioniq_images/B00E3WVAD2.jpg
+line 53224 did 7:53224 img_path mbeir_images/fashioniq_images/B004TMGDME.jpg

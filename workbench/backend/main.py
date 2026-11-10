@@ -31,11 +31,13 @@ from workbench.backend.composition import (
 from workbench.backend.errors import WorkbenchError
 from workbench.backend.index import database_path, rebuild_index
 from workbench.backend.jobs import DuplicateJobError, QueueShutdownError, SingleGpuQueue
+from workbench.backend.native_measurements import list_native_measurements
 from workbench.backend.operator_config import resolve_config
 from workbench.backend.preflight import preflight_blockers
 from workbench.backend.registry import checkpoint_availability, load_registry, sha256_file
 from workbench.backend.schemas.results import PROTOCOL_IDS, Annotation, SavedCohort
 from workbench.backend.storage import cohort_metrics, get_analysis_input, get_query, list_runs, query_page, validate_analysis_selection
+from workbench.backend.subset_provenance import decorate_run_rows
 from workbench.scripts.evaluate_models import guarded_plan
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -1023,10 +1025,34 @@ def evidence_summary():
                                            if status == "duplicate"),
             "confidence": "partial" if undetermined else "full"}
 
+@app.get("/api/native-measurements")
+def native_measurements():
+    """Native (non-queue) macro measurements, served EXCLUSIVELY as unverified.
+
+    These files sit outside the aggregate-report pipeline: no completion proof, no invocation
+    outcome, no evidence-ledger entry, no verifier receipt. They are therefore a separate endpoint
+    and a separate section of the UI, never rows of `/api/benchmark-runs`, and they are not counted
+    by `/api/evidence/summary`.
+    """
+    return list_native_measurements(resolve_config().WORKBENCH_ARTIFACTS_ROOT)
+
 @app.get("/api/runs/gate")
 def run_gates():
     """Gate fields keyed by run_id, for joining onto `/api/runs` records that have a report."""
     return {report["run_id"]: _gate_fields(report) for report in _aggregate_reports()}
+
+@app.get("/api/runs/parity-gate")
+def parity_gate():
+    """The G1/G2 parity verdict, DERIVED from the measurement artifacts.
+
+    Prose elsewhere said "PASS" beside artifacts whose mandatory subchecks failed. This endpoint is
+    the machine answer: `passed_models` lists only models where no mandatory subcheck failed, and a
+    model with a failing mandatory check is `PARITY_MANDATORY_SUBCHECK_FAILED`, never `PARITY_PASS`.
+    An empty `passed_models` is a correct verdict about the artifacts, not a broken endpoint.
+    """
+    from workbench.backend.parity_gate import evaluate_all
+
+    return evaluate_all()
 
 @app.get("/api/composition/runs")
 def composition_runs(subset: str | None = None, include_fixtures: bool = False,
@@ -1051,7 +1077,9 @@ def composition_runs(subset: str | None = None, include_fixtures: bool = False,
         runs = list_composition_summaries(artifacts_root=artifacts_root, subset=subset,
                                           include_fixtures=True, include_smoke=include_smoke,
                                           include_imported=include_imported)
-    return runs
+    # R7: each row states which parent run and which query membership produced it. Derived from the
+    # per-query artifacts and reported beside the served number, which is never replaced.
+    return decorate_run_rows(artifacts_root, runs)
 
 @app.get("/api/composition/capabilities")
 def composition_capabilities_summary(subset: str | None = None):

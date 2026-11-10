@@ -1,0 +1,761 @@
+{
+  "artifact_type": "limn_dual_scope_diagnostic",
+  "schema_version": 1,
+  "purpose": "diagnostic comparison for the two CIRCUS queries whose reference image and normalized caption pair are filed under both shirt and toptee in the FashionIQ validation captions; NOT part of the canonical 6003-query metric",
+  "canonical_status": {
+    "status": "PARTIAL",
+    "scored_count": 6001,
+    "unscored_count": 2,
+    "unscored_qids": [
+      "7:3038",
+      "7:3790"
+    ],
+    "note": "Both diagnostic scopes run; the canonical metrics stay 6001/6003 and both queries stay unscored there. No diagnostic number is folded into the canonical evaluator, no scope is chosen as 'the' answer."
+  },
+  "source_run_id": "9e4918a6b5c243412cbc58c9",
+  "gallery": {
+    "count": 74381,
+    "protocol_id": "circus_fashioniq_release_v1",
+    "note": "the FULL released gallery for every scope: no category filtering, the checkpoint being category-specific does not restrict candidates"
+  },
+  "conditions": [
+    "multimodal",
+    "text_only_black_image",
+    "image_only_empty_text"
+  ],
+  "scopes": [
+    "shirt",
+    "toptee"
+  ],
+  "queries": {
+    "7:3038": {
+      "qid": "7:3038",
+      "release": {
+        "index": 3037,
+        "query_txt": "Is darker and has a different graphic and is darker.",
+        "reference_id": "7:53224",
+        "positive_ids": [
+          "7:3416"
+        ],
+        "loader_category": null,
+        "matched_subsets": [
+          "full"
+        ]
+      },
+      "resolved_query_image_path": "/home/heheboiz/data/cir/data/FashionIQ/resized_image/shirt/B004TMGDME.jpg",
+      "target_position_in_gallery": [
+        13614
+      ],
+      "target_gallery_id": "mbeir_images/fashioniq_images/B004D8QCN4.jpg",
+      "scopes": {
+        "shirt": {
+          "multimodal": {
+            "scope": "shirt",
+            "condition": "multimodal",
+            "query_embedding_norm": 1.0000000133374116,
+            "staged_image_path": "/home/heheboiz/data/cir/data/FashionIQ/resized_image/shirt/B004TMGDME.jpg",
+            "model_text": "Is darker and has a different graphic and is darker.",
+            "target_rank": 3,
+            "target_score": 0.5703769326210022,
+            "target_gallery_position": 13614,
+            "target_did": "7:3416",
+            "gallery_size_scored": 74381,
+            "score_min": -0.4139670431613922,
+            "score_max": 0.8147742748260498,
+            "score_at_rank_1": 0.8147742748260498,
+            "target_margin_vs_rank1": 0.2443973422050476,
+            "encode_seconds": 46.892,
+            "top100_export": "/home/heheboiz/data/cir/workbench/docs/reviews/20261109-native15-composition-limn/limn_dual_scope.shirt.multimodal.jsonl"
+          },
+          "text_only_black_image": {
+            "scope": "shirt",
+            "condition": "text_only_black_image",
+            "query_embedding_norm": 0.9999999770165949,
+            "staged_image_path": "/tmp/limn-dual-qe3xe896/queries/text_only_black_image/7:3038.png",
+            "model_text": "Is darker and has a different graphic and is darker.",
+            "target_rank": 88,
+            "target_score": 0.4220863878726959,
+            "target_gallery_position": 13614,
+            "target_did": "7:3416",
+            "gallery_size_scored": 74381,
+            "score_min": -0.378568559885025,
+            "score_max": 0.7404771447181702,
+            "score_at_rank_1": 0.7404771447181702,
+            "target_margin_vs_rank1": 0.31839075684547424,
+            "encode_seconds": 0.114,
+            "top100_export": "/home/heheboiz/data/cir/workbench/docs/reviews/20261109-native15-composition-limn/limn_dual_scope.shirt.text_only_black_image.jsonl"
+          },
+          "image_only_empty_text": {
+            "scope": "shirt",
+            "condition": "image_only_empty_text",
+            "query_embedding_norm": 0.9999999526772363,
+            "staged_image_path": "/home/heheboiz/data/cir/data/FashionIQ/resized_image/shirt/B004TMGDME.jpg",
+            "model_text": "",
+            "target_rank": 152,
+            "target_score": 0.36779189109802246,
+            "target_gallery_position": 13614,
+            "target_did": "7:3416",
+            "gallery_size_scored": 74381,
+            "score_min": -0.33480337262153625,
+            "score_max": 0.7385141849517822,
+            "score_at_rank_1": 0.7385141849517822,
+            "target_margin_vs_rank1": 0.37072229385375977,
+            "encode_seconds": 0.113,
+            "top100_export": "/home/heheboiz/data/cir/workbench/docs/reviews/20261109-native15-composition-limn/limn_dual_scope.shirt.image_only_empty_text.jsonl"
+          }
+        },
+        "toptee": {
+          "multimodal": {
+            "scope": "toptee",
+            "condition": "multimodal",
+            "query_embedding_norm": 1.0000000267611846,
+            "staged_image_path": "/home/heheboiz/data/cir/data/FashionIQ/resized_image/shirt/B004TMGDME.jpg",
+            "model_text": "Is darker and has a different graphic and is darker.",
+            "target_rank": 43,
+            "target_score": 0.5678249001502991,
+            "target_gallery_position": 13614,
+            "target_did": "7:3416",
+            "gallery_size_scored": 74381,
+            "score_min": -0.47393396496772766,
+            "score_max": 0.8175360560417175,
+            "score_at_rank_1": 0.8175360560417175,
+            "target_margin_vs_rank1": 0.24971115589141846,
+            "encode_seconds": 1.884,
+            "top100_export": "/home/heheboiz/data/cir/workbench/docs/reviews/20261109-native15-composition-limn/limn_dual_scope.toptee.multimodal.jsonl"
+          },
+          "text_only_black_image": {
+            "scope": "toptee",
+            "condition": "text_only_black_image",
+            "query_embedding_norm": 1.0000000280174877,
+            "staged_image_path": "/tmp/limn-dual-qe3xe896/queries/text_only_black_image/7:3038.png",
+            "model_text": "Is darker and has a different graphic and is darker.",
+            "target_rank": 389,
+            "target_score": 0.3436165750026703,
+            "target_gallery_position": 13614,
+            "target_did": "7:3416",
+            "gallery_size_scored": 74381,
+            "score_min": -0.2906406819820404,
+            "score_max": 0.689705491065979,
+            "score_at_rank_1": 0.689705491065979,
+            "target_margin_vs_rank1": 0.3460889160633087,
+            "encode_seconds": 0.114,
+            "top100_export": "/home/heheboiz/data/cir/workbench/docs/reviews/20261109-native15-composition-limn/limn_dual_scope.toptee.text_only_black_image.jsonl"
+          },
+          "image_only_empty_text": {
+            "scope": "toptee",
+            "condition": "image_only_empty_text",
+            "query_embedding_norm": 1.0000000512018716,
+            "staged_image_path": "/home/heheboiz/data/cir/data/FashionIQ/resized_image/shirt/B004TMGDME.jpg",
+            "model_text": "",
+            "target_rank": 67,
+            "target_score": 0.45405110716819763,
+            "target_gallery_position": 13614,
+            "target_did": "7:3416",
+            "gallery_size_scored": 74381,
+            "score_min": -0.39179307222366333,
+            "score_max": 0.7239910364151001,
+            "score_at_rank_1": 0.7239910364151001,
+            "target_margin_vs_rank1": 0.26993992924690247,
+            "encode_seconds": 0.063,
+            "top100_export": "/home/heheboiz/data/cir/workbench/docs/reviews/20261109-native15-composition-limn/limn_dual_scope.toptee.image_only_empty_text.jsonl"
+          }
+        }
+      },
+      "target_did": "7:3416"
+    },
+    "7:3790": {
+      "qid": "7:3790",
+      "release": {
+        "index": 3789,
+        "query_txt": "Is grey and has a less whimsical graphic and is lighter.",
+        "reference_id": "7:33523",
+        "positive_ids": [
+          "7:42304"
+        ],
+        "loader_category": null,
+        "matched_subsets": [
+          "full",
+          "sf"
+        ]
+      },
+      "resolved_query_image_path": "/home/heheboiz/data/cir/data/FashionIQ/resized_image/shirt/B0079K0YBO.jpg",
+      "target_position_in_gallery": [
+        70410
+      ],
+      "target_gallery_id": "mbeir_images/fashioniq_images/B00E3WVAD2.jpg",
+      "scopes": {
+        "shirt": {
+          "multimodal": {
+            "scope": "shirt",
+            "condition": "multimodal",
+            "query_embedding_norm": 0.9999999774609021,
+            "staged_image_path": "/home/heheboiz/data/cir/data/FashionIQ/resized_image/shirt/B0079K0YBO.jpg",
+            "model_text": "Is grey and has a less whimsical graphic and is lighter.",
+            "target_rank": 65,
+            "target_score": 0.5140696167945862,
+            "target_gallery_position": 70410,
+            "target_did": "7:42304",
+            "gallery_size_scored": 74381,
+            "score_min": -0.34073030948638916,
+            "score_max": 0.644286572933197,
+            "score_at_rank_1": 0.644286572933197,
+            "target_margin_vs_rank1": 0.13021695613861084,
+            "encode_seconds": 46.892,
+            "top100_export": "/home/heheboiz/data/cir/workbench/docs/reviews/20261109-native15-composition-limn/limn_dual_scope.shirt.multimodal.jsonl"
+          },
+          "text_only_black_image": {
+            "scope": "shirt",
+            "condition": "text_only_black_image",
+            "query_embedding_norm": 1.000000035800694,
+            "staged_image_path": "/tmp/limn-dual-qe3xe896/queries/text_only_black_image/7:3790.png",
+            "model_text": "Is grey and has a less whimsical graphic and is lighter.",
+            "target_rank": 6891,
+            "target_score": 0.21734005212783813,
+            "target_gallery_position": 70410,
+            "target_did": "7:42304",
+            "gallery_size_scored": 74381,
+            "score_min": -0.3288184404373169,
+            "score_max": 0.6010594964027405,
+            "score_at_rank_1": 0.6010594964027405,
+            "target_margin_vs_rank1": 0.38371944427490234,
+            "encode_seconds": 0.114,
+            "top100_export": "/home/heheboiz/data/cir/workbench/docs/reviews/20261109-native15-composition-limn/limn_dual_scope.shirt.text_only_black_image.jsonl"
+          },
+          "image_only_empty_text": {
+            "scope": "shirt",
+            "condition": "image_only_empty_text",
+            "query_embedding_norm": 0.9999999524724132,
+            "staged_image_path": "/home/heheboiz/data/cir/data/FashionIQ/resized_image/shirt/B0079K0YBO.jpg",
+            "model_text": "",
+            "target_rank": 2200,
+            "target_score": 0.3019900619983673,
+            "target_gallery_position": 70410,
+            "target_did": "7:42304",
+            "gallery_size_scored": 74381,
+            "score_min": -0.34740346670150757,
+            "score_max": 0.7860040068626404,
+            "score_at_rank_1": 0.7860040068626404,
+            "target_margin_vs_rank1": 0.48401394486427307,
+            "encode_seconds": 0.113,
+            "top100_export": "/home/heheboiz/data/cir/workbench/docs/reviews/20261109-native15-composition-limn/limn_dual_scope.shirt.image_only_empty_text.jsonl"
+          }
+        },
+        "toptee": {
+          "multimodal": {
+            "scope": "toptee",
+            "condition": "multimodal",
+            "query_embedding_norm": 1.000000010069961,
+            "staged_image_path": "/home/heheboiz/data/cir/data/FashionIQ/resized_image/shirt/B0079K0YBO.jpg",
+            "model_text": "Is grey and has a less whimsical graphic and is lighter.",
+            "target_rank": 43,
+            "target_score": 0.6190158128738403,
+            "target_gallery_position": 70410,
+            "target_did": "7:42304",
+            "gallery_size_scored": 74381,
+            "score_min": -0.35517796874046326,
+            "score_max": 0.7025628089904785,
+            "score_at_rank_1": 0.7025628089904785,
+            "target_margin_vs_rank1": 0.08354699611663818,
+            "encode_seconds": 1.884,
+            "top100_export": "/home/heheboiz/data/cir/workbench/docs/reviews/20261109-native15-composition-limn/limn_dual_scope.toptee.multimodal.jsonl"
+          },
+          "text_only_black_image": {
+            "scope": "toptee",
+            "condition": "text_only_black_image",
+            "query_embedding_norm": 0.9999999866289458,
+            "staged_image_path": "/tmp/limn-dual-qe3xe896/queries/text_only_black_image/7:3790.png",
+            "model_text": "Is grey and has a less whimsical graphic and is lighter.",
+            "target_rank": 4730,
+            "target_score": 0.27249062061309814,
+            "target_gallery_position": 70410,
+            "target_did": "7:42304",
+            "gallery_size_scored": 74381,
+            "score_min": -0.39415714144706726,
+            "score_max": 0.6055787205696106,
+            "score_at_rank_1": 0.6055787205696106,
+            "target_margin_vs_rank1": 0.33308809995651245,
+            "encode_seconds": 0.114,
+            "top100_export": "/home/heheboiz/data/cir/workbench/docs/reviews/20261109-native15-composition-limn/limn_dual_scope.toptee.text_only_black_image.jsonl"
+          },
+          "image_only_empty_text": {
+            "scope": "toptee",
+            "condition": "image_only_empty_text",
+            "query_embedding_norm": 0.9999999620617145,
+            "staged_image_path": "/home/heheboiz/data/cir/data/FashionIQ/resized_image/shirt/B0079K0YBO.jpg",
+            "model_text": "",
+            "target_rank": 4047,
+            "target_score": 0.29997509717941284,
+            "target_gallery_position": 70410,
+            "target_did": "7:42304",
+            "gallery_size_scored": 74381,
+            "score_min": -0.32562077045440674,
+            "score_max": 0.7201340794563293,
+            "score_at_rank_1": 0.7201340794563293,
+            "target_margin_vs_rank1": 0.4201589822769165,
+            "encode_seconds": 0.063,
+            "top100_export": "/home/heheboiz/data/cir/workbench/docs/reviews/20261109-native15-composition-limn/limn_dual_scope.toptee.image_only_empty_text.jsonl"
+          }
+        }
+      },
+      "target_did": "7:42304"
+    }
+  },
+  "release_provenance": {
+    "hash_verification": "matched",
+    "sha256": {
+      "mbeir_query": "b601ef6a5411bf9385cff41e64bea863871ab1094cd09d78683de6a5141165ef",
+      "mbeir_candidates": "121ec284832c33289ee13bfac19d5d59dc3f8aeddf672d784fd5eb8bcdf79eef",
+      "sf": "95a93883334e351e4d3aaaf25e47e89b48d4daf02bdb786e8f00d58165ace37d",
+      "validated_solved": "18f829da4d3b1ee8439f43998bae43dbbe8924c2eaafba84473ae849f564f5c7",
+      "validated_unsolved": "ba019a30d3b45f4b29c34d2d48638dbeeed2e2a42409f625922c65de5b2a7efa",
+      "aggregated_audit": "27bdbef041200dc393b5478d3e57121bc16c70a9acc2e98a19fb48408a99533c"
+    },
+    "counts": {
+      "candidate": 74381,
+      "gallery": 74381,
+      "full": 6003,
+      "sf": 4069,
+      "validated": 586,
+      "validated_solved": 368,
+      "validated_unsolved": 218
+    },
+    "category_resolution_counts": {
+      "considered_count": 6003,
+      "resolved_count": 5884,
+      "ambiguous_count": 119,
+      "unresolved_count": 0
+    }
+  },
+  "gallery_matrices": {
+    "shirt": {
+      "file": "/home/heheboiz/data/cir/workbench/artifacts/composition/runs/9e4918a6b5c243412cbc58c9/work/limn/features/gallery_shirt.npy",
+      "shape": [
+        74381,
+        768
+      ],
+      "dtype": "float32",
+      "byte_length": 228498560,
+      "recorded_content_digest": "1896231c9dbbbfe32c5205eaf33a3cd24430e56da63163db1b4c692830d9f576",
+      "recomputed_content_digest": "1896231c9dbbbfe32c5205eaf33a3cd24430e56da63163db1b4c692830d9f576",
+      "verify_mode": "full",
+      "row_norm_sample_first_2048_mean": 1.0000000005697367,
+      "row_norm_sample_first_2048_min": 0.9999999108660855,
+      "row_norm_sample_first_2048_max": 1.0000000880338547
+    },
+    "toptee": {
+      "file": "/home/heheboiz/data/cir/workbench/artifacts/composition/runs/9e4918a6b5c243412cbc58c9/work/limn/features/gallery_toptee.npy",
+      "shape": [
+        74381,
+        768
+      ],
+      "dtype": "float32",
+      "byte_length": 228498560,
+      "recorded_content_digest": "fac3e6d7d3644ece8e742eaac86060452d973da0ccc647b1f68026c4b86e6a9f",
+      "recomputed_content_digest": "fac3e6d7d3644ece8e742eaac86060452d973da0ccc647b1f68026c4b86e6a9f",
+      "verify_mode": "full",
+      "row_norm_sample_first_2048_mean": 0.9999999996072417,
+      "row_norm_sample_first_2048_min": 0.9999999091992736,
+      "row_norm_sample_first_2048_max": 1.000000088870219
+    }
+  },
+  "checkpoints": {
+    "shirt": {
+      "checkpoint_id": "base_iter0_shirt",
+      "filename": "0_shirt_best_model.pt",
+      "path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/limn/0_shirt_best_model.pt",
+      "size_bytes": 1792010157,
+      "sha256": "9260c7f77d3017d8cc10e6652cc8cfe275dbc9704366fa2bf581a24808930d74",
+      "sha256_source": "recomputed over the file on disk; equals the registry expected_sha256",
+      "mapping_status": "VERIFIED_METADATA",
+      "bundle_id": "base_iter0_all_categories",
+      "dataset_type_index": 1
+    },
+    "toptee": {
+      "checkpoint_id": "base_iter0_toptee",
+      "filename": "0_toptee_best_model.pt",
+      "path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/limn/0_toptee_best_model.pt",
+      "size_bytes": 1792010157,
+      "sha256": "79f663a14d89d455fdc3612b0b36d011c06d7957d1475a654755e1053a6cece2",
+      "sha256_source": "recomputed over the file on disk; equals the registry expected_sha256",
+      "mapping_status": "VERIFIED_METADATA",
+      "bundle_id": "base_iter0_all_categories",
+      "dataset_type_index": 2
+    }
+  },
+  "rank_convention_crosscheck": {
+    "method": "recompute the recorded canonical target rank of already-scored queries from this run's own cached query matrix + cached gallery matrix, using the adapter's score/rank; agreement proves gallery ORDER and the tie rule are the recorded ones",
+    "checked": 36,
+    "all_agree": true,
+    "items": [
+      {
+        "condition": "multimodal",
+        "qid": "7:2011",
+        "scope": "shirt",
+        "recorded_rank": 166,
+        "recomputed_rank": 166,
+        "max_abs_score_self_diff": 0.0,
+        "agrees": true
+      },
+      {
+        "condition": "multimodal",
+        "qid": "7:2012",
+        "scope": "shirt",
+        "recorded_rank": 1,
+        "recomputed_rank": 1,
+        "max_abs_score_self_diff": 0.0,
+        "agrees": true
+      },
+      {
+        "condition": "multimodal",
+        "qid": "7:2013",
+        "scope": "shirt",
+        "recorded_rank": 2209,
+        "recomputed_rank": 2209,
+        "max_abs_score_self_diff": 0.0,
+        "agrees": true
+      },
+      {
+        "condition": "multimodal",
+        "qid": "7:2014",
+        "scope": "shirt",
+        "recorded_rank": 1,
+        "recomputed_rank": 1,
+        "max_abs_score_self_diff": 0.0,
+        "agrees": true
+      },
+      {
+        "condition": "multimodal",
+        "qid": "7:2015",
+        "scope": "shirt",
+        "recorded_rank": 1386,
+        "recomputed_rank": 1386,
+        "max_abs_score_self_diff": 0.0,
+        "agrees": true
+      },
+      {
+        "condition": "multimodal",
+        "qid": "7:2016",
+        "scope": "shirt",
+        "recorded_rank": 1,
+        "recomputed_rank": 1,
+        "max_abs_score_self_diff": 0.0,
+        "agrees": true
+      },
+      {
+        "condition": "multimodal",
+        "qid": "7:2017",
+        "scope": "shirt",
+        "recorded_rank": 4,
+        "recomputed_rank": 4,
+        "max_abs_score_self_diff": 0.0,
+        "agrees": true
+      },
+      {
+        "condition": "multimodal",
+        "qid": "7:2018",
+        "scope": "shirt",
+        "recorded_rank": 166,
+        "recomputed_rank": 166,
+        "max_abs_score_self_diff": 0.0,
+        "agrees": true
+      },
+      {
+        "condition": "multimodal",
+        "qid": "7:2019",
+        "scope": "shirt",
+        "recorded_rank": 2,
+        "recomputed_rank": 2,
+        "max_abs_score_self_diff": 0.0,
+        "agrees": true
+      },
+      {
+        "condition": "multimodal",
+        "qid": "7:2020",
+        "scope": "shirt",
+        "recorded_rank": 14,
+        "recomputed_rank": 14,
+        "max_abs_score_self_diff": 0.0,
+        "agrees": true
+      },
+      {
+        "condition": "multimodal",
+        "qid": "7:2021",
+        "scope": "shirt",
+        "recorded_rank": 5,
+        "recomputed_rank": 5,
+        "max_abs_score_self_diff": 0.0,
+        "agrees": true
+      },
+      {
+        "condition": "multimodal",
+        "qid": "7:2022",
+        "scope": "shirt",
+        "recorded_rank": 1,
+        "recomputed_rank": 1,
+        "max_abs_score_self_diff": 0.0,
+        "agrees": true
+      },
+      {
+        "condition": "text_only_black_image",
+        "qid": "7:2011",
+        "scope": "shirt",
+        "recorded_rank": 1142,
+        "recomputed_rank": 1142,
+        "max_abs_score_self_diff": 0.0,
+        "agrees": true
+      },
+      {
+        "condition": "text_only_black_image",
+        "qid": "7:2012",
+        "scope": "shirt",
+        "recorded_rank": 113,
+        "recomputed_rank": 113,
+        "max_abs_score_self_diff": 0.0,
+        "agrees": true
+      },
+      {
+        "condition": "text_only_black_image",
+        "qid": "7:2013",
+        "scope": "shirt",
+        "recorded_rank": 3068,
+        "recomputed_rank": 3068,
+        "max_abs_score_self_diff": 0.0,
+        "agrees": true
+      },
+      {
+        "condition": "text_only_black_image",
+        "qid": "7:2014",
+        "scope": "shirt",
+        "recorded_rank": 15808,
+        "recomputed_rank": 15808,
+        "max_abs_score_self_diff": 0.0,
+        "agrees": true
+      },
+      {
+        "condition": "text_only_black_image",
+        "qid": "7:2015",
+        "scope": "shirt",
+        "recorded_rank": 7077,
+        "recomputed_rank": 7077,
+        "max_abs_score_self_diff": 0.0,
+        "agrees": true
+      },
+      {
+        "condition": "text_only_black_image",
+        "qid": "7:2016",
+        "scope": "shirt",
+        "recorded_rank": 67727,
+        "recomputed_rank": 67727,
+        "max_abs_score_self_diff": 0.0,
+        "agrees": true
+      },
+      {
+        "condition": "text_only_black_image",
+        "qid": "7:2017",
+        "scope": "shirt",
+        "recorded_rank": 2,
+        "recomputed_rank": 2,
+        "max_abs_score_self_diff": 0.0,
+        "agrees": true
+      },
+      {
+        "condition": "text_only_black_image",
+        "qid": "7:2018",
+        "scope": "shirt",
+        "recorded_rank": 503,
+        "recomputed_rank": 503,
+        "max_abs_score_self_diff": 0.0,
+        "agrees": true
+      },
+      {
+        "condition": "text_only_black_image",
+        "qid": "7:2019",
+        "scope": "shirt",
+        "recorded_rank": 22,
+        "recomputed_rank": 22,
+        "max_abs_score_self_diff": 0.0,
+        "agrees": true
+      },
+      {
+        "condition": "text_only_black_image",
+        "qid": "7:2020",
+        "scope": "shirt",
+        "recorded_rank": 40101,
+        "recomputed_rank": 40101,
+        "max_abs_score_self_diff": 0.0,
+        "agrees": true
+      },
+      {
+        "condition": "text_only_black_image",
+        "qid": "7:2021",
+        "scope": "shirt",
+        "recorded_rank": 53814,
+        "recomputed_rank": 53814,
+        "max_abs_score_self_diff": 0.0,
+        "agrees": true
+      },
+      {
+        "condition": "text_only_black_image",
+        "qid": "7:2022",
+        "scope": "shirt",
+        "recorded_rank": 45,
+        "recomputed_rank": 45,
+        "max_abs_score_self_diff": 0.0,
+        "agrees": true
+      },
+      {
+        "condition": "image_only_empty_text",
+        "qid": "7:2011",
+        "scope": "shirt",
+        "recorded_rank": 5854,
+        "recomputed_rank": 5854,
+        "max_abs_score_self_diff": 0.0,
+        "agrees": true
+      },
+      {
+        "condition": "image_only_empty_text",
+        "qid": "7:2012",
+        "scope": "shirt",
+        "recorded_rank": 20592,
+        "recomputed_rank": 20592,
+        "max_abs_score_self_diff": 0.0,
+        "agrees": true
+      },
+      {
+        "condition": "image_only_empty_text",
+        "qid": "7:2013",
+        "scope": "shirt",
+        "recorded_rank": 65855,
+        "recomputed_rank": 65855,
+        "max_abs_score_self_diff": 0.0,
+        "agrees": true
+      },
+      {
+        "condition": "image_only_empty_text",
+        "qid": "7:2014",
+        "scope": "shirt",
+        "recorded_rank": 63,
+        "recomputed_rank": 63,
+        "max_abs_score_self_diff": 0.0,
+        "agrees": true
+      },
+      {
+        "condition": "image_only_empty_text",
+        "qid": "7:2015",
+        "scope": "shirt",
+        "recorded_rank": 68889,
+        "recomputed_rank": 68889,
+        "max_abs_score_self_diff": 0.0,
+        "agrees": true
+      },
+      {
+        "condition": "image_only_empty_text",
+        "qid": "7:2016",
+        "scope": "shirt",
+        "recorded_rank": 1,
+        "recomputed_rank": 1,
+        "max_abs_score_self_diff": 0.0,
+        "agrees": true
+      },
+      {
+        "condition": "image_only_empty_text",
+        "qid": "7:2017",
+        "scope": "shirt",
+        "recorded_rank": 34614,
+        "recomputed_rank": 34614,
+        "max_abs_score_self_diff": 0.0,
+        "agrees": true
+      },
+      {
+        "condition": "image_only_empty_text",
+        "qid": "7:2018",
+        "scope": "shirt",
+        "recorded_rank": 48598,
+        "recomputed_rank": 48598,
+        "max_abs_score_self_diff": 0.0,
+        "agrees": true
+      },
+      {
+        "condition": "image_only_empty_text",
+        "qid": "7:2019",
+        "scope": "shirt",
+        "recorded_rank": 2897,
+        "recomputed_rank": 2897,
+        "max_abs_score_self_diff": 0.0,
+        "agrees": true
+      },
+      {
+        "condition": "image_only_empty_text",
+        "qid": "7:2020",
+        "scope": "shirt",
+        "recorded_rank": 26,
+        "recomputed_rank": 26,
+        "max_abs_score_self_diff": 0.0,
+        "agrees": true
+      },
+      {
+        "condition": "image_only_empty_text",
+        "qid": "7:2021",
+        "scope": "shirt",
+        "recorded_rank": 2,
+        "recomputed_rank": 2,
+        "max_abs_score_self_diff": 0.0,
+        "agrees": true
+      },
+      {
+        "condition": "image_only_empty_text",
+        "qid": "7:2022",
+        "scope": "shirt",
+        "recorded_rank": 28,
+        "recomputed_rank": 28,
+        "max_abs_score_self_diff": 0.0,
+        "agrees": true
+      }
+    ]
+  },
+  "runtime": {
+    "controller_python": "3.12.11 (main, Oct  7 2025, 15:34:39) [Clang 20.1.4 ]",
+    "model_interpreter": "/home/heheboiz/data/cir/workbench/envs/limn310-adapted/bin/python",
+    "decode_workers": 2,
+    "elapsed_seconds": 60.47,
+    "top_k": 100,
+    "scoring": "adapter.score: L2-normalized query row dot composed target row (target rows are already L2-normalized by compose_target)",
+    "rank": "adapter.rank: 1 + count(row > v) + count(row[:i] == v), same as the evaluator"
+  },
+  "canonical_cohort": {
+    "subset": "full",
+    "query_count": 6003,
+    "query_count_per_subset": {
+      "full": 6003,
+      "sf": 4069,
+      "validated": 586
+    },
+    "scored_count": 6001,
+    "unscored_count": 2,
+    "multimodal_recall_at_10": 30.0283,
+    "source": "workbench/artifacts/composition/summary/limn_base_iter0_all_categories_9e4918a6b5c243412cbc58c9/full.json"
+  },
+  "provenance_correction": {
+    "defect": "R5",
+    "what": "target_did repeated one query's positive id across every row because the producer read a shared loop variable (t2_dual_scope.py:273)",
+    "fix": "each row's target_did is that query's own positive id, cross-checked against the release",
+    "changed_records": 6,
+    "source_file": "/home/heheboiz/data/cir/workbench/docs/reviews/20261109-native15-composition-limn/limn_dual_scope.json",
+    "source_sha256": "04c4419e44ff555b909ad92ed0a8596520a0cb5cdcfc0467986baabf77bfabf0",
+    "unchanged_fields": [
+      "target_rank",
+      "target_score",
+      "target_gallery_position",
+      "score_at_rank_1",
+      "target_margin_vs_rank1",
+      "top100_export",
+      "gallery_size_scored",
+      "model_text",
+      "encode_seconds",
+      "query_embedding_norm",
+      "score_min",
+      "score_max"
+    ],
+    "verification": "rank/score/position/asset of all 12 combinations re-derived from each scope's own export and the release loader; see r5_reconcile.json"
+  }
+}

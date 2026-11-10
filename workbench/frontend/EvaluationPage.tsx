@@ -3,7 +3,7 @@ import type { WorkbenchData, RunCatalogEntry } from "./data";
 import { protocolLabel } from "./data";
 import type { Location } from "./routes";
 import { SUBSET_LABEL, SUBSETS, CONDITIONS, FIXED_CUTOFF_LABEL } from "./routes";
-import { Badge, Card, DetailToggle, EmptyState, ErrorState, KeyValue, LoadingState, SortHeader, sortRows, useSort } from "./ui";
+import { Badge, Card, Detail, DetailToggle, EmptyState, ErrorState, KeyValue, LoadingState, SortHeader, sortRows, useSort } from "./ui";
 import {
   COMPOSITION_COLUMNS, COMPOSITION_GAP_FORMULA, FIXED_CUTOFFS, compositionGap, compositionMinWidth,
   protocolsWithReports,
@@ -13,6 +13,7 @@ import { fmtDateStamp, fmtDenominator, fmtFractionPercent, fmtGap, fmtInt, fmtNd
 import type { CompositionRun } from "./types";
 import type { WarningLabel } from "./gate";
 import { warningLabels } from "./gate";
+import { protocolHasSubsets } from "./scope";
 
 /** Đánh giá: measured metrics for a stated protocol and subset, with denominators.
  *
@@ -37,6 +38,94 @@ export function EvaluationPage({ data, location, view, onGoto, onSelectRun }: {
 
 function subsetRows(runs: CompositionRun[], subset: string): CompositionRun[] {
   return runs.filter((run) => run.subset === subset);
+}
+
+/** The G1/G2 verdict on the web, derived from the artifacts instead of quoted from prose.
+ *
+ *  An empty `passed_models` is rendered as the verdict it is: NOT a failure to load, and not a
+ *  placeholder. Each model prints its own status, the dimensions that held, and the mandatory
+ *  checks that did not — with declared vs measured, because "failed" without the numbers is
+ *  unarguable and unfixable.
+ */
+function ParityGateCard({ data }: { data: WorkbenchData }) {
+  const region = data.parityGate.region;
+  if (region.status === "error") {
+    return (
+      <Card title="G1/G2 — cổng chẵn lẻ (từ artifact)" testId="parity-gate">
+        <ErrorState message={region.error ?? "Không tải được cổng G1/G2"} onRetry={data.parityGate.retry} />
+      </Card>
+    );
+  }
+  if (!region.data) {
+    return <Card title="G1/G2 — cổng chẵn lẻ (từ artifact)" testId="parity-gate"><LoadingState label="Đang tính cổng từ artifact…" /></Card>;
+  }
+  const gate = region.data;
+  const models = Object.values(gate.models ?? {});
+  const failed = models.filter((model) => !model.passed);
+  return (
+    <Card
+      title="G1/G2 — cổng chẵn lẻ (từ artifact)"
+      testId="parity-gate"
+      subtitle={`Chuẩn ${gate.standard} · tính từ artifact đo, không đọc từ văn bản`}
+      actions={(
+        <Badge tone={gate.passed_models.length ? "ok" : "bad"} testId="parity-gate-verdict">
+          {gate.passed_models.length
+            ? `PASS: ${gate.passed_models.join(", ")}`
+            : `KHÔNG mô hình nào PASS (0/${models.length})`}
+        </Badge>
+      )}
+    >
+      {/* The empty list is the answer, said out loud, so nobody reads it as "not loaded". */}
+      <p className="pipeline-notice" data-testid="parity-gate-summary">
+        {gate.passed_models.length === 0
+          ? <>Không mô hình nào đạt: {failed.length}/{models.length} mô hình có subcheck bắt buộc FAIL. Đây là kết luận từ artifact, không phải lỗi tải.</>
+          : <>{gate.passed_models.length}/{models.length} mô hình đạt mọi subcheck bắt buộc.</>}
+      </p>
+      <div className="table-wrap">
+        <table data-testid="parity-gate-table">
+          <caption className="sr-only">Kết luận G1/G2 theo mô hình, kèm subcheck bắt buộc thất bại</caption>
+          <thead>
+            <tr>
+              <th scope="col">Mô hình</th>
+              <th scope="col">Kết luận</th>
+              <th scope="col" className="num">Subcheck FAIL</th>
+              <th scope="col">Chiều đạt</th>
+            </tr>
+          </thead>
+          <tbody>
+            {models.map((model) => (
+              <tr key={model.model_id} data-testid={`parity-row-${model.model_id}`} data-passed={model.passed}>
+                <th scope="row">{model.model_id}</th>
+                <td><Badge tone={model.passed ? "ok" : "bad"}>{model.status}</Badge></td>
+                <td className="num">
+                  {model.failure_count === 0 ? "0" : <Detail summary={`${model.failure_count} subcheck`} testId={`parity-failures-${model.model_id}`}>
+                    <ul style={{ margin: 0, paddingLeft: 18 }}>
+                      {model.failures.map((failure) => (
+                        <li key={failure.name}>
+                          <code>{failure.name}</code> ({failure.gate}, {failure.dimension}): khai báo{" "}
+                          <b>{String(failure.declared)}</b>, đo <b>{String(typeof failure.measured === "number" ? failure.measured.toPrecision(6) : failure.measured)}</b>
+                        </li>
+                      ))}
+                    </ul>
+                  </Detail>}
+                </td>
+                <td>
+                  <span className="cell-sub">
+                    {Object.entries(model.dimensions ?? {}).map(([dimension, ok]) => (
+                      <span key={dimension} className={ok ? "hint-ok" : "hint-bad"} style={{ marginRight: 8 }}>
+                        {dimension} {ok ? "✓" : "✗"}
+                      </span>
+                    ))}
+                  </span>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="hint">{gate.note}</p>
+    </Card>
+  );
 }
 
 function CompositionTable({ data, location, onGoto, onSelectRun }: {
@@ -75,10 +164,11 @@ function CompositionTable({ data, location, onGoto, onSelectRun }: {
 
   return (
     <div className="stack" data-testid="area-evaluation">
+      <ParityGateCard data={data} />
       <Card
         title="CIRCUS composition"
-        subtitle={`${protocolLabel(location.protocol)} · ${rows.length} lượt ở subset ${SUBSET_LABEL[location.subset]}`}
-        actions={(
+        subtitle={`${protocolLabel(location.protocol)} · ${rows.length} lượt${protocolHasSubsets(location.protocol) ? ` ở subset ${SUBSET_LABEL[location.subset]}` : ""}`}
+        actions={protocolHasSubsets(location.protocol) ? (
           <>
             <div className="viewtabs" role="tablist" aria-label="Subset">
               {SUBSETS.map((subset) => (
@@ -91,7 +181,7 @@ function CompositionTable({ data, location, onGoto, onSelectRun }: {
               ))}
             </div>
           </>
-        )}
+        ) : undefined}
       >
         <div className="formula" style={{ marginBottom: 10 }}>
           Composition gap = {COMPOSITION_GAP_FORMULA}. Giá trị là <b>phân số không đơn vị</b>, tính trên

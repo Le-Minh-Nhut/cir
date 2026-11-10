@@ -1,0 +1,45 @@
+FILE combiner_rn50x4_noft_rn50x4_noft_unresolved_20261108T064137301769Z_combiner_rn50x4_noft_rn50x4_noft_unresolved_020a70b0_completion.json
+{
+ "artifact_type": "official_evaluation_completion_proof",
+ "schema_version": 1,
+ "completion_status": "COMPLETED",
+ "run_id": "20261108T064137301769Z_combiner_rn50x4_noft_rn50x4_noft_unresolved_020a70b0",
+ "model_id": "combiner_rn50x4_noft",
+ "checkpoint_id": "rn50x4_noft_unresolved",
+ "protocol_id": "fashioniq_original_split",
+ "source_expected_commit": "dfed9f748a8a4d05abf613164e06d59b22dbdf13",
+ "source_actual_commit": "dfed9f748a8a4d05abf613164e06d59b22dbdf13",
+ "checkpoint_artifact_type": "file",
+ "checkpoint_sha256": "b31882fe6f7e3e194cb9cfda048926844ee0ccc9d4ebc5483fb3bacfa5972955",
+ "bundle_manifest_digest": null,
+ "checkpoint_bundle": null,
+ "directory_members": null,
+ "invocation_status": "INVOCATION_COMPLETED",
+ "return_code": 0,
+ "ledger_entry_digest": "1550e85f16bca76cfb6dabc2cfb48a201791341b6f874e71c27bb4a10ccdb426",
+ "report_digest": "435924cf08774b4b8047e7d47d9e5616d9da006e29ac04ebeaeb25bba47a4cb7",
+ "report_relative": "combiner_rn50x4_noft_rn50x4_noft_unresolved_20261108T064137301769Z_combiner_rn50x4_noft_rn50x4_noft_unresolved_020a70b0_aggregate.json",
+ "metric_extraction_available": true,
+ "extraction_status": "EXTRACTED_VERIFIED",
+ "environment_digest": "d399aa6a1654aea575f7cfafb93a8a08e62e8320183f7b3b26cef96f3dcd874c",
+ "command_digest": "6eca3089ce1d08ab4bbfe5adae4f137754bfaa8113e71fa420c0b66e61db5f06",
+ "evidence_digest": "e359116b52eb715d522236fdf51791393a34e22042c49cc8e2a44bc196e325db",
+ "stdout_log": "stdout.log",
+ "stderr_log": "stderr.log",
+ "run
+REPORT_KEYS ['/', 'h', 'o', 'm', 'e', '/', 'h', 'e', 'h', 'e', 'b', 'o', 'i', 'z', '/', 'd', 'a', 't', 'a', '/']
+FILE combiner_rn50x4_noft_rn50x4_noft_unresolved_20261108T064137301769Z_combiner_rn50x4_noft_rn50x4_noft_unresolved_020a70b0_invocation_outcome.json
+{
+ "artifact_type": "invocation_outcome",
+ "schema_version": 1,
+ "run_id": "20261108T064137301769Z_combiner_rn50x4_noft_rn50x4_noft_unresolved_020a70b0",
+ "model_id": "combiner_rn50x4_noft",
+ "checkpoint_id": "rn50x4_noft_unresolved",
+ "protocol_id": "fashioniq_original_split",
+ "return_code": 0,
+ "invocation_status": "INVOCATION_COMPLETED",
+ "verdict": "PROOF_VALIDATED",
+ "completed": true,
+ "reason": null,
+ "recorded_at": "2026-11-08T07:20:29.428712+00:00"
+}

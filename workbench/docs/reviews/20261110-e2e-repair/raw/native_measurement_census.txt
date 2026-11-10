@@ -1,0 +1,23 @@
+# Census: files under checkpoint_selection/**/measurements/*.json carrying numeric macro metrics
+# command: workbench/envs/ctl312h/bin/python raw/audit_native_measurements.py
+# matched files: 43 | with numeric aggregate.macro_r10/r50: 15
+# NOTE: metrics live under `aggregate`, not top level. A top-level-only scan returns 0 files.
+
+airknow_fiq_n05_run1.json                  mid=airknow      proto=fashioniq_full_gallery_ref_excluded replay=SOURCE_FAITHFUL_WORKBENCH_REPLAY   r10=52.54661498980954      r50=72.9026186457433       complete=True   native_evaluator='test_BLIP2.py:test'
+airknow_fiq_n08_run1.json                  mid=airknow      proto=fashioniq_full_gallery_ref_excluded replay=SOURCE_FAITHFUL_WORKBENCH_REPLAY   r10=50.64166565555885      r50=71.45559570455528      complete=True   native_evaluator='test_BLIP2.py:test'
+clvc_run1.json                             mid=clvc_net     proto=fashioniq_val_split                replay=None                               r10=29.970746517160162     r50=58.62171212901515      complete=True   native_evaluator=None
+conesep_fiq_n02.json                       mid=conesep      proto=fashioniq_full_gallery_ref_excluded replay=SOURCE_FAITHFUL_WORKBENCH_REPLAY   r10=54.76130615726771      r50=75.21514359343843      complete=True   native_evaluator='test.py:test'
+dcnet_run1.json                            mid=dcnet        proto=fashioniq_full_gallery_ref_excluded replay=None                               r10=27.929730914548923     r50=53.72723331879208      complete=True   native_evaluator=None
+encoder_fashioniq.json                     mid=encoder      proto=fashioniq_val_split                replay=None                               r10=56.223101675386054     r50=77.66738539271432      complete=True   native_evaluator=None
+habit_fiq_n02.json                         mid=habit        proto=fashioniq_full_gallery_ref_excluded replay=SOURCE_FAITHFUL_WORKBENCH_REPLAY   r10=54.87332239571265      r50=74.50337396905957      complete=True   native_evaluator='test.py:test'
+hint_doc_command.json                      mid=hint         proto=fashioniq_val_split                replay=SOURCE_FAITHFUL_WORKBENCH_REPLAY   r10=59.80338494972219      r50=80.13076097500765      complete=True   native_evaluator='test.py:test'
+hint_fashioniq.json                        mid=hint         proto=fashioniq_val_split                replay=SOURCE_FAITHFUL_WORKBENCH_REPLAY   r10=59.80338494972219      r50=80.13076097500765      complete=True   native_evaluator='test.py:test'
+intent_fiq_n02.json                        mid=intent       proto=fashioniq_full_gallery_ref_excluded replay=SOURCE_FAITHFUL_WORKBENCH_REPLAY   r10=54.86624335289025      r50=75.43191079283865      complete=True   native_evaluator='test.py:test'
+limn_base_iter0.json                       mid=limn         proto=fashioniq_val_split                replay=None                               r10=55.79193333333333      r50=77.6378                complete=True   native_evaluator=None
+sprc_vitl_run1.json                        mid=sprc         proto=fashioniq_original_split           replay=None                               r10=51.038571198781334     r50=73.32633932431538      complete=True   native_evaluator=None
+tgcir_run1.json                            mid=tgcir        proto=fashioniq_val_split                replay=None                               r10=49.720772235486656     r50=71.10231942031965      complete=True   native_evaluator=None
+tme_fashioniq_0.json                       mid=tme          proto=fashioniq_original_split           replay=None                               r10=54.922901590665184     r50=74.83842174212138      complete=True   native_evaluator=None
+tme_normal_path_full.json                  mid=tme          proto=fashioniq_original_split           replay=None                               r10=54.922901590665184     r50=74.83842174212138      complete=True   native_evaluator=None
+
+Q1 distinct model_id with numeric macro_r10 (12): ['airknow', 'clvc_net', 'conesep', 'dcnet', 'encoder', 'habit', 'hint', 'intent', 'limn', 'sprc', 'tgcir', 'tme']
+Q2 active configs with NO such file (5): ['csmcir', 'ptha_mtst', 'pair', 'combiner_rn50x4_noft', 'clip4cir_rn50x4_fullft']

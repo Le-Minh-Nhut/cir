@@ -1,0 +1,3 @@
+banner: AGGREGATE-ONLY REAL EVALUATION — 1 certified research result; per-query Top-K analysis unavailable
+claims-absent: False
+aggregate-only: True

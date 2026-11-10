@@ -1,0 +1,42 @@
+=== git status of the 5 manifest-mismatch files ===
+(empty = tracked and unmodified vs HEAD)
+
+=== git log --oneline -3 per file ===
+-- workbench/third_party/CSMCIR/src/lavis/models/__init__.py
+b2fca87 Close D-10: native CSMCIR evaluation through the standard pipeline
+5e6e284 Vendor the sixteen pinned upstreams and apply evidence-backed recovery fixes
+-- workbench/third_party/CSMCIR/src/validate_blip_csmcir.py
+b2fca87 Close D-10: native CSMCIR evaluation through the standard pipeline
+5e6e284 Vendor the sixteen pinned upstreams and apply evidence-backed recovery fixes
+-- workbench/third_party/DCNet/base/base_trainer.py
+36ae9e2 Native evaluation of 15 targets, LIMN parity and dual-scope diagnostic
+200b7c7 fix(cir): repair PTHA feature boundary, verify HINT end-to-end, scope LIMN/DCNet fixes
+5e6e284 Vendor the sixteen pinned upstreams and apply evidence-backed recovery fixes
+-- workbench/third_party/TME/src/precompute.py
+98c0eeb chore(cir): reclaim 194 GiB of dead weights, then finish TME verification on the normal path
+3655b89 feat: add TME as the seventeenth model entry, with its own protocol
+-- workbench/third_party/TME/src/precompute_evaluation.py
+98c0eeb chore(cir): reclaim 194 GiB of dead weights, then finish TME verification on the normal path
+3655b89 feat: add TME as the seventeenth model entry, with its own protocol
+
+=== actual vs recorded sha256 ===
+CSMCIR/src/lavis/models/__init__.py
+   recorded=9d8c914b551a7de614e062f9a241f44626fd591a31a0ccf1cc79f0ae23c9db01
+   actual  =0ec134431697af6f202b5256e4e30ab725a44191a279e3f8bfdb3a62495b3774
+   equal=False
+CSMCIR/src/validate_blip_csmcir.py
+   recorded=aa7a4395cdb700fded0567e0969da774a331927eaea327b5a23da82fdc7506a9
+   actual  =a057e8f3ad7097adcfabb2b8fd8b4747588ff3461cfb43f00cd3483dfd6d512d
+   equal=False
+DCNet/base/base_trainer.py
+   recorded=3edd98363f81d0efbac6f7b1dcf9690a5db714bcc588cd4b0d890c5bb865860b
+   actual  =6917e18fb3979cc7fabc322285ecf5565bb6860cc0c1c27624b0af04da27c15d
+   equal=False
+TME/src/precompute.py
+   recorded=c3da9c9dc8c11b0616640f910435583471fe64f9190f6fb5abd4382bc2c48d27
+   actual  =97bdbc14c4d7ae1aa13222190e0056cb3557225fd73c51b455203898aa7ad963
+   equal=False
+TME/src/precompute_evaluation.py
+   recorded=0f6a0573bc82e5a8e34de8bd78d1da8970c21b917e1784a44be6781b7a5581f3
+   actual  =1f13dbd5e005621d723b4026ced17afb4f6ab1ace9b51f35e4e83023f375d81b
+   equal=False

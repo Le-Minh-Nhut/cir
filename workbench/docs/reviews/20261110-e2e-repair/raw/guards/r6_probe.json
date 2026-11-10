@@ -1,0 +1,377 @@
+{
+ "artifact_type": "r6_r8_before_evidence",
+ "cases": {
+  "baseline": {
+   "path": "/api/composition/diagnostics/limn-dual-scope/candidates?qid=7:3038&scope=shirt&condition=multimodal&depth=100",
+   "http": 200,
+   "candidate_count": 100,
+   "depth_stored": 100,
+   "depth_reported_in_response": null,
+   "target_rank": 3,
+   "target_in_window": true,
+   "clamp_reported": false,
+   "candidate_keys": [
+    "gallery_id",
+    "gallery_position",
+    "image_path",
+    "is_target",
+    "rank",
+    "score"
+   ],
+   "top_level_keys": [
+    "candidates",
+    "canonical_status_note",
+    "checkpoint_sha256",
+    "condition",
+    "depth_stored",
+    "gallery_size",
+    "model_text",
+    "qid",
+    "scope",
+    "staged_query_image_is_evaluator_input",
+    "target_rank",
+    "target_score"
+   ],
+   "target_object_present": false,
+   "category_present": false,
+   "image_url_present": false,
+   "duplicate_gallery_ids": 0
+  },
+  "empty_payload_summary": {
+   "path": "/api/composition/diagnostics/limn-dual-scope",
+   "http": 200,
+   "top_level_keys": [
+    "available",
+    "canonical_cohort",
+    "canonical_status",
+    "checkpoints",
+    "conditions",
+    "evidence_files",
+    "gallery",
+    "label",
+    "queries",
+    "rank_convention_crosscheck",
+    "reason",
+    "release_provenance",
+    "runtime",
+    "scopes",
+    "status"
+   ],
+   "detail": "DIAGNOSTIC_COMPLETE"
+  },
+  "wrong_qid": {
+   "path": "/api/composition/diagnostics/limn-dual-scope/candidates?qid=7:9999&scope=shirt&condition=multimodal",
+   "http": 404,
+   "top_level_keys": [
+    "detail"
+   ],
+   "detail": {
+    "error": "diagnostic_candidates_unavailable",
+    "message": "7:9999 is not one of the ambiguous queries"
+   }
+  },
+  "wrong_scope": {
+   "path": "/api/composition/diagnostics/limn-dual-scope/candidates?qid=7:3038&scope=dress&condition=multimodal",
+   "http": 404,
+   "top_level_keys": [
+    "detail"
+   ],
+   "detail": {
+    "error": "diagnostic_candidates_unavailable",
+    "message": "dress is not a diagnostic scope"
+   }
+  },
+  "wrong_condition": {
+   "path": "/api/composition/diagnostics/limn-dual-scope/candidates?qid=7:3038&scope=shirt&condition=audio_only",
+   "http": 404,
+   "top_level_keys": [
+    "detail"
+   ],
+   "detail": {
+    "error": "diagnostic_candidates_unavailable",
+    "message": "audio_only is not a supported condition"
+   }
+  },
+  "depth_zero": {
+   "path": "/api/composition/diagnostics/limn-dual-scope/candidates?qid=7:3038&scope=shirt&condition=multimodal&depth=0",
+   "http": 200,
+   "candidate_count": 1,
+   "depth_stored": 100,
+   "depth_reported_in_response": null,
+   "target_rank": 3,
+   "target_in_window": false,
+   "clamp_reported": false,
+   "candidate_keys": [
+    "gallery_id",
+    "gallery_position",
+    "image_path",
+    "is_target",
+    "rank",
+    "score"
+   ],
+   "top_level_keys": [
+    "candidates",
+    "canonical_status_note",
+    "checkpoint_sha256",
+    "condition",
+    "depth_stored",
+    "gallery_size",
+    "model_text",
+    "qid",
+    "scope",
+    "staged_query_image_is_evaluator_input",
+    "target_rank",
+    "target_score"
+   ],
+   "target_object_present": false,
+   "category_present": false,
+   "image_url_present": false,
+   "duplicate_gallery_ids": 0
+  },
+  "depth_negative": {
+   "path": "/api/composition/diagnostics/limn-dual-scope/candidates?qid=7:3038&scope=shirt&condition=multimodal&depth=-5",
+   "http": 200,
+   "candidate_count": 1,
+   "depth_stored": 100,
+   "depth_reported_in_response": null,
+   "target_rank": 3,
+   "target_in_window": false,
+   "clamp_reported": false,
+   "candidate_keys": [
+    "gallery_id",
+    "gallery_position",
+    "image_path",
+    "is_target",
+    "rank",
+    "score"
+   ],
+   "top_level_keys": [
+    "candidates",
+    "canonical_status_note",
+    "checkpoint_sha256",
+    "condition",
+    "depth_stored",
+    "gallery_size",
+    "model_text",
+    "qid",
+    "scope",
+    "staged_query_image_is_evaluator_input",
+    "target_rank",
+    "target_score"
+   ],
+   "target_object_present": false,
+   "category_present": false,
+   "image_url_present": false,
+   "duplicate_gallery_ids": 0
+  },
+  "depth_beyond_stored": {
+   "path": "/api/composition/diagnostics/limn-dual-scope/candidates?qid=7:3038&scope=shirt&condition=multimodal&depth=1000",
+   "http": 200,
+   "candidate_count": 100,
+   "depth_stored": 100,
+   "depth_reported_in_response": null,
+   "target_rank": 3,
+   "target_in_window": true,
+   "clamp_reported": false,
+   "candidate_keys": [
+    "gallery_id",
+    "gallery_position",
+    "image_path",
+    "is_target",
+    "rank",
+    "score"
+   ],
+   "top_level_keys": [
+    "candidates",
+    "canonical_status_note",
+    "checkpoint_sha256",
+    "condition",
+    "depth_stored",
+    "gallery_size",
+    "model_text",
+    "qid",
+    "scope",
+    "staged_query_image_is_evaluator_input",
+    "target_rank",
+    "target_score"
+   ],
+   "target_object_present": false,
+   "category_present": false,
+   "image_url_present": false,
+   "duplicate_gallery_ids": 0
+  },
+  "depth_stored_100_but_ask_200": {
+   "path": "/api/composition/diagnostics/limn-dual-scope/candidates?qid=7:3038&scope=shirt&condition=multimodal&depth=200",
+   "http": 200,
+   "candidate_count": 100,
+   "depth_stored": 100,
+   "depth_reported_in_response": null,
+   "target_rank": 3,
+   "target_in_window": true,
+   "clamp_reported": false,
+   "candidate_keys": [
+    "gallery_id",
+    "gallery_position",
+    "image_path",
+    "is_target",
+    "rank",
+    "score"
+   ],
+   "top_level_keys": [
+    "candidates",
+    "canonical_status_note",
+    "checkpoint_sha256",
+    "condition",
+    "depth_stored",
+    "gallery_size",
+    "model_text",
+    "qid",
+    "scope",
+    "staged_query_image_is_evaluator_input",
+    "target_rank",
+    "target_score"
+   ],
+   "target_object_present": false,
+   "category_present": false,
+   "image_url_present": false,
+   "duplicate_gallery_ids": 0
+  },
+  "rank_beyond_window": {
+   "path": "/api/composition/diagnostics/limn-dual-scope/candidates?qid=7:3790&scope=shirt&condition=text_only_black_image&depth=100",
+   "http": 200,
+   "candidate_count": 100,
+   "depth_stored": 100,
+   "depth_reported_in_response": null,
+   "target_rank": 6891,
+   "target_in_window": false,
+   "clamp_reported": false,
+   "candidate_keys": [
+    "gallery_id",
+    "gallery_position",
+    "image_path",
+    "is_target",
+    "rank",
+    "score"
+   ],
+   "top_level_keys": [
+    "candidates",
+    "canonical_status_note",
+    "checkpoint_sha256",
+    "condition",
+    "depth_stored",
+    "gallery_size",
+    "model_text",
+    "qid",
+    "scope",
+    "staged_query_image_is_evaluator_input",
+    "target_rank",
+    "target_score"
+   ],
+   "target_object_present": false,
+   "category_present": false,
+   "image_url_present": false,
+   "duplicate_gallery_ids": 0
+  }
+ },
+ "summary_vs_candidates": {
+  "checked": 12,
+  "mismatches": [
+   {
+    "qid": "7:3038",
+    "scope": "shirt",
+    "condition": "multimodal",
+    "problems": [
+     "summary export limn_dual_scope.shirt.multimodal.jsonl != candidates export None"
+    ]
+   },
+   {
+    "qid": "7:3038",
+    "scope": "shirt",
+    "condition": "text_only_black_image",
+    "problems": [
+     "summary export limn_dual_scope.shirt.text_only_black_image.jsonl != candidates export None"
+    ]
+   },
+   {
+    "qid": "7:3038",
+    "scope": "shirt",
+    "condition": "image_only_empty_text",
+    "problems": [
+     "summary export limn_dual_scope.shirt.image_only_empty_text.jsonl != candidates export None"
+    ]
+   },
+   {
+    "qid": "7:3038",
+    "scope": "toptee",
+    "condition": "multimodal",
+    "problems": [
+     "summary export limn_dual_scope.toptee.multimodal.jsonl != candidates export None"
+    ]
+   },
+   {
+    "qid": "7:3038",
+    "scope": "toptee",
+    "condition": "text_only_black_image",
+    "problems": [
+     "summary export limn_dual_scope.toptee.text_only_black_image.jsonl != candidates export None"
+    ]
+   },
+   {
+    "qid": "7:3038",
+    "scope": "toptee",
+    "condition": "image_only_empty_text",
+    "problems": [
+     "summary export limn_dual_scope.toptee.image_only_empty_text.jsonl != candidates export None"
+    ]
+   },
+   {
+    "qid": "7:3790",
+    "scope": "shirt",
+    "condition": "multimodal",
+    "problems": [
+     "summary export limn_dual_scope.shirt.multimodal.jsonl != candidates export None"
+    ]
+   },
+   {
+    "qid": "7:3790",
+    "scope": "shirt",
+    "condition": "text_only_black_image",
+    "problems": [
+     "summary export limn_dual_scope.shirt.text_only_black_image.jsonl != candidates export None"
+    ]
+   },
+   {
+    "qid": "7:3790",
+    "scope": "shirt",
+    "condition": "image_only_empty_text",
+    "problems": [
+     "summary export limn_dual_scope.shirt.image_only_empty_text.jsonl != candidates export None"
+    ]
+   },
+   {
+    "qid": "7:3790",
+    "scope": "toptee",
+    "condition": "multimodal",
+    "problems": [
+     "summary export limn_dual_scope.toptee.multimodal.jsonl != candidates export None"
+    ]
+   },
+   {
+    "qid": "7:3790",
+    "scope": "toptee",
+    "condition": "text_only_black_image",
+    "problems": [
+     "summary export limn_dual_scope.toptee.text_only_black_image.jsonl != candidates export None"
+    ]
+   },
+   {
+    "qid": "7:3790",
+    "scope": "toptee",
+    "condition": "image_only_empty_text",
+    "problems": [
+     "summary export limn_dual_scope.toptee.image_only_empty_text.jsonl != candidates export None"
+    ]
+   }
+  ]
+ }
+}

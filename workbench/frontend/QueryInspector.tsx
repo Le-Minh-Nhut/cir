@@ -55,7 +55,9 @@ export function QueryInspector({ run, query, condition = "multimodal", selectedC
   const request = run && query
     ? candidateRequestPath({ runId: run.run_id, subset: run.subset, condition, queryId: query.query_id, k: effectiveK })
     : "none";
-  const requestKey = `${canRequest}:${request}`;
+  // The FULL identity, protocol included: two protocols can serve the same run id shape, and an
+  // answer is only valid for the protocol whose export produced it.
+  const requestKey = `${canRequest}:${run?.protocol_id ?? ""}:${request}`;
   const candidatesRegion = useRegion<{ items: CompositionQuery[] }>(
     "inspector-candidates", requestKey,
     useMemo(() => (canRequest
@@ -116,20 +118,40 @@ export function QueryInspector({ run, query, condition = "multimodal", selectedC
         )}
       >
         <div className="query-brief">
-          <div className="shots">
-            <Shot category={category} id={query.reference_id} label="Ảnh tham chiếu" />
-            {query.positive_ids.map((id, index) => (
-              <Shot key={id} category={category} id={id} target
-                    label={index === 0 ? "Ảnh đích" : "Ảnh đích bổ sung"} />
-            ))}
+          {/* DOM order is the reading order the evidence requires: the reference image, then the
+              edit caption, THEN the target. A reader who sees the target first reads the caption as
+              a post-hoc description of it. */}
+          <div className="query-sequence" data-testid="query-sequence">
+            <div className="shots">
+              <Shot category={category} id={query.reference_id} label="Ảnh tham chiếu" />
+            </div>
+            <div className="query-instruction-caption">
+              <div className="eyebrow">Yêu cầu chỉnh sửa</div>
+              <p className="edit-caption" data-testid="query-caption">{query.query_txt}</p>
+            </div>
+            <div className="shots" data-testid="query-targets">
+              {query.positive_ids.map((id, index) => (
+                <Shot key={id} category={category} id={id} target
+                      label={index === 0 ? "Ảnh đích" : "Ảnh đích bổ sung"} />
+              ))}
+            </div>
+            {(() => {
+              // The target image is rendered from the query record, never from the candidate window,
+              // so it survives a rank outside the exported depth. Say so where the image is.
+              const ranks = conditions.map((item) => item.rank).filter((rank): rank is number => rank != null);
+              if (!ranks.length || !depth) return null;
+              const best = Math.min(...ranks);
+              if (best <= depth) return null;
+              return (
+                <p className="hint" data-testid="target-outside-window">
+                  Ảnh đích ở hạng tốt nhất {fmtRank(best)}, <b>ngoài cửa sổ {fmtInt(depth)} ứng viên đã xuất</b> —
+                  vẫn hiện ở đây vì hạng là hạng toàn gallery.
+                </p>
+              );
+            })()}
           </div>
 
           <div className="query-instruction">
-            <div>
-              <div className="eyebrow">Yêu cầu chỉnh sửa</div>
-              <p className="edit-caption">{query.query_txt}</p>
-            </div>
-
             <div>
               <div className="eyebrow" style={{ marginBottom: 8 }}>
                 Hạng theo điều kiện · outcome phân loại tại @{FIXED_CUTOFFS.compositionOutcomeK} (cố định)
@@ -138,7 +160,8 @@ export function QueryInspector({ run, query, condition = "multimodal", selectedC
                 {conditions.map((item) => (
                   <div key={item.id}
                        className={`rankcell ${item.rank === null ? "unscored-cell" : item.rank <= FIXED_CUTOFFS.compositionOutcomeK ? "hit" : "miss"}`}
-                       data-testid={`rank-${item.id}`}>
+                       data-testid={`rank-${item.id}`}
+                       data-rank-state={item.rank === null ? "missing-rank" : item.rank <= FIXED_CUTOFFS.compositionOutcomeK ? "hit" : "miss"}>
                     <small>{CONDITION_LABELS[item.id] ?? item.short}</small>
                     <b>{item.rank === null ? "Chưa chấm" : fmtRank(item.rank)}</b>
                     <span className="hint">
@@ -274,8 +297,13 @@ export function QueryInspector({ run, query, condition = "multimodal", selectedC
   );
 }
 
-/** One image tile: explicit missing state, and a dialog that Escape closes. */
-function Shot({ category, id, label, target, compact }: {
+/** One image tile: explicit missing state, and a dialog that Escape closes.
+ *
+ *  Exported because the LIMN diagnostic gallery renders the SAME tile: two image renderers would be
+ *  two answers to "does this image exist in this deployment", and the missing-asset state has to be
+ *  identical in both.
+ */
+export function Shot({ category, id, label, target, compact }: {
   category: string;
   id: string;
   label: string;
@@ -293,12 +321,14 @@ function Shot({ category, id, label, target, compact }: {
   return (
     <figure className={`shot ${target ? "target" : ""} ${compact ? "compact" : ""}`}>
       {failed || !id
-        ? <div className="shot-missing" data-testid="query-image" data-image-id={clean}>Ảnh không có trong deployment<br />{clean}</div>
+        ? <div className="shot-missing" data-testid="query-image" data-image-id={clean}
+               data-asset-state="missing">Ảnh không có trong deployment<br />{clean}</div>
         : (
           <button type="button" className="shot-open" aria-label={`Phóng to ${label}: ${clean}`}
                   onClick={() => dialog.current?.showModal()}>
             <img src={src} alt={`${label}: ${clean}`} width="240" height="240" loading="lazy"
-                 data-testid="query-image" data-image-id={clean} onError={() => setFailed(true)} />
+                 data-testid="query-image" data-image-id={clean} data-asset-state="present"
+                 onError={() => setFailed(true)} />
           </button>
         )}
       <figcaption className="shot-label">

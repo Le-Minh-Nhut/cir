@@ -1167,6 +1167,10 @@ def get_composition_run_queries(
     items: list[dict[str, Any]] = []
     counters = {"scored": 0, "unscored": 0, "hit_at_k": 0, "retrieval_failure": 0,
                 "unscored_by_kind": {}, "candidates_available": 0}
+    # Per-state totals for the chip row. Counted AFTER the explorer's other filters but BEFORE the
+    # `query_state` filter itself, so each chip can print its own total while a different chip is
+    # active. Counting after that filter would make every inactive chip read 0.
+    state_counts = {"hit": 0, "retrieval_failure": 0, "unscored": 0}
 
     for q in subset_queries:
         q_ranks = {
@@ -1190,13 +1194,14 @@ def get_composition_run_queries(
             continue
         if outcome and q_outcome != outcome:
             continue
-        if query_state and state != query_state:
-            continue
         if query_id and q.qid != query_id:
             continue
         if min_rank is not None and (target_rank is None or target_rank < min_rank):
             continue
         if max_rank is not None and (target_rank is None or target_rank > max_rank):
+            continue
+        state_counts[state] += 1
+        if query_state and state != query_state:
             continue
 
         counters["scored" if target_rank is not None else "unscored"] += 1
@@ -1255,6 +1260,7 @@ def get_composition_run_queries(
         "offset": offset,
         "condition": target_condition,
         "counters": counters,
+        "state_counts": state_counts,
         "candidates": {
             "available": bool(candidates.get("available")),
             "status": candidates.get("status"),

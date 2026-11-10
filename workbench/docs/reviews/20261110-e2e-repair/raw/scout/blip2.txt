@@ -1,0 +1,106 @@
+Read-only extraction complete. I found no file literally named “shared contract”; the fields below are the ones the acceptance names (image transform, LAVIS processor config/max_length, caption join, reference mask, recall arithmetic), plus the invocation-shell facts. All snippets are verbatim from the pinned trees.
+
+## airknow
+
+```
+airknow|image_transform|data_utils.targetpad_transform(1.25, 224) — TargetPad→Resize(224,BICUBIC)→CenterCrop(224)→RGB→ToTensor→CLIP Normalize; squarepad and clip defaults are NOT used|workbench/replay/airknow.py:174|transform = data_utils.targetpad_transform(1.25, 224)
+airknow|image_transform_construction|built once in the replay shell, passed to the native FashionIQ dataset (same object for query and gallery)|workbench/replay/airknow.py:180|dataset = datasets.FashionIQ(path=root_str, transform=transform, noise_ratio=0)
+airknow|image_transform_native_default|native training path hardcodes transform="targetpad", target_ratio=1.25, input_dim=224; squarepad branch is dead|workbench/third_party/AirKnow/train_BLIP2.py:111-119|transform = "targetpad" / target_ratio = 1.25 / preprocess = targetpad_transform(target_ratio, input_dim)
+airknow|image_transform_chain|TargetPad pads only when actual_ratio >= target_ratio (1.25), else returns image unchanged|workbench/third_party/AirKnow/data_utils.py:64-68|actual_ratio = max(w, h) / min(w, h) ; if actual_ratio < self.target_ratio: return image
+airknow|text_processor_config|LAVIS config configs/models/blip2/blip2_pretrain.yaml, selected by the model class's own PRETRAINED_MODEL_CONFIG_DICT; loaded via load_preprocess(cfg.preprocess), not load_model_and_preprocess|workbench/replay/airknow.py:43-44|PROCESSOR_CONFIGS = { "pretrain": "configs/models/blip2/blip2_pretrain.yaml",
+airknow|text_processor_config_load|config path resolved under the pinned checkout and only preprocess loaded|workbench/replay/lavis_processors.py:216-217|cfg = OmegaConf.load(config_path) ; _, txt_processors = load_preprocess(cfg.preprocess)
+airknow|text_processor_selection|eval text processor is blip_caption|workbench/third_party/AirKnow/lavis/configs/models/blip2/blip2_pretrain.yaml:32-36|text_processor: train: name: "blip_caption" eval: name: "blip_caption"
+airknow|text_processor_max_length|NO max_length on the LAVIS processor: BlipCaptionProcessor(prompt="", max_words=50), truncation is by 50 whitespace words|workbench/third_party/AirKnow/lavis/processors/blip_processors.py:30,44-45,64-66|def __init__(self, prompt="", max_words=50): ... max_words = cfg.get("max_words", 50) ... if len(caption_words) > self.max_words: caption = " ".join(caption_words[: self.max_words])
+airknow|tokenizer_max_length|the BERT tokenizer inside the model sets max_length=32 (self.max_txt_len), padding="max_length", truncation=True — this is NOT the LAVIS text processor|workbench/third_party/AirKnow/lavis/models/blip2_models/blip2_cir.py:110,481-485|max_txt_len=32 ... padding="max_length", truncation=True, max_length=self.max_txt_len,
+airknow|caption_join|two corrected captions joined with literal " and "|workbench/third_party/AirKnow/datasets.py:129-130|text = "{} and {}".format(self.correct_text(captions[0], correction_dict), self.correct_text(captions[1], correction_dict))
+airknow|caption_correct_text|lowercase, every string.punctuation char → space, strip/split, exact per-token correction-dict lookup, single-space join|workbench/third_party/AirKnow/datasets.py:122-127|trans=str.maketrans({key: ' ' for key in string.punctuation}) ; tokens = str(text).lower().translate(trans).strip().split()
+airknow|reference_mask|YES, -10e10 executes on the FashionIQ path (unconditional in the non-fashion200k/else branch), before argsort|workbench/third_party/AirKnow/test_BLIP2.py:150-154|for i, t in enumerate(test_queries): sims[i, test_targets_id.index(t['source_img_id'])] = -10e10
+airknow|gallery|full ordered validation split (self.split hardcoded 'original-split')|workbench/third_party/AirKnow/datasets.py:31,218-224|self.split = 'original-split' ... elif self.split == 'original-split': for id, image_name in enumerate(images):
+airknow|recall_arithmetic|hits / len(nn_result) where nn_result has one row per query; multiplies by 100|workbench/third_party/AirKnow/test_BLIP2.py:169-175|for k in [1, 10, 50]: ... r = 100 * r / len(nn_result)
+airknow|recall_multiplies_100|YES|workbench/third_party/AirKnow/test_BLIP2.py:174|r = 100 * r / len(nn_result)
+airknow|model_mode|native test() calls model.train() at entry; replay reproduces that unless --eval-mode neutralizes it|workbench/third_party/AirKnow/test_BLIP2.py:10|model.train()
+airknow|model_mode_replay|replay defaults to native train()|workbench/replay/airknow.py:171-172|# Native behavior: test_BLIP2.py:10 calls model.train() / model.train()
+airknow|protocol|fashioniq_full_gallery_ref_excluded|workbench/replay/airknow.py:51|PROTOCOL = "fashioniq_full_gallery_ref_excluded"
+```
+
+## conesep
+
+```
+conesep|image_transform|data_utils.targetpad_transform(1.25, 224); squarepad/clip defaults not used|workbench/replay/conesep.py:164|transform = data_utils.targetpad_transform(1.25, 224)
+conesep|image_transform_construction|built in the replay shell and passed to the native dataset|workbench/replay/conesep.py:171|dataset = datasets.FashionIQ(path=root_str, transform=transform, noise_ratio=0)
+conesep|image_transform_native_default|native train.py hardcodes targetpad/1.25/224|workbench/third_party/ConeSep/train.py:91-99|transform = "targetpad" / target_ratio = 1.25 / preprocess = targetpad_transform(target_ratio, input_dim)
+conesep|text_processor_config|configs/models/blip2/blip2_pretrain.yaml, from the model class's PRETRAINED_MODEL_CONFIG_DICT|workbench/replay/conesep.py:38-39|PROCESSOR_CONFIGS = { "pretrain": "configs/models/blip2/blip2_pretrain.yaml",
+conesep|text_processor_config_load|pinned config → load_preprocess(cfg.preprocess)|workbench/replay/lavis_processors.py:216-217|cfg = OmegaConf.load(config_path) ; _, txt_processors = load_preprocess(cfg.preprocess)
+conesep|text_processor_max_length|NO max_length; BlipCaptionProcessor(prompt="", max_words=50)|workbench/third_party/ConeSep/lavis/processors/blip_processors.py:30,44-45,64-66|def __init__(self, prompt="", max_words=50): ... max_words = cfg.get("max_words", 50) ... if len(caption_words) > self.max_words: caption = " ".join(caption_words[: self.max_words])
+conesep|tokenizer_max_length|BERT tokenizer inside the model uses max_length=32|workbench/third_party/ConeSep/lavis/models/blip2_models/ConeSep.py:128,469-473|max_txt_len=32 ... max_length=self.max_txt_len,
+conesep|caption_join|literal " and "|workbench/third_party/ConeSep/datasets.py:115-116|text = "{} and {}".format(self.correct_text(captions[0], correction_dict), self.correct_text(captions[1], correction_dict))
+conesep|reference_mask|YES, -10e10 on the FashionIQ path, before argsort|workbench/third_party/ConeSep/test.py:67-71|for i, t in enumerate(test_queries): sims[i, test_targets_id.index(t['source_img_id'])] = -10e10
+conesep|gallery|full ordered validation split (self.split hardcoded 'original-split')|workbench/third_party/ConeSep/datasets.py:28,201-207|self.split = 'original-split' ... elif self.split == 'original-split':
+conesep|recall_arithmetic|r = 100 * r / len(nn_result)|workbench/third_party/ConeSep/test.py:76-81|for k in [1, 10, 50]: ... r = 100 * r / len(nn_result)
+conesep|recall_multiplies_100|YES|workbench/third_party/ConeSep/test.py:81|r = 100 * r / len(nn_result)
+conesep|model_mode|model.eval()|workbench/third_party/ConeSep/test.py:10|model.eval()
+conesep|protocol|fashioniq_full_gallery_ref_excluded|workbench/replay/conesep.py:46|PROTOCOL = "fashioniq_full_gallery_ref_excluded"
+```
+
+## habit
+
+```
+habit|image_transform|data_utils.targetpad_transform(1.25, 224)|workbench/replay/habit.py:151|transform = data_utils.targetpad_transform(1.25, 224)
+habit|image_transform_construction|passed to native FashionIQ with explicit split="original-split"|workbench/replay/habit.py:157|dataset = datasets.FashionIQ(path=root_str, transform=transform, noise_ratio=0, split="original-split")
+habit|image_transform_native_default|native train.py hardcodes targetpad/1.25/224|workbench/third_party/HABIT/train.py:94-102|transform = "targetpad" / target_ratio = 1.25 / preprocess = targetpad_transform(target_ratio, input_dim)
+habit|text_processor_config|configs/models/blip2/blip2_pretrain.yaml|workbench/replay/habit.py:38-39|PROCESSOR_CONFIGS = { "pretrain": "configs/models/blip2/blip2_pretrain.yaml",
+habit|text_processor_max_length|NO max_length; BlipCaptionProcessor(prompt="", max_words=50)|workbench/third_party/HABIT/lavis/processors/blip_processors.py:30,44-45,64-66|def __init__(self, prompt="", max_words=50): ... max_words = cfg.get("max_words", 50)
+habit|tokenizer_max_length|BERT tokenizer inside model: max_length=32|workbench/third_party/HABIT/lavis/models/blip2_models/HABIT.py:136,389-393|max_txt_len=32 ... max_length=self.max_txt_len,
+habit|caption_join|literal " and "|workbench/third_party/HABIT/datasets.py:119-120|text = "{} and {}".format(self.correct_text(captions[0], correction_dict), self.correct_text(captions[1], correction_dict))
+habit|reference_mask|YES, -10e10 on the FashionIQ path, before argsort|workbench/third_party/HABIT/test.py:150-154|for i, t in enumerate(test_queries): sims[i, test_targets_id.index(t['source_img_id'])] = -10e10
+habit|gallery|full ordered validation split; split defaults to 'original-split'|workbench/third_party/HABIT/datasets.py:28,205-207|def __init__(self, path, category=None, transform=None, noise_ratio=0, split='original-split'): ... elif self.split == 'original-split':
+habit|recall_arithmetic|r = 100 * r / len(nn_result)|workbench/third_party/HABIT/test.py:168-174|for k in [1, 10, 50]: ... r = 100 * r / len(nn_result)
+habit|recall_multiplies_100|YES|workbench/third_party/HABIT/test.py:174|r = 100 * r / len(nn_result)
+habit|model_mode|model.eval()|workbench/third_party/HABIT/test.py:10|model.eval()
+habit|protocol|fashioniq_full_gallery_ref_excluded|workbench/replay/habit.py:46|PROTOCOL = "fashioniq_full_gallery_ref_excluded"
+```
+
+## intent
+
+```
+intent|image_transform|data_utils.targetpad_transform(1.25, 224)|workbench/replay/intent.py:151|transform = data_utils.targetpad_transform(1.25, 224)
+intent|image_transform_construction|passed to native FashionIQ with split="original-split"|workbench/replay/intent.py:157|dataset = datasets.FashionIQ(path=root_str, transform=transform, noise_ratio=0, split="original-split")
+intent|image_transform_native_default|native train_INTENT.py hardcodes targetpad/1.25/224|workbench/third_party/INTENT/train_INTENT.py:79-87|transform = "targetpad" / target_ratio = 1.25 / preprocess = targetpad_transform(target_ratio, input_dim)
+intent|text_processor_config|configs/models/blip2/blip2_pretrain.yaml|workbench/replay/intent.py:38-39|PROCESSOR_CONFIGS = { "pretrain": "configs/models/blip2/blip2_pretrain.yaml",
+intent|text_processor_max_length|NO max_length; BlipCaptionProcessor(prompt="", max_words=50)|workbench/third_party/INTENT/lavis/processors/blip_processors.py:30,44-45,64-66|def __init__(self, prompt="", max_words=50): ... max_words = cfg.get("max_words", 50)
+intent|tokenizer_max_length|BERT tokenizer inside model: max_length=32|workbench/third_party/INTENT/lavis/models/blip2_models/blip2_cir.py:145,740-743|max_txt_len=32 ... max_length=self.max_txt_len,
+intent|caption_join|literal " and "|workbench/third_party/INTENT/datasets.py:117-118|text = "{} and {}".format(self.correct_text(captions[0], correction_dict), self.correct_text(captions[1], correction_dict))
+intent|reference_mask|YES, -10e10 on the FashionIQ path, before argsort|workbench/third_party/INTENT/test.py:149-153|for i, t in enumerate(test_queries): sims[i, test_targets_id.index(t['source_img_id'])] = -10e10
+intent|gallery|full ordered validation split; split defaults to 'original-split'|workbench/third_party/INTENT/datasets.py:26,203-205|def __init__(self, path, category=None, transform=None,noise_ratio=0, split='original-split'): ... elif self.split == 'original-split':
+intent|recall_arithmetic|r = 100 * r / len(nn_result)|workbench/third_party/INTENT/test.py:167-173|for k in [1, 10, 50]: ... r = 100 * r / len(nn_result)
+intent|recall_multiplies_100|YES|workbench/third_party/INTENT/test.py:173|r = 100 * r / len(nn_result)
+intent|model_mode|model.eval()|workbench/third_party/INTENT/test.py:10|model.eval()
+intent|protocol|fashioniq_full_gallery_ref_excluded|workbench/replay/intent.py:46|PROTOCOL = "fashioniq_full_gallery_ref_excluded"
+```
+
+## hint
+
+```
+hint|image_transform|data_utils.targetpad_transform(1.25, 224)|workbench/replay/hint.py:184|transform = data_utils.targetpad_transform(1.25, 224)
+hint|image_transform_construction|passed to native FashionIQ (no split argument — this dataset has no split switch)|workbench/replay/hint.py:192|dataset = datasets.FashionIQ(path=root, transform=transform)
+hint|image_transform_native_default|native train.py hardcodes targetpad/1.25/224|workbench/third_party/HINT/train.py:73-80|transform = "targetpad" / target_ratio = 1.25 / preprocess = targetpad_transform(target_ratio, input_dim)
+hint|text_processor_config|configs/models/blip2/blip2_pretrain.yaml (selectable by --backbone)|workbench/replay/hint.py:56-57|PROCESSOR_CONFIGS = { "pretrain": "configs/models/blip2/blip2_pretrain.yaml",
+hint|text_processor_config_load|config_relative_path → text_processors(source_root, config_relative_path)|workbench/replay/hint.py:162|txt_processors, boundary = text_processors(source_root, config_relative_path)
+hint|text_processor_max_length|NO max_length; BlipCaptionProcessor(prompt="", max_words=50)|workbench/third_party/HINT/lavis/processors/blip_processors.py:30,44-45,64-66|def __init__(self, prompt="", max_words=50): ... max_words = cfg.get("max_words", 50)
+hint|tokenizer_max_length|BERT tokenizer inside model: max_length=32|workbench/third_party/HINT/lavis/models/blip2_models/HINT.py:254,413-417|max_txt_len=32 ... max_length=self.max_txt_len,
+hint|caption_join|literal " and "|workbench/third_party/HINT/datasets.py:82-83|text = "{} and {}".format(self.correct_text(captions[0], correction_dict), self.correct_text(captions[1], correction_dict))
+hint|reference_mask|YES, -10e10, before argsort|workbench/third_party/HINT/test.py:82-86|for i, t in enumerate(test_queries): sims[i, test_targets_id.index(t['source_img_id'])] = -10e10
+hint|gallery|ordered pair union (source ∪ target) of the validation split — no 'original-split' option in this dataset class|workbench/third_party/HINT/datasets.py:154-164|for i in test_queries: if i['source_img_id'] not in test_targets_id: ... if i['target_img_id'] not in test_targets_id: ...
+hint|recall_arithmetic|r = 100 * r / len(nn_result)|workbench/third_party/HINT/test.py:100-106|for k in [1, 10, 50]: ... r = 100 * r / len(nn_result)
+hint|recall_multiplies_100|YES|workbench/third_party/HINT/test.py:106|r = 100 * r / len(nn_result)
+hint|model_mode|model.eval()|workbench/third_party/HINT/test.py:12|model.eval()
+hint|protocol|fashioniq_val_split|workbench/replay/hint.py:65|PROTOCOL = "fashioniq_val_split"
+```
+
+## The five special points, stated plainly
+
+- **Image transform at evaluation:** all five build `data_utils.targetpad_transform(1.25, 224)` in their replay shell (`airknow.py:174`, `conesep.py:164`, `habit.py:151`, `intent.py:151`, `hint.py:184`). That is the repo’s own function: `TargetPad(1.25)` → `Resize(224, BICUBIC)` → `CenterCrop(224)` → RGB → `ToTensor` → CLIP mean/std (`data_utils.py:92-105`). `squarepad_transform` exists in every repo but no path selects it; no CLIP default transform is used.
+- **LAVIS text processor:** config is `configs/models/blip2/blip2_pretrain.yaml` in every case, selected from the model class’s `PRETRAINED_MODEL_CONFIG_DICT`, loaded through `OmegaConf.load` + `load_preprocess(cfg.preprocess)` (`lavis_processors.py:216-217`) rather than `load_model_and_preprocess`. **No `max_length` is set on the processor** — `BlipCaptionProcessor(prompt="", max_words=50)` truncates at 50 words. `max_length=32` belongs to the model’s internal BERT tokenizer, not the LAVIS processor.
+- **Caption join:** identical string in all five: `"{} and {}".format(self.correct_text(captions[0], correction_dict), self.correct_text(captions[1], correction_dict))`.
+- **`-10e10` on the FashionIQ path:** yes for all five. AirKnow `test_BLIP2.py:151`, ConeSep `test.py:68`, HABIT `test.py:151`, INTENT `test.py:150`, HINT `test.py:83` — unconditional in the non-`fashion200k` branch, written before `argsort`.
+- **Recall arithmetic:** hits / `len(nn_result)` (one row per query), **multiplied by 100**, at AirKnow `:174`, ConeSep `:81`, HABIT `:174`, INTENT `:173`, HINT `:106`.

@@ -1,0 +1,6 @@
+source csmcir  macro_r10 = 57.05073873202006
+served csmcir           = [(57.05073873202006, '(top level)', 'measurement.json')]
+source ptha    macro_metrics.r10 = 37.897844115893044
+served ptha_mtst        = [(37.897844115893044, 'macro_metrics', 'ptha_transfer_run1.json')]
+match csmcir: True
+match ptha  : True

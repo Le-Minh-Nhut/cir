@@ -73,7 +73,30 @@ export function isPerQueryVerified(run: EvidenceRun): boolean {
   return run?.evidence_status === "PER_QUERY_VERIFIED";
 }
 
+/** What the shell knows about each source's own request state.
+ *
+ *  `evidenceState` used to infer "no real evidence" from an EMPTY ARRAY, which is also what a region
+ *  holds before its first answer arrives. The banner therefore announced "MOCK DEVELOPMENT DATA — no
+ *  real evaluation results are loaded" over data that had not been fetched yet. The fix is not a
+ *  guess at a default: the caller states each source's status, and any unsettled source makes the
+ *  banner a LOADING statement rather than a claim about content.
+ */
+export type EvidenceSourceStatus = "idle" | "loading" | "ready" | "error";
+
+export interface EvidenceSources {
+  runs?: EvidenceSourceStatus;
+  benchmarks?: EvidenceSourceStatus;
+  composition?: EvidenceSourceStatus;
+}
+
 export interface EvidenceState {
+  /** True while any source that feeds this state has not settled. When true, every count below is a
+   *  lower bound read from whatever arrived, and the banner must not state an absence. */
+  loading: boolean;
+  /** Sources that failed to load. A failed source is also not evidence of absence. */
+  failedSources: string[];
+  /** Sources still in flight. */
+  pendingSources: string[];
   /** Real runs in the per-query index. */
   experimentRuns: number;
   /** Per-query runs the authoritative verifier corroborated. */
@@ -122,9 +145,18 @@ export interface CompositionScope {
 export function evidenceState(runs: EvidenceRun[] | null | undefined,
                               benchmarkRuns: EvidenceBenchmarkRun[] | null | undefined,
                               compositionRuns?: EvidenceCompositionRun[] | null,
-                              scope?: CompositionScope | null): EvidenceState {
+                              scope?: CompositionScope | null,
+                              sources?: EvidenceSources | null): EvidenceState {
   const safeRuns = Array.isArray(runs) ? runs : [];
   const safeBenchmarks = Array.isArray(benchmarkRuns) ? benchmarkRuns : [];
+  const statuses = sources ?? {};
+  const pendingSources = (["runs", "benchmarks", "composition"] as const)
+    .filter((name) => statuses[name] === "idle" || statuses[name] === "loading");
+  const failedSources = (["runs", "benchmarks", "composition"] as const)
+    .filter((name) => statuses[name] === "error");
+  // An unstated source is treated as settled: existing callers that pass only data keep their
+  // meaning, and the shell — the only caller with region state — always states it.
+  const loading = pendingSources.length > 0;
 
   const experimentRuns = safeRuns.filter((run) => run?.data_kind === "experiment").length;
   // A declared experiment is NOT verified evidence. Counted separately so the banner can say
@@ -151,6 +183,9 @@ export function evidenceState(runs: EvidenceRun[] | null | undefined,
   const rowsWithCandidateTopk = scoped
     .filter((run) => run?.capabilities?.candidate_topk === true).length;
   return {
+    loading,
+    failedSources,
+    pendingSources,
     experimentRuns,
     verifiedQueryRuns,
     unverifiedExperimentRuns,
@@ -175,6 +210,22 @@ export function evidenceState(runs: EvidenceRun[] | null | undefined,
  *  exists. A synthetic or refused aggregate is never described as a real evaluation (I03/I14/I16).
  */
 export function evidenceBanner(state: EvidenceState): string {
+  // Loading and failure come FIRST, because every branch below is a claim about what the deployment
+  // holds, and neither an unsettled nor a failed source supports one. This is the same defect class
+  // as the scope strip printing "0 lượt" while the rows were still in flight.
+  if (state.loading || state.failedSources.length > 0) {
+    const parts: string[] = [];
+    if (state.loading) parts.push("Đang tải bằng chứng");
+    if (state.failedSources.length) {
+      parts.push(`Không tải được ${state.failedSources.join(", ")} — đây là lỗi yêu cầu, `
+        + "không phải 'không có kết quả'");
+    }
+    const arrived = state.experimentRuns + state.aggregateRuns;
+    if (arrived > 0) {
+      parts.push(`${state.certifiedAggregates} đã chứng nhận trong ${state.aggregateRuns} report đã về`);
+    }
+    return parts.join(" · ");
+  }
   if (state.noRealEvidence) {
     return state.hasMockEvidence
       ? "MOCK DEVELOPMENT DATA — only labelled development runs are loaded; no real evaluation results"

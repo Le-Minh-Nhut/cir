@@ -1,0 +1,19 @@
+AirKnow   | commit=6ab6fa95b746f85b08eea4cb66eb51448bce99b7 | date=2026-09-28T14:40:56+08:00 | models=airknow | local_fixes=data_utils.py (model_recovery); lavis/models/__init__.py (model_recovery) | MANIFEST_OK (1218 files)
+CLIP4Cir  | commit=dfed9f748a8a4d05abf613164e06d59b22dbdf13 | date=2023-09-05T09:31:52+02:00 | models=combiner_rn50x4_noft,clip4cir_rn50x4_fullft | local_fixes=- | MANIFEST_OK (14 files)
+CLVCNet   | commit=bd9b6889489806cb60676597880f91d918b279cb | date=2026-04-05T18:54:18+08:00 | models=clvc_net | local_fixes=resnet.py (model_recovery) | MANIFEST_OK (9 files)
+CSMCIR    | commit=774f94e2076ff17ea91703a6239d2a08f0e1a44e | date=2026-04-27T16:30:50+08:00 | models=csmcir | local_fixes=- | bad=2 missing=0 (359 files)
+          |   mismatched: src/lavis/models/__init__.py,src/validate_blip_csmcir.py
+ConeSep   | commit=bd4bf629ebe68045c1a54dcc61e4a3ea65f8759b | date=2026-05-25T17:59:18+08:00 | models=conesep | local_fixes=- | MANIFEST_OK (1221 files)
+DCNet     | commit=68c79d38569f01ca39c3b4ea641b3b7eb2ccb5fb | date=2021-03-15T11:42:57+09:00 | models=dcnet | local_fixes=- | bad=1 missing=0 (39 files)
+          |   mismatched: base/base_trainer.py
+ENCODER   | commit=29a2a31d6a56f677bf450c3be7cdaef423fb7018 | date=2026-05-25T18:00:29+08:00 | models=encoder | local_fixes=datasets1.py (model_recovery_addition); evaluate_model.py (model_recovery) | MANIFEST_OK (26 files)
+HABIT     | commit=6ddc2cd63eac1f65693f4e821c34fb3b42aee306 | date=2026-05-25T18:02:56+08:00 | models=habit | local_fixes=- | MANIFEST_OK (1234 files)
+HINT      | commit=bec50b6c8c19111893b617979502b948d1cea5b2 | date=2026-04-09T16:38:14+08:00 | models=hint | local_fixes=- | MANIFEST_OK (1225 files)
+INTENT    | commit=2a75fc6f57d1a036bf3167a7fe1d2cee072f51f3 | date=2026-05-25T18:15:51+08:00 | models=intent | local_fixes=- | MANIFEST_OK (1228 files)
+LIMN      | commit=7d7bc9b116f594a65ac22457491edf28a88d3c3e | date=2026-04-05T19:33:05+08:00 | models=limn | local_fixes=- | MANIFEST_OK (33 files)
+MTST_PTHA | commit=6a02ee4763fc2260b6abfb18be78853facb91d86 | date=2025-02-09T18:52:27+08:00 | models=ptha_mtst | local_fixes=.gitattributes (coordinator); MTST_PTHA/src/data_utils.py (coordinator); MTST_PTHA/src/lavis/models/__init__.py (coordinator) | MANIFEST_OK (360 files)
+PAIR      | commit=bfb0b98cdb4c44f6b9190baaa84d783a77dd888f | date=2026-04-05T15:58:53+08:00 | models=pair | local_fixes=models/MHTransformer_rev.py (model_recovery_addition) | MANIFEST_OK (22 files)
+SPRC      | commit=2935a5397732260d1db6fa577e5926f963e36f0f | date=2024-04-16T21:29:29+08:00 | models=sprc | local_fixes=- | MANIFEST_OK (354 files)
+TGCIR     | commit=65fa78eaf8cabe8197fcc22ccab42207c591bdee | date=2026-04-09T16:03:25+08:00 | models=tgcir | local_fixes=- | MANIFEST_OK (11 files)
+TME       | commit=394aad79df2c104feb32a2c96132582012765062 | date=2026-10-19T10:12:30+08:00 | models=tme | local_fixes=precompute.sh (coordinator); src/utility.py (coordinator) | bad=2 missing=0 (351 files)
+          |   mismatched: src/precompute.py,src/precompute_evaluation.py

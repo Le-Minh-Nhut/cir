@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { fetchJson, useRegion, type RegionHandle } from "./useRegion";
-import type { BenchmarkRun, RunGate } from "./gate";
+import type { BenchmarkRun, ParityGatePayload, RunGate } from "./gate";
 import type { Cohort, CompositionQuery, CompositionRun, DuplicateStatus, Job, Measurement, Model, Query, Run } from "./types";
 import type { CapabilityFlags, CapabilityReport, Provenance } from "./catalog";
 import { compositionCapabilities, benchmarkCapabilities, indexCapabilities, provenanceOf, testWorkspaceOrigin, transferLabel } from "./catalog";
@@ -157,6 +157,9 @@ export interface CompositionPagePayload {
   items: CompositionQuery[];
   total: number;
   queries_unavailable_reason?: string;
+  /** Per-state totals under the current filters EXCEPT the state filter itself, so each chip can
+   *  print its own count while another chip is active. */
+  state_counts?: Record<"hit" | "retrieval_failure" | "unscored", number>;
 }
 
 export interface UniverseEntry<T> {
@@ -187,6 +190,47 @@ export interface EvidenceSummary {
   confidence: "full" | "partial";
 }
 
+/** `GET /api/native-measurements` — macro numbers measured outside the job queue.
+ *
+ *  Separate from `/api/benchmark-runs` on purpose: these carry no completion proof, no
+ *  evidence-ledger entry and no verifier receipt, so they are `verified: false` and are never
+ *  sorted against certified reports. The UI must show them as a distinct, explicitly unverified
+ *  catalog; the endpoint's own note says so and is rendered rather than paraphrased. */
+export interface NativeMeasurement {
+  measurement_id: string;
+  source: { path: string; sha256: string | null; bytes: number; artifact_type: string };
+  verified: false;
+  verification: {
+    state: string;
+    certified: boolean;
+    is_research_evidence: boolean;
+    reason: string;
+  };
+  unreadable: string | null;
+  model_id: string | null;
+  checkpoint_id: string | null;
+  protocol_id: string | null;
+  metrics: { r10?: number; r50?: number; mean?: number } | null;
+  complete: boolean | null;
+  categories: string[];
+  recorded_at: string | null;
+  label: string | null;
+  blocker: string | null;
+}
+
+export interface NativeMeasurementCatalog {
+  measurements: NativeMeasurement[];
+  counts: {
+    files: number;
+    with_metrics: number;
+    unreadable: number;
+    signposted_blockers: number;
+    verified: number;
+  };
+  verified: false;
+  note: string;
+}
+
 export interface WorkbenchData {
   models: RegionHandle<Model[]>;
   indexRuns: RegionHandle<Run[]>;
@@ -203,6 +247,10 @@ export interface WorkbenchData {
   indexUniverse: RegionHandle<Array<UniverseEntry<Query>>>;
   compositionCapabilitiesSummary: RegionHandle<CapabilitySummary>;
   evidenceSummary: RegionHandle<EvidenceSummary>;
+  /** Native macro measurements, served as an explicitly unverified catalog. */
+  nativeMeasurements: RegionHandle<NativeMeasurementCatalog>;
+  /** G1/G2 parity verdict DERIVED from the measurement artifacts (`/api/runs/parity-gate`). */
+  parityGate: RegionHandle<ParityGatePayload>;
   protocolIds: string[];
   catalog: RunCatalogEntry[];
   refreshAll: () => void;
@@ -241,6 +289,10 @@ export function useWorkbenchData(query: DataQuery): WorkbenchData {
     (signal) => fetchJson(`/api/composition/capabilities?subset=${query.subset}`, signal));
   const evidenceSummary = useRegion<EvidenceSummary>("evidence-summary", "evidence",
     (signal) => fetchJson("/api/evidence/summary", signal));
+  const nativeMeasurements = useRegion<NativeMeasurementCatalog>("native-measurements", "native",
+    (signal) => fetchJson("/api/native-measurements", signal));
+  const parityGate = useRegion<ParityGatePayload>("parity-gate", "parity-gate",
+    (signal) => fetchJson("/api/runs/parity-gate", signal));
   const cohorts = useRegion<Cohort[]>("cohorts", "cohorts", (signal) => fetchJson("/api/cohorts", signal));
   const jobs = useRegion<Job[]>("jobs", "jobs", (signal) => fetchJson("/api/jobs", signal));
   const gates = useRegion<Record<string, RunGate>>("gates", "gates", (signal) => fetchJson("/api/runs/gate", signal));
@@ -329,11 +381,13 @@ export function useWorkbenchData(query: DataQuery): WorkbenchData {
   const refreshAll = useCallback(() => {
     models.retry(); indexRuns.retry(); aggregates.retry(); compositionRuns.retry();
     cohorts.retry(); jobs.retry(); gates.retry();
-    compositionCapabilitiesSummary.retry(); evidenceSummary.retry();
+    compositionCapabilitiesSummary.retry(); evidenceSummary.retry(); nativeMeasurements.retry();
+    parityGate.retry();
   }, [models.retry, indexRuns.retry, aggregates.retry, compositionRuns.retry, cohorts.retry, jobs.retry,
-      gates.retry, compositionCapabilitiesSummary.retry, evidenceSummary.retry]);
+      gates.retry, compositionCapabilitiesSummary.retry, evidenceSummary.retry,
+      nativeMeasurements.retry, parityGate.retry]);
 
   return { models, indexRuns, aggregates, compositionRuns, cohorts, jobs, gates,
     compositionPage, compositionUniverse, indexUniverse, compositionCapabilitiesSummary,
-    evidenceSummary, protocolIds, catalog, refreshAll };
+    evidenceSummary, nativeMeasurements, parityGate, protocolIds, catalog, refreshAll };
 }

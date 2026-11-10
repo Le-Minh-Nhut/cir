@@ -1,0 +1,12 @@
+### R8: does the candidates payload carry any image URL?
+top-level keys: ['candidates', 'canonical_status_note', 'checkpoint_sha256', 'condition', 'depth_stored', 'gallery_size', 'model_text', 'qid', 'scope', 'staged_query_image_is_evaluator_input', 'target_rank', 'target_score']
+candidate keys: ['gallery_id', 'gallery_position', 'image_path', 'is_target', 'rank', 'score']
+first candidate: {"rank": 1, "gallery_position": 16809, "gallery_id": "mbeir_images/fashioniq_images/B004TMGDME.jpg", "image_path": "mbeir_images/fashioniq_images/B004TMGDME.jpg", "score": 0.8147742748260498, "is_target": false}
+any key containing image/url/thumb: ['image_path']
+
+### R8: summary endpoint status + whether scope is in identity
+HTTP 200
+keys: ['available', 'canonical_cohort', 'canonical_status', 'checkpoints', 'conditions', 'evidence_files', 'gallery', 'label', 'queries', 'rank_convention_crosscheck', 'reason', 'release_provenance', 'runtime', 'scopes', 'status']
+has scope-keyed top level? ['scopes']
+queries[qid] keys: ['qid', 'release', 'scopes', 'target_gallery_id', 'target_position_in_gallery']
+cell keys: ['export', 'gallery_size_scored', 'model_text', 'score_at_rank_1', 'target_margin_vs_rank1', 'target_rank', 'target_score']

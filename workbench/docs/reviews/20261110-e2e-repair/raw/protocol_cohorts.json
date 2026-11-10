@@ -1,0 +1,183 @@
+{
+  "source": "recomputed from data/FashionIQ + artifacts/circus_release",
+  "protocols": {
+    "fashioniq_original_split": {
+      "gallery_kind": "full_split",
+      "reference_excluded": false,
+      "aliases": [
+        "fashioniq_original",
+        "fashioniq_val_split_ref_included"
+      ],
+      "categories": {
+        "dress": {
+          "queries": 2017,
+          "gallery": 3817,
+          "gallery_sha256_ordered": "d193f087d5e18d640fb9f371d53842ed48eb32f773f9945b732c77f1e0fc5702",
+          "gallery_duplicates": 0,
+          "split_images": 3817,
+          "split_sha256": "21ff91d53c23859da91bfd49f3acc139b7f3a3dc944fc4e4a80194468cf14bab",
+          "query_ids_sha256": "2ff41f122eeaaf93d0ee79fc779db97d1b6514d9ba58a9c1e9e849226b3b08f9",
+          "reference_ids_sha256": "c80adec2b2327955db225c16c0ed54a4140e12ba9e9cf6813456fdc2e87caa3d",
+          "target_ids_sha256": "a1d8905a3f1feeb264d53879fa73be5f8ea35626bab3b6b902bde0ea884121df",
+          "targets_in_gallery": 2017,
+          "references_in_gallery": 2017,
+          "targets_inside_reference_set": 0,
+          "query_identity_sha256": "bfd2838e005a777ae8353ae12c04db7812d537eeddae62aee85b0487e6cc91f0"
+        },
+        "shirt": {
+          "queries": 2038,
+          "gallery": 6346,
+          "gallery_sha256_ordered": "2c2a2382d9be4c9c8895bd1b4a6668f9b5e263432f38a72bd4b2d4c8030f5e2d",
+          "gallery_duplicates": 0,
+          "split_images": 6346,
+          "split_sha256": "b82effbf7352a6f828b38c45eb32e53d726bd4d6fd81d6290c81eeb2c68e3234",
+          "query_ids_sha256": "67d8fa7eea5512107356ba0eb20eb3c1ef566c48917ade47a957330306e539ca",
+          "reference_ids_sha256": "5abda2c7a184ab9053a14f3e70dafc63e88cc2ef165c0c4f8a5f8c1b755840c2",
+          "target_ids_sha256": "eaf9fac8bc9ff5079bc5651e89d59e95aaec9090ffb2a17e5be5896d3ea13ef7",
+          "targets_in_gallery": 2038,
+          "references_in_gallery": 2038,
+          "targets_inside_reference_set": 0,
+          "query_identity_sha256": "c617b47df9118e1c34c082ff7372ca29b371d112daf99d9e21f87e26c2747bc8"
+        },
+        "toptee": {
+          "queries": 1961,
+          "gallery": 5373,
+          "gallery_sha256_ordered": "cae7b6f089482f39a85247aebca4ec255e0db25f9c21e2a6bff87d5574f95d51",
+          "gallery_duplicates": 0,
+          "split_images": 5373,
+          "split_sha256": "ee42b2505275dd7a19b11ddb88c9264aab2d77f4e59b075fb1c7c3095d02f412",
+          "query_ids_sha256": "2b28bef3a136f94ff8386d2e7af3e3b728fd1f3b382481f5c47a422cfd7e01f9",
+          "reference_ids_sha256": "af748de67d2116aeafd01bf632c25ff5a07bee472e73efa12cb9e7ef0ccb63c6",
+          "target_ids_sha256": "d0f2f5ef411ef5110f412f908f30b802f2a8690cfd84bbfec638e5065721fd78",
+          "targets_in_gallery": 1961,
+          "references_in_gallery": 1961,
+          "targets_inside_reference_set": 0,
+          "query_identity_sha256": "d7ddea9d802b1e999ed26a9afff6034f3d4cc0f7874d3a6bba18e2ec03dfcdc9"
+        }
+      }
+    },
+    "fashioniq_full_gallery_ref_excluded": {
+      "gallery_kind": "full_split",
+      "reference_excluded": true,
+      "aliases": [],
+      "categories": {
+        "dress": {
+          "queries": 2017,
+          "gallery": 3817,
+          "gallery_sha256_ordered": "d193f087d5e18d640fb9f371d53842ed48eb32f773f9945b732c77f1e0fc5702",
+          "gallery_duplicates": 0,
+          "split_images": 3817,
+          "split_sha256": "21ff91d53c23859da91bfd49f3acc139b7f3a3dc944fc4e4a80194468cf14bab",
+          "query_ids_sha256": "2ff41f122eeaaf93d0ee79fc779db97d1b6514d9ba58a9c1e9e849226b3b08f9",
+          "reference_ids_sha256": "c80adec2b2327955db225c16c0ed54a4140e12ba9e9cf6813456fdc2e87caa3d",
+          "target_ids_sha256": "a1d8905a3f1feeb264d53879fa73be5f8ea35626bab3b6b902bde0ea884121df",
+          "targets_in_gallery": 2017,
+          "references_in_gallery": 2017,
+          "targets_inside_reference_set": 0,
+          "query_identity_sha256": "bfd2838e005a777ae8353ae12c04db7812d537eeddae62aee85b0487e6cc91f0"
+        },
+        "shirt": {
+          "queries": 2038,
+          "gallery": 6346,
+          "gallery_sha256_ordered": "2c2a2382d9be4c9c8895bd1b4a6668f9b5e263432f38a72bd4b2d4c8030f5e2d",
+          "gallery_duplicates": 0,
+          "split_images": 6346,
+          "split_sha256": "b82effbf7352a6f828b38c45eb32e53d726bd4d6fd81d6290c81eeb2c68e3234",
+          "query_ids_sha256": "67d8fa7eea5512107356ba0eb20eb3c1ef566c48917ade47a957330306e539ca",
+          "reference_ids_sha256": "5abda2c7a184ab9053a14f3e70dafc63e88cc2ef165c0c4f8a5f8c1b755840c2",
+          "target_ids_sha256": "eaf9fac8bc9ff5079bc5651e89d59e95aaec9090ffb2a17e5be5896d3ea13ef7",
+          "targets_in_gallery": 2038,
+          "references_in_gallery": 2038,
+          "targets_inside_reference_set": 0,
+          "query_identity_sha256": "c617b47df9118e1c34c082ff7372ca29b371d112daf99d9e21f87e26c2747bc8"
+        },
+        "toptee": {
+          "queries": 1961,
+          "gallery": 5373,
+          "gallery_sha256_ordered": "cae7b6f089482f39a85247aebca4ec255e0db25f9c21e2a6bff87d5574f95d51",
+          "gallery_duplicates": 0,
+          "split_images": 5373,
+          "split_sha256": "ee42b2505275dd7a19b11ddb88c9264aab2d77f4e59b075fb1c7c3095d02f412",
+          "query_ids_sha256": "2b28bef3a136f94ff8386d2e7af3e3b728fd1f3b382481f5c47a422cfd7e01f9",
+          "reference_ids_sha256": "af748de67d2116aeafd01bf632c25ff5a07bee472e73efa12cb9e7ef0ccb63c6",
+          "target_ids_sha256": "d0f2f5ef411ef5110f412f908f30b802f2a8690cfd84bbfec638e5065721fd78",
+          "targets_in_gallery": 1961,
+          "references_in_gallery": 1961,
+          "targets_inside_reference_set": 0,
+          "query_identity_sha256": "d7ddea9d802b1e999ed26a9afff6034f3d4cc0f7874d3a6bba18e2ec03dfcdc9"
+        }
+      }
+    },
+    "fashioniq_val_split": {
+      "gallery_kind": "pair_union",
+      "reference_excluded": true,
+      "aliases": [
+        "fashioniq_val"
+      ],
+      "categories": {
+        "dress": {
+          "queries": 2017,
+          "gallery": 2628,
+          "gallery_sha256_ordered": "317f08bdfdd7af089814a693b7ac9939e922d3c52d3d943f9ac0c4ca3c1ba011",
+          "gallery_duplicates": 0,
+          "split_images": 3817,
+          "split_sha256": "21ff91d53c23859da91bfd49f3acc139b7f3a3dc944fc4e4a80194468cf14bab",
+          "query_ids_sha256": "2ff41f122eeaaf93d0ee79fc779db97d1b6514d9ba58a9c1e9e849226b3b08f9",
+          "reference_ids_sha256": "c80adec2b2327955db225c16c0ed54a4140e12ba9e9cf6813456fdc2e87caa3d",
+          "target_ids_sha256": "a1d8905a3f1feeb264d53879fa73be5f8ea35626bab3b6b902bde0ea884121df",
+          "targets_in_gallery": 2017,
+          "references_in_gallery": 2017,
+          "targets_inside_reference_set": 0,
+          "query_identity_sha256": "bfd2838e005a777ae8353ae12c04db7812d537eeddae62aee85b0487e6cc91f0"
+        },
+        "shirt": {
+          "queries": 2038,
+          "gallery": 3089,
+          "gallery_sha256_ordered": "e402646a1caceb0566412d17ea5af0ae3df93e6f59b4755cc3c72dd9f5be1b75",
+          "gallery_duplicates": 0,
+          "split_images": 6346,
+          "split_sha256": "b82effbf7352a6f828b38c45eb32e53d726bd4d6fd81d6290c81eeb2c68e3234",
+          "query_ids_sha256": "67d8fa7eea5512107356ba0eb20eb3c1ef566c48917ade47a957330306e539ca",
+          "reference_ids_sha256": "5abda2c7a184ab9053a14f3e70dafc63e88cc2ef165c0c4f8a5f8c1b755840c2",
+          "target_ids_sha256": "eaf9fac8bc9ff5079bc5651e89d59e95aaec9090ffb2a17e5be5896d3ea13ef7",
+          "targets_in_gallery": 2038,
+          "references_in_gallery": 2038,
+          "targets_inside_reference_set": 0,
+          "query_identity_sha256": "c617b47df9118e1c34c082ff7372ca29b371d112daf99d9e21f87e26c2747bc8"
+        },
+        "toptee": {
+          "queries": 1961,
+          "gallery": 2902,
+          "gallery_sha256_ordered": "d0018afec416e2fab1bbc6ed8708058c86a2ebab674dfbd3c7473a5dbea04f29",
+          "gallery_duplicates": 0,
+          "split_images": 5373,
+          "split_sha256": "ee42b2505275dd7a19b11ddb88c9264aab2d77f4e59b075fb1c7c3095d02f412",
+          "query_ids_sha256": "2b28bef3a136f94ff8386d2e7af3e3b728fd1f3b382481f5c47a422cfd7e01f9",
+          "reference_ids_sha256": "af748de67d2116aeafd01bf632c25ff5a07bee472e73efa12cb9e7ef0ccb63c6",
+          "target_ids_sha256": "d0f2f5ef411ef5110f412f908f30b802f2a8690cfd84bbfec638e5065721fd78",
+          "targets_in_gallery": 1961,
+          "references_in_gallery": 1961,
+          "targets_inside_reference_set": 0,
+          "query_identity_sha256": "d7ddea9d802b1e999ed26a9afff6034f3d4cc0f7874d3a6bba18e2ec03dfcdc9"
+        }
+      }
+    }
+  },
+  "fashioniq_root": "/home/heheboiz/data/cir/data/FashionIQ",
+  "circus_release": {
+    "gallery": 74381,
+    "gallery_sha256_ordered": "232d3b365e0579a9dcebca94d613047983abee8c9b6ecf0bbe982c8f8f703b3c",
+    "gallery_duplicates": 0,
+    "candidates": 74381,
+    "queries": 6003,
+    "query_ids_sha256": "e0638fbc0cfb81b237af15aa7a3cc5a4574b35b7342e5ecfc9bcded2686db46a",
+    "query_has_multi_positive": 9,
+    "query_reference_equals_positive": 0,
+    "gallery_sha256_source_file": "workbench/artifacts/circus_release/shortcut_audit/retrieval_data_fashioniq_task7_aggregated_best_rank_mm_any.json",
+    "file_sha256": {
+      "mbeir_query": "b601ef6a5411bf9385cff41e64bea863871ab1094cd09d78683de6a5141165ef",
+      "mbeir_candidates": "121ec284832c33289ee13bfac19d5d59dc3f8aeddf672d784fd5eb8bcdf79eef",
+      "aggregated_audit": "27bdbef041200dc393b5478d3e57121bc16c70a9acc2e98a19fb48408a99533c"
+    }
+  }
+}

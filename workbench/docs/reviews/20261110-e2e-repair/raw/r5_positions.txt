@@ -1,0 +1,25 @@
+rank_convention_crosscheck: {
+ "method": "recompute the recorded canonical target rank of already-scored queries from this run's own cached query matrix + cached gallery matrix, using the adapter's score/rank; agreement proves gallery ORDER and the tie rule are the recorded ones",
+ "checked": 36,
+ "all_agree": true
+}
+items n= 36
+   {"condition": "multimodal", "qid": "7:2011", "scope": "shirt", "recorded_rank": 166, "recomputed_rank": 166, "max_abs_score_self_diff": 0.0, "agrees": true}
+   {"condition": "multimodal", "qid": "7:2012", "scope": "shirt", "recorded_rank": 1, "recomputed_rank": 1, "max_abs_score_self_diff": 0.0, "agrees": true}
+   {"condition": "multimodal", "qid": "7:2013", "scope": "shirt", "recorded_rank": 2209, "recomputed_rank": 2209, "max_abs_score_self_diff": 0.0, "agrees": true}
+   {"condition": "multimodal", "qid": "7:2014", "scope": "shirt", "recorded_rank": 1, "recomputed_rank": 1, "max_abs_score_self_diff": 0.0, "agrees": true}
+   {"condition": "multimodal", "qid": "7:2015", "scope": "shirt", "recorded_rank": 1386, "recomputed_rank": 1386, "max_abs_score_self_diff": 0.0, "agrees": true}
+   {"condition": "multimodal", "qid": "7:2016", "scope": "shirt", "recorded_rank": 1, "recomputed_rank": 1, "max_abs_score_self_diff": 0.0, "agrees": true}
+gallery_matrices keys: ['shirt', 'toptee']
+ GM shirt {"file": "/home/heheboiz/data/cir/workbench/artifacts/composition/runs/9e4918a6b5c243412cbc58c9/work/limn/features/gallery_shirt.npy", "shape": [74381, 768], "dtype": "float32", "byte_length": 228498560, "recorded_content_digest": "1896231c9dbbbfe32c5205eaf33a3cd24430e56da63163db1b4c692830d9f576", "
+ GM toptee {"file": "/home/heheboiz/data/cir/workbench/artifacts/composition/runs/9e4918a6b5c243412cbc58c9/work/limn/features/gallery_toptee.npy", "shape": [74381, 768], "dtype": "float32", "byte_length": 228498560, "recorded_content_digest": "fac3e6d7d3644ece8e742eaac86060452d973da0ccc647b1f68026c4b86e6a9f", 
+source_run_id: 9e4918a6b5c243412cbc58c9
+runtime: {
+ "controller_python": "3.12.11 (main, Oct  7 2025, 15:34:39) [Clang 20.1.4 ]",
+ "model_interpreter": "/home/heheboiz/data/cir/workbench/envs/limn310-adapted/bin/python",
+ "decode_workers": 2,
+ "elapsed_seconds": 60.47,
+ "top_k": 100,
+ "scoring": "adapter.score: L2-normalized query row dot composed target row (target rows are already L2-normalized by compose_target)",
+ "rank": "adapter.rank: 1 + count(row > v) + count(row[:i] == v), same as the evaluator"
+}

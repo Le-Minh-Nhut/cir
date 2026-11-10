@@ -1,0 +1,217 @@
+Read-only extraction complete. No files were modified.
+
+The "shared contract" is not written down as a single schema in this repo (I searched for it), so I emit the fields every one of these five evaluators shares, plus the four you flagged. Paths are repo-relative; `third_party` = `workbench/third_party`.
+
+## ENCODER
+
+```
+encoder|model_id|encoder|workbench/registry/models.yaml:696|- model_id: encoder
+encoder|method_name|ENCODER|workbench/registry/models.yaml:741|method_name: ENCODER
+encoder|upstream_commit_sha|29a2a31d6a56f677bf450c3be7cdaef423fb7018|workbench/registry/models.yaml:745|upstream_commit_sha: 29a2a31d...
+encoder|source_dir|ENCODER|workbench/registry/models.yaml:747|source_dir: ENCODER
+encoder|native_protocol|fashioniq_val_split|workbench/registry/models.yaml:750|native_protocol: fashioniq_val_split
+encoder|fashioniq_layout|fashioniq_ilearn_resized_training|workbench/registry/models.yaml:748|fashioniq_layout: fashioniq_ilearn_resized_training
+encoder|checkpoint_serialization|state_dict|workbench/registry/models.yaml:730|checkpoint_serialization: state_dict
+encoder|checkpoint_file|fashioniq.pt, sha256 0f31c50150a7bda3495e3378df13b4cec7924b52efd23b5e5dd9731459da9173|workbench/registry/models.yaml:775|expected_sha256: 0f31c501...
+encoder|image_factory|open_clip.create_model_and_transforms('ViT-B-32', pretrained=<source_root>/open_clip_pytorch_model.bin) -> (model, preprocess_train, preprocess_val)|third_party/ENCODER/evaluate_model.py:40|_, preprocess_train, preprocess_val = open_clip.create_model_and_transforms('ViT-B-32', pretrained=os.path.join(clip_path, 'open_clip_pytorch_model.bin'))
+encoder|transform_list|list index 0 = preprocess_train, index 1 = preprocess_val|third_party/ENCODER/evaluate_model.py:43|transform = [preprocess_train, preprocess_val]
+encoder|transform_dispatch|get_img uses self.transform[stage]|third_party/ENCODER/datasets.py:153|img = self.transform[stage](img)
+encoder|query_transform|stage=0 -> preprocess_train (stochastic RandomResizedCrop) for the reference/query image|third_party/ENCODER/datasets.py:139|out['source_img_data'] = self.get_img(candidate, stage=0)
+encoder|query_transform_gallery_pair|both reference and target query images use stage=0|third_party/ENCODER/datasets.py:177|out['source_img_data'] = self.get_img(name + '_' + candidate, stage=0)
+encoder|query_transform_gallery_pair_target|target query image also stage=0|third_party/ENCODER/datasets.py:178|out['target_img_data'] = self.get_img(name + '_' + target, stage=0)
+encoder|gallery_transform|stage=1 -> preprocess_val (deterministic resize/center-crop) for val-split gallery|third_party/ENCODER/datasets.py:195|out['target_img_data'] = self.get_img(name + '_' + images[i], stage=1)
+encoder|gallery_transform_original_split|original-split branch also uses stage=1|third_party/ENCODER/datasets.py:202|out['target_img_data'] = self.get_img(name + '_' + image_name, stage=1)
+encoder|default_split|FashionIQ.__init__ default split='val-split'|third_party/ENCODER/datasets.py:64|def __init__(self, path, transform=None, split='val-split'):
+encoder|default_split_source|evaluate_model argparse --fashioniq_split default 'val-split' passed into datasets1.FashionIQ|third_party/ENCODER/evaluate_model.py:15|parser.add_argument('--fashioniq_split', default = 'val-split')
+encoder|default_split_wiring|datasets1.FashionIQ(path=..., transform=[...], split=args.fashioniq_split)|third_party/ENCODER/evaluate_model.py:43|fashioniq_dataset = datasets1.FashionIQ(path = args.fashioniq_path, transform = [preprocess_train, preprocess_val], split = args.fashioniq_split)
+encoder|datasets1_alias|datasets1.py is `from datasets import *`, so the class is datasets.py:FashionIQ|third_party/ENCODER/datasets1.py:1|from datasets import *
+encoder|caption_normalize|correct_text: lowercase, map every string.punctuation char to space, strip, split|third_party/ENCODER/datasets.py:117|def correct_text(self, text, correction_dict):
+encoder|caption_punctuation_map|maketrans({key: ' ' for key in string.punctuation})|third_party/ENCODER/datasets.py:118|trans=str.maketrans({key: ' ' for key in string.punctuation})
+encoder|caption_dict_applied|YES - exact per-token lookup through the loaded correction_dict|third_party/ENCODER/datasets.py:120|text = " ".join([correction_dict.get(word) if word in correction_dict else word for word in tokens])
+encoder|caption_concat|concat_text joins caption 0 + literal ' and ' + caption 1|third_party/ENCODER/datasets.py:125|text = "{} and {}".format(self.correct_text(captions[0], correction_dict), self.correct_text(captions[1], correction_dict))
+encoder|correction_dict_load|loaded unconditionally per category|third_party/ENCODER/datasets.py:164|correction_dict = json.load(f)
+encoder|correction_dict_use_test|val query text is built with the dictionary|third_party/ENCODER/datasets.py:171|mod_str = self.concat_text(caption['captions'], correction_dict)
+encoder|gallery_construction|val-split: first-seen ordered union of source_img_id then target_img_id|third_party/ENCODER/datasets.py:188|test_targets_id.append(i['source_img_id'])
+encoder|gallery_union_target|target id appended after its source|third_party/ENCODER/datasets.py:190|test_targets_id.append(i['target_img_id'])
+encoder|reference_mask_line|sims[i, index_of_reference] = -10e10 before descending argsort (mask, not removal)|third_party/ENCODER/test.py:68|sims[i, test_targets_id.index(t['source_img_id'])] = -10e10
+encoder|rank_order|np.argsort(-sims[i, :])[:50]|third_party/ENCODER/test.py:71|nn_result = [np.argsort(-sims[i, :])[:50] for i in range(sims.shape[0])]
+encoder|recall_arithmetic|hits at K / number of queries in the category, times 100 -> PERCENT|third_party/ENCODER/test.py:80|r = 100 * r / len(nn_result)
+encoder|recall_units|percent (0-100), K in {1,10,50}, denominator = category query count|third_party/ENCODER/test.py:75|for k in [1, 10, 50]:
+encoder|macro|equal-weight 3-category mean of R@10 and R@50; mean=(macro_r10+macro_r50)/2; None unless all 3 complete|workbench/replay/common.py:318|r10 = sum(result.r10 for result in results) / len(CATEGORIES)
+encoder|macro_mean|arithmetic mean of macro R@10 and macro R@50|workbench/replay/common.py:320|return {"macro_r10": r10, "macro_r50": r50, "macro_mean": (r10 + r50) / 2, "complete": True}
+encoder|replay_factory|replay builds the same ViT-B-32 factory against the pinned source root|workbench/replay/encoder.py:291|_, preprocess_train, preprocess_val = open_clip.create_model_and_transforms(
+encoder|replay_transform_list|same [preprocess_train, preprocess_val]|workbench/replay/encoder.py:295|transform = [preprocess_train, preprocess_val]
+encoder|replay_dataset|explicit split='val-split', seeded construction|workbench/replay/encoder.py:310|dataset = datasets.FashionIQ(path=root_str, transform=transform, split="val-split")
+encoder|replay_calls_native|pinned test.test(params, model, testset, category)|workbench/replay/encoder.py:315|recalls = dict(test_module.test(params, encoder_model, dataset, category))
+encoder|tokenizer|open_clip.get_tokenizer('ViT-B-32')|third_party/ENCODER/model_try2.py:137|self.tokenizer = open_clip.get_tokenizer('ViT-B-32')
+```
+
+## PAIR
+
+```
+pair|model_id|pair|workbench/registry/models.yaml:795|- model_id: pair
+pair|method_name|PAIR|workbench/registry/models.yaml:806|method_name: PAIR
+pair|upstream_commit_sha|bfb0b98cdb4c44f6b9190baaa84d783a77dd888f|workbench/registry/models.yaml:814|upstream_commit_sha: bfb0b98c...
+pair|source_dir|PAIR|workbench/registry/models.yaml:816|source_dir: PAIR
+pair|native_protocol|fashioniq_val_split|workbench/registry/models.yaml:819|native_protocol: fashioniq_val_split
+pair|fashioniq_layout|fashioniq_ilearn_resized_training|workbench/registry/models.yaml:817|fashioniq_layout: fashioniq_ilearn_resized_training
+pair|reproduction_status|BLOCKED_CHECKPOINT_MAPPING_UNVERIFIED|workbench/registry/models.yaml:825|reproduction_status: BLOCKED_CHECKPOINT_MAPPING_UNVERIFIED
+pair|checkpoint_file|pair-B1.pt sha256 c4d861ecd0baa3f1427fc7a853943f5614baf87def1cdd9c4bb7583ee925fbf2; pair-B2.pt sha256 74346fd7... (both mapping UNVERIFIED)|workbench/registry/models.yaml:861|expected_sha256: c4d861ec...
+pair|image_factory|open_clip.create_model_and_transforms('ViT-B-32', pretrained=./open_clip_pytorch_model.bin)|third_party/PAIR/train.py:66|_, preprocess_train, preprocess_val = open_clip.create_model_and_transforms('ViT-B-32', pretrained=os.path.join(clip_path, 'open_clip_pytorch_model.bin'))
+pair|transform_list|list index 0 = preprocess_train, index 1 = preprocess_val|third_party/PAIR/train.py:73|fashioniq_dataset = datasets.FashionIQ(path = args.fashioniq_path, transform = [preprocess_train, preprocess_val], split = args.fashioniq_split)
+pair|transform_dispatch|get_img uses self.transform[stage]|third_party/PAIR/data/datasets.py:112|img = self.transform[stage](img)
+pair|query_transform|stage=0 -> preprocess_train for the reference image in __getitem__|third_party/PAIR/data/datasets.py:98|out['source_img_data'] = self.get_img(candidate, stage=0)
+pair|query_transform_target|__getitem__ target also stage=0|third_party/PAIR/data/datasets.py:100|out['target_img_data'] = self.get_img(target, stage=0)
+pair|query_transform_test|test query reference image stage=0|third_party/PAIR/data/datasets.py:138|out['source_img_data'] = self.get_img(name + '_' + candidate, stage=0)
+pair|query_transform_test_target|test query target image stage=0|third_party/PAIR/data/datasets.py:140|out['target_img_data'] = self.get_img(name + '_' + target, stage=0)
+pair|gallery_transform|stage=1 -> preprocess_val for val-split gallery|third_party/PAIR/data/datasets.py:158|out['target_img_data'] = self.get_img(name + '_' + images[i], stage=1)
+pair|gallery_transform_original_split|original-split branch also stage=1|third_party/PAIR/data/datasets.py:165|out['target_img_data'] = self.get_img(name + '_' + image_name, stage=1)
+pair|default_split|FashionIQ.__init__ default split='val-split'|third_party/PAIR/data/datasets.py:23|def __init__(self, path, transform=None, split='val-split'):
+pair|default_split_source|train.py argparse --fashioniq_split default 'val-split'|third_party/PAIR/train.py:29|parser.add_argument('--fashioniq_split', default = 'val-split')
+pair|default_dataset_caveat|train.py launcher default dataset is 'shoes', not FashionIQ|third_party/PAIR/train.py:28|parser.add_argument('--dataset', default = 'shoes', help = "data set type")
+pair|caption_normalize|correct_text: lowercase, punctuation->space, strip, split|third_party/PAIR/data/datasets.py:77|def correct_text(self, text, correction_dict):
+pair|caption_dict_applied|YES - per-token correction_dict lookup|third_party/PAIR/data/datasets.py:80|text = " ".join([correction_dict.get(word) if word in correction_dict else word for word in tokens])
+pair|caption_concat|concat_text joins caption 0 + ' and ' + caption 1|third_party/PAIR/data/datasets.py:85|text = "{} and {}".format(self.correct_text(captions[0], correction_dict), self.correct_text(captions[1], correction_dict))
+pair|correction_dict_load|loaded per category|third_party/PAIR/data/datasets.py:123|correction_dict = json.load(f)
+pair|correction_dict_use_test|val query text built with the dictionary|third_party/PAIR/data/datasets.py:130|mod_str = self.concat_text(caption['captions'], correction_dict)
+pair|gallery_construction|val-split first-seen ordered source-then-target union|third_party/PAIR/data/datasets.py:151|test_targets_id.append(i['source_img_id'])
+pair|gallery_union_target|target appended after source|third_party/PAIR/data/datasets.py:153|test_targets_id.append(i['target_img_id'])
+pair|reference_mask_line|sims[i, reference_index] = -10e10 before descending sort|third_party/PAIR/test.py:68|sims[i, test_targets_id.index(t['source_img_id'])] = -10e10
+pair|rank_order|np.argsort(-sims[i, :])[:50]|third_party/PAIR/test.py:71|nn_result = [np.argsort(-sims[i, :])[:50] for i in range(sims.shape[0])]
+pair|recall_arithmetic|hits/len(nn_result)*100 -> PERCENT, K in {1,10,50}|third_party/PAIR/test.py:80|r = 100 * r / len(nn_result)
+pair|recall_units|percent, denominator = number of category queries|third_party/PAIR/test.py:75|for k in [1, 10, 50]:
+pair|macro|workbench macro_aggregate, equal-weight 3-category mean (source emits per-category only)|workbench/replay/common.py:318|r10 = sum(result.r10 for result in results) / len(CATEGORIES)
+pair|replay_factory|replay builds ViT-B-32 factory with no pretrained arg|workbench/replay/pair.py:165|_, preprocess_train, preprocess_val = open_clip.create_model_and_transforms("ViT-B-32")
+pair|replay_dataset|explicit split='val-split', seeded|workbench/replay/pair.py:178|dataset = datasets.FashionIQ(path=root_str, transform=transform, split="val-split")
+pair|replay_calls_native|pinned test.test(params, model, testset, category)|workbench/replay/pair.py:182|recalls = dict(test_module.test(params, model, dataset, category))
+pair|tokenizer|open_clip ViT-B/32 tokenizer in Backbone (source does not pin open_clip version)|third_party/PAIR/models/model.py:37|self.tokenizer = open_clip.get_tokenizer('ViT-B-32')
+```
+
+## CLVC-Net
+
+```
+clvc_net|model_id|clvc_net|workbench/registry/models.yaml:876|- model_id: clvc_net
+clvc_net|method_name|CLVC-Net|workbench/registry/models.yaml:899|method_name: CLVC-Net
+clvc_net|upstream_commit_sha|bd9b6889489806cb60676597880f91d918b279cb|workbench/registry/models.yaml:906|upstream_commit_sha: bd9b6889...
+clvc_net|source_dir|CLVCNet|workbench/registry/models.yaml:908|source_dir: CLVCNet
+clvc_net|native_protocol|fashioniq_val_split|workbench/registry/models.yaml:914|native_protocol: fashioniq_val_split
+clvc_net|fashioniq_layout|fashioniq_clvc_resized|workbench/registry/models.yaml:909|fashioniq_layout: fashioniq_clvc_resized
+clvc_net|reproduction_status|BLOCKED_CHECKPOINT_MAPPING|workbench/registry/models.yaml:923|reproduction_status: BLOCKED_CHECKPOINT_MAPPING
+clvc_net|category_model_policy|independent (6 files: <cat>_local_model.pt + <cat>_global_model.pt)|workbench/registry/models.yaml:882|category_model_policy: independent
+clvc_net|checkpoint_serialization|whole_model|workbench/registry/models.yaml:897|checkpoint_serialization: whole_model
+clvc_net|checkpoint_members|dress/shirt/toptee local+global, per-member sha256 declared|workbench/registry/models.yaml:945|required_files:
+clvc_net|image_transform|single transform (not a train/val list): Resize(256)->CenterCrop(224)->ToTensor->ImageNet Normalize|third_party/CLVCNet/train.py:96|transform=torchvision.transforms.Compose([
+clvc_net|image_transform_pipeline|Resize(256), CenterCrop(224), Normalize([0.485,0.456,0.406],[0.229,0.224,0.225])|third_party/CLVCNet/train.py:91|torchvision.transforms.Resize(256),
+clvc_net|train_transform|train split uses Resize(256)->RandomCrop(224)->RandomHorizontalFlip (not used by test)|third_party/CLVCNet/train.py:78|transform=torchvision.transforms.Compose([
+clvc_net|query_transform|test query and gallery share the SAME single transform (no stage split)|third_party/CLVCNet/datasets.py:201|img = self.transform(img)
+clvc_net|dataset_signature|FashionIQ(path, gallery_all=False, name='dress', split='train', transform=None)|third_party/CLVCNet/datasets.py:153|def __init__(self, path, gallery_all=False, name = 'dress',split = 'train',transform=None):
+clvc_net|default_split|constructor default split='train' (the val reader is selected by the caller)|third_party/CLVCNet/datasets.py:153|split = 'train'
+clvc_net|replay_split|replay passes split='val', gallery_all=False|workbench/replay/clvc_net.py:169|split="val",
+clvc_net|caption_normalize|NO correct_text/correction dict; concat_text just wraps the raw captions|third_party/CLVCNet/datasets.py:173|def concat_text(self, captions):
+clvc_net|caption_concat|template '<BOS> {} <AND> {} <EOS>'|third_party/CLVCNet/datasets.py:174|text = "<BOS> {} <AND> {} <EOS>".format(captions[0], captions[1])
+clvc_net|caption_dict_applied|NO - no correction dictionary is read anywhere in this FashionIQ class|third_party/CLVCNet/datasets.py:173|def concat_text(self, captions):
+clvc_net|text_tokenizer|SimpleVocab: ascii-only, punctuation DELETED (None, not space), lowercase, split; specials <UNK>/<AND>/<BOS>/<EOS> = 0/1/2/3|third_party/CLVCNet/text_model.py:25|trans=str.maketrans({key: None for key in string.punctuation})
+clvc_net|text_tokenizer_specials|word2id specials|third_party/CLVCNet/text_model.py:15|self.word2id['<AND>'] = 1
+clvc_net|query_text_build|mod_str = concat_text(caption['captions']) in get_test_queries|third_party/CLVCNet/datasets.py:218|mod_str = self.concat_text(caption['captions'])
+clvc_net|gallery_construction|gallery_all=False default: first-seen ordered source-then-target union|third_party/CLVCNet/datasets.py:247|test_targets_id.append(i['source_img_id'])
+clvc_net|gallery_union_target|target appended after source|third_party/CLVCNet/datasets.py:249|test_targets_id.append(i['target_img_id'])
+clvc_net|gallery_all_branch|gallery_all=True would use the full split order (not the replay path)|third_party/CLVCNet/datasets.py:234|if self.gallery_all:
+clvc_net|reference_mask_line|FashionIQ branch: sims[i, reference_index] = -10e10|third_party/CLVCNet/test.py:135|sims[i, test_targets_id.index(t['source_img_id'])] = -10e10
+clvc_net|rank_order|np.argsort(-sims[i, :])[:50]|third_party/CLVCNet/test.py:138|nn_result = [np.argsort(-sims[i, :])[:50] for i in range(sims.shape[0])]
+clvc_net|recall_arithmetic|hits/len(nn_result)*100 -> PERCENT, K in {1,10,50}|third_party/CLVCNet/test.py:147|r = 100 * r / len(nn_result)
+clvc_net|recall_units|percent, denominator = category query count|third_party/CLVCNet/test.py:142|for k in [1, 10, 50]:
+clvc_net|query_feature_concat|cat(normalize(local.compose_img_text[1]), normalize(global.compose_img_text[0]))|third_party/CLVCNet/test.py:100|f = torch.cat([F.normalize(local_model.compose_img_text(imgs, mods)[1]), F.normalize(global_model.compose_img_text(imgs, mods)[0])], dim=1)
+clvc_net|gallery_feature_concat|cat(normalize(local.extract_img_feature[1]), normalize(global.extract_img_feature[1]))|third_party/CLVCNet/test.py:116|imgs = torch.cat([F.normalize(local_model.extract_img_feature(imgs)[1]), F.normalize(global_model.extract_img_feature(imgs)[1])], dim=1).data.cpu().numpy()
+clvc_net|replay_transform|replay rebuilds the native val pipeline Resize(256)->CenterCrop(224)->ToTensor->Normalize|workbench/replay/clvc_net.py:143|transform = transforms.Compose([
+clvc_net|replay_dataset|gallery_all=False, name=category, split='val'|workbench/replay/clvc_net.py:165|testset = datasets.FashionIQ(
+clvc_net|replay_calls_native|pinned test.test(params, local_model, global_model, testset, category)|workbench/replay/clvc_net.py:173|recalls = dict(test_module.test(params, local_model, global_model, testset, category))
+```
+
+## TG-CIR
+
+```
+tgcir|model_id|tgcir|workbench/registry/models.yaml:1253|- model_id: tgcir
+tgcir|method_name|TG-CIR|workbench/registry/models.yaml:1260|method_name: TG-CIR
+tgcir|upstream_commit_sha|65fa78eaf8cabe8197fcc22ccab42207c591bdee|workbench/registry/models.yaml:1267|upstream_commit_sha: 65fa78ea...
+tgcir|source_dir|TGCIR|workbench/registry/models.yaml:1269|source_dir: TGCIR
+tgcir|native_protocol|fashioniq_val_split|workbench/registry/models.yaml:1275|native_protocol: fashioniq_val_split
+tgcir|fashioniq_layout|fashioniq_ilearn_resized_training|workbench/registry/models.yaml:1270|fashioniq_layout: fashioniq_ilearn_resized_training
+tgcir|reproduction_status|BLOCKED_COMMAND|workbench/registry/models.yaml:1281|reproduction_status: BLOCKED_COMMAND
+tgcir|checkpoint_serialization|whole_model|workbench/registry/models.yaml:1257|checkpoint_serialization: whole_model
+tgcir|image_transform|OpenAI CLIP preprocess for the configured encoder (ViT-B/16 by default); single transform shared by query and gallery|third_party/TGCIR/train.py:88|clip, preprocess = clip.load(args.img_encoder, device='cuda', jit=False)
+tgcir|image_encoder_default|ViT-B/16|third_party/TGCIR/train.py:56|parser.add_argument('--img_encoder', type=str, default='ViT-B/16')
+tgcir|transform_wiring|img_transform = preprocess, passed to datasets.FashionIQ|third_party/TGCIR/train.py:93|img_transform = preprocess
+tgcir|query_transform|same single transform (no stage index)|third_party/TGCIR/datasets.py:114|img = self.transform(img)
+tgcir|gallery_transform|same single transform|third_party/TGCIR/datasets.py:106|img = self.transform(img)
+tgcir|dataset_signature|FashionIQ(path, transform=None) - NO split parameter|third_party/TGCIR/datasets.py:21|def __init__(self, path, transform=None):
+tgcir|default_split|no split argument exists; get_test_data hardcodes 'val' split file|third_party/TGCIR/datasets.py:127|with open(os.path.join(self.split_dir, "split.{}.{}.json".format(name, 'val')), 'r') as f:
+tgcir|caption_normalize|correct_text: lowercase, punctuation->space, strip, split|third_party/TGCIR/datasets.py:71|def correct_text(self, text, correction_dict):
+tgcir|caption_dict_applied|YES - per-token correction_dict lookup|third_party/TGCIR/datasets.py:74|text = " ".join([correction_dict.get(word) if word in correction_dict else word for word in tokens])
+tgcir|caption_concat|concat_text joins caption 0 + ' and ' + caption 1|third_party/TGCIR/datasets.py:79|text = "{} and {}".format(self.correct_text(captions[0], correction_dict), self.correct_text(captions[1], correction_dict))
+tgcir|correction_dict_load|loaded per category|third_party/TGCIR/datasets.py:132|correction_dict = json.load(f)
+tgcir|correction_dict_use_test|val query text built with the dictionary|third_party/TGCIR/datasets.py:136|mod_str = self.concat_text(caption['captions'], correction_dict)
+tgcir|correction_dict_train_path|cached train captions are also dictionary-corrected|third_party/TGCIR/datasets.py:64|cap = self.concat_text(triplets['captions'], correction_dict)
+tgcir|gallery_construction|first-seen ordered source-then-target union|third_party/TGCIR/datasets.py:151|test_targets_id.append(i['source_img_id'])
+tgcir|gallery_union_target|target appended after source|third_party/TGCIR/datasets.py:153|test_targets_id.append(i['target_img_id'])
+tgcir|query_images|get_test_img used for both query reference and query target|third_party/TGCIR/datasets.py:141|out['source_img_data'] = self.get_test_img(name + '_' + candidate)
+tgcir|reference_mask_line|sims[i, reference_index] = -10e10|third_party/TGCIR/test.py:67|sims[i, test_targets_id.index(t['source_img_id'])] = -10e10
+tgcir|rank_order|np.argsort(-sims[i, :])[:50]|third_party/TGCIR/test.py:70|nn_result = [np.argsort(-sims[i, :])[:50] for i in range(sims.shape[0])]
+tgcir|recall_arithmetic|hits/len(nn_result)*100 -> PERCENT, K in {1,10,50}|third_party/TGCIR/test.py:79|r = 100 * r / len(nn_result)
+tgcir|recall_units|percent, denominator = category query count|third_party/TGCIR/test.py:74|for k in [1, 10, 50]:
+tgcir|tokenizer|clip.tokenize (OpenAI CLIP, ViT-B/16 context)|third_party/TGCIR/model.py:120|text = clip.tokenize(txt).cuda()
+tgcir|replay_status|PREFLIGHT_ONLY - never imports upstream, never loads checkpoint, never runs inference|workbench/replay/tgcir.py:37|def preflight(source_root: Path, dataset_root: Path, checkpoint_root: Path) -> list[str]:
+tgcir|replay_checkpoint_blocker|checkpoint mapping unresolved + no author SHA -> whole-model load forbidden|workbench/replay/tgcir.py:69|f"checkpoint mapping unresolved: {checkpoint['source_url']} does not verify FashionIQ archive member "
+tgcir|replay_clip_blocker|OpenAI CLIP ViT-B/16 asset provenance unverified|workbench/replay/tgcir.py:76|"OpenAI CLIP ViT-B/16 runtime asset/cache provenance and local availability are unverified"
+```
+
+## LIMN
+
+```
+limn|model_id|limn|workbench/registry/models.yaml:1450|- model_id: limn
+limn|method_name|LIMN|workbench/registry/models.yaml:1461|method_name: LIMN
+limn|upstream_commit_sha|7d7bc9b116f594a65ac22457491edf28a88d3c3e|workbench/registry/models.yaml:1468|upstream_commit_sha: 7d7bc9b1...
+limn|source_dir|LIMN|workbench/registry/models.yaml:1470|source_dir: LIMN
+limn|native_protocol|fashioniq_val_split|workbench/registry/models.yaml:1476|native_protocol: fashioniq_val_split
+limn|fashioniq_layout|fashioniq_ilearn_resized_training|workbench/registry/models.yaml:1471|fashioniq_layout: fashioniq_ilearn_resized_training
+limn|reproduction_status|BLOCKED_RUNTIME_PREREQUISITES|workbench/registry/models.yaml:1485|reproduction_status: BLOCKED_RUNTIME_PREREQUISITES
+limn|category_model_policy|independent (one whole model per category)|workbench/registry/models.yaml:1457|category_model_policy: independent
+limn|checkpoint_serialization|whole_model|workbench/registry/models.yaml:1458|checkpoint_serialization: whole_model
+limn|checkpoint_bundle|base_iter0_{dress,shirt,toptee}, per-member sha256 verified|workbench/replay/limn.py:37|LIMN_CHECKPOINTS = {
+limn|image_factory|open_clip.create_model_and_transforms('ViT-L-14', pretrained=.../open_clip_pytorch_model.bin)|third_party/LIMN/LIMN/train.py:78|clip, preprocess_train, preprocess_val = open_clip.create_model_and_transforms('ViT-L-14', pretrained=os.path.join('[CLIP path]/laionCLIP-ViT-L-14-DataComp.XL-s13B-b90K', 'open_clip_pytorch_model.bin'))
+limn|transform_list|list index 0 = preprocess_train, index 1 = preprocess_val|third_party/LIMN/LIMN/train.py:81|dress_dataset = datasets.FashionIQ(path = args.fashioniq_path, name = 'dress', transform = [preprocess_train, preprocess_val])
+limn|transform_dispatch_train|get_img (train/train_init path) uses transform[0]|third_party/LIMN/LIMN/datasets.py:117|img = self.transform[0](img)
+limn|transform_dispatch_test|get_test_img uses transform[1]|third_party/LIMN/LIMN/datasets.py:125|img = self.transform[1](img)
+limn|query_transform|test query reference image -> transform[1] = preprocess_val (NOT preprocess_train)|third_party/LIMN/LIMN/datasets.py:151|out['source_img_data'] = self.get_test_img(self.name + '_' + candidate)
+limn|query_transform_target|test query target image -> transform[1]|third_party/LIMN/LIMN/datasets.py:153|out['target_img_data'] = self.get_test_img(self.name + '_' + target)
+limn|gallery_transform|gallery -> transform[1] = preprocess_val|third_party/LIMN/LIMN/datasets.py:166|out['target_img_data'] = self.get_test_img(self.name + '_' + images[i])
+limn|dataset_signature|FashionIQ(path, name, transform=None) - per-category name, NO split parameter|third_party/LIMN/LIMN/datasets.py:39|def __init__(self, path, name, transform=None):
+limn|default_split|no split argument; get_test_data hardcodes the 'val' split file|third_party/LIMN/LIMN/datasets.py:137|with open(os.path.join(self.split_dir, "split.{}.{}.json".format(self.name, 'val')), 'r') as f:
+limn|caption_normalize|correct_text: lowercase, punctuation->space, strip, split|third_party/LIMN/LIMN/datasets.py:82|def correct_text(self, text, correction_dict):
+limn|caption_dict_applied|YES - per-token correction_dict lookup|third_party/LIMN/LIMN/datasets.py:85|text = " ".join([correction_dict.get(word) if word in correction_dict else word for word in tokens])
+limn|caption_concat|concat_text joins caption 0 + ' and ' + caption 1|third_party/LIMN/LIMN/datasets.py:90|text = "{} and {}".format(self.correct_text(captions[0], correction_dict), self.correct_text(captions[1], correction_dict))
+limn|correction_dict_load|loaded per category|third_party/LIMN/LIMN/datasets.py:142|correction_dict = json.load(f)
+limn|correction_dict_use_test|val query text built with the dictionary|third_party/LIMN/LIMN/datasets.py:146|mod_str = self.concat_text(caption['captions'], correction_dict)
+limn|gallery_construction|first-seen ordered source-then-target union|third_party/LIMN/LIMN/datasets.py:161|test_targets_id.append(i['source_img_id'])
+limn|gallery_union_target|target appended after source|third_party/LIMN/LIMN/datasets.py:163|test_targets_id.append(i['target_img_id'])
+limn|reference_mask_line|sims[i, reference_index] = -10e10 before descending argsort|third_party/LIMN/LIMN/test.py:82|sims[i, test_targets_id.index(t['source_img_id'])] = -10e10
+limn|rank_order|np.argsort(-sims[i, :])[:50]|third_party/LIMN/LIMN/test.py:85|nn_result = [np.argsort(-sims[i, :])[:50] for i in range(sims.shape[0])]
+limn|recall_arithmetic|hits/len(nn_result)*100 -> PERCENT, K in {1,10,50}|third_party/LIMN/LIMN/test.py:94|r = 100 * r / len(nn_result)
+limn|recall_units|percent, denominator = category query count|third_party/LIMN/LIMN/test.py:89|for k in [1, 10, 50]:
+limn|query_feature|compose_query(...)[0]|third_party/LIMN/LIMN/test.py:42|f = model.compose_query(imgs, mods, dataset_type)[0]
+limn|gallery_feature|compose_target(...)[0]|third_party/LIMN/LIMN/test.py:61|imgs = model.compose_target(imgs, dataset_type)[0].data.cpu().numpy()
+limn|tokenizer|open_clip.get_tokenizer('ViT-L-14')|third_party/LIMN/LIMN/model.py:17|self.tokenizer = open_clip.get_tokenizer('ViT-L-14')
+limn|replay_transform|replay builds train/val transforms from the checkpoint's own visual.image_size/mean/std|workbench/replay/limn.py:186|preprocess_train = open_clip.image_transform(visual.image_size, is_train=True,
+limn|replay_transform_val|is_train=False for the val transform|workbench/replay/limn.py:188|preprocess_val = open_clip.image_transform(visual.image_size, is_train=False,
+limn|replay_dataset_factory|native datasets.FashionIQ with transform=[preprocess_train, preprocess_val]|workbench/replay/limn.py:192|"dataset_factory": lambda cache_root: native_datasets.FashionIQ(
+limn|replay_calls_native|pinned test.test(SimpleNamespace(local_rank=0,batch_size=...), model, dataset, category)|workbench/replay/limn.py:238|metrics = dict(native_test.test(SimpleNamespace(local_rank=0,
+limn|macro|explicit workbench macro, only when all three categories selected|workbench/replay/limn.py:264|aggregate = macro_aggregate(results) if categories == CATEGORIES else {
+```
+
+## Cross-model notes the lines imply
+
+- **Transform asymmetry is not shared.** ENCODER and PAIR apply `transform[0]` (stochastic `preprocess_train`) to query images and `transform[1]` (`preprocess_val`) to gallery images — that is why their replays wrap dataset construction in `seeded_dataset_construction` (`replay/encoder.py:309`, `replay/pair.py:177`). LIMN's *test* path sends both query and gallery through `transform[1]` (`datasets.py:151,153,166`), so LIMN's query population is deterministic; its train path is the one using `transform[0]`. TG-CIR and CLVC-Net have a single transform, so there is no stage distinction to report.
+- **Caption pipeline splits into two families.** ENCODER/PAIR/TG-CIR/LIMN all use `correct_text` → `concat_text` with `" and "` and apply the per-category `correction_dict` by exact token lookup. CLVC-Net has no correction dictionary at all and uses `<BOS> … <AND> … <EOS>` with `SimpleVocab`, which *deletes* punctuation (`maketrans({key: None …})`) rather than mapping it to a space — a different normalization, not a parameterization of the same one.
+- **Reference handling is identical in mechanism across all five:** mask the reference score to `-10e10` in place before a descending `argsort`, never physically remove it. Lines: `test.py:68` (ENCODER), `:68` (PAIR), `:135` (CLVC-Net), `:67` (TG-CIR), `:82` (LIMN).
+- **Recall arithmetic and units are identical:** percent, `100 * hits / len(nn_result)`, K ∈ {1,10,50}, denominator = that category's query count (not gallery size), top-50 candidate list. Macro is *not* native to any of these five; it is workbench-added equal-weight category averaging in `replay/common.py:310-320`, with `macro_mean = (macro_r10 + macro_r50) / 2`.
+- **ENCODER's `datasets.py:64` default is a double default:** `FashionIQ.__init__(..., split='val-split')` at `:64` is only the fallback; the actual value comes from `evaluate_model.py:15` (`--fashioniq_split` default `'val-split'`) threaded through `:43`. The replay bypasses both and passes `split="val-split"` explicitly (`replay/encoder.py:310`). PAIR has the same shape (`datasets.py:23` + `train.py:29`), with the extra caveat that PAIR's launcher default `--dataset` is `shoes`, not FashionIQ.
+- **TG-CIR has no runnable path in this workbench:** `replay/tgcir.py` is preflight-only and returns blockers unconditionally (checkpoint mapping, missing author SHA, unverified ViT-B/16 asset), so its source lines above are static evidence only — no replay ever reaches `test.py:67`.

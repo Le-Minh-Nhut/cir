@@ -1,0 +1,404 @@
+{
+  "shots": [
+    "workbench/docs/reviews/20261110-e2e-repair/web_evidence/1920-01-landing-bare-url.png",
+    "workbench/docs/reviews/20261110-e2e-repair/web_evidence/1920-02-fashioniq-original.png",
+    "workbench/docs/reviews/20261110-e2e-repair/web_evidence/1920-03-subset-full.png",
+    "workbench/docs/reviews/20261110-e2e-repair/web_evidence/1920-03-subset-sf.png",
+    "workbench/docs/reviews/20261110-e2e-repair/web_evidence/1920-03-subset-validated.png",
+    "workbench/docs/reviews/20261110-e2e-repair/web_evidence/1920-04-scope-no-data.png",
+    "workbench/docs/reviews/20261110-e2e-repair/web_evidence/1920-05-error-state.png",
+    "workbench/docs/reviews/20261110-e2e-repair/web_evidence/1920-05b-url-problem.png",
+    "workbench/docs/reviews/20261110-e2e-repair/web_evidence/1920-06-loading-state.png",
+    "workbench/docs/reviews/20261110-e2e-repair/web_evidence/1920-07-inspector-query-images.png",
+    "workbench/docs/reviews/20261110-e2e-repair/web_evidence/1920-08-topk-10.png",
+    "workbench/docs/reviews/20261110-e2e-repair/web_evidence/1920-08-topk-50.png",
+    "workbench/docs/reviews/20261110-e2e-repair/web_evidence/1920-08-topk-100.png",
+    "workbench/docs/reviews/20261110-e2e-repair/web_evidence/1920-07b-inspector-missing-rank.png",
+    "workbench/docs/reviews/20261110-e2e-repair/web_evidence/1920-09-chip-correct-at-10.png",
+    "workbench/docs/reviews/20261110-e2e-repair/web_evidence/1920-10-advanced-collapsed.png",
+    "workbench/docs/reviews/20261110-e2e-repair/web_evidence/1920-11-stale-response-guard.png",
+    "workbench/docs/reviews/20261110-e2e-repair/web_evidence/1920-12-limn-outside-window.png",
+    "workbench/docs/reviews/20261110-e2e-repair/web_evidence/1920-13-limn-defects.png",
+    "workbench/docs/reviews/20261110-e2e-repair/web_evidence/1920-14-parity-gate.png",
+    "workbench/docs/reviews/20261110-e2e-repair/web_evidence/1920-15-model-inventory-validated.png",
+    "workbench/docs/reviews/20261110-e2e-repair/web_evidence/2560-16-inspector.png",
+    "workbench/docs/reviews/20261110-e2e-repair/web_evidence/390-16-inspector.png"
+  ],
+  "checks": {
+    "landing": {
+      "search": "?area=overview&protocol=circus_fashioniq_release_v1&subset=full",
+      "protocol": "circus_fashioniq_release_v1",
+      "subset": "full",
+      "subsetControl": true,
+      "sidebar": "CIRCUS FashionIQ Release v1\nSubset Full\n30 lượt khả dụng ở phạm vi này",
+      "strip": "CIRCUS FashionIQ Release v1\nFull\n17 lượt phục vụ · 17 có dữ liệu ở phạm vi này, chưa gồm lượt lỗi"
+    },
+    "fashiq_original": {
+      "subsetControl": false,
+      "strip": "FashionIQ — Original Split (Full Gallery)\n0 lượt composition (protocol này không có) · 13 báo cáo tổng hợp có số đo\nMở 13 báo cáo tổng hợp",
+      "sidebar": "FashionIQ — Original Split (Full Gallery)\n22 lượt khả dụng ở phạm vi này"
+    },
+    "subset_full": {
+      "rendered_rows": 17,
+      "api_rows": 17
+    },
+    "subset_sf": {
+      "rendered_rows": 9,
+      "api_rows": 9
+    },
+    "subset_validated": {
+      "rendered_rows": 9,
+      "api_rows": 9
+    },
+    "scope_no_data": {
+      "kind": "no-results",
+      "text": "CIRCUS composition FashionIQ — Val Split (Pair-Union Gallery) · 0 lượt Composition gap = 1 − max(mean nDCG_image, mean nDCG_text) / mean nDCG_multimodal. Giá trị là phân số không đơn vị, tính trên cohort có đủ ba hạng chính xác. Outcome phân loại ở @10 (cố định theo protocol) theo protocol release —"
+    },
+    "api_error_state": {
+      "kind": "error",
+      "text": "Yêu cầu thất bại forced Thử lại"
+    },
+    "url_problem_state": {
+      "problems": "Giá trị URL không hợp lệ\n\nKhông giá trị nào bị âm thầm thay đổi; hãy chọn lại\n\nsubset=bogus — chỉ nhận full, sf, validated"
+    },
+    "loading_state": {
+      "state": "loading",
+      "text": "CIRCUS FashionIQ Release v1\nShortcut-Free (SF)\nĐang tải danh sách lượt…",
+      "emptyKinds": [
+        "loading",
+        "loading"
+      ]
+    },
+    "inspector_sequence": {
+      "order": [
+        "shots",
+        "query-instruction-caption",
+        "query-targets",
+        "target-outside-window"
+      ],
+      "tiles": [
+        {
+          "id": "B003NUSB6O.jpg",
+          "state": "present"
+        },
+        {
+          "id": "B002U4LDZK.jpg",
+          "state": "present"
+        }
+      ],
+      "caption": "Bright red with a larger and is darker.",
+      "outside": "Ảnh đích ở hạng tốt nhất #54,098, ngoài cửa sổ 100 ứng viên đã xuất — vẫn hiện ở đây vì hạng là hạng toàn gallery."
+    },
+    "query_export": {
+      "query_id": "7:3045",
+      "target_rank": 73369,
+      "reference": "mbeir_images/fashioniq_images/B003NUSB6O.jpg",
+      "positives": [
+        "mbeir_images/fashioniq_images/B002U4LDZK.jpg"
+      ]
+    },
+    "topk_tiles": {
+      "10": {
+        "tiles": 10,
+        "first": "B00426BXQI.jpg",
+        "last": "B008RJU51U.jpg",
+        "url": "?area=samples&view=explorer&protocol=circus_fashioniq_release_v1&subset=full&run=9e4918a6b5c243412cbc58c9&runs=c%3A9e4918a6b5c243412cbc58c9&query=7%3A3045&q=7%3A3045"
+      },
+      "50": {
+        "tiles": 50,
+        "first": "B00426BXQI.jpg",
+        "last": "B00D0475WE.jpg",
+        "url": "?area=samples&view=explorer&protocol=circus_fashioniq_release_v1&subset=full&run=9e4918a6b5c243412cbc58c9&runs=c%3A9e4918a6b5c243412cbc58c9&query=7%3A3045&q=7%3A3045"
+      },
+      "100": {
+        "tiles": 100,
+        "first": "B00426BXQI.jpg",
+        "last": "B00DYXY6QE.jpg",
+        "url": "?area=samples&view=explorer&protocol=circus_fashioniq_release_v1&subset=full&run=9e4918a6b5c243412cbc58c9&runs=c%3A9e4918a6b5c243412cbc58c9&query=7%3A3045&q=7%3A3045"
+      }
+    },
+    "target_states": {
+      "targetTiles": [
+        {
+          "id": "B002U4LDZK.jpg",
+          "state": "present"
+        }
+      ],
+      "outside": "Ảnh đích ở hạng tốt nhất #54,098, ngoài cửa sổ 100 ứng viên đã xuất — vẫn hiện ở đây vì hạng là hạng toàn gallery.",
+      "ranks": [
+        {
+          "id": "rank-multimodal",
+          "state": "miss",
+          "text": "Ảnh + văn bản (MM) #73,369 ngoài @10 · ngoài cửa sổ 100 ứng viên đã lưu"
+        },
+        {
+          "id": "rank-text_only_black_image",
+          "state": "miss",
+          "text": "Chỉ văn bản #54,098 ngoài @10 · ngoài cửa sổ 100 ứng viên đã lưu"
+        },
+        {
+          "id": "rank-image_only_empty_text",
+          "state": "miss",
+          "text": "Chỉ ảnh #66,246 ngoài @10 · ngoài cửa sổ 100 ứng viên đã lưu"
+        }
+      ]
+    },
+    "unscored_states": {
+      "ranks": [
+        "missing-rank",
+        "missing-rank",
+        "missing-rank"
+      ],
+      "exportState": "capability",
+      "targets": [
+        "present"
+      ]
+    },
+    "missing_asset_http": 404,
+    "chips": [
+      {
+        "id": "chip-all",
+        "pressed": "true",
+        "text": "Tất cả6,003"
+      },
+      {
+        "id": "chip-hit",
+        "pressed": "false",
+        "text": "Correct@101,802"
+      },
+      {
+        "id": "chip-retrieval_failure",
+        "pressed": "false",
+        "text": "Miss@104,199"
+      },
+      {
+        "id": "chip-unscored",
+        "pressed": "false",
+        "text": "Unscored2"
+      }
+    ],
+    "chip_api_counts": {
+      "hit": 1802,
+      "retrieval_failure": 4199,
+      "unscored": 2
+    },
+    "advanced_disclosure": {
+      "open": false,
+      "tests": [
+        "filter-outcome",
+        "filter-category",
+        "filter-order",
+        "include-imported"
+      ]
+    },
+    "stale_response_guard": {
+      "lag": [],
+      "after_slow_arrives": "Query 7:1466"
+    },
+    "limn_combinations": [
+      {
+        "qid": "7:3038",
+        "scope": "shirt",
+        "condition": "multimodal",
+        "tiles": 100,
+        "target": "B004D8QCN4.jpg",
+        "in_window": true,
+        "target_rank": 3,
+        "complete": false,
+        "defects": 1,
+        "incomplete_notice": true
+      },
+      {
+        "qid": "7:3038",
+        "scope": "shirt",
+        "condition": "text_only_black_image",
+        "tiles": 100,
+        "target": "B004D8QCN4.jpg",
+        "in_window": true,
+        "target_rank": 88,
+        "complete": false,
+        "defects": 1,
+        "incomplete_notice": true
+      },
+      {
+        "qid": "7:3038",
+        "scope": "shirt",
+        "condition": "image_only_empty_text",
+        "tiles": 100,
+        "target": "B004D8QCN4.jpg",
+        "in_window": false,
+        "target_rank": 152,
+        "complete": false,
+        "defects": 1,
+        "incomplete_notice": true
+      },
+      {
+        "qid": "7:3038",
+        "scope": "toptee",
+        "condition": "multimodal",
+        "tiles": 100,
+        "target": "B004D8QCN4.jpg",
+        "in_window": true,
+        "target_rank": 43,
+        "complete": false,
+        "defects": 1,
+        "incomplete_notice": true
+      },
+      {
+        "qid": "7:3038",
+        "scope": "toptee",
+        "condition": "text_only_black_image",
+        "tiles": 100,
+        "target": "B004D8QCN4.jpg",
+        "in_window": false,
+        "target_rank": 389,
+        "complete": false,
+        "defects": 1,
+        "incomplete_notice": true
+      },
+      {
+        "qid": "7:3038",
+        "scope": "toptee",
+        "condition": "image_only_empty_text",
+        "tiles": 100,
+        "target": "B004D8QCN4.jpg",
+        "in_window": true,
+        "target_rank": 67,
+        "complete": false,
+        "defects": 1,
+        "incomplete_notice": true
+      },
+      {
+        "qid": "7:3790",
+        "scope": "shirt",
+        "condition": "multimodal",
+        "tiles": 100,
+        "target": "B00E3WVAD2.jpg",
+        "in_window": true,
+        "target_rank": 65,
+        "complete": false,
+        "defects": 0,
+        "incomplete_notice": true
+      },
+      {
+        "qid": "7:3790",
+        "scope": "shirt",
+        "condition": "text_only_black_image",
+        "tiles": 100,
+        "target": "B00E3WVAD2.jpg",
+        "in_window": false,
+        "target_rank": 6891,
+        "complete": false,
+        "defects": 0,
+        "incomplete_notice": true
+      },
+      {
+        "qid": "7:3790",
+        "scope": "shirt",
+        "condition": "image_only_empty_text",
+        "tiles": 100,
+        "target": "B00E3WVAD2.jpg",
+        "in_window": false,
+        "target_rank": 2200,
+        "complete": false,
+        "defects": 0,
+        "incomplete_notice": true
+      },
+      {
+        "qid": "7:3790",
+        "scope": "toptee",
+        "condition": "multimodal",
+        "tiles": 100,
+        "target": "B00E3WVAD2.jpg",
+        "in_window": true,
+        "target_rank": 43,
+        "complete": false,
+        "defects": 0,
+        "incomplete_notice": true
+      },
+      {
+        "qid": "7:3790",
+        "scope": "toptee",
+        "condition": "text_only_black_image",
+        "tiles": 100,
+        "target": "B00E3WVAD2.jpg",
+        "in_window": false,
+        "target_rank": 4730,
+        "complete": false,
+        "defects": 0,
+        "incomplete_notice": true
+      },
+      {
+        "qid": "7:3790",
+        "scope": "toptee",
+        "condition": "image_only_empty_text",
+        "tiles": 100,
+        "target": "B00E3WVAD2.jpg",
+        "in_window": false,
+        "target_rank": 4047,
+        "complete": false,
+        "defects": 0,
+        "incomplete_notice": true
+      }
+    ],
+    "parity_gate": {
+      "ui": {
+        "verdict": "KHÔNG mô hình nào PASS (0/2)",
+        "summary": "Không mô hình nào đạt: 2/2 mô hình có subcheck bắt buộc FAIL. Đây là kết luận từ artifact, không phải lỗi tải.",
+        "rows": [
+          {
+            "id": "parity-row-limn",
+            "passed": "false",
+            "text": "limn\tPARITY_MANDATORY_SUBCHECK_FAILED\t 3 subcheck \t input_parity ✓forward_parity ✓batch_parity ✗scoring_parity ✓"
+          },
+          {
+            "id": "parity-row-encoder",
+            "passed": "false",
+            "text": "encoder\tPARITY_MANDATORY_SUBCHECK_FAILED\t 13 subcheck \t input_parity ✓forward_parity ✗batch_parity ✗scoring_parity ✗metrics_parity ✓"
+          }
+        ]
+      },
+      "api_passed": [],
+      "api_status": {
+        "limn": "PARITY_MANDATORY_SUBCHECK_FAILED",
+        "encoder": "PARITY_MANDATORY_SUBCHECK_FAILED"
+      }
+    },
+    "model_inventory": {
+      "rows": 17,
+      "scope_link_groups": 2,
+      "links": [
+        {
+          "id": "other-scope-combiner_rn50x4_noft",
+          "text": "Có kết quả ở 1 phạm vi khác — mở đúng phạm vi đó: FashionIQ — Original Split (Full Gallery) · 13 số đo (toàn phạm vi)"
+        },
+        {
+          "id": "other-scope-combiner_rn50x4_noft-fashioniq_original_split-all",
+          "text": "FashionIQ — Original Split (Full Gallery) · 13 số đo (toàn phạm vi)"
+        }
+      ],
+      "bare_todo_rows": 6
+    },
+    "viewport_2560": {
+      "docWidth": 2560,
+      "viewport": 2560,
+      "navVisible": true
+    },
+    "viewport_390": {
+      "docWidth": 390,
+      "viewport": 390,
+      "navVisible": true
+    },
+    "warm_load": 597
+  },
+  "timing": {
+    "page_load_to_numbers_ms": 510,
+    "query_select_to_first_image_ms": 455,
+    "warm_page_load_to_numbers_ms": 597
+  },
+  "errors": [],
+  "intentional_console_errors": [
+    "console error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
+  ],
+  "console_errors": []
+}

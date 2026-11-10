@@ -1,0 +1,152 @@
+All source paths below are repo-relative; `TP/` = `workbench/third_party/`, `WB/` = `workbench/`.
+
+## combiner_rn50x4_noft and clip4cir_rn50x4_fullft (shared CLIP4Cir evaluator)
+
+```
+combiner_rn50x4_noft|gallery_source|full ordered val split: image_splits/split.<cat>.val.json, classic-mode index = whole file|TP/CLIP4Cir/src/data_utils.py:144-147|self.image_names: list = [] / with open(base_path / 'fashionIQ_dataset' / 'image_splits' / f'split.{dress_type}.{split}.json') as f: self.image_names.extend(json.load(f))
+combiner_rn50x4_noft|gallery_construction|index features built from FashionIQDataset('val',[dress_type],'classic',preprocess); reference stays eligible|TP/CLIP4Cir/src/validate.py:127-129|classic_val_dataset = FashionIQDataset('val', [dress_type], 'classic', preprocess)
+combiner_rn50x4_noft|split_flag_default|no CLI split flag; split literal 'val' hard-coded on both datasets|TP/CLIP4Cir/src/validate.py:127-129|FashionIQDataset('val', [dress_type], 'classic', preprocess) ... relative
+combiner_rn50x4_noft|reference_mask|NO_MASK_ON_FASHIONIQ_PATH (compute_fiq_val_metrics bounds :21-57; CIRR-only mask lives in compute_cirr_val_metrics :135-187 at :162-166)|TP/CLIP4Cir/src/validate.py:162-166|reference_mask = torch.tensor(sorted_index_names != np.repeat(...))  # only in compute_cirr_val_metrics
+combiner_rn50x4_noft|image_transform_construction|targetpad_transform(target_ratio=1.25, dim=clip_model.visual.input_resolution); RN50x4 input_resolution=288|TP/CLIP4Cir/src/validate.py:280,291|input_dim = clip_model.visual.input_resolution / preprocess = targetpad_transform(args.target_ratio, input_dim)
+combiner_rn50x4_noft|image_transform_pipeline|TargetPad(1.25,288) -> Resize(288,BICUBIC) -> CenterCrop(288) -> RGB -> ToTensor -> CLIP mean/std|TP/CLIP4Cir/src/data_utils.py:82-96|TargetPad(target_ratio, dim), Resize(dim, interpolation=PIL.Image.BICUBIC), CenterCrop(dim), ... Normalize((0.48145466,...),(0.26862954,...))
+combiner_rn50x4_noft|image_transform_defaults|--target-ratio default 1.25; --transform default targetpad|TP/CLIP4Cir/src/validate.py:273-275|parser.add_argument("--target-ratio", default=1.25 ...) / parser.add_argument("--transform", default="targetpad" ...)
+combiner_rn50x4_noft|text_join|cap0.strip('.?, ').capitalize() + " and " + cap1.strip('.?, '); clip.tokenize(context_length=77)|TP/CLIP4Cir/src/validate.py:89-93|f"{flattened_captions[i].strip('.?, ').capitalize()} and {flattened_captions[i + 1].strip('.?, ')}"
+combiner_rn50x4_noft|score_orientation|distances = 1 - predicted_features @ index_features.T; argsort ascending == descending cosine|TP/CLIP4Cir/src/validate.py:44-45|distances = 1 - predicted_features @ index_features.T / sorted_indices = torch.argsort(distances, dim=-1)
+combiner_rn50x4_noft|score_normalization|gallery L2-normalized (:41), composed query L2-normalized (:107); Combiner output = output_layer + g*text + (1-g)*image then normalize|TP/CLIP4Cir/src/validate.py:41,107; TP/CLIP4Cir/src/combiner.py:62-65|index_features = F.normalize(index_features, dim=-1).float() / return F.normalize(output, dim=-1)
+combiner_rn50x4_noft|metric_arithmetic|recall_at10 = sum(labels[:, :10])/len(labels) * 100; recall_at50 likewise; category mean across shirt,dress,toptee|TP/CLIP4Cir/src/validate.py:54-55,353-354|recall_at10 = (torch.sum(labels[:, :10]) / len(labels)).item() * 100 / mean(average_recall10_list)
+combiner_rn50x4_noft|metric_units|PERCENT (×100) for R@10/R@50; no nDCG|TP/CLIP4Cir/src/validate.py:54-55|.item() * 100
+combiner_rn50x4_noft|selection_rule|reject/rank by ascending distance (1-cos); no max-over-tokens, no reference exclusion|TP/CLIP4Cir/src/validate.py:44-46|distances = 1 - predicted_features @ index_features.T; sorted_indices = torch.argsort(distances, dim=-1)
+combiner_rn50x4_noft|adapter_score_dim|640 (RN50x4 visual.output_dim)|WB/composition/model_clip4cir.py:64|DIMENSION = 640
+combiner_rn50x4_noft|adapter_score|normalize both sides, chunked dot product; returns similarity matrix (higher=better)|WB/composition/model_clip4cir.py:133-143|scores[:, start:stop] = query_values @ gallery.T / return scores
+combiner_rn50x4_noft|adapter_reference_eligible|True (measured by base probe)|WB/composition/model_clip4cir.py:71|reference_eligible = True
+combiner_rn50x4_noft|adapter_worker_transform|targetpad_transform(1.25, clip_model.visual.input_resolution); clip.tokenize(context_length=77); combiner.combine_features then renormalize|WB/composition/model_clip4cir.py:404,427-431|preprocess = targetpad_transform(1.25, clip_model.visual.input_resolution) / composed = combiner.combine_features(image_features, text_features)
+combiner_rn50x4_noft|checkpoint_selection|rn50x4_noft_unresolved, mapping VERIFIED_METADATA, single Combiner file fiq_comb_RN50x4_noft.pt|WB/registry/models.yaml:1155-1180|checkpoint_id: rn50x4_noft_unresolved / filename: fiq_comb_RN50x4_noft.pt
+clip4cir_rn50x4_fullft|gallery_source|same full ordered val split per category|TP/CLIP4Cir/src/data_utils.py:144-147|self.image_names.extend(json.load(f))  # split.<cat>.val.json
+clip4cir_rn50x4_fullft|split_flag_default|'val' hard-coded; no split CLI|TP/CLIP4Cir/src/validate.py:127-129|FashionIQDataset('val', [dress_type], 'classic', preprocess)
+clip4cir_rn50x4_fullft|reference_mask|NO_MASK_ON_FASHIONIQ_PATH (compute_fiq_val_metrics :21-57; CIRR-only mask :162-166 in compute_cirr_val_metrics :135-187)|TP/CLIP4Cir/src/validate.py:162-166|reference_mask = torch.tensor(...)  # compute_cirr_val_metrics only
+clip4cir_rn50x4_fullft|image_transform_construction|targetpad_transform(1.25, input_resolution=288); same TargetPad pipeline|TP/CLIP4Cir/src/validate.py:280,291; TP/CLIP4Cir/src/data_utils.py:82-96|preprocess = targetpad_transform(args.target_ratio, input_dim)
+clip4cir_rn50x4_fullft|text_join|strip('.?, ').capitalize() first caption + " and " + second|TP/CLIP4Cir/src/validate.py:89-93|f"{...capitalize()} and {...strip('.?, ')}"
+clip4cir_rn50x4_fullft|score_orientation|1 - dot product, ascending argsort|TP/CLIP4Cir/src/validate.py:44-45|distances = 1 - predicted_features @ index_features.T
+clip4cir_rn50x4_fullft|metric_arithmetic|R@10/R@50 percent, per category, then arithmetic mean|TP/CLIP4Cir/src/validate.py:54-55,353-354|(torch.sum(labels[:, :10]) / len(labels)).item() * 100
+clip4cir_rn50x4_fullft|metric_units|PERCENT|TP/CLIP4Cir/src/validate.py:54-55|* 100
+clip4cir_rn50x4_fullft|selection_rule|ascending 1-cos distance; reference eligible; two-member bundle by declared role|TP/CLIP4Cir/src/validate.py:44-46; WB/composition/model_clip4cir.py:66|BUNDLE_ROLES = ("combiner", "clip")
+clip4cir_rn50x4_fullft|checkpoint_selection|rn50x4_fullft_unresolved bundle (Combiner+CLIP), mapping unverified|WB/registry/models.yaml:1156-1200|checkpoint_id: rn50x4_fullft_unresolved
+```
+
+## tme (TME)
+
+```
+tme|gallery_source|image_splits/split.<cat>.val.json in file order -> image_type_names[cat] -> current_image_names|TP/TME/src/data.py:174-177|with open(self.path / 'image_splits' / f'split.{dress_type}.{split}.json') as f: self.image_type_names[dress_type] = json.load(f); self.image_names.extend(...)
+tme|gallery_scope|set_specific_dress_type(cat) swaps current_image_names per category; evaluator loops dress,shirt,toptee|TP/TME/src/data.py:181-188; TP/TME/src/precompute_evaluation.py:16-18|self.current_image_names = self.image_type_names[dress_type] / dataset.set_specific_dress_type(category)
+tme|split_flag_default|split passed as literal 'val' by evaluator; precompute_test has no split flag (--dataset default CIRR, --mode default test)|TP/TME/src/precompute_test.py:139|dataset = data.get_dataset(args.dataset, preprocess, 'val')
+tme|reference_mask|NO_MASK_ON_FASHIONIQ_PATH (compute_metric_features bounds :28-140; CIRR-only guard at :89)|TP/TME/src/precompute_evaluation.py:89-92|if category == 'CIRR': # only for cirr, delete the reference image ... distances[...] = 10e10
+tme|image_transform_construction|targetpad_transform(target_ratio=1.25, dim=224)|TP/TME/src/utility.py:130-144; TP/TME/src/precompute_test.py:114|return Compose([TargetPad(target_ratio, dim), Resize(dim, interpolation=InterpolationMode.BICUBIC), CenterCrop(dim), ... Normalize((0.48145466,...),(0.26862954,...))])
+tme|image_transform_adapter|same call in adapter worker|WB/composition/model_tme.py:368|transform = targetpad_transform(target_ratio=1.25, dim=224)
+tme|text_join|strip('.?, ').capitalize() first + " and " + second, then txt_processors['eval']|TP/TME/src/precompute_evaluation.py:75-77|f"{captions[i].strip('.?, ').capitalize()} and {captions[i + 1].strip('.?, ')}"
+tme|score_orientation|model.inference returns max-over-target-token cosine; distances = 1 - similarity; ascending argsort|TP/TME/src/precompute_evaluation.py:87,94|distances = 1 - distances / sorted_indices = torch.argsort(distances, dim=-1)
+tme|score_normalization|query fusion F.normalize (encode_fusion) and target F.normalize(vision_proj); max over 32 target tokens|TP/TME/src/lavis/models/blip2_models/blip2_qformer_cir_image_diff_features.py:248-254|z_target = F.normalize(self.vision_proj(F_target), dim=-1); sim_i2t, _ = sim_t2q.max(-1)
+tme|metric_arithmetic|R@1/5/10/50 percent per category; acc=(R@10+R@50)/2; category acc averaged over 3 (/=3)|TP/TME/src/precompute_evaluation.py:101-113,16-20|recall_at10 = (torch.sum(labels[:, :10]) / len(labels)).item() * 100; 'acc': (recall_at10 + recall_at50) / 2. / acc_dict['acc'] /= 3
+tme|metric_units|PERCENT for recalls; acc is a percent mean|TP/TME/src/precompute_evaluation.py:104-105,112|* 100 / (recall_at10 + recall_at50) / 2.
+tme|selection_rule|ascending 1-sim (TME distance sign), reference eligible; CIRR mask writes +10e10 so ascending sort pushes it last|TP/TME/src/precompute_evaluation.py:87-94|distances = 1 - distances; distances[..., ref] = 10e10; torch.argsort(distances, dim=-1)
+tme|adapter_score_dim|256 (query vector; targets (G,Q,256))|WB/composition/model_tme.py:61|score_dimension = 256
+tme|adapter_score|einsum nd,gqd->ngq then max over token axis|WB/composition/model_tme.py:252|return np.einsum("nd,gqd->ngq", query_values, target_values).max(axis=-1)
+tme|adapter_reference_eligible|True|WB/composition/model_tme.py:59|reference_eligible = True
+tme|replay_protocol|fashioniq_original_split; reference_included; checkpoint_selection_rule best_validation_checkpoint_at_sigma_0|WB/replay/tme.py:57-58,460-461|PROTOCOL = "fashioniq_original_split" / "reference_policy": "reference_included"
+tme|replay_entrypoint|CLI: --checkpoint-root --dataset-root --source-root --checkpoint-id --category --output --preflight-only|WB/replay/tme.py:493-501|parser.add_argument("--checkpoint-root", ...)
+tme|replay_native_call|targetpad_transform(1.25,224); evaluate_features(...); per-category recall_at1/10/50 read|WB/replay/tme.py:368,433,437-453|metrics = evaluate_features(blip_model, dataset, txt_processors["eval"]) / r10=recalls["recall_at10"]
+tme|checkpoint_selection|fashioniq_0, training noise 0%, no 20% artifact|WB/registry/models.yaml:1705-1735|checkpoint_id: fashioniq_0 / checkpoint_training_noise_pct: 0
+```
+
+## dcnet (DCNet)
+
+```
+dcnet|gallery_source|ordered full val split read as val_trg gallery: image_splits/split.<cat>.val.json|TP/DCNet/data_loader/CE_dataset.py:24-27|self.no_target = (split == 'val_trg' or split == 'test_trg') / self.data = read_json(Path(data_dir + f"/image_splits/split.{category}.{split.split('_')[0]}.json"))
+dcnet|gallery_loader|val_trg datasets built with split='val_trg', batch_size=100, shuffle=False|TP/DCNet/data_loader/data_loaders.py:183-190,203-207|split='val_trg' ... self.dataloaders[dataset.category + '_trg'] = DataLoader(...)
+dcnet|split_flag_default|evaluator mode default 'val'; gallery loader split literal 'val_trg'|TP/DCNet/test.py:101; TP/DCNet/data_loader/data_loaders.py:184|args.add_argument('--mode', default="val", type=str) / split='val_trg'
+dcnet|reference_mask|reference masked in BOTH score matrices before fusion (reference-INeligible)|TP/DCNet/trainer/trainer_joint.py:215-218|for ei, elem in enumerate(batch['meta_info']): score_matrix_comp[ei, id2targetidx[elem['candidate']]] = -10e10 ; score_matrix_corr[...] = -10e10
+dcnet|image_transform_construction|CenterCrop(224) -> ToTensor -> ImageNet Normalize; input JPEGs pre-resized to 256|TP/DCNet/data_loader/data_loaders.py:66-70; TP/DCNet/preprocess/resize_img.py:69|transforms.CenterCrop(224), transforms.ToTensor(), transforms.Normalize((0.485,0.456,0.406),(0.229,0.224,0.225)) / image_size = [256, 256]
+dcnet|image_transform_ratio|no TargetPad; square 256 resize then center crop 224 (ratio fixed by preprocessing)|TP/DCNet/preprocess/resize_img.py:9-11,69|def resize_image(image, size): return image.resize(size, Image.ANTIALIAS) / image_size = [256, 256]
+dcnet|text_join|NO_TEXT_JOIN: precomputed GloVe token vectors from captions/cap.<cat>.glove.val.pkl; max_text_words=30|TP/DCNet/data_loader/CE_dataset.py:29-34; TP/DCNet/configs/ce/fashioniq_dcnet.json:29|text_path = f"/captions/cap.{category}.glove.{split}.pkl" / "max_text_words": 30
+dcnet|score_orientation|un-normalized inner product summed over 7 expert subspaces (l2renorm=False, dist=False); shape B x N|TP/DCNet/model/metric.py:57-61|tmp = torch.matmul(trg_embd_, src_embd_.unsqueeze(-1)) / sims += torch.matmul(src_embd_, trg_embd_.t())
+dcnet|score_normalization|none on the score; fusion is log_softmax(score_comp)+log_softmax(score_corr) over gallery axis|TP/DCNet/trainer/trainer_joint.py:239-240|score_comb = F.log_softmax(score_comp[j], dim=-1) + F.log_softmax(score_corr[j], dim=-1)
+dcnet|metric_arithmetic|compute_score returns fraction hits at 10/50 (sum/n), averaged per category; recall_avg = mean over categories|TP/DCNet/model/metric.py:5-21; TP/DCNet/trainer/trainer_joint.py:247-249|return sum(scores_r_10) / n, sum(scores_r_50) / n / metric['recall_avg'] = metric['recall'][:,:2].mean()
+dcnet|metric_units|FRACTION 0..1 (no ×100) for R@10/R@50|TP/DCNet/model/metric.py:18-21|scores_r_10.append(recall(...)) / return sum(scores_r_10) / n
+dcnet|selection_rule|topk(largest=self.largest) on comp, corr and fused score; largest defaults True and config sets true|TP/DCNet/trainer/trainer_joint.py:228,240; TP/DCNet/base/base_trainer.py:31; TP/DCNet/configs/ce/fashioniq_dcnet.json:78|score.topk(dim=0, k=50, largest=self.largest, sorted=True) / self.largest = cfg_trainer.get('largest', True) / "largest": true
+dcnet|adapter_reference_eligible|False (upstream masks reference)|WB/composition/model_dcnet.py:109|reference_eligible = False
+dcnet|adapter_score|raises ScoringNotReproducible (per-query correction branch cannot be a fixed matrix)|WB/composition/model_dcnet.py:145-155|raise ScoringNotReproducible("DCNet's reported ranking fuses ...")
+dcnet|adapter_score_dim|1024 (experts.ce_shared_dim)|WB/composition/model_dcnet.py:94|DIMENSION = 1024
+dcnet|replay_protocol|fashioniq_full_gallery_ref_excluded|WB/replay/dcnet.py:25|PROTOCOL = "fashioniq_full_gallery_ref_excluded"
+dcnet|replay_entrypoint|preflight-only CLI: --checkpoint-root --dataset-root --source-root --category --preflight-only --output|WB/replay/dcnet.py:211-218|parser.add_argument("--checkpoint-root", type=Path, required=True, ...)
+dcnet|replay_required_inputs|run dir config.json+trained_model.pth; dataset resized_images/ + split.<cat>.val.json + cap.<cat>.glove.val.pkl|WB/replay/dcnet.py:23,175-187|REQUIRED_RUN_FILES = ("config.json", "trained_model.pth") / glove_path = ... f"cap.{category}.glove.val.pkl"
+dcnet|checkpoint_selection|fashioniq_run_directory (run dir), mapping VERIFIED_METADATA, training noise null|WB/registry/models.yaml:1042-1071|checkpoint_id: fashioniq_run_directory / checkpoint_training_noise_pct: null
+```
+
+## csmcir (CSMCIR)
+
+```
+csmcir|gallery_source|full ordered val split: image_splits/split.<cat>.val.json -> image_names|TP/CSMCIR/src/data_utils_csmcir.py:417-420|self.image_names: list = [] / self.image_names.extend(json.load(f))
+csmcir|gallery_construction|classic-mode gallery via extract_index_blip_caption_features; category loop dress,toptee,shirt|TP/CSMCIR/src/validate_blip_csmcir.py:606-613,632-633|val_dress_types=['dress', 'toptee', 'shirt'] / classic_val_dataset = FashionIQDataset('val', [dress_type], 'classic', preprocess, )
+csmcir|split_flag_default|'val' hard-coded; --dataset default fashionIQ, --transform default targetpad, --target-ratio default 1.25|TP/CSMCIR/src/validate_blip_csmcir.py:508-513,610-612|FashionIQDataset('val', [dress_type], 'relative', preprocess, )
+csmcir|reference_mask|NO_MASK_ON_FASHIONIQ_PATH (compute_fiq_val_metrics bounds :24-57; CIRR-only mask at :266-268 in compute_cirr_val_metrics :240-293; second copy in get_results :334-364 at :339-342)|TP/CSMCIR/src/validate_blip_csmcir.py:266-268|reference_mask = torch.tensor(sorted_index_names != np.repeat(...))  # compute_cirr_val_metrics
+csmcir|image_transform_construction|targetpad_transform(target_ratio, input_dim=224)|TP/CSMCIR/src/validate_blip_csmcir.py:588-595; TP/CSMCIR/src/data_utils_csmcir.py:125-141|preprocess = targetpad_transform(target_ratio, input_dim) / TargetPad(target_ratio, dim), Resize(dim,BICUBIC), CenterCrop(dim), ... Normalize((0.48145466,...),(0.26862954,...))
+csmcir|text_join|strip('.?, ').capitalize() first + " and " + second, then txt_processors["eval"]|TP/CSMCIR/src/validate_blip_csmcir.py:185-190|f"{flattened_captions[i].strip('.?, ').capitalize()} and {flattened_captions[i + 1].strip('.?, ')}"
+csmcir|score_orientation|blip_model.inference returns max-over-target-token cosine; distances = 1 - pred_sim; ascending argsort|TP/CSMCIR/src/validate_blip_csmcir.py:261-262|distances = 1 - pred_sim / sorted_indices = torch.argsort(distances, dim=-1)
+csmcir|score_normalization|query fusion F.normalize(text_proj) and target F.normalize(vision_proj[:, :32]); max over 32 tokens|TP/CSMCIR/src/lavis/models/blip2_models/blip2_qformer_cir_align_prompt_csmcir.py:439-448|fusion_feats = F.normalize(self.text_proj(...), dim=-1) / sim_i2t, _ = sim_t2q.max(-1)
+csmcir|metric_arithmetic|R@10/R@50 percent per category; average_recall=(mean R@50+mean R@10)/2|TP/CSMCIR/src/validate_blip_csmcir.py:54-55,647-649|recall_at10 = (torch.sum(labels[:, :10]) / len(labels)).item() * 100 / 'average_recall': (mean(recalls_at50) + mean(recalls_at10)) / 2
+csmcir|metric_units|PERCENT|TP/CSMCIR/src/validate_blip_csmcir.py:54-55|* 100
+csmcir|selection_rule|ascending 1-sim; reference eligible on FashionIQ|TP/CSMCIR/src/validate_blip_csmcir.py:261-263|distances = 1 - pred_sim; torch.argsort(distances, dim=-1)
+csmcir|adapter_reference_eligible|True|WB/composition/model_csmcir.py:63|reference_eligible = True
+csmcir|adapter_score_dim|8192 (32×256 token layout)|WB/composition/model_csmcir.py:67|score_dimension = 8192
+csmcir|adapter_score|reshape to (N,32,256), normalize target tokens, einsum max over tokens|WB/composition/model_csmcir.py:104-110|return np.einsum("nd,mkd->nmk", query, vectors, optimize=True).max(axis=-1)
+csmcir|adapter_refusal|mode_supported returns False with substitution reason (native inference vs adapter score differ)|WB/composition/model_csmcir.py:78-81|return False, _TARGET_REASON
+csmcir|checkpoint_selection|fashioniq_tuned_clip_best.pt, training noise 0%, mapping VERIFIED_METADATA|WB/registry/models.yaml:117-128|checkpoint_id: fashioniq / checkpoint_training_noise_pct: 0
+```
+
+## sprc (SPRC)
+
+```
+sprc|gallery_source|full ordered val split: image_splits/split.<cat>.val.json -> image_names|TP/SPRC/src/data_utils.py:153-156|self.image_names: list = [] / self.image_names.extend(json.load(f))
+sprc|gallery_construction|classic-mode gallery via extract_index_blip_features; category loop dress,toptee,shirt|TP/SPRC/src/blip_validate.py:62-67,155|FashionIQDataset('val', [dress_type], 'classic', preprocess, ) / clip_finetune_fiq(['dress', 'toptee', 'shirt'], ...)
+sprc|split_flag_default|'val' hard-coded; --dataset required, --blip-model-name default blip2_cir_rerank_learn|TP/SPRC/src/blip_validate.py:64-66,139-148|FashionIQDataset('val', [dress_type], 'relative', preprocess, )
+sprc|reference_mask|NO_MASK_ON_FASHIONIQ_PATH (compute_fiq_val_metrics bounds :24-57; CIRR-only mask at :258-260 in compute_cirr_val_metrics :232-285; second copy get_results :326-356 at :330-333)|TP/SPRC/src/validate_blip.py:258-260|reference_mask = torch.tensor(sorted_index_names != np.repeat(...))  # compute_cirr_val_metrics
+sprc|image_transform_construction|targetpad_transform(1.25, 224)|TP/SPRC/src/blip_validate.py:52-53; TP/SPRC/src/data_utils.py:91-105|input_dim = 224 / preprocess = targetpad_transform(1.25, input_dim)
+sprc|image_transform_pipeline|TargetPad(1.25,224) -> Resize(224,BICUBIC) -> CenterCrop(224) -> RGB -> ToTensor -> CLIP mean/std|TP/SPRC/src/data_utils.py:91-105|TargetPad(target_ratio, dim), Resize(dim, interpolation=PIL.Image.BICUBIC), CenterCrop(dim), ... Normalize((0.48145466,...),(0.26862954,...))
+sprc|text_join|strip('.?, ').capitalize() first + " and " + second, then txt_processors["eval"]|TP/SPRC/src/validate_blip.py:180-184|f"{flattened_captions[i].strip('.?, ').capitalize()} and {flattened_captions[i + 1].strip('.?, ')}"
+sprc|score_orientation|blip_model.inference max-over-target-token cosine; distances = 1 - pred_sim; ascending argsort|TP/SPRC/src/validate_blip.py:44-45|distances = 1 - pred_sim / sorted_indices = torch.argsort(distances, dim=-1)
+sprc|score_normalization|text_feat F.normalize(text_proj); target feats F.normalize(vision_proj_f); max over target tokens|TP/SPRC/src/lavis/models/blip2_models/blip2_qformer_cir_rerank.py:387-395|text_feat = F.normalize(self.text_proj(...), dim=-1) / sim_i2t, _ = sim_t2q.max(-1)
+sprc|metric_arithmetic|R@10/R@50 percent per category; average_recall=(mean R@50+mean R@10)/2|TP/SPRC/src/blip_validate.py:54-55,93-95|recall_at10 = (torch.sum(labels[:, :10]) / len(labels)).item() * 100 / 'average_recall': (mean(recalls_at50) + mean(recalls_at10)) / 2
+sprc|metric_units|PERCENT|TP/SPRC/src/blip_validate.py:54-55|* 100
+sprc|selection_rule|ascending 1-sim; reference eligible on FashionIQ; NO composition adapter exists (deferred)|TP/SPRC/src/validate_blip.py:44-46; WB/registry/models.yaml:1333-1364|torch.argsort(distances, dim=-1) / replay_status: BLOCKED_CHECKPOINT_MAPPING
+sprc|checkpoint_selection|sprc_fiq_unresolved / sprc_fiq_vitl, both mapping UNVERIFIED (ViT-L released vs ViT-g paper)|WB/registry/models.yaml:1401-1420|checkpoint_id: sprc_fiq_unresolved / checkpoint_mapping_status: UNVERIFIED
+```
+
+## ptha_mtst (MTST_PTHA)
+
+```
+ptha_mtst|gallery_source|full ordered val split: image_splits/split.<cat>.val.json -> image_names, then exists() filter drops missing .png|TP/MTST_PTHA/MTST_PTHA/src/data_utils.py:170-177|self.image_names.extend(json.load(f)) / if not file_path.exists(): self.image_names.remove(image_name)
+ptha_mtst|gallery_construction|classic-mode gallery via extract_index_blip_features; category loop dress,toptee,shirt|TP/MTST_PTHA/MTST_PTHA/src/blip_validate.py:62-67,200|FashionIQDataset('val', [dress_type], 'classic', preprocess, )
+ptha_mtst|split_flag_default|'val' hard-coded; --dataset required, --backbone default pretrain|TP/MTST_PTHA/MTST_PTHA/src/blip_validate.py:64-66,186-192|FashionIQDataset('val', [dress_type], 'relative', preprocess, )
+ptha_mtst|reference_mask|NO_MASK_ON_FASHIONIQ_PATH (compute_fiq_val_metrics bounds :24-57; CIRR-only mask at :258-260 in compute_cirr_val_metrics :232-285; second copy get_results :326-356 at :330-333)|TP/MTST_PTHA/MTST_PTHA/src/validate_blip.py:258-260|reference_mask = torch.tensor(sorted_index_names != np.repeat(...))  # compute_cirr_val_metrics
+ptha_mtst|image_transform_construction|targetpad_transform(1.25, 224)|TP/MTST_PTHA/MTST_PTHA/src/blip_validate.py:52-53; TP/MTST_PTHA/MTST_PTHA/src/data_utils.py:99-113|input_dim = 224 / preprocess = targetpad_transform(1.25, input_dim)
+ptha_mtst|image_transform_pipeline|TargetPad(1.25,224) -> Resize(224,BICUBIC) -> CenterCrop(224) -> RGB -> ToTensor -> CLIP mean/std|TP/MTST_PTHA/MTST_PTHA/src/data_utils.py:99-113|TargetPad(target_ratio, dim), Resize(dim, interpolation=PIL.Image.BICUBIC), CenterCrop(dim), ... Normalize((0.48145466,...),(0.26862954,...))
+ptha_mtst|text_join|strip('.?, ').capitalize() first + " and " + second, then txt_processors["eval"]|TP/MTST_PTHA/MTST_PTHA/src/validate_blip.py:180-184|f"{flattened_captions[i].strip('.?, ').capitalize()} and {flattened_captions[i + 1].strip('.?, ')}"
+ptha_mtst|score_orientation|blip_model.inference max-over-32-target-token cosine; distances = 1 - pred_sim; ascending argsort|TP/MTST_PTHA/MTST_PTHA/src/validate_blip.py:44-45|distances = 1 - pred_sim / sorted_indices = torch.argsort(distances, dim=-1)
+ptha_mtst|score_normalization|fusion_feats F.normalize(text_proj[:,32]) and target F.normalize(vision_proj); max over 32 tokens|TP/MTST_PTHA/MTST_PTHA/src/lavis/models/blip2_models/blip2_qformer_tgir_concatembedding_sim.py:424-441|fusion_feats = F.normalize(self.text_proj(...), dim=-1) / sim_i2t, _ = sim_t2q.max(-1)
+ptha_mtst|metric_arithmetic|R@10/R@50 percent per category; average_recall=(mean R@50+mean R@10)/2; replay macro mean of category r10/r50|TP/MTST_PTHA/MTST_PTHA/src/blip_validate.py:54-55,93-95; WB/replay/ptha_mtst.py:375-376,393|'average_recall': (mean(recalls_at50) + mean(recalls_at10)) / 2 / "macro_metrics": {"r10": r10, "r50": r50, "mean": (r10 + r50) / 2}
+ptha_mtst|metric_units|PERCENT|TP/MTST_PTHA/MTST_PTHA/src/blip_validate.py:54-55|* 100
+ptha_mtst|selection_rule|ascending 1-sim; reference eligible; CIRR-trained checkpoint requires explicit transfer opt-in|WB/replay/ptha_mtst.py:410-420|parser.add_argument("--transfer-cirr-to-fashioniq", action="store_true", ...)
+ptha_mtst|adapter_reference_eligible|True|WB/composition/model_ptha_mtst.py:39|reference_eligible = True
+ptha_mtst|adapter_score_dim|8192 (32×256 token layout)|WB/composition/model_ptha_mtst.py:41|score_dimension = 8192
+ptha_mtst|adapter_score|reshape to (N,32,256), einsum max over target tokens|WB/composition/model_ptha_mtst.py:85-87|return np.einsum("nd,mkd->nmk", query, target_tokens, optimize=True).max(axis=-1)
+ptha_mtst|replay_label|CIRR→FashionIQ cross-dataset transfer, exploratory|WB/replay/ptha_mtst.py:35|TRANSFER_LABEL = "PTHA+MTST | CIRR checkpoint -> FashionIQ | cross-dataset transfer | exploratory"
+ptha_mtst|replay_entrypoint|CLI: --source-root --dataset-root --checkpoint-root --checkpoint-id --transfer-cirr-to-fashioniq|WB/replay/ptha_mtst.py:410-420|parser.add_argument("--checkpoint-id", choices=CHECKPOINT_IDS, ...)
+ptha_mtst|replay_target_contract|class-based projection contract (project_at_boundary vs project_inside_inference); refuses unknown class|WB/replay/ptha_mtst.py:196-204,326-333|TARGET_FEATURE_CONTRACTS = {"Blip2QformerCirCat": "project_at_boundary", "Blip2Qformer4TGIRCESIM": "project_inside_inference"}
+ptha_mtst|checkpoint_selection|cirr_transfer (tuned_mtst_cirr.pt), training dataset CIRR, forwards FashionIQ, noise null|WB/registry/models.yaml:395-413|checkpoint_id: cirr_transfer / transfer_condition: cross_dataset_transfer
+```
+
+## Cross-model notes (contract-relevant deltas)
+
+- `sprc` is the only target with **no composition adapter** and no `workbench/replay/sprc.py`; its rows above are native-source only.
+- `dcnet` is the only one whose native score is **un-normalized inner product + log-softmax fusion**, so its metric units are fractions, unlike the percent-based family.
+- `ptha_mtst` is the only gallery that **physically removes** split images whose `.png` is absent (`data_utils.py:174-177`), so its gallery count can differ from the raw split file.
+- `tme`, `csmcir`, `sprc`, `ptha_mtst` all share the BLIP-2/Lavis text join and `1 - sim` ascending rank; only TME guards the reference mask with `if category == 'CIRR'` at `precompute_evaluation.py:89`.

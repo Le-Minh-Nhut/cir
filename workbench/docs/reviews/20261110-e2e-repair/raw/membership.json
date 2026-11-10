@@ -1,0 +1,69 @@
+{
+  "fashioniq_root": "/home/heheboiz/data/cir/data/FashionIQ",
+  "prepared_clip4cir": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/prepared/clip4cir/fashionIQ_dataset",
+  "categories": {
+    "dress": {
+      "split_val_images": 3817,
+      "split_duplicates": 0,
+      "caption_rows": 2017,
+      "refs": 1331,
+      "targets": 2017,
+      "pair_union": 2628,
+      "ids_referenced_but_absent_from_split": 0,
+      "val_split_png_missing": 0,
+      "val_split_jpg_missing": 3817,
+      "val_split_png_missing_examples": [],
+      "prepared_png_missing": 3817,
+      "prepared_jpg_missing": 0,
+      "prepared_caption_rows": 2017,
+      "multi_positive_rows": 0,
+      "target_equals_reference": 0,
+      "captions_per_row": [
+        2
+      ]
+    },
+    "shirt": {
+      "split_val_images": 6346,
+      "split_duplicates": 0,
+      "caption_rows": 2038,
+      "refs": 1541,
+      "targets": 2038,
+      "pair_union": 3089,
+      "ids_referenced_but_absent_from_split": 0,
+      "val_split_png_missing": 0,
+      "val_split_jpg_missing": 6346,
+      "val_split_png_missing_examples": [],
+      "prepared_png_missing": 6346,
+      "prepared_jpg_missing": 0,
+      "prepared_caption_rows": 2038,
+      "multi_positive_rows": 0,
+      "target_equals_reference": 0,
+      "captions_per_row": [
+        2
+      ]
+    },
+    "toptee": {
+      "split_val_images": 5373,
+      "split_duplicates": 0,
+      "caption_rows": 1961,
+      "refs": 1454,
+      "targets": 1961,
+      "pair_union": 2902,
+      "ids_referenced_but_absent_from_split": 0,
+      "val_split_png_missing": 0,
+      "val_split_jpg_missing": 5373,
+      "val_split_png_missing_examples": [],
+      "prepared_png_missing": 5373,
+      "prepared_jpg_missing": 0,
+      "prepared_caption_rows": 1961,
+      "multi_positive_rows": 0,
+      "target_equals_reference": 0,
+      "captions_per_row": [
+        2
+      ]
+    }
+  },
+  "union_of_three_val_splits": 15415,
+  "images_dir_png_count": 74381,
+  "resized_image_count": 15536
+}

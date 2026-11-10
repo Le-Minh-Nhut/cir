@@ -1,0 +1,4 @@
+FILE workbench/artifacts/reports/combiner_rn50x4_noft_rn50x4_noft_unresolved_20261108T064137301769Z_combiner_rn50x4_noft_rn50x4_noft_unresolved_020a70b0_completion.json
+  KEYS ['artifact_type', 'schema_version', 'completion_status', 'run_id', 'model_id', 'checkpoint_id', 'protocol_id', 'source_expected_commit', 'source_actual_commit', 'checkpoint_artifact_type', 'checkpoint_sha256', 'bundle_manifest_digest', 'checkpoint_bundle', 'directory_members', 'invocation_status', 'return_code', 'ledger_entry_digest', 'report']
+FILE workbench/artifacts/reports/combiner_rn50x4_noft_rn50x4_noft_unresolved_20261108T064137301769Z_combiner_rn50x4_noft_rn50x4_noft_unresolved_020a70b0_invocation_outcome.json
+  KEYS ['artifact_type', 'schema_version', 'run_id', 'model_id', 'checkpoint_id', 'protocol_id', 'return_code', 'invocation_status', 'verdict', 'completed', 'reason', 'recorded_at']

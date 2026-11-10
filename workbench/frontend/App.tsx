@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AREAS, KNOWN_PROTOCOL_IDS, SUBSET_LABEL, TO_SEARCH_VERSION, areaDef, hrefFor, parseLocation, toSearch, type AreaId, type Location } from "./routes";
 import { useWorkbenchData, protocolLabel, type RunCatalogEntry } from "./data";
 import { protocolsWithReports, protocolOrDefault } from "./catalog";
+import { chooseInitialScope, chooseSubsetFor, protocolHasSubsets, SUBSET_SEQUENCE } from "./scope";
 import { OverviewPage } from "./OverviewPage";
 import { ExperimentsPage } from "./ExperimentsPage";
 import { EvaluationPage } from "./EvaluationPage";
@@ -30,6 +31,9 @@ export default function App() {
   const initial = useMemo(() => parseLocation(window.location.search, knownProtocolsForParse()), []);
   const [location, setLocation] = useState<Location>(initial.location);
   const [problems, setProblems] = useState(initial.problems);
+  // Which halves of the scope the URL itself named. A landing correction may fill an unstated half
+  // and must never overwrite a stated one.
+  const [namedScope, setNamedScope] = useState(initial.scope);
   const [menuOpen, setMenuOpen] = useState(false);
   const [dismissed, setDismissed] = useState(false);
   // Reading size is a reader preference, not a browser zoom setting: 17px default, 19px on request,
@@ -122,24 +126,42 @@ export default function App() {
       const parsed = parseLocation(window.location.search, knownProtocols.length ? knownProtocols : knownProtocolsForParse());
       setLocation(parsed.location);
       setProblems(parsed.problems);
+      setNamedScope(parsed.scope);
     };
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
   }, [knownProtocols]);
 
-  // First load: if the URL said nothing, adopt the protocol the data actually has, so the header
-  // never claims "FashionIQ Original" while the served rows are CIRCUS release content.
+  // Landing scope, chosen from the rows the API actually served.
+  //
+  // Two defects this replaces. First, `data.protocolIds[0]` is insertion order, and the deployment's
+  // FIRST protocol (CIRCUS release) has composition rows while its reports live under
+  // `fashioniq_original_split` -- so "first" is not "most". Second, and worse: a bare URL adopted a
+  // protocol but KEPT the default subset `sf`, which that protocol may not have. Opening the app then
+  // printed "FashionIQ Original / SF / 0 lượt" beside a deployment holding 13 aggregate reports, and
+  // it looked like a workbench with no results.
+  //
+  // So: each half of the scope is filled only when the URL did not name it, from the same data the
+  // page is about to count. `replaceState`, because a background correction must not become a history
+  // entry the operator has to walk back, and never when the reader stated the value.
   useEffect(() => {
-    if (window.location.search) return;
-    const fallback = data.protocolIds[0];
-    if (fallback && fallback !== location.protocol) {
-      setLocation((current) => {
-        const next = { ...current, protocol: fallback };
-        writeUrl(next, "replace");
-        return next;
-      });
-    }
-  }, [data.protocolIds, location.protocol, writeUrl]);
+    if (data.compositionRuns.region.status !== "ready") return;
+    const rows = data.compositionRuns.region.data ?? [];
+    if (!rows.length) return;
+    const choice = chooseInitialScope(rows);
+    if (!choice) return;
+    const nextProtocol = namedScope.protocolNamed ? location.protocol : choice.protocol;
+    const subset = namedScope.subsetNamed
+      ? location.subset
+      : (chooseSubsetFor(rows, nextProtocol) ?? location.subset);
+    if (nextProtocol === location.protocol && subset === location.subset) return;
+    setLocation((current) => {
+      const next: Location = { ...current, protocol: nextProtocol, subset: subset as Location["subset"] };
+      writeUrl(next, "replace");
+      return next;
+    });
+  }, [data.compositionRuns.region.status, data.compositionRuns.region.data,
+      location.protocol, location.subset, namedScope.protocolNamed, namedScope.subsetNamed, writeUrl]);
 
   // A subset switch KEEPS the run selection.
   //
@@ -211,7 +233,14 @@ export default function App() {
     (data.compositionRuns.region.data ?? []).map((run) => ({
       run_id: run.run_id, protocol_id: run.protocol_id, subset: run.subset, capabilities: run.capabilities,
     })),
-    { protocolId: location.protocol, subset: location.subset });
+    { protocolId: location.protocol, subset: location.subset },
+    // The banner is a claim about what this deployment HOLDS, so it needs each source's own request
+    // state: an empty array means "nothing arrived yet" as often as it means "nothing exists".
+    {
+      runs: data.indexRuns.region.status,
+      benchmarks: data.aggregates.region.status,
+      composition: data.compositionRuns.region.status,
+    });
   const banner = evidenceBanner(evidence);
 
   // The selection-scoped claim that replaces the old app-wide banner: it is about the runs on
@@ -229,7 +258,7 @@ export default function App() {
   };
 
   return (
-    <div className="shell">
+    <div className="shell" data-shell-state={data.compositionRuns.region.status}>
       <a className="skip-link" href="#main-content">Đến nội dung chính</a>
       {menuOpen && <div className="scrim" onClick={() => setMenuOpen(false)} role="presentation" />}
       <nav className="sidebar" data-open={menuOpen} aria-label="Khu vực" data-testid="workbench-nav">
@@ -247,10 +276,12 @@ export default function App() {
             {COUNTS[item.id] ? <span className="nav-count">{COUNTS[item.id]!(data, location)}</span> : null}
           </button>
         ))}
-        <div className="sidebar-foot">
+        <div className="sidebar-foot" data-testid="sidebar-scope">
           <small>{protocolLabel(location.protocol)}</small>
-          <small>Subset {SUBSET_LABEL[location.subset]}</small>
-          <small>{data.catalog.length} lượt khả dụng</small>
+          {protocolHasSubsets(location.protocol) && <small>Subset {SUBSET_LABEL[location.subset]}</small>}
+          {/* The catalog is per-subset, so a deployment-wide number here contradicted the scoped
+              count printed on the page directly beside it. */}
+          <small data-testid="sidebar-catalog-count">{data.catalog.length} lượt khả dụng ở phạm vi này</small>
         </div>
       </nav>
 
@@ -285,13 +316,16 @@ export default function App() {
               ))}
             </select>
           </div>
-          {location.protocol === CIRCUS_PROTOCOL && (
+          {/* The subset control exists only over a protocol whose circuit HAS subsets. Over
+              FashionIQ Original it used to print "Shortcut-Free (SF)" while every row beneath was
+              that protocol's single cohort — a label for a cohort that does not exist. */}
+          {protocolHasSubsets(location.protocol) && (
             <div className="ctx">
               <label htmlFor="subset-select">Subset</label>
               <select id="subset-select" value={location.subset}
                       data-testid="subset-select"
                       onChange={(event) => changeSubset(event.target.value as Location["subset"])}>
-                {(["full", "sf", "validated"] as const).map((subset) => (
+                {SUBSET_SEQUENCE.map((subset) => (
                   <option key={subset} value={subset}>{SUBSET_LABEL[subset]}</option>
                 ))}
               </select>
@@ -318,7 +352,8 @@ export default function App() {
 
         {problems.length > 0 && (
           <div className="content" style={{ paddingBottom: 0 }}>
-            <Card title="Giá trị URL không hợp lệ" subtitle="Không giá trị nào bị âm thầm thay đổi; hãy chọn lại">
+            <Card title="Giá trị URL không hợp lệ" testId="url-problems"
+                  subtitle="Không giá trị nào bị âm thầm thay đổi; hãy chọn lại">
               <ul style={{ margin: 0, paddingLeft: 18 }}>
                 {problems.map((problem) => (
                   <li key={`${problem.param}:${problem.value}`}>
@@ -333,7 +368,8 @@ export default function App() {
         {(banner || selectionNotice) && !dismissed && (
           <div className="content" style={{ paddingBottom: 0 }}>
             <div className={`empty banner ${banner ? "empty-partial" : "empty-capability"}`}
-                 data-testid="error-banner" data-notice-kind={banner ? "evidence" : "selection"}>
+                 data-testid="error-banner" data-notice-kind={banner ? "evidence" : "selection"}
+                 data-evidence-loading={evidence.loading || evidence.failedSources.length > 0 || undefined}>
               <div className="banner-text">
                 {banner && <b>{banner}</b>}
                 {selectionNotice && <span className="empty-detail" style={{ display: "block" }}>{selectionNotice}</span>}

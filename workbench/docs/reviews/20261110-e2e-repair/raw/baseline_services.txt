@@ -1,0 +1,24 @@
+=== pgrep -af serve_workbench.py ===
+2759507 workbench/envs/ctl312h/bin/python workbench/scripts/serve_workbench.py --production-frontend --host 127.0.0.1 --backend-port 8000 --frontend-port 5173
+=== ss -ltnp ===
+State  Recv-Q Send-Q                          Local Address:Port  Peer Address:PortProcess                                       
+LISTEN 0      511                                 127.0.0.1:5765       0.0.0.0:*    users:(("node-MainThread",pid=1227933,fd=23))
+LISTEN 0      200                                 127.0.0.1:5432       0.0.0.0:*                                                 
+LISTEN 0      511                                 127.0.0.1:5173       0.0.0.0:*    users:(("node-MainThread",pid=2759525,fd=21))
+LISTEN 0      511                                 127.0.0.1:4173       0.0.0.0:*    users:(("node-MainThread",pid=2600086,fd=23))
+LISTEN 0      2048                                127.0.0.1:8000       0.0.0.0:*    users:(("python",pid=2759510,fd=7))          
+LISTEN 0      4096                 100.115.73.12%tailscale0:46972      0.0.0.0:*                                                 
+LISTEN 0      4096                                127.0.0.1:631        0.0.0.0:*                                                 
+LISTEN 0      512                                 127.0.0.1:36859      0.0.0.0:*    users:(("omp",pid=2265411,fd=66))            
+LISTEN 0      4096                                127.0.0.1:20241      0.0.0.0:*    users:(("cloudflared",pid=1201270,fd=10))    
+LISTEN 0      511                                 127.0.0.1:30177      0.0.0.0:*    users:(("next-server (v1",pid=1197905,fd=22))
+LISTEN 0      128                                   0.0.0.0:22         0.0.0.0:*                                                 
+LISTEN 0      4096                            127.0.0.53%lo:53         0.0.0.0:*                                                 
+LISTEN 0      511                                   0.0.0.0:4301       0.0.0.0:*    users:(("http-server",pid=2480984,fd=23))    
+LISTEN 0      4096                               127.0.0.54:53         0.0.0.0:*                                                 
+LISTEN 0      2048                                127.0.0.1:8765       0.0.0.0:*    users:(("python",pid=1227919,fd=7))          
+LISTEN 0      4096                 100.115.73.12%tailscale0:443        0.0.0.0:*                                                 
+LISTEN 0      4096   [fd7a:115c:a1e0::153a:490d]%tailscale0:443           [::]:*                                                 
+LISTEN 0      4096   [fd7a:115c:a1e0::153a:490d]%tailscale0:45477         [::]:*                                                 
+LISTEN 0      511                                         *:2208             *:*    users:(("node-MainThread",pid=1201227,fd=24))
+LISTEN 0      4096                                    [::1]:631           [::]:*                                                 

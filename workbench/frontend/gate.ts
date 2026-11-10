@@ -45,6 +45,33 @@ export type RunGate = {
   is_synthetic?: boolean | null;
   verification?: VerificationInfo | null;
 };
+/** `GET /api/runs/parity-gate` — the G1/G2 verdict computed from the artifacts themselves.
+ *
+ *  Deliberately NOT a single boolean: `passed_models` is an empty list when no evidenced model passes,
+ *  and that is a verdict about the evidence, not an error. Each model carries its own status,
+ *  per-dimension booleans, its mandatory failures and the artifacts the verdict rests on. */
+export type ParityGatePayload = {
+  standard: string;
+  passed_models: string[];
+  note: string;
+  models: Record<string, {
+    model_id: string;
+    status: string;
+    passed: boolean;
+    complete: boolean;
+    dimensions: Record<string, boolean>;
+    coverage?: Record<string, string[]>;
+    failure_count: number;
+    failures: Array<{
+      name: string; dimension: string; gate: string;
+      declared: unknown; measured: unknown; ok: boolean; mandatory: boolean;
+      standard: string; note: string;
+    }>;
+    evidence?: string[];
+    detail?: string;
+  }>;
+};
+
 export type GateVerdict = {
   status?: string;
   passed?: boolean;

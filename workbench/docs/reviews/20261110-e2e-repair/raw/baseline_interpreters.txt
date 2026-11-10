@@ -1,0 +1,21 @@
+# workbench.env keys read: 18
+# upstream_python = registry environment.python (what the upstream README pins)
+# adapted_python  = registry environment.adapted_runtime.python (what the operator env implements)
+# model_id               var                              upstream   adapted   resolved                                                   reported
+  csmcir                 WORKBENCH_CSMCIR_PYTHON          3.9        3.10      /home/heheboiz/data/cir/workbench/artifacts/environments/cir-005ef4e1b02999a5/bin/python 3.10.22  [exists]
+  airknow                WORKBENCH_AIRKNOW_PYTHON         3.8.10     -         workbench/envs/ctl312h/bin/python (WORKBENCH default)      3.12.11  [exists]
+  conesep                WORKBENCH_CONESEP_PYTHON         3.8.10     3.9       /home/heheboiz/data/cir/workbench/envs/ilearn39-adapted/bin/python 3.9.25  [exists]
+  ptha_mtst              WORKBENCH_PTHA_MTST_PYTHON       3.9        3.10      /home/heheboiz/data/cir/workbench/artifacts/environments/cir-005ef4e1b02999a5/bin/python 3.10.22  [exists]
+  habit                  WORKBENCH_HABIT_PYTHON           3.8.10     3.9       /home/heheboiz/data/cir/workbench/envs/ilearn39-adapted/bin/python 3.9.25  [exists]
+  intent                 WORKBENCH_INTENT_PYTHON          3.9        3.9       /home/heheboiz/data/cir/workbench/envs/ilearn39-adapted/bin/python 3.9.25  [exists]
+  hint                   WORKBENCH_HINT_PYTHON            3.8.10     3.9       /home/heheboiz/data/cir/workbench/envs/ilearn39-adapted/bin/python 3.9.25  [exists]
+  encoder                WORKBENCH_ENCODER_PYTHON         3.9        3.10      /home/heheboiz/data/cir/workbench/envs/encoder310-adapted/bin/python 3.10.20  [exists]
+  pair                   WORKBENCH_PAIR_PYTHON            3.8.10     -         workbench/envs/ctl312h/bin/python (WORKBENCH default)      3.12.11  [exists]
+  clvc_net               WORKBENCH_CLVC_PYTHON            3.7.6      -         workbench/envs/ctl312h/bin/python (WORKBENCH default)      3.12.11  [exists]
+  dcnet                  WORKBENCH_DCNET_PYTHON           3.7.7      -         workbench/envs/ctl312h/bin/python (WORKBENCH default)      3.12.11  [exists]
+  combiner_rn50x4_noft   WORKBENCH_CLIP4CIR_PYTHON        3.8        -         workbench/envs/ctl312h/bin/python (WORKBENCH default)      3.12.11  [exists]
+  clip4cir_rn50x4_fullft WORKBENCH_CLIP4CIR_PYTHON        3.8        -         workbench/envs/ctl312h/bin/python (WORKBENCH default)      3.12.11  [exists]
+  tgcir                  WORKBENCH_TGCIR_PYTHON           UNKNOWN    -         workbench/envs/ctl312h/bin/python (WORKBENCH default)      3.12.11  [exists]
+  sprc                   WORKBENCH_SPRC_PYTHON            3.9        -         workbench/envs/ctl312h/bin/python (WORKBENCH default)      3.12.11  [exists]
+  limn                   WORKBENCH_LIMN_PYTHON            UNKNOWN    3.10      /home/heheboiz/data/cir/workbench/envs/limn310-adapted/bin/python 3.10.20  [exists]
+  tme                    WORKBENCH_TME_PYTHON             3.10       -         /home/heheboiz/data/cir/workbench/envs/tme-adapted/bin/python 3.10.22  [exists]

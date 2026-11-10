@@ -1,0 +1,27 @@
+### encoder shirt tolerances={"identity": "exact, zero tolerance", "pixels": "bitwise equality expected (max_abs == 0, array_equal)", "text_and_tokens": "exact equality", "forward_max_abs": 1e-05, "forward_max_rel": 0.0001, "forward_min_cosine": 0.9999999, "batch_max_abs": 0.0001, "batch_max_rel": 0.001, "score_max_abs": 1e-06, "tie_epsilon": 1e-06, "metrics": "exact hit-count equality"}
+  sample.query_val_pixels: max_abs=0.0 max_rel=0.0 within=True bitwise=True
+  sample.query_native_tensors: max_abs=0.04142118990421295 max_rel=606.2215686383217 within=False bitwise=False
+  sample.target: max_abs=0.0 max_rel=0.0 within=True bitwise=True
+  batch_size_1_vs_n: max_abs=2.812594175338745e-07 max_rel=0.0031308995258445375 within=False
+  cache_off_restart: max_abs=0.0 max_rel=0.0 within=None
+  population.features_vs_native_val_control: max_abs=1.2777745723724365e-06 max_rel=0.7519744456046599 within=False
+  population.features_vs_native_train_query: max_abs=0.12295106053352356 max_rel=84856.68704092671 within=False
+  population.gallery_vs_native: max_abs=1.648440957069397e-06 max_rel=7.7499972070904795 within=True
+### encoder toptee tolerances={"identity": "exact, zero tolerance", "pixels": "bitwise equality expected (max_abs == 0, array_equal)", "text_and_tokens": "exact equality", "forward_max_abs": 1e-05, "forward_max_rel": 0.0001, "forward_min_cosine": 0.9999999, "batch_max_abs": 0.0001, "batch_max_rel": 0.001, "score_max_abs": 1e-06, "tie_epsilon": 1e-06, "metrics": "exact hit-count equality"}
+  sample.query_val_pixels: max_abs=0.0 max_rel=0.0 within=True bitwise=True
+  sample.query_native_tensors: max_abs=0.023707862943410873 max_rel=207.29014469512612 within=False bitwise=False
+  sample.target: max_abs=0.0 max_rel=0.0 within=True bitwise=True
+  batch_size_1_vs_n: max_abs=3.2782554626464844e-07 max_rel=0.011646653843520266 within=False
+  cache_off_restart: max_abs=0.0 max_rel=0.0 within=None
+  population.features_vs_native_val_control: max_abs=9.872019290924072e-07 max_rel=7.850000984209719 within=False
+  population.features_vs_native_train_query: max_abs=0.12517333775758743 max_rel=233071.60896303508 within=False
+  population.gallery_vs_native: max_abs=9.98377799987793e-07 max_rel=3.897590520814516 within=True
+### encoder dress tolerances={"identity": "exact, zero tolerance", "pixels": "bitwise equality expected (max_abs == 0, array_equal)", "text_and_tokens": "exact equality", "forward_max_abs": 1e-05, "forward_max_rel": 0.0001, "forward_min_cosine": 0.9999999, "batch_max_abs": 0.0001, "batch_max_rel": 0.001, "score_max_abs": 1e-06, "tie_epsilon": 1e-06, "metrics": "exact hit-count equality"}
+  sample.query_val_pixels: max_abs=0.0 max_rel=0.0 within=True bitwise=True
+  sample.query_native_tensors: max_abs=0.02124939113855362 max_rel=46.6752522471972 within=False bitwise=False
+  sample.target: max_abs=0.0 max_rel=0.0 within=True bitwise=True
+  batch_size_1_vs_n: max_abs=3.203749656677246e-07 max_rel=0.0077950176161260265 within=False
+  cache_off_restart: max_abs=0.0 max_rel=0.0 within=None
+  population.features_vs_native_val_control: max_abs=1.0998919606208801e-06 max_rel=3.3548386852382883 within=False
+  population.features_vs_native_train_query: max_abs=0.12039151974022388 max_rel=223487.7287736603 within=False
+  population.gallery_vs_native: max_abs=1.1324882507324219e-06 max_rel=1.3636362821713672 within=True

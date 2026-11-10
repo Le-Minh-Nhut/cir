@@ -1,0 +1,3 @@
+STOP_AT UnicodeDecodeError 'utf-8' codec can't decode byte 0x80 in position 63: invalid start byte
+N_GLOBAL_OPS 0
+N_STRINGS 0

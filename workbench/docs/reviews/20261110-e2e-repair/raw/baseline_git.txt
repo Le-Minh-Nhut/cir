@@ -1,0 +1,16 @@
+=== git rev-parse HEAD ===
+2e2e2d299e0cd3f27d6bcaff09fdf64d7c778dc6
+=== git status --short ===
+?? CLEANUP_REPORT.md.save
+?? workbench/docs/reviews/20261110-e2e-repair/
+=== git diff --stat ===
+(empty above means no unstaged diff)
+=== git diff --cached --stat ===
+=== branch/upstream ===
+research/cir-failure-workbench
+origin/research/cir-failure-workbench
+=== unpushed (origin/research/cir-failure-workbench..HEAD) ===
+=== count ===
+0
+=== origin ref sha ===
+2e2e2d299e0cd3f27d6bcaff09fdf64d7c778dc6

@@ -1,0 +1,55 @@
+{'files_scanned': 71, 'files': 31, 'blocks_with_metrics': 48, 'with_metrics': 25, 'rollup_rows': 23, 'unreadable': 2, 'signposted_blockers': 4, 'models_with_metrics': 28, 'verified': 0}
+B1/H_normal            None                                 ['r10', 'r50', 'mean'] rollup=True path=measured.B1/H_normal pair_compat_verdict.json unread=- blk=-
+B1/H_normal            None                                 ['r10', 'r50', 'mean'] rollup=True path=B1/H_normal          summary.json unread=- blk=-
+B1/H_rev               None                                 ['r10', 'r50', 'mean'] rollup=True path=measured.B1/H_rev    pair_compat_verdict.json unread=- blk=-
+B1/H_rev               None                                 ['r10', 'r50', 'mean'] rollup=True path=B1/H_rev             summary.json unread=- blk=-
+B2/H_normal            None                                 ['r10', 'r50', 'mean'] rollup=True path=measured.B2/H_normal pair_compat_verdict.json unread=- blk=-
+B2/H_normal            None                                 ['r10', 'r50', 'mean'] rollup=True path=B2/H_normal          summary.json unread=- blk=-
+B2/H_rev               None                                 ['r10', 'r50', 'mean'] rollup=True path=measured.B2/H_rev    pair_compat_verdict.json unread=- blk=-
+B2/H_rev               None                                 ['r10', 'r50', 'mean'] rollup=True path=B2/H_rev             summary.json unread=- blk=-
+None                   None                                 [] rollup=False path=None                 ptha_transfer_run2.json unread=x blk=-
+None                   None                                 [] rollup=False path=None                 call_path_probe.json unread=x blk=-
+airknow                None                                 ['r10', 'r50', 'mean'] rollup=True path=selected_2026-11-06.airknow.metrics selection_decisions.json unread=- blk=-
+airknow                fashioniq_full_gallery_ref_exclude   ['r10', 'r50', 'mean'] rollup=False path=aggregate            airknow_fiq_n05_run1.json unread=- blk=-
+airknow                fashioniq_full_gallery_ref_exclude   ['r10', 'r50', 'mean'] rollup=False path=aggregate            airknow_fiq_n08_run1.json unread=- blk=-
+airknow_n05            None                                 ['r10', 'r50', 'mean'] rollup=True path=airknow_n05.macro    all_measured_summary.json unread=- blk=-
+airknow_n08            None                                 ['r10', 'r50', 'mean'] rollup=True path=airknow_n08.macro    all_measured_summary.json unread=- blk=-
+airknow_variant_80     None                                 ['r10', 'r50', 'mean'] rollup=True path=selected_2026-11-06.airknow_variant_80.metrics selection_decisions.json unread=- blk=-
+clip4cir_fullft        None                                 ['r10', 'r50', 'mean'] rollup=True path=clip4cir_fullft      clip4cir_parsed.json unread=- blk=-
+clip4cir_noft          None                                 ['r10', 'r50', 'mean'] rollup=True path=clip4cir_noft        clip4cir_parsed.json unread=- blk=-
+clip4cir_rn50x4_fullft None                                 ['r10', 'r50', 'mean'] rollup=True path=selected_2026-11-06.clip4cir_rn50x4_fullft.metrics selection_decisions.json unread=- blk=-
+clvc                   None                                 ['r10', 'r50', 'mean'] rollup=True path=clvc.macro           all_measured_summary.json unread=- blk=-
+clvc_net               None                                 ['r10', 'r50', 'mean'] rollup=True path=selected_2026-11-06.clvc_net.metrics selection_decisions.json unread=- blk=-
+clvc_net               fashioniq_val_split                  ['r10', 'r50', 'mean'] rollup=False path=aggregate            clvc_run1.json unread=- blk=-
+combiner_rn50x4_noft   None                                 ['r10', 'r50', 'mean'] rollup=True path=selected_2026-11-06.combiner_rn50x4_noft.metrics selection_decisions.json unread=- blk=-
+conesep                fashioniq_full_gallery_ref_exclude   ['r10', 'r50', 'mean'] rollup=False path=aggregate            conesep_fiq_n02.json unread=- blk=-
+csmcir                 None                                 [] rollup=False path=None                 csmcir_blocker.json unread=- blk=x
+csmcir                 fashioniq_original_split             ['r10', 'r50', 'mean'] rollup=False path=(top level)          measurement.json unread=- blk=-
+dcnet                  None                                 ['r10', 'r50', 'mean'] rollup=True path=selected_2026-11-06.dcnet.metrics selection_decisions.json unread=- blk=-
+dcnet                  fashioniq_full_gallery_ref_exclude   ['r10', 'r50', 'mean'] rollup=False path=aggregate            dcnet_run1.json unread=- blk=-
+dcnet                  fashioniq_full_gallery_ref_exclude   ['r10', 'r50'] rollup=False path=paper                dcnet_run1.json unread=- blk=-
+encoder                fashioniq_val_split                  ['r10', 'r50', 'mean'] rollup=False path=aggregate            encoder_fashioniq.json unread=- blk=-
+habit                  fashioniq_full_gallery_ref_exclude   ['r10', 'r50', 'mean'] rollup=False path=aggregate            habit_fiq_n02.json unread=- blk=-
+hint                   fashioniq_val_split                  ['r10', 'r50', 'mean'] rollup=False path=aggregate            hint_fashioniq.json unread=- blk=-
+hint                   fashioniq_val_split                  ['r10', 'r50', 'mean'] rollup=False path=aggregate            hint_doc_command.json unread=- blk=-
+intent                 fashioniq_full_gallery_ref_exclude   ['r10', 'r50', 'mean'] rollup=False path=aggregate            intent_fiq_n02.json unread=- blk=-
+limn                   fashioniq_val_split                  ['r10', 'r50', 'mean'] rollup=False path=aggregate            limn_base_iter0.json unread=- blk=-
+pair                   None                                 [] rollup=False path=None                 pair_blocker.json unread=- blk=x
+pair                   fashioniq_val_split                  ['r10', 'r50', 'mean'] rollup=False path=macro                pair_b1_H_normal.json unread=- blk=-
+pair                   fashioniq_val_split                  ['r10', 'r50'] rollup=False path=paper_reference      pair_b1_H_normal.json unread=- blk=-
+pair                   fashioniq_val_split                  ['r10', 'r50', 'mean'] rollup=False path=macro                pair_b1_H_rev.json unread=- blk=-
+pair                   fashioniq_val_split                  ['r10', 'r50'] rollup=False path=paper_reference      pair_b1_H_rev.json unread=- blk=-
+pair                   fashioniq_val_split                  ['r10', 'r50', 'mean'] rollup=False path=macro                pair_b2_H_normal.json unread=- blk=-
+pair                   fashioniq_val_split                  ['r10', 'r50'] rollup=False path=paper_reference      pair_b2_H_normal.json unread=- blk=-
+pair                   fashioniq_val_split                  ['r10', 'r50', 'mean'] rollup=False path=macro                pair_b2_H_rev.json unread=- blk=-
+pair                   fashioniq_val_split                  ['r10', 'r50'] rollup=False path=paper_reference      pair_b2_H_rev.json unread=- blk=-
+paper_reference        None                                 ['r10', 'r50'] rollup=True path=paper_reference      pair_compat_verdict.json unread=- blk=-
+ptha_mtst              None                                 [] rollup=False path=None                 ptha_mtst_transfer_blocker.json unread=- blk=x
+sprc                   fashioniq_original_split             ['r10', 'r50', 'mean'] rollup=False path=aggregate            sprc_vitl_run1.json unread=- blk=-
+sprc_vitl              None                                 ['r10', 'r50', 'mean'] rollup=True path=selected_2026-11-06.sprc_vitl.metrics selection_decisions.json unread=- blk=-
+tgcir                  None                                 ['r10', 'r50', 'mean'] rollup=True path=tgcir.macro          all_measured_summary.json unread=- blk=-
+tgcir                  None                                 ['r10', 'r50', 'mean'] rollup=True path=selected_2026-11-06.tgcir.metrics selection_decisions.json unread=- blk=-
+tgcir                  fashioniq_val_split                  ['r10', 'r50', 'mean'] rollup=False path=aggregate            tgcir_run1.json unread=- blk=-
+tme                    None                                 [] rollup=False path=None                 tme_blocker.json unread=- blk=x
+tme                    fashioniq_original_split             ['r10', 'r50', 'mean'] rollup=False path=aggregate            tme_fashioniq_0.json unread=- blk=-
+tme                    fashioniq_original_split             ['r10', 'r50', 'mean'] rollup=False path=aggregate            tme_normal_path_full.json unread=- blk=-

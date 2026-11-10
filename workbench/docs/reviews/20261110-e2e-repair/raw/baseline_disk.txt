@@ -1,0 +1,6 @@
+=== df -h ===
+Filesystem      Size  Used Avail Use% Mounted on
+/dev/nvme0n1p5  630G  442G  156G  74% /
+=== du -sh roots ===
+84G	workbench/artifacts
+25G	data
