@@ -120,7 +120,7 @@ Chỉ những số dưới đây đủ căn cứ để trích. Mỗi số kèm n
 | **CLVC-Net** | **30.0208 / 58.6719** | hai run độc lập **trùng nhau** | cùng báo cáo |
 | **Air-Know** | **52.5468 ± 0.2673** (4 run) | **kèm công bố** nondeterminism của upstream, không giấu | cùng báo cáo |
 | **ENCODER** | **31.0178 / 49.5586** | run pinned `ce89a9a2…` | `MODEL_LIMN_ENCODER_VERIFICATION.vi.md` |
-| **LIMN** canonical `9e4918a6` | **PARTIAL 6001/6003** | + hai subset derived (sf: 4068/4069 `DERIVED_PARTIAL`; validated: 586/586 `DERIVED_COMPLETE`) | cùng báo cáo; `tests/test_derived_subset_status.py` |
+| **LIMN** canonical `9e4918a6` | **PARTIAL 6001/6003** | + hai subset derived: sf 4068/4069 — `execution_status` **PARTIAL** (của parent), `derived_from.own_status_label` = **`DERIVED_PARTIAL`**; validated 586/586 — `execution_status` **PARTIAL** (của parent), `derived_from.own_status_label` = **`DERIVED_COMPLETE`**. `execution_status` **không** mang nhãn derived (option b) | cùng báo cáo; `tests/test_derived_subset_status.py` |
 | **Gate** | **0 / 2 mô hình có artifact parity; 0 / 17 cấu hình PASS** | `passed_models: []`; `failure_count` **13** (encoder) và **3** (limn) — đều là **discrepancy thật**, không phải thiếu dữ liệu. Mẫu số là cohort **17** cấu hình như §6: 13 model G1/G2 `NOT_RUN` chưa có artifact parity nên không thể pass | `GATE_SCORING_VERIFICATION.vi.md`; `/api/runs/parity-gate` |
 
 Nói rõ: **0 PASS không phải lỗi của gate** — đó là 16 discrepancy thật (13 + 3) giữa hai phía, đọc từ
