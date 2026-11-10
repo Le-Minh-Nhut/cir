@@ -160,7 +160,7 @@ artifact. Gate cũ báo `PARITY_PASS` cho cả hai; gate mới báo đúng.
   gửi tín hiệu tới npm/uvicorn theo tên; instance hiện tại có `SID == PGID == PID` (session riêng) nên
   miễn nhiễm với việc group của một shell khác bị reap. **Không suy đoán thêm.**
   Người đọc có thể gặp service **down**: `curl /api/benchmark-runs` trả **000** nghĩa là restart bằng
-  lệnh ở §7. **PID không phải pin bền** (mỗi restart đổi PID); **digest bundle mới là pin** — hiện tại
+  lệnh ở §8. **PID không phải pin bền** (mỗi restart đổi PID); **digest bundle mới là pin** — hiện tại
   `assets/index-DWpK0yeS.js` sha256 `7e34724ebf55092e36524b98980cca55e71f3ddbaa62489c65577f92e18a6a16`
   (đo lại sau restart: `/api/benchmark-runs` 200 với 13 mục, `/api/native-measurements` 200 với
   `unbacked_counted: 0`, DCNet `27.929730914548916` / `percent` / `sibling_key`).
@@ -168,7 +168,78 @@ artifact. Gate cũ báo `PARITY_PASS` cho cả hai; gate mới báo đúng.
 
 ---
 
-## 6. Bảng sweep
+## 6. Tổng kết điều kiện kết thúc
+
+Mỗi hàng dưới đây được **đọc từ file hoặc API sống**, không chép từ báo cáo khác. Cột "nguồn" là chỗ
+tôi thực sự lấy số.
+
+| hạng mục | số | nguồn (đã tự đo) |
+|---|---|---|
+| cấu hình trong registry | **17 cấu hình / 16 upstream** | `registry/models.yaml` qua `load_registry()`: 17 model, 16 `upstream_repo_url` phân biệt; CLIP4Cir chứa 2 (`combiner_rn50x4_noft`, `clip4cir_rn50x4_fullft`) |
+| cohort native FashionIQ | **17** (không phải 15) | `20261109-native15-composition-limn/NATIVE_EVAL_MATRIX.csv` có **17** dòng, và 17/17 model registry đều có mặt trong catalog native. Con số "15" trong tên chiến dịch cũ là **cũ** |
+| đã thực thi thật (có log/artifact khớp measurement) | **15 / 17** | CSV cột `native_executed`: `N` ở `airknow`, `pair` (2 model) ⇒ 15 `Y`. Khớp với `models_with_metrics = 17` trừ đi 2 model chỉ có roll-up |
+| trong đó có `EXITCODE=0` kiểm chứng được | **9 / 17** | quét `docs/reviews/**/*.log` tìm `EXITCODE=0` + `*.json` có `runtime/side_effects.exit_code == 0`: chỉ 9 model có bằng chứng. **Không** phải 13/15 |
+| qua **G1** | **0** | `GET /api/runs/parity-gate` → `passed_models: []` |
+| qua **G2** | **0** | cùng response; `encoder` 13 failure, `limn` 3 failure (discrepancy thật, không phải thiếu dữ liệu) |
+| dùng được để **so sánh nghiên cứu** | **17 model / 21 dòng** | `/api/native-measurements`: `counted ∧ artifact_backed` = 21 dòng thuộc **17** model. (Advisory ghi 15 — **sai**; payload sống ghi 17) |
+| có **ảnh Top-K** | **full 13/18, sf 5/11, validated 5/11** | `GET /api/composition/capabilities?subset=…` → `capability_counts.candidate_topk` so với `run_count` |
+| **deferred** | **2** | `frontend/ModelInventory.tsx:16-19`: `csmcir` ("thiếu dữ liệu phụ trợ"), `sprc` ("chưa tải checkpoint") |
+| **blocked** | **1** | `pair` — cần upstream `model_vssp` + `MHTransformer_dis`; `replay/pair_absence.py` là bằng chứng vắng mặt |
+| **cần rerun** | **5** | xem dưới |
+
+### Năm ca cần rerun (liệt kê thật, có căn cứ)
+
+| ca | lý do | căn cứ |
+|---|---|---|
+| `clip4cir_rn50x4_noft` | chỉ có roll-up, không artifact | `/api/native-measurements`: `artifact_backed: false`, `counted: false` |
+| `airknow` (2 dòng) | 2 lần chạy n05/n08 khác nhau, chưa chốt cái nào là canonical; thêm nữa upstream nondeterministic ±0.2673 | payload: 2 dòng `counted: true` cùng model |
+| `pair` (4 dòng) | 4 cấu hình B1/B2 × H_normal/H_rev **khác nhau thật** — cần chọn canonical hoặc công bố cả 4 | payload: 4 dòng `counted: true`, values khác nhau |
+| ENCODER `5dee7425…`, `6a528e87…` | **superseded**: relation draw từ generator không pin | `MODEL_LIMN_ENCODER_VERIFICATION.vi.md` §M-01-a; run canonical là `ce89a9a2…` |
+| `habit` (run `e0dd04a4…`, subset `validated`) | artifact ghi `FAILED` vì interpreter trỏ `airknow-adapted` (Python 3.11.15 ≠ 3.8.10); env var **nay đã đúng** nên đây là artifact cũ | `summary/habit_fiq_n02_e0dd04a4…/validated.json` → `condition_status.*.reason`, `runtime.model_interpreter.path` |
+
+### Điều **không** được tính là parity (theo master file)
+
+**Không** tính `EXIT=0`, smoke pass, điểm gần paper, fixture, hay rank-only là parity. Vì thế G1/G2 là
+**0** dù nhiều run `COMPLETED`; `native_verified = Y` chỉ có `limn`, và điều đó **không** nâng G1/G2 lên.
+
+## 6.1. Hai defect phát hiện khi kiểm chứng bảng trên
+
+### DEFECT A — bằng chứng `w_shots/` cũ, tự mâu thuẫn
+
+Quét 14 file `web_evidence/w_shots/*.json` (raw `raw/verify/41-defectA-stale-evidence.txt`):
+
+- **4 file** còn render `DERIVED_*` **trong cột `execution_status`** — đó là cách hiển thị của option (a)
+  mà ta đã bỏ: `w02_models_inventory`, `w02_overview_circus`, `w04_reload_full`, `w05_pe_histograms`.
+  Đối chiếu API sống: `DERIVED_*` nay **chỉ** nằm trong `derived_from.own_status_label`, còn
+  `execution_status` là `PARTIAL`. ⇒ ảnh chụp cũ, **không** đại diện hành vi đã phát hành.
+- **2 file** có record API khác 200:
+  - `w04_deeplink_out_of_range` → 404 là **chủ đích** (probe `query_id 7:99999`), bằng chứng **hợp lệ**;
+  - `w05_pe_histograms` → `/api/parity-gate` 404 vì **sai URL**: route thật là
+    `@app.get("/api/runs/parity-gate")` (`backend/main.py:1044`), trả 200 với `passed_models: []`.
+
+Cả 5 file vẫn được giữ (bằng chứng lịch sử không xoá), nhưng **không** được trích làm bằng chứng W-05 cho
+hành vi hiện tại cho tới khi chụp lại trên bundle `index-DWpK0yeS.js`.
+
+### DEFECT B — `habit` FAILED vì interpreter (artifact cũ, không phải env hiện tại)
+
+`summary/habit_fiq_n02_e0dd04a46ef7a58334b9e353/validated.json` ghi
+`RuntimeError: execution environment not verified [BLOCKED/PYTHON_VERSION_MISMATCH]:
+WORKBENCH_HABIT_PYTHON=…/envs/airknow-adapted/bin/python (expected Python 3.8.10, found 3.11.15)`.
+
+Kiểm lại trạng thái hiện tại:
+
+- `workbench/config/workbench.env:12` **nay đã đúng**:
+  `WORKBENCH_HABIT_PYTHON=/home/heheboiz/data/cir/workbench/envs/ilearn39-adapted/bin/python`
+  (cùng dòng 13/14/15 cho intent/hint/conesep).
+- `workbench/envs/ilearn39-adapted/bin/python` tồn tại, **Python 3.9.25**; `airknow-adapted/bin/python`
+  **không còn tồn tại**.
+
+⇒ Đây **không** phải operator action đang mở, mà là **artifact cũ** mang đường dẫn đã chết. Cần
+**rerun `habit`** để artifact mới ghi interpreter đúng. Registry vẫn khai `python: 3.8.10` cho habit,
+trong khi env thực tế là 3.9 — registry dùng `adapted_runtime.python: 3.9`, nên dùng env 3.9 là đúng
+theo `adapted_runtime`; **không** sửa `workbench.env` (bị cấm).
+
+## 7. Bảng sweep
 
 Ba dòng là **ba cây KHÁC NHAU**, không phải một cây chạy ba lần.
 
@@ -185,7 +256,7 @@ Ship sweep: `350 warnings in 3540.59s (0:59:00)`, 975 dòng, `ERROR` row = 0, `E
 
 ---
 
-## 7. Lệnh chạy lại
+## 8. Lệnh chạy lại
 
 ```bash
 # toàn bộ suite, tuần tự, trên cây phát hành
@@ -228,7 +299,7 @@ setsid nohup env WORKBENCH_CIRCUS_RELEASE_ROOT=/home/heheboiz/data/cir/workbench
 
 ---
 
-## 8. Tóm tắt một câu
+## 9. Tóm tắt một câu
 
 Cây phát hành đạt **`18 failed, 2800 passed, 47 skipped`, gap 0, NEW = 0** so với baseline — không còn
 hồi quy nào thuộc đợt này; phần còn đỏ là 18 lỗi có sẵn, PAIR bị chặn bởi upstream, và 16 discrepancy
