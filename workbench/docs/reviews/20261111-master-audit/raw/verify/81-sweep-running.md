@@ -122,3 +122,84 @@ Run only when `/tmp/sweep_c25d67f2.txt` contains a trailing
 - Web service untouched: no restart, no kill, no rebuild of `dist/`.
 - Only file created by this step is this report (plus the pre-existing untracked
   `CLEANUP_REPORT.md.save`, which was not modified).
+
+## KẾT THÚC — KHÔNG DÙNG ĐƯỢC
+
+Sweep này bị dừng giữa đường. **Kết quả KHÔNG dùng được** — không được dùng cho
+`TESTED_SOURCE_SHA`, không được đem so với baseline.
+
+### Lý do: cây làm việc đã biến đổi giữa lúc chạy (mutating tree)
+
+Production thay đổi khi sweep đang chạy:
+
+- Commit `3ab8d0d` — `fix(frontend): compare table separates peers by composition label (A5)` —
+  sửa `workbench/frontend/QueryInspector.tsx`.
+- `dist/` đang được rebuild trong lúc sweep chạy. Bằng chứng mtime:
+
+  ```
+  2026-11-11 19:35:15 +0700  workbench/frontend/QueryInspector.tsx   (source, đổi giữa run)
+  2026-11-11 19:35:53 +0700  workbench/frontend/dist/assets/index-DYYSN7oG.js  (rebuild giữa run)
+  ```
+
+- `workbench/tests/test_frontend_staleness.py:245-248` khẳng định
+  `mtime(dist) >= mtime(mới nhất của frontend *.ts/*.tsx)`. Nguồn và bundle cùng bị ghi
+  trong lúc pytest đang chạy, nên bất biến của cây bị phá tại đúng thời điểm đo.
+- Bundle đã đổi tên trong lúc chạy: lúc preflight là `index-CBR6lHgq.js`
+  (sha256 `acfb5fbb…ac21a`), sau khi dừng là `index-DYYSN7oG.js`. Đây là bằng chứng trực tiếp
+  rằng artefact được test không còn là artefact đã preflight.
+
+Quy tắc của campaign này: **sweep trên cây đang biến đổi thì không đo được gì**
+(a sweep on a mutating tree measures nothing). Vì vậy run bị hủy thay vì thu thập.
+
+### Mốc thời gian và tiến độ
+
+| Mục | Giá trị |
+|---|---|
+| Bắt đầu | `2026-11-11T19:29:28+07:00` (12:29:28Z) |
+| Dừng (SIGKILL) | `2026-11-11T19:36:14+07:00` (12:36:14Z) |
+| Thời gian chạy | ~6 min 46 s trên dự kiến 55–58 min |
+| Tiến độ đạt được | **31%** |
+| PID | `1021047` |
+| Log giữ lại | `/tmp/sweep_c25d67f2.txt` (13 dòng, 1070 byte) |
+
+Dòng log cuối cùng, nguyên văn (chưa kết thúc bằng newline, pytest bị cắt giữa dòng):
+
+```
+.......................................F................................ [ 31%]
+............................s.
+```
+
+Lưu ý: đã có một `F` ở dòng 31% — nhưng vì cây biến đổi, kể cả failure này cũng không
+quy được cho source nào một cách đáng tin.
+
+### Lệnh dừng
+
+```bash
+pgrep -af "pytest workbench/tests"     # -> 1021047 ... --basetemp=/tmp/sweep_basetemp_c25d67f2
+kill -TERM 1021047                     # graceful, chờ 10 s
+kill -KILL 1021047                     # vẫn còn sống sau SIGTERM -> kill cứng
+```
+
+Sau đó `pgrep -af "pytest workbench/tests"` trả về rỗng. Không đụng tới web service:
+supervisor `999204` (`serve_workbench.py --production-frontend --host 127.0.0.1`) và các
+con của nó vẫn chạy bình thường trong suốt quá trình.
+
+### Dọn dẹp
+
+```bash
+du -sh /tmp/sweep_basetemp_c25d67f2   # 7.5G
+rm -rf /tmp/sweep_basetemp_c25d67f2   # exit=0
+df -h /                               # 630G, 500G used, 99G avail, 84%
+```
+
+Basetemp đã xóa (`ls /tmp/sweep_basetemp_*` → không tồn tại). Log
+`/tmp/sweep_c25d67f2.txt` **được giữ lại** làm bằng chứng, không xóa.
+
+### Việc phải làm tiếp
+
+Phải chạy một **sweep serial mới, sạch**, tại **HEAD cuối cùng**, trên một cây **đứng yên**
+(stationary): không commit, không rebuild `dist/`, không sửa `workbench/frontend/**` trong
+suốt thời gian chạy. Trước khi start lại phải lặp lại đủ 7 mục preflight, và ghi lại
+`sha256` của bundle tại thời điểm start để chứng minh artefact không đổi giữa run.
+
+Checklist post-run ở phần trên vẫn giữ nguyên và chỉ áp dụng cho run mới đó.
