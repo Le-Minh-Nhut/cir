@@ -436,7 +436,170 @@ directory does not exist afterwards). Overrides: `--backend-port/--frontend-port
 `WORKBENCH_CHECKPOINT_ROOT` at `/tmp/cir_systemd_iso/artifacts` for the test deployment; the release
 root stayed the real read-only one, which the renderer emits whenever the operator re-renders).
 
-## Cutover (NOT executed here — for the lead)
+## Cutover — EXECUTED 2026-11-11 23:48:4x +07
+
+The live 8000/5173 stack now runs under systemd. Authorized by the operator after the isolated
+proof passed. Rollback script: **`/tmp/cutover_rollback.sh`** (`chmod +x`, `bash -n` clean,
+`md5 04fbd5ecfdd978d4b3996ffc173ddf2c`, read back before the supervisor was touched). **Rollback was
+not needed.**
+
+### Pre-flight (all passed)
+
+```
+### PF1 pytest sweep
+EMPTY
+### PF3 supervisor
+   PID PPID ELAPSED  COMMAND
+999204 1735 04:30:12 workbench/envs/ctl312h/bin/python workbench/scripts/serve_workbench.py --production-frontend --host 127.0.0.1 --backend-port 8000 --frontend-port 5173
+### PF3 git
+982ea3e1fcd8c208bc7635a3f5669dbdb2bbb4c8
+?? CLEANUP_REPORT.md.save
+?? workbench/docs/reviews/20261111-master-audit/raw/verify/85-composition-dossier.md
+### PF4 gpu
+pid, process_name, used_gpu_memory [MiB]
+```
+
+Job queue: `count= 0` → `OK-NO-LIVE-JOBS`. The queue was **empty** — no record at all, so there was
+no `queued`/`preparing`/`running` entry to block on. Status list, verbatim: `(no records)`.
+
+`nvidia-smi --query-compute-apps=…` printed only the header — **no GPU process was attributed to a
+compute app at that moment** (the two `gpu_job.sh` composition workers reported by the lead were not
+visible as compute apps in this query, likely between CUDA contexts). Nothing was signalled on the
+GPU side either way; no `gpu_job.sh` child was touched.
+
+### Cutover transcript
+
+```
+### bundle BEFORE
+assets/index-DYYSN7oG.js
+### stopping supervisor
+kill -TERM 999204
+supervisor_gone_after_polls=3
+GONE
+### residual children
+PID COMMAND
+none
+### ports must be empty
+PORTS_FREE
+```
+
+`ss -lnt | grep -E ':(8000|5173)\b'` printed **nothing** — required before enabling anything.
+
+```
+[WRITE] /home/heheboiz/.config/systemd/user/cir-workbench-backend.service
+[WRITE] /home/heheboiz/.config/systemd/user/cir-workbench-frontend.service
+install_rc=0
+Created symlink /home/heheboiz/.config/systemd/user/default.target.wants/cir-workbench-backend.service → …
+Created symlink /home/heheboiz/.config/systemd/user/default.target.wants/cir-workbench-frontend.service → …
+enable_rc=0
+backend_ready_polls=3
+frontend_ready_polls=1
+```
+
+### MainPIDs, before → after
+
+| Unit | Before cutover | After cutover |
+|---|---|---|
+| backend | `999204` (supervisor) → child `999208` | **`1221147`**, then `1221379` after the kill case |
+| frontend | child `999209` (npm), node `999221` | **`1221148`** (npm), node `1221161` |
+
+`NRestarts=0` for both at first start; `NRestarts=1` for the backend after the deliberate kill.
+
+```
+systemctl --user show -p MainPID -p ControlGroup -p KillMode -p NRestarts cir-workbench-backend.service cir-workbench-frontend.service
+MainPID=1221147  NRestarts=0  ControlGroup=/user.slice/…/cir-workbench-backend.service  KillMode=mixed
+MainPID=1221148  NRestarts=0  ControlGroup=/user.slice/…/cir-workbench-frontend.service  KillMode=mixed
+```
+
+Post-cutover backend identity (same interpreter, cwd, release root, and argv as the supervisor
+launched):
+
+```
+backend=1221379 frontend=1221148
+backend_comm=python
+backend_argv=/home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python -m uvicorn workbench.backend.main:app --host 127.0.0.1 --port 8000
+backend_cwd=/home/heheboiz/data/cir
+backend_cgroup=0::/user.slice/user-1000.slice/user@1000.service/app.slice/cir-workbench-backend.service
+backend_release=WORKBENCH_CIRCUS_RELEASE_ROOT=/home/heheboiz/data/cir/workbench/artifacts/circus_release
+state: active running NRestarts=1 KillMode=mixed ControlGroup=…/cir-workbench-backend.service
+fe_state: active NRestarts=0 KillMode=mixed
+enabled: enabled enabled
+ports: 127.0.0.1:5173 node-MainThread pid=1221161 / 127.0.0.1:8000 python pid=1221379
+supervisor_gone
+```
+
+### Endpoint verification — five codes, all 200
+
+```
+direct_bench=200        # http://127.0.0.1:8000/api/benchmark-runs
+direct_fe_root=200      # http://127.0.0.1:5173/
+direct_comp=200         # /api/composition/runs/10173dc45dea8c90fd2a284b?subset=full  (direct)
+proxied_bench=200       # http://127.0.0.1:5173/api/benchmark-runs
+proxied_comp=200        # same composition run THROUGH the 5173 proxy
+```
+
+Served bundle name, unchanged by the cutover (no rebuild):
+
+```
+assets/index-DYYSN7oG.js          # BEFORE
+assets/index-DYYSN7oG.js          # AFTER
+```
+
+Backend journal after first start:
+
+```
+Nov 11 23:48:49 python[1221147]: INFO:     127.0.0.1:37180 - "GET /api/benchmark-runs HTTP/1.1" 200 OK
+Nov 11 23:48:51 python[1221147]: INFO:     127.0.0.1:49314 - "GET /api/benchmark-runs HTTP/1.1" 200 OK
+Nov 11 23:48:52 python[1221147]: INFO:     127.0.0.1:49316 - "GET /api/composition/runs/10173dc45dea8c90fd2a284b?subset=full HTTP/1.1" 200 OK
+Nov 11 23:48:52 python[1221147]: INFO:     127.0.0.1:49326 - "GET /api/benchmark-runs HTTP/1.1" 200 OK
+Nov 11 23:48:52 python[1221147]: INFO:     127.0.0.1:49342 - "GET /api/composition/runs/10173dc45dea8c90fd2a284b?subset=full HTTP/1.1" 200 OK
+```
+
+### Live `kill -KILL` recovery case on the REAL unit
+
+```
+LIVE_KILL: MainPID_before=1221147 NRestarts_before=0 at 23:48:56.213893937
+sent_SIGKILL_to 1221147 (23:48:56.236)
+MainPID_after=1221379  NRestarts_after=1  active=running
+```
+
+Recovery latency, measured from the SIGTERM… SIGKILL at 23:48:56.236 to the replacement logging
+`Application startup complete` at 23:48:58.514 and answering 200 immediately after:
+
+```
+kill (23:48:56.236) → Scheduled restart job 23:48:58.252316 → Started 23:48:58.263926
+                    → Started server process 23:48:58.512972
+                    → Uvicorn running 23:48:58.514069
+=> ≈ 2.28 s from kill to serving process; ≤ 3.0 s to a 200 from the replacement.
+```
+
+Journal, verbatim (ledger warnings and per-request GET lines filtered):
+
+```
+Nov 11 23:48:56.236065 heheboiz-nhut-pc systemd[1735]: cir-workbench-backend.service: Main process exited, code=killed, status=9/KILL
+Nov 11 23:48:56.236126 heheboiz-nhut-pc systemd[1735]: cir-workbench-backend.service: Failed with result 'signal'.
+Nov 11 23:48:56.236257 heheboiz-nhut-pc systemd[1735]: cir-workbench-backend.service: Consumed 5.492s CPU time, 3.0G memory peak, 0B memory swap peak.
+Nov 11 23:48:58.252316 heheboiz-nhut-pc systemd[1735]: cir-workbench-backend.service: Scheduled restart job, restart counter is at 1.
+Nov 11 23:48:58.263926 heheboiz-nhut-pc systemd[1735]: Started cir-workbench-backend.service - CIR workbench backend (uvicorn on 127.0.0.1:8000).
+Nov 11 23:48:58.512972 heheboiz-nhut-pc python[1221379]: INFO:     Started server process [1221379]
+Nov 11 23:48:58.512972 heheboiz-nhut-pc python[1221379]: INFO:     Waiting for application startup.
+Nov 11 23:48:58.514035 heheboiz-nhut-pc python[1221379]: INFO:     Application startup complete.
+Nov 11 23:48:58.514069 heheboiz-nhut-pc python[1221379]: INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
+```
+
+Post-kill re-verification (not assumed — re-fetched after the replacement took over):
+
+```
+bench=200   comp=200   fe_root=200   proxied=200
+```
+
+Measurement caveat, stated because it happened: the first polling loop I wrote for this case had a
+broken epoch-millisecond comparison and returned before polling (`NRestarts_after=0`,
+`bench=000`, proxied `502` at that instant — the frontend was up with the backend still restarting).
+The 2.28 s figure comes from the journal timestamps above, not from that loop; the loop then polled
+correctly and saw the replacement at the next attempt. No state was changed by the bad loop.
+
+### Cutover procedure used (superseded text below kept for the record)
 
 Order matters: the supervisor owns the ports until it is gone, so stop it before enabling units.
 
@@ -492,22 +655,25 @@ tests are `@pytest.mark.skipif(not Path("/run/systemd/system").exists())`.
 
 ## Still unproven / not done
 
-- **The live 8000/5173 cutover was not performed and must not be performed by this worker.** The
-  sequence above is written, not run. Consequently the production-rendered units were verified only
-  by `--dry-run` and by `systemd-analyze verify` on the rendered test pair (clean, no output);
-  they were never started on 8000/5173.
+- **The live 8000/5173 cutover WAS performed** (2026-11-11 23:48, see the Cutover section). It is
+  now the running stack; the supervised launcher (PID 999204) is gone and both units are `enabled`.
+  What remains unrun in production: a `systemctl --user stop` of the **real** backend unit, so the
+  "stay stopped" case is proven only on the isolated copy (case C). The real unit has proven
+  `Restart=always` recovery after a real `SIGKILL` (§Cutover, 2.28 s).
 - `systemd-analyze verify` was run on the test-rendered files only. It printed nothing (no warnings,
-  no unknown keys).
+  no unknown keys). The production files are byte-identical except ports/paths, which the renderer
+  substitutes from the same config.
 - A real GPU evaluator job was deliberately not queued (no GPU work allowed). The containment proof
   uses a `setsid` stub, not a live evaluator; `JOBS.shutdown()`'s own group-kill path therefore ran
   with zero live jobs, so the 30 s `TimeoutStopSec` was never actually saturated — the worst case
-  (a job that ignores SIGTERM for its full 10 s grace) is bounded by arithmetic, not measured.
-- Long-run behaviour: the unit was never left up for hours, so journal growth and the DuckDB index
-  thread under repeated restarts are unmeasured. The unit has no log rotation of its own; journald
-  is expected to handle it.
+  (a job that ignores SIGTERM for its full 10 s grace) is bounded by arithmetic, not measured. The
+  cutover also ran with an empty job queue.
+- Long-run behaviour: the production unit has been up only minutes, so journal growth and the DuckDB
+  index thread under repeated restarts are unmeasured. The unit has no log rotation of its own;
+  journald is expected to handle it.
 - `Restart=always` means an operator cannot leave the unit down by killing the process — only
-  `systemctl stop` does that. That is the intended semantic but worth stating: a `kill -9` of the
-  backend is *never* a stop.
+  `systemctl stop` does that. Confirmed in production the hard way: the deliberate `kill -KILL` of
+  `1221147` restarted it as `1221379` instead of leaving the stack down.
 - Two runs of the isolated backend share `workbench.duckdb` (copied into
   `/tmp/cir_systemd_iso/artifacts`), and the ledger key stayed the operator's, so the log carries
   `skipping aggregate report … disagreeing with its evidence-ledger entry` for reports whose
