@@ -22,15 +22,16 @@ báo cáo/raw tương ứng. Đọc kèm:
 |---|---|
 | base HEAD | `92ed66de4f359ef479da18bf8939723b6f9313e5` |
 | branch | `research/cir-failure-workbench` |
-| cây phát hành | **9 commit** trên base `92ed66de`: `be14393c97b100390a9a45c6b0a46857b24a78b9` là revision sweep đo (= `TESTED_SOURCE_SHA`), HEAD hiện tại `abb6fbbfdb396972ed878e9a2d332f6f7fc2de69` **== `origin/research/cir-failure-workbench`**. Đợt này **đã commit hết**, không còn work chưa commit (chỉ còn file operator `CLEANUP_REPORT.md.save` không track) |
+| cây phát hành | `be14393c97b100390a9a45c6b0a46857b24a78b9` — revision ship sweep đo, = `TESTED_SOURCE_SHA`; **đây là mốc bền**, không đổi nữa. HEAD có thêm các commit **docs-only** sau `be14393`; lấy giá trị sống bằng `git rev-parse HEAD`. Tính chất phải giữ (là cái khiến sweep còn hiệu lực cho cả cây): `git diff be14393 HEAD -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'` **rỗng**, và `git status --porcelain` đúng bằng `?? CLEANUP_REPORT.md.save`. *Một tài liệu bàn giao ghim SHA/count của HEAD sẽ cũ ngay commit sau — và bàn giao trong chiến dịch về drift báo cáo–thực tế thì không được là thứ đầu tiên nói sai thực tế.* |
 | Python | `workbench/envs/ctl312h/bin/python` — CPython **3.12.11** |
 | torch | **2.15.0+cu132** |
 | GPU | **NVIDIA GeForce RTX 5070 Ti** |
-| backend | `:8000`, uvicorn PID **4082632** (con của `serve_workbench.py` PID 4082631), env `WORKBENCH_CIRCUS_RELEASE_ROOT=…/artifacts/circus_release`. **PID chỉ đúng tại thời điểm đo** (mỗi restart đổi PID; stack đã chết/restart nhiều lần trong đợt) — **pin bền là digest bundle ở hàng frontend**, không phải PID |
+| backend | `:8000`, env `WORKBENCH_CIRCUS_RELEASE_ROOT=…/artifacts/circus_release`. Lấy PID sống bằng `pgrep -af "serve_workbench.py --production-frontend"` / `pgrep -af "uvicorn workbench.backend.main"`. **PID chỉ đúng tại thời điểm đo** (mỗi restart đổi PID; stack đã chết/restart nhiều lần trong đợt) — **pin bền là digest bundle ở hàng frontend**, không phải PID |
 | frontend | `:5173`, bundle **`assets/index-DWpK0yeS.js`**, sha256 **`7e34724ebf55092e36524b98980cca55e71f3ddbaa62489c65577f92e18a6a16`** (bytes phục vụ `cmp`-identical với `dist/`) |
 
 Sẵn sàng đo bằng `/api/benchmark-runs` (HTTP 200). **Không** dùng `/api/models` để poll: 154 s cold vì nó
-hash mọi checkpoint. Uvicorn cũ trên `:8765` (PID 1227919) thiếu route mới — **không** đo vào nó.
+hash mọi checkpoint. Có một uvicorn cũ trên `:8765` thiếu route mới — nhận diện bằng
+`pgrep -af "port 8765"` (PID đổi sau restart, đừng ghim số) — **không** đo vào nó.
 
 ---
 
@@ -149,7 +150,8 @@ artifact. Gate cũ báo `PARITY_PASS` cho cả hai; gate mới báo đúng.
   bỏ sót. Các khoá `*_pct` có mặt (`dead_parameters_pct`, `relative_error_pct`,
   `checkpoint_training_noise_pct`) mô tả **đại lượng khác**, không được dùng làm khai báo thang macro.
 - **Derived row chưa có marker `DERIVED` trên UI** — dữ liệu đúng (`derived_from`), bề mặt web chưa hiện.
-- **`:8765` stale uvicorn** (PID 1227919) vẫn sống, thiếu route mới.
+- **`:8765` stale uvicorn** vẫn sống, thiếu route mới (`/api/runs/parity-gate` → 404, so với 200 ở
+  `:8000`). Tìm nó bằng `pgrep -af "port 8765"`; PID đổi sau restart nên không ghim số.
 - **Stack không tự hồi phục — cơ chế đã xác định một phần, thủ phạm thì chưa.** Service `:8000`/`:5173`
   đã chết **bốn lần** trong đợt này, đều cùng một chữ ký log: `[WARN] npm exited with status -15` (bị
   SIGTERM) rồi backend `Shutting down` êm. **Đã xác định:** đó chính xác là đường
