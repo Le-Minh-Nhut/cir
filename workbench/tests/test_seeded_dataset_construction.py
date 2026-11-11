@@ -158,21 +158,33 @@ def test_a_run_shares_one_cache_between_its_children(tmp_path: Path, monkeypatch
     that fits one, and the observer died with `[Errno 28] No space left on device` inside the native
     `save_obj`, which reads as a broken export rather than as a disk the parent could have saved.
     """
-    from workbench.replay.common import CACHE_ROOT_ENV, run_cache_root
+    from workbench.replay.common import (
+        CACHE_ROOT_ENV,
+        cache_requirement,
+        cache_tensor_digests,
+        run_cache_root,
+        write_cache_manifest,
+    )
 
     dataset = _dataset_root(tmp_path)
     shared = tmp_path / "replay-cache"
     monkeypatch.setenv(CACHE_ROOT_ENV, str(shared))
+    requirement = cache_requirement(dataset, model_id="encoder")
 
-    with run_cache_root(dataset) as first:
+    with run_cache_root(dataset, requirement=requirement) as first:
         assert first == shared
         (first / "fashion_iq_data.json").write_text("{}")
         (first / "test_queries_dress.pkl").write_bytes(b"cache")
+        # R04: the tensors are only reusable once a manifest describes them. Sharing a root is
+        # still the point of this test; what changed is that the second child VERIFIES it first.
+        write_cache_manifest(first, {**requirement, "tensors": cache_tensor_digests(first)})
 
-    with run_cache_root(dataset) as second:
+    record: dict = {}
+    with run_cache_root(dataset, requirement=requirement, record=record) as second:
         assert second == first, "the second child did not join the run's cache"
         assert (second / "test_queries_dress.pkl").read_bytes() == b"cache", (
             "the second construction cannot see the first's cache, so it would rebuild it")
+    assert record["cache_manifest_status"] == "verified"
 
 
 def test_the_cache_root_is_fresh_when_no_parent_named_one(tmp_path: Path, monkeypatch) -> None:

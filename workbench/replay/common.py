@@ -8,6 +8,7 @@ import subprocess
 import tempfile
 from contextlib import contextmanager
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Iterator
 
@@ -100,45 +101,387 @@ CACHE_ROOT_ENV = "WORKBENCH_REPLAY_CACHE_ROOT"
 #: evaluation if it is handed that evaluation's own tensors.
 OBSERVATION_OUT_ENV = "WORKBENCH_OBSERVATION_OUT"
 
+# ------------------------------------------------------------------------------------------------
+# Cache manifest: what a reusable cache root must PROVE before any constructor loads it.
+#
+# Why it exists. The native constructors (`AirKnow/datasets.py:34`, `TGCIR/datasets.py:24`,
+# `CLVCNet/datasets.py:152`) take their warm branch on the mere PRESENCE of `fashion_iq_data.json`
+# and then unpickle `test_{queries,targets}_<cat>.pkl` without ever re-running the transform. So a
+# cache root whose links point at a different annotation directory, or which holds tensors produced
+# by a different transform, is loaded verbatim: measured on this host, a cache built from
+# `OLD_ANNOTATIONS` with foreign pixels satisfied a request for a different dataset root and ran the
+# declared transform ZERO times. `assert_alignment` never sees any of it; it compares model-side
+# identities, not cache provenance. The manifest is the check that was claimed and did not exist.
+# ------------------------------------------------------------------------------------------------
+
+#: Diagnostic name. Bump `CACHE_MANIFEST_SCHEMA_VERSION` on any incompatible change: an old cache is
+#: then refused rather than misread.
+CACHE_MANIFEST_NAME = "workbench_cache_manifest.json"
+CACHE_MANIFEST_SCHEMA_VERSION = 1
+#: The constructor's own warm/cold switch. Present == the constructor will load the pickles instead
+#: of rebuilding them.
+CACHE_WARM_SENTINEL = "fashion_iq_data.json"
+
+#: Explicit operator opt-out. Only an operator who deliberately wants the pre-manifest behaviour --
+#: trust whatever files are present -- sets this; it is then recorded in the run metadata so the run
+#: can never look verified. Never a default, never inferred.
+CACHE_VERIFICATION_OPT_OUT_ENV = "WORKBENCH_CACHE_MANIFEST_OPT_OUT"
+
+class CacheManifestError(RuntimeError):
+    """A reusable cache root did not prove it describes the requested inputs.
+
+    Carries the differing fields so a caller can print them instead of guessing which part of a
+    complex description disagreed. `mismatches` is a list of `"<field>: <expected> != <actual>"`.
+    """
+
+    def __init__(self, cache_root: Path, mismatches: list[str]) -> None:
+        self.cache_root = Path(cache_root)
+        self.mismatches = list(mismatches)
+        super().__init__(
+            f"replay cache {self.cache_root} is not reusable for this run "
+            f"({len(self.mismatches)} mismatched field(s)): " + "; ".join(self.mismatches))
+
+def directory_digest(root: Path) -> str:
+    """Digest of a directory's contents: sorted relative paths plus each file's sha256.
+
+    Used for the inputs the constructors key on as a DIRECTORY (`resized_image`). A symlink pointing
+    at a directory with the same listing but different bytes produces a different digest, so a swap
+    cannot hide behind an identical name.
+    """
+    digest = hashlib.sha256()
+    if not root.is_dir():
+        return f"absent:{root}"
+    for path in sorted(root.rglob("*")):
+        if path.is_dir():
+            continue
+        digest.update(path.relative_to(root).as_posix().encode("utf-8"))
+        digest.update(b"\0")
+        digest.update(sha256_file(path).encode("ascii"))
+        digest.update(b"\n")
+    return digest.hexdigest()
+
+def annotation_inputs(cache_root: Path, directory_names: tuple[str, ...]) -> dict[str, Any]:
+    """What the constructor will actually READ from a cache root's input links.
+
+    Both paths are recorded on purpose. `requested_path` is what the caller asked for; `resolved_path`
+    is what the link really points at. A symlink that has MOVED compares unequal on `resolved_path`
+    even if the name is unchanged -- that is the probe's exact failure mode.
+    """
+    described: dict[str, Any] = {}
+    for name in directory_names:
+        link = cache_root / name
+        requested = link.resolve() if link.exists() else None
+        described[name] = {
+            "cache_entry": str(link),
+            "is_symlink": link.is_symlink(),
+            "requested_path": None if requested is None else str(requested),
+            "digest": directory_digest(requested) if requested is not None else None,
+        }
+    return described
+
+def describe_cache_inputs(dataset_root: Path,
+                          directory_names: tuple[str, ...] = ("captions", "image_splits", "resized_image")
+                          ) -> dict[str, Any]:
+    """The annotation description a FRESH run would require, from the requested dataset root."""
+    described: dict[str, Any] = {}
+    for name in directory_names:
+        source = dataset_root / name
+        if not source.exists():
+            raise FileNotFoundError(f"native replay input missing: {source}")
+        resolved = source.resolve()
+        described[name] = {
+            "requested_path": str(source),
+            "resolved_path": str(resolved),
+            "digest": directory_digest(resolved),
+        }
+    return described
+
+def cache_tensor_digests(cache_root: Path) -> dict[str, str]:
+    """Digest of every produced tensor file, keyed by name, in sorted order.
+
+    A digest per file rather than one over the directory listing: a truncated pickle and a swapped
+    pickle both have to be visible, and a per-file map names the one that changed.
+    """
+    digests: dict[str, str] = {}
+    for path in sorted(cache_root.glob("*.pkl")) + sorted(cache_root.glob("*.json")):
+        if path.name == CACHE_MANIFEST_NAME:
+            continue
+        digests[path.name] = sha256_file(path)
+    return digests
+
+def transform_descriptor(transform: Any) -> str:
+    """The transform's identity: class path plus the numeric parameters that decide the pixels.
+
+    Taken from the CALLER's transform, never guessed, because the whole defect is a cache whose
+    pixels came from a transform other than the declared one.
+    """
+    if isinstance(transform, str):
+        # Already a descriptor (a caller that recorded it rather than constructed it).
+        return transform
+    return describe_transform(transform)
+
+def describe_transform(transform: Any) -> str:
+    """Walk a torchvision-style transform chain into a stable, comparable string."""
+    parts: list[str] = []
+    for step in getattr(transform, "transforms", [transform]):
+        klass = type(step)
+        name = f"{klass.__module__}.{klass.__qualname__}"
+        params = []
+        for attribute in ("size", "ratio", "scale", "p", "mean", "std", "interpolation",
+                          "degrees", "translate", "fill"):
+            value = getattr(step, attribute, None)
+            if isinstance(value, (int, float, str, bool, tuple, list)):
+                params.append(f"{attribute}={value!r}")
+        parts.append(name + ("(" + ", ".join(params) + ")" if params else ""))
+    return " -> ".join(parts)
+
+def write_cache_manifest(cache_root: Path, description: dict[str, Any]) -> Path:
+    """Write the manifest atomically, so a crashed warm pass cannot leave a half-written one.
+
+    Temp file in the SAME directory (same filesystem, so `os.replace` is atomic) then `os.replace`.
+    A crash therefore leaves either the previous complete manifest or none, never a truncated file
+    that would describe a cache the constructor is still writing.
+    """
+    cache_root.mkdir(parents=True, exist_ok=True)
+    payload = dict(description)
+    payload["schema_version"] = CACHE_MANIFEST_SCHEMA_VERSION
+    payload.setdefault("written_by", {})
+    payload["written_at"] = datetime.now(timezone.utc).isoformat()
+    target = cache_root / CACHE_MANIFEST_NAME
+    handle = tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=cache_root,
+                                         prefix=CACHE_MANIFEST_NAME + ".", suffix=".tmp",
+                                         delete=False)
+    temporary = Path(handle.name)
+    try:
+        with handle:
+            json.dump(payload, handle, indent=2, sort_keys=True)
+            handle.write("\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, target)
+    except BaseException:
+        temporary.unlink(missing_ok=True)
+        raise
+    return target
+
+def read_cache_manifest(cache_root: Path) -> dict[str, Any] | None:
+    """The manifest, or None when there is none. A malformed manifest is an error, not an absence."""
+    path = cache_root / CACHE_MANIFEST_NAME
+    if not path.is_file():
+        return None
+    try:
+        document = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as error:
+        raise CacheManifestError(cache_root, [f"manifest unreadable: {error}"]) from error
+    if not isinstance(document, dict):
+        raise CacheManifestError(cache_root, ["manifest is not a JSON object"])
+    return document
+
+def _flatten(prefix: str, value: Any, out: dict[str, Any]) -> None:
+    if isinstance(value, dict):
+        for key, item in value.items():
+            _flatten(f"{prefix}.{key}" if prefix else str(key), item, out)
+    else:
+        out[prefix] = value
+
+def compare_cache_manifest(cache_root: Path, required: dict[str, Any]) -> list[str]:
+    """Every field where the cache disagrees with the inputs this run requires.
+
+    Only the fields the caller REQUIRED are compared: a manifest may carry extra provenance, and a
+    caller that knows nothing about a checkpoint must not be refused for recording `null`.
+    """
+    actual = read_cache_manifest(cache_root)
+    if actual is None:
+        return [f"manifest: missing ({cache_root / CACHE_MANIFEST_NAME}); an unverified cache is "
+                f"never reused (set {CACHE_VERIFICATION_OPT_OUT_ENV}=1 to trust it deliberately)"]
+
+    mismatches: list[str] = []
+    if actual.get("schema_version") != CACHE_MANIFEST_SCHEMA_VERSION:
+        mismatches.append(f"schema_version: {CACHE_MANIFEST_SCHEMA_VERSION} != "
+                          f"{actual.get('schema_version')!r}")
+
+    flat_actual: dict[str, Any] = {}
+    _flatten("", actual, flat_actual)
+    flat_required: dict[str, Any] = {}
+    _flatten("", required, flat_required)
+    for field, expected in flat_required.items():
+        found = flat_actual.get(field)
+        if found != expected:
+            mismatches.append(f"{field}: {expected!r} != {found!r}")
+
+    # The manifest's own tensor digests must still describe the files on disk. Without this the
+    # manifest is a claim about bytes nobody re-read, and a pickle rewritten after the manifest was
+    # written would load unopposed -- the same defect one layer down.
+    recorded = actual.get("tensors")
+    if isinstance(recorded, dict):
+        present = cache_tensor_digests(cache_root)
+        for name, digest in sorted(recorded.items()):
+            if present.get(name) != digest:
+                mismatches.append(f"tensors.{name}: {digest!r} != {present.get(name)!r}")
+        for name in sorted(set(present) - set(recorded)):
+            mismatches.append(f"tensors.{name}: absent from manifest but present on disk "
+                              f"({present[name]!r})")
+    return mismatches
+
+
+def gallery_identity(dataset_root: Path, categories: tuple[str, ...] = CATEGORIES) -> dict[str, Any]:
+    """The ordered gallery a warm cache was built against, per category.
+
+    Read from `image_splits/split.<cat>.val.json`, which IS the order the native constructors index
+    (`AirKnow/datasets.py:186,214` assign `target_img_id = images.index(name)` over exactly this
+    list). Reading the annotation is cheap; re-reading twelve gigabytes of pickles to recover the
+    same order is not.
+    """
+    described: dict[str, Any] = {}
+    for category in categories:
+        split = dataset_root / "image_splits" / f"split.{category}.val.json"
+        if not split.is_file():
+            described[category] = {"count": None, "digest": None, "first": None, "last": None}
+            continue
+        names = json.loads(split.read_text(encoding="utf-8"))
+        described[category] = {
+            "count": len(names),
+            "digest": sha256_file(split),
+            "first": names[0] if names else None,
+            "last": names[-1] if names else None,
+        }
+    return described
+
+def cache_requirement(dataset_root: Path, *,
+                      model_id: str | None = None,
+                      transform: Any = None,
+                      checkpoint: dict[str, Any] | None = None,
+                      state: dict[str, Any] | None = None,
+                      directory_names: tuple[str, ...] = ("captions", "image_splits", "resized_image"),
+                      categories: tuple[str, ...] = CATEGORIES) -> dict[str, Any]:
+    """The description a cache root must match for THIS run to load it.
+
+    Everything comes from the caller: the model, the transform object the caller will actually apply,
+    the checkpoint it verified, and the seed/eval-mode state. Nothing is inferred, because the defect
+    is a cache built from a DIFFERENT description being loaded as if it were this one.
+    """
+    requirement: dict[str, Any] = {
+        "annotations": describe_cache_inputs(dataset_root, directory_names),
+        "gallery": gallery_identity(dataset_root, categories),
+    }
+    if model_id is not None:
+        requirement["model_id"] = model_id
+    if transform is not None:
+        requirement["transform"] = transform_descriptor(transform)
+    if checkpoint is not None:
+        requirement["checkpoint"] = {
+            "checkpoint_id": checkpoint.get("checkpoint_id") or checkpoint.get("id"),
+            "expected_sha256": checkpoint.get("expected_sha256"),
+        }
+    if state is not None:
+        requirement["state"] = dict(state)
+    return requirement
+
+def _symlink_mismatches(cache_root: Path, dataset_root: Path,
+                        directory_names: tuple[str, ...]) -> list[str]:
+    """A cache entry must point at the REQUESTED input, not merely at something that exists."""
+    mismatches: list[str] = []
+    for name in directory_names:
+        source = dataset_root / name
+        link = cache_root / name
+        if not link.exists():
+            mismatches.append(f"annotations.{name}.cache_entry: missing ({link})")
+            continue
+        wanted, found = source.resolve(), link.resolve()
+        if wanted != found:
+            mismatches.append(f"annotations.{name}.resolved_path: {str(wanted)!r} != {str(found)!r}")
+    return mismatches
+
+def cache_verification_report(cache_root: Path) -> dict[str, Any]:
+    """What a run records about the cache it used. The digest identifies the manifest's content."""
+    path = cache_root / CACHE_MANIFEST_NAME
+    return {
+        "cache_root": str(cache_root),
+        "cache_manifest_path": str(path),
+        "cache_manifest_digest": sha256_file(path) if path.is_file() else None,
+    }
+
+def _verification_opted_out() -> bool:
+    return os.environ.get(CACHE_VERIFICATION_OPT_OUT_ENV, "").strip().lower() in {"1", "true", "yes"}
 
 @contextmanager
 def run_cache_root(dataset_root: Path,
-                   directory_names: tuple[str, ...] = ("captions", "image_splits", "resized_image")) -> Iterator[Path]:
+                   directory_names: tuple[str, ...] = ("captions", "image_splits", "resized_image"),
+                   *, requirement: dict[str, Any] | None = None,
+                   record: dict[str, Any] | None = None,
+                   model_id: str | None = None,
+                   transform: Any = None,
+                   checkpoint: dict[str, Any] | None = None,
+                   state: dict[str, Any] | None = None) -> Iterator[Path]:
     """The cache root for THIS run: the shared one when the parent named it, else a fresh temp root.
 
     A replay invoked directly (an operator running the wrapper by hand, or a test) has no parent to
     extend its lifetime, so it keeps the fully isolated behaviour.
+
+    `record`, when given, receives this run's cache provenance: whether the cache was verified against
+    the run's own description, rebuilt cold, or forced through by the operator's opt-out.
     """
     shared = os.environ.get(CACHE_ROOT_ENV, "").strip()
     if shared:
-        with reusable_cache_root(dataset_root, Path(shared), directory_names) as root:
+        if requirement is None:
+            # ALWAYS describe something: a caller that names only the dataset root still gets the
+            # annotation and gallery checks, which is where the reproduced failure started. It is a
+            # WEAKER claim than naming the model and transform, so the scope is recorded.
+            requirement = cache_requirement(
+                dataset_root, model_id=model_id, transform=transform, checkpoint=checkpoint,
+                state=state, directory_names=directory_names)
+            scope = "annotations_and_gallery" if not (model_id or transform) else "annotations_gallery_model"
+        else:
+            scope = "caller_supplied"
+        with reusable_cache_root(dataset_root, Path(shared), directory_names,
+                                 requirement=requirement, record=record,
+                                 requirement_scope=scope) as root:
             yield root
         return
     with isolated_cache_root(dataset_root, directory_names) as root:
+        if record is not None:
+            record.update({"cache_manifest_status": "rebuilt",
+                           "cache_manifest_reason": "fresh isolated root: the constructor builds cold",
+                           "cache_manifest_opted_out": False,
+                           **cache_verification_report(root)})
         yield root
 
 
 @contextmanager
 def reusable_cache_root(dataset_root: Path, cache_root: Path,
-                        directory_names: tuple[str, ...] = ("captions", "image_splits", "resized_image")) -> Iterator[Path]:
-    """A cache root that survives between the processes of one run.
+                        directory_names: tuple[str, ...] = ("captions", "image_splits", "resized_image"),
+                        *, requirement: dict[str, Any] | None = None,
+                        record: dict[str, Any] | None = None,
+                        requirement_scope: str = "caller_supplied") -> Iterator[Path]:
+    """A cache root that survives between processes, reused ONLY against a verified manifest.
 
-    `isolated_cache_root` deliberately yields a FRESH directory every time, so the native
-    constructor always takes its cold path and writes its own cache. That is right for isolation and
-    wrong for cost: the aggregate and the per-query observer build the SAME three-category cache --
-    measured at an 11.87 GB peak for one construction -- so a run needs room for two or for the first
-    one to be deleted before the second starts.
+    `isolated_cache_root` deliberately yields a FRESH directory every time, so the native constructor
+    always takes its cold path and writes its own cache. That is right for isolation and wrong for
+    cost: the aggregate and the per-query observer build the SAME three-category cache -- measured at
+    an 11.87 GB peak for one construction -- so a run needs room for two or for the first one to be
+    deleted before the second starts.
 
-    On a host where one cache fits and two do not, neither of those is acceptable. This root is
-    scoped to ONE run instead: it is created under the run's own directory, so concurrent runs still
-    cannot see each other's caches, and the second construction reuses the first's files. The
-    constructor's own cold/warm branch decides: with `fashion_iq_data.json` present it loads the
-    pickles rather than rebuilding them.
+    Reuse across a run is worth having, but the previous version of this docstring justified it with a
+    claim that was FALSE: that "the callback that reads the cache is `assert_alignment`, which
+    refuses a cache whose identities do not match". Nothing compared a cache's annotations, transform
+    or tensors against the request. A cache root linking `OLD_ANNOTATIONS` and holding tensors made by
+    a foreign CLIP transform satisfied a request for a different dataset root, and the declared
+    transform ran zero times; after loading, the tensors are indistinguishable from correct ones. The
+    false claim is deleted and this function now REFUSES.
 
-    Reuse is only sound because the inputs are pinned -- the seed, the transform and the annotation
-    files are the same for both children -- and because the callback that reads the cache is
-    `assert_alignment`, which refuses a cache whose identities do not match the annotations. A stale
-    or foreign cache is a refusal, not a silently wrong ranking.
+    The rule (refuse rather than silently rebuild, because a silently reused foreign cache costs a
+    published wrong ranking while a rebuild costs minutes of CPU an operator can see and pay for):
+
+    * cache root has no warm sentinel -> cold: nothing to verify, status `rebuilt`;
+    * sentinel + manifest -> compare every required field: annotations by requested path, RESOLVED
+      real path and directory digest; transform descriptor; model/checkpoint; gallery count, order
+      and digest; seed/eval state. Any difference raises `CacheManifestError` naming each field;
+    * sentinel + no manifest -> unverified, refused as `not_present`;
+    * input symlinks must resolve to the REQUESTED dataset_root entry -- always checked, because a
+      moved link is the first step of the failure above;
+    * `WORKBENCH_CACHE_MANIFEST_OPT_OUT` restores trust-whatever-is-present for an operator who
+      deliberately accepts it, and the run then records `not_verified_opt_out`, so a run can never
+      look verified while skipping the check.
     """
     cache_root.mkdir(parents=True, exist_ok=True)
     for name in directory_names:
@@ -148,7 +491,56 @@ def reusable_cache_root(dataset_root: Path, cache_root: Path,
         link = cache_root / name
         if not link.exists():
             link.symlink_to(source.resolve(), target_is_directory=source.is_dir())
-    yield cache_root
+
+    mismatches = _symlink_mismatches(cache_root, dataset_root, directory_names)
+    if mismatches:
+        raise CacheManifestError(cache_root, mismatches)
+
+    warm = (cache_root / CACHE_WARM_SENTINEL).is_file()
+    opted_out = _verification_opted_out()
+    if opted_out:
+        status = "not_verified_opt_out"
+        reason = f"{CACHE_VERIFICATION_OPT_OUT_ENV} set: cache contents trusted without verification"
+    elif not warm:
+        status = "rebuilt"
+        reason = "no warm sentinel in the cache root: the constructor builds cold"
+    else:
+        manifest_mismatches = compare_cache_manifest(cache_root, requirement or {})
+        if manifest_mismatches:
+            raise CacheManifestError(cache_root, manifest_mismatches)
+        status = "verified"
+        reason = "manifest matches the run's own description"
+
+    if record is not None:
+        record.update({"cache_manifest_status": status,
+                       "cache_manifest_reason": reason,
+                       "cache_manifest_opted_out": opted_out,
+                       # What was actually checked. `annotations_and_gallery` is honest about not
+                       # covering the model or the transform.
+                       "cache_manifest_scope": requirement_scope,
+                       "cache_manifest_checked_fields": sorted(requirement) if requirement else [],
+                       **cache_verification_report(cache_root)})
+    try:
+        yield cache_root
+    finally:
+        # A COLD construction just wrote tensors into this root. Describe them on the way out,
+        # otherwise the next child sees a warm sentinel with no manifest and is refused -- which
+        # would make sharing a root impossible rather than safe.
+        if status in {"rebuilt", "not_verified_opt_out"} and (cache_root / CACHE_WARM_SENTINEL).is_file():
+            if requirement is not None:
+                tensors = cache_tensor_digests(cache_root)
+                write_cache_manifest(cache_root, {**requirement, "tensors": tensors,
+                                                  "cache_files": sorted(tensors),
+                                                  "written_by": {"script": "workbench.replay.common",
+                                                                 "version": 1,
+                                                                 "caller": "cold construction"}})
+                if record is not None:
+                    record.update(cache_verification_report(cache_root))
+            elif record is not None:
+                record["cache_manifest_status"] = "rebuilt_unverified"
+                record["cache_manifest_reason"] = (
+                    "the constructor wrote tensors but the caller supplied no description, so no "
+                    "manifest could be written; a later child will refuse this root")
 
 
 @contextmanager

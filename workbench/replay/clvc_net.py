@@ -35,6 +35,7 @@ from workbench.backend.fashioniq_layout import CATEGORIES
 from workbench.backend.registry import model_by_id
 from workbench.replay.common import (
     ReplayResult,
+    cache_requirement,
     run_cache_root,
     load_trusted_whole_model,
     macro_aggregate,
@@ -187,9 +188,20 @@ def evaluate_categories(
     ])
 
     results: list[ReplayResult] = []
-    # See `replay/tgcir.py`: a warm cache is reused only when the caller names a root that
-    # `warm_replay_cache.py` built from the same pinned annotations.
-    with run_cache_root(dataset_root) as cache_root:
+    # A shared root is reused ONLY when its manifest matches THIS run's description; see
+    # `replay/tgcir.py`. CLVC-Net's constructor is per-category and does NOT write
+    # `test_queries_<cat>.pkl`, so `warm_replay_cache.py` does not warm it (its `cache_files` is
+    # empty by design). Pointing WORKBENCH_REPLAY_CACHE_ROOT at such a root would therefore be
+    # refused; the normal path here is the fresh isolated one and reports `rebuilt`.
+    cache_metadata: dict[str, Any] = {}
+    with run_cache_root(
+            dataset_root,
+            requirement=cache_requirement(
+                dataset_root, model_id="clvc_net", transform=transform,
+                checkpoint={"checkpoint_id": CHECKPOINT_VARIANT["checkpoint_id"],
+                            "expected_sha256": None},
+                state={"seed": None, "eval_mode": True, "noise_ratio": 0}),
+            record=cache_metadata) as cache_root:
         root_str = str(cache_root).rstrip("/") + "/"
         params = SimpleNamespace(batch_size=batch_size)
 
@@ -239,6 +251,7 @@ def evaluate_categories(
                             "(test.py:28,47,99,115; text_model.py:96,108) run on CPU; weights, "
                             "architecture, arithmetic and ranking untouched"
                         ) if adapted else None,
+                        "cache_manifest": dict(cache_metadata),
                     },
                 )
             )

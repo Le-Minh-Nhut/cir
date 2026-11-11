@@ -39,6 +39,7 @@ from workbench.backend.fashioniq_layout import CATEGORIES
 from workbench.backend.registry import model_by_id
 from workbench.replay.common import (
     ReplayResult,
+    cache_requirement,
     run_cache_root,
     macro_aggregate,
     sha256_file,
@@ -232,9 +233,21 @@ def evaluate_categories(
     # `run_cache_root` honours WORKBENCH_REPLAY_CACHE_ROOT and otherwise behaves exactly like
     # `isolated_cache_root`. It exists because the pinned constructor materialises every query and
     # gallery image for all three categories before the first forward: measured warm 1 067 s CPU and
-    # 14 635 inputs, which would otherwise be counted against GPU wall time. Reuse is only sound
-    # because the root is built from the same pinned annotations by `warm_replay_cache.py`.
-    with run_cache_root(dataset_root) as cache_root:
+    # 14 635 inputs, which would otherwise be counted against GPU wall time.
+    #
+    # A shared root is reused ONLY when its manifest matches THIS run's description. That is the
+    # check `reuse is sound because the root is built from the same pinned annotations` used to
+    # assume: presence was never proof, and a warm root built from other annotations (or another
+    # transform) loaded as if it were this one.
+    cache_metadata: dict[str, Any] = {}
+    with run_cache_root(
+            dataset_root,
+            requirement=cache_requirement(
+                dataset_root, model_id="tgcir", transform=preprocess,
+                checkpoint={"checkpoint_id": CHECKPOINT["checkpoint_id"],
+                            "expected_sha256": CHECKPOINT.get("expected_sha256")},
+                state={"seed": None, "eval_mode": True, "noise_ratio": 0}),
+            record=cache_metadata) as cache_root:
         root_str = str(cache_root).rstrip("/") + "/"
         testset = datasets.FashionIQ(path=root_str, transform=preprocess)
         for category in categories:
@@ -249,7 +262,7 @@ def evaluate_categories(
                     r10=recalls.get(f"{category}_r10"),
                     r50=recalls.get(f"{category}_r50"),
                     complete=True,
-                    provenance=dict(provenance_common),
+                    provenance={**provenance_common, "cache_manifest": dict(cache_metadata)},
                 )
             )
     del clip_model

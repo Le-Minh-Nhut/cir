@@ -29,6 +29,7 @@ from workbench.backend.fashioniq_layout import CATEGORIES
 from workbench.backend.registry import model_by_id
 from workbench.replay.common import (
     ReplayResult,
+    cache_requirement,
     run_cache_root,
     load_trusted_whole_model,
     macro_aggregate,
@@ -375,7 +376,15 @@ def evaluate_categories(
     # categories' queries AND galleries before the first forward -- measured 21 552 inputs /
     # 12.98 GB of tensors / 14 957 MB peak RSS -- which is minutes of CPU that must not be counted
     # as GPU time, and which SIGKILLs the process when it overlaps another worker's memory.
-    with run_cache_root(dataset_root) as cache_root:
+    cache_metadata: dict[str, Any] = {}
+    with run_cache_root(
+            dataset_root,
+            requirement=cache_requirement(
+                dataset_root, model_id="airknow", transform=transform,
+                checkpoint={"checkpoint_id": variant["checkpoint_id"],
+                            "expected_sha256": expected_sha},
+                state={"seed": seed, "eval_mode": bool(eval_mode), "noise_ratio": 0}),
+            record=cache_metadata) as cache_root:
         root_str = str(cache_root).rstrip("/") + "/"
         dataset = datasets.FashionIQ(path=root_str, transform=transform, noise_ratio=0)
 
@@ -419,6 +428,10 @@ def evaluate_categories(
                                     "config; no second BLIP-2 model is constructed and no "
                                     "/root/bert-base-uncased asset is read",
                         },
+                        # What the cache root PROVED before the constructor read it: `verified`
+                        # (manifest matched), `rebuilt` (cold), `not_verified_opt_out` (operator
+                        # forced it). A warm-path run is therefore visible as such.
+                        "cache_manifest": dict(cache_metadata),
                     },
                 )
             )
