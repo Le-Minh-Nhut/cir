@@ -1,0 +1,21 @@
+— chọn lượt —
+limn / base_iter0_all_categories · 10173dc4 · không có Top-K
+conesep / fiq_n02 · 30f6de42 · Top-K 50
+ptha_mtst / cirr_transfer · 315dd590 · không có Top-K (TRANSFER)
+intent / fiq_n02 · 37ee72aa · Top-K 50
+intent / fiq_n02 · 4901da13 · Top-K 100
+habit / fiq_n02 · 497c25c5 · Top-K 50
+hint / fashioniq · 4bc9893a · Top-K 50
+encoder / fashioniq · 5dee7425 · Top-K 100
+encoder / fashioniq · 6a528e87 · không có Top-K
+encoder / fashioniq · 9b806c22 · Top-K 100
+limn / base_iter0_all_categories · 9e4918a6 · Top-K 100
+conesep / fiq_n02 · a4f786d8 · Top-K 100
+encoder / fashioniq · acc9b20e · Top-K 100
+tme / fashioniq_0 · ad477312 · không có Top-K
+habit / fiq_n02 · c6eb9d57 · Top-K 100
+tme / fashioniq_0 · cd1a696d · Top-K 100
+encoder / fashioniq · ce89a9a2 · Top-K 100
+hint / fashioniq · f461f391 · Top-K 100
+ptha_mtst / cirr_transfer · f54a7745 · Top-K 100 (TRANSFER)
+habit / fiq_n02 · e0dd04a4 · không có Top-K
