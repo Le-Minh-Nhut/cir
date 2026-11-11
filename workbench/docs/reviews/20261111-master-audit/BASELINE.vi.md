@@ -3,6 +3,12 @@
 Mọi số dưới đây kèm đúng lệnh sinh ra nó. Lệnh chạy tại `/home/heheboiz/data/cir`.
 Không sửa repo, không commit, không đụng `CLEANUP_REPORT.md.save`.
 
+Đây là **ảnh chụp tại thời điểm 2026-11-11** (HEAD khi đó `92ed66d`): mọi SHA/HEAD/số suite trong file
+này là số **của lượt đo đó**, không phải hiện hành. Pin hiện hành là
+`TESTED_SOURCE_SHA = 7babfd96c1b5003d3fba7197bc6cbb1446a48a2b` với sweep riêng
+2931 passed / 18 failed / 47 skipped = 2996 (`raw/verify/72-sweep-pin.md`, và bảng trong
+`../FINAL_PC_RELEASE_VERDICT.md`).
+
 ## 1. Git: branch, HEAD, remote, worktree, 6 commit cuối
 
 Lệnh (một lần, ghi ra `/tmp/gitfacts.txt` rồi đọc lại):
@@ -160,7 +166,7 @@ LISTEN 0 2048 127.0.0.1:8765 0.0.0.0:* users:(("python",pid=1227919,fd=7))
 
 Ba cổng đều listen trên loopback. **Có hai backend**: 8000 (con của `serve_workbench.py`, đang được web dùng) và 8765 (uvicorn độc lập, PID 1227919). Khi đối chiếu số API phải nói rõ cổng nào; mặc định trong báo cáo này là **8000**.
 
-Frontend bundle đang serve:
+Frontend bundle đang serve **tại thời điểm chụp** (đã superseded — xem ghi chú ngay dưới):
 
 ```
 cat workbench/frontend/dist/index.html
@@ -201,9 +207,16 @@ Chỉ `workbench/frontend/dist/` và `workbench/frontend/node_modules/` bị git
 server, và đó chính là cách W-05 phát hiện bundle hỏng. Pin hiện hành nằm ở
 `WEB_SURFACE_VERIFICATION.vi.md` §"Service được phục vụ".
 
-Cũng vì vậy con số `index-DjAje2d2.js` ghi bên trên là **superseded**: bundle đang phục vụ là
-`assets/index-DeTvxLlD.js`, sha256 `1503e8911122587ba8c81e8ecf93d151312fda41e12ff5ba9580ef1797e18155` —
-đọc lại bằng `curl -s http://127.0.0.1:5173/ | grep -o 'assets/index-[^"]*\.js'` rồi `sha256sum` trên `dist/`.
+Cũng vì vậy con số `index-DjAje2d2.js` ghi bên trên là **superseded**, và `index-DeTvxLlD.js`
+(sha256 `1503e891…8155`) mà bản baseline này từng ghi cũng **đã superseded** — tệp đó không còn trên đĩa.
+Bundle **đang phục vụ** là `assets/index-DyVaNikG.js`, sha256
+`81d61f65ec827b83cabc958c157d65f6ad4ff99919ccae90cc1fdc29f03b0981` (`dist/assets` chỉ còn đúng nó và
+`index-DecQnta9.css`; `cmp` byte phục vụ với `dist/` → IDENTICAL). Đọc lại bằng hai lệnh:
+
+```
+curl -s http://127.0.0.1:5173/ | grep -o 'assets/index-[^"]*\.js'
+sha256sum workbench/frontend/dist/assets/<file vừa in ra>
+```
 
 Backend trả lời (dùng `/api/benchmark-runs` làm readiness, **không** dùng `/api/models`):
 
@@ -462,4 +475,4 @@ Bẫy thứ hai ở đây: `workbench/artifacts/composition/summary/` có **22**
 
 ## Kết luận baseline
 
-HEAD `92ed66d` khớp remote, tree sạch (chỉ file operator), service 8000/5173/8765 đều sống và bundle khớp đĩa, GPU rảnh 14.7 GiB, đĩa còn 152 G. Ba số phải nhớ: **17 cấu hình / 16 repo / 15 native cohort** — tất cả khớp kỳ vọng. Không có lệch nào ở ba số này. Lệch duy nhất cần báo là **nhãn protocol giữa yaml và fixture**: `tme` (đã biết) **và** `ptha_mtst` (mới), cùng một nguyên nhân: fixture chưa được cập nhật theo yaml.
+Tại thời điểm chụp (2026-11-11, HEAD `92ed66d`): HEAD khớp remote, tree sạch (chỉ file operator), service 8000/5173/8765 đều sống và bundle khớp đĩa, GPU rảnh 14.7 GiB, đĩa còn 152 G. Ba số phải nhớ: **17 cấu hình / 16 repo / 15 native cohort** — tất cả khớp kỳ vọng. Không có lệch nào ở ba số này. Lệch duy nhất cần báo là **nhãn protocol giữa yaml và fixture**: `tme` (đã biết) **và** `ptha_mtst` (mới), cùng một nguyên nhân: fixture chưa được cập nhật theo yaml.

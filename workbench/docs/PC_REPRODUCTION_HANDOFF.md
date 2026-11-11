@@ -2,7 +2,7 @@
 
 Primary operator route is this document's [One run/resume path](#one-runresume-path). Copy the checked-in `pc_autopilot.pc_cohort.yaml` to a private PC-specific YAML and configure all six absolute paths, finite budgets, capabilities, model settings, and operational batch before any real run. [MODEL_STATUS_SPEC.md](MODEL_STATUS_SPEC.md) records per-model source, checkpoint, assets, capability, and blockers.
 
-**Current revision identity:** `TESTED_SOURCE_SHA` is `624fcf9607d7397c8eef51a3453792a8a9f93de6`, latest production commit (round A40). Detached collection is 2197 `workbench/tests`, 2256 `workbench/tests tests`. Full serial sweep at this SHA: 2256 collected, 2245 passed, 1 failed, 10 skipped, 0 errors, 3942.16s (1:05:42). Sole failure was the by-construction release metadata guard; after advancing release documents, `test_handoff_commands.py` passes. `workbench/tests` scope: 2197 collected (2186 passed, 1 failed, 10 skipped); `tests/unit`: 59 passed. The earlier frozen `2ff698e` sweep (2247/2236/1/10) is historical.
+**Current revision identity:** `TESTED_SOURCE_SHA` is `7babfd96c1b5003d3fba7197bc6cbb1446a48a2b` — 2931 passed, 18 failed, 47 skipped = 2996 collected at that revision (`reviews/FINAL_PC_RELEASE_VERDICT.md`, record `reviews/20261111-master-audit/raw/verify/72-sweep-pin.md`); the commands below check out and compare against it. **The round A40 numbers in this section are that round's own measurements, not today's**: at the A40 round the pin was `624fcf9607d7397c8eef51a3453792a8a9f93de6` (latest production commit then; superseded — it predates the frontend commits `252b380` and `d323a5c`). Detached collection at A40 was 2197 `workbench/tests`, 2256 `workbench/tests tests`. Full serial sweep at that SHA: 2256 collected, 2245 passed, 1 failed, 10 skipped, 0 errors, 3942.16s (1:05:42). Sole failure was the by-construction release metadata guard; after advancing release documents, `test_handoff_commands.py` passes. `workbench/tests` scope at A40: 2197 collected (2186 passed, 1 failed, 10 skipped); `tests/unit`: 59 passed. The earlier frozen `2ff698e` sweep (2247/2236/1/10) is historical.
 
 The frozen A39 sweep reported exactly three failures. Their identities are stated in full above and none
 of them is a passing claim dressed as a failure: two were the index reader's own regression, fixed in the
@@ -126,9 +126,9 @@ git fetch origin research/cir-failure-workbench
 git checkout research/cir-failure-workbench
 git merge --ff-only origin/research/cir-failure-workbench
 git rev-parse HEAD          # branch tip; may be a documentation-only successor
-git rev-parse 624fcf9607d7397c8eef51a3453792a8a9f93de6 # TESTED_SOURCE_SHA
-git merge-base --is-ancestor 624fcf9607d7397c8eef51a3453792a8a9f93de6 HEAD
-git diff --exit-code 624fcf9607d7397c8eef51a3453792a8a9f93de6 HEAD -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'
+git rev-parse 7babfd96c1b5003d3fba7197bc6cbb1446a48a2b # TESTED_SOURCE_SHA
+git merge-base --is-ancestor 7babfd96c1b5003d3fba7197bc6cbb1446a48a2b HEAD
+git diff --exit-code 7babfd96c1b5003d3fba7197bc6cbb1446a48a2b HEAD -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'
 ```
 
 Fresh checkout (clone the research branch directly):
@@ -137,9 +137,9 @@ Fresh checkout (clone the research branch directly):
 git clone --branch research/cir-failure-workbench git@github.com:Le-Minh-Nhut/cir.git cir
 cd cir
 git rev-parse HEAD          # branch tip; may be a documentation-only successor
-git rev-parse 624fcf9607d7397c8eef51a3453792a8a9f93de6 # TESTED_SOURCE_SHA
-git merge-base --is-ancestor 624fcf9607d7397c8eef51a3453792a8a9f93de6 HEAD
-git diff --exit-code 624fcf9607d7397c8eef51a3453792a8a9f93de6 HEAD -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'
+git rev-parse 7babfd96c1b5003d3fba7197bc6cbb1446a48a2b # TESTED_SOURCE_SHA
+git merge-base --is-ancestor 7babfd96c1b5003d3fba7197bc6cbb1446a48a2b HEAD
+git diff --exit-code 7babfd96c1b5003d3fba7197bc6cbb1446a48a2b HEAD -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'
 ```
 
 Continue from the repository root:
