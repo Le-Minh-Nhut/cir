@@ -72,9 +72,16 @@ xác nhận, **không** được trích như đã chứng minh.
    Cho tới đó **không** được trích "CLVC = 29.97" hay "CLVC = 30.02" như số đã chốt — xem
    `CENSUS_20261111.vi.md` §1.2. (Air-Know có cùng dạng hai row counted, nhưng đã có `variance_group`
    n=4 / sd `0.26728186433775697` nên mức bất định **đã đo**; CLVC thì chưa.)
-10. **uvicorn `:8765` cũ vẫn sống** — thiếu route mới (`/api/runs/parity-gate` → 404 so với 200 ở
-   `:8000`; đo lại tại `0691f3e`: đúng 404 vs 200). Nhận diện bằng cổng và hành vi route, không bằng
-   PID. Cần kill tiến trình đó; PID đổi sau restart nên không ghim số.
+10. **ĐÃ ĐÓNG — uvicorn `:8765` cũ đã bị kill trong đợt này** (`a21e131`). Lịch sử giữ nguyên: nó
+   từng sống và thiếu route mới (`/api/runs/parity-gate` → **404**, so với **200** ở `:8000`; đo lại
+   tại `0691f3e`: đúng 404 vs 200), nên nó là một cái bẫy đo — ai `curl` nhầm cổng sẽ thấy 404 và
+   tưởng route không tồn tại. Bằng chứng kill: `raw/verify/80-supervision-recovery.md` →
+   `8765_parity_gate` **404 → 000** (`kill -TERM` cho tiến trình `ss -ltnp` chỉ ra trên `:8765`, cộng
+   tiến trình `npm run dev --port 5765` mồ côi cùng phiên; `:8000`/`:5173` không bị ảnh hưởng). Kiểm
+   lại lúc bàn giao: `curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8765/api/runs/parity-gate`
+   → **`000`** (exit 7, không listener trên 8765 **và** 5765). **Bài học tái dùng được (giữ nguyên):**
+   nhận diện instance lạ bằng **cổng + hành vi route**, **không bao giờ** bằng PID — PID đổi sau mỗi
+   restart nên không ghim số.
 
 **Đã sửa, không còn là việc:** nhãn "Số đo native không ghi protocol" ở `ModelInventory.tsx` **là**
 defect cùng họ R06/R08. Payload sống `:8000/api/native-measurements` cho `clvc_net` / `tgcir`: mọi row

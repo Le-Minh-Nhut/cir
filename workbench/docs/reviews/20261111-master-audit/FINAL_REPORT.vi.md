@@ -31,8 +31,10 @@ báo cáo/raw tương ứng. Đọc kèm:
 | frontend | `:5173`, bundle **`assets/index-CBR6lHgq.js`**, sha256 **`acfb5fbbced77e88b86ee542e5f261c6df71c0e0e8039d753965e1fc873ac21a`** (bytes phục vụ `cmp`-identical với `dist/`; `index-BLH2yome.js` / `702ed2e9…d681` là bundle phục vụ trước đó, **superseded**, như `index-DyVaNikG.js` / `81d61f65…0981` và các tên cũ hơn). Tên bundle là giá trị **di động** — đọc lại bằng `curl -s http://127.0.0.1:5173/ \| grep -o 'assets/index-[^"]*\.js'` rồi `sha256sum workbench/frontend/dist/assets/<tên vừa đọc>`: pin là digest, không phải tên file |
 
 Sẵn sàng đo bằng `/api/benchmark-runs` (HTTP 200). **Không** dùng `/api/models` để poll: 154 s cold vì nó
-hash mọi checkpoint. Có một uvicorn cũ trên `:8765` thiếu route mới — nhận diện bằng
-`pgrep -af "port 8765"` (PID đổi sau restart, đừng ghim số) — **không** đo vào nó.
+hash mọi checkpoint. Một uvicorn cũ từng sống trên `:8765` và thiếu route mới — **đã kill trong đợt này**
+(`a21e131`), nên hiện không còn cổng đó để đo nhầm (`curl -s -o /dev/null -w '%{http_code}\n'
+http://127.0.0.1:8765/api/runs/parity-gate` → `000`). Bài học vẫn đúng: nếu gặp lại một instance lạ,
+nhận diện bằng **cổng + hành vi route** (`/api/runs/parity-gate` 404 vs 200 ở `:8000`), **không** bằng PID.
 
 ---
 
@@ -189,8 +191,12 @@ thiếu dimension, không phải trùng khớp.
   `relative_error_pct`, `checkpoint_training_noise_pct`) mô tả **đại lượng khác**, không được dùng làm
   khai báo thang macro.
 - **Derived row chưa có marker `DERIVED` trên UI** — dữ liệu đúng (`derived_from`), bề mặt web chưa hiện.
-- **`:8765` stale uvicorn** vẫn sống, thiếu route mới (`/api/runs/parity-gate` → 404, so với 200 ở
-  `:8000`). Tìm nó bằng `pgrep -af "port 8765"`; PID đổi sau restart nên không ghim số.
+- **`:8765` stale uvicorn — ĐÃ KILL trong đợt này (`a21e131`).** Lịch sử: nó từng sống và thiếu route
+  mới (`/api/runs/parity-gate` → **404**, so với **200** ở `:8000`), nên `curl` nhầm cổng sẽ tưởng route
+  không tồn tại. Bằng chứng: `raw/verify/80-supervision-recovery.md` → `8765_parity_gate` **404 → 000**;
+  kiểm lại lúc bàn giao `curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8765/api/runs/parity-gate`
+  → **`000`** (exit 7; không listener trên 8765 **và** 5765). **Bài học giữ nguyên:** nhận diện instance
+  lạ bằng **cổng + hành vi route**, **không** bằng PID — PID đổi sau restart nên không ghim số.
 - **Stack không tự hồi phục — cơ chế đã xác định một phần, thủ phạm thì chưa.** Service `:8000`/`:5173`
   đã chết **ít nhất bốn lần** trong đợt này, mỗi lần một PID; **số chính xác không chốt được** vì mỗi
   lần restart lại redirect bằng một dấu `>` vào log `/tmp/…` nên chữ ký của lần trước biến mất. Bốn lần
@@ -313,8 +319,10 @@ Chín báo cáo trong thư mục này do **sáu worker viết song song**, và *
 - **§1 — hàng backend.** PID đã được thay bằng hướng dẫn `pgrep`, kèm quy tắc "PID chỉ đúng tại thời điểm đo;
   pin bền là digest bundle `acfb5fbb…ac21a`" (sha256 đầy đủ ở hàng frontend; `702ed2e9…d681` là bundle
   trước đó, nay superseded).
-- **§1 note và §5 — uvicorn `:8765` cũ.** Nhận diện bằng **cổng** và bằng hành vi route:
-  `/api/runs/parity-gate` trả **404** trên `:8765` so với **200** trên `:8000` — không bằng PID.
+- **§1 note và §5 — uvicorn `:8765` cũ.** Đã kill trong đợt này (`a21e131`), nên nó **không còn** là
+  bẫy đo; §5 nay ghi trạng thái đó thay vì "vẫn sống". Bài học **giữ nguyên**: nhận diện instance lạ
+  bằng **cổng** và **hành vi route** (`/api/runs/parity-gate` **404** trên `:8765` so với **200** trên
+  `:8000`), **không** bằng PID.
 - **§4 — hàng gate.** `0/15 PASS` đã đối soát thành `0 / 2 mô hình có artifact parity; 0 / 17 cấu hình PASS`,
   khớp cohort **17** cấu hình của §6.
 - **§4 — hàng LIMN.** `DERIVED_PARTIAL` / `DERIVED_COMPLETE` nay được gán đúng cho
