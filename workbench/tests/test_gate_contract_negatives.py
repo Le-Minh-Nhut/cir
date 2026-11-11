@@ -536,3 +536,84 @@ def test_absent_evidence_is_incomplete_while_the_same_absence_beside_claims_fail
     assert loud.status == gate.MANDATORY_FAILED, loud.detail
     assert [check.name for check in loud.failures] == [f"relation.{CATEGORY}.digest"]
     assert loud.failures[0].absence is True
+
+# ------------------------------- negative 8: a count compared to ITSELF can never fail
+
+def _native_with_identity(**overrides) -> dict:
+    native = _native()
+    native["native"]["layer1_identity"] = _native_identity(**overrides)
+    return native
+
+def _identity_checks(verdict: gate.ParityVerdict) -> dict[str, gate.ParityCheck]:
+    return {check.name: check for check in verdict.checks
+            if check.name.startswith(f"{CATEGORY}.identity.")
+            and check.name.endswith("_agreement")}
+
+@pytest.mark.parametrize("pair, native_key, declared_key, native_value, declared_value", [
+    ("query_count", "query_count_native", "query_count_annotations", 6001, 6003),
+    ("gallery_count", "gallery_count_native", "gallery_count_rebuilt_from_annotations", 6001, 6003),
+])
+def test_a_count_that_disagrees_across_the_two_sides_fails(
+        tmp_path: Path, pair: str, native_key: str, declared_key: str,
+        native_value: int, declared_value: int) -> None:
+    """The old code compared each count to ITSELF (`query_count_annotations == .query_count_annotations`).
+
+    Two of the four mandatory G1 count checks could therefore never fail, while being reported as if
+    they certified agreement. Here the native side scored a different number than the annotations
+    declare, which is exactly what the checks exist to catch.
+    """
+    _write(tmp_path, "testmodel",
+           _native_with_identity(**{native_key: native_value, declared_key: declared_value}),
+           _adapter())
+    verdict = _evaluate(tmp_path)
+    check = _identity_checks(verdict)[f"{CATEGORY}.identity.{pair}_agreement"]
+    assert check.ok is False, "a self-comparison passed: the tautology is back"
+    assert check.mandatory is True and check.gate == "G1"
+    assert check.dimension == "input_parity"
+    assert check.declared == declared_value
+    assert check.measured == {"native": native_value, "annotations": declared_value}
+    assert check in verdict.failures
+    assert verdict.status == gate.MANDATORY_FAILED and verdict.passed is False
+    assert verdict.dimensions["input_parity"] is False
+
+def test_agreeing_counts_pass_and_name_both_values(tmp_path: Path) -> None:
+    _write(tmp_path, "testmodel", _native(), _adapter())
+    verdict = _evaluate(tmp_path)
+    pairs = _identity_checks(verdict)
+    assert set(pairs) == {f"{CATEGORY}.identity.query_count_agreement",
+                          f"{CATEGORY}.identity.gallery_count_agreement"}, sorted(pairs)
+    for check in pairs.values():
+        assert check.ok is True
+        assert check.measured == {"native": check.declared,
+                                  "annotations": check.declared}, check.measured
+
+@pytest.mark.parametrize("pair, key, value", [
+    ("query_count", "query_count_native", None),
+    ("query_count", "query_count_annotations", None),
+    ("query_count", "query_count_native", "2017"),
+    ("gallery_count", "gallery_count_native", None),
+    ("gallery_count", "gallery_count_rebuilt_from_annotations", None),
+    ("gallery_count", "gallery_count_rebuilt_from_annotations", True),
+])
+def test_a_missing_or_non_integer_count_fails_and_names_the_missing_side(
+        tmp_path: Path, pair: str, key: str, value: object) -> None:
+    """An absent count is not agreement: it fails, and the note says which side is missing."""
+    _write(tmp_path, "testmodel", _native_with_identity(**{key: value}), _adapter())
+    verdict = _evaluate(tmp_path)
+    check = _identity_checks(verdict)[f"{CATEGORY}.identity.{pair}_agreement"]
+    assert check.ok is False
+    assert check.mandatory is True
+    assert key in check.note, check.note
+    assert "no count recorded" in check.note, check.note
+    assert check in verdict.failures
+    assert verdict.status == gate.MANDATORY_FAILED
+
+def test_an_absent_count_field_fails_not_just_a_null(tmp_path: Path) -> None:
+    """Field omitted entirely: same failure class, still names the absent side."""
+    native = _native()
+    del native["native"]["layer1_identity"]["query_count_annotations"]
+    _write(tmp_path, "testmodel", native, _adapter())
+    verdict = _evaluate(tmp_path)
+    check = _identity_checks(verdict)[f"{CATEGORY}.identity.query_count_agreement"]
+    assert check.ok is False and "query_count_annotations" in check.note
+    assert verdict.status == gate.MANDATORY_FAILED

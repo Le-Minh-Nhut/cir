@@ -420,14 +420,30 @@ def _identity_checks(native: dict[str, Any], declared: dict[str, Any],
             name=f"{category}.identity.{key}", dimension="input_parity", gate="G1",
             declared="exact equality, zero tolerance", measured=layer.get(key),
             ok=layer.get(key) is True, mandatory=True))
-    for key in ("query_count_native", "query_count_annotations",
-                "gallery_count_native", "gallery_count_rebuilt_from_annotations"):
+    # Two PAIRS, not four checks. The native side and the annotation side are two independent
+    # counts of the same population; comparing a field to itself across the "native"/"annotations"
+    # naming would make two mandatory G1 checks unable to fail. `encoder_parity.py:216-219` and
+    # `t4_parity.py:98-101` write them as `len(test_queries)`/`len(captions)` and
+    # `len(test_targets)`/`len(rebuilt)`.
+    for pair, native_key, declared_key, side in (
+            ("query_count", "query_count_native", "query_count_annotations", "annotations"),
+            ("gallery_count", "gallery_count_native",
+             "gallery_count_rebuilt_from_annotations", "rebuilt from the annotations")):
+        left, right = layer.get(native_key), layer.get(declared_key)
+        # A count the artifact does not record is not agreement: absent evidence is a failure whose
+        # note names the missing side, so a dropped field can never read as a pass.
+        absent = [name for name, value, ok_type in
+                  ((native_key, left, int), (declared_key, right, int))
+                  if not (isinstance(value, ok_type) and not isinstance(value, bool))]
+        ok = not absent and left == right
         checks.append(ParityCheck(
-            name=f"{category}.identity.{key}", dimension="input_parity", gate="G1",
-            declared="equal count", measured=layer.get(key),
-            ok=isinstance(layer.get(key), int) and layer.get(key) == layer.get(
-                "query_count_annotations" if "query" in key else "gallery_count_rebuilt_from_annotations"),
-            mandatory=True))
+            name=f"{category}.identity.{pair}_agreement", dimension="input_parity", gate="G1",
+            declared=right, measured={"native": left, "annotations": right},
+            ok=ok, mandatory=True,
+            note="" if ok else (
+                f"no count recorded on the native side (`{native_key}`)" if native_key in absent
+                else f"no count recorded on the {side} side (`{declared_key}`)" if declared_key in absent
+                else f"the native evaluator scored {left} but the {side} declare {right}")))
     if layer.get("gallery_has_duplicates") is True:
         checks.append(ParityCheck(f"{category}.identity.gallery_has_duplicates", "input_parity", "G1",
                                   "no duplicates", True, ok=False, mandatory=True))
