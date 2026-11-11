@@ -347,6 +347,63 @@ verbatim. If a future condition can hand the worker an input it legitimately can
 already written down here: reply-with-error and keep serving for a LIVE worker, keep latching strictly
 for a dead one.
 
+---
+
+## 6. Throughput, measured from the runs' own artifacts
+
+The campaign's missing number is s/img. Both the window-fix claim and the question "is the widened
+window actually taken" are answerable from the runs' own file timestamps, without a new run.
+
+### 6.1 TG-CIR — post-window gallery encode reproduces 0.0053 s/img
+
+| run | window | measurement | s/img |
+|---|---|---|---|
+| `6396454ce29c2bea9ebfbe00` (the 5-query smoke of §4) | `ADAPTER_CALL_WINDOW = 4096` (`ff0fafe`) | run dir born 04:14:05 → `gallery_global.npy` 04:20:37 = **392 s** over 74 381 images | **0.0053** |
+
+This is exactly the "after" figure 90 §4.2 recorded for `tgcir` on a forced re-encode (`0.0093 →
+0.0053`, 1.8×). An independent run landing on the same four decimals is the evidence that the widened
+window is genuinely being taken; a committed-but-unexercised window would have left this near 0.0093.
+
+`clvc_net`'s pre-window full run (`eab10106`, 4489 s wall over three scopes) does not yield a clean
+per-scope s/img — the wall covers load, encode and memmap flush together — which is why 90 §4.2 called
+its 0.0603 an estimate and measured the "after" directly instead.
+
+### 6.2 `clvc_net` — per-scope encode is 5× the standalone measurement
+
+Per-scope deltas from the sidecar write times of run `d541e40c` (the only place a per-scope wall is
+visible):
+
+| scope | sidecar written | delta | s/img |
+|---|---|---|---|
+| `dress` | 01:38:45 | — (first; includes model load) | — |
+| `shirt` | 01:55:49 | 1024 s | **0.0138** |
+| `toptee` | 02:12:58 | 1029 s | **0.0138** |
+
+90 §4.2 measured `dress` at **0.0027 s/img** standalone. These scopes are ~5× slower. Recording the
+discrepancy rather than explaining it away: the in-run scope encode writes 2048-d features into a
+609 MB memmap inside the measured interval, while 90 §4.2's 201.4 s figure was a standalone re-encode
+of the same images. Both readings are real; they measure different code around the same window.
+Separating them needs per-scope instrumentation (adapter call timed apart from the memmap flush), which
+this section did not do.
+
+### 6.3 Peak VRAM — pending
+
+Not claimed. The worker replies carry `vram` per job (`reply(..., vram=_vram())`,
+`model_tgcir.py:504`), but the runner does not persist `last_reply`, so no artifact this section owns
+contains it. Cheap to recover: `nvidia-smi --query-gpu=memory.used --format=csv -l 1` across one
+gallery scope. The static figure 90 §4.1 recorded for a gallery encode is 851 MiB; that is a sample, not
+a peak.
+
+### 6.4 The live `clvc_net` run
+
+pid **`1366364`**, started 2026-11-12 04:22:15 +07, argv `--config ~/cir_rerun_20261109.yaml
+--models clvc_net --subsets full --topk-depth 100`, log `/tmp/cirrus_clvc_net3.log`, run dir
+`workbench/artifacts/composition/runs/eab10106b2df8e97fb7a5ce5` — the same `run_id` as the earlier
+`-retry-1` summary, so this is a re-execution of an existing identity, not a new one. Its gallery and
+query features were reused from the earlier attempt; no new `full.json` had appeared when this section
+was written. Check with `ps -p 1366364` plus `ls
+workbench/artifacts/composition/summary/clvc_net_author_drive_unresolved_eab10106b2df8e97fb7a5ce5*/`.
+
 ## Còn chặn
 
 1. **Full runs not started.** No `--subsets full` run of either model was launched from this section.
@@ -364,6 +421,10 @@ for a dead one.
    `runner._stage_query_path` so `clvc_net` inherits it, but `clvc_net` does no stem-based caption
    resolution and its two conditions already completed before the change.
 6. **No `browser`/API cross-check in this section.** Not requested here; 90 §0.3 owns that surface.
+7. **Throughput is partly measured, partly pending.** Gallery s/img is measured for both models (§6.1,
+   §6.2); peak VRAM is not (§6.3), because the runner drops the per-job `vram` field.
+8. **The live `clvc_net` full run was in flight** at the time of writing (§6.4). Its own condition_status
+   is not evidence for or against anything in this file.
 
 ## Note on the `96-` filename prefix
 
