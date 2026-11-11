@@ -446,3 +446,27 @@ assets:
   expected_size_bytes: 441171321
   expected_sha256: null
   provenance_status: VERIFIED
+- model_id: tgcir
+  family: OpenAI CLIP ViT-B/16 weights
+  required_for: official_evaluation
+  source_type: direct_url
+  # `direct_url` uses `source_repo` as the URL verbatim; this is the digest-addressed URL the
+  # pinned `clip.clip._MODELS['ViT-B/16']` entry names (openai/CLIP clip/clip.py:37), read from
+  # `workbench/envs/tgcir39-la/bin/python -c "import clip.clip as c; print(c._MODELS['ViT-B/16'])"`.
+  source_repo: https://openaipublic.azureedge.net/clip/models/5806e77cd80f8b59890b7e101eabd078d9fb84e6937f9e85e4ecb61988df416f/ViT-B-16.pt
+  source_revision: null
+  source_path: null
+  destination_scope: user_cache
+  destination_path: ViT-B-16.pt
+  # OpenAI's CLIP does NOT read XDG_CACHE_HOME: `clip.load` resolves its cache as
+  # `download_root or os.path.expanduser("~/.cache/clip")` (openai/CLIP clip/clip.py:120). The
+  # registry must match the consumer, so this root is fixed rather than environment-driven.
+  cache_root_fixed: ~/.cache/clip
+  cache_root_env_var: XDG_CACHE_HOME
+  automatic_download_available: true
+  # Measured from the file already in the cache (`stat -c %s`) and `sha256sum`; the digest equals
+  # the hash segment of the URL above, so this is a URL-published digest verified against the bytes
+  # on disk, not a local-only recording. `workbench/replay/tgcir.py` checks the same value.
+  expected_size_bytes: 350837078
+  expected_sha256: 5806e77cd80f8b59890b7e101eabd078d9fb84e6937f9e85e4ecb61988df416f
+  provenance_status: VERIFIED
