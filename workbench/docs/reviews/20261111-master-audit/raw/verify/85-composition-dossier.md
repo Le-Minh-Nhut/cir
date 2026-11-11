@@ -1008,3 +1008,255 @@ reason.
 7. **OK** — released artifact is a whole-module zip pickle (352 members) loaded by bare `torch.load(weights_only=False)` at `replay/tgcir.py:208` plus a `_LinearWithBias` alias and `batch_first=False` on 24 MHA modules; upstream `load_checkpoint` (`utils.py:125-137`, `strict=True`, key `'state_dict'`) is **never called** and `--restore_file` is inert; a loader is trivially assemblable.
 8. **OK** — CLVC native numbers exist twice and **disagree by ~0.05** (`raw/clvc_run3cat_gpu.json` macro R@10 30.0208 / R@50 58.6719 / mean 44.3463 vs `measurements/clvc_run1.json` 29.9707 / 58.6217 / 44.2962); TG-CIR native numbers **do exist** (`raw/tgcir_run3cat_gpu.json` macro R@10 49.7208 / R@50 71.1023 / mean 60.4115), differing from `measurements/tgcir_run1.json` in one cell only (dress r1).
 9. **OK** — `FASHIONIQ_ROOT=/home/heheboiz/data/cir/data/FashionIQ`; all cap/split/correction-dict/`resized_image` paths exist for dress/shirt/toptee with 2017/2038/1961 val queries and 3817/6346/5373 `.jpg` images.
+
+---
+
+## 11. adapted_runtime shape
+
+Read-only. The registry was **not** edited; every simulation below mutated a deep-copied model dict
+in memory only.
+
+### 11.1 Two existing blocks, verbatim (raw YAML, comments included)
+
+Chosen to cover both requested shapes: **`csmcir`** (`models.yaml:51-63`) is the richest —
+`target_compute_capability` + a `packages` list + `pip_index_url`; **`limn`**
+(`models.yaml:1500-1520`) is the same family with a single-package list and the longest explanatory
+comments, showing what an author actually wrote next to the pins.
+
+`csmcir` — `workbench/registry/models.yaml:51-63`:
+
+```yaml
+      adapted_runtime:
+        target_compute_capability: sm_120
+        # The selected cu128 pair supports Python 3.9 and 3.10;
+        # Python 3.10 matches the verified cp310 stack in envs/tme-adapted and models.yaml:1305.
+        python: '3.10'
+        pytorch: '==2.7.1'
+        torchvision: '==0.22.1'
+        cuda: '12.8'
+        # CSMCIR/requirements.txt:9 pins transformers==4.36.2, required by vendored
+        # src/lavis/models/blip2_models/Qformer.py:41 for apply_chunking_to_forward. timm==0.9.12 (:5)
+        # and fairscale==0.4.13 (:10) match pinned source; numpy<2 preserves compatibility with the pinned model dependencies.
+        packages: ['transformers==4.36.2', 'timm==0.9.12', 'fairscale==0.4.13', 'numpy<2']
+        pip_index_url: https://download.pytorch.org/whl/cu128
+```
+
+`limn` — `workbench/registry/models.yaml:1500-1520`:
+
+```yaml
+      adapted_runtime:
+        target_compute_capability: sm_120
+        python: '3.10'
+        pytorch: '==2.7.1'
+        torchvision: '==0.22.1'
+        cuda: '12.8'
+        # open_clip 2.20.0 is the author's own verbatim pin: `LIMN/requirements.txt:37` declares
+        # `open-clip-torch==2.20.0`, and `environment.packages` above already carries it. The earlier
+        # `>=2.24,<2.27` range here contradicted that pin for no stated reason, and the only runtime
+        # actually built and measured for this model (`workbench/envs/limn-adapted`) is 2.20.0, which
+        # is what produced the recorded three-category result.
+        #
+        # Measured, so the record is not overstated: both 2.20.0 and 2.24.0 unpickle these bundles
+        # (`torch.load(weights_only=False)` returns `model.LIMN`, and the pickled
+        # `VisionTransformer` carries `global_average_pool=True` / no `pool_type` under BOTH). The
+        # version difference therefore does not show up at load time; this pin is justified by the
+        # author's pin and by provenance of the measured environment, not by a load-time failure.
+        packages: ['open_clip_torch==2.20.0']
+        # Keep the declared CUDA build: the adapted profile must
+        # install from the CUDA 12.8 wheel index explicitly.
+        pip_index_url: https://download.pytorch.org/whl/cu128
+```
+
+Indentation is 6 spaces for `adapted_runtime:` itself — it is a child of `environment:`
+(4 spaces) inside the `models:` list item, i.e. `environment.adapted_runtime`. `tme`
+(`models.yaml:1608-1621`) is the only one that uses **ranges** instead of exact pins
+(`pytorch: '>=2.7.1,<2.9'`) and the only one that **omits `python`** entirely.
+
+### 11.2 Every code path in `workbench/backend/runtime.py` that reads it
+
+Grep command and result (13 hits):
+
+```
+cd /home/heheboiz/data/cir && grep -n "adapted_runtime\|target_compute_capability\|ADAPTATION_ENV" workbench/backend/runtime.py
+```
+
+```
+69:    #: `adapted_runtime.target_compute_capability` when an operator-selected adaptation applied.
+1005:#: Operator-selected runtime adaptation. Set to the registry's `adapted_runtime`
+1006:#: `target_compute_capability` (e.g. ``sm_120_blackwell``) to verify a model against its declared
+1009:ADAPTATION_ENV = "WORKBENCH_RUNTIME_ADAPTATION"
+1015:    registry declares. Any other ADAPTATION_ENV value is refused rather than silently ignored —
+1027:    requested = (_setting(ADAPTATION_ENV) or "").strip()
+1030:    declared = (model.get("environment") or {}).get("adapted_runtime") or {}
+1031:    target = str(declared.get("target_compute_capability") or "").strip()
+1037:            f"unknown {ADAPTATION_ENV}={requested!r} for model "
+1048:    registry declares a matching `adapted_runtime.target_compute_capability`; any other model is
+1055:    adapted_runtime the selection fails to match is still an operator error and refuses loudly.
+1781:    report.runtime_adaptation = str(adaptation.get("target_compute_capability")) if adaptation else None
+1889:        "adapted_runtime": runtime_adaptation(model, undeclared_is_error=False),
+```
+
+There are exactly **four executable reads** (the rest are comments/docstrings). Deciding lines:
+
+**(a) The selector — `runtime_adaptation`, `:1011-1040`:**
+
+```
+1027:     requested = (_setting(ADAPTATION_ENV) or "").strip()
+1028:     if not requested:
+1029:         return None
+1030:     declared = (model.get("environment") or {}).get("adapted_runtime") or {}
+1031:     target = str(declared.get("target_compute_capability") or "").strip()
+1032:     if requested != target:
+1033:         if not target and not undeclared_is_error:
+1034:             return None
+1035:         raise WorkbenchError(
+1036:             "UNKNOWN_RUNTIME_ADAPTATION",
+1037:             f"unknown {ADAPTATION_ENV}={requested!r} for model "
+1038:             f"{model.get('model_id', '<unnamed>')!r}: declared adaptation is {target or 'none'}",
+1039:             {"model_id": model.get("model_id"), "requested": requested, "declared": target or None})
+1040:     return declared
+```
+
+**(b) The resolved contract — `resolved_runtime_environment`, `:1042-1082`:**
+
+```
+1057:     env = dict(model.get("environment") or {})
+1058:     adapted = runtime_adaptation(model, undeclared_is_error=False)
+1059:     if not adapted:
+1060:         return env
+1061:     resolved = {**env}
+1062:     for source, target in (("pytorch", "pytorch"), ("torchvision", "torchvision"),
+1063:                            ("cuda", "cuda"), ("python", "python")):
+1064:         if source in adapted:
+1065:             resolved[target] = adapted[source]
+1066:     declared = list(resolved.get("packages") or [])
+...
+1079:     for key in ("pip_index_url",):
+1080:         if adapted.get(key):
+1081:             resolved[key] = adapted[key]
+1082:     return resolved
+```
+
+**(c) The dependency set the probe checks — `_adapted_packages`, `:1089-1103`:**
+
+```
+1092:     if "pytorch" in adapted:
+1093:         required["torch"] = declared_requirement("torch", adapted.get("pytorch"))
+1094:     if "torchvision" in adapted:
+1095:         required["torchvision"] = declared_requirement("torchvision", adapted.get("torchvision"))
+1096:     for pkg in adapted.get("packages") or []:
+...
+1102:         required.setdefault(name, constraint)
+```
+
+Selected at `:1687-1688`:
+
+```
+1687:     adaptation = runtime_adaptation(model, undeclared_is_error=False)
+1688:     required = _adapted_packages(model, adaptation) if adaptation else _required_packages(model)
+```
+
+**(d) Provenance — `:1781`** (`report.runtime_adaptation`) and **`:1889`** (the report dict's
+`"adapted_runtime"` key, via `undeclared_is_error=False`).
+
+### 11.3 Key-by-key: required vs optional, and the tier that results
+
+| key | required? | read by | effect if absent |
+|---|---|---|---|
+| `target_compute_capability` | **REQUIRED** — it *is* the selector | `:1031`, compared to `ADAPTATION_ENV` at `:1032` | `target = ""` → with `undeclared_is_error=True` **raises** `UNKNOWN_RUNTIME_ADAPTATION`; with `False` returns `None` → adaptation silently not applied (`adapt=None`) |
+| `python` | **REQUIRED in practice** for `clvc_net` | `:1062-1065` then `:1664-1665` | absent → the *historical* python pin survives; `clvc_net` then fails `expected Python 3.7.6, found 3.9.25` → `BLOCKED/PYTHON_VERSION_MISMATCH`. For `tgcir` the historical pin is `UNKNOWN`, so absent is harmless |
+| `pytorch` | optional, but omitting it leaves the historical `==1.6.0` / `==1.7.0` in force | `:1092-1093` | historical pin → `BLOCKED/DEPENDENCY_VERSION_MISMATCH` |
+| `torchvision` | optional, same trap | `:1094-1095` | historical `UNKNOWN` (`clvc`) / `==0.8.0` (`tgcir`) → the latter blocks |
+| `cuda` | **optional and NOT verified by `verify_environment`** | `:1062-1065` copies it into the contract; `_requires_gpu` at `:1155-1165` reads it to decide pending-vs-ready | absent → the historical `cuda` value survives and still forces `GPU_VERIFICATION_PENDING`. Changing it to a bogus `11.1` changes **nothing** in the tier |
+| `packages` | optional | `:1096-1102` | absent → historical `packages` list used |
+| `pip_index_url` | optional, **never verified** | `:1079-1081` | no tier effect at all; it only steers the installer |
+
+Tier outcomes, all measured (§11.4):
+
+- **match** → `runtime_adaptation` returns the block, `report.runtime_adaptation == "sm_120"`, and
+  with every pin satisfied the tier goes `PYTHON_VERSION_VERIFIED` → `DEPENDENCIES_VERIFIED` →
+  `GPU_VERIFICATION_PENDING` (a **READY_TIERS** member at `:1867`; only `verify_gpu_runtime()` can
+  promote it to `GPU_RUNTIME_READY`).
+- **mismatch** (`target` declared but ≠ `ADAPTATION_ENV`) → **raises** `WorkbenchError
+  UNKNOWN_RUNTIME_ADAPTATION` from `:1035-1039` on any `undeclared_is_error=True` call
+  (`resolved_runtime_environment` catches it at `:1660-1663` and falls back to the historical env).
+- **not declared** → `None`; historical contract; for these two models that means
+  `BLOCKED/PYTHON_VERSION_MISMATCH` (clvc) and `BLOCKED/DEPENDENCY_VERSION_MISMATCH` (tgcir).
+
+### 11.4 Measured: what each block actually does
+
+Command (in-memory only; registry untouched):
+
+```
+cd /home/heheboiz/data/cir && PYTHONPATH=/home/heheboiz/data/cir \
+  WORKBENCH_CLVC_PYTHON=.../envs/clvc39-la/bin/python \
+  WORKBENCH_TGCIR_PYTHON=.../envs/tgcir39-la/bin/python \
+  WORKBENCH_RUNTIME_ADAPTATION=sm_120 \
+  .venv/bin/python /tmp/audit85/sim4.py
+```
+
+Baseline first — today's registry, no `adapted_runtime`, interpreters set, advisory probe:
+
+```
+clvc_net tier= BLOCKED status= PYTHON_VERSION_MISMATCH
+  reason= expected Python 3.7.6, found 3.9.25
+tgcir    tier= BLOCKED status= DEPENDENCY_VERSION_MISMATCH
+  reason= torch: expected ==1.7.0, found 2.7.1+cu128
+```
+
+With a candidate block injected into `environment.adapted_runtime`:
+
+```
+tgcir     | no python key (historical UNKNOWN)       | GPU_VERIFICATION_PENDING | GPU_VERIFICATION_PENDING
+tgcir     | no python, no packages                   | GPU_VERIFICATION_PENDING | GPU_VERIFICATION_PENDING
+tgcir     | python 3.9, packages omitted             | GPU_VERIFICATION_PENDING | GPU_VERIFICATION_PENDING
+clvc_net  | python 3.9, packages omitted             | GPU_VERIFICATION_PENDING | GPU_VERIFICATION_PENDING
+clvc_net  | python 3.9, packages [torchvision]       | GPU_VERIFICATION_PENDING | GPU_VERIFICATION_PENDING
+clvc_net  | no cuda key in block                     | GPU_VERIFICATION_PENDING | GPU_VERIFICATION_PENDING
+clvc_net  | cuda 11.1 (bogus) in block               | GPU_VERIFICATION_PENDING | GPU_VERIFICATION_PENDING
+clvc_net  | pytorch range >=2.7.1,<2.9               | GPU_VERIFICATION_PENDING | GPU_VERIFICATION_PENDING
+clvc_net  | tcc sm_90 vs env sm_120                  | RAISED WorkbenchError | UNKNOWN_RUNTIME_ADAPTATION
+clvc_net  | python 3.10 in block (wrong)             | BLOCKED | PYTHON_VERSION_MISMATCH
+clvc_net  | torch ==2.6.0 (wrong)                    | BLOCKED | DEPENDENCY_VERSION_MISMATCH
+clvc_net  | tcc only, no pins at all                 | BLOCKED | PYTHON_VERSION_MISMATCH
+clvc_net  | min (no python)                          | BLOCKED | PYTHON_VERSION_MISMATCH
+```
+
+Two facts this pins down that are not obvious from the code alone:
+
+1. **`python: '3.9'` is the single load-bearing extra field for `clvc_net`** — dropping it reverts to
+   the historical `3.7.6` and the block buys nothing.
+2. **`cuda` and `pip_index_url` are decorative as far as `verify_environment` is concerned.** A
+   deliberately wrong `cuda: '11.1'` still reaches `GPU_VERIFICATION_PENDING`, because
+   `verify_environment` never compares the CUDA version — only `verify_gpu_runtime()` does, from the
+   environment's own probe. `pip_index_url` is never read outside `resolved_runtime_environment`.
+
+Measured environment facts this rests on (from §4, plus a distribution inventory taken this turn):
+
+```
+clvc39-la : torch 2.7.1+cu128, torchvision 0.22.1+cu128, numpy 1.26.4, tqdm 4.70.1,
+            clip ABSENT, pandas ABSENT
+tgcir39-la: torch 2.7.1+cu128, torchvision 0.22.1+cu128, numpy 1.22.3, pandas 1.4.2,
+            Pillow 11.3.0, clip 1.0, ftfy 6.3.1, regex 2026.1.15, tqdm 4.70.1
+```
+
+`==2.7.1` does match `2.7.1+cu128` and `==0.22.1` does match `0.22.1+cu128`
+(`SpecifierSet('==2.7.1').contains(Version('2.7.1+cu128'))` → `True`), so exact pins are safe here.
+
+### 11.5 Minimal block per model (≤6 lines)
+
+```
+clvc_net: adapted_runtime: {target_compute_capability: sm_120, python: '3.9', pytorch: '==2.7.1', torchvision: '==0.22.1', cuda: '12.8'}
+tgcir:    adapted_runtime: {target_compute_capability: sm_120, python: '3.9', pytorch: '==2.7.1', torchvision: '==0.22.1', cuda: '12.8'}
+```
+
+Both reach `GPU_VERIFICATION_PENDING` (a READY tier) with exactly those five keys and **no**
+`packages` / `pip_index_url`. Confident: `target_compute_capability: sm_120` (matches the env var and
+the RTX 5070 Ti's measured `compute_cap 12.0`), `python: '3.9'`, `pytorch: '==2.7.1'`,
+`torchvision: '==0.22.1'` — all four are read from the installed distributions. Not confident / not
+measured: the `cuda: '12.8'` value is only decorative to the verifier, and whether the GPU actually
+satisfies `sm_120` requires `verify_gpu_runtime(authorized=True)`, which this audit did not run
+(no GPU use permitted); note also that `tgcir39-la` carries `clip 1.0` whose source identity is
+declared in `environment.packages`, and an adapted block's `packages` list **replaces** the
+historical names it repeats — so if `clip` were listed without its `git+…` source it would drop the
+source check, which is why leaving `packages` out entirely is the safer minimal form.
