@@ -153,13 +153,14 @@ artifact. Gate cũ báo `PARITY_PASS` cho cả hai; gate mới báo đúng.
 - **`:8765` stale uvicorn** vẫn sống, thiếu route mới (`/api/runs/parity-gate` → 404, so với 200 ở
   `:8000`). Tìm nó bằng `pgrep -af "port 8765"`; PID đổi sau restart nên không ghim số.
 - **Stack không tự hồi phục — cơ chế đã xác định một phần, thủ phạm thì chưa.** Service `:8000`/`:5173`
-  đã chết **ít nhất bốn lần** trong đợt này (số lần chính xác **chưa chốt**: ba lần còn log header —
-  PID 3691345, 4040574, 4062957 — và danh sách PID superseded trong
-  `WEB_SURFACE_VERIFICATION.vi.md` cho thấy thêm ít nhất một lần nữa), đều cùng một chữ ký log:
+  đã chết **bốn lần** trong đợt này, mỗi lần một PID và mỗi lần đều còn log header —
+  PID 3691345, 4040574, 4062957, 4082632 — tất cả cùng một chữ ký log:
   `[WARN] npm exited with status -15` (bị
-  SIGTERM) rồi backend `Shutting down` êm. Bản sao log của một lần chết nằm ở
-  `raw/service-death-log.txt` (chép từ `/tmp/workbench_serve.log`, mtime `2026-11-11 02:25:51` — mốc
-  thời gian là mtime của tệp, không có trong nội dung log). **Đã xác định:** đó chính xác là đường
+  SIGTERM) rồi backend `Shutting down` êm. Hai lần có bản sao đã commit:
+  `raw/service-death-log.txt` (từ `/tmp/workbench_serve.log`, mtime `2026-11-11 02:25:51` — mốc
+  thời gian là mtime của tệp, không có trong nội dung log) và `raw/service-death-log-4.txt`
+  (từ `/tmp/serve_handover.log`, mtime `2026-11-11 07:29:33`). Các restart khác trong danh sách PID
+  superseded không còn log nên nguyên nhân của chúng chưa rõ. **Đã xác định:** đó chính xác là đường
   `serve_workbench.py:152-166` — `forward_stop` nhận SIGTERM/SIGHUP, gửi `os.kill(child.pid, SIGTERM)`
   cho từng child rồi `raise_signal(SIGINT)`. Nghĩa là launcher **của chính nó** nhận SIGTERM; child
   không tự chết. **Chưa xác định:** ai gửi SIGTERM đó. Đã kiểm và loại trừ: `jobs.py` spawn job bằng

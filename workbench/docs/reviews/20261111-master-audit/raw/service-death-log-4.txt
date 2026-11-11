@@ -1,0 +1,6 @@
+# source /tmp/serve_handover.log (4th death, mtime 2026-11-11 07:29:33 +0700); copied 2026-11-11 — service :8000/:5173 died while this cleanup session was running, same signature as the three earlier deaths
+[WARN] npm exited with status -15
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [4082632]

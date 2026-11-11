@@ -48,7 +48,7 @@ nào ở phía server. Luôn `npm run build` trước khi restart.
 | backend | `http://127.0.0.1:8000` |
 | restart | đúng **một lần** trong lượt W-05 này (stack đã restart nhiều lần trong cả đợt — xem hàng PID bên dưới), `WORKBENCH_CIRCUS_RELEASE_ROOT=/home/heheboiz/data/cir/workbench/artifacts/circus_release` |
 | PID **đang phục vụ** | `serve_workbench.py` **4082631** → uvicorn **4082632** (superseded: `4062950/4062957`, `4040573/4040574`, `3390138/3390139`, `3316577/3316578`, `3228456`, `3212146`) |
-| cảnh báo về pin PID | PID **không bền** trong đợt này: số lần chết do SIGTERM từ bên ngoài **chưa chốt**; đã ghi nhận **ít nhất bốn lần** (mỗi lần PID đổi — xem danh sách superseded ở hàng trên). Ba lần có log header còn giữ: `/tmp/workbench_serve.log` (`[WARN] npm exited with status -15`, PID 3691345; mtime `2026-11-11 02:25:51` — mốc thời gian lấy từ mtime của tệp, **không** có trong nội dung log; bản sao đã commit: `raw/service-death-log.txt`), `/tmp/workbench_serve_final.log` (PID 4040574), `/tmp/serve_probe.log` (PID 4062957). **Digest bundle mới là pin bền**; PID chỉ đúng tại thời điểm đo |
+| cảnh báo về pin PID | PID **không bền** trong đợt này: **bốn** lần stack bị SIGTERM từ bên ngoài, mỗi lần một PID khác — `3691345` (`/tmp/workbench_serve.log`, mtime `2026-11-11 02:25:51`; mốc thời gian lấy từ mtime của tệp, **không** có trong nội dung log), `4040574` (`/tmp/workbench_serve_final.log`), `4062957` (`/tmp/serve_probe.log`), `4082632` (`/tmp/serve_handover.log`, mtime `2026-11-11 07:29:33`). Cả bốn đều có đúng chữ ký `[WARN] npm exited with status -15` rồi backend `Shutting down` êm. Bản sao đã commit: `raw/service-death-log.txt` (lần 1) và `raw/service-death-log-4.txt` (lần 4). Các restart khác trong danh sách superseded không còn log nên **không rõ nguyên nhân**. **Digest bundle mới là pin bền**; PID chỉ đúng tại thời điểm đo |
 | readiness | `/api/benchmark-runs` → 200 sau 1 s; **không** dùng `/api/models` (cold start ~154 s vì hash mọi checkpoint) |
 | digest khớp | `sha256(served /assets/index-DWpK0yeS.js)` = `sha256(dist/assets/index-DWpK0yeS.js)` = `7e34724e…8a6a16`; `cmp` → IDENTICAL |
 
@@ -425,7 +425,7 @@ trong lượt này. Không sửa gì ở đây.
 | root | `WORKBENCH_CIRCUS_RELEASE_ROOT=/home/heheboiz/data/cir/workbench/artifacts/circus_release` |
 | proxy | vite `preview` proxy `/api` → `http://127.0.0.1:8000` (`vite.config.mts`, `WORKBENCH_BACKEND_URL`) |
 | PID | **4082631** (`serve_workbench.py`) → **4082632** (uvicorn); superseded `4062950/4062957`, `4040573/4040574`, `3390138/3390139`, `3316577/3316578`, `3228456`, `3212146` |
-| quy tắc pin | **digest bundle là pin bền; PID chỉ đúng tại thời điểm đo.** PID đã cũ đi **ít nhất bốn lần** trong một đợt (mỗi lần service restart; số lần chính xác chưa chốt — xem mục "Service được phục vụ"). Không bao giờ dùng hàng PID làm pin build |
+| quy tắc pin | **digest bundle là pin bền; PID chỉ đúng tại thời điểm đo.** PID đã cũ đi **bốn lần** trong một đợt, mỗi lần một lần chết do SIGTERM (xem mục "Service được phục vụ" để có PID của từng lần). Không bao giờ dùng hàng PID làm pin build |
 | readiness | `/api/benchmark-runs` 200 sau 1 s |
 
 ### Bằng chứng theo nhóm scope có dữ liệu
@@ -485,8 +485,9 @@ Log: `raw/w01_w03_targeted_tests.txt`. Không chạy toàn bộ suite (theo yêu
   nào đọc trường này, nên số phục vụ không đổi — xem mục W-01 bổ sung để biết **phạm vi quét** và vì sao
   một lần quét `workbench/artifacts/**` không thể thấy nó.
 * `unit_declared` **không còn là 0/43** (con số đó đã cũ): payload sống báo `unit_declared: 4`,
-  `unit_sibling_key: 2`, `unit_inferred: 39`, `unit_not_declared: 39`. Sáu dòng nay mang khai báo thật
-  (`clip4cir_fullft.json` khai `categories[*].provenance.units`; `dcnet.json` khai bằng hậu tố
-  `macro_r10_percent`). **39** dòng vẫn dựa trên suy luận độ lớn và đã được audit từng dòng: **0** khai
+  `unit_sibling_key: 2`, `unit_inferred: 39`, `unit_not_declared: 39`. **Bốn** dòng nay mang khai báo
+  thật — `unit_declared: 4` **đã gồm** hai dòng `unit_sibling_key` (`clip4cir_fullft.json` khai
+  `categories[*].provenance.units`; `dcnet.json` khai bằng hậu tố `macro_r10_percent`) — nên tổng là
+  4/43 chứ không phải 6. **39** dòng vẫn dựa trên suy luận độ lớn và đã được audit từng dòng: **0** khai
   báo bị bỏ sót.
 * `.scratch/` đã xoá; nội dung có giá trị đã chuyển vào `raw/` và `scripts/`.
