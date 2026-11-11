@@ -77,3 +77,16 @@ count change refused, opt-out explicit+visible, cold root reports `rebuilt`, iso
 manifest, atomic write, both annotation paths recorded, gallery order/count, compare names every
 field. `test_seeded_dataset_construction.py::test_a_run_shares_one_cache_between_its_children` updated
 to write the manifest and assert `verified` (it previously asserted the defect: sharing without proof).
+
+## Failure ledger for `pytest workbench/tests -k "cache or replay"`
+
+| test | verdict |
+|---|---|
+| `test_circus_cli.py::test_category_scope_failure_cache_is_stable` | **NOT R04.** Reproduced with all five R04 files reverted to `ff8d062^` (`common.py`, `airknow.py`, `tgcir.py`, `clvc_net.py`, `warm_replay_cache.py` copied back from the parent commit) — still `assert 'MODEL_UNAVAILABLE' == 'PARTIAL'`. Other agents have uncommitted `workbench/composition/*` edits in this tree, which is where the status is produced. |
+| `test_evaluate_models.py::test_encoder_replay_preserves_upstream_trailing_root_separator` | Transient. Passes alone at HEAD and passes with the R04 files reverted; the failure (`'Model' object has no attribute 'backbone'`) appears only in the full selection. |
+| `test_composition_topk_runner.py::test_resume_with_export_request_backfills_from_the_preserved_cache` | Transient. Passes alone (`1 passed`); the failing test CHANGES between full-selection runs (circus → topk → evaluate_models), which is a cross-test state leak in the composition suite, not a cache defect. |
+
+Stable result for the R04 files themselves: `test_r04_cache_manifest.py` 16/16,
+`test_seeded_dataset_construction.py` + `test_evaluate_models.py` + `test_hint_replay.py` 66 passed,
+and the shared-root cold→warm handshake verified end to end
+(`rebuilt` → manifest written on exit → `verified`, checked fields `['annotations', 'gallery']`).
