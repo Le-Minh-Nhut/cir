@@ -250,3 +250,166 @@ took effect without a restart. Restarting the unit was out of scope and was not 
 * `clvc_net`'s `protocol incompatible: circus_fashioniq_release_v1` in the first POST is a
   protocol-name fact, not an asset fact: `clvc_net` supports only `fashioniq_val_split`. With its
   own protocol the reason disappears from the list.
+
+---
+
+# Addendum — closing the `tgcir` residual at the contract level
+
+Date: 2026-11-12. The section above diagnosed the residual and stopped at an ownership boundary; that
+boundary was then widened to `workbench/registry/preparation_contracts.yaml`, restricted to the
+single `external_assets` entry of the `tgcir_fashioniq` contract. Nothing else in that file changed.
+
+## The edit (verbatim from the file, lines 206-222)
+
+```yaml
+  external_assets:
+  - name: OpenAI CLIP ViT-B/16 weights/cache
+    kind: external_pretrained_asset
+    state: SOURCE_HASH_AVAILABLE
+    required_for_evaluation: true
+    required_for_preparation: false
+    expected_local_location: ~/.cache/clip/ViT-B-16.pt
+    location_env_var: WORKBENCH_TGCIR_VITB16_WEIGHTS
+    expected_sha256: 5806e77cd80f8b59890b7e101eabd078d9fb84e6937f9e85e4ecb61988df416f
+    source: OpenAI CLIP clip.load default acquisition/cache
+    optional: false
+    notes: 'Native evaluator requires CLIP ViT-B/16. The digest is AUTHOR-PUBLISHED, not invented
+      here: it is the hash segment of the digest-addressed URL in the pinned clip module
+      (`clip.clip._MODELS["ViT-B/16"]`, openai/CLIP clip/clip.py:37), which upstream `clip.load`
+      self-verifies against; `sha256sum` of the cached file reproduces it exactly (350837078 bytes).
+      Resolved path: ~/.cache/clip/ViT-B-16.pt -- fixed because CLIP does not read XDG_CACHE_HOME.
+      Same shape as the verified clip4cir_fashioniq RN50x4 entry above.'
+```
+
+Three field changes, copied from the `clip4cir_fashioniq` RN50x4 entry that was already verified:
+`state` `BLOCKED_EXTERNAL_ASSET_PROVENANCE` → `SOURCE_HASH_AVAILABLE`;
+`expected_local_location` `null` → `~/.cache/clip/ViT-B-16.pt`; and `expected_sha256` added. Kept:
+`location_env_var`, `source`, `optional: false`, `kind`, both `required_for_*` flags.
+
+Parsed back through the registry, so this is what the code reads, not just what the file says:
+
+```
+name = OpenAI CLIP ViT-B/16 weights/cache
+state = SOURCE_HASH_AVAILABLE
+expected_local_location = ~/.cache/clip/ViT-B-16.pt
+location_env_var = WORKBENCH_TGCIR_VITB16_WEIGHTS
+expected_sha256 = 5806e77cd80f8b59890b7e101eabd078d9fb84e6937f9e85e4ecb61988df416f
+source = OpenAI CLIP clip.load default acquisition/cache
+optional = False
+```
+
+The digest is not a value invented for this entry: it is the hash segment of the OpenAI URL in the
+pinned `clip` module, and `sha256sum` of the cached bytes reproduces all 64 characters (see the
+cross-check table above). The declared `expected_local_location` matches the location the auxiliary
+entry resolves to, so the two registries now name one file.
+
+## Verification 1 — `tgcir` blocker list, before vs after
+
+Controller `workbench/envs/ctl312h/bin/python`, `preflight_blockers(model_by_id('tgcir'), resolve_config())`.
+
+BEFORE the contract edit:
+
+```
+tgcir ['external runtime asset provenance unresolved: OpenAI CLIP ViT-B/16 weights/cache', 'command not runnable: COMMAND_BLOCKED_SOURCE_ENTRYPOINT']
+```
+
+AFTER:
+
+```
+tgcir ['command not runnable: COMMAND_BLOCKED_SOURCE_ENTRYPOINT']
+```
+
+The provenance line is gone. The asset status is now a verified local asset against a published
+digest, with the measured bytes equal to it:
+
+```
+{'name': 'OpenAI CLIP ViT-B/16 weights/cache', 'status': 'VERIFIED_LOCAL_ASSET', 'path': '/home/heheboiz/.cache/clip/ViT-B-16.pt', 'expected_sha256': '5806e77cd80f8b59890b7e101eabd078d9fb84e6937f9e85e4ecb61988df416f', 'expected_sha256_prefix': None, 'actual_sha256': '5806e77cd80f8b59890b7e101eabd078d9fb84e6937f9e85e4ecb61988df416f', 'expected_size_bytes': None, 'actual_size_bytes': 350837078}
+```
+
+## Verification 2 — `POST /api/jobs` for `tgcir`
+
+```
+409
+{"detail":{"error":"evaluation_blocked","message":"Official evaluation is not ready.","details":{"blockers":["command not runnable: COMMAND_BLOCKED_SOURCE_ENTRYPOINT"]}}}
+```
+
+409, and the **only** blocker is the entrypoint line. That is the correct final state for this path
+and was deliberately not cleared.
+
+## Why that 409 is correct, and not a hole
+
+`POST /api/jobs` is the OFFICIAL EVALUATOR path. It refuses on
+`command not runnable: COMMAND_BLOCKED_SOURCE_ENTRYPOINT` because that is a true statement about the
+pinned upstream: TG-CIR's `test.py` exposes no evaluation CLI (`train.py:74` declares
+`--restore_file` and never reads it) and CLVCNet ships no CLI either. Nothing about the assets is
+implicated any more, for either model.
+
+The CIRCUS COMPOSITION path does **not** traverse that gate: it goes through the adapters'
+`status()` and `composition_eval.py`, not `guarded_plan`/`preflight_blockers`. The two paths are
+therefore expected to disagree, and they did: composition smokes produced measured numbers for both
+`clvc_net` and `tgcir` (doc 90) while `POST /api/jobs` returned 409 for both. A future reader must
+not read "409" as "composition is blocked".
+
+## Verification 3 — composition `--plan` readiness row for `tgcir`
+
+```
+workbench/envs/ctl312h/bin/python workbench/scripts/composition_eval.py --models tgcir --plan --topk-depth 100 --config ~/cir_rerun_20261109.yaml
+```
+
+```json
+{
+  "adapter": "workbench.composition.model_tgcir",
+  "checkpoint_id": "tgcir_archive_unresolved",
+  "model_id": "tgcir",
+  "ready": true,
+  "reason": null,
+  "runtime": {
+    "model_interpreter": {
+      "path": "/home/heheboiz/data/cir/workbench/envs/tgcir39-la/bin/python",
+      "source": "workbench_env",
+      "verification_reason": "environment verification not run in plan mode",
+      "verification_status": "NOT_PROBED",
+      "verified": false,
+      "version": "Python 3.9.25; torch 2.7.1+cu128"
+    }
+  },
+  "status": "READY"
+}
+```
+
+`status: READY`, `reason: null`, `selected_models: [tgcir]`, `unavailable: []`, exit 0. This is the
+path that has to work, and it does.
+
+Without `--config` the same command reports
+`unavailable: [{tgcir, "no checkpoint variant records a training condition ... policy strict_clean"}]`,
+which is the checkpoint-condition policy, not an asset fact, and is resolved by the authorized
+cohort config used above (the same config doc 90 used).
+
+## Verification 4 — tests that read `preparation_contracts.yaml`
+
+`grep -rln "preparation_contracts" workbench/tests/` → `test_f05_f08_f09_verification.py`,
+`test_protocols.py`, `test_ptha_native_assets.py`, `test_replay.py`,
+`test_tme_feature_dtype_contract.py` (the named `test_prepare_dataset.py` /
+`test_operator_contracts.py` do not exist in this tree).
+
+```
+$ workbench/envs/ctl312h/bin/python -m pytest workbench/tests/test_protocols.py workbench/tests/test_replay.py workbench/tests/test_ptha_native_assets.py workbench/tests/test_tme_feature_dtype_contract.py workbench/tests/test_f05_f08_f09_verification.py -q
+1 failed, 93 passed, 3 warnings in 8.03s
+```
+
+The single failure is `test_f08_dcnet_config_data_dir_resolution` — DCNet's `data_dir` resolution,
+nothing to do with `tgcir` or CLIP. It is **pre-existing**: re-run against the committed (pre-edit)
+`preparation_contracts.yaml` it fails identically (`1 failed in 0.10s`, same
+`assert PosixPath('/home/heheboiz/data/cir/data/FashionIQ') == (.../DCNet/dataset/fashioniq)`), so it
+is not caused by this change and was not touched.
+
+**No test pinned `BLOCKED_EXTERNAL_ASSET_PROVENANCE` for `tgcir`:** `grep -rn
+"BLOCKED_EXTERNAL_ASSET_PROVENANCE" workbench/tests/` returns no matches. No test was edited.
+
+## Còn chặn (updated)
+
+* `command not runnable: COMMAND_BLOCKED_SOURCE_ENTRYPOINT` — still the sole remaining blocker for
+  both models on the official-evaluator path. True statement about the upstream entrypoints; must
+  not be "fixed", and the composition path is unaffected by it.
+* `tgcir`'s `external runtime asset provenance unresolved` — **closed**. Both models' asset
+  blockers are now empty; `clvc_net` and `tgcir` are asset-unblocked.

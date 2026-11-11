@@ -206,14 +206,20 @@ contracts:
   external_assets:
   - name: OpenAI CLIP ViT-B/16 weights/cache
     kind: external_pretrained_asset
-    state: BLOCKED_EXTERNAL_ASSET_PROVENANCE
+    state: SOURCE_HASH_AVAILABLE
     required_for_evaluation: true
     required_for_preparation: false
-    expected_local_location: null
+    expected_local_location: ~/.cache/clip/ViT-B-16.pt
     location_env_var: WORKBENCH_TGCIR_VITB16_WEIGHTS
+    expected_sha256: 5806e77cd80f8b59890b7e101eabd078d9fb84e6937f9e85e4ecb61988df416f
     source: OpenAI CLIP clip.load default acquisition/cache
     optional: false
-    notes: Native evaluator requires CLIP ViT-B/16; verify its documented weight SHA-256 before changing blocked provenance.
+    notes: 'Native evaluator requires CLIP ViT-B/16. The digest is AUTHOR-PUBLISHED, not invented
+      here: it is the hash segment of the digest-addressed URL in the pinned clip module
+      (`clip.clip._MODELS["ViT-B/16"]`, openai/CLIP clip/clip.py:37), which upstream `clip.load`
+      self-verifies against; `sha256sum` of the cached file reproduces it exactly (350837078 bytes).
+      Resolved path: ~/.cache/clip/ViT-B-16.pt -- fixed because CLIP does not read XDG_CACHE_HOME.
+      Same shape as the verified clip4cir_fashioniq RN50x4 entry above.'
   deterministic_status: UNKNOWN
   automation_policy: MANUAL_REQUIRED
   notes: Source cache files fashion_iq_data.json and test_queries/test_targets PKLs are cache artifacts; source does not validate freshness. Do not copy dictionaries or caches from another repository.
