@@ -595,8 +595,13 @@ def _encode_gallery(adapter: Any, image_paths: Sequence[Path], scope: str | None
     trailing_shape: tuple[int, ...] | None = None
     position = 0
     projection: dict[str, int] = {}
-    for start in range(0, len(image_paths), batch_size):
-        paths = image_paths[start:start + batch_size]
+    # `batch_size` is the FORWARD batch the model sees; `window` is how many paths one adapter call
+    # carries, so the worker can build `window // batch_size` internal batches and decode them
+    # concurrently. Calling with `batch_size` made every call a single internal batch, which
+    # short-circuits `prefetch_rows` to its serial branch -- the decode pool never ran.
+    window = max(batch_size, ADAPTER_CALL_WINDOW)
+    for start in range(0, len(image_paths), window):
+        paths = image_paths[start:start + window]
         encoded = _as_array(adapter.encode_targets([str(path) for path in paths], [scope] * len(paths)))
         if encoded.ndim < 2 or encoded.shape[0] != len(paths):
             raise ValueError(f"encode_targets returned invalid shape {encoded.shape}")
@@ -667,8 +672,12 @@ def _encode_queries(adapter: Any, queries: Sequence[Any], query_paths: Sequence[
     for index in indices:
         if query_paths[index] is None:
             errors[queries[index].qid] = "query reference image is missing"
-    for batch_start in range(0, len(eligible), batch_size):
-        batch = eligible[batch_start:batch_start + batch_size]
+    # Same call window as the gallery: one adapter call carries `window` queries so the worker can
+    # build several internal forward batches and decode them concurrently. The per-query fallback
+    # below still calls with ONE query, and remains a distinct arithmetic shape it records.
+    window = max(batch_size, ADAPTER_CALL_WINDOW)
+    for batch_start in range(0, len(eligible), window):
+        batch = eligible[batch_start:batch_start + window]
         paths: list[str] = []
         texts: list[str] = []
         categories: list[str | None] = []
@@ -744,6 +753,26 @@ BLAS_THREADS_PINNED = 1
 SCORE_THREADS_ENV = "WORKBENCH_SCORE_THREADS"
 #: Half the box (AGENTS.md), and deliberately conservative: this competes with the live cohort.
 SCORE_THREADS_DEFAULT = min(8, (os.cpu_count() or 8) // 2)
+
+#: How many paths ONE `encode_targets`/`encode_queries` call carries, independent of the forward
+#: batch size. MEASURED necessity: the gallery loop used to call the adapter once per `batch_size`
+#: slice, so every adapter received exactly one batch, and `adapters.prefetch_rows` takes its SERIAL
+#: branch when `len(batches) <= 1`. The decode pool therefore never ran for any model: one core
+#: decoded 74 381 images while the GPU idled at 6-10 % utilisation and 40 W of 285 W (measured on
+#: `clvc_net` run eab10106b2df8e97fb7a5ce5). Widening the CALL is what lets the worker build more
+#: than one internal batch and decode them in parallel.
+#:
+#: The forward batch size is unchanged (`adapter.batch_size`, still 32 by default and still hashed
+#: into the run identity), so the tensors the model sees are the same size and the same order --
+#: this changes HOW the decode is scheduled, not the arithmetic. The gallery digest is the
+#: regression anchor: 889bc330 recorded content_digest
+#: a9bfa6ed4853bf999eb468379bdf5b760ef6dc3ba81861f3f0020ea509c30680 for dress, and a window change
+#: must reproduce it exactly.
+#:
+#: 4096 keeps each job's `np.concatenate` result at 4096 x 2048 x 4 B = 33.5 MB (512-d models: 8.4 MB).
+#: One job per gallery would be 609 MB plus `workers*2` decoded batches resident, which is the
+#: blow-up `prefetch_rows` exists to prevent. Deliberately NOT scaled to the gallery size.
+ADAPTER_CALL_WINDOW = 4096
 
 def resolved_score_threads(default: int = SCORE_THREADS_DEFAULT) -> int:
     """Query-parallelism for scoring, from the operator override or the conservative default."""

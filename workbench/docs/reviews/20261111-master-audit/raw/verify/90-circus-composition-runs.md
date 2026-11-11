@@ -350,20 +350,15 @@ deliberately refuses with `unresolved:annotation_names_two_categories`. Resolvin
 for CLVC alone would make the two models cover different query sets and break cross-model
 comparability, so it is not done. `PARTIAL` is the correct status.
 
-## 4.2 The decode pool never engages: a measured runner limitation (NOT fixed here)
+## 4.2 The decode pool never engaged — FIXED, and the gallery digest proves the arithmetic did not move
 
-`runner._encode_gallery:598-600` slices the gallery into `batch_size` chunks and calls
-`adapter.encode_targets(...)` once per chunk, so each call receives exactly `batch_size` paths:
+### The limitation, measured
 
-```
-598:    for start in range(0, len(image_paths), batch_size):
-599:        paths = image_paths[start:start + batch_size]
-600:        encoded = _as_array(adapter.encode_targets([str(path) for path in paths], [scope] * len(paths)))
-```
-
-Each adapter worker then re-slices its (already `batch_size`-sized) input
-(`model_clvc_net.py:548`, `model_tgcir.py:618`, `model_encoder.py:574`), producing
-`len(batches) == 1`, and `adapters.prefetch_rows:141` takes its serial branch:
+`runner._encode_gallery` sliced the gallery into `batch_size` chunks and called
+`adapter.encode_targets(...)` once per chunk, so each call received exactly `batch_size` paths. Each
+adapter worker then re-sliced its already-`batch_size`-sized input (`model_clvc_net.py:548`,
+`model_tgcir.py:618`, `model_encoder.py:574`), producing `len(batches) == 1`, and
+`adapters.prefetch_rows:141` took its serial branch:
 
 ```
 141:    if workers <= 1 or len(batches) <= 1:
@@ -372,12 +367,49 @@ Each adapter worker then re-slices its (already `batch_size`-sized) input
 144:        return
 ```
 
-So `WORKBENCH_DECODE_WORKERS` never has effect for gallery or query encoding in ANY of the three
-adapters — the degeneracy is universal in the runner, not adapter-specific. That is the measured cause
-of 6–10 % GPU utilisation at 40 W with one core decoding 74 381 images. The fix (a runner call window,
-e.g. 4096 paths per `encode_targets` call with the worker still batching at 32 internally) was
-specified but **not implemented or committed**: the `tgcir` full run held the GPU lock and a
-run-identity-affecting edit to the runner was not landed against an in-flight run. It is the open item.
+So `WORKBENCH_DECODE_WORKERS` never had effect for gallery or query encoding in ANY of the three
+adapters — universal in the runner, not adapter-specific. That is the measured cause of 6–10 % GPU
+utilisation at 40 W with one core decoding 74 381 images.
+
+### The fix
+
+`runner.ADAPTER_CALL_WINDOW = 4096` (`runner.py:766`), used as the outer loop stride in
+`_encode_gallery` (`:602-603`) and `_encode_queries` (`:678-679`):
+
+```python
+window = max(batch_size, ADAPTER_CALL_WINDOW)
+for start in range(0, len(image_paths), window):
+    paths = image_paths[start:start + window]
+```
+
+`batch_size` (the FORWARD batch, still 32, still hashed into the run identity) is untouched, so the
+tensors the model sees are the same size, in the same order. This changes how DECODE is scheduled, not
+the arithmetic. The per-query fallback still calls with one query and still records itself as a
+distinct shape. Memory: 4096 × 2048 × 4 B = **33.5 MB** per job payload (8.4 MB for 512-d models),
+versus 609 MB for one-job-per-gallery plus `workers*2` resident batches.
+
+### Regression anchor: the gallery digest, exact
+
+Re-encoded each model's FULL 74 381-image gallery through the widened window and compared the content
+digest to what the pre-change runs recorded. One bit different would be a bug.
+
+| model | scope | shape | digest after | anchor (recorded by) | match | s/img | before |
+|---|---|---|---|---|---|---|---|
+| `clvc_net` | `dress` | `[74381, 2048]` | `a9bfa6ed4853bf999eb468379bdf5b760ef6dc3ba81861f3f0020ea509c30680` | `a9bfa6ed…` (`eab10106`) | **yes** | **0.0027** | 0.0603 |
+| `tgcir` | `None` | `[74381, 512]` | `2c8963b93f842627f63d92aab934cb167830c112f6630ce233ccd7fa6f54a508` | `2c8963b9…` (`9f115afe`) | **yes** | **0.0053** | 0.0093 |
+
+`clvc_net` dress gallery: **201.4 s for 74 381 images**, from 4489 s for three scopes (~1496 s per
+scope) before — a **22× wall-time improvement on the same bytes**. `tgcir`: 396.5 s, from ~616 s for
+the whole run. `decode_workers=10`, `reused=0` (a genuine re-encode, not a cache hit).
+
+The `clvc_net` comparison is like-for-like (same scope, same anchor). The `tgcir` "before" figure is
+its whole-run wall time including queries, so it understates the gallery improvement; the digest match
+is what makes the tgcir measurement load-bearing, not its timing.
+
+**Because `runner.py` is not hashed into the run identity**, this changes no `run_id` and no
+`adapter_module_source_hash`: existing published runs stay comparable, and a re-run of the same
+configuration reuses its feature cache. The digest equality above is the evidence that it is safe.
+
 
 ## 4.3 `tgcir` full run — COMPLETED (PARTIAL), two conditions lost to a real defect
 
@@ -454,15 +486,13 @@ GET /api/composition/runs?include_smoke=true                                    
    reference stem and 3 of 6003 queries cannot be scoped; one such query fails the whole condition
    with `AdapterWorkerError`. Only `multimodal` has numbers for this model. The fix belongs in
    `runner.py` (pass the original image identity alongside the staged path) and is NOT made here.
-2. **The runner call-window fix is NOT implemented.** `runner.py` is untouched (`git log -1 --
-   workbench/composition/runner.py` = `f856338`, predating this session); `prefetch_rows:141` still
-   short-circuits to serial. So the recorded 0.0603 s/img (`clvc_net`) and 0.0093 s/img (`tgcir`) are
-   the UNIMPROVED numbers, and 6–10 % GPU utilisation remains explained by nothing except this.
-3. **Both full-run measurements predate any window fix.** When one lands, both must be re-measured;
-   the regression anchor is the gallery digest, not a sample comparison: `889bc330`'s
-   `gallery_dress.npy.json` records `content_digest =
-   a9bfa6ed4853bf999eb468379bdf5b760ef6dc3ba81861f3f0020ea509c30680`, shape `[74381, 2048]`, and
-   `eab10106` reproduced that exact digest at stride 32. Any window change must reproduce it exactly.
+2. **The call-window fix IS committed** (§4.2): `ADAPTER_CALL_WINDOW = 4096`, both anchors reproduce
+   bit-exactly, `clvc_net` dress gallery 0.0027 s/img vs 0.0603 before. What is NOT yet done is a
+   full re-run of either model under it — the two runs measured here (`eab10106`, `9f115afe`) predate
+   the change, so their WALL TIMES are superseded while their RANKS remain valid (the deliverables
+   digest-match, and `runner.py` is not in the run identity).
+3. **`clvc_net`'s full-run metrics stand** for the window change, because the gallery and query
+   feature digests are unchanged. What they do NOT cover is the staged-path defect below.
 4. **`clvc_net`'s empty-text condition remains unmeasurable** (`text_model.py:84-86`, 87 §5c).
    Declared `ABLATION_UNSUPPORTED` since `5cb0103`; the composition gap is therefore `null` for this
    model and cannot be filled.
