@@ -120,13 +120,21 @@ def preflight(source_root: Path, dataset_root: Path, checkpoint_root: Path) -> l
     )
 
     # A cold cache is the evaluable state: the constructor rebuilds it from the pinned annotations.
-    # A WARM cache is a provenance question, not a blocker -- but it is never silently trusted, so
-    # the replay always runs under `isolated_cache_root` (fresh temp root, constructor's cold path).
+    # A warm cache is a provenance question, not a blocker. Two separate facts matter here, and the
+    # earlier version of this comment merged them wrongly:
+    #
+    # * files sitting in the DATASET root are never read as a cache -- `run_cache_root` builds a
+    #   different root and links only the three input directories into it -- so they cannot influence
+    #   a run at all, and this stays a provenance warning rather than a blocker;
+    # * a root that IS used (`WORKBENCH_REPLAY_CACHE_ROOT`) is now verified against a manifest before
+    #   the constructor reads it (`replay/common.py::reusable_cache_root`), so "unverified provenance"
+    #   is no longer the reason to delete anything -- a mismatch is a refusal, not a silent load.
     present = [dataset_root / path for path in NATIVE_CACHES if (dataset_root / path).is_file()]
     if present:
         blockers.append(
-            "TG-CIR warm native cache present in the dataset root and its provenance is unverified; "
-            "delete it (the replay rebuilds from annotations) before publishing: "
+            "TG-CIR warm native cache present in the dataset root; it is not the root this replay "
+            "reads (a fresh root is built and the input directories are linked into it), so it "
+            "cannot affect these numbers -- delete it to keep the tree unambiguous: "
             + ", ".join(str(p) for p in present))
 
     blockers.extend(validate_checkpoint(checkpoint_root))

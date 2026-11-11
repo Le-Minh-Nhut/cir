@@ -2,7 +2,8 @@
 
 Why a wrapper exists: `test_BLIP2.py` defines callable routines without `__main__` or a checkpoint
 loader, and its auxiliary LaSCo routines call `load_obj("")` with an empty path. This module supplies the
-missing invocation shell and runs the native FashionIQ evaluator inside `isolated_cache_root`.
+missing invocation shell and runs the native FashionIQ evaluator inside `run_cache_root` (a fresh
+isolated root by default, or the caller's shared root after its manifest verifies).
 
 Native model behavior:
 `test_BLIP2.py:10` natively sets `model.train()` at the top of `test()`. `model.eval()` is only called
