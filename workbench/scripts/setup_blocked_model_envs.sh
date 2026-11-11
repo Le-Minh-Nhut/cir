@@ -53,11 +53,26 @@ case "${1:?target name: airknow|clvc|tgcir|pair}" in
       "pandas==2.0.3" "numpy<2" Pillow pyyaml regex requests tqdm
     ;;
   pair)
-    # PAIR declares Python 3.8.10 / Torch 2.0.0 + open_clip. Installed only to measure what the
-    # checkpoint itself demands: no interpreter can supply the two missing modules.
-    DIR="$ENVS/pair38-la"
-    common 3.8 "$DIR" "torch==2.7.1 torchvision==0.22.1"
+    # PAIR declares Python 3.8.10 / Torch 2.0.0 + open_clip, but that pinned pairing cannot be
+    # installed here: torch 2.7.1 declares `Requires-Python >=3.9.0` (read from the installed
+    # 2.7.1+cu128 metadata, not from the README), so a 3.8 interpreter cannot resolve the wheel at
+    # all. Adapted: 3.9 + cu128, the same interpreter line `clvc39-la` and `tgcir39-la` use.
+    #
+    # The missing `model_vssp` / `MHTransformer_dis` modules are NOT a Python-version problem: they
+    # are absent from the pinned tree at every sys.path root the replay adds
+    # (`PAIR/`, `PAIR/data`, `PAIR/models`, `PAIR/utils`), so no interpreter version can supply
+    # them. `workbench.replay.pair_absence` resolves them per root and reports which of the two it
+    # is — absent module vs. module present but missing a class. This env exists to measure what the
+    # checkpoint structurally demands, and to have a runtime that matches the pins it can install.
+    DIR="$ENVS/pair39-la"
+    common 3.9 "$DIR" "torch==2.7.1 torchvision==0.22.1"
     uip "open_clip_torch==2.24.0" "numpy<2" Pillow tqdm einops timm
+    # The three imports the replay itself performs (`pair.py:133`), so a broken pin fails here
+    # rather than at the first evaluation attempt. `open_clip` exports no `__version__`.
+    "$DIR/bin/python" -c 'import sys, torch, torchvision, open_clip; \
+import importlib.metadata as md; \
+print("smoke", sys.version.split()[0], torch.__version__, torchvision.__version__, \
+md.version("open_clip_torch"), torch.version.cuda)'
     ;;
   *) echo "unknown target: $1" >&2; exit 2 ;;
 esac
