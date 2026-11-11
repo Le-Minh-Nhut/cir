@@ -13,6 +13,7 @@ báo cáo/raw tương ứng. Đọc kèm:
 | `UPSTREAM_INPUT_AND_PROTOCOL_MATRIX.vi.md` | upstream, đầu vào, protocol |
 | `WEB_SURFACE_VERIFICATION.vi.md` | W-01…W-05 |
 | `VERIFICATION_AND_SWEEP.vi.md` | bốn khẳng định Phase 1 + ba lần sweep |
+| `REMAINING_WORK.md` | việc còn lại: 4 mục chưa sửa + 8 mục cần người khác; đọc trước khi tiếp tục |
 
 ---
 

@@ -1,0 +1,6 @@
+# source /tmp/serve_probe.log (3rd death, PID 4062957, mtime 2026-11-11 03:53:06 +0700); copied 2026-11-11 from the surviving /tmp header before the next restart could truncate it — the file was never committed before this copy, and /tmp is not in the repo
+[WARN] npm exited with status -15
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [4062957]
