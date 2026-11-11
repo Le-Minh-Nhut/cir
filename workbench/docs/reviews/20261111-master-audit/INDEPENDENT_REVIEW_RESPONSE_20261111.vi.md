@@ -480,22 +480,27 @@ bằng **cổng** + hành vi route, không bằng PID.
 
 ## 20. Sweep
 
-Sweep đầy đủ đang chạy tại `cd980dc` (`/home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python -m
-pytest workbench/tests -q`), số liệu sẽ được cập nhật. **Không** trích số khi chưa có file.
+Sweep serial đầy đủ đã chạy xong tại `cd980dc` (`/home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python -m
+pytest workbench/tests -q -p no:cacheprovider -rfE --tb=short`); số dưới đây lấy từ bản ghi đã commit, không từ trích dẫn miệng.
 
-<!-- SWEEP_RESULT -->
+**Kết quả sweep (đã xong).** Sweep serial tại revision `cd980dcecbb685b3cd6be4516d6550660a8e89b8`, dòng tổng kết nguyên văn:
+
+```
+18 failed, 2901 passed, 47 skipped
+```
+
+2966 collected, **accounting gap 0**; `^ERROR ` = **0**; `Errno 28` = **0**. So bộ failure với baseline `20261110-e2e-repair/full_suite_68ad75e.txt`: **NEW=0, DROPPED=0, COMMON=18** — không có hồi quy. HEAD hiện tại chỉ đi trước revision đó bằng commit tài liệu (`git diff cd980dc HEAD` ngoài `workbench/docs` và `workbench/tests` là rỗng), nên sweep này nghiệm thu đúng cây sản xuất đang có. Phân loại 18 failure: **18 PRE-EXISTING** — trong đó **6 ENVIRONMENT** và **1 FLAKY** (flaky chỉ trong suite đầy đủ; pass khi chạy riêng). Bản ghi đầy đủ: `raw/verify/68-final-sweep.md`.
 
 Bối cảnh đã có, dùng được ngay: sweep serial gần nhất (`raw/verify/67-regression-sweep.md`) tại
 `a24635e` → `18 failed, 2901 passed, 47 skipped`, 2966 collected, **accounting gap 0**, **0 NEW / 0 DROPPED
 / 18 COMMON** so với baseline `68ad75e` (`raw/verify/67a-failure-diff-a24635e.txt`). Passed tăng
-2701 → 2901, toàn bộ là test mới của lô `d6d3e36…a24635e`. Nhưng lô sau đó (`f856338` … `cd980dc`) chưa
-có sweep serial — đó chính là việc đang chạy.
+2701 → 2901, toàn bộ là test mới của lô `d6d3e36…a24635e`. Lô sau đó (`f856338` … `cd980dc`) nay đã có sweep serial riêng: kết quả ở khối trên, cùng bộ 18 failure.
 
 ## 21. Chưa kiểm được
 
 | điều | vì sao |
 |---|---|
-| số sweep tại `cd980dc` | đang chạy; không chạy pytest song song (§20) |
+| số sweep tại `cd980dc` | **đã có** (§20); sweep chạy serial, không song song |
 | `/api/models` **cold** 154 s còn đúng không | đo được 0.008 s **warm**; không xoá cache / không restart service (bị cấm trong đợt này) |
 | 117 query LIMN lịch sử có thật sự bị định tuyến bằng annotation hỏng | không tồn tại annotation/pixel trace của các lần chạy cũ |
 | CLVC transform có vô can không | **chưa từng** đo counterfactual `Resize(224)`; equal Recall không chứng minh |
@@ -514,4 +519,4 @@ có sweep serial — đó chính là việc đang chạy.
   không làm model nào đạt.
 - Còn chặn thật: PAIR (upstream chưa publish hai module), 13 model chưa có G1/G2, `7:3038`/`7:3790`,
   39/43 row dùng unit suy luận, ingest run GPU mới, nguồn SIGTERM, nhất quán chéo tài liệu.
-- Sweep tại `cd980dc` **đang chạy**; ô `<!-- SWEEP_RESULT -->` chờ số.
+- Sweep tại `cd980dc` **đã xong**: `18 failed, 2901 passed, 47 skipped`, gap 0, NEW=0 / DROPPED=0 / COMMON=18 (§20).
