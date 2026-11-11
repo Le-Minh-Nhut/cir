@@ -206,7 +206,11 @@ a plan that skips the condition is not a guarantee that no caller ever hands it 
 
 ## 5. The held run
 
-`clvc_net` smoke, launched before this fix and PAUSED (not cancelled) on instruction:
+`clvc_net` smoke, launched before this fix and **RUNNING** (not paused, not cancelled) at the time of
+writing. The earlier "PAUSED (not cancelled) on instruction" line in this document was wrong and is
+corrected here: `/proc/1248457/status` reported `State: R (running)` with `PPid: 1248099` while
+`work/clvc_net/features/` held `gallery_dress.npy` and `gallery_shirt.npy` with the dress sidecar
+already written. A reader must not think a GPU job was parked — it was consuming the card.
 
 | field | value |
 |---|---|
@@ -214,7 +218,7 @@ a plan that skips the condition is not a guarantee that no caller ever hands it 
 | PID (control) | 1248099 |
 | PID (GPU child) | 1248457, 1320 MiB |
 | start (UTC) | 2026-11-11T17:26:57Z |
-| stage at pause | gallery encode: `work/clvc_net/features/gallery_dress.npy` = 609 329 280 bytes, written 2026-11-11T17:31:54Z |
+| stage at time of writing | gallery encode, second of three scopes (`gallery_dress.npy` 609 329 280 B + `gallery_shirt.npy`, dress sidecar written); observed 2026-11-11T18:50:55Z |
 | conditions | all three launched under the OLD `mode_supported`; the empty-text condition is the one this fix now declares unsupported |
 
 That smoke was started under the pre-fix code, so its `image_only_empty_text` will show 5 named
