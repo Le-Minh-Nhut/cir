@@ -129,8 +129,12 @@ summary vẫn `not_recorded`. Native replay tạo model **trước** khi seed.
 Test trước/sau ghi trong `raw/verify/62-encoder-relation.md` §4 (5 ca FAILED-before → PASS).
 
 **Hệ quả phải nói rõ:** bốn run id **superseded** — `5dee7425dd46c5f154808aac`, `6a528e877c328772e2c7bb28`,
-`ce89a9a27c4cceadeaaf30b0`, `eda30a37c0bc17ac43844f09` — vì identity của chúng **không** phủ tensor
-relation. `ce89a9a2`, trước là run canonical của ENCODER, **nay không còn canonical**.
+`ce89a9a27c4cceadeaaf30b0`, `eda30a37c0bc17ac43844f09` — vì id của chúng đã hash với
+`relation_state: not_recorded` (mint trước `f856338`), nên **không** id nào partition tensor relation.
+`ce89a9a2` **không** phải run canonical: nó là **valid measurement với identity không partition** —
+số `31.0178 / 49.5586` đo trên nó, pin chắc cho chính nó (seed `20261111`, tensor + sha256
+`20db0c27…f9ce92` persist ở `runs/ce89a9a2…/construction_state/`), nhưng hai run draw relation khác
+nhau vẫn có thể trùng id. Canonical run **chưa mint**.
 
 Commit `f856338`.
 
@@ -452,7 +456,7 @@ không phủ nhận số cold). Không còn là vật cản poll.
 | 6 | Service chết bởi SIGTERM ngoài, không rõ nguồn | §17(c) | xác định tiến trình gửi tín hiệu |
 | 7 | Nhất quán chéo tài liệu | sáu drift đã sửa tay (`FINAL_REPORT.vi.md` §6 "Hạn chế đã biết"); sweep R12 tìm thêm số sai, nay ghi trong CENSUS | chín tài liệu còn lại **không** được bảo đảm nhất quán nội bộ |
 | 8 | **ĐÃ SỬA** — `FINAL_REPORT.vi.md` từng ghim bundle **cũ** `index-DWpK0yeS.js` / `7e34724e…` ở :31 | bundle sống là `index-DeTvxLlD.js` / `1503e891…` (§19); `FINAL_REPORT` nay ghi đúng và mọi tài liệu còn nhắc bundle cũ đều được dán nhãn superseded | — |
-| 9 | `MODEL_LIMN_ENCODER_VERIFICATION.vi.md:434` còn `0.539144 / 6001` và câu "không đổi so với run canonical cũ" | §13 mục 1 | chủ dự án duyệt sửa; census đã ghi số đúng |
+| 9 | **ĐÃ SỬA** — `MODEL_LIMN_ENCODER_VERIFICATION.vi.md:434` từng ghi `0.539144 / 6001` và câu "không đổi so với run canonical cũ"; `FINAL_REPORT`/census từng gọi `ce89a9a2…` là run canonical | nay `0.474394 / 6003` trên run `ce89a9a2…` (valid measurement, identity **không** partition vì id hash `relation_state: not_recorded`); `M-01-a` hạ xuống `FIXED_CODE / RERUN_PENDING`; canonical run encoder **chưa mint** (§13 mục 1; CENSUS §0.6) | — |
 | 10 | `FINAL_REPORT.vi.md:198` còn "17 model / 21 dòng dùng được" | §12 | như trên |
 
 **Kết luận không đổi:** mọi sửa trong đợt này làm gate **trung thực**, không làm model nào **đạt**.

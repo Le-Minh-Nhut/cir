@@ -35,7 +35,7 @@ Máy: RTX 5070 Ti (16 303 MiB), `nvidia-smi` không có compute process suốt l
 | **M-02-a** — resolver chọn category khi nguồn annotation thiếu/hỏng | **FIXED_VERIFIED** | `workbench/composition/model_limn.py:59-108` (`CaptionScopeIndex.unreadable`), `:140-141` | `raw/m02/probe_resolver_before_after.txt`: HEAD trả `'shirt'`/`'shirt'`/`'toptee'`; `raw/m02/tests_failing_first.txt` (2 failed trên HEAD) | `caption_scope_index` ghi tên file không đọc được; `resolve_query_category` trả `None` khi index thiếu nguồn | `raw/m02/tests_passing_after.txt` → 74 passed | `9e4918a6…` (không đổi: 117 vẫn giải được vì cả ba file đọc được) |
 | **M-02-b** — 117 query phục hồi lịch sử | **CONFIRMED (đúng), xác minh độc lập** | `raw/m02/qid_scope_map.json` | — | không sửa | `raw/m02/m02_recount.json` | `9e4918a6…` |
 | **M-02-c** — upstream không có khoá garment category | **CONFIRMED (đã đọc source upstream)** | `TIGER-AI-Lab/UniIR@98dc570c` `src/data/preprocessing/fashioniq_data_preprocessor.py` | — | không sửa | `raw/m02/m02_upstream.json` | — |
-| **M-01-a** — `learnable_relation` sinh không seed, không vào checkpoint | **FIXED_VERIFIED** (rerun pinned `ce89a9a2…`) | `workbench/composition/model_encoder.py:42-63` (hằng số), `:148-157` (nơi persist), `:340-380` (pin + persist) | `raw/m01/tests_failing_first.txt` (4 failed trên HEAD); `raw/m01/forward_delta.json` | pin `torch.manual_seed(20261111)` ngay trước `Encoder(...)`, ghi tensor + sha256 vào `<run>/construction_state/` (bản đầu dưới `work/` bị cleanup xoá — xem §A) | 64 passed (`raw/m01/tests_encoder.txt`); 2 process sạch cùng seed → gallery/query feature **bit-identical** | `5dee7425dd46c5f154808aac`, `6a528e877c328772e2c7bb28` (superseded: relation drawn from an unpinned generator) → thay bằng `ce89a9a27c4cceadeaaf30b0` |
+| **M-01-a** — `learnable_relation` sinh không seed, không vào checkpoint | **`FIXED_CODE / RERUN_PENDING`** — code đúng (pin + persist đã chạy thật), run canonical **chưa mint** | `workbench/composition/model_encoder.py:42-63` (hằng số), `:148-157` (nơi persist), `:340-380` (pin + persist) | `raw/m01/tests_failing_first.txt` (4 failed trên HEAD); `raw/m01/forward_delta.json` | pin `torch.manual_seed(20261111)` ngay trước `Encoder(...)`, ghi tensor + sha256 vào `<run>/construction_state/` (bản đầu dưới `work/` bị cleanup xoá — xem §A) | 64 passed (`raw/m01/tests_encoder.txt`); 2 process sạch cùng seed → gallery/query feature **bit-identical** | `5dee7425dd46c5f154808aac`, `6a528e877c328772e2c7bb28` (superseded: relation drawn from an unpinned generator); `ce89a9a27c4cceadeaaf30b0` đo được số nhưng id hash `relation_state: not_recorded` ⇒ **không canonical**, superseded-by-design cùng `eda30a37c0bc17ac43844f09` (§A; census R12.1) |
 | **M-01-b** — train transform cho query, val cho gallery | **CONFIRMED; đo như adaptation sensitivity, KHÔNG đổi production** | `workbench/composition/model_encoder.py:390-400` (`preprocess_val` cho cả hai) | `raw/m01/` không có; số đo cũ ≤0.3 R@10, dấu không nhất quán (`ENCODER_PARITY.vi.md:376-382`) | đề xuất diff, xem §M-01.2 | — | `5dee7425…`, `6a528e87…` |
 | **M-01-c** — cold start / warm-cold cache | **CONFIRMED; rerun mới cold + `cache_verify_mode=full`** | `workbench/composition/runner.py:1612-1618` (`seed_applied: False`) | §M-01.4 | xem §M-01.4 | — | `5dee7425…` (cache `full`), `6a528e87…` (cache field thiếu) |
 
@@ -420,7 +420,7 @@ Không job GPU nào khác của tôi chạy trong lượt này; transform contro
 
 ### A. ENCODER rerun — pin đã chạy thật
 
-Run mới: **`ce89a9a27c4cceadeaaf30b0`** (`full,sf,validated` × 3 condition, `cache=full`,
+Run **đã đo** (không phải canonical — xem cuối mục): **`ce89a9a27c4cceadeaaf30b0`** (`full,sf,validated` × 3 condition, `cache=full`,
 `reused=0`, `COMPLETED`, `topk-depth 100`). Số (`raw/m01/rerun_pinned_final.txt`):
 
 | subset | condition | scored | coverage | R@10 | R@50 | nDCG |
@@ -431,8 +431,27 @@ Run mới: **`ce89a9a27c4cceadeaaf30b0`** (`full,sf,validated` × 3 condition, `
 | sf | multimodal | 4069 | 1.0 | 18.7270 | 36.3234 | 0.218785 |
 | validated | multimodal | 586 | 1.0 | 34.4710 | 55.2901 | 0.296207 |
 
-`composition_gap_ndcg` = 0.539144 trên `gap_cohort_count` 6001 (không đổi so với run canonical cũ:
-pin chỉ làm feature xác định, không đổi mẫu số).
+`composition_gap_ndcg` = **0.474394** trên `gap_cohort_count` **6003** — đúng như
+`summary/encoder_fashioniq_ce89a9a27c4cceadeaaf30b0/full.json`: `composition_gap_ndcg
+0.47439372489324116`, `gap_cohort_count 6003`, `query_count 6003`; `raw/m01/rerun_pinned_final.txt:7`.
+Con số `0.539144 / 6001` **không** thuộc ENCODER: nó là của LIMN `9e4918a6…`
+(`raw/m03/derived_subset_runs.json:56,67`), dán nhầm sang mục này (census R12.1). So với run trước pin
+`6a528e87…` (gap `0.472302`, cohort 6003), pin đổi gap `0.472302 → 0.474394`; cohort giữ 6003. Câu cũ
+"không đổi so với run canonical cũ: pin chỉ làm feature xác định, không đổi mẫu số" **đã bỏ** — sai
+theo raw.
+
+**Run này là measurement hợp lệ với identity KHÔNG partition.** `ce89a9a2…` được mint **trước**
+`f856338` (lúc runner còn hash `relation_state` trước handshake), nên identity/summary của nó ghi
+`relation_state: not_recorded` — kiểm trực tiếp: `ranks/encoder_fashioniq.json` → `identity` **không**
+có key `relation_state` (`runner.py:1219-1239` `_relation_identity` trả `not_recorded` cho payload
+thiếu block). Vì vậy id **không** partition tensor relation: hai run draw relation khác nhau vẫn có
+thể trùng id. Pin thì vẫn chắc **cho chính run này** — seed `20261111` áp trong worker
+(`RELATION_SEED`) và tensor + sha256 `20db0c27…f9ce92` được persist dưới
+`runs/ce89a9a2…/construction_state/`, nên số đo quy được về một tensor đã biết. Kết luận: **valid
+measurement, unpartitioned identity — không phải run canonical.** Canonical run **chưa mint**; bốn id
+encoder trên đĩa đều superseded-by-design (`ce89a9a27c4cceadeaaf30b0`, `5dee7425dd46c5f154808aac`,
+`6a528e877c328772e2c7bb28`, `eda30a37c0bc17ac43844f09`), lý do chung: id hash với
+`relation_state: not_recorded`.
 
 Trạng thái construction đã persist, **bên ngoài** `work/`:
 
@@ -453,8 +472,10 @@ của run vừa chạy được phục hồi bằng digest (`scripts/m01/restore
 draw lại từ đúng seed đã pin, **refuse nếu digest khác**, và sidecar ghi rõ provenance là re-derive
 sau khi bản gốc bị xoá (digest bằng giá trị run đã in trước khi xoá).
 
-Hai run cũ `5dee7425…`, `6a528e87…` giữ nguyên byte, đánh dấu **superseded** với lý do
-"relation drawn from an unpinned generator".
+Bốn run encoder `ce89a9a27c4cceadeaaf30b0`, `5dee7425dd46c5f154808aac`, `6a528e877c328772e2c7bb28`,
+`eda30a37c0bc17ac43844f09` giữ nguyên byte, đánh dấu **superseded**: `5dee7425`/`6a528e87` với lý do
+"relation drawn from an unpinned generator", cả bốn với lý do chung "id hashed with
+`relation_state: not_recorded`" — mint trước `f856338`.
 
 ### B. LIMN sf/validated — suy ra từ parent, không dùng GPU
 
