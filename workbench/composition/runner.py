@@ -1238,6 +1238,24 @@ def _relation_identity(state: Any) -> dict[str, Any]:
                                   if state.get("expected_sha256") else None),
     }
 
+def _recorded_relation_matches(saved: Mapping[str, Any], current: Mapping[str, Any]) -> bool:
+    """Whether a stored rank payload may be REUSED for the relation this run will use.
+
+    The fingerprint already covers the relation block, so a genuinely different identity cannot
+    match. This is the case the fingerprint cannot cover: a model whose construction DRAWS a relation
+    must never reuse a payload that records none. Two runs of the old code produced such a payload
+    (`relation_state: not_recorded`) while computing features from an unpinned draw; handing it back
+    would present a different tensor's ranks as this run's measurement. So reuse requires a recorded
+    digest for a relation-bearing model, and the ordinary fingerprint rule for every other model.
+    """
+    if not current.get("status") == "recorded":
+        return True
+    recorded = saved.get("identity", {}).get("relation_state") if isinstance(
+        saved.get("identity"), Mapping) else None
+    return (isinstance(recorded, Mapping) and recorded.get("status") == "recorded"
+            and recorded.get("sha256") == current.get("sha256"))
+
+
 def relation_state_from_summary(summary: Any) -> dict[str, Any]:
     """The `relation_state` block of a stored summary, or an honest absence.
 
@@ -1607,6 +1625,25 @@ def run_composition(data: Any, model_specs: Sequence[ModelSpec], config: Any, *,
         writers: dict[str, Any] = {}
         try:
             adapter = spec.adapter_factory(config, checkpoint_id)
+            # R03: construction-time state that the run id must cover is populated HERE -- before the
+            # identity is hashed, and before any encode call. `identity['relation_state']` used to be
+            # read straight after construction, so ENCODER's `learnable_relation` (drawn INSIDE
+            # `Encoder(...)`, absent from every checkpoint) was hashed as `not_recorded` while the
+            # features were computed with the seeded tensor: the run id, the fingerprint and the
+            # summary all described a relation the run did not use. The hook encodes nothing; for
+            # ENCODER it starts the worker and asks it for the digest.
+            adapter.prepare_identity()
+            if getattr(adapter, "relation_bearing", False):
+                # A model that draws a relation cannot be measured without naming it: the draw is an
+                # arithmetic input to both the query and the gallery features, and no checkpoint
+                # restores it. Refusing is the only honest outcome -- a `not_recorded` identity for
+                # such a model would be a run whose numbers cannot be attributed to any tensor.
+                unnamed = _relation_identity(getattr(adapter, "relation_state", None))
+                if unnamed.get("status") != "recorded" or not unnamed.get("sha256"):
+                    raise ValueError(
+                        "relation_state_unrecorded: this adapter's construction draws a relation "
+                        "tensor, but prepare_identity() recorded no digest, so the run id would not "
+                        "cover the tensor its features are computed with; refusing the run")
             adapter_source_hash = _module_source_hash(adapter)
             runtime_identity = model_interpreter_identity(model, config, adapter)
             if not getattr(adapter, "reference_eligible", True):
@@ -1749,6 +1786,7 @@ def run_composition(data: Any, model_specs: Sequence[ModelSpec], config: Any, *,
                 try:
                     saved = json.loads(rank_path.read_text(encoding="utf-8"))
                     if (isinstance(saved, dict) and saved.get("fingerprint") == fingerprint and
+                            _recorded_relation_matches(saved, identity["relation_state"]) and
                             _rank_payload_is_valid(saved.get("ranks"), conditions,
                                                   {query.qid for query in queries}, len(gallery_ids))):
                         saved_status = saved.get("condition_status", {})
@@ -2157,6 +2195,21 @@ def run_composition(data: Any, model_specs: Sequence[ModelSpec], config: Any, *,
             # made the rank payload lie would otherwise reappear in the summary, since the reset
             # below has already cleared the backfill's readback by the time we get here.
             policy_observed = merge_policy_observations(backfill_policy, observed_policy_record())
+            # R03: the summary reads the EFFECTIVE state, resolved after every encode call, not the
+            # value captured before them. Two claims are enforced here rather than assumed:
+            #
+            #   * the live state still equals the identity's digest. A run whose features were
+            #     computed with a different relation than its run id claims is not a measurement of
+            #     anything, so a disagreement FAILS the run instead of being written down beside it;
+            #   * the block written into the summary is the live one, so a reader can never see a
+            #     stale `not_recorded` beside features computed with a recorded tensor.
+            effective_relation = _relation_identity(getattr(adapter, "relation_state", None))
+            if effective_relation.get("sha256") != identity["relation_state"].get("sha256"):
+                raise ValueError(
+                    f"relation_state_drift: model={model_id} computed its features with relation "
+                    f"{effective_relation.get('sha256')!r} but the run id was minted over "
+                    f"{identity['relation_state'].get('sha256')!r}; a run cannot claim a relation "
+                    "its features were not computed with")
             summary_by_subset = {}
             for subset in subsets:
                 selected = [query for query in queries if subset in query.subsets]
@@ -2197,10 +2250,12 @@ def run_composition(data: Any, model_specs: Sequence[ModelSpec], config: Any, *,
                                       "ablation_policy": "black PIL replacement is staged before adapter transform; empty text for image-only"},
                     "adapter": f"{type(adapter).__module__}.{type(adapter).__qualname__}",
                     "category_scopes": list(scopes),
-                    # M-01: surfaced under its own key so the gate can read it without parsing the
-                    # identity hash. Same value that partitions the run id, so the two can never
-                    # disagree about which relation produced the features.
-                    "relation_state": identity["relation_state"],
+                    # M-01/R03: surfaced under its own key so the gate can read it without parsing the
+                    # identity hash. The EFFECTIVE block (read after encoding), which `relation_state_drift`
+                    # above has already proven equal to the identity's digest -- so the run id, the
+                    # fingerprint and the summary can never disagree about which relation produced the
+                    # features.
+                    "relation_state": dict(effective_relation),
                     "category_resolution": data.provenance.get("category_resolution", {}),
                     "unresolved_category_query_count": sum(query.category is None for query in queries),
                     # `category_resolution` above is the RELEASE-level fact and keeps saying 119
@@ -2285,9 +2340,15 @@ def run_composition(data: Any, model_specs: Sequence[ModelSpec], config: Any, *,
                             "summaries": summary_by_subset})
         except Exception as error:
             reason = f"{type(error).__name__}: {error}"
+            # A failed run still states what it knew about its relation. `not_recorded` here is a
+            # REFUSAL, not a shrug: it accompanies `execution_status: FAILED` and the reason above,
+            # so a relation-bearing model whose draw could not be named is visible as refused rather
+            # than left looking like an ordinary absence.
+            failed_relation = _relation_identity(getattr(adapter, "relation_state", None))
             summaries = _write_failed_results(data, artifacts, model_id, checkpoint_id, attempt,
                 subsets, conditions, queries, reason, is_synthetic, labels,
-                execution_status="FAILED", run_id=run_id if "run_id" in locals() else attempt)
+                execution_status="FAILED", run_id=run_id if "run_id" in locals() else attempt,
+                relation_state=failed_relation)
             reports.append({"model_id": model_id, "checkpoint_id": checkpoint_id,
                             "status": "FAILED", "reason": reason,
                             "adapter_module_source_status": "available" if adapter_source_hash != "unavailable" else "unavailable",
@@ -2366,7 +2427,8 @@ def _write_failed_results(data: Any, artifacts: Path, model_id: str, checkpoint_
                           queries: Sequence[Any], reason: str, synthetic: bool = False,
                           labels: dict[str, Any] | None = None, *, execution_status: str = "FAILED",
                           condition_status: dict[str, Any] | None = None,
-                          run_id: str | None = None) -> dict[str, str]:
+                          run_id: str | None = None,
+                          relation_state: Mapping[str, Any] | None = None) -> dict[str, str]:
     from workbench.composition.metrics import compose
 
     summary_paths = {}
@@ -2398,7 +2460,14 @@ def _write_failed_results(data: Any, artifacts: Path, model_id: str, checkpoint_
                    "checkpoint_mapping_status": (labels or {}).get("checkpoint_mapping_status"),
                    "reproduction_status": (labels or {}).get("reproduction_status"),
                    "metrics": asdict(compose(failed_ranks, query_count=len(selected))),
-                   "run_id": run_id or attempt}
+                   "run_id": run_id or attempt,
+                   # `not_recorded` here is a REFUSAL: it is written beside
+                   # `execution_status: FAILED` and the reason, so an artifact can never present an
+                   # unnamed relation as an acceptable outcome.
+                   "relation_state": (dict(relation_state) if isinstance(relation_state, Mapping)
+                                      else {"status": RELATION_NOT_RECORDED,
+                                            "reason": "the run failed before any relation state "
+                                                      "could be recorded"})}
         _atomic_json(summary_path, summary)
         summary_paths[subset] = str(summary_path)
     return summary_paths

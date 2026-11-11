@@ -29,6 +29,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from workbench.backend.fashioniq_layout import CATEGORIES
 from workbench.backend.registry import model_by_id
+# ONE constant, imported rather than copied: `Adapter.prepare_identity` pins the composition worker
+# with this seed and the native path below pins its own construction with it, so the two can never
+# drift into measuring different relations. (No cycle: `composition.model_encoder` imports replay
+# only inside `_worker_main`, after the module is loaded.)
+from workbench.composition.model_encoder import RELATION_EXPECTED_DIGEST, RELATION_SEED
 from workbench.replay.common import (
     OBSERVATION_OUT_ENV,
     FeatureRecorder,
@@ -232,6 +237,60 @@ def _assert_checkpoint_loaded(encoder_model, report, variant: dict[str, Any], so
             f"{len(unexpected)} unexpected key(s) (first: {unexpected[0] if unexpected else '-'}). "
             "Refusing to evaluate a partially-loaded model.")
 
+def _relation_record(encoder_model: Any, destination: Path | None, *,
+                     drawn: bool = True) -> dict[str, Any]:
+    """Persist the relation tensor the native construction just drew, and return its record.
+
+    `learnable_relation` is not in `state_dict()`, so these bytes plus their digest are the only
+    record of the state this category's query AND gallery features were both computed with. Written
+    beside the run's output when the parent named one (`WORKBENCH_OBSERVATION_OUT`), because a record
+    inside a temp tree is deleted at the end of the run that needs it afterwards.
+    """
+    import hashlib
+
+    import numpy as np
+
+    relation = getattr(getattr(getattr(encoder_model, "backbone", None), "binding_decoder", None),
+                       "learnable_relation", None)
+    if relation is None:
+        # Honest absence, in the same vocabulary the composition side uses: this object exposes no
+        # relation tensor, so nothing about a relation is claimed (and the parity gate reports
+        # `not_recorded` rather than a pass). The pinned `Encoder` always declares it, so this path is
+        # reachable only for an object shaped like one but not one.
+        return {"status": "not_recorded",
+                "reason": "the constructed model exposes no `backbone.binding_decoder."
+                          "learnable_relation`, so no relation tensor was drawn or read here"}
+    relation = relation.detach().float().cpu().contiguous()
+    digest = hashlib.sha256(relation.numpy().tobytes()).hexdigest()
+    record = {
+        "status": "recorded",
+        "seed": RELATION_SEED if drawn else None,
+        "sha256": digest,
+        "expected_sha256": RELATION_EXPECTED_DIGEST,
+        "matches_pinned_digest": digest == RELATION_EXPECTED_DIGEST,
+        "in_state_dict": False,
+        "seed_placement": ("torch.manual_seed(seed) immediately before Encoder(...) construction"
+                           if drawn else
+                           "not applicable: this checkpoint is a whole pickled model, so the tensor "
+                           "came from that file rather than from a seeded `randn`"),
+        # Says exactly what the pin is: a declared policy, because the released checkpoint carries no
+        # relation and the authors' draw is not recoverable from any artifact.
+        "policy": ("declared pin, not a restoration: the released checkpoint does not contain "
+                   "`learnable_relation`, so the drawn tensor is reproducible under this seed and is "
+                   "not claimed to be the authors'"),
+        "tensor": "backbone.binding_decoder.learnable_relation",
+        "shape": list(relation.shape), "dtype": str(relation.dtype),
+        "path": None,
+    }
+    if destination is not None:
+        destination.mkdir(parents=True, exist_ok=True)
+        path = destination / f"relation-seed{RELATION_SEED}.npy"
+        np.save(path, relation.numpy(), allow_pickle=False)
+        Path(str(path) + ".json").write_text(json.dumps(record, indent=1) + "\n", encoding="utf-8")
+        record["path"] = str(path)
+    return record
+
+
 def evaluate_categories(
     checkpoint_root: Path,
     dataset_root: Path,
@@ -250,6 +309,19 @@ def evaluate_categories(
 
     target_device = device or ("cuda" if torch.cuda.is_available() else "cpu")
 
+    # The relation pin, at the construction site and immediately before it.
+    #
+    # POLICY, not restoration: `BindingDecoder.learnable_relation` is drawn by
+    # `nn.Parameter(torch.randn(N_p, dim)).cuda()` inside `Encoder.__init__`
+    # (`model_try2.py:93`). `.cuda()` on a Parameter returns a plain Tensor, so the attribute is not
+    # registered, is absent from `state_dict()` and from the released 417-key checkpoint, and NO
+    # checkpoint contains it -- the tensor the authors evaluated with is not recoverable from any
+    # artifact. This pin (the SAME `RELATION_SEED` the CIRCUS worker uses, imported so the two cannot
+    # drift) is therefore a declared policy that makes the draw reproducible and comparable, and the
+    # drawn bytes plus their digest are written beside the run's output. Without it the native path
+    # drew from an unpinned global RNG, so the historical numbers could not be reproduced from the
+    # code that produced them.
+    torch.manual_seed(RELATION_SEED)
     # Hyperparameters matching evaluate_model.py defaults for FashionIQ: {P=3, wc=2, N_p=2}
     encoder_model = model_try2.Encoder(
         hidden_dim=512,
@@ -262,6 +334,7 @@ def evaluate_categories(
     )
 
     ckpt_data = torch.load(checkpoint_path, map_location="cpu")
+    drawn = True
     if isinstance(ckpt_data, dict):
         # `strict=False` is upstream's choice and it is kept, but its RESULT is no longer discarded:
         # a checkpoint wrapped in the wrong schema loads nothing and `load_state_dict` returns
@@ -279,6 +352,7 @@ def evaluate_categories(
         _assert_checkpoint_loaded(encoder_model, report, variant, source_root)
     else:
         encoder_model = ckpt_data
+        drawn = False
 
     encoder_model = encoder_model.to(target_device)
     encoder_model.eval()
@@ -300,6 +374,13 @@ def evaluate_categories(
     # this one (measured: two processes, same seed and deterministic kernels, different feature
     # hashes).
     observation_out = os.environ.get(OBSERVATION_OUT_ENV, "").strip()
+    # The drawn tensor, recorded from the CONSTRUCTED model and written beside the run's output (the
+    # per-query payload's own directory) so it outlives the temp tree. `drawn` is False when the
+    # checkpoint was a whole pickled model: then this tensor came from that file, not from `randn`.
+    relation_state = _relation_record(
+        encoder_model,
+        Path(observation_out).parent if observation_out else None,
+        drawn=drawn)
     captured_features: dict[str, tuple] = {}
     with run_cache_root(dataset_root) as cache_root:
         root_str = str(cache_root).rstrip("/") + "/"
@@ -344,7 +425,15 @@ def evaluate_categories(
             destination.parent.mkdir(parents=True, exist_ok=True)
             np.savez(destination, **arrays)
 
-    return results, macro_aggregate(results)
+    aggregate = macro_aggregate(results)
+    # The relation this evaluation's features were computed with travels with the result, in the
+    # document the wrapper prints and the parent parses, so an artifact can never describe a
+    # measurement without stating its relation (and `parity_gate._relation_checks` can compare it
+    # with the composition side).
+    for result in results:
+        result.provenance["relation_state"] = relation_state
+    aggregate["relation_state"] = relation_state
+    return results, aggregate
 
 
 def main(argv: list[str] | None = None) -> int:

@@ -13,6 +13,7 @@ import os
 import shutil
 import subprocess
 import sys
+import tempfile
 import uuid
 from pathlib import Path
 from typing import Any, Sequence
@@ -62,6 +63,14 @@ RELATION_SEED = 20261111
 #: run, never be treated as the same measurement.
 RELATION_EXPECTED_DIGEST = "20db0c27c979e9a0938c71af5142458dfa2070468d0ad3fcb6f24134c2f9ce92"
 
+#: The worker phase that constructs the model and replies with the relation digest ONLY.
+#:
+#: R03: the runner hashed `relation_state` before any encode call, so the run id, the fingerprint and
+#: the summary all recorded `not_recorded` while the features were computed with the seeded tensor.
+#: The identity must cover the REAL draw, and the only place the draw exists is a constructed model --
+#: so a phase exists whose whole job is to construct the model and answer, doing no image work.
+HANDSHAKE_PHASE = "handshake"
+
 
 class Adapter(CompositionAdapter):
     """Run ENCODER in its registered Python environment; no reference-image score mask."""
@@ -69,6 +78,9 @@ class Adapter(CompositionAdapter):
     model_id = "encoder"
     category_scopes = (None,)
     reference_eligible = True
+    #: `BindingDecoder.learnable_relation` is drawn inside `Encoder(...)` and no checkpoint carries
+    #: it, so this adapter must name its draw BEFORE the run id is minted (see `prepare_identity`).
+    relation_bearing = True
     # score() is a plain normalized dot product over 512-d features.
     score_dimension = 512
     #: The transform policy this adapter ACTUALLY applies, declared so it travels with the run.
@@ -180,9 +192,81 @@ class Adapter(CompositionAdapter):
             raise FileNotFoundError(f"ENCODER input image missing: {missing[0]}")
         return paths
 
-    def _run_job(self, phase: str, image_paths: Sequence[str | Path],
-                 texts: Sequence[str] = (), categories: Sequence[str | None] = ()) -> np.ndarray:
-        work_root = self.require_work_root()
+    def _scratch_root(self) -> Path:
+        """A worker directory for the handshake, before `work_root` exists.
+
+        `prepare_identity` runs BEFORE the run id, and the runner derives `work_root` from that id, so
+        the handshake genuinely has nowhere under the run to write yet. It gets a private scratch
+        directory, MOVED under the run's own `work/<model>/` by the first exchange that has a
+        `work_root` (same filesystem here, so the worker's open stderr handle follows the rename) --
+        otherwise the worker log, which the runner preserves for a failed run, would live in /tmp.
+        A FAILED handshake never reaches that move, so its directory stays in the system temp root;
+        the failure reason names the `worker.stderr.log` inside it, which is the only way a failed
+        construction is debuggable. One directory per failed run, never per successful one.
+        """
+        if self._job_dir is None:
+            self._job_dir = Path(tempfile.mkdtemp(prefix="encoder-handshake-"))
+        return self._job_dir
+
+    def _job_root(self) -> Path:
+        """The worker directory to use for this exchange, under the run once it can be."""
+        if self.work_root is None:
+            return self._scratch_root()
+        target = self.require_work_root() / self.model_id
+        target.mkdir(parents=True, exist_ok=True)
+        if self._job_dir is None or not self._job_dir.is_dir():
+            self._job_dir = target / f"worker-{uuid.uuid4().hex}"
+            self._job_dir.mkdir()
+        elif self._job_dir.parent != target:
+            self._job_dir = Path(shutil.move(str(self._job_dir),
+                                            str(target / self._job_dir.name)))
+        return self._job_dir
+
+    def _relation_record(self, response: dict[str, Any]) -> dict[str, Any] | None:
+        """The relation block for a worker reply, or None when it named no digest."""
+        if not response.get("relation_digest"):
+            return None
+        work_root = self.work_root
+        return {
+            "seed": response.get("relation_seed"),
+            "sha256": response["relation_digest"],
+            "matches_pinned_digest": response["relation_digest"] == RELATION_EXPECTED_DIGEST,
+            "expected_sha256": RELATION_EXPECTED_DIGEST,
+            "in_state_dict": False,
+            "transform_policy": self.transform_policy,
+            "path": None if work_root is None else str(self.construction_state_root()),
+        }
+
+    def prepare_identity(self) -> dict[str, Any] | None:
+        """Construct the model in the worker and record the relation it actually drew.
+
+        Called by the runner before the run id is hashed, so `identity['relation_state']` covers the
+        real tensor instead of the pre-encode `None` (R03). The worker's handshake phase constructs the
+        model, digests `learnable_relation` and replies -- no image is opened and no forward pass runs.
+
+        A reply without a digest is a REFUSAL, not a `not_recorded` run: this model's features are a
+        function of that tensor, so a run that cannot name it is not a measurement.
+        """
+        response, _ = self._exchange(HANDSHAKE_PHASE, (), (), (), write_output=False)
+        state = self._relation_record(response)
+        if state is None:
+            raise AdapterWorkerError(
+                "adapter_worker_handshake_no_relation: model=encoder phase=handshake "
+                "the worker constructed the model but replied without `relation_digest`, so the run "
+                "cannot state which `learnable_relation` its features are computed with; refusing to "
+                "mint a `not_recorded` identity for a model whose construction draws one")
+        self.relation_state = state
+        return state
+
+    def _exchange(self, phase: str, image_paths: Sequence[str | Path],
+                  texts: Sequence[str], categories: Sequence[str | None], *,
+                  write_output: bool) -> tuple[dict[str, Any], Path | None]:
+        """Write one job, hand it to the worker (starting it if needed), and return its reply."""
+        if self.work_root is None:
+            relation_root = self._scratch_root() / "construction-state"
+        else:
+            relation_root = self.construction_state_root()
+        job_dir = self._job_root()
         if not self.interpreter or not Path(self.interpreter).is_file():
             variable = self._model_record["environment"]["python_env_var"]
             raise RuntimeError(f"model interpreter unavailable: {variable} is unset or missing")
@@ -193,14 +277,9 @@ class Adapter(CompositionAdapter):
             self._interpreter_verified = True
         if self._worker_failed is not None:
             raise AdapterWorkerError(self._worker_failed)
-        adapter_root = work_root / self.model_id
-        adapter_root.mkdir(parents=True, exist_ok=True)
-        if self._job_dir is None:
-            self._job_dir = adapter_root / f"worker-{uuid.uuid4().hex}"
-            self._job_dir.mkdir()
         self._counter += 1
-        job_path = self._job_dir / f"job-{self._counter}.json"
-        output_path = self._job_dir / f"output-{self._counter}.npy"
+        job_path = job_dir / f"job-{self._counter}.json"
+        output_path = (job_dir / f"output-{self._counter}.npy") if write_output else None
         scope = ",".join(sorted({str(value) for value in categories})) or "global"
         payload = {
             "phase": phase, "image_paths": self._image_paths(image_paths),
@@ -208,9 +287,10 @@ class Adapter(CompositionAdapter):
             # `work/<model>/` except `features/`, so a record inside it is deleted at the end of the
             # very run it describes. The drawn tensor is the only record of state `state_dict()`
             # cannot carry, so it belongs beside `ranks/` and `candidates/`, not under `work/`.
-            "relation_root": str(self.construction_state_root()),
+            "relation_root": str(relation_root),
             "texts": list(texts), "categories": list(categories),
-            "output_path": str(output_path), "checkpoint_path": str(self._checkpoint_path),
+            "output_path": None if output_path is None else str(output_path),
+            "checkpoint_path": str(self._checkpoint_path),
             "expected_sha256": self._checkpoint.get("expected_sha256"),
             "checkpoint_mapping_status": self._checkpoint.get("checkpoint_mapping_status"),
             "source_root": str(self.source_root), "dataset_root": str(self.dataset_root),
@@ -226,11 +306,12 @@ class Adapter(CompositionAdapter):
         if self._worker is not None and self._worker.poll() is not None:
             status = self._worker.returncode
             self._worker_failed = (
-                f"adapter_worker_exited: model=encoder scope={scope} phase={phase} exit_status={status}")
+                f"adapter_worker_exited: model=encoder scope={scope} phase={phase} exit_status={status} "
+                f"log={job_dir / 'worker.stderr.log'}")
             self._stop_worker()
             raise AdapterWorkerError(self._worker_failed)
         if self._worker is None:
-            self._worker_error = self._job_dir / "worker.stderr.log"
+            self._worker_error = job_dir / "worker.stderr.log"
             self._worker_log = self._worker_error.open("w", encoding="utf-8")
             self._worker = subprocess.Popen(
                 [self.interpreter, "-m", "workbench.composition.model_encoder",
@@ -250,35 +331,38 @@ class Adapter(CompositionAdapter):
             self._stop_worker()
             status = worker.returncode if worker is not None else None
             self._worker_failed = (
-                f"adapter_worker_exited: model=encoder scope={scope} phase={phase} exit_status={status}")
+                f"adapter_worker_exited: model=encoder scope={scope} phase={phase} exit_status={status} "
+                f"log={job_dir / 'worker.stderr.log'}")
             raise AdapterWorkerError(self._worker_failed)
         response = json.loads(line[len("CIRCUS_WORKER:"):])
         if not response.get("ok"):
             job_path.unlink(missing_ok=True)
-            output_path.unlink(missing_ok=True)
+            if output_path is not None:
+                output_path.unlink(missing_ok=True)
             self._worker_failed = (
                 f"adapter_worker_job_failed: model=encoder scope={scope} phase={phase} "
                 f"error={response.get('error_type')}: {response.get('error')}")
             self._stop_worker()
             raise AdapterWorkerError(self._worker_failed)
+        job_path.unlink(missing_ok=True)
+        return response, output_path
+
+    def _run_job(self, phase: str, image_paths: Sequence[str | Path],
+                 texts: Sequence[str] = (), categories: Sequence[str | None] = ()) -> np.ndarray:
+        self.require_work_root()
+        response, output_path = self._exchange(phase, image_paths, texts, categories,
+                                               write_output=True)
+        scope = ",".join(sorted({str(value) for value in categories})) or "global"
         # Recorded, not asserted: a future interpreter that draws different bytes is a new
-        # measurement, and the flag says so instead of pretending the pin did not move.
-        if response.get("relation_digest"):
-            self.relation_state = {
-                "seed": response.get("relation_seed"),
-                "sha256": response["relation_digest"],
-                "matches_pinned_digest": response["relation_digest"] == RELATION_EXPECTED_DIGEST,
-                "expected_sha256": RELATION_EXPECTED_DIGEST,
-                "in_state_dict": False,
-                "transform_policy": self.transform_policy,
-                "path": str(self.construction_state_root()),
-            }
+        # measurement, and the flag says so instead of pretending the pin did not move. The value is
+        # the SAME one the handshake already put in the identity -- the runner asserts that below.
+        self.relation_state = self._relation_record(response) or self.relation_state
+        assert output_path is not None
         result = np.load(output_path, allow_pickle=False).astype(np.float32, copy=False)
         if result.ndim != 2 or result.shape != (len(image_paths), 512):
             raise AdapterWorkerError(
                 f"adapter_worker_invalid_matrix: model=encoder scope={scope} phase={phase} "
                 f"shape={result.shape} expected=({len(image_paths)}, 512)")
-        job_path.unlink(missing_ok=True)
         output_path.unlink(missing_ok=True)
         return result
 
@@ -404,25 +488,30 @@ def _worker_main(job_path: Path) -> None:
         relation = model.backbone.binding_decoder.learnable_relation.detach().float().cpu().contiguous()
         import hashlib
         relation_digest = hashlib.sha256(relation.numpy().tobytes()).hexdigest()
-        # Written under the RUN's work root, not the worker's job directory: `close()` deletes the
-        # latter, and this record must outlive the worker that drew it.
-        relation_root = Path(job["relation_root"])
-        relation_root.mkdir(parents=True, exist_ok=True)
-        relation_path = relation_root / f"relation-seed{relation_seed}.npy"
-        np.save(relation_path, relation.numpy(), allow_pickle=False)
-        Path(str(relation_path) + ".json").write_text(json.dumps({
-            "tensor": "backbone.binding_decoder.learnable_relation",
-            "shape": list(relation.shape), "dtype": str(relation.dtype),
-            "seed": relation_seed, "sha256": relation_digest,
-            "seed_placement": "torch.manual_seed(seed) immediately before Encoder(...) construction",
-            "in_state_dict": False,
-            "transform_policy": job.get("transform_policy"),
-            "source": "workbench/third_party/ENCODER/model_try2.py:93 (torch.randn(N_p, dim))",
-            "permutation_scope": "whole model construction (CLIP tower, FactorNet, decoder heads and "
-                                 "this tensor all draw from the seeded generator); the pin is what "
-                                 "makes the run reproducible, not a claim that the released relation "
-                                 "was recoverable",
-        }, indent=1) + "\n", encoding="utf-8")
+        if job.get("phase") != HANDSHAKE_PHASE:
+            # Written under the RUN's work root, not the worker's job directory: `close()` deletes the
+            # latter, and this record must outlive the worker that drew it. The HANDSHAKE runs before
+            # the run directory exists (it is what the run id is hashed over), so it records nothing
+            # and the first real job writes the durable copy -- the digest it replies with is the same
+            # bytes either way, because the seed and the construction order are the same.
+            relation_root = Path(job["relation_root"])
+            relation_root.mkdir(parents=True, exist_ok=True)
+            relation_path = relation_root / f"relation-seed{relation_seed}.npy"
+            np.save(relation_path, relation.numpy(), allow_pickle=False)
+            Path(str(relation_path) + ".json").write_text(json.dumps({
+                "tensor": "backbone.binding_decoder.learnable_relation",
+                "shape": list(relation.shape), "dtype": str(relation.dtype),
+                "seed": relation_seed, "sha256": relation_digest,
+                "seed_placement": ("torch.manual_seed(seed) immediately before Encoder(...) "
+                                   "construction"),
+                "in_state_dict": False,
+                "transform_policy": job.get("transform_policy"),
+                "source": "workbench/third_party/ENCODER/model_try2.py:93 (torch.randn(N_p, dim))",
+                "permutation_scope": "whole model construction (CLIP tower, FactorNet, decoder heads "
+                                     "and this tensor all draw from the seeded generator); the pin is "
+                                     "what makes the run reproducible, not a claim that the released "
+                                     "relation was recoverable",
+            }, indent=1) + "\n", encoding="utf-8")
         state = load_trusted_whole_model(
             Path(job["checkpoint_path"]), job["expected_sha256"], torch_module)
         if isinstance(state, dict):
@@ -440,6 +529,14 @@ def _worker_main(job_path: Path) -> None:
         return
 
     def run_one(current: dict[str, Any]) -> None:
+        if current.get("phase") == HANDSHAKE_PHASE:
+            # R03: construct the model and answer with the relation digest ALONE. No image is opened
+            # and no forward pass runs -- the entire point is to let the run id cover the tensor before
+            # anything is encoded. The model stays loaded, so the encode jobs that follow reuse this
+            # exact construction and therefore this exact relation.
+            reply(True, relation_digest=relation_digest, relation_seed=relation_seed,
+                  handshake=True)
+            return
         paths, texts = current["image_paths"], current["texts"]
         features = []
         batch_size = max(1, int(current.get("batch_size") or 32))

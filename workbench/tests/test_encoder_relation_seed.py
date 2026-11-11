@@ -72,3 +72,15 @@ def test_a_different_draw_is_visible_in_the_reply_not_silent() -> None:
     """The worker reports the digest it drew, so a run can be checked against its own record."""
     assert "relation_digest=relation_digest" in SOURCE
     assert model_encoder.RELATION_EXPECTED_DIGEST and len(model_encoder.RELATION_EXPECTED_DIGEST) == 64
+
+def test_the_handshake_phase_does_no_image_work() -> None:
+    """R03: the phase that feeds the run identity constructs the model and answers, nothing more.
+
+    A handshake that encoded anything would make the identity depend on an encode call -- the exact
+    ordering the defect had -- and would also run a forward pass before the run directory exists.
+    """
+    source = SOURCE.split("def run_one", 1)[1]
+    branch = source.split('current.get("phase") == HANDSHAKE_PHASE', 1)[1].split("return", 1)[0]
+    assert "relation_digest=relation_digest" in branch
+    for forbidden in ("Image.open", "extract_retrieval", "prefetch_rows", "np.save"):
+        assert forbidden not in branch, f"the handshake branch must not call {forbidden}"

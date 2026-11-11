@@ -259,6 +259,11 @@ class CompositionAdapter:
     model_id: str
     reference_eligible = True
     category_scopes: tuple[str | None, ...] = (None,)
+    #: True only for an adapter whose CONSTRUCTION draws a relation tensor that no checkpoint can
+    #: restore (ENCODER's `learnable_relation`). Such an adapter must record the draw in
+    #: `relation_state` before the run id is hashed -- see `prepare_identity` -- and a run of one that
+    #: cannot name its relation is refused rather than published as a measurement.
+    relation_bearing = False
 
     def __init__(self, config: Any, checkpoint_id: str | None = None) -> None:
         self.config = config
@@ -297,6 +302,25 @@ class CompositionAdapter:
 
     def mode_supported(self, condition: str) -> tuple[bool, str | None]:
         return True, None
+
+    def prepare_identity(self) -> dict[str, Any] | None:
+        """Populate every construction-time state the run identity must hash, and return it.
+
+        Called by the runner IMMEDIATELY after ``__init__`` and BEFORE the identity is built, because
+        a value that only becomes known during encoding cannot be part of the run id: R03 was exactly
+        that -- `identity['relation_state']` was read before the first encode call, so the run id,
+        the fingerprint and the summary all recorded the pre-encode `not_recorded` block while the
+        features were computed with a relation the identity never saw.
+
+        The base implementation is a no-op returning ``None``, so every adapter that draws nothing
+        mints the byte-identical run id it minted before this hook existed. An adapter whose
+        construction draws state must override it to produce that state WITHOUT encoding anything
+        (ENCODER starts its worker and asks for the digest, doing no image work), and must raise
+        rather than return a state that cannot name what was drawn.
+
+        The runner refuses the run when ``relation_bearing`` is true and this returns no digest.
+        """
+        return None
 
     def require_verified_interpreter(self) -> str:
         """Return this adapter's model interpreter, proving its environment first.
