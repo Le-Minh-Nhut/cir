@@ -110,3 +110,33 @@ def test_log_rotation_keeps_previous_segment(tmp_path: Path) -> None:
     assert "first segment" not in rotated.read_text()
     assert "second segment" in rotated.read_text()
     assert rotated.name.startswith("serve.log.")
+
+
+def test_backoff_ladder_is_exact() -> None:
+    serve = load_script()
+    assert [serve.restart_delay(n) for n in range(1, 8)] == [
+        0.2, 0.4, 0.8, 1.6, 3.2, 6.4, 8.0]
+    # failures <= 0 is the first step, not a negative or absent delay.
+    assert serve.restart_delay(0) == serve.BACKOFF_BASE == 0.2
+    assert serve.restart_delay(-5) == serve.BACKOFF_BASE
+
+
+def test_backoff_saturates_without_giant_int_arithmetic() -> None:
+    serve = load_script()
+    # The regression: `BACKOFF_BASE * 2 ** (failures - 1)` built 2**1024 and then raised
+    # OverflowError: int too large to convert to float, so a long crash loop crashed the
+    # supervisor instead of pacing it.
+    begin = time.monotonic()
+    for failures in (7, 8, 1025, 10 ** 6, 10 ** 12):
+        assert serve.restart_delay(failures) == serve.BACKOFF_CAP == 8.0
+    assert time.monotonic() - begin < 1.0, "clamping must happen before the multiply"
+    # The exponent is clamped at the smallest one that already saturates the cap.
+    assert serve.BACKOFF_BASE * 2 ** serve.BACKOFF_SATURATING_EXPONENT >= serve.BACKOFF_CAP
+    assert serve.BACKOFF_BASE * 2 ** (serve.BACKOFF_SATURATING_EXPONENT - 1) < serve.BACKOFF_CAP
+
+
+def test_backoff_is_monotone_over_a_long_crash_loop() -> None:
+    serve = load_script()
+    delays = [serve.restart_delay(n) for n in range(1, 2001)]
+    assert delays == sorted(delays)
+    assert delays[-1] == serve.BACKOFF_CAP

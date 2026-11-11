@@ -123,9 +123,16 @@ def describe_exit(status: int) -> str:
     except ValueError:
         return f"signal {-status}"
 
+#: Smallest exponent whose value already reaches BACKOFF_CAP. Clamping *here* keeps the
+#: multiply away from an oversized power: `2 ** 1024` is a big int that cannot be converted
+#: to a float at all, so the unclamped form raised OverflowError instead of returning the cap.
+BACKOFF_SATURATING_EXPONENT = next(
+    exponent for exponent in range(64) if BACKOFF_BASE * 2 ** exponent >= BACKOFF_CAP)
+
 def restart_delay(failures: int) -> float:
     """Capped exponential backoff: a service that dies on startup cannot spin."""
-    return min(BACKOFF_BASE * 2 ** max(0, failures - 1), BACKOFF_CAP)
+    exponent = min(max(0, failures - 1), BACKOFF_SATURATING_EXPONENT)
+    return min(BACKOFF_BASE * 2 ** exponent, BACKOFF_CAP)
 
 def regular_log_target(fd: int) -> str | None:
     try:

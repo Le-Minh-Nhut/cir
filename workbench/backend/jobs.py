@@ -32,6 +32,10 @@ class Job:
     error: str | None = None
     stdout_tail: str = ""
     stderr_tail: str = ""
+    #: Set by startup recovery: this job was in flight when the previous backend died, so its
+    #: process group was never reaped and may still hold the GPU. Never cleared by killing an
+    #: unverified id — it is bookkeeping for a refusal/warning that names the reason.
+    gpu_may_be_held: bool = False
 
 
 # Operator configuration the queue must pass on, because the process it starts *is* the
@@ -209,6 +213,11 @@ class SingleGpuQueue:
         self._process_groups: dict[str, int | None] = {}
         # Set by shutdown(): the worker leaves its loop instead of waiting for the next job.
         self._stopping = False
+        # Jobs recovered from a crash whose process group was never reaped, and whose group id
+        # was never persisted: they may still hold the single GPU, so dispatch is refused until
+        # an operator confirms the device is free. Never killed here (an unverified id is not a
+        # licence to signal).
+        self._gpu_orphans: list[str] = []
         self._condition = Condition(Lock())
         self._worker = Thread(target=self._work, daemon=True)
         self._worker.start()
@@ -345,11 +354,14 @@ class SingleGpuQueue:
             completed_at=record.get("completed_at"),
             return_code=record.get("return_code"),
             error=record.get("error"),
+            gpu_may_be_held=bool(record.get("gpu_may_be_held")),
         )
         with self._condition:
             if any(existing.job_id == job.job_id for existing in self._jobs):
                 return
             self._jobs.append(job)
+            if job.gpu_may_be_held:
+                self._gpu_orphans.append(job.job_id)
 
     def _next_job(self) -> Job | None:
         """The next queued job, or None once shutdown has been requested."""
@@ -477,7 +489,8 @@ class SingleGpuQueue:
             tmp.write_text(
                     json.dumps({key: getattr(job, key) for key in (
                         "job_id", "model_id", "checkpoint_id", "protocol_id", "status",
-                        "started_at", "completed_at", "return_code", "error")}, indent=2) + "\n",
+                        "started_at", "completed_at", "return_code", "error",
+                        "gpu_may_be_held")}, indent=2) + "\n",
                     encoding="utf-8")
             tmp.replace(target)
         except OSError:
@@ -502,10 +515,23 @@ class SingleGpuQueue:
                     record = json.loads(state_path.read_text(encoding="utf-8"))
                 except (OSError, ValueError):
                     continue
+                # A record that cannot name itself is not a job: adopting it would invent an
+                # entry (a fresh uuid, no log directory) that no operator can match to
+                # anything. Malformed JSON is already skipped above; a JSON *list* or scalar
+                # used to raise AttributeError out of this loop and abort recovery for every
+                # later record, so it is skipped here too.
+                if not isinstance(record, dict) or not record.get("job_id"):
+                    continue
                 if record.get("status") in ("queued", "preparing", "running"):
+                    in_flight = record["status"] != "queued"
                     record["status"] = "failed"
                     record["error"] = "workbench restarted while the job was in flight"
                     record["completed_at"] = datetime.now(timezone.utc).isoformat()
+                    # A queued record never had a process. Anything further along may have
+                    # left its process group — the evaluator that holds the GPU — running,
+                    # and the group id was never persisted, so nothing here may kill it.
+                    if in_flight:
+                        record["gpu_may_be_held"] = True
                     recovered.append(record)
                     try:
                         state_path.write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
@@ -524,6 +550,23 @@ class SingleGpuQueue:
             directory = Path(job.log_directory)
             try:
                 directory.mkdir(parents=True, exist_ok=True)
+                with self._condition:
+                    orphans = list(self._gpu_orphans)
+                if orphans:
+                    # Honest refusal, not a kill: the previous backend died leaving these
+                    # groups unreaped and their group ids were never persisted, so there is no
+                    # verified id to signal. Dispatching anyway would double-book the single
+                    # GPU against a process this workbench cannot prove is gone.
+                    reason = ("a job recovered from a crash may still hold the GPU "
+                              f"({', '.join(orphans)}); release the device and restart the "
+                              "workbench before dispatching")
+                    with self._condition:
+                        if job.status != "cancelled":
+                            job.status = "blocked"
+                            job.error = reason
+                            self._append(job, "stderr_tail", f"[BLOCKED] {reason}\n")
+                            self._persist(job)
+                    continue
                 # Readiness is re-checked here, immediately before dispatch: a job may sit in
                 # the queue while the environment changes (the GPU capability is invalidated
                 # by an interpreter or dependency change), and a stale check in the request
