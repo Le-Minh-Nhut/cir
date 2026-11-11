@@ -562,6 +562,26 @@ def test_a_release_document_cannot_quote_a_production_tree_that_never_ran_the_ga
         assert token in newer_launcher, f"the tested launcher must still contain {token}"
 
 
+def _collect(cwd: Path) -> str:
+    """`pytest --collect-only` output for the suite rooted at `cwd`."""
+    return subprocess.run(
+        [sys.executable, "-m", "pytest", "workbench/tests", "--collect-only", "-q",
+         "-p", "no:cacheprovider"],
+        cwd=cwd, capture_output=True, text=True).stdout
+
+def _per_module(output: str) -> dict[str, int]:
+    """Collected node ids counted by test module."""
+    counts: dict[str, int] = {}
+    for line in output.splitlines():
+        if "::" not in line:
+            continue
+        module = line.strip().split("::", 1)[0]
+        counts[module] = counts.get(module, 0) + 1
+    return counts
+
+def _collection_errors(output: str) -> list[str]:
+    return [line.strip() for line in output.splitlines() if line.startswith("ERROR ")]
+
 def _collected_at(sha: str, destination: Path) -> str | None:
     """How many tests the *named revision's own* tree collects, in a worktree of that revision.
 
@@ -595,13 +615,17 @@ def _collected_at(sha: str, destination: Path) -> str | None:
     if modules.is_dir() and not (worktree / "workbench/frontend/node_modules").exists():
         try:
             (worktree / "workbench/frontend/node_modules").symlink_to(modules, target_is_directory=True)
-        except OSError:
-            pass
+        except OSError as error:
+            raise AssertionError(
+                f"could not link installed frontend dependencies into the worktree for {sha}: {error}. "
+                "Without them the TypeScript guard modules fail at import and this check silently "
+                "compares the record against a smaller tree -- the exact mistake it exists to catch.") from error
+    if not (worktree / "workbench/frontend/node_modules").exists():
+        raise AssertionError(
+            f"workbench/frontend/node_modules is absent, so {sha} cannot collect the suite this "
+            "guard is about. Install the frontend dependencies; a lowered count is not a verdict.")
     try:
-        return subprocess.run(
-            [sys.executable, "-m", "pytest", "workbench/tests", "--collect-only", "-q",
-             "-p", "no:cacheprovider"],
-            cwd=worktree, capture_output=True, text=True).stdout
+        return _collect(worktree)
     finally:
         subprocess.run(["git", "worktree", "remove", "--force", str(worktree)],
                        cwd=ROOT, capture_output=True)
@@ -647,12 +671,42 @@ def test_the_release_documents_quote_the_test_count_they_actually_ran() -> None:
             cwd=ROOT, capture_output=True, text=True).stdout
     collected = len([line for line in collection.splitlines() if "::" in line])
     assert collected, "collection produced no test ids; this check cannot verify the count"
-    recorded, recorded_failed = int(counts[0][0]), int(counts[0][1])
+    # THE TEMP WORKTREE MUST COLLECT EVERY MODULE THE PIN REVISION HAS.
+    #
+    # Without this, a worktree that fails to import whole test modules still returns a number, and
+    # that number is smaller than the record -- so the guard blames the record for a missing
+    # directory. Measured: nine TypeScript guard modules went silent because the worktree had no
+    # `node_modules`, and the run reported "2931 + 18 + 47 = 2996 but this tree collects 2911".
+    #
+    # Scoped to FILES PRESENT AT THE PIN, and to modules that collect here, rather than literal
+    # node-id equality: the pin is an ancestor, so this tree legitimately has test modules the pin
+    # does not (`test_service_supervision.py`), and the guard module itself has grown since. Equality
+    # would therefore assert that history never advances. What cannot differ is whether a module the
+    # pin contains contributes tests at all -- pytest collects a file whole or errors on it, so one
+    # node id is the whole question, and a module that collects here but not in the worktree is a
+    # missing input rather than a stale record.
+    main = _per_module(_collect(ROOT))
+    pinned = _per_module(collection)
+    errors = _collection_errors(collection)
+    assert not errors, (
+        "the worktree for " + tested.group(1) + " failed to import these modules, so its count is a "
+        "smaller suite than the one the record describes: " + "; ".join(errors))
+    at_pin = subprocess.run(["git", "ls-tree", "--name-only", "-r", source.stdout.strip(),
+                             "workbench/tests"], cwd=ROOT, capture_output=True, text=True)
+    assert at_pin.returncode == 0, f"cannot list the tests of {tested.group(1)}: {at_pin.stderr}"
+    expected = {module for module in main
+                if module in at_pin.stdout.split()}
+    silent = sorted(expected - set(pinned))
+    assert not silent, (
+        f"these modules collect in this tree and exist at {tested.group(1)}, but collected nothing "
+        f"in that revision's worktree: {silent}. The worktree is missing an input, not the revision "
+        "a test: link or install it before trusting a lower count.")
     # Skips and failures are part of the suite's honest result, not evidence of a stale number: a host
     # without the real Conda binary or a GPU legitimately skips those integrations, and the
     # release-metadata guards necessarily fail on the revision they describe. Treating either as
     # staleness made the check unsatisfiable for a tree that has them, so the recorded passes,
     # failures and skips must together account for what the tree collects.
+    recorded, recorded_failed = int(counts[0][0]), int(counts[0][1])
     skipped_counts = re.findall(r"(\d+) skipped", verdict)
     recorded_skips = int(skipped_counts[0]) if skipped_counts else 0
     assert skipped_counts, (
