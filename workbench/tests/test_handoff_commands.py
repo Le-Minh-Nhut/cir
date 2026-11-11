@@ -693,11 +693,35 @@ def test_no_release_document_describes_verify_only_as_verifying_a_run() -> None:
 
 
 def test_the_verdict_names_the_same_test_count_the_handoff_does() -> None:
-    """Two documents quoting different numbers for the same run is how a report loses its meaning."""
-    verdict = (ROOT / "workbench/docs/reviews/FINAL_PC_RELEASE_VERDICT.md").read_text(encoding="utf-8")
+    """Two documents quoting different numbers for the same run is how a report loses its meaning.
+
+    A count that appears in one document only, or twice with different values, is not a record. Both
+    documents describe the same serial sweep, so their pass, fail and skip counts must be the same
+    triple -- read from each document rather than from whichever one happens to be quoted first.
+    """
     # `N passed, M failed` rather than `N passed, 0 failed`: the release-metadata guards are part of
     # the suite and they FAIL on the very revision they describe, so a document that can only record
-    # zero failures cannot describe its own run honestly.
-    counts = re.findall(r"\*\*(\d+) passed, (\d+) failed\*\*", verdict)
-    assert counts, "the verdict must record the suite's pass and fail counts"
+    # zero failures cannot describe its own run honestly. The skipped count is part of the same
+    # sentence in both documents, so it is captured with the pair instead of searched separately --
+    # both documents also quote historical runs with different skip totals.
+    counts = re.compile(r"\*\*(\d+) passed, (\d+) failed\*\*(?:, (\d+) skipped)?")
+    recorded: dict[str, tuple[str, str, str]] = {}
+    for name in ("workbench/docs/reviews/FINAL_PC_RELEASE_VERDICT.md",
+                 "workbench/docs/PC_PILOT_HANDOFF.md"):
+        found = counts.findall((ROOT / name).read_text(encoding="utf-8"))
+        assert found, f"{name} must record the suite's pass and fail counts"
+        assert len(set(found)) == 1, f"{name} contradicts itself about the suite: {found}"
+        recorded[name] = found[0]
+    verdict, handoff = (recorded["workbench/docs/reviews/FINAL_PC_RELEASE_VERDICT.md"],
+                        recorded["workbench/docs/PC_PILOT_HANDOFF.md"])
+    assert verdict[:2] == handoff[:2], (
+        f"the two documents disagree about the same run: verdict records {verdict[0]} passed, "
+        f"{verdict[1]} failed; handoff records {handoff[0]} passed, {handoff[1]} failed")
+    assert bool(verdict[2]) == bool(handoff[2]), (
+        "only one document records how many tests were skipped, so the counts cannot be "
+        f"reconciled: verdict {verdict}, handoff {handoff}")
+    assert verdict == handoff, (
+        f"the two documents disagree about the same run: verdict records {verdict[0]} passed, "
+        f"{verdict[1]} failed, {verdict[2]} skipped; handoff records {handoff[0]} passed, "
+        f"{handoff[1]} failed, {handoff[2]} skipped")
 
