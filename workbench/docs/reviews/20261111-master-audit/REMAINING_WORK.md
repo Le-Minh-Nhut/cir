@@ -21,12 +21,13 @@ Mục 12 cũ (nhãn native không protocol) **không phải defect** — lý do 
 ## CHƯA LÀM — phải làm trước khi coi là xong
 1. **PAIR** — cần upstream công bố `model_vssp` + `MHTransformer_dis`. Đã quét 21 commit, không tồn
    tại. Xem `replay/pair_absence.py`.
-2. **13 model G1/G2 `NOT_RUN`** — cần artifact parity; mỗi model cần GPU.
-3. **4 ca cần rerun** (bảng §6 `FINAL_REPORT.vi.md`): `clip4cir_rn50x4_noft`, `airknow` (3 dòng counted
+2. **15 model G1/G2 `NOT_RUN`** (13 đang hoạt động + 2 deferred) — cần artifact parity; mỗi model cần GPU.
+   Nguồn duy nhất của bảng: `CENSUS_20261111.vi.md` §1 (17 trừ encoder và limn); trích lại từ đó, không tự đếm.
+3. **5 ca cần rerun** (bảng §6 `FINAL_REPORT.vi.md`): `clip4cir_rn50x4_noft`, `airknow` (3 dòng counted
    — n05 và n08 khác checkpoint, cộng một cặp mâu thuẫn trên `fiq_n05`), `clvc_net` (hai số counted mâu
-   thuẫn, xem mục 10), `pair` (4 dòng), `habit` `e0dd04a4` (artifact trỏ interpreter chết). ENCODER đã
-   rerun và `acc9b20e` là canonical; `5dee7425`/`6a528e87` superseded, lý do từng id ghi ở §6
-   `FINAL_REPORT.vi.md`. Số ca phải rerun còn **4**.
+   thuẫn, xem mục 10), `pair` (4 dòng), `habit` `e0dd04a4` (artifact trỏ interpreter chết). ENCODER **đã
+   xong** nên **không** tính vào 5: `acc9b20e` là canonical; `5dee7425`/`6a528e87` superseded, lý do từng
+   id ghi ở §6 `FINAL_REPORT.vi.md`. Số ca phải rerun còn **5**.
 4. **LIMN 2 query mơ hồ** `7:3038`, `7:3790` — provenance upstream không cho phép chốt category. Cần
    metadata category từ upstream.
 5. **Derived row chưa có marker `DERIVED` trên UI** — dữ liệu đúng ở `derived_from`, bề mặt web chưa

@@ -13,7 +13,7 @@ báo cáo/raw tương ứng. Đọc kèm:
 | `UPSTREAM_INPUT_AND_PROTOCOL_MATRIX.vi.md` | upstream, đầu vào, protocol |
 | `WEB_SURFACE_VERIFICATION.vi.md` | W-01…W-05 |
 | `VERIFICATION_AND_SWEEP.vi.md` | bốn khẳng định Phase 1 + ba lần sweep |
-| `REMAINING_WORK.md` | việc còn lại: 4 mục chưa sửa + 8 mục cần người khác; đọc trước khi tiếp tục |
+| `REMAINING_WORK.md` | việc còn lại: **11** mục chưa xong; đọc trước khi tiếp tục |
 
 ---
 
@@ -99,7 +99,7 @@ Phần quan trọng nhất với người đọc: mỗi câu dưới đây từn
 | # | Nhận định cũ | Kết luận | Bằng chứng |
 |---|---|---|---|
 | 1 | "URL sai ở 7 repo" | **BÁC BỎ** — không tái lập được: 16/16 SHA khớp, 0 redirect, 0 fork | `UPSTREAM_INPUT_AND_PROTOCOL_MATRIX.vi.md` |
-| 2 | "`np.argsort(-sims)` áp cho mọi model" | **SAI với 10/17 config**: DCNet dùng `torch.topk` ×3 nhánh; CLIP4Cir/PTHA/TME/CSMCIR/SPRC dùng `torch.argsort` **tăng dần** trên `1-cos` | cùng báo cáo, ma trận |
+| 2 | "`np.argsort(-sims)` áp cho mọi model" | **SAI với 7/17 config** (đếm theo config, `CENSUS_20261111.vi.md` §R12.2 — con số `10/17` cũ đếm theo **dòng** gọi `argsort`, và 10 là số config **không** bị ảnh hưởng): DCNet dùng `torch.topk` ×3 nhánh; CLIP4Cir (2 config) / PTHA / TME / CSMCIR / SPRC dùng `torch.argsort` **tăng dần** trên `1-cos` | cùng báo cáo, ma trận |
 | 3 | "ENCODER dùng train transform cho mọi ảnh" | **SAI** — query `stage=0`, gallery `stage=1` | `MODEL_LIMN_ENCODER_VERIFICATION.vi.md` M-01-b |
 | 4 | "PTHA có entrypoint FashionIQ" | **SAI** — `validate_blip.py:497-511` chỉ dispatch CIRR | `UPSTREAM_INPUT_AND_PROTOCOL_MATRIX.vi.md` |
 | 5 | "BLAS pin không có tác dụng (9→9)" | **SAI trên host này** — pin chạy: **20→1→20**. Nửa "drift đồng thời" thì **đúng** và nay đã được phát hiện (`drift_detected`) | `raw/gate_s02_drift_before_after.txt`, `raw/gate_s02_isolation_after.txt` |
@@ -125,7 +125,7 @@ câu "chưa chốt". Mỗi số kèm nơi nó sống.
 | **Air-Know** | **HAI SỐ counted + spread đo được: 52.5466 (n05 hist) và 52.9241 (n05 replay), mean nhóm 4 draw 52.5468 ± 0.2673** | `fiq_n05` có hai row counted mâu thuẫn (`conflict_with` nêu nhau); nhóm 4 draw có `variance_group` n 4, mean 52.54676006631348, sd 0.26728186433775697, spread 0.6252866852209422. Công bố nondeterminism của upstream, không giấu | `list_native_measurements()` tại `358c3fc`; `raw/airknow_run3cat_gpu_run{1..4}.json`; `raw/airknow_run3cat_gpu_variance_correction.md:21` |
 | **ENCODER** | **31.0178 / 49.5586** | **đo lần đầu trên** `ce89a9a2…`, **re-confirmed trên** canonical `acc9b20e…` — hai run delta `0.0` trên cả 36 giá trị per-condition và mọi gap, 0/18009 rank khác. Canonical `acc9b20e1aea48487f65f944` partition tensor relation: `relation_state.sha256` `20db0c27…f9ce92` `matches_pinned_digest: true`, và tensor persist ở `runs/acc9b20e…/construction_state/` | `MODEL_LIMN_ENCODER_VERIFICATION.vi.md`; `summary/encoder_fashioniq_acc9b20e1aea48487f65f944/full.json`; `summary/encoder_fashioniq_ce89a9a27c4cceadeaaf30b0/full.json` |
 | **LIMN** canonical `9e4918a6` | **PARTIAL 6001/6003** | + hai subset derived: sf 4068/4069 — `execution_status` **PARTIAL** (của parent), `derived_from.own_status_label` = **`DERIVED_PARTIAL`**; validated 586/586 — `execution_status` **PARTIAL** (của parent), `derived_from.own_status_label` = **`DERIVED_COMPLETE`**. `execution_status` **không** mang nhãn derived (option b) | cùng báo cáo; `tests/test_derived_subset_status.py` |
-| **Gate** | **0 / 2 mô hình có artifact parity; 0 / 17 cấu hình PASS** | `passed_models: []`; `failure_count` **16** (encoder) và **3** (limn) — đều là **discrepancy thật**, không phải thiếu dữ liệu. Encoder tăng 13 → 16 vì ba subcheck `relation.<category>.digest` (dress / shirt / toptee, dimension `relation_parity`) trở thành **mandatory** ở R02/R03, không phải hồi quy mới. Mẫu số là cohort **17** cấu hình như §6: 13 model G1/G2 `NOT_RUN` chưa có artifact parity nên không thể pass | `GATE_SCORING_VERIFICATION.vi.md`; `/api/runs/parity-gate` |
+| **Gate** | **0 / 2 mô hình có artifact parity; 0 / 17 cấu hình PASS** | `passed_models: []`; `failure_count` **16** (encoder) và **3** (limn) — đều là **discrepancy thật**, không phải thiếu dữ liệu. Encoder tăng 13 → 16 vì ba subcheck `relation.<category>.digest` (dress / shirt / toptee, dimension `relation_parity`) trở thành **mandatory** ở R02/R03, không phải hồi quy mới. Mẫu số là cohort **17** cấu hình như §6: **15** model G1/G2 `NOT_RUN` chưa có artifact parity (13 đang hoạt động + 2 deferred, `CENSUS_20261111.vi.md`) nên không thể pass | `GATE_SCORING_VERIFICATION.vi.md`; `/api/runs/parity-gate` |
 
 Bốn run ENCODER đầu — `ce89a9a27c4cceadeaaf30b0`, `5dee7425dd46c5f154808aac`,
 `6a528e877c328772e2c7bb28`, `eda30a37c0bc17ac43844f09` — đều mint trước `f856338` nên id của chúng
@@ -177,7 +177,9 @@ thiếu dimension, không phải trùng khớp.
 - **18 test fail có sẵn** (baseline `full_suite_68ad75e.txt`), **NEW = 0**. Chúng thuộc BLIP resident
   worker, circus CLI resume, TME lifecycle/precision, F08 DCNet config, handoff SHA, release-blocker GPU
   records, prepare_model recipe. Không phải của đợt này, nhưng vẫn đỏ.
-- **13 model G1/G2 `NOT_RUN`** — chỉ encoder và limn có artifact parity.
+- **15 model G1/G2 `NOT_RUN`** (13 đang hoạt động + 2 deferred) — chỉ encoder và limn có artifact parity.
+  Bảng 15 hàng `NOT_RUN` là của `CENSUS_20261111.vi.md` (17 trừ encoder và limn); census là nguồn duy nhất
+  cho con số này, mọi tài liệu khác trích lại từ đó.
 - **8 model chỉ có roll-up** (`B1/H_normal`, `B1/H_rev`, `B2/H_normal`, `B2/H_rev`, `airknow_n05`,
   `airknow_n08`, `airknow_variant_80`, `clip4cir_rn50x4_noft`) — được **hiển thị** với
   `artifact_backed: false`, `counted: false`, **không** vào `models_with_metrics` (17).
@@ -229,16 +231,20 @@ tôi thực sự lấy số.
 | cấu hình trong registry | **17 cấu hình / 16 upstream** | `registry/models.yaml` qua `load_registry()`: 17 model, 16 `upstream_repo_url` phân biệt; CLIP4Cir chứa 2 (`combiner_rn50x4_noft`, `clip4cir_rn50x4_fullft`) |
 | cohort native FashionIQ | **17** (không phải 15) | `20261109-native15-composition-limn/NATIVE_EVAL_MATRIX.csv` có **17** dòng, và 17/17 model registry đều có mặt trong catalog native. Con số "15" trong tên chiến dịch cũ là **cũ** |
 | đã thực thi thật (`native_executed = Y` trong CSV) | **12 / 17** | chỉ đọc cột `native_executed` của `20261109-native15-composition-limn/NATIVE_EVAL_MATRIX.csv`: 12 `Y`, 5 `N` (`airknow`, `pair`, `clvc_net`, `tgcir`, `sprc`). Đếm lại bằng `csv.DictReader`, không suy ra từ `models_with_metrics` |
-| trong đó có `EXITCODE=0` kiểm chứng được | **9 / 17** | quét `docs/reviews/**/*.log` tìm `EXITCODE=0` + `*.json` có `runtime/side_effects.exit_code == 0`: chỉ 9 model có bằng chứng. **Không** phải 13/15 |
+| trong đó có `EXITCODE=0` kiểm chứng được | **7 / 17** theo tiêu chí `CENSUS_20261111.vi.md` (`EXITCODE=0` **hoặc** `runtime.side_effects.exit_code == 0`) — **9** nếu tính cả json chỉ có `runtime.exit_code: 0` | `CENSUS_20261111.vi.md` §1.1 là nguồn duy nhất: 7 model có `EXITCODE=0` trong `raw/native/*.meta.txt` — conesep, ptha_mtst, habit, intent, hint, encoder, tme. Hai model còn lại để ra 9 (`dcnet`, `clip4cir_rn50x4_fullft`) chỉ có `runtime.exit_code: 0` với `runtime.side_effects: null`, nên **không** đạt tiêu chí census. **Không** phải 13/15 |
 | qua **G1** | **0** | `GET /api/runs/parity-gate` → `passed_models: []` |
 | qua **G2** | **0** | cùng response; `encoder` 16 failure, `limn` 3 failure (discrepancy thật, không phải thiếu dữ liệu) |
-| dùng được để **so sánh nghiên cứu** | **17 model / 23 dòng** | `list_native_measurements()` tại `358c3fc` (đúng hàm route `/api/native-measurements` gọi, `main.py:1037`): `counted ∧ artifact_backed` = **23** dòng thuộc **17** model, `models_with_metrics: 17`. Trước ingest (`ae6fa2b`) là 21 dòng; advisory ghi 15 — **sai** |
-| có **ảnh Top-K** | **full 13/18, sf 5/11, validated 5/11** | `GET /api/composition/capabilities?subset=…` → `capability_counts.candidate_topk` so với `run_count` |
+| có số đo **artifact-backed** (`counted ∧ artifact_backed`) — **không** phải "dùng được để so sánh nghiên cứu" | **17 model / 23 dòng** | `list_native_measurements()` tại `358c3fc` (đúng hàm route `/api/native-measurements` gọi, `main.py:1037`): `counted ∧ artifact_backed` = **23** dòng thuộc **17** model, `models_with_metrics: 17`. Trước ingest (`ae6fa2b`) là 21 dòng; advisory ghi 15 — **sai**. Con số "dùng được cho nghiên cứu" theo định nghĩa `G1 ∧ G2 ∧ exit0 ∧ artifact_backed` là **0 / 17** (`CENSUS_20261111.vi.md` §0.4): điều kiện `counted ∧ artifact_backed` **không** bao gồm parity hay exit code |
+| **`research_ready`** | **0 / 17** | `CENSUS_20261111.vi.md` §0.4 / §1.1: không model nào có G2 = PASS, nên vế thứ hai của định nghĩa không bao giờ đúng |
+| có **ảnh Top-K** | **full 15/20, sf 7/13, validated 7/13** | `GET /api/composition/capabilities?subset=…` → `capability_counts.candidate_topk` trên `run_count`, đo lại 2026-11-11 trên cùng endpoint. Con số cũ `13/18 / 5/11 / 5/11` là **trước** hai run ENCODER mint sau đó (`9b806c22…`, `acc9b20e…`), cả hai đều có `candidate_topk` nên mẫu số và tử số cùng tăng 2 ở cả ba subset; hàng này **phải đọc lại** bằng endpoint, không chép |
 | **deferred** | **2** | `frontend/ModelInventory.tsx:16-19`: `csmcir` ("thiếu dữ liệu phụ trợ"), `sprc` ("chưa tải checkpoint") |
 | **blocked** | **1** | `pair` — cần upstream `model_vssp` + `MHTransformer_dis`; `replay/pair_absence.py` là bằng chứng vắng mặt |
-| **cần rerun** | **6** | xem dưới |
+| **cần rerun** | **5** — `clip4cir_rn50x4_noft`, `airknow`, `clvc_net`, `pair`, `habit` | xem dưới |
 
-### Sáu ca cần rerun (liệt kê thật, có căn cứ)
+### Năm ca cần rerun (liệt kê thật, có căn cứ)
+
+Năm hàng dưới đây **cộng** lại thành **5**. Hàng ENCODER ở cuối là **đã xong** và **không** nằm trong 5:
+nó được giữ lại chỉ để trạng thái của nó không bị đếm nhầm thành việc mở.
 
 | ca | lý do | căn cứ |
 |---|---|---|
@@ -246,7 +252,7 @@ tôi thực sự lấy số.
 | `airknow` (3 dòng counted) | n05 và n08 là **checkpoint khác** nên vẫn hai số; riêng `fiq_n05` nay có **hai** row counted mâu thuẫn (`52.54661498980954` vs `52.924086629607395`, `conflict_with` nêu nhau). Upstream nondeterministic: `variance_group` n=4, sd `0.26728186433775697` | `list_native_measurements()` tại `358c3fc`: 3 dòng `counted ∧ artifact_backed`, `checkpoint_selection/…/airknow_fiq_n05_run1.json` + `airknow_fiq_n08_run1.json` + `raw/airknow_run3cat_gpu_run1.json` |
 | `clvc_net` (**2 dòng counted mâu thuẫn**) | cùng `protocol_id: fashioniq_val_split`, hai số counted: `29.970746517160162` và `30.02079703540087`; API **không** chọn theo độ mới, chỉ ghi `conflict_with` cho cả hai. Cần chốt canonical hoặc rerun | `list_native_measurements()` tại `358c3fc`: `measurements[]` hai row `clvc_net` + `fashioniq_val_split` `counted: true`; code `native_measurements.py` `_mark_duplicates` nhánh `# 3d`. Chi tiết: `CENSUS_20261111.vi.md` §1.2 |
 | `pair` (4 dòng) | 4 cấu hình B1/B2 × H_normal/H_rev **khác nhau thật** — cần chọn canonical hoặc công bố cả 4 | payload: 4 dòng `counted: true`, values khác nhau |
-| ENCODER — **đã xong**: 5 id cũ `ce89a9a2…`, `9b806c22…`, `5dee7425…`, `6a528e87…`, `eda30a37…` | **superseded, lý do riêng từng cái**: `ce89a9a2` id hash `relation_state: not_recorded` (mint trước `f856338`); `9b806c22` recorded nhưng **không** có `construction_state/` (defect, đóng ở `34aaa10`); `5dee7425`/`6a528e87`/`eda30a37` draw từ generator không pin (`5dee7425` thêm nữa `full` only). **Canonical nay là `acc9b20e…`**: recorded + tensor persist | `MODEL_LIMN_ENCODER_VERIFICATION.vi.md` §M-01-a, §A; `runs/acc9b20e1aea48487f65f944/{construction_state,ranks}`; `raw/verify/69-encoder-rerun.md` §R2 |
+| ENCODER — **ĐÃ XONG, KHÔNG TÍNH VÀO 5 CA TRÊN** (`acc9b20e…` là canonical, đã chạy xong): 5 id cũ `ce89a9a2…`, `9b806c22…`, `5dee7425…`, `6a528e87…`, `eda30a37…` | **superseded, lý do riêng từng cái**: `ce89a9a2` id hash `relation_state: not_recorded` (mint trước `f856338`); `9b806c22` recorded nhưng **không** có `construction_state/` (defect, đóng ở `34aaa10`); `5dee7425`/`6a528e87`/`eda30a37` draw từ generator không pin (`5dee7425` thêm nữa `full` only). **Canonical nay là `acc9b20e…`**: recorded + tensor persist | `MODEL_LIMN_ENCODER_VERIFICATION.vi.md` §M-01-a, §A; `runs/acc9b20e1aea48487f65f944/{construction_state,ranks}`; `raw/verify/69-encoder-rerun.md` §R2 |
 | `habit` (run `e0dd04a4…`, subset `validated`) | artifact ghi `FAILED` vì interpreter trỏ `airknow-adapted` (Python 3.11.15 ≠ 3.8.10); env var **nay đã đúng** nên đây là artifact cũ | `summary/habit_fiq_n02_e0dd04a4…/validated.json` → `condition_status.*.reason`, `runtime.model_interpreter.path` |
 
 ### Điều **không** được tính là parity (theo master file)
