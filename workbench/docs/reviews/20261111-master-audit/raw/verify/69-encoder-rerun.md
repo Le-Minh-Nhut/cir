@@ -284,3 +284,224 @@ canonical run id, not to change the figures. `5dee7425…`, `6a528e87…`, `eda3
 * Console log kept for inspection: `/tmp/encoder_rerun_20261111.log` (63 lines; the trailing JSON
   block is the run report).
 * This evidence file. No production source or test was edited.
+
+---
+
+# Rerun 2 — persistence fix `34aaa10`
+
+Date 2026-11-11, after `34aaa10` ("Persist ENCODER relation tensor at construction, not on a later
+job", HEAD at launch `34aaa10c3984e310b94e36068c118d828064c9c8`). The §7 defect above is the one it
+closes: the persist block is now unconditional at construction, and `_adopt_scratch_relation()`
+(`workbench/composition/model_encoder.py:262`) renames the scratch directory into
+`<run>/construction_state/` on the first exchange that has a `work_root` — before the keep-features
+cleanup runs.
+
+## R2.1 Preflight
+
+```
+$ pgrep -af pytest                                     -> empty (rc=1)
+$ nvidia-smi --query-compute-apps=pid,process_name --format=csv
+pid, process_name                                      -> no rows
+$ nvidia-smi --query-gpu=uuid,memory.used,memory.total --format=csv,noheader
+GPU-9bc596d9-19e9-6f43-dc2c-a80da924263c, 771 MiB, 16303 MiB
+$ git status --porcelain                               -> ?? CLEANUP_REPORT.md.save   (1 line, pre-existing)
+```
+
+`workbench/scripts/gpu_job.sh` held `flock -n /tmp/cir_gpu.lock` for the child's whole lifetime; its
+launch check printed `[gpu_job] lock held, GPU empty, launching: ...`. No wait-loop iterations: the
+lock was free. No other GPU job, no concurrent pytest.
+
+## R2.2 Command (identical to `9b806c22`, same scope)
+
+```bash
+cd /home/heheboiz/data/cir
+nohup workbench/scripts/gpu_job.sh \
+  workbench/envs/ctl312h/bin/python workbench/scripts/composition_eval.py \
+  --config /home/heheboiz/cir_rerun_20261109.yaml \
+  --models encoder --subsets full,sf,validated \
+  --topk-depth 100 --keep-features \
+  > /tmp/encoder_rerun2_20261111.log 2>&1 &
+```
+
+`--models encoder` only; `WORKBENCH_COMPOSITION_BATCH_SIZE` unset (default 32, as recorded in both
+prior identities); `WORKBENCH_BLAS_THREADS` unset (runner's own `BLAS_THREADS_PINNED=1`, recorded
+`requested 1 / effective 1 / previous 10 / verified true` in `policy_observed`).
+
+Wall time: log created `11:32:22+07:00`, run directory born `11:32:59`, final summary written
+`11:37:19` → **~4m57s end to end** (260 s from run-dir creation), the same as rerun 1.
+
+## R2.3 New run id
+
+**`acc9b20e1aea48487f65f944`**
+
+```
+summary/encoder_fashioniq_acc9b20e1aea48487f65f944/{full,sf,validated}.json
+runs/acc9b20e1aea48487f65f944/{ranks,candidates,construction_state,work/encoder/features}
+```
+
+## R2.4 `relation_state` block, verbatim (`full.json`; `sf.json` and `validated.json` identical)
+
+```json
+  "relation_state": {
+    "expected_sha256": "20db0c27c979e9a0938c71af5142458dfa2070468d0ad3fcb6f24134c2f9ce92",
+    "matches_pinned_digest": true,
+    "seed": 20261111,
+    "sha256": "20db0c27c979e9a0938c71af5142458dfa2070468d0ad3fcb6f24134c2f9ce92",
+    "status": "recorded"
+  }
+```
+
+`status: recorded`, `sha256 == expected_sha256 == 20db0c27…ce92`, `matches_pinned_digest: true`,
+`seed: 20261111`. The same block is present in `runs/acc9b20e1aea48487f65f944/ranks/encoder_fashioniq.json::identity`.
+
+## R2.5 `construction_state/` — the tensor file EXISTS this time
+
+```
+$ ls -l workbench/artifacts/composition/runs/acc9b20e1aea48487f65f944/construction_state/
+-rw-rw-r-- 1 heheboiz heheboiz 4144 Nov 11 11:32 relation-seed20261111.npy
+-rw-rw-r-- 1 heheboiz heheboiz 1219 Nov 11 11:32 relation-seed20261111.npy.json
+```
+
+Both files present. `.npy` mtime `11:32:49` **predates** the run directory's birth `11:32:59` — the
+rename from the handshake scratch directory preserved the mtime, which is direct evidence the file
+was written at construction and then adopted, exactly as `34aaa10` describes.
+
+`sha256` of the tensor payload (the digest definition the pin uses: raw `tobytes()` of the
+`float32 (2,512)` array):
+
+```
+$ sha256sum .../relation-seed20261111.npy            -> 6ce23bbc6a367c34f9536a612c9e32e3b9cec213687c7bd73378a16001ccf244
+  (that is the FILE digest, including the .npy header)
+```
+
+The file digest is not the pinned value, and must not be — the pin is over the tensor bytes, not the
+numpy envelope. Digested as the run digests it:
+
+```
+numpy.load(...) -> dtype float32, shape (2, 512)
+sha256(array.tobytes()) = 20db0c27c979e9a0938c71af5142458dfa2070468d0ad3fcb6f24134c2f9ce92
+  == RELATION_EXPECTED_DIGEST                     -> MATCH
+sidecar .npy.json "sha256" = 20db0c27c979e9a0938c71af5142458dfa2070468d0ad3fcb6f24134c2f9ce92  -> same
+array_equal vs ce89a9a2's .npy                     -> True
+cmp <ce89a9a2 .npy> <acc9b20e .npy>                -> byte-identical (file digest 6ce23bbc… in both)
+```
+
+So: the file on disk reproduces the pinned digest exactly, and it is byte-for-byte the same `.npy`
+that `ce89a9a2` carries (which was itself re-derived by script after its own copy was deleted — this
+run's copy needed no such recovery, it was written by the run).
+
+## R2.6 Status and metrics
+
+`execution_status: COMPLETED` on all three subsets; every condition `COMPLETED` with
+`unscored_count: 0`; `cache_verify_mode: full`; `reused_query_result_count: 0`;
+`topk_export`: `TOPK_EXPORT_COMPLETE`, depth 100, `missing_query_count: 0`, `partial: false`, and each
+`.jsonl` has exactly 6003 rows. `failed_expectations: []`. `gallery_count: 74381`,
+`query_count`: 6003 / 4069 / 586.
+
+| subset | condition | R@10 | R@50 | nDCG | composition_gap_ndcg |
+|---|---|---|---|---|---|
+| full | multimodal | 31.01782442112277 | 49.558554056305184 | 0.295680489014025 | 0.47439372489324116 |
+| full | text_only_black_image | 8.512410461435948 | 18.02432117274696 | 0.1554115204524066 | (same aggregate) |
+| full | image_only_empty_text | 2.6486756621689156 | 7.512910211560886 | 0.10732704390474265 | (same aggregate) |
+| sf | multimodal | 18.726959941017448 | 36.32342098795773 | 0.21878521362499326 | 0.5083127388173692 |
+| sf | text_only_black_image | 1.0321946424182846 | 5.529614155812239 | 0.10757390247452973 | (same) |
+| sf | image_only_empty_text | 0.5406733841238633 | 4.177930695502581 | 0.09765738736689415 | (same) |
+| validated | multimodal | 34.47098976109215 | 55.2901023890785 | 0.2962070356673842 | 0.6087546543920695 |
+| validated | text_only_black_image | 1.8771331058020477 | 7.679180887372014 | 0.11588962404118631 | (same) |
+| validated | image_only_empty_text | 1.023890784982935 | 6.996587030716723 | 0.10776273212981008 | (same) |
+
+Gap cohorts 6003 / 4069 / 586 — unchanged.
+
+## R2.7 Delta vs `9b806c22` and vs `ce89a9a2`
+
+Machine-subtracted, not eyeballed. **Non-zero deltas: 0.**
+
+* 36 per-condition metric values (3 subsets × 3 conditions × R@10/R@50/nDCG/MRR) × 2 baselines
+  → all exactly `0.0`.
+* 5 gap aggregates per subset (`composition_gap_ndcg`, `gap_multimodal_ndcg`,
+  `gap_text_only_ndcg`, `gap_image_only_ndcg`, `mrr_gap`) × 3 subsets × 2 baselines → all `0.0`.
+* `gap_cohort_count` identical (6003 / 4069 / 586).
+
+| metric | `ce89a9a2` | `9b806c22` | `acc9b20e` | Δ vs both |
+|---|---|---|---|---|
+| full multimodal R@10 | 31.01782442112277 | 31.01782442112277 | 31.01782442112277 | 0.0 |
+| full multimodal R@50 | 49.558554056305184 | 49.558554056305184 | 49.558554056305184 | 0.0 |
+| full multimodal nDCG | 0.295680489014025 | 0.295680489014025 | 0.295680489014025 | 0.0 |
+| sf multimodal R@10 | 18.726959941017448 | 18.726959941017448 | 18.726959941017448 | 0.0 |
+| sf multimodal R@50 | 36.32342098795773 | 36.32342098795773 | 36.32342098795773 | 0.0 |
+| validated multimodal R@10 | 34.47098976109215 | 34.47098976109215 | 34.47098976109215 | 0.0 |
+| validated multimodal R@50 | 55.2901023890785 | 55.2901023890785 | 55.2901023890785 | 0.0 |
+| full `composition_gap_ndcg` | 0.47439372489324116 | 0.47439372489324116 | 0.47439372489324116 | 0.0 |
+
+Byte-level confirmation:
+
+| artifact | `9b806c22` | `acc9b20e` |
+|---|---|---|
+| `candidates/…/multimodal.jsonl` md5 | `ecb307cab615…` | `ecb307cab615…` |
+| `candidates/…/text_only_black_image.jsonl` md5 | `3440ff289d9c…` | `3440ff289d9c…` |
+| `candidates/…/image_only_empty_text.jsonl` md5 | `da97cf5265a0…` | `da97cf5265a0…` |
+| `work/encoder/features/gallery_global.npy` md5 | `857eb56a6dbb…` | `857eb56a6dbb…` |
+
+Identity diff vs `9b806c22` is exactly one key: `adapter_module_source_hash`
+`920d30945b…` → `57a37a34…` (the `34aaa10` edit to `model_encoder.py`). `scoring_module_source_hash`
+and `relation_state` are unchanged.
+
+## R2.8 Rank differences
+
+**0 of 18,009** query × condition cells moved, against **both** `9b806c22` and `ce89a9a2`:
+
+```
+vs 9b806c22: image_only_empty_text 0/6003, multimodal 0/6003, text_only_black_image 0/6003  -> 0
+vs ce89a9a2: image_only_empty_text 0/6003, multimodal 0/6003, text_only_black_image 0/6003  -> 0
+query_failures: {} for all conditions; condition_status byte-identical to both
+```
+
+No finding to report: the expected identity holds. Same seed, same draw, same features, same ranks,
+same numbers — only the run id moved, now for the two reasons that justify a new id (relation
+recorded at mint time, plus the `34aaa10` adapter source hash).
+
+## R2.9 Tree movement
+
+```
+before launch:  ?? CLEANUP_REPORT.md.save
+after run:      ?? CLEANUP_REPORT.md.save
+```
+
+Identical. The rerun added **zero** tracked-file changes; `workbench/artifacts/**` is gitignored
+(`.gitignore:85`), so the new artifacts exist on disk untracked. Nothing under
+`workbench/artifacts/` was committed, deleted or moved — the four earlier ENCODER runs and the
+`ce89a9a2` tensor file are byte-untouched. New disk cost: 229 MB
+(`runs/acc9b20e1aea48487f65f944/`: 181 MB `work/encoder/features/`, 48 MB `candidates/`, 4 KB
+`construction_state/`).
+
+## R2.10 Which run is canonical NOW
+
+**`acc9b20e1aea48487f65f944` is the canonical ENCODER run.**
+
+It is the **FIRST** ENCODER run that has **both** properties at once: an identity that partitions the
+relation tensor (`relation_state.status: recorded`, `sha256 20db0c27…ce92`,
+`matches_pinned_digest: true`, present in the summary AND in `ranks/<model>_<checkpoint>.json::identity`)
+**and** the persisted tensor file itself (`construction_state/relation-seed20261111.npy` + `.json`,
+payload digest equal to the pin, byte-identical to the draw `ce89a9a2` scored with). Every earlier run
+had at most one of the two.
+
+Superseded, with the reason for each:
+
+| run id | status now | reason |
+|---|---|---|
+| `ce89a9a27c4cceadeaaf30b0` | superseded | identity hashed while `relation_state` was `None` — the run id does not partition the relation (`not_recorded`) |
+| `9b806c22…` (`9b806c22221e944ff10e514e`) | superseded | identity recorded the digest, but the tensor file was absent — no durable copy of the draw it claims |
+| `5dee7425dd46c5f154808aac` | superseded | relation drawn from an unpinned generator; also `--subsets full` only |
+| `6a528e877c328772e2c7bb28` | superseded | relation drawn from an unpinned generator; no `cache_verify_mode`/`relation_state` |
+| `eda30a37c0bc17ac43844f09` | superseded | relation drawn from an unpinned generator; no `cache_verify_mode`/`relation_state` |
+
+The published figures `31.0178 / 49.5586` remain correct for ENCODER multimodal `full` — they are
+reproduced to the last digit by `acc9b20e`, with 0 rank differences. The documents that quote them
+should re-point the canonical run id to `acc9b20e1aea48487f65f944`; no number changes.
+
+## R2.11 Files
+
+* Run artifacts (new, gitignored): `workbench/artifacts/composition/runs/acc9b20e1aea48487f65f944/`,
+  `workbench/artifacts/composition/summary/encoder_fashioniq_acc9b20e1aea48487f65f944/`.
+* Console log kept for inspection: `/tmp/encoder_rerun2_20261111.log`.
+* No production source or test was edited by this job.
