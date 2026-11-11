@@ -5,8 +5,8 @@ READ-ONLY: navigation, select_option, screenshots and GET requests. No restart, 
 no config edit, no write to the backend. Every number compared is pinned to the exact API URL that
 produced it; every screenshot is 2560x1440 at deviceScaleFactor 1.
 
-Bundle this evidence describes: assets/index-CBR6lHgq.js
-sha256 acfb5fbbced77e88b86ee542e5f261c6df71c0e0e8039d753965e1fc873ac21a
+Bundle this evidence describes: assets/index-DYYSN7oG.js
+sha256 74e4b4f86ce8b4f5061456138ce1ff79aa084d7662c54c24a123e5bb679d651f
 Checked below in `bundle_check()` from the served HTML + the dist file, so a rebuild invalidates it.
 """
 from __future__ import annotations
@@ -71,7 +71,7 @@ def bundle_check() -> dict:
     dist_files = sorted(p.name for p in (DIST / "assets").iterdir())
     digest = hashlib.sha256((DIST / js).read_bytes()).hexdigest() if js else None
     return {"served_js": js, "sha256": digest, "dist_assets": dist_files,
-            "css_expected": "index-DecQnta9.css", "js_expected": "index-CBR6lHgq.js"}
+            "css_expected": "index-DecQnta9.css", "js_expected": "index-DYYSN7oG.js"}
 
 
 def explorer(run: str, query: str = QID, condition: str = "multimodal", subset: str = "full",

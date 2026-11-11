@@ -92,3 +92,77 @@ Harness dùng playwright + chromium có sẵn của repo (`workbench/envs/ctl312
 
 Trong lúc chạy, **một** lần kết nối bị đóng giữa chừng (`RemoteDisconnected` khi gọi `/api/models`) — đúng hiện tượng "agent khác restart service". Lần thử lại ngay sau đó: API 200, FE 200. Không restart gì từ phía tôi. Các lần đo trong báo cáo đều **sau** lần thử lại này và bundle digest vẫn là `702ed2e9…d681` (digest của
 lượt đo này; **nay superseded** — xem bảng đầu báo cáo).
+
+---
+
+# PHỤ LỤC 2026-11-11 (lượt đo lại) — không viết lại các hàng gốc ở trên
+
+Phần trên là **bản ghi lịch sử** của `index-BLH2yome.js` / `702ed2e9…d681`. Phần này là trạng thái **hiện tại**,
+đo trên bundle **đang phục vụ**, và nó **thay thế** phần trên ở đúng những điểm được nêu tên dưới đây.
+
+## Bundle của phụ lục này
+
+| mục | giá trị |
+|---|---|
+| served js | **`assets/index-DYYSN7oG.js`** |
+| sha256 | **`74e4b4f86ce8b4f5061456138ce1ff79aa084d7662c54c24a123e5bb679d651f`** |
+| served css | `index-DecQnta9.css` (không đổi so với lượt trước) |
+| đối chứng | `curl -s http://127.0.0.1:5173/ \| grep -o 'assets/index-[^\"]*\.js'` → `assets/index-DYYSN7oG.js`; `sha256sum workbench/frontend/dist/assets/index-DYYSN7oG.js` → `74e4b4f8…d651f`; `recheck_results.json` → `bundle.served_js` / `bundle.sha256` trùng |
+| harness | `web_evidence/e2e_recheck/recheck_probe.py`, viewport 2560×1440×1, **21 check** |
+| sửa trong lượt này | chỉ hai literal digest của chính harness (`js_expected` + docstring) từ `index-CBR6lHgq.js` / `acfb5fbb…ac21a` → `index-DYYSN7oG.js` / `74e4b4f8…d651f`; không sửa assertion nào |
+
+## Kết quả probe: 21/21 PASS
+
+`web_evidence/e2e_recheck/recheck_results.json` → `{"passed": 21, "failed": []}`.
+
+| nhóm | check | nay |
+|---|---|---|
+| A — peer so sánh | `A1_compare_before_single`, `A2_compare_after_two_selected`, `A3_compare_arbitrary_peer`, `A4_compare_peer_clear`, `A5_compare_two_runs_one_model` | **PASS ×5** |
+| B — nhãn run | `B1_run_labels_distinct`, `B2_noexport_run_matches_label`, `B3_sibling_run_has_candidates` | **PASS ×3** |
+| C — inspector/Top-K | `C1_reference_caption_target`, `C2_MM_top10/top50`, `C2_Text-only_top10/top50`, `C2_Image-only_top10/top50`, `C3_three_conditions_differ`, `C4_bad_qid_no_results` | **PASS ×9** |
+| D — CSMCIR | `D1_csmcir_row_text`, `D2_csmcir_native_link_opens_row` | **PASS ×2** |
+| E — derived lineage | `E1_derived_lineage_validated`, `E2_parent_stays_partial` | **PASS ×2** |
+
+**A5 — verdict: PASS.** Đây là check duy nhất đỏ ở lượt trước và bản sửa `3ab8d0d` đã ở trong bundle phục vụ.
+Bằng chứng: `A5_compare_two_runs_one_model.png` + `columns.rows` của `recheck_results.json` —
+`limn / base_iter0_all_categories · 10173dc4 · không có Top-K #193` và
+`limn / base_iter0_all_categories · 9e4918a6 · Top-K 100 #193` là **hai hàng khác nhau**, dù cùng `model_id`;
+`api_candidate_status` của hai run lần lượt là `TOPK_EXPORT_NOT_REQUESTED` và `AVAILABLE`, đúng như nhãn in ra.
+Không còn check nào đỏ.
+
+## Lỗi nào nay đã đóng, bởi commit nào, trên bundle nào
+
+| lỗi ở phần trên | trạng thái | commit | bằng chứng trên `index-DYYSN7oG.js` / `74e4b4f8…d651f` |
+|---|---|---|---|
+| **#1** ComparePanel không bao giờ với tới TME (`slice(0,4)` trên thứ tự API, không có ô chọn peer) | **ĐÃ ĐÓNG** | `c25d67f` "reachable comparison peers, unique run labels, derived lineage, CSMCIR native link" | `A2_compare_after_two_selected`: URL `runs=c%3Af461f391…%2Cc%3Acd1a696d…` dựng bảng **2 hàng** — `hint / fashioniq · f461f391 · Top-K 100 (đang xem) #98` + `tme / fashioniq_0 · cd1a696d · Top-K 100 #65`, `cohortLine` "Cohort: 2 lượt…". Có `[data-testid=compare-peer-picker]` / `compare-peer-select` liệt kê **20** lựa chọn (**không** cắt 4): `A3` chọn được `conesep a4f786d8` mà bản cũ chưa từng hiện; `A4` bỏ lượt đã thêm vẫn chọn lại được. Ảnh `A1_compare_before_single.png`, `A2…`, `A3_compare_arbitrary_peer.png`, `A4_compare_peer_clear.png` |
+| **#2** hai run khác nhau mang nhãn y hệt (`hint / fashioniq`, `tme / fashioniq_0`), chọn nhầm là mất Top-K | **ĐÃ ĐÓNG** | `c25d67f` (nhãn run có run-id stub + trạng thái Top-K); `3ab8d0d` (bảng so sánh dùng đúng nhãn đó thay vì `model_id` trần) | `B1_run_labels.txt` — cả 20 dòng đều phân biệt được, ví dụ `hint / fashioniq · 4bc9893a · Top-K 50`, `hint / fashioniq · f461f391 · Top-K 100`, `tme / fashioniq_0 · ad477312 · không có Top-K`, `tme / fashioniq_0 · cd1a696d · Top-K 100`; `B1_run_labels_distinct.png`. `B2_noexport_run_matches_label`: chọn dòng "không có Top-K" thì khối ứng viên nói đúng "Lượt này chưa có danh sách ứng viên … no candidate export directory for this run" — nhãn và dữ liệu khớp. `B3`: dòng anh em cùng model thì **có** ứng viên |
+| **A5 (bảng so sánh in trùng tên peer)** | **ĐÃ ĐÓNG** | `3ab8d0d` | `A5_compare_two_runs_one_model` PASS; nhãn peer nay là nhãn composition đầy đủ (xem verdict ở trên) |
+
+Hai commit này **không** đóng lỗi #3 và #5. Lỗi #4 hoá ra **không phải lỗi hiện hành** — nó đã được sửa từ trước lượt đo đầu (xem hàng #4 dưới đây).
+
+## Lỗi nào VẪN CÒN, và một hàng gốc phải rút lại (không nằm trong phạm vi giờ này)
+
+| # | lỗi | nay vẫn tái hiện được? | ghi chú |
+|---|---|---|---|
+| **#3** | Lưu cohort là ngõ cụt trên dữ liệu CIRCUS | **CÒN** | `FailuresPage.tsx` `saveCohort()` vẫn tự `throw` khi mọi run là `c:`; và `/api/runs` vẫn trả **`[]`**, nên `PUT /api/cohorts` (validate qua `validate_analysis_selection`) không có run hợp lệ. `GET /api/cohorts` → `[]`. Đo lại trên `index-DYYSN7oG.js` (`F3_cohort_still_dead.png`): nút "Lưu tập đã lọc (6,003 query)" → `[data-testid=save-feedback][data-status=error]`, "Lưu thất bại: API cohort chỉ nhận run của chỉ mục per-query; CIRCUS release run chưa có endpoint cohort…"; `GET /api/runs` → `[]`; `GET /api/cohorts` → `[]`. **Không** có cohort `e2e-check-20261111` nào được tạo |
+| **#4** | Trang mặc định mở subset `sf` trong khi dữ liệu cần ở `full` | **KHÔNG CÒN — hàng gốc là đọc sai của tôi, không phải quan sát** | `routes.defaultLocation()` vẫn ghi `subset: "sf"` (đó là giá trị *trước khi* resolve), nhưng `App.tsx:148-166` gọi `chooseInitialScope` / `chooseSubsetFor` rồi `replaceState` sang subset có nhiều dòng đo được nhất — bản sửa này ở commit `3828163` (2026-11-10), tức **đã có trước cả lượt đo đầu tiên của tôi**, nên hàng #4 ở phần trên là suy luận từ việc đọc `defaultLocation()` chứ không phải kết quả đo. Đo lại trên `index-DYYSN7oG.js`: `GET /` trần → `subset-select = full`, URL `…&subset=full`; `/?protocol=circus_fashioniq_release_v1` (không nêu subset) → `full`; `&subset=sf` nêu rõ → giữ `sf`. Ảnh `F2_default_subset_after_addendum.png`. Số click của bước 1 vì vậy là **2**, không phải 3 như hàng gốc ghi |
+| **#5** | Độ trễ vào danh sách run dao động mạnh | **CÒN (chưa đo lại)** | số ở lượt trước: **0,87 s / 3,854 s / 1,731 s** cho cùng một deep link. Lượt này **không** đo lại, nên con số vẫn là của `index-BLH2yome.js`; chưa có bằng chứng nó đã được xử lý |
+| **bước 7 — `/api/models` cold** | chưa đo được | **NOT_VERIFIED** | `_MODELS_CACHE` là cache toàn tiến trình (`workbench/backend/main.py:172-176`); lượt này **không được** restart service nên không tạo được trạng thái cold. Đo được chỉ có warm: **2,092–3,205 ms** (5 lần, 87.139 byte) |
+
+## Bước 6 của bảng gốc: đọc lại cho đúng hiện trạng
+
+- **So sánh hai model cùng query** — nay **PASS** (trước là FAIL): HINT `#98` và TME `#65` nằm chung một bảng, chứng minh bằng `A2_compare_after_two_selected.png`.
+- **Mở kết quả từ Phân tích lỗi** — vẫn PASS như lượt trước (`s6_failure_analysis_to_inspector.png`, `s6_jumped_from_failures.png`).
+- **Một ghi chú `e2e-check-20261111`** — vẫn PASS như lượt trước: `GET /api/annotations` trả
+  `{"query_id":"7:3143","protocol_id":"circus_fashioniq_release_v1","note":"e2e-check-20261111"}` (`s6_note_after_reload.png`).
+- **Cohort `e2e-check-20261111`** — vẫn **không tạo được** (lỗi #3). Đây là phần duy nhất của bước 6 còn FAIL.
+
+## Chạy lại phụ lục này
+
+```
+workbench/envs/ctl312h/bin/python \
+  workbench/docs/reviews/20261111-master-audit/web_evidence/e2e_recheck/recheck_probe.py
+```
+Probe tự kiểm digest bundle ở đầu mỗi lần chạy; nếu frontend được build lại lần nữa, `bundle_check` sẽ đỏ **trước** mọi
+assertion khác — đó là tín hiệu phải cập nhật `js_expected`, không phải lỗi sản phẩm.
+Không chạy `pytest` trong lượt này (một sweep tuần tự đang chạy, PID 1046852); không rebuild; không restart/kill service.

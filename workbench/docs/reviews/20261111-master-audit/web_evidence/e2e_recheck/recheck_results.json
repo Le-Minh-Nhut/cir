@@ -1,13 +1,13 @@
 {
  "bundle": {
-  "served_js": "assets/index-CBR6lHgq.js",
-  "sha256": "acfb5fbbced77e88b86ee542e5f261c6df71c0e0e8039d753965e1fc873ac21a",
+  "served_js": "assets/index-DYYSN7oG.js",
+  "sha256": "74e4b4f86ce8b4f5061456138ce1ff79aa084d7662c54c24a123e5bb679d651f",
   "dist_assets": [
-   "index-CBR6lHgq.js",
+   "index-DYYSN7oG.js",
    "index-DecQnta9.css"
   ],
   "css_expected": "index-DecQnta9.css",
-  "js_expected": "index-CBR6lHgq.js"
+  "js_expected": "index-DYYSN7oG.js"
  },
  "viewport": {
   "width": 2560,
@@ -43,23 +43,23 @@
    "columns": {
     "rows": [
      [
-      "hint / fashioniq (đang xem)",
+      "hint / fashioniq · f461f391 · Top-K 100 (đang xem)",
       "#98"
      ],
      [
-      "limn",
+      "limn / base_iter0_all_categories · 10173dc4 · không có Top-K",
       "#193"
      ],
      [
-      "conesep",
+      "conesep / fiq_n02 · 30f6de42 · Top-K 50",
       "#193"
      ],
      [
-      "ptha_mtst",
+      "ptha_mtst / cirr_transfer · 315dd590 · không có Top-K",
       "#1,235"
      ],
      [
-      "intent",
+      "intent / fiq_n02 · 37ee72aa · Top-K 50",
       "#111"
      ]
     ],
@@ -183,11 +183,11 @@
    "columns": {
     "rows": [
      [
-      "hint / fashioniq (đang xem)",
+      "hint / fashioniq · f461f391 · Top-K 100 (đang xem)",
       "#98"
      ],
      [
-      "tme",
+      "tme / fashioniq_0 · cd1a696d · Top-K 100",
       "#65"
      ]
     ],
@@ -314,15 +314,15 @@
    "columns": {
     "rows": [
      [
-      "hint / fashioniq (đang xem)",
+      "hint / fashioniq · f461f391 · Top-K 100 (đang xem)",
       "#98"
      ],
      [
-      "tme",
+      "tme / fashioniq_0 · cd1a696d · Top-K 100",
       "#65"
      ],
      [
-      "conesep",
+      "conesep / fiq_n02 · a4f786d8 · Top-K 100",
       "#193"
      ]
     ],
@@ -447,23 +447,23 @@
    "columns": {
     "rows": [
      [
-      "hint / fashioniq (đang xem)",
+      "hint / fashioniq · f461f391 · Top-K 100 (đang xem)",
       "#98"
      ],
      [
-      "limn",
+      "limn / base_iter0_all_categories · 10173dc4 · không có Top-K",
       "#193"
      ],
      [
-      "conesep",
+      "conesep / fiq_n02 · 30f6de42 · Top-K 50",
       "#193"
      ],
      [
-      "ptha_mtst",
+      "ptha_mtst / cirr_transfer · 315dd590 · không có Top-K",
       "#1,235"
      ],
      [
-      "intent",
+      "intent / fiq_n02 · 37ee72aa · Top-K 50",
       "#111"
      ]
     ],
@@ -578,7 +578,7 @@
    "check": "A5_compare_two_runs_one_model",
    "url": "http://127.0.0.1:5173/?area=samples&view=compare&protocol=circus_fashioniq_release_v1&subset=full&runs=c%3Af461f391c6d4696011be8067%2Cc%3A10173dc45dea8c90fd2a284b%2Cc%3A9e4918a6b5c243412cbc58c9&run=f461f391c6d4696011be8067&query=7%3A1242",
    "expectation": "hai lượt cùng model_id (limn 10173dc4 không Top-K, 9e4918a6 Top-K 100) phải phân biệt được TRONG BẢNG so sánh",
-   "passed": false,
+   "passed": true,
    "png": "A5_compare_two_runs_one_model.png",
    "viewport": {
     "width": 2560,
@@ -588,15 +588,15 @@
    "columns": {
     "rows": [
      [
-      "hint / fashioniq (đang xem)",
+      "hint / fashioniq · f461f391 · Top-K 100 (đang xem)",
       "#98"
      ],
      [
-      "limn",
+      "limn / base_iter0_all_categories · 10173dc4 · không có Top-K",
       "#193"
      ],
      [
-      "limn",
+      "limn / base_iter0_all_categories · 9e4918a6 · Top-K 100",
       "#193"
      ]
     ],
@@ -706,8 +706,8 @@
     "cohortLine": "Cohort: 3 lượt, cùng protocol circus_fashioniq_release_v1 và subset full; hạng thiếu được ghi riêng là chưa chấm."
    },
    "twin_labels": [
-    "limn #193",
-    "limn #193"
+    "limn / base_iter0_all_categories · 10173dc4 · không có Top-K #193",
+    "limn / base_iter0_all_categories · 9e4918a6 · Top-K 100 #193"
    ],
    "api_candidate_status": {
     "10173dc45dea8c90fd2a284b": "TOPK_EXPORT_NOT_REQUESTED",
@@ -1018,9 +1018,7 @@
    "status": "PARTIAL"
   }
  ],
- "passed": 20,
- "failed": [
-  "A5_compare_two_runs_one_model"
- ],
+ "passed": 21,
+ "failed": [],
  "screenshots": 21
 }
