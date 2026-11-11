@@ -161,10 +161,7 @@ class Adapter(CompositionAdapter):
         return _status(cls, config if config is not None else resolve_config())
 
     def mode_supported(self, condition: str) -> tuple[bool, str | None]:
-        if condition not in CONDITIONS:
-            return False, f"unknown composition condition: {condition!r}"
-        reason = _structural_refusal(self)
-        return (reason is None), reason
+        return _mode_support(condition, _structural_refusal(self))
 
     def encode_queries(self, image_paths: Sequence[str], texts: Sequence[str],
                        categories: Sequence[str | None]) -> np.ndarray:
@@ -270,6 +267,20 @@ def _blockers(model: dict[str, Any], checkpoint: dict[str, Any], path: Path,
     if missing:
         reasons.append(f"checkpoint members carry no declared digest: {missing}")
     return reasons
+
+def _mode_support(condition: str, reason: str | None) -> tuple[bool, str | None]:
+    """One predicate for both `mode_supported` and the status row, so the two cannot disagree."""
+    if condition not in CONDITIONS:
+        return False, f"unknown composition condition: {condition!r}"
+    if condition == "image_only_empty_text":
+        # Report the unsupported condition as unsupported: the runner asks `mode_supported` and
+        # SKIPS a condition it answers False for (runner.py:1920-1925), recording it as
+        # ABLATION_UNSUPPORTED instead of running a condition in which every query fails. The
+        # cause is the MODEL's text tower, not this adapter: `_refuse_empty_edits` is the per-query
+        # report of a behaviour measured in `text_model.py:84-86` (see EMPTY_TEXT_REASON). Saying
+        # True here and then failing 6003 queries makes the plan lie.
+        return False, "; ".join(item for item in (reason, EMPTY_TEXT_REASON) if item)
+    return (reason is None), reason
 
 def _structural_refusal(adapter: Adapter) -> str | None:
     return "; ".join(_blockers(adapter._model, adapter._checkpoint, adapter.checkpoint_path,
@@ -469,7 +480,7 @@ def _status(cls: type[Adapter], config: Any) -> AdapterStatus:
         reasons = [gate] if gate else []
     return AdapterStatus(cls.model_id, not reasons, "; ".join(reasons) or None,
                          tuple(str(item["checkpoint_id"]) for item in model["checkpoint_variants"]),
-                         {condition: (not reasons, "; ".join(reasons) or None)
+                         {condition: _mode_support(condition, "; ".join(reasons) or None)
                           for condition in CONDITIONS},
                          notes + ". Cosine over concatenated, per-half-normalized 2048-d rows; the "
                                   "upstream reference mask is NOT inherited. One resident worker per "

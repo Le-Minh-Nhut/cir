@@ -291,3 +291,36 @@ def test_the_module_keeps_the_transport_signature_the_runner_calls() -> None:
     signature = inspect.signature(clvc._run)
     assert list(signature.parameters) == [
         "adapter", "operation", "image_paths", "texts", "categories"]
+
+# --------------------------------------------------- the unsupported condition is DECLARED, not failed
+
+def test_the_empty_text_condition_is_declared_unsupported_by_name() -> None:
+    """`mode_supported` must answer False for `image_only_empty_text`: the runner SKIPS a condition
+    it answers False for (runner.py:1920-1925) and records `ABLATION_UNSUPPORTED`, so declaring it
+    is what stops 6003 guaranteed failures from being run and reported as a plan that lied.
+    The cause is the model's text tower (`text_model.py:84-86`), and the reason must say so.
+    """
+    adapter = clvc.Adapter.__new__(clvc.Adapter)
+    adapter._model = {"model_id": "clvc_net",
+                      "environment": {"python_env_var": "WORKBENCH_CLVC_PYTHON"}}
+    adapter._checkpoint = {"checkpoint_id": "x", "checkpoint_mapping_status": "VERIFIED_METADATA",
+                           "bundle_members": [{"filename": f"{c}_{m}_model.pt",
+                                               "expected_sha256": "0" * 64}
+                                              for c in clvc.CATEGORIES for m in ("local", "global")]}
+    adapter.checkpoint_path = Path("/nonexistent")
+    adapter._interpreter = None
+    adapter.config = None
+    supported, reason = adapter.mode_supported("image_only_empty_text")
+    assert supported is False
+    assert clvc.EMPTY_TEXT_REASON in reason
+    # The other two conditions are unaffected by the declaration.
+    assert clvc._mode_support("multimodal", None) == (True, None)
+    assert clvc._mode_support("text_only_black_image", None) == (True, None)
+    assert clvc._mode_support("not-a-condition", None)[0] is False
+
+def test_status_per_mode_agrees_with_mode_supported_for_the_empty_condition() -> None:
+    """One predicate, so the status row cannot say True where `mode_supported` says False."""
+    sealed = clvc._mode_support("image_only_empty_text", None)
+    assert sealed[0] is False and clvc.EMPTY_TEXT_REASON in sealed[1]
+    assert clvc._mode_support("image_only_empty_text", "structural x") == (
+        False, f"structural x; {clvc.EMPTY_TEXT_REASON}")

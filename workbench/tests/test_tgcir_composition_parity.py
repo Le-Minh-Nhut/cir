@@ -250,3 +250,41 @@ def test_first_reply_records_the_pid_instead_of_refusing():
     adapter._worker_pid = None
     assert adapter._check_worker_pid(999) == 999
     assert adapter._worker_pid == 999
+
+@needs_dataset
+def test_a_blank_caption_is_transported_as_blank_rather_than_refused():
+    """`image_only_empty_text` hands the model an EMPTY caption, and TG-CIR can encode it.
+
+    Refusing here aborted the whole run: the worker replies failure, `_run` raises
+    `AdapterWorkerError`, and the runner re-raises that unconditionally (runner.py:693-694). A blank
+    caption is not ambiguous -- every dictionary maps it to "" -- so it is passed through, once.
+    """
+    corrections = module.Corrections(DATASET)
+    real = "is solid white and is a lighter color"
+    assert corrections.correct(["", real], [None, None]) == ["", real]
+    assert corrections.correct([""], [None]) == [""]
+    assert corrections.correct([""], ["dress"]) == [""]
+    assert corrections.correct(["   "], [None]) == [""]
+    # The multimodal text is unchanged by the new branch, so the two conditions still differ only
+    # in their pixels and the empty-text condition still differs only in its text.
+    assert corrections.correct([real], [None]) == [real]
+
+@needs_dataset
+def test_a_non_blank_ambiguous_caption_is_still_refused():
+    """The blank branch must not swallow the real refusal: two dictionaries that DISAGREE refuse."""
+    corrections = module.Corrections(DATASET)
+    key, (stem, forms) = "a probe caption", ("B005X4PL1G", {
+        "dress": "probe dress form", "shirt": "probe shirt form"})
+    corrections._by_text[key] = dict(forms)
+    corrections._by_pair[(stem, key)] = dict(forms)
+    try:
+        with pytest.raises(ValueError, match="is ambiguous"):
+            corrections.correct([key], [None], [f"{stem}.jpg"])
+    finally:
+        del corrections._by_text[key]
+        del corrections._by_pair[(stem, key)]
+    # After removing the fixture the same caption refuses for the OTHER stated reason when no
+    # reference stem can resolve it, so the ambiguity branch was the one under test and not a
+    # lucky accident of the lookup.
+    with pytest.raises(ValueError, match="resolves to no category"):
+        corrections.correct([key], [None])

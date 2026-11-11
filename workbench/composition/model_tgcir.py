@@ -179,6 +179,17 @@ class Corrections:
         paths = list(image_paths or [None] * len(texts))
         corrected: list[str] = []
         for position, (text, category) in enumerate(zip(texts, categories)):
+            if not str(text).strip():
+                # A BLANK caption is not ambiguous: every candidate dictionary maps it to "", so
+                # there is nothing for the lookup to choose between. TG-CIR is a text tower over a
+                # caption STRING, and "" tokenises to a valid (SOT, EOT) sequence that the pinned
+                # `clip.tokenize` handles, so the empty edit — `image_only_empty_text` — is a real
+                # input this model can encode. Refusing it here would abort the whole run: `_run`
+                # raises `AdapterWorkerError` and the runner re-raises that unconditionally
+                # (runner.py:693-694), so the condition would kill the model's run instead of
+                # degrading. Recorded verbatim: the empty string reaches the model unchanged.
+                corrected.append("")
+                continue
             if category is not None and category not in self.dictionaries:
                 raise ValueError(f"tgcir has no correction dictionary for category {category!r}")
             stem = Path(paths[position]).stem if paths[position] else None
