@@ -211,28 +211,100 @@ function statesNumber(row: NativeRowLike): boolean {
  *  appeared only after switching protocol. Scope resolution is a function of its own, and the
  *  inventory asks it about the ACTIVE scope.
  *
- *  Tiers, exact first: `(model_id, protocol_id)`, then a row that declares NO protocol — such a
- *  row cannot be attributed to another scope, so it is the only admissible fallback. A row naming a
- *  different protocol is never borrowed here; that is the "kết quả ở scope khác" case. (`family` is
- *  not a tier: every row this catalog serves is the native family, and `otherScopeFor` keys it.)
+ *  R01 at the UI layer: the ONLY admissible match is an exact `(model_id, protocol_id)`. A row that
+ *  states no protocol cannot be attributed to a protocol — it is not evidence about this scope and
+ *  lending it to whatever the reader happens to have selected is the same defect as attributing an
+ *  unidentified measurement to a protocol. `otherScopeFor` already refuses such rows; this is
+ *  consistent with it. Unattributed rows are surfaced separately (`nativeUnattributedFor`) so the
+ *  reader still sees the file instead of losing it.
  */
 export function nativeRowsFor(rows: readonly NativeRowLike[], model: string | null | undefined,
                               protocol: string): NativeRowLike[] {
   if (!model) return [];
-  const own = rows.filter((row) => statesNumber(row) && row.model_id === model);
-  const exact = own.filter((row) => row.protocol_id === protocol);
-  return exact.length ? exact : own.filter((row) => !row.protocol_id);
+  return rows.filter((row) => statesNumber(row) && row.model_id === model && row.protocol_id === protocol);
 }
 
-/** The set of models with a native number in `protocol` — `nativeRowsFor` asked once for every
- *  model, because the inventory needs one answer per row and a scan per row would be quadratic. */
+/** Native rows for one model that state a number but name NO protocol. They are real rows the tree
+ *  serves; what they are not is a measurement of any scope, so they never enter `nativeMeasuredIds`
+ *  and never render as "measured here". The inventory shows them under their own label. */
+export function nativeUnattributedFor(rows: readonly NativeRowLike[], model: string | null | undefined): NativeRowLike[] {
+  if (!model) return [];
+  return rows.filter((row) => statesNumber(row) && row.model_id === model && !row.protocol_id);
+}
+
+/** Models with a native number in EXACTLY `protocol`. A protocol-less row is deliberately excluded:
+ *  "measured in this protocol" is a claim a row without a protocol cannot support. */
 export function nativeMeasuredIds(rows: readonly NativeRowLike[], protocol: string): Set<string> {
   const ids = new Set<string>();
   for (const row of rows) {
-    if (!row.model_id || !statesNumber(row)) continue;
-    if (row.protocol_id === protocol || !row.protocol_id) ids.add(row.model_id);
+    if (!row.model_id || !statesNumber(row) || row.protocol_id !== protocol) continue;
+    ids.add(row.model_id);
   }
   return ids;
+}
+
+/** One inventory row's status, from the served facts alone.
+ *
+ *  The chain is ordered, and the order is the claim: a campaign deferral outranks a run, a run
+ *  outranks a row in another table, and "measured" is only ever said about a row that carries a
+ *  number. Extracted so the ordering is one function a test can execute rather than a ternary tower
+ *  where a later branch can silently contradict the counter above it.
+ *
+ *  Two contradictions the tower used to have, both now impossible:
+ *  * `nativeOnly` was `!entry && nativeInScope > 0`, so two composition runs in this scope plus one
+ *    native macro read "Có dữ liệu native" — a label denying the runs. It now requires
+ *    `usableCount === 0`.
+ *  * every `entry` that was not a composition row was labelled "Có dữ liệu native", including index
+ *    and aggregate rows; and an aggregate row with `aggregate_metrics: false` read "Có số đo" while
+ *    the measured counter (which requires that flag) excluded it. Both now follow the flag.
+ *
+ *  A native row that names no protocol is not a measurement of any scope; it gets its own status so
+ *  the row is visible without the scope being able to claim it.
+ */
+export interface InventoryFacts {
+  deferred: boolean;
+  /** Composition run selected for this row in the active protocol/subset. */
+  hasRun: boolean;
+  /** `capabilities.flags.aggregate_metrics` on the selected row. */
+  runHasAggregateMetrics: boolean;
+  runMissingScored: boolean;
+  /** Which served table the selected catalog entry came from; null when there is no entry. */
+  entryFamily: "composition" | "index" | "aggregate" | null;
+  entryHasAggregateMetrics: boolean;
+  /** Native rows with a number for (model, this protocol). */
+  nativeInScope: number;
+  /** Native rows with a number for this model that name NO protocol. */
+  nativeUnattributed: number;
+  /** Usable composition rows for this model in this scope. */
+  usableCount: number;
+  /** Usable entries in this scope whose row reports aggregate metrics — i.e. rows the measured
+   *  counter ("Có số đo") already counts. A multi-run row that the counter counts must not read
+   *  "cần chọn" as if nothing were measured. */
+  measuredEntryCount: number;
+  elsewhereCount: number;
+  checkpointDownloaded: boolean;
+}
+
+export function inventoryStatus(facts: InventoryFacts): string {
+  if (facts.deferred) return "Tạm gác";
+  if (facts.hasRun) {
+    if (!facts.runHasAggregateMetrics) return "Chỉ có hạng từng query";
+    return facts.runMissingScored ? "Chấm thiếu" : "Có số đo";
+  }
+  if (facts.entryFamily) {
+    if (facts.entryFamily === "composition") return "Chưa có số đo";
+    if (!facts.entryHasAggregateMetrics) return "Chỉ có lượt chạy, chưa có số";
+    return "Có số đo";
+  }
+  if (facts.nativeInScope > 0 && facts.usableCount === 0) return "Có dữ liệu native";
+  if (facts.nativeUnattributed > 0) return "Số đo native không ghi protocol";
+  if (facts.usableCount > 1) {
+    return facts.measuredEntryCount > 0
+      ? `${facts.usableCount} lượt trong phạm vi, đã có số đo — chọn một`
+      : `${facts.usableCount} lượt cần chọn`;
+  }
+  if (facts.elsewhereCount > 0) return "Có kết quả ở scope khác";
+  return facts.checkpointDownloaded ? "Chưa có số đo" : "Chưa có checkpoint xác nhận";
 }
 
 /** What the inspector may say about the target and the candidate window ON SCREEN.

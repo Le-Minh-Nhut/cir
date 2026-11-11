@@ -78,20 +78,74 @@ test("no conclusion when the target is in the window or the export stored nothin
   assert.equal(S.candidateWindowVerdict({ ...base, depth: 0, targetInShown: false, status: "ready" }).kind, "hidden");
 });
 
-// R06: a native row in the ACTIVE protocol measures the model HERE; a row naming another protocol
-// does not, and a blocker document (no metrics) is never a measurement.
-test("native rows measure the model in their own protocol, and only there", () => {
+// R06/R01: only an exact (model, protocol) native row measures the model HERE. A protocol-less row is
+// still reachable under its own label, and is never counted as measured in a selected protocol.
+test("a protocol-less native row is not measured in a selected protocol but stays reachable", () => {
   const rows = [
     { model_id: "conesep", protocol_id: "p1", metrics: { r10: 54.76 } },
     { model_id: "tme", protocol_id: "p2", metrics: { r10: 31 } },
     { model_id: "habit", protocol_id: "p1", metrics: null },
-    { model_id: "unstated", protocol_id: null, metrics: { r10: 12 } },
+    { model_id: "airknow", protocol_id: null, metrics: { r10: 12 } },
   ];
-  assert.deepEqual([...S.nativeMeasuredIds(rows, "p1")].sort(), ["conesep", "unstated"]);
-  assert.deepEqual([...S.nativeMeasuredIds(rows, "p2")].sort(), ["tme", "unstated"]);
+  // Exact (model, protocol) rows measure that model in that protocol, and nowhere else.
+  assert.deepEqual([...S.nativeMeasuredIds(rows, "p1")], ["conesep"]);
+  assert.deepEqual([...S.nativeMeasuredIds(rows, "p2")], ["tme"]);
   assert.equal(S.nativeRowsFor(rows, "conesep", "p2").length, 0, "a p1 row was borrowed for p2");
   assert.equal(S.nativeRowsFor(rows, "conesep", "p1").length, 1);
   assert.equal(S.nativeRowsFor(rows, "habit", "p1").length, 0, "a blocker document counted as a number");
-  assert.equal(S.nativeRowsFor(rows, "unstated", "p2").length, 1, "an unstated protocol is the fallback");
+  // The protocol-less row is NOT a measurement of any scope...
+  for (const protocol of ["p1", "p2", "p3"]) {
+    assert.equal(S.nativeMeasuredIds(rows, protocol).has("airknow"), false,
+      `protocol-less row counted as measured in ${protocol}`);
+    assert.equal(S.nativeRowsFor(rows, "airknow", protocol).length, 0);
+  }
+  // ...but it is not lost: it is served under its own, unattributed answer.
+  assert.equal(S.nativeUnattributedFor(rows, "airknow").length, 1);
+  assert.equal(S.nativeUnattributedFor(rows, "conesep").length, 0);
   assert.equal(S.nativeRowsFor(rows, null, "p1").length, 0);
+});
+
+// (b) an exact (model, protocol) native row IS measured there.
+test("an exact (model, protocol) native row makes the model measured in that protocol", () => {
+  const rows = [{ model_id: "csmcir", protocol_id: "fashioniq_original_split", metrics: { r10: 57.05 } }];
+  assert.equal(S.nativeMeasuredIds(rows, "fashioniq_original_split").has("csmcir"), true);
+  assert.equal(S.nativeMeasuredIds(rows, "fashioniq_val_split").has("csmcir"), false);
+  assert.equal(S.nativeRowsFor(rows, "csmcir", "fashioniq_original_split").length, 1);
+  assert.equal(S.nativeUnattributedFor(rows, "csmcir").length, 0);
+});
+
+// (c) the deferral stays the status, and it does not conceal the native number behind it.
+test("a deferred model with a native row reports the deferral AND the number", () => {
+  const base = {
+    deferred: true, hasRun: false, runHasAggregateMetrics: false, runMissingScored: false,
+    entryFamily: null, entryHasAggregateMetrics: false, nativeUnattributed: 0,
+    usableCount: 0, measuredEntryCount: 0, elsewhereCount: 0, checkpointDownloaded: true,
+  };
+  assert.equal(S.inventoryStatus({ ...base, nativeInScope: 1 }), "Tạm gác",
+    "the campaign status must not be replaced by a measurement label");
+  assert.equal(S.inventoryStatus({ ...base, nativeInScope: 0 }), "Tạm gác");
+  // The number is reachable, not hidden: the caller prints it beside the status (nativeInScope).
+  assert.equal(S.inventoryStatus({ ...base, nativeInScope: 3 }), "Tạm gác");
+});
+
+test("a label never contradicts a row the API serves in the same scope", () => {
+  const base = {
+    deferred: false, hasRun: false, runHasAggregateMetrics: false, runMissingScored: false,
+    entryFamily: null, entryHasAggregateMetrics: false, nativeInScope: 0, nativeUnattributed: 0,
+    usableCount: 0, measuredEntryCount: 0, elsewhereCount: 0, checkpointDownloaded: true,
+  };
+  // Two composition runs here plus a native macro: the runs are the answer, not "native only".
+  assert.match(S.inventoryStatus({ ...base, usableCount: 2, measuredEntryCount: 2, nativeInScope: 1 }),
+    /2 lượt.*đã có số đo/);
+  assert.doesNotMatch(S.inventoryStatus({ ...base, usableCount: 2, measuredEntryCount: 2, nativeInScope: 1 }),
+    /Có dữ liệu native/);
+  // An aggregate row without aggregate metrics must not read "Có số đo" (the counter excludes it).
+  assert.equal(S.inventoryStatus({ ...base, entryFamily: "aggregate" }), "Chỉ có lượt chạy, chưa có số");
+  assert.equal(S.inventoryStatus({ ...base, entryFamily: "aggregate", entryHasAggregateMetrics: true }), "Có số đo");
+  // A run without aggregate metrics is ranks-only, not measured.
+  assert.equal(S.inventoryStatus({ ...base, hasRun: true }), "Chỉ có hạng từng query");
+  // An index row is never called native.
+  assert.notEqual(S.inventoryStatus({ ...base, entryFamily: "index" }), "Có dữ liệu native");
+  // A protocol-less native row does not make the selected scope measured.
+  assert.equal(S.inventoryStatus({ ...base, nativeUnattributed: 1 }), "Số đo native không ghi protocol");
 });

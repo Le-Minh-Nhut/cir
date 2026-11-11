@@ -5,7 +5,7 @@ import type { Model } from "./types";
 import { Badge, Detail, ErrorState, LoadingState } from "./ui";
 import { fmtDenominator, fmtInt, fmtNdcg, fmtPercentValue } from "./format";
 import { scoredCounts } from "./catalog";
-import { nativeMeasuredIds, nativeRowsFor, otherScopeFor, protocolHasSubsets, type ScopeRow } from "./scope";
+import { inventoryStatus, nativeMeasuredIds, nativeRowsFor, nativeUnattributedFor, otherScopeFor, protocolHasSubsets, type ScopeRow } from "./scope";
 import { SUBSET_LABEL } from "./routes";
 
 /** Operator scope for this review. Not a registry fact and not a measurement: the two models whose
@@ -185,29 +185,40 @@ export function ModelInventory({ data, location, onGoto }: {
               const downloaded = checkpoints.filter((checkpoint) => checkpoint.checkpoint_downloaded).length;
               const blockers = [...new Set(checkpoints.flatMap((checkpoint) => checkpoint.blocking_reasons ?? []))];
               const missingScored = counts != null && counts.scored < counts.total;
-              // R06: a native row in the ACTIVE protocol measures this model here. It is not a
-              // composition run, so it opens the native table — the same destination the cross-scope
-              // link uses — and its label is the native vocabulary, never "Có số đo".
+              // R06: only an EXACT (model, protocol) native row measures this model here. A row that
+              // names no protocol is not evidence about the selected scope (R01 in the UI layer), so
+              // it gets its own label and its own link instead of being lent to whatever protocol is
+              // on screen.
               const nativeHere = nativeRowsFor(nativeRows, model.model_id, location.protocol);
-              const nativeOnly = !entry && nativeHere.length > 0;
+              const nativeUnattributed = nativeUnattributedFor(nativeRows, model.model_id);
+              const nativeOnly = !entry && nativeHere.length > 0 && usable.length === 0;
               // Scopes this model DOES have numbers in, from composition rows, native measurements and
               // aggregate reports. Never let "no run here" be the whole answer when a real row exists
               // elsewhere: the reader gets the scope, its size, and a link that opens it.
-              const elsewhere = entry || deferredReason || nativeOnly
+              const elsewhere = entry || deferredReason || nativeOnly || nativeUnattributed.length
                 ? []
                 : otherScopeFor(allRows, model.model_id).filter((scope) =>
                     scope.protocol !== location.protocol
                     || (protocolHasSubsets(location.protocol) ? scope.subset !== location.subset : false));
-              const status = deferredReason ? "Tạm gác"
-                : run ? (missingScored ? "Chấm thiếu" : "Có số đo")
-                : nativeOnly ? "Có dữ liệu native"
-                : entry ? "Có dữ liệu native"
-                : usable.length > 1 ? `${usable.length} lượt cần chọn`
-                : elsewhere.length ? "Có kết quả ở scope khác"
-                : downloaded ? "Chưa có số đo" : "Chưa có checkpoint xác nhận";
+              // One decision, in `scope.ts`, so the label and the counter above cannot disagree.
+              const status = inventoryStatus({
+                deferred: !!deferredReason,
+                hasRun: !!run,
+                runHasAggregateMetrics: !!entry?.capabilities.flags.aggregate_metrics,
+                runMissingScored: missingScored,
+                entryFamily: entry?.family ?? null,
+                entryHasAggregateMetrics: !!entry?.capabilities.flags.aggregate_metrics,
+                nativeInScope: nativeHere.length,
+                nativeUnattributed: nativeUnattributed.length,
+                usableCount: usable.length,
+                measuredEntryCount: usable.filter((item) => item.capabilities.flags.aggregate_metrics).length,
+                elsewhereCount: elsewhere.length,
+                checkpointDownloaded: downloaded > 0,
+              });
+              const openNative = () => onGoto({ area: "evaluation", view: "native", runs: [], run: "", query: "", offset: 0 });
               const openRun = () => {
-                if (nativeOnly) {
-                  onGoto({ area: "evaluation", view: "native", runs: [], run: "", query: "", offset: 0 });
+                if (nativeOnly || nativeUnattributed.length) {
+                  openNative();
                   return;
                 }
                 if (!entry) return;
@@ -230,8 +241,29 @@ export function ModelInventory({ data, location, onGoto }: {
                             Xem số đo native
                           </button>
                       : deferredReason
-                        ? <span className="cell-sub">Ngoài đợt chạy này</span>
-                        : elsewhere.length
+                        ? <div className="cell-sub" style={{ marginTop: 6 }} data-testid={`deferred-${model.model_id}`}>
+                            <span>Ngoài đợt chạy này</span>
+                            {/* The deferral is a campaign decision, not a statement that nothing was
+                                measured. A reader must not have to leave the row to learn otherwise. */}
+                            {nativeHere.length > 0 && (
+                              <button type="button" className="ghost" style={{ marginTop: 6 }}
+                                      data-testid={`deferred-native-${model.model_id}`} onClick={openNative}>
+                                {fmtInt(nativeHere.length)} số đo native ở phạm vi này
+                              </button>
+                            )}
+                          </div>
+                      : nativeUnattributed.length
+                        ? <div className="cell-sub" style={{ marginTop: 6 }} data-testid={`native-unattributed-${model.model_id}`}>
+                            <span>
+                              {fmtInt(nativeUnattributed.length)} số đo native nhưng file không ghi protocol —
+                              không quy được cho phạm vi đang chọn.
+                            </span>
+                            <button type="button" className="ghost" style={{ marginTop: 6 }}
+                                    data-testid={`native-unattributed-open-${model.model_id}`} onClick={openNative}>
+                              Xem trong bảng native
+                            </button>
+                          </div>
+                      : elsewhere.length
                           ? <div className="cell-sub" data-testid={`other-scope-${model.model_id}`} style={{ marginTop: 6 }}>
                               <span>Có kết quả ở {elsewhere.length} phạm vi khác — mở đúng phạm vi đó:</span>
                               <div className="scope-links">
@@ -274,11 +306,16 @@ export function ModelInventory({ data, location, onGoto }: {
                     <Badge tone={deferredReason ? "neutral" : run && !missingScored ? "ok" : nativeOnly ? "info" : "warn"}>{status}</Badge>
                     <span className="cell-sub">
                       {deferredReason
-                        ?? (entry
+                        ? `${deferredReason}${nativeHere.length
+                            ? ` · ${fmtInt(nativeHere.length)} số đo native ở phạm vi này`
+                            : ""}`
+                        : entry
                           ? (missingScored ? `${fmtInt(counts?.unscored)} / ${fmtInt(counts?.total)} query chưa chấm` : "mọi query trong mẫu đều có hạng")
                           : nativeOnly
                             ? `${fmtInt(nativeHere.length)} số đo native · macro toàn protocol, chưa xác minh`
-                            : `${downloaded} / ${checkpoints.length} checkpoint đã có · ${model.reproduction_status ?? "chưa rõ"}`)}
+                            : nativeUnattributed.length
+                              ? `${fmtInt(nativeUnattributed.length)} số đo native không ghi protocol · chưa quy được cho phạm vi này`
+                              : `${downloaded} / ${checkpoints.length} checkpoint đã có · ${model.reproduction_status ?? "chưa rõ"}`}
                     </span>
                   </td>
                   <td className="num">
@@ -296,7 +333,9 @@ export function ModelInventory({ data, location, onGoto }: {
                           {entry.capabilities.flags.candidate_topk ? "Đã xuất ứng viên" : "Cần xuất Top-K"}
                         </span>
                       : <span className="hint">{deferredReason ? "Ngoài đợt chạy này"
-                          : nativeOnly ? "Macro native — không có ứng viên" : "Chưa có kết quả"}</span>}
+                          : nativeOnly ? "Macro native — không có ứng viên"
+                          : nativeUnattributed.length ? "Macro native — không ghi protocol"
+                          : "Chưa có kết quả"}</span>}
                   </td>
                   <td>
                     {/* Registry's own reasons, verbatim; the summary is the count. An empty list says the
