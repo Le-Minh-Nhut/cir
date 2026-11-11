@@ -349,3 +349,21 @@ In §1(b) the child's uvicorn lines and the supervisor's lines share one file. I
 and one death line lost its neighbours, because two processes append to the same fd with independent
 buffers. The supervisor's own lines are written with `flush=True` and were always readable; the
 interleaving is a property of inherited stdout+stderr, unchanged by this work and not fixed here.
+
+## 8. Porcelain: three entries, two of them not this task's
+
+After the commit, `git status --porcelain` is:
+
+```text
+?? CLEANUP_REPORT.md.save
+?? workbench/systemd/
+?? workbench/tests/test_systemd_user_services.py
+```
+
+`CLEANUP_REPORT.md.save` is the pre-existing entry the task expected. The other two appeared
+**during** this session (mtimes `2026-11-11 23:40:11` … `23:43:26`, vs. session start before
+`23:37`): `workbench/systemd/{__init__,render_units}.py`, two `*.service.in` templates, and
+`workbench/tests/test_systemd_user_services.py`. They are another writer's in-flight work — a
+systemd user-unit renderer with its own test file, unrelated to backoff or job recovery. They were
+neither written nor staged by this task and are left untouched (deleting unrelated work is out of
+scope); nothing in the commit above references them.
