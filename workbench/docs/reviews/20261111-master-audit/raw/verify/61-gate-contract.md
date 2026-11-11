@@ -129,5 +129,12 @@ suites were run explicitly:
 → **57 passed**. The named command deselects everything (2908 deselected, 0 selected), which is a
 selection artefact, not a pass — recorded here so it is not mistaken for coverage.
 
-Gate/verdict-named selection (`-k "parity or gate or verdict"`) was also run; its result is in
-`62-gate-suite.txt` if the broader suite is needed.
+The wider selection `-k "gate"` over all of `workbench/tests/` was also run against the same commit:
+
+```
+workbench/envs/ctl312h/bin/python -m pytest workbench/tests/ \
+  workbench/tests/test_gate_contract_negatives.py -k "gate" -q --basetemp=/tmp/r02_gate_bt
+→ 240 passed, 1 skipped, 2670 deselected in 107s
+```
+
+Nothing outside `parity_gate.py`'s own contract regressed.
