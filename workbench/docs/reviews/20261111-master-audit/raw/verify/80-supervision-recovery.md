@@ -122,8 +122,10 @@ Match. `dist/` was not rebuilt; no frontend source or asset was touched.
 
 > **SUPERSEDED (added later).** The two lines above are the measurement of *this* rollout and
 > are kept verbatim: at that moment `index-BLH2yome.js` / `702ed2e9…d681` really was served, and
-> `dist/` really was not rebuilt. The frontend has since been rebuilt: the bundle **served now**
-> is `index-CBR6lHgq.js` / `acfb5fbbced77e88b86ee542e5f261c6df71c0e0e8039d753965e1fc873ac21a`.
+> `dist/` really was not rebuilt. The frontend has since been rebuilt twice: `index-CBR6lHgq.js` /
+> `acfb5fbbced77e88b86ee542e5f261c6df71c0e0e8039d753965e1fc873ac21a` came first and is now also
+> superseded, and the bundle **served now** is `index-DYYSN7oG.js` /
+> `74e4b4f86ce8b4f5061456138ce1ff79aa084d7662c54c24a123e5bb679d651f`.
 > Re-read with the same two commands; do not treat the digest above as current.
 
 ## Stale :8765

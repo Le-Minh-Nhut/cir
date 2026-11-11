@@ -24,7 +24,7 @@ xuất `derivedLineage` (+ `types.ts` khai kiểu), `EvaluationPage.tsx` render 
 (node) và `workbench/tests/test_derived_subset_status.py` (python; **71 passed** cùng các test frontend
 khác). Vì vậy phép đo cũ `grep -rn 'derived_from' workbench/frontend/*.ts*` → **0** (đo tại `0691f3e`)
 **đã bị superseded** bởi chính thay đổi này: chạy lại cùng lệnh bây giờ ra **6** hit, và bundle đang
-phục vụ (`index-CBR6lHgq.js`) mang chuỗi đó. **Một lưu ý trung thực:** bằng chứng **thị giác** cho ca
+phục vụ (`index-DYYSN7oG.js`) mang chuỗi đó. **Một lưu ý trung thực:** bằng chứng **thị giác** cho ca
 586/586 so với parent partial đang được **kiểm lại riêng**; nếu nó không xác nhận thì phải ghi là chưa
 xác nhận, **không** được trích như đã chứng minh.
 
@@ -117,13 +117,14 @@ bảng native với nhãn `duplicate_of`, chỉ không được tính là bằng
 - Production diff `0691f3e..HEAD` ngoài `workbench/docs` và `workbench/tests`: **rỗng** (đo trước khi pin).
   Commit sau mốc chỉ được sửa tài liệu; guard so từng byte cây sản xuất sẽ đỏ nếu không còn đúng.
 - Bất biến: `git status --porcelain` = `?? CLEANUP_REPORT.md.save`
-- Bundle phục vụ: `index-CBR6lHgq.js` sha256
-  `acfb5fbbced77e88b86ee542e5f261c6df71c0e0e8039d753965e1fc873ac21a` — **fact đo được**, đọc lại bằng
+- Bundle phục vụ: `index-DYYSN7oG.js` sha256
+  `74e4b4f86ce8b4f5061456138ce1ff79aa084d7662c54c24a123e5bb679d651f` — **fact đo được**, đọc lại bằng
   `curl -s http://127.0.0.1:5173/ | grep -o 'assets/index-[^"]*\.js'` rồi
-  `sha256sum workbench/frontend/dist/assets/index-CBR6lHgq.js`; `dist/assets/` lúc đo chỉ có
-  `index-DecQnta9.css` + `index-CBR6lHgq.js`, và bytes phục vụ `cmp`-identical với `dist/`. Mỗi lần build
-  lại phải đọc lại đúng hai lệnh đó, không chép số này. `index-BLH2yome.js` / `702ed2e9…d681` là bundle
-  **superseded**; `index-DyVaNikG.js` / `81d61f65…0981`, `index-DeTvxLlD.js` / `1503e891…8155` và các tên cũ hơn cũng vậy.
+  `sha256sum workbench/frontend/dist/assets/index-DYYSN7oG.js`; `dist/assets/` lúc đo chỉ có
+  `index-DecQnta9.css` + `index-DYYSN7oG.js`, và bytes phục vụ `cmp`-identical với `dist/`. Mỗi lần build
+  lại phải đọc lại đúng hai lệnh đó, không chép số này. `index-CBR6lHgq.js` / `acfb5fbb…ac21a` và
+  `index-BLH2yome.js` / `702ed2e9…d681` là bundle **superseded**; `index-DyVaNikG.js` / `81d61f65…0981`,
+  `index-DeTvxLlD.js` / `1503e891…8155` và các tên cũ hơn cũng vậy.
 - Web: http://127.0.0.1:5173/ · API: http://127.0.0.1:8000 (poll `/api/benchmark-runs`, **không** `/api/models`)
 
 ## Dọn dẹp đã làm

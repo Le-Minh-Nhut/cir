@@ -212,8 +212,10 @@ Cũng vì vậy con số `index-DjAje2d2.js` ghi bên trên là **superseded**, 
 `index-DyVaNikG.js` (sha256 `81d61f65…0981`, bản từng được ghi là "đang phục vụ" ở đây) cũng **đã superseded**, như `index-DWpK0yeS.js` / `7e34724e…a16`.
 `index-BLH2yome.js` (sha256 `702ed2e93a1bf86ba2094fe62791d4272dcdbf36e8caf7f757f08cf96805d681`, bản từng
 được ghi là "đang phục vụ" ở đây) cũng **đã superseded** — frontend được build lại sau đó.
-Bundle **đang phục vụ** là `assets/index-CBR6lHgq.js`, sha256
-`acfb5fbbced77e88b86ee542e5f261c6df71c0e0e8039d753965e1fc873ac21a` (`dist/assets` chỉ còn đúng nó và
+`index-CBR6lHgq.js` (sha256 `acfb5fbbced77e88b86ee542e5f261c6df71c0e0e8039d753965e1fc873ac21a`, bản từng
+được ghi là "đang phục vụ" ở đây) cũng **đã superseded** — frontend được build lại một lần nữa.
+Bundle **đang phục vụ** là `assets/index-DYYSN7oG.js`, sha256
+`74e4b4f86ce8b4f5061456138ce1ff79aa084d7662c54c24a123e5bb679d651f` (`dist/assets` chỉ còn đúng nó và
 `index-DecQnta9.css`; `cmp` byte phục vụ với `dist/` → IDENTICAL). Đọc lại bằng hai lệnh:
 
 ```
