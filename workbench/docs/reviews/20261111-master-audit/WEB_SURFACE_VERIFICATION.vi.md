@@ -199,6 +199,9 @@ thật (`unit_declared = 4`, trong đó 2 là `unit_sibling_key`); **39** dòng 
 lớn, và từng dòng đã được audit: **0** khai báo bị bỏ sót
 (các key `*_pct` có mặt như `dead_parameters_pct`, `relative_error_pct`,
 `checkpoint_training_noise_pct` mô tả **đại lượng khác**, không phải thang macro).
+Bằng chứng: `raw/verify/31-live-unit-audit.txt` (payload sống, liệt kê từng dòng theo `unit_source`).
+**Không** dùng `web_evidence/w01_native_measurements_after.json` cho các con số này — bản đó chụp
+**trước** khi có đường khai báo, nên nó ghi `unit_declared: 0`, `unit_inferred: 43`.
 
 Nói cách khác: trong **43** dòng có macro, **39** dòng vẫn đang được đọc trên thang suy ra theo độ
 lớn và **4** dòng mang khai báo thật — 2 dòng khai qua `categories[*].provenance.units` của
