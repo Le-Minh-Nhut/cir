@@ -22,10 +22,11 @@ Mục 12 cũ (nhãn native không protocol) **không phải defect** — lý do 
 1. **PAIR** — cần upstream công bố `model_vssp` + `MHTransformer_dis`. Đã quét 21 commit, không tồn
    tại. Xem `replay/pair_absence.py`.
 2. **13 model G1/G2 `NOT_RUN`** — cần artifact parity; mỗi model cần GPU.
-3. **5 ca cần rerun** (bảng §6 `FINAL_REPORT.vi.md`): `clip4cir_rn50x4_noft`, `airknow` (3 dòng counted
+3. **4 ca cần rerun** (bảng §6 `FINAL_REPORT.vi.md`): `clip4cir_rn50x4_noft`, `airknow` (3 dòng counted
    — n05 và n08 khác checkpoint, cộng một cặp mâu thuẫn trên `fiq_n05`), `clvc_net` (hai số counted mâu
-   thuẫn, xem mục 10), `pair` (4 dòng), `habit` `e0dd04a4` (artifact trỏ interpreter chết). ENCODER
-   `5dee7425`/`6a528e87` đã đóng: superseded, lý do từng id ghi ở §6 `FINAL_REPORT.vi.md`.
+   thuẫn, xem mục 10), `pair` (4 dòng), `habit` `e0dd04a4` (artifact trỏ interpreter chết). ENCODER đã
+   rerun và `acc9b20e` là canonical; `5dee7425`/`6a528e87` superseded, lý do từng id ghi ở §6
+   `FINAL_REPORT.vi.md`. Số ca phải rerun còn **4**.
 4. **LIMN 2 query mơ hồ** `7:3038`, `7:3790` — provenance upstream không cho phép chốt category. Cần
    metadata category từ upstream.
 5. **Derived row chưa có marker `DERIVED` trên UI** — dữ liệu đúng ở `derived_from`, bề mặt web chưa
@@ -58,12 +59,16 @@ Mục 12 cũ (nhãn native không protocol) **không phải defect** — lý do 
    `:8000`; đo lại tại `7babfd9`: đúng 404 vs 200). Nhận diện bằng cổng và hành vi route, không bằng
    PID. Cần kill tiến trình đó; PID đổi sau restart nên không ghim số.
 
-**Không phải việc (đã kiểm):** nhãn "Số đo native không ghi protocol" ở `ModelInventory.tsx` là **đúng
-theo dữ liệu**, không phải defect — payload sống `:8000/api/native-measurements` cho `clvc_net` 5 row
-(3 row `protocol_id: fashioniq_val_split`, 2 row `protocol_id: null` là roll-up) và `tgcir` 4 row theo
-đúng khuôn đó; `nativeUnattributedFor()` (`scope.ts`) lọc `statesNumber ∧ model_id ∧ !protocol_id` nên
-chọn **đúng 2 row null** mỗi model, không nuốt row nào có `protocol_id`. Chỗ dễ đọc sai: hai row null
-là roll-up phát lại số của chính row có protocol. Đây là cải thiện câu chữ, **không** được đổi bộ lọc.
+**Đã sửa, không còn là việc:** nhãn "Số đo native không ghi protocol" ở `ModelInventory.tsx` **là**
+defect cùng họ R06/R08. Payload sống `:8000/api/native-measurements` cho `clvc_net` / `tgcir`: mọi row
+`protocol_id: null` là roll-up `counted: false` (`all_measured_summary.json`,
+`selection_decisions.json`), nên `nativeUnattributedFor()` cũ (lọc `statesNumber ∧ !protocol_id`) đếm 2
+row và báo "2 số đo native nhưng file không ghi protocol" — trong khi model có row counted ở
+`fashioniq_val_split`. Cùng lỗi ở `airknow` @ `fashioniq_full_gallery_ref_excluded`: 6 row, chỉ 3
+`counted: true`, 3 row còn lại là repeat `duplicate_of` (`run3cat_gpu_run{1..4}`), nên "6 số đo native"
+là sai. Nay `scope.ts` có predicate `counts` (`statesNumber ∧ counted !== false`) dùng trong cả
+`nativeRowsFor` / `nativeUnattributedFor` / `nativeMeasuredIds`; row `counted: false` **vẫn hiện** trong
+bảng native với nhãn `duplicate_of`, chỉ không được tính là bằng chứng cho câu hỏi phạm vi.
 
 ## Trạng thái chốt
 - Revision được sweep: `7babfd96c1b5003d3fba7197bc6cbb1446a48a2b` (= `TESTED_SOURCE_SHA`; **chính là**

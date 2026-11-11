@@ -337,6 +337,17 @@ function statesNumber(row: NativeRowLike): boolean {
   return row.metrics !== null && row.metrics !== undefined;
 }
 
+/** R08 at the scope layer: a row the backend marks `counted: false` (a repeat draw, a roll-up that
+ *  restates another row, a superseded selection) still STATES a number and is still displayed with
+ *  its `duplicate_of` label — but it is not evidence in a scope question. `statesNumber` answers
+ *  "is there a number at all"; this answers "may a scope claim it". airknow showed six native rows at
+ *  `fashioniq_full_gallery_ref_excluded`, three of them `duplicate_of` repeats, and printed "6 số đo
+ *  native"; clvc_net/tgcir's only protocol-less rows were roll-ups, and the inventory told the reader
+ *  a number existed whose scope was unknown. */
+function counts(row: NativeRowLike): boolean {
+  return statesNumber(row) && row.counted !== false;
+}
+
 /** Native rows for one model IN one scope.
  *
  *  R06: the inventory consulted native rows only to build links to OTHER scopes, and filtered those
@@ -355,7 +366,7 @@ function statesNumber(row: NativeRowLike): boolean {
 export function nativeRowsFor(rows: readonly NativeRowLike[], model: string | null | undefined,
                               protocol: string): NativeRowLike[] {
   if (!model) return [];
-  return rows.filter((row) => statesNumber(row) && row.model_id === model && row.protocol_id === protocol);
+  return rows.filter((row) => counts(row) && row.model_id === model && row.protocol_id === protocol);
 }
 
 /** Native rows for one model that state a number but name NO protocol. They are real rows the tree
@@ -363,7 +374,7 @@ export function nativeRowsFor(rows: readonly NativeRowLike[], model: string | nu
  *  and never render as "measured here". The inventory shows them under their own label. */
 export function nativeUnattributedFor(rows: readonly NativeRowLike[], model: string | null | undefined): NativeRowLike[] {
   if (!model) return [];
-  return rows.filter((row) => statesNumber(row) && row.model_id === model && !row.protocol_id);
+  return rows.filter((row) => counts(row) && row.model_id === model && !row.protocol_id);
 }
 
 /** Models with a native number in EXACTLY `protocol`. A protocol-less row is deliberately excluded:
@@ -371,7 +382,7 @@ export function nativeUnattributedFor(rows: readonly NativeRowLike[], model: str
 export function nativeMeasuredIds(rows: readonly NativeRowLike[], protocol: string): Set<string> {
   const ids = new Set<string>();
   for (const row of rows) {
-    if (!row.model_id || !statesNumber(row) || row.protocol_id !== protocol) continue;
+    if (!row.model_id || !counts(row) || row.protocol_id !== protocol) continue;
     ids.add(row.model_id);
   }
   return ids;

@@ -26,14 +26,24 @@ process.on("exit", () => fs.rmSync(temp, { recursive: true, force: true }));
 const SELECTED = "fashioniq_full_gallery_ref_excluded";
 const OTHER = "fashioniq_val_split";
 
-/** Native rows as `/api/native-measurements` served them for tgcir: a macro that names no protocol,
- *  plus a counted, artifact-backed row attributed to another protocol. */
+/** Native rows as `/api/native-measurements` served them: tgcir's only protocol-less row is a ROLL-UP
+ *  (`counted: false`), airknow has a genuine counted protocol-less macro plus a `duplicate_of` repeat
+ *  draw in the selected protocol, and each model has one counted row somewhere. */
 const nativeRows = [
   { model_id: "tgcir", protocol_id: null, metrics: { r10: 1.0, r50: 2.0 }, counted: false,
     source_kind: "rollup:all_measured_summary.json" },
+  { model_id: "airknow", protocol_id: null, metrics: { r10: 3.0, r50: 4.0 }, counted: true,
+    source_kind: "rollup:all_measured_summary.json" },
   { model_id: "tgcir", protocol_id: OTHER, metrics: { r10: 40.2, r50: 60.5 }, unit: "percent",
     counted: true, artifact_backed: true, source_kind: "artifact" },
+  { model_id: "airknow", protocol_id: SELECTED, metrics: { r10: 5.0 }, unit: "percent",
+    counted: false, duplicate_of: "airknow_run3cat_gpu_run1.json", source_kind: "artifact" },
+  { model_id: "clvc_net", protocol_id: SELECTED, metrics: { r10: 6.0 }, unit: "percent",
+    counted: true, source_kind: "artifact" },
 ];
+
+/** The pre-fix predicates, verbatim: `statesNumber` and nothing about `counted`. */
+const statesNumber = (row) => row.metrics !== null && row.metrics !== undefined;
 /** The catalog index the inventory hands `otherScopeFor`: every row that can hold a number, with the
  *  family that decides WHICH table lists it. */
 const allRows = nativeRows
@@ -60,19 +70,53 @@ function factsFor(modelId) {
   return { nativeUnattributed, nativeHere, nativeOnly, elsewhere, status };
 }
 
-test("a protocol-less native row does NOT hide the scope where the model's counted row lives", () => {
+// R08 at the scope layer: `counted: false` rows state a number, are still listed, and are not
+// evidence. Pre-fix, all three helpers filtered on `statesNumber` alone.
+const preFixUnattributed = (modelId) =>
+  nativeRows.filter((row) => statesNumber(row) && row.model_id === modelId && !row.protocol_id);
+
+test("(a) an uncounted protocol-less ROLL-UP is not an unattributed measurement", () => {
+  // tgcir's only protocol-less rows are `all_measured_summary.json` / `selection_decisions.json`.
+  assert.equal(preFixUnattributed("tgcir").length, 1, "fixture: pre-fix counted the roll-up");
   const { nativeUnattributed, elsewhere, status } = factsFor("tgcir");
-  assert.equal(nativeUnattributed.length, 1, "the unattributed row must still be surfaced");
-  // The link is present, and it names the scope that actually holds the attributed number.
+  assert.equal(nativeUnattributed.length, 0, "a roll-up restating another row is not evidence");
+  // ...so no "không ghi protocol" claim, and the link to the counted row stands on its own.
+  assert.equal(status, "Có kết quả ở scope khác");
   assert.equal(elsewhere.length, 1, "nativeUnattributed blocked the cross-scope link");
   assert.equal(elsewhere[0].protocol, OTHER);
   assert.equal(elsewhere[0].family, "native");
-  // ...and the status still says the served file does not name a protocol: both facts are visible.
-  assert.equal(status, "Số đo native không ghi protocol");
+});
 
-  // The pre-fix condition, verbatim, for the same row: it suppresses the link entirely. This is the
-  // defect the assertion above pins — against that line the same model produced an empty list.
-  const beforeFix = (false || false || false || nativeUnattributed.length)
+test("(b) a protocol-less COUNTED row is still an unattributed measurement", () => {
+  const { nativeUnattributed, status } = factsFor("airknow");
+  assert.equal(nativeUnattributed.length, 1);
+  assert.equal(nativeUnattributed[0].counted, true);
+  assert.equal(status, "Số đo native không ghi protocol");
+});
+
+test("(c) a duplicate_of repeat is not counted as measured in its own protocol", () => {
+  // airknow's `run3cat_gpu_run2..4` repeats sit at SELECTED with counted: false.
+  assert.equal(nativeRows.filter((row) => row.model_id === "airknow" && row.protocol_id === SELECTED
+    && statesNumber(row)).length, 1, "fixture: pre-fix counted the repeat");
+  assert.deepEqual([...S.nativeMeasuredIds(nativeRows, SELECTED)].sort(), ["clvc_net"],
+    "a repeat draw measured its protocol");
+  assert.deepEqual([...S.nativeRowsFor(nativeRows, "airknow", SELECTED)], []);
+  // The row is still served and still visible: only the scope decision excludes it.
+  assert.equal(nativeRows.filter((row) => row.duplicate_of).length, 1);
+  // A counted row in the same protocol DOES measure it.
+  const withKeeper = [...nativeRows, { model_id: "airknow", protocol_id: SELECTED,
+    metrics: { r10: 5.0 }, counted: true, source_kind: "artifact" }];
+  assert.ok(S.nativeMeasuredIds(withKeeper, SELECTED).has("airknow"));
+  assert.equal(S.nativeRowsFor(withKeeper, "airknow", SELECTED).length, 1);
+});
+
+test("(d) uncounted protocol-null rows yield elsewhere and no unattributed count", () => {
+  const { nativeUnattributed, elsewhere, status } = factsFor("tgcir");
+  assert.equal(nativeUnattributed.length, 0);
+  assert.equal(elsewhere.length, 1, "the cross-scope link must survive");
+  assert.equal(status, "Có kết quả ở scope khác");
+  // The pre-fix condition, verbatim, for the same row: the unattributed count suppressed the link.
+  const beforeFix = (false || false || false || preFixUnattributed("tgcir").length)
     ? []
     : S.otherScopeFor(allRows, "tgcir").filter((scope) =>
         scope.protocol !== SELECTED
