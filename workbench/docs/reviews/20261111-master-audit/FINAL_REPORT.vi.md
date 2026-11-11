@@ -23,12 +23,12 @@ báo cáo/raw tương ứng. Đọc kèm:
 |---|---|
 | base HEAD | `92ed66de4f359ef479da18bf8939723b6f9313e5` |
 | branch | `research/cir-failure-workbench` |
-| cây phát hành | `cd980dcecbb685b3cd6be4516d6550660a8e89b8` — revision ship sweep đo, = `TESTED_SOURCE_SHA`; **đây là mốc bền**, không đổi nữa. `be14393` là lượt sweep **bị thay thế** (18/2800/47); production của nó đã đi trước `cd980dc` (`git diff be14393 cd980dc` ngoài `workbench/docs` và `workbench/tests` **không** rỗng), nên số của nó chỉ còn là lịch sử. HEAD có thêm các commit **docs-only** sau `cd980dc`; lấy giá trị sống bằng `git rev-parse HEAD`. Tính chất phải giữ (là cái khiến sweep còn hiệu lực cho cả cây): `git diff cd980dc HEAD -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'` **rỗng**, và `git status --porcelain` đúng bằng `?? CLEANUP_REPORT.md.save`. *Một tài liệu bàn giao ghim SHA/count của HEAD sẽ cũ ngay commit sau — và bàn giao trong chiến dịch về drift báo cáo–thực tế thì không được là thứ đầu tiên nói sai thực tế.* |
+| cây phát hành | `7babfd96c1b5003d3fba7197bc6cbb1446a48a2b` — revision mà sweep pin đo (`18 failed, 2931 passed, 47 skipped` = 2996 collected, bản ghi `raw/verify/72-sweep-pin.md`), = `TESTED_SOURCE_SHA`; **đây là mốc bền**, không đổi nữa. `cd980dc` (`18 failed, 2901 passed, 47 skipped` = 2966, `raw/verify/68-final-sweep.md`) và `be14393` (18/2800/47) là các lượt sweep **bị thay thế**; production của chúng đã đi trước `7babfd9` (`git diff cd980dc 7babfd9` và `git diff be14393 7babfd9` ngoài `workbench/docs` và `workbench/tests` **không** rỗng), nên số của chúng chỉ còn là lịch sử. HEAD có thêm các commit **docs-only** sau `7babfd9`; lấy giá trị sống bằng `git rev-parse HEAD`. Tính chất phải giữ (là cái khiến sweep còn hiệu lực cho cả cây): `git diff 7babfd9 HEAD -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'` **rỗng**, và `git status --porcelain` đúng bằng `?? CLEANUP_REPORT.md.save`. *Một tài liệu bàn giao ghim SHA/count của HEAD sẽ cũ ngay commit sau — và bàn giao trong chiến dịch về drift báo cáo–thực tế thì không được là thứ đầu tiên nói sai thực tế.* |
 | Python | `workbench/envs/ctl312h/bin/python` — CPython **3.12.11** |
 | torch | **2.15.0+cu132** |
 | GPU | **NVIDIA GeForce RTX 5070 Ti** |
 | backend | `:8000`, env `WORKBENCH_CIRCUS_RELEASE_ROOT=…/artifacts/circus_release`. Lấy PID sống bằng `pgrep -af "serve_workbench.py --production-frontend"` / `pgrep -af "uvicorn workbench.backend.main"`. **PID chỉ đúng tại thời điểm đo** (mỗi restart đổi PID; stack đã chết/restart nhiều lần trong đợt) — **pin bền là digest bundle ở hàng frontend**, không phải PID |
-| frontend | `:5173`, bundle **`assets/index-DeTvxLlD.js`**, sha256 **`1503e8911122587ba8c81e8ecf93d151312fda41e12ff5ba9580ef1797e18155`** (bytes phục vụ `cmp`-identical với `dist/`) |
+| frontend | `:5173`, bundle **`assets/index-DyVaNikG.js`**, sha256 **`81d61f65ec827b83cabc958c157d65f6ad4ff99919ccae90cc1fdc29f03b0981`** (bytes phục vụ `cmp`-identical với `dist/`). Tên bundle là giá trị **di động** — đọc lại bằng `curl -s http://127.0.0.1:5173/ \| grep -o 'assets/index-[^"]*\.js'` rồi `sha256sum workbench/frontend/dist/assets/<tên vừa đọc>`: pin là digest, không phải tên file |
 
 Sẵn sàng đo bằng `/api/benchmark-runs` (HTTP 200). **Không** dùng `/api/models` để poll: 154 s cold vì nó
 hash mọi checkpoint. Có một uvicorn cũ trên `:8765` thiếu route mới — nhận diện bằng
@@ -211,7 +211,8 @@ thiếu dimension, không phải trùng khớp.
   miễn nhiễm với việc group của một shell khác bị reap. **Không suy đoán thêm.**
   Người đọc có thể gặp service **down**: `curl /api/benchmark-runs` trả **000** nghĩa là restart bằng
   lệnh ở §8. **PID không phải pin bền** (mỗi restart đổi PID); **digest bundle mới là pin** — hiện tại
-  `assets/index-DeTvxLlD.js` sha256 `1503e8911122587ba8c81e8ecf93d151312fda41e12ff5ba9580ef1797e18155`
+  `assets/index-DyVaNikG.js` sha256 `81d61f65ec827b83cabc958c157d65f6ad4ff99919ccae90cc1fdc29f03b0981`
+  (đọc lại bằng `curl -s http://127.0.0.1:5173/ | grep -o 'assets/index-[^"]*\.js'` rồi `sha256sum` trên `dist/`; tên file trôi theo mỗi build, digest mới là pin)
   (đo lại sau restart: `/api/benchmark-runs` 200 với 13 mục, `/api/native-measurements` 200 với
   `unbacked_counted: 0`, DCNet `27.929730914548916` / `percent` / `sibling_key`).
 - **`/api/models` cold 154 s** — đừng dùng để poll; dùng `/api/benchmark-runs`.
@@ -269,7 +270,7 @@ Quét 14 file `web_evidence/w_shots/*.json` (raw `raw/verify/41-defectA-stale-ev
     `@app.get("/api/runs/parity-gate")` (`backend/main.py:1044`), trả 200 với `passed_models: []`.
 
 Cả 5 file vẫn được giữ (bằng chứng lịch sử không xoá), nhưng **không** được trích làm bằng chứng W-05 cho
-hành vi hiện tại cho tới khi chụp lại trên bundle `index-DeTvxLlD.js`.
+hành vi hiện tại cho tới khi chụp lại trên bundle `index-DyVaNikG.js`.
 
 ### DEFECT B — `habit` FAILED vì interpreter (artifact cũ, không phải env hiện tại)
 
@@ -297,12 +298,12 @@ Chín báo cáo trong thư mục này do **sáu worker viết song song**, và *
 `relation_state` đi tới gate). Báo cáo này đã được sửa tay ở những chỗ đó; các mục dưới đây là những gì
 **thực sự** đã phát hiện và sửa, mỗi mục kèm bất biến hoặc lệnh chứng minh nó **nay** đúng:
 
-- **§1 — mốc git.** SHA HEAD di động + số commit đã được thay bằng mốc bền `cd980dcecbb685b3cd6be4516d6550660a8e89b8`
+- **§1 — mốc git.** SHA HEAD di động + số commit đã được thay bằng mốc bền `7babfd96c1b5003d3fba7197bc6cbb1446a48a2b`
   (= `TESTED_SOURCE_SHA`), kèm lệnh `git rev-parse HEAD` để lấy giá trị sống. Bất biến:
-  `git diff cd980dc HEAD -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'` **rỗng**. Mốc cũ
-  `be14393` được nêu rõ là lượt sweep **bị thay thế**, không còn là mốc.
+  `git diff 7babfd9 HEAD -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'` **rỗng**. Mốc cũ
+  `cd980dc` và `be14393` được nêu rõ là lượt sweep **bị thay thế**, không còn là mốc.
 - **§1 — hàng backend.** PID đã được thay bằng hướng dẫn `pgrep`, kèm quy tắc "PID chỉ đúng tại thời điểm đo;
-  pin bền là digest bundle `1503e891…8155`" (sha256 đầy đủ ở hàng frontend).
+  pin bền là digest bundle `81d61f65…0981`" (sha256 đầy đủ ở hàng frontend).
 - **§1 note và §5 — uvicorn `:8765` cũ.** Nhận diện bằng **cổng** và bằng hành vi route:
   `/api/runs/parity-gate` trả **404** trên `:8765` so với **200** trên `:8000` — không bằng PID.
 - **§4 — hàng gate.** `0/15 PASS` đã đối soát thành `0 / 2 mô hình có artifact parity; 0 / 17 cấu hình PASS`,
@@ -320,30 +321,36 @@ cho **0** kết quả). Vì vậy **không** được giả định các báo c�
 những gì đã kiểm là những gì nêu trong báo cáo này, cộng với những gì **từng báo cáo tự trích trong raw evidence
 của chính nó**.
 
-Thứ chống lưng cho trạng thái phát hành **không** phải văn xuôi của từng báo cáo, mà là: `18 failed / 2901 passed / 47 skipped`
-với **accounting gap 0**, 2966 collected tại `cd980dc`, guard `workbench/tests/test_handoff_commands.py` **8 passed**, và
+Thứ chống lưng cho trạng thái phát hành **không** phải văn xuôi của từng báo cáo, mà là: `18 failed / 2931 passed / 47 skipped`
+với **accounting gap 0**, 2996 collected tại `7babfd9`, guard `workbench/tests/test_handoff_commands.py` **8 passed**, và
 **production diff rỗng**.
 
 ## 7. Bảng sweep
 
-Bốn dòng là **bốn cây KHÁC NHAU**, không phải một cây chạy bốn lần.
+Năm dòng là **năm cây KHÁC NHAU**, không phải một cây chạy năm lần.
 
 | cây | dòng tổng kết | NEW | DROPPED | COMMON | collected | GAP |
 |---|---|---|---|---|---|---|
 | trước khi sửa 6 hồi quy | `24 failed, 2793 passed, 47 skipped` | 6 | 0 | 18 | 2864 | **0** |
 | trước `relation_state` | `18 failed, 2799 passed, 47 skipped` | 0 | 0 | 18 | 2864 | **0** |
 | `be14393` — **bị thay thế**, chỉ là lịch sử | `18 failed, 2800 passed, 47 skipped` | 0 | 0 | 18 | 2865 | **0** |
-| **cây phát hành (SHIP) — `cd980dc`** | **`18 failed, 2901 passed, 47 skipped`** | **0** | **0** | **18** | **2966** | **0** |
+| `cd980dc` — **bị thay thế**, chỉ là lịch sử | `18 failed, 2901 passed, 47 skipped` | 0 | 0 | 18 | 2966 | **0** |
+| **cây phát hành (SHIP) — `7babfd9`** | **`18 failed, 2931 passed, 47 skipped`** | **0** | **0** | **18** | **2996** | **0** |
 
-Dòng `cd980dc` là bản có thẩm quyền: `350 warnings in 3486.46s (0:58:06)`, `^ERROR ` = 0, `Errno 28` = **0**,
-`^FAILED` = 18, và nó nghiệm thu đúng cây sản xuất đang có (`git diff cd980dc HEAD` ngoài `workbench/docs` và
-`workbench/tests` rỗng). Bản ghi: `raw/verify/68-final-sweep.md` (log đầy đủ nằm ở `/tmp` và đã xoá; bản ghi
-markdown là bằng chứng được commit).
+Dòng `7babfd9` là bản có thẩm quyền: `350 warnings in 3445.68s (0:57:25)`, `^ERROR ` = 0, `Errno 28` = **0**,
+`^FAILED` = 18, hai phép chứng minh cây đứng yên (đầu và cuối lượt cùng một SHA), và nó nghiệm thu đúng cây sản
+xuất đang có (`git diff 7babfd9 HEAD` ngoài `workbench/docs` và `workbench/tests` rỗng). Bản ghi:
+`raw/verify/72-sweep-pin.md`.
+
+Dòng `cd980dc` giữ lại làm **lịch sử**: `350 warnings in 3486.46s (0:58:06)`, cùng bộ 18 id, nhưng production của
+nó đã bị `7babfd9` vượt qua (`git diff cd980dc 7babfd9` ngoài `workbench/docs` và `workbench/tests` **không** rỗng
+— hai commit frontend `252b380`, `d323a5c`), nên số của nó không còn mô tả cây đang ship. Bản ghi:
+`raw/verify/68-final-sweep.md`.
 
 Dòng `be14393` giữ lại làm **lịch sử**: ship sweep cũ `350 warnings in 3540.59s (0:59:00)`, 975 dòng, `ERROR`
 row = 0, `Errno 28` = **0**, log đầy đủ; `git status` chụp **trong lúc chạy** byte-identical với trước khi chạy
-(sha256 `d271b76b…6115`) ⇒ lượt đó không drift, nhưng production của nó đã bị `cd980dc` vượt qua (`git diff
-be14393 cd980dc` ngoài `workbench/docs` và `workbench/tests` **không** rỗng), nên số của nó không còn mô tả
+(sha256 `d271b76b…6115`) ⇒ lượt đó không drift, nhưng production của nó đã bị `cd980dc` rồi `7babfd9` vượt qua
+(`git diff be14393 7babfd9` ngoài `workbench/docs` và `workbench/tests` **không** rỗng), nên số của nó không còn mô tả
 cây đang ship. Raw `raw/full_suite_ship_sweep.txt`, `raw/verify/{37,38,39}-*`.
 
 ---
@@ -396,6 +403,6 @@ là cách chữ ký chết của các lần trước bị xoá — nên `>>` là
 
 ## 9. Tóm tắt một câu
 
-Cây phát hành đạt **`18 failed, 2901 passed, 47 skipped`**, 2966 collected, gap 0, NEW = 0 so với baseline — không còn
+Cây phát hành đạt **`18 failed, 2931 passed, 47 skipped`**, 2996 collected tại `7babfd9`, gap 0, NEW = 0 so với baseline — không còn
 hồi quy nào thuộc đợt này; phần còn đỏ là 18 lỗi có sẵn, PAIR bị chặn bởi upstream, và 19 discrepancy
 parity **thật** (16 encoder + 3 limn) mà gate cũ đã che bằng `PARITY_PASS`.

@@ -1,7 +1,7 @@
 # W-01…W-05 — Xác minh bề mặt web trên service thật
 
 Repo `/home/heheboiz/data/cir`, nhánh `research/cir-failure-workbench`, HEAD `92ed66de4f359ef479da18bf8939723b6f9313e5`
-+ thay đổi chưa commit của nhiều worker. Không commit gì trong lượt này.
++ thay đổi chưa commit của nhiều worker — HEAD **lúc đo**, nay **superseded** (`TESTED_SOURCE_SHA` hiện là `7babfd9`). Không commit gì trong lượt này.
 
 Service: frontend `http://127.0.0.1:5173`, backend `http://127.0.0.1:8000`.
 Uvicorn trên `:8765` là tiến trình cũ thiếu route mới — **không** dùng để đo.
@@ -38,7 +38,7 @@ nào ở phía server. Luôn `npm run build` trước khi restart.
 
 | mục | giá trị |
 |---|---|
-| bundle **đang phục vụ** | **`assets/index-DeTvxLlD.js`** sha256 **`1503e8911122587ba8c81e8ecf93d151312fda41e12ff5ba9580ef1797e18155`** |
+| bundle **đang phục vụ** | **`assets/index-DyVaNikG.js`** sha256 **`81d61f65ec827b83cabc958c157d65f6ad4ff99919ccae90cc1fdc29f03b0981`** — tên file trôi theo mỗi build; đọc lại bằng `curl -s http://127.0.0.1:5173/ \| grep -o 'assets/index-[^"]*\.js'` rồi `sha256sum workbench/frontend/dist/assets/<tên vừa đọc>` |
 | css | `index-DecQnta9.css` |
 | lý do phải pin | `workbench/frontend/dist/` bị gitignore nên **artifact build không được track**; build thì tái lập được (`npm run build --prefix workbench/frontend` — nguồn, `tsconfig.json`, `vite.config.mts`, `package.json`/`package-lock.json` đều tracked và `tsc`/`vite` đã cài), nhưng **byte đang phục vụ phải được pin bằng digest tại mỗi lần đo** |
 | superseded — bundle phục vụ trước `relation_state`/`relation_parity` | `index-CEgaMiLf.js` sha256 `0b6b15a80782d04459e78e3bd71fc0d2532a8c16bb09d01987814d16bab6eb87` — **không còn trên đĩa**, đã bị build mới ghi đè |
@@ -50,7 +50,7 @@ nào ở phía server. Luôn `npm run build` trước khi restart.
 | PID **đang phục vụ** | `serve_workbench.py` **4171850** → uvicorn **4171851** (superseded: `4082631/4082632`, `4062950/4062957`, `4040573/4040574`, `3390138/3390139`, `3316577/3316578`, `3228456`, `3212146`) |
 | cảnh báo về pin PID | PID **không bền** trong đợt này: stack đã chết **ít nhất bốn lần** do SIGTERM từ bên ngoài, mỗi lần một PID khác, và **số chính xác không chốt được** — mỗi lần restart lại redirect bằng một dấu `>` vào log `/tmp/…` nên log cũ bị truncate và chữ ký của lần trước đó biến mất. Bốn lần còn log header, cả bốn chữ ký nay **đã commit trong repo**: PID `3691345` → `raw/service-death-log.txt`, `4040574` → `raw/service-death-log-2.txt`, `4062957` → `raw/service-death-log-3.txt`, `4082632` → `raw/service-death-log-4.txt`. Tất cả có đúng chữ ký `[WARN] npm exited with status -15` rồi backend `Shutting down` êm. Đường dẫn `/tmp` (`/tmp/workbench_serve.log`, `/tmp/workbench_serve_final.log`, `/tmp/serve_probe.log`, `/tmp/serve_handover.log`, mtime `02:25:51` / `03:35:06` / `03:53:06` / `07:29:33` ngày 2026-11-11) chỉ là **provenance** của bản sao, không phải nơi trích dẫn. Đừng đọc con số này như một pin: nó chỉ tăng và mỗi log mới truncate log cũ. **Digest bundle mới là pin bền**; PID chỉ đúng tại thời điểm đo |
 | readiness | `/api/benchmark-runs` → 200 sau 1 s; **không** dùng `/api/models` (cold start ~154 s vì hash mọi checkpoint) |
-| digest khớp | `sha256(served /assets/index-DeTvxLlD.js)` = `sha256(dist/assets/index-DeTvxLlD.js)` = `1503e891…8155`; `cmp` → IDENTICAL |
+| digest khớp | `sha256(served /assets/index-DyVaNikG.js)` = `sha256(dist/assets/index-DyVaNikG.js)` = `81d61f65…0981`; `cmp` → IDENTICAL |
 
 Lần restart này cũng là lần duy nhất nạp `workbench/backend/parity_gate.py` và
 `workbench/composition/runner.py` do worker khác sửa. Verdict của gate **không đổi**:
@@ -420,8 +420,8 @@ trong lượt này. Không sửa gì ở đây.
 | mục | giá trị |
 |---|---|
 | HEAD khi đo | `92ed66de4f359ef479da18bf8939723b6f9313e5` + thay đổi chưa commit — **superseded** |
-| revision của lượt này | **`be14393c97b100390a9a45c6b0a46857b24a78b9`** — bảng bằng chứng dưới đây được thu trên cây đó; **superseded**, `TESTED_SOURCE_SHA` nay là `cd980dcecbb685b3cd6be4516d6550660a8e89b8`. HEAD lấy sống bằng `git rev-parse HEAD` (không ghim) |
-| bundle phục vụ **tại lượt đó** (nay superseded) | **`index-DWpK0yeS.js`**, sha256 **`7e34724ebf55092e36524b98980cca55e71f3ddbaa62489c65577f92e18a6a16`**; bundle sống nay là `index-DeTvxLlD.js` / `1503e891…8155` |
+| revision của lượt này | **`be14393c97b100390a9a45c6b0a46857b24a78b9`** — bảng bằng chứng dưới đây được thu trên cây đó; **superseded**, `TESTED_SOURCE_SHA` nay là `7babfd96c1b5003d3fba7197bc6cbb1446a48a2b` (`2931/18/47 = 2996`, `raw/verify/72-sweep-pin.md`; `cd980dc` 2901/18/47 = 2966 cũng đã bị thay thế). HEAD lấy sống bằng `git rev-parse HEAD` (không ghim) |
+| bundle phục vụ **tại lượt đó** (nay superseded) | **`index-DWpK0yeS.js`**, sha256 **`7e34724ebf55092e36524b98980cca55e71f3ddbaa62489c65577f92e18a6a16`**; bundle sống nay là `index-DyVaNikG.js` / `81d61f65…0981` (đọc lại bằng `curl -s http://127.0.0.1:5173/ \| grep -o 'assets/index-[^"]*\.js'` rồi `sha256sum` trên `dist/`; `index-DeTvxLlD.js` / `1503e891…8155` cũng đã superseded) |
 | dist | `cmp` → IDENTICAL giữa byte phục vụ và `dist/assets/` — kiểm lại digest mỗi lần build: `curl -s http://127.0.0.1:5173/ \| grep -o 'assets/index-[^"]*\.js'` rồi `sha256sum` |
 | superseded | `index-CEgaMiLf.js` sha256 `0b6b15a8…6eb87` (build trước `relation_state`/`relation_parity`; không còn trên đĩa) |
 | css | `index-DecQnta9.css` |
