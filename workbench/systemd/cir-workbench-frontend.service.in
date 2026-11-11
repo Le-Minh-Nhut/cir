@@ -1,0 +1,28 @@
+[Unit]
+Description=@DESCRIPTION@
+# Ordering only: the proxy reconnects per request, so the frontend may come up while the backend
+# is still starting; it must, however, be stopped after the backend when both are stopped.
+After=@BACKEND_UNIT@.service
+Wants=@BACKEND_UNIT@.service
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+[Service]
+Type=simple
+# npm (Type=simple) is the main process; it spawns `sh -c vite preview`, which spawns node.
+# KillMode=mixed is measured (see the 20261111 audit evidence): SIGTERM to npm, then SIGKILL to
+# the rest of the cgroup, otherwise the vite process keeps the port and every restart fails with
+# EADDRINUSE.
+ExecStart=@EXEC_START@
+WorkingDirectory=@WORKING_DIRECTORY@
+@ENVIRONMENT@
+
+Restart=always
+RestartSec=2
+KillMode=mixed
+TimeoutStopSec=10
+KillSignal=SIGTERM
+SendSIGKILL=yes
+
+[Install]
+WantedBy=default.target

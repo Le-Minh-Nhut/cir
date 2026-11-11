@@ -1,0 +1,33 @@
+[Unit]
+Description=@DESCRIPTION@
+# A crash loop must not spin: 5 starts inside 60 s, then the unit stays failed until an operator
+# resets it. RestartSec below is the between-attempt delay; this pair is the ceiling on attempts.
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+[Service]
+Type=simple
+# uvicorn is the main process: no shell, no wrapper, so MainPID is the server itself and signals
+# reach the process that runs the shutdown hook.
+ExecStart=@EXEC_START@
+WorkingDirectory=@WORKING_DIRECTORY@
+@ENVIRONMENT@
+
+Restart=always
+# 2 s is long enough for a port released by the previous instance to be bindable again and short
+# enough that an operator sees the recovery promptly.
+RestartSec=2
+# mixed: SIGTERM to the main process only (so uvicorn's shutdown hook runs and reaps job groups),
+# then SIGKILL to anything left in the cgroup -- including a job child that called setsid() and
+# left the session. control-group would SIGTERM the GPU-holding job directly, which skips the
+# queue's truthful "failed" bookkeeping.
+KillMode=mixed
+# The shutdown hook may wait GRACE_SECONDS (10 s) + 5 s per live job group and a 10 s worker join;
+# 30 s covers one stalled group without letting a wedged stop hang forever.
+TimeoutStopSec=30
+# Never start a second instance while the old one still holds the port.
+KillSignal=SIGTERM
+SendSIGKILL=yes
+
+[Install]
+WantedBy=default.target
