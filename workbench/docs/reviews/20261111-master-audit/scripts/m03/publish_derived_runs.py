@@ -33,6 +33,9 @@ MODEL = "limn"
 CHECKPOINT = "base_iter0_all_categories"
 PROTOCOL = "circus_fashioniq_release_v1"
 SCHEMA = "circus-derived-subset/v1"
+#: Written where an unscored qid has no parent reason, so a reader can tell "the parent recorded
+#: nothing" apart from "the reason was not carried".
+PARENT_RECORDED_NO_REASON = "parent_recorded_no_reason"
 ARTIFACTS = REPO / "workbench/artifacts"
 COMPOSITION = ARTIFACTS / "composition"
 EVIDENCE = REPO / "workbench/docs/reviews/20261111-master-audit/raw/m03"
@@ -97,6 +100,32 @@ def main() -> int:
         result = compose(subset_ranks, query_count=len(declared))
         metrics = asdict(result)
 
+        # The failure map is carried BY MEMBERSHIP: a qid outside this subset must not appear at
+        # all, and every unscored qid must say WHY it is unscored. Writing `{condition: {}}` made a
+        # reader report `failure=null, unscored_kind=null`, which is indistinguishable from "the
+        # pipeline recorded nothing" -- so an unscored qid with no parent reason gets an explicit
+        # sentinel instead of null.
+        parent_failures = ranks_payload.get("query_failures") or {}
+        subset_failures = {}
+        for condition in parent_ranks:
+            reasons = parent_failures.get(condition) or {}
+            carried = {}
+            for qid, rank in subset_ranks[condition].items():
+                reason = reasons.get(qid)
+                if reason is None and rank is None:
+                    reason = PARENT_RECORDED_NO_REASON
+                if reason is not None:
+                    carried[qid] = reason
+            unscored_without_reason = [qid for qid, rank in subset_ranks[condition].items()
+                                       if rank is None and qid not in carried]
+            outside = set(carried) - set(subset_ranks[condition])
+            if unscored_without_reason or outside:
+                raise SystemExit(
+                    f"REFUSING {subset}/{condition}: unscored qids without a carried reason="
+                    f"{unscored_without_reason}, failure qids outside the membership={sorted(outside)}")
+            subset_failures[condition] = carried
+        parent_topk = dict(parent_summary.get("topk_export") or {})
+
         parent_scope_resolution = dict(parent_summary.get("adapter_query_scope_resolution") or {})
         # `unscoped_qids` = un-SCOPED (no checkpoint could be chosen). Every such qid in this subset's
         # membership is also a query this subset cannot score, so `still_unscoped` and the per-condition
@@ -119,6 +148,18 @@ def main() -> int:
             "parent_rank_artifact_sha256": identity["parent_rank_artifact_sha256"],
             "parent_summary": str(parent_summary_path.relative_to(REPO)),
             "parent_summary_sha256": sha256_file(parent_summary_path),
+            # The PARENT's own candidate export, so a reader can say whether a parent window
+            # exists at all before it looks for one, and label it as the parent's.
+            "parent_topk_export": {
+                "requested": bool(parent_topk.get("requested")),
+                "status": parent_topk.get("status"),
+                "depth": parent_topk.get("depth"),
+                "conditions": list(parent_topk.get("conditions") or ()),
+                "partial": bool(parent_topk.get("partial")),
+            },
+            "parent_topk_note": ("derived runs store no candidates of their own; the candidate "
+                                 "window for a derived query is the PARENT run's export, served "
+                                 "only when this lineage verifies"),
             "subset": subset,
             "membership_definition": (f"workbench.composition.data.select_queries(subset={subset!r}) "
                                       "over the pinned CIRCUS release membership columns"),
@@ -266,7 +307,7 @@ def main() -> int:
             "condition_status": subset_condition_status,
             "fingerprint": derived_id,
             "identity": dict(ranks_payload.get("identity") or {}, derived_from=derived_from),
-            "query_failures": {condition: {} for condition in parent_ranks},
+            "query_failures": subset_failures,
             "ranks": subset_ranks,
             "derived_from": derived_from,
         }

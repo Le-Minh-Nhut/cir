@@ -1064,32 +1064,110 @@ def determine_query_outcome(
     return "unresolved"
 
 
+def _sha256_of(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for block in iter(lambda: handle.read(1 << 20), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+#: The four statuses a derived run reports for its PARENT's candidate export. They are the parent's
+#: own facts, not this run's: a derived run never exports candidates itself.
+PARENT_TOPK_STATUSES = ("NOT_REQUESTED", "NOT_EXPORTED", "PARTIAL", "COMPLETE")
+
+def _derived_parent_candidates(artifacts_root: Path, lineage: Mapping[str, Any],
+                               condition: str) -> dict[str, Any]:
+    """The candidate window for a derived query, taken from the PARENT run's export.
+
+    A derived run re-aggregates the parent's ranks and stores no candidates of its own, so reading
+    the derived run_id returned ``TOPK_EXPORT_NOT_REQUESTED`` -- an empty window that reads as "the
+    target is not there". The parent's export is used only when the lineage VERIFIES: the parent's
+    rank artifact must hash to what the derived record claims. Anything else is
+    ``parent_topk_unavailable`` with the reason, never a silently empty window.
+    """
+    from workbench.composition.topk import read_candidates
+
+    parent_run_id = str(lineage.get("parent_run_id") or "")
+    claimed = lineage.get("parent_rank_artifact_sha256")
+    declared = dict(lineage.get("parent_topk_export") or {})
+
+    def unavailable(reason: str) -> dict[str, Any]:
+        return {"available": False, "status": "parent_topk_unavailable", "reason": reason,
+                "manifest": None, "rows": {}, "path": None, "parent_run_id": parent_run_id or None}
+
+    if not parent_run_id:
+        return unavailable("the derived record names no parent run, so no lineage can be verified")
+    try:
+        ranks_dir = resolve_composition_path(artifacts_root, f"runs/{parent_run_id}/ranks")
+    except ValueError as error:
+        return unavailable(f"parent run id is not a usable path component: {error}")
+    parent_rank = next((path for path in sorted(ranks_dir.glob("*.json")) if path.is_file()), None)
+    if parent_rank is None:
+        return unavailable(f"parent run {parent_run_id} has no rank artifact to verify against")
+    if not claimed:
+        return unavailable("the derived record claims no parent rank digest, so the parent "
+                           "identity cannot be verified")
+    actual = _sha256_of(parent_rank)
+    if actual != claimed:
+        return unavailable(f"parent rank artifact digest {actual} does not match the digest "
+                           f"{claimed} this derived record claims")
+
+    candidates = read_candidates(artifacts_root, parent_run_id, condition)
+    if candidates.get("available"):
+        manifest = candidates.get("manifest") or {}
+        status = "PARTIAL" if manifest.get("partial") else "COMPLETE"
+        reason = (f"the parent's export is partial: {manifest.get('missing_query_count')} declared "
+                  f"queries have no candidate window" if manifest.get("partial") else None)
+        return {"available": True, "status": status, "reason": reason,
+                "manifest": manifest, "rows": candidates.get("rows") or {},
+                "path": candidates.get("path"), "parent_run_id": parent_run_id}
+    export_status = candidates.get("status")
+    status = ("NOT_REQUESTED" if export_status == "TOPK_EXPORT_NOT_REQUESTED"
+              and not declared.get("requested") else "NOT_EXPORTED")
+    reason = (candidates.get("reason")
+              or f"the parent run {parent_run_id} has no usable candidate export for {condition}")
+    return {"available": False, "status": status, "reason": reason,
+            "manifest": None, "rows": {}, "path": candidates.get("path"),
+            "parent_run_id": parent_run_id}
+
 def _candidate_reader(release: Any, candidates: Mapping[str, Any]) -> dict[str, Any]:
     """Validate the export's gallery identity ONCE, then resolve rows without re-hashing.
 
     The digest covers the whole ordered released gallery, so recomputing it per query made a
     6003-query page hash 74k identities 6003 times. The refusal is identical either way -- the
     check is about the export, not about the query.
+
+    ``status`` is what the page reports; ``available`` gates row resolution, so a candidate window
+    served from a parent run keeps its own status (COMPLETE/PARTIAL) instead of being relabelled
+    ``AVAILABLE`` as if this run had exported it.
     """
     from workbench.composition.topk import gallery_digest
 
     if not candidates.get("available"):
-        return {"status": candidates.get("status") or "TOPK_EXPORT_NOT_REQUESTED",
-                "reason": candidates.get("reason"), "rows": candidates.get("rows") or {}}
+        status = candidates.get("status") or "TOPK_EXPORT_NOT_REQUESTED"
+        return {"available": False, "item_status": status,
+                "status": status, "reason": candidates.get("reason"),
+                "rows": candidates.get("rows") or {},
+                "source_run_id": candidates.get("parent_run_id")}
     manifest = candidates.get("manifest") or {}
     recorded = manifest.get("gallery_identity_sha256")
     if recorded:
         current = gallery_digest(getattr(release.gallery, "protocol_id", ""),
                                  release.gallery.image_ids, release.candidate_names)
         if current != recorded:
-            return {"status": "TOPK_EXPORT_GALLERY_MISMATCH",
+            return {"available": False, "item_status": "TOPK_EXPORT_GALLERY_MISMATCH",
+                    "status": "TOPK_EXPORT_GALLERY_MISMATCH",
                     "reason": "candidate positions were produced against a different gallery "
-                              "identity than the one loaded now", "rows": {}}
-    return {"status": "AVAILABLE", "reason": None, "rows": candidates.get("rows") or {}}
+                              "identity than the one loaded now", "rows": {},
+                    "source_run_id": candidates.get("parent_run_id")}
+    return {"available": True, "item_status": candidates.get("status") or "AVAILABLE",
+            "status": candidates.get("status") or "AVAILABLE",
+            "reason": candidates.get("reason"), "rows": candidates.get("rows") or {},
+            "source_run_id": candidates.get("parent_run_id")}
 
 def _resolve_candidates(release: Any, reader: Mapping[str, Any], qid: str) -> dict[str, Any]:
     """Resolve one query's stored gallery positions to released image names."""
-    if reader["status"] != "AVAILABLE":
+    if not reader.get("available"):
         return {"status": reader["status"], "reason": reader["reason"], "rows": []}
     row = (reader["rows"] or {}).get(qid)
     if row is None:
@@ -1108,7 +1186,8 @@ def _resolve_candidates(release: Any, reader: Mapping[str, Any], qid: str) -> di
                      "image_id": names.get(identity, identity),
                      "gallery_position": position,
                      "score": float(score) if isinstance(score, (int, float)) else None})
-    return {"status": "AVAILABLE", "reason": None, "rows": rows}
+    return {"status": reader.get("item_status") or "AVAILABLE", "reason": reader["reason"],
+            "rows": rows}
 
 def get_composition_run_queries(
     run_id: str,
@@ -1158,7 +1237,14 @@ def get_composition_run_queries(
     ranks_by_condition = ranks_data.get("ranks", {}) if ranks_data else {}
     failures_by_condition = ranks_data.get("query_failures", {}) if ranks_data else {}
     target_condition = condition or "multimodal"
-    candidates = read_candidates(artifacts_root, run_id, target_condition)
+    lineage = (ranks_data or {}).get("derived_from") if isinstance(
+        (ranks_data or {}).get("derived_from"), Mapping) else None
+    if lineage:
+        # A derived run owns no candidates: its window is the PARENT's, served only when the
+        # lineage verifies. Reported with the parent's own status, never relabelled.
+        candidates = _derived_parent_candidates(artifacts_root, lineage, target_condition)
+    else:
+        candidates = read_candidates(artifacts_root, run_id, target_condition)
     reader = _candidate_reader(release, candidates)
     candidate_depth = int((candidates.get("manifest") or {}).get("depth") or 0)
 
@@ -1240,6 +1326,11 @@ def get_composition_run_queries(
             "candidate_status": resolved["status"],
             "candidate_reason": resolved["reason"],
             "candidate_depth": candidate_depth or None,
+            # Which run the window came from. A derived run's window is the parent's, and saying
+            # so is the difference between "this run exported nothing" and "you are looking at
+            # the parent's candidates".
+            "candidate_source_run_id": reader.get("source_run_id") or run_id,
+            "candidate_source": "parent_run" if reader.get("source_run_id") else "run",
         })
 
     # Sorting
@@ -1266,7 +1357,18 @@ def get_composition_run_queries(
             "status": candidates.get("status"),
             "reason": candidates.get("reason"),
             "depth": candidate_depth or None,
+            "source_run_id": reader.get("source_run_id") or run_id,
+            "source": "parent_run" if lineage else "run",
+            "parent_run_id": lineage.get("parent_run_id") if lineage else None,
+            "lineage_verified": (None if not lineage else
+                                 candidates.get("status") != "parent_topk_unavailable"),
         },
+        "lineage": ({
+            "derived": True,
+            "parent_run_id": lineage.get("parent_run_id"),
+            "parent_rank_artifact_sha256": lineage.get("parent_rank_artifact_sha256"),
+            "parent_topk_export": lineage.get("parent_topk_export"),
+        } if lineage else None),
         "statistics": _ranks_statistics(ranks_data, len(subset_queries),
                                         {query.qid for query in subset_queries}),
         "statistics_whole_run": _ranks_statistics(ranks_data, None, None),
