@@ -189,6 +189,100 @@ export function otherScopeFor(rows: ScopeRow[], model?: string | null): ScopeCho
       || SUBSET_SEQUENCE.indexOf(left.subset as never) - SUBSET_SEQUENCE.indexOf(right.subset as never));
 }
 
+/** The native-row fields a scope decision needs: exactly what `/api/native-measurements` serves per
+ *  measurement, and what a native row carries after it has been mapped into a `ScopeRow`. */
+export interface NativeRowLike {
+  model_id?: string | null;
+  protocol_id?: string | null;
+  metrics?: { r10?: number; r50?: number; mean?: number } | null;
+}
+
+/** A native row is a scope fact only when it STATES a number. A blocker document (`metrics: null`)
+ *  is a reason, not a measurement, and must not make its model read as measured. */
+function statesNumber(row: NativeRowLike): boolean {
+  return row.metrics !== null && row.metrics !== undefined;
+}
+
+/** Native rows for one model IN one scope.
+ *
+ *  R06: the inventory consulted native rows only to build links to OTHER scopes, and filtered those
+ *  to scopes DIFFERENT from the current one — so a model whose only number was a native macro in
+ *  the protocol on screen read "Chưa có số đo" while the row sat in the catalog, and the link
+ *  appeared only after switching protocol. Scope resolution is a function of its own, and the
+ *  inventory asks it about the ACTIVE scope.
+ *
+ *  Tiers, exact first: `(model_id, protocol_id)`, then a row that declares NO protocol — such a
+ *  row cannot be attributed to another scope, so it is the only admissible fallback. A row naming a
+ *  different protocol is never borrowed here; that is the "kết quả ở scope khác" case. (`family` is
+ *  not a tier: every row this catalog serves is the native family, and `otherScopeFor` keys it.)
+ */
+export function nativeRowsFor(rows: readonly NativeRowLike[], model: string | null | undefined,
+                              protocol: string): NativeRowLike[] {
+  if (!model) return [];
+  const own = rows.filter((row) => statesNumber(row) && row.model_id === model);
+  const exact = own.filter((row) => row.protocol_id === protocol);
+  return exact.length ? exact : own.filter((row) => !row.protocol_id);
+}
+
+/** The set of models with a native number in `protocol` — `nativeRowsFor` asked once for every
+ *  model, because the inventory needs one answer per row and a scan per row would be quadratic. */
+export function nativeMeasuredIds(rows: readonly NativeRowLike[], protocol: string): Set<string> {
+  const ids = new Set<string>();
+  for (const row of rows) {
+    if (!row.model_id || !statesNumber(row)) continue;
+    if (row.protocol_id === protocol || !row.protocol_id) ids.add(row.model_id);
+  }
+  return ids;
+}
+
+/** What the inspector may say about the target and the candidate window ON SCREEN.
+ *
+ *  R10: the sentence used `Math.min` over all three conditions' ranks, so MM rank 50 + text rank 5
+ *  with K=10 explained the MULTIMODAL window with the TEXT condition's #5 and declared the target
+ *  "outside Top-10" — a correct number about a different condition. A window belongs to ONE
+ *  condition, so the rank quoted is that condition's, and the sentence names it.
+ *
+ *  It also concluded before the request had an answer: while the window was pending, `shown` was
+ *  empty and "outside the window" was printed about a window that did not exist yet. Pending is its
+ *  own verdict, and the component prints no conclusion for it.
+ *
+ *  Lives here (not in `inspector.ts`) so the choice is a pure export the tests can execute.
+ */
+export type WindowVerdict =
+  | { kind: "hidden" }
+  | { kind: "pending" }
+  | { kind: "unavailable"; reason: string }
+  | { kind: "ranked"; conditionId: string; conditionLabel: string; rank: number; insideK: boolean };
+
+export function candidateWindowVerdict(input: {
+  /** All three condition readings for the selected query, in protocol order. */
+  conditions: ReadonlyArray<{ id: string; rank: number | null }>;
+  /** The condition whose candidate window is rendered (the URL's `condition`). */
+  viewed: string;
+  /** The label that condition is printed under, so the sentence can name whose rank it quotes. */
+  viewedLabel: string;
+  effectiveK: number;
+  /** Rows the export stored for this run; 0 means there is no window to describe at all. */
+  depth: number;
+  targetInShown: boolean;
+  /** `useRegion` status of the candidate request for THIS run+subset+condition+query+K. A region
+   *  still holding another key's data is `loading` here by construction of its caller. */
+  status: "idle" | "loading" | "ready" | "error";
+}): WindowVerdict {
+  if (!input.depth || input.targetInShown) return { kind: "hidden" };
+  if (input.status === "idle" || input.status === "loading") return { kind: "pending" };
+  if (input.status === "error") {
+    return { kind: "unavailable", reason: `không tải được cửa sổ Top-${input.effectiveK}` };
+  }
+  const viewed = input.conditions.find((item) => item.id === input.viewed);
+  if (!viewed || viewed.rank === null) {
+    return { kind: "unavailable",
+             reason: `điều kiện ${input.viewedLabel} chưa có hạng chính xác, nên chưa kết luận được` };
+  }
+  return { kind: "ranked", conditionId: viewed.id, conditionLabel: input.viewedLabel,
+           rank: viewed.rank, insideK: viewed.rank <= input.effectiveK };
+}
+
 /** The five independent parts of one result label. Each is a separate sentence because each can be
  *  true while its neighbour is false: a run can be measured and unverified, or verified with no
  *  exported candidates, and a single combined badge cannot say that. */

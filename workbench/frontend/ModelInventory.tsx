@@ -5,7 +5,7 @@ import type { Model } from "./types";
 import { Badge, Detail, ErrorState, LoadingState } from "./ui";
 import { fmtDenominator, fmtInt, fmtNdcg, fmtPercentValue } from "./format";
 import { scoredCounts } from "./catalog";
-import { otherScopeFor, protocolHasSubsets, type ScopeRow } from "./scope";
+import { nativeMeasuredIds, nativeRowsFor, otherScopeFor, protocolHasSubsets, type ScopeRow } from "./scope";
 import { SUBSET_LABEL } from "./routes";
 
 /** Operator scope for this review. Not a registry fact and not a measurement: the two models whose
@@ -36,21 +36,38 @@ export function ModelInventory({ data, location, onGoto }: {
   const entries = useMemo(
     () => data.catalog.filter((entry) => entry.protocolId === location.protocol && entry.provenance.bucket !== "development"),
     [data.catalog, location.protocol]);
-  const measuredIds = useMemo(() => new Set(entries
+  const compositionMeasuredIds = useMemo(() => new Set(entries
     .filter((entry) => !entry.composition?.is_failed && entry.status !== "FAILED" && entry.capabilities.flags.aggregate_metrics)
     .map((entry) => entry.modelId)), [entries]);
+  const nativeRows = useMemo(
+    () => data.nativeMeasurements.region.data?.measurements ?? [],
+    [data.nativeMeasurements.region.data]);
+  // R06: a native macro in the ACTIVE protocol is a measurement of that model in this scope. Before
+  // this, native rows were consulted only to build links to OTHER scopes and filtered to scopes
+  // different from the current one, so a model whose only number was native here read "Chưa có số
+  // đo" while its row sat in the catalog. Native rows carry no subset: the number is whole-protocol.
+  const nativeMeasured = useMemo(
+    () => nativeMeasuredIds(nativeRows, location.protocol),
+    [nativeRows, location.protocol]);
+  const measuredIds = useMemo(
+    () => new Set([...compositionMeasuredIds, ...nativeMeasured]),
+    [compositionMeasuredIds, nativeMeasured]);
   const active = models.filter((model) => !DEFERRED_MODELS[model.model_id]);
   const pending = active.filter((model) => !measuredIds.has(model.model_id));
   const deferred = models.filter((model) => DEFERRED_MODELS[model.model_id]);
+  const measuredCount = models.length - pending.length - deferred.length;
   const runCount = entries.filter((entry) => entry.family === "composition" && entry.status !== "FAILED").length;
   // W-02: five different questions, five different numbers. The old header printed one "17" that a
   // reader could only interpret by guessing which of these it meant.
   //  * attempts: rows the API published, duplicates included — a rerun is an attempt, not a run.
   //  * measurements: native macro blocks with a number, the only rows this deployment MEASURED.
   //  * blockers: files that only signpost a blocker, i.e. models with a named reason and no number.
-  const attemptCount = entries.length + (data.nativeMeasurements.region.data?.measurements ?? []).length;
-  const measurementCount = (data.nativeMeasurements.region.data?.measurements ?? [])
-    .filter((row) => row.metrics && !row.rollup).length;
+  const attemptCount = entries.length + nativeRows.length;
+  // R06: the backend census (`counts.with_metrics`) counts counted AND artifact-backed rows. This
+  // used to filter on `!rollup`, which is a different set: a roll-up replaced by an artifact is
+  // still counted, and an unbacked claim is not. Same predicate, stated once.
+  const measurementCount = nativeRows
+    .filter((row) => row.metrics && row.counted !== false && row.artifact_backed === true).length;
   const blockerCount = data.nativeMeasurements.region.data?.counts.signposted_blockers ?? 0;
 
   const ordered = useMemo(() => [...models].sort((a, b) => {
@@ -103,6 +120,15 @@ export function ModelInventory({ data, location, onGoto }: {
     return <ErrorState message={data.compositionRuns.region.error ?? "Không tải được danh sách lượt chạy"}
                        onRetry={data.compositionRuns.retry} />;
   }
+  // R06: native rows also decide "measured" now, so the same reasoning applies to their region: a
+  // native catalog still in flight would read as "no native number" and re-earn the wrong label.
+  if (data.nativeMeasurements.region.status === "loading" && !data.nativeMeasurements.region.data) {
+    return <LoadingState label="Đang đọc catalog số đo native…" />;
+  }
+  if (data.nativeMeasurements.region.status === "error") {
+    return <ErrorState message={data.nativeMeasurements.region.error ?? "Không tải được catalog số đo native"}
+                       onRetry={data.nativeMeasurements.retry} />;
+  }
 
   return (
     <section className="model-inventory" aria-label="Toàn bộ mô hình" data-testid="model-inventory">
@@ -113,7 +139,7 @@ export function ModelInventory({ data, location, onGoto }: {
         <div><strong data-testid="count-attempts">{attemptCount}</strong><span>Lần thử ghi nhận (kể cả trùng)</span></div>
         <div><strong data-testid="count-measurements">{measurementCount}</strong><span>Số đo native có macro</span></div>
         <div><strong data-testid="count-blockers">{blockerCount}</strong><span>File chỉ ghi blocker</span></div>
-        <div><strong data-testid="count-active-measured">{active.filter((model) => measuredIds.has(model.model_id)).length}</strong><span>Có số đo trong phạm vi này</span></div>
+        <div><strong data-testid="count-active-measured">{measuredCount}</strong><span>Có số đo trong phạm vi này</span></div>
         <div><strong data-testid="count-pending">{pending.length}</strong><span>Cần chạy hoặc xử lý blocker</span></div>
         <div><strong data-testid="count-deferred">{deferred.length}</strong><span>Tạm gác theo yêu cầu</span></div>
       </div>
@@ -126,7 +152,7 @@ export function ModelInventory({ data, location, onGoto }: {
         <label>Trạng thái
           <select value={filter} onChange={(event) => setFilter(event.target.value)}>
             <option value="all">Tất cả mô hình ({models.length})</option>
-            <option value="measured">Có số đo ({models.length - pending.length - deferred.length})</option>
+            <option value="measured">Có số đo ({measuredCount})</option>
             <option value="pending">Cần xử lý ({pending.length})</option>
             <option value="deferred">Tạm gác ({deferred.length})</option>
           </select>
@@ -159,21 +185,31 @@ export function ModelInventory({ data, location, onGoto }: {
               const downloaded = checkpoints.filter((checkpoint) => checkpoint.checkpoint_downloaded).length;
               const blockers = [...new Set(checkpoints.flatMap((checkpoint) => checkpoint.blocking_reasons ?? []))];
               const missingScored = counts != null && counts.scored < counts.total;
+              // R06: a native row in the ACTIVE protocol measures this model here. It is not a
+              // composition run, so it opens the native table — the same destination the cross-scope
+              // link uses — and its label is the native vocabulary, never "Có số đo".
+              const nativeHere = nativeRowsFor(nativeRows, model.model_id, location.protocol);
+              const nativeOnly = !entry && nativeHere.length > 0;
               // Scopes this model DOES have numbers in, from composition rows, native measurements and
               // aggregate reports. Never let "no run here" be the whole answer when a real row exists
               // elsewhere: the reader gets the scope, its size, and a link that opens it.
-              const elsewhere = entry || deferredReason
+              const elsewhere = entry || deferredReason || nativeOnly
                 ? []
                 : otherScopeFor(allRows, model.model_id).filter((scope) =>
                     scope.protocol !== location.protocol
                     || (protocolHasSubsets(location.protocol) ? scope.subset !== location.subset : false));
               const status = deferredReason ? "Tạm gác"
                 : run ? (missingScored ? "Chấm thiếu" : "Có số đo")
+                : nativeOnly ? "Có dữ liệu native"
                 : entry ? "Có dữ liệu native"
                 : usable.length > 1 ? `${usable.length} lượt cần chọn`
                 : elsewhere.length ? "Có kết quả ở scope khác"
                 : downloaded ? "Chưa có số đo" : "Chưa có checkpoint xác nhận";
               const openRun = () => {
+                if (nativeOnly) {
+                  onGoto({ area: "evaluation", view: "native", runs: [], run: "", query: "", offset: 0 });
+                  return;
+                }
                 if (!entry) return;
                 onGoto(entry.family === "composition"
                   ? { area: "samples", view: "explorer", runs: [entry.key], run: entry.runId, query: "", q: "", offset: 0 }
@@ -188,6 +224,11 @@ export function ModelInventory({ data, location, onGoto }: {
                       ? <button className="inspect-button" type="button" onClick={openRun}>
                           {entry.family === "composition" ? "Xem query" : "Xem kết quả"}
                         </button>
+                      : nativeOnly
+                        ? <button className="inspect-button" type="button" onClick={openRun}
+                                  data-testid={`native-open-${model.model_id}`}>
+                            Xem số đo native
+                          </button>
                       : deferredReason
                         ? <span className="cell-sub">Ngoài đợt chạy này</span>
                         : elsewhere.length
@@ -230,12 +271,14 @@ export function ModelInventory({ data, location, onGoto }: {
                             </div>}
                   </td>
                   <td>
-                    <Badge tone={deferredReason ? "neutral" : run && !missingScored ? "ok" : "warn"}>{status}</Badge>
+                    <Badge tone={deferredReason ? "neutral" : run && !missingScored ? "ok" : nativeOnly ? "info" : "warn"}>{status}</Badge>
                     <span className="cell-sub">
                       {deferredReason
                         ?? (entry
                           ? (missingScored ? `${fmtInt(counts?.unscored)} / ${fmtInt(counts?.total)} query chưa chấm` : "mọi query trong mẫu đều có hạng")
-                          : `${downloaded} / ${checkpoints.length} checkpoint đã có · ${model.reproduction_status ?? "chưa rõ"}`)}
+                          : nativeOnly
+                            ? `${fmtInt(nativeHere.length)} số đo native · macro toàn protocol, chưa xác minh`
+                            : `${downloaded} / ${checkpoints.length} checkpoint đã có · ${model.reproduction_status ?? "chưa rõ"}`)}
                     </span>
                   </td>
                   <td className="num">
@@ -252,7 +295,8 @@ export function ModelInventory({ data, location, onGoto }: {
                       ? <span className={entry.capabilities.flags.candidate_topk ? "hint-ok" : "hint-bad"}>
                           {entry.capabilities.flags.candidate_topk ? "Đã xuất ứng viên" : "Cần xuất Top-K"}
                         </span>
-                      : <span className="hint">{deferredReason ? "Ngoài đợt chạy này" : "Chưa có kết quả"}</span>}
+                      : <span className="hint">{deferredReason ? "Ngoài đợt chạy này"
+                          : nativeOnly ? "Macro native — không có ứng viên" : "Chưa có kết quả"}</span>}
                   </td>
                   <td>
                     {/* Registry's own reasons, verbatim; the summary is the count. An empty list says the
@@ -280,7 +324,9 @@ export function ModelInventory({ data, location, onGoto }: {
       )}
       <p className="hint">
         Cột MM dành cho lượt CIRCUS ở protocol/subset đang chọn; số đo native xem trong chi tiết.
-        “Có số đo” mô tả dữ liệu đã ghi, chưa thay thế kiểm chứng pipeline.
+        “Có số đo” chỉ nói về lượt CIRCUS/composition đã chạy; “Có dữ liệu native” là macro trong protocol
+        đang chọn, mở trong bảng Số đo native và chưa thay thế kiểm chứng pipeline (không có subset: số đo
+        phủ toàn protocol). Cả hai đều được tính là đã đo trong phạm vi này.
         CSMCIR và SPRC vẫn có trong danh sách để theo dõi phạm vi.
       </p>
     </section>

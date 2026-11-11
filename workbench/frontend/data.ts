@@ -245,6 +245,12 @@ export interface NativeMeasurement {
   backed_by_kind?: string | null;
   /** The number the row's own file wrote, before any replacement — present only when replaced. */
   raw_metrics?: NativeMeasurement["metrics"];
+  /** R07: the SCALE `raw_metrics` is on. The pre-replacement unit was kept on the backend beside
+   *  `raw_metrics` precisely because the served `unit` is the REPLACING report's scale; rendering
+   *  the original number with the replaced row's unit printed DCNet's `0.2793` as "0.2793 %".
+   *  Absent on a row that was never replaced (there `unit` IS the file's own scale). */
+  raw_unit?: "fraction" | "percent" | null;
+  raw_unit_source?: "declared" | "sibling_key" | "inferred_from_magnitude" | "undeclared" | null;
   /** `false` on a row that states the same identity as another row; `duplicate_of` names it. */
   counted?: boolean;
   duplicate_of?: string | null;

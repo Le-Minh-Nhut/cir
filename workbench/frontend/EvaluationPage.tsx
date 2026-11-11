@@ -632,12 +632,29 @@ function NativeMeasurementTable({ data, location, onGoto }: {
                                   ← {row.backed_by.split("/").pop()}
                                 </span>
                               )}
-                              {row.raw_metrics && (
-                                <span className="cell-sub" data-testid={`native-replaced-${row.measurement_id}`}>
-                                  roll-up ghi R@10 {fmtRecall(row.raw_metrics.r10 ?? null, row.unit, 4)} — đã thay
-                                  bằng số của artifact
-                                </span>
-                              )}
+                              {row.raw_metrics && (() => {
+                                // R07: `row.unit` is the REPLACING report's scale, not the scale
+                                // the roll-up wrote. Reading the pre-replacement number on the new
+                                // row's unit printed DCNet's 0.2793 fraction as "0.2793 %". The
+                                // backend keeps `raw_unit`/`raw_unit_source` beside `raw_metrics`;
+                                // `row.unit` is the fallback ONLY for a row served without them, and
+                                // the line says which scale is on screen and whether it was inferred
+                                // — the same rule the unit badge one column over follows.
+                                const hasRawUnit = row.raw_unit !== undefined;
+                                const rawUnit = hasRawUnit ? row.raw_unit : row.unit;
+                                const rawSource = hasRawUnit ? row.raw_unit_source : row.unit_source;
+                                return (
+                                  <span className="cell-sub" data-testid={`native-replaced-${row.measurement_id}`}>
+                                    roll-up ghi R@10 {fmtRecall(row.raw_metrics.r10 ?? null, rawUnit, 4)} — đã thay
+                                    bằng số của artifact. Số gốc theo thang{" "}
+                                    {rawUnit ?? "không ghi"}
+                                    {hasRawUnit ? "" : " (lấy từ dòng đã thay: backend không kèm thang gốc)"}
+                                    {rawSource === "inferred_from_magnitude"
+                                      ? " · suy theo độ lớn, không phải khai báo"
+                                      : ` · ${rawSource ?? "không ghi"}`}
+                                  </span>
+                                );
+                              })()}
                               {/* Two different reasons a row is not counted, told apart: a repeat
                                   names the row it duplicates, an unbacked claim names no artifact. */}
                               {row.counted === false && (

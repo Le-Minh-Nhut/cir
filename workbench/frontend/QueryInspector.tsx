@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BASE } from "./client";
 import { fetchJson, useRegion } from "./useRegion";
 import { conditionsOf, outcomeTone } from "./inspector";
+import { candidateWindowVerdict } from "./scope";
 import { Badge, Card, Detail, EmptyState, ErrorState, KeyValue, LoadingState } from "./ui";
 import { fmtInt, fmtRank } from "./format";
 import { FIXED_CUTOFFS } from "./catalog";
@@ -150,18 +151,44 @@ export function QueryInspector({ run, query, condition = "multimodal", selectedC
               // exactly where it matters — a run that exported 50 rows while the menu offers Top-100
               // has a target at #43 that is inside the export and outside the served list, and a
               // bare rank comparison called that "outside the 100 stored rows".
-              const ranks = conditions.map((item) => item.rank).filter((rank): rank is number => rank != null);
-              if (!ranks.length || !depth) return null;
-              const best = Math.min(...ranks);
-              if (targetInShown) return null;
+              //
+              // R10: the window on screen belongs to `condition` (the URL's), so the rank quoted is
+              // THAT condition's. The old code took `Math.min` across all three and explained the
+              // MM window with the text-only condition's rank — a true number about another
+              // condition. The sentence names the condition, and nothing is concluded until the
+              // request for this window has answered.
+              const label = CONDITION_LABELS[condition] ?? condition;
+              const verdict = candidateWindowVerdict({
+                conditions, viewed: condition, viewedLabel: label,
+                effectiveK, depth, targetInShown,
+                status: !canRequest ? "idle" : loading ? "loading" : candidatesRegion.region.status,
+              });
+              if (verdict.kind === "hidden") return null;
+              if (verdict.kind === "pending") {
+                return (
+                  <p className="hint" data-testid="target-window-pending" aria-live="polite">
+                    Đang tải cửa sổ Top-{fmtInt(effectiveK)} của {label}… Chưa kết luận ảnh đích nằm
+                    trong hay ngoài cửa sổ này.
+                  </p>
+                );
+              }
+              if (verdict.kind === "unavailable") {
+                return (
+                  <p className="hint" data-testid="target-window-unknown">
+                    Chưa mô tả được cửa sổ ứng viên: {verdict.reason}. Ảnh đích vẫn hiện ở đây vì nó
+                    lấy từ bản ghi query, không từ danh sách ứng viên.
+                  </p>
+                );
+              }
               return (
                 <p className="hint" data-testid="target-outside-window">
-                  Ảnh đích ở hạng tốt nhất {fmtRank(best)} — <b>ngoài cửa sổ Top-{fmtInt(effectiveK)} đang hiện</b>
-                  {" "}({fmtInt(servedDepth)} ứng viên được serve, export lưu {fmtInt(depth)} dòng)
-                  {best > effectiveK
-                    ? ` · Với K=10 hay K=20 thì ảnh đích không nằm trong danh sách`
-                    : ` · hạng ${fmtRank(best)} nằm trong K nhưng export của lượt này không chứa đúng ảnh đó`}.
-                  {" "}Vẫn hiện ở đây vì hạng là hạng toàn gallery, không phải vị trí trong danh sách ứng viên.
+                  Ảnh đích ở hạng {fmtRank(verdict.rank)} <b>theo điều kiện {label}</b> —{" "}
+                  <b>ngoài cửa sổ Top-{fmtInt(effectiveK)} đang hiện</b>
+                  {" "}({fmtInt(servedDepth)} ứng viên được serve, export lưu {fmtInt(depth)} dòng).{" "}
+                  {verdict.insideK
+                    ? `Hạng ${fmtRank(verdict.rank)} của ${label} nằm trong K nhưng export của lượt này không chứa đúng ảnh đó.`
+                    : `Hạng ${fmtRank(verdict.rank)} của ${label} đã vượt K, nên với K=10 hay K=20 ảnh đích không nằm trong danh sách.`}
+                  {" "}Đây là hạng toàn gallery, không phải vị trí trong danh sách ứng viên.
                 </p>
               );
             })()}
