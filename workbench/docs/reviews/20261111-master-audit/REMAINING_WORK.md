@@ -6,7 +6,7 @@
 1. `FINAL_REPORT.vi.md:189` — vẫn còn "Khớp với `models_with_metrics = 17` trừ đi 2 model chỉ có roll-up". Xoá mệnh đề, chỉ trích cột `native_executed` của `NATIVE_EVAL_MATRIX.csv`.
 2. `MODELS_REST_VERIFICATION.vi.md:473` — vẫn `models_with_metrics = 15` / `models_rollup_only = 13`; payload sống là **17 / 8**.
 3. `FINAL_REPORT.vi.md:339` — lệnh restart vẫn `> /tmp/workbench_serve.log` (truncate). Đổi `>>`.
-4. Ba log header còn trên đĩa: `/tmp/workbench_serve.log` (PID 3691345), `/tmp/workbench_serve_final.log` (PID 4040574), `/tmp/serve_probe.log` (PID 4062957); chỉ **hai** đã có bản copy commit (`raw/service-death-log.txt` = 3691345, `raw/service-death-log-4.txt` = 4082632). `/tmp/serve_handover.log` (4082632) đã bị truncate. Phải chép `-2`/`-3` vào `raw/service-death-log-2.txt` và `raw/service-death-log-3.txt` rồi commit, và sửa claim ở §5 `FINAL_REPORT` + `WEB_SURFACE_VERIFICATION` để chỉ trích đường dẫn đã commit.
+4. Claim "bốn lần chết còn log header" ở §5 `FINAL_REPORT.vi.md` và ở `WEB_SURFACE_VERIFICATION.vi.md` vẫn trích đường dẫn `/tmp/*`. Sửa để chỉ trích đường dẫn đã commit: `raw/service-death-log.txt` (PID 3691345), `-2` (4040574), `-3` (4062957), `-4` (4082632) — cả bốn nay đã commit, nên bằng chứng không còn phụ thuộc `/tmp`. Giữ nguyên: cơ chế `serve_workbench.py:152-166`, quy tắc xác nhận `curl /api/benchmark-runs` → 000 nghĩa là phải restart, và "ai gửi SIGTERM thì chưa xác định".
 
 ## Chưa chốt được — cần người khác
 5. **PAIR** — cần upstream công bố `model_vssp` + `MHTransformer_dis`. Đã quét 21 commit, không tồn tại. Xem `replay/pair_absence.py`.
