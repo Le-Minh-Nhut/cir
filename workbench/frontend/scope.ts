@@ -190,11 +190,145 @@ export function otherScopeFor(rows: ScopeRow[], model?: string | null): ScopeCho
 }
 
 /** The native-row fields a scope decision needs: exactly what `/api/native-measurements` serves per
- *  measurement, and what a native row carries after it has been mapped into a `ScopeRow`. */
+ *  measurement, and what a native row carries after it has been mapped into a `ScopeRow`.
+ *
+ *  R16: two served facts make a counted number provisional, and neither is a scope decision, so they
+ *  live here as the fields the pure functions below READ (`nativeConflictChips`,
+ *  `nativeVarianceSummary`, `nativeRepeatLabel`) — the wire contract that types the whole row is
+ *  `NativeMeasurement` in `data.ts`. Keeping the read-set here is what lets a test execute the
+ *  decisions on plain objects, with no React and no catalog. */
 export interface NativeRowLike {
   model_id?: string | null;
   protocol_id?: string | null;
   metrics?: { r10?: number; r50?: number; mean?: number } | null;
+  /** The scale `metrics` is on; needed to print a conflicting number the way its own row prints it. */
+  unit?: "fraction" | "percent" | null;
+  /** The file this row came from: `conflict_with` names OTHER files by this same path. */
+  source?: { path: string } | null;
+  /** Files whose number for the same identity disagrees with this one. Non-empty = not settled. */
+  conflict_with?: string[] | null;
+  /** Statistics of the repeat draws the keeper of a nondeterministic config stands for. */
+  variance_group?: {
+    metric?: string | null;
+    n: number;
+    values?: number[];
+    mean: number;
+    sd?: number | null;
+    spread?: number | null;
+    note?: string | null;
+    insufficient_draws?: boolean;
+  } | null;
+  /** The draw index a repeat row states about itself (1-based), and the group size when served. */
+  review_repeat_index?: number | null;
+  review_repeat_count?: number | null;
+  /** Set on a repeat row: the file it duplicates. */
+  duplicate_of?: string | null;
+  /** `artifact` | `review_run` | `rollup:<file>` — ancestry, which decides what a repeat is. */
+  source_kind?: string | null;
+  /** `false` on a row that states no number of its own (repeat, roll-up, unbacked claim). */
+  counted?: boolean;
+}
+
+/** One number on the row's own scale, 2 decimals. Local because this module is import-free by
+ *  contract (see the file header): the tests compile `scope.ts` alone. */
+function recallText(value: number | null | undefined, unit: "fraction" | "percent" | null | undefined,
+                    digits = 2): string {
+  if (value === null || value === undefined || !Number.isFinite(value)) return "—";
+  if (unit === "fraction") return `${(value * 100).toFixed(digits)}%`;
+  if (unit === "percent") return `${value.toFixed(digits)}%`;
+  return `${value.toFixed(digits)}`;
+}
+
+/** Same scaling WITHOUT a percent sign: sd and spread are distances, not recall values. */
+function spreadText(value: number | null | undefined, unit: "fraction" | "percent" | null | undefined): string {
+  if (value === null || value === undefined || !Number.isFinite(value)) return "—";
+  return (unit === "fraction" ? value * 100 : value).toFixed(2);
+}
+
+export interface NativeConflictChip {
+  /** The other file's path — the chip's key. */
+  key: string;
+  file: string;
+  /** The other row's value, formatted on ITS scale, ready for the numeric cell. */
+  perMetric: { r10: string; r50: string };
+  /** Full sentence: both numbers, the other file, and that the value is not settled. */
+  label: string;
+}
+
+/** R16: a counted row whose number a second file contradicts.
+ *
+ *  The table printed both rows as plain numbers, so a reader saw two measurements where the backend
+ *  says one disagreement. Every chip names BOTH numbers and the file the other one is in, and says
+ *  the value is not settled; `perMetric` is what the numeric cell prints beside its own value, so
+ *  neither number can be read without the other appearing.
+ */
+export function nativeConflictChips(row: NativeRowLike, rows: readonly NativeRowLike[]): NativeConflictChip[] {
+  const paths = row.conflict_with ?? [];
+  return paths.map((path) => {
+    const file = path.split("/").pop() ?? path;
+    const other = rows.find((peer) => peer.source?.path === path);
+    const mine = { r10: recallText(row.metrics?.r10, row.unit), r50: recallText(row.metrics?.r50, row.unit) };
+    if (!other || !other.metrics) {
+      return {
+        key: path, file,
+        perMetric: { r10: `≠ số trong ${file}`, r50: `≠ số trong ${file}` },
+        label: `Giá trị CHƯA chốt: file ${file} cho một số khác cho cùng mô hình + protocol, `
+             + `nhưng dòng đó không có trong catalog nên chưa đối chiếu được hai số.`,
+      };
+    }
+    const theirs = { r10: recallText(other.metrics?.r10, other.unit),
+                     r50: recallText(other.metrics?.r50, other.unit) };
+    return {
+      key: path, file, perMetric: { r10: `≠ ${theirs.r10} (${file})`, r50: `≠ ${theirs.r50} (${file})` },
+      label: `Giá trị CHƯA chốt: hai file cùng mô hình + protocol cho hai số khác nhau — `
+           + `${mine.r10} (dòng này) vs ${theirs.r10} (${file}). `
+           + `Đây là một bất đồng giữa hai nguồn, không phải hai số đo độc lập.`,
+    };
+  });
+}
+
+export type NativeVarianceSummary =
+  | { kind: "none" }
+  | { kind: "single-draw"; n: number; label: string }
+  | { kind: "group"; n: number; mean: number; sd: number | null; spread: number; label: string };
+
+/** R16: what a keeper row's `variance_group` says about the number on screen.
+ *
+ *  Four draws of one configuration are one measurement with a spread, not four measurements — and
+ *  the spread is the only place the evaluator's nondeterminism is visible. `sd`/`spread` are printed
+ *  without a percent sign (they are distances); one draw makes no statement about stability at all,
+ *  so that case says only that one draw exists.
+ */
+export function nativeVarianceSummary(row: NativeRowLike): NativeVarianceSummary {
+  const group = row.variance_group;
+  if (!group || group.n === undefined) return { kind: "none" };
+  const metric = (group.metric ?? "r10").replace("r", "R@");
+  const n = group.n;
+  const sd = group.sd ?? null;
+  if (group.insufficient_draws === true || n <= 1 || sd === null
+      || group.spread === null || group.spread === undefined) {
+    return { kind: "single-draw", n,
+      label: `chỉ có 1 draw cho cấu hình này (${metric}) — chưa đủ draw để nói gì về độ ổn định.` };
+  }
+  const mean = group.mean;
+  return { kind: "group", n, mean, sd, spread: group.spread,
+    label: `${n} draw của MỘT cấu hình (${metric}): mean ${recallText(mean, row.unit)}, `
+         + `sd ${spreadText(sd, row.unit)}, spread ${spreadText(group.spread, row.unit)} — `
+         + `evaluator nondeterministic by upstream design, nên con số ở dòng này là một draw, `
+         + `không phải hằng số; ${n} draw không phải ${n} số đo.` };
+}
+
+/** "repeat 2 of 4" for a repeat row. The group size is served on the KEEPER (`variance_group.n`),
+ *  which is the row `duplicate_of` names; `review_repeat_count` is the row's own claim when present. */
+export function nativeRepeatLabel(row: NativeRowLike, rows: readonly NativeRowLike[]): string | null {
+  if (row.review_repeat_index === null || row.review_repeat_index === undefined) return null;
+  const total = row.review_repeat_count
+    ?? row.variance_group?.n
+    ?? rows.find((peer) => row.duplicate_of && peer.source?.path === row.duplicate_of)?.variance_group?.n
+    ?? null;
+  return total === null
+    ? `repeat ${row.review_repeat_index}`
+    : `repeat ${row.review_repeat_index} of ${total}`;
 }
 
 /** A native row is a scope fact only when it STATES a number. A blocker document (`metrics: null`)

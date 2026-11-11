@@ -5,6 +5,9 @@ import type { Cohort, CompositionQuery, CompositionRun, DuplicateStatus, Job, Me
 import type { CapabilityFlags, CapabilityReport, Provenance } from "./catalog";
 import { compositionCapabilities, benchmarkCapabilities, indexCapabilities, provenanceOf, testWorkspaceOrigin, transferLabel } from "./catalog";
 import type { Subset } from "./routes";
+/** Type-only: the R16 read-set on a native row is declared once, beside the pure functions that
+ *  read it, and `NativeMeasurement` names those fields through it rather than restating them. */
+import type { NativeRowLike } from "./scope";
 
 /** Every source the workbench reads, each as its own keyed region.
  *
@@ -254,6 +257,19 @@ export interface NativeMeasurement {
   /** `false` on a row that states the same identity as another row; `duplicate_of` names it. */
   counted?: boolean;
   duplicate_of?: string | null;
+  /** R16: files whose number for the SAME model + protocol disagrees with this row's. Non-empty means
+   *  the served value is not settled — the other row is a disagreement, not a second measurement.
+   *  Typed from `NativeRowLike` because that is where the reading decision (`nativeConflictChips`)
+   *  lives; one shape, so the wire row and the pure function cannot drift apart. */
+  conflict_with?: NativeRowLike["conflict_with"];
+  /** R16: draw statistics of one configuration, carried by the KEEPER of a repeat group. Read by
+   *  `nativeVarianceSummary` — the only place the evaluator's nondeterminism is stated. */
+  variance_group?: NativeRowLike["variance_group"];
+  /** R16: the draw index the review file states about itself (`determinism.repeat_count`). */
+  review_repeat_index?: NativeRowLike["review_repeat_index"];
+  /** Group size as the row states it; `null` on the served rows, so the label falls back to the
+   *  keeper's `variance_group.n` (see `nativeRepeatLabel`). */
+  review_repeat_count?: NativeRowLike["review_repeat_count"];
 }
 
 export interface NativeMeasurementCatalog {

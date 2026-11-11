@@ -14,7 +14,7 @@ import type { CompositionRun } from "./types";
 import type { NativeMeasurement } from "./data";
 import type { WarningLabel } from "./gate";
 import { warningLabels } from "./gate";
-import { protocolHasSubsets } from "./scope";
+import { nativeConflictChips, nativeRepeatLabel, nativeVarianceSummary, protocolHasSubsets } from "./scope";
 
 /** Đánh giá: measured metrics for a stated protocol and subset, with denominators.
  *
@@ -607,7 +607,14 @@ function NativeMeasurementTable({ data, location, onGoto }: {
                         </tr>
                       </thead>
                       <tbody>
-                        {rows.map((row) => (
+                        {rows.map((row) => {
+                          // R16: three served facts the table used to print as if they were absent.
+                          // The DECISIONS live in `scope.ts` so the tests execute them; this file only
+                          // renders their output.
+                          const conflicts = nativeConflictChips(row, rows);
+                          const variance = nativeVarianceSummary(row);
+                          const repeat = nativeRepeatLabel(row, rows);
+                          return (
                           <tr key={row.measurement_id}
                               data-testid={`native-row-${row.measurement_id}`}
                               aria-selected={model ? row.model_id === model : undefined}>
@@ -664,9 +671,42 @@ function NativeMeasurementTable({ data, location, onGoto }: {
                                     : "không có artifact chống lưng · không đếm"}
                                 </span>
                               )}
+                              {/* R16: "repeat 2 of 4" — the draw index the file states, so a reader
+                                  sees WHICH repeat is on screen, not just that it repeats. */}
+                              {repeat && (
+                                <span className="cell-sub" data-testid={`native-repeat-${row.measurement_id}`}>
+                                  {repeat}
+                                </span>
+                              )}
+                              {conflicts.map((chip) => (
+                                <span className="cell-sub" key={chip.key}
+                                      data-testid={`native-conflict-${row.measurement_id}`}
+                                      title={chip.label}>
+                                  <Badge tone="warn">CHƯA CHỐT · {chip.file}</Badge>
+                                </span>
+                              ))}
+                              {variance.kind !== "none" && (
+                                <span className="cell-sub" data-testid={`native-variance-${row.measurement_id}`}>
+                                  {variance.label}
+                                </span>
+                              )}
                             </td>
-                            <td className="num">{fmtRecall(row.metrics?.r10 ?? null, row.unit, 2)}</td>
-                            <td className="num">{fmtRecall(row.metrics?.r50 ?? null, row.unit, 2)}</td>
+                            <td className="num">
+                              {fmtRecall(row.metrics?.r10 ?? null, row.unit, 2)}
+                              {conflicts.map((chip) => (
+                                <span className="cell-sub" key={chip.key} data-testid={`native-conflict-r10-${row.measurement_id}`}>
+                                  {chip.perMetric.r10}
+                                </span>
+                              ))}
+                            </td>
+                            <td className="num">
+                              {fmtRecall(row.metrics?.r50 ?? null, row.unit, 2)}
+                              {conflicts.map((chip) => (
+                                <span className="cell-sub" key={chip.key} data-testid={`native-conflict-r50-${row.measurement_id}`}>
+                                  {chip.perMetric.r50}
+                                </span>
+                              ))}
+                            </td>
                             <td>
                               <Badge tone={row.unit_source === "declared"
                                 || row.unit_source === "sibling_key" ? "ok" : "warn"}>
@@ -684,7 +724,8 @@ function NativeMeasurementTable({ data, location, onGoto }: {
                             <td><DetailToggle open={expanded === row.measurement_id}
                                               onToggle={() => setExpanded(expanded === row.measurement_id ? null : row.measurement_id)} /></td>
                           </tr>
-                        ))}
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>
