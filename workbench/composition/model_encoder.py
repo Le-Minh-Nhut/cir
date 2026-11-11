@@ -8,6 +8,7 @@ mirrors ``workbench/replay/encoder.py:253-295`` because replay's loader is not r
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import shutil
@@ -258,10 +259,33 @@ class Adapter(CompositionAdapter):
         self.relation_state = state
         return state
 
+    def _adopt_scratch_relation(self) -> None:
+        """Move a construction-time relation record out of the scratch job dir into the run.
+
+        The worker now persists the tensor DURING construction, i.e. during the handshake, when the
+        run id (hashed over the digest the handshake returns, `runner.py:1768`) has not been minted
+        and `work_root` -- assigned at `runner.py:1770-1774` -- does not exist. So the handshake
+        writes under `_scratch_root()/construction-state`; the first exchange that HAS a `work_root`
+        moves that directory to `construction_state_root()` (same filesystem, so a rename). It must
+        move OUT of `work/`: the keep-features cleanup deletes every child of `work/<model>/`
+        except `features/` (`runner.py:2387-2398`), which is why the record does not live there.
+        Runs before `_job_root()` so the scratch tree is still where the worker wrote it.
+        """
+        if self.work_root is None or self._job_dir is None:
+            return
+        stale = self._job_dir / "construction-state"
+        if not stale.is_dir():
+            return
+        target = self.construction_state_root()
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copytree(stale, target, dirs_exist_ok=True)
+        shutil.rmtree(stale, ignore_errors=True)
+
     def _exchange(self, phase: str, image_paths: Sequence[str | Path],
                   texts: Sequence[str], categories: Sequence[str | None], *,
                   write_output: bool) -> tuple[dict[str, Any], Path | None]:
         """Write one job, hand it to the worker (starting it if needed), and return its reply."""
+        self._adopt_scratch_relation()
         if self.work_root is None:
             relation_root = self._scratch_root() / "construction-state"
         else:
@@ -482,36 +506,8 @@ def _worker_main(job_path: Path) -> None:
                 wc=2, N_p=2, weighted=True)
         finally:
             os.chdir(previous_cwd)
-        # Persist the tensor that was actually drawn, not a claim about it: `learnable_relation` is
-        # not in `state_dict()`, so this file plus its digest is the only record of the state this
-        # run's query and gallery features were both computed with.
         relation = model.backbone.binding_decoder.learnable_relation.detach().float().cpu().contiguous()
-        import hashlib
         relation_digest = hashlib.sha256(relation.numpy().tobytes()).hexdigest()
-        if job.get("phase") != HANDSHAKE_PHASE:
-            # Written under the RUN's work root, not the worker's job directory: `close()` deletes the
-            # latter, and this record must outlive the worker that drew it. The HANDSHAKE runs before
-            # the run directory exists (it is what the run id is hashed over), so it records nothing
-            # and the first real job writes the durable copy -- the digest it replies with is the same
-            # bytes either way, because the seed and the construction order are the same.
-            relation_root = Path(job["relation_root"])
-            relation_root.mkdir(parents=True, exist_ok=True)
-            relation_path = relation_root / f"relation-seed{relation_seed}.npy"
-            np.save(relation_path, relation.numpy(), allow_pickle=False)
-            Path(str(relation_path) + ".json").write_text(json.dumps({
-                "tensor": "backbone.binding_decoder.learnable_relation",
-                "shape": list(relation.shape), "dtype": str(relation.dtype),
-                "seed": relation_seed, "sha256": relation_digest,
-                "seed_placement": ("torch.manual_seed(seed) immediately before Encoder(...) "
-                                   "construction"),
-                "in_state_dict": False,
-                "transform_policy": job.get("transform_policy"),
-                "source": "workbench/third_party/ENCODER/model_try2.py:93 (torch.randn(N_p, dim))",
-                "permutation_scope": "whole model construction (CLIP tower, FactorNet, decoder heads "
-                                     "and this tensor all draw from the seeded generator); the pin is "
-                                     "what makes the run reproducible, not a claim that the released "
-                                     "relation was recoverable",
-            }, indent=1) + "\n", encoding="utf-8")
         state = load_trusted_whole_model(
             Path(job["checkpoint_path"]), job["expected_sha256"], torch_module)
         if isinstance(state, dict):
@@ -519,6 +515,41 @@ def _worker_main(job_path: Path) -> None:
             _assert_checkpoint_loaded(model, report, checkpoint, source_root)
         else:
             model = state
+        # Persist the tensor that was actually drawn, not a claim about it: `learnable_relation` is
+        # not in `state_dict()`, so this file plus its digest is the only record of the state this
+        # run's query and gallery features were both computed with.
+        #
+        # UNCONDITIONAL, and therefore also during the HANDSHAKE -- which is the FIRST job. The one
+        # write used to sit behind `phase != HANDSHAKE_PHASE`, and no later job re-enters this body:
+        # every encode job runs `run_one` on the model already built here. Measured on rerun
+        # 9b806c22221e944ff10e514e: `relation_state.status == "recorded"`, digest
+        # 20db0c27..., `matches_pinned_digest: true`, and no `construction_state/` at all -- the
+        # better-identified run had the weaker evidence. The run directory cannot be named here
+        # (`run_id` IS this digest, `runner.py:1768`; `work_root` is assigned at
+        # `runner.py:1770-1774`), so at handshake time the adapter passes its scratch
+        # `construction-state/` directory and relocates it to `runs/<run_id>/construction_state/`
+        # on the first exchange that has a `work_root` (`_adopt_scratch_relation`).
+        relation_root = Path(job["relation_root"])
+        relation_root.mkdir(parents=True, exist_ok=True)
+        relation_path = relation_root / f"relation-seed{relation_seed}.npy"
+        # Written BEFORE the digest is replied: a run whose record cannot be written must not look
+        # fine, so a failure here raises into the `except` above and replies with an error instead
+        # of a digest, and the runner refuses the run.
+        np.save(relation_path, relation.numpy(), allow_pickle=False)
+        Path(str(relation_path) + ".json").write_text(json.dumps({
+            "tensor": "backbone.binding_decoder.learnable_relation",
+            "shape": list(relation.shape), "dtype": str(relation.dtype),
+            "seed": relation_seed, "sha256": relation_digest,
+            "seed_placement": ("torch.manual_seed(seed) immediately before Encoder(...) "
+                               "construction"),
+            "in_state_dict": False,
+            "transform_policy": job.get("transform_policy"),
+            "source": "workbench/third_party/ENCODER/model_try2.py:93 (torch.randn(N_p, dim))",
+            "permutation_scope": "whole model construction (CLIP tower, FactorNet, decoder heads "
+                                 "and this tensor all draw from the seeded generator); the pin is "
+                                 "what makes the run reproducible, not a claim that the released "
+                                 "relation was recoverable",
+        }, indent=1) + "\n", encoding="utf-8")
         model = model.cuda().eval()
         _, _, preprocess_val = open_clip_module.create_model_and_transforms(
             "ViT-B-32", pretrained=str(source_root / "open_clip_pytorch_model.bin"))

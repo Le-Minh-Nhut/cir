@@ -17,6 +17,7 @@ NumPy features, no model, no GPU -- and assert the four states the fix must dist
 from __future__ import annotations
 
 import json
+import tempfile
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -189,3 +190,124 @@ def test_the_summary_block_carries_the_identity_fields(field: str) -> None:
     state = runner._relation_identity({"sha256": DIGEST, "expected_sha256": DIGEST,
                                        "matches_pinned_digest": True})
     assert field in state
+
+class _StubEncoder:
+    """A model with the one attribute the worker reads, drawn under the same seeded generator."""
+
+    def __init__(self, **_kwargs):
+        import torch
+
+        self.backbone = SimpleNamespace(binding_decoder=SimpleNamespace(
+            learnable_relation=torch.randn(2, 8)))
+
+    def load_state_dict(self, _state, strict=False):
+        return SimpleNamespace(unexpected_keys=(), missing_keys=())
+
+    def cuda(self):
+        return self
+
+    def eval(self):
+        return self
+
+
+def _drive_worker(tmp_path: Path, job: dict, monkeypatch, capsys, *, save=None) -> list[dict]:
+    """Run the REAL `_worker_main` against a stub model; return the CIRCUS_WORKER replies."""
+    import io
+    import sys
+    import types
+
+    from workbench.composition import model_encoder as encoder
+    from workbench.replay import common as replay_common
+    from workbench.replay import encoder as replay_encoder
+
+    stub_clip = types.ModuleType("open_clip")
+    stub_clip.create_model_and_transforms = lambda *_a, **_k: (None, None, object())
+    monkeypatch.setitem(sys.modules, "open_clip", stub_clip)
+    monkeypatch.setattr(replay_common, "load_trusted_whole_model", lambda *_a, **_k: {"stub": 1})
+    monkeypatch.setattr(replay_encoder, "_assert_checkpoint_loaded", lambda *_a, **_k: None)
+    monkeypatch.setattr(replay_encoder, "_load_replay_modules",
+                        lambda _root: (__import__("torch"), stub_clip, None, None,
+                                       types.SimpleNamespace(Encoder=_StubEncoder)))
+    monkeypatch.setattr(encoder, "limit_torch_threads", lambda *_a, **_k: 0)
+    monkeypatch.setattr(encoder, "resolved_decode_workers", lambda *_a, **_k: 1)
+    if save is not None:
+        monkeypatch.setattr(encoder.np, "save", save)
+    monkeypatch.setattr(sys, "stdin", io.StringIO())
+    job_path = tmp_path / "job.json"
+    job_path.write_text(json.dumps({**job, "source_root": str(tmp_path),
+                                    "expected_sha256": "0" * 64,
+                                    "checkpoint_path": str(tmp_path / "ckpt.pth")}),
+                        encoding="utf-8")
+
+    encoder._worker_main(job_path)
+
+    return [json.loads(line[len("CIRCUS_WORKER:"):])
+            for line in capsys.readouterr().out.splitlines()
+            if line.startswith("CIRCUS_WORKER:")]
+
+
+def test_the_handshake_persists_the_tensor_it_reports(tmp_path: Path, monkeypatch, capsys) -> None:
+    """The handshake is the FIRST job, so the record must be written AT construction, not later.
+
+    Measured on the real rerun: `relation_state` recorded, digest correct, no `construction_state/`.
+    The one write used to live behind `phase != HANDSHAKE_PHASE`, and no later job re-enters the
+    construction body -- so the tensor the identity names was never on disk.
+    """
+    import hashlib
+
+    relation_root = tmp_path / "construction-state"
+    replies = _drive_worker(tmp_path, {"phase": "handshake", "relation_seed": 20261111,
+                                       "relation_root": str(relation_root),
+                                       "transform_policy": {"probe": "stub"}},
+                            monkeypatch, capsys)
+
+    assert replies and replies[0]["ok"] is True, replies
+    digest = replies[0]["relation_digest"]
+    tensor_path = relation_root / "relation-seed20261111.npy"
+    assert tensor_path.is_file(), "the handshake must persist the tensor it just digested"
+    # The file IS the bytes the reply described: same numpy re-save, same sha256.
+    assert hashlib.sha256(np.load(tensor_path, allow_pickle=False).tobytes()).hexdigest() == digest
+    sidecar = json.loads(Path(str(tensor_path) + ".json").read_text(encoding="utf-8"))
+    assert sidecar["sha256"] == digest
+    assert sidecar["seed"] == 20261111
+    assert sidecar["in_state_dict"] is False
+    assert sidecar["source"].startswith("workbench/third_party/ENCODER/model_try2.py:93")
+    assert sidecar["seed_placement"].startswith("torch.manual_seed(seed)")
+    assert sidecar["shape"] == [2, 8]
+
+
+def test_a_failed_persist_replies_with_an_error_not_a_digest(tmp_path: Path, monkeypatch,
+                                                             capsys) -> None:
+    """A run whose record cannot be written must not look fine: no digest, so the runner refuses."""
+    def explode(*_args, **_kwargs):
+        raise OSError("disk full")
+
+    replies = _drive_worker(tmp_path, {"phase": "handshake", "relation_seed": 20261111,
+                                       "relation_root": str(tmp_path / "construction-state")},
+                            monkeypatch, capsys, save=explode)
+
+    assert replies and replies[0]["ok"] is False, replies
+    assert replies[0]["error_type"] == "OSError"
+    assert "relation_digest" not in replies[0]
+
+def test_the_handshake_record_is_relocated_out_of_the_scratch_job_dir(tmp_path: Path) -> None:
+    """The run dir cannot exist at handshake time, so the write lands in scratch and must move.
+
+    `construction_state_root()` is `<run>/construction_state`, and a record left inside
+    `work/<model>/` is deleted by the keep-features cleanup (`runner.py:2387-2398`).
+    """
+    from workbench.composition import model_encoder as encoder
+
+    adapter = encoder.Adapter.__new__(encoder.Adapter)
+    adapter.work_root = tmp_path / "runs" / "abc123" / "work" / "encoder"
+    adapter._job_dir = Path(tempfile.mkdtemp(prefix="encoder-relocate-"))
+    stale = adapter._job_dir / "construction-state"
+    stale.mkdir()
+    (stale / "relation-seed20261111.npy").write_bytes(b"drawn")
+
+    adapter._adopt_scratch_relation()
+
+    target = tmp_path / "runs" / "abc123" / "construction_state" / "relation-seed20261111.npy"
+    assert target.read_bytes() == b"drawn"
+    assert not stale.exists()
+    assert "work" not in target.parts
