@@ -9,7 +9,7 @@ negative fixtures returned `passed=true, complete=true, failure_count=0`.
 
 ## Rule 1 — per-category scoping
 
-`verdict.missing_by_category` / `verdict.mandatory_by_category` are filled per category inside the
+`verdict.missing_by_category` and `verdict.mandatory_by_category` are filled per category inside the
 artifact loop. `verdict.missing` is now the UNION over categories of required dimensions that lack a
 mandatory check in that category, so one well-measured category can no longer carry a bare one.
 `verdict.categories` is set before the loop so a pass can be asserted against the judged set.
@@ -43,8 +43,24 @@ treated as relation-drawing when EITHER document carries a `relation_state` key 
 either side keeps `mandatory=False, ok=False`, so `relation_parity` is False rather than absent.
 
 Fixtures: `complete_fixture_no_relation` → `PARITY_MANDATORY_SUBCHECK_FAILED` (1 failure,
-`relation.<cat>.digest`). `empty_adapter_control` moves `INCOMPLETE` → `MANDATORY_FAILED` for the same
-reason (encoder, no digest); still `passed=false`, `complete=false`, `missing` unchanged.
+`relation.<cat>.digest`).
+
+## Rule 3a — absent evidence is not a failed claim (per category)
+
+A check that reports ABSENCE (`ParityCheck.absence=True`: an unrecorded relation digest, "no rank
+comparison recorded") measures nothing, so it must not be reported as a failed claim on an artifact
+that made no claim. The rule is decided PER CATEGORY, from `bool(adapter_body)`:
+
+* adapter body empty ⇒ absence checks are demoted to non-mandatory (`_unclaimable`), the dimension
+  reports `missing`, and the verdict is `INCOMPLETE` with `failure_count` 0;
+* adapter body has any content ⇒ absence checks stay mandatory, so a category that claims forward or
+  scoring results but records no relation digest is `MANDATORY_FAILED` beside its real claims.
+
+`empty_adapter_control` (encoder, `{}`) → `INCOMPLETE`, `passed=false`, `failure_count` 0, `missing`
+= `[forward_parity, batch_parity, scoring_parity]`, `relation_parity` False. A GLOBAL version of this
+rule is wrong and `other_categories_empty` proves it: shirt claims results and lacks a digest
+(1 genuine failure), dress/toptee claim nothing (missing), and the verdict is `MANDATORY_FAILED` —
+a global "all failures are absence ⇒ INCOMPLETE" test would have thrown shirt's real failure away.
 
 ## Rule 4 — scoring needs rank evidence
 
@@ -81,11 +97,11 @@ reintroduces a false pass raises instead of reporting.
 | fixture | before | after | fails |
 |---|---|---|---|
 | complete_fixture_no_relation | PARITY_PASS | PARITY_MANDATORY_SUBCHECK_FAILED | 0→1 |
-| empty_adapter_control | PARITY_INCOMPLETE | PARITY_MANDATORY_SUBCHECK_FAILED | 0→1 |
+| empty_adapter_control | PARITY_INCOMPLETE | PARITY_INCOMPLETE (unchanged, correctly) | 0→0 |
 | contradictory_identity | PARITY_PASS | PARITY_MANDATORY_SUBCHECK_FAILED | 0→5 |
 | local_tolerance_overrides_global_and_no_rank_evidence | PARITY_PASS | PARITY_EVIDENCE_MALFORMED | 0→0 |
 | score_only_no_rank_evidence | PARITY_PASS | PARITY_MANDATORY_SUBCHECK_FAILED | 0→2 |
-| other_categories_empty | PARITY_PASS | PARITY_MANDATORY_SUBCHECK_FAILED | 0→3 |
+| other_categories_empty | PARITY_PASS | PARITY_MANDATORY_SUBCHECK_FAILED | 0→1 (missing non-empty) |
 
 Every `passed` moved to False where it was True. Probe run: copied to `/tmp/gate_probe_real.py`, its
 import repointed at `/home/heheboiz/data/cir/workbench/backend/parity_gate.py` and its historical root

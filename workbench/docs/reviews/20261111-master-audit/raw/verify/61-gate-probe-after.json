@@ -15,7 +15,7 @@
     "failure_count": 1
   },
   "empty_adapter_control": {
-    "status": "PARITY_MANDATORY_SUBCHECK_FAILED",
+    "status": "PARITY_INCOMPLETE",
     "passed": false,
     "complete": false,
     "missing": [
@@ -28,7 +28,7 @@
       "metrics_parity": true,
       "relation_parity": false
     },
-    "failure_count": 1
+    "failure_count": 0
   },
   "contradictory_identity": {
     "status": "PARITY_MANDATORY_SUBCHECK_FAILED",
@@ -85,7 +85,7 @@
       "metrics_parity": true,
       "relation_parity": false
     },
-    "failure_count": 3
+    "failure_count": 1
   },
   "historical_verdict": {
     "encoder": {

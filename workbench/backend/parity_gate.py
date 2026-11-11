@@ -126,12 +126,17 @@ class ParityCheck:
     #: The boolean the HARNESS itself recorded for this comparison, when it recorded one. Kept beside
     #: this gate's verdict so the old label is readable and any disagreement is visible.
     harness_recorded: Any = None
+    #: True when the check reports ABSENT evidence rather than a measured value that failed. Such a
+    #: check belongs to `missing`, not to `failures`: "no claim was recorded" is `INCOMPLETE`, and it
+    #: is only promoted to a failure when the artifact DID make claims for that category.
+    absence: bool = False
 
     def to_dict(self) -> dict[str, Any]:
         return {"name": self.name, "dimension": self.dimension, "gate": self.gate,
                 "declared": self.declared, "measured": self.measured, "ok": self.ok,
                 "mandatory": self.mandatory, "standard": self.standard, "note": self.note,
-                "harness_recorded_within_tolerance": self.harness_recorded}
+                "harness_recorded_within_tolerance": self.harness_recorded,
+                "reports_absent_evidence": self.absence}
 
 
 @dataclass
@@ -632,10 +637,24 @@ def _scoring_evidence(checks: list[ParityCheck],
         return [ParityCheck(
             name=f"{category}.ranks.evidence_present", dimension="scoring_parity", gate="G2",
             declared="a rank comparison beside the score comparison",
-            measured="no rank comparison recorded", ok=False, mandatory=True,
+            measured="no rank comparison recorded", ok=False, mandatory=True, absence=True,
             note=("the artifact records score deltas but no rank comparison, so whether the "
                   "scoring still produces the same ORDER is unmeasured") )], False
     return [], has_rank and not has_score
+
+def _unclaimable(check: ParityCheck) -> ParityCheck:
+    """An absence-reporting check for a category whose adapter claims nothing.
+
+    Non-mandatory, so it never lands in `failures`; `ok` stays False so the dimension is still
+    reported False rather than absent. The dimension is separately reported `missing` by rule 1.
+    """
+    return ParityCheck(
+        name=check.name, dimension=check.dimension, gate=check.gate, declared=check.declared,
+        measured=check.measured, ok=check.ok, mandatory=False, standard=check.standard,
+        harness_recorded=check.harness_recorded, absence=True,
+        note=(check.note + "; " if check.note else "") +
+             "the artifact claims NOTHING for this category, so this is absent evidence, not a "
+             "failed claim")
 
 def _check_invariants(verdict: ParityVerdict) -> None:
     """A pass is impossible on an empty or partly-measured mandatory set.
@@ -786,7 +805,7 @@ def _relation_checks(native: dict[str, Any], adapter: dict[str, Any],
     if native_digest is None or adapter_digest is None:
         return [ParityCheck(
             name=name, dimension="relation_parity", gate="G1", mandatory=draws_relation, ok=False,
-            declared=declared, measured=measured, harness_recorded=False,
+            declared=declared, measured=measured, harness_recorded=False, absence=True,
             note=("this model draws a relation tensor at construction, so an unrecorded digest is a "
                   "mandatory failure: whether the two sides computed features with the same relation "
                   "is unknown, and unknown is not a pass") if draws_relation else
@@ -916,6 +935,18 @@ def evaluate_model(model_id: str, *, categories: Iterable[str] = ("dress", "shir
             # the score half certify the dimension.
             evidence_gap, score_missing = _scoring_evidence(checks, category)
             checks.extend(evidence_gap)
+            # ABSENT EVIDENCE IS NOT A FAILED CLAIM. A check that reports "nothing was recorded"
+            # (`absence=True`) measures nothing, so an artifact pair that made NO claim for this
+            # category must not be reported as "1 mandatory subcheck failed" -- that says a claim was
+            # measured and did not hold, which is `MANDATORY_FAILED`'s meaning, not `INCOMPLETE`'s.
+            # The adapter body is where the claims live: an empty `{}` claims nothing in this
+            # category, so its absence checks become non-mandatory (the dimension then reports
+            # `missing`, and `relation_parity` reports False). When the artifact DOES claim anything
+            # here -- forward deltas, score deltas -- a missing relation digest stays a mandatory
+            # failure beside those real claims.
+            claims_present = bool(adapter_body)
+            if not claims_present:
+                checks = [check if not check.absence else _unclaimable(check) for check in checks]
             checks.extend(_metrics_checks(native_body, category))
             checks.extend(_observer_checks(native_body, category))
 
@@ -1034,6 +1065,22 @@ def evaluate_model(model_id: str, *, categories: Iterable[str] = ("dress", "shir
     verdict.missing = [dimension for dimension in REQUIRED_DIMENSIONS
                        if any(dimension in verdict.missing_by_category.get(category, [])
                               for category in categories)]
+
+    # VERDICT PRECEDENCE between `INCOMPLETE` and `MANDATORY_FAILED` is decided PER CATEGORY, in the
+    # artifact loop above -- not here. Those two statuses answer different questions, and the more
+    # accurate one wins:
+    #   * a failure means a CLAIM was measured for that category and did not hold;
+    #   * missing means the dimension was never measured for some category at all.
+    # So an absence-reporting check (`absence=True`) is demoted to non-mandatory when its own
+    # category's adapter body claims nothing; the dimension then reports `missing`. When the same
+    # artifact DOES claim results in that category, the absence is a real failure beside real claims
+    # and stays mandatory.
+    #
+    # A GLOBAL version of this rule would be wrong, and `other_categories_empty` is the fixture that
+    # proves it: shirt claims forward and scoring results and records no relation digest (a genuine
+    # mandatory failure), while dress and toptee claim nothing (missing). A global "failures are all
+    # about absence => INCOMPLETE" test would throw away shirt's real failure and report a
+    # partly-measured pass as merely incomplete.
 
     if standard != verdict.applied_standard:
         # v2 has not been measured on these artifacts, and applying it after the fact would move a

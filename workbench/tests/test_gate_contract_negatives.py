@@ -133,12 +133,14 @@ def test_an_empty_adapter_artifact_does_not_pass_and_is_not_complete(tmp_path: P
     _write(tmp_path, "testmodel", _native(), {"category": CATEGORY, "phase": "adapter",
                                               "tolerances": dict(TOLERANCES), "adapter": {}})
     verdict = _evaluate(tmp_path)
-    assert verdict.status != gate.PASS, verdict.detail
+    assert verdict.status == gate.INCOMPLETE, verdict.detail
     assert verdict.passed is False
     assert verdict.complete is False, "an artifact with no measurement must not report complete"
-    # ENCODER draws a relation tensor, so `not_recorded` is a mandatory failure (rule 3), which takes
-    # precedence over `INCOMPLETE` here. Either way it is not a pass, and the gaps are still named.
-    assert verdict.status in {gate.INCOMPLETE, gate.MANDATORY_FAILED}, verdict.status
+    # An empty adapter records NO CLAIM, so nothing was disproved: `failure_count` must be 0 and the
+    # gaps are reported through `missing`. (The encoder relation digest is absent here too, and it is
+    # absent evidence, not a failed claim -- `complete_fixture_no_relation` covers the case where the
+    # same absences sit beside real claims and do fail.)
+    assert verdict.failures == [], verdict.failures
     # `metrics_parity` IS measured here: the native side records hit-count equality. What is missing
     # is everything the adapter would have had to measure.
     assert set(verdict.missing) == {"forward_parity", "batch_parity", "scoring_parity"}, verdict.missing
@@ -511,3 +513,26 @@ def test_a_pass_carries_a_mandatory_check_in_every_required_dimension_every_cate
         return
     for category in verdict.categories:
         assert set(verdict.mandatory_by_category[category]) == set(gate.REQUIRED_DIMENSIONS)
+
+def test_absent_evidence_is_incomplete_while_the_same_absence_beside_claims_fails(
+        tmp_path: Path) -> None:
+    """The distinction is exactly "did the artifact claim anything for this category".
+
+    Both fixtures lack a relation digest. With an empty adapter body nothing was claimed, so nothing
+    was disproved: `INCOMPLETE` with `failure_count` 0. Beside real forward/scoring claims the same
+    absence contradicts the artifact's own claims and is a mandatory failure.
+    """
+    _write(tmp_path, "encoder", _native(),
+           {"category": CATEGORY, "phase": "adapter", "tolerances": dict(TOLERANCES), "adapter": {}})
+    silent = gate.evaluate_model("encoder", root=tmp_path, categories=(CATEGORY,))
+    assert silent.status == gate.INCOMPLETE, silent.detail
+    assert silent.failures == []
+    assert "relation_parity" not in silent.missing  # the dimension exists, it is just False
+
+    loud_root = tmp_path / "claims"
+    loud_root.mkdir()
+    _write(loud_root, "encoder", _native(), _adapter())
+    loud = gate.evaluate_model("encoder", root=loud_root, categories=(CATEGORY,))
+    assert loud.status == gate.MANDATORY_FAILED, loud.detail
+    assert [check.name for check in loud.failures] == [f"relation.{CATEGORY}.digest"]
+    assert loud.failures[0].absence is True
