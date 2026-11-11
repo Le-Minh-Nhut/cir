@@ -132,5 +132,6 @@
     "four_run_macro_r10_spread": 0.6253,
     "note": "this artifact's macro is one draw; A-12 in docs/reviews/20261111-master-audit/BLOCKED_MODELS_VERIFICATION.vi.md",
     "_backfilled": "variance fields added after the run from the four-run measurement; metrics unchanged"
-  }
+  },
+  "checkpoint_id": "fiq_n05"
 }

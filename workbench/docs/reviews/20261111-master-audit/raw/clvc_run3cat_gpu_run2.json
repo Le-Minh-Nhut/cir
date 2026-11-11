@@ -72,5 +72,6 @@
     "macro_mean": 44.34634551988645,
     "complete": true
   },
-  "recorded_at": "2026-11-10T14:12:09.101720+00:00"
+  "recorded_at": "2026-11-10T14:12:09.101720+00:00",
+  "replay_type": "SOURCE_FAITHFUL_WORKBENCH_REPLAY"
 }

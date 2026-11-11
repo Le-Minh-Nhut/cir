@@ -302,7 +302,11 @@ def test_the_real_tree_keeps_equal_metrics_rows_counted() -> None:
     counted_airknow = [row for row in rows
                        if row["model_id"] == "airknow" and row["counted"]
                        and not row["rollup"]]
-    assert len(counted_airknow) == 2, counted_airknow
+    # R16 changed this from 2 to 3: the ingested `airknow_run3cat_gpu_run1.json` is a THIRD counted
+    # measurement (a third run of the `fiq_n05` config, distinct from the two in-tree artifacts), and
+    # its three siblings are marked `duplicate_of` rather than counted — see
+    # `test_the_airknow_repeats_add_exactly_one_counted_row`.
+    assert len(counted_airknow) == 3, counted_airknow
     # `hint` and `tme` each ship two exports of ONE checkpoint (same `checkpoint_sha256`), so
     # exactly one of each pair counts and the other names it as its ancestor.
     for model in ("hint", "tme"):
@@ -310,3 +314,34 @@ def test_the_real_tree_keeps_equal_metrics_rows_counted() -> None:
         assert len(pair) == 2, pair
         assert len([row for row in pair if row["counted"]]) == 1, pair
         assert len([row for row in pair if row["duplicate_of"]]) == 1, pair
+
+
+def test_the_airknow_repeats_add_exactly_one_counted_row() -> None:
+    """R16: the four `airknow_run3cat_gpu_run{1..4}` files are draws of ONE config, not four models.
+
+    BEFORE: they were un-ingested (no `replay_type`, wrong directory), so `airknow` served only the
+    `_run1` artifacts of two checkpoints. Ingesting them naively would have counted 2 + 4 = 6
+    measurements of one model. The repeats carry a draw index in `determinism.repeat_count`, so one
+    of them counts and the other three are `duplicate_of` it with a reason.
+    """
+    payload = nm.list_native_measurements(ARTIFACTS)
+    rows = [row for row in payload["measurements"]
+            if row["model_id"] == "airknow" and row.get("metrics")]
+    repeats = [row for row in rows if row.get("review_repeat_index") is not None]
+    assert len(repeats) == 4, repeats
+    assert len([row for row in repeats if row["counted"]]) == 1, repeats
+    keeper = [row for row in repeats if row["counted"]][0]
+    assert keeper["review_repeat_index"] == 1, keeper
+    assert keeper["metrics"]["r10"] == pytest.approx(52.924086629607395), keeper
+    assert keeper["variance_group"]["n"] == 4, keeper["variance_group"]
+    assert keeper["variance_group"]["spread"] == pytest.approx(0.6252866852209422), keeper
+    demoted = [row for row in repeats if not row["counted"]]
+    assert len(demoted) == 3, demoted
+    for row in demoted:
+        assert row["duplicate_of"] == keeper["source"]["path"], row
+        assert "repeat run" in row["duplicate_reason"], row
+        # The number is never lost: it stays readable on the demoted row.
+        assert row["metrics"]["r10"] > 0, row
+    # One model, three counted rows: two checkpoints of the in-tree tree plus the new run.
+    counted = [row for row in rows if row["counted"] and not row["rollup"]]
+    assert len(counted) == 3, counted

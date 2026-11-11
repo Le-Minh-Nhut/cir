@@ -94,5 +94,7 @@
     "macro_mean": 60.411545827903154,
     "complete": true
   },
-  "recorded_at": "2026-11-10T13:24:47.518951+00:00"
+  "recorded_at": "2026-11-10T13:24:47.518951+00:00",
+  "replay_type": "SOURCE_FAITHFUL_WORKBENCH_REPLAY",
+  "checkpoint_id": "tgcir_archive_unresolved"
 }

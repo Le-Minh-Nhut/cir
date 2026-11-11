@@ -1,0 +1,76 @@
+{
+  "model_id": "clvc_net",
+  "protocol": "fashioniq_val_split",
+  "results": [
+    {
+      "model_id": "clvc_net",
+      "checkpoint_id": "author_drive_dress",
+      "category": "dress",
+      "protocol": "fashioniq_val_split",
+      "r1": 6.841844323252355,
+      "r10": 29.449677739216657,
+      "r50": 56.767476450173525,
+      "complete": true,
+      "provenance": {
+        "local_checkpoint": "workbench/artifacts/checkpoint_selection/20261106T002617+0700/checkpoints/clvc/dress_local_model.pt",
+        "global_checkpoint": "workbench/artifacts/checkpoint_selection/20261106T002617+0700/checkpoints/clvc/dress_global_model.pt",
+        "source_commit": "bd9b6889489806cb60676597880f91d918b279cb",
+        "native_evaluator": "test.py:test",
+        "runtime_label": "NATIVE_CUDA",
+        "device": "cuda",
+        "adaptation": null
+      },
+      "parity_mismatches": [],
+      "per_query_published": false
+    },
+    {
+      "model_id": "clvc_net",
+      "checkpoint_id": "author_drive_shirt",
+      "category": "shirt",
+      "protocol": "fashioniq_val_split",
+      "r1": 6.4769381746810595,
+      "r10": 27.77232580961727,
+      "r50": 55.250245338567225,
+      "complete": true,
+      "provenance": {
+        "local_checkpoint": "workbench/artifacts/checkpoint_selection/20261106T002617+0700/checkpoints/clvc/shirt_local_model.pt",
+        "global_checkpoint": "workbench/artifacts/checkpoint_selection/20261106T002617+0700/checkpoints/clvc/shirt_global_model.pt",
+        "source_commit": "bd9b6889489806cb60676597880f91d918b279cb",
+        "native_evaluator": "test.py:test",
+        "runtime_label": "NATIVE_CUDA",
+        "device": "cuda",
+        "adaptation": null
+      },
+      "parity_mismatches": [],
+      "per_query_published": false
+    },
+    {
+      "model_id": "clvc_net",
+      "checkpoint_id": "author_drive_toptee",
+      "category": "toptee",
+      "protocol": "fashioniq_val_split",
+      "r1": 7.8531361550229475,
+      "r10": 32.840387557368686,
+      "r50": 63.99796022437532,
+      "complete": true,
+      "provenance": {
+        "local_checkpoint": "workbench/artifacts/checkpoint_selection/20261106T002617+0700/checkpoints/clvc/toptee_local_model.pt",
+        "global_checkpoint": "workbench/artifacts/checkpoint_selection/20261106T002617+0700/checkpoints/clvc/toptee_global_model.pt",
+        "source_commit": "bd9b6889489806cb60676597880f91d918b279cb",
+        "native_evaluator": "test.py:test",
+        "runtime_label": "NATIVE_CUDA",
+        "device": "cuda",
+        "adaptation": null
+      },
+      "parity_mismatches": [],
+      "per_query_published": false
+    }
+  ],
+  "aggregate": {
+    "macro_r10": 30.02079703540087,
+    "macro_r50": 58.67189400437203,
+    "macro_mean": 44.34634551988645,
+    "complete": true
+  },
+  "recorded_at": "2026-11-10T13:31:28.628383+00:00"
+}

@@ -156,5 +156,6 @@
     "checkpoint_root": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/checkpoints/airknow",
     "variant": "fiq_n05",
     "eval_mode": false
-  }
+  },
+  "checkpoint_id": "fiq_n05"
 }

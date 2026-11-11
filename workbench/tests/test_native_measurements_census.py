@@ -248,7 +248,11 @@ def test_the_catalog_never_reaches_outside_the_artifacts_root() -> None:
         path = row["source"]["path"]
         assert not path.startswith("/"), row
         assert "site-packages" not in path and "/downloads/" not in path, row
-        assert path.startswith("checkpoint_selection/"), row
+        # R16: a committed review run is served as its own row, so two prefixes are now legal — the
+        # artifact tree, and the two review globs that satisfy `_review_run_payload`. Nothing else is,
+        # which is what this assertion is for. (Before R16 only the first prefix existed.)
+        assert path.startswith("checkpoint_selection/") or (
+            path.startswith("workbench/docs/reviews/") and "/raw/" in path), row
 
 
 def test_the_endpoint_serves_the_whole_catalog(tmp_path: Path) -> None:

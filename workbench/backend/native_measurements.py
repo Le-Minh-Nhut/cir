@@ -26,6 +26,25 @@ the block it found. Two shapes are deliberately not read as per-model measuremen
 Nothing here is certified. These carry no completion proof, no invocation outcome, no evidence-ledger
 entry and no verifier receipt, so every row is `verified: false` with a named state, and the endpoint
 is separate from `/api/benchmark-runs` (which `/api/evidence/summary` counts).
+
+R16 — committed native GPU runs under `docs/reviews/` are ingested too, by ONE predicate and two roles:
+
+    docs/reviews/*/raw/*.json          a ROW of its own, `source_kind = "review_run"`
+    docs/reviews/*/raw/native/*.json   a BACKING REPORT only, `source_kind = "native_replay"`
+
+The predicate is `_review_run_payload`: a `model_id`, a non-empty `replay_type`, a
+`protocol`/`protocol_id`, and an `aggregate` the shared parser turns into at least one served metric.
+Being JSON is NOT the predicate — `pair_absence_evidence.json` and the `w03_*` inspector dumps state
+no model and no aggregate, `raw/clvc_run3cat_gpu_run1.json` is a byte-clone with no `replay_type`, and
+a document whose `migrated_from.artifact_sha256` is already present re-emits another file's number, so
+none of them is ingested. One file has one role, so no number is served twice.
+
+Repeats are not extra measurements, and they are not dropped. `_mark_duplicates` groups review rows by
+ancestry the FILES state and marks all but the keeper `duplicate_of` with a `duplicate_reason`:
+`airknow_run3cat_gpu_run{1..4}.json` are four DRAWS of one configuration (the upstream evaluator runs
+with live dropout and no seed), so they add exactly ONE counted row, and the group's statistics ride on
+the keeper as `variance_group`. Two counted numbers for one model+protocol are never resolved by
+recency: both stay served and both name the other as `conflict_with`.
 """
 from __future__ import annotations
 
@@ -292,11 +311,20 @@ def _categories(payload: dict[str, Any]) -> list[str]:
 def _rows_for_file(path: Path, root: Path) -> list[dict[str, Any]]:
     """Every measurement block in one file, each with its own provenance and block path."""
     relative = str(path.relative_to(root))
-    base = {
+    base = _blank_row_for(relative, path.stat().st_size)
+    try:
+        return _rows_of(path, base)
+    except (OSError, json.JSONDecodeError) as error:
+        return [{**base, "measurement_id": hashlib.sha256(relative.encode()).hexdigest()[:16],
+                 "unreadable": f"{type(error).__name__}: {error}"}]
+
+def _blank_row_for(relative: str, size: int) -> dict[str, Any]:
+    """The key set every row carries, so no consumer sees a row missing a field it reads."""
+    return {
         "source": {
             "path": relative,
             "sha256": None,
-            "bytes": path.stat().st_size,
+            "bytes": size,
             "artifact_type": "native_measurement",
         },
         # Never true here, and stated as data rather than left to a consumer to remember.
@@ -351,12 +379,19 @@ def _rows_for_file(path: Path, root: Path) -> list[dict[str, Any]]:
         # Which suffix each metric's value came from (R07: mixed scales stay visible).
         "per_metric_units": None,
         "checkpoint_fingerprints": None,
+        # R16: the draw index a review run states about itself (`determinism.repeat_count`), why a row
+        # does not count when the reason is neither a roll-up nor a repeated identity, the repeat
+        # group's own statistics, and the row this one disagrees with when identities collide.
+        "review_repeat_index": None,
+        "duplicate_reason": None,
+        "variance_group": None,
+        "conflict_with": None,
     }
-    try:
-        payload = json.loads(path.read_text())
-    except (OSError, json.JSONDecodeError) as error:
-        return [{**base, "measurement_id": hashlib.sha256(relative.encode()).hexdigest()[:16],
-                 "unreadable": f"{type(error).__name__}: {error}"}]
+
+def _rows_of(path: Path, base: dict[str, Any]) -> list[dict[str, Any]]:
+    """The rows ONE artifact document states, given the blank row its file already filled in."""
+    relative = base["source"]["path"]
+    payload = json.loads(path.read_text())
     if not isinstance(payload, dict):
         # A JSON array of some other structure (attempts.json) is not a measurement document.
         return []
@@ -511,6 +546,118 @@ def _report_metrics(metrics: dict[str, Any], document_unit: str | None = None
     """
     return served_metrics(metrics, document_unit)
 
+def _unanimous_checkpoint(payload: dict[str, Any]) -> str | None:
+    """The checkpoint a document names, AT ANY DEPTH, or None when it names none.
+
+    `airknow_run3cat_gpu_run1.json` states `fiq_n05` only in `categories[*].checkpoint_id` and
+    `runtime.variant`. Reading the document root alone left the row saying "no checkpoint", and a row
+    that states none cannot refuse a report of a DIFFERENT checkpoint — the R01 relabelling one level
+    down. Members that disagree state no single checkpoint, and yield None.
+    """
+    top = _first_text(payload, "checkpoint_id", "variant", "checkpoint_name", "label")
+    if top:
+        return top
+    members = payload.get("categories")
+    if not isinstance(members, list):
+        members = payload.get("results")
+    names = {member.get("checkpoint_id") for member in members or [] if isinstance(member, dict)}
+    names = {name.strip() for name in names if isinstance(name, str) and name.strip()}
+    if len(names) == 1:
+        return names.pop()
+    if not names and isinstance(payload.get("runtime"), dict):
+        return _first_text(payload["runtime"], "variant")
+    return None
+
+def _review_run_payload(payload: Any) -> dict[str, Any] | None:
+    """The fields of ONE `docs/reviews/*/raw/*.json` run, or None when it satisfies no contract.
+
+    R16: the predicate is structural, never "the file is JSON". A readable run states a `model_id`, a
+    non-empty `replay_type`, a `protocol`/`protocol_id`, and an `aggregate` the shared parser turns
+    into at least one served metric. Everything else under `raw/` is refused HERE, by rule rather
+    than by luck: `pair_absence_evidence.json` and the four `w03_*` inspector dumps state no model
+    and no aggregate, and `clvc_run3cat_gpu_run1.json` is a byte-clone that states no `replay_type`.
+    """
+    if not isinstance(payload, dict) or not payload.get("model_id"):
+        return None
+    if not payload.get("replay_type"):
+        return None
+    protocol = _first_text(payload, "protocol", "protocol_id")
+    if not protocol:
+        return None
+    aggregate = payload.get("aggregate")
+    if not isinstance(aggregate, dict):
+        return None
+    values, unit, unit_source, per_metric_units = _report_metrics(
+        aggregate, _declared_unit(payload) or _provenance_unit(payload))
+    if not values:
+        return None
+    determinism = payload.get("determinism")
+    return {
+        "metrics": values,
+        "unit": unit,
+        "unit_source": unit_source,
+        "per_metric_units": per_metric_units,
+        "protocol_id": protocol,
+        "checkpoint_id": _unanimous_checkpoint(payload),
+        "recorded_at": _first_text(payload, "recorded_at", "timestamp"),
+        "complete": payload.get("complete_benchmark", aggregate.get("complete")),
+        "review_repeat_index": (determinism.get("repeat_count")
+                                if isinstance(determinism, dict) else None),
+        "categories": _categories(payload),
+        "label": _first_text(payload, "label"),
+        "mapping_status": _first_text(payload, "mapping_status", "provenance_label"),
+        "checkpoint_fingerprints": _checkpoint_fingerprint(payload),
+    }
+
+def _review_run_rows(artifacts_root: Path) -> list[dict[str, Any]]:
+    """One row per ingested `docs/reviews/*/raw/*.json` run: `source_kind = "review_run"`.
+
+    A committed run is its own artifact, so nothing replaces its number: `backed_by` is its own path.
+    `raw/native/*.json` is NOT read here — that glob's role is to BACK a `checkpoint_selection/` row,
+    and serving it as a row too would state one run twice under two source kinds. A document whose
+    `migrated_from.artifact_sha256` is already on disk re-emits that file under a new protocol label
+    (`clip4cir_fullft.migrated.json` does exactly this), so it is a relabelling, not a new run.
+    """
+    rows: list[dict[str, Any]] = []
+    root = _repo_root_for(artifacts_root)
+    reviews = root / "docs" / "reviews"
+    if not reviews.is_dir():
+        return rows
+    present = {_digest(candidate) for candidate in reviews.rglob("*.json") if candidate.is_file()}
+    for path in sorted(reviews.glob("*/raw/*.json")):
+        if path.parent.name == "native":
+            continue
+        try:
+            payload = json.loads(path.read_text())
+        except (OSError, json.JSONDecodeError):
+            continue
+        fields = _review_run_payload(payload)
+        if fields is None:
+            continue
+        migrated_from = payload.get("migrated_from")
+        if isinstance(migrated_from, dict):
+            ancestor = migrated_from.get("artifact_sha256")
+            if isinstance(ancestor, str) and ancestor.strip() in present:
+                continue
+        # A path relative to the CHECKOUT, like every other served path: an absolute path would leak
+        # the machine's layout into the payload and trip the catalog's own scope check.
+        relative = str(Path(root.name) / path.relative_to(root))
+        base = _blank_row_for(relative, path.stat().st_size)
+        rows.append({
+            **base,
+            **fields,
+            "measurement_id": hashlib.sha256(f"{relative}#aggregate".encode()).hexdigest()[:16],
+            "source": {**base["source"], "sha256": _digest(path)},
+            "model_id": _canonical_model(payload["model_id"]),
+            "metric_path": "aggregate",
+            "rollup": False,
+            # A review run is its own backing artifact, never a roll-up: no report may replace it.
+            "artifact_backed": True,
+            "source_kind": "review_run",
+            "backed_by": relative,
+        })
+    return rows
+
 def _repo_root_for(artifacts_root: Path) -> Path:
     """The checkout holding both `workbench/artifacts/` and `workbench/docs/reviews/`.
 
@@ -531,8 +678,13 @@ def _backing_reports(artifacts_root: Path) -> list[dict[str, Any]]:
     Two structural sources, never a roll-up:
 
     * `reports/*_aggregate.json` — a run whose aggregate report states its own observed metrics;
-    * `docs/reviews/*/raw/native/*.json` with a `replay_type` and an `aggregate` — a
-      SOURCE_NATIVE_ENTRYPOINT replay, which also names per-category query and gallery counts.
+    * `docs/reviews/*/raw/native/*.json` with a `replay_type` and an `aggregate` — a replay, which
+      also names per-category query and gallery counts. `source_kind = "native_replay"`.
+
+    R16: `docs/reviews/*/raw/*.json` is read as ROWS, not as reports (`_review_run_rows`), and only
+    when it satisfies the same contract. A committed run is its own artifact, so it is never allowed
+    to replace another row's number, and one file never plays two roles: the two globs are disjoint
+    (a `raw/native/` file is skipped by the row reader) so a number is never served twice.
 
     A roll-up under `checkpoint_selection/` can back neither: it is exactly what must not be able to
     vouch for itself.
@@ -754,7 +906,7 @@ def _mark_duplicates(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     `same_metrics_as: <path>` — the earlier version keyed on `round(value, 4)` and silently demoted
     the second checkpoint to a duplicate of the first.
 
-    `duplicate_of` is written in exactly three ancestry situations:
+    `duplicate_of` is written in exactly five ancestry situations:
 
     1. Two rows are backed by the SAME artifact (`backed_by` equal) for the same model and protocol:
        two files stating one run's number (the roll-up pair, `clip4cir_parsed.json` and
@@ -766,8 +918,20 @@ def _mark_duplicates(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     3. A roll-up row restates an in-tree artifact's number: the relation is established from the
        source KIND (`rollup:*` vs `artifact`), and value equality only picks WHICH artifact it
        restates.
+    3b. R16: repeated DRAWS of one configuration — rows whose files each state a draw index
+       (`determinism.repeat_count`) for one model, protocol and checkpoint digest. Draw 1 is the
+       keeper; the others name it and carry `duplicate_reason`. This is ancestry the file states, and
+       counting four draws would inflate one configuration to four measurements.
+    3c. R16: one run stated twice under two filenames where at least one side is a committed review
+       run and both agree on model, protocol and every served number. Equal numbers alone still never
+       demote (R08) — the review-run source KIND is what makes this ancestry.
 
     A row that is merely numerically equal to another is not a duplicate and is not demoted.
+
+    R16: two COUNTED numbers for one identity are never resolved by recency. Both stay counted and
+    each names the other in `conflict_with`, so a genuine disagreement is visible in the payload
+    instead of being silently picked. The identity used is the ancestry the rows state — the weights
+    digest when they state one — so `fiq_n08` is never reported as conflicting with `fiq_n05`.
 
     The stated identity — same source `sha256` AND same `metric_path`, i.e. one block stated twice —
     is enforced by construction rather than by a rule here: `_blocks` yields each block once and the
@@ -846,6 +1010,90 @@ def _mark_duplicates(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 row["counted"] = False
                 break
 
+    # 3b. R16: repeated DRAWS of one configuration. The four `airknow_run3cat_gpu_run{1..4}.json`
+    #     share model, protocol and checkpoint digest and differ only because the upstream evaluator
+    #     runs with live dropout and no seed -- each file states its own draw index
+    #     (`determinism.repeat_count`). Counting four draws as four measurements inflates
+    #     `models_with_metrics` for one config (the R08 defect with the sign flipped); dropping three
+    #     hides evidence. So the draw the file labels draw 1 is the keeper, the others name it and say
+    #     why, and the group's statistics ride on the keeper so the spread a reader needs survives.
+    by_repeat: dict[tuple[Any, ...], list[dict[str, Any]]] = {}
+    for row in rows:
+        if (not row.get("metrics") or row.get("duplicate_of")
+                or row.get("review_repeat_index") is None):
+            continue
+        key = (row.get("model_id"), row.get("protocol_id"), row.get("checkpoint_fingerprints"))
+        by_repeat.setdefault(key, []).append(row)
+    for group in by_repeat.values():
+        if len(group) < 2:
+            continue
+        keeper = min(group, key=lambda item: (item["review_repeat_index"] != 1,
+                                              str(item["source"]["path"])))
+        values = [item["metrics"].get("r10") for item in group]
+        values = [value for value in values if isinstance(value, (int, float))]
+        mean = sum(values) / len(values)
+        keeper["variance_group"] = {
+            "metric": "r10",
+            "n": len(values),
+            "values": values,
+            "mean": mean,
+            "sd": (math.sqrt(sum((value - mean) ** 2 for value in values) / (len(values) - 1))
+                   if len(values) > 1 else None),
+            "spread": max(values) - min(values) if len(values) > 1 else 0.0,
+            "note": ("draws of ONE configuration; the served number is the artifact's own draw 1, "
+                     "these statistics describe the group and replace nothing"),
+        }
+        for row in group:
+            if row is keeper:
+                continue
+            row["duplicate_of"] = keeper["source"]["path"]
+            row["counted"] = False
+            row["duplicate_reason"] = (
+                "same config, repeat run, airknow evaluator is nondeterministic by upstream design: "
+                f"draw {row['review_repeat_index']} of {len(group)} of one configuration")
+
+    # 3c. R16: one run stated twice under two filenames. Equal numbers ALONE never demote (R08), so
+    #     this needs the source KIND as ancestry: at least one side is a committed review run, and the
+    #     two rows agree on model, protocol and every served number. The in-tree artifact keeps the
+    #     count (its provenance is the longer record); the review run names it.
+    by_value: dict[tuple[Any, ...], list[dict[str, Any]]] = {}
+    for row in rows:
+        if not row.get("metrics") or row.get("duplicate_of") or row.get("rollup"):
+            continue
+        key = (row.get("model_id"), row.get("protocol_id"),
+               fingerprint[row["measurement_id"]])
+        by_value.setdefault(key, []).append(row)
+    for group in by_value.values():
+        if len(group) < 2 or not any(item.get("source_kind") == "review_run" for item in group):
+            continue
+        keeper = min(group, key=lambda item: (item.get("source_kind") == "review_run",
+                                              str(item["source"]["path"])))
+        for row in group:
+            if row is keeper:
+                continue
+            row["duplicate_of"] = keeper["source"]["path"]
+            row["counted"] = False
+            row["duplicate_reason"] = (
+                "same model, protocol and every served number as the named row: one run stated "
+                "twice, not two measurements (equal numbers alone never demote — the source kind "
+                "is what makes this ancestry)")
+
+    # 3d. R16: two COUNTED numbers for one identity. Never resolved by recency: both stay counted,
+    #     both name the other, so a genuinely disagreeing pair is visible instead of being picked.
+    #     The key is the ancestry the rows state — the weights digest when they state one, else the
+    #     bare model+protocol — so `fiq_n08` is never reported as conflicting with `fiq_n05`.
+    by_identity: dict[tuple[Any, ...], list[dict[str, Any]]] = {}
+    for row in rows:
+        if not row.get("metrics") or row.get("duplicate_of") or not row.get("counted", True):
+            continue
+        by_identity.setdefault((row.get("model_id"), row.get("protocol_id"),
+                                row.get("checkpoint_fingerprints")), []).append(row)
+    for group in by_identity.values():
+        if len(group) < 2:
+            continue
+        for row in group:
+            row["conflict_with"] = sorted(item["source"]["path"] for item in group if item is not row)
+
     # 4. Equal numbers with no ancestry: informational only, NEVER a demotion.
     for row in rows:
         if not row.get("metrics") or row.get("duplicate_of"):
@@ -878,6 +1126,9 @@ def list_native_measurements(artifacts_root: Path) -> dict[str, Any]:
                 row["model_id"] = _model_from_stem(path)
             rows.append(row)
 
+    # R16: committed review runs are rows of their own. They are their OWN artifacts, so the backing
+    # pass treats them exactly like an in-tree artifact and never replaces their number.
+    rows.extend(_review_run_rows(artifacts_root))
     rows = _backed_by_artifact(rows, artifacts_root)
     rows.sort(key=lambda item: (str(item.get("model_id")), str(item.get("protocol_id")),
                                 str(item.get("source", {}).get("path")),
