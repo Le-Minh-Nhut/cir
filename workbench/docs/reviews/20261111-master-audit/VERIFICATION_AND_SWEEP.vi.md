@@ -103,7 +103,7 @@ Frontend: `data.ts` khai báo thêm `sibling_key`; `EvaluationPage.tsx` cho cả
 `npm run build --prefix workbench/frontend` → exit 0, `✓ 39 modules transformed`, `✓ built in 190ms`.
 Không có import chết `fmtPercentValue`; không phải sửa tệp nào vì lý do build. Raw:
 `03-frontend-build.txt` (bản trước khi sửa frontend) và lần build sau sửa (bundle `index-DWpK0yeS.js` — bundle
-của **lượt đó**, nay **superseded**; bundle đang phục vụ là `index-BLH2yome.js` sha256 `702ed2e9…d681`, xem
+của **lượt đó**, nay **superseded**; bundle đang phục vụ là `index-CBR6lHgq.js` sha256 `acfb5fbb…ac21a`, xem
 `REMAINING_WORK.md`).
 
 ### 2. `workbench/backend/native_measurements.py` — **PASS**
@@ -263,7 +263,7 @@ Có sửa backend + frontend ⇒ build lại và khởi động lại **đúng m
 - Frontend `:5173`: bundle `assets/index-DWpK0yeS.js` (377.82 kB), sha256
   **`7e34724ebf55092e36524b98980cca55e71f3ddbaa62489c65577f92e18a6a16`**;
   `dist/assets/index-DWpK0yeS.js` cùng hash, `cmp` → IDENTICAL. **Đây là bản ghi của lượt đó và đã
-  SUPERSEDED** — bundle đang phục vụ nay là `assets/index-BLH2yome.js`, sha256 `702ed2e93a1bf86ba2094fe62791d4272dcdbf36e8caf7f757f08cf96805d681` (`index-DyVaNikG.js` / `81d61f65…0981` của lượt kế tiếp cũng đã superseded) (đọc lại bằng
+  SUPERSEDED** — bundle đang phục vụ nay là `assets/index-CBR6lHgq.js`, sha256 `acfb5fbbced77e88b86ee542e5f261c6df71c0e0e8039d753965e1fc873ac21a` (`index-BLH2yome.js` / `702ed2e9…d681` và `index-DyVaNikG.js` / `81d61f65…0981` của các lượt kế tiếp cũng đã superseded) (đọc lại bằng
   `curl -s http://127.0.0.1:5173/ | grep -o 'assets/index-[^"]*\.js'` rồi `sha256sum` trên `dist/`).
 - Uvicorn cũ PID 1227919 trên `:8765` vẫn sống — **không** dùng để đo bất cứ gì.
 - Raw: `17-final-service-identity.txt` (bản cuối), `11-service-identity-postfix.txt` (bản trước khi sửa
@@ -482,8 +482,8 @@ của nó có **0** khoá đơn vị (đã quét `unit`/`percent`/`pct`/`fractio
 - `/api/benchmark-runs` → **HTTP 200** (ready).
 - Bundle: **`assets/index-DWpK0yeS.js`**, sha256
   **`7e34724ebf55092e36524b98980cca55e71f3ddbaa62489c65577f92e18a6a16`**; bytes phục vụ **trùng khớp**
-  `dist/` (`cmp` → IDENTICAL). **Đã SUPERSEDED** — bundle sống là `assets/index-BLH2yome.js`, sha256
-  `702ed2e93a1bf86ba2094fe62791d4272dcdbf36e8caf7f757f08cf96805d681` (`cmp` → IDENTICAL với `dist/`; `index-DyVaNikG.js` / `81d61f65…0981` cũng đã superseded); đọc
+  `dist/` (`cmp` → IDENTICAL). **Đã SUPERSEDED** — bundle sống là `assets/index-CBR6lHgq.js`, sha256
+  `acfb5fbbced77e88b86ee542e5f261c6df71c0e0e8039d753965e1fc873ac21a` (`cmp` → IDENTICAL với `dist/`; `index-BLH2yome.js` / `702ed2e9…d681` và `index-DyVaNikG.js` / `81d61f65…0981` cũng đã superseded); đọc
   lại mỗi lần build bằng `curl -s http://127.0.0.1:5173/ | grep -o 'assets/index-[^"]*\.js'` rồi
   `sha256sum workbench/frontend/dist/assets/<file vừa in ra>`.
 - Raw: `32-service-identity-final.txt` (bản ghi của lượt này).

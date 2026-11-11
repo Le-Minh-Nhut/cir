@@ -210,8 +210,10 @@ server, và đó chính là cách W-05 phát hiện bundle hỏng. Pin hiện h�
 Cũng vì vậy con số `index-DjAje2d2.js` ghi bên trên là **superseded**, và `index-DeTvxLlD.js`
 (sha256 `1503e891…8155`) mà bản baseline này từng ghi cũng **đã superseded** — tệp đó không còn trên đĩa.
 `index-DyVaNikG.js` (sha256 `81d61f65…0981`, bản từng được ghi là "đang phục vụ" ở đây) cũng **đã superseded**, như `index-DWpK0yeS.js` / `7e34724e…a16`.
-Bundle **đang phục vụ** là `assets/index-BLH2yome.js`, sha256
-`702ed2e93a1bf86ba2094fe62791d4272dcdbf36e8caf7f757f08cf96805d681` (`dist/assets` chỉ còn đúng nó và
+`index-BLH2yome.js` (sha256 `702ed2e93a1bf86ba2094fe62791d4272dcdbf36e8caf7f757f08cf96805d681`, bản từng
+được ghi là "đang phục vụ" ở đây) cũng **đã superseded** — frontend được build lại sau đó.
+Bundle **đang phục vụ** là `assets/index-CBR6lHgq.js`, sha256
+`acfb5fbbced77e88b86ee542e5f261c6df71c0e0e8039d753965e1fc873ac21a` (`dist/assets` chỉ còn đúng nó và
 `index-DecQnta9.css`; `cmp` byte phục vụ với `dist/` → IDENTICAL). Đọc lại bằng hai lệnh:
 
 ```

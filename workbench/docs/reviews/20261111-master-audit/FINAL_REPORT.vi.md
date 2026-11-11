@@ -28,7 +28,7 @@ báo cáo/raw tương ứng. Đọc kèm:
 | torch | **2.15.0+cu132** |
 | GPU | **NVIDIA GeForce RTX 5070 Ti** |
 | backend | `:8000`, env `WORKBENCH_CIRCUS_RELEASE_ROOT=…/artifacts/circus_release`. Lấy PID sống bằng `pgrep -af "serve_workbench.py --production-frontend"` / `pgrep -af "uvicorn workbench.backend.main"`. **PID chỉ đúng tại thời điểm đo** (mỗi restart đổi PID; stack đã chết/restart nhiều lần trong đợt) — **pin bền là digest bundle ở hàng frontend**, không phải PID |
-| frontend | `:5173`, bundle **`assets/index-BLH2yome.js`**, sha256 **`702ed2e93a1bf86ba2094fe62791d4272dcdbf36e8caf7f757f08cf96805d681`** (bytes phục vụ `cmp`-identical với `dist/`). Tên bundle là giá trị **di động** — đọc lại bằng `curl -s http://127.0.0.1:5173/ \| grep -o 'assets/index-[^"]*\.js'` rồi `sha256sum workbench/frontend/dist/assets/<tên vừa đọc>`: pin là digest, không phải tên file |
+| frontend | `:5173`, bundle **`assets/index-CBR6lHgq.js`**, sha256 **`acfb5fbbced77e88b86ee542e5f261c6df71c0e0e8039d753965e1fc873ac21a`** (bytes phục vụ `cmp`-identical với `dist/`; `index-BLH2yome.js` / `702ed2e9…d681` là bundle phục vụ trước đó, **superseded**, như `index-DyVaNikG.js` / `81d61f65…0981` và các tên cũ hơn). Tên bundle là giá trị **di động** — đọc lại bằng `curl -s http://127.0.0.1:5173/ \| grep -o 'assets/index-[^"]*\.js'` rồi `sha256sum workbench/frontend/dist/assets/<tên vừa đọc>`: pin là digest, không phải tên file |
 
 Sẵn sàng đo bằng `/api/benchmark-runs` (HTTP 200). **Không** dùng `/api/models` để poll: 154 s cold vì nó
 hash mọi checkpoint. Có một uvicorn cũ trên `:8765` thiếu route mới — nhận diện bằng
@@ -213,7 +213,8 @@ thiếu dimension, không phải trùng khớp.
   miễn nhiễm với việc group của một shell khác bị reap. **Không suy đoán thêm.**
   Người đọc có thể gặp service **down**: `curl /api/benchmark-runs` trả **000** nghĩa là restart bằng
   lệnh ở §8. **PID không phải pin bền** (mỗi restart đổi PID); **digest bundle mới là pin** — hiện tại
-  `assets/index-BLH2yome.js` sha256 `702ed2e93a1bf86ba2094fe62791d4272dcdbf36e8caf7f757f08cf96805d681`
+  `assets/index-CBR6lHgq.js` sha256 `acfb5fbbced77e88b86ee542e5f261c6df71c0e0e8039d753965e1fc873ac21a`
+  (bundle `index-BLH2yome.js` / `702ed2e9…d681` từng phục vụ ở đây nay **superseded**)
   (đọc lại bằng `curl -s http://127.0.0.1:5173/ | grep -o 'assets/index-[^"]*\.js'` rồi `sha256sum` trên `dist/`; tên file trôi theo mỗi build, digest mới là pin)
   (đo lại sau restart: `/api/benchmark-runs` 200 với 13 mục, `/api/native-measurements` 200 với
   `unbacked_counted: 0`, DCNet `27.929730914548916` / `percent` / `sibling_key`).
@@ -276,7 +277,8 @@ Quét 14 file `web_evidence/w_shots/*.json` (raw `raw/verify/41-defectA-stale-ev
     `@app.get("/api/runs/parity-gate")` (`backend/main.py:1044`), trả 200 với `passed_models: []`.
 
 Cả 5 file vẫn được giữ (bằng chứng lịch sử không xoá), nhưng **không** được trích làm bằng chứng W-05 cho
-hành vi hiện tại cho tới khi chụp lại trên bundle `index-BLH2yome.js`.
+hành vi hiện tại cho tới khi chụp lại trên bundle `index-CBR6lHgq.js` (bundle `index-BLH2yome.js` mà ghi chú
+này từng nêu nay **superseded**).
 
 ### DEFECT B — `habit` FAILED vì interpreter (artifact cũ, không phải env hiện tại)
 
@@ -309,7 +311,8 @@ Chín báo cáo trong thư mục này do **sáu worker viết song song**, và *
   `git diff 0691f3e HEAD -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'` **rỗng**. Mốc cũ
   `7babfd9`, `cd980dc`, `c755673` và `be14393` được nêu rõ là lượt sweep **bị thay thế**, không còn là mốc.
 - **§1 — hàng backend.** PID đã được thay bằng hướng dẫn `pgrep`, kèm quy tắc "PID chỉ đúng tại thời điểm đo;
-  pin bền là digest bundle `702ed2e9…d681`" (sha256 đầy đủ ở hàng frontend).
+  pin bền là digest bundle `acfb5fbb…ac21a`" (sha256 đầy đủ ở hàng frontend; `702ed2e9…d681` là bundle
+  trước đó, nay superseded).
 - **§1 note và §5 — uvicorn `:8765` cũ.** Nhận diện bằng **cổng** và bằng hành vi route:
   `/api/runs/parity-gate` trả **404** trên `:8765` so với **200** trên `:8000` — không bằng PID.
 - **§4 — hàng gate.** `0/15 PASS` đã đối soát thành `0 / 2 mô hình có artifact parity; 0 / 17 cấu hình PASS`,

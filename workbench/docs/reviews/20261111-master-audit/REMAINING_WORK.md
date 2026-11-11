@@ -18,6 +18,16 @@ ký chết stack được trích bằng đường dẫn **đã commit** (`raw/se
 `"Giá trị CHƯA chốt"`, và `test_web_scope_and_labels.py` (14) + `test_frontend_catalog.py` (18) pass.
 Mục 12 cũ (nhãn native không protocol) **không phải defect** — lý do giữ ở đoạn "Không phải việc" dưới.
 
+**Đóng ở lượt này — marker `DERIVED` trên UI (mục 5 cũ).** Việc này **đã xong** ở `c25d67f`: `scope.ts`
+xuất `derivedLineage` (+ `types.ts` khai kiểu), `EvaluationPage.tsx` render lineage ở cả hai chỗ
+(`:258`, `:358`), và có test canh cả hai phía — `workbench/frontend/tests/derived-lineage.test.cjs`
+(node) và `workbench/tests/test_derived_subset_status.py` (python; **71 passed** cùng các test frontend
+khác). Vì vậy phép đo cũ `grep -rn 'derived_from' workbench/frontend/*.ts*` → **0** (đo tại `0691f3e`)
+**đã bị superseded** bởi chính thay đổi này: chạy lại cùng lệnh bây giờ ra **6** hit, và bundle đang
+phục vụ (`index-CBR6lHgq.js`) mang chuỗi đó. **Một lưu ý trung thực:** bằng chứng **thị giác** cho ca
+586/586 so với parent partial đang được **kiểm lại riêng**; nếu nó không xác nhận thì phải ghi là chưa
+xác nhận, **không** được trích như đã chứng minh.
+
 ## CHƯA LÀM — phải làm trước khi coi là xong
 1. **PAIR** — cần upstream công bố `model_vssp` + `MHTransformer_dis`. Đã quét 21 commit, không tồn
    tại. Xem `replay/pair_absence.py`.
@@ -30,24 +40,30 @@ Mục 12 cũ (nhãn native không protocol) **không phải defect** — lý do 
    id ghi ở §6 `FINAL_REPORT.vi.md`. Số ca phải rerun còn **5**.
 4. **LIMN 2 query mơ hồ** `7:3038`, `7:3790` — provenance upstream không cho phép chốt category. Cần
    metadata category từ upstream.
-5. **Derived row chưa có marker `DERIVED` trên UI** — dữ liệu đúng ở `derived_from`, bề mặt web chưa
-   hiện. Đo lại tại `0691f3e`: `grep -rn 'derived_from' workbench/frontend/*.ts*` → **0** kết quả, và
-   bundle đang phục vụ (`index-BLH2yome.js`) cũng có **0** lần chuỗi `derived_from`. Vẫn là việc mở.
-6. **46/50 dòng dùng đơn vị suy luận** — payload sống `:8000/api/native-measurements` tại `0691f3e`
+5. **46/50 dòng dùng đơn vị suy luận** — payload sống `:8000/api/native-measurements` tại `0691f3e`
    cho `unit_inferred 46` / `unit_declared 4` / `unit_sibling_key 2` / `unit_not_declared 46` trên 56
    row (50 row có metrics). Đã audit từng dòng, 0 khai báo bị bỏ sót; muốn hết suy luận phải sửa
    producer của từng artifact.
-7. **Quét chéo 9 báo cáo CHƯA hoàn thành** — worker bị kill, file `raw/verify/42-*` không tồn tại. Đã
+6. **Quét chéo 9 báo cáo CHƯA hoàn thành** — worker bị kill, file `raw/verify/42-*` không tồn tại. Đã
    sửa tay 6 chỗ (liệt kê trong `FINAL_REPORT.vi.md` §6.1), phần còn lại chưa kiểm; `FINAL_REPORT.vi.md`
    §6.1 đã ghi rõ giới hạn này để người đọc không giả định nhất quán.
-8. **R16(b) — composition adapter của CLVC/TG-CIR luôn từ chối** vì thiếu interpreter stack pin. Cần
-   pin stack rồi chạy lại composition cho hai model đó. (R16 vế (a) đã đóng ở `358c3fc`: bảy run GPU
+7. **R16(b) — hai adapter composition CLVC/TG-CIR không có encoder (vẫn mở).** Cách nói cũ ở đây
+   ("luôn từ chối **vì thiếu interpreter stack pin**") đã bị **bác bỏ** bằng probe trực tiếp — nguồn:
+   `COMPOSITION_BLOCKERS.vi.md` + `raw/compose_probe/`. Trạng thái thật, hai tầng:
+   (i) **Cổng môi trường chỉ là triệu chứng ĐẦU TIÊN**: `BLOCKED/PYTHON_VERSION_MISMATCH` — CLVC cần
+   Python 3.7.6, máy có 3.9.25; TG-CIR cần `torch ==1.7.0`, máy có 2.7.1+cu128 (kèm
+   `DEPENDENCY_VERSION_MISMATCH`).
+   (ii) **Khi đã stub cổng cho thoả interpreter mà chính model resolve**, cả hai vẫn `raise Refused` —
+   `model_clvc_net.py:205` và `model_tgcir.py:177` — vì **không module nào chứa encoder**.
+   ⇒ **Pin interpreter một mình sẽ KHÔNG mở khoá được hai model này.** Việc phải làm là viết encoder
+   (uỷ quyền cho `workbench/replay/*`) cho cả hai, cộng khối `adapted_runtime: sm_120` trong registry.
+   Giữ mục này **mở**. (R16 vế (a) đã đóng ở `358c3fc`: bảy run GPU
    `airknow_run3cat_gpu_run{1..4}.json`, `tgcir_run3cat_gpu.json`, `clvc_run3cat_gpu.json`,
    `clvc_run3cat_gpu_run2.json` nay được `native_measurements.py` phục vụ qua
    `_review_run_payload`/`_review_run_rows`, `source_kind: review_run`.)
-9. **R16(c) — chưa xác định ai gửi SIGTERM** giết stack. Đã xác định `serve_workbench.py:152-166` là
+8. **R16(c) — chưa xác định ai gửi SIGTERM** giết stack. Đã xác định `serve_workbench.py:152-166` là
    đường nhận, đã loại trừ `jobs.py`, test/script trong repo và session reaping; người gửi vẫn chưa biết.
-10. **CLVC có HAI số counted mâu thuẫn — phải chốt hoặc rerun.** Cùng `model_id: clvc_net`, cùng
+9. **CLVC có HAI số counted mâu thuẫn — phải chốt hoặc rerun.** Cùng `model_id: clvc_net`, cùng
    `protocol_id: fashioniq_val_split`, cả hai `counted: true`: `29.970746517160162`
    (`checkpoint_selection/20261106T002617+0700/measurements/clvc_run1.json`) và `30.02079703540087`
    (`workbench/docs/reviews/20261111-master-audit/raw/clvc_run3cat_gpu.json`). API ghi `conflict_with`
@@ -56,7 +72,7 @@ Mục 12 cũ (nhãn native không protocol) **không phải defect** — lý do 
    Cho tới đó **không** được trích "CLVC = 29.97" hay "CLVC = 30.02" như số đã chốt — xem
    `CENSUS_20261111.vi.md` §1.2. (Air-Know có cùng dạng hai row counted, nhưng đã có `variance_group`
    n=4 / sd `0.26728186433775697` nên mức bất định **đã đo**; CLVC thì chưa.)
-11. **uvicorn `:8765` cũ vẫn sống** — thiếu route mới (`/api/runs/parity-gate` → 404 so với 200 ở
+10. **uvicorn `:8765` cũ vẫn sống** — thiếu route mới (`/api/runs/parity-gate` → 404 so với 200 ở
    `:8000`; đo lại tại `0691f3e`: đúng 404 vs 200). Nhận diện bằng cổng và hành vi route, không bằng
    PID. Cần kill tiến trình đó; PID đổi sau restart nên không ghim số.
 
@@ -94,13 +110,13 @@ bảng native với nhãn `duplicate_of`, chỉ không được tính là bằng
 - Production diff `0691f3e..HEAD` ngoài `workbench/docs` và `workbench/tests`: **rỗng** (đo trước khi pin).
   Commit sau mốc chỉ được sửa tài liệu; guard so từng byte cây sản xuất sẽ đỏ nếu không còn đúng.
 - Bất biến: `git status --porcelain` = `?? CLEANUP_REPORT.md.save`
-- Bundle phục vụ: `index-BLH2yome.js` sha256
-  `702ed2e93a1bf86ba2094fe62791d4272dcdbf36e8caf7f757f08cf96805d681` — **fact đo được**, đọc lại bằng
+- Bundle phục vụ: `index-CBR6lHgq.js` sha256
+  `acfb5fbbced77e88b86ee542e5f261c6df71c0e0e8039d753965e1fc873ac21a` — **fact đo được**, đọc lại bằng
   `curl -s http://127.0.0.1:5173/ | grep -o 'assets/index-[^"]*\.js'` rồi
-  `sha256sum workbench/frontend/dist/assets/index-BLH2yome.js`; `dist/assets/` lúc đo chỉ có
-  `index-DecQnta9.css` + `index-BLH2yome.js`, và bytes phục vụ `cmp`-identical với `dist/`. Mỗi lần build
-  lại phải đọc lại đúng hai lệnh đó, không chép số này. `index-DyVaNikG.js` / `81d61f65…0981` là bundle
-  **superseded**; `index-DeTvxLlD.js` / `1503e891…8155` và các tên cũ hơn cũng vậy.
+  `sha256sum workbench/frontend/dist/assets/index-CBR6lHgq.js`; `dist/assets/` lúc đo chỉ có
+  `index-DecQnta9.css` + `index-CBR6lHgq.js`, và bytes phục vụ `cmp`-identical với `dist/`. Mỗi lần build
+  lại phải đọc lại đúng hai lệnh đó, không chép số này. `index-BLH2yome.js` / `702ed2e9…d681` là bundle
+  **superseded**; `index-DyVaNikG.js` / `81d61f65…0981`, `index-DeTvxLlD.js` / `1503e891…8155` và các tên cũ hơn cũng vậy.
 - Web: http://127.0.0.1:5173/ · API: http://127.0.0.1:8000 (poll `/api/benchmark-runs`, **không** `/api/models`)
 
 ## Dọn dẹp đã làm

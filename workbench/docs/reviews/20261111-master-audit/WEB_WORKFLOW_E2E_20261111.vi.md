@@ -8,10 +8,11 @@ Không restart, không kill, không build, không sửa code. Ghi chú này **ch
 
 | mục | giá trị |
 |---|---|
-| bundle phục vụ | **`assets/index-BLH2yome.js`** |
+| bundle phục vụ **tại lượt đo này** | **`assets/index-BLH2yome.js`** |
 | sha256 | **`702ed2e93a1bf86ba2094fe62791d4272dcdbf36e8caf7f757f08cf96805d681`** |
 | đối chứng | `sha256(serve từ :5173)` == `sha256(workbench/frontend/dist/assets/index-BLH2yome.js)` → khớp |
 | **hiệu lực** | một lần rebuild/restart sau đó **thay thế** bundle này; mọi kết luận dưới đây chỉ đúng cho digest trên |
+| **trạng thái nay** | bundle trên **đã superseded**: frontend được build lại sau lượt này, và bundle **đang phục vụ bây giờ** là `index-CBR6lHgq.js` / `acfb5fbbced77e88b86ee542e5f261c6df71c0e0e8039d753965e1fc873ac21a`. Bảng PASS/FAIL dưới đây là **bản ghi lịch sử** của `index-BLH2yome.js` và **không** được đọc lại như kết quả đo trên bundle mới — muốn kết luận cho bundle hiện tại thì phải chạy lại harness trên nó |
 
 ## Phạm vi dữ liệu dùng làm chuẩn (không đoán)
 
@@ -89,4 +90,5 @@ Harness dùng playwright + chromium có sẵn của repo (`workbench/envs/ctl312
 
 ## Ghi nhận sự cố service trong lúc đo
 
-Trong lúc chạy, **một** lần kết nối bị đóng giữa chừng (`RemoteDisconnected` khi gọi `/api/models`) — đúng hiện tượng "agent khác restart service". Lần thử lại ngay sau đó: API 200, FE 200. Không restart gì từ phía tôi. Các lần đo trong báo cáo đều **sau** lần thử lại này và bundle digest vẫn là `702ed2e9…d681`.
+Trong lúc chạy, **một** lần kết nối bị đóng giữa chừng (`RemoteDisconnected` khi gọi `/api/models`) — đúng hiện tượng "agent khác restart service". Lần thử lại ngay sau đó: API 200, FE 200. Không restart gì từ phía tôi. Các lần đo trong báo cáo đều **sau** lần thử lại này và bundle digest vẫn là `702ed2e9…d681` (digest của
+lượt đo này; **nay superseded** — xem bảng đầu báo cáo).

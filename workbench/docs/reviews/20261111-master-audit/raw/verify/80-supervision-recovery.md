@@ -120,6 +120,12 @@ sha256sum workbench/frontend/dist/assets/index-BLH2yome.js
 
 Match. `dist/` was not rebuilt; no frontend source or asset was touched.
 
+> **SUPERSEDED (added later).** The two lines above are the measurement of *this* rollout and
+> are kept verbatim: at that moment `index-BLH2yome.js` / `702ed2e9…d681` really was served, and
+> `dist/` really was not rebuilt. The frontend has since been rebuilt: the bundle **served now**
+> is `index-CBR6lHgq.js` / `acfb5fbbced77e88b86ee542e5f261c6df71c0e0e8039d753965e1fc873ac21a`.
+> Re-read with the same two commands; do not treat the digest above as current.
+
 ## Stale :8765
 
 Identified by port and route behaviour only, never by PID: `:8765` answered **404** for
