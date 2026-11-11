@@ -66,17 +66,6 @@ def _digest(path: Path) -> str:
     return digest.hexdigest()
 
 
-def _numbers(block: dict[str, Any]) -> dict[str, float]:
-    served = {}
-    for name, aliases in METRIC_ALIASES.items():
-        for alias in aliases:
-            value = block.get(alias)
-            if isinstance(value, (int, float)) and not isinstance(value, bool):
-                served[name] = float(value)
-                break
-    return served
-
-
 #: Keys a document uses to DECLARE the unit of its macro numbers. A declared unit always wins: a
 #: value of `0.2793` is only a fraction because nothing in that file says otherwise.
 UNIT_KEYS = ("metric_unit", "units", "unit", "recall_unit")
@@ -112,21 +101,6 @@ def _declared_unit(payload: dict[str, Any]) -> str | None:
     return None
 
 
-def _suffix_declared_unit(block: dict[str, Any]) -> str | None:
-    """The unit a SUFFIXED SIBLING key declares inside this very block, e.g. `macro_r10_percent`.
-
-    This is a DECLARATION, not an inference: the file names the scale of its own number, so it
-    outranks magnitude inference. Without it a percent-valued block whose three categories all
-    happen to score under 1 % would be read as a fraction and rendered 100x too small.
-    """
-    for key in block:
-        lowered = str(key).lower()
-        for suffix, unit in UNIT_SUFFIX_DECLARATIONS:
-            if lowered.endswith(suffix):
-                return unit
-    return None
-
-
 def _unit_of(numbers: dict[str, float], declared: str | None) -> tuple[str | None, str]:
     """The unit this block's numbers are in, and how that was decided.
 
@@ -144,11 +118,96 @@ def _unit_of(numbers: dict[str, float], declared: str | None) -> tuple[str | Non
     return None, "undeclared"
 
 
-def _blocks(node: Any, trail: tuple[str, ...] = ()) -> Iterator[tuple[tuple[str, ...], dict[str, float], str | None]]:
-    """Every macro block in a document, with the key path that reached it and its DECLARED unit.
+def _is_number(value: Any) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+def metric_values(block: dict[str, Any]) -> tuple[dict[str, float], str | None, str, dict[str, str]]:
+    """`(values, unit, unit_source, per_metric_units)` for ONE block, by ONE rule for every caller.
+
+    R07: the value served and the scale it is labelled with MUST come from the same key. Per metric,
+    the suffixes are tried in `UNIT_SUFFIX_ORDER` and the first key that is a real number wins, so
+    `macro_r10: 0.2793` beside `macro_r10_percent: 27.93` serves 27.93 as `percent` — never 0.2793
+    labelled `percent`.
+
+    R07b: a suffix only declares anything when it is appended to THAT metric's own alias. A block
+    carrying `dead_parameters_pct` says nothing about the recall scale, and is not read as if it did.
+
+    `per_metric_units` names the suffix each metric's value came from (`_percent`, `_pct`, `` for the
+    bare key, `_fraction`), so a block that mixes scales is visible instead of collapsed to one guess.
+    `unit_source` is `sibling_key` when a suffix stated the scale and `undeclared` otherwise; callers
+    add their own `declared` (document-level) and magnitude fallbacks.
+    """
+    values: dict[str, float] = {}
+    per_metric_units: dict[str, str] = {}
+    declared: str | None = None
+    for name, aliases in METRIC_ALIASES.items():
+        chosen: str | None = None
+        for suffix in UNIT_SUFFIX_ORDER:
+            hit = next((block[f"{alias}{suffix}"] for alias in aliases
+                        if _is_number(block.get(f"{alias}{suffix}"))), None)
+            if hit is None:
+                continue
+            values[name] = float(hit)
+            chosen = suffix
+            break
+        if chosen is None:
+            continue
+        per_metric_units[name] = chosen
+        # The block's scale is stated per METRIC, so a `_fraction` key of the same metric still
+        # declares it when the bare key happens to win the value. A key of ANOTHER metric never does,
+        # and a declaration that would describe a different number than the one served is refused.
+        scale = chosen if chosen else _agreed_suffix(block, aliases, values[name])
+        if scale and declared is None:
+            declared = dict(UNIT_SUFFIX_DECLARATIONS)[scale]
+    if declared:
+        return values, declared, "sibling_key", per_metric_units
+    return values, None, "undeclared", per_metric_units
+
+def _agreed_suffix(block: dict[str, Any], aliases: tuple[str, ...], bare: float) -> str | None:
+    """The suffix THIS metric's aliases carry that states the same number on another scale.
+
+    `{"macro_r10": 0.6, "macro_r10_fraction": 0.6}` states one recall twice and names its scale; that
+    declaration is used (`fraction`). `{"macro_r10": 12.0, "macro_r10_fraction": 0.12}` also carries
+    both, but only the bare key is used here, and 0.12 does not describe 12.0 — so it declares
+    nothing and the scale stays undeclared rather than being asserted from a different number.
+    """
+    for suffix in UNIT_SUFFIX_ORDER:
+        if not suffix:
+            continue
+        if not any(_is_number(block.get(f"{alias}{suffix}")) for alias in aliases):
+            continue
+        value = next(float(block[f"{alias}{suffix}"]) for alias in aliases
+                     if _is_number(block.get(f"{alias}{suffix}")))
+        expected = bare * 100.0 if suffix in ("_percent", "_pct") else bare
+        if math.isclose(value, expected, rel_tol=1e-6, abs_tol=1e-9):
+            return suffix
+    return None
+
+def served_metrics(block: dict[str, Any], document_unit: str | None = None
+                   ) -> tuple[dict[str, float], str | None, str, dict[str, str]]:
+    """`metric_values` plus the two fallbacks, in the one order both paths use.
+
+    A suffixed sibling of the metric's own key states the scale of the number it sits beside, so it
+    outranks a document-level `unit` (`sibling_key`), which outranks magnitude inference
+    (`inferred_from_magnitude`). Nothing here guesses a scale a file wrote down.
+    """
+    values, unit, unit_source, per_metric_units = metric_values(block)
+    if unit:
+        return values, unit, unit_source, per_metric_units
+    if document_unit:
+        return values, document_unit, "declared", per_metric_units
+    unit, unit_source = _unit_of(values, None)
+    return values, unit, unit_source, per_metric_units
+
+
+def _blocks(node: Any, trail: tuple[str, ...] = ()) -> Iterator[tuple[tuple[str, ...], dict[str, float], str | None, str, dict[str, str]]]:
+    """Every macro block in a document, with the key path that reached it and its parsed scale.
 
     Walks mappings and lists alike, because `cohort_summary.json` is a list of per-model objects and
     `aggregate` may itself sit inside a list member.
+
+    The scale comes from the SAME per-metric parser the report path uses (`metric_values`), so a row
+    can never pair one key's number with another key's unit.
     """
     if isinstance(node, dict):
         key = trail[-1].lower() if trail else ""
@@ -156,13 +215,13 @@ def _blocks(node: Any, trail: tuple[str, ...] = ()) -> Iterator[tuple[tuple[str,
         # reaches `aggregate` — a macro-block key — from inside a reference subtree, so testing only
         # the last element counted the publication's macro_r10 as this deployment's measurement.
         excluded = any(token in part.lower() for part in trail for token in EXCLUDED_TOKENS)
-        numbers = _numbers(node)
+        numbers, unit, unit_source, per_metric_units = metric_values(node)
         # Bare `r10`/`r50` only count as a measurement when the block was reached under a
         # macro-shaped key. Without that gate `all_measured_summary.json`'s per-category
         # `dress`/`shirt`/`toptee` blocks each read as a macro measurement.
         macro_shaped = not trail or key in MACRO_BLOCK_KEYS or any(m in node for m in MACRO_MARKERS)
         if numbers and not excluded and macro_shaped:
-            yield trail, numbers, _suffix_declared_unit(node)
+            yield trail, numbers, unit, unit_source, per_metric_units
             # A macro block can also contain per-category detail; do not descend into it, or the
             # same macro would be counted again from a nested copy.
             return
@@ -255,6 +314,20 @@ def _rows_for_file(path: Path, root: Path) -> list[dict[str, Any]]:
         # must be readable on the scale its own file used.
         "raw_unit": None,
         "raw_unit_source": None,
+        # R01: the identity the row wore BEFORE a report replaced its number, so the original label
+        # is never lost. `None` (not `True`) until the backing pass reads the evidence.
+        "raw_model_id": None,
+        "raw_checkpoint_id": None,
+        "raw_protocol_id": None,
+        "raw_source_path": None,
+        # Which identity rule joined the row to its report (`exact` / `single_candidate_protocol_unknown`)
+        # and, when nothing was substituted, the reports that made the join ambiguous.
+        "identity_join": None,
+        "identity_ambiguous": None,
+        # R08: equal numbers with no shared ancestry — informational, never a demotion.
+        "same_metrics_as": None,
+        # Which suffix each metric's value came from (R07: mixed scales stay visible).
+        "per_metric_units": None,
     }
     try:
         payload = json.loads(path.read_text())
@@ -265,8 +338,7 @@ def _rows_for_file(path: Path, root: Path) -> list[dict[str, Any]]:
         # A JSON array of some other structure (attempts.json) is not a measurement document.
         return []
 
-    blocks = [(trail, numbers, declared_in_block)
-              for trail, numbers, declared_in_block in _blocks(payload)]
+    blocks = list(_blocks(payload))
     if not blocks:
         # Not a measurement document. A model/protocol naming an explicit blocker IS worth serving:
         # "why is this model absent" then has an answer sourced from an artifact.
@@ -295,23 +367,24 @@ def _rows_for_file(path: Path, root: Path) -> list[dict[str, Any]]:
     # Two or more blocks with DIFFERENT owners in one file is a roll-up by construction: a single
     # measurement cannot be about two models. A known roll-up file is one even when it holds a single
     # block: `pair_compat/measurements/summary.json` repeats numbers its siblings state.
-    owners = {_owner_key(trail) for trail, _numbers, _unit in blocks}
+    owners = {_owner_key(trail) for trail, *_rest in blocks}
     known_rollup = any(relative.endswith(name) for name in KNOWN_ROLLUPS)
     rollup = known_rollup or (len(blocks) > 1 and len(owners - {None}) > 1)
 
     rows: list[dict[str, Any]] = []
-    for trail, numbers, declared_in_block in blocks:
+    for trail, numbers, block_unit, block_unit_source, per_metric_units in blocks:
         owner = _owner_key(trail)
         # A roll-up entry names the MODEL in its key (`clip4cir_noft`, `B1/H_normal`,
         # `combiner_rn50x4_noft`); a direct file names it in `model_id` or in its own stem.
         model = owner if rollup else (model_hint or owner)
-        # A document-level declaration outranks the block's own suffixed sibling key, which in turn
-        # outranks magnitude inference. The two declaration kinds are labelled apart, because
-        # "the document says percent" and "this block names its own scale" are different evidence.
+        # R07: the block's scale came from the SAME per-metric parser the report path uses, so the
+        # value and its unit describe one key. A document-level declaration still outranks it —
+        # "the file says percent" and "this block names its own scale" are different evidence —
+        # and magnitude inference is the last resort, never a substitute for either.
         if declared_unit:
             unit, unit_source = declared_unit, "declared"
-        elif declared_in_block:
-            unit, unit_source = declared_in_block, "sibling_key"
+        elif block_unit:
+            unit, unit_source = block_unit, block_unit_source
         else:
             unit, unit_source = _unit_of(numbers, None)
         rows.append({
@@ -332,6 +405,9 @@ def _rows_for_file(path: Path, root: Path) -> list[dict[str, Any]]:
             # as a percent must not print a fraction as 0.28 %.
             "unit": unit,
             "unit_source": unit_source,
+            # Which suffix each metric's value came from, so a mixed-scale block is visible rather
+            # than collapsed into the one label above.
+            "per_metric_units": per_metric_units,
             "mapping_status": mapping_status,
             "rollup": rollup,
             "rollup_entry": owner if rollup else None,
@@ -394,41 +470,21 @@ def _provenance_unit(payload: dict[str, Any]) -> str | None:
         return "percent"
     return None
 
-def _report_metrics(metrics: dict[str, Any],
-                    document_unit: str | None = None) -> tuple[dict[str, float], str | None, str]:
-    """The served numbers of ONE report block, normalised to the scale the block declares.
+def _report_metrics(metrics: dict[str, Any], document_unit: str | None = None
+                    ) -> tuple[dict[str, float], str | None, str, dict[str, str]]:
+    """The served numbers of ONE report block — `served_metrics` under its historical name.
 
     W-01: `dcnet.json` states its aggregate twice — `macro_r10: 0.2793` beside
     `macro_r10_percent: 27.9297`. Reading the bare key served a FRACTION while the row's `unit` came
     from the *source* roll-up of a different run, so DCNet rendered as 0.28 % against every other
-    model's ~50 %. A suffixed sibling is the report naming its own scale, so it wins and the metric
-    keeps the value the declaration covers.
+    model's ~50 %.
 
-    Returns `(values, unit, unit_source)`. Precedence, highest first: a suffixed sibling key in the
-    block (`sibling_key`), the document's own unanimous provenance declaration (`declared`), then
-    magnitude inference — which `unit_inferred` names so it is never mistaken for a declaration.
+    Delegates to the ONE parser the row path also uses, so a report and a row can never disagree
+    about which key a value came from. Precedence, highest first: a suffixed sibling key of the
+    metric's own alias (`sibling_key`), the document's own unanimous provenance declaration
+    (`declared`), then magnitude inference (`inferred_from_magnitude`).
     """
-    values: dict[str, float] = {}
-    suffix_unit: str | None = None
-    for name, aliases in METRIC_ALIASES.items():
-        for suffix in UNIT_SUFFIX_ORDER:
-            hit = next((metrics[f"{alias}{suffix}"] for alias in aliases
-                        if isinstance(metrics.get(f"{alias}{suffix}"), (int, float))
-                        and not isinstance(metrics.get(f"{alias}{suffix}"), bool)), None)
-            if hit is None:
-                continue
-            values[name] = float(hit)
-            if suffix and suffix_unit is None:
-                suffix_unit = dict(UNIT_SUFFIX_DECLARATIONS).get(suffix)
-            break
-    if suffix_unit:
-        return values, suffix_unit, "sibling_key"
-    if document_unit:
-        return values, document_unit, "declared"
-    # Nothing declared: magnitude inference is the last resort, and `unit_inferred` names it.
-    unit, unit_source = _unit_of(values, None)
-    return values, unit, unit_source
-
+    return served_metrics(metrics, document_unit)
 
 def _repo_root_for(artifacts_root: Path) -> Path:
     """The checkout holding both `workbench/artifacts/` and `workbench/docs/reviews/`.
@@ -467,17 +523,20 @@ def _backing_reports(artifacts_root: Path) -> list[dict[str, Any]]:
                 continue
             if not isinstance(payload, dict) or not payload.get("model_id"):
                 continue
-            values, unit, unit_source = _report_metrics(payload.get("observed_metrics") or {})
+            values, unit, unit_source, per_metric_units = _report_metrics(
+                payload.get("observed_metrics") or {})
             if not values:
                 continue
             reports.append({
                 "model_id": payload["model_id"],
                 "canonical_model": _canonical_model(payload["model_id"]),
+                "checkpoint_id": payload.get("checkpoint_id"),
                 "protocol_id": payload.get("protocol_id"),
                 "run_id": payload.get("run_id"),
                 "metrics": values,
                 "unit": unit,
                 "unit_source": unit_source,
+                "per_metric_units": per_metric_units,
                 "path": str(path.relative_to(artifacts_root)),
                 "sha256": _digest(path),
                 "source_kind": "aggregate_report",
@@ -493,17 +552,22 @@ def _backing_reports(artifacts_root: Path) -> list[dict[str, Any]]:
         aggregate = payload.get("aggregate")
         if not isinstance(aggregate, dict) or not payload.get("model_id"):
             continue
-        values, unit, unit_source = _report_metrics(aggregate, _provenance_unit(payload))
+        values, unit, unit_source, per_metric_units = _report_metrics(
+            aggregate, _provenance_unit(payload))
         if not values:
             continue
         reports.append({
             "model_id": payload["model_id"],
             "canonical_model": _canonical_model(payload["model_id"]),
+            # A replay states no checkpoint of its own, so this is `None` and the join can only
+            # check the fields BOTH sides state (see `IDENTITY_JOIN_FIELDS`).
+            "checkpoint_id": payload.get("checkpoint_id"),
             "protocol_id": payload.get("protocol"),
             "run_id": payload.get("replay_type"),
             "metrics": values,
             "unit": unit,
             "unit_source": unit_source,
+            "per_metric_units": per_metric_units,
             "path": str(path),
             "sha256": _digest(path),
             "source_kind": "native_replay",
@@ -511,35 +575,98 @@ def _backing_reports(artifacts_root: Path) -> list[dict[str, Any]]:
     return reports
 
 
+#: Fields a row and a backing report must agree on before the report may replace the row's number.
+#:
+#: Read from BOTH shapes, not assumed:
+#:   model_id      every row states one (`model_id`/`model`/`method_id`/roll-up entry key) and every
+#:                 report does (`reports/*_aggregate.json`, `raw/native/*.json`).
+#:   protocol_id   rows state `protocol_id` or `protocol`; aggregate reports state `protocol_id`,
+#:                 native replays state `protocol`.
+#:   checkpoint_id rows state `checkpoint_id`/`variant`/`checkpoint_name`/`label`; aggregate reports
+#:                 state `checkpoint_id`; native replays state NOTHING — so this field is compared
+#:                 only when the report states it (a field a report leaves blank cannot contradict).
+#: Could NOT be included, because one side never carries it: `dataset`/`dataset_id` (neither side),
+#: `benchmark`/`benchmark_reference` (reports only, and null on every report under `reports/`), and
+#: `run_id` (reports only). Adding any of them would refuse every join rather than tighten one.
+IDENTITY_JOIN_FIELDS = ("model_id", "protocol_id", "checkpoint_id")
+
+def _row_checkpoint(row: dict[str, Any]) -> str | None:
+    """The row's checkpoint LABEL, or None when what it states is not a checkpoint statement.
+
+    A roll-up entry key that merely repeats the model name (`selection_decisions.json`'s
+    `combiner_rn50x4_noft`) is the roll-up naming its model, not a checkpoint of it, so it cannot
+    constrain which report may back the row.
+    """
+    checkpoint = row.get("checkpoint_id")
+    if checkpoint is None or checkpoint == row.get("model_id"):
+        return None
+    return checkpoint
+
+def _identity_matches(row: dict[str, Any], report: dict[str, Any]) -> bool:
+    """Whether `report` states the same measurement identity as `row` on every field both state."""
+    row_protocol, report_protocol = row.get("protocol_id"), report.get("protocol_id")
+    if row_protocol and report_protocol and row_protocol != report_protocol:
+        return False
+    row_checkpoint = _row_checkpoint(row)
+    report_checkpoint = report.get("checkpoint_id")
+    if row_checkpoint and report_checkpoint and row_checkpoint != report_checkpoint:
+        return False
+    return True
+
 def _backed_by_artifact(rows: list[dict[str, Any]],
                         artifacts_root: Path) -> list[dict[str, Any]]:
     """Replace an unbacked number with the artifact's own, then mark repeated identities.
 
-    The rule the payload now enforces: **a served measurement value is one an artifact backs.** A
-    roll-up (`clip4cir_parsed.json`, `selection_decisions.json`) states 43.8182 for CLIP4Cir FullFT
-    while the replay artifact that produced a number states 43.8017 — two different runs, and no file
-    under `checkpoint_selection/` corresponds to the roll-up's dress/toptee cells. Serving the roll-up
-    value presented an unreproducible number as a measurement, twice (once under `clip4cir_fullft`,
-    once under `clip4cir_rn50x4_fullft`).
+    The rule the payload enforces: **a served measurement value is one an artifact backs.** A roll-up
+    (`clip4cir_parsed.json`, `selection_decisions.json`) states 43.8182 for CLIP4Cir FullFT while the
+    replay artifact that produced a number states 43.8017 — two different runs, and no file under
+    `checkpoint_selection/` corresponds to the roll-up's dress/toptee cells.
 
-    Order matters: canonicalise the model first (so the alias pair is one model), then back, then
-    mark repeats.
+    R01: a report may back a row only when `IDENTITY_JOIN_FIELDS` agree — the row's label and the
+    number served then describe ONE measurement. The previous `by_model_any_protocol` fallback let
+    `checkpoint_A`/`protocol_A` be served 88.0 from an unrelated `checkpoint_B`/`protocol_B` report
+    while keeping its own label, i.e. an artifact silently relabelling itself. That fallback is GONE.
+    Policy when identities differ: REFUSE the replacement (never overwrite the row's fields) — the
+    row keeps its own number, `artifact_backed` and `counted` stay exactly as they were, and the
+    report is not served under the row's label.
+
+    Two reports matching one identity are not one measurement's evidence either: the row keeps its
+    own number and states `identity_ambiguous: [paths]`, so a reader sees why nothing was substituted.
+
+    The single permitted exception: the row states NO protocol and the model has exactly ONE
+    candidate report, so the join is unambiguous; that is recorded as
+    `identity_join: "single_candidate_protocol_unknown"`.
     """
     reports = _backing_reports(artifacts_root)
-    by_model: dict[tuple[str, str | None], dict[str, Any]] = {}
-    by_model_any_protocol: dict[str, dict[str, Any]] = {}
+    by_model: dict[str, list[dict[str, Any]]] = {}
     for report in reports:
-        by_model.setdefault((report["canonical_model"], report["protocol_id"]), report)
-        by_model_any_protocol.setdefault(report["canonical_model"], report)
+        by_model.setdefault(report["canonical_model"] or "", []).append(report)
 
     for row in rows:
-        model = _canonical_model(row.get("model_id"))
+        # The label as the file wrote it, kept for `raw_model_id` below: canonicalising the alias is
+        # a separate, deliberate step and must not be confused with losing the original name.
+        original_model = row.get("model_id")
+        model = _canonical_model(original_model)
         row["model_id"] = model
         if not row.get("metrics"):
             continue
-        report = (by_model.get((model, row.get("protocol_id")))
-                  # A roll-up often omits the protocol; the only report for that model still backs it.
-                  or by_model_any_protocol.get(model or ""))
+        candidates = by_model.get(model or "", [])
+        matches = [report for report in candidates if _identity_matches(row, report)]
+        identity_join: str | None = None
+        if len(matches) == 1:
+            report: dict[str, Any] | None = matches[0]
+            identity_join = "exact"
+        elif len(matches) > 1:
+            report = None
+            row["identity_ambiguous"] = sorted(item["path"] for item in matches)
+        elif row.get("protocol_id") is None and len(candidates) == 1:
+            # The row states no protocol, so there is exactly one candidate it could mean.
+            report = candidates[0]
+            identity_join = "single_candidate_protocol_unknown"
+        else:
+            report = None
+            if len(candidates) > 1:
+                row["identity_ambiguous"] = sorted(item["path"] for item in candidates)
         if report is None:
             if row.get("artifact_backed"):
                 # A direct artifact is its own backing.
@@ -551,65 +678,117 @@ def _backed_by_artifact(rows: list[dict[str, Any]],
                 # to keep `counted: true`, so 18 unbacked roll-up claims fed the per-model tally.
                 row["counted"] = False
             continue
-        # The number is replaced, so its SCALE must be re-derived from the report that replaced it.
-        # Keeping the pre-replacement `unit` printed DCNet's 0.2793 fraction under a `percent` the
-        # module had inferred from a different file.
+        # The number is replaced, so its SCALE must be re-derived from the report that replaced it,
+        # and the row's OWN identity is kept beside it: the original label must never be lost.
         row["raw_metrics"] = dict(row["metrics"])
         row["raw_unit"] = row.get("unit")
         row["raw_unit_source"] = row.get("unit_source")
+        row["raw_model_id"] = original_model
+        row["raw_checkpoint_id"] = row.get("checkpoint_id")
+        row["raw_protocol_id"] = row.get("protocol_id")
+        row["raw_source_path"] = row["source"]["path"]
         row["metrics"] = dict(report["metrics"])
         row["unit"] = report["unit"]
         row["unit_source"] = report["unit_source"]
+        row["per_metric_units"] = report.get("per_metric_units")
         row["artifact_backed"] = True
         row["source_kind"] = "artifact"
         row["backed_by"] = report["path"]
         row["backed_by_sha256"] = report["sha256"]
         row["backed_by_run_id"] = report["run_id"]
         row["backed_by_kind"] = report["source_kind"]
+        row["identity_join"] = identity_join
         row["protocol_id"] = row.get("protocol_id") or report["protocol_id"]
 
     return _mark_duplicates(rows)
 
-
 def _mark_duplicates(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Mark repeated identities; NEVER drop a row.
+    """Mark repeated measurements by IDENTITY; never by a rounded score; NEVER drop a row.
 
-    A roll-up repeating an artifact's number is not a second measurement, and the alias pair is ONE
-    configuration of one upstream. `counted` is False on the repeat, but the row stays in
-    `measurements`: a reader must be able to see that two files state one number, and a silently
-    deleted row cannot be audited at all.
+    R08: equal numbers are not identity. Two checkpoints of one model that happen to score the same
+    are two measurements, so they both stay `counted: true` and merely record
+    `same_metrics_as: <path>` — the earlier version keyed on `round(value, 4)` and silently demoted
+    the second checkpoint to a duplicate of the first.
 
-    Identity is a TOLERANCE, not `round(x, 6)`: `airknow` states 52.5466 in the roll-up and
-    52.54661498980954 in the run file — one experiment written at two precisions — while
-    `airknow_n05` (52.5466) and `airknow_n08` (50.6417) are two DIFFERENT runs and stay separate.
-    Rounding at 6 decimals split the first pair and would merge nothing at all, so the precision
-    repeats were counted twice.
+    `duplicate_of` is written in exactly two situations, both of them ancestry:
 
-    The artifact-backed row wins; between two rows of the same class the first in path order does,
-    so the outcome is deterministic.
+    1. Two rows are backed by the SAME artifact (`backed_by` equal) for the same model and protocol:
+       two files stating one run's number (the roll-up pair, `clip4cir_parsed.json` and
+       `selection_decisions.json`, both normalised to the replay artifact's number). The non-roll-up
+       row, else the first in path order, is the one that counts.
+    2. A roll-up row restates an in-tree artifact's number: the roll-up's numbers equal those of a
+       row whose source is NOT a roll-up. That relation is established from the source KIND
+       (`rollup:*` vs `artifact`), and value equality only picks WHICH artifact it restates.
+
+    A row that is merely numerically equal to another is not a duplicate and is not demoted.
+
+    The stated identity — same source `sha256` AND same `metric_path`, i.e. one block stated twice —
+    is enforced by construction rather than by a rule here: `_blocks` yields each block once and the
+    walker visits each path once, so `(sha256, metric_path)` is already unique across rows. It is
+    named in this docstring because it is the identity the rules below are built on, not a check that
+    was skipped.
     """
-    by_key: dict[tuple[Any, ...], dict[str, Any]] = {}
+    fingerprint = {}
     for row in rows:
         metrics = row.get("metrics")
         if not metrics:
             continue
-        key = (row.get("model_id"), row.get("protocol_id"),
-               tuple(sorted((name, round(value, 4)) for name, value in metrics.items())))
-        existing = by_key.get(key)
-        if existing is None:
-            by_key[key] = row
-            row["duplicate_of"] = None
-            continue
-        if row.get("artifact_backed") and not existing.get("artifact_backed"):
-            row["duplicate_of"] = None
-            existing["duplicate_of"] = row["source"]["path"]
-            existing["counted"] = False
-            by_key[key] = row
-        else:
-            row["duplicate_of"] = existing["source"]["path"]
-            row["counted"] = False
-    return rows
+        fingerprint[row["measurement_id"]] = tuple(
+            sorted((name, round(value, 6)) for name, value in metrics.items()))
 
+    # 1. A roll-up and a row sharing one backing artifact state one run twice. Two plain exports that
+    #    merely agree are NOT demoted: nothing says one of them is the other's source.
+    by_backing: dict[tuple[Any, ...], list[dict[str, Any]]] = {}
+    for row in rows:
+        if not row.get("metrics") or not row.get("backed_by") or row["backed_by"] == row["source"]["path"]:
+            continue
+        key = (row["backed_by"], row.get("model_id"), row.get("protocol_id"),
+               fingerprint[row["measurement_id"]])
+        by_backing.setdefault(key, []).append(row)
+    for group in by_backing.values():
+        if len(group) < 2 or not any(item.get("rollup") for item in group):
+            continue
+        keeper = min(group, key=lambda item: (item.get("rollup", False),
+                                              str(item["source"]["path"])))
+        for row in group:
+            if row is keeper:
+                continue
+            row["duplicate_of"] = keeper["source"]["path"]
+            row["counted"] = False
+
+    # 2. A roll-up restating an artifact's number. A roll-up usually states NO protocol, so an
+    #    absent protocol on either side does not break the ancestry; two DIFFERENT protocols do.
+    artifacts = [row for row in rows
+                 if row.get("metrics") and not row.get("rollup")
+                 and not row.get("duplicate_of")]
+    for row in rows:
+        if not row.get("metrics") or not row.get("rollup") or row.get("duplicate_of"):
+            continue
+        for artifact in artifacts:
+            protocols_agree = (artifact.get("protocol_id") is None
+                               or row.get("protocol_id") is None
+                               or artifact.get("protocol_id") == row.get("protocol_id"))
+            if (artifact.get("model_id") == row.get("model_id")
+                    and protocols_agree
+                    and fingerprint[artifact["measurement_id"]]
+                    == fingerprint[row["measurement_id"]]):
+                row["duplicate_of"] = artifact["source"]["path"]
+                row["counted"] = False
+                break
+
+    # 3. Equal numbers with no ancestry: informational only, NEVER a demotion.
+    for row in rows:
+        if not row.get("metrics") or row.get("duplicate_of"):
+            continue
+        peers = [other for other in rows
+                 if other is not row and other.get("metrics")
+                 and not other.get("duplicate_of")
+                 and other["measurement_id"] != row["measurement_id"]
+                 and fingerprint[other["measurement_id"]] == fingerprint[row["measurement_id"]]
+                 and other.get("model_id") == row.get("model_id")]
+        if peers:
+            row["same_metrics_as"] = sorted(peer["source"]["path"] for peer in peers)[0]
+    return rows
 
 def list_native_measurements(artifacts_root: Path) -> dict[str, Any]:
     """Every native measurement in the selection tree, with the path of the block that states it."""
