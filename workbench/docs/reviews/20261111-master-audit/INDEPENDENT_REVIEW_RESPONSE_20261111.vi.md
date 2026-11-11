@@ -5,7 +5,8 @@
 > Cấu trúc mỗi mục: **Rxx — phát hiện → đã sửa gì → tái hiện trước → sau → commit**.
 > Ba kết luận dùng được: **Đã sửa**, **Bác bỏ**, **Còn chặn**. Không có mục nào bị làm mềm thành "đã cải thiện".
 >
-> **Tổng: 16/16 mục có kết luận. Đã sửa 15. Bác bỏ 0. Còn chặn 1 (R16).**
+> **Tổng: 16/16 mục có kết luận. Đã sửa 15. Bác bỏ 0. Còn chặn 1 một phần (R16 — vế (a) ingest ĐÃ LÀM
+> ở `358c3fc`, vế (b) adapter và (c) nguồn SIGTERM vẫn mở).**
 > **`research_ready` = 0/17** (`CENSUS_20261111.vi.md:92,169`). Mọi sửa đổi dưới đây làm gate **trung thực**,
 > không làm model nào **đạt**.
 
@@ -30,7 +31,7 @@
 | R13 | Đã sửa | `replay/pair_absence.py:101,220,249` | `9f6246f` | `test_blocked_models_verification.py` |
 | R14 | Đã sửa | `scripts/setup_blocked_model_envs.sh:56-70` | `9f6246f` | recipe chạy `exit 0` |
 | R15 | Đã sửa | `replay/airknow.py:83,144,223,512` | `8996b4a` | `test_r15_airknow_variance_group.py` (11) |
-| R16 | **Còn chặn** | — | — | — (xem §17) |
+| R16 | **Còn chặn MỘT PHẦN** — (a) ingest **đã làm**, (b) adapter + (c) SIGTERM còn mở | `backend/native_measurements.py` (`_review_run_payload`, `_review_run_rows`, `_mark_duplicates` 3b/3c/3d) | `358c3fc` | `test_native_ingest_r16.py` (16) |
 
 ---
 
@@ -259,7 +260,8 @@ Commit `ab64911`, `e11f9ff` (kèm `raw/verify/65-frontend.md` §D1/D2 + audit ch
 
 **Live** (`/api/native-measurements`, HEAD này): DCNet `r10 = 27.929730914548916`, `unit=percent`,
 `unit_source=sibling_key`, `raw_unit_source=inferred_from_magnitude`. Counts: `unit_declared 4`,
-`unit_sibling_key 2`, `unit_inferred 39`, `unit_undeclared 0`.
+`unit_sibling_key 2`, `unit_inferred 46`, `unit_undeclared 0` (bộ số tại `358c3fc`; trước ingest là
+`unit_inferred 39` — §R12.3, §17a).
 
 Commit `9a951c5`, `ab64911`.
 
@@ -283,7 +285,8 @@ Rule mới **không** gộp được hai checkpoint thật: `airknow_n05` (`f4d2
 (`756fc0bd…`) khác digest, vẫn **hai** row counted.
 
 **Sau.** Live `/api/native-measurements`: `with_metrics 21`, `duplicate_rows 22`, `unbacked_counted 0`,
-`blocks_with_metrics 43`, `models_with_metrics 17`.
+`blocks_with_metrics 43`, `models_with_metrics 17`. (Số này là **của `ae6fa2b`**; sau `358c3fc` là
+`23 / 27 / 50` — §17a, §19.)
 
 Commit `9a951c5`, `ae6fa2b`.
 
@@ -333,7 +336,8 @@ Commit `ab64911`.
 **Trước.** `FINAL_REPORT.vi.md:198` định nghĩa "dùng được để so sánh nghiên cứu" = `counted ∧
 artifact_backed` = 17 model / 21 dòng, và bảng dẫn `NATIVE_EVAL_MATRIX.csv` nói 15 Y / 2 N.
 
-**Đã sửa bằng cách ĐẾM, không khẳng định** — tài liệu mới `CENSUS_20261111.vi.md` (`7c56510`).
+**Đã sửa bằng cách ĐẾM, không khẳng định** — tài liệu mới `CENSUS_20261111.vi.md` (`7c56510`); số dòng
+counted+backed đọc lại tại `358c3fc` là **23** (§17a, §19).
 
 | phép đếm | kết quả | nguồn |
 |---|---|---|
@@ -351,8 +355,9 @@ Review đúng ở cả hai chỗ: CSV là 12/5 (không phải 15/2), và 21 row 
 "dùng được". Live xác nhận `models_with_metrics 17`, `verified 0` — tức **không** row nào là
 `is_research_evidence`.
 
-**Dư (phải nói):** câu `FINAL_REPORT.vi.md:198` **vẫn còn** trong file master report; census mới là nơi
-đúng. Đây là drift chéo tài liệu, đã ghi ở §17.
+**Dư (phải nói):** câu "17 model / N dòng dùng được" **vẫn còn** trong master report (§6, dòng "dùng
+được để **so sánh nghiên cứu**"); census mới là nơi đúng. Đây là drift chéo tài liệu, đã ghi ở
+§18. Con số M đổi 21 → **23** ở `358c3fc`, lỗi định nghĩa thì không.
 
 ## 13. R12 — Số liệu và các câu "bác bỏ audit cũ"
 
@@ -423,7 +428,8 @@ rời được.
 
 **Sau.** Bốn raw Air-Know cho mean R@10 **52.54676006631348**, sample SD **0.26728186433775697**, spread
 **0.6252866852209422** (`raw/airknow_run3cat_gpu_variance_correction.md:21`) — khớp con số review nêu.
-Artifact đã commit **không** bị viết lại; correction ghi trong raw nêu trên.
+Artifact đã commit **không** bị viết lại; correction ghi trong raw nêu trên. Từ `358c3fc`, bộ thống kê
+này **đi theo row** trên API (`variance_group` trên row `review_run` được giữ lại, `n 4`) — §17a.
 
 **Giới hạn (review nêu, chấp nhận):** CPU/GPU log chưa khoá mode/RNG/input digest nên **chưa** đủ để quy
 toàn bộ chênh lệch cho precision.
@@ -432,30 +438,65 @@ Commit `8996b4a`.
 
 ## 17. R16 — Ingest mới, adapter từ chối, service tự hồi phục
 
-Ba vế, ba kết luận khác nhau. **Tổng: Còn chặn.**
+Ba vế, ba kết luận khác nhau. **Tổng: MỘT PHẦN ĐÓNG — (a) ĐÃ LÀM, (b) và (c) còn chặn.** R16 **không**
+được gọi là đã đóng.
 
-**(a) Native mới chưa ingest — CÒN CHẶN.** `/api/native-measurements` phục vụ `airknow`/`tgcir`/`clvc_net`
-từ `checkpoint_selection/20261106T002617+0700/measurements/{airknow_fiq_n05_run1,airknow_fiq_n08_run1,
-tgcir_run1,clvc_run1}.json`. Ba run GPU mới (`raw/airknow_run3cat_gpu_run{1..4}.json`,
-`raw/tgcir_run3cat_gpu.json`, `raw/clvc_run3cat_gpu.json`) **không** có trong cây ingest; `tgcir_run1`
-phục vụ `r10 = 49.720772235486656` trong khi `tgcir_run3cat_gpu.json` ghi `43.38125929598414`. Nguyên
-nhân: cơ chế ingest **không có khái niệm `superseded_by`**, nên chép file mới vào là thêm row chứ không
-thay row cũ (`BLOCKED_MODELS_VERIFICATION.vi.md` §13.4–13.6). **Điều kiện thiếu:** một trong hai —
-(1) `native_measurements.py` hiểu `superseded_by` + row cũ khai trường đó, hoặc (2) quyết định của chủ dự
-án rằng run cũ bị thay thế và row mới được thêm.
+**(a) Native mới chưa ingest — ĐÃ LÀM, commit `358c3fc612109d6d268f5afe655f10420a52f318`.**
+
+Trước: `/api/native-measurements` phục vụ `airknow`/`tgcir`/`clvc_net` **chỉ** từ
+`checkpoint_selection/20261106T002617+0700/measurements/{airknow_fiq_n05_run1,airknow_fiq_n08_run1,tgcir_run1,clvc_run1}.json`;
+bảy run GPU thật dưới `docs/reviews/*/raw/` không có trong cây ingest vì (i) chúng nằm **một cấp trên**
+`raw/native/`, và (ii) chúng **không** có `replay_type`.
+
+Đã sửa bằng **một predicate** và **hai vai**, trong `workbench/backend/native_measurements.py`:
+`_review_run_payload()` là điều kiện cấu trúc — có `model_id`, `replay_type` khác rỗng,
+`protocol`/`protocol_id`, và một `aggregate` mà parser chung (`_report_metrics`) biến thành **≥1** metric
+được phục vụ; `_review_run_rows()` phục vụ `docs/reviews/*/raw/*.json` thoả predicate thành **row riêng**
+với `source_kind = "review_run"`. `raw/native/*.json` giữ vai **backing report** (`source_kind =
+"native_replay"`); hai glob **rời nhau** nên một số không bị phục vụ hai lần. File chỉ "tình cờ là JSON"
+bị từ chối **bởi luật**, không bởi may mắn: `pair_absence_evidence.json` và bốn dump `w03_*` không nêu
+model/aggregate, `raw/clvc_run3cat_gpu_run1.json` là bản sao byte không có `replay_type`, và file có
+`migrated_from.artifact_sha256` đã có trên đĩa thì là **đổi nhãn**, không phải run mới.
+
+Bảy artifact được ingest, mỗi file chỉ **thêm** metadata (`replay_type`, và `checkpoint_id` khi tài liệu
+nêu theo category): `airknow_run3cat_gpu_run1..4.json` (`replay_type SOURCE_FAITHFUL_WORKBENCH_REPLAY`,
+`checkpoint_id fiq_n05`), `tgcir_run3cat_gpu.json` (`tgcir_archive_unresolved`), `clvc_run3cat_gpu.json`
+và `clvc_run3cat_gpu_run2.json`. Bản `.pre-r16` giữ cạnh mỗi file; leaf diff so với bản `.pre-r16` cho
+**changed = 0** trên mọi leaf chung (đã kiểm lại: 97/97/97/115/71/55/55 leaf chung, 0 đổi) — tức **không**
+số nào bị viết lại.
+
+Bốn file Air-Know là **bốn draw của MỘT** cấu hình (evaluator upstream chạy live dropout, không seed). Đúng
+**một** row counted (`repeat_index 1`, `r10 52.924086629607395`); ba row còn lại `duplicate_of` với reason
+"same config, repeat run, airknow evaluator is nondeterministic by upstream design"; `variance_group` trên
+row giữ lại ghi `n 4`, `mean 52.54676006631348`, `sd 0.26728186433775697`,
+`spread 0.6252866852209422`.
+
+Counts (`list_native_measurements()` tại HEAD `358c3fc`, đường `main.py:1037` → cùng hàm): `files 32 → 39`,
+`with_metrics 21 → 23`, `duplicate_rows 22 → 27`, `blocks_with_metrics 43 → 50`, `unit_inferred 39 → 46`;
+**`models_with_metrics` giữ 17**, `models_rollup_only` giữ 8, `unbacked_counted` giữ 0. Ba model được
+ingest đều **đã** có row counted từ trước, nên ingest **không** làm tăng số model.
+
+**Cái (a) KHÔNG đóng:** không run nào trong bảy đóng được điều kiện của (b). Số của CLVC vẫn **hai** giá
+trị counted mâu thuẫn (`29.970746517160162` từ `clvc_run1.json` vs `30.02079703540087` từ
+`raw/clvc_run3cat_gpu.json`, cả hai `conflict_with` nêu nhau, **không** resolved by recency — CENSUS §1.2);
+`tgcir_run3cat_gpu.json` hoá ra **trùng từng ô** với `tgcir_run1.json` nên bị `duplicate_of`; và bảy file
+vẫn **không** có `runtime.side_effects`/`EXITCODE=0`, nên cột `exit0` của census vẫn `no` cho cả ba model.
+Test chặn: `workbench/tests/test_native_ingest_r16.py` (16 passed, chạy riêng).
 
 **(b) CLVC/TG-CIR composition adapter luôn từ chối — CÒN CHẶN, có chủ đích.** `model_clvc_net.py:199,205`
 và `model_tgcir.py:171,177` ném `Refused("no interpreter environment resolved for WORKBENCH_CLVC_PYTHON")`
-/ `Refused(_refusal(adapter))`. Từ chối là kết quả **đúng** khi chưa có interpreter; native replay đã mở
-là đường khác, không thay thế được composition. **Điều kiện thiếu:** interpreter cho stack pin của từng
-model (CLVC: Python 3.7.6 / torch 1.6.0 / cu102; TG-CIR: torch 1.7.0 / cu110).
+/ `Refused(_refusal(adapter))`. Từ chối là kết quả **đúng** khi chưa có interpreter; native replay (a) đã
+mở là đường khác, **không** thay thế được composition. **Điều kiện thiếu:** interpreter cho stack pin của
+từng model — CLVC: Python 3.7.6 / torch 1.6.0 / cu102; TG-CIR: torch 1.7.0 / cu110. Không có interpreter đó
+thì adapter vẫn phải từ chối, và (a) không thay đổi điều này.
 
 **(c) Service tự chết rồi không tự hồi phục — CÒN CHẶN một phần.** Đường chết **đã xác định**:
 `serve_workbench.py:152-166` — `forward_stop` nhận SIGTERM/SIGHUP, gửi `os.kill(child.pid, SIGTERM)` cho
 từng child rồi `raise_signal(SIGINT)`; child **không** tự chết. Bốn chữ ký đã commit:
 `raw/service-death-log.txt` (PID 3691345), `-2` (4040574), `-3` (4062957), `-4` (4082632).
 **Điều kiện thiếu:** chưa xác định **ai** gửi SIGTERM. Đã kiểm và loại trừ `jobs.py` (spawn với
-`start_new_session=True` nên `killpg` chỉ chạm group riêng của job). Không suy đoán thêm.
+`start_new_session=True` nên `killpg` chỉ chạm group riêng của job). Không suy đoán thêm. `358c3fc` không
+chạm vế này.
 
 **(d) `/api/models` cold 154 s — đo lại tại HEAD này: 200 trong 0.008 s** (warm; không xoá cache nên
 không phủ nhận số cold). Không còn là vật cản poll.
@@ -469,13 +510,13 @@ không phủ nhận số cold). Không còn là vật cản poll.
 | 1 | PAIR | `raw/pair_absence_evidence.json` `verdict: BLOCKED_MISSING_SOURCE_CLASSES`; không revision nào trong **21 commit** của `iLearn-Lab/ICASSP25-PAIR` chứa `model_vssp*`/`MHTransformer_dis*`, `git grep` trên mọi rev = 0 | upstream phải publish hai module đó |
 | 2 | 13 model **chưa có** artifact G1/G2 (NOT_RUN, không phải FAIL) | `CENSUS:169` | mỗi model một differential native↔adapter trên **một mẫu thật cố định**, tolerance khai **trước** khi đo; hàng giờ GPU mỗi model, một job GPU tại một thời điểm |
 | 3 | `7:3038` / `7:3790` không thể resolve canonical | preprocessor upstream **chưa bao giờ** ghi khoá garment-category; hai qid nằm ở **cả** shirt và toptee | dữ liệu upstream, không phải code |
-| 4 | 39/43 dòng vẫn dựa trên unit **suy theo độ lớn** | live counts `unit_inferred 39` | sửa producer của **từng** artifact để tự khai thang |
+| 4 | 46/50 dòng vẫn dựa trên unit **suy theo độ lớn** | `list_native_measurements()` tại `358c3fc`: `unit_inferred 46`, `unit_declared 4` (§R12.3 — trước ingest là 39/43) | sửa producer của **từng** artifact để tự khai thang |
 | 5 | Chỉ 2/16 model có bất kỳ bằng chứng G1/G2, **cả hai FAIL** | `/api/runs/parity-gate` `passed_models: []` | chạy differential thật (mục 2) |
 | 6 | Service chết bởi SIGTERM ngoài, không rõ nguồn | §17(c) | xác định tiến trình gửi tín hiệu |
 | 7 | Nhất quán chéo tài liệu | sáu drift đã sửa tay (`FINAL_REPORT.vi.md` §6 "Hạn chế đã biết"); sweep R12 tìm thêm số sai, nay ghi trong CENSUS | chín tài liệu còn lại **không** được bảo đảm nhất quán nội bộ |
 | 8 | **ĐÃ SỬA** — `FINAL_REPORT.vi.md` từng ghim bundle **cũ** `index-DWpK0yeS.js` / `7e34724e…` ở :31 | bundle sống là `index-DeTvxLlD.js` / `1503e891…` (§19); `FINAL_REPORT` nay ghi đúng và mọi tài liệu còn nhắc bundle cũ đều được dán nhãn superseded | — |
 | 9 | **ĐÃ SỬA** — `MODEL_LIMN_ENCODER_VERIFICATION.vi.md:434` từng ghi `0.539144 / 6001` và câu "không đổi so với run canonical cũ"; `FINAL_REPORT`/census từng gọi `ce89a9a2…` là run canonical | nay `0.474394 / 6003`; `ce89a9a2…` là run **số đo được đo lần đầu** (identity hash `relation_state: not_recorded`), `M-01-a` nay `FIXED_VERIFIED` với run canonical `acc9b20e…` (identity recorded + tensor persist — §4, CENSUS §0.6) | — |
-| 10 | `FINAL_REPORT.vi.md:198` còn "17 model / 21 dòng dùng được" | §12 | như trên |
+| 10 | `FINAL_REPORT.vi.md` §6 vẫn còn dòng "17 model / N dòng dùng được" (nay **23** dòng sau `358c3fc`) | §12 | tách khỏi "dùng được cho nghiên cứu"; xem thêm CENSUS §1.2 cho CLVC |
 
 **Kết luận không đổi:** mọi sửa trong đợt này làm gate **trung thực**, không làm model nào **đạt**.
 `passed_models: []` là kết quả **đúng**.
@@ -491,7 +532,7 @@ không phủ nhận số cold). Không còn là vật cản poll.
 | sha256 bundle (dist) | `1503e8911122587ba8c81e8ecf93d151312fda41e12ff5ba9580ef1797e18155` | `sha256sum` |
 | sha256 bundle (phục vụ) | `1503e8911122587ba8c81e8ecf93d151312fda41e12ff5ba9580ef1797e18155` | `curl :5173/assets/index-DeTvxLlD.js \| sha256sum` |
 | `cmp` phục vụ ↔ `dist/` | **identical** | `cmp /tmp/served_now.js workbench/frontend/dist/assets/index-DeTvxLlD.js` → exit 0 |
-| `/api/native-measurements` counts | `with_metrics 21`, `blocks_with_metrics 43`, `rollup_rows 18`, `duplicate_rows 22`, `unbacked_counted 0`, `models_with_metrics 17`, `models_rollup_only 8`, `verified 0`, `unit_declared 4`, `unit_sibling_key 2`, `unit_inferred 39` | `curl :8000/api/native-measurements` |
+| `/api/native-measurements` counts | `files 39`, `with_metrics 23`, `blocks_with_metrics 50`, `rollup_rows 18`, `duplicate_rows 27`, `unbacked_counted 0`, `models_with_metrics 17`, `models_rollup_only 8`, `verified 0`, `unit_declared 4`, `unit_sibling_key 2`, `unit_inferred 46` | `list_native_measurements(resolve_config().WORKBENCH_ARTIFACTS_ROOT)` — đúng hàm route `main.py:1037` gọi. Tiến trình `:8000` đang chạy nạp code **trước** `358c3fc` nên `curl` vẫn trả bộ số cũ `21/43/22/39`; restart rồi mới khớp |
 | DCNet row | `r10 = 27.929730914548916`, `unit=percent`, `unit_source=sibling_key` | cùng payload |
 | `/api/runs/parity-gate` | `passed_models: []`; encoder `MANDATORY_FAILED` 16 failure; limn `MANDATORY_FAILED` 3 failure + `missing ["metrics_parity"]`; `standard parity-relative/v1` | cùng API |
 | derived runs | `6a96c5c199526b61c1470b0e` `DERIVED_PARTIAL`, `coverage 0.9997542393708528`; `aee2e8d39214d877a84d7c08` `DERIVED_COMPLETE`, `coverage 1` | `/api/runs` → `derived_from` |
@@ -539,16 +580,19 @@ liệu cố tình lệch (`2901 passed` vs `2800 passed`).
 | ai gửi SIGTERM cho launcher | chưa xác định; đã loại trừ `jobs.py` (§17c) |
 | G1/G2 cho 13 model NOT_RUN | chưa có artifact; cần GPU |
 | eval trên browser live | chỉ đọc dist + `curl` bundle + node test; không mở browser |
-| run GPU mới của airknow/tgcir/clvc_net có khớp run cũ | cần ingest trước (§17a) |
+| run GPU mới của airknow/tgcir/clvc_net có khớp run cũ | **đã ingest** (§17a, `358c3fc`) nên giờ so được — và câu trả lời **không** đồng nhất: `tgcir_run3cat_gpu.json` trùng từng ô với `tgcir_run1.json` (`duplicate_of`), CLVC **lệch** (`29.970746517160162` vs `30.02079703540087`, cả hai counted, `conflict_with` — CENSUS §1.2), Air-Know lệch trong spread đo được (sd `0.26728186433775697`) |
+| CLVC có hai số counted — chốt cái nào | **chưa có quyết định** nào; `conflict_with` chỉ làm mâu thuẫn **thấy được**, không phải phán quyết (CENSUS §1.2) |
 
 ## 22. Tổng kết
 
-- **16 mục review, 16 kết luận: Đã sửa 15, Bác bỏ 0, Còn chặn 1 (R16).**
+- **16 mục review, 16 kết luận: Đã sửa 15, Bác bỏ 0, Còn chặn 1 một phần (R16 — (a) ingest ĐÃ LÀM ở
+  `358c3fc`; (b) adapter CLVC/TG-CIR và (c) nguồn SIGTERM vẫn mở).**
 - **0 phát hiện bị bác bỏ** — mọi phát hiện P1/P2 đều tái hiện được trên source/code, và mọi phép so
   số của review (CSV 12/5, gap `0.474394/6003`, tie-rule 7/17, `unit_declared` bao gồm `sibling_key`,
   TG-CIR lệch R@1, CLVC không có cache) đều đúng.
 - **`research_ready` = 0/17.** `passed_models: []` không đổi: các sửa đổi làm gate **không thể PASS giả**,
-  không làm model nào đạt.
+  không làm model nào đạt. `358c3fc` làm ba run **hiện ra** trên API, không nâng bậc bằng chứng nào.
 - Còn chặn thật: PAIR (upstream chưa publish hai module), 13 model chưa có G1/G2, `7:3038`/`7:3790`,
-  39/43 row dùng unit suy luận, ingest run GPU mới, nguồn SIGTERM, nhất quán chéo tài liệu.
+  46/50 row dùng unit suy luận, **CLVC hai số counted chưa chốt**, adapter CLVC/TG-CIR thiếu interpreter
+  stack pin, nguồn SIGTERM, nhất quán chéo tài liệu.
 - Sweep tại `cd980dc` **đã xong**: `18 failed, 2901 passed, 47 skipped`, gap 0, NEW=0 / DROPPED=0 / COMMON=18 (§20).
