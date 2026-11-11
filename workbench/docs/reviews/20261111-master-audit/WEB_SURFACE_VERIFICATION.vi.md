@@ -47,8 +47,8 @@ nào ở phía server. Luôn `npm run build` trước khi restart.
 | frontend | `http://127.0.0.1:5173` (vite `preview`, proxy `/api` → `http://127.0.0.1:8000`) |
 | backend | `http://127.0.0.1:8000` |
 | restart | đúng **một lần** trong lượt W-05 này (stack đã restart nhiều lần trong cả đợt — xem hàng PID bên dưới), `WORKBENCH_CIRCUS_RELEASE_ROOT=/home/heheboiz/data/cir/workbench/artifacts/circus_release` |
-| PID **đang phục vụ** | `serve_workbench.py` **4082631** → uvicorn **4082632** (superseded: `4062950/4062957`, `4040573/4040574`, `3390138/3390139`, `3316577/3316578`, `3228456`, `3212146`) |
-| cảnh báo về pin PID | PID **không bền** trong đợt này: **bốn** lần stack bị SIGTERM từ bên ngoài, mỗi lần một PID khác — `3691345` (`/tmp/workbench_serve.log`, mtime `2026-11-11 02:25:51`; mốc thời gian lấy từ mtime của tệp, **không** có trong nội dung log), `4040574` (`/tmp/workbench_serve_final.log`), `4062957` (`/tmp/serve_probe.log`), `4082632` (`/tmp/serve_handover.log`, mtime `2026-11-11 07:29:33`). Cả bốn đều có đúng chữ ký `[WARN] npm exited with status -15` rồi backend `Shutting down` êm. Bản sao đã commit: `raw/service-death-log.txt` (lần 1) và `raw/service-death-log-4.txt` (lần 4). Các restart khác trong danh sách superseded không còn log nên **không rõ nguyên nhân**. **Digest bundle mới là pin bền**; PID chỉ đúng tại thời điểm đo |
+| PID **đang phục vụ** | `serve_workbench.py` **4171850** → uvicorn **4171851** (superseded: `4082631/4082632`, `4062950/4062957`, `4040573/4040574`, `3390138/3390139`, `3316577/3316578`, `3228456`, `3212146`) |
+| cảnh báo về pin PID | PID **không bền** trong đợt này: stack đã chết **ít nhất bốn lần** do SIGTERM từ bên ngoài, mỗi lần một PID khác, và **số chính xác không chốt được** — mỗi lần restart lại `> /tmp/…log` nên log cũ bị truncate và chữ ký của lần trước đó biến mất. Bốn lần còn log header: `3691345` (`/tmp/workbench_serve.log`, mtime `2026-11-11 02:25:51`; mốc thời gian lấy từ mtime của tệp, **không** có trong nội dung log), `4040574` (`/tmp/workbench_serve_final.log`), `4062957` (`/tmp/serve_probe.log`), `4082632` (`/tmp/serve_handover.log`, mtime `2026-11-11 07:29:33`). Tất cả có đúng chữ ký `[WARN] npm exited with status -15` rồi backend `Shutting down` êm. Bản sao đã commit: `raw/service-death-log.txt` (lần 1) và `raw/service-death-log-4.txt` (lần 4). Đừng đọc con số này như một pin: nó chỉ tăng và mỗi log mới truncate log cũ. **Digest bundle mới là pin bền**; PID chỉ đúng tại thời điểm đo |
 | readiness | `/api/benchmark-runs` → 200 sau 1 s; **không** dùng `/api/models` (cold start ~154 s vì hash mọi checkpoint) |
 | digest khớp | `sha256(served /assets/index-DWpK0yeS.js)` = `sha256(dist/assets/index-DWpK0yeS.js)` = `7e34724e…8a6a16`; `cmp` → IDENTICAL |
 
@@ -427,8 +427,8 @@ trong lượt này. Không sửa gì ở đây.
 | css | `index-DecQnta9.css` |
 | root | `WORKBENCH_CIRCUS_RELEASE_ROOT=/home/heheboiz/data/cir/workbench/artifacts/circus_release` |
 | proxy | vite `preview` proxy `/api` → `http://127.0.0.1:8000` (`vite.config.mts`, `WORKBENCH_BACKEND_URL`) |
-| PID | **4082631** (`serve_workbench.py`) → **4082632** (uvicorn); superseded `4062950/4062957`, `4040573/4040574`, `3390138/3390139`, `3316577/3316578`, `3228456`, `3212146` |
-| quy tắc pin | **digest bundle là pin bền; PID chỉ đúng tại thời điểm đo.** PID đã cũ đi **bốn lần** trong một đợt, mỗi lần một lần chết do SIGTERM (xem mục "Service được phục vụ" để có PID của từng lần). Không bao giờ dùng hàng PID làm pin build |
+| PID | **4171850** (`serve_workbench.py`) → **4171851** (uvicorn); superseded `4082631/4082632`, `4062950/4062957`, `4040573/4040574`, `3390138/3390139`, `3316577/3316578`, `3228456`, `3212146` |
+| quy tắc pin | **digest bundle là pin bền; PID chỉ đúng tại thời điểm đo.** PID đã cũ đi **ít nhất bốn lần** trong một đợt (mỗi lần một lần chết do SIGTERM; số chính xác không chốt được vì log bị truncate ở mỗi restart — xem mục "Service được phục vụ"). Không bao giờ dùng hàng PID làm pin build |
 | readiness | `/api/benchmark-runs` 200 sau 1 s |
 
 ### Bằng chứng theo nhóm scope có dữ liệu

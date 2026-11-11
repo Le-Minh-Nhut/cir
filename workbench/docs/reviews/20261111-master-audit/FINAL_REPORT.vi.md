@@ -153,7 +153,8 @@ artifact. Gate cũ báo `PARITY_PASS` cho cả hai; gate mới báo đúng.
 - **`:8765` stale uvicorn** vẫn sống, thiếu route mới (`/api/runs/parity-gate` → 404, so với 200 ở
   `:8000`). Tìm nó bằng `pgrep -af "port 8765"`; PID đổi sau restart nên không ghim số.
 - **Stack không tự hồi phục — cơ chế đã xác định một phần, thủ phạm thì chưa.** Service `:8000`/`:5173`
-  đã chết **bốn lần** trong đợt này, mỗi lần một PID và mỗi lần đều còn log header —
+  đã chết **ít nhất bốn lần** trong đợt này, mỗi lần một PID; **số chính xác không chốt được** vì mỗi
+  lần restart lại truncate `> /tmp/…log` nên chữ ký của lần trước biến mất. Bốn lần còn log header —
   PID 3691345, 4040574, 4062957, 4082632 — tất cả cùng một chữ ký log:
   `[WARN] npm exited with status -15` (bị
   SIGTERM) rồi backend `Shutting down` êm. Hai lần có bản sao đã commit:
