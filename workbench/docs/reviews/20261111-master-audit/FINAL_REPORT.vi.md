@@ -13,7 +13,7 @@ báo cáo/raw tương ứng. Đọc kèm:
 | `UPSTREAM_INPUT_AND_PROTOCOL_MATRIX.vi.md` | upstream, đầu vào, protocol |
 | `WEB_SURFACE_VERIFICATION.vi.md` | W-01…W-05 |
 | `VERIFICATION_AND_SWEEP.vi.md` | bốn khẳng định Phase 1 + ba lần sweep |
-| `REMAINING_WORK.md` | việc còn lại: **11** mục chưa xong; đọc trước khi tiếp tục |
+| `REMAINING_WORK.md` | việc còn lại: **9** mục chưa xong; đọc trước khi tiếp tục |
 
 ---
 
@@ -190,7 +190,7 @@ thiếu dimension, không phải trùng khớp.
   từng dòng: **0** khai báo bị bỏ sót. Các khoá `*_pct` có mặt (`dead_parameters_pct`,
   `relative_error_pct`, `checkpoint_training_noise_pct`) mô tả **đại lượng khác**, không được dùng làm
   khai báo thang macro.
-- **Derived row chưa có marker `DERIVED` trên UI** — dữ liệu đúng (`derived_from`), bề mặt web chưa hiện.
+- **Marker `DERIVED` trên UI — ĐÃ XONG** (`c25d67f`): `scope.ts:622` xuất `derivedLineage`, `EvaluationPage.tsx:258,358` render lineage, và `workbench/frontend/tests/derived-lineage.test.cjs` canh phía node. Phép đo cũ `grep -rn 'derived_from' workbench/frontend/*.ts*` → **0** (tại `0691f3e`) **đã bị superseded**: chạy lại bây giờ ra **6** hit, và bundle đang phục vụ `index-DYYSN7oG.js` / `74e4b4f8…d651f` mang chuỗi đó (`grep -c derived_from` → 1 trong byte đã minify).
 - **`:8765` stale uvicorn — ĐÃ KILL trong đợt này (`a21e131`).** Lịch sử: nó từng sống và thiếu route
   mới (`/api/runs/parity-gate` → **404**, so với **200** ở `:8000`), nên `curl` nhầm cổng sẽ tưởng route
   không tồn tại. Bằng chứng: `raw/verify/80-supervision-recovery.md` → `8765_parity_gate` **404 → 000**;

@@ -28,6 +28,19 @@ phục vụ (`index-DYYSN7oG.js`) mang chuỗi đó. **Một lưu ý trung thự
 586/586 so với parent partial đang được **kiểm lại riêng**; nếu nó không xác nhận thì phải ghi là chưa
 xác nhận, **không** được trích như đã chứng minh.
 
+
+**Đóng ở lượt này — uvicorn `:8765` cũ (mục 10 cũ) đã bị kill trong đợt này** (`a21e131`). Bằng chứng kill trích từ `raw/verify/80-supervision-recovery.md` (`8765_parity_gate` **404 → 000**):
+
+   Lịch sử giữ nguyên: nó từng sống và thiếu route mới (`/api/runs/parity-gate` → **404**, so với **200** ở `:8000`; đo lại
+   tại `0691f3e`: đúng 404 vs 200), nên nó là một cái bẫy đo — ai `curl` nhầm cổng sẽ thấy 404 và
+   tưởng route không tồn tại. Bằng chứng kill: `raw/verify/80-supervision-recovery.md` →
+   `8765_parity_gate` **404 → 000** (`kill -TERM` cho tiến trình `ss -ltnp` chỉ ra trên `:8765`, cộng
+   tiến trình `npm run dev --port 5765` mồ côi cùng phiên; `:8000`/`:5173` không bị ảnh hưởng). Kiểm
+   lại lúc bàn giao: `curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8765/api/runs/parity-gate`
+   → **`000`** (exit 7, không listener trên 8765 **và** 5765). **Bài học tái dùng được (giữ nguyên):**
+   nhận diện instance lạ bằng **cổng + hành vi route**, **không bao giờ** bằng PID — PID đổi sau mỗi
+   restart nên không ghim số.
+
 ## CHƯA LÀM — phải làm trước khi coi là xong
 1. **PAIR** — cần upstream công bố `model_vssp` + `MHTransformer_dis`. Đã quét 21 commit, không tồn
    tại. Xem `replay/pair_absence.py`.
@@ -35,7 +48,7 @@ xác nhận, **không** được trích như đã chứng minh.
    Nguồn duy nhất của bảng: `CENSUS_20261111.vi.md` §1 (17 trừ encoder và limn); trích lại từ đó, không tự đếm.
 3. **5 ca cần rerun** (bảng §6 `FINAL_REPORT.vi.md`): `clip4cir_rn50x4_noft`, `airknow` (3 dòng counted
    — n05 và n08 khác checkpoint, cộng một cặp mâu thuẫn trên `fiq_n05`), `clvc_net` (hai số counted mâu
-   thuẫn, xem mục 10), `pair` (4 dòng), `habit` `e0dd04a4` (artifact trỏ interpreter chết). ENCODER **đã
+   thuẫn, xem mục 9), `pair` (4 dòng), `habit` `e0dd04a4` (artifact trỏ interpreter chết). ENCODER **đã
    xong** nên **không** tính vào 5: `acc9b20e` là canonical; `5dee7425`/`6a528e87` superseded, lý do từng
    id ghi ở §6 `FINAL_REPORT.vi.md`. Số ca phải rerun còn **5**.
 4. **LIMN 2 query mơ hồ** `7:3038`, `7:3790` — provenance upstream không cho phép chốt category. Cần
@@ -72,16 +85,6 @@ xác nhận, **không** được trích như đã chứng minh.
    Cho tới đó **không** được trích "CLVC = 29.97" hay "CLVC = 30.02" như số đã chốt — xem
    `CENSUS_20261111.vi.md` §1.2. (Air-Know có cùng dạng hai row counted, nhưng đã có `variance_group`
    n=4 / sd `0.26728186433775697` nên mức bất định **đã đo**; CLVC thì chưa.)
-10. **ĐÃ ĐÓNG — uvicorn `:8765` cũ đã bị kill trong đợt này** (`a21e131`). Lịch sử giữ nguyên: nó
-   từng sống và thiếu route mới (`/api/runs/parity-gate` → **404**, so với **200** ở `:8000`; đo lại
-   tại `0691f3e`: đúng 404 vs 200), nên nó là một cái bẫy đo — ai `curl` nhầm cổng sẽ thấy 404 và
-   tưởng route không tồn tại. Bằng chứng kill: `raw/verify/80-supervision-recovery.md` →
-   `8765_parity_gate` **404 → 000** (`kill -TERM` cho tiến trình `ss -ltnp` chỉ ra trên `:8765`, cộng
-   tiến trình `npm run dev --port 5765` mồ côi cùng phiên; `:8000`/`:5173` không bị ảnh hưởng). Kiểm
-   lại lúc bàn giao: `curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8765/api/runs/parity-gate`
-   → **`000`** (exit 7, không listener trên 8765 **và** 5765). **Bài học tái dùng được (giữ nguyên):**
-   nhận diện instance lạ bằng **cổng + hành vi route**, **không bao giờ** bằng PID — PID đổi sau mỗi
-   restart nên không ghim số.
 
 **Đã sửa, không còn là việc:** nhãn "Số đo native không ghi protocol" ở `ModelInventory.tsx` **là**
 defect cùng họ R06/R08. Payload sống `:8000/api/native-measurements` cho `clvc_net` / `tgcir`: mọi row
