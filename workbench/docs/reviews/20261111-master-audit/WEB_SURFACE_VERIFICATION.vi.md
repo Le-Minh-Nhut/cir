@@ -10,11 +10,11 @@ Uvicorn trên `:8765` là tiến trình cũ thiếu route mới — **không** d
 
 | issue_id | status | evidence file | artifact | API response | UI screenshot | fix | regression |
 |---|---|---|---|---|---|---|---|
-| W-01 | **XONG** | `raw/w01_w03_targeted_tests.txt` | `workbench/backend/native_measurements.py`, `workbench/frontend/{format,data,EvaluationPage,OverviewPage}.ts*` | `w01_native_measurements_BEFORE_backing.json` → `w01_native_measurements_after.json` | `w_shots/w01_native_table.png`, `w_shots/w01_native_overview.png` | prune path `paper*`; unit theo declaration rồi mới suy; `mapping_status`; `undeclared_unit_rows`; **roll-up không cấp số đo thiếu artifact**, alias gộp, `counted`/`duplicate_of` | `test_native_measurements_census.py` (25), `test_frontend_format.py` |
+| W-01 | **XONG** | `raw/w01_w03_targeted_tests.txt` | `workbench/backend/native_measurements.py`, `workbench/frontend/{format,data,EvaluationPage,OverviewPage}.ts*` | `w01_native_measurements_BEFORE_backing.json` → `w01_native_measurements_after.json` | `w_shots/w01_native_table.png`, `w_shots/w01_native_overview.png` | prune path `paper*`; unit theo declaration rồi mới suy; `mapping_status`; `undeclared_unit_rows`; **roll-up không cấp số đo thiếu artifact**, alias gộp, `counted`/`duplicate_of` | `test_native_measurements_census.py` (28), `test_frontend_format.py` |
 | W-02 | **XONG** | `raw/w02_*_notes.txt` | `workbench/frontend/{scope,ModelInventory,EvaluationPage,data,routes}.ts*` | `w_shots/w02_models_inventory.json`, `w_shots/w02_native_scope_populated.json` | `w_shots/w02_overview_circus.png`, `w_shots/w02_models_inventory.png`, `w_shots/w02_native_scope_populated.png` | view `native`; link theo `family`; 9 đếm tách rời | `test_web_scope_and_labels.py`, `test_frontend_routes.py` |
 | W-03 | **XONG** | `raw/w03_before_summary.txt`, `raw/w03_after_summary.txt` | `workbench/backend/limn_diagnostic.py`, `workbench/frontend/{QueryInspector,LimnScopeDiagnostic}.tsx` | `w03_limn_3038_toptee_mm_depth{10,20,43,100}.json`, `pre_limn_*` | `w_shots/w03_inspector_7-3038_limn_full.png`, `w03_inspector_midrank_encoder.png`, `w03_limn_diagnostic_toptee.png`, `w03_limn_probe_toptee_mm_K10.png` | presence trên window được serve; hai depth; probe có control K | `test_limn_dual_scope_diagnostic.py` (17) |
 | W-04 | **XONG** | `web_evidence/w04/w04_results.json` | — | 503 cưỡng bức trong `w04_induced_api_error.json` | `w04_late_answer_a_after_b.png`, `w04_deeplink_out_of_range.png`, `w04_reload_and_history.png`, `w04_induced_api_error.png` | subtitle không in 0 khi region lỗi | `test_frontend_requests.py` + 4 kiểm browser |
-| W-05 | **XONG** | xem mục W-05 | — | `w01_native_measurements_after.json`, `w05_benchmark_runs_after.json`, `w05_parity_gate_after.json` | 13 ảnh trong `w_shots/` + `manifest.json` | — | — |
+| W-05 | **XONG** | xem mục W-05 | — | `w01_native_measurements_after.json`, `w05_benchmark_runs_after.json`, `w05_parity_gate_after.json` | 17 ảnh trong `w_shots/` (13 trong `manifest.json`) | — | — |
 
 ## Trạng thái nửa chừng nhận lại (trước khi sửa)
 
@@ -46,9 +46,9 @@ nào ở phía server. Luôn `npm run build` trước khi restart.
 | superseded — bundle trước lần nhận W-05 | `index-DjAje2d2.js` sha256 `74a9319ed6f05ce0508cf93424d5a0dcd8909e9a0116dcec4e87a1f24d50f867` — **không còn trên đĩa** |
 | frontend | `http://127.0.0.1:5173` (vite `preview`, proxy `/api` → `http://127.0.0.1:8000`) |
 | backend | `http://127.0.0.1:8000` |
-| restart | đúng **một lần**, `WORKBENCH_CIRCUS_RELEASE_ROOT=/home/heheboiz/data/cir/workbench/artifacts/circus_release` |
-| PID **đang phục vụ** | `serve_workbench.py` **4082631** → uvicorn **4082632** (superseded: `4062950/4062957`, `4040573/4040574`, `3390138/3390139`, `3316577/3316578`, `3212146`) |
-| cảnh báo về pin PID | PID **không bền** trong đợt này: stack đã bị SIGTERM từ bên ngoài **hai lần** (`[WARN] npm exited with status -15` trong `/tmp/workbench_serve.log`, mtime `2026-11-11 02:25:51` — mốc thời gian lấy từ mtime của tệp, không có trong nội dung log; bản sao đã commit: `raw/service-death-log.txt`; và `/tmp/workbench_serve_final.log` sau đó), mỗi lần phải restart và PID đổi. **Digest bundle mới là pin bền**; PID chỉ đúng tại thời điểm đo |
+| restart | đúng **một lần** trong lượt W-05 này (stack đã restart nhiều lần trong cả đợt — xem hàng PID bên dưới), `WORKBENCH_CIRCUS_RELEASE_ROOT=/home/heheboiz/data/cir/workbench/artifacts/circus_release` |
+| PID **đang phục vụ** | `serve_workbench.py` **4082631** → uvicorn **4082632** (superseded: `4062950/4062957`, `4040573/4040574`, `3390138/3390139`, `3316577/3316578`, `3228456`, `3212146`) |
+| cảnh báo về pin PID | PID **không bền** trong đợt này: số lần chết do SIGTERM từ bên ngoài **chưa chốt**; đã ghi nhận **ít nhất bốn lần** (mỗi lần PID đổi — xem danh sách superseded ở hàng trên). Ba lần có log header còn giữ: `/tmp/workbench_serve.log` (`[WARN] npm exited with status -15`, PID 3691345; mtime `2026-11-11 02:25:51` — mốc thời gian lấy từ mtime của tệp, **không** có trong nội dung log; bản sao đã commit: `raw/service-death-log.txt`), `/tmp/workbench_serve_final.log` (PID 4040574), `/tmp/serve_probe.log` (PID 4062957). **Digest bundle mới là pin bền**; PID chỉ đúng tại thời điểm đo |
 | readiness | `/api/benchmark-runs` → 200 sau 1 s; **không** dùng `/api/models` (cold start ~154 s vì hash mọi checkpoint) |
 | digest khớp | `sha256(served /assets/index-DWpK0yeS.js)` = `sha256(dist/assets/index-DWpK0yeS.js)` = `7e34724e…8a6a16`; `cmp` → IDENTICAL |
 
@@ -194,13 +194,20 @@ unit_not_declared  = 39    # KHÔNG có khai báo: 39/43 dòng đo
 unbacked_counted   = 0
 ```
 
-Đo lại trên payload sống (`/api/native-measurements`, HTTP 200). Sáu dòng/blocks nay mang khai báo
-thật; **39** dòng vẫn dựa trên suy luận độ lớn, và từng dòng đã được audit: **0** khai báo bị bỏ sót
+Đo lại trên payload sống (`/api/native-measurements`, HTTP 200). **Bốn** dòng/blocks nay mang khai báo
+thật (`unit_declared = 4`, trong đó 2 là `unit_sibling_key`); **39** dòng vẫn dựa trên suy luận độ
+lớn, và từng dòng đã được audit: **0** khai báo bị bỏ sót
 (các key `*_pct` có mặt như `dead_parameters_pct`, `relative_error_pct`,
 `checkpoint_training_noise_pct` mô tả **đại lượng khác**, không phải thang macro).
 
-Nói cách khác: **toàn bộ** 43 dòng có macro trong deployment này đang được đọc trên thang suy ra
-theo độ lớn, không dòng nào khai đơn vị trong artifact. UI in con số này ở đầu bảng native kèm danh
+Nói cách khác: trong **43** dòng có macro, **39** dòng vẫn đang được đọc trên thang suy ra theo độ
+lớn và **4** dòng mang khai báo thật — 2 dòng khai qua `categories[*].provenance.units` của
+`clip4cir_fullft.json`, 2 dòng khai bằng key có hậu tố `macro_r10_percent`/`macro_r50_percent` của
+`dcnet.json` — **0** khai báo bị bỏ sót. Lưu ý `unit_declared = 4` **đã bao gồm** hai dòng
+`unit_sibling_key`, nên cộng `4 + 2` là đếm trùng (45 > 43); tổng số dòng có khai báo là **4/43**,
+không phải 6. 39/43 vẫn là con số lớn, và các key `*_pct` có mặt
+(`dead_parameters_pct`, `relative_error_pct`, `checkpoint_training_noise_pct`) mô tả **đại lượng
+khác** nên không được tính là khai báo thang macro. UI in con số này ở đầu bảng native kèm danh
 sách mở được (`data-testid="native-undeclared-list"`), thay vì để người đọc tự suy.
 
 Regression: `test_every_row_without_a_declared_unit_is_listed_not_only_counted`,
@@ -418,7 +425,7 @@ trong lượt này. Không sửa gì ở đây.
 | root | `WORKBENCH_CIRCUS_RELEASE_ROOT=/home/heheboiz/data/cir/workbench/artifacts/circus_release` |
 | proxy | vite `preview` proxy `/api` → `http://127.0.0.1:8000` (`vite.config.mts`, `WORKBENCH_BACKEND_URL`) |
 | PID | **4082631** (`serve_workbench.py`) → **4082632** (uvicorn); superseded `4062950/4062957`, `4040573/4040574`, `3390138/3390139`, `3316577/3316578`, `3228456`, `3212146` |
-| quy tắc pin | **digest bundle là pin bền; PID chỉ đúng tại thời điểm đo.** PID đã cũ đi **ba lần** trong một đợt (mỗi lần service restart). Không bao giờ dùng hàng PID làm pin build |
+| quy tắc pin | **digest bundle là pin bền; PID chỉ đúng tại thời điểm đo.** PID đã cũ đi **ít nhất bốn lần** trong một đợt (mỗi lần service restart; số lần chính xác chưa chốt — xem mục "Service được phục vụ"). Không bao giờ dùng hàng PID làm pin build |
 | readiness | `/api/benchmark-runs` 200 sau 1 s |
 
 ### Bằng chứng theo nhóm scope có dữ liệu
@@ -436,8 +443,12 @@ Mỗi ảnh nằm cạnh chính response API mà trang đã nhận, trong cùng 
 | diagnostic LIMN, cả hai scope | `w_shots/w03_limn_diagnostic_toptee.png` | `/api/composition/diagnostics/limn-dual-scope` (+ `…/candidates?depth=20`) |
 | Probe K=10 / K=100 (chụp vùng) | `w_shots/w03_limn_probe_toptee_mm_K10.png`, `w_shots/w03_limn_probe_target_tile.png` | — |
 
-`w_shots/manifest.json` liệt kê mọi ảnh với URL, viewport, `png_sha256` và `dom_text_sha256`, nên một
-ảnh không thể bị đọc là bằng chứng cho một payload khác.
+`w_shots/manifest.json` liệt kê **13** ảnh với `url`, `png_sha256` và `dom_text_sha256` (không có
+trường `viewport`), nên một ảnh trong manifest không thể bị đọc là bằng chứng cho một payload khác.
+Bốn ảnh trong `w_shots/` **không** nằm trong manifest — `w03_inspector_ordinary_7-3038_K50.png`,
+`w03_limn_probe_target_tile.png`, `w03_limn_probe_toptee_mm.png`, `w03_limn_probe_toptee_mm_K10.png` —
+nên với bốn ảnh đó không có `png_sha256`/`dom_text_sha256` để đối chiếu, và chúng chỉ dùng làm hình
+minh hoạ, không dùng làm bằng chứng duy nhất cho một khẳng định.
 
 ### `networkidle` không bao giờ xảy ra trên stack này
 
@@ -458,7 +469,7 @@ workbench/envs/ctl312h/bin/python -m pytest \
   test_native_measurements_census test_frontend_format test_web_scope_and_labels \
   test_limn_dual_scope_diagnostic test_limn_scope_routing test_limn_diagnostic_record \
   test_frontend_routes test_frontend_requests test_frontend_catalog -q
-→ 142 passed
+→ 145 passed
 ```
 
 Log: `raw/w01_w03_targeted_tests.txt`. Không chạy toàn bộ suite (theo yêu cầu).
