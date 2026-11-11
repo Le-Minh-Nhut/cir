@@ -31,6 +31,7 @@ from __future__ import annotations
 from importlib import import_module
 
 import sys
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -38,7 +39,7 @@ from PIL import Image
 
 from workbench.composition.adapters import CompositionAdapter, adapter_class
 from workbench.composition.inputs import CONDITIONS, adapt_query_inputs
-from workbench.backend.registry import load_registry
+from workbench.backend.registry import checkpoint_path, load_registry
 
 #: Adapters added for models that previously had none. ``airknow`` is included because it was
 #: added in the same programme and has the same "not verified on GPU" status. The last three
@@ -102,18 +103,63 @@ def test_status_is_truthful_and_reports_every_mode(model_id: str) -> None:
     assert set(status.per_mode) == set(CONDITIONS)
     assert status.checkpoint_ids, f"{model_id} reports no checkpoint ids"
 
-@pytest.mark.parametrize("model_id", sorted(NEW_ADAPTERS))
+#: Models whose readiness is now MEASURED, not hoped for, so the snapshot below no longer covers
+#: them. Evidence, both `raw/verify/89-adapted-runtime-and-gpu-capability.md`:
+#:
+#: * `clvc_net` — tier `GPU_VERIFICATION_PENDING` from the registry's `adapted_runtime`, promoted to
+#:   `GPU_RUNTIME_READY` by the authorized probe (`compute_capability` 12.0, RTX 5070 Ti), so
+#:   `require_launch_ready` returns the interpreter; parity measured in
+#:   `raw/verify/87-clvc-composition.md` §5.
+#: * `tgcir` — the same tier progression on `tgcir39-la`; parity measured in
+#:   `raw/verify/88-tgcir-composition.md` §3.
+#:
+#: ``status.ready`` for these two is a statement about the OPERATOR's provisioned state (interpreter
+#: in `workbench.env`, checkpoint staged under `WORKBENCH_CHECKPOINT_ROOT`), which is why the test
+#: below reads that file explicitly: the suite-wide fixture hides operator state, and a readiness
+#: claim that needed it must say so rather than assert the opposite.
+READY_WITH_EVIDENCE = {"clvc_net", "tgcir"}
+
+@pytest.mark.parametrize("model_id", sorted(set(NEW_ADAPTERS) - READY_WITH_EVIDENCE))
 def test_status_refuses_rather_than_claiming_readiness(model_id: str) -> None:
-    """Pin the CURRENT honest state: none of these is ready, for a named reason.
+    """Pin the CURRENT honest state: these five are not ready, for a named reason.
 
     This assertion is intentionally a snapshot of an unverified state, not a quality target. When
     a variant genuinely becomes runnable (interpreter provisioned, mapping verified, GPU forward
     parity measured) this test must be updated *with that evidence*, never deleted to make CI green.
+    ``clvc_net`` and ``tgcir`` left this set that way — see ``READY_WITH_EVIDENCE``.
     """
     status = adapter_class(model_id).status()
     assert status.ready is False, (
         f"{model_id} now reports ready=True; if that is real, update this test and cite the "
         "GPU/parity evidence that justifies it")
+
+@pytest.mark.parametrize("model_id", sorted(READY_WITH_EVIDENCE))
+def test_status_reports_the_measured_readiness(model_id: str, monkeypatch) -> None:
+    """The two models measured ready are asserted ready, against the operator's own provisioning.
+
+    Skipped, never weakened, when that provisioning is absent (a fresh clone has no staged
+    checkpoint and no `workbench.env`): the claim being pinned is about provisioned operator state,
+    and there is nothing honest to assert about it on a machine that has none. The evidence and the
+    measured tier are named in ``READY_WITH_EVIDENCE``.
+    """
+    from workbench.backend import model_settings, operator_config
+
+    operator_file = Path(__file__).resolve().parents[1] / "config" / "workbench.env"
+    if not operator_file.is_file():
+        pytest.skip("operator workbench.env absent")
+    monkeypatch.setattr(operator_config, "_CONFIG_PATH", operator_file)
+    model_settings.file_settings.cache_clear()
+    config = operator_config.resolve_config()
+    model = _model_row(model_id)
+    checkpoint = checkpoint_path(model_id, model["checkpoint_variants"][0],
+                                 config.WORKBENCH_CHECKPOINT_ROOT)
+    if not checkpoint.exists():
+        pytest.skip(f"checkpoint not staged: {checkpoint}")
+
+    status = adapter_class(model_id).status(config)
+    assert status.ready is True, (
+        f"{model_id} is measured ready (raw/verify/89-adapted-runtime-and-gpu-capability.md) but "
+        f"status() refuses: {status.reason}")
 
 @pytest.mark.parametrize("model_id", sorted(NEW_ADAPTERS))
 def test_score_reproduces_the_declared_expression(model_id: str) -> None:

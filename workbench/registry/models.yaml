@@ -934,6 +934,18 @@ models:
       # "no GPU needed", which suppressed the GPU-verification gate for a CUDA-hard evaluator.
       cuda: '10.2'
       packages: [torchvision]
+      # Measured minimal block (`raw/verify/85-composition-dossier.md` §11.5, re-probed in
+      # `raw/verify/89-adapted-runtime-and-gpu-capability.md`): these five keys take the advisory
+      # tier from BLOCKED/PYTHON_VERSION_MISMATCH to GPU_VERIFICATION_PENDING. `python: '3.9'` is
+      # the load-bearing one — without it the historical 3.7.6 pin survives and blocks. No
+      # `packages`: adding `numpy<2` changed nothing in the measured tier, and an unneeded
+      # constraint is a future false blocker.
+      adapted_runtime:
+        target_compute_capability: sm_120
+        python: '3.9'
+        pytorch: '==2.7.1'
+        torchvision: '==0.22.1'
+        cuda: '12.8'
     strict_clean_checkpoint_available: null
     notes: Native pair-union and reference exclusion verified. Pinned test.py has no CLI/model loader, so `workbench/replay/clvc_net.py` supplies the shell and loads the six per-category whole models by name. The staged six files are confirmed against the pinned classes and the three category vocabularies; the renamed single-file declaration that preceded this pointed at no existing artifact. Evaluation requires torchvision ResNet-50 ImageNet weights through an unpinned Torch cache, but the six whole-model pickles already carry 318 of the 320 ResNet-50 tensors (only `fc.*` is absent, and `model.py:78` replaces it with a bare `nn.Sequential`), so that download governs module construction and cannot change a scored parameter.
     checkpoint_variants:
@@ -1299,6 +1311,19 @@ models:
       # because openai/CLIP publishes no tags. A revision pins it properly: the commit below resolves
       # (HTTP 200 on `clip/clip.py`) and defines both `load` and `tokenize`.
       packages: ['clip @ git+https://github.com/openai/CLIP.git@a1d071733d7111c9c014f024669f959182114e33', numpy==1.22.3, pandas==1.4.2, Pillow]
+      # Measured, `raw/verify/89-adapted-runtime-and-gpu-capability.md`: the same five keys take the
+      # advisory tier from BLOCKED/DEPENDENCY_VERSION_MISMATCH (torch ==1.7.0) to
+      # GPU_VERIFICATION_PENDING. No `packages` list here on purpose, twice over: (1) it is not
+      # needed for the tier — measured identical with and without it; (2) an adapted `packages`
+      # list REPLACES the historical one in `resolved_runtime_environment`, so a partial list would
+      # drop `numpy`/`pandas`/`Pillow` (and the `clip` git source) from the installer's contract.
+      # Omitting it keeps the historical list and overrides only the interpreter/pin quartet.
+      adapted_runtime:
+        target_compute_capability: sm_120
+        python: '3.9'
+        pytorch: '==2.7.1'
+        torchvision: '==0.22.1'
+        cuda: '12.8'
     strict_clean_checkpoint_available: null
     notes: Native annotation endpoint-union/reference-excluded evaluator verified. Pinned test.py has no CLI/checkpoint replay, so `workbench/replay/tgcir.py` supplies the shell. The extracted archive member is the FashionIQ checkpoint and loads strictly into `model.VCG_CIR`; only the archive-member NAME was ever unresolved.
     checkpoint_variants:
