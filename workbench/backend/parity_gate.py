@@ -1031,7 +1031,6 @@ def evaluate_model(model_id: str, *, categories: Iterable[str] = ("dress", "shir
     # PER CATEGORY, not globally. `other_categories_empty` failed because the shirt checks were
     # aggregated over the whole model: dress and toptee carried nothing and the verdict still read
     # PASS. A dimension now counts only when it has a mandatory check in EVERY judged category.
-    verdict.categories = categories
     verdict.missing = [dimension for dimension in REQUIRED_DIMENSIONS
                        if any(dimension in verdict.missing_by_category.get(category, [])
                               for category in categories)]
