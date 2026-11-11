@@ -136,7 +136,9 @@ def test_an_empty_adapter_artifact_does_not_pass_and_is_not_complete(tmp_path: P
     assert verdict.status != gate.PASS, verdict.detail
     assert verdict.passed is False
     assert verdict.complete is False, "an artifact with no measurement must not report complete"
-    assert verdict.status == gate.INCOMPLETE, verdict.status
+    # ENCODER draws a relation tensor, so `not_recorded` is a mandatory failure (rule 3), which takes
+    # precedence over `INCOMPLETE` here. Either way it is not a pass, and the gaps are still named.
+    assert verdict.status in {gate.INCOMPLETE, gate.MANDATORY_FAILED}, verdict.status
     # `metrics_parity` IS measured here: the native side records hit-count equality. What is missing
     # is everything the adapter would have had to measure.
     assert set(verdict.missing) == {"forward_parity", "batch_parity", "scoring_parity"}, verdict.missing
@@ -383,3 +385,129 @@ def test_a_tolerance_declared_on_one_side_only_is_accepted_and_recorded(tmp_path
     _write(tmp_path, "testmodel", _native(), _adapter(tolerances=adapter_tolerances))
     verdict = _evaluate(tmp_path)
     assert verdict.status == gate.PASS, verdict.detail
+
+# --------------- negative 8: the five defects the bundled probe reproduces (2026-11-11)
+
+def _identity(**overrides) -> dict:
+    """The identity-bearing fields an artifact MAY carry at its top level."""
+    fields = {"model_id": "testmodel", "checkpoint_id": "fashion_iq", "protocol_id": "val_split"}
+    fields.update(overrides)
+    return fields
+
+def test_a_complete_artifact_without_a_relation_digest_cannot_pass(tmp_path: Path) -> None:
+    """ENCODER draws `learnable_relation`; an unrecorded digest is a mandatory failure for it."""
+    _write(tmp_path, "encoder", _native(), _adapter())
+    verdict = gate.evaluate_model("encoder", root=tmp_path, categories=(CATEGORY,))
+    assert verdict.status == gate.MANDATORY_FAILED, verdict.detail
+    failed = [check for check in verdict.failures if "relation" in check.name]
+    assert failed and failed[0].mandatory is True
+    assert verdict.dimensions["relation_parity"] is False
+
+def test_a_model_with_no_relation_at_all_reports_the_dimension_false_not_absent(
+        tmp_path: Path) -> None:
+    """No `relation_state` on either side and a model that draws none: not mandatory, still False."""
+    _write(tmp_path, "testmodel", _native(), _adapter())
+    verdict = _evaluate(tmp_path)
+    relation = [check for check in verdict.checks if check.dimension == "relation_parity"]
+    assert relation and relation[0].mandatory is False and relation[0].ok is False
+    assert verdict.dimensions["relation_parity"] is False
+    assert verdict.dimensions["input_parity"] is True
+
+def test_a_relation_state_key_recorded_as_not_recorded_is_mandatory(tmp_path: Path) -> None:
+    """Carrying the key at all says a relation exists; `not_recorded` is then a failure."""
+    native, adapter = _native(), _adapter()
+    native["relation_state"] = {"sha256": None, "expected_sha256": "abc"}
+    adapter["relation_state"] = {"sha256": None, "expected_sha256": "abc"}
+    _write(tmp_path, "testmodel", native, adapter)
+    verdict = _evaluate(tmp_path)
+    assert verdict.status == gate.MANDATORY_FAILED, verdict.detail
+    assert any("relation" in check.name for check in verdict.failures)
+
+def test_contradictory_identity_fields_cannot_pass(tmp_path: Path) -> None:
+    """The native side alone cannot say whether the adapter loaded the same checkpoint."""
+    _write(tmp_path, "testmodel", {**_native(), **_identity(model_id="model_A")},
+           {**_adapter(), **_identity(model_id="model_B")})
+    verdict = _evaluate(tmp_path)
+    assert verdict.status == gate.MANDATORY_FAILED, verdict.detail
+    failed = [check for check in verdict.failures
+              if check.name == f"{CATEGORY}.input.identity_agreement.model_id"]
+    assert failed, [check.name for check in verdict.failures]
+    assert failed[0].measured == {"native": "model_A", "adapter": "model_B"}
+    assert verdict.dimensions["input_parity"] is False
+
+def test_an_identity_field_on_one_side_only_cannot_pass(tmp_path: Path) -> None:
+    _write(tmp_path, "testmodel", {**_native(), **_identity()}, _adapter())
+    verdict = _evaluate(tmp_path)
+    assert verdict.status == gate.MANDATORY_FAILED, verdict.detail
+    assert any("identity_agreement" in check.name for check in verdict.failures)
+
+def test_a_required_dimension_measured_in_one_category_only_is_incomplete(tmp_path: Path) -> None:
+    """Shirt is fully measured; dress and toptee carry an empty adapter body."""
+    _write(tmp_path, "testmodel", _native(), _adapter())
+    for category in ("dress", "toptee"):
+        for side, body in (("native", _native()), ("adapter",
+                           {"category": category, "phase": "adapter",
+                            "tolerances": dict(TOLERANCES), "adapter": {}})):
+            (tmp_path / f"g1_g2.testmodel.{category}.{side}.json").write_text(
+                json.dumps({**body, "category": category}), encoding="utf-8")
+    verdict = gate.evaluate_model("testmodel", root=tmp_path,
+                                  categories=("dress", "shirt", "toptee"))
+    assert verdict.status == gate.INCOMPLETE, verdict.detail
+    assert {"forward_parity", "batch_parity", "scoring_parity"} <= set(verdict.missing)
+    assert verdict.missing_by_category["dress"], verdict.missing_by_category
+    assert verdict.missing_by_category["shirt"] == [], verdict.missing_by_category
+
+def test_scores_without_rank_evidence_cannot_satisfy_scoring_parity(tmp_path: Path) -> None:
+    """A score delta says the values agree, not that the ORDER still matches."""
+    scoring = {"score_max_abs_delta_vs_dot": 1.19e-07, "score_pairs_compared": 8,
+               "score_max_abs_declared": 1e-06, "score_within_tolerance": True}
+    _write(tmp_path, "testmodel", _native(), _adapter(scoring=scoring))
+    verdict = _evaluate(tmp_path)
+    assert verdict.status == gate.MANDATORY_FAILED, verdict.detail
+    failed = [check for check in verdict.failures if check.name.endswith("ranks.evidence_present")]
+    assert failed, [check.name for check in verdict.failures]
+    assert failed[0].measured == "no rank comparison recorded"
+
+def test_rank_evidence_without_scores_is_missing_not_satisfied(tmp_path: Path) -> None:
+    """The reverse gap is `missing`, so the dimension is `INCOMPLETE`, never silently satisfied."""
+    scoring = {"rank_differences_vs_native_val_control": {"count": 0, "non_tie_count": 0,
+                                                          "min_gap_abs": 0.0}}
+    _write(tmp_path, "testmodel", _native(), _adapter(scoring=scoring))
+    verdict = _evaluate(tmp_path)
+    assert verdict.status == gate.INCOMPLETE, verdict.detail
+    assert "scoring_parity" in verdict.missing, verdict.missing
+
+def test_a_looser_body_tolerance_cannot_override_a_stricter_declared_one(tmp_path: Path) -> None:
+    """Body `1.0` against a declared `1e-6`, delta `0.1`: refused, both numbers named."""
+    scoring = {"score_max_abs_delta_vs_dot": 0.1, "score_max_abs_declared": 1.0,
+               "score_within_tolerance": True,
+               "rank_differences_vs_native_val_control": {"count": 0, "non_tie_count": 0,
+                                                          "min_gap_abs": 0.0}}
+    _write(tmp_path, "testmodel", _native(), _adapter(scoring=scoring))
+    verdict = _evaluate(tmp_path)
+    assert verdict.status == gate.MALFORMED, verdict.detail
+    assert "1e-06" in verdict.detail and "1.0" in verdict.detail
+    assert "looser body tolerance" in verdict.detail
+
+def test_a_stricter_body_tolerance_is_allowed_and_applied(tmp_path: Path) -> None:
+    """A narrower claim is not an override: the body's tighter number is what gets used."""
+    scoring = {"score_max_abs_delta_vs_dot": 5e-07, "score_max_abs_declared": 1e-07,
+               "score_within_tolerance": True,
+               "rank_differences_vs_native_val_control": {"count": 0, "non_tie_count": 0,
+                                                          "min_gap_abs": 0.0}}
+    _write(tmp_path, "testmodel", _native(), _adapter(scoring=scoring))
+    verdict = _evaluate(tmp_path)
+    assert verdict.status == gate.MANDATORY_FAILED, verdict.detail
+    failed = [check for check in verdict.failures if "scores.max_abs_vs_dot" in check.name]
+    assert failed and failed[0].declared == 1e-07 and failed[0].measured == 5e-07
+
+def test_a_pass_carries_a_mandatory_check_in_every_required_dimension_every_category(
+        tmp_path: Path) -> None:
+    """The invariant itself: `passed` is impossible on a partly-measured mandatory set."""
+    _write(tmp_path, "testmodel", _native(), _adapter())
+    verdict = _evaluate(tmp_path)
+    if not verdict.passed:
+        assert verdict.status != gate.PASS
+        return
+    for category in verdict.categories:
+        assert set(verdict.mandatory_by_category[category]) == set(gate.REQUIRED_DIMENSIONS)

@@ -1,0 +1,104 @@
+{
+  "complete_fixture_no_relation": {
+    "status": "PARITY_MANDATORY_SUBCHECK_FAILED",
+    "passed": false,
+    "complete": false,
+    "missing": [],
+    "dimensions": {
+      "input_parity": true,
+      "forward_parity": true,
+      "batch_parity": true,
+      "scoring_parity": true,
+      "metrics_parity": true,
+      "relation_parity": false
+    },
+    "failure_count": 1
+  },
+  "empty_adapter_control": {
+    "status": "PARITY_MANDATORY_SUBCHECK_FAILED",
+    "passed": false,
+    "complete": false,
+    "missing": [
+      "forward_parity",
+      "batch_parity",
+      "scoring_parity"
+    ],
+    "dimensions": {
+      "input_parity": true,
+      "metrics_parity": true,
+      "relation_parity": false
+    },
+    "failure_count": 1
+  },
+  "contradictory_identity": {
+    "status": "PARITY_MANDATORY_SUBCHECK_FAILED",
+    "passed": false,
+    "complete": false,
+    "missing": [],
+    "dimensions": {
+      "input_parity": false,
+      "forward_parity": true,
+      "batch_parity": true,
+      "scoring_parity": true,
+      "metrics_parity": true,
+      "relation_parity": false
+    },
+    "failure_count": 5
+  },
+  "local_tolerance_overrides_global_and_no_rank_evidence": {
+    "status": "PARITY_EVIDENCE_MALFORMED",
+    "passed": false,
+    "complete": false,
+    "missing": [],
+    "dimensions": {},
+    "failure_count": 0
+  },
+  "score_only_no_rank_evidence": {
+    "status": "PARITY_MANDATORY_SUBCHECK_FAILED",
+    "passed": false,
+    "complete": false,
+    "missing": [],
+    "dimensions": {
+      "input_parity": true,
+      "forward_parity": true,
+      "batch_parity": true,
+      "scoring_parity": false,
+      "metrics_parity": true,
+      "relation_parity": false
+    },
+    "failure_count": 2
+  },
+  "other_categories_empty": {
+    "status": "PARITY_MANDATORY_SUBCHECK_FAILED",
+    "passed": false,
+    "complete": false,
+    "missing": [
+      "forward_parity",
+      "batch_parity",
+      "scoring_parity"
+    ],
+    "dimensions": {
+      "input_parity": true,
+      "forward_parity": true,
+      "batch_parity": true,
+      "scoring_parity": true,
+      "metrics_parity": true,
+      "relation_parity": false
+    },
+    "failure_count": 3
+  },
+  "historical_verdict": {
+    "encoder": {
+      "status": "PARITY_MANDATORY_SUBCHECK_FAILED",
+      "failure_count": 16,
+      "missing": []
+    },
+    "limn": {
+      "status": "PARITY_MANDATORY_SUBCHECK_FAILED",
+      "failure_count": 3,
+      "missing": [
+        "metrics_parity"
+      ]
+    }
+  }
+}

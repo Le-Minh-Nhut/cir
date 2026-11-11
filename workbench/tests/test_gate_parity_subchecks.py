@@ -60,8 +60,14 @@ def _minimal(tmp_path: Path, *, model: str = "encoder", categories: tuple[str, .
              batch_within: bool = True, batch_max_rel: float = 1e-4,
              non_tie: int = 0, min_gap: float = 0.0,
              population_max_rel: float = 1e-6, identity_ok: bool = True,
-             checkpoint_tolerances: dict | None = None) -> Path:
-    """A synthetic evidence directory: one category, one knob per subcheck."""
+             checkpoint_tolerances: dict | None = None,
+             relation_sha: str | None = "6a09e667f3bcc908") -> Path:
+    """A synthetic evidence directory: one category, one knob per subcheck.
+
+    `relation_sha` defaults to a digest recorded identically on BOTH sides: ENCODER draws a relation
+    tensor at construction, so an artifact that records none is not a clean artifact (it cannot show
+    the two sides drew the same tensor). `None` omits the key altogether.
+    """
     for category in categories:
         native = {
             "category": category, "phase": "native",
@@ -119,6 +125,9 @@ def _minimal(tmp_path: Path, *, model: str = "encoder", categories: tuple[str, .
                 },
             },
         }
+        if relation_sha is not None:
+            native["relation_state"] = {"sha256": relation_sha, "matches_pinned_digest": True}
+            adapter["relation_state"] = {"sha256": relation_sha, "matches_pinned_digest": True}
         _write(tmp_path, model, category, "native", native)
         _write(tmp_path, model, category, "adapter", adapter)
     return tmp_path

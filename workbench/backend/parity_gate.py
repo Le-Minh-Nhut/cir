@@ -148,7 +148,16 @@ class ParityVerdict:
     advisory: list[dict[str, Any]] = field(default_factory=list)
     coverage: dict[str, list[str]] = field(default_factory=dict)
     #: Mandatory dimensions that were never measured. Non-empty => `INCOMPLETE`, never `PASS`.
+    #: A dimension is listed when ANY judged category carries no mandatory check for it: "measured
+    #: globally, once" is not the same claim as "measured on every category that has evidence".
     missing: list[str] = field(default_factory=list)
+    #: Which mandatory dimensions each category actually rested on, and which it did not. The pair
+    #: `missing` + this is what makes a per-category gap nameable instead of averaged away.
+    missing_by_category: dict[str, list[str]] = field(default_factory=dict)
+    mandatory_by_category: dict[str, list[str]] = field(default_factory=dict)
+    #: The categories this verdict judged, in order. A pass asserts every required dimension had a
+    #: mandatory check in EACH of them.
+    categories: tuple[str, ...] = ()
     #: The standard the verdict was ACTUALLY computed under -- read from the artifacts, which is the
     #: only defensible answer: the declared tolerance and its form are part of the measurement. A
     #: caller may REQUEST another standard; that request cannot relabel a v1 result.
@@ -162,6 +171,7 @@ class ParityVerdict:
     detail: str = ""
 
     def to_dict(self) -> dict[str, Any]:
+        _check_invariants(self)
         return {"model_id": self.model_id, "status": self.status, "passed": self.passed,
                 "complete": self.complete,
                 "applied_standard": self.applied_standard,
@@ -172,8 +182,13 @@ class ParityVerdict:
                 # and a reader must be able to tell the two apart.
                 "coverage": {key: list(value) for key, value in self.coverage.items()},
                 # The mandatory dimensions nothing measured. Named here so `INCOMPLETE` is
-                # actionable rather than a bare status.
+                # actionable rather than a bare status. Non-empty when ANY judged category lacks the
+                # dimension, so one well-measured category cannot carry a bare one.
                 "missing": list(self.missing),
+                "missing_by_category": {key: list(value)
+                                        for key, value in self.missing_by_category.items()},
+                "mandatory_by_category": {key: list(value)
+                                          for key, value in self.mandatory_by_category.items()},
                 "label_disagreements": list(self.label_disagreements),
                 "failures": [check.to_dict() for check in self.failures],
                 "failure_count": len(self.failures),
@@ -238,6 +253,13 @@ def _number(container: dict[str, Any], key: str, *, where: str) -> tuple[bool, f
 #: instead of a model namespace. LIMN's three category files predate the namespaced form; the bare
 #: names are a legacy convention for that one model, NOT a default for every model.
 LEGACY_BARE_MODELS = ("limn",)
+
+#: Models whose construction DRAWS a relation tensor from the global RNG (`ENCODER` draws
+#: `learnable_relation`; it is not in `state_dict()` and no checkpoint restores it). For these, an
+#: unrecorded `relation_state` digest means two runs may have compared features computed with
+#: different relations -- a mandatory failure, never an exemption. A model not listed here is still
+#: treated as relation-drawing when EITHER artifact carries the `relation_state` key at all.
+RELATION_DRAWING_MODELS = ("encoder",)
 
 def _artifact_names(model_id: str, category: str) -> tuple[str, str]:
     """The namespaced filenames for a model's evidence.
@@ -407,6 +429,43 @@ def _identity_checks(native: dict[str, Any], declared: dict[str, Any],
     return checks
 
 
+#: The identity-bearing fields an artifact MAY carry at its TOP level. Read from both documents and
+#: compared value-to-value: the `*_identical` booleans inside a payload are written by the harness
+#: that predicts them, so they cannot certify that the two sides agree.
+IDENTITY_FIELDS = ("model_id", "checkpoint_id", "checkpoint_identity", "protocol_id", "protocol",
+                   "query_order_sha256", "gallery_order_sha256")
+
+_ABSENT = object()
+
+def _identity_cross_checks(native: dict[str, Any], adapter: dict[str, Any],
+                           category: str) -> list[ParityCheck]:
+    """G1: the two artifacts must declare the SAME identity, compared field by field.
+
+    `_identity_checks` reads the native side only, so two artifacts that measured different
+    checkpoints, protocols or query orders reported `input_parity: True`. Here both documents are
+    read and the values compared. A field carried by ONE side and not the other is a failure too:
+    "the adapter never declared which checkpoint it loaded" is not agreement.
+
+    A field both sides omit is skipped -- most artifacts carry only a subset of these (LIMN carries
+    none), and `input_parity` still has its mandatory layer1 check per category.
+    """
+    checks: list[ParityCheck] = []
+    for field in IDENTITY_FIELDS:
+        left = native[field] if field in native else _ABSENT
+        right = adapter[field] if field in adapter else _ABSENT
+        if left is _ABSENT and right is _ABSENT:
+            continue
+        ok = left is not _ABSENT and right is not _ABSENT and left == right
+        checks.append(ParityCheck(
+            name=f"{category}.input.identity_agreement.{field}", dimension="input_parity",
+            gate="G1", declared="the same value recorded on both sides",
+            measured={"native": None if left is _ABSENT else left,
+                      "adapter": None if right is _ABSENT else right},
+            ok=ok, mandatory=True,
+            note="" if ok else ("the two artifacts disagree on this identity field (or only one "
+                                "records it); the payload's own booleans are not consulted")))
+    return checks
+
 def _pixel_check(adapter: dict[str, Any], category: str) -> list[ParityCheck]:
     layer = adapter.get("layer2_pixels") or {}
     decode = layer.get("adapter_decode_vs_native_val_decode")
@@ -494,6 +553,14 @@ def _rank_checks(adapter: dict[str, Any], declared: dict[str, Any],
     return checks
 
 
+def _tolerance_value(value: Any, *, where: str) -> float:
+    """One declared tolerance, or a refusal. An infinite/negative value is not a tolerance."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise _Malformed(f"{where} is {value!r}, not a number")
+    if not math.isfinite(float(value)) or float(value) < 0.0:
+        raise _Malformed(f"{where} is {value!r}: a tolerance must be a finite non-negative number")
+    return float(value)
+
 def _score_checks(adapter: dict[str, Any], declared: dict[str, Any],
                   category: str) -> list[ParityCheck]:
     """The score agreement, RECOMPUTED from the delta and the declared tolerance.
@@ -501,6 +568,17 @@ def _score_checks(adapter: dict[str, Any], declared: dict[str, Any],
     `score_within_tolerance` is the harness's own boolean and is kept as `harness_recorded` only.
     The old code returned that boolean AS the verdict, so a block declaring
     `score_max_abs_delta_vs_dot: 0.1` beside `score_within_tolerance: true` reported a pass.
+
+    ONE tolerance source. The body-level `score_max_abs_declared` used to win over the top-level
+    `score_max_abs` unconditionally, so an adapter body could restate the tolerance as `1.0` beside a
+    top-level `1e-6` and have a `0.1` delta pass. Now:
+
+    * both declared and the body is LOOSER -> `_Malformed`, naming both numbers: a body cannot
+      override a stricter declared tolerance;
+    * both declared and the body is STRICTER -> the body wins, because it is the narrower claim;
+    * only one declared -> that one is used.
+
+    The artifact's recorded `within_tolerance` is never rewritten; it stays in `harness_recorded`.
     """
     scoring = adapter.get("scoring_ranking")
     if scoring is None:
@@ -515,23 +593,67 @@ def _score_checks(adapter: dict[str, Any], declared: dict[str, Any],
             raise _Malformed(f"{category}.scoring_ranking declares `score_within_tolerance` but "
                              "records no `score_max_abs_delta_vs_dot` to check it against")
         return []
-    tolerance = scoring.get("score_max_abs_declared")
-    if tolerance is None:
-        tolerance = declared.get("score_max_abs")
+    body_declared = scoring.get("score_max_abs_declared")
+    top_declared = declared.get("score_max_abs")
+    body_value = (None if body_declared is None else
+                  _tolerance_value(body_declared,
+                                   where=f"{category}.scoring_ranking.score_max_abs_declared"))
+    top_value = None if top_declared is None else _tolerance_value(
+        top_declared, where=f"{category}.tolerances.score_max_abs")
+    if body_value is not None and top_value is not None and body_value > top_value:
+        raise _Malformed(
+            f"{category}: the body declares `score_max_abs_declared` {body_value!r} while the "
+            f"artifact declares `score_max_abs` {top_value!r}; a looser body tolerance cannot "
+            "override a stricter declared one")
+    tolerance = body_value if body_value is not None else top_value
     if tolerance is None:
         raise _Malformed(f"{category}: a score delta of {delta!r} is recorded but the artifact "
                          "declares no `score_max_abs_declared`/`score_max_abs` tolerance")
-    if isinstance(tolerance, bool) or not isinstance(tolerance, (int, float)):
-        raise _Malformed(f"{category}.scoring_ranking.score_max_abs_declared is {tolerance!r}, "
-                         "not a number")
-    if not math.isfinite(float(tolerance)) or float(tolerance) < 0.0:
-        raise _Malformed(f"{category}.scoring_ranking.score_max_abs_declared is {tolerance!r}: "
-                         "a tolerance must be a finite non-negative number")
     return [ParityCheck(
         name=f"{category}.scores.max_abs_vs_dot", dimension="scoring_parity", gate="G2",
-        declared=float(tolerance), measured=delta,
-        ok=delta <= float(tolerance), mandatory=True, harness_recorded=recorded)]
+        declared=tolerance, measured=delta,
+        ok=delta <= tolerance, mandatory=True, harness_recorded=recorded)]
 
+
+def _scoring_evidence(checks: list[ParityCheck],
+                      category: str) -> tuple[list[ParityCheck], bool]:
+    """`scoring_parity` needs BOTH a score comparison and a rank comparison.
+
+    A score delta alone says the values agree at the compared pairs; it says nothing about whether
+    the ORDER the scoring produces still matches, which is what Recall is computed from. So a
+    category that records scores but no rank comparison gets a mandatory FAILURE naming the gap
+    instead of a silent pass. The reverse is returned as `score_missing`: rank evidence alone must
+    not satisfy the dimension either, and rule 1 turns that into `missing` (hence `INCOMPLETE`).
+    """
+    names = [check.name for check in checks if check.dimension == "scoring_parity"]
+    has_score = any(".scores." in name for name in names)
+    has_rank = any(".ranks." in name for name in names)
+    if has_score and not has_rank:
+        return [ParityCheck(
+            name=f"{category}.ranks.evidence_present", dimension="scoring_parity", gate="G2",
+            declared="a rank comparison beside the score comparison",
+            measured="no rank comparison recorded", ok=False, mandatory=True,
+            note=("the artifact records score deltas but no rank comparison, so whether the "
+                  "scoring still produces the same ORDER is unmeasured") )], False
+    return [], has_rank and not has_score
+
+def _check_invariants(verdict: ParityVerdict) -> None:
+    """A pass is impossible on an empty or partly-measured mandatory set.
+
+    Every early return above is covered because `to_dict` calls this. The check is deliberately
+    loud: a future edit that reintroduces a false pass must break a test, not a report reader.
+    """
+    if not verdict.passed:
+        return
+    assert verdict.status == PASS, (verdict.model_id, verdict.status)
+    assert not verdict.failures, [check.name for check in verdict.failures]
+    assert not verdict.missing, verdict.missing
+    assert any(check.mandatory for check in verdict.checks), verdict.model_id
+    for category in verdict.categories:
+        for dimension in REQUIRED_DIMENSIONS:
+            assert dimension in verdict.mandatory_by_category.get(category, []), (
+                f"{verdict.model_id}/{category}: {dimension} is required but carries no mandatory "
+                "check, so this verdict cannot be a pass")
 
 def _metrics_checks(native: dict[str, Any], category: str) -> list[ParityCheck]:
     """Hit-count equality. A non-boolean flag is malformed, never "not applicable"."""
@@ -618,7 +740,7 @@ def _body(artifact: dict[str, Any], *, side: str) -> dict[str, Any]:
 
 
 def _relation_checks(native: dict[str, Any], adapter: dict[str, Any],
-                     category: str) -> list[ParityCheck]:
+                     category: str, model_id: str) -> list[ParityCheck]:
     """M-01: did BOTH sides compute their features with the SAME relation tensor?
 
     A model can draw its relation tensor at construction (`ENCODER` draws
@@ -631,32 +753,49 @@ def _relation_checks(native: dict[str, Any], adapter: dict[str, Any],
     three outcomes are kept apart on purpose, because collapsing them is how a silent mismatch would
     become a pass:
 
-    * both record a digest and they AGREE  -> one check, ok;
-    * both record a digest and they DIFFER -> one check, NOT ok (failures, so the verdict cannot be
-      `PASS`);
-    * either side records no digest        -> one check, NOT ok with `measured: "not_recorded"`, so
-      the dimension is measured-and-failed rather than silently absent. An artifact written before
-      this field existed is `not_recorded`, never a pass -- the same rule `policy_observed` follows.
+    * both record a digest and they AGREE  -> one check, mandatory, ok;
+    * both record a digest and they DIFFER -> one check, mandatory, NOT ok;
+    * either side records no digest        -> one check, NOT ok with `measured: "not_recorded"`.
+      Whether it is MANDATORY depends on the model: `RELATION_DRAWING_MODELS` (and any artifact
+      pair where either side carries the key at all) draws a relation, so an unrecorded digest is a
+      mandatory failure there. A model that genuinely has no relation keeps the check non-mandatory
+      -- `relation_parity` is reported False instead of vanishing -- so an old artifact is not
+      retro-failed for a tensor its construction never had.
     """
-    def digest(document: dict[str, Any]) -> Any:
-        block = document.get("relation_state")
+    def record(document: dict[str, Any]) -> Any:
+        """The `relation_state` key itself, or `_ABSENT` when the artifact predates the field."""
+        return document["relation_state"] if "relation_state" in document else _ABSENT
+
+    def digest(block: Any) -> Any:
         return block.get("sha256") if isinstance(block, dict) else None
 
-    native_digest, adapter_digest = digest(native), digest(adapter)
+    native_block, adapter_block = record(native), record(adapter)
+    native_digest, adapter_digest = digest(native_block), digest(adapter_block)
+    # A model whose CONSTRUCTION draws a relation tensor cannot pass without recording that both
+    # sides drew the same one. `ENCODER` draws `learnable_relation` from the global RNG, so an
+    # artifact that predates `relation_state` is `not_recorded`, which is a mandatory failure for it,
+    # not an exemption. Any artifact that carries the key at all is treated the same way: recording
+    # `not_recorded` states that a relation exists and was not pinned.
+    draws_relation = (model_id in RELATION_DRAWING_MODELS or native_block is not _ABSENT
+                      or adapter_block is not _ABSENT)
     name = f"relation.{category}.digest"
+    measured = (f"native={'not_recorded' if native_digest is None else 'recorded'}, "
+                f"adapter={'not_recorded' if adapter_digest is None else 'recorded'}")
+    declared = ("native and adapter constructed the identical relation tensor"
+                if draws_relation else "both sides record the relation tensor they constructed")
     if native_digest is None or adapter_digest is None:
         return [ParityCheck(
-            name=name, dimension="relation_parity", gate="G1", mandatory=False, ok=False,
-            declared="both sides record the relation tensor they constructed",
-            measured=f"native={'not_recorded' if native_digest is None else 'recorded'}, "
-                     f"adapter={'not_recorded' if adapter_digest is None else 'recorded'}",
-            harness_recorded=False,
-            note="at least one side does not record its relation digest, so whether the two computed "
-                 "features with the same relation is unknown. Unknown is not a pass")]
+            name=name, dimension="relation_parity", gate="G1", mandatory=draws_relation, ok=False,
+            declared=declared, measured=measured, harness_recorded=False,
+            note=("this model draws a relation tensor at construction, so an unrecorded digest is a "
+                  "mandatory failure: whether the two sides computed features with the same relation "
+                  "is unknown, and unknown is not a pass") if draws_relation else
+                 ("at least one side does not record its relation digest, so whether the two computed "
+                  "features with the same relation is unknown. Unknown is not a pass"))]
     return [ParityCheck(
         name=name, dimension="relation_parity", gate="G1", mandatory=True,
         ok=native_digest == adapter_digest,
-        declared="native and adapter constructed the identical relation tensor",
+        declared=declared,
         measured=f"native={str(native_digest)[:16]} adapter={str(adapter_digest)[:16]}",
         harness_recorded=True,
         note=None if native_digest == adapter_digest else
@@ -676,6 +815,7 @@ def evaluate_model(model_id: str, *, categories: Iterable[str] = ("dress", "shir
     verdict = ParityVerdict(model_id=model_id, requested_standard=standard)
     base = root if root is not None else evidence_root()
     categories = tuple(categories)
+    verdict.categories = categories
     missing_artifacts = []
     for category in categories:
         if _artifact_paths(base, model_id, category) is None:
@@ -716,10 +856,17 @@ def evaluate_model(model_id: str, *, categories: Iterable[str] = ("dress", "shir
 
             checks: list[ParityCheck] = []
             checks.extend(_identity_checks(native_body, declared, category))
+            # G1 cross-side: both documents' identity fields, compared value to value. The native
+            # side alone cannot tell whether the adapter measured the same checkpoint. An adapter
+            # that measured NOTHING has no identity claim to contradict -- it is `INCOMPLETE` on the
+            # rules below, not "measured and failed". Once it has a body, a field present on one side
+            # only IS a failure.
+            if adapter_body:
+                checks.extend(_identity_cross_checks(native, adapter, category))
             checks.extend(_pixel_check(adapter_body, category))
             # M-01: read from the WHOLE document, not the `body`: the relation record sits beside the
             # measured payload, exactly as `policy_observed` does.
-            checks.extend(_relation_checks(native, adapter, category))
+            checks.extend(_relation_checks(native, adapter, category, model_id))
 
             sample = (adapter_body.get("layer4_forward_sample")
                       or adapter_body.get("sample_forward"))
@@ -765,6 +912,10 @@ def evaluate_model(model_id: str, *, categories: Iterable[str] = ("dress", "shir
                     gate="G2", atol_key="batch_max_abs", rtol_key="batch_max_rel"))
             checks.extend(_rank_checks(adapter_body, declared, category))
             checks.extend(_score_checks(adapter_body, declared, category))
+            # A score comparison without a rank comparison is half of `scoring_parity`. Do not let
+            # the score half certify the dimension.
+            evidence_gap, score_missing = _scoring_evidence(checks, category)
+            checks.extend(evidence_gap)
             checks.extend(_metrics_checks(native_body, category))
             checks.extend(_observer_checks(native_body, category))
 
@@ -782,6 +933,18 @@ def evaluate_model(model_id: str, *, categories: Iterable[str] = ("dress", "shir
                      .get("rank_differences_vs_native_val_control") or {}).get("non_tie_count"),
             }
             verdict.checks.extend(checks)
+            # Per-category mandatory coverage. A required dimension measured in `shirt` is not
+            # measured in `dress`: an adapter body of `{}` in one category used to be carried by the
+            # other categories' checks, and the verdict reported PASS.
+            have = {check.dimension for check in checks if check.mandatory}
+            if score_missing:
+                # Rank evidence alone: keep the rank checks (they are real), but the dimension was
+                # never fully measured here, so it is `missing` rather than satisfied.
+                have.discard("scoring_parity")
+            missing_here = [dimension for dimension in REQUIRED_DIMENSIONS
+                            if dimension not in have]
+            verdict.mandatory_by_category[category] = [d for d in REQUIRED_DIMENSIONS if d in have]
+            verdict.missing_by_category[category] = missing_here
         except _Malformed as error:
             verdict.status = MALFORMED
             verdict.detail = f"malformed parity artifact: {error}"
@@ -861,12 +1024,17 @@ def evaluate_model(model_id: str, *, categories: Iterable[str] = ("dress", "shir
                           f"unmeasured comparison is never {PASS}")
         return verdict
 
-    # A mandatory dimension that NO check rests on was never measured. Distinguishing that from
+    # A mandatory dimension that NO category measured was never measured. Distinguishing that from
     # "measured and held" is the point of `INCOMPLETE`: an adapter artifact of `{}` reported PASS and
     # `complete: True`, because an empty check list was indistinguishable from a satisfied one.
+    #
+    # PER CATEGORY, not globally. `other_categories_empty` failed because the shirt checks were
+    # aggregated over the whole model: dress and toptee carried nothing and the verdict still read
+    # PASS. A dimension now counts only when it has a mandatory check in EVERY judged category.
+    verdict.categories = categories
     verdict.missing = [dimension for dimension in REQUIRED_DIMENSIONS
-                       if not any(check.mandatory and check.dimension == dimension
-                                  for check in verdict.checks)]
+                       if any(dimension in verdict.missing_by_category.get(category, [])
+                              for category in categories)]
 
     if standard != verdict.applied_standard:
         # v2 has not been measured on these artifacts, and applying it after the fact would move a
