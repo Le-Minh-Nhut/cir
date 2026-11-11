@@ -19,10 +19,13 @@
 12. **Stack chết do SIGTERM bên ngoài, chưa xác định ai gửi.** Đã xác định `serve_workbench.py:152-166` là đường nhận. Đã loại trừ `jobs.py`, test/script trong repo, session reaping.
 
 ## Trạng thái chốt
-- Revision được sweep: `be14393c97b100390a9a45c6b0a46857b24a78b9` (= `TESTED_SOURCE_SHA`)
-- Sweep: `18 failed / 2800 passed / 47 skipped`, accounting gap **0**, NEW=0
+- Revision được sweep: `cd980dcecbb685b3cd6be4516d6550660a8e89b8` (= `TESTED_SOURCE_SHA`; **chính là**
+  revision của sweep, không phải một revision khác được trích dẫn)
+- Sweep: `18 failed / 2901 passed / 47 skipped`, 2966 collected, accounting gap **0**, NEW=0 / DROPPED=0
 - Guard: `workbench/tests/test_handoff_commands.py` → 8 passed
-- Production diff `be14393..HEAD` ngoài `workbench/docs` và `workbench/tests`: **rỗng**
+- Production diff `cd980dc..HEAD` ngoài `workbench/docs` và `workbench/tests`: **rỗng**; bất biến này (swept
+  revision = `TESTED_SOURCE_SHA`, và nó chứa mọi byte sản xuất đang có) là thứ phải giữ, không phải một SHA
+  cũ hơn
 - Bất biến: `git status --porcelain` = `?? CLEANUP_REPORT.md.save`
 - Bundle phục vụ: `index-DWpK0yeS.js` sha256 `7e34724ebf55092e36524b98980cca55e71f3ddbaa62489c65577f92e18a6a16`
 - Web: http://127.0.0.1:5173/ · API: http://127.0.0.1:8000 (poll `/api/benchmark-runs`, **không** `/api/models`)

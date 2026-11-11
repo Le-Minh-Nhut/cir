@@ -462,7 +462,9 @@ không phủ nhận số cold). Không còn là vật cản poll.
 
 | sự thật | giá trị | nguồn |
 |---|---|---|
-| HEAD | `cd980dcecbb685b3cd6be4516d6550660a8e89b8` | `git rev-parse HEAD` |
+| revision được nghiệm thu | `cd980dcecbb685b3cd6be4516d6550660a8e89b8` (= `TESTED_SOURCE_SHA`) | dòng `TESTED_SOURCE_SHA` trong `reviews/FINAL_PC_RELEASE_VERDICT.md` |
+| sản xuất đang có = sản xuất đã sweep | `git diff cd980dc HEAD -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'` **rỗng** (exit 0) | chạy đúng lệnh đó |
+| HEAD sống | **không ghim** — `HEAD` trôi theo từng commit; đọc bằng `git rev-parse HEAD` | `git rev-parse HEAD` |
 | bundle | `assets/index-DeTvxLlD.js` | `workbench/frontend/dist/assets/` |
 | sha256 bundle (dist) | `1503e8911122587ba8c81e8ecf93d151312fda41e12ff5ba9580ef1797e18155` | `sha256sum` |
 | sha256 bundle (phục vụ) | `1503e8911122587ba8c81e8ecf93d151312fda41e12ff5ba9580ef1797e18155` | `curl :5173/assets/index-DeTvxLlD.js \| sha256sum` |
@@ -494,7 +496,15 @@ pytest workbench/tests -q -p no:cacheprovider -rfE --tb=short`); số dưới đ
 Bối cảnh đã có, dùng được ngay: sweep serial gần nhất (`raw/verify/67-regression-sweep.md`) tại
 `a24635e` → `18 failed, 2901 passed, 47 skipped`, 2966 collected, **accounting gap 0**, **0 NEW / 0 DROPPED
 / 18 COMMON** so với baseline `68ad75e` (`raw/verify/67a-failure-diff-a24635e.txt`). Passed tăng
-2701 → 2901, toàn bộ là test mới của lô `d6d3e36…a24635e`. Lô sau đó (`f856338` … `cd980dc`) nay đã có sweep serial riêng: kết quả ở khối trên, cùng bộ 18 failure.
+2701 → 2901, toàn bộ là test mới của lô `d6d3e36…a24635e`. Sweep tại `cd980dc` bao trùm **toàn bộ** lô sửa
+— từ `d6d3e36` đến `cd980dc`, gồm cả `f856338` (bản sửa ENCODER, commit **trước** `cd980dc`) — và là bản có
+thẩm quyền. Nó **dư thừa với** lượt `a24635e`, không phải bản kế tiếp của lượt đó: lượt `a24635e` chỉ được giữ
+vì là lượt serial đầy đủ **đầu tiên** của lô, và số của nó khớp chính xác với lượt `cd980dc`.
+
+Guard đã thật sự có hiệu lực: `test_handoff_commands.py::test_the_verdict_names_the_same_test_count_the_handoff_does`
+bị cắt cụt từ `cb505c0` (nó chỉ đọc file verdict, không hề mở bản handoff nên không so sánh hai tài liệu) và
+được phục hồi ở `bd9845d`; nay nó **fail** khi hai tài liệu ghi số khác nhau, đã chứng minh trên một cặp tài
+liệu cố tình lệch (`2901 passed` vs `2800 passed`).
 
 ## 21. Chưa kiểm được
 
