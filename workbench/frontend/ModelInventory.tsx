@@ -5,7 +5,7 @@ import type { Model } from "./types";
 import { Badge, Detail, ErrorState, LoadingState } from "./ui";
 import { fmtDenominator, fmtInt, fmtNdcg, fmtPercentValue } from "./format";
 import { scoredCounts } from "./catalog";
-import { inventoryStatus, nativeMeasuredIds, nativeRowsFor, nativeUnattributedFor, otherScopeFor, protocolHasSubsets, type ScopeRow } from "./scope";
+import { crossScopeAllowed, inventoryStatus, nativeMeasuredIds, nativeRowsFor, nativeUnattributedFor, otherScopeFor, protocolHasSubsets, type ScopeRow } from "./scope";
 import { SUBSET_LABEL } from "./routes";
 
 /** Operator scope for this review. Not a registry fact and not a measurement: the two models whose
@@ -195,11 +195,11 @@ export function ModelInventory({ data, location, onGoto }: {
               // Scopes this model DOES have numbers in, from composition rows, native measurements and
               // aggregate reports. Never let "no run here" be the whole answer when a real row exists
               // elsewhere: the reader gets the scope, its size, and a link that opens it.
-              const elsewhere = entry || deferredReason || nativeOnly || nativeUnattributed.length
-                ? []
-                : otherScopeFor(allRows, model.model_id).filter((scope) =>
+              const elsewhere = crossScopeAllowed({ hasEntry: !!entry, deferred: !!deferredReason, nativeOnly })
+                ? otherScopeFor(allRows, model.model_id).filter((scope) =>
                     scope.protocol !== location.protocol
-                    || (protocolHasSubsets(location.protocol) ? scope.subset !== location.subset : false));
+                    || (protocolHasSubsets(location.protocol) ? scope.subset !== location.subset : false))
+                : [];
               // One decision, in `scope.ts`, so the label and the counter above cannot disagree.
               const status = inventoryStatus({
                 deferred: !!deferredReason,
@@ -252,55 +252,63 @@ export function ModelInventory({ data, location, onGoto }: {
                               </button>
                             )}
                           </div>
-                      : nativeUnattributed.length
-                        ? <div className="cell-sub" style={{ marginTop: 6 }} data-testid={`native-unattributed-${model.model_id}`}>
-                            <span>
-                              {fmtInt(nativeUnattributed.length)} số đo native nhưng file không ghi protocol —
-                              không quy được cho phạm vi đang chọn.
-                            </span>
-                            <button type="button" className="ghost" style={{ marginTop: 6 }}
-                                    data-testid={`native-unattributed-open-${model.model_id}`} onClick={openNative}>
-                              Xem trong bảng native
-                            </button>
-                          </div>
-                      : elsewhere.length
-                          ? <div className="cell-sub" data-testid={`other-scope-${model.model_id}`} style={{ marginTop: 6 }}>
-                              <span>Có kết quả ở {elsewhere.length} phạm vi khác — mở đúng phạm vi đó:</span>
-                              <div className="scope-links">
-                                {elsewhere.map((scope) => (
-                                  <button key={`${scope.protocol}:${scope.subset}:${scope.family ?? ""}`} type="button"
-                                          className="ghost"
-                                          data-testid={`other-scope-${model.model_id}-${scope.protocol}-${scope.family ?? "composition"}-${scope.subset || "all"}`}
-                                          // The view that actually LISTS these rows. A composition
-                                          // subset opens the composition table; a native macro opens
-                                          // the native table (which the benchmark table never lists);
-                                          // an aggregate report opens the benchmark table. Opening
-                                          // "the protocol" was not enough: two families can share one
-                                          // protocol id and only one of them has a row there (W-02).
-                                          onClick={() => onGoto(scope.family === "native"
-                                            ? { area: "evaluation", view: "native", protocol: scope.protocol,
-                                                runs: [], run: "", query: "", offset: 0 }
-                                            : scope.subset
-                                              ? { area: "evaluation", view: "composition", protocol: scope.protocol,
-                                                  subset: scope.subset as Location["subset"], runs: [], run: "", query: "", offset: 0 }
-                                              : { area: "evaluation", view: "benchmark", protocol: scope.protocol,
-                                                  runs: [], run: "", query: "", offset: 0 })}>
-                                    {protocolLabel(scope.protocol)}
-                                    {protocolHasSubsets(scope.protocol) && scope.subset
-                                      ? ` · ${SUBSET_LABEL[scope.subset as keyof typeof SUBSET_LABEL] ?? scope.subset}` : ""}
-                                    {scope.family === "native" ? " · số đo native" : ""}
-                                    {" · "}{fmtInt(scope.rows)} {scope.subset ? "lượt" : "số đo (toàn phạm vi)"}
-                                  </button>
-                                ))}
+                      : nativeUnattributed.length || elsewhere.length
+                        // R06-follow-up: the two facts are independent, so both are printed. The
+                        // label says this file's scope is unknown; the links say where the model's
+                        // ATTRIBUTED rows are. One used to hide the other.
+                        ? <>
+                            {nativeUnattributed.length > 0 && (
+                              <div className="cell-sub" style={{ marginTop: 6 }} data-testid={`native-unattributed-${model.model_id}`}>
+                                <span>
+                                  {fmtInt(nativeUnattributed.length)} số đo native nhưng file không ghi protocol —
+                                  không quy được cho phạm vi đang chọn.
+                                </span>
+                                <button type="button" className="ghost" style={{ marginTop: 6 }}
+                                        data-testid={`native-unattributed-open-${model.model_id}`} onClick={openNative}>
+                                  Xem trong bảng native
+                                </button>
                               </div>
-                            </div>
-                          : <div className="cell-sub" data-testid={`todo-${model.model_id}`} style={{ marginTop: 6 }}>
-                              <span>{usable.length > 1
-                                ? `${usable.length} lượt trong phạm vi này; chọn một lượt ở khu vực Lượt chạy.`
-                                : nextStep(model)}</span>
-                              <button type="button" style={{ marginTop: 6 }}
-                                      onClick={() => onGoto({ area: "experiments", view: "runs" })}>Mở các lượt chạy</button>
-                            </div>}
+                            )}
+                            {elsewhere.length > 0 && (
+                              <div className="cell-sub" data-testid={`other-scope-${model.model_id}`} style={{ marginTop: 6 }}>
+                                <span>Có kết quả ở {elsewhere.length} phạm vi khác — mở đúng phạm vi đó:</span>
+                                <div className="scope-links">
+                                  {elsewhere.map((scope) => (
+                                    <button key={`${scope.protocol}:${scope.subset}:${scope.family ?? ""}`} type="button"
+                                            className="ghost"
+                                            data-testid={`other-scope-${model.model_id}-${scope.protocol}-${scope.family ?? "composition"}-${scope.subset || "all"}`}
+                                            // The view that actually LISTS these rows. A composition
+                                            // subset opens the composition table; a native macro opens
+                                            // the native table (which the benchmark table never lists);
+                                            // an aggregate report opens the benchmark table. Opening
+                                            // "the protocol" was not enough: two families can share one
+                                            // protocol id and only one of them has a row there (W-02).
+                                            onClick={() => onGoto(scope.family === "native"
+                                              ? { area: "evaluation", view: "native", protocol: scope.protocol,
+                                                  runs: [], run: "", query: "", offset: 0 }
+                                              : scope.subset
+                                                ? { area: "evaluation", view: "composition", protocol: scope.protocol,
+                                                    subset: scope.subset as Location["subset"], runs: [], run: "", query: "", offset: 0 }
+                                                : { area: "evaluation", view: "benchmark", protocol: scope.protocol,
+                                                    runs: [], run: "", query: "", offset: 0 })}>
+                                      {protocolLabel(scope.protocol)}
+                                      {protocolHasSubsets(scope.protocol) && scope.subset
+                                        ? ` · ${SUBSET_LABEL[scope.subset as keyof typeof SUBSET_LABEL] ?? scope.subset}` : ""}
+                                      {scope.family === "native" ? " · số đo native" : ""}
+                                      {" · "}{fmtInt(scope.rows)} {scope.subset ? "lượt" : "số đo (toàn phạm vi)"}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </>
+                        : <div className="cell-sub" data-testid={`todo-${model.model_id}`} style={{ marginTop: 6 }}>
+                            <span>{usable.length > 1
+                              ? `${usable.length} lượt trong phạm vi này; chọn một lượt ở khu vực Lượt chạy.`
+                              : nextStep(model)}</span>
+                            <button type="button" style={{ marginTop: 6 }}
+                                    onClick={() => onGoto({ area: "experiments", view: "runs" })}>Mở các lượt chạy</button>
+                          </div>}
                   </td>
                   <td>
                     <Badge tone={deferredReason ? "neutral" : run && !missingScored ? "ok" : nativeOnly ? "info" : "warn"}>{status}</Badge>

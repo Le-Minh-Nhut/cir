@@ -419,6 +419,30 @@ export interface InventoryFacts {
   checkpointDownloaded: boolean;
 }
 
+/** Whether a model with nothing in THIS scope may be told where its numbers actually are.
+ *
+ *  R06-follow-up: the condition was `entry || deferredReason || nativeOnly || nativeUnattributed.length`
+ *  — so a model whose selected protocol holds only protocol-less native rows was left with "a number
+ *  exists but its scope is unknown" and never the link to the scope that DOES have its attributed,
+ *  counted row. "This row names no protocol" and "this model has numbers in another scope" are
+ *  independent facts; neither may erase the other. Only the three reasons that mean the CURRENT scope
+ *  already has something to show suppress the link: a selected entry, a campaign deferral, and a
+ *  native number in this very scope. `nativeUnattributed` deliberately does not.
+ *
+ *  The caller still filters `otherScopeFor` to scopes different from the one on screen, and renders
+ *  the unattributed label and the links side by side when both apply.
+ */
+export function crossScopeAllowed(facts: {
+  /** A catalog entry selected for this row in the active protocol/subset. */
+  hasEntry: boolean;
+  /** An operator campaign deferral; the reason is printed on the row instead. */
+  deferred: boolean;
+  /** Native rows with a number in the ACTIVE protocol — this scope's own answer. */
+  nativeOnly: boolean;
+}): boolean {
+  return !facts.hasEntry && !facts.deferred && !facts.nativeOnly;
+}
+
 export function inventoryStatus(facts: InventoryFacts): string {
   if (facts.deferred) return "Tạm gác";
   if (facts.hasRun) {
