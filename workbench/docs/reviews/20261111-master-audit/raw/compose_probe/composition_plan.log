@@ -1,0 +1,379 @@
+{
+  "category_resolution": {
+    "ambiguous_count": 119,
+    "ambiguous_examples": [
+      {
+        "categories": [
+          "shirt",
+          "toptee"
+        ],
+        "qid": "7:2179"
+      },
+      {
+        "categories": [
+          "shirt",
+          "toptee"
+        ],
+        "qid": "7:2211"
+      },
+      {
+        "categories": [
+          "shirt",
+          "toptee"
+        ],
+        "qid": "7:2218"
+      },
+      {
+        "categories": [
+          "shirt",
+          "toptee"
+        ],
+        "qid": "7:2228"
+      },
+      {
+        "categories": [
+          "shirt",
+          "toptee"
+        ],
+        "qid": "7:2258"
+      },
+      {
+        "categories": [
+          "shirt",
+          "toptee"
+        ],
+        "qid": "7:2285"
+      },
+      {
+        "categories": [
+          "shirt",
+          "toptee"
+        ],
+        "qid": "7:2307"
+      },
+      {
+        "categories": [
+          "shirt",
+          "toptee"
+        ],
+        "qid": "7:2309"
+      },
+      {
+        "categories": [
+          "shirt",
+          "toptee"
+        ],
+        "qid": "7:2333"
+      },
+      {
+        "categories": [
+          "shirt",
+          "toptee"
+        ],
+        "qid": "7:2463"
+      },
+      {
+        "categories": [
+          "shirt",
+          "toptee"
+        ],
+        "qid": "7:2471"
+      },
+      {
+        "categories": [
+          "shirt",
+          "toptee"
+        ],
+        "qid": "7:2486"
+      },
+      {
+        "categories": [
+          "shirt",
+          "toptee"
+        ],
+        "qid": "7:2529"
+      },
+      {
+        "categories": [
+          "shirt",
+          "toptee"
+        ],
+        "qid": "7:2575"
+      },
+      {
+        "categories": [
+          "shirt",
+          "toptee"
+        ],
+        "qid": "7:2587"
+      },
+      {
+        "categories": [
+          "shirt",
+          "toptee"
+        ],
+        "qid": "7:2637"
+      },
+      {
+        "categories": [
+          "shirt",
+          "toptee"
+        ],
+        "qid": "7:2650"
+      },
+      {
+        "categories": [
+          "shirt",
+          "toptee"
+        ],
+        "qid": "7:2679"
+      },
+      {
+        "categories": [
+          "shirt",
+          "toptee"
+        ],
+        "qid": "7:2698"
+      },
+      {
+        "categories": [
+          "shirt",
+          "toptee"
+        ],
+        "qid": "7:2717"
+      }
+    ],
+    "ambiguous_qids": [
+      "7:2179",
+      "7:2211",
+      "7:2218",
+      "7:2228",
+      "7:2258",
+      "7:2285",
+      "7:2307",
+      "7:2309",
+      "7:2333",
+      "7:2463",
+      "7:2471",
+      "7:2486",
+      "7:2529",
+      "7:2575",
+      "7:2587",
+      "7:2637",
+      "7:2650",
+      "7:2679",
+      "7:2698",
+      "7:2717",
+      "7:2815",
+      "7:2959",
+      "7:2999",
+      "7:3005",
+      "7:3033",
+      "7:3038",
+      "7:3163",
+      "7:3177",
+      "7:3243",
+      "7:3280",
+      "7:3324",
+      "7:3367",
+      "7:3402",
+      "7:3464",
+      "7:3487",
+      "7:3493",
+      "7:3560",
+      "7:3601",
+      "7:3629",
+      "7:3635",
+      "7:3790",
+      "7:3800",
+      "7:3813",
+      "7:3906",
+      "7:3927",
+      "7:3993",
+      "7:4008",
+      "7:4013",
+      "7:4066",
+      "7:4086",
+      "7:4164",
+      "7:4171",
+      "7:4243",
+      "7:4246",
+      "7:4290",
+      "7:4294",
+      "7:4305",
+      "7:4322",
+      "7:4358",
+      "7:4397",
+      "7:4420",
+      "7:4425",
+      "7:4434",
+      "7:4487",
+      "7:4504",
+      "7:4510",
+      "7:4529",
+      "7:4540",
+      "7:4542",
+      "7:4582",
+      "7:4594",
+      "7:4641",
+      "7:4759",
+      "7:4765",
+      "7:4806",
+      "7:4808",
+      "7:4809",
+      "7:4838",
+      "7:4849",
+      "7:4871",
+      "7:4880",
+      "7:4884",
+      "7:4893",
+      "7:4956",
+      "7:4982",
+      "7:5048",
+      "7:5090",
+      "7:5101",
+      "7:5105",
+      "7:5109",
+      "7:5149",
+      "7:5170",
+      "7:5212",
+      "7:5228",
+      "7:5236",
+      "7:5239",
+      "7:5259",
+      "7:5329",
+      "7:5388",
+      "7:5415",
+      "7:5444",
+      "7:5512",
+      "7:5546",
+      "7:5584",
+      "7:5597",
+      "7:5607",
+      "7:5641",
+      "7:5654",
+      "7:5655",
+      "7:5700",
+      "7:5701",
+      "7:5711",
+      "7:5742",
+      "7:5764",
+      "7:5788",
+      "7:5798",
+      "7:5863",
+      "7:5896",
+      "7:5963"
+    ],
+    "annotation_provenance": {
+      "complete": true,
+      "files": [
+        {
+          "count": 3817,
+          "detail": null,
+          "file": "split.dress.val.json",
+          "path": "/home/heheboiz/data/cir/data/FashionIQ/image_splits/split.dress.val.json",
+          "problem": null,
+          "sha256": "21ff91d53c23859da91bfd49f3acc139b7f3a3dc944fc4e4a80194468cf14bab",
+          "usable": true
+        },
+        {
+          "count": 6346,
+          "detail": null,
+          "file": "split.shirt.val.json",
+          "path": "/home/heheboiz/data/cir/data/FashionIQ/image_splits/split.shirt.val.json",
+          "problem": null,
+          "sha256": "b82effbf7352a6f828b38c45eb32e53d726bd4d6fd81d6290c81eeb2c68e3234",
+          "usable": true
+        },
+        {
+          "count": 5373,
+          "detail": null,
+          "file": "split.toptee.val.json",
+          "path": "/home/heheboiz/data/cir/data/FashionIQ/image_splits/split.toptee.val.json",
+          "problem": null,
+          "sha256": "ee42b2505275dd7a19b11ddb88c9264aab2d77f4e59b075fb1c7c3095d02f412",
+          "usable": true
+        },
+        {
+          "count": 2024,
+          "detail": null,
+          "file": "cap.dress.test.json",
+          "path": "/home/heheboiz/data/cir/data/FashionIQ/captions/cap.dress.test.json",
+          "problem": null,
+          "sha256": "190240b3b4d115cd4f80de65ab78ca18a3f8581c041cbeea6f5a1f57ee4f5a48",
+          "usable": true
+        },
+        {
+          "count": 2038,
+          "detail": null,
+          "file": "cap.shirt.test.json",
+          "path": "/home/heheboiz/data/cir/data/FashionIQ/captions/cap.shirt.test.json",
+          "problem": null,
+          "sha256": "27c7551b005d4befa53135a7ddee5e31c97821eafd3ceb3fec514e7ac0ad83a7",
+          "usable": true
+        },
+        {
+          "count": 2056,
+          "detail": null,
+          "file": "cap.toptee.test.json",
+          "path": "/home/heheboiz/data/cir/data/FashionIQ/captions/cap.toptee.test.json",
+          "problem": null,
+          "sha256": "db822aa52340ce1f09c3000064f79b60b6c476b50b98bf34200dd2996c06e146",
+          "usable": true
+        }
+      ],
+      "problems": {}
+    },
+    "considered_count": 6003,
+    "identity_counts": {
+      "dress": 5173,
+      "shirt": 7842,
+      "toptee": 6882
+    },
+    "identity_source": "reference in FashionIQ validation splits or test-caption annotations",
+    "resolved_count": 5884,
+    "status": "resolved",
+    "unresolved_count": 0,
+    "unresolved_qids": []
+  },
+  "expected_output_paths": [],
+  "failed_expectations": [],
+  "gallery_count": 74381,
+  "gallery_identity_sha256": "0bfd43b9cc0162885f06c60cfc751602ee9f3bed2fb4d206ffcebe3f7b443462",
+  "is_synthetic": false,
+  "missing_assets": {
+    "downloaded": false,
+    "extension_resolution_counts": {},
+    "local_resolved_by_stem_count": 74381,
+    "missing_gallery_by_model": {},
+    "positive_target_count": 6003,
+    "positive_target_missing_by_model": {},
+    "positive_target_missing_count": 0,
+    "positive_target_missing_examples": [],
+    "positive_targets_resolved_count": 6003,
+    "query_reference_count": 4315,
+    "query_reference_missing_by_model": {},
+    "query_reference_missing_count": 0,
+    "query_reference_missing_examples": [],
+    "query_references_resolved_count": 4315,
+    "released_gallery_count": 74381,
+    "status": "complete",
+    "unresolvable_gallery_count": 0,
+    "unresolvable_gallery_examples": []
+  },
+  "protocol_id": "circus_fashioniq_release_v1",
+  "readiness": [],
+  "selected_models": [],
+  "unavailable": [
+    {
+      "model_id": "clvc_net",
+      "reason": "no checkpoint variant records a training condition, so none can be called clean under policy strict_clean. Policy include_flagged_conditions runs these with the condition recorded as unknown.",
+      "status": "NOT_READY"
+    },
+    {
+      "model_id": "tgcir",
+      "reason": "no checkpoint variant records a training condition, so none can be called clean under policy strict_clean. Policy include_flagged_conditions runs these with the condition recorded as unknown.",
+      "status": "NOT_READY"
+    }
+  ]
+}

@@ -1,0 +1,7 @@
+interpreter: /home/heheboiz/data/cir/workbench/envs/tgcir39-la/bin/python 3.9.25
+torch: 2.7.1+cu128 torchvision: 0.22.1+cu128
+transform: clip.load('ViT-B/16', device='cpu', jit=False).preprocess
+clip visual.input_resolution: 224
+tensor: (3, 224, 224) torch.float32 min -1.7922625541687012 max 2.1458969116210938
+normalize_mean (0.48145466, 0.4578275, 0.40821073) std (0.26862954, 0.26130258, 0.27577711)
+expected (3,224,224) float32: True

@@ -1,0 +1,3 @@
+clvc39-la: 3.9.25 2.7.1+cu128 cuda_available True
+tgcir39-la: 3.9.25 2.7.1+cu128 cuda_available True
+ctl312h: 3.12.11 2.15.0+cu132 cuda_available True

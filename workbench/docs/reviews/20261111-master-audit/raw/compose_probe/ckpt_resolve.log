@@ -1,0 +1,16 @@
+checkpoint root: /home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads
+### clvc_net author_drive_unresolved
+  path: /home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/../../checkpoints/clvc
+  present: True
+    dress_local_model.pt 217168235 MATCH
+    dress_global_model.pt 176437419 MATCH
+    shirt_local_model.pt 218603243 MATCH
+    shirt_global_model.pt 177872427 MATCH
+    toptee_local_model.pt 218308843 MATCH
+    toptee_global_model.pt 177578027 MATCH
+  total bytes: 1185968194
+### tgcir tgcir_archive_unresolved
+  path: /home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/../../downloads/tgcir/x/checkpoints/Fashioniq.pt
+  present: True
+  sha256: c37768f374c75bebff1299e870518c23bf6db3dc8a75c4d1f729ccd6dd02e966 declared: c37768f374c75bebff1299e870518c23bf6db3dc8a75c4d1f729ccd6dd02e966 match: True
+  size: 607928637 declared: 607928637

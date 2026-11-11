@@ -1,0 +1,3 @@
+torch.cuda.is_available() True
+device_count 1
+capability (12, 0)

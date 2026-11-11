@@ -1,0 +1,42 @@
+### workbench.composition.model_clvc_net
+  interpreter attr: /home/heheboiz/data/cir/workbench/envs/clvc39-la/bin/python
+  checkpoint_path: /home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/../../checkpoints/clvc
+  encode_queries RAISED RuntimeError
+  msg: execution environment not verified [BLOCKED/PYTHON_VERSION_MISMATCH]: WORKBENCH_CLVC_PYTHON=/home/heheboiz/data/cir/workbench/envs/clvc39-la/bin/python (expected Python 3.7.6, found 3.9.25)
+Traceback (most recent call last):
+  File "/home/heheboiz/data/cir/workbench/docs/reviews/20261111-master-audit/raw/compose_probe/compose_probe_gate.py", line 19, in <module>
+    v = a.encode_queries([IMG], [TXT], [cat])
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/heheboiz/data/cir/workbench/composition/model_clvc_net.py", line 124, in encode_queries
+    return _run(self, "queries", image_paths, texts, categories)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/heheboiz/data/cir/workbench/composition/model_clvc_net.py", line 203, in _run
+    adapter.require_verified_interpreter()
+  File "/home/heheboiz/data/cir/workbench/composition/adapters.py", line 346, in require_verified_interpreter
+    verified = require_verified_model_interpreter(resolved, config=getattr(self, "config", None))
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/heheboiz/data/cir/workbench/backend/runtime.py", line 2309, in require_verified_model_interpreter
+    raise RuntimeError(
+RuntimeError: execution environment not verified [BLOCKED/PYTHON_VERSION_MISMATCH]: WORKBENCH_CLVC_PYTHON=/home/heheboiz/data/cir/workbench/envs/clvc39-la/bin/python (expected Python 3.7.6, found 3.9.25)
+  mode_supported: (False, 'unguarded CUDA: 14 source lines / 15 .cuda() call expressions [model.py(2), test.py(4), text_model.py(3), train.py(6)]; 6 lines / 7 expressions reachable from scoring')
+### workbench.composition.model_tgcir
+  interpreter attr: /home/heheboiz/data/cir/workbench/envs/tgcir39-la/bin/python
+  checkpoint_path: /home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/../../downloads/tgcir/x/checkpoints/Fashioniq.pt
+  encode_queries RAISED RuntimeError
+  msg: execution environment not verified [BLOCKED/DEPENDENCY_VERSION_MISMATCH]: WORKBENCH_TGCIR_PYTHON=/home/heheboiz/data/cir/workbench/envs/tgcir39-la/bin/python (torch: expected ==1.7.0, found 2.7.1+cu128)
+Traceback (most recent call last):
+  File "/home/heheboiz/data/cir/workbench/docs/reviews/20261111-master-audit/raw/compose_probe/compose_probe_gate.py", line 19, in <module>
+    v = a.encode_queries([IMG], [TXT], [cat])
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/heheboiz/data/cir/workbench/composition/model_tgcir.py", line 91, in encode_queries
+    return _run(self, "queries", image_paths, texts, categories)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/heheboiz/data/cir/workbench/composition/model_tgcir.py", line 175, in _run
+    adapter.require_verified_interpreter()
+  File "/home/heheboiz/data/cir/workbench/composition/adapters.py", line 346, in require_verified_interpreter
+    verified = require_verified_model_interpreter(resolved, config=getattr(self, "config", None))
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/heheboiz/data/cir/workbench/backend/runtime.py", line 2309, in require_verified_model_interpreter
+    raise RuntimeError(
+RuntimeError: execution environment not verified [BLOCKED/DEPENDENCY_VERSION_MISMATCH]: WORKBENCH_TGCIR_PYTHON=/home/heheboiz/data/cir/workbench/envs/tgcir39-la/bin/python (torch: expected ==1.7.0, found 2.7.1+cu128)
+  mode_supported: (False, "pinned /home/heheboiz/data/cir/workbench/third_party/TGCIR/test.py has no CLI (no __main__ block, no argparse), so its only scoring surface is test(params, model, testset, category) and no checkpoint loader exists; TG-CIR evaluation is CUDA-hard: model.py:32,107,120,136,244,251 and test.py:31,47,101,115 call .cuda() with no device guard, and model.py:41 loads CLIP with device='cuda'")

@@ -1,0 +1,20 @@
+### workbench.composition.model_clvc_net
+  interpreter: /home/heheboiz/data/cir/workbench/envs/clvc39-la/bin/python
+  checkpoint_path: /home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/../../checkpoints/clvc
+  RAISED Refused
+      File "/home/heheboiz/data/cir/workbench/composition/model_clvc_net.py", line 124, in encode_queries
+        return _run(self, "queries", image_paths, texts, categories)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      File "/home/heheboiz/data/cir/workbench/composition/model_clvc_net.py", line 205, in _run
+        raise Refused(_refusal(adapter))
+    workbench.composition.model_clvc_net.Refused: unguarded CUDA: 14 source lines / 15 .cuda() call expressions [model.py(2), test.py(4), text_model.py(3), train.py(6)]; 6 lines / 7 expressions reachable from scoring
+### workbench.composition.model_tgcir
+  interpreter: /home/heheboiz/data/cir/workbench/envs/tgcir39-la/bin/python
+  checkpoint_path: /home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/../../downloads/tgcir/x/checkpoints/Fashioniq.pt
+  RAISED Refused
+      File "/home/heheboiz/data/cir/workbench/composition/model_tgcir.py", line 91, in encode_queries
+        return _run(self, "queries", image_paths, texts, categories)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      File "/home/heheboiz/data/cir/workbench/composition/model_tgcir.py", line 177, in _run
+        raise Refused(_refusal(adapter))
+    workbench.composition.model_tgcir.Refused: pinned /home/heheboiz/data/cir/workbench/third_party/TGCIR/test.py has no CLI (no __main__ block, no argparse), so its only scoring surface is test(params, model, testset, category) and no checkpoint loader exists; TG-CIR evaluation is CUDA-hard: model.py:32,107,120,136,244,251 and test.py:31,47,101,115 call .cuda() with no device guard, and model.py:41 loads CLIP with device='cuda'

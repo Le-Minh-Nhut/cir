@@ -1,0 +1,6 @@
+### clvc_net with an in-memory adapted_runtime
+  tier: GPU_VERIFICATION_PENDING status: GPU_VERIFICATION_PENDING
+  reason: CUDA capability must be verified on the GPU host with verify_gpu_runtime() before this model can be launched
+### tgcir with an in-memory adapted_runtime
+  tier: GPU_VERIFICATION_PENDING status: GPU_VERIFICATION_PENDING
+  reason: CUDA capability must be verified on the GPU host with verify_gpu_runtime() before this model can be launched
