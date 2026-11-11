@@ -135,6 +135,8 @@ twice more, and both results recorded here:
    ```
    git rev-parse HEAD
    git status --porcelain
+   git diff --stat 96d86010e85048d82f2dacf26e17d7b7206d31ab -- . \
+     ':(exclude)workbench/docs' ':(exclude)workbench/tests'
    git diff --stat -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'
    ls workbench/frontend/dist/assets/ ; sha256sum workbench/frontend/dist/assets/*.js
    ```
@@ -142,10 +144,17 @@ twice more, and both results recorded here:
 
 Both checkpoints must show:
 
-- `git rev-parse HEAD` still `96d86010e85048d82f2dacf26e17d7b7206d31ab`
-- porcelain still exactly `?? CLEANUP_REPORT.md.save` (docs-only edits under
-  `workbench/docs` are tolerable; anything else is not)
-- the `:(exclude)` diff still empty
+- **source tree** still identical to the swept commit. HEAD itself is allowed to advance
+  past `96d86010e85048d82f2dacf26e17d7b7206d31ab`, because committing this very report
+  already moved it (to `5455f0e`). The correct test is therefore:
+  ```
+  git diff --stat 96d86010e85048d82f2dacf26e17d7b7206d31ab -- . \
+    ':(exclude)workbench/docs' ':(exclude)workbench/tests'
+  ```
+  which must stay **empty** — i.e. any new commit is docs-only.
+- porcelain shows nothing outside `workbench/docs` (docs-only edits are tolerable;
+  anything else is not)
+- the `:(exclude)` working-tree diff still empty
 - the bundle still `index-DYYSN7oG.js` with sha256 `74e4b4f8…9d651f`
 
 If any checkpoint differs, the run is **not** usable for `TESTED_SOURCE_SHA` and must be
@@ -158,6 +167,11 @@ Checkpoint results are appended under "Stationary checkpoints" below.
 | When | HEAD | porcelain | non-docs diff | bundle | verdict |
 |---|---|---|---|---|---|
 | start (19:38:19 +07) | `96d86010…31ab` | `?? CLEANUP_REPORT.md.save` | empty | `index-DYYSN7oG.js` / `74e4b4f8…9d651f` | stationary |
+
+Checkpoint rule: the swept tree is `96d86010`. HEAD may advance by docs-only commits
+(including this report's own commit `5455f0e`); the authoritative test is
+`git diff --stat 96d86010 -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'`
+staying empty, plus an unchanged bundle digest.
 | ~+25 min | _pending_ | _pending_ | _pending_ | _pending_ | _pending_ |
 | end | _pending_ | _pending_ | _pending_ | _pending_ | _pending_ |
 
