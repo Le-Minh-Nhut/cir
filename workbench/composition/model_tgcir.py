@@ -650,7 +650,17 @@ def _worker_main(job_path: Path) -> None:
         except Exception as error:
             reply(False, error_type=type(error).__name__, error=str(error))
 
-    run_one(job)
+    try:
+        run_one(job)
+    except Exception as error:
+        # The FIRST job is the one `_exchange` gave the worker at Popen time, so it must fail the
+        # same way the loop's jobs do: reply, then keep serving. Unguarded, a `Corrections.correct`
+        # ValueError here propagated out of `_worker_main`, the process exited 1, the parent's
+        # `readline` saw EOF and reported `adapter_worker_exited ... exit_status=1` -- and because
+        # `_exchange` latches `_worker_failed`, every later batch in that condition got the latched
+        # string, so one bad caption zeroed all 6003 queries (run 9f115afe, both text conditions).
+        # `_run` turns the reply into the same per-query degradation any other failure gets.
+        reply(False, error_type=type(error).__name__, error=str(error))
     for line in sys.stdin:
         request = json.loads(line)
         if request.get("stop"):

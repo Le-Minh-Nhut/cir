@@ -288,3 +288,79 @@ def test_a_non_blank_ambiguous_caption_is_still_refused():
     # lucky accident of the lookup.
     with pytest.raises(ValueError, match="resolves to no category"):
         corrections.correct([key], [None])
+
+
+def test_a_failed_first_job_replies_and_keeps_the_worker_serving(tmp_path, monkeypatch, capsys):
+    """The Popen-time job failing must reply, not exit: the loop's jobs were always guarded.
+
+    Run 9f115afe: `run_one(job)` sat outside the try, so a `Corrections.correct` ValueError on the
+    first job propagated out of `_worker_main`, the worker exited 1, `_exchange` saw EOF and latched
+    `adapter_worker_exited ... exit_status=1` into `_worker_failed` -- zeroing all 6003 queries of
+    BOTH text conditions. Guarded, the same job replies and the next job is still served.
+    """
+    import types
+
+    def fake_torch():
+        tensor = type("Tensor", (), {})
+        fake = types.SimpleNamespace(
+            Tensor=tensor, nn=types.SimpleNamespace(MultiheadAttention=object),
+            cuda=types.SimpleNamespace(is_available=lambda: False))
+        fake.__version__ = "0.0.0-fake"
+        return fake
+
+    class FakeModel:
+        def modules(self):
+            return []
+
+        def to(self, device):
+            return self
+
+        def eval(self):
+            return self
+
+    clip = types.SimpleNamespace(
+        load=lambda *a, **k: (None, lambda image: np.zeros((3, 8, 8), dtype=np.float32)))
+
+    class FlakyCorrections:
+        calls = 0
+
+        def __init__(self, root):
+            pass
+
+        def correct(self, texts, categories, paths):
+            FlakyCorrections.calls += 1
+            if FlakyCorrections.calls == 1:
+                raise ValueError("tgcir caption text 0 ('x') resolves to no category")
+            return list(texts)
+
+    monkeypatch.setattr("workbench.replay.tgcir._load_tgcir",
+                        lambda *a, **k: (fake_torch(), (clip, None, None), []))
+    monkeypatch.setattr(module, "_load_verified_model", lambda *a, **k: FakeModel())
+    monkeypatch.setattr(module, "Corrections", FlakyCorrections)
+    monkeypatch.setattr(module, "limit_torch_threads", lambda: None)
+    monkeypatch.setattr(module, "resolved_decode_workers", lambda: 1)
+    monkeypatch.setattr(module, "_vram", lambda: None)
+
+    checkpoint = tmp_path / "Fashioniq.pt"
+    checkpoint.write_bytes(b"w" * 16)
+
+    def job(name, texts):
+        path = tmp_path / f"{name}.json"
+        path.write_text(json.dumps({
+            "phase": "queries", "image_paths": [], "texts": texts, "categories": [None] * len(texts),
+            "output_path": str(tmp_path / f"{name}.npy"), "checkpoint_path": str(checkpoint),
+            "expected_sha256": None, "expected_size_bytes": None, "source_root": str(tmp_path),
+            "dataset_root": str(tmp_path), "batch_size": 2, "transform": "none"}))
+        return path
+
+    second = job("job2", [])
+    monkeypatch.setattr(module.sys, "stdin", __import__("io").StringIO(
+        json.dumps({"job_path": str(second)}) + "\n"))
+
+    module._worker_main(job("job1", ["a caption"]))
+    replies = [json.loads(line[len("CIRCUS_WORKER:"):])
+               for line in capsys.readouterr().out.splitlines()
+               if line.startswith("CIRCUS_WORKER:")]
+    assert len(replies) == 2, f"the first failure must not end the worker; got {replies}"
+    assert replies[0]["ok"] is False and "resolves to no category" in replies[0]["error"]
+    assert replies[1]["ok"] is True, replies[1]
