@@ -470,14 +470,51 @@ The gallery encode is real: `work/tgcir/features/gallery_global.npy` is 152 332 
 74 381 × 512 × 4, written 19:45:05Z, i.e. this run paid it. The 616 s is the whole run.
 
 
-Recorded from the served API (HTTP GET only) for `eab10106b2df8e97fb7a5ce5`:
+## 4.4 Re-run under the fixed window
+
+`clvc_net` relaunched at **2026-11-11T20:23:30Z** (PID 1330469, `gpu_job` wrapper 1330461), argv
+`--config ~/cir_rerun_20261109.yaml --models clvc_net --subsets full --topk-depth 100` — **no
+`--batch-size` flag** (default 32).
+
+Two facts a reader must know about this re-run:
+
+1. **Its run_id is the SAME as §4.1's (`eab10106b2df8e97fb7a5ce5`), by design.** `runner.py` is not
+   hashed into the run identity, so changing the call window moves no id. That is what keeps published
+   runs comparable — and it also means the gallery feature cache from §4.1 is REUSED (fingerprint
+   unchanged), so this run does not re-encode the gallery at all. The 22× gallery speedup in §4.2 was
+   therefore measured directly, on a forced re-encode (`reused=0`), because this run takes the cache
+   path.
+2. **A first attempt at 20:22:55Z passed `--batch-size 32` explicitly** and was stopped before it
+   produced a rank, because the instruction was not to pass the flag. It was replaced 35 s later. No
+   artifact was published from it.
+
+GPU sampled on the relaunched run: **11–25 % utilisation, 851 MiB, 24.4–27.1 W** — a different phase
+from §4.1's 6–10 % / 40 W gallery encode: this run validates a cached gallery on the CPU, so its watts
+are lower, not higher.
+
+### End-to-end speedup, measured on a forced re-encode (the honest number)
+
+| model | scope | images | before s/img | after s/img | speedup | digest |
+|---|---|---|---|---|---|---|
+| `clvc_net` | `dress` | 74 381 | 0.0603 | **0.0027** | **22×** | exact match |
+| `tgcir` | `None` | 74 381 | 0.0093 | **0.0053** | 1.8× | exact match |
+
+`clvc_net`'s 0.0603 was derived from a whole-run wall time of 4489 s covering three scopes, so the
+per-scope "before" is an estimate; the "after" is a direct 201.4 s measurement of one scope. The digest
+equality is what makes both rows load-bearing.
+
+
+
+
+### API endpoints used (HTTP GET only)
 
 ```
 GET /api/composition/runs/eab10106b2df8e97fb7a5ce5?subset=full                   -> 200
 GET /api/composition/runs/<run>/queries?...&top_k=100&limit=1&offset=0           -> 200 (100 candidates)
 GET /api/composition/runs?include_smoke=true                                     -> 200
+GET /api/composition/runs/889bc330d60e8cbab956944f/candidates?subset=full
+    &condition=multimodal&query_id=7%3A1&limit=100                               -> 200
 ```
-
 
 ## Còn chặn
 
