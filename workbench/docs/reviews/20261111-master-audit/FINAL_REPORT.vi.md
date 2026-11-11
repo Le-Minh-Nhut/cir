@@ -57,7 +57,7 @@ Cột "fail-first" là lệnh/raw chứng minh lỗi **trước** khi sửa; c�
 
 | ID | Trạng thái | file:line | fail-first | regression |
 |---|---|---|---|---|
-| M-01-a | `FIXED_CODE / RERUN_PENDING` — code đúng, run canonical **chưa mint** | `composition/model_encoder.py:42-63`, `:148-157`, `:340-380` | `raw/m01/tests_failing_first.txt` 4 failed | `raw/m01/tests_encoder.txt` 64 passed; `31.0178 / 49.5586` **đo trên** `ce89a9a2…`, nhưng identity của run đó hash `relation_state: not_recorded` (mint trước `f856338`) ⇒ **valid measurement, unpartitioned identity**; chưa run nào mint sau `f856338` |
+| M-01-a | `FIXED_VERIFIED` — code đúng, **và** đã có run mint sau fix mang cả identity lẫn tensor | `composition/model_encoder.py:42-63`, `:148-157`, `:262` (`_adopt_scratch_relation`), `:340-380` | `raw/m01/tests_failing_first.txt` 4 failed | `raw/m01/tests_encoder.txt` 64 passed; `31.0178 / 49.5586` **đo lần đầu trên** `ce89a9a2…`, **re-confirmed trên** `acc9b20e…` (delta `0.0`, 0/18009 rank khác). Bằng chứng verify: run `acc9b20e1aea48487f65f944` có `relation_state.sha256` `20db0c27…f9ce92` = `expected_sha256`, `matches_pinned_digest: true`, **và** `runs/acc9b20e…/construction_state/relation-seed20261111.npy` |
 | M-01-b | `CONFIRMED`, **không** đổi production (đo là độ nhạy adaptation) | `model_encoder.py:390-400` | `raw/m01/forward_delta.json` | — |
 | M-01-c | `CONFIRMED`; rerun mới dùng cold + `cache_verify_mode=full` | `runner.py:1612-1618` | `raw/m01/` | — |
 | M-02 | xem `MODEL_LIMN_ENCODER_VERIFICATION.vi.md` | — | raw/m02 | — |
@@ -121,15 +121,40 @@ Chỉ những số dưới đây đủ căn cứ để trích. Mỗi số kèm n
 | **TG-CIR** | **49.7208 / 71.1023** | tái lập digit-for-digit với số lịch sử, qua eval path do WORKBENCH thêm; `--restore_file` vẫn **dead** | `BLOCKED_MODELS_VERIFICATION.vi.md` |
 | **CLVC-Net** | **30.0208 / 58.6719** | hai run độc lập **trùng nhau** | cùng báo cáo |
 | **Air-Know** | **52.5468 ± 0.2673** (4 run) | **kèm công bố** nondeterminism của upstream, không giấu | cùng báo cáo |
-| **ENCODER** | **31.0178 / 49.5586** | **đo trên** run `ce89a9a2…` — valid measurement, identity **unpartitioned**: `relation_state` của run đó hash `not_recorded` (mint trước `f856338`), nên id **không** partition tensor relation. Pin vẫn chắc cho chính run đó (seed `20261111` áp trong worker, tensor + sha256 `20db0c27…f9ce92` persist ở `runs/ce89a9a2…/construction_state/`). Run canonical **pending mint** | `MODEL_LIMN_ENCODER_VERIFICATION.vi.md`; `summary/encoder_fashioniq_ce89a9a27c4cceadeaaf30b0/full.json` |
+| **ENCODER** | **31.0178 / 49.5586** | **đo lần đầu trên** `ce89a9a2…`, **re-confirmed trên** canonical `acc9b20e…` — hai run delta `0.0` trên cả 36 giá trị per-condition và mọi gap, 0/18009 rank khác. Canonical `acc9b20e1aea48487f65f944` partition tensor relation: `relation_state.sha256` `20db0c27…f9ce92` `matches_pinned_digest: true`, và tensor persist ở `runs/acc9b20e…/construction_state/` | `MODEL_LIMN_ENCODER_VERIFICATION.vi.md`; `summary/encoder_fashioniq_acc9b20e1aea48487f65f944/full.json`; `summary/encoder_fashioniq_ce89a9a27c4cceadeaaf30b0/full.json` |
 | **LIMN** canonical `9e4918a6` | **PARTIAL 6001/6003** | + hai subset derived: sf 4068/4069 — `execution_status` **PARTIAL** (của parent), `derived_from.own_status_label` = **`DERIVED_PARTIAL`**; validated 586/586 — `execution_status` **PARTIAL** (của parent), `derived_from.own_status_label` = **`DERIVED_COMPLETE`**. `execution_status` **không** mang nhãn derived (option b) | cùng báo cáo; `tests/test_derived_subset_status.py` |
 | **Gate** | **0 / 2 mô hình có artifact parity; 0 / 17 cấu hình PASS** | `passed_models: []`; `failure_count` **16** (encoder) và **3** (limn) — đều là **discrepancy thật**, không phải thiếu dữ liệu. Encoder tăng 13 → 16 vì ba subcheck `relation.<category>.digest` (dress / shirt / toptee, dimension `relation_parity`) trở thành **mandatory** ở R02/R03, không phải hồi quy mới. Mẫu số là cohort **17** cấu hình như §6: 13 model G1/G2 `NOT_RUN` chưa có artifact parity nên không thể pass | `GATE_SCORING_VERIFICATION.vi.md`; `/api/runs/parity-gate` |
 
-Bốn run ENCODER trên đĩa — `ce89a9a27c4cceadeaaf30b0`, `5dee7425dd46c5f154808aac`,
+Bốn run ENCODER đầu — `ce89a9a27c4cceadeaaf30b0`, `5dee7425dd46c5f154808aac`,
 `6a528e877c328772e2c7bb28`, `eda30a37c0bc17ac43844f09` — đều mint trước `f856338` nên id của chúng
-hash `relation_state: not_recorded`; không id nào trong bốn cái đó partition tensor relation.
+hash `relation_state: not_recorded`; không id nào trong bốn cái đó partition tensor relation. Run thứ
+năm `9b806c22221e944ff10e514e` mint sau `f856338`: identity đã recorded nhưng `construction_state/`
+vắng (defect, đóng ở `34aaa10`), nên vẫn superseded. Run thứ sáu `acc9b20e…` có **cả hai** — canonical.
 
-<!-- ENCODER_CANONICAL_RUN: pending mint -->
+<!-- ENCODER_CANONICAL_RUN: acc9b20e1aea48487f65f944 -->
+**Canonical run ENCODER: `acc9b20e1aea48487f65f944`** — run **đầu tiên** có **đồng thời** (a) identity
+partition tensor relation: `relation_state.status "recorded"`, `sha256 == expected_sha256 ==`
+`20db0c27c979e9a0938c71af5142458dfa2070468d0ad3fcb6f24134c2f9ce92`, `matches_pinned_digest: true`,
+`seed 20261111` (`summary/encoder_fashioniq_acc9b20e1aea48487f65f944/full.json` →
+`relation_state`; block y hệt trong `sf.json`, `validated.json` và trong
+`runs/acc9b20e…/ranks/encoder_fashioniq.json::identity`), và (b) tensor đã persist:
+`runs/acc9b20e1aea48487f65f944/construction_state/relation-seed20261111.npy` (4224 B; 128 B header + 4096 B payload) + `.npy.json`
+sidecar. Digest tensor (payload `float32 (2,512).tobytes()`) = `20db0c27…f9ce92` **== pin**; digest
+**file** `.npy` là `6ce23bbc6a367c34f9536a612c9e32e3b9cec213687c7bd73378a16001ccf244` vì gồm cả header
+numpy — pin ở repo này là trên byte tensor, không phải trên envelope, nên hai con số **khác nhau là
+đúng**. File byte-identical với `.npy` của `ce89a9a2`.
+
+Mọi số **không đổi**: 36 giá trị per-condition (3 subset × 3 condition × R@10/R@50/nDCG/MRR) và 5
+aggregate gap trên cả 3 subset đều **delta đúng `0.0`**, và **0 / 18009** ô rank khác
+(`ranks.encoder_fashioniq.json`, so từng query). Run `COMPLETED` cả 3 subset, unscored `0`, query
+6003 / 4069 / 586, gallery 74381, `topk_export TOPK_EXPORT_COMPLETE depth 100`,
+`cache_verify_mode full`.
+
+Năm predecessor bị **superseded, lý do khác nhau** — không gộp: `ce89a9a2…` (identity hash khi
+`relation_state` chưa có ⇒ `not_recorded`); `9b806c22…` (identity **đã** recorded nhưng **không** có
+`construction_state/` — defect thật, đóng ở `34aaa10`); `5dee7425…` / `6a528e87…` / `eda30a37…`
+(relation draw từ generator không pin; `5dee7425` thêm nữa `--subsets full` only).
+Raw: `raw/verify/69-encoder-rerun.md` §R2.
 
 Nói rõ: **0 PASS không phải lỗi của gate** — đó là 19 discrepancy thật (16 + 3) giữa hai phía, đọc từ
 artifact. Gate cũ báo `PARITY_PASS` cho cả hai; gate mới báo đúng. Limn còn `missing ["metrics_parity"]`, tức
@@ -215,7 +240,7 @@ tôi thực sự lấy số.
 | `clip4cir_rn50x4_noft` | chỉ có roll-up, không artifact | `/api/native-measurements`: `artifact_backed: false`, `counted: false` |
 | `airknow` (2 dòng) | 2 lần chạy n05/n08 khác nhau, chưa chốt cái nào là canonical; thêm nữa upstream nondeterministic ±0.2673 | payload: 2 dòng `counted: true` cùng model |
 | `pair` (4 dòng) | 4 cấu hình B1/B2 × H_normal/H_rev **khác nhau thật** — cần chọn canonical hoặc công bố cả 4 | payload: 4 dòng `counted: true`, values khác nhau |
-| ENCODER — cả **4** run: `ce89a9a2…`, `5dee7425…`, `6a528e87…`, `eda30a37…` | **superseded**: id hash với `relation_state: not_recorded` (mint trước `f856338`), nên không run nào partition tensor relation; `5dee7425`/`6a528e87` thêm nữa draw từ generator không pin | `MODEL_LIMN_ENCODER_VERIFICATION.vi.md` §M-01-a, §A; `grep -l encoder workbench/artifacts/composition/runs/*/ranks/*.json` = đúng 4 id trên. Canonical run **chưa mint** |
+| ENCODER — **đã xong**: 5 id cũ `ce89a9a2…`, `9b806c22…`, `5dee7425…`, `6a528e87…`, `eda30a37…` | **superseded, lý do riêng từng cái**: `ce89a9a2` id hash `relation_state: not_recorded` (mint trước `f856338`); `9b806c22` recorded nhưng **không** có `construction_state/` (defect, đóng ở `34aaa10`); `5dee7425`/`6a528e87`/`eda30a37` draw từ generator không pin (`5dee7425` thêm nữa `full` only). **Canonical nay là `acc9b20e…`**: recorded + tensor persist | `MODEL_LIMN_ENCODER_VERIFICATION.vi.md` §M-01-a, §A; `runs/acc9b20e1aea48487f65f944/{construction_state,ranks}`; `raw/verify/69-encoder-rerun.md` §R2 |
 | `habit` (run `e0dd04a4…`, subset `validated`) | artifact ghi `FAILED` vì interpreter trỏ `airknow-adapted` (Python 3.11.15 ≠ 3.8.10); env var **nay đã đúng** nên đây là artifact cũ | `summary/habit_fiq_n02_e0dd04a4…/validated.json` → `condition_status.*.reason`, `runtime.model_interpreter.path` |
 
 ### Điều **không** được tính là parity (theo master file)

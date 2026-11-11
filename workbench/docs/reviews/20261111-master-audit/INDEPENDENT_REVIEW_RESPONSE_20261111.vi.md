@@ -83,10 +83,19 @@ failure_count=0` (`raw/verify/61-gate-contract.md:3-4`).
 | body tolerance đè top-level | **một** nguồn tolerance; tolerance khác/lỏng hơn ném `_Malformed` (`:213`) | `local_tolerance_overrides_global` → `EVIDENCE_MALFORMED` |
 | "vắng bằng chứng" và "claim sai" bị trộn | `ParityCheck.absence` (`:132`): vắng = `missing` (INCOMPLETE), vắng **bên cạnh** claim thật = `MANDATORY_FAILED` — quyết định **theo category** vì luật toàn cục làm mất đúng ca shirt fail của `other_categories_empty` | `empty_adapter_control` → `INCOMPLETE`, 0 failure, `missing=[forward,batch,scoring]` |
 | PASS không thể kiểm | `_check_invariants` (`:659`): `passed` ⇒ `PASS` ∧ không failure ∧ không missing ∧ **mỗi** dimension bắt buộc có check mandatory trong **từng** category | mọi `to_dict()`/đường return sớm |
+| gate so **một field với chính nó** | `9cefa36`: bốn check `identity.{query,gallery}_count_{native,annotations}` đổi thành **hai** cặp `identity.{query,gallery}_count_agreement` (`parity_gate.py:433-448`) — mỗi cặp so count **native** với count **annotation/rebuilt**, và count thiếu ghi `missing` chứ không pass | 2 cặp/category, tất cả `ok: true` |
 
 Số liệu probe sau (`raw/verify/61-gate-probe-after.json`): `complete_fixture_no_relation` 1,
 `contradictory_identity` 5, `score_only_no_rank_evidence` 2, `other_categories_empty` 1,
 `local_tolerance_overrides_global` = `PARITY_EVIDENCE_MALFORMED`, `empty_adapter_control` = `INCOMPLETE`.
+
+**Bỏ self-comparison (`9cefa36`) — verdict không đổi.** Sáu cặp artifact thật đều đồng ý
+(`encoder`/`limn` × dress/shirt/toptee: query 2017/2038/1961, gallery 2628/3089/2902 — mỗi cặp
+`native == annotations`), nên ENCODER giữ **16** failure và LIMN giữ **3** failure + `missing
+["metrics_parity"]`; `passed_models: []` nguyên. Cái đổi là hai check mandatory từ **không thể fail**
+thành **có thể fail**. Kiểm lại bằng chính gate trên artifact đã publish
+(`parity_gate.evaluate_model`, `raw/verify/61-gate-probe-real.py`): `encoder`
+`PARITY_MANDATORY_SUBCHECK_FAILED` 16, `limn` 3 + `missing ["metrics_parity"]`.
 
 **Verdict lịch sử.** ENCODER **13 → 16 failure** (ba digest relation trở thành bắt buộc); LIMN **3 failure
 + thiếu `metrics_parity`**, không đổi. Live `/api/runs/parity-gate`: `encoder`
@@ -99,7 +108,7 @@ Số liệu probe sau (`raw/verify/61-gate-probe-after.json`): `complete_fixture
 adapter↔native; phần đối chứng thật nằm ở `scoring_parity` (score+rank hai phía). Không đổi nhãn
 dimension này thành "đã đối chứng adapter↔native" — nó không phải.
 
-Commit `d6d3e36`, `39ac8c4`, `f5ce7a5`.
+Commit `d6d3e36`, `39ac8c4`, `f5ce7a5`, `9cefa36`.
 
 ## 4. R03 — ENCODER chốt identity trước khi có relation digest
 
@@ -128,15 +137,24 @@ summary vẫn `not_recorded`. Native replay tạo model **trước** khi seed.
 (`raw/m01/cross_process_bit_identity.txt:9`, `raw/m01/forward_delta_runs.txt:6`).
 Test trước/sau ghi trong `raw/verify/62-encoder-relation.md` §4 (5 ca FAILED-before → PASS).
 
-**Hệ quả phải nói rõ:** bốn run id **superseded** — `5dee7425dd46c5f154808aac`, `6a528e877c328772e2c7bb28`,
-`ce89a9a27c4cceadeaaf30b0`, `eda30a37c0bc17ac43844f09` — vì id của chúng đã hash với
-`relation_state: not_recorded` (mint trước `f856338`), nên **không** id nào partition tensor relation.
-`ce89a9a2` **không** phải run canonical: nó là **valid measurement với identity không partition** —
-số `31.0178 / 49.5586` đo trên nó, pin chắc cho chính nó (seed `20261111`, tensor + sha256
-`20db0c27…f9ce92` persist ở `runs/ce89a9a2…/construction_state/`), nhưng hai run draw relation khác
-nhau vẫn có thể trùng id. Canonical run **chưa mint**.
+**Hệ quả — và nay đã verify end to end.** Chuỗi: code (`f856338`) → run `9b806c22221e944ff10e514e`
+có identity **đã** cover tensor (`relation_state.status "recorded"`, `sha256 == expected_sha256 ==
+20db0c27c979e9a0938c71af5142458dfa2070468d0ad3fcb6f24134c2f9ce92`, `matches_pinned_digest: true`) →
+rerun đó **lộ ra defect thứ hai**: guard persist bỏ qua run (handshake là job đầu) nên
+`construction_state/` không được ghi → đóng ở `34aaa10`
+(`model_encoder.py:262` `_adopt_scratch_relation`) → run cuối **`acc9b20e1aea48487f65f944`** mang **cả
+hai**: identity recorded (**digest tensor** `20db0c27…f9ce92` = pin) **và**
+`runs/acc9b20e…/construction_state/relation-seed20261111.npy` (digest **file** `6ce23bbc…f244`, khác
+vì gồm header numpy — pin là trên byte tensor). Số không đổi: delta `0.0` trên 36 giá trị
+per-condition và mọi gap, 0/18009 rank khác so với `ce89a9a2…`/`9b806c22…`.
+`acc9b20e1aea48487f65f944` là run canonical; `ce89a9a2` vẫn là run **số đo được đo lần đầu**
+(`31.0178 / 49.5586`, `gap 0.474394 / 6003`) nhưng identity của nó hash `relation_state: not_recorded`
+(mint trước `f856338`) nên **không** partition tensor. Năm id superseded, lý do riêng:
+`ce89a9a2…` (`not_recorded`); `9b806c22…` (recorded nhưng thiếu tensor); `5dee7425…`, `6a528e87…`,
+`eda30a37…` (relation draw từ generator không pin).
+Raw: `raw/verify/69-encoder-rerun.md` §4-§7, §R2; `runs/acc9b20e1aea48487f65f944/construction_state/`.
 
-Commit `f856338`.
+Commit `f856338`, `34aaa10`.
 
 ## 5. R04 — Warm cache native nhận dữ liệu pipeline khác
 
@@ -342,7 +360,7 @@ Review đúng ở cả hai chỗ: CSV là 12/5 (không phải 15/2), và 21 row 
 
 | # | phát hiện của review | đối chiếu | kết quả |
 |---|---|---|---|
-| 1 | ENCODER Full gap phải là `0.474394 / 6003`, không `0.539144 / 6001` | `summary/encoder_fashioniq_ce89a9a2…/full.json`: `composition_gap_ndcg 0.47439372489324116`, `gap_cohort_count 6003`, `query_count 6003`; `0.5391438513723383 / 6001` là của **LIMN** `9e4918a6…` (`raw/m03/derived_subset_runs.json:56,67`), dán nhầm sang mục ENCODER | **review đúng** |
+| 1 | ENCODER Full gap phải là `0.474394 / 6003`, không `0.539144 / 6001` | `summary/encoder_fashioniq_ce89a9a2…/full.json`: `composition_gap_ndcg 0.47439372489324116`, `gap_cohort_count 6003`, `query_count 6003`; số này re-confirmed y hệt trên canonical `acc9b20e…` (`summary/encoder_fashioniq_acc9b20e1aea48487f65f944/full.json`); `0.5391438513723383 / 6001` là của **LIMN** `9e4918a6…` (`raw/m03/derived_subset_runs.json:56,67`), dán nhầm sang mục ENCODER | **review đúng** |
 | 2 | tie-rule là **7/17** không phải 10/17 | 6 config `torch.argsort` tăng dần trên `1-cos` (CLIP4Cir ×2 config chung 1 file, MTST_PTHA, TME, CSMCIR, SPRC) + DCNet `torch.topk` ×3 nhánh = **7**; số 10 đến từ đếm **dòng** (CSMCIR 5 lời gọi, MTST 3, SPRC 3, CLIP4Cir 2, DCNet 3 = 16 dòng) | **review đúng**; 10 là số config **không** bị ảnh hưởng |
 | 3 | `unit_declared(4)` **đã bao gồm** `unit_sibling_key(2)` ⇒ 4+2 đếm đôi | `DECLARED_UNIT_SOURCES = ("declared","sibling_key")` (`native_measurements.py:83`), `:908-913` | **review đúng**; `4 + 39 = 43` mới là phép cộng đúng |
 | 4 | CLVC transform **chưa từng** được đo; equal Recall không chứng minh transform vô can | không có counterfactual `Resize(224)`, không có pixel trace lịch sử | **review đúng**; claim cũ bị rút |
@@ -456,7 +474,7 @@ không phủ nhận số cold). Không còn là vật cản poll.
 | 6 | Service chết bởi SIGTERM ngoài, không rõ nguồn | §17(c) | xác định tiến trình gửi tín hiệu |
 | 7 | Nhất quán chéo tài liệu | sáu drift đã sửa tay (`FINAL_REPORT.vi.md` §6 "Hạn chế đã biết"); sweep R12 tìm thêm số sai, nay ghi trong CENSUS | chín tài liệu còn lại **không** được bảo đảm nhất quán nội bộ |
 | 8 | **ĐÃ SỬA** — `FINAL_REPORT.vi.md` từng ghim bundle **cũ** `index-DWpK0yeS.js` / `7e34724e…` ở :31 | bundle sống là `index-DeTvxLlD.js` / `1503e891…` (§19); `FINAL_REPORT` nay ghi đúng và mọi tài liệu còn nhắc bundle cũ đều được dán nhãn superseded | — |
-| 9 | **ĐÃ SỬA** — `MODEL_LIMN_ENCODER_VERIFICATION.vi.md:434` từng ghi `0.539144 / 6001` và câu "không đổi so với run canonical cũ"; `FINAL_REPORT`/census từng gọi `ce89a9a2…` là run canonical | nay `0.474394 / 6003` trên run `ce89a9a2…` (valid measurement, identity **không** partition vì id hash `relation_state: not_recorded`); `M-01-a` hạ xuống `FIXED_CODE / RERUN_PENDING`; canonical run encoder **chưa mint** (§13 mục 1; CENSUS §0.6) | — |
+| 9 | **ĐÃ SỬA** — `MODEL_LIMN_ENCODER_VERIFICATION.vi.md:434` từng ghi `0.539144 / 6001` và câu "không đổi so với run canonical cũ"; `FINAL_REPORT`/census từng gọi `ce89a9a2…` là run canonical | nay `0.474394 / 6003`; `ce89a9a2…` là run **số đo được đo lần đầu** (identity hash `relation_state: not_recorded`), `M-01-a` nay `FIXED_VERIFIED` với run canonical `acc9b20e…` (identity recorded + tensor persist — §4, CENSUS §0.6) | — |
 | 10 | `FINAL_REPORT.vi.md:198` còn "17 model / 21 dòng dùng được" | §12 | như trên |
 
 **Kết luận không đổi:** mọi sửa trong đợt này làm gate **trung thực**, không làm model nào **đạt**.
