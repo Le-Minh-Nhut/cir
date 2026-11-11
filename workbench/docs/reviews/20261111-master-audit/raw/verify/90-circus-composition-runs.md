@@ -379,7 +379,64 @@ e.g. 4096 paths per `encode_targets` call with the worker still batching at 32 i
 specified but **not implemented or committed**: the `tgcir` full run held the GPU lock and a
 run-identity-affecting edit to the runner was not landed against an in-flight run. It is the open item.
 
-### API cross-check for the full run
+## 4.3 `tgcir` full run — COMPLETED (PARTIAL), two conditions lost to a real defect
+
+| field | value |
+|---|---|
+| run_id | `9f115afeb58eb1adf75d88ba` |
+| PID (gpu_job / control) | 1304819 / 1304827 |
+| start / end (UTC) | 2026-11-11T19:36:09Z → 2026-11-11T19:46:25Z |
+| wall time | **616 s (10 m 16 s)** |
+| execution_status | `PARTIAL`, exit code 1 |
+| queries / gallery | 6003 / 74381 |
+| images encoded | 74381 gallery (one agnostic scope, `gallery_global.npy` 152 332 416 B = 74381 × 512 × 4) + 6003 multimodal query rows |
+| s/img (gallery) | **0.0093 s/img** (616 s / 74 381) — ~6.5× faster than `clvc_net`, consistent with one scope instead of three and a 512-d head instead of 2048-d |
+
+`condition_status`:
+
+| condition | status | scored | reason |
+|---|---|---|---|
+| `multimodal` | `COMPLETED` | 6003 / 6003 | — |
+| `text_only_black_image` | **`MODEL_UNAVAILABLE`** | **0 / 6003** | `AdapterWorkerError: adapter_worker_job_failed: model=tgcir phase=queries error=ValueError: tgcir caption text 1 ('Is grey with a design on the back.') resolves to no category, so no correction dictionary can be chosen` |
+| `image_only_empty_text` | **`MODEL_UNAVAILABLE`** | **0 / 6003** | same error |
+
+`multimodal` metrics (the one condition that ran): R@10 **23.33833083458271**, R@50
+**42.11227719473597**, nDCG_full 0.24702051966534347, MRR 0.12098114437415375, coverage 1.0,
+6003/6003 scored. nDCG gap `null` (`"no queries have exact ranks in all three conditions"`).
+
+`topk_export`: `{"depth": 100, "requested": true, "status": "TOPK_EXPORT_COMPLETE_PARTIAL",
+"partial": true, "missing_query_count": 12006, ...}` — the two failed conditions' windows.
+
+### The defect this run exposes: `text_only_black_image` stages the image, so TG-CIR loses the stem
+
+`runner._stage_query_path:627-631` writes the blacked-out query image to
+`work_root/queries/<condition>/<qid>.png` and returns that path. TG-CIR's `Corrections.correct`
+resolves a caption's category in this order (88 §6): explicit caller category → `(reference stem,
+raw text)` → raw text → reference stem. For exactly **3 of 6003** release queries the text appears in
+no caption file under a unique category, so resolution depends on the REFERENCE STEM:
+
+```
+queries NOT resolvable by text alone: 3
+   ('7:3938', 'Is grey with a design on the back.', '7:20350')
+   ('7:4723', 'Is an off the shoulder top.',          '7:63668')
+   ('7:5123', 'Fades from red to orange.',            '7:70795')
+```
+
+Under `multimodal` those queries arrive with their real image path (`B0….jpg`), the stem resolves, and
+the caption corrects. Under `text_only_black_image` the path is the STAGED `7:3938.png`, whose
+`Path(...).stem` is the **qid**, not an image id — so the lookup has neither text nor stem to work
+with and raises. Because `_run` converts a failed worker reply into `AdapterWorkerError` and
+`runner._encode_queries:693-694` re-raises that unconditionally, one such query fails the whole
+batch's condition: 6003 unscored.
+
+This is the SAME class of abort the `5cb0103` fix removed for the blank caption, arriving through a
+different input (the staged path), and it is not fixed here: the correct fix is for the runner to hand
+the adapter the ORIGINAL query identity alongside the staged path, which is a `runner.py` change of the
+call-window kind still held open. Recorded, not worked around.
+
+The gallery encode is real: `work/tgcir/features/gallery_global.npy` is 152 332 416 bytes =
+74 381 × 512 × 4, written 19:45:05Z, i.e. this run paid it. The 616 s is the whole run.
+
 
 Recorded from the served API (HTTP GET only) for `eab10106b2df8e97fb7a5ce5`:
 
@@ -392,18 +449,18 @@ GET /api/composition/runs?include_smoke=true                                    
 
 ## Còn chặn
 
-1. **`tgcir` full run is IN FLIGHT at yield time.** PID 1304819 (gpu_job wrapper) / 1304827 (control),
-   run_id not yet visible (the directory appears after the gallery encode begins), started
-   2026-11-11T19:36:09Z, log `/tmp/cirrus_tgcir.log`, stamp `/tmp/cirrus_tgcir.stamp`. How to check:
-   `pgrep -af composition_eval`, `tail /tmp/cirrus_tgcir.log`, then
-   `ls -d workbench/artifacts/composition/summary/tgcir_*`.
+1. **`tgcir`'s `text_only_black_image` and `image_only_empty_text` are LOST to a real runner/adapter
+   mismatch** (§4.3): `_stage_query_path` hands the adapter a staged `<qid>.png`, so TG-CIR loses the
+   reference stem and 3 of 6003 queries cannot be scoped; one such query fails the whole condition
+   with `AdapterWorkerError`. Only `multimodal` has numbers for this model. The fix belongs in
+   `runner.py` (pass the original image identity alongside the staged path) and is NOT made here.
 2. **The runner call-window fix is NOT implemented.** `runner.py` is untouched (`git log -1 --
    workbench/composition/runner.py` = `f856338`, predating this session); `prefetch_rows:141` still
-   short-circuits to serial. So §4.2's 0.0603 s/img is the UNIMPROVED number, and 6–10 % GPU
-   utilisation remains unexplained by anything except this limitation. This is the main open item.
-3. **`clvc_net`'s full-run numbers are the pre-window-fix numbers.** When the window lands, the run
-   must be re-measured; the regression anchor is the gallery digest, not a sample comparison:
-   `889bc330`'s `gallery_dress.npy.json` records `content_digest =
+   short-circuits to serial. So the recorded 0.0603 s/img (`clvc_net`) and 0.0093 s/img (`tgcir`) are
+   the UNIMPROVED numbers, and 6–10 % GPU utilisation remains explained by nothing except this.
+3. **Both full-run measurements predate any window fix.** When one lands, both must be re-measured;
+   the regression anchor is the gallery digest, not a sample comparison: `889bc330`'s
+   `gallery_dress.npy.json` records `content_digest =
    a9bfa6ed4853bf999eb468379bdf5b760ef6dc3ba81861f3f0020ea509c30680`, shape `[74381, 2048]`, and
    `eab10106` reproduced that exact digest at stride 32. Any window change must reproduce it exactly.
 4. **`clvc_net`'s empty-text condition remains unmeasurable** (`text_model.py:84-86`, 87 §5c).
