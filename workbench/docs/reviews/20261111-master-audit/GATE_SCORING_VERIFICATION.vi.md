@@ -75,7 +75,10 @@ hiện** chứ không thể **ngăn**.
    (`forward_max_abs: native 1e-05, adapter 1.0`).
 
 Verdict trên artifact thật **không đổi** sau khi sửa (`raw/gate_head_verdicts_after.txt`):
-`limn` vẫn `PARITY_MANDATORY_SUBCHECK_FAILED` (3 failure), `encoder` 13 failure, `passed_models: []`.
+`limn` vẫn `PARITY_MANDATORY_SUBCHECK_FAILED` (3 failure), `encoder` **16** failure, `passed_models: []`.
+Encoder đi từ 13 → 16 vì ba subcheck `relation.{dress,shirt,toptee}.digest` (dimension `relation_parity`)
+trở thành **mandatory** ở R02/R03 — artifact cũ không ghi `relation_state`, nên đó là thông tin thiếu được
+nêu ra, không phải hồi quy mới (`raw/verify/61-gate-contract.md`, bảng before → after).
 Khác biệt duy nhất: `limn` nay báo thêm `missing: ["metrics_parity"]` — artifact LIMN **không** ghi
 `native_metrics_match_feature_rerank` (đã kiểm bằng `json.load`), nên chiều đó chưa từng được đo.
 Đây là thông tin đúng bị thiếu trước đây, không phải hạ verdict.

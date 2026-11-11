@@ -451,7 +451,7 @@ không phủ nhận số cold). Không còn là vật cản poll.
 | 5 | Chỉ 2/16 model có bất kỳ bằng chứng G1/G2, **cả hai FAIL** | `/api/runs/parity-gate` `passed_models: []` | chạy differential thật (mục 2) |
 | 6 | Service chết bởi SIGTERM ngoài, không rõ nguồn | §17(c) | xác định tiến trình gửi tín hiệu |
 | 7 | Nhất quán chéo tài liệu | sáu drift đã sửa tay (`FINAL_REPORT.vi.md` §6 "Hạn chế đã biết"); sweep R12 tìm thêm số sai, nay ghi trong CENSUS | chín tài liệu còn lại **không** được bảo đảm nhất quán nội bộ |
-| 8 | `FINAL_REPORT.vi.md:31` còn ghim bundle **cũ** `index-DWpK0yeS.js` / `7e34724e…` | bundle sống là `index-DeTvxLlD.js` / `1503e891…` (§19) | sửa dòng đó (thuộc tài liệu master, ngoài phạm vi được giao lần này) |
+| 8 | **ĐÃ SỬA** — `FINAL_REPORT.vi.md` từng ghim bundle **cũ** `index-DWpK0yeS.js` / `7e34724e…` ở :31 | bundle sống là `index-DeTvxLlD.js` / `1503e891…` (§19); `FINAL_REPORT` nay ghi đúng và mọi tài liệu còn nhắc bundle cũ đều được dán nhãn superseded | — |
 | 9 | `MODEL_LIMN_ENCODER_VERIFICATION.vi.md:434` còn `0.539144 / 6001` và câu "không đổi so với run canonical cũ" | §13 mục 1 | chủ dự án duyệt sửa; census đã ghi số đúng |
 | 10 | `FINAL_REPORT.vi.md:198` còn "17 model / 21 dòng dùng được" | §12 | như trên |
 

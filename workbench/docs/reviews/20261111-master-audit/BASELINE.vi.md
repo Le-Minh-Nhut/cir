@@ -202,7 +202,8 @@ server, và đó chính là cách W-05 phát hiện bundle hỏng. Pin hiện h�
 `WEB_SURFACE_VERIFICATION.vi.md` §"Service được phục vụ".
 
 Cũng vì vậy con số `index-DjAje2d2.js` ghi bên trên là **superseded**: bundle đang phục vụ là
-`assets/index-DWpK0yeS.js`, sha256 `7e34724ebf55092e36524b98980cca55e71f3ddbaa62489c65577f92e18a6a16`.
+`assets/index-DeTvxLlD.js`, sha256 `1503e8911122587ba8c81e8ecf93d151312fda41e12ff5ba9580ef1797e18155` —
+đọc lại bằng `curl -s http://127.0.0.1:5173/ | grep -o 'assets/index-[^"]*\.js'` rồi `sha256sum` trên `dist/`.
 
 Backend trả lời (dùng `/api/benchmark-runs` làm readiness, **không** dùng `/api/models`):
 

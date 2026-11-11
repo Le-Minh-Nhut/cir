@@ -102,7 +102,8 @@ Frontend: `data.ts` khai báo thêm `sibling_key`; `EvaluationPage.tsx` cho cả
 
 `npm run build --prefix workbench/frontend` → exit 0, `✓ 39 modules transformed`, `✓ built in 190ms`.
 Không có import chết `fmtPercentValue`; không phải sửa tệp nào vì lý do build. Raw:
-`03-frontend-build.txt` (bản trước khi sửa frontend) và lần build sau sửa (bundle `index-DWpK0yeS.js`).
+`03-frontend-build.txt` (bản trước khi sửa frontend) và lần build sau sửa (bundle `index-DWpK0yeS.js` — bundle
+của **lượt đó**, nay **superseded**; bundle đang phục vụ là `index-DeTvxLlD.js`, xem `REMAINING_WORK.md`).
 
 ### 2. `workbench/backend/native_measurements.py` — **PASS**
 
@@ -260,7 +261,9 @@ Có sửa backend + frontend ⇒ build lại và khởi động lại **đúng m
 - Sẵn sàng (poll `/api/benchmark-runs`, KHÔNG dùng `/api/models`): HTTP 200, 13 mục.
 - Frontend `:5173`: bundle `assets/index-DWpK0yeS.js` (377.82 kB), sha256
   **`7e34724ebf55092e36524b98980cca55e71f3ddbaa62489c65577f92e18a6a16`**;
-  `dist/assets/index-DWpK0yeS.js` cùng hash, `cmp` → IDENTICAL.
+  `dist/assets/index-DWpK0yeS.js` cùng hash, `cmp` → IDENTICAL. **Đây là bản ghi của lượt đó và đã
+  SUPERSEDED**: bundle đang phục vụ nay là `assets/index-DeTvxLlD.js`, sha256 `1503e891…8155` (đọc lại bằng
+  `curl -s http://127.0.0.1:5173/ | grep -o 'assets/index-[^"]*\.js'` rồi `sha256sum` trên `dist/`).
 - Uvicorn cũ PID 1227919 trên `:8765` vẫn sống — **không** dùng để đo bất cứ gì.
 - Raw: `17-final-service-identity.txt` (bản cuối), `11-service-identity-postfix.txt` (bản trước khi sửa
   `.gitignore`).
@@ -478,23 +481,33 @@ của nó có **0** khoá đơn vị (đã quét `unit`/`percent`/`pct`/`fractio
 - `/api/benchmark-runs` → **HTTP 200** (ready).
 - Bundle: **`assets/index-DWpK0yeS.js`**, sha256
   **`7e34724ebf55092e36524b98980cca55e71f3ddbaa62489c65577f92e18a6a16`**; bytes phục vụ **trùng khớp**
-  `dist/` (`cmp` → IDENTICAL).
-- Raw: `32-service-identity-final.txt`.
+  `dist/` (`cmp` → IDENTICAL). **Đã SUPERSEDED** — bundle sống là `assets/index-DeTvxLlD.js`, sha256
+  `1503e8911122587ba8c81e8ecf93d151312fda41e12ff5ba9580ef1797e18155` (`cmp` → IDENTICAL với `dist/`); đọc
+  lại mỗi lần build bằng `curl -s http://127.0.0.1:5173/ | grep -o 'assets/index-[^"]*\.js'` + `sha256sum`.
+- Raw: `32-service-identity-final.txt` (bản ghi của lượt này).
 
 ## Tóm tắt phát hành
 
-- **Sweep chốt:** `18 failed, 2799 passed, 47 skipped` — **NEW = 0 / DROPPED = 0 / COMMON = 18**.
+- **Sweep trung gian** (trước `relation_state`, bị các lượt sau vượt qua): `18 failed, 2799 passed, 47 skipped`
+  — **NEW = 0 / DROPPED = 0 / COMMON = 18**.
 - **GAP = 0** (18+2799+47 = 2864 = collected).
 - Bốn khẳng định Phase 1: **PASS** cả bốn.
 - Không còn hồi quy nào thuộc chiến dịch này.
 
-## SWEEP CÂY PHÁT HÀNH (SHIP TREE) — số CHỐT
+## SWEEP TẠI `be14393` — **BỊ THAY THẾ (superseded)**
 
-Đây là lần đo trên **đúng cây sẽ phát hành**: sau `relation_state` (`runner.py`) và `relation_parity`
+> **Đã superseded.** Sweep có thẩm quyền là sweep tại `cd980dc` (= `TESTED_SOURCE_SHA`):
+> `18 failed, 2901 passed, 47 skipped`, `2966 collected`, gap 0, NEW=0 / DROPPED=0 / COMMON=18 —
+> bản ghi `raw/verify/68-final-sweep.md`. Mục dưới đây giữ nguyên số của lượt `be14393` như **bản ghi
+> lịch sử của lượt đó**, không còn là "số chốt" của cây phát hành.
+
+Đây là lần đo trên cây sau `relation_state` (`runner.py`) và `relation_parity`
 (`parity_gate.py`), sau khi `limn-encoder` chốt option (b) cho derived-status, và sau khi test doubles
-BLAS / import scanner / `compile_module` được sửa.
+BLAS / import scanner / `compile_module` được sửa. Production của cây đó đã bị `cd980dc` vượt qua
+(`git diff be14393 cd980dc` ngoài `workbench/docs` và `workbench/tests` **không** rỗng).
 
-**1. Dòng tổng kết nguyên văn:**
+**1. Dòng tổng kết nguyên văn** (của lượt `be14393`, đã **superseded**; dòng có thẩm quyền là
+`18 failed, 2901 passed, 47 skipped, 350 warnings in 3486.46s (0:58:06)` tại `cd980dc`):
 
 ```
 18 failed, 2800 passed, 47 skipped, 350 warnings in 3540.59s (0:59:00)
@@ -505,7 +518,7 @@ BLAS / import scanner / `compile_module` được sửa.
 | | |
 |---|---|
 | failed | 18 |
-| passed | 2800 |
+| passed | 2800 (của lượt `be14393`, đã superseded) |
 | skipped | 47 |
 | **tổng** | **2865** |
 | `--collect-only -q` (trước run) | 2865 |
@@ -515,7 +528,9 @@ BLAS / import scanner / `compile_module` được sửa.
 Tổng collected **tăng +1** so với lần sweep trước (2864 → 2865). Nguồn: `test_derived_subset_status.py`
 được `limn-encoder` viết lại lúc 01:22:41 để chuyển sang option (b); file này hiện có **5 node**. Delta
 chính xác **không chứng minh được** vì file còn untracked (không có snapshot git của số node trước đó) —
-nêu rõ để không ai đọc con số +1 như một phép đo.
+nêu rõ để không ai đọc con số +1 như một phép đo. Sau đó số collected còn tăng tiếp 2865 → 2966 khi lô
+`d6d3e36…cd980dc` thêm test; lượt **có thẩm quyền** là lượt cuối tại `cd980dc` (`2966 collected`,
+`2901 passed`), xem `raw/verify/68-final-sweep.md`.
 
 **3. Sức khoẻ log:** `ERROR` row = **0** (nghĩa là không có collection error; 325 dòng bắt đầu bằng `E `
 là **thân traceback** của `--tb=short`, không phải lỗi collect). `OSError: [Errno 28]` = **0**. Log
@@ -549,13 +564,15 @@ lệ. Các tệp `raw/verify/*` được ghi **sau** khi sweep kết thúc, khô
 Raw: `33-ship-sweep-preflight.txt`, `37-ship-sweep-result.txt`, `38-ship-failure-diff.txt`,
 `39-ship-accounting-and-drift.txt`, log đầy đủ `raw/full_suite_ship_sweep.txt`.
 
-### Bảng số qua ba lần sweep (giữ nguyên lịch sử)
+### Bảng số qua bốn lần sweep (giữ nguyên lịch sử)
 
 | cây | dòng tổng kết | NEW | DROPPED | COMMON | collected | GAP |
 |---|---|---|---|---|---|---|
 | trước khi sửa 6 hồi quy | 24 failed, 2793 passed, 47 skipped | 6 | 0 | 18 | 2864 | 0 |
 | trước `relation_state` | 18 failed, 2799 passed, 47 skipped | 0 | 0 | 18 | 2864 | 0 |
-| **cây phát hành (chốt)** | **18 failed, 2800 passed, 47 skipped** | **0** | **0** | **18** | **2865** | **0** |
+| `be14393` — **superseded**, bản ghi lịch sử | 18 failed, 2800 passed, 47 skipped | 0 | 0 | 18 | 2865 | 0 |
+| **`cd980dc` — cây phát hành, CÓ THẨM QUYỀN** | **18 failed, 2901 passed, 47 skipped** | **0** | **0** | **18** | **2966** | **0** |
 
 Đọc bảng này theo thứ tự thời gian: mỗi dòng là một cây KHÁC NHAU, không phải cùng một cây chạy lại.
-Dòng cuối là cây phát hành.
+Dòng cuối là cây phát hành và là số **có thẩm quyền** (`raw/verify/68-final-sweep.md`, 3486.46 s, `^ERROR ` = 0,
+`Errno 28` = 0); dòng `be14393` được giữ làm bản ghi của lượt đó và đã bị thay thế.
