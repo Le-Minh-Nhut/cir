@@ -112,17 +112,44 @@ def test_two_candidate_reports_never_substitute_and_say_why(tmp_path: Path) -> N
     assert len(row["identity_ambiguous"]) == 2, row["identity_ambiguous"]
 
 
-def test_a_single_candidate_joins_a_row_that_states_no_protocol(tmp_path: Path) -> None:
-    """The one permitted relaxation, and it records itself."""
+def test_a_single_candidate_joins_a_row_that_states_no_protocol_or_checkpoint(
+        tmp_path: Path) -> None:
+    """The one permitted relaxation: no protocol stated, one candidate, checkpoint agrees.
+
+    The row states neither a protocol nor a checkpoint, so the single report is the only measurement
+    it could mean; its protocol is taken from that report and the label says so.
+    """
+    # The row omits the protocol; the single report states one, so the join IS a relaxation.
+    row = {"model_id": "dcnet", "aggregate": {"macro_r10": 12.0, "macro_r50": 30.0}}
+    payload = _collect(tmp_path, {
+        "checkpoint_selection/measurement.json": row,
+        "reports/only_aggregate.json": {**UNRELATED_REPORT, "checkpoint_id": None},
+    })
+    served = _row(payload, "dcnet", "measurement.json")
+    assert served["metrics"]["r10"] == pytest.approx(88.0), served["metrics"]
+    assert served["identity_join"] == "single_candidate_protocol_unknown", served
+    assert served["raw_protocol_id"] is None, served
+
+
+def test_a_single_candidate_cannot_back_a_row_that_names_another_checkpoint(
+        tmp_path: Path) -> None:
+    """R01 through the side door: no protocol, but `checkpoint_A` vs a `checkpoint_B` report.
+
+    BEFORE: the single-candidate branch skipped `_identity_matches` entirely, so this row served 88.0
+    under its own `checkpoint_A` label. A row that names a checkpoint is a specific claim, not a
+    wildcard — the replacement is refused and the candidate is named as why.
+    """
     row = {key: value for key, value in ROW.items() if key != "protocol_id"}
     payload = _collect(tmp_path, {
         "checkpoint_selection/measurement.json": row,
         "reports/only_aggregate.json": UNRELATED_REPORT,
     })
     served = _row(payload, "dcnet", "measurement.json")
-    assert served["metrics"]["r10"] == pytest.approx(88.0), served["metrics"]
-    assert served["identity_join"] == "single_candidate_protocol_unknown", served
-    assert served["raw_protocol_id"] is None, served
+    assert served["metrics"]["r10"] == pytest.approx(12.0), served["metrics"]
+    assert served["raw_metrics"] is None, served
+    assert served["backed_by"] == served["source"]["path"], served
+    assert served["identity_ambiguous"], served
+    assert served["checkpoint_id"] == "checkpoint_A", served
 
 
 # ------------------------------------------------------------------------------- R07a / R07b
@@ -235,6 +262,38 @@ def test_a_rollup_restating_an_artifact_is_still_not_counted_twice(tmp_path: Pat
     assert rollup["duplicate_of"].endswith("artifact.json"), rollup
 
 
+def test_two_exports_of_one_checkpoint_are_one_measurement(tmp_path: Path) -> None:
+    """Ancestry the FILE states — same weights digest — is a duplicate; equal scores are not."""
+    payload = _collect(tmp_path, {
+        "checkpoint_selection/one.json": {"model_id": "fx", "protocol_id": "protocol_A",
+                                          "aggregate": {"macro_r10": 30.0},
+                                          "checkpoint_sha256": "a" * 64},
+        "checkpoint_selection/two.json": {"model_id": "fx", "protocol_id": "protocol_A",
+                                          "aggregate": {"macro_r10": 30.0},
+                                          "checkpoint_sha256": "a" * 64},
+    })
+    rows = [row for row in payload["measurements"] if row.get("metrics")]
+    assert len(rows) == 2, rows
+    assert len([row for row in rows if row["counted"]]) == 1, rows
+    assert len([row for row in rows if row["duplicate_of"]]) == 1, rows
+
+
+def test_two_checkpoints_with_different_digests_and_equal_scores_both_count(
+        tmp_path: Path) -> None:
+    """The R08 case with the digests present: different weights ⇒ two measurements."""
+    payload = _collect(tmp_path, {
+        "checkpoint_selection/a.json": {"model_id": "fx", "protocol_id": "protocol_A",
+                                        "aggregate": {"macro_r10": 30.0},
+                                        "checkpoint_sha256": "a" * 64},
+        "checkpoint_selection/b.json": {"model_id": "fx", "protocol_id": "protocol_A",
+                                        "aggregate": {"macro_r10": 30.0},
+                                        "checkpoint_sha256": "b" * 64},
+    })
+    rows = [row for row in payload["measurements"] if row.get("metrics")]
+    assert all(row["counted"] for row in rows), rows
+    assert all(row["duplicate_of"] is None for row in rows), rows
+
+
 def test_the_real_tree_keeps_equal_metrics_rows_counted() -> None:
     """Snapshot of the real catalog: airknow has two runs at two precisions, and `hint`/`tme` each
     ship two files with the same numbers. None of them may be demoted on value equality."""
@@ -244,7 +303,10 @@ def test_the_real_tree_keeps_equal_metrics_rows_counted() -> None:
                        if row["model_id"] == "airknow" and row["counted"]
                        and not row["rollup"]]
     assert len(counted_airknow) == 2, counted_airknow
-    for row in rows:
-        if row.get("same_metrics_as") and row["model_id"] in {"hint", "tme"}:
-            assert row["counted"] is True, row
-            assert row["duplicate_of"] is None, row
+    # `hint` and `tme` each ship two exports of ONE checkpoint (same `checkpoint_sha256`), so
+    # exactly one of each pair counts and the other names it as its ancestor.
+    for model in ("hint", "tme"):
+        pair = [row for row in rows if row["model_id"] == model and not row["rollup"]]
+        assert len(pair) == 2, pair
+        assert len([row for row in pair if row["counted"]]) == 1, pair
+        assert len([row for row in pair if row["duplicate_of"]]) == 1, pair

@@ -66,29 +66,79 @@ Rules, as implemented:
 Anything else with equal numbers keeps `counted: true` and records `same_metrics_as: <path>`.
 The stated `sha256` + `metric_path` identity needs no rule: each block is yielded once per path.
 
+## with_metrics 21 → 23: which two rows, and why they are two measurements
+
+Verdict: **neither pair is a second measurement.** The +2 was wrong and has been reverted; `hint` and
+`tme` are each ONE run written twice, and each pair now carries `duplicate_of` again — this time on
+stated ancestry (identical `checkpoint_sha256`), not on rounded scores.
+
+| model | file A | file B | A sha256 | B sha256 | metrics (both) | checkpoint (both) | protocol (both) | verdict |
+|---|---|---|---|---|---|---|---|---|
+| hint | `checkpoint_selection/20261106T002617+0700/cohort/measurements/hint_fashioniq.json` (4333 B, `2026-11-06T15:23:57Z`) | `checkpoint_selection/20261106T233409+0700/measurements/hint_doc_command.json` (4333 B, `2026-11-06T17:18:51Z`) | `131e4a35f6cc…acc3acd6` | `0355a0c27849…c06f94` | r10 59.80338494972219, r50 80.13076097500765, mean 69.96707296236491 | `fashioniq` / `fashioniq` | `fashioniq_val_split` / same | **DUPLICATE** — one run re-exported |
+| tme | `checkpoint_selection/20261106T002617+0700/cohort/measurements/tme_fashioniq_0.json` (11483 B, `16:08:56Z`) | `checkpoint_selection/20261106T233409+0700/measurements/tme_normal_path_full.json` (11372 B, `18:53:49Z`) | `35b605786602…9641d0c` | `0239f181e8e2…03345a9` | r10 54.922901590665184, r50 74.83842174212138, mean 64.88066166639328 | `fashioniq_0` / `fashioniq_0` | `fashioniq_original_split` / same | **DUPLICATE** — one run re-exported |
+
+Different files, different `sha256` — but both members of each pair record the SAME weights:
+`provenance.checkpoint_sha256 = bf9c72d42206b667ed586758c15c648970df821857e4067f26155a114a6517d4`
+(hint) and `fea7fc08760dad1f5a66184ea7e65b45388f9781157cbd33a3b64db74103968a` (tme), with the same
+`checkpoint_id`. The file pair also agrees on `replay_type`/`model_id`/`protocol`/`complete_benchmark`
+and differs only in `timestamp` (hint) or in feature-cache provenance (tme:
+`UNVERIFIED` → `VERIFIED_PRIOR_RUN`). That is one measurement at two precisions of bookkeeping, not
+two checkpoints.
+
+Fix applied: `_checkpoint_fingerprint()` reads the digest a document states (top-level, else unanimous
+across `categories`/`results` provenance) into `row["checkpoint_fingerprints"]`, and `_mark_duplicates`
+rule 2 demotes a same-model/same-protocol/same-digest/same-number group. The keeper is the latest
+`recorded_at`, and the group size is recorded as `checkpoint_ancestry_count`. Result: `with_metrics`
+back to **21**, `duplicate_rows` back to **22**; `hint_doc_command.json` and `tme_normal_path_full.json`
+are the counted rows, the earlier exports are `duplicate_of` them.
+
+This rule cannot merge two genuinely different checkpoints: `airknow_n05` (`f4d25ed9…`) and
+`airknow_n08` (`756fc0bd…`) have different digests and stay two counted rows. Equal scores alone still
+never demote anything.
+
+## R01 side door (found in review) — closed
+
+`single_candidate_protocol_unknown` used to skip `_identity_matches` entirely, so a row with no
+protocol but `checkpoint_id="checkpoint_A"` was replaced by a `checkpoint_B` report and kept label A.
+Now the relaxation applies only when the join already matched (`len(matches) == 1`), and it is a
+LABEL for the `row.protocol_id is None ∧ one candidate ∧ candidate states a protocol` case. A row
+naming a different checkpoint refuses like every other mismatch and lists the candidate in
+`identity_ambiguous`. Enforced, not documented: after the if/elif chain,
+
+```python
+if report is not None and identity_join != "exact" and not _identity_matches(row, report):
+    raise AssertionError(...)
+```
+
+`test_a_single_candidate_cannot_back_a_row_that_names_another_checkpoint` covers it
+(`r10 == 12.0`, `raw_metrics is None`, `backed_by == own source`, `identity_ambiguous` non-empty).
+
+## csmcir
+
+`identity_ambiguous` holds both `reports/csmcir_fashioniq_20261107T054343058424Z_…f564570e_aggregate.json`
+and `reports/csmcir_fashioniq_20261107T054933277898Z_…f03887d2_aggregate.json`. Nothing was
+substituted, and `r10 = 57.05073873202006` is still served under its own label `checkpoint_id=fashioniq`
+/ `protocol_id=fashioniq_original_split`, with `backed_by` = its own source file.
+
 ## Verification
 
 New tests: `workbench/tests/test_native_measurements_identity.py` — 13 passed.
 Fail-before is proved by the bundled probe, which imports the `06e30e8c` snapshot and still shows
 every defect (see below); each new test quotes the pre-fix output in its docstring.
 
-`pytest workbench/tests/test_native_measurements_census.py -q` ⇒ **1 failed, 27 passed**.
+`pytest workbench/tests/test_native_measurements_census.py workbench/tests/test_native_measurements_identity.py -q` ⇒ **44 passed**.
 
-`test_a_rollup_entry_is_not_double_counted_as_a_second_measurement` fails at
-`assert len(identities) == len(set(identities))` (23 vs 21). That assertion is R08 itself: it builds
-ranked-table identity as `(model_id, protocol_id, round(value, 4))` and demands uniqueness, which is
-exactly the rule that demoted a distinct checkpoint to a duplicate. The two rows it now flags are
-`hint` (`hint_fashioniq.json` vs `hint_doc_command.json`) and `tme` (`tme_fashioniq_0.json` vs
-`tme_normal_path_full.json`) — different files, same checkpoint, no shared backing artifact, both
-`counted: true` by design. The test encodes the wrong contract and is left unmodified.
-
-Also updated earlier in this change and now green: `test_a_suffixed_sibling_key_declares_the_unit`
-(its `fx_fraction_block` case now passes via `_agreed_suffix`).
+`test_a_rollup_entry_is_not_double_counted_as_a_second_measurement` asserted ranked identity as
+`(model_id, protocol_id, round(value, 4))` uniqueness — the R08 defect spelled as a requirement. It
+now asserts uniqueness of `(source sha256, metric_path)`, i.e. of the source block, and its docstring
+states why value equality is not identity (two checkpoints with equal recall). Everything else in the
+test is unchanged. No other test in the repo used the old rule
+(`grep -rn "round(value, 4)\|round(value,4)" workbench/tests/` now matches only that docstring).
 
 Real catalog, before → after (`counts`):
 
-* `with_metrics` 21 → 23 (the two demoted rows above are now counted)
-* `duplicate_rows` 22 → 20
+* `with_metrics` 21 (unchanged: the +2 candidate pair is one run each — see the table above)
+* `duplicate_rows` 22 (unchanged)
 * everything else unchanged: `blocks_with_metrics 43`, `rollup_rows 18`, `unbacked_rows 18`,
   `unbacked_counted 0`, `unit_declared 4`, `unit_sibling_key 2`, `unit_inferred 39`,
   `models_with_metrics 17`, `verified 0`

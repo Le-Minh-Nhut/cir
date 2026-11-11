@@ -250,6 +250,28 @@ def _owner_key(trail: tuple[str, ...]) -> str | None:
     return None
 
 
+def _checkpoint_fingerprint(payload: dict[str, Any]) -> tuple[str, ...] | None:
+    """The checkpoint identities a document states UNANIMOUSLY, or None when it states none.
+
+    `hint_fashioniq.json` and `hint_doc_command.json` are ONE run written twice: same
+    `checkpoint_sha256` (`bf9c72d4…`), same `checkpoint_id` (`fashioniq`), same numbers, different
+    timestamps. Reading the weights digest the file itself records is what makes that a statement of
+    ancestry rather than a guess from equal scores — two genuinely different checkpoints produce
+    different digests, and two checkpoints of one model can easily produce identical recall.
+    """
+    from_payload = payload.get("checkpoint_sha256")
+    if isinstance(from_payload, str) and from_payload.strip():
+        return (from_payload.strip(),)
+    members = payload.get("categories")
+    if not isinstance(members, list):
+        members = payload.get("results")
+    if not isinstance(members, list):
+        return None
+    digests = {(member.get("provenance") or {}).get("checkpoint_sha256")
+               for member in members if isinstance(member, dict)}
+    digests = {digest.strip() for digest in digests if isinstance(digest, str) and digest.strip()}
+    return tuple(sorted(digests)) if digests else None
+
 def _categories(payload: dict[str, Any]) -> list[str]:
     raw = payload.get("categories")
     names: list[str] = []
@@ -328,6 +350,7 @@ def _rows_for_file(path: Path, root: Path) -> list[dict[str, Any]]:
         "same_metrics_as": None,
         # Which suffix each metric's value came from (R07: mixed scales stay visible).
         "per_metric_units": None,
+        "checkpoint_fingerprints": None,
     }
     try:
         payload = json.loads(path.read_text())
@@ -408,6 +431,8 @@ def _rows_for_file(path: Path, root: Path) -> list[dict[str, Any]]:
             # Which suffix each metric's value came from, so a mixed-scale block is visible rather
             # than collapsed into the one label above.
             "per_metric_units": per_metric_units,
+            # The weights the document says it measured (see `_checkpoint_fingerprint`).
+            "checkpoint_fingerprints": _checkpoint_fingerprint(payload),
             "mapping_status": mapping_status,
             "rollup": rollup,
             "rollup_entry": owner if rollup else None,
@@ -602,16 +627,18 @@ def _row_checkpoint(row: dict[str, Any]) -> str | None:
         return None
     return checkpoint
 
+def _checkpoint_agrees(row: dict[str, Any], report: dict[str, Any]) -> bool:
+    """Whether the row's checkpoint statement is absent or identical to the report's."""
+    row_checkpoint = _row_checkpoint(row)
+    report_checkpoint = report.get("checkpoint_id")
+    return not (row_checkpoint and report_checkpoint and row_checkpoint != report_checkpoint)
+
 def _identity_matches(row: dict[str, Any], report: dict[str, Any]) -> bool:
     """Whether `report` states the same measurement identity as `row` on every field both state."""
     row_protocol, report_protocol = row.get("protocol_id"), report.get("protocol_id")
     if row_protocol and report_protocol and row_protocol != report_protocol:
         return False
-    row_checkpoint = _row_checkpoint(row)
-    report_checkpoint = report.get("checkpoint_id")
-    if row_checkpoint and report_checkpoint and row_checkpoint != report_checkpoint:
-        return False
-    return True
+    return _checkpoint_agrees(row, report)
 
 def _backed_by_artifact(rows: list[dict[str, Any]],
                         artifacts_root: Path) -> list[dict[str, Any]]:
@@ -633,9 +660,15 @@ def _backed_by_artifact(rows: list[dict[str, Any]],
     Two reports matching one identity are not one measurement's evidence either: the row keeps its
     own number and states `identity_ambiguous: [paths]`, so a reader sees why nothing was substituted.
 
-    The single permitted exception: the row states NO protocol and the model has exactly ONE
-    candidate report, so the join is unambiguous; that is recorded as
-    `identity_join: "single_candidate_protocol_unknown"`.
+    The single permitted relaxation: the row states NO protocol and the model has exactly ONE
+    candidate report, so the protocol is taken from that report and the join is recorded as
+    `identity_join: "single_candidate_protocol_unknown"`. The checkpoint identity must STILL agree
+    (`_identity_matches`) — a row that names a checkpoint is a specific claim, not a wildcard, so
+    `checkpoint_A` with a single `checkpoint_B` report is REFUSED and listed in
+    `identity_ambiguous` like every other mismatch.
+
+    Nothing is substituted unless `_identity_matches` held for it; that is asserted below, so no
+    future edit can reopen the bypass this docstring describes.
     """
     reports = _backing_reports(artifacts_root)
     by_model: dict[str, list[dict[str, Any]]] = {}
@@ -655,18 +688,29 @@ def _backed_by_artifact(rows: list[dict[str, Any]],
         identity_join: str | None = None
         if len(matches) == 1:
             report: dict[str, Any] | None = matches[0]
-            identity_join = "exact"
+            # The join is a RELAXATION, and says so, exactly when the row stated no protocol and the
+            # single candidate supplied one. The checkpoint still had to agree (`_identity_matches`),
+            # so a row naming `checkpoint_A` can never be backed by a `checkpoint_B` report.
+            identity_join = ("single_candidate_protocol_unknown"
+                             if row.get("protocol_id") is None and len(candidates) == 1
+                             and report.get("protocol_id")
+                             else "exact")
         elif len(matches) > 1:
             report = None
             row["identity_ambiguous"] = sorted(item["path"] for item in matches)
-        elif row.get("protocol_id") is None and len(candidates) == 1:
-            # The row states no protocol, so there is exactly one candidate it could mean.
-            report = candidates[0]
-            identity_join = "single_candidate_protocol_unknown"
         else:
+            # No report states this identity. When candidates exist, name them: a reader must be
+            # able to see WHY its number was not substituted (R01: refuse, never relabel).
             report = None
-            if len(candidates) > 1:
+            if candidates:
                 row["identity_ambiguous"] = sorted(item["path"] for item in candidates)
+        # The invariant, enforced rather than documented: nothing may be substituted unless the
+        # identity really matched, so no future edit can reopen the R01 bypass.
+        if report is not None and identity_join != "exact" and not _identity_matches(row, report):
+            raise AssertionError(
+                f"R01 bypass: {row['source']['path']} ({row.get('checkpoint_id')!r}, "
+                f"{row.get('protocol_id')!r}) would be replaced by {report['path']} "
+                f"({report.get('checkpoint_id')!r}, {report.get('protocol_id')!r})")
         if report is None:
             if row.get("artifact_backed"):
                 # A direct artifact is its own backing.
@@ -710,15 +754,18 @@ def _mark_duplicates(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     `same_metrics_as: <path>` — the earlier version keyed on `round(value, 4)` and silently demoted
     the second checkpoint to a duplicate of the first.
 
-    `duplicate_of` is written in exactly two situations, both of them ancestry:
+    `duplicate_of` is written in exactly three ancestry situations:
 
     1. Two rows are backed by the SAME artifact (`backed_by` equal) for the same model and protocol:
        two files stating one run's number (the roll-up pair, `clip4cir_parsed.json` and
-       `selection_decisions.json`, both normalised to the replay artifact's number). The non-roll-up
-       row, else the first in path order, is the one that counts.
-    2. A roll-up row restates an in-tree artifact's number: the roll-up's numbers equal those of a
-       row whose source is NOT a roll-up. That relation is established from the source KIND
-       (`rollup:*` vs `artifact`), and value equality only picks WHICH artifact it restates.
+       `selection_decisions.json`). The non-roll-up row, else the first in path order, counts.
+    2. Two exports state the SAME `checkpoint_sha256` for the same model+protocol and one number:
+       ONE run written twice under two filenames (`hint_fashioniq.json` / `hint_doc_command.json`,
+       `tme_fashioniq_0.json` / `tme_normal_path_full.json`). The weights digest is the file stating
+       its own ancestry; equal scores alone are not, and two different checkpoints stay two rows.
+    3. A roll-up row restates an in-tree artifact's number: the relation is established from the
+       source KIND (`rollup:*` vs `artifact`), and value equality only picks WHICH artifact it
+       restates.
 
     A row that is merely numerically equal to another is not a duplicate and is not demoted.
 
@@ -756,7 +803,30 @@ def _mark_duplicates(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
             row["duplicate_of"] = keeper["source"]["path"]
             row["counted"] = False
 
-    # 2. A roll-up restating an artifact's number. A roll-up usually states NO protocol, so an
+    # 2. Two exports of ONE checkpoint stating one number (same weights digest). This is ancestry the
+    #    file states, not a guess from equal scores: two DIFFERENT checkpoints of one model can score
+    #    identically, and those stay two measurements (`same_metrics_as` only).
+    by_checkpoint: dict[tuple[Any, ...], list[dict[str, Any]]] = {}
+    for row in rows:
+        fingerprints = row.get("checkpoint_fingerprints")
+        if not row.get("metrics") or row.get("duplicate_of") or not fingerprints:
+            continue
+        key = (row.get("model_id"), row.get("protocol_id"), fingerprints,
+               fingerprint[row["measurement_id"]])
+        by_checkpoint.setdefault(key, []).append(row)
+    for group in by_checkpoint.values():
+        if len(group) < 2:
+            continue
+        keeper = max(group, key=lambda item: (str(item.get("recorded_at") or ""),
+                                              str(item["source"]["path"])))
+        keeper["checkpoint_ancestry_count"] = len(group)
+        for row in group:
+            if row is keeper:
+                continue
+            row["duplicate_of"] = keeper["source"]["path"]
+            row["counted"] = False
+
+    # 3. A roll-up restating an artifact's number. A roll-up usually states NO protocol, so an
     #    absent protocol on either side does not break the ancestry; two DIFFERENT protocols do.
     artifacts = [row for row in rows
                  if row.get("metrics") and not row.get("rollup")
@@ -776,7 +846,7 @@ def _mark_duplicates(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 row["counted"] = False
                 break
 
-    # 3. Equal numbers with no ancestry: informational only, NEVER a demotion.
+    # 4. Equal numbers with no ancestry: informational only, NEVER a demotion.
     for row in rows:
         if not row.get("metrics") or row.get("duplicate_of"):
             continue

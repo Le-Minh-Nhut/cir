@@ -127,6 +127,15 @@ def test_a_rollup_entry_is_not_double_counted_as_a_second_measurement() -> None:
     a repeat is marked `counted: false` and an unbacked claim is marked `artifact_backed: false`, so
     neither can inflate a model count — while BOTH stay in `measurements`, because a reader has to be
     able to see that two files state one number.
+
+    Measurement identity is NOT a rounded score. Keying on `(model_id, protocol_id,
+    round(value, 4))` — which this test used to require to be unique — is the R08 defect itself: two
+    DIFFERENT checkpoints of one model that happen to score the same collapsed into one row, the
+    second demoted to `duplicate_of` the first. Equal numbers from different checkpoints are two
+    measurements. Identity here is therefore (a) the same source `sha256` + `metric_path` (one block
+    stated twice, which the block walker already makes unique) or (b) explicit ancestry as the module
+    records it: a shared backing artifact, the same `checkpoint_sha256`, or a roll-up restating an
+    artifact. Numerically equal rows with no ancestry stay counted and carry `same_metrics_as`.
     """
     payload = _catalog()
     measured = _rows_with_metrics(payload)
@@ -137,12 +146,16 @@ def test_a_rollup_entry_is_not_double_counted_as_a_second_measurement() -> None:
                                                        if not row.get("counted", True)]), payload["counts"]
     assert payload["counts"]["unbacked_rows"] == len([row for row in measured
                                                       if not row["artifact_backed"]]), payload["counts"]
-    # No identity may be counted twice, and identity is a TOLERANCE: `airknow` writes the same run as
-    # 52.5466 in a roll-up and 52.54661498980954 in the run file.
-    identities = [(row["model_id"], row["protocol_id"],
-                   tuple(sorted((name, round(value, 4)) for name, value in row["metrics"].items())))
-                  for row in counted]
-    assert len(identities) == len(set(identities)), "an identity is counted twice"
+    # No measurement identity may be counted twice. Identity is the source block
+    # (`sha256` + `metric_path`), never a rounded score: `airknow_n05` (52.5466) and `airknow_n08`
+    # (50.6417) are two runs, and two checkpoints with EQUAL recall are still two checkpoints.
+    block_identities = [(row["source"]["sha256"], row["metric_path"]) for row in counted]
+    assert len(block_identities) == len(set(block_identities)), "a source block is counted twice"
+    # And the counts agree with the ancestry the module recorded.
+    assert payload["counts"]["with_metrics"] == len([row for row in counted
+                                                     if row["artifact_backed"]]), payload["counts"]
+    assert all(row["counted"] for row in measured if not row["artifact_backed"]) is False, \
+        payload["counts"]
     # And a marked DUPLICATE names the row it duplicates. An unbacked row is not marked as a
     # duplicate — it is uncounted for a different reason, which it states in `source_kind`.
     for row in measured:
