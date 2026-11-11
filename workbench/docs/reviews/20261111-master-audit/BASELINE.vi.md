@@ -5,9 +5,9 @@ Không sửa repo, không commit, không đụng `CLEANUP_REPORT.md.save`.
 
 Đây là **ảnh chụp tại thời điểm 2026-11-11** (HEAD khi đó `92ed66d`): mọi SHA/HEAD/số suite trong file
 này là số **của lượt đo đó**, không phải hiện hành. Pin hiện hành là
-`TESTED_SOURCE_SHA = 7babfd96c1b5003d3fba7197bc6cbb1446a48a2b` với sweep riêng
-2931 passed / 18 failed / 47 skipped = 2996 (`raw/verify/72-sweep-pin.md`, và bảng trong
-`../FINAL_PC_RELEASE_VERDICT.md`).
+`TESTED_SOURCE_SHA = 0691f3e88a03770aec0395843509da8f91a5d7ee` với sweep riêng
+2931 passed / 18 failed / 47 skipped = 2996 (`raw/verify/73-sweep-close.md`, và bảng trong
+`../FINAL_PC_RELEASE_VERDICT.md`). `7babfd9` (cùng 2931/18/47, `raw/verify/72-sweep-pin.md`) nay là pin **đã bị thay thế**.
 
 ## 1. Git: branch, HEAD, remote, worktree, 6 commit cuối
 
@@ -209,8 +209,9 @@ server, và đó chính là cách W-05 phát hiện bundle hỏng. Pin hiện h�
 
 Cũng vì vậy con số `index-DjAje2d2.js` ghi bên trên là **superseded**, và `index-DeTvxLlD.js`
 (sha256 `1503e891…8155`) mà bản baseline này từng ghi cũng **đã superseded** — tệp đó không còn trên đĩa.
-Bundle **đang phục vụ** là `assets/index-DyVaNikG.js`, sha256
-`81d61f65ec827b83cabc958c157d65f6ad4ff99919ccae90cc1fdc29f03b0981` (`dist/assets` chỉ còn đúng nó và
+`index-DyVaNikG.js` (sha256 `81d61f65…0981`, bản từng được ghi là "đang phục vụ" ở đây) cũng **đã superseded**, như `index-DWpK0yeS.js` / `7e34724e…a16`.
+Bundle **đang phục vụ** là `assets/index-BLH2yome.js`, sha256
+`702ed2e93a1bf86ba2094fe62791d4272dcdbf36e8caf7f757f08cf96805d681` (`dist/assets` chỉ còn đúng nó và
 `index-DecQnta9.css`; `cmp` byte phục vụ với `dist/` → IDENTICAL). Đọc lại bằng hai lệnh:
 
 ```

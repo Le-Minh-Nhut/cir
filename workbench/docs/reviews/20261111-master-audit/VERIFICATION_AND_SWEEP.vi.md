@@ -4,7 +4,7 @@ Vai trò: worker xác minh / cổng phát hành. Không tin báo cáo của sáu
 đây đọc trực tiếp từ cây làm việc và từ API đang phục vụ.
 
 - Repo: `/home/heheboiz/data/cir`, nhánh `research/cir-failure-workbench`
-- HEAD lúc đo: `92ed66de4f359ef479da18bf8939723b6f9313e5` + work chưa commit — **superseded**; mốc bền nay là `TESTED_SOURCE_SHA` `7babfd9` (§ sweep pin, `raw/verify/72-sweep-pin.md`)
+- HEAD lúc đo: `92ed66de4f359ef479da18bf8939723b6f9313e5` + work chưa commit — **superseded**; mốc bền nay là `TESTED_SOURCE_SHA` `0691f3e` (§ sweep chốt, `raw/verify/73-sweep-close.md`; `7babfd9` của lượt trước cũng đã bị thay thế)
 - Python: `workbench/envs/ctl312h/bin/python` (CPython 3.12.11)
 - Raw: `workbench/docs/reviews/20261111-master-audit/raw/verify/`
 
@@ -103,7 +103,7 @@ Frontend: `data.ts` khai báo thêm `sibling_key`; `EvaluationPage.tsx` cho cả
 `npm run build --prefix workbench/frontend` → exit 0, `✓ 39 modules transformed`, `✓ built in 190ms`.
 Không có import chết `fmtPercentValue`; không phải sửa tệp nào vì lý do build. Raw:
 `03-frontend-build.txt` (bản trước khi sửa frontend) và lần build sau sửa (bundle `index-DWpK0yeS.js` — bundle
-của **lượt đó**, nay **superseded**; bundle đang phục vụ là `index-DyVaNikG.js` sha256 `81d61f65…0981`, xem
+của **lượt đó**, nay **superseded**; bundle đang phục vụ là `index-BLH2yome.js` sha256 `702ed2e9…d681`, xem
 `REMAINING_WORK.md`).
 
 ### 2. `workbench/backend/native_measurements.py` — **PASS**
@@ -263,7 +263,7 @@ Có sửa backend + frontend ⇒ build lại và khởi động lại **đúng m
 - Frontend `:5173`: bundle `assets/index-DWpK0yeS.js` (377.82 kB), sha256
   **`7e34724ebf55092e36524b98980cca55e71f3ddbaa62489c65577f92e18a6a16`**;
   `dist/assets/index-DWpK0yeS.js` cùng hash, `cmp` → IDENTICAL. **Đây là bản ghi của lượt đó và đã
-  SUPERSEDED**: bundle đang phục vụ nay là `assets/index-DyVaNikG.js`, sha256 `81d61f65…0981` (đọc lại bằng
+  SUPERSEDED** — bundle đang phục vụ nay là `assets/index-BLH2yome.js`, sha256 `702ed2e93a1bf86ba2094fe62791d4272dcdbf36e8caf7f757f08cf96805d681` (`index-DyVaNikG.js` / `81d61f65…0981` của lượt kế tiếp cũng đã superseded) (đọc lại bằng
   `curl -s http://127.0.0.1:5173/ | grep -o 'assets/index-[^"]*\.js'` rồi `sha256sum` trên `dist/`).
 - Uvicorn cũ PID 1227919 trên `:8765` vẫn sống — **không** dùng để đo bất cứ gì.
 - Raw: `17-final-service-identity.txt` (bản cuối), `11-service-identity-postfix.txt` (bản trước khi sửa
@@ -482,9 +482,10 @@ của nó có **0** khoá đơn vị (đã quét `unit`/`percent`/`pct`/`fractio
 - `/api/benchmark-runs` → **HTTP 200** (ready).
 - Bundle: **`assets/index-DWpK0yeS.js`**, sha256
   **`7e34724ebf55092e36524b98980cca55e71f3ddbaa62489c65577f92e18a6a16`**; bytes phục vụ **trùng khớp**
-  `dist/` (`cmp` → IDENTICAL). **Đã SUPERSEDED** — bundle sống là `assets/index-DyVaNikG.js`, sha256
-  `81d61f65ec827b83cabc958c157d65f6ad4ff99919ccae90cc1fdc29f03b0981` (`cmp` → IDENTICAL với `dist/`); đọc
-  lại mỗi lần build bằng `curl -s http://127.0.0.1:5173/ | grep -o 'assets/index-[^"]*\.js'` + `sha256sum`.
+  `dist/` (`cmp` → IDENTICAL). **Đã SUPERSEDED** — bundle sống là `assets/index-BLH2yome.js`, sha256
+  `702ed2e93a1bf86ba2094fe62791d4272dcdbf36e8caf7f757f08cf96805d681` (`cmp` → IDENTICAL với `dist/`; `index-DyVaNikG.js` / `81d61f65…0981` cũng đã superseded); đọc
+  lại mỗi lần build bằng `curl -s http://127.0.0.1:5173/ | grep -o 'assets/index-[^"]*\.js'` rồi
+  `sha256sum workbench/frontend/dist/assets/<file vừa in ra>`.
 - Raw: `32-service-identity-final.txt` (bản ghi của lượt này).
 
 ## Tóm tắt phát hành
@@ -497,20 +498,21 @@ của nó có **0** khoá đơn vị (đã quét `unit`/`percent`/`pct`/`fractio
 
 ## SWEEP TẠI `be14393` — **BỊ THAY THẾ (superseded)**
 
-> **Đã superseded.** Sweep có thẩm quyền là sweep tại `7babfd9` (= `TESTED_SOURCE_SHA`):
+> **Đã superseded.** Sweep có thẩm quyền là sweep chốt tại `0691f3e` (= `TESTED_SOURCE_SHA`):
 > `18 failed, 2931 passed, 47 skipped`, `2996 collected`, gap 0, NEW=0 / DROPPED=0 / COMMON=18 —
-> bản ghi `raw/verify/72-sweep-pin.md`. Các lượt `cd980dc` (`18 failed, 2901 passed, 47 skipped`, 2966
-> collected, `raw/verify/68-final-sweep.md`) và `c755673` (2914/18/47 = 2979, `raw/verify/70-sweep-final.md`)
+> bản ghi `raw/verify/73-sweep-close.md`. Lượt `7babfd9` (cùng 2931/18/47 = 2996,
+> `raw/verify/72-sweep-pin.md`), `cd980dc` (`18 failed, 2901 passed, 47 skipped`, 2966,
+> `raw/verify/68-final-sweep.md`) và `c755673` (2914/18/47 = 2979, `raw/verify/70-sweep-final.md`)
 > cũng đã **bị thay thế**. Mục dưới đây giữ nguyên số của lượt `be14393` như **bản ghi
 > lịch sử của lượt đó**, không còn là "số chốt" của cây phát hành.
 
 Đây là lần đo trên cây sau `relation_state` (`runner.py`) và `relation_parity`
 (`parity_gate.py`), sau khi `limn-encoder` chốt option (b) cho derived-status, và sau khi test doubles
-BLAS / import scanner / `compile_module` được sửa. Production của cây đó đã bị `cd980dc` rồi `7babfd9` vượt qua
-(`git diff be14393 7babfd9` ngoài `workbench/docs` và `workbench/tests` **không** rỗng).
+BLAS / import scanner / `compile_module` được sửa. Production của cây đó đã bị `cd980dc` rồi `0691f3e` vượt qua
+(`git diff be14393 0691f3e` ngoài `workbench/docs` và `workbench/tests` **không** rỗng).
 
 **1. Dòng tổng kết nguyên văn** (của lượt `be14393`, đã **superseded**; dòng có thẩm quyền là
-`18 failed, 2931 passed, 47 skipped, 350 warnings in 3445.68s (0:57:25)` tại `7babfd9`):
+`18 failed, 2931 passed, 47 skipped, 350 warnings in 3203.74s (0:53:23)` tại `0691f3e`):
 
 ```
 18 failed, 2800 passed, 47 skipped, 350 warnings in 3540.59s (0:59:00)
@@ -532,8 +534,9 @@ Tổng collected **tăng +1** so với lần sweep trước (2864 → 2865). Ngu
 được `limn-encoder` viết lại lúc 01:22:41 để chuyển sang option (b); file này hiện có **5 node**. Delta
 chính xác **không chứng minh được** vì file còn untracked (không có snapshot git của số node trước đó) —
 nêu rõ để không ai đọc con số +1 như một phép đo. Sau đó số collected còn tăng tiếp 2865 → 2966 → 2996 khi lô
-`d6d3e36…cd980dc` thêm test và hai commit frontend `252b380`/`d323a5c` vào tới `7babfd9`; lượt **có thẩm quyền**
-là lượt cuối tại `7babfd9` (`2996 collected`, `2931 passed`), xem `raw/verify/72-sweep-pin.md`.
+`d6d3e36…cd980dc` thêm test và hai commit frontend `252b380`/`d323a5c` vào tới `7babfd9`, rồi `0691f3e` thêm test
+node; lượt **có thẩm quyền** là lượt cuối tại `0691f3e` (`2996 collected`, `2931 passed`), xem
+`raw/verify/73-sweep-close.md`.
 
 **3. Sức khoẻ log:** `ERROR` row = **0** (nghĩa là không có collection error; 325 dòng bắt đầu bằng `E `
 là **thân traceback** của `--tb=short`, không phải lỗi collect). `OSError: [Errno 28]` = **0**. Log
@@ -567,7 +570,7 @@ lệ. Các tệp `raw/verify/*` được ghi **sau** khi sweep kết thúc, khô
 Raw: `33-ship-sweep-preflight.txt`, `37-ship-sweep-result.txt`, `38-ship-failure-diff.txt`,
 `39-ship-accounting-and-drift.txt`, log đầy đủ `raw/full_suite_ship_sweep.txt`.
 
-### Bảng số qua năm lần sweep (giữ nguyên lịch sử)
+### Bảng số qua bảy lần sweep (giữ nguyên lịch sử)
 
 | cây | dòng tổng kết | NEW | DROPPED | COMMON | collected | GAP |
 |---|---|---|---|---|---|---|
@@ -575,9 +578,11 @@ Raw: `33-ship-sweep-preflight.txt`, `37-ship-sweep-result.txt`, `38-ship-failure
 | trước `relation_state` | 18 failed, 2799 passed, 47 skipped | 0 | 0 | 18 | 2864 | 0 |
 | `be14393` — **superseded**, bản ghi lịch sử | 18 failed, 2800 passed, 47 skipped | 0 | 0 | 18 | 2865 | 0 |
 | **`cd980dc` — superseded, bản ghi lịch sử** | 18 failed, 2901 passed, 47 skipped | 0 | 0 | 18 | 2966 | 0 |
-| **`7babfd9` — cây phát hành, CÓ THẨM QUYỀN** | **18 failed, 2931 passed, 47 skipped** | **0** | **0** | **18** | **2996** | **0** |
+| `c755673` — **superseded**, bản ghi lịch sử | 18 failed, 2914 passed, 47 skipped | 0 | 0 | 18 | 2979 | 0 |
+| `7babfd9` — **superseded**, bản ghi lịch sử | 18 failed, 2931 passed, 47 skipped | 0 | 0 | 18 | 2996 | 0 |
+| **`0691f3e` — cây phát hành, CÓ THẨM QUYỀN** | **18 failed, 2931 passed, 47 skipped** | **0** | **0** | **18** | **2996** | **0** |
 
 Đọc bảng này theo thứ tự thời gian: mỗi dòng là một cây KHÁC NHAU, không phải cùng một cây chạy lại.
-Dòng cuối là cây phát hành và là số **có thẩm quyền** (`raw/verify/72-sweep-pin.md`, 3445.68 s, `^ERROR ` = 0,
-`Errno 28` = 0, hai phép chứng minh cây đứng yên); các dòng `be14393` và `cd980dc` được giữ làm bản ghi của
-lượt đó và đã bị thay thế.
+Dòng cuối là cây phát hành và là số **có thẩm quyền** (`raw/verify/73-sweep-close.md`, 3203.74 s, `^ERROR ` = 0,
+`Errno 28` = 0, hai phép chứng minh cây đứng yên); các dòng `be14393`, `cd980dc`, `c755673` và `7babfd9` được giữ
+làm bản ghi của lượt đó và đã bị thay thế.
