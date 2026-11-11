@@ -154,3 +154,12 @@ workbench/envs/ctl312h/bin/python -m pytest workbench/tests/ \
 ```
 
 Nothing outside `parity_gate.py`'s own contract regressed.
+
+A wider selection (`-k "gate or verdict"`, excluding four modules another agent currently has
+mid-edit — `test_airknow_replay/test_clvc_net_replay/test_tgcir_replay` fail collection on
+`cache_requirement` missing from `workbench/replay/common.py`) reached ~90% with one failure in a
+module unrelated to this gate (`test_pc_launcher.py`); every gate-owned module was run individually
+and passes: `test_gate_contract_negatives`, `test_gate_parity_subchecks`,
+`test_gate_r3_mask_join`, `test_csmcir_aggregate_api_parity`, `test_final_hardening_regressions`
+(110 passed), `test_release_gate_scenarios` + `test_r19_aggregate_parsers` (24 passed),
+`test_circus_env_gate_omp` (27), `test_paper_gate` (65).
