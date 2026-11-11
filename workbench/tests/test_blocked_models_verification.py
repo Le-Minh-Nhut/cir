@@ -204,5 +204,13 @@ def test_airknow_eval_is_nondeterministic_by_upstream_design():
     assert 'SEED_ENV = "WORKBENCH_AIRKNOW_SEED"' in wrapper
     assert "os.environ.get(SEED_ENV)" in wrapper
     assert 'torch.manual_seed(int(seed))' in wrapper, "seeding must be gated on the env var, not unconditional"
-    assert '"repeat_count"' in wrapper and '"run_to_run_delta_macro_r10"' in wrapper
-    assert "MEASURED_RUN_TO_RUN_DELTA_MACRO_R10" in wrapper
+
+    # R15: the campaign's 0.4744 pp figure is a property of a GROUP of runs, never of the single run
+    # an artifact describes. It must not be emitted as a per-run attribute, and it must be gone from
+    # the module as a constant that a run can stamp onto itself.
+    assert "MEASURED_RUN_TO_RUN_DELTA_MACRO_R10" not in wrapper, (
+        "the borrowed per-run delta constant is back; a run must not claim a variance it never measured")
+    assert "assemble_variance_group" in wrapper, (
+        "the artifact must carry a group-scoped variance block computed at emit time")
+    assert '"applies_to_this_run": False' in wrapper, (
+        "the historical campaign figure must be labelled as not applicable to this run")
