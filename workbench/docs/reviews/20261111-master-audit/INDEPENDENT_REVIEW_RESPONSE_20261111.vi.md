@@ -1,7 +1,7 @@
 # Phản hồi kiểm tra độc lập `CIR_INDEPENDENT_REVIEW_06e30e8c` — 2026-11-11
 
 > Đối tượng: `~/Downloads/CIR_INDEPENDENT_REVIEW_06e30e8c.vi.md` (154 dòng, mốc source `06e30e8c`).
-> Trả lời tại HEAD `cd980dcecbb685b3cd6be4516d6550660a8e89b8` (mốc **lịch sử** lúc viết, nay **superseded** — `TESTED_SOURCE_SHA` hiện là `7babfd96c1b5003d3fba7197bc6cbb1446a48a2b`), nhánh `research/cir-failure-workbench`.
+> Trả lời tại HEAD `cd980dcecbb685b3cd6be4516d6550660a8e89b8` (mốc **lịch sử** lúc viết, nay **superseded** — `TESTED_SOURCE_SHA` hiện là `0691f3e88a03770aec0395843509da8f91a5d7ee`; `7babfd9`, `c755673`, `cd980dc`, `a24635e` đều là history), nhánh `research/cir-failure-workbench`.
 > Cấu trúc mỗi mục: **Rxx — phát hiện → đã sửa gì → tái hiện trước → sau → commit**.
 > Ba kết luận dùng được: **Đã sửa**, **Bác bỏ**, **Còn chặn**. Không có mục nào bị làm mềm thành "đã cải thiện".
 >
@@ -514,7 +514,7 @@ không phủ nhận số cold). Không còn là vật cản poll.
 | 5 | Chỉ 2/16 model có bất kỳ bằng chứng G1/G2, **cả hai FAIL** | `/api/runs/parity-gate` `passed_models: []` | chạy differential thật (mục 2) |
 | 6 | Service chết bởi SIGTERM ngoài, không rõ nguồn | §17(c) | xác định tiến trình gửi tín hiệu |
 | 7 | Nhất quán chéo tài liệu | sáu drift đã sửa tay (`FINAL_REPORT.vi.md` §6 "Hạn chế đã biết"); sweep R12 tìm thêm số sai, nay ghi trong CENSUS | chín tài liệu còn lại **không** được bảo đảm nhất quán nội bộ |
-| 8 | **ĐÃ SỬA** — `FINAL_REPORT.vi.md` từng ghim bundle **cũ** `index-DWpK0yeS.js` / `7e34724e…` ở :31 | khi sửa, bundle sống là `index-DeTvxLlD.js` / `1503e891…` (§19) — **nay superseded** bởi `index-DyVaNikG.js` / `81d61f65…0981`; `FINAL_REPORT` nay ghi đúng bundle sống và mọi tài liệu còn nhắc bundle cũ đều được dán nhãn superseded | — |
+| 8 | **ĐÃ SỬA** — `FINAL_REPORT.vi.md` từng ghim bundle **cũ** `index-DWpK0yeS.js` / `7e34724e…` ở :31 | khi sửa, bundle sống là `index-DeTvxLlD.js` / `1503e891…` (§19) — **nay superseded**, như `index-DyVaNikG.js` / `81d61f65…0981` sau đó cũng vậy; bundle sống hiện tại là `index-BLH2yome.js` / `702ed2e9…05d681` (đọc lại bằng `curl -s http://127.0.0.1:5173/ | grep -o 'assets/index-[^"]*\.js'` rồi `sha256sum` trên `dist/`), và mọi tài liệu còn nhắc bundle cũ đều được dán nhãn superseded | — |
 | 9 | **ĐÃ SỬA** — `MODEL_LIMN_ENCODER_VERIFICATION.vi.md:434` từng ghi `0.539144 / 6001` và câu "không đổi so với run canonical cũ"; `FINAL_REPORT`/census từng gọi `ce89a9a2…` là run canonical | nay `0.474394 / 6003`; `ce89a9a2…` là run **số đo được đo lần đầu** (identity hash `relation_state: not_recorded`), `M-01-a` nay `FIXED_VERIFIED` với run canonical `acc9b20e…` (identity recorded + tensor persist — §4, CENSUS §0.6) | — |
 | 10 | `FINAL_REPORT.vi.md` §6 vẫn còn dòng "17 model / N dòng dùng được" (nay **23** dòng sau `358c3fc`) | §12 | tách khỏi "dùng được cho nghiên cứu"; xem thêm CENSUS §1.2 cho CLVC |
 
@@ -525,13 +525,13 @@ không phủ nhận số cold). Không còn là vật cản poll.
 
 | sự thật | giá trị | nguồn |
 |---|---|---|
-| revision được nghiệm thu | `7babfd96c1b5003d3fba7197bc6cbb1446a48a2b` (= `TESTED_SOURCE_SHA`; sweep pin `2931/18/47 = 2996`, `raw/verify/72-sweep-pin.md`) | dòng `TESTED_SOURCE_SHA` trong `reviews/FINAL_PC_RELEASE_VERDICT.md`; `cd980dc` (2901/18/47 = 2966) là revision **bị thay thế** |
-| sản xuất đang có = sản xuất đã sweep | `git diff 7babfd9 HEAD -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'` **rỗng** (exit 0) | chạy đúng lệnh đó |
+| revision được nghiệm thu | `0691f3e88a03770aec0395843509da8f91a5d7ee` (= `TESTED_SOURCE_SHA`; sweep `2931/18/47 = 2996`, `raw/verify/73-sweep-close.md`) | dòng `TESTED_SOURCE_SHA` trong `reviews/FINAL_PC_RELEASE_VERDICT.md`; `7babfd9` (2931/18/47 = 2996), `c755673` (2914/18/47 = 2979) và `cd980dc` (2901/18/47 = 2966) là history **bị thay thế** |
+| sản xuất đang có = sản xuất đã sweep | `git diff 0691f3e HEAD -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'` **rỗng** (exit 0) | chạy đúng lệnh đó |
 | HEAD sống | **không ghim** — `HEAD` trôi theo từng commit; đọc bằng `git rev-parse HEAD` | `git rev-parse HEAD` |
-| bundle | `assets/index-DyVaNikG.js` | `workbench/frontend/dist/assets/` — tên file **di động**; đọc lại bằng `curl -s http://127.0.0.1:5173/ \| grep -o 'assets/index-[^"]*\.js'` |
-| sha256 bundle (dist) | `81d61f65ec827b83cabc958c157d65f6ad4ff99919ccae90cc1fdc29f03b0981` | `sha256sum workbench/frontend/dist/assets/index-DyVaNikG.js` |
-| sha256 bundle (phục vụ) | `81d61f65ec827b83cabc958c157d65f6ad4ff99919ccae90cc1fdc29f03b0981` | `curl :5173/assets/index-DyVaNikG.js \| sha256sum` |
-| `cmp` phục vụ ↔ `dist/` | **identical** | `cmp /tmp/served_now.js workbench/frontend/dist/assets/index-DyVaNikG.js` → exit 0. Bundle `index-DeTvxLlD.js` / `1503e891…8155` là **superseded** |
+| bundle | `assets/index-BLH2yome.js` | `workbench/frontend/dist/assets/` — tên file **di động**; đọc lại bằng `curl -s http://127.0.0.1:5173/ \| grep -o 'assets/index-[^"]*\.js'` |
+| sha256 bundle (dist) | `702ed2e93a1bf86ba2094fe62791d4272dcdbf36e8caf7f757f08cf96805d681` | `sha256sum workbench/frontend/dist/assets/index-BLH2yome.js` |
+| sha256 bundle (phục vụ) | `702ed2e93a1bf86ba2094fe62791d4272dcdbf36e8caf7f757f08cf96805d681` | `curl :5173/assets/index-BLH2yome.js \| sha256sum` |
+| `cmp` phục vụ ↔ `dist/` | **identical** | `cmp /tmp/served_now.js workbench/frontend/dist/assets/index-BLH2yome.js` → exit 0. `dist/assets` chỉ chứa đúng `index-BLH2yome.js` + `index-DecQnta9.css`. Bundle `index-DyVaNikG.js` / `81d61f65…0981` là **superseded**, và `index-DeTvxLlD.js` / `1503e891…8155` cùng các tên cũ hơn cũng vậy |
 | `/api/native-measurements` counts | `files 39`, `with_metrics 23`, `blocks_with_metrics 50`, `rollup_rows 18`, `duplicate_rows 27`, `unbacked_counted 0`, `models_with_metrics 17`, `models_rollup_only 8`, `verified 0`, `unit_declared 4`, `unit_sibling_key 2`, `unit_inferred 46` | `list_native_measurements(resolve_config().WORKBENCH_ARTIFACTS_ROOT)` — đúng hàm route `main.py:1037` gọi. Tiến trình `:8000` đang chạy nạp code **trước** `358c3fc` nên `curl` vẫn trả bộ số cũ `21/43/22/39`; restart rồi mới khớp |
 | DCNet row | `r10 = 27.929730914548916`, `unit=percent`, `unit_source=sibling_key` | cùng payload |
 | `/api/runs/parity-gate` | `passed_models: []`; encoder `MANDATORY_FAILED` 16 failure; limn `MANDATORY_FAILED` 3 failure + `missing ["metrics_parity"]`; `standard parity-relative/v1` | cùng API |
@@ -545,27 +545,29 @@ bằng **cổng** + hành vi route, không bằng PID.
 
 ## 20. Sweep
 
-Sweep serial đầy đủ đã chạy xong tại `7babfd9` (`/home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python -m
+Sweep serial đầy đủ đã chạy xong tại `0691f3e` (`/home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python -m
 pytest workbench/tests -q -p no:cacheprovider -rfE --tb=short`); số dưới đây lấy từ bản ghi đã commit, không từ trích dẫn miệng.
 
-**Kết quả sweep (đã xong).** Sweep serial tại revision `7babfd96c1b5003d3fba7197bc6cbb1446a48a2b`, dòng tổng kết nguyên văn:
+**Kết quả sweep có thẩm quyền.** Sweep serial tại revision `0691f3e88a03770aec0395843509da8f91a5d7ee`, dòng tổng kết nguyên văn:
 
 ```
-18 failed, 2931 passed, 47 skipped
+18 failed, 2931 passed, 47 skipped, 350 warnings in 3203.74s (0:53:23)
 ```
 
-2996 collected, **accounting gap 0**; `^ERROR ` = **0**; `Errno 28` = **0**; hai phép chứng minh cây đứng yên (đầu và
-cuối lượt cùng một SHA). So bộ failure với baseline `20261110-e2e-repair/full_suite_68ad75e.txt`: **NEW=0, DROPPED=0, COMMON=18** — không có hồi quy. HEAD hiện tại chỉ đi trước revision đó bằng commit tài liệu (`git diff 7babfd9 HEAD` ngoài `workbench/docs` và `workbench/tests` là rỗng), nên sweep này nghiệm thu đúng cây sản xuất đang có. Phân loại 18 failure: **18 PRE-EXISTING** — trong đó **6 ENVIRONMENT** và **1 FLAKY** (flaky chỉ trong suite đầy đủ; pass khi chạy riêng). Bản ghi đầy đủ: `raw/verify/72-sweep-pin.md`.
+2996 collected, **accounting gap 0**; `^ERROR ` = **0**; `Errno 28` = **0**; hai phép chứng minh cây đứng yên ở 17:03:31 và 17:28:35 (+0700), và HEAD giống nhau lúc đầu và lúc cuối. So bộ failure với baseline `20261110-e2e-repair/full_suite_68ad75e.txt`: **NEW=0, DROPPED=0, COMMON=18** — không có hồi quy, và set trùng với sweep `7babfd9`. HEAD hiện tại chỉ đi trước revision đó bằng commit tài liệu (`git diff 0691f3e HEAD` ngoài `workbench/docs` và `workbench/tests` là rỗng), nên sweep này nghiệm thu đúng cây sản xuất đang có. Phân loại 18 failure: **18 PRE-EXISTING** — trong đó **6 ENVIRONMENT** và **1 FLAKY** (flaky chỉ trong suite đầy đủ; pass khi chạy riêng), **1** là guard pin cũ đỏ đúng thiết kế cho tới khi tài liệu được pin lại. Bản ghi đầy đủ: `raw/verify/73-sweep-close.md`.
 
-Lịch sử bị thay thế, giữ nguyên số: `c755673` → `2914 passed / 18 failed / 47 skipped` = 2979 (`raw/verify/70-sweep-final.md`);
-`cd980dc` → `2901/18/47` = 2966 (`raw/verify/68-final-sweep.md`). Cùng bộ 18 id, nhưng production của cả hai đã đi trước `7babfd9`.
+Độ phủ frontend của sweep, nói đúng: **sáu** file test python dính frontend → **162 passed**; nhánh predicate counted-only (`counts()`) của `scope.ts` chỉ được phủ bởi node suite `workbench/frontend/tests/inventory-cross-scope.test.cjs`, mà `pytest workbench/tests` **KHÔNG** chạy.
+
+Lịch sử bị thay thế, giữ nguyên số: `7babfd9` → `2931 passed, 18 failed, 47 skipped` = 2996 (`raw/verify/72-sweep-pin.md`; cùng số, mất hiệu lực vì `0691f3e` đổi `workbench/frontend/scope.ts` sau nó — `workbench/frontend/tests` nằm trong cây production mà guard so sánh);
+`c755673` → `2914 passed / 18 failed / 47 skipped` = 2979 (`raw/verify/70-sweep-final.md`);
+`cd980dc` → `2901/18/47` = 2966 (`raw/verify/68-final-sweep.md`). Cùng bộ 18 id, nhưng production của cả ba đã đi trước `0691f3e`.
 
 Bối cảnh đã có, dùng được ngay: sweep serial tại
 `a24635e` (`raw/verify/67-regression-sweep.md`) → `18 failed, 2901 passed, 47 skipped`, 2966 collected, **accounting gap 0**, **0 NEW / 0 DROPPED
 / 18 COMMON** so với baseline `68ad75e` (`raw/verify/67a-failure-diff-a24635e.txt`). Passed tăng
 2701 → 2901, toàn bộ là test mới của lô `d6d3e36…a24635e`; hai commit frontend `252b380`/`d323a5c` sau đó cộng thêm
-30 test đạt (2901 → 2931) trên cây `7babfd9`. Sweep tại `7babfd9` bao trùm **toàn bộ** lô sửa
-— từ `d6d3e36` đến `7babfd9` — và là bản có
+30 test đạt (2901 → 2931) trên cây `7babfd9`. Sweep tại `0691f3e` bao trùm **toàn bộ** lô sửa
+— từ `d6d3e36` đến `0691f3e` — và là bản có
 thẩm quyền. Nó **dư thừa với** lượt `a24635e`, không phải bản kế tiếp của lượt đó: lượt `a24635e` chỉ được giữ
 vì là lượt serial đầy đủ **đầu tiên** của lô.
 
@@ -578,7 +580,7 @@ liệu cố tình lệch (`2901 passed` vs `2800 passed`).
 
 | điều | vì sao |
 |---|---|
-| số sweep tại `7babfd9` | **đã có** (§20); sweep chạy serial, không song song |
+| số sweep tại `0691f3e` | **đã có** (§20); sweep chạy serial, không song song |
 | `/api/models` **cold** 154 s còn đúng không | đo được 0.008 s **warm**; không xoá cache / không restart service (bị cấm trong đợt này) |
 | 117 query LIMN lịch sử có thật sự bị định tuyến bằng annotation hỏng | không tồn tại annotation/pixel trace của các lần chạy cũ |
 | CLVC transform có vô can không | **chưa từng** đo counterfactual `Resize(224)`; equal Recall không chứng minh |
@@ -600,4 +602,17 @@ liệu cố tình lệch (`2901 passed` vs `2800 passed`).
 - Còn chặn thật: PAIR (upstream chưa publish hai module), 13 model chưa có G1/G2, `7:3038`/`7:3790`,
   46/50 row dùng unit suy luận, **CLVC hai số counted chưa chốt**, adapter CLVC/TG-CIR thiếu interpreter
   stack pin, nguồn SIGTERM, nhất quán chéo tài liệu.
-- Sweep tại `7babfd9` **đã xong**: `18 failed, 2931 passed, 47 skipped`, 2996 collected, gap 0, NEW=0 / DROPPED=0 / COMMON=18 (§20).
+- **Sweep có thẩm quyền tại `0691f3e88a03770aec0395843509da8f91a5d7ee`**: `18 failed, 2931 passed, 47 skipped`
+  (nguyên văn `18 failed, 2931 passed, 47 skipped, 350 warnings in 3203.74s (0:53:23)`), 2996 collected, gap 0,
+  `^ERROR ` 0, `Errno 28` 0, hai phép chứng minh cây đứng yên ở 17:03:31 và 17:28:35 (+0700), NEW=0 /
+  DROPPED=0 / COMMON=18 so với baseline `68ad75e`; bản ghi `raw/verify/73-sweep-close.md` (§20). Pin
+  `TESTED_SOURCE_SHA` trong `FINAL_PC_RELEASE_VERDICT.md` và `PC_PILOT_HANDOFF.md` là `0691f3e`, và
+  production đang có bằng đúng cây đã sweep.
+- `7babfd9`, `c755673`, `cd980dc` và `a24635e` là **history**, không phải trạng thái hiện tại: số của chúng
+  được giữ nguyên trong §20 và trong bảng "Superseded tested source" của verdict. `7babfd9` trùng số với
+  `0691f3e` (2931/18/47 = 2996) nhưng mất hiệu lực vì `0691f3e` đổi `workbench/frontend/scope.ts`, tức một
+  commit **production** sau nó.
+- Không có mục nào ở trên mâu thuẫn với phán quyết đã pin: độ phủ frontend của sweep là **sáu** test python
+  (162 passed) **cộng** node suite `workbench/frontend/tests/inventory-cross-scope.test.cjs` — node suite đó
+  phủ nhánh `counts()` mà `pytest workbench/tests` **không** chạy, nên nó được nêu riêng thay vì được tính
+  là "sweep đã chạy test frontend". `research_ready` vẫn **0/17**.
