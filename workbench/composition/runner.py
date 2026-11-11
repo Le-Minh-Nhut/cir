@@ -630,7 +630,18 @@ def _stage_query_path(path: Path, query: Any, condition: str, work_root: Path) -
         image = source.copy()
     adapted, text = adapt_query_inputs(image, query.query_txt, condition)
     if condition == "text_only_black_image":
-        staged = work_root / "queries" / condition / f"{_component(query.qid)}.png"
+        # Named by the SOURCE image's stem, not the query id. An adapter may resolve a caption's
+        # category from its reference image's stem (TG-CIR does: `(reference stem, raw text)` after
+        # the explicit category, and 3 of 6003 release queries resolve ONLY that way), so replacing
+        # the stem with the qid destroyed the one input that could scope those queries -- the worker
+        # then raised and `runner._encode_queries` re-raised `AdapterWorkerError`, zeroing the whole
+        # condition. The stem is restored here; the pixels are unchanged.
+        #
+        # Two queries sharing a reference collide on this filename, and that is safe: the staged
+        # image is `Image.new(mode, size, 0)` (`inputs.black_image_like`), which depends only on the
+        # source's mode and size -- so the same stem means the same source file and therefore the
+        # same bytes. Nothing is overwritten with different content.
+        staged = work_root / "queries" / condition / f"{Path(path).stem}.png"
         staged.parent.mkdir(parents=True, exist_ok=True)
         adapted.save(staged, format="PNG")
         return staged, text

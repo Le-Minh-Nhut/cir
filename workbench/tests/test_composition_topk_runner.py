@@ -353,3 +353,64 @@ def test_resume_without_a_cache_refuses_to_claim_success(
     assert status not in (None, "COMPLETED"), (
         f"a requested-but-impossible export must not report plain success, got {status!r}")
     assert "re-run without --resume" in (summary["topk_export"].get("reason") or "")
+
+# ------------------------------------------------- the staged query image keeps the SOURCE stem
+
+def test_the_staged_text_only_image_is_named_by_the_source_stem_not_the_qid(tmp_path: Path):
+    """An adapter may resolve a caption's category from its reference image's stem.
+
+    TG-CIR does exactly that (`(reference stem, raw text)` is its second resolution step), and 3 of
+    6003 release queries resolve ONLY that way. Naming the staged PNG `7:1.png` replaced the stem with
+    the qid, so the worker could not scope those queries, raised, and `_encode_queries` re-raised
+    `AdapterWorkerError` -- zeroing the whole `text_only_black_image` condition (run 9f115afe:
+    0/6003 scored). The stem must survive staging.
+    """
+    from PIL import Image
+
+    source = tmp_path / "B005X4PL1G.jpg"
+    Image.new("RGB", (8, 6), (12, 34, 56)).save(source, format="JPEG")
+
+    class Query:
+        qid = "7:1"
+        query_txt = "is solid white"
+
+    staged, text = runner._stage_query_path(source, Query(), "text_only_black_image", tmp_path)
+    assert staged.stem == "B005X4PL1G", f"staged stem must be the source stem, got {staged.stem!r}"
+    assert staged.suffix == ".png"
+    assert text == Query.query_txt
+    # The pixels are the black replacement at the source's own size, written where the adapter reads.
+    with Image.open(staged) as written:
+        assert written.size == (8, 6)
+        assert written.convert("RGB").getextrema() == ((0, 0), (0, 0), (0, 0)), (
+            "the staged pixels must be the black replacement, every channel zero")
+    # A condition that needs no staging returns the original path untouched.
+    same, empty = runner._stage_query_path(source, Query(), "image_only_empty_text", tmp_path)
+    assert same == source and empty == ""
+
+def test_two_queries_sharing_a_reference_collide_safely(tmp_path: Path):
+    """Same stem => same source file => same `Image.new(mode, size, 0)` => same bytes.
+
+    The staged name is not per-query any more, so two queries with one reference write the same
+    file. That is only safe because the black replacement depends solely on the source's mode and
+    size (`inputs.black_image_like`), so the second write cannot change what the first one meant.
+    """
+    from PIL import Image
+
+    source = tmp_path / "B00AKLK08G.jpg"
+    Image.new("RGB", (5, 7), (200, 100, 50)).save(source, format="JPEG")
+
+    class Query:
+        qid = "7:2"
+        query_txt = "a"
+
+    first, _ = runner._stage_query_path(source, Query(), "text_only_black_image", tmp_path)
+    first_bytes = first.read_bytes()
+
+    class Other(Query):
+        qid = "7:3"
+        query_txt = "b"
+
+    second, _ = runner._stage_query_path(source, Other(), "text_only_black_image", tmp_path)
+    assert first == second, "both queries must stage the same reference to the same file"
+    assert second.read_bytes() == first_bytes, (
+        "the second write must not change the bytes the first query was encoding")
