@@ -514,9 +514,14 @@ function ComparePanel({ run, query, selected, onPeerChange }: {
           </thead>
           <tbody>
             {rows.map((row) => {
+              // A5: a bare `model_id` repeated rows — two distinct LIMN runs both printed
+              // "limn #193", one with Top-K and one without. The full composition label (model /
+              // checkpoint · run-id stub · Top-K depth) separates them and shows the export state,
+              // exactly as the run picker does. Display only: the rank beside it is untouched.
+              const peer = peers.find((item) => item.run_id === row.key);
               const label = row.key === run.run_id
-                ? `${run.model_id} / ${run.checkpoint_id} (đang xem)`
-                : peers.find((peer) => peer.run_id === row.key)?.model_id ?? row.key;
+                ? `${compositionLabel(run)} (đang xem)`
+                : peer ? compositionLabel(peer) : row.key;
               return (
                 <tr key={row.key} aria-selected={row.key === run.run_id}>
                   <td>{label}</td>

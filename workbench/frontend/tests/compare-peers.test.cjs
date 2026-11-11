@@ -107,3 +107,34 @@ test("the label never alters a served number", () => {
   assert.equal(sample.metrics.ndcg_multimodal, 0.1498);
   assert.equal(sample.metrics.coverage, 1.0);
 });
+
+// A5: the comparison TABLE labelled peers by bare `model_id`, so two distinct LIMN runs both printed
+// "limn #193" while one had Top-K 100 and the other TOPK_EXPORT_NOT_REQUESTED. Same defect class as
+// the run-picker label, so the same fix: the composition label, which is unique and states the
+// export state.
+const LIMN_TOPK = "9e4918a6b5c243412cbc58c9";
+const LIMN_NOTO = "10173dc45dea8c90fd2a284b";
+
+test("two LIMN runs in the compare table cannot render identically", () => {
+  const withTopk = C.compositionLabel(row("limn", LIMN_TOPK, "full", 100));
+  const without = C.compositionLabel(row("limn", LIMN_NOTO, "full", null));
+  assert.notEqual(withTopk, without, "the two limn columns must be separable");
+  assert.match(withTopk, new RegExp(LIMN_TOPK.slice(0, 8)));
+  assert.match(without, new RegExp(LIMN_NOTO.slice(0, 8)));
+  assert.match(withTopk, /Top-K 100/);
+  assert.match(without, /không có Top-K/);
+  // The old rendering was the bare model id — the thing that produced two identical cells.
+  assert.equal(row("limn", LIMN_TOPK, "full", 100).model_id,
+               row("limn", LIMN_NOTO, "full", null).model_id);
+});
+
+test("the compare table's peer column prints the composition label, not the bare model id", () => {
+  const source = fs.readFileSync(path.join(root, "QueryInspector.tsx"), "utf8");
+  const table = source.slice(source.indexOf("const rows = ranksRegion.region.data"));
+  assert.match(table, /compositionLabel\(peer\)/,
+    "the peer column must use the disambiguated label");
+  assert.doesNotMatch(table, /peers\.find\(\(peer\) => peer\.run_id === row\.key\)\?\.model_id/,
+    "a bare model_id in the peer column is what made two LIMN runs indistinguishable");
+  assert.match(table, /compositionLabel\(run\)/,
+    "the viewed run prints the same label shape, so the columns read alike");
+});
