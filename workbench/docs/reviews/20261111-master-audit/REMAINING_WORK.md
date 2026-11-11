@@ -3,14 +3,10 @@
 # VIỆC CÒN LẠI — master audit 2026-11-11
 
 ## CHƯA SỬA — phải làm trước khi coi là xong
-1. `FINAL_REPORT.vi.md:189` — bỏ mệnh đề sai "Khớp với `models_with_metrics = 17` trừ đi 2 model chỉ có roll-up". Sai hai lần: §5 liệt kê **8** rollup-only, và `airknow`/`pair` nằm **trong** 17.
-2. `MODELS_REST_VERIFICATION.vi.md:473` — `models_with_metrics = 15` / `models_rollup_only = 13` đã cũ; payload sống là **17 / 8**.
-3. `FINAL_REPORT.vi.md:339` — lệnh restart dùng `> /tmp/workbench_serve.log`, chính là cơ chế xoá log bằng chứng của các lần chết trước. Đổi sang `>>`.
-4. §5 `FINAL_REPORT` và `WEB_SURFACE_VERIFICATION` khai "bốn lần chết còn log header" với đường dẫn `/tmp/*`; `/tmp/serve_handover.log` đã bị truncate (0 hit `exited with status -15`, 0 hit `4082632`). Chỉ **hai** bản copy đã commit: `raw/service-death-log.txt` (PID 3691345) và `raw/service-death-log-4.txt` (PID 4082632). Sửa claim để chỉ trích đường dẫn đã commit.
-1a. `FINAL_REPORT.vi.md:189` — vẫn còn "Khớp với `models_with_metrics = 17` trừ đi 2 model chỉ có roll-up". Xoá mệnh đề, chỉ trích cột `native_executed` của `NATIVE_EVAL_MATRIX.csv`.
-1b. `MODELS_REST_VERIFICATION.vi.md:473` — vẫn `models_with_metrics = 15` / `models_rollup_only = 13`; payload sống là **17 / 8**.
-1c. `FINAL_REPORT.vi.md:339` — lệnh restart vẫn `> /tmp/workbench_serve.log` (truncate). Đổi `>>`.
-1d. Hai log chết **chưa được commit**: `/tmp/workbench_serve_final.log` (PID 4040574) và `/tmp/serve_probe.log` (PID 4062957). Chép chữ ký sang `raw/service-death-log-2.txt` và `raw/service-death-log-3.txt` rồi commit; nếu không, restart tiếp theo sẽ xoá chúng.
+1. `FINAL_REPORT.vi.md:189` — vẫn còn "Khớp với `models_with_metrics = 17` trừ đi 2 model chỉ có roll-up". Xoá mệnh đề, chỉ trích cột `native_executed` của `NATIVE_EVAL_MATRIX.csv`.
+2. `MODELS_REST_VERIFICATION.vi.md:473` — vẫn `models_with_metrics = 15` / `models_rollup_only = 13`; payload sống là **17 / 8**.
+3. `FINAL_REPORT.vi.md:339` — lệnh restart vẫn `> /tmp/workbench_serve.log` (truncate). Đổi `>>`.
+4. Ba log header còn trên đĩa: `/tmp/workbench_serve.log` (PID 3691345), `/tmp/workbench_serve_final.log` (PID 4040574), `/tmp/serve_probe.log` (PID 4062957); chỉ **hai** đã có bản copy commit (`raw/service-death-log.txt` = 3691345, `raw/service-death-log-4.txt` = 4082632). `/tmp/serve_handover.log` (4082632) đã bị truncate. Phải chép `-2`/`-3` vào `raw/service-death-log-2.txt` và `raw/service-death-log-3.txt` rồi commit, và sửa claim ở §5 `FINAL_REPORT` + `WEB_SURFACE_VERIFICATION` để chỉ trích đường dẫn đã commit.
 
 ## Chưa chốt được — cần người khác
 5. **PAIR** — cần upstream công bố `model_vssp` + `MHTransformer_dis`. Đã quét 21 commit, không tồn tại. Xem `replay/pair_absence.py`.
