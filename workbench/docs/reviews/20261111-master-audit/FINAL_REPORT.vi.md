@@ -155,14 +155,18 @@ artifact. Gate cũ báo `PARITY_PASS` cho cả hai; gate mới báo đúng.
   `:8000`). Tìm nó bằng `pgrep -af "port 8765"`; PID đổi sau restart nên không ghim số.
 - **Stack không tự hồi phục — cơ chế đã xác định một phần, thủ phạm thì chưa.** Service `:8000`/`:5173`
   đã chết **ít nhất bốn lần** trong đợt này, mỗi lần một PID; **số chính xác không chốt được** vì mỗi
-  lần restart lại truncate `> /tmp/…log` nên chữ ký của lần trước biến mất. Bốn lần còn log header —
-  PID 3691345, 4040574, 4062957, 4082632 — tất cả cùng một chữ ký log:
+  lần restart lại redirect bằng một dấu `>` vào log `/tmp/…` nên chữ ký của lần trước biến mất. Bốn lần
+  còn log header — PID 3691345, 4040574, 4062957, 4082632 — tất cả cùng một chữ ký log:
   `[WARN] npm exited with status -15` (bị
-  SIGTERM) rồi backend `Shutting down` êm. Hai lần có bản sao đã commit:
-  `raw/service-death-log.txt` (từ `/tmp/workbench_serve.log`, mtime `2026-11-11 02:25:51` — mốc
-  thời gian là mtime của tệp, không có trong nội dung log) và `raw/service-death-log-4.txt`
-  (từ `/tmp/serve_handover.log`, mtime `2026-11-11 07:29:33`). Các restart khác trong danh sách PID
-  superseded không còn log nên nguyên nhân của chúng chưa rõ. **Đã xác định:** đó chính xác là đường
+  SIGTERM) rồi backend `Shutting down` êm. Cả bốn chữ ký nay **đã commit trong repo**, nên bằng chứng
+  không còn phụ thuộc `/tmp`:
+  `raw/service-death-log.txt` (PID 3691345), `raw/service-death-log-2.txt` (4040574),
+  `raw/service-death-log-3.txt` (4062957), `raw/service-death-log-4.txt` (4082632). Đường dẫn `/tmp`
+  (`/tmp/workbench_serve.log`, `/tmp/workbench_serve_final.log`, `/tmp/serve_probe.log`,
+  `/tmp/serve_handover.log`) chỉ là **provenance** của bản sao, không phải nơi trích dẫn; mtime
+  `02:25:51` / `03:35:06` / `03:53:06` / `07:29:33` ngày 2026-11-11 lấy từ mtime tệp, **không** có
+  trong nội dung log. Các restart khác trong danh sách PID superseded không còn log nên nguyên nhân của
+  chúng chưa rõ. **Đã xác định:** đó chính xác là đường
   `serve_workbench.py:152-166` — `forward_stop` nhận SIGTERM/SIGHUP, gửi `os.kill(child.pid, SIGTERM)`
   cho từng child rồi `raise_signal(SIGINT)`. Nghĩa là launcher **của chính nó** nhận SIGTERM; child
   không tự chết. **Chưa xác định:** ai gửi SIGTERM đó. Đã kiểm và loại trừ: `jobs.py` spawn job bằng
@@ -187,7 +191,7 @@ tôi thực sự lấy số.
 |---|---|---|
 | cấu hình trong registry | **17 cấu hình / 16 upstream** | `registry/models.yaml` qua `load_registry()`: 17 model, 16 `upstream_repo_url` phân biệt; CLIP4Cir chứa 2 (`combiner_rn50x4_noft`, `clip4cir_rn50x4_fullft`) |
 | cohort native FashionIQ | **17** (không phải 15) | `20261109-native15-composition-limn/NATIVE_EVAL_MATRIX.csv` có **17** dòng, và 17/17 model registry đều có mặt trong catalog native. Con số "15" trong tên chiến dịch cũ là **cũ** |
-| đã thực thi thật (có log/artifact khớp measurement) | **15 / 17** | CSV cột `native_executed`: `N` ở `airknow`, `pair` (2 model) ⇒ 15 `Y`. Khớp với `models_with_metrics = 17` trừ đi 2 model chỉ có roll-up |
+| đã thực thi thật (`native_executed = Y` trong CSV) | **12 / 17** | chỉ đọc cột `native_executed` của `20261109-native15-composition-limn/NATIVE_EVAL_MATRIX.csv`: 12 `Y`, 5 `N` (`airknow`, `pair`, `clvc_net`, `tgcir`, `sprc`). Đếm lại bằng `csv.DictReader`, không suy ra từ `models_with_metrics` |
 | trong đó có `EXITCODE=0` kiểm chứng được | **9 / 17** | quét `docs/reviews/**/*.log` tìm `EXITCODE=0` + `*.json` có `runtime/side_effects.exit_code == 0`: chỉ 9 model có bằng chứng. **Không** phải 13/15 |
 | qua **G1** | **0** | `GET /api/runs/parity-gate` → `passed_models: []` |
 | qua **G2** | **0** | cùng response; `encoder` 13 failure, `limn` 3 failure (discrepancy thật, không phải thiếu dữ liệu) |
@@ -337,8 +341,11 @@ workbench/envs/ctl312h/bin/python -m pytest workbench/tests/test_native_measurem
 setsid nohup env WORKBENCH_CIRCUS_RELEASE_ROOT=/home/heheboiz/data/cir/workbench/artifacts/circus_release \
   workbench/envs/ctl312h/bin/python workbench/scripts/serve_workbench.py \
   --production-frontend --host 127.0.0.1 --backend-port 8000 --frontend-port 5173 \
-  > /tmp/workbench_serve.log 2>&1 < /dev/null &
+  >> /tmp/workbench_serve.log 2>&1 < /dev/null &
 ```
+
+Phải dùng `>>`, **không** dùng `>`: một dấu `>` truncate log bằng chứng ở mỗi lần restart, và đó chính
+là cách chữ ký chết của các lần trước bị xoá — nên `>>` là bắt buộc.
 
 ---
 

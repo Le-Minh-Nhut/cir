@@ -470,18 +470,21 @@ Trạng thái: **CONFIRMED** deferred-không-phải-zero; **CONFIRMED (defect ch
 
 ## Roll-up và alias bị đếm như model độc lập
 
-Đo trên `/api/native-measurements` (49 dòng): `counts.models_with_metrics = 15`,
-`counts.models_rollup_only = 13`, `counts.rollup_rows = 22`, `rollup_sources` = 5 file. Nhưng 17
+Đo lại trên `/api/native-measurements` (49 dòng): `counts.models_with_metrics = 17`,
+`counts.models_rollup_only = 8`, `counts.rollup_rows = 18`, `rollup_sources` = 5 file. Nhưng 17
 model trong registry; và tập "model" xuất hiện trong catalog bao gồm **tên không có trong registry**:
 
 ```
-roll-up-only ids (13): B1/H_normal, B1/H_rev, B2/H_normal, B2/H_rev,
-                       airknow_n05, airknow_n08, airknow_variant_80,
-                       clip4cir_fullft, clip4cir_noft, clip4cir_rn50x4_fullft,
-                       clvc, combiner_rn50x4_noft, sprc_vitl
-không có trong registry.models: B1/H_*, B2/H_*, airknow_n05, airknow_n08, airknow_variant_80,
-                                clip4cir_fullft, clip4cir_noft, clvc, sprc_vitl  (11/13)
+roll-up-only ids (8): B1/H_normal, B1/H_rev, B2/H_normal, B2/H_rev,
+                      airknow_n05, airknow_n08, airknow_variant_80,
+                      clip4cir_rn50x4_noft
+không có trong registry.models: cả 8/8 — B1/H_*, B2/H_*, airknow_n05, airknow_n08,
+                               airknow_variant_80, clip4cir_rn50x4_noft
 ```
+
+Điểm cốt lõi không đổi: các id này **không phải model registry**, chúng là alias/biến thể của model
+đã có. Vì vậy một con số `models_rollup_only` chỉ có nghĩa khi đọc kèm danh sách id, không được đọc
+như "8 model nữa".
 
 Diễn giải từng nhóm — tất cả đều là **alias của model đã có**, trừ khi nói khác:
 
@@ -496,19 +499,18 @@ Diễn giải từng nhóm — tất cả đều là **alias của model đã c�
   `counts.with_metrics` / `models_with_metrics` **loại** chúng; response có `note` nói rõ
   "must not be read as a leaderboard position"; `EvaluationPage.tsx:607` in
   "roll-up: lặp lại số của file khác". ⇒ chúng **không** bị cộng vào số model đo.
-- **Chỗ vẫn đếm như model — `models_rollup_only = 13`:** con số này được phục vụ và được đọc như
-  "13 model chỉ có số trong roll-up", nhưng 11/13 không phải model (4 biến thể `pair`, 3 alias
-  airknow, 2 tên CLIP4Cir, `clvc`, `sprc_vitl`). Muốn đếm đúng phải chuẩn hoá theo identity
-  (`checkpoint_id` + upstream SHA), không theo khoá JSON.
+- **Chỗ dễ đọc sai — `models_rollup_only = 8`:** con số này được phục vụ và dễ bị đọc như
+  "8 model chỉ có số trong roll-up", nhưng **cả 8/8 id đều không có trong registry** (4 biến thể
+  checker của `pair`, 3 alias airknow, 1 tên CLIP4Cir noft). Muốn đếm đúng phải chuẩn hoá theo
+  identity (`checkpoint_id` + upstream SHA), không theo khoá JSON.
 - **File mang số mà UI đếm như model, nêu đích danh:** `selection_decisions.json` (8 entry, cả 8 là
   alias/dup) và `clip4cir_parsed.json` (2 entry, cả 2 là tên ngoài registry). Cả hai nằm trong
   `rollup_sources` của API.
-- **Hệ quả tới con số 15/17 của chiến dịch:** `counts.models_with_metrics = 15` **không** phải "15
-  model": trong 15 id đó có `csmcir` (đang deferred) và 4 biến thể `pair`
-  (`pair_b1_H_normal`, `pair_b1_H_rev`, `pair_b2_H_normal`, `pair_b2_H_rev` — mỗi file một dòng,
-  cùng `model_id: "pair"`), tức số **model** thật nhỏ hơn 15; cùng lúc 3 model registry
-  (`combiner_rn50x4_noft`, `clip4cir_rn50x4_fullft`, và `pair` khi tính theo id registry) chỉ có mặt
-  qua roll-up. Con số "15 model có số đo" **không** được dùng làm mốc bàn giao.
+- **Hệ quả tới con số "15 model có số đo" mà advisory cũ nêu:** `counts.models_with_metrics = 17` nay
+  **trùng** đúng 17 model registry, nhưng 17 là số **model**, không phải số dòng: phía sau nó là 21
+  dòng `counted ∧ artifact_backed` (lặp ở `airknow` 2 dòng, `pair` 4 dòng), và trong 17 model đó vẫn
+  có `csmcir` (deferred) cùng `pair` (blocked). Con số "17 model có số đo"
+  **không** được dùng làm mốc bàn giao — mốc là artifact + gate, không phải số model.
 - **Không nơi nào gộp FullFT với NoFT:** tách theo `checkpoint_id`/tên key, đúng yêu cầu. Cũng không
   có chỗ nào lấy `clip4cir_fullft` 43.8182 để so với `combiner_rn50x4_noft` 35.1407 như hai model
   khác nhau — nhưng cả hai **đều là alias ngoài registry**, nên một roll-up chứa chúng (=
