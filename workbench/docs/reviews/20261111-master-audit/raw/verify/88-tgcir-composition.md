@@ -288,7 +288,7 @@ PID.
    adapter + worker contract, parity and runtime, at the declared 5-query/20-image scale. The
    campaign's native TG-CIR numbers (`raw/tgcir_run3cat_gpu.json`: macro R@10 49.7208 / R@50 71.1023 /
    mean 60.4115) are untouched by this work and remain the comparison targets for that run.
-5. **`clipWeight` transform**: the worker builds a SECOND CLIP tower on the CPU purely to get
+5. **A second CLIP tower is built for the transform only**: the worker builds a SECOND CLIP tower on the CPU purely to get
    `.preprocess` (the pinned model already carries its own visual weights from the pickle). It costs
    ~340 MB of host RAM and 0 MiB of VRAM; the transform it yields is the same object
    `train.py:87,90` uses. Recorded in `load_state["transform"]`.
