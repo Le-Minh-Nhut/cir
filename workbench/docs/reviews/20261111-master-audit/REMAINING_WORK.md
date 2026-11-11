@@ -51,6 +51,32 @@ ký chết stack được trích bằng đường dẫn **đã commit** (`raw/se
 10. **uvicorn `:8765` cũ vẫn sống** — thiếu route mới (`/api/runs/parity-gate` → 404 so với 200 ở
    `:8000`). Nhận diện bằng cổng và hành vi route, không bằng PID. Cần kill tiến trình đó; PID đổi
    sau restart nên không ghim số.
+11. **UI KHÔNG hiện `conflict_with` / `variance_group` — lỗ hổng thật, cần chủ frontend** (xác nhận
+   2026-11-11 sau khi restart `:8000` tại `727f1d1`). `native_measurements.py` phục vụ hai field đó trên
+   row (`_review_run_payload`, `_mark_duplicates` nhánh `# 3d` / `# 3b`), nhưng bề mặt web bỏ qua:
+   `grep -rn 'conflict_with\|variance_group\|duplicate_reason' workbench/frontend/*.ts*` → **0** kết quả.
+   Hệ quả đo được trên `:5173` (`?area=evaluation&view=native&protocol=fashioniq_val_split`):
+   `clvc_net` hiện **ba dòng** — `29.97%` (`clvc_run1.json`), `30.02%` (`clvc_run3cat_gpu.json`), và
+   `30.02%` thứ ba gắn nhãn "trùng với clvc_run3cat_gpu.json, không đếm"
+   (`workbench/frontend/EvaluationPage.tsx:662-663`); **không** dòng nào nói hai số 29.97/30.02 đang
+   **mâu thuẫn** với nhau, nên người đọc thấy hai số như cùng đã chốt. `airknow` tương tự với
+   `52.5466` / `52.9241`. **Hành vi đúng:** dòng mang `conflict_with` phải hiện một dấu hiệu mâu thuẫn
+   (badge + liệt kê path đối thủ) và một câu "chưa chốt"; dòng mang `variance_group` phải hiện
+   `n`/`mean`/`sd`/`spread` cạnh số của draw giữ lại. Hai field này cũng phải có trong `NativeRowLike`
+   (`workbench/frontend/scope.ts:194-198`) nếu inventory cần dùng — hiện interface chỉ khai
+   `model_id`/`protocol_id`/`metrics`. **Không** sửa ở đợt của tôi: ngoài phạm vi ghi.
+12. **Nhãn "Số đo native không ghi protocol" — ĐÃ KIỂM, KHÔNG phải defect (giữ nguyên).** Kiểm bằng
+   payload sống `:8000/api/native-measurements` tại `727f1d1`: `clvc_net` có 5 row — 3 row
+   `protocol_id: fashioniq_val_split` (`clvc_run1.json` 29.970746517160162 counted, `clvc_run3cat_gpu.json`
+   30.02079703540087 counted, `clvc_run3cat_gpu_run2.json` duplicate) và **2 row `protocol_id: null`**
+   (`rollup:all_measured_summary.json`, `rollup:selection_decisions.json`, cả hai r10 29.9707,
+   `counted: false`); `tgcir` có 4 row theo đúng khuôn đó (2 row null: cùng hai file roll-up, r10
+   49.7208). `nativeUnattributedFor()` (`workbench/frontend/scope.ts:230-233`) lọc
+   `statesNumber ∧ model_id ∧ !protocol_id` ⇒ chọn **đúng 2 row null** mỗi model, **không** nuốt row nào
+   có `protocol_id`. Nhãn ở `ModelInventory.tsx:255-259` và `:316-317` vì thế **đúng theo dữ liệu**.
+   Chỗ dễ đọc sai (không phải lỗi): hai row null đó là **roll-up** phát lại số của chính row có protocol,
+   nên "2 số đo native" trùng giá trị với số attributed — nếu muốn rõ hơn thì câu nên nói "2 dòng roll-up
+   chưa ghi protocol", nhưng đó là cải thiện câu chữ, không phải sửa logic, và **không** được đổi bộ lọc.
 
 ## Trạng thái chốt
 - Revision được sweep: `c755673487744876d12fdd5a676a220329bd3468` (= `TESTED_SOURCE_SHA`; **chính là**
