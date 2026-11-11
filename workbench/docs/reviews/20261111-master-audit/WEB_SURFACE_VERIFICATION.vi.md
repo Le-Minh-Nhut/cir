@@ -48,7 +48,7 @@ nào ở phía server. Luôn `npm run build` trước khi restart.
 | backend | `http://127.0.0.1:8000` |
 | restart | đúng **một lần**, `WORKBENCH_CIRCUS_RELEASE_ROOT=/home/heheboiz/data/cir/workbench/artifacts/circus_release` |
 | PID **đang phục vụ** | `serve_workbench.py` **4082631** → uvicorn **4082632** (superseded: `4062950/4062957`, `4040573/4040574`, `3390138/3390139`, `3316577/3316578`, `3212146`) |
-| cảnh báo về pin PID | PID **không bền** trong đợt này: stack đã bị SIGTERM từ bên ngoài **hai lần** (`[WARN] npm exited with status -15` ở `/tmp/workbench_serve.log` lúc 02:25:51, và `/tmp/workbench_serve_final.log` sau đó), mỗi lần phải restart và PID đổi. **Digest bundle mới là pin bền**; PID chỉ đúng tại thời điểm đo |
+| cảnh báo về pin PID | PID **không bền** trong đợt này: stack đã bị SIGTERM từ bên ngoài **hai lần** (`[WARN] npm exited with status -15` trong `/tmp/workbench_serve.log`, mtime `2026-11-11 02:25:51` — mốc thời gian lấy từ mtime của tệp, không có trong nội dung log; bản sao đã commit: `raw/service-death-log.txt`; và `/tmp/workbench_serve_final.log` sau đó), mỗi lần phải restart và PID đổi. **Digest bundle mới là pin bền**; PID chỉ đúng tại thời điểm đo |
 | readiness | `/api/benchmark-runs` → 200 sau 1 s; **không** dùng `/api/models` (cold start ~154 s vì hash mọi checkpoint) |
 | digest khớp | `sha256(served /assets/index-DWpK0yeS.js)` = `sha256(dist/assets/index-DWpK0yeS.js)` = `7e34724e…8a6a16`; `cmp` → IDENTICAL |
 

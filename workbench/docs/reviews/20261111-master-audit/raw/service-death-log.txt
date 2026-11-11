@@ -1,0 +1,6 @@
+# source /tmp/workbench_serve.log (mtime 2026-11-11 02:25:51 +0700); copied 2026-11-11 after that file was found intact — cited by WEB_SURFACE_VERIFICATION.vi.md PID-durability row
+[WARN] npm exited with status -15
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [3691345]

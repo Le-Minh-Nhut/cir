@@ -154,7 +154,9 @@ artifact. Gate cũ báo `PARITY_PASS` cho cả hai; gate mới báo đúng.
   `:8000`). Tìm nó bằng `pgrep -af "port 8765"`; PID đổi sau restart nên không ghim số.
 - **Stack không tự hồi phục — cơ chế đã xác định một phần, thủ phạm thì chưa.** Service `:8000`/`:5173`
   đã chết **bốn lần** trong đợt này, đều cùng một chữ ký log: `[WARN] npm exited with status -15` (bị
-  SIGTERM) rồi backend `Shutting down` êm. **Đã xác định:** đó chính xác là đường
+  SIGTERM) rồi backend `Shutting down` êm. Bản sao log của một lần chết nằm ở
+  `raw/service-death-log.txt` (chép từ `/tmp/workbench_serve.log`, mtime `2026-11-11 02:25:51` — mốc
+  thời gian là mtime của tệp, không có trong nội dung log). **Đã xác định:** đó chính xác là đường
   `serve_workbench.py:152-166` — `forward_stop` nhận SIGTERM/SIGHUP, gửi `os.kill(child.pid, SIGTERM)`
   cho từng child rồi `raise_signal(SIGINT)`. Nghĩa là launcher **của chính nó** nhận SIGTERM; child
   không tự chết. **Chưa xác định:** ai gửi SIGTERM đó. Đã kiểm và loại trừ: `jobs.py` spawn job bằng
