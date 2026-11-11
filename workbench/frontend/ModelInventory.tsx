@@ -14,7 +14,10 @@ import { SUBSET_LABEL } from "./routes";
  *  ponytail: keyed by model_id, so it must be revised when the registry changes; the honest general
  *  form is a `deferred_reason` field served per model. */
 export const DEFERRED_MODELS: Record<string, string> = {
-  csmcir: "Tạm gác theo yêu cầu: thiếu dữ liệu phụ trợ",
+  // CSMCIR was deferred for a missing auxiliary asset; it was then MEASURED natively on FashionIQ
+  // (macro R@10 57.05 / R@50 77.30, run `f03887d2`). Only its CIRCUS composition stays deferred, so
+  // the row must not read as "nothing measured" while a counted native row exists.
+  csmcir: "FashionIQ native đã đo · CIRCUS composition tạm gác",
   sprc: "Tạm gác theo yêu cầu: chưa tải checkpoint",
 };
 
@@ -200,6 +203,12 @@ export function ModelInventory({ data, location, onGoto }: {
                     scope.protocol !== location.protocol
                     || (protocolHasSubsets(location.protocol) ? scope.subset !== location.subset : false))
                 : [];
+              // A deferred row still has real numbers somewhere: the counted native rows name their
+              // own protocol, so the row links to the table that lists them (never to a scope it
+              // does not have).
+              const nativeScopes = deferredReason
+                ? otherScopeFor(allRows, model.model_id).filter((scope) => scope.family === "native")
+                : [];
               // One decision, in `scope.ts`, so the label and the counter above cannot disagree.
               const status = inventoryStatus({
                 deferred: !!deferredReason,
@@ -242,14 +251,26 @@ export function ModelInventory({ data, location, onGoto }: {
                           </button>
                       : deferredReason
                         ? <div className="cell-sub" style={{ marginTop: 6 }} data-testid={`deferred-${model.model_id}`}>
-                            <span>Ngoài đợt chạy này</span>
-                            {/* The deferral is a campaign decision, not a statement that nothing was
-                                measured. A reader must not have to leave the row to learn otherwise. */}
-                            {nativeHere.length > 0 && (
-                              <button type="button" className="ghost" style={{ marginTop: 6 }}
-                                      data-testid={`deferred-native-${model.model_id}`} onClick={openNative}>
-                                {fmtInt(nativeHere.length)} số đo native ở phạm vi này
-                              </button>
+                            <span>{deferredReason}</span>
+                            {/* The deferral is a campaign decision about THIS scope, not a statement
+                                that the model has no number. The counted native rows live under their
+                                own protocol, so the link names it and opens the table that lists them. */}
+                            {nativeScopes.length > 0 && (
+                              <div className="scope-links">
+                                {nativeScopes.map((scope) => (
+                                  <button key={`${scope.protocol}:${scope.family ?? ""}`} type="button" className="ghost"
+                                          style={{ marginTop: 6 }}
+                                          data-testid={`deferred-native-${model.model_id}-${scope.protocol}`}
+                                          onClick={() => onGoto({ area: "evaluation", view: "native",
+                                                                 protocol: scope.protocol, runs: [], run: "",
+                                                                 query: "", offset: 0 })}>
+                                    Mở số đo native · {protocolLabel(scope.protocol)}
+                                    {protocolHasSubsets(scope.protocol) && scope.subset
+                                      ? ` · ${SUBSET_LABEL[scope.subset as keyof typeof SUBSET_LABEL] ?? scope.subset}` : ""}
+                                    {" · "}{fmtInt(scope.rows)}
+                                  </button>
+                                ))}
+                              </div>
                             )}
                           </div>
                       : nativeUnattributed.length || elsewhere.length

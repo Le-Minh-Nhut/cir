@@ -586,6 +586,63 @@ export function subsetLabelFor(protocolId: string, subset: string, labels: Recor
   return protocolHasSubsets(protocolId) ? (labels[subset] ?? subset) : "";
 }
 
+/** The `derived_from` block the composition API serves for a re-derived subset run.
+ *
+ *  A derived run's `execution_status` is INHERITED from its parent (option b: the enum keeps its four
+ *  values), so `PARTIAL` on a 586/586 subset is the parent's partiality, not this subset's. The
+ *  subset's own completeness is stated in `own_status_label` + `own_*_count`, and reading them is the
+ *  whole point of this field. Display only: no metric and no denominator here is recomputed. */
+export interface DerivedFromLike {
+  parent_run_id?: string | null;
+  subset?: string | null;
+  own_status_label?: string | null;
+  own_coverage?: number | null;
+  own_scored_count?: number | null;
+  own_unscored_count?: number | null;
+  membership_count?: number | null;
+  derivation?: string | null;
+}
+
+export interface DerivedLineage {
+  /** The marker a row must carry so a derived number is never read as a fresh measurement. */
+  marker: string;
+  /** One sentence: parent, this subset's own label, and this subset's own coverage numbers. */
+  text: string;
+  parentRunId: string;
+  /** This subset's own completeness, as the artifact states it. Null when the row does not say. */
+  ownComplete: boolean | null;
+}
+
+/** R09/derived: lineage and the derived run's OWN coverage, from the served `derived_from` alone.
+ *
+ *  The parent stays `PARTIAL` 6001/6003 while this subset is `DERIVED_COMPLETE` 586/586; printing
+ *  only `execution_status` makes those two indistinguishable. The denominator printed is
+ *  `own_scored_count + own_unscored_count` (this subset's membership), never the parent's.
+ */
+export function derivedLineage(run: { derived_from?: DerivedFromLike | null } | null | undefined,
+                               shortId: (id: string) => string = (id) => id.slice(0, 8)): DerivedLineage | null {
+  const lineage = run?.derived_from;
+  if (!lineage || !lineage.parent_run_id) return null;
+  const parent = shortId(lineage.parent_run_id);
+  const subset = lineage.subset ? ` (subset ${lineage.subset})` : "";
+  const scored = lineage.own_scored_count;
+  const unscored = lineage.own_unscored_count;
+  const total = typeof scored === "number" && typeof unscored === "number"
+    ? scored + unscored
+    : lineage.membership_count ?? null;
+  const own = typeof scored === "number" && total !== null
+    ? `chính subset này: ${scored.toLocaleString("en-US")}/${total.toLocaleString("en-US")} đã chấm`
+    : "chính subset này: không ghi số đã chấm";
+  const label = lineage.own_status_label ? ` · ${lineage.own_status_label}` : "";
+  return {
+    marker: "DERIVED",
+    text: `Lượt dẫn xuất từ ${parent}${subset}: tái tổ hợp hạng của parent, không chạy lại GPU — `
+        + `${own}${label}. execution_status là của parent, không phải của subset này.`,
+    parentRunId: lineage.parent_run_id,
+    ownComplete: typeof lineage.own_coverage === "number" ? lineage.own_coverage >= 1 : null,
+  };
+}
+
 /** The explorer chip row: the four authoritative query states, in one control.
  *
  *  `query_state` is the backend's own classification (`hit` / `retrieval_failure` / `unscored`), so

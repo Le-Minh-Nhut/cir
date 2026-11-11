@@ -3,9 +3,9 @@ import { BASE } from "./client";
 import { fetchJson, useRegion } from "./useRegion";
 import { conditionsOf, outcomeTone } from "./inspector";
 import { candidateWindowVerdict } from "./scope";
-import { Badge, Card, Detail, EmptyState, ErrorState, KeyValue, LoadingState } from "./ui";
+import { Badge, Card, Detail, EmptyState, ErrorState, Field, KeyValue, LoadingState } from "./ui";
 import { fmtInt, fmtRank } from "./format";
-import { FIXED_CUTOFFS } from "./catalog";
+import { FIXED_CUTOFFS, comparePeers, compositionLabel } from "./catalog";
 import { candidateDisplayOptions, candidateRequestPath, effectiveCandidateK } from "./candidateRequest";
 import { outcomeLabel } from "./routes";
 import type { CompositionQuery, CompositionRun } from "./types";
@@ -38,11 +38,15 @@ const CONDITION_LABELS: Record<string, string> = {
  *  * images that 404 in this deployment render an explicit missing tile with the image id, so a
  *    coverage gap is visible instead of an empty box.
  */
-export function QueryInspector({ run, query, condition = "multimodal", selectedCount, onAnnotate }: {
+export function QueryInspector({ run, query, condition = "multimodal", selectedCount, selectedRuns = [], onPeerChange, onAnnotate }: {
   run: CompositionRun | null;
   query: CompositionQuery | null;
   condition?: string;
   selectedCount: number;
+  /** Selected run keys (`c:<run_id>`) from the URL: the comparison cohort the reader already named. */
+  selectedRuns?: readonly string[];
+  /** Replace the comparison cohort. The caller updates `runs=` and keeps protocol/subset/query. */
+  onPeerChange?: (keys: string[]) => void;
   onAnnotate: () => void;
 }) {
   const [k, setK] = useState(10);
@@ -330,7 +334,8 @@ export function QueryInspector({ run, query, condition = "multimodal", selectedC
 
       <div className="inspector-secondary">
         <Card title="So sánh cùng query" subtitle="Cùng protocol, cùng subset: cohort và mẫu số được nêu">
-          <ComparePanel run={run} query={query} />
+          <ComparePanel run={run} query={query} selected={selectedRuns}
+                        onPeerChange={onPeerChange ?? (() => undefined)} />
         </Card>
         <Card title="Ghi chú nghiên cứu" subtitle="Gắn đúng query + protocol, lưu qua reload">
           <p className="hint">
@@ -398,20 +403,39 @@ export function Shot({ category, id, label, target, compact }: {
 /** Cross-run comparison for one query, restricted to the same protocol and subset.
  *  A different cohort would make the columns incomparable, so it is refused with the reason.
  *  Both reads are keyed regions (protocol+subset for the peer list, query+selection for the ranks),
- *  so a query change cannot leave the previous query's comparison on screen. */
-function ComparePanel({ run, query }: { run: CompositionRun; query: CompositionQuery }) {
+ *  so a query change cannot leave the previous query's comparison on screen.
+ *
+ *  Peers come from the SERVED rows of the same scope, ordered by the selection the URL already holds
+ *  (`runs=` names both runs of the comparison the reader asked for) and then unsliced — plus an
+ *  explicit picker, so any row of the scope is reachable. The old list sliced the first four rows in
+ *  API order, which made `tme` and every other run impossible to compare. */
+function ComparePanel({ run, query, selected, onPeerChange }: {
+  run: CompositionRun;
+  query: CompositionQuery;
+  /** Selected run keys (`c:<run_id>`) straight from the URL, so a peer choice survives navigation. */
+  selected: readonly string[];
+  onPeerChange: (runIds: string[]) => void;
+}) {
   const peerKey = `${run.protocol_id}\u001f${run.subset}`;
   const peersRegion = useRegion<CompositionRun[]>(
     "compare-peers", peerKey,
     useCallback((signal: AbortSignal) => fetchJson<CompositionRun[]>(`/api/composition/runs?subset=${run.subset}`, signal),
       [run.subset]));
 
+  const selectedRunIds = useMemo(
+    () => selected.filter((key) => key.startsWith("c:")).map((key) => key.slice(2)),
+    [selected.join(",")]); // eslint-disable-line react-hooks/exhaustive-deps
+  const candidates = useMemo(
+    () => comparePeers(peersRegion.region.data ?? [], {
+      currentRunId: run.run_id, protocol: run.protocol_id, subset: run.subset, selected: selectedRunIds,
+    }),
+    [peersRegion.region.data, run.run_id, run.protocol_id, run.subset, selectedRunIds]);
+  // The comparison shows the OTHER runs the URL selects; when it names none besides this one, the
+  // first few scoped rows are shown so the panel is never empty — and the picker reaches all of them.
+  const picked = selectedRunIds.filter((id) => id !== run.run_id);
   const peers = useMemo(
-    () => (peersRegion.region.data ?? [])
-      .filter((candidate) => candidate.protocol_id === run.protocol_id && candidate.subset === run.subset)
-      .filter((candidate) => candidate.run_id !== run.run_id)
-      .slice(0, 4),
-    [peersRegion.region.data, run.protocol_id, run.subset, run.run_id]);
+    () => (picked.length ? candidates.filter((row) => picked.includes(row.run_id)) : candidates.slice(0, 4)),
+    [candidates, picked.join(",")]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const rankKey = `${run.run_id}\u001f${query.query_id}\u001f${peers.map((peer) => peer.run_id).join(",")}`;
   const ranksRegion = useRegion<Array<{ key: string; rank: number | null }>>(
@@ -433,8 +457,43 @@ function ComparePanel({ run, query }: { run: CompositionRun; query: CompositionQ
     return <ErrorState message={peersRegion.region.error ?? ""} onRetry={peersRegion.retry} />;
   }
   if (peersRegion.region.status === "loading") return <LoadingState label="Đang tải các lượt cùng scope…" />;
-  if (!peers.length) {
+  if (!candidates.length) {
     return <EmptyState kind="capability" detail="Chỉ có một lượt trong protocol và subset này, nên không có gì để so sánh." />;
+  }
+  const picker = (
+    <div className="toolbar" data-testid="compare-peer-picker">
+      <Field label="Thêm lượt so sánh" htmlFor="compare-peer"
+             hint="Cùng protocol, cùng subset; mọi lượt của phạm vi này đều chọn được">
+        <select id="compare-peer" data-testid="compare-peer-select" value=""
+                onChange={(event) => {
+                  const peer = candidates.find((row) => row.run_id === event.target.value);
+                  if (!peer) return;
+                  // Only the comparison cohort changes: protocol, subset, inspected run and query stay.
+                  const next = [...new Set([...picked, peer.run_id])].map((id) => `c:${id}`);
+                  onPeerChange([`c:${run.run_id}`, ...next]);
+                  event.target.value = "";
+                }}>
+          <option value="">— chọn lượt —</option>
+          {candidates.map((peer) => (
+            <option key={peer.run_id} value={peer.run_id} disabled={picked.includes(peer.run_id)}>
+              {compositionLabel(peer)}{picked.includes(peer.run_id) ? " · đang so sánh" : ""}
+            </option>
+          ))}
+        </select>
+      </Field>
+      {picked.length > 0 && (
+        <button type="button" className="ghost" data-testid="compare-peer-clear"
+                onClick={() => onPeerChange([`c:${run.run_id}`])}>Bỏ lượt đã thêm</button>
+      )}
+    </div>
+  );
+  if (!peers.length) {
+    return (
+      <div className="stack">
+        {picker}
+        <EmptyState kind="capability" detail="Chưa chọn lượt nào để so sánh — chọn một lượt ở ô trên." />
+      </div>
+    );
   }
   if (ranksRegion.region.status === "error") {
     return <ErrorState message={ranksRegion.region.error ?? ""} onRetry={ranksRegion.retry} />;
@@ -446,6 +505,7 @@ function ComparePanel({ run, query }: { run: CompositionRun; query: CompositionQ
 
   return (
     <div className="stack">
+      {picker}
       <div className="table-wrap">
         <table>
           <caption className="sr-only">Hạng multimodal của cùng query trên các lượt cùng scope</caption>

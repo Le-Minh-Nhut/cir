@@ -3,7 +3,7 @@ import { fetchJson, useRegion, type RegionHandle } from "./useRegion";
 import type { BenchmarkRun, ParityGatePayload, RunGate } from "./gate";
 import type { Cohort, CompositionQuery, CompositionRun, DuplicateStatus, Job, Measurement, Model, Query, Run } from "./types";
 import type { CapabilityFlags, CapabilityReport, Provenance } from "./catalog";
-import { compositionCapabilities, benchmarkCapabilities, indexCapabilities, provenanceOf, testWorkspaceOrigin, transferLabel } from "./catalog";
+import { compositionCapabilities, benchmarkCapabilities, compositionLabel, indexCapabilities, provenanceOf, testWorkspaceOrigin, transferLabel } from "./catalog";
 import type { Subset } from "./routes";
 /** Type-only: the R16 read-set on a native row is declared once, beside the pure functions that
  *  read it, and `NativeMeasurement` names those fields through it rather than restating them. */
@@ -89,7 +89,9 @@ export function buildCatalog(compositionRuns: CompositionRun[], indexRuns: Run[]
       key: `c:${run.run_id}`,
       family: "composition",
       runId: run.run_id,
-      label: `${run.model_id} / ${run.checkpoint_id}`,
+      // Disambiguated: `model / checkpoint` repeats inside one served scope (two `hint / fashioniq`
+      // in subset full), and only one of each pair exported Top-K.
+      label: compositionLabel(run),
       modelId: run.model_id,
       checkpointId: run.checkpoint_id,
       protocolId: run.protocol_id,

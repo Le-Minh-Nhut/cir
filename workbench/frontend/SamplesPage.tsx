@@ -60,6 +60,11 @@ export function SamplesPage({ data, location, onGoto, onAnnotate }: {
     && (!selectedCurrent || selectedRegion.region.status === "loading" || selectedRegion.region.status === "idle"));
   const inspectorFailed = !!(run && location.query && selectedCurrent && selectedRegion.region.status === "error");
 
+  // Changing the comparison cohort rewrites ONLY `runs=`. Protocol, subset, the inspected run and the
+  // query stay exactly as they are, so the comparison is still about the same cohort and the same
+  // sample — a peer choice must never navigate the reader somewhere else.
+  const changePeers = (keys: string[]) => onGoto({ runs: keys });
+
   if (location.view === "compare") {
     return (
       <div className="stack">
@@ -69,6 +74,8 @@ export function SamplesPage({ data, location, onGoto, onAnnotate }: {
                           next={<button type="button" onClick={() => onGoto({ view: "explorer" })}>Mở inspector</button>} />
             : <QueryInspector run={run} query={selectedQuery} condition={location.condition}
                               selectedCount={location.runs.length}
+                              selectedRuns={location.runs}
+                              onPeerChange={changePeers}
                               onAnnotate={() => onGoto({ area: "notebook", view: "annotations", query: selectedQuery.query_id })} />}
         </Card>
       </div>
@@ -245,6 +252,8 @@ export function SamplesPage({ data, location, onGoto, onAnnotate }: {
               : run && selectedQuery
                 ? <QueryInspector run={run} query={selectedQuery} condition={location.condition}
                                   selectedCount={location.runs.length}
+                                  selectedRuns={location.runs}
+                                  onPeerChange={changePeers}
                                   onAnnotate={() => onGoto({ area: "notebook", view: "annotations", query: selectedQuery.query_id })} />
                 : (
                   <Card title="Duyệt ảnh truy hồi">

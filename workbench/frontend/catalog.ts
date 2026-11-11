@@ -586,3 +586,39 @@ export const FIXED_CUTOFFS = {
 export function scoringImplsPresent(rows: readonly CompositionRunLike[]): string[] {
   return [...new Set(rows.map((run) => run.scoring_impl?.impl?.trim() || "unknown"))].sort();
 }
+
+/** Label for one composition run in any picker.
+ *
+ *  `model / checkpoint` is NOT unique in a served scope: subset `full` holds two `hint / fashioniq`
+ *  and two `tme / fashioniq_0` rows, and only one of each pair exported Top-K — so picking by that
+ *  label alone can land on the run with no candidates. The label therefore carries a run-id stub and
+ *  whether a candidate export exists. Display only: no metric, rank or denominator is touched.
+ */
+export function compositionLabel(run: CompositionRunLike): string {
+  const depth = run.capability_detail?.candidate_topk?.depth ?? null;
+  const note = depth != null && depth > 0 ? `Top-K ${depth}`
+    : run.capabilities?.candidate_topk ? "có Top-K" : "không có Top-K";
+  return `${run.model_id} / ${run.checkpoint_id} · ${run.run_id.slice(0, 8)} · ${note}`;
+}
+
+/** Peer runs a comparison may show, from the served rows and the selection the URL already holds.
+ *
+ *  The old peer list was `served.filter(same protocol+subset).slice(0, 4)` — API order — so the four
+ *  peers were always `limn, conesep, ptha_mtst, intent` and every other run (TME included) was
+ *  unreachable. The comparison the reader asked for is already in `runs=`, so those come FIRST; every
+ *  other row of the same protocol+subset follows, UNSLICED, so nothing becomes unreachable.
+ */
+export function comparePeers<T extends { run_id: string; protocol_id: string; subset: string }>(
+  served: readonly T[],
+  input: { currentRunId: string; protocol: string; subset: string; selected: readonly string[] },
+): T[] {
+  const scoped = served.filter((row) => row.protocol_id === input.protocol
+    && row.subset === input.subset && row.run_id !== input.currentRunId);
+  const chosen = input.selected
+    // Keys are `c:<run_id>` in the URL; the family prefix is a selection detail, not an identity.
+    .map((key) => key.startsWith("c:") ? key.slice(2) : key)
+    .map((id) => scoped.find((row) => row.run_id === id))
+    .filter((row): row is T => !!row);
+  const rest = scoped.filter((row) => !chosen.some((picked) => picked.run_id === row.run_id));
+  return [...chosen, ...rest];
+}

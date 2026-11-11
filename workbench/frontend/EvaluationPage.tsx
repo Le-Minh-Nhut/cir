@@ -14,7 +14,7 @@ import type { CompositionRun } from "./types";
 import type { NativeMeasurement } from "./data";
 import type { WarningLabel } from "./gate";
 import { warningLabels } from "./gate";
-import { nativeConflictChips, nativeRepeatLabel, nativeVarianceSummary, protocolHasSubsets } from "./scope";
+import { derivedLineage, nativeConflictChips, nativeRepeatLabel, nativeVarianceSummary, protocolHasSubsets } from "./scope";
 
 /** Đánh giá: measured metrics for a stated protocol and subset, with denominators.
  *
@@ -250,6 +250,20 @@ function CompositionTable({ data, location, onGoto, onSelectRun }: {
                             <td>
                               <span className="cell-strong">{run.model_id}</span>
                               <span className="cell-sub">{shortId(run.checkpoint_id, 26)}</span>
+                              {/* A derived subset carries its PARENT's execution_status, so the
+                                  status column alone cannot say this subset is 586/586 while the
+                                  parent is 6001/6003. The lineage and its own coverage are printed
+                                  here, from `derived_from`; no metric or denominator is recomputed. */}
+                              {(() => {
+                                const lineage = derivedLineage(run, (id) => shortId(id, 8));
+                                if (!lineage) return null;
+                                return (
+                                  <span className="cell-sub" data-testid={`derived-lineage-${run.run_id}`}>
+                                    <Badge tone={lineage.ownComplete ? "ok" : "warn"}>{lineage.marker}</Badge>
+                                    {" "}{lineage.text}
+                                  </span>
+                                );
+                              })()}
                             </td>
                             <td>
                               <Badge tone={transfer.isTransfer ? "warn" : "neutral"}
@@ -341,8 +355,11 @@ function ScoringImplNotice({ rows }: { rows: CompositionRun[] }) {
 function RunMetricsDetail({ run }: { run: CompositionRun }) {
   const gap = compositionGap(run);
   const warnings: WarningLabel[] = warningLabels(run as never, 5);
+  const lineage = derivedLineage(run, (id) => shortId(id, 8));
   return (
     <KeyValue rows={[
+        ...(lineage ? [[`dẫn xuất (${lineage.marker})`,
+          <span key="dv" data-testid="derived-detail">{lineage.text} · parent run_id <code>{lineage.parentRunId}</code></span>] as [string, React.ReactNode]] : []),
         ["gap", gap.state === "available"
           ? <span key="g">{fmtGap(gap.value)} · cohort {fmtInt(gap.cohort)} · {gap.formula}</span>
           : <span key="g" className="hint">unavailable — {gap.reason}</span>],

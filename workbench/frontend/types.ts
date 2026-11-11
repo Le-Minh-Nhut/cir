@@ -1,3 +1,5 @@
+import type { DerivedFromLike } from "./scope";
+
 export type TopResult = { rank:number; image_id:string; score:number };
 export type Query = { query_id:string; category:string; annotation_index:number; reference_id:string; target_id:string; raw_captions:string[]; model_input_text:string; target_rank:number; top_results:TopResult[] };
 export type Run = { run_id:string; protocol_id:string; model_id:string; method_name:string; checkpoint_id:string; checkpoint_training_noise_pct:number|null; evaluation_noise_pct:number|null; data_kind:"mock"|"experiment"; top_k_saved:number; gallery_size:number; category_gallery_sizes?:Record<string,number>|null; category_eligible_counts?:Record<string,number>|null; evidence_status?:"PER_QUERY_VERIFIED"|"SYNTHETIC_OR_MOCK"|string|null };
@@ -126,6 +128,9 @@ export type CompositionRun = {
   scoring_impl?: { impl: string; basis?: string; adapter_hash_known?: boolean; scoring_hash_known?: boolean } | null;
   /** Backend `is_failed_summary`: no numbers were measured, so metric cells must blank. */
   is_failed?: boolean;
+  /** Present on a run re-derived from a parent's ranks (`circus-derived-subset/v1`). Its
+   *  `execution_status` is the parent's; this subset's own completeness lives here. */
+  derived_from?: DerivedFromLike | null;
   metrics: CompositionMetrics;
   smoke?: { limited: boolean; query_limit?: number | null; label?: string | null };
 };
