@@ -238,10 +238,16 @@ def test_category_assignment_keeps_ambiguous_queries_unscoped(release_root: Path
         json.dumps([{"candidate": "reference", "captions": ["synthetic"]}]), encoding="utf-8")
     (root / "captions/cap.shirt.test.json").write_text(
         json.dumps([{"candidate": "reference", "captions": ["synthetic"]}]), encoding="utf-8")
-    (root / "captions/cap.toptee.test.json").write_text("[]", encoding="utf-8")
+    # Non-empty filler, not "[]": an emptied split or caption file is now refused as unusable
+    # provenance (R05), so the fixture must express "this category holds another garment".
+    (root / "captions/cap.toptee.test.json").write_text(
+        json.dumps([{"candidate": "other", "captions": ["synthetic"]}]), encoding="utf-8")
     for category in ("dress", "shirt", "toptee"):
-        (root / f"image_splits/split.{category}.val.json").write_text("[]", encoding="utf-8")
-    assigned = assign_garment_categories(data, root)
+        (root / f"image_splits/split.{category}.val.json").write_text(
+            json.dumps(["other.jpg"]), encoding="utf-8")
+    # `annotation_pin={}`: this FashionIQ layout is synthetic, so the released row counts and
+    # digests do not apply; the row schema and non-emptiness still do (R05).
+    assigned = assign_garment_categories(data, root, annotation_pin={})
     resolution = assigned.provenance["category_resolution"]
     assert assigned.queries[0].category is None
     assert resolution["status"] == "ambiguous"

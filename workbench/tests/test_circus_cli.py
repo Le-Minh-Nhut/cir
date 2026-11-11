@@ -66,10 +66,18 @@ def _fixture(tmp_path: Path, model_ids: tuple[str, ...] = ("fixture3d",)) -> tup
     (fashioniq / "image_splits").mkdir()
     for index in range(5):
         Image.new("RGB", (3, 2), (index, index, index)).save(fashioniq / "images" / f"img{index}.jpg")
-    for category in ("dress", "shirt", "toptee"):
-        refs = ["img0.jpg", "img1.jpg", "img3.jpg"] if category == "dress" else []
-        (fashioniq / "image_splits" / f"split.{category}.val.json").write_text(json.dumps(refs), encoding="utf-8")
-        (fashioniq / "captions" / f"cap.{category}.test.json").write_text("[]", encoding="utf-8")
+    # Every annotation file is non-empty: an emptied split is now refused as unusable provenance
+    # (R05), so a fixture that means "this category holds other garments" has to say so, and one
+    # that means "no category holds this image" leaves it out. `img4` belongs to no category, which
+    # is what makes q2 a category-scope failure below.
+    for category, refs, other in (("dress", ["img0.jpg", "img1.jpg", "img3.jpg"], "dressonly.jpg"),
+                                  ("shirt", ["shirtonly.jpg"], "shirtonly.jpg"),
+                                  ("toptee", ["topteeonly.jpg"], "topteeonly.jpg")):
+        (fashioniq / "image_splits" / f"split.{category}.val.json").write_text(
+            json.dumps(refs), encoding="utf-8")
+        (fashioniq / "captions" / f"cap.{category}.test.json").write_text(
+            json.dumps([{"candidate": other, "captions": ["a caption", "another"]}]),
+            encoding="utf-8")
 
     adapter_root = tmp_path / "adapters"
     adapter_root.mkdir()

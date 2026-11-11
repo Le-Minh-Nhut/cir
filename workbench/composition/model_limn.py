@@ -48,6 +48,7 @@ from workbench.composition.adapters import (
     worker_environment,
 )
 from workbench.composition.inputs import CONDITIONS
+from workbench.composition.data import ANNOTATION_PIN, inspect_annotation
 
 BUNDLE_ID = "base_iter0_all_categories"
 
@@ -59,15 +60,56 @@ def normalize_query_text(text: str) -> str:
 class CaptionScopeIndex(dict):
     """``(image stem, normalized text) -> frozenset(categories)`` plus the sources that were NOT read.
 
-    A plain ``dict`` mapping keeps every existing reader working, while ``unreadable`` records which
-    annotation files the index could not read. Without it, "the other category has no row for this
-    pair" and "the other category was never opened" are the same state, and a resolver can then route
-    an ambiguous query to the one category whose file happened to exist.
+    A plain ``dict`` mapping keeps every existing reader working, while ``unreadable`` /
+    ``malformed`` / ``empty`` / ``mismatch`` (all keyed by CATEGORY, e.g. ``"toptee"``) describe the
+    sources that cannot be used as evidence. Without them, "the other category has no row for this
+    pair" and "the other category was never opened, was gutted to ``[]``, or carries a garbled row"
+    are the same state, and a resolver then routes an ambiguous query to the one category whose file
+    happened to survive.
+
+    ``incomplete`` is the single predicate a resolver must honour: true when any file is
+    unreadable, malformed (any row that is not an object with a string ``candidate`` and a list of
+    string ``captions``), empty, or off its committed pin (row count/digest disagreeing with
+    ``data.ANNOTATION_PIN``).
     """
 
     unreadable: frozenset[str] = frozenset()
+    malformed: Mapping[str, str] = {}
+    empty: frozenset[str] = frozenset()
+    mismatch: Mapping[str, str] = {}
+    counts: Mapping[str, int | None] = {}
+    digests: Mapping[str, str | None] = {}
+    complete: bool = False
 
-def caption_scope_index(fashioniq_root: Path) -> CaptionScopeIndex:
+    @property
+    def incomplete(self) -> bool:
+        """True when this index cannot prove the absence of a row in any category."""
+        return bool(self.unreadable or self.malformed or self.empty or self.mismatch)
+
+    def report(self) -> dict[str, Any]:
+        """Per-file provenance, in the shape a run summary and the inventory can read."""
+        broken = set(self.unreadable) | set(self.empty) | set(self.malformed) | set(self.mismatch)
+        problems = {**{name: "unreadable" for name in self.unreadable},
+                    **{name: "empty" for name in self.empty},
+                    **{name: problem for name, problem in self.malformed.items()},
+                    **{name: problem for name, problem in self.mismatch.items()}}
+        return {
+            "complete": self.complete,
+            "incomplete": self.incomplete,
+            "unreadable": sorted(self.unreadable),
+            "malformed": dict(sorted(self.malformed.items())),
+            "empty": sorted(self.empty),
+            "mismatch": dict(sorted(self.mismatch.items())),
+            "files": {category: {"file": f"cap.{category}.val.json",
+                                 "count": self.counts.get(category),
+                                 "sha256": self.digests.get(category),
+                                 "usable": category not in broken,
+                                 "problem": problems.get(category)}
+                      for category in sorted(self.counts)},
+        }
+
+def caption_scope_index(fashioniq_root: Path,
+                        pin: Mapping[str, Mapping[str, Any]] | None = None) -> CaptionScopeIndex:
     """Map ``(image stem, joined validation caption text)`` to the annotating categories.
 
     M-BEIR task-7 query text is the reference image's two FashionIQ validation captions joined by
@@ -77,36 +119,55 @@ def caption_scope_index(fashioniq_root: Path) -> CaptionScopeIndex:
     still appears under two categories is genuinely undecidable and maps to both, so callers can
     refuse instead of picking one.
 
-    Annotation files that are absent or unparseable are named in ``unreadable``. Their rows are not
-    in the index, so a pair that would have been ambiguous can look unique; consumers that route a
-    query must treat a non-empty ``unreadable`` as incomplete provenance.
+    A file is only used when ``data.inspect_annotation`` accepts it: every row well formed, the
+    file non-empty, and -- when ``pin`` names it -- its row count and digest matching the committed
+    ``data.ANNOTATION_PIN``. JSON validity is not enough: ``[]`` parses, but a category gutted to
+    ``[]`` (or truncated, or carrying one wrong-typed row) would otherwise look like a category with
+    no row for a garment and turn a real ambiguity into a unique wrong answer. Such a file is named
+    in the matching attribute, its rows are not indexed, and ``incomplete`` is true.
+
+    ``pin`` is the mapping ``data.inspect_annotation`` checks: ``None`` means "this root carries no
+    pinned bytes" -- the default because most callers here are hand-built fixtures -- and it still
+    enforces the row schema plus non-emptiness. The ONE released-data caller, ``Adapter``, passes
+    ``Adapter.annotation_pin`` (``data.ANNOTATION_PIN``), which is what makes live routing refuse a
+    file whose rows no longer match the authors' bytes.
     """
+    pin = {} if pin is None else pin
     index: dict[tuple[str, str], set[str]] = {}
     unreadable: set[str] = set()
+    malformed: dict[str, str] = {}
+    empty: set[str] = set()
+    mismatch: dict[str, str] = {}
+    counts: dict[str, int | None] = {}
+    digests: dict[str, str | None] = {}
     for category in ("dress", "shirt", "toptee"):
-        path = Path(fashioniq_root) / "captions" / f"cap.{category}.val.json"
-        try:
-            rows = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, ValueError):
+        report = inspect_annotation(Path(fashioniq_root) / "captions" / f"cap.{category}.val.json",
+                                    shape="captions", pin=pin)
+        counts[category] = report.count
+        digests[category] = report.actual_sha256
+        if report.problem is None:
+            for row in report.rows:
+                text = normalize_query_text(
+                    " and ".join(part for part in row["captions"] if part.strip()))
+                if text:
+                    index.setdefault((Path(row["candidate"]).stem, text), set()).add(category)
+        elif report.problem == "unreadable":
             unreadable.add(category)
-            continue
-        if not isinstance(rows, list):
-            unreadable.add(category)
-            continue
-        for row in rows:
-            if not isinstance(row, dict) or not isinstance(row.get("candidate"), str):
-                continue
-            captions = row.get("captions")
-            if not isinstance(captions, list):
-                continue
-            text = normalize_query_text(" and ".join(
-                part for part in captions if isinstance(part, str) and part.strip()))
-            if text:
-                index.setdefault((Path(row["candidate"]).stem, text), set()).add(category)
+        elif report.problem == "malformed":
+            malformed[category] = report.detail or "malformed"
+        elif report.problem == "empty":
+            empty.add(category)
+        else:
+            mismatch[category] = report.detail or str(report.problem)
     result = CaptionScopeIndex({key: frozenset(categories) for key, categories in index.items()})
     result.unreadable = frozenset(unreadable)
+    result.malformed = dict(malformed)
+    result.empty = frozenset(empty)
+    result.mismatch = dict(mismatch)
+    result.counts = dict(counts)
+    result.digests = dict(digests)
+    result.complete = not (unreadable or malformed or empty or mismatch)
     return result
-
 
 def query_reference_stem(query: Any, candidate_names: Mapping[str, str] | None) -> str | None:
     """Return the reference image stem the release candidate table records for ``query``."""
@@ -114,6 +175,56 @@ def query_reference_stem(query: Any, candidate_names: Mapping[str, str] | None) 
         return None
     name = candidate_names.get(getattr(query, "reference_id", None))
     return Path(name).stem if isinstance(name, str) and name else None
+
+
+def _index_complete(index: Mapping[tuple[str, str], frozenset[str]]) -> bool:
+    """Whether ``index`` proves that a category with no row really has no row.
+
+    A plain ``dict`` carries no provenance at all, so it cannot prove anything; only a
+    ``CaptionScopeIndex`` whose ``complete`` flag is set can.
+    """
+    return isinstance(index, CaptionScopeIndex) and not index.incomplete
+
+
+def resolve_query_scope(index: Mapping[tuple[str, str], frozenset[str]], query: Any,
+                        candidate_names: Mapping[str, str] | None) -> dict[str, Any]:
+    """One routing decision plus its rationale, before the caller checks it against its scopes.
+
+    ``reason`` is ``loader`` (the release loader assigned ``query.category``),
+    ``annotation:<category>`` (the loader left it unset and exactly one caption file names this
+    reference/text pair) or ``unresolved:<why>``. ``provenance_incomplete`` is true when the
+    decision cannot be verified against a complete annotation set: in particular a ``loader`` route
+    taken while the index is incomplete is a route no annotation ever confirmed, so a reader must be
+    able to tell it apart from a verified one.
+    """
+    category = getattr(query, "category", None)
+    complete = _index_complete(index)
+    record: dict[str, Any] = {"qid": getattr(query, "qid", None), "scope": None,
+                              "reason": None, "provenance_incomplete": not complete,
+                              "holding_categories": (), "annotation_complete": complete}
+    if category is not None:
+        record["scope"] = category
+        record["reason"] = "loader"
+        return record
+    stem = query_reference_stem(query, candidate_names)
+    if stem is None:
+        record["reason"] = "unresolved:no_reference_identity"
+        return record
+    holders = index.get((stem, normalize_query_text(getattr(query, "query_txt", ""))), frozenset())
+    record["holding_categories"] = tuple(sorted(holders))
+    if not complete:
+        record["reason"] = "unresolved:annotation_index_incomplete"
+        return record
+    if not holders:
+        record["reason"] = "unresolved:no_annotation_row"
+        return record
+    if len(holders) > 1:
+        record["reason"] = "unresolved:annotation_names_two_categories"
+        return record
+    resolved = next(iter(holders))
+    record["scope"] = resolved
+    record["reason"] = f"annotation:{resolved}"
+    return record
 
 
 def resolve_query_category(scopes: Sequence[str | None], index: Mapping[tuple[str, str], frozenset[str]],
@@ -126,21 +237,13 @@ def resolve_query_category(scopes: Sequence[str | None], index: Mapping[tuple[st
     caption annotation, which has to name exactly one scope; anything short of that stays ``None``
     and the query stays unscored.
 
-    An annotation index that could not read one of its sources cannot prove uniqueness: the missing
-    file's rows are absent, so the surviving category looks like the only one. That case returns
-    ``None`` for every query the loader left unscoped, because "the other file had no row" and "the
-    other file was never opened" must not produce the same answer.
+    An annotation index that cannot prove it read every source -- unreadable, malformed, emptied or
+    off-pin -- cannot prove uniqueness either, so every query the loader left unscoped returns
+    ``None``: "the other file had no row" and "the other file was never opened / was gutted" must
+    not produce the same answer.
     """
-    category = getattr(query, "category", None)
-    if category is not None:
-        return category if category in scopes else None
-    stem = query_reference_stem(query, candidate_names)
-    if stem is None:
-        return None
-    if getattr(index, "unreadable", frozenset()):
-        return None
-    categories = index.get((stem, normalize_query_text(getattr(query, "query_txt", ""))), frozenset())
-    resolved = next(iter(categories)) if len(categories) == 1 else None
+    record = resolve_query_scope(index, query, candidate_names)
+    resolved = record["scope"]
     return resolved if resolved in scopes else None
 
 
@@ -162,6 +265,10 @@ class Adapter(CompositionAdapter):
     model_id = "limn"
     category_scopes = ("dress", "shirt", "toptee")
     reference_eligible = True
+    #: Pin enforced on the caption annotation set. ``ANNOTATION_PIN`` is the default because an
+    #: annotation file that silently stopped matching the authors' bytes must refuse routing, not
+    #: route. A fixture overrides it on the instance with ``{}`` ("synthetic bytes; schema only").
+    annotation_pin: Mapping[str, Mapping[str, Any]] = ANNOTATION_PIN
 
     def __init__(self, config: Any, checkpoint_id: str | None = None) -> None:
         config = config or resolve_config()
@@ -183,7 +290,9 @@ class Adapter(CompositionAdapter):
         self.interpreter = resolve_model_interpreter(self._model_record, config) or setting(variable)
         self.source_root = Path(config.WORKBENCH_THIRD_PARTY_ROOT) / self._model_record["source_dir"]
         self.dataset_root = Path(config.FASHIONIQ_ROOT)
-        self._caption_scopes: dict[tuple[str, str], frozenset[str]] | None = None
+        self._caption_scopes: CaptionScopeIndex | None = None
+        self._scope_decisions: dict[str, dict[str, Any]] = {}
+        self._scope_map_written = False
         self._candidate_names: dict[str, str] | None = None
         self._counter = 0
         self._job_dir: Path | None = None
@@ -212,6 +321,16 @@ class Adapter(CompositionAdapter):
             self._candidate_names = names
         return self._candidate_names
 
+    def _decisions(self) -> dict[str, dict[str, Any]]:
+        """This adapter's routing decisions, created on first use.
+
+        Tolerant of an instance built with ``object.__new__`` (the tests' seam for routing without a
+        checkpoint or a worker), so recording a decision never needs a constructor.
+        """
+        if not hasattr(self, "_scope_decisions"):
+            self._scope_decisions = {}
+        return self._scope_decisions
+
     def query_scope(self, query: Any,
                     candidate_names: Mapping[str, str] | None = None) -> str | None:
         """Route one released query to the checkpoint scope its own annotation names.
@@ -220,11 +339,110 @@ class Adapter(CompositionAdapter):
         Returns the category the release loader already assigned when there is one, otherwise the
         category whose FashionIQ validation caption pair produced this query's text. ``None`` means
         the release does not determine a scope, so the query stays unscored instead of defaulting.
+
+        Every decision is cached with its rationale by :meth:`query_scope_resolution`, which the
+        runner-side consumers reach through the run artifact this adapter writes on ``close()``.
         """
-        if self._caption_scopes is None:
-            self._caption_scopes = caption_scope_index(self.dataset_root)
+        index = self.caption_scope_index()
         names = self.candidate_names() if candidate_names is None else candidate_names
-        return resolve_query_category(self.category_scopes, self._caption_scopes, query, names)
+        record = resolve_query_scope(index, query, names)
+        record["batch_indices"] = (getattr(query, "index", None),)
+        record["candidates"] = self._scope_diagnostics(index, query, names)
+        if record["scope"] is not None and record["scope"] not in self.category_scopes:
+            # An out-of-scope assignment is an adapter gap, not an ambiguity: name it as such
+            # instead of reporting a bare `None` under a reason that claims a scope was found.
+            record["reason"] = f"unresolved:scope_outside_declared:{record['scope']}"
+            record["scope"] = None
+        self._decisions()[str(record["qid"])] = record
+        return record["scope"]
+
+    def caption_scope_index(self) -> CaptionScopeIndex:
+        """The annotation index, built once and shared by every routing call."""
+        if getattr(self, "_caption_scopes", None) is None:
+            self._caption_scopes = caption_scope_index(
+                self.dataset_root, getattr(self, "annotation_pin", ANNOTATION_PIN))
+        return self._caption_scopes
+
+    @staticmethod
+    def _scope_diagnostics(index: CaptionScopeIndex, query: Any,
+                           candidate_names: Mapping[str, str] | None) -> dict[str, Any]:
+        """What each candidate category file said about this query's reference and text.
+
+        For an unresolved query this is the per-scope evidence a reader needs: the file, its row
+        count, whether it could be used at all, and whether it holds this ``(stem, text)`` pair.
+        """
+        stem = query_reference_stem(query, candidate_names)
+        text = normalize_query_text(getattr(query, "query_txt", ""))
+        holders = index.get((stem, text), frozenset()) if stem is not None else frozenset()
+        files = index.report()["files"]
+        diagnostics: dict[str, Any] = {}
+        for category, entry in files.items():
+            diagnostics[category] = {
+                "file": entry["file"],
+                "count": entry["count"],
+                "usable": entry["usable"],
+                "problem": entry["problem"],
+                "holds_pair": category in holders,
+            }
+        diagnostics["reference_stem"] = stem
+        diagnostics["normalized_text"] = text
+        return diagnostics
+
+    def query_scope_resolution(self) -> dict[str, Any]:
+        """``qid -> scope`` with one rationale per query, plus the annotation provenance.
+
+        Written to ``<run>/scope/query_scope_<model>.json`` so the inventory and the run page can
+        read the routing decisions of a finished run without re-running the resolver. Reasons are
+        ``loader``, ``annotation:<category>`` and ``unresolved:<why>``; ``provenance_incomplete``
+        marks a decision taken while the annotation set could not prove the absence of a row.
+        """
+        decisions = [{"qid": qid, **{key: value for key, value in record.items()
+                                     if key not in {"qid", "candidates"}},
+                      "candidates": record.get("candidates", {})}
+                     for qid, record in sorted(self._decisions().items())]
+        counts: dict[str, int] = {}
+        for record in decisions:
+            key = f"{record['reason']}:{record['scope']}" if record["scope"] is not None \
+                else str(record["reason"])
+            counts[key] = counts.get(key, 0) + 1
+        return {
+            "model_id": self.model_id,
+            "resolver": f"{type(self).__module__}.{type(self).__qualname__}.query_scope",
+            "annotation": self.caption_scope_index().report(),
+            "counts_by_reason": dict(sorted(counts.items())),
+            "unresolved": [record for record in decisions if record["scope"] is None],
+            "provenance_incomplete_count": sum(bool(record["provenance_incomplete"])
+                                               for record in decisions),
+            "query_count": len(decisions),
+            "scope_by_qid": {record["qid"]: record["scope"] for record in decisions},
+            "decisions": decisions,
+        }
+
+    def _write_scope_artifact(self) -> Path | None:
+        """Publish this run's routing decisions beside its rank artifact, if a run root exists.
+
+        ``work_root`` is ``<artifacts>/composition/runs/<run_id>/work/<model>``, so the run
+        directory is two levels up. Nothing here may fail a run: routing provenance is a record of
+        what happened, not a scoring input.
+        """
+        decisions = self._decisions()
+        if getattr(self, "_scope_map_written", False) or not decisions \
+                or getattr(self, "work_root", None) is None:
+            return None
+        run_root = Path(self.work_root).parent.parent
+        if run_root.parent.name != "runs":
+            return None
+        destination = run_root / "scope" / f"query_scope_{self.model_id}.json"
+        try:
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            temporary = destination.with_suffix(f".{uuid.uuid4().hex}.tmp")
+            temporary.write_text(json.dumps(self.query_scope_resolution(), indent=2,
+                                            sort_keys=True, default=str) + "\n", encoding="utf-8")
+            temporary.replace(destination)
+        except OSError:
+            return None
+        self._scope_map_written = True
+        return destination
 
     @classmethod
     def status(cls, config: Any | None = None) -> AdapterStatus:
@@ -471,6 +689,9 @@ class Adapter(CompositionAdapter):
             self._worker_log = None
 
     def close(self) -> None:
+        # Before any cleanup: the scope artifact lives beside the run, not in `work_root`, so the
+        # runner's rmtree of the work directory cannot take it with it.
+        self._write_scope_artifact()
         if self._worker is not None:
             if self._worker.stdin is not None:
                 try:

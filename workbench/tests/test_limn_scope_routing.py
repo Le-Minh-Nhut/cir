@@ -139,6 +139,8 @@ def test_adapter_seam_is_pure_routing(fixture_root: Path) -> None:
     adapter._caption_scopes = None
     adapter._candidate_names = dict(NAMES)
     adapter.config = SimpleNamespace(WORKBENCH_CIRCUS_RELEASE_ROOT=fixture_root)
+    # Synthetic caption bytes: the released pin does not apply, the row schema still does.
+    adapter.annotation_pin = {}
     assert adapter.query_scope(_query("Is blue and is long", "7:1")) == "shirt"
     assert adapter.query_scope(_query("Is green and is sleeveless", "7:2")) == "toptee"
     assert adapter.query_scope(_query("Is darker and has a different graphic and is darker", "7:3")) is None
