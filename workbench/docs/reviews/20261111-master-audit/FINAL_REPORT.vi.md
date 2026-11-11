@@ -241,6 +241,39 @@ Kiểm lại trạng thái hiện tại:
 trong khi env thực tế là 3.9 — registry dùng `adapted_runtime.python: 3.9`, nên dùng env 3.9 là đúng
 theo `adapted_runtime`; **không** sửa `workbench.env` (bị cấm).
 
+### Hạn chế đã biết — nhất quán chéo giữa chín báo cáo
+
+Chín báo cáo trong thư mục này do **sáu worker viết song song**, và **một số con số đã dịch chuyển sau đó**
+(mẫu số cohort, trạng thái run derived, đơn vị của DCNet, giá trị được serve của CLIP4Cir, và việc
+`relation_state` đi tới gate). Báo cáo này đã được sửa tay ở những chỗ đó; các mục dưới đây là những gì
+**thực sự** đã phát hiện và sửa, mỗi mục kèm bất biến hoặc lệnh chứng minh nó **nay** đúng:
+
+- **§1 — mốc git.** SHA HEAD di động + số commit đã được thay bằng mốc bền `be14393c97b100390a9a45c6b0a46857b24a78b9`
+  (= `TESTED_SOURCE_SHA`), kèm lệnh `git rev-parse HEAD` để lấy giá trị sống. Bất biến:
+  `git diff be14393 HEAD -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'` **rỗng**.
+- **§1 — hàng backend.** PID đã được thay bằng hướng dẫn `pgrep`, kèm quy tắc "PID chỉ đúng tại thời điểm đo;
+  pin bền là digest bundle `7e34724e…a6a16`" (sha256 đầy đủ ở hàng frontend).
+- **§1 note và §5 — uvicorn `:8765` cũ.** Nhận diện bằng **cổng** và bằng hành vi route:
+  `/api/runs/parity-gate` trả **404** trên `:8765` so với **200** trên `:8000` — không bằng PID.
+- **§4 — hàng gate.** `0/15 PASS` đã đối soát thành `0 / 2 mô hình có artifact parity; 0 / 17 cấu hình PASS`,
+  khớp cohort **17** cấu hình của §6.
+- **§4 — hàng LIMN.** `DERIVED_PARTIAL` / `DERIVED_COMPLETE` nay được gán đúng cho
+  `derived_from.own_status_label`, còn `execution_status` được nêu là `PARTIAL` (option b) — **không** gán cho enum.
+- **`WEB_SURFACE_VERIFICATION.vi.md`.** Tám build pin cũ đã được sửa; các bundle bị thay thế được **dán nhãn**
+  superseded chứ không xoá.
+
+**Chưa làm — và đây là điều người đọc phải biết:** một lượt **quét chéo có hệ thống** trên cả chín báo cáo
+**đã không hoàn thành**. Worker được giao việc đó bị dừng trước khi kịp tạo output, và file bằng chứng dự kiến
+— mục **42** của loạt `raw/verify/` (tên file nói về drift chéo giữa các tài liệu) — **không tồn tại**; không
+file nào trong thư mục này trích dẫn nó (grep tên đó trong `workbench/docs/reviews/20261111-master-audit/`
+cho **0** kết quả). Vì vậy **không** được giả định các báo cáo kia nhất quán nội bộ:
+những gì đã kiểm là những gì nêu trong báo cáo này, cộng với những gì **từng báo cáo tự trích trong raw evidence
+của chính nó**.
+
+Thứ chống lưng cho trạng thái phát hành **không** phải văn xuôi của từng báo cáo, mà là: `18 failed / 2800 passed / 47 skipped`
+với **accounting gap 0** tại `be14393`, guard `workbench/tests/test_handoff_commands.py` **8 passed**, và
+**production diff rỗng**.
+
 ## 7. Bảng sweep
 
 Ba dòng là **ba cây KHÁC NHAU**, không phải một cây chạy ba lần.
