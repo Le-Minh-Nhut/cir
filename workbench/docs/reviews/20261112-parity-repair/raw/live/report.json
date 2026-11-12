@@ -1,0 +1,90 @@
+{
+  "url": "http://127.0.0.1:5173",
+  "run": "da0a2162be0e159a1a456cec",
+  "shell": {
+    "status": 200,
+    "scripts": [
+      "/assets/index-NnjrdZLG.js"
+    ],
+    "stylesheets": [
+      "/assets/index-DecQnta9.css"
+    ]
+  },
+  "parity": {
+    "subtitle": "Chuẩn parity-relative/v1 · tính từ artifact đo, không đọc từ văn bản",
+    "header_line": "Chuẩn parity-relative/v1 · tính từ artifact đo, không đọc từ văn bản",
+    "contains_Chuẩn_parity-relative/v1": true,
+    "contains_bracket_list": false,
+    "verdict_badge": "KHÔNG mô hình nào PASS (0/3)",
+    "summary": "Không mô hình nào đạt: 3/3 mô hình có subcheck bắt buộc FAIL. Đây là kết luận từ artifact, không phải lỗi tải.",
+    "models": [
+      {
+        "model_id": "parity-row-encoder",
+        "passed": "false",
+        "text": [
+          "encoder\tPARITY_MANDATORY_SUBCHECK_FAILED\t",
+          "9 subcheck",
+          "\t",
+          "input_parity ✓forward_parity ✗batch_parity ✗scoring_parity ✓metrics_parity ✓relation_parity ✓"
+        ]
+      },
+      {
+        "model_id": "parity-row-hint",
+        "passed": "false",
+        "text": [
+          "hint\tPARITY_MANDATORY_SUBCHECK_FAILED\t",
+          "2 subcheck",
+          "\t",
+          "input_parity ✓forward_parity ✓batch_parity ✗scoring_parity ✓metrics_parity ✓relation_parity ✗"
+        ]
+      },
+      {
+        "model_id": "parity-row-limn",
+        "passed": "false",
+        "text": [
+          "limn\tPARITY_MANDATORY_SUBCHECK_FAILED\t",
+          "3 subcheck",
+          "\t",
+          "input_parity ✓forward_parity ✓batch_parity ✗scoring_parity ✓metrics_parity ✓relation_parity ✗"
+        ]
+      }
+    ]
+  },
+  "conditions": {
+    "values": [
+      "multimodal",
+      "text_only_black_image",
+      "clvc_image_encoder_only"
+    ],
+    "labels": [
+      "Image + text",
+      "Text only",
+      "Image only (image encoder)"
+    ],
+    "selected": "multimodal"
+  },
+  "run_select": {
+    "value": "c:da0a2162be0e159a1a456cec"
+  },
+  "inspector": {
+    "title": "Query 7:2179",
+    "caption": "Has writing on the t-shirt and is gray with black lettering.",
+    "ranks": {
+      "multimodal": {
+        "count": 1,
+        "text": "Ảnh + văn bản (MM)\n#1,580\nngoài @10 · ngoài 100 dòng export đã lưu"
+      },
+      "text_only_black_image": {
+        "count": 1,
+        "text": "Chỉ văn bản\n#4,549\nngoài @10 · ngoài 100 dòng export đã lưu"
+      },
+      "clvc_image_encoder_only": {
+        "count": 1,
+        "text": "Chỉ ảnh (image encoder)\n#2,100\nngoài @10 · ngoài 100 dòng export đã lưu"
+      }
+    },
+    "unscored_notice": null
+  },
+  "console_errors": [],
+  "console_error_count": 0
+}
