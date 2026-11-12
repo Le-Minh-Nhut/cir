@@ -1,0 +1,3 @@
+A4 chunked->full relabel, total claim 512, sha256 still of the real 4146 arrays, no offenders
+   status: PARITY_PASS | compared/total: 512 / 512 | coverage: full
+   detail: every mandatory subcheck of every mandatory dimension was measured and held under its own declared tolerance

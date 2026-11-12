@@ -1,0 +1,30 @@
+WRITER scope: {"components_total": 4146, "components_emitted": 513, "coverage": "chunked", "mismatch_count": 1, "max_abs": 0.009999990463256836, "worst_normalized": 166.66650772094727, "offenders": [3600], "head_last_index": 511, "offender_emitted": true}
+
+=== A1 as-written record (offender inside the emitted chunk) ===
+status           : PARITY_MANDATORY_SUBCHECK_FAILED
+passed           : False
+applied_standard : parity-absolute-relative/v2
+detail           : 1 mandatory subcheck(s) failed: shirt.components.sample_forward.query. A mandatory failure is never reported as a pass, whatever a prose surface above it says
+component checks : [('shirt.components.sample_forward.query', False, 1, 513, 4146, 'chunked', 166.66650772094727, [3600])]
+failures         : ['shirt.components.sample_forward.query']
+missing          : []
+
+=== A2a offender rows deleted, mismatch_count/offenders left as recorded ===
+status           : PARITY_EVIDENCE_MALFORMED
+passed           : False
+applied_standard : parity-relative/v1
+detail           : malformed parity artifact: shirt.component_parity.sample_forward.query.mismatch_count is 1 but the emitted components hold 0 violation(s) at []: the record contradicts the values it carries
+component checks : []
+failures         : []
+missing          : []
+
+=== A2b offender rows deleted + mismatch_count/offenders zeroed (digests+worst kept) ===
+status           : PARITY_PASS
+passed           : True
+applied_standard : parity-absolute-relative/v2
+detail           : every mandatory subcheck of every mandatory dimension was measured and held under its own declared tolerance
+component checks : [('shirt.components.sample_forward.query', True, 0, 512, 4146, 'chunked', 0.0, [])]
+failures         : []
+missing          : []
+
+recorded worst_normalized still: 166.66650772094727 max_abs: 0.009999990463256836 coverage: chunked components_emitted/total: 512 / 4146

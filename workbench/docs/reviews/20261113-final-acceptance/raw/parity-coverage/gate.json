@@ -1,0 +1,575 @@
+{
+ "generated_by": "workbench/docs/reviews/20261113-final-acceptance/raw/parity-coverage/run_gate.py",
+ "interpreter": "/home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python",
+ "evidence_root": "/home/heheboiz/data/cir/workbench/docs/reviews/20261109-native15-composition-limn",
+ "discovered_models": [
+  "conesep",
+  "encoder",
+  "habit",
+  "hint",
+  "intent",
+  "limn",
+  "tgcir"
+ ],
+ "standard": "parity-relative/v1",
+ "standards": {
+  "parity-absolute-relative/v2": [
+   "encoder",
+   "habit",
+   "hint",
+   "tgcir"
+  ],
+  "parity-relative/v1": [
+   "conesep",
+   "intent",
+   "limn"
+  ]
+ },
+ "passed_models": [],
+ "classification_rule": {
+  "absent_evidence_refusal": "check.reports_absent_evidence is True",
+  "derived_invariant": "check.name starts with one of ['component.', 'input.identity_agreement.', 'input.relation.']",
+  "measured_disagreement": "otherwise: a recorded value outside its declared tolerance"
+ },
+ "models": {
+  "conesep": {
+   "status": "PARITY_EVIDENCE_MISSING",
+   "passed": false,
+   "complete": false,
+   "applied_standard": "parity-relative/v1",
+   "failure_count": 0,
+   "failures": [],
+   "failure_classes": [],
+   "missing": [],
+   "missing_by_category": {},
+   "dimensions": {},
+   "coverage_counts": {},
+   "categories": [],
+   "evidence": []
+  },
+  "encoder": {
+   "status": "PARITY_MANDATORY_SUBCHECK_FAILED",
+   "passed": false,
+   "complete": false,
+   "applied_standard": "parity-absolute-relative/v2",
+   "failure_count": 9,
+   "failures": [
+    {
+     "name": "dress.population.features_vs_native_val_control.max_rel",
+     "dimension": "forward_parity",
+     "gate": "G2",
+     "declared": 0.0001,
+     "measured": 0.7499999820540181,
+     "ok": false,
+     "mandatory": true,
+     "standard": "parity-relative/v1",
+     "note": "relative error on a component near zero: the denominator, not the model, drives this. The declared tolerance is not moved; see parity-absolute-relative/v2",
+     "harness_recorded_within_tolerance": false,
+     "reports_absent_evidence": false,
+     "class": "measured_disagreement"
+    },
+    {
+     "name": "dress.population.gallery_vs_native.max_rel",
+     "dimension": "forward_parity",
+     "gate": "G2",
+     "declared": 0.0001,
+     "measured": 10.461538814286977,
+     "ok": false,
+     "mandatory": true,
+     "standard": "parity-relative/v1",
+     "note": "relative error on a component near zero: the denominator, not the model, drives this. The declared tolerance is not moved; see parity-absolute-relative/v2",
+     "harness_recorded_within_tolerance": true,
+     "reports_absent_evidence": false,
+     "class": "measured_disagreement"
+    },
+    {
+     "name": "dress.batch_1_vs_n.max_rel",
+     "dimension": "batch_parity",
+     "gate": "G2",
+     "declared": 0.001,
+     "measured": 0.003176237364982574,
+     "ok": false,
+     "mandatory": true,
+     "standard": "parity-relative/v1",
+     "note": "relative error on a component near zero: the denominator, not the model, drives this. The declared tolerance is not moved; see parity-absolute-relative/v2",
+     "harness_recorded_within_tolerance": false,
+     "reports_absent_evidence": false,
+     "class": "measured_disagreement"
+    },
+    {
+     "name": "shirt.population.features_vs_native_val_control.max_rel",
+     "dimension": "forward_parity",
+     "gate": "G2",
+     "declared": 0.0001,
+     "measured": 4.236841887544606,
+     "ok": false,
+     "mandatory": true,
+     "standard": "parity-relative/v1",
+     "note": "relative error on a component near zero: the denominator, not the model, drives this. The declared tolerance is not moved; see parity-absolute-relative/v2",
+     "harness_recorded_within_tolerance": false,
+     "reports_absent_evidence": false,
+     "class": "measured_disagreement"
+    },
+    {
+     "name": "shirt.population.gallery_vs_native.max_rel",
+     "dimension": "forward_parity",
+     "gate": "G2",
+     "declared": 0.0001,
+     "measured": 0.5312498017651329,
+     "ok": false,
+     "mandatory": true,
+     "standard": "parity-relative/v1",
+     "note": "relative error on a component near zero: the denominator, not the model, drives this. The declared tolerance is not moved; see parity-absolute-relative/v2",
+     "harness_recorded_within_tolerance": true,
+     "reports_absent_evidence": false,
+     "class": "measured_disagreement"
+    },
+    {
+     "name": "shirt.batch_1_vs_n.max_rel",
+     "dimension": "batch_parity",
+     "gate": "G2",
+     "declared": 0.001,
+     "measured": 0.0027347281757461243,
+     "ok": false,
+     "mandatory": true,
+     "standard": "parity-relative/v1",
+     "note": "relative error on a component near zero: the denominator, not the model, drives this. The declared tolerance is not moved; see parity-absolute-relative/v2",
+     "harness_recorded_within_tolerance": false,
+     "reports_absent_evidence": false,
+     "class": "measured_disagreement"
+    },
+    {
+     "name": "toptee.population.features_vs_native_val_control.max_rel",
+     "dimension": "forward_parity",
+     "gate": "G2",
+     "declared": 0.0001,
+     "measured": 6.2777780084400545,
+     "ok": false,
+     "mandatory": true,
+     "standard": "parity-relative/v1",
+     "note": "relative error on a component near zero: the denominator, not the model, drives this. The declared tolerance is not moved; see parity-absolute-relative/v2",
+     "harness_recorded_within_tolerance": false,
+     "reports_absent_evidence": false,
+     "class": "measured_disagreement"
+    },
+    {
+     "name": "toptee.population.gallery_vs_native.max_rel",
+     "dimension": "forward_parity",
+     "gate": "G2",
+     "declared": 0.0001,
+     "measured": 3.133333651667554,
+     "ok": false,
+     "mandatory": true,
+     "standard": "parity-relative/v1",
+     "note": "relative error on a component near zero: the denominator, not the model, drives this. The declared tolerance is not moved; see parity-absolute-relative/v2",
+     "harness_recorded_within_tolerance": true,
+     "reports_absent_evidence": false,
+     "class": "measured_disagreement"
+    },
+    {
+     "name": "toptee.batch_1_vs_n.max_rel",
+     "dimension": "batch_parity",
+     "gate": "G2",
+     "declared": 0.001,
+     "measured": 0.0015533629650869047,
+     "ok": false,
+     "mandatory": true,
+     "standard": "parity-relative/v1",
+     "note": "relative error on a component near zero: the denominator, not the model, drives this. The declared tolerance is not moved; see parity-absolute-relative/v2",
+     "harness_recorded_within_tolerance": false,
+     "reports_absent_evidence": false,
+     "class": "measured_disagreement"
+    }
+   ],
+   "failure_classes": [
+    "measured_disagreement"
+   ],
+   "missing": [
+    "metrics_parity"
+   ],
+   "missing_by_category": {
+    "dress": [
+     "metrics_parity"
+    ],
+    "shirt": [
+     "metrics_parity"
+    ],
+    "toptee": [
+     "metrics_parity"
+    ]
+   },
+   "dimensions": {
+    "input_parity": true,
+    "forward_parity": false,
+    "batch_parity": false,
+    "scoring_parity": true,
+    "metrics_parity": false,
+    "observer_parity": false,
+    "relation_parity": true
+   },
+   "coverage_counts": {
+    "input_parity": 2,
+    "forward_parity": 2,
+    "batch_parity": 2,
+    "scoring_parity": 2,
+    "metrics_parity": 2,
+    "observer_parity": 2,
+    "relation_parity": 2
+   },
+   "categories": [],
+   "evidence": [
+    "/home/heheboiz/data/cir/workbench/docs/reviews/20261109-native15-composition-limn/g1_g2.encoder.dress.native.json",
+    "/home/heheboiz/data/cir/workbench/docs/reviews/20261109-native15-composition-limn/g1_g2.encoder.dress.adapter.json",
+    "/home/heheboiz/data/cir/workbench/docs/reviews/20261109-native15-composition-limn/g1_g2.encoder.shirt.native.json",
+    "/home/heheboiz/data/cir/workbench/docs/reviews/20261109-native15-composition-limn/g1_g2.encoder.shirt.adapter.json",
+    "/home/heheboiz/data/cir/workbench/docs/reviews/20261109-native15-composition-limn/g1_g2.encoder.toptee.native.json",
+    "/home/heheboiz/data/cir/workbench/docs/reviews/20261109-native15-composition-limn/g1_g2.encoder.toptee.adapter.json"
+   ]
+  },
+  "habit": {
+   "status": "PARITY_MANDATORY_SUBCHECK_FAILED",
+   "passed": false,
+   "complete": false,
+   "applied_standard": "parity-absolute-relative/v2",
+   "failure_count": 2,
+   "failures": [
+    {
+     "name": "shirt.batch_1_vs_n.max_rel",
+     "dimension": "batch_parity",
+     "gate": "G2",
+     "declared": 0.001,
+     "measured": 0.0050964738236841,
+     "ok": false,
+     "mandatory": true,
+     "standard": "parity-relative/v1",
+     "note": "relative error on a component near zero: the denominator, not the model, drives this. The declared tolerance is not moved; see parity-absolute-relative/v2",
+     "harness_recorded_within_tolerance": false,
+     "reports_absent_evidence": false,
+     "class": "measured_disagreement"
+    },
+    {
+     "name": "toptee.batch_1_vs_n.max_rel",
+     "dimension": "batch_parity",
+     "gate": "G2",
+     "declared": 0.001,
+     "measured": 0.006168472315303178,
+     "ok": false,
+     "mandatory": true,
+     "standard": "parity-relative/v1",
+     "note": "relative error on a component near zero: the denominator, not the model, drives this. The declared tolerance is not moved; see parity-absolute-relative/v2",
+     "harness_recorded_within_tolerance": false,
+     "reports_absent_evidence": false,
+     "class": "measured_disagreement"
+    }
+   ],
+   "failure_classes": [
+    "measured_disagreement"
+   ],
+   "missing": [
+    "metrics_parity"
+   ],
+   "missing_by_category": {
+    "dress": [
+     "metrics_parity"
+    ],
+    "shirt": [
+     "metrics_parity"
+    ],
+    "toptee": [
+     "metrics_parity"
+    ]
+   },
+   "dimensions": {
+    "input_parity": true,
+    "forward_parity": true,
+    "batch_parity": false,
+    "scoring_parity": true,
+    "relation_parity": false
+   },
+   "coverage_counts": {
+    "input_parity": 2,
+    "forward_parity": 2,
+    "batch_parity": 2,
+    "scoring_parity": 2,
+    "metrics_parity": 2,
+    "observer_parity": 2,
+    "relation_parity": 2
+   },
+   "categories": [],
+   "evidence": [
+    "/home/heheboiz/data/cir/workbench/docs/reviews/20261109-native15-composition-limn/g1_g2.habit.dress.native.json",
+    "/home/heheboiz/data/cir/workbench/docs/reviews/20261109-native15-composition-limn/g1_g2.habit.dress.adapter.json",
+    "/home/heheboiz/data/cir/workbench/docs/reviews/20261109-native15-composition-limn/g1_g2.habit.shirt.native.json",
+    "/home/heheboiz/data/cir/workbench/docs/reviews/20261109-native15-composition-limn/g1_g2.habit.shirt.adapter.json",
+    "/home/heheboiz/data/cir/workbench/docs/reviews/20261109-native15-composition-limn/g1_g2.habit.toptee.native.json",
+    "/home/heheboiz/data/cir/workbench/docs/reviews/20261109-native15-composition-limn/g1_g2.habit.toptee.adapter.json"
+   ]
+  },
+  "hint": {
+   "status": "PARITY_MANDATORY_SUBCHECK_FAILED",
+   "passed": false,
+   "complete": false,
+   "applied_standard": "parity-absolute-relative/v2",
+   "failure_count": 2,
+   "failures": [
+    {
+     "name": "shirt.batch_1_vs_n.max_rel",
+     "dimension": "batch_parity",
+     "gate": "G2",
+     "declared": 0.001,
+     "measured": 0.005049934976857354,
+     "ok": false,
+     "mandatory": true,
+     "standard": "parity-relative/v1",
+     "note": "relative error on a component near zero: the denominator, not the model, drives this. The declared tolerance is not moved; see parity-absolute-relative/v2",
+     "harness_recorded_within_tolerance": false,
+     "reports_absent_evidence": false,
+     "class": "measured_disagreement"
+    },
+    {
+     "name": "toptee.batch_1_vs_n.max_rel",
+     "dimension": "batch_parity",
+     "gate": "G2",
+     "declared": 0.001,
+     "measured": 0.04213516386699195,
+     "ok": false,
+     "mandatory": true,
+     "standard": "parity-relative/v1",
+     "note": "relative error on a component near zero: the denominator, not the model, drives this. The declared tolerance is not moved; see parity-absolute-relative/v2",
+     "harness_recorded_within_tolerance": false,
+     "reports_absent_evidence": false,
+     "class": "measured_disagreement"
+    }
+   ],
+   "failure_classes": [
+    "measured_disagreement"
+   ],
+   "missing": [],
+   "missing_by_category": {
+    "dress": [],
+    "shirt": [],
+    "toptee": []
+   },
+   "dimensions": {
+    "input_parity": true,
+    "forward_parity": true,
+    "batch_parity": false,
+    "scoring_parity": true,
+    "metrics_parity": true,
+    "relation_parity": false
+   },
+   "coverage_counts": {
+    "input_parity": 2,
+    "forward_parity": 2,
+    "batch_parity": 2,
+    "scoring_parity": 2,
+    "metrics_parity": 2,
+    "observer_parity": 2,
+    "relation_parity": 2
+   },
+   "categories": [],
+   "evidence": [
+    "/home/heheboiz/data/cir/workbench/docs/reviews/20261109-native15-composition-limn/g1_g2.hint.dress.native.json",
+    "/home/heheboiz/data/cir/workbench/docs/reviews/20261109-native15-composition-limn/g1_g2.hint.dress.adapter.json",
+    "/home/heheboiz/data/cir/workbench/docs/reviews/20261109-native15-composition-limn/g1_g2.hint.shirt.native.json",
+    "/home/heheboiz/data/cir/workbench/docs/reviews/20261109-native15-composition-limn/g1_g2.hint.shirt.adapter.json",
+    "/home/heheboiz/data/cir/workbench/docs/reviews/20261109-native15-composition-limn/g1_g2.hint.toptee.native.json",
+    "/home/heheboiz/data/cir/workbench/docs/reviews/20261109-native15-composition-limn/g1_g2.hint.toptee.adapter.json"
+   ]
+  },
+  "intent": {
+   "status": "PARITY_EVIDENCE_MISSING",
+   "passed": false,
+   "complete": false,
+   "applied_standard": "parity-relative/v1",
+   "failure_count": 0,
+   "failures": [],
+   "failure_classes": [],
+   "missing": [],
+   "missing_by_category": {},
+   "dimensions": {},
+   "coverage_counts": {},
+   "categories": [],
+   "evidence": []
+  },
+  "limn": {
+   "status": "PARITY_MANDATORY_SUBCHECK_FAILED",
+   "passed": false,
+   "complete": false,
+   "applied_standard": "parity-relative/v1",
+   "failure_count": 3,
+   "failures": [
+    {
+     "name": "dress.batch_1_vs_n.max_rel",
+     "dimension": "batch_parity",
+     "gate": "G2",
+     "declared": 0.001,
+     "measured": 0.011399774792037631,
+     "ok": false,
+     "mandatory": true,
+     "standard": "parity-relative/v1",
+     "note": "relative error on a component near zero: the denominator, not the model, drives this. The declared tolerance is not moved; see parity-absolute-relative/v2",
+     "harness_recorded_within_tolerance": false,
+     "reports_absent_evidence": false,
+     "class": "measured_disagreement"
+    },
+    {
+     "name": "shirt.batch_1_vs_n.max_rel",
+     "dimension": "batch_parity",
+     "gate": "G2",
+     "declared": 0.001,
+     "measured": 0.002698280178837889,
+     "ok": false,
+     "mandatory": true,
+     "standard": "parity-relative/v1",
+     "note": "relative error on a component near zero: the denominator, not the model, drives this. The declared tolerance is not moved; see parity-absolute-relative/v2",
+     "harness_recorded_within_tolerance": false,
+     "reports_absent_evidence": false,
+     "class": "measured_disagreement"
+    },
+    {
+     "name": "toptee.batch_1_vs_n.max_rel",
+     "dimension": "batch_parity",
+     "gate": "G2",
+     "declared": 0.001,
+     "measured": 0.007509343787328878,
+     "ok": false,
+     "mandatory": true,
+     "standard": "parity-relative/v1",
+     "note": "relative error on a component near zero: the denominator, not the model, drives this. The declared tolerance is not moved; see parity-absolute-relative/v2",
+     "harness_recorded_within_tolerance": false,
+     "reports_absent_evidence": false,
+     "class": "measured_disagreement"
+    }
+   ],
+   "failure_classes": [
+    "measured_disagreement"
+   ],
+   "missing": [],
+   "missing_by_category": {
+    "dress": [],
+    "shirt": [],
+    "toptee": []
+   },
+   "dimensions": {
+    "input_parity": true,
+    "forward_parity": true,
+    "batch_parity": false,
+    "scoring_parity": true,
+    "metrics_parity": true,
+    "relation_parity": false
+   },
+   "coverage_counts": {
+    "input_parity": 2,
+    "forward_parity": 2,
+    "batch_parity": 2,
+    "scoring_parity": 2,
+    "metrics_parity": 2,
+    "observer_parity": 2,
+    "relation_parity": 2
+   },
+   "categories": [],
+   "evidence": [
+    "/home/heheboiz/data/cir/workbench/docs/reviews/20261109-native15-composition-limn/g1_g2.dress.native.json",
+    "/home/heheboiz/data/cir/workbench/docs/reviews/20261109-native15-composition-limn/g1_g2.dress.adapter.json",
+    "/home/heheboiz/data/cir/workbench/docs/reviews/20261109-native15-composition-limn/g1_g2.shirt.native.json",
+    "/home/heheboiz/data/cir/workbench/docs/reviews/20261109-native15-composition-limn/g1_g2.shirt.adapter.json",
+    "/home/heheboiz/data/cir/workbench/docs/reviews/20261109-native15-composition-limn/g1_g2.toptee.native.json",
+    "/home/heheboiz/data/cir/workbench/docs/reviews/20261109-native15-composition-limn/g1_g2.toptee.adapter.json"
+   ]
+  },
+  "tgcir": {
+   "status": "PARITY_MANDATORY_SUBCHECK_FAILED",
+   "passed": false,
+   "complete": false,
+   "applied_standard": "parity-absolute-relative/v2",
+   "failure_count": 3,
+   "failures": [
+    {
+     "name": "dress.batch_1_vs_n.max_rel",
+     "dimension": "batch_parity",
+     "gate": "G2",
+     "declared": 0.001,
+     "measured": 0.24029609477008945,
+     "ok": false,
+     "mandatory": true,
+     "standard": "parity-relative/v1",
+     "note": "relative error on a component near zero: the denominator, not the model, drives this. The declared tolerance is not moved; see parity-absolute-relative/v2",
+     "harness_recorded_within_tolerance": false,
+     "reports_absent_evidence": false,
+     "class": "measured_disagreement"
+    },
+    {
+     "name": "shirt.batch_1_vs_n.max_rel",
+     "dimension": "batch_parity",
+     "gate": "G2",
+     "declared": 0.001,
+     "measured": 0.07048293904534349,
+     "ok": false,
+     "mandatory": true,
+     "standard": "parity-relative/v1",
+     "note": "relative error on a component near zero: the denominator, not the model, drives this. The declared tolerance is not moved; see parity-absolute-relative/v2",
+     "harness_recorded_within_tolerance": false,
+     "reports_absent_evidence": false,
+     "class": "measured_disagreement"
+    },
+    {
+     "name": "toptee.batch_1_vs_n.max_rel",
+     "dimension": "batch_parity",
+     "gate": "G2",
+     "declared": 0.001,
+     "measured": 0.029507544996198128,
+     "ok": false,
+     "mandatory": true,
+     "standard": "parity-relative/v1",
+     "note": "relative error on a component near zero: the denominator, not the model, drives this. The declared tolerance is not moved; see parity-absolute-relative/v2",
+     "harness_recorded_within_tolerance": false,
+     "reports_absent_evidence": false,
+     "class": "measured_disagreement"
+    }
+   ],
+   "failure_classes": [
+    "measured_disagreement"
+   ],
+   "missing": [
+    "metrics_parity"
+   ],
+   "missing_by_category": {
+    "dress": [
+     "metrics_parity"
+    ],
+    "shirt": [
+     "metrics_parity"
+    ],
+    "toptee": [
+     "metrics_parity"
+    ]
+   },
+   "dimensions": {
+    "input_parity": true,
+    "forward_parity": true,
+    "batch_parity": false,
+    "scoring_parity": true,
+    "relation_parity": false
+   },
+   "coverage_counts": {
+    "input_parity": 2,
+    "forward_parity": 2,
+    "batch_parity": 2,
+    "scoring_parity": 2,
+    "metrics_parity": 2,
+    "observer_parity": 2,
+    "relation_parity": 2
+   },
+   "categories": [],
+   "evidence": [
+    "/home/heheboiz/data/cir/workbench/docs/reviews/20261109-native15-composition-limn/g1_g2.tgcir.dress.native.json",
+    "/home/heheboiz/data/cir/workbench/docs/reviews/20261109-native15-composition-limn/g1_g2.tgcir.dress.adapter.json",
+    "/home/heheboiz/data/cir/workbench/docs/reviews/20261109-native15-composition-limn/g1_g2.tgcir.shirt.native.json",
+    "/home/heheboiz/data/cir/workbench/docs/reviews/20261109-native15-composition-limn/g1_g2.tgcir.shirt.adapter.json",
+    "/home/heheboiz/data/cir/workbench/docs/reviews/20261109-native15-composition-limn/g1_g2.tgcir.toptee.native.json",
+    "/home/heheboiz/data/cir/workbench/docs/reviews/20261109-native15-composition-limn/g1_g2.tgcir.toptee.adapter.json"
+   ]
+  }
+ }
+}

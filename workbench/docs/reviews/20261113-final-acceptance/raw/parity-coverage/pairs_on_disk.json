@@ -1,0 +1,76 @@
+{
+ "rule": "a PAIR needs g1_g2.<model>.<cat>.native.json AND .adapter.json for dress, shirt AND toptee",
+ "models": {
+  "conesep": {
+   "paired_categories": [],
+   "g1_only_categories": [
+    "dress",
+    "shirt",
+    "toptee"
+   ],
+   "complete": false
+  },
+  "encoder": {
+   "paired_categories": [
+    "dress",
+    "shirt",
+    "toptee"
+   ],
+   "g1_only_categories": [],
+   "complete": true
+  },
+  "habit": {
+   "paired_categories": [
+    "dress",
+    "shirt",
+    "toptee"
+   ],
+   "g1_only_categories": [],
+   "complete": true
+  },
+  "hint": {
+   "paired_categories": [
+    "dress",
+    "shirt",
+    "toptee"
+   ],
+   "g1_only_categories": [],
+   "complete": true
+  },
+  "intent": {
+   "paired_categories": [],
+   "g1_only_categories": [
+    "dress",
+    "shirt",
+    "toptee"
+   ],
+   "complete": false
+  },
+  "limn": {
+   "paired_categories": [
+    "dress",
+    "shirt",
+    "toptee"
+   ],
+   "g1_only_categories": [],
+   "complete": true
+  },
+  "tgcir": {
+   "paired_categories": [
+    "dress",
+    "shirt",
+    "toptee"
+   ],
+   "g1_only_categories": [],
+   "complete": true
+  }
+ },
+ "complete_pairs": [
+  "encoder",
+  "habit",
+  "hint",
+  "limn",
+  "tgcir"
+ ],
+ "complete_pair_count": 5
+}

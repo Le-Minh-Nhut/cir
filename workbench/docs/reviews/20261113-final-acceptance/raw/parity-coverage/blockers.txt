@@ -1,0 +1,212 @@
+==============================================================================
+# INTERPRETER_BROKEN_SYMLINK (shared)  models=['airknow', 'pair', 'sprc', 'combiner_rn50x4_noft', 'clip4cir_rn50x4_fullft']
+$ readlink -f workbench/envs/airknow-adapted/bin/python
+exit=1
+==============================================================================
+# PYTHON_ENV_VAR_UNSET  models=['airknow', 'pair', 'dcnet', 'combiner_rn50x4_noft', 'clip4cir_rn50x4_fullft', 'sprc']
+$ grep -n -E WORKBENCH_(AIRKNOW|PAIR|DCNET|CLIP4CIR|SPRC)_PYTHON workbench/config/workbench.env
+exit=1
+==============================================================================
+# PROBE csmcir  models=['csmcir']
+$ /home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python /home/heheboiz/data/cir/workbench/docs/reviews/20261113-final-acceptance/raw/parity-coverage/probe_csmcir.py
+exit=0
+--- stdout ---
+{
+ "model_id": "csmcir",
+ "python_env_var": "WORKBENCH_CSMCIR_PYTHON",
+ "resolver_returned": "/home/heheboiz/data/cir/workbench/artifacts/environments/cir-005ef4e1b02999a5/bin/python",
+ "interpreter_exists": true,
+ "preflight_blockers": [],
+ "adapter_module": "workbench.composition.model_csmcir",
+ "adapter_module_exists": true,
+ "checkpoints": [
+  {
+   "checkpoint_id": "fashioniq",
+   "path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/csmcir/fashioniq_tuned_clip_best.pt",
+   "downloaded": true,
+   "mapping_verified": true
+  }
+ ]
+}
+==============================================================================
+# PROBE airknow  models=['airknow']
+$ /home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python /home/heheboiz/data/cir/workbench/docs/reviews/20261113-final-acceptance/raw/parity-coverage/probe_airknow.py
+exit=0
+--- stdout ---
+{
+ "model_id": "airknow",
+ "python_env_var": "WORKBENCH_AIRKNOW_PYTHON",
+ "resolver_returned": null,
+ "interpreter_exists": false,
+ "preflight_blockers": [
+  "execution environment not verified: WORKBENCH_AIRKNOW_PYTHON=None [UNCONFIGURED/UNCONFIGURED] (WORKBENCH_AIRKNOW_PYTHON not set)"
+ ],
+ "adapter_module": "workbench.composition.model_airknow",
+ "adapter_module_exists": true,
+ "checkpoints": [
+  {
+   "checkpoint_id": "fiq_n05",
+   "path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/../../checkpoints/airknow/airknow_fiq_0.5.pt",
+   "downloaded": true,
+   "mapping_verified": true
+  },
+  {
+   "checkpoint_id": "fiq_n08",
+   "path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/../../checkpoints/airknow/airknow_fiq_0.8.pt",
+   "downloaded": true,
+   "mapping_verified": true
+  }
+ ]
+}
+==============================================================================
+# PROBE pair  models=['pair']
+$ /home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python /home/heheboiz/data/cir/workbench/docs/reviews/20261113-final-acceptance/raw/parity-coverage/probe_pair.py
+exit=0
+--- stdout ---
+{
+ "model_id": "pair",
+ "python_env_var": "WORKBENCH_PAIR_PYTHON",
+ "resolver_returned": null,
+ "interpreter_exists": false,
+ "preflight_blockers": [
+  "command not runnable: COMMAND_BLOCKED_SOURCE_ENTRYPOINT",
+  "execution environment not verified: WORKBENCH_PAIR_PYTHON=None [UNCONFIGURED/UNCONFIGURED] (WORKBENCH_PAIR_PYTHON not set)"
+ ],
+ "adapter_module": "workbench.composition.model_pair",
+ "adapter_module_exists": true,
+ "checkpoints": [
+  {
+   "checkpoint_id": "pair_b1",
+   "path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/../../checkpoints/pair/pair-B1.pt",
+   "downloaded": true,
+   "mapping_verified": false
+  },
+  {
+   "checkpoint_id": "pair_b2",
+   "path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/../../checkpoints/pair/pair-B2.pt",
+   "downloaded": true,
+   "mapping_verified": false
+  }
+ ]
+}
+==============================================================================
+# PROBE dcnet  models=['dcnet']
+$ /home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python /home/heheboiz/data/cir/workbench/docs/reviews/20261113-final-acceptance/raw/parity-coverage/probe_dcnet.py
+exit=0
+--- stdout ---
+{
+ "model_id": "dcnet",
+ "python_env_var": "WORKBENCH_DCNET_PYTHON",
+ "resolver_returned": null,
+ "interpreter_exists": false,
+ "preflight_blockers": [
+  "execution environment not verified: WORKBENCH_DCNET_PYTHON=None [UNCONFIGURED/UNCONFIGURED] (WORKBENCH_DCNET_PYTHON not set)"
+ ],
+ "adapter_module": "workbench.composition.model_dcnet",
+ "adapter_module_exists": true,
+ "checkpoints": [
+  {
+   "checkpoint_id": "fashioniq_run_directory",
+   "path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/../../checkpoints/dcnet",
+   "downloaded": true,
+   "mapping_verified": true
+  }
+ ]
+}
+==============================================================================
+# PROBE combiner_rn50x4_noft  models=['combiner_rn50x4_noft']
+$ /home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python /home/heheboiz/data/cir/workbench/docs/reviews/20261113-final-acceptance/raw/parity-coverage/probe_combiner_rn50x4_noft.py
+exit=0
+--- stdout ---
+{
+ "model_id": "combiner_rn50x4_noft",
+ "python_env_var": "WORKBENCH_CLIP4CIR_PYTHON",
+ "resolver_returned": null,
+ "interpreter_exists": false,
+ "preflight_blockers": [
+  "FashionIQ image extension requirement: 3817 of 3817 dress validation images lack .jpg in /home/heheboiz/data/cir/data/FashionIQ/images (first: B009PMCJLW.jpg)",
+  "FashionIQ image extension requirement: 6346 of 6346 shirt validation images lack .jpg in /home/heheboiz/data/cir/data/FashionIQ/images (first: B000KENMD8.jpg)",
+  "FashionIQ image extension requirement: 5373 of 5373 toptee validation images lack .jpg in /home/heheboiz/data/cir/data/FashionIQ/images (first: B008CG1JJ0.jpg)",
+  "canonical dataset link resolves to /home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/prepared/clip4cir/fashionIQ_dataset, expected /home/heheboiz/data/cir/data/FashionIQ",
+  "execution environment not verified: WORKBENCH_CLIP4CIR_PYTHON=None [UNCONFIGURED/UNCONFIGURED] (WORKBENCH_CLIP4CIR_PYTHON not set)"
+ ],
+ "adapter_module": "workbench.composition.model_combiner_rn50x4_noft",
+ "adapter_module_exists": true,
+ "checkpoints": [
+  {
+   "checkpoint_id": "rn50x4_noft_unresolved",
+   "path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/../../checkpoints/clip4cir/FashionIQ/RN50x4_noft/fiq_comb_RN50x4_noft.pt",
+   "downloaded": true,
+   "mapping_verified": true
+  }
+ ]
+}
+==============================================================================
+# PROBE clip4cir_rn50x4_fullft  models=['clip4cir_rn50x4_fullft']
+$ /home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python /home/heheboiz/data/cir/workbench/docs/reviews/20261113-final-acceptance/raw/parity-coverage/probe_clip4cir_rn50x4_fullft.py
+exit=0
+--- stdout ---
+{
+ "model_id": "clip4cir_rn50x4_fullft",
+ "python_env_var": "WORKBENCH_CLIP4CIR_PYTHON",
+ "resolver_returned": null,
+ "interpreter_exists": false,
+ "preflight_blockers": [
+  "FashionIQ image extension requirement: 3817 of 3817 dress validation images lack .jpg in /home/heheboiz/data/cir/data/FashionIQ/images (first: B009PMCJLW.jpg)",
+  "FashionIQ image extension requirement: 6346 of 6346 shirt validation images lack .jpg in /home/heheboiz/data/cir/data/FashionIQ/images (first: B000KENMD8.jpg)",
+  "FashionIQ image extension requirement: 5373 of 5373 toptee validation images lack .jpg in /home/heheboiz/data/cir/data/FashionIQ/images (first: B008CG1JJ0.jpg)",
+  "canonical dataset link resolves to /home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/prepared/clip4cir/fashionIQ_dataset, expected /home/heheboiz/data/cir/data/FashionIQ",
+  "execution environment not verified: WORKBENCH_CLIP4CIR_PYTHON=None [UNCONFIGURED/UNCONFIGURED] (WORKBENCH_CLIP4CIR_PYTHON not set)"
+ ],
+ "adapter_module": "workbench.composition.model_clip4cir_rn50x4_fullft",
+ "adapter_module_exists": true,
+ "checkpoints": [
+  {
+   "checkpoint_id": "rn50x4_fullft_unresolved",
+   "path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/../../checkpoints/clip4cir/FashionIQ/RN50x4_fullft",
+   "downloaded": true,
+   "mapping_verified": true
+  }
+ ]
+}
+==============================================================================
+# PROBE sprc  models=['sprc']
+$ /home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python /home/heheboiz/data/cir/workbench/docs/reviews/20261113-final-acceptance/raw/parity-coverage/probe_sprc.py
+exit=0
+--- stdout ---
+{
+ "model_id": "sprc",
+ "python_env_var": "WORKBENCH_SPRC_PYTHON",
+ "resolver_returned": null,
+ "interpreter_exists": false,
+ "preflight_blockers": [
+  "canonical dataset link resolves to /home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/prepared/sprc/fashionIQ_dataset, expected /home/heheboiz/data/cir/data/FashionIQ",
+  "external runtime asset provenance unresolved: LAVIS BLIP-2 pretrain weights",
+  "command not runnable: COMMAND_BLOCKED_MODEL_MAPPING",
+  "execution environment not verified: WORKBENCH_SPRC_PYTHON=None [UNCONFIGURED/UNCONFIGURED] (WORKBENCH_SPRC_PYTHON not set)"
+ ],
+ "adapter_module": null,
+ "adapter_module_exists": false,
+ "checkpoints": [
+  {
+   "checkpoint_id": "sprc_fiq_unresolved",
+   "path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/../../checkpoints/sprc/sprc_fiq.pt",
+   "downloaded": false,
+   "mapping_verified": false
+  },
+  {
+   "checkpoint_id": "sprc_fiq_vitl",
+   "path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/../../checkpoints/sprc/sprc_fiq_vitl.pt",
+   "downloaded": true,
+   "mapping_verified": true
+  }
+ ]
+}
+==============================================================================
+# DEFERRED_FROM_WEB (pair)  models=['pair']
+$ /home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python -c import json,sys; sys.path.insert(0,'/home/heheboiz/data/cir'); from workbench.backend.registry import load_registry, web_deferred_models; reg=load_registry(); print(json.dumps(web_deferred_models(reg), indent=1))
+exit=0
+--- stdout ---
+{
+ "pair": "Ch\u01b0a c\u00f3 mapping checkpoint ch\u00ednh th\u1ee9c: pickle \u0111\u01b0\u1ee3c t\u1ea1o b\u1edfi c\u00e1c class m\u00e0 repo \u0111\u00e3 pin kh\u00f4ng c\u00f3 (BLOCKED_CHECKPOINT_MAPPING_UNVERIFIED), n\u00ean ch\u01b0a th\u1ec3 c\u00f4ng b\u1ed1 l\u00e0 t\u00e1i l\u1eadp PAIR."
+}

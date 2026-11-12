@@ -1,0 +1,1417 @@
+{
+ "generated_by": "workbench/docs/reviews/20261113-final-acceptance/raw/parity-coverage/enumerate_executability.py",
+ "interpreter": "/home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python",
+ "registry_count": 17,
+ "verdicts": {
+  "BLOCKED(ADAPTER_NOT_READY)": 1,
+  "BLOCKED(ENV_VAR_UNSET)": 5,
+  "EXECUTABLE": 10,
+  "NO_ADAPTER": 1
+ },
+ "note": "each column names the production function it came from; nothing is re-derived here",
+ "models": [
+  {
+   "model_id": "csmcir",
+   "python_env_var": "WORKBENCH_CSMCIR_PYTHON",
+   "interpreter": {
+    "variable": "WORKBENCH_CSMCIR_PYTHON",
+    "declared_in": "workbench/config/workbench.env",
+    "declared_value": "/home/heheboiz/data/cir/workbench/artifacts/environments/cir-005ef4e1b02999a5/bin/python",
+    "resolves_to": "/home/heheboiz/data/cir/workbench/artifacts/environments/cir-005ef4e1b02999a5/bin/python3.10",
+    "exists": true,
+    "dangling_target": null
+   },
+   "resolver_returned": "/home/heheboiz/data/cir/workbench/artifacts/environments/cir-005ef4e1b02999a5/bin/python",
+   "checkpoints": [
+    {
+     "checkpoint_id": "fashioniq",
+     "filename": "fashioniq_tuned_clip_best.pt",
+     "mapping_status": "VERIFIED_METADATA",
+     "path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/csmcir/fashioniq_tuned_clip_best.pt",
+     "kind": "file",
+     "size_bytes": 2720615859,
+     "downloaded": true,
+     "mapping_verified": true,
+     "official_sha256_match": true,
+     "runnable": true,
+     "blocking_reasons": []
+    }
+   ],
+   "adapter": {
+    "module": "workbench.composition.model_csmcir",
+    "exists": true,
+    "ready": false,
+    "reason": "CSMCIR cannot run through the composition adapter: the adapter's score() is a 256-d text embedding expanded x32 into an 8192-d dot product, whereas the native evaluator's inference() uses attention-weighted token importance and a max over 32 query tokens. Those are different quantities, so adapter scores would be a substitution, not the measured contract. The native evaluator path is measured (CHECKPOINT_SELECTION_REPORT.md 3.18); this adapter is not wired to it. Additionally, local captions cover only the FashionIQ validation split (15,415 of 74,381 CIRCUS gallery images, or 20.72%), leaving 58,966 images uncaptioned.",
+    "checkpoint_ids": [
+     "fashioniq"
+    ],
+    "per_mode": {
+     "multimodal": [
+      false,
+      "CSMCIR cannot run through the composition adapter: the adapter's score() is a 256-d text embedding expanded x32 into an 8192-d dot product, whereas the native evaluator's inference() uses attention-weighted token importance and a max over 32 query tokens. Those are different quantities, so adapter scores would be a substitution, not the measured contract. The native evaluator path is measured (CHECKPOINT_SELECTION_REPORT.md 3.18); this adapter is not wired to it. Additionally, local captions cover only the FashionIQ validation split (15,415 of 74,381 CIRCUS gallery images, or 20.72%), leaving 58,966 images uncaptioned."
+     ],
+     "text_only_black_image": [
+      false,
+      "CSMCIR cannot run through the composition adapter: the adapter's score() is a 256-d text embedding expanded x32 into an 8192-d dot product, whereas the native evaluator's inference() uses attention-weighted token importance and a max over 32 query tokens. Those are different quantities, so adapter scores would be a substitution, not the measured contract. The native evaluator path is measured (CHECKPOINT_SELECTION_REPORT.md 3.18); this adapter is not wired to it. Additionally, local captions cover only the FashionIQ validation split (15,415 of 74,381 CIRCUS gallery images, or 20.72%), leaving 58,966 images uncaptioned."
+     ],
+     "image_only_empty_text": [
+      false,
+      "CSMCIR cannot run through the composition adapter: the adapter's score() is a 256-d text embedding expanded x32 into an 8192-d dot product, whereas the native evaluator's inference() uses attention-weighted token importance and a max over 32 query tokens. Those are different quantities, so adapter scores would be a substitution, not the measured contract. The native evaluator path is measured (CHECKPOINT_SELECTION_REPORT.md 3.18); this adapter is not wired to it. Additionally, local captions cover only the FashionIQ validation split (15,415 of 74,381 CIRCUS gallery images, or 20.72%), leaving 58,966 images uncaptioned."
+     ]
+    },
+    "notes": "CSMCIR cannot run through the composition adapter: the adapter's score() is a 256-d text embedding expanded x32 into an 8192-d dot product, whereas the native evaluator's inference() uses attention-weighted token importance and a max over 32 query tokens. Those are different quantities, so adapter scores would be a substitution, not the measured contract. The native evaluator path is measured (CHECKPOINT_SELECTION_REPORT.md 3.18); this adapter is not wired to it. Additionally, local captions cover only the FashionIQ validation split (15,415 of 74,381 CIRCUS gallery images, or 20.72%), leaving 58,966 images uncaptioned."
+   },
+   "category_scopes": [
+    null
+   ],
+   "native_protocol": "fashioniq_original_split",
+   "supported_protocols": [
+    "fashioniq_original_split"
+   ],
+   "category_model_policy": null,
+   "reproduction_status": "NOT_RUN",
+   "command_status": null,
+   "replay_status": null,
+   "source_dir": "CSMCIR",
+   "preflight_blockers": [],
+   "web_publication": null,
+   "executability": "BLOCKED(ADAPTER_NOT_READY)",
+   "executability_reason": "CSMCIR cannot run through the composition adapter: the adapter's score() is a 256-d text embedding expanded x32 into an 8192-d dot product, whereas the native evaluator's inference() uses attention-weighted token importance and a max over 32 query tokens. Those are different quantities, so adapter scores would be a substitution, not the measured contract. The native evaluator path is measured (CHECKPOINT_SELECTION_REPORT.md 3.18); this adapter is not wired to it. Additionally, local captions cover only the FashionIQ validation split (15,415 of 74,381 CIRCUS gallery images, or 20.72%), leaving 58,966 images uncaptioned."
+  },
+  {
+   "model_id": "airknow",
+   "python_env_var": "WORKBENCH_AIRKNOW_PYTHON",
+   "interpreter": {
+    "variable": "WORKBENCH_AIRKNOW_PYTHON",
+    "declared_in": null,
+    "declared_value": null,
+    "resolves_to": null,
+    "exists": false,
+    "dangling_target": null
+   },
+   "resolver_returned": null,
+   "checkpoints": [
+    {
+     "checkpoint_id": "fiq_n05",
+     "filename": "airknow_fiq_0.5.pt",
+     "mapping_status": "VERIFIED_METADATA",
+     "path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/../../checkpoints/airknow/airknow_fiq_0.5.pt",
+     "kind": "file",
+     "size_bytes": 2724056638,
+     "downloaded": true,
+     "mapping_verified": true,
+     "official_sha256_match": true,
+     "runnable": false,
+     "blocking_reasons": [
+      "execution environment not verified: WORKBENCH_AIRKNOW_PYTHON=None [UNCONFIGURED/UNCONFIGURED] (WORKBENCH_AIRKNOW_PYTHON not set)"
+     ]
+    },
+    {
+     "checkpoint_id": "fiq_n08",
+     "filename": "airknow_fiq_0.8.pt",
+     "mapping_status": "VERIFIED_METADATA",
+     "path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/../../checkpoints/airknow/airknow_fiq_0.8.pt",
+     "kind": "file",
+     "size_bytes": 2724056638,
+     "downloaded": true,
+     "mapping_verified": true,
+     "official_sha256_match": true,
+     "runnable": false,
+     "blocking_reasons": [
+      "execution environment not verified: WORKBENCH_AIRKNOW_PYTHON=None [UNCONFIGURED/UNCONFIGURED] (WORKBENCH_AIRKNOW_PYTHON not set)"
+     ]
+    }
+   ],
+   "adapter": {
+    "module": "workbench.composition.model_airknow",
+    "exists": true,
+    "ready": false,
+    "reason": "no interpreter environment resolved for WORKBENCH_AIRKNOW_PYTHON",
+    "checkpoint_ids": [
+     "fiq_n05",
+     "fiq_n08"
+    ],
+    "per_mode": {
+     "multimodal": [
+      true,
+      null
+     ],
+     "text_only_black_image": [
+      true,
+      null
+     ],
+     "image_only_empty_text": [
+      true,
+      null
+     ]
+    },
+    "notes": "Category-agnostic single space; max over 32 target tokens, reference eligible."
+   },
+   "category_scopes": [
+    null
+   ],
+   "native_protocol": "fashioniq_full_gallery_ref_excluded",
+   "supported_protocols": [
+    "fashioniq_full_gallery_ref_excluded"
+   ],
+   "category_model_policy": null,
+   "reproduction_status": "NOT_RUN",
+   "command_status": null,
+   "replay_status": null,
+   "source_dir": "AirKnow",
+   "preflight_blockers": [
+    "execution environment not verified: WORKBENCH_AIRKNOW_PYTHON=None [UNCONFIGURED/UNCONFIGURED] (WORKBENCH_AIRKNOW_PYTHON not set)"
+   ],
+   "web_publication": null,
+   "executability": "BLOCKED(ENV_VAR_UNSET)",
+   "executability_reason": "WORKBENCH_AIRKNOW_PYTHON is not set in any env file"
+  },
+  {
+   "model_id": "conesep",
+   "python_env_var": "WORKBENCH_CONESEP_PYTHON",
+   "interpreter": {
+    "variable": "WORKBENCH_CONESEP_PYTHON",
+    "declared_in": "workbench/config/workbench.env",
+    "declared_value": "/home/heheboiz/data/cir/workbench/envs/ilearn39-adapted/bin/python",
+    "resolves_to": "/home/heheboiz/.local/share/uv/python/cpython-3.9.25-linux-x86_64-gnu/bin/python3.9",
+    "exists": true,
+    "dangling_target": null
+   },
+   "resolver_returned": "/home/heheboiz/data/cir/workbench/envs/ilearn39-adapted/bin/python",
+   "checkpoints": [
+    {
+     "checkpoint_id": "fiq_n02",
+     "filename": "ConeSep-FIQ-N0.2.pt",
+     "mapping_status": "VERIFIED_METADATA",
+     "path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/conesep/ConeSep-FIQ-N0.2.pt",
+     "kind": "file",
+     "size_bytes": 2721428966,
+     "downloaded": true,
+     "mapping_verified": true,
+     "official_sha256_match": true,
+     "runnable": true,
+     "blocking_reasons": []
+    },
+    {
+     "checkpoint_id": "fiq_n05",
+     "filename": "ConeSep-FIQ-N0.5.pt",
+     "mapping_status": "VERIFIED_METADATA",
+     "path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/conesep/ConeSep-FIQ-N0.5.pt",
+     "kind": "absent",
+     "size_bytes": null,
+     "downloaded": false,
+     "mapping_verified": true,
+     "official_sha256_match": null,
+     "runnable": false,
+     "blocking_reasons": [
+      "checkpoint missing: /home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/conesep/ConeSep-FIQ-N0.5.pt"
+     ]
+    },
+    {
+     "checkpoint_id": "fiq_n08",
+     "filename": "ConeSep-FIQ_N0.8.pt",
+     "mapping_status": "VERIFIED_METADATA",
+     "path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/conesep/ConeSep-FIQ_N0.8.pt",
+     "kind": "absent",
+     "size_bytes": null,
+     "downloaded": false,
+     "mapping_verified": true,
+     "official_sha256_match": null,
+     "runnable": false,
+     "blocking_reasons": [
+      "checkpoint missing: /home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/conesep/ConeSep-FIQ_N0.8.pt"
+     ]
+    }
+   ],
+   "adapter": {
+    "module": "workbench.composition.model_conesep",
+    "exists": true,
+    "ready": true,
+    "reason": null,
+    "checkpoint_ids": [
+     "fiq_n02",
+     "fiq_n05",
+     "fiq_n08"
+    ],
+    "per_mode": {
+     "multimodal": [
+      true,
+      null
+     ],
+     "text_only_black_image": [
+      true,
+      null
+     ],
+     "image_only_empty_text": [
+      true,
+      null
+     ]
+    },
+    "notes": "Category-agnostic single space; transfer/evaluation checkpoint follows selected registry variant."
+   },
+   "category_scopes": [
+    null
+   ],
+   "native_protocol": "fashioniq_full_gallery_ref_excluded",
+   "supported_protocols": [
+    "fashioniq_full_gallery_ref_excluded"
+   ],
+   "category_model_policy": null,
+   "reproduction_status": "NOT_RUN",
+   "command_status": null,
+   "replay_status": null,
+   "source_dir": "ConeSep",
+   "preflight_blockers": [],
+   "web_publication": null,
+   "executability": "EXECUTABLE",
+   "executability_reason": "interpreter resolves, adapter ready, at least one checkpoint present"
+  },
+  {
+   "model_id": "ptha_mtst",
+   "python_env_var": "WORKBENCH_PTHA_MTST_PYTHON",
+   "interpreter": {
+    "variable": "WORKBENCH_PTHA_MTST_PYTHON",
+    "declared_in": "workbench/config/workbench.env",
+    "declared_value": "/home/heheboiz/data/cir/workbench/artifacts/environments/cir-005ef4e1b02999a5/bin/python",
+    "resolves_to": "/home/heheboiz/data/cir/workbench/artifacts/environments/cir-005ef4e1b02999a5/bin/python3.10",
+    "exists": true,
+    "dangling_target": null
+   },
+   "resolver_returned": "/home/heheboiz/data/cir/workbench/artifacts/environments/cir-005ef4e1b02999a5/bin/python",
+   "checkpoints": [
+    {
+     "checkpoint_id": "cirr_transfer",
+     "filename": "tuned_mtst_cirr.pt",
+     "mapping_status": "VERIFIED_METADATA",
+     "path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/ptha_mtst/tuned_mtst_cirr.pt",
+     "kind": "file",
+     "size_bytes": 2720352973,
+     "downloaded": true,
+     "mapping_verified": true,
+     "official_sha256_match": true,
+     "runnable": true,
+     "blocking_reasons": []
+    }
+   ],
+   "adapter": {
+    "module": "workbench.composition.model_ptha_mtst",
+    "exists": true,
+    "ready": true,
+    "reason": null,
+    "checkpoint_ids": [
+     "cirr_transfer"
+    ],
+    "per_mode": {
+     "multimodal": [
+      true,
+      null
+     ],
+     "text_only_black_image": [
+      true,
+      null
+     ],
+     "image_only_empty_text": [
+      true,
+      null
+     ]
+    },
+    "notes": "cirr_transfer is a CIRR-trained \u2192 FashionIQ transfer checkpoint, not a FashionIQ reproduction"
+   },
+   "category_scopes": [
+    null
+   ],
+   "native_protocol": "fashioniq_original_split",
+   "supported_protocols": [
+    "fashioniq_original_split"
+   ],
+   "category_model_policy": null,
+   "reproduction_status": "SELECTED_TRANSFER_ONLY",
+   "command_status": null,
+   "replay_status": null,
+   "source_dir": "MTST_PTHA",
+   "preflight_blockers": [],
+   "web_publication": null,
+   "executability": "EXECUTABLE",
+   "executability_reason": "interpreter resolves, adapter ready, at least one checkpoint present"
+  },
+  {
+   "model_id": "habit",
+   "python_env_var": "WORKBENCH_HABIT_PYTHON",
+   "interpreter": {
+    "variable": "WORKBENCH_HABIT_PYTHON",
+    "declared_in": "workbench/config/workbench.env",
+    "declared_value": "/home/heheboiz/data/cir/workbench/envs/ilearn39-adapted/bin/python",
+    "resolves_to": "/home/heheboiz/.local/share/uv/python/cpython-3.9.25-linux-x86_64-gnu/bin/python3.9",
+    "exists": true,
+    "dangling_target": null
+   },
+   "resolver_returned": "/home/heheboiz/data/cir/workbench/envs/ilearn39-adapted/bin/python",
+   "checkpoints": [
+    {
+     "checkpoint_id": "fiq_n02",
+     "filename": "HABIT-FIQ_N0.2.pt",
+     "mapping_status": "VERIFIED_METADATA",
+     "path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/habit/HABIT-FIQ_N0.2.pt",
+     "kind": "file",
+     "size_bytes": 2730715930,
+     "downloaded": true,
+     "mapping_verified": true,
+     "official_sha256_match": true,
+     "runnable": true,
+     "blocking_reasons": []
+    },
+    {
+     "checkpoint_id": "fiq_n05",
+     "filename": "HABIT-FIQ_N0.5.pt",
+     "mapping_status": "VERIFIED_METADATA",
+     "path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/habit/HABIT-FIQ_N0.5.pt",
+     "kind": "absent",
+     "size_bytes": null,
+     "downloaded": false,
+     "mapping_verified": true,
+     "official_sha256_match": null,
+     "runnable": false,
+     "blocking_reasons": [
+      "checkpoint missing: /home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/habit/HABIT-FIQ_N0.5.pt"
+     ]
+    },
+    {
+     "checkpoint_id": "fiq_n08",
+     "filename": "HABIT-FIQ_N0.8.pt",
+     "mapping_status": "VERIFIED_METADATA",
+     "path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/habit/HABIT-FIQ_N0.8.pt",
+     "kind": "absent",
+     "size_bytes": null,
+     "downloaded": false,
+     "mapping_verified": true,
+     "official_sha256_match": null,
+     "runnable": false,
+     "blocking_reasons": [
+      "checkpoint missing: /home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/habit/HABIT-FIQ_N0.8.pt"
+     ]
+    }
+   ],
+   "adapter": {
+    "module": "workbench.composition.model_habit",
+    "exists": true,
+    "ready": true,
+    "reason": null,
+    "checkpoint_ids": [
+     "fiq_n02"
+    ],
+    "per_mode": {
+     "multimodal": [
+      true,
+      null
+     ],
+     "text_only_black_image": [
+      true,
+      null
+     ],
+     "image_only_empty_text": [
+      true,
+      null
+     ]
+    },
+    "notes": ""
+   },
+   "category_scopes": [
+    null
+   ],
+   "native_protocol": "fashioniq_full_gallery_ref_excluded",
+   "supported_protocols": [
+    "fashioniq_full_gallery_ref_excluded"
+   ],
+   "category_model_policy": null,
+   "reproduction_status": "NOT_RUN",
+   "command_status": null,
+   "replay_status": null,
+   "source_dir": "HABIT",
+   "preflight_blockers": [],
+   "web_publication": null,
+   "executability": "EXECUTABLE",
+   "executability_reason": "interpreter resolves, adapter ready, at least one checkpoint present"
+  },
+  {
+   "model_id": "intent",
+   "python_env_var": "WORKBENCH_INTENT_PYTHON",
+   "interpreter": {
+    "variable": "WORKBENCH_INTENT_PYTHON",
+    "declared_in": "workbench/config/workbench.env",
+    "declared_value": "/home/heheboiz/data/cir/workbench/envs/ilearn39-adapted/bin/python",
+    "resolves_to": "/home/heheboiz/.local/share/uv/python/cpython-3.9.25-linux-x86_64-gnu/bin/python3.9",
+    "exists": true,
+    "dangling_target": null
+   },
+   "resolver_returned": "/home/heheboiz/data/cir/workbench/envs/ilearn39-adapted/bin/python",
+   "checkpoints": [
+    {
+     "checkpoint_id": "fiq_n02",
+     "filename": "intent_fiq_0.2.pt",
+     "mapping_status": "VERIFIED_METADATA",
+     "path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/intent/intent_fiq_0.2.pt",
+     "kind": "file",
+     "size_bytes": 2722478522,
+     "downloaded": true,
+     "mapping_verified": true,
+     "official_sha256_match": true,
+     "runnable": true,
+     "blocking_reasons": []
+    },
+    {
+     "checkpoint_id": "fiq_n05",
+     "filename": "intent_fiq_0.5.pt",
+     "mapping_status": "VERIFIED_METADATA",
+     "path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/intent/intent_fiq_0.5.pt",
+     "kind": "absent",
+     "size_bytes": null,
+     "downloaded": false,
+     "mapping_verified": true,
+     "official_sha256_match": null,
+     "runnable": false,
+     "blocking_reasons": [
+      "checkpoint missing: /home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/intent/intent_fiq_0.5.pt"
+     ]
+    },
+    {
+     "checkpoint_id": "fiq_n08",
+     "filename": "intent_fiq_0.8.pt",
+     "mapping_status": "VERIFIED_METADATA",
+     "path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/intent/intent_fiq_0.8.pt",
+     "kind": "absent",
+     "size_bytes": null,
+     "downloaded": false,
+     "mapping_verified": true,
+     "official_sha256_match": null,
+     "runnable": false,
+     "blocking_reasons": [
+      "checkpoint missing: /home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/intent/intent_fiq_0.8.pt"
+     ]
+    }
+   ],
+   "adapter": {
+    "module": "workbench.composition.model_intent",
+    "exists": true,
+    "ready": true,
+    "reason": null,
+    "checkpoint_ids": [
+     "fiq_n02"
+    ],
+    "per_mode": {
+     "multimodal": [
+      true,
+      null
+     ],
+     "text_only_black_image": [
+      true,
+      null
+     ],
+     "image_only_empty_text": [
+      true,
+      null
+     ]
+    },
+    "notes": ""
+   },
+   "category_scopes": [
+    null
+   ],
+   "native_protocol": "fashioniq_full_gallery_ref_excluded",
+   "supported_protocols": [
+    "fashioniq_full_gallery_ref_excluded"
+   ],
+   "category_model_policy": null,
+   "reproduction_status": "NOT_RUN",
+   "command_status": null,
+   "replay_status": null,
+   "source_dir": "INTENT",
+   "preflight_blockers": [],
+   "web_publication": null,
+   "executability": "EXECUTABLE",
+   "executability_reason": "interpreter resolves, adapter ready, at least one checkpoint present"
+  },
+  {
+   "model_id": "hint",
+   "python_env_var": "WORKBENCH_HINT_PYTHON",
+   "interpreter": {
+    "variable": "WORKBENCH_HINT_PYTHON",
+    "declared_in": "workbench/config/workbench.env",
+    "declared_value": "/home/heheboiz/data/cir/workbench/envs/ilearn39-adapted/bin/python",
+    "resolves_to": "/home/heheboiz/.local/share/uv/python/cpython-3.9.25-linux-x86_64-gnu/bin/python3.9",
+    "exists": true,
+    "dangling_target": null
+   },
+   "resolver_returned": "/home/heheboiz/data/cir/workbench/envs/ilearn39-adapted/bin/python",
+   "checkpoints": [
+    {
+     "checkpoint_id": "fashioniq",
+     "filename": "fashioniq.pt",
+     "mapping_status": "VERIFIED_METADATA",
+     "path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/hint/fashioniq.pt",
+     "kind": "file",
+     "size_bytes": 2724451182,
+     "downloaded": true,
+     "mapping_verified": true,
+     "official_sha256_match": true,
+     "runnable": true,
+     "blocking_reasons": []
+    }
+   ],
+   "adapter": {
+    "module": "workbench.composition.model_hint",
+    "exists": true,
+    "ready": true,
+    "reason": null,
+    "checkpoint_ids": [
+     "fashioniq"
+    ],
+    "per_mode": {
+     "multimodal": [
+      true,
+      null
+     ],
+     "text_only_black_image": [
+      true,
+      null
+     ],
+     "image_only_empty_text": [
+      true,
+      null
+     ]
+    },
+    "notes": ""
+   },
+   "category_scopes": [
+    null
+   ],
+   "native_protocol": "fashioniq_val_split",
+   "supported_protocols": [
+    "fashioniq_val_split"
+   ],
+   "category_model_policy": null,
+   "reproduction_status": "NOT_RUN",
+   "command_status": null,
+   "replay_status": null,
+   "source_dir": "HINT",
+   "preflight_blockers": [],
+   "web_publication": null,
+   "executability": "EXECUTABLE",
+   "executability_reason": "interpreter resolves, adapter ready, at least one checkpoint present"
+  },
+  {
+   "model_id": "encoder",
+   "python_env_var": "WORKBENCH_ENCODER_PYTHON",
+   "interpreter": {
+    "variable": "WORKBENCH_ENCODER_PYTHON",
+    "declared_in": "workbench/config/workbench.env",
+    "declared_value": "/home/heheboiz/data/cir/workbench/envs/encoder310-adapted/bin/python",
+    "resolves_to": "/home/heheboiz/.local/share/uv/python/cpython-3.10.20-linux-x86_64-gnu/bin/python3.10",
+    "exists": true,
+    "dangling_target": null
+   },
+   "resolver_returned": "/home/heheboiz/data/cir/workbench/envs/encoder310-adapted/bin/python",
+   "checkpoints": [
+    {
+     "checkpoint_id": "fashioniq",
+     "filename": "fashioniq.pt",
+     "mapping_status": "VERIFIED_METADATA",
+     "path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/encoder/fashioniq.pt",
+     "kind": "file",
+     "size_bytes": 631879365,
+     "downloaded": true,
+     "mapping_verified": true,
+     "official_sha256_match": true,
+     "runnable": false,
+     "blocking_reasons": [
+      "execution environment not verified: WORKBENCH_ENCODER_PYTHON=/home/heheboiz/data/cir/workbench/envs/encoder310-adapted/bin/python [GPU_VERIFICATION_PENDING/GPU_VERIFICATION_PENDING] (CUDA capability must be verified on the GPU host with verify_gpu_runtime() before this model can be launched)"
+     ]
+    }
+   ],
+   "adapter": {
+    "module": "workbench.composition.model_encoder",
+    "exists": true,
+    "ready": true,
+    "reason": null,
+    "checkpoint_ids": [
+     "fashioniq"
+    ],
+    "per_mode": {
+     "multimodal": [
+      true,
+      null
+     ],
+     "text_only_black_image": [
+      true,
+      null
+     ],
+     "image_only_empty_text": [
+      true,
+      null
+     ]
+    },
+    "notes": "checkpoint=passed; interpreter=passed (WORKBENCH_ENCODER_PYTHON=set); GPU=passed; mapping=passed (VERIFIED_METADATA)"
+   },
+   "category_scopes": [
+    null
+   ],
+   "native_protocol": "fashioniq_val_split",
+   "supported_protocols": [
+    "fashioniq_val_split"
+   ],
+   "category_model_policy": "shared",
+   "reproduction_status": "METRICS_MEASURED_MAPPING_UNVERIFIED",
+   "command_status": null,
+   "replay_status": null,
+   "source_dir": "ENCODER",
+   "preflight_blockers": [
+    "execution environment not verified: WORKBENCH_ENCODER_PYTHON=/home/heheboiz/data/cir/workbench/envs/encoder310-adapted/bin/python [GPU_VERIFICATION_PENDING/GPU_VERIFICATION_PENDING] (CUDA capability must be verified on the GPU host with verify_gpu_runtime() before this model can be launched)"
+   ],
+   "web_publication": null,
+   "executability": "EXECUTABLE",
+   "executability_reason": "interpreter resolves, adapter ready, at least one checkpoint present"
+  },
+  {
+   "model_id": "pair",
+   "python_env_var": "WORKBENCH_PAIR_PYTHON",
+   "interpreter": {
+    "variable": "WORKBENCH_PAIR_PYTHON",
+    "declared_in": null,
+    "declared_value": null,
+    "resolves_to": null,
+    "exists": false,
+    "dangling_target": null
+   },
+   "resolver_returned": null,
+   "checkpoints": [
+    {
+     "checkpoint_id": "pair_b1",
+     "filename": "pair-B1.pt",
+     "mapping_status": "UNVERIFIED",
+     "path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/../../checkpoints/pair/pair-B1.pt",
+     "kind": "file",
+     "size_bytes": 694958565,
+     "downloaded": true,
+     "mapping_verified": false,
+     "official_sha256_match": true,
+     "runnable": false,
+     "blocking_reasons": [
+      "command not runnable: COMMAND_BLOCKED_SOURCE_ENTRYPOINT",
+      "execution environment not verified: WORKBENCH_PAIR_PYTHON=None [UNCONFIGURED/UNCONFIGURED] (WORKBENCH_PAIR_PYTHON not set)",
+      "checkpoint mapping unresolved"
+     ]
+    },
+    {
+     "checkpoint_id": "pair_b2",
+     "filename": "pair-B2.pt",
+     "mapping_status": "UNVERIFIED",
+     "path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/../../checkpoints/pair/pair-B2.pt",
+     "kind": "file",
+     "size_bytes": 694872371,
+     "downloaded": true,
+     "mapping_verified": false,
+     "official_sha256_match": true,
+     "runnable": false,
+     "blocking_reasons": [
+      "command not runnable: COMMAND_BLOCKED_SOURCE_ENTRYPOINT",
+      "execution environment not verified: WORKBENCH_PAIR_PYTHON=None [UNCONFIGURED/UNCONFIGURED] (WORKBENCH_PAIR_PYTHON not set)",
+      "checkpoint mapping unresolved"
+     ]
+    }
+   ],
+   "adapter": {
+    "module": "workbench.composition.model_pair",
+    "exists": true,
+    "ready": false,
+    "reason": "checkpoint mapping is UNVERIFIED for pair_b1: the released pickle names classes the pinned repository does not contain, so no number from these bytes can be labelled a PAIR reproduction; no interpreter environment resolved for WORKBENCH_PAIR_PYTHON",
+    "checkpoint_ids": [
+     "pair_b1",
+     "pair_b2"
+    ],
+    "per_mode": {
+     "multimodal": [
+      true,
+      null
+     ],
+     "text_only_black_image": [
+      true,
+      null
+     ],
+     "image_only_empty_text": [
+      true,
+      null
+     ]
+    },
+    "notes": "Cosine over mean-pooled 1024-d vectors; upstream reference mask NOT inherited (CIRCUS needs a reference-eligible gallery); query transform is the deterministic val transform, a documented divergence from upstream's stochastic train transform."
+   },
+   "category_scopes": [
+    null
+   ],
+   "native_protocol": "fashioniq_val_split",
+   "supported_protocols": [
+    "fashioniq_val_split"
+   ],
+   "category_model_policy": null,
+   "reproduction_status": "BLOCKED_CHECKPOINT_MAPPING_UNVERIFIED",
+   "command_status": "COMMAND_BLOCKED_SOURCE_ENTRYPOINT",
+   "replay_status": null,
+   "source_dir": "PAIR",
+   "preflight_blockers": [
+    "command not runnable: COMMAND_BLOCKED_SOURCE_ENTRYPOINT",
+    "execution environment not verified: WORKBENCH_PAIR_PYTHON=None [UNCONFIGURED/UNCONFIGURED] (WORKBENCH_PAIR_PYTHON not set)"
+   ],
+   "web_publication": {
+    "status": "DEFERRED",
+    "reason": "Ch\u01b0a c\u00f3 mapping checkpoint ch\u00ednh th\u1ee9c: pickle \u0111\u01b0\u1ee3c t\u1ea1o b\u1edfi c\u00e1c class m\u00e0 repo \u0111\u00e3 pin kh\u00f4ng c\u00f3 (BLOCKED_CHECKPOINT_MAPPING_UNVERIFIED), n\u00ean ch\u01b0a th\u1ec3 c\u00f4ng b\u1ed1 l\u00e0 t\u00e1i l\u1eadp PAIR.",
+    "decided": "2026-11-13",
+    "offline": "workbench/envs/ctl312h/bin/python workbench/scripts/evaluate_models.py --list   (PAIR tr\u00ean m\u1ecdi checkpoint v\u1eabn xu\u1ea5t hi\u1ec7n); v\u00e0 workbench/envs/ctl312h/bin/python workbench/scripts/evaluate_models.py --model pair --checkpoint pair_b1 --protocol fashioniq_val_split --dry-run (v\u1eabn b\u00e1o \u0111\u00fang hai blocker)."
+   },
+   "executability": "BLOCKED(ENV_VAR_UNSET)",
+   "executability_reason": "WORKBENCH_PAIR_PYTHON is not set in any env file"
+  },
+  {
+   "model_id": "clvc_net",
+   "python_env_var": "WORKBENCH_CLVC_PYTHON",
+   "interpreter": {
+    "variable": "WORKBENCH_CLVC_PYTHON",
+    "declared_in": "workbench/config/workbench.env",
+    "declared_value": "/home/heheboiz/data/cir/workbench/envs/clvc39-la/bin/python",
+    "resolves_to": "/home/heheboiz/.local/share/uv/python/cpython-3.9.25-linux-x86_64-gnu/bin/python3.9",
+    "exists": true,
+    "dangling_target": null
+   },
+   "resolver_returned": "/home/heheboiz/data/cir/workbench/envs/clvc39-la/bin/python",
+   "checkpoints": [
+    {
+     "checkpoint_id": "author_drive_unresolved",
+     "filename": ".",
+     "mapping_status": "VERIFIED_METADATA",
+     "path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/../../checkpoints/clvc",
+     "kind": "dir",
+     "size_bytes": 1185968194,
+     "downloaded": true,
+     "mapping_verified": true,
+     "official_sha256_match": null,
+     "runnable": false,
+     "blocking_reasons": [
+      "command not runnable: COMMAND_BLOCKED_SOURCE_ENTRYPOINT"
+     ]
+    }
+   ],
+   "adapter": {
+    "module": "workbench.composition.model_clvc_net",
+    "exists": true,
+    "ready": true,
+    "reason": null,
+    "checkpoint_ids": [
+     "author_drive_unresolved"
+    ],
+    "per_mode": {
+     "multimodal": [
+      true,
+      null
+     ],
+     "text_only_black_image": [
+      true,
+      null
+     ],
+     "image_only_empty_text": [
+      false,
+      "CLVC-Net cannot encode an empty edit: TextLSTMModel.forward tokenises to zero tokens and indexes x[0][0] (text_model.py:84-86), which raises IndexError for every row, so image_only_empty_text is unrepresentable in this model's text tower rather than merely unsupported by the adapter"
+     ]
+    },
+    "notes": "unguarded CUDA: 14 source lines / 15 .cuda() call expressions [model.py(2), test.py(4), text_model.py(3), train.py(6)]; 6 lines / 7 expressions reachable from scoring. Cosine over concatenated, per-half-normalized 2048-d rows; the upstream reference mask is NOT inherited. One resident worker per adapter, per-category checkpoints loaded lazily on first use."
+   },
+   "category_scopes": [
+    "dress",
+    "shirt",
+    "toptee"
+   ],
+   "native_protocol": "fashioniq_val_split",
+   "supported_protocols": [
+    "fashioniq_val_split"
+   ],
+   "category_model_policy": "independent",
+   "reproduction_status": "BLOCKED_CHECKPOINT_MAPPING",
+   "command_status": "COMMAND_BLOCKED_SOURCE_ENTRYPOINT",
+   "replay_status": "BLOCKED_NO_SOURCE_REPLAY",
+   "source_dir": "CLVCNet",
+   "preflight_blockers": [
+    "command not runnable: COMMAND_BLOCKED_SOURCE_ENTRYPOINT"
+   ],
+   "web_publication": null,
+   "executability": "EXECUTABLE",
+   "executability_reason": "interpreter resolves, adapter ready, at least one checkpoint present"
+  },
+  {
+   "model_id": "dcnet",
+   "python_env_var": "WORKBENCH_DCNET_PYTHON",
+   "interpreter": {
+    "variable": "WORKBENCH_DCNET_PYTHON",
+    "declared_in": null,
+    "declared_value": null,
+    "resolves_to": null,
+    "exists": false,
+    "dangling_target": null
+   },
+   "resolver_returned": null,
+   "checkpoints": [
+    {
+     "checkpoint_id": "fashioniq_run_directory",
+     "filename": ".",
+     "mapping_status": "VERIFIED_METADATA",
+     "path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/../../checkpoints/dcnet",
+     "kind": "dir",
+     "size_bytes": 2882704059,
+     "downloaded": true,
+     "mapping_verified": true,
+     "official_sha256_match": null,
+     "runnable": false,
+     "blocking_reasons": [
+      "execution environment not verified: WORKBENCH_DCNET_PYTHON=None [UNCONFIGURED/UNCONFIGURED] (WORKBENCH_DCNET_PYTHON not set)"
+     ]
+    }
+   ],
+   "adapter": {
+    "module": "workbench.composition.model_dcnet",
+    "exists": true,
+    "ready": false,
+    "reason": "no interpreter environment resolved for WORKBENCH_DCNET_PYTHON (unset, and no provisioning assignment records one for dcnet); registry-declared runtime torch 1.4.0 cannot run the approved base_trainer.py weights_only opt-out (TypeError on that torch); surveyed: envs/dcnet-prepare (3.7.12): no torch; artifacts/environments/cir-005ef4e1b02999a5 (3.10.22, torch 2.7.1+cu128): imports CENet and loads the staged checkpoint strictly (518/518 tensors, weights_only=False); artifacts/environments/dcnet-377 (3.7.7, torch 1.4.0+cpu): imports CENet but raises TypeError on the approved weights_only opt-out; reported ranking is log_softmax(comp)+log_softmax(corr) over a per-query correction branch (trainer_joint.py:207-218,239-240), so score() cannot be reproduced from two fixed matrices and refuses; upstream masks the reference (trainer_joint.py:217-218) while CIRCUS requires a reference-eligible gallery; the protocols conflict",
+    "checkpoint_ids": [
+     "fashioniq_run_directory"
+    ],
+    "per_mode": {
+     "multimodal": [
+      false,
+      "no interpreter environment resolved for WORKBENCH_DCNET_PYTHON (unset, and no provisioning assignment records one for dcnet); registry-declared runtime torch 1.4.0 cannot run the approved base_trainer.py weights_only opt-out (TypeError on that torch); surveyed: envs/dcnet-prepare (3.7.12): no torch; artifacts/environments/cir-005ef4e1b02999a5 (3.10.22, torch 2.7.1+cu128): imports CENet and loads the staged checkpoint strictly (518/518 tensors, weights_only=False); artifacts/environments/dcnet-377 (3.7.7, torch 1.4.0+cpu): imports CENet but raises TypeError on the approved weights_only opt-out; reported ranking is log_softmax(comp)+log_softmax(corr) over a per-query correction branch (trainer_joint.py:207-218,239-240), so score() cannot be reproduced from two fixed matrices and refuses; upstream masks the reference (trainer_joint.py:217-218) while CIRCUS requires a reference-eligible gallery; the protocols conflict"
+     ],
+     "text_only_black_image": [
+      false,
+      "no interpreter environment resolved for WORKBENCH_DCNET_PYTHON (unset, and no provisioning assignment records one for dcnet); registry-declared runtime torch 1.4.0 cannot run the approved base_trainer.py weights_only opt-out (TypeError on that torch); surveyed: envs/dcnet-prepare (3.7.12): no torch; artifacts/environments/cir-005ef4e1b02999a5 (3.10.22, torch 2.7.1+cu128): imports CENet and loads the staged checkpoint strictly (518/518 tensors, weights_only=False); artifacts/environments/dcnet-377 (3.7.7, torch 1.4.0+cpu): imports CENet but raises TypeError on the approved weights_only opt-out; reported ranking is log_softmax(comp)+log_softmax(corr) over a per-query correction branch (trainer_joint.py:207-218,239-240), so score() cannot be reproduced from two fixed matrices and refuses; upstream masks the reference (trainer_joint.py:217-218) while CIRCUS requires a reference-eligible gallery; the protocols conflict"
+     ],
+     "image_only_empty_text": [
+      false,
+      "no interpreter environment resolved for WORKBENCH_DCNET_PYTHON (unset, and no provisioning assignment records one for dcnet); registry-declared runtime torch 1.4.0 cannot run the approved base_trainer.py weights_only opt-out (TypeError on that torch); surveyed: envs/dcnet-prepare (3.7.12): no torch; artifacts/environments/cir-005ef4e1b02999a5 (3.10.22, torch 2.7.1+cu128): imports CENet and loads the staged checkpoint strictly (518/518 tensors, weights_only=False); artifacts/environments/dcnet-377 (3.7.7, torch 1.4.0+cpu): imports CENet but raises TypeError on the approved weights_only opt-out; reported ranking is log_softmax(comp)+log_softmax(corr) over a per-query correction branch (trainer_joint.py:207-218,239-240), so score() cannot be reproduced from two fixed matrices and refuses; upstream masks the reference (trainer_joint.py:217-218) while CIRCUS requires a reference-eligible gallery; the protocols conflict"
+     ]
+    },
+    "notes": "Reference-INeligible by upstream protocol (reference masked before the fused log-softmax rank). No subprocess is launched: scoring is not expressible over fixed feature matrices and no interpreter is registered."
+   },
+   "category_scopes": [
+    null
+   ],
+   "native_protocol": "fashioniq_full_gallery_ref_excluded",
+   "supported_protocols": [
+    "fashioniq_full_gallery_ref_excluded"
+   ],
+   "category_model_policy": "shared",
+   "reproduction_status": "BLOCKED_CHECKPOINT_MAPPING",
+   "command_status": "COMMAND_AUDITED",
+   "replay_status": "REPLAY_CODE_IMPLEMENTED",
+   "source_dir": "DCNet",
+   "preflight_blockers": [
+    "execution environment not verified: WORKBENCH_DCNET_PYTHON=None [UNCONFIGURED/UNCONFIGURED] (WORKBENCH_DCNET_PYTHON not set)"
+   ],
+   "web_publication": null,
+   "executability": "BLOCKED(ENV_VAR_UNSET)",
+   "executability_reason": "WORKBENCH_DCNET_PYTHON is not set in any env file"
+  },
+  {
+   "model_id": "combiner_rn50x4_noft",
+   "python_env_var": "WORKBENCH_CLIP4CIR_PYTHON",
+   "interpreter": {
+    "variable": "WORKBENCH_CLIP4CIR_PYTHON",
+    "declared_in": null,
+    "declared_value": null,
+    "resolves_to": null,
+    "exists": false,
+    "dangling_target": null
+   },
+   "resolver_returned": null,
+   "checkpoints": [
+    {
+     "checkpoint_id": "rn50x4_noft_unresolved",
+     "filename": "fiq_comb_RN50x4_noft.pt",
+     "mapping_status": "VERIFIED_METADATA",
+     "path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/../../checkpoints/clip4cir/FashionIQ/RN50x4_noft/fiq_comb_RN50x4_noft.pt",
+     "kind": "file",
+     "size_bytes": 236017921,
+     "downloaded": true,
+     "mapping_verified": true,
+     "official_sha256_match": true,
+     "runnable": false,
+     "blocking_reasons": [
+      "FashionIQ image extension requirement: 3817 of 3817 dress validation images lack .jpg in /home/heheboiz/data/cir/data/FashionIQ/images (first: B009PMCJLW.jpg)",
+      "FashionIQ image extension requirement: 6346 of 6346 shirt validation images lack .jpg in /home/heheboiz/data/cir/data/FashionIQ/images (first: B000KENMD8.jpg)",
+      "FashionIQ image extension requirement: 5373 of 5373 toptee validation images lack .jpg in /home/heheboiz/data/cir/data/FashionIQ/images (first: B008CG1JJ0.jpg)",
+      "canonical dataset link resolves to /home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/prepared/clip4cir/fashionIQ_dataset, expected /home/heheboiz/data/cir/data/FashionIQ",
+      "execution environment not verified: WORKBENCH_CLIP4CIR_PYTHON=None [UNCONFIGURED/UNCONFIGURED] (WORKBENCH_CLIP4CIR_PYTHON not set)"
+     ]
+    }
+   ],
+   "adapter": {
+    "module": "workbench.composition.model_combiner_rn50x4_noft",
+    "exists": true,
+    "ready": false,
+    "reason": "no interpreter environment resolved for WORKBENCH_CLIP4CIR_PYTHON",
+    "checkpoint_ids": [
+     "rn50x4_noft_unresolved"
+    ],
+    "per_mode": {
+     "multimodal": [
+      true,
+      null
+     ],
+     "text_only_black_image": [
+      true,
+      null
+     ],
+     "image_only_empty_text": [
+      true,
+      null
+     ]
+    },
+    "notes": "Cosine over normalized CLIP features (validate.py:41,44,107); Combiner fusion is upstream's combine_features; no reference mask. Upstream emits AGGREGATE METRICS ONLY (validate.py:47-52) -- per-query rank export is new work, not an upstream parity claim. The noft variant additionally needs base OpenAI CLIP RN50x4 weights, which the checkpoint registry does not stage or verify."
+   },
+   "category_scopes": [
+    null
+   ],
+   "native_protocol": "fashioniq_original_split",
+   "supported_protocols": [
+    "fashioniq_original_split"
+   ],
+   "category_model_policy": "shared",
+   "reproduction_status": "BLOCKED_CHECKPOINT_MAPPING",
+   "command_status": "COMMAND_AUDITED",
+   "replay_status": "REPLAY_CODE_IMPLEMENTED",
+   "source_dir": "CLIP4Cir",
+   "preflight_blockers": [
+    "FashionIQ image extension requirement: 3817 of 3817 dress validation images lack .jpg in /home/heheboiz/data/cir/data/FashionIQ/images (first: B009PMCJLW.jpg)",
+    "FashionIQ image extension requirement: 6346 of 6346 shirt validation images lack .jpg in /home/heheboiz/data/cir/data/FashionIQ/images (first: B000KENMD8.jpg)",
+    "FashionIQ image extension requirement: 5373 of 5373 toptee validation images lack .jpg in /home/heheboiz/data/cir/data/FashionIQ/images (first: B008CG1JJ0.jpg)",
+    "canonical dataset link resolves to /home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/prepared/clip4cir/fashionIQ_dataset, expected /home/heheboiz/data/cir/data/FashionIQ",
+    "execution environment not verified: WORKBENCH_CLIP4CIR_PYTHON=None [UNCONFIGURED/UNCONFIGURED] (WORKBENCH_CLIP4CIR_PYTHON not set)"
+   ],
+   "web_publication": null,
+   "executability": "BLOCKED(ENV_VAR_UNSET)",
+   "executability_reason": "WORKBENCH_CLIP4CIR_PYTHON is not set in any env file"
+  },
+  {
+   "model_id": "clip4cir_rn50x4_fullft",
+   "python_env_var": "WORKBENCH_CLIP4CIR_PYTHON",
+   "interpreter": {
+    "variable": "WORKBENCH_CLIP4CIR_PYTHON",
+    "declared_in": null,
+    "declared_value": null,
+    "resolves_to": null,
+    "exists": false,
+    "dangling_target": null
+   },
+   "resolver_returned": null,
+   "checkpoints": [
+    {
+     "checkpoint_id": "rn50x4_fullft_unresolved",
+     "filename": ".",
+     "mapping_status": "VERIFIED_METADATA",
+     "path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/../../checkpoints/clip4cir/FashionIQ/RN50x4_fullft",
+     "kind": "dir",
+     "size_bytes": 949892616,
+     "downloaded": true,
+     "mapping_verified": true,
+     "official_sha256_match": null,
+     "runnable": false,
+     "blocking_reasons": [
+      "FashionIQ image extension requirement: 3817 of 3817 dress validation images lack .jpg in /home/heheboiz/data/cir/data/FashionIQ/images (first: B009PMCJLW.jpg)",
+      "FashionIQ image extension requirement: 6346 of 6346 shirt validation images lack .jpg in /home/heheboiz/data/cir/data/FashionIQ/images (first: B000KENMD8.jpg)",
+      "FashionIQ image extension requirement: 5373 of 5373 toptee validation images lack .jpg in /home/heheboiz/data/cir/data/FashionIQ/images (first: B008CG1JJ0.jpg)",
+      "canonical dataset link resolves to /home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/prepared/clip4cir/fashionIQ_dataset, expected /home/heheboiz/data/cir/data/FashionIQ",
+      "execution environment not verified: WORKBENCH_CLIP4CIR_PYTHON=None [UNCONFIGURED/UNCONFIGURED] (WORKBENCH_CLIP4CIR_PYTHON not set)"
+     ]
+    }
+   ],
+   "adapter": {
+    "module": "workbench.composition.model_clip4cir_rn50x4_fullft",
+    "exists": true,
+    "ready": false,
+    "reason": "no interpreter environment resolved for WORKBENCH_CLIP4CIR_PYTHON",
+    "checkpoint_ids": [
+     "rn50x4_fullft_unresolved"
+    ],
+    "per_mode": {
+     "multimodal": [
+      true,
+      null
+     ],
+     "text_only_black_image": [
+      true,
+      null
+     ],
+     "image_only_empty_text": [
+      true,
+      null
+     ]
+    },
+    "notes": "Cosine over normalized CLIP features (validate.py:41,44,107); Combiner fusion is upstream's combine_features; no reference mask. Upstream emits AGGREGATE METRICS ONLY (validate.py:47-52) -- per-query rank export is new work, not an upstream parity claim. The noft variant additionally needs base OpenAI CLIP RN50x4 weights, which the checkpoint registry does not stage or verify."
+   },
+   "category_scopes": [
+    null
+   ],
+   "native_protocol": "fashioniq_original_split",
+   "supported_protocols": [
+    "fashioniq_original_split"
+   ],
+   "category_model_policy": "shared",
+   "reproduction_status": "BLOCKED_CHECKPOINT_BUNDLE",
+   "command_status": "COMMAND_AUDITED",
+   "replay_status": "BLOCKED_CHECKPOINT_MAPPING",
+   "source_dir": "CLIP4Cir",
+   "preflight_blockers": [
+    "FashionIQ image extension requirement: 3817 of 3817 dress validation images lack .jpg in /home/heheboiz/data/cir/data/FashionIQ/images (first: B009PMCJLW.jpg)",
+    "FashionIQ image extension requirement: 6346 of 6346 shirt validation images lack .jpg in /home/heheboiz/data/cir/data/FashionIQ/images (first: B000KENMD8.jpg)",
+    "FashionIQ image extension requirement: 5373 of 5373 toptee validation images lack .jpg in /home/heheboiz/data/cir/data/FashionIQ/images (first: B008CG1JJ0.jpg)",
+    "canonical dataset link resolves to /home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/prepared/clip4cir/fashionIQ_dataset, expected /home/heheboiz/data/cir/data/FashionIQ",
+    "execution environment not verified: WORKBENCH_CLIP4CIR_PYTHON=None [UNCONFIGURED/UNCONFIGURED] (WORKBENCH_CLIP4CIR_PYTHON not set)"
+   ],
+   "web_publication": null,
+   "executability": "BLOCKED(ENV_VAR_UNSET)",
+   "executability_reason": "WORKBENCH_CLIP4CIR_PYTHON is not set in any env file"
+  },
+  {
+   "model_id": "tgcir",
+   "python_env_var": "WORKBENCH_TGCIR_PYTHON",
+   "interpreter": {
+    "variable": "WORKBENCH_TGCIR_PYTHON",
+    "declared_in": "workbench/config/workbench.env",
+    "declared_value": "/home/heheboiz/data/cir/workbench/envs/tgcir39-la/bin/python",
+    "resolves_to": "/home/heheboiz/.local/share/uv/python/cpython-3.9.25-linux-x86_64-gnu/bin/python3.9",
+    "exists": true,
+    "dangling_target": null
+   },
+   "resolver_returned": "/home/heheboiz/data/cir/workbench/envs/tgcir39-la/bin/python",
+   "checkpoints": [
+    {
+     "checkpoint_id": "tgcir_archive_unresolved",
+     "filename": "Fashioniq.pt",
+     "mapping_status": "VERIFIED_METADATA",
+     "path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/../../downloads/tgcir/x/checkpoints/Fashioniq.pt",
+     "kind": "file",
+     "size_bytes": 607928637,
+     "downloaded": true,
+     "mapping_verified": true,
+     "official_sha256_match": true,
+     "runnable": false,
+     "blocking_reasons": [
+      "command not runnable: COMMAND_BLOCKED_SOURCE_ENTRYPOINT"
+     ]
+    }
+   ],
+   "adapter": {
+    "module": "workbench.composition.model_tgcir",
+    "exists": true,
+    "ready": true,
+    "reason": null,
+    "checkpoint_ids": [
+     "tgcir_archive_unresolved"
+    ],
+    "per_mode": {
+     "multimodal": [
+      true,
+      null
+     ],
+     "text_only_black_image": [
+      true,
+      null
+     ],
+     "image_only_empty_text": [
+      true,
+      null
+     ]
+    },
+    "notes": "Cosine over mean-pooled 512-d vectors; upstream reference mask NOT inherited (CIRCUS needs a reference-eligible gallery). Evaluated by a WORKBENCH-ADDED path driving the pinned encoder, not by an author CLI (test.py has none; train.py --restore_file is dead). Pinned source stays CUDA-hard: model.py:32,107,120,136,244,251 and test.py:31,47,101,115 call .cuda() with no device guard, and model.py:41 loads CLIP with device='cuda'"
+   },
+   "category_scopes": [
+    null
+   ],
+   "native_protocol": "fashioniq_val_split",
+   "supported_protocols": [
+    "fashioniq_val_split"
+   ],
+   "category_model_policy": "shared",
+   "reproduction_status": "BLOCKED_COMMAND",
+   "command_status": "COMMAND_BLOCKED_SOURCE_ENTRYPOINT",
+   "replay_status": "PREFLIGHT_ONLY",
+   "source_dir": "TGCIR",
+   "preflight_blockers": [
+    "command not runnable: COMMAND_BLOCKED_SOURCE_ENTRYPOINT"
+   ],
+   "web_publication": null,
+   "executability": "EXECUTABLE",
+   "executability_reason": "interpreter resolves, adapter ready, at least one checkpoint present"
+  },
+  {
+   "model_id": "sprc",
+   "python_env_var": "WORKBENCH_SPRC_PYTHON",
+   "interpreter": {
+    "variable": "WORKBENCH_SPRC_PYTHON",
+    "declared_in": null,
+    "declared_value": null,
+    "resolves_to": null,
+    "exists": false,
+    "dangling_target": null
+   },
+   "resolver_returned": null,
+   "checkpoints": [
+    {
+     "checkpoint_id": "sprc_fiq_unresolved",
+     "filename": "sprc_fiq.pt",
+     "mapping_status": "UNVERIFIED",
+     "path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/../../checkpoints/sprc/sprc_fiq.pt",
+     "kind": "absent",
+     "size_bytes": null,
+     "downloaded": false,
+     "mapping_verified": false,
+     "official_sha256_match": null,
+     "runnable": false,
+     "blocking_reasons": [
+      "canonical dataset link resolves to /home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/prepared/sprc/fashionIQ_dataset, expected /home/heheboiz/data/cir/data/FashionIQ",
+      "external runtime asset provenance unresolved: LAVIS BLIP-2 pretrain weights",
+      "command not runnable: COMMAND_BLOCKED_MODEL_MAPPING",
+      "execution environment not verified: WORKBENCH_SPRC_PYTHON=None [UNCONFIGURED/UNCONFIGURED] (WORKBENCH_SPRC_PYTHON not set)",
+      "checkpoint missing: /home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/../../checkpoints/sprc/sprc_fiq.pt",
+      "checkpoint mapping unresolved"
+     ]
+    },
+    {
+     "checkpoint_id": "sprc_fiq_vitl",
+     "filename": "sprc_fiq_vitl.pt",
+     "mapping_status": "VERIFIED_METADATA",
+     "path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/../../checkpoints/sprc/sprc_fiq_vitl.pt",
+     "kind": "file",
+     "size_bytes": 1459756541,
+     "downloaded": true,
+     "mapping_verified": true,
+     "official_sha256_match": true,
+     "runnable": false,
+     "blocking_reasons": [
+      "canonical dataset link resolves to /home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/prepared/sprc/fashionIQ_dataset, expected /home/heheboiz/data/cir/data/FashionIQ",
+      "external runtime asset provenance unresolved: LAVIS BLIP-2 pretrain weights",
+      "command not runnable: COMMAND_BLOCKED_MODEL_MAPPING",
+      "execution environment not verified: WORKBENCH_SPRC_PYTHON=None [UNCONFIGURED/UNCONFIGURED] (WORKBENCH_SPRC_PYTHON not set)"
+     ]
+    }
+   ],
+   "adapter": {
+    "module": null,
+    "exists": false,
+    "ready": null,
+    "reason": "no composition adapter is declared for this model"
+   },
+   "category_scopes": null,
+   "native_protocol": "fashioniq_original_split",
+   "supported_protocols": [
+    "fashioniq_original_split"
+   ],
+   "category_model_policy": "shared",
+   "reproduction_status": "BLOCKED_CHECKPOINT_MAPPING",
+   "command_status": "COMMAND_BLOCKED_MODEL_MAPPING",
+   "replay_status": "BLOCKED_CHECKPOINT_MAPPING",
+   "source_dir": "SPRC",
+   "preflight_blockers": [
+    "canonical dataset link resolves to /home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/prepared/sprc/fashionIQ_dataset, expected /home/heheboiz/data/cir/data/FashionIQ",
+    "external runtime asset provenance unresolved: LAVIS BLIP-2 pretrain weights",
+    "command not runnable: COMMAND_BLOCKED_MODEL_MAPPING",
+    "execution environment not verified: WORKBENCH_SPRC_PYTHON=None [UNCONFIGURED/UNCONFIGURED] (WORKBENCH_SPRC_PYTHON not set)"
+   ],
+   "web_publication": null,
+   "executability": "NO_ADAPTER",
+   "executability_reason": "no composition adapter module on disk"
+  },
+  {
+   "model_id": "limn",
+   "python_env_var": "WORKBENCH_LIMN_PYTHON",
+   "interpreter": {
+    "variable": "WORKBENCH_LIMN_PYTHON",
+    "declared_in": "workbench/config/workbench.env",
+    "declared_value": "/home/heheboiz/data/cir/workbench/envs/limn310-adapted/bin/python",
+    "resolves_to": "/home/heheboiz/.local/share/uv/python/cpython-3.10.20-linux-x86_64-gnu/bin/python3.10",
+    "exists": true,
+    "dangling_target": null
+   },
+   "resolver_returned": "/home/heheboiz/data/cir/workbench/envs/limn310-adapted/bin/python",
+   "checkpoints": [
+    {
+     "checkpoint_id": "base_iter0_dress",
+     "filename": "0_dress_best_model.pt",
+     "mapping_status": "VERIFIED_METADATA",
+     "path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/limn/0_dress_best_model.pt",
+     "kind": "file",
+     "size_bytes": 1792010157,
+     "downloaded": true,
+     "mapping_verified": true,
+     "official_sha256_match": true,
+     "runnable": false,
+     "blocking_reasons": [
+      "execution environment not verified: WORKBENCH_LIMN_PYTHON=/home/heheboiz/data/cir/workbench/envs/limn310-adapted/bin/python [GPU_VERIFICATION_PENDING/GPU_VERIFICATION_PENDING] (CUDA capability must be verified on the GPU host with verify_gpu_runtime() before this model can be launched)"
+     ]
+    },
+    {
+     "checkpoint_id": "base_iter0_shirt",
+     "filename": "0_shirt_best_model.pt",
+     "mapping_status": "VERIFIED_METADATA",
+     "path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/limn/0_shirt_best_model.pt",
+     "kind": "file",
+     "size_bytes": 1792010157,
+     "downloaded": true,
+     "mapping_verified": true,
+     "official_sha256_match": true,
+     "runnable": false,
+     "blocking_reasons": [
+      "execution environment not verified: WORKBENCH_LIMN_PYTHON=/home/heheboiz/data/cir/workbench/envs/limn310-adapted/bin/python [GPU_VERIFICATION_PENDING/GPU_VERIFICATION_PENDING] (CUDA capability must be verified on the GPU host with verify_gpu_runtime() before this model can be launched)"
+     ]
+    },
+    {
+     "checkpoint_id": "base_iter0_toptee",
+     "filename": "0_toptee_best_model.pt",
+     "mapping_status": "VERIFIED_METADATA",
+     "path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/limn/0_toptee_best_model.pt",
+     "kind": "file",
+     "size_bytes": 1792010157,
+     "downloaded": true,
+     "mapping_verified": true,
+     "official_sha256_match": true,
+     "runnable": false,
+     "blocking_reasons": [
+      "execution environment not verified: WORKBENCH_LIMN_PYTHON=/home/heheboiz/data/cir/workbench/envs/limn310-adapted/bin/python [GPU_VERIFICATION_PENDING/GPU_VERIFICATION_PENDING] (CUDA capability must be verified on the GPU host with verify_gpu_runtime() before this model can be launched)"
+     ]
+    }
+   ],
+   "adapter": {
+    "module": "workbench.composition.model_limn",
+    "exists": true,
+    "ready": true,
+    "reason": null,
+    "checkpoint_ids": [
+     "base_iter0_dress",
+     "base_iter0_shirt",
+     "base_iter0_toptee"
+    ],
+    "per_mode": {
+     "multimodal": [
+      true,
+      null
+     ],
+     "text_only_black_image": [
+      true,
+      null
+     ],
+     "image_only_empty_text": [
+      true,
+      null
+     ]
+    },
+    "notes": "checkpoints=passed ({'base_iter0_dress': True, 'base_iter0_shirt': True, 'base_iter0_toptee': True}); interpreter=passed (WORKBENCH_LIMN_PYTHON=set); GPU=passed; mapping=passed (VERIFIED_METADATA)"
+   },
+   "category_scopes": [
+    "dress",
+    "shirt",
+    "toptee"
+   ],
+   "native_protocol": "fashioniq_val_split",
+   "supported_protocols": [
+    "fashioniq_val_split"
+   ],
+   "category_model_policy": "independent",
+   "reproduction_status": "BLOCKED_RUNTIME_PREREQUISITES",
+   "command_status": "REPLAY_COMMAND_IMPLEMENTED",
+   "replay_status": "REPLAY_CODE_IMPLEMENTED",
+   "source_dir": "LIMN",
+   "preflight_blockers": [
+    "execution environment not verified: WORKBENCH_LIMN_PYTHON=/home/heheboiz/data/cir/workbench/envs/limn310-adapted/bin/python [GPU_VERIFICATION_PENDING/GPU_VERIFICATION_PENDING] (CUDA capability must be verified on the GPU host with verify_gpu_runtime() before this model can be launched)"
+   ],
+   "web_publication": null,
+   "executability": "EXECUTABLE",
+   "executability_reason": "interpreter resolves, adapter ready, at least one checkpoint present"
+  },
+  {
+   "model_id": "tme",
+   "python_env_var": "WORKBENCH_TME_PYTHON",
+   "interpreter": {
+    "variable": "WORKBENCH_TME_PYTHON",
+    "declared_in": "workbench/config/workbench.env",
+    "declared_value": "/home/heheboiz/data/cir/workbench/envs/tme-adapted/bin/python",
+    "resolves_to": "/home/heheboiz/data/cir/workbench/envs/tme-adapted/bin/python3.10",
+    "exists": true,
+    "dangling_target": null
+   },
+   "resolver_returned": "/home/heheboiz/data/cir/workbench/envs/tme-adapted/bin/python",
+   "checkpoints": [
+    {
+     "checkpoint_id": "fashioniq_0",
+     "filename": "fashioniq_0_best_model.pth",
+     "mapping_status": "VERIFIED_METADATA",
+     "path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/tme/fashioniq_0_best_model.pth",
+     "kind": "file",
+     "size_bytes": 2728382104,
+     "downloaded": true,
+     "mapping_verified": true,
+     "official_sha256_match": null,
+     "runnable": true,
+     "blocking_reasons": []
+    },
+    {
+     "checkpoint_id": "cirr_0",
+     "filename": "cirr_0_best_model.pth",
+     "mapping_status": "VERIFIED_METADATA",
+     "path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/tme/cirr_0_best_model.pth",
+     "kind": "absent",
+     "size_bytes": null,
+     "downloaded": false,
+     "mapping_verified": true,
+     "official_sha256_match": null,
+     "runnable": false,
+     "blocking_reasons": [
+      "checkpoint missing: /home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/tme/cirr_0_best_model.pth"
+     ]
+    }
+   ],
+   "adapter": {
+    "module": "workbench.composition.model_tme",
+    "exists": true,
+    "ready": true,
+    "reason": null,
+    "checkpoint_ids": [
+     "fashioniq_0"
+    ],
+    "per_mode": {
+     "multimodal": [
+      true,
+      null
+     ],
+     "text_only_black_image": [
+      true,
+      null
+     ],
+     "image_only_empty_text": [
+      true,
+      null
+     ]
+    },
+    "notes": "Checkpoint is author-published and size-verified; registry has no author SHA-256."
+   },
+   "category_scopes": [
+    null
+   ],
+   "native_protocol": "fashioniq_original_split",
+   "supported_protocols": [
+    "fashioniq_original_split"
+   ],
+   "category_model_policy": null,
+   "reproduction_status": "NOT_RUN",
+   "command_status": "REPLAY_COMMAND_IMPLEMENTED",
+   "replay_status": null,
+   "source_dir": "TME",
+   "preflight_blockers": [],
+   "web_publication": null,
+   "executability": "EXECUTABLE",
+   "executability_reason": "interpreter resolves, adapter ready, at least one checkpoint present"
+  }
+ ]
+}

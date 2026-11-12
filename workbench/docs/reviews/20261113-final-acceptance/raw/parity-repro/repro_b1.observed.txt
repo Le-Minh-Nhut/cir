@@ -1,0 +1,15 @@
+REAL dress pair, unmodified:
+  status: PARITY_MANDATORY_SUBCHECK_FAILED
+  dress metrics: [('dress.metrics.hit_count_equality', True, True, True)]
+  dress detail counts: {'r1': 375, 'r10': 1032, 'r50': 1498}
+
+REAL dress pair, adapter r1 raised 375 -> 376 (a rerun under a different mask), flag untouched:
+  flag kept: True | detail native r1: 375 | detail adapter r1: 376 | equality: {'r1': False, 'r10': True, 'r50': True}
+  status: PARITY_MANDATORY_SUBCHECK_FAILED
+  dress metrics: [('dress.metrics.hit_count_equality', True, True, True)]
+  dress dimension metrics_parity: True
+  failures: ['dress.batch_1_vs_n.max_rel', 'shirt.batch_1_vs_n.max_rel', 'toptee.batch_1_vs_n.max_rel']
+
+Same but with the flag flipped to False (proves the flag alone decides):
+  status: PARITY_MANDATORY_SUBCHECK_FAILED
+  dress metrics: [('dress.metrics.hit_count_equality', False, False, True)]

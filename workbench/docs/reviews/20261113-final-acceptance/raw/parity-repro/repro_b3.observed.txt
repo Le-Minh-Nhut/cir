@@ -1,0 +1,7 @@
+dress queries: 2017 gallery: 2628
+masked,   strict hard-hit R@1      : 375
+masked,   tie-counted R@1         : 382
+unmasked, strict hard-hit R@1     : 348
+unmasked, tie-counted R@1         : 354
+artifact recorded native hits     : {'r1': 375, 'r10': 1032, 'r50': 1498}
+artifact recorded adapter hits    : {'r1': 375, 'r10': 1032, 'r50': 1498}

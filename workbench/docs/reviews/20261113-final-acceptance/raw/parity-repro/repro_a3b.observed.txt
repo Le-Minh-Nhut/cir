@@ -1,0 +1,8 @@
+P2 chunked: indices 3000..3099 only, 100/4146 emitted, no head
+    -> PARITY_PASS | compared=100/4146 coverage=chunked | every mandatory subcheck of every mandatory dimension was measured and held under its own declared tolerance
+P3 chunked: 368/4146 emitted (144-index hole in the head)
+    -> PARITY_PASS | compared=368/4146 coverage=chunked | every mandatory subcheck of every mandatory dimension was measured and held under its own declared tolerance
+P10 chunked: 1 of 4146 components emitted
+    -> PARITY_PASS | compared=1/4146 coverage=chunked | every mandatory subcheck of every mandatory dimension was measured and held under its own declared tolerance
+P11 chunked: only indices 0..255 emitted (head truncated 512->256)
+    -> PARITY_PASS | compared=256/4146 coverage=chunked | every mandatory subcheck of every mandatory dimension was measured and held under its own declared tolerance

@@ -1,0 +1,153 @@
+[
+ {
+  "blocker": "INTERPRETER_BROKEN_SYMLINK (shared)",
+  "models": [
+   "airknow",
+   "pair",
+   "sprc",
+   "combiner_rn50x4_noft",
+   "clip4cir_rn50x4_fullft"
+  ],
+  "asset_missing": "/home/heheboiz/miniconda3/envs/teacher-sprc/bin/python",
+  "note": "five DECLARED env symlinks point at one removed conda env; repairing it is the operator's, not this lane's",
+  "command": "readlink -f workbench/envs/airknow-adapted/bin/python",
+  "exit": 1,
+  "stdout": "",
+  "stderr": "",
+  "also": [
+   {
+    "command": "test -e workbench/envs/airknow-adapted/bin/python",
+    "exit": 1,
+    "stdout": "",
+    "stderr": "",
+    "symlink": "workbench/envs/airknow-adapted/bin/python"
+   },
+   {
+    "command": "test -e workbench/envs/pair-adapted/bin/python",
+    "exit": 1,
+    "stdout": "",
+    "stderr": "",
+    "symlink": "workbench/envs/pair-adapted/bin/python"
+   },
+   {
+    "command": "test -e workbench/envs/sprc-adapted/bin/python",
+    "exit": 1,
+    "stdout": "",
+    "stderr": "",
+    "symlink": "workbench/envs/sprc-adapted/bin/python"
+   },
+   {
+    "command": "test -e workbench/envs/clip4cir-adapted/bin/python",
+    "exit": 1,
+    "stdout": "",
+    "stderr": "",
+    "symlink": "workbench/envs/clip4cir-adapted/bin/python"
+   },
+   {
+    "command": "test -e workbench/envs/limn-adapted/bin/python",
+    "exit": 1,
+    "stdout": "",
+    "stderr": "",
+    "symlink": "workbench/envs/limn-adapted/bin/python"
+   }
+  ]
+ },
+ {
+  "blocker": "PYTHON_ENV_VAR_UNSET",
+  "models": [
+   "airknow",
+   "pair",
+   "dcnet",
+   "combiner_rn50x4_noft",
+   "clip4cir_rn50x4_fullft",
+   "sprc"
+  ],
+  "asset_missing": "the WORKBENCH_*_PYTHON variable for the model",
+  "command": "grep -n -E WORKBENCH_(AIRKNOW|PAIR|DCNET|CLIP4CIR|SPRC)_PYTHON workbench/config/workbench.env",
+  "exit": 1,
+  "stdout": "",
+  "stderr": "",
+  "note": "grep exits 1 and prints nothing: the variable is absent, which is the blocker"
+ },
+ {
+  "blocker": "PROBE csmcir",
+  "models": [
+   "csmcir"
+  ],
+  "command": "/home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python /home/heheboiz/data/cir/workbench/docs/reviews/20261113-final-acceptance/raw/parity-coverage/probe_csmcir.py",
+  "exit": 0,
+  "stdout": "{\n \"model_id\": \"csmcir\",\n \"python_env_var\": \"WORKBENCH_CSMCIR_PYTHON\",\n \"resolver_returned\": \"/home/heheboiz/data/cir/workbench/artifacts/environments/cir-005ef4e1b02999a5/bin/python\",\n \"interpreter_exists\": true,\n \"preflight_blockers\": [],\n \"adapter_module\": \"workbench.composition.model_csmcir\",\n \"adapter_module_exists\": true,\n \"checkpoints\": [\n  {\n   \"checkpoint_id\": \"fashioniq\",\n   \"path\": \"/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/csmcir/fashioniq_tuned_clip_best.pt\",\n   \"downloaded\": true,\n   \"mapping_verified\": true\n  }\n ]\n}\n",
+  "stderr": ""
+ },
+ {
+  "blocker": "PROBE airknow",
+  "models": [
+   "airknow"
+  ],
+  "command": "/home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python /home/heheboiz/data/cir/workbench/docs/reviews/20261113-final-acceptance/raw/parity-coverage/probe_airknow.py",
+  "exit": 0,
+  "stdout": "{\n \"model_id\": \"airknow\",\n \"python_env_var\": \"WORKBENCH_AIRKNOW_PYTHON\",\n \"resolver_returned\": null,\n \"interpreter_exists\": false,\n \"preflight_blockers\": [\n  \"execution environment not verified: WORKBENCH_AIRKNOW_PYTHON=None [UNCONFIGURED/UNCONFIGURED] (WORKBENCH_AIRKNOW_PYTHON not set)\"\n ],\n \"adapter_module\": \"workbench.composition.model_airknow\",\n \"adapter_module_exists\": true,\n \"checkpoints\": [\n  {\n   \"checkpoint_id\": \"fiq_n05\",\n   \"path\": \"/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/../../checkpoints/airknow/airknow_fiq_0.5.pt\",\n   \"downloaded\": true,\n   \"mapping_verified\": true\n  },\n  {\n   \"checkpoint_id\": \"fiq_n08\",\n   \"path\": \"/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/../../checkpoints/airknow/airknow_fiq_0.8.pt\",\n   \"downloaded\": true,\n   \"mapping_verified\": true\n  }\n ]\n}\n",
+  "stderr": ""
+ },
+ {
+  "blocker": "PROBE pair",
+  "models": [
+   "pair"
+  ],
+  "command": "/home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python /home/heheboiz/data/cir/workbench/docs/reviews/20261113-final-acceptance/raw/parity-coverage/probe_pair.py",
+  "exit": 0,
+  "stdout": "{\n \"model_id\": \"pair\",\n \"python_env_var\": \"WORKBENCH_PAIR_PYTHON\",\n \"resolver_returned\": null,\n \"interpreter_exists\": false,\n \"preflight_blockers\": [\n  \"command not runnable: COMMAND_BLOCKED_SOURCE_ENTRYPOINT\",\n  \"execution environment not verified: WORKBENCH_PAIR_PYTHON=None [UNCONFIGURED/UNCONFIGURED] (WORKBENCH_PAIR_PYTHON not set)\"\n ],\n \"adapter_module\": \"workbench.composition.model_pair\",\n \"adapter_module_exists\": true,\n \"checkpoints\": [\n  {\n   \"checkpoint_id\": \"pair_b1\",\n   \"path\": \"/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/../../checkpoints/pair/pair-B1.pt\",\n   \"downloaded\": true,\n   \"mapping_verified\": false\n  },\n  {\n   \"checkpoint_id\": \"pair_b2\",\n   \"path\": \"/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/../../checkpoints/pair/pair-B2.pt\",\n   \"downloaded\": true,\n   \"mapping_verified\": false\n  }\n ]\n}\n",
+  "stderr": ""
+ },
+ {
+  "blocker": "PROBE dcnet",
+  "models": [
+   "dcnet"
+  ],
+  "command": "/home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python /home/heheboiz/data/cir/workbench/docs/reviews/20261113-final-acceptance/raw/parity-coverage/probe_dcnet.py",
+  "exit": 0,
+  "stdout": "{\n \"model_id\": \"dcnet\",\n \"python_env_var\": \"WORKBENCH_DCNET_PYTHON\",\n \"resolver_returned\": null,\n \"interpreter_exists\": false,\n \"preflight_blockers\": [\n  \"execution environment not verified: WORKBENCH_DCNET_PYTHON=None [UNCONFIGURED/UNCONFIGURED] (WORKBENCH_DCNET_PYTHON not set)\"\n ],\n \"adapter_module\": \"workbench.composition.model_dcnet\",\n \"adapter_module_exists\": true,\n \"checkpoints\": [\n  {\n   \"checkpoint_id\": \"fashioniq_run_directory\",\n   \"path\": \"/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/../../checkpoints/dcnet\",\n   \"downloaded\": true,\n   \"mapping_verified\": true\n  }\n ]\n}\n",
+  "stderr": ""
+ },
+ {
+  "blocker": "PROBE combiner_rn50x4_noft",
+  "models": [
+   "combiner_rn50x4_noft"
+  ],
+  "command": "/home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python /home/heheboiz/data/cir/workbench/docs/reviews/20261113-final-acceptance/raw/parity-coverage/probe_combiner_rn50x4_noft.py",
+  "exit": 0,
+  "stdout": "{\n \"model_id\": \"combiner_rn50x4_noft\",\n \"python_env_var\": \"WORKBENCH_CLIP4CIR_PYTHON\",\n \"resolver_returned\": null,\n \"interpreter_exists\": false,\n \"preflight_blockers\": [\n  \"FashionIQ image extension requirement: 3817 of 3817 dress validation images lack .jpg in /home/heheboiz/data/cir/data/FashionIQ/images (first: B009PMCJLW.jpg)\",\n  \"FashionIQ image extension requirement: 6346 of 6346 shirt validation images lack .jpg in /home/heheboiz/data/cir/data/FashionIQ/images (first: B000KENMD8.jpg)\",\n  \"FashionIQ image extension requirement: 5373 of 5373 toptee validation images lack .jpg in /home/heheboiz/data/cir/data/FashionIQ/images (first: B008CG1JJ0.jpg)\",\n  \"canonical dataset link resolves to /home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/prepared/clip4cir/fashionIQ_dataset, expected /home/heheboiz/data/cir/data/FashionIQ\",\n  \"execution environment not verified: WORKBENCH_CLIP4CIR_PYTHON=None [UNCONFIGURED/UNCONFIGURED] (WORKBENCH_CLIP4CIR_PYTHON not set)\"\n ],\n \"adapter_module\": \"workbench.composition.model_combiner_rn50x4_noft\",\n \"adapter_module_exists\": true,\n \"checkpoints\": [\n  {\n   \"checkpoint_id\": \"rn50x4_noft_unresolved\",\n   \"path\": \"/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/../../checkpoints/clip4cir/FashionIQ/RN50x4_noft/fiq_comb_RN50x4_noft.pt\",\n   \"downloaded\": true,\n   \"mapping_verified\": true\n  }\n ]\n}\n",
+  "stderr": ""
+ },
+ {
+  "blocker": "PROBE clip4cir_rn50x4_fullft",
+  "models": [
+   "clip4cir_rn50x4_fullft"
+  ],
+  "command": "/home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python /home/heheboiz/data/cir/workbench/docs/reviews/20261113-final-acceptance/raw/parity-coverage/probe_clip4cir_rn50x4_fullft.py",
+  "exit": 0,
+  "stdout": "{\n \"model_id\": \"clip4cir_rn50x4_fullft\",\n \"python_env_var\": \"WORKBENCH_CLIP4CIR_PYTHON\",\n \"resolver_returned\": null,\n \"interpreter_exists\": false,\n \"preflight_blockers\": [\n  \"FashionIQ image extension requirement: 3817 of 3817 dress validation images lack .jpg in /home/heheboiz/data/cir/data/FashionIQ/images (first: B009PMCJLW.jpg)\",\n  \"FashionIQ image extension requirement: 6346 of 6346 shirt validation images lack .jpg in /home/heheboiz/data/cir/data/FashionIQ/images (first: B000KENMD8.jpg)\",\n  \"FashionIQ image extension requirement: 5373 of 5373 toptee validation images lack .jpg in /home/heheboiz/data/cir/data/FashionIQ/images (first: B008CG1JJ0.jpg)\",\n  \"canonical dataset link resolves to /home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/prepared/clip4cir/fashionIQ_dataset, expected /home/heheboiz/data/cir/data/FashionIQ\",\n  \"execution environment not verified: WORKBENCH_CLIP4CIR_PYTHON=None [UNCONFIGURED/UNCONFIGURED] (WORKBENCH_CLIP4CIR_PYTHON not set)\"\n ],\n \"adapter_module\": \"workbench.composition.model_clip4cir_rn50x4_fullft\",\n \"adapter_module_exists\": true,\n \"checkpoints\": [\n  {\n   \"checkpoint_id\": \"rn50x4_fullft_unresolved\",\n   \"path\": \"/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/../../checkpoints/clip4cir/FashionIQ/RN50x4_fullft\",\n   \"downloaded\": true,\n   \"mapping_verified\": true\n  }\n ]\n}\n",
+  "stderr": ""
+ },
+ {
+  "blocker": "PROBE sprc",
+  "models": [
+   "sprc"
+  ],
+  "command": "/home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python /home/heheboiz/data/cir/workbench/docs/reviews/20261113-final-acceptance/raw/parity-coverage/probe_sprc.py",
+  "exit": 0,
+  "stdout": "{\n \"model_id\": \"sprc\",\n \"python_env_var\": \"WORKBENCH_SPRC_PYTHON\",\n \"resolver_returned\": null,\n \"interpreter_exists\": false,\n \"preflight_blockers\": [\n  \"canonical dataset link resolves to /home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/prepared/sprc/fashionIQ_dataset, expected /home/heheboiz/data/cir/data/FashionIQ\",\n  \"external runtime asset provenance unresolved: LAVIS BLIP-2 pretrain weights\",\n  \"command not runnable: COMMAND_BLOCKED_MODEL_MAPPING\",\n  \"execution environment not verified: WORKBENCH_SPRC_PYTHON=None [UNCONFIGURED/UNCONFIGURED] (WORKBENCH_SPRC_PYTHON not set)\"\n ],\n \"adapter_module\": null,\n \"adapter_module_exists\": false,\n \"checkpoints\": [\n  {\n   \"checkpoint_id\": \"sprc_fiq_unresolved\",\n   \"path\": \"/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/../../checkpoints/sprc/sprc_fiq.pt\",\n   \"downloaded\": false,\n   \"mapping_verified\": false\n  },\n  {\n   \"checkpoint_id\": \"sprc_fiq_vitl\",\n   \"path\": \"/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/../../checkpoints/sprc/sprc_fiq_vitl.pt\",\n   \"downloaded\": true,\n   \"mapping_verified\": true\n  }\n ]\n}\n",
+  "stderr": ""
+ },
+ {
+  "blocker": "DEFERRED_FROM_WEB (pair)",
+  "models": [
+   "pair"
+  ],
+  "asset_missing": "a published source class for the released pickle",
+  "command": "/home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python -c import json,sys; sys.path.insert(0,'/home/heheboiz/data/cir'); from workbench.backend.registry import load_registry, web_deferred_models; reg=load_registry(); print(json.dumps(web_deferred_models(reg), indent=1))",
+  "exit": 0,
+  "stdout": "{\n \"pair\": \"Ch\\u01b0a c\\u00f3 mapping checkpoint ch\\u00ednh th\\u1ee9c: pickle \\u0111\\u01b0\\u1ee3c t\\u1ea1o b\\u1edfi c\\u00e1c class m\\u00e0 repo \\u0111\\u00e3 pin kh\\u00f4ng c\\u00f3 (BLOCKED_CHECKPOINT_MAPPING_UNVERIFIED), n\\u00ean ch\\u01b0a th\\u1ec3 c\\u00f4ng b\\u1ed1 l\\u00e0 t\\u00e1i l\\u1eadp PAIR.\"\n}\n",
+  "stderr": ""
+ }
+]

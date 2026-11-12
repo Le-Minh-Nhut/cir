@@ -1,0 +1,9 @@
+P1 chunked, only 100 of 4146 emitted (no head guarantee)         -> PARITY_PASS                      compared/total=100/4146 cov=chunked
+P2 chunked, indices 3000..3099 only (no head, no gap check)      -> PARITY_PASS                      compared/total=100/4146 cov=chunked
+P3 chunked, head has a 144-index hole (no completeness check)    -> PARITY_PASS                      compared/total=368/4146 cov=chunked
+P4 chunked, worst_normalized=5.0 recorded, mismatch_count=0      -> PARITY_PASS                      compared/total=512/4146 cov=chunked
+P5 all three sha256 replaced by 'aaaa…' (digests never verified) -> PARITY_PASS                      compared/total=512/4146 cov=chunked
+P6 shape rewritten to [6,691] (only the product is checked)      -> PARITY_PASS                      compared/total=512/4146 cov=chunked
+P7 duplicate index (control: refused)                            -> PARITY_EVIDENCE_MALFORMED        compared/total=-/- cov=-
+P8 NaN component (control: refused)                              -> PARITY_EVIDENCE_MALFORMED        compared/total=-/- cov=-
+P9 components_total+shape shrunk to 512 while 4146 measured      -> PARITY_EVIDENCE_MALFORMED        compared/total=-/- cov=-

@@ -1,0 +1,33 @@
+(i) writer `limn_hits.build('dress')` — the flag it would write:
+   native hits : {'r1': 375, 'r10': 1032, 'r50': 1498} queries 2017
+   adapter hits: {'r1': 375, 'r10': 1032, 'r50': 1498} queries 2017
+   equality    : {'r1': True, 'r10': True, 'r50': True} -> flag all(equality) = True
+   WRITER derives the flag from the counts: parity_gate is not involved.
+
+B2a flag=true WITH a detail block saying native 375 / adapter 376, equality r1=False
+   status          : PARITY_PASS
+   passed          : True
+   metrics_parity  : True
+   metrics checks  : [('dress.metrics.hit_count_equality', True, True)]
+   detail block read by the gate?  False
+
+B2b flag=true, NO detail block at all (a bare assertion)
+   status          : PARITY_PASS
+   passed          : True
+   metrics_parity  : True
+   metrics checks  : [('dress.metrics.hit_count_equality', True, True)]
+   detail block read by the gate?  False
+
+B2c flag=false (control: the reader does react to the boolean)
+   status          : PARITY_MANDATORY_SUBCHECK_FAILED
+   passed          : False
+   metrics_parity  : False
+   metrics checks  : [('dress.metrics.hit_count_equality', False, False)]
+   detail block read by the gate?  False
+
+B2d flag absent (LIMN before limn_hits: absence is INCOMPLETE, not a pass)
+   status          : PARITY_INCOMPLETE
+   passed          : False
+   metrics_parity  : <dimension absent>
+   metrics checks  : []
+   detail block read by the gate?  False
