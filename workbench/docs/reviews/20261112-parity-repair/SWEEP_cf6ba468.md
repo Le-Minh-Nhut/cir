@@ -1,8 +1,11 @@
-# Sweep at `cf6ba468`: 20 failed / 3159 passed / 47 skipped — pin NOT yet advanced
+# Sweep at `cf6ba468`: 20 failed / 3159 passed / 47 skipped — pin advanced to this revision
 
 Third stationary sweep of the `20261112` parity-repair campaign, run on a tree that had stopped
-receiving writes from every lane. It is the sweep that justifies the next pin advance; the advance
-itself is a separate step and **has not been made**.
+receiving writes from every lane. It is the sweep that justified the pin advance, and that advance
+**was made** by `58175d3` (`release: advance TESTED_SOURCE_SHA to cf6ba468 after a stationary
+sweep`): `TESTED_SOURCE_SHA` is now `cf6ba468` in both release documents, and the release guard
+went from `1 failed, 7 passed` (before the advance, measured while the pin still named
+`aea143bd`) to **`8 passed, 0 failed`** (after).
 
 **Verdict: the sweep is valid.** Zero collection errors, zero `Errno 28`, accounting exact at 3226.
 The failure set is the **identical 20 ids** of `107-sweep-aea143bd.md` — no new failure, none gone.
@@ -114,7 +117,9 @@ workbench/frontend/gate.ts       |  11 ++
 ```
 
 Against `aea143bd`, production only (`workbench/docs` and `workbench/tests` excluded, as the release
-guard does). The pin advance that follows must name `cf6ba468`, whose tree these numbers describe.
+guard does). The pin advance named `cf6ba468`, whose tree these numbers describe; it was committed
+as `58175d3`, so `git diff --stat cf6ba468 HEAD -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'`
+is now empty and these numbers are readable from the pin itself.
 
 ## 5. Safety
 
