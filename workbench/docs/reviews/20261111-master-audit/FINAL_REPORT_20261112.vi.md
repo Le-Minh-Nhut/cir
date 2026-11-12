@@ -120,8 +120,10 @@ NVIDIA GeForce RTX 5070 Ti, 580.173.02, 2055 MiB, 16303 MiB
 ```
 
 Đây là **profile mới** (`--conditions … clvc_image_encoder_only`, `raw/verify/103-image-only-plumbing.md`
-§8) và **chưa có summary**: `workbench/artifacts/composition/summary/` không có thư mục nào mới hơn
-`05:16`, nên **không con số nào của lần chạy này tồn tại để trích** — xem §4.4.
+§8). Tại **thời điểm chụp `08:46`** nó chưa có summary, nên khối này đúng như một bản chụp có mốc thời
+gian. **Nó đã xong sau đó** — summary `…da0a2162be0e159a1a456cec/full.json` (17 956 B, mtime
+`09:15:18.964 +0700`) — và số của nó ở **§4.4b**, nguồn chuẩn `raw/verify/104-clvc-full-image-only.md`.
+Cả hai PID trên đã thoát.
 
 ---
 
@@ -370,7 +372,7 @@ job command ran? False
 
 Cờ này không tự xoá; xác nhận thiết bị trống là việc của operator (`nvidia-smi`), sau đó restart.
 
-### 2.4 Env-cache: backend **không** bị cũ (đã đo), nhưng `/api/models` thì có
+### 2.4 Env-cache: backend **không** bị cũ (đã đo), và `/api/models` **đã vá** (trước đó thì có)
 
 `raw/verify/94-backend-env-cache-restart.md` §Verdict: cơ chế có thật nhưng **hậu quả không xảy ra**,
 và **không restart** (restart trên tiền đề sai sẽ là gián đoạn không cần thiết cho unit đang chạy).
@@ -593,9 +595,13 @@ với lý do **đã khai báo** (`image_only_empty_text` là ablation `ABLATION_
 nhập nhằng annotation như bản release gốc giao), nên `composition_gap_ndcg` của CLVC là `null` —
 `raw/verify/98-tgcir-full-run.md` §1-§3.
 
-Một run CLVC **mới hơn** dưới profile mới (`--conditions
-multimodal,text_only_black_image,clvc_image_encoder_only`) **đang chạy** tại thời điểm giao báo cáo và
-**chưa có số**: báo cáo này **không** được trích bất kỳ con số nào của nó (§0.1, §4.4).
+Một run CLVC **mới hơn** dưới profile khai báo (`--conditions
+multimodal,text_only_black_image,clvc_image_encoder_only`) **đã xong** và **đã có số**:
+`da0a2162be0e159a1a456cec`, `PARTIAL`, 6001/6003 chấm được, gap ba điều kiện
+**`0.33061712371309204`** — gap đầu tiên của CLVC tính được (§4.4b,
+`raw/verify/104-clvc-full-image-only.md`). Nhưng điều kiện ảnh của nó là
+`clvc_image_encoder_only`, **không phải** `image_only_empty_text` của protocol, nên đây là gap **biến
+thể** — và **không** được đặt chung cột với `0.43853620852911723` của TG-CIR (§4.2, §4.4b).
 
 ### 4.1 TG-CIR: smoke 5 query **và** một Full run `COMPLETED` 6003 query
 
@@ -716,6 +722,22 @@ Runner **hỏi** adapter chứ không chạy mọi điều kiện: `active_condi
 cũng lọc theo cùng cách (`export_conditions`, `runner.py:1835-1837`) nên điều kiện không hỗ trợ không
 bị tính là thiếu export (`raw/verify/90a-…md` §1).
 
+**`ABLATION_UNSUPPORTED` vẫn đúng nguyên văn cho `image_only_empty_text` — run mới không đổi điều đó.**
+`TextLSTMModel.forward` vẫn tokenise về 0 token rồi index `x[0][0]` (`text_model.py:84-86`), và không
+có gì trong công việc này chạm vào text tower của CLVC (`raw/verify/104-clvc-full-image-only.md`
+"Còn chặn" mục 5).
+
+**Nhưng vai "ảnh" trong run mới không phải điều kiện đó.** Nó được điền bởi một điều kiện **có tên
+riêng**, `clvc_image_encoder_only`, khai báo qua `ABLATION_CONDITIONS` (không đụng `CONDITIONS`):
+hàng query lấy **nguyên biểu thức target row** của upstream, `test.py:116`
+(`cat(normalize(local.extract_img_feature(img)[1]), normalize(global.extract_img_feature(img)[1]))`),
+**không có text tower nào được gọi** — đo bằng cách patch `compose_img_text` ném lỗi ở cả hai nửa mà
+vẫn trả `(2, 2048)`, và hai caption khác nhau cho tensor **giống hệt** (`raw/verify/99-…md` §6.2, §6.3:
+tolerance khai trước `1e-6`, đo được `6.705522537231445e-08`). Vì vậy nó là một **thứ khác** với điều
+kiện protocol bị khai không hỗ trợ, và **cấm** viết thành "CLVC giờ làm được image-only": câu đúng là
+"CLVC có một ablation ảnh **có tên**, không phải điều kiện `image_only_empty_text` của protocol". Hai
+điều kiện này không thay thế nhau trong bất kỳ bảng nào, và gap của chúng không được đặt chung cột.
+
 ### 4.3 CLVC-Net: 119/6003 (1.98 %) query không chấm được — giữ có chủ ý, và đã tách được 117 + 2
 
 `raw/verify/90-circus-composition-runs.md` §4.1: **119 trên 6003 query (1.98 %)** không được chấm vì
@@ -747,8 +769,22 @@ nằm ở cả hai split, nên stem một mình sẽ chọn im lặng cho 26 que
 (cùng mục). Resolver được **tái dùng nguyên văn** từ `model_limn.py` (0 dòng sửa) nên hai model vẫn phủ
 cùng một tập query.
 
-Hệ quả cho một run **mới**: `unscored_count` 119 → **2** mỗi điều kiện, coverage `0.98018` → `0.99967`,
-`missing_query_count` 238 → **4** — **kỳ vọng, chưa đo**; run đang chạy là lần đầu kiểm nó (§4.4).
+**Đã đo — không còn là kỳ vọng.** Run mới `da0a2162be0e159a1a456cec` (§4.4b) cho đúng hệ quả này,
+và đọc từ artifact chứ không từ dự đoán (`raw/verify/104-clvc-full-image-only.md` §3, §4, §7):
+
+| đại lượng | run cũ `eab10106…-retry-2` | run mới `da0a2162…` |
+|---|---|---|
+| `adapter_query_scope_resolution.still_unscoped` | 119 | **2** (`unscoped_qids ["7:3038","7:3790"]`) |
+| `adapter_query_scope_resolution.adapter_routed` | — (resolver chưa có) | **6001** |
+| `unscored_count` mỗi điều kiện | 119 | **2** |
+| `scored_count` mỗi điều kiện | 5884 | **6001** |
+| `coverage` | `0.980176578377478` | **`0.9996668332500417`** |
+| `topk_export.missing_query_count` | 238 (119 × 2 điều kiện) | **6** (2 × **3** điều kiện) |
+
+Tức 117 query **thật sự được chấm**, không chỉ được đếm: mọi metric của mọi điều kiện **đều đổi**
+(R@10 multimodal `7.256968048946295` → `7.198800199966672`; text-only `1.3936097892590076` →
+`1.3997667055490752`), và `scored_count` là 6001 ở cả ba (`104` §9). Một metric giữ nguyên bit-for-bit
+sẽ là dấu hiệu các hàng đó vẫn bị ghi `null` — không có chuyện đó.
 
 **Rò rỉ modality — phán quyết (a), kèm điều kiện phải nói ra.** Đầu vào routing là **stem** của ảnh
 reference (một product id FashionIQ) đối chiếu với `cap.*.val.json` / `split.*.val.json` của tác giả: đó
@@ -760,14 +796,36 @@ reference"; (a) cho phép nhãn, nó không làm câu đó đúng. Điều này 
 (`IMAGE_ENCODER_ONLY_LEAKS_SCOPE`) và chặn bằng chữ ký `Adapter.query_scope(self, query,
 candidate_names)` — không có `condition`, không gallery, không score (cùng mục).
 
-Nó **khớp chính xác với LIMN**: run LIMN `10173dc4` báo cùng hình dạng — `ambiguous_count: 119`,
-`category_scope_failures: {multimodal: 119, text_only_black_image: 119, image_only_empty_text: 119}`,
-`PARTIAL` — vì `model_limn.py` cố ý từ chối với `unresolved:annotation_names_two_categories`
-(`raw/verify/90-…md` §4.1). Giải chúng bằng suy luận riêng cho CLVC sẽ làm hai model phủ hai tập query
-khác nhau và phá tính so sánh chéo, nên **không làm**; `PARTIAL` là trạng thái đúng cho **run đã
-công bố**.
+**So với LIMN — nay nói chính xác, không suy diễn.** Run LIMN `10173dc45dea8c90fd2a284b` báo cùng
+hình dạng ở mức summary: `ambiguous_count: 119`, `category_scope_failures: {multimodal: 119,
+text_only_black_image: 119, image_only_empty_text: 119}`, `PARTIAL`, `execution_status PARTIAL` trên
+6003 query (`raw/verify/90-…md` §4.1; đọc lại summary hôm nay).
 
-### 4.4 CLVC Full: hai lần chạy đã hoàn tất (`-retry-2` là bản có hiệu lực), không còn run nào đang chạy trong họ `eab10106`
+Nhưng **rank artifact** của LIMN trả lời câu hỏi cụ thể hơn, và câu trả lời là **LIMN cũng để hai qid
+đó unscored**. Đọc trực tiếp
+`workbench/artifacts/composition/runs/10173dc45dea8c90fd2a284b/ranks/limn_base_iter0_all_categories.json`:
+cả ba điều kiện có **5884 non-null / 119 null** trên 6003, và bốn qid được tra đều **`null` ở cả ba
+điều kiện** — không chỉ `7:3038`/`7:3790` mà **cả** `7:2179` và `7:4066`, tức LIMN **chưa** có resolver
+nên vẫn bỏ toàn bộ 119:
+
+| qid | LIMN `multimodal` | LIMN `text_only_black_image` | LIMN `image_only_empty_text` |
+|---|---|---|---|
+| `7:3038` | **`null`** | **`null`** | **`null`** |
+| `7:3790` | **`null`** | **`null`** | **`null`** |
+| `7:2179` | **`null`** | **`null`** | **`null`** |
+| `7:4066` | **`null`** | **`null`** | **`null`** |
+
+Hệ quả chính xác cho tính so sánh chéo, nói đúng mức: CLVC mới và LIMN **trùng nhau ở đúng 2 query**
+(`7:3038`, `7:3790` — cả hai đều unscored) và **khác nhau ở 117 query** còn lại, nơi CLVC mới **có**
+hạng còn LIMN **không**. Vậy hai model **không còn** phủ cùng một tập query: cohort chung là **5884**
+(nếu giao theo qid có hạng ở cả hai) chứ không phải 6001. Đây là hệ quả của một quyết định có chủ ý —
+resolver được **tái dùng nguyên văn** từ `model_limn.py` (0 dòng sửa) nhưng **chỉ CLVC gọi nó** trong
+một run — nên muốn so sánh chéo trên 6001 query thì LIMN phải chạy lại qua cùng resolver; báo cáo này
+**không** làm việc đó và **không** ghi đè số LIMN. `PARTIAL` vẫn là trạng thái đúng cho cả hai run.
+
+### 4.4 CLVC Full: hai run dưới **hai profile khác nhau** — `4.4a` run cũ (protocol triple), `4.4b` run mới (có gap ba điều kiện)
+
+#### 4.4a Run cũ `eab10106b2df8e97fb7a5ce5` (`-retry-2`) — protocol triple, `image_only_empty_text` là ablation
 
 Run Full đã hoàn tất trước đó: `eab10106b2df8e97fb7a5ce5`, `execution_status` **`PARTIAL`**, wall
 **4489 s (1 h 14 m 56 s)**, 223 143 gallery forward + 12 006 query forward, batch 32, peak VRAM
@@ -825,28 +883,82 @@ R@1 của CLVC Full cũng **có**, ở file suy ra chứ không ở `full.json`:
 (`raw/verify/101-metrics-r1-and-fallback.md` §3b; phục vụ sống với
 `derived_metrics.recall_at_1.status = "VERIFIED"`, `raw/verify/100-api-cache-and-ui-blocked.md` §5).
 
-**Một run CLVC mới hơn đang chạy, và nó KHÔNG có số nào ở đây.** Tại thời điểm giao báo cáo
-(2026-11-12T08:46+07) `pgrep` thấy PID `1477261` (wrapper `1477254`) chạy
-`composition_eval.py --models clvc_net --subsets full --topk-depth 100 --conditions
-multimodal,text_only_black_image,clvc_image_encoder_only` (§0.1) — **profile mới**, có
-`--conditions` (`raw/verify/103-image-only-plumbing.md` §8). Nó **chưa** ghi summary: không thư mục nào
-trong `workbench/artifacts/composition/summary/` mới hơn `05:16`, nên **không** con số nào của lần chạy
-này tồn tại. Kỳ vọng đã công bố trước để kiểm chứ không để tin (`raw/verify/103-…md` §8.5):
-`unscored_count` **2** mỗi điều kiện, coverage `6001/6003 = 0.99967`, `condition_status.
-clvc_image_encoder_only == COMPLETED`, `metrics.gap_conditions` = ba tên mới, `gap_role_reason` khác
-`null`, `composition_gap_ndcg` **khác** `null`, `topk_export.missing_query_count` **4** (nếu điều kiện
-thứ ba cũng export) hoặc **6** (nếu cả ba cùng export) — và **4 kèm `topk_export.conditions` chỉ hai
-phần tử** là một phát hiện, không phải pass. Báo cáo này **không** được trích bất kỳ con số nào của nó
-cho tới khi summary tồn tại.
+#### 4.4b Run mới `da0a2162be0e159a1a456cec` — profile khai báo, gap ba điều kiện **tính được lần đầu**
 
-Cơ chế đã sẵn cho run đó, và đây là phần **đã vá**: `gap_conditions` / `gap_role_reason` được ghi theo
-**vai**, không theo vị trí (`runner.resolve_gap_conditions`, `raw/verify/103-…md` §4); ba run khác nhau
-chỉ ở danh sách điều kiện cho ba `run_id` khác nhau (`62e362bf911fb5f97c6e497b` /
-`8ef7596c0e1fd42a1910e766` / `e877a310f9e70ea9d6df29af`, cùng file §6), nên một gap biến thể **không
-thể** bị đọc nhầm thành gap protocol ở mức artifact.
+Run đang bay lúc §0.1 được chụp **đã xong** và **đã ghi summary**. Nguồn chuẩn:
+`raw/verify/104-clvc-full-image-only.md`.
 
-**Không còn `composition_eval.py` nào thuộc họ `eab10106` đang chạy**, và `pgrep` lúc giao báo cáo chỉ
-trả hai PID của run profile mới nói trên.
+Summary: `workbench/artifacts/composition/summary/clvc_net_author_drive_unresolved_da0a2162be0e159a1a456cec/full.json`
+(**17 956 B**, mtime `2026-11-12 09:15:18.964 +0700`); ranks
+`runs/da0a2162be0e159a1a456cec/ranks/clvc_net_author_drive_unresolved.json` (388.4 KB). Đọc lại nguyên
+các trường dưới đây tại HEAD `d0e0eb7` + commit báo cáo này.
+
+| trường | giá trị |
+|---|---|
+| `execution_status` | **`PARTIAL`** |
+| `query_count` | **6003** (`full` 6003, `sf` 4069, `validated` 586) |
+| `smoke` | `{"label": null, "limited": false, "query_limit": null}` — Full thật |
+| `conditions` | `["multimodal", "text_only_black_image", "clvc_image_encoder_only"]` |
+| `image_only_empty_text` | **VẮNG** khỏi `conditions` **và** `condition_status` — **không phải** `ABLATION_UNSUPPORTED`, mà là **không được yêu cầu** |
+| `condition_status` | cả ba điều kiện `PARTIAL`, `unscored_count` **2**, `category_scope_failure_count` 2, `fallback_used: false` |
+| `feature_batch_fallback` | `partition: canonical_call_window`, `fallback_qids: []`, `runner_batch_size` **32**, `adapter_batch_size` **32**, `call_window` **4096**, `adapter_calls` 3 |
+| `adapter_query_scope_resolution` | `loader_scoped` **5884**, `adapter_routed` **6001**, `still_unscoped` **2**, `unscoped_qids` `["7:3038","7:3790"]` |
+| wall time | **2068.4 s (34 min 28 s)** — `08:40:50.565` → `09:15:18.964` |
+| ảnh đã encode | 92 390 (74 381 gallery + 3 × 6003 query) → **0.02239 s/ảnh**, 44.67 ảnh/s |
+| GPU | 22 mẫu `nvidia-smi`: util **min 8 % / max 99 % / mean 90.7 %** (20/22 mẫu ở 96-99 %), `memory.used` **1701 MiB** (hằng số — **không** phải peak toàn run), power **116.55-217.35 W**, mean **205.7 W** |
+| `topk_export` | `TOPK_EXPORT_COMPLETE_PARTIAL`, depth **100**, **ba** điều kiện, `missing_query_count` **6** (= 2 × 3 manifest), `partial: true` |
+
+Metric theo điều kiện, **6001/6003 chấm được**, coverage **`0.9996668332500417`** (đọc từ
+`metrics.<role>`, với `metrics.image_only.condition == "clvc_image_encoder_only"`):
+
+| condition | R@1 | R@10 | R@50 | mrr | ndcg_full |
+|---|---|---|---|---|---|
+| `multimodal` | 1.3997667055490752 | 7.198800199966672 | 18.180303282786202 | 0.03564730414020548 | 0.14921544731411218 |
+| `text_only_black_image` | 0.11664722546242293 | 1.3997667055490752 | 4.49925012497917 | 0.006595896893970061 | 0.09988226530955799 |
+| `clvc_image_encoder_only` | 0.11664722546242293 | 1.1998000333277787 | 2.9495084152641224 | 0.005437399476599689 | 0.08644584977266369 |
+
+**Đây là lần đầu gap ba điều kiện của CLVC tính được.** `composition_gap_ndcg`
+**`0.33061712371309204`**, `gap_cohort_count` **6001**, `mrr_gap` `0.029051407246235415`,
+`gap_unavailable_reason` **`null`**; `gap_conditions` =
+`["multimodal","text_only_black_image","clvc_image_encoder_only"]` và `gap_role_reason` khác `null`:
+"image role filled by the adapter's named ablation 'clvc_image_encoder_only': the protocol image
+condition 'image_only_empty_text' carries no ranks in this run". Công thức tự kiểm:
+`1 - max(0.09988226530955799, 0.08644584977266369) / 0.14921544731411218` =
+`0.33061712371309204`, khớp **chính xác** (`104` §5). `shortcut_outcomes`:
+`{"both": 1, "composition_required": 382, "image_only": 71, "neither_scored": 2, "text_only": 83,
+"unresolved": 5464}`.
+
+**Run này KHÔNG thay số của run cũ, và không được gộp với nó.** Nó thay **coverage**: 5884 → **6001**
+chấm được, `still_unscoped` 119 → **2**, `missing_query_count` 238 → **6**. Số của
+`eab10106…-retry-2` (§4.4a) vẫn là số của **run đó**, trên **cohort 5884** — không viết lại, không
+trộn. Và **gap `0.3306` không phải gap protocol**: điều kiện ảnh ở đây là `clvc_image_encoder_only`
+(**thay thế**, ghi theo tên), không phải `image_only_empty_text`; nên **không** được đặt chung cột với
+gap `0.4385` của TG-CIR (`104` "Còn chặn" mục 4).
+
+**Ba giới hạn trung thực của run này, ghi nguyên từ `104`:**
+
+1. **Lệnh như văn bản không chạy được; controller phải là `ctl312h`.** Gọi
+   `clvc39-la/bin/python … composition_eval.py` bị từ chối trong **20 s, trước mọi encode**:
+   `"environment gate would refuse the run [BLOCKED/UNSAFE_INTERPRETER]: cannot use active workbench
+   environment"`, `"status": "SELECTED_BUT_BLOCKED"` — cổng `check_environment_isolation`
+   (`workbench/backend/runtime.py:257`) không cho dùng chính venv của model làm môi trường điều phối.
+   Đo trực tiếp: `clvc39-la` → `(False, 'cannot use active workbench environment')`;
+   `ctl312h` → `(True, 'ISOLATION_VERIFIED')`. Run này (và **cả hai** run Full trước) dùng `ctl312h`
+   làm controller, model vẫn chạy trên `clvc39-la` (`verification_status: GPU_RUNTIME_READY`). Cổng
+   **không** bị sửa; đây là báo cáo, không phải workaround (`104` §0.1, "Còn chặn" mục 1).
+2. **`backfill_recall_at_1.py` từ chối backfill run này — và điều đó được ghi lại, không giấu.**
+   `METRIC_BLOCKS` chỉ map ba tên protocol, nên `clvc_image_encoder_only` rơi vào chính nó, không thấy
+   `metrics["clvc_image_encoder_only"]` (khối thật là `metrics["image_only"]`), so với `None` rồi từ
+   chối: `clvc_image_encoder_only.scored_count: recomputed 6001 vs published None` (và ba trường nữa),
+   exit 1, **không** ghi file `derived/`. Không cần backfill cho run này: **R@1 đã có sẵn trong
+   `full.json`** (`104` §6.1, "Còn chặn" mục 3). Script **không** đọc `gap_conditions`, nên câu hỏi
+   "có nhận gap_conditions phi protocol không" trả lời **có**; chỗ chặn thật là map tên điều kiện.
+3. **VRAM 1701 MiB là cửa sổ lấy mẫu, không phải peak.** 22 mẫu trong pha encode/query; một đỉnh
+   thoáng qua ngoài cửa sổ sẽ không xuất hiện — con số này là **sàn** cho pha đó (`104` "Còn chặn"
+   mục 7).
+
+**Không còn `composition_eval.py` nào đang chạy** sau run này: wrapper `1477254` và controller
+`1477261` đều đã thoát khi run hoàn tất (`104` §0.2).
 
 ---
 
@@ -910,7 +1022,8 @@ commit sau. Mỗi mục dưới đây mang file bằng chứng; chỗ chưa đo 
    từ `model_limn.py` (0 dòng sửa) và 15 test mới khoá hành vi; seam của runner cho
    `routed 6001 / unscoped 2`, scope digest đổi từ `8a5dd517…` sang `3a1c5a67…` nên lần chạy lại mint
    run id mới thay vì tái dùng ranks all-null (`raw/verify/99-clvc-scope-and-image-only.md` §2, §3, §5).
-   Đo **hệ quả metric** của việc này: **chưa đo** — đó là run đang chạy (§4.4).
+   Hệ quả metric của việc này **đã đo** trên run mới: coverage `0.980176578377478` →
+   **`0.9996668332500417`**, và mọi metric đều đổi (§4.3, §4.4b).
 
 ### 5.2 CÒN (11 mục) — mỗi mục nêu đúng thứ còn thiếu
 
@@ -972,11 +1085,18 @@ commit sau. Mỗi mục dưới đây mang file bằng chứng; chỗ chưa đo 
     (`workbench/backend/storage.py:339-342`). Hệ quả: một export chỉ có `run_id` **không tự nói** nó là
     composition hay index, và reference chỉ còn trong provenance của cohort. Ghi nhận, **chưa vá** —
     sửa cần một quyết định về hợp đồng cột (thêm cột cho cả hai nhánh, hay tách schema).
-11. **Peak VRAM của CLVC Full (run CŨ) chưa đo** — run `-retry-2` đã bay trước cửa sổ lấy mẫu nên
-    **không** có mẫu `nvidia-smi` nào; `2897 MiB` thuộc lần chạy `eab10106…` **trước đó** và không được
-    chuyển sang. Chỉ TG-CIR có bằng chứng GPU (22 mẫu, util 97-100 %, 2172 MiB, 235.02-260.04 W)
-    (`raw/verify/98-tgcir-full-run.md` §1, §5; §4.4 trên). Peak VRAM của run **đang chạy** cũng
-    **chưa đo** tại thời điểm giao báo cáo.
+11. **Peak VRAM của CLVC Full (run CŨ) chưa đo — và run MỚI thì có mẫu, nhưng không phải peak.**
+    Hai câu riêng, không được trộn:
+    * **Run cũ `eab10106…-retry-2`: `chưa đo`.** Không có mẫu `nvidia-smi` nào được lấy trong lúc nó
+      chạy; `2897 MiB` thuộc lần chạy `eab10106…` **trước đó** và **không** được chuyển sang
+      (`raw/verify/98-tgcir-full-run.md` §1, §5).
+    * **Run mới `da0a2162…`: CÓ mẫu — 22 mẫu, `memory.used` `1701 MiB` hằng số, util mean 90.7 % (20/22
+      mẫu ≥ 96 %), power mean 205.7 W.** Nhưng đó là **cửa sổ lấy mẫu**, không phải peak toàn run: một
+      đỉnh thoáng qua ngoài cửa sổ sẽ không xuất hiện, nên **1701 MiB là sàn** cho pha đó
+      (`raw/verify/104-clvc-full-image-only.md` §0.3, "Còn chặn" mục 7). **Không** con số nào ở đây
+      được gán cho run cũ.
+    * TG-CIR vẫn là run duy nhất có mẫu GPU **toàn run** đọc được: 22 mẫu, util 97-100 %, 2172 MiB,
+      235.02-260.04 W (`raw/verify/98-…md` §2).
 
 ### 5.3 Hai ghi chú còn mở, giữ nguyên nhưng nay có thêm dữ kiện
 
@@ -1009,6 +1129,7 @@ commit sau. Mỗi mục dưới đây mang file bằng chứng; chỗ chưa đo 
 | `raw/verify/101-metrics-r1-and-fallback.md` | R@1: định nghĩa + cùng mẫu số với R@10/50 (§1), 7 test biên (§2), backfill 3 guard + số suy ra (tgcir 6.3135099117108116 / 1.949025487256372 / 0.08329168748958854; clvc 1.4106050305914344 / 0.10197144799456152 / `null`) (§3), 136/136 digest artifact **không đổi** (§7); partition encode + cache key (§5, §6) |
 | `raw/verify/102-queue-gpu-and-blocker-inventory.md` | **21 blocker** inventoried: 4 nhãn cũ nay SAI (§7.1) + 17 còn mở (§7.2), mỗi dòng nêu đúng thứ thiếu; `gpu_may_be_held` **GIỮ** với chứng minh hai đường (§1, §2) và giới hạn release là thủ tục (§4); backoff PASS (§5); 4 test queue thật (§6) |
 | `raw/verify/103-image-only-plumbing.md` | `clvc_image_encoder_only` được khai báo (`ABLATION_CONDITIONS`, không đụng `CONDITIONS`) và có đường qua runner/metrics (§1-§3); gap triple giải theo **vai** + `gap_conditions`/`gap_role_reason` (§4); ba `run_id` khác nhau theo danh sách điều kiện (§6); `--conditions` CLI + `_plan` theo danh sách thật (§8.1, §8.2); kỳ vọng của run mới (§8.5) |
+| `raw/verify/104-clvc-full-image-only.md` | **run CLVC mới** `da0a2162be0e159a1a456cec`: `PARTIAL`, 6003 q, ba điều kiện `mm`/`text`/`clvc_image_encoder_only` (§1, §2); `unscored_count 2` mỗi điều kiện, resolver `6001 routed / 2 unscoped` (§3, §4); gap **`0.33061712371309204`** trên 6001, tự kiểm tới 0 khớp (§5); R@1/10/50 + tự tính lại từ ranks (§6); backfill **từ chối** run này vì `METRIC_BLOCKS` (§6.1); `missing_query_count 6` = 2 × 3 manifest (§7); `partition: canonical_call_window`, batch 32 (§8); before/after với `eab10106` (§9); `7:2179` = 1580/4549/2100, `7:4066` = 59/287/6054, `7:3038` null cả ba (§10); API 200/22 514 B (§11); controller phải là `ctl312h` (§0.1)
 | `raw/verify/90a-condition-degradation-fix.md` | `ABLATION_UNSUPPORTED` cho `image_only_empty_text` của CLVC (`text_model.py:84-86`); vị từ dùng chung `mode_supported`/`per_mode`; runner hỏi adapter (`runner.py:1920-1925`); sửa `Corrections.correct` cho text rỗng của TG-CIR |
 | `raw/verify/91-browser-smoke-after-cutover.md` | bundle phục vụ `assets/index-DYYSN7oG.js` (sha256 `74e4b4f8…`) sau cutover; deep link, run picker 20 option, query `7:1242`, Top-K 10 vs 50 ở 2560×1440 |
 | `raw/verify/94-backend-env-cache-restart.md` | `file_settings()` lazy nên backend **không** cũ (đo (c) vs (d)); counterfactual stale; **không** restart; MainPID **lúc đó** `1221379` (nay `1476678`, §0.1); quy tắc `models.yaml` sửa-được vs `workbench.env` phải restart |
@@ -1029,7 +1150,7 @@ commit sau. Mỗi mục dưới đây mang file bằng chứng; chỗ chưa đo 
 | 1 | Phục hồi dịch vụ web | **ĐẠT MỘT PHẦN** | Cutover thật và phục hồi sau SIGKILL thật đã đo (≈2.28 s), nhưng ca `systemctl stop` trên unit thật và worst-case `TimeoutStopSec` chưa đo. |
 | 2 | Dọn tiến trình con | **ĐẠT MỘT PHẦN** | Backoff, crash-loop, `jobs.py` recovery, `_MODELS_CACHE`, `query_count`, `subset_provenance`, R@1, partition encode và cohort round-trip **đã vá và đo** (§5.1), nhưng guard `gpu_may_be_held` vẫn **từ chối** dispatch và đường release của nó là **thủ tục**, không phải kiểm chứng thiết bị (§5.2 mục 9). |
 | 3 | Đối chiếu với upstream | **ĐẠT MỘT PHẦN** | Parity ở mức **mẫu 5 query / 20 ảnh** đạt trên mọi trường (rows `0.0`, hạng giống hệt), nhưng **chứng minh parity quy mô Full không tồn tại**, và con số composition Full `23.3383` **không phải** parity proof (native macro 49.7208 là protocol khác). |
-| 4 | Kết quả composition trên Full | **ĐẠT MỘT PHẦN** | Cả hai run Full đều tồn tại: TG-CIR `7b1fa85007bffdab931f7f19` **`COMPLETED`** trên 6003 query với gap ba điều kiện `0.43853620852911723`; CLVC `eab10106…-retry-2` là **`PARTIAL`** có lý do đã khai báo (`image_only_empty_text` là `ABLATION_UNSUPPORTED`, cộng 119 query nhập nhằng annotation), nên gap CLVC là `null`; R@1 của cả hai chỉ có ở file suy ra, không ở `full.json`; một run CLVC dưới profile mới **đang chạy và chưa có số** (§4.4). |
+| 4 | Kết quả composition trên Full | **ĐẠT MỘT PHẦN** | Cả hai model đều có run Full: TG-CIR `7b1fa85007bffdab931f7f19` **`COMPLETED`** trên 6003 query, gap ba điều kiện protocol `0.43853620852911723`; CLVC có **hai** run — `eab10106…-retry-2` (`PARTIAL`, `image_only_empty_text` là `ABLATION_UNSUPPORTED`, 119 query không chấm, gap `null`) và `da0a2162be0e159a1a456cec` (`PARTIAL`, 6001/6003 chấm được, gap **`0.33061712371309204`** tính được lần đầu) — nhưng gap đó chạy trên **profile biến thể đã khai báo**: vai ảnh do `clvc_image_encoder_only` điền, **không phải** `image_only_empty_text`, nên **điều kiện thứ ba của protocol vẫn chưa được đo cho CLVC** và `0.3306` **không** được đặt chung cột với `0.4385` của TG-CIR. |
 
 ---
 
@@ -1059,14 +1180,14 @@ Trạng thái đọc từ `workbench/artifacts/composition/summary/<dir>/full.js
 | `62e362bf911fb5f97c6e497b` | fixture | — | — | — | `run_id` của 2 điều kiện, chỉ để chứng minh danh sách điều kiện vào identity | `103` §6 |
 | `8ef7596c0e1fd42a1910e766` | fixture | — | — | — | `run_id` của protocol triple | `103` §6 |
 | `e877a310f9e70ea9d6df29af` | fixture | — | — | — | `run_id` khi thay điều kiện ảnh bằng `clvc_image_encoder_only` | `103` §6 |
-| `da0a2162be0e159a1a456cec` | `clvc_net` | **chưa có summary** | — | — | run **đang chạy** dưới profile mới (`--conditions … clvc_image_encoder_only`); thư mục `runs/` tồn tại, **không** con số nào được trích | §0.1; §4.4 |
+| `da0a2162be0e159a1a456cec` | `clvc_net` | **`PARTIAL`** | 6003 | `false` | **run CLVC dưới profile khai báo**: ba điều kiện `mm`/`text`/`clvc_image_encoder_only` (không có `image_only_empty_text`), 6001/6003 chấm được, gap `0.33061712371309204` trên 6001 — gap ba điều kiện **đầu tiên** của CLVC, **biến thể**, không phải gap protocol | `104` §1-§7; §4.4b |
 | `1366364` / `1366356` | — | — | — | — | **PID** (không phải run_id) của lần chạy `-retry-2`; đã thoát | `98` §1 |
-| `1477261` / `1477254` | — | — | — | — | **PID** của run profile mới đang chạy tại 08:46 | §0.1 |
+| `1477261` / `1477254` | — | — | — | — | **PID** của run profile mới (controller / wrapper), đã thoát khi run xong; run của chúng là `da0a2162…` | §0.1; `104` §0.2 |
 
 Ba `run_id` fixture (`62e362bf…`, `8ef7596c…`, `e877a310…`) là **CPU fixture**, không phải run GPU và
 không có metric công bố — chúng ở đây chỉ để chứng minh danh sách điều kiện được hash vào identity.
-`da0a2162be0e159a1a456cec` **không** có `summary/` (chỉ có `candidates/`, `work/` và lock của chính nó),
-tức nó chưa phải một run công bố được.
+`da0a2162be0e159a1a456cec` **đã** có `summary/` (17 956 B, mtime `09:15:18.964 +0700`) nên là một run
+công bố được; `eab10106…-retry-2` và nó là **hai** run khác nhau, khác `conditions` trong identity.
 
 ---
 
@@ -1099,6 +1220,11 @@ selection cần GPU hoặc lâu hơn ngân sách của lượt này).
 | Gap triple giải theo vai (§4.4) | `… -m pytest workbench/tests/test_runner_gap_identity.py workbench/tests/test_runner_gap_roles.py -q` | **đo lại:** `3 passed` + `11 passed` |
 | `TESTED_SOURCE_SHA` vẫn cũ và guard đỏ có chủ ý (§5.2 mục 6) | `git diff --stat 96d86010e85048d82f2dacf26e17d7b7206d31ab HEAD -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'` | 14 file, 1 805 insertions / 155 deletions (`102` §7.2 `SHA-PIN`) |
 | Export cohort thiếu cột `reference` (§5.2 mục 10) | `grep -n "would silently change the shape" -B3 -A1 workbench/backend/storage.py` · `grep -n "fieldnames" workbench/backend/main.py` · `grep -n "header = \"| Run" workbench/backend/main.py` | `storage.py:339-342`; `main.py:1530` (CSV lấy khoá từ `metrics[0]`) và `:1535` (header Markdown cố định, không có cột reference) |
+| Run mới CLVC có gap ba điều kiện (§4.4b, §7) | `python3 -c "import json;d=json.load(open('workbench/artifacts/composition/summary/clvc_net_author_drive_unresolved_da0a2162be0e159a1a456cec/full.json'));m=d['metrics'];print(d['execution_status'],d['query_count'],d['conditions'],m['composition_gap_ndcg'],m['gap_cohort_count'],m['gap_conditions'],m['image_only']['condition'])"` | **đo lại:** `PARTIAL 6003 ['multimodal', 'text_only_black_image', 'clvc_image_encoder_only'] 0.33061712371309204 6001 [ba tên như trên] clvc_image_encoder_only` |
+| Run mới phục vụ đúng qua API (§4.4b) | `curl -s -o /tmp/r104.json -w "%{http_code} %{size_download}\n" "http://127.0.0.1:8000/api/composition/runs/da0a2162be0e159a1a456cec?subset=full"` | **đo lại:** `200 22514` |
+| `7:2179` được chấm thật ở điều kiện ảnh, Top-K sâu 100 (§4.3, §4.4b) | `curl -s "http://127.0.0.1:8000/api/composition/runs/da0a2162be0e159a1a456cec/queries?subset=full&condition=clvc_image_encoder_only&query_id=7:2179&top_k=100&limit=1&offset=0"` | **đo lại:** `200`, 14 695 B, `target_rank 2100`, `candidates.depth 100`, `top_results` dài **100** |
+| LIMN cũng để `7:3038`/`7:3790` unscored (§4.3) | `python3 -c "import json;d=json.load(open('workbench/artifacts/composition/runs/10173dc45dea8c90fd2a284b/ranks/limn_base_iter0_all_categories.json'));r=d['ranks'];[print(c,{q:r[c].get(q) for q in ('7:3038','7:3790','7:2179','7:4066')},sum(1 for v in r[c].values() if v is not None)) for c in r]"` | **đo lại:** cả ba điều kiện `5884` non-null / `119` null; bốn qid đều `None` ở cả ba |
+| Backfill từ chối run biến thể (§4.4b giới hạn 2) | `workbench/envs/ctl312h/bin/python workbench/scripts/backfill_recall_at_1.py --run clvc_net:da0a2162be0e159a1a456cec` | **theo `104` §6.1:** exit 1, `clvc_image_encoder_only.scored_count: recomputed 6001 vs published None`, không ghi file `derived/` |
 
 Chỗ nào lệnh **không** chạy được ở đây (cần GPU, cần run mới, hoặc cần một artifact chưa tồn tại) thì
 báo cáo ghi `chưa đo` tại chỗ đó thay vì thay bằng một con số suy ra.

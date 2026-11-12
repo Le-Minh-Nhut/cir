@@ -205,7 +205,22 @@ Three statements in the report were also corrected for the same reason without b
 the §2 verdict line, and §1.5's "current state" sentence (backend `MainPID` is `1476678` now, not
 `1221379`; frontend is unchanged at `1221148`).
 
-Two limits of the applied pass, stated so the next reader does not assume more: R@1 is still quoted
-only from the derived file (0 of 35 published `summary/*/full.json` carry the key), and the CLVC run
-in flight under the new profile (`da0a2162be0e159a1a456cec`, no `summary/` yet) contributes no number
-to the report.
+Two limits of that pass, stated so the next reader does not assume more: R@1 is still quoted only
+from the derived file (0 of 35 published `summary/*/full.json` carry the key), and the CLVC run in
+flight under the new profile (`da0a2162be0e159a1a456cec`, no `summary/` yet) contributed no number.
+
+**That second limit is now closed** (second commit, same branch, report file only). The run finished
+and published `…da0a2162be0e159a1a456cec/full.json` (17 956 B, mtime `2026-11-12 09:15:18.964 +0700`):
+`PARTIAL`, 6003 queries, conditions `(multimodal, text_only_black_image, clvc_image_encoder_only)`,
+6001/6003 scored, `composition_gap_ndcg 0.33061712371309204` over 6001. Source of record is
+`104-clvc-full-image-only.md`. The report now carries it as **§4.4b**, keeps the old
+`eab10106…-retry-2` as **§4.4a** with its own untouched numbers, and states in three places (§4.2,
+§4.4b, §7 row 4) that this gap runs on a **declared variant** image condition and is therefore not the
+protocol gap and not comparable to TG-CIR's `0.4385`.
+
+Two things C1-C12 could not have anticipated and that the second pass had to settle from the artifacts
+rather than from the brief: LIMN's rank artifact leaves `7:3038`, `7:3790`, `7:2179` and `7:4066` all
+`null` in all three conditions (5884 non-null / 119 null per condition), so CLVC and LIMN now agree on
+2 qids and differ on 117 — the shared cohort is 5884, not 6001; and `backfill_recall_at_1.py` refuses
+this run because `METRIC_BLOCKS` maps only protocol names, which `104` §6.1 records and the report
+repeats rather than hides.
