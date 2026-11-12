@@ -121,25 +121,42 @@ IMAGE_ENCODER_ONLY_OPERATION = "image_only"
 #: SCOPE LEAKAGE DECLARATION for ``clvc_image_encoder_only``: TRUE, and it is not a refinement.
 #:
 #: CLVC-Net scores a query against ONE category's gallery matrix, so every condition needs the
-#: query's category. The category comes from the reference image's STEM resolved against the
-#: FashionIQ annotation/split files (``data.assign_garment_categories`` and the shared resolver).
-#: Under ``image_only_empty_text`` and ``clvc_image_encoder_only`` the reference image is the only
-#: input, so reading its stem is reading a dataset label that is available independently of the
-#: pixels being encoded — permitted, because the label is release metadata, not the reference's
-#: pixels. Under ``text_only_black_image`` the reference is REPLACED by a black image, so the
-#: condition claims to remove the reference modality while routing still consults a property
-#: derived from that same reference image. That is information the condition says it deleted.
+#: query's category. There are TWO routing inputs, and they are not the same input:
 #:
-#: Stated plainly rather than hidden: the routing label is a DATASET LABEL (verdict (a) of the
-#: protocol question), and it is the same label for all three conditions, so cross-condition
-#: comparisons stay internally consistent. What it must never be read as is "text_only_black_image
-#: sees no reference information at all": it sees the row's category. A run that needs the stricter
+#: * 5 884 of 6 003 queries: the RELEASE LOADER's assignment (``query.category``), computed from the
+#:   reference image's stem against the authors' FashionIQ split/caption annotation. No caption text
+#:   is read, and no image pixel is read. A dataset label, available independently of the pixels.
+#: * 117 of 6 003 queries: the loader left them unscoped (their reference sits in two categories), so
+#:   the shared resolver keys on ``(reference stem, normalize_query_text(edit caption))`` --
+#:   ``model_limn.resolve_query_scope``'s own index key. For those 117 the EDIT CAPTION decides the
+#:   category. The other 2 stay unscored.
+#:
+#: So under ``text_only_black_image`` and ``clvc_image_encoder_only`` the routing input is a dataset
+#: label **plus, for those 117, the edit text that the condition otherwise removes**. Under the
+#: image-only condition the caption is therefore not fully absent: it is absent from the EMBEDDING
+#: (``composed_rows`` never receives it) and present in ROUTING for 117 queries. Under
+#: ``text_only_black_image`` the same is true of the reference-derived label.
+#:
+#: Stated plainly rather than hidden. What it must never be read as is "text_only_black_image /
+#: clvc_image_encoder_only see no reference information and no caption": ``text_only_black_image``
+#: sees the row's category, and both see the edit caption for the 117. A run that needs the stricter
 #: claim has to be a separate run identity that declares the exemption — see
-#: ``IMAGE_ENCODER_ONLY`` in the evidence file — not a silent reuse of this one.
+#: ``category_routing_inputs`` in the evidence file — not a silent reuse of this one.
+#:
+#: The size of the effect on the published CLVC gap is MEASURED, not argued: over all 6 001 scored
+#: queries it is 0.33061712371309204; over the 5 884 loader-scoped (caption-free) queries alone it is
+#: 0.33400015944039774. Both come from the same rank table
+#: (``runs/da0a2162be0e159a1a456cec/ranks``), via ``workbench/scripts/derive_routing_cohort_gap.py``.
 IMAGE_ENCODER_ONLY_LEAKS_SCOPE = (
-    "category routing reads the reference image stem for every condition; under "
-    "text_only_black_image and clvc_image_encoder_only that is the only reference-derived input, "
-    "and it is a release DATASET LABEL (permitted), not the reference pixels")
+    "category routing reads the release loader's assignment (reference image stem) for 5884 "
+    "queries and, for the 117 the loader left unscoped, (reference stem, edit caption text) "
+    "resolved against the pinned caption annotation; under text_only_black_image and "
+    "clvc_image_encoder_only the routing input is therefore a release DATASET LABEL plus, for "
+    "those 117, the edit text that the condition otherwise removes")
+#: One-line form for a run summary's `claim_narrowed` field.
+IMAGE_ENCODER_ONLY_LEAKS_CAPTION = (
+    "117 of 6001 scored queries had their category chosen from (reference stem, edit caption); a "
+    "condition that removes the edit still used it for routing")
 
 class Refused(RuntimeError):
     """This adapter's inputs or artifacts are not executable; no worker is launched."""
@@ -226,11 +243,15 @@ class Adapter(CompositionAdapter):
         """Route one released query to the checkpoint scope its own annotation names.
 
         The runner calls this only for the queries the release loader left unscoped (it treats a
-        loader assignment as final), so the 5 884 already-scoped queries cannot move. The remaining
-        119 are the ones a FashionIQ reference belongs to two categories for; the caption
-        annotation resolves 117 of them to exactly one category and refuses the 2 whose caption
-        pair is filed identically under both. ``None`` keeps a query unscored — never defaulted,
-        never inferred from the target image or from a retrieval score.
+        loader assignment as final), so the 5 884 already-scoped queries cannot move — those are
+        routed from the loader's own reference-stem assignment and this method never sees them.
+
+        For the remaining 119 the key IS ``(reference stem, normalized edit caption)``, taken from
+        ``model_limn.resolve_query_scope``; the edit caption is therefore a routing input for those
+        117 (2 stay unscored, their caption pair filed under both categories). ``None`` keeps a
+        query unscored — never defaulted, never inferred from the target image or from a retrieval
+        score. The caption's presence here is why
+        ``IMAGE_ENCODER_ONLY_LEAKS_SCOPE`` says "dataset label plus, for those 117, the edit text".
         """
         index = self.caption_scope_index()
         record = resolve_query_scope(index, query, candidate_names)
@@ -295,8 +316,11 @@ class Adapter(CompositionAdapter):
         concatenation order and the same per-half ``F.normalize`` as the gallery matrix, so a
         reference image's row here differs from its own gallery row only by batch composition.
 
-        No text argument exists on purpose: the edit caption is not an input, so it cannot change
-        the embedding, and ``compose_img_text``/``text_model`` are never reached. This is NOT
+        No text argument exists on purpose: the edit caption is not an EMBEDDING input, so it cannot
+        change this row, and ``compose_img_text``/``text_model`` are never reached. It is NOT a claim
+        that the caption is absent from the query altogether: the query's CATEGORY may have been
+        chosen from the caption by the resolver (117 of 6001 — ``IMAGE_ENCODER_ONLY_LEAKS_SCOPE``),
+        which affects which gallery matrix the row is scored against, not the row. This is also NOT
         ``image_only_empty_text``: that condition drives the text tower with an empty string, which
         this model cannot encode at all (``EMPTY_TEXT_REASON``), and it stays unsupported.
         """

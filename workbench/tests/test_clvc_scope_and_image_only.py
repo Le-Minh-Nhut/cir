@@ -128,21 +128,50 @@ def test_an_off_pin_annotation_file_refuses_to_route(fixture_root: Path) -> None
     assert adapter.query_scope_resolution()["annotation"]["incomplete"] is True
 
 
-def test_routing_does_not_depend_on_the_condition_or_the_gallery() -> None:
-    """LEAKAGE, declared rather than hidden: the scope comes from the reference STEM only.
+def test_the_leakage_declaration_names_the_caption_and_the_stem() -> None:
+    """LEAKAGE, declared exactly rather than minimised.
 
-    ``query_scope`` takes a query and the candidate table — no condition, no gallery, no score.
-    Under ``text_only_black_image`` the reference PIXELS are removed but the release's category
-    label still routes the query, so that condition sees one piece of reference-derived metadata.
-    The declaration is asserted to be present and to say so, instead of this being an unstated
-    property a reader has to discover.
+    An earlier version of this string said routing reads "the reference image stem for every
+    condition ... the only reference-derived input". That was FALSE for 117 of 6001 queries:
+    ``resolve_query_scope`` keys on ``(reference stem, normalized edit caption)`` for the queries the
+    loader left unscoped, so the caption chose their category. The declaration must name both inputs,
+    and must not claim the conditions see no text.
     """
+    declaration = clvc.IMAGE_ENCODER_ONLY_LEAKS_SCOPE
+    assert "edit caption" in declaration, declaration
+    assert "117" in declaration, declaration
+    assert "DATASET LABEL" in declaration, declaration
+    for condition in ("text_only_black_image", "clvc_image_encoder_only"):
+        assert condition in declaration, declaration
+    # The sentence that was wrong must not come back: "the only reference-derived input".
+    assert "only reference-derived input" not in declaration
+    # The one-line form a run summary writes says the same thing.
+    assert "edit caption" in clvc.IMAGE_ENCODER_ONLY_LEAKS_CAPTION
+    assert "117" in clvc.IMAGE_ENCODER_ONLY_LEAKS_CAPTION
+
+
+def test_the_resolver_key_really_is_stem_plus_caption() -> None:
+    """The fact the declaration rests on, measured on the shared resolver: the key has TEXT in it.
+
+    Two queries with the SAME reference stem and DIFFERENT captions must be able to route to
+    different categories — if the key were the stem alone, the second lookup could not.
+    """
+    import inspect
+
+    from workbench.composition import model_limn
+
+    source = inspect.getsource(model_limn.resolve_query_scope)
+    assert "normalize_query_text" in source
+    assert "query_reference_stem" in source
+    assert "query_txt" in source
+
+
+def test_routing_does_not_depend_on_the_condition_or_the_gallery() -> None:
+    """The signature is the guarantee: no condition, no gallery, no score can enter a scope."""
     import inspect
 
     assert list(inspect.signature(clvc.Adapter.query_scope).parameters) == [
         "self", "query", "candidate_names"]
-    assert "DATASET LABEL" in clvc.IMAGE_ENCODER_ONLY_LEAKS_SCOPE
-    assert "text_only_black_image" in clvc.IMAGE_ENCODER_ONLY_LEAKS_SCOPE
 
 
 # ------------------------------------------------------------------ the real 119, measured
