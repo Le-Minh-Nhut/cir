@@ -30,6 +30,12 @@ interface ScopeReading {
   gallery_size_scored: number | null;
   model_text: string;
   export: string | null;
+  /** CLVC adds these; LIMN omits them, so every read is optional. */
+  condition_kind?: "protocol" | "ablation";
+  condition_label?: string;
+  raw_edit_caption?: string;
+  encoded_text_is_empty?: boolean;
+  target_within_export_depth?: boolean;
 }
 
 interface DiagnosticPayload {
@@ -61,14 +67,29 @@ interface DiagnosticPayload {
   gallery?: { count: number; protocol_id: string; note: string } | null;
   checkpoints?: Record<string, { checkpoint_id: string; sha256: string; filename: string }>;
   rank_convention_crosscheck?: { checked: number; all_agree: boolean; method?: string };
+  /** Present only on the CLVC payload (LIMN's bytes are frozen). */
+  model?: string;
+  model_name?: string;
+  diagnostic?: boolean;
+  canonical?: boolean;
+  condition_kinds?: Record<string, "protocol" | "ablation">;
+  condition_labels?: Record<string, string>;
+  canonical_cohort_provenance?: {
+    source: "artifact" | "run_summary";
+    run_id?: string | null;
+    path?: string | null;
+    sha256?: string | null;
+  } | null;
+  reference_match_note?: string;
   queries?: Record<string, {
     qid: string;
+    reference_asset?: string;
     release: { query_txt: string; reference_id: string; positive_ids: string[]; loader_category: string | null };
     target_gallery_id: string;
     target_position_in_gallery: number[];
     scopes: Record<string, Record<string, ScopeReading>>;
   }>;
-  evidence_files?: { per_scope?: string[] };
+  evidence_files?: { summary?: string; per_scope?: string[] };
   /** Whether the diagnostic evidence is internally consistent. False means the comparison below
    *  contradicts itself somewhere, so it is rendered with the reason rather than silently. */
   complete?: boolean;
@@ -87,6 +108,9 @@ interface DiagnosticCandidate {
   image_category: string | null;
   score: number;
   is_target: boolean;
+  /** CLVC only: this tile IS the query's own reference image, i.e. a self-match. */
+  is_reference?: boolean;
+  match_kind?: "reference_self_match" | "candidate";
 }
 
 interface DiagnosticCandidates {
@@ -128,19 +152,71 @@ interface DiagnosticCandidates {
   candidates: DiagnosticCandidate[];
   staged_query_image_is_evaluator_input: boolean;
   canonical_status_note: string;
+  /* CLVC adds these; LIMN omits them. */
+  model?: string;
+  model_name?: string;
+  diagnostic?: boolean;
+  canonical?: boolean;
+  condition_kind?: "protocol" | "ablation";
+  condition_label?: string;
+  raw_edit_caption?: string;
+  query_image_path?: string;
+  reference_image_path?: string;
+  reference_asset?: string;
+  score_at_rank_1?: number | null;
+  target_within_export_depth?: boolean;
+  effectively_encoded?: { text: string; text_is_empty: boolean; note: string | null };
+  rank_1_is_reference_self_match?: boolean;
+  target_outside_stored_window?: boolean;
 }
 
 const CONDITION_SHORT: Record<string, string> = {
   multimodal: "MM",
   text_only_black_image: "Text-only",
   image_only_empty_text: "Image-only",
+  clvc_image_encoder_only: "Image only (encoder)",
 };
 
+/** The diagnostic endpoints this panel can switch between, without a reload.
+ *
+ *  Both models answer the same payload shape from the same reader, so the panel is one component with
+ *  a model axis rather than two copies that drift. `slug` is the path segment the backend declares
+ *  literally for each model. */
+const DIAGNOSTIC_MODELS = [
+  { slug: "limn", label: "LIMN" },
+  { slug: "clvc", label: "CLVC-Net" },
+] as const;
+type DiagnosticModelSlug = typeof DIAGNOSTIC_MODELS[number]["slug"];
+
+/** Which published dual-scope diagnostic the panel is showing. Switching is a fetch, not a reload. */
+function ModelPicker({ value, onChange }: {
+  value: DiagnosticModelSlug;
+  onChange: (next: DiagnosticModelSlug) => void;
+}) {
+  return (
+    <label className="field">Model
+      <select value={value} aria-label="Model chẩn đoán"
+              onChange={(event) => onChange(event.target.value as DiagnosticModelSlug)}
+              data-testid="dual-diagnostic-model">
+        {DIAGNOSTIC_MODELS.map((item) => (
+          <option key={item.slug} value={item.slug}>{item.label}</option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
 export function LimnScopeDiagnostic({ pageSubset }: { pageSubset?: string }) {
+  // The model is a control, not a build-time choice: both diagnostics are published, both answer the
+  // same shape, and a reader comparing them must not reload the page to do it.
+  const [modelSlug, setModelSlug] = useState<DiagnosticModelSlug>("limn");
   const region = useRegion<DiagnosticPayload>(
-    "limn-dual-scope", "limn-dual-scope",
+    "dual-scope", `dual-scope:${modelSlug}`,
     useMemo(() => (signal: AbortSignal) =>
-      fetchJson<DiagnosticPayload>("/api/composition/diagnostics/limn-dual-scope", signal), []));
+      fetchJson<DiagnosticPayload>(`/api/composition/diagnostics/${modelSlug}-dual-scope`, signal),
+      [modelSlug]));
+  // A payload for another model may never paint under this selector's label.
+  const payloadIsCurrent = region.region.key === `dual-scope:${modelSlug}`;
 
   if (region.region.status === "loading" || region.region.status === "idle") {
     return <LoadingState label="Đang tải so sánh hai scope…" />;
@@ -148,14 +224,17 @@ export function LimnScopeDiagnostic({ pageSubset }: { pageSubset?: string }) {
   if (region.region.status === "error") {
     return <ErrorState message={region.region.error ?? "Không tải được so sánh hai scope"} onRetry={region.retry} />;
   }
-  const payload = region.region.data;
+  const payload = payloadIsCurrent ? region.region.data : null;
   if (!payload || !payload.available) {
     return (
-      <EmptyState kind="capability" testId="limn-diagnostic-unavailable"
+      <div className="stack" data-testid="dual-diagnostic-model-bar">
+        <ModelPicker value={modelSlug} onChange={setModelSlug} />
+        <EmptyState kind="capability" testId="limn-diagnostic-unavailable"
                   title="Chưa có so sánh hai scope"
                   detail={payload?.canonical_status
                     ? `Chẩn đoán chưa được xuất bản (${payload.status}). Trạng thái canonical không đổi.`
                     : `Chẩn đoán chưa được xuất bản (${payload?.status ?? "không rõ"}).`} />
+      </div>
     );
   }
 
@@ -177,14 +256,26 @@ export function LimnScopeDiagnostic({ pageSubset }: { pageSubset?: string }) {
 
   return (
     <Card
-      title={<span data-testid="limn-diagnostic-title">Ambiguous category — diagnostic comparison</span>}
+      title={<span data-testid="limn-diagnostic-title">
+        {modelSlug === "clvc" ? "CLVC-Net — " : ""}Ambiguous category — diagnostic comparison
+      </span>}
       subtitle={payload.reason}
       testId="limn-diagnostic"
       actions={(
-        <Badge tone="warn" testId="limn-diagnostic-canonical">
-          Canonical ({cohortLabel} cohort): {fmtInt(canonical.scored_count)}/
-          {fmtInt(canonical.scored_count + canonical.unscored_count)} scored
-        </Badge>
+        <>
+          <ModelPicker value={modelSlug} onChange={setModelSlug} />
+          {payload.complete === false && (
+            <Badge tone="bad" testId="limn-diagnostic-incomplete-badge"
+                   title={(payload.defects ?? []).map((defect) => defect.code)
+                     .filter((code, index, all) => all.indexOf(code) === index).join(", ")}>
+              Chưa hoàn tất — {fmtInt((payload.defects ?? []).length)} defect
+            </Badge>
+          )}
+          <Badge tone="warn" testId="limn-diagnostic-canonical">
+            Canonical ({cohortLabel} cohort): {fmtInt(canonical.scored_count)}/
+            {fmtInt(canonical.scored_count + canonical.unscored_count)} scored
+          </Badge>
+        </>
       )}
     >
       <div className="pipeline-notice" data-testid="limn-diagnostic-canonical-notice">
@@ -210,11 +301,18 @@ export function LimnScopeDiagnostic({ pageSubset }: { pageSubset?: string }) {
         )}
         <p className="hint">{canonical.note}</p>
         {payload.complete === false && (
-          <p data-testid="limn-diagnostic-defects">
-            <b>Bằng chứng chẩn đoán tự mâu thuẫn</b> ({fmtInt((payload.defects ?? []).length)} defect):
-            {" "}{(payload.defects ?? []).map((defect) => defect.code).filter((code, index, all) => all.indexOf(code) === index).join(", ")}.
-            Chi tiết ở phần chọn query bên dưới.
-          </p>
+          <div className="pipeline-notice" data-testid="limn-diagnostic-defects">
+            <strong>
+              Bằng chứng chẩn đoán chưa hoàn tất — {fmtInt((payload.defects ?? []).length)} defect.
+            </strong>
+            <p>
+              Mã: <code>{(payload.defects ?? []).map((defect) => defect.code)
+                .filter((code, index, all) => all.indexOf(code) === index).join(", ")}</code>.
+              Các hạng và điểm bên dưới vẫn là số đo thật từ file bằng chứng, nhưng chúng{" "}
+              <b>chưa được coi là đầy đủ</b>: mỗi ô bị ảnh hưởng được nêu chi tiết ở phần chọn query
+              bên dưới. Trạng thái canonical không đổi.
+            </p>
+          </div>
         )}
       </div>
 
@@ -248,7 +346,14 @@ export function LimnScopeDiagnostic({ pageSubset }: { pageSubset?: string }) {
                       <div className="cell-sub">loader category: {query.release.loader_category ?? "không xác định"}</div>
                     </th>
                   )}
-                  <td>{CONDITION_SHORT[condition] ?? condition}</td>
+                  <td>
+                    {payload.condition_labels?.[condition] ?? CONDITION_SHORT[condition] ?? condition}
+                    {payload.condition_kinds?.[condition] === "ablation" && (
+                      <div className="cell-sub">
+                        <Badge tone="warn">ablation</Badge>
+                      </div>
+                    )}
+                  </td>
                   {scopes.map((scope) => {
                     const reading = query.scopes[scope]?.[condition];
                     if (!reading) {
@@ -313,22 +418,49 @@ export function LimnScopeDiagnostic({ pageSubset }: { pageSubset?: string }) {
             {" "}— đọc từ <code>{cohort.source ?? "không ghi nguồn"}</code>, không suy ra từ trang này.
           </p>
         )}
-        <p className="hint">
-          Bằng chứng: <code>limn_dual_scope.json</code> + 6 file per-scope trong{" "}
-          <code>workbench/docs/reviews/20261109-native15-composition-limn/</code>.
-        </p>
+        {payload.canonical_cohort_provenance && (
+          <p className="hint" data-testid="dual-diagnostic-cohort-provenance">
+            Cohort canonical đọc từ <b>run summary</b>{" "}
+            {payload.canonical_cohort_provenance.run_id
+              ? <code>{payload.canonical_cohort_provenance.run_id}</code> : null}
+            {" "}(sha256 <code>{payload.canonical_cohort_provenance.sha256?.slice(0, 16) ?? "không ghi"}…</code>),
+            vì artifact chẩn đoán không tự ghi cohort. Số đã chấm vẫn là của lượt canonical, không phải
+            của panel này.
+          </p>
+        )}
+        {payload.evidence_files?.summary && (
+          <p className="hint" data-testid="dual-diagnostic-evidence">
+            Bằng chứng: <code>{payload.evidence_files.summary.split("/").pop()}</code> +{" "}
+            {fmtInt(payload.evidence_files.per_scope?.length ?? 0)} file per-scope trong{" "}
+            <code>{payload.evidence_files.summary.replace(/\/[^/]+$/, "/")}</code>.
+          </p>
+        )}
+        {!payload.evidence_files?.summary && (
+          <p className="hint">
+            Bằng chứng: <code>limn_dual_scope.json</code> + 6 file per-scope trong{" "}
+            <code>workbench/docs/reviews/20261109-native15-composition-limn/</code>.
+          </p>
+        )}
       </Detail>
 
-      <CandidateProbe queries={queries.map((query) => query.qid)} scopes={scopes} conditions={conditions} />
+      <CandidateProbe modelSlug={modelSlug}
+                      referenceAssets={Object.fromEntries(
+                        queries.map((query) => [query.qid, query.reference_asset ?? null]))}
+                      queries={queries.map((query) => query.qid)}
+                      scopes={scopes} conditions={conditions}
+                      conditionLabels={payload.condition_labels ?? {}} />
     </Card>
   );
 }
 
 /** One query × one scope × one condition, exported Top-100, so a rank can be inspected not trusted. */
-function CandidateProbe({ queries, scopes, conditions }: {
+function CandidateProbe({ modelSlug, referenceAssets, queries, scopes, conditions, conditionLabels }: {
+  modelSlug: DiagnosticModelSlug;
+  referenceAssets: Record<string, string | null>;
   queries: string[];
   scopes: string[];
   conditions: string[];
+  conditionLabels: Record<string, string>;
 }) {
   const [qid, setQid] = useState(queries[0] ?? "");
   const [scope, setScope] = useState(scopes[0] ?? "");
@@ -342,15 +474,15 @@ function CandidateProbe({ queries, scopes, conditions }: {
   // and a late answer for K=100 must not paint under a K=10 label. The backend validates depth
   // rather than clamping it, and reports `depth_served` / `depth_stored` separately.
   const region = useRegion<DiagnosticCandidates>(
-    "limn-diagnostic-candidates", key,
+    "dual-diagnostic-candidates", `${modelSlug}\u001f${key}`,
     useMemo(() => ((signal: AbortSignal) =>
       fetchJson<DiagnosticCandidates>(
-        `/api/composition/diagnostics/limn-dual-scope/candidates?qid=${encodeURIComponent(qid)}`
+        `/api/composition/diagnostics/${modelSlug}-dual-scope/candidates?qid=${encodeURIComponent(qid)}`
         + `&scope=${encodeURIComponent(scope)}&condition=${encodeURIComponent(condition)}`
         + `&depth=${depth}`,
-        signal)), [qid, scope, condition, depth]));
+        signal)), [modelSlug, qid, scope, condition, depth]));
   // A response for another qid/scope/condition may never paint under these labels.
-  const current = region.region.key === key;
+  const current = region.region.key === `${modelSlug}\u001f${key}`;
   const data = current ? region.region.data : null;
 
   return (
@@ -368,7 +500,11 @@ function CandidateProbe({ queries, scopes, conditions }: {
         </label>
         <label className="field">Điều kiện
           <select value={condition} onChange={(event) => setCondition(event.target.value)} data-testid="limn-probe-condition">
-            {conditions.map((value) => <option key={value} value={value}>{CONDITION_SHORT[value] ?? value}</option>)}
+            {conditions.map((value) => (
+              <option key={value} value={value}>
+                {conditionLabels[value] ?? CONDITION_SHORT[value] ?? value}
+              </option>
+            ))}
           </select>
         </label>
         <label className="field">Top-K hiển thị
@@ -396,6 +532,16 @@ function CandidateProbe({ queries, scopes, conditions }: {
                 <code>{data.checkpoint_sha256?.slice(0, 16) ?? "không ghi"}…</code>
               </p>
               <p className="hint" data-testid="limn-probe-canonical-note">{data.canonical_status_note}</p>
+              {data.rank_1_is_reference_self_match && (
+                <div className="pipeline-notice" data-testid="dual-probe-self-match">
+                  <strong>Hạng 1 ở điều kiện này là chính ảnh tham chiếu của query.</strong>
+                  <p>
+                    Đây là <b>self-match</b> (score ≈ {data.score_at_rank_1?.toFixed(6) ?? "1.0"}), không phải
+                    một kết quả truy hồi: gallery có chứa ảnh tham chiếu nên hàng của nó tự khớp với chính
+                    nó. Ảnh đích thật của query nằm ở hạng <b>{fmtRank(data.target_rank)}</b>.
+                  </p>
+                </div>
+              )}
 
               {!data.complete && (
                 <div className="pipeline-notice" data-testid="limn-probe-incomplete">
@@ -417,6 +563,38 @@ function CandidateProbe({ queries, scopes, conditions }: {
                         coi là đầy đủ.</span>}
                 </div>
               )}
+
+              {/* The query itself: reference image, the released caption, and what the model was
+                  ACTUALLY given. The ablation transports no text, so `model_text` is empty and saying
+                  only "caption: ..." would misreport the input. */}
+              <div className="stack" data-testid="dual-probe-query">
+                <div className="eyebrow">Query — ảnh tham chiếu, caption gốc, và text thực sự đưa vào model</div>
+                <div className="shots">
+                  {data.reference_image_path && (
+                    <Shot category={data.target.image_category ?? data.scope}
+                          id={data.reference_image_path}
+                          label={`ảnh tham chiếu ${referenceAssets[data.qid] ?? ""}`.trim()} />
+                  )}
+                </div>
+                <p className="hint" data-testid="dual-probe-caption">
+                  Caption gốc: “{data.raw_edit_caption ?? "không ghi"}”
+                </p>
+                <p className="hint" data-testid="dual-probe-effective-text">
+                  Text thực sự mã hoá:{" "}
+                  {data.effectively_encoded
+                    ? (data.effectively_encoded.text_is_empty
+                        ? <b>rỗng</b>
+                        : <code>{data.effectively_encoded.text}</code>)
+                    : <code>{data.model_text}</code>}
+                  {data.effectively_encoded?.text_is_empty && <span> (điều kiện này không truyền text)</span>}
+                  {data.condition_kind === "ablation" && <span> · <Badge tone="warn">ablation</Badge></span>}
+                </p>
+                {data.effectively_encoded?.text_is_empty && (
+                  <p className="hint" data-testid="dual-probe-empty-text-note">
+                    {data.effectively_encoded.note}
+                  </p>
+                )}
+              </div>
 
               {/* The target ALWAYS renders, separately from the window, because it frequently is not
                   in it: at rank 6891 no Top-100 window contains it, and a gallery that can only show
@@ -450,10 +628,17 @@ function CandidateProbe({ queries, scopes, conditions }: {
                     <div className="candidates" data-testid="limn-probe-grid">
                       {data.candidates.map((candidate) => (
                         <article key={`${candidate.rank}:${candidate.gallery_id}`}
-                                 className={`candidate ${candidate.is_target ? "is-target" : ""}`}>
+                                 className={`candidate ${candidate.is_target ? "is-target" : ""}`
+                                   + `${candidate.is_reference ? " is-reference" : ""}`}
+                                 data-match-kind={candidate.match_kind ?? "candidate"}>
                           <div className="candidate-rank">
                             <b>#{candidate.rank}</b>
                             {candidate.is_target && <span>Ảnh đích</span>}
+                            {candidate.is_reference && (
+                              <span data-testid={`dual-probe-ref-match-${candidate.rank}`}>
+                                Ảnh tham chiếu (self-match)
+                              </span>
+                            )}
                           </div>
                           <Shot category={candidate.image_category ?? data.scope}
                                 id={candidate.gallery_id} compact target={candidate.is_target}
