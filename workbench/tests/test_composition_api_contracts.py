@@ -303,3 +303,96 @@ def test_a_run_without_a_derived_record_or_ablation_is_unchanged(tmp_path):
     assert [item["id"] for item in detail["conditions_display"]] == list(CONDITIONS)
     assert "gap_conditions" not in detail
     assert detail["metrics"].get("recall_at_1_multimodal") is None
+
+def test_a_three_condition_variant_serves_only_those_three(tmp_path, monkeypatch):
+    """`served_conditions` prepended the protocol triple, so a 3-condition run advertised a fourth.
+
+    `da0a2162be0e159a1a456cec` measured multimodal + text-only + `clvc_image_encoder_only`; the
+    payload still offered `image_only_empty_text`, and selecting it served the whole cohort as
+    `unscored` with no candidate window.
+    """
+    root = tmp_path
+    variant = ("multimodal", "text_only_black_image", "clvc_image_encoder_only")
+    _summary(root, "variant1", conditions=list(variant),
+             condition_status={name: {"status": "COMPLETED", "unscored_count": 0}
+                               for name in variant})
+    _ranks(root, "variant1", {name: {"7:1": index} for index, name in enumerate(variant, 1)})
+    monkeypatch.setattr(C, "load_cached_release", lambda *a, **k: _release(["7:1"]))
+    monkeypatch.setattr("workbench.composition.topk.read_candidates", lambda *a, **k: _no_export())
+
+    page = C.get_composition_run_queries("variant1", subset="full", artifacts_root=root, limit=1)
+    assert [item["id"] for item in page["conditions"]] == list(variant), page["conditions"]
+    assert set(page["items"][0]["ranks"]) == set(variant), page["items"][0]["ranks"]
+    detail = C.get_composition_run_detail("variant1", "full", root)
+    assert {name: row["status"] for name, row in detail["condition_status"].items()} == {
+        name: "COMPLETED" for name in variant}, detail["condition_status"]
+
+    # The surviving instance of the same defect: an AGGREGATE-ONLY variant (no rank table to filter
+    # on) fell back to `CONDITIONS` and offered a fourth condition it never measured.
+    _summary(root, "variant2", conditions=list(variant),
+             condition_status={name: {"status": "COMPLETED", "unscored_count": 0}
+                               for name in variant})
+    aggregate = C.get_composition_run_detail("variant2", "full", root)
+    assert [item["id"] for item in aggregate["conditions_display"]] == list(variant), (
+        aggregate["conditions_display"])
+
+
+def test_a_declared_but_unsupported_condition_is_still_advertised(tmp_path, monkeypatch):
+    """The no-regression half: a refused ablation keeps its selector entry and its own status."""
+    root = tmp_path
+    _summary(root, "refused1",
+             condition_status={"multimodal": {"status": "COMPLETED", "unscored_count": 0},
+                               "text_only_black_image": {"status": "COMPLETED",
+                                                         "unscored_count": 0},
+                               "image_only_empty_text": {"status": "ABLATION_UNSUPPORTED",
+                                                         "reason": "cannot encode an empty edit"}})
+    _ranks(root, "refused1", {"multimodal": {"7:1": 1}, "text_only_black_image": {"7:1": 2},
+                              "image_only_empty_text": {"7:1": None}})
+    monkeypatch.setattr(C, "load_cached_release", lambda *a, **k: _release(["7:1"]))
+    monkeypatch.setattr("workbench.composition.topk.read_candidates", lambda *a, **k: _no_export())
+
+    page = C.get_composition_run_queries("refused1", subset="full", artifacts_root=root, limit=1)
+    assert [item["id"] for item in page["conditions"]] == list(CONDITIONS), page["conditions"]
+    detail = C.get_composition_run_detail("refused1", "full", root)
+    assert detail["condition_status"]["image_only_empty_text"]["status"] == "ABLATION_UNSUPPORTED", (
+        detail["condition_status"])
+
+
+def test_a_legacy_summary_without_the_field_still_serves_the_protocol_triple(tmp_path, monkeypatch):
+    """A summary that predates `conditions` falls back to the protocol triple, not to nothing."""
+    root = tmp_path
+    _summary(root, "legacy1")
+    payload = json.loads((root / "composition" / "summary" / "m_c_legacy1" / "full.json")
+                         .read_text(encoding="utf-8"))
+    payload.pop("conditions")
+    (root / "composition" / "summary" / "m_c_legacy1" / "full.json").write_text(
+        json.dumps(payload), encoding="utf-8")
+    _ranks(root, "legacy1", {name: {"7:1": 1} for name in CONDITIONS})
+    monkeypatch.setattr(C, "load_cached_release", lambda *a, **k: _release(["7:1"]))
+    monkeypatch.setattr("workbench.composition.topk.read_candidates", lambda *a, **k: _no_export())
+
+    page = C.get_composition_run_queries("legacy1", subset="full", artifacts_root=root, limit=1)
+    assert [item["id"] for item in page["conditions"]] == list(CONDITIONS), page["conditions"]
+    assert [item["id"] for item in page["conditions"]] == list(C.displayed_conditions(None))
+
+
+def _release(qids):
+    class _Query:
+        def __init__(self, qid: str) -> None:
+            self.qid = qid
+            self.subsets = ("full",)
+            self.category = "dress"
+            self.query_txt = "clip"
+            self.reference_id = 0
+            self.positive_ids = [1]
+
+    class _Release:
+        queries = [_Query(qid) for qid in qids]
+        candidate_names = {0: "ref.jpg", 1: "target.jpg"}
+
+    return _Release()
+
+
+def _no_export() -> dict:
+    return {"available": False, "status": "TOPK_EXPORT_NOT_REQUESTED", "reason": None,
+            "rows": {}, "manifest": None}

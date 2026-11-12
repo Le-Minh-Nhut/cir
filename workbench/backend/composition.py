@@ -20,15 +20,35 @@ logger = logging.getLogger("workbench.composition")
 SUBSETS = ("full", "sf", "validated")
 CONDITIONS = ("multimodal", "text_only_black_image", "image_only_empty_text")
 
-def displayed_conditions(summary: Mapping[str, Any] | None) -> tuple[str, ...]:
-    """The conditions to RENDER for one run: the protocol triple, plus any ablation it scored.
+def run_conditions(summary: Mapping[str, Any] | None) -> tuple[str, ...] | None:
+    """The conditions the RUN declared, protocol names first; ``None`` when it recorded none.
 
-    `CONDITIONS` stays the protocol's three names -- every model's `condition_status` block is keyed
-    on it, and `determine_query_outcome` reads two of them positionally. An adapter that also scored
-    an ablation (`ABLATION_CONDITIONS`, e.g. `clvc_image_encoder_only`) carries a fourth real row in
-    `condition_status`/`metrics`; dropping it from the display set is what made that measurement
-    invisible. Order is protocol-first, then declaration order, so nothing is ever renamed.
+    `summary["conditions"]` is what the runner actually ran, so it -- not the module constant -- is
+    the set of conditions a consumer may advertise. ``None`` (a summary that predates the field)
+    is distinct from an empty tuple: the caller then falls back to the protocol triple instead of
+    serving nothing.
     """
+    if not isinstance(summary, Mapping):
+        return None
+    declared = summary.get("conditions")
+    if not isinstance(declared, (list, tuple)) or not declared:
+        return None
+    names = [str(name) for name in declared]
+    return tuple([name for name in CONDITIONS if name in names]
+                 + [name for name in names if name not in CONDITIONS])
+
+def displayed_conditions(summary: Mapping[str, Any] | None) -> tuple[str, ...]:
+    """The conditions to RENDER for one run: those it declared, plus any ablation it scored.
+
+    `CONDITIONS` stays the protocol's three names -- `determine_query_outcome` reads two of them
+    positionally -- and it is only the FALLBACK, for a summary that predates `conditions`. Prepending
+    it unconditionally advertised `image_only_empty_text` for a run that measured three conditions
+    (protocol, text-only, and an adapter's named image ablation), whose selector entry then served
+    nothing but `unscored` rows. An adapter that also scored an ablation
+    (`ABLATION_CONDITIONS`, e.g. `clvc_image_encoder_only`) declares it, so its real row still
+    renders. Order is protocol-first, then declared order, so nothing is ever renamed.
+    """
+    declared = run_conditions(summary)
     scored: set[str] = set()
     if isinstance(summary, Mapping):
         for field in ("condition_status", "conditions"):
@@ -45,8 +65,17 @@ def displayed_conditions(summary: Mapping[str, Any] | None) -> tuple[str, ...]:
                 bucket = metrics.get(role)
                 if isinstance(bucket, Mapping) and isinstance(bucket.get("condition"), str):
                     scored.add(bucket["condition"])
-    extra = tuple(name for name in ABLATION_CONDITIONS if name in scored and name not in CONDITIONS)
-    return (*CONDITIONS, *extra)
+    if declared is None:
+        extra = tuple(name for name in ABLATION_CONDITIONS
+                      if name in scored and name not in CONDITIONS)
+        return (*CONDITIONS, *extra)
+    # A condition the run declared, plus one it recorded a measurement for under a name its
+    # declaration omits -- both were measured, so both are renderable.
+    undeclared = sorted(scored - set(declared),
+                        key=lambda name: (ABLATION_CONDITIONS.index(name)
+                                          if name in ABLATION_CONDITIONS else len(ABLATION_CONDITIONS),
+                                          name))
+    return (*declared, *undeclared)
 
 def condition_display_label(condition: str) -> str:
     """A condition's human label; an unknown name is shown verbatim rather than dropped."""
@@ -658,22 +687,31 @@ def _scoring_impl_for(model_id: str | None, adapter_hash: str | None) -> dict[st
     return result
 
 def _recorded_source_matches_disk(summary: Mapping[str, Any]) -> bool:
-    """Whether the artifact's recorded scoring hash still equals the module's hash on disk.
+    """Whether the artifact's recorded hashes still equal the modules' hashes on disk.
+
+    TWO hashes, TWO modules, and both must match. `scoring_module_source_hash` hashes the SHARED
+    `workbench.composition.adapters` module; `adapter_module_source_hash` hashes the model's own
+    `model_<id>.py`, which is where a `score` override lives. Comparing the shared hash against the
+    adapter module compared two different files, so it was False for every run ever recorded and
+    `scoring_impl` read `unknown` on a run whose source was byte-identical to today's.
 
     True means the source that produced the run and the source readable now are the same bytes, so
-    derivation from that source is evidence about the run. False (or unreadable) means the row is
-    historical and must not be labelled from today's code.
+    derivation from that source is evidence about the run. False (or unreadable, or a hash the runner
+    recorded as `unavailable`) means the row is historical and must not be labelled from today's code.
     """
-    recorded = summary.get("scoring_module_source_hash")
-    if not recorded:
+    recorded_scoring = summary.get("scoring_module_source_hash")
+    recorded_adapter = summary.get("adapter_module_source_hash")
+    if not recorded_scoring or not recorded_adapter:
+        return False
+    if "unavailable" in (recorded_scoring, recorded_adapter):
         return False
     model_id = summary.get("model_id")
     if not model_id:
         return False
-    from workbench.composition.adapters import capability
+    from workbench.composition import adapters as adapters_module
     from workbench.composition.runner import _module_source_hash
 
-    module_name = capability(model_id)
+    module_name = adapters_module.capability(model_id)
     if not module_name:
         return False
     import sys as _sys
@@ -685,7 +723,8 @@ def _recorded_source_matches_disk(summary: Mapping[str, Any]) -> bool:
         except Exception:
             return False
     try:
-        return _module_source_hash(module) == recorded
+        return (_module_source_hash(adapters_module) == recorded_scoring
+                and _module_source_hash(module) == recorded_adapter)
     except Exception:
         return False
 
@@ -1541,16 +1580,32 @@ def get_composition_run_queries(
     # The triple the outcome classification reads. Taken from the summary the run recorded, so a run
     # whose image role is an adapter ablation is classified over the conditions it ACTUALLY scored;
     # absent a summary, `outcome_conditions` re-derives the same rule from the rank table.
-    outcome_triple = outcome_conditions(ranks_by_condition,
-                                        _summary_for_run(artifacts_root, run_id, subset))
-    # The conditions this run ACTUALLY ranked: the protocol names it carries a table for, then any
-    # ablation table. A protocol name with no table is not served at all -- listing it produced a
-    # `ranks: {image_only_empty_text: null}` key for a condition the run never measured, and the
-    # inspector then rendered "Chưa chấm" for it beside a real target rank. `CONDITIONS` keeps its
-    # meaning; this only decides which keys the payload carries.
-    served_conditions = (*(name for name in CONDITIONS if name in ranks_by_condition),
-                         *(name for name in ABLATION_CONDITIONS
-                           if name in ranks_by_condition and name not in CONDITIONS))
+    summary_for_run = _summary_for_run(artifacts_root, run_id, subset)
+    outcome_triple = outcome_conditions(ranks_by_condition, summary_for_run)
+    # The conditions this run ACTUALLY measured: the ones its summary DECLARED, in protocol-first
+    # order, falling back to the protocol triple only for a summary that predates the field. It used
+    # to prepend `CONDITIONS` unconditionally, so a run that measured three conditions
+    # (protocol, text-only, and an adapter's named image ablation) advertised a fourth selector entry
+    # -- `image_only_empty_text` -- that it never measured, and selecting it served the whole cohort
+    # as `unscored` with no candidate window. A declared condition is served only when the rank
+    # artifact carries a table for it, and a table the declaration omits is still served: a refused
+    # ablation keeps its all-null table and its `ABLATION_UNSUPPORTED` status row.
+    declared = run_conditions(summary_for_run)
+    measured = declared if declared is not None else (
+        *CONDITIONS, *(name for name in ABLATION_CONDITIONS if name not in CONDITIONS))
+
+    def actually_ranked(name: str) -> bool:
+        table = ranks_by_condition.get(name)
+        return isinstance(table, Mapping) and any(rank is not None for rank in table.values())
+
+    # A condition is served when the run DECLARED it -- so a refused one keeps its entry and its
+    # `ABLATION_UNSUPPORTED` status instead of vanishing -- or when the rank artifact holds a real
+    # rank for it, which is a measurement whatever the summary says. An all-null table for a
+    # condition nobody declared is not a measurement and is not offered.
+    served_conditions = tuple(name for name in measured
+                              if name in ranks_by_condition or actually_ranked(name))
+    served_conditions += tuple(name for name in ranks_by_condition
+                               if name not in served_conditions and actually_ranked(name))
     target_condition = condition or "multimodal"
     lineage = (ranks_data or {}).get("derived_from") if isinstance(
         (ranks_data or {}).get("derived_from"), Mapping) else None
@@ -1674,9 +1729,11 @@ def get_composition_run_queries(
         "limit": limit,
         "offset": offset,
         "condition": target_condition,
-        # Which condition keys `items[].ranks` carries for this run: the protocol three, plus any
-        # ablation condition it actually ranked. The UI labels rows from this, never from a
-        # hard-coded triple, so a `clvc_image_encoder_only` row is rendered instead of dropped.
+        # Which condition keys `items[].ranks` carries for this run: the conditions the run
+        # DECLARED (a refused one keeps its entry, so `condition_status` can still say
+        # `ABLATION_UNSUPPORTED` for it) plus any condition it holds a real rank for. The UI labels
+        # rows from this, never from a hard-coded triple, so a `clvc_image_encoder_only` row is
+        # rendered instead of dropped and an unmeasured protocol name is never offered.
         "conditions": [{"id": name, "label": condition_display_label(name)}
                        for name in served_conditions],
         "counters": counters,

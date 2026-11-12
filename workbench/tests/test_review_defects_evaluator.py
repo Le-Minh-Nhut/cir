@@ -496,3 +496,78 @@ def test_legacy_artifact_without_cache_verify_mode_is_not_a_duplicate() -> None:
     backend.annotate_duplicate_attempts([modern, legacy])
     assert modern["duplicate_status"] != "duplicate" or legacy["duplicate_status"] != "duplicate", (
         "a run whose cache verification is unknown cannot be the same measurement as one that is known")
+
+# ------------------------------------------------------- #9 the disk guard compared the wrong hash
+
+def _guard_fixture(root: Path, run_id: str, phases: dict[str, Any]) -> Path:
+    """A run whose rank artifact records adapter+scoring hashes and a matching summary."""
+    conditions = ["multimodal", "text_only_black_image", "image_only_empty_text"]
+    summary = {
+        "schema_version": 1, "model_id": "conesep", "checkpoint_id": "ckpt", "run_id": run_id,
+        "subset": "full", "protocol_id": "circus_fashioniq_release_v1",
+        "conditions": conditions, "query_count": 1, "gallery_count": 1,
+        "execution_status": "COMPLETED",
+        "metrics": {"coverage": 1.0, "gap_cohort_count": 1,
+                    "multimodal": {"ndcg_full": 1.0, "query_count": 1, "scored_count": 1}},
+        "condition_status": {name: {"status": "COMPLETED", "unscored_count": 0}
+                             for name in conditions},
+    }
+    path = root / "composition" / "summary" / f"conesep_ckpt_{run_id}" / "full.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(summary), encoding="utf-8")
+    ranks = root / "composition" / "runs" / run_id / "ranks" / "conesep.json"
+    ranks.parent.mkdir(parents=True, exist_ok=True)
+    ranks.write_text(json.dumps({"attempt": run_id, "identity": {"model_id": "conesep", **phases},
+                                 "ranks": {name: {"7:1": 1} for name in conditions},
+                                 "query_failures": {}}), encoding="utf-8")
+    return path
+
+def _disk_hashes() -> dict[str, str]:
+    """The two hashes the runner would record TODAY for `conesep`: shared module + adapter module."""
+    import sys
+
+    import workbench.composition.adapters  # noqa: F401  (imported for sys.modules)
+    import workbench.composition.model_conesep  # noqa: F401
+
+    from workbench.composition.adapters import capability
+
+    adapter_module = capability("conesep")
+    return {
+        "scoring_module_source_hash": runner._module_source_hash(
+            sys.modules["workbench.composition.adapters"]),
+        "adapter_module_source_hash": runner._module_source_hash(sys.modules[adapter_module]),
+    }
+
+def test_a_run_whose_two_module_hashes_match_disk_serves_the_derived_impl(tmp_path: Path) -> None:
+    """#9: the guard hashed the SHARED adapters module and compared it to the ADAPTER module.
+
+    Two different files, so the comparison was False for every run ever recorded and `scoring_impl`
+    read `unknown` on a run whose source was byte-identical to today's. Driven through the disk guard
+    (the run-detail route), not by calling `scoring_implementation(..., live=...)` directly.
+    """
+    backend = _backend()
+    _guard_fixture(tmp_path, "match", _disk_hashes())
+    detail = backend.get_composition_run_detail("match", "full", tmp_path)
+    assert detail is not None
+    assert detail["scoring_impl"]["source"] == "live", detail["scoring_impl"]
+    assert detail["scoring_impl"]["impl"] == "einsum-optimized", detail["scoring_impl"]
+
+def test_one_perturbed_hash_keeps_the_impl_unknown(tmp_path: Path) -> None:
+    """The negative half: a recorded adapter hash that no longer matches disk means history."""
+    backend = _backend()
+    phases = _disk_hashes()
+    phases["adapter_module_source_hash"] = "0" * 64
+    _guard_fixture(tmp_path, "perturbed", phases)
+    detail = backend.get_composition_run_detail("perturbed", "full", tmp_path)
+    assert detail is not None
+    assert detail["scoring_impl"]["impl"] == "unknown", detail["scoring_impl"]
+    assert detail["scoring_impl"]["source"] == "unavailable", detail["scoring_impl"]
+
+def test_an_absent_hash_never_reads_as_live(tmp_path: Path) -> None:
+    """A summary with no recorded hashes cannot be proven equal to disk, so it is not `live`."""
+    backend = _backend()
+    _guard_fixture(tmp_path, "absent", {})
+    detail = backend.get_composition_run_detail("absent", "full", tmp_path)
+    assert detail is not None
+    assert detail["scoring_impl"]["source"] != "live", detail["scoring_impl"]
+    assert detail["scoring_impl"]["impl"] == "unknown", detail["scoring_impl"]
