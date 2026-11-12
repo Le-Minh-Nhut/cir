@@ -22,7 +22,8 @@ import numpy as np
 from PIL import Image
 
 from workbench.composition.adapters import AdapterWorkerError, ExactRankUnavailable
-from workbench.composition.inputs import CONDITIONS, adapt_query_inputs
+from workbench.composition.inputs import (ABLATION_CONDITIONS, CONDITIONS, DEFAULT_CONDITION_ENCODER,
+                                          adapt_query_inputs, encoder_method)
 from workbench.composition.data import PAPER_STATED_GALLERY_IMAGES, RELEASED_GALLERY_IMAGES, sha256_file
 
 
@@ -717,6 +718,72 @@ def _feature_partition_record(blocks: Sequence[Mapping[str, Any]]) -> dict[str, 
         "reason": None,
     }
 
+#: The three ROLES the composition gap is defined over, and the protocol condition that fills each.
+#: The gap formula is `1 - max(text, image) / multimodal`, so the roles are positional and the names
+#: are not interchangeable.
+GAP_ROLES = ("multimodal", "text", "image")
+PROTOCOL_GAP_CONDITIONS = {"multimodal": "multimodal", "text": "text_only_black_image",
+                           "image": "image_only_empty_text"}
+#: The condition that may fill the image role when the protocol's own image condition produced no
+#: ranks. Ordered by preference; a name here is only used when it was actually scored.
+IMAGE_ROLE_ABLATIONS = ("clvc_image_encoder_only",)
+
+def resolve_gap_conditions(scored_conditions: Sequence[str]) -> tuple[tuple[str, ...], str | None]:
+    """The (multimodal, text, image) triple to compute the gap over, and WHY it differs.
+
+    The gap must be computed over three conditions that all carry ranks in this run, and the image
+    role is the one that varies: `image_only_empty_text` is unrepresentable in CLVC-Net's text tower,
+    so a CLVC Full run that only names the protocol triple publishes `composition_gap_ndcg: null`
+    even when the adapter measured a real image-only ablation. Filling the role by ROLE (not by
+    position in the caller's list, and not by whichever name sorts last) is what makes that gap
+    well defined; the returned reason is what stops the variant gap from reading as the protocol gap.
+
+    Selection is by conditional, never by "the ablation wins": a run that scored BOTH image
+    conditions keeps the protocol triple, so the ablation can never silently replace a protocol
+    number. A run that scored neither still resolves to the protocol triple, and `compose` reports
+    the existing `missing condition(s)` reason for it.
+    """
+    scored = set(scored_conditions)
+    triple = list(PROTOCOL_GAP_CONDITIONS[role] for role in GAP_ROLES)
+    reasons: list[str] = []
+    if PROTOCOL_GAP_CONDITIONS["image"] not in scored:
+        substitute = next((name for name in IMAGE_ROLE_ABLATIONS if name in scored), None)
+        if substitute is not None:
+            triple[GAP_ROLES.index("image")] = substitute
+            reasons.append(f"image role filled by the adapter's named ablation {substitute!r}: the "
+                           f"protocol image condition {PROTOCOL_GAP_CONDITIONS['image']!r} carries "
+                           f"no ranks in this run")
+    for role, condition in zip(GAP_ROLES, triple):
+        if condition not in scored:
+            reasons.append(f"role {role!r} has no scored condition in this run "
+                           f"(would be {condition!r})")
+    return tuple(triple), "; ".join(reasons) or None
+
+class AdapterEncoderMissing(RuntimeError):
+    """The adapter declares a condition supported but carries no method that can encode it."""
+
+def _condition_encoder(adapter: Any, condition: str) -> tuple[Callable[..., Any], bool]:
+    """Resolve `condition`'s encoder method; return `(callable, transports_text)`.
+
+    The method comes from `inputs.CONDITION_ENCODERS`, never from a condition name test here, so the
+    same declaration serves the runner, the plan and any later caller. Only `encode_queries` carries
+    texts: a dedicated image encoder has no text parameter at all, which is what makes the ablation
+    incapable of silently reading a caption.
+
+    A declared condition whose adapter lacks the method is REFUSED BY NAME rather than falling back
+    to `encode_queries`: the fallback would encode a different expression and publish it under the
+    ablation's name.
+    """
+    name = encoder_method(condition)
+    method = getattr(adapter, name, None)
+    if not callable(method):
+        raise AdapterEncoderMissing(
+            f"adapter_encoder_missing: condition={condition} requires "
+            f"{type(adapter).__name__}.{name} and the adapter does not define it; refusing rather "
+            f"than falling back to {DEFAULT_CONDITION_ENCODER}, which would encode a different "
+            f"expression under this condition's name")
+    return method, name == DEFAULT_CONDITION_ENCODER
+
 def _encode_queries(adapter: Any, queries: Sequence[Any], query_paths: Sequence[Path | None],
                     indices: Sequence[int], condition: str, work_root: Path,
                     destination: Path, fingerprint: str, dimension: int,
@@ -727,6 +794,12 @@ def _encode_queries(adapter: Any, queries: Sequence[Any], query_paths: Sequence[
     # adapter resolver exists to scope, and LIMN refuses those.
     def scope_of(index: int) -> str | None:
         return queries[index].category if scopes is None else scopes[index]
+
+    encode, transports_text = _condition_encoder(adapter, condition)
+
+    def encode_batch(paths: list[str], texts: list[str],
+                     categories: list[str | None]) -> Any:
+        return encode(paths, texts, categories) if transports_text else encode(paths, categories)
 
     # A cache written under the mixed (per-query fallback) partition is stored under a DERIVED key,
     # so `_load_memmap(..., fingerprint)` below can never return it: that load is only attempted
@@ -791,7 +864,7 @@ def _encode_queries(adapter: Any, queries: Sequence[Any], query_paths: Sequence[
             continue
         try:
             adapter_calls += 1
-            encoded = _as_array(adapter.encode_queries(paths, texts, categories))
+            encoded = _as_array(encode_batch(paths, texts, categories))
             if encoded.shape != (len(surviving), dimension):
                 raise ValueError(f"encode_queries returned invalid shape {encoded.shape}")
             features[surviving] = encoded.astype(np.float32, copy=False)
@@ -813,7 +886,7 @@ def _encode_queries(adapter: Any, queries: Sequence[Any], query_paths: Sequence[
                     continue
                 try:
                     adapter_calls += 1
-                    encoded = _as_array(adapter.encode_queries([path], [text], [scope_of(index)]))
+                    encoded = _as_array(encode_batch([path], [text], [scope_of(index)]))
                     if encoded.shape != (1, dimension):
                         raise ValueError(f"encode_queries returned invalid shape {encoded.shape}")
                     features[index] = encoded[0].astype(np.float32, copy=False)
@@ -1723,8 +1796,9 @@ def run_composition(data: Any, model_specs: Sequence[ModelSpec], config: Any, *,
         raise ValueError("batch_size must be positive")
     if smoke is not None and smoke < 1:
         raise ValueError("smoke query limit must be positive")
-    if not conditions or any(item not in CONDITIONS for item in conditions):
-        raise ValueError(f"conditions must be selected from {CONDITIONS}")
+    allowed_conditions = tuple(CONDITIONS) + tuple(ABLATION_CONDITIONS)
+    if not conditions or any(item not in allowed_conditions for item in conditions):
+        raise ValueError(f"conditions must be selected from {allowed_conditions}")
     from workbench.composition.topk import normalise_depth, open_export, abort_export, close_export
 
     # Validated before any work happens: an unusable depth must refuse the run, not surface after
@@ -1831,6 +1905,14 @@ def run_composition(data: Any, model_specs: Sequence[ModelSpec], config: Any, *,
                     supported[condition] = adapter.mode_supported(condition)
                 except Exception as error:
                     supported[condition] = (False, f"{type(error).__name__}: {error}")
+                if supported[condition][0]:
+                    # A condition the adapter DECLARES supported but for which it carries no encoder
+                    # method is refused BEFORE any encode, under the named error, instead of
+                    # failing every query one at a time after the gallery has been paid for.
+                    try:
+                        _condition_encoder(adapter, condition)
+                    except AdapterEncoderMissing as error:
+                        supported[condition] = (False, str(error))
             gpu_identity = _gpu_identity()
             checkpoint_identity = spec.checkpoint_identity or "unknown"
             condition_transform_source_hash = _module_source_hash(sys.modules.get("workbench.composition.inputs"))
@@ -2391,7 +2473,14 @@ def run_composition(data: Any, model_specs: Sequence[ModelSpec], config: Any, *,
                 qids = [query.qid for query in selected]
                 subset_ranks = {condition: {qid: ranks.get(condition, {}).get(qid) for qid in qids}
                                 for condition in conditions}
-                result = compose(subset_ranks, query_count=len(qids))
+                # Chosen from the conditions that ACTUALLY carry ranks in this run, by role. The
+                # alternative -- always passing the protocol triple -- makes every CLVC Full run
+                # publish a null gap, because the image role would be the condition that model
+                # cannot encode at all.
+                gap_conditions, gap_role_reason = resolve_gap_conditions(
+                    [condition for condition in conditions
+                     if any(rank is not None for rank in subset_ranks.get(condition, {}).values())])
+                result = compose(subset_ranks, query_count=len(qids), conditions=gap_conditions)
                 for condition in conditions:
                     output = _result_outputs(artifacts, data.gallery.protocol_id,
                                              model_id, checkpoint_id, attempt, subset, condition, is_synthetic)
@@ -2512,7 +2601,13 @@ def run_composition(data: Any, model_specs: Sequence[ModelSpec], config: Any, *,
                     # only known after scoring must not change the group a run belongs to.
                     "policy_observed": policy_observed,
                     "variant_provenance": variant_provenance,
-                    "metrics": asdict(result), "run_id": run_id, "resume_key": fingerprint,
+                    # `gap_conditions` (inside `metrics`) names the exact triple the gap was
+                    # computed over, so a variant gap can never be read as the protocol gap.
+                    # `gap_role_reason` says why a non-protocol triple was used, or names a role
+                    # with no scored condition. Both are recorded even when the gap is null: the
+                    # reason the gap is absent is as much a fact as the number.
+                    "metrics": {**asdict(result), "gap_role_reason": gap_role_reason},
+                    "run_id": run_id, "resume_key": fingerprint,
                     "reused_query_result_count": len(queries) * len(conditions) if reused else 0,
                 }
                 _atomic_json(summary_path, summary)

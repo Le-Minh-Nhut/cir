@@ -96,17 +96,34 @@ class CompositionResult:
     gap_multimodal_ndcg: float | None
     gap_text_only_ndcg: float | None
     gap_image_only_ndcg: float | None
+    #: The exact condition names the gap was computed over, in (multimodal, text, image) role order.
+    #: `CompositionResult`'s role fields keep their names, so a caller can always see WHICH condition
+    #: filled the image role -- without this, a gap computed over an adapter's named ablation is
+    #: indistinguishable from the protocol gap.
+    gap_conditions: tuple[str, ...] = _CONDITIONS
 
 
-def compose(ranks: Mapping[str, Mapping[str, int | None]], query_count: int | None = None) -> CompositionResult:
+def compose(ranks: Mapping[str, Mapping[str, int | None]], query_count: int | None = None,
+            conditions: Sequence[str] = _CONDITIONS) -> CompositionResult:
     """Aggregate condition metrics and a normalized nDCG gap on the common scored cohort.
 
     Per-condition metrics retain their own scored cohort and coverage. `gap_*_ndcg` values
     expose the same common cohort used by `composition_gap_ndcg`. Extra known cohort members
     absent from all mappings reduce coverage only; they never enter any mean. Missing condition/qid
     ranks stay unscored, never misses. Ties are resolved by the rank producer.
+
+    ``conditions`` is the triple the gap and the shortcut bins are computed over, in role order
+    (multimodal, text, image). It defaults to the protocol triple, which is why every existing call
+    is unchanged. A non-default triple uses the SAME rule over those names -- so an adapter's named
+    ablation can fill the image role and the result records the names in `gap_conditions`. The role
+    FIELDS keep their names: `image_only` carries the metrics of whichever condition filled the role,
+    and `metrics.image_only.condition` says which one.
     """
-    qids = set().union(*(set(ranks.get(condition, {})) for condition in _CONDITIONS))
+    conditions = tuple(conditions)
+    if len(conditions) != 3 or len(set(conditions)) != 3:
+        raise ValueError(f"conditions must be three distinct names in (multimodal, text, image) "
+                         f"role order, got {conditions!r}")
+    qids = set().union(*(set(ranks.get(condition, {})) for condition in conditions))
     cohort_count = len(qids) if query_count is None else query_count
     if cohort_count < 0:
         raise ValueError(f"query_count must not be negative, got {cohort_count}")
@@ -117,12 +134,12 @@ def compose(ranks: Mapping[str, Mapping[str, int | None]], query_count: int | No
         condition_ranks = ranks.get(condition, {})
         return {qid: condition_ranks.get(qid) for qid in qids}
 
-    mm_ranks = cohort_ranks(_CONDITIONS[0])
-    text_ranks = cohort_ranks(_CONDITIONS[1])
-    image_ranks = cohort_ranks(_CONDITIONS[2])
-    mm = compute_condition_metrics(_CONDITIONS[0], mm_ranks)
-    text = compute_condition_metrics(_CONDITIONS[1], text_ranks)
-    image = compute_condition_metrics(_CONDITIONS[2], image_ranks)
+    mm_ranks = cohort_ranks(conditions[0])
+    text_ranks = cohort_ranks(conditions[1])
+    image_ranks = cohort_ranks(conditions[2])
+    mm = compute_condition_metrics(conditions[0], mm_ranks)
+    text = compute_condition_metrics(conditions[1], text_ranks)
+    image = compute_condition_metrics(conditions[2], image_ranks)
     if cohort_count != len(qids):
         mm = _with_query_count(mm, cohort_count)
         text = _with_query_count(text, cohort_count)
@@ -134,8 +151,8 @@ def compose(ranks: Mapping[str, Mapping[str, int | None]], query_count: int | No
     gap_mm = gap_text = gap_image = gap = mrr_gap = None
     if not qids and cohort_count == 0:
         reason = "empty query cohort"
-    elif not all(condition in ranks for condition in _CONDITIONS):
-        missing = [condition for condition in _CONDITIONS if condition not in ranks]
+    elif not all(condition in ranks for condition in conditions):
+        missing = [condition for condition in conditions if condition not in ranks]
         reason = f"missing condition(s): {', '.join(missing)}"
     elif not common:
         reason = "no queries have exact ranks in all three conditions"
@@ -153,11 +170,14 @@ def compose(ranks: Mapping[str, Mapping[str, int | None]], query_count: int | No
             gap = 1.0 - max(gap_text, gap_image) / gap_mm
             reason = None
 
-    all_ranks = {condition: ranks.get(condition, {}) for condition in _CONDITIONS}
-    outcomes = shortcut_outcomes(all_ranks)
+    all_ranks = {condition: ranks.get(condition, {}) for condition in conditions}
+    # The bins are computed over the SAME triple as the gap: a variant run that reported the
+    # protocol's shortcut outcomes would be mixing two cohorts, since the image role is a different
+    # condition and `neither_scored` is counted per qid across all three.
+    outcomes = shortcut_outcomes(all_ranks, conditions=conditions)
     outcomes["neither_scored"] += cohort_count - len(qids)
     return CompositionResult(mm, text, image, gap, reason, mrr_gap, outcomes,
-                             gap_count, gap_mm, gap_text, gap_image)
+                             gap_count, gap_mm, gap_text, gap_image, conditions)
 
 
 def _with_query_count(metrics: ConditionMetrics, query_count: int) -> ConditionMetrics:
@@ -167,19 +187,28 @@ def _with_query_count(metrics: ConditionMetrics, query_count: int) -> ConditionM
                    coverage=metrics.scored_count / query_count if query_count else 1.0)
 
 
-def shortcut_outcomes(ranks: Mapping[str, Mapping[str, int | None]], k: int = SHORTCUT_K) -> dict[str, int]:
+def shortcut_outcomes(ranks: Mapping[str, Mapping[str, int | None]], k: int = SHORTCUT_K,
+                      conditions: Sequence[str] = _CONDITIONS) -> dict[str, int]:
     """Count mutually exclusive K-hit outcomes; `neither_scored` counts excluded qids.
 
     A qid missing any condition rank is excluded from outcome bins and counted in
     `neither_scored`; it is not treated as a retrieval miss. Ties are producer-resolved.
+
+    `conditions` is the (multimodal, text, image) triple, same convention as `compose`: the bins are
+    defined over whichever three conditions the caller measured, never over a hard-coded module
+    tuple, so a variant run's bins describe the cohort it actually scored.
     """
     if k < 1:
         raise ValueError(f"k must be positive, got {k}")
-    qids = set().union(*(set(ranks.get(condition, {})) for condition in _CONDITIONS))
+    conditions = tuple(conditions)
+    if len(conditions) != 3 or len(set(conditions)) != 3:
+        raise ValueError(f"conditions must be three distinct names in (multimodal, text, image) "
+                         f"role order, got {conditions!r}")
+    qids = set().union(*(set(ranks.get(condition, {})) for condition in conditions))
     outcomes = {name: 0 for name in
                 ("text_only", "image_only", "both", "composition_required", "unresolved", "neither_scored")}
     for qid in qids:
-        values = [ranks.get(condition, {}).get(qid) for condition in _CONDITIONS]
+        values = [ranks.get(condition, {}).get(qid) for condition in conditions]
         if any(rank is None for rank in values):
             outcomes["neither_scored"] += 1
             continue
