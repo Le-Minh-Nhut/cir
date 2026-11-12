@@ -21,6 +21,9 @@ const CONDITION_LABELS: Record<string, string> = {
   multimodal: "Ảnh + văn bản (MM)",
   text_only_black_image: "Chỉ văn bản",
   image_only_empty_text: "Chỉ ảnh",
+  // An adapter's named image-role ablation is a condition like the others and carries the label the
+  // backend serves for it, so a variant run's window is never titled with another condition's name.
+  clvc_image_encoder_only: "Chỉ ảnh (image encoder)",
 };
 
 /** One query, in one run: reference image, edit text, target image, the three condition ranks, and
