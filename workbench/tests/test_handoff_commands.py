@@ -488,30 +488,48 @@ def test_no_release_document_points_at_a_superseded_source_sha() -> None:
         "the recorded source to a revision that includes them, or the handoff installs code that was "
         "never gated.")
 
-    handoff = (ROOT / "workbench/docs/PC_PILOT_HANDOFF.md").read_text(encoding="utf-8")
-    checkouts = re.findall(r"^git checkout ([0-9a-f]{7,40})", handoff, re.M)
-    assert checkouts, "the handoff must give an explicit checkout command"
-    for target in re.findall(r"^git checkout (\S+)", handoff, re.M):
-        assert re.fullmatch(r"[0-9a-f]{7,40}", target), (
-            f"the handoff offers `git checkout {target}`, which is a MOVING TARGET: a branch name or "
-            "FETCH_HEAD cannot be compared with the tested source, so following it may install code "
-            "this test never gated. Pin the revision.")
+    handoff_path = ROOT / "workbench/docs/PC_PILOT_HANDOFF.md"
+    handoff = handoff_path.read_text(encoding="utf-8")
+    # The handoff is the one document that MUST tell the operator what to install, so the
+    # "explicit checkout command" requirement stays scoped to it. Every OTHER release document may
+    # legitimately have none -- but if it has one, it is an instruction to an operator and it is
+    # held to the same rule. Scoping the extraction to the handoff alone let the verdict keep
+    # `git checkout 96d86010` twenty lines below a `TESTED_SOURCE_SHA` of `117fc172` while this test
+    # stayed green, which is exactly the class of error it exists to catch.
+    assert re.findall(r"^git checkout ([0-9a-f]{7,40})", handoff, re.M), (
+        "the handoff must give an explicit checkout command")
 
     tested_production = _production_tree(tested_sha)
     assert tested_production is not None, f"could not read the production tree of {tested_sha}"
-    for sha in checkouts:
-        assert subprocess.run(["git", "rev-parse", sha], cwd=ROOT, capture_output=True,
-                              text=True).returncode == 0, f"checkout points at unknown commit {sha}"
-        # Not `FETCH_HEAD` and not a branch name: neither is a fixed revision, so neither can be
-        # compared with the tested source, and a moving target cannot be verified by this test.
-        assert re.fullmatch(r"[0-9a-f]{7,40}", sha), (
-            f"the handoff must check out a fixed revision; {sha!r} is a moving target")
-        checked_out = _production_tree(sha)
-        assert checked_out == tested_production, (
-            f"the handoff tells the operator to check out {sha}, whose PRODUCTION source differs from "
-            f"the tested source {tested_sha}: following it installs different code. If {sha} is a "
-            f"legitimate documentation-only follow-up its production tree would be identical; it is "
-            f"not, so the tested source itself must be advanced instead.")
+
+    for document in RELEASE_DOCS:
+        rel = document.relative_to(ROOT)
+        text = document.read_text(encoding="utf-8")
+        for target in re.findall(r"^git checkout (\S+)", text, re.M):
+            assert re.fullmatch(r"[0-9a-f]{7,40}", target), (
+                f"{rel} offers `git checkout {target}`, which is a MOVING TARGET: a branch name or "
+                "FETCH_HEAD cannot be compared with the tested source, so following it may install "
+                "code this test never gated. Pin the revision.")
+        for sha in re.findall(r"^git checkout ([0-9a-f]{7,40})", text, re.M):
+            assert subprocess.run(["git", "rev-parse", sha], cwd=ROOT, capture_output=True,
+                                  text=True).returncode == 0, (
+                f"{rel} tells the operator to check out {sha}, which is not a commit in this repo")
+            checked_out = _production_tree(sha)
+            assert checked_out == tested_production, (
+                f"{rel} tells the operator to check out {sha}, whose PRODUCTION source differs from "
+                f"the tested source {tested_sha}: following it installs different code. If {sha} is a "
+                f"legitimate documentation-only follow-up its production tree would be identical; it "
+                f"is not, so the tested source itself must be advanced instead.")
+        # `git rev-parse HEAD  # must print <sha>` is the same instruction in prose: an operator
+        # follows it to decide the checkout worked, so the sha it names is held to the same rule.
+        for expected in re.findall(r"must print ([0-9a-f]{7,40})", text):
+            assert subprocess.run(["git", "rev-parse", expected], cwd=ROOT, capture_output=True,
+                                  text=True).returncode == 0, (
+                f"{rel} tells the operator HEAD must print {expected}, which is not a commit here")
+            assert _production_tree(expected) == tested_production, (
+                f"{rel} tells the operator HEAD must print {expected}, whose PRODUCTION source "
+                f"differs from the tested source {tested_sha}: an operator who checked that would "
+                f"believe a different tree was installed.")
 
     # A documentation-only successor is allowed, and this is what distinguishes it from an obsolete
     # ancestor: same production tree, different commit.

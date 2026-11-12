@@ -492,8 +492,8 @@ static or fixture-level.
 ```bash
 git clone git@github.com:Le-Minh-Nhut/cir.git && cd cir
 git fetch origin research/cir-failure-workbench
-git checkout 96d86010e85048d82f2dacf26e17d7b7206d31ab   # the TESTED_SOURCE_SHA above; never `git reset --hard`
-git rev-parse HEAD             # must print 96d86010e85048d82f2dacf26e17d7b7206d31ab
+git checkout 117fc17220d0e35651c6778c1afb62e271c8d944   # the TESTED_SOURCE_SHA above; never `git reset --hard`
+git rev-parse HEAD             # must print 117fc17220d0e35651c6778c1afb62e271c8d944
 ./pc.sh                        # the one operator command
 ```
 
