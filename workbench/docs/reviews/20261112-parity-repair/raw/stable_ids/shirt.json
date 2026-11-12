@@ -1,0 +1,672 @@
+{
+  "category": "shirt",
+  "stable_ids": {
+    "reference": "B00AMD5I7U",
+    "target": "B005LIXPPI",
+    "sample_index": 1352,
+    "gallery_rows": {
+      "reference": 492,
+      "target": 2238
+    },
+    "release": {
+      "qid": "7:3362",
+      "query_img_path": "mbeir_images/fashioniq_images/B00AMD5I7U.jpg",
+      "query_txt": "Is blue and has a lighter logo.",
+      "pos_cand_list": [
+        "7:73545"
+      ],
+      "target_did": "7:73545",
+      "target_img_path": "mbeir_images/fashioniq_images/B005LIXPPI.jpg",
+      "joined_rows_for_reference": 1
+    }
+  },
+  "protocol": {
+    "gallery": "datasets.py:186-195 get_test_data(val-split), rebuilt from captions/cap.shirt.val.json, asserted identical",
+    "normalize": "test.py:54-58 per-row L2, float32",
+    "score": "test.py:62 all_queries.dot(all_imgs.T), float32",
+    "mask": "test.py:67-68 sims[i, test_targets_id.index(source_img_id)] = -10e10",
+    "rank": "test.py:71 np.argsort(-sims[i]); adapters.py:393-409 closed form 1 + #greater + #earlier-equal",
+    "tie_epsilon": 1e-06,
+    "eras": {
+      "pre": "/home/heheboiz/data/cir/workbench/docs/reviews/20261109-native15-composition-limn/raw/encoder_parity",
+      "post": "/tmp/encparity_raw"
+    }
+  },
+  "cross_side_feature_distance": {
+    "pre": 1.648440957069397e-06,
+    "post": 1.650303602218628e-06
+  },
+  "era_shift": {
+    "native_query": 0.01691335439682007,
+    "native_gallery": 0.0003574155271053314,
+    "adapter_query": 0.016913391649723053,
+    "adapter_gallery": 0.0003574267029762268
+  },
+  "cause_of_pre_regeneration_state": {
+    "classification": "ONE_SHARED_RELATION_PRE_REGENERATION",
+    "pre_cross_side_distance": 1.648440957069397e-06,
+    "relation_change_moves_features_by": 0.01691335439682007,
+    "ratio": 10260.212429378531,
+    "meaning": "both pre-era sides sat within the 1e-6 float32 noise floor of each other while a relation change moves features by ~1e-2, so the pre-era pair was computed with ONE relation tensor on both sides; the historical 1215-vs-1216 disagreement was a boundary case INSIDE that shared-relation state, not a comparison of two relations"
+  },
+  "pre_regeneration": {
+    "sides": {
+      "adapter": {
+        "rank_masked_argsort": 1372,
+        "rank_unmasked_argsort": 1373,
+        "rank_masked_tie_policy": 1372,
+        "count_strictly_greater_masked": 1371,
+        "count_equal_excluding_self_masked": 0,
+        "target_score_masked": 0.17480599880218506,
+        "margin_above": 0.00016057491302490234,
+        "nearest_above": {
+          "img_id": "B004R1CKX8",
+          "score": 0.17496657371520996
+        },
+        "margin_below": 2.2351741790771484e-07,
+        "nearest_below": {
+          "img_id": "B005UQ9WKI",
+          "score": 0.17480577528476715
+        },
+        "dirichlet_gap": null
+      },
+      "native_val_control": {
+        "rank_masked_argsort": 1373,
+        "rank_unmasked_argsort": 1374,
+        "rank_masked_tie_policy": 1373,
+        "count_strictly_greater_masked": 1372,
+        "count_equal_excluding_self_masked": 0,
+        "target_score_masked": 0.17480586469173431,
+        "margin_above": 1.1920928955078125e-07,
+        "nearest_above": {
+          "img_id": "B005UQ9WKI",
+          "score": 0.17480598390102386
+        },
+        "margin_below": 3.725290298461914e-07,
+        "nearest_below": {
+          "img_id": "B00CC2O4PQ",
+          "score": 0.17480549216270447
+        },
+        "dirichlet_gap": null
+      }
+    },
+    "rank_differences": {
+      "count": 1,
+      "agrees": false,
+      "adapter_rank": 1372,
+      "native_rank": 1373
+    },
+    "row_max_abs_delta": 7.7858567237854e-07,
+    "archived_claim": {
+      "source": "git show HEAD:workbench/docs/reviews/20261109-native15-composition-limn/g1_g2.encoder.shirt.adapter.json",
+      "block": {
+        "count": 1,
+        "head": [
+          1352
+        ],
+        "classification": [
+          {
+            "index": 1352,
+            "adapter_rank": 1372,
+            "native_rank": 1373,
+            "adapter_matrix_gap": 0.00016057491302490234,
+            "native_matrix_gap": 0.00016041100025177002,
+            "min_gap": 0.00016041100025177002,
+            "explained_by_tie_epsilon": false
+          }
+        ],
+        "non_tie_count": 1,
+        "min_gap_abs": 0.00016041100025177002
+      },
+      "relation_state_present": false
+    }
+  },
+  "post_regeneration": {
+    "sides": {
+      "adapter": {
+        "rank_masked_argsort": 1372,
+        "rank_unmasked_argsort": 1373,
+        "rank_masked_tie_policy": 1372,
+        "count_strictly_greater_masked": 1371,
+        "count_equal_excluding_self_masked": 0,
+        "target_score_masked": 0.1751340925693512,
+        "margin_above": 0.00017429888248443604,
+        "nearest_above": {
+          "img_id": "B006VWU4TI",
+          "score": 0.17530839145183563
+        },
+        "margin_below": 1.290440559387207e-05,
+        "nearest_below": {
+          "img_id": "B004R1CKX8",
+          "score": 0.17512118816375732
+        },
+        "dirichlet_gap": null
+      },
+      "native_val_control": {
+        "rank_masked_argsort": 1372,
+        "rank_unmasked_argsort": 1373,
+        "rank_masked_tie_policy": 1372,
+        "count_strictly_greater_masked": 1371,
+        "count_equal_excluding_self_masked": 0,
+        "target_score_masked": 0.17513398826122284,
+        "margin_above": 0.00017458200454711914,
+        "nearest_above": {
+          "img_id": "B006VWU4TI",
+          "score": 0.17530857026576996
+        },
+        "margin_below": 1.3142824172973633e-05,
+        "nearest_below": {
+          "img_id": "B004R1CKX8",
+          "score": 0.17512084543704987
+        },
+        "dirichlet_gap": null
+      }
+    },
+    "rank_differences": {
+      "count": 0,
+      "agrees": true,
+      "adapter_rank": 1372,
+      "native_rank": 1372
+    },
+    "row_max_abs_delta": 7.82310962677002e-07,
+    "artifact": {
+      "source": "workbench/docs/reviews/20261109-native15-composition-limn/g1_g2.encoder.shirt.adapter.json",
+      "file_sha256": "58524f514588ac0fe77c97c484d5ac6a5e2dae7de5c004d06c6b421565cf8d31",
+      "rank_differences_vs_native_val_control": {
+        "count": 0,
+        "head": [],
+        "classification": [],
+        "non_tie_count": 0,
+        "min_gap_abs": 0.0
+      },
+      "adapter_vs_argsort_unmasked_count": 7,
+      "native_mask_only_effect_count": 1132,
+      "native_second_process_floor": {
+        "available": true,
+        "score_max_abs_vs_first_native_process": 0.03517739474773407,
+        "rank_differences_vs_first_native_process": {
+          "count": 475,
+          "head": [
+            4,
+            17,
+            20,
+            22,
+            29,
+            31,
+            33,
+            36,
+            38,
+            42,
+            43,
+            48,
+            56,
+            61,
+            62,
+            63,
+            64,
+            67,
+            74,
+            77
+          ]
+        },
+        "recall": {
+          "r1": 25.564278704612367,
+          "r10": 55.299313052011776,
+          "r50": 75.3189401373896
+        }
+      },
+      "recall": {
+        "adapter_style": {
+          "r1": 19.479882237487733,
+          "r10": 54.26889106967615,
+          "r50": 75.22080471050049
+        },
+        "native_convention_on_adapter_features": {
+          "r1": 25.564278704612367,
+          "r10": 55.20117762512267,
+          "r50": 75.36800785083415
+        },
+        "native_convention_val_control": {
+          "r1": 25.564278704612367,
+          "r10": 55.20117762512267,
+          "r50": 75.36800785083415
+        }
+      },
+      "relation_state": {
+        "seed": 20261111,
+        "sha256": "20db0c27c979e9a0938c71af5142458dfa2070468d0ad3fcb6f24134c2f9ce92",
+        "matches_pinned_digest": true,
+        "expected_sha256": "20db0c27c979e9a0938c71af5142458dfa2070468d0ad3fcb6f24134c2f9ce92",
+        "in_state_dict": false,
+        "transform_policy": {
+          "query_transform": "preprocess_val",
+          "gallery_transform": "preprocess_val",
+          "native_query_transform": "preprocess_train",
+          "native_gallery_transform": "preprocess_val",
+          "kind": "declared adaptation",
+          "note": "CIRCUS composition uses preprocess_val for both query and gallery; native ENCODER uses preprocess_train (RandomResizedCrop) for the query and preprocess_val for the gallery. Keeping val for both is deliberate: the asymmetry is a property of the native release, and honouring it here would change every published number."
+        },
+        "path": "/tmp/encparity_raw/construction_state"
+      }
+    }
+  },
+  "attribution": {
+    "verdict": "RESOLVED_BY_RELATION_SEED",
+    "pre_deciding_margin": 1.1920928955078125e-07,
+    "pre_cross_side_row_max_abs": 7.7858567237854e-07,
+    "pre_margin_over_cross_side_noise": 0.15311004784688995,
+    "pre_rank_native": 1373,
+    "pre_rank_adapter": 1372,
+    "post_rank_native": 1372,
+    "post_rank_adapter": 1372,
+    "pre_target_score_native": 0.17480586469173431,
+    "post_target_score_native": 0.17513398826122284,
+    "target_score_delta_native": 0.0003281235694885254,
+    "native_score_row_max_abs_pre_vs_post": 0.0009765774011611938,
+    "adapter_score_row_max_abs_pre_vs_post": 0.0009765326976776123,
+    "movement_over_pre_margin": 8192.125,
+    "relation_seed": 20261111,
+    "relation_sha256": "20db0c27c979e9a0938c71af5142458dfa2070468d0ad3fcb6f24134c2f9ce92",
+    "relation_matches_pinned": true,
+    "pre_relation_state_present": false,
+    "how_a_shared_relation_still_disagreed": "the pre-era target sat on a knife edge: its deciding margin (1.1920928955078125e-07) is 0.15311004784688995 of the residual cross-side score difference on the same row (7.7858567237854e-07). Two implementations that agree to that level still order two near-equal rows differently, so the historical 1-rank difference needs no relation difference at all -- it is the float32 noise both sides already carry, landing on a boundary. The seeded re-run moves both queries by ~1e2-1e4x that margin, which destroys the knife edge instead of resolving a policy question"
+  },
+  "neighbourhood": {
+    "pre": {
+      "adapter": [
+        {
+          "rank": 1365,
+          "gallery_row": 966,
+          "img_id": "B00DG9ISYM",
+          "score": 0.17560188472270966
+        },
+        {
+          "rank": 1366,
+          "gallery_row": 697,
+          "img_id": "B00B7SB6RA",
+          "score": 0.17557433247566223
+        },
+        {
+          "rank": 1367,
+          "gallery_row": 171,
+          "img_id": "B0093OQBCK",
+          "score": 0.1754862368106842
+        },
+        {
+          "rank": 1368,
+          "gallery_row": 2685,
+          "img_id": "B0093OQREM",
+          "score": 0.1754862368106842
+        },
+        {
+          "rank": 1369,
+          "gallery_row": 2622,
+          "img_id": "B00BTJJVPQ",
+          "score": 0.17532160878181458
+        },
+        {
+          "rank": 1370,
+          "gallery_row": 547,
+          "img_id": "B00863JI88",
+          "score": 0.17521661520004272
+        },
+        {
+          "rank": 1371,
+          "gallery_row": 2513,
+          "img_id": "B004R1CKX8",
+          "score": 0.17496657371520996
+        },
+        {
+          "rank": 1372,
+          "gallery_row": 2238,
+          "img_id": "B005LIXPPI",
+          "score": 0.17480599880218506
+        },
+        {
+          "rank": 1373,
+          "gallery_row": 806,
+          "img_id": "B005UQ9WKI",
+          "score": 0.17480577528476715
+        },
+        {
+          "rank": 1374,
+          "gallery_row": 450,
+          "img_id": "B00CC2O4PQ",
+          "score": 0.17480549216270447
+        },
+        {
+          "rank": 1375,
+          "gallery_row": 2374,
+          "img_id": "B006VWU4TI",
+          "score": 0.17472343146800995
+        },
+        {
+          "rank": 1376,
+          "gallery_row": 1783,
+          "img_id": "B004D8QCN4",
+          "score": 0.17467652261257172
+        },
+        {
+          "rank": 1377,
+          "gallery_row": 756,
+          "img_id": "B00EJRN3HM",
+          "score": 0.17464493215084076
+        },
+        {
+          "rank": 1378,
+          "gallery_row": 2475,
+          "img_id": "B005KB7QSS",
+          "score": 0.17464427649974823
+        },
+        {
+          "rank": 1379,
+          "gallery_row": 74,
+          "img_id": "B001KBZ1QQ",
+          "score": 0.17464369535446167
+        },
+        {
+          "rank": 1380,
+          "gallery_row": 1895,
+          "img_id": "B008J83O62",
+          "score": 0.17455294728279114
+        }
+      ],
+      "native_val_control": [
+        {
+          "rank": 1365,
+          "gallery_row": 966,
+          "img_id": "B00DG9ISYM",
+          "score": 0.17560195922851562
+        },
+        {
+          "rank": 1366,
+          "gallery_row": 697,
+          "img_id": "B00B7SB6RA",
+          "score": 0.17557431757450104
+        },
+        {
+          "rank": 1367,
+          "gallery_row": 171,
+          "img_id": "B0093OQBCK",
+          "score": 0.17548629641532898
+        },
+        {
+          "rank": 1368,
+          "gallery_row": 2685,
+          "img_id": "B0093OQREM",
+          "score": 0.17548629641532898
+        },
+        {
+          "rank": 1369,
+          "gallery_row": 2622,
+          "img_id": "B00BTJJVPQ",
+          "score": 0.1753215789794922
+        },
+        {
+          "rank": 1370,
+          "gallery_row": 547,
+          "img_id": "B00863JI88",
+          "score": 0.17521648108959198
+        },
+        {
+          "rank": 1371,
+          "gallery_row": 2513,
+          "img_id": "B004R1CKX8",
+          "score": 0.17496627569198608
+        },
+        {
+          "rank": 1372,
+          "gallery_row": 806,
+          "img_id": "B005UQ9WKI",
+          "score": 0.17480598390102386
+        },
+        {
+          "rank": 1373,
+          "gallery_row": 2238,
+          "img_id": "B005LIXPPI",
+          "score": 0.17480586469173431
+        },
+        {
+          "rank": 1374,
+          "gallery_row": 450,
+          "img_id": "B00CC2O4PQ",
+          "score": 0.17480549216270447
+        },
+        {
+          "rank": 1375,
+          "gallery_row": 2374,
+          "img_id": "B006VWU4TI",
+          "score": 0.17472364008426666
+        },
+        {
+          "rank": 1376,
+          "gallery_row": 1783,
+          "img_id": "B004D8QCN4",
+          "score": 0.17467623949050903
+        },
+        {
+          "rank": 1377,
+          "gallery_row": 756,
+          "img_id": "B00EJRN3HM",
+          "score": 0.17464479804039001
+        },
+        {
+          "rank": 1378,
+          "gallery_row": 2475,
+          "img_id": "B005KB7QSS",
+          "score": 0.1746443510055542
+        },
+        {
+          "rank": 1379,
+          "gallery_row": 74,
+          "img_id": "B001KBZ1QQ",
+          "score": 0.17464366555213928
+        },
+        {
+          "rank": 1380,
+          "gallery_row": 1895,
+          "img_id": "B008J83O62",
+          "score": 0.17455312609672546
+        }
+      ]
+    },
+    "post": {
+      "adapter": [
+        {
+          "rank": 1365,
+          "gallery_row": 97,
+          "img_id": "B001GHIUDK",
+          "score": 0.17551098763942719
+        },
+        {
+          "rank": 1366,
+          "gallery_row": 547,
+          "img_id": "B00863JI88",
+          "score": 0.17550763487815857
+        },
+        {
+          "rank": 1367,
+          "gallery_row": 2622,
+          "img_id": "B00BTJJVPQ",
+          "score": 0.17539337277412415
+        },
+        {
+          "rank": 1368,
+          "gallery_row": 2685,
+          "img_id": "B0093OQREM",
+          "score": 0.17537006735801697
+        },
+        {
+          "rank": 1369,
+          "gallery_row": 171,
+          "img_id": "B0093OQBCK",
+          "score": 0.17537006735801697
+        },
+        {
+          "rank": 1370,
+          "gallery_row": 697,
+          "img_id": "B00B7SB6RA",
+          "score": 0.17534980177879333
+        },
+        {
+          "rank": 1371,
+          "gallery_row": 2374,
+          "img_id": "B006VWU4TI",
+          "score": 0.17530839145183563
+        },
+        {
+          "rank": 1372,
+          "gallery_row": 2238,
+          "img_id": "B005LIXPPI",
+          "score": 0.1751340925693512
+        },
+        {
+          "rank": 1373,
+          "gallery_row": 2513,
+          "img_id": "B004R1CKX8",
+          "score": 0.17512118816375732
+        },
+        {
+          "rank": 1374,
+          "gallery_row": 1523,
+          "img_id": "B00C2WTGEU",
+          "score": 0.17499911785125732
+        },
+        {
+          "rank": 1375,
+          "gallery_row": 806,
+          "img_id": "B005UQ9WKI",
+          "score": 0.1749056726694107
+        },
+        {
+          "rank": 1376,
+          "gallery_row": 1870,
+          "img_id": "B006VE8GR8",
+          "score": 0.17476938664913177
+        },
+        {
+          "rank": 1377,
+          "gallery_row": 1699,
+          "img_id": "B008AL4EXK",
+          "score": 0.174666166305542
+        },
+        {
+          "rank": 1378,
+          "gallery_row": 2475,
+          "img_id": "B005KB7QSS",
+          "score": 0.17464812099933624
+        },
+        {
+          "rank": 1379,
+          "gallery_row": 756,
+          "img_id": "B00EJRN3HM",
+          "score": 0.17460277676582336
+        },
+        {
+          "rank": 1380,
+          "gallery_row": 450,
+          "img_id": "B00CC2O4PQ",
+          "score": 0.17455272376537323
+        }
+      ],
+      "native_val_control": [
+        {
+          "rank": 1365,
+          "gallery_row": 97,
+          "img_id": "B001GHIUDK",
+          "score": 0.1755111664533615
+        },
+        {
+          "rank": 1366,
+          "gallery_row": 547,
+          "img_id": "B00863JI88",
+          "score": 0.1755075752735138
+        },
+        {
+          "rank": 1367,
+          "gallery_row": 2622,
+          "img_id": "B00BTJJVPQ",
+          "score": 0.17539329826831818
+        },
+        {
+          "rank": 1368,
+          "gallery_row": 2685,
+          "img_id": "B0093OQREM",
+          "score": 0.17537009716033936
+        },
+        {
+          "rank": 1369,
+          "gallery_row": 171,
+          "img_id": "B0093OQBCK",
+          "score": 0.17537009716033936
+        },
+        {
+          "rank": 1370,
+          "gallery_row": 697,
+          "img_id": "B00B7SB6RA",
+          "score": 0.17534977197647095
+        },
+        {
+          "rank": 1371,
+          "gallery_row": 2374,
+          "img_id": "B006VWU4TI",
+          "score": 0.17530857026576996
+        },
+        {
+          "rank": 1372,
+          "gallery_row": 2238,
+          "img_id": "B005LIXPPI",
+          "score": 0.17513398826122284
+        },
+        {
+          "rank": 1373,
+          "gallery_row": 2513,
+          "img_id": "B004R1CKX8",
+          "score": 0.17512084543704987
+        },
+        {
+          "rank": 1374,
+          "gallery_row": 1523,
+          "img_id": "B00C2WTGEU",
+          "score": 0.17499898374080658
+        },
+        {
+          "rank": 1375,
+          "gallery_row": 806,
+          "img_id": "B005UQ9WKI",
+          "score": 0.174905925989151
+        },
+        {
+          "rank": 1376,
+          "gallery_row": 1870,
+          "img_id": "B006VE8GR8",
+          "score": 0.17476946115493774
+        },
+        {
+          "rank": 1377,
+          "gallery_row": 1699,
+          "img_id": "B008AL4EXK",
+          "score": 0.1746661216020584
+        },
+        {
+          "rank": 1378,
+          "gallery_row": 2475,
+          "img_id": "B005KB7QSS",
+          "score": 0.17464813590049744
+        },
+        {
+          "rank": 1379,
+          "gallery_row": 756,
+          "img_id": "B00EJRN3HM",
+          "score": 0.1746026575565338
+        },
+        {
+          "rank": 1380,
+          "gallery_row": 450,
+          "img_id": "B00CC2O4PQ",
+          "score": 0.1745527684688568
+        }
+      ]
+    }
+  }
+}

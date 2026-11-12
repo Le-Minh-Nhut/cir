@@ -1,0 +1,14 @@
+=== du dirs ===
+991916036	data/FashionIQ/images
+288392173	data/FashionIQ/resized_image
+286225672	data/FashionIQ/resized_images
+403551063	data/FashionIQ/captions
+1398312	data/FashionIQ/image_splits
+11762668	data/FashionIQ/qwen_captions
+=== qwen sha ===
+b7129bafc56ed7f33ea5175e565358b042b5ef9263af002758564579ebb5b6a6  data/FashionIQ/qwen_captions/dress_cot_val.json
+bbe6f689dfe0c5fcc897979f90877fcaa2c4c8d3dc405cb64f1507fc78452cc9  data/FashionIQ/qwen_captions/shirt_cot_val.json
+acdacc3d8d0565e645324ddd838cb288f1bc69434635d83ece127b93dacac1cc  data/FashionIQ/qwen_captions/toptee_cot_val.json
+data/FashionIQ/qwen_captions/dress_cot_val.json 2817386
+data/FashionIQ/qwen_captions/shirt_cot_val.json 5015979
+data/FashionIQ/qwen_captions/toptee_cot_val.json 3929303

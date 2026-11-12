@@ -75,6 +75,17 @@ screenshots"), nên chúng **không còn** untracked. Trạng thái hiện tại
 Chụp bằng đúng các lệnh in kèm; không suy diễn từ khối §0 ở trên. **Đây là nguồn duy nhất** cho trạng
 thái sống; §9 chỉ lặp lại các giá trị này.
 
+§0.1 đo tại `cd9ced2155a2d98e9021c549b4ca7310f3fac51b`; mọi hậu duệ chỉ-tài-liệu có cùng cây
+production — `git diff --quiet aea143bd HEAD -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'`
+rỗng — và đó là điều kiện để đọc các số này, không phải `HEAD` bằng đúng sha nào.
+
+Đo lại lúc viết dòng này (`HEAD = 40c897c31bbdd76b5a76f65935c7dd0f7fef0e94`): lệnh trên exit `0`, nên
+các commit sau `cd9ced2` đúng là chỉ-tài-liệu. Nhưng cây làm việc **hiện** mang sửa đổi production chưa
+commit của chiến dịch — `workbench/backend/composition.py`, `workbench/backend/parity_gate.py`, và 12
+artifact `g1_g2.*` — nên cùng phép so với pin mà **không** giới hạn `HEAD`
+(`git diff --quiet aea143bd -- …`) cho exit `1`: bản trên đĩa chưa phải mốc đo, và `HEAD` chỉ thành mốc
+đo khi các sửa đổi đó được commit hoặc bỏ.
+
 ```
 $ date -Iseconds
 2026-11-12T13:36:19+07:00
@@ -271,7 +282,7 @@ MainPID trước → sau (`raw/verify/86-systemd-user-services.md` §"MainPIDs, 
 
 Năm endpoint sau cutover đều 200: `direct_bench`, `direct_fe_root`, `direct_comp`, `proxied_bench`,
 `proxied_comp`; bundle phục vụ không đổi (`assets/index-DYYSN7oG.js` trước và sau — tên bundle **lịch
-sử** của lần cutover `23:48:4x`; bundle đang phục vụ hiện nay là `assets/index-DDviexaW.js`, xem §9)
+sử** của lần cutover `23:48:4x`; bundle đang phục vụ hiện nay là `assets/index-NnjrdZLG.js`, xem §9)
 (`raw/verify/86-systemd-user-services.md` §"Endpoint verification").
 
 Ca `kill -KILL` trên **unit thật** (`raw/verify/86-systemd-user-services.md` §"Live `kill -KILL`
@@ -1377,8 +1388,12 @@ công bố được; `eab10106…-retry-2` và nó là **hai** run khác nhau, k
 
 ## 9. Bảng lệnh kiểm chứng — lệnh dùng để kiểm từng khẳng định
 
-Chạy tại `/home/heheboiz/data/cir`, HEAD `cd9ced2155a2d98e9021c549b4ca7310f3fac51b` (**`== origin`**,
-0 behind / 0 ahead — chiến dịch đã được push). Pin `aea143bd` có cây production **trùng** HEAD (§0.1). Không lệnh nào ghi vào
+Chạy tại `/home/heheboiz/data/cir`. Bảng này là **mốc đo**, không phải một lời khẳng định về `HEAD`:
+§9 đo tại `cd9ced2155a2d98e9021c549b4ca7310f3fac51b`; mọi hậu duệ chỉ-tài-liệu có cùng cây production —
+`git diff --quiet aea143bd HEAD -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'` rỗng — và
+đó là điều kiện để đọc các số này, không phải `HEAD` bằng đúng sha nào. (Đo lại lúc viết dòng này, HEAD
+`40c897c31bbdd76b5a76f65935c7dd0f7fef0e94`: exit `0`. Cây làm việc hiện mang sửa đổi production chưa
+commit của chiến dịch, nên bản trên đĩa chưa phải mốc đo — xem §0.1.) Không lệnh nào ghi vào
 artifact, không lệnh nào chạm unit/GPU/lock. Các giá trị sống dưới đây lặp lại **§0.1**, là nguồn duy
 nhất; nếu hai chỗ lệch nhau thì §0.1 đúng. Cột cuối ghi rõ nguồn của kết quả: **đo lại** = chạy trong lượt tích hợp này
 (2026-11-12T08:4x-08:5x+07); **theo `NN`** = chép từ file bằng chứng ghi kèm, không chạy lại (một số
@@ -1386,7 +1401,7 @@ selection cần GPU hoặc lâu hơn ngân sách của lượt này).
 
 | khẳng định | lệnh | kết quả mong đợi / đã thấy |
 |---|---|---|
-| HEAD và khoảng cách với `origin` (§0.1) | `git rev-parse HEAD` · `git rev-parse origin/research/cir-failure-workbench` · `git rev-list --left-right --count origin/research/cir-failure-workbench...HEAD` | **đo lại:** `cd9ced2155a2d98e9021c549b4ca7310f3fac51b` · cùng sha · `0<TAB>0` — đã push |
+| HEAD và khoảng cách với `origin` (§0.1) | `git rev-parse HEAD` · `git rev-parse origin/research/cir-failure-workbench` · `git rev-list --left-right --count origin/research/cir-failure-workbench...HEAD` | **tại mốc §0.1:** `cd9ced2155a2d98e9021c549b4ca7310f3fac51b` · cùng sha · `0<TAB>0`. **Đo lại lúc viết dòng này:** `40c897c31bbdd76b5a76f65935c7dd0f7fef0e94` · cùng sha · `0<TAB>0`. Hai lần đo hai mốc; không mốc nào là "sha phải giữ" |
 | Hai unit sống đúng MainPID (§0.1, §1.5) | `systemctl --user show -p MainPID -p ActiveEnterTimestamp -p NRestarts cir-workbench-backend.service cir-workbench-frontend.service` | **đo lại:** backend `1758096` / `Thu 2026-11-12 12:20:57 +07` / `0` · frontend `1221148` / `Wed 2026-11-11 23:48:44 +07` / `0` |
 | Không còn run composition nào chạy (§0.1, §4.4b) | `pgrep -af composition_eval.py` | **đo lại:** rỗng `(none)` — mọi run đã thoát |
 | GPU đang bận bao nhiêu (§0.1) | `nvidia-smi --query-gpu=name,driver_version,memory.used,memory.total --format=csv,noheader` · `nvidia-smi --query-compute-apps=pid,used_memory --format=csv,noheader` | **đo lại:** `… 373 MiB, 16303 MiB` · không có compute app |
@@ -1412,7 +1427,7 @@ selection cần GPU hoặc lâu hơn ngân sách của lượt này).
 | LIMN cũng để `7:3038`/`7:3790` unscored (§4.3) | `python3 -c "import json;d=json.load(open('workbench/artifacts/composition/runs/10173dc45dea8c90fd2a284b/ranks/limn_base_iter0_all_categories.json'));r=d['ranks'];[print(c,{q:r[c].get(q) for q in ('7:3038','7:3790','7:2179','7:4066')},sum(1 for v in r[c].values() if v is not None)) for c in r]"` | **đo lại:** cả ba điều kiện `5884` non-null / `119` null; bốn qid đều `None` ở cả ba |
 | Hai cohort gap A/B khớp file derived (§4.4b) | `python3 -c "import json;d=json.load(open('workbench/artifacts/composition/derived/category_routing_inputs/clvc_net_da0a2162be0e159a1a456cec_full.json'));print(d['routing']['resolver_key'],d['routing']['loader_scoped_count'],d['routing']['resolver_routed_count'],d['routing']['still_unscoped_count'],d['routing']['replay_agrees_with_artifact']);[print(c,d[c]['gap_cohort_count'],d[c]['composition_gap_ndcg'],d[c]['caption_free'],d[c].get('reproduces_published')) for c in ('cohort_a_all_scored','cohort_b_loader_scoped')]"` | **đo lại:** `reference_stem+edit_caption 5884 117 2 True`; `cohort_a_all_scored 6001 0.33061712371309204 False True`; `cohort_b_loader_scoped 5884 0.33400015944039774 True None` |
 | Run đã công bố **không** mang khối routing (§5.2 mục 12) | `python3 -c "import json;print('category_routing_inputs' in json.load(open('workbench/artifacts/composition/summary/clvc_net_author_drive_unresolved_da0a2162be0e159a1a456cec/full.json')))"` | `False` — summary bất biến, số đo nằm ở artifact derived riêng |
-| Bundle đang phục vụ (§1.5) | `curl -s http://127.0.0.1:5173/ \| grep -o 'assets/index-[^"]*\.js'` · `sha256sum workbench/frontend/dist/assets/index-DDviexaW.js` · `curl -s http://127.0.0.1:5173/assets/index-DDviexaW.js \| sha256sum` | **đo lại:** trang phục vụ trỏ `assets/index-DDviexaW.js`; bản trong `dist/` và bản qua proxy **cùng** sha256 `58eed6d48640fa1f93d2a64a96d87812a044a3b07b324fb872f6126162bf5369` (392 261 B, mtime `09:34:18.594`). `index-DYYSN7oG.js` và `index-Lne9CV3w.js` là tên **lịch sử**, không phải hiện tại |
+| Bundle đang phục vụ (§1.5) | `curl -s http://127.0.0.1:5173/ \| grep -o 'assets/index-[^"]*\.js'` · `sha256sum workbench/frontend/dist/assets/index-NnjrdZLG.js` · `curl -s http://127.0.0.1:5173/assets/index-NnjrdZLG.js \| sha256sum` | **đo lại:** trang phục vụ trỏ `assets/index-NnjrdZLG.js`; bản trong `dist/` và bản qua proxy **cùng** sha256 `721d34d043858e80c88e76d72866ba8583508318baeebac599cebd1e1c2c80d0` (392 769 B, mtime `2026-11-12 12:20:56.749`). `index-DYYSN7oG.js`, `index-Lne9CV3w.js` và `index-DDviexaW.js` là tên **lịch sử**, không phải hiện tại |
 | Backfill nhận run biến thể **sau** `b887c7e` (§4.4b giới hạn 2) | `workbench/envs/ctl312h/bin/python workbench/scripts/backfill_recall_at_1.py --run clvc_net:da0a2162be0e159a1a456cec; echo rc=$?` | **đo lại:** `rc=0`, record có `multimodal` 1.3997667055490752 / `text_only_black_image` 0.11664722546242293 / `scored_count 6001`, khớp `full.json`. Trước `b887c7e` thì exit 1 với `clvc_image_encoder_only.scored_count: recomputed 6001 vs published None` (`104` §6.1) |
 
 Chỗ nào lệnh **không** chạy được ở đây (cần GPU, cần run mới, hoặc cần một artifact chưa tồn tại) thì

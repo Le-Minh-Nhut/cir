@@ -246,6 +246,14 @@ R@10/R@50) ⇒ **5** sai lệch thật, trong đó **2** cái có khả năng �
 * **"5"** (3 batch-rel + 2 rank) là con số duy nhất đứng được; nếu chỉ muốn nói "cái có thể đổi metric"
   thì phải viết **2**, và phải nói rõ 2 đó **không** đổi R@10/R@50.
 
+**Cập nhật theo artifact hiện hành — chỉ phần đếm hạng.** `scoring_ranking.rank_differences_vs_native_val_control`
+của `g1_g2.encoder.{dress,shirt,toptee}.adapter.json` nay là `count: 0, non_tie_count: 0, min_gap_abs:
+0.0` ở cả ba category, nên số thay đổi rank không-tie là **0**, không phải **2**. Đếm hiện hành:
+**3** block `batch_size_1_vs_n`, **0** rank, **0** đổi R@10/R@50. Hai `max_abs` và taxonomy
+`NOT_COMPARABLE`/`DENOMINATOR_ARTEFACT` trong bảng trên **không** đổi (`ENCODER_RELATION.md` §11: chín
+`max_rel` ở lại nguyên). Nguồn của thay đổi: `ENCODER_RELATION.md` §4 (dress `7:1565` 1215/1216 →
+**1222/1222**; shirt `7:3362` 1373/1372 → **1372/1372**).
+
 **limn G2 — đã đo lại, "3" bảo vệ được, "1" thì không.** `g1_g2.{dress,shirt,toptee}.adapter.json`
 (4 block/category, không có file `.limn.` riêng — tên file dùng tên category):
 mỗi category có **đúng 1** block `within_tolerance: false`, và cả ba đều là cùng một block

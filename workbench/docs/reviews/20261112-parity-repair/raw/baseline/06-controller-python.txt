@@ -1,0 +1,23 @@
+=== ctl312h python -V ===
+Python 3.12.11
+=== ctl312h sys.executable ===
+/home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python
+=== envs dirs ===
+workbench/envs/airknow-adapted/
+workbench/envs/airknow310-la/
+workbench/envs/clip4cir-adapted/
+workbench/envs/clvc39-la/
+workbench/envs/ctl312/
+workbench/envs/ctl312h/
+workbench/envs/dcnet-prepare/
+workbench/envs/dl-adapted/
+workbench/envs/encoder310-adapted/
+workbench/envs/ilearn39-adapted/
+workbench/envs/limn-adapted/
+workbench/envs/limn310-adapted/
+workbench/envs/pair-adapted/
+workbench/envs/pair39-la/
+workbench/envs/sprc-adapted/
+workbench/envs/test-adapted/
+workbench/envs/tgcir39-la/
+workbench/envs/tme-adapted/

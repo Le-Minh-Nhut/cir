@@ -1,0 +1,31 @@
+ workbench/backend/composition.py                   | 372 ++++++++++-
+ workbench/backend/jobs.py                          |  45 +-
+ workbench/backend/main.py                          | 175 ++++-
+ workbench/backend/storage.py                       | 240 +++++++
+ workbench/composition/inputs.py                    |  26 +
+ workbench/composition/metrics.py                   |  68 +-
+ workbench/composition/model_clvc_net.py            | 701 +++++++++++++++++++--
+ workbench/composition/model_tgcir.py               | 632 ++++++++++++++++---
+ workbench/composition/runner.py                    | 327 +++++++++-
+ workbench/frontend/EvaluationPage.tsx              |  30 +-
+ workbench/frontend/FailuresPage.tsx                |  22 +-
+ workbench/frontend/NotebookPage.tsx                |  82 +++
+ workbench/frontend/QueryInspector.tsx              |   3 +
+ workbench/frontend/SamplesPage.tsx                 |  36 +-
+ workbench/frontend/data.ts                         |  21 +-
+ workbench/frontend/inspector.ts                    |  43 +-
+ workbench/frontend/routes.ts                       |  68 +-
+ workbench/frontend/tests/ui_smoke.py               |  46 +-
+ workbench/frontend/types.ts                        |  30 +-
+ workbench/registry/auxiliary_assets.yaml           |  24 +
+ workbench/registry/models.yaml                     |  25 +
+ workbench/registry/preparation_contracts.yaml      |  12 +-
+ workbench/scripts/backfill_recall_at_1.py          | 278 ++++++++
+ workbench/scripts/composition_eval.py              |  47 +-
+ workbench/scripts/derive_routing_cohort_gap.py     | 249 ++++++++
+ workbench/scripts/serve_workbench.py               |   9 +-
+ workbench/systemd/__init__.py                      |   0
+ workbench/systemd/cir-workbench-backend.service.in |  33 +
+ .../systemd/cir-workbench-frontend.service.in      |  28 +
+ workbench/systemd/render_units.py                  | 215 +++++++
+ 30 files changed, 3622 insertions(+), 265 deletions(-)

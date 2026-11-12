@@ -1,0 +1,59 @@
+{
+  "category": "dress",
+  "query_count": 2017,
+  "gallery_count": 2628,
+  "mask_policy": "reference score set to -100000000000.0 (test.py:135); the query's own source image IS in the gallery and is masked to -10e10 before ranking (test.py:134-135), i.e. excluded by score, not by removal",
+  "tie_policy": "np.argsort(-sims[i, :]) with numpy default kind='quicksort' (test.py:138). NOT stable: equal scores take an arbitrary positional order, so a query whose target ties with another gallery image is scored by that arbitrary order. target_rank here is the native positional rank; tied_with_target > 0 marks a tie-decided rank",
+  "gallery_construction": "datasets.FashionIQ.get_test_targets() with gallery_all=False (datasets.py:233-257): the gallery is the order-preserving union of every query's candidate (source) and target image, in first-appearance order -- NOT the full split image list, NOT per-query candidates only",
+  "text_path": "no text correction anywhere: captions reach the model as '<BOS> {c0} <AND> {c1} <EOS>' (datasets.py:173-175) and are tokenised by the checkpoint's own SimpleVocab (text_model.py:23-27)",
+  "transform": "Resize(256) -> CenterCrop(224) -> ToTensor -> Normalize(ImageNet 0.485/0.456/0.406, 0.229/0.224/0.225) -- the native FashionIQ val pipeline, train.py:90-96",
+  "batch_size_argument_plumbing": "params.batch_size, read at test.py:96 (query loop) and test.py:112 (target/gallery loop); the loop flushes at len(imgs) >= params.batch_size. Passed as a SimpleNamespace attribute -- pinned test.py has no CLI, so this is the only argument path, and the checkpoint/pinned files stay byte-identical",
+  "batch_size": 1,
+  "native_recalls": {
+    "r1": 6.7922657411998015,
+    "r10": 28.805156172533465,
+    "r50": 56.71789786812097
+  },
+  "recomputed_recalls": {
+    "r1": 6.7922657411998015,
+    "r10": 28.805156172533465,
+    "r50": 56.71789786812097
+  },
+  "recomputed_matches_native": true,
+  "mismatched_keys": [],
+  "queries_with_tie_at_target": 40,
+  "queries_with_target_rank_none": 0,
+  "references_visible_in_top50": 2017,
+  "checkpoint_digests": {
+    "dress_local_model.pt": "33d44186efd6a25ca0761794115610016182b9f53ff6413083f31b6979769a07",
+    "dress_global_model.pt": "be41c2ba81b803fd392c2c2517bf29cf4dd58205af7777f2becb4f84a80f5c7c"
+  },
+  "checkpoint_root": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/checkpoints/clvc",
+  "source_commit": "bd9b6889489806cb60676597880f91d918b279cb",
+  "source_root": "/home/heheboiz/data/cir/workbench/third_party/CLVCNet",
+  "source_tree_status": {
+    "verified": true,
+    "state": "vendored_in_repo",
+    "expected_commit": "bd9b6889489806cb60676597880f91d918b279cb",
+    "actual_commit": "bd9b6889489806cb60676597880f91d918b279cb",
+    "dirty": false,
+    "error": null,
+    "provenance_digest": "09b9f9818ca49d0e3615e4f9b7ddd6653b2501a0035ec3544765e82543c7620f"
+  },
+  "dataset_root": "/home/heheboiz/data/cir/data/FashionIQ",
+  "annotation_sha256": {
+    "cap.dress.val.json": "5e5117d45695df9c3ca91fac3e0bc49e6422ae9c8b3793f0ac9b3ab83adb7de9",
+    "split.dress.val.json": "21ff91d53c23859da91bfd49f3acc139b7f3a3dc944fc4e4a80194468cf14bab"
+  },
+  "interpreter": {
+    "worker": "/home/heheboiz/data/cir/workbench/envs/clvc39-la/bin/python",
+    "worker_version": "3.9.25",
+    "controller": "/home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python"
+  },
+  "torch_version": "2.7.1+cu128",
+  "torchvision_version": "0.22.1+cu128",
+  "numpy_version": "1.26.4",
+  "device": "cuda",
+  "wall_seconds": 290.169,
+  "native_evaluator": "test.py:test (pinned, unmodified)"
+}

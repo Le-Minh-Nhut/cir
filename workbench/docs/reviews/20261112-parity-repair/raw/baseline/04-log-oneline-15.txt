@@ -1,0 +1,16 @@
+=== git log --oneline -15 ===
+40c897c docs(report): re-pin to aea143bd after the second stationary sweep
+cd9ced2 docs(release): state this sweep's own duration in the aea143bd row
+c569427 release: advance TESTED_SOURCE_SHA to aea143bd after the final stationary sweep
+aea143b fix(web): browse the conditions the RUN measured, not the protocol constant
+5b5a24a docs(report): the porcelain block is a snapshot, and say so
+a425739 docs(report): say why '20 failed' and 'guard 8 passed' are both true
+b5c9965 docs(report): the §0 porcelain block was an unlabelled snapshot
+c64b173 docs(report): re-pin the live-state rows after the pin advance and the push
+a0c08c0 fix(release): stop the verdict installing the superseded revision; guard every release doc
+1a71790 docs(release): point the 117fc172 citations at its own sweep record
+23d847e evidence: commit the post-cutover browser smoke, the tgcir API surface, and the E2E screenshots
+c998504 release: advance TESTED_SOURCE_SHA to 117fc172 after the stationary sweep
+622be09 docs(verify): correct the encode denominator to image encodes (scopes x gallery + query rows); retract the old CLVC figure
+117fc17 docs(report): the caption-free gap is measured — 0.33400015944039774 over 5884
+c9ac37a docs(report): pin the reference_metadata_seen grep to its real scope

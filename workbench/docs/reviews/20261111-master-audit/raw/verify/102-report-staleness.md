@@ -253,9 +253,11 @@ One row was certifying an output it no longer produced: `R@1 vắng khỏi artif
 `35` and `35` → 0/35. Re-measured: **`35` and `36` → 1/36**, the one file being
 `clvc_net_author_drive_unresolved_da0a2162be0e159a1a456cec/full.json`. §4.1's "R@1 absent" is now
 scoped to the three runs it is true for (smoke `1eee4c0a` and both older Full runs), and §5.1 item 6
-carries the same qualification. The served bundle is recorded as `assets/index-DDviexaW.js`, sha256
-`58eed6d48640fa1f93d2a64a96d87812a044a3b07b324fb872f6126162bf5369`, with the older names labelled
-historical.
+carries the same qualification. The served bundle is recorded as `assets/index-NnjrdZLG.js`, sha256
+`721d34d043858e80c88e76d72866ba8583508318baeebac599cebd1e1c2c80d0`, with the older names labelled
+historical. (Measured 2026-11-12: served page, `dist/` and the proxied file carry that one sha256,
+392 769 B. The values this paragraph carried before — `assets/index-DDviexaW.js`, sha256
+`58eed6d48640f…f5369`, 392 261 B — are the superseded measurement.)
 
 **Fifth pass — the report is re-pinned to `aea143bd`.** A second stationary sweep landed and was pushed
 after the fourth pass, so §5.2 item 6 and the §9 pin row still named `117fc172` while the pin had moved.

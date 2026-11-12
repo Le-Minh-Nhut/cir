@@ -1,0 +1,1 @@
+PARITY_MANDATORY_SUBCHECK_FAILED {'dress': ['metrics_parity'], 'shirt': ['metrics_parity'], 'toptee': ['metrics_parity']} []

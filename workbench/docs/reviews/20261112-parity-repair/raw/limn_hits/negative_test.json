@@ -1,0 +1,20 @@
+{
+  "flip_one_side_hit_count": {
+    "status": "PARITY_MANDATORY_SUBCHECK_FAILED",
+    "detail": "4 mandatory subcheck(s) failed: dress.batch_1_vs_n.max_rel, dress.metrics.hit_count_equality, shirt.batch_1_vs_n.max_rel, toptee.batch_1_vs_n.max_rel. A mandatory failure is never reported as a pass, whatever a prose surface above it says",
+    "dress_metrics_checks": [
+      [
+        "dress.metrics.hit_count_equality",
+        false,
+        false
+      ]
+    ],
+    "root": "/tmp/limn-hits-flip_one_side_hit_count-lc9f5n86"
+  },
+  "non_boolean_flag": {
+    "status": "PARITY_EVIDENCE_MALFORMED",
+    "detail": "malformed parity artifact: dress.native_metrics_match_feature_rerank is 'true': only a recorded boolean can certify or refuse hit-count equality",
+    "dress_metrics_checks": [],
+    "root": "/tmp/limn-hits-non_boolean_flag-fctji9ai"
+  }
+}

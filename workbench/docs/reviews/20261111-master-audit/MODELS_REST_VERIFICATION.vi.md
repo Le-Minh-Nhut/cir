@@ -327,7 +327,11 @@ Không còn mục `UNVERIFIED` trong ca này.
   (đọc trực tiếp). ⇒ không phải cosine. **CONFIRMED.**
 - **Đơn vị:** phần trăm, `test.py:160-170` `100*r/len(nn_result)`, k∈{1,10,50}.
   Số: `54.87332239571265 / 74.50337396905957 / 64.68834818238611`; R@1 có mặt
-  (`dress` 21.2692117…).
+  (`dress` 21.2692117…). **Lưu ý:** `21.269211700545366` là R@1 của **HABIT** trong
+  `raw/native/habit.json` (checkpoint `814d2d0c…`, protocol `fashioniq_full_gallery_ref_excluded`) —
+  nó chỉ **trùng số** với R@1 dress của ENCODER trên đường chưa seed, không phải cùng một phép đo
+  (`20261112-parity-repair/ENCODER_RELATION.md` §10 hàng 19 xếp nó là false positive). R@1 dress của
+  ENCODER bản đã seed lại là `21.120475954387704` (`ENCODER_RELATION.md` §8).
 
 ### Saved-vector probe — nó chứng minh gì, và KHÔNG chứng minh gì
 

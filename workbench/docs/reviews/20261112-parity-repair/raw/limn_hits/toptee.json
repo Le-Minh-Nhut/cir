@@ -1,0 +1,60 @@
+{
+  "category": "toptee",
+  "declared_rule": "exact integer hit-count equality at every cutoff",
+  "cutoffs": [
+    1,
+    10,
+    50
+  ],
+  "reference_mask": "native test.py:92 convention applied on BOTH sides (sims[row, reference_position] = -10e10)",
+  "ranking_convention": "native test.py:92 (np.argsort(-sims), 1-based target index)",
+  "eligible_queries": 1961,
+  "eligible_query_set_identical": true,
+  "eligible_query_set_evidence": "limn_native.<category>.jsonl reference_id/target_id sequences equal raw/g2_<category>_inputs.json full_reference_ids/full_target_ids, same length, same order",
+  "native": {
+    "source": "limn_native.toptee.jsonl:target_rank (native LIMN/test.py::test)",
+    "query_count": 1961,
+    "hits": {
+      "r1": 511,
+      "r10": 1181,
+      "r50": 1609
+    },
+    "recall_pct": {
+      "r1": 26.058133605303418,
+      "r10": 60.22437531871494,
+      "r50": 82.04997450280469
+    },
+    "recorded_macro_reproduced_by_stored_ranks": true
+  },
+  "adapter": {
+    "source": "raw/g2_toptee_population.npz queries/gallery (adapter worker features) + raw/g2_toptee_inputs.json",
+    "query_count": 1961,
+    "gallery_count": 2902,
+    "hits": {
+      "r1": 511,
+      "r10": 1181,
+      "r50": 1609
+    },
+    "recall_pct": {
+      "r1": 26.058133605303418,
+      "r10": 60.22437531871494,
+      "r50": 82.04997450280469
+    }
+  },
+  "equality": {
+    "r1": true,
+    "r10": true,
+    "r50": true
+  },
+  "mask_is_native_protocol_not_a_free_parameter": "the reference is unretrievable in the native metric, so the same mask is applied to the adapter features; the reference-eligible production ranking is reported below as information and is never the comparison",
+  "informational": {
+    "adapter_production_ranking_recall_pct": {
+      "r1": 22.182559918408977,
+      "r10": 59.61244263131056,
+      "r50": 81.74400815910249
+    },
+    "adapter_production_ranking_note": "unmasked + tie-counted, i.e. what CIRCUS reports: reference-eligible and tie-safe. It differs from the native metric by protocol, which the adapter artifact already quantifies as mask_explained_rank_shift_count=810. Not a hit-count mismatch.",
+    "rank_rows_identical_to_native_aggregate": true,
+    "stored_rank_differences_in_adapter_artifact": 0
+  }
+}

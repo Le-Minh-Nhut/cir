@@ -1,0 +1,22 @@
+=== nproc ===
+20
+=== Cpus_allowed_list ===
+Cpus_allowed_list:	0-19
+=== nvidia-smi gpu ===
+name, memory.total [MiB], memory.used [MiB]
+NVIDIA GeForce RTX 5070 Ti, 16303 MiB, 991 MiB
+=== nvidia-smi compute-apps ===
+pid, process_name, used_gpu_memory [MiB]
+=== nvidia-smi header ===
+Thu Nov 12 19:25:32 2026       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 580.173.02             Driver Version: 580.173.02     CUDA Version: 13.0     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA GeForce RTX 5070 Ti     Off |   00000000:02:00.0  On |                  N/A |
+|  0%   50C    P3             41W /  300W |     991MiB /  16303MiB |     10%      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+

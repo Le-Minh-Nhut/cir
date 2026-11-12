@@ -1,0 +1,11 @@
+## /tmp/base_parity.json dict
+  keys: ['standard', 'requested_standard', 'advisory_standards', 'passed_models', 'models', 'note']
+    standard = parity-relative/v1
+    requested_standard = parity-relative/v1
+    advisory_standards = ['parity-absolute-relative/v2']
+    passed_models = []
+    models = {'encoder': {'model_id': 'encoder', 'status': 'PARITY_MANDATORY_SUBCHECK_FAILED', 'passed': False, 'complete': False, 'applied_standard': 'parity-relative/v1', 
+    note = `passed` is True only when every mandatory dimension was measured and no mandatory subcheck failed. No artifact is PARITY_NOT_RUN; nothing measured held is PARI
+## /tmp/base_benchruns.json list
+  len 13
+  first keys: ['run_id', 'model_id', 'checkpoint_id', 'protocol_id', 'checkpoint_training_noise_pct', 'evaluation_noise_pct', 'duplicate_status', 'duplicate_attempt_count', 'benchmark_gate', 'parity_status', 'verification', 'variant_provenance', 'category_metrics', 'observed_metrics', 'execution_status', 'per_query_capability', 'per_query_state', 'per_query_export_reason', 'is_synthetic', 'paper_sanity_metrics', 'benchmark_reference', 'per_query_export_available', 'evaluator_environment_knobs', 'capabilities', 'transfer']

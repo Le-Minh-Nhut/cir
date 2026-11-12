@@ -515,6 +515,10 @@ are correct as written.
   G2 PASS with **two honestly-declared failures**, neither with a moved tolerance: 2 non-tie rank
   changes at ranks far below 50 (no R@10/R@50 effect), and the batch 1-vs-N `max_rel` sub-check at
   `1.165e-2` against its declared `1e-3` (`max_abs` within tolerance).
+  **Superseded in the rank half only:** the regenerated artifacts report `non_tie_count: 0` /
+  `min_gap_abs: 0.0` in all three categories, so the non-tie rank failures are **0**, not 2 — see
+  `20261112-parity-repair/ENCODER_RELATION.md` §4. The batch `max_rel` failure stands; the encoder
+  gate is now **9** mandatory failures, not 13.
 - `g1_g2.encoder.{dress,shirt,toptee}.{native,adapter}.json` — the per-category evidence for that
   differential, alongside the existing LIMN `g1_g2.*` files.
 - `raw/encoder_parity/` — `adapter.*.npz`, `relation_proof_*` and the supporting captures. The

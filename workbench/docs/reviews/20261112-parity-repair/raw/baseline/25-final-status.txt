@@ -1,0 +1,34 @@
+=== git status --porcelain (FINAL) ===
+?? CLEANUP_REPORT.md.save
+?? workbench/docs/reviews/20261112-parity-repair/
+=== ls untracked-claim files ===
+ls: cannot access 'pc_composition_smoke.yaml': No such file or directory
+ls: cannot access 'src/train_cirr.py': No such file or directory
+ls: cannot access 'uv.lock': No such file or directory
+=== status untracked=all ===
+?? CLEANUP_REPORT.md.save
+?? workbench/docs/reviews/20261112-parity-repair/raw/baseline/01-repo-identity.txt
+?? workbench/docs/reviews/20261112-parity-repair/raw/baseline/02-diffstat-96d86010-HEAD.txt
+?? workbench/docs/reviews/20261112-parity-repair/raw/baseline/03-prod-tree-invariant.txt
+?? workbench/docs/reviews/20261112-parity-repair/raw/baseline/04-log-oneline-15.txt
+?? workbench/docs/reviews/20261112-parity-repair/raw/baseline/05-tested-source-sha-grep.txt
+?? workbench/docs/reviews/20261112-parity-repair/raw/baseline/06-controller-python.txt
+?? workbench/docs/reviews/20261112-parity-repair/raw/baseline/07-env-versions.txt
+?? workbench/docs/reviews/20261112-parity-repair/raw/baseline/08-hardware.txt
+?? workbench/docs/reviews/20261112-parity-repair/raw/baseline/09-procs-lock-df.txt
+?? workbench/docs/reviews/20261112-parity-repair/raw/baseline/10-services.txt
+?? workbench/docs/reviews/20261112-parity-repair/raw/baseline/11-api-codes.txt
+?? workbench/docs/reviews/20261112-parity-repair/raw/baseline/12-frontend-bundle.txt
+?? workbench/docs/reviews/20261112-parity-repair/raw/baseline/13-served-index-html.txt
+?? workbench/docs/reviews/20261112-parity-repair/raw/baseline/14-resolved-checkpoints.txt
+?? workbench/docs/reviews/20261112-parity-repair/raw/baseline/15-model-status.txt
+?? workbench/docs/reviews/20261112-parity-repair/raw/baseline/16-aux-destinations.json
+?? workbench/docs/reviews/20261112-parity-repair/raw/baseline/17-aux-validation.json
+?? workbench/docs/reviews/20261112-parity-repair/raw/baseline/18-checkpoint-variants.json
+?? workbench/docs/reviews/20261112-parity-repair/raw/baseline/19-annotation-sha256.txt
+?? workbench/docs/reviews/20261112-parity-repair/raw/baseline/20-data-dir-sizes.txt
+?? workbench/docs/reviews/20261112-parity-repair/raw/baseline/21-operator-rerun-yaml.txt
+?? workbench/docs/reviews/20261112-parity-repair/raw/baseline/22-workbench-env-redacted-keys.txt
+?? workbench/docs/reviews/20261112-parity-repair/raw/baseline/23-layout-path-check.json
+?? workbench/docs/reviews/20261112-parity-repair/raw/baseline/24-parity-and-benchmark-runs-shape.txt
+?? workbench/docs/reviews/20261112-parity-repair/raw/baseline/25-final-status.txt

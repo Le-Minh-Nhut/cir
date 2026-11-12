@@ -17,7 +17,7 @@ không có lần chấm điểm nào bị chạy lại.
 | **R5** | **CONFIRMED** | Cả 12 ô ghi `target_did = 7:42304` (positive của `7:3790`); rank/score/asset/candidate **đúng**; chỉ trường identity sai. |
 | **R6** | **CONFIRMED** | `depth=0`/`-5` bị nuốt thành cửa sổ **1 dòng** với HTTP 200; `depth=1000` trả 100 dòng im lặng; summary và candidates đọc file **độc lập** nên có thể nói khác nhau. |
 | **R8** | **CONFIRMED** | Response **không** có image URL, không category, không label theo scope, không object target riêng ⇒ target hạng 6891 **không thể render**. |
-| **R9** | **CONFIRMED** | Không tồn tại gate nào trong code: `encoder` có **13** subcheck bắt buộc FAIL trong artifact (3× `batch_1_vs_n.max_rel` — 1.165e-2 / 7.795e-3 / 3.131e-3 vs `1e-3`; 2 non-tie rank change; 6 `population.*.max_rel`) mà mọi surface vẫn đọc "G2 PASS". |
+| **R9** | **CONFIRMED** | Không tồn tại gate nào trong code: `encoder` có **13** subcheck bắt buộc FAIL trong artifact (3× `batch_1_vs_n.max_rel` — 1.165e-2 / 7.795e-3 / 3.131e-3 vs `1e-3`; 2 non-tie rank change; 6 `population.*.max_rel`) mà mọi surface vẫn đọc "G2 PASS". **Nay (artifact đã seed lại):** còn **9** subcheck FAIL, **0** non-tie rank change — hai `ranks.*`/category đã flip; ba `batch_1_vs_n.max_rel` vẫn fail. Finding R9 vẫn CONFIRMED vì điểm của nó là *không có gate*, không phải con số; nguồn: `20261112-parity-repair/ENCODER_RELATION.md` §4. |
 
 Bốn finding đều **reproduce được** trên HEAD. Không có NOT_REPRODUCED.
 
@@ -365,8 +365,8 @@ artifact bên dưới. Đó chính là cơ chế khiến "PASS" in cạnh bằng
 | `batch_size_1_vs_n.max_rel` (dress) | `batch_max_rel 1e-3` | **7.795e-03** | `within_tolerance: false` |
 | `batch_size_1_vs_n.max_rel` (shirt) | `1e-3` | **3.131e-03** | `within_tolerance: false` |
 | `batch_size_1_vs_n.max_rel` (toptee) | `1e-3` | **1.165e-02** | `within_tolerance: false` |
-| `rank_differences_vs_native_val_control.non_tie_count` (dress) | 0 non-tie | **1** (gap 6.572e-04) | `explained_by_tie_epsilon: false` |
-| `…non_tie_count` (shirt) | 0 non-tie | **1** (gap 1.604e-04) | `explained_by_tie_epsilon: false` |
+| `rank_differences_vs_native_val_control.non_tie_count` (dress) | 0 non-tie | **1** (gap 6.572e-04) — **nay 0**, `min_gap_abs 0.0` | `explained_by_tie_epsilon: false` — nay không còn áp dụng |
+| `…non_tie_count` (shirt) | 0 non-tie | **1** (gap 1.604e-04) — **nay 0**, `min_gap_abs 0.0` | `explained_by_tie_epsilon: false` — nay không còn áp dụng |
 | `population.features_vs_native_val_control.max_rel` (dress/shirt/toptee) | `forward_max_rel 1e-4` | **3.355 / 0.752 / 7.850** | `within_tolerance: false` |
 | `population.gallery_vs_native.max_rel` | **harness KHÔNG test `max_rel` cho key này** (`max_abs` only) | **1.364 / 7.750 / 3.898** | `within_tolerance: true` (chỉ vì `max_abs` đạt) |
 
@@ -426,7 +426,7 @@ code nào phản đối được.
 | `input_parity` | G1: ids, gallery order, model text, token/mask, decode expression | ✅ |
 | `forward_parity` | G2: cùng batch composition, cross-process (`max_abs`, `min_cosine`) | ✅ (`max_abs` đạt; `max_rel` FAIL vì mẫu số) |
 | `batch_parity` | G2: batch 1 vs N — **subcheck actually fails** | ❌ |
-| `scoring_parity` | G2: score và rank trên cùng feature | ❌ (2 non-tie change) |
+| `scoring_parity` | G2: score và rank trên cùng feature | ❌ (2 non-tie change) — **nay ✅**: `non_tie_count 0` ở cả ba category |
 | `metrics_parity` | hit-count equality | ✅ |
 
 Không có chỗ nào lấy trung bình giữa các dimension, và `observer` **không bao giờ** đại diện cho
@@ -496,7 +496,9 @@ ALL standard=parity-relative/v1 passed_models=[]
 
 13 failure của `encoder`: 3 `batch_1_vs_n.max_rel`, 4 `ranks.*` (2 `non_tie_changes` +
 2 `min_gap_vs_tie_epsilon`), 6 `population.*.max_rel`. Đúng bằng tập subcheck đã khai là FAIL, không
-thêm không bớt. `limn` cũng không PASS (3 `batch_1_vs_n.max_rel`: 1.140e-02 / 2.698e-03 /
+thêm không bớt. **Nay là 9**, không phải 13: bốn check `ranks.*` đã flip (`non_tie_count 0`,
+`min_gap_abs 0.0` ở cả ba category), ba `batch_1_vs_n.max_rel` vẫn fail — `ENCODER_RELATION.md` §4
+(`16 → 9`, 99 checks). `limn` cũng không PASS (3 `batch_1_vs_n.max_rel`: 1.140e-02 / 2.698e-03 /
 7.509e-03 vs `1e-3`) — nhất quán với `INPUT_FORWARD_PARITY.vi.md:258`, chỗ trước đây vẫn đọc "PASS".
 
 **Coverage: `True` nghĩa là "mọi check đang tồn tại đều đạt", không phải "đã kiểm đủ".** Gate trả

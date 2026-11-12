@@ -317,7 +317,7 @@ native dot product on the same features, **unmasked** (the `-10e10` reference ma
 | shirt | 1.192e-07 | 64 |
 | toptee | 1.192e-07 | 64 |
 
-### 5.2 Ranks — 0 differences in toptee, 1 each in dress/shirt, and both are non-ties
+### 5.2 Ranks — bản ghi cũ: 0 differences in toptee, 1 each in dress/shirt, both non-ties; **nay 0 everywhere**
 
 | category | queries | rank differences vs native (same pinned model, `preprocess_val` control) | non-tie | min score gap at the disagreement |
 |---|---|---|---|---|
@@ -343,19 +343,35 @@ Tie-convention comparison, adapter `rank()` vs native `np.argsort`, **same matri
 
 Every convention-level difference is an **exact** float tie (gap 0.0), which the declared rule permits.
 
-### 5.3 Metrics — deviates from the published aggregate by ≤ 0.20, and the deviation is itself D1 evidence
+**Cập nhật cho bảng đầu của §5.2 — hai non-tie đã hết.** Artifact hiện hành
+(`g1_g2.encoder.<cat>.adapter.json` → `scoring_ranking.rank_differences_vs_native_val_control`) ghi
+`count: 0, head: [], non_tie_count: 0, min_gap_abs: 0.0` ở cả ba category, nên dòng "1 / 1" của dress và
+shirt ở trên là **bản ghi của phép đo chưa seed**. Probe nay là `dress` `7:1565` (rank **1222/1222**,
+trước là 1215/1216) và `shirt` `7:3362` (rank **1372/1372**, trước là 1373/1372); cả hai từng là
+knife-edge trong chính float32 noise của trạng thái chung, không phải tie. Nguồn:
+`20261112-parity-repair/ENCODER_RELATION.md` §4. Hai bảng còn lại của §5.2 (tie-convention) không đổi.
+
+### 5.3 Metrics — deviates from the published aggregate by ≤ 0.35, and the deviation is itself D1 evidence
 
 Adapter features → adapter `score`/`rank` → Recall, against the native re-run on the same population and
 against the stored aggregate:
 
 | category | adapter (unmasked, CIRCUS convention) R@1 / R@10 / R@50 | native re-run (masked) R@1 / R@10 / R@50 | stored `raw/native/encoder.json` R@1 / R@10 / R@50 | Δ (re-run − stored) |
 |---|---|---|---|---|
-| dress | 17.4021 / 50.9668 / 76.0040 | 21.2692 / 51.9584 / 76.3510 | 21.4675 / 51.9584 / 76.3510 | −0.198 / 0.000 / 0.000 |
-| shirt | 19.4308 / 54.2198 / 75.1717 | 25.3680 / 54.9558 / 75.4661 | 25.5152 / 54.9558 / 75.4171 | −0.147 / 0.000 / +0.049 |
-| toptee | 22.6415 / 61.0403 / 80.7751 | 29.3728 / 61.8052 / 81.0301 | 29.3728 / 61.9582 / 81.1321 | 0.000 / −0.153 / −0.102 |
+| dress | 17.4021 / 50.9668 / 76.0040 | 21.1205 / 51.7105 / 76.3014 | 21.4675 / 51.9584 / 76.3510 | −0.347 / −0.248 / −0.050 |
+| shirt | 19.4308 / 54.2198 / 75.1717 | 25.3189 / 54.9068 / 75.3189 | 25.5152 / 54.9558 / 75.4171 | −0.196 / −0.049 / −0.098 |
+| toptee | 22.6415 / 61.0403 / 80.7751 | 29.1178 / 62.0602 / 80.9791 | 29.3728 / 61.9582 / 81.1321 | −0.255 / +0.102 / −0.153 |
 
-So the native re-run does **not** reproduce the stored aggregate exactly: R@1 by up to 0.198, R@10 by up
-to 0.153, R@50 by up to 0.102, and there are `6` hit changes across the `18` published Recall values.
+Cột "native re-run" ở trên là **bản đã seed lại** (relation seed `20261111`, `relation_state.sha256
+20db0c27…`; nguồn: `20261112-parity-repair/ENCODER_RELATION.md` §8) — bản ghi đã bị thay thế là
+`21.2692 / 51.9584 / 76.3510` (dress), `25.3680 / 54.9558 / 75.4661` (shirt), `29.3728 / 61.8052 /
+81.0301` (toptee), đo trên đường **chưa seed** nên không tái lập được. Macro seeded của phía parity
+native: **R@10 56.225801935399 / R@50 77.533156738705** (`ENCODER_RELATION.md` §9b).
+
+So the native re-run does **not** reproduce the stored aggregate exactly: R@1 by up to 0.347, R@10 by up
+to 0.248, R@50 by up to 0.153, and **9/9** ô Recall (3 category × r1/r10/r50) khác bảng hit count của
+file đã lưu (`ENCODER_RELATION.md` §9b). (Con số cũ — "R@1 0.198 / R@10 0.153 / R@50 0.102" và "6 hit
+changes" — thuộc bản **chưa seed**, đã bị thay thế.)
 **That is D1 again, measured end to end:** the stored run used a different `learnable_relation` draw than
 this one, so its Recall values differ slightly even though every input is identical. It is not a harness
 error — the same re-run's per-query ranks reproduce its own native `test()` hit counts exactly in all
@@ -364,7 +380,8 @@ feature → rank → Recall chain is verified against an aggregate computed from
 
 The adapter column differs from the native column entirely by the two declared protocol divergences,
 quantified next — not by a ranking error. Ranking parity against the same-model native run is §5.2
-(1 difference in dress, 1 in shirt, 0 in toptee).
+(**0** differences in all three categories; bản ghi cũ "1 difference in dress, 1 in shirt, 0 in
+toptee" là phép đo trên đường chưa seed — `non_tie_count 0`, `min_gap_abs 0.0` ở artifact hiện hành).
 
 ### 5.4 The two protocol differences, quantified
 
@@ -380,11 +397,18 @@ Query transform (`preprocess_train` vs `preprocess_val`), same pinned model, bot
 
 | category | native metric (train-transform queries, published protocol) | native val-transform control | Δ R@10 | Δ R@50 |
 |---|---|---|---|---|
-| dress | 51.9584 | 51.6609 | −0.2975 | −0.1487 |
-| shirt | 54.9558 | 55.2502 | +0.2944 | +0.0492 |
-| toptee | 61.9582 | 61.8052 | −0.1530 | −0.1530 |
+| dress | 51.7105 | 51.7105 | 0.0000 | −0.0496 |
+| shirt | 54.9068 | 55.2012 | +0.2944 | +0.0491 |
+| toptee | 62.0602 | 61.6012 | −0.4590 | −0.1020 |
 
-So the transform choice moves R@10/R@50 by at most ~0.3 points and the sign is not consistent — it is
+Hai cột trên đọc từ artifact hiện hành `g1_g2.encoder.<cat>.native.json` —
+`native.native_rank_recall_from_features` (train-transform) và `native.val_transform_control_rank_recall`
+(val-transform) — tức **bản đã seed lại**. Bản ghi trước (native `51.9584 / 54.9558 / 61.9582`, control
+`51.6609 / 55.2502 / 61.8052`, Δ R@10 `−0.2975 / +0.2944 / −0.1530`, Δ R@50 `−0.1487 / +0.0492 /
+−0.1530`) đo trên đường chưa seed và đã bị thay thế; riêng Δ R@10 dress nay là `0.0000` chứ không phải
+`−0.2975`.
+
+So the transform choice moves R@10/R@50 by at most ~0.46 points and the sign is not consistent — it is
 noise from the stochastic crop, not a bias. This is the first measured answer to "how much does the
 ENCODER query transform matter", which the earlier preprocessing review (`ENCODER_LIMN_PREPROCESSING_VERDICT.md`
 §11) explicitly listed as not executed.
@@ -398,8 +422,8 @@ ENCODER query transform matter", which the earlier preprocessing review (`ENCODE
 | **G1 input parity** | **PASS** | gallery order, reference/target ids and model text exact against the annotations (2017/2038/1961 rows each, 0 mismatches); tokenizer/vocab/context/mask identical; the adapter's decode expression is **bitwise** identical to the native `preprocess_val` decode; the query-image transform genuinely differs (`preprocess_train` vs `preprocess_val`), is a declared protocol divergence, and its metric effect is measured at ≤ 0.3 R@10 |
 | **G2 forward parity** | **PASS (absolute), one declared sub-check FAILED** | features **bitwise identical** on the fixed sample in all three categories; population `max_abs ≤ 1.65e-06` (declared `1e-5`) but the declared `max_rel ≤ 1e-4` is **FAILED** for the documented near-zero-denominator reason; batch-1-vs-N `max_abs ≤ 3.3e-07` ✔ and its declared `max_rel ≤ 1e-3` also **FAILED** for the same reason; cache on/off bitwise |
 | **G2 scoring parity** | **PASS** | `max_abs = 1.192e-07` (declared `1e-6`) in all three categories |
-| **G2 ranking parity** | **PASS with 2 declared exceptions** | tie-convention differences: 47 total, all exact ties (gap 0.0), 0 non-tie; cross-process rank differences: 0 (toptee), 1 (dress, gap 6.6e-04) and 1 (shirt, gap 1.6e-04), **both non-tie and therefore reported as FAIL**, both at ranks ≫ 50 with no effect on any hit count |
-| **G2 metrics parity** | **PASS (hit-count exact against its own aggregate); the published aggregate is NOT exactly reproduced, and that is D1** | the native re-run's per-query ranks reproduce its own native `test()` hit counts exactly in all three categories, and the re-run deviates from `raw/native/encoder.json` by ≤ 0.198 R@1 / ≤ 0.153 R@10 / ≤ 0.102 R@50 (6 hit changes out of 18 values) because the stored run drew a different `learnable_relation`; adapter Recall differs from the re-run only by the declared mask + transform divergence (§5.4) |
+| **G2 ranking parity** | **PASS with 2 declared exceptions** — **nay PASS sạch: 0 exception** | tie-convention differences: 47 total, all exact ties (gap 0.0), 0 non-tie; cross-process rank differences: 0 (toptee), 1 (dress, gap 6.6e-04) and 1 (shirt, gap 1.6e-04), **both non-tie and therefore reported as FAIL**, both at ranks ≫ 50 with no effect on any hit count. **Artifact hiện hành:** `non_tie_count 0`, `min_gap_abs 0.0` ở cả ba category — hai exception đã hết (`ENCODER_RELATION.md` §4) |
+| **G2 metrics parity** | **PASS (hit-count exact against its own aggregate); the published aggregate is NOT exactly reproduced, and that is D1** | the native re-run's per-query ranks reproduce its own native `test()` hit counts exactly in all three categories, and the re-run deviates from `raw/native/encoder.json` by ≤ 0.347 R@1 / ≤ 0.248 R@10 / ≤ 0.153 R@50 (**9/9** ô Recall khác hit count) because the stored run drew a different `learnable_relation` — bản ghi cũ "≤ 0.198 / ≤ 0.153 / ≤ 0.102, 6 hit changes" thuộc đường chưa seed; adapter Recall differs from the re-run only by the declared mask + transform divergence (§5.4). Macro seeded: **R@10 56.225801935399 / R@50 77.533156738705** (`ENCODER_RELATION.md` §9b) |
 | **first point of divergence** | **`BindingDecoder.learnable_relation`, layer `binding_product_cross`** — and it is a defect in the pinned artifact, not in the adapter | 32.27 absolute on the unitless product, 1.6e-2 on final features, 534/391/417 rank differences **between two runs of the native code itself**; absent from `fashioniq.pt` (no key, no missing-key report); pinning it makes every layer bitwise identical across processes |
 
 **Net statement, short enough to quote:** with the pinned model's uncheckpointed `learnable_relation`

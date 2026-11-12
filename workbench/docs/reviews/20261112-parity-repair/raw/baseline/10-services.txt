@@ -1,0 +1,16 @@
+=== backend ===
+MainPID=1758096
+NRestarts=0
+ActiveState=active
+SubState=running
+ActiveEnterTimestamp=Thu 2026-11-12 12:20:57 +07
+=== frontend ===
+MainPID=1221148
+NRestarts=0
+ActiveState=active
+SubState=running
+ActiveEnterTimestamp=Wed 2026-11-11 23:48:44 +07
+=== ps ===
+    PID STARTED                  ELAPSED  COMMAND
+1221148 Wed Nov 11 23:48:44 2026 19:39:48 npm run preview --host 127.0.0.1 --port 5173 --strictPort
+1758096 Thu Nov 12 12:20:56 2026 07:07:35 /home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python -m uvicorn workbench.backend.main:app --host 127.0.0.1 --port 8000

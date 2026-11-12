@@ -1,0 +1,8 @@
+=== index js refs ===
+assets/index-NnjrdZLG.js
+=== sha256 dist assets ===
+721d34d043858e80c88e76d72866ba8583508318baeebac599cebd1e1c2c80d0  workbench/frontend/dist/assets/index-NnjrdZLG.js
+e7e826a332ec9ab171f97051b901ee86fa69e2588937c3023914f3ac41ffe196  workbench/frontend/dist/assets/index-DecQnta9.css
+=== stat ===
+workbench/frontend/dist/assets/index-NnjrdZLG.js 392769
+workbench/frontend/dist/assets/index-DecQnta9.css 26552

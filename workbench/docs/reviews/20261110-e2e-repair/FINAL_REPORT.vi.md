@@ -104,6 +104,13 @@ hạng của encoder, đọc từ `g1_g2.encoder.{dress,shirt}.adapter.json` →
 `scoring_ranking.rank_differences_vs_native_val_control`: dress index 1569 (adapter 1216 vs native
 1215, `min_gap_abs 6.5717e-4`), shirt index 1352 (1372 vs 1373, `1.6041e-4`), toptee **0**.
 
+**Đã bị thay thế (artifact hiện hành):** `scoring_ranking.rank_differences_vs_native_val_control` của
+cả ba category nay là `count: 0, head: [], non_tie_count: 0, min_gap_abs: 0.0` — **0** thay đổi hạng,
+không còn 2. Đoạn trên giữ nguyên làm bản ghi của phép đo trên đường **chưa seed**; con số hiện hành và
+lý do đổi là `20261112-parity-repair/ENCODER_RELATION.md` §4 (dress `7:1565` 1215/1216 → **1222/1222**,
+shirt `7:3362` 1373/1372 → **1372/1372**, cả hai là knife-edge trong một float32 noise chung, không phải
+tie). Vì vậy "**5**" ở trên cũng thành **3** nếu chỉ đếm cái còn đứng được — 3 block `batch_1_vs_n`.
+
 Ba con số đã lưu hành, hai trong ba sai: **"2"** (BC-cũ `:207`, `GATES.csv:4`) bỏ sót 3 block batch;
 **"13"** (gate) đếm **theo check** không theo sai lệch — 5 check/category + 3 cho toptee, gồm cả
 `DENOMINATOR_ARTEFACT` và `LABEL-DISAGREEMENT`, nên không dùng làm "số sai lệch" được; **"1"** cho
@@ -210,6 +217,13 @@ khác đã nêu, không phải lần đo thứ ba.
 | `$D1/cohort/measurements/encoder_fashioniq.json` (**web phục vụ**) | 56.2231 | 77.6674 | 51.8592 / 55.0049 / 61.8052 |
 | `raw/native/encoder.json` (BC-cũ §3.6 trích) | 56.2908 | 77.6334 | 51.9584 / 54.9558 / 61.9582 |
 | Δ | **0.0676** | 0.0340 | +0.0992 / −0.0491 / +0.1530 |
+
+**Không tái lập được (bổ sung):** cả hai macro trên đều **không** tái lập được từ repo hiện tại —
+`ENCODER_RELATION.md` §9b gọi cả `raw/native/encoder.json` (`NOT_REPRODUCED`, max cell 0.34705 pp) và
+`cohort/measurements/encoder_fashioniq.json` (`NOT_REPRODUCED`, max cell 0.35696 pp) như vậy; không file
+nào ghi relation seed. Số **tái lập được** duy nhất là macro phía parity native đã seed:
+**R@10 56.225801935399 / R@50 77.533156738705** (`ENCODER_RELATION.md` §9b), và nó là population của
+parity harness, không phải một lần chạy lại entry point đánh giá.
 
 Hai file cùng `checkpoint_sha256 0f31c501…9173`, cùng `source_commit 29a2a31d…`, cùng protocol; khác
 `recorded_at` (2026-11-06 vs 2026-11-09). Đây **chính là** biên độ do `learnable_relation` bị rút lại

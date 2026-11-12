@@ -1,0 +1,5 @@
+PARITY_MANDATORY_SUBCHECK_FAILED {'dress': [], 'shirt': [], 'toptee': []} [('dress.metrics.hit_count_equality', True, True), ('shirt.metrics.hit_count_equality', True, True), ('toptee.metrics.hit_count_equality', True, True)]
+
+dress.batch_1_vs_n.max_rel | declared 0.001 | measured 0.011399774792037631
+shirt.batch_1_vs_n.max_rel | declared 0.001 | measured 0.002698280178837889
+toptee.batch_1_vs_n.max_rel | declared 0.001 | measured 0.007509343787328878

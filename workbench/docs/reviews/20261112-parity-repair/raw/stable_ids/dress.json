@@ -1,0 +1,672 @@
+{
+  "category": "dress",
+  "stable_ids": {
+    "reference": "B004DTTRA8",
+    "target": "B0048OYGF4",
+    "sample_index": 1569,
+    "gallery_rows": {
+      "reference": 1077,
+      "target": 2205
+    },
+    "release": {
+      "qid": "7:1565",
+      "query_img_path": "mbeir_images/fashioniq_images/B004DTTRA8.jpg",
+      "query_txt": "Is more intimate and cami and has no pink in it.",
+      "pos_cand_list": [
+        "7:21877"
+      ],
+      "target_did": "7:21877",
+      "target_img_path": "mbeir_images/fashioniq_images/B0048OYGF4.jpg",
+      "joined_rows_for_reference": 1
+    }
+  },
+  "protocol": {
+    "gallery": "datasets.py:186-195 get_test_data(val-split), rebuilt from captions/cap.dress.val.json, asserted identical",
+    "normalize": "test.py:54-58 per-row L2, float32",
+    "score": "test.py:62 all_queries.dot(all_imgs.T), float32",
+    "mask": "test.py:67-68 sims[i, test_targets_id.index(source_img_id)] = -10e10",
+    "rank": "test.py:71 np.argsort(-sims[i]); adapters.py:393-409 closed form 1 + #greater + #earlier-equal",
+    "tie_epsilon": 1e-06,
+    "eras": {
+      "pre": "/home/heheboiz/data/cir/workbench/docs/reviews/20261109-native15-composition-limn/raw/encoder_parity",
+      "post": "/tmp/encparity_raw"
+    }
+  },
+  "cross_side_feature_distance": {
+    "pre": 1.1324882507324219e-06,
+    "post": 1.1399388313293457e-06
+  },
+  "era_shift": {
+    "native_query": 0.013255782425403595,
+    "native_gallery": 0.001024533063173294,
+    "adapter_query": 0.01325578149408102,
+    "adapter_gallery": 0.0010245256125926971
+  },
+  "cause_of_pre_regeneration_state": {
+    "classification": "ONE_SHARED_RELATION_PRE_REGENERATION",
+    "pre_cross_side_distance": 1.1324882507324219e-06,
+    "relation_change_moves_features_by": 0.013255782425403595,
+    "ratio": 11705.006578947368,
+    "meaning": "both pre-era sides sat within the 1e-6 float32 noise floor of each other while a relation change moves features by ~1e-2, so the pre-era pair was computed with ONE relation tensor on both sides; the historical 1215-vs-1216 disagreement was a boundary case INSIDE that shared-relation state, not a comparison of two relations"
+  },
+  "pre_regeneration": {
+    "sides": {
+      "adapter": {
+        "rank_masked_argsort": 1216,
+        "rank_unmasked_argsort": 1217,
+        "rank_masked_tie_policy": 1216,
+        "count_strictly_greater_masked": 1215,
+        "count_equal_excluding_self_masked": 0,
+        "target_score_masked": 0.131982684135437,
+        "margin_above": 1.4901161193847656e-07,
+        "nearest_above": {
+          "img_id": "B008HH26XM",
+          "score": 0.13198283314704895
+        },
+        "margin_below": 0.00037533044815063477,
+        "nearest_below": {
+          "img_id": "B00AHOY6VS",
+          "score": 0.13160735368728638
+        },
+        "dirichlet_gap": null
+      },
+      "native_val_control": {
+        "rank_masked_argsort": 1215,
+        "rank_unmasked_argsort": 1216,
+        "rank_masked_tie_policy": 1215,
+        "count_strictly_greater_masked": 1214,
+        "count_equal_excluding_self_masked": 0,
+        "target_score_masked": 0.13198302686214447,
+        "margin_above": 0.0006571710109710693,
+        "nearest_above": {
+          "img_id": "B002Z7FP1A",
+          "score": 0.13264019787311554
+        },
+        "margin_below": 1.043081283569336e-07,
+        "nearest_below": {
+          "img_id": "B008HH26XM",
+          "score": 0.1319829225540161
+        },
+        "dirichlet_gap": null
+      }
+    },
+    "rank_differences": {
+      "count": 1,
+      "agrees": false,
+      "adapter_rank": 1216,
+      "native_rank": 1215
+    },
+    "row_max_abs_delta": 8.344650268554688e-07,
+    "archived_claim": {
+      "source": "git show HEAD:workbench/docs/reviews/20261109-native15-composition-limn/g1_g2.encoder.dress.adapter.json",
+      "block": {
+        "count": 1,
+        "head": [
+          1569
+        ],
+        "classification": [
+          {
+            "index": 1569,
+            "adapter_rank": 1216,
+            "native_rank": 1215,
+            "adapter_matrix_gap": 0.0006574243307113647,
+            "native_matrix_gap": 0.0006571710109710693,
+            "min_gap": 0.0006571710109710693,
+            "explained_by_tie_epsilon": false
+          }
+        ],
+        "non_tie_count": 1,
+        "min_gap_abs": 0.0006571710109710693
+      },
+      "relation_state_present": false
+    }
+  },
+  "post_regeneration": {
+    "sides": {
+      "adapter": {
+        "rank_masked_argsort": 1222,
+        "rank_unmasked_argsort": 1223,
+        "rank_masked_tie_policy": 1222,
+        "count_strictly_greater_masked": 1221,
+        "count_equal_excluding_self_masked": 0,
+        "target_score_masked": 0.13203206658363342,
+        "margin_above": 0.00043720006942749023,
+        "nearest_above": {
+          "img_id": "B003VXVGRY",
+          "score": 0.1324692666530609
+        },
+        "margin_below": 0.0002525150775909424,
+        "nearest_below": {
+          "img_id": "B00EDSJG2I",
+          "score": 0.13177955150604248
+        },
+        "dirichlet_gap": null
+      },
+      "native_val_control": {
+        "rank_masked_argsort": 1222,
+        "rank_unmasked_argsort": 1223,
+        "rank_masked_tie_policy": 1222,
+        "count_strictly_greater_masked": 1221,
+        "count_equal_excluding_self_masked": 0,
+        "target_score_masked": 0.1320323795080185,
+        "margin_above": 0.00043705105781555176,
+        "nearest_above": {
+          "img_id": "B003VXVGRY",
+          "score": 0.13246943056583405
+        },
+        "margin_below": 0.0002530813217163086,
+        "nearest_below": {
+          "img_id": "B00EDSJG2I",
+          "score": 0.13177929818630219
+        },
+        "dirichlet_gap": null
+      }
+    },
+    "rank_differences": {
+      "count": 0,
+      "agrees": true,
+      "adapter_rank": 1222,
+      "native_rank": 1222
+    },
+    "row_max_abs_delta": 8.158385753631592e-07,
+    "artifact": {
+      "source": "workbench/docs/reviews/20261109-native15-composition-limn/g1_g2.encoder.dress.adapter.json",
+      "file_sha256": "2de713063727c7cabbfe7947d1a37a4b37eaf78b6f5550edc4bd4caf2034eeac",
+      "rank_differences_vs_native_val_control": {
+        "count": 0,
+        "head": [],
+        "classification": [],
+        "non_tie_count": 0,
+        "min_gap_abs": 0.0
+      },
+      "adapter_vs_argsort_unmasked_count": 28,
+      "native_mask_only_effect_count": 1093,
+      "native_second_process_floor": {
+        "available": true,
+        "score_max_abs_vs_first_native_process": 0.045631006360054016,
+        "rank_differences_vs_first_native_process": {
+          "count": 499,
+          "head": [
+            2,
+            5,
+            6,
+            9,
+            12,
+            14,
+            18,
+            22,
+            29,
+            32,
+            37,
+            43,
+            45,
+            49,
+            50,
+            65,
+            68,
+            69,
+            70,
+            72
+          ]
+        },
+        "recall": {
+          "r1": 21.46752602875558,
+          "r10": 51.660882498760536,
+          "r50": 76.15270203272186
+        }
+      },
+      "recall": {
+        "adapter_style": {
+          "r1": 17.501239464551315,
+          "r10": 50.91720376797224,
+          "r50": 76.15270203272186
+        },
+        "native_convention_on_adapter_features": {
+          "r1": 21.269211700545366,
+          "r10": 51.71046108081309,
+          "r50": 76.25185919682697
+        },
+        "native_convention_val_control": {
+          "r1": 21.269211700545366,
+          "r10": 51.71046108081309,
+          "r50": 76.25185919682697
+        }
+      },
+      "relation_state": {
+        "seed": 20261111,
+        "sha256": "20db0c27c979e9a0938c71af5142458dfa2070468d0ad3fcb6f24134c2f9ce92",
+        "matches_pinned_digest": true,
+        "expected_sha256": "20db0c27c979e9a0938c71af5142458dfa2070468d0ad3fcb6f24134c2f9ce92",
+        "in_state_dict": false,
+        "transform_policy": {
+          "query_transform": "preprocess_val",
+          "gallery_transform": "preprocess_val",
+          "native_query_transform": "preprocess_train",
+          "native_gallery_transform": "preprocess_val",
+          "kind": "declared adaptation",
+          "note": "CIRCUS composition uses preprocess_val for both query and gallery; native ENCODER uses preprocess_train (RandomResizedCrop) for the query and preprocess_val for the gallery. Keeping val for both is deliberate: the asymmetry is a property of the native release, and honouring it here would change every published number."
+        },
+        "path": "/tmp/encparity_raw/construction_state"
+      }
+    }
+  },
+  "attribution": {
+    "verdict": "RESOLVED_BY_RELATION_SEED",
+    "pre_deciding_margin": 1.043081283569336e-07,
+    "pre_cross_side_row_max_abs": 8.344650268554688e-07,
+    "pre_margin_over_cross_side_noise": 0.125,
+    "pre_rank_native": 1215,
+    "pre_rank_adapter": 1216,
+    "post_rank_native": 1222,
+    "post_rank_adapter": 1222,
+    "pre_target_score_native": 0.13198302686214447,
+    "post_target_score_native": 0.1320323795080185,
+    "target_score_delta_native": 4.935264587402344e-05,
+    "native_score_row_max_abs_pre_vs_post": 0.0035641342401504517,
+    "adapter_score_row_max_abs_pre_vs_post": 0.0035641267895698547,
+    "movement_over_pre_margin": 34169.28571428572,
+    "relation_seed": 20261111,
+    "relation_sha256": "20db0c27c979e9a0938c71af5142458dfa2070468d0ad3fcb6f24134c2f9ce92",
+    "relation_matches_pinned": true,
+    "pre_relation_state_present": false,
+    "how_a_shared_relation_still_disagreed": "the pre-era target sat on a knife edge: its deciding margin (1.043081283569336e-07) is 0.125 of the residual cross-side score difference on the same row (8.344650268554688e-07). Two implementations that agree to that level still order two near-equal rows differently, so the historical 1-rank difference needs no relation difference at all -- it is the float32 noise both sides already carry, landing on a boundary. The seeded re-run moves both queries by ~1e2-1e4x that margin, which destroys the knife edge instead of resolving a policy question"
+  },
+  "neighbourhood": {
+    "pre": {
+      "adapter": [
+        {
+          "rank": 1205,
+          "gallery_row": 1250,
+          "img_id": "B00C4Q356Y",
+          "score": 0.1341928392648697
+        },
+        {
+          "rank": 1206,
+          "gallery_row": 112,
+          "img_id": "B00AWKKHOC",
+          "score": 0.13401386141777039
+        },
+        {
+          "rank": 1207,
+          "gallery_row": 2187,
+          "img_id": "B00AWKKMWE",
+          "score": 0.13401386141777039
+        },
+        {
+          "rank": 1208,
+          "gallery_row": 25,
+          "img_id": "B00C0X5FG4",
+          "score": 0.13369739055633545
+        },
+        {
+          "rank": 1209,
+          "gallery_row": 1585,
+          "img_id": "B009LGLIIC",
+          "score": 0.13338300585746765
+        },
+        {
+          "rank": 1210,
+          "gallery_row": 1614,
+          "img_id": "B005QN9ET4",
+          "score": 0.1332995742559433
+        },
+        {
+          "rank": 1211,
+          "gallery_row": 416,
+          "img_id": "B003VXVGRY",
+          "score": 0.1331317275762558
+        },
+        {
+          "rank": 1212,
+          "gallery_row": 2022,
+          "img_id": "B00CF1RK6Y",
+          "score": 0.13303790986537933
+        },
+        {
+          "rank": 1213,
+          "gallery_row": 381,
+          "img_id": "B008AKNE3W",
+          "score": 0.13272805511951447
+        },
+        {
+          "rank": 1214,
+          "gallery_row": 706,
+          "img_id": "B002Z7FP1A",
+          "score": 0.13264010846614838
+        },
+        {
+          "rank": 1215,
+          "gallery_row": 2253,
+          "img_id": "B008HH26XM",
+          "score": 0.13198283314704895
+        },
+        {
+          "rank": 1216,
+          "gallery_row": 2205,
+          "img_id": "B0048OYGF4",
+          "score": 0.131982684135437
+        },
+        {
+          "rank": 1217,
+          "gallery_row": 157,
+          "img_id": "B00AHOY6VS",
+          "score": 0.13160735368728638
+        },
+        {
+          "rank": 1218,
+          "gallery_row": 1480,
+          "img_id": "B004XY62ZQ",
+          "score": 0.13159626722335815
+        },
+        {
+          "rank": 1219,
+          "gallery_row": 928,
+          "img_id": "B004NAW3HQ",
+          "score": 0.13150091469287872
+        },
+        {
+          "rank": 1220,
+          "gallery_row": 2077,
+          "img_id": "B00CJJD4S0",
+          "score": 0.13128161430358887
+        }
+      ],
+      "native_val_control": [
+        {
+          "rank": 1205,
+          "gallery_row": 1250,
+          "img_id": "B00C4Q356Y",
+          "score": 0.13419310748577118
+        },
+        {
+          "rank": 1206,
+          "gallery_row": 112,
+          "img_id": "B00AWKKHOC",
+          "score": 0.13401390612125397
+        },
+        {
+          "rank": 1207,
+          "gallery_row": 2187,
+          "img_id": "B00AWKKMWE",
+          "score": 0.13401390612125397
+        },
+        {
+          "rank": 1208,
+          "gallery_row": 25,
+          "img_id": "B00C0X5FG4",
+          "score": 0.13369736075401306
+        },
+        {
+          "rank": 1209,
+          "gallery_row": 1585,
+          "img_id": "B009LGLIIC",
+          "score": 0.13338373601436615
+        },
+        {
+          "rank": 1210,
+          "gallery_row": 1614,
+          "img_id": "B005QN9ET4",
+          "score": 0.1333000808954239
+        },
+        {
+          "rank": 1211,
+          "gallery_row": 416,
+          "img_id": "B003VXVGRY",
+          "score": 0.13313183188438416
+        },
+        {
+          "rank": 1212,
+          "gallery_row": 2022,
+          "img_id": "B00CF1RK6Y",
+          "score": 0.1330377459526062
+        },
+        {
+          "rank": 1213,
+          "gallery_row": 381,
+          "img_id": "B008AKNE3W",
+          "score": 0.13272817432880402
+        },
+        {
+          "rank": 1214,
+          "gallery_row": 706,
+          "img_id": "B002Z7FP1A",
+          "score": 0.13264019787311554
+        },
+        {
+          "rank": 1215,
+          "gallery_row": 2205,
+          "img_id": "B0048OYGF4",
+          "score": 0.13198302686214447
+        },
+        {
+          "rank": 1216,
+          "gallery_row": 2253,
+          "img_id": "B008HH26XM",
+          "score": 0.1319829225540161
+        },
+        {
+          "rank": 1217,
+          "gallery_row": 157,
+          "img_id": "B00AHOY6VS",
+          "score": 0.13160786032676697
+        },
+        {
+          "rank": 1218,
+          "gallery_row": 1480,
+          "img_id": "B004XY62ZQ",
+          "score": 0.13159620761871338
+        },
+        {
+          "rank": 1219,
+          "gallery_row": 928,
+          "img_id": "B004NAW3HQ",
+          "score": 0.1315009593963623
+        },
+        {
+          "rank": 1220,
+          "gallery_row": 2077,
+          "img_id": "B00CJJD4S0",
+          "score": 0.13128162920475006
+        }
+      ]
+    },
+    "post": {
+      "adapter": [
+        {
+          "rank": 1205,
+          "gallery_row": 873,
+          "img_id": "B00B4GG33W",
+          "score": 0.13492949306964874
+        },
+        {
+          "rank": 1206,
+          "gallery_row": 1250,
+          "img_id": "B00C4Q356Y",
+          "score": 0.13468331098556519
+        },
+        {
+          "rank": 1207,
+          "gallery_row": 733,
+          "img_id": "B00AODC7BS",
+          "score": 0.13463395833969116
+        },
+        {
+          "rank": 1208,
+          "gallery_row": 1585,
+          "img_id": "B009LGLIIC",
+          "score": 0.13460864126682281
+        },
+        {
+          "rank": 1209,
+          "gallery_row": 1037,
+          "img_id": "B008OXYAKG",
+          "score": 0.13457760214805603
+        },
+        {
+          "rank": 1210,
+          "gallery_row": 706,
+          "img_id": "B002Z7FP1A",
+          "score": 0.1344052404165268
+        },
+        {
+          "rank": 1211,
+          "gallery_row": 2022,
+          "img_id": "B00CF1RK6Y",
+          "score": 0.13399887084960938
+        },
+        {
+          "rank": 1212,
+          "gallery_row": 381,
+          "img_id": "B008AKNE3W",
+          "score": 0.13367058336734772
+        },
+        {
+          "rank": 1213,
+          "gallery_row": 2253,
+          "img_id": "B008HH26XM",
+          "score": 0.13345867395401
+        },
+        {
+          "rank": 1214,
+          "gallery_row": 1614,
+          "img_id": "B005QN9ET4",
+          "score": 0.1332426816225052
+        },
+        {
+          "rank": 1215,
+          "gallery_row": 1523,
+          "img_id": "B009S3I9A8",
+          "score": 0.13320337235927582
+        },
+        {
+          "rank": 1216,
+          "gallery_row": 157,
+          "img_id": "B00AHOY6VS",
+          "score": 0.13269223272800446
+        },
+        {
+          "rank": 1217,
+          "gallery_row": 2493,
+          "img_id": "B008R8BGT6",
+          "score": 0.1326766014099121
+        },
+        {
+          "rank": 1218,
+          "gallery_row": 2077,
+          "img_id": "B00CJJD4S0",
+          "score": 0.13266301155090332
+        },
+        {
+          "rank": 1219,
+          "gallery_row": 2349,
+          "img_id": "B004O6LVY0",
+          "score": 0.13257533311843872
+        },
+        {
+          "rank": 1220,
+          "gallery_row": 928,
+          "img_id": "B004NAW3HQ",
+          "score": 0.13253585994243622
+        }
+      ],
+      "native_val_control": [
+        {
+          "rank": 1205,
+          "gallery_row": 873,
+          "img_id": "B00B4GG33W",
+          "score": 0.13492944836616516
+        },
+        {
+          "rank": 1206,
+          "gallery_row": 1250,
+          "img_id": "B00C4Q356Y",
+          "score": 0.13468363881111145
+        },
+        {
+          "rank": 1207,
+          "gallery_row": 733,
+          "img_id": "B00AODC7BS",
+          "score": 0.13463370501995087
+        },
+        {
+          "rank": 1208,
+          "gallery_row": 1585,
+          "img_id": "B009LGLIIC",
+          "score": 0.1346093714237213
+        },
+        {
+          "rank": 1209,
+          "gallery_row": 1037,
+          "img_id": "B008OXYAKG",
+          "score": 0.13457784056663513
+        },
+        {
+          "rank": 1210,
+          "gallery_row": 706,
+          "img_id": "B002Z7FP1A",
+          "score": 0.13440531492233276
+        },
+        {
+          "rank": 1211,
+          "gallery_row": 2022,
+          "img_id": "B00CF1RK6Y",
+          "score": 0.13399876654148102
+        },
+        {
+          "rank": 1212,
+          "gallery_row": 381,
+          "img_id": "B008AKNE3W",
+          "score": 0.13367071747779846
+        },
+        {
+          "rank": 1213,
+          "gallery_row": 2253,
+          "img_id": "B008HH26XM",
+          "score": 0.13345876336097717
+        },
+        {
+          "rank": 1214,
+          "gallery_row": 1614,
+          "img_id": "B005QN9ET4",
+          "score": 0.13324326276779175
+        },
+        {
+          "rank": 1215,
+          "gallery_row": 1523,
+          "img_id": "B009S3I9A8",
+          "score": 0.1332031637430191
+        },
+        {
+          "rank": 1216,
+          "gallery_row": 157,
+          "img_id": "B00AHOY6VS",
+          "score": 0.13269276916980743
+        },
+        {
+          "rank": 1217,
+          "gallery_row": 2493,
+          "img_id": "B008R8BGT6",
+          "score": 0.13267652690410614
+        },
+        {
+          "rank": 1218,
+          "gallery_row": 2077,
+          "img_id": "B00CJJD4S0",
+          "score": 0.13266301155090332
+        },
+        {
+          "rank": 1219,
+          "gallery_row": 2349,
+          "img_id": "B004O6LVY0",
+          "score": 0.13257555663585663
+        },
+        {
+          "rank": 1220,
+          "gallery_row": 928,
+          "img_id": "B004NAW3HQ",
+          "score": 0.13253584504127502
+        }
+      ]
+    }
+  }
+}

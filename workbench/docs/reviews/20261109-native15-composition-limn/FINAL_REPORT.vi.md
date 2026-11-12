@@ -520,7 +520,9 @@ một gate định nghĩa là "cả 15" không được xanh chỉ vì 11 model 
    bit-identical, feature bitwise `0.0`, score `≤ 5.4e-07`, **0** khác biệt hạng so với native
    aggregate) và `encoder` (§3.6: G1 PASS, sample forward bitwise `0.0` qua hai process, population
    `max_abs ≤ 1.65e-06`, score `1.19e-07`, **0** thay đổi hit count — nhưng **2 rank change non-tie** và
-   `max_rel` batch **FAIL**, cả hai báo là FAIL đã khai).
+   `max_rel` batch **FAIL**, cả hai báo là FAIL đã khai). **Cập nhật:** nay **0 rank change non-tie**
+   (`non_tie_count 0`, `min_gap_abs 0.0` ở cả ba category); `max_rel` batch vẫn FAIL. Hai con số `2`
+   ở trên là bản ghi của phép đo trên đường chưa seed — `20261112-parity-repair/ENCODER_RELATION.md` §4.
 3. 12 ranking chẩn đoán cho 2 query mơ hồ, đủ 2 scope × 3 điều kiện, trên nguyên gallery 74,381.
 4. Category của `7:3038`/`7:3790` **không** xác định được, và tôi chỉ ra được vì sao ở mức code
    upstream + dữ liệu (không phải "không tìm ra").

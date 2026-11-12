@@ -1,0 +1,8 @@
+=== pgrep ===
+(none)
+=== cir_gpu.lock ===
+-rw-rw-r-- 1 heheboiz heheboiz 0 Nov 12 08:40 /tmp/cir_gpu.lock
+=== df ===
+Filesystem      Size  Used Avail Use% Mounted on
+/dev/nvme0n1p5  630G  541G   57G  91% /
+/dev/nvme0n1p5  630G  541G   57G  91% /

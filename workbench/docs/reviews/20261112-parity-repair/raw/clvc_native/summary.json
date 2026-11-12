@@ -1,0 +1,970 @@
+{
+  "declared_before_run": {
+    "fixed_batch_size": 32,
+    "fixed_batch_rationale": "the value the 30.0208 artifact recorded; declared before the run and not chosen to match a target",
+    "probe_batch_size": 1,
+    "probe_category": "dress",
+    "extra_controls": []
+  },
+  "mask_policy": "-100000000000.0 (test.py:135); reference excluded by score, not by removal",
+  "gallery_construction": "datasets.FashionIQ.get_test_targets() with gallery_all=False (datasets.py:233-257): the gallery is the order-preserving union of every query's candidate (source) and target image, in first-appearance order -- NOT the full split image list, NOT per-query candidates only",
+  "reference_policy": "the query's own source image IS in the gallery and is masked to -10e10 before ranking (test.py:134-135), i.e. excluded by score, not by removal",
+  "tie_policy": "np.argsort(-sims[i, :]) with numpy default kind='quicksort' (test.py:138). NOT stable: equal scores take an arbitrary positional order, so a query whose target ties with another gallery image is scored by that arbitrary order. target_rank here is the native positional rank; tied_with_target > 0 marks a tie-decided rank",
+  "text_path": "no text correction anywhere: captions reach the model as '<BOS> {c0} <AND> {c1} <EOS>' (datasets.py:173-175) and are tokenised by the checkpoint's own SimpleVocab (text_model.py:23-27)",
+  "transform": "Resize(256) -> CenterCrop(224) -> ToTensor -> Normalize(ImageNet 0.485/0.456/0.406, 0.229/0.224/0.225) -- the native FashionIQ val pipeline, train.py:90-96",
+  "batch_size_argument_plumbing": "params.batch_size, read at test.py:96 (query loop) and test.py:112 (target/gallery loop); the loop flushes at len(imgs) >= params.batch_size. Passed as a SimpleNamespace attribute -- pinned test.py has no CLI, so this is the only argument path, and the checkpoint/pinned files stay byte-identical",
+  "controller_interpreter": {
+    "path": "/home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python",
+    "version": "3.12.11"
+  },
+  "worker_interpreter": {
+    "path": "/home/heheboiz/data/cir/workbench/envs/clvc39-la/bin/python"
+  },
+  "passes": {
+    "batch1": {
+      "batch_size": 1,
+      "categories": {
+        "dress": {
+          "query_count": 2017,
+          "gallery_count": 2628,
+          "native_recalls": {
+            "r1": 6.7922657411998015,
+            "r10": 28.805156172533465,
+            "r50": 56.71789786812097
+          },
+          "recomputed_recalls": {
+            "r1": 6.7922657411998015,
+            "r10": 28.805156172533465,
+            "r50": 56.71789786812097
+          },
+          "recomputed_matches_native": true,
+          "queries_with_tie_at_target": 40,
+          "wall_seconds": 290.169,
+          "per_query_file": "/home/heheboiz/data/cir/workbench/docs/reviews/20261112-parity-repair/raw/clvc_native/batch1/dress.jsonl"
+        }
+      },
+      "macro_native": {
+        "r1": 6.7922657411998015,
+        "r10": 28.805156172533465,
+        "r50": 56.71789786812097
+      },
+      "macro_recomputed": {
+        "r1": 6.7922657411998015,
+        "r10": 28.805156172533465,
+        "r50": 56.71789786812097
+      },
+      "macro_matches_recomputed": true,
+      "category_count": 1,
+      "total_query_count": 2017
+    },
+    "batch32": {
+      "batch_size": 32,
+      "categories": {
+        "dress": {
+          "query_count": 2017,
+          "gallery_count": 2628,
+          "native_recalls": {
+            "r1": 6.841844323252355,
+            "r10": 29.449677739216657,
+            "r50": 56.767476450173525
+          },
+          "recomputed_recalls": {
+            "r1": 6.841844323252355,
+            "r10": 29.449677739216657,
+            "r50": 56.767476450173525
+          },
+          "recomputed_matches_native": true,
+          "queries_with_tie_at_target": 40,
+          "wall_seconds": 49.609,
+          "per_query_file": "/home/heheboiz/data/cir/workbench/docs/reviews/20261112-parity-repair/raw/clvc_native/batch32/dress.jsonl"
+        },
+        "shirt": {
+          "query_count": 2038,
+          "gallery_count": 3089,
+          "native_recalls": {
+            "r1": 6.4769381746810595,
+            "r10": 27.77232580961727,
+            "r50": 55.250245338567225
+          },
+          "recomputed_recalls": {
+            "r1": 6.4769381746810595,
+            "r10": 27.77232580961727,
+            "r50": 55.250245338567225
+          },
+          "recomputed_matches_native": true,
+          "queries_with_tie_at_target": 12,
+          "wall_seconds": 118.807,
+          "per_query_file": "/home/heheboiz/data/cir/workbench/docs/reviews/20261112-parity-repair/raw/clvc_native/batch32/shirt.jsonl"
+        },
+        "toptee": {
+          "query_count": 1961,
+          "gallery_count": 2902,
+          "native_recalls": {
+            "r1": 7.8531361550229475,
+            "r10": 32.840387557368686,
+            "r50": 63.99796022437532
+          },
+          "recomputed_recalls": {
+            "r1": 7.8531361550229475,
+            "r10": 32.840387557368686,
+            "r50": 63.99796022437532
+          },
+          "recomputed_matches_native": true,
+          "queries_with_tie_at_target": 14,
+          "wall_seconds": 165.853,
+          "per_query_file": "/home/heheboiz/data/cir/workbench/docs/reviews/20261112-parity-repair/raw/clvc_native/batch32/toptee.jsonl"
+        }
+      },
+      "macro_native": {
+        "r1": 7.05730621765212,
+        "r10": 30.02079703540087,
+        "r50": 58.67189400437203
+      },
+      "macro_recomputed": {
+        "r1": 7.05730621765212,
+        "r10": 30.02079703540087,
+        "r50": 58.67189400437203
+      },
+      "macro_matches_recomputed": true,
+      "category_count": 3,
+      "total_query_count": 6016
+    },
+    "batch32_r2": {
+      "batch_size": 32,
+      "categories": {
+        "dress": {
+          "query_count": 2017,
+          "gallery_count": 2628,
+          "native_recalls": {
+            "r1": 6.841844323252355,
+            "r10": 29.449677739216657,
+            "r50": 56.767476450173525
+          },
+          "recomputed_recalls": {
+            "r1": 6.841844323252355,
+            "r10": 29.449677739216657,
+            "r50": 56.767476450173525
+          },
+          "recomputed_matches_native": true,
+          "queries_with_tie_at_target": 40,
+          "wall_seconds": 44.823,
+          "per_query_file": "/home/heheboiz/data/cir/workbench/docs/reviews/20261112-parity-repair/raw/clvc_native/batch32_r2/dress.jsonl"
+        },
+        "shirt": {
+          "query_count": 2038,
+          "gallery_count": 3089,
+          "native_recalls": {
+            "r1": 6.4769381746810595,
+            "r10": 27.77232580961727,
+            "r50": 55.250245338567225
+          },
+          "recomputed_recalls": {
+            "r1": 6.4769381746810595,
+            "r10": 27.77232580961727,
+            "r50": 55.250245338567225
+          },
+          "recomputed_matches_native": true,
+          "queries_with_tie_at_target": 12,
+          "wall_seconds": 55.755,
+          "per_query_file": "/home/heheboiz/data/cir/workbench/docs/reviews/20261112-parity-repair/raw/clvc_native/batch32_r2/shirt.jsonl"
+        },
+        "toptee": {
+          "query_count": 1961,
+          "gallery_count": 2902,
+          "native_recalls": {
+            "r1": 7.8531361550229475,
+            "r10": 32.840387557368686,
+            "r50": 63.99796022437532
+          },
+          "recomputed_recalls": {
+            "r1": 7.8531361550229475,
+            "r10": 32.840387557368686,
+            "r50": 63.99796022437532
+          },
+          "recomputed_matches_native": true,
+          "queries_with_tie_at_target": 14,
+          "wall_seconds": 79.58,
+          "per_query_file": "/home/heheboiz/data/cir/workbench/docs/reviews/20261112-parity-repair/raw/clvc_native/batch32_r2/toptee.jsonl"
+        }
+      },
+      "macro_native": {
+        "r1": 7.05730621765212,
+        "r10": 30.02079703540087,
+        "r50": 58.67189400437203
+      },
+      "macro_recomputed": {
+        "r1": 7.05730621765212,
+        "r10": 30.02079703540087,
+        "r50": 58.67189400437203
+      },
+      "macro_matches_recomputed": true,
+      "category_count": 3,
+      "total_query_count": 6016
+    },
+    "batch48": {
+      "batch_size": 48,
+      "categories": {
+        "dress": {
+          "query_count": 2017,
+          "gallery_count": 2628,
+          "native_recalls": {
+            "r1": 6.7922657411998015,
+            "r10": 29.350520575111553,
+            "r50": 56.81705503222608
+          },
+          "recomputed_recalls": {
+            "r1": 6.7922657411998015,
+            "r10": 29.350520575111553,
+            "r50": 56.81705503222608
+          },
+          "recomputed_matches_native": true,
+          "queries_with_tie_at_target": 36,
+          "wall_seconds": 268.61,
+          "per_query_file": "/home/heheboiz/data/cir/workbench/docs/reviews/20261112-parity-repair/raw/clvc_native/batch48/dress.jsonl"
+        },
+        "shirt": {
+          "query_count": 2038,
+          "gallery_count": 3089,
+          "native_recalls": {
+            "r1": 6.427870461236506,
+            "r10": 27.77232580961727,
+            "r50": 55.15210991167812
+          },
+          "recomputed_recalls": {
+            "r1": 6.427870461236506,
+            "r10": 27.77232580961727,
+            "r50": 55.15210991167812
+          },
+          "recomputed_matches_native": true,
+          "queries_with_tie_at_target": 12,
+          "wall_seconds": 269.84,
+          "per_query_file": "/home/heheboiz/data/cir/workbench/docs/reviews/20261112-parity-repair/raw/clvc_native/batch48/shirt.jsonl"
+        },
+        "toptee": {
+          "query_count": 1961,
+          "gallery_count": 2902,
+          "native_recalls": {
+            "r1": 7.8531361550229475,
+            "r10": 32.78939316675166,
+            "r50": 63.895971443141256
+          },
+          "recomputed_recalls": {
+            "r1": 7.8531361550229475,
+            "r10": 32.78939316675166,
+            "r50": 63.895971443141256
+          },
+          "recomputed_matches_native": true,
+          "queries_with_tie_at_target": 14,
+          "wall_seconds": 97.864,
+          "per_query_file": "/home/heheboiz/data/cir/workbench/docs/reviews/20261112-parity-repair/raw/clvc_native/batch48/toptee.jsonl"
+        }
+      },
+      "macro_native": {
+        "r1": 7.024424119153085,
+        "r10": 29.970746517160162,
+        "r50": 58.62171212901515
+      },
+      "macro_recomputed": {
+        "r1": 7.024424119153085,
+        "r10": 29.970746517160162,
+        "r50": 58.62171212901515
+      },
+      "macro_matches_recomputed": true,
+      "category_count": 3,
+      "total_query_count": 6016
+    }
+  },
+  "batch_sensitivity_vs_batch32": {
+    "batch1": {
+      "batch_size": 1,
+      "categories": {
+        "dress": {
+          "recall_delta": {
+            "r1": -0.049578582052553166,
+            "r10": -0.644521566683192,
+            "r50": -0.049578582052554054
+          },
+          "max_abs_delta_r1_r10_r50": 0.644521566683192,
+          "max_abs_score_delta_at_target": 0.12662918493151665,
+          "moved_ranks": 1548,
+          "moved_rank_fraction": 0.767476,
+          "moved_rank_examples": [
+            {
+              "qid": "dress:00000:B005X4PL1G->B0084Y8XIU",
+              "rank_batch32": 40,
+              "rank_above": 40,
+              "rank_this_pass": 44
+            },
+            {
+              "qid": "dress:00001:B008XODTD0->B00AKLK08G",
+              "rank_batch32": 0,
+              "rank_above": 0,
+              "rank_this_pass": 1
+            },
+            {
+              "qid": "dress:00002:B00BPYP69K->B00CMPE0C0",
+              "rank_batch32": 1586,
+              "rank_above": 1586,
+              "rank_this_pass": 1604
+            },
+            {
+              "qid": "dress:00003:B000QSGNOI->B004UO3XYC",
+              "rank_batch32": 74,
+              "rank_above": 74,
+              "rank_this_pass": 64
+            },
+            {
+              "qid": "dress:00005:B00CL14N3Q->B004KHOPDW",
+              "rank_batch32": 313,
+              "rank_above": 313,
+              "rank_this_pass": 339
+            },
+            {
+              "qid": "dress:00006:B009CMY4BS->B0091PLEKA",
+              "rank_batch32": 1089,
+              "rank_above": 1089,
+              "rank_this_pass": 1100
+            },
+            {
+              "qid": "dress:00007:B00896JPTE->B004P7TNIY",
+              "rank_batch32": 251,
+              "rank_above": 251,
+              "rank_this_pass": 240
+            },
+            {
+              "qid": "dress:00008:B00F4WI9H0->B0077SM1Z0",
+              "rank_batch32": 261,
+              "rank_above": 261,
+              "rank_this_pass": 270
+            },
+            {
+              "qid": "dress:00011:B00FHFMMMW->B00F5DPMIM",
+              "rank_batch32": 39,
+              "rank_above": 39,
+              "rank_this_pass": 38
+            },
+            {
+              "qid": "dress:00012:B00DH06JSW->B00C0X5FG4",
+              "rank_batch32": 19,
+              "rank_above": 19,
+              "rank_this_pass": 17
+            },
+            {
+              "qid": "dress:00013:B008YIZM80->B005OOUCLE",
+              "rank_batch32": 6,
+              "rank_above": 6,
+              "rank_this_pass": 7
+            },
+            {
+              "qid": "dress:00014:B009DI5YSS->B008MNM7Y4",
+              "rank_batch32": 18,
+              "rank_above": 18,
+              "rank_this_pass": 20
+            },
+            {
+              "qid": "dress:00015:B007GB2BZI->B009S5XX0M",
+              "rank_batch32": 3,
+              "rank_above": 3,
+              "rank_this_pass": 4
+            },
+            {
+              "qid": "dress:00017:B00CW6HT7W->B00DVH1QS4",
+              "rank_batch32": 74,
+              "rank_above": 74,
+              "rank_this_pass": 92
+            },
+            {
+              "qid": "dress:00018:B004VJ217Q->B00DC6UJ0K",
+              "rank_batch32": 382,
+              "rank_above": 382,
+              "rank_this_pass": 354
+            },
+            {
+              "qid": "dress:00019:B007B6WEA0->B007H3JJHI",
+              "rank_batch32": 5,
+              "rank_above": 5,
+              "rank_this_pass": 10
+            },
+            {
+              "qid": "dress:00020:B0061IXDTU->B008P3DTZC",
+              "rank_batch32": 620,
+              "rank_above": 620,
+              "rank_this_pass": 609
+            },
+            {
+              "qid": "dress:00021:B00B67ELUG->B009OJFHGA",
+              "rank_batch32": 110,
+              "rank_above": 110,
+              "rank_this_pass": 100
+            },
+            {
+              "qid": "dress:00022:B00BFGBJ3K->B006ZKN7UY",
+              "rank_batch32": 83,
+              "rank_above": 83,
+              "rank_this_pass": 60
+            },
+            {
+              "qid": "dress:00023:B008UEW5RO->B00AIBYV1K",
+              "rank_batch32": 21,
+              "rank_above": 21,
+              "rank_this_pass": 30
+            }
+          ],
+          "compared_queries": 2017
+        }
+      },
+      "scope_note": "score comparison is at the target rank only; full similarity rows are not persisted"
+    },
+    "batch32_r2": {
+      "batch_size": 32,
+      "categories": {
+        "dress": {
+          "recall_delta": {
+            "r1": 0.0,
+            "r10": 0.0,
+            "r50": 0.0
+          },
+          "max_abs_delta_r1_r10_r50": 0.0,
+          "max_abs_score_delta_at_target": 0.0,
+          "moved_ranks": 0,
+          "moved_rank_fraction": 0.0,
+          "moved_rank_examples": [],
+          "compared_queries": 2017
+        },
+        "shirt": {
+          "recall_delta": {
+            "r1": 0.0,
+            "r10": 0.0,
+            "r50": 0.0
+          },
+          "max_abs_delta_r1_r10_r50": 0.0,
+          "max_abs_score_delta_at_target": 0.0,
+          "moved_ranks": 0,
+          "moved_rank_fraction": 0.0,
+          "moved_rank_examples": [],
+          "compared_queries": 2038
+        },
+        "toptee": {
+          "recall_delta": {
+            "r1": 0.0,
+            "r10": 0.0,
+            "r50": 0.0
+          },
+          "max_abs_delta_r1_r10_r50": 0.0,
+          "max_abs_score_delta_at_target": 0.0,
+          "moved_ranks": 0,
+          "moved_rank_fraction": 0.0,
+          "moved_rank_examples": [],
+          "compared_queries": 1961
+        }
+      },
+      "scope_note": "score comparison is at the target rank only; full similarity rows are not persisted"
+    },
+    "batch48": {
+      "batch_size": 48,
+      "categories": {
+        "dress": {
+          "recall_delta": {
+            "r1": -0.049578582052553166,
+            "r10": -0.09915716410510456,
+            "r50": 0.049578582052554054
+          },
+          "max_abs_delta_r1_r10_r50": 0.09915716410510456,
+          "max_abs_score_delta_at_target": 0.03873884677886963,
+          "moved_ranks": 427,
+          "moved_rank_fraction": 0.211701,
+          "moved_rank_examples": [
+            {
+              "qid": "dress:00032:B00EXMSRW4->B001VZ6H5U",
+              "rank_batch32": 32,
+              "rank_above": 32,
+              "rank_this_pass": 31
+            },
+            {
+              "qid": "dress:00036:B00G6TRZE8->B003ZJ6GCO",
+              "rank_batch32": 11,
+              "rank_above": 11,
+              "rank_this_pass": 13
+            },
+            {
+              "qid": "dress:00037:B0054DKVWK->B0076ZYQ6G",
+              "rank_batch32": 151,
+              "rank_above": 151,
+              "rank_this_pass": 149
+            },
+            {
+              "qid": "dress:00038:B008RJZTD4->B00CRWGE5E",
+              "rank_batch32": 232,
+              "rank_above": 232,
+              "rank_this_pass": 241
+            },
+            {
+              "qid": "dress:00039:B00B53A556->B008N2O3NW",
+              "rank_batch32": 50,
+              "rank_above": 50,
+              "rank_this_pass": 48
+            },
+            {
+              "qid": "dress:00040:B005DWYMPO->B005H6XSQA",
+              "rank_batch32": 205,
+              "rank_above": 205,
+              "rank_this_pass": 204
+            },
+            {
+              "qid": "dress:00042:B00DOS53RA->B00B59UOBU",
+              "rank_batch32": 1373,
+              "rank_above": 1373,
+              "rank_this_pass": 1354
+            },
+            {
+              "qid": "dress:00043:B00B3PUKMY->B00C67CQDO",
+              "rank_batch32": 410,
+              "rank_above": 410,
+              "rank_this_pass": 411
+            },
+            {
+              "qid": "dress:00044:B00B923WCQ->B005GQPE4K",
+              "rank_batch32": 134,
+              "rank_above": 134,
+              "rank_this_pass": 136
+            },
+            {
+              "qid": "dress:00045:B00DU6GJJC->B00CFYDMM2",
+              "rank_batch32": 28,
+              "rank_above": 28,
+              "rank_this_pass": 30
+            },
+            {
+              "qid": "dress:00066:B0094QX5SK->B00B1AVTWG",
+              "rank_batch32": 10,
+              "rank_above": 10,
+              "rank_this_pass": 12
+            },
+            {
+              "qid": "dress:00067:B001HK23KM->B002TKJL40",
+              "rank_batch32": 176,
+              "rank_above": 176,
+              "rank_this_pass": 178
+            },
+            {
+              "qid": "dress:00069:B005DRAVT0->B007RB7J4K",
+              "rank_batch32": 758,
+              "rank_above": 758,
+              "rank_this_pass": 755
+            },
+            {
+              "qid": "dress:00070:B007B98014->B004SIUT1A",
+              "rank_batch32": 117,
+              "rank_above": 117,
+              "rank_this_pass": 118
+            },
+            {
+              "qid": "dress:00072:B00B2JJ15S->B00ASIH0ZC",
+              "rank_batch32": 131,
+              "rank_above": 131,
+              "rank_this_pass": 134
+            },
+            {
+              "qid": "dress:00077:B007FKA7E2->B0029XKWKO",
+              "rank_batch32": 56,
+              "rank_above": 56,
+              "rank_this_pass": 55
+            },
+            {
+              "qid": "dress:00079:B00B08494E->B00CVTMGTG",
+              "rank_batch32": 166,
+              "rank_above": 166,
+              "rank_this_pass": 168
+            },
+            {
+              "qid": "dress:00080:B006361YUA->B0095JQU2E",
+              "rank_batch32": 36,
+              "rank_above": 36,
+              "rank_this_pass": 35
+            },
+            {
+              "qid": "dress:00082:B0054N0S6E->B0095WSNZ8",
+              "rank_batch32": 1470,
+              "rank_above": 1470,
+              "rank_this_pass": 1468
+            },
+            {
+              "qid": "dress:00085:B00A8CDCD2->B006ZUSYN4",
+              "rank_batch32": 23,
+              "rank_above": 23,
+              "rank_this_pass": 22
+            }
+          ],
+          "compared_queries": 2017
+        },
+        "shirt": {
+          "recall_delta": {
+            "r1": -0.049067713444553185,
+            "r10": 0.0,
+            "r50": -0.09813542688910815
+          },
+          "max_abs_delta_r1_r10_r50": 0.09813542688910815,
+          "max_abs_score_delta_at_target": 0.026166468858718872,
+          "moved_ranks": 378,
+          "moved_rank_fraction": 0.185476,
+          "moved_rank_examples": [
+            {
+              "qid": "shirt:00031:B00853SE8E->B004IP8H7Q",
+              "rank_batch32": 271,
+              "rank_above": 271,
+              "rank_this_pass": 270
+            },
+            {
+              "qid": "shirt:00048:B009VZW24C->B004ZITRGQ",
+              "rank_batch32": 174,
+              "rank_above": 174,
+              "rank_this_pass": 172
+            },
+            {
+              "qid": "shirt:00052:B003XCKD3G->B0061SL9LO",
+              "rank_batch32": 668,
+              "rank_above": 668,
+              "rank_this_pass": 662
+            },
+            {
+              "qid": "shirt:00054:B00AREPLXK->B0081K48FY",
+              "rank_batch32": 27,
+              "rank_above": 27,
+              "rank_this_pass": 26
+            },
+            {
+              "qid": "shirt:00058:B009G0S8CM->B005OQ0QDG",
+              "rank_batch32": 464,
+              "rank_above": 464,
+              "rank_this_pass": 473
+            },
+            {
+              "qid": "shirt:00060:B00BT0JNWQ->B00ADZ1H8G",
+              "rank_batch32": 206,
+              "rank_above": 206,
+              "rank_this_pass": 203
+            },
+            {
+              "qid": "shirt:00061:B005TGMERW->B002SBOJHY",
+              "rank_batch32": 604,
+              "rank_above": 604,
+              "rank_this_pass": 605
+            },
+            {
+              "qid": "shirt:00062:B003FGW8MO->B00GHN6XLY",
+              "rank_batch32": 325,
+              "rank_above": 325,
+              "rank_this_pass": 330
+            },
+            {
+              "qid": "shirt:00096:B000QGPYP4->B0083Z6QDO",
+              "rank_batch32": 37,
+              "rank_above": 37,
+              "rank_this_pass": 36
+            },
+            {
+              "qid": "shirt:00098:B0012NBP4O->B0051IRDJC",
+              "rank_batch32": 61,
+              "rank_above": 61,
+              "rank_this_pass": 57
+            },
+            {
+              "qid": "shirt:00099:B0041IY8I2->B007TW76EU",
+              "rank_batch32": 13,
+              "rank_above": 13,
+              "rank_this_pass": 14
+            },
+            {
+              "qid": "shirt:00103:B000W7YJP8->B0096F6D6U",
+              "rank_batch32": 6,
+              "rank_above": 6,
+              "rank_this_pass": 5
+            },
+            {
+              "qid": "shirt:00104:B00CWVIPQ6->B00AFC4VDA",
+              "rank_batch32": 130,
+              "rank_above": 130,
+              "rank_this_pass": 134
+            },
+            {
+              "qid": "shirt:00105:B003EKOBTY->B001KUGM6U",
+              "rank_batch32": 140,
+              "rank_above": 140,
+              "rank_this_pass": 144
+            },
+            {
+              "qid": "shirt:00106:B004WU17MY->B0046CZBPM",
+              "rank_batch32": 790,
+              "rank_above": 790,
+              "rank_this_pass": 847
+            },
+            {
+              "qid": "shirt:00108:B007M68RR8->B009ELWRYS",
+              "rank_batch32": 15,
+              "rank_above": 15,
+              "rank_this_pass": 17
+            },
+            {
+              "qid": "shirt:00111:B005XIGCYW->B009Q7CK8I",
+              "rank_batch32": 12,
+              "rank_above": 12,
+              "rank_this_pass": 11
+            },
+            {
+              "qid": "shirt:00113:B007TM9B70->B009G0S8CM",
+              "rank_batch32": 6,
+              "rank_above": 6,
+              "rank_this_pass": 7
+            },
+            {
+              "qid": "shirt:00114:B000W8UAR8->B00B4YHCJS",
+              "rank_batch32": 148,
+              "rank_above": 148,
+              "rank_this_pass": 150
+            },
+            {
+              "qid": "shirt:00115:B009L80RS2->B0089HEOHG",
+              "rank_batch32": 923,
+              "rank_above": 923,
+              "rank_this_pass": 899
+            }
+          ],
+          "compared_queries": 2038
+        },
+        "toptee": {
+          "recall_delta": {
+            "r1": 0.0,
+            "r10": -0.05099439061702782,
+            "r50": -0.10198878123406274
+          },
+          "max_abs_delta_r1_r10_r50": 0.10198878123406274,
+          "max_abs_score_delta_at_target": 0.020434677600860596,
+          "moved_ranks": 372,
+          "moved_rank_fraction": 0.189699,
+          "moved_rank_examples": [
+            {
+              "qid": "toptee:00001:B0088WRQVS->B001AS562I",
+              "rank_batch32": 314,
+              "rank_above": 314,
+              "rank_this_pass": 315
+            },
+            {
+              "qid": "toptee:00003:B00H03TS7Q->B0085YC1G4",
+              "rank_batch32": 7,
+              "rank_above": 7,
+              "rank_this_pass": 9
+            },
+            {
+              "qid": "toptee:00007:B00DEJR2EQ->B00CD23F8W",
+              "rank_batch32": 4,
+              "rank_above": 4,
+              "rank_this_pass": 5
+            },
+            {
+              "qid": "toptee:00009:B00EE0DYZ0->B001UEUTF6",
+              "rank_batch32": 26,
+              "rank_above": 26,
+              "rank_this_pass": 25
+            },
+            {
+              "qid": "toptee:00011:B007OTSRDM->B00CDVICKY",
+              "rank_batch32": 13,
+              "rank_above": 13,
+              "rank_this_pass": 12
+            },
+            {
+              "qid": "toptee:00012:B00BE75USU->B00D55169Q",
+              "rank_batch32": 54,
+              "rank_above": 54,
+              "rank_this_pass": 53
+            },
+            {
+              "qid": "toptee:00014:B007G11JF6->B00F6EB91O",
+              "rank_batch32": 97,
+              "rank_above": 97,
+              "rank_this_pass": 100
+            },
+            {
+              "qid": "toptee:00015:B006MHUH0I->B00C2G46RS",
+              "rank_batch32": 40,
+              "rank_above": 40,
+              "rank_this_pass": 39
+            },
+            {
+              "qid": "toptee:00019:B00CN3WUP0->B00BM0OYPO",
+              "rank_batch32": 195,
+              "rank_above": 195,
+              "rank_this_pass": 187
+            },
+            {
+              "qid": "toptee:00020:B006C4Y45A->B00AJQVNJM",
+              "rank_batch32": 55,
+              "rank_above": 55,
+              "rank_this_pass": 59
+            },
+            {
+              "qid": "toptee:00023:B008A4OUC2->B004I6OAQW",
+              "rank_batch32": 6,
+              "rank_above": 6,
+              "rank_this_pass": 7
+            },
+            {
+              "qid": "toptee:00025:B00AIZCMKI->B00BB1UC5K",
+              "rank_batch32": 9,
+              "rank_above": 9,
+              "rank_this_pass": 10
+            },
+            {
+              "qid": "toptee:00026:B004L83ZEU->B001NZVD4I",
+              "rank_batch32": 98,
+              "rank_above": 98,
+              "rank_this_pass": 103
+            },
+            {
+              "qid": "toptee:00027:B00DLAFC0O->B007XD6ZME",
+              "rank_batch32": 33,
+              "rank_above": 33,
+              "rank_this_pass": 34
+            },
+            {
+              "qid": "toptee:00028:B008WZC38C->B001F4A45G",
+              "rank_batch32": 8,
+              "rank_above": 8,
+              "rank_this_pass": 7
+            },
+            {
+              "qid": "toptee:00031:B006E3ZMA0->B00A13DD8M",
+              "rank_batch32": 51,
+              "rank_above": 51,
+              "rank_this_pass": 53
+            },
+            {
+              "qid": "toptee:00050:B008TBS8UG->B0084YK36U",
+              "rank_batch32": 38,
+              "rank_above": 38,
+              "rank_this_pass": 39
+            },
+            {
+              "qid": "toptee:00051:B00BDGQK90->B005U5K6XQ",
+              "rank_batch32": 1135,
+              "rank_above": 1135,
+              "rank_this_pass": 1129
+            },
+            {
+              "qid": "toptee:00053:B00BDGQK90->B008MP0KYQ",
+              "rank_batch32": 44,
+              "rank_above": 44,
+              "rank_this_pass": 43
+            },
+            {
+              "qid": "toptee:00055:B005JR1KA8->B009W1HUM4",
+              "rank_batch32": 291,
+              "rank_above": 291,
+              "rank_this_pass": 283
+            }
+          ],
+          "compared_queries": 1961
+        }
+      },
+      "scope_note": "score comparison is at the target rank only; full similarity rows are not persisted"
+    }
+  },
+  "historical_comparison": {
+    "run1_29.9707": {
+      "artifact": "workbench/artifacts/checkpoint_selection/20261106T002617+0700/measurements/clvc_run1.json",
+      "macro_r10": 29.970746517160162,
+      "macro_r50": 58.62171212901515,
+      "per_category": {
+        "dress": {
+          "history_r1": 6.7922657411998015,
+          "history_r10": 29.350520575111553,
+          "history_r50": 56.81705503222608,
+          "delta_r10": 0.09915716410510456,
+          "delta_r50": -0.049578582052554054,
+          "history_r1_hits": 137.0,
+          "history_r10_hits": 592.0,
+          "history_r50_hits": 1146.0,
+          "new_r1_hits": 138.0,
+          "new_r10_hits": 594.0,
+          "new_r50_hits": 1145.0
+        },
+        "shirt": {
+          "history_r1": 6.427870461236506,
+          "history_r10": 27.77232580961727,
+          "history_r50": 55.15210991167812,
+          "delta_r10": 0.0,
+          "delta_r50": 0.09813542688910815,
+          "history_r1_hits": 131.0,
+          "history_r10_hits": 566.0,
+          "history_r50_hits": 1124.0,
+          "new_r1_hits": 132.0,
+          "new_r10_hits": 566.0,
+          "new_r50_hits": 1126.0
+        },
+        "toptee": {
+          "history_r1": 7.8531361550229475,
+          "history_r10": 32.78939316675166,
+          "history_r50": 63.895971443141256,
+          "delta_r10": 0.05099439061702782,
+          "delta_r50": 0.10198878123406274,
+          "history_r1_hits": 154.0,
+          "history_r10_hits": 643.0,
+          "history_r50_hits": 1253.0,
+          "new_r1_hits": 154.0,
+          "new_r10_hits": 644.0,
+          "new_r50_hits": 1255.0
+        }
+      },
+      "macro_r10_matches": false,
+      "macro_r50_matches": false
+    },
+    "run3_30.0208": {
+      "artifact": "workbench/docs/reviews/20261111-master-audit/raw/clvc_run3cat_gpu.json",
+      "macro_r10": 30.02079703540087,
+      "macro_r50": 58.67189400437203,
+      "per_category": {
+        "dress": {
+          "history_r1": 6.841844323252355,
+          "history_r10": 29.449677739216657,
+          "history_r50": 56.767476450173525,
+          "delta_r10": 0.0,
+          "delta_r50": 0.0,
+          "history_r1_hits": 138.0,
+          "history_r10_hits": 594.0,
+          "history_r50_hits": 1145.0,
+          "new_r1_hits": 138.0,
+          "new_r10_hits": 594.0,
+          "new_r50_hits": 1145.0
+        },
+        "shirt": {
+          "history_r1": 6.4769381746810595,
+          "history_r10": 27.77232580961727,
+          "history_r50": 55.250245338567225,
+          "delta_r10": 0.0,
+          "delta_r50": 0.0,
+          "history_r1_hits": 132.0,
+          "history_r10_hits": 566.0,
+          "history_r50_hits": 1126.0,
+          "new_r1_hits": 132.0,
+          "new_r10_hits": 566.0,
+          "new_r50_hits": 1126.0
+        },
+        "toptee": {
+          "history_r1": 7.8531361550229475,
+          "history_r10": 32.840387557368686,
+          "history_r50": 63.99796022437532,
+          "delta_r10": 0.0,
+          "delta_r50": 0.0,
+          "history_r1_hits": 154.0,
+          "history_r10_hits": 644.0,
+          "history_r50_hits": 1255.0,
+          "new_r1_hits": 154.0,
+          "new_r10_hits": 644.0,
+          "new_r50_hits": 1255.0
+        }
+      },
+      "macro_r10_matches": true,
+      "macro_r50_matches": true
+    }
+  }
+}

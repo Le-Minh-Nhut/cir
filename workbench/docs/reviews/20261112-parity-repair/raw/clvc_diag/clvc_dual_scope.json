@@ -1,0 +1,808 @@
+{
+  "artifact_type": "clvc_dual_scope_diagnostic",
+  "schema_version": 1,
+  "diagnostic": true,
+  "canonical": false,
+  "purpose": "diagnostic comparison for the two CIRCUS queries whose reference image and normalized caption pair are filed under both shirt and toptee in the FashionIQ validation captions; NOT part of the canonical 6001/6003 metric and never folded into any metric",
+  "canonical_status": {
+    "status": "PARTIAL",
+    "scored_count": 6001,
+    "unscored_count": 2,
+    "unscored_qids": [
+      "7:3038",
+      "7:3790"
+    ],
+    "note": "Both diagnostic scopes run for each CLVC-Net condition; the canonical metrics stay 6001/6003 and both queries stay unscored there. No diagnostic number is folded into the canonical evaluator, no scope is chosen as 'the' answer."
+  },
+  "source_run_id": "da0a2162be0e159a1a456cec",
+  "gallery": {
+    "count": 74381,
+    "protocol_id": "circus_fashioniq_release_v1",
+    "note": "the FULL released gallery for every scope: no category filtering, the checkpoint being category-specific does not restrict candidates"
+  },
+  "conditions": [
+    "multimodal",
+    "text_only_black_image",
+    "clvc_image_encoder_only"
+  ],
+  "scopes": [
+    "shirt",
+    "toptee"
+  ],
+  "queries": {
+    "7:3038": {
+      "qid": "7:3038",
+      "release": {
+        "index": 3037,
+        "query_txt": "Is darker and has a different graphic and is darker.",
+        "reference_id": "7:53224",
+        "positive_ids": [
+          "7:3416"
+        ],
+        "loader_category": null,
+        "matched_subsets": [
+          "full"
+        ]
+      },
+      "resolved_query_image_path": "/home/heheboiz/data/cir/data/FashionIQ/resized_image/shirt/B004TMGDME.jpg",
+      "target_position_in_gallery": [
+        13614
+      ],
+      "target_gallery_id": "mbeir_images/fashioniq_images/B004D8QCN4.jpg",
+      "target_image_path": "/home/heheboiz/data/cir/data/FashionIQ/resized_image/shirt/B004D8QCN4.jpg",
+      "scopes": {
+        "shirt": {
+          "multimodal": {
+            "scope": "shirt",
+            "condition": "multimodal",
+            "diagnostic": true,
+            "canonical": false,
+            "canonical_status": "excluded: qid remains unscoped/unscored in the canonical 6001/6003 metric; this cell never enters a metric",
+            "condition_kind": "protocol",
+            "raw_edit_caption": "Is darker and has a different graphic and is darker.",
+            "resolved_category": "shirt",
+            "resolved_category_reason": "diagnostic scope: the release resolver names BOTH shirt and toptee for this query and the canonical run refuses to pick one",
+            "query_embedding_norm": 1.4142136751290721,
+            "staged_image_path": "/home/heheboiz/data/cir/data/FashionIQ/resized_image/shirt/B004TMGDME.jpg",
+            "model_text": "Is darker and has a different graphic and is darker.",
+            "device": "cpu",
+            "cuda_neutralised": true,
+            "batch_composition": {
+              "forward_batch_rows": 2,
+              "note": "CLVC-Net rows move with batch composition; this diagnostic encodes both qids of one scope in one batch and no canonical number is compared to"
+            },
+            "target_rank": 848,
+            "target_score": 0.4636196792125702,
+            "target_gallery_position": 13614,
+            "target_did": "7:3416",
+            "gallery_size_scored": 74381,
+            "score_min": -0.6125609874725342,
+            "score_max": 0.7360861897468567,
+            "score_at_rank_1": 0.7360861897468567,
+            "rank_1_gallery_id": "mbeir_images/fashioniq_images/B006DJVQNW.jpg",
+            "target_margin_vs_rank1": 0.2724665105342865,
+            "encode_seconds": 4.2,
+            "target_within_export_depth": false,
+            "top100_export": "/home/heheboiz/data/cir/workbench/docs/reviews/20261112-parity-repair/raw/clvc_diag/clvc_dual_scope.shirt.multimodal.jsonl"
+          },
+          "text_only_black_image": {
+            "scope": "shirt",
+            "condition": "text_only_black_image",
+            "diagnostic": true,
+            "canonical": false,
+            "canonical_status": "excluded: qid remains unscoped/unscored in the canonical 6001/6003 metric; this cell never enters a metric",
+            "condition_kind": "protocol",
+            "raw_edit_caption": "Is darker and has a different graphic and is darker.",
+            "resolved_category": "shirt",
+            "resolved_category_reason": "diagnostic scope: the release resolver names BOTH shirt and toptee for this query and the canonical run refuses to pick one",
+            "query_embedding_norm": 1.4142135944120782,
+            "staged_image_path": "/tmp/clvc-dual-yqadrd_r/queries/text_only_black_image/B004TMGDME.png",
+            "model_text": "Is darker and has a different graphic and is darker.",
+            "device": "cpu",
+            "cuda_neutralised": true,
+            "batch_composition": {
+              "forward_batch_rows": 2,
+              "note": "CLVC-Net rows move with batch composition; this diagnostic encodes both qids of one scope in one batch and no canonical number is compared to"
+            },
+            "target_rank": 304,
+            "target_score": 0.47740668058395386,
+            "target_gallery_position": 13614,
+            "target_did": "7:3416",
+            "gallery_size_scored": 74381,
+            "score_min": -0.5867882370948792,
+            "score_max": 0.6548824310302734,
+            "score_at_rank_1": 0.6548824310302734,
+            "rank_1_gallery_id": "mbeir_images/fashioniq_images/B006JRTMKC.jpg",
+            "target_margin_vs_rank1": 0.17747575044631958,
+            "encode_seconds": 4.388,
+            "target_within_export_depth": false,
+            "top100_export": "/home/heheboiz/data/cir/workbench/docs/reviews/20261112-parity-repair/raw/clvc_diag/clvc_dual_scope.shirt.text_only_black_image.jsonl"
+          },
+          "clvc_image_encoder_only": {
+            "scope": "shirt",
+            "condition": "clvc_image_encoder_only",
+            "diagnostic": true,
+            "canonical": false,
+            "canonical_status": "excluded: qid remains unscoped/unscored in the canonical 6001/6003 metric; this cell never enters a metric",
+            "condition_kind": "ablation",
+            "raw_edit_caption": "Is darker and has a different graphic and is darker.",
+            "resolved_category": "shirt",
+            "resolved_category_reason": "diagnostic scope: the release resolver names BOTH shirt and toptee for this query and the canonical run refuses to pick one",
+            "query_embedding_norm": 1.4142134790279397,
+            "staged_image_path": "/home/heheboiz/data/cir/data/FashionIQ/resized_image/shirt/B004TMGDME.jpg",
+            "model_text": "",
+            "device": "cpu",
+            "cuda_neutralised": true,
+            "batch_composition": {
+              "forward_batch_rows": 2,
+              "note": "CLVC-Net rows move with batch composition; this diagnostic encodes both qids of one scope in one batch and no canonical number is compared to"
+            },
+            "target_rank": 8702,
+            "target_score": 0.30329281091690063,
+            "target_gallery_position": 13614,
+            "target_did": "7:3416",
+            "gallery_size_scored": 74381,
+            "score_min": -0.6141282320022583,
+            "score_max": 0.9999998211860657,
+            "score_at_rank_1": 0.9999998211860657,
+            "rank_1_gallery_id": "mbeir_images/fashioniq_images/B004TMGDME.jpg",
+            "target_margin_vs_rank1": 0.696707010269165,
+            "encode_seconds": 0.503,
+            "target_within_export_depth": false,
+            "top100_export": "/home/heheboiz/data/cir/workbench/docs/reviews/20261112-parity-repair/raw/clvc_diag/clvc_dual_scope.shirt.clvc_image_encoder_only.jsonl"
+          }
+        },
+        "toptee": {
+          "multimodal": {
+            "scope": "toptee",
+            "condition": "multimodal",
+            "diagnostic": true,
+            "canonical": false,
+            "canonical_status": "excluded: qid remains unscoped/unscored in the canonical 6001/6003 metric; this cell never enters a metric",
+            "condition_kind": "protocol",
+            "raw_edit_caption": "Is darker and has a different graphic and is darker.",
+            "resolved_category": "toptee",
+            "resolved_category_reason": "diagnostic scope: the release resolver names BOTH shirt and toptee for this query and the canonical run refuses to pick one",
+            "query_embedding_norm": 1.4142134661881811,
+            "staged_image_path": "/home/heheboiz/data/cir/data/FashionIQ/resized_image/shirt/B004TMGDME.jpg",
+            "model_text": "Is darker and has a different graphic and is darker.",
+            "device": "cpu",
+            "cuda_neutralised": true,
+            "batch_composition": {
+              "forward_batch_rows": 2,
+              "note": "CLVC-Net rows move with batch composition; this diagnostic encodes both qids of one scope in one batch and no canonical number is compared to"
+            },
+            "target_rank": 1253,
+            "target_score": 0.5659813284873962,
+            "target_gallery_position": 13614,
+            "target_did": "7:3416",
+            "gallery_size_scored": 74381,
+            "score_min": -0.6724859476089478,
+            "score_max": 0.7361156344413757,
+            "score_at_rank_1": 0.7361156344413757,
+            "rank_1_gallery_id": "mbeir_images/fashioniq_images/B001RNO3DE.jpg",
+            "target_margin_vs_rank1": 0.1701343059539795,
+            "encode_seconds": 2.244,
+            "target_within_export_depth": false,
+            "top100_export": "/home/heheboiz/data/cir/workbench/docs/reviews/20261112-parity-repair/raw/clvc_diag/clvc_dual_scope.toptee.multimodal.jsonl"
+          },
+          "text_only_black_image": {
+            "scope": "toptee",
+            "condition": "text_only_black_image",
+            "diagnostic": true,
+            "canonical": false,
+            "canonical_status": "excluded: qid remains unscoped/unscored in the canonical 6001/6003 metric; this cell never enters a metric",
+            "condition_kind": "protocol",
+            "raw_edit_caption": "Is darker and has a different graphic and is darker.",
+            "resolved_category": "toptee",
+            "resolved_category_reason": "diagnostic scope: the release resolver names BOTH shirt and toptee for this query and the canonical run refuses to pick one",
+            "query_embedding_norm": 1.414213554399653,
+            "staged_image_path": "/tmp/clvc-dual-yqadrd_r/queries/text_only_black_image/B004TMGDME.png",
+            "model_text": "Is darker and has a different graphic and is darker.",
+            "device": "cpu",
+            "cuda_neutralised": true,
+            "batch_composition": {
+              "forward_batch_rows": 2,
+              "note": "CLVC-Net rows move with batch composition; this diagnostic encodes both qids of one scope in one batch and no canonical number is compared to"
+            },
+            "target_rank": 1549,
+            "target_score": 0.4584702253341675,
+            "target_gallery_position": 13614,
+            "target_did": "7:3416",
+            "gallery_size_scored": 74381,
+            "score_min": -0.6130234599113464,
+            "score_max": 0.6663635969161987,
+            "score_at_rank_1": 0.6663635969161987,
+            "rank_1_gallery_id": "mbeir_images/fashioniq_images/B007TVKE5O.jpg",
+            "target_margin_vs_rank1": 0.20789337158203125,
+            "encode_seconds": 6.011,
+            "target_within_export_depth": false,
+            "top100_export": "/home/heheboiz/data/cir/workbench/docs/reviews/20261112-parity-repair/raw/clvc_diag/clvc_dual_scope.toptee.text_only_black_image.jsonl"
+          },
+          "clvc_image_encoder_only": {
+            "scope": "toptee",
+            "condition": "clvc_image_encoder_only",
+            "diagnostic": true,
+            "canonical": false,
+            "canonical_status": "excluded: qid remains unscoped/unscored in the canonical 6001/6003 metric; this cell never enters a metric",
+            "condition_kind": "ablation",
+            "raw_edit_caption": "Is darker and has a different graphic and is darker.",
+            "resolved_category": "toptee",
+            "resolved_category_reason": "diagnostic scope: the release resolver names BOTH shirt and toptee for this query and the canonical run refuses to pick one",
+            "query_embedding_norm": 1.4142135471113446,
+            "staged_image_path": "/home/heheboiz/data/cir/data/FashionIQ/resized_image/shirt/B004TMGDME.jpg",
+            "model_text": "",
+            "device": "cpu",
+            "cuda_neutralised": true,
+            "batch_composition": {
+              "forward_batch_rows": 2,
+              "note": "CLVC-Net rows move with batch composition; this diagnostic encodes both qids of one scope in one batch and no canonical number is compared to"
+            },
+            "target_rank": 1267,
+            "target_score": 0.5921408534049988,
+            "target_gallery_position": 13614,
+            "target_did": "7:3416",
+            "gallery_size_scored": 74381,
+            "score_min": -0.717103898525238,
+            "score_max": 0.9999996423721313,
+            "score_at_rank_1": 0.9999996423721313,
+            "rank_1_gallery_id": "mbeir_images/fashioniq_images/B004TMGDME.jpg",
+            "target_margin_vs_rank1": 0.40785878896713257,
+            "encode_seconds": 4.577,
+            "target_within_export_depth": false,
+            "top100_export": "/home/heheboiz/data/cir/workbench/docs/reviews/20261112-parity-repair/raw/clvc_diag/clvc_dual_scope.toptee.clvc_image_encoder_only.jsonl"
+          }
+        }
+      }
+    },
+    "7:3790": {
+      "qid": "7:3790",
+      "release": {
+        "index": 3789,
+        "query_txt": "Is grey and has a less whimsical graphic and is lighter.",
+        "reference_id": "7:33523",
+        "positive_ids": [
+          "7:42304"
+        ],
+        "loader_category": null,
+        "matched_subsets": [
+          "full",
+          "sf"
+        ]
+      },
+      "resolved_query_image_path": "/home/heheboiz/data/cir/data/FashionIQ/resized_image/shirt/B0079K0YBO.jpg",
+      "target_position_in_gallery": [
+        70410
+      ],
+      "target_gallery_id": "mbeir_images/fashioniq_images/B00E3WVAD2.jpg",
+      "target_image_path": "/home/heheboiz/data/cir/data/FashionIQ/resized_image/shirt/B00E3WVAD2.jpg",
+      "scopes": {
+        "shirt": {
+          "multimodal": {
+            "scope": "shirt",
+            "condition": "multimodal",
+            "diagnostic": true,
+            "canonical": false,
+            "canonical_status": "excluded: qid remains unscoped/unscored in the canonical 6001/6003 metric; this cell never enters a metric",
+            "condition_kind": "protocol",
+            "raw_edit_caption": "Is grey and has a less whimsical graphic and is lighter.",
+            "resolved_category": "shirt",
+            "resolved_category_reason": "diagnostic scope: the release resolver names BOTH shirt and toptee for this query and the canonical run refuses to pick one",
+            "query_embedding_norm": 1.4142134773861321,
+            "staged_image_path": "/home/heheboiz/data/cir/data/FashionIQ/resized_image/shirt/B0079K0YBO.jpg",
+            "model_text": "Is grey and has a less whimsical graphic and is lighter.",
+            "device": "cpu",
+            "cuda_neutralised": true,
+            "batch_composition": {
+              "forward_batch_rows": 2,
+              "note": "CLVC-Net rows move with batch composition; this diagnostic encodes both qids of one scope in one batch and no canonical number is compared to"
+            },
+            "target_rank": 412,
+            "target_score": 0.571142852306366,
+            "target_gallery_position": 70410,
+            "target_did": "7:42304",
+            "gallery_size_scored": 74381,
+            "score_min": -0.5119717121124268,
+            "score_max": 0.7956860065460205,
+            "score_at_rank_1": 0.7956860065460205,
+            "rank_1_gallery_id": "mbeir_images/fashioniq_images/B00CEQZ1SY.jpg",
+            "target_margin_vs_rank1": 0.22454315423965454,
+            "encode_seconds": 4.2,
+            "target_within_export_depth": false,
+            "top100_export": "/home/heheboiz/data/cir/workbench/docs/reviews/20261112-parity-repair/raw/clvc_diag/clvc_dual_scope.shirt.multimodal.jsonl"
+          },
+          "text_only_black_image": {
+            "scope": "shirt",
+            "condition": "text_only_black_image",
+            "diagnostic": true,
+            "canonical": false,
+            "canonical_status": "excluded: qid remains unscoped/unscored in the canonical 6001/6003 metric; this cell never enters a metric",
+            "condition_kind": "protocol",
+            "raw_edit_caption": "Is grey and has a less whimsical graphic and is lighter.",
+            "resolved_category": "shirt",
+            "resolved_category_reason": "diagnostic scope: the release resolver names BOTH shirt and toptee for this query and the canonical run refuses to pick one",
+            "query_embedding_norm": 1.4142135683341495,
+            "staged_image_path": "/tmp/clvc-dual-yqadrd_r/queries/text_only_black_image/B0079K0YBO.png",
+            "model_text": "Is grey and has a less whimsical graphic and is lighter.",
+            "device": "cpu",
+            "cuda_neutralised": true,
+            "batch_composition": {
+              "forward_batch_rows": 2,
+              "note": "CLVC-Net rows move with batch composition; this diagnostic encodes both qids of one scope in one batch and no canonical number is compared to"
+            },
+            "target_rank": 1466,
+            "target_score": 0.4442720413208008,
+            "target_gallery_position": 70410,
+            "target_did": "7:42304",
+            "gallery_size_scored": 74381,
+            "score_min": -0.49663445353507996,
+            "score_max": 0.7572203278541565,
+            "score_at_rank_1": 0.7572203278541565,
+            "rank_1_gallery_id": "mbeir_images/fashioniq_images/B000A2BIS6.jpg",
+            "target_margin_vs_rank1": 0.3129482865333557,
+            "encode_seconds": 4.388,
+            "target_within_export_depth": false,
+            "top100_export": "/home/heheboiz/data/cir/workbench/docs/reviews/20261112-parity-repair/raw/clvc_diag/clvc_dual_scope.shirt.text_only_black_image.jsonl"
+          },
+          "clvc_image_encoder_only": {
+            "scope": "shirt",
+            "condition": "clvc_image_encoder_only",
+            "diagnostic": true,
+            "canonical": false,
+            "canonical_status": "excluded: qid remains unscoped/unscored in the canonical 6001/6003 metric; this cell never enters a metric",
+            "condition_kind": "ablation",
+            "raw_edit_caption": "Is grey and has a less whimsical graphic and is lighter.",
+            "resolved_category": "shirt",
+            "resolved_category_reason": "diagnostic scope: the release resolver names BOTH shirt and toptee for this query and the canonical run refuses to pick one",
+            "query_embedding_norm": 1.4142135676947762,
+            "staged_image_path": "/home/heheboiz/data/cir/data/FashionIQ/resized_image/shirt/B0079K0YBO.jpg",
+            "model_text": "",
+            "device": "cpu",
+            "cuda_neutralised": true,
+            "batch_composition": {
+              "forward_batch_rows": 2,
+              "note": "CLVC-Net rows move with batch composition; this diagnostic encodes both qids of one scope in one batch and no canonical number is compared to"
+            },
+            "target_rank": 5481,
+            "target_score": 0.25908106565475464,
+            "target_gallery_position": 70410,
+            "target_did": "7:42304",
+            "gallery_size_scored": 74381,
+            "score_min": -0.5716699361801147,
+            "score_max": 0.9999997019767761,
+            "score_at_rank_1": 0.9999997019767761,
+            "rank_1_gallery_id": "mbeir_images/fashioniq_images/B0079K0YBO.jpg",
+            "target_margin_vs_rank1": 0.7409186363220215,
+            "encode_seconds": 0.503,
+            "target_within_export_depth": false,
+            "top100_export": "/home/heheboiz/data/cir/workbench/docs/reviews/20261112-parity-repair/raw/clvc_diag/clvc_dual_scope.shirt.clvc_image_encoder_only.jsonl"
+          }
+        },
+        "toptee": {
+          "multimodal": {
+            "scope": "toptee",
+            "condition": "multimodal",
+            "diagnostic": true,
+            "canonical": false,
+            "canonical_status": "excluded: qid remains unscoped/unscored in the canonical 6001/6003 metric; this cell never enters a metric",
+            "condition_kind": "protocol",
+            "raw_edit_caption": "Is grey and has a less whimsical graphic and is lighter.",
+            "resolved_category": "toptee",
+            "resolved_category_reason": "diagnostic scope: the release resolver names BOTH shirt and toptee for this query and the canonical run refuses to pick one",
+            "query_embedding_norm": 1.4142135816370214,
+            "staged_image_path": "/home/heheboiz/data/cir/data/FashionIQ/resized_image/shirt/B0079K0YBO.jpg",
+            "model_text": "Is grey and has a less whimsical graphic and is lighter.",
+            "device": "cpu",
+            "cuda_neutralised": true,
+            "batch_composition": {
+              "forward_batch_rows": 2,
+              "note": "CLVC-Net rows move with batch composition; this diagnostic encodes both qids of one scope in one batch and no canonical number is compared to"
+            },
+            "target_rank": 259,
+            "target_score": 0.7430012226104736,
+            "target_gallery_position": 70410,
+            "target_did": "7:42304",
+            "gallery_size_scored": 74381,
+            "score_min": -0.600824773311615,
+            "score_max": 0.8428176045417786,
+            "score_at_rank_1": 0.8428176045417786,
+            "rank_1_gallery_id": "mbeir_images/fashioniq_images/B004A8NENI.jpg",
+            "target_margin_vs_rank1": 0.09981638193130493,
+            "encode_seconds": 2.244,
+            "target_within_export_depth": false,
+            "top100_export": "/home/heheboiz/data/cir/workbench/docs/reviews/20261112-parity-repair/raw/clvc_diag/clvc_dual_scope.toptee.multimodal.jsonl"
+          },
+          "text_only_black_image": {
+            "scope": "toptee",
+            "condition": "text_only_black_image",
+            "diagnostic": true,
+            "canonical": false,
+            "canonical_status": "excluded: qid remains unscoped/unscored in the canonical 6001/6003 metric; this cell never enters a metric",
+            "condition_kind": "protocol",
+            "raw_edit_caption": "Is grey and has a less whimsical graphic and is lighter.",
+            "resolved_category": "toptee",
+            "resolved_category_reason": "diagnostic scope: the release resolver names BOTH shirt and toptee for this query and the canonical run refuses to pick one",
+            "query_embedding_norm": 1.4142135553016537,
+            "staged_image_path": "/tmp/clvc-dual-yqadrd_r/queries/text_only_black_image/B0079K0YBO.png",
+            "model_text": "Is grey and has a less whimsical graphic and is lighter.",
+            "device": "cpu",
+            "cuda_neutralised": true,
+            "batch_composition": {
+              "forward_batch_rows": 2,
+              "note": "CLVC-Net rows move with batch composition; this diagnostic encodes both qids of one scope in one batch and no canonical number is compared to"
+            },
+            "target_rank": 568,
+            "target_score": 0.6188584566116333,
+            "target_gallery_position": 70410,
+            "target_did": "7:42304",
+            "gallery_size_scored": 74381,
+            "score_min": -0.5946567058563232,
+            "score_max": 0.747597873210907,
+            "score_at_rank_1": 0.747597873210907,
+            "rank_1_gallery_id": "mbeir_images/fashioniq_images/B00483AQX6.jpg",
+            "target_margin_vs_rank1": 0.12873941659927368,
+            "encode_seconds": 6.011,
+            "target_within_export_depth": false,
+            "top100_export": "/home/heheboiz/data/cir/workbench/docs/reviews/20261112-parity-repair/raw/clvc_diag/clvc_dual_scope.toptee.text_only_black_image.jsonl"
+          },
+          "clvc_image_encoder_only": {
+            "scope": "toptee",
+            "condition": "clvc_image_encoder_only",
+            "diagnostic": true,
+            "canonical": false,
+            "canonical_status": "excluded: qid remains unscoped/unscored in the canonical 6001/6003 metric; this cell never enters a metric",
+            "condition_kind": "ablation",
+            "raw_edit_caption": "Is grey and has a less whimsical graphic and is lighter.",
+            "resolved_category": "toptee",
+            "resolved_category_reason": "diagnostic scope: the release resolver names BOTH shirt and toptee for this query and the canonical run refuses to pick one",
+            "query_embedding_norm": 1.4142135424769486,
+            "staged_image_path": "/home/heheboiz/data/cir/data/FashionIQ/resized_image/shirt/B0079K0YBO.jpg",
+            "model_text": "",
+            "device": "cpu",
+            "cuda_neutralised": true,
+            "batch_composition": {
+              "forward_batch_rows": 2,
+              "note": "CLVC-Net rows move with batch composition; this diagnostic encodes both qids of one scope in one batch and no canonical number is compared to"
+            },
+            "target_rank": 4535,
+            "target_score": 0.44561105966567993,
+            "target_gallery_position": 70410,
+            "target_did": "7:42304",
+            "gallery_size_scored": 74381,
+            "score_min": -0.5582849979400635,
+            "score_max": 0.9999999403953552,
+            "score_at_rank_1": 0.9999999403953552,
+            "rank_1_gallery_id": "mbeir_images/fashioniq_images/B0079K0YBO.jpg",
+            "target_margin_vs_rank1": 0.5543888807296753,
+            "encode_seconds": 4.577,
+            "target_within_export_depth": false,
+            "top100_export": "/home/heheboiz/data/cir/workbench/docs/reviews/20261112-parity-repair/raw/clvc_diag/clvc_dual_scope.toptee.clvc_image_encoder_only.jsonl"
+          }
+        }
+      }
+    }
+  },
+  "release_provenance": {
+    "hash_verification": "matched",
+    "sha256": {
+      "mbeir_query": "b601ef6a5411bf9385cff41e64bea863871ab1094cd09d78683de6a5141165ef",
+      "mbeir_candidates": "121ec284832c33289ee13bfac19d5d59dc3f8aeddf672d784fd5eb8bcdf79eef",
+      "sf": "95a93883334e351e4d3aaaf25e47e89b48d4daf02bdb786e8f00d58165ace37d",
+      "validated_solved": "18f829da4d3b1ee8439f43998bae43dbbe8924c2eaafba84473ae849f564f5c7",
+      "validated_unsolved": "ba019a30d3b45f4b29c34d2d48638dbeeed2e2a42409f625922c65de5b2a7efa",
+      "aggregated_audit": "27bdbef041200dc393b5478d3e57121bc16c70a9acc2e98a19fb48408a99533c"
+    },
+    "counts": {
+      "candidate": 74381,
+      "gallery": 74381,
+      "full": 6003,
+      "sf": 4069,
+      "validated": 586,
+      "validated_solved": 368,
+      "validated_unsolved": 218
+    },
+    "category_resolution_counts": {
+      "considered_count": 6003,
+      "resolved_count": 5884,
+      "ambiguous_count": 119,
+      "unresolved_count": 0
+    }
+  },
+  "gallery_matrices": {
+    "shirt": {
+      "file": "/home/heheboiz/data/cir/workbench/artifacts/composition/runs/da0a2162be0e159a1a456cec/work/clvc_net/features/gallery_shirt.npy",
+      "shape": [
+        74381,
+        2048
+      ],
+      "dtype": "float32",
+      "byte_length": 609329280,
+      "recorded_content_digest": "fd8b18bcca1b4d82c5de0e52f04036e89ffb3aedf1eb0d07940b46b1aba6e341",
+      "recomputed_content_digest": "fd8b18bcca1b4d82c5de0e52f04036e89ffb3aedf1eb0d07940b46b1aba6e341",
+      "verify_mode": "full",
+      "producer": "the source run's own cached gallery matrix; the diagnostic reads it, it does not re-encode 74,381 images"
+    },
+    "toptee": {
+      "file": "/home/heheboiz/data/cir/workbench/artifacts/composition/runs/da0a2162be0e159a1a456cec/work/clvc_net/features/gallery_toptee.npy",
+      "shape": [
+        74381,
+        2048
+      ],
+      "dtype": "float32",
+      "byte_length": 609329280,
+      "recorded_content_digest": "55a5b9909dd632b8fb155e56b01ef40227a126d2243cab94a6e8a6b4a2819000",
+      "recomputed_content_digest": "55a5b9909dd632b8fb155e56b01ef40227a126d2243cab94a6e8a6b4a2819000",
+      "verify_mode": "full",
+      "producer": "the source run's own cached gallery matrix; the diagnostic reads it, it does not re-encode 74,381 images"
+    }
+  },
+  "checkpoints": {
+    "shirt": {
+      "checkpoint_id": "author_drive_unresolved",
+      "directory": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/../../checkpoints/clvc",
+      "members": {
+        "shirt_local_model.pt": "2ba8e320b08ebb97d6558eb599cde2be228b5488250de7cb4cde8a138ff2c681",
+        "shirt_global_model.pt": "78b1d660227ab6928e3a11a7384f9fff2aa7ab2a39baec1a45ac59db35e28bcf"
+      },
+      "local_sha256_recomputed": "2ba8e320b08ebb97d6558eb599cde2be228b5488250de7cb4cde8a138ff2c681",
+      "mapping_status": "VERIFIED_METADATA",
+      "dataset_type_index": 1
+    },
+    "toptee": {
+      "checkpoint_id": "author_drive_unresolved",
+      "directory": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/../../checkpoints/clvc",
+      "members": {
+        "toptee_local_model.pt": "d1fa9170496f73a008736723fe5329c93ff710305d0bcc79ff628822c0a91f4c",
+        "toptee_global_model.pt": "c78a58c4becafee3bffe719bef743d42c4495c3a91096a4b5935c364449ed11d"
+      },
+      "local_sha256_recomputed": "d1fa9170496f73a008736723fe5329c93ff710305d0bcc79ff628822c0a91f4c",
+      "mapping_status": "VERIFIED_METADATA",
+      "dataset_type_index": 2
+    }
+  },
+  "qid_identity_verification": {
+    "7:3038": {
+      "release_index": 3037,
+      "release_reference_id": "7:53224",
+      "release_positive_ids": [
+        "7:3416"
+      ],
+      "resolved_reference_path": "/home/heheboiz/data/cir/data/FashionIQ/resized_image/shirt/B004TMGDME.jpg",
+      "target_gallery_position": [
+        13614
+      ],
+      "target_gallery_id": "mbeir_images/fashioniq_images/B004D8QCN4.jpg",
+      "gallery_id_at_position_agrees": true,
+      "target_path_resolves": true,
+      "source_run_ranked_this_qid": {
+        "multimodal": false,
+        "text_only_black_image": false,
+        "clvc_image_encoder_only": false
+      },
+      "source_run_rank_recorded_for_qid": {
+        "multimodal": null,
+        "text_only_black_image": null,
+        "clvc_image_encoder_only": null
+      },
+      "source_run_query_cache_row_finite": {
+        "multimodal/shirt": false,
+        "multimodal/toptee": false,
+        "text_only_black_image/shirt": false,
+        "text_only_black_image/toptee": false,
+        "clvc_image_encoder_only/shirt": false,
+        "clvc_image_encoder_only/toptee": false
+      },
+      "release_row": {
+        "path": "workbench/artifacts/circus_release/mbeir_fashioniq_task7_test.jsonl",
+        "qid": "7:3038",
+        "query_img_path": "7:53224",
+        "pos_cand_list": [
+          "7:3416"
+        ],
+        "query_txt": "Is darker and has a different graphic and is darker."
+      },
+      "agrees_with_release_row": true
+    },
+    "7:3790": {
+      "release_index": 3789,
+      "release_reference_id": "7:33523",
+      "release_positive_ids": [
+        "7:42304"
+      ],
+      "resolved_reference_path": "/home/heheboiz/data/cir/data/FashionIQ/resized_image/shirt/B0079K0YBO.jpg",
+      "target_gallery_position": [
+        70410
+      ],
+      "target_gallery_id": "mbeir_images/fashioniq_images/B00E3WVAD2.jpg",
+      "gallery_id_at_position_agrees": true,
+      "target_path_resolves": true,
+      "source_run_ranked_this_qid": {
+        "multimodal": false,
+        "text_only_black_image": false,
+        "clvc_image_encoder_only": false
+      },
+      "source_run_rank_recorded_for_qid": {
+        "multimodal": null,
+        "text_only_black_image": null,
+        "clvc_image_encoder_only": null
+      },
+      "source_run_query_cache_row_finite": {
+        "multimodal/shirt": false,
+        "multimodal/toptee": false,
+        "text_only_black_image/shirt": false,
+        "text_only_black_image/toptee": false,
+        "clvc_image_encoder_only/shirt": false,
+        "clvc_image_encoder_only/toptee": false
+      },
+      "release_row": {
+        "path": "workbench/artifacts/circus_release/mbeir_fashioniq_task7_test.jsonl",
+        "qid": "7:3790",
+        "query_img_path": "7:33523",
+        "pos_cand_list": [
+          "7:42304"
+        ],
+        "query_txt": "Is grey and has a less whimsical graphic and is lighter."
+      },
+      "agrees_with_release_row": true
+    }
+  },
+  "rank_convention_crosscheck": {
+    "method": "recompute the recorded canonical target rank of already-scored, loader-scoped queries from the cached gallery with the adapter's own rank rule, then attribute any disagreement: the same image's cached GPU gallery row is the row's twin (test.py:116), so `max_abs_cpu_row_vs_cached_gpu_gallery_row` measures the DEVICE difference alone. Gallery order and tie rule are validated by the rows agreeing to float noise while ranks move by ~1e-4 relative",
+    "condition": "clvc_image_encoder_only",
+    "checked": 6,
+    "all_agree": false,
+    "max_abs_row_delta": 9.318767115473747e-05,
+    "max_rank_delta": 10,
+    "items": [
+      {
+        "qid": "7:2011",
+        "scope": "shirt",
+        "recorded_rank": 37515,
+        "recomputed_rank": 37525,
+        "recomputed_rank_batch1": 37525,
+        "agrees": false,
+        "rank_delta_rank_per_locally_recomputed": 10,
+        "max_abs_cpu_row_vs_cached_gpu_gallery_row": 8.301623165607452e-05,
+        "max_abs_cpu_batch1_vs_cpu_batch3": 7.264316082000732e-08
+      },
+      {
+        "qid": "7:2012",
+        "scope": "shirt",
+        "recorded_rank": 21136,
+        "recomputed_rank": 21137,
+        "recomputed_rank_batch1": 21137,
+        "agrees": false,
+        "rank_delta_rank_per_locally_recomputed": 1,
+        "max_abs_cpu_row_vs_cached_gpu_gallery_row": 6.307009607553482e-05,
+        "max_abs_cpu_batch1_vs_cpu_batch3": 8.754432201385498e-08
+      },
+      {
+        "qid": "7:2013",
+        "scope": "shirt",
+        "recorded_rank": 69917,
+        "recomputed_rank": 69921,
+        "recomputed_rank_batch1": 69921,
+        "agrees": false,
+        "rank_delta_rank_per_locally_recomputed": 4,
+        "max_abs_cpu_row_vs_cached_gpu_gallery_row": 8.540414273738861e-05,
+        "max_abs_cpu_batch1_vs_cpu_batch3": 6.891787052154541e-08
+      },
+      {
+        "qid": "7:4048",
+        "scope": "toptee",
+        "recorded_rank": 26,
+        "recomputed_rank": 26,
+        "recomputed_rank_batch1": 26,
+        "agrees": true,
+        "rank_delta_rank_per_locally_recomputed": 0,
+        "max_abs_cpu_row_vs_cached_gpu_gallery_row": 9.318767115473747e-05,
+        "max_abs_cpu_batch1_vs_cpu_batch3": 6.891787052154541e-08
+      },
+      {
+        "qid": "7:4049",
+        "scope": "toptee",
+        "recorded_rank": 53248,
+        "recomputed_rank": 53240,
+        "recomputed_rank_batch1": 53240,
+        "agrees": false,
+        "rank_delta_rank_per_locally_recomputed": 8,
+        "max_abs_cpu_row_vs_cached_gpu_gallery_row": 5.535827949643135e-05,
+        "max_abs_cpu_batch1_vs_cpu_batch3": 1.1920928955078125e-07
+      },
+      {
+        "qid": "7:4050",
+        "scope": "toptee",
+        "recorded_rank": 12678,
+        "recomputed_rank": 12680,
+        "recomputed_rank_batch1": 12680,
+        "agrees": false,
+        "rank_delta_rank_per_locally_recomputed": 2,
+        "max_abs_cpu_row_vs_cached_gpu_gallery_row": 5.78342005610466e-05,
+        "max_abs_cpu_batch1_vs_cpu_batch3": 7.82310962677002e-08
+      }
+    ]
+  },
+  "device_delta": {
+    "method": "the image-only CPU row of an already-scored query's reference image compared against THAT image's own cached GPU gallery row, plus the same CPU row encoded alone (batch 1) against the batched CPU row",
+    "items": [
+      {
+        "qid": "7:2011",
+        "scope": "shirt",
+        "max_abs_cpu_vs_gpu_gallery_row": 8.301623165607452e-05,
+        "cpu_batch1_vs_cpu_batch_max_abs": 7.264316082000732e-08,
+        "rank_moves_when_only_the_device_changes": true
+      },
+      {
+        "qid": "7:2012",
+        "scope": "shirt",
+        "max_abs_cpu_vs_gpu_gallery_row": 6.307009607553482e-05,
+        "cpu_batch1_vs_cpu_batch_max_abs": 8.754432201385498e-08,
+        "rank_moves_when_only_the_device_changes": true
+      },
+      {
+        "qid": "7:2013",
+        "scope": "shirt",
+        "max_abs_cpu_vs_gpu_gallery_row": 8.540414273738861e-05,
+        "cpu_batch1_vs_cpu_batch_max_abs": 6.891787052154541e-08,
+        "rank_moves_when_only_the_device_changes": true
+      },
+      {
+        "qid": "7:4048",
+        "scope": "toptee",
+        "max_abs_cpu_vs_gpu_gallery_row": 9.318767115473747e-05,
+        "cpu_batch1_vs_cpu_batch_max_abs": 6.891787052154541e-08,
+        "rank_moves_when_only_the_device_changes": false
+      },
+      {
+        "qid": "7:4049",
+        "scope": "toptee",
+        "max_abs_cpu_vs_gpu_gallery_row": 5.535827949643135e-05,
+        "cpu_batch1_vs_cpu_batch_max_abs": 1.1920928955078125e-07,
+        "rank_moves_when_only_the_device_changes": true
+      },
+      {
+        "qid": "7:4050",
+        "scope": "toptee",
+        "max_abs_cpu_vs_gpu_gallery_row": 5.78342005610466e-05,
+        "cpu_batch1_vs_cpu_batch_max_abs": 7.82310962677002e-08,
+        "rank_moves_when_only_the_device_changes": true
+      }
+    ],
+    "importance": "an image-only query row and the same image's gallery row are the SAME expression (test.py:116), so this difference is device arithmetic plus batch composition -- not a different encoding, order or tie rule. It is why every cell of this diagnostic is marked device=cpu and why no cell is compared to a canonical number"
+  },
+  "export_depth_provenance": {
+    "source_run_candidate_depth": 100,
+    "diagnostic_depth": 100,
+    "matches": true,
+    "source_run_candidate_records": 6001,
+    "source_run_missing_qids": [
+      "7:3038",
+      "7:3790"
+    ],
+    "note": "the source run exports depth 100 and explicitly misses 7:3038/7:3790, so every cell here had to be COMPUTED; nothing in this export is copied from the run's stored candidate windows"
+  },
+  "unsupported_conditions": {
+    "image_only_empty_text": {
+      "status": "ABLATION_UNSUPPORTED",
+      "model": "clvc_net",
+      "reason": "CLVC-Net cannot encode an empty edit: TextLSTMModel.forward tokenises to zero tokens and indexes x[0][0] (text_model.py:84-86), which raises IndexError for every row, so image_only_empty_text is unrepresentable in this model's text tower rather than merely unsupported by the adapter",
+      "note": "a SEPARATE condition from the computed clvc_image_encoder_only column; CLVC's text tower indexes token 0 on an empty edit, so this condition is reported, never faked"
+    }
+  },
+  "leakage_guard": {
+    "output_directory": "/home/heheboiz/data/cir/workbench/docs/reviews/20261112-parity-repair/raw/clvc_diag",
+    "naming": "clvc_dual_scope.*, distinct from clvc_net_author_drive_unresolved.*",
+    "read_by": "nothing: no canonical metrics/runner path references this directory",
+    "aggregate_if_any": "this artifact carries diagnostic:true / canonical:false at top level and in every cell and every export row; no score is aggregated into a metric"
+  },
+  "runtime": {
+    "controller_python": "3.9.25 (main, Oct 31 2025, 23:00:23) \n[Clang 21.1.4 ]",
+    "torch": "2.7.1+cu128",
+    "device": "cpu",
+    "cuda_available_but_unused": true,
+    "top_k": 100,
+    "scoring": "adapter.score: L2-normalized query row dot gallery row",
+    "rank": "adapter.rank: 1 + count(row > v) + count(row[:i] == v), same as the evaluator",
+    "elapsed_seconds": 44.07
+  }
+}

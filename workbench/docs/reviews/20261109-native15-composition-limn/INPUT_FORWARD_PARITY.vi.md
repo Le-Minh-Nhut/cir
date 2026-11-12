@@ -248,6 +248,15 @@ is the precise condition the declared tolerance permits. Example pairs
 `(argsort_rank, adapter_rank)`: `(1,3)`, `(9,8)`, `(12,4)`, `(348,344)`, `(1554,1555)` — the drift
 is not a constant offset, which is why a fixed "allow ±1" rule would have been wrong.
 
+**Kiểm lại theo artifact hiện hành (2026-11-12):** cả ba bảng của §5 đọc lại từ
+`g1_g2.{dress,shirt,toptee}.adapter.json` → `layer2_4_forward.scoring_ranking` và **tái lập đúng**:
+`rank_differences: 0`, `unexplained_rank_differences: 0`, `max_abs_rank_delta: 0`,
+`adapter_vs_argsort_unmasked_difference_count` `27 / 7 / 13`, `mask_explained_rank_shift_count`
+`790 / 1110 / 810`, `adapter_style_recall.r10` `50.52057511155181 / 55.05397448478901 /
+59.61244263131056`, `native_style_recall.r10` `51.165096678235 / 55.986261040235526 /
+60.22437531871494`. Bảng ở đây là số **LIMN**, không phải ENCODER, nên các giá trị ENCODER bị thay thế
+(`20261112-parity-repair/ENCODER_RELATION.md` §10) **không** áp dụng cho file này.
+
 ---
 
 ## 6. Verdict

@@ -1,0 +1,9 @@
+=== served index.html ===
+<script type="module" crossorigin src="/assets/index-NnjrdZLG.js"></script>
+<link rel="stylesheet" crossorigin href="/assets/index-DecQnta9.css">
+<meta name="viewport" content="width=device-width, initial-scale=1" /><link rel="icon" href="data:," /><div id="root"></div>
+
+=== served asset sha ===
+721d34d043858e80c88e76d72866ba8583508318baeebac599cebd1e1c2c80d0  -
+=== served css sha ===
+e7e826a332ec9ab171f97051b901ee86fa69e2588937c3023914f3ac41ffe196  -

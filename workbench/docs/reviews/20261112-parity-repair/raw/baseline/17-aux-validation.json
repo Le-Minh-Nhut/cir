@@ -1,0 +1,170 @@
+[
+ {
+  "model_id": "csmcir",
+  "family": "Qwen captions",
+  "path": "/home/heheboiz/data/cir/data/FashionIQ/qwen_captions/dress_cot_val.json",
+  "status": "VERIFIED",
+  "issues": []
+ },
+ {
+  "model_id": "csmcir",
+  "family": "Qwen captions",
+  "path": "/home/heheboiz/data/cir/data/FashionIQ/qwen_captions/shirt_cot_val.json",
+  "status": "VERIFIED",
+  "issues": []
+ },
+ {
+  "model_id": "csmcir",
+  "family": "Qwen captions",
+  "path": "/home/heheboiz/data/cir/data/FashionIQ/qwen_captions/toptee_cot_val.json",
+  "status": "VERIFIED",
+  "issues": []
+ },
+ {
+  "model_id": "csmcir",
+  "family": "COT_ours2 captions",
+  "path": "/home/heheboiz/data/cir/workbench/third_party/CSMCIR/COT_ours2/fashioniq/dress_cot_val.json",
+  "status": "VERIFIED",
+  "issues": []
+ },
+ {
+  "model_id": "csmcir",
+  "family": "COT_ours2 captions",
+  "path": "/home/heheboiz/data/cir/workbench/third_party/CSMCIR/COT_ours2/fashioniq/shirt_cot_val.json",
+  "status": "VERIFIED",
+  "issues": []
+ },
+ {
+  "model_id": "csmcir",
+  "family": "COT_ours2 captions",
+  "path": "/home/heheboiz/data/cir/workbench/third_party/CSMCIR/COT_ours2/fashioniq/toptee_cot_val.json",
+  "status": "VERIFIED",
+  "issues": []
+ },
+ {
+  "model_id": "csmcir",
+  "family": "Author-published bytecode for the class that saved the released checkpoint",
+  "path": "/home/heheboiz/data/cir/workbench/third_party/CSMCIR/src/lavis/models/blip2_models/blip2_qformer_cir_align_prompt_target_image_caption_shiyan92.pyc",
+  "status": "VERIFIED",
+  "issues": []
+ },
+ {
+  "model_id": "clvc_net",
+  "family": "torchvision ResNet-50 ImageNet weights",
+  "path": "/home/heheboiz/.cache/torch/hub/checkpoints/resnet50-19c8e357.pth",
+  "status": "VERIFIED",
+  "issues": []
+ },
+ {
+  "model_id": "combiner_rn50x4_noft",
+  "family": "OpenAI CLIP RN50x4 base weights",
+  "path": "/home/heheboiz/.cache/clip/RN50x4.pt",
+  "status": "VERIFIED",
+  "issues": []
+ },
+ {
+  "model_id": "clip4cir_rn50x4_fullft",
+  "family": "OpenAI CLIP RN50x4 base weights",
+  "path": "/home/heheboiz/.cache/clip/RN50x4.pt",
+  "status": "VERIFIED",
+  "issues": []
+ },
+ {
+  "model_id": "sprc",
+  "family": "LAVIS BLIP-2 pretrain weights",
+  "path": "/home/heheboiz/.cache/lavis/blip2_pretrained.pth",
+  "status": "LOCALLY_RECORDED_ASSET",
+  "issues": []
+ },
+ {
+  "model_id": "sprc",
+  "family": "EVA-ViT-g backbone weights",
+  "path": "/home/heheboiz/.cache/torch/hub/checkpoints/eva_vit_g.pth",
+  "status": "LOCALLY_RECORDED_ASSET",
+  "issues": []
+ },
+ {
+  "model_id": "csmcir",
+  "family": "LAVIS BLIP-2 pretrain weights",
+  "path": "/home/heheboiz/.cache/lavis/blip2_pretrained.pth",
+  "status": "LOCALLY_RECORDED_ASSET",
+  "issues": []
+ },
+ {
+  "model_id": "encoder",
+  "family": "LAION CLIP ViT-B/32 (open_clip format)",
+  "path": "/home/heheboiz/data/cir/workbench/third_party/ENCODER/open_clip_pytorch_model.bin",
+  "status": "VERIFIED",
+  "issues": []
+ },
+ {
+  "model_id": "airknow",
+  "family": "LAVIS BLIP-2 pretrain weights",
+  "path": "/home/heheboiz/.cache/lavis/blip2_pretrained.pth",
+  "status": "LOCALLY_RECORDED_ASSET",
+  "issues": []
+ },
+ {
+  "model_id": "airknow",
+  "family": "EVA-ViT-g backbone weights",
+  "path": "/home/heheboiz/.cache/torch/hub/checkpoints/eva_vit_g.pth",
+  "status": "LOCALLY_RECORDED_ASSET",
+  "issues": []
+ },
+ {
+  "model_id": "csmcir",
+  "family": "EVA-ViT-g backbone weights",
+  "path": "/home/heheboiz/.cache/torch/hub/checkpoints/eva_vit_g.pth",
+  "status": "LOCALLY_RECORDED_ASSET",
+  "issues": []
+ },
+ {
+  "model_id": "csmcir",
+  "family": "bert-base-uncased tokenizer",
+  "path": "/home/heheboiz/.cache/huggingface/hub/models--bert-base-uncased",
+  "status": "VERIFIED",
+  "issues": []
+ },
+ {
+  "model_id": "tme",
+  "family": "BLIP-2 pretrain weights",
+  "path": "/home/heheboiz/data/cir/workbench/third_party/TME/weight/blip2_pretrained.pth",
+  "status": "LOCALLY_RECORDED_ASSET",
+  "issues": []
+ },
+ {
+  "model_id": "tme",
+  "family": "EVA-ViT-g backbone weights",
+  "path": "/home/heheboiz/data/cir/workbench/third_party/TME/weight/eva_vit_g.pth",
+  "status": "LOCALLY_RECORDED_ASSET",
+  "issues": []
+ },
+ {
+  "model_id": "tme",
+  "family": "bert-base-uncased Qformer payload",
+  "path": "/home/heheboiz/.cache/huggingface/hub/models--bert-base-uncased",
+  "status": "VERIFIED",
+  "issues": []
+ },
+ {
+  "model_id": "ptha_mtst",
+  "family": "EVA-ViT-g backbone weights",
+  "path": "/home/heheboiz/.cache/torch/hub/checkpoints/eva_vit_g.pth",
+  "status": "LOCALLY_RECORDED_ASSET",
+  "issues": []
+ },
+ {
+  "model_id": "ptha_mtst",
+  "family": "bert-base-uncased tokenizer",
+  "path": "/home/heheboiz/.cache/huggingface/hub/models--bert-base-uncased",
+  "status": "VERIFIED",
+  "issues": []
+ },
+ {
+  "model_id": "tgcir",
+  "family": "OpenAI CLIP ViT-B/16 weights",
+  "path": "/home/heheboiz/.cache/clip/ViT-B-16.pt",
+  "status": "VERIFIED",
+  "issues": []
+ }
+]
