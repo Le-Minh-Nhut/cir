@@ -47,6 +47,7 @@ from workbench.composition.adapters import adapter_class
 from workbench.composition.inputs import ABLATION_CONDITIONS, CONDITIONS
 from workbench.composition.runner import (
     ModelSpec,
+    _gallery_fingerprint,
     assert_composition_destination,
     inspect_image_inventory,
     model_interpreter_identity,
@@ -295,9 +296,10 @@ def _plan(pairs: list[tuple[dict[str, Any], str]], unavailable: list[dict[str, A
             outputs.append(str(assert_composition_destination(
                 artifacts, artifacts / "composition" / "summary" /
                 f"{model['model_id']}_{checkpoint_id}_<attempt>" / f"{subset}.json")))
-    gallery_identity = hashlib.sha256(json.dumps(
-        {"protocol_id": data.gallery.protocol_id, "image_ids": data.gallery.image_ids},
-        sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
+    # ONE formula for one gallery: the value every completed run records. A second derivation here
+    # published `0bfd43b9…` where the run published `1db68c59…` for the identical 74,381-image
+    # gallery, so "did this plan produce this run" could never be answered by comparing the two.
+    gallery_identity = _gallery_fingerprint(data)
     return {"selected_models": [{"model_id": model["model_id"], "checkpoint_id": checkpoint}
                                  for model, checkpoint in pairs],
             "unavailable": unavailable, "readiness": readiness,
@@ -423,10 +425,9 @@ def main(argv: list[str] | None = None) -> int:
                                  **_runner_topk_kwargs(run_composition, args.topk_depth,
                                                        args.keep_features)) if specs else {
                                      "run_count": 0, "models": [], "gallery_count": len(data.gallery.image_ids),
-                                     "gallery_identity_sha256": hashlib.sha256(json.dumps(
-                                         {"protocol_id": data.gallery.protocol_id,
-                                          "image_ids": data.gallery.image_ids}, sort_keys=True,
-                                         separators=(",", ":")).encode("utf-8")).hexdigest(),
+                                     # Same helper as `_plan` and the runner: a blocked report must
+                                     # not reintroduce the second formula the plan branch dropped.
+                                     "gallery_identity_sha256": _gallery_fingerprint(data),
                                      "protocol_id": data.gallery.protocol_id,
                                      "synthetic": bool(data.provenance.get("is_synthetic"))}
         report["models"].extend(blocked)

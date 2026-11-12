@@ -567,6 +567,37 @@ def _scope_for_query(adapter: Any, query: Any,
                    f"{scopes!r}; batch_indices=({query.index},), qids={[query.qid]}")
 
 
+def _scope_resolution_record(adapter: Any, queries: Sequence[Any], scopes: Sequence[str | None],
+                             assignments: Sequence[tuple[str | None, str | None]]) -> dict[str, Any]:
+    """The three routing states the resolver actually distinguishes, per qid.
+
+    `_scope_for_query` returns `(None, None)` when the adapter declares no per-category routing
+    (`category_scopes == (None,)`): every query is scored against the ONE `global` matrix, which is
+    a RESOLVED scope. It returns `(None, "<reason>")` only when it genuinely could not scope the
+    query. Counting a bare `scope is None` therefore reported 6003 "unscoped" queries on a run that
+    scored all 6003 (`7b1fa850…`), and the block contradicted `condition_status.*.unscored_count`
+    in the same summary. The REASON is the authoritative signal.
+
+    Kept as one function so the block can be replayed over a real release without a GPU.
+    Invariant: `adapter_routed + global_scoped + still_unscoped == len(queries)`, and
+    `still_unscoped == len(unscoped_qids)`.
+    """
+    return {
+        "resolver": (f"{type(adapter).__module__}.{type(adapter).__qualname__}.query_scope"
+                     if callable(getattr(adapter, "query_scope", None)) else None),
+        "loader_scoped": sum(query.category is not None for query in queries),
+        # True when the adapter routes by NO category at all. Read this BEFORE reading
+        # `adapter_routed: 0` as a routing failure: a category-agnostic adapter places every query
+        # it is handed on `global` and says so here.
+        "category_agnostic": None in scopes,
+        "adapter_routed": sum(scope is not None for scope, _reason in assignments),
+        # A resolved `global` scope: scored, not routed by category.
+        "global_scoped": sum(scope is None and reason is None for scope, reason in assignments),
+        "still_unscoped": sum(reason is not None for _scope, reason in assignments),
+        "unscoped_qids": [query.qid for query, (_scope, reason)
+                          in zip(queries, assignments) if reason is not None],
+    }
+
 def _disk_projection(path: Path, gallery_count: int, feature_shape: Sequence[int], remaining_scopes: int,
                      query_count: int, conditions: int) -> dict[str, int]:
     feature_width = int(np.prod(feature_shape, dtype=np.int64))
@@ -2524,17 +2555,10 @@ def run_composition(data: Any, model_specs: Sequence[ModelSpec], config: Any, *,
                     "unresolved_category_query_count": sum(query.category is None for query in queries),
                     # `category_resolution` above is the RELEASE-level fact and keeps saying 119
                     # ambiguous; this is what the adapter resolver actually routed, so a 6001
-                    # scored count does not read as a contradiction.
-                    "adapter_query_scope_resolution": {
-                        "resolver": (f"{type(adapter).__module__}."
-                                     f"{type(adapter).__qualname__}.query_scope"
-                                     if callable(getattr(adapter, "query_scope", None)) else None),
-                        "loader_scoped": sum(query.category is not None for query in queries),
-                        "adapter_routed": sum(scope is not None for scope in query_scopes),
-                        "still_unscoped": sum(scope is None for scope in query_scopes),
-                        "unscoped_qids": [query.qid for query, scope in zip(queries, query_scopes)
-                                          if scope is None],
-                    },
+                    # scored count does not read as a contradiction. THREE states, not two: see
+                    # `_scope_resolution_record` for why a bare `scope is None` was wrong.
+                    "adapter_query_scope_resolution": _scope_resolution_record(
+                        adapter, queries, scopes, assignments),
                     "reference_eligible": reference_eligible,
                     "reference_eligibility": reference_eligibility,
                     "runtime": {"controller_python": sys.version, "platform": platform.platform(),

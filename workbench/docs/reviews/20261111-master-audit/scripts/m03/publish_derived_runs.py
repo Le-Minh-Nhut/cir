@@ -273,6 +273,10 @@ def main() -> int:
             "adapter_query_scope_resolution": {
                 "resolver": parent_scope_resolution.get("resolver"),
                 "loader_scoped": subset_loader_scoped,
+                # Copied from the parent: a derived TG-CIR row otherwise reads `adapter_routed: 0`
+                # with no way to tell "routes nothing" from "could not scope anything".
+                "category_agnostic": bool(parent_scope_resolution.get("category_agnostic")
+                                          or parent_summary.get("category_scopes") == [None]),
                 "adapter_routed": len(declared) - len(subset_unscoped),
                 "still_unscoped": len(subset_unscoped),
                 "unscoped_qids": subset_unscoped,
