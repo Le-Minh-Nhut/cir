@@ -746,10 +746,34 @@ outcome menu: Composition required (382) · Unresolved (5,464) · Text-only (83)
 no console errors
 ```
 
-`ui_smoke.py`'s "a scored card must never say unsc" assertion now holds on this run: the badge is
-`Unresolved — …`, and its run id is in the served set the session walks (`usable` includes any
-`circus_fashioniq_release_v1`/`full` run with per-query ranks, so the assertion bites here or on a
-peer run, never on a 6,003-query lie).
+### `ui_smoke.py`: the assertion now demonstrably bites on this run
+
+The first claim made here — "its run id is in the served set the session walks" — was **wrong**:
+`samples` walks `usable[:6]` and `da0a2162be0e159a1a456cec` is 7th or later among 27 eligible runs, so
+the assertion was passing on peer runs and had never seen the defect. Checked, not assumed.
+
+The harness gained `--run-id` (check that run first, and only it) and `--query-id` (open that card).
+**The assertion itself is unchanged**; only which run it bites on became selectable. Without
+`--query-id` the pinned run's first row is an unscored qid (`7:3038`), so the scored half would still
+not fire — the second attempt skipped for exactly that reason, which is why the query pin exists.
+
+```
+python workbench/frontend/tests/ui_smoke.py --url http://127.0.0.1:5173 \
+    --session samples --run-id da0a2162be0e159a1a456cec --query-id 7:1
+exit 0
+[DOM-VERIFIED] samples Query 7:1 (clvc_net): outcome badge 'Unresolved — mọi hạng ngoài @10';
+               ranks ['#223', '#3,197', '#12,796']; 3 numeric; 10 candidates
+[DOM-VERIFIED] samples Query 7:1: badge 'Unresolved — mọi hạng ngoài @10' agrees with
+               3 numeric ranks and 10 candidates
+```
+
+Before the fix this card rendered `outcome: unscored` → badge "Chưa chấm" beside three numbered
+ranks, which is the exact contradiction the assertion exists to catch. The unpinned `--session
+samples` run still passes (exit 0, 5 DOM-VERIFIED notes), so the default path is unchanged.
+
+`--session all` still times out in its `fixture` session on this stack: that session waits for
+`fashioniq_val_split` in `#protocol-select` and this deployment serves only the CIRCUS protocol. It
+requires `--build-fixture`, which is what that session is for; the failure is not from this fix.
 
 Tests: `workbench/tests/test_api_outcome_triple.py` (9), including the invariant on a variant-triple
 AND a protocol-triple run, the filter returning exactly `outcome_counts[class]`, and

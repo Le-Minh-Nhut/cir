@@ -55,6 +55,7 @@ import json
 import os
 import sys
 import urllib.request
+from urllib.parse import quote
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[3]
@@ -570,7 +571,9 @@ def session_composition(browser, base_url: str, shots: Path, recorder: Recorder)
     assert not recorder.page_errors, recorder.page_errors
     return saved
 
-def session_samples(page, base_url: str, shots: Path, recorder: Recorder) -> list[str]:
+def session_samples(page, base_url: str, shots: Path, recorder: Recorder,
+                    pin_run_id: str | None = None,
+                    pin_query_id: str | None = None) -> list[str]:
     """A query card may not claim `unscored` while it shows numeric ranks and real candidates.
 
     The bug this exists for: an outcome badge printing the protocol's bare word `unresolved` next to
@@ -588,11 +591,26 @@ def session_samples(page, base_url: str, shots: Path, recorder: Recorder) -> lis
                       f"ranks, so there is no query card to inspect")
         return saved
 
+    # A pinned run is checked FIRST and the walk stops after it: `--run-id` exists so the assertion
+    # can be pointed at a specific run instead of whichever six the API happens to list first. The
+    # assertion below is unchanged -- only which run it bites on is selectable.
+    if pin_run_id is not None:
+        pinned = [run for run in usable if run["run_id"] == pin_run_id]
+        if not pinned:
+            recorder.skip(f"samples: pinned run {pin_run_id} is not a served {CIRCUS_PROTOCOL}/full "
+                          f"run with per-query ranks on {base_url}")
+            return saved
+        usable = pinned + [run for run in usable if run["run_id"] != pin_run_id]
+
     # Both shapes must be exercised: a scored query (numeric ranks -> badge may not say unscored)
     # and, when the stack has one, an unscored query (no numeric rank -> badge must say so).
     def read_card(run_id: str) -> dict:
+        # A pinned query opens THAT card; without one the explorer's default order decides, and the
+        # first row of a variant run is an unscored qid, so the scored half of this assertion would
+        # never be exercised on the run the caller asked about.
+        query_param = (f"&query={quote(pin_query_id, safe='')}" if pin_query_id else "")
         page.goto(f"{base_url}/?area=samples&view=explorer&protocol={CIRCUS_PROTOCOL}"
-                  f"&subset=full&runs=c:{run_id}", wait_until="domcontentloaded")
+                  f"&subset=full&runs=c:{run_id}{query_param}", wait_until="domcontentloaded")
         page.wait_for_selector("[data-testid=query-inspector]", timeout=NAV_TIMEOUT_MS)
         page.wait_for_selector("[data-testid=query-outcome]", timeout=NAV_TIMEOUT_MS)
         page.wait_for_timeout(600)
@@ -612,7 +630,8 @@ def session_samples(page, base_url: str, shots: Path, recorder: Recorder) -> lis
 
     scored = None
     unscored_card = None
-    for run in usable[:6]:
+    walk = usable[:1] if pin_run_id is not None else usable[:6]
+    for run in walk:
         state = read_card(run["run_id"])
         recorder.note(f"samples {state['title']} ({run['model_id']}): outcome badge "
                       f"{state['badge']!r}; ranks {state['ranks']}; {state['numericRanks']} numeric; "
@@ -758,7 +777,8 @@ def launch(playwright, mobile: bool = False):
     kwargs = {"executable_path": chrome} if chrome else {"channel": "chrome"}
     return playwright.chromium.launch(**kwargs)
 
-def run_sessions(url: str, shots: Path, which: str) -> Recorder:
+def run_sessions(url: str, shots: Path, which: str, pin_run_id: str | None = None,
+                 pin_query_id: str | None = None) -> Recorder:
     from playwright.sync_api import sync_playwright
 
     recorder = Recorder()
@@ -784,7 +804,8 @@ def run_sessions(url: str, shots: Path, which: str) -> Recorder:
                 page = context.new_page()
                 recorder.attach(page)
                 try:
-                    saved += session_samples(page, url, shots, recorder)
+                    saved += session_samples(page, url, shots, recorder, pin_run_id=pin_run_id,
+                                             pin_query_id=pin_query_id)
                 finally:
                     context.close()
             if which in ("mobile", "all"):
@@ -803,6 +824,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--shots", type=Path, default=Path("/tmp/ui-e2e/shots"))
     parser.add_argument("--session",
                         choices=("cold", "fixture", "composition", "samples", "mobile", "all"), default="all")
+    parser.add_argument("--query-id", default=None,
+                        help="open this query's card in the samples session (with --run-id)")
+    parser.add_argument("--run-id", default=None,
+                        help="check this run FIRST and only it in the samples session; the assertion "
+                             "is unchanged, only the run it bites on is selectable")
     args = parser.parse_args(argv)
 
     if args.build_fixture is not None:
@@ -812,7 +838,8 @@ def main(argv: list[str] | None = None) -> int:
 
     if not args.url:
         parser.error("either --build-fixture or --url is required")
-    recorder = run_sessions(args.url, args.shots, args.session)
+    recorder = run_sessions(args.url, args.shots, args.session, pin_run_id=args.run_id,
+                            pin_query_id=args.query_id)
     summary = {
         "session": args.session,
         "checks": recorder.checks,
