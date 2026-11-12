@@ -1,0 +1,170 @@
+{
+  "ui": "http://127.0.0.1:5173",
+  "viewport": "2560x1440",
+  "run_id": "f461f391c6d4696011be8067",
+  "query_id": "7:1242",
+  "steps": {
+    "a_run_picker": {
+      "url": "http://127.0.0.1:5173/?area=samples&protocol=circus_fashioniq_release_v1&subset=full&view=explorer",
+      "total_options_including_placeholder": 21,
+      "real_options": 20,
+      "placeholder": {
+        "value": "",
+        "label": "— chọn lượt —",
+        "disabled": false
+      },
+      "sample_labels": [
+        "limn / base_iter0_all_categories · 10173dc4 · không có Top-K",
+        "conesep / fiq_n02 · 30f6de42 · Top-K 50",
+        "ptha_mtst / cirr_transfer · 315dd590 · không có Top-K (TRANSFER)"
+      ],
+      "all_labels": [
+        "limn / base_iter0_all_categories · 10173dc4 · không có Top-K",
+        "conesep / fiq_n02 · 30f6de42 · Top-K 50",
+        "ptha_mtst / cirr_transfer · 315dd590 · không có Top-K (TRANSFER)",
+        "intent / fiq_n02 · 37ee72aa · Top-K 50",
+        "intent / fiq_n02 · 4901da13 · Top-K 100",
+        "habit / fiq_n02 · 497c25c5 · Top-K 50",
+        "hint / fashioniq · 4bc9893a · Top-K 50",
+        "encoder / fashioniq · 5dee7425 · Top-K 100",
+        "encoder / fashioniq · 6a528e87 · không có Top-K",
+        "encoder / fashioniq · 9b806c22 · Top-K 100",
+        "limn / base_iter0_all_categories · 9e4918a6 · Top-K 100",
+        "conesep / fiq_n02 · a4f786d8 · Top-K 100",
+        "encoder / fashioniq · acc9b20e · Top-K 100",
+        "tme / fashioniq_0 · ad477312 · không có Top-K",
+        "habit / fiq_n02 · c6eb9d57 · Top-K 100",
+        "tme / fashioniq_0 · cd1a696d · Top-K 100",
+        "encoder / fashioniq · ce89a9a2 · Top-K 100",
+        "hint / fashioniq · f461f391 · Top-K 100",
+        "ptha_mtst / cirr_transfer · f54a7745 · Top-K 100 (TRANSFER)",
+        "habit / fiq_n02 · e0dd04a4 · không có Top-K"
+      ]
+    },
+    "b_query_7_1242": {
+      "url": "http://127.0.0.1:5173/?area=samples&protocol=circus_fashioniq_release_v1&subset=full&view=explorer&runs=c%3Af461f391c6d4696011be8067&query=7%3A1242",
+      "title": "Query 7:1242",
+      "card_subtitle": null,
+      "reference": {
+        "src": "/api/images/circus/B00CQAJI7S.jpg",
+        "dataImageId": "B00CQAJI7S.jpg",
+        "naturalWidth": 322,
+        "complete": true,
+        "assetState": "present",
+        "naturalWidth_after_wait": 322
+      },
+      "caption": "Is shorter skirt with brighter colors and is colorful with sleeves.",
+      "target_images": [
+        {
+          "id": "B00B79JENC.jpg",
+          "nw": 289
+        }
+      ],
+      "target_missing": [],
+      "target_window_block": {
+        "testid": "target-outside-window",
+        "text": "Ảnh đích ở hạng #98 theo điều kiện Ảnh + văn bản (MM) — ngoài cửa sổ Top-10 đang hiện (10 ứng viên được serve, export lưu 100 dòng). Hạng #98 của Ảnh + văn bản (MM) đã vượt K, nên với K=10 hay K=20 ảnh đích không nằm trong danh sách. Đây là hạng toàn gallery, không phải vị trí trong danh sách ứng viên."
+      }
+    },
+    "c_topk_10_vs_50": {
+      "k10": {
+        "row_count": 10,
+        "first3": [
+          {
+            "rank": "#1",
+            "image_id": "B009CCA04I.jpg",
+            "is_target": false
+          },
+          {
+            "rank": "#2",
+            "image_id": "B00BU8ZRX6.jpg",
+            "is_target": false
+          },
+          {
+            "rank": "#3",
+            "image_id": "B00870UZ0K.jpg",
+            "is_target": false
+          }
+        ],
+        "count_text": "Đang hiển thị 10 ứng viên · export lưu 100 dòng · Ảnh + văn bản (MM) · ảnh đích KHÔNG nằm trong danh sách này",
+        "select_value": "10",
+        "options": [
+          "1",
+          "5",
+          "10",
+          "20",
+          "50",
+          "100"
+        ]
+      },
+      "k50": {
+        "row_count": 50,
+        "first3": [
+          {
+            "rank": "#1",
+            "image_id": "B009CCA04I.jpg",
+            "is_target": false
+          },
+          {
+            "rank": "#2",
+            "image_id": "B00BU8ZRX6.jpg",
+            "is_target": false
+          },
+          {
+            "rank": "#3",
+            "image_id": "B00870UZ0K.jpg",
+            "is_target": false
+          }
+        ],
+        "count_text": "Đang hiển thị 50 ứng viên · export lưu 100 dòng · Ảnh + văn bản (MM) · ảnh đích KHÔNG nằm trong danh sách này",
+        "select_value": "50",
+        "options": [
+          "1",
+          "5",
+          "10",
+          "20",
+          "50",
+          "100"
+        ]
+      }
+    },
+    "d_compare": {
+      "url": "http://127.0.0.1:5173/?area=samples&view=compare&protocol=circus_fashioniq_release_v1&subset=full&runs=c%3A10173dc45dea8c90fd2a284b,c%3A9e4918a6b5c243412cbc58c9&query=7%3A1242",
+      "rows": [
+        {
+          "header_cell": "limn / base_iter0_all_categories · 10173dc4 · không có Top-K (đang xem)",
+          "rank": "#193"
+        },
+        {
+          "header_cell": "limn / base_iter0_all_categories · 9e4918a6 · Top-K 100",
+          "rank": "#193"
+        }
+      ],
+      "caption": "Hạng multimodal của cùng query trên các lượt cùng scope",
+      "peer_options": [
+        "— chọn lượt —",
+        "limn / base_iter0_all_categories · 9e4918a6 · Top-K 100 · đang so sánh",
+        "conesep / fiq_n02 · 30f6de42 · Top-K 50",
+        "ptha_mtst / cirr_transfer · 315dd590 · không có Top-K",
+        "intent / fiq_n02 · 37ee72aa · Top-K 50",
+        "intent / fiq_n02 · 4901da13 · Top-K 100"
+      ]
+    },
+    "e_no_results": {
+      "url": "http://127.0.0.1:5173/?area=samples&protocol=circus_fashioniq_release_v1&subset=full&view=explorer&runs=c%3Af461f391c6d4696011be8067&query=7%3A99999",
+      "empty_states": [
+        {
+          "testid": "empty-state",
+          "kind": "no-results",
+          "role": "status",
+          "text": "Chưa có kết quảKhông tìm thấy đúng query 7:99999 ở lượt này hoặc subset đang chọn. Không tự thay bằng query khác.Chọn lượt khác"
+        }
+      ],
+      "has_error_alert": false,
+      "inspector_present": false,
+      "body_text_head": "Đến nội dung chính\nCIR.\nResearch workbench\n◎\nTổng quan\n▤\nMô hình & lượt chạy\n◑\nĐánh giá\n20\n▦\nKhám phá mẫu\n△\nPhân tích lỗi\n20\n✎\nSổ nghiên cứu\nCIRCUS FashionIQ Release v1\nSubset Full\n33 lượt khả dụng ở phạm vi này\nKhám phá mẫu\n\nTừng query: ảnh, văn bản sửa, hạng theo điều kiện, ứng viên\n\nCỡ giao diện\n17px\n19px\n⧉ Sao chép liên kết\nProtocol\nCIRCUS FashionIQ Release v1\nFashionIQ — Original Split (Full Gallery)\nSubset\nFull\nShortcut-Free (SF)\nValidated\nLượt chọn\n1\nQuery\n7:99999\nInspector\nSo sánh mô hình\nAGGREGATE-ONLY REAL EVALUATION — 2 certified research results (11 further aggregate runs uncertified); per-query candidate Top-K available on 15 of 20 composed runs in view\nẨn\nBộ lọc mẫu\n\nhint / fas"
+    },
+    "console_errors": [],
+    "page_errors": []
+  }
+}
