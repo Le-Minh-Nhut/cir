@@ -1,0 +1,73 @@
+[gpu_job] lock held, GPU empty, launching: /home/heheboiz/data/cir/workbench/envs/ilearn39-adapted/bin/python workbench/docs/reviews/20261112-parity-repair/scripts/third_model_parity.py --phase native
+GPU-9bc596d9-19e9-6f43-dc2c-a80da924263c, 664 MiB, 16303 MiB
+# dress: identity measured in 11.2s
+{
+ "gallery_order_identical": true,
+ "reference_ids_identical": true,
+ "target_ids_identical": true,
+ "model_text_identical": true,
+ "counts": [
+  2017,
+  2017,
+  2628,
+  2628
+ ],
+ "sample_indices": [
+  0,
+  14,
+  18,
+  816,
+  2016
+ ],
+ "gallery_sample": 20
+}
+/home/heheboiz/data/cir/workbench/third_party/HINT/lavis/models/blip2_models/blip2.py:42: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  return torch.cuda.amp.autocast(dtype=dtype)
+# dress: native capture {"decode_equality": {"adapter_decode_vs_native_val_decode": {"max_abs": 0.0, "max_rel": 0.0, "min_cosine": 0.9999999999999999, "bitwise_equal": true, "shape": [5, 3, 224, 224]}, "measured_in": "one pr
+# dress: native finished in 61.5s
+# shirt: identity measured in 12.1s
+{
+ "gallery_order_identical": true,
+ "reference_ids_identical": true,
+ "target_ids_identical": true,
+ "model_text_identical": true,
+ "counts": [
+  2038,
+  2038,
+  3089,
+  3089
+ ],
+ "sample_indices": [
+  1,
+  2,
+  8,
+  798,
+  2037
+ ],
+ "gallery_sample": 20
+}
+# shirt: native capture {"decode_equality": {"adapter_decode_vs_native_val_decode": {"max_abs": 0.0, "max_rel": 0.0, "min_cosine": 0.9999999999999999, "bitwise_equal": true, "shape": [5, 3, 224, 224]}, "measured_in": "one pr
+# shirt: native finished in 55.3s
+# toptee: identity measured in 8.8s
+{
+ "gallery_order_identical": true,
+ "reference_ids_identical": true,
+ "target_ids_identical": true,
+ "model_text_identical": true,
+ "counts": [
+  1961,
+  1961,
+  2902,
+  2902
+ ],
+ "sample_indices": [
+  0,
+  3,
+  15,
+  637,
+  1960
+ ],
+ "gallery_sample": 20
+}
+# toptee: native capture {"decode_equality": {"adapter_decode_vs_native_val_decode": {"max_abs": 0.0, "max_rel": 0.0, "min_cosine": 0.9999999999999999, "bitwise_equal": true, "shape": [5, 3, 224, 224]}, "measured_in": "one pr
+# toptee: native finished in 53.6s

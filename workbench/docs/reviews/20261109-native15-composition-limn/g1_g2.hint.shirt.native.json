@@ -1,0 +1,264 @@
+{
+  "category": "shirt",
+  "phase": "native",
+  "model_id": "hint",
+  "checkpoint_id": "fashioniq",
+  "protocol": "fashioniq_val_split",
+  "standard": "parity-absolute-relative/v2",
+  "tolerances": {
+    "forward_max_abs": 1e-05,
+    "forward_max_rel": 0.0001,
+    "batch_max_abs": 0.0001,
+    "batch_max_rel": 0.001,
+    "score_max_abs": 1e-06,
+    "tie_epsilon": 1e-06
+  },
+  "checkpoint": {
+    "path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/hint/fashioniq.pt",
+    "size_bytes": 2724451182,
+    "declared_sha256": "bf9c72d42206b667ed586758c15c648970df821857e4067f26155a114a6517d4",
+    "sha256": "bf9c72d42206b667ed586758c15c648970df821857e4067f26155a114a6517d4",
+    "matches_declared": true
+  },
+  "query_order_sha256": "5abda2c7a184ab9053a14f3e70dafc63e88cc2ef165c0c4f8a5f8c1b755840c2",
+  "gallery_order_sha256": "e402646a1caceb0566412d17ea5af0ae3df93e6f59b4755cc3c72dd9f5be1b75",
+  "layer1_identity": {
+    "query_count_native": 2038,
+    "query_count_annotations": 2038,
+    "gallery_count_native": 3089,
+    "gallery_count_rebuilt_from_annotations": 3089,
+    "gallery_order_identical": true,
+    "reference_ids_identical": true,
+    "target_ids_identical": true,
+    "model_text_identical_to_author_composition": true,
+    "model_text_mismatches": [],
+    "duplicate_caption_pairs_within_category": 1,
+    "reference_equals_target_rows": 0,
+    "gallery_has_duplicates": false,
+    "gallery_scope": "category-agnostic",
+    "gallery_is_category_agnostic": true,
+    "adapter_target_category": null,
+    "target_feature_rank": 3,
+    "batch_size": 32,
+    "population_final_batch": {
+      "queries": 22,
+      "gallery": 17,
+      "note": "last batch of the FULL population; the fixed sample is one partial batch"
+    },
+    "text_handling": {
+      "native": "datasets.py:82-84 concat_text -> mod['str']; test.py:44 txt_processors['eval']",
+      "adapter": "model_hint.py:330 applies processors[0]['eval'] to the same composed sentence",
+      "comparable_quantity": "the query FEATURE, not a token list: HINT tokenises inside extract_retrieval_compose with max_txt_len=32 truncation"
+    },
+    "image_transform": {
+      "call": "data_utils.targetpad_transform(1.25, 224)",
+      "native": "replay/hint.py:184 (val path)",
+      "adapter": "model_hint.py::_worker_main (same call)",
+      "note": "both sides take the VAL transform; LIMN's adapter/native split has no analogue here, so no train-transform comparison is recorded"
+    },
+    "sample": {
+      "query_indices": [
+        1,
+        2,
+        8,
+        798,
+        2037
+      ],
+      "reference_ids": [
+        "B0083I6W08",
+        "B0083WOL16",
+        "B009LM1ZJS",
+        "B0083I6W08",
+        "B0042P6BVG"
+      ],
+      "target_ids": [
+        "B00BPD4N5E",
+        "B008VNAKSU",
+        "B00B4EF1AA",
+        "B001CK7TGA",
+        "B00D78EKUS"
+      ],
+      "captions": [
+        [
+          "is green with a four leaf clover",
+          "is green and has no text"
+        ],
+        [
+          "Is a brown tee shirt with diseal logo",
+          "is darker and has short sleeves"
+        ],
+        [
+          "is purple in color with playing cards graphic",
+          "is darker"
+        ],
+        [
+          "is larger and darker",
+          "is darker"
+        ],
+        [
+          "is solid black",
+          "is more formal"
+        ]
+      ],
+      "model_texts": [
+        "is green with a four leaf clover and is green and has no text",
+        "is a brown tee shirt with dismal logo and is darker and has short sleeves",
+        "is purple in color with playing cards graphic and is darker",
+        "is larger and darker and is darker",
+        "is solid black and is more formal"
+      ],
+      "selection_rules": {
+        "1": "multi_positive_first",
+        "2": "capitalized_first_caption",
+        "8": "short_second_caption",
+        "798": "multi_positive_second",
+        "2037": "last_row"
+      },
+      "selection_rules_skipped_for_slot_budget": [],
+      "multi_positive_rows": [
+        1,
+        798
+      ],
+      "sample_has_two_rows_sharing_a_reference": true,
+      "gallery_sample_ids": [
+        "B0083I6W08",
+        "B0083WOL16",
+        "B009LM1ZJS",
+        "B0042P6BVG",
+        "B00BPD4N5E",
+        "B008VNAKSU",
+        "B00B4EF1AA",
+        "B001CK7TGA",
+        "B00D78EKUS",
+        "B00CZ7QJUG",
+        "B005AD7WZI",
+        "B005Y4KFPM",
+        "B005Y4JJ0Y",
+        "B006QHPYIY",
+        "B005NYBUF2",
+        "B001OATAN8",
+        "B001OAN6BK",
+        "B0075G2YFG",
+        "B007A4H2IW",
+        "B005XIGOL8"
+      ],
+      "gallery_sample_positions": [
+        2,
+        4,
+        16,
+        3087,
+        3,
+        5,
+        17,
+        1425,
+        3088,
+        0,
+        1,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14
+      ],
+      "gallery_sample_covers_tail": true,
+      "gallery_sample_size": 20,
+      "is_partial_batch": true
+    },
+    "phase_seconds": 8.0
+  },
+  "capture_state": {
+    "producer": "scripts/third_model_parity.py --phase identity",
+    "interpreter": "/home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python",
+    "versions": {
+      "python": "/home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python",
+      "numpy": "1.26.4",
+      "torch": "2.15.0+cu132",
+      "torch_cuda": "13.2",
+      "cuda_available": true,
+      "device": "NVIDIA GeForce RTX 5070 Ti"
+    },
+    "gpu_capture_executed": true,
+    "measured_here": [
+      "query_count_native",
+      "query_count_annotations",
+      "gallery_count_native",
+      "gallery_count_rebuilt_from_annotations",
+      "gallery_order_identical",
+      "reference_ids_identical",
+      "target_ids_identical",
+      "model_text_identical_to_author_composition",
+      "model_text_mismatches",
+      "duplicate_caption_pairs_within_category",
+      "reference_equals_target_rows",
+      "gallery_has_duplicates",
+      "gallery_native_order",
+      "query_native_order",
+      "gallery_scope",
+      "gallery_is_category_agnostic",
+      "adapter_target_category",
+      "target_feature_rank",
+      "batch_size",
+      "population_final_batch",
+      "text_handling",
+      "image_transform",
+      "sample",
+      "phase_seconds"
+    ],
+    "not_yet_measured": [],
+    "why": "the adapter half needs the model worker, which refuses to start without CUDA (`model_hint.py::_worker_main`); absent evidence stays absent",
+    "measured_by": [
+      "scripts/third_model_parity.py --phase identity (G1 block)",
+      "scripts/third_model_parity.py --phase native (sample forward, decode equality)",
+      "scripts/third_model_parity.py --phase adapter (comparisons, ranking, hit counts)"
+    ]
+  },
+  "native_metrics_match_feature_rerank": true,
+  "native_metrics_parity_detail": {
+    "rule": "exact integer hit-count equality at every cutoff",
+    "cutoffs": [
+      1,
+      10,
+      50
+    ],
+    "reference_mask": "test.py:74-79 applied to BOTH sides (sims[row, reference] = -10e10)",
+    "ranking_convention": "numpy argsort(-sims), 1-based target index (test.py:74-86)",
+    "native": {
+      "source": "workbench/docs/reviews/checkpoint_selection/20261106T233409+0700/hint/measurements/hint_native_verify.json",
+      "hits": {
+        "r1": 663,
+        "r10": 1272,
+        "r50": 1656
+      },
+      "recall_pct": {
+        "r1": 51.27576054955839,
+        "r10": 81.15799803729146,
+        "r50": 100.0
+      }
+    },
+    "adapter": {
+      "source": "raw/third_model/population_<category>.npz (adapter worker features), ranked under the native protocol",
+      "hits": {
+        "r1": 663,
+        "r10": 1272,
+        "r50": 1656
+      },
+      "recall_pct": {
+        "r1": 32.53189401373896,
+        "r10": 62.414131501472035,
+        "r50": 81.25613346418056
+      }
+    },
+    "information_only": {
+      "recall": {
+        "r1": 29.784102060843963,
+        "r10": 62.07065750736016,
+        "r50": 81.25613346418056
+      },
+      "note": "unmasked, reference-eligible: what CIRCUS reports. It differs from the native metric by PROTOCOL, so it is information, never the hit-count comparison"
+    }
+  }
+}

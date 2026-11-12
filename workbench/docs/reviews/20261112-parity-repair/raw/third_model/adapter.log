@@ -1,0 +1,81 @@
+[gpu_job] lock held, GPU empty, launching: workbench/envs/ctl312h/bin/python workbench/docs/reviews/20261112-parity-repair/scripts/third_model_parity.py --phase adapter
+GPU-9bc596d9-19e9-6f43-dc2c-a80da924263c, 664 MiB, 16303 MiB
+/home/heheboiz/data/cir/workbench/envs/ctl312h/lib/python3.12/site-packages/transformers/utils/generic.py:441: FutureWarning: `torch.utils._pytree._register_pytree_node` is deprecated. Please use `torch.utils._pytree.register_pytree_node` instead.
+  _torch_pytree._register_pytree_node(
+/home/heheboiz/data/cir/workbench/envs/ctl312h/lib/python3.12/site-packages/transformers/utils/generic.py:309: FutureWarning: `torch.utils._pytree._register_pytree_node` is deprecated. Please use `torch.utils._pytree.register_pytree_node` instead.
+  _torch_pytree._register_pytree_node(
+/home/heheboiz/data/cir/workbench/envs/ctl312h/lib/python3.12/site-packages/torch/jit/_script.py:1491: FutureWarning: `torch.jit.script` is deprecated. Please switch to `torch.compile` or `torch.export`.
+  warnings.warn(
+/home/heheboiz/data/cir/workbench/envs/ctl312h/lib/python3.12/site-packages/torch/jit/_script.py:1643: FutureWarning: `torch.jit.interface` is deprecated. Please use `torch.compile` instead.
+  warnings.warn(
+/home/heheboiz/data/cir/workbench/envs/ctl312h/lib/python3.12/site-packages/transformers/utils/generic.py:309: FutureWarning: `torch.utils._pytree._register_pytree_node` is deprecated. Please use `torch.utils._pytree.register_pytree_node` instead.
+  _torch_pytree._register_pytree_node(
+# dress: identity measured in 8.8s
+{
+ "gallery_order_identical": true,
+ "reference_ids_identical": true,
+ "target_ids_identical": true,
+ "model_text_identical": true,
+ "counts": [
+  2017,
+  2017,
+  2628,
+  2628
+ ],
+ "sample_indices": [
+  0,
+  14,
+  18,
+  816,
+  2016
+ ],
+ "gallery_sample": 20
+}
+# dress: wrote g1_g2.hint.dress.adapter.json
+# dress: adapter finished in 104.5s
+# shirt: identity measured in 9.6s
+{
+ "gallery_order_identical": true,
+ "reference_ids_identical": true,
+ "target_ids_identical": true,
+ "model_text_identical": true,
+ "counts": [
+  2038,
+  2038,
+  3089,
+  3089
+ ],
+ "sample_indices": [
+  1,
+  2,
+  8,
+  798,
+  2037
+ ],
+ "gallery_sample": 20
+}
+# shirt: wrote g1_g2.hint.shirt.adapter.json
+# shirt: adapter finished in 99.5s
+# toptee: identity measured in 9.9s
+{
+ "gallery_order_identical": true,
+ "reference_ids_identical": true,
+ "target_ids_identical": true,
+ "model_text_identical": true,
+ "counts": [
+  1961,
+  1961,
+  2902,
+  2902
+ ],
+ "sample_indices": [
+  0,
+  3,
+  15,
+  637,
+  1960
+ ],
+ "gallery_sample": 20
+}
+# toptee: wrote g1_g2.hint.toptee.adapter.json
+# toptee: adapter finished in 94.7s
