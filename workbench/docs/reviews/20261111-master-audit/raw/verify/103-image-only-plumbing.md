@@ -213,8 +213,8 @@ Artifacts: 136/136 digests under `composition/summary/**/full.json`, `runs/**/ra
 
 ## Còn chặn
 
-1. **`composition_eval.py` cannot request the new condition — the GPU command below will not run it
-   as written.** The CLI has no `--conditions` flag; `run_composition` defaults to `CONDITIONS`, so a
+1. **[RESOLVED in this file's §8] `composition_eval.py` could not request the new condition — the
+   GPU command below would not have run it as written.** The CLI has no `--conditions` flag; `run_composition` defaults to `CONDITIONS`, so a
    Full run launched today scores exactly the protocol triple and the ablation name is never
    requested. Patch spec (`workbench/scripts/composition_eval.py`, not mine):
 
@@ -273,3 +273,174 @@ Artifacts: 136/136 digests under `composition/summary/**/full.json`, `runs/**/ra
    `composition_gap_ndcg` **not null**. A gap that is null with
    `gap_unavailable_reason == "missing condition(s): clvc_image_encoder_only"` would mean the
    condition produced no ranks and the run must not be published as a variant-gap measurement.
+
+---
+
+## 8. Addendum — the CLI can request the condition now, and the plan matches the run
+
+The gap the lead found by reading the CLI: `composition_eval.main` never passed `conditions=` to
+`run_composition`, so the runner always used its default triple and `clvc_image_encoder_only` could
+not be requested at all — the role resolution of §4 would never have seen it. `_plan` also iterated
+the module constant `composition_data.CONDITIONS` for `expected_output_paths`, so a planned variant
+run listed an output it would not write and omitted one it would.
+
+### 8.1 `--conditions`
+
+`workbench/scripts/composition_eval.py`, parser after `--decode-workers`:
+
+```
+--conditions CONDITIONS
+                      comma-separated conditions to score; defaults to the protocol triple
+                      (multimodal,text_only_black_image,image_only_empty_text). Adapter-declared
+                      ablations (clvc_image_encoder_only) must be named explicitly. The list is
+                      hashed into the run id, so adding or substituting a condition mints a new
+                      run rather than reusing the protocol one.
+```
+
+`_resolve_conditions(raw: str | None) -> tuple[str, ...]`:
+
+| input | result |
+|---|---|
+| unset | the protocol triple, unchanged |
+| `multimodal,text_only_black_image` | as given |
+| `text_only_black_image, multimodal, text_only_black_image` | `("text_only_black_image", "multimodal")` — ORDER PRESERVED (the gap roles are positional), duplicates collapsed |
+| `clvc_image_encoder_only` | as given |
+| `multimodal,text_only_black_image,image_only_empty_text,clvc_image_encoder_only` | all four, caller order |
+| `""`, `" "`, `","` | refused: `--conditions was empty; expected one or more of: …` |
+| `mm` / `image_only_empty_text_typo` | refused: `unknown condition(s): …; expected one or more of: multimodal, text_only_black_image, image_only_empty_text, clvc_image_encoder_only` |
+
+Validation is against `inputs.CONDITIONS + inputs.ABLATION_CONDITIONS` — the same tuple the runner
+validates against, so the CLI cannot admit a name the runner refuses (or vice versa). It runs
+**before** `_load_configuration`, so a bad name exits **2** with a JSON `{"error": …}` and never reads
+the release or plans a gallery encode. The resolved tuple is passed as
+`run_composition(..., conditions=conditions, ...)` (line ~413) and to `_plan(..., conditions)`.
+`composition_data.CONDITIONS` is no longer consulted for output paths.
+
+### 8.2 `_plan`
+
+`_plan(pairs, unavailable, data, config, subsets, conditions=(*CONDITIONS,))` now builds
+`expected_output_paths` from the argument, and the plan payload gains `"conditions": [...]` so a
+reader can see which list the paths were built for. Measured on the SYNTHETIC CLI fixture
+(`--plan`, `--subsets full`):
+
+| requested | planned `.jsonl` paths |
+|---|---|
+| `multimodal,text_only_black_image` | `full/multimodal.jsonl`, `full/text_only_black_image.jsonl` |
+| `multimodal,text_only_black_image,clvc_image_encoder_only` | the two above **plus** `full/clvc_image_encoder_only.jsonl` — and **no** `full/image_only_empty_text.jsonl` |
+| unset | the protocol triple's three paths |
+
+`--plan` still writes nothing (`artifacts` does not exist afterwards, asserted).
+
+### 8.3 Anything else assuming exactly three conditions — findings
+
+| location | verdict |
+|---|---|
+| `topk.open_export(..., conditions)` | takes the list; builds one writer per condition (`topk.py:264`). No arity assumption. |
+| `CandidateTopKWriter` / `close_export` / `write_batch` / `abort_export` | all keyed by condition name through a mapping; no index. |
+| `topk.export_index` | iterates the manifests actually on disk and keys the index by `manifest["condition"]` — a fourth file is picked up automatically. |
+| `topk.read_candidates` | takes `condition: str`, defaults to `multimodal` for the single-condition read path; nothing enumerates a triple. |
+| runner `topk_export_state` | `"conditions": sorted(published)` and `missing_query_count` = sum over the manifests present. Grows with the list. |
+| `composition_eval._plan` | **was** the one place; fixed in §8.2. |
+| `composition_eval` `_runner_topk_kwargs` | signature introspection only. |
+| runner `identity["conditions"]` | `list(conditions)`; already the source of the run-id difference. |
+| `runner.resolve_gap_conditions` | asserts exactly three because the GAP is defined over three roles; that is the formula, not a condition-list limit, and it is fed the scored subset. |
+| `metrics.compose` / `shortcut_outcomes` | three distinct names by definition (role order). Same reasoning. |
+| `backend/composition.py` | still hard-codes the protocol triple; owned by another worker. Omits the row, does not break (§Còn chặn 3). |
+
+So: **one** three-condition assumption existed for output enumeration (`_plan`), and it is fixed.
+`topk.py` needs no change.
+
+### 8.4 Tests
+
+`workbench/tests/test_runner_cli_conditions.py`, 18 tests, all pass:
+
+* `--help` exists and names every condition (compared with argparse's wrapping removed — the first
+  version of this test failed because `image_only_empty_text` is split as `imag`/`e_only_empty_text`
+  at the default terminal width);
+* 7 resolution cases, including order preservation, duplicate collapse, the ablation alone and
+  beside the protocol conditions, and an all-four request;
+* 4 empty-list spellings refused; empty list and unknown name each exit **2** with a JSON error
+  naming the allowed set; a non-condition name (`mm`) also exits 2;
+* the plan lists exactly the requested conditions for a 2-condition and a 3-condition request, lists
+  no unrequested protocol condition, and writes nothing; the default plan is the protocol triple;
+* a source-level assertion that `run_composition` is called with `conditions=conditions` and that
+  `_plan` iterates `conditions`, not `composition_data.CONDITIONS`.
+
+```
+workbench/envs/ctl312h/bin/python -m pytest workbench/tests/test_runner_cli_conditions.py \
+  workbench/tests/test_circus_cli.py workbench/tests/test_circus_metrics.py \
+  workbench/tests/test_runner_image_only_condition.py workbench/tests/test_metrics_gap_conditions.py \
+  workbench/tests/test_runner_gap_roles.py workbench/tests/test_runner_gap_identity.py \
+  workbench/tests/test_composition_topk_runner.py workbench/tests/test_composition_topk_export.py \
+  workbench/tests/test_composition_topk_api.py workbench/tests/test_composition_api.py \
+  -q -p no:cacheprovider --basetemp=/tmp/metrics_c3
+→ 120 passed
+```
+
+Wider selection (`-k "composition or circus or metric or runner"` over `workbench/tests/`):
+**513 passed, 1 skipped, 7 failed** — all seven pre-existing and reproduced on a pristine worktree at
+`d16a1ba`: 4 × `test_circus_adapters_blip.py` (`'Adapter' object has no attribute 'batch_size'`),
+2 × `test_circus_tme_lifecycle.py` (`WORKBENCH_ENCODER_PYTHON`/`WORKBENCH_LIMN_PYTHON` unset), 1 ×
+`test_circus_tme_precision.py` (fixture subprocess). None touches `composition_eval.py`.
+
+Artifacts: 136/136 digests unchanged again after this change.
+
+### 8.5 The GPU command, flag spelled out, and what it must publish
+
+**Not run.** Sequential, one GPU job, the lock untouched:
+
+```
+MAX_WAIT=3600 workbench/scripts/gpu_job.sh \
+  workbench/envs/clvc39-la/bin/python workbench/scripts/composition_eval.py \
+  --config /home/heheboiz/cir_rerun_20261109.yaml \
+  --models clvc_net \
+  --subsets full \
+  --topk-depth 100 \
+  --conditions multimodal,text_only_black_image,clvc_image_encoder_only
+```
+
+Expected, stated so the result is checked rather than believed:
+
+| field | expected | why |
+|---|---|---|
+| `conditions` | `["multimodal", "text_only_black_image", "clvc_image_encoder_only"]` | the flag, verbatim and in that order |
+| `condition_status.multimodal` | `PARTIAL`, `unscored_count 2`, `fallback_used false` | 117 of the 119 previously-unscoped queries recovered by the LIMN resolver; `7:3038` and `7:3790` remain genuinely ambiguous (99 §3) |
+| `condition_status.text_only_black_image` | `PARTIAL`, `unscored_count 2`, `fallback_used false` | same cohort |
+| `condition_status.clvc_image_encoder_only` | `PARTIAL`, `unscored_count 2`, and `feature_batch_fallback.partition == "canonical_call_window"` | the image-only encoder has no text tower, so no empty-edit refusal; a mixed partition would mean the encode fell back and the run is diagnostic, not canonical |
+| `image_only_empty_text` | **absent** from `conditions`/`condition_status` | never requested; not inherited from the protocol tuple |
+| coverage per active condition | `6001/6003 = 0.9996668…` | 2 unscored |
+| `metrics.gap_conditions` | `["multimodal", "text_only_black_image", "clvc_image_encoder_only"]` | resolved by role: the protocol image condition has no ranks |
+| `metrics.gap_role_reason` | non-null, containing "image role filled by the adapter's named ablation" | records WHY the triple is not the protocol one |
+| `metrics.composition_gap_ndcg` | **not null** | that is the whole point of the change |
+| `metrics.gap_cohort_count` | `6001` | every qid with a rank in all three |
+| `topk_export.conditions` | the three requested | `open_export` builds one writer per condition |
+| `topk_export.missing_query_count` | **`4`** | 2 unscored × 2 exporting conditions — see below |
+| `topk_export.status` | `TOPK_EXPORT_COMPLETE_PARTIAL`, `partial true` | 4 missing windows |
+| `topk_export.depth` | `100` | `--topk-depth 100` |
+
+The `4` is worth being explicit about, because the lead's arithmetic and mine differ in mechanism
+though not in value. `missing_query_count` is a SUM over manifests
+(`runner.py:2417`: `sum(int(item.get("missing_query_count") or 0) for item in manifests)`), and each
+manifest counts `expected_qids - written` for ITS condition (`topk.py:223`). If all three conditions
+export, 2 unscored each would give **6**, not 4. Two of my expectations are therefore conditional:
+
+* **If `clvc_image_encoder_only` gets a writer** (it is in `export_conditions`, i.e.
+  `supported[condition][0]` is true, which is the intent): `missing_query_count` = **6**, and
+  `topk_export.conditions` has three entries.
+* **If it does not** — the observed `missing_query_count` will be **4** and
+  `topk_export.conditions` will hold two entries. That would be a real finding, not a pass: it would
+  mean the condition scored ranks but produced no candidate window, and the run must be examined
+  before publication.
+
+So `4` is the value that means "two conditions exported" and `6` is the value that means "all three
+did". The run is read against `topk_export.conditions`, which is published, rather than against a
+count that can be right for the wrong reason.
+
+Failure signatures that mean the plumbing did NOT work, in order of likelihood:
+
+1. `composition_gap_ndcg: null` with `gap_unavailable_reason == "missing condition(s):
+   clvc_image_encoder_only"` — the condition produced no ranks.
+2. `condition_status.clvc_image_encoder_only.status == "ABLATION_UNSUPPORTED"` with
+   `adapter_encoder_missing` — the adapter method was absent at run time (wrong checkout).
+3. `conditions` missing the third name — the flag did not reach `run_composition`, i.e. an older
+   `composition_eval.py` was executed.

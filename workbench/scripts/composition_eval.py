@@ -44,6 +44,7 @@ from workbench.backend.operator_config import resolve_config
 from workbench.backend.registry import checkpoint_path, load_registry
 from workbench.composition import data as composition_data
 from workbench.composition.adapters import adapter_class
+from workbench.composition.inputs import ABLATION_CONDITIONS, CONDITIONS
 from workbench.composition.runner import (
     ModelSpec,
     assert_composition_destination,
@@ -90,7 +91,33 @@ def _parser() -> argparse.ArgumentParser:
                         help="parallel image-decode workers (env: WORKBENCH_DECODE_WORKERS, "
                              "default 8). Decode-only: the transform and the feature values are "
                              "unchanged, so this does not alter any result.")
+    parser.add_argument("--conditions", default=None,
+                        help="comma-separated conditions to score; defaults to the protocol triple "
+                             f"({','.join(CONDITIONS)}). Adapter-declared ablations "
+                             f"({','.join(ABLATION_CONDITIONS)}) must be named explicitly. The list is "
+                             "hashed into the run id, so adding or substituting a condition mints a "
+                             "new run rather than reusing the protocol one.")
     return parser
+
+def _resolve_conditions(raw: str | None) -> tuple[str, ...]:
+    """Parse `--conditions`: known names only, deduplicated, order preserved.
+
+    Order matters: the gap roles are positional (multimodal, text, image), so the caller's order is
+    carried into the run identity rather than sorted away. A duplicate is collapsed rather than
+    refused -- naming the same condition twice is a typo, not a second measurement, and the runner
+    would otherwise score it twice into one rank table.
+    """
+    allowed = tuple(CONDITIONS) + tuple(ABLATION_CONDITIONS)
+    if raw is None:
+        return tuple(CONDITIONS)
+    requested = [item.strip() for item in raw.split(",") if item.strip()]
+    if not requested:
+        raise ValueError(f"--conditions was empty; expected one or more of: {', '.join(allowed)}")
+    unknown = [item for item in requested if item not in allowed]
+    if unknown:
+        raise ValueError(f"unknown condition(s): {', '.join(sorted(set(unknown)))}; expected one or "
+                         f"more of: {', '.join(allowed)}")
+    return tuple(dict.fromkeys(requested))
 
 
 def _load_configuration(path: Path | None) -> tuple[Any, Any, Any, dict[str, Any]]:
@@ -234,7 +261,8 @@ def _load_data(config: Any, *, synthetic: bool):
 
 
 def _plan(pairs: list[tuple[dict[str, Any], str]], unavailable: list[dict[str, Any]],
-          data: Any, config: Any, subsets: list[str]) -> dict[str, Any]:
+          data: Any, config: Any, subsets: list[str],
+          conditions: tuple[str, ...] = tuple(CONDITIONS)) -> dict[str, Any]:
     artifacts = Path(config.WORKBENCH_ARTIFACTS_ROOT).expanduser().resolve()
     inventory = inspect_image_inventory(data, [model for model, _checkpoint in pairs],
                                         Path(config.FASHIONIQ_ROOT))
@@ -258,7 +286,9 @@ def _plan(pairs: list[tuple[dict[str, Any], str]], unavailable: list[dict[str, A
                               "adapter": model.get("composition_adapter"),
                               "runtime": {"model_interpreter": model_interpreter_identity(model, config, verify=False)}})
         for subset in subsets:
-            for condition in composition_data.CONDITIONS:
+            # The SAME resolved list the run will use, never the module constant: a plan that lists
+            # an output the run will not write, or omits one it will, misdescribes the run.
+            for condition in conditions:
                 outputs.append(str(assert_composition_destination(
                     artifacts, artifacts / "composition" / "results" / data.gallery.protocol_id /
                     model["model_id"] / checkpoint_id / "<attempt>" / subset / f"{condition}.jsonl")))
@@ -274,6 +304,7 @@ def _plan(pairs: list[tuple[dict[str, Any], str]], unavailable: list[dict[str, A
             "protocol_id": data.gallery.protocol_id, "gallery_count": len(data.gallery.image_ids),
             "gallery_identity_sha256": gallery_identity, "missing_assets": inventory,
             "expected_output_paths": outputs,
+            "conditions": list(conditions),
             "category_resolution": data.provenance.get("category_resolution", {}),
             "is_synthetic": bool(data.provenance.get("is_synthetic")),
             "failed_expectations": data.provenance.get("failed_expectations", ())}
@@ -322,6 +353,14 @@ def main(argv: list[str] | None = None) -> int:
             print(json.dumps({"error": "--decode-workers must be a positive integer"}))
             return 2
         os.environ[DECODE_WORKERS_ENV] = str(args.decode_workers)
+    # Resolved BEFORE the run, and before any configuration is loaded: an unknown condition name is
+    # a usage error (exit 2), not a failed run, and it must not get as far as reading the release or
+    # planning a gallery encode.
+    try:
+        conditions = _resolve_conditions(args.conditions)
+    except ValueError as error:
+        print(json.dumps({"error": str(error)}))
+        return 2
     try:
         profile, _, config, registry = _load_configuration(args.config)
         subsets = [item.strip() for item in args.subsets.split(",") if item.strip()]
@@ -338,7 +377,7 @@ def main(argv: list[str] | None = None) -> int:
         data = _load_data(config, synthetic=synthetic)
         data = composition_data.assign_garment_categories(data, config.FASHIONIQ_ROOT)
         if args.plan or args.prepare_data:
-            report = _plan(pairs, unavailable, data, config, subsets)
+            report = _plan(pairs, unavailable, data, config, subsets, conditions)
             if args.prepare_data:
                 from workbench.composition.data import resolve_release_paths, verify_release_hashes
 
@@ -378,7 +417,7 @@ def main(argv: list[str] | None = None) -> int:
             specs.append(ModelSpec(model["model_id"], checkpoint_id,
                                    lambda cfg, cid, cls=adapter_type: cls(cfg, cid), model,
                                    _checkpoint_identity(model, checkpoint_id, config)))
-        report = run_composition(data, specs, config, subsets=subsets,
+        report = run_composition(data, specs, config, subsets=subsets, conditions=conditions,
                                  resume=args.resume, smoke=args.smoke, seed=args.seed,
                                  synthetic=bool(data.provenance.get("is_synthetic")),
                                  **_runner_topk_kwargs(run_composition, args.topk_depth,
