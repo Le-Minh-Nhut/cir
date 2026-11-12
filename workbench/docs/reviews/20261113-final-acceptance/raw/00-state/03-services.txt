@@ -1,0 +1,16 @@
+captured_at=2026-11-13T01:40:00+07:00
+
+## systemctl --user show
+MainPID=2162645
+NRestarts=0
+ActiveState=active
+ActiveEnterTimestamp=Thu 2026-11-12 23:22:41 +07
+
+MainPID=2162647
+NRestarts=0
+ActiveState=active
+ActiveEnterTimestamp=Thu 2026-11-12 23:22:41 +07
+
+## listening sockets 8000/5173
+LISTEN 0      511                                 127.0.0.1:5173       0.0.0.0:*    users:(("node-MainThread",pid=2162660,fd=21))
+LISTEN 0      2048                                127.0.0.1:8000       0.0.0.0:*    users:(("python",pid=2162645,fd=7))          

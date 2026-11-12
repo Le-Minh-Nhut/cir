@@ -1,0 +1,48 @@
+captured_at=2026-11-13T01:40:52+07:00
+
+## registry python_env_var -> workbench.env value -> realpath -> exists
+
+MODEL                      VAR                            IN_ENV   EXISTS   REALPATH
+csmcir                     WORKBENCH_CSMCIR_PYTHON        yes      yes      /home/heheboiz/data/cir/workbench/artifacts/environments/cir-005ef4e1b02999a5/bin/python3.10
+airknow                    WORKBENCH_AIRKNOW_PYTHON       NO       -        -
+conesep                    WORKBENCH_CONESEP_PYTHON       yes      yes      /home/heheboiz/.local/share/uv/python/cpython-3.9.25-linux-x86_64-gnu/bin/python3.9
+ptha_mtst                  WORKBENCH_PTHA_MTST_PYTHON     yes      yes      /home/heheboiz/data/cir/workbench/artifacts/environments/cir-005ef4e1b02999a5/bin/python3.10
+habit                      WORKBENCH_HABIT_PYTHON         yes      yes      /home/heheboiz/.local/share/uv/python/cpython-3.9.25-linux-x86_64-gnu/bin/python3.9
+intent                     WORKBENCH_INTENT_PYTHON        yes      yes      /home/heheboiz/.local/share/uv/python/cpython-3.9.25-linux-x86_64-gnu/bin/python3.9
+hint                       WORKBENCH_HINT_PYTHON          yes      yes      /home/heheboiz/.local/share/uv/python/cpython-3.9.25-linux-x86_64-gnu/bin/python3.9
+encoder                    WORKBENCH_ENCODER_PYTHON       yes      yes      /home/heheboiz/.local/share/uv/python/cpython-3.10.20-linux-x86_64-gnu/bin/python3.10
+pair                       WORKBENCH_PAIR_PYTHON          NO       -        -
+clvc_net                   WORKBENCH_CLVC_PYTHON          yes      yes      /home/heheboiz/.local/share/uv/python/cpython-3.9.25-linux-x86_64-gnu/bin/python3.9
+dcnet                      WORKBENCH_DCNET_PYTHON         NO       -        -
+combiner_rn50x4_noft       WORKBENCH_CLIP4CIR_PYTHON      NO       -        -
+clip4cir_rn50x4_fullft     WORKBENCH_CLIP4CIR_PYTHON      NO       -        -
+tgcir                      WORKBENCH_TGCIR_PYTHON         yes      yes      /home/heheboiz/.local/share/uv/python/cpython-3.9.25-linux-x86_64-gnu/bin/python3.9
+sprc                       WORKBENCH_SPRC_PYTHON          NO       -        -
+limn                       WORKBENCH_LIMN_PYTHON          yes      yes      /home/heheboiz/.local/share/uv/python/cpython-3.10.20-linux-x86_64-gnu/bin/python3.10
+tme                        WORKBENCH_TME_PYTHON           yes      yes      /home/heheboiz/data/cir/workbench/envs/tme-adapted/bin/python3.10
+
+## every workbench/envs/*/bin/python symlink target and resolution
+workbench/envs/airknow-adapted/bin/python      -> /home/heheboiz/miniconda3/envs/teacher-sprc/bin/python                 resolves=NO
+workbench/envs/airknow310-la/bin/python        -> /home/heheboiz/.local/share/uv/python/cpython-3.10-linux-x86_64-gnu/bin/python3.10 resolves=yes
+workbench/envs/clip4cir-adapted/bin/python     -> /home/heheboiz/miniconda3/envs/teacher-sprc/bin/python                 resolves=NO
+workbench/envs/clvc39-la/bin/python            -> /home/heheboiz/.local/share/uv/python/cpython-3.9-linux-x86_64-gnu/bin/python3.9 resolves=yes
+workbench/envs/ctl312/bin/python               -> /usr/bin/python3.12                                                    resolves=yes
+workbench/envs/ctl312h/bin/python              -> /home/heheboiz/.local/share/uv/python/cpython-3.12-linux-x86_64-gnu/bin/python3.12 resolves=yes
+workbench/envs/dcnet-prepare/bin/python        -> python3.7                                                              resolves=yes
+workbench/envs/dl-adapted/bin/python           -> /home/heheboiz/miniconda3/envs/teacher-sprc/bin/python                 resolves=NO
+workbench/envs/encoder310-adapted/bin/python   -> /home/heheboiz/.local/share/uv/python/cpython-3.10-linux-x86_64-gnu/bin/python3.10 resolves=yes
+workbench/envs/ilearn39-adapted/bin/python     -> /home/heheboiz/.local/share/uv/python/cpython-3.9-linux-x86_64-gnu/bin/python3.9 resolves=yes
+workbench/envs/limn-adapted/bin/python         -> /home/heheboiz/miniconda3/envs/teacher-sprc/bin/python                 resolves=NO
+workbench/envs/limn310-adapted/bin/python      -> /home/heheboiz/.local/share/uv/python/cpython-3.10-linux-x86_64-gnu/bin/python3.10 resolves=yes
+workbench/envs/pair-adapted/bin/python         -> /home/heheboiz/miniconda3/envs/teacher-sprc/bin/python                 resolves=NO
+workbench/envs/pair39-la/bin/python            -> /home/heheboiz/.local/share/uv/python/cpython-3.9-linux-x86_64-gnu/bin/python3.9 resolves=yes
+workbench/envs/sprc-adapted/bin/python         -> /home/heheboiz/miniconda3/envs/teacher-sprc/bin/python                 resolves=NO
+workbench/envs/test-adapted/bin/python         -> /home/heheboiz/miniconda3/envs/teacher-sprc/bin/python                 resolves=NO
+workbench/envs/tgcir39-la/bin/python           -> /home/heheboiz/.local/share/uv/python/cpython-3.9-linux-x86_64-gnu/bin/python3.9 resolves=yes
+workbench/envs/tme-adapted/bin/python          -> python3.10                                                             resolves=yes
+
+## interpreters under artifacts/environments
+workbench/artifacts/environments/cir-005ef4e1b02999a5/bin/python
+workbench/artifacts/environments/clip4cir-38/bin/python
+workbench/artifacts/environments/dcnet-377/bin/python
+workbench/artifacts/environments/sprc-39/bin/python

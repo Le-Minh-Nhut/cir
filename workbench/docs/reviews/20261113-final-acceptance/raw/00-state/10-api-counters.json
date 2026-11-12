@@ -1,0 +1,112 @@
+{
+ "captured_at": "2026-11-13T01:40+07:00",
+ "endpoint_records": {
+  "/api/models": {
+   "records": 17,
+   "bytes": 86658,
+   "field": "model_id (17 unique; registry order)"
+  },
+  "/api/benchmark-runs": {
+   "records": 13,
+   "bytes": 54761
+  },
+  "/api/runs/parity-gate": {
+   "records": 7,
+   "bytes": 94699,
+   "keys": [
+    "advisory_standards",
+    "models",
+    "note",
+    "passed_models",
+    "requested_standard",
+    "standard",
+    "standards"
+   ],
+   "standard": "parity-relative/v1",
+   "requested_standard": "parity-relative/v1",
+   "advisory_standards": [],
+   "passed_models": [],
+   "models_n": 3,
+   "models": [
+    "encoder",
+    "hint",
+    "limn"
+   ],
+   "standards": {
+    "parity-absolute-relative/v2": [
+     "hint"
+    ],
+    "parity-relative/v1": [
+     "encoder",
+     "limn"
+    ]
+   }
+  },
+  "/api/runs": {
+   "records": 0,
+   "bytes": 2
+  },
+  "/api/jobs": {
+   "records": 0,
+   "bytes": 2
+  },
+  "/api/native-measurements": {
+   "records": 56,
+   "bytes": 108403,
+   "counts": {
+    "files_scanned": 71,
+    "files": 39,
+    "blocks_with_metrics": 50,
+    "with_metrics": 23,
+    "rollup_rows": 18,
+    "duplicate_rows": 27,
+    "unbacked_rows": 18,
+    "unbacked_counted": 0,
+    "unit_declared": 4,
+    "unit_sibling_key": 2,
+    "unit_inferred": 46,
+    "unit_undeclared": 0,
+    "unit_not_declared": 46,
+    "unreadable": 2,
+    "signposted_blockers": 4,
+    "models_with_metrics": 17,
+    "models_rollup_only": 8,
+    "verified": 0
+   }
+  },
+  "/api/composition/runs": {
+   "records": 53,
+   "bytes": 1993626
+  },
+  "/api/evidence/summary": {
+   "aggregate_run_count": 13,
+   "certified_aggregate_count": 2,
+   "unique_measurement_count": 13,
+   "undetermined_measurement_count": 0,
+   "duplicate_attempt_count": 0,
+   "confidence": "full"
+  },
+  "/api/composition/capabilities": {
+   "run_count": 53,
+   "capability_counts": {
+    "aggregate_metrics": 50,
+    "per_query_target_ranks": 53,
+    "candidate_topk": 36,
+    "image_availability": 53
+   },
+   "artifact_count": 53,
+   "measured_artifact_count": 53,
+   "unique_measurement_count": 50,
+   "undetermined_artifact_count": 18,
+   "confidence": "partial",
+   "image_availability_is_sample": true
+  },
+  "/api/runs/gate": {
+   "bytes": 51817
+  },
+  "/api/cohorts": {
+   "records": 0,
+   "bytes": 2
+  }
+ }
+}

@@ -603,13 +603,19 @@ Summary legacy **không** có trường `conditions` phải **không** đổi: t
 `('multimodal','text_only_black_image','image_only_empty_text')` (`BACKEND_DEFECTS.md:239-244`). Ba test
 trong `test_composition_api_contracts.py`.
 
-**Lỗi 3 — hai công thức `gallery_identity_sha256` (spec only).** Trên cùng một release: nhánh
+**Lỗi 3 — hai công thức `gallery_identity_sha256` — ĐÃ SỬA 2026-11-13.** Đoạn dưới giữ nguyên làm
+bản ghi lúc phát hiện; trạng thái hiện tại: cả `_plan` và nhánh blocked-report trong
+`workbench/scripts/composition_eval.py` đều gọi `runner._gallery_fingerprint`, nên plan, blocked và run
+hoàn tất in **cùng một** digest `1db68c59d96f014cdbecf936e108653de98abef0bd9a98a8abc2fe08b5dec4b4`
+(đo lại 2026-11-13, `gallery_count 74381`). Payload **không** đổi, nên artifact cũ vẫn verify lại được
+khi đọc. `0bfd43b9…` từ nay chỉ là giá trị lịch sử. Test: `test_gallery_identity_one_formula.py`.
+Trên cùng một release, lúc phát hiện: nhánh
 plan/blocked (`composition_eval.py:298-300`, payload `{protocol_id, image_ids}`) →
 `0bfd43b9cc0162885f06c60cfc751602ee9f3bed2fb4d206ffcebe3f7b443462`; mọi run hoàn tất
 (`runner.py:512-515`, `_gallery_fingerprint`, payload `{protocol_id, ordered_gallery, candidate_names}`)
 → `1db68c59d96f014cdbecf936e108653de98abef0bd9a98a8abc2fe08b5dec4b4`; `gallery_count 74381` ở **cả
-hai**. Vì sao **chưa** làm: `workbench/scripts/composition_eval.py` và `workbench/composition/runner.py`
-**không thuộc lane này** — spec là change request, không phải change. Giải pháp chọn: dùng lại
+hai**. Vì sao lúc đó **chưa** làm: `workbench/scripts/composition_eval.py` và
+`workbench/composition/runner.py` **không thuộc lane này**; nay đã làm. Giải pháp chọn: dùng lại
 `_gallery_fingerprint` (xoá công thức thứ hai), không phải đổi tên khoá. Cả hai lựa chọn **không** phá
 digest nào đã công bố vì không artifact on-disk nào chứa `0bfd43b9…` ngoài transcript audit dưới
 `workbench/docs/` (historical record, không được viết lại).
@@ -1043,9 +1049,9 @@ Nguồn: `BACKEND_DEFECTS.md:22-30` (in ra bốn khối A/B/C/D đã ghi ở `:1
 | 2 | **2 query nhập nhằng** `7:3038`, `7:3790` | `raw/m02/m02_recount.json:288-297` (119/117/2; shirt 46, toptee 71); release không có khoá category; mọi luật phân xử đều phá luật "chỉ gán từ đúng một category được nêu". Cần metadata upstream, không phải vá code |
 | 3 | **`image_only_empty_text` không hỗ trợ cho CLVC** | `third_party/CLVCNet/text_model.py:84-86` index `x[0][0]` sau khi tokenise empty → `IndexError` cho **mọi** hàng (`model_clvc_net.py:418-435`, `EMPTY_TEXT_REASON` ở `:96`). Ghi `ABLATION_UNSUPPORTED`, không fake |
 | 4 | **15 id không có cặp parity** | `_discover_models` trả **3** id; `INVENTORY.csv` `has_parity_artifact` = `Y` chỉ cho encoder/limn. 17 − 2 = 15 lúc audit; nay 17 − 3 = 14 |
-| 5 | **công thức gallery-digest kép** | `0bfd43b9…` (plan/blocked) vs `1db68c59…` (run hoàn tất), `gallery_count 74381` cả hai — spec ở `GALLERY_DIGEST_PATCH_SPEC.md`, file sở hữu nằm ngoài lane |
-| 6 | **trường scope-resolution** | `7b1fa850…`: `adapter_routed 0`, `still_unscoped 6003`, `condition_status.*.unscored_count 0` — mâu thuẫn nội tại; fix ở `runner.py:2528-2537`, ngoài lane (`SCOPE_RESOLUTION_PATCH_SPEC.md`) |
-| 7 | **`reference_metadata_seen` chưa có trong run identity** | `grep -rn reference_metadata_seen workbench/composition workbench/backend workbench/scripts workbench/tests` → **0** hit; chỉ có trong `raw/verify/99-clvc-scope-and-image-only.md:125,314`. Chưa ship vì nó mint run id mới cho mọi run hiện có |
+| 5 | **công thức gallery-digest kép** — **ĐÃ SỬA 2026-11-13** | Lúc phát hiện: `0bfd43b9…` (plan/blocked) vs `1db68c59…` (run hoàn tất), `gallery_count 74381` cả hai. Nay cả ba nhánh in `1db68c59…`; `0bfd43b9…` chỉ còn là giá trị lịch sử trong transcript audit |
+| 6 | **trường scope-resolution** — **ĐÃ SỬA 2026-11-13** | Artifact `7b1fa850…` giữ nguyên (lịch sử bất biến) với `adapter_routed 0` / `still_unscoped 6003` / `unscored_count 0`. Runner nay suy ra unscoped từ REASON: `category_agnostic`, `global_scoped` được ghi thêm, `adapter_routed` giữ nghĩa hẹp. TG-CIR: `global_scoped 6003`, `still_unscoped 0`, `adapter_routed 0`, `loader_scoped 5884` (hai số cuối KHÁC nghĩa: loader gán category cho 5 884 query, nhưng adapter bỏ qua category khi chọn matrix nên cả 6 003 đều vào `global`). Không tài liệu nào được trích "6003 unscoped" như một lỗi routing |
+| 7 | **`reference_metadata_seen`** — **QUYẾT ĐỊNH 2026-11-13: lỗ hổng tài liệu, KHÔNG phải lỗi identity** | `0` hit trong code, đúng như đo. Nhưng routing ĐÃ nằm trong identity: `query_scope_resolution` + `adapter_source_hashes`; đo trên release thật, routing đọc caption vs chỉ loader khác nhau đúng 117 query và cho scope digest khác nhau (`3a1c5a67…` vs `8a5dd517…`), nên run id đã phân biệt được. Thêm trường chỉ mint id mới cho mọi run mà không phân biệt thêm gì — đúng lý do §7.6 rút lại đề xuất. Không cần migration; phần khai báo đã ship (`IMAGE_ENCODER_ONLY_LEAKS_SCOPE/_CAPTION`) |
 | 8 | **20 test fail pre-existing** | Sweep tại pin hiện tại `cf6ba468`: **3159 passed / 20 failed / 47 skipped = 3226**, diff so sweep `aea143bd`: **0 mới, 0 rơi, 20 y nguyên** (`SWEEP_cf6ba468.md` §2-§3). Tập 20 đó (`107-sweep-aea143bd.md` §3): **18** id baseline (blip ×4, `circus_cli`, `tme_lifecycle` ×2, `tme_precision`, `f08_dcnet`, `handoff_commands` SHA guard, `release_blocker_gpu_records` ×7, `prepare_model`) + **2** id chưa từng trong baseline 18 (`test_doctor.py::test_dcnet_runtime_asset_blocks_after_preparation_is_present`, `test_evaluate_models.py::test_dcnet_audited_command_reports_non_command_blockers`). Mục `handoff_commands` SHA guard trong tập đó **nay đã xanh** ở trạng thái hiện tại (`8 passed`, §9) — nó đỏ trong sweep vì sweep chạy **trước** lệnh nâng pin; 19 id còn lại vẫn đỏ. Ba trong số 20 phụ thuộc trạng thái host nên pass trong worktree trần và fail trong cây thật (`106` §6) — ghi nhận, không sửa |
 | 9 | **người gửi SIGTERM lịch sử** | `UNDETERMINED`. Đường nhận đã biết (`serve_workbench.py:152-166`), `jobs.py` bị loại, test/script trong repo bị loại, session reaping bị loại; bốn chữ ký chết đã commit (`raw/service-death-log{,-2,-3,-4}.txt`). *"That inference is for a future investigation, not evidence about the past"* |
 | 10 | **hành vi `systemctl stop`** | `NOT_COMPLETED` — ca `TimeoutStopSec=30` worst-case (job sống phớt lờ SIGTERM hết 10 s grace) **chưa đo**, chỉ bị chặn bằng số học (`GRACE_SECONDS` 10 + 5 SIGKILL + 10 join ≤ 30) |

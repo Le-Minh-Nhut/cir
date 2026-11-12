@@ -1,0 +1,34 @@
+# cir-defer-pair-on-web.patch — search result: ABSENT
+captured_at=2026-11-13T01:41+07:00
+
+## name search across /home/heheboiz (whole home, no depth limit)
+$ find /home/heheboiz -name 'cir-defer-pair-on-web.patch' 2>/dev/null
+(no output)
+
+$ find /home/heheboiz -iname '*defer*pair*' 2>/dev/null
+(no output)
+
+$ find /home/heheboiz -iname '*pair*defer*' 2>/dev/null
+(no output)
+
+## history search (read-only)
+$ git log --all --oneline -- '*defer-pair*'
+(no output — exit 0)
+
+$ git stash list
+(empty — exit 0)
+
+## content search inside the repo and the 20261109 handoff tree
+$ grep -rn 'cir-defer-pair' /home/heheboiz/data/cir
+(no output)
+$ grep -rl -i 'defer-pair|defer_pair|defer pair' /home/heheboiz/data/cir-handoff-20261109
+(no output)
+
+## context: 588 *.patch files exist under $HOME outside .git; the only non-repo one is
+/home/heheboiz/data/cir-handoff-20261109/CIR_FIX_RERUN_HANDOFF_20261109/frontend/CIR_LIGHT_FRONTEND_PATCH/CIR_LIGHT_FRONTEND.patch
+## none of the 588 is named *defer-pair* or contains the string 'cir-defer-pair'.
+
+## the only in-tree mechanism that defers PAIR is the frontend operator map:
+workbench/frontend/ModelInventory.tsx:16-22  DEFERRED_MODELS = { csmcir: …, sprc: … }
+## — PAIR is NOT in it. PAIR reaches the UI as a normal row whose registry status is
+##   reproduction_status: BLOCKED_CHECKPOINT_MAPPING_UNVERIFIED.

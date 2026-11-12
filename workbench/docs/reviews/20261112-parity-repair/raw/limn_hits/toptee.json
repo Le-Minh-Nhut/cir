@@ -11,6 +11,13 @@
   "eligible_queries": 1961,
   "eligible_query_set_identical": true,
   "eligible_query_set_evidence": "limn_native.<category>.jsonl reference_id/target_id sequences equal raw/g2_<category>_inputs.json full_reference_ids/full_target_ids, same length, same order",
+  "provenance": {
+    "protocol": "fashioniq_val_split",
+    "checkpoint_id": "base_iter0_toptee",
+    "model_id": "limn",
+    "query_order_sha256": "fd79762c895e6bf1e513a2a5730de058e15169fab87f836aa7911a12d3aecae1",
+    "gallery_order_sha256": "e79e4ffdf02bb9a205358f62692a3390329e8cd31e69f3e9adc273a5f7dc0b89"
+  },
   "native": {
     "source": "limn_native.toptee.jsonl:target_rank (native LIMN/test.py::test)",
     "query_count": 1961,

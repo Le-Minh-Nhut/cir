@@ -1,0 +1,82 @@
+{
+ "standard": "parity-relative/v1",
+ "requested_standard": "parity-relative/v1",
+ "passed_models": [],
+ "advisory_standards": [],
+ "standards": {
+  "parity-absolute-relative/v2": [
+   "hint"
+  ],
+  "parity-relative/v1": [
+   "encoder",
+   "limn"
+  ]
+ },
+ "models": {
+  "encoder": {
+   "status": "PARITY_MANDATORY_SUBCHECK_FAILED",
+   "passed": false,
+   "complete": false,
+   "applied_standard": "parity-relative/v1",
+   "failure_count": 9,
+   "failing_names": [
+    "dress.population.features_vs_native_val_control.max_rel",
+    "dress.population.gallery_vs_native.max_rel",
+    "dress.batch_1_vs_n.max_rel",
+    "shirt.population.features_vs_native_val_control.max_rel",
+    "shirt.population.gallery_vs_native.max_rel",
+    "shirt.batch_1_vs_n.max_rel",
+    "toptee.population.features_vs_native_val_control.max_rel",
+    "toptee.population.gallery_vs_native.max_rel",
+    "toptee.batch_1_vs_n.max_rel"
+   ],
+   "dimensions": {
+    "input_parity": true,
+    "forward_parity": false,
+    "batch_parity": false,
+    "scoring_parity": true,
+    "metrics_parity": true,
+    "relation_parity": true
+   }
+  },
+  "hint": {
+   "status": "PARITY_MANDATORY_SUBCHECK_FAILED",
+   "passed": false,
+   "complete": false,
+   "applied_standard": "parity-absolute-relative/v2",
+   "failure_count": 2,
+   "failing_names": [
+    "shirt.batch_1_vs_n.max_rel",
+    "toptee.batch_1_vs_n.max_rel"
+   ],
+   "dimensions": {
+    "input_parity": true,
+    "forward_parity": true,
+    "batch_parity": false,
+    "scoring_parity": true,
+    "metrics_parity": true,
+    "relation_parity": false
+   }
+  },
+  "limn": {
+   "status": "PARITY_MANDATORY_SUBCHECK_FAILED",
+   "passed": false,
+   "complete": false,
+   "applied_standard": "parity-relative/v1",
+   "failure_count": 3,
+   "failing_names": [
+    "dress.batch_1_vs_n.max_rel",
+    "shirt.batch_1_vs_n.max_rel",
+    "toptee.batch_1_vs_n.max_rel"
+   ],
+   "dimensions": {
+    "input_parity": true,
+    "forward_parity": true,
+    "batch_parity": false,
+    "scoring_parity": true,
+    "metrics_parity": true,
+    "relation_parity": false
+   }
+  }
+ }
+}

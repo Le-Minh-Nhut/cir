@@ -1,0 +1,822 @@
+{
+ "manifest_version": 1,
+ "generated": "2026-11-13",
+ "lane": "CLVC (clvc_net / author_drive_unresolved) dual-scope diagnostic",
+ "purpose": "raw evidence for the 12-cell CLVC dual-scope diagnostic; diagnostic only, NEVER canonical",
+ "diagnostic": true,
+ "canonical": false,
+ "canonical_status": {
+  "status": "PARTIAL",
+  "scored_count": 6001,
+  "considered": 6003,
+  "unscored_count": 2,
+  "unscored_qids": [
+   "7:3038",
+   "7:3790"
+  ],
+  "note": "both qids stay unscored in the canonical 6001/6003 metric; no diagnostic number enters it"
+ },
+ "cell_definition": {
+  "axes": [
+   "query (2)",
+   "scope/category (2)",
+   "condition (3)"
+  ],
+  "count": 12,
+  "grounding": "artifact schema: queries.<qid>.scopes.<scope>.<condition>; conditions[] lists exactly 3 supported conditions; scopes[] lists 2"
+ },
+ "provenance_common": {
+  "batch": 32,
+  "batch_source": "batch_partition.adapter_batch_size=32 / runner_batch_size=32 @ summary/clvc_net_author_drive_unresolved_da0a2162be0e159a1a456cec/full.json (declared baseline; batch 48 not used)",
+  "partition": {
+   "call_window": 4096,
+   "adapter_batch_size": 32,
+   "runner_batch_size": 32,
+   "adapter_calls_per_condition": 3,
+   "partition": "canonical_call_window",
+   "diagnostic_cell_batch": "each scope+condition encoded both qids in ONE forward batch: batch_composition.forward_batch_rows=2"
+  },
+  "upstream_commit": "bd9b6889489806cb60676597880f91d918b279cb",
+  "upstream_commit_source": "workbench/registry/models.yaml -> clvc_net.upstream_commit_sha",
+  "checkpoint_id": "author_drive_unresolved",
+  "checkpoint_mapping_status": "VERIFIED_METADATA",
+  "checkpoint_pair": {
+   "shirt": {
+    "local": "shirt_local_model.pt",
+    "local_sha256": "2ba8e320b08ebb97d6558eb599cde2be228b5488250de7cb4cde8a138ff2c681",
+    "global": "shirt_global_model.pt",
+    "global_sha256": "78b1d660227ab6928e3a11a7384f9fff2aa7ab2a39baec1a45ac59db35e28bcf",
+    "dataset_type_index": 1
+   },
+   "toptee": {
+    "local": "toptee_local_model.pt",
+    "local_sha256": "d1fa9170496f73a008736723fe5329c93ff710305d0bcc79ff628822c0a91f4c",
+    "global": "toptee_global_model.pt",
+    "global_sha256": "c78a58c4becafee3bffe719bef743d42c4495c3a91096a4b5935c364449ed11d",
+    "dataset_type_index": 2
+   }
+  },
+  "checkpoint_directory": "workbench/artifacts/checkpoint_selection/20261106T002617+0700/checkpoints/clvc",
+  "checkpoint_digests_recomputed_this_lane": true,
+  "dataset_order": "query order = release/loader order ascending index; gallery order = released mbeir_fashioniq_task7_test gallery (74,381), identity_sha256 1db68c59\u20264c4b4",
+  "protocol_id": "circus_fashioniq_release_v1",
+  "gallery": {
+   "count": 74381,
+   "identity_sha256": "1db68c59d96f014cdbecf936e108653de98abef0bd9a98a8abc2fe08b5dec4b4",
+   "matrices": {
+    "shirt": {
+     "file": "workbench/artifacts/composition/runs/da0a2162be0e159a1a456cec/work/clvc_net/features/gallery_shirt.npy",
+     "content_digest": "fd8b18bcca1b4d82c5de0e52f04036e89ffb3aedf1eb0d07940b46b1aba6e341",
+     "shape": [
+      74381,
+      2048
+     ],
+     "dtype": "float32",
+     "byte_length": 609329280
+    },
+    "toptee": {
+     "file": "workbench/artifacts/composition/runs/da0a2162be0e159a1a456cec/work/clvc_net/features/gallery_toptee.npy",
+     "content_digest": "55a5b9909dd632b8fb155e56b01ef40227a126d2243cab94a6e8a6b4a2819000",
+     "shape": [
+      74381,
+      2048
+     ],
+     "dtype": "float32",
+     "byte_length": 609329280
+    }
+   }
+  },
+  "precision": "float32 throughout: gallery .npy dtype float32, adapter rows float32, dot-product scores float32. No float64 cast, no half.",
+  "device": "cpu",
+  "cuda_neutralised": true,
+  "cuda_neutralisation": "text tower hardwires .cuda() at third_party/CLVCNet/text_model.py:96,108; CPU run neutralises both device moves to identity. Measured, not asserted:",
+  "device_delta": {
+   "max_abs_row_delta": 9.318767115473747e-05,
+   "max_rank_delta": 10,
+   "cpu_batch1_vs_cpu_batch_max_abs": 8.754432201385498e-08
+  },
+  "ranking_policy": "score = L2-normalised query row \u00b7 gallery row (adapter.score); rank = 1 + count(row > v) + count(row[:i] == v) (adapter.rank, evaluator tie rule); window = top 100 by that rank",
+  "top_k": 100,
+  "source_run_id": "da0a2162be0e159a1a456cec",
+  "source_run_coverage": {
+   "considered": 6003,
+   "scored": 6001,
+   "unscored": [
+    "7:3038",
+    "7:3790"
+   ],
+   "topk_export_status": "TOPK_EXPORT_COMPLETE_PARTIAL",
+   "note": "the run stored NO candidate rows for these two qids, so all 12 cells were COMPUTED; nothing copied from the run windows"
+  },
+  "producer": "workbench/docs/reviews/20261112-parity-repair/scripts/clvc_dual_scope.py (copied to scripts/clvc_dual_scope.py here for provenance, NOT re-run)",
+  "producer_elapsed_seconds": 44.07,
+  "summary_artifact": {
+   "path": "workbench/docs/reviews/20261112-parity-repair/raw/clvc_diag/clvc_dual_scope.json",
+   "sha256": "00baa12f6ca054dd2c9c7a4eacdd3bd4b74ad257342cbbc1e5c0204bdd45e214",
+   "bytes": 40004
+  },
+  "producer_source": {
+   "copied_from": "workbench/docs/reviews/20261112-parity-repair/scripts/clvc_dual_scope.py",
+   "here": "scripts/clvc_dual_scope.py",
+   "sha256": "b14292329185b907ca001120e4580b55eefc47bbfa59ad7b5274e3f517b88bb9",
+   "bytes": 31608,
+   "note": "copied for provenance only; NOT re-run by this lane because all 12 cells already existed byte-identical"
+  }
+ },
+ "cells": [
+  {
+   "cell": {
+    "query": "7:3038",
+    "category_or_scope": "shirt",
+    "condition": "multimodal"
+   },
+   "cell_key_path": "queries.7:3038.scopes.shirt.multimodal",
+   "condition_kind": "protocol",
+   "status": "PRESENT",
+   "artifact": "workbench/docs/reviews/20261112-parity-repair/raw/clvc_diag/clvc_dual_scope.shirt.multimodal.jsonl",
+   "artifact_sha256": "c3ad1ce11b9a22bbc5837e5094b71788601312364e9d2379d60c69a55a301402",
+   "artifact_bytes": 42084,
+   "row_locator": {
+    "file": "clvc_dual_scope.shirt.multimodal.jsonl",
+    "qid": "7:3038",
+    "scope": "shirt",
+    "condition": "multimodal"
+   },
+   "target_did": "7:3416",
+   "target_rank": 848,
+   "target_score": 0.4636196792125702,
+   "score_at_rank_1": 0.7360861897468567,
+   "target_margin_vs_rank1": 0.2724665105342865,
+   "target_gallery_position": 13614,
+   "target_within_export_depth": false,
+   "window": {
+    "depth": 100,
+    "rows": 100,
+    "first_rank": 1,
+    "last_rank": 100,
+    "gallery_size": 74381,
+    "is_target_flags": 0
+   },
+   "reference_eligibility": {
+    "reference_id": "7:53224",
+    "reference_asset": "B004TMGDME.jpg",
+    "reference_gallery_position": 16809,
+    "reference_rank_in_window": 17,
+    "reference_score_in_window": 0.6638066172599792,
+    "reference_is_rank_1": false
+   },
+   "checkpoint_sha256": "2ba8e320b08ebb97d6558eb599cde2be228b5488250de7cb4cde8a138ff2c681",
+   "gallery_content_digest": "fd8b18bcca1b4d82c5de0e52f04036e89ffb3aedf1eb0d07940b46b1aba6e341",
+   "raw_edit_caption": "Is darker and has a different graphic and is darker.",
+   "model_text": "Is darker and has a different graphic and is darker.",
+   "encoded_text_is_empty": false,
+   "resolved_category": "shirt",
+   "device": "cpu",
+   "batch_composition": {
+    "forward_batch_rows": 2,
+    "note": "CLVC-Net rows move with batch composition; this diagnostic encodes both qids of one scope in one batch and no canonical number is compared to"
+   }
+  },
+  {
+   "cell": {
+    "query": "7:3038",
+    "category_or_scope": "shirt",
+    "condition": "text_only_black_image"
+   },
+   "cell_key_path": "queries.7:3038.scopes.shirt.text_only_black_image",
+   "condition_kind": "protocol",
+   "status": "PRESENT",
+   "artifact": "workbench/docs/reviews/20261112-parity-repair/raw/clvc_diag/clvc_dual_scope.shirt.text_only_black_image.jsonl",
+   "artifact_sha256": "60f027209433deb109edbb412fcb8719dbbe9224ad54ced47c7f1ddd71eca27d",
+   "artifact_bytes": 42118,
+   "row_locator": {
+    "file": "clvc_dual_scope.shirt.text_only_black_image.jsonl",
+    "qid": "7:3038",
+    "scope": "shirt",
+    "condition": "text_only_black_image"
+   },
+   "target_did": "7:3416",
+   "target_rank": 304,
+   "target_score": 0.47740668058395386,
+   "score_at_rank_1": 0.6548824310302734,
+   "target_margin_vs_rank1": 0.17747575044631958,
+   "target_gallery_position": 13614,
+   "target_within_export_depth": false,
+   "window": {
+    "depth": 100,
+    "rows": 100,
+    "first_rank": 1,
+    "last_rank": 100,
+    "gallery_size": 74381,
+    "is_target_flags": 0
+   },
+   "reference_eligibility": {
+    "reference_id": "7:53224",
+    "reference_asset": "B004TMGDME.jpg",
+    "reference_gallery_position": null,
+    "reference_rank_in_window": null,
+    "reference_score_in_window": null,
+    "reference_is_rank_1": false
+   },
+   "checkpoint_sha256": "2ba8e320b08ebb97d6558eb599cde2be228b5488250de7cb4cde8a138ff2c681",
+   "gallery_content_digest": "fd8b18bcca1b4d82c5de0e52f04036e89ffb3aedf1eb0d07940b46b1aba6e341",
+   "raw_edit_caption": "Is darker and has a different graphic and is darker.",
+   "model_text": "Is darker and has a different graphic and is darker.",
+   "encoded_text_is_empty": false,
+   "resolved_category": "shirt",
+   "device": "cpu",
+   "batch_composition": {
+    "forward_batch_rows": 2,
+    "note": "CLVC-Net rows move with batch composition; this diagnostic encodes both qids of one scope in one batch and no canonical number is compared to"
+   }
+  },
+  {
+   "cell": {
+    "query": "7:3038",
+    "category_or_scope": "shirt",
+    "condition": "clvc_image_encoder_only"
+   },
+   "cell_key_path": "queries.7:3038.scopes.shirt.clvc_image_encoder_only",
+   "condition_kind": "ablation",
+   "status": "PRESENT",
+   "artifact": "workbench/docs/reviews/20261112-parity-repair/raw/clvc_diag/clvc_dual_scope.shirt.clvc_image_encoder_only.jsonl",
+   "artifact_sha256": "aa840e8682a31f7a7e27f29f8261ed6452b476071c775c9178c6d2d35f11a968",
+   "artifact_bytes": 42013,
+   "row_locator": {
+    "file": "clvc_dual_scope.shirt.clvc_image_encoder_only.jsonl",
+    "qid": "7:3038",
+    "scope": "shirt",
+    "condition": "clvc_image_encoder_only"
+   },
+   "target_did": "7:3416",
+   "target_rank": 8702,
+   "target_score": 0.30329281091690063,
+   "score_at_rank_1": 0.9999998211860657,
+   "target_margin_vs_rank1": 0.696707010269165,
+   "target_gallery_position": 13614,
+   "target_within_export_depth": false,
+   "window": {
+    "depth": 100,
+    "rows": 100,
+    "first_rank": 1,
+    "last_rank": 100,
+    "gallery_size": 74381,
+    "is_target_flags": 0
+   },
+   "reference_eligibility": {
+    "reference_id": "7:53224",
+    "reference_asset": "B004TMGDME.jpg",
+    "reference_gallery_position": 16809,
+    "reference_rank_in_window": 1,
+    "reference_score_in_window": 0.9999998211860657,
+    "reference_is_rank_1": true
+   },
+   "checkpoint_sha256": "2ba8e320b08ebb97d6558eb599cde2be228b5488250de7cb4cde8a138ff2c681",
+   "gallery_content_digest": "fd8b18bcca1b4d82c5de0e52f04036e89ffb3aedf1eb0d07940b46b1aba6e341",
+   "raw_edit_caption": "Is darker and has a different graphic and is darker.",
+   "model_text": "",
+   "encoded_text_is_empty": true,
+   "resolved_category": "shirt",
+   "device": "cpu",
+   "batch_composition": {
+    "forward_batch_rows": 2,
+    "note": "CLVC-Net rows move with batch composition; this diagnostic encodes both qids of one scope in one batch and no canonical number is compared to"
+   }
+  },
+  {
+   "cell": {
+    "query": "7:3038",
+    "category_or_scope": "toptee",
+    "condition": "multimodal"
+   },
+   "cell_key_path": "queries.7:3038.scopes.toptee.multimodal",
+   "condition_kind": "protocol",
+   "status": "PRESENT",
+   "artifact": "workbench/docs/reviews/20261112-parity-repair/raw/clvc_diag/clvc_dual_scope.toptee.multimodal.jsonl",
+   "artifact_sha256": "ae1ed1212e6f579bb97b0cac67fae40dddca18c496e3fafdb9b423e0588e5665",
+   "artifact_bytes": 42118,
+   "row_locator": {
+    "file": "clvc_dual_scope.toptee.multimodal.jsonl",
+    "qid": "7:3038",
+    "scope": "toptee",
+    "condition": "multimodal"
+   },
+   "target_did": "7:3416",
+   "target_rank": 1253,
+   "target_score": 0.5659813284873962,
+   "score_at_rank_1": 0.7361156344413757,
+   "target_margin_vs_rank1": 0.1701343059539795,
+   "target_gallery_position": 13614,
+   "target_within_export_depth": false,
+   "window": {
+    "depth": 100,
+    "rows": 100,
+    "first_rank": 1,
+    "last_rank": 100,
+    "gallery_size": 74381,
+    "is_target_flags": 0
+   },
+   "reference_eligibility": {
+    "reference_id": "7:53224",
+    "reference_asset": "B004TMGDME.jpg",
+    "reference_gallery_position": 16809,
+    "reference_rank_in_window": 13,
+    "reference_score_in_window": 0.7061459422111511,
+    "reference_is_rank_1": false
+   },
+   "checkpoint_sha256": "d1fa9170496f73a008736723fe5329c93ff710305d0bcc79ff628822c0a91f4c",
+   "gallery_content_digest": "55a5b9909dd632b8fb155e56b01ef40227a126d2243cab94a6e8a6b4a2819000",
+   "raw_edit_caption": "Is darker and has a different graphic and is darker.",
+   "model_text": "Is darker and has a different graphic and is darker.",
+   "encoded_text_is_empty": false,
+   "resolved_category": "toptee",
+   "device": "cpu",
+   "batch_composition": {
+    "forward_batch_rows": 2,
+    "note": "CLVC-Net rows move with batch composition; this diagnostic encodes both qids of one scope in one batch and no canonical number is compared to"
+   }
+  },
+  {
+   "cell": {
+    "query": "7:3038",
+    "category_or_scope": "toptee",
+    "condition": "text_only_black_image"
+   },
+   "cell_key_path": "queries.7:3038.scopes.toptee.text_only_black_image",
+   "condition_kind": "protocol",
+   "status": "PRESENT",
+   "artifact": "workbench/docs/reviews/20261112-parity-repair/raw/clvc_diag/clvc_dual_scope.toptee.text_only_black_image.jsonl",
+   "artifact_sha256": "47e909b85b0fe3ae28b360a5be8218eda2b791653901e270be3dfdf207458abc",
+   "artifact_bytes": 42123,
+   "row_locator": {
+    "file": "clvc_dual_scope.toptee.text_only_black_image.jsonl",
+    "qid": "7:3038",
+    "scope": "toptee",
+    "condition": "text_only_black_image"
+   },
+   "target_did": "7:3416",
+   "target_rank": 1549,
+   "target_score": 0.4584702253341675,
+   "score_at_rank_1": 0.6663635969161987,
+   "target_margin_vs_rank1": 0.20789337158203125,
+   "target_gallery_position": 13614,
+   "target_within_export_depth": false,
+   "window": {
+    "depth": 100,
+    "rows": 100,
+    "first_rank": 1,
+    "last_rank": 100,
+    "gallery_size": 74381,
+    "is_target_flags": 0
+   },
+   "reference_eligibility": {
+    "reference_id": "7:53224",
+    "reference_asset": "B004TMGDME.jpg",
+    "reference_gallery_position": null,
+    "reference_rank_in_window": null,
+    "reference_score_in_window": null,
+    "reference_is_rank_1": false
+   },
+   "checkpoint_sha256": "d1fa9170496f73a008736723fe5329c93ff710305d0bcc79ff628822c0a91f4c",
+   "gallery_content_digest": "55a5b9909dd632b8fb155e56b01ef40227a126d2243cab94a6e8a6b4a2819000",
+   "raw_edit_caption": "Is darker and has a different graphic and is darker.",
+   "model_text": "Is darker and has a different graphic and is darker.",
+   "encoded_text_is_empty": false,
+   "resolved_category": "toptee",
+   "device": "cpu",
+   "batch_composition": {
+    "forward_batch_rows": 2,
+    "note": "CLVC-Net rows move with batch composition; this diagnostic encodes both qids of one scope in one batch and no canonical number is compared to"
+   }
+  },
+  {
+   "cell": {
+    "query": "7:3038",
+    "category_or_scope": "toptee",
+    "condition": "clvc_image_encoder_only"
+   },
+   "cell_key_path": "queries.7:3038.scopes.toptee.clvc_image_encoder_only",
+   "condition_kind": "ablation",
+   "status": "PRESENT",
+   "artifact": "workbench/docs/reviews/20261112-parity-repair/raw/clvc_diag/clvc_dual_scope.toptee.clvc_image_encoder_only.jsonl",
+   "artifact_sha256": "0a514244159fa87ff41c1e3eeff064d1d0c74c8a94be1235df6e7ed373dc3aa5",
+   "artifact_bytes": 42039,
+   "row_locator": {
+    "file": "clvc_dual_scope.toptee.clvc_image_encoder_only.jsonl",
+    "qid": "7:3038",
+    "scope": "toptee",
+    "condition": "clvc_image_encoder_only"
+   },
+   "target_did": "7:3416",
+   "target_rank": 1267,
+   "target_score": 0.5921408534049988,
+   "score_at_rank_1": 0.9999996423721313,
+   "target_margin_vs_rank1": 0.40785878896713257,
+   "target_gallery_position": 13614,
+   "target_within_export_depth": false,
+   "window": {
+    "depth": 100,
+    "rows": 100,
+    "first_rank": 1,
+    "last_rank": 100,
+    "gallery_size": 74381,
+    "is_target_flags": 0
+   },
+   "reference_eligibility": {
+    "reference_id": "7:53224",
+    "reference_asset": "B004TMGDME.jpg",
+    "reference_gallery_position": 16809,
+    "reference_rank_in_window": 1,
+    "reference_score_in_window": 0.9999996423721313,
+    "reference_is_rank_1": true
+   },
+   "checkpoint_sha256": "d1fa9170496f73a008736723fe5329c93ff710305d0bcc79ff628822c0a91f4c",
+   "gallery_content_digest": "55a5b9909dd632b8fb155e56b01ef40227a126d2243cab94a6e8a6b4a2819000",
+   "raw_edit_caption": "Is darker and has a different graphic and is darker.",
+   "model_text": "",
+   "encoded_text_is_empty": true,
+   "resolved_category": "toptee",
+   "device": "cpu",
+   "batch_composition": {
+    "forward_batch_rows": 2,
+    "note": "CLVC-Net rows move with batch composition; this diagnostic encodes both qids of one scope in one batch and no canonical number is compared to"
+   }
+  },
+  {
+   "cell": {
+    "query": "7:3790",
+    "category_or_scope": "shirt",
+    "condition": "multimodal"
+   },
+   "cell_key_path": "queries.7:3790.scopes.shirt.multimodal",
+   "condition_kind": "protocol",
+   "status": "PRESENT",
+   "artifact": "workbench/docs/reviews/20261112-parity-repair/raw/clvc_diag/clvc_dual_scope.shirt.multimodal.jsonl",
+   "artifact_sha256": "c3ad1ce11b9a22bbc5837e5094b71788601312364e9d2379d60c69a55a301402",
+   "artifact_bytes": 42084,
+   "row_locator": {
+    "file": "clvc_dual_scope.shirt.multimodal.jsonl",
+    "qid": "7:3790",
+    "scope": "shirt",
+    "condition": "multimodal"
+   },
+   "target_did": "7:42304",
+   "target_rank": 412,
+   "target_score": 0.571142852306366,
+   "score_at_rank_1": 0.7956860065460205,
+   "target_margin_vs_rank1": 0.22454315423965454,
+   "target_gallery_position": 70410,
+   "target_within_export_depth": false,
+   "window": {
+    "depth": 100,
+    "rows": 100,
+    "first_rank": 1,
+    "last_rank": 100,
+    "gallery_size": 74381,
+    "is_target_flags": 0
+   },
+   "reference_eligibility": {
+    "reference_id": "7:33523",
+    "reference_asset": "B0079K0YBO.jpg",
+    "reference_gallery_position": null,
+    "reference_rank_in_window": null,
+    "reference_score_in_window": null,
+    "reference_is_rank_1": false
+   },
+   "checkpoint_sha256": "2ba8e320b08ebb97d6558eb599cde2be228b5488250de7cb4cde8a138ff2c681",
+   "gallery_content_digest": "fd8b18bcca1b4d82c5de0e52f04036e89ffb3aedf1eb0d07940b46b1aba6e341",
+   "raw_edit_caption": "Is grey and has a less whimsical graphic and is lighter.",
+   "model_text": "Is grey and has a less whimsical graphic and is lighter.",
+   "encoded_text_is_empty": false,
+   "resolved_category": "shirt",
+   "device": "cpu",
+   "batch_composition": {
+    "forward_batch_rows": 2,
+    "note": "CLVC-Net rows move with batch composition; this diagnostic encodes both qids of one scope in one batch and no canonical number is compared to"
+   }
+  },
+  {
+   "cell": {
+    "query": "7:3790",
+    "category_or_scope": "shirt",
+    "condition": "text_only_black_image"
+   },
+   "cell_key_path": "queries.7:3790.scopes.shirt.text_only_black_image",
+   "condition_kind": "protocol",
+   "status": "PRESENT",
+   "artifact": "workbench/docs/reviews/20261112-parity-repair/raw/clvc_diag/clvc_dual_scope.shirt.text_only_black_image.jsonl",
+   "artifact_sha256": "60f027209433deb109edbb412fcb8719dbbe9224ad54ced47c7f1ddd71eca27d",
+   "artifact_bytes": 42118,
+   "row_locator": {
+    "file": "clvc_dual_scope.shirt.text_only_black_image.jsonl",
+    "qid": "7:3790",
+    "scope": "shirt",
+    "condition": "text_only_black_image"
+   },
+   "target_did": "7:42304",
+   "target_rank": 1466,
+   "target_score": 0.4442720413208008,
+   "score_at_rank_1": 0.7572203278541565,
+   "target_margin_vs_rank1": 0.3129482865333557,
+   "target_gallery_position": 70410,
+   "target_within_export_depth": false,
+   "window": {
+    "depth": 100,
+    "rows": 100,
+    "first_rank": 1,
+    "last_rank": 100,
+    "gallery_size": 74381,
+    "is_target_flags": 0
+   },
+   "reference_eligibility": {
+    "reference_id": "7:33523",
+    "reference_asset": "B0079K0YBO.jpg",
+    "reference_gallery_position": null,
+    "reference_rank_in_window": null,
+    "reference_score_in_window": null,
+    "reference_is_rank_1": false
+   },
+   "checkpoint_sha256": "2ba8e320b08ebb97d6558eb599cde2be228b5488250de7cb4cde8a138ff2c681",
+   "gallery_content_digest": "fd8b18bcca1b4d82c5de0e52f04036e89ffb3aedf1eb0d07940b46b1aba6e341",
+   "raw_edit_caption": "Is grey and has a less whimsical graphic and is lighter.",
+   "model_text": "Is grey and has a less whimsical graphic and is lighter.",
+   "encoded_text_is_empty": false,
+   "resolved_category": "shirt",
+   "device": "cpu",
+   "batch_composition": {
+    "forward_batch_rows": 2,
+    "note": "CLVC-Net rows move with batch composition; this diagnostic encodes both qids of one scope in one batch and no canonical number is compared to"
+   }
+  },
+  {
+   "cell": {
+    "query": "7:3790",
+    "category_or_scope": "shirt",
+    "condition": "clvc_image_encoder_only"
+   },
+   "cell_key_path": "queries.7:3790.scopes.shirt.clvc_image_encoder_only",
+   "condition_kind": "ablation",
+   "status": "PRESENT",
+   "artifact": "workbench/docs/reviews/20261112-parity-repair/raw/clvc_diag/clvc_dual_scope.shirt.clvc_image_encoder_only.jsonl",
+   "artifact_sha256": "aa840e8682a31f7a7e27f29f8261ed6452b476071c775c9178c6d2d35f11a968",
+   "artifact_bytes": 42013,
+   "row_locator": {
+    "file": "clvc_dual_scope.shirt.clvc_image_encoder_only.jsonl",
+    "qid": "7:3790",
+    "scope": "shirt",
+    "condition": "clvc_image_encoder_only"
+   },
+   "target_did": "7:42304",
+   "target_rank": 5481,
+   "target_score": 0.25908106565475464,
+   "score_at_rank_1": 0.9999997019767761,
+   "target_margin_vs_rank1": 0.7409186363220215,
+   "target_gallery_position": 70410,
+   "target_within_export_depth": false,
+   "window": {
+    "depth": 100,
+    "rows": 100,
+    "first_rank": 1,
+    "last_rank": 100,
+    "gallery_size": 74381,
+    "is_target_flags": 0
+   },
+   "reference_eligibility": {
+    "reference_id": "7:33523",
+    "reference_asset": "B0079K0YBO.jpg",
+    "reference_gallery_position": 29872,
+    "reference_rank_in_window": 1,
+    "reference_score_in_window": 0.9999997019767761,
+    "reference_is_rank_1": true
+   },
+   "checkpoint_sha256": "2ba8e320b08ebb97d6558eb599cde2be228b5488250de7cb4cde8a138ff2c681",
+   "gallery_content_digest": "fd8b18bcca1b4d82c5de0e52f04036e89ffb3aedf1eb0d07940b46b1aba6e341",
+   "raw_edit_caption": "Is grey and has a less whimsical graphic and is lighter.",
+   "model_text": "",
+   "encoded_text_is_empty": true,
+   "resolved_category": "shirt",
+   "device": "cpu",
+   "batch_composition": {
+    "forward_batch_rows": 2,
+    "note": "CLVC-Net rows move with batch composition; this diagnostic encodes both qids of one scope in one batch and no canonical number is compared to"
+   }
+  },
+  {
+   "cell": {
+    "query": "7:3790",
+    "category_or_scope": "toptee",
+    "condition": "multimodal"
+   },
+   "cell_key_path": "queries.7:3790.scopes.toptee.multimodal",
+   "condition_kind": "protocol",
+   "status": "PRESENT",
+   "artifact": "workbench/docs/reviews/20261112-parity-repair/raw/clvc_diag/clvc_dual_scope.toptee.multimodal.jsonl",
+   "artifact_sha256": "ae1ed1212e6f579bb97b0cac67fae40dddca18c496e3fafdb9b423e0588e5665",
+   "artifact_bytes": 42118,
+   "row_locator": {
+    "file": "clvc_dual_scope.toptee.multimodal.jsonl",
+    "qid": "7:3790",
+    "scope": "toptee",
+    "condition": "multimodal"
+   },
+   "target_did": "7:42304",
+   "target_rank": 259,
+   "target_score": 0.7430012226104736,
+   "score_at_rank_1": 0.8428176045417786,
+   "target_margin_vs_rank1": 0.09981638193130493,
+   "target_gallery_position": 70410,
+   "target_within_export_depth": false,
+   "window": {
+    "depth": 100,
+    "rows": 100,
+    "first_rank": 1,
+    "last_rank": 100,
+    "gallery_size": 74381,
+    "is_target_flags": 0
+   },
+   "reference_eligibility": {
+    "reference_id": "7:33523",
+    "reference_asset": "B0079K0YBO.jpg",
+    "reference_gallery_position": null,
+    "reference_rank_in_window": null,
+    "reference_score_in_window": null,
+    "reference_is_rank_1": false
+   },
+   "checkpoint_sha256": "d1fa9170496f73a008736723fe5329c93ff710305d0bcc79ff628822c0a91f4c",
+   "gallery_content_digest": "55a5b9909dd632b8fb155e56b01ef40227a126d2243cab94a6e8a6b4a2819000",
+   "raw_edit_caption": "Is grey and has a less whimsical graphic and is lighter.",
+   "model_text": "Is grey and has a less whimsical graphic and is lighter.",
+   "encoded_text_is_empty": false,
+   "resolved_category": "toptee",
+   "device": "cpu",
+   "batch_composition": {
+    "forward_batch_rows": 2,
+    "note": "CLVC-Net rows move with batch composition; this diagnostic encodes both qids of one scope in one batch and no canonical number is compared to"
+   }
+  },
+  {
+   "cell": {
+    "query": "7:3790",
+    "category_or_scope": "toptee",
+    "condition": "text_only_black_image"
+   },
+   "cell_key_path": "queries.7:3790.scopes.toptee.text_only_black_image",
+   "condition_kind": "protocol",
+   "status": "PRESENT",
+   "artifact": "workbench/docs/reviews/20261112-parity-repair/raw/clvc_diag/clvc_dual_scope.toptee.text_only_black_image.jsonl",
+   "artifact_sha256": "47e909b85b0fe3ae28b360a5be8218eda2b791653901e270be3dfdf207458abc",
+   "artifact_bytes": 42123,
+   "row_locator": {
+    "file": "clvc_dual_scope.toptee.text_only_black_image.jsonl",
+    "qid": "7:3790",
+    "scope": "toptee",
+    "condition": "text_only_black_image"
+   },
+   "target_did": "7:42304",
+   "target_rank": 568,
+   "target_score": 0.6188584566116333,
+   "score_at_rank_1": 0.747597873210907,
+   "target_margin_vs_rank1": 0.12873941659927368,
+   "target_gallery_position": 70410,
+   "target_within_export_depth": false,
+   "window": {
+    "depth": 100,
+    "rows": 100,
+    "first_rank": 1,
+    "last_rank": 100,
+    "gallery_size": 74381,
+    "is_target_flags": 0
+   },
+   "reference_eligibility": {
+    "reference_id": "7:33523",
+    "reference_asset": "B0079K0YBO.jpg",
+    "reference_gallery_position": null,
+    "reference_rank_in_window": null,
+    "reference_score_in_window": null,
+    "reference_is_rank_1": false
+   },
+   "checkpoint_sha256": "d1fa9170496f73a008736723fe5329c93ff710305d0bcc79ff628822c0a91f4c",
+   "gallery_content_digest": "55a5b9909dd632b8fb155e56b01ef40227a126d2243cab94a6e8a6b4a2819000",
+   "raw_edit_caption": "Is grey and has a less whimsical graphic and is lighter.",
+   "model_text": "Is grey and has a less whimsical graphic and is lighter.",
+   "encoded_text_is_empty": false,
+   "resolved_category": "toptee",
+   "device": "cpu",
+   "batch_composition": {
+    "forward_batch_rows": 2,
+    "note": "CLVC-Net rows move with batch composition; this diagnostic encodes both qids of one scope in one batch and no canonical number is compared to"
+   }
+  },
+  {
+   "cell": {
+    "query": "7:3790",
+    "category_or_scope": "toptee",
+    "condition": "clvc_image_encoder_only"
+   },
+   "cell_key_path": "queries.7:3790.scopes.toptee.clvc_image_encoder_only",
+   "condition_kind": "ablation",
+   "status": "PRESENT",
+   "artifact": "workbench/docs/reviews/20261112-parity-repair/raw/clvc_diag/clvc_dual_scope.toptee.clvc_image_encoder_only.jsonl",
+   "artifact_sha256": "0a514244159fa87ff41c1e3eeff064d1d0c74c8a94be1235df6e7ed373dc3aa5",
+   "artifact_bytes": 42039,
+   "row_locator": {
+    "file": "clvc_dual_scope.toptee.clvc_image_encoder_only.jsonl",
+    "qid": "7:3790",
+    "scope": "toptee",
+    "condition": "clvc_image_encoder_only"
+   },
+   "target_did": "7:42304",
+   "target_rank": 4535,
+   "target_score": 0.44561105966567993,
+   "score_at_rank_1": 0.9999999403953552,
+   "target_margin_vs_rank1": 0.5543888807296753,
+   "target_gallery_position": 70410,
+   "target_within_export_depth": false,
+   "window": {
+    "depth": 100,
+    "rows": 100,
+    "first_rank": 1,
+    "last_rank": 100,
+    "gallery_size": 74381,
+    "is_target_flags": 0
+   },
+   "reference_eligibility": {
+    "reference_id": "7:33523",
+    "reference_asset": "B0079K0YBO.jpg",
+    "reference_gallery_position": 29872,
+    "reference_rank_in_window": 1,
+    "reference_score_in_window": 0.9999999403953552,
+    "reference_is_rank_1": true
+   },
+   "checkpoint_sha256": "d1fa9170496f73a008736723fe5329c93ff710305d0bcc79ff628822c0a91f4c",
+   "gallery_content_digest": "55a5b9909dd632b8fb155e56b01ef40227a126d2243cab94a6e8a6b4a2819000",
+   "raw_edit_caption": "Is grey and has a less whimsical graphic and is lighter.",
+   "model_text": "",
+   "encoded_text_is_empty": true,
+   "resolved_category": "toptee",
+   "device": "cpu",
+   "batch_composition": {
+    "forward_batch_rows": 2,
+    "note": "CLVC-Net rows move with batch composition; this diagnostic encodes both qids of one scope in one batch and no canonical number is compared to"
+   }
+  }
+ ],
+ "unsupported_conditions": {
+  "image_only_empty_text": {
+   "status": "ABLATION_UNSUPPORTED",
+   "model": "clvc_net",
+   "reason": "CLVC-Net cannot encode an empty edit: TextLSTMModel.forward tokenises to zero tokens and indexes x[0][0] (text_model.py:84-86), which raises IndexError for every row, so image_only_empty_text is unrepresentable in this model's text tower rather than merely unsupported by the adapter",
+   "note": "a SEPARATE condition from the computed clvc_image_encoder_only column; CLVC's text tower indexes token 0 on an empty edit, so this condition is reported, never faked"
+  }
+ },
+ "non_cells_excluded": {
+  "image_only_empty_text": {
+   "status": "ABLATION_UNSUPPORTED",
+   "reason": "CLVC text tower tokenises an empty edit to zero tokens and indexes x[0][0] (third_party/CLVCNet/text_model.py:84-86) -> IndexError for every row; recorded under unsupported_conditions, never as a cell"
+  }
+ },
+ "checks_run_this_lane": [
+  "12/12 (qid,scope,condition) keys exist in the summary and have exactly one jsonl row each",
+  "per cell: ranks are 1..100 contiguous, scores non-increasing, 100 unique gallery positions, window rank-1 score == summary score_at_rank_1",
+  "per cell: jsonl target_rank/target_score == summary target_rank/target_score; target_did == that query own release positive",
+  "per cell: target_score within [score_min, score_max]; gallery_size 74381; depth 100",
+  "1200/1200 candidate gallery ids resolve through backend main.resolve_image against FASHIONIQ_ROOT (thumbnails displayable)",
+  "checkpoint local sha256 recomputed on disk == registry expected_sha256 (shirt 2ba8e320\u2026, toptee d1fa9170\u2026)",
+  "text: raw_edit_caption == release.query_txt in all 12 cells; model_text == raw_edit_caption in the 8 multimodal/text_only_black_image cells and model_text == \"\" in the 4 clvc_image_encoder_only cells (that ablation transports no text: workbench/composition/inputs.py CONDITION_ENCODERS)",
+  "resolved_category == scope in all 12 cells (the scope IS the ambiguous category, so category cannot be a separate axis)"
+ ],
+ "blockers": [],
+ "capture_decision": {
+  "gpu_job_launched": false,
+  "why": "every required cell already existed as raw evidence with valid digests; re-running would violate \"reuse and never regenerate cells that already exist\" and cannot be justified by any missing cell",
+  "gpu_state_at_decision": "nvidia-smi --query-compute-apps returned header only (0 compute apps); pgrep -af \"gpu_job|pytest|composition_eval\" returned no processes; /tmp/cir_gpu.lock present but unlocked (flock -n acquires)",
+  "wall_time_observed": {
+   "producer_elapsed_seconds_recorded_in_artifact": 44.07,
+   "device": "cpu",
+   "source": "clvc_dual_scope.json -> runtime.elapsed_seconds",
+   "note": "this lane did not re-run the producer; the figure is the recorded one"
+  },
+  "what_a_regeneration_would_cost": {
+   "device": "cpu",
+   "runner": "workbench/envs/clvc39-la/bin/python workbench/docs/reviews/20261112-parity-repair/scripts/clvc_dual_scope.py",
+   "gpu_required": false,
+   "why_cpu_ok": "gallery matrices are the run own caches; only 2 queries x 2 scopes x 3 conditions are encoded (~4.2 s max per cell observed), gallery not re-encoded",
+   "estimated_wall": "~45-60 s CPU (recorded 44 s); no GPU job needed because a GPU twin would change only device arithmetic (measured max_abs_row_delta 9.3e-05, max_rank_delta 10)"
+  }
+ },
+ "evidence_location": {
+  "authoritative": "workbench/docs/reviews/20261112-parity-repair/raw/clvc_diag",
+  "not_duplicated_reason": "this lane wrote no second copy: two copies of one artifact is how a reader ends up citing the one that will drift. The 7 files were verified byte-identical (sha256) and the copy that briefly existed at raw/clvc-dualscope/evidence/ was deleted.",
+  "digest_sets_verified_identical": true,
+  "files": [
+   "clvc_dual_scope.json",
+   "clvc_dual_scope.shirt.clvc_image_encoder_only.jsonl",
+   "clvc_dual_scope.shirt.multimodal.jsonl",
+   "clvc_dual_scope.shirt.text_only_black_image.jsonl",
+   "clvc_dual_scope.toptee.clvc_image_encoder_only.jsonl",
+   "clvc_dual_scope.toptee.multimodal.jsonl",
+   "clvc_dual_scope.toptee.text_only_black_image.jsonl"
+  ],
+  "cited_by": "workbench/docs/reviews/20261112-parity-repair/CLVC_DIAGNOSTIC.md (the producing record)"
+ }
+}

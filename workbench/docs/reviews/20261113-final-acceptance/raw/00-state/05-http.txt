@@ -1,0 +1,21 @@
+captured_at=2026-11-13T01:40:03+07:00
+
+## HTTP status + bytes
+models                   200 86658
+benchmark-runs           200 54761
+runs/parity-gate         200 94699
+runs                     200 2
+jobs                     200 2
+native-measurements      200 108403
+composition/runs         200 1993626
+evidence/summary         200 169
+composition/capabilities 200 304
+runs/gate                200 51817
+cohorts                  200 2
+
+## frontend
+GET http://127.0.0.1:5173/ -> 200 271
+
+## bundle referenced by served shell
+assets/index-CFwf1H51.js
+assets/index-DecQnta9.css

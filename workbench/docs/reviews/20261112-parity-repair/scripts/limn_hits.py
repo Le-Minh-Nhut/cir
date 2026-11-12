@@ -26,6 +26,7 @@ block survives a re-run. Nothing here needs a GPU or the adapter worker.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import shutil
 import sys
@@ -45,6 +46,42 @@ import numpy as np  # noqa: E402
 
 def _hits(ranks: list[int]) -> dict[str, int]:
     return {f"r{k}": sum(1 for rank in ranks if rank <= k) for k in CUTOFFS}
+
+
+def _order_digest(names: list[str]) -> str:
+    """sha256 over an id sequence, newline-joined in ORDER.
+
+    Order is the whole point: two sides that ranked the same set in a different order are not the same
+    comparison, so the digest covers position, not just membership. `HINT`'s producer digests its
+    sequences the same way (`digest_ids` in `third_model_parity.py`), so the two are comparable.
+    """
+    return hashlib.sha256("\n".join(str(name) for name in names).encode("utf-8")).hexdigest()
+
+
+def provenance(category: str) -> dict:
+    """The identifiers a hit-count comparison needs, from the stored protocol inputs.
+
+    `parity_gate._metrics_checks` refuses to certify a hit-count comparison without these, because
+    equal counts over different queries, galleries or checkpoints measure nothing. LIMN's artifacts
+    carried NONE of them, so the gate could not tell whether the two count vectors described the same
+    population. Nothing here is remeasured: the query and gallery sequences are the ones the native
+    phase recorded in `raw/g2_<category>_inputs.json` and the ranks were computed from, so the digests
+    bind the comparison that was actually run rather than a fresh one.
+
+    `protocol`/`checkpoint` are the declaration the native aggregate itself carries
+    (`raw/native_metrics.csv`, which records the protocol id and the checkpoint id it scored), and the
+    same values the other two producers declare.
+    """
+    inputs = json.loads((RAW / f"g2_{category}_inputs.json").read_text())
+    row = next(line for line in (RAW / "native_metrics.csv").read_text().splitlines()
+               if line.startswith("limn,") and f",{category}," in line)
+    fields = row.split(",")
+    protocol, checkpoint_id = fields[1], fields[3]
+    return {"protocol": protocol,
+            "checkpoint_id": checkpoint_id,
+            "model_id": "limn",
+            "query_order_sha256": _order_digest(inputs["full_reference_ids"]),
+            "gallery_order_sha256": _order_digest(inputs["gallery_ids"])}
 
 
 def _pct(hits: dict[str, int], total: int) -> dict[str, float]:
@@ -132,6 +169,7 @@ def build(category: str) -> dict:
         "eligible_query_set_evidence": (
             "limn_native.<category>.jsonl reference_id/target_id sequences equal "
             "raw/g2_<category>_inputs.json full_reference_ids/full_target_ids, same length, same order"),
+        "provenance": provenance(category),
         "native": {key: native[key] for key in ("source", "query_count", "hits", "recall_pct",
                                                 "recorded_macro_reproduced_by_stored_ranks")},
         "adapter": {key: adapter[key] for key in ("source", "query_count", "gallery_count", "hits",
@@ -170,13 +208,16 @@ def write_artifacts(results: dict[str, dict]) -> list[str]:
         detail["native"] = {k: v for k, v in result["native"].items()}
         detail["adapter"] = {k: v for k, v in result["adapter"].items()}
         artifact["native_metrics_match_feature_rerank"] = all(result["equality"].values())
+        detail.pop("provenance", None)
         artifact["native_metrics_parity_detail"] = detail
+        artifact.update(result["provenance"])
         # Same declared tolerance key ENCODER carries, on BOTH sides so neither artifact is the only
         # one declaring the rule this field certifies.
         artifact.setdefault("tolerances", {})["metrics"] = "exact hit-count equality"
         adapter_path = EVIDENCE / f"g1_g2.{category}.adapter.json"
         adapter = json.loads(adapter_path.read_text(encoding="utf-8"))
         adapter.setdefault("tolerances", {})["metrics"] = "exact hit-count equality"
+        adapter.update(result["provenance"])
         adapter_path.write_text(json.dumps(adapter, indent=2) + "\n", encoding="utf-8")
         path.write_text(json.dumps(artifact, indent=2) + "\n", encoding="utf-8")
         added = sorted(set(artifact) - before)

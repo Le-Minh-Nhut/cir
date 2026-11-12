@@ -1,0 +1,21 @@
+=== BEFORE (HEAD:workbench/backend/composition.py) ===
+field absent         run_conditions=None                                                                   displayed=('multimodal', 'text_only_black_image', 'image_only_empty_text')
+declared empty       run_conditions=None                                                                   displayed=('multimodal', 'text_only_black_image', 'image_only_empty_text')
+declared non-empty   run_conditions=('multimodal', 'text_only_black_image', 'clvc_image_encoder_only')     displayed=('multimodal', 'text_only_black_image', 'clvc_image_encoder_only')
+
+=== AFTER (current tree) ===
+field absent         run_conditions=None                                                                   displayed=('multimodal', 'text_only_black_image', 'image_only_empty_text')  declaration=UNKNOWN
+declared empty       run_conditions=()                                                                     displayed=()  declaration=DECLARED_EMPTY
+declared non-empty   run_conditions=('multimodal', 'text_only_black_image', 'clvc_image_encoder_only')     displayed=('multimodal', 'text_only_black_image', 'clvc_image_encoder_only')  declaration=DECLARED
+
+=== the invariant the fix restores ===
+before: absent is empty  -> True
+after:  absent is empty  -> False
+before: declared-empty served as protocol triple -> True
+after:  declared-empty served as empty list      -> True
+
+=== da0a2162be0e159a1a456cec, served verbatim (after) ===
+conditions_display   : [{"id": "multimodal", "label": "Image + text"}, {"id": "text_only_black_image", "label": "Text only"}, {"id": "clvc_image_encoder_only", "label": "Image only (image encoder)"}]
+conditions_declaration: DECLARED
+summary conditions    : ['multimodal', 'text_only_black_image', 'clvc_image_encoder_only']
+pre-fix would serve   : ('multimodal', 'text_only_black_image', 'clvc_image_encoder_only') (identical: this run is non-empty)

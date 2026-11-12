@@ -1,0 +1,51 @@
+captured_at=2026-11-13T01:39:54+07:00
+
+## rev-parse HEAD
+b4d25c70382b193ae20be59e52e163a0ea4c94ad
+## rev-parse origin/research/cir-failure-workbench
+b4d25c70382b193ae20be59e52e163a0ea4c94ad
+## branch
+research/cir-failure-workbench
+
+## git status --porcelain (re-measured; tree moved during capture)
+ M workbench/backend/limn_diagnostic.py
+ M workbench/frontend/LimnScopeDiagnostic.tsx
+?? CLEANUP_REPORT.md.save
+?? workbench/docs/reviews/20261113-final-acceptance/
+?? workbench/tests/test_clvc_diagnostic.py
+
+## git log --oneline -12
+b4d25c7 docs(review): the sweep record's pin note is now history
+90de6e8 docs(review): record the pin-advance state, not the pre-advance one
+9f9c751 docs(review): fill the sweep and pin rows in the delivery report
+58175d3 release: advance TESTED_SOURCE_SHA to cf6ba468 after a stationary sweep
+cf6ba46 docs(review): CLVC batch identities, corrected baseline digests, matrix reconciliation
+7df87ab fix(parity): report standard as a string plus a per-standard breakdown
+249098d feat(parity): a third model becomes discoverable — HINT G1/G2 pair and shared producer
+243b4d2 docs(review): 20261112 parity repair evidence and corrections
+84812a4 fix(parity): seed the ENCODER relation in the G1/G2 producer; record LIMN hit counts
+23e5b8f feat(parity): componentwise parity-absolute-relative/v2 writer and reader
+cb0b228 fix(backend): compare adapter+scoring module hashes separately; serve declared conditions
+40c897c docs(report): re-pin to aea143bd after the second stationary sweep
+
+## remote
+git@github.com:Le-Minh-Nhut/cir.git
+origin	git@github.com:Le-Minh-Nhut/cir.git (fetch)
+origin	git@github.com:Le-Minh-Nhut/cir.git (push)
+
+## ahead/behind
+0	0
+
+## production-tree invariant vs TESTED_SOURCE_SHA (expect exit 0)
+exit=0
+
+## pin vs working tree
+ workbench/backend/limn_diagnostic.py       | 512 ++++++++++++++++++++++++-----
+ workbench/frontend/LimnScopeDiagnostic.tsx | 217 ++++++++++--
+ 2 files changed, 632 insertions(+), 97 deletions(-)
+
+## git stash list
+(end)
+
+## git log --all --oneline -- *defer-pair*
+(end)

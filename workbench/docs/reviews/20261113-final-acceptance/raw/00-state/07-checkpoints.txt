@@ -1,0 +1,71 @@
+captured_at=2026-11-13T01:40:52+07:00
+
+## bundle root (workbench.env WORKBENCH_CHECKPOINT_ROOT)
+workbench/artifacts/checkpoint_selection/20261106T002617+0700
+
+## resolved bundle dir: checkpoints/ and cohort/downloads/
+--- checkpoints/ ---
+airknow
+clip4cir
+clvc
+dcnet
+pair
+sprc
+--- cohort/downloads/ ---
+conesep
+csmcir
+encoder
+habit
+hint
+intent
+limn
+ptha_mtst
+tme
+
+## PAIR (bundle: checkpoints/pair)
+694958565  workbench/artifacts/checkpoint_selection/20261106T002617+0700/checkpoints/pair/pair-B1.pt
+694872371  workbench/artifacts/checkpoint_selection/20261106T002617+0700/checkpoints/pair/pair-B2.pt
+
+## SPRC (bundle: checkpoints/sprc)
+1459756541  workbench/artifacts/checkpoint_selection/20261106T002617+0700/checkpoints/sprc/sprc_fiq_vitl.pt
+ViT-g variant filename sprc_fiq.pt present: NO
+
+## CSMCIR (bundle: checkpoints/csmcir and cohort/downloads/csmcir)
+stat: cannot stat 'workbench/artifacts/checkpoint_selection/20261106T002617+0700/checkpoints/csmcir/*.pt': No such file or directory (os error 2)
+2720615859  workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/csmcir/fashioniq_tuned_clip_best.pt
+sha256sum: workbench/artifacts/checkpoint_selection/20261106T002617+0700/checkpoints/csmcir/*.pt: No such file or directory (os error 2)
+
+## CLVC six members (bundle dir: checkpoints/clvc)
+176437419  workbench/artifacts/checkpoint_selection/20261106T002617+0700/checkpoints/clvc/dress_global_model.pt
+217168235  workbench/artifacts/checkpoint_selection/20261106T002617+0700/checkpoints/clvc/dress_local_model.pt
+177872427  workbench/artifacts/checkpoint_selection/20261106T002617+0700/checkpoints/clvc/shirt_global_model.pt
+218603243  workbench/artifacts/checkpoint_selection/20261106T002617+0700/checkpoints/clvc/shirt_local_model.pt
+177578027  workbench/artifacts/checkpoint_selection/20261106T002617+0700/checkpoints/clvc/toptee_global_model.pt
+218308843  workbench/artifacts/checkpoint_selection/20261106T002617+0700/checkpoints/clvc/toptee_local_model.pt
+be41c2ba81b803fd392c2c2517bf29cf4dd58205af7777f2becb4f84a80f5c7c  workbench/artifacts/checkpoint_selection/20261106T002617+0700/checkpoints/clvc/dress_global_model.pt
+33d44186efd6a25ca0761794115610016182b9f53ff6413083f31b6979769a07  workbench/artifacts/checkpoint_selection/20261106T002617+0700/checkpoints/clvc/dress_local_model.pt
+78b1d660227ab6928e3a11a7384f9fff2aa7ab2a39baec1a45ac59db35e28bcf  workbench/artifacts/checkpoint_selection/20261106T002617+0700/checkpoints/clvc/shirt_global_model.pt
+2ba8e320b08ebb97d6558eb599cde2be228b5488250de7cb4cde8a138ff2c681  workbench/artifacts/checkpoint_selection/20261106T002617+0700/checkpoints/clvc/shirt_local_model.pt
+c78a58c4becafee3bffe719bef743d42c4495c3a91096a4b5935c364449ed11d  workbench/artifacts/checkpoint_selection/20261106T002617+0700/checkpoints/clvc/toptee_global_model.pt
+d1fa9170496f73a008736723fe5329c93ff710305d0bcc79ff628822c0a91f4c  workbench/artifacts/checkpoint_selection/20261106T002617+0700/checkpoints/clvc/toptee_local_model.pt
+
+## dcnet / clip4cir / airknow for cross-reference
+2724056638  workbench/artifacts/checkpoint_selection/20261106T002617+0700/checkpoints/airknow/airknow_fiq_0.5.pt
+2724056638  workbench/artifacts/checkpoint_selection/20261106T002617+0700/checkpoints/airknow/airknow_fiq_0.8.pt
+713874695  workbench/artifacts/checkpoint_selection/20261106T002617+0700/checkpoints/clip4cir/FashionIQ/RN50x4_fullft/fiq_clip_RN50x4_fullft.pt
+236017921  workbench/artifacts/checkpoint_selection/20261106T002617+0700/checkpoints/clip4cir/FashionIQ/RN50x4_fullft/fiq_comb_RN50x4_fullft.pt
+236017921  workbench/artifacts/checkpoint_selection/20261106T002617+0700/checkpoints/clip4cir/FashionIQ/RN50x4_noft/fiq_comb_RN50x4_noft.pt
+176437419  workbench/artifacts/checkpoint_selection/20261106T002617+0700/checkpoints/clvc/dress_global_model.pt
+217168235  workbench/artifacts/checkpoint_selection/20261106T002617+0700/checkpoints/clvc/dress_local_model.pt
+177872427  workbench/artifacts/checkpoint_selection/20261106T002617+0700/checkpoints/clvc/shirt_global_model.pt
+218603243  workbench/artifacts/checkpoint_selection/20261106T002617+0700/checkpoints/clvc/shirt_local_model.pt
+177578027  workbench/artifacts/checkpoint_selection/20261106T002617+0700/checkpoints/clvc/toptee_global_model.pt
+218308843  workbench/artifacts/checkpoint_selection/20261106T002617+0700/checkpoints/clvc/toptee_local_model.pt
+1734  workbench/artifacts/checkpoint_selection/20261106T002617+0700/checkpoints/dcnet/config.json
+2877310172  workbench/artifacts/checkpoint_selection/20261106T002617+0700/checkpoints/dcnet/trained_model.pth
+5340335  workbench/artifacts/checkpoint_selection/20261106T002617+0700/checkpoints/dcnet/val/att_result.pt
+2098  workbench/artifacts/checkpoint_selection/20261106T002617+0700/checkpoints/dcnet/val/config.json
+49720  workbench/artifacts/checkpoint_selection/20261106T002617+0700/checkpoints/dcnet/val/info.log
+694958565  workbench/artifacts/checkpoint_selection/20261106T002617+0700/checkpoints/pair/pair-B1.pt
+694872371  workbench/artifacts/checkpoint_selection/20261106T002617+0700/checkpoints/pair/pair-B2.pt
+1459756541  workbench/artifacts/checkpoint_selection/20261106T002617+0700/checkpoints/sprc/sprc_fiq_vitl.pt

@@ -1,0 +1,24 @@
+## df -h /
+Filesystem      Size  Used Avail Use% Mounted on
+/dev/nvme0n1p5  630G  543G   55G  91% /
+
+## free -h
+               total        used        free      shared  buff/cache   available
+Mem:            31Gi       7.9Gi       3.7Gi       117Mi        19Gi        23Gi
+Swap:          8.0Gi       4.6Gi       3.4Gi
+
+## nvidia-smi (summary)
+name, driver_version, temperature.gpu, utilization.gpu [%], memory.used [MiB], memory.total [MiB], compute_mode
+NVIDIA GeForce RTX 5070 Ti, 580.173.02, 41, 30 %, 843 MiB, 16303 MiB, Default
+
+## nvidia-smi --query-compute-apps
+pid, process_name, used_gpu_memory [MiB]
+
+## pgrep -af pytest|composition_eval.py|gpu_job|clvc_
+(empty — rc=1)
+
+## /tmp/cir_gpu.lock
+-rw-rw-r-- 1 heheboiz heheboiz 0 Nov 12 23:11 /tmp/cir_gpu.lock
+
+## uptime
+ 01:39:38  up 6 days  4:45,  2 users,  load average: 1.02, 1.24, 0.93

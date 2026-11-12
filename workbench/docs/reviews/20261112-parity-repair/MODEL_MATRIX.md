@@ -122,12 +122,12 @@ Footnotes for §1
 | habit | fashioniq_full_gallery_ref_excluded | R@10 54.87332239571265 / R@50 74.50337396905957 | workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/measurements/habit_fiq_n02.json |
 | intent | fashioniq_full_gallery_ref_excluded | R@10 54.86624335289025 / R@50 75.43191079283865 | workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/measurements/intent_fiq_n02.json |
 | hint | fashioniq_val_split | R@10 59.80338494972219 / R@50 80.13076097500765 | workbench/artifacts/checkpoint_selection/20261106T233409+0700/measurements/hint_doc_command.json |
-| encoder | fashioniq_val_split | R@10 56.225801935399 / R@50 77.533156738705 (seeded, reproducible) · registry aggregate 56.223101675386054 / 77.66738539271432 NOT_REPRODUCIBLE · review aggregate 56.290792549557 / 77.633389132303 NOT_REPRODUCIBLE | seeded: workbench/docs/reviews/20261109-native15-composition-limn/g1_g2.encoder.{dress,shirt,toptee}.native.json (layer1_identity.native_metrics_recheck) · registry: workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/measurements/encoder_fashioniq.json · review: workbench/docs/reviews/20261109-native15-composition-limn/raw/native/encoder.json |
-| pair | fashioniq_val_split | R@10 34.03503453772374 (4 rows: B1/H_normal 34.035, B1/H_rev 35.015, B2/H_normal 22.156, B2/H_rev 20.087) / R@50 56.59567753134161 (B1/H_normal) | workbench/artifacts/checkpoint_selection/20261106T002617+0700/pair_compat/measurements/pair_b1_H_normal.json |
+| encoder | fashioniq_val_split | **`native_primary`** R@10 56.22580193539884 / R@50 77.53315673870537 (seeded, reproducible — the only cross-run-reproducible ENCODER figure) · **`native_val_control`** R@10 56.17095419043685 / R@50 77.49899018875801 (`on_adapter_features == val_control` byte-equal on all 9 cells; the `native_primary` delta is the **query transform** `preprocess_train` vs `preprocess_val`, NOT the mask — both are reference-masked) · registry draw 56.223101675386054 / 77.66738539271432 `NOT_REPRODUCIBLE` (the one row the API serves) · review draw 56.290792549557 / 77.633389132303 `NOT_REPRODUCIBLE` and **served nowhere** (`raw/native/encoder.json` states no `replay_type`, so it is neither a row nor a backing report) | seeded `native_primary`: `docs/reviews/20261109-native15-composition-limn/g1_g2.encoder.{dress,shirt,toptee}.native.json` → `native.native_metrics_recheck` · `native_val_control`: `g1_g2.encoder.{…}.adapter.json` → `adapter.scoring_ranking.native_convention_recall_val_control` · registry: `artifacts/checkpoint_selection/20261106T002617+0700/cohort/measurements/encoder_fashioniq.json` · review: `docs/reviews/20261109-native15-composition-limn/raw/native/encoder.json` |
+| pair | fashioniq_val_split | **WITHHELD FROM WEB PUBLICATION (2026-11-13); retained in the registry.** Its four counted exploratory rows are readable **by id only**: `61ccfc4d63fb69eb` B1/H_normal 34.03503453772374 / 56.59567753134161, `27a9b77d146b9b97` B1/H_rev 35.014736041655844 / 57.57531573029066, `f4655ef992695f90` B2/H_normal 22.156393011046543 / 43.486402136659365, `8cb65b73274a86f8` B2/H_rev 20.086769084793715 / 41.49879132733318 (all `mapping_status: EXPLORATORY_PUBLIC_MAPPING`). The **8** variant-keyed roll-up rows remain **listed** and uncounted — `B1/H_normal`, `B1/H_rev`, `B2/H_normal`, `B2/H_rev` × 2 files, each `rollup: true`, `counted: false`, `protocol_id: null`, `unit_source: inferred_from_magnitude` | `workbench/artifacts/checkpoint_selection/20261106T002617+0700/pair_compat/measurements/pair_b1_H_normal.json` (+ `pair_b1_H_rev.json`, `pair_b2_H_normal.json`, `pair_b2_H_rev.json`) · roll-ups: `pair_compat/manifests/pair_compat_verdict.json` and `pair_compat/measurements/summary.json` · deferral: `workbench/registry/models.yaml` `web_publication.status: DEFERRED` |
 | clvc_net | fashioniq_val_split | R@10 30.02079703540087 / R@50 58.67189400437203 at batch 32 (SELECTED: composition runs pin 32) · R@10 29.970746517160162 / R@50 58.62171212901515 at batch 48 (lineage) | workbench/artifacts/checkpoint_selection/20261106T002617+0700/measurements/clvc_run1.json (batch 48) · workbench/docs/reviews/20261111-master-audit/raw/clvc_run3cat_gpu.json (batch 32) · per-query ranks and the reproduction proof: workbench/docs/reviews/20261112-parity-repair/CLVC_NATIVE.md §3-§6 + raw/clvc_native/<pass>/<cat>.jsonl |
-| dcnet | fashioniq_full_gallery_ref_excluded | R@10 27.929730914548923 / R@50 53.72723331879208 | workbench/artifacts/checkpoint_selection/20261106T002617+0700/measurements/dcnet_run1.json |
+| dcnet | fashioniq_full_gallery_ref_excluded | R@10 27.929730914548916 / R@50 53.76075764301528 (**CPU replay**, the served pair) · roll-up `measurements/dcnet_run1.json` states 27.929730914548923 / 53.72723331879208 — a 2026-11-07 CUDA run, **not** the served pair | served backing: `workbench/docs/reviews/20261109-native15-composition-limn/raw/native/dcnet.json` (`replay_type SOURCE_NATIVE_ENTRYPOINT`) · roll-up: `workbench/artifacts/checkpoint_selection/20261106T002617+0700/measurements/dcnet_run1.json` |
 | combiner_rn50x4_noft | fashioniq_original_split | R@10 35.1078 / R@50 58.4756 | workbench/artifacts/checkpoint_selection/20261106T002617+0700/measurements/selection_decisions.json |
-| clip4cir_rn50x4_fullft | fashioniq_full_gallery_ref_excluded | R@10 43.8016931215922 / R@50 66.98358456293742 | workbench/docs/reviews/20261109-native15-composition-limn/raw/native/clip4cir_fullft.json |
+| clip4cir_rn50x4_fullft | **validated** `fashioniq_original_split` — the recorded label `fashioniq_full_gallery_ref_excluded` is `MISLABELED` (`PROTOCOL_MATRIX.csv`: the FashionIQ branch of `third_party/CLIP4Cir/src/validate.py:20-56` applies **no reference mask**; the only `reference_mask` is CIRR-only at `:160-166`) | R@10 43.8016931215922 / R@50 66.98358456293742 — macro = **unweighted mean** of the three category recalls (`validate.py:5` `from statistics import mean`, `:281-297`, `:308-309`; a pooled recomputation would be 43.76662307359437, a different quantity) · roll-up `measurements/clip4cir_parsed.json` states 43.81821850935618 / 66.95005893707275 over dress/toptee cells that exist in **no other file**, served only as `raw_metrics` | workbench/docs/reviews/20261109-native15-composition-limn/raw/native/clip4cir_fullft.json (`backed_by_sha256 fb97cfab…398e`; stdout log prints `average recall10 = 43.8016931215922`) |
 | tgcir | fashioniq_val_split | R@10 49.720772235486656 / R@50 71.10231942031965 | workbench/artifacts/checkpoint_selection/20261106T002617+0700/measurements/tgcir_run1.json |
 | sprc | fashioniq_original_split | R@10 51.038571198781334 / R@50 73.32633932431538 | workbench/artifacts/checkpoint_selection/20261106T002617+0700/measurements/sprc_vitl_run1.json |
 | limn | fashioniq_val_split | R@10 55.79193333333333 / R@50 77.6378 | workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/measurements/limn_base_iter0.json |
@@ -148,7 +148,19 @@ Footnotes for §2
   - `habit` → `cohort/measurements/habit_fiq_n02.json`; `intent` → `…/intent_fiq_n02.json`.
   - `hint` → `20261106T233409+0700/measurements/hint_doc_command.json` (the later, counted copy;
     `cohort/measurements/hint_fashioniq.json` states the identical numbers and is marked duplicate).
-  - `encoder` → **three** aggregates exist, and only one is cross-run reproducible.
+  - `encoder` → **three** aggregates exist, and only one is cross-run reproducible. **Two of the
+    three are the same kind of quantity in two SCOPES, and they must never be collapsed into one
+    number** (`ENCODER_RELATION.md` §11b):
+    **`native_primary`** = `56.22580193539884 / 77.53315673870537`, the mean over
+    `g1_g2.encoder.{dress,shirt,toptee}.native.json` → `native.native_metrics_recheck`; queries go
+    through `preprocess_train` (stochastic `RandomResizedCrop`), **reference-masked**.
+    **`native_val_control`** = `56.17095419043685 / 77.49899018875801`, the mean over
+    `g1_g2.encoder.{…}.adapter.json` → `adapter.scoring_ranking.native_convention_recall_val_control`;
+    queries go through `preprocess_val`, **also reference-masked**. `on_adapter_features` is
+    **byte-equal to `val_control` on all 9 cells** (r1/r10/r50 × 3 categories, asserted this turn).
+    The `native_primary ↔ val_control` gap is therefore the **query transform, not the mask** — and
+    this is why neither may be quoted as "the" ENCODER native number.
+    The two *unseeded draws* are
     `cohort/measurements/encoder_fashioniq.json` (`recorded_at 2026-11-06T14:39:45Z`, 56.223101675386054
     / 77.66738539271432) and `raw/native/encoder.json` (`recorded_at 2026-11-09T13:23:23Z`,
     56.290792549557 / 77.633389132303) are **both unseeded draws** — `learnable_relation` is drawn
@@ -162,7 +174,13 @@ Footnotes for §2
     `NOT_REPRODUCIBLE` in the cell, not deleted.
   - `pair` → `pair_compat/measurements/pair_b1_H_normal.json`; the four counted rows are
     B1/H_normal 34.03503453772374, B1/H_rev 35.014736041655844, B2/H_normal 22.156393011046543,
-    B2/H_rev 20.086769084793715 — all `mapping_status: EXPLORATORY_PUBLIC_MAPPING`.
+    B2/H_rev 20.086769084793715 — all `mapping_status: EXPLORATORY_PUBLIC_MAPPING`. **Deferred from
+    web publication 2026-11-13** (§4b): these four ids are reachable only at
+    `/api/native-measurements/{measurement_id}`. The **8** variant-keyed roll-up rows
+    (`B1/H_normal`, `B1/H_rev`, `B2/H_normal`, `B2/H_rev`, two files each) remain **listed** and stay
+    `counted: false`, `protocol_id: null`, `unit_source: inferred_from_magnitude` — they are keyed by
+    variant, not by `model_id: pair`, so the deferral filter does not touch them and must not be
+    described as removing every `B1/`/`B2/` row.
   - `clvc_net` → **both** aggregates are correct and are labelled by batch size:
     `measurements/clvc_run1.json` = **batch 48** (`29.970746517160162 / 58.62171212901515`, all nine
     cells reproduced), `raw/clvc_run3cat_gpu.json` = **batch 32** (`30.02079703540087 /
@@ -180,11 +198,17 @@ Footnotes for §2
     `workbench/artifacts/reports/combiner_rn50x4_noft_…020a70b0_aggregate.json`
     (`EXECUTION_COMPLETED`, `observed_metrics {r10 35.1078, r50 58.4756, mean 46.7917}`).
   - `clip4cir_rn50x4_fullft` → `20261109-native15-composition-limn/raw/native/clip4cir_fullft.json`
-    (`aggregate.macro_r10 43.8016931215922`, `replay_type SOURCE_NATIVE_ENTRYPOINT`). The roll-up
-    file `measurements/clip4cir_parsed.json` states a **different** pair
+    (`aggregate.macro_r10 43.8016931215922`, `macro_r50 66.98358456293742`,
+    `replay_type SOURCE_NATIVE_ENTRYPOINT`). The roll-up file
+    `measurements/clip4cir_parsed.json` states a **different** pair
     (`43.81821850935618 / 66.95005893707275`) for its own `clip4cir_fullft` key, and
-    `selection_decisions.json` repeats `43.8182`. `native_measurements.py:798-801` documents this
-    as two different runs.
+    `selection_decisions.json` repeats `43.8182`. Two different runs; **the replay is the correct
+    aggregate** because the macro rule is the unweighted three-category mean
+    (`validate.py:5,281-309`) and the roll-up's dress/toptee cells exist in no other file —
+    footnote 33. The roll-up's pair is served only as `raw_metrics`.
+    `docs/reviews/20261109-native15-composition-limn/raw/native/encoder.json` is the contrasting
+    case: it states an `aggregate` but **no `replay_type`**, so it is neither a row nor a backing
+    report and its `56.290792549557 / 77.633389132303` is served **nowhere**.
   - `tgcir` → `measurements/tgcir_run1.json`; `raw/tgcir_run3cat_gpu.json` states the identical
     numbers (`49.720772235486656`) and is marked duplicate/uncounted.
   - `sprc` → `measurements/sprc_vitl_run1.json` (`aggregate.complete=true`).
@@ -192,10 +216,18 @@ Footnotes for §2
     per-category rows came from the completed run and **the aggregate was recomputed here** after
     the runner's own aggregate helper raised.
   - `tme` → `20261106T233409+0700/measurements/tme_normal_path_full.json`.
-- **13** `native_protocol` for `combiner_rn50x4_noft` is `fashioniq_original_split` per the row, but
+- **13** `native_protocol` for `combiner_rn50x4_noft` is `fashioniq_original_split` per the row, and
   the run artifact `…020a70b0_completion.json` states `protocol_id: fashioniq_original_split` too —
-  consistent. `clip4cir_rn50x4_fullft` is `fashioniq_full_gallery_ref_excluded` (whole-split gallery,
-  reference masked at its own index) per `raw/native/clip4cir_fullft.json:5`.
+  consistent. `clip4cir_rn50x4_fullft` is **`fashioniq_original_split` at the validated protocol**;
+  its recorded label `fashioniq_full_gallery_ref_excluded` (in `raw/native/clip4cir_fullft.json:5`) is
+  `MISLABELED`. Verified in source, not taken from the matrix: the FashionIQ branch
+  (`workbench/third_party/CLIP4Cir/src/validate.py:20-56`, `compute_fiq_val_metrics`) sorts the index,
+  builds `labels` from `sorted_index_names` and computes `recall_at10/50` — **no reference masking
+  anywhere**; `generate_fiq_val_predictions` (`:58-112`) consumes the reference features but never
+  removes the reference row. The file's **only** `reference_mask` is at `:160-166` inside
+  `compute_cirr_val_metrics` (CIRR). The registry agrees (`native_protocol:
+  fashioniq_original_split` on `/api/models`). The metrics are unaffected by the label; the cohort
+  (3817/6346/5373) is the same either way.
 - **14** No native artifact records a `run_id` field except the two `workbench/artifacts/reports/`
   runs used for `combiner`; the others are identified by file path + `recorded_at` (present only for
   `encoder 2026-11-06T14:39:45Z` and `tme 2026-11-06T18:53:49Z`). That is why the column is named
@@ -231,8 +263,14 @@ Footnotes for §2
 
 Footnotes for §3
 - **16** `composition_run_ids` are the `run_id`s of the `full.json` summaries under
-  `workbench/artifacts/composition/summary/` (36 dirs → **33 distinct ids** → 30 non-synthetic,
-  non-`released_audit` → **24 with a 6003-query cohort**). Enumerated this session; see §Totals.
+  `workbench/artifacts/composition/summary/`. The two populations must not be mixed:
+  **33 distinct ids on disk** (36 dirs; 2 `SYNTHETIC_*`, 1 `released_audit_task7_mm_any`, and 5
+  query-limited smokes) versus **26 distinct ids served by default** by
+  `GET /api/composition/runs` (smoke, fixtures and imported rows are opt-in). The six smoke ids are
+  `3f86f584` (limn, 8 q), `eda30a37` (encoder, 8 q), `1eee4c0a` + `6396454c` (tgcir, 5 q),
+  `889bc330` + `d541e40c` (clvc_net, 5 q) — all `smoke.limited: true`. Per-model default-served
+  counts are `encoder 5, habit 3, limn 4, tgcir 2, clvc_net 2, conesep 2, hint 2, intent 2,
+  ptha_mtst 2, tme 2`; measured this turn. See §Totals.
 - **17** `composition_status`: `PASS` only when **every** referenced attempt is `COMPLETED`;
   `INCOMPLETE` when some attempt completed and at least one was `PARTIAL`/`FAILED`; `FAIL` when none
   completed. Exact per-attempt states:
@@ -343,6 +381,42 @@ Footnotes for §4
 
 ---
 
+## 4b. Publication scope — registry 17, published 16, PAIR deferred
+
+**Two different counts, and neither is the other.**
+
+* **Registry configurations: 17.** `yaml.safe_load(models.yaml)['models']` → 17. PAIR is still one of
+  them, with its source history, both checkpoint variants (`pair_b1`, `pair_b2`), its offline CLI and
+  every artifact under `artifacts/checkpoint_selection/…/pair_compat/`.
+* **Published on the web: 16.** `workbench/backend/registry.py:160-170` `web_deferred_models()` reads
+  the registry's own flag; `/api/models`, `/api/native-measurements` and `POST /api/jobs` subtract it.
+  `models.yaml:828` (working tree) declares `web_publication: {status: DEFERRED, reason: …,
+  decided: 2026-11-13, offline: …}` for `pair` and for no other model.
+  `workbench/tests/test_pair_web_deferral.py` asserts both numbers in one test:
+  `len(registry["models"]) == 17` and `17 - len(deferred) == 16`.
+
+**What the deferral removes, and what it does not.** Removed: PAIR's **listing** in `/api/models` and
+`/api/native-measurements`, and a false `404 model_not_found` for a new PAIR job. Kept: the registry
+entry, the offline CLI, and every measurement **by its own id** —
+`/api/native-measurements/{measurement_id}` is deliberately not filtered, so an auditor holding
+`61ccfc4d63fb69eb` still reads `mapping_status: EXPLORATORY_PUBLIC_MAPPING` and the artifact path.
+
+**The 8 roll-up rows survive the deferral.** `B1/H_normal`, `B1/H_rev`, `B2/H_normal`, `B2/H_rev` ×
+two files (`pair_compat/manifests/pair_compat_verdict.json`, `pair_compat/measurements/summary.json`)
+are keyed by **variant**, not by `model_id: pair`; they carry `rollup: true`, `counted: false`,
+`protocol_id: null`, `unit_source: inferred_from_magnitude`, and they were never counted. Filtering
+`pair` leaves all 8 in the listing (measured: filtered census still returns 22 roll-up rows, of which
+these 8). This is the correct outcome — they state a number no artifact backs and were never a
+publication claim — but it means **"PAIR is deferred" is not the same as "no `B1/`/`B2/` row is
+listed"**, and no count of published *models* may be read as a count of *rows*.
+
+Measured effect of the filter on the native catalogue (disk code, `list_native_measurements` with
+`exclude_model_ids={'pair'}`): 56 rows → **51**; `files 39 → 34`; `blocks_with_metrics 50 → 46`;
+`with_metrics 23 → 19`; `models_with_metrics 17 → 16`; `signposted_blockers 4 → 3`;
+`rollup_rows`, `duplicate_rows`, `unbacked_rows`, `verified` unchanged (18 / 27 / 18 / 0).
+
+---
+
 ## 5. Disposition
 
 | model_id | disposition | blocker_code | blocker_one_line |
@@ -402,9 +476,19 @@ Footnotes for §5
   **Rule that replaces "quote neither":** quote **batch 32** for anything compared against a
   composition run, and **always name the batch** — `--batch-size` is part of the measurement identity.
 - **33** `clip4cir_rn50x4_fullft` `blocker_code = TWO_NATIVE_MACROS`: replay `43.8016931215922`
-  vs roll-up `43.81821850935618`. `backend/native_measurements.py:798-801` states this is "two
-  different runs" and that no file under `checkpoint_selection/` corresponds to the roll-up's
-  dress/toptee cells.
+  vs roll-up `43.81821850935618`. **Which one is correct is settled, not open:** the replay is. The
+  rule is in the evaluator — `third_party/CLIP4Cir/src/validate.py:5` `from statistics import mean`,
+  `:281-297` collects one value per category, `:308-309` prints `average recall10/50 =
+  mean(list)` — so a macro is the **unweighted mean of the three category R@10 values**, not a pooled
+  recomputation (pooled over 2017/2038/1961 queries the same cells give `43.76662307359437`, a
+  different quantity). The replay's three cells recompute to exactly `43.8016931215922`, and its
+  `raw/native/clip4cir_fullft.stdout.log` prints the same figure. The roll-up
+  (`checkpoint_selection/20261106T002617+0700/measurements/clip4cir_parsed.json`, key
+  `clip4cir_fullft`) is the **wrong** one: its `dress_r10 39.11750018596649` and
+  `toptee_r50 71.23916149139404` appear in **no other file** under `workbench/` (grep → 1 hit, the
+  roll-up itself), so its macro is built over cells no artifact backs. The API therefore serves the
+  replay and keeps the roll-up's pair in `raw_metrics` — `backend/native_measurements.py` documents
+  this as two different runs.
 - **34** `airknow` `blocker_code = INTERPRETER_BROKEN_SYMLINK` is the smallest actionable defect:
   every other blocker on this board is missing science, this one is a dangling symlink
   (`workbench/envs/airknow-adapted/bin/python -> /home/heheboiz/miniconda3/envs/teacher-sprc/bin/python`,
@@ -420,13 +504,18 @@ derived from another.
 | quantity | value | names / detail |
 |---|---|---|
 | registered configurations | **17** | `yaml.safe_load(models.yaml)['models']`; ids at `models.yaml:28,133,208,315,430,527,621,696,795,876,989,1085,1168,1265,1358,1475,1582` |
+| **configurations published on the web** | **16** | 17 − 1 deferred (`pair`); `web_deferred_models()` in `backend/registry.py:160-170`, asserted by `tests/test_pair_web_deferral.py` (`17 - len(deferred) == 16`). **Never quote 16 as the registry size or 17 as the published count** — §4b |
 | extra in-scope native targets (not registry ids) | **1** | `clip4cir_rn50x4_noft` — aggregate present, row uncounted/unbacked |
 | matrix rows | **18** | 17 + 1 |
-| ids carrying a native aggregate artifact (any id) | **18** | `list_native_measurements()` metric-bearing rows, aliased |
+| ids carrying a native aggregate artifact (any id) | **18** | Superseded by the line below; kept so the old figure is not silently reused |
+| distinct model keys in the served native census | **25** | `airknow, airknow_n05, airknow_n08, airknow_variant_80, clip4cir_rn50x4_fullft, clip4cir_rn50x4_noft, clvc_net, combiner_rn50x4_noft, conesep, csmcir, dcnet, encoder, habit, hint, intent, limn, pair, ptha_mtst, sprc, tgcir, tme, B1/H_normal, B1/H_rev, B2/H_normal, B2/H_rev` — 21 model ids + 4 variant-keyed roll-up keys |
+| **models with a counted, artifact-backed native row** | **17** | the registry's 17 ids, one each (`pair` contributes 4 counted rows; `airknow` 3) |
+| counted artifact-backed native **rows** | **23** | `counts.with_metrics`; ≠ 17 models and ≠ 25 keys |
 | ids carrying a native aggregate (registered only) | **17** | every registered id has at least one |
 | registered ids with **no** aggregate artifact | **0** | — |
+| **counts no reader may quote as "evaluated"** | — | `verified: 0` is the only verification count. **23** is counted artifact-backed *rows*, **27** is `duplicate_rows` (repeats of one identity), **18** is `unbacked_rows` (roll-up claims no artifact backs), **17** is *models* with a number, **25** is *model keys* incl. variants, **14** is protocol-eligible configurations. None of them is "evaluated", "verified", or "reproduced" — see the two separate questions below |
 | **valid native FashionIQ evaluations** (protocol-eligible aggregate; parity-independent) | **14** | airknow, clip4cir_rn50x4_fullft\*, clvc_net, conesep, csmcir†, dcnet, encoder, habit, hint, intent, limn, sprc†, tgcir, tme — exclusions and reasons in footnote 37 |
-| **native parity-verified** (G1+G2, zero mandatory failures) | **0** | `passed_models: []`; encoder fails 9 G2 checks, hint 2, limn 3 — every one a relative-or-componentwise term on a vanishing denominator (footnotes 29, 38) |
+| **native parity-verified** (G1+G2, zero mandatory failures) | **0** | `passed_models: []`; encoder fails 9 G2 checks, limn 3, hint **2 as served / 8 at the current tree** — every one a relative-or-componentwise term on a vanishing denominator (footnotes 29, 38, 39) |
 | native executed **but not verified** | **16** | airknow, clip4cir_rn50x4_fullft, clvc_net, combiner_rn50x4_noft, conesep, csmcir, dcnet, encoder, habit, hint, intent, limn, ptha_mtst, sprc, tgcir, tme |
 | …of which `NATIVE_EVAL_MATRIX.csv` records `native_executed=Y` | **12** | csmcir, conesep, ptha_mtst, habit, intent, hint, encoder, dcnet, combiner_rn50x4_noft, clip4cir_rn50x4_fullft, limn, tme |
 | …4 aggregates newer than that matrix snapshot | **4** | airknow, clvc_net, sprc, tgcir (matrix says `native_executed=N`; the aggregate file exists — footnote 35) |
@@ -490,6 +579,20 @@ unmeasured (`missing: []`). Consequence for the vocabulary: `hint` moves from `I
 (`NO_PARITY_EVIDENCE`) to `FAIL` (`PARITY_MANDATORY_SUBCHECK_FAILED`) — an artifact pair now exists and
 the gate rejects it, which is exactly the rule footnote 29 states.
 Prose source: `20261112-parity-repair/THIRD_MODEL_PARITY.md` §7 (do not restate its tables).
+
+Footnote 39 — **`hint`'s G2 count is now snapshot-dependent, and the served number is the stale one.**
+
+`GET /api/runs/parity-gate` (re-verified this turn) serves `models.hint.failures` = **2**
+(`shirt.batch_1_vs_n.max_rel` 0.005049934976857354, `toptee.batch_1_vs_n.max_rel`
+0.04213516386699195) with `status: PARITY_MANDATORY_SUBCHECK_FAILED` and
+`applied_standard: parity-absolute-relative/v2`. The uvicorn process serving :8000 started
+`Thu Nov 12 23:22:41 2026` **without `--reload`**, and `workbench/backend/parity_gate.py` was
+modified at `01:44:17` on 2026-11-13. Evaluating the same model against the current tree gives
+**8** mandatory failures — the two above plus `{dress,shirt,toptee}.metrics.eligible_denominators`
+(measured `{native: None, adapter: None}`) and `{dress,shirt,toptee}.metrics.eligible_query_set_identical`
+(measured `None`). Neither number may be cited as current until the service is restarted; the
+served one is a 23:22 snapshot, the tree one is uncommitted work by the gate lane. The *status* is
+`FAIL` either way and `passed_models` stays `[]`.
 
 Footnote 36 — **the committed baseline at HEAD differs, and that is why two verdicts moved.**
 Evaluating the gate against `git show HEAD:…` copies of the same twelve artifacts (written to a

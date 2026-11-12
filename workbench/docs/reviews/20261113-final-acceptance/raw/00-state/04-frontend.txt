@@ -1,0 +1,45 @@
+captured_at=2026-11-13T01:40:20+07:00
+
+# FRONTEND BUNDLE — TWO OBSERVATIONS IN THIS TURN (tree moved under the recon lane)
+
+## T1 ~01:31 (start of turn, before any other lane wrote)
+dist/index.html mtime 2026-11-12 23:22:36.170144134 +0700, 271 B, sha256 81e23a49f0a1be52c2a38abee1cbedce972f11b08c23d5bfc977bea203f12537
+dist/assets/index-NnjrdZLG.js  392769 B  sha256 721d34d043858e80c88e76d72866ba8583508318baeebac599cebd1e1c2c80d0
+dist/assets/index-DecQnta9.css   26552 B  sha256 e7e826a332ec9ab171f97051b901ee86fa69e2588937c3023914f3ac41ffe196
+served http://127.0.0.1:5173/ -> 200 271 B, byte-identical to dist/index.html
+newest *.ts/*.tsx then: gate.ts 2026-11-12 23:20:00 (+0700)
+
+## T2 2026-11-13T01:39:31 (+0700) — a rebuild landed mid-turn
+dist:
+drwxrwxr-x 3 heheboiz heheboiz 4096 2026-11-13 01:39:31.709985019 +0700 .
+drwxrwxr-x 5 heheboiz heheboiz 4096 2026-11-12 12:19:25.104941773 +0700 ..
+drwxrwxr-x 2 heheboiz heheboiz 4096 2026-11-13 01:39:31.709985019 +0700 assets
+-rw-rw-r-- 1 heheboiz heheboiz  271 2026-11-13 01:39:31.709985019 +0700 index.html
+
+dist/assets:
+drwxrwxr-x 2 heheboiz heheboiz   4096 2026-11-13 01:39:31.709985019 +0700 .
+drwxrwxr-x 3 heheboiz heheboiz   4096 2026-11-13 01:39:31.709985019 +0700 ..
+-rw-rw-r-- 1 heheboiz heheboiz 396890 2026-11-13 01:39:31.709258985 +0700 index-CFwf1H51.js
+-rw-rw-r-- 1 heheboiz heheboiz  26552 2026-11-13 01:39:31.709985019 +0700 index-DecQnta9.css
+
+dist/index.html:
+<script type="module" crossorigin src="/assets/index-CFwf1H51.js"></script>
+<link rel="stylesheet" crossorigin href="/assets/index-DecQnta9.css">
+<meta name="viewport" content="width=device-width, initial-scale=1" /><link rel="icon" href="data:," /><div id="root"></div>
+
+40d705a29b15b5c5308af4b043aaf470a9a9d4105acc744023661fc36a5305bb  dist/index.html
+5730d4f77aa8051016ddab9579b27e02e13ab97d3571eb8deaf132a64b784a45  dist/assets/index-CFwf1H51.js
+e7e826a332ec9ab171f97051b901ee86fa69e2588937c3023914f3ac41ffe196  dist/assets/index-DecQnta9.css
+
+served shell sha256:
+40d705a29b15b5c5308af4b043aaf470a9a9d4105acc744023661fc36a5305bb  -
+served js sha256:
+5730d4f77aa8051016ddab9579b27e02e13ab97d3571eb8deaf132a64b784a45  -
+served css sha256:
+e7e826a332ec9ab171f97051b901ee86fa69e2588937c3023914f3ac41ffe196  -
+
+## newest *.ts/*.tsx at T2
+2026-11-13 01:39:31.1249546690 ./LimnScopeDiagnostic.tsx
+2026-11-12 23:20:00.9882503930 ./gate.ts
+2026-11-12 12:19:30.0470986370 ./data.ts
+2026-11-12 12:19:25.1059418130 ./App.tsx

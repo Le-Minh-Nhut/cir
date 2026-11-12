@@ -1,9 +1,17 @@
 # Patch spec — `adapter_query_scope_resolution` counts "does not route" as "could not scope"
 
-Status: spec only. The field is written by `workbench/composition/runner.py` (lines 2528-2537) and
-the invariant that reads it is asserted by
-`workbench/docs/reviews/20261111-master-audit/scripts/m03/publish_derived_runs.py:273-281`.
-Runner and publisher are owned by another pass; this document is the change request.
+Status: **IMPLEMENTED 2026-11-13** (was: spec only). The runner now derives unresolved from the
+RETURNED REASON (`runner._scope_resolution_record`): `(None, None)` = a resolved `global` scope,
+`(None, "<reason>")` = genuinely unscopable. Every existing key is kept; `category_agnostic` and
+`global_scoped` are added, and `adapter_routed` keeps its NARROW meaning (a query the adapter placed
+on a NAMED matrix), so TG-CIR reports `adapter_routed: 0, global_scoped: 6003, still_unscoped: 0,
+category_agnostic: true`, with `loader_scoped: 5884` as the separate DESCRIPTIVE count (the loader
+assigned a garment to 5 884 queries; this adapter ignores it when picking a matrix, so all 6 003 land
+on `global` — `loader_scoped` overlaps `global_scoped` rather than partitioning with it). The derived
+publisher copies `category_agnostic` from the parent.
+`7b1fa850…`'s artifact is NOT rewritten: it is immutable history and keeps its old block.
+Acceptance tests: `workbench/tests/test_limn_scope_runner.py`,
+`workbench/tests/test_derived_subset_status.py`. The defect description below is the record.
 
 ## Defect (reproduced)
 
@@ -94,6 +102,14 @@ on a matrix, whether the loader or the adapter decided the name. That is what th
 narrower "decided by `query_scope()`" meaning is preferred, keep `adapter_routed` as
 `sum(scope is not None and query.category is None ...)` and add `global_scoped` beside it. Either
 way `still_unscoped` must stop counting resolved `global` scopes.
+
+**Which was chosen (2026-11-13): the NARROW meaning plus `global_scoped`.** TG-CIR therefore reports
+`adapter_routed: 0` (not 5 884) and `global_scoped: 6003`. The rejection reason for option (a) is not
+cosmetic: `derive_routing_cohort_gap.py:145-147` replays `adapter_routed` against
+`len(loader_qids) + len(resolved_by_caption)` and refuses the derivation on disagreement, so widening
+the key would have broken a consumer that already exists. Measured on the real release (`gallery_count`
+74 381, 6 003 queries) after the change: `adapter_routed 0 + global_scoped 6003 + still_unscoped 0 ==
+6003`, with `loader_scoped` staying 5 884.
 
 ## The invariant that must not break
 

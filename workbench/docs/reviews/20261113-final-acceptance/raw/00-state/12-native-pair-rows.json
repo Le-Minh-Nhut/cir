@@ -1,0 +1,209 @@
+{
+ "note": "PAIR-related rows from /api/native-measurements.metrics rows",
+ "rows": [
+  {
+   "measurement_id": "dd42f32772c4e5cf",
+   "model_id": "B1/H_normal",
+   "checkpoint_id": "B1/H_normal",
+   "protocol_id": null,
+   "metrics": {
+    "r10": 34.035,
+    "r50": 56.5957,
+    "mean": 45.3154
+   },
+   "rollup": true,
+   "counted": false,
+   "mapping_status": null,
+   "blocker": null,
+   "source": "checkpoint_selection/20261106T002617+0700/pair_compat/manifests/pair_compat_verdict.json"
+  },
+  {
+   "measurement_id": "bc0db3353d0706ff",
+   "model_id": "B1/H_normal",
+   "checkpoint_id": "B1/H_normal",
+   "protocol_id": null,
+   "metrics": {
+    "r10": 34.035,
+    "r50": 56.5957,
+    "mean": 45.3154
+   },
+   "rollup": true,
+   "counted": false,
+   "mapping_status": null,
+   "blocker": null,
+   "source": "checkpoint_selection/20261106T002617+0700/pair_compat/measurements/summary.json"
+  },
+  {
+   "measurement_id": "573ac9482e55918c",
+   "model_id": "B1/H_rev",
+   "checkpoint_id": "B1/H_rev",
+   "protocol_id": null,
+   "metrics": {
+    "r10": 35.0147,
+    "r50": 57.5753,
+    "mean": 46.295
+   },
+   "rollup": true,
+   "counted": false,
+   "mapping_status": null,
+   "blocker": null,
+   "source": "checkpoint_selection/20261106T002617+0700/pair_compat/manifests/pair_compat_verdict.json"
+  },
+  {
+   "measurement_id": "c10e512c3a92a4c0",
+   "model_id": "B1/H_rev",
+   "checkpoint_id": "B1/H_rev",
+   "protocol_id": null,
+   "metrics": {
+    "r10": 35.0147,
+    "r50": 57.5753,
+    "mean": 46.295
+   },
+   "rollup": true,
+   "counted": false,
+   "mapping_status": null,
+   "blocker": null,
+   "source": "checkpoint_selection/20261106T002617+0700/pair_compat/measurements/summary.json"
+  },
+  {
+   "measurement_id": "5913c767a8e7d4a2",
+   "model_id": "B2/H_normal",
+   "checkpoint_id": "B2/H_normal",
+   "protocol_id": null,
+   "metrics": {
+    "r10": 22.1564,
+    "r50": 43.4864,
+    "mean": 32.8214
+   },
+   "rollup": true,
+   "counted": false,
+   "mapping_status": null,
+   "blocker": null,
+   "source": "checkpoint_selection/20261106T002617+0700/pair_compat/manifests/pair_compat_verdict.json"
+  },
+  {
+   "measurement_id": "b771dca51e180479",
+   "model_id": "B2/H_normal",
+   "checkpoint_id": "B2/H_normal",
+   "protocol_id": null,
+   "metrics": {
+    "r10": 22.1564,
+    "r50": 43.4864,
+    "mean": 32.8214
+   },
+   "rollup": true,
+   "counted": false,
+   "mapping_status": null,
+   "blocker": null,
+   "source": "checkpoint_selection/20261106T002617+0700/pair_compat/measurements/summary.json"
+  },
+  {
+   "measurement_id": "606fa3cc698a956a",
+   "model_id": "B2/H_rev",
+   "checkpoint_id": "B2/H_rev",
+   "protocol_id": null,
+   "metrics": {
+    "r10": 20.0868,
+    "r50": 41.4988,
+    "mean": 30.7928
+   },
+   "rollup": true,
+   "counted": false,
+   "mapping_status": null,
+   "blocker": null,
+   "source": "checkpoint_selection/20261106T002617+0700/pair_compat/manifests/pair_compat_verdict.json"
+  },
+  {
+   "measurement_id": "d780cbab298c45b9",
+   "model_id": "B2/H_rev",
+   "checkpoint_id": "B2/H_rev",
+   "protocol_id": null,
+   "metrics": {
+    "r10": 20.0868,
+    "r50": 41.4988,
+    "mean": 30.7928
+   },
+   "rollup": true,
+   "counted": false,
+   "mapping_status": null,
+   "blocker": null,
+   "source": "checkpoint_selection/20261106T002617+0700/pair_compat/measurements/summary.json"
+  },
+  {
+   "measurement_id": "a804c2973c98c6de",
+   "model_id": "pair",
+   "checkpoint_id": null,
+   "protocol_id": null,
+   "metrics": null,
+   "rollup": false,
+   "counted": true,
+   "mapping_status": null,
+   "blocker": "BLOCKED_SOURCE_CLASSES_UNPUBLISHED",
+   "source": "checkpoint_selection/20261106T002617+0700/measurements/pair_blocker.json"
+  },
+  {
+   "measurement_id": "61ccfc4d63fb69eb",
+   "model_id": "pair",
+   "checkpoint_id": null,
+   "protocol_id": "fashioniq_val_split",
+   "metrics": {
+    "r10": 34.03503453772374,
+    "r50": 56.59567753134161,
+    "mean": 45.31535603453267
+   },
+   "rollup": false,
+   "counted": true,
+   "mapping_status": "EXPLORATORY_PUBLIC_MAPPING",
+   "blocker": null,
+   "source": "checkpoint_selection/20261106T002617+0700/pair_compat/measurements/pair_b1_H_normal.json"
+  },
+  {
+   "measurement_id": "27a9b77d146b9b97",
+   "model_id": "pair",
+   "checkpoint_id": null,
+   "protocol_id": "fashioniq_val_split",
+   "metrics": {
+    "r10": 35.014736041655844,
+    "r50": 57.57531573029066,
+    "mean": 46.29502588597325
+   },
+   "rollup": false,
+   "counted": true,
+   "mapping_status": "EXPLORATORY_PUBLIC_MAPPING",
+   "blocker": null,
+   "source": "checkpoint_selection/20261106T002617+0700/pair_compat/measurements/pair_b1_H_rev.json"
+  },
+  {
+   "measurement_id": "f4655ef992695f90",
+   "model_id": "pair",
+   "checkpoint_id": null,
+   "protocol_id": "fashioniq_val_split",
+   "metrics": {
+    "r10": 22.156393011046543,
+    "r50": 43.486402136659365,
+    "mean": 32.821397573852956
+   },
+   "rollup": false,
+   "counted": true,
+   "mapping_status": "EXPLORATORY_PUBLIC_MAPPING",
+   "blocker": null,
+   "source": "checkpoint_selection/20261106T002617+0700/pair_compat/measurements/pair_b2_H_normal.json"
+  },
+  {
+   "measurement_id": "8cb65b73274a86f8",
+   "model_id": "pair",
+   "checkpoint_id": null,
+   "protocol_id": "fashioniq_val_split",
+   "metrics": {
+    "r10": 20.086769084793715,
+    "r50": 41.49879132733318,
+    "mean": 30.792780206063448
+   },
+   "rollup": false,
+   "counted": true,
+   "mapping_status": "EXPLORATORY_PUBLIC_MAPPING",
+   "blocker": null,
+   "source": "checkpoint_selection/20261106T002617+0700/pair_compat/measurements/pair_b2_H_rev.json"
+  }
+ ]
+}

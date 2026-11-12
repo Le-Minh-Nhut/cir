@@ -62,12 +62,21 @@ prefix comparison. Passed a *relative* path (`workbench/envs/clvc39-la/bin/pytho
 unaffected — but a relative `WORKBENCH_CLVC_PYTHON` would be refused for a reason that has nothing to
 do with the environment.
 
-The plan/selection JSON also prints `gallery_identity_sha256 0bfd43b9…` while the run summary prints
-`1db68c59…`. These are two different formulas over the same gallery, not two galleries: the CLI's
-`_plan` hashes `{"protocol_id", "image_ids"}`, the runner hashes
+**CORRECTED 2026-11-13 (digest formula fixed; this paragraph records the pre-fix state).** The
+plan/selection JSON printed `gallery_identity_sha256 0bfd43b9…` while the run summary printed
+`1db68c59…`. Those were two different formulas over the same gallery, not two galleries: the CLI's
+`_plan` hashed `{"protocol_id", "image_ids"}`, the runner hashes
 `{"protocol_id", "ordered_gallery", "candidate_names"}` (`runner.py:_gallery_fingerprint`). Verified
 by computing both on one loaded release: `0bfd43b9…` and `1db68c59…` respectively, `gallery_count`
-74 381 both times. `1db68c59…` equals the identity every published run carries.
+74 381 both times. **That was a defect and it is fixed:** the plan branch and the blocked-report
+branch now call `_gallery_fingerprint` too, so `0bfd43b9…` is no longer produced by any branch of any
+code path. Measured at 2026-11-13 by loading the release in
+`workbench/envs/ctl312h/bin/python` and evaluating both expressions:
+`plan == runner == 1db68c59d96f014cdbecf936e108653de98abef0bd9a98a8abc2fe08b5dec4b4` for
+`gallery_count 74381`. `1db68c59…` is, and remains, the identity every published run carries; the
+plan digest and the run digest are now the same quantity by construction. `0bfd43b9…` survives only
+as a value this and other audit transcripts recorded while the defect existed — the transcripts are
+history and are not rewritten.
 
 ### 0.2 Launch
 

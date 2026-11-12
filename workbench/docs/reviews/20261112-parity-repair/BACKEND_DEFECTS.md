@@ -267,15 +267,21 @@ Tests (`workbench/tests/test_composition_api_contracts.py`):
 * `test_a_legacy_summary_without_the_field_still_serves_the_protocol_triple` — pre-field summary
   still serves the protocol triple.
 
-## Defect 3 — two `gallery_identity_sha256` formulas (spec only)
+## Defect 3 — two `gallery_identity_sha256` formulas (FIXED 2026-11-13)
 
-Computed both on one loaded release: plan/blocked branch
+At the time of this record, computed on one loaded release: plan/blocked branch
 `0bfd43b9cc0162885f06c60cfc751602ee9f3bed2fb4d206ffcebe3f7b443462`, runner
 `1db68c59d96f014cdbecf936e108653de98abef0bd9a98a8abc2fe08b5dec4b4`, `gallery_count 74381` for
-both. Full change request — exact functions, line numbers, and why neither resolution breaks any
-published digest — in `workbench/docs/reviews/20261112-parity-repair/GALLERY_DIGEST_PATCH_SPEC.md`.
+both. **Fixed the same way the spec proposed:** `_plan` and the blocked-report branch in
+`workbench/scripts/composition_eval.py` now call `runner._gallery_fingerprint`, so the plan, the
+blocked report and a completed run publish ONE digest
+(`1db68c59d96f014cdbecf936e108653de98abef0bd9a98a8abc2fe08b5dec4b4` on this release, measured
+2026-11-13). The fingerprint payload was NOT changed, so artifacts recorded before the fix still
+re-verify on read. `0bfd43b9…` is now a historical value only. Acceptance test:
+`workbench/tests/test_gallery_identity_one_formula.py`. Change request (kept as the record):
+`workbench/docs/reviews/20261112-parity-repair/GALLERY_DIGEST_PATCH_SPEC.md`.
 
-## Defect 4 — routing counted as failure (spec only)
+## Defect 4 — routing counted as failure (FIXED 2026-11-13; artifact left as history)
 
 Artifact `7b1fa85007bffdab931f7f19`: `adapter_routed 0`, `still_unscoped 6003`,
 `unscoped_qids` 6003 entries, `category_scopes [null]`, `resolver null`, and every
@@ -285,6 +291,13 @@ runner, not here — `backend/composition.py` only serves the recorded dict, and
 diverge from `derive_routing_cohort_gap.py`, which replays against the artifact. Change request,
 including how to keep `test_derived_subset_status.py:131-145` green, in
 `workbench/docs/reviews/20261112-parity-repair/SCOPE_RESOLUTION_PATCH_SPEC.md`.
+
+**Implemented in the runner** (`runner._scope_resolution_record`): unresolved is derived from the
+returned REASON, `category_agnostic` and `global_scoped` are recorded, `adapter_routed` keeps its
+narrow meaning, and `still_unscoped == sum(condition_status[*].unscored_count)` holds again. The
+`7b1fa850…` summary is immutable and keeps its old block; no document may quote "6003 unscoped" as a
+routing failure. The `test_derived_subset_status.py` invariant stays green because LIMN's two
+unscoped qids carry real reasons.
 
 ## Test counts measured
 

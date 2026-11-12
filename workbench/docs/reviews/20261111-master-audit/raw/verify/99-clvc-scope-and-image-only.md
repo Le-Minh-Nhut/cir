@@ -387,6 +387,23 @@ The routing fact belongs in the SUMMARY, not in the identity.
 
 **7.7 `category_routing_inputs` — the block a future run writes (assigned to `runner.py`).**
 
+**DECISION 2026-11-13 (runner identity lane): a DOCUMENTED GAP in the summary's self-description, NOT
+an identity defect. No versioned change, no migration.** Evidence, measured on the real release: the
+routing FACT is already inside run identity. `identity` carries `query_scope_resolution`
+(`_scope_resolution_identity`, keyed by qid) and `adapter_source_hashes` over the five methods, so a
+run whose routing read the edit caption is a different run id from one that did not. Replayed
+caption-aware routing against loader-only routing over the released 6 003 queries: they differ on
+exactly the 117 queries and yield different scope digests
+(`3a1c5a6763154870536f3586491d5bea9d87b73a9836363dc298d2accdd34d87` vs
+`8a5dd517595eb4883d8b3174f410f87980fbc612418231e2be4e0e3847cd1c19`), and the full run-identity
+digest differs too. `reference_metadata_seen` in `identity` would therefore not distinguish anything
+identity does not already distinguish — it would only mint new ids for every existing run, which is
+exactly why §7.6 reverted it. The DECLARE side is already shipped:
+`IMAGE_ENCODER_ONLY_LEAKS_SCOPE` and `IMAGE_ENCODER_ONLY_LEAKS_CAPTION` in
+`workbench/composition/model_clvc_net.py` name both routing inputs and the 117. What remains open is
+the per-run SUMMARY block below (§7.7 shape), which is a description, not an identity input, and is
+deliberately not retrofitted into any finished summary.
+
 Where: `runner.py`, in the summary payload near `adapter_query_scope_resolution` (~`:2439`), i.e. the
 same dict as `condition_status` / `category_scope_failures`. **NOT in `identity`** — see 7.6; nothing
 here changes a score, so hashing it would only fork the run tree. (If a consumer needs it hashed, the

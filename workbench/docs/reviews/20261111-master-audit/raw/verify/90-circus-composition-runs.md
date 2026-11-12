@@ -88,6 +88,17 @@ Both plans also reported, identically:
 "missing_assets": {"status": "extension_mismatch", ...}
 ```
 
+**PROVENANCE (added 2026-11-13; the JSON above is left exactly as that binary printed it).** That
+`gallery_identity_sha256` was the PLAN-BRANCH formula `{"protocol_id", "image_ids"}`, a second
+formula under the same key as the runner's `{"protocol_id", "ordered_gallery", "candidate_names"}`
+(`1db68c59…`). It was a defect, and it is fixed: since 2026-11-13 `_plan` and the blocked-report
+branch both call `runner._gallery_fingerprint`, so a plan and a completed run of the same ordered
+gallery now print **`1db68c59d96f014cdbecf936e108653de98abef0bd9a98a8abc2fe08b5dec4b4`** —
+measured then by loading this release (`gallery_count 74381`) under
+`workbench/envs/ctl312h/bin/python` and comparing `_plan(...)` against `_gallery_fingerprint(data)`.
+`0bfd43b9…` is therefore a HISTORICAL value: no branch produces it now, and quoting it as a current
+plan digest would be false. See `raw/verify/104-clvc-full-image-only.md` §0.1.
+
 `extension_mismatch` is the plan's own accounting of how it resolved image files, not a missing
 asset: `extension_resolution_counts` = `{".png": 58966, "exact": 15415}`,
 `local_resolved_by_stem_count` = 74381, `missing_gallery_by_model: {}`, `unresolvable_gallery_count:

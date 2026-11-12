@@ -11,6 +11,13 @@
   "eligible_queries": 2038,
   "eligible_query_set_identical": true,
   "eligible_query_set_evidence": "limn_native.<category>.jsonl reference_id/target_id sequences equal raw/g2_<category>_inputs.json full_reference_ids/full_target_ids, same length, same order",
+  "provenance": {
+    "protocol": "fashioniq_val_split",
+    "checkpoint_id": "base_iter0_shirt",
+    "model_id": "limn",
+    "query_order_sha256": "d4941371d3738f6a8b20b9c71c0e3ebfdc48bbbb9d95813704b491be7ad2ba74",
+    "gallery_order_sha256": "a1e86d7e8295c2fc9aea213ab1191c9d04665612889ddd98794fedd7a6d22690"
+  },
   "native": {
     "source": "limn_native.shirt.jsonl:target_rank (native LIMN/test.py::test)",
     "query_count": 2038,

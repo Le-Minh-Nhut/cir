@@ -1,7 +1,12 @@
 # Patch spec — one key, two `gallery_identity_sha256` formulas
 
-Status: spec only. `workbench/scripts/composition_eval.py` and `workbench/composition/runner.py`
-are owned by another pass; this document is the change request, not the change.
+Status: **IMPLEMENTED 2026-11-13** (was: spec only). Both call sites now reuse `_gallery_fingerprint`
+— `workbench/scripts/composition_eval.py` `_plan` and the `if specs else` blocked report. The
+fingerprint PAYLOAD was deliberately NOT changed, so every artifact written before the fix still
+re-verifies on read (`backend/composition.py:_candidate_reader`). Acceptance test:
+`workbench/tests/test_gallery_identity_one_formula.py` (plan == blocked == completed for one ordered
+gallery, an order-change negative, and a same-process stability assertion). The defect description
+below is kept as the record of what was wrong.
 
 ## Defect (confirmed)
 
@@ -111,7 +116,7 @@ def test_plan_and_run_publish_the_same_gallery_digest():
     assert data is not None
     plan = composition_eval._plan([], [], data, test_config(), ["full"], ("multimodal",))
     assert plan["gallery_identity_sha256"] == _gallery_fingerprint(data)
-    # today: 0bfd43b9…  != 1db68c59…  -- the fix is what makes this pass
+    # PRE-FIX: 0bfd43b9…  != 1db68c59…  -- the fix is what makes this pass
 ```
 
 `_plan` takes `(pairs, unavailable, data, config, subsets, conditions)`; `pairs=[]` is enough
@@ -126,7 +131,8 @@ def test_the_blocked_report_branch_publishes_the_run_digest(...):
     # gallery_identity_sha256 equals _gallery_fingerprint(data) -- the value a completed run records.
 ```
 
-Both must fail on today's source (`0bfd43b9… != 1db68c59…`) and pass after the change. A third
+Both failed before the change (`0bfd43b9… != 1db68c59…`; measured 2026-11-13: 2 of the 3
+acceptance tests red) and pass after it. A third
 assertion worth keeping: the value is stable across two calls in one process, i.e. it is a
 function of the loaded release and not of dict ordering (`candidate_names` is sorted in
 `_gallery_fingerprint`, so this holds).
