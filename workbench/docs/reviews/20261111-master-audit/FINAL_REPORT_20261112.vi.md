@@ -23,7 +23,7 @@ Khối dưới đây là **bản chụp có mốc thời gian `2026-11-12T04:43+
 tại, và **không** được đọc như cùng một thời điểm với §0.1: hai khối cách nhau vài giờ và nhiều sự kiện.
 Hai tiến trình `composition_eval.py` trong khối (`1366356`, `1366364`) **đã thoát**; xem §4.4 (đã sửa)
 và `raw/verify/98-tgcir-full-run.md` §1. **Nguồn duy nhất cho trạng thái hiện tại là §0.1** — HEAD
-`a0c08c0`, đã `== origin`, backend `1510910`, frontend `1221148`, porcelain một dòng.
+`cd9ced2`, đã `== origin`, backend `1758096`, frontend `1221148`, GPU nghỉ, không run composition nào.
 
 ```
 ## git rev-parse HEAD
@@ -70,33 +70,39 @@ Ba đường dẫn `raw/verify/91-…`, `raw/verify/97-…` và `web_evidence/e2
 **`23d847e`** ("evidence: commit the post-cutover browser smoke, the tgcir API surface, and the E2E
 screenshots"), nên chúng **không còn** untracked. Trạng thái hiện tại ở §0.1.
 
-### 0.1 Số liệu sống **đo lại** lần cuối (2026-11-12T10:0x+07)
+### 0.1 Số liệu sống **đo lại** lần cuối (2026-11-12T13:36+07)
 
 Chụp bằng đúng các lệnh in kèm; không suy diễn từ khối §0 ở trên. **Đây là nguồn duy nhất** cho trạng
 thái sống; §9 chỉ lặp lại các giá trị này.
 
 ```
 $ date -Iseconds
-2026-11-12T10:0x:xx+07:00
+2026-11-12T13:36:19+07:00
 
 $ git rev-parse HEAD
-a0c08c0e658bb9ece6112352f4b2de90e07d3ad9
+cd9ced2155a2d98e9021c549b4ca7310f3fac51b
 
 $ git rev-parse origin/research/cir-failure-workbench
-a0c08c0e658bb9ece6112352f4b2de90e07d3ad9
+cd9ced2155a2d98e9021c549b4ca7310f3fac51b
 
 $ git rev-list --left-right --count origin/research/cir-failure-workbench...HEAD
 0       0
 
 $ systemctl --user show -p MainPID -p ActiveEnterTimestamp -p NRestarts \
     cir-workbench-backend.service cir-workbench-frontend.service
-MainPID=1510910
+MainPID=1758096
 NRestarts=0
-ActiveEnterTimestamp=Thu 2026-11-12 09:34:21 +07
+ActiveEnterTimestamp=Thu 2026-11-12 12:20:57 +07
 
 MainPID=1221148
 NRestarts=0
 ActiveEnterTimestamp=Wed 2026-11-11 23:48:44 +07
+
+$ pgrep -af composition_eval.py
+(none)
+
+$ nvidia-smi --query-gpu=memory.used,memory.total --format=csv,noheader
+373 MiB, 16303 MiB
 ```
 
 `git status --porcelain` **tại thời điểm chụp §0.1** (nguyên văn, khi đó đúng **một** dòng):
@@ -115,14 +121,17 @@ việc. Ngay sau lần chụp này, hai file frontend (`workbench/frontend/Sampl
 **không** nằm trong commit nào của nó. Vì vậy khối trên là ảnh chụp có mốc thời gian, không phải một
 lời hứa rằng porcelain luôn có đúng một dòng; muốn biết hiện trạng thì chạy lại lệnh.
 
-Đọc theo thứ tự tham số như §0: dòng đầu là backend (**`MainPID=1510910`**, vào `active` lúc
-`09:34:21 +07` — đã restart thêm một lần sau bản chụp `1476678` của §0.1 trước), dòng sau là frontend
+Đọc theo thứ tự tham số như §0: dòng đầu là backend (**`MainPID=1758096`**, vào `active` lúc
+`12:20:57 +07` — restart thêm một lần nữa sau các bản chụp `1476678` và `1510910`), dòng sau là frontend
 (**`MainPID=1221148`**, vẫn là tiến trình của cutover `23:48:44 +07`, `NRestarts=0` — unit này **không**
-bị chạm suốt chiến dịch). Cả hai `NRestarts=0`.
+bị chạm suốt chiến dịch). Cả hai `NRestarts=0`. Không còn `composition_eval.py` nào chạy và GPU ở
+`373 MiB` (mức nghỉ, không có compute app).
 
-**HEAD là `a0c08c0e658bb9ece6112352f4b2de90e07d3ad9` và đã `== origin`** (`0 behind / 0 ahead`), tức
-công việc của chiến dịch **đã được push** — 36 commit kể từ `82cb1044`. Mọi kết luận trong báo cáo này
-nói về cây làm việc tại `a0c08c0`.
+**HEAD là `cd9ced2155a2d98e9021c549b4ca7310f3fac51b` và đã `== origin`** (`0 behind / 0 ahead`), tức
+công việc của chiến dịch **đã được push** (trước đó 36 commit kể từ `82cb1044`; con số đó là của bản
+chụp `10:0x` và các commit sau nó đã cộng thêm). Mọi kết luận trong báo cáo này nói về cây làm việc tại
+`cd9ced2`, với pin `aea143bd` — và `git diff --quiet aea143bd HEAD -- . ':(exclude)workbench/docs'
+':(exclude)workbench/tests'` **rỗng**, tức cây production của HEAD đúng bằng cây đã được pin.
 
 Không còn tiến trình composition nào chạy, và GPU trống:
 
@@ -282,8 +291,8 @@ Trạng thái **sau đó** (bản chụp §0.1 trước): backend đã restart t
 `NRestarts=0`, `ActiveEnterTimestamp=Thu 2026-11-12 08:39:33 +07`; frontend **không đổi**
 (`1221148`, `23:48:44 +07`, `NRestarts=0`) (§0.1). Việc restart đó là của lượt vá cache (`raw/verify/100-…md`
 §"Live confirmation after restart"), **không** phải của báo cáo này.
-Trạng thái **hiện tại** (§0.1, nguồn duy nhất): backend `MainPID=1510910`, `NRestarts=0`,
-`ActiveEnterTimestamp=Thu 2026-11-12 09:34:21 +07`; frontend vẫn `1221148` / `23:48:44 +07` /
+Trạng thái **hiện tại** (§0.1, nguồn duy nhất): backend `MainPID=1758096`, `NRestarts=0`,
+`ActiveEnterTimestamp=Thu 2026-11-12 12:20:57 +07`; frontend vẫn `1221148` / `23:48:44 +07` /
 `NRestarts=0` — unit này **không** bị chạm suốt chiến dịch.
 
 ### 1.6 Chưa đo / còn giữ nguyên
@@ -681,7 +690,7 @@ gallery release đầy đủ `74381` (`raw/verify/97-…md` §2). Trong 60 dòng
 ### 4.1b TG-CIR Full: `7b1fa85007bffdab931f7f19`, `COMPLETED`, 6003 query
 
 Summary: `workbench/artifacts/composition/summary/tgcir_tgcir_archive_unresolved_7b1fa85007bffdab931f7f19/full.json`
-(**109 793 B**, mtime `2026-11-12 05:16:29.257 +0700`; đọc lại nguyên file tại HEAD `a0c08c0`).
+(**109 793 B**, mtime `2026-11-12 05:16:29.257 +0700`; đọc lại nguyên file tại HEAD `cd9ced2`).
 
 | trường | giá trị |
 |---|---|
@@ -961,7 +970,7 @@ Run đang bay lúc §0.1 được chụp **đã xong** và **đã ghi summary**.
 Summary: `workbench/artifacts/composition/summary/clvc_net_author_drive_unresolved_da0a2162be0e159a1a456cec/full.json`
 (**17 956 B**, mtime `2026-11-12 09:15:18.964 +0700`); ranks
 `runs/da0a2162be0e159a1a456cec/ranks/clvc_net_author_drive_unresolved.json` (388.4 KB). Đọc lại nguyên
-các trường dưới đây tại HEAD `a0c08c0` + commit báo cáo này.
+các trường dưới đây tại HEAD `cd9ced2` + commit báo cáo này.
 
 | trường | giá trị |
 |---|---|
@@ -1191,34 +1200,40 @@ commit sau. Mỗi mục dưới đây mang file bằng chứng; chỗ chưa đo 
    khai báo bị bỏ sót, và các key `*_pct` mô tả đại lượng khác nên không phải khai báo thang macro. Sửa
    được **chỉ ở producer** của từng artifact, không sửa được ở tầng API
    (`raw/verify/102-…-inventory.md` §7.2 dòng `UNIT-46`).
-6. **`TESTED_SOURCE_SHA` đã nâng — phần còn mở là 20 test fail, không phải pin.** Pin cũ
-   `96d86010e85048d82f2dacf26e17d7b7206d31ab` đã được **thay bằng `117fc17220d0e35651c6778c1afb62e271c8d944`**
-   sau một lượt sweep **dừng** (stationary), trong **cả hai** release document; sweep đó đo
+6. **`TESTED_SOURCE_SHA` đã nâng — phần còn mở là 20 test fail, không phải pin.** Pin hiện tại là
+   **`aea143bd8894881ad7d5b341c21dbeff25cfaaaf`**, ghi trong **cả hai** release document
+   (`FINAL_PC_RELEASE_VERDICT.md`, `PC_PILOT_HANDOFF.md`), sau lượt sweep **dừng** (stationary) thứ hai.
+   Sweep đó đo **`3126 passed, 20 failed, 47 skipped = 3193 collected`**, wall **`3684.01 s (1:01:24)`**,
+   `^ERROR` **0**, `Errno 28` **0**, record **`raw/verify/107-sweep-aea143bd.md`** (kèm `.log.txt`,
+   `.preflight.txt`); `3126 + 20 + 47 = 3193` khớp đúng số `--collect-only` của chính revision đó
+   (`107` §2). Guard `test_handoff_commands.py` **8 passed**.
+   **Khối lượng chiến dịch, tính lại tại pin mới:** `git diff --stat 96d86010e85048d82f2dacf26e17d7b7206d31ab
+   aea143bd -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'` → **30 file production,
+   +3622 / −265**. Đó là con số phải trích cho "chiến dịch đã đổi bao nhiêu".
+   **Dòng bị thay thế, giữ làm lịch sử:** pin `117fc17220d0e35651c6778c1afb62e271c8d944` đo
    **`3123 passed, 20 failed, 47 skipped = 3190 collected`**, wall **`3586.55 s`**, record
-   `raw/verify/106-sweep-117fc172.md`; guard `test_handoff_commands.py` **8 passed**. Lần nâng phủ
-   **29 file production, +3505 / −246** kể từ pin cũ (trước đó báo cáo này ghi 14 file / 1 805 / 155
-   ở pin `96d86010`, và con số đó là **lịch sử**, không phải hiện trạng).
-   **Chưa đóng:** **20 test vẫn fail** — **18** id baseline đã ghi (blip ×4, `circus_cli`,
+   `raw/verify/106-sweep-117fc172.md`, và ở pin đó khoảng cách từ `96d86010` là **29 file,
+   +3505 / −246**. Cả hai con số đó **không** bị viết lại; chúng mô tả lần nâng **trước**.
+   Bước giữa hai pin là **5 file, +123 / −25** (`backend/composition.py`, `SamplesPage.tsx`, `data.ts`,
+   `routes.ts`, `tests/ui_smoke.py`) — `117` → `aea143bd`.
+   **Chưa đóng:** **20 test vẫn fail**, và đây là **cùng một tập 20 id** như sweep trước —
+   **0 mới, 0 rơi, 20 y nguyên** (`107` §3). Gồm **18** id baseline đã ghi (blip ×4, `circus_cli`,
    `tme_lifecycle` ×2, `tme_precision`, `f08_dcnet`, `handoff_commands` SHA guard,
    `release_blocker_gpu_records` ×7, `prepare_model`) cộng **2** id **chưa từng nằm trong baseline 18**
    (`test_doctor.py::test_dcnet_runtime_asset_blocks_after_preparation_is_present`,
    `test_evaluate_models.py::test_dcnet_audited_command_reports_non_command_blockers`), cả hai cũng fail
-   ở pin trước (`106` §3, §4). Ba trong số đó phụ thuộc trạng thái host nên pass trong worktree trần và
-   fail trong cây thật (`106` §6) — ghi nhận, không sửa.
+   ở các pin trước (`106` §3, §4). Ba trong số đó phụ thuộc trạng thái host nên pass trong worktree trần
+   và fail trong cây thật (`106` §6) — ghi nhận, không sửa.
 
    **Vì sao "20 fail" và "guard 8 passed" cùng đúng — không mâu thuẫn.** Một trong 20 id đó là
-   `test_handoff_commands.py::test_no_release_document_points_at_a_superseded_source_sha`. Nó fail
-   trong sweep **vì** pin chưa được nâng: guard đó **từ chối** một release document trỏ tới SHA đã bị
-   thay, nên ở thời điểm `117fc172` được đo, chính pin còn lệch cây của nó và guard đỏ **có chủ ý**.
-   Sau khi `c998504` nâng pin, cùng guard đó **pass** (`8 passed`, đo lại sau mọi commit về sau —
-   `106` §5). Vậy tập fail ghi trong sweep chứa **một** test chỉ đỏ khi pin còn lệch.
+   `test_handoff_commands.py::test_no_release_document_points_at_a_superseded_source_sha`. Sweep chạy
+   **trước** khi nâng pin, nên lúc đo nó **đỏ có chủ ý**: guard từ chối một release document trỏ tới SHA
+   đã bị thay, và pin khi đó còn lệch cây đang đo. Sau khi nâng pin, cùng guard đó **pass** (`8 passed`,
+   đo lại sau mọi commit về sau — `107` §5). Vậy con số **20** là tập fail **đo được** tại `aea143bd`
+   **trong lúc sweep**, không phải dự báo cho HEAD sau khi nâng pin — và báo cáo này **không** suy ra
+   một con số "sau khi nâng" nào khác: không có phép trừ 20 → 19 ở đây, vì tập 20 và trạng thái guard
+   xanh là hai phép đo ở hai thời điểm khác nhau, không phải hai số hạng của một tổng.
 
-   Hệ quả, **suy ra chứ không đo**: chạy lại toàn suite tại HEAD hiện tại *nên* cho **19 fail / 3124
-   passed / 47 skipped**, vì đúng một id đã chuyển sang xanh. Đây là **phép suy** từ triple đã ghi cộng
-   trạng thái guard đã kiểm, **không** phải một lượt sweep mới — báo cáo này không chạy lại suite
-   ~60 phút và **không** được trích `19`/`3124` như một kết quả đo. Triple **đã đo** vẫn là
-   **`3123 passed, 20 failed, 47 skipped = 3190`** và **không** bị viết lại: nó là kết quả của sweep ở
-   `117fc172`, không phải của HEAD.
 7. **Người gửi SIGTERM lịch sử vẫn chưa xác định** — đường nhận đã biết
    (`serve_workbench.py:152-166`, `forward_stop` → `os.kill(child.pid, SIGTERM)` → `raise_signal(SIGINT)`),
    `jobs.py` bị loại (`start_new_session=True`), test/script trong repo bị loại, session reaping bị loại;
@@ -1326,7 +1341,7 @@ commit sau. Mỗi mục dưới đây mang file bằng chứng; chỗ chưa đo 
 ## 8. Bảng artifact/run — mọi `run_id` xuất hiện trong báo cáo
 
 Trạng thái đọc từ `workbench/artifacts/composition/summary/<dir>/full.json` tại HEAD
-`a0c08c0e658bb9ece6112352f4b2de90e07d3ad9` (**`== origin`**), đọc lại **2026-11-12T10:0x+07**. `smoke` = `smoke.limited`; "—" = không phải run composition.
+`cd9ced2155a2d98e9021c549b4ca7310f3fac51b` (**`== origin`**), đọc lại **2026-11-12T13:3x+07**. `smoke` = `smoke.limited`; "—" = không phải run composition.
 
 | run_id / attempt | model | `execution_status` | query | smoke | nghĩa một dòng | nguồn |
 |---|---|---|---|---|---|---|
@@ -1362,8 +1377,8 @@ công bố được; `eab10106…-retry-2` và nó là **hai** run khác nhau, k
 
 ## 9. Bảng lệnh kiểm chứng — lệnh dùng để kiểm từng khẳng định
 
-Chạy tại `/home/heheboiz/data/cir`, HEAD `a0c08c0e658bb9ece6112352f4b2de90e07d3ad9` (**`== origin`**,
-0 behind / 0 ahead — chiến dịch đã được push, 36 commit kể từ `82cb1044`). Không lệnh nào ghi vào
+Chạy tại `/home/heheboiz/data/cir`, HEAD `cd9ced2155a2d98e9021c549b4ca7310f3fac51b` (**`== origin`**,
+0 behind / 0 ahead — chiến dịch đã được push). Pin `aea143bd` có cây production **trùng** HEAD (§0.1). Không lệnh nào ghi vào
 artifact, không lệnh nào chạm unit/GPU/lock. Các giá trị sống dưới đây lặp lại **§0.1**, là nguồn duy
 nhất; nếu hai chỗ lệch nhau thì §0.1 đúng. Cột cuối ghi rõ nguồn của kết quả: **đo lại** = chạy trong lượt tích hợp này
 (2026-11-12T08:4x-08:5x+07); **theo `NN`** = chép từ file bằng chứng ghi kèm, không chạy lại (một số
@@ -1371,8 +1386,8 @@ selection cần GPU hoặc lâu hơn ngân sách của lượt này).
 
 | khẳng định | lệnh | kết quả mong đợi / đã thấy |
 |---|---|---|
-| HEAD và khoảng cách với `origin` (§0.1) | `git rev-parse HEAD` · `git rev-parse origin/research/cir-failure-workbench` · `git rev-list --left-right --count origin/research/cir-failure-workbench...HEAD` · `git rev-list --count 82cb1044..HEAD` | **đo lại:** `a0c08c0e658bb9ece6112352f4b2de90e07d3ad9` · cùng sha · `0<TAB>0` · `36` — đã push |
-| Hai unit sống đúng MainPID (§0.1, §1.5) | `systemctl --user show -p MainPID -p ActiveEnterTimestamp -p NRestarts cir-workbench-backend.service cir-workbench-frontend.service` | **đo lại:** backend `1510910` / `Thu 2026-11-12 09:34:21 +07` / `0` · frontend `1221148` / `Wed 2026-11-11 23:48:44 +07` / `0` |
+| HEAD và khoảng cách với `origin` (§0.1) | `git rev-parse HEAD` · `git rev-parse origin/research/cir-failure-workbench` · `git rev-list --left-right --count origin/research/cir-failure-workbench...HEAD` | **đo lại:** `cd9ced2155a2d98e9021c549b4ca7310f3fac51b` · cùng sha · `0<TAB>0` — đã push |
+| Hai unit sống đúng MainPID (§0.1, §1.5) | `systemctl --user show -p MainPID -p ActiveEnterTimestamp -p NRestarts cir-workbench-backend.service cir-workbench-frontend.service` | **đo lại:** backend `1758096` / `Thu 2026-11-12 12:20:57 +07` / `0` · frontend `1221148` / `Wed 2026-11-11 23:48:44 +07` / `0` |
 | Không còn run composition nào chạy (§0.1, §4.4b) | `pgrep -af composition_eval.py` | **đo lại:** rỗng `(none)` — mọi run đã thoát |
 | GPU đang bận bao nhiêu (§0.1) | `nvidia-smi --query-gpu=name,driver_version,memory.used,memory.total --format=csv,noheader` · `nvidia-smi --query-compute-apps=pid,used_memory --format=csv,noheader` | **đo lại:** `… 373 MiB, 16303 MiB` · không có compute app |
 | TG-CIR Full là `COMPLETED` 6003 (§4.1b, §7) | `python3 -c "import json;d=json.load(open('workbench/artifacts/composition/summary/tgcir_tgcir_archive_unresolved_7b1fa85007bffdab931f7f19/full.json'));print(d['execution_status'],d['query_count'],d['smoke'],d['metrics']['composition_gap_ndcg'])"` | `COMPLETED 6003 {'label': None, 'limited': False, 'query_limit': None} 0.43853620852911723` |
@@ -1389,8 +1404,8 @@ selection cần GPU hoặc lâu hơn ngân sách của lượt này).
 | `gpu_may_be_held` vẫn từ chối và release đúng thủ tục (§5.2 mục 9) | `… -m pytest workbench/tests/test_job_gpu_guard_through_queue.py -p no:cacheprovider --basetemp=/tmp/r9q -q` | **đo lại:** `4 passed in 0.85s` |
 | `--conditions` chấp nhận/từ chối đúng danh sách (§4.4) | `… -m pytest workbench/tests/test_runner_cli_conditions.py -q` | **đo lại:** `18 passed` |
 | Gap triple giải theo vai (§4.4) | `… -m pytest workbench/tests/test_runner_gap_identity.py workbench/tests/test_runner_gap_roles.py -q` | **đo lại:** `3 passed` + `11 passed` |
-| `TESTED_SOURCE_SHA` **đã được nâng** (§5.2 mục 6) | `grep -n "TESTED_SOURCE_SHA" workbench/docs/reviews/FINAL_PC_RELEASE_VERDICT.md workbench/docs/PC_PILOT_HANDOFF.md` · `git diff --stat 96d86010e85048d82f2dacf26e17d7b7206d31ab HEAD -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'` | Pin nay là **`117fc17220d0e35651c6778c1afb62e271c8d944`**, sweep **`3123 passed, 20 failed, 47 skipped = 3190 collected`**, wall **`3586.55 s`**, record `raw/verify/106-sweep-117fc172.md`; guard `test_handoff_commands.py` **8 passed**. Khoảng cách từ pin **CŨ** `96d86010…` tới HEAD: **29 file, +3505 / −246** — đó là khối lượng mà lần nâng pin này đã phủ. Triple trên là **kết quả đo của sweep tại `117fc172`** và **không** bị viết lại. **Chưa đóng:** **20 test vẫn fail** trong sweep đó, gồm **18 id baseline đã ghi** (blip ×4, `circus_cli`, `tme_lifecycle` ×2, `tme_precision`, `f08_dcnet`, `handoff_commands` SHA guard, `release_blocker_gpu_records` ×7, `prepare_model`) và **2 id chưa từng nằm trong baseline 18** (`test_doctor.py::test_dcnet_runtime_asset_blocks_after_preparation_is_present`, `test_evaluate_models.py::test_dcnet_audited_command_reports_non_command_blockers`) — cả hai cũng fail ở pin trước (`106` §3, §4). **Một trong 20 id đó nay đã xanh:** `test_handoff_commands.py::test_no_release_document_points_at_a_superseded_source_sha` đỏ **vì pin chưa nâng**, và pass sau `c998504` (§5.2 mục 6). Vì vậy **19 fail / 3124 passed / 47 skipped** là con số **suy ra** cho HEAD hiện tại, **không** phải một lượt đo — đừng trích nó như kết quả sweep |
-| Guard mở rộng: `git checkout` **và** `must print` được kiểm trong **MỌI** release document (§5.2 mục 6) | `workbench/envs/ctl312h/bin/python -m pytest workbench/tests/test_handoff_commands.py -q -p no:cacheprovider --basetemp=/tmp/pin_rep` · `sed -n '/^RELEASE_DOCS/,/])/p' workbench/tests/test_handoff_commands.py` | **đo lại:** `8 passed in 13.36s`; `RELEASE_DOCS` gồm **5** file (`PC_PILOT_HANDOFF.md`, `PC_ONE_COMMAND_GUIDE.vi.md`, `FINAL_PC_RELEASE_VERDICT.md`, `FINAL_DEFECT_LEDGER.md`, `AUTOMATION_RUNBOOK.md`), và test lặp qua **từng** file cho cả `^git checkout <sha>` lẫn `must print <sha>` (`test_handoff_commands.py:505-535`). **Bite proof** (`106` §8.3): regress verdict về `git checkout 96d86010…` → `FAILED … tells the operator to check out 96d86010…, whose PRODUCTION source differs from the tested source 117fc172…`; sửa lại → `1 passed`; cả file `8 passed`. Trước khi mở rộng, extraction chỉ đọc handoff nên verdict sai vẫn xanh | `grep -n "would silently change the shape" -B3 -A1 workbench/backend/storage.py` · `grep -n "fieldnames" workbench/backend/main.py` · `grep -n "header = \"| Run" workbench/backend/main.py` | `storage.py:339-342`; `main.py:1530` (CSV lấy khoá từ `metrics[0]`) và `:1535` (header Markdown cố định, không có cột reference) |
+| `TESTED_SOURCE_SHA` **đã được nâng** (§5.2 mục 6) | `grep -n "TESTED_SOURCE_SHA" workbench/docs/reviews/FINAL_PC_RELEASE_VERDICT.md workbench/docs/PC_PILOT_HANDOFF.md` · `git diff --stat 96d86010e85048d82f2dacf26e17d7b7206d31ab aea143bd8894881ad7d5b341c21dbeff25cfaaaf -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'` · `git diff --stat 117fc17220d0e35651c6778c1afb62e271c8d944 aea143bd8894881ad7d5b341c21dbeff25cfaaaf -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'` | Pin nay là **`aea143bd8894881ad7d5b341c21dbeff25cfaaaf`** (cả hai release document), sweep **`3126 passed, 20 failed, 47 skipped = 3193 collected`**, wall **`3684.01 s (1:01:24)`**, record `raw/verify/107-sweep-aea143bd.md`; guard **8 passed**. Khoảng cách từ pin **CŨ** `96d86010…` tới pin hiện tại: **30 file, +3622 / −265**. Bước giữa hai pin: **5 file, +123 / −25**. **Dòng bị thay thế (lịch sử, không viết lại):** `117fc172…` đo `3123 passed, 20 failed, 47 skipped = 3190`, `3586.55 s`, `106-…md`, 29 file / +3505 −246. **Chưa đóng:** **20 test vẫn fail** — **cùng một tập 20 id** như sweep trước (**0 mới, 0 rơi**, `107` §3): 18 id baseline (blip ×4, `circus_cli`, `tme_lifecycle` ×2, `tme_precision`, `f08_dcnet`, `handoff_commands` SHA guard, `release_blocker_gpu_records` ×7, `prepare_model`) cộng 2 id chưa từng trong baseline 18 (`test_doctor.py::test_dcnet_runtime_asset_blocks_after_preparation_is_present`, `test_evaluate_models.py::test_dcnet_audited_command_reports_non_command_blockers`). **Một trong 20 id đó xanh sau khi nâng pin:** `test_handoff_commands.py::test_no_release_document_points_at_a_superseded_source_sha` đỏ **trong lúc sweep** vì pin chưa nâng, pass sau đó (§5.2 mục 6) — nên **20** là số **đo được tại `aea143bd` trong sweep**, không phải dự báo cho HEAD, và **không** có con số "sau khi nâng" nào được suy ra ở đây |
+| Guard mở rộng: `git checkout` **và** `must print` được kiểm trong **MỌI** release document (§5.2 mục 6) | `workbench/envs/ctl312h/bin/python -m pytest workbench/tests/test_handoff_commands.py -q -p no:cacheprovider --basetemp=/tmp/pin_rep` · `sed -n '/^RELEASE_DOCS/,/])/p' workbench/tests/test_handoff_commands.py` | **đo lại:** `8 passed in 13.36s`; `RELEASE_DOCS` gồm **5** file (`PC_PILOT_HANDOFF.md`, `PC_ONE_COMMAND_GUIDE.vi.md`, `FINAL_PC_RELEASE_VERDICT.md`, `FINAL_DEFECT_LEDGER.md`, `AUTOMATION_RUNBOOK.md`), và test lặp qua **từng** file cho cả `^git checkout <sha>` lẫn `must print <sha>` (`test_handoff_commands.py:505-535`). **Bite proof** (`106` §8.3, vẫn đúng ở pin `aea143bd`): regress verdict về `git checkout 96d86010…` → `FAILED … tells the operator to check out 96d86010…, whose PRODUCTION source differs from the tested source 117fc172…`; sửa lại → `1 passed`; cả file `8 passed`. Trước khi mở rộng, extraction chỉ đọc handoff nên verdict sai vẫn xanh | `grep -n "would silently change the shape" -B3 -A1 workbench/backend/storage.py` · `grep -n "fieldnames" workbench/backend/main.py` · `grep -n "header = \"| Run" workbench/backend/main.py` | `storage.py:339-342`; `main.py:1530` (CSV lấy khoá từ `metrics[0]`) và `:1535` (header Markdown cố định, không có cột reference) |
 | Run mới CLVC có gap ba điều kiện (§4.4b, §7) | `python3 -c "import json;d=json.load(open('workbench/artifacts/composition/summary/clvc_net_author_drive_unresolved_da0a2162be0e159a1a456cec/full.json'));m=d['metrics'];print(d['execution_status'],d['query_count'],d['conditions'],m['composition_gap_ndcg'],m['gap_cohort_count'],m['gap_conditions'],m['image_only']['condition'])"` | **đo lại:** `PARTIAL 6003 ['multimodal', 'text_only_black_image', 'clvc_image_encoder_only'] 0.33061712371309204 6001 [ba tên như trên] clvc_image_encoder_only` |
 | Run mới phục vụ đúng qua API (§4.4b) | `curl -s -o /tmp/r104.json -w "%{http_code} %{size_download}\n" "http://127.0.0.1:8000/api/composition/runs/da0a2162be0e159a1a456cec?subset=full"` | **đo lại:** `200 22514` |
 | `7:2179` được chấm thật ở điều kiện ảnh, Top-K sâu 100 — **xác nhận qua UI** (§4.3, §4.4b) | `curl -s "http://127.0.0.1:8000/api/composition/runs/da0a2162be0e159a1a456cec/queries?subset=full&condition=clvc_image_encoder_only&query_id=7:2179&top_k=100&limit=1&offset=0"` **và** browser: `?area=samples&view=explorer&runs=c:da0a2162…&condition=clvc_image_encoder_only&query=7:2179` | **đo lại:** API `200`, 14 695 B, `target_rank 2100`, `candidates.depth 100`, `top_results` dài **100**. **UI (sau khi vá menu điều kiện):** option list `[multimodal, text_only_black_image, clvc_image_encoder_only]` — `image_only_empty_text` **không** được mời; card `7:2179` badge `"Unresolved — mọi hạng ngoài @10"`, ba hạng **#1,580 / #4,549 / #2,100**, 0 console error; smoke `--run-id da0a2162… --condition clvc_image_encoder_only --query-id 7:2179` **exit 0** |

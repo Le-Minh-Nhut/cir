@@ -256,3 +256,23 @@ scoped to the three runs it is true for (smoke `1eee4c0a` and both older Full ru
 carries the same qualification. The served bundle is recorded as `assets/index-DDviexaW.js`, sha256
 `58eed6d48640fa1f93d2a64a96d87812a044a3b07b324fb872f6126162bf5369`, with the older names labelled
 historical.
+
+**Fifth pass — the report is re-pinned to `aea143bd`.** A second stationary sweep landed and was pushed
+after the fourth pass, so §5.2 item 6 and the §9 pin row still named `117fc172` while the pin had moved.
+Both now read: pin `aea143bd8894881ad7d5b341c21dbeff25cfaaaf`, sweep `3126 passed, 20 failed, 47
+skipped = 3193 collected`, wall `3684.01 s (1:01:24)`, record `raw/verify/107-sweep-aea143bd.md`, guard
+8 passed, failure set **0 new / 0 gone / 20 identical**. The campaign-volume figure was recomputed at
+the new pin rather than carried over: `git diff --stat 96d86010 aea143bd -- . ':(exclude)workbench/docs'
+':(exclude)workbench/tests'` → **30 files, +3622 / −265** (the old 29 / +3505 / −246 was measured at
+`117fc172` and is now labelled as the superseded advance). The intermediate step is 5 files, +123 / −25.
+
+The derived "19 fail / 3124 passed" paragraph was **deleted**. It was arithmetic on the old triple; the
+new triple is measured and already reflects the guard going green during the sweep, so the honest
+statement is that 20 is the measured set at `aea143bd` *during* the sweep and the guard passes *after*
+the advance — two measurements at two instants, not two terms of a sum. No post-advance re-run figure is
+claimed anywhere.
+
+§0.1 was refreshed to the live state at `2026-11-12T13:36+07`: HEAD `cd9ced2 == origin`, backend
+`MainPID=1758096` at `12:20:57`, frontend `1221148` unchanged, no `composition_eval.py`, GPU 373 MiB.
+It also records that `git diff --quiet aea143bd HEAD` over the production tree is empty, i.e. the pin's
+tree is exactly what is on disk.
