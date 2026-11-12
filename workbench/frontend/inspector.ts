@@ -7,25 +7,40 @@ export interface ConditionReading {
   rank: number | null;
 }
 
-/** The three condition readings for one query, in protocol order.
+const SHORT_LABEL: Record<string, string> = {
+  multimodal: "Multimodal (MM)",
+  text_only_black_image: "Text-only",
+  image_only_empty_text: "Image-only",
+  clvc_image_encoder_only: "Image-only (image encoder)",
+};
+
+/** The condition readings for one query, over the conditions THAT RUN scored.
  *
  *  Extracted so the labels can never drift from the ids the API uses, and so a null rank is
  *  distinguishable from a rank of 0 (the API uses `null` for "no exact rank"; rank 0 is impossible).
+ *
+ *  The readings come from the ROW's own `ranks` keys, not from the protocol triple. A run whose
+ *  image role is an adapter ablation (`clvc_image_encoder_only`) serves no `image_only_empty_text`
+ *  key at all, and rendering the protocol names regardless printed "Chưa chấm" for a condition the
+ *  run never measured -- three of them, beside a real target rank. Protocol order first (so a normal
+ *  run's order is unchanged), then any extra condition the run actually ranked, in the order the
+ *  payload lists it.
  */
 export function conditionsOf(query: Pick<CompositionQuery, "ranks">): ConditionReading[] {
-  const short: Record<string, string> = {
-    multimodal: "Multimodal (MM)",
-    text_only_black_image: "Text-only",
-    image_only_empty_text: "Image-only",
-  };
-  return CONDITIONS.map((condition) => {
-    const raw = query.ranks?.[condition.id];
-    return {
-      id: condition.id,
-      short: short[condition.id] ?? condition.label,
-      rank: typeof raw === "number" && raw > 0 ? raw : null,
-    };
-  });
+  const ranks = query.ranks ?? {};
+  const protocolIds: string[] = CONDITIONS.map((condition) => condition.id);
+  const extra = Object.keys(ranks).filter((id) => !protocolIds.includes(id));
+  return [...protocolIds, ...extra]
+    .filter((id) => id in ranks)
+    .map((id) => {
+      const raw = ranks[id];
+      const declared = CONDITIONS.find((condition) => condition.id === (id as typeof condition.id));
+      return {
+        id,
+        short: SHORT_LABEL[id] ?? declared?.label ?? id,
+        rank: typeof raw === "number" && raw > 0 ? raw : null,
+      };
+    });
 }
 
 export type Tone = "ok" | "warn" | "bad" | "info" | "neutral";

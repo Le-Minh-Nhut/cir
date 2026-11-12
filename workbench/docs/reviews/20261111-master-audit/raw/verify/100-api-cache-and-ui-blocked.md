@@ -655,6 +655,106 @@ console errors: none
 
 Probe deleted afterwards; `cohorts.json` is `[]`. Frontend suite + cohort tests: **44 passed**.
 
+## The outcome triple: a variant run classified every query "unscored"
+
+**Reproduced first, live** on `da0a2162be0e159a1a456cec` (CLVC Full, conditions
+`[multimodal, text_only_black_image, clvc_image_encoder_only]`),
+`GET …/queries?subset=full&condition=clvc_image_encoder_only&query_id=7:1`:
+
+```
+outcome: unscored | target_rank: 12796 | unscored: False | state: retrieval_failure
+counters: {'scored': 1, 'unscored': 0, …}        state_counts: {'hit': 0, 'retrieval_failure': 1, 'unscored': 0}
+ranks keys: ['clvc_image_encoder_only', 'image_only_empty_text', 'multimodal', 'text_only_black_image']
+```
+
+One row, two contradictory statements about the same qid, and the counters already said `scored: 1`.
+Cause: `determine_query_outcome` read `ranks.get("image_only_empty_text")` literally, got `None`,
+and returned `"unscored"` — for every one of the 6,003 queries.
+
+### The fix
+
+`determine_query_outcome(ranks, k=10, conditions=CONDITIONS)`: the (multimodal, text, image) triple
+is a PARAMETER. The default keeps every existing run's output byte-identical (asserted).
+
+`outcome_conditions(ranks_by_condition, summary)` picks that triple, three sources strongest first:
+
+1. `metrics.gap_conditions` on the run's summary — what the scorer itself computed the gap over;
+2. otherwise the protocol triple with an ablation substituted for the image role **only when that role
+   has no non-null rank at all**, by the same rule `runner.resolve_gap_conditions` applies;
+3. otherwise `CONDITIONS` unchanged.
+
+No ablation name is hard-coded: the substitution scans `ABLATION_CONDITIONS`, and a test passes a
+different recorded name (`some_other_ablation`) to prove it.
+
+Inside the function, a role **absent from the row** is a MISS (`False`), never "unknown"; a role
+present but null for this qid is the one true `unscored`. Written as a tri-state `hit()` so `-1 <= k`
+cannot be mistaken for a hit.
+
+**One decision, reported under both names.** `row_unscored = q_outcome == "unscored"`; the row's
+`unscored`, `unscored_kind` and the `counters.scored/unscored` pair all read that one boolean.
+
+**One source for the filter.** `outcome_counts` on the page payload counts each row with the same
+predicate that wrote `items[].outcome`, and the `outcome` filter selects on `q_outcome`, so the menu,
+the filter and the rows cannot disagree.
+
+**Only ranked conditions are served.** `served_conditions` listed the protocol names regardless of
+whether the run had a table for them, so the payload carried
+`ranks: {image_only_empty_text: null}` and the inspector rendered "Chưa chấm" for a condition the run
+never measured. It now lists the protocol names the run has a table for, then any ablation table.
+
+### Frontend
+
+* `SamplesPage.tsx` badge and filter already read `item.outcome` — no local recompute, so they were
+  right once the backend was. The outcome menu now also prints `outcome_counts` (a menu that listed
+  all 6,003 under "Unscored" was the same defect on a second surface).
+* `inspector.ts` `conditionsOf` DID recompute locally: it mapped the hard-coded `CONDITIONS` and
+  looked each id up in `ranks`, so a run with no `image_only_empty_text` key got three "Chưa chấm"
+  cells. It now reads the ROW's own `ranks` keys (protocol order first, then extras), and
+  `clvc_image_encoder_only` has its own label.
+* `EvaluationPage.tsx:394` prints `run.metrics.outcomes`, which the scorer computed over the resolved
+  triple — already correct.
+
+### Measured after (live, two restarts total: MainPID 1507997, then 1510910 for this last change)
+
+Outcome histogram for `da0a2162be0e159a1a456cec`, live over HTTP:
+
+```json
+"outcome_counts": {"both": 1, "composition_required": 382, "image_only": 71, "text_only": 83,
+                   "unresolved": 5464, "unscored": 2}
+```
+
+**6,001 scored across the five scored classes + 2 unscored = 6,003**, matching
+`counters.scored 6001 / unscored 2` and the scorer's own `metrics.outcomes` (`neither_scored: 2`).
+Before the fix every one of those 6,003 was in `unscored`.
+
+One row, live:
+
+```json
+{"query_id": "7:1", "outcome": "unresolved", "target_rank": 12796,
+ "unscored": false, "unscored_kind": null, "query_state": "retrieval_failure"}
+"ranks": {"multimodal": 223, "text_only_black_image": 3197, "clvc_image_encoder_only": 12796}
+"conditions": ["multimodal", "text_only_black_image", "clvc_image_encoder_only"]
+```
+
+Browser, `?area=samples&…&runs=c:da0a2162…&condition=clvc_image_encoder_only&query=7:1`:
+
+```
+badge: "Unresolved — mọi hạng ngoài @10"
+cells: multimodal #223 · text-only #3,197 · image-only (image encoder) #12,796   (no phantom cell)
+outcome menu: Composition required (382) · Unresolved (5,464) · Text-only (83) · Image-only (71)
+              · Both (1) · Unscored (pipeline/mapping) (2)
+no console errors
+```
+
+`ui_smoke.py`'s "a scored card must never say unsc" assertion now holds on this run: the badge is
+`Unresolved — …`, and its run id is in the served set the session walks (`usable` includes any
+`circus_fashioniq_release_v1`/`full` run with per-query ranks, so the assertion bites here or on a
+peer run, never on a 6,003-query lie).
+
+Tests: `workbench/tests/test_api_outcome_triple.py` (9), including the invariant on a variant-triple
+AND a protocol-triple run, the filter returning exactly `outcome_counts[class]`, and
+`test_only_ranked_conditions_are_served`. Regressions: 38 + 58 passed.
+
 ## Còn chặn
 
 1. ~~**Cohort round-trip on this HEAD is not exercisable** (§9).~~ **CLOSED** — the composition arm

@@ -7,6 +7,7 @@ import json
 import logging
 from dataclasses import asdict
 from pathlib import Path
+from collections.abc import Sequence
 from typing import Any, Mapping
 
 from workbench.backend.operator_config import WorkbenchConfig, resolve_config
@@ -1155,19 +1156,87 @@ def release_query_ids() -> frozenset[str] | None:
         return None
     return frozenset(query.qid for query in release.queries)
 
+#: The role order `determine_query_outcome` and `compose` both read: (multimodal, text, image).
+OUTCOME_ROLES = ("multimodal", "text", "image")
+
+def outcome_conditions(ranks_by_condition: Mapping[str, Any] | None,
+                       summary: Mapping[str, Any] | None = None) -> tuple[str, ...]:
+    """The (multimodal, text, image) triple this RUN's outcome classification must read.
+
+    Three sources, strongest first, and none of them a hard-coded ablation name:
+
+    1. `metrics.gap_conditions` on the run's summary -- the triple the scorer itself computed the
+       gap over, recorded by the runner. This is the authority when present.
+    2. The protocol triple, filtered by what the rank artifact actually carries: a role whose
+       protocol name has no table is filled from `ABLATION_CONDITIONS` in declared order, which is
+       exactly the rule `runner.resolve_gap_conditions` applies (and re-derives for runs whose
+       summary predates the field).
+    3. `CONDITIONS` unchanged, when neither input says anything different.
+
+    The result is always three DISTINCT names in role order, because that is what the classification
+    requires: a triple that could not be completed falls back to the protocol names, and the
+    per-row `unscored` flag then says the truth about that run.
+    """
+    recorded = None
+    if isinstance(summary, Mapping):
+        candidate = (summary.get("metrics") or {}).get("gap_conditions")
+        if isinstance(candidate, (list, tuple)) and len(candidate) == 3 \
+                and len(set(candidate)) == 3:
+            recorded = tuple(str(name) for name in candidate)
+    if recorded is not None:
+        return recorded
+    if not isinstance(ranks_by_condition, Mapping) or not ranks_by_condition:
+        return CONDITIONS
+
+    def scored(name: str) -> bool:
+        table = ranks_by_condition.get(name)
+        return isinstance(table, Mapping) and any(value is not None for value in table.values())
+
+    triple = list(CONDITIONS)
+    image_role = OUTCOME_ROLES.index("image")
+    if not scored(triple[image_role]):
+        substitute = next((name for name in ABLATION_CONDITIONS
+                           if name in ranks_by_condition and name not in triple
+                           and scored(name)), None)
+        if substitute is not None:
+            triple[image_role] = substitute
+    return tuple(triple)
+
 def determine_query_outcome(
     ranks: Mapping[str, int | None],
     k: int = SHORTCUT_K,
+    conditions: Sequence[str] = CONDITIONS,
 ) -> str:
-    """Classify query outcome for K=10."""
-    mm = ranks.get("multimodal")
-    t = ranks.get("text_only_black_image")
-    i = ranks.get("image_only_empty_text")
-    if mm is None or t is None or i is None:
+    """Classify a query's outcome at K over the run's own (multimodal, text, image) triple.
+
+    `conditions` is that triple, in role order. It defaults to the protocol triple, which is why
+    every existing run's output is unchanged -- and it must be passed for a run whose image role is
+    filled by an adapter's named ablation (`metrics.gap_conditions`): reading the protocol names
+    literally made EVERY query of the CLVC Full run `da0a2162be0e159a1a456cec` come back
+    `outcome: "unscored"` while the same row carried `target_rank: 12796, unscored: false`.
+
+    A missing rank in any role of the triple means the outcome cannot be classified; that is the one
+    and only meaning of `"unscored"` here, and the caller must keep it consistent with the row's own
+    `unscored` flag rather than re-deriving the two independently.
+    """
+    triple = tuple(conditions)
+    if len(triple) != 3:
+        raise ValueError(f"conditions must be three names in (multimodal, text, image) role order, "
+                         f"got {triple!r}")
+    # A role this run never measured (the key is absent from the row) can never be a hit: it is a
+    # MISS, not an unclassifiable absence. Conflating the two made a run whose image role is an
+    # ablation classify every row as `unscored` while the row carried a real target rank. A role that
+    # IS in the triple but null for THIS qid is the one true "cannot classify" case -- and it is also
+    # the case the row's own `unscored` flag reports, which is what keeps the two consistent.
+    def hit(role: str) -> bool | None:
+        if role not in ranks:
+            return False
+        value = ranks[role]
+        return None if value is None else value <= k
+
+    mm_hit, t_hit, i_hit = hit(triple[0]), hit(triple[1]), hit(triple[2])
+    if mm_hit is None or t_hit is None or i_hit is None:
         return "unscored"
-    mm_hit = mm <= k
-    t_hit = t <= k
-    i_hit = i <= k
     if mm_hit and not t_hit and not i_hit:
         return "composition_required"
     if t_hit and not i_hit:
@@ -1381,6 +1450,30 @@ def _resolve_candidates(release: Any, reader: Mapping[str, Any], qid: str) -> di
     return {"status": reader.get("item_status") or "AVAILABLE", "reason": reader["reason"],
             "rows": rows}
 
+def _summary_for_run(artifacts_root: Path, run_id: str,
+                     subset: str = "full") -> dict[str, Any] | None:
+    """The run's summary document, or None.
+
+    Used to read facts the run recorded about itself (`metrics.gap_conditions`). Validation and
+    decoration are deliberately skipped: the caller wants the recorded value, not a served row.
+    """
+    try:
+        summary_dir = resolve_composition_path(artifacts_root, "summary")
+    except ValueError:
+        return None
+    if not summary_dir.is_dir():
+        return None
+    for run_dir in summary_dir.iterdir():
+        if not run_dir.is_dir():
+            continue
+        target = run_dir / f"{subset}.json"
+        if not target.is_file():
+            continue
+        summary = read_summary_file(target)
+        if summary and summary.get("run_id") == run_id:
+            return summary
+    return None
+
 def get_composition_run_queries(
     run_id: str,
     subset: str = "full",
@@ -1428,10 +1521,17 @@ def get_composition_run_queries(
 
     ranks_by_condition = ranks_data.get("ranks", {}) if ranks_data else {}
     failures_by_condition = ranks_data.get("query_failures", {}) if ranks_data else {}
-    # The protocol triple, plus any ABLATION condition this run actually ranked. `CONDITIONS` keeps
-    # its meaning (`determine_query_outcome` reads two of its names positionally); this only widens
-    # what the served `ranks` map carries, so a `clvc_image_encoder_only` row is not silently dropped.
-    served_conditions = (*CONDITIONS,
+    # The triple the outcome classification reads. Taken from the summary the run recorded, so a run
+    # whose image role is an adapter ablation is classified over the conditions it ACTUALLY scored;
+    # absent a summary, `outcome_conditions` re-derives the same rule from the rank table.
+    outcome_triple = outcome_conditions(ranks_by_condition,
+                                        _summary_for_run(artifacts_root, run_id, subset))
+    # The conditions this run ACTUALLY ranked: the protocol names it carries a table for, then any
+    # ablation table. A protocol name with no table is not served at all -- listing it produced a
+    # `ranks: {image_only_empty_text: null}` key for a condition the run never measured, and the
+    # inspector then rendered "Chưa chấm" for it beside a real target rank. `CONDITIONS` keeps its
+    # meaning; this only decides which keys the payload carries.
+    served_conditions = (*(name for name in CONDITIONS if name in ranks_by_condition),
                          *(name for name in ABLATION_CONDITIONS
                            if name in ranks_by_condition and name not in CONDITIONS))
     target_condition = condition or "multimodal"
@@ -1455,13 +1555,21 @@ def get_composition_run_queries(
     # `query_state` filter itself, so each chip can print its own total while a different chip is
     # active. Counting after that filter would make every inactive chip read 0.
     state_counts = {"hit": 0, "retrieval_failure": 0, "unscored": 0}
+    # The outcome filter's own totals, over the SAME predicate the per-row `outcome` uses — one
+    # computation, so the filter menu and the rows cannot disagree about how many queries are in a
+    # class. (`state_counts` counts a different fact: the branch the ROW is in.)
+    outcome_counts: dict[str, int] = {}
 
     for q in subset_queries:
         q_ranks = {
             c: ranks_by_condition.get(c, {}).get(q.qid)
             for c in served_conditions
         }
-        q_outcome = determine_query_outcome(q_ranks)
+        q_outcome = determine_query_outcome(q_ranks, conditions=outcome_triple)
+        # `outcome == "unscored"` and the row's `unscored` flag are ONE decision, made here and
+        # reported under both names. Deriving them separately is what let a row read
+        # `outcome: unscored` beside `target_rank: 12796, unscored: false`.
+        row_unscored = q_outcome == "unscored"
         target_rank = q_ranks.get(target_condition)
         failure_msg = readable_failure_message(
             failures_by_condition.get(target_condition, {}).get(q.qid))
@@ -1485,10 +1593,11 @@ def get_composition_run_queries(
         if max_rank is not None and (target_rank is None or target_rank > max_rank):
             continue
         state_counts[state] += 1
+        outcome_counts[q_outcome] = outcome_counts.get(q_outcome, 0) + 1
         if query_state and state != query_state:
             continue
 
-        counters["scored" if target_rank is not None else "unscored"] += 1
+        counters["unscored" if row_unscored else "scored"] += 1
         if state == "hit":
             counters["hit_at_k"] += 1
         elif state == "retrieval_failure":
@@ -1516,8 +1625,8 @@ def get_composition_run_queries(
             "target_rank": target_rank,
             "outcome": q_outcome,
             "query_state": state,
-            "unscored": target_rank is None,
-            "unscored_kind": unscored_kind,
+            "unscored": row_unscored,
+            "unscored_kind": unscored_kind if row_unscored else None,
             "retrieval_failure": state == "retrieval_failure",
             "failure": failure_msg,
             "top_results": window,
@@ -1555,6 +1664,8 @@ def get_composition_run_queries(
                        for name in served_conditions],
         "counters": counters,
         "state_counts": state_counts,
+        # Totals per outcome class, over the same predicate as `items[].outcome`.
+        "outcome_counts": dict(sorted(outcome_counts.items())),
         "candidates": {
             "available": bool(candidates.get("available")),
             "status": candidates.get("status"),

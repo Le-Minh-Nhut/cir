@@ -165,6 +165,9 @@ export interface CompositionPagePayload {
   /** Per-state totals under the current filters EXCEPT the state filter itself, so each chip can
    *  print its own count while another chip is active. */
   state_counts?: Record<"hit" | "retrieval_failure" | "unscored", number>;
+  /** Totals per outcome class over the SAME predicate `items[].outcome` uses, so the outcome filter
+   *  menu and the rows cannot disagree about how many queries are in a class. */
+  outcome_counts?: Record<string, number>;
 }
 
 export interface UniverseEntry<T> {

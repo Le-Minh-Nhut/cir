@@ -123,7 +123,15 @@ export function SamplesPage({ data, location, onGoto, onAnnotate }: {
               <select id="outcome-select" value={location.outcome} data-testid="filter-outcome"
                       onChange={(event) => onGoto({ outcome: event.target.value, offset: 0 })}>
                 <option value="">Tất cả</option>
-                {OUTCOMES.map((outcome) => <option key={outcome.id} value={outcome.id}>{outcome.label}</option>)}
+                {/* The count comes from the backend's `outcome_counts`, computed over the same
+                    predicate the rows' own `outcome` uses. A menu that listed all 6,003 under
+                    "Unscored" while every visible row read a real rank is the defect this fixes. */}
+                {OUTCOMES.map((outcome) => (
+                  <option key={outcome.id} value={outcome.id}>
+                    {outcome.label}{page.data?.outcome_counts?.[outcome.id] != null
+                      ? ` (${fmtInt(page.data.outcome_counts[outcome.id])})` : ""}
+                  </option>
+                ))}
               </select>
             </Field>
             <Field label="Danh mục" htmlFor="category-select">
