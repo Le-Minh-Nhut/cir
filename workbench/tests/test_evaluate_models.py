@@ -338,31 +338,83 @@ def test_limn_adapter_runs_full_bundle_or_named_category(monkeypatch, tmp_path: 
     assert "--category" not in bundle
     assert bundle[bundle.index("--checkpoint-root") + 1] == str(checkpoint_root)
     assert diagnostic[diagnostic.index("--category") + 1] == "dress"
-def test_tgcir_reports_the_archive_mapping_blocker_rather_than_launching() -> None:
+def test_tgcir_reports_the_archive_mapping_blocker_rather_than_launching(
+        monkeypatch, tmp_path: Path) -> None:
     """TG-CIR's member mapping WAS unresolved; it is now established from the bytes.
 
     This test previously asserted that the adapter was skipped as unaudited, then that the reason
-    named an unresolved archive mapping. The mapping is resolved: the extracted member is
-    `checkpoints/Fashioniq.pt`, it loads STRICTLY into `model.VCG_CIR` at the source's own default
-    geometry, and three of four token-count permutations are rejected by tensor shapes. What still
-    stops a launch is unrelated to the weight — the ViT-B/16 external asset's provenance and the
-    missing interpreter. Asserting the OLD reason here would now be false, so the test pins the
-    current one.
+    named an unresolved archive mapping, then that a `ViT-B/16` external-asset provenance blocker
+    was present. The mapping is resolved: the extracted member is `checkpoints/Fashioniq.pt`, it
+    loads STRICTLY into `model.VCG_CIR` at the source's own default geometry, and three of four
+    token-count permutations are rejected by tensor shapes. What still stops a launch is unrelated
+    to the weight — the pinned `test.py` has no CLI, so the command is not runnable.
+
+    The `ViT-B/16` assertion was HOST STATE, not a property of the model: commit `1bf00c3` declared
+    that asset, and on a machine whose `~/.cache/clip/ViT-B-16.pt` matches the declared digest the
+    asset is `VERIFIED_LOCAL_ASSET` and correctly stops being a blocker. Asserting its presence
+    therefore passed only on a host without the cache and failed on a host with it — the test
+    measured the author's disk, not the product. The two cases are separated here instead:
+
+    * with the declared asset **verified present**, the plan is still refused and the asset must NOT
+      appear as a blocker (the behaviour `1bf00c3` intended);
+    * with the asset **missing**, the plan is refused and the asset MUST appear as a blocker.
+
+    Both seams are pinned in both directions, so neither case reads this machine's cache.
     """
     module = load_module()
     model = records()["tgcir"]
+    variant = model["checkpoint_variants"][0]
 
-    plan, reasons = module.guarded_plan(model, model["checkpoint_variants"][0], model["native_protocol"], None, 200)
+    def plan_reasons() -> tuple[object, list[str]]:
+        return module.guarded_plan(model, variant, model["native_protocol"], None, 200)
 
-    assert plan is None
+    # --- Case 1: the declared CLIP asset is present and verified (host state pinned, not read).
+    #
+    # TWO seams report the same asset, and both must be pinned or the test still reads this host:
+    #   * `validate_auxiliary_asset` -- the registry's auxiliary-asset path, which
+    #     `preflight_blockers` imports INSIDE the function, so the patch must land on `registry`
+    #     itself (patching `preflight.<name>` is silently ignored);
+    #   * `external_asset_statuses` -- the runtime-asset path, which reports the cache file.
+    # Measured: with only the first patched, a host without the cache still blocked the plan through
+    # the second, so pinning one seam was a test that passed only where the cache existed.
+    real_statuses = registry.external_asset_statuses
+
+    def verified(asset, path=None, *, fashioniq_root=None, split_ids=None):
+        return registry.AuxiliaryValidationResult(True, "VERIFIED", [])
+
+    monkeypatch.setattr(registry, "validate_auxiliary_asset", verified, raising=False)
+    monkeypatch.setattr(
+        registry, "external_asset_statuses",
+        lambda model_: [{**status, "status": "VERIFIED_LOCAL_ASSET"} for status in real_statuses(model_)],
+        raising=False)
+    plan, reasons = plan_reasons()
     joined = " ".join(reasons)
+    assert plan is None, "a verified external asset must not make the run launchable by itself"
     assert "checkpoint mapping unresolved" not in joined, reasons
-    assert model["checkpoint_variants"][0]["checkpoint_mapping_status"] == "VERIFIED_METADATA"
-    assert model["checkpoint_variants"][0]["filename"] == "Fashioniq.pt"
-    assert any("ViT-B/16" in reason for reason in reasons), reasons
+    assert variant["checkpoint_mapping_status"] == "VERIFIED_METADATA"
+    assert variant["filename"] == "Fashioniq.pt"
+    # The archive mapping is settled, so the blocker is the missing entrypoint — and it is reported.
+    assert any("COMMAND_BLOCKED_SOURCE_ENTRYPOINT" in reason for reason in reasons), reasons
     assert not any("not audited" in reason for reason in reasons), (
         "tgcir has an audited command now; reporting it as unaudited would be false")
+    # THE NEGATIVE: a verified asset must not be reported as a blocker. This is the assertion whose
+    # absence let a stale host-state check stand in for a product property.
+    assert not any("ViT-B/16" in reason for reason in reasons), (
+        "the CLIP ViT-B/16 asset is verified present, so it must not appear as a blocker: " + joined)
 
+    # --- Case 2: the same asset is missing. The blocker must come back, naming the asset.
+    def missing(asset, path=None, *, fashioniq_root=None, split_ids=None):
+        return registry.AuxiliaryValidationResult(False, "MISSING", ["MISSING"])
+
+    monkeypatch.setattr(registry, "validate_auxiliary_asset", missing, raising=False)
+    monkeypatch.setattr(
+        registry, "external_asset_statuses",
+        lambda model_: [{**status, "status": "MISSING", "path": None} for status in real_statuses(model_)],
+        raising=False)
+    plan_missing, reasons_missing = plan_reasons()
+    assert plan_missing is None, "a missing external asset must refuse the launch"
+    assert any("ViT-B/16" in reason for reason in reasons_missing), (
+        "a missing CLIP ViT-B/16 asset must be named as a blocker: " + " ".join(reasons_missing))
 
 def test_dcnet_audited_command_reports_non_command_blockers() -> None:
     module = load_module()
