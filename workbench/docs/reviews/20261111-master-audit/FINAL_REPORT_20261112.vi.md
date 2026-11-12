@@ -786,15 +786,42 @@ Tức 117 query **thật sự được chấm**, không chỉ được đếm: m
 `1.3997667055490752`), và `scored_count` là 6001 ở cả ba (`104` §9). Một metric giữ nguyên bit-for-bit
 sẽ là dấu hiệu các hàng đó vẫn bị ghi `null` — không có chuyện đó.
 
-**Rò rỉ modality — phán quyết (a), kèm điều kiện phải nói ra.** Đầu vào routing là **stem** của ảnh
-reference (một product id FashionIQ) đối chiếu với `cap.*.val.json` / `split.*.val.json` của tác giả: đó
-là metadata của release, lấy được **không cần byte ảnh nào**, không suy từ pixel, không từ ảnh target,
-không từ score (`raw/verify/99-…md` §4). Hệ quả dễ nói sai: dưới `text_only_black_image`, pixel reference
-bị thay bằng ảnh đen **nhưng routing vẫn đọc category của hàng đó** — điều kiện này vẫn thấy một mẩu
-metadata bắt nguồn từ reference. Vì vậy **cấm** câu "text_only_black_image không thấy thông tin
-reference"; (a) cho phép nhãn, nó không làm câu đó đúng. Điều này được khai trong code
-(`IMAGE_ENCODER_ONLY_LEAKS_SCOPE`) và chặn bằng chữ ký `Adapter.query_scope(self, query,
-candidate_names)` — không có `condition`, không gallery, không score (cùng mục).
+**Rò rỉ modality — phán quyết (a) cho 5884, và KHÔNG phải (a) cho 117.** Bản trước viết gọn thành một
+câu, và câu đó **sai** ở phần 117. Đầu vào routing **không** chỉ là stem. Đọc đúng hàm
+`resolve_query_scope` (`workbench/composition/model_limn.py:189-227`, được `model_clvc_net.py` gọi
+nguyên văn):
+
+* **5884 query — category lấy từ loader.** `category = getattr(query, "category", None)`; nếu khác
+  `None` thì `record["reason"] = "loader"` và **không** đụng tới văn bản. Đây **đúng là** metadata của
+  release, lấy được không cần byte ảnh nào, không suy từ pixel/target/score. Phán quyết **(a)** đúng
+  cho nhóm này.
+* **117 query — category lấy từ `(stem, caption sửa)`, tức CÓ dùng văn bản.**
+  `holders = index.get((stem, normalize_query_text(query.query_txt)), …)` — khoá là **cặp** (stem,
+  caption đã chuẩn hoá), không phải stem đơn. Nhóm này được route bằng chính **edit caption**.
+* **2 query — không có category duy nhất** (`len(holders) > 1` → `unresolved:annotation_names_two_categories`),
+  nên không được chấm.
+
+**Hệ quả, nói thẳng:** với **117/6001** query đã chấm, một điều kiện **loại bỏ** edit caption
+(`clvc_image_encoder_only`, và cả `text_only_black_image`) vẫn **dùng** edit caption để chọn category.
+Nhãn routing của nhóm đó là **hỗn hợp**: metadata release **cộng** văn bản mà điều kiện kia nói là đã
+bỏ. Vì vậy **cấm** hai câu: "routing chỉ dùng stem, không cần văn bản" và "(a) đúng cho toàn bộ cohort".
+Phán quyết đúng là: **(a) cho 5884; với 117 thì đó là nhãn routing trộn metadata với edit text.**
+
+Điều này **đã được khai trong code**, không còn là suy luận của báo cáo:
+`IMAGE_ENCODER_ONLY_LEAKS_SCOPE` (`workbench/composition/model_clvc_net.py:150`) nói nguyên văn
+"category routing reads the release loader's assignment (reference image stem) for 5884 queries and,
+for the 117 the loader left unscoped, (reference stem, edit caption text) resolved against the pinned
+caption annotation; under text_only_black_image and clvc_image_encoder_only the routing input is
+therefore a release DATASET LABEL plus, for those 117, the edit text that the condition otherwise
+removes", kèm dạng một dòng `IMAGE_ENCODER_ONLY_LEAKS_CAPTION` cho trường `claim_narrowed`. Chữ ký
+`Adapter.query_scope(self, query, candidate_names)` vẫn chặn việc nhãn phụ thuộc `condition`/gallery/
+score — nhưng nó **không** chặn việc nhãn phụ thuộc `query.query_txt`, và đó chính là chỗ rò rỉ.
+
+**Việc còn mở, nêu tên:** quy tắc "một điều kiện image-only không được dùng văn bản trừ khi miễn trừ
+đó được ghi trong một **run identity riêng**" **chưa** được đáp ứng: `grep -rn
+reference_metadata_seen workbench/composition workbench/backend workbench/scripts` → **0 hit**. Trường
+`reference_metadata_seen` mới chỉ là **đề xuất** (`raw/verify/99-…md` §4, §7.6), chưa ship, vì nó mint
+run id mới cho mọi run hiện có. Ghi nhận là **open item có tên**, không phải đã đóng.
 
 **So với LIMN — nay nói chính xác, không suy diễn.** Run LIMN `10173dc45dea8c90fd2a284b` báo cùng
 hình dạng ở mức summary: `ambiguous_count: 119`, `category_scope_failures: {multimodal: 119,
@@ -916,6 +943,20 @@ Metric theo điều kiện, **6001/6003 chấm được**, coverage **`0.9996668
 | `multimodal` | 1.3997667055490752 | 7.198800199966672 | 18.180303282786202 | 0.03564730414020548 | 0.14921544731411218 |
 | `text_only_black_image` | 0.11664722546242293 | 1.3997667055490752 | 4.49925012497917 | 0.006595896893970061 | 0.09988226530955799 |
 | `clvc_image_encoder_only` | 0.11664722546242293 | 1.1998000333277787 | 2.9495084152641224 | 0.005437399476599689 | 0.08644584977266369 |
+
+**Nhưng gap này là gap CÓ ĐIỀU KIỆN — đọc kèm §4.3 trước khi trích nó.** Cohort 6001 ở trên không
+đồng nhất về nguồn nhãn routing: **5884** query lấy category từ loader (không dùng văn bản), **117**
+query lấy category từ `(stem, caption sửa)` đối chiếu file caption đã pin — tức routing của 117 query đó
+**dùng chính edit caption** mà `clvc_image_encoder_only` nói là đã bỏ (`model_limn.py:213`;
+`IMAGE_ENCODER_ONLY_LEAKS_SCOPE`, `workbench/composition/model_clvc_net.py:150`). Vì vậy
+`0.33061712371309204` là gap trên một cohort mà **117/6001 hàng có nhãn routing lấy một phần từ văn
+bản**. Con số **strict caption-free** (chỉ 5884 query loader-scoped) là một cohort nhỏ hơn và hiện vẫn
+**chưa tính xong**; sẽ ghi vào đây khi có, kèm script và đường dẫn rank table — **không** suy ra,
+**không** lấy từ một con số nằm trong comment của source.
+
+Cần nói rõ để không ai đọc nhầm hai chiều: **các metric không sai.** Chúng được tính **đúng** trên
+cohort của chúng (`104` §6 tự tính lại từ rank table, khớp từng chữ số). Cái sai trước đây là **cách mô
+tả cohort đó phụ thuộc vào gì** — và đó là thứ đã sửa ở §4.3, không phải một con số.
 
 **Đây là lần đầu gap ba điều kiện của CLVC tính được.** `composition_gap_ndcg`
 **`0.33061712371309204`**, `gap_cohort_count` **6001**, `mrr_gap` `0.029051407246235415`,
@@ -1130,7 +1171,7 @@ commit sau. Mỗi mục dưới đây mang file bằng chứng; chỗ chưa đo 
 | `raw/verify/89-adapted-runtime-and-gpu-capability.md` | `adapted_runtime` sm_120 cho `clvc_net`/`tgcir`; tier `BLOCKED` → `GPU_VERIFICATION_PENDING` → `GPU_RUNTIME_READY`; bản ghi GPU (capability 12.0, torch 2.7.1+cu128, 16303 MiB); `command_status` giữ `COMMAND_BLOCKED_SOURCE_ENTRYPOINT` |
 | `raw/verify/90-circus-composition-runs.md` | CLVC Full `eab10106` §4.1 (PARTIAL, 4489 s, metrics, `gap null`, 119/6003) — **lần chạy bị thay thế**, xem `98`; §4.2 s/img 0.0027 vs 0.0603; §4.3 TG-CIR `9f115afe` mất 2 điều kiện; danh sách "Còn chặn" |
 | `raw/verify/98-tgcir-full-run.md` | **nguồn chuẩn cho CẢ HAI run Full**: `tgcir` `7b1fa85007bffdab931f7f19` `COMPLETED`, 6003 q, gap `0.43853620852911723`, `TOPK_EXPORT_COMPLETE` missing 0 (§2); `clvc_net` `eab10106…-retry-2` `PARTIAL`, 1867.2 s, 0.0202 s/ảnh, VRAM `chưa đo` (§1); side-by-side (§3); cross-check API 200/71 954 B và JSONL=API (§4); "composition ≠ native" (§ cuối) |
-| `raw/verify/99-clvc-scope-and-image-only.md` | dry run 6 003 query: `loader_scoped 5884`, `recovered_from_annotation 117` (shirt 46, toptee 71), `still_unscoped 2` = `7:3038`/`7:3790` (§2, §3); phán quyết rò rỉ modality (a) + điều cấm phát biểu (§4); `clvc_image_encoder_only` đo trên CPU: tolerance `1e-6`, đo được `6.705522537231445e-08` (§6.3); 15 test (§5) |
+| `raw/verify/99-clvc-scope-and-image-only.md` | dry run 6 003 query: `loader_scoped 5884`, `recovered_from_annotation 117` (shirt 46, toptee 71), `still_unscoped 2` = `7:3038`/`7:3790` (§2, §3); phán quyết rò rỉ modality (a) + điều cấm phát biểu (§4) — **lưu ý:** (a) đúng cho 5884, còn 117 được route bằng `(stem, caption)` nên (a) **không** đúng nguyên trạng cho chúng (xem §4.3; khai trong `model_clvc_net.py:150`); `clvc_image_encoder_only` đo trên CPU: tolerance `1e-6`, đo được `6.705522537231445e-08` (§6.3); 15 test (§5) |
 | `raw/verify/100-api-cache-and-ui-blocked.md` | bốn nguyên nhân "blocked" tách biệt với field path (§1); `_MODELS_CACHE` theo state stamp — cold 98.43 s → 67.28 s sống, warm 0.026/0.017 s (§2, live §1); `statistics.query_count` 6003→5 (§3); `subset_provenance` byte-identical hai thứ tự gọi, sha256 `bb7406d6…` (§4); R@1 phục vụ từ derived record (§5); cohort save→reopen→export HTTP **và** browser (§6, §6b) |
 | `raw/verify/101-metrics-r1-and-fallback.md` | R@1: định nghĩa + cùng mẫu số với R@10/50 (§1), 7 test biên (§2), backfill 3 guard + số suy ra (tgcir 6.3135099117108116 / 1.949025487256372 / 0.08329168748958854; clvc 1.4106050305914344 / 0.10197144799456152 / `null`) (§3), 136/136 digest artifact **không đổi** (§7); partition encode + cache key (§5, §6) |
 | `raw/verify/102-queue-gpu-and-blocker-inventory.md` | **21 blocker** inventoried: 4 nhãn cũ nay SAI (§7.1) + 17 còn mở (§7.2), mỗi dòng nêu đúng thứ thiếu; `gpu_may_be_held` **GIỮ** với chứng minh hai đường (§1, §2) và giới hạn release là thủ tục (§4); backoff PASS (§5); 4 test queue thật (§6) |
