@@ -148,9 +148,14 @@ def _cached_features(work_root: Path, fingerprint: str, condition: str,
         target = _load_memmap(target_file,
                               _digest({"run": fingerprint, "scope": scope,
                                        "kind": "full-gallery-features"}))
+        # The query cache's key depends on the PARTITION it was written under, so the record is read
+        # first. A cache with no record is treated as canonical (as `_encode_queries` does); a
+        # fallback cache carries its own key and is reused only for a backfill of the same run.
+        record = _read_feature_fallback(feature_file)
         features = _load_memmap(feature_file,
-                                _digest({"run": fingerprint, "condition": condition,
-                                         "scope": scope, "kind": "query-features"}))
+                                record.get("cache_key") or _digest(
+                                    {"run": fingerprint, "condition": condition,
+                                     "scope": scope, "kind": "query-features"}))
         if target is None or features is None:
             return {}, {}
         gallery[scope] = target
@@ -648,6 +653,70 @@ def _stage_query_path(path: Path, query: Any, condition: str, work_root: Path) -
     return path, text
 
 
+#: Which batching the query features inside one condition were actually produced under.
+#: The canonical partition is one adapter call per `max(batch_size, ADAPTER_CALL_WINDOW)` queries.
+#: The mixed partition is the per-query retry below, which runs whenever a batch call raises: the
+#: survivors are then encoded ONE QUERY AT A TIME, so a model whose features depend on the batch
+#: sees a different arithmetic shape for those rows. That is not a detail for CLVC-Net, whose query
+#: rows move by up to 1.4639e-02 between batch 1 and batch 20 while the pinned upstream evaluator
+#: moves identically (87 §3b) -- a run whose query features were partly produced this way is a
+#: DIFFERENT measurement from one that was not, and must never be mixed with it.
+FEATURE_PARTITION_CANONICAL = "canonical_call_window"
+FEATURE_PARTITION_MIXED = "per_query_fallback"
+FEATURE_FALLBACK_SUFFIX = ".feature-fallback.json"
+
+def _feature_partition_fingerprint(fingerprint: str, fallback: Mapping[str, Any]) -> str:
+    """Memmap cache key that cannot be mistaken for the canonical partition.
+
+    `batch_size`/`adapter_batch_size` are already hashed into the run identity, but the PARTITION
+    inside a condition is only known at call time. Without this the fallback's memmap would carry
+    the canonical fingerprint and a later canonical run (`--resume`, or the same configuration
+    re-run) would load it as if its single-query rows were canonical -- silently publishing a
+    measurement computed under a different arithmetic shape. The derived key never equals the
+    canonical one, so that load can only miss.
+    """
+    if not fallback.get("fallback_qids"):
+        return fingerprint
+    return _digest({"cache": fingerprint, "feature_partition": FEATURE_PARTITION_MIXED,
+                    "fallback_qids": sorted(fallback["fallback_qids"])})
+
+def _read_feature_fallback(path: Path) -> dict[str, Any]:
+    """The partition record for a query-feature cache; `{}` when there is none to read."""
+    try:
+        record = json.loads(path.with_suffix(path.suffix + FEATURE_FALLBACK_SUFFIX).read_text(encoding="utf-8"))
+        return record if isinstance(record, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+def _feature_partition_record(blocks: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+    """One per-condition provenance block: was the canonical partition used, and where not.
+
+    A missing record is reported as `partition: None` with a reason, never as canonical: features
+    written before this field existed (or deleted after the run) say nothing about their partition,
+    and a reader deciding comparability may not be told otherwise.
+    """
+    known = [block for block in blocks if block.get("partition")]
+    if not known:
+        return {"partition": None, "fallback_used": None, "fallback_qids": [], "fallback_reason": None,
+                "call_window": None, "runner_batch_size": None, "adapter_batch_size": None,
+                "adapter_calls": None,
+                "reason": "no feature partition record on disk (features removed, or written before "
+                          "this field existed); the partition behind these features is unknown"}
+    used = [block for block in known if block.get("fallback_qids")]
+    qids = sorted({qid for block in used for qid in block["fallback_qids"]})
+    return {
+        "partition": FEATURE_PARTITION_MIXED if qids else FEATURE_PARTITION_CANONICAL,
+        "fallback_used": bool(qids),
+        "fallback_qids": qids,
+        "fallback_reason": next((block.get("fallback_reason") for block in used
+                                 if block.get("fallback_reason")), None),
+        "call_window": max((int(block.get("call_window") or 0) for block in known), default=0) or None,
+        "runner_batch_size": max((int(block.get("runner_batch_size") or 0) for block in known), default=0) or None,
+        "adapter_batch_size": max((int(block.get("adapter_batch_size") or 0) for block in known), default=0) or None,
+        "adapter_calls": sum(int(block.get("adapter_calls") or 0) for block in known),
+        "reason": None,
+    }
+
 def _encode_queries(adapter: Any, queries: Sequence[Any], query_paths: Sequence[Path | None],
                     indices: Sequence[int], condition: str, work_root: Path,
                     destination: Path, fingerprint: str, dimension: int,
@@ -659,9 +728,22 @@ def _encode_queries(adapter: Any, queries: Sequence[Any], query_paths: Sequence[
     def scope_of(index: int) -> str | None:
         return queries[index].category if scopes is None else scopes[index]
 
-    cached = _load_memmap(destination, fingerprint, (len(queries), dimension))
+    # A cache written under the mixed (per-query fallback) partition is stored under a DERIVED key,
+    # so `_load_memmap(..., fingerprint)` below can never return it: that load is only attempted
+    # when the sidecar says the canonical partition produced this file. A legacy cache with no
+    # partition record is treated as canonical, which is what it was.
+    #
+    # ponytail: a mixed-partition cache is not reused at all, so a diagnostic run that falls back
+    # re-encodes its queries on `--resume`. Upgrade path: load it under its own recorded `cache_key`
+    # once a caller can ask for "the same diagnostic partition" explicitly; until then a cache hit
+    # there would risk being served as canonical, which is the whole failure this prevents.
+    previous = _read_feature_fallback(destination)
+    partition_policy = previous.get("partition") or FEATURE_PARTITION_CANONICAL
+    cached = (_load_memmap(destination, fingerprint, (len(queries), dimension))
+              if partition_policy == FEATURE_PARTITION_CANONICAL else None)
     errors_path = destination.with_suffix(destination.suffix + ".errors.json")
     category_path = destination.with_suffix(destination.suffix + ".category-errors.json")
+    fallback_path = destination.with_suffix(destination.suffix + FEATURE_FALLBACK_SUFFIX)
     if cached is not None:
         try:
             errors = json.loads(errors_path.read_text(encoding="utf-8"))
@@ -687,6 +769,9 @@ def _encode_queries(adapter: Any, queries: Sequence[Any], query_paths: Sequence[
     # build several internal forward batches and decode them concurrently. The per-query fallback
     # below still calls with ONE query, and remains a distinct arithmetic shape it records.
     window = max(batch_size, ADAPTER_CALL_WINDOW)
+    fallback_qids: list[str] = []
+    fallback_reason: str | None = None
+    adapter_calls = 0
     for batch_start in range(0, len(eligible), window):
         batch = eligible[batch_start:batch_start + window]
         paths: list[str] = []
@@ -705,6 +790,7 @@ def _encode_queries(adapter: Any, queries: Sequence[Any], query_paths: Sequence[
         if not surviving:
             continue
         try:
+            adapter_calls += 1
             encoded = _as_array(adapter.encode_queries(paths, texts, categories))
             if encoded.shape != (len(surviving), dimension):
                 raise ValueError(f"encode_queries returned invalid shape {encoded.shape}")
@@ -712,6 +798,8 @@ def _encode_queries(adapter: Any, queries: Sequence[Any], query_paths: Sequence[
         except Exception as batch_error:
             if isinstance(batch_error, AdapterWorkerError):
                 raise
+            if fallback_reason is None:
+                fallback_reason = f"{type(batch_error).__name__}: {batch_error}"
             bad_batch_indices = tuple(getattr(batch_error, "batch_indices", ())) \
                 if type(batch_error).__name__ == "CategoryScopeError" else ()
             bad_qids = [queries[surviving[index]].qid for index in bad_batch_indices
@@ -724,10 +812,14 @@ def _encode_queries(adapter: Any, queries: Sequence[Any], query_paths: Sequence[
                 if local_index in bad_batch_indices:
                     continue
                 try:
+                    adapter_calls += 1
                     encoded = _as_array(adapter.encode_queries([path], [text], [scope_of(index)]))
                     if encoded.shape != (1, dimension):
                         raise ValueError(f"encode_queries returned invalid shape {encoded.shape}")
                     features[index] = encoded[0].astype(np.float32, copy=False)
+                    # ONE adapter call carrying ONE query: the arithmetic shape the group call would
+                    # have given this row is gone, so the row is named in the partition record.
+                    fallback_qids.append(queries[index].qid)
                 except Exception as error:
                     if isinstance(error, AdapterWorkerError):
                         raise
@@ -739,10 +831,41 @@ def _encode_queries(adapter: Any, queries: Sequence[Any], query_paths: Sequence[
                     else:
                         errors[queries[index].qid] = f"{type(error).__name__}: {error} (batch: {batch_error})"
     features.flush()
-    _write_memmap_metadata(destination, fingerprint, features)
+    record = {"partition": FEATURE_PARTITION_MIXED if fallback_qids else FEATURE_PARTITION_CANONICAL,
+              "fallback_used": bool(fallback_qids),
+              "fallback_qids": sorted(set(fallback_qids)),
+              "fallback_reason": fallback_reason if fallback_qids else None,
+              "call_window": window, "runner_batch_size": batch_size,
+              "adapter_batch_size": getattr(adapter, "batch_size", None),
+              "adapter_calls": adapter_calls,
+              "batch_order": "query index order, ascending; fallback rows re-encoded alone in the same order"}
+    # Written LAST and under the derived key: the sidecar IS the cache identity, so a reader that
+    # sees the canonical fingerprint is being told this file came from the canonical partition.
+    cache_key = _feature_partition_fingerprint(fingerprint, record)
+    record["cache_key"] = cache_key
+    _atomic_json(fallback_path, record)
+    _write_memmap_metadata(destination, cache_key, features)
     _atomic_json(errors_path, errors)
     _atomic_json(category_path, category_errors)
     return np.load(destination, mmap_mode="r", allow_pickle=False), errors, category_errors
+
+def _query_feature_partition(work_root: Path, condition: str, scopes: Sequence[str | None],
+                             *, not_encoded_reason: str | None = None) -> dict[str, Any]:
+    """The partition record(s) of a condition's query-feature caches, merged for provenance.
+
+    `not_encoded_reason` names the case where NO encode ever ran for this condition (an
+    `ABLATION_UNSUPPORTED` mode, a refused model): there are no features, so there is no partition
+    to report, and "unknown" would wrongly suggest features whose provenance was lost.
+    """
+    blocks = []
+    for scope in scopes:
+        path = work_root / "features" / f"query_{condition}_{_scope_name(scope)}.npy"
+        blocks.append(_read_feature_fallback(path))
+    if not_encoded_reason is not None and not any(block.get("partition") for block in blocks):
+        return {"partition": "not_encoded", "fallback_used": None, "fallback_qids": [],
+                "fallback_reason": None, "call_window": None, "runner_batch_size": None,
+                "adapter_batch_size": None, "adapter_calls": None, "reason": not_encoded_reason}
+    return _feature_partition_record(blocks)
 
 
 #: Query-dimension parallelism for the scoring contraction. MEASURED and BIT-IDENTICAL: every
@@ -1992,7 +2115,8 @@ def run_composition(data: Any, model_specs: Sequence[ModelSpec], config: Any, *,
                         feature_fp = _digest({"run": fingerprint, "condition": condition, "scope": scope,
                                               "kind": "query-features"})
                         if condition in retry_conditions:
-                            for suffix in ("", ".json", ".errors.json", ".category-errors.json"):
+                            for suffix in ("", ".json", ".errors.json", ".category-errors.json",
+                                           FEATURE_FALLBACK_SUFFIX):
                                 feature_file.with_suffix(feature_file.suffix + suffix).unlink(missing_ok=True)
                         try:
                             values, errors, category_errors = _encode_queries(
@@ -2144,11 +2268,16 @@ def run_composition(data: Any, model_specs: Sequence[ModelSpec], config: Any, *,
                     scored_count = sum(rank is not None for rank in ranks[condition].values())
                     unscored_count = len(ranks[condition]) - scored_count
                     current_status = mode_status.get(condition, {}).get("status")
+                    partition = _query_feature_partition(
+                        work_root, condition, scopes,
+                        not_encoded_reason=("this condition's query features were never encoded: "
+                                            f"{mode_status.get(condition, {}).get('status')}"))
                     if current_status not in {"EXACT_RANK_UNAVAILABLE", "ABLATION_UNSUPPORTED"}:
                         if not scored_count:
                             reason = next(iter(condition_reasons.values()), "no query produced an exact rank")
                             mode_status[condition] = {"status": "MODEL_UNAVAILABLE", "reason": reason,
                                                       "unscored_count": unscored_count,
+                                                      "feature_batch_fallback": partition,
                                                       "category_scope_failure_count": len(category_errors_all) + len(scope_errors)}
                         else:
                             # A condition that needed the per-query fallback scored at batch 1
@@ -2161,6 +2290,12 @@ def run_composition(data: Any, model_specs: Sequence[ModelSpec], config: Any, *,
                             mode_status[condition] = {"status": "PARTIAL" if unscored_count else "COMPLETED",
                                                       "unscored_count": unscored_count,
                                                       "fallback_used": bool(fallback_used.get(condition)),
+                                                      # Kept SEPARATE from `fallback_used`: that key
+                                                      # means "the SCORING pass fell back to one
+                                                      # query at a time". This one is about the
+                                                      # ENCODE pass, which changes features for a
+                                                      # batch-sensitive model (CLVC-Net: 87 §3b).
+                                                      "feature_batch_fallback": partition,
                                                       "category_scope_failure_count": len(category_errors_all) + len(scope_errors)}
                 _atomic_json(rank_path, {"fingerprint": fingerprint, "identity": identity,
                                          "attempt": attempt, "ranks": ranks,
@@ -2342,6 +2477,29 @@ def run_composition(data: Any, model_specs: Sequence[ModelSpec], config: Any, *,
                     "is_synthetic": is_synthetic, "synthetic_fixture": is_synthetic,
                     "feature_storage": {"format": "float32 .npy memmap", "projected_bytes": projection_totals,
                                         "arrays_removed_after_rank": True},
+                    # A canonical run and a diagnostic one must be distinguishable without opening
+                    # the code. `runner_batch_size` is the runner's group/`batch_size` argument,
+                    # `adapter_batch_size` the forward batch the model actually saw, `call_window`
+                    # how many paths one adapter call carried (the worker splits it into forward
+                    # batches), `query_order` the order rows were submitted in, and each condition's
+                    # partition whether its query features came from the canonical call shape or the
+                    # per-query fallback -- which for a batch-sensitive model (CLVC-Net: rows move up
+                    # to 1.4639e-02 between batch 1 and 20) is a different measurement.
+                    "batch_partition": {
+                        "runner_batch_size": batch_size,
+                        "adapter_batch_size": getattr(adapter, "batch_size", None),
+                        "call_window": max(batch_size, ADAPTER_CALL_WINDOW),
+                        "query_order": "release/loader query order, ascending index; scoring groups of "
+                                       "runner_batch_size in that same order",
+                        "partition_policy": "one adapter call per call_window queries; a failing call "
+                                            "falls back to one query at a time and is recorded per "
+                                            "condition in condition_status.<cond>.feature_batch_fallback",
+                        "conditions": {condition: _query_feature_partition(
+                            work_root, condition, scopes,
+                            not_encoded_reason=("this condition's query features were never "
+                                                f"encoded: {mode_status.get(condition, {}).get('status')}"))
+                                       for condition in conditions},
+                    },
                     "topk_export": topk_export_state,
                     # Provenance fact: how thoroughly the feature cache behind this run was
                     # verified on load. Written into the summary (not only the identity block)
