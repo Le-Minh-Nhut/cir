@@ -58,7 +58,17 @@ from workbench.composition.adapters import (
     resolved_decode_workers,
     worker_environment,
 )
+from workbench.composition.data import ANNOTATION_PIN
 from workbench.composition.inputs import CONDITIONS
+#: The routing contract is SHARED with LIMN, not reimplemented here: both models rank a query in
+#: exactly one of the same three per-category spaces, both take the release loader's assignment as
+#: final, and both fall back to the query's own FashionIQ caption annotation only when the loader
+#: left the query unscoped. Reusing the one resolver is what keeps the two models scoring the SAME
+#: query set; a second implementation would drift the first time either changed.
+from workbench.composition.model_limn import (
+    caption_scope_index,
+    resolve_query_scope,
+)
 from workbench.replay.common import load_trusted_whole_model
 
 #: ``model.py:127,199`` give each member a 1024-d feature; the evaluator concatenates the two.
@@ -88,6 +98,48 @@ EMPTY_TEXT_REASON = (
     "indexes x[0][0] (text_model.py:84-86), which raises IndexError for every row, so "
     "image_only_empty_text is unrepresentable in this model's text tower rather than merely "
     "unsupported by the adapter")
+
+#: The honest image-only path, as a NAMED condition distinct from ``image_only_empty_text``.
+#:
+#: ``image_only_empty_text`` stays unsupported for this model (``EMPTY_TEXT_REASON``): its text
+#: tower cannot encode an empty edit at all. But CLVC-Net DOES have an image-only representation —
+#: the same one its own retrieval pipeline already computes for a TARGET row, ``test.py:116``
+#: ``cat(normalize(local.extract_img_feature(imgs)[1]),
+#: normalize(global.extract_img_feature(imgs)[1]))`` — and the CLVC-Net paper names the baseline
+#: it corresponds to: "Image_Only simply takes the reference image representation as the composed
+#: query representation" (SIGIR'21, §4.2). So the ablation the paper reports is expressible with
+#: THIS checkpoint, without touching the text tower; what is missing is a CONDITION NAME, not a
+#: capability. ``IMAGE_ENCODER_ONLY`` is that name.
+#:
+#: It is NOT the paper's only difference: see ``IMAGE_ENCODER_ONLY_LEAKS_SCOPE`` for the routing
+#: consequence, which is a separate declaration and not silently folded in.
+IMAGE_ENCODER_ONLY = "clvc_image_encoder_only"
+#: The worker OPERATION that expression is sent under. Distinct from ``"targets"`` only so a reply
+#: can be attributed to the path that produced it; the row expression itself is the same.
+IMAGE_ENCODER_ONLY_OPERATION = "image_only"
+
+#: SCOPE LEAKAGE DECLARATION for ``clvc_image_encoder_only``: TRUE, and it is not a refinement.
+#:
+#: CLVC-Net scores a query against ONE category's gallery matrix, so every condition needs the
+#: query's category. The category comes from the reference image's STEM resolved against the
+#: FashionIQ annotation/split files (``data.assign_garment_categories`` and the shared resolver).
+#: Under ``image_only_empty_text`` and ``clvc_image_encoder_only`` the reference image is the only
+#: input, so reading its stem is reading a dataset label that is available independently of the
+#: pixels being encoded — permitted, because the label is release metadata, not the reference's
+#: pixels. Under ``text_only_black_image`` the reference is REPLACED by a black image, so the
+#: condition claims to remove the reference modality while routing still consults a property
+#: derived from that same reference image. That is information the condition says it deleted.
+#:
+#: Stated plainly rather than hidden: the routing label is a DATASET LABEL (verdict (a) of the
+#: protocol question), and it is the same label for all three conditions, so cross-condition
+#: comparisons stay internally consistent. What it must never be read as is "text_only_black_image
+#: sees no reference information at all": it sees the row's category. A run that needs the stricter
+#: claim has to be a separate run identity that declares the exemption — see
+#: ``IMAGE_ENCODER_ONLY`` in the evidence file — not a silent reuse of this one.
+IMAGE_ENCODER_ONLY_LEAKS_SCOPE = (
+    "category routing reads the reference image stem for every condition; under "
+    "text_only_black_image and clvc_image_encoder_only that is the only reference-derived input, "
+    "and it is a release DATASET LABEL (permitted), not the reference pixels")
 
 class Refused(RuntimeError):
     """This adapter's inputs or artifacts are not executable; no worker is launched."""
@@ -153,6 +205,59 @@ class Adapter(CompositionAdapter):
         #: Every worker-reported PID, in reply order: the reuse proof (one PID for N batches).
         self.worker_pids: list[int] = []
         self._interpreter_verified = False
+        #: Category routing (shared contract with LIMN; see the module-level import comment).
+        self.dataset_root = Path(self.config.FASHIONIQ_ROOT)
+        self._caption_scopes: Any = None
+        self._scope_decisions: dict[str, dict[str, Any]] = {}
+
+    #: Pin enforced on the caption annotation set, exactly as LIMN declares it. A fixture overrides
+    #: this on the instance with ``{}`` ("synthetic bytes; row schema only").
+    annotation_pin: Mapping[str, Mapping[str, Any]] = ANNOTATION_PIN
+
+    def caption_scope_index(self) -> Any:
+        """The annotation index, built once and shared by every routing call."""
+        if getattr(self, "_caption_scopes", None) is None:
+            self._caption_scopes = caption_scope_index(
+                self.dataset_root, getattr(self, "annotation_pin", ANNOTATION_PIN))
+        return self._caption_scopes
+
+    def query_scope(self, query: Any,
+                    candidate_names: Mapping[str, str] | None = None) -> str | None:
+        """Route one released query to the checkpoint scope its own annotation names.
+
+        The runner calls this only for the queries the release loader left unscoped (it treats a
+        loader assignment as final), so the 5 884 already-scoped queries cannot move. The remaining
+        119 are the ones a FashionIQ reference belongs to two categories for; the caption
+        annotation resolves 117 of them to exactly one category and refuses the 2 whose caption
+        pair is filed identically under both. ``None`` keeps a query unscored — never defaulted,
+        never inferred from the target image or from a retrieval score.
+        """
+        index = self.caption_scope_index()
+        record = resolve_query_scope(index, query, candidate_names)
+        if record["scope"] is not None and record["scope"] not in self.category_scopes:
+            record["reason"] = f"unresolved:scope_outside_declared:{record['scope']}"
+            record["scope"] = None
+        if not hasattr(self, "_scope_decisions"):
+            self._scope_decisions = {}
+        self._scope_decisions[str(record["qid"])] = record
+        return record["scope"]
+
+    def query_scope_resolution(self) -> dict[str, Any]:
+        """``qid -> scope`` with one rationale per query, plus the annotation provenance."""
+        decisions = [{"qid": qid, **{key: value for key, value in record.items() if key != "qid"}}
+                     for qid, record in sorted(self._scope_decisions.items())]
+        counts: dict[str, int] = {}
+        for record in decisions:
+            key = (f"{record['reason']}:{record['scope']}" if record["scope"] is not None
+                   else str(record["reason"]))
+            counts[key] = counts.get(key, 0) + 1
+        return {"model_id": self.model_id,
+                "resolver": f"{type(self).__module__}.{type(self).__qualname__}.query_scope",
+                "annotation": self.caption_scope_index().report(),
+                "counts_by_reason": dict(sorted(counts.items())),
+                "unresolved": [record for record in decisions if record["scope"] is None],
+                "query_count": len(decisions),
+                "scope_by_qid": {record["qid"]: record["scope"] for record in decisions}}
 
     @classmethod
     def status(cls, config: Any = None) -> AdapterStatus:
@@ -180,6 +285,24 @@ class Adapter(CompositionAdapter):
             raise ValueError(f"CLVC-Net gallery scope {scope!r} is not one of "
                              f"{self.category_scopes}")
         return _run(self, "targets", image_paths, (), categories)
+
+    def encode_image_only_queries(self, image_paths: Sequence[str],
+                                  categories: Sequence[str | None]) -> np.ndarray:
+        """Query rows from the image encoder ALONE — the named ``clvc_image_encoder_only`` path.
+
+        The row is ``test.py:116``'s target expression, applied to the reference image: the same
+        ``extract_img_feature`` halves, the same transform, the same ``(local, global)``
+        concatenation order and the same per-half ``F.normalize`` as the gallery matrix, so a
+        reference image's row here differs from its own gallery row only by batch composition.
+
+        No text argument exists on purpose: the edit caption is not an input, so it cannot change
+        the embedding, and ``compose_img_text``/``text_model`` are never reached. This is NOT
+        ``image_only_empty_text``: that condition drives the text tower with an empty string, which
+        this model cannot encode at all (``EMPTY_TEXT_REASON``), and it stays unsupported.
+        """
+        if len(image_paths) != len(categories):
+            raise ValueError("image_paths and categories must have equal lengths")
+        return _run(self, IMAGE_ENCODER_ONLY_OPERATION, image_paths, (), categories)
 
     def score(self, queries: Any, targets: Any,
               categories: Sequence[str | None] | None = None) -> np.ndarray:
@@ -270,6 +393,11 @@ def _blockers(model: dict[str, Any], checkpoint: dict[str, Any], path: Path,
 
 def _mode_support(condition: str, reason: str | None) -> tuple[bool, str | None]:
     """One predicate for both `mode_supported` and the status row, so the two cannot disagree."""
+    if condition == IMAGE_ENCODER_ONLY:
+        # Supported by CONSTRUCTION, not by hope: the path is `extract_img_feature` on the same
+        # pair from the same worker, and the CPU verification fixture executes it. It is a
+        # DIFFERENT name from `image_only_empty_text` on purpose — that one stays unsupported.
+        return (reason is None), reason
     if condition not in CONDITIONS:
         return False, f"unknown composition condition: {condition!r}"
     if condition == "image_only_empty_text":
@@ -360,6 +488,13 @@ def _run(adapter: Adapter, operation: str, image_paths: Sequence[str], texts: Se
             raise ValueError("CLVC-Net query image and text counts must match")
         _query_categories(categories)
         _refuse_empty_edits(texts)
+    elif operation == IMAGE_ENCODER_ONLY_OPERATION:
+        # The category is still an INPUT (the gallery is per category), but no text is transported
+        # at all, so nothing here can reach the text tower.
+        if texts:
+            raise ValueError("clvc_image_encoder_only transports no text; got "
+                             f"{len(texts)} texts for {len(image_paths)} images")
+        _query_categories(categories)
     else:
         scopes = {category for category in categories}
         if len(scopes) != 1 or None in scopes:
@@ -486,6 +621,44 @@ def _status(cls: type[Adapter], config: Any) -> AdapterStatus:
                                   "upstream reference mask is NOT inherited. One resident worker per "
                                   "adapter, per-category checkpoints loaded lazily on first use.")
 
+def image_row_builder(local_model: Any, global_model: Any, torch_module: Any,
+                      functional: Any) -> Any:
+    """The ONE image-only row expression, shared by the worker and the CPU fixture.
+
+    ``test.py:116`` — ``cat(normalize(local.extract_img_feature(imgs)[1]),
+    normalize(global.extract_img_feature(imgs)[1]))`` — applied to a query's reference image. The
+    gallery matrix is produced by exactly this expression, so a reference image's image-only query
+    row and its own gallery row differ only by batch composition, not by preprocessing, half order,
+    normalisation or model.
+
+    Torch and ``F`` are ARGUMENTS rather than module imports: this module is imported by the
+    backend without torch loaded, and the row builder must remain the same object in the worker
+    (GPU), in the CPU verification fixture, and in any test that stubs the text tower.
+    """
+    def build(images: Any) -> Any:
+        return torch_module.cat([
+            functional.normalize(local_model.extract_img_feature(images)[1]),
+            functional.normalize(global_model.extract_img_feature(images)[1]),
+        ], dim=1)
+    return build
+
+def composed_rows(operation: str, local_model: Any, global_model: Any, images: Any,
+                  texts: Sequence[str], torch_module: Any, functional: Any) -> Any:
+    """One forward batch → one 2048-d row per image. The only place an operation becomes a row.
+
+    Pulled out of the worker loop so the CPU verification fixture can execute the REAL expression
+    with the REAL weights on a machine without CUDA, instead of asserting a copy of it. The worker
+    passes its loaded pair; the fixture passes the same two pickles loaded on CPU.
+    """
+    if operation == "queries":
+        return torch_module.cat([
+            functional.normalize(local_model.compose_img_text(images, list(texts))[1]),
+            functional.normalize(global_model.compose_img_text(images, list(texts))[0]),
+        ], dim=1)
+    # ``targets`` and ``image_only`` share ONE expression (`test.py:116`), so the gallery row for an
+    # image and its image-only query row cannot diverge in preprocessing, half order or norm.
+    return image_row_builder(local_model, global_model, torch_module, functional)(images)
+
 def load_category_pair(category: str, members: Sequence[dict[str, Any]],
                        torch_module: Any) -> tuple[Any, Any]:
     """Verify both members' digests, then unpickle them — in that order, per member.
@@ -560,17 +733,8 @@ def _worker_main(job_path: Path) -> None:
             start = index * batch_size
             with torch.no_grad():
                 images = images.cuda()
-                if operation == "queries":
-                    edits = list(texts[start:start + len(images)])
-                    composed = torch.cat([
-                        F.normalize(local.compose_img_text(images, edits)[1]),
-                        F.normalize(global_model.compose_img_text(images, edits)[0]),
-                    ], dim=1)
-                else:
-                    composed = torch.cat([
-                        F.normalize(local.extract_img_feature(images)[1]),
-                        F.normalize(global_model.extract_img_feature(images)[1]),
-                    ], dim=1)
+                composed = composed_rows(operation, local, global_model, images,
+                                         texts[start:start + len(images)], torch, F)
             rows.append(composed.detach().float().cpu().numpy())
             del images, composed
         return np.concatenate(rows, axis=0) if rows else np.empty((0, DIMENSION), np.float32)
