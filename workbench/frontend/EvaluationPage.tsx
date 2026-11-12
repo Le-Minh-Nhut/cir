@@ -277,7 +277,21 @@ function CompositionTable({ data, location, onGoto, onSelectRun }: {
                               </Badge>
                             </td>
                             <td className="num">{run.is_failed ? "—" : fmtNdcg(run.metrics?.ndcg_multimodal)}</td>
-                            <td className="num">{run.is_failed ? "—" : fmtPercentValue(run.metrics?.recall_at_10_multimodal)}</td>
+                            <td className="num">
+                              {run.is_failed ? "—" : fmtPercentValue(run.metrics?.recall_at_10_multimodal)}
+                              {/* R@1 sits in the same track as R@10 rather than in a twelfth column:
+                                  the declared column list is what the table's minimum width is
+                                  derived from, and a new column would overflow the container. A
+                                  null is an em dash WITH its reason (a derived record that could
+                                  not be verified, or a condition with no exact rank) — never 0.0. */}
+                              <span className="cell-sub num"
+                                    title={run.metrics?.recall_at_1_multimodal == null
+                                      ? (run.derived_metrics?.recall_at_1?.reason
+                                         ?? "no exact rank at 1 was recorded for this run")
+                                      : `R@1 = target ranked exactly 1st, same scored cohort as R@10`}>
+                                R@1 {fmtPercentValue(run.metrics?.recall_at_1_multimodal)}
+                              </span>
+                            </td>
                             <td className="num">{run.is_failed ? "—" : fmtNdcg(run.metrics?.ndcg_text_only)}</td>
                             <td className="num">{run.is_failed ? "—" : fmtNdcg(run.metrics?.ndcg_image_only)}</td>
                             <td className="num" title={gap.state === "available" ? `${gap.formula}; cohort ${fmtInt(gap.cohort)}` : gap.reason}>
@@ -364,7 +378,19 @@ function RunMetricsDetail({ run }: { run: CompositionRun }) {
           ? <span key="g">{fmtGap(gap.value)} · cohort {fmtInt(gap.cohort)} · {gap.formula}</span>
           : <span key="g" className="hint">unavailable — {gap.reason}</span>],
         ["mean cohort", <span key="m">MM {fmtNdcg(run.metrics?.gap_multimodal_ndcg)} · text {fmtNdcg(run.metrics?.gap_text_only_ndcg)} · image {fmtNdcg(run.metrics?.gap_image_only_ndcg)}</span>],
-        ["recall", <span key="r">R@10 {fmtPercentValue(run.metrics?.recall_at_10_multimodal)} · R@50 {fmtPercentValue(run.metrics?.recall_at_50_multimodal)} · cắt cố định trong protocol</span>],
+        ["recall", <span key="r">
+          R@1 {fmtPercentValue(run.metrics?.recall_at_1_multimodal)}
+          {run.metrics?.recall_at_1_multimodal == null
+            ? <span className="hint"> ({run.metrics?.multimodal?.recall_at_1_unavailable_reason
+                ?? run.derived_metrics?.recall_at_1?.reason ?? "không có hạng chính xác tại 1"})</span>
+            : null}
+          {" · "}R@10 {fmtPercentValue(run.metrics?.recall_at_10_multimodal)} · R@50 {fmtPercentValue(run.metrics?.recall_at_50_multimodal)}
+          {" · "}cắt cố định trong protocol
+          {run.derived_metrics?.recall_at_1?.source
+            ? <span className="hint"> · R@1 từ {run.derived_metrics.recall_at_1.source}
+                ({run.derived_metrics.recall_at_1.status})</span>
+            : null}
+        </span>],
         ["outcome", <span key="o">{Object.entries(run.metrics?.outcomes ?? {}).map(([name, count]) => `${name} ${fmtInt(count)}`).join(" · ") || "—"} (tại @{FIXED_CUTOFFS.compositionOutcomeK})</span>],
         ["unscored", <span key="u">{fmtInt(scoredCounts(run, "multimodal").unscored)} query không có hạng chính xác — lỗi pipeline/ánh xạ, không phải lỗi truy hồi
           {scoredCounts(run, "multimodal").unscoredByKind

@@ -60,16 +60,23 @@ export type CompositionMetrics = {
   gap_image_only_ndcg?: number | null;
   gap_unavailable_reason?: string | null;
   multimodal?: { scored_count?: number | null; query_count?: number | null; coverage?: number | null;
-                 recall_at_10?: number | null; recall_at_50?: number | null; ndcg_full?: number | null;
-                 mrr?: number | null; unavailable_reason?: string | null } | null;
+                 recall_at_1?: number | null; recall_at_10?: number | null; recall_at_50?: number | null; ndcg_full?: number | null;
+                 mrr?: number | null; unavailable_reason?: string | null;
+                 /** Set only when a derived R@1 record was refused for this bucket. */
+                 recall_at_1_unavailable_reason?: string | null } | null;
   text_only?: { scored_count?: number | null; query_count?: number | null; coverage?: number | null;
-                recall_at_10?: number | null; recall_at_50?: number | null; ndcg_full?: number | null;
-                mrr?: number | null; unavailable_reason?: string | null } | null;
+                recall_at_1?: number | null; recall_at_10?: number | null; recall_at_50?: number | null; ndcg_full?: number | null;
+                mrr?: number | null; unavailable_reason?: string | null;
+                recall_at_1_unavailable_reason?: string | null } | null;
   image_only?: { scored_count?: number | null; query_count?: number | null; coverage?: number | null;
-                 recall_at_10?: number | null; recall_at_50?: number | null; ndcg_full?: number | null;
-                 mrr?: number | null; unavailable_reason?: string | null } | null;
+                 recall_at_1?: number | null; recall_at_10?: number | null; recall_at_50?: number | null; ndcg_full?: number | null;
+                 mrr?: number | null; unavailable_reason?: string | null;
+                 recall_at_1_unavailable_reason?: string | null } | null;
   recall_at_1_multimodal?: number | null;
   recall_at_10_multimodal?: number | null;
+  /** Which condition filled each gap role, when the run recorded a non-protocol triple. */
+  gap_conditions?: string[] | null;
+  gap_role_reason?: string | null;
   recall_at_50_multimodal?: number | null;
   mrr_gap?: number | null;
   coverage?: number;
@@ -131,6 +138,17 @@ export type CompositionRun = {
   /** Present on a run re-derived from a parent's ranks (`circus-derived-subset/v1`). Its
    *  `execution_status` is the parent's; this subset's own completeness lives here. */
   derived_from?: DerivedFromLike | null;
+  /** Metrics served from a DERIVED record instead of the published summary, per metric, with the
+   *  source digest and — when it could not be served — the refusal reason. `status` is the verdict:
+   *  `VERIFIED` means the artifact the record describes still hashes to what the record claims. */
+  derived_metrics?: Record<string, {
+    status?: "MISSING" | "VERIFIED" | "REFUSED" | string;
+    source?: string | null;
+    reason?: string | null;
+    values?: Record<string, number | null> | null;
+  }> | null;
+  /** Conditions to render for this run: the protocol triple plus any ablation it actually scored. */
+  conditions_display?: Array<{ id: string; label: string }> | null;
   metrics: CompositionMetrics;
   smoke?: { limited: boolean; query_limit?: number | null; label?: string | null };
 };
