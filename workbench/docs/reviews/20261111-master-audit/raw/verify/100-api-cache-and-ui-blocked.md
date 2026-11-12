@@ -326,6 +326,14 @@ the offer list to `n <= depth`, so on this run the options are `[1, 5, 10, 20, 5
 **Honest: yes.** The number 100 cannot be selected where the export holds 50, and the depth is printed
 on the row that would have been wrong.
 
+Observed in a real browser (Chromium via `browser_qa.py`'s playwright, `?area=samples&view=explorer&
+runs=c:4bc9893a977e501b82378e76`, 1440x900), reading the live `<select data-testid="topk">`:
+
+```
+Top-K options on depth-50 run: ['Top 1', 'Top 5', 'Top 10', 'Top 20', 'Top 50']
+offers 100: False
+```
+
 ### `TOPK_EXPORT_NOT_REQUESTED` — `ad477312aa57c1b9114f9e51` (TME, Full)
 
 `GET .../runs/ad477312aa57c1b9114f9e51?subset=full`:
@@ -341,6 +349,19 @@ UI: `canRequest` is false, the selector renders `<option value="unavailable">Ch�
 and is disabled, and the panel renders `EmptyState kind="capability"` titled
 `"Lượt này chưa có danh sách ứng viên"` with the backend's own reason inside a `Detail`. No placeholder
 images. **Honest: yes** — a named status and a next step, never an empty success.
+
+Observed in the browser on `runs=c:ad477312aa57c1b9114f9e51`:
+
+```
+selector count: 1   disabled: True
+options: ['Chưa có ứng viên']
+contains 'chưa có danh sách ứng viên': True
+contains 'Chưa có ứng viên': True
+```
+
+(The literal `TOPK_EXPORT_NOT_REQUESTED` is **not** in the DOM text: the panel shows the backend's
+human reason, and the status word lives in the `Detail` body. That is the intended split — the status
+is vocabulary, the reason is the sentence a reader acts on.)
 
 ---
 
@@ -383,6 +404,42 @@ then `FailuresPage.saveCohort`'s `compositionOnly` early return can be removed. 
 client-side refusal is the correct behaviour, not a bug.
 
 ---
+
+## 9a. The four causes observed separately in one page load
+
+`?area=experiments&view=models`, 1440x1400, real Chromium, reading `model-row-<id>`:
+
+```
+tgcir     status badge: "2 lượt trong phạm vi, đã có số đo — chọn một"   blockers: 1
+          reasons: "2 lý do | external runtime asset provenance unresolved: OpenAI CLIP ViT-B/16
+                    weights/cache | command not runnable: COMMAND_BLOCKED_SOURCE_ENTRYPOINT"
+clvc_net  status badge: "Chấm thiếu"                                    blockers: 1
+          reasons: "3 lý do | torchvision ResNet-50 ImageNet weights missing: ... |
+                    external runtime asset file missing: ..."
+```
+
+This is the separation the task asks for, on one screen:
+* the **status badge** describes the RUN in scope — tgcir "có số đo" (a measured run), clvc "Chấm
+  thiếu" (partial coverage, cause (c));
+* the **blockers list** carries cause (a) verbatim, and it does NOT turn the row's status into
+  "blocked" — tgcir is `BLOCKED_COMMAND` yet its row reads as measured-with-numbers;
+* clvc's ResNet line is still `missing` here because this process predates the cache fix (§2) — the
+  file is present and verified on disk, and the listing cannot see it until the unit restarts.
+  That is the defect §2 removes, caught in the act.
+
+The `R@1` column, same page load (frontend `96014e9`, backend still pre-fix):
+
+```
+line: R@1 —        (×8 rows, each carrying the em dash and a title with the reason)
+```
+
+Correct for the current process: the live JSON has no `recall_at_1` yet, and the cell says so with an
+em dash instead of `0.0`. Confirmed against the live payload in the same run:
+
+```
+GET /api/composition/runs/7b1fa85007bffdab931f7f19?subset=full → 200
+recall_at_1_multimodal present: False     derived_metrics present: False     conditions_display present: False
+```
 
 ## 9b. Frontend: R@1 beside R@10, nulls with a reason
 
