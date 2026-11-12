@@ -1,6 +1,7 @@
 """Read-only API and cache for CIRCUS composition evaluation artifacts."""
 from __future__ import annotations
 
+import copy
 import hashlib
 import json
 import logging
@@ -10,12 +11,48 @@ from typing import Any, Mapping
 
 from workbench.backend.operator_config import WorkbenchConfig, resolve_config
 from workbench.composition.data import RELEASE_PROTOCOL_ID, load_release
+from workbench.composition.inputs import ABLATION_CONDITIONS, condition_label
 from workbench.composition.metrics import SHORTCUT_K, compose, hit_at_k, ndcg_full
 
 logger = logging.getLogger("workbench.composition")
 
 SUBSETS = ("full", "sf", "validated")
 CONDITIONS = ("multimodal", "text_only_black_image", "image_only_empty_text")
+
+def displayed_conditions(summary: Mapping[str, Any] | None) -> tuple[str, ...]:
+    """The conditions to RENDER for one run: the protocol triple, plus any ablation it scored.
+
+    `CONDITIONS` stays the protocol's three names -- every model's `condition_status` block is keyed
+    on it, and `determine_query_outcome` reads two of them positionally. An adapter that also scored
+    an ablation (`ABLATION_CONDITIONS`, e.g. `clvc_image_encoder_only`) carries a fourth real row in
+    `condition_status`/`metrics`; dropping it from the display set is what made that measurement
+    invisible. Order is protocol-first, then declaration order, so nothing is ever renamed.
+    """
+    scored: set[str] = set()
+    if isinstance(summary, Mapping):
+        for field in ("condition_status", "conditions"):
+            value = summary.get(field)
+            if isinstance(value, Mapping):
+                scored.update(str(name) for name in value)
+            elif isinstance(value, (list, tuple)):
+                scored.update(str(name) for name in value)
+        metrics = summary.get("metrics")
+        if isinstance(metrics, Mapping):
+            # `metrics` keys its buckets by ROLE (`multimodal`, `text_only`, `image_only`), and each
+            # bucket names the condition that filled that role in its own `condition` field.
+            for role in ("multimodal", "text_only", "image_only"):
+                bucket = metrics.get(role)
+                if isinstance(bucket, Mapping) and isinstance(bucket.get("condition"), str):
+                    scored.add(bucket["condition"])
+    extra = tuple(name for name in ABLATION_CONDITIONS if name in scored and name not in CONDITIONS)
+    return (*CONDITIONS, *extra)
+
+def condition_display_label(condition: str) -> str:
+    """A condition's human label; an unknown name is shown verbatim rather than dropped."""
+    try:
+        return condition_label(condition)
+    except ValueError:
+        return condition
 
 
 def resolve_composition_path(artifacts_root: Path, relative: str | Path) -> Path:
@@ -91,7 +128,15 @@ def load_cached_release(root: Path | None = None) -> Any:
 
 
 def read_summary_file(path: Path) -> dict[str, Any] | None:
-    """Read and validate a summary file with mtime caching."""
+    """Read and validate a summary file with mtime caching.
+
+    The cache holds the PARSED dict; every caller gets its own deep copy. The cache used to hand the
+    same object to everyone, and `list_composition_summaries` decorates rows in place
+    (`decorate_summary`, `annotate_duplicate_attempts`, `decorate_run_rows`), so whichever route
+    warmed the cache decided which derived blocks a later detail response carried -- the run-detail
+    fetch was 20 053 B without `subset_provenance` and 20 841 B with it, depending only on whether
+    the list route had run first in this process. A response must not depend on an earlier request.
+    """
     try:
         stat = path.stat()
     except OSError:
@@ -99,7 +144,7 @@ def read_summary_file(path: Path) -> dict[str, Any] | None:
     path_str = str(path.resolve())
     cached = _SUMMARY_FILE_CACHE.get(path_str)
     if cached and cached[0] == stat.st_mtime and cached[1] == stat.st_size:
-        return cached[2]
+        return copy.deepcopy(cached[2])
 
     try:
         text = path.read_text(encoding="utf-8")
@@ -119,6 +164,8 @@ def read_summary_file(path: Path) -> dict[str, Any] | None:
         if isinstance(mm, dict):
             if "ndcg_multimodal" not in metrics and "ndcg_full" in mm:
                 metrics["ndcg_multimodal"] = mm["ndcg_full"]
+            if "recall_at_1_multimodal" not in metrics and "recall_at_1" in mm:
+                metrics["recall_at_1_multimodal"] = mm["recall_at_1"]
             if "recall_at_10_multimodal" not in metrics and "recall_at_10" in mm:
                 metrics["recall_at_10_multimodal"] = mm["recall_at_10"]
             if "recall_at_50_multimodal" not in metrics and "recall_at_50" in mm:
@@ -147,7 +194,20 @@ def read_summary_file(path: Path) -> dict[str, Any] | None:
         else "unknown"
     )
     _SUMMARY_FILE_CACHE[path_str] = (stat.st_mtime, stat.st_size, data)
-    return data
+    return copy.deepcopy(data)
+
+def _cached_summary_copy(path_str: str) -> dict[str, Any] | None:
+    """A fresh, UNDECORATED copy of a cached summary, for a caller that decorates in place.
+
+    Two routes decorate the same parsed document with DIFFERENT derived blocks: the list route adds
+    `subset_provenance` (via `decorate_run_rows`) and the detail route does not. Handing both the same
+    object made the detail response depend on whether the list route had already run -- 80 104 B
+    without the block, 80 927 B with it, in the same process. Every caller now receives its own copy,
+    so the two routes are independent, and a caller that mutates its copy cannot change what the next
+    request reads.
+    """
+    cached = _SUMMARY_FILE_CACHE.get(path_str)
+    return copy.deepcopy(cached[2]) if cached else None
 
 
 def is_fixture_summary(summary: Mapping[str, Any]) -> bool:
@@ -191,7 +251,7 @@ def is_imported_summary(summary: Mapping[str, Any]) -> bool:
 # FAILED means the run produced no numbers; MODEL_UNAVAILABLE / EXACT_RANK_UNAVAILABLE /
 # ABLATION_UNSUPPORTED are per-condition statuses, never top-level execution statuses.
 _FAILED_EXECUTION_STATUSES = frozenset({"FAILED"})
-_METRIC_KEYS = frozenset({"ndcg_full", "recall_at_10", "recall_at_50", "mrr"})
+_METRIC_KEYS = frozenset({"ndcg_full", "recall_at_1", "recall_at_10", "recall_at_50", "mrr"})
 
 
 def _has_measured_numbers(metrics: Any) -> bool:
@@ -983,6 +1043,51 @@ def decorate_summary(artifacts_root: Path, summary: dict[str, Any],
                       if whole_run else None),
     }
     summary["statistics_whole_run"] = whole_run
+    # A metric the scorer gained AFTER these runs finished is served from a derived record only when
+    # the record still describes the rank artifact on disk (see `derived_metric`). The published
+    # `full.json` is never rewritten: this block is the other place a number can come from, and it
+    # says so, per metric, with `source` and the refusal reason when it cannot be served.
+    summary["derived_metrics"] = {}
+    metrics_block = summary.get("metrics")
+    if isinstance(metrics_block, dict):
+        attempt = (ranks_data or {}).get("attempt") if isinstance(ranks_data, Mapping) else None
+        for metric in DERIVED_METRICS:
+            record = derived_metric(artifacts_root, metric, str(summary.get("run_id") or ""),
+                                    attempt or summary.get("attempt") or None)
+            block = {"status": record["status"], "source": "derived_record",
+                     "derived_from": ((record.get("record") or {}).get("derived_from")),
+                     "reason": record["reason"]}
+            if record["status"] == "VERIFIED":
+                values = (record.get("record") or {}).get("conditions") or {}
+                for condition, values_for_condition in values.items():
+                    if not isinstance(values_for_condition, Mapping):
+                        continue
+                    bucket = metrics_block.get(condition)
+                    if not isinstance(bucket, dict) or "recall_at_1" in bucket:
+                        continue
+                    bucket["recall_at_1"] = values_for_condition.get("recall_at_1")
+                    if values_for_condition.get("unavailable_reason"):
+                        bucket["recall_at_1_unavailable_reason"] = \
+                            values_for_condition["unavailable_reason"]
+                multimodal = metrics_block.get("multimodal")
+                if isinstance(multimodal, dict) and "recall_at_1_multimodal" not in metrics_block:
+                    metrics_block["recall_at_1_multimodal"] = multimodal.get("recall_at_1")
+                block["values"] = {condition: (values_for_condition or {}).get("recall_at_1")
+                                   for condition, values_for_condition in values.items()}
+            summary["derived_metrics"][metric] = block
+    # The gap's OWN condition triple, when the run records one. Without this a variant gap (computed
+    # over an adapter's named ablation because the protocol image condition carries no ranks) is
+    # indistinguishable on screen from the protocol gap.
+    gap_conditions = metrics_block.get("gap_conditions") if isinstance(metrics_block, Mapping) else None
+    if isinstance(gap_conditions, (list, tuple)) and gap_conditions:
+        summary["gap_conditions"] = [str(name) for name in gap_conditions]
+        summary["gap_condition_labels"] = [condition_display_label(str(name))
+                                           for name in gap_conditions]
+        summary["gap_role_reason"] = (metrics_block.get("gap_role_reason")
+                                      if isinstance(metrics_block, Mapping) else None)
+    summary["conditions_display"] = [
+        {"id": name, "label": condition_display_label(name)}
+        for name in displayed_conditions(summary)]
     return summary
 
 def get_composition_run_detail(
@@ -1070,6 +1175,83 @@ def _sha256_of(path: Path) -> str:
         for block in iter(lambda: handle.read(1 << 20), b""):
             digest.update(block)
     return digest.hexdigest()
+
+#: Metrics this backend can serve from a DERIVED record rather than from the published summary.
+#: A derived record states how to recompute one metric from a run's own rank artifact and carries
+#: the digest of the artifact it was derived from. It exists because `recall_at_1` was added to the
+#: scorer after these runs finished: recomputing it from the stored ranks is exact, but the result
+#: must never outlive the artifact that produced it, so the digest is checked on every read and a
+#: mismatch is refused rather than served.
+DERIVED_METRICS = ("recall_at_1",)
+_DERIVED_FILE_CACHE: dict[str, tuple[float, int, list[dict[str, Any]]]] = {}
+
+def _derived_metric_records(artifacts_root: Path, metric: str) -> list[dict[str, Any]]:
+    """Every derived record for one metric, cached on the file's stamp."""
+    try:
+        directory = resolve_composition_path(artifacts_root, Path("derived") / metric)
+    except ValueError:
+        return []
+    if not directory.is_dir():
+        return []
+    records: list[dict[str, Any]] = []
+    for path in sorted(directory.glob("*.json")):
+        try:
+            stat = path.stat()
+        except OSError:
+            continue
+        key = str(path)
+        cached = _DERIVED_FILE_CACHE.get(key)
+        if cached and cached[0] == stat.st_mtime and cached[1] == stat.st_size:
+            records.extend(cached[2])
+            continue
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            logger.warning("Unreadable derived %s record: %s", metric, path)
+            continue
+        runs = payload.get("runs") if isinstance(payload, dict) else None
+        usable = [record for record in (runs or []) if isinstance(record, dict)]
+        _DERIVED_FILE_CACHE[key] = (stat.st_mtime, stat.st_size, usable)
+        records.extend(usable)
+    return records
+
+def derived_metric(artifacts_root: Path, metric: str, run_id: str,
+                   attempt: str | None) -> dict[str, Any]:
+    """One derived metric record for (run, attempt), with its source verified.
+
+    Returns `{"status": "MISSING"|"VERIFIED"|"REFUSED", "record": ..., "reason": ...}`. REFUSED is
+    the important case: a record whose `derived_from.ranks.sha256` no longer matches the artifact on
+    disk describes a table that no longer exists, so its numbers are not this run's numbers. Serving
+    them would be a fabricated measurement; refusing is a named absence.
+    """
+    result: dict[str, Any] = {"status": "MISSING", "record": None, "reason": None}
+    if not run_id or not attempt:
+        result["reason"] = ("no attempt id is recorded for this run, so a derived record cannot be "
+                           "matched to it")
+        return result
+    candidates = [record for record in _derived_metric_records(artifacts_root, metric)
+                  if record.get("run_id") == run_id and record.get("attempt") == attempt]
+    if not candidates:
+        return result
+    record = candidates[0]
+    declared = ((record.get("derived_from") or {}).get("ranks") or {})
+    path_value, expected = declared.get("path"), declared.get("sha256")
+    if not path_value or not expected:
+        result.update(status="REFUSED",
+                      reason="the derived record does not name the rank artifact it came from")
+        return result
+    path = Path(str(path_value))
+    if not path.is_file():
+        result.update(status="REFUSED",
+                      reason=f"the rank artifact the record was derived from is gone: {path}")
+        return result
+    if _sha256_of(path) != expected:
+        result.update(status="REFUSED",
+                      reason=(f"the rank artifact changed since this {metric} record was derived "
+                              f"({path}), so the number no longer describes this run"))
+        return result
+    result.update(status="VERIFIED", record=record)
+    return result
 
 #: The four statuses a derived run reports for its PARENT's candidate export. They are the parent's
 #: own facts, not this run's: a derived run never exports candidates itself.
@@ -1236,6 +1418,12 @@ def get_composition_run_queries(
 
     ranks_by_condition = ranks_data.get("ranks", {}) if ranks_data else {}
     failures_by_condition = ranks_data.get("query_failures", {}) if ranks_data else {}
+    # The protocol triple, plus any ABLATION condition this run actually ranked. `CONDITIONS` keeps
+    # its meaning (`determine_query_outcome` reads two of its names positionally); this only widens
+    # what the served `ranks` map carries, so a `clvc_image_encoder_only` row is not silently dropped.
+    served_conditions = (*CONDITIONS,
+                         *(name for name in ABLATION_CONDITIONS
+                           if name in ranks_by_condition and name not in CONDITIONS))
     target_condition = condition or "multimodal"
     lineage = (ranks_data or {}).get("derived_from") if isinstance(
         (ranks_data or {}).get("derived_from"), Mapping) else None
@@ -1261,7 +1449,7 @@ def get_composition_run_queries(
     for q in subset_queries:
         q_ranks = {
             c: ranks_by_condition.get(c, {}).get(q.qid)
-            for c in CONDITIONS
+            for c in served_conditions
         }
         q_outcome = determine_query_outcome(q_ranks)
         target_rank = q_ranks.get(target_condition)
@@ -1350,6 +1538,11 @@ def get_composition_run_queries(
         "limit": limit,
         "offset": offset,
         "condition": target_condition,
+        # Which condition keys `items[].ranks` carries for this run: the protocol three, plus any
+        # ablation condition it actually ranked. The UI labels rows from this, never from a
+        # hard-coded triple, so a `clvc_image_encoder_only` row is rendered instead of dropped.
+        "conditions": [{"id": name, "label": condition_display_label(name)}
+                       for name in served_conditions],
         "counters": counters,
         "state_counts": state_counts,
         "candidates": {
@@ -1369,7 +1562,12 @@ def get_composition_run_queries(
             "parent_rank_artifact_sha256": lineage.get("parent_rank_artifact_sha256"),
             "parent_topk_export": lineage.get("parent_topk_export"),
         } if lineage else None),
-        "statistics": _ranks_statistics(ranks_data, len(subset_queries),
+        # `query_count` must describe the queries this block actually ranked, which is what the
+        # per-condition denominators one level above already count. Passing the release's subset
+        # size served `query_count: 6003` beside `denominator: 5` on a 5-query smoke and contradicted
+        # the same payload's `statistics_whole_run.query_count: 5`; `None` makes the helper derive it
+        # from those denominators, so the two can no longer disagree.
+        "statistics": _ranks_statistics(ranks_data, None,
                                         {query.qid for query in subset_queries}),
         "statistics_whole_run": _ranks_statistics(ranks_data, None, None),
     }

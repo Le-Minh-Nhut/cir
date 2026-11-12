@@ -167,17 +167,136 @@ def write_json(path: Path, payload: list[dict]) -> None:
     temporary.replace(path)
 
 
+#: The readiness document, keyed on the state it was computed from. A module-level list with no key
+#: served the pre-edit document for the life of the process: after the pinned ResNet-50 file was
+#: acquired and verified, `GET /api/models` still reported it missing while `POST /api/jobs` (which
+#: recomputes `preflight_blockers` per request) had already dropped that blocker. A readiness view
+#: that cannot see the file appear, or disappear, is not a readiness view.
+#:
+#: The key is every input the answer depends on, taken as CHEAP STAMPS only -- file/directory stats
+#: and a handful of setting reads, never a hash and never a probe. A full recompute costs ~106 s
+#: cold on this host (17 models x preflight + per-checkpoint availability), so it must stay cached;
+#: the stamp is what makes the cache unable to outlive its inputs.
+_MODELS_CACHE_KEY: tuple | None = None
 _MODELS_CACHE: list[dict] | None = None
+
+def _stat_stamp(path: Path) -> tuple:
+    """`(str, size, mtime_ns, exists)` for a path, or a named absence. Stat only, never a read."""
+    try:
+        stat = path.stat()
+    except OSError:
+        return (str(path), None, None, False)
+    return (str(path), stat.st_size, stat.st_mtime_ns, True)
+
+def _asset_witness_paths(model: dict, config) -> list[Path]:
+    """The paths whose appearance or disappearance can change this model's readiness.
+
+    For every external asset the model's preparation contract requires, this is the file the
+    checker opens. A cache-shaped asset (`cache_path_suffix` under `cache_root_env_var`) has no
+    declared absolute location, so the watched path is that location resolved the way its consumer
+    resolves it -- this is the one place the shape is restated, and it is restated as a stat target,
+    not as a status decision: the checker below still decides what the file means.
+    """
+    from workbench.backend.model_settings import setting
+    from workbench.backend.registry import evaluator_root, evaluator_relative_asset_paths, required_runtime_assets
+
+    paths: list[Path] = []
+    relative = evaluator_relative_asset_paths(model)
+    root = evaluator_root(model)
+    for asset in required_runtime_assets(model):
+        location = asset.get("expected_local_location")
+        env_var = asset.get("location_env_var")
+        configured = setting(env_var) if env_var else None
+        if configured:
+            paths.append(Path(configured).expanduser())
+            continue
+        if location:
+            path = Path(location).expanduser()
+            # A relative declaration without an env var is opened from the checkout's own cwd.
+            name = relative.get(asset.get("name"))
+            paths.append((root / name) if (name and root is not None) else path)
+            continue
+        suffix = asset.get("cache_path_suffix")
+        if not suffix:
+            continue
+        root_var = asset.get("cache_root_env_var") or "TORCH_HOME"
+        configured_root = setting(root_var) or setting("XDG_CACHE_HOME")
+        if configured_root and configured_root.strip():
+            cache_root = Path(configured_root.strip()).expanduser()
+        else:
+            cache_root = Path.home() / ".cache" / ("huggingface" if root_var == "HF_HOME" else "torch")
+        paths.append(cache_root / suffix)
+    return paths
+
+def _models_state_stamp(registry: dict, config) -> tuple:
+    """Everything `GET /api/models` reads, as stats and setting values.
+
+    Registry documents, the operator file, every declared setting the registry names, every
+    checkpoint path (and, for a bundle, its members), every required external asset path, and each
+    model's checkout directory. All of it is `stat`/`setting` -- no hashing, no subprocess -- so a
+    change of any of these is visible on the very next request in the same process.
+    """
+    from workbench.backend.model_settings import setting
+    from workbench.backend.registry import (
+        AUXILIARY_ASSET_REGISTRY_PATH, PREPARATION_CONTRACT_REGISTRY_PATH, REGISTRY_PATH,
+        checkpoint_path, load_auxiliary_assets,
+    )
+
+    parts: list[tuple] = []
+    # The path `load_registry` itself will read (`WORKBENCH_REGISTRY_PATH` can relocate it), plus the
+    # two sibling documents whose entries feed the same answer.
+    import os as _os
+
+    registry_path = Path(_os.environ["WORKBENCH_REGISTRY_PATH"]).resolve() \
+        if _os.environ.get("WORKBENCH_REGISTRY_PATH") else REGISTRY_PATH
+    for path in (registry_path, AUXILIARY_ASSET_REGISTRY_PATH, PREPARATION_CONTRACT_REGISTRY_PATH):
+        parts.append(("registry", _stat_stamp(Path(path))))
+    from workbench.backend import operator_config
+
+    parts.append(("operator_env", _stat_stamp(Path(operator_config._CONFIG_PATH))))
+    variables: set[str] = set()
+    from workbench.backend.registry import required_runtime_assets
+
+    for asset in load_auxiliary_assets():
+        for name in ("cache_root_env_var", "location_env_var", "cache_root_fixed"):
+            if asset.get(name):
+                variables.add(str(asset[name]))
+    for model in registry["models"]:
+        env = model.get("environment") or {}
+        if env.get("python_env_var"):
+            variables.add(str(env["python_env_var"]))
+        for asset in required_runtime_assets(model):
+            for name in ("location_env_var", "cache_root_env_var"):
+                if asset.get(name):
+                    variables.add(str(asset[name]))
+    variables.update({"XDG_CACHE_HOME", "HF_HOME", "TORCH_HOME"})
+    parts.append(("settings", tuple(sorted((name, setting(name)) for name in variables))))
+    for model in registry["models"]:
+        for variant in model["checkpoint_variants"]:
+            path = checkpoint_path(model["model_id"], variant, config.WORKBENCH_CHECKPOINT_ROOT)
+            parts.append(("checkpoint", _stat_stamp(path)))
+            if path.is_dir():
+                for member in sorted(path.iterdir()):
+                    parts.append(("member", _stat_stamp(member)))
+        for asset_path in _asset_witness_paths(model, config):
+            parts.append(("asset", _stat_stamp(asset_path)))
+        if model.get("source_dir"):
+            parts.append(("source", _stat_stamp(
+                Path(config.WORKBENCH_THIRD_PARTY_ROOT) / str(model["source_dir"]))))
+    parts.append(("dataset", _stat_stamp(Path(config.FASHIONIQ_ROOT))))
+    return tuple(parts)
 
 @app.get("/api/models")
 def models():
-    global _MODELS_CACHE
-    if _MODELS_CACHE is not None:
-        return _MODELS_CACHE
+    global _MODELS_CACHE, _MODELS_CACHE_KEY
+    config = resolve_config()
     registry = load_registry()
+    stamp = _models_state_stamp(registry, config)
+    if _MODELS_CACHE is not None and _MODELS_CACHE_KEY == stamp:
+        return _MODELS_CACHE
     out = []
     for model in registry["models"]:
-        model_blockers = preflight_blockers(model, resolve_config())
+        model_blockers = preflight_blockers(model, config)
 
         available = {item["checkpoint_id"]: checkpoint_availability(
             model, item, model_blockers=model_blockers)
@@ -200,7 +319,7 @@ def models():
                 for bundle in bundles
             ]
         out.append(entry)
-    _MODELS_CACHE = out
+    _MODELS_CACHE, _MODELS_CACHE_KEY = out, stamp
     return out
 
 
