@@ -1059,10 +1059,20 @@ def decorate_summary(artifacts_root: Path, summary: dict[str, Any],
                      "reason": record["reason"]}
             if record["status"] == "VERIFIED":
                 values = (record.get("record") or {}).get("conditions") or {}
+                # The derived record keys by CONDITION NAME (`image_only_empty_text`); the summary
+                # buckets by ROLE (`multimodal`/`text_only`/`image_only`) and each bucket names the
+                # condition that filled it. Mapping through that name is what keeps a variant run's
+                # value out of the protocol condition's bucket.
+                bucket_for: dict[str, str] = {}
+                for role in ("multimodal", "text_only", "image_only"):
+                    bucket = metrics_block.get(role)
+                    if isinstance(bucket, Mapping) and isinstance(bucket.get("condition"), str):
+                        bucket_for[bucket["condition"]] = role
                 for condition, values_for_condition in values.items():
                     if not isinstance(values_for_condition, Mapping):
                         continue
-                    bucket = metrics_block.get(condition)
+                    role = bucket_for.get(condition, condition)
+                    bucket = metrics_block.get(role)
                     if not isinstance(bucket, dict) or "recall_at_1" in bucket:
                         continue
                     bucket["recall_at_1"] = values_for_condition.get("recall_at_1")

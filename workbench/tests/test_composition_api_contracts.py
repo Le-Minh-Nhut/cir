@@ -178,7 +178,15 @@ def test_detail_is_byte_identical_in_both_call_orders(tmp_path):
 def test_a_stale_derived_record_is_refused(tmp_path):
     """A derived number that outlives its source artifact is worse than no number."""
     root = tmp_path
-    _summary(root, "derived1")
+    summary = _summary(root, "derived1")
+    # The buckets name the condition that filled each ROLE, exactly as a real summary does. The
+    # derived record keys by CONDITION NAME, so a value has to be routed through that name -- the
+    # first cut of this overlay looked the record's key up directly and silently served nothing for
+    # every bucket whose role name differs from its condition name, which is two of the three.
+    payload = json.loads(summary.read_text(encoding="utf-8"))
+    payload["metrics"]["text_only"] = {"condition": "text_only_black_image", "ndcg_full": 0.4}
+    payload["metrics"]["image_only"] = {"condition": "image_only_empty_text", "ndcg_full": None}
+    summary.write_text(json.dumps(payload), encoding="utf-8")
     ranks_path = _ranks(root, "derived1", {condition: {"7:1": 1, "7:2": 2} for condition in CONDITIONS})
     digest = hashlib.sha256(ranks_path.read_bytes()).hexdigest()
 
@@ -199,6 +207,9 @@ def test_a_stale_derived_record_is_refused(tmp_path):
     assert served["derived_metrics"]["recall_at_1"]["status"] == "VERIFIED"
     assert served["metrics"]["recall_at_1_multimodal"] == 50.0
     assert served["metrics"]["multimodal"]["recall_at_1"] == 50.0
+    # Every role bucket is filled, not just the one whose key happens to equal its role name.
+    assert served["metrics"]["text_only"]["recall_at_1"] == 50.0
+    assert served["metrics"]["image_only"]["recall_at_1"] == 50.0
 
     # The artifact is replaced, so the record now describes a table that no longer exists.
     C._RANKS_CACHE.clear()
