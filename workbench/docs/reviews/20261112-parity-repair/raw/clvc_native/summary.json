@@ -201,6 +201,78 @@
       "category_count": 3,
       "total_query_count": 6016
     },
+    "batch32_r3": {
+      "batch_size": 32,
+      "categories": {
+        "dress": {
+          "query_count": 2017,
+          "gallery_count": 2628,
+          "native_recalls": {
+            "r1": 6.841844323252355,
+            "r10": 29.449677739216657,
+            "r50": 56.767476450173525
+          },
+          "recomputed_recalls": {
+            "r1": 6.841844323252355,
+            "r10": 29.449677739216657,
+            "r50": 56.767476450173525
+          },
+          "recomputed_matches_native": true,
+          "queries_with_tie_at_target": 40,
+          "wall_seconds": 170.142,
+          "per_query_file": "/home/heheboiz/data/cir/workbench/docs/reviews/20261112-parity-repair/raw/clvc_native/batch32_r3/dress.jsonl"
+        },
+        "shirt": {
+          "query_count": 2038,
+          "gallery_count": 3089,
+          "native_recalls": {
+            "r1": 6.4769381746810595,
+            "r10": 27.77232580961727,
+            "r50": 55.250245338567225
+          },
+          "recomputed_recalls": {
+            "r1": 6.4769381746810595,
+            "r10": 27.77232580961727,
+            "r50": 55.250245338567225
+          },
+          "recomputed_matches_native": true,
+          "queries_with_tie_at_target": 12,
+          "wall_seconds": 333.696,
+          "per_query_file": "/home/heheboiz/data/cir/workbench/docs/reviews/20261112-parity-repair/raw/clvc_native/batch32_r3/shirt.jsonl"
+        },
+        "toptee": {
+          "query_count": 1961,
+          "gallery_count": 2902,
+          "native_recalls": {
+            "r1": 7.8531361550229475,
+            "r10": 32.840387557368686,
+            "r50": 63.99796022437532
+          },
+          "recomputed_recalls": {
+            "r1": 7.8531361550229475,
+            "r10": 32.840387557368686,
+            "r50": 63.99796022437532
+          },
+          "recomputed_matches_native": true,
+          "queries_with_tie_at_target": 14,
+          "wall_seconds": 147.761,
+          "per_query_file": "/home/heheboiz/data/cir/workbench/docs/reviews/20261112-parity-repair/raw/clvc_native/batch32_r3/toptee.jsonl"
+        }
+      },
+      "macro_native": {
+        "r1": 7.05730621765212,
+        "r10": 30.02079703540087,
+        "r50": 58.67189400437203
+      },
+      "macro_recomputed": {
+        "r1": 7.05730621765212,
+        "r10": 30.02079703540087,
+        "r50": 58.67189400437203
+      },
+      "macro_matches_recomputed": true,
+      "category_count": 3,
+      "total_query_count": 6016
+    },
     "batch48": {
       "batch_size": 48,
       "categories": {
@@ -416,6 +488,51 @@
       "scope_note": "score comparison is at the target rank only; full similarity rows are not persisted"
     },
     "batch32_r2": {
+      "batch_size": 32,
+      "categories": {
+        "dress": {
+          "recall_delta": {
+            "r1": 0.0,
+            "r10": 0.0,
+            "r50": 0.0
+          },
+          "max_abs_delta_r1_r10_r50": 0.0,
+          "max_abs_score_delta_at_target": 0.0,
+          "moved_ranks": 0,
+          "moved_rank_fraction": 0.0,
+          "moved_rank_examples": [],
+          "compared_queries": 2017
+        },
+        "shirt": {
+          "recall_delta": {
+            "r1": 0.0,
+            "r10": 0.0,
+            "r50": 0.0
+          },
+          "max_abs_delta_r1_r10_r50": 0.0,
+          "max_abs_score_delta_at_target": 0.0,
+          "moved_ranks": 0,
+          "moved_rank_fraction": 0.0,
+          "moved_rank_examples": [],
+          "compared_queries": 2038
+        },
+        "toptee": {
+          "recall_delta": {
+            "r1": 0.0,
+            "r10": 0.0,
+            "r50": 0.0
+          },
+          "max_abs_delta_r1_r10_r50": 0.0,
+          "max_abs_score_delta_at_target": 0.0,
+          "moved_ranks": 0,
+          "moved_rank_fraction": 0.0,
+          "moved_rank_examples": [],
+          "compared_queries": 1961
+        }
+      },
+      "scope_note": "score comparison is at the target rank only; full similarity rows are not persisted"
+    },
+    "batch32_r3": {
       "batch_size": 32,
       "categories": {
         "dress": {

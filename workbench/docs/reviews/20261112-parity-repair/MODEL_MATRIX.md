@@ -14,9 +14,13 @@ field, or a command run in this session. `INVENTORY.csv` is used **only** as a c
 `evaluate_all()`) is authoritative for G1/G2; where prose disagrees the gate wins and the prose is
 named in § "Superseded".
 
-**Snapshot note (read this before quoting a G1/G2 cell).** All twelve `g1_g2.*.json` artifacts and
-both producers (`scripts/t4_parity.py`, `scripts/encoder_parity.py`) carry **uncommitted
-working-tree modifications made by another worker at `2026-11-12 20:07–20:15 +0700`**, i.e. *after*
+**Snapshot note (read this before quoting a G1/G2 cell).** The `g1_g2.*` evidence set and
+its producers (`scripts/t4_parity.py`, `scripts/encoder_parity.py`) carry **uncommitted
+working-tree changes made by other workers during this session**: twelve artifacts were rewritten at
+`20:07–20:15 +0700`, and a **third model (`hint`) gained a brand-new six-file paired set** (untracked;
+`parity_gate.py` also gained v2 support, commits `23e5b8f`/`84812a4`). Discovery therefore now returns
+**three** ids, and the gate reads each pair under the standard that pair declares — `encoder`/`limn`
+under `parity-relative/v1`, `hint` under `parity-absolute-relative/v2`, i.e. *after*
 this audit's premise pass. The G1/G2 cells below are the gate's verdict on the **working tree as it
 is now**, because that is what `GET /api/runs/parity-gate` serves. The committed baseline at HEAD
 `40c897c` differs and is recorded in footnote 36. Nothing in this file was written by the matrix
@@ -118,9 +122,9 @@ Footnotes for §1
 | habit | fashioniq_full_gallery_ref_excluded | R@10 54.87332239571265 / R@50 74.50337396905957 | workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/measurements/habit_fiq_n02.json |
 | intent | fashioniq_full_gallery_ref_excluded | R@10 54.86624335289025 / R@50 75.43191079283865 | workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/measurements/intent_fiq_n02.json |
 | hint | fashioniq_val_split | R@10 59.80338494972219 / R@50 80.13076097500765 | workbench/artifacts/checkpoint_selection/20261106T233409+0700/measurements/hint_doc_command.json |
-| encoder | fashioniq_val_split | R@10 56.223101675386054 / R@50 77.66738539271432 | workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/measurements/encoder_fashioniq.json |
+| encoder | fashioniq_val_split | R@10 56.225801935399 / R@50 77.533156738705 (seeded, reproducible) · registry aggregate 56.223101675386054 / 77.66738539271432 NOT_REPRODUCIBLE · review aggregate 56.290792549557 / 77.633389132303 NOT_REPRODUCIBLE | seeded: workbench/docs/reviews/20261109-native15-composition-limn/g1_g2.encoder.{dress,shirt,toptee}.native.json (layer1_identity.native_metrics_recheck) · registry: workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/measurements/encoder_fashioniq.json · review: workbench/docs/reviews/20261109-native15-composition-limn/raw/native/encoder.json |
 | pair | fashioniq_val_split | R@10 34.03503453772374 (4 rows: B1/H_normal 34.035, B1/H_rev 35.015, B2/H_normal 22.156, B2/H_rev 20.087) / R@50 56.59567753134161 (B1/H_normal) | workbench/artifacts/checkpoint_selection/20261106T002617+0700/pair_compat/measurements/pair_b1_H_normal.json |
-| clvc_net | fashioniq_val_split | R@10 29.970746517160162 / R@50 58.62171212901515 | workbench/artifacts/checkpoint_selection/20261106T002617+0700/measurements/clvc_run1.json |
+| clvc_net | fashioniq_val_split | R@10 30.02079703540087 / R@50 58.67189400437203 at batch 32 (SELECTED: composition runs pin 32) · R@10 29.970746517160162 / R@50 58.62171212901515 at batch 48 (lineage) | workbench/artifacts/checkpoint_selection/20261106T002617+0700/measurements/clvc_run1.json (batch 48) · workbench/docs/reviews/20261111-master-audit/raw/clvc_run3cat_gpu.json (batch 32) · per-query ranks and the reproduction proof: workbench/docs/reviews/20261112-parity-repair/CLVC_NATIVE.md §3-§6 + raw/clvc_native/<pass>/<cat>.jsonl |
 | dcnet | fashioniq_full_gallery_ref_excluded | R@10 27.929730914548923 / R@50 53.72723331879208 | workbench/artifacts/checkpoint_selection/20261106T002617+0700/measurements/dcnet_run1.json |
 | combiner_rn50x4_noft | fashioniq_original_split | R@10 35.1078 / R@50 58.4756 | workbench/artifacts/checkpoint_selection/20261106T002617+0700/measurements/selection_decisions.json |
 | clip4cir_rn50x4_fullft | fashioniq_full_gallery_ref_excluded | R@10 43.8016931215922 / R@50 66.98358456293742 | workbench/docs/reviews/20261109-native15-composition-limn/raw/native/clip4cir_fullft.json |
@@ -144,13 +148,30 @@ Footnotes for §2
   - `habit` → `cohort/measurements/habit_fiq_n02.json`; `intent` → `…/intent_fiq_n02.json`.
   - `hint` → `20261106T233409+0700/measurements/hint_doc_command.json` (the later, counted copy;
     `cohort/measurements/hint_fashioniq.json` states the identical numbers and is marked duplicate).
-  - `encoder` → `cohort/measurements/encoder_fashioniq.json`.
+  - `encoder` → **three** aggregates exist, and only one is cross-run reproducible.
+    `cohort/measurements/encoder_fashioniq.json` (`recorded_at 2026-11-06T14:39:45Z`, 56.223101675386054
+    / 77.66738539271432) and `raw/native/encoder.json` (`recorded_at 2026-11-09T13:23:23Z`,
+    56.290792549557 / 77.633389132303) are **both unseeded draws** — `learnable_relation` is drawn
+    from the global RNG and neither file records a `relation_state`, `seed`, or `batch_size`
+    (`ENCODER_RELATION.md` §9b, key-set table). `RELATION_SEED` landed 2026-11-11, after both. Only the
+    **seeded parity native side** reproduces across runs: R@10 **56.225801935399** / R@50
+    **77.533156738705**, recomputed this session as the mean of
+    `g1_g2.encoder.{dress,shirt,toptee}.native.json` → `native.layer1_identity.native_metrics_recheck`
+    (`dress 51.71046108081309 / shirt 54.90677134445535 / toptee 62.0601733809281`; r50
+    `76.30143777887952 / 75.3189401373896 / 80.97909229984701`). Both older numbers are marked
+    `NOT_REPRODUCIBLE` in the cell, not deleted.
   - `pair` → `pair_compat/measurements/pair_b1_H_normal.json`; the four counted rows are
     B1/H_normal 34.03503453772374, B1/H_rev 35.014736041655844, B2/H_normal 22.156393011046543,
     B2/H_rev 20.086769084793715 — all `mapping_status: EXPLORATORY_PUBLIC_MAPPING`.
-  - `clvc_net` → `measurements/clvc_run1.json` (`29.970746517160162`); the conflicting second row is
-    `20261111-master-audit/raw/clvc_run3cat_gpu.json` (`30.02079703540087`), still `counted: true`
-    with mutual `conflict_with`.
+  - `clvc_net` → **both** aggregates are correct and are labelled by batch size:
+    `measurements/clvc_run1.json` = **batch 48** (`29.970746517160162 / 58.62171212901515`, all nine
+    cells reproduced), `raw/clvc_run3cat_gpu.json` = **batch 32** (`30.02079703540087 /
+    58.67189400437203`, all six cells reproduced). Proof, per-query rank JSONL and the determinism
+    control: `20261112-parity-repair/CLVC_NATIVE.md` §3-§6; raw passes under
+    `20261112-parity-repair/raw/clvc_native/<pass>/<cat>.jsonl` (2017/2038/1961 rows per category,
+    all fields complete, `target_rank` never null). The **batch-32** figure is the one to quote
+    against any composition run, because `workbench/replay/clvc_net.py:268` defaults
+    `--batch-size 32` and every recorded composition measurement used 32.
   - `dcnet` → `measurements/dcnet_run1.json`; the artifact carries `paper` cells
     (`macro_r10 27.78`) so it is comparable in shape, but no parity exists.
   - `combiner_rn50x4_noft` → `measurements/selection_decisions.json`
@@ -254,7 +275,7 @@ Footnotes for §3
 | ptha_mtst | NOT_RUN | NOT_RUN | NONE | NONE |
 | habit | NOT_RUN | NOT_RUN | NONE | NONE |
 | intent | NOT_RUN | NOT_RUN | NONE | NONE |
-| hint | NOT_RUN | NOT_RUN | NONE | NONE |
+| hint | PASS | FAIL | NONE | shirt.batch_1_vs_n.max_rel; toptee.batch_1_vs_n.max_rel |
 | encoder | PASS | FAIL | NONE | dress.population.features_vs_native_val_control.max_rel; dress.population.gallery_vs_native.max_rel; dress.batch_1_vs_n.max_rel; shirt.population.features_vs_native_val_control.max_rel; shirt.population.gallery_vs_native.max_rel; shirt.batch_1_vs_n.max_rel; toptee.population.features_vs_native_val_control.max_rel; toptee.population.gallery_vs_native.max_rel; toptee.batch_1_vs_n.max_rel |
 | pair | NOT_RUN | NOT_RUN | NONE | NONE |
 | clvc_net | NOT_RUN | NOT_RUN | NONE | NONE |
@@ -269,8 +290,12 @@ Footnotes for §3
 
 Footnotes for §4
 - **21** Source of every G1/G2 cell: `from workbench.backend.parity_gate import evaluate_model`,
-  iterating `_discover_models(evidence_root())`. Reproduced this session; **no pytest was run.**
-  `evaluate_all()` returns `passed_models: []`, `standard: parity-relative/v1`.
+  iterating `_discover_models(evidence_root())`, which now returns
+  `['encoder', 'hint', 'limn']` — three models, discovered from their own filenames, not from a seed
+  list. Reproduced this session; **no pytest was run.** `evaluate_all()` returns
+  `passed_models: []` and a mixed `standard` list (`['parity-absolute-relative/v2',
+  'parity-relative/v1']`), because each pair is judged under the standard it declares; the
+  per-model `applied_standard` is recorded in the `parity_evidence_path` cell.
 - **22** `encoder` **G1 now PASSES** (30 mandatory checks, 0 failing). The three
   `relation.{dress,shirt,toptee}.digest` checks are recorded on both sides with the pinned digest:
   `relation_state = {status: recorded, seed: 20261111, sha256: 20db0c27c979e9a0938c71af5142458dfa2
@@ -331,7 +356,7 @@ Footnotes for §4
 | hint | INCOMPLETE | NO_PARITY_EVIDENCE | native + 2 CIRCUS runs, no G1/G2 pair |
 | encoder | FAIL | PARITY_MANDATORY_SUBCHECK_FAILED | gate: G1 PASS, G2 9 relative-term-only failures (3 population + 3 gallery + 3 batch); relation pin now recorded on both sides |
 | pair | BLOCKED | BLOCKED_MISSING_SOURCE_CLASSES | model_vssp / MHTransformer_dis unpublished; numbers exist only under an exploratory alias |
-| clvc_net | INCOMPLETE | NATIVE_MACRO_CONFLICT | two counted native macros 0.0501 pp apart, no per-query ranks; no parity |
+| clvc_net | INCOMPLETE | NATIVE_MACRO_RESOLVED_BY_BATCH | both historical macros reproduce exactly at fixed batch sizes (32 -> 30.0208, 48 -> 29.9707); batch size is the mechanism; --batch-size is part of the measurement identity |
 | dcnet | INCOMPLETE | NO_PARITY_EVIDENCE | native aggregate present but its only ledger entry is EXECUTION_FAILED |
 | combiner_rn50x4_noft | INCOMPLETE | METRIC_REFERENCE_UNVERIFIED | run 020a70b0 EXECUTION_COMPLETED, benchmark gate not passed |
 | clip4cir_rn50x4_fullft | INCOMPLETE | TWO_NATIVE_MACROS | replay 43.8017 vs roll-up 43.8182; no parity |
@@ -359,9 +384,23 @@ Footnotes for §5
   row `Scope/accounting`. Their reasons differ: `csmcir` = composition deferred by the operator;
   `sprc` = no ViT-g checkpoint (ViT-L measured but not comparable to the paper row,
   `models.yaml:1423-1425`).
-- **32** `clvc_net` `blocker_code = NATIVE_MACRO_CONFLICT`: two rows, same protocol, same six
-  checkpoint files (`realpath` equal), disagreeing 29.970746517160162 vs 30.02079703540087
-  (0.0501 pp R@10), `per_query_published: false` in both, so the differing 1–2 qids cannot be named.
+- **32** `clvc_net` `blocker_code = NATIVE_MACRO_RESOLVED_BY_BATCH` (was `NATIVE_MACRO_CONFLICT`).
+  A controlled rerun settled it, both directions, bit-exactly (`CLVC_NATIVE.md` §3, §5, §6):
+  - fixed **batch 32** reproduces `raw/clvc_run3cat_gpu.json` on **all six** R@10/R@50 cells
+    (macro `30.02079703540087 / 58.67189400437203`, Δ `0.0`), and the prose command that recorded
+    `--batch-size 32` is `BLOCKED_MODELS_VERIFICATION.vi.md:214-218`;
+  - fixed **batch 48** reproduces `measurements/clvc_run1.json` on **all nine** R@1/R@10/R@50 cells
+    (macro `29.970746517160162 / 58.62171212901515`, Δ `0.0`), matching the batch-`48` command at
+    `CHECKPOINT_SELECTION_REPORT.md:1697-1699`;
+  - three independent batch-32 passes (`batch32`, `batch32_r2`, `batch32_r3`) are **bit-identical**:
+    0 ranks moved, max |Δ| `0.000e+00`, same qid order (`CLVC_NATIVE.md` §5);
+  - per-query ranks now exist (`CLVC_NATIVE.md` §6), so the old "cannot be named" caveat is dead.
+  **Measured sensitivity — the reason the rule exists** (`CLVC_NATIVE.md` §4): batch 1 vs 32 moves
+  **1548 of 2017** dress ranks (max |Δ score| 0.644522, R@10 28.805156 → 29.449678); batch 48 vs 32
+  moves **427 / 378 / 372** ranks in dress/shirt/toptee (one category at batch 1 only, stated rather
+  than extrapolated).
+  **Rule that replaces "quote neither":** quote **batch 32** for anything compared against a
+  composition run, and **always name the batch** — `--batch-size` is part of the measurement identity.
 - **33** `clip4cir_rn50x4_fullft` `blocker_code = TWO_NATIVE_MACROS`: replay `43.8016931215922`
   vs roll-up `43.81821850935618`. `backend/native_measurements.py:798-801` states this is "two
   different runs" and that no file under `checkpoint_selection/` corresponds to the roll-up's
@@ -386,17 +425,18 @@ derived from another.
 | ids carrying a native aggregate artifact (any id) | **18** | `list_native_measurements()` metric-bearing rows, aliased |
 | ids carrying a native aggregate (registered only) | **17** | every registered id has at least one |
 | registered ids with **no** aggregate artifact | **0** | — |
-| valid native FashionIQ evaluations (aggregate **and** `native_verified=Y`) | **0** | gate rule: G1+G2 with zero mandatory failures — none |
+| **valid native FashionIQ evaluations** (protocol-eligible aggregate; parity-independent) | **14** | airknow, clip4cir_rn50x4_fullft\*, clvc_net, conesep, csmcir†, dcnet, encoder, habit, hint, intent, limn, sprc†, tgcir, tme — exclusions and reasons in footnote 37 |
+| **native parity-verified** (G1+G2, zero mandatory failures) | **0** | `passed_models: []`; encoder fails 9 G2 checks, hint 2, limn 3 — every one a relative-or-componentwise term on a vanishing denominator (footnotes 29, 38) |
 | native executed **but not verified** | **16** | airknow, clip4cir_rn50x4_fullft, clvc_net, combiner_rn50x4_noft, conesep, csmcir, dcnet, encoder, habit, hint, intent, limn, ptha_mtst, sprc, tgcir, tme |
 | …of which `NATIVE_EVAL_MATRIX.csv` records `native_executed=Y` | **12** | csmcir, conesep, ptha_mtst, habit, intent, hint, encoder, dcnet, combiner_rn50x4_noft, clip4cir_rn50x4_fullft, limn, tme |
 | …4 aggregates newer than that matrix snapshot | **4** | airknow, clvc_net, sprc, tgcir (matrix says `native_executed=N`; the aggregate file exists — footnote 35) |
 | native blocked | **1** | pair (`BLOCKED_MISSING_SOURCE_CLASSES`; its 4 counted numbers are `EXPLORATORY_PUBLIC_MAPPING`) |
 | CIRCUS composition runs referenced (distinct `run_id`s with a summary) | **33** all · **30** non-synthetic non-audit · **24** with a 6003-query cohort | 36 `full.json` dirs; 2 `SYNTHETIC_*`; 1 `released_audit_task7_mm_any`; 6 ids are 5-or-8-query smokes |
-| parity measured (≥1 paired `g1_g2` artifact set) | **2** | **encoder**, **limn** |
-| parity PASS per the gate (`evaluate_all()`, not prose) | **0** | `passed_models: []` |
-| parity blocked / missing artifact | **15** | the other 15 registered ids |
-| G1 PASS models | **2** | encoder (0/30 mandatory failing, working tree), limn (0/18) — at HEAD encoder was `FAIL` on 3 relation digests (footnote 36) |
-| G2 PASS models | **0** | encoder 9 failures, limn 3 failures; every one is a relative-term-only failure |
+| parity measured (≥1 paired `g1_g2` artifact set) | **3** | **encoder** (v1), **limn** (v1), **hint** (v2, footnote 38) |
+| parity PASS per the gate (`evaluate_all()`, not prose) | **0** | `passed_models: []` — the *parity* verdict, held by only 3 models; the **14** above is the native-evaluation count and does not depend on it |
+| parity blocked / missing artifact | **14** | the other 14 registered ids (17 − 3 measured) |
+| G1 PASS models | **3** | encoder (0/30), hint (0/36, v2), limn (0/18) — at HEAD encoder was `FAIL` on 3 relation digests (footnote 36) |
+| G2 PASS models | **0** | encoder 9 failures, hint 2, limn 3; every one is a relative/componentwise-term-only failure |
 | models with a 6003-query CIRCUS run **and** a native aggregate | **9** | encoder, conesep, habit, intent, hint, limn, ptha_mtst, tgcir, tme (+clvc_net = 10 with a 6003 run; its runs are all PARTIAL) |
 
 Footnote 35 — **the four aggregates the matrix column predates.** `NATIVE_EVAL_MATRIX.csv`
@@ -406,6 +446,50 @@ Footnote 35 — **the four aggregates the matrix column predates.** `NATIVE_EVAL
 `complete: true` and three per-category rows. The count of **16** comes from the artifacts; **12** is
 what that column says. The artifacts win (same staleness class as `has_composition_run`,
 §Cross-check).
+
+Footnote 37 — **the 14 protocol-eligible native evaluations, derived (not incremented from the old
+zero).** Command: intersect the models that have a native aggregate artifact
+(`list_native_measurements()` metric-bearing rows, 18 ids) with the rows of
+`workbench/docs/reviews/20261110-e2e-repair/PROTOCOL_MATRIX.csv` whose `row_kind = native_config`
+(17 rows: protocol/loader/gallery/category attributes verified per row), then subtract the four
+exclusions below. 18 ids − 4 exclusions = **14**.
+
+Exclusions, each named with its reason:
+
+| id | why it is not a valid native FashionIQ evaluation |
+|---|---|
+| `ptha_mtst` | **CIRR checkpoint → FashionIQ cross-dataset transfer**, not a FashionIQ reproduction. The artifact itself labels it `CIRR checkpoint -> FashionIQ | cross-dataset transfer | exploratory` and `PROTOCOL_MATRIX` notes read *"the reported number is cross-dataset transfer, not a reproduction"*. Its protocol *is* verified (`fashioniq_original_split`, CONFIRMED) — eligibility fails on the checkpoint's training dataset, not on the protocol. |
+| `combiner_rn50x4_noft` | **roll-up-only served row.** The number 35.1078/58.4756 is read from `measurements/selection_decisions.json`; the only run artifact (`…020a70b0_aggregate.json`) is `EXECUTION_COMPLETED` but its `benchmark_gate` is `METRIC_REFERENCE_UNVERIFIED` with *"no committed reference describes this experiment"*, and `per_query_export_available: false`. A run exists; the evaluation is not certified. |
+| `clip4cir_rn50x4_noft` | **roll-up / unbacked row.** The macro lives only in `measurements/clip4cir_parsed.json` under key `clip4cir_noft`, and the native service row for it is `counted=false, artifact_backed=false`. No protocol row of its own exists in `PROTOCOL_MATRIX.csv` (it shares the `combiner` registration). |
+| `pair` | **exploratory public-class alias only.** Its four counted rows carry `mapping_status: EXPLORATORY_PUBLIC_MAPPING`; `PROTOCOL_MATRIX` says *"Not a native run; not admitted as acceptance evidence."* |
+
+Two footnotes on the kept 14:
+
+* `\*clip4cir_rn50x4_fullft` — protocol **eligible but mislabelled**: its recorded label is
+  `fashioniq_full_gallery_ref_excluded` while the validated protocol is `fashioniq_original_split`
+  (`label_verdict: MISLABELED`, evidence `third_party/CLIP4Cir/src/validate.py:21-57` — the FashionIQ
+  branch has no reference mask; the only `reference_mask` is CIRR-only at `:162-166`). It is counted,
+  at its **validated** protocol, not at its recorded one.
+* `†csmcir`, `†sprc` — protocol **CONFIRMED** and aggregates present, but both are `USER_DEFERRED`
+  (see footnote 31), so they are eligible evaluations that the campaign is deliberately not spending
+  work on. Counting them keeps the row honest about what exists; the deferred disposition is carried
+  in the Disposition table, not hidden here.
+
+The remaining 12 (14 − 2 deferred) are the active, protocol-eligible, parity-independent native
+evaluations.
+
+Footnote 38 — **`hint` is the third parity-measured model, and the only one on v2.**
+Its six artifacts (`g1_g2.hint.{dress,shirt,toptee}.{native,adapter}.json`, currently **untracked**)
+declare `standard: parity-absolute-relative/v2` on both sides, and the gate detects it:
+`evaluate_model('hint').applied_standard == 'parity-absolute-relative/v2'` — the first pair in this
+repo judged componentwise (`abs(a-b) <= atol + rtol*abs(b)` per element) rather than on `max_abs`/
+`max_rel` aggregates. Result: **G1 PASS** (36 mandatory checks, 0 failing) and **G2 FAIL** on exactly
+two subchecks, `shirt.batch_1_vs_n.max_rel` and `toptee.batch_1_vs_n.max_rel` (measured
+0.005049934976857354 and 0.04213516386699195 in `THIRD_MODEL_PARITY.md` §7). No mandatory dimension is
+unmeasured (`missing: []`). Consequence for the vocabulary: `hint` moves from `INCOMPLETE`
+(`NO_PARITY_EVIDENCE`) to `FAIL` (`PARITY_MANDATORY_SUBCHECK_FAILED`) — an artifact pair now exists and
+the gate rejects it, which is exactly the rule footnote 29 states.
+Prose source: `20261112-parity-repair/THIRD_MODEL_PARITY.md` §7 (do not restate its tables).
 
 Footnote 36 — **the committed baseline at HEAD differs, and that is why two verdicts moved.**
 Evaluating the gate against `git show HEAD:…` copies of the same twelve artifacts (written to a
@@ -418,34 +502,48 @@ Evaluating the gate against `git show HEAD:…` copies of the same twelve artifa
 | encoder `scoring_parity` | `false` | `true` |
 | limn `metrics_parity` | `missing` (key absent from all six files) | `true` (`native_metrics_match_feature_rerank: true`) |
 | limn G2 | `FAIL`, 3 (`batch_1_vs_n.max_rel`) | `FAIL`, 3 (same three, same values) |
+| hint | **no artifacts at all** (`NOT_RUN`, undiscovered) | **`FAIL`**: `PASS` G1 / `FAIL` G2 on 2 `batch_1_vs_n.max_rel`, judged componentwise under v2 |
+| models discovered | 2 (`encoder`, `limn`) | 3 (`encoder`, `hint`, `limn`) |
 | `passed_models` | `[]` | `[]` |
 
-So **no overall verdict changed** (both models remain `PARITY_MANDATORY_SUBCHECK_FAILED` and
-`passed_models` stays empty), but **two dimensions moved**: encoder `relation_parity` and
-`input_parity`-adjacent G1, and LIMN's `metrics_parity`. The historical rank disagreements the
+So **no overall verdict changed** (all three models are `PARITY_MANDATORY_SUBCHECK_FAILED` and
+`passed_models` stays empty), but **three things moved**: encoder's G1 (`relation_parity`),
+LIMN's `metrics_parity`, and a **new third pair** (`hint`) appearing on the v2 standard. The historical rank disagreements the
 audit reconstructed from index dumps (dress index 1569 → `7:1565`, shirt index 1352 → `7:3362`) live
 **only in the HEAD bytes** — the working-tree files record `count: 0`. Both are true statements about
 different snapshots, which is exactly why the pair must be re-measured under one declared run
 identity before either is cited as current.
 
-Reading the totals honestly: **no configuration in this repo currently qualifies as a verified
-FashionIQ reproduction** under the campaign's own definition, because that definition requires
-parity and no pair passes. That is a statement about evidence, not about whether the models "work":
-9 configurations hold both a native aggregate and at least one completed 6003-query CIRCUS run, and
-16 of 17 hold a native aggregate.
+**Two different questions, two different numbers — do not read one as the other.**
 
-Two counts that must not be conflated:
+* **Does a native FashionIQ evaluation exist?** Yes, for **14** ids. That count is parity-independent:
+  it asks only whether the protocol, loader, gallery and category scope were verified and whether an
+  aggregate artifact exists at that evidence level. It is *the* number to quote when the question is
+  "how much of this cohort has been measured", and it is the one the campaign spec protects when it
+  says a genuine native-only aggregate stays visible at its actual evidence level.
+* **Is any configuration parity-verified?** **0.** That asks a stricter question: a native **and** a
+  Workbench run over identical inputs, agreeing per the gate with zero mandatory failures. Three models
+  have a parity pair at all (`encoder`, `limn` on v1; `hint` on v2) and none passes (9, 3 and 2 G2
+  failures respectively, all relative-or-componentwise-only).
+
+Everything between those two numbers is evidence level, not existence: 16 ids executed an evaluator,
+12 of them are `native_executed=Y` in `NATIVE_EVAL_MATRIX.csv`, 4 more aggregates postdate that
+column (footnote 35), and 9 ids hold both a native aggregate and at least one completed 6003-query
+CIRCUS run.
+
+One more pair of counts that are also distinct, and neither of which is "verified":
 
 * **16 "executed"** counts ids with a metric-bearing aggregate artifact, whatever produced it. That
   includes `clvc_net` and `tgcir`, whose runs came from `workbench/replay/*.py` shells rather than
   the upstream entrypoint (the pinned `test.py` in both has no CLI/loader), and `airknow`, whose
-  registry env still declares the dangling symlink.
+  registry env still declares the dangling symlink — which is why "executed" (16) is larger than
+  "protocol-eligible" (14).
 * **12 "native_executed=Y"** is the older matrix column, which additionally required
   `EXECUTION_COMPLETED` reporting on the historical path. It misses four later aggregates
   (footnote 35) and predates `clvc_net`/`tgcir`'s replayed runs.
 
-Neither number is "verified". `native_verified` is `N` on all 18 rows because the campaign's
-definition is parity, and parity is `PASS` for **zero** models.
+`native_verified` stays `N` on all 18 rows because it means parity, and parity is `PASS` for
+**zero** models.
 
 ---
 
@@ -493,9 +591,13 @@ Results this audit newly supersedes. Each line: what, where, why.
    reports encoder **G1 PASS**. Encoder still fails G2 (9 relative-only checks), so its overall
    verdict did **not** improve past `PARITY_MANDATORY_SUBCHECK_FAILED` — see footnote 36 for the
    HEAD-vs-working-tree table.
-4. **`CLVC`'s native macro as a single number.** Both `29.970746517160162` and `30.02079703540087`
-   remain `counted: true` with mutual `conflict_with`; neither may be quoted alone, and neither
-   artifact publishes per-query ranks to resolve the 1–2 differing qids.
+4. **`CLVC`'s native macro as an unresolved conflict, and *this file's own earlier* "quote neither"
+   rule.** Both are superseded by the controlled rerun in `CLVC_NATIVE.md` §3-§6: `30.02079703540087
+   / 58.67189400437203` is the **batch-32** number (reproduced on all six R@10/R@50 cells),
+   `29.970746517160162 / 58.62171212901515` the **batch-48** number (all nine cells), three batch-32
+   passes are bit-identical (0 ranks moved, max |Δ| 0.0), and per-query ranks exist. Quote batch 32
+   against composition runs and always name the batch. The 0.0501 pp gap is a batch-size effect of an
+   unchanged evaluator, not a defect in either artifact.
 5. **`FINAL_REPORT_20261112.vi.md:274` and `:1415` — "bundle đang phục vụ hiện nay là
    `assets/index-DDviexaW.js`".** Superseded: served == `dist` == `assets/index-NnjrdZLG.js`,
    `sha256 721d34d043858e80c88e76d72866ba8583508318baeebac599cebd1e1c2c80d0`, 392 769 B. Same for
@@ -504,7 +606,13 @@ Results this audit newly supersedes. Each line: what, where, why.
    columns are stale for `clvc_net`, `tgcir`, `clip4cir_rn50x4_fullft` (§Cross-check).
 7. **"SPRC's checkpoint is absent."** Superseded: `sprc_fiq_vitl.pt` is on disk,
    `sha256 1938610…bea08`, matching `models.yaml:1452`; only the paper's ViT-g is missing.
-8. **`CLVC`'s `image_only_empty_text` as a supported condition.** Superseded by
+8. **The ENCODER native aggregate as a single reproducible number.** Superseded: the registry's
+   56.223101675386054 / 77.66738539271432 and the review artifact's 56.290792549557 /
+   77.633389132303 are **two independent unseeded draws** (`learnable_relation` is constructed from
+   the global RNG and neither file records a relation state or a seed), so neither reproduces across
+   runs. The seeded parity native side is the only cross-run-reproducible figure: **R@10
+   56.225801935399 / R@50 77.533156738705**. See `ENCODER_RELATION.md` §8-§9b.
+9. **`CLVC`'s `image_only_empty_text` as a supported condition.** Superseded by
    `eab10106b2`'s `ABLATION_UNSUPPORTED` (CLVC-Net cannot encode an empty edit,
    `text_model.py:84-86`); `da0a2162` drops it in favour of `clvc_image_encoder_only`.
 
@@ -564,6 +672,55 @@ t=pathlib.Path(tempfile.mkdtemp())
 # artifact working-tree vs HEAD digests (the 20:07-20:15 change)
 git status --porcelain -- workbench/docs/reviews/20261109-native15-composition-limn | head -20
 git diff --stat -- workbench/docs/reviews/20261109-native15-composition-limn
+
+# CLVC-Net: recompute the two macros from the per-query rank JSONL, and the batch sensitivity
+python3 -c "
+import json, statistics
+B='workbench/docs/reviews/20261112-parity-repair/raw/clvc_native/'
+for p in ('batch32','batch48','batch32_r2','batch32_r3','batch1'):
+    cats={'batch1':('dress',)}.get(p,('dress','shirt','toptee'))
+    r10=[];r50=[]
+    for c in cats:
+        rows=[json.loads(l) for l in open(B+p+'/'+c+'.jsonl')]
+        g=len({r['reference_gallery_index'] for r in rows} | {r['target_gallery_index'] for r in rows})
+        r10.append(sum(1 for r in rows if r['target_rank']<10)*100.0/len(rows))
+        r50.append(sum(1 for r in rows if r['target_rank']<50)*100.0/len(rows))
+    print(p, 'macro_r10=%.15f macro_r50=%.15f' % (statistics.fmean(r10), statistics.fmean(r50)))
+"
+python3 -c "import json;d=json.load(open('workbench/docs/reviews/20261112-parity-repair/raw/clvc_native/summary.json'));
+print(json.dumps(d['batch_sensitivity_vs_batch32'], indent=1)[:1200])"
+
+# protocol-eligible native evaluations: 18 aggregate ids minus the 4 named exclusions
+python3 -c "import csv
+P='workbench/docs/reviews/20261110-e2e-repair/PROTOCOL_MATRIX.csv'
+M='workbench/docs/reviews/20261112-parity-repair/MODEL_MATRIX.csv'
+proto={r['model_id']:r for r in csv.DictReader(open(P)) if r['row_kind']=='native_config'}
+mx={r['model_id']:r for r in csv.DictReader(open(M))}
+EXCL={'ptha_mtst','combiner_rn50x4_noft','clip4cir_rn50x4_noft','pair'}
+cand=[m for m in mx if mx[m]['native_run_id_or_artifact']!='NONE']
+elig=[m for m in cand if m in proto and m not in EXCL]
+print('aggregate ids', len(cand), 'protocol-eligible', len(elig)); print(sorted(elig));
+print('excluded', sorted(EXCL))"
+
+# the seeded encoder macro (the only cross-run-reproducible encoder figure)
+python3 -c "
+import json, statistics
+B='workbench/docs/reviews/20261109-native15-composition-limn/'
+r10=[];r50=[]
+for c in ('dress','shirt','toptee'):
+    m=json.load(open(B+f'g1_g2.encoder.{c}.native.json'))['native']['native_metrics_recheck']
+    r10.append(m[c+'_r10']); r50.append(m[c+'_r50'])
+print('seeded macro_r10=%.15f macro_r50=%.15f' % (statistics.fmean(r10), statistics.fmean(r50)))"
+
+# third parity model + which standard each pair is judged under (footnote 38)
+python3 -c "
+import sys; sys.path.insert(0,'.')
+from workbench.backend import parity_gate as g
+print(g._discover_models(g.evidence_root()))
+[print(m, g.evaluate_model(m).status, g.evaluate_model(m).applied_standard,
+       len([c for c in g.evaluate_model(m).checks if c.gate=='G1' and c.mandatory]),
+       len([c for c in g.evaluate_model(m).failures]))
+ for m in g._discover_models(g.evidence_root())]"
 
 # bundle identity (superseded item 5)
 grep -rn "index-DDviexaW" workbench/docs | wc -l

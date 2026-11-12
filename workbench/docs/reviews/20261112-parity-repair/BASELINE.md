@@ -255,11 +255,11 @@ Command: `sed -n '1,200p' workbench/config/workbench.env` (read-only; file not w
 
 | Path | Exists | Size | Command |
 |---|---|---|---|
-| `data/FashionIQ` | yes (8 subdirs) | — | `ls -ld data data/FashionIQ` |
+| `data/FashionIQ` | yes (**6** subdirs; the `8` previously recorded here is wrong — measured 2026-11-12) | — | `find data/FashionIQ -maxdepth 1 -type d` |
 | `data/FashionIQ/images` | yes | 991 916 036 B, 74 381 files, extension `.png` | `du -sb`; `ls \| wc -l` |
 | `data/FashionIQ/resized_image/{dress,shirt,toptee}` | yes | 288 392 173 B; 3 817 / 6 346 / 5 373 `.jpg` | `du -sb`; per-dir `os.listdir` census |
 | `data/FashionIQ/resized_images` | yes | 286 225 672 B, 15 415 `.jpg` | same |
-| `data/FashionIQ/captions` | yes | 403 551 063 B, 21 JSON + 10 `.pkl` | `du -sb`; `ls -l` |
+| `data/FashionIQ/captions` | yes | 403 551 063 B, **12** JSON + 10 `.pkl` (22 files; the `21 JSON` previously recorded here was the *combined* annotation count of `captions` + `image_splits`) | `du -sb`; `ls -l` |
 | `data/FashionIQ/image_splits` | yes | 1 398 312 B, 9 JSON | same |
 | `data/FashionIQ/qwen_captions` | yes | 11 762 668 B, 3 JSON | same |
 
@@ -271,33 +271,53 @@ Layout completeness, evaluated through the registry's own loader
 
 Annotation `sha256sum` (small files only):
 
-| File | Size | sha256 |
+| File | Size (B) | sha256 |
 |---|---|---|
-| `captions/cap.dress.val.json` | 388.1K | `5e5117d45695df9c3ca91fac3e0bc49e6422ae9c8b3793f0ac9b3ab83adb7de9` |
-| `captions/cap.shirt.val.json` | 388.7K | `7b7ca3797b85dddfd83e74cdb4454cb63e3e7c09acef2590155efbacea6d7feb` |
-| `captions/cap.toptee.val.json` | 382.7K | `b4e09f428e6c255cc4b4ec46e77908305ab83075d82840c960be81af15cdc5eb` |
-| `captions/cap.dress.train.json` | 1.1M | `1691bd52e5bbda755b0c1f14d1024000be2c57a0cc29511a327af1372636a946` |
-| `captions/cap.shirt.train.json` | 1.1M | `1552c05d866d31b43321a719b2cb8a65f02c53e9a6bc355861fe1d62498b9983` |
-| `captions/cap.toptee.train.json` | 1.1M | `6daa171a9e744823087780a3b69b8b697bd05526adb6dd55a38ee6c4904ab348` |
-| `captions/cap.dress.test.json` | 327.7K | `190240b3b4d115cd4f80de65ab78ca18a3f8581c041cbeea6f5a1f57ee4f5a48` |
-| `captions/cap.shirt.test.json` | 325.6K | `27c7551b005d4befa53135a7ddee5e31c97821eafd3ceb3fec514e7ac0ad83a7` |
-| `captions/cap.toptee.test.json` | 337.3K | — (not in captured head; see `19-annotation-sha256.txt`) |
-| `captions/correction_dict_dress.json` | 9.3K | `9e4a59877098fe26036b70759387be589990eb4068692427e890113dcba2edda` |
-| `captions/correction_dict_shirt.json` | 8.9K | `ca29e29e23c0a1987d6b121219d9580bdae9872df0ea219c5aea870ee2f8567e` |
-| `captions/correction_dict_toptee.json` | 9.8K | `3dfbf15fa6d3a30dc0f5cf7e2908ca36d1775e42aa6598f1dba7899267dc1b71` |
-| `image_splits/split.dress.val.json` | 67.1K | `21ff91d53c23859da91bfd49f3acc139b7f3a3dc944fc4e4a80194468cf14bab` |
-| `image_splits/split.shirt.val.json` | 111.6K | `b82effbf7352a6f828b38c45eb32e53d726bd4d6fd81d6290c81eeb2c68e3234` |
-| `image_splits/split.toptee.val.json` | 94.4K | — (see `19-annotation-sha256.txt`) |
-| `image_splits/split.dress.train.json` | 201.3K | `0999ce5da01a38f0cef1547941b738f4c56e225fdd9b8e03e2a6edaf292f94c3` |
-| `image_splits/split.shirt.train.json` | 334.6K | `1552c05d…` prefix collision note: see raw file (full digest there) |
-| `image_splits/split.toptee.train.json` | 283.4K | `aa9b3a55332340f21360fb6a3fe174badd27ce389fe7d78d890bf2b9032ffe05` |
-| `image_splits/split.dress.test.json` | 67.1K | `1d1d3af24b9ec4ed3f7805c53a870148df9b51e232b32912505d8ae54718353d` |
-| `image_splits/split.shirt.test.json` | 111.6K | `8d243830e80e77c23c8dc9a85db87813230d38da146f0706082db812f591968b` |
-| `image_splits/split.toptee.test.json` | 94.5K | `25a30d4f4013a04026585399b10980db7cba39dfaad0d97a0671a62e2125ddbf` |
+| `captions/cap.dress.test.json` | 335557 | `190240b3b4d115cd4f80de65ab78ca18a3f8581c041cbeea6f5a1f57ee4f5a48` |
+| `captions/cap.dress.train.json` | 1178488 | `1691bd52e5bbda755b0c1f14d1024000be2c57a0cc29511a327af1372636a946` |
+| `captions/cap.dress.val.json` | 397427 | `5e5117d45695df9c3ca91fac3e0bc49e6422ae9c8b3793f0ac9b3ab83adb7de9` |
+| `captions/cap.shirt.test.json` | 333382 | `27c7551b005d4befa53135a7ddee5e31c97821eafd3ceb3fec514e7ac0ad83a7` |
+| `captions/cap.shirt.train.json` | 1167604 | `0999ce5da01a38f0cef1547941b738f4c56e225fdd9b8e03e2a6edaf292f94c3` |
+| `captions/cap.shirt.val.json` | 398072 | `7b7ca3797b85dddfd83e74cdb4454cb63e3e7c09acef2590155efbacea6d7feb` |
+| `captions/cap.toptee.test.json` | 345441 | `db822aa52340ce1f09c3000064f79b60b6c476b50b98bf34200dd2996c06e146` |
+| `captions/cap.toptee.train.json` | 1200387 | `6daa171a9e744823087780a3b69b8b697bd05526adb6dd55a38ee6c4904ab348` |
+| `captions/cap.toptee.val.json` | 391897 | `b4e09f428e6c255cc4b4ec46e77908305ab83075d82840c960be81af15cdc5eb` |
+| `captions/correction_dict_dress.json` | 9479 | `9e4a59877098fe26036b70759387be589990eb4068692427e890113dcba2edda` |
+| `captions/correction_dict_shirt.json` | 9064 | `ca29e29e23c0a1987d6b121219d9580bdae9872df0ea219c5aea870ee2f8567e` |
+| `captions/correction_dict_toptee.json` | 10019 | `3dfbf15fa6d3a30dc0f5cf7e2908ca36d1775e42aa6598f1dba7899267dc1b71` |
+| `image_splits/split.dress.test.json` | 68726 | `1d1d3af24b9ec4ed3f7805c53a870148df9b51e232b32912505d8ae54718353d` |
+| `image_splits/split.dress.train.json` | 206138 | `dcb1c7329003e85e39a3010147a620cee4b7de6a5ddf2626f253bc9a2cdd78e5` |
+| `image_splits/split.dress.val.json` | 68708 | `21ff91d53c23859da91bfd49f3acc139b7f3a3dc944fc4e4a80194468cf14bab` |
+| `image_splits/split.shirt.test.json` | 114230 | `8d243830e80e77c23c8dc9a85db87813230d38da146f0706082db812f591968b` |
+| `image_splits/split.shirt.train.json` | 342650 | `1552c05d866d31b43321a719b2cb8a65f02c53e9a6bc355861fe1d62498b9983` |
+| `image_splits/split.shirt.val.json` | 114230 | `b82effbf7352a6f828b38c45eb32e53d726bd4d6fd81d6290c81eeb2c68e3234` |
+| `image_splits/split.toptee.test.json` | 96734 | `25a30d4f4013a04026585399b10980db7cba39dfaad0d97a0671a62e2125ddbf` |
+| `image_splits/split.toptee.train.json` | 290180 | `aa9b3a55332340f21360fb6a3fe174badd27ce389fe7d78d890bf2b9032ffe05` |
+| `image_splits/split.toptee.val.json` | 96716 | `ee42b2505275dd7a19b11ddb88c9264aab2d77f4e59b075fb1c7c3095d02f412` |
+
+Rebuilt from `raw/baseline/19-annotation-sha256.txt` on 2026-11-12, one row per line of that file:
+the raw capture pairs each digest with one path on the same line, and it is **complete** — 21 digests,
+21 paths, no elision, no `+N more` marker (the file has 44 lines in total: header, 21 digest lines, the
+`=== sizes ===` section, and 21 `path bytes` lines). Every digest and every byte count above was also
+re-measured on disk this turn with
+`sha256sum data/FashionIQ/captions/*.json data/FashionIQ/image_splits/*.json` and `os.path.getsize`, and
+all 21 pairs matched.
+
+Superseded cells, kept so the shift is visible rather than silent: the table previously assigned
+`1552c05d…98b9983` to `cap.shirt.train.json` (it is `split.shirt.train.json`, raw:18),
+`0999ce5d…292f94c3` to `split.dress.train.json` (it is `cap.shirt.train.json`, raw:6;
+`split.dress.train.json` is `dcb1c732…2cdd78e5`, raw:15), and marked three rows
+"— not in captured head" / "— see raw file" that the raw file does contain:
+`cap.toptee.test.json` `db822aa5…6c06e146` (raw:8), `split.toptee.val.json` `ee42b250…5d02f412` (raw:22),
+`cap.toptee.val.json` `b4e09f42…15cdc5eb` (raw:10, unchanged). The earlier `split.shirt.train.json`
+cell reading `` `1552c05d…` prefix collision note `` is now the full digest.
+Sizes were also coarse (`1.1M` for three files 1.18M–1.20M); they are exact bytes now.
 
 Command: `sha256sum data/FashionIQ/captions/*.json data/FashionIQ/image_splits/*.json` (full, unabridged
-list in `raw/baseline/19-annotation-sha256.txt`; the transcript rendering of that file interleaved some
-long paths, so where a digest above is marked "see raw file", read the raw file).
+list in `raw/baseline/19-annotation-sha256.txt`). That raw file is **not** interleaved: each line is
+`<digest>  data/FashionIQ/<dir>/<file>`, so every digest and path read off it is unambiguous. The
+"transcript rendering interleaved some long paths" note this paragraph used to carry was wrong and is
+what produced the shifted pairs — it should not be cited again.
 
 CSMCIR caption assets match their declared digests exactly:
 `qwen_captions/dress_cot_val.json` `b7129baf…b6a6` (2 817 386 B), `shirt_…` `bbe6f689…cc9`
@@ -362,13 +382,28 @@ Every item below is a measured state contradicting a claim in a document or in t
    `git diff --quiet 96d86010..HEAD` over production paths exits **1** (30 files, +3622 −265), while the
    same check against `aea143bd` exits **0**. The byte-identical invariant holds against `aea143bd` only;
    the row names the superseded base.
-4. **Frontend bundle name/sha.** `20261111-master-audit/FINAL_REPORT_20261112.vi.md` §9 records the
+   **Re-measured 2026-11-12 after the row was corrected** (the row now names
+   `aea143bd8894881ad7d5b341c21dbeff25cfaaaf`, and `test_handoff_commands.py` looks only at
+   `TESTED_SOURCE_SHA`, never at that row): the row's base is right again, but the invariant no longer
+   holds against `HEAD` either — `git diff --quiet aea143bd HEAD -- . ':(exclude)workbench/docs'
+   ':(exclude)workbench/tests'` now exits **1** (2 files, +356 −41) because two production commits landed
+   after the pin, `cb0b228` and `23e5b8f`, and a further 2 files / +44 −4 are uncommitted
+   (`parity_gate.py`, `gate.ts`). `96d86010..HEAD` is 31 files / +3956 −284. So the pin is currently
+   behind the tree and must be advanced; the guard's single failing assertion is exactly this
+   comparison, not a documentation error.
+4. **Frontend bundle name/sha.** `20261111-master-audit/FINAL_REPORT_20261112.vi.md` §9 recorded the
    served bundle as `assets/index-DDviexaW.js`, sha256 `58eed6d48640f…f5369`, 392 261 B, mtime
-   `09:34:18.594`; `FINAL_REPORT.vi.md` records `assets/index-DYYSN7oG.js`, sha256 `74e4b4f8…d651f`.
+   `09:34:18.594`; `FINAL_REPORT.vi.md` recorded `assets/index-DYYSN7oG.js`, sha256 `74e4b4f8…d651f`.
    Measured served bundle is **`assets/index-NnjrdZLG.js`**, sha256
    `721d34d043858e80c88e76d72866ba8583508318baeebac599cebd1e1c2c80d0`, **392 769 B**, mtime
    `2026-11-12 12:20:56.749`; CSS is `index-DecQnta9.css` (matches the CSS name both docs record).
    `dist/` and the proxy serve byte-identical bytes.
+   **Corrected in the report 2026-11-12:** §1.5 and the §9 bundle row now both read
+   `assets/index-NnjrdZLG.js` with the sha256 and size above, and `index-DDviexaW.js` /
+   `index-DYYSN7oG.js` are labelled historical names. Re-measured this turn: served page, `dist/`, and
+   the proxied file still carry that one sha256. (The stale `index-DDviexaW.js` mentions that remain are
+   in `raw/verify/105-*` and `106-*`, which are historical sweep records of their own revisions and are
+   annotated as such, not rewritten.)
 5. **Backend MainPID / NRestarts.** The §0 historical block in `FINAL_REPORT_20261112.vi.md` records
    backend `MainPID=1221379`, `NRestarts=1`, `ActiveEnterTimestamp=Wed 2026-11-11 23:48:58`; measured
    backend is `MainPID=1758096`, `NRestarts=0`, `ActiveEnterTimestamp=Thu 2026-11-12 12:20:57`. (That

@@ -28,7 +28,7 @@ both paths (`summary.json` → `controller_interpreter`, `worker_interpreter`).
 | item | where | what it is |
 |---|---|---|
 | **gallery construction** | `datasets.py:233-257` (`get_test_targets`, `gallery_all=False`), called from `test.py:85` | Order-preserving **union of every query's candidate and target image**, in first-appearance order. Not the full split list (3817 for dress), not per-query candidates: dress 2017 queries → **2628** gallery images. |
-| **reference inclusion / exclusion** | `test.py:134-135` | The query's own source image **is** in the gallery and is masked to `-10e10`, i.e. excluded **by score**, not by removal. Verified in this run: 2017/2017/1961 queries had a valid `reference_gallery_index`, and the reference never entered the top-50 for any query (`references_visible_in_top50 = 0` in every category). |
+| **reference inclusion / exclusion** | `test.py:134-135` | The query's own source image **is** in the gallery and is masked to `-10e10`, i.e. excluded **by score**, not by removal — it stays in the array at the bottom. Measured: `reference_masked_last` is true for **2628/2628** dress and **3089/3089** shirt queries, `min_reference_rank` = 2627 of 2628 and 3088 of 3089 (i.e. exactly last, never higher). Since `-10e10` dominates any cosine similarity, the mask is total — it never competes for a top-50 slot. |
 | **mask constant** | `test.py:135` | `sims[i, test_targets_id.index(t['source_img_id'])] = -10e10` |
 | **ranking / tie convention** | `test.py:138` | `np.argsort(-sims[i, :])[:50]` — numpy default `kind='quicksort'`, **not stable**. R@k is a positional test (`test.py:145`), so a query whose target ties with another gallery image has a tie-decided rank. Recorded per query as `tied_with_target`; counts: dress 40, shirt 12, toptee 14 at batch 32 (36/12/14 at batch 48). |
 | **text correction** | none | Captions reach the model verbatim as `"<BOS> {c0} <AND> {c1} <EOS>"` (`datasets.py:173-175`), tokenised by the checkpoint's own `SimpleVocab` (`text_model.py:23-27`). No correction, normalisation or filtering step exists in the evaluator. |
@@ -56,6 +56,7 @@ Per-query count = category query count in every pass (asserted in the controller
 |---|---|---|---|---|---|---|---|---|---|---|
 | `batch32` (baseline, declared before run) | 32 | 3 | 2017/2038/1961 | 6.841844 / 6.476938 / 7.853136 | 29.449678 / 27.772326 / 32.840388 | 56.767476 / 55.250245 / 63.997960 | 7.057306217652120 | **30.02079703540087** | **58.67189400437203** | 334.3 s |
 | `batch32_r2` (determinism control) | 32 | 3 | 2017/2038/1961 | identical | identical | identical | 7.057306217652120 | 30.02079703540087 | 58.67189400437203 | 180.2 s |
+| `batch32_r3` (mask-field re-measure; adds `reference_rank`) | 32 | 3 | 2017/2038/1961 | identical | identical | identical | 7.057306217652120 | 30.02079703540087 | 58.67189400437203 | 651.6 s |
 | `batch48` (control for the 29.9707 artifact) | 48 | 3 | 2017/2038/1961 | 6.792266 / 6.427870 / 7.853136 | 29.350521 / 27.772326 / 32.789393 | 56.817055 / 55.152110 / 63.895971 | 7.024424119153085 | **29.970746517160162** | **58.62171212901515** | 636.3 s |
 | `batch1` (sensitivity probe) | 1 | 1 (dress) | 2017 | 6.792266 | 28.805156 | 56.717898 | — | 28.805156172533465 | 56.717897868120971 | 290.2 s |
 
@@ -106,8 +107,9 @@ one checkpoint bundle. Exhausted hypothesis space, with the evidence for each re
   reproduced) produce both numbers.
 - *gallery order / construction*: excluded — 2628/3089/2902 gallery images in every pass, ordered
   pair-union by `datasets.py:243-249`; the code path is not batch-dependent.
-- *mask*: excluded — `-10e10`, `test.py:135`, identical in all passes; 0 reference images surfaced
-  in any top-50.
+- *mask*: excluded — `-10e10`, `test.py:135`, identical in all passes; the reference sits exactly
+  last in 2628/2628 dress and 3089/3089 shirt queries (`reference_masked_last`, `min_reference_rank`
+  = gallery−1), so it can never take a top-50 slot.
 - *corrected text*: excluded — no correction exists anywhere in `test.py`/`datasets.py`/`text_model.py`.
 - *tie rule*: **not** the cause of the historical gap, but it is a real confound at the margin — ties
   at the target score exist (40/12/14 at batch 32 vs 36/12/14 at batch 48 in dress/shirt/toptee), so
@@ -158,24 +160,34 @@ difference reported above is attributable to batch size and to nothing else — 
 no seed drift, no cuDNN nondeterminism at fixed shape. This is what makes the two exact
 reproductions meaningful rather than lucky.
 
+A third batch-32 pass (`batch32_r3`, run to re-measure the reference-mask field after a defect in it
+was found) returned the same macro to the last digit: **30.02079703540087 / 58.67189400437203**.
+Three independent batch-32 passes agree exactly.
+
 ## 6. Per-query evidence
 
 `raw/clvc_native/<pass>/<category>.jsonl`, one row per ranked query:
 
-| pass | category | query_count | JSONL rows | unique qid | fields complete | gallery | ties at target | rank=None | ref in top-50 |
+| pass | category | query_count | JSONL rows | unique qid | fields complete | gallery | ties at target | rank=None | ref masked last |
 |---|---|---|---|---|---|---|---|---|---|
-| batch32 | dress | 2017 | 2017 | yes | yes | 2628 | 40 | 0 | 0 |
-| batch32 | shirt | 2038 | 2038 | yes | yes | 3089 | 12 | 0 | 0 |
-| batch32 | toptee | 1961 | 1961 | yes | yes | 2902 | 14 | 0 | 0 |
-| batch32_r2 | dress/shirt/toptee | 2017/2038/1961 | equal | yes | yes | same | same | 0 | 0 |
-| batch48 | dress/shirt/toptee | 2017/2038/1961 | equal | yes | yes | same | 36/12/14 | 0 | 0 |
-| batch1 | dress | 2017 | 2017 | yes | yes | 2628 | 40 | 0 | 0 |
+| batch32 | dress | 2017 | 2017 | yes | yes | 2628 | 40 | 0 | 2017/2017 |
+| batch32 | shirt | 2038 | 2038 | yes | yes | 3089 | 12 | 0 | 2038/2038 |
+| batch32 | toptee | 1961 | 1961 | yes | yes | 2902 | 14 | 0 | measured in `batch32_r3` |
+| batch32_r2 | dress/shirt/toptee | 2017/2038/1961 | equal | yes | yes | same | same | 0 | — |
+| batch32_r3 | dress/shirt/toptee | 2017/2038/1961 | equal | yes | yes | same | 40/12/14 | 0 | 2017/2038/1961 |
+| batch48 | dress/shirt/toptee | 2017/2038/1961 | equal | yes | yes | same | 36/12/14 | 0 | — |
+| batch1 | dress | 2017 | 2017 | yes | yes | 2628 | 40 | 0 | — |
 
 Row fields: `qid` (stable `<category>:<index>:<candidate>-><target>`), `candidate_id`, `target_id`,
 `reference_gallery_index`, `target_gallery_index`, `target_rank`, `score_at_target_rank`,
 `score_at_prev_rank` (the score one rank above, so a tie at the boundary is visible),
 `tied_with_target` (count of other gallery images with the identical score), `tie_rule`,
-`batch_size`, `reference_in_top50`. `target_rank` is never `None` in any pass because the gallery
+`batch_size`, `reference_rank` (positional rank of the masked reference) and `reference_masked_last`.
+
+Passes `batch32`, `batch32_r2` and `batch48` predate the `reference_rank` field: they carry
+`reference_in_top50`, which tested membership in the full ordering and is therefore trivially true —
+it is **not** evidence about the mask and is superseded by `batch32_r3`. Everything those three
+passes assert about recalls, ranks, ties and batch sensitivity is unaffected; the field was additive. `target_rank` is never `None` in any pass because the gallery
 contains every target by construction.
 
 ## 7. What this settles / what it does not

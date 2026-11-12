@@ -475,6 +475,64 @@ pin therefore did not degrade the forward agreement — it left it where it was,
 denominator artefacts remain. **They were neither moved nor deleted**: `forward_max_rel` is still
 `1e-4`, `batch_max_rel` still `1e-3`, and the gate still fails on all nine.
 
+### 11b. Three recall vectors in the G2 block, and the one a reader will misread
+
+`adapter.scoring_ranking` carries **three** native-convention recall vectors per category, and two of
+them are byte-equal. Verified per category, not assumed from one:
+
+| category | vector | r1 | r10 | r50 |
+|---|---|---|---|---|
+| dress | `native_convention_recall_on_adapter_features` | 21.269211700545366 | 51.71046108081309 | 76.25185919682697 |
+| dress | `native_convention_recall_val_control` | 21.269211700545366 | 51.71046108081309 | 76.25185919682697 |
+| dress | `native_convention_recall_native_primary` | 21.120475954387704 | 51.71046108081309 | 76.301437778879517 |
+| shirt | `native_convention_recall_on_adapter_features` | 25.564278704612367 | 55.201177625122668 | 75.368007850834147 |
+| shirt | `native_convention_recall_val_control` | 25.564278704612367 | 55.201177625122668 | 75.368007850834147 |
+| shirt | `native_convention_recall_native_primary` | 25.318940137389596 | 54.90677134445535 | 75.318940137389603 |
+| toptee | `native_convention_recall_on_adapter_features` | 29.01580826109128 | 61.601223865374806 | 80.877103518612955 |
+| toptee | `native_convention_recall_val_control` | 29.01580826109128 | 61.601223865374806 | 80.877103518612955 |
+| toptee | `native_convention_recall_native_primary` | 29.117797042325343 | 62.060173380928099 | 80.979092299847011 |
+
+Equality verdict per category — **the same pattern in all three**, so it generalises:
+
+| category | `on_adapter_features == val_control` | `== native_primary` | `native_mask_only_effect.count` |
+|---|---|---|---|
+| dress | **yes**, all three cutoffs | no | 1093 |
+| shirt | **yes**, all three cutoffs | no | 1132 |
+| toptee | **yes**, all three cutoffs | no | 1024 |
+
+`on_adapter_features` and `val_control` are identical because they are the *same quantity*: the
+adapter's features scored under the native ranking convention against the val-transform control
+population. `on_adapter_features` additionally equals the native artifact's own
+`val_transform_control_rank_recall` on all 9 cells. `native_primary` equals the native artifact's
+`native_metrics_recheck` on all 9 cells — it is the native pipeline's own primary-population metric.
+
+**The difference between them is the query transform, not the reference mask.** `native_primary` uses
+`preprocess_train` (the stochastic `RandomResizedCrop`) for queries; `val_control` uses
+`preprocess_val`. Both are reference-masked. The mask-only block separates a different pair: its
+`recall_with_mask` reproduces `val_control`/`on_adapter_features` exactly, and its
+`recall_without_mask` is the unmasked figure — so `native_mask_only_effect.count`
+(1093 / 1132 / 1024) is the count of queries whose rank moves when the `-10e10` reference mask is
+applied **within the val-transform control population**, not the cause of the
+`native_primary` − `on_adapter_features` delta. That delta is
+`−0.1487 / 0.0 / +0.0496` (dress), `−0.2453 / −0.2944 / −0.0491` (shirt),
+`+0.1019 / +0.4589 / +0.1019` (toptee).
+
+**The sentence a reader must not misread.** The R@1 that looks *lower* — `~25.32` for shirt against
+`~25.56`, and `~21.12` vs `~21.27` for dress — is the same model measured on `preprocess_train`
+**query tensors**, i.e. the native pipeline's primary protocol; it is **not** an adapter deficit, and
+the adapter is not the weaker side. Both numbers are computed from identical features under the
+identical reference mask. Likewise R@50: `75.3189` vs `75.3680` (shirt) is the training-transform
+crop, not an adapter loss. The sign is not consistent across categories — `toptee` runs the other way
+(`29.1178` primary vs `29.0158` control) — which is the signature of a stochastic crop rather than a
+systematic bias.
+
+**No cross-side metric divergence is claimed here.** A reviewer previously suspected one and
+retracted it; this subsection does not revive it. The two equal vectors are the same measurement
+recorded twice under two names, the third is the other protocol arm, and all three agree with the
+native artifact's own corresponding fields on all 9 cells each. Recorded once in
+`20261109-native15-composition-limn/ENCODER_PARITY.vi.md:383-385` as Δ R@10 `−0.2975 / +0.2944 /
+−0.1530`; see §10 row 4 for that doc's status.
+
 ## 12. Run conditions
 
 GPU, necessarily. `BindingDecoder.__init__` calls `.cuda()`, so construction itself cannot run on

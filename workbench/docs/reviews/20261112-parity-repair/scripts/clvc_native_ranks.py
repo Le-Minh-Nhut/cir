@@ -169,7 +169,11 @@ def execute(args: argparse.Namespace) -> int:
                 "score_at_target_rank": target_score,
                 "score_at_prev_rank": float(-row[int(order[rank - 1])]) if rank else None,
                 "tied_with_target": int(np.count_nonzero(row == row[target_pos])) - 1,
-                "reference_in_top50": reference_pos in set(int(x) for x in order),
+                # The mask puts the reference at the BOTTOM, not out of the array, so a check
+                # against the full ordering is always true and says nothing. What matters is where
+                # the mask actually left it: its positional rank in the native ordering.
+                "reference_rank": int(np.nonzero(order == reference_pos)[0][0]),
+                "reference_masked_last": bool(order[-1] == reference_pos),
                 "batch_size": args.batch_size,
                 "tie_rule": "argsort_quicksort_positional",
             })
@@ -198,7 +202,8 @@ def execute(args: argparse.Namespace) -> int:
             "mismatched_keys": mismatched,
             "queries_with_tie_at_target": sum(1 for r in records if r["tied_with_target"] > 0),
             "queries_with_target_rank_none": sum(1 for r in records if r["target_rank"] is None),
-            "references_visible_in_top50": sum(1 for r in records if r["reference_in_top50"]),
+            "references_masked_last": sum(1 for r in records if r["reference_masked_last"]),
+            "min_reference_rank": min(r["reference_rank"] for r in records),
             "checkpoint_digests": {p.name: sha256_file(p) for p in (local_path, global_path)},
             "checkpoint_root": str(CHECKPOINT_ROOT),
             "source_commit": entry["upstream_commit_sha"],
