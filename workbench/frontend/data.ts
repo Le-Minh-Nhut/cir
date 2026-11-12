@@ -298,6 +298,10 @@ export interface NativeMeasurementCatalog {
     rollup_rows?: number;
     verified: number;
   };
+  /** Models the registry defers from the WEB (`web_publication.status: DEFERRED`), with the reason
+   *  recorded there. Their rows are absent from `measurements` above and still fetchable one at a
+   *  time by `measurement_id`; this map exists so a deep link naming one can say why. */
+  deferred_models?: Record<string, string>;
   /** The rows behind `counts.unit_not_declared`, so a reader can audit the list instead of
    *  re-deriving which numbers are on an inferred scale. */
   undeclared_unit_rows?: Array<{
@@ -311,6 +315,21 @@ export interface NativeMeasurementCatalog {
   }>;
   verified: false;
   note: string;
+}
+
+/** How many registry entries exist, and how many the site publishes (`/api/models/publication`).
+ *
+ *  Both numbers are served. `published_count` is the length of the same projection `/api/models`
+ *  returns and `registry_count` is `len(registry["models"])`, so a header may print either without
+ *  arithmetic — "16 shown + 1 deferred = 17" in the client is precisely how a stated count and a
+ *  computed count drift apart. */
+export interface ModelPublication {
+  registry_count: number;
+  published_count: number;
+  published_model_ids: string[];
+  deferred_count: number;
+  /** `model_id -> registry reason` for each withheld entry. */
+  deferred: Record<string, string>;
 }
 
 export interface WorkbenchData {
@@ -333,6 +352,9 @@ export interface WorkbenchData {
   nativeMeasurements: RegionHandle<NativeMeasurementCatalog>;
   /** G1/G2 parity verdict DERIVED from the measurement artifacts (`/api/runs/parity-gate`). */
   parityGate: RegionHandle<ParityGatePayload>;
+  /** Registry size vs web publication, BOTH from the backend (`/api/models/publication`). The
+   *  registry count is never derived here by adding the deferred names to `models.length`. */
+  modelPublication: RegionHandle<ModelPublication>;
   protocolIds: string[];
   catalog: RunCatalogEntry[];
   refreshAll: () => void;
@@ -375,6 +397,10 @@ export function useWorkbenchData(query: DataQuery): WorkbenchData {
     (signal) => fetchJson("/api/native-measurements", signal));
   const parityGate = useRegion<ParityGatePayload>("parity-gate", "parity-gate",
     (signal) => fetchJson("/api/runs/parity-gate", signal));
+  // Registry size and publication count, both served: no client-side derivation of the registry
+  // size from a filtered list plus a deferred-name count.
+  const modelPublication = useRegion<ModelPublication>("model-publication", "model-publication",
+    (signal) => fetchJson("/api/models/publication", signal));
   const cohorts = useRegion<Cohort[]>("cohorts", "cohorts", (signal) => fetchJson("/api/cohorts", signal));
   const jobs = useRegion<Job[]>("jobs", "jobs", (signal) => fetchJson("/api/jobs", signal));
   const gates = useRegion<Record<string, RunGate>>("gates", "gates", (signal) => fetchJson("/api/runs/gate", signal));
@@ -477,12 +503,12 @@ export function useWorkbenchData(query: DataQuery): WorkbenchData {
     models.retry(); indexRuns.retry(); aggregates.retry(); compositionRuns.retry();
     cohorts.retry(); jobs.retry(); gates.retry();
     compositionCapabilitiesSummary.retry(); evidenceSummary.retry(); nativeMeasurements.retry();
-    parityGate.retry();
+    parityGate.retry(); modelPublication.retry();
   }, [models.retry, indexRuns.retry, aggregates.retry, compositionRuns.retry, cohorts.retry, jobs.retry,
       gates.retry, compositionCapabilitiesSummary.retry, evidenceSummary.retry,
-      nativeMeasurements.retry, parityGate.retry]);
+      nativeMeasurements.retry, parityGate.retry, modelPublication.retry]);
 
   return { models, indexRuns, aggregates, compositionRuns, cohorts, jobs, gates,
     compositionPage, compositionUniverse, indexUniverse, compositionCapabilitiesSummary,
-    evidenceSummary, nativeMeasurements, parityGate, protocolIds, catalog, refreshAll };
+    evidenceSummary, nativeMeasurements, parityGate, modelPublication, protocolIds, catalog, refreshAll };
 }

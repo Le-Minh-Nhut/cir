@@ -26,6 +26,9 @@ export function OverviewPage({ data, location, onOpenRun, onGoto }: {
 }) {
   const composition = data.compositionRuns.region;
   const models = data.models.region;
+  // Both counts are served (`/api/models/publication`); the registry size is never derived from the
+  // published list.
+  const publication = data.modelPublication.region;
   const capabilities = data.compositionCapabilitiesSummary.region;
   const evidence = data.evidenceSummary.region;
   const caps = capabilities.data;
@@ -194,15 +197,26 @@ export function OverviewPage({ data, location, onOpenRun, onGoto }: {
               )}
         </Card>
 
-        <Card title="Registry mô hình" subtitle="Mô hình chạy được hay bị chặn, kèm lý do">
+        <Card title="Registry mô hình" subtitle="Mô hình công bố trên web, chạy được hay bị chặn, kèm lý do">
           {models.status === "error"
             ? <ErrorState message={models.error ?? ""} onRetry={data.models.retry} />
             : models.status === "loading" && !models.data ? <LoadingState />
             : (
               <div className="row" style={{ gap: 24 }}>
+                {/* BOTH numbers, each with its own label: `/api/models` serves the PUBLISHED entries,
+                    so printing its length under a registry label conflated two different questions.
+                    Both values come from `/api/models/publication` (registry_count is the whole
+                    document, published_count the same projection this card lists) — never from
+                    `models.length` plus a client-side constant. */}
                 <div className="stat">
-                  <span className="stat-value">{fmtInt((models.data ?? []).length)}</span>
-                  <span className="stat-label">entry</span>
+                  <span className="stat-value" data-testid="overview-published-count">{fmtInt((models.data ?? []).length)}</span>
+                  <span className="stat-label">công bố trên web</span>
+                </div>
+                <div className="stat">
+                  <span className="stat-value" data-testid="overview-registry-count">
+                    {publication.data ? fmtInt(publication.data.registry_count) : "—"}
+                  </span>
+                  <span className="stat-label">trong registry</span>
                 </div>
                 <div className="stat">
                   <span className="stat-value" style={{ color: blockedModels.length ? "var(--warn)" : undefined }}>{fmtInt(blockedModels.length)}</span>

@@ -14,7 +14,7 @@ import type { CompositionRun } from "./types";
 import type { NativeMeasurement } from "./data";
 import type { WarningLabel } from "./gate";
 import { warningLabels } from "./gate";
-import { derivedLineage, nativeConflictChips, nativeRepeatLabel, nativeVarianceSummary, protocolHasSubsets } from "./scope";
+import { derivedLineage, nativeConflictChips, nativeRepeatLabel, nativeVarianceSummary, protocolHasSubsets, webDeferralNotice } from "./scope";
 
 /** Đánh giá: measured metrics for a stated protocol and subset, with denominators.
  *
@@ -577,6 +577,9 @@ function NativeMeasurementTable({ data, location, onGoto }: {
   const protocols = [...new Set(all.filter((row) => row.metrics && row.protocol_id)
     .map((row) => row.protocol_id as string))];
   const model = new URLSearchParams(window.location.search).get("model");
+  // A deep link that names a model the site defers lands on a table holding none of its rows. The
+  // rows are not gone (they are served by id); without this notice the page reads as "no data".
+  const deferralNotice = webDeferralNotice(model, region.data?.deferred_models ?? {});
 
   return (
     <div className="stack" data-testid="area-native">
@@ -590,6 +593,12 @@ function NativeMeasurementTable({ data, location, onGoto }: {
             ? `không đọc được catalog native cho ${protocolLabel(location.protocol)} — đây là lỗi yêu cầu, không phải 0 dòng`
             : `đang đọc catalog native cho ${protocolLabel(location.protocol)}…`}
       >
+        {deferralNotice && (
+          <div className="pipeline-notice" data-testid="native-deferral-notice" role="status">
+            <strong>Tạm gác khỏi web</strong>
+            <p className="hint">{deferralNotice}</p>
+          </div>
+        )}
         {region.status === "error"
           ? <ErrorState message={region.error ?? "Không tải được catalog native"} onRetry={data.nativeMeasurements.retry} />
           : region.status !== "ready"

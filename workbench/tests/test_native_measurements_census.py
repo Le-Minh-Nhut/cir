@@ -256,7 +256,12 @@ def test_the_catalog_never_reaches_outside_the_artifacts_root() -> None:
 
 
 def test_the_endpoint_serves_the_whole_catalog(tmp_path: Path) -> None:
-    """The route is a pass-through with no filtering of its own, so it inherits every guarantee."""
+    """The route is a pass-through for every PUBLISHED model, plus the web-deferral disclosure.
+
+    PAIR is deferred from the web (`web_publication.status: DEFERRED` in the registry), so its rows
+    are the one thing the route withholds — and they are still fetchable by id, which the next test
+    asserts. Everything else the tree states is served unchanged.
+    """
     from fastapi.testclient import TestClient
 
     from workbench.backend.main import app
@@ -268,8 +273,11 @@ def test_the_endpoint_serves_the_whole_catalog(tmp_path: Path) -> None:
     assert payload["verified"] is False
     models = {row["model_id"] for row in payload["measurements"]
               if row.get("metrics")}
-    for required in ("ptha_mtst", "pair", "clip4cir_rn50x4_fullft", "combiner_rn50x4_noft", "csmcir"):
+    for required in ("ptha_mtst", "clip4cir_rn50x4_fullft", "combiner_rn50x4_noft", "csmcir"):
         assert required in models, sorted(models)
+    # The deferral is DISCLOSED, not silent: the reason travels with the catalogue.
+    assert payload["deferred_models"]["pair"].strip()
+    assert "pair" not in models
     assert payload["counts"]["verified"] == 0
     # A settlement check: the JSON round-trips, so nothing un-serializable is in a row.
     assert json.loads(response.text)["counts"] == payload["counts"]

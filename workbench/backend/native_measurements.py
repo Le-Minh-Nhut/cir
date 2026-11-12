@@ -1108,8 +1108,18 @@ def _mark_duplicates(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
             row["same_metrics_as"] = sorted(peer["source"]["path"] for peer in peers)[0]
     return rows
 
-def list_native_measurements(artifacts_root: Path) -> dict[str, Any]:
-    """Every native measurement in the selection tree, with the path of the block that states it."""
+def list_native_measurements(artifacts_root: Path, *, exclude_model_ids: frozenset[str] = frozenset()) -> dict[str, Any]:
+    """Every native measurement in the selection tree, with the path of the block that states it.
+
+    ``exclude_model_ids`` is the WEB publication filter: a model deferred from the site
+    (`web_publication.status: DEFERRED` in the registry) has its rows removed from the LISTING
+    here, before any count is computed, and stays fetchable one at a time through
+    ``native_measurement`` / ``GET /api/native-measurements/{measurement_id}``. Deferring is a
+    publication decision, so the rows keep their provenance, their `mapping_status` and their
+    source artifacts; only the list they appear in is narrower. The exclusion happens AFTER the
+    artifact-backing pass, so a surviving row that named a deferred row as its backing file still
+    resolves, and nothing is re-derived from a filtered tree.
+    """
     selection = artifacts_root / "checkpoint_selection"
     paths: list[Path] = []
     if selection.is_dir():
@@ -1130,6 +1140,8 @@ def list_native_measurements(artifacts_root: Path) -> dict[str, Any]:
     # pass treats them exactly like an in-tree artifact and never replaces their number.
     rows.extend(_review_run_rows(artifacts_root))
     rows = _backed_by_artifact(rows, artifacts_root)
+    if exclude_model_ids:
+        rows = [row for row in rows if row.get("model_id") not in exclude_model_ids]
     rows.sort(key=lambda item: (str(item.get("model_id")), str(item.get("protocol_id")),
                                 str(item.get("source", {}).get("path")),
                                 str(item.get("metric_path"))))

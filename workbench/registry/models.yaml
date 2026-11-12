@@ -828,6 +828,31 @@ models:
     command_status: COMMAND_BLOCKED_SOURCE_ENTRYPOINT
     strict_clean_checkpoint_available: false
     notes: Existing audit found pair-B1.pt and pair-B2.pt; official FashionIQ mapping is not verified.
+    # DEFERRED FROM THE WEB, not deleted from the registry. The checkpoints were produced by classes
+    # the pinned repository does not contain (`reproduction_status` above), so no number this entry
+    # yields can be published as a PAIR reproduction on the site. The entry itself, its source
+    # history, both checkpoint variants, the offline CLI (`scripts/evaluate_models.py --model pair`)
+    # and every artifact under `artifacts/checkpoint_selection/.../pair_compat/` stay exactly as they
+    # are, and each native measurement stays readable BY ITS OWN ID for offline audit.
+    #
+    # What the flag removes is the publication surface: `/api/models` (so the model picker and the
+    # inventory), `/api/native-measurements` (its rows are unlisted while remaining fetchable at
+    # `/api/native-measurements/{measurement_id}`), and `POST /api/jobs` (which answers a named
+    # deferral instead of the false `model_not_found`). The exploratory rows keep
+    # `mapping_status: EXPLORATORY_PUBLIC_MAPPING` wherever they are read; nothing here relabels one
+    # as verified, and `/api/benchmark-runs`, the parity gate and the composition list never had a
+    # PAIR row to hide.
+    web_publication:
+      status: DEFERRED
+      reason: >-
+        Chưa có mapping checkpoint chính thức: pickle được tạo bởi các class mà repo đã pin không có
+        (BLOCKED_CHECKPOINT_MAPPING_UNVERIFIED), nên chưa thể công bố là tái lập PAIR.
+      decided: 2026-11-13
+      offline: >-
+        workbench/envs/ctl312h/bin/python workbench/scripts/evaluate_models.py --list   (PAIR trên
+        mọi checkpoint vẫn xuất hiện); và
+        workbench/envs/ctl312h/bin/python workbench/scripts/evaluate_models.py --model pair
+        --checkpoint pair_b1 --protocol fashioniq_val_split --dry-run (vẫn báo đúng hai blocker).
     # Map status stays UNVERIFIED, and the reason is now POSITIVE rather than "nobody checked":
     # the released pickles were produced by an implementation the pinned repo does not contain.
     # Measured on CPU from the bytes (see docs/reviews/20261108T114646+0700-ckpt-mapping):

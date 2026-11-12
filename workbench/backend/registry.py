@@ -104,6 +104,15 @@ def load_registry(path: Path | None = None) -> dict[str, Any]:
             raise ValueError(f"unknown preparation contract for {model['model_id']}")
         if model.get("native_protocol_condition") and native_protocol is not None:
             raise ValueError(f"conditional native protocol must remain unavailable for {model['model_id']}")
+        # `web_publication` says whether the site publishes this entry, NOT whether the research
+        # record exists. It is closed-vocabulary on purpose: a misspelling (`DEFERED`) would publish
+        # the model again silently, which is the one failure this flag cannot afford.
+        publication = model.get("web_publication")
+        if publication is not None:
+            if not isinstance(publication, dict) or publication.get("status") not in {"PUBLISHED", "DEFERRED"}:
+                raise ValueError(f"unknown web publication state for {model['model_id']}")
+            if publication["status"] == "DEFERRED" and not str(publication.get("reason") or "").strip():
+                raise ValueError(f"a deferred model must state its reason: {model['model_id']}")
         variants = {checkpoint["checkpoint_id"] for checkpoint in model["checkpoint_variants"]}
         for bundle in model.get("checkpoint_bundles", []):
             if {"bundle_id", "required_checkpoint_ids", "structure", "mapping_status", "notes"} - bundle.keys() or not bundle["required_checkpoint_ids"] or not set(bundle["required_checkpoint_ids"]).issubset(variants):
@@ -146,6 +155,19 @@ def load_registry(path: Path | None = None) -> dict[str, Any]:
                         f"checkpoint source state {source_state!r} and mapping state "
                         f"{checkpoint['checkpoint_mapping_status']!r} disagree for {model['model_id']}")
     return copy.deepcopy(registry)
+
+
+def web_deferred_models(registry: dict[str, Any]) -> dict[str, str]:
+    """`{model_id: reason}` for every entry the WEBSITE withholds, from the registry's own flag.
+
+    Read by the publication surfaces (`/api/models`, `/api/native-measurements`, `POST /api/jobs`)
+    and by nothing that produces evidence: the offline CLI, the checkpoint resolver and the
+    evaluator see the registry unchanged, which is the whole point of deferring instead of deleting.
+    Deriving the set here, once, is what stops two surfaces from disagreeing about who is published.
+    """
+    return {model["model_id"]: str((model.get("web_publication") or {}).get("reason") or "").strip()
+            for model in registry.get("models", [])
+            if (model.get("web_publication") or {}).get("status") == "DEFERRED"}
 
 
 def expected_asset_size(asset: dict[str, Any]) -> int | None:

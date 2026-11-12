@@ -17,8 +17,20 @@ export const DEFERRED_MODELS: Record<string, string> = {
   // CSMCIR was deferred for a missing auxiliary asset; it was then MEASURED natively on FashionIQ
   // (macro R@10 57.05 / R@50 77.30, run `f03887d2`). Only its CIRCUS composition stays deferred, so
   // the row must not read as "nothing measured" while a counted native row exists.
-  csmcir: "FashionIQ native đã đo · CIRCUS composition tạm gác",
-  sprc: "Tạm gác theo yêu cầu: chưa tải checkpoint",
+  //
+  // Verified against the served rows, not assumed: the native row `6812926dbe6394ce` (checkpoint
+  // `fashioniq`, `fashioniq_original_split`, artifact_backed + counted) and two certified aggregate
+  // reports exist, and `/api/composition/runs` holds ZERO csmcir rows. The copy below states exactly
+  // that pair of facts.
+  csmcir: "FashionIQ native đã đo (row 6812926dbe6394ce, đã chứng thực) · CIRCUS composition chưa có lượt nào",
+  // SPRC's drift, corrected: the ViT-L checkpoint IS present and measured; what is missing is the
+  // paper's ViT-g file. `sprc_fiq.pt` (backbone `pretrain`, the authors' ViT-g) is declared
+  // `CHECKPOINT_MAPPING_UNVERIFIED` with null digest and is absent (home-wide search: 0 hits).
+  // `sprc_fiq_vitl.pt` (backbone `pretrain_vitL`) is present AND has a published, certified native
+  // row `6811145a4cff98ee` (r10 51.0386, artifact_backed + counted). The old string — "chưa tải
+  // checkpoint" — was false for the variant that was actually run, and would have told a reader the
+  // published number had no checkpoint behind it.
+  sprc: "Đã đo native bằng ViT-L (row 6811145a4cff98ee, đã chứng thực) · thiếu checkpoint ViT-g của paper (sprc_fiq.pt)",
 };
 
 /** Every model in `/api/models`, with its run status in the current protocol/subset.
@@ -72,6 +84,10 @@ export function ModelInventory({ data, location, onGoto }: {
   const measurementCount = nativeRows
     .filter((row) => row.metrics && row.counted !== false && row.artifact_backed === true).length;
   const blockerCount = data.nativeMeasurements.region.data?.counts.signposted_blockers ?? 0;
+  // The registry is WIDER than `/api/models`: entries the registry withholds from the web are not
+  // rows here at all. BOTH numbers are served by `/api/models/publication`, so neither the published
+  // count nor the registry count is derived in the client.
+  const publication = data.modelPublication.region.data ?? null;
 
   const ordered = useMemo(() => [...models].sort((a, b) => {
     const priority = (id: string) => DEFERRED_MODELS[id] ? 2 : measuredIds.has(id) ? 0 : 1;
@@ -136,7 +152,7 @@ export function ModelInventory({ data, location, onGoto }: {
   return (
     <section className="model-inventory" aria-label="Toàn bộ mô hình" data-testid="model-inventory">
       <div className="inventory-stats" data-testid="inventory-stats">
-        <div><strong data-testid="count-models">{models.length}</strong><span>Mô hình đăng ký</span></div>
+        <div><strong data-testid="count-models">{models.length}</strong><span>Mô hình công bố trên web</span></div>
         <div><strong data-testid="count-runs">{runCount}</strong><span>Lượt CIRCUS có dữ liệu ở phạm vi này</span></div>
         <div><strong data-testid="count-composition-rows">{entries.filter((entry) => entry.family === "composition").length}</strong><span>Dòng composition (mọi trạng thái)</span></div>
         <div><strong data-testid="count-attempts">{attemptCount}</strong><span>Lần thử ghi nhận (kể cả trùng)</span></div>
@@ -397,6 +413,23 @@ export function ModelInventory({ data, location, onGoto }: {
         phủ toàn protocol). Cả hai đều được tính là đã đo trong phạm vi này.
         CSMCIR và SPRC vẫn có trong danh sách để theo dõi phạm vi.
       </p>
+      {/* The registry is wider than this page: an entry the registry withholds from the WEB is not a
+          row here, and a reader comparing `models.yaml` against this table is owed the difference.
+          Both numbers are SERVED (`/api/models/publication`) — `registry_count` is the whole
+          registry document, `published_count` the projection this table lists. Neither is derived
+          here by arithmetic, which is how a header and a table drift apart. */}
+      {publication && publication.deferred_count > 0 && (
+        <p className="hint" data-testid="web-deferred-footnote">
+          <b>{fmtInt(publication.published_count)}</b> mô hình công bố trên web ·{" "}
+          <b>{fmtInt(publication.registry_count)}</b> trong registry.{" "}
+          Tạm gác khỏi web (vẫn chạy được bằng CLI offline, số đo native vẫn đọc được theo <code>measurement_id</code>):{" "}
+          {Object.entries(publication.deferred).map(([modelId, reason]) => (
+            <span key={modelId} data-testid={`web-deferred-${modelId}`}>
+              <code>{modelId}</code> — {reason}{" "}
+            </span>
+          ))}
+        </p>
+      )}
     </section>
   );
 }

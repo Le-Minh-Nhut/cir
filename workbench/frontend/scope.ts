@@ -454,6 +454,29 @@ export function crossScopeAllowed(facts: {
   return !facts.hasEntry && !facts.deferred && !facts.nativeOnly;
 }
 
+/** The notice a deferred model's DEEP LINK renders, from the registry's own reason.
+ *
+ *  A `?view=native&model=pair` link, a bookmark or a citation used to land on a table that no longer
+ *  lists the rows it names, and the highlight simply found nothing — indistinguishable from "this
+ *  model has no measurements". The deferral is a decision with a reason and an audit path, so the
+ *  notice states three facts: it is deferred, why, and that the record is still readable by id.
+ *
+ *  Returns `null` for a published model and for no model at all, so a caller renders the notice only
+ *  where it applies. The id half is spelled out rather than linked: the web has no page for an
+ *  individual measurement, and inventing one would publish what the deferral withholds.
+ */
+export function webDeferralNotice(
+  modelId: string | null | undefined,
+  deferred: Record<string, string>,
+): string | null {
+  if (!modelId) return null;
+  const reason = deferred[modelId];
+  if (!reason) return null;
+  return `${modelId} đang tạm gác khỏi web: ${reason} `
+    + "Bản ghi không bị xoá — số đo native vẫn đọc được theo `measurement_id` "
+    + "(/api/native-measurements/{id}) và vẫn chạy được bằng CLI offline.";
+}
+
 export function inventoryStatus(facts: InventoryFacts): string {
   if (facts.deferred) return "Tạm gác";
   if (facts.hasRun) {

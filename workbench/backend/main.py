@@ -31,10 +31,16 @@ from workbench.backend.composition import (
 from workbench.backend.errors import WorkbenchError
 from workbench.backend.index import database_path, rebuild_index
 from workbench.backend.jobs import DuplicateJobError, QueueShutdownError, SingleGpuQueue
+from workbench.backend.limn_diagnostic import diagnostic_router
 from workbench.backend.native_measurements import list_native_measurements
 from workbench.backend.operator_config import resolve_config
 from workbench.backend.preflight import preflight_blockers
-from workbench.backend.registry import checkpoint_availability, load_registry, sha256_file
+from workbench.backend.registry import (
+    checkpoint_availability,
+    load_registry,
+    sha256_file,
+    web_deferred_models,
+)
 from workbench.backend.schemas.results import PROTOCOL_IDS, Annotation, SavedCohort
 from workbench.backend.storage import (
     cohort_metrics,
@@ -56,6 +62,10 @@ COHORTS_PATH = resolve_config().WORKBENCH_ARTIFACTS_ROOT / "cohorts.json"
 LABELS = ["preservation_failure", "under_edit", "over_edit", "partial_edit", "wrong_attribute", "wrong_entity_binding", "reference_dominance", "text_dominance", "fine_grained_visual_confusion", "ambiguous_ground_truth", "possible_dataset_issue", "duplicate_or_near_duplicate", "other", "unknown"]
 app = FastAPI(title="CIR Failure Analysis Workbench")
 app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"], allow_methods=["*"], allow_headers=["*"])
+# CLVC's two literal diagnostic paths live on `limn_diagnostic.diagnostic_router` (LIMN's own two are
+# declared in this module below). Registration order is NOT load-bearing here because every path is
+# literal: that is why the router declares no parameterised `/{model_id}-dual-scope` route.
+app.include_router(diagnostic_router)
 JOBS = SingleGpuQueue()
 
 def _recover_interrupted_jobs() -> None:
@@ -297,14 +307,27 @@ def _models_state_stamp(registry: dict, config) -> tuple:
 
 @app.get("/api/models")
 def models():
+    """The registry entries this WEBSITE publishes.
+
+    An entry whose registry block says `web_publication.status: DEFERRED` is withheld here, with a
+    reason recorded in the registry itself — not deleted, and not hidden by a filter that runs after
+    a count was taken. Everything downstream (the inventory, the model picker, the queue's refusal
+    text) reads this one list, so no surface can publish a model the registry deferred.
+
+    The response stays a bare list: `published_model_ids` is on `/api/models/publication`, so a
+    count describing what this list OMITS never has to be inferred from the list itself.
+    """
     global _MODELS_CACHE, _MODELS_CACHE_KEY
     config = resolve_config()
     registry = load_registry()
+    deferred = web_deferred_models(registry)
     stamp = _models_state_stamp(registry, config)
     if _MODELS_CACHE is not None and _MODELS_CACHE_KEY == stamp:
         return _MODELS_CACHE
     out = []
     for model in registry["models"]:
+        if model["model_id"] in deferred:
+            continue
         model_blockers = preflight_blockers(model, config)
 
         available = {item["checkpoint_id"]: checkpoint_availability(
@@ -330,6 +353,28 @@ def models():
         out.append(entry)
     _MODELS_CACHE, _MODELS_CACHE_KEY = out, stamp
     return out
+
+@app.get("/api/models/publication")
+def models_publication():
+    """How many registry entries exist, how many the site publishes, and which are withheld.
+
+    A client must never derive the registry size by arithmetic over a filtered list: "16 shown, add
+    the 1 deferred" is exactly the drift that let a header and a table disagree. Both numbers come
+    from the same registry read here, and `registry_count` is `len(registry["models"])` — the whole
+    document, not the filtered projection. `published_count` is the length of the SAME projection
+    `/api/models` returns, computed by the same predicate, so the two endpoints cannot diverge.
+    """
+    registry = load_registry()
+    deferred = web_deferred_models(registry)
+    published = [model["model_id"] for model in registry["models"]
+                 if model["model_id"] not in deferred]
+    return {
+        "registry_count": len(registry["models"]),
+        "published_count": len(published),
+        "published_model_ids": published,
+        "deferred_count": len(deferred),
+        "deferred": deferred,
+    }
 
 
 def _check_index_ready(db_path: Path) -> None:
@@ -1161,8 +1206,53 @@ def native_measurements():
     outcome, no evidence-ledger entry, no verifier receipt. They are therefore a separate endpoint
     and a separate section of the UI, never rows of `/api/benchmark-runs`, and they are not counted
     by `/api/evidence/summary`.
+
+    A model the registry defers from the web keeps its rows OUT of this listing, and every counter
+    below is computed from the rows actually returned — a "56 rows" header over a table of 51 is the
+    defect this filter must not reintroduce. Each withheld row remains readable at
+    `/api/native-measurements/{measurement_id}`, which is the offline-audit path.
     """
-    return list_native_measurements(resolve_config().WORKBENCH_ARTIFACTS_ROOT)
+    payload = list_native_measurements(resolve_config().WORKBENCH_ARTIFACTS_ROOT,
+                                       exclude_model_ids=frozenset(web_deferred_models(load_registry())))
+    # Which models are withheld, and why, so a surface can explain an absence it is asked about
+    # (`?model=pair`) instead of rendering an empty table. A disclosure, never a count.
+    return {**payload, "deferred_models": web_deferred_models(load_registry())}
+
+
+@app.get("/api/native-measurements/{measurement_id}")
+def native_measurement(measurement_id: str):
+    """ONE native measurement, by its own id, whether or not its model is published.
+
+    Deferring PAIR from the site is a publication decision, not a deletion: an auditor holding
+    `61ccfc4d63fb69eb` must still be able to open the record, see `mapping_status:
+    EXPLORATORY_PUBLIC_MAPPING`, and read the artifact path it came from. Deliberately NOT filtered
+    by `web_publication` — a route that hid the record would turn "deferred" into "deleted" while
+    the artifact stayed on disk.
+    """
+    # The unfiltered catalogue is what this route reads: the deferral narrows the LISTING only.
+    payload = list_native_measurements(resolve_config().WORKBENCH_ARTIFACTS_ROOT)
+    row = next((item for item in payload["measurements"]
+                if item["measurement_id"] == measurement_id), None)
+    if row is None:
+        raise HTTPException(404, {"error": "native_measurement_not_found",
+                                  "message": "No native measurement carries this id.",
+                                  "details": {"measurement_id": measurement_id}})
+    return {**row, "web_publication": _native_publication(row, web_deferred_models(load_registry()))}
+
+
+def _native_publication(row: dict, deferred: dict[str, str]) -> dict:
+    """Whether this ROW is listed on the site, and why not. Stated per record, never inferred.
+
+    A row read by id has to answer "why is this not in the table" on its own: the reader may have
+    arrived from a bookmark, a report or a citation, and an unlabelled record would read as a
+    published result that the table happens to omit.
+    """
+    reason = deferred.get(str(row.get("model_id")))
+    if reason is None:
+        return {"status": "PUBLISHED"}
+    return {"status": "DEFERRED", "reason": reason,
+            "scope": "listing only: this record is served by id for offline audit",
+            "exploratory": row.get("mapping_status") == "EXPLORATORY_PUBLIC_MAPPING"}
 
 @app.get("/api/runs/gate")
 def run_gates():
@@ -1566,6 +1656,32 @@ class JobInput(BaseModel):
     top_k: int = Field(default=200, ge=1, le=200)
 
 
+def _offline_invocation(registry: dict, model_id: str, checkpoint_id: str) -> dict:
+    """The command that still runs this model OUTSIDE the website, from the registry's own flags.
+
+    A refusal that says "not here" without saying "here instead" sends the reader nowhere. The
+    pieces come from the registry (`native_protocol`, the variant's checkpoint id) rather than from
+    a literal, so a relocated run identity cannot leave a stale command in the error body.
+    """
+    model = next((item for item in registry["models"] if item["model_id"] == model_id), None)
+    protocol = (model or {}).get("native_protocol")
+    argv = ["workbench/envs/ctl312h/bin/python", "workbench/scripts/evaluate_models.py",
+            "--model", model_id, "--checkpoint", checkpoint_id]
+    if protocol:
+        argv += ["--protocol", protocol]
+    argv += ["--dry-run"]
+    return {"command": " ".join(argv),
+            # `--list` refuses to run WITH `--model`, so the inventory command is offered separately
+            # rather than appended into a string that would fail if pasted.
+            "list_command": "workbench/envs/ctl312h/bin/python workbench/scripts/evaluate_models.py --list",
+            "protocol": protocol,
+            "checkpoint": checkpoint_id,
+            "callable": list(argv),
+            # Named so the reader knows the registry still holds the record and the artifacts.
+            "registry_entry": "web_publication.status = DEFERRED (reason recorded in models.yaml)",
+            "artifacts": [variant["checkpoint_id"] for variant in (model or {}).get("checkpoint_variants", [])]}
+
+
 def _duplicate_job_conflict(job_id: str, status: str) -> HTTPException:
     """The one 409 shape a duplicate submission gets, wherever the duplicate is detected."""
     return HTTPException(409, {"error": "duplicate_job",
@@ -1575,6 +1691,32 @@ def _duplicate_job_conflict(job_id: str, status: str) -> HTTPException:
 @app.post("/api/jobs")
 def queue_job(payload: JobInput):
     registry = load_registry()
+    deferred = web_deferred_models(registry)
+    if payload.model_id in deferred:
+        # The model EXISTS and is registered: `model_not_found` would be a lie, and the 409 the old
+        # code eventually returned named the blockers without saying the operator had already
+        # decided to stop publishing this model. The deferral is its own refusal.
+        #
+        # `message` is a complete sentence a UI can render as-is: it names the model, the deferral
+        # and the offline path, and it carries NO interpolated registry prose. The registry's own
+        # reason appears exactly ONCE, in `details.reason`, because embedding it in `message` too
+        # meant every client either printed it twice or had to cut the sentence apart.
+        raise HTTPException(409, {
+            "error": "model_deferred_from_web",
+            "message": (
+                f"{payload.model_id} is deferred from the web workbench and cannot be queued as a "
+                f"website job. The model is still registered, its artifacts are intact, and it "
+                f"still runs through the offline CLI — see details.offline and details.reason."
+            ),
+            "details": {
+                "model_id": payload.model_id,
+                # Verbatim from the registry. One place, so a client renders it once.
+                "reason": deferred[payload.model_id],
+                "offline": _offline_invocation(registry, payload.model_id, payload.checkpoint_id),
+                "web_publication": "DEFERRED",
+                "scope": "queueing as a website job only; the registry entry, the offline CLI and "
+                         "every measurement (readable by id) are unaffected",
+            }})
     model = next((item for item in registry["models"] if item["model_id"] == payload.model_id), None)
     if model is None:
         raise HTTPException(404, {"error": "model_not_found", "message": "Model is not registered.", "details": {"model_id": payload.model_id}})
