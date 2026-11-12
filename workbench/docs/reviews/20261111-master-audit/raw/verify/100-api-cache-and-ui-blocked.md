@@ -627,6 +627,34 @@ original arguments — the DuckDB arm, unchanged.
 Both throwaway cohorts (`rt-live-100`, `cohort-20261112T014331`) were deleted; `GET /api/cohorts`
 now returns `[]` and `cohorts.json` holds `[]`.
 
+### 6b. The export control that did not exist
+
+The cohort card listed saved cohorts and offered **no export at all**: `GET
+/api/cohorts/{id}/export/{json,csv,markdown}` was a backend feature reachable only by curl. For the
+person who saved the cohort that is indistinguishable from a missing feature, so the card now carries
+the control.
+
+`NotebookPage.tsx` `CohortRow`: three buttons (JSON / CSV / MD), each fetching the route it names and
+handing the bytes to the browser as `<cohort_id>.json|csv|md`. A refusal is printed with the backend's
+own sentence (`cohort_artifact_changed` and friends), not a status code. The provenance is rendered
+too — the reference, `sha256` prefix, `qid_subsets` and the ranked conditions — because a cohort whose
+artifact cannot be named is a number without a source.
+
+Verified in Chromium on a throwaway `ui-export-probe`, reading the real download:
+
+```
+card text: ui-export-probe | 3 query | 1 lượt | CIRCUS composition | Xuất: | JSON | CSV …
+detail has 'artifact đã kiểm': True        'sha256 188d84febd9a1ebc': True
+detail has 'qid thuộc subset': True        'điều kiện đã xếp hạng': True
+button json/csv/markdown: present and enabled
+downloaded file: ui-export-probe.json, 1499 B
+  run_ids ['c:7b1fa85007bffdab931f7f19'] · protocol circus_fashioniq_release_v1 · qids ['7:1','7:2','7:603']
+  r10 33.333333333333336
+console errors: none
+```
+
+Probe deleted afterwards; `cohorts.json` is `[]`. Frontend suite + cohort tests: **44 passed**.
+
 ## Còn chặn
 
 1. ~~**Cohort round-trip on this HEAD is not exercisable** (§9).~~ **CLOSED** — the composition arm

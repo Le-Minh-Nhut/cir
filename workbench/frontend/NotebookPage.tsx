@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import type { ReactNode } from "react";
 import { fetchJson } from "./useRegion";
 import type { WorkbenchData } from "./data";
 import type { Location } from "./routes";
@@ -215,24 +216,105 @@ function CohortsView({ data, onGoto, location }: {
   );
 }
 
+type CohortProvenance = {
+  family?: string; protocol_id?: string; qid_subsets?: string[];
+  conditions?: Record<string, number>;
+  runs?: Array<{ reference?: string; run_id?: string; protocol_id?: string;
+                 rank_artifact?: string; rank_artifact_sha256?: string }>;
+};
+
 function CohortRow({ cohort }: { cohort: Cohort }) {
   const definition = cohort.definition as Record<string, unknown>;
+  const composition = (definition?.composition ?? null) as CohortProvenance | null;
+  const [state, setState] = useState<{ status: "idle" | "busy" | "error"; message?: string }>({ status: "idle" });
+
+  /** Fetch one export format and hand it to the browser as a file.
+   *
+   *  The export routes exist on the API (`/api/cohorts/{id}/export/{json,csv,markdown}`) and were
+   *  reachable only by curl: the cohort card listed the saved cohort and offered no way to take its
+   *  numbers anywhere. That made "export" a backend feature with no UI, which is the same shape as a
+   *  missing feature for the person who saved the cohort.
+   *
+   *  `markdown` and `csv` come back as `{content}`; `json` comes back as the cohort itself. The file
+   *  is named from the id and the extension, so two exports of one cohort are distinguishable.
+   */
+  async function exportAs(format: "json" | "csv" | "markdown") {
+    setState({ status: "busy" });
+    try {
+      const response = await fetch(`/api/cohorts/${encodeURIComponent(cohort.cohort_id)}/export/${format}`);
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) {
+        // The backend names its refusals (`cohort_artifact_changed`, …) and that sentence is the
+        // whole value of the refusal; a bare status code would hide it.
+        throw new Error(payload?.message ?? payload?.error ?? `${response.status}`);
+      }
+      const body = format === "json" ? JSON.stringify(payload, null, 2) : String(payload?.content ?? "");
+      const type = format === "json" ? "application/json" : format === "csv" ? "text/csv" : "text/markdown";
+      const url = URL.createObjectURL(new Blob([body], { type }));
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${cohort.cohort_id}.${format === "markdown" ? "md" : format}`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      setState({ status: "idle" });
+    } catch (cause) {
+      setState({ status: "error", message: cause instanceof Error ? cause.message : String(cause) });
+    }
+  }
+
   return (
     <article className="card" style={{ padding: 12 }} data-testid={`cohort-${cohort.cohort_id}`}>
       <div className="row">
         <b>{cohort.cohort_id}</b>
         <Badge tone="info">{fmtInt(cohort.query_ids.length)} query</Badge>
         <Badge>{fmtInt(cohort.run_ids.length)} lượt</Badge>
+        {composition && <Badge tone="neutral">CIRCUS composition</Badge>}
         <span className="hint" style={{ marginLeft: "auto" }}>{fmtDateStamp(cohort.created_at)}</span>
       </div>
+      {/* Export is a control on the row, not a hidden endpoint: json keeps every field,
+          csv/markdown carry the cohort's numbers with the denominator. */}
+      <div className="row" style={{ gap: 6, marginTop: 8 }}>
+        <span className="hint">Xuất:</span>
+        {(["json", "csv", "markdown"] as const).map((format) => (
+          <button key={format} type="button" className="ghost" disabled={state.status === "busy"}
+                  data-testid={`cohort-export-${cohort.cohort_id}-${format}`}
+                  onClick={() => void exportAs(format)}>
+            {format === "markdown" ? "MD" : format.toUpperCase()}
+          </button>
+        ))}
+      </div>
+      {state.status === "error" && (
+        <p className="hint" data-testid={`cohort-export-error-${cohort.cohort_id}`} role="alert"
+           style={{ color: "var(--bad)", marginTop: 6 }}>
+          Không xuất được: {state.message}
+        </p>
+      )}
       <Detail summary="Phạm vi và định nghĩa">
         <KeyValue rows={[
           ["protocol", <code key="p">{cohort.protocol_id}</code>],
           ["preset", String(definition?.preset ?? "—")],
           ["cutoff @K", String(definition?.k ?? "—")],
+          ["subset", String(definition?.subset ?? "—")],
           ["cohort", String(definition?.cohort ?? "—")],
           ["partial", String(definition?.partial ?? "—")],
           ["run_ids", <code key="r">{cohort.run_ids.join(", ")}</code>],
+          // The provenance a composition cohort was SAVED against. Without it the card could not say
+          // which artifact produced these numbers, and a reopened cohort would look like a fresh
+          // computation over whatever the run says today.
+          ...(composition ? [[
+            "artifact đã kiểm",
+            <span key="a">{composition.runs?.map((item) => (
+              <code key={item.reference} className="mono" style={{ display: "block" }}>
+                {item.reference} · sha256 {(item.rank_artifact_sha256 ?? "").slice(0, 16)}…
+              </code>
+            ))}</span>,
+          ] as [string, ReactNode]] : []),
+          ...(composition?.qid_subsets ? [["qid thuộc subset",
+            composition.qid_subsets.join(", ")] as [string, ReactNode]] : []),
+          ...(composition?.conditions ? [["điều kiện đã xếp hạng",
+            Object.entries(composition.conditions).map(([name, count]) => `${name} ${fmtInt(count)}`).join(" · ")] as [string, ReactNode]] : []),
         ]} />
       </Detail>
     </article>
