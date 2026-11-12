@@ -1,0 +1,39 @@
+=== sweep preflight 2026-11-12T12:29:32+07:00
+HEAD_FULL=aea143bd8894881ad7d5b341c21dbeff25cfaaaf
+SHA8=aea143bd
+origin=a425739b1606eecda6edb22045afd2181c951244
+5b5a24a_in_history=YES
+
+--- pgrep pytest (expect empty)
+(empty)
+--- pgrep composition_eval (expect empty)
+(empty)
+--- nvidia compute apps (expect empty)
+--- git status --porcelain
+?? CLEANUP_REPORT.md.save
+--- MODIFIED tracked count (must be 0)
+0
+0
+
+--- production diff vs 117fc172
+ workbench/backend/composition.py     | 19 +++++++++-
+ workbench/frontend/SamplesPage.tsx   | 26 ++++++++++----
+ workbench/frontend/data.ts           | 18 ++++++++--
+ workbench/frontend/routes.ts         | 68 ++++++++++++++++++++++++++++++------
+ workbench/frontend/tests/ui_smoke.py | 17 ++++++---
+ 5 files changed, 123 insertions(+), 25 deletions(-)
+ 5 files changed, 123 insertions(+), 25 deletions(-)
+
+--- frontend freshness
+newest_src 1794460770.0470986
+newest_dist_js 1794460856.749563
+VERDICT FRESH
+bundle index-NnjrdZLG.js
+js=1 css=1
+served=assets/index-NnjrdZLG.js
+
+--- disk
+Filesystem      Size  Used Avail Use% Mounted on
+/dev/nvme0n1p5  630G  511G   87G  86% /
+--- collect-only
+3193 tests collected in 4.77s
