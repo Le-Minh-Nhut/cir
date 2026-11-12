@@ -666,7 +666,7 @@ Summary: `workbench/artifacts/composition/summary/tgcir_tgcir_archive_unresolved
 | `gallery_count` | 74381 (`gallery_identity_sha256` `1db68c59d96f014cdbecf936e108653de98abef0bd9a98a8abc2fe08b5dec4b4`, `hash_verification: matched`) |
 | `model_id` / `checkpoint_id` | `tgcir` / `tgcir_archive_unresolved` |
 | wall time | **556.9 s (9 min 17 s)** — log birth `05:07:12.401` → summary `05:16:29.257` |
-| ảnh đã encode | 92 390 = 74 381 gallery + 3 × 6003 query → **0.00603 s/ảnh**, 165.9 ảnh/s |
+| ảnh đã encode | **92 390 — ĐÚNG** (74 381 gallery + 18 009 dòng query, một gallery `global` dùng chung; xác nhận từ sidecar `gallery_global.npy` `[74381, 512]`, một file duy nhất) → **0.00603 s/ảnh**, 165.9 ảnh/s. Ở mọi chỗ: mẫu số là **lượt encode ảnh**, không phải số ảnh gallery (`104` §0.2a) |
 | GPU | RTX 5070 Ti, `tgcir39-la` (Python 3.9.25, torch 2.7.1+cu128); 22 mẫu `nvidia-smi`: util **97-100 %**, memory.used **2172 MiB** (min = max), power **235.02-260.04 W** |
 
 Ba điều kiện đều **`COMPLETED`, `unscored_count: 0`, `fallback_used: false`,
@@ -912,7 +912,7 @@ là lần chạy **cũ đã bị thay thế**; các con số giống nhau ở c�
 | đại lượng | giá trị | nguồn |
 |---|---|---|
 | wall time | **1867.2 s (31 min 7 s)** — log birth `04:22:15.752` → summary mtime `04:53:22.956` | 98 §1 |
-| ảnh đã encode | 92 390 = 74 381 gallery + 3 × 6003 query → **0.0202 s/ảnh**, 49.5 ảnh/s | 98 §1 |
+| ảnh đã encode | **số cũ SAI — không dùng.** `92 390` đếm gallery một lần thay vì ba scope, **và** attempt `-retry-2` này phục vụ gallery từ **cache** (`feature_storage.projected_bytes` = 609 329 280 một lần cho mỗi scope = nhánh cache-hit; không file feature nào được ghi trong cửa sổ 04:22–04:53), nên `1867.2 s` chỉ mua **11 768** dòng query → **0.1587 s/dòng (query-only)**. Attempt **có** encode là attempt-1 `eab10106` (01:21:13→02:35:43): **234 911 = 223 143 gallery (3 scope × 74 381) + 11 768 query**, **4469.8 s → 0.01903 s/ảnh, 52.56 ảnh/s**. Mẫu số là **lượt encode ảnh**, không phải số ảnh gallery — xem `104` §0.2a, §9.1 | 98 §1; 104 §9.1 |
 | `smoke` | `{"label": null, "limited": false, "query_limit": null}` — **không** dùng `--smoke` | 98 §1 |
 | `query_count` / `gallery_count` | 6003 / 74381 | 98 §1 |
 | interpreter | `clvc39-la` (Python 3.9.25, torch 2.7.1+cu128), RTX 5070 Ti | 98 §1 |
@@ -949,7 +949,7 @@ các trường dưới đây tại HEAD `d0e0eb7` + commit báo cáo này.
 | `feature_batch_fallback` | `partition: canonical_call_window`, `fallback_qids: []`, `runner_batch_size` **32**, `adapter_batch_size` **32**, `call_window` **4096**, `adapter_calls` 3 |
 | `adapter_query_scope_resolution` | `loader_scoped` **5884**, `adapter_routed` **6001**, `still_unscoped` **2**, `unscoped_qids` `["7:3038","7:3790"]` |
 | wall time | **2068.4 s (34 min 28 s)** — `08:40:50.565` → `09:15:18.964` |
-| ảnh đã encode | 92 390 (74 381 gallery + 3 × 6003 query) → **0.02239 s/ảnh**, 44.67 ảnh/s |
+| ảnh đã encode | **241 146** = **223 143** gallery (3 scope × 74 381 — ba sidecar `[74381, 2048]`, ba digest khác nhau) + **18 003** dòng query (3 điều kiện × 6001; 2 query unscored giữ hàng NaN) → **2068.4 s / 241 146 = 0.00858 s/ảnh, 116.6 ảnh/s**. Mẫu số là **lượt encode ảnh** (scope × ảnh gallery + dòng query), **không** phải số ảnh gallery; bản cũ `92 390 → 0.02239` đếm gallery một lần và thấp hơn 2.61× (`104` §0.2a) |
 | GPU | 22 mẫu `nvidia-smi`: util **min 8 % / max 99 % / mean 90.7 %** (20/22 mẫu ở 96-99 %), `memory.used` **1701 MiB** (hằng số — **không** phải peak toàn run), power **116.55-217.35 W**, mean **205.7 W** |
 | `topk_export` | `TOPK_EXPORT_COMPLETE_PARTIAL`, depth **100**, **ba** điều kiện, `missing_query_count` **6** (= 2 × 3 manifest), `partial: true` |
 
@@ -1203,11 +1203,13 @@ commit sau. Mỗi mục dưới đây mang file bằng chứng; chỗ chưa đo 
 
 * **Gallery encode `0.0138 s/ảnh` so với `0.0027 s/ảnh` độc lập (~5×) — vẫn chưa giải thích.** Quy cho
   memmap 609 MB flush nhưng **chưa chứng minh** (`raw/verify/96-staged-path-and-tgcir-worker-exit.md`
-  §6.2). Dữ kiện mới **thu hẹp** khoảng: hai run Full hoàn tất cho tốc độ độc lập là **0.0202 s/ảnh**
-  (`clvc_net`, 92 390 ảnh / 1867.2 s) và **0.00603 s/ảnh** (`tgcir`, 92 390 / 556.9 s)
-  (`raw/verify/98-…md` §1, §2). **Không** con số nào trong hai số đó tái hiện `0.0027`, nên phép đọc
-  standalone càng ít được xác nhận hơn — mục vẫn **mở**, và vẫn cần per-scope instrumentation trong
-  **một** run.
+  §6.2). Dữ kiện mới **thu hẹp** khoảng, với mẫu số đã sửa (**lượt encode ảnh**, không phải số ảnh gallery):
+  `clvc_net` `da0a2162` **0.00858 s/ảnh** (241 146 / 2068.4 s) và `tgcir` **0.00603 s/ảnh** (92 390 /
+  556.9 s — mẫu số này **đúng**, TG-CIR chỉ có **một** gallery `global`; xem `104` §0.2a và
+  `raw/verify/98-…md` §2). Con số `0.0202 s/ảnh` của `clvc_net` **đã bị rút**: nó đếm gallery một lần
+  và attempt `-retry-2` còn phục vụ gallery từ cache (`104` §9.1), nên **không** dùng nó làm mốc.
+  Hai số còn lại (0.00858, 0.00603) đều **không** tái hiện `0.0027`, nên phép đọc standalone càng ít
+  được xác nhận hơn — mục vẫn **mở**, và vẫn cần per-scope instrumentation trong **một** run.
 * **Guard first-job của TG-CIR `adapter_worker_exited exit_status=1`** — guard **đã ship** (`be9de58` +
   hunk `model_tgcir.py:653-663`) và chỉ được chứng minh trên **CPU** (trước: `exit_status: 1, replies:
   0`; sau: `exit_status: 0, replies: 2`); thay đổi latch thì **KHÔNG** ship và phải **giữ nguyên**
@@ -1224,7 +1226,7 @@ commit sau. Mỗi mục dưới đây mang file bằng chứng; chỗ chưa đo 
 | `raw/verify/86-systemd-user-services.md` | hai unit user; `MainPID` = uvicorn không wrapper; `Restart=always`/`RestartSec=2`/`StartLimit 60,5`/`KillMode=mixed`/`TimeoutStopSec=30`; ba ca kill (3092 ms / 2881 ms / giữ dừng); cô lập cgroup cho con `setsid` + timeline; frontend 2432 ms và 2381 ms + lý do `mixed` vs `process`; cutover 23:48:4x, MainPID trước→sau, kill thật ≈2.28 s; `/tmp/cutover_rollback.sh` md5 `04fbd5ec…` |
 | `raw/verify/89-adapted-runtime-and-gpu-capability.md` | `adapted_runtime` sm_120 cho `clvc_net`/`tgcir`; tier `BLOCKED` → `GPU_VERIFICATION_PENDING` → `GPU_RUNTIME_READY`; bản ghi GPU (capability 12.0, torch 2.7.1+cu128, 16303 MiB); `command_status` giữ `COMMAND_BLOCKED_SOURCE_ENTRYPOINT` |
 | `raw/verify/90-circus-composition-runs.md` | CLVC Full `eab10106` §4.1 (PARTIAL, 4489 s, metrics, `gap null`, 119/6003) — **lần chạy bị thay thế**, xem `98`; §4.2 s/img 0.0027 vs 0.0603; §4.3 TG-CIR `9f115afe` mất 2 điều kiện; danh sách "Còn chặn" |
-| `raw/verify/98-tgcir-full-run.md` | **nguồn chuẩn cho CẢ HAI run Full**: `tgcir` `7b1fa85007bffdab931f7f19` `COMPLETED`, 6003 q, gap `0.43853620852911723`, `TOPK_EXPORT_COMPLETE` missing 0 (§2); `clvc_net` `eab10106…-retry-2` `PARTIAL`, 1867.2 s, 0.0202 s/ảnh, VRAM `chưa đo` (§1); side-by-side (§3); cross-check API 200/71 954 B và JSONL=API (§4); "composition ≠ native" (§ cuối) |
+| `raw/verify/98-tgcir-full-run.md` | **nguồn chuẩn cho CẢ HAI run Full**: `tgcir` `7b1fa85007bffdab931f7f19` `COMPLETED`, 6003 q, gap `0.43853620852911723`, `TOPK_EXPORT_COMPLETE` missing 0 (§2); `clvc_net` `eab10106…-retry-2` `PARTIAL`, 1867.2 s, **s/ảnh cũ SAI — gallery lấy từ cache**, xem `104` §9.1, VRAM `chưa đo` (§1); side-by-side (§3); cross-check API 200/71 954 B và JSONL=API (§4); "composition ≠ native" (§ cuối) |
 | `raw/verify/99-clvc-scope-and-image-only.md` | dry run 6 003 query: `loader_scoped 5884`, `recovered_from_annotation 117` (shirt 46, toptee 71), `still_unscoped 2` = `7:3038`/`7:3790` (§2, §3); phán quyết rò rỉ modality (a) + điều cấm phát biểu (§4) — **lưu ý:** (a) đúng cho 5884, còn 117 được route bằng `(stem, caption)` nên (a) **không** đúng nguyên trạng cho chúng (xem §4.3; khai trong `model_clvc_net.py:150`); `clvc_image_encoder_only` đo trên CPU: tolerance `1e-6`, đo được `6.705522537231445e-08` (§6.3); 15 test (§5) |
 | `raw/verify/100-api-cache-and-ui-blocked.md` | bốn nguyên nhân "blocked" tách biệt với field path (§1); `_MODELS_CACHE` theo state stamp — cold 98.43 s → 67.28 s sống, warm 0.026/0.017 s (§2, live §1); `statistics.query_count` 6003→5 (§3); `subset_provenance` byte-identical hai thứ tự gọi, sha256 `bb7406d6…` (§4); R@1 phục vụ từ derived record (§5); cohort save→reopen→export HTTP **và** browser (§6, §6b) |
 | `raw/verify/101-metrics-r1-and-fallback.md` | R@1: định nghĩa + cùng mẫu số với R@10/50 (§1), 7 test biên (§2), backfill 3 guard + số suy ra (tgcir 6.3135099117108116 / 1.949025487256372 / 0.08329168748958854; clvc 1.4106050305914344 / 0.10197144799456152 / `null`) (§3), 136/136 digest artifact **không đổi** (§7); partition encode + cache key (§5, §6) |
@@ -1269,7 +1271,7 @@ Trạng thái đọc từ `workbench/artifacts/composition/summary/<dir>/full.js
 | `9f115afeb58eb1adf75d88ba-retry-1` | `tgcir` | `PARTIAL` | 6003 | `false` | retry của lần trên, cùng dạng; nơi thấy `adapter_worker_exited exit_status=1` | `96` §2 |
 | `eab10106b2df8e97fb7a5ce5` | `clvc_net` | `PARTIAL` | 6003 | `false` | CLVC Full **lần đầu**, 4489 s, VRAM 2897 MiB (số VRAM **chỉ** thuộc run này) | `90` §4.1 |
 | `eab10106b2df8e97fb7a5ce5-retry-1` | `clvc_net` | `PARTIAL` | 6003 | `false` | retry thứ nhất, cùng metrics, bị `-retry-2` thay thế | summary dir |
-| `eab10106b2df8e97fb7a5ce5-retry-2` | `clvc_net` | **`PARTIAL`** | 6003 | `false` | **CLVC Full có hiệu lực**: 1867.2 s, 0.0202 s/ảnh, gap `null` (`no queries have exact ranks in all three conditions`), 5884/6003 mỗi điều kiện | `98` §1; §4.4 |
+| `eab10106b2df8e97fb7a5ce5-retry-2` | `clvc_net` | **`PARTIAL`** | 6003 | `false` | **CLVC Full có hiệu lực**: 1867.2 s, **`0.0202 s/ảnh` đã rút** (gallery cache; `104` §9.1), gap `null` (`no queries have exact ranks in all three conditions`), 5884/6003 mỗi điều kiện | `98` §1; §4.4 |
 | `889bc330d60e8cbab956944f` | `clvc_net` | `PARTIAL` | 5 | `true` | smoke; `image_only_empty_text` = `MODEL_UNAVAILABLE` (trước khi có `ABLATION_UNSUPPORTED`) | summary dir |
 | `d541e40cde1a949026f98854` | `clvc_net` | `PARTIAL` | 5 | `true` | smoke; `image_only_empty_text` = `ABLATION_UNSUPPORTED` | summary dir |
 | `10173dc45dea8c90fd2a284b` | `limn` | `PARTIAL` | 6003 | `false` | run LIMN so sánh: `ambiguous_count: 119`, `PARTIAL` cùng lý do `unresolved:annotation_names_two_categories` | `90` §4.1; §4.3 |

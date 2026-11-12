@@ -25,7 +25,7 @@ Summary: `workbench/artifacts/composition/summary/clvc_net_author_drive_unresolv
 | GPU | RTX 5070 Ti, model interpreter `clvc39-la` (Python 3.9.25; torch 2.7.1+cu128) |
 | controller PID | 1366364 (wrapper `gpu_job.sh` 1366356); exited before 2026-11-12T05:02:31+07:00 |
 | wall time | log birth `04:22:15.752` → summary mtime `04:53:22.956` = **1867.2 s (31 min 7 s)** |
-| images encoded | 92 390 = 74 381 gallery + 3 × 6003 queries → **0.0202 s/image, 49.5 image/s** |
+| image encodes | **denominator was wrong, and the attempt did not encode the gallery.** Published here as `92 390 = 74 381 gallery + 3 × 6003 queries → 0.0202 s/image`; the sidecars show this `-retry-2` attempt served a **cached** gallery (`feature_storage.projected_bytes` = one matrix, 609 329 280, for each of the three scopes — the cache-hit branch; no feature file was written in its 04:22–04:53 window), so its honest figure is **11 768 query rows / 1867.2 s = 0.1587 s/image** (query-only, never comparable to a full run). The attempt that DID encode is attempt-1 `eab10106` (01:21:13→02:35:43): **234 911 = 223 143 gallery (3 scopes × 74 381) + 11 768 query rows**, **4469.8 s → 0.01903 s/image, 52.56 image/s**. See `104` §9.1. Denominator is IMAGE ENCODES, not gallery images. |
 | peak VRAM | **not sampled** — no `nvidia-smi` sample was taken during this run (it was already in flight when this session started) |
 
 Condition status (artifact and API identical):
@@ -95,7 +95,7 @@ Summary: `workbench/artifacts/composition/summary/tgcir_tgcir_archive_unresolved
 | start | `2026-11-12 05:07:12.401 +0700` (log birth) |
 | exit / summary | `2026-11-12 05:16:29.257 +0700` |
 | wall time | **556.9 s (9 min 17 s)** |
-| images encoded | 92 390 (74 381 gallery + 3 × 6003 queries, one shared `global` projection) → **0.00603 s/image, 165.9 image/s** |
+| image encodes | **92 390, correct** (74 381 gallery + 3 × 6003 query rows = 18 009, one shared `global` projection) → 556.9 s → **0.00603 s/image, 165.9 image/s**. Verified from this run's own sidecars: **one** gallery file `gallery_global.npy` `[74381, 512]` float32, digest `2c8963b93f842627…` — this model encodes the gallery ONCE, not once per category scope, so the denominator is the whole encode set. Query sidecars are `[6003, 512]` each with 6003 non-NaN rows (all three conditions `unscored_count: 0`), and wherever throughput appears: **the denominator is IMAGE ENCODES (gallery scopes × gallery images + query rows actually encoded), not gallery images.** Contrast `clvc_net`, whose gallery is three per-scope matrices — see `104` §0.2a, §9.1. |
 | peak VRAM | 2172 MiB **at the sampled window** (constant across all 22 samples; not a whole-run peak) |
 | GPU sample | `timeout 22 nvidia-smi -l 1`, 22 samples: util **97–100 %** (mean 99), memory.used **2172 MiB** (min = max), power **235.02–260.04 W** (mean 257 W) |
 

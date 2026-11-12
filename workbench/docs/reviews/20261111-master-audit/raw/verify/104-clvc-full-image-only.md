@@ -86,8 +86,63 @@ setsid nohup env MAX_WAIT=3600 workbench/scripts/gpu_job.sh \
 * `--batch-size` **never passed**; the recorded batch is the adapter's own 32.
 * start `2026-11-12 08:40:50.565 +0700`; summary mtime `2026-11-12 09:15:18.964 +0700` →
   **2068.4 s (34 min 28 s)** wall.
-* images encoded: 74 381 gallery + 3 × 6003 queries = **92 390** →
-  **0.02239 s/image, 44.67 image/s**.
+* image encodes: **223 143 gallery + 18 003 query rows = 241 146** →
+  **0.00858 s/image, 116.6 image/s**. Derivation in §0.2a. (An earlier draft of this file said
+  "92 390 images → 0.02239 s/image, 44.67 image/s"; that denominator counted the gallery once
+  instead of once per category scope and is wrong by 2.61× — see §0.2a.)
+
+### 0.2a The throughput denominator, derived from the sidecars
+
+**The denominator is IMAGE ENCODES, not gallery images**: a CLVC-Net run encodes the gallery once per
+category scope, so `gallery encodes = scopes × gallery_images`, plus one query row per (condition,
+query) that was actually encoded.
+
+Gallery — three files, three scopes, one per category, each a `[74381, 2048]` float32 matrix with its
+own content digest (read from `work/clvc_net/features/*.npy.json`, `verify_mode: full`):
+
+| sidecar | shape | dtype | byte_length | content_digest |
+|---|---|---|---|---|
+| `gallery_dress.npy.json` | `[74381, 2048]` | float32 | 609 329 280 | `a9bfa6ed4853bf999eb468379bdf5b760ef6dc3ba81861f3f0020ea509c30680` |
+| `gallery_shirt.npy.json` | `[74381, 2048]` | float32 | 609 329 280 | `fd8b18bcca1b4d82c5de0e52f04036e89ffb3aedf1eb0d07940b46b1aba6e341` |
+| `gallery_toptee.npy.json` | `[74381, 2048]` | float32 | 609 329 280 | `55a5b9909dd632b8fb155e56b01ef40227a126d2243cab94a6e8a6b4a2819000` |
+
+Three distinct digests over three equal shapes: three separate encodes of the same 74 381 images,
+one per scope. → **3 × 74 381 = 223 143 gallery encodes**. No row is a placeholder: `non-NaN =
+74 381` and `all-zero rows = 0` in every one of the three arrays (checked with `np.load(...,
+mmap_mode="r")`).
+
+Queries — nine files (`query_<condition>_<scope>.npy`), each sidecar `[6003, 2048]`, and the rows
+**actually encoded** were counted as non-NaN first-columns:
+
+| scope | `multimodal` | `text_only_black_image` | `clvc_image_encoder_only` |
+|---|---|---|---|
+| `dress` | 2010 | 2010 | 2010 |
+| `shirt` | 2035 | 2035 | 2035 |
+| `toptee` | 1956 | 1956 | 1956 |
+| **per condition** | **6001** | **6001** | **6001** |
+
+`2010 + 2035 + 1956 = 6001` matches the scored count exactly; the per-file shape is 6003 rows
+because the two unscored qids (`7:3038`, `7:3790`) keep their row index as NaN. → **3 × 6001 =
+18 003 query encodes**.
+
+```
+total            = 223 143 + 18 003            = 241 146 image encodes
+s per image      = 2068.4 s / 241 146          = 0.008577 s  ≈ 0.00858 s/image
+images per second= 241 146 / 2068.4 s          = 116.59      ≈ 116.6 image/s
+```
+
+Sanity check against the sidecar mtimes (these bound the encode phases, so they are a cross-check on
+the denominator, not a second measurement of it): `gallery_dress` 08:44:35 → `gallery_shirt`
+08:47:49 → `gallery_toptee` 08:51:04, i.e. **194 s and 195 s for 74 381 encodes each ≈ 0.0026 s per
+gallery image per scope**; the query phase runs 08:51:04 → 09:08:17, **1033 s for 18 003 rows
+≈ 0.057 s per query row** (the query rows carry the text tower, so they are the expensive half).
+Those two phases together are 1422 s for 241 146 encodes ≈ 0.0059 s/image — faster than the 0.00858
+figure above, which is `wall / encodes` and therefore also carries ~225 s of pre-encode startup and
+the rank + Top-K export tail. `0.00858` is the honest whole-run amortised number; `0.0059` is the
+encode-only floor. Either way the denominator is 241 146, not 92 390.
+
+The old run's published figure is a different case, not just a different denominator: its `-retry-2`
+attempt **encoded no gallery at all** (cache hit; query rows only) — see §9.1.
 
 ### 0.3 GPU sample series (first time this run family has one)
 
@@ -331,6 +386,42 @@ is identical, and `scored_count` is 6001 in all three.
 R@1 did not exist in the old run's summary, so there is no old value to compare — its absence there
 is not a zero (98 §3).
 
+### 9.1 `eab10106`'s own throughput figure is not just mis-derived — `-retry-2` encoded nothing
+
+The assignment asked whether the old run's `92 390 → 0.0202 s/image, 49.5 image/s` has the same
+three-scope defect. It has that defect **and a worse one**: the attempt those numbers describe
+(`-retry-2`, the one 98 §1 calls authoritative) did not encode features at all. Physical evidence:
+
+| check | `-retry-2` (04:22:15 → 04:53:22) | attempt-1 `eab10106` (01:21:13 → 02:35:43) |
+|---|---|---|
+| feature file mtimes in its window | **none** — the feature dir is `02:25:42`, from attempt-1 | 01:38 → 02:25, i.e. inside its own window |
+| `feature_storage.projected_bytes` per scope | `609 329 280` **three times** — exactly `matrix_bytes` for one gallery matrix (609 329 152 + numpy header), i.e. the size of a *cached* file, not a projection | `dress 1 926 340 608`, `shirt 1 317 011 456`, `toptee 707 682 304` — `matrix × remaining_scopes + query_bytes × 3`, the *estimate* a run computes before it encodes |
+| galleries | all three present, `verify_mode: full`, `non-NaN 74 381` | same |
+| query features | present, `multimodal` 2010+1989+1885 = 5884 encoded rows per condition | same files |
+
+`_encode_gallery` returns `{"reused": 1, "projected_bytes": destination.stat().st_size}` on a cache
+hit and the full projection only when it is about to encode (`runner.py:596-598`, `:570-583`).
+`-retry-2`'s three scopes each record exactly one matrix's byte length → **three cache hits**, and the
+mtime evidence agrees: nothing was written between 04:22 and 04:53. So its 1867.2 s wall bought
+query encodes only.
+
+| run | eligible image encodes | wall | s/image | image/s |
+|---|---|---|---|---|
+| `eab10106` **attempt-1** (the attempt that actually encoded the gallery) | **234 911** = 223 143 gallery + 11 768 query rows (2 conditions × 5884, counted as non-NaN) | 4469.8 s (01:21:13.836 → 02:35:43.614) | **0.01903** | **52.56** |
+| `eab10106 -retry-2` (cached gallery) | **11 768** query rows only — the gallery came from cache | 1867.2 s | 0.15867 | 6.30 |
+| `da0a2162` (this run) | **241 146** | 2068.4 s | **0.00858** | **116.6** |
+| `7b1fa850` (`tgcir`) | **92 390** — correct, one shared `global` gallery | 556.9 s | 0.00603 | 165.9 |
+
+So the old published `0.0202 s/ảnh` is **not recoverable as an encode rate**: its denominator counts a
+gallery that was never encoded in that attempt, over a wall time that excludes the gallery encode.
+The nearest honest number for `eab10106` is attempt-1's `0.01903 s/image / 52.56 image/s` (encode-only
+amortised over its own wall), and `-retry-2`'s `6.30 image/s` is a *query-only* rate that must never be
+compared with a full run's. Both are marked suspect in FINAL_REPORT §4.4a.
+
+The cross-model comparison survives, but only in the corrected form: `da0a2162` 0.00858 s/image vs
+`tgcir` 0.00603 s/image — same denominator kind (all encodes the run performed), ratio **1.42×**, not
+the 3.4× that `0.0202` vs `0.00603` implies.
+
 ## 10. Two queries read through the artifact
 
 | qid | why | `multimodal` | `text_only_black_image` | `clvc_image_encoder_only` |
@@ -426,5 +517,13 @@ surfaced as an explicit unscored state, not as an empty success.
    annotations; a `COMPLETED` status would require inventing a category for one of them. The run
    publishes `unscored_count: 2`, `still_unscoped: 2`, `missing_query_count: 6`, and
    `shortcut_outcomes.neither_scored: 2` — four independent statements of the same two queries.
-7. **VRAM 1701 MiB is the sampled window, not a peak.** 22 samples during the query/encode phase; a
+7. **Throughput: the denominator is image ENCODES** (category scopes × gallery images + query rows
+   actually encoded), never gallery images. This run: 223 143 + 18 003 = 241 146 → 0.00858 s/image,
+   116.6 image/s (§0.2a). The previously published `92 390 → 0.02239 s/image` counted one gallery;
+   `98` §1's CLVC figure (`92 390 → 0.0202`) has the same defect **and** describes an attempt that
+   served a cached gallery (§9.1), so it is not an encode rate at all. `98` §2's TG-CIR figure
+   (`92 390 → 0.00603`) is **correct** — that model has one shared `global` gallery, verified from its
+   own sidecar (`gallery_global.npy.json` `[74381, 512]`, one file) — so the comparison is
+   apples-to-apples only in the corrected form 0.00858 vs 0.00603 (1.42×).
+8. **VRAM 1701 MiB is the sampled window, not a peak.** 22 samples during the query/encode phase; a
    transient spike outside the window would not appear. The number is a floor for that phase.
