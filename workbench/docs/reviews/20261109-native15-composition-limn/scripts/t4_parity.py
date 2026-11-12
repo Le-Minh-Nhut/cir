@@ -16,6 +16,7 @@ Tolerances: declared in INPUT_FORWARD_PARITY.vi.md before this ran.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import sys
 import time
@@ -48,6 +49,73 @@ def correct_text(text: str, correction: dict[str, str]) -> str:
     translation = str.maketrans({key: " " for key in string.punctuation})
     tokens = str(text).lower().translate(translation).strip().split()
     return " ".join(correction.get(word, word) for word in tokens)
+
+# --------------------------------------------------------------------------- v2 evidence writer
+
+#: The declared standard this producer emits from now on. Written FIRST in
+#: `workbench/docs/reviews/20261112-parity-repair/V2_STANDARD.md`, then here, then read by
+#: `parity_gate._component_checks`. Both phases declare it: the gate refuses a pair whose two sides
+#: disagree, and the block itself is written by the phase that holds BOTH arrays.
+STANDARD_V2 = "parity-absolute-relative/v2"
+COMPONENT_FULL_LIMIT = 4096
+COMPONENT_HEAD = 512
+
+def _component_digest(array: np.ndarray) -> str:
+    return hashlib.sha256(np.ascontiguousarray(array, dtype="<f8").tobytes()).hexdigest()
+
+def component_scope(name: str, dimension: str, actual: np.ndarray, reference: np.ndarray,
+                    *, atol: float, rtol: float) -> dict:
+    """The v2 per-component record for ONE aligned comparison, from arrays already in memory.
+
+    `abs(adapter - native) <= atol + rtol*abs(native)`, native as the reference, applied element by
+    element here -- `max_abs`/`max_rel` are never used to infer it. Chunk rule and every field:
+    `V2_STANDARD.md`. Above `COMPONENT_FULL_LIMIT` components the record is the first `COMPONENT_HEAD`
+    plus every violating component, with a sha256 over the full arrays so the chunk is provable.
+    """
+    a = np.ascontiguousarray(actual, dtype=np.float64).ravel()
+    b = np.ascontiguousarray(reference, dtype=np.float64).ravel()
+    if a.shape != b.shape:
+        raise SystemExit(f"{name}: {a.shape} vs {b.shape} are not aligned; refusing to record a "
+                         "component block for arrays that do not correspond")
+    delta = np.abs(a - b)
+    denominator = atol + rtol * np.abs(b)
+    total = int(b.size)
+    normalized = np.zeros(total, dtype=np.float64)
+    np.divide(delta, denominator, out=normalized, where=denominator > 0.0)
+    # `~(delta <= denominator)` counts a NaN as a violation, so a non-finite component is recorded as
+    # an offender instead of silently reading clean; the gate refuses the block as malformed.
+    offenders = [int(index) for index in np.flatnonzero(~(delta <= denominator))]
+    if total <= COMPONENT_FULL_LIMIT:
+        emitted, coverage = list(range(total)), "full"
+    else:
+        emitted, coverage = sorted(set(range(COMPONENT_HEAD)) | set(offenders)), "chunked"
+    return {
+        "dimension": dimension,
+        "shape": list(actual.shape),
+        "components_total": total,
+        "components_emitted": len(emitted),
+        "coverage": coverage,
+        "indices": emitted,
+        "reference": [float(b[index]) for index in emitted],
+        "actual": [float(a[index]) for index in emitted],
+        "sha256": {"reference": _component_digest(b), "actual": _component_digest(a),
+                   "delta": _component_digest(delta)},
+        "mismatch_count": len(offenders),
+        "max_abs": float(delta.max()) if total else 0.0,
+        "worst_normalized": float(normalized.max()) if total else 0.0,
+        "offenders": [{"index": index, "reference": float(b[index]), "actual": float(a[index]),
+                       "normalized": float(normalized[index])} for index in offenders],
+    }
+
+def component_block(scopes: dict[str, dict]) -> dict:
+    """The `component_parity` document, as recorded beside `relation_state` at the top level."""
+    return {"standard": STANDARD_V2,
+            "declared_rule": "abs(adapter - native) <= atol + rtol * abs(native)",
+            "reference_side": "native",
+            "chunk_rule": (f"full when components_total <= {COMPONENT_FULL_LIMIT}, else the first "
+                           f"{COMPONENT_HEAD} components plus every component whose normalized "
+                           "violation exceeds 1"),
+            "scopes": scopes}
 
 
 # --------------------------------------------------------------------------- native phase
@@ -237,6 +305,18 @@ def adapter_phase(category: str, config) -> dict:
                 forward[side]["max_abs"] <= TOL["forward_max_abs"]
                 and forward[side]["max_rel"] <= TOL["forward_max_rel"])
         result["sample_forward"] = forward
+        # v2: the per-component record for the SAME aligned arrays the aggregates above summarise.
+        # Both reference arrays are the native side's, so the rule's "native is the reference" holds.
+        # Additive: a v1 reader ignores the key; `max_abs`/`max_rel` stay exactly as they were and are
+        # never used to INFER the componentwise result.
+        result["component_parity"] = component_block({
+            "sample_forward.query": component_scope(
+                "sample_forward.query", "forward_parity", adapter_queries, native["native_query"],
+                atol=TOL["forward_max_abs"], rtol=TOL["forward_max_rel"]),
+            "sample_forward.target": component_scope(
+                "sample_forward.target", "forward_parity", adapter_targets, native["native_target"],
+                atol=TOL["forward_max_abs"], rtol=TOL["forward_max_rel"]),
+        })
 
         singles = np.concatenate([
             adapter.encode_queries([path], [text], [category])
@@ -387,6 +467,28 @@ def score_and_rank(category: str, inputs: dict, config) -> dict:
     return rankings
 
 
+def refresh_metrics_block(categories: tuple[str, ...]) -> None:
+    """Re-derive the `metrics_parity` block on the artifacts this script just rewrote.
+
+    `main()` writes each native artifact from scratch, so the hit-count block added by
+    `20261112-parity-repair/scripts/limn_hits.py` would be lost. Deriving it needs only stored data,
+    so it is re-run here rather than left to a manual step that will be forgotten.
+    """
+    import importlib.util
+
+    path = Path("/home/heheboiz/data/cir/workbench/docs/reviews/20261112-parity-repair"
+                "/scripts/limn_hits.py")
+    if not path.is_file():
+        print(f"# metrics block NOT refreshed: {path} is missing; "
+              "`metrics_parity` will report missing", flush=True)
+        return
+    spec = importlib.util.spec_from_file_location("limn_hits", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    for line in module.refresh(categories):
+        print(f"# metrics: {line}", flush=True)
+
+
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     phase = argv[argv.index("--phase") + 1] if "--phase" in argv else "native"
@@ -401,10 +503,18 @@ def main(argv: list[str] | None = None) -> int:
         print(f"# {category}/{phase}: start", flush=True)
         if phase == "native":
             payload = {"category": category, "phase": phase, "tolerances": TOL,
+                       "standard": STANDARD_V2,
                        "layer1_identity": native_phase(category, config)}
         elif phase == "adapter":
+            body = adapter_phase(category, config)
+            components = body.pop("component_parity", None)
             payload = {"category": category, "phase": phase, "tolerances": TOL,
-                       "layer2_4_forward": adapter_phase(category, config)}
+                       "standard": STANDARD_V2,
+                       "layer2_4_forward": body}
+            # Beside the body, at the top level: `parity_gate._component_checks` reads the WHOLE
+            # document, exactly as it reads `relation_state` there.
+            if components is not None:
+                payload["component_parity"] = components
         else:
             raise SystemExit(f"unknown phase {phase!r}; use native or adapter")
         target.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
@@ -426,6 +536,8 @@ def main(argv: list[str] | None = None) -> int:
                 "restart": payload["layer2_4_forward"]["cache_off_restart"],
                 "rankings": payload["layer2_4_forward"]["scoring_ranking"],
             }, indent=1))
+    # Both phases rewrite at least one side of the pair, so the block is re-derived after the loop.
+    refresh_metrics_block(categories)
     return 0
 
 

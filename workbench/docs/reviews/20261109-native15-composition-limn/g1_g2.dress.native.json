@@ -7,7 +7,8 @@
     "batch_max_abs": 0.0001,
     "batch_max_rel": 0.001,
     "score_max_abs": 1e-06,
-    "tie_epsilon": 1e-06
+    "tie_epsilon": 1e-06,
+    "metrics": "exact hit-count equality"
   },
   "layer1_identity": {
     "query_count_native": 2017,
@@ -406,5 +407,65 @@
       "dress_r50": 74.26871591472484
     },
     "phase_seconds": 211.9
+  },
+  "native_metrics_match_feature_rerank": true,
+  "native_metrics_parity_detail": {
+    "declared_rule": "exact integer hit-count equality at every cutoff",
+    "cutoffs": [
+      1,
+      10,
+      50
+    ],
+    "reference_mask": "native test.py:92 convention applied on BOTH sides (sims[row, reference_position] = -10e10)",
+    "ranking_convention": "native test.py:92 (np.argsort(-sims), 1-based target index)",
+    "eligible_queries": 2017,
+    "eligible_query_set_identical": true,
+    "eligible_query_set_evidence": "limn_native.<category>.jsonl reference_id/target_id sequences equal raw/g2_<category>_inputs.json full_reference_ids/full_target_ids, same length, same order",
+    "equality": {
+      "r1": true,
+      "r10": true,
+      "r50": true
+    },
+    "mask_is_native_protocol_not_a_free_parameter": "the reference is unretrievable in the native metric, so the same mask is applied to the adapter features; the reference-eligible production ranking is reported below as information and is never the comparison",
+    "informational": {
+      "adapter_production_ranking_recall_pct": {
+        "r1": 17.055032226078335,
+        "r10": 50.52057511155181,
+        "r50": 74.26871591472484
+      },
+      "adapter_production_ranking_note": "unmasked + tie-counted, i.e. what CIRCUS reports: reference-eligible and tie-safe. It differs from the native metric by protocol, which the adapter artifact already quantifies as mask_explained_rank_shift_count=790. Not a hit-count mismatch.",
+      "rank_rows_identical_to_native_aggregate": true,
+      "stored_rank_differences_in_adapter_artifact": 0
+    },
+    "native": {
+      "source": "limn_native.dress.jsonl:target_rank (native LIMN/test.py::test)",
+      "query_count": 2017,
+      "hits": {
+        "r1": 375,
+        "r10": 1032,
+        "r50": 1498
+      },
+      "recall_pct": {
+        "r1": 18.591968269707486,
+        "r10": 51.165096678235,
+        "r50": 74.26871591472484
+      },
+      "recorded_macro_reproduced_by_stored_ranks": true
+    },
+    "adapter": {
+      "source": "raw/g2_dress_population.npz queries/gallery (adapter worker features) + raw/g2_dress_inputs.json",
+      "query_count": 2017,
+      "gallery_count": 2628,
+      "hits": {
+        "r1": 375,
+        "r10": 1032,
+        "r50": 1498
+      },
+      "recall_pct": {
+        "r1": 18.591968269707486,
+        "r10": 51.165096678235,
+        "r50": 74.26871591472484
+      }
+    }
   }
 }

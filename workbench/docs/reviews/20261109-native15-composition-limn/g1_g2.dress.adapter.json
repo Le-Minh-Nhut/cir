@@ -7,7 +7,8 @@
     "batch_max_abs": 0.0001,
     "batch_max_rel": 0.001,
     "score_max_abs": 1e-06,
-    "tie_epsilon": 1e-06
+    "tie_epsilon": 1e-06,
+    "metrics": "exact hit-count equality"
   },
   "layer2_4_forward": {
     "sample_forward": {

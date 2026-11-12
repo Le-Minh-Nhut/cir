@@ -431,9 +431,9 @@
         512
       ],
       "native_query_val_vs_train_control": {
-        "max_abs": 0.04142118990421295,
-        "max_rel": 606.2215686383217,
-        "min_cosine": 0.986903036446107,
+        "max_abs": 0.04142923653125763,
+        "max_rel": 70.32709604629011,
+        "min_cosine": 0.9869073401610309,
         "bitwise_equal": false,
         "shape": [
           4,
@@ -442,25 +442,42 @@
       }
     },
     "native_metrics_recheck": {
-      "shirt_r1": 25.36800785083415,
-      "shirt_r10": 54.9558390578999,
-      "shirt_r50": 75.46614327772326
+      "shirt_r1": 25.318940137389596,
+      "shirt_r10": 54.90677134445535,
+      "shirt_r50": 75.3189401373896
     },
     "native_rank_recall_from_features": {
-      "r1": 25.36800785083415,
-      "r10": 54.9558390578999,
-      "r50": 75.46614327772326
+      "r1": 25.318940137389596,
+      "r10": 54.90677134445535,
+      "r50": 75.3189401373896
     },
     "val_transform_control_rank_recall": {
-      "r1": 25.46614327772326,
-      "r10": 55.250245338567225,
-      "r50": 75.46614327772326
+      "r1": 25.564278704612367,
+      "r10": 55.20117762512267,
+      "r50": 75.36800785083415
     },
     "native_metrics_match_feature_rerank": true,
     "population": {
       "queries": 2038,
       "gallery": 3089
     },
-    "phase_seconds": 77.1
+    "phase_seconds": 66.5
+  },
+  "relation_state": {
+    "status": "recorded",
+    "seed": 20261111,
+    "sha256": "20db0c27c979e9a0938c71af5142458dfa2070468d0ad3fcb6f24134c2f9ce92",
+    "expected_sha256": "20db0c27c979e9a0938c71af5142458dfa2070468d0ad3fcb6f24134c2f9ce92",
+    "matches_pinned_digest": true,
+    "in_state_dict": false,
+    "seed_placement": "torch.manual_seed(seed) immediately before Encoder(...) construction",
+    "policy": "declared pin, not a restoration: the released checkpoint does not contain `learnable_relation`, so the drawn tensor is reproducible under this seed and is not claimed to be the authors'",
+    "tensor": "backbone.binding_decoder.learnable_relation",
+    "shape": [
+      2,
+      512
+    ],
+    "dtype": "torch.float32",
+    "path": null
   }
 }

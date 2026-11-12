@@ -32,9 +32,9 @@
         "within_tolerance": true
       },
       "query_native_tensors": {
-        "max_abs": 0.04142118990421295,
-        "max_rel": 606.2215686383217,
-        "min_cosine": 0.986903036446107,
+        "max_abs": 0.04142923653125763,
+        "max_rel": 70.32709604629011,
+        "min_cosine": 0.9869073401610309,
         "bitwise_equal": false,
         "shape": [
           4,
@@ -60,9 +60,9 @@
       ]
     },
     "batch_size_1_vs_n": {
-      "max_abs": 2.812594175338745e-07,
-      "max_rel": 0.0031308995258445375,
-      "min_cosine": 0.999999999998987,
+      "max_abs": 2.8312206268310547e-07,
+      "max_rel": 0.0027347281757461243,
+      "min_cosine": 0.9999999999989881,
       "bitwise_equal": false,
       "shape": [
         4,
@@ -111,9 +111,9 @@
       "query_count": 2038,
       "gallery_count": 3089,
       "features_vs_native_val_control": {
-        "max_abs": 1.2777745723724365e-06,
-        "max_rel": 0.7519744456046599,
-        "min_cosine": 0.9999999999775313,
+        "max_abs": 1.296401023864746e-06,
+        "max_rel": 4.236841887544606,
+        "min_cosine": 0.9999999999766658,
         "bitwise_equal": false,
         "shape": [
           2038,
@@ -122,9 +122,9 @@
         "within_tolerance": false
       },
       "features_vs_native_train_query": {
-        "max_abs": 0.12295106053352356,
-        "max_rel": 84856.68704092671,
-        "min_cosine": 0.8999370829752419,
+        "max_abs": 0.12288805842399597,
+        "max_rel": 84368.72038138587,
+        "min_cosine": 0.8999580359670575,
         "bitwise_equal": false,
         "shape": [
           2038,
@@ -133,9 +133,9 @@
         "within_tolerance": false
       },
       "gallery_vs_native": {
-        "max_abs": 1.648440957069397e-06,
-        "max_rel": 7.7499972070904795,
-        "min_cosine": 0.9999999999165303,
+        "max_abs": 1.650303602218628e-06,
+        "max_rel": 0.5312498017651329,
+        "min_cosine": 0.9999999999165801,
         "bitwise_equal": false,
         "shape": [
           3089,
@@ -153,66 +153,84 @@
       "score_max_abs_declared": 1e-06,
       "score_within_tolerance": true,
       "adapter_vs_argsort_unmasked": {
-        "count": 10,
+        "count": 7,
         "head": [
           5,
           86,
           134,
-          174,
           424,
           633,
-          1140,
-          1307,
-          1507,
+          1584,
           1736
         ],
         "non_tie_count": 0,
         "non_tie_head": []
       },
       "adapter_style_recall": {
-        "r1": 19.43081452404318,
-        "r10": 54.2198233562316,
-        "r50": 75.17173699705593
+        "r1": 19.479882237487733,
+        "r10": 54.26889106967615,
+        "r50": 75.22080471050049
       },
       "native_mask_only_effect": {
-        "count": 1126,
+        "count": 1132,
         "recall_without_mask": {
           "r1": 19.528949950932287,
-          "r10": 54.2198233562316,
-          "r50": 75.17173699705593
+          "r10": 54.26889106967615,
+          "r50": 75.22080471050049
         },
         "recall_with_mask": {
-          "r1": 25.46614327772326,
-          "r10": 55.250245338567225,
-          "r50": 75.46614327772326
+          "r1": 25.564278704612367,
+          "r10": 55.20117762512267,
+          "r50": 75.36800785083415
         }
       },
       "native_convention_recall_on_adapter_features": {
-        "r1": 25.46614327772326,
-        "r10": 55.250245338567225,
-        "r50": 75.46614327772326
+        "r1": 25.564278704612367,
+        "r10": 55.20117762512267,
+        "r50": 75.36800785083415
       },
       "native_convention_recall_val_control": {
-        "r1": 25.46614327772326,
-        "r10": 55.250245338567225,
-        "r50": 75.46614327772326
+        "r1": 25.564278704612367,
+        "r10": 55.20117762512267,
+        "r50": 75.36800785083415
       },
       "native_convention_recall_native_primary": {
-        "r1": 25.36800785083415,
-        "r10": 54.9558390578999,
-        "r50": 75.46614327772326
+        "r1": 25.318940137389596,
+        "r10": 54.90677134445535,
+        "r50": 75.3189401373896
       },
       "native_second_process_floor": {
         "available": true,
-        "score_max_abs_vs_first_native_process": 0.0,
+        "score_max_abs_vs_first_native_process": 0.03517739474773407,
         "rank_differences_vs_first_native_process": {
-          "count": 0,
-          "head": []
+          "count": 475,
+          "head": [
+            4,
+            17,
+            20,
+            22,
+            29,
+            31,
+            33,
+            36,
+            38,
+            42,
+            43,
+            48,
+            56,
+            61,
+            62,
+            63,
+            64,
+            67,
+            74,
+            77
+          ]
         },
         "recall": {
-          "r1": 25.46614327772326,
-          "r10": 55.250245338567225,
-          "r50": 75.46614327772326
+          "r1": 25.564278704612367,
+          "r10": 55.299313052011776,
+          "r50": 75.3189401373896
         }
       },
       "stored_native_metrics_raw/native/encoder.json": {
@@ -221,26 +239,14 @@
         "r50": 75.4170755642787
       },
       "rank_differences_vs_native_val_control": {
-        "count": 1,
-        "head": [
-          1352
-        ],
-        "classification": [
-          {
-            "index": 1352,
-            "adapter_rank": 1372,
-            "native_rank": 1373,
-            "adapter_matrix_gap": 0.00016057491302490234,
-            "native_matrix_gap": 0.00016041100025177002,
-            "min_gap": 0.00016041100025177002,
-            "explained_by_tie_epsilon": false
-          }
-        ],
-        "non_tie_count": 1,
-        "min_gap_abs": 0.00016041100025177002
+        "count": 0,
+        "head": [],
+        "classification": [],
+        "non_tie_count": 0,
+        "min_gap_abs": 0.0
       },
       "rank_differences_vs_native_primary": {
-        "count": 991,
+        "count": 1001,
         "head": [
           0,
           2,
@@ -248,24 +254,40 @@
           9,
           13,
           14,
+          16,
           17,
           18,
           22,
+          23,
           25,
           28,
           29,
           31,
           33,
           35,
-          36,
           37,
           38,
-          41,
-          42
+          41
         ]
       },
       "native_metrics_recheck_source": "raw/native/encoder.json"
     },
-    "phase_seconds": 27.1
+    "phase_seconds": 25.6
+  },
+  "relation_state": {
+    "seed": 20261111,
+    "sha256": "20db0c27c979e9a0938c71af5142458dfa2070468d0ad3fcb6f24134c2f9ce92",
+    "matches_pinned_digest": true,
+    "expected_sha256": "20db0c27c979e9a0938c71af5142458dfa2070468d0ad3fcb6f24134c2f9ce92",
+    "in_state_dict": false,
+    "transform_policy": {
+      "query_transform": "preprocess_val",
+      "gallery_transform": "preprocess_val",
+      "native_query_transform": "preprocess_train",
+      "native_gallery_transform": "preprocess_val",
+      "kind": "declared adaptation",
+      "note": "CIRCUS composition uses preprocess_val for both query and gallery; native ENCODER uses preprocess_train (RandomResizedCrop) for the query and preprocess_val for the gallery. Keeping val for both is deliberate: the asymmetry is a property of the native release, and honouring it here would change every published number."
+    },
+    "path": "/tmp/encparity_raw/construction_state"
   }
 }

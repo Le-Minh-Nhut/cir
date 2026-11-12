@@ -23,7 +23,7 @@
       "query_val_pixels": {
         "max_abs": 0.0,
         "max_rel": 0.0,
-        "min_cosine": 0.9999999999999998,
+        "min_cosine": 0.9999999999999999,
         "bitwise_equal": true,
         "shape": [
           4,
@@ -32,9 +32,9 @@
         "within_tolerance": true
       },
       "query_native_tensors": {
-        "max_abs": 0.02124939113855362,
-        "max_rel": 46.6752522471972,
-        "min_cosine": 0.9969422054518507,
+        "max_abs": 0.021341462153941393,
+        "max_rel": 2645.4704793284955,
+        "min_cosine": 0.9968605094135667,
         "bitwise_equal": false,
         "shape": [
           4,
@@ -45,7 +45,7 @@
       "target": {
         "max_abs": 0.0,
         "max_rel": 0.0,
-        "min_cosine": 1.0,
+        "min_cosine": 0.9999999999999998,
         "bitwise_equal": true,
         "shape": [
           4,
@@ -60,9 +60,9 @@
       ]
     },
     "batch_size_1_vs_n": {
-      "max_abs": 3.203749656677246e-07,
-      "max_rel": 0.0077950176161260265,
-      "min_cosine": 0.9999999999991733,
+      "max_abs": 3.3527612686157227e-07,
+      "max_rel": 0.003176237364982574,
+      "min_cosine": 0.9999999999991614,
       "bitwise_equal": false,
       "shape": [
         4,
@@ -73,7 +73,7 @@
     "cache_off_restart": {
       "max_abs": 0.0,
       "max_rel": 0.0,
-      "min_cosine": 0.9999999999999998,
+      "min_cosine": 0.9999999999999999,
       "bitwise_equal": true,
       "shape": [
         4,
@@ -111,9 +111,9 @@
       "query_count": 2017,
       "gallery_count": 2628,
       "features_vs_native_val_control": {
-        "max_abs": 1.0998919606208801e-06,
-        "max_rel": 3.3548386852382883,
-        "min_cosine": 0.9999999999963554,
+        "max_abs": 1.125037670135498e-06,
+        "max_rel": 0.7499999820540181,
+        "min_cosine": 0.9999999999963455,
         "bitwise_equal": false,
         "shape": [
           2017,
@@ -122,9 +122,9 @@
         "within_tolerance": false
       },
       "features_vs_native_train_query": {
-        "max_abs": 0.12039151974022388,
-        "max_rel": 223487.7287736603,
-        "min_cosine": 0.8833465225175526,
+        "max_abs": 0.1199780534952879,
+        "max_rel": 34020.27695414627,
+        "min_cosine": 0.8835981601880671,
         "bitwise_equal": false,
         "shape": [
           2017,
@@ -133,9 +133,9 @@
         "within_tolerance": false
       },
       "gallery_vs_native": {
-        "max_abs": 1.1324882507324219e-06,
-        "max_rel": 1.3636362821713672,
-        "min_cosine": 0.9999999999918108,
+        "max_abs": 1.1399388313293457e-06,
+        "max_rel": 10.461538814286977,
+        "min_cosine": 0.9999999999918054,
         "bitwise_equal": false,
         "shape": [
           2628,
@@ -153,7 +153,7 @@
       "score_max_abs_declared": 1e-06,
       "score_within_tolerance": true,
       "adapter_vs_argsort_unmasked": {
-        "count": 30,
+        "count": 28,
         "head": [
           49,
           178,
@@ -161,68 +161,89 @@
           228,
           230,
           311,
-          317,
-          321,
-          331,
           355,
           365,
-          394,
           411,
+          413,
           427,
           471,
-          611,
+          535,
           728,
           848,
           919,
-          1066
+          1066,
+          1077,
+          1340,
+          1362
         ],
         "non_tie_count": 0,
         "non_tie_head": []
       },
       "adapter_style_recall": {
-        "r1": 17.402082300446207,
-        "r10": 50.966782350024786,
-        "r50": 76.00396628656421
+        "r1": 17.501239464551315,
+        "r10": 50.91720376797224,
+        "r50": 76.15270203272186
       },
       "native_mask_only_effect": {
         "count": 1093,
         "recall_without_mask": {
-          "r1": 17.402082300446207,
+          "r1": 17.45166088249876,
           "r10": 50.91720376797224,
-          "r50": 76.00396628656421
+          "r50": 76.15270203272186
         },
         "recall_with_mask": {
-          "r1": 21.318790282597917,
-          "r10": 51.660882498760536,
-          "r50": 76.20228061477442
+          "r1": 21.269211700545366,
+          "r10": 51.71046108081309,
+          "r50": 76.25185919682697
         }
       },
       "native_convention_recall_on_adapter_features": {
-        "r1": 21.318790282597917,
-        "r10": 51.660882498760536,
-        "r50": 76.20228061477442
+        "r1": 21.269211700545366,
+        "r10": 51.71046108081309,
+        "r50": 76.25185919682697
       },
       "native_convention_recall_val_control": {
-        "r1": 21.318790282597917,
-        "r10": 51.660882498760536,
-        "r50": 76.20228061477442
+        "r1": 21.269211700545366,
+        "r10": 51.71046108081309,
+        "r50": 76.25185919682697
       },
       "native_convention_recall_native_primary": {
-        "r1": 21.269211700545366,
-        "r10": 51.95835399107585,
-        "r50": 76.35101636093208
+        "r1": 21.120475954387704,
+        "r10": 51.71046108081309,
+        "r50": 76.30143777887952
       },
       "native_second_process_floor": {
         "available": true,
-        "score_max_abs_vs_first_native_process": 0.0,
+        "score_max_abs_vs_first_native_process": 0.045631006360054016,
         "rank_differences_vs_first_native_process": {
-          "count": 0,
-          "head": []
+          "count": 499,
+          "head": [
+            2,
+            5,
+            6,
+            9,
+            12,
+            14,
+            18,
+            22,
+            29,
+            32,
+            37,
+            43,
+            45,
+            49,
+            50,
+            65,
+            68,
+            69,
+            70,
+            72
+          ]
         },
         "recall": {
-          "r1": 21.318790282597917,
+          "r1": 21.46752602875558,
           "r10": 51.660882498760536,
-          "r50": 76.20228061477442
+          "r50": 76.15270203272186
         }
       },
       "stored_native_metrics_raw/native/encoder.json": {
@@ -231,51 +252,55 @@
         "r50": 76.35101636093208
       },
       "rank_differences_vs_native_val_control": {
-        "count": 1,
-        "head": [
-          1569
-        ],
-        "classification": [
-          {
-            "index": 1569,
-            "adapter_rank": 1216,
-            "native_rank": 1215,
-            "adapter_matrix_gap": 0.0006574243307113647,
-            "native_matrix_gap": 0.0006571710109710693,
-            "min_gap": 0.0006571710109710693,
-            "explained_by_tie_epsilon": false
-          }
-        ],
-        "non_tie_count": 1,
-        "min_gap_abs": 0.0006571710109710693
+        "count": 0,
+        "head": [],
+        "classification": [],
+        "non_tie_count": 0,
+        "min_gap_abs": 0.0
       },
       "rank_differences_vs_native_primary": {
-        "count": 1051,
+        "count": 1035,
         "head": [
           2,
           4,
           5,
           6,
-          7,
           8,
           9,
           11,
-          12,
           14,
           15,
-          17,
           18,
           21,
           22,
           24,
           26,
           28,
-          29,
-          31
+          32,
+          36,
+          37,
+          39,
+          40
         ]
       },
       "native_metrics_recheck_source": "raw/native/encoder.json"
     },
-    "phase_seconds": 26.2
+    "phase_seconds": 31.1
+  },
+  "relation_state": {
+    "seed": 20261111,
+    "sha256": "20db0c27c979e9a0938c71af5142458dfa2070468d0ad3fcb6f24134c2f9ce92",
+    "matches_pinned_digest": true,
+    "expected_sha256": "20db0c27c979e9a0938c71af5142458dfa2070468d0ad3fcb6f24134c2f9ce92",
+    "in_state_dict": false,
+    "transform_policy": {
+      "query_transform": "preprocess_val",
+      "gallery_transform": "preprocess_val",
+      "native_query_transform": "preprocess_train",
+      "native_gallery_transform": "preprocess_val",
+      "kind": "declared adaptation",
+      "note": "CIRCUS composition uses preprocess_val for both query and gallery; native ENCODER uses preprocess_train (RandomResizedCrop) for the query and preprocess_val for the gallery. Keeping val for both is deliberate: the asymmetry is a property of the native release, and honouring it here would change every published number."
+    },
+    "path": "/tmp/encparity_raw/construction_state"
   }
 }

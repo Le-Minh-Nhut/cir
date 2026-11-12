@@ -22,7 +22,9 @@ Nothing here changes evaluation semantics of either side.
 """
 from __future__ import annotations
 
+import hashlib
 import json
+import os
 import string
 import sys
 import time
@@ -35,7 +37,10 @@ sys.path.insert(0, str(REPO))
 import numpy as np
 
 OUT = REPO / "workbench/docs/reviews/20261109-native15-composition-limn"
-RAW = OUT / "raw/encoder_parity"
+# The phase INTERMEDIATES (`inputs.*.json`, `native.*.npz`, `adapter.*.npz`, worker dirs) are tracked
+# evidence of the run that produced the artifacts, so a re-measurement writes them elsewhere rather
+# than over the record it is meant to be compared against. Artifacts themselves always land in `OUT`.
+RAW = Path(os.environ.get("ENCODER_PARITY_RAW", OUT / "raw/encoder_parity"))
 
 TOL = {
     "identity": "exact, zero tolerance",
@@ -102,6 +107,73 @@ def native_ranks(queries: np.ndarray, gallery: np.ndarray, reference_positions: 
 def recall(ranks: list[int]) -> dict[str, float]:
     return {f"r{k}": 100 * sum(1 for r in ranks if r <= k) / len(ranks) for k in (1, 10, 50)}
 
+# --------------------------------------------------------------------------- v2 evidence writer
+
+#: The declared standard both artifacts carry from now on. Contract written first in
+#: `workbench/docs/reviews/20261112-parity-repair/V2_STANDARD.md`, then emitted here, then read by
+#: `parity_gate._component_checks`. Deliberately duplicated from `t4_parity.py`: the two producers run
+#: under DIFFERENT interpreters and neither may import the other, and `parity_gate` stays numpy-free.
+STANDARD_V2 = "parity-absolute-relative/v2"
+COMPONENT_FULL_LIMIT = 4096
+COMPONENT_HEAD = 512
+
+def _component_digest(array: np.ndarray) -> str:
+    return hashlib.sha256(np.ascontiguousarray(array, dtype="<f8").tobytes()).hexdigest()
+
+def component_scope(name: str, actual: np.ndarray, reference: np.ndarray,
+                    *, atol: float, rtol: float) -> dict:
+    """The v2 per-component record for ONE aligned native-referenced comparison.
+
+    `abs(adapter - native) <= atol + rtol*abs(native)`, applied element by element here, from the
+    arrays `compare()` already has in memory -- the aggregates are never used to infer it. Above
+    `COMPONENT_FULL_LIMIT` components the record is the first `COMPONENT_HEAD` plus every violating
+    component, bound to the full arrays by sha256 so the chunk is provable. See `V2_STANDARD.md`.
+    """
+    a = np.ascontiguousarray(actual, dtype=np.float64).ravel()
+    b = np.ascontiguousarray(reference, dtype=np.float64).ravel()
+    if a.shape != b.shape:
+        raise SystemExit(f"{name}: {a.shape} vs {b.shape} are not aligned; refusing to record a "
+                         "component block for arrays that do not correspond")
+    delta = np.abs(a - b)
+    denominator = atol + rtol * np.abs(b)
+    total = int(b.size)
+    normalized = np.zeros(total, dtype=np.float64)
+    np.divide(delta, denominator, out=normalized, where=denominator > 0.0)
+    # `~(delta <= denominator)` counts a NaN as a violation, so a non-finite component is recorded as
+    # an offender rather than reading clean; the gate refuses such a block as malformed.
+    offenders = [int(index) for index in np.flatnonzero(~(delta <= denominator))]
+    if total <= COMPONENT_FULL_LIMIT:
+        emitted, coverage = list(range(total)), "full"
+    else:
+        emitted, coverage = sorted(set(range(COMPONENT_HEAD)) | set(offenders)), "chunked"
+    return {
+        "dimension": "forward_parity",
+        "shape": list(actual.shape),
+        "components_total": total,
+        "components_emitted": len(emitted),
+        "coverage": coverage,
+        "indices": emitted,
+        "reference": [float(b[index]) for index in emitted],
+        "actual": [float(a[index]) for index in emitted],
+        "sha256": {"reference": _component_digest(b), "actual": _component_digest(a),
+                   "delta": _component_digest(delta)},
+        "mismatch_count": len(offenders),
+        "max_abs": float(delta.max()) if total else 0.0,
+        "worst_normalized": float(normalized.max()) if total else 0.0,
+        "offenders": [{"index": index, "reference": float(b[index]), "actual": float(a[index]),
+                       "normalized": float(normalized[index])} for index in offenders],
+    }
+
+def component_block(scopes: dict[str, dict]) -> dict:
+    """The `component_parity` document, recorded beside `relation_state` at the top level."""
+    return {"standard": STANDARD_V2,
+            "declared_rule": "abs(adapter - native) <= atol + rtol * abs(native)",
+            "reference_side": "native",
+            "chunk_rule": (f"full when components_total <= {COMPONENT_FULL_LIMIT}, else the first "
+                           f"{COMPONENT_HEAD} components plus every component whose normalized "
+                           "violation exceeds 1"),
+            "scopes": scopes}
+
 
 # --------------------------------------------------------------------------- native phase
 
@@ -131,9 +203,17 @@ def native_phase(category: str, config) -> dict:
     # `clip_path = './'`, so the pinned module must be built with the source root as cwd -- exactly
     # what `composition/model_encoder.py::_worker_main` does.
     import os
+    # The pin, IMPORTED from the production module and not copied, applied at the same point as both
+    # production paths (`replay/encoder.py:324`, `composition/model_encoder.py:500`): immediately
+    # before the construction whose `BindingDecoder.__init__` draws `learnable_relation`. The adapter
+    # side gets the same seed in its worker, so the two sides draw the same 2x512 of the same stream
+    # instead of each drawing its own -- without this, the two sides compared features computed with
+    # different relations and `forward_parity` could not see it.
+    from workbench.composition.model_encoder import RELATION_SEED
     previous_cwd = Path.cwd()
     try:
         os.chdir(source_root)
+        torch_mod.manual_seed(RELATION_SEED)
         model = model_try2.Encoder(hidden_dim=512, dropout=0.5, local_token_num=3, t=0.1,
                                    wc=2, N_p=2, weighted=True)
     finally:
@@ -143,6 +223,10 @@ def native_phase(category: str, config) -> dict:
         raise SystemExit("checkpoint is not a state_dict; replay path expects a dict")
     report = model.load_state_dict(state, strict=False)
     replay._assert_checkpoint_loaded(model, report, variant, source_root)
+    # The production recorder, reused: same digest function (`sha256` over the float32 bytes of
+    # `backbone.binding_decoder.learnable_relation`), same vocabulary (`matches_pinned_digest`).
+    # `destination` is None because the record travels in this artifact rather than in an `.npy`.
+    relation_state = replay._relation_record(model, None)
     model = model.to("cuda").eval()
     enable_deterministic_inference(torch_mod)
 
@@ -350,6 +434,9 @@ def native_phase(category: str, config) -> dict:
                 for k in (1, 10, 50)),
             "population": {"queries": int(population_native.shape[0]),
                            "gallery": int(population_gallery.shape[0])},
+            # Lifted to the document's top level by `main()`: `parity_gate._relation_checks` reads the
+            # WHOLE document, and the production aggregate puts it beside the measured payload too.
+            "relation_state": relation_state,
             "phase_seconds": round(time.time() - began, 1),
         }
         del model, dataset, test_queries, test_targets
@@ -728,6 +815,12 @@ def adapter_phase(category: str, config) -> dict:
     adapter.work_root.mkdir(parents=True, exist_ok=True)
     result: dict = {"batch_size": adapter.batch_size, "interpreter": adapter.interpreter}
     try:
+        # The production entry point, not a copy of it: the runner calls `prepare_identity()` so the
+        # identity covers the tensor the features are computed with, and the worker seeds that
+        # construction with `RELATION_SEED` (`model_encoder.py:500`). Blocked here means the artifact
+        # cannot state its relation: this raises rather than writing a `not_recorded` measurement.
+        # Inside `try` because the handshake STARTS the worker, so a failure must still close it.
+        relation_state = adapter.prepare_identity()
         aq = adapter.encode_queries(inputs["sample_query_paths"], inputs["sample_texts"],
                                     [None] * len(inputs["sample_texts"]))
         at = adapter.encode_targets(inputs["sample_target_paths"], [None] * len(inputs["sample_target_paths"]))
@@ -745,6 +838,20 @@ def adapter_phase(category: str, config) -> dict:
                                         and item["max_rel"] <= TOL["forward_max_rel"])
         result["layer4_forward_sample"]["query_native_tensors"]["within_tolerance"] = (
             result["layer4_forward_sample"]["query_native_tensors"]["max_abs"] <= TOL["forward_max_abs"])
+        # v2: per-component records for the SAME aligned arrays the aggregates above summarise.
+        # Recorded ONLY where the reference array is the native side's, because the v2 rule names
+        # native as the reference: `batch_size_1_vs_n` and `cache_off_restart` compare the adapter
+        # against its own output, and `*_train_query`/`query_native_tensors` measure the declared
+        # protocol divergence (preprocess_train vs preprocess_val), which the gate never counts as
+        # parity. Their v1 aggregate checks are untouched.
+        components = {
+            "layer4_forward_sample.query_val_pixels": component_scope(
+                "layer4_forward_sample.query_val_pixels", aq, native["sample_query_val"],
+                atol=TOL["forward_max_abs"], rtol=TOL["forward_max_rel"]),
+            "layer4_forward_sample.target": component_scope(
+                "layer4_forward_sample.target", at, native["sample_target"],
+                atol=TOL["forward_max_abs"], rtol=TOL["forward_max_rel"]),
+        }
 
         singles = np.concatenate([adapter.encode_queries([path], [text], [None])
                                   for path, text in zip(inputs["sample_query_paths"], inputs["sample_texts"])])
@@ -788,10 +895,25 @@ def adapter_phase(category: str, config) -> dict:
                 and result["population"][key]["max_rel"] <= TOL["forward_max_rel"])
         result["population"]["gallery_vs_native"]["within_tolerance"] = (
             result["population"]["gallery_vs_native"]["max_abs"] <= TOL["forward_max_abs"])
+        # The two population scopes whose reference array is the native side's val-transform features.
+        # `features_vs_native_train_query` is excluded: it measures the declared protocol divergence.
+        components.update({
+            "population.features_vs_native_val_control": component_scope(
+                "population.features_vs_native_val_control", population_queries,
+                native["population_val"],
+                atol=TOL["forward_max_abs"], rtol=TOL["forward_max_rel"]),
+            "population.gallery_vs_native": component_scope(
+                "population.gallery_vs_native", population_gallery, native["gallery"],
+                atol=TOL["forward_max_abs"], rtol=TOL["forward_max_rel"]),
+        })
+        result["component_parity"] = component_block(components)
     finally:
         adapter.close()
 
     result["scoring_ranking"] = score_and_rank(category, inputs, config)
+    # Beside the body, where `parity_gate._relation_checks` reads it (lifted by `main()`). The value
+    # is the handshake's own record, i.e. the tensor the worker actually drew and then encoded with.
+    result["relation_state"] = relation_state
     result["phase_seconds"] = round(time.time() - began, 1)
     return result
 
@@ -976,15 +1098,27 @@ def main(argv: list[str] | None = None) -> int:
         target = OUT / f"g1_g2.encoder.{category}.{phase}.json"
         print(f"# {category}/{phase}: start", flush=True)
         if phase == "native":
+            body = native_phase(category, config)
             payload = {"category": category, "phase": phase, "model_id": "encoder",
                        "protocol": "fashioniq_val_split", "tolerances": TOL,
-                       "native": native_phase(category, config)}
+                       "standard": STANDARD_V2, "native": body}
         elif phase == "adapter":
+            body = adapter_phase(category, config)
             payload = {"category": category, "phase": phase, "model_id": "encoder",
                        "protocol": "fashioniq_val_split", "tolerances": TOL,
-                       "adapter": adapter_phase(category, config)}
+                       "standard": STANDARD_V2, "adapter": body}
         else:
             raise SystemExit(f"unknown phase {phase!r}; use native, probe, or adapter")
+        # Beside the body, never inside it: `parity_gate` reads the whole document for these keys
+        # (`_relation_checks`, `_component_checks`), and the body's key set is what
+        # `_identity_cross_checks` compares between the two sides -- a key added to one side only
+        # would read as a defect.
+        relation_state = body.pop("relation_state", None)
+        if relation_state is not None:
+            payload["relation_state"] = relation_state
+        components = body.pop("component_parity", None)
+        if components is not None:
+            payload["component_parity"] = components
         target.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
         print(f"# {category}/{phase}: wrote {target.name}", flush=True)
         if phase == "native":
