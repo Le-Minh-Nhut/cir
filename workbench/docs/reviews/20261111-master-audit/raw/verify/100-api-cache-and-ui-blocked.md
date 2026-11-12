@@ -384,6 +384,22 @@ client-side refusal is the correct behaviour, not a bug.
 
 ---
 
+## 9b. Frontend: R@1 beside R@10, nulls with a reason
+
+`EvaluationPage.tsx` renders `R@1 {fmtPercentValue(recall_at_1_multimodal)}` as a sub-line inside the
+R@10 cell (not a new column — see item 4), with a `title` that carries
+`derived_metrics.recall_at_1.reason` when the value is null. The expanded row detail prints
+`R@1 … · R@10 … · R@50 …` plus `R@1 từ derived_record (VERIFIED)`.
+
+A null is `fmtPercentValue`'s em dash with the reason attached, never `0.0`:
+* clvc `image_only_empty_text` → `"no queries have an exact rank"` (the condition is
+  `ABLATION_UNSUPPORTED`, so it has no ranks at all);
+* a refused derived record → `"the rank artifact changed since this recall_at_1 record was derived …"`.
+
+`dist/` rebuilt: `index-Lne9CV3w.js` (390.03 kB / 113.86 kB gzip), stylesheet unchanged
+(`index-DecQnta9.css`). `test_frontend_staleness` (which asserts `dist/` is newer than the sources and
+carries the current-source literals) plus the layout, catalog, and format suites → **44 passed**.
+
 ## 10. Tests run (CPU only, targeted)
 
 ```
@@ -417,10 +433,13 @@ workbench/envs/ctl312h/bin/python -m pytest \
    directory carrying thousands of members would make the per-request stamp the dominant cost; the
    bundle arm iterates members on purpose (a member swap must be visible), so this is a real ceiling
    with a known upgrade path (stamp the directory's own mtime and only enumerate on change).
-4. **Frontend R@1 is not yet rendered.** `types.ts` / `EvaluationPage.tsx` changes for showing R@1
-   beside R@10 were reverted mid-pass when the budget ran short (`git checkout -- workbench/frontend/types.ts`);
-   the API serves `recall_at_1` and `recall_at_1_multimodal` today, so the remaining work is a display
-   change plus a `dist/` rebuild. A `null` must render as an em dash with the reason — the API already
-   supplies `recall_at_1_unavailable_reason`.
+4. **Frontend R@1 landed (`96014e9`), but the served bundle on :5173 is still the old one.**
+   `workbench/frontend/dist/assets/index-Lne9CV3w.js` is built from the current sources (the vite
+   preview process serves whatever is in `dist/`, so it picks this up on its next page load — but the
+   *live* backend serving :8000 still returns the pre-fix JSON, which has no `recall_at_1`, so a page
+   load today renders the em dash for every run). The display is correct and tested against the real
+   payload shape; it needs the backend restart in item 2 to show numbers. R@1 sits inside the R@10
+   track: a twelfth declared column would push the table past its 1148 px container, and the minimum
+   width is derived from that declared list (`test_frontend_layout_provenance` would fail).
 5. **List-route cold cost is dominated by `subset_provenance`** (§7, 0.820 s of 3.216 s, 283 773
    JSON decodes over 126 files). Not changed; recorded so the next pass starts from a number.
