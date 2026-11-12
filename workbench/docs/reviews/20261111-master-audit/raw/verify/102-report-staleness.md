@@ -192,3 +192,20 @@ still not licensed."
 `COMPLETED` and `PARTIAL` respectively, still 6003 queries, still `smoke.limited: false`, and the CLVC gap
 is still `null` for the same `ABLATION_UNSUPPORTED` reason. The PAIR absence, the SHA pin, the 5 rerun
 cases, the 15 `NOT_RUN`, LIMN `7:3038`/`7:3790` and the 46/50 inferred units are unaffected.
+
+---
+
+## 4. Status — APPLIED, do not apply again
+
+All twelve items (C1-C12) and all three addendum items (A1-A3) were applied to
+`FINAL_REPORT_20261112.vi.md` on 2026-11-12, in one commit on top of `d0e0eb7` (report file only,
+pushed nowhere). Line numbers in §1 are therefore stale by construction — they refer to `82cb1044`.
+Three statements in the report were also corrected for the same reason without being in this list:
+§2.4 (`_MODELS_CACHE` was fixed by `abba57e`, so "still serves a stale document" is no longer true),
+the §2 verdict line, and §1.5's "current state" sentence (backend `MainPID` is `1476678` now, not
+`1221379`; frontend is unchanged at `1221148`).
+
+Two limits of the applied pass, stated so the next reader does not assume more: R@1 is still quoted
+only from the derived file (0 of 35 published `summary/*/full.json` carry the key), and the CLVC run
+in flight under the new profile (`da0a2162be0e159a1a456cec`, no `summary/` yet) contributes no number
+to the report.

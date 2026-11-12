@@ -1,17 +1,27 @@
 # BÁO CÁO GIAO HÀNG — audit tổng 20261111 (viết 2026-11-12)
 
-Đây là báo cáo **giao hàng**, không đo gì mới. Mọi con số dưới đây được **chép nguyên** từ một file
-bằng chứng có đường dẫn trích ngay trong dòng. Chỗ nào không có số trong file bằng chứng thì ghi
-`chưa đo`, không suy diễn.
+Đây là báo cáo **giao hàng**. Mọi con số dưới đây được **chép nguyên** từ một file bằng chứng có đường
+dẫn trích ngay trong dòng. Chỗ nào không có số trong file bằng chứng thì ghi `chưa đo`, không suy diễn.
 
-Phần "số liệu sống" (git, systemd, `pgrep`, GPU) được chụp bằng lệnh ghi rõ trong §0; bản chụp nằm ở
-`/tmp/audit-facts/05-live.txt` (ngoài repo, chỉ để đối chiếu).
+Phần "số liệu sống" (git, systemd, `pgrep`, GPU) được chụp bằng lệnh ghi rõ trong §0; bản chụp
+`04:43+07` nằm ở `/tmp/audit-facts/05-live.txt` (ngoài repo, chỉ để đối chiếu). **§0.1 là lần chụp lại
+lúc giao báo cáo** (`08:46+07`) và là trạng thái đúng để đọc; §0 là lịch sử.
 
-Bốn phần dưới đây là **bốn phán quyết riêng biệt**, không gộp.
+Bản sửa lần này (một commit trên `d0e0eb7`, chỉ chạm file báo cáo này) chỉ đổi **những câu đã sai vì cả hai run Full giờ đều tồn tại**, cộng các
+mục mà một commit sau đã vá. Danh sách sửa từng dòng: `raw/verify/102-report-staleness.md`. Nguồn chuẩn
+cho hai run Full: `raw/verify/98-tgcir-full-run.md`. Mọi lệnh dùng để kiểm: §9. Số liệu nào **đo lại**
+trong lượt này (§0.1, §9) thì ghi rõ "đo lại"; còn lại là chép từ file bằng chứng.
+
+§1-§4 là **bốn phán quyết riêng biệt**, không gộp; §5 tách **đã vá / còn**, §6-§9 là bảng tra (file
+bằng chứng, phán quyết, `run_id`, lệnh kiểm).
 
 ---
 
 ## 0. Số liệu sống tại thời điểm viết (2026-11-12T04:43+07, tức 2026-11-11T21:43Z)
+
+Khối dưới đây là **bản chụp có mốc thời gian**, không phải trạng thái hiện tại. Hai tiến trình
+`composition_eval.py` trong khối (`1366356`, `1366364`) **đã thoát**; xem §4.4 (đã sửa) và
+`raw/verify/98-tgcir-full-run.md` §1. Trạng thái sống lúc giao báo cáo nằm ở §0.1.
 
 ```
 ## git rev-parse HEAD
@@ -52,6 +62,66 @@ Thứ tự hai dòng `systemctl` theo đúng thứ tự tham số trên lệnh: 
 ?? workbench/docs/reviews/20261111-master-audit/raw/verify/97-api-surface-tgcir-run.md
 ?? workbench/docs/reviews/20261111-master-audit/web_evidence/e2e_post_cutover/
 ```
+
+### 0.1 Số liệu sống **đo lại** lúc giao báo cáo (2026-11-12T08:46+07)
+
+Chụp bằng đúng các lệnh in kèm; không suy diễn từ khối §0 ở trên.
+
+```
+$ date -Iseconds
+2026-11-12T08:46:28+07:00
+
+$ git rev-parse HEAD
+d0e0eb7af087a88360e4bc981b296f3d5e2c06bc
+
+$ git rev-parse origin/research/cir-failure-workbench
+82cb10444bc09a07130acf9df96330abc196cae6
+
+$ git rev-list --left-right --count origin/research/cir-failure-workbench...HEAD
+0       15
+
+$ systemctl --user show -p MainPID -p ActiveEnterTimestamp -p NRestarts \
+    cir-workbench-backend.service cir-workbench-frontend.service
+MainPID=1476678
+NRestarts=0
+ActiveEnterTimestamp=Thu 2026-11-12 08:39:33 +07
+
+MainPID=1221148
+NRestarts=0
+ActiveEnterTimestamp=Wed 2026-11-11 23:48:44 +07
+
+$ systemctl --user is-active cir-workbench-backend.service cir-workbench-frontend.service
+active
+active
+```
+
+Đọc theo thứ tự tham số như §0: dòng đầu là backend (**`MainPID=1476678`**, vào `active` lúc
+`08:39:33 +07`, tức đã restart sau bản chụp `1221379`), dòng sau là frontend (**`MainPID=1221148`**,
+vẫn là tiến trình của cutover `23:48:44 +07`, `NRestarts=0` — unit này **không** bị chạm). Cả hai
+`NRestarts=0`.
+
+**HEAD là `d0e0eb7af087a88360e4bc981b296f3d5e2c06bc` và CHƯA được push.** `origin` đang ở
+`82cb10444bc09a07130acf9df96330abc196cae6`, tức **sau 15 commit** (0 behind / 15 ahead). Mọi kết luận
+trong báo cáo này nói về cây làm việc tại `d0e0eb7`, không phải về thứ người khác clone được từ
+`origin`.
+
+Một lần chạy composition **đang bay** tại thời điểm chụp (được ghi lại, **không** bị chạm):
+
+```
+$ pgrep -af composition_eval.py
+1477254 bash workbench/scripts/gpu_job.sh workbench/envs/ctl312h/bin/python
+        workbench/scripts/composition_eval.py --config /home/heheboiz/cir_rerun_20261109.yaml
+        --models clvc_net --subsets full --topk-depth 100
+        --conditions multimodal,text_only_black_image,clvc_image_encoder_only
+1477261 workbench/envs/ctl312h/bin/python workbench/scripts/composition_eval.py … (cùng tham số)
+
+$ nvidia-smi --query-gpu=name,driver_version,memory.used,memory.total --format=csv,noheader
+NVIDIA GeForce RTX 5070 Ti, 580.173.02, 2055 MiB, 16303 MiB
+```
+
+Đây là **profile mới** (`--conditions … clvc_image_encoder_only`, `raw/verify/103-image-only-plumbing.md`
+§8) và **chưa có summary**: `workbench/artifacts/composition/summary/` không có thư mục nào mới hơn
+`05:16`, nên **không con số nào của lần chạy này tồn tại để trích** — xem §4.4.
 
 ---
 
@@ -187,8 +257,12 @@ kill (23:48:56.236) → Scheduled restart job 23:48:58.252316 → Started 23:48:
 => ≈ 2.28 s từ kill tới process phục vụ; ≤ 3.0 s tới một 200 từ bản thay thế.
 ```
 
-Trạng thái hiện tại khớp: backend `MainPID=1221379 NRestarts=1 ActiveEnterTimestamp=Wed 2026-11-11
-23:48:58 +07`, frontend `MainPID=1221148 NRestarts=0 …23:48:44 +07` (§0).
+Trạng thái **lúc cutover** khớp: backend `MainPID=1221379 NRestarts=1 ActiveEnterTimestamp=Wed
+2026-11-11 23:48:58 +07`, frontend `MainPID=1221148 NRestarts=0 …23:48:44 +07` (§0, bản chụp `04:43`).
+Trạng thái **lúc giao báo cáo**: backend đã restart thêm một lần → `MainPID=1476678`,
+`NRestarts=0`, `ActiveEnterTimestamp=Thu 2026-11-12 08:39:33 +07`; frontend **không đổi**
+(`1221148`, `23:48:44 +07`, `NRestarts=0`) (§0.1). Việc restart đó là của lượt vá cache (`raw/verify/100-…md`
+§"Live confirmation after restart"), **không** phải của báo cáo này.
 
 ### 1.6 Chưa đo / còn giữ nguyên
 
@@ -209,8 +283,9 @@ Trạng thái hiện tại khớp: backend `MainPID=1221379 NRestarts=1 ActiveEn
 
 ## 2. Dọn tiến trình con (evaluator cleanup)
 
-**Phán quyết: ĐẠT MỘT PHẦN** — backoff, crash-loop, `jobs.py` và guard GPU đều đã vá và đo; riêng
-cache không khoá của `/api/models` vẫn có thể phục vụ tài liệu cũ.
+**Phán quyết: ĐẠT MỘT PHẦN** — backoff, crash-loop, `jobs.py` và guard GPU đều đã vá và đo, và cache
+không khoá của `/api/models` **nay đã vá** (§2.4); phần chưa đóng là guard `gpu_may_be_held` (vẫn từ
+chối, đường release là thủ tục — §5.2 mục 9) và các mục `chưa đo` ở §2.5.
 
 ### 2.1 Tràn backoff: tái hiện được, đã vá
 
@@ -309,15 +384,22 @@ ném đi mới ra dạng `execution environment not verified: WORKBENCH_CLVC_PYT
 [UNCONFIGURED/UNCONFIGURED] (WORKBENCH_CLVC_PYTHON not set)` — API sống **không** trả dạng đó
 (`raw/verify/94-…md` §(c) vs (d), §"Counterfactual").
 
-Nhưng **`/api/models` có cache module không khoá**: `main._MODELS_CACHE` là list mức module, không có
-key nào (`main.py:170-176`), nên `GET /api/models` phục vụ tài liệu **trước khi sửa** suốt đời process
+**`/api/models` từng có cache module không khoá — nay đã vá.** Bản cũ: `main._MODELS_CACHE` là list mức
+module, không có key nào (`main.py:170-176`), nên `GET /api/models` phục vụ tài liệu **trước khi sửa**
+suốt đời process; đo được listing vẫn báo file ResNet-50 của `clvc_net` là missing dù file đã có, trong
+khi `POST /api/jobs` (tính lại `preflight_blockers` mỗi request) **đã** bỏ blocker đó
 (`raw/verify/95-external-asset-unblock.md` §"Did the API pick up the registry edit without a restart?").
-Đo được: listing vẫn báo file ResNet-50 của `clvc_net` là missing dù file đã có và đã verify; trong khi
-`POST /api/jobs` (tính lại `preflight_blockers` mỗi request) **đã** bỏ blocker asset của `clvc_net`.
-Đối lập: `registry._load_yaml_cached` / `load_auxiliary_assets` key theo `(path, size, mtime_ns)` nên
-thấy ngay (`raw/verify/95-…md`, cùng mục). Quy tắc vận hành rút ra: `models.yaml` — sửa và chạy tiếp;
-`workbench.env` — sửa rồi restart backend (`raw/verify/94-…md` §"Why an edit to `workbench.env` still
-requires a restart").
+
+Bản hiện tại key theo `_models_state_stamp(registry, config)` (`main.py:240`): 73 entry, **chỉ**
+`stat`/`setting` (không hash, không probe), gồm thống kê document registry/auxiliary/preparation-contract,
+file env của operator, mọi setting mà registry nêu tên, mọi đường dẫn checkpoint (và member nếu là
+bundle), mọi đường dẫn external asset bắt buộc, và thư mục checkout của từng model. Chi phí stamp
+**0.016 s** (warm 0.006 s); `/api/models` **lạnh 98.43 s** → **67.28 s** trên process sống, **0.026 s /
+0.017 s** khi ấm (`raw/verify/100-api-cache-and-ui-blocked.md` §2, §"Live confirmation after restart"
+mục 1). Badge đổi **trong cùng process** theo cả hai chiều (thiếu → sai checksum → thiếu), và gate
+`POST /api/jobs` **vẫn** 409 — cache không được "vá" bằng cách nới lỏng từ chối (cùng file §2). Quy tắc
+vận hành còn lại: `workbench.env` sửa thì vẫn nên restart backend, không phải vì cache mà vì
+`file_settings()` (`raw/verify/94-…md` §"Why an edit to `workbench.env` still requires a restart").
 
 ### 2.5 Chưa đo
 
@@ -331,8 +413,23 @@ requires a restart").
 
 ## 3. Đối chiếu với upstream (native parity)
 
-**Phán quyết: ĐẠT MỘT PHẦN** — parity ở mức mẫu 5 query / 20 ảnh đạt trên mọi trường đo; **không**
-phải chứng minh mức metric và chưa có parity ở quy mô Full.
+**Phán quyết: ĐẠT MỘT PHẦN** — parity ở mức **mẫu 5 query / 20 ảnh mỗi category** đạt trên mọi trường
+đo; **không** phải chứng minh mức metric, và **một chứng minh parity ở quy mô Full KHÔNG tồn tại**.
+
+Hai điều phải nói thẳng, vì bản trước để người đọc tự suy:
+
+1. **Đây là mẫu, không phải Full.** Mọi bảng ở §3 đo trên **5 query × 20 ảnh gallery**, một category mỗi
+   lần. Chưa có phép so native↔composition nào chạy trên 6 003 query hay gallery 74 381 ảnh.
+2. **Con số Full mới của composition KHÔNG phải chứng minh parity, và không bao giờ được trình bày như
+   vậy.** §4.1b có `tgcir` composition R@10 `23.33833083458271`; đó là **một** protocol đo trên **một**
+   đường (composition). Nó không so với bất kỳ lần chạy native nào trên cùng input, nên nó **không** nói
+   gì về việc hai đường có khớp nhau ở quy mô Full. Một Full run chỉ chứng minh composition **chạy
+   được** và **cho ra số**; parity vẫn chỉ có ở mức mẫu.
+3. **Native ≠ composition.** Native macro R@10 **49.7208** (`raw/tgcir_run3cat_gpu.json`) và composition
+   **23.3383** là **hai protocol khác nhau** — khác câu query (release sentence đơn vs hai caption train
+   join), khác candidate pool (toàn bộ gallery release vs split theo category) — nên **không** được đặt
+   chung một cột, không được trừ cho nhau, và không được đọc thành "composition kém hơn một nửa"
+   (`raw/verify/98-tgcir-full-run.md` §"Why the CIRCUS composition number is not the native number").
 
 ### 3.1 CLVC-Net: từng model, từng trường
 
@@ -469,23 +566,41 @@ candidate thật — đúng chính sách `reference_eligible: true` đã ghi, đ
 
 ### 3.6 Phạm vi — nói rõ
 
-Mọi số ở §3 là **parity 5 query / 20 ảnh mỗi category**, **không phải** chứng minh mức metric.
-`raw/verify/87-clvc-composition.md` §"Còn chặn" mục 1: "No numbers here are a metric: every measurement
-is a 5-query, 20-image parity sample … Full run counts (6016 release queries, 74381-image gallery), the
-per-condition aggregate and R@1/10/50 for `clvc_net` remain unmeasured" — ở phạm vi của tài liệu đó.
-`raw/verify/88-tgcir-composition.md` §"Còn chặn" mục 4 nói cùng ý cho TG-CIR. Số native của campaign
-(`raw/tgcir_run3cat_gpu.json`: macro R@10 49.7208 / R@50 71.1023 / mean 60.4115) **không** bị công
-việc này chạm tới và vẫn là mục tiêu so sánh cho một full run sau này (`raw/verify/89-…md` §"Còn
-chặn" mục 1).
+Mọi số ở §3 là **parity 5 query / 20 ảnh mỗi category** — **một mẫu**, không phải chứng minh mức
+metric, và **không** có parity quy mô Full. `raw/verify/87-clvc-composition.md` §"Còn chặn" mục 1 nói
+đúng ở phạm vi của tài liệu đó: "No numbers here are a metric: every measurement is a 5-query, 20-image
+parity sample …". `raw/verify/88-tgcir-composition.md` §"Còn chặn" mục 4 nói cùng ý cho TG-CIR.
+
+Phần **đã đổi** so với bản trước: câu "the per-condition aggregate and R@1/10/50 for `clvc_net` remain
+unmeasured" **không còn đúng ở mức run** — CLVC Full đã có R@10/R@50 theo điều kiện (§4.4) và R@1 suy ra
+từ ranks (`raw/verify/101-metrics-r1-and-fallback.md` §3b). Cái **vẫn** chưa có là **parity** ở quy mô
+đó: một phép so native↔composition trên cùng 6 003 query / 74 381 ảnh. Con số composition Full **không**
+thay thế được phép so đó.
+
+Số native của campaign (`raw/tgcir_run3cat_gpu.json`: macro R@10 49.7208 / R@50 71.1023 / mean 60.4115)
+**không** bị công việc này chạm tới và vẫn là mục tiêu so sánh cho một phép parity Full sau này
+(`raw/verify/89-…md` §"Còn chặn" mục 1). Đặt nó cạnh `23.3383` của composition là **sai protocol**
+(§3 đầu mục, `raw/verify/98-…md`).
 
 ---
 
 ## 4. Kết quả composition trên Full
 
-**Phán quyết: CHƯA ĐẠT** — TG-CIR Full chưa tồn tại; CLVC Full đã có nhưng là `PARTIAL` với một điều
-kiện không đo được và `composition_gap_ndcg` là `null`.
+**Phán quyết: ĐẠT MỘT PHẦN** — **cả hai** run Full giờ đều tồn tại. TG-CIR Full
+`7b1fa85007bffdab931f7f19` là **`COMPLETED`** trên **6003 query** với gap ba điều kiện
+**`0.43853620852911723`**; CLVC Full `eab10106b2df8e97fb7a5ce5` (lần chạy `-retry-2`) là **`PARTIAL`**
+với lý do **đã khai báo** (`image_only_empty_text` là ablation `ABLATION_UNSUPPORTED`, cộng 119 query
+nhập nhằng annotation như bản release gốc giao), nên `composition_gap_ndcg` của CLVC là `null` —
+`raw/verify/98-tgcir-full-run.md` §1-§3.
 
-### 4.1 TG-CIR: cái đang có là smoke 5 query, **không phải** Full
+Một run CLVC **mới hơn** dưới profile mới (`--conditions
+multimodal,text_only_black_image,clvc_image_encoder_only`) **đang chạy** tại thời điểm giao báo cáo và
+**chưa có số**: báo cáo này **không** được trích bất kỳ con số nào của nó (§0.1, §4.4).
+
+### 4.1 TG-CIR: smoke 5 query **và** một Full run `COMPLETED` 6003 query
+
+Có **hai** run, không phải một. Full: `7b1fa85007bffdab931f7f19` (§4.1b). Smoke:
+`1eee4c0adbc93f7708205a5e` — vẫn là smoke, và không phải tất cả những gì đang có.
 
 Run `1eee4c0adbc93f7708205a5e`, `--subsets full --smoke 5 --topk-depth 100`
 (`raw/verify/97-api-surface-tgcir-run.md` §1; `raw/verify/96-staged-path-and-tgcir-worker-exit.md` §4).
@@ -513,16 +628,70 @@ Metric của **smoke 5 query** này (`raw/verify/97-…md` §1, bảng "Per-cond
 `[23, 6, 14404, 91, 832]` / `[207, 249, 31976, 450, 24900]` / `[3697, 2469, 34272, 66684, 4314]`
 (`raw/verify/97-…md` §1, "Cross-check").
 
-**R@1 không tồn tại ở cả hai phía.** `metrics.<cond>.recall_at_1` là `<ABSENT>` trên artifact **và**
-API, nên không có R@1 nào được phục vụ (`raw/verify/97-…md` §1, "R@1, stated as fact").
+**R@1 không có trên artifact của smoke này.** `metrics.<cond>.recall_at_1` là `<ABSENT>` trên artifact
+**và** API của `1eee4c0a`, và `derived_metrics.recall_at_1.status` là **`MISSING`** (không có record
+suy ra cho run này), nên không có R@1 nào được phục vụ cho nó (`raw/verify/97-…md` §1, "R@1, stated as
+fact"; đo lại qua `GET /api/composition/runs/1eee4c0adbc93f7708205a5e?subset=full`, 2026-11-12T08:5x).
+Lý do **đã đổi** so với bản trước: R@1 **đã được pipeline tính** (`recall_at_1` trong
+`ConditionMetrics`, `workbench/composition/metrics.py:48`, công thức `100.0 * sum(hit_at_k(rank, 1) …) /
+scored_count` tại `:77`) và **đã có** cho hai run Full qua file suy ra — nhưng **không** run nào trong
+hai artifact Full công bố mang `recall_at_1` trong chính `metrics` của nó (`raw/verify/101-metrics-r1-and-fallback.md`
+§1, §7: "0 of 35" file `summary/*/full.json` có key này). Vì vậy R@1 **vẫn không được trích từ artifact**,
+và **không bao giờ** được đọc thành 0.
 
 **Nói thẳng: đây là smoke 5 query, không phải Full run, và recall của 5 query không phải metric công
 bố được.** Chính payload mang marker `smoke.limited: true`, `smoke.query_limit: 5`,
 `smoke.label: "SMOKE QUERY LIMIT; full released gallery preserved"` trong khi `gallery_count` vẫn là
 gallery release đầy đủ `74381` (`raw/verify/97-…md` §2). Trong 60 dòng phục vụ với `include_smoke=true`,
 **10** dòng mang `smoke.limited: true` và **50** dòng không; không có `include_smoke` thì run này
-**vắng mặt** khỏi 50 dòng (`raw/verify/97-…md` §2). Số **Full** của TG-CIR: **chưa đo** — không có
-summary Full nào cho `tgcir` trong bằng chứng của đợt này.
+**vắng mặt** khỏi 50 dòng (`raw/verify/97-…md` §2).
+
+### 4.1b TG-CIR Full: `7b1fa85007bffdab931f7f19`, `COMPLETED`, 6003 query
+
+Summary: `workbench/artifacts/composition/summary/tgcir_tgcir_archive_unresolved_7b1fa85007bffdab931f7f19/full.json`
+(**109 793 B**, mtime `2026-11-12 05:16:29.257 +0700`; đọc lại nguyên file tại HEAD `d0e0eb7`).
+
+| trường | giá trị |
+|---|---|
+| `execution_status` | **`COMPLETED`** |
+| `query_count` | **6003** (`sf` 4069, `validated` 586) |
+| `smoke` | `{"label": null, "limited": false, "query_limit": null}` — Full thật, không `--smoke` |
+| `gallery_count` | 74381 (`gallery_identity_sha256` `1db68c59d96f014cdbecf936e108653de98abef0bd9a98a8abc2fe08b5dec4b4`, `hash_verification: matched`) |
+| `model_id` / `checkpoint_id` | `tgcir` / `tgcir_archive_unresolved` |
+| wall time | **556.9 s (9 min 17 s)** — log birth `05:07:12.401` → summary `05:16:29.257` |
+| ảnh đã encode | 92 390 = 74 381 gallery + 3 × 6003 query → **0.00603 s/ảnh**, 165.9 ảnh/s |
+| GPU | RTX 5070 Ti, `tgcir39-la` (Python 3.9.25, torch 2.7.1+cu128); 22 mẫu `nvidia-smi`: util **97-100 %**, memory.used **2172 MiB** (min = max), power **235.02-260.04 W** |
+
+Ba điều kiện đều **`COMPLETED`, `unscored_count: 0`, `fallback_used: false`,
+`category_scope_failure_count: 0`** (`raw/verify/98-tgcir-full-run.md` §2):
+
+| condition | R@10 | R@50 | mrr | ndcg_full | scored |
+|---|---|---|---|---|---|
+| `multimodal` | 23.33833083458271 | 42.11227719473597 | 0.12098114437415375 | 0.24702051966534347 | 6003/6003 |
+| `text_only_black_image` | 6.546726636681659 | 13.65983674829252 | 0.03674930344151411 | 0.1386930775424115 | 6003/6003 |
+| `image_only_empty_text` | 2.798600699650175 | 7.163085124104614 | 0.010877930517005432 | 0.10452130761687346 | 6003/6003 |
+
+Gap **ba điều kiện có thật** cho model này: `composition_gap_ndcg` **`0.43853620852911723`**,
+`mrr_gap` `0.08423184093263963`, `gap_cohort_count` **6003**, `gap_unavailable_reason` `null`. Cơ chế
+(`metrics.py:126-148`): cả ba điều kiện đều có hạng cho mọi qid nên `common` = toàn bộ 6003, và
+`gap = 1 - max(gap_text, gap_image) / gap_mm` = `1 - 0.1386930775/0.2470205197` = **0.4385362085**,
+tái lập tới 1e-12 (`raw/verify/98-…md` §2). `shortcut_outcomes`:
+`{"both": 9, "composition_required": 956, "image_only": 159, "neither_scored": 0, "text_only": 384,
+"unresolved": 4495}`. `topk_export`: `TOPK_EXPORT_COMPLETE`, depth **100**, ba điều kiện,
+`missing_query_count` **0**, `partial: false`.
+
+R@1 của run này **có** — nhưng ở **file suy ra**, không ở `full.json`: `multimodal`
+**6.3135099117108116**, `text_only_black_image` **1.949025487256372**, `image_only_empty_text`
+**0.08329168748958854** (`workbench/artifacts/composition/derived/recall_at_1/clvc_net_…-retry-2+tgcir_7b1fa85007bffdab931f7f19_full.json`;
+`raw/verify/101-metrics-r1-and-fallback.md` §3a). Ba số này **không** nằm trong `full.json` và chỉ được
+phục vụ qua overlay `derived_metric` (`raw/verify/100-api-cache-and-ui-blocked.md` §5, §"Live
+confirmation after restart" mục 2: `derived_metrics.recall_at_1.status = "VERIFIED"`).
+
+**Composition không phải native.** R@10 `23.33833083458271` ở đây là protocol composition (xếp hạng
+từng query trên toàn bộ gallery release 74 381 ảnh, dùng câu release đơn), còn **49.7208** là native
+macro R@10 (`raw/tgcir_run3cat_gpu.json`, hai caption train join lại, gallery chia theo category). Hai
+số **không** so sánh được và **không** được đặt chung một cột (`raw/verify/98-…md` §"Why the CIRCUS
+composition number is not the native number").
 
 ### 4.2 CLVC-Net: `ABLATION_UNSUPPORTED` cho `image_only_empty_text`
 
@@ -547,7 +716,7 @@ Runner **hỏi** adapter chứ không chạy mọi điều kiện: `active_condi
 cũng lọc theo cùng cách (`export_conditions`, `runner.py:1835-1837`) nên điều kiện không hỗ trợ không
 bị tính là thiếu export (`raw/verify/90a-…md` §1).
 
-### 4.3 CLVC-Net: 119/6003 (1.98 %) query không chấm được — giữ có chủ ý
+### 4.3 CLVC-Net: 119/6003 (1.98 %) query không chấm được — giữ có chủ ý, và đã tách được 117 + 2
 
 `raw/verify/90-circus-composition-runs.md` §4.1: **119 trên 6003 query (1.98 %)** không được chấm vì
 annotation của release nêu **hai** category cho các qid đó; adapter từ chối đoán và runner ghi lý do
@@ -555,13 +724,50 @@ theo từng query (`category_scope_failure_count: 119`). Đây là **chính sác
 khuyết điểm của CLVC**: release tự báo `category_resolution.ambiguous_count: 119` (trên 6003 xét,
 5884 resolve).
 
+**Bản sửa quan trọng: 119 không phải một khối không thể tách.** Dry run trên **cả 6003 query**
+(`raw/verify/99-clvc-scope-and-image-only.md` §2, §3; file `/tmp/clvc_scope_dryrun.json`, ngoài repo)
+đọc ra:
+
+```
+loader_scoped                          5884
+resolver_agrees_with_loader            5884
+resolver_disagrees_with_loader            0
+recovered_from_annotation               117     (shirt 46, toptee 71)
+still_unscoped                            2
+```
+
+Tức **117 query tìm lại được category từ chính file annotation đã pin**, và **đúng 2 query** còn lại là
+nhập nhằng thật: `7:3038` (stem `B004TMGDME`, caption `is darker and has a different graphic and is
+darker`) và `7:3790` (stem `B0079K0YBO`, caption `is grey and has a less whimsical graphic and is
+lighter`) — cả hai nằm trong **cả** `shirt` và `toptee`, lý do nguyên văn
+`unresolved:annotation_names_two_categories` (`raw/verify/99-…md` §3). Chính sách giữ nguyên: 5 884 +
+117 + 2 = 6 003, và hai qid kia **vẫn không được chấm** — nhưng từ nay đây là **hai** query nhập nhằng
+được nêu tên, không phải "119 query không rõ". Chỉ dùng stem sẽ **tệ hơn**: trong 119, **26** reference
+nằm ở cả hai split, nên stem một mình sẽ chọn im lặng cho 26 query mà annotation giải được bằng text
+(cùng mục). Resolver được **tái dùng nguyên văn** từ `model_limn.py` (0 dòng sửa) nên hai model vẫn phủ
+cùng một tập query.
+
+Hệ quả cho một run **mới**: `unscored_count` 119 → **2** mỗi điều kiện, coverage `0.98018` → `0.99967`,
+`missing_query_count` 238 → **4** — **kỳ vọng, chưa đo**; run đang chạy là lần đầu kiểm nó (§4.4).
+
+**Rò rỉ modality — phán quyết (a), kèm điều kiện phải nói ra.** Đầu vào routing là **stem** của ảnh
+reference (một product id FashionIQ) đối chiếu với `cap.*.val.json` / `split.*.val.json` của tác giả: đó
+là metadata của release, lấy được **không cần byte ảnh nào**, không suy từ pixel, không từ ảnh target,
+không từ score (`raw/verify/99-…md` §4). Hệ quả dễ nói sai: dưới `text_only_black_image`, pixel reference
+bị thay bằng ảnh đen **nhưng routing vẫn đọc category của hàng đó** — điều kiện này vẫn thấy một mẩu
+metadata bắt nguồn từ reference. Vì vậy **cấm** câu "text_only_black_image không thấy thông tin
+reference"; (a) cho phép nhãn, nó không làm câu đó đúng. Điều này được khai trong code
+(`IMAGE_ENCODER_ONLY_LEAKS_SCOPE`) và chặn bằng chữ ký `Adapter.query_scope(self, query,
+candidate_names)` — không có `condition`, không gallery, không score (cùng mục).
+
 Nó **khớp chính xác với LIMN**: run LIMN `10173dc4` báo cùng hình dạng — `ambiguous_count: 119`,
 `category_scope_failures: {multimodal: 119, text_only_black_image: 119, image_only_empty_text: 119}`,
 `PARTIAL` — vì `model_limn.py` cố ý từ chối với `unresolved:annotation_names_two_categories`
 (`raw/verify/90-…md` §4.1). Giải chúng bằng suy luận riêng cho CLVC sẽ làm hai model phủ hai tập query
-khác nhau và phá tính so sánh chéo, nên **không làm**; `PARTIAL` là trạng thái đúng.
+khác nhau và phá tính so sánh chéo, nên **không làm**; `PARTIAL` là trạng thái đúng cho **run đã
+công bố**.
 
-### 4.4 CLVC Full: đã có một run hoàn tất, và một lần chạy lại đang chạy
+### 4.4 CLVC Full: hai lần chạy đã hoàn tất (`-retry-2` là bản có hiệu lực), không còn run nào đang chạy trong họ `eab10106`
 
 Run Full đã hoàn tất trước đó: `eab10106b2df8e97fb7a5ce5`, `execution_status` **`PARTIAL`**, wall
 **4489 s (1 h 14 m 56 s)**, 223 143 gallery forward + 12 006 query forward, batch 32, peak VRAM
@@ -577,8 +783,11 @@ Run Full đã hoàn tất trước đó: `eab10106b2df8e97fb7a5ce5`, `execution_
                            "category_scope_failure_count": 119, "fallback_used": false}}
 ```
 
-Metric theo điều kiện, mẫu số 6003 (`raw/verify/90-…md` §4.1; đọc lại từ
-`workbench/artifacts/composition/summary/clvc_net_author_drive_unresolved_eab10106b2df8e97fb7a5ce5/full.json`):
+Metric theo điều kiện, mẫu số 6003 (`raw/verify/90-…md` §4.1; **đọc lại** từ
+`workbench/artifacts/composition/summary/clvc_net_author_drive_unresolved_eab10106b2df8e97fb7a5ce5-retry-2/full.json`
+— **17 029 B**, mtime `2026-11-12 04:53:22.955 +0700`). Bản `…_eab10106…/full.json` (không có hậu tố)
+là lần chạy **cũ đã bị thay thế**; các con số giống nhau ở cả hai lần, nhưng lần **hoàn tất** là
+`-retry-2` (`raw/verify/98-tgcir-full-run.md` §1):
 
 | condition | scored | coverage | R@10 | R@50 | nDCG_full | MRR |
 |---|---|---|---|---|---|---|
@@ -591,67 +800,200 @@ Metric theo điều kiện, mẫu số 6003 (`raw/verify/90-…md` §4.1; đọc
 `{"depth": 100, "requested": true, "status": "TOPK_EXPORT_COMPLETE_PARTIAL", "partial": true,
 "missing_query_count": 238, ...}` với 238 = 119 × 2 điều kiện được export (cùng mục).
 
-**Trạng thái lần chạy lại hiện tại — ĐANG CHẠY, chưa xong.** `pgrep` (§0) trả hai tiến trình: PID
-`1366364` là `composition_eval.py --models clvc_net --subsets full --topk-depth 100`, PID `1366356` là
-`gpu_job.sh` cha. Đo thêm: `ps` cho `1366364` ở `Sl`, `etime 20:23`, 19 thread, ~767 % CPU; nó đang mở
-hai handle chỉ-ghi vào
-`runs/eab10106b2df8e97fb7a5ce5/candidates/clvc_net_author_drive_unresolved/.multimodal.jsonl.1366364….tmp`
-(**15 997 926 B**, mtime `04:40:38`) và `.text_only_black_image.jsonl.1366364….tmp` (**0 B**, mtime
-`04:22:26`). Kích thước file thứ nhất **không tăng** giữa hai lần đo `04:40:38` và `04:42:39`, nên
-không thể kết luận nó đang ghi liên tục; cái kết luận được là **chưa hoàn tất**: thư mục `ranks/` có
-mtime `03:46:27` và các `full.json` hiện có của run_id này là `02:35:43`
-(`…_eab10106…/full.json`) và `03:46:30` (`…_eab10106…-retry-1/full.json`) — **tất cả đều trước** lúc
-process này start (`04:22:15`), nên lần chạy này chưa ghi lại ranks và chưa có summary mới. Vì vậy
-**không** được gán bất kỳ con số Full nào cho nó. Tiến trình này **không bị chạm** trong suốt quá trình
-soạn báo cáo.
+**Trạng thái lần chạy lại — ĐÃ XONG; PID `1366364` đã thoát.** Lần chạy `-retry-2` do PID `1366364`
+(wrapper `gpu_job.sh` `1366356`) điều khiển **kết thúc** và ghi ra
+`workbench/artifacts/composition/summary/clvc_net_author_drive_unresolved_eab10106b2df8e97fb7a5ce5-retry-2/full.json`
+(**17 029 B**, mtime `04:53:22.955 +0700`), `execution_status` **`PARTIAL`**
+(`raw/verify/98-tgcir-full-run.md` §1). Các số của chính lần chạy đó:
 
-Không có con số Full nào khác: **chưa đo**.
+| đại lượng | giá trị | nguồn |
+|---|---|---|
+| wall time | **1867.2 s (31 min 7 s)** — log birth `04:22:15.752` → summary mtime `04:53:22.956` | 98 §1 |
+| ảnh đã encode | 92 390 = 74 381 gallery + 3 × 6003 query → **0.0202 s/ảnh**, 49.5 ảnh/s | 98 §1 |
+| `smoke` | `{"label": null, "limited": false, "query_limit": null}` — **không** dùng `--smoke` | 98 §1 |
+| `query_count` / `gallery_count` | 6003 / 74381 | 98 §1 |
+| interpreter | `clvc39-la` (Python 3.9.25, torch 2.7.1+cu128), RTX 5070 Ti | 98 §1 |
+| peak VRAM | **chưa đo** — không có mẫu `nvidia-smi` nào được lấy trong lúc run chạy (run đã bay trước khi phiên đo bắt đầu) | 98 §1, §5 |
 
----
+Peak VRAM **không** được gán cho run này: con số `2897 MiB` ở đầu mục thuộc lần chạy **trước**
+(`eab10106…`, `raw/verify/90-…md` §4.1) và **không** được chuyển sang `-retry-2`. Câu cũ "**không** được
+gán bất kỳ con số Full nào cho nó" nay **hết hiệu lực**: các con số trong bảng trên **là** số của nó.
 
-## 5. Khuyết điểm đã tìm ra và **CHƯA** vá
+R@1 của CLVC Full cũng **có**, ở file suy ra chứ không ở `full.json`: `multimodal`
+**1.4106050305914344**, `text_only_black_image` **0.10197144799456152**, `image_only_empty_text`
+**`null`** với lý do `"no queries have an exact rank"` — **không** ghi thành 0.0
+(`raw/verify/101-metrics-r1-and-fallback.md` §3b; phục vụ sống với
+`derived_metrics.recall_at_1.status = "VERIFIED"`, `raw/verify/100-api-cache-and-ui-blocked.md` §5).
 
-1. **`statistics.query_count` phục vụ `6003` bên cạnh mẫu số từng điều kiện là `5` trên một smoke.**
-   `workbench/backend/composition.py:1372` truyền `len(subset_queries)` — kích thước subset `full` của
-   release — trong khi khối `conditions` ngay bên cạnh chỉ tính trên các qid thực sự được xếp hạng (5).
-   Trong cùng payload, `statistics_whole_run.query_count` là `5` và `query_count` của run-detail cũng là
-   `5`. Người đọc sẽ hiểu như thể 6003 query đã được chấm trong smoke này. Artifact **không** có khối
-   `statistics`, nên đây không phải mismatch artifact↔API và **không bị chấm là FAIL** trong 97 — ghi ở
-   `raw/verify/97-api-surface-tgcir-run.md` §7(a) với mức **OBSERVATION (not scored)**.
-2. **`subset_provenance` chỉ xuất hiện sau khi route list làm nóng cache summary dùng chung.** Lần
-   fetch detail **lạnh** 20 053 B **không** có key này; hai lần detail sau và lần fetch qua proxy
-   20 841 B **có**. Nguyên nhân đọc từ code: `read_summary_file` cache dict đã parse theo path và trao
-   **cùng object** cho mọi caller, còn `list_composition_summaries` sửa nó tại chỗ qua
-   `decorate_run_rows` — route nào làm nóng cache quyết định block có mặt hay không. Khi có mặt thì nó
-   đúng (`consistent: true`) (`raw/verify/97-…md` §7(b)).
-3. **Fallback encode theo từng query của runner có thể trộn batch size trong một điều kiện mà không ghi
-   lại** (`runner.py` `_encode_queries`, `:700-709`). Với CLVC-Net điều này **đổi feature**, nên một run
-   mà feature query được sinh một phần bởi fallback **không so sánh được** với run không dùng fallback
-   (`raw/verify/87-clvc-composition.md` §3b, §"Còn chặn" mục 2). Ngược lại, fallback ở đường **SCORING**
-   thì **có** ghi: `condition_status.<cond>.fallback_used` xuất hiện trong artifact và API (ví dụ
-   `fallback_used: false` ở `raw/verify/97-…md` §1a và `raw/verify/90-…md` §4.1). **Chưa vá.**
-4. **Gallery encode của `CLVC-Net` đo được 0.0138 s/ảnh trong run, so với 0.0027 s/ảnh đo độc lập
-   (90 §4.2) — lệch ~5×.** Quy cho memmap 609 MB flush trong lúc đo, nhưng **chưa chứng minh**:
-   `raw/verify/96-staged-path-and-tgcir-worker-exit.md` §6.2 ghi rõ "Recording the discrepancy rather
-   than explaining it away … Both readings are real; they measure different code around the same window.
-   Separating them needs per-scope instrumentation … which this section did not do." Ghi nhận là
-   **chưa giải thích được**.
-5. **Chế độ hỏng thứ hai của TG-CIR: `adapter_worker_exited exit_status=1`, thấy đúng một lần ở
-   `9f115afe-retry-1`, không tái hiện được ở quy mô 5 query.** Cơ chế: job đầu tiên tại `model_tgcir.py:653`
-   là job **duy nhất** chạy ngoài `try`, nên một `ValueError` ở đó thoát process với exit 1; `_exchange`
-   thấy EOF rồi **latch** `_worker_failed` (`model_tgcir.py:317`), khiến mọi batch sau — ở mọi điều kiện
-   — short-circuit với cùng chuỗi, và `runner._encode_queries` re-raise vô điều kiện (`runner.py:713-714`)
-   nên cả điều kiện chết với 6003 unscored (`raw/verify/96-staged-path-and-tgcir-worker-exit.md` §2).
-   **Guard first-job ĐÃ ship** (`be9de58` + hunk 653-663), kèm **repro trên CPU không GPU không weights**:
-   trước guard `exit_status: 1, replies: 0`; sau guard `exit_status: 0, replies: 2` với job 2 được phục
-   vụ bình thường (`raw/verify/96-…md` §2.4). **Thay đổi latch thì KHÔNG ship**: `raw/verify/96-…md` §5
-   ghi rõ nó đã được phân tích, **reverted**, và hành vi latch/stop gốc được phục hồi nguyên văn —
-   "A semantics change to `_worker_failed` justified only by a scenario that no longer reproduces is a
-   precaution, not a fix". Guard này cũng **chưa có bằng chứng từ run thật**, chỉ có repro CPU, và không
-   đường nào của run thật đi vào nó khi 6003/6003 query đều resolve (`raw/verify/96-…md` §"Còn chặn"
-   mục 3).
+**Một run CLVC mới hơn đang chạy, và nó KHÔNG có số nào ở đây.** Tại thời điểm giao báo cáo
+(2026-11-12T08:46+07) `pgrep` thấy PID `1477261` (wrapper `1477254`) chạy
+`composition_eval.py --models clvc_net --subsets full --topk-depth 100 --conditions
+multimodal,text_only_black_image,clvc_image_encoder_only` (§0.1) — **profile mới**, có
+`--conditions` (`raw/verify/103-image-only-plumbing.md` §8). Nó **chưa** ghi summary: không thư mục nào
+trong `workbench/artifacts/composition/summary/` mới hơn `05:16`, nên **không** con số nào của lần chạy
+này tồn tại. Kỳ vọng đã công bố trước để kiểm chứ không để tin (`raw/verify/103-…md` §8.5):
+`unscored_count` **2** mỗi điều kiện, coverage `6001/6003 = 0.99967`, `condition_status.
+clvc_image_encoder_only == COMPLETED`, `metrics.gap_conditions` = ba tên mới, `gap_role_reason` khác
+`null`, `composition_gap_ndcg` **khác** `null`, `topk_export.missing_query_count` **4** (nếu điều kiện
+thứ ba cũng export) hoặc **6** (nếu cả ba cùng export) — và **4 kèm `topk_export.conditions` chỉ hai
+phần tử** là một phát hiện, không phải pass. Báo cáo này **không** được trích bất kỳ con số nào của nó
+cho tới khi summary tồn tại.
+
+Cơ chế đã sẵn cho run đó, và đây là phần **đã vá**: `gap_conditions` / `gap_role_reason` được ghi theo
+**vai**, không theo vị trí (`runner.resolve_gap_conditions`, `raw/verify/103-…md` §4); ba run khác nhau
+chỉ ở danh sách điều kiện cho ba `run_id` khác nhau (`62e362bf911fb5f97c6e497b` /
+`8ef7596c0e1fd42a1910e766` / `e877a310f9e70ea9d6df29af`, cùng file §6), nên một gap biến thể **không
+thể** bị đọc nhầm thành gap protocol ở mức artifact.
+
+**Không còn `composition_eval.py` nào thuộc họ `eab10106` đang chạy**, và `pgrep` lúc giao báo cáo chỉ
+trả hai PID của run profile mới nói trên.
 
 ---
+
+## 5. Khuyết điểm: cái gì đã **VÁ** và cái gì **CÒN**
+
+Mục này thay cho danh sách "CHƯA vá" của bản trước, vì nhiều mục trong đó **đã vá và đã đo** ở những
+commit sau. Mỗi mục dưới đây mang file bằng chứng; chỗ chưa đo thì ghi `chưa đo`.
+
+### 5.1 Đã VÁ (9 mục) — mỗi mục có bằng chứng đo lại, không phải "đã sửa" suông
+
+1. **Tràn backoff** (trước: `restart_delay(1025)` ném `OverflowError: int too large to convert to
+   float`). Vá bằng clamp **số mũ trước** phép nhân: `BACKOFF_SATURATING_EXPONENT == 6`, thang
+   0.2/0.4/0.8/1.6/3.2/6.4/8.0, bão hoà 8.0 tại 8, 9, 1025, 1e6, 1e12; 1000 lần gọi tại
+   `failures = 10**6` mất 0.000156 s (`raw/verify/102-queue-gpu-and-blocker-inventory.md` §5;
+   `raw/verify/84-evaluator-recovery-and-backoff.md` §1).
+2. **`jobs.py` recovery lúc khởi động** — 5 phát hiện đều vá và đo trên fixture thật: bản ghi in-flight
+   → `failed` với artifact **byte-identical**, bản ghi `completed` không bị chạm, metadata hỏng
+   (`list`/scalar) không còn làm sập lượt quét (`jobs.py:509-515`), recovery không bao giờ chạy lại job,
+   và kiểm toán quyền sở hữu kill (không `pkill`, không `killall`, không pid từ file)
+   (`raw/verify/84-…md` §3). Test hồi quy qua **queue thật**: 4 test, `4 passed in 0.80s`
+   (`raw/verify/102-…-inventory.md` §6).
+3. **`_MODELS_CACHE` không khoá** — nay key theo `_models_state_stamp` (`main.py:240`, 73 entry,
+   `stat`/`setting` only): stamp 0.016 s (warm 0.006 s), `/api/models` **lạnh 98.43 s** → **67.28 s**
+   trên process sống, **0.026 s / 0.017 s** khi ấm; badge đổi **trong cùng process** theo cả hai chiều
+   (thiếu → sai checksum → thiếu), và gate `POST /api/jobs` **vẫn** 409
+   (`raw/verify/100-api-cache-and-ui-blocked.md` §2, §"Live confirmation after restart" mục 1).
+4. **`statistics.query_count`** phục vụ `6003` cạnh mẫu số `5` trên smoke — nay suy từ số query **thực
+   sự được xếp hạng**: smoke `6003 → 5`, và run Full vẫn báo đúng cả cohort (3/3). Đo lại sống trên
+   `1eee4c0a`: `statistics.query_count: 5`, ba denominator đều `5`, `statistics_whole_run.query_count: 5`
+   (`raw/verify/100-…md` §3, §"Live confirmation after restart" mục 3).
+5. **`subset_provenance` phụ thuộc thứ tự gọi** — `read_summary_file` nay trả `copy.deepcopy`; detail
+   **byte-identical ở cả hai thứ tự gọi**, cùng `80 174 B` và cùng sha256
+   `bb7406d633bad67e0f4f6daca0bed01e921fafd5c2e0bf1da8adcbda6e359e57` (đo sống, qua HTTP; trong
+   process là `80 104 B` / `bc165e5…`) (`raw/verify/100-…md` §4, §"Live confirmation after restart" mục 4).
+6. **R@1 vắng mặt** — `recall_at_1` đã có trong `ConditionMetrics` (`workbench/composition/metrics.py:48`)
+   và được tính bằng `100.0 * sum(hit_at_k(rank, 1) …) / scored_count` (`:77`) trên **cùng cohort và cùng
+   mẫu số** với R@10/R@50; 7 test biên (rỗng → `None` + lý do, không bao giờ `0`), backfill 3 guard
+   (cohort equality, reproducibility ở 1e-12, immutability) và **136/136** digest artifact **không đổi**
+   (`raw/verify/101-metrics-r1-and-fallback.md` §1, §2, §3, §7). Số suy ra: tgcir 6.3135099117108116 /
+   1.949025487256372 / 0.08329168748958854; clvc 1.4106050305914344 / 0.10197144799456152 / `null`
+   "no queries have an exact rank" (§3a, §3b). **Giới hạn còn lại:** file `full.json` **đã công bố không
+   bị ghi lại** (bị từ chối theo tên), nên R@1 chỉ tồn tại ở file suy ra + overlay API
+   (`raw/verify/101-…md` "Còn chặn" mục 2), và mọi số R@1 trong báo cáo này đều trích từ đó, không trích
+   từ `full.json`.
+7. **Fallback encode không được ghi lại** — `runner.py` nay ghi partition theo từng điều kiện
+   (`partition`, `fallback_used`, **`fallback_qids`**, `fallback_reason`, `call_window`,
+   `runner_batch_size`, `adapter_batch_size`, `adapter_calls`, `runner.py:657-700`) và khoá memmap cache
+   theo `_feature_partition_fingerprint` (`runner.py:669`), nên cache sinh từ partition trộn **không**
+   thể đội lốt cache canonical: `canonical-key cache HIT?: False` sau khi fallback, và 6 test khoá hành
+   vi (`raw/verify/101-…md` §5, §6). **Giới hạn:** hai run Full đã công bố có `work/` đã prune nên
+   `partition` của chúng là **không thể biết từ đĩa** (`raw/verify/101-…md` "Còn chặn" mục 3) — đã vá
+   cho run **sau** commit, không hồi tố.
+8. **Cohort save → reopen → export** (trước: `400 run_not_found`, index DuckDB rỗng) — nhánh
+   composition trong `storage.py` (`c:<run_id>`) làm tròn vòng: `PUT` 200, `GET /api/cohorts` mở lại
+   đúng id, `export/{json,csv,markdown}` 200/200/200, **và** cùng đường đó trong Chromium
+   (`cohort-20261112T014331`, 6 003 qid, `r1 6.3135099117108116`, `r10 23.33833083458271` — trùng
+   metric của chính run). Năm đường từ chối đều 400 và nêu tên nguyên nhân; cohort cũ (DuckDB) vẫn nạp
+   (`raw/verify/100-…md` §9, §"Live confirmation after restart" mục 6, 6b).
+9. **CLVC 119-query coverage** — không còn là khối mù: dry run 6 003 query tách **117 tìm lại được**
+   (shirt 46, toptee 71) + **2 nhập nhằng thật** (`7:3038`, `7:3790`), resolver **tái dùng nguyên văn**
+   từ `model_limn.py` (0 dòng sửa) và 15 test mới khoá hành vi; seam của runner cho
+   `routed 6001 / unscoped 2`, scope digest đổi từ `8a5dd517…` sang `3a1c5a67…` nên lần chạy lại mint
+   run id mới thay vì tái dùng ranks all-null (`raw/verify/99-clvc-scope-and-image-only.md` §2, §3, §5).
+   Đo **hệ quả metric** của việc này: **chưa đo** — đó là run đang chạy (§4.4).
+
+### 5.2 CÒN (11 mục) — mỗi mục nêu đúng thứ còn thiếu
+
+1. **Nguồn upstream của PAIR** — `BLOCKED_MISSING_SOURCE_CLASSES`, không phải "blocked" chung chung:
+   `iLearn-Lab/ICASSP25-PAIR` tại `bfb0b98cdb4c44f6b9190baaa84d783a77dd888f` có **21** commit và **31**
+   đường dẫn từng tồn tại, **không** chứa `model_vssp` (`Encoder`, `Backbone`, `FeatureWiseAffine`) hay
+   `MHTransformer_dis` (`Transformer`, `TransformerLayer`, `MultiHeadAttention`, `MlpTransformer`) mà
+   các pickle checkpoint yêu cầu (`raw/verify/102-…-inventory.md` §7.2 dòng `PAIR-SRC`).
+2. **15 model `NOT_RUN` cho G1/G2** (13 active + 2 deferred `csmcir`, `sprc`) — không có artifact
+   differential native↔adapter; chỉ `encoder` và `limn` có, và cả hai là `MANDATORY_SUBCHECK_FAILED`
+   (`encoder.failure_count 16`, `limn` 3 `batch_1_vs_n.max_rel`) nên `passed_models: []`
+   (`raw/verify/102-…-inventory.md` §7.2 dòng `G1G2-15`).
+3. **5 ca chạy lại** — `clip4cir_rn50x4_noft` (chỉ roll-up, `artifact_backed: false`), `airknow` (3 dòng
+   counted, `fiq_n05` có hai dòng xung đột `52.54661498980954` vs `52.924086629607395`), `clvc_net`
+   (hai dòng counted cùng `protocol_id`, đã truy provenance: **cùng byte checkpoint**
+   `bd9b6889…79cb`, khác biệt 1-2 query do tie-break — nên nhãn là tie-break, không phải provenance),
+   `pair` (4 dòng B1/B2 × H_normal/H_rev), `habit e0dd04a4` (`FAILED` vì interpreter `airknow-adapted`
+   3.11.15 ≠ 3.8.10; env nay đã đúng). ENCODER **không** nằm trong 5
+   (`raw/verify/102-…-inventory.md` §7.2 dòng `RERUN-5`, `CLVC-NUM`).
+4. **LIMN `7:3038` / `7:3790`** — nay nêu chính xác là **hai** query nhập nhằng còn lại (không phải
+   "119"), mỗi cái nằm trong **cả** `shirt` và `toptee` với cùng reference identity và cùng cặp caption;
+   release không có khoá category nào để phân xử, và mọi luật phân xử (tra ảnh target, so score, quyết
+   định curation) đều phá luật "chỉ gán từ đúng một category được nêu"
+   (`raw/verify/99-…md` §3; `raw/verify/102-…-inventory.md` §7.2 dòng `LIMN-2`). Cần metadata upstream,
+   không phải vá code.
+5. **46/50 dòng metric dùng đơn vị suy từ độ lớn** — `unit_declared 4`, `unit_sibling_key 2`,
+   `unit_inferred 46`, `unit_not_declared 46` trên `blocks_with_metrics 50`; đã soát từng dòng, **0**
+   khai báo bị bỏ sót, và các key `*_pct` mô tả đại lượng khác nên không phải khai báo thang macro. Sửa
+   được **chỉ ở producer** của từng artifact, không sửa được ở tầng API
+   (`raw/verify/102-…-inventory.md` §7.2 dòng `UNIT-46`).
+6. **`TESTED_SOURCE_SHA` cũ** — vẫn là `96d86010e85048d82f2dacf26e17d7b7206d31ab` và guard **đỏ có chủ
+   ý**: **14** file production đã đi qua pin (1 805 insertion / 155 deletion), gồm `runner.py` 218,
+   `model_tgcir.py` 632, `model_clvc_net.py` 525, `backend/jobs.py` 45, `composition/metrics.py` 7,
+   `scripts/backfill_recall_at_1.py` 187, `systemd/render_units.py` 215. **Không** được nâng trong đợt
+   này — cần một lượt sweep **dừng** (stationary) rồi mới pin lại
+   (`raw/verify/102-…-inventory.md` §7.2 dòng `SHA-PIN`).
+7. **Người gửi SIGTERM lịch sử vẫn chưa xác định** — đường nhận đã biết
+   (`serve_workbench.py:152-166`, `forward_stop` → `os.kill(child.pid, SIGTERM)` → `raise_signal(SIGINT)`),
+   `jobs.py` bị loại (`start_new_session=True`), test/script trong repo bị loại, session reaping bị loại;
+   bốn chữ ký chết đã commit (`raw/service-death-log{,-2,-3,-4}.txt`, PID 3691345 / 4040574 / 4062957 /
+   4082632, đều `[WARN] npm exited with status -15`). Không thể đóng bằng suy luận: "that inference is
+   for a future investigation, not evidence about the past"
+   (`raw/verify/102-…-inventory.md` §7.2 dòng `SIGTERM-SENDER`; `raw/verify/86-…md` cùng mục).
+8. **Worst-case `TimeoutStopSec=30` chưa đo** — chỉ bị chặn bằng **số học** (`GRACE_SECONDS` 10 s + 5 s
+   SIGKILL mỗi job group + 10 s worker join ≤ 30 s); chưa có ca nào cho một job sống phớt lờ SIGTERM hết
+   grace (`raw/verify/86-systemd-user-services.md` §"Still unproven / not done"; §1.6 trên).
+9. **`gpu_may_be_held`: release là thủ tục, không phải kiểm chứng** — guard được **GIỮ**, không xoá:
+   con `setsid` **sống** sau SIGKILL của chủ queue trên supervisor trần (`child_alive_after_owner_sigkill
+   = True`), **chết** trong unit `KillMode=mixed` ở t+0.050 s, trước bản thay thế 1.09 s — nhưng
+   `jobs.py` **không** quan sát được mình đang ở đường nào. Release chạy đúng (`blocked` → restart →
+   `completed`) nhưng `/tmp/q102/restart_clears.log` cho thấy restart **vẫn nhận dispatch khi orphan còn
+   sống** (`ORPHAN_STILL_ALIVE=True`, `dispatch_status=completed`): "release the device and restart" chỉ
+   được bảo đảm bởi sự trung thực của operator, không phải bởi code
+   (`raw/verify/102-…-inventory.md` §1-§4, §8).
+10. **Export cohort CSV/Markdown thiếu cột `reference`** — `composition_cohort_metrics` cố ý trả
+    `run_id` chứ không trả reference `c:<run_id>`, vì bộ cột của export **dùng chung** với nhánh DuckDB
+    (`csv.DictWriter(..., fieldnames=list(metrics[0]))` tại `workbench/backend/main.py:1530`, và header
+    Markdown cố định tại `:1535`), nên thêm cột sẽ đổi hình dạng của **mọi** export
+    (`workbench/backend/storage.py:339-342`). Hệ quả: một export chỉ có `run_id` **không tự nói** nó là
+    composition hay index, và reference chỉ còn trong provenance của cohort. Ghi nhận, **chưa vá** —
+    sửa cần một quyết định về hợp đồng cột (thêm cột cho cả hai nhánh, hay tách schema).
+11. **Peak VRAM của CLVC Full (run CŨ) chưa đo** — run `-retry-2` đã bay trước cửa sổ lấy mẫu nên
+    **không** có mẫu `nvidia-smi` nào; `2897 MiB` thuộc lần chạy `eab10106…` **trước đó** và không được
+    chuyển sang. Chỉ TG-CIR có bằng chứng GPU (22 mẫu, util 97-100 %, 2172 MiB, 235.02-260.04 W)
+    (`raw/verify/98-tgcir-full-run.md` §1, §5; §4.4 trên). Peak VRAM của run **đang chạy** cũng
+    **chưa đo** tại thời điểm giao báo cáo.
+
+### 5.3 Hai ghi chú còn mở, giữ nguyên nhưng nay có thêm dữ kiện
+
+* **Gallery encode `0.0138 s/ảnh` so với `0.0027 s/ảnh` độc lập (~5×) — vẫn chưa giải thích.** Quy cho
+  memmap 609 MB flush nhưng **chưa chứng minh** (`raw/verify/96-staged-path-and-tgcir-worker-exit.md`
+  §6.2). Dữ kiện mới **thu hẹp** khoảng: hai run Full hoàn tất cho tốc độ độc lập là **0.0202 s/ảnh**
+  (`clvc_net`, 92 390 ảnh / 1867.2 s) và **0.00603 s/ảnh** (`tgcir`, 92 390 / 556.9 s)
+  (`raw/verify/98-…md` §1, §2). **Không** con số nào trong hai số đó tái hiện `0.0027`, nên phép đọc
+  standalone càng ít được xác nhận hơn — mục vẫn **mở**, và vẫn cần per-scope instrumentation trong
+  **một** run.
+* **Guard first-job của TG-CIR `adapter_worker_exited exit_status=1`** — guard **đã ship** (`be9de58` +
+  hunk `model_tgcir.py:653-663`) và chỉ được chứng minh trên **CPU** (trước: `exit_status: 1, replies:
+  0`; sau: `exit_status: 0, replies: 2`); thay đổi latch thì **KHÔNG** ship và phải **giữ nguyên**
+  reverted (`raw/verify/96-…md` §2.4, §5). Câu "chưa có bằng chứng từ run thật" nay có bạn đồng hành,
+  **không** phải mâu thuẫn: TG-CIR Full `7b1fa850` chạy **`COMPLETED` 6003/6003 query**, tức một run
+  thật **không** đi vào guard — đúng như thiết kế. Đọc "chưa chứng minh trên run thật" thành "có thể
+  hỏng" là đọc sai (`raw/verify/98-…md` §2).
 
 ## 6. Bảng file bằng chứng
 
@@ -660,15 +1002,21 @@ Không có con số Full nào khác: **chưa đo**.
 | `raw/verify/84-evaluator-recovery-and-backoff.md` | `restart_delay(1025)` ném `OverflowError`; cách vá clamp số mũ (`BACKOFF_SATURATING_EXPONENT == 6`) và thang 0.2→8.0; crash loop 6 restart/10 s với gap 0.2/0.4/0.8/1.6/3.2/6.4; `jobs.py` recovery 5 phát hiện + kiểm toán quyền sở hữu kill + guard `gpu_may_be_held`; SIGTERM lịch sử vẫn chưa rõ người gửi |
 | `raw/verify/86-systemd-user-services.md` | hai unit user; `MainPID` = uvicorn không wrapper; `Restart=always`/`RestartSec=2`/`StartLimit 60,5`/`KillMode=mixed`/`TimeoutStopSec=30`; ba ca kill (3092 ms / 2881 ms / giữ dừng); cô lập cgroup cho con `setsid` + timeline; frontend 2432 ms và 2381 ms + lý do `mixed` vs `process`; cutover 23:48:4x, MainPID trước→sau, kill thật ≈2.28 s; `/tmp/cutover_rollback.sh` md5 `04fbd5ec…` |
 | `raw/verify/89-adapted-runtime-and-gpu-capability.md` | `adapted_runtime` sm_120 cho `clvc_net`/`tgcir`; tier `BLOCKED` → `GPU_VERIFICATION_PENDING` → `GPU_RUNTIME_READY`; bản ghi GPU (capability 12.0, torch 2.7.1+cu128, 16303 MiB); `command_status` giữ `COMMAND_BLOCKED_SOURCE_ENTRYPOINT` |
-| `raw/verify/90-circus-composition-runs.md` | CLVC Full `eab10106` §4.1 (PARTIAL, 4489 s, metrics, `gap null`, 119/6003); §4.2 s/img 0.0027 vs 0.0603; §4.3 TG-CIR `9f115afe` mất 2 điều kiện; danh sách "Còn chặn" |
+| `raw/verify/90-circus-composition-runs.md` | CLVC Full `eab10106` §4.1 (PARTIAL, 4489 s, metrics, `gap null`, 119/6003) — **lần chạy bị thay thế**, xem `98`; §4.2 s/img 0.0027 vs 0.0603; §4.3 TG-CIR `9f115afe` mất 2 điều kiện; danh sách "Còn chặn" |
+| `raw/verify/98-tgcir-full-run.md` | **nguồn chuẩn cho CẢ HAI run Full**: `tgcir` `7b1fa85007bffdab931f7f19` `COMPLETED`, 6003 q, gap `0.43853620852911723`, `TOPK_EXPORT_COMPLETE` missing 0 (§2); `clvc_net` `eab10106…-retry-2` `PARTIAL`, 1867.2 s, 0.0202 s/ảnh, VRAM `chưa đo` (§1); side-by-side (§3); cross-check API 200/71 954 B và JSONL=API (§4); "composition ≠ native" (§ cuối) |
+| `raw/verify/99-clvc-scope-and-image-only.md` | dry run 6 003 query: `loader_scoped 5884`, `recovered_from_annotation 117` (shirt 46, toptee 71), `still_unscoped 2` = `7:3038`/`7:3790` (§2, §3); phán quyết rò rỉ modality (a) + điều cấm phát biểu (§4); `clvc_image_encoder_only` đo trên CPU: tolerance `1e-6`, đo được `6.705522537231445e-08` (§6.3); 15 test (§5) |
+| `raw/verify/100-api-cache-and-ui-blocked.md` | bốn nguyên nhân "blocked" tách biệt với field path (§1); `_MODELS_CACHE` theo state stamp — cold 98.43 s → 67.28 s sống, warm 0.026/0.017 s (§2, live §1); `statistics.query_count` 6003→5 (§3); `subset_provenance` byte-identical hai thứ tự gọi, sha256 `bb7406d6…` (§4); R@1 phục vụ từ derived record (§5); cohort save→reopen→export HTTP **và** browser (§6, §6b) |
+| `raw/verify/101-metrics-r1-and-fallback.md` | R@1: định nghĩa + cùng mẫu số với R@10/50 (§1), 7 test biên (§2), backfill 3 guard + số suy ra (tgcir 6.3135099117108116 / 1.949025487256372 / 0.08329168748958854; clvc 1.4106050305914344 / 0.10197144799456152 / `null`) (§3), 136/136 digest artifact **không đổi** (§7); partition encode + cache key (§5, §6) |
+| `raw/verify/102-queue-gpu-and-blocker-inventory.md` | **21 blocker** inventoried: 4 nhãn cũ nay SAI (§7.1) + 17 còn mở (§7.2), mỗi dòng nêu đúng thứ thiếu; `gpu_may_be_held` **GIỮ** với chứng minh hai đường (§1, §2) và giới hạn release là thủ tục (§4); backoff PASS (§5); 4 test queue thật (§6) |
+| `raw/verify/103-image-only-plumbing.md` | `clvc_image_encoder_only` được khai báo (`ABLATION_CONDITIONS`, không đụng `CONDITIONS`) và có đường qua runner/metrics (§1-§3); gap triple giải theo **vai** + `gap_conditions`/`gap_role_reason` (§4); ba `run_id` khác nhau theo danh sách điều kiện (§6); `--conditions` CLI + `_plan` theo danh sách thật (§8.1, §8.2); kỳ vọng của run mới (§8.5) |
 | `raw/verify/90a-condition-degradation-fix.md` | `ABLATION_UNSUPPORTED` cho `image_only_empty_text` của CLVC (`text_model.py:84-86`); vị từ dùng chung `mode_supported`/`per_mode`; runner hỏi adapter (`runner.py:1920-1925`); sửa `Corrections.correct` cho text rỗng của TG-CIR |
 | `raw/verify/91-browser-smoke-after-cutover.md` | bundle phục vụ `assets/index-DYYSN7oG.js` (sha256 `74e4b4f8…`) sau cutover; deep link, run picker 20 option, query `7:1242`, Top-K 10 vs 50 ở 2560×1440 |
-| `raw/verify/94-backend-env-cache-restart.md` | `file_settings()` lazy nên backend **không** cũ (đo (c) vs (d)); counterfactual stale; **không** restart; MainPID giữ `1221379`; quy tắc `models.yaml` sửa-được vs `workbench.env` phải restart |
-| `raw/verify/95-external-asset-unblock.md` | ResNet-50 `19c8e357…` tải và verify prefix; `main._MODELS_CACHE` **không khoá** nên `/api/models` phục vụ tài liệu cũ; `POST /api/jobs` tính lại nên thấy ngay; addendum hợp đồng CLIP `SOURCE_HASH_AVAILABLE` |
+| `raw/verify/94-backend-env-cache-restart.md` | `file_settings()` lazy nên backend **không** cũ (đo (c) vs (d)); counterfactual stale; **không** restart; MainPID **lúc đó** `1221379` (nay `1476678`, §0.1); quy tắc `models.yaml` sửa-được vs `workbench.env` phải restart |
+| `raw/verify/95-external-asset-unblock.md` | ResNet-50 `19c8e357…` tải và verify prefix; `main._MODELS_CACHE` **không khoá** nên `/api/models` phục vụ tài liệu cũ — **đã vá**, xem `100` §2; `POST /api/jobs` tính lại nên thấy ngay; addendum hợp đồng CLIP `SOURCE_HASH_AVAILABLE` |
 | `raw/verify/96-staged-path-identity.md` | staged path phải giữ **stem** của ảnh reference (`<stem>.png`) không phải qid; 3/6003 query chỉ resolve được bằng stem; smoke `1eee4c0a` ba điều kiện `COMPLETED`; digest `corrected_digest` từng điều kiện |
-| `raw/verify/96-staged-path-and-tgcir-worker-exit.md` | chế độ hỏng thứ hai `adapter_worker_exited exit_status=1` (§2); guard first-job đã ship + repro CPU (§2.4, §3); latch phân tích **không** ship (§5); §6.2 lệch 0.0138 vs 0.0027 s/img (~5×) chưa giải thích; §6.4 run `1366364` đang chạy |
-| `raw/verify/97-api-surface-tgcir-run.md` | 61/61 trường artifact↔API khớp; ba điều kiện `COMPLETED`, `unscored` 0, `topk_export` sâu 100; gap `0.4417698538002782`; R@10 20/0/0, R@50 40/0/0; `target_rank` 23/207/3697; R@1 vắng cả hai phía; `statistics.query_count` 6003 (§7a) và `subset_provenance` 20 053 vs 20 841 B (§7b) |
-| `raw/verify/87-clvc-composition.md` | parity CLVC 5 query × 20 ảnh: bốn trường `0.0`, masked score 8.94e-08/1.19e-07/1.79e-07; hạng giống hệt; đồng nhất thức score 1.1920929e-07 (1 ULP); batch 1 vs N **khác** (1.4638714492321014e-02) và native tái hiện y hệt; fallback `_encode_queries` chưa vá |
+| `raw/verify/96-staged-path-and-tgcir-worker-exit.md` | chế độ hỏng thứ hai `adapter_worker_exited exit_status=1` (§2); guard first-job đã ship + repro CPU (§2.4, §3); latch phân tích **không** ship (§5); §6.2 lệch 0.0138 vs 0.0027 s/img (~5×) chưa giải thích; §6.4 ghi run `1366364` **lúc đó đang chạy** — nay đã thoát và đã có `-retry-2/full.json` (`98` §1) |
+| `raw/verify/97-api-surface-tgcir-run.md` | **smoke** `1eee4c0a` (5 query): 61/61 trường artifact↔API khớp; ba điều kiện `COMPLETED`, `unscored` 0, `topk_export` sâu 100; gap `0.4417698538002782`; R@10 20/0/0, R@50 40/0/0; `target_rank` 23/207/3697; R@1 vắng ở artifact smoke (§7a `statistics.query_count` 6003 và §7b `subset_provenance` 20 053 vs 20 841 B — **cả hai đã vá**, xem `100` §3, §4) |
+| `raw/verify/87-clvc-composition.md` | parity CLVC **5 query × 20 ảnh**: bốn trường `0.0`, masked score 8.94e-08/1.19e-07/1.79e-07; hạng giống hệt; đồng nhất thức score 1.1920929e-07 (1 ULP); batch 1 vs N **khác** (1.4638714492321014e-02) và native tái hiện y hệt; fallback `_encode_queries` **đã vá** cho run sau `5c6c781` (`101` §5, §6) |
 | `raw/verify/88-tgcir-composition.md` | parity TG-CIR 12 mảng `0.0`, hạng giống; batch 1 vs N `2.898e-06`; không kế thừa mask reference (6/15 query reference là top-1 khi bỏ mask); correction đúng một lần + digest |
 | `/tmp/audit-facts/05-live.txt` (ngoài repo) | bản chụp §0: `git rev-parse HEAD`/`origin`, `git status --porcelain`, `systemctl --user show`, `pgrep -af composition_eval.py`, `ps` PID `1366364`, handle `.tmp` đang mở, `nvidia-smi` |
 
@@ -679,6 +1027,78 @@ Không có con số Full nào khác: **chưa đo**.
 | # | hạng mục | phán quyết | lý do (1 câu) |
 |---|---|---|---|
 | 1 | Phục hồi dịch vụ web | **ĐẠT MỘT PHẦN** | Cutover thật và phục hồi sau SIGKILL thật đã đo (≈2.28 s), nhưng ca `systemctl stop` trên unit thật và worst-case `TimeoutStopSec` chưa đo. |
-| 2 | Dọn tiến trình con | **ĐẠT MỘT PHẦN** | Backoff, crash-loop, `jobs.py` và guard GPU đã vá và đo, nhưng cache không khoá của `/api/models` vẫn có thể phục vụ tài liệu cũ. |
-| 3 | Đối chiếu với upstream | **ĐẠT MỘT PHẦN** | Parity ở mức 5 query / 20 ảnh đạt trên mọi trường (rows `0.0`, hạng giống hệt), nhưng đây không phải chứng minh mức metric và chưa có parity quy mô Full. |
-| 4 | Kết quả composition trên Full | **CHƯA ĐẠT** | TG-CIR Full chưa tồn tại (chỉ có smoke 5 query), còn CLVC Full là `PARTIAL` với `composition_gap_ndcg` `null`. |
+| 2 | Dọn tiến trình con | **ĐẠT MỘT PHẦN** | Backoff, crash-loop, `jobs.py` recovery, `_MODELS_CACHE`, `query_count`, `subset_provenance`, R@1, partition encode và cohort round-trip **đã vá và đo** (§5.1), nhưng guard `gpu_may_be_held` vẫn **từ chối** dispatch và đường release của nó là **thủ tục**, không phải kiểm chứng thiết bị (§5.2 mục 9). |
+| 3 | Đối chiếu với upstream | **ĐẠT MỘT PHẦN** | Parity ở mức **mẫu 5 query / 20 ảnh** đạt trên mọi trường (rows `0.0`, hạng giống hệt), nhưng **chứng minh parity quy mô Full không tồn tại**, và con số composition Full `23.3383` **không phải** parity proof (native macro 49.7208 là protocol khác). |
+| 4 | Kết quả composition trên Full | **ĐẠT MỘT PHẦN** | Cả hai run Full đều tồn tại: TG-CIR `7b1fa85007bffdab931f7f19` **`COMPLETED`** trên 6003 query với gap ba điều kiện `0.43853620852911723`; CLVC `eab10106…-retry-2` là **`PARTIAL`** có lý do đã khai báo (`image_only_empty_text` là `ABLATION_UNSUPPORTED`, cộng 119 query nhập nhằng annotation), nên gap CLVC là `null`; R@1 của cả hai chỉ có ở file suy ra, không ở `full.json`; một run CLVC dưới profile mới **đang chạy và chưa có số** (§4.4). |
+
+---
+
+## 8. Bảng artifact/run — mọi `run_id` xuất hiện trong báo cáo
+
+Trạng thái đọc từ `workbench/artifacts/composition/summary/<dir>/full.json` tại HEAD `d0e0eb7`
+(2026-11-12T08:5x+07). `smoke` = `smoke.limited`; "—" = không phải run composition.
+
+| run_id / attempt | model | `execution_status` | query | smoke | nghĩa một dòng | nguồn |
+|---|---|---|---|---|---|---|
+| `7b1fa85007bffdab931f7f19` | `tgcir` | **`COMPLETED`** | 6003 | `false` | **TG-CIR Full duy nhất**, 3 điều kiện `COMPLETED`, gap `0.43853620852911723` | `98` §2; §4.1b |
+| `1eee4c0adbc93f7708205a5e` | `tgcir` | `COMPLETED` | 5 | `true` | smoke 5 query, `gallery_count` vẫn 74381; gap `0.4417698538002782` trên 5 qid | `97` §1; §4.1 |
+| `6396454ce29c2bea9ebfbe00` | `tgcir` | `COMPLETED` | 5 | `true` | smoke trước đó, 3 điều kiện `COMPLETED` — không dùng làm metric | summary dir |
+| `9f115afeb58eb1adf75d88ba` | `tgcir` | `PARTIAL` | 6003 | `false` | Full **hỏng**: `text_only_black_image` và `image_only_empty_text` = `MODEL_UNAVAILABLE` | summary dir; `90` §4.3 |
+| `9f115afeb58eb1adf75d88ba-retry-1` | `tgcir` | `PARTIAL` | 6003 | `false` | retry của lần trên, cùng dạng; nơi thấy `adapter_worker_exited exit_status=1` | `96` §2 |
+| `eab10106b2df8e97fb7a5ce5` | `clvc_net` | `PARTIAL` | 6003 | `false` | CLVC Full **lần đầu**, 4489 s, VRAM 2897 MiB (số VRAM **chỉ** thuộc run này) | `90` §4.1 |
+| `eab10106b2df8e97fb7a5ce5-retry-1` | `clvc_net` | `PARTIAL` | 6003 | `false` | retry thứ nhất, cùng metrics, bị `-retry-2` thay thế | summary dir |
+| `eab10106b2df8e97fb7a5ce5-retry-2` | `clvc_net` | **`PARTIAL`** | 6003 | `false` | **CLVC Full có hiệu lực**: 1867.2 s, 0.0202 s/ảnh, gap `null` (`no queries have exact ranks in all three conditions`), 5884/6003 mỗi điều kiện | `98` §1; §4.4 |
+| `889bc330d60e8cbab956944f` | `clvc_net` | `PARTIAL` | 5 | `true` | smoke; `image_only_empty_text` = `MODEL_UNAVAILABLE` (trước khi có `ABLATION_UNSUPPORTED`) | summary dir |
+| `d541e40cde1a949026f98854` | `clvc_net` | `PARTIAL` | 5 | `true` | smoke; `image_only_empty_text` = `ABLATION_UNSUPPORTED` | summary dir |
+| `10173dc45dea8c90fd2a284b` | `limn` | `PARTIAL` | 6003 | `false` | run LIMN so sánh: `ambiguous_count: 119`, `PARTIAL` cùng lý do `unresolved:annotation_names_two_categories` | `90` §4.1; §4.3 |
+| `3f86f58483b368377e2c151e` | `limn` | `COMPLETED` | 8 | `true` | smoke LIMN (8 query) | summary dir |
+| `9e4918a6b5c243412cbc58c9` | `limn` | `PARTIAL` | 6003 | `false` | run LIMN khác, cùng lớp `PARTIAL` | summary dir |
+| `4bc9893a977e501b82378e76` | `hint` | `COMPLETED` | 6003 | `false` | Full có `candidate_topk.depth = 50` — ca kiểm UI "menu không mời 100" | `100` §8 |
+| `ad477312aa57c1b9114f9e51` | `tme` | `COMPLETED` | 6003 | `false` | Full **không** export Top-K → `TOPK_EXPORT_NOT_REQUESTED` | `100` §8 |
+| `e0dd04a46ef7a58334b9e353` | `habit` | `FAILED` | 6003 | `false` | `FAILED` vì interpreter `airknow-adapted` 3.11.15 ≠ 3.8.10 — một trong 5 ca chạy lại | `102` §7.2 `RERUN-5` |
+| `62e362bf911fb5f97c6e497b` | fixture | — | — | — | `run_id` của 2 điều kiện, chỉ để chứng minh danh sách điều kiện vào identity | `103` §6 |
+| `8ef7596c0e1fd42a1910e766` | fixture | — | — | — | `run_id` của protocol triple | `103` §6 |
+| `e877a310f9e70ea9d6df29af` | fixture | — | — | — | `run_id` khi thay điều kiện ảnh bằng `clvc_image_encoder_only` | `103` §6 |
+| `da0a2162be0e159a1a456cec` | `clvc_net` | **chưa có summary** | — | — | run **đang chạy** dưới profile mới (`--conditions … clvc_image_encoder_only`); thư mục `runs/` tồn tại, **không** con số nào được trích | §0.1; §4.4 |
+| `1366364` / `1366356` | — | — | — | — | **PID** (không phải run_id) của lần chạy `-retry-2`; đã thoát | `98` §1 |
+| `1477261` / `1477254` | — | — | — | — | **PID** của run profile mới đang chạy tại 08:46 | §0.1 |
+
+Ba `run_id` fixture (`62e362bf…`, `8ef7596c…`, `e877a310…`) là **CPU fixture**, không phải run GPU và
+không có metric công bố — chúng ở đây chỉ để chứng minh danh sách điều kiện được hash vào identity.
+`da0a2162be0e159a1a456cec` **không** có `summary/` (chỉ có `candidates/`, `work/` và lock của chính nó),
+tức nó chưa phải một run công bố được.
+
+---
+
+## 9. Bảng lệnh kiểm chứng — lệnh dùng để kiểm từng khẳng định
+
+Chạy tại `/home/heheboiz/data/cir`, HEAD `d0e0eb7`. Không lệnh nào ghi vào artifact, không lệnh nào
+chạm unit/GPU/lock. Cột cuối ghi rõ nguồn của kết quả: **đo lại** = chạy trong lượt tích hợp này
+(2026-11-12T08:4x-08:5x+07); **theo `NN`** = chép từ file bằng chứng ghi kèm, không chạy lại (một số
+selection cần GPU hoặc lâu hơn ngân sách của lượt này).
+
+| khẳng định | lệnh | kết quả mong đợi / đã thấy |
+|---|---|---|
+| HEAD và khoảng cách với `origin` (§0.1) | `git rev-parse HEAD` · `git rev-parse origin/research/cir-failure-workbench` · `git rev-list --left-right --count origin/research/cir-failure-workbench...HEAD` | `d0e0eb7…` · `82cb104…` · `0<TAB>15` |
+| Hai unit sống đúng MainPID (§0.1, §1.5) | `systemctl --user show -p MainPID -p ActiveEnterTimestamp -p NRestarts cir-workbench-backend.service cir-workbench-frontend.service` · `systemctl --user is-active …` | `1476678` / `08:39:33 +07` / `0` · `1221148` / `23:48:44 +07` / `0` · `active` `active` |
+| Không còn run `eab10106` nào chạy (§4.4) | `pgrep -af composition_eval.py` | chỉ hai PID của run profile mới (`1477254`, `1477261`) |
+| GPU đang bận bao nhiêu (§0.1) | `nvidia-smi --query-gpu=name,driver_version,memory.used,memory.total --format=csv,noheader` | `… 2055 MiB, 16303 MiB` |
+| TG-CIR Full là `COMPLETED` 6003 (§4.1b, §7) | `python3 -c "import json;d=json.load(open('workbench/artifacts/composition/summary/tgcir_tgcir_archive_unresolved_7b1fa85007bffdab931f7f19/full.json'));print(d['execution_status'],d['query_count'],d['smoke'],d['metrics']['composition_gap_ndcg'])"` | `COMPLETED 6003 {'label': None, 'limited': False, 'query_limit': None} 0.43853620852911723` |
+| CLVC Full là `PARTIAL` và gap `null` có lý do (§4.4, §7) | cùng dạng trên `…/clvc_net_author_drive_unresolved_eab10106b2df8e97fb7a5ce5-retry-2/full.json` | `PARTIAL 6003 … None no queries have exact ranks in all three conditions` |
+| Run Full được phục vụ đúng qua API (§4.1b, §4.4) | `curl -s "http://127.0.0.1:8000/api/composition/runs/7b1fa85007bffdab931f7f19?subset=full"` (và `…/eab10106b2df8e97fb7a5ce5?subset=full`) | `200`, `72958 B` / `22011 B`, `COMPLETED` / `PARTIAL`, `recall_at_1_multimodal` `6.3135099117108116` / `1.4106050305914344` |
+| R@1 đến từ derived record, không từ `full.json` (§4.1b, §5.1 mục 6) | `python3 -c "import json;d=json.load(open('workbench/artifacts/composition/derived/recall_at_1/clvc_net_eab10106b2df8e97fb7a5ce5-retry-2+tgcir_7b1fa85007bffdab931f7f19_full.json'));[print(r['attempt'],[(c,(m or {}).get('recall_at_1')) for c,m in r['conditions'].items()]) for r in d['runs']]"` | `7b1fa850…` 6.3135099117108116 / 1.949025487256372 / 0.08329168748958854; `…-retry-2` 1.4106050305914344 / 0.10197144799456152 / `None` |
+| R@1 vắng khỏi artifact đã công bố (§4.1, §5.1 mục 6) | `grep -L '"recall_at_1"' workbench/artifacts/composition/summary/*/full.json \| wc -l` · `ls workbench/artifacts/composition/summary/*/full.json \| wc -l` | **đo lại:** `35` và `35` — tức **0/35** file `full.json` mang key `recall_at_1` |
+| Smoke không còn báo `query_count` 6003 (§5.1 mục 4) | `curl -s "http://127.0.0.1:8000/api/composition/runs/1eee4c0adbc93f7708205a5e/queries?subset=full&condition=multimodal&limit=1&top_k=10"` | `statistics.query_count: 5`, ba denominator `5`, `statistics_whole_run.query_count: 5` |
+| 117 + 2 tách đúng (§4.3, §5.1 mục 9) | `workbench/envs/ctl312h/bin/python -m pytest workbench/tests/test_clvc_scope_and_image_only.py -p no:cacheprovider --basetemp=/tmp/r9 -q` | **đo lại:** `15 passed in 33.63s` (test `test_the_119_split_into_117_recovered_and_2_genuinely_ambiguous` nêu tên `7:3038`, `7:3790`) |
+| R@1 đúng định nghĩa và đúng biên (§5.1 mục 6) | `… -m pytest workbench/tests/test_metrics_recall_at_1.py workbench/tests/test_metrics_backfill_recall_at_1.py -q` | **đo lại:** `7 passed` + `4 passed` (backfill 3 guard) |
+| Partition encode được ghi và khoá cache (§5.1 mục 7) | `… -m pytest workbench/tests/test_runner_feature_partition.py workbench/tests/test_runner_batch_provenance.py -q` | **đo lại:** `6 passed` + `2 passed` |
+| `_MODELS_CACHE` hết cũ, gate vẫn đỏ đúng chỗ (§5.1 mục 3) | `… -m pytest workbench/tests/test_api_models_cache_staleness.py -q` | **đo lại:** `3 passed in 154.22s` |
+| `query_count` / `subset_provenance` / R@1 overlay (§5.1 mục 4, 5) | `… -m pytest workbench/tests/test_composition_api_contracts.py -q` | **đo lại:** `7 passed in 1.65s` |
+| `gpu_may_be_held` vẫn từ chối và release đúng thủ tục (§5.2 mục 9) | `… -m pytest workbench/tests/test_job_gpu_guard_through_queue.py -p no:cacheprovider --basetemp=/tmp/r9q -q` | **đo lại:** `4 passed in 0.85s` |
+| `--conditions` chấp nhận/từ chối đúng danh sách (§4.4) | `… -m pytest workbench/tests/test_runner_cli_conditions.py -q` | **đo lại:** `18 passed` |
+| Gap triple giải theo vai (§4.4) | `… -m pytest workbench/tests/test_runner_gap_identity.py workbench/tests/test_runner_gap_roles.py -q` | **đo lại:** `3 passed` + `11 passed` |
+| `TESTED_SOURCE_SHA` vẫn cũ và guard đỏ có chủ ý (§5.2 mục 6) | `git diff --stat 96d86010e85048d82f2dacf26e17d7b7206d31ab HEAD -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'` | 14 file, 1 805 insertions / 155 deletions (`102` §7.2 `SHA-PIN`) |
+| Export cohort thiếu cột `reference` (§5.2 mục 10) | `grep -n "would silently change the shape" -B3 -A1 workbench/backend/storage.py` · `grep -n "fieldnames" workbench/backend/main.py` · `grep -n "header = \"| Run" workbench/backend/main.py` | `storage.py:339-342`; `main.py:1530` (CSV lấy khoá từ `metrics[0]`) và `:1535` (header Markdown cố định, không có cột reference) |
+
+Chỗ nào lệnh **không** chạy được ở đây (cần GPU, cần run mới, hoặc cần một artifact chưa tồn tại) thì
+báo cáo ghi `chưa đo` tại chỗ đó thay vì thay bằng một con số suy ra.
