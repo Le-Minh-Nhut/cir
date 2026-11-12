@@ -42,6 +42,10 @@ class ConditionMetrics:
     query_count: int
     scored_count: int
     coverage: float
+    # R@1 is `hit_at_k(rank, 1)`, i.e. the exact rank equals 1. Same scored denominator as R@10/R@50:
+    # unscored queries change `coverage`, never the mean. A rank of 2 is a miss; a rank of 1 that the
+    # producer reached through a tie is a hit, because the tie policy is the producer's.
+    recall_at_1: float | None
     recall_at_10: float | None
     recall_at_50: float | None
     ndcg_full: float | None
@@ -64,12 +68,13 @@ def compute_condition_metrics(condition: str, ranks: Mapping[str, int | None]) -
     if not scored_count:
         reason = "empty query cohort" if not query_count else "no queries have an exact rank"
         return ConditionMetrics(condition, query_count, 0, 1.0 if not query_count else 0.0,
-                                None, None, None, None, reason)
+                                None, None, None, None, None, reason)
     return ConditionMetrics(
         condition,
         query_count,
         scored_count,
         scored_count / query_count,
+        100.0 * sum(hit_at_k(rank, 1) for rank in scored) / scored_count,
         100.0 * sum(hit_at_k(rank, 10) for rank in scored) / scored_count,
         100.0 * sum(hit_at_k(rank, 50) for rank in scored) / scored_count,
         sum(ndcg_full(rank) for rank in scored) / scored_count,
