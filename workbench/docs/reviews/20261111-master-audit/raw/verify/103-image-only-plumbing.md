@@ -444,3 +444,119 @@ Failure signatures that mean the plumbing did NOT work, in order of likelihood:
    `adapter_encoder_missing` — the adapter method was absent at run time (wrong checkout).
 3. `conditions` missing the third name — the flag did not reach `run_composition`, i.e. an older
    `composition_eval.py` was executed.
+
+---
+
+## 9. The GPU run landed, and it exposed a defect in `backfill_recall_at_1.py`
+
+Run `da0a2162be0e159a1a456cec` (`clvc_net`, `--subsets full --topk-depth 100
+--conditions multimodal,text_only_black_image,clvc_image_encoder_only`), read from
+`summary/clvc_net_author_drive_unresolved_da0a2162be0e159a1a456cec/full.json`:
+
+| field | value |
+|---|---|
+| `execution_status` | `PARTIAL` |
+| `conditions` | `["multimodal", "text_only_black_image", "clvc_image_encoder_only"]` |
+| `condition_status` | all three `PARTIAL`, `unscored_count 2`, `fallback_used false`, `feature_batch_fallback.partition canonical_call_window`, `adapter_calls 3` |
+| coverage | `0.9996668332500417` (6001/6003) |
+| `metrics.gap_conditions` | the three requested names, in order |
+| `metrics.gap_role_reason` | "image role filled by the adapter's named ablation 'clvc_image_encoder_only': the protocol image condition 'image_only_empty_text' carries no ranks in this run" |
+| `metrics.composition_gap_ndcg` | **`0.33061712371309204`**, `gap_cohort_count 6001` |
+| `metrics.image_only.condition` | `clvc_image_encoder_only` |
+| `metrics.<role>.recall_at_1` | `1.3997667055490752` / `0.11664722546242293` / `0.11664722546242293` |
+| `topk_export` | `conditions` all three, depth 100, `missing_query_count` **6**, `partial true` |
+
+So the plumbing of §1-§8 worked end to end: the ablation condition ran, the gap is not null, the
+partition is canonical, and every expected value in §8.5 holds — including the `6`, which is the
+"all three conditions exported" reading (2 unscored × 3 conditions), not the `4` that would have meant
+only two did.
+
+### 9.1 The defect
+
+`backfill_recall_at_1.py` keyed its block lookup on a hard-coded condition -> block map
+(`METRIC_BLOCKS`), which is only correct for the protocol triple. For this run it looked for
+`metrics["clvc_image_encoder_only"]`, which does not exist (the numbers are in `metrics["image_only"]`,
+because the blocks are named by ROLE), never read `gap_conditions`, and **exited 1**:
+
+```
+rc=1  ...  clvc_image_encoder_only: ... comparisons against published None
+```
+
+### 9.2 The fix
+
+`_role_mapping(summary) -> (mapping, source, problems)`:
+
+* when `metrics.gap_conditions` is three distinct names, the mapping is read POSITIONALLY from it
+  (`[0] -> multimodal`, `[1] -> text_only`, `[2] -> image_only`), which is exactly how `compose`
+  assigns the roles; `source = "gap_conditions"`;
+* each block's own `condition` field is then cross-checked against that mapping — a triple that says
+  one name and a block that says another is a refusal, not an average;
+* with no `gap_conditions` (pre-`d16a1ba` summaries) the fixed protocol mapping is used and
+  `source = "legacy_protocol_triple"`; a malformed `gap_conditions` (wrong length, duplicates) is
+  `source = "invalid_gap_conditions"` and refuses;
+* both `source` and the mapping are published in the record under `role_mapping`, so the output always
+  says which path produced it.
+
+A condition in the summary's `conditions` list that the mapping cannot place is refused **by name**:
+`cannot place condition(s) ['…'] in a metric block; role mapping came from …`. Skipping it would
+publish a record covering fewer conditions than the run, which reads like a run that measured fewer.
+
+The artifact may already carry R@1 (every run from `d16a1ba`'s metrics change onwards does). Then the
+tool is CHECKING a number rather than deriving one, and each condition now records
+`already_present: true`, `summary_recall_at_1`, `metric_block` and `agrees_with_summary`. A
+disagreement above `1e-12` is added to the same `problems` list that already guards
+`scored_count`/`coverage`/R@10/R@50, i.e. it refuses the whole backfill.
+
+Every pre-existing guard is unchanged: cohort equality (`query_count` vs the rank table's qid set),
+reproducibility at `1e-12`, refuse-to-write-into-a-published-summary, and `null` (never `0`) with a
+reason for a condition with no exact rank.
+
+### 9.3 Result on the new run
+
+```
+workbench/envs/ctl312h/bin/python workbench/scripts/backfill_recall_at_1.py \
+  --run clvc_net:da0a2162be0e159a1a456cec
+→ rc=0
+  output: composition/derived/recall_at_1/clvc_net_da0a2162be0e159a1a456cec_full.json
+```
+
+| condition | metric block | rank==1 | scored | derived R@1 | summary R@1 | agrees |
+|---|---|---|---|---|---|---|
+| `multimodal` | `multimodal` | 84 | 6001 | `1.3997667055490752` | `1.3997667055490752` | **true** |
+| `text_only_black_image` | `text_only` | 7 | 6001 | `0.11664722546242293` | `0.11664722546242293` | **true** |
+| `clvc_image_encoder_only` | `image_only` | 7 | 6001 | `0.11664722546242293` | `0.11664722546242293` | **true** |
+
+`role_mapping.source == "gap_conditions"`, mapping
+`{multimodal: multimodal, text_only_black_image: text_only, clvc_image_encoder_only: image_only}`.
+The three values were read from the artifact by the tool itself, not transcribed.
+
+### 9.4 Existing derived file untouched
+
+`clvc_net_eab10106b2df8e97fb7a5ce5-retry-2+tgcir_7b1fa85007bffdab931f7f19_full.json` still hashes
+**`36df1545b51351d440a5b7c306b2b1a888e69076acfd0cba55a2a8db7cfea580`** before and after this change.
+The two old runs were NOT re-run: their derived record already exists and their artifacts are
+immutable.
+
+Published artifacts: **141/141** digests under `composition/summary/**/full.json`,
+`runs/**/ranks/*.json`, `runs/**/candidates/**/*.jsonl` identical before and after (141 now, not 136:
+the new GPU run added its own summary, ranks and candidate files).
+
+### 9.5 Tests
+
+`workbench/tests/test_metrics_backfill_recall_at_1.py`, 9 tests, all pass (4 pre-existing + 5 new):
+
+| test | asserts |
+|---|---|
+| `test_a_variant_triple_is_mapped_from_gap_conditions_and_agrees_with_the_summary` | `source == "gap_conditions"`, `clvc_image_encoder_only -> image_only`, derived R@1 equals the summary's own, `already_present True`, `agrees_with_summary True`, and every condition's `summary_recall_at_1` equals `metrics[block].recall_at_1` |
+| `test_a_summary_without_gap_conditions_falls_back_to_the_protocol_triple` | absent `gap_conditions` + ablation name -> refuse by name; with the protocol names in place -> `source == "legacy_protocol_triple"` and the legacy mapping is used |
+| `test_an_unmappable_condition_is_refused_by_name` | `mystery_condition` -> `SystemExit` naming it |
+| `test_a_contradicting_r1_in_the_summary_refuses_the_backfill` | summary R@1 99.0 -> `not reproducible` |
+| `test_a_summary_whose_gap_conditions_disagree_with_its_blocks_is_refused` | block `condition` contradicts `gap_conditions` -> refused |
+
+```
+workbench/envs/ctl312h/bin/python -m pytest workbench/tests/test_metrics_backfill_recall_at_1.py \
+  workbench/tests/test_metrics_recall_at_1.py workbench/tests/test_runner_cli_conditions.py \
+  workbench/tests/test_runner_gap_identity.py workbench/tests/test_runner_gap_roles.py \
+  workbench/tests/test_metrics_gap_conditions.py -q -p no:cacheprovider --basetemp=/tmp/metrics_d2
+→ 55 passed
+```
