@@ -946,13 +946,19 @@ gap `0.4385` của TG-CIR (`104` "Còn chặn" mục 4).
    `ctl312h` → `(True, 'ISOLATION_VERIFIED')`. Run này (và **cả hai** run Full trước) dùng `ctl312h`
    làm controller, model vẫn chạy trên `clvc39-la` (`verification_status: GPU_RUNTIME_READY`). Cổng
    **không** bị sửa; đây là báo cáo, không phải workaround (`104` §0.1, "Còn chặn" mục 1).
-2. **`backfill_recall_at_1.py` từ chối backfill run này — và điều đó được ghi lại, không giấu.**
-   `METRIC_BLOCKS` chỉ map ba tên protocol, nên `clvc_image_encoder_only` rơi vào chính nó, không thấy
-   `metrics["clvc_image_encoder_only"]` (khối thật là `metrics["image_only"]`), so với `None` rồi từ
-   chối: `clvc_image_encoder_only.scored_count: recomputed 6001 vs published None` (và ba trường nữa),
-   exit 1, **không** ghi file `derived/`. Không cần backfill cho run này: **R@1 đã có sẵn trong
-   `full.json`** (`104` §6.1, "Còn chặn" mục 3). Script **không** đọc `gap_conditions`, nên câu hỏi
-   "có nhận gap_conditions phi protocol không" trả lời **có**; chỗ chặn thật là map tên điều kiện.
+2. **`backfill_recall_at_1.py` từng từ chối backfill run này — đã vá sau đó, và đây là cả hai nửa.**
+   Lúc `104` được viết, script **từ chối**: `METRIC_BLOCKS` chỉ map ba tên protocol, nên
+   `clvc_image_encoder_only` rơi vào chính nó, không thấy `metrics["clvc_image_encoder_only"]` (khối
+   thật là `metrics["image_only"]`), so với `None` rồi từ chối —
+   `clvc_image_encoder_only.scored_count: recomputed 6001 vs published None` (và ba trường nữa), exit 1,
+   **không** ghi file `derived/` (`104` §6.1, "Còn chặn" mục 3). Commit `b887c7e` ("read the
+   condition->metric-block role mapping from the artifact") đã sửa đúng điểm đó: chạy lại
+   `backfill_recall_at_1.py --run clvc_net:da0a2162be0e159a1a456cec` nay trả **rc = 0** và ghi record
+   với `multimodal` 1.3997667055490752 / `text_only_black_image` 0.11664722546242293 trên
+   `scored_count 6001` — khớp `full.json` (đo lại trong lượt này; file `derived/` sinh ra bởi phép kiểm
+   đó đã được xoá, vì run này **không cần** nó: R@1 đã có sẵn trong `full.json`). Ghi chú phương pháp:
+   script **không** đọc `gap_conditions`, nên câu hỏi "có nhận gap_conditions phi protocol không" trả
+   lời **có**; chỗ chặn thật là map tên điều kiện, và đó là chỗ đã vá.
 3. **VRAM 1701 MiB là cửa sổ lấy mẫu, không phải peak.** 22 mẫu trong pha encode/query; một đỉnh
    thoáng qua ngoài cửa sổ sẽ không xuất hiện — con số này là **sàn** cho pha đó (`104` "Còn chặn"
    mục 7).
@@ -1129,7 +1135,7 @@ commit sau. Mỗi mục dưới đây mang file bằng chứng; chỗ chưa đo 
 | `raw/verify/101-metrics-r1-and-fallback.md` | R@1: định nghĩa + cùng mẫu số với R@10/50 (§1), 7 test biên (§2), backfill 3 guard + số suy ra (tgcir 6.3135099117108116 / 1.949025487256372 / 0.08329168748958854; clvc 1.4106050305914344 / 0.10197144799456152 / `null`) (§3), 136/136 digest artifact **không đổi** (§7); partition encode + cache key (§5, §6) |
 | `raw/verify/102-queue-gpu-and-blocker-inventory.md` | **21 blocker** inventoried: 4 nhãn cũ nay SAI (§7.1) + 17 còn mở (§7.2), mỗi dòng nêu đúng thứ thiếu; `gpu_may_be_held` **GIỮ** với chứng minh hai đường (§1, §2) và giới hạn release là thủ tục (§4); backoff PASS (§5); 4 test queue thật (§6) |
 | `raw/verify/103-image-only-plumbing.md` | `clvc_image_encoder_only` được khai báo (`ABLATION_CONDITIONS`, không đụng `CONDITIONS`) và có đường qua runner/metrics (§1-§3); gap triple giải theo **vai** + `gap_conditions`/`gap_role_reason` (§4); ba `run_id` khác nhau theo danh sách điều kiện (§6); `--conditions` CLI + `_plan` theo danh sách thật (§8.1, §8.2); kỳ vọng của run mới (§8.5) |
-| `raw/verify/104-clvc-full-image-only.md` | **run CLVC mới** `da0a2162be0e159a1a456cec`: `PARTIAL`, 6003 q, ba điều kiện `mm`/`text`/`clvc_image_encoder_only` (§1, §2); `unscored_count 2` mỗi điều kiện, resolver `6001 routed / 2 unscoped` (§3, §4); gap **`0.33061712371309204`** trên 6001, tự kiểm tới 0 khớp (§5); R@1/10/50 + tự tính lại từ ranks (§6); backfill **từ chối** run này vì `METRIC_BLOCKS` (§6.1); `missing_query_count 6` = 2 × 3 manifest (§7); `partition: canonical_call_window`, batch 32 (§8); before/after với `eab10106` (§9); `7:2179` = 1580/4549/2100, `7:4066` = 59/287/6054, `7:3038` null cả ba (§10); API 200/22 514 B (§11); controller phải là `ctl312h` (§0.1)
+| `raw/verify/104-clvc-full-image-only.md` | **run CLVC mới** `da0a2162be0e159a1a456cec`: `PARTIAL`, 6003 q, ba điều kiện `mm`/`text`/`clvc_image_encoder_only` (§1, §2); `unscored_count 2` mỗi điều kiện, resolver `6001 routed / 2 unscoped` (§3, §4); gap **`0.33061712371309204`** trên 6001, tự kiểm tới 0 khớp (§5); R@1/10/50 + tự tính lại từ ranks (§6); backfill từng **từ chối** run này vì `METRIC_BLOCKS` (§6.1), nay đã vá bởi `b887c7e`; `missing_query_count 6` = 2 × 3 manifest (§7); `partition: canonical_call_window`, batch 32 (§8); before/after với `eab10106` (§9); `7:2179` = 1580/4549/2100, `7:4066` = 59/287/6054, `7:3038` null cả ba (§10); API 200/22 514 B (§11); controller phải là `ctl312h` (§0.1)
 | `raw/verify/90a-condition-degradation-fix.md` | `ABLATION_UNSUPPORTED` cho `image_only_empty_text` của CLVC (`text_model.py:84-86`); vị từ dùng chung `mode_supported`/`per_mode`; runner hỏi adapter (`runner.py:1920-1925`); sửa `Corrections.correct` cho text rỗng của TG-CIR |
 | `raw/verify/91-browser-smoke-after-cutover.md` | bundle phục vụ `assets/index-DYYSN7oG.js` (sha256 `74e4b4f8…`) sau cutover; deep link, run picker 20 option, query `7:1242`, Top-K 10 vs 50 ở 2560×1440 |
 | `raw/verify/94-backend-env-cache-restart.md` | `file_settings()` lazy nên backend **không** cũ (đo (c) vs (d)); counterfactual stale; **không** restart; MainPID **lúc đó** `1221379` (nay `1476678`, §0.1); quy tắc `models.yaml` sửa-được vs `workbench.env` phải restart |
@@ -1224,7 +1230,7 @@ selection cần GPU hoặc lâu hơn ngân sách của lượt này).
 | Run mới phục vụ đúng qua API (§4.4b) | `curl -s -o /tmp/r104.json -w "%{http_code} %{size_download}\n" "http://127.0.0.1:8000/api/composition/runs/da0a2162be0e159a1a456cec?subset=full"` | **đo lại:** `200 22514` |
 | `7:2179` được chấm thật ở điều kiện ảnh, Top-K sâu 100 (§4.3, §4.4b) | `curl -s "http://127.0.0.1:8000/api/composition/runs/da0a2162be0e159a1a456cec/queries?subset=full&condition=clvc_image_encoder_only&query_id=7:2179&top_k=100&limit=1&offset=0"` | **đo lại:** `200`, 14 695 B, `target_rank 2100`, `candidates.depth 100`, `top_results` dài **100** |
 | LIMN cũng để `7:3038`/`7:3790` unscored (§4.3) | `python3 -c "import json;d=json.load(open('workbench/artifacts/composition/runs/10173dc45dea8c90fd2a284b/ranks/limn_base_iter0_all_categories.json'));r=d['ranks'];[print(c,{q:r[c].get(q) for q in ('7:3038','7:3790','7:2179','7:4066')},sum(1 for v in r[c].values() if v is not None)) for c in r]"` | **đo lại:** cả ba điều kiện `5884` non-null / `119` null; bốn qid đều `None` ở cả ba |
-| Backfill từ chối run biến thể (§4.4b giới hạn 2) | `workbench/envs/ctl312h/bin/python workbench/scripts/backfill_recall_at_1.py --run clvc_net:da0a2162be0e159a1a456cec` | **theo `104` §6.1:** exit 1, `clvc_image_encoder_only.scored_count: recomputed 6001 vs published None`, không ghi file `derived/` |
+| Backfill nhận run biến thể **sau** `b887c7e` (§4.4b giới hạn 2) | `workbench/envs/ctl312h/bin/python workbench/scripts/backfill_recall_at_1.py --run clvc_net:da0a2162be0e159a1a456cec; echo rc=$?` | **đo lại:** `rc=0`, record có `multimodal` 1.3997667055490752 / `text_only_black_image` 0.11664722546242293 / `scored_count 6001`, khớp `full.json`. Trước `b887c7e` thì exit 1 với `clvc_image_encoder_only.scored_count: recomputed 6001 vs published None` (`104` §6.1) |
 
 Chỗ nào lệnh **không** chạy được ở đây (cần GPU, cần run mới, hoặc cần một artifact chưa tồn tại) thì
 báo cáo ghi `chưa đo` tại chỗ đó thay vì thay bằng một con số suy ra.

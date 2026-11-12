@@ -221,6 +221,8 @@ protocol gap and not comparable to TG-CIR's `0.4385`.
 Two things C1-C12 could not have anticipated and that the second pass had to settle from the artifacts
 rather than from the brief: LIMN's rank artifact leaves `7:3038`, `7:3790`, `7:2179` and `7:4066` all
 `null` in all three conditions (5884 non-null / 119 null per condition), so CLVC and LIMN now agree on
-2 qids and differ on 117 — the shared cohort is 5884, not 6001; and `backfill_recall_at_1.py` refuses
-this run because `METRIC_BLOCKS` maps only protocol names, which `104` §6.1 records and the report
-repeats rather than hides.
+2 qids and differ on 117 — the shared cohort is 5884, not 6001; and `backfill_recall_at_1.py` refused
+this run because `METRIC_BLOCKS` mapped only protocol names — which `104` §6.1 records, and which
+`b887c7e` has since fixed (re-running it now exits 0 and reproduces 1.3997667055490752 /
+0.11664722546242293 over `scored_count 6001`). The report states both halves; the derived file that
+verification produced was deleted, because this run publishes R@1 itself.
