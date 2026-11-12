@@ -273,3 +273,26 @@ score 5884/6003 (119 unscored, `coverage 0.980176578377478`), and `topk_export` 
 * It does not claim any GPU work. No job in this document touched a model, a checkpoint or a device.
 * It does not advance `TESTED_SOURCE_SHA`, does not rewrite `FINAL_REPORT_20261112.vi.md`, and does not
   patch `jobs.py`, `main.py`, `composition/**`, `frontend/**`, `systemd/**` or `config/workbench.env`.
+
+---
+
+## 9. Addendum — two concurrent commits landed after §7 was written
+
+`git log` shows two commits authored 2026-11-12 07:53 that were not on `origin` (`82cb104`) when this
+workstream started, and that **change two rows of §7.2**. They are recorded here rather than edited into
+§7, so the record shows what was true when each measurement was taken.
+
+| commit | effect on §7.2 | new label |
+|---|---|---|
+| `8484ef7` `composition(metrics): R@1 from exact ranks + backfill of published Full runs` | `ConditionMetrics` now declares `recall_at_1` (`workbench/composition/metrics.py:48`) and `compute_condition_metrics` returns it. **`R1-ABSENT` is closed at the code level.** It is **not** closed at the artifact level: `workbench/scripts/backfill_recall_at_1.py` exists but has not been run over the published summaries — **0 of 35** `summary/*/full.json` carry a `recall_at_1` key (checked here). The two Full runs in §7.4 therefore still have no R@1, and "R@1 is absent from these artifacts" remains the accurate statement about them. | `R1-ABSENT` → **`R1-CODE-ADDED-ARTIFACTS-NOT-BACKFILLED`** |
+| `5c6c781` `composition(runner): record the ENCODE batch partition and key the cache on it` | `runner.py:657-700` now records the canonical vs mixed feature partition per condition (`partition`, `fallback_used`, `fallback_qids`, `fallback_reason`) and keys the memmap cache on `_feature_partition_fingerprint` (`:668`), so a cache written from a mixed partition cannot be mistaken for a canonical one. `FALLBACK-ENCODE` is closed at the code level for runs made after it. Features written **before** it report `partition: None` with a reason, so the already-published Full runs still cannot prove their partition. | `FALLBACK-ENCODE` → **`FALLBACK-ENCODE-CLOSED-FOR-NEW-RUNS`** |
+
+Neither commit touches `jobs.py`, so §1-§6 (the guard, the child survival, the release, the backoff)
+stand unchanged and were re-verified after both commits landed: 4 passed in 0.80 s.
+
+`workbench/composition/model_clvc_net.py` was also **dirty** in the working tree while this workstream
+ran (mtime 07:57:55, +24/−1: a new `IMAGE_ENCODER_ONLY` condition name and a shared routing contract
+imported from `model_limn`). It is **not** mine and was **not** staged; the commit below contains three
+paths only. That change will make `image_only_empty_text` for CLVC not the only image-only story — the
+`ABLATION_UNSUPPORTED` verdict in §7.4 and in `102-report-staleness.md` C3 remains correct for the runs
+that exist, but a future CLVC run may carry a fourth condition. Not measured here.

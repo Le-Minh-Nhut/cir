@@ -155,3 +155,40 @@ guard. That is consistent, not a contradiction; state it so the reader does not 
   `raw/verify/102-…-inventory.md` §7.2 row `SHA-PIN`.
 * **`gpu_may_be_held` is still a live refusal.** `raw/verify/102-…-inventory.md` §3-§4 prove the blocked
   and released directions; the blocker is kept.
+
+---
+
+## 3. Addendum — two corrections are themselves now stale (concurrent commits, 2026-11-12 07:53)
+
+Written after §1-§2, when two commits landed that were not on `origin` at `82cb104`. They change the
+**status** of two items the main report calls open. The lead should apply these in the same pass.
+
+### A1 — R@1 is no longer absent from the code (affects §2 bullet 1 of this file, and §4.1 of the report)
+
+`8484ef7` added `recall_at_1` to `ConditionMetrics` (`workbench/composition/metrics.py:48`), computed as
+`hit_at_k(rank, 1)` over the same scored denominator, with the tie policy left to the producer. So the
+report's sentence "R@1 không tồn tại ở cả hai phía" (`FINAL_REPORT_20261112.vi.md:515-517`) is **stale
+in its reason** even though its **conclusion about the published runs still holds**: the backfill script
+`workbench/scripts/backfill_recall_at_1.py` has not been run — **0 of 35** `summary/*/full.json` files
+carry a `recall_at_1` key, including both Full runs in §7.4. Correct wording: R@1 is **computed by the
+pipeline now** but **not present in any published artifact yet**, so it must still not be quoted — and
+still not as 0. Re-running the backfill over the stored `ranks/*.json` is what would close it, and that
+is a separate, cheap, CPU-only step the lead can schedule.
+
+### A2 — the encode fallback is now recorded (affects §5 item 3 of the report)
+
+`5c6c781` makes `runner.py` record the feature partition per condition (`partition`, `fallback_used`,
+`fallback_qids`, `fallback_reason`, `runner.py:657-700`) and keys the memmap cache on
+`_feature_partition_fingerprint` (`:668`), so a mixed-partition cache cannot be mistaken for a canonical
+one. `FINAL_REPORT_20261112.vi.md` §5 item 3 ends "**Chưa vá.**" — that is now **false for runs made
+after this commit**. It stays true for the two published Full runs, whose feature caches predate the
+field and therefore report `partition: None` with a reason. Correct wording: "fixed going forward;
+the existing runs cannot prove their partition, so a cross-run feature comparison involving them is
+still not licensed."
+
+### A3 — nothing else in §1-§2 changes
+
+`tgcir` Full `7b1fa850…` and `clvc_net` Full `…-retry-2` are still the two runs on disk, still
+`COMPLETED` and `PARTIAL` respectively, still 6003 queries, still `smoke.limited: false`, and the CLVC gap
+is still `null` for the same `ABLATION_UNSUPPORTED` reason. The PAIR absence, the SHA pin, the 5 rerun
+cases, the 15 `NOT_RUN`, LIMN `7:3038`/`7:3790` and the 46/50 inferred units are unaffected.
