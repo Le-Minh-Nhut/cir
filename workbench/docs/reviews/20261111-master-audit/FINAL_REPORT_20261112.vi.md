@@ -19,9 +19,11 @@ bằng chứng, phán quyết, `run_id`, lệnh kiểm).
 
 ## 0. Số liệu sống tại thời điểm viết (2026-11-12T04:43+07, tức 2026-11-11T21:43Z)
 
-Khối dưới đây là **bản chụp có mốc thời gian**, không phải trạng thái hiện tại. Hai tiến trình
-`composition_eval.py` trong khối (`1366356`, `1366364`) **đã thoát**; xem §4.4 (đã sửa) và
-`raw/verify/98-tgcir-full-run.md` §1. Trạng thái sống lúc giao báo cáo nằm ở §0.1.
+Khối dưới đây là **bản chụp có mốc thời gian `2026-11-12T04:43+07`**, **không** phải trạng thái hiện
+tại, và **không** được đọc như cùng một thời điểm với §0.1: hai khối cách nhau vài giờ và nhiều sự kiện.
+Hai tiến trình `composition_eval.py` trong khối (`1366356`, `1366364`) **đã thoát**; xem §4.4 (đã sửa)
+và `raw/verify/98-tgcir-full-run.md` §1. **Nguồn duy nhất cho trạng thái hiện tại là §0.1** — HEAD
+`a0c08c0`, đã `== origin`, backend `1510910`, frontend `1221148`, porcelain một dòng.
 
 ```
 ## git rev-parse HEAD
@@ -54,7 +56,8 @@ NVIDIA GeForce RTX 5070 Ti, 580.173.02, 839 MiB, 16303 MiB
 Thứ tự hai dòng `systemctl` theo đúng thứ tự tham số trên lệnh: dòng đầu là
 `cir-workbench-backend.service`, dòng sau là `cir-workbench-frontend.service`.
 
-`git status --porcelain` (nguyên văn):
+`git status --porcelain` **tại `2026-11-12T04:43+07`, TRƯỚC khi ba đường dẫn sau được commit**
+(nguyên văn — bản chụp lịch sử, **không** phải trạng thái hiện tại):
 
 ```
 ?? CLEANUP_REPORT.md.save
@@ -62,6 +65,10 @@ Thứ tự hai dòng `systemctl` theo đúng thứ tự tham số trên lệnh: 
 ?? workbench/docs/reviews/20261111-master-audit/raw/verify/97-api-surface-tgcir-run.md
 ?? workbench/docs/reviews/20261111-master-audit/web_evidence/e2e_post_cutover/
 ```
+
+Ba đường dẫn `raw/verify/91-…`, `raw/verify/97-…` và `web_evidence/e2e_post_cutover/` đã được commit ở
+**`23d847e`** ("evidence: commit the post-cutover browser smoke, the tgcir API surface, and the E2E
+screenshots"), nên chúng **không còn** untracked. Trạng thái hiện tại ở §0.1.
 
 ### 0.1 Số liệu sống **đo lại** lần cuối (2026-11-12T10:0x+07)
 
@@ -91,6 +98,16 @@ MainPID=1221148
 NRestarts=0
 ActiveEnterTimestamp=Wed 2026-11-11 23:48:44 +07
 ```
+
+`git status --porcelain` **hiện tại** (nguyên văn, đúng **một** dòng):
+
+```
+$ git status --porcelain
+?? CLEANUP_REPORT.md.save
+```
+
+Dòng duy nhất đó là file của operator và **cố ý không bao giờ được stage** (`CLEANUP_REPORT.md.save`,
+không phải một phần của repo). Mọi đường dẫn bằng chứng từng untracked lúc `04:43` đã vào `23d847e`.
 
 Đọc theo thứ tự tham số như §0: dòng đầu là backend (**`MainPID=1510910`**, vào `active` lúc
 `09:34:21 +07` — đã restart thêm một lần sau bản chụp `1476678` của §0.1 trước), dòng sau là frontend
