@@ -238,3 +238,21 @@ No section of the report describes the routing input as stem-only any more; the 
 mentions in §4.3 are the refutation ("routing chỉ dùng stem" is listed as forbidden) and the
 26-of-119 stem-ambiguity argument, which is about why stem alone would be worse, not about what the
 resolver reads.
+
+**Fourth pass — live-state rows re-pinned.** After the pin advanced to `117fc17220d0e35651c6778c1afb62e271c8d944`
+and the campaign was pushed, the report's own live-state rows had gone stale. §0.1 is now the single
+authority (`HEAD a0c08c0 == origin`, 0/0, 36 commits since `82cb1044`; backend `MainPID=1510910`,
+frontend `1221148`; no composition process, GPU 373 MiB with no compute app) and §9 repeats it rather
+than holding a second copy. The `TESTED_SOURCE_SHA` row is no longer "still old": it records the
+advance, the sweep (`3123 passed, 20 failed, 47 skipped = 3190`, `3586.55 s`, `106-sweep-117fc172.md`),
+the guard at 8 passed, the 29-file / +3505 −246 production diff from the OLD pin as history, and the 20
+remaining failures by class (18 baseline ids plus 2 never in that baseline). The guard-extension row is
+new: `git checkout` and `must print` are checked in every `RELEASE_DOCS` entry, with the bite proof.
+
+One row was certifying an output it no longer produced: `R@1 vắng khỏi artifact đã công bố` printed
+`35` and `35` → 0/35. Re-measured: **`35` and `36` → 1/36**, the one file being
+`clvc_net_author_drive_unresolved_da0a2162be0e159a1a456cec/full.json`. §4.1's "R@1 absent" is now
+scoped to the three runs it is true for (smoke `1eee4c0a` and both older Full runs), and §5.1 item 6
+carries the same qualification. The served bundle is recorded as `assets/index-DDviexaW.js`, sha256
+`58eed6d48640fa1f93d2a64a96d87812a044a3b07b324fb872f6126162bf5369`, with the older names labelled
+historical.
