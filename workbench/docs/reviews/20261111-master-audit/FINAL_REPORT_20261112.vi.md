@@ -99,15 +99,21 @@ NRestarts=0
 ActiveEnterTimestamp=Wed 2026-11-11 23:48:44 +07
 ```
 
-`git status --porcelain` **hiện tại** (nguyên văn, đúng **một** dòng):
+`git status --porcelain` **tại thời điểm chụp §0.1** (nguyên văn, khi đó đúng **một** dòng):
 
 ```
 $ git status --porcelain
 ?? CLEANUP_REPORT.md.save
 ```
 
-Dòng duy nhất đó là file của operator và **cố ý không bao giờ được stage** (`CLEANUP_REPORT.md.save`,
-không phải một phần của repo). Mọi đường dẫn bằng chứng từng untracked lúc `04:43` đã vào `23d847e`.
+Dòng đó là file của operator và **cố ý không bao giờ được stage** (`CLEANUP_REPORT.md.save`, không
+phải một phần của repo). Mọi đường dẫn bằng chứng từng untracked lúc `04:43` đã vào `23d847e`.
+
+**Lưu ý về một bản chụp:** `git status` là trạng thái **sống**, nên nó đổi khi người khác đang sửa
+việc. Ngay sau lần chụp này, hai file frontend (`workbench/frontend/SamplesPage.tsx`,
+`workbench/frontend/routes.ts`) xuất hiện ở dạng ` M` — **không** phải thay đổi của báo cáo này và
+**không** nằm trong commit nào của nó. Vì vậy khối trên là ảnh chụp có mốc thời gian, không phải một
+lời hứa rằng porcelain luôn có đúng một dòng; muốn biết hiện trạng thì chạy lại lệnh.
 
 Đọc theo thứ tự tham số như §0: dòng đầu là backend (**`MainPID=1510910`**, vào `active` lúc
 `09:34:21 +07` — đã restart thêm một lần sau bản chụp `1476678` của §0.1 trước), dòng sau là frontend
