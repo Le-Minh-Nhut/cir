@@ -1,0 +1,66 @@
+=== sweep preflight 2026-11-12T11:01:31+07:00
+HEAD_FULL=117fc17220d0e35651c6778c1afb62e271c8d944
+SHA8=117fc172
+origin=82cb10444bc09a07130acf9df96330abc196cae6
+
+--- pgrep pytest workbench/tests (expect empty)
+(empty)
+--- pgrep composition_eval.py (expect empty)
+(empty)
+--- nvidia-smi compute apps (expect empty)
+--- git status --porcelain
+?? CLEANUP_REPORT.md.save
+?? workbench/docs/reviews/20261111-master-audit/raw/verify/91-browser-smoke-after-cutover.md
+?? workbench/docs/reviews/20261111-master-audit/raw/verify/97-api-surface-tgcir-run.md
+?? workbench/docs/reviews/20261111-master-audit/web_evidence/e2e_post_cutover/
+--- MODIFIED tracked files (expect none)
+(none)
+
+--- production diff vs old pin 96d86010
+ workbench/backend/composition.py                   | 355 ++++++++++-
+ workbench/backend/jobs.py                          |  45 +-
+ workbench/backend/main.py                          | 175 ++++-
+ workbench/backend/storage.py                       | 240 +++++++
+ workbench/composition/inputs.py                    |  26 +
+ workbench/composition/metrics.py                   |  68 +-
+ workbench/composition/model_clvc_net.py            | 701 +++++++++++++++++++--
+ workbench/composition/model_tgcir.py               | 632 ++++++++++++++++---
+ workbench/composition/runner.py                    | 327 +++++++++-
+ workbench/frontend/EvaluationPage.tsx              |  30 +-
+ workbench/frontend/FailuresPage.tsx                |  22 +-
+ workbench/frontend/NotebookPage.tsx                |  82 +++
+ workbench/frontend/QueryInspector.tsx              |   3 +
+ workbench/frontend/SamplesPage.tsx                 |  10 +-
+ workbench/frontend/data.ts                         |   3 +
+ workbench/frontend/inspector.ts                    |  43 +-
+ workbench/frontend/tests/ui_smoke.py               |  39 +-
+ workbench/frontend/types.ts                        |  30 +-
+ workbench/registry/auxiliary_assets.yaml           |  24 +
+ workbench/registry/models.yaml                     |  25 +
+ workbench/registry/preparation_contracts.yaml      |  12 +-
+ workbench/scripts/backfill_recall_at_1.py          | 278 ++++++++
+ workbench/scripts/composition_eval.py              |  47 +-
+ workbench/scripts/derive_routing_cohort_gap.py     | 249 ++++++++
+ workbench/scripts/serve_workbench.py               |   9 +-
+ workbench/systemd/__init__.py                      |   0
+ workbench/systemd/cir-workbench-backend.service.in |  33 +
+ .../systemd/cir-workbench-frontend.service.in      |  28 +
+ workbench/systemd/render_units.py                  | 215 +++++++
+ 29 files changed, 3505 insertions(+), 246 deletions(-)
+PROD_DIFF_FILES=29
+ 29 files changed, 3505 insertions(+), 246 deletions(-)
+
+--- frontend freshness
+newest_src 1794450807.3258295
+dist_index 1794450858.596437
+VERDICT FRESH
+--- dist counts
+js=1 css=1
+index-DDviexaW.js
+index-DecQnta9.css
+
+--- disk
+Filesystem      Size  Used Avail Use% Mounted on
+/dev/nvme0n1p5  630G  541G   57G  91% /
+COLLECT=3190
+/dev/nvme0n1p5  630G  541G   57G  91% /
