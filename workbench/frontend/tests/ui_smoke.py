@@ -573,7 +573,8 @@ def session_composition(browser, base_url: str, shots: Path, recorder: Recorder)
 
 def session_samples(page, base_url: str, shots: Path, recorder: Recorder,
                     pin_run_id: str | None = None,
-                    pin_query_id: str | None = None) -> list[str]:
+                    pin_query_id: str | None = None,
+                    pin_condition: str | None = None) -> list[str]:
     """A query card may not claim `unscored` while it shows numeric ranks and real candidates.
 
     The bug this exists for: an outcome badge printing the protocol's bare word `unresolved` next to
@@ -609,8 +610,12 @@ def session_samples(page, base_url: str, shots: Path, recorder: Recorder,
         # first row of a variant run is an unscored qid, so the scored half of this assertion would
         # never be exercised on the run the caller asked about.
         query_param = (f"&query={quote(pin_query_id, safe='')}" if pin_query_id else "")
+        # A pinned CONDITION is the one the run measured; without it the explorer opens the run's
+        # first condition, which is right for a protocol-triple run and useless for a variant one.
+        cond_param = (f"&condition={quote(pin_condition, safe='')}" if pin_condition else "")
         page.goto(f"{base_url}/?area=samples&view=explorer&protocol={CIRCUS_PROTOCOL}"
-                  f"&subset=full&runs=c:{run_id}{query_param}", wait_until="domcontentloaded")
+                  f"&subset=full&runs=c:{run_id}{cond_param}{query_param}",
+                  wait_until="domcontentloaded")
         page.wait_for_selector("[data-testid=query-inspector]", timeout=NAV_TIMEOUT_MS)
         page.wait_for_selector("[data-testid=query-outcome]", timeout=NAV_TIMEOUT_MS)
         page.wait_for_timeout(600)
@@ -778,7 +783,7 @@ def launch(playwright, mobile: bool = False):
     return playwright.chromium.launch(**kwargs)
 
 def run_sessions(url: str, shots: Path, which: str, pin_run_id: str | None = None,
-                 pin_query_id: str | None = None) -> Recorder:
+                 pin_query_id: str | None = None, pin_condition: str | None = None) -> Recorder:
     from playwright.sync_api import sync_playwright
 
     recorder = Recorder()
@@ -805,7 +810,7 @@ def run_sessions(url: str, shots: Path, which: str, pin_run_id: str | None = Non
                 recorder.attach(page)
                 try:
                     saved += session_samples(page, url, shots, recorder, pin_run_id=pin_run_id,
-                                             pin_query_id=pin_query_id)
+                                             pin_query_id=pin_query_id, pin_condition=pin_condition)
                 finally:
                     context.close()
             if which in ("mobile", "all"):
@@ -826,6 +831,8 @@ def main(argv: list[str] | None = None) -> int:
                         choices=("cold", "fixture", "composition", "samples", "mobile", "all"), default="all")
     parser.add_argument("--query-id", default=None,
                         help="open this query's card in the samples session (with --run-id)")
+    parser.add_argument("--condition", default=None,
+                        help="open this condition in the samples session (with --run-id)")
     parser.add_argument("--run-id", default=None,
                         help="check this run FIRST and only it in the samples session; the assertion "
                              "is unchanged, only the run it bites on is selectable")
@@ -839,7 +846,7 @@ def main(argv: list[str] | None = None) -> int:
     if not args.url:
         parser.error("either --build-fixture or --url is required")
     recorder = run_sessions(args.url, args.shots, args.session, pin_run_id=args.run_id,
-                            pin_query_id=args.query_id)
+                            pin_query_id=args.query_id, pin_condition=args.condition)
     summary = {
         "session": args.session,
         "checks": recorder.checks,

@@ -4,6 +4,7 @@ import type { BenchmarkRun, ParityGatePayload, RunGate } from "./gate";
 import type { Cohort, CompositionQuery, CompositionRun, DuplicateStatus, Job, Measurement, Model, Query, Run } from "./types";
 import type { CapabilityFlags, CapabilityReport, Provenance } from "./catalog";
 import { compositionCapabilities, benchmarkCapabilities, compositionLabel, indexCapabilities, provenanceOf, testWorkspaceOrigin, transferLabel } from "./catalog";
+import { conditionsForRun, resolveCondition } from "./routes";
 import type { Subset } from "./routes";
 /** Type-only: the R16 read-set on a native row is declared once, beside the pure functions that
  *  read it, and `NativeMeasurement` names those fields through it rather than restating them. */
@@ -397,6 +398,19 @@ export function useWorkbenchData(query: DataQuery): WorkbenchData {
     query.outcome, query.category, query.order, query.offset, query.limit, query.query,
     query.queryState ?? "", query.imported ?? "exclude",
   ].join("\u001f");
+  // The RUN's own conditions decide which condition the explorer may ask for. Resolved here because
+  // this is where both the served rows (`safeComposition`) and the request key exist: a URL naming a
+  // condition the selected run does not have is degraded to that run's first condition, so the list
+  // is keyed by a table that actually has ranks. `conditionsForRun` falls back to the protocol triple
+  // when a payload names none, which keeps a run with the protocol's three conditions byte-identical.
+  const selectedCompositionRow = useMemo(
+    () => safeComposition.find((row) => `c:${row.run_id}` === selectedComposition[0]) ?? null,
+    [safeComposition, selectedComposition[0]]);
+  const conditionOptions = useMemo(
+    () => conditionsForRun(selectedCompositionRow?.conditions_display),
+    [selectedCompositionRow]);
+  const effectiveCondition = resolveCondition(query.condition, conditionOptions);
+
   const compositionPage = useRegion<CompositionPagePayload>(
     "composition-page",
     compositionPageKey,
@@ -405,7 +419,7 @@ export function useWorkbenchData(query: DataQuery): WorkbenchData {
       if (!runId) return null;
       return async (signal: AbortSignal) => {
         const params = new URLSearchParams({
-          subset: query.subset, condition: query.condition, order: query.order,
+          subset: query.subset, condition: effectiveCondition, order: query.order,
           limit: String(query.limit), offset: String(query.offset),
         });
         if (query.category) params.set("category", query.category);
@@ -415,7 +429,7 @@ export function useWorkbenchData(query: DataQuery): WorkbenchData {
         return fetchJson(`/api/composition/runs/${encodeURIComponent(runId)}/queries?${params}`, signal);
       };
       // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [selectedComposition[0], query.subset, query.condition, query.outcome, query.category,
+    }, [selectedComposition[0], query.subset, effectiveCondition, query.outcome, query.category,
         query.order, query.offset, query.limit, query.query, query.queryState]),
   );
 

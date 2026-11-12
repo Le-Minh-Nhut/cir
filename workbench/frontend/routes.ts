@@ -90,15 +90,26 @@ export const SUBSET_LABEL: Record<Subset, string> = {
   validated: "Validated",
 };
 
-/** Query conditions in the CIRCUS input-ablation release. The cutoff of the outcome
- *  classification is FIXED at 10 by the backend (`determine_query_outcome(k=10)`); it is not a
- *  user control, which is why it is named here and never bound to a selector. */
+/** The PROTOCOL's three query conditions, and the fallback when a payload names none.
+ *
+ *  This constant is not the set a run can be browsed by. A run's own conditions come from
+ *  `conditions_display` (the backend resolves them per run), because an adapter may score a
+ *  named image-role ablation instead of `image_only_empty_text` — offering the constant's third
+ *  entry for such a run listed a condition it never measured and hid the one it did. The cutoff of
+ *  the outcome classification is FIXED at 10 by the backend (`determine_query_outcome(k=10)`); it is
+ *  not a user control, which is why it is named here and never bound to a selector. */
 export const CONDITIONS = [
   { id: "multimodal", label: "Multimodal (MM)" },
   { id: "text_only_black_image", label: "Text-only (ảnh đen)" },
   { id: "image_only_empty_text", label: "Image-only (text rỗng)" },
 ] as const;
-export type ConditionId = (typeof CONDITIONS)[number]["id"];
+/** A condition id is a backend identifier, not a closed enum: `clvc_image_encoder_only` is real.
+ *  Kept as `string` so a run-driven option list type-checks against `Location.condition`. */
+export type ConditionId = string;
+
+/** A well-formed condition id. The parser admits these and lets the RUN decide whether one exists:
+ *  refusing an id here would 400 a link to a condition the API actually serves. */
+const CONDITION_ID = /^[a-z][a-z0-9_]*$/;
 
 export const OUTCOMES = [
   { id: "composition_required", label: "Composition required" },
@@ -309,14 +320,17 @@ export function parseLocation(search: string, knownProtocols: string[]): { locat
 
   location.query = (params.get("query") ?? params.get("comp_qid") ?? "").trim();
 
+  // A condition id the RUN does not serve is degraded by the page to that run's first condition,
+  // not rejected here: an id is only knowable against a payload, and rejecting it turned a stale
+  // link into an error page. Malformed text is still a reported problem.
   const rawCondition = params.get("condition") ?? params.get("comp_cond");
-  if (rawCondition !== null) {
-    const condition = oneOf(CONDITIONS.map((item) => item.id), rawCondition);
-    if (condition) location.condition = condition;
-    else problems.push({ param: "condition", value: rawCondition, message: `chỉ nhận ${CONDITIONS.map((item) => item.id).join(", ")}` });
+  if (rawCondition !== null && rawCondition.trim()) {
+    const candidate = rawCondition.trim();
+    if (CONDITION_ID.test(candidate)) location.condition = candidate;
+    else problems.push({ param: "condition", value: rawCondition,
+                         message: "điều kiện phải là một id dạng chữ thường (vd clvc_image_encoder_only)" });
   }
-  const rawConditionAll = oneOf(CONDITIONS.map((item) => item.id), location.condition);
-  if (!rawConditionAll) location.condition = "multimodal";
+  if (!CONDITION_ID.test(location.condition)) location.condition = "multimodal";
 
   const rawOutcome = params.get("outcome") ?? params.get("comp_outcome");
   if (rawOutcome !== null && rawOutcome !== "") {
@@ -412,4 +426,38 @@ export const TO_SEARCH_VERSION = "";
 /** A shareable link for one context. Used by the "copy link" affordance. */
 export function hrefFor(location: Location): string {
   return `${window.location.origin}${window.location.pathname}${toSearch(location)}`;
+}
+
+/** The conditions a READER may browse for one run: the run's own list, or the protocol triple.
+ *
+ *  `conditions_display` is served per run by the backend (`composition.py` `displayed_conditions`):
+ *  the protocol names the run actually ranked, then any adapter ablation it scored. Only when a
+ *  payload carries none — an older artifact, or a catalog row with no selected run — does the
+ *  protocol constant stand in, so a page that cannot know yet still offers the usual three.
+ *
+ *  Labels come from the payload. The constant's labels are the fallback for its own three ids and
+ *  are NOT applied to an unknown id: printing another condition's name over a real measurement is
+ *  the defect this function exists to prevent.
+ */
+export function conditionsForRun(
+  served: ReadonlyArray<{ id: string; label?: string | null }> | null | undefined,
+): Array<{ id: string; label: string }> {
+  const known = (served ?? []).filter(
+    (item): item is { id: string; label?: string | null } =>
+      !!item && typeof item.id === "string" && CONDITION_ID.test(item.id));
+  if (known.length) {
+    return known.map((item) => ({
+      id: item.id,
+      label: item.label?.trim() || CONDITIONS.find((c) => c.id === item.id)?.label || item.id,
+    }));
+  }
+  return CONDITIONS.map((item) => ({ id: item.id, label: item.label }));
+}
+
+/** The condition to DISPLAY for a run: the requested one when that run serves it, else the run's
+ *  first. A stale or foreign `?condition=` must degrade to a real condition of this run, never to a
+ *  blank panel and never to a request for a condition the run does not have. */
+export function resolveCondition(requested: string, options: ReadonlyArray<{ id: string }>): string {
+  if (options.some((option) => option.id === requested)) return requested;
+  return options[0]?.id ?? "multimodal";
 }

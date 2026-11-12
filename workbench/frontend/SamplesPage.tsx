@@ -3,7 +3,7 @@ import type { CompositionQuery, CompositionRun } from "./types";
 import type { WorkbenchData } from "./data";
 import { protocolLabel } from "./data";
 import type { Location } from "./routes";
-import { CONDITIONS, ORDERS, OUTCOMES, SUBSET_LABEL } from "./routes";
+import { CONDITIONS, ORDERS, OUTCOMES, SUBSET_LABEL, conditionsForRun, resolveCondition } from "./routes";
 import { Card, Detail, EmptyState, ErrorState, Field, LoadingState } from "./ui";
 import { fmtInt, fmtRank } from "./format";
 import { QueryInspector } from "./QueryInspector";
@@ -35,6 +35,14 @@ export function SamplesPage({ data, location, onGoto, onAnnotate }: {
   const runKey = location.runs[0];
   const entry = catalog.find((item) => item.key === runKey) ?? null;
   const run: CompositionRun | null = entry?.composition ?? null;
+  // The conditions this run can be browsed by, from the run's own payload. The protocol constant is
+  // only the fallback for a run whose payload names none; offering it unconditionally listed
+  // `image_only_empty_text` for a run that scored the adapter's ablation instead, and hid the
+  // condition it did score.
+  const conditionOptions = conditionsForRun(run?.conditions_display);
+  // A URL naming a condition this run does not serve degrades to the run's first one, so a stale
+  // link shows a real panel instead of an empty request for a condition with no ranks.
+  const condition = resolveCondition(location.condition, conditionOptions);
   const page = data.compositionPage.region;
   const items = page.data?.items ?? [];
   const total = page.data?.total ?? 0;
@@ -42,7 +50,7 @@ export function SamplesPage({ data, location, onGoto, onAnnotate }: {
 
   // The inspected query is its own read, keyed by run + subset + condition + query id.
   const inspectorPath = run && location.query
-    ? candidateRequestPath({ runId: run.run_id, subset: location.subset, condition: location.condition,
+    ? candidateRequestPath({ runId: run.run_id, subset: location.subset, condition,
                              queryId: location.query, k: 10 })
     : "none";
   const selectedRegion = useRegion<{ items: CompositionQuery[] }>(
@@ -72,7 +80,7 @@ export function SamplesPage({ data, location, onGoto, onAnnotate }: {
           {!selectedQuery
             ? <EmptyState kind="none-selected" detail="Chọn một query ở Inspector trước; bảng so sánh dùng chính query đó."
                           next={<button type="button" onClick={() => onGoto({ view: "explorer" })}>Mở inspector</button>} />
-            : <QueryInspector run={run} query={selectedQuery} condition={location.condition}
+            : <QueryInspector run={run} query={selectedQuery} condition={condition}
                               selectedCount={location.runs.length}
                               selectedRuns={location.runs}
                               onPeerChange={changePeers}
@@ -105,9 +113,13 @@ export function SamplesPage({ data, location, onGoto, onAnnotate }: {
             </select>
           </Field>
           <Field label="Điều kiện" htmlFor="condition-select" hint="Đổi điều kiện sẽ tải xếp hạng ứng viên riêng của điều kiện đó">
-            <select id="condition-select" value={location.condition} data-testid="filter-condition"
-                    onChange={(event) => onGoto({ condition: event.target.value as Location["condition"], offset: 0 })}>
-              {CONDITIONS.map((condition) => <option key={condition.id} value={condition.id}>{condition.label}</option>)}
+            <select id="condition-select" value={condition} data-testid="filter-condition"
+                    onChange={(event) => onGoto({ condition: event.target.value, offset: 0 })}>
+              {/* The RUN's conditions, from its own payload: a condition it did not measure is not
+                  offered, and the one it did measure is. */}
+              {conditionOptions.map((item) => (
+                <option key={item.id} value={item.id}>{item.label}</option>
+              ))}
             </select>
           </Field>
           <Field label="Mã query" htmlFor="query-search">
@@ -258,7 +270,7 @@ export function SamplesPage({ data, location, onGoto, onAnnotate }: {
             : inspectorFailed
               ? <Card title="Duyệt ảnh truy hồi"><ErrorState message={selectedRegion.region.error ?? "Không tải được query"} onRetry={selectedRegion.retry} /></Card>
               : run && selectedQuery
-                ? <QueryInspector run={run} query={selectedQuery} condition={location.condition}
+                ? <QueryInspector run={run} query={selectedQuery} condition={condition}
                                   selectedCount={location.runs.length}
                                   selectedRuns={location.runs}
                                   onPeerChange={changePeers}

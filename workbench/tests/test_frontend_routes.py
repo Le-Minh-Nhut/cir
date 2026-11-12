@@ -97,8 +97,8 @@ def test_the_old_composition_link_keeps_working_and_names_the_release_protocol()
 
 
 def test_an_invalid_value_is_reported_not_coerced() -> None:
-    out = _parse("?area=nowhere&subset=bogus&condition=nope&order=sideways&offset=-4&k=999"
-                 "&protocol=made_up&outcome=invented&category=hats&preset=maybe&view=ghost")
+    out = _parse("?area=nowhere&subset=bogus&condition=Not A Condition&order=sideways&offset=-4"
+                 "&k=999&protocol=made_up&outcome=invented&category=hats&preset=maybe&view=ghost")
     problems = {problem["param"]: problem for problem in out["problems"]}
     assert set(problems) == {"area", "subset", "condition", "order", "offset", "k",
                              "protocol", "outcome", "category", "preset"}, problems
@@ -155,3 +155,77 @@ def test_the_native_scope_has_a_view_that_lists_it() -> None:
     assert out["location"]["view"] == "native", out["location"]
     # And it round-trips, so a copied link to a native row stays on that view.
     assert "view=native" in out["roundTrip"], out["roundTrip"]
+
+
+def test_a_condition_id_the_protocol_triple_does_not_name_is_admitted() -> None:
+    """A condition id is a backend identifier, not a closed three-item enum.
+
+    `clvc_image_encoder_only` is a real condition of a real run. The parser used to reject anything
+    outside the protocol constant, so a link to the condition a variant run actually scored carried
+    a `condition` problem and the value was dropped -- the operator could not select the one
+    condition that run measured. Whether a condition EXISTS is a fact about the selected run, which
+    only a payload can answer, so the parser admits the id and the page degrades an unknown one to
+    the run's first condition.
+    """
+    out = _parse("?area=samples&view=explorer&condition=clvc_image_encoder_only")
+    assert out["problems"] == [], out["problems"]
+    assert out["location"]["condition"] == "clvc_image_encoder_only", out["location"]
+
+def test_the_protocol_triple_still_parses_exactly_as_before() -> None:
+    """Byte-identical for the runs whose conditions ARE the protocol triple."""
+    for condition in ("multimodal", "text_only_black_image", "image_only_empty_text"):
+        out = _parse(f"?area=samples&view=explorer&condition={condition}")
+        assert out["problems"] == [], (condition, out["problems"])
+        assert out["location"]["condition"] == condition, out["location"]
+    # No condition in the URL keeps the documented default.
+    out = _parse("?area=samples&view=explorer")
+    assert out["location"]["condition"] == "multimodal", out["location"]
+
+def test_the_run_driven_option_list_prefers_the_payload_and_falls_back_to_the_triple() -> None:
+    """One function decides the options, so the select and the request cannot disagree.
+
+    * a payload naming an ablation offers THAT ablation, and not the protocol's third condition;
+    * a payload naming none (older artifact, catalog row with no run) offers the protocol triple
+      exactly as before;
+    * an unknown id is never given another condition's label.
+    """
+    serveds = json.dumps([
+        [{"id": "multimodal", "label": "Image + text"},
+         {"id": "text_only_black_image", "label": "Text only"},
+         {"id": "clvc_image_encoder_only", "label": "Image only (image encoder)"}],
+        None,
+        [],
+        [{"id": "mystery_condition", "label": None}],
+    ])
+    out = support.run_json(f"""
+import * as R from {SRC};
+const serveds = {serveds};
+const out = serveds.map((served) => R.conditionsForRun(served));
+const legacy = R.conditionsForRun([
+  {{ id: "multimodal" }}, {{ id: "text_only_black_image" }}, {{ id: "image_only_empty_text" }}]);
+console.log('__R__' + JSON.stringify({{
+  variant: out[0], none: out[1], empty: out[2], unknown: out[3], legacy,
+  degrade: [R.resolveCondition("image_only_empty_text", out[0]),
+            R.resolveCondition("clvc_image_encoder_only", out[0]),
+            R.resolveCondition("nope", out[0])],
+  protocol: R.conditionsForRun(null).map((item) => item.id),
+}}));
+""")
+    variant = [item["id"] for item in out["variant"]]
+    assert variant == ["multimodal", "text_only_black_image", "clvc_image_encoder_only"], out
+    assert "image_only_empty_text" not in variant
+    assert out["variant"][2]["label"] == "Image only (image encoder)", out["variant"]
+
+    # Absent payload -> the protocol triple, same ids and same labels as the constant.
+    assert out["protocol"] == ["multimodal", "text_only_black_image", "image_only_empty_text"], out
+    assert [item["id"] for item in out["none"]] == out["protocol"]
+    assert [item["id"] for item in out["empty"]] == out["protocol"]
+    assert out["none"][2]["label"] == "Image-only (text rỗng)", out["none"]
+    assert out["legacy"] == out["none"], "a label-less payload must render the constant's labels"
+
+    # An unknown id keeps its own name; it is never relabelled as another condition.
+    assert out["unknown"][0]["id"] == "mystery_condition"
+    assert out["unknown"][0]["label"] == "mystery_condition", out["unknown"]
+
+    # A condition the run lacks degrades to the run's first, and a served one is kept.
+    assert out["degrade"] == ["multimodal", "clvc_image_encoder_only", "multimodal"], out["degrade"]

@@ -167,10 +167,22 @@ def test_only_ranked_conditions_are_served() -> None:
     assert row["ranks"]["clvc_image_encoder_only"] == 12796, row
     assert [item["id"] for item in page["conditions"]] == [
         "multimodal", "text_only_black_image", "clvc_image_encoder_only"], page["conditions"]
+    # `conditions_display` (what the UI may OFFER) lists only conditions with a rank table, in
+    # protocol-first order, so the select cannot offer a condition this run has no rows for.
+    detail = __import__("workbench.backend.composition", fromlist=["x"]).get_composition_run_detail(
+        VARIANT_RUN, "full")
+    if detail is not None:
+        offered = [item["id"] for item in detail["conditions_display"]]
+        assert "image_only_empty_text" not in offered, offered
+        assert offered == ["multimodal", "text_only_black_image", "clvc_image_encoder_only"], offered
     # A protocol-triple run is unchanged: it has a table for all three.
     other = _page(PROTOCOL_RUN, limit=1)
     if other is not None:
         assert [item["id"] for item in other["conditions"]] == list(CONDITIONS), other["conditions"]
+        other_detail = __import__("workbench.backend.composition",
+                                  fromlist=["x"]).get_composition_run_detail(PROTOCOL_RUN, "full")
+        if other_detail is not None:
+            assert [item["id"] for item in other_detail["conditions_display"]] == list(CONDITIONS)
 
 
 def test_the_outcome_filter_returns_only_rows_of_that_class() -> None:

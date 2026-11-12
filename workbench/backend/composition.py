@@ -1096,9 +1096,26 @@ def decorate_summary(artifacts_root: Path, summary: dict[str, Any],
                                            for name in gap_conditions]
         summary["gap_role_reason"] = (metrics_block.get("gap_role_reason")
                                       if isinstance(metrics_block, Mapping) else None)
+    # What the UI may OFFER for this run: the conditions it has a rank table for. A condition with no
+    # table is not browsable -- offering it produced a third option whose every row was "Chưa chấm"
+    # and hid the condition the run did score. Falls back to `displayed_conditions` when no rank
+    # artifact is available (a failed or aggregate-only run), because then nothing can be filtered
+    # and the protocol triple is the only honest list.
+    tables = (ranks_data or {}).get("ranks") if isinstance(ranks_data, Mapping) else None
+    tables = tables if isinstance(tables, Mapping) else {}
+
+    def has_table(name: str) -> bool:
+        table = tables.get(name)
+        return isinstance(table, Mapping) and bool(table)
+
+    # Protocol order first, then any extra condition the run scored, in declaration order -- the same
+    # order `displayed_conditions` uses, so a protocol-triple run is unchanged.
+    ranked = tuple([name for name in CONDITIONS if has_table(name)]
+                   + [name for name in tables if name not in CONDITIONS and has_table(name)])
+    offered = ranked or displayed_conditions(summary)
     summary["conditions_display"] = [
         {"id": name, "label": condition_display_label(name)}
-        for name in displayed_conditions(summary)]
+        for name in offered]
     return summary
 
 def get_composition_run_detail(

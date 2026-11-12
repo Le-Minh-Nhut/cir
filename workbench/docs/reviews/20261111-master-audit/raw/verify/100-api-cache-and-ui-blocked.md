@@ -806,3 +806,100 @@ AND a protocol-triple run, the filter returning exactly `outcome_counts[class]`,
    width is derived from that declared list (`test_frontend_layout_provenance` would fail).
 5. **List-route cold cost is dominated by `subset_provenance`** (§7, 0.820 s of 3.216 s, 283 773
    JSON decodes over 126 files). Not changed; recorded so the next pass starts from a number.
+
+---
+
+## The condition list was the protocol constant: a UI that could not browse what the run measured
+
+`routes.ts:96-100` hard-coded `CONDITIONS` ending in `image_only_empty_text`; `routes.ts:314` rejected
+any other id in the URL; `SamplesPage.tsx:110` mapped that constant into `<select
+data-testid="filter-condition">`; and `types.ts:151` declared `conditions_display` with **no
+consumer**. For run `da0a2162be0e159a1a456cec` — which scored
+`[multimodal, text_only_black_image, clvc_image_encoder_only]` — the operator was offered a condition
+the run never measured and **could not select** the one it did.
+
+### Backend: offer only conditions the run has a table for
+
+`decorate_summary` now builds `conditions_display` from the run's own rank tables: protocol names
+first, then any extra condition it scored, in that order. `displayed_conditions` remains the fallback
+for a run with no rank artifact (failed / aggregate-only), where nothing can be filtered anyway.
+
+```
+da0a2162  ['multimodal', 'text_only_black_image', 'clvc_image_encoder_only']   <- was + image_only_empty_text
+4bc9893a  ['multimodal', 'text_only_black_image', 'image_only_empty_text']
+ad477312  ['multimodal', 'text_only_black_image', 'image_only_empty_text']
+10173dc4  ['multimodal', 'text_only_black_image', 'image_only_empty_text']
+```
+
+The three protocol-triple runs keep the same three ids, the same order and the same labels — asserted
+(`test_a_run_without_a_derived_record_or_ablation_is_unchanged`,
+`test_only_ranked_conditions_are_served`).
+
+### Frontend: one function decides the options, and the URL no longer 400s a real condition
+
+* `routes.ts`: `ConditionId` is `string`; the parser admits `/^[a-z][a-z0-9_]*$/` instead of only the
+  three constant values, so `?condition=clvc_image_encoder_only` is no longer reported as a problem.
+  Malformed text is still reported. **No ablation name appears in the frontend.**
+* `routes.ts::conditionsForRun(served)` — the `<select>` options, from `conditions_display`, falling
+  back to `CONDITIONS` only when the payload names none. An unknown id keeps its own name as its
+  label; it is never relabelled as another condition.
+* `routes.ts::resolveCondition(requested, options)` — the display condition: the requested one when
+  the run serves it, else the run's first. `SamplesPage` uses it for the select value and for the
+  inspector request; `data.ts` uses it for the page request key, so a stale link degrades to a table
+  with real ranks instead of an empty one.
+
+### Browser proof (live, after the restart at MainPID 1758096)
+
+```
+OPTIONS: [['multimodal','Image + text'], ['text_only_black_image','Text only'],
+          ['clvc_image_encoder_only','Image only (image encoder)']]
+offers image_only_empty_text: False
+select clvc_image_encoder_only -> selected clvc_image_encoder_only; url condition clvc_image_encoder_only
+Query 7:2179  badge "Unresolved — mọi hạng ngoài @10"
+   rank-multimodal            #1,580  ngoài @10 · ngoài 100 dòng export đã lưu
+   rank-text_only_black_image #4,549  ngoài @10 · ngoài 100 dòng export đã lưu
+   rank-clvc_image_encoder_only #2,100 ngoài @10 · ngoài 100 dòng export đã lưu
+errors: []
+```
+
+Ranks equal `104` §10 (1580 / 4549 / 2100) exactly. **`image_only_empty_text` is not offered** for
+this run.
+
+Older runs, same browser, after the run payload loads:
+
+```
+HINT 4bc9893a  [['multimodal','Image + text'], ['text_only_black_image','Text only'], ['image_only_empty_text','Image only']]
+TME  ad477312  [['multimodal','Image + text'], ['text_only_black_image','Text only'], ['image_only_empty_text','Image only']]
+LIMN 10173dc4  [['multimodal','Image + text'], ['text_only_black_image','Text only'], ['image_only_empty_text','Image only']]
+```
+
+Identical ids and order for all three. (An earlier read of HINT before the run payload arrived showed
+the constant's own labels — that is the documented fallback, and it is replaced by the payload's
+labels once the row loads.)
+
+### Smoke
+
+`ui_smoke.py` gained `--condition` (and already had `--run-id`/`--query-id`). The assertion is
+unchanged.
+
+```
+--run-id da0a2162be0e159a1a456cec --condition clvc_image_encoder_only --query-id 7:2179
+exit 0
+[DOM-VERIFIED] samples Query 7:2179 (clvc_net): outcome badge 'Unresolved — mọi hạng ngoài @10';
+               ranks ['#1,580','#4,549','#2,100']; 3 numeric; 10 candidates
+
+--session samples (unpinned)  exit 0, 5 DOM-VERIFIED notes
+```
+
+### Tests
+
+```
+workbench/tests/test_frontend_routes.py        11 passed
+  (+ test_an_unknown_page_is_reported…, the invalid-value test now uses malformed text for
+   `condition` because a well-formed unknown id is no longer a parse problem,
+   + test_a_condition_id_the_protocol_triple_does_not_name_is_admitted,
+   + test_the_protocol_triple_still_parses_exactly_as_before,
+   + test_the_run_driven_option_list_prefers_the_payload_and_falls_back_to_the_triple)
+workbench/tests/test_api_outcome_triple.py     9 passed
+workbench/tests/test_composition_api_contracts.py + …  16 / 39 passed
+```
