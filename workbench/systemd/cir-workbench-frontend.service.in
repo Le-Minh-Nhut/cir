@@ -10,17 +10,28 @@ StartLimitBurst=5
 [Service]
 Type=simple
 # npm (Type=simple) is the main process; it spawns `sh -c vite preview`, which spawns node.
-# KillMode=mixed is measured (see the 20261111 audit evidence): SIGTERM to npm, then SIGKILL to
-# the rest of the cgroup, otherwise the vite process keeps the port and every restart fails with
-# EADDRINUSE.
+# `mixed` used to be the setting here (see the 20261111 audit evidence): SIGTERM to npm only, then
+# SIGKILL to the rest of the cgroup. That works, but it costs the WHOLE TimeoutStopSec on every
+# normal stop, because node outlives npm and keeps the port until the cgroup SIGKILL. Measured
+# 2026-11-13: node survived 32.5 s under `mixed` vs 24 ms under `control-group`. See the KillMode
+# block below for the numbers.
 ExecStart=@EXEC_START@
 WorkingDirectory=@WORKING_DIRECTORY@
 @ENVIRONMENT@
 
 Restart=always
 RestartSec=2
-KillMode=mixed
-TimeoutStopSec=10
+# control-group, MEASURED (2026-11-13, spare port, isolated): `mixed` sends SIGTERM to npm only, so
+# npm exits in 22 ms while node keeps :5173 for 32.5 s -- the full TimeoutStopSec is burnt, and the
+# port stays held until systemd's cgroup SIGKILL. With control-group every member is signalled at
+# once: npm exits in 22 ms, node in 24 ms, the port is free at 51 ms, and a same-port restart
+# succeeds immediately. The backend keeps `mixed` on purpose -- there SIGNALING the job child
+# directly would skip the queue's truthful "failed" bookkeeping; npm's children have no such state.
+KillMode=control-group
+# 10 s was tuned to "cover the wait for the cgroup SIGKILL"; with control-group there is no wait.
+# The measured stop is 51 ms, so 5 s is a ~100x margin over the normal case and still bounds a
+# wedged node (a SIGSTOPped or uninterruptible process) to a fifth of the old timeout.
+TimeoutStopSec=5
 KillSignal=SIGTERM
 SendSIGKILL=yes
 

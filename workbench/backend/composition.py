@@ -21,17 +21,22 @@ SUBSETS = ("full", "sf", "validated")
 CONDITIONS = ("multimodal", "text_only_black_image", "image_only_empty_text")
 
 def run_conditions(summary: Mapping[str, Any] | None) -> tuple[str, ...] | None:
-    """The conditions the RUN declared, protocol names first; ``None`` when it recorded none.
+    """The conditions the RUN declared, protocol names first.
 
-    `summary["conditions"]` is what the runner actually ran, so it -- not the module constant -- is
-    the set of conditions a consumer may advertise. ``None`` (a summary that predates the field)
-    is distinct from an empty tuple: the caller then falls back to the protocol triple instead of
-    serving nothing.
+    Three states, and the caller must not conflate them (it did: `not declared` returned ``None``,
+    so a summary that DECLARED an empty list was served the protocol triple):
+
+    * field ABSENT, or a summary that is not a mapping -> ``None``: unknown, a summary that predates
+      the field. ``conditions_declaration`` in the served payload says so; the display falls back to
+      the protocol triple.
+    * field present and empty -> ``()``: this run declared that it measured no condition. Served as
+      an empty list, never as the protocol triple.
+    * field present and non-empty -> those names, protocol names first.
     """
-    if not isinstance(summary, Mapping):
+    if not isinstance(summary, Mapping) or "conditions" not in summary:
         return None
-    declared = summary.get("conditions")
-    if not isinstance(declared, (list, tuple)) or not declared:
+    declared = summary["conditions"]
+    if not isinstance(declared, (list, tuple)):
         return None
     names = [str(name) for name in declared]
     return tuple([name for name in CONDITIONS if name in names]
@@ -77,7 +82,25 @@ def displayed_conditions(summary: Mapping[str, Any] | None) -> tuple[str, ...]:
                                           name))
     return (*declared, *undeclared)
 
+#: The three states `run_conditions` returns, named for a payload that must not leave a reader to
+#: guess which one it is looking at.
+CONDITIONS_DECLARED = "DECLARED"
+CONDITIONS_DECLARED_EMPTY = "DECLARED_EMPTY"
+CONDITIONS_UNKNOWN = "UNKNOWN"
+
+def conditions_declaration(summary: Mapping[str, Any] | None) -> str:
+    """Which of the three states this summary's `conditions` field is in.
+
+    ``UNKNOWN`` must never be rendered as "no conditions": it means the summary predates the field,
+    so the served list is the protocol triple standing in, not a measurement.
+    """
+    declared = run_conditions(summary)
+    if declared is None:
+        return CONDITIONS_UNKNOWN
+    return CONDITIONS_DECLARED if declared else CONDITIONS_DECLARED_EMPTY
+
 def condition_display_label(condition: str) -> str:
+
     """A condition's human label; an unknown name is shown verbatim rather than dropped."""
     try:
         return condition_label(condition)
@@ -1155,6 +1178,10 @@ def decorate_summary(artifacts_root: Path, summary: dict[str, Any],
     summary["conditions_display"] = [
         {"id": name, "label": condition_display_label(name)}
         for name in offered]
+    # `conditions_display` alone cannot say whether an empty list was DECLARED or merely unknown,
+    # so the payload states it. `UNKNOWN` means a summary predating the field, where the protocol
+    # triple above is a stand-in rather than a measurement.
+    summary["conditions_declaration"] = conditions_declaration(summary)
     return summary
 
 def get_composition_run_detail(
@@ -1736,6 +1763,9 @@ def get_composition_run_queries(
         # rendered instead of dropped and an unmeasured protocol name is never offered.
         "conditions": [{"id": name, "label": condition_display_label(name)}
                        for name in served_conditions],
+        # Same three states as the run detail: this list being empty must distinguish "the run
+        # declared no condition" from "the summary predates the field".
+        "conditions_declaration": conditions_declaration(summary_for_run),
         "counters": counters,
         "state_counts": state_counts,
         # Totals per outcome class, over the same predicate as `items[].outcome`.

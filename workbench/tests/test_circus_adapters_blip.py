@@ -116,6 +116,19 @@ def _resident_adapter(module, model_id: str, tmp_path: Path):
     checkpoint = tmp_path / "checkpoint.pt"
     checkpoint.touch()
     adapter = module.Adapter.__new__(module.Adapter)
+    # Run the REAL base initialiser rather than assigning its fields by hand. `CompositionAdapter
+    # .__init__` is what assigns `batch_size = resolved_batch_size()` (`adapters.py:273`), which
+    # `_run` writes into the worker job JSON; a `__new__`-only fixture never had it, so every
+    # `encode_*` raised `AttributeError: 'Adapter' object has no attribute 'batch_size'` before
+    # reaching the resident-worker behaviour these tests are about.
+    #
+    # The base initialiser is called directly, not `module.Adapter(...)`: the subclass's own
+    # `__init__` runs `_resolve`, which needs the registry and a staged checkpoint path. Nothing it
+    # would set is read here -- this fixture already supplies `_model`, `_checkpoint` and
+    # `_interpreter` -- while `batch_size` comes from the operator override exactly as in a real
+    # run, so the fixture cannot drift to a value production would never use.
+    adapters.CompositionAdapter.__init__(
+        adapter, SimpleNamespace(WORKBENCH_THIRD_PARTY_ROOT=tmp_path), "variant")
     adapter.work_root = tmp_path / "work"
     adapter._interpreter = sys.executable
     adapter._worker = None
@@ -123,14 +136,12 @@ def _resident_adapter(module, model_id: str, tmp_path: Path):
     adapter._worker_counter = 0
     adapter._worker_failed = None
     if model_id == "conesep":
-        adapter.config = SimpleNamespace(WORKBENCH_THIRD_PARTY_ROOT=tmp_path)
         adapter._model = {"source_dir": "model-source"}
         adapter._checkpoint = {"resolved_path": str(checkpoint), "checkpoint_id": "variant",
                                "checkpoint_training_noise_pct": 50}
         adapter._job_root = None
         adapter._interpreter_verified = True
     else:
-        adapter.config = SimpleNamespace(WORKBENCH_THIRD_PARTY_ROOT=tmp_path)
         adapter._model = {"source_dir": "model-source"}
         adapter._checkpoint = {"resolved_path": str(checkpoint)}
         adapter._job_root = None

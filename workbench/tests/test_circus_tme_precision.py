@@ -95,6 +95,15 @@ def test_worker_skips_empty_stdin_lines(tmp_path: Path, monkeypatch, capsys) -> 
     torch.device = lambda value: SimpleNamespace(type=value)
     torch.no_grad = contextlib.nullcontext
     torch.load = lambda *_args, **_kwargs: {}
+    # `model_tme._worker_main` calls `limit_torch_threads()` (`model_tme.py:370`), which pins
+    # torch's intra-op thread count and reads it back. Without these two the call raised
+    # `AttributeError: module 'torch' has no attribute 'set_num_threads'`, the worker replied
+    # `ok:false`, wrote no `.npy`, and this test failed on a missing file instead of on the empty
+    # stdin lines it is about. Behaviourally faithful: the stub stores what it is asked to set,
+    # exactly as the real pair does, so `require_batch_fits`-style readbacks stay meaningful.
+    _threads = {"count": 1}
+    torch.set_num_threads = lambda count: _threads.__setitem__("count", int(count))
+    torch.get_num_threads = lambda: _threads["count"]
     lavis = types.ModuleType("lavis")
     lavis.__path__ = []
     lavis_models = types.ModuleType("lavis.models")

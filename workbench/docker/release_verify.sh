@@ -444,11 +444,40 @@ elif [[ -n "$(find "${REPO}/workbench/frontend" -maxdepth 1 \( -name '*.ts' -o -
     # and the release verifier used to accept any dist directory that existed. The Docker image
     # builds the frontend from source, so this checks the OTHER served copy.
     j10_bad="${j10_bad}frontend/dist is older than its sources (run vite build); "
-elif ! grep -rq "phán quyết audit chuẩn" "${REPO}/workbench/frontend/dist" 2>/dev/null; then
-    j10_bad="${j10_bad}built bundle lacks audit-threshold copy; "
+elif [[ -z "$(ls "${REPO}/workbench/frontend/dist/assets"/*.js 2>/dev/null)" ]]; then
+    j10_bad="${j10_bad}frontend/dist/assets holds no JavaScript bundle (run vite build); "
+else
+    # Present and current are not enough: the shell must point at a bundle that EXISTS, and the
+    # bundle must contain the two warning labels the gate actually renders. This replaces a grep for
+    # `phán quyết audit chuẩn`, Vietnamese prose that commit 4e61f2f DELETED from App.tsx on purpose
+    # ("let the payload, not the UI, decide status") — a check that can never pass, because it
+    # asserts the presence of copy whose removal was the point. The labels below are the copy the
+    # UI genuinely emits today: `gate.ts` builds both, so a bundle lacking either was not built from
+    # this source, which is the staleness this check is for.
+    j10_shell="${REPO}/workbench/frontend/dist/index.html"
+    if [[ ! -f "$j10_shell" ]]; then
+        j10_bad="${j10_bad}frontend/dist/index.html missing (run vite build); "
+    else
+        j10_ref="$(grep -o '/assets/[^"]*\.js' "$j10_shell" 2>/dev/null | head -1)"
+        j10_ref="${j10_ref#/assets/}"
+        if [[ -z "$j10_ref" ]]; then
+            j10_bad="${j10_bad}dist/index.html references no built bundle; "
+        elif [[ ! -f "${REPO}/workbench/frontend/dist/assets/${j10_ref}" ]]; then
+            # The served shell names a bundle that is not on disk: a restart would 404 the app.
+            j10_bad="${j10_bad}dist/index.html references ${j10_ref}, which is absent from dist/assets; "
+        else
+            j10_bundle="${REPO}/workbench/frontend/dist/assets/${j10_ref}"
+            if ! grep -q "CAPTION THAY THẾ" "$j10_bundle" 2>/dev/null; then
+                j10_bad="${j10_bad}built bundle ${j10_ref} lacks the CAPTION THAY THẾ label; "
+            fi
+            if ! grep -q "LỆCH PAPER" "$j10_bundle" 2>/dev/null; then
+                j10_bad="${j10_bad}built bundle ${j10_ref} lacks the LỆCH PAPER label; "
+            fi
+        fi
+    fi
 fi
 if [[ -z "$j10_bad" ]]; then
-    pass J10 "two labels exactly; built bundle carries the display copy"
+    pass J10 "two labels exactly; the served bundle is built from this source and carries both"
 else
     fail J10 "$j10_bad"
 fi
