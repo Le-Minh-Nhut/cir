@@ -36,7 +36,16 @@ from workbench.backend.operator_config import resolve_config
 from workbench.backend.preflight import preflight_blockers
 from workbench.backend.registry import checkpoint_availability, load_registry, sha256_file
 from workbench.backend.schemas.results import PROTOCOL_IDS, Annotation, SavedCohort
-from workbench.backend.storage import cohort_metrics, get_analysis_input, get_query, list_runs, query_page, validate_analysis_selection
+from workbench.backend.storage import (
+    cohort_metrics,
+    cohort_selection,
+    composition_cohort_metrics,
+    get_analysis_input,
+    get_query,
+    list_runs,
+    query_page,
+    validate_analysis_selection,
+)
 from workbench.backend.subset_provenance import decorate_run_rows
 from workbench.scripts.evaluate_models import guarded_plan
 
@@ -1458,14 +1467,26 @@ def cohorts():
 
 @app.put("/api/cohorts")
 def save_cohort(payload: CohortInput):
-    runs, maps = validate_analysis_selection(payload.run_ids)
+    """Save a cohort over index runs, CIRCUS composition runs, or (never) a mix of both.
+
+    `cohort_selection` decides which arm by the reference's own shape: a `c:<run_id>` entry is a
+    composition run, anything else is an index run. A composition cohort carries the provenance the
+    selection was validated against -- run id, protocol, subset, condition and the rank artifact's
+    sha256 -- inside `definition.composition`. Without that block a reopened cohort could only be
+    re-scored against whatever the artifact says today, which is not the cohort that was saved.
+    """
+    runs, maps, composition_provenance = cohort_selection(payload.run_ids)
     protocol = runs[0]["protocol_id"]
     if protocol != payload.protocol_id:
         raise WorkbenchError("cross_protocol", "Cohort protocol does not match selected runs.", {"cohort_protocol": payload.protocol_id, "run_protocol": protocol})
     unknown = sorted(set(payload.query_ids) - set(maps[payload.run_ids[0]]))
     if unknown:
         raise WorkbenchError("query_alignment_mismatch", "Cohort contains query IDs outside selected run universe.", {"unknown_query_ids": unknown[:20], "unknown_query_count": len(unknown)})
-    record = SavedCohort(**payload.model_dump(), created_at=datetime.now(timezone.utc)).model_dump(mode="json")
+    definition = payload.definition
+    if composition_provenance is not None:
+        definition = {**definition, "composition": composition_provenance}
+    record = SavedCohort(**{**payload.model_dump(), "definition": definition},
+                         created_at=datetime.now(timezone.utc)).model_dump(mode="json")
     records = [item for item in read_json(COHORTS_PATH) if item["cohort_id"] != payload.cohort_id] + [record]
     write_json(COHORTS_PATH, records)
     return record
@@ -1479,12 +1500,29 @@ def _format_metric(val: Any) -> str:
     return str(val)
 
 
+def _cohort_metrics(cohort: dict) -> list[dict]:
+    """Metrics for a stored cohort, from the SAME source its selection was validated against.
+
+    A cohort saved over composition runs reads the composition rank artifacts, and passes the
+    digests it recorded as `expected`: an artifact that changed since the save is refused with
+    `cohort_artifact_changed` rather than silently producing different numbers under the same saved
+    name. A cohort saved before this existed (a DuckDB-referenced one) has no
+    `definition.composition`, falls through to `cohort_metrics`, and loads exactly as it always did.
+    """
+    provenance = (cohort.get("definition") or {}).get("composition")
+    if not isinstance(provenance, dict):
+        return cohort_metrics(cohort["run_ids"], cohort["query_ids"])
+    references = [run["reference"] for run in provenance.get("runs") or [] if run.get("reference")]
+    expected = {run["reference"]: run.get("rank_artifact_sha256")
+                for run in provenance.get("runs") or [] if run.get("reference")}
+    return composition_cohort_metrics(references, cohort["query_ids"], expected=expected)
+
 @app.get("/api/cohorts/{cohort_id}/export/{format}")
 def export_cohort(cohort_id: str, format: str):
     cohort = next((item for item in read_json(COHORTS_PATH) if item["cohort_id"] == cohort_id), None)
     if cohort is None:
         raise HTTPException(404, {"error": "cohort_not_found", "message": "Cohort not found.", "details": {"cohort_id": cohort_id}})
-    metrics = cohort_metrics(cohort["run_ids"], cohort["query_ids"])
+    metrics = _cohort_metrics(cohort)
     if format == "json":
         return {**cohort, "metrics": metrics}
     if format == "csv":

@@ -365,7 +365,7 @@ is vocabulary, the reason is the sentence a reader acts on.)
 
 ---
 
-## 9. Cohort save → reopen → export (current HEAD)
+## 9. Cohort save → reopen → export (BEFORE the fix — kept as the reproduction)
 
 The cohort API is scoped to the per-query **index** (`storage.validate_analysis_selection` →
 `get_runs` over `runs`/`queries` DuckDB tables), which holds **0 rows** on this deployment
@@ -477,11 +477,165 @@ workbench/envs/ctl312h/bin/python -m pytest \
 
 ---
 
+## Live confirmation after restart
+
+One restart, at the end of the pass, as scheduled: `systemctl --user restart cir-workbench-backend.service`
+→ **MainPID 1476678**, `ActiveState active`, first `/api/models` 200 after ~2 polls (the first request
+pays the cold rebuild). The frontend unit was **not** touched.
+
+**The GPU CLVC Full run survived.** It was not visible when this pass began, launched while the
+restart was being prepared, and is alive afterwards:
+
+```
+1477254  1735    03:01  bash workbench/scripts/gpu_job.sh … composition_eval.py --config /home/heheboiz/cir_rerun_20261109.yaml
+                        --models clvc_net --subsets full --topk-depth 100
+                        --conditions multimodal,text_only_black_image,clvc_image_encoder_only
+1477261  1477254 03:01  workbench/envs/ctl312h/bin/python workbench/scripts/composition_eval.py …
+nvidia-smi: 99 %, 1701 MiB
+```
+
+`ppid 1735` is the operator shell that started `gpu_job.sh`, not the backend, so the restart could
+not reach it — confirmed by the PIDs being unchanged across the restart, not just inferred.
+
+### 1. `/api/models` — a present ResNet-50 is no longer reported missing
+
+```
+first request after restart : 200, 86 658 B, 67.28 s   (cold rebuild)
+second                      : 200, 86 658 B,  0.026 s
+third                       : 200, 86 658 B,  0.017 s   (byte-identical to the second)
+clvc_net checkpoints[0].blocking_reasons = ["command not runnable: COMMAND_BLOCKED_SOURCE_ENTRYPOINT"]
+tgcir    checkpoints[0].blocking_reasons = ["command not runnable: COMMAND_BLOCKED_SOURCE_ENTRYPOINT"]
+```
+
+Both asset lines are **gone**: `torchvision ResNet-50 ImageNet weights missing: …` and
+`external runtime asset file missing: …` no longer appear, and tgcir's CLIP provenance line is gone
+too. What remains is exactly (a) from §1 — the pinned entrypoint — which is true and is not a claim
+about composition. This is the live defect from `95-external-asset-unblock.md` closed.
+
+Stamp cost, measured in-process on the same code: **0.016 s / 73 entries** (warm 0.006 s). The
+per-request cost of the live endpoint is the second/third call above (0.017–0.026 s), which is that
+stamp plus JSON serialisation — the 98 s rebuild is not on the request path.
+
+### 2. Run detail — `recall_at_1`, `derived_metrics`, `conditions_display`
+
+`GET /api/composition/runs/7b1fa85007bffdab931f7f19?subset=full` → **200**, 72 958 B, 1.77 s:
+
+```
+recall_at_1_multimodal: 6.3135099117108116
+per-bucket: multimodal 6.3135099117108116 · text_only 1.949025487256372 · image_only 0.08329168748958854
+derived_metrics.recall_at_1.status = "VERIFIED", source = "derived_record"
+conditions_display = [{multimodal, "Image + text"}, {text_only_black_image, "Text only"},
+                      {image_only_empty_text, "Image only"}]
+execution_status COMPLETED · query_count 6003
+```
+
+`GET …/runs/eab10106b2df8e97fb7a5ce5?subset=full` → **200**, `execution_status PARTIAL`:
+
+```
+clvc r1: multimodal 1.4106050305914344 · text_only 0.10197144799456152 · image_only null
+         reason "no queries have an exact rank" · derived status VERIFIED
+```
+
+All six non-null values equal `derived/recall_at_1/…json` exactly, live.
+
+### 3. `statistics.query_count` on a smoke
+
+`GET …/runs/1eee4c0adbc93f7708205a5e/queries?subset=full&condition=multimodal&limit=1&top_k=10` →
+**200**:
+
+```
+statistics.query_count: 5      (was 6003)
+denominators: image_only_empty_text 5 · multimodal 5 · text_only_black_image 5
+statistics_whole_run.query_count: 5
+```
+
+### 4. `subset_provenance` — identical in both call orders
+
+```
+detail before list: (80174, 'bb7406d633bad67e0f4f6daca0bed01e921fafd5c2e0bf1da8adcbda6e359e57')  prov: False
+detail after  list: (80174, 'bb7406d633bad67e0f4f6daca0bed01e921fafd5c2e0bf1da8adcbda6e359e57')  prov: False
+identical: True
+```
+
+One sha256 pair, live, through HTTP. (80 174 B rather than the in-process 80 104 B because the live
+payload goes through FastAPI's JSON encoder, which does not sort keys; within this process the two
+orders are byte-identical, which is the property.)
+
+### 5. A run with results still opens while a new launch is refused
+
+```
+GET  /api/composition/runs/7b1fa85007bffdab931f7f19?subset=full  → 200, COMPLETED, query_count 6003
+POST /api/jobs {tgcir, tgcir_archive_unresolved, fashioniq_val_split, top_k 10} → 409
+{"detail":{"error":"evaluation_blocked","message":"Official evaluation is not ready.",
+  "details":{"blockers":["command not runnable: COMMAND_BLOCKED_SOURCE_ENTRYPOINT"]}}}
+```
+
+Both directions in the same live process: the number is readable, the launch is refused.
+
+### 6. Cohort round-trip — save → reopen → export, HTTP **and** browser
+
+The composition arm in `storage.py` (`c:<run_id>` references) makes this work for the runs this
+deployment actually has. Live, over HTTP:
+
+```
+PUT /api/cohorts {cohort_id:"rt-live-100", protocol_id:"circus_fashioniq_release_v1",
+                  query_ids:["7:1","7:2","7:603"], run_ids:["c:7b1fa85007bffdab931f7f19"],
+                  definition:{preset:"all",k:10,subset:"full"}}                  → 200
+  saved run_ids ["c:7b1fa85007bffdab931f7f19"] · protocol circus_fashioniq_release_v1 · qids ["7:1","7:2","7:603"]
+  provenance: family composition · protocol circus_fashioniq_release_v1 ·
+              qid_subsets ["full","sf","validated"] ·
+              conditions {image_only_empty_text 6003, multimodal 6003, text_only_black_image 6003}
+              ranks sha256 188d84febd9a1ebc…
+GET  /api/cohorts                                        → 200, row reopens with the same ids
+GET  /api/cohorts/rt-live-100/export/{json,csv,markdown}  → 200 / 200 / 200
+  json metrics: run_id 7b1fa85007bffdab931f7f19 · query_count 3 · scored_count 3 · r10 33.3333
+```
+
+Then the same path through the actual UI (Chromium, `?area=failures&view=consensus&
+runs=c:7b1fa85007bffdab931f7f19`), which exercises the frontend change too:
+
+```
+save button      "Lưu tập đã lọc (6,003 query)" → feedback "Đã lưu", no console errors
+saved cohort     cohort-20261112T014331 · run_ids ["c:7b1fa85007bffdab931f7f19"] · 6003 qids · subset full
+reopen           ?area=notebook&view=cohorts → card `cohort-20261112T014331`,
+                 "6,003 query · 1 lượt", detail shows protocol circus_fashioniq_release_v1, preset all, cutoff @K 10
+                 no console errors, no failed requests
+export (proxy)   :5173/api/cohorts/cohort-20261112T014331/export/{json,csv,markdown} → 200/200/200
+                 json: run_ids ["c:7b1fa85007bffdab931f7f19"], protocol circus_fashioniq_release_v1,
+                       6003 qids, subset full, r1 6.3135099117108116, r10 23.33833083458271
+```
+
+`r10 23.33833083458271` equals the run's own `metrics.recall_at_10` (23.33833083458271) and
+`r1 6.3135099117108116` equals its served R@1 — the cohort's numbers come from the same artifact the
+run reports, on 6003 real queries. **The round trip is closed end to end in the browser, not only in
+curl.**
+
+Refusal paths, live (all 400, each naming its cause):
+
+```
+unknown run   → run_not_found            {run_id: deadbeef…}
+unranked qid  → query_alignment_mismatch {unknown_query_ids: ["9999:1"]}
+mixed family  → mixed_data_kind          {index_run_ids, composition_references}
+wrong proto   → cross_protocol           {cohort_protocol, run_protocol}
+stale artifact→ cohort_artifact_changed  {saved_rank_artifact_sha256: 000…, current: 188d84f…}
+```
+
+Old cohort files still load: `test_a_cohort_saved_before_the_composition_arm_still_loads` writes a
+pre-change record (no `definition.composition`) and asserts it reaches `cohort_metrics` with its
+original arguments — the DuckDB arm, unchanged.
+
+Both throwaway cohorts (`rt-live-100`, `cohort-20261112T014331`) were deleted; `GET /api/cohorts`
+now returns `[]` and `cohorts.json` holds `[]`.
+
 ## Còn chặn
 
-1. **Cohort round-trip on this HEAD is not exercisable** (§9). Blocked on `workbench/backend/storage.py`
-   (not mine). Patch spec above.
-2. **The live backend still serves the pre-fix code.** `cir-workbench-backend.service` was not
+1. ~~**Cohort round-trip on this HEAD is not exercisable** (§9).~~ **CLOSED** — the composition arm
+   landed in `storage.py` and the round trip is proven over HTTP and in the browser (§ "Live
+   confirmation after restart" item 6). The §9 text is kept as the reproduction of the defect.
+2. ~~**The live backend still serves the pre-fix code.**~~ **CLOSED** — restarted once at MainPID
+   1476678; every number in the "Live confirmation after restart" section is from the live process.
+   The paragraph below records what was true before that restart.
+   **The live backend still served the pre-fix code.** `cir-workbench-backend.service` was not
    restarted (explicitly out of scope), so every "after" number above is from the source tree in a
    fresh process / the test suite, not from :8000. The live payloads quoted in §1, §3-before and §8 are
    the old code and remain what the running process returns until the lead schedules a restart.

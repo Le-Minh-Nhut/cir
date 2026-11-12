@@ -78,14 +78,19 @@ export function FailuresPage({ data, location, onGoto, onSaved }: {
     const cohortId = `cohort-${new Date().toISOString().replace(/[-:.]/g, "").slice(0, 15)}`;
     setState({ status: "saving" });
     try {
-      const runIds = pages.map((entry) => entry.runKey);
-      const compositionOnly = runIds.every((key) => key.startsWith("c:"));
-      if (compositionOnly) {
-        // The cohort API is scoped to the per-query index (`validate_analysis_selection`), which
-        // does not contain CIRCUS release runs. Sending them would produce a 400 that looks like a
-        // UI bug, so the request file records the contract and the UI states the limit.
-        throw new Error("API cohort chỉ nhận run của chỉ mục per-query; CIRCUS release run chưa có endpoint cohort. Đã ghi yêu cầu backend.");
+      const runKeys = pages.map((entry) => entry.runKey);
+      const hasComposition = runKeys.some((key) => key.startsWith("c:"));
+      const hasIndex = runKeys.some((key) => key.startsWith("i:"));
+      if (hasComposition && hasIndex) {
+        // The backend refuses this too (`mixed_data_kind`), and it must: a CIRCUS rank and an index
+        // top-K are different quantities. Saying so here is the same rule stated before the round
+        // trip, not a second rule.
+        throw new Error("Không thể trộn lượt CIRCUS với lượt của chỉ mục per-query trong một cohort: hai loại báo hai đại lượng khác nhau.");
       }
+      // A composition reference keeps its `c:` prefix: that prefix is what tells the backend which
+      // arm validates it. An index reference is sent bare, exactly as before, so every cohort saved
+      // through this page still loads.
+      const runIds = runKeys.map((key) => (key.startsWith("c:") ? key : key.slice(2)));
       const response = await fetch("/api/cohorts", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -93,8 +98,9 @@ export function FailuresPage({ data, location, onGoto, onSaved }: {
           cohort_id: cohortId,
           protocol_id: location.protocol,
           query_ids: filtered.map((row) => row.query_id),
-          run_ids: runIds.map((key) => key.slice(2)),
+          run_ids: runIds,
           definition: { preset, k: location.k, category: location.category, outcome: location.outcome,
+                        subset: location.subset,
                         scoring: "unscored-separate", cohort: scope.cohort, partial: scope.partial },
           notes: `saved from failure analysis; ${filtered.length} of ${scope.rows.length} rows`,
         }),

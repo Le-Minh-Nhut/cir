@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from collections import defaultdict
+from collections.abc import Mapping
 from pathlib import Path
 from statistics import mean, median
 from typing import Any
@@ -169,6 +170,245 @@ def _query_maps(run_ids: list[str], database_path: Path | None = None) -> dict[s
 
 def get_query_universe(run_ids: list[str], database_path: Path | None = None) -> dict[str, dict[str, dict[str, Any]]]:
     return _query_maps(run_ids, database_path)
+
+# ---------------------------------------------------------------------------------------------
+# CIRCUS composition cohorts
+#
+# A cohort used to be describable only in the per-query DuckDB index, and the CIRCUS release runs
+# that this workbench actually serves live in `artifacts/composition`, not in that index. So the
+# release was the only dataset with real numbers AND the only dataset whose cohorts could not be
+# saved: `PUT /api/cohorts` answered `run_not_found` for every run the UI lists
+# (`raw/verify/100-api-cache-and-ui-blocked.md` §9). These functions are the second arm.
+#
+# A composition reference is spelled `c:<run_id>`. The prefix is the disambiguator: a bare run id is
+# a DuckDB index reference exactly as before, so every existing cohort and every existing caller of
+# the DuckDB arm keeps working, and a composition run can never be mistaken for an index run whose
+# id happens to collide.
+# ---------------------------------------------------------------------------------------------
+
+COMPOSITION_PREFIX = "c:"
+
+def is_composition_reference(reference: str) -> bool:
+    """Whether a selection entry names a CIRCUS composition run rather than an index run."""
+    return isinstance(reference, str) and reference.startswith(COMPOSITION_PREFIX)
+
+def composition_run_id(reference: str) -> str:
+    return reference[len(COMPOSITION_PREFIX):]
+
+def _composition_rank_artifact(reference: str) -> tuple[str, Path, dict[str, Any]]:
+    """`(run_id, ranks_path, ranks)`, refusing a reference that names no usable artifact.
+
+    Refusal is by NAME and by cause: an unknown run id says which id, and a missing artifact says
+    which run has ranks nowhere. A cohort cannot be validated against a table that does not exist.
+    """
+    from workbench.backend.composition import resolve_composition_path
+    from workbench.backend.operator_config import resolve_config
+
+    run_id = composition_run_id(reference)
+    if not run_id:
+        raise WorkbenchError("query_alignment_mismatch",
+                             "A composition reference must name a run id after the prefix.",
+                             {"reference": reference})
+    artifacts = resolve_config().WORKBENCH_ARTIFACTS_ROOT
+    try:
+        ranks_dir = resolve_composition_path(artifacts, f"runs/{run_id}/ranks")
+    except ValueError as error:
+        raise WorkbenchError("run_not_found", "Composition run was not found.",
+                             {"run_id": run_id, "reference": reference}) from error
+    files = sorted(ranks_dir.glob("*.json")) if ranks_dir.is_dir() else []
+    if not files:
+        raise WorkbenchError("run_not_found", "Composition run was not found.",
+                             {"run_id": run_id, "reference": reference,
+                              "composition_ranks_path": str(ranks_dir)})
+    path = files[0]
+    try:
+        ranks = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as error:
+        raise WorkbenchError("run_not_found",
+                             "The composition rank artifact exists but could not be read.",
+                             {"run_id": run_id, "rank_artifact": str(path)}) from error
+    if not isinstance(ranks, dict) or not isinstance(ranks.get("ranks"), dict):
+        raise WorkbenchError("run_not_found",
+                             "The composition rank artifact carries no rank table.",
+                             {"run_id": run_id, "rank_artifact": str(path)})
+    return run_id, path, ranks
+
+def composition_selection(references: list[str]) -> tuple[list[dict[str, Any]], dict[str, dict[str, dict[str, Any]]], dict[str, Any]]:
+    """Runs, query maps and provenance for a cohort made of composition runs.
+
+    The map for each run is `{qid: {"target_rank": ..., "ranks": {...}}}`, built from the SAME
+    artifact `cohort_metrics` reads, so a saved cohort and its reopened metrics cannot come from two
+    different sources. The provenance block records the run id, protocol, subset, condition and the
+    sha256 of the artifact the selection was validated against; a cohort whose artifact changes
+    afterwards is refusable by comparing that digest, rather than silently re-scored.
+    """
+    from workbench.backend.composition import load_cached_release
+
+    release = load_cached_release()
+    if release is None:
+        raise WorkbenchError("query_dataset_unavailable",
+                             "The CIRCUS release is not loaded locally, so a composition cohort "
+                             "cannot be validated.",
+                             {"references": references})
+    protocol_id = str(getattr(getattr(release, "gallery", None), "protocol_id", ""))
+    release_qids = {query.qid for query in release.queries}
+    runs: list[dict[str, Any]] = []
+    maps: dict[str, dict[str, dict[str, Any]]] = {}
+    provenance_runs: list[dict[str, Any]] = []
+    conditions: dict[str, int] = {}
+    for reference in references:
+        run_id, path, ranks = _composition_rank_artifact(reference)
+        table = ranks["ranks"]
+        for condition, values in table.items():
+            if isinstance(values, Mapping):
+                conditions[condition] = len(values)
+        # The run's own universe: the qids its OWN artifact ranks. Comparing qid sets across runs is
+        # then a statement about which queries both were actually able to score, not about which
+        # queries the release happens to hold.
+        run_map: dict[str, dict[str, Any]] = {}
+        for condition, values in table.items():
+            if not isinstance(values, Mapping):
+                continue
+            for qid, rank in values.items():
+                if qid not in release_qids:
+                    continue
+                entry = run_map.setdefault(qid, {"query_id": qid, "ranks": {}, "target_rank": None})
+                entry["ranks"][condition] = rank
+                if condition == "multimodal":
+                    entry["target_rank"] = rank
+        maps[reference] = run_map
+        digest = _sha256_of_file(path)
+        runs.append({"run_id": run_id, "reference": reference, "protocol_id": protocol_id,
+                     "data_kind": "circus_composition", "subset": "",
+                     "top_k_saved": 0, "family": "composition"})
+        provenance_runs.append({"reference": reference, "run_id": run_id,
+                                "protocol_id": protocol_id,
+                                "rank_artifact": str(path), "rank_artifact_sha256": digest})
+    selected_qids = set().union(*maps.values()) if maps else set()
+    protocols = {run["protocol_id"] for run in runs}
+    if len(protocols) != 1 or not protocol_id:
+        raise WorkbenchError("cross_protocol",
+                             "Cross-protocol analysis is invalid. Select runs from one protocol.",
+                             {"protocol_ids": sorted(protocols)})
+    return runs, maps, {"family": "composition", "protocol_id": protocol_id,
+                        # The release subsets the selected qids BELONG to (a qid can be in all
+                        # three). Deliberately not named `subset`: the cohort's own scope is the
+                        # caller's `definition.subset`, and conflating "these qids are also in `sf`"
+                        # with "this cohort is scoped to `sf`" would state the wrong scope.
+                        "qid_subsets": sorted({subset for query in release.queries
+                                               if query.qid in selected_qids
+                                               for subset in query.subsets}),
+                        "conditions": dict(sorted(conditions.items())),
+                        "runs": provenance_runs}
+
+def _sha256_of_file(path: Path) -> str:
+    import hashlib
+
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for block in iter(lambda: handle.read(1 << 20), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+def composition_cohort_metrics(references: list[str], query_ids: list[str], *,
+                               expected: Mapping[str, str] | None = None) -> list[dict[str, Any]]:
+    """Per-run cohort metrics from the composition rank artifacts.
+
+    `expected` maps a reference to the artifact digest the cohort was SAVED against. A mismatch is a
+    refusal (`cohort_artifact_changed`), never a silent re-score: the saved cohort describes a table,
+    and a table that changed makes the saved numbers describe something no longer on disk.
+    """
+    _, maps, provenance = composition_selection(references)
+    by_reference = {item["reference"]: item for item in provenance["runs"]}
+    for reference in references:
+        claimed = (expected or {}).get(reference)
+        actual = by_reference[reference]["rank_artifact_sha256"]
+        if claimed and claimed != actual:
+            raise WorkbenchError(
+                "cohort_artifact_changed",
+                "The run artifact this cohort was saved against has changed, so its saved numbers "
+                "no longer describe the artifact on disk. Re-save the cohort.",
+                {"reference": reference, "run_id": by_reference[reference]["run_id"],
+                 "saved_rank_artifact_sha256": claimed, "current_rank_artifact_sha256": actual})
+    rows: list[dict[str, Any]] = []
+    for reference in references:
+        run_map = maps[reference]
+        ranks = [run_map[qid]["target_rank"] for qid in query_ids
+                 if qid in run_map and isinstance(run_map[qid].get("target_rank"), int)]
+        rows.append({
+            # `run_id`, not the `c:` reference: the export's column set is shared with the DuckDB
+            # arm (CSV/Markdown are written from `metrics[0]`'s keys), and adding a column here
+            # would silently change the shape of every cohort export. The reference is derivable
+            # (`c:<run_id>`) and is recorded in the cohort's provenance.
+            "run_id": by_reference[reference]["run_id"],
+            "query_count": len(query_ids),
+            "scored_count": len(ranks),
+            **{f"r{k}": (100 * sum(rank <= k for rank in ranks) / len(ranks)) if ranks else None
+               for k in (1, 5, 10, 20, 50, 100)},
+            "mean_target_rank": mean(ranks) if ranks else None,
+            "median_target_rank": median(ranks) if ranks else None,
+        })
+    return rows
+
+def composition_unknown_query_ids(references: list[str], query_ids: list[str]) -> list[str]:
+    """qids in `query_ids` that no selected composition run ranks at all.
+
+    A qid that exists in the release but has no rank in the run is NOT a valid member of that run's
+    cohort: the cohort would carry a query the run never scored, and its metrics would silently
+    treat it as absent. Refused by name, with a bounded sample like the DuckDB arm.
+    """
+    _, maps, _ = composition_selection(references)
+    universe = set().union(*(set(mapping) for mapping in maps.values())) if maps else set()
+    return sorted(set(query_ids) - universe)
+
+def cohort_selection(references: list[str], *, k: int | None = None,
+                     require_top_k: bool = True, database_path: Path | None = None):
+    """`validate_analysis_selection` for a selection that mixes both families.
+
+    Split, not duplicated: an index reference goes through the DuckDB arm exactly as before, a
+    `c:` reference through the composition arm, and the two results are merged. A selection that is
+    ALL composition is therefore handled entirely by the composition arm, which is what makes a
+    CIRCUS cohort saveable today without touching the index at all.
+    """
+    composition = [reference for reference in references if is_composition_reference(reference)]
+    index = [reference for reference in references if not is_composition_reference(reference)]
+    if not composition:
+        runs, maps = validate_analysis_selection(references, k=k, require_top_k=require_top_k,
+                                                 database_path=database_path)
+        return runs, maps, None
+    if index:
+        raise WorkbenchError("mixed_data_kind",
+                             "A cohort cannot mix per-query index runs and CIRCUS composition runs: "
+                             "the two report different quantities.",
+                             {"index_run_ids": index, "composition_references": composition})
+    runs, maps, provenance = composition_selection(composition)
+    if k is not None and not 1 <= k <= 200:
+        raise WorkbenchError("insufficient_top_k_depth", "K must be between 1 and 200.",
+                             {"requested_k": k})
+    baseline_reference, baseline = runs[0]["reference"], maps[runs[0]["reference"]]
+    baseline_ids = set(baseline)
+    for run in runs[1:]:
+        candidate = maps[run["reference"]]
+        missing = sorted(baseline_ids - set(candidate))
+        extra = sorted(set(candidate) - baseline_ids)
+        if missing or extra:
+            raise WorkbenchError(
+                "query_alignment_mismatch",
+                "Selected runs do not have an identical query universe.",
+                {"baseline_run_id": runs[0]["run_id"], "run_id": run["run_id"],
+                 "missing_query_count": len(missing), "missing_query_ids": missing[:20],
+                 "extra_query_count": len(extra), "extra_query_ids": extra[:20]})
+        for query_id, expected in baseline.items():
+            actual = candidate[query_id]
+            if expected["ranks"] != actual["ranks"]:
+                raise WorkbenchError(
+                    "canonical_query_mismatch",
+                    "Canonical query fields differ for the same query_id.",
+                    {"query_id": query_id, "baseline_run_id": runs[0]["run_id"],
+                     "run_id": run["run_id"],
+                     "mismatches": {"ranks": {"expected": expected["ranks"],
+                                              "actual": actual["ranks"]}}})
+    return runs, maps, provenance
 
 
 def validate_analysis_selection(run_ids: list[str], *, k: int | None = None, require_top_k: bool = True, database_path: Path | None = None) -> tuple[list[dict[str, Any]], dict[str, dict[str, dict[str, Any]]]]:
