@@ -14,21 +14,27 @@ GPU, không restart service.
 ## §0 — Trạng thái đo
 
 Các số trong báo cáo được đo tại **revision của chiến dịch**, không phải tại một tip sha. Điều kiện để
-đọc chúng là **bất biến cây production**, không phải `HEAD` bằng đúng một sha:
+đọc chúng là **bất biến cây production**, không phải `HEAD` bằng đúng một sha. Có **hai** phép đo, ghi
+theo mốc thời gian, và phép đo sau **không** phủ định phép đo trước — nó là hệ quả của việc nâng pin.
+
+### (a) Đo trong chiến dịch (trước khi nâng pin)
+
+Tại thời điểm audit baseline, `HEAD` là `40c897c31bbdd76b5a76f65935c7dd0f7fef0e94` và bất biến đúng
+so với base lịch sử:
 
 ```
 $ git diff --quiet aea143bd8894881ad7d5b341c21dbeff25cfaaaf HEAD -- . \
     ':(exclude)workbench/docs' ':(exclude)workbench/tests'
-exit 0        # đo tại HEAD 40c897c31bbdd76b5a76f65935c7dd0f7fef0e94
+exit 0        # HEAD = 40c897c31bbdd76b5a76f65935c7dd0f7fef0e94
 ```
 
-Nguồn: `BASELINE.md:387-393`, `raw/baseline/03-prod-tree-invariant.txt` (`prod_tree_equals_aea143bd=0`),
-`20261111-master-audit/FINAL_REPORT_20261112.vi.md:75-85`. Các commit **chỉ-tài-liệu** sau mốc đó không
-làm sai các số này, vì chúng không chạm cây production (`BASELINE.md:55-56`: pin cách HEAD 4 commit, cả
-bốn chỉ-tài-liệu).
+Nguồn: `raw/baseline/03-prod-tree-invariant.txt` (`prod_tree_equals_aea143bd=0`), `BASELINE.md:387-393`,
+`20261111-master-audit/FINAL_REPORT_20261112.vi.md` §0.1. Các commit **chỉ-tài-liệu** sau mốc đó không
+làm sai các số này (`BASELINE.md:55-56`).
 
-**Cây production hiện KHÁC pin, và đây là sửa lỗi production của chính chiến dịch này.** Đo lại lúc
-viết báo cáo (`HEAD = cf6ba468af5b3a6f47174bdd0d50866f23b7006f`):
+Sau đó **chính chiến dịch này** ship ba sửa lỗi production — `cb0b228` (so hai hash module riêng; phục
+vụ điều kiện run tự khai), `23e5b8f` (writer+reader `parity-absolute-relative/v2`), `7df87ab`
+(`standard` là chuỗi + `standards` breakdown). Vì vậy phép so với pin cũ, đo lại trong chiến dịch, đọc:
 
 ```
 $ git diff --quiet aea143bd HEAD -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'
@@ -40,14 +46,34 @@ $ git diff --stat aea143bd HEAD -- . ':(exclude)workbench/docs' ':(exclude)workb
  3 files changed, 400 insertions(+), 45 deletions(-)
 ```
 
-Ba file đó đến từ ba commit production của chiến dịch: `cb0b228` (so hai hash module riêng; phục vụ
-điều kiện run tự khai), `23e5b8f` (writer+reader `parity-absolute-relative/v2`), `7df87ab` (`standard`
-là chuỗi + `standards` breakdown). Vì vậy **mốc đo của báo cáo là pin `aea143bd`**, còn cây đang chạy
-mang thêm ba sửa lỗi đó — và pin **phải được nâng**; hệ quả đo được ghi ở §9.
+Cả ba file đều **đã commit** (`git status --porcelain` giới hạn ở đường production: rỗng). Lúc đó guard
+siêu-dữ-liệu release đỏ đúng như thiết kế, vì nó assert pin chứa mọi byte production trên đĩa:
+`1 failed, 7 passed in 16.41s` (`--basetemp=/tmp/pin_cf6`).
 
-Bất biến dạng "so với chính cây trên đĩa" hiện **fail** (exit `1`), đúng như record đã dự báo và đúng
-như `test_handoff_commands.py::test_no_release_document_points_at_a_superseded_source_sha` phát hiện:
-`1 failed, 7 passed in 16.41s` (đo trong lượt này, `--basetemp=/tmp/pin_cf6`).
+### (b) Đo sau khi nâng pin — bất biến NAY ĐÚNG tại pin
+
+Pin đã được nâng lên **`cf6ba468af5b3a6f47174bdd0d50866f23b7006f`** sau một sweep stationary, và điều
+kiện đọc số **nay thoả**:
+
+```
+$ git diff --quiet cf6ba468af5b3a6f47174bdd0d50866f23b7006f HEAD -- . \
+    ':(exclude)workbench/docs' ':(exclude)workbench/tests'
+exit 0        # HEAD = 9f9c751f62005b0e77fd40986936022bd15423d9
+$ git diff --stat cf6ba468 HEAD -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'
+(rỗng)
+$ git diff --stat cf6ba468 -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'
+(rỗng)        # so với chính cây trên đĩa cũng rỗng
+```
+
+`HEAD` = `origin/research/cir-failure-workbench` = `9f9c751f62005b0e77fd40986936022bd15423d9`,
+`git rev-list --left-right --count` = `0	0`. `TESTED_SOURCE_SHA` = `cf6ba468…` trong **cả hai**
+`FINAL_PC_RELEASE_VERDICT.md` và `PC_PILOT_HANDOFF.md`. Guard release: **8 passed, 0 failed** in 14.65 s
+(đo trong lượt này, `--basetemp=/tmp/pin_after_adv`).
+
+**Hệ quả, nói thẳng:** ba file `composition.py` / `parity_gate.py` / `gate.ts` **nằm TRONG** cây được
+pin, không phải ngoài nó. Mọi con số trong báo cáo này đọc được **từ pin** `cf6ba468`; `HEAD` có thể là
+**bất kỳ hậu duệ chỉ-tài-liệu nào** (hiện là `9f9c751`) mà không làm sai một số nào. Phép đo (a) ở trên
+là lịch sử của một khiếm khuyết **đã đóng**, không phải trạng thái hiện tại.
 
 ---
 
@@ -679,14 +705,19 @@ Pin không còn được phát biểu như "HEAD phải bằng sha X", mà là *
 duệ chỉ-tài-liệu có **cùng cây production** (`git diff --quiet aea143bd HEAD -- …` rỗng), và **đó** là
 điều kiện để đọc số, "không phải `HEAD` bằng đúng sha nào". Dòng §9 tương ứng đổi từ một khẳng định
 "số liệu sống" sang hai lần đo ở hai mốc: *"Hai lần đo hai mốc; không mốc nào là 'sha phải giữ'"*
-(`git diff 40c897c HEAD` của report, khối `+20 −5`).
+(`git diff 40c897c HEAD` của report, khối `+20 −5`). Cách diễn đạt đó áp dụng nguyên vẹn cho pin hiện
+tại: mốc đo là `cf6ba468`, `HEAD` là `9f9c751` (hậu duệ chỉ-tài-liệu), bất biến rỗng ở cả hai phép so
+(§0(b)).
 
 ### 7.3 Dòng baseline của verdict
 
-`FINAL_PC_RELEASE_VERDICT.md:24` (row "Production tree") đã nêu đúng base `aea143bd8894881ad7d5b341c21dbeff25cfaaaf`;
-row này **cho người đọc**, guard **không** đọc nó — guard đọc `TESTED_SOURCE_SHA` (row trên). Đo lại
-sau khi row được sửa: base đúng, nhưng bất biến không còn đúng so với `HEAD` hoặc so với đĩa, vì hai
-commit production `cb0b228` và `23e5b8f` (cộng `7df87ab`) landed sau pin — xem §0 (`BASELINE.md:385-393`).
+`FINAL_PC_RELEASE_VERDICT.md:24` (row "Production tree") nêu base **`cf6ba468af5b3a6f47174bdd0d50866f23b7006f`** —
+cùng sha với `TESTED_SOURCE_SHA`; row này **cho người đọc**, guard **không** đọc nó — guard chỉ đọc
+`TESTED_SOURCE_SHA` (row trên). Bất biến dạng "base == cây production" **nay đúng**: `git diff --quiet
+cf6ba468 HEAD -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'` exit `0`, và cùng phép so với
+chính cây trên đĩa cũng rỗng (§0(b)). Trước khi nâng pin, base cũ `aea143bd` **không** còn đúng vì ba
+commit production `cb0b228`, `23e5b8f`, `7df87ab` landed sau nó (`BASELINE.md:385-393`) — đó là lý do
+pin phải dịch; việc dịch đó đã xong.
 
 ### 7.4 Sửa giá trị ENCODER ở các tài liệu trích số pre-seed
 
@@ -846,37 +877,40 @@ Mỗi dòng đếm **độc lập** từ bảng/lệnh nêu kèm; **không** dò
 | G1 PASS | **3** | encoder (0/30), hint (0/36, v2), limn (0/18) |
 | G2 PASS | **0** | encoder 9 failure, hint 2, limn 3 |
 | test đã collect (toàn suite, cây hiện tại) | **3226** | `pytest workbench/tests --collect-only -q` |
-| test đã collect tại pin `aea143bd` | **3193** | `107-sweep-aea143bd.md` §1 (`--collect-only -q`) |
-| sweep tại pin: passed / failed / skipped | **3126 / 20 / 47 = 3193**, wall **3684.01 s (1:01:24)**, `^ERROR` 0, `Errno 28` 0 | `107-sweep-aea143bd.md` §2 |
-| sweep: diff tập failure so sweep trước (`117fc172`) | **0 mới, 0 rơi, 20 y nguyên** | `107-sweep-aea143bd.md` §3 |
-| sweep tại **chính chiến dịch này** (cây sau 3 commit production) | **`cf6ba468`**: 3159 passed / 20 failed / 47 skipped = **3226** collected, wall **4037.65 s (1:07:17)**, `^ERROR` 0, `Errno 28` 0; diff tập failure so sweep `aea143bd`: **0 mới, 0 rơi, 20 y nguyên** | `SWEEP_cf6ba468.md` §2-§3 (log `/tmp/sweep_cf6ba468.txt`) |
+| test đã collect tại pin **trước** (`aea143bd`, lịch sử) | **3193** | `107-sweep-aea143bd.md` §1 (`--collect-only -q`) |
+| test đã collect tại pin **hiện tại** (`cf6ba468`) | **3226** | khớp `3159 + 20 + 47` của sweep tại chính pin đó (§9 dưới); cây hiện tại collect cùng số |
+| sweep tại pin **trước** (`aea143bd`, lịch sử): passed / failed / skipped | **3126 / 20 / 47 = 3193**, wall **3684.01 s (1:01:24)**, `^ERROR` 0, `Errno 28` 0 | `107-sweep-aea143bd.md` §2 |
+| sweep đó: diff tập failure so sweep trước nữa (`117fc172`) | **0 mới, 0 rơi, 20 y nguyên** | `107-sweep-aea143bd.md` §3 |
+| **sweep tại pin hiện tại** (`cf6ba468`) | **3159 passed / 20 failed / 47 skipped = 3226** collected, wall **4037.65 s (1:07:17)**, `^ERROR` 0, `Errno 28` 0; diff tập failure so sweep `aea143bd`: **0 mới, 0 rơi, 20 y nguyên**. Trong **chính** sweep này guard release còn **đỏ** vì sweep chạy **trước** lệnh nâng pin; guard xanh **sau** đó (`8 passed`) — tập 20 failure của dòng này **không** còn gồm guard đó ở trạng thái hiện tại | `SWEEP_cf6ba468.md` §2-§3 (log `/tmp/sweep_cf6ba468.txt`) |
 | pin hiện tại | **`cf6ba468af5b3a6f47174bdd0d50866f23b7006f`** — nâng sau một sweep stationary có tập failure **trùng khít** tập của pin trước (`aea143bd`: 0 mới, 0 rơi, 20 y nguyên) | `FINAL_PC_RELEASE_VERDICT.md` / `PC_PILOT_HANDOFF.md`, `TESTED_SOURCE_SHA` |
 | test mới cho v2 | **25+** | 19 def / 27 case trong `test_parity_absolute_relative_v2.py`; +3 backend; +2 `standard`-as-string; `V2_STANDARD.md:186-189` → **46 passed** cho hai file |
 | test `test_composition_api_contracts.py` | **10** passed (7 trước `cb0b228`) | `BACKEND_DEFECTS.md:293` |
 | test `test_review_defects_evaluator.py` | **28** passed (25 trước) | `BACKEND_DEFECTS.md:294` |
 | 14 file composition-related | **143** passed, 0 failed | `BACKEND_DEFECTS.md:297` |
 | `test_api_outcome_triple.py` / `test_derived_subset_status.py` | **9** / **5** passed | `BACKEND_DEFECTS.md:295-296` |
-| `test_handoff_commands.py` (đo trong lượt này) | **1 failed, 7 passed**, 16.41 s | `pytest … --basetemp=/tmp/pin_cf6` |
+| `test_handoff_commands.py` tại pin `cf6ba468` | **8 passed, 0 failed**, 14.65 s | `pytest … --basetemp=/tmp/pin_after_adv`; trước khi nâng pin: `1 failed, 7 passed` (`--basetemp=/tmp/pin_cf6`) |
 
-**Hai mục đỏ-dự-kiến (expected-red)** — cả hai là guard siêu-dữ-liệu release, không phải regression
-logic; chỉ mục 1 đỏ trong lượt đo này:
+**Guard siêu-dữ-liệu release: đỏ TRƯỚC khi nâng pin, xanh SAU đó** — thứ tự là điểm, không phải mâu
+thuẫn:
 
-1. `test_handoff_commands.py::test_no_release_document_points_at_a_superseded_source_sha` — **ĐỎ, đo
-   được**: `1 failed, 7 passed in 16.41s`. Lý do: nó assert `TESTED_SOURCE_SHA` chứa **mọi** byte
-   production trên đĩa, và ba commit production của chiến dịch (`cb0b228`, `23e5b8f`, `7df87ab`) landed
-   sau `aea143bd`. Đó là **lỗi của pin**, không phải của code: với `workbench/backend/composition.py`
-   được revert, file này pass **8/8** (`BACKEND_DEFECTS.md:289-304`). Trong sweep **tại pin**, cùng id
-   này cũng đỏ có chủ ý vì sweep chạy **trước** khi nâng pin, rồi xanh lại sau khi nâng (`107 §3`;
-   `107 §5`: `8 passed in 14.01s`).
+1. `test_handoff_commands.py::test_no_release_document_points_at_a_superseded_source_sha` — **nay
+   XANH: `8 passed, 0 failed in 14.65s`** tại pin `cf6ba468` (đo trong lượt này). Nó **đỏ trước** khi
+   nâng pin, và đỏ đó là **đúng thiết kế**: guard assert `TESTED_SOURCE_SHA` chứa **mọi** byte
+   production trên đĩa, mà ba commit production của chiến dịch (`cb0b228`, `23e5b8f`, `7df87ab`) landed
+   sau `aea143bd` — nên **pin phải dịch**, không phải code phải sửa. Bằng chứng đó là lỗi của pin chứ
+   không của code: với `workbench/backend/composition.py` được revert, file này pass **8/8**
+   (`BACKEND_DEFECTS.md:289-304`). Trong sweep tại `cf6ba468`, cùng id này **đỏ** vì sweep chạy
+   **trước** lệnh nâng pin (`58175d3`), rồi xanh lại ngay sau đó — cả hai đều đúng, và chính thứ tự đó
+   là lý do tồn tại của guard.
 2. `test_handoff_commands.py::test_the_release_documents_quote_the_test_count_they_actually_ran` và
-   `::test_the_verdict_names_the_same_test_count_the_handoff_does` — **XANH trong lượt này** (nằm trong
-   `7 passed`), và đỏ-dự-kiến chỉ khi số `passed/failed` trong release document không khớp số test mà
-   **revision được nêu tên** thật sự collect. Docstring của chính file ghi rõ lớp này: *"the
-   release-metadata guards are part of the suite and they FAIL on the very revision they describe, so a
-   document that can only record zero failures cannot describe its own run honestly"*
-   (`workbench/tests/test_handoff_commands.py:666-668`). Chúng xanh sau khi nâng pin sang
-   `cf6ba468`, vì document nay ghi đúng `3159 passed, 20 failed, 47 skipped` của chính revision đó;
-   **advance pin mà không cập nhật số sẽ làm chúng đỏ**.
+   `::test_the_verdict_names_the_same_test_count_the_handoff_does` — **XANH** (`8 passed` ở trên), và
+   đỏ-dự-kiến chỉ khi số `passed/failed` trong release document không khớp số test mà **revision được
+   nêu tên** thật sự collect. Docstring của chính file ghi rõ lớp này: *"the release-metadata guards
+   are part of the suite and they FAIL on the very revision they describe, so a document that can only
+   record zero failures cannot describe its own run honestly"*
+   (`workbench/tests/test_handoff_commands.py:666-668`). Chúng xanh vì document nay ghi đúng
+   `3159 passed, 20 failed, 47 skipped` của chính `cf6ba468`; **advance pin mà không cập nhật số sẽ làm
+   chúng đỏ**.
 
 **Hai con số khác nhau, đừng đọc cái này như cái kia** (`MODEL_MATRIX.md:517-532`):
 
@@ -1012,7 +1046,7 @@ Nguồn: `BACKEND_DEFECTS.md:22-30` (in ra bốn khối A/B/C/D đã ghi ở `:1
 | 5 | **công thức gallery-digest kép** | `0bfd43b9…` (plan/blocked) vs `1db68c59…` (run hoàn tất), `gallery_count 74381` cả hai — spec ở `GALLERY_DIGEST_PATCH_SPEC.md`, file sở hữu nằm ngoài lane |
 | 6 | **trường scope-resolution** | `7b1fa850…`: `adapter_routed 0`, `still_unscoped 6003`, `condition_status.*.unscored_count 0` — mâu thuẫn nội tại; fix ở `runner.py:2528-2537`, ngoài lane (`SCOPE_RESOLUTION_PATCH_SPEC.md`) |
 | 7 | **`reference_metadata_seen` chưa có trong run identity** | `grep -rn reference_metadata_seen workbench/composition workbench/backend workbench/scripts workbench/tests` → **0** hit; chỉ có trong `raw/verify/99-clvc-scope-and-image-only.md:125,314`. Chưa ship vì nó mint run id mới cho mọi run hiện có |
-| 8 | **20 test fail pre-existing** | `107-sweep-aea143bd.md` §3: **18** id baseline (blip ×4, `circus_cli`, `tme_lifecycle` ×2, `tme_precision`, `f08_dcnet`, `handoff_commands` SHA guard, `release_blocker_gpu_records` ×7, `prepare_model`) + **2** id chưa từng trong baseline 18 (`test_doctor.py::test_dcnet_runtime_asset_blocks_after_preparation_is_present`, `test_evaluate_models.py::test_dcnet_audited_command_reports_non_command_blockers`). Ba trong số đó phụ thuộc trạng thái host nên pass trong worktree trần và fail trong cây thật (`106` §6) — ghi nhận, không sửa |
+| 8 | **20 test fail pre-existing** | Sweep tại pin hiện tại `cf6ba468`: **3159 passed / 20 failed / 47 skipped = 3226**, diff so sweep `aea143bd`: **0 mới, 0 rơi, 20 y nguyên** (`SWEEP_cf6ba468.md` §2-§3). Tập 20 đó (`107-sweep-aea143bd.md` §3): **18** id baseline (blip ×4, `circus_cli`, `tme_lifecycle` ×2, `tme_precision`, `f08_dcnet`, `handoff_commands` SHA guard, `release_blocker_gpu_records` ×7, `prepare_model`) + **2** id chưa từng trong baseline 18 (`test_doctor.py::test_dcnet_runtime_asset_blocks_after_preparation_is_present`, `test_evaluate_models.py::test_dcnet_audited_command_reports_non_command_blockers`). Mục `handoff_commands` SHA guard trong tập đó **nay đã xanh** ở trạng thái hiện tại (`8 passed`, §9) — nó đỏ trong sweep vì sweep chạy **trước** lệnh nâng pin; 19 id còn lại vẫn đỏ. Ba trong số 20 phụ thuộc trạng thái host nên pass trong worktree trần và fail trong cây thật (`106` §6) — ghi nhận, không sửa |
 | 9 | **người gửi SIGTERM lịch sử** | `UNDETERMINED`. Đường nhận đã biết (`serve_workbench.py:152-166`), `jobs.py` bị loại, test/script trong repo bị loại, session reaping bị loại; bốn chữ ký chết đã commit (`raw/service-death-log{,-2,-3,-4}.txt`). *"That inference is for a future investigation, not evidence about the past"* |
 | 10 | **hành vi `systemctl stop`** | `NOT_COMPLETED` — ca `TimeoutStopSec=30` worst-case (job sống phớt lờ SIGTERM hết 10 s grace) **chưa đo**, chỉ bị chặn bằng số học (`GRACE_SECONDS` 10 + 5 SIGKILL + 10 join ≤ 30) |
 | 11 | **batch size nào canonical cho CLVC** | `UNDETERMINED` — không upstream pinned lẫn registry chỉ định; `test.py` chỉ đọc `params.batch_size` |
