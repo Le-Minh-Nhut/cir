@@ -138,23 +138,41 @@ def _minimal(tmp_path: Path, *, model: str = "encoder", categories: tuple[str, .
 @pytest.mark.skipif(not (REVIEW / "g1_g2.encoder.shirt.adapter.json").is_file(),
                     reason="the campaign artifacts are not on this host")
 def test_encoder_gate_is_not_pass_on_head() -> None:
-    """The exact case that motivated this module: a declared mandatory failure and a PASS surface."""
+    """The exact case that motivated this module: a declared mandatory failure and a PASS surface.
+
+    The batch-relative subcheck is the INVARIANT failure: `batch_size_1_vs_n.max_rel` exceeds the
+    `batch_max_rel` the artifact itself declares, in every category. The measured `max_rel` is a
+    number this campaign legitimately re-measures, so only the relation to its own declared tolerance
+    is asserted -- never the third decimal.
+
+    `non_tie_count` is likewise measured, and it moved to 0 once both sides were seeded with the same
+    relation tensor. So the invariant asserted here is the CAUSE, not the old count: with
+    `relation_state.sha256` equal on both sides and zero non-tie rank changes, scoring parity has no
+    residual to explain, and the verdict must still fail on the batch dimension alone.
+    """
     verdict = gate.evaluate_model("encoder")
     assert verdict.status == gate.MANDATORY_FAILED
     assert verdict.passed is False
     names = {check.name for check in verdict.failures}
     assert any("batch_1_vs_n.max_rel" in name for name in names), names
-    assert any("non_tie_changes" in name for name in names), names
-    # The failing ones are exactly the declared ones, at their declared values.
+    # The failing batch checks are exactly one per category, each judged against the artifact's own
+    # declared tolerance and each genuinely above it.
     batch = [check for check in verdict.failures if check.name.endswith("batch_1_vs_n.max_rel")]
     assert len(batch) == 3
     for check in batch:
         assert check.declared == 1e-3
         assert check.measured > check.declared
-    # The three measured values are the ones the artifacts record, to full precision.
-    measured = {check.measured for check in batch}
-    for expected in (0.0031308995258445375, 0.0077950176161260265, 0.011646653843520266):
-        assert expected in measured, (expected, measured)
+    assert not any("non_tie_changes" in name for name in names), (
+        "a zero non-tie count must not appear as a failure: " + repr(names))
+    # The relation digests are the reason the rank dimension is clean, so they are the recorded
+    # invariant. Identical bytes on both sides is what makes the features comparable at all.
+    for category in CATEGORIES:
+        native = _artifact("encoder", category, "native")
+        adapter = _artifact("encoder", category, "adapter")
+        digest = native["relation_state"]["sha256"]
+        assert digest == adapter["relation_state"]["sha256"], category
+        assert adapter["adapter"]["scoring_ranking"][
+            "rank_differences_vs_native_val_control"]["non_tie_count"] == 0, category
 
 
 @pytest.mark.skipif(not (REVIEW / "g1_g2.encoder.shirt.adapter.json").is_file(),
@@ -187,15 +205,31 @@ def test_limn_gate_is_also_not_pass_on_head() -> None:
 @pytest.mark.skipif(not (REVIEW / "g1_g2.encoder.shirt.adapter.json").is_file(),
                     reason="the campaign artifacts are not on this host")
 def test_the_historical_record_survives_untouched() -> None:
-    """The verdict is DERIVED. Every artifact stays readable with its own recorded booleans."""
+    """The verdict is DERIVED. Every artifact stays readable with its own recorded booleans.
+
+    `historical` is an ECHO, so the invariant is equality with the artifact's own recorded values --
+    not the values themselves. `recorded_non_tie_rank_changes` is `0` today (both sides now draw the
+    same relation tensor) and was `1` before; a literal here would pin a measurement and would have to
+    be re-pinned on every legitimate re-measurement, which is exactly what a history echo must not do.
+    """
     before = {name: (REVIEW / name).read_bytes()
               for name in ("g1_g2.encoder.shirt.adapter.json", "g1_g2.encoder.shirt.native.json")}
     verdict = gate.evaluate_model("encoder")
     after = {name: (REVIEW / name).read_bytes() for name in before}
     assert before == after, "the gate must never rewrite the evidence it judges"
     recorded = verdict.historical["shirt"]
-    assert recorded["recorded_within_tolerance"]["batch_size_1_vs_n"] is False
-    assert recorded["recorded_non_tie_rank_changes"] == 1
+    adapter = _artifact("encoder", "shirt", "adapter")["adapter"]
+    scoring = adapter["scoring_ranking"]
+    # The echo must equal the source, field for field, whatever the measurement currently is.
+    assert recorded["recorded_non_tie_rank_changes"] == \
+        scoring["rank_differences_vs_native_val_control"]["non_tie_count"]
+    assert recorded["recorded_within_tolerance"]["batch_size_1_vs_n"] == \
+        adapter["batch_size_1_vs_n"]["within_tolerance"]
+    assert recorded["recorded_within_tolerance"]["sample_query_val_pixels"] == \
+        adapter["layer4_forward_sample"]["query_val_pixels"].get("within_tolerance")
+    # The declared table is echoed whole, so a reader can see what the numbers were judged against.
+    assert recorded["declared_tolerances"] == \
+        _artifact("encoder", "shirt", "native")["tolerances"]
     assert recorded["declared_tolerances"]["batch_max_rel"] == 1e-3
     # The old prose verdict is not the gate's output, and the gate does not repeat it as a status.
     assert verdict.status != gate.PASS
@@ -204,14 +238,35 @@ def test_the_historical_record_survives_untouched() -> None:
 @pytest.mark.skipif(not (REVIEW / "g1_g2.encoder.shirt.adapter.json").is_file(),
                     reason="the campaign artifacts are not on this host")
 def test_the_dimensions_are_not_conflated() -> None:
-    """Observer/macro, input, forward, batch and scoring parity are separate answers."""
+    """Observer/macro, input, forward, batch and scoring parity are separate answers.
+
+    The invariant is that each dimension is DERIVED from its own mandatory checks -- a dimension is
+    False exactly when one of ITS mandatory checks failed -- so the test asserts the relation between
+    `dimensions` and `checks` instead of pinning which dimensions are False today. `scoring_parity`
+    is the one that moved: it was False while a rank difference needed the tie epsilon to explain, and
+    it is True now that both sides draw the same relation tensor. What must not move is that no
+    dimension can be carried by another's checks, and that every failure lands in the dimension whose
+    subcheck it is.
+    """
     verdict = gate.evaluate_model("encoder")
+    for dimension in gate.DIMENSIONS:
+        mandatory = [check for check in verdict.checks
+                     if check.mandatory and check.dimension == dimension]
+        if mandatory:
+            assert verdict.dimensions[dimension] is all(check.ok for check in mandatory), dimension
+    for check in verdict.failures:
+        assert verdict.dimensions[check.dimension] is False, check.name
+    # The two failing dimensions are the ones whose subcheck is the denominator-unstable relative
+    # error, and each of them fails on `max_rel` -- never on an absolute delta.
+    failing = {dimension for dimension, ok in verdict.dimensions.items() if ok is False}
+    assert {"batch_parity", "forward_parity"} <= failing, failing
+    for check in verdict.failures:
+        if check.dimension in ("batch_parity", "forward_parity"):
+            assert check.name.endswith(".max_rel"), check.name
+    # Input parity and the observer are separate answers, measured and never merged.
     assert verdict.dimensions["input_parity"] is True
-    assert verdict.dimensions["batch_parity"] is False
-    assert verdict.dimensions["scoring_parity"] is False
     dimensions = {check.dimension for check in verdict.checks}
     assert {"input_parity", "batch_parity", "scoring_parity"} <= dimensions
-    # Observer/macro agreement is its own dimension and never carries forward parity.
     assert "observer_parity" not in verdict.dimensions or \
         verdict.dimensions["observer_parity"] != verdict.dimensions.get("forward_parity")
 
@@ -349,22 +404,33 @@ def test_limn_rank_checks_are_read_from_its_own_record_shape() -> None:
 def test_the_harness_tests_max_rel_on_some_keys_and_not_others() -> None:
     """The incoherence R9 now records. It is in WHICH comparator each check calls, not in science.
 
-    `encoder_parity.py:745-747` tests only `max_abs` for `layer4_forward_sample.query_native_tensors`;
-    `:778-781` tests `max_abs` AND `max_rel` for the two population QUERY comparisons; `:783` tests
-    only `max_abs` for `population.gallery_vs_native`. So gallery features with `max_rel` 1.36 / 7.75 /
-    3.90 read `within_tolerance: true` while query features of the same shape and dtype read `false`
-    on `max_rel` 0.752 / 7.850 / 3.355 -- the headline "population max_rel FAIL" depends on which
-    side of the same artifact you look at.
+    `encoder_parity.py` tests `max_abs` AND `max_rel` for the population QUERY comparisons but only
+    `max_abs` for `population.gallery_vs_native` (and for `query_native_tensors`). So gallery features
+    can exceed the same declared `max_rel` and still read `within_tolerance: true` while query
+    features of the same shape read `false`.
+
+    The invariant is that WIRING and its consequence: the gallery block is labelled within tolerance
+    while its own `max_rel` is above the declared `forward_max_rel`, the query block is labelled
+    outside, and the gate reports the disagreement. The measured ratios are re-measured by every run
+    and are therefore compared to the DECLARED tolerance, never pinned as constants -- the old
+    `> 1.0` / `> 0.5` thresholds recorded one run's numbers, and the gallery ratio is 0.53 today.
     """
+    declared_rel = _tolerances("encoder")["forward_max_rel"]
     adapter = _artifact("encoder", "shirt", "adapter")["adapter"]
     population = adapter["population"]
     recorded = {key: value.get("within_tolerance") for key, value in population.items()
                 if isinstance(value, dict)}
-    # Gallery fails the same declared `max_rel` and is still labelled within tolerance.
+    # Gallery exceeds the same declared `max_rel` and is still labelled within tolerance: that
+    # asymmetry IS the defect, and it holds at any measured magnitude above the tolerance.
     assert recorded["gallery_vs_native"] is True
-    assert population["gallery_vs_native"]["max_rel"] > 1.0
+    assert population["gallery_vs_native"]["max_rel"] > declared_rel
+    # The query comparison of the same shape and dtype is labelled outside on the same tolerance.
     assert recorded["features_vs_native_val_control"] is False
-    assert population["features_vs_native_val_control"]["max_rel"] > 0.5
+    assert population["features_vs_native_val_control"]["max_rel"] > declared_rel
+    # Both are denied by the backstop it was supposed to use: the absolute delta stays inside atol
+    # while the relative term is what fails, i.e. a near-zero denominator drives it.
+    for key in ("gallery_vs_native", "features_vs_native_val_control"):
+        assert population[key]["max_abs"] <= _tolerances("encoder")["forward_max_abs"], key
     # The gate applies the declared tolerance table to both and names the disagreement.
     verdict = gate.evaluate_model("encoder")
     disagreements = {(item["comparison"], item["subcheck"])
@@ -376,6 +442,7 @@ def test_the_harness_tests_max_rel_on_some_keys_and_not_others() -> None:
     gallery = next(check for check in verdict.checks
                    if check.name == "shirt.population.gallery_vs_native.max_rel")
     assert gallery.harness_recorded is True and gallery.ok is False
+    assert gallery.declared == declared_rel
     assert gallery.to_dict()["harness_recorded_within_tolerance"] is True
 
 

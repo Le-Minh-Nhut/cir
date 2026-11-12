@@ -341,8 +341,201 @@ def _tolerances(native: dict[str, Any], adapter: dict[str, Any]) -> dict[str, An
 
 
 def evaluate_abs_rel(actual: float, reference: float, *, atol: float, rtol: float) -> bool:
-    """`abs(a-b) <= atol + rtol*abs(b)` for one component, the v2 rule."""
+    """`abs(a-b) <= atol + rtol*abs(b)` for one component, the v2 rule.
+
+    The production caller is `_component_scope_check`: v2 is defined per component, so it can only be
+    evaluated over recorded components, never over a `max_abs`/`max_rel` aggregate.
+    """
     return abs(actual - reference) <= atol + rtol * abs(reference)
+
+#: The v2 component block: the per-element record `parity-absolute-relative/v2` is DEFINED over.
+#: Additive by construction -- a v1 reader ignores an unknown key, and an artifact without the block
+#: is still a v1 result. Shape and every refusal rule are written down first in
+#: `workbench/docs/reviews/20261112-parity-repair/V2_STANDARD.md`.
+COMPONENT_KEY = "component_parity"
+COMPONENT_RULE = "abs(adapter - native) <= atol + rtol * abs(native)"
+#: Which DECLARED tolerance pair judges a scope, chosen by the dimension the scope feeds. A block
+#: cannot name its own tolerance: it is judged against the table this artifact already declares, so
+#: a component dump can never loosen the rule it is measured by.
+#:
+#: Only `forward_parity` appears, and that is a statement about the reference side: the rule names
+#: NATIVE as the reference, so only a comparison whose reference array came from the native side can
+#: be recorded here. `batch_parity` (`batch 1 vs N`) and `cache_off_restart` compare the adapter
+#: against its OWN output; their v1 aggregate checks judge them exactly as before, and calling their
+#: left-hand array "native" would misdescribe the measurement.
+COMPONENT_TOLERANCES = {"forward_parity": ("forward_max_abs", "forward_max_rel")}
+COMPONENT_COVERAGE = ("full", "chunked")
+_COMPONENT_HEX = frozenset("0123456789abcdef")
+
+def _component_numbers(record: dict[str, Any], key: str, *, where: str) -> list[float]:
+    """One recorded component array. A non-number or a non-finite value is malformed, never a pass."""
+    values = record.get(key)
+    if not isinstance(values, list):
+        raise _Malformed(f"{where}.{key} is a {type(values).__name__}, not a list of components")
+    numbers: list[float] = []
+    for position, value in enumerate(values):
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise _Malformed(f"{where}.{key}[{position}] is {value!r}, not a number")
+        if not math.isfinite(float(value)):
+            raise _Malformed(f"{where}.{key}[{position}] is {value!r}: a non-finite component cannot "
+                             "be judged against a tolerance, so it is malformed evidence, not a pass")
+        numbers.append(float(value))
+    return numbers
+
+def _component_indices(record: dict[str, Any], total: int, *, where: str) -> list[int]:
+    """The flat indices of the emitted components: ascending, unique, inside `[0, total)`."""
+    values = record.get("indices")
+    if not isinstance(values, list):
+        raise _Malformed(f"{where}.indices is a {type(values).__name__}, not a list of indices")
+    indices: list[int] = []
+    for position, value in enumerate(values):
+        if isinstance(value, bool) or not isinstance(value, int):
+            raise _Malformed(f"{where}.indices[{position}] is {value!r}, not an integer index")
+        if not 0 <= value < total:
+            raise _Malformed(f"{where}.indices[{position}] is {value} but the scope holds "
+                             f"{total} component(s)")
+        indices.append(value)
+    if indices != sorted(set(indices)):
+        raise _Malformed(f"{where}.indices must be ascending and unique, got {indices[:10]}")
+    return indices
+
+def _component_digest(record: dict[str, Any], key: str, *, where: str) -> str:
+    """One `sha256` binding the emitted chunk to the full array it came from."""
+    digests = record.get("sha256")
+    if not isinstance(digests, dict):
+        raise _Malformed(f"{where}.sha256 is a {type(digests).__name__}, not an object of digests")
+    value = digests.get(key)
+    if (not isinstance(value, str) or len(value) != 64
+            or not set(value.lower()) <= _COMPONENT_HEX):
+        raise _Malformed(f"{where}.sha256.{key} is {value!r}, not a sha256 hex digest: without the "
+                         "digest the emitted chunk is an unbound claim, not a proof of the full array")
+    return value
+
+def _component_scope_check(name: str, record: Any, declared: dict[str, Any],
+                           category: str) -> ParityCheck:
+    """One v2 component scope, judged component by component and cross-checked against its own record.
+
+    The verdict is DERIVED from `(reference, actual)` with `evaluate_abs_rel`; `mismatch_count`,
+    `offenders`, `max_abs` and `worst_normalized` are only cross-checks. An artifact whose recorded
+    summary disagrees with the values it carries is malformed, because one of the two is wrong and
+    the gate cannot know which.
+    """
+    where = f"{category}.{COMPONENT_KEY}.{name}"
+    if not isinstance(record, dict):
+        raise _Malformed(f"{where} is a {type(record).__name__}, not an object")
+    dimension = record.get("dimension")
+    if dimension not in COMPONENT_TOLERANCES:
+        raise _Malformed(f"{where}.dimension is {dimension!r}: the componentwise rule is recorded "
+                         f"only for {sorted(COMPONENT_TOLERANCES)}, the dimensions the producers "
+                         "compare aligned arrays for")
+    atol_key, rtol_key = COMPONENT_TOLERANCES[dimension]
+    for key in (atol_key, rtol_key):
+        if key not in declared:
+            raise _Malformed(f"{where} is judged against the declared `{atol_key}`/`{rtol_key}` and "
+                             f"the artifact declares no `{key}`, so this comparison cannot be "
+                             "evaluated")
+    atol, rtol = float(declared[atol_key]), float(declared[rtol_key])
+    total = record.get("components_total")
+    if isinstance(total, bool) or not isinstance(total, int) or total <= 0:
+        raise _Malformed(f"{where}.components_total is {total!r}: a scope with no components has "
+                         "nothing to judge, and an empty comparison is never ok")
+    shape = record.get("shape")
+    if (not isinstance(shape, list) or not shape
+            or any(isinstance(value, bool) or not isinstance(value, int) or value < 0
+                   for value in shape)):
+        raise _Malformed(f"{where}.shape is {shape!r}, not a list of non-negative integers")
+    if math.prod(shape) != total:
+        raise _Malformed(f"{where}.shape {shape} holds {math.prod(shape)} components but "
+                         f"`components_total` says {total}")
+    indices = _component_indices(record, total, where=where)
+    reference = _component_numbers(record, "reference", where=where)
+    actual = _component_numbers(record, "actual", where=where)
+    emitted = record.get("components_emitted")
+    if isinstance(emitted, bool) or not isinstance(emitted, int):
+        raise _Malformed(f"{where}.components_emitted is {emitted!r}, not a count")
+    if not (emitted == len(indices) == len(reference) == len(actual)):
+        raise _Malformed(f"{where} claims {emitted} emitted component(s) but carries "
+                         f"{len(indices)} index/ies, {len(reference)} reference value(s) and "
+                         f"{len(actual)} actual value(s)")
+    if emitted > total:
+        raise _Malformed(f"{where} emits {emitted} of {total} component(s)")
+    coverage = record.get("coverage")
+    if coverage not in COMPONENT_COVERAGE:
+        raise _Malformed(f"{where}.coverage is {coverage!r}, not one of {list(COMPONENT_COVERAGE)}")
+    if (coverage == "full") != (emitted == total):
+        raise _Malformed(f"{where}.coverage is {coverage!r} while {emitted} of {total} component(s) "
+                         "were emitted: `full` describes the whole array and nothing else")
+    for key in ("reference", "actual", "delta"):
+        _component_digest(record, key, where=where)
+
+    offenders: list[int] = []
+    worst = 0.0
+    unbounded = False
+    for index, actual_value, reference_value in zip(indices, actual, reference):
+        if not evaluate_abs_rel(actual_value, reference_value, atol=atol, rtol=rtol):
+            offenders.append(index)
+        denominator = atol + rtol * abs(reference_value)
+        delta = abs(actual_value - reference_value)
+        if denominator > 0.0:
+            worst = max(worst, delta / denominator)
+        elif delta > 0.0:
+            unbounded = True
+
+    recorded_mismatches = record.get("mismatch_count")
+    if isinstance(recorded_mismatches, bool) or not isinstance(recorded_mismatches, int):
+        raise _Malformed(f"{where}.mismatch_count is {recorded_mismatches!r}, not a count")
+    if recorded_mismatches != len(offenders):
+        raise _Malformed(f"{where}.mismatch_count is {recorded_mismatches} but the emitted components "
+                         f"hold {len(offenders)} violation(s) at {offenders[:5]}: the record "
+                         "contradicts the values it carries")
+    recorded_offenders = record.get("offenders")
+    if not isinstance(recorded_offenders, list):
+        raise _Malformed(f"{where}.offenders is a {type(recorded_offenders).__name__}, not a list")
+    offender_indices: list[int] = []
+    for position, item in enumerate(recorded_offenders):
+        index = item.get("index") if isinstance(item, dict) else None
+        if isinstance(index, bool) or not isinstance(index, int):
+            raise _Malformed(f"{where}.offenders[{position}] carries no integer `index`")
+        offender_indices.append(index)
+    if sorted(offender_indices) != offenders:
+        raise _Malformed(f"{where}.offenders names {sorted(offender_indices)[:10]} but the emitted "
+                         f"components violate the rule at {offenders[:10]}")
+
+    derived_max_abs = max((abs(a - b) for a, b in zip(actual, reference)), default=0.0)
+    present_abs, recorded_max_abs = _number(record, "max_abs", where=where)
+    if present_abs and recorded_max_abs is not None:
+        if coverage == "full" and not math.isclose(recorded_max_abs, derived_max_abs, rel_tol=1e-9):
+            raise _Malformed(f"{where}.max_abs is {recorded_max_abs!r} but the emitted components "
+                             f"hold {derived_max_abs!r}")
+        if recorded_max_abs < derived_max_abs:
+            raise _Malformed(f"{where}.max_abs is {recorded_max_abs!r}, below {derived_max_abs!r}: a "
+                             "summary cannot be smaller than the values it summarises")
+    present_worst, recorded_worst = _number(record, "worst_normalized", where=where)
+    if present_worst and recorded_worst is not None and not unbounded:
+        if coverage == "full" and not math.isclose(recorded_worst, worst, rel_tol=1e-9):
+            raise _Malformed(f"{where}.worst_normalized is {recorded_worst!r} but the emitted "
+                             f"components hold {worst!r}")
+        if recorded_worst < worst:
+            raise _Malformed(f"{where}.worst_normalized is {recorded_worst!r}, below {worst!r}")
+
+    positions = {index: position for position, index in enumerate(indices)}
+    return ParityCheck(
+        name=f"{category}.components.{name}", dimension=dimension, gate="G2",
+        declared={"rule": COMPONENT_RULE, "atol": atol, "rtol": rtol,
+                  "atol_key": atol_key, "rtol_key": rtol_key},
+        measured={
+            "scope": name, "coverage": coverage,
+            "components_compared": emitted, "components_total": total,
+            "mismatch_count": len(offenders),
+            "worst_normalized": None if unbounded else worst,
+            "offending_coordinates": offenders[:64],
+            "offending_values": [
+                {"index": index, "reference": reference[positions[index]],
+                 "actual": actual[positions[index]]} for index in offenders[:5]],
+        },
+        ok=not offenders, mandatory=True, standard=STANDARD_ABS_REL_V2,
+        note=("derived from the recorded components, not from the aggregate `max_abs`/`max_rel`; the "
+              "aggregates are v1 checks and are never used to infer this verdict"))
 
 
 def _relative_checks(measured: dict[str, Any], declared: dict[str, Any], *,
@@ -733,25 +926,85 @@ def _declared_standard(native: dict[str, Any], adapter: dict[str, Any]) -> str:
     under a standard it was not measured with moves a declared tolerance after seeing the number.
 
     An artifact that declares v2 must also carry the per-component comparison v2 is defined over
-    (`abs(a-b) <= atol + rtol*abs(b)` per element). These artifacts record only `max_abs`/`max_rel`,
-    which are v1 summary statistics: a v2 label over v1 measurements is malformed, not a v2 result.
+    (`abs(a-b) <= atol + rtol*abs(b)` per element), in `component_parity`. `max_abs`/`max_rel` are
+    v1 summary statistics: a v2 label over them alone is malformed, not a v2 result. The block is
+    written by the phase that holds BOTH arrays (the adapter), so it is required on at least one
+    side; a block on both sides is accepted only when every shared scope is identical.
 
     Two artifacts declaring different standards is malformed too -- the same rule as tolerances.
+    An artifact with NO `standard` key is a v1 result, so ONE side v1-by-default and the other v2 is
+    exactly that mixed case: the two sides were measured under different rules and one verdict cannot
+    be reported under both. (Both sides absent is not a disagreement -- it is the v1 record.)
     """
     left, right = native.get("standard"), adapter.get("standard")
     for side, value in (("native", left), ("adapter", right)):
         if value is not None and value not in STANDARDS:
             raise _Malformed(f"the {side} artifact declares an unknown standard {value!r}")
-    if left is not None and right is not None and left != right:
+    if (left or STANDARD_RELATIVE_V1) != (right or STANDARD_RELATIVE_V1):
         raise _Malformed(f"the two artifacts declare different standards: native {left!r}, "
-                         f"adapter {right!r}")
+                         f"adapter {right!r} -- an unstated standard is "
+                         f"{STANDARD_RELATIVE_V1!r}, and one verdict cannot be reported under two")
     declared = left or right or STANDARD_RELATIVE_V1
-    if declared == STANDARD_ABS_REL_V2:
-        raise _Malformed(
-            "the artifact declares parity-absolute-relative/v2 but records only `max_abs`/`max_rel` "
-            "aggregates; that standard is defined per component (abs(a-b) <= atol + rtol*abs(b)) and "
-            "cannot be evaluated from the recorded statistics, so it must never be applied")
+    if declared == STANDARD_ABS_REL_V2 and not _component_scopes(native, adapter):
+        raise _Malformed(_V2_WITHOUT_COMPONENTS)
     return declared
+
+#: One refusal, used by both places that can spot a bare v2 label, so the reason never drifts.
+_V2_WITHOUT_COMPONENTS = (
+    "the artifact declares parity-absolute-relative/v2 but records only `max_abs`/`max_rel` "
+    "aggregates; that standard is defined per component (abs(a-b) <= atol + rtol*abs(b)) and cannot "
+    f"be evaluated from the recorded statistics, so it must never be applied. A v2 artifact carries "
+    f"`{COMPONENT_KEY}` (see workbench/docs/reviews/20261112-parity-repair/V2_STANDARD.md)")
+
+def _component_scopes(native: dict[str, Any], adapter: dict[str, Any]) -> list[tuple[str, Any]]:
+    """Every `(scope name, record)` the pair records, adapter first, and a refusal on a contradiction.
+
+    The block is written where both arrays were held, so it normally sits on ONE side. Two sides may
+    each carry one (a future producer that compares on the native side too); then a scope named on
+    both must record the SAME bytes of comparison, because two records of one comparison that
+    disagree are an artifact contradicting itself, not a second measurement.
+    """
+    scopes: dict[str, Any] = {}
+    for side, artifact in (("adapter", adapter), ("native", native)):
+        block = artifact.get(COMPONENT_KEY)
+        if block is None:
+            continue
+        where = f"the {side} artifact's `{COMPONENT_KEY}`"
+        if not isinstance(block, dict):
+            raise _Malformed(f"{where} is a {type(block).__name__}, not an object")
+        declared = block.get("standard", STANDARD_ABS_REL_V2)
+        if declared != STANDARD_ABS_REL_V2:
+            raise _Malformed(f"{where}.standard is {declared!r}: the block records components of "
+                             f"{STANDARD_ABS_REL_V2} and nothing else")
+        rule = block.get("declared_rule")
+        if rule is not None and rule != COMPONENT_RULE:
+            raise _Malformed(f"{where}.declared_rule is {rule!r}, not the declared v2 rule "
+                             f"{COMPONENT_RULE!r}: a block cannot restate the rule it is judged by")
+        reference = block.get("reference_side")
+        if reference is not None and reference != "native":
+            raise _Malformed(f"{where}.reference_side is {reference!r}: v2 makes the NATIVE side the "
+                             "reference, and a block cannot swap them after the fact")
+        records = block.get("scopes")
+        if not isinstance(records, dict):
+            raise _Malformed(f"{where}.scopes is a {type(records).__name__}, not an object of scopes")
+        for name, record in records.items():
+            if name in scopes and scopes[name] != record:
+                raise _Malformed(f"the two artifacts record different components for scope {name!r}; "
+                                 "one comparison cannot have two records")
+            scopes[name] = record
+    return list(scopes.items())
+
+def _component_checks(native: dict[str, Any], adapter: dict[str, Any],
+                      declared: dict[str, Any], category: str) -> list[ParityCheck]:
+    """The v2 componentwise subchecks: one mandatory check per recorded scope, rule applied per element.
+
+    Called only for a pair that DECLARED v2. A pair that declares v2 and records no scope is
+    `_component_scopes`' refusal, so this never returns `[]` for a declared-v2 pair.
+    """
+    scopes = _component_scopes(native, adapter)
+    if not scopes:
+        raise _Malformed(_V2_WITHOUT_COMPONENTS)
+    return [_component_scope_check(name, record, declared, category) for name, record in scopes]
 
 
 def _body(artifact: dict[str, Any], *, side: str) -> dict[str, Any]:
@@ -885,11 +1138,16 @@ def evaluate_model(model_id: str, *, categories: Iterable[str] = ("dress", "shir
             adapter = _read(adapter_path)
             verdict.evidence.extend([str(native_path), str(adapter_path)])
             declared = _tolerances(native, adapter)
-            standards.add(_declared_standard(native, adapter))
+            applied = _declared_standard(native, adapter)
+            standards.add(applied)
             native_body = _body(native, side="native")
             adapter_body = _body(adapter, side="adapter")
 
             checks: list[ParityCheck] = []
+            # The v2 componentwise subchecks, only for a pair that DECLARED v2 (a v1 pair carries no
+            # block and earns no v2 check, whatever standard the caller requested).
+            if applied == STANDARD_ABS_REL_V2:
+                checks.extend(_component_checks(native, adapter, declared, category))
             checks.extend(_identity_checks(native_body, declared, category))
             # G1 cross-side: both documents' identity fields, compared value to value. The native
             # side alone cannot tell whether the adapter measured the same checkpoint. An adapter
