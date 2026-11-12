@@ -226,3 +226,15 @@ this run because `METRIC_BLOCKS` mapped only protocol names — which `104` §6.
 `b887c7e` has since fixed (re-running it now exits 0 and reproduces 1.3997667055490752 /
 0.11664722546242293 over `scored_count 6001`). The report states both halves; the derived file that
 verification produced was deleted, because this run publishes R@1 itself.
+
+**Third pass — the caption-free figure is measured, and it replaces every `chưa tính xong`.**
+`workbench/artifacts/composition/derived/category_routing_inputs/clvc_net_da0a2162be0e159a1a456cec_full.json`
+(4 623 B) publishes both cohorts from the same rank table: A = `0.33061712371309204` over 6001 (the
+published figure, `reproduces_published: true`) and B = **`0.33400015944039774`** over 5884
+(`caption_free: true`), differing by `0.0033830357273053`. The report quotes both wherever the gap is
+stated (§4 header, §4.3, §4.4b, §7 row 4, §8) and states that the finished summary is immutable and
+carries no `category_routing_inputs`, with the §7.7 patch spec named as the open item (§5.2 item 12).
+No section of the report describes the routing input as stem-only any more; the two remaining `stem`
+mentions in §4.3 are the refutation ("routing chỉ dùng stem" is listed as forbidden) and the
+26-of-119 stem-ambiguity argument, which is about why stem alone would be worse, not about what the
+resolver reads.

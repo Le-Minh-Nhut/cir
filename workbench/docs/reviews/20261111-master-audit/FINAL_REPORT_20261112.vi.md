@@ -598,7 +598,8 @@ nhập nhằng annotation như bản release gốc giao), nên `composition_gap_
 Một run CLVC **mới hơn** dưới profile khai báo (`--conditions
 multimodal,text_only_black_image,clvc_image_encoder_only`) **đã xong** và **đã có số**:
 `da0a2162be0e159a1a456cec`, `PARTIAL`, 6001/6003 chấm được, gap ba điều kiện
-**`0.33061712371309204`** — gap đầu tiên của CLVC tính được (§4.4b,
+**`0.33061712371309204`** trên cohort 6001 — gap đầu tiên của CLVC tính được; trên cohort
+caption-free 5884 (không có edit text nào chạm routing) con số là **`0.33400015944039774`** (§4.4b,
 `raw/verify/104-clvc-full-image-only.md`). Nhưng điều kiện ảnh của nó là
 `clvc_image_encoder_only`, **không phải** `image_only_empty_text` của protocol, nên đây là gap **biến
 thể** — và **không** được đặt chung cột với `0.43853620852911723` của TG-CIR (§4.2, §4.4b).
@@ -817,6 +818,12 @@ removes", kèm dạng một dòng `IMAGE_ENCODER_ONLY_LEAKS_CAPTION` cho trườ
 `Adapter.query_scope(self, query, candidate_names)` vẫn chặn việc nhãn phụ thuộc `condition`/gallery/
 score — nhưng nó **không** chặn việc nhãn phụ thuộc `query.query_txt`, và đó chính là chỗ rò rỉ.
 
+**Kích thước của rò rỉ đã đo, không phải ước lượng:** gap trên cohort A (6001, có 117 hàng nhãn routing
+phụ thuộc caption) là `0.33061712371309204`; trên cohort B (5884, `caption_free: true`, không edit text
+nào chạm routing) là **`0.33400015944039774`** — lệch `0.0033830357273053` (≈1.02 % của A). Nguồn:
+`workbench/artifacts/composition/derived/category_routing_inputs/clvc_net_da0a2162be0e159a1a456cec_full.json`
+(`raw/verify/99-clvc-scope-and-image-only.md` §4.3); chi tiết và cách dùng ở §4.4b.
+
 **Việc còn mở, nêu tên:** quy tắc "một điều kiện image-only không được dùng văn bản trừ khi miễn trừ
 đó được ghi trong một **run identity riêng**" **chưa** được đáp ứng. Đo chính xác, cả hai phạm vi:
 
@@ -960,14 +967,42 @@ Metric theo điều kiện, **6001/6003 chấm được**, coverage **`0.9996668
 query lấy category từ `(stem, caption sửa)` đối chiếu file caption đã pin — tức routing của 117 query đó
 **dùng chính edit caption** mà `clvc_image_encoder_only` nói là đã bỏ (`model_limn.py:213`;
 `IMAGE_ENCODER_ONLY_LEAKS_SCOPE`, `workbench/composition/model_clvc_net.py:150`). Vì vậy
-`0.33061712371309204` là gap trên một cohort mà **117/6001 hàng có nhãn routing lấy một phần từ văn
-bản**. Con số **strict caption-free** (chỉ 5884 query loader-scoped) là một cohort nhỏ hơn và hiện vẫn
-**chưa tính xong**; sẽ ghi vào đây khi có, kèm script và đường dẫn rank table — **không** suy ra,
-**không** lấy từ một con số nằm trong comment của source.
+`0.33061712371309204` là gap trên **cohort A (6001)** — cohort mà **117/6001 hàng có nhãn routing lấy
+một phần từ văn bản**.
 
-Cần nói rõ để không ai đọc nhầm hai chiều: **các metric không sai.** Chúng được tính **đúng** trên
-cohort của chúng (`104` §6 tự tính lại từ rank table, khớp từng chữ số). Cái sai trước đây là **cách mô
-tả cohort đó phụ thuộc vào gì** — và đó là thứ đã sửa ở §4.3, không phải một con số.
+**Con số strict caption-free đã đo: cohort B.** Cùng một rank table, cùng công thức, chỉ khác **tập
+qid**: bỏ 117 query mà resolver route bằng `(stem, caption)` và giữ 5884 query loader-scoped
+(`query_count 5884`, `caption_free: true`):
+
+| cohort | query | `composition_gap_ndcg` | mm | text | image | `caption_free` |
+|---|---|---|---|---|---|---|
+| **A — toàn bộ query đã chấm (bản đã công bố)** | **6001** | **0.33061712371309204** | 0.14921544731411218 | 0.09988226530955799 | 0.08644584977266369 | `false` |
+| **B — chỉ loader-scoped** | **5884** | **0.33400015944039774** | 0.14947221054602272 | 0.09954846839174243 | 0.08655137339831104 | **`true`** |
+
+Hai số lệch nhau **0.0033830357273053** (≈**1.02 %** của A). Nguồn:
+`workbench/artifacts/composition/derived/category_routing_inputs/clvc_net_da0a2162be0e159a1a456cec_full.json`
+(4 623 B; khoá `cohort_a_all_scored`, `cohort_b_loader_scoped`), sinh bởi
+`workbench/scripts/derive_routing_cohort_gap.py`, ghi lại ở `raw/verify/99-clvc-scope-and-image-only.md`
+§4.3. Công cụ **replay** resolver trên CPU và **từ chối** nếu replay không khớp
+`adapter_query_scope_resolution` của artifact — ở đây `replay_agrees_with_artifact: true`
+(5 884 / 6 001 / 2, đúng hai qid `7:3038`/`7:3790`) — và **từ chối ghi đè** file derived đã tồn tại.
+`cohort_a_all_scored.reproduces_published: true`.
+
+**Dùng số nào:** khi một khẳng định đòi "không có edit text nào chạm vào routing" thì **phải** trích
+**B = `0.33400015944039774` trên 5884**. Khi nói về run như nó đã công bố thì trích **A =
+`0.33061712371309204` trên 6001**, và nói rõ A là gap của một cohort có 117 hàng nhãn routing phụ thuộc
+caption.
+
+**Đây là phụ thuộc routing, không phải lỗi metric.** Hai số đến từ **cùng** rank table
+(`runs/da0a2162be0e159a1a456cec/ranks/…`), **cùng** `metrics.compose`, **cùng** công thức
+`1 - max(text, image)/mm`; chúng chỉ khác **tập qid được đưa vào**. A tái lập artifact tới **1e-12**
+(`104` §5, §6; `reproduces_published: true`). Không có hàng nào bị tính sai; cái từng sai là **mô tả
+cohort phụ thuộc vào gì** (§4.3), và đó là thứ đã sửa.
+
+**Run đã xong KHÔNG ghi lại điều này, và không được nói ngược lại.** Summary `da0a2162…/full.json` là
+**bất biến** và **không** mang khối `category_routing_inputs`; file derived ở trên là artifact **riêng**,
+không nằm trong summary. Một run **sau** sẽ mang nó (patch spec: `raw/verify/99-…md` §7.7) — xem §5.2
+mục 12.
 
 **Đây là lần đầu gap ba điều kiện của CLVC tính được.** `composition_gap_ndcg`
 **`0.33061712371309204`**, `gap_cohort_count` **6001**, `mrr_gap` `0.029051407246235415`,
@@ -1083,7 +1118,7 @@ commit sau. Mỗi mục dưới đây mang file bằng chứng; chỗ chưa đo 
    Hệ quả metric của việc này **đã đo** trên run mới: coverage `0.980176578377478` →
    **`0.9996668332500417`**, và mọi metric đều đổi (§4.3, §4.4b).
 
-### 5.2 CÒN (11 mục) — mỗi mục nêu đúng thứ còn thiếu
+### 5.2 CÒN (12 mục) — mỗi mục nêu đúng thứ còn thiếu
 
 1. **Nguồn upstream của PAIR** — `BLOCKED_MISSING_SOURCE_CLASSES`, không phải "blocked" chung chung:
    `iLearn-Lab/ICASSP25-PAIR` tại `bfb0b98cdb4c44f6b9190baaa84d783a77dd888f` có **21** commit và **31**
@@ -1155,6 +1190,14 @@ commit sau. Mỗi mục dưới đây mang file bằng chứng; chỗ chưa đo 
       được gán cho run cũ.
     * TG-CIR vẫn là run duy nhất có mẫu GPU **toàn run** đọc được: 22 mẫu, util 97-100 %, 2172 MiB,
       235.02-260.04 W (`raw/verify/98-…md` §2).
+12. **Run đã công bố không mang `category_routing_inputs`; một run sau thì sẽ.** Summary
+    `da0a2162…/full.json` là **bất biến** và **không** có khối nào nói rằng 117/6001 query có nhãn
+    routing lấy từ `(stem, caption)`. Số đo hiện nằm ở một artifact **riêng**
+    (`derived/category_routing_inputs/clvc_net_da0a2162be0e159a1a456cec_full.json`, 4 623 B) — đủ để
+    trích, nhưng **không** phải một phần của run. Patch spec để run **sau** tự mang khối đó:
+    `raw/verify/99-clvc-scope-and-image-only.md` §7.7. Hệ quả phải nói kèm: bất kỳ ai đọc
+    `full.json` mà không đọc file derived sẽ thấy `0.3306` **không kèm** cảnh báo cohort, nên câu
+    "run này đã ghi lại việc routing dùng caption" là **sai** cho tới khi §7.7 ship.
 
 ### 5.3 Hai ghi chú còn mở, giữ nguyên nhưng nay có thêm dữ kiện
 
@@ -1208,7 +1251,7 @@ commit sau. Mỗi mục dưới đây mang file bằng chứng; chỗ chưa đo 
 | 1 | Phục hồi dịch vụ web | **ĐẠT MỘT PHẦN** | Cutover thật và phục hồi sau SIGKILL thật đã đo (≈2.28 s), nhưng ca `systemctl stop` trên unit thật và worst-case `TimeoutStopSec` chưa đo. |
 | 2 | Dọn tiến trình con | **ĐẠT MỘT PHẦN** | Backoff, crash-loop, `jobs.py` recovery, `_MODELS_CACHE`, `query_count`, `subset_provenance`, R@1, partition encode và cohort round-trip **đã vá và đo** (§5.1), nhưng guard `gpu_may_be_held` vẫn **từ chối** dispatch và đường release của nó là **thủ tục**, không phải kiểm chứng thiết bị (§5.2 mục 9). |
 | 3 | Đối chiếu với upstream | **ĐẠT MỘT PHẦN** | Parity ở mức **mẫu 5 query / 20 ảnh** đạt trên mọi trường (rows `0.0`, hạng giống hệt), nhưng **chứng minh parity quy mô Full không tồn tại**, và con số composition Full `23.3383` **không phải** parity proof (native macro 49.7208 là protocol khác). |
-| 4 | Kết quả composition trên Full | **ĐẠT MỘT PHẦN** | Cả hai model đều có run Full: TG-CIR `7b1fa85007bffdab931f7f19` **`COMPLETED`** trên 6003 query, gap ba điều kiện protocol `0.43853620852911723`; CLVC có **hai** run — `eab10106…-retry-2` (`PARTIAL`, `image_only_empty_text` là `ABLATION_UNSUPPORTED`, 119 query không chấm, gap `null`) và `da0a2162be0e159a1a456cec` (`PARTIAL`, 6001/6003 chấm được, gap **`0.33061712371309204`** tính được lần đầu) — nhưng gap đó chạy trên **profile biến thể đã khai báo**: vai ảnh do `clvc_image_encoder_only` điền, **không phải** `image_only_empty_text`, nên **điều kiện thứ ba của protocol vẫn chưa được đo cho CLVC** và `0.3306` **không** được đặt chung cột với `0.4385` của TG-CIR. |
+| 4 | Kết quả composition trên Full | **ĐẠT MỘT PHẦN** | Cả hai model đều có run Full: TG-CIR `7b1fa85007bffdab931f7f19` **`COMPLETED`** trên 6003 query, gap ba điều kiện protocol `0.43853620852911723`; CLVC có **hai** run — `eab10106…-retry-2` (`PARTIAL`, `image_only_empty_text` là `ABLATION_UNSUPPORTED`, 119 query không chấm, gap `null`) và `da0a2162be0e159a1a456cec` (`PARTIAL`, 6001/6003 chấm được, gap **`0.33061712371309204`** trên 6001 tính được lần đầu; cohort caption-free 5884 cho **`0.33400015944039774`**) — nhưng gap đó chạy trên **profile biến thể đã khai báo**: vai ảnh do `clvc_image_encoder_only` điền, **không phải** `image_only_empty_text`, nên **điều kiện thứ ba của protocol vẫn chưa được đo cho CLVC** và `0.3306`/`0.3340` **không** được đặt chung cột với `0.4385` của TG-CIR. Thêm một giới hạn nữa: cohort 6001 có **117** query mà nhãn routing lấy từ `(stem, caption)` — nên nếu một khẳng định đòi "không edit text nào chạm routing" thì phải dùng `0.33400015944039774` trên 5884, và run đã công bố **không** tự ghi điều đó (§5.2 mục 12). |
 
 ---
 
@@ -1238,7 +1281,7 @@ Trạng thái đọc từ `workbench/artifacts/composition/summary/<dir>/full.js
 | `62e362bf911fb5f97c6e497b` | fixture | — | — | — | `run_id` của 2 điều kiện, chỉ để chứng minh danh sách điều kiện vào identity | `103` §6 |
 | `8ef7596c0e1fd42a1910e766` | fixture | — | — | — | `run_id` của protocol triple | `103` §6 |
 | `e877a310f9e70ea9d6df29af` | fixture | — | — | — | `run_id` khi thay điều kiện ảnh bằng `clvc_image_encoder_only` | `103` §6 |
-| `da0a2162be0e159a1a456cec` | `clvc_net` | **`PARTIAL`** | 6003 | `false` | **run CLVC dưới profile khai báo**: ba điều kiện `mm`/`text`/`clvc_image_encoder_only` (không có `image_only_empty_text`), 6001/6003 chấm được, gap `0.33061712371309204` trên 6001 — gap ba điều kiện **đầu tiên** của CLVC, **biến thể**, không phải gap protocol | `104` §1-§7; §4.4b |
+| `da0a2162be0e159a1a456cec` | `clvc_net` | **`PARTIAL`** | 6003 | `false` | **run CLVC dưới profile khai báo**: ba điều kiện `mm`/`text`/`clvc_image_encoder_only` (không có `image_only_empty_text`), 6001/6003 chấm được, gap `0.33061712371309204` trên cohort 6001 (A) và **`0.33400015944039774`** trên cohort caption-free 5884 (B) — gap ba điều kiện **đầu tiên** của CLVC, **biến thể**, không phải gap protocol; 117/6001 nhãn routing dùng `(stem, caption)` | `104` §1-§7; `99` §4.3; §4.4b |
 | `1366364` / `1366356` | — | — | — | — | **PID** (không phải run_id) của lần chạy `-retry-2`; đã thoát | `98` §1 |
 | `1477261` / `1477254` | — | — | — | — | **PID** của run profile mới (controller / wrapper), đã thoát khi run xong; run của chúng là `da0a2162…` | §0.1; `104` §0.2 |
 
@@ -1282,6 +1325,8 @@ selection cần GPU hoặc lâu hơn ngân sách của lượt này).
 | Run mới phục vụ đúng qua API (§4.4b) | `curl -s -o /tmp/r104.json -w "%{http_code} %{size_download}\n" "http://127.0.0.1:8000/api/composition/runs/da0a2162be0e159a1a456cec?subset=full"` | **đo lại:** `200 22514` |
 | `7:2179` được chấm thật ở điều kiện ảnh, Top-K sâu 100 (§4.3, §4.4b) | `curl -s "http://127.0.0.1:8000/api/composition/runs/da0a2162be0e159a1a456cec/queries?subset=full&condition=clvc_image_encoder_only&query_id=7:2179&top_k=100&limit=1&offset=0"` | **đo lại:** `200`, 14 695 B, `target_rank 2100`, `candidates.depth 100`, `top_results` dài **100** |
 | LIMN cũng để `7:3038`/`7:3790` unscored (§4.3) | `python3 -c "import json;d=json.load(open('workbench/artifacts/composition/runs/10173dc45dea8c90fd2a284b/ranks/limn_base_iter0_all_categories.json'));r=d['ranks'];[print(c,{q:r[c].get(q) for q in ('7:3038','7:3790','7:2179','7:4066')},sum(1 for v in r[c].values() if v is not None)) for c in r]"` | **đo lại:** cả ba điều kiện `5884` non-null / `119` null; bốn qid đều `None` ở cả ba |
+| Hai cohort gap A/B khớp file derived (§4.4b) | `python3 -c "import json;d=json.load(open('workbench/artifacts/composition/derived/category_routing_inputs/clvc_net_da0a2162be0e159a1a456cec_full.json'));print(d['routing']['resolver_key'],d['routing']['loader_scoped_count'],d['routing']['resolver_routed_count'],d['routing']['still_unscoped_count'],d['routing']['replay_agrees_with_artifact']);[print(c,d[c]['gap_cohort_count'],d[c]['composition_gap_ndcg'],d[c]['caption_free'],d[c].get('reproduces_published')) for c in ('cohort_a_all_scored','cohort_b_loader_scoped')]"` | **đo lại:** `reference_stem+edit_caption 5884 117 2 True`; `cohort_a_all_scored 6001 0.33061712371309204 False True`; `cohort_b_loader_scoped 5884 0.33400015944039774 True None` |
+| Run đã công bố **không** mang khối routing (§5.2 mục 12) | `python3 -c "import json;print('category_routing_inputs' in json.load(open('workbench/artifacts/composition/summary/clvc_net_author_drive_unresolved_da0a2162be0e159a1a456cec/full.json')))"` | `False` — summary bất biến, số đo nằm ở artifact derived riêng |
 | Backfill nhận run biến thể **sau** `b887c7e` (§4.4b giới hạn 2) | `workbench/envs/ctl312h/bin/python workbench/scripts/backfill_recall_at_1.py --run clvc_net:da0a2162be0e159a1a456cec; echo rc=$?` | **đo lại:** `rc=0`, record có `multimodal` 1.3997667055490752 / `text_only_black_image` 0.11664722546242293 / `scored_count 6001`, khớp `full.json`. Trước `b887c7e` thì exit 1 với `clvc_image_encoder_only.scored_count: recomputed 6001 vs published None` (`104` §6.1) |
 
 Chỗ nào lệnh **không** chạy được ở đây (cần GPU, cần run mới, hoặc cần một artifact chưa tồn tại) thì
