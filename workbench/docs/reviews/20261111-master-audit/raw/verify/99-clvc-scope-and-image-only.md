@@ -149,6 +149,24 @@ membership is the resolver REPLAYED on CPU and cross-checked against the artifac
 agrees, otherwise the tool refuses). Ranks sha256 `1c7fa9f720246d898ee2b68f5ed35180388cbf6bb4397a15a7fdfa448a2cf8f5`,
 summary sha256 `76b9e5491440e36cb78d2dfa4a1a4f4aa48ddd109dad78dc69aa7a4d35b77491`.
 
+Output file, as the tool itself prints it (4 623 B, git-ignored under `workbench/artifacts/**` like
+every other derived artifact):
+
+```
+workbench/artifacts/composition/derived/category_routing_inputs/
+  clvc_net_da0a2162be0e159a1a456cec_full.json
+```
+
+keys: `attempt`, `model_id`, `subset`, `conditions`, `gap_conditions`, `annotation`, `routing`
+(`resolver_key: "reference_stem+edit_caption"`, `loader_scoped_count: 5884`,
+`resolver_routed_count: 117`, `still_unscoped_count: 2`, `replay_agrees_with_artifact: true`),
+`cohort_a_all_scored`, `cohort_b_loader_scoped`, `inputs.ranks.sha256`,
+`inputs.summary.sha256`, `claim_narrowed`. A second invocation at the same path exits 1 with
+`already exists; refusing to rewrite a derived artifact`. The two cohort values are produced by the
+SAME `metrics.compose` call shape over the SAME rank table, the second one fed
+`{condition: {qid: rank for qid, rank in table[condition].items() if qid in loader_qids}}` and
+`query_count=5884`; cohort B is not a different arithmetic.
+
 | cohort | queries | gap nDCG | mm | text | image | caption-free |
 |---|---|---|---|---|---|---|
 | **A — all scored (published)** | 6 001 | **0.33061712371309204** (reproduces to 1e-12) | 0.14921544731411218 | 0.09988226530955799 | 0.08644584977266369 | no |
