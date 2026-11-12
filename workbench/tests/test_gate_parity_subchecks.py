@@ -343,9 +343,18 @@ def test_v2_is_advisory_on_v1_data_and_cannot_certify(tmp_path: Path) -> None:
 
 
 def test_v1_remains_the_default_standard(tmp_path: Path) -> None:
+    """A v1 pair under an explicit root: the label is v1 and no breakdown invents a standard.
+
+    The root is EXPLICIT. Reading the real evidence directory made this test depend on what happened
+    to be on disk -- it broke as soon as a second standard appeared, which is a fact about the
+    directory, not about the default.
+    """
     _minimal(tmp_path)
     assert _verdict(tmp_path).status == gate.PASS
-    assert gate.evaluate_all()["standard"] == gate.STANDARD_RELATIVE_V1
+    result = gate.evaluate_all(root=tmp_path)
+    assert result["standard"] == gate.STANDARD_RELATIVE_V1
+    assert result["standards"] == {gate.STANDARD_RELATIVE_V1: ["encoder"]}
+    assert result["advisory_standards"] == [gate.STANDARD_ABS_REL_V2]
 
 
 def test_an_unknown_standard_is_refused(tmp_path: Path) -> None:

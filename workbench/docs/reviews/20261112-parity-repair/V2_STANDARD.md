@@ -187,3 +187,83 @@ Runs: `pytest workbench/tests/test_gate_parity_subchecks.py
 workbench/tests/test_parity_absolute_relative_v2.py -q` → **46 passed**.
 `evaluate_all()` on the real evidence is byte-identical to the pre-change gate
 (`sha256 bd87d8b5…f9bd9`), so the test edit changed no gate behaviour.
+
+## Aggregation
+
+The v2 standard is kept; the AGGREGATE that reports it was broken.
+
+### The bug (string vs list)
+
+`evaluate_all` filled the single `standard` slot with
+
+```python
+"standard": applied[0] if len(applied) == 1 else (applied or STANDARD_RELATIVE_V1),
+```
+
+so the field was a STRING only while every evidenced model declared the same standard. The moment a
+second standard appeared — which is exactly what shipping v2 does — it became a LIST. Two live
+consequences, both reproduced before the fix by putting a v2 pair beside a v1 pair in one directory:
+
+```
+standard      = ['parity-absolute-relative/v2', 'parity-relative/v1'] | list
+page renders  = Chuẩn ['parity-absolute-relative/v2', 'parity-relative/v1']
+```
+
+1. `workbench/frontend/gate.ts` types the field as `string` and `EvaluationPage.tsx:71` renders
+   ``Chuẩn ${gate.standard}``, so the live page printed an array into a sentence;
+2. `test_v1_remains_the_default_standard` called `evaluate_all()` with NO root — the real evidence
+   directory — and asserted `== STANDARD_RELATIVE_V1`, so it broke the moment HINT's v2-labeled
+   artifacts landed. That is a fact about the directory, not about the default.
+
+### The semantics chosen
+
+`standard` is ALWAYS a string, chosen deterministically: the standard of the FIRST model in sorted
+model-id order whose verdict is not `NOT_RUN`, or `parity-relative/v1` when nothing was judged. Sorted
+order, not artifact arrival order and not a majority, so the label cannot move because a pair landed
+unless that pair sorts first. It is one label for a surface that has room for one label.
+
+### The new field
+
+`standards` maps each declared standard to the model ids that declared it, every judged model
+appearing under exactly one key:
+
+```json
+"standard":  "parity-relative/v1",
+"standards": {"parity-absolute-relative/v2": ["hint"],
+              "parity-relative/v1": ["encoder", "limn"]}
+```
+
+After (same directory that produced the list above):
+
+```
+standard      = 'parity-relative/v1' | str
+standards     = {'parity-absolute-relative/v2': ['hint'], 'parity-relative/v1': ['encoder']}
+page renders  = Chuẩn parity-relative/v1
+per-model records identical to the pre-fix gate: True
+```
+
+`models[*].applied_standard` remains the per-model truth, unchanged. `standard` is a routing/display
+summary of that field and never a substitute for it — a verdict is read from `models`, never inferred
+from the aggregate label.
+
+### Frontend decision
+
+`workbench/frontend/gate.ts` already typed `standard: string`, so the TYPE needed no loosening and the
+TSX needed no change: with the backend returning a string, `Chuẩn ${gate.standard}` is correct as
+written. The type was extended with the two fields it was missing — `standards?:
+Record<string, string[]>` and the per-model `applied_standard?: string` — as documentation of the
+payload, not to fix a render. `EvaluationPage.tsx` is untouched; it does not print `standards`, and
+adding a breakdown table is a UI change nobody asked for.
+
+### Tests
+
+* `test_v1_remains_the_default_standard` now takes an explicit `tmp_path` root and additionally
+  asserts the breakdown has exactly one key, so it tests the DEFAULT rather than the directory.
+* `test_a_two_standard_evidence_set_keeps_standard_a_string` (in the v2 test file) builds both
+  standards in one root and asserts `standard` is a `str`, is the sorted-first model's standard,
+  `standards` groups both, the grouping covers every judged model exactly once, and a
+  `standard=` request for the other one moves neither answer.
+* `test_the_aggregate_label_is_v1_when_nothing_was_judged` pins the empty directory: `standard` is
+  v1, `standards` is `{}`, `passed_models` is empty.
+* Both new tests were run against a `/tmp` copy with the old slot restored: the first fails at
+  `assert isinstance(result["standard"], str)`, the second raises `KeyError: 'standards'`.

@@ -1431,14 +1431,41 @@ def evaluate_all(*, root: Path | None = None,
 
     `standard` is reported as the standard actually APPLIED (the artifacts' own). A request that
     differs is reported beside it, so a caller cannot mistake a v2 request for a v2 result.
+
+    `standard` is ALWAYS a string, and `standards` is the breakdown. These answer different
+    questions, and conflating them broke both a render and a test:
+
+    * `standard` -- ONE label, for a surface that has room for one string
+      (`Chuẩn ${gate.standard}`). Chosen DETERMINISTICALLY: the standard of the FIRST model in
+      sorted model-id order whose verdict is not `NOT_RUN`; `parity-relative/v1` when no model
+      yielded a verdict at all. It must not depend on which artifacts happen to be on disk, so it is
+      not "the majority standard" (a majority flips when one pair lands) and not a list.
+    * `standards` -- `{standard: [model_id, ...]}`, every model grouped under the standard its OWN
+      artifacts declared. This is the honest aggregate: a mixed evidence directory is normal while a
+      campaign migrates, and a per-model answer already exists in `models[*].applied_standard`.
+
+    A list in `standard` used to appear the moment a second standard existed among the verdicts,
+    because the slot held `applied[0] if len(applied) == 1 else applied`. The frontend types this
+    field as `string` and interpolates it, so that was a live defect, not a cosmetic one.
     """
     base = root if root is not None else evidence_root()
     verdicts = {model_id: evaluate_model(model_id, root=base, standard=standard).to_dict()
                 for model_id in _discover_models(base)}
-    applied = sorted({verdict["applied_standard"] for verdict in verdicts.values()
-                      if verdict["status"] != NOT_RUN})
+    models = sorted(verdicts)
+    standards: dict[str, list[str]] = {}
+    for model_id in models:
+        verdict = verdicts[model_id]
+        if verdict["status"] == NOT_RUN:
+            continue
+        standards.setdefault(verdict["applied_standard"], []).append(model_id)
+    applied = sorted(standards)
+    # Sorted model order, not artifact arrival order: a new pair appearing on disk cannot move the
+    # label unless it sorts before the current first model.
+    label = next((verdicts[model_id]["applied_standard"] for model_id in models
+                  if verdicts[model_id]["status"] != NOT_RUN), STANDARD_RELATIVE_V1)
     return {
-        "standard": applied[0] if len(applied) == 1 else (applied or STANDARD_RELATIVE_V1),
+        "standard": label,
+        "standards": {key: standards[key] for key in applied},
         "requested_standard": standard,
         "advisory_standards": sorted(set(STANDARDS) - set(applied)) if applied else [],
         "passed_models": sorted(model_id for model_id, verdict in verdicts.items() if verdict["passed"]),
@@ -1446,5 +1473,7 @@ def evaluate_all(*, root: Path | None = None,
         "note": ("`passed` is True only when every mandatory dimension was measured and no mandatory "
                  f"subcheck failed. No artifact is {NOT_RUN}; nothing measured held is {INCOMPLETE}; "
                  f"a measured subcheck outside its tolerance is {MANDATORY_FAILED}. Only {PASS} "
-                 "claims a pass, and `standard` is the standard the artifacts declare."),
+                 "claims a pass. `standard` is ONE label -- the standard of the first model in "
+                 "sorted order with a verdict -- and `standards` groups every model under the "
+                 "standard its own artifacts declared."),
     }

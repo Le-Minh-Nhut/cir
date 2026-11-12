@@ -51,7 +51,15 @@ export type RunGate = {
  *  and that is a verdict about the evidence, not an error. Each model carries its own status,
  *  per-dimension booleans, its mandatory failures and the artifacts the verdict rests on. */
 export type ParityGatePayload = {
+  /** ONE label, always a string: the standard of the first model in sorted order with a verdict,
+   *  `parity-relative/v1` when nothing was judged. Rendered directly (`Chuẩn ${gate.standard}`), so
+   *  it must never become a list. */
   standard: string;
+  /** Every judged model grouped under the standard its OWN artifacts declared, e.g.
+   *  `{"parity-relative/v1": ["encoder", "limn"], "parity-absolute-relative/v2": ["hint"]}`.
+   *  A mixed directory is normal while a campaign migrates; the per-model truth stays in
+   *  `models[id].applied_standard`. */
+  standards?: Record<string, string[]>;
   passed_models: string[];
   note: string;
   models: Record<string, {
@@ -59,6 +67,9 @@ export type ParityGatePayload = {
     status: string;
     passed: boolean;
     complete: boolean;
+    /** The standard THIS model's artifacts declared — the per-model truth the aggregate
+     *  `standard` and `standards` are derived from. */
+    applied_standard?: string;
     dimensions: Record<string, boolean>;
     coverage?: Record<string, string[]>;
     failure_count: number;

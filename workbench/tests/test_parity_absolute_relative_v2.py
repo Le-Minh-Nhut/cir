@@ -392,3 +392,59 @@ def test_a_chunked_block_is_judged_and_never_read_as_full(tmp_path: Path, t4) ->
     assert check.measured["components_compared"] == t4.COMPONENT_HEAD + 1
     assert check.measured["components_total"] == total
     assert check.measured["offending_coordinates"] == [total - 1]
+
+# ------------------------------------------------- aggregate label: one string, plus a breakdown
+
+def _model_pair(root: Path, model_id: str, category: str, *, standard: str | None,
+                block: dict | None = None) -> None:
+    """Write one model's artifact pair (native + adapter) under `root`, from the shared fixtures."""
+    native, adapter = _native(), _adapter(block)
+    for document in (native, adapter):
+        document["category"] = category
+        document["model_id"] = model_id
+        if standard is not None:
+            document["standard"] = standard
+    for side, document in (("native", native), ("adapter", adapter)):
+        (root / f"g1_g2.{model_id}.{category}.{side}.json").write_text(
+            json.dumps(document), encoding="utf-8")
+
+def test_a_two_standard_evidence_set_keeps_standard_a_string(tmp_path: Path, t4) -> None:
+    """Two standards on disk: `standard` stays the ONE label, `standards` holds the grouping.
+
+    The shipped bug: `standard` held `applied[0] if len(applied) == 1 else applied`, so a second
+    standard turned the slot into a LIST. The frontend types that field as `string` and renders
+    `Chuẩn ${gate.standard}`, so a mixed directory printed an array into a sentence. The label is now
+    the standard of the FIRST model in sorted order that has a verdict -- stable as artifacts arrive
+    -- and the per-standard grouping lives in its own field.
+    """
+    actual, reference = _reference_actual(t4)
+    block = _block(t4, actual, reference)
+    for category in ("dress", "shirt", "toptee"):
+        _model_pair(tmp_path, "encoder", category, standard=None)
+        _model_pair(tmp_path, "aaa_v2", category, standard=gate.STANDARD_ABS_REL_V2, block=block)
+
+    result = gate.evaluate_all(root=tmp_path)
+    assert isinstance(result["standard"], str), result["standard"]
+    assert result["standard"] in gate.STANDARDS
+    # Sorted first model id ("aaa_v2") wins the single label, and it really is judged under v2.
+    assert result["standard"] == gate.STANDARD_ABS_REL_V2
+    assert result["models"]["aaa_v2"]["applied_standard"] == gate.STANDARD_ABS_REL_V2
+    assert result["models"]["encoder"]["applied_standard"] == gate.STANDARD_RELATIVE_V1
+    assert result["standards"] == {gate.STANDARD_ABS_REL_V2: ["aaa_v2"],
+                                   gate.STANDARD_RELATIVE_V1: ["encoder"]}
+    # Nothing is left out of the breakdown: every judged model belongs to exactly one standard.
+    grouped = sorted(model for models in result["standards"].values() for model in models)
+    judged = sorted(model for model, verdict in result["models"].items()
+                    if verdict["status"] != gate.NOT_RUN)
+    assert grouped == judged
+    # A request for the other standard cannot move either answer.
+    requested = gate.evaluate_all(root=tmp_path, standard=gate.STANDARD_RELATIVE_V1)
+    assert requested["standard"] == gate.STANDARD_ABS_REL_V2
+    assert requested["requested_standard"] == gate.STANDARD_RELATIVE_V1
+
+def test_the_aggregate_label_is_v1_when_nothing_was_judged(tmp_path: Path) -> None:
+    """No artifact at all: the label is v1 and the breakdown is empty, never a list or None."""
+    result = gate.evaluate_all(root=tmp_path)
+    assert result["standard"] == gate.STANDARD_RELATIVE_V1
+    assert result["standards"] == {}
+    assert result["passed_models"] == []
