@@ -16,6 +16,7 @@ pass, and a v2 label over aggregates only stays malformed.
 """
 from __future__ import annotations
 
+import base64
 import importlib.util
 import json
 import math
@@ -63,8 +64,25 @@ def encoder():
 
 # ------------------------------------------------------------------- fixture artifacts
 
+#: The identifiers a hit-count comparison must carry before it can certify anything. `metrics_parity`
+#: is derived from per-side counts plus these, so a fixture that passes needs both -- a bare
+#: `native_metrics_match_feature_rerank` boolean is only a cross-check now.
+PROVENANCE = {"protocol": "fashioniq_val_split", "checkpoint_id": "testmodel_checkpoint",
+              "query_order_sha256": "a" * 64, "gallery_order_sha256": "b" * 64}
+
+
+def _metrics_detail(native_hits: dict | None = None, adapter_hits: dict | None = None) -> dict:
+    native_hits = native_hits or {"r1": 4, "r10": 7, "r50": 9}
+    adapter_hits = adapter_hits or dict(native_hits)
+    return {"cutoffs": [1, 10, 50],
+            "native": {"hits": dict(native_hits), "query_count": 10},
+            "adapter": {"hits": dict(adapter_hits), "query_count": 10},
+            "eligible_query_set_identical": True,
+            "equality": {k: native_hits[k] == adapter_hits[k] for k in native_hits}}
+
+
 def _native() -> dict:
-    return {
+    document = {
         "category": CATEGORY, "phase": "native", "model_id": "testmodel",
         "tolerances": dict(TOLERANCES),
         "native": {
@@ -77,7 +95,10 @@ def _native() -> dict:
             },
             "native_metrics_match_feature_rerank": True,
         },
+        "native_metrics_parity_detail": _metrics_detail(),
     }
+    document.update(PROVENANCE)
+    return document
 
 def _forward(value: float = 0.0, *, cosine: float = 1.0) -> dict:
     return {"max_abs": value, "max_rel": value, "min_cosine": cosine, "bitwise_equal": False,
@@ -105,6 +126,7 @@ def _adapter(components: dict | None = None) -> dict:
     }
     document = {"category": CATEGORY, "phase": "adapter", "model_id": "testmodel",
                 "tolerances": dict(TOLERANCES), "adapter": body}
+    document.update(PROVENANCE)
     if components is not None:
         document["component_parity"] = components
     return document
@@ -241,25 +263,43 @@ def test_the_writer_records_aligned_components_with_full_digests(t4) -> None:
     assert scope["max_abs"] == float(np.abs(
         actual.astype(np.float64) - reference.astype(np.float64)).max())
 
-def test_the_writer_chunks_a_large_array_and_keeps_every_offender(t4) -> None:
-    """Above the limit: the head plus every violating coordinate, with `coverage: chunked`."""
+def test_the_writer_emits_every_component_of_a_large_array_as_ordered_chunks(t4) -> None:
+    """Above the limit: EVERY component, in chunks that tile the array. No preview, no head budget.
+
+    The record used to emit the first `COMPONENT_HEAD` components plus the offenders, which left the
+    gate unable to say anything about the rest. A tail offender is now emitted because the tail is.
+    """
     total = t4.COMPONENT_FULL_LIMIT + 100
     reference = np.full(total, 0.5, dtype=np.float32)
     actual = reference + np.float32(1e-9)
-    offender = total - 1                       # outside the emitted head on purpose
+    offender = total - 1                       # the tail: never inside a 512-component head
     actual[offender] = np.float32(0.5 + 1e-2)
     scope = t4.component_scope("population.features_vs_native_val_control", "forward_parity",
                               actual, reference, atol=TOLERANCES["forward_max_abs"],
                               rtol=TOLERANCES["forward_max_rel"])
-    assert scope["coverage"] == "chunked"
-    assert scope["components_total"] == total
-    assert scope["components_emitted"] == t4.COMPONENT_HEAD + 1
-    assert offender in scope["indices"], "a violating component must never be dropped"
+    assert scope["coverage"] == "chunks"
+    assert scope["components_total"] == scope["components_emitted"] == total
+    assert len(scope["chunks"]) == math.ceil(total / t4.COMPONENT_CHUNK_SIZE)
+    covered: list[int] = []
+    for chunk in scope["chunks"]:
+        reference_values = gate._decode_components(chunk["reference"], "reference", where="chunk")
+        covered.extend(range(chunk["start"], chunk["start"] + len(reference_values)))
+        actual_values = gate._decode_components(chunk["actual"], "actual", where="chunk")
+        assert len(reference_values) == len(actual_values)
+        # Each chunk digests ITS OWN bytes, so the reader can recompute it.
+        assert chunk["sha256"]["reference"] == gate.component_digest(reference_values)
+        assert chunk["sha256"]["actual"] == gate.component_digest(actual_values)
+    assert covered == list(range(total)), "the chunks must tile the array exactly"
     assert scope["mismatch_count"] == 1
     assert [item["index"] for item in scope["offenders"]] == [offender]
-    position = scope["indices"].index(offender)
-    assert scope["reference"][position] == pytest.approx(0.5)
-    assert scope["actual"][position] == pytest.approx(0.5 + 1e-2)
+    assert scope["worst_normalized"] > 1.0
+
+def test_the_writer_declares_the_threshold_and_chunk_size_it_used(t4) -> None:
+    """The constant that decides full-vs-chunks is named in the record, not inferred."""
+    block = t4.component_block({})
+    assert str(t4.COMPONENT_FULL_LIMIT) in block["chunk_rule"]
+    assert str(t4.COMPONENT_CHUNK_SIZE) in block["chunk_rule"]
+    assert "no gap and no overlap" in block["chunk_rule"]
 
 def test_the_writer_refuses_misaligned_arrays(t4) -> None:
     with pytest.raises(SystemExit, match="not aligned"):
@@ -374,12 +414,37 @@ def test_evaluate_abs_rel_has_a_production_caller() -> None:
     source = inspect.getsource(gate._component_scope_check)
     assert "evaluate_abs_rel(" in source
 
-def test_a_chunked_block_is_judged_and_never_read_as_full(tmp_path: Path, t4) -> None:
-    """`coverage: chunked` is accepted, judged on what it carries, and reported as a chunk."""
+def test_a_chunks_block_covering_a_large_scope_is_judged_over_every_component(
+        tmp_path: Path, t4) -> None:
+    """The `chunks` form: complete coverage of a scope larger than the `full` limit.
+
+    This is the POSITIVE CONTROL for the coverage fix. A preview of the same array could never earn a
+    verdict; the chunks form can, because it carries every component and the reader recomputes every
+    digest and applies the rule to all of them.
+    """
+    total = t4.COMPONENT_FULL_LIMIT + 50
+    reference = np.full(total, 0.5, dtype=np.float32)
+    actual = reference + np.float32(1e-9)          # every component inside atol + rtol*|b|
+    block = _block(t4, actual, reference, name="population.features_vs_native_val_control")
+    native, adapter = _native(), _adapter(block)
+    native["standard"] = adapter["standard"] = gate.STANDARD_ABS_REL_V2
+    _write(tmp_path, native, adapter)
+    verdict = _evaluate(tmp_path)
+    assert verdict.status == gate.PASS, verdict.detail
+    check = next(check for check in verdict.checks
+                 if check.name == f"{CATEGORY}.components.population.features_vs_native_val_control")
+    assert check.measured["coverage"] == "chunks"
+    assert check.measured["complete_coverage"] is True
+    assert check.measured["components_compared"] == check.measured["components_total"] == total
+    assert check.measured["mismatch_count"] == 0
+    assert check.ok is True
+
+def test_a_chunks_block_with_one_tail_offender_fails_and_names_it(tmp_path: Path, t4) -> None:
+    """A violating component in the LAST chunk is found, because the last chunk is emitted."""
     total = t4.COMPONENT_FULL_LIMIT + 50
     reference = np.full(total, 0.5, dtype=np.float32)
     actual = reference + np.float32(1e-9)
-    actual[total - 1] = np.float32(0.5 + 1e-2)      # the only violating component, outside the head
+    actual[total - 1] = np.float32(0.5 + 1e-2)      # the tail chunk, outside any head sample
     block = _block(t4, actual, reference, name="population.features_vs_native_val_control")
     native, adapter = _native(), _adapter(block)
     native["standard"] = adapter["standard"] = gate.STANDARD_ABS_REL_V2
@@ -388,10 +453,9 @@ def test_a_chunked_block_is_judged_and_never_read_as_full(tmp_path: Path, t4) ->
     assert verdict.status == gate.MANDATORY_FAILED, verdict.detail
     check = next(check for check in verdict.checks
                  if check.name == f"{CATEGORY}.components.population.features_vs_native_val_control")
-    assert check.measured["coverage"] == "chunked"
-    assert check.measured["components_compared"] == t4.COMPONENT_HEAD + 1
-    assert check.measured["components_total"] == total
+    assert check.measured["coverage"] == "chunks"
     assert check.measured["offending_coordinates"] == [total - 1]
+    assert check.measured["worst_normalized"] > 1.0
 
 # ------------------------------------------------- aggregate label: one string, plus a breakdown
 
@@ -448,3 +512,514 @@ def test_the_aggregate_label_is_v1_when_nothing_was_judged(tmp_path: Path) -> No
     assert result["standard"] == gate.STANDARD_RELATIVE_V1
     assert result["standards"] == {}
     assert result["passed_models"] == []
+
+
+# ------------------------------------------------ the coverage rule and its regression battery
+
+#: One large scope's arrays, reused by the coverage tests. 4146 = the scope the audit measured: bigger
+#: than `COMPONENT_FULL_LIMIT`, with room for an offender well past any head sample.
+LARGE_TOTAL = 4146
+LARGE_OFFENDER = 3600
+
+
+
+def _encode(values, t4) -> str:
+    """The writer's own transport, so a test never invents a second encoding."""
+    return t4._encode_components(np.ascontiguousarray(np.array(values), dtype="<f8"))
+
+
+def _decoded(chunk: dict, key: str) -> list[float]:
+    return gate._decode_components(chunk[key], key, where="test")
+
+
+def _as_preview(scope: dict, *, keep: list[int], t4=None) -> dict:
+    """Rewrite a `chunks` scope as the preview the OLD writer emitted: `keep` components, chunked."""
+    values = {}
+    for chunk in scope["chunks"]:
+        reference = _decoded(chunk, "reference")
+        actual = _decoded(chunk, "actual")
+        for offset in range(len(reference)):
+            values[chunk["start"] + offset] = (reference[offset], actual[offset])
+    scope.pop("chunks", None)
+    scope.update({"coverage": "chunked", "components_emitted": len(keep), "indices": list(keep),
+                  "reference": [values[i][0] for i in keep],
+                  "actual": [values[i][1] for i in keep]})
+    return scope
+
+
+def _large_pair(t4, *, offender: int | None = LARGE_OFFENDER,
+                delta: float = 1e-2) -> tuple[dict, dict]:
+    """A native/adapter pair whose single component scope holds `LARGE_TOTAL` components."""
+    reference = np.full(LARGE_TOTAL, 0.5, dtype=np.float32)
+    actual = reference + np.float32(1e-9)
+    if offender is not None:
+        actual[offender] = np.float32(0.5 + delta)
+    block = t4.component_block({"sample_forward.query": t4.component_scope(
+        "sample_forward.query", "forward_parity", actual, reference,
+        atol=TOLERANCES["forward_max_abs"], rtol=TOLERANCES["forward_max_rel"])})
+    native, adapter = _native(), _adapter(block)
+    native["standard"] = adapter["standard"] = gate.STANDARD_ABS_REL_V2
+    return native, adapter
+
+
+def _scope_of(verdict) -> object:
+    return next(check for check in verdict.checks if check.name.startswith(f"{CATEGORY}.components."))
+
+
+def test_the_tail_offender_in_a_complete_record_fails_the_scope(tmp_path: Path, t4) -> None:
+    """An offender past the old head sample is judged, because the whole array is emitted."""
+    native, adapter = _large_pair(t4)
+    _write(tmp_path, native, adapter)
+    verdict = _evaluate(tmp_path)
+    assert verdict.status == gate.MANDATORY_FAILED, verdict.detail
+    scope = _scope_of(verdict)
+    assert scope.measured["offending_coordinates"] == [LARGE_OFFENDER]
+    assert scope.measured["worst_normalized"] > 1.0
+
+
+def test_a_preview_record_can_never_pass_even_when_every_emitted_row_is_clean(
+        tmp_path: Path, t4) -> None:
+    """THE DEFECT. A 512-component preview of 4146, every row clean, digest intact: INCOMPLETE.
+
+    The defect was that `ok` was `not offenders` over the rows the artifact chose to emit, so a
+    smaller preview was a smaller claim and an easier pass. Partial coverage is now reported as
+    unmeasured, and the dimension is `missing`, never True.
+    """
+    native, adapter = _large_pair(t4, offender=None)
+    scope = adapter["component_parity"]["scopes"]["sample_forward.query"]
+    # Turn the complete record into exactly the shape the old writer emitted: the head, previewed.
+    head = t4.COMPONENT_HEAD
+    _as_preview(scope, keep=list(range(head)))
+    _write(tmp_path, native, adapter)
+    verdict = _evaluate(tmp_path)
+    assert verdict.status != gate.PASS, verdict.detail
+    assert verdict.passed is False
+    assert verdict.status == gate.INCOMPLETE
+    assert verdict.missing == ["forward_parity"], verdict.missing
+    check = _scope_of(verdict)
+    assert check.ok is False
+    assert check.measured["complete_coverage"] is False
+    assert check.measured["components_compared"] == head
+    assert check.measured["components_total"] == LARGE_TOTAL
+    assert "PREVIEW ONLY" in check.note
+    assert f"{head} of {LARGE_TOTAL}" in check.note
+
+
+def test_a_preview_whose_offender_rows_were_deleted_is_malformed_not_a_pass(
+        tmp_path: Path, t4) -> None:
+    """The adversarial variant: offender rows removed, counts silenced, `worst_normalized` kept."""
+    native, adapter = _large_pair(t4)
+    scope = adapter["component_parity"]["scopes"]["sample_forward.query"]
+    # Reduce to a preview the way the old writer would have, then delete the offender's row and
+    # silence the two fields that would otherwise name it. `worst_normalized` and `max_abs` stay:
+    # they describe the FULL array, as they always did.
+    _as_preview(scope, keep=list(range(t4.COMPONENT_HEAD)))
+    scope.update({"mismatch_count": 0, "offenders": []})
+    assert scope["worst_normalized"] > 1.0
+    _write(tmp_path, native, adapter)
+    verdict = _evaluate(tmp_path)
+    assert verdict.status == gate.MALFORMED, verdict.detail
+    assert "worst_normalized" in verdict.detail
+    assert "no offending component is recorded" in verdict.detail
+
+
+def test_a_preview_naming_an_offender_it_does_not_emit_is_malformed(tmp_path: Path, t4) -> None:
+    """A preview's offender list is checked against the components it actually carries."""
+    native, adapter = _large_pair(t4, offender=None)
+    scope = adapter["component_parity"]["scopes"]["sample_forward.query"]
+    _as_preview(scope, keep=list(range(t4.COMPONENT_HEAD)))
+    scope.update({"mismatch_count": 1,
+                  "offenders": [{"index": LARGE_OFFENDER, "reference": 0.5, "actual": 0.51,
+                                 "normalized": 166.6}]})
+    _write(tmp_path, native, adapter)
+    verdict = _evaluate(tmp_path)
+    assert verdict.status == gate.MALFORMED, verdict.detail
+    # The count and the list are checked against the values carried, so a claimed offender the record
+    # does not emit is caught as a contradiction -- there is no way to assert one you cannot show.
+    assert "contradicts the values it carries" in verdict.detail
+
+
+def _chunks_pair(t4) -> tuple[dict, dict, list[dict]]:
+    native, adapter = _large_pair(t4, offender=None)
+    chunks = adapter["component_parity"]["scopes"]["sample_forward.query"]["chunks"]
+    return native, adapter, chunks
+
+
+def test_a_chunk_gap_is_malformed(tmp_path: Path, t4) -> None:
+    """A dropped chunk leaves a hole, and the union no longer equals the scope."""
+    native, adapter, chunks = _chunks_pair(t4)
+    del chunks[1]
+    _write(tmp_path, native, adapter)
+    verdict = _evaluate(tmp_path)
+    assert verdict.status == gate.MALFORMED, verdict.detail
+    assert "not complete coverage" in verdict.detail or "gap and no overlap" in verdict.detail
+
+
+def test_a_short_final_chunk_is_malformed(tmp_path: Path, t4) -> None:
+    """The tail truncated by one component: the array is not fully covered."""
+    native, adapter, chunks = _chunks_pair(t4)
+    last = chunks[-1]
+    for key in ("reference", "actual"):
+        last[key] = _encode(_decoded(last, key)[:-1], t4)
+    # Its own digest still describes the longer values, so the truncation is caught either way.
+    _write(tmp_path, native, adapter)
+    verdict = _evaluate(tmp_path)
+    assert verdict.status == gate.MALFORMED, verdict.detail
+    assert "does not bind these values" in verdict.detail or "tail was never emitted" in verdict.detail
+
+
+def test_a_substituted_chunk_is_malformed_by_its_own_digest(tmp_path: Path, t4) -> None:
+    """One chunk's values replaced: ITS digest no longer binds them, whatever the full-array one says.
+
+    This is the check the old reader could not make at all -- it validated 64 hex characters and
+    nothing else, so a substituted preview was indistinguishable from a faithful one.
+    """
+    native, adapter, chunks = _chunks_pair(t4)
+    adjusted = _decoded(chunks[0], "actual")
+    adjusted[7] = 0.5009765625                     # a change below the rule's tolerance
+    chunks[0]["actual"] = _encode(adjusted, t4)
+    _write(tmp_path, native, adapter)
+    verdict = _evaluate(tmp_path)
+    assert verdict.status == gate.MALFORMED, verdict.detail
+    assert "does not bind these values" in verdict.detail
+
+
+def test_a_stale_chunk_digest_is_malformed(tmp_path: Path, t4) -> None:
+    """The values are honest but the digest was copied from another chunk."""
+    native, adapter, chunks = _chunks_pair(t4)
+    chunks[0]["sha256"] = dict(chunks[1]["sha256"])
+    _write(tmp_path, native, adapter)
+    verdict = _evaluate(tmp_path)
+    assert verdict.status == gate.MALFORMED, verdict.detail
+    assert "does not bind these values" in verdict.detail
+
+
+def test_chunks_in_the_wrong_order_are_malformed(tmp_path: Path, t4) -> None:
+    native, adapter, chunks = _chunks_pair(t4)
+    chunks[0], chunks[1] = chunks[1], chunks[0]
+    _write(tmp_path, native, adapter)
+    verdict = _evaluate(tmp_path)
+    assert verdict.status == gate.MALFORMED, verdict.detail
+    assert "must tile" in verdict.detail
+
+
+def test_overlapping_chunks_are_malformed(tmp_path: Path, t4) -> None:
+    """A chunk re-emitting components the previous one already covered."""
+    native, adapter, chunks = _chunks_pair(t4)
+    # A chunk that starts one component EARLY, re-covering its predecessor's last index.
+    chunks[1]["start"] = chunks[1]["start"] - 1
+    _write(tmp_path, native, adapter)
+    verdict = _evaluate(tmp_path)
+    assert verdict.status == gate.MALFORMED, verdict.detail
+    assert "must tile" in verdict.detail
+
+
+def test_a_chunk_starting_past_the_tail_is_malformed(tmp_path: Path, t4) -> None:
+    """A last chunk that runs past `components_total`."""
+    native, adapter, chunks = _chunks_pair(t4)
+    chunks[-1]["start"] = LARGE_TOTAL - 10
+    _write(tmp_path, native, adapter)
+    verdict = _evaluate(tmp_path)
+    assert verdict.status == gate.MALFORMED, verdict.detail
+    assert "past the" in verdict.detail or "runs to flat index" in verdict.detail
+
+
+def test_a_chunk_with_a_non_finite_component_is_malformed(tmp_path: Path, t4) -> None:
+    for poison in (math.nan, math.inf, -math.inf):
+        native, adapter, chunks = _chunks_pair(t4)
+        poisoned = _decoded(chunks[-1], "actual")
+        poisoned[3] = poison
+        chunks[-1]["actual"] = _encode(poisoned, t4)
+        _write(tmp_path, native, adapter)
+        verdict = _evaluate(tmp_path)
+        assert verdict.status == gate.MALFORMED, (poison, verdict.status)
+        assert "non-finite" in verdict.detail
+
+
+def test_a_duplicated_component_across_chunks_is_malformed(tmp_path: Path, t4) -> None:
+    """A chunk whose span re-covers a component its predecessor already emitted."""
+    native, adapter, chunks = _chunks_pair(t4)
+    chunks[1]["start"] = chunks[1]["start"] - 5
+    _write(tmp_path, native, adapter)
+    verdict = _evaluate(tmp_path)
+    assert verdict.status == gate.MALFORMED, verdict.detail
+    assert "gap and no overlap" in verdict.detail
+
+
+def test_a_declared_indices_list_must_match_its_start(tmp_path: Path, t4) -> None:
+    """`indices` is optional, but when present it must be the run `start` implies."""
+    native, adapter, chunks = _chunks_pair(t4)
+    chunks[0]["indices"] = list(range(1, 1 + len(_decoded(chunks[0], "reference"))))
+    _write(tmp_path, native, adapter)
+    verdict = _evaluate(tmp_path)
+    assert verdict.status == gate.MALFORMED, verdict.detail
+    assert "contiguous run" in verdict.detail
+
+
+def test_a_chunk_count_that_disagrees_with_the_scope_is_malformed(tmp_path: Path, t4) -> None:
+    """`mismatch_count` is derived over ALL chunks, so it cannot be owned by one of them."""
+    native, adapter, chunks = _chunks_pair(t4)
+    scope = adapter["component_parity"]["scopes"]["sample_forward.query"]
+    scope["mismatch_count"] = 3
+    _write(tmp_path, native, adapter)
+    verdict = _evaluate(tmp_path)
+    assert verdict.status == gate.MALFORMED, verdict.detail
+    assert "contradicts the values it carries" in verdict.detail
+
+
+def test_a_chunks_label_on_a_partial_scope_is_malformed(tmp_path: Path, t4) -> None:
+    """Claiming complete coverage while carrying one chunk fewer."""
+    native, adapter, chunks = _chunks_pair(t4)
+    chunks.pop()
+    _write(tmp_path, native, adapter)
+    verdict = _evaluate(tmp_path)
+    assert verdict.status == gate.MALFORMED, verdict.detail
+
+
+def test_an_unknown_coverage_value_is_malformed(tmp_path: Path, t4) -> None:
+    native, adapter = _large_pair(t4, offender=None)
+    adapter["component_parity"]["scopes"]["sample_forward.query"]["coverage"] = "sampled"
+    _write(tmp_path, native, adapter)
+    verdict = _evaluate(tmp_path)
+    assert verdict.status == gate.MALFORMED, verdict.detail
+    assert "coverage" in verdict.detail
+
+
+def test_a_shape_that_disagrees_with_the_total_is_malformed(tmp_path: Path, t4) -> None:
+    native, adapter = _large_pair(t4, offender=None)
+    adapter["component_parity"]["scopes"]["sample_forward.query"]["shape"] = [LARGE_TOTAL + 1]
+    _write(tmp_path, native, adapter)
+    verdict = _evaluate(tmp_path)
+    assert verdict.status == gate.MALFORMED, verdict.detail
+    assert "shape" in verdict.detail
+
+
+def test_a_complete_record_whose_summary_understates_the_values_is_malformed(
+        tmp_path: Path, t4) -> None:
+    """`max_abs` smaller than a component actually carried: the summary is not a summary."""
+    native, adapter = _large_pair(t4)
+    scope = adapter["component_parity"]["scopes"]["sample_forward.query"]
+    scope["max_abs"] = 1e-12
+    _write(tmp_path, native, adapter)
+    verdict = _evaluate(tmp_path)
+    assert verdict.status == gate.MALFORMED, verdict.detail
+    assert "max_abs" in verdict.detail
+
+
+def test_a_complete_record_whose_worst_understates_the_values_is_malformed(
+        tmp_path: Path, t4) -> None:
+    native, adapter = _large_pair(t4)
+    scope = adapter["component_parity"]["scopes"]["sample_forward.query"]
+    scope["worst_normalized"] = 0.5
+    _write(tmp_path, native, adapter)
+    verdict = _evaluate(tmp_path)
+    assert verdict.status == gate.MALFORMED, verdict.detail
+    assert "worst_normalized" in verdict.detail
+
+
+def test_the_complete_form_recomputes_digests_with_one_shared_serialization(t4) -> None:
+    """The reader's digest and the writer's are the same eight bytes per component, or nothing holds."""
+    import hashlib
+    values = [0.5, -0.0, 1.0 / 3.0, float(np.float32(1e-9))]
+    expected = hashlib.sha256(
+        np.ascontiguousarray(np.array(values), dtype="<f8").tobytes()).hexdigest()
+    assert gate.component_digest(values) == expected
+    assert gate.COMPONENT_DIGEST_DTYPE == "<f8"
+
+
+# ------------------------------------------------------ hit counts: derived, never a flag
+
+def _metrics_pair(*, native_hits=None, adapter_hits=None, flag: bool | None = True,
+                  native_count: int = 2017, adapter_count: int = 2017,
+                  identical_set: bool = True, provenance: dict | None = None,
+                  detail: dict | None = None) -> tuple[dict, dict]:
+    """A pair whose metric evidence is one hit-count block plus a recorded flag."""
+    native_hits = native_hits or {"r1": 375, "r10": 1032, "r50": 1498}
+    adapter_hits = adapter_hits or dict(native_hits)
+    native, adapter = _native(), _adapter()
+    block = detail if detail is not None else {
+        "cutoffs": [1, 10, 50],
+        "native": {"hits": dict(native_hits), "query_count": native_count},
+        "adapter": {"hits": dict(adapter_hits), "query_count": adapter_count},
+        "eligible_query_set_identical": identical_set,
+        "equality": {k: native_hits.get(k) == adapter_hits.get(k) for k in native_hits}}
+    native["native_metrics_parity_detail"] = block
+    if flag is None:
+        native.pop("native_metrics_match_feature_rerank", None)
+        native["native"].pop("native_metrics_match_feature_rerank", None)
+    else:
+        native["native"]["native_metrics_match_feature_rerank"] = flag
+    if provenance is not None:
+        native.update(provenance)
+        adapter.update(provenance)
+    return native, adapter
+
+
+def _metrics_of(verdict) -> list:
+    return [check for check in verdict.checks if check.dimension == "metrics_parity"]
+
+
+def test_a_true_flag_beside_differing_hit_counts_is_malformed(tmp_path: Path) -> None:
+    """THE DEFECT: `native r1 = 375`, `adapter r1 = 376`, flag still `true`, used to PASS.
+
+    The gate read the boolean AS the verdict and never opened the block beside it, so the mismatch
+    was recorded and ignored. The flag is now a cross-check against the counts, and a disagreement
+    makes the artifact self-contradictory rather than certified.
+    """
+    native, adapter = _metrics_pair(native_hits={"r1": 375, "r10": 1032, "r50": 1498},
+                                    adapter_hits={"r1": 376, "r10": 1032, "r50": 1498},
+                                    flag=True)
+    _write(tmp_path, native, adapter)
+    verdict = _evaluate(tmp_path)
+    assert verdict.status == gate.MALFORMED, verdict.detail
+    assert verdict.passed is False
+    assert "native_metrics_match_feature_rerank is True" in verdict.detail
+    assert "'r1': 375" in verdict.detail and "'r1': 376" in verdict.detail
+
+
+def test_agreeing_counts_with_a_false_flag_are_malformed_too(tmp_path: Path) -> None:
+    """Contradiction runs both ways: a `false` flag beside equal counts is equally wrong."""
+    native, adapter = _metrics_pair(flag=False)
+    _write(tmp_path, native, adapter)
+    verdict = _evaluate(tmp_path)
+    assert verdict.status == gate.MALFORMED, verdict.detail
+    assert "native_metrics_match_feature_rerank is False" in verdict.detail
+
+
+def test_a_true_flag_with_no_counts_anywhere_is_incomplete_not_a_pass(tmp_path: Path) -> None:
+    """`flag=true` with nothing behind it. Used to PASS; now the dimension is unmeasured."""
+    native, adapter = _native(), _adapter()
+    native.pop("native_metrics_parity_detail", None)
+    native["native"]["native_metrics_match_feature_rerank"] = True
+    _write(tmp_path, native, adapter)
+    verdict = _evaluate(tmp_path)
+    assert verdict.status == gate.INCOMPLETE, verdict.detail
+    assert verdict.passed is False
+    assert "metrics_parity" in verdict.missing
+    check = _metrics_of(verdict)[0]
+    assert check.ok is False and check.absence is True
+    assert "not evidence" in check.note
+
+
+def test_a_false_flag_without_counts_still_cannot_pass(tmp_path: Path) -> None:
+    native, adapter = _native(), _adapter()
+    native.pop("native_metrics_parity_detail", None)
+    native["native"]["native_metrics_match_feature_rerank"] = False
+    _write(tmp_path, native, adapter)
+    verdict = _evaluate(tmp_path)
+    assert verdict.status == gate.INCOMPLETE, verdict.detail
+
+
+def test_equal_counts_with_full_provenance_pass_and_record_the_derivation(tmp_path: Path) -> None:
+    """The positive control for the metric dimension: counts + denominators + provenance."""
+    native, adapter = _metrics_pair()
+    _write(tmp_path, native, adapter)
+    verdict = _evaluate(tmp_path)
+    assert verdict.status == gate.PASS, verdict.detail
+    check = next(check for check in _metrics_of(verdict)
+                 if check.name.endswith(".metrics.hit_count_equality"))
+    assert check.ok is True and check.mandatory is True
+    assert check.measured["derived_equal"] is True
+    assert check.measured["per_cutoff"] == {"r1": True, "r10": True, "r50": True}
+    assert check.measured["native"] == {"r1": 375, "r10": 1032, "r50": 1498}
+    assert check.measured["recorded_flag"] is True
+    assert check.harness_recorded is True
+    assert verdict.dimensions["metrics_parity"] is True
+
+
+def test_equal_counts_over_different_denominators_do_not_certify(tmp_path: Path) -> None:
+    """Same-size reordered sets: equal hits over different eligible counts is not equality."""
+    native, adapter = _metrics_pair(native_count=2017, adapter_count=2016)
+    _write(tmp_path, native, adapter)
+    verdict = _evaluate(tmp_path)
+    assert verdict.status == gate.MANDATORY_FAILED, verdict.detail
+    check = next(check for check in verdict.failures
+                 if check.name.endswith(".metrics.eligible_denominators"))
+    assert check.measured == {"native": 2017, "adapter": 2016}
+    assert "different denominators" in check.note
+
+
+def test_an_unasserted_eligible_query_set_does_not_certify(tmp_path: Path) -> None:
+    native, adapter = _metrics_pair(identical_set=False)
+    _write(tmp_path, native, adapter)
+    verdict = _evaluate(tmp_path)
+    assert verdict.status == gate.MANDATORY_FAILED, verdict.detail
+    assert any(check.name.endswith(".metrics.eligible_query_set_identical")
+               for check in verdict.failures)
+
+
+def test_a_metrics_block_whose_own_equality_contradicts_its_counts_is_malformed(
+        tmp_path: Path) -> None:
+    """The block's OWN per-cutoff verdict is cross-checked too, not just the single flag."""
+    document = {
+        "cutoffs": [1, 10, 50],
+        "native": {"hits": {"r1": 375, "r10": 1032, "r50": 1498}, "query_count": 2017},
+        "adapter": {"hits": {"r1": 376, "r10": 1032, "r50": 1498}, "query_count": 2017},
+        "eligible_query_set_identical": True,
+        "equality": {"r1": True, "r10": True, "r50": True}}   # r1 is a lie
+    native, adapter = _metrics_pair(detail=document, flag=True)
+    _write(tmp_path, native, adapter)
+    verdict = _evaluate(tmp_path)
+    assert verdict.status == gate.MALFORMED, verdict.detail
+    assert ".equality says" in verdict.detail
+
+
+def test_missing_provenance_is_a_named_mandatory_failure(tmp_path: Path) -> None:
+    """Counts without the identifiers that make them comparable: a failure naming each gap."""
+    native, adapter = _metrics_pair(provenance=None)
+    for document in (native, adapter):
+        for field in ("protocol", "protocol_id", "checkpoint_id", "query_order_sha256",
+                      "gallery_order_sha256"):
+            document.pop(field, None)
+    _write(tmp_path, native, adapter)
+    verdict = _evaluate(tmp_path)
+    assert verdict.status == gate.MANDATORY_FAILED, verdict.detail
+    check = next(check for check in verdict.failures if check.name.endswith(".metrics.provenance"))
+    assert check.ok is False
+    for field in ("protocol", "checkpoint_id", "query_order_sha256", "gallery_order_sha256"):
+        assert f"`{field}`" in check.note, (field, check.note)
+
+
+def test_provenance_on_one_side_only_is_a_failure(tmp_path: Path) -> None:
+    native, adapter = _metrics_pair()
+    adapter.pop("query_order_sha256")
+    _write(tmp_path, native, adapter)
+    verdict = _evaluate(tmp_path)
+    assert verdict.status == gate.MANDATORY_FAILED, verdict.detail
+    check = next(check for check in verdict.failures if check.name.endswith(".metrics.provenance"))
+    assert "one side only" in check.note
+
+
+def test_a_missing_cutoff_in_one_count_vector_is_malformed(tmp_path: Path) -> None:
+    native, adapter = _metrics_pair(adapter_hits={"r1": 375, "r10": 1032})
+    _write(tmp_path, native, adapter)
+    verdict = _evaluate(tmp_path)
+    assert verdict.status == gate.MALFORMED, verdict.detail
+    assert "'r50'" in verdict.detail
+
+
+def test_a_non_integer_hit_count_is_malformed(tmp_path: Path) -> None:
+    native, adapter = _metrics_pair(adapter_hits={"r1": 375.0, "r10": 1032, "r50": 1498})
+    _write(tmp_path, native, adapter)
+    verdict = _evaluate(tmp_path)
+    assert verdict.status == gate.MALFORMED, verdict.detail
+    assert "not an integer hit count" in verdict.detail
+
+
+def test_the_shipped_limn_pair_reports_no_false_metric_pass() -> None:
+    """The LIVE LIMN artifacts: whatever they record, `metrics_parity` is never True on a flag alone."""
+    review = (Path(__file__).resolve().parents[1] / "docs" / "reviews"
+              / "20261109-native15-composition-limn")
+    if not (review / "g1_g2.dress.native.json").is_file():
+        pytest.skip("the LIMN artifacts are not on this host")
+    verdict = gate.evaluate_model("limn")
+    checks = [check for check in verdict.checks if check.dimension == "metrics_parity"]
+    assert checks, "LIMN records a metric comparison, so the dimension must carry checks"
+    for check in checks:
+        if not check.name.endswith(".metrics.hit_count_equality"):
+            continue
+        measured = check.measured
+        assert measured.get("derived_equal") is True, (
+            f"{check.name}: enabled only by a recorded boolean, not by a derivation")
+        assert measured.get("native") == measured.get("adapter"), check.name
+    assert verdict.status != gate.PASS

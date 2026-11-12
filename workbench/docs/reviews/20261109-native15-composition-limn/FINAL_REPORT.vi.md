@@ -43,7 +43,7 @@ không trọng số trên 3 category của **chính model đó**, không phải 
 | model | R@10 | R@50 | nguồn |
 |---|---|---|---|
 | `hint` | **59.8034** | **80.1308** | `raw/native/hint.json` |
-| `encoder` | **56.2908** | **77.6334** | `raw/native/encoder.json` |
+| `encoder` | **56.2908** `NOT_REPRODUCIBLE` | **77.6334** `NOT_REPRODUCIBLE` | `raw/native/encoder.json` — **unseeded draw**, superseded by the seeded **56.22580193539884 / 77.53315673870537** (`g1_g2.encoder.*.native.json` → `native.native_metrics_recheck`); see `20261112-parity-repair/ENCODER_RELATION.md` §8-§9b |
 | `limn` | **55.7919** | **77.6378** | `limn_native.json` |
 
 `limn` thêm R@1 = **23.3394** (`limn_native.json` → `aggregate.macro_r1`).

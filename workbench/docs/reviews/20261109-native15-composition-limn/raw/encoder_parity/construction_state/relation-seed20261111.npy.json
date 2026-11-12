@@ -1,0 +1,22 @@
+{
+ "tensor": "backbone.binding_decoder.learnable_relation",
+ "shape": [
+  2,
+  512
+ ],
+ "dtype": "torch.float32",
+ "seed": 20261111,
+ "sha256": "20db0c27c979e9a0938c71af5142458dfa2070468d0ad3fcb6f24134c2f9ce92",
+ "seed_placement": "torch.manual_seed(seed) immediately before Encoder(...) construction",
+ "in_state_dict": false,
+ "transform_policy": {
+  "query_transform": "preprocess_val",
+  "gallery_transform": "preprocess_val",
+  "native_query_transform": "preprocess_train",
+  "native_gallery_transform": "preprocess_val",
+  "kind": "declared adaptation",
+  "note": "CIRCUS composition uses preprocess_val for both query and gallery; native ENCODER uses preprocess_train (RandomResizedCrop) for the query and preprocess_val for the gallery. Keeping val for both is deliberate: the asymmetry is a property of the native release, and honouring it here would change every published number."
+ },
+ "source": "workbench/third_party/ENCODER/model_try2.py:93 (torch.randn(N_p, dim))",
+ "permutation_scope": "whole model construction (CLIP tower, FactorNet, decoder heads and this tensor all draw from the seeded generator); the pin is what makes the run reproducible, not a claim that the released relation was recoverable"
+}

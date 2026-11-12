@@ -467,5 +467,10 @@
         "r50": 82.04997450280469
       }
     }
-  }
+  },
+  "protocol": "fashioniq_val_split",
+  "checkpoint_id": "base_iter0_toptee",
+  "model_id": "limn",
+  "query_order_sha256": "fd79762c895e6bf1e513a2a5730de058e15169fab87f836aa7911a12d3aecae1",
+  "gallery_order_sha256": "e79e4ffdf02bb9a205358f62692a3390329e8cd31e69f3e9adc273a5f7dc0b89"
 }

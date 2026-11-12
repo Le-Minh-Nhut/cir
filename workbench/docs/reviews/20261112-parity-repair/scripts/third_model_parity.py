@@ -43,13 +43,14 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib
 import importlib.util
 import json
 import sys
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any, Callable, Sequence
 
 REPO = Path("/home/heheboiz/data/cir")
 sys.path.insert(0, str(REPO))
@@ -104,6 +105,40 @@ class ModelScope:
     target_category: str | None
     #: Extra declared tolerances this model's artifacts must carry. Empty for both current models.
     extra_tolerances: dict[str, Any] | None = None
+    #: The stored native per-query-rank measurement reused as the ranking CONTROL, or None when the
+    #: model has none. None is not a gap papered over: without a control `scoring_parity` cannot be
+    #: measured against a native MEASUREMENT, and the sample-scope path below says so instead of
+    #: substituting the adapter's own output for one.
+    native_control_path: str | None = None
+    #: "full"    -- rank the WHOLE category population (HINT: 2017 queries over 2628 images).
+    #: "sample"  -- rank the fixed sample only, and SAY SO. A sample-shaped scope is a preview: the
+    #:              verdict it supports is about the sample, never about the population, and the
+    #:              artifact carries `population_scope` so a reader cannot mistake one for the other.
+    population_scope: str = "full"
+    #: The pinned text-processor config key this model's evaluator selects.
+    processor_config: str = "pretrain"
+    #: The protocol id this pair is measured under, as the registry declares it. Written into the
+    #: artifact so `parity_gate._metrics_checks`'s provenance comparison has a value on both sides.
+    protocol_id: str = "fashioniq_val_split"
+    #: HOW the native preprocessing is obtained, as a declaration rather than a hardcoded call:
+    #:   "data_utils" -- `data_utils.targetpad_transform(1.25, 224)` from the pinned checkout
+    #:                   (HINT, HABIT, INTENT, CONESEPS)
+    #:   "clip"       -- `clip.load('ViT-B/16', jit=False).preprocess`, which is a DIFFERENT
+    #:                   normalization (CLIP's own mean/std) and a different resize (224 bicubic via
+    #:                   CLIP, not TargetPad). TG-CIR builds exactly this (`train.py:87,90`).
+    #: A model whose preprocessing is wrong is not measurable: comparing features produced under two
+    #: normalizations measures the preprocessing, not the model.
+    transform_source: str = "data_utils"
+    #: The device the native model is placed on. "cuda" for every model whose evaluator requires it;
+    #: "cpu" is refused by the CUDA-hard ones and is here for the models that patch it.
+    native_device: str = "cuda"
+    #: Whether the adapter tolerates an in-process `restart()`, which the `cache_off_restart`
+    #: comparison needs. False for an adapter that asserts its worker loads ONCE per instance:
+    #: `model_tgcir.py:344 _check_worker_pid` raises `adapter_worker_reloaded` when a second worker
+    #: replies, so restarting it is refused by design. Recording that as a capability keeps the
+    #: artifact honest -- the comparison is reported NOT MEASURED, never silently skipped and never
+    #: passed.
+    restart_supported: bool = True
 
     def declared_tolerances(self) -> dict[str, Any]:
         return {**TOL, **(self.extra_tolerances or {})}
@@ -118,6 +153,42 @@ class CaptureHook:
     """
 
     scope: ModelScope
+
+    def dataset_kwargs(self) -> dict[str, Any]:
+        """Constructor keywords the pinned `FashionIQ` dataset needs BESIDES path and transform.
+
+        HINT's takes none; HABIT/INTENT/CONESEPS's take `noise_ratio` (`datasets.py`, whose default
+        path reads a noise setting). Declared as a hook rather than sniffed, because a wrong default
+        here silently evaluates a DIFFERENT split and every downstream number is then about a model
+        that was never asked the question.
+        """
+        return {}
+
+    def replay_modules(self, source_root: Path) -> Any:
+        """The pinned modules this model's evaluator imports, as the hook's own tuple.
+
+        Defaults to the LAVIS-family `_load_replay_modules`. A model that names its loader
+        differently (TG-CIR's `_load_tgcir`) overrides this rather than being special-cased in
+        `identity_phase` -- which is the whole reason this is a method and not an inline call.
+        """
+        return load_replay_modules(self.scope.replay_module, source_root,
+                                   self.scope.processor_config)
+
+    def transform(self, loaded: dict[str, Any]):
+        """The preprocessing callable BOTH sides apply, resolved from `scope.transform_source`.
+
+        One definition serving every hook, because the transform is a property of the MODEL's pinned
+        training/eval recipe, not of the producer. A hook that needs something else overrides this.
+        """
+        if self.scope.transform_source == "clip":
+            import clip
+
+            _clip_model, preprocess = clip.load("ViT-B/16", device="cpu", jit=False)
+            return preprocess
+        if self.scope.transform_source != "data_utils":
+            raise SystemExit(f"unknown transform_source {self.scope.transform_source!r} for "
+                             f"{self.scope.model_id}: expected 'data_utils' or 'clip'")
+        return loaded["data_utils"].targetpad_transform(1.25, 224)
 
     def gallery(self, loaded: Any, category: str) -> dict[str, Any]:
         """Scope function: what this category's query/gallery population IS, per the pinned source."""
@@ -291,25 +362,31 @@ def _hits(ranks: Sequence[int]) -> dict[str, int]:
             for k in (1, 10, 50)}
 
 
-def native_control(category: str) -> dict[str, Any]:
+def native_control(hook: CaptureHook, category: str) -> dict[str, Any]:
     """The stored native per-query ranks, re-verified against the registry checkpoint digest.
 
     Reused rather than re-measured: it is the SAME checkpoint bytes, protocol and population, and a
     second full native evaluation would add a number, not information. What is re-verified here is
     the thing reuse could silently get wrong -- that the ranks still reproduce the macro that file
     records, and that its checkpoint is the one the registry declares.
+
+    The path and the checkpoint come from the SCOPE. A model with no stored control gets `None` and
+    the caller records the ranking dimension as unmeasured rather than comparing the adapter's own
+    output to itself.
     """
     from workbench.backend.registry import checkpoint_by_id, model_by_id
 
-    document = json.loads(NATIVE_CONTROL.read_text(encoding="utf-8"))
-    declared = checkpoint_by_id(model_by_id("hint"), "fashioniq")
+    if not hook.scope.native_control_path:
+        return None
+    document = json.loads(Path(REPO / hook.scope.native_control_path).read_text(encoding="utf-8"))
+    declared = checkpoint_by_id(model_by_id(hook.scope.model_id), hook.scope.checkpoint_id)
     entry = document["categories"][category]
     ranks = [int(rank) for rank in entry["ranks"]]
     hits = _hits(ranks)
     recorded = [float(value) for value in entry["native_recalls_r1_r10_r50"]]
     recomputed = [100.0 * hits[f"r{k}"] / len(ranks) for k in (1, 10, 50)]
     return {
-        "source": str(NATIVE_CONTROL.relative_to(REPO)),
+        "source": hook.scope.native_control_path,
         "checkpoint_sha256": document["checkpoint"]["sha256"],
         "checkpoint_sha256_matches_registry":
             document["checkpoint"]["sha256"] == declared.get("expected_sha256"),
@@ -333,7 +410,23 @@ def native_control(category: str) -> dict[str, Any]:
     }
 
 
-def decode_equality(paths: Sequence[str]) -> dict[str, Any]:
+def load_replay_modules(replay_module: str, source_root: Path, processor_config: str) -> Any:
+    """Call a replay module's `_load_replay_modules`, whatever arity that module's own signature has.
+
+    Measured, not assumed: HINT's takes `(source_root, config_key)` because it selects among several
+    processor configs (`replay/hint.py`), while HABIT/INTENT/CONESEP take `(source_root)` and pin
+    `PROCESSOR_CONFIGS["pretrain"]` themselves. Passing two arguments to the single-argument form is
+    a `TypeError`, and guessing which form a new module has is how a producer breaks on the model it
+    was just extended for. So the arity is read from the function itself.
+    """
+    import inspect
+
+    loader = importlib.import_module(replay_module)._load_replay_modules
+    parameters = [name for name, parameter in inspect.signature(loader).parameters.items()
+                  if parameter.kind in (parameter.POSITIONAL_ONLY, parameter.POSITIONAL_OR_KEYWORD)]
+    return loader(source_root, processor_config) if len(parameters) >= 2 else loader(source_root)
+
+def decode_equality(paths: Sequence[str], hook: "CaptureHook | None" = None) -> dict[str, Any]:
     """Both sides' preprocessing, decoded in THIS process, compared bitwise.
 
     Honest scope: this proves the two transform COMPOSITIONS are identical (HINT uses
@@ -345,12 +438,36 @@ def decode_equality(paths: Sequence[str]) -> dict[str, Any]:
     import torch
     from PIL import Image
 
-    from workbench.replay.hint import _load_replay_modules
+    # The loader, the checkout and the processor config come from the hook when one is supplied, so a
+    # second model's decode block is about ITS pinned transform. Called with no hook by the HINT-era
+    # path, which is why HINT stays the default rather than becoming a required argument.
+    from workbench.backend.registry import model_by_id
 
-    _, _, pinned, _ = _load_replay_modules(
-        Path(REPO / "workbench/third_party/HINT"), "pretrain")
-    data_utils, _ = pinned
-    transform = data_utils.targetpad_transform(1.25, 224)
+    model_id = hook.scope.model_id if hook is not None else "hint"
+    replay_module = hook.scope.replay_module if hook is not None else "workbench.replay.hint"
+    processor_config = hook.scope.processor_config if hook is not None else "pretrain"
+    # The checkout is read from the REGISTRY, not from a path guess: `source_dir` is the field the
+    # replay modules themselves resolve, so a decode block cannot measure a different tree than the
+    # forward block it will be compared against.
+    source_dir = model_by_id(model_id)["source_dir"]
+    # INDEX, never a 4-tuple unpack: HINT's loader returns
+    # `(torch, datasets, (data_utils, test_module), processors)` and HABIT/INTENT/CONESEP return
+    # `(torch, datasets, data_utils, test_module, (txt_processors, boundary))` -- the `data_utils`
+    # module is at index 2 in the first and index 2 in the second only by coincidence, and unpacking
+    # four names from a five-tuple is `ValueError: too many values to unpack`.
+    # The TRANSFORM comes from the HOOK, not from a `data_utils` lookup: TG-CIR's preprocessing is
+    # `clip.load('ViT-B/16').preprocess` and its loader returns no `data_utils` at all, so indexing
+    # for one would be wrong twice. `hook.transform` is the single declaration every hook shares.
+    if hook is not None:
+        transform = hook.transform({})
+    else:
+        loaded_modules = load_replay_modules(replay_module,
+                                             Path(REPO / "workbench/third_party" / source_dir),
+                                             processor_config)
+        data_utils = loaded_modules[2]
+        if isinstance(data_utils, tuple):
+            data_utils = data_utils[0]
+        transform = data_utils.targetpad_transform(1.25, 224)
     native_side = torch.stack([transform(Image.open(path).convert("RGB")) for path in paths])
     adapter_side = torch.stack([transform(Image.open(path).convert("RGB")) for path in paths])
     measured = compare(adapter_side.numpy(), native_side.numpy())
@@ -358,12 +475,13 @@ def decode_equality(paths: Sequence[str]) -> dict[str, Any]:
         "max_abs": measured["max_abs"], "max_rel": measured["max_rel"],
         "min_cosine": measured["min_cosine"], "bitwise_equal": measured["bitwise_equal"],
         "shape": measured["shape"]}}
-    terms = transform.transforms
+    terms = getattr(transform, "transforms", [])
     result.update({
         "measured_in": "one process (CPU); both compositions executed here",
-        "native_composition": "replay/hint.py:184 data_utils.targetpad_transform(1.25, 224)",
-        "adapter_composition": "model_hint.py:329 same call",
-        "transform_steps": [type(step).__name__ for step in terms],
+        "native_composition": f"{replay_module} data_utils.targetpad_transform(1.25, 224)",
+        "adapter_composition": "the adapter worker's own targetpad_transform(1.25, 224) call",
+        "transform_steps": [type(step).__name__ for step in terms] or
+                           [type(transform).__name__],
         "image_size": 224,
         "target_ratio": 1.25,
         "normalization": {
@@ -479,7 +597,7 @@ class HintCapture(CaptureHook):
         from PIL import Image
 
         torch_mod, network = loaded["torch"], loaded["model"]
-        transform = loaded["data_utils"].targetpad_transform(1.25, 224)
+        transform = self.transform(loaded)
         processor = loaded["processors"][0]["eval"]
         from workbench.composition.adapters import resolved_batch_size
 
@@ -503,7 +621,7 @@ class HintCapture(CaptureHook):
         from workbench.composition.adapters import resolved_batch_size
 
         torch_mod, network = loaded["torch"], loaded["model"]
-        transform = loaded["data_utils"].targetpad_transform(1.25, 224)
+        transform = self.transform(loaded)
         outputs = []
         batch = resolved_batch_size()
         with torch_mod.no_grad():
@@ -517,6 +635,307 @@ class HintCapture(CaptureHook):
                 del images, features
         return np.concatenate(outputs, axis=0)
 
+
+class LavisFashionIQCapture(CaptureHook):
+    """The shared LAVIS BLIP-2 FashionIQ contract: HABIT, INTENT and CONESEPS.
+
+    These three are the SAME shape, measured rather than assumed:
+
+      * `datasets.FashionIQ(path, category=None, transform=None, noise_ratio=0, split=...)` in all
+        three (`HABIT/datasets.py:28`, `INTENT/datasets.py:26`, `ConeSep/datasets.py:26`), each
+        exposing `test_queries_<cat>`/`test_targets_<cat>` with `source_img_id`, `target_img_id`,
+        `mod['str']` and `target_img_data`;
+      * the SAME decisor in `test.py` -- `sims = np.matmul(all_queries, all_imgs).squeeze().max(-1)`,
+        then `sims[i, test_targets_id.index(t['source_img_id'])] = -10e10`, then `argsort(-sims)`
+        (`HABIT/test.py:141-152`, `INTENT/test.py:141-150`) -- so one ranking convention serves all
+        three, and this class has no ranking code of its own;
+      * the SAME transform `data_utils.targetpad_transform(1.25, 224)` and the SAME processor config.
+
+    CONESEPS is the one DIVERGENCE and it is a layout, not a convention: its
+    `extract_retrieval_compose` returns `(N,1,1,256)` and its `extract_retrieval_target` returns
+    `(N,256,32)` (`ConeSep.py:492,516`), which the adapter widens to an 8192-wide row and `score()`
+    then re-splits. The hook flattens the native query to `(N,256)` so both sides are the same
+    quantity, and the layout is recorded rather than silently transposed.
+    """
+
+    def __init__(self, scope: ModelScope, *, noise_ratio: float = 0.0,
+                 target_transpose: bool = True) -> None:
+        self.scope = scope
+        #: `datasets.FashionIQ(noise_ratio=...)`. 0 is the evaluation split every one of the three
+        #: registries declares (`evaluation_noise_pct: 0` in their native aggregates).
+        self.noise_ratio = noise_ratio
+        #: Whether the native TARGET array must be transposed `(N,256,32) -> (N,32,256)` to match the
+        #: adapter, which is what all three adapters emit.
+        self.target_transpose = target_transpose
+
+    def dataset_kwargs(self) -> dict[str, Any]:
+        return {"noise_ratio": self.noise_ratio}
+
+    # -- loading -------------------------------------------------------------------------------
+    def load_native(self, config: Any, category: str):
+        """Pinned modules, catalogue checkpoint and the pinned dataset, as `test.py` sees them."""
+        from workbench.backend.registry import checkpoint_by_id, model_by_id
+        from workbench.replay.common import load_trusted_whole_model
+
+        model = model_by_id(self.scope.model_id)
+        checkpoint = checkpoint_by_id(model, self.scope.checkpoint_id)
+        checkpoint_root = Path(config.WORKBENCH_CHECKPOINT_ROOT) / self.scope.model_id
+        dataset_root = Path(config.FASHIONIQ_ROOT)
+        source_root = Path(config.WORKBENCH_THIRD_PARTY_ROOT) / model["source_dir"]
+        replay = importlib.import_module(self.scope.replay_module)
+        problems = replay.preflight(checkpoint_root, dataset_root, source_root, (category,))
+        if problems:
+            raise SystemExit(f"{self.scope.model_id} preflight blocked: {problems}")
+        import torch
+
+        torch_mod, datasets, data_utils, _test, processors = replay._load_replay_modules(
+            source_root)
+        txt_processors, _boundary = processors
+        path = checkpoint_root / checkpoint["filename"]
+        network = load_trusted_whole_model(path, checkpoint.get("expected_sha256"), torch_mod)
+        network = network.to("cuda").eval()
+        return {"torch": torch_mod, "datasets": datasets, "data_utils": data_utils,
+                "processors": txt_processors, "model": network,
+                "dataset_root": dataset_root, "cache": None, "checkpoint": checkpoint,
+                "checkpoint_path": path, "config": config}
+
+    # -- scope function ------------------------------------------------------------------------
+    def gallery(self, loaded: dict[str, Any], category: str) -> dict[str, Any]:
+        dataset_root = loaded["dataset_root"]
+        images = json.loads((dataset_root / "image_splits" / f"split.{category}.val.json")
+                            .read_text(encoding="utf-8"))
+        rows = json.loads((dataset_root / "captions" / f"cap.{category}.val.json")
+                          .read_text(encoding="utf-8"))
+        correction = json.loads((dataset_root / "captions" / f"correction_dict_{category}.json")
+                                .read_text(encoding="utf-8"))
+        # The GALLERY is the category's whole image list, in the pinned split's order: that is what
+        # `datasets.get_test_data` enumerates under `split='original-split'`
+        # (`HABIT/datasets.py:205-210`) and it is why the reference mask has something to mask.
+        gallery_ids = list(images)
+        composed = [f"{T4.correct_text(row['captions'][0], correction)} and "
+                    f"{T4.correct_text(row['captions'][1], correction)}" for row in rows]
+
+        def image_path(name: str) -> str:
+            return str(dataset_root / "resized_image" / category / f"{name}.jpg")
+
+        return {
+            "category": category,
+            "images": images,
+            "rows": rows,
+            "correction": correction,
+            "gallery_ids": gallery_ids,
+            "gallery_positions": list(range(len(gallery_ids))),
+            "reference_ids": [row["candidate"] for row in rows],
+            "target_ids": [row["target"] for row in rows],
+            "composed_texts": composed,
+            "image_path": image_path,
+            "gallery_paths": [image_path(name) for name in gallery_ids],
+        }
+
+    # -- capture hooks -------------------------------------------------------------------------
+    def native_features(self, loaded: dict[str, Any], paths: Sequence[str],
+                        texts: Sequence[str]) -> Any:
+        import numpy as np
+        from PIL import Image
+
+        from workbench.composition.adapters import resolved_batch_size
+
+        torch_mod, network = loaded["torch"], loaded["model"]
+        transform = self.transform(loaded)
+        # The mapping's key is `"eval"` in every pinned `test.py` (`HABIT/test.py:111`).
+        processor = loaded["processors"]["eval"]
+        outputs = []
+        batch = resolved_batch_size()
+        with torch_mod.no_grad():
+            for start in range(0, len(paths), batch):
+                chunk = paths[start:start + batch]
+                images = torch_mod.stack([transform(Image.open(path).convert("RGB"))
+                                          for path in chunk]).float().cuda()
+                chunk_texts = [processor(text) for text in texts[start:start + len(chunk)]]
+                features = network.extract_retrieval_compose(images, chunk_texts)
+                # CONESEPS returns `(N,1,1,256)`; HABIT/INTENT return `(N,256)`. Flattening to a row
+                # per query is the adapter's own layout in both cases (`model_habit.py:378` does
+                # `.reshape(len(pixels), -1)`), so this is alignment, not a re-measurement.
+                outputs.append(features.detach().cpu().numpy().reshape(len(chunk), -1))
+                del images, features
+        return np.concatenate(outputs, axis=0)
+
+    def native_target_features(self, loaded: dict[str, Any], paths: Sequence[str]) -> Any:
+        import numpy as np
+        from PIL import Image
+
+        from workbench.composition.adapters import resolved_batch_size
+
+        torch_mod, network = loaded["torch"], loaded["model"]
+        transform = self.transform(loaded)
+        outputs = []
+        batch = resolved_batch_size()
+        with torch_mod.no_grad():
+            for start in range(0, len(paths), batch):
+                chunk = paths[start:start + batch]
+                images = torch_mod.stack([transform(Image.open(path).convert("RGB"))
+                                          for path in chunk]).float().cuda()
+                features = network.extract_retrieval_target(images)
+                # (N, 256, 32) -> (N, 32, 256): the adapter's layout, so the comparator is aligned.
+                # `permute(0,2,1)` is what every one of the three adapters does
+                # (`model_habit.py:381`, `model_intent.py:361`, `model_conesep.py:324`).
+                array = features.detach().cpu().numpy()
+                outputs.append(array.transpose(0, 2, 1) if self.target_transpose else array)
+                del images, features
+        return np.concatenate(outputs, axis=0)
+
+class ClippedModelCapture(LavisFashionIQCapture):
+    """TG-CIR: same FashionIQ dataset contract, DIFFERENT loader, transform and model restore.
+
+    Measured differences from the LAVIS family, each of which the shared phases would have got wrong:
+
+      * **No `_load_replay_modules`.** `replay/tgcir.py:174 _load_tgcir(source_root, device)` returns
+        `(torch, (clip, datasets, tg_test), adaptations)` -- three elements whose middle is itself a
+        three-tuple. So this class supplies `load_native` itself, and the shared
+        `load_replay_modules()` is not consulted.
+      * **Transform is CLIP's, not TargetPad.** `train.py:87,90` builds
+        `clip.load('ViT-B/16', jit=False).preprocess`; the LAVIS family uses
+        `data_utils.targetpad_transform(1.25, 224)`. Different mean/std AND a different resize, so
+        using the wrong one compares preprocessing rather than models. Declared as
+        `scope.transform_source = "clip"` and served by `CaptureHook.transform`.
+      * **Model restore is `torch.load(..., weights_only=False)`**, not
+        `load_trusted_whole_model`, plus a torch-1.7 pickle alias (`nn.MultiheadAttention` without
+        `batch_first`). Reusing the LAVIS restore path would fail on the pickle.
+
+    The dataset contract is otherwise identical (`third_party/TGCIR/datasets.py:21
+    __init__(path, transform=None)`, `test_queries_<cat>`/`test_targets_<cat>`), which is why this
+    SUBCLASSES `LavisFashionIQCapture` rather than repeating its `gallery()`.
+    """
+
+    def dataset_kwargs(self) -> dict[str, Any]:
+        """TG-CIR's dataset takes no `noise_ratio` (`third_party/TGCIR/datasets.py:21
+        __init__(path, transform=None)`), unlike the LAVIS family."""
+        return {}
+
+    def gallery(self, loaded: dict[str, Any], category: str) -> dict[str, Any]:
+        """The gallery is the UNION of source and target ids, in first-appearance order.
+
+        Not the full image list: `third_party/TGCIR/datasets.py:147-150` builds `test_targets_id` by
+        walking the queries and appending `source_img_id` then `target_img_id` if unseen. Measured:
+        dress has 2017 queries but only **2628** gallery images, against 3817 images in the split
+        file. Inheriting the full-list `gallery()` produced `gallery_order_identical: false` on the
+        first identity run -- a true statement about MY hook, not about the model.
+        """
+        scope = super().gallery(loaded, category)
+        gallery_ids: list[str] = []
+        for row in scope["rows"]:
+            for name in (row["candidate"], row["target"]):
+                if name not in gallery_ids:
+                    gallery_ids.append(name)
+        positions = {name: index for index, name in enumerate(scope["images"])}
+        return {**scope, "gallery_ids": gallery_ids,
+                "gallery_positions": [positions[name] for name in gallery_ids],
+                "gallery_paths": [scope["image_path"](name) for name in gallery_ids]}
+
+    def replay_modules(self, source_root: Path) -> Any:
+        """`_load_tgcir(source_root, device)` flattened to the shape the shared phases index.
+
+        The pinned loader returns `(torch, (clip, datasets, tg_test), adaptations)`, so index 1 is a
+        TUPLE, not the `datasets` module. Returning it unchanged gave
+        `AttributeError: 'tuple' object has no attribute 'FashionIQ'`. The shared phase only needs
+        `[1]`: the datasets module. The clip module and the adaptations are carried on `loaded`
+        instead, by `load_native`, where the forwards can use them.
+        """
+        from workbench.replay import tgcir as replay
+
+        torch_mod, inner, _adaptations = replay._load_tgcir(source_root, self.scope.native_device)
+        clip_mod, datasets, tg_test = inner
+        return (torch_mod, datasets, (None, tg_test), clip_mod)
+
+    def load_native(self, config: Any, category: str):
+        # `sys.path` must carry the checkout before `_load_tgcir` imports `clip`, `datasets`, `test`.
+        import torch as _torch
+
+        from workbench.backend.registry import model_by_id
+        from workbench.replay import tgcir as replay
+
+        from workbench.backend.registry import checkpoint_path as _resolved_path
+
+        model = model_by_id(self.scope.model_id)
+        # The checkpoint lives under `downloads/tgcir/x/checkpoints/`, not `root/tgcir/`. The pinned
+        # `preflight` and `validate_checkpoint` take a DIRECTORY and append `Fashioniq.pt`, so the
+        # registry-resolved path's own parent is what they must be given -- re-deriving the
+        # conventional location made both report the checkpoint missing on a file that is present.
+        checkpoint_path = Path(_resolved_path(self.scope.model_id, replay.CHECKPOINT,
+                                              config.WORKBENCH_CHECKPOINT_ROOT))
+        checkpoint_root = checkpoint_path.parent
+        dataset_root = Path(config.FASHIONIQ_ROOT)
+        source_root = Path(config.WORKBENCH_THIRD_PARTY_ROOT) / model["source_dir"]
+        problems = replay.preflight(source_root, dataset_root, checkpoint_root)
+        if problems:
+            raise SystemExit(f"tgcir preflight blocked: {problems}")
+        torch_mod, (clip_mod, datasets, _tg_test), adaptations = replay._load_tgcir(
+            source_root, self.scope.native_device)
+        network = _torch.load(checkpoint_path, map_location="cpu", weights_only=False)
+        unset = [module for module in network.modules()
+                 if isinstance(module, torch_mod.nn.MultiheadAttention)
+                 and not hasattr(module, "batch_first")]
+        for module in unset:
+            module.batch_first = False
+        if unset:
+            adaptations = [*adaptations,
+                           f"batch_first=False restored on {len(unset)} MultiheadAttention modules"]
+        network = network.to(self.scope.native_device).eval()
+        return {"torch": torch_mod, "datasets": datasets, "data_utils": None,
+                "processors": None, "model": network, "dataset_root": dataset_root,
+                "cache": None, "checkpoint": replay.CHECKPOINT,
+                "checkpoint_path": checkpoint_path, "config": config,
+                "clip": clip_mod, "adaptations": list(adaptations)}
+
+    def native_features(self, loaded: dict[str, Any], paths: Sequence[str],
+                        texts: Sequence[str]) -> Any:
+        """The pinned encoder path, verbatim from `test.py`: compose -> mean-pool over tokens.
+
+        `model.py:197-199` in the pinned source: query row = `F.normalize(mean(tokens))`, so the
+        comparable quantity is one 512-d vector per query, not the token layout. The adapter does the
+        same (`model_tgcir.py:635`), which is why no transpose is needed on this side.
+        """
+        import numpy as np
+        from PIL import Image
+
+        from workbench.composition.adapters import resolved_batch_size
+
+        torch_mod, network = loaded["torch"], loaded["model"]
+        # TG-CIR applies NO text processor at the call site: `test.py` passes the corrected caption
+        # string straight to `extract_retrieval_compose`, and its own tokenizer runs inside.
+        preprocess = self.transform(loaded)
+        outputs = []
+        batch = resolved_batch_size()
+        with torch_mod.no_grad():
+            for start in range(0, len(paths), batch):
+                chunk = paths[start:start + batch]
+                images = torch_mod.stack([preprocess(Image.open(path).copy().convert("RGB"))
+                                          for path in chunk]).to(self.scope.native_device)
+                features = network.extract_retrieval_compose(images, texts[start:start + len(chunk)])
+                array = features.detach().float().cpu().numpy()
+                outputs.append(array.reshape(len(chunk), -1))
+                del images, features
+        return np.concatenate(outputs, axis=0)
+
+    def native_target_features(self, loaded: dict[str, Any], paths: Sequence[str]) -> Any:
+        import numpy as np
+        from PIL import Image
+
+        from workbench.composition.adapters import resolved_batch_size
+
+        torch_mod, network = loaded["torch"], loaded["model"]
+        preprocess = self.transform(loaded)
+        outputs = []
+        batch = resolved_batch_size()
+        with torch_mod.no_grad():
+            for start in range(0, len(paths), batch):
+                chunk = paths[start:start + batch]
+                images = torch_mod.stack([preprocess(Image.open(path).copy().convert("RGB"))
+                                          for path in chunk]).to(self.scope.native_device)
+                features = network.extract_retrieval_target(images)
+                outputs.append(features.detach().float().cpu().numpy().reshape(len(chunk), -1))
+                del images, features
+        return np.concatenate(outputs, axis=0)
 
 # --------------------------------------------------------------------------- phases
 
@@ -538,15 +957,26 @@ def _versions() -> dict[str, Any]:
     return record
 
 
-def checkpoint_identity(config: Any) -> dict[str, Any]:
-    """The checkpoint bytes, hashed once and cached under the producer's own raw dir."""
+def checkpoint_identity(config: Any, model_id: str = "hint",
+                        checkpoint_id: str = "fashioniq") -> dict[str, Any]:
+    """The checkpoint bytes, hashed once and cached under the producer's own raw dir.
+
+    `model_id`/`checkpoint_id` are parameters rather than HINT's literals: a second model's pair must
+    name ITS checkpoint, and a cache keyed only on size+path would have collided silently if two
+    models happened to stage equal-sized files.
+    """
     import hashlib as _hash
 
-    from workbench.backend.registry import checkpoint_by_id, model_by_id
+    from workbench.backend.registry import checkpoint_by_id, checkpoint_path, model_by_id
 
-    declared = checkpoint_by_id(model_by_id("hint"), "fashioniq")
-    path = Path(config.WORKBENCH_CHECKPOINT_ROOT) / "hint" / declared["filename"]
-    cache = RAW / "checkpoint_identity.json"
+    model = model_by_id(model_id)
+    declared = checkpoint_by_id(model, checkpoint_id)
+    # The REGISTRY's own resolution, not `root/<model>/<filename>`: several models stage their
+    # checkpoint somewhere the convention does not predict (TG-CIR is under
+    # `downloads/tgcir/x/checkpoints/`), and constructing the path here reported a
+    # FileNotFoundError on a checkpoint the registry can point straight at.
+    path = checkpoint_path(model_id, declared, config.WORKBENCH_CHECKPOINT_ROOT)
+    cache = RAW / f"checkpoint_identity_{model_id}_{checkpoint_id}.json"
     record = {"path": str(path), "size_bytes": path.stat().st_size,
               "declared_sha256": declared.get("expected_sha256")}
     if cache.is_file():
@@ -580,15 +1010,18 @@ def identity_phase(hook: CaptureHook, category: str, config: Any) -> dict[str, A
 
     from workbench.backend.registry import model_by_id
     from workbench.replay.common import isolated_cache_root
-    from workbench.replay.hint import _load_replay_modules
 
     model = model_by_id(hook.scope.model_id)
     source_root = Path(config.WORKBENCH_THIRD_PARTY_ROOT) / model["source_dir"]
     dataset_root = Path(config.FASHIONIQ_ROOT)
-    _, datasets, _, _ = _load_replay_modules(source_root, "pretrain")
+    # The MODULE and the processor config come from the scope, not from HINT: `_load_replay_modules`
+    # is one function name every LAVIS-family replay module happens to share, and picking it by
+    # hardcoded name is what would have made a second hook silently measure HINT's classes.
+    datasets = hook.replay_modules(source_root)[1]
     began = time.time()
     with isolated_cache_root(dataset_root) as cache:
-        dataset = datasets.FashionIQ(path=str(cache).rstrip("/") + "/", transform=Identity())
+        dataset = datasets.FashionIQ(path=str(cache).rstrip("/") + "/", transform=Identity(),
+                                     **hook.dataset_kwargs())
         scope = hook.gallery({"dataset_root": dataset_root}, category)
         native_queries = getattr(dataset, f"test_queries_{category}")
         native_targets = getattr(dataset, f"test_targets_{category}")
@@ -689,9 +1122,27 @@ def native_phase(hook: CaptureHook, category: str, config: Any) -> dict[str, Any
     records: dict[str, Any] = {}
     try:
         with isolated_cache_root(loaded["dataset_root"]) as cache:
+            # NO TRANSFORM. This phase wants the dataset's IDS and TEXT only -- every image it
+            # actually forwards is opened from the `..._paths` lists below, and the transform is
+            # applied there. Passing `targetpad_transform(1.25, 224)` here made
+            # `datasets.get_test_img` decode and transform every query and gallery image of ALL
+            # THREE categories at construction (tens of thousands of decoded tensors), which measured
+            # 27.5 GiB peak and was OOM-killed. The identity phase already skips the transform for
+            # exactly this reason.
+            # An IDENTITY transform, not None: `HABIT/datasets.py:157` calls
+            # `self.transform(img)` unconditionally, so None raises
+            # `TypeError: 'NoneType' object is not callable`. Identity keeps the PIL object and costs
+            # no tensor allocation, which is the whole point -- the pixels are forwarded from the
+            # `..._paths` lists below, under the transform the hook applies there.
+            class _Identity:
+                def __call__(self, image):
+                    return image
+
+                def __getitem__(self, index):
+                    return self
+
             dataset = loaded["datasets"].FashionIQ(
-                path=str(cache).rstrip("/") + "/",
-                transform=loaded["data_utils"].targetpad_transform(1.25, 224))
+                path=str(cache).rstrip("/") + "/", transform=_Identity(), **hook.dataset_kwargs())
             queries = getattr(dataset, f"test_queries_{category}")
             targets = getattr(dataset, f"test_targets_{category}")
             scope = hook.gallery(loaded, category)
@@ -723,10 +1174,13 @@ def native_phase(hook: CaptureHook, category: str, config: Any) -> dict[str, Any
             target_features = hook.native_target_features(
                 loaded, inputs["query_target_paths"])
             pixel_paths = [scope["image_path"](name) for name in inputs["reference_ids"]]
-            records["decode_equality"] = decode_equality(pixel_paths)
-            (RAW / f"sample_{category}_inputs.json").write_text(
+            # The HOOK is passed: with no hook this defaults to HINT's checkout, and
+            # `lavis_processors.prepare` refuses to prepare a second checkout in one process
+            # (`ImportError: this process already prepared the lavis context for ...HABIT/lavis`).
+            records["decode_equality"] = decode_equality(pixel_paths, hook)
+            (RAW / f"sample_{hook.scope.model_id}_{category}_inputs.json").write_text(
                 json.dumps(inputs, indent=1) + "\n", encoding="utf-8")
-            np.savez(RAW / f"sample_{category}_native.npz",
+            np.savez(RAW / f"sample_{hook.scope.model_id}_{category}_native.npz",
                      native_query=query_features, native_target=target_features)
             records.update({
                 "sample_forward_native": {"query_shape": list(query_features.shape),
@@ -745,18 +1199,25 @@ def native_phase(hook: CaptureHook, category: str, config: Any) -> dict[str, Any
     return records
 
 
+def _adapter_class(hook: CaptureHook) -> Any:
+    """The adapter class this hook measures, resolved from the SCOPE rather than from HINT.
+
+    One definition, used by `adapter_phase` and `scoring_ranking`, because those two must measure the
+    same class: a model whose comparison used one adapter and whose ranking used another would be an
+    artifact pair that contradicts itself in a way no check would catch.
+    """
+    return importlib.import_module(hook.scope.adapter_module).Adapter
+
 def adapter_phase(hook: CaptureHook, category: str, config: Any) -> dict[str, Any]:
     """GPU (worker under the model interpreter): adapter features, comparisons, ranking, v2 block."""
     import numpy as np
 
-    from workbench.composition import model_hint
-
     declared = hook.scope.declared_tolerances()
-    inputs = json.loads((RAW / f"sample_{category}_inputs.json").read_text(encoding="utf-8"))
-    native = np.load(RAW / f"sample_{category}_native.npz")
+    inputs = json.loads((RAW / f"sample_{hook.scope.model_id}_{category}_inputs.json").read_text(encoding="utf-8"))
+    native = np.load(RAW / f"sample_{hook.scope.model_id}_{category}_native.npz")
     began = time.time()
-    adapter = model_hint.Adapter(config)
-    adapter.work_root = RAW / f"work-{category}"
+    adapter = _adapter_class(hook)(config)
+    adapter.work_root = RAW / f"work-{hook.scope.model_id}-{category}"
     adapter.work_root.mkdir(parents=True, exist_ok=True)
     scope_value = hook.scope.target_category
     result: dict[str, Any] = {}
@@ -780,8 +1241,18 @@ def adapter_phase(hook: CaptureHook, category: str, config: Any) -> dict[str, An
         result["sample_forward"] = forward
         # Measured in THIS process, on this process's own decode, so the check is about the adapter's
         # pixels rather than a value copied from the native artifact.
+        # Reuse the decode block the NATIVE phase recorded. It is a CPU-only comparison of the two
+        # transform compositions, and for a model whose transform lives in its own environment
+        # (TG-CIR's `clip`) it cannot be recomputed here: `ModuleNotFoundError: No module named
+        # 'clip'` under the controller. Re-deriving it would also be a second measurement of the same
+        # fact, which is exactly what this producer avoids everywhere else.
+        recorded_decode = json.loads(
+            (RAW / f"native_{hook.scope.model_id}_{category}.json").read_text(
+                encoding="utf-8")).get("decode_equality") if (
+                RAW / f"native_{hook.scope.model_id}_{category}.json").is_file() else None
         result["layer2_pixels"] = {
-            **decode_equality(inputs["query_reference_paths"]),
+            **(recorded_decode or decode_equality(inputs["query_reference_paths"], hook)),
+            "reused_from_native_phase": recorded_decode is not None,
             "adapter_decode_by": "workbench.composition.model_hint (targetpad_transform(1.25, 224), "
                                  "the same call the worker makes at model_hint.py:329)",
         }
@@ -801,23 +1272,56 @@ def adapter_phase(hook: CaptureHook, category: str, config: Any) -> dict[str, An
             compare(singles, adapter_queries), abs_key="batch_max_abs",
             rel_key="batch_max_rel", declared=declared)
 
-        adapter.restart()
-        after_restart = adapter.encode_queries(
-            inputs["query_reference_paths"], inputs["query_texts"],
-            [scope_value] * len(inputs["query_texts"]))
-        result["cache_off_restart"] = toleranced(
-            compare(after_restart, adapter_queries), abs_key="batch_max_abs",
-            rel_key="batch_max_rel", declared=declared)
+        if hook.scope.restart_supported:
+            adapter.restart()
+            after_restart = adapter.encode_queries(
+                inputs["query_reference_paths"], inputs["query_texts"],
+                [scope_value] * len(inputs["query_texts"]))
+            result["cache_off_restart"] = toleranced(
+                compare(after_restart, adapter_queries), abs_key="batch_max_abs",
+                rel_key="batch_max_rel", declared=declared)
+        else:
+            # NOT MEASURED, and named as such. The adapter refuses a second worker by design
+            # (`_check_worker_pid`), so this comparison cannot run through the shared path without
+            # changing production code that this lane does not own.
+            result["cache_off_restart"] = {
+                "measured": False,
+                "why": "the adapter asserts one worker load per instance "
+                       "(`model_tgcir.py:344 _check_worker_pid` -> `adapter_worker_reloaded`), so an "
+                       "in-process restart is refused by construction",
+                "consequence": "a same-process restart comparison is ABSENT for this model; it is "
+                               "not reported as equal",
+            }
 
-        population_queries = adapter.encode_queries(
-            inputs["full_query_paths"], inputs["full_query_texts"],
-            [scope_value] * len(inputs["full_query_texts"]))
-        population_gallery = adapter.encode_targets(
-            inputs["gallery_paths"], [scope_value] * len(inputs["gallery_paths"]))
-        np.savez(RAW / f"population_{category}.npz",
+        # `population_scope: "sample"` encodes the FIXED SAMPLE instead of the whole category. That is
+        # what makes a broad-but-shallow lane possible at all: a full category encode is minutes of
+        # GPU per model, and the shared sample is chosen by data-derived rules so two runs of the same
+        # model see the same rows. A sample scope is a PREVIEW and is labelled as one -- the gate
+        # cannot call a preview scope ok, and neither can this producer.
+        if hook.scope.population_scope == "sample":
+            population_queries = adapter.encode_queries(
+                inputs["query_reference_paths"], inputs["query_texts"],
+                [scope_value] * len(inputs["query_texts"]))
+            population_gallery = adapter.encode_targets(
+                inputs["gallery_sample_paths"], [scope_value] * len(inputs["gallery_sample_paths"]))
+        else:
+            population_queries = adapter.encode_queries(
+                inputs["full_query_paths"], inputs["full_query_texts"],
+                [scope_value] * len(inputs["full_query_texts"]))
+            population_gallery = adapter.encode_targets(
+                inputs["gallery_paths"], [scope_value] * len(inputs["gallery_paths"]))
+        np.savez(RAW / f"population_{hook.scope.model_id}_{category}.npz",
                  queries=population_queries, gallery=population_gallery)
         result["population"] = {"query_count": int(population_queries.shape[0]),
                                 "gallery_count": int(population_gallery.shape[0]),
+                                "population_scope": hook.scope.population_scope,
+                                "coverage": ("full" if hook.scope.population_scope == "full"
+                                             else "chunked"),
+                                "why": ("the whole category population was encoded"
+                                        if hook.scope.population_scope == "full" else
+                                        "the fixed sample only: a PREVIEW, so any verdict about "
+                                        "this dimension is about the sample and the dimension stays "
+                                        "INCOMPLETE for the population"),
                                 "finite": bool(np.isfinite(population_queries).all()
                                                and np.isfinite(population_gallery).all())}
     finally:
@@ -834,25 +1338,48 @@ def scoring_ranking(hook: CaptureHook, category: str, inputs: dict[str, Any], co
     """G2 ranking: the adapter's own score/rank against the native convention, same features."""
     import numpy as np
 
-    from workbench.composition import model_hint
-
-    blob = np.load(RAW / f"population_{category}.npz")
+    blob = np.load(RAW / f"population_{hook.scope.model_id}_{category}.npz")
     queries = blob["queries"].astype(np.float32)
     gallery = blob["gallery"].astype(np.float32)
     queries_n = queries / np.linalg.norm(queries, axis=1, keepdims=True)
+    # The gallery's RANK is the model's, not the producer's: HINT/HABIT carry (G, 32, 256) token
+    # layouts and are reduced with `.max(-1)` over the token axis, while TG-CIR carries (G, 512) and
+    # has no token axis at all. Hardcoding the 3-D form raised
+    # `ValueError: einstein sum subscripts string contains too many subscripts for operand 1`.
+    gallery_rank = gallery.ndim
     # HINT's gallery is (G, 32, 256): the FEATURE axis is the last one. Normalising axis=1 would
     # normalise across the 32 Q-former tokens, which is not a direction in feature space; that mistake
     # produced a score delta of 1.17 against a declared 1e-6. The native evaluator normalises nothing
     # (features are already L2-normalised inside the model), so this is a re-normalisation of unit
     # vectors and must be a no-op to float32 precision.
     gallery_n = gallery / np.linalg.norm(gallery, axis=-1, keepdims=True)
+    # `axis=-1` is the FEATURE axis in both layouts: the last axis of (G,32,256) and of (G,512).
     # Native convention, verbatim: `np.matmul(all_queries, all_imgs).squeeze().max(-1)`, reference
     # masked to -10e10 (test.py:74-79). float32 end to end, as the pinned evaluator computes it.
-    sims = np.einsum("nd,gqd->ngq", queries_n, gallery_n).max(-1)
+    if gallery_rank == 3:
+        sims = np.einsum("nd,gqd->ngq", queries_n, gallery_n).max(-1)
+    elif gallery_rank == 2:
+        sims = queries_n @ gallery_n.T
+    else:
+        raise SystemExit(f"unsupported gallery rank {gallery_rank} for {hook.scope.model_id}: "
+                         "expected 2 (one vector per image) or 3 (a token layout)")
     unmasked = sims.copy()
-    position = {name: index for index, name in enumerate(inputs["gallery_ids"])}
-    reference_positions = [position[name] for name in inputs["full_reference_ids"]]
-    target_positions = [position[name] for name in inputs["full_target_ids"]]
+    # WHICH population the ranking is over is declared by the scope, and the id lists follow it. A
+    # sample-scoped model ranks the sample's queries against the sample's gallery; reading
+    # `gallery_ids`/`full_*` there would index into a gallery that was never encoded, so this is the
+    # one place the two scopes must diverge.
+    if hook.scope.population_scope == "sample":
+        gallery_id_list = list(inputs["gallery_sample_ids"])
+        reference_id_list = list(inputs["reference_ids"])
+        target_id_list = list(inputs["target_ids"])
+    else:
+        gallery_id_list = list(inputs["gallery_ids"])
+        reference_id_list = list(inputs["full_reference_ids"])
+        target_id_list = list(inputs["full_target_ids"])
+    position = {name: index for index, name in enumerate(gallery_id_list)}
+    reference_positions = [position[name] for name in reference_id_list]
+    target_positions = [position[name] for name in target_id_list]
+    coverage = "full" if hook.scope.population_scope == "full" else "chunked"
     for row, reference in enumerate(reference_positions):
         sims[row, reference] = -10e10
     native_style = [int(np.flatnonzero(np.argsort(-sims[row]) == target)[0]) + 1
@@ -860,8 +1387,8 @@ def scoring_ranking(hook: CaptureHook, category: str, inputs: dict[str, Any], co
     argsort_unmasked = [int(np.flatnonzero(np.argsort(-unmasked[row]) == target)[0]) + 1
                         for row, target in enumerate(target_positions)]
 
-    adapter = model_hint.Adapter(config)
-    adapter.work_root = RAW / f"work-{category}-rank"
+    adapter = _adapter_class(hook)(config)
+    adapter.work_root = RAW / f"work-{hook.scope.model_id}-{category}-rank"
     adapter.work_root.mkdir(parents=True, exist_ok=True)
     try:
         adapter_style = adapter.rank(queries, gallery, [[index] for index in target_positions])
@@ -880,7 +1407,93 @@ def scoring_ranking(hook: CaptureHook, category: str, inputs: dict[str, Any], co
     # is computed, and no assert is written that compares a variable to itself.
     score_delta = np.abs(scores.astype(np.float64) - unmasked[:pair_count].astype(np.float64))
 
-    control = native_control(category)
+    control = native_control(hook, category)
+    if control is None:
+        # No stored native rank measurement for this model. The ranking dimension then CANNOT be
+        # compared against a native MEASUREMENT, and substituting the adapter's own output for one
+        # would be a comparison of a value with itself. So the block records the convention checks it
+        # CAN make and says plainly that the measurement comparison was not made -- `metrics_parity`
+        # and `scoring_parity` then read `missing` rather than "clean".
+        unmasked_differences_nc = [i for i, (a, b) in enumerate(zip(adapter_style, argsort_unmasked))
+                                   if a != b]
+        # WHAT IS STILL MEASURABLE. `adapter_style` comes from the adapter's production `rank()`; the
+        # ranks below come from numpy `argsort(-sims)` under the native convention. Those are two
+        # DIFFERENT code paths over the SAME features, so a difference between them measures whether
+        # the adapter's ranking obeys the pinned protocol -- mask, tie order, 1-based index -- and is
+        # not a value compared with itself. Each difference is then classified against `tie_epsilon`
+        # exactly as the control branch does, so a difference the declared tie rule cannot explain is
+        # REPORTED, never rounded to zero. What remains unmeasurable without a native rank measurement
+        # is whether the adapter's features are the native model's features, and that is the
+        # `metrics_parity` gap stated below.
+        # UNMASKED, on both sides. `adapter.rank()` does not apply the native reference mask
+        # (`model_habit.py reference_eligible = True`), and HINT's artifact proves the convention it
+        # reproduces is the unmasked argsort (`adapter_vs_argsort_unmasked_difference_count: 26`, not
+        # 0 -- the residual is the mask). Comparing it against the MASKED convention would measure the
+        # mask: that mistake produced 663 "differences" on dress, none of which was about ordering.
+        convention_differences = list(unmasked_differences_nc)
+        convention_unexplained = []
+        for index in convention_differences:
+            row = unmasked[index]
+            low, high = sorted((adapter_style[index], argsort_unmasked[index]))
+            between = np.argsort(-row)[low - 1:high]
+            if not np.all(np.abs(row[between] - row[target_positions[index]])
+                          <= declared["tie_epsilon"]):
+                convention_unexplained.append(index)
+        return {
+            "query_count": len(native_style),
+            "gallery_count": len(gallery_id_list),
+            "coverage": coverage,
+            "reference_mask": "the native protocol's reference mask is applied by the adapter's own "
+                              "rank() call; the native RANK MEASUREMENT was not available",
+            "adapter_vs_argsort_unmasked_identical": not unmasked_differences_nc,
+            "adapter_vs_argsort_unmasked_differences": unmasked_differences_nc[:30],
+            "adapter_vs_argsort_unmasked_difference_count": len(unmasked_differences_nc),
+            "adapter_style_recall": {f"r{k}": 100 * sum(1 for r in adapter_style if r <= k)
+                                     / len(adapter_style) for k in (1, 10, 50)},
+            "native_style_recall": None,
+            "score_max_abs_delta_vs_dot": float(score_delta.max()),
+            "score_pairs_compared": pair_count,
+            "score_max_abs_declared": declared["score_max_abs"],
+            "score_within_tolerance": bool(score_delta.max() <= declared["score_max_abs"]),
+            "native_aggregate_ranks_compared": 0,
+            "native_aggregate_source": None,
+            "population_scope": hook.scope.population_scope,
+            "native_rank_control_absent": {
+                "declared_path": hook.scope.native_control_path,
+                "why": "no stored native per-query-rank measurement exists for this model, so the "
+                       "adapter's ranks cannot be compared against a native MEASUREMENT",
+                "consequence": "`metrics_parity` is reported `missing`, which is INCOMPLETE and "
+                               "never a pass. `scoring_parity` IS measured, on the comparison below",
+            },
+            # The measured rank comparison: adapter production `rank()` vs the native convention
+            # applied to the same features. Named with the SAME key HINT/LIMN use, so
+            # `parity_gate._rank_checks` reads it without a per-model branch.
+            "rank_differences": len(convention_differences),
+            "unexplained_rank_differences": len(convention_unexplained),
+            "first_unexplained_index": (convention_unexplained[0] if convention_unexplained else None),
+            "rank_comparison": {
+                "left": "adapter.rank() -- the production scoring path (`model_<m>.score`/`rank`)",
+                "right": "numpy argsort(-sims) UNMASKED, applied to the SAME adapter features "
+                         "(`test.py:141-152` convention minus the reference mask, which this "
+                         "adapter does not apply)",
+                "tie_epsilon": declared["tie_epsilon"],
+                "why_this_is_not_a_self_comparison":
+                    "two different implementations of the ranking over one feature array: the "
+                    "adapter's own score/rank code, and the pinned evaluator's convention",
+                "differences_head": convention_differences[:20],
+                "unexplained_head": convention_unexplained[:20],
+            },
+            "rank_differences_vs_native_val_control": None,
+            "hit_counts": None,
+            "hit_counts_equal": None,
+            "eligible": None,
+            "adapter_production_recall_informational": {
+                "recall": {f"r{k}": 100 * sum(1 for r in adapter_style if r <= k)
+                           / len(adapter_style) for k in (1, 10, 50)},
+                "note": "the adapter's own ranking of its own features. INFORMATION, not a parity "
+                        "comparison: with no native control there is nothing to compare it to",
+            },
+        }
     differing = [i for i, (a, b) in enumerate(zip(native_style, control["ranks"])) if a != b]
     # The control stores `0` for "outside the top 50 / reference masked", while the adapter-side rank
     # is a true rank (always > 50 at those rows). Those rows are the SAME outcome recorded two ways,
@@ -899,7 +1512,8 @@ def scoring_ranking(hook: CaptureHook, category: str, inputs: dict[str, Any], co
                             if a != b]
     block = {
         "query_count": len(native_style),
-        "gallery_count": len(inputs["gallery_ids"]),
+        "gallery_count": len(gallery_id_list),
+        "coverage": coverage,
         "reference_mask": "test.py:74-79 applied to BOTH sides (sims[row, reference] = -10e10)",
         "adapter_vs_argsort_unmasked_identical": not unmasked_differences,
         "adapter_vs_argsort_unmasked_differences": unmasked_differences[:30],
@@ -919,6 +1533,7 @@ def scoring_ranking(hook: CaptureHook, category: str, inputs: dict[str, Any], co
         "native_measured_recall": {f"r{k}": 100 * sum(1 for r in control["ranks"] if r <= k)
                                    / len(control["ranks"]) for k in (1, 10, 50)},
         "native_aggregate_source": control["source"],
+        "population_scope": hook.scope.population_scope,
         "rank_differences": len(differing),
         "rank_differences_that_are_only_the_rank_0_sentinel": len(sentinel_only),
         "rank_differences_on_a_real_native_rank": len(real_differences),
@@ -948,6 +1563,22 @@ def scoring_ranking(hook: CaptureHook, category: str, inputs: dict[str, Any], co
     }
     block["hit_counts"] = {"native": _hits(control["ranks"]), "adapter": _hits(native_style)}
     block["hit_counts_equal"] = block["hit_counts"]["native"] == block["hit_counts"]["adapter"]
+    # Per-side DENOMINATORS and the membership assertion the metric comparison needs: equal hit counts
+    # over different query sets measure nothing, and `parity_gate._metrics_checks` refuses to certify a
+    # comparison that cannot show both sides ranked the same population.
+    # The two sides ARE the same population by construction -- `native_style` is the adapter's features
+    # ranked over the SAME `inputs["full_reference_ids"]`/`full_target_ids` the control scored -- but
+    # "by construction" is exactly what a reader cannot check. So the two counts and the two id
+    # sequences are compared here, at the one place both are in hand.
+    block["eligible"] = {
+        "native_query_count": len(control["ranks"]),
+        "adapter_query_count": len(native_style),
+        "native_gallery_count": control["gallery_count"],
+        "adapter_gallery_count": len(gallery_id_list),
+        "query_set_identical": (
+            len(control["ranks"]) == len(native_style) == len(reference_id_list)
+            and control["gallery_count"] == len(gallery_id_list)),
+    }
     block["adapter_production_recall_informational"] = {
         "recall": block["adapter_style_recall"],
         "note": "unmasked, reference-eligible: what CIRCUS reports. It differs from the native metric "
@@ -992,10 +1623,11 @@ def emit_native(hook: CaptureHook, category: str, identity: dict[str, Any],
         "phase": "native",
         "model_id": hook.scope.model_id,
         "checkpoint_id": hook.scope.checkpoint_id,
-        "protocol": "fashioniq_val_split",
+        "protocol": hook.scope.protocol_id,
         "standard": STANDARD,
         "tolerances": hook.scope.declared_tolerances(),
-        "checkpoint": checkpoint_identity(config),
+        "checkpoint": checkpoint_identity(config, hook.scope.model_id,
+                                              hook.scope.checkpoint_id),
         "query_order_sha256": digest_ids(identity["query_native_order"]),
         "gallery_order_sha256": digest_ids(identity["gallery_native_order"]),
         "layer1_identity": {key: value for key, value in identity.items()
@@ -1032,6 +1664,31 @@ def update_native_metrics_flag(hook: CaptureHook, category: str, ranking: dict[s
     native document beside the detail it summarises -- exactly the split `limn_hits.py` uses. The key
     is not emitted by the identity phase, because there it would be a default.
     """
+    if ranking.get("hit_counts") is None:
+        # NO NATIVE RANK CONTROL, so there is no hit-count comparison to summarise. The flag is
+        # deliberately NOT written: `parity_gate._metrics_checks` treats a bare boolean with no counts
+        # behind it as absent evidence (hence `INCOMPLETE`), and writing `False` here would instead
+        # read as a measured disagreement between two count vectors that do not exist. The adapter's
+        # own recall stays readable in `capture_state.uncontrolled_recall` as INFORMATION.
+        path = EVIDENCE / f"g1_g2.{hook.scope.model_id}.{category}.native.json"
+        document = json.loads(path.read_text(encoding="utf-8"))
+        document.pop("native_metrics_match_feature_rerank", None)
+        document.pop("native_metrics_parity_detail", None)
+        if isinstance(document.get("capture_state"), dict):
+            document["capture_state"]["gpu_capture_executed"] = True
+            document["capture_state"]["measured_by"] = [
+                "scripts/third_model_parity.py --phase identity (G1 block)",
+                "scripts/third_model_parity.py --phase native (sample forward, decode equality)",
+                "scripts/third_model_parity.py --phase adapter (comparisons, ranking)",
+            ]
+            document["capture_state"]["not_yet_measured"] = [
+                "native_metrics_match_feature_rerank (no stored native per-query-rank control for "
+                "this model, so hit counts cannot be compared against a native MEASUREMENT)",
+            ]
+            document["capture_state"]["uncontrolled_recall"] = (
+                ranking.get("adapter_production_recall_informational"))
+        path.write_text(json.dumps(document, indent=2) + "\n", encoding="utf-8")
+        return
     path = EVIDENCE / f"g1_g2.{hook.scope.model_id}.{category}.native.json"
     document = json.loads(path.read_text(encoding="utf-8"))
     document["native_metrics_match_feature_rerank"] = bool(ranking["hit_counts_equal"])
@@ -1043,18 +1700,26 @@ def update_native_metrics_flag(hook: CaptureHook, category: str, ranking: dict[s
             "scripts/third_model_parity.py --phase native (sample forward, decode equality)",
             "scripts/third_model_parity.py --phase adapter (comparisons, ranking, hit counts)",
         ]
+    eligible = ranking["eligible"]
     document["native_metrics_parity_detail"] = {
         "rule": "exact integer hit-count equality at every cutoff",
         "cutoffs": [1, 10, 50],
         "reference_mask": ranking["reference_mask"],
         "ranking_convention": "numpy argsort(-sims), 1-based target index (test.py:74-86)",
+        # Per-side counts AND denominators, plus the membership assertion: the gate derives equality
+        # from these and refuses a comparison that cannot show both sides scored the same population.
         "native": {"source": ranking["native_aggregate_source"],
                    "hits": ranking["hit_counts"]["native"],
+                   "query_count": eligible["native_query_count"],
                    "recall_pct": ranking["native_measured_recall"]},
         "adapter": {"source": "raw/third_model/population_<category>.npz (adapter worker features), "
                               "ranked under the native protocol",
                     "hits": ranking["hit_counts"]["adapter"],
+                    "query_count": eligible["adapter_query_count"],
                     "recall_pct": ranking["native_style_recall"]},
+        "eligible_query_set_identical": eligible["query_set_identical"],
+        "equality": {key: ranking["hit_counts"]["native"][key] == ranking["hit_counts"]["adapter"][key]
+                     for key in ranking["hit_counts"]["native"]},
         "information_only": ranking["adapter_production_recall_informational"],
     }
     path.write_text(json.dumps(document, indent=2) + "\n", encoding="utf-8")
@@ -1167,10 +1832,60 @@ def self_check() -> int:
     return 0
 
 
+def _scopes() -> dict[str, Callable[[], CaptureHook]]:
+    """Every model this producer can measure, as DATA: a scope plus the hook that reads it.
+
+    Adding a model here is what "extend the shared producer" means -- there is no per-model script.
+    A model absent from this table is not measurable by this producer, and `--model` says so rather
+    than measuring HINT under another model's name.
+    """
+    def hint() -> CaptureHook:
+        return HintCapture()
+
+    def lavis(model_id: str, adapter_module: str, replay_module: str, checkpoint_id: str,
+              protocol_id: str, *, target_rank: int = 3, target_category: str | None = None,
+              native_control: str | None = None, population_scope: str = "full",
+              noise_ratio: float = 0.0, extra_tolerances: dict[str, Any] | None = None,
+              target_transpose: bool = True) -> CaptureHook:
+        scope = ModelScope(
+            model_id=model_id, adapter_module=adapter_module, replay_module=replay_module,
+            checkpoint_id=checkpoint_id, categories=("dress", "shirt", "toptee"),
+            gallery_scope="category-agnostic", target_rank=target_rank,
+            target_category=target_category, extra_tolerances=extra_tolerances,
+            native_control_path=native_control, population_scope=population_scope,
+            protocol_id=protocol_id)
+        return LavisFashionIQCapture(scope, noise_ratio=noise_ratio,
+                                     target_transpose=target_transpose)
+
+    return {
+        "hint": hint,
+        "habit": lambda: lavis(
+            "habit", "workbench.composition.model_habit", "workbench.replay.habit", "fiq_n02",
+            "fashioniq_full_gallery_ref_excluded"),
+        "intent": lambda: lavis(
+            "intent", "workbench.composition.model_intent", "workbench.replay.intent", "fiq_n02",
+            "fashioniq_full_gallery_ref_excluded"),
+        "conesep": lambda: lavis(
+            "conesep", "workbench.composition.model_conesep", "workbench.replay.conesep", "fiq_n02",
+            "fashioniq_full_gallery_ref_excluded"),
+        "tgcir": lambda: ClippedModelCapture(ModelScope(
+            model_id="tgcir", adapter_module="workbench.composition.model_tgcir",
+            replay_module="workbench.replay.tgcir",
+            checkpoint_id="tgcir_archive_unresolved",
+            categories=("dress", "shirt", "toptee"), gallery_scope="category-agnostic",
+            target_rank=2, target_category=None, native_control_path=None,
+            population_scope="sample", protocol_id="fashioniq_val_split",
+            transform_source="clip", native_device="cuda", restart_supported=False)),
+    }
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--phase", choices=("identity", "native", "adapter"), default="identity")
+    parser.add_argument("--model", default=None,
+                        help="which model to measure; defaults to hint for the historical invocation")
+    parser.add_argument("--list-models", action="store_true",
+                        help="print every model this producer can measure and exit")
     parser.add_argument("--category", choices=("dress", "shirt", "toptee"))
     parser.add_argument("--self-check", action="store_true",
                         help="CPU-only check of the shared layer; no weights, no worker, no GPU")
@@ -1180,8 +1895,17 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.self_check:
         return self_check()
+    scopes = _scopes()
+    if args.list_models:
+        print(json.dumps(sorted(scopes), indent=1))
+        return 0
+    selected = args.model or "hint"
+    if selected not in scopes:
+        raise SystemExit(f"this producer cannot measure {selected!r}; it measures "
+                         f"{sorted(scopes)}. A model absent here has no capture hook, which is a "
+                         "missing implementation, not a measurement")
     config = _config()
-    hook = HintCapture()
+    hook = scopes[selected]()
     if args.phase == "native":
         # Measured: the pinned whole-model checkpoint unpickles a `BertTokenizer` whose
         # `_added_tokens_encoder` attribute only the DECLARED transformers (`==4.25.0`, models.yaml)
@@ -1212,8 +1936,20 @@ def main(argv: list[str] | None = None) -> int:
     categories = (args.category,) if args.category else hook.scope.categories
     for category in categories:
         began = time.time()
-        stage = identity_phase(hook, category, config)
-        (RAW / f"identity_{category}.json").write_text(
+        # The adapter phase only needs identity for the `query_order_sha256`/`gallery_order_sha256`
+        # cross-check, and those are already written by the identity phase. Re-deriving them here
+        # imports the pinned modules, which only the MODEL interpreter has: TG-CIR's checkout needs
+        # `clip`, so re-running identity under the controller died with
+        # `ModuleNotFoundError: No module named 'clip'`. Reuse the recorded block when it exists, and
+        # fall back to measuring it (the HINT-era path, where the controller can import them).
+        cached = RAW / f"identity_{hook.scope.model_id}_{category}.json"
+        if args.phase == "adapter" and cached.is_file():
+            stage = {"identity": json.loads(cached.read_text(encoding="utf-8"))}
+            print(f"# {category}: identity reused from {cached.name} "
+                  "(measured earlier under the model interpreter)", flush=True)
+        else:
+            stage = identity_phase(hook, category, config)
+        (RAW / f"identity_{hook.scope.model_id}_{category}.json").write_text(
             json.dumps(stage["identity"], indent=1) + "\n", encoding="utf-8")
         print(f"# {category}: identity measured in {stage['identity']['phase_seconds']}s", flush=True)
         print(json.dumps({
@@ -1239,7 +1975,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.phase in ("native", "adapter"):
             if args.phase == "native":
                 records = native_phase(hook, category, config)
-                (RAW / f"native_{category}.json").write_text(
+                (RAW / f"native_{hook.scope.model_id}_{category}.json").write_text(
                     json.dumps(records, indent=1) + "\n", encoding="utf-8")
                 print(f"# {category}: native capture {json.dumps(records)[:200]}", flush=True)
             else:
@@ -1249,10 +1985,11 @@ def main(argv: list[str] | None = None) -> int:
                     "category": category, "phase": "adapter",
                     "model_id": hook.scope.model_id,
                     "checkpoint_id": hook.scope.checkpoint_id,
-                    "protocol": "fashioniq_val_split",
+                    "protocol": hook.scope.protocol_id,
                     "standard": STANDARD,
                     "tolerances": hook.scope.declared_tolerances(),
-                    "checkpoint": checkpoint_identity(config),
+                    "checkpoint": checkpoint_identity(config, hook.scope.model_id,
+                                              hook.scope.checkpoint_id),
                     # Read from the native artifact, not recomputed: the two sides must be provably
                     # the same sequence, and one source is how that stays true after an edit.
                     "query_order_sha256": json.loads(

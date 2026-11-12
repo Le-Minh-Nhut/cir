@@ -22,6 +22,8 @@ Nothing here changes evaluation semantics of either side.
 """
 from __future__ import annotations
 
+import base64
+import zlib
 import hashlib
 import json
 import os
@@ -114,20 +116,73 @@ def recall(ranks: list[int]) -> dict[str, float]:
 #: `parity_gate._component_checks`. Deliberately duplicated from `t4_parity.py`: the two producers run
 #: under DIFFERENT interpreters and neither may import the other, and `parity_gate` stays numpy-free.
 STANDARD_V2 = "parity-absolute-relative/v2"
+#: Decides the coverage form. At or below it the whole array is one `full` record; above it the array
+#: is emitted as `chunks`, chunked at `COMPONENT_CHUNK_SIZE`. Named here, declared in the record, and
+#: read by `parity_gate` as a documented constant -- not a tunable that could shrink silently.
 COMPONENT_FULL_LIMIT = 4096
+#: Components per chunk in the `chunks` form. Only the FILE SIZE depends on this: the reader requires
+#: the chunks to tile `[0, components_total)` with no gap and no overlap whatever the size, so a
+#: record cannot buy an easier verdict by cutting its array into more pieces.
+COMPONENT_CHUNK_SIZE = 4096
+#: At or below this many components the values are written as JSON numbers so a reviewer can read a
+#: small sample directly; above it they travel base64-encoded. Both are the same float64 bytes.
+COMPONENT_READABLE_LIMIT = 2048
+#: The preview form's head. NO LONGER EMITTED -- kept so an older record can still be read, and
+#: because `parity_gate` refuses a `chunked` record a verdict either way.
 COMPONENT_HEAD = 512
 
 def _component_digest(array: np.ndarray) -> str:
+    """sha256 over canonical little-endian float64, flat order -- the ONE serialization the reader
+    recomputes (`parity_gate.component_digest`) and every component digest in the record uses."""
     return hashlib.sha256(np.ascontiguousarray(array, dtype="<f8").tobytes()).hexdigest()
+
+def _chunk(a: np.ndarray, b: np.ndarray, start: int, stop: int) -> dict:
+    """One `chunks` entry: where it starts, its own values, and digests of ITS OWN bytes.
+
+    The index list is implied by `start` and the value length -- a chunk is a contiguous run, so
+    spelling out 4096 integers per chunk would spend 40% of the payload restating its own position.
+
+    Values travel as base64 of the canonical `<f8` bytes. A population scope is ~1.5M components per
+    side, and a JSON float costs ~20 bytes: the numbers would be 300 MB across the three categories of
+    one model, for a document a reviewer is meant to open. Base64 is exactly half that and is the SAME
+    bytes the digest covers, so the reader decodes to the identical float64 values and no check moves.
+    """
+    actual_slice = a[start:stop]
+    reference_slice = b[start:stop]
+    delta_slice = np.abs(actual_slice - reference_slice)
+    return {"start": start,
+            "reference": _encode_components(reference_slice),
+            "actual": _encode_components(actual_slice),
+            "sha256": {"reference": _component_digest(reference_slice),
+                       "actual": _component_digest(actual_slice),
+                       "delta": _component_digest(delta_slice)}}
+
+
+def _encode_components(array: np.ndarray) -> str:
+    """Canonical little-endian float64 bytes, zlib-compressed, base64.
+
+    The reader's `_decode_components` inverts exactly this: base64 -> zlib -> the same bytes the digest
+    covers. Compression is lossless by construction, so the transported bytes and the hashed bytes are
+    one and the same; only the JSON size changes. A population scope is ~1.5M components per side, and
+    leaving those as JSON numbers would put ~300 MB of punctuation into a review artifact.
+    """
+    raw = np.ascontiguousarray(array, dtype="<f8").tobytes()
+    return base64.b64encode(zlib.compress(raw, 9)).decode("ascii")
 
 def component_scope(name: str, actual: np.ndarray, reference: np.ndarray,
                     *, atol: float, rtol: float) -> dict:
-    """The v2 per-component record for ONE aligned native-referenced comparison.
+    """The v2 per-component record for ONE aligned comparison, from arrays already in memory.
 
-    `abs(adapter - native) <= atol + rtol*abs(native)`, applied element by element here, from the
-    arrays `compare()` already has in memory -- the aggregates are never used to infer it. Above
-    `COMPONENT_FULL_LIMIT` components the record is the first `COMPONENT_HEAD` plus every violating
-    component, bound to the full arrays by sha256 so the chunk is provable. See `V2_STANDARD.md`.
+    `abs(adapter - native) <= atol + rtol*abs(native)`, native as the reference, applied element by
+    element here -- `max_abs`/`max_rel` are never used to infer it. Shape and every field:
+    `V2_STANDARD.md`.
+
+    COVERAGE IS COMPLETE AT EVERY SIZE. At or below `COMPONENT_FULL_LIMIT` components the record is
+    the whole array in one list (`coverage: "full"`); above it the array is split into
+    `COMPONENT_CHUNK_SIZE`-sized runs that tile the array exactly (`coverage: "chunks"`). The record
+    used to emit a 512-component preview above the limit, which made the gate unable to judge the
+    other 99% of a large scope: a preview plus a full-array digest is partial coverage, and no
+    verdict may rest on it. Every component is now emitted, so every component can be judged.
     """
     a = np.ascontiguousarray(actual, dtype=np.float64).ravel()
     b = np.ascontiguousarray(reference, dtype=np.float64).ravel()
@@ -142,36 +197,54 @@ def component_scope(name: str, actual: np.ndarray, reference: np.ndarray,
     # `~(delta <= denominator)` counts a NaN as a violation, so a non-finite component is recorded as
     # an offender rather than reading clean; the gate refuses such a block as malformed.
     offenders = [int(index) for index in np.flatnonzero(~(delta <= denominator))]
-    if total <= COMPONENT_FULL_LIMIT:
-        emitted, coverage = list(range(total)), "full"
-    else:
-        emitted, coverage = sorted(set(range(COMPONENT_HEAD)) | set(offenders)), "chunked"
-    return {
+
+    record = {
         "dimension": "forward_parity",
         "shape": list(actual.shape),
         "components_total": total,
-        "components_emitted": len(emitted),
-        "coverage": coverage,
-        "indices": emitted,
-        "reference": [float(b[index]) for index in emitted],
-        "actual": [float(a[index]) for index in emitted],
-        "sha256": {"reference": _component_digest(b), "actual": _component_digest(a),
-                   "delta": _component_digest(delta)},
+        "components_emitted": total,
         "mismatch_count": len(offenders),
         "max_abs": float(delta.max()) if total else 0.0,
         "worst_normalized": float(normalized.max()) if total else 0.0,
         "offenders": [{"index": index, "reference": float(b[index]), "actual": float(a[index]),
                        "normalized": float(normalized[index])} for index in offenders],
     }
+    if total <= COMPONENT_FULL_LIMIT:
+        record.update({
+            "coverage": "full",
+            "indices": list(range(total)),
+            # Base64 of the same canonical bytes above the readable threshold, numbers below it: an
+            # 8-component sample should stay readable, a 4096-component one need not cost 160 kB of
+            # JSON punctuation to say the same eight bytes per component.
+            "reference": (_encode_components(b) if total > COMPONENT_READABLE_LIMIT
+                          else [float(value) for value in b]),
+            "actual": (_encode_components(a) if total > COMPONENT_READABLE_LIMIT
+                       else [float(value) for value in a]),
+            "sha256": {"reference": _component_digest(b), "actual": _component_digest(a),
+                       "delta": _component_digest(delta)},
+        })
+    else:
+        record.update({
+            "coverage": "chunks",
+            "chunk_size": COMPONENT_CHUNK_SIZE,
+            "chunks": [_chunk(a, b, start, min(start + COMPONENT_CHUNK_SIZE, total))
+                       for start in range(0, total, COMPONENT_CHUNK_SIZE)],
+            # The full-array digests stay recorded as the external anchor they were always meant to
+            # be. They do NOT carry a verdict: the reader recomputes each chunk instead.
+            "sha256": {"reference": _component_digest(b), "actual": _component_digest(a),
+                       "delta": _component_digest(delta)},
+        })
+    return record
 
 def component_block(scopes: dict[str, dict]) -> dict:
-    """The `component_parity` document, recorded beside `relation_state` at the top level."""
+    """The `component_parity` document, as recorded beside `relation_state` at the top level."""
     return {"standard": STANDARD_V2,
             "declared_rule": "abs(adapter - native) <= atol + rtol * abs(native)",
             "reference_side": "native",
-            "chunk_rule": (f"full when components_total <= {COMPONENT_FULL_LIMIT}, else the first "
-                           f"{COMPONENT_HEAD} components plus every component whose normalized "
-                           "violation exceeds 1"),
+            "chunk_rule": (f"full when components_total <= {COMPONENT_FULL_LIMIT}, else every "
+                           f"component in chunks of at most {COMPONENT_CHUNK_SIZE}: the chunks tile "
+                           "[0, components_total) with no gap and no overlap, so the coverage is "
+                           "complete at any size"),
             "scopes": scopes}
 
 

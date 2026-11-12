@@ -1,0 +1,67 @@
+{
+ "decode_equality": {
+  "adapter_decode_vs_native_val_decode": {
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "min_cosine": 0.9999999999999999,
+   "bitwise_equal": true,
+   "shape": [
+    5,
+    3,
+    224,
+    224
+   ]
+  },
+  "measured_in": "one process (CPU); both compositions executed here",
+  "native_composition": "workbench.replay.conesep data_utils.targetpad_transform(1.25, 224)",
+  "adapter_composition": "the adapter worker's own targetpad_transform(1.25, 224) call",
+  "transform_steps": [
+   "TargetPad",
+   "Resize",
+   "CenterCrop",
+   "function",
+   "ToTensor",
+   "Normalize"
+  ],
+  "image_size": 224,
+  "target_ratio": 1.25,
+  "normalization": {
+   "mean": [
+    0.48145466,
+    0.4578275,
+    0.40821073
+   ],
+   "std": [
+    0.26862954,
+    0.26130258,
+    0.27577711
+   ]
+  },
+  "bitwise_equal_is_the_expected_value": true
+ },
+ "sample_forward_native": {
+  "query_shape": [
+   5,
+   256
+  ],
+  "target_shape": [
+   5,
+   32,
+   256
+  ],
+  "adapter_expected_query_shape": [
+   5,
+   256
+  ],
+  "adapter_expected_target_shape": [
+   5,
+   32,
+   256
+  ]
+ },
+ "population_identity": {
+  "query_count": 2038,
+  "gallery_count": 6346
+ },
+ "phase_seconds": 23.5
+}

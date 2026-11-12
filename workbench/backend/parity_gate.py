@@ -65,8 +65,13 @@ The gate never edits an artifact, a CSV or a document. It derives a verdict and 
 """
 from __future__ import annotations
 
+import base64
+import binascii
+import hashlib
 import json
 import math
+import struct
+import zlib
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Iterable
@@ -364,22 +369,93 @@ COMPONENT_RULE = "abs(adapter - native) <= atol + rtol * abs(native)"
 #: against its OWN output; their v1 aggregate checks judge them exactly as before, and calling their
 #: left-hand array "native" would misdescribe the measurement.
 COMPONENT_TOLERANCES = {"forward_parity": ("forward_max_abs", "forward_max_rel")}
-COMPONENT_COVERAGE = ("full", "chunked")
+
+#: How much of a scope the record actually carries. A CLOSED set: any other string is malformed.
+#:
+#: * `full`     -- every component of the array, in one list. Complete coverage.
+#: * `chunks`   -- every component of the array, split into ordered, non-overlapping chunks that
+#:                 tile `[0, components_total)` exactly. Complete coverage, each chunk bound to its
+#:                 own bytes by a digest the reader RECOMPUTES.
+#: * `chunked`  -- a PREVIEW: a head plus the offenders it happened to find. Partial coverage.
+#:
+#: The governing rule, and the reason `chunked` exists as a separate value rather than as a budget:
+#: **a preview sample plus a full-array hash is partial coverage and can never be a PASS.** The hash
+#: is an anchor for an external reviewer holding the arrays; it is not evidence ABOUT the components
+#: nobody looked at. So a clean preview is `INCOMPLETE` -- never ok -- and a preview that DOES contain
+#: a violating component is a genuine failure. Only `full` and `chunks` can earn a verdict.
+COMPONENT_FULL = "full"
+COMPONENT_CHUNKS = "chunks"
+COMPONENT_PREVIEW = "chunked"
+COMPONENT_COVERAGE = (COMPONENT_FULL, COMPONENT_CHUNKS, COMPONENT_PREVIEW)
+
+#: The ONE serialization every component digest is taken over: canonical little-endian float64, in
+#: flat order. Named once here so the reader's recomputation and the producers' `_component_digest`
+#: cannot drift into two different definitions of "the same bytes". `struct` spells that dtype `<d`
+#: and numpy spells it `<f8`: same eight bytes, little-endian IEEE-754 double.
+COMPONENT_DIGEST_DTYPE = "<f8"
+COMPONENT_DIGEST_FORMAT = "<d"
+COMPONENT_DIGEST_KEYS = ("reference", "actual", "delta")
 _COMPONENT_HEX = frozenset("0123456789abcdef")
+
+
+def component_digest(values: Iterable[float]) -> str:
+    """`sha256` over one component array, canonical little-endian float64, flat order.
+
+    Stdlib only (`struct` + `hashlib`): the gate stays numpy-free, and the producers' numpy
+    `ascontiguousarray(a, dtype="<f8").tobytes()` produces the same bytes, so a digest written by a
+    producer can be recomputed here. This is the reader-side half of that one definition.
+    """
+    packed = struct.Struct(COMPONENT_DIGEST_FORMAT)
+    digest = hashlib.sha256()
+    for value in values:
+        digest.update(packed.pack(float(value)))
+    return digest.hexdigest()
+
+_COMPONENT_PACK = struct.Struct(COMPONENT_DIGEST_FORMAT)
+
+
+def _decode_components(value: Any, key: str, *, where: str) -> list[float]:
+    """One component array, from either transport: a list of numbers, or base64 canonical bytes.
+
+    Two transports because the scopes differ by four orders of magnitude. A 2048-component sample is
+    readable as numbers and a reviewer should be able to read it; a 1.5M-component population scope is
+    20 bytes of JSON per component as numbers, which turns a review artifact into a binary blob with
+    JSON punctuation. Base64 of zlib-compressed canonical `<f8` bytes is a third of that and decompresses
+    to the exact bytes the digest is taken over -- nothing about the evidence changes, only its
+    transport, and the compression is lossless by construction.
+
+    Both are decoded to the same `list[float]`, so every check downstream is written once.
+    """
+    if isinstance(value, str):
+        try:
+            raw = zlib.decompress(base64.b64decode(value, validate=True))
+        except (binascii.Error, ValueError, zlib.error):
+            raise _Malformed(f"{where}.{key} is a string that is not valid base64(zlib(...))") from None
+        if len(raw) % _COMPONENT_PACK.size:
+            raise _Malformed(f"{where}.{key} decodes to {len(raw)} bytes, not a whole number of "
+                             f"{_COMPONENT_PACK.size}-byte little-endian float64 values")
+        return list(struct.unpack(f"{len(raw) // _COMPONENT_PACK.size}d", raw))
+    if not isinstance(value, list):
+        raise _Malformed(f"{where}.{key} is a {type(value).__name__}, not a list of components or a "
+                         "base64 string of canonical float64 components")
+    numbers: list[float] = []
+    for position, item in enumerate(value):
+        if isinstance(item, bool) or not isinstance(item, (int, float)):
+            raise _Malformed(f"{where}.{key}[{position}] is {item!r}, not a number")
+        if not math.isfinite(float(item)):
+            raise _Malformed(f"{where}.{key}[{position}] is {item!r}: a non-finite component cannot "
+                             "be judged against a tolerance, so it is malformed evidence, not a pass")
+        numbers.append(float(item))
+    return numbers
+
 
 def _component_numbers(record: dict[str, Any], key: str, *, where: str) -> list[float]:
     """One recorded component array. A non-number or a non-finite value is malformed, never a pass."""
-    values = record.get(key)
-    if not isinstance(values, list):
-        raise _Malformed(f"{where}.{key} is a {type(values).__name__}, not a list of components")
-    numbers: list[float] = []
-    for position, value in enumerate(values):
-        if isinstance(value, bool) or not isinstance(value, (int, float)):
-            raise _Malformed(f"{where}.{key}[{position}] is {value!r}, not a number")
-        if not math.isfinite(float(value)):
+    numbers = _decode_components(record.get(key), key, where=where)
+    for position, value in enumerate(numbers):
+        if not math.isfinite(value):
             raise _Malformed(f"{where}.{key}[{position}] is {value!r}: a non-finite component cannot "
                              "be judged against a tolerance, so it is malformed evidence, not a pass")
-        numbers.append(float(value))
     return numbers
 
 def _component_indices(record: dict[str, Any], total: int, *, where: str) -> list[int]:
@@ -399,26 +475,146 @@ def _component_indices(record: dict[str, Any], total: int, *, where: str) -> lis
         raise _Malformed(f"{where}.indices must be ascending and unique, got {indices[:10]}")
     return indices
 
-def _component_digest(record: dict[str, Any], key: str, *, where: str) -> str:
-    """One `sha256` binding the emitted chunk to the full array it came from."""
+def _component_digests(record: dict[str, Any], *, where: str) -> dict[str, str]:
+    """The three recorded digests, each REQUIRED to be 64 hex characters.
+
+    Presence and shape only: what the digests are FOR differs by coverage form, and the caller
+    decides. `full`/`chunks` recompute them from the record's own values (see `_verify_digests`);
+    a `chunked` preview has no complete array to recompute against, so its digests are an unverified
+    anchor and cannot contribute to a verdict either way.
+    """
     digests = record.get("sha256")
     if not isinstance(digests, dict):
         raise _Malformed(f"{where}.sha256 is a {type(digests).__name__}, not an object of digests")
-    value = digests.get(key)
-    if (not isinstance(value, str) or len(value) != 64
-            or not set(value.lower()) <= _COMPONENT_HEX):
-        raise _Malformed(f"{where}.sha256.{key} is {value!r}, not a sha256 hex digest: without the "
-                         "digest the emitted chunk is an unbound claim, not a proof of the full array")
-    return value
+    checked: dict[str, str] = {}
+    for key in COMPONENT_DIGEST_KEYS:
+        value = digests.get(key)
+        if (not isinstance(value, str) or len(value) != 64
+                or not set(value.lower()) <= _COMPONENT_HEX):
+            raise _Malformed(f"{where}.sha256.{key} is {value!r}, not a sha256 hex digest: without "
+                             "the digest the emitted components are an unbound claim")
+        checked[key] = value.lower()
+    return checked
+
+
+def _verify_digests(record: dict[str, Any], reference: list[float], actual: list[float], *,
+                    where: str) -> None:
+    """Recompute all three digests from the values the record CARRIES, and refuse a mismatch.
+
+    This is what turns a digest from an assertion into a binding: the record cannot present one set
+    of components and another set's digest. `delta` is `abs(actual - reference)` component-wise, the
+    same quantity the producers hash.
+    """
+    recorded = _component_digests(record, where=where)
+    delta = [abs(a - b) for a, b in zip(actual, reference)]
+    for key, values in (("reference", reference), ("actual", actual), ("delta", delta)):
+        derived = component_digest(values)
+        if derived != recorded[key]:
+            raise _Malformed(f"{where}.sha256.{key} is {recorded[key]!r} but the components it "
+                             f"carries hash to {derived!r}: the digest does not bind these values")
+
+class _Chunk:
+    """One emitted chunk, already shape-checked: its flat indices and the two aligned value lists."""
+
+    __slots__ = ("where", "indices", "reference", "actual")
+
+    def __init__(self, where: str, indices: list[int], reference: list[float],
+                 actual: list[float]) -> None:
+        self.where = where
+        self.indices = indices
+        self.reference = reference
+        self.actual = actual
+
+
+def _chunk_payload(record: Any, total: int, *, where: str) -> _Chunk:
+    """One `{start, reference, actual, sha256}` chunk, shape-checked against `total`.
+
+    A chunk IS a contiguous run, so its flat indices are `range(start, start + len(reference))` and
+    spelling them out would cost ~40% of the payload to say nothing. `indices` is still accepted when
+    present and must agree with the run, so a record written either way reads the same.
+
+    Every rule the reader applies to a whole scope applies here to a chunk: integers in range,
+    ascending and unique, the value lists the same length, values finite. A chunk is not a lesser
+    claim about its own bytes.
+    """
+    if not isinstance(record, dict):
+        raise _Malformed(f"{where} is a {type(record).__name__}, not an object")
+    reference = _component_numbers(record, "reference", where=where)
+    actual = _component_numbers(record, "actual", where=where)
+    if not (len(reference) == len(actual)):
+        raise _Malformed(f"{where} carries {len(reference)} reference value(s) and {len(actual)} "
+                         "actual value(s); a chunk must be aligned")
+    if not reference:
+        raise _Malformed(f"{where} carries no components: an empty chunk measures nothing")
+    start = record.get("start")
+    if isinstance(start, bool) or not isinstance(start, int):
+        raise _Malformed(f"{where}.start is {start!r}, not an integer flat index")
+    if not 0 <= start < total:
+        raise _Malformed(f"{where}.start is {start} but the scope holds {total} component(s)")
+    indices = list(range(start, start + len(reference)))
+    if indices[-1] >= total:
+        raise _Malformed(f"{where} runs to flat index {indices[-1]} but the scope holds {total} "
+                         "component(s)")
+    if "indices" in record:
+        declared = _component_indices(record, total, where=where)
+        if declared != indices:
+            raise _Malformed(f"{where}.indices is not the contiguous run its `start` implies "
+                             f"({declared[:4]}... vs {indices[:4]}...)")
+    _verify_digests(record, reference, actual, where=where)
+    return _Chunk(where, indices, reference, actual)
+
+
+def _chunks_tile(scope: dict[str, Any], total: int, *, where: str) -> list[_Chunk]:
+    """The `chunks` form: ordered, non-overlapping, covering `[0, total)` exactly.
+
+    The whole point of the form is that the reader can prove it looked at every component, so the
+    tiling is checked rather than assumed: a missing component, a duplicated one, an out-of-order
+    chunk, or a chunk that overlaps its predecessor all refuse. `indices` is not consulted -- a
+    chunk's coverage IS its index list, and requiring both would let them disagree.
+    """
+    records = scope.get("chunks")
+    if not isinstance(records, list) or not records:
+        raise _Malformed(f"{where}.chunks is {records!r}: the `{COMPONENT_CHUNKS}` form carries its "
+                         "components as a non-empty list of chunks")
+    chunks = [_chunk_payload(item, total, where=f"{where}.chunks[{position}]")
+              for position, item in enumerate(records)]
+    expected = 0
+    for position, chunk in enumerate(chunks):
+        first = chunk.indices[0]
+        if first != expected:
+            raise _Malformed(f"{where}.chunks[{position}] starts at flat index {first} but the "
+                             f"components before it cover [0, {expected}); the chunks must tile "
+                             "[0, components_total) in order with no gap and no overlap")
+        expected = first + len(chunk.indices)
+        if expected > total:
+            raise _Malformed(f"{where}.chunks[{position}] ends at {expected}, past the "
+                             f"{total} component(s) the scope declares")
+    if expected != total:
+        raise _Malformed(f"{where}.chunks cover [0, {expected}) but the scope declares {total} "
+                         "component(s): the tail was never emitted, so this record is not complete "
+                         "coverage")
+    return chunks
+
 
 def _component_scope_check(name: str, record: Any, declared: dict[str, Any],
                            category: str) -> ParityCheck:
-    """One v2 component scope, judged component by component and cross-checked against its own record.
+    """One v2 component scope: judged per component, across EVERY component it covers.
 
-    The verdict is DERIVED from `(reference, actual)` with `evaluate_abs_rel`; `mismatch_count`,
-    `offenders`, `max_abs` and `worst_normalized` are only cross-checks. An artifact whose recorded
-    summary disagrees with the values it carries is malformed, because one of the two is wrong and
-    the gate cannot know which.
+    Three coverage forms, and the verdict differs because the EVIDENCE differs:
+
+    * `full` / `chunks` -- complete coverage. Every component is present, every digest is recomputed
+      from the values carried, and the rule is applied to all of them. `ok` needs zero derived
+      offenders. This is the only form that can be `ok`.
+    * `chunked` -- a preview (head plus whatever offenders it found). It is judged on what it
+      carries: a violating component among the emitted ones FAILS the scope, because a real violation
+      is a real violation however it was sampled. A clean preview is NOT ok -- it is a partial
+      measurement reported as absent, so the dimension reads `INCOMPLETE`. A full-array digest over
+      components nobody looked at cannot upgrade a sample into a proof, which is the defect this
+      form used to have.
+
+    In every form the recorded summary must be consistent with the values actually carried, and a
+    record whose own `worst_normalized` exceeds the rule's unit threshold while naming no offender is
+    self-contradictory: the writer emits every violating component, so the two cannot both be true.
     """
     where = f"{category}.{COMPONENT_KEY}.{name}"
     if not isinstance(record, dict):
@@ -447,46 +643,67 @@ def _component_scope_check(name: str, record: Any, declared: dict[str, Any],
     if math.prod(shape) != total:
         raise _Malformed(f"{where}.shape {shape} holds {math.prod(shape)} components but "
                          f"`components_total` says {total}")
-    indices = _component_indices(record, total, where=where)
-    reference = _component_numbers(record, "reference", where=where)
-    actual = _component_numbers(record, "actual", where=where)
-    emitted = record.get("components_emitted")
-    if isinstance(emitted, bool) or not isinstance(emitted, int):
-        raise _Malformed(f"{where}.components_emitted is {emitted!r}, not a count")
-    if not (emitted == len(indices) == len(reference) == len(actual)):
-        raise _Malformed(f"{where} claims {emitted} emitted component(s) but carries "
-                         f"{len(indices)} index/ies, {len(reference)} reference value(s) and "
-                         f"{len(actual)} actual value(s)")
-    if emitted > total:
-        raise _Malformed(f"{where} emits {emitted} of {total} component(s)")
     coverage = record.get("coverage")
     if coverage not in COMPONENT_COVERAGE:
         raise _Malformed(f"{where}.coverage is {coverage!r}, not one of {list(COMPONENT_COVERAGE)}")
-    if (coverage == "full") != (emitted == total):
-        raise _Malformed(f"{where}.coverage is {coverage!r} while {emitted} of {total} component(s) "
-                         "were emitted: `full` describes the whole array and nothing else")
-    for key in ("reference", "actual", "delta"):
-        _component_digest(record, key, where=where)
+
+    if coverage == COMPONENT_CHUNKS:
+        chunks = _chunks_tile(record, total, where=where)
+    else:
+        indices = _component_indices(record, total, where=where)
+        reference = _component_numbers(record, "reference", where=where)
+        actual = _component_numbers(record, "actual", where=where)
+        emitted = record.get("components_emitted")
+        if isinstance(emitted, bool) or not isinstance(emitted, int):
+            raise _Malformed(f"{where}.components_emitted is {emitted!r}, not a count")
+        if not (emitted == len(indices) == len(reference) == len(actual)):
+            raise _Malformed(f"{where} claims {emitted} emitted component(s) but carries "
+                             f"{len(indices)} index/ies, {len(reference)} reference value(s) and "
+                             f"{len(actual)} actual value(s)")
+        if emitted > total:
+            raise _Malformed(f"{where} emits {emitted} of {total} component(s)")
+        if (coverage == COMPONENT_FULL) != (emitted == total):
+            raise _Malformed(f"{where}.coverage is {coverage!r} while {emitted} of {total} "
+                             "component(s) were emitted: `full` describes the whole array and "
+                             "nothing else")
+        if coverage == COMPONENT_FULL:
+            # Complete coverage: the digest is a binding on the values carried, so recompute it.
+            _verify_digests(record, reference, actual, where=where)
+        else:
+            # A preview: presence and shape only. There is no complete array to recompute against,
+            # and the digest is explicitly NOT evidence about the components that were not emitted.
+            _component_digests(record, where=where)
+        chunks = [_Chunk(where, indices, reference, actual)]
 
     offenders: list[int] = []
     worst = 0.0
     unbounded = False
-    for index, actual_value, reference_value in zip(indices, actual, reference):
-        if not evaluate_abs_rel(actual_value, reference_value, atol=atol, rtol=rtol):
-            offenders.append(index)
-        denominator = atol + rtol * abs(reference_value)
-        delta = abs(actual_value - reference_value)
-        if denominator > 0.0:
-            worst = max(worst, delta / denominator)
-        elif delta > 0.0:
-            unbounded = True
+    compared = 0
+    for chunk in chunks:
+        compared += len(chunk.indices)
+        for index, actual_value, reference_value in zip(chunk.indices, chunk.actual, chunk.reference):
+            if not evaluate_abs_rel(actual_value, reference_value, atol=atol, rtol=rtol):
+                offenders.append(index)
+            denominator = atol + rtol * abs(reference_value)
+            delta = abs(actual_value - reference_value)
+            if denominator > 0.0:
+                worst = max(worst, delta / denominator)
+            elif delta > 0.0:
+                unbounded = True
+
+    complete = coverage != COMPONENT_PREVIEW
+    if complete and compared != total:
+        # Belt and braces: `_chunks_tile`/the `full` check already prove this, and a verdict must not
+        # depend on one guard being right.
+        raise _Malformed(f"{where} claims complete coverage ({coverage!r}) but carries {compared} of "
+                         f"{total} component(s)")
 
     recorded_mismatches = record.get("mismatch_count")
     if isinstance(recorded_mismatches, bool) or not isinstance(recorded_mismatches, int):
         raise _Malformed(f"{where}.mismatch_count is {recorded_mismatches!r}, not a count")
     if recorded_mismatches != len(offenders):
-        raise _Malformed(f"{where}.mismatch_count is {recorded_mismatches} but the emitted components "
-                         f"hold {len(offenders)} violation(s) at {offenders[:5]}: the record "
+        raise _Malformed(f"{where}.mismatch_count is {recorded_mismatches} but the components it "
+                         f"carries hold {len(offenders)} violation(s) at {offenders[:5]}: the record "
                          "contradicts the values it carries")
     recorded_offenders = record.get("offenders")
     if not isinstance(recorded_offenders, list):
@@ -498,44 +715,68 @@ def _component_scope_check(name: str, record: Any, declared: dict[str, Any],
             raise _Malformed(f"{where}.offenders[{position}] carries no integer `index`")
         offender_indices.append(index)
     if sorted(offender_indices) != offenders:
-        raise _Malformed(f"{where}.offenders names {sorted(offender_indices)[:10]} but the emitted "
-                         f"components violate the rule at {offenders[:10]}")
+        raise _Malformed(f"{where}.offenders names {sorted(offender_indices)[:10]} but the "
+                         f"components it carries violate the rule at {offenders[:10]}")
 
-    derived_max_abs = max((abs(a - b) for a, b in zip(actual, reference)), default=0.0)
+    values = {index: (chunk.reference[position], chunk.actual[position])
+              for chunk in chunks
+              for position, index in enumerate(chunk.indices)}
+    derived_max_abs = max((abs(actual_value - reference_value)
+                           for reference_value, actual_value in values.values()), default=0.0)
     present_abs, recorded_max_abs = _number(record, "max_abs", where=where)
     if present_abs and recorded_max_abs is not None:
-        if coverage == "full" and not math.isclose(recorded_max_abs, derived_max_abs, rel_tol=1e-9):
-            raise _Malformed(f"{where}.max_abs is {recorded_max_abs!r} but the emitted components "
-                             f"hold {derived_max_abs!r}")
+        if complete and not math.isclose(recorded_max_abs, derived_max_abs, rel_tol=1e-9):
+            raise _Malformed(f"{where}.max_abs is {recorded_max_abs!r} but the components it "
+                             f"carries hold {derived_max_abs!r}")
         if recorded_max_abs < derived_max_abs:
             raise _Malformed(f"{where}.max_abs is {recorded_max_abs!r}, below {derived_max_abs!r}: a "
                              "summary cannot be smaller than the values it summarises")
     present_worst, recorded_worst = _number(record, "worst_normalized", where=where)
     if present_worst and recorded_worst is not None and not unbounded:
-        if coverage == "full" and not math.isclose(recorded_worst, worst, rel_tol=1e-9):
-            raise _Malformed(f"{where}.worst_normalized is {recorded_worst!r} but the emitted "
-                             f"components hold {worst!r}")
+        if complete and not math.isclose(recorded_worst, worst, rel_tol=1e-9):
+            raise _Malformed(f"{where}.worst_normalized is {recorded_worst!r} but the components it "
+                             f"carries hold {worst!r}")
         if recorded_worst < worst:
             raise _Malformed(f"{where}.worst_normalized is {recorded_worst!r}, below {worst!r}")
+        if recorded_worst > 1.0 and not offenders:
+            # The writer emits every component whose normalized violation exceeds 1. A record that
+            # says one exists while naming none is contradictory in EVERY coverage form -- and in a
+            # preview this is exactly how a removed offender used to disappear.
+            raise _Malformed(f"{where}.worst_normalized is {recorded_worst!r} (> 1) but no offending "
+                             "component is recorded: a violation above the rule's own unit "
+                             "threshold must name its coordinate, whatever the coverage")
 
-    positions = {index: position for position, index in enumerate(indices)}
+    if offenders:
+        ok = False
+        note = (f"{len(offenders)} component(s) violate the rule; the verdict is derived from the "
+                f"recorded components, not from the aggregate `max_abs`/`max_rel`")
+    elif complete:
+        ok = True
+        note = (f"every one of the {compared} component(s) satisfies the rule under the declared "
+                f"`{atol_key}`/`{rtol_key}`; coverage {coverage!r} means the whole array was judged")
+    else:
+        ok = False
+        note = (f"PREVIEW ONLY: {compared} of {total} component(s) were inspected and every one of "
+                f"them is inside the rule, which is not evidence about the other {total - compared}. "
+                f"A sample plus a full-array digest is partial coverage and can never be a pass")
     return ParityCheck(
         name=f"{category}.components.{name}", dimension=dimension, gate="G2",
         declared={"rule": COMPONENT_RULE, "atol": atol, "rtol": rtol,
                   "atol_key": atol_key, "rtol_key": rtol_key},
         measured={
             "scope": name, "coverage": coverage,
-            "components_compared": emitted, "components_total": total,
+            "components_compared": compared, "components_total": total,
+            "complete_coverage": complete,
+            "chunks": len(chunks) if coverage == COMPONENT_CHUNKS else None,
             "mismatch_count": len(offenders),
             "worst_normalized": None if unbounded else worst,
             "offending_coordinates": offenders[:64],
             "offending_values": [
-                {"index": index, "reference": reference[positions[index]],
-                 "actual": actual[positions[index]]} for index in offenders[:5]],
+                {"index": index, "reference": values[index][0], "actual": values[index][1]}
+                for index in offenders[:5]],
         },
-        ok=not offenders, mandatory=True, standard=STANDARD_ABS_REL_V2,
-        note=("derived from the recorded components, not from the aggregate `max_abs`/`max_rel`; the "
-              "aggregates are v1 checks and are never used to infer this verdict"))
+        ok=ok, mandatory=complete or bool(offenders), absence=(not complete and not offenders),
+        standard=STANDARD_ABS_REL_V2, note=note)
 
 
 def _relative_checks(measured: dict[str, Any], declared: dict[str, Any], *,
@@ -883,18 +1124,272 @@ def _check_invariants(verdict: ParityVerdict) -> None:
                 f"{verdict.model_id}/{category}: {dimension} is required but carries no mandatory "
                 "check, so this verdict cannot be a pass")
 
-def _metrics_checks(native: dict[str, Any], category: str) -> list[ParityCheck]:
-    """Hit-count equality. A non-boolean flag is malformed, never "not applicable"."""
-    if "native_metrics_match_feature_rerank" not in native:
-        return []
-    value = native.get("native_metrics_match_feature_rerank")
-    if not isinstance(value, bool):
-        raise _Malformed(f"{category}.native_metrics_match_feature_rerank is {value!r}: only a "
+#: The identifiers a hit-count comparison must declare before it can certify anything. Keyed by the
+#: top-level field, with the human name used in the refusal note. Reported as ONE mandatory check so
+#: the note can list every missing identifier at once instead of one per run.
+METRICS_PROVENANCE = (
+    ("protocol_id", "protocol"),
+    ("protocol", "protocol"),
+    ("checkpoint_id", "checkpoint"),
+    ("query_order_sha256", "query order digest"),
+    ("gallery_order_sha256", "gallery order digest"),
+)
+
+
+def _identity_value(document: dict[str, Any], field: str) -> Any:
+    """One provenance field from either document, or `_ABSENT`."""
+    return document[field] if field in document else _ABSENT
+
+
+def _recorded_flag(native: dict[str, Any], adapter: dict[str, Any]) -> Any:
+    """The recorded `native_metrics_match_feature_rerank`, wherever the producer put it.
+
+    LIMN and HINT write it at the TOP level of the native document (beside the block it summarises);
+    ENCODER writes it inside its nested `native` body, beside the metric recheck it derives from. Both
+    are the same claim, so both are read -- and two different values on one side is malformed.
+    """
+    found = []
+    for label, document in (("native", native), ("adapter", adapter)):
+        for place_name, place in ((label, document),
+                                  (f"{label}.native", document.get("native")),
+                                  (f"{label}.adapter", document.get("adapter"))):
+            if not isinstance(place, dict):
+                continue
+            if "native_metrics_match_feature_rerank" in place:
+                found.append((place_name, place["native_metrics_match_feature_rerank"]))
+    if not found:
+        return None
+    distinct = {repr(value) for _place, value in found}
+    if len(distinct) > 1:
+        raise _Malformed("the artifacts record `native_metrics_match_feature_rerank` more than once "
+                         f"with different values: {found}; one claim cannot have two answers")
+    return found[0][1]
+
+
+def _metrics_detail(native: dict[str, Any], adapter: dict[str, Any]) -> tuple[dict[str, Any] | None, str]:
+    """The per-side hit-count block, whichever side carries it, and which side that was.
+
+    Both producers write it into the NATIVE artifact (the phase that measured both vectors), and the
+    key is deliberately accepted on the adapter side too: `limn_hits.py` mirrors the tolerance into
+    both documents, and a future producer may record the counts where it ranked. The block is
+    compared, never trusted -- what it says about itself is only an assertion to cross-check.
+    """
+    for side, document in (("native", native), ("adapter", adapter)):
+        for key in ("native_metrics_parity_detail", "adapter_metrics_parity_detail"):
+            block = document.get(key)
+            if block is None:
+                continue
+            if not isinstance(block, dict):
+                raise _Malformed(f"the {side} artifact's `{key}` is a "
+                                 f"{type(block).__name__}, not an object")
+            return block, f"{side}.{key}"
+    return None, ""
+
+
+def _hit_counts(block: dict[str, Any], side: str, *, where: str) -> dict[str, int]:
+    """One side's integer hit counts, keyed by cutoff. A missing or non-integer count is malformed."""
+    entry = block.get(side)
+    if not isinstance(entry, dict):
+        raise _Malformed(f"{where}.{side} is a {type(entry).__name__}, not an object with `hits`")
+    hits = entry.get("hits")
+    if not isinstance(hits, dict) or not hits:
+        raise _Malformed(f"{where}.{side}.hits is {hits!r}: without per-cutoff counts there is "
+                         "nothing to derive hit-count equality from")
+    counts: dict[str, int] = {}
+    for key, value in hits.items():
+        if isinstance(value, bool) or not isinstance(value, int):
+            raise _Malformed(f"{where}.{side}.hits.{key} is {value!r}, not an integer hit count")
+        if value < 0:
+            raise _Malformed(f"{where}.{side}.hits.{key} is {value!r}, not a count")
+        counts[key] = value
+    return counts
+
+
+def _metrics_checks(native: dict[str, Any], adapter: dict[str, Any],
+                    category: str) -> list[ParityCheck]:
+    """Hit-count equality DERIVED from the per-side counts, with the recorded flag only a cross-check.
+
+    The defect this replaces: the gate read `native_metrics_match_feature_rerank` and used the boolean
+    AS the verdict, so an artifact could record `native r1 = 375`, `adapter r1 = 376` and still be
+    certified -- the mismatch was written beside the flag and never read. Now:
+
+    * `equality` is derived from the two recorded count vectors, cutoff by cutoff;
+    * the recorded flag must AGREE with that derivation -- a disagreement is `_Malformed`, because the
+      document cannot be both right and wrong, and a `true` flag beside differing counts is exactly
+      the artifact that used to pass;
+    * a flag with no counts behind it is not evidence: the check is absent (hence `INCOMPLETE`), never
+      a pass;
+    * a certifiable comparison also needs provenance -- both denominators, a protocol id, a checkpoint
+      identity and both order digests. Absent provenance beside a recorded comparison is a mandatory
+      FAILURE naming what is missing, because the artifact claimed a comparison and cannot show that
+      the two sides compared the same queries over the same gallery.
+    """
+    detail, detail_where = _metrics_detail(native, adapter)
+    recorded = _recorded_flag(native, adapter)
+    if recorded is not None and not isinstance(recorded, bool):
+        raise _Malformed(f"{category}.native_metrics_match_feature_rerank is {recorded!r}: only a "
                          "recorded boolean can certify or refuse hit-count equality")
-    return [ParityCheck(
+
+    if detail is None:
+        if recorded is None:
+            return []
+        # A bare boolean with nothing behind it. Non-mandatory + absence so the dimension reads
+        # `missing` (INCOMPLETE) instead of passing on a self-assertion.
+        return [ParityCheck(
+            name=f"{category}.metrics.hit_count_equality", dimension="metrics_parity", gate="G2",
+            declared="exact hit-count equality derived from per-side counts",
+            measured={"recorded_flag": recorded, "counts": None},
+            ok=False, mandatory=False, absence=True,
+            note=("the artifact records `native_metrics_match_feature_rerank` but no per-side hit "
+                  "counts (`native_metrics_parity_detail` / `adapter_metrics_parity_detail`), so "
+                  "equality is unmeasurable: a boolean asserting its own conclusion is not evidence"))]
+
+    cutoffs = detail.get("cutoffs")
+    if not isinstance(cutoffs, list) or not cutoffs:
+        raise _Malformed(f"{detail_where}.cutoffs is {cutoffs!r}: the declared cutoffs are what the "
+                         "counts are compared at")
+    for value in cutoffs:
+        if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+            raise _Malformed(f"{detail_where}.cutoffs holds {value!r}, not a positive integer cutoff")
+    native_hits = _hit_counts(detail, "native", where=detail_where)
+    adapter_hits = _hit_counts(detail, "adapter", where=detail_where)
+    keys = [f"r{k}" for k in cutoffs]
+    for side, counts in (("native", native_hits), ("adapter", adapter_hits)):
+        missing = [key for key in keys if key not in counts]
+        if missing:
+            raise _Malformed(f"{detail_where}.{side}.hits records {sorted(counts)} but the declared "
+                             f"cutoffs need {missing}: a comparison missing a cutoff cannot be "
+                             "certified at that cutoff")
+
+    derived = {key: native_hits[key] == adapter_hits[key] for key in keys}
+    derived_equal = all(derived.values())
+
+    # The counts must also be counts OF THE SAME POPULATION, or equal hits mean nothing.
+    native_entry = detail.get("native") if isinstance(detail.get("native"), dict) else {}
+    adapter_entry = detail.get("adapter") if isinstance(detail.get("adapter"), dict) else {}
+    denominators = {"native": native_entry.get("query_count"),
+                    "adapter": adapter_entry.get("query_count")}
+    counts_agree = (isinstance(denominators["native"], int) and not isinstance(
+                        denominators["native"], bool)
+                    and denominators["native"] == denominators["adapter"])
+
+    checks: list[ParityCheck] = []
+
+    recorded_equality = detail.get("equality")
+    if isinstance(recorded_equality, dict):
+        contradicted = {key: recorded_equality[key] for key in keys
+                        if key in recorded_equality and recorded_equality[key] is not derived[key]}
+        if contradicted:
+            raise _Malformed(
+                f"{detail_where}.equality says {contradicted} but the recorded counts derive "
+                f"{ {key: derived[key] for key in contradicted} } (native "
+                f"{ {key: native_hits[key] for key in contradicted} }, adapter "
+                f"{ {key: adapter_hits[key] for key in contradicted} }): the block contradicts the "
+                "counts it carries")
+
+    if recorded is not None and recorded is not derived_equal:
+        raise _Malformed(
+            f"{category}.native_metrics_match_feature_rerank is {recorded} but the recorded hit "
+            f"counts derive {derived_equal} (native { {k: native_hits[k] for k in keys} } vs adapter "
+            f"{ {k: adapter_hits[k] for k in keys} }): the flag is an assertion to cross-check, and "
+            "an artifact that contradicts its own counts cannot certify anything")
+
+    checks.append(ParityCheck(
         name=f"{category}.metrics.hit_count_equality", dimension="metrics_parity", gate="G2",
-        declared="exact hit-count equality", measured=value,
-        ok=value is True, mandatory=True)]
+        declared="exact hit-count equality at every declared cutoff, derived from the two count vectors",
+        measured={"derived_equal": derived_equal, "per_cutoff": derived,
+                  "native": {key: native_hits[key] for key in keys},
+                  "adapter": {key: adapter_hits[key] for key in keys},
+                  "recorded_flag": recorded},
+        ok=derived_equal, mandatory=True, harness_recorded=recorded,
+        note=("derived from the per-side counts; the recorded flag is kept as a cross-check and a "
+              "disagreement is malformed evidence, never a pass" if recorded is not None else
+              "derived from the per-side counts; the artifact records no flag")))
+
+    # THREE outcomes per check, never two. The gate's own rule is that absent evidence is
+    # `INCOMPLETE` and a contradicted claim is a FAILURE, and a check whose `measured` is two nulls
+    # must not blur them:
+    #
+    #   * recorded on both sides and equal        -> ok, mandatory;
+    #   * recorded on both sides and different    -> a MEASURED DISAGREEMENT: mandatory failure;
+    #   * absent (one or both sides)              -> an ABSENT-EVIDENCE refusal: `absence=True`,
+    #                                                non-mandatory, so the dimension reads `missing`
+    #                                                and the verdict is `INCOMPLETE`.
+    #
+    # The middle case is the one the campaign cares about (equal hits over different denominators are
+    # not equality). The third case is what a producer that has not recorded denominators yet looks
+    # like, and calling that "failed" would claim it measured something it never measured.
+    denominators_present = {side: isinstance(value, int) and not isinstance(value, bool)
+                            for side, value in denominators.items()}
+    if all(denominators_present.values()):
+        denominators_missing: list[str] = []
+    else:
+        denominators_missing = [f"`{side}.query_count`" for side, present
+                                in denominators_present.items() if not present]
+    checks.append(ParityCheck(
+        name=f"{category}.metrics.eligible_denominators", dimension="metrics_parity", gate="G2",
+        declared="the same eligible query denominator on both sides",
+        measured={"native": denominators["native"], "adapter": denominators["adapter"]},
+        ok=counts_agree, mandatory=not denominators_missing, absence=bool(denominators_missing),
+        note="" if counts_agree else (
+            "ABSENT DENOMINATOR: the block records no " + ", ".join(denominators_missing)
+            + ", so the two count vectors cannot be shown to describe the same eligible population. "
+              "This is an unmeasured input, not a measured disagreement"
+            if denominators_missing else
+            "MEASURED DISAGREEMENT: equal hit counts over different denominators are not equality; "
+            "one side dropped queries the other scored")))
+
+    membership = detail.get("eligible_query_set_identical")
+    if membership is None:
+        # Absent, same rule: an unrecorded membership assertion measures nothing.
+        checks.append(ParityCheck(
+            name=f"{category}.metrics.eligible_query_set_identical", dimension="metrics_parity",
+            gate="G2", declared="the two sides ranked the same eligible query set",
+            measured={"eligible_query_set_identical": None}, ok=False, mandatory=False, absence=True,
+            note=("ABSENT MEMBERSHIP: the block does not record `eligible_query_set_identical`, so "
+                  "whether both sides ranked the same eligible query set was never measured")))
+    else:
+        checks.append(ParityCheck(
+            name=f"{category}.metrics.eligible_query_set_identical", dimension="metrics_parity",
+            gate="G2", declared="the two sides ranked the same eligible query set",
+            measured={"eligible_query_set_identical": membership}, ok=membership is True,
+            mandatory=True,
+            note="" if membership is True else
+                 "MEASURED DISAGREEMENT: both sides were recorded, and the block does not assert they "
+                 "ranked the same eligible query set"))
+
+    absent_fields = []
+    values: dict[str, Any] = {}
+    for field, label in METRICS_PROVENANCE:
+        left = _identity_value(native, field)
+        right = _identity_value(adapter, field)
+        if left is _ABSENT and right is _ABSENT:
+            absent_fields.append(f"`{field}` ({label})")
+            continue
+        values[field] = {"native": None if left is _ABSENT else left,
+                         "adapter": None if right is _ABSENT else right}
+        if left is _ABSENT or right is _ABSENT:
+            absent_fields.append(f"`{field}` ({label}) on one side only")
+    # `protocol_id` and `protocol` name the same thing in the two producers; either satisfies it.
+    protocol_present = (not any(item.startswith("`protocol_id`") for item in absent_fields)
+                        or not any(item.startswith("`protocol`") for item in absent_fields))
+    if protocol_present:
+        absent_fields = [item for item in absent_fields
+                         if not (item.startswith("`protocol_id`") or item.startswith("`protocol`"))]
+    provenance_ok = not absent_fields
+    checks.append(ParityCheck(
+        name=f"{category}.metrics.provenance", dimension="metrics_parity", gate="G2",
+        declared=("a protocol id, a checkpoint identity, and both order digests on BOTH sides, because "
+                  "a hit-count comparison across different queries, galleries or checkpoints "
+                  "measures nothing"),
+        measured={"fields": values, "absent": absent_fields},
+        ok=provenance_ok, mandatory=True, absence=not provenance_ok,
+        note="" if provenance_ok else
+             ("the artifacts record a hit-count comparison without the identifiers that make it one: "
+              + ", ".join(absent_fields)
+              + ". Two counts are only comparable when both sides ranked the same queries over the "
+                "same gallery under the same protocol and checkpoint")))
+    return checks
 
 
 def _observer_checks(native: dict[str, Any], category: str) -> list[ParityCheck]:
@@ -1218,11 +1713,16 @@ def evaluate_model(model_id: str, *, categories: Iterable[str] = ("dress", "shir
             # `missing`, and `relation_parity` reports False). When the artifact DOES claim anything
             # here -- forward deltas, score deltas -- a missing relation digest stays a mandatory
             # failure beside those real claims.
+            # The metric checks are collected BEFORE the demotion below, so an absence-reporting
+            # metric check on an adapter that claims nothing is demoted like every other absence
+            # rather than reported as a failed claim. (A `true` flag with no counts behind it, and a
+            # comparison whose provenance is unstated, are both absences: the artifact did not measure
+            # the thing, it failed to record the inputs.)
+            checks.extend(_metrics_checks(native, adapter, category))
+            checks.extend(_observer_checks(native_body, category))
             claims_present = bool(adapter_body)
             if not claims_present:
                 checks = [check if not check.absence else _unclaimable(check) for check in checks]
-            checks.extend(_metrics_checks(native_body, category))
-            checks.extend(_observer_checks(native_body, category))
 
             # Keep the artifact's own verdicts verbatim: history is not rewritten, only aggregated.
             historical[category] = {
@@ -1246,8 +1746,15 @@ def evaluate_model(model_id: str, *, categories: Iterable[str] = ("dress", "shir
                 # Rank evidence alone: keep the rank checks (they are real), but the dimension was
                 # never fully measured here, so it is `missing` rather than satisfied.
                 have.discard("scoring_parity")
+            # A dimension carrying an absence-reporting check that is not ok was NOT measured, even
+            # when other checks of the same dimension exist. Without this a clean 512-of-4096
+            # component preview was masked by the aggregate `max_abs`/`max_rel` checks that also feed
+            # `forward_parity`, and the verdict read PASS on evidence about 12% of the array.
+            unmeasured = {check.dimension for check in checks if check.absence and not check.ok}
+            failed = {check.dimension for check in checks if check.mandatory and not check.ok}
             missing_here = [dimension for dimension in REQUIRED_DIMENSIONS
-                            if dimension not in have]
+                            if dimension not in have
+                            or (dimension in unmeasured and dimension not in failed)]
             verdict.mandatory_by_category[category] = [d for d in REQUIRED_DIMENSIONS if d in have]
             verdict.missing_by_category[category] = missing_here
         except _Malformed as error:

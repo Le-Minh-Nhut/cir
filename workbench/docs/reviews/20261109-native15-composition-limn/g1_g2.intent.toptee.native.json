@@ -1,0 +1,222 @@
+{
+  "category": "toptee",
+  "phase": "native",
+  "model_id": "intent",
+  "checkpoint_id": "fiq_n02",
+  "protocol": "fashioniq_full_gallery_ref_excluded",
+  "standard": "parity-absolute-relative/v2",
+  "tolerances": {
+    "forward_max_abs": 1e-05,
+    "forward_max_rel": 0.0001,
+    "batch_max_abs": 0.0001,
+    "batch_max_rel": 0.001,
+    "score_max_abs": 1e-06,
+    "tie_epsilon": 1e-06
+  },
+  "checkpoint": {
+    "path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/intent/intent_fiq_0.2.pt",
+    "size_bytes": 2722478522,
+    "declared_sha256": "2a504cadfd6b1c2486a2c508538b0160c5653f62c7cd11f4f3d8a9534dc26afc",
+    "sha256": "2a504cadfd6b1c2486a2c508538b0160c5653f62c7cd11f4f3d8a9534dc26afc",
+    "matches_declared": true
+  },
+  "query_order_sha256": "af748de67d2116aeafd01bf632c25ff5a07bee472e73efa12cb9e7ef0ccb63c6",
+  "gallery_order_sha256": "cae7b6f089482f39a85247aebca4ec255e0db25f9c21e2a6bff87d5574f95d51",
+  "layer1_identity": {
+    "query_count_native": 1961,
+    "query_count_annotations": 1961,
+    "gallery_count_native": 5373,
+    "gallery_count_rebuilt_from_annotations": 5373,
+    "gallery_order_identical": true,
+    "reference_ids_identical": true,
+    "target_ids_identical": true,
+    "model_text_identical_to_author_composition": true,
+    "model_text_mismatches": [],
+    "duplicate_caption_pairs_within_category": 3,
+    "reference_equals_target_rows": 0,
+    "gallery_has_duplicates": false,
+    "gallery_scope": "category-agnostic",
+    "gallery_is_category_agnostic": true,
+    "adapter_target_category": null,
+    "target_feature_rank": 3,
+    "batch_size": 32,
+    "population_final_batch": {
+      "queries": 9,
+      "gallery": 29,
+      "note": "last batch of the FULL population; the fixed sample is one partial batch"
+    },
+    "text_handling": {
+      "native": "datasets.py:82-84 concat_text -> mod['str']; test.py:44 txt_processors['eval']",
+      "adapter": "model_hint.py:330 applies processors[0]['eval'] to the same composed sentence",
+      "comparable_quantity": "the query FEATURE, not a token list: HINT tokenises inside extract_retrieval_compose with max_txt_len=32 truncation"
+    },
+    "image_transform": {
+      "call": "data_utils.targetpad_transform(1.25, 224)",
+      "native": "replay/hint.py:184 (val path)",
+      "adapter": "model_hint.py::_worker_main (same call)",
+      "note": "both sides take the VAL transform; LIMN's adapter/native split has no analogue here, so no train-transform comparison is recorded"
+    },
+    "sample": {
+      "query_indices": [
+        0,
+        3,
+        15,
+        637,
+        1960
+      ],
+      "reference_ids": [
+        "B008CFZW76",
+        "B00H03TS7Q",
+        "B006MHUH0I",
+        "B008CFZW76",
+        "B0059LBD1A"
+      ],
+      "target_ids": [
+        "B008CG1JJ0",
+        "B0085YC1G4",
+        "B00C2G46RS",
+        "B00AZL7U7U",
+        "B004070YLE"
+      ],
+      "captions": [
+        [
+          "is the same",
+          "appears to be exactly the same"
+        ],
+        [
+          "The shirt is black with the cat in hat.",
+          "has the Cat in the Hat on it"
+        ],
+        [
+          "is shorter and more bold",
+          "is orange"
+        ],
+        [
+          "is red colored and floral pattern",
+          "has flowery print"
+        ],
+        [
+          "is a see-thru striped long sleeved t-shirt and U collar",
+          "Is striped and lighter in color"
+        ]
+      ],
+      "model_texts": [
+        "is the same and appears to be exactly the same",
+        "the shirt is black with the cat in hat and has the cat in the hat on it",
+        "is shorter and more bold and is orange",
+        "is red colored and floral pattern and has flowery print",
+        "is a see thru striped long sleeved t shirt and u collar and is striped and lighter in color"
+      ],
+      "selection_rules": {
+        "0": "multi_positive_first",
+        "3": "capitalized_first_caption",
+        "15": "short_second_caption",
+        "637": "multi_positive_second",
+        "1960": "last_row"
+      },
+      "selection_rules_skipped_for_slot_budget": [],
+      "multi_positive_rows": [
+        0,
+        637
+      ],
+      "sample_has_two_rows_sharing_a_reference": true,
+      "gallery_sample_ids": [
+        "B008CFZW76",
+        "B00H03TS7Q",
+        "B006MHUH0I",
+        "B0059LBD1A",
+        "B008CG1JJ0",
+        "B0085YC1G4",
+        "B00C2G46RS",
+        "B00AZL7U7U",
+        "B004070YLE",
+        "B003BHB50I",
+        "B001AS562I",
+        "B00D2EVETW",
+        "B009P4JF1W",
+        "B004C1XF96",
+        "B003R7235S",
+        "B000F7SSDO",
+        "B007TGJOMS",
+        "B0015O8JLC",
+        "B00BB1UAMU",
+        "B005CTBNN2"
+      ],
+      "gallery_sample_positions": [
+        969,
+        1388,
+        2261,
+        2355,
+        0,
+        8,
+        33,
+        1672,
+        5371,
+        5372,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        9,
+        10,
+        11
+      ],
+      "gallery_sample_covers_tail": true,
+      "gallery_sample_size": 20,
+      "is_partial_batch": true
+    },
+    "phase_seconds": 14.7
+  },
+  "capture_state": {
+    "producer": "scripts/third_model_parity.py --phase identity",
+    "interpreter": "/home/heheboiz/data/cir/workbench/envs/ilearn39-adapted/bin/python",
+    "versions": {
+      "python": "/home/heheboiz/data/cir/workbench/envs/ilearn39-adapted/bin/python",
+      "numpy": "1.26.4",
+      "torch": "2.7.1+cu128",
+      "torch_cuda": "12.8",
+      "cuda_available": true,
+      "device": "NVIDIA GeForce RTX 5070 Ti"
+    },
+    "gpu_capture_executed": false,
+    "measured_here": [
+      "query_count_native",
+      "query_count_annotations",
+      "gallery_count_native",
+      "gallery_count_rebuilt_from_annotations",
+      "gallery_order_identical",
+      "reference_ids_identical",
+      "target_ids_identical",
+      "model_text_identical_to_author_composition",
+      "model_text_mismatches",
+      "duplicate_caption_pairs_within_category",
+      "reference_equals_target_rows",
+      "gallery_has_duplicates",
+      "gallery_native_order",
+      "query_native_order",
+      "gallery_scope",
+      "gallery_is_category_agnostic",
+      "adapter_target_category",
+      "target_feature_rank",
+      "batch_size",
+      "population_final_batch",
+      "text_handling",
+      "image_transform",
+      "sample",
+      "phase_seconds"
+    ],
+    "not_yet_measured": [
+      "sample_forward (native + adapter features)",
+      "batch_size_1_vs_n",
+      "cache_off_restart",
+      "population forward deltas",
+      "scoring_ranking score delta and tie classification",
+      "component_parity",
+      "native_metrics_match_feature_rerank"
+    ],
+    "why": "the adapter half needs the model worker, which refuses to start without CUDA (`model_hint.py::_worker_main`); absent evidence stays absent"
+  }
+}

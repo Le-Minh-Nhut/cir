@@ -16,6 +16,7 @@
     "tie_epsilon": 1e-06,
     "metrics": "exact hit-count equality"
   },
+  "standard": "parity-absolute-relative/v2",
   "native": {
     "category": "shirt",
     "layer1_identity": {
@@ -461,7 +462,7 @@
       "queries": 2038,
       "gallery": 3089
     },
-    "phase_seconds": 66.5
+    "phase_seconds": 397.7
   },
   "relation_state": {
     "status": "recorded",

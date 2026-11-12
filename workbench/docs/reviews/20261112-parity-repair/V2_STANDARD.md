@@ -29,6 +29,8 @@ production caller. Both are now wired; neither tolerance and no v1 check was mov
   `standard` key is still judged `parity-relative/v1`, unchanged.
 * An artifact that declares v2 and carries no `component_parity` block stays `_Malformed`. A bare
   label over v1 aggregates is never a v2 result.
+* `coverage` gained a third value, `chunks` (complete coverage, split), and `chunked` changed meaning:
+  it is now an explicitly PARTIAL preview that can never be `ok`. See "Coverage" below.
 
 ## Shape
 
@@ -45,7 +47,7 @@ production caller. Both are now wired; neither tolerance and no v1 check was mov
       "shape": [4, 512],
       "components_total": 2048,
       "components_emitted": 2048,
-      "coverage": "full" | "chunked",
+      "coverage": "full" | "chunks" | "chunked",
       "indices": [0, 1, 2047],
       "reference": [0.1, 0.2, 0.3],
       "actual":    [0.1, 0.2, 0.3],
@@ -129,13 +131,73 @@ componentwise verdict:
 * when `coverage == "chunked"` the recorded values describe the full array, so they are only
   required to be at least the derived values — never used to declare a scope ok.
 
-## Chunk rule
+## Coverage: three forms, and only two of them can earn a verdict
 
-Full arrays are emitted when `components_total <= 4096`. Above that the dump is the first 512
-components PLUS every violating component, ascending, deduplicated. This keeps a full-population
-scope (~1.5 M components) inside a reviewable file while still emitting every coordinate a failure
-verdict could name. `coverage: "chunked"` is part of the record, so a reader can never mistake a
-chunk for the whole array.
+The rule this section exists to state: **a preview sample plus a full-array hash is partial coverage
+and can never be a PASS.**
+
+The first version of this standard let a large scope emit a 512-component head plus the offenders it
+found, labelled `coverage: "chunked"`, with a `sha256` over the whole array beside it. The reader then
+applied the rule to the emitted rows only, so `ok` meant "the preview is clean" — and a preview with
+the offending row deleted became a PASS while the record still declared
+`worst_normalized: 166.67` on a 4,146-component scope. A hash over components nobody looked at is an
+anchor for an external reviewer holding the arrays; it is not evidence about those components, and no
+verdict may rest on it.
+
+`coverage` is a closed set of three values:
+
+| value | what it carries | can it be `ok`? |
+|---|---|---|
+| `full` | every component, in one `indices`/`reference`/`actual` triple | **yes**, with zero derived offenders |
+| `chunks` | every component, in an ordered list of `{indices, reference, actual, sha256}` chunks tiling `[0, components_total)` | **yes**, with zero derived offenders |
+| `chunked` | a PREVIEW: some subset, typically a head plus the offenders found | **no.** A violating emitted component FAILS the scope; a clean preview is `INCOMPLETE` |
+
+### `chunks`
+
+```json
+"coverage": "chunks",
+"chunk_size": 4096,
+"chunks": [
+  {"indices": [0, 1, "…"], "reference": [0.1, "…"], "actual": [0.1, "…"],
+   "sha256": {"reference": "<64 hex>", "actual": "<64 hex>", "delta": "<64 hex>"}},
+  {"indices": [4096, "…"], "…": "…"}
+],
+"sha256": {"reference": "<64 hex over the FULL array>", "actual": "…", "delta": "…"}
+```
+
+The reader REQUIRES, per chunk and across chunks:
+
+* `len(indices) == len(reference) == len(actual)`, non-empty, indices integers in
+  `[0, components_total)`, ascending and unique within the chunk;
+* each chunk's indices a contiguous run, and the runs tiling `[0, components_total)` in order: the
+  first chunk starts at `0`, each next chunk starts where the previous ended, and the last ends at
+  `components_total`. A gap, an overlap, a duplicated component, or an out-of-order chunk is
+  `_Malformed`;
+* each chunk's three digests **recomputed from that chunk's own values** — `sha256` over canonical
+  little-endian float64 in flat order, the same serialization the full-array digest uses
+  (`parity_gate.component_digest`, `struct.pack("<d")` per component). A substituted chunk, a stale
+  digest, or a truncated tail is `_Malformed`;
+* every component value finite and numeric.
+
+The rule `abs(actual - reference) <= atol + rtol*abs(reference)` is then applied to **every component
+of every chunk**, so a scope of any size can be fully judged. The full-array digests stay recorded as
+the external anchor; they are never the basis of the verdict.
+
+### The threshold
+
+`COMPONENT_FULL_LIMIT = 4096` (declared in each producer, and in the block's own `chunk_rule` string)
+decides the form: at or below it, `full`; above it, `chunks` at `COMPONENT_CHUNK_SIZE = 4096`. Only
+the FILE SIZE depends on the chunk size — the tiling requirement means a record cannot buy an easier
+verdict by cutting its array into more pieces.
+
+### Summary consistency, in every form
+
+`mismatch_count` equals the derived violation count over ALL evaluated components; `offenders[]` is
+exactly the derived violating index set; `max_abs` and `worst_normalized` are at least the derived
+values, and EXACTLY equal (within `math.isclose(rel_tol=1e-9)`) when coverage is complete. Under any
+form, a record whose `worst_normalized` exceeds `1` while naming no offending coordinate is
+`_Malformed`: the writer records every violating component, so the two claims cannot both be true.
+That single cross-check is what stops a deleted offender row from being invisible.
 
 ## What stays exactly as it was
 

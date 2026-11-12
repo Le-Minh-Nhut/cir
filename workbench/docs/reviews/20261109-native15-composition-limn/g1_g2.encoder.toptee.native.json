@@ -16,6 +16,7 @@
     "tie_epsilon": 1e-06,
     "metrics": "exact hit-count equality"
   },
+  "standard": "parity-absolute-relative/v2",
   "native": {
     "category": "toptee",
     "layer1_identity": {
@@ -378,7 +379,7 @@
       "queries": 1961,
       "gallery": 2902
     },
-    "phase_seconds": 60.2
+    "phase_seconds": 547.8
   },
   "relation_state": {
     "status": "recorded",

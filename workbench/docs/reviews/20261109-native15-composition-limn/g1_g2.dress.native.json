@@ -467,5 +467,10 @@
         "r50": 74.26871591472484
       }
     }
-  }
+  },
+  "protocol": "fashioniq_val_split",
+  "checkpoint_id": "base_iter0_dress",
+  "model_id": "limn",
+  "query_order_sha256": "994a6cae47ac65bf084af22b3802cdb25cbd60fe356685fe8667823770d32cb3",
+  "gallery_order_sha256": "117be8464456317798fcffabf2104dc902c0c901f6304310895110013ef2af6e"
 }

@@ -59,12 +59,32 @@ def _native_identity(**overrides) -> dict:
     return layer
 
 
+#: The identifiers a hit-count comparison needs on BOTH sides before it can certify anything.
+PROVENANCE = {"protocol": "fashioniq_val_split", "checkpoint_id": "testmodel_checkpoint",
+              "query_order_sha256": "a" * 64, "gallery_order_sha256": "b" * 64,
+              "model_id": "testmodel"}
+
+
+def _metrics_detail(*, native_hits: dict | None = None, adapter_hits: dict | None = None,
+                    query_count: int = 10, identical_set: bool = True) -> dict:
+    native_hits = native_hits or {"r1": 4, "r10": 7, "r50": 9}
+    adapter_hits = adapter_hits or dict(native_hits)
+    return {"cutoffs": [1, 10, 50],
+            "native": {"hits": dict(native_hits), "query_count": query_count},
+            "adapter": {"hits": dict(adapter_hits), "query_count": query_count},
+            "eligible_query_set_identical": identical_set,
+            "equality": {k: native_hits[k] == adapter_hits[k] for k in native_hits}}
+
+
 def _native(*, tolerances: dict | None = None, metrics: bool = True) -> dict:
     body = {"layer1_identity": _native_identity()}
+    document = {"category": CATEGORY, "phase": "native", "model_id": "testmodel",
+                "tolerances": dict(tolerances or TOLERANCES), "native": body}
     if metrics:
         body["native_metrics_match_feature_rerank"] = True
-    return {"category": CATEGORY, "phase": "native", "model_id": "testmodel",
-            "tolerances": dict(tolerances or TOLERANCES), "native": body}
+        document["native_metrics_parity_detail"] = _metrics_detail()
+        document.update(PROVENANCE)
+    return document
 
 
 def _forward(value: float = 0.0, *, flag: bool | None = True, cosine: float = 1.0) -> dict:
@@ -106,8 +126,13 @@ def _adapter(*, tolerances: dict | None = None, forward: dict | None = None,
         body["batch_size_1_vs_n"] = {"max_abs": 3e-07, "max_rel": 1e-06, "min_cosine": 0.9999999,
                                      "bitwise_equal": False, "shape": [2, 4],
                                      "within_tolerance": True}
-    return {"category": CATEGORY, "phase": "adapter", "model_id": "testmodel",
-            "tolerances": dict(tolerances or TOLERANCES), "adapter": body}
+    document = {"category": CATEGORY, "phase": "adapter", "model_id": "testmodel",
+                "tolerances": dict(tolerances or TOLERANCES), "adapter": body}
+    # Provenance travels with the comparison it identifies: a pair that records no hit-count
+    # comparison at all declares none of these either, exactly like the real LIMN pair did.
+    if metrics_present:
+        document.update(PROVENANCE)
+    return document
 
 
 def _names(model: str) -> tuple[str, str]:
@@ -141,9 +166,13 @@ def test_an_empty_adapter_artifact_does_not_pass_and_is_not_complete(tmp_path: P
     # absent evidence, not a failed claim -- `complete_fixture_no_relation` covers the case where the
     # same absences sit beside real claims and do fail.)
     assert verdict.failures == [], verdict.failures
-    # `metrics_parity` IS measured here: the native side records hit-count equality. What is missing
-    # is everything the adapter would have had to measure.
-    assert set(verdict.missing) == {"forward_parity", "batch_parity", "scoring_parity"}, verdict.missing
+    # `metrics_parity` is MISSING too, and for a reason the fix introduced on purpose: the native side
+    # records hit counts and the adapter side records neither the counts nor the provenance a hit-count
+    # comparison needs (checkpoint, protocol, order digests). A comparison only one side identified is
+    # not a comparison, so the dimension is unmeasured rather than satisfied. It stays an ABSENCE here
+    # -- the adapter claims nothing at all, so nothing about it was disproved.
+    assert set(verdict.missing) == {"forward_parity", "batch_parity", "scoring_parity",
+                                    "metrics_parity"}, verdict.missing
 
 
 def test_an_artifact_missing_one_mandatory_dimension_is_incomplete_not_pass(tmp_path: Path) -> None:

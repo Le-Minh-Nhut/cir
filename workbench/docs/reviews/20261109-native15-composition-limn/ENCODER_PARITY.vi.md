@@ -250,9 +250,12 @@ ranks, but the moved ranks sit deep and cancel: R@1/R@10/R@50 deltas between two
 `−0.05 / +0.10 / −0.05`, `0.00 / +0.05 / −0.05`, `+0.10 / −0.05 / 0.00`. So the ≈0.2–0.3 spread visible
 across historical ENCODER numbers is draw noise, **not** a mapping or BLAS defect — and the
 `534/391/417` figure must not be quoted as a metric error.
-Pinned re-run macro: R@10 `56.2398` / R@50 `77.6157` against the stored `56.2908` / `77.6334`
-(Δ `−0.051` / `−0.018`).
-
+Pinned re-run macro, **seeded** (`RELATION_SEED` wired 2026-11-11): R@10 **56.22580193539884** /
+R@50 **77.53315673870537**, against the stored `56.2908` / `77.6334` — which is an **unseeded
+draw** and is `NOT_REPRODUCIBLE` (Δ is not a defect: the two are different relation draws, not one
+quantity measured twice; see `20261112-parity-repair/ENCODER_RELATION.md` §8-§9b). The
+`56.2398 / 77.6157` figure this line used to carry was itself the pre-pin unseeded re-run and is
+superseded.
 
 ### 4.1 Forward parity, relation pinned on both sides
 

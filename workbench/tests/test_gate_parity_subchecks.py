@@ -56,12 +56,39 @@ def _verdict(tmp_path: Path, **kwargs) -> gate.ParityVerdict:
     return gate.evaluate_model("encoder", root=tmp_path, categories=("shirt",))
 
 
+#: A hit-count block that satisfies the CURRENT rule: per-side counts at every declared cutoff, the
+#: same eligible denominator, and an assertion that both sides ranked the same eligible set. A bare
+#: `native_metrics_match_feature_rerank` boolean used to be enough; it is now only a cross-check.
+def _metrics_detail(*, native_hits: dict | None = None, adapter_hits: dict | None = None,
+                    native_count: int = 10, adapter_count: int = 10,
+                    identical_set: bool = True, recorded_flag: bool = True) -> dict:
+    native_hits = native_hits or {"r1": 4, "r10": 7, "r50": 9}
+    adapter_hits = adapter_hits or dict(native_hits)
+    return {
+        "cutoffs": [1, 10, 50],
+        "native": {"hits": dict(native_hits), "query_count": native_count},
+        "adapter": {"hits": dict(adapter_hits), "query_count": adapter_count},
+        "eligible_query_set_identical": identical_set,
+        "equality": {key: native_hits[key] == adapter_hits[key] for key in native_hits},
+        "recorded_flag": recorded_flag,
+    }
+
+
+#: The identifiers a hit-count comparison must carry on BOTH sides before it can certify anything.
+_PROVENANCE = {
+    "protocol": "fashioniq_val_split",
+    "checkpoint_id": "testmodel_checkpoint",
+    "query_order_sha256": "a" * 64,
+    "gallery_order_sha256": "b" * 64,
+}
+
 def _minimal(tmp_path: Path, *, model: str = "encoder", categories: tuple[str, ...] = ("shirt",),
              batch_within: bool = True, batch_max_rel: float = 1e-4,
              non_tie: int = 0, min_gap: float = 0.0,
              population_max_rel: float = 1e-6, identity_ok: bool = True,
              checkpoint_tolerances: dict | None = None,
-             relation_sha: str | None = "6a09e667f3bcc908") -> Path:
+             relation_sha: str | None = "6a09e667f3bcc908",
+             metrics_detail: dict | None = None) -> Path:
     """A synthetic evidence directory: one category, one knob per subcheck.
 
     `relation_sha` defaults to a digest recorded identically on BOTH sides: ENCODER draws a relation
@@ -85,6 +112,10 @@ def _minimal(tmp_path: Path, *, model: str = "encoder", categories: tuple[str, .
                 "native_metrics_match_feature_rerank": True,
             },
         }
+        native.update(_PROVENANCE)
+        native["native_metrics_parity_detail"] = (metrics_detail
+                                                  if metrics_detail is not None
+                                                  else _metrics_detail())
         adapter = {
             "category": category, "phase": "adapter",
             "tolerances": native["tolerances"],
@@ -125,6 +156,7 @@ def _minimal(tmp_path: Path, *, model: str = "encoder", categories: tuple[str, .
                 },
             },
         }
+        adapter.update(_PROVENANCE)
         if relation_sha is not None:
             native["relation_state"] = {"sha256": relation_sha, "matches_pinned_digest": True}
             adapter["relation_state"] = {"sha256": relation_sha, "matches_pinned_digest": True}
@@ -267,8 +299,15 @@ def test_the_dimensions_are_not_conflated() -> None:
     assert verdict.dimensions["input_parity"] is True
     dimensions = {check.dimension for check in verdict.checks}
     assert {"input_parity", "batch_parity", "scoring_parity"} <= dimensions
-    assert "observer_parity" not in verdict.dimensions or \
-        verdict.dimensions["observer_parity"] != verdict.dimensions.get("forward_parity")
+    # The observer is separate by CONSTRUCTION, not by happening to disagree today: every observer
+    # check is non-mandatory and carries its own dimension, so it can never carry forward_parity's
+    # verdict. (Asserting the two dimensions merely differ would pass by coincidence whenever both are
+    # False -- which is the case right now, for unrelated reasons.)
+    observer = [check for check in verdict.checks if check.dimension == "observer_parity"]
+    assert observer, "the encoder artifacts record an observer-vs-macro recheck"
+    assert all(not check.mandatory for check in observer)
+    assert all(check.name.endswith(tuple(f"_{k}" for k in ("r1", "r10", "r50")))
+               for check in observer)
 
 
 def test_a_model_without_evidence_is_not_run_never_pass(tmp_path: Path) -> None:

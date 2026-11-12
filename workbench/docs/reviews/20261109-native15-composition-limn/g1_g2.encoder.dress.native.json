@@ -16,6 +16,7 @@
     "tie_epsilon": 1e-06,
     "metrics": "exact hit-count equality"
   },
+  "standard": "parity-absolute-relative/v2",
   "native": {
     "category": "dress",
     "layer1_identity": {
@@ -442,7 +443,7 @@
       }
     },
     "native_metrics_recheck": {
-      "dress_r1": 21.120475954387704,
+      "dress_r1": 21.170054536440258,
       "dress_r10": 51.71046108081309,
       "dress_r50": 76.30143777887952
     },
@@ -456,12 +457,12 @@
       "r10": 51.71046108081309,
       "r50": 76.25185919682697
     },
-    "native_metrics_match_feature_rerank": true,
+    "native_metrics_match_feature_rerank": false,
     "population": {
       "queries": 2017,
       "gallery": 2628
     },
-    "phase_seconds": 88.1
+    "phase_seconds": 566.9
   },
   "relation_state": {
     "status": "recorded",

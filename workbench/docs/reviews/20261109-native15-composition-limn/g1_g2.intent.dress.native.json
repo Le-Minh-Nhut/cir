@@ -1,0 +1,222 @@
+{
+  "category": "dress",
+  "phase": "native",
+  "model_id": "intent",
+  "checkpoint_id": "fiq_n02",
+  "protocol": "fashioniq_full_gallery_ref_excluded",
+  "standard": "parity-absolute-relative/v2",
+  "tolerances": {
+    "forward_max_abs": 1e-05,
+    "forward_max_rel": 0.0001,
+    "batch_max_abs": 0.0001,
+    "batch_max_rel": 0.001,
+    "score_max_abs": 1e-06,
+    "tie_epsilon": 1e-06
+  },
+  "checkpoint": {
+    "path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/intent/intent_fiq_0.2.pt",
+    "size_bytes": 2722478522,
+    "declared_sha256": "2a504cadfd6b1c2486a2c508538b0160c5653f62c7cd11f4f3d8a9534dc26afc",
+    "sha256": "2a504cadfd6b1c2486a2c508538b0160c5653f62c7cd11f4f3d8a9534dc26afc",
+    "matches_declared": true
+  },
+  "query_order_sha256": "c80adec2b2327955db225c16c0ed54a4140e12ba9e9cf6813456fdc2e87caa3d",
+  "gallery_order_sha256": "d193f087d5e18d640fb9f371d53842ed48eb32f773f9945b732c77f1e0fc5702",
+  "layer1_identity": {
+    "query_count_native": 2017,
+    "query_count_annotations": 2017,
+    "gallery_count_native": 3817,
+    "gallery_count_rebuilt_from_annotations": 3817,
+    "gallery_order_identical": true,
+    "reference_ids_identical": true,
+    "target_ids_identical": true,
+    "model_text_identical_to_author_composition": true,
+    "model_text_mismatches": [],
+    "duplicate_caption_pairs_within_category": 7,
+    "reference_equals_target_rows": 0,
+    "gallery_has_duplicates": false,
+    "gallery_scope": "category-agnostic",
+    "gallery_is_category_agnostic": true,
+    "adapter_target_category": null,
+    "target_feature_rank": 3,
+    "batch_size": 32,
+    "population_final_batch": {
+      "queries": 1,
+      "gallery": 9,
+      "note": "last batch of the FULL population; the fixed sample is one partial batch"
+    },
+    "text_handling": {
+      "native": "datasets.py:82-84 concat_text -> mod['str']; test.py:44 txt_processors['eval']",
+      "adapter": "model_hint.py:330 applies processors[0]['eval'] to the same composed sentence",
+      "comparable_quantity": "the query FEATURE, not a token list: HINT tokenises inside extract_retrieval_compose with max_txt_len=32 truncation"
+    },
+    "image_transform": {
+      "call": "data_utils.targetpad_transform(1.25, 224)",
+      "native": "replay/hint.py:184 (val path)",
+      "adapter": "model_hint.py::_worker_main (same call)",
+      "note": "both sides take the VAL transform; LIMN's adapter/native split has no analogue here, so no train-transform comparison is recorded"
+    },
+    "sample": {
+      "query_indices": [
+        0,
+        14,
+        18,
+        816,
+        2016
+      ],
+      "reference_ids": [
+        "B005X4PL1G",
+        "B009DI5YSS",
+        "B004VJ217Q",
+        "B005X4PL1G",
+        "B00BY3GO0C"
+      ],
+      "target_ids": [
+        "B0084Y8XIU",
+        "B008MNM7Y4",
+        "B00DC6UJ0K",
+        "B0084DJQ6O",
+        "B0030EHJ66"
+      ],
+      "captions": [
+        [
+          "is shiny and silver with shorter sleeves",
+          "fit and flare"
+        ],
+        [
+          "Is more black and elegant",
+          "is solid black and has shorter sleeves"
+        ],
+        [
+          "has more flair and smaller print",
+          "is shorter"
+        ],
+        [
+          "is more darker and minimal",
+          "is black"
+        ],
+        [
+          "Brighter and more playful looking",
+          "is red with a floral print"
+        ]
+      ],
+      "model_texts": [
+        "is shiny and silver with shorter sleeves and fit and flare",
+        "is more black and elegant and is solid black and has shorter sleeves",
+        "has more flair and smaller print and is shorter",
+        "is more darker and minimal and is black",
+        "brighter and more playful looking and is red with a floral print"
+      ],
+      "selection_rules": {
+        "0": "multi_positive_first",
+        "14": "capitalized_first_caption",
+        "18": "short_second_caption",
+        "816": "multi_positive_second",
+        "2016": "last_row"
+      },
+      "selection_rules_skipped_for_slot_budget": [],
+      "multi_positive_rows": [
+        0,
+        816
+      ],
+      "sample_has_two_rows_sharing_a_reference": true,
+      "gallery_sample_ids": [
+        "B005X4PL1G",
+        "B009DI5YSS",
+        "B004VJ217Q",
+        "B00BY3GO0C",
+        "B0084Y8XIU",
+        "B008MNM7Y4",
+        "B00DC6UJ0K",
+        "B0084DJQ6O",
+        "B0030EHJ66",
+        "B00A9VAS2K",
+        "B009PMCJLW",
+        "B007HNF4QI",
+        "B00AKLK08G",
+        "B00CMPE0C0",
+        "B004UO3XYC",
+        "B007U6KROG",
+        "B004KHOPDW",
+        "B0083E6W7U",
+        "B007L3WP5W",
+        "B0091PLEKA"
+      ],
+      "gallery_sample_positions": [
+        314,
+        2912,
+        3242,
+        2893,
+        1,
+        29,
+        33,
+        1533,
+        3814,
+        3816,
+        0,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ],
+      "gallery_sample_covers_tail": true,
+      "gallery_sample_size": 20,
+      "is_partial_batch": true
+    },
+    "phase_seconds": 15.4
+  },
+  "capture_state": {
+    "producer": "scripts/third_model_parity.py --phase identity",
+    "interpreter": "/home/heheboiz/data/cir/workbench/envs/ilearn39-adapted/bin/python",
+    "versions": {
+      "python": "/home/heheboiz/data/cir/workbench/envs/ilearn39-adapted/bin/python",
+      "numpy": "1.26.4",
+      "torch": "2.7.1+cu128",
+      "torch_cuda": "12.8",
+      "cuda_available": true,
+      "device": "NVIDIA GeForce RTX 5070 Ti"
+    },
+    "gpu_capture_executed": false,
+    "measured_here": [
+      "query_count_native",
+      "query_count_annotations",
+      "gallery_count_native",
+      "gallery_count_rebuilt_from_annotations",
+      "gallery_order_identical",
+      "reference_ids_identical",
+      "target_ids_identical",
+      "model_text_identical_to_author_composition",
+      "model_text_mismatches",
+      "duplicate_caption_pairs_within_category",
+      "reference_equals_target_rows",
+      "gallery_has_duplicates",
+      "gallery_native_order",
+      "query_native_order",
+      "gallery_scope",
+      "gallery_is_category_agnostic",
+      "adapter_target_category",
+      "target_feature_rank",
+      "batch_size",
+      "population_final_batch",
+      "text_handling",
+      "image_transform",
+      "sample",
+      "phase_seconds"
+    ],
+    "not_yet_measured": [
+      "sample_forward (native + adapter features)",
+      "batch_size_1_vs_n",
+      "cache_off_restart",
+      "population forward deltas",
+      "scoring_ranking score delta and tie classification",
+      "component_parity",
+      "native_metrics_match_feature_rerank"
+    ],
+    "why": "the adapter half needs the model worker, which refuses to start without CUDA (`model_hint.py::_worker_main`); absent evidence stays absent"
+  }
+}

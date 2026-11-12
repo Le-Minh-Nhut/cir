@@ -91,7 +91,7 @@ Re-read this section: the counts below supersede the earlier "only combiner exec
 
 | model | protocol | macro R@10 | macro R@50 | wall | peak RSS | artifact |
 |---|---|---|---|---|---|---|
-| encoder | fashioniq_val_split | 56.2908 | 77.6334 | 131 s | 18.63 GiB | `raw/native/encoder.json` |
+| encoder | fashioniq_val_split | 56.2908 **`NOT_REPRODUCIBLE`** | 77.6334 **`NOT_REPRODUCIBLE`** | 131 s | 18.63 GiB | `raw/native/encoder.json` — an **unseeded draw** (`learnable_relation` comes from the global RNG; the file records no seed, no `relation_state`), superseded by the seeded parity figure **R@10 56.22580193539884 / R@50 77.53315673870537** (`g1_g2.encoder.{dress,shirt,toptee}.native.json` → `native.native_metrics_recheck`). Do **not** quote this row as the model's current ENCODER number. See `20261112-parity-repair/ENCODER_RELATION.md` §8-§9b |
 | hint | fashioniq_val_split | 59.8034 | 80.1308 | 271 s | 20.51 GiB | `raw/native/hint.json` |
 | habit | fashioniq_full_gallery_ref_excluded | 54.8733 | 74.5034 | 421 s | 27.54 GiB | `raw/native/habit.json` |
 | intent | fashioniq_full_gallery_ref_excluded | 54.8662 | 75.4319 | 440 s | 26.11 GiB | `raw/native/intent.json` |

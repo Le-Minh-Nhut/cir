@@ -233,6 +233,7 @@
         "r10": 1272,
         "r50": 1656
       },
+      "query_count": 2038,
       "recall_pct": {
         "r1": 51.27576054955839,
         "r10": 81.15799803729146,
@@ -246,11 +247,18 @@
         "r10": 1272,
         "r50": 1656
       },
+      "query_count": 2038,
       "recall_pct": {
         "r1": 32.53189401373896,
         "r10": 62.414131501472035,
         "r50": 81.25613346418056
       }
+    },
+    "eligible_query_set_identical": true,
+    "equality": {
+      "r1": true,
+      "r10": true,
+      "r50": true
     },
     "information_only": {
       "recall": {
