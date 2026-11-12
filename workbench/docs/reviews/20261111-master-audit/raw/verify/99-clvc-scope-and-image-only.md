@@ -104,30 +104,75 @@ references sit in exactly one split, **26 sit in both** — the stem alone would
 a category for 26 queries the annotation resolves by text (and for `7:3038`/`7:3790` the stem cannot
 decide at all).
 
-## 4. Modality leakage: verdict and its scope
+## 4. Modality leakage: verdict, corrected
 
-**Verdict (a): a dataset label available independently of pixels — with one condition that must
-state it out loud.**
+**CORRECTION (2026-11-12, after review).** The first version of this section said routing reads "the
+reference image **stem**", and the code declared the same thing. **That was false for 117 of 6 001
+queries.** `model_limn.resolve_query_scope` keys on
+`index.get((query_reference_stem(query), normalize_query_text(query.query_txt)))` — the reference stem
+**plus the edit caption**. So the category of the 117 recovered queries was chosen FROM the edit
+caption, and only the 5 884 loader-scoped queries were routed without any text. Under
+`clvc_image_encoder_only` — the condition the published gap `0.33061712371309204` rests on — those
+117 had their category chosen by text the condition claims to have removed. Nothing anywhere recorded
+it (`grep -rn reference_metadata_seen workbench` → 0 hits). The declaration is corrected, not deleted.
 
-* The routing input is the reference image's **stem** (a FashionIQ product id) resolved against the
-  authors' `cap.*.val.json` / `split.*.val.json`. It is release metadata: the same value is
-  obtainable from the annotation file with no image bytes at all. It is not derived from the
-  reference's pixels, and it is not the target image, not a score, not a checkpoint comparison.
-* Consequence that is easy to get wrong: under `text_only_black_image` the reference PIXELS are
-  replaced by a black image, yet routing still consults the row's category. So that condition sees
-  one piece of reference-derived metadata. Same for `clvc_image_encoder_only`, where the reference is
-  the only input and the label is legitimate.
-* Declared in code as `IMAGE_ENCODER_ONLY_LEAKS_SCOPE` (a string a test asserts on), and asserted
-  structurally: `Adapter.query_scope` takes `(self, query, candidate_names)` — no condition, no
-  gallery, no score — so the label cannot start depending on them without changing that signature.
-* **The honest alternative, described and NOT shipped:** a run identity that declares the exemption
-  explicitly — e.g. `protocol_id` keeping `circus_fashioniq_release_v1` but a summary field
-  `reference_metadata_seen: {"text_only_black_image": ["category_label"]}` in the run identity, so
-  the condition's claim ("the reference is removed") is narrowed in the artifact rather than
-  contradicted by an unstated property. That needs `runner.py` (identity) and `backend/composition.py`
-  (display) — outside my ownership. Patch spec in §7.
-* What must not be claimed anywhere: "text_only_black_image sees no reference information". Verdict
-  (a) permits the label; it does not make the claim true.
+### 4.1 The two routing inputs, exactly
+
+| cohort | count | routing input | reads the edit caption? |
+|---|---|---|---|
+| loader-scoped | 5 884 | release loader's `query.category`, from the **reference stem** against `split.*.val.json` / `cap.*.test.json` | **no** |
+| resolver-routed | 117 | **`(reference stem, normalize_query_text(edit caption))`** against the pinned `cap.*.val.json` | **yes** |
+| unscored | 2 | neither names one category | (never scored) |
+
+So under `text_only_black_image` and `clvc_image_encoder_only` the routing input is a release
+**dataset label plus, for those 117, the edit text that the condition otherwise removes**. The
+caption is absent from the EMBEDDING (`composed_rows` never receives it, proved in §6.3) and present
+in ROUTING for 117 queries.
+
+### 4.2 Verdict
+
+**Verdict (a) for the 5 884: a dataset label available independently of pixels, permitted.** The
+reference's stem resolved against the authors' annotation is release metadata — obtainable from the
+annotation file with no image bytes, not derived from the reference's pixels, not the target image,
+not a score, not a checkpoint comparison.
+
+**The 117 are a narrower (a) with a caveat that must travel with the number: the label was derived
+using the edit caption.** That is legitimate for a per-category gallery (`train.py:156-157` builds one
+pair per category, so the query must be placed in one space), but it is not caption-free, and no
+report may describe the image-only condition as having removed the caption entirely.
+
+### 4.3 The size of it, measured (CPU, ranks on disk, no re-run)
+
+`workbench/scripts/derive_routing_cohort_gap.py --run clvc_net:da0a2162be0e159a1a456cec`. Cohort
+membership is the resolver REPLAYED on CPU and cross-checked against the artifact's own
+`adapter_query_scope_resolution` (5 884 / 6 001 / 2 and the same two unscoped qids — the replay
+agrees, otherwise the tool refuses). Ranks sha256 `1c7fa9f720246d898ee2b68f5ed35180388cbf6bb4397a15a7fdfa448a2cf8f5`,
+summary sha256 `76b9e5491440e36cb78d2dfa4a1a4f4aa48ddd109dad78dc69aa7a4d35b77491`.
+
+| cohort | queries | gap nDCG | mm | text | image | caption-free |
+|---|---|---|---|---|---|---|
+| **A — all scored (published)** | 6 001 | **0.33061712371309204** (reproduces to 1e-12) | 0.14921544731411218 | 0.09988226530955799 | 0.08644584977266369 | no |
+| **B — loader-scoped only** | **5 884** | **0.33400015944039774** | 0.14947221054602272 | 0.09954846839174243 | 0.08655137339831104 | **yes** |
+
+The caption-dependent 117 move the published gap by **0.00338303572730530** (1.02 % of the value).
+Cohort B is the number to quote when a claim requires "no edit text reached routing"; cohort A is the
+number the artifact published, and it is the run's own figure.
+
+### 4.4 What must not be claimed
+
+* "text_only_black_image sees no reference information" — it sees the row's category.
+* "clvc_image_encoder_only removes the caption" — it removes it from the EMBEDDING; for 117 queries
+  the caption still chose the gallery matrix. Say "caption-free over the 5 884 loader-scoped queries".
+* "the routing input is the reference stem" — false for 117. Both inputs, always named.
+
+### 4.5 Declared and recorded
+
+* `IMAGE_ENCODER_ONLY_LEAKS_SCOPE` (module constant) now names both inputs and the 117; a test asserts
+  the words "edit caption" and "117" are present and that the old "only reference-derived input"
+  phrasing cannot return.
+* `IMAGE_ENCODER_ONLY_LEAKS_CAPTION` is the one-line `claim_narrowed` form for a run summary.
+* **Not retrofitted:** the finished run's summary is immutable and carries no such block. A future run
+  gets `category_routing_inputs` from §7.7.
 
 ## 5. Tests, and the numbers behind them
 
@@ -156,7 +201,9 @@ New file `workbench/tests/test_clvc_scope_and_image_only.py`, 15 tests:
 | `test_a_missing_annotation_file_refuses_to_route` | `incomplete` honoured: absent file ≠ absent row |
 | `test_a_corrupt_annotation_file_refuses_to_route` | unreadable file → `None` |
 | `test_an_off_pin_annotation_file_refuses_to_route` | digest/row-count mismatch → `None` |
-| `test_routing_does_not_depend_on_the_condition_or_the_gallery` | the leakage declaration is asserted, and the signature cannot silently grow a condition |
+| `test_the_leakage_declaration_names_the_caption_and_the_stem` | both inputs and the 117 are named; the old "only reference-derived input" sentence cannot return |
+| `test_the_resolver_key_really_is_stem_plus_caption` | the fact the declaration rests on: the resolver source uses `normalize_query_text` / `query_reference_stem` / `query_txt` |
+| `test_routing_does_not_depend_on_the_condition_or_the_gallery` | the signature cannot silently grow a condition or a gallery |
 | `test_the_resolver_agrees_with_the_loader_on_every_scoped_query` | 5 884 / 5 884, 0 disagreements |
 | `test_the_119_split_into_117_recovered_and_2_genuinely_ambiguous` | 5 884 + 117 + 2 = 6 003; the two qids named |
 | `test_the_text_tower_is_never_called_on_the_image_only_path` | `compose_img_text` patched to RAISE on both halves |
@@ -166,6 +213,11 @@ New file `workbench/tests/test_clvc_scope_and_image_only.py`, 15 tests:
 | `test_scoring_rank_and_tie_break_are_the_multimodal_paths_own` | `rank`/`rank_and_topk` are the base implementations |
 | `test_the_image_only_path_transports_no_text_at_all` | texts are REFUSED, not ignored |
 | `test_image_only_empty_text_stays_declared_unsupported` | old condition untouched |
+
+New file `workbench/tests/test_composition_scope_routing_cohort.py`, 5 tests: cohort A reproduces the
+published `0.33061712371309204` to 1e-12; cohort B is 5 884 with `0.33400015944039774` and excludes a
+named caption-routed qid (`7:2179`); 5 884 + 117 + 2 = 6 003; the derivation records the rank table's
+sha256; the writer refuses an existing output path (published artifacts are immutable).
 
 ### Reproduction, on the pre-fix bytes
 
@@ -310,11 +362,57 @@ falling through the `text_only_black_image` branch.
 **7.5 registry YAML** — nothing required; the condition is adapter-declared. If the frontend needs a
 label, `CONDITION_LABELS` in 7.1 is the single source.
 
-**7.6 Leakage declaration (optional, recommended)** — in `runner.py`'s identity dict:
-`"reference_metadata_seen": {"text_only_black_image": ["category_label"],
-"clvc_image_encoder_only": ["category_label"]}`. This mints a new run id for every existing run
-(none of them declared it), which is the price of the narrower claim; it was NOT shipped here because
-it changes run identity for models that have nothing to do with CLVC.
+**7.6 ~~Leakage declaration in the identity dict~~ — WITHDRAWN, superseded by 7.7.** A
+`reference_metadata_seen` field in `identity` would mint a new run id for every existing run,
+including models with nothing to do with CLVC, to record a fact that does not change a single number.
+The routing fact belongs in the SUMMARY, not in the identity.
+
+**7.7 `category_routing_inputs` — the block a future run writes (assigned to `runner.py`).**
+
+Where: `runner.py`, in the summary payload near `adapter_query_scope_resolution` (~`:2439`), i.e. the
+same dict as `condition_status` / `category_scope_failures`. **NOT in `identity`** — see 7.6; nothing
+here changes a score, so hashing it would only fork the run tree. (If a consumer needs it hashed, the
+counter-argument is that a cohort's membership is a scoring input; it is not: it is a *description* of
+the routing already hashed as `query_scope_resolution`.)
+
+Shape, per condition on the run's own triple:
+
+```python
+"category_routing_inputs": {
+    "resolver": f"{type(adapter).__module__}.{type(adapter).__qualname__}.query_scope"
+                if callable(getattr(adapter, "query_scope", None)) else None,
+    "resolver_key": "reference_stem+edit_caption",
+    "per_condition": {
+        condition: {
+            "loader_scoped_count": int,      # query.category is not None
+            "resolver_routed_count": int,    # scope chosen by query_scope (the caption)
+            "still_unscoped_count": int,
+            "routing_reads_edit_caption": bool,   # True when resolver_routed_count > 0
+            "claim_narrowed": str,           # one line, see below
+        }
+        for condition in conditions
+    },
+}
+```
+
+`claim_narrowed`, exactly (formatted with the three numbers):
+
+```
+f"{resolver_routed_count} of {loader_scoped_count + resolver_routed_count} scored queries had their "
+f"category chosen from (reference stem, edit caption); under {condition} the edit is removed from "
+f"the embedding, not from routing"
+```
+
+Provenance for the numbers, so they cannot be asserted: `loader_scoped_count` is
+`sum(query.category is not None for query in queries)` (already computed at `:2441`), and
+`resolver_routed_count` is `adapter.query_scope_resolution()["counts_by_reason"]` summed over
+`annotation:*` keys — available for any adapter that implements the LIMN/CLVC resolver, and `0` with
+`routing_reads_edit_caption: False` for every other adapter (they route by `query.category` only).
+Adapters that do not resolve at all write `resolver: null` and `"not_applicable"` as the claim.
+
+Backward compatibility: a summary without the block keeps its meaning (pre-7.7 runs make no claim);
+`backend/composition.py` needs a one-line pass-through next to `adapter_query_scope_resolution`
+(`:686`) or the API will simply not serve it.
 
 ## Còn chặn
 
@@ -324,7 +422,10 @@ it changes run identity for models that have nothing to do with CLVC.
    Expected effect, stated so it can be checked rather than believed: `unscored_count` 119 → 2 per
    active condition, coverage `0.98018` → `0.99967`, `missing_query_count` 238 → 4, and the metrics
    MOVE (they are recomputed over a 117-query larger cohort, so a metric that stays bit-identical
-   would mean the queries were not scored).
+   would mean the queries were not scored). Note what this run does NOT fix: it does not make the
+   117 caption-free. Their category still comes from the edit caption (§4.1); a run whose claim needs
+   "no edit text reached routing" must quote cohort B (`5 884`, gap `0.33400015944039774`) or wait for
+   a routing rule that refuses those 117 instead of resolving them.
 2. **`clvc_image_encoder_only` cannot run until §7 lands.** It is declared supportable and its row
    expression is measured on CPU; it has no path through `runner.py`'s condition loop, `metrics`, or
    the backend display. No GPU number exists for it, and none is claimed.
@@ -339,3 +440,10 @@ it changes run identity for models that have nothing to do with CLVC.
 5. **`TextLSTMModel.forward`'s `.cuda()` hardwiring is still the reason the multimodal caption
    control could not run on real weights** (`text_model.py:108`). It is the same mechanism as
    `EMPTY_TEXT_REASON`; not fixed here, out of scope, and fixing it would change the model's bytes.
+6. **The routing leak is now documented and measured, and still present.** No code change can remove
+it: the 117 queries cannot be scored without a category, and the only released evidence for their
+category is the caption annotation keyed by that caption. A run that refuses them instead would
+report `unscored_count: 119` again and lose the 117 — that is cohort-B-or-nothing, and it is the
+operator's call, not this workstream's. What is fixed is the false claim: the declaration, the two
+`query_scope` docstrings and this section now name both inputs and the 117, and
+`tests/test_clvc_scope_and_image_only.py` fails if the old wording returns.
