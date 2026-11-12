@@ -818,10 +818,21 @@ removes", kèm dạng một dòng `IMAGE_ENCODER_ONLY_LEAKS_CAPTION` cho trườ
 score — nhưng nó **không** chặn việc nhãn phụ thuộc `query.query_txt`, và đó chính là chỗ rò rỉ.
 
 **Việc còn mở, nêu tên:** quy tắc "một điều kiện image-only không được dùng văn bản trừ khi miễn trừ
-đó được ghi trong một **run identity riêng**" **chưa** được đáp ứng: `grep -rn
-reference_metadata_seen workbench/composition workbench/backend workbench/scripts` → **0 hit**. Trường
-`reference_metadata_seen` mới chỉ là **đề xuất** (`raw/verify/99-…md` §4, §7.6), chưa ship, vì nó mint
-run id mới cho mọi run hiện có. Ghi nhận là **open item có tên**, không phải đã đóng.
+đó được ghi trong một **run identity riêng**" **chưa** được đáp ứng. Đo chính xác, cả hai phạm vi:
+
+```
+$ grep -rn reference_metadata_seen workbench/composition workbench/backend workbench/scripts workbench/tests
+(0 hit)                                    ← không có trong CODE
+$ grep -rn reference_metadata_seen workbench
+workbench/docs/reviews/20261111-master-audit/raw/verify/99-clvc-scope-and-image-only.md:125
+workbench/docs/reviews/20261111-master-audit/raw/verify/99-clvc-scope-and-image-only.md:314
+(2 dòng, cả hai trong CÙNG một file đề xuất)   ← 4 hit khi tính cả file .md và bản trùng
+```
+
+Tức trường `reference_metadata_seen` **chỉ tồn tại trong văn bản đề xuất** (`raw/verify/99-…md` §4,
+§7.6), **không** trong code chạy: chưa ship, vì nó mint run id mới cho mọi run hiện có. Ghi nhận là
+**open item có tên**, không phải đã đóng — và nếu ai chạy `grep` trên cả `workbench` sẽ thấy hit, nên
+câu "0 hit" chỉ đúng khi giới hạn ở **thư mục code**, đúng như lệnh in ở trên.
 
 **So với LIMN — nay nói chính xác, không suy diễn.** Run LIMN `10173dc45dea8c90fd2a284b` báo cùng
 hình dạng ở mức summary: `ambiguous_count: 119`, `category_scope_failures: {multimodal: 119,
