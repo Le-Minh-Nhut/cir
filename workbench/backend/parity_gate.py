@@ -66,6 +66,7 @@ The gate never edits an artifact, a CSV or a document. It derives a verdict and 
 from __future__ import annotations
 
 import base64
+import copy
 import binascii
 import hashlib
 import json
@@ -222,6 +223,41 @@ class _Malformed(Exception):
     understand must become `PARITY_EVIDENCE_MALFORMED`, never an empty `[]` of checks -- which is
     what let an empty adapter body report `PARITY_PASS`.
     """
+
+
+def _artifact_stamp(base: Path) -> tuple[tuple[str, int, int], ...]:
+    """Every artifact `evaluate_all` can read, as `(name, mtime_ns, size)`. Stats only, no hashing.
+
+    The gate reads artifacts in exactly three places, and all three resolve names under `base`:
+
+    * `_discover_models` — `base.iterdir()`, keeping `g1_g2.*.json` with a `<category>.<side>` tail;
+    * `_artifact_paths` — `base / name` for names built by `_artifact_names`, and the legacy bare
+      `g1_g2.<category>.<side>.json` form;
+    * `_read` — called only on the two paths `_artifact_paths` returned.
+
+    Every one of those names matches `g1_g2.*.json`, so this glob covers the whole read set: a file
+    APPEARING, DISAPPEARING, or being REWRITTEN (which changes mtime_ns and usually size) changes the
+    stamp. `mtime_ns` is used rather than `st_mtime` so two writes inside the same second cannot hash
+    to the same stamp. A directory that cannot be listed raises, and the caller then declines to cache
+    -- an unreadable evidence root must never be cached as "no artifacts".
+
+    What a stamp cannot see is a write that preserves both mtime and size (a tool restoring the
+    timestamp, or a same-length edit followed by `touch -r`). Nothing in this repo writes artifacts
+    that way; `cp -p`/`git checkout` bump mtime. Hashing every artifact would see even that, at 94 MB
+    of reads per request, which is the cost this memo exists to avoid.
+    """
+    if not base.is_dir():
+        # `glob` yields nothing for a directory that is absent OR unlistable, which would make "the
+        # evidence root is not there" indistinguishable from "it holds no artifacts" -- and the empty
+        # stamp would then be CACHED. Raise instead, so the caller derives without caching.
+        raise FileNotFoundError(f"{base} is not a readable directory")
+    return tuple(sorted((path.name, path.stat().st_mtime_ns, path.stat().st_size)
+                        for path in base.glob("g1_g2.*.json")))
+
+#: The last `evaluate_all` answer, with the stamp it was derived from. ONE entry: a service that has
+#: seen a hundred artifact revisions must not accumulate a hundred verdicts. Keyed on the stamp, the
+#: requested standard, and the resolved root, because each of those changes the answer.
+_EVALUATE_ALL_CACHE: list[tuple[tuple, dict[str, Any]]] = []
 
 
 def _read(path: Path) -> dict[str, Any]:
@@ -679,15 +715,27 @@ def _component_scope_check(name: str, record: Any, declared: dict[str, Any],
     worst = 0.0
     unbounded = False
     compared = 0
+    derived_max_abs = 0.0
+    #: Values for the first few offenders only, because that is all `offending_values` reads. The
+    #: earlier form built one dict entry per component -- ~195 MiB and ~0.55 s of the run on a
+    #: 1.5M-component scope -- to build a map consulted at most five times, and then walked it again
+    #: to fold `derived_max_abs`. Both folds happen here, inside the pass that already computes
+    #: `delta`, so each component is visited once.
+    shown_values: dict[int, tuple[float, float]] = {}
     for chunk in chunks:
         compared += len(chunk.indices)
         for index, actual_value, reference_value in zip(chunk.indices, chunk.actual, chunk.reference):
             if not evaluate_abs_rel(actual_value, reference_value, atol=atol, rtol=rtol):
                 offenders.append(index)
+                if len(shown_values) < 5:
+                    shown_values[index] = (reference_value, actual_value)
             denominator = atol + rtol * abs(reference_value)
             delta = abs(actual_value - reference_value)
+            if delta > derived_max_abs:
+                derived_max_abs = delta
             if denominator > 0.0:
-                worst = max(worst, delta / denominator)
+                if delta / denominator > worst:
+                    worst = delta / denominator
             elif delta > 0.0:
                 unbounded = True
 
@@ -718,11 +766,6 @@ def _component_scope_check(name: str, record: Any, declared: dict[str, Any],
         raise _Malformed(f"{where}.offenders names {sorted(offender_indices)[:10]} but the "
                          f"components it carries violate the rule at {offenders[:10]}")
 
-    values = {index: (chunk.reference[position], chunk.actual[position])
-              for chunk in chunks
-              for position, index in enumerate(chunk.indices)}
-    derived_max_abs = max((abs(actual_value - reference_value)
-                           for reference_value, actual_value in values.values()), default=0.0)
     present_abs, recorded_max_abs = _number(record, "max_abs", where=where)
     if present_abs and recorded_max_abs is not None:
         if complete and not math.isclose(recorded_max_abs, derived_max_abs, rel_tol=1e-9):
@@ -772,7 +815,8 @@ def _component_scope_check(name: str, record: Any, declared: dict[str, Any],
             "worst_normalized": None if unbounded else worst,
             "offending_coordinates": offenders[:64],
             "offending_values": [
-                {"index": index, "reference": values[index][0], "actual": values[index][1]}
+                {"index": index, "reference": shown_values[index][0],
+                 "actual": shown_values[index][1]}
                 for index in offenders[:5]],
         },
         ok=ok, mandatory=complete or bool(offenders), absence=(not complete and not offenders),
@@ -1934,6 +1978,45 @@ def _discover_models(base: Path) -> list[str]:
 
 def evaluate_all(*, root: Path | None = None,
                  standard: str = STANDARD_RELATIVE_V1) -> dict[str, Any]:
+    """Every model's verdict, MEMOISED on the artifacts' own `(mtime_ns, size)` stamp.
+
+    Deriving this costs ~2.9 s and ~270 MiB because complete component coverage means reading and
+    checking 7.77 M components; `/api/runs/parity-gate` is fetched on every mount of the parity page,
+    so deriving it per request blocked the UI for seconds and allocated the same 270 MiB per
+    concurrent request. The derivation is a pure function of the artifacts, the requested standard and
+    the root, so the answer for a given stamp is the SAME ANSWER -- recomputing it is pure cost.
+
+    Three properties this keeps, in the order they matter:
+
+    1. **It cannot go stale.** The key is a stat of every artifact the gate reads (see
+       `_artifact_stamp`), so any file that appears, disappears or is rewritten produces a different
+       key and a fresh derivation. There is deliberately NO TTL: a clock cannot tell you whether a
+       file changed, so a time-based expiry would introduce staleness that the stamp rules out
+       exactly.
+    2. **It cannot be poisoned.** The cached object is never returned; every call gets a
+       `copy.deepcopy`, so a caller mutating the payload cannot affect the next request. The copy
+       costs 0.5 ms against the 2.9 s derivation.
+    3. **It degrades to correct, not to fast.** If the evidence root cannot be listed, the stamp is
+       unavailable, and the call derives without caching -- an unreadable directory must never be
+       remembered as "no artifacts".
+
+    `evaluate_all_uncached` remains the plain derivation, and the tests compare against it directly.
+    """
+    base = root if root is not None else evidence_root()
+    try:
+        stamp: tuple | None = (str(base), standard, _artifact_stamp(base))
+    except OSError:
+        return evaluate_all_uncached(root=root, standard=standard)
+    if _EVALUATE_ALL_CACHE and _EVALUATE_ALL_CACHE[0][0] == stamp:
+        return copy.deepcopy(_EVALUATE_ALL_CACHE[0][1])
+    result = evaluate_all_uncached(root=root, standard=standard)
+    _EVALUATE_ALL_CACHE.clear()
+    _EVALUATE_ALL_CACHE.append((stamp, result))
+    return copy.deepcopy(result)
+
+
+def evaluate_all_uncached(*, root: Path | None = None,
+                          standard: str = STANDARD_RELATIVE_V1) -> dict[str, Any]:
     """Every model with G1/G2 evidence on disk, each judged on its own artifacts.
 
     `standard` is reported as the standard actually APPLIED (the artifacts' own). A request that

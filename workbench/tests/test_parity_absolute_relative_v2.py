@@ -19,6 +19,8 @@ from __future__ import annotations
 import base64
 import importlib.util
 import json
+import time
+import os
 import math
 import sys
 from pathlib import Path
@@ -1023,3 +1025,129 @@ def test_the_shipped_limn_pair_reports_no_false_metric_pass() -> None:
             f"{check.name}: enabled only by a recorded boolean, not by a derivation")
         assert measured.get("native") == measured.get("adapter"), check.name
     assert verdict.status != gate.PASS
+
+
+# ---------------------------------------------- the aggregate memo: exactness, not speed
+
+def _stamp_fixture(tmp_path: Path, t4) -> Path:
+    """A complete evidence directory the memo can stamp: one model, all three categories, 6 files."""
+    for category in ("dress", "shirt", "toptee"):
+        native, adapter = _large_pair(t4, offender=None)
+        for document in (native, adapter):
+            document["category"] = category
+        for side, document in (("native", native), ("adapter", adapter)):
+            (tmp_path / f"g1_g2.testmodel.{category}.{side}.json").write_text(
+                json.dumps(document), encoding="utf-8")
+    return tmp_path
+
+
+def _count_derivations(monkeypatch) -> list[int]:
+    """Count entries into the UNCACHED derivation, which is what a warm hit must avoid."""
+    calls: list[int] = []
+    original = gate.evaluate_all_uncached
+
+    def counting(**kwargs):
+        calls.append(1)
+        return original(**kwargs)
+
+    monkeypatch.setattr(gate, "evaluate_all_uncached", counting)
+    monkeypatch.setattr(gate, "_EVALUATE_ALL_CACHE", [])
+    return calls
+
+
+def test_a_warm_request_derives_once_and_returns_the_same_payload(tmp_path: Path, t4,
+                                                                  monkeypatch) -> None:
+    """Two requests, one derivation. Asserted on CALLS, never on elapsed time."""
+    root = _stamp_fixture(tmp_path, t4)
+    calls = _count_derivations(monkeypatch)
+    first = gate.evaluate_all(root=root)
+    second = gate.evaluate_all(root=root)
+    assert len(calls) == 1, calls
+    assert first == second
+
+
+def test_touching_an_artifact_re_derives(tmp_path: Path, t4, monkeypatch) -> None:
+    """The stamp is the whole safety property: a rewritten artifact MUST re-derive."""
+    root = _stamp_fixture(tmp_path, t4)
+    calls = _count_derivations(monkeypatch)
+    before = gate.evaluate_all(root=root)
+    assert len(calls) == 1
+    target = root / "g1_g2.testmodel.shirt.adapter.json"
+    os.utime(target, ns=(time.time_ns(), time.time_ns()))
+    after = gate.evaluate_all(root=root)
+    assert len(calls) == 2, calls
+    assert after == before, "a touch with identical bytes must change the CACHE, not the verdict"
+
+
+def test_rewriting_an_artifact_is_never_served_from_the_cache(tmp_path: Path, t4,
+                                                              monkeypatch) -> None:
+    """Same-size rewrite with a new mtime: the stamp sees it and the verdict follows the bytes."""
+    root = _stamp_fixture(tmp_path, t4)
+    calls = _count_derivations(monkeypatch)
+    first = gate.evaluate_all(root=root)
+    assert first["models"]["testmodel"]["status"] == gate.PASS, first["models"]["testmodel"]["detail"]
+    adapter_path = root / "g1_g2.testmodel.shirt.adapter.json"
+    document = json.loads(adapter_path.read_text())
+    scope = document["component_parity"]["scopes"]["sample_forward.query"]
+    # Publish the offender the record was built without: the verdict must stop being a PASS.
+    scope["mismatch_count"] = 1
+    scope["offenders"] = [{"index": 0, "reference": 0.5, "actual": 0.51, "normalized": 166.6}]
+    adapter_path.write_text(json.dumps(document))
+    second = gate.evaluate_all(root=root)
+    assert len(calls) == 2, calls
+    assert second["models"]["testmodel"]["status"] != gate.PASS
+
+
+def test_a_caller_mutating_the_payload_cannot_poison_the_next_request(tmp_path: Path, t4,
+                                                                     monkeypatch) -> None:
+    root = _stamp_fixture(tmp_path, t4)
+    calls = _count_derivations(monkeypatch)
+    first = gate.evaluate_all(root=root)
+    first["models"].clear()
+    first["passed_models"].append("POISON")
+    second = gate.evaluate_all(root=root)
+    assert len(calls) == 1, "a mutation is not a cache miss"
+    assert "POISON" not in second["passed_models"]
+    assert second["models"], "the cached payload must be deep-copied, not handed out"
+
+
+def test_the_memoised_payload_is_byte_identical_to_the_derivation(tmp_path: Path, t4,
+                                                                  monkeypatch) -> None:
+    """A memoised payload that differs from the derivation is worse than a slow one."""
+    root = _stamp_fixture(tmp_path, t4)
+    _count_derivations(monkeypatch)
+    memoised = gate.evaluate_all(root=root)
+    derived = gate.evaluate_all_uncached(root=root)
+    assert json.dumps(memoised, sort_keys=True) == json.dumps(derived, sort_keys=True)
+
+
+def test_the_requested_standard_is_part_of_the_key(tmp_path: Path, t4, monkeypatch) -> None:
+    """A v2 request reports a different advisory block, so it cannot share the v1 entry."""
+    root = _stamp_fixture(tmp_path, t4)
+    calls = _count_derivations(monkeypatch)
+    v1 = gate.evaluate_all(root=root)
+    v2 = gate.evaluate_all(root=root, standard=gate.STANDARD_ABS_REL_V2)
+    assert len(calls) == 2, calls
+    assert v1["requested_standard"] != v2["requested_standard"]
+    assert v1["standard"] == v2["standard"], "the APPLIED standard still comes from the artifacts"
+
+
+def test_the_cache_holds_one_entry_only(tmp_path: Path, t4, monkeypatch) -> None:
+    root = _stamp_fixture(tmp_path, t4)
+    _count_derivations(monkeypatch)
+    gate.evaluate_all(root=root)
+    gate.evaluate_all(root=root, standard=gate.STANDARD_ABS_REL_V2)
+    gate.evaluate_all(root=root)
+    assert len(gate._EVALUATE_ALL_CACHE) == 1, gate._EVALUATE_ALL_CACHE
+
+
+def test_an_unlistable_evidence_root_derives_without_caching(tmp_path: Path) -> None:
+    """A directory that cannot be read must never be remembered as 'no artifacts'."""
+    missing = tmp_path / "not-there"
+    gate._EVALUATE_ALL_CACHE.clear()
+    result = gate.evaluate_all(root=missing)
+    # Nothing to derive, and nothing cached: an unreadable root is not a remembered "no evidence".
+    assert gate._EVALUATE_ALL_CACHE == []
+    assert all(verdict["status"] in (gate.NOT_RUN, gate.EVIDENCE_MISSING)
+               for verdict in result["models"].values()), result["models"]
+    assert "not-there" not in json.dumps(result.get("evidence", ""))
