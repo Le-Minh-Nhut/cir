@@ -4,10 +4,9 @@ Run against the restarted services at `1c23d46` (production tree `e833eda`), 202
 Probe: `probe_live_verify.py` (headless Chrome, `/usr/bin/google-chrome`, viewport 1440x900 plus
 390x844). Raw readings: `live-verify.json`. Screenshots: `screenshots/`.
 
-**Verdict: 9 of 10 acceptance criteria hold; one does not.** The failing one is
-`?view=native&model=pair` — the bare deep link loses the `model=` parameter before the page renders,
-so no deferral notice appears. Details in §4. Everything else, including all 12 CLVC cells, matches
-the tested tree byte for byte.
+**Verdict at the time of this run: 9 of 10 criteria held; the bare deep link did not (§4).** That
+defect was then repaired and re-verified (§8); this file keeps the run that found it, because a
+record that only shows the passing state cannot show what was fixed.
 
 ## 1. Headline readings
 
@@ -132,3 +131,34 @@ workbench/envs/ctl312h/bin/python \
 
 Exit 0 only when every criterion holds; it exits 1 today on §4, by design — the probe is not
 tolerant of the defect it found.
+
+## 8. The deep-link defect, repaired
+
+§4 named a `model` parameter the UI read but the location model did not carry. It is now a field of
+`Location`: parsed verbatim, serialized last and only when set, so it survives every `replaceState`
+and every `goto`; links that never named a model serialize byte-identically. The second half was
+needed for the same link — `?view=native` with no `area=` collapsed to the dashboard, because
+`view` ids are unique across areas but the default area (`overview`) declares no views. A URL that
+names a view but no area now takes the area that owns that view.
+
+Evidence for the repair:
+
+| check | result |
+|---|---|
+| `node --test tests/model-param.test.cjs` | **9 passed, 0 failed** — parse→`toSearch` round trip, no-area form, fully explicit form, explicit area wins over the view's owner, unknown view keeps the model, absent model writes nothing, unknown model id preserved, existing links byte-identical |
+| `tsc -b` via `npm run build` | clean; bundle `index-8klMGIWd.js`, 399 398 B, sha256 `43b2618c56bf2a355dda893c774d8160ab64fcbb1df88623d84159baea284d87` |
+| rebuilt `dist/index.html` | sha256 `696c23fcaec29e809f997063e3a758afd3665859d397b9741e9c76fcc6ea0d04` |
+
+Three deep-link shapes in the browser, captured as `screenshots/native-deferral-{bare,no-area,explicit}.png`:
+
+| URL | expectation |
+|---|---|
+| `?area=evaluation&view=native&model=pair` | `model=` survives the correction, deferral notice renders |
+| `?view=native&model=pair` | area resolves to `evaluation` from the view, notice renders |
+| `?area=evaluation&view=native&protocol=circus_fashioniq_release_v1&subset=full&model=pair` | unchanged URL, notice renders |
+
+`workbench/frontend/dist/` is gitignored (`.gitignore:95`, 0 tracked files), so the rebuilt bundle is
+deployed but deliberately not committed.
+
+The post-redeploy re-check of these three URLs, the 12 cells and the endpoint rows is recorded in the
+handoff report, not here, so this file does not claim a measurement taken after the tree froze.
