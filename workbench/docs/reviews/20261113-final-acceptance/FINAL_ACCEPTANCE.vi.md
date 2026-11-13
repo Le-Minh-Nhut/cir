@@ -18,11 +18,11 @@ lượt này (xem §Năm dòng).
 
 | mục | giá trị | nguồn |
 |---|---|---|
-| HEAD | `a53044f7cf5607a08975e135f7698444986e855e` | `git rev-parse HEAD` (đo lại lượt này) |
-| `origin/research/cir-failure-workbench` | cùng SHA; `git rev-list --left-right --count` = `0	0` | đo lại lượt này |
+| HEAD | **`git rev-parse HEAD` là thẩm quyền** — không chốt SHA ở đây, vì tài liệu này được chính commit chứa nó đưa vào cây. HEAD **lúc đo** = `a53044f7cf5607a08975e135f7698444986e855e`; hai commit chỉ-tài-liệu sau đó (`6ee1618`, `d2edc02`) không chạm cây production | `git rev-parse HEAD` |
+| `origin/research/cir-failure-workbench` | bằng HEAD tại mọi thời điểm đo; `git rev-list --left-right --count HEAD...origin/research/cir-failure-workbench` = `0	0` **lúc đo** (và lại `0 0` sau khi push hai commit tài liệu) | `git rev-list --left-right --count` |
 | nhánh | `research/cir-failure-workbench` | `git branch --show-current` |
 | `TESTED_SOURCE_SHA` | `90f7b2c1e1f6b8474570961ae5a2e08ecf2ee36c` (có trong **cả hai** release doc) | `FINAL_PC_RELEASE_VERDICT.md:22`, `PC_PILOT_HANDOFF.md` |
-| cây production tại pin == HEAD | `git diff --quiet 90f7b2c HEAD -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'` → exit **0** | đo lại lượt này |
+| cây production tại pin == HEAD | `git diff --quiet 90f7b2c HEAD -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'` → exit **0**. Đây là **bất biến**, không phải một SHA đóng băng: nó đúng ở `a53044f`, ở `6ee1618`, ở `d2edc02`, và sẽ đúng ở mọi commit chỉ-sửa-`workbench/docs` tiếp theo | đo lại lượt này, và sau mỗi commit tài liệu |
 | bundle đã deploy | `dist/assets/index-8klMGIWd.js` **399 398 B**, sha256 `43b2618c56bf2a355dda893c774d8160ab64fcbb1df88623d84159baea284d87` | `sha256sum`, và `curl :5173/assets/…` cho **cùng** digest |
 | shell | `dist/index.html` **271 B**, sha256 `696c23fcaec29e809f997063e3a758afd3665859d397b9741e9c76fcc6ea0d04`; served == built | đo lại lượt này |
 | `dist` | gitignored (`.gitignore:95`, 0 path tracked) → **deploy mà không commit**, có chủ ý | `SWEEP_90f7b2c.md` §1 |

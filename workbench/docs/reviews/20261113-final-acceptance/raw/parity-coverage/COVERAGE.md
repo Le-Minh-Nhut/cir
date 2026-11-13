@@ -14,8 +14,8 @@ Delivered in this lane:
 | | before | after | evidence |
 |---|---|---|---|
 | registry models | 17 | 17 | `executability.json:registry_count` |
-| models with a **complete** native+adapter pair over all three categories | **3** (`encoder`, `hint`, `limn`) | **4** (`+ habit`) | `pairs_on_disk.json` |
-| models with native-side G1 identity evidence only | 0 | 3 (`conesep`, `intent`, `habit` had none; `habit` completed) | `g1_g2.{conesep,intent}.*.native.json` |
+| models with a **complete** native+adapter pair over all three categories | **3** (`encoder`, `hint`, `limn`) | **4** after this round's F1 (`+ habit`), **5** at the end of F2 (`+ tgcir`) — **5 is the final count** and `FINAL_TABLE.md` is the superseding source | `pairs_on_disk.json:complete_pair_count` = 5 |
+| models with native-side G1 identity evidence only | 0 | 3 mid-round (`conesep`, `intent`, `habit`), **2 final** (`conesep`, `intent`) — `habit` completed a pair in F1 and is no longer G1-only | `pairs_on_disk.json` → `g1_only_categories` non-empty for `conesep`, `intent` only |
 | models with a reproducible blocker record | 0 | 7 (`csmcir`, `airknow`, `pair`, `dcnet`, `combiner_rn50x4_noft`, `clip4cir_rn50x4_fullft`, `sprc`) | `blockers.txt`, `blockers.json` |
 
 **The honest headline: one new complete pair, three new native halves, seven rerunnable blockers.**
@@ -298,8 +298,11 @@ contract in `unprobed_contracts.json`, quoted from its own pinned code:
 | `tgcir` | loader returns a 3-element tuple (`replay/tgcir.py:174`, return `:193`) and needs `clip.load('ViT-B/16')` preprocess, not `targetpad_transform(1.25, 224)` | a CLIP-preprocess-aware hook plus a device guard |
 | `ptha_mtst` | `cirr_transfer` is a CIRR→FashionIQ transfer checkpoint (`SELECTED_TRANSFER_ONLY`) | a scope decision by the acceptance owner, not a producer change |
 
-The lane's own honest accounting: it produced **one** new complete pair (`habit`) and **three** new
-G1-native halves (`habit`, `intent`, `conesep`), not the fourteen the coverage gap nominally asked for.
+The lane's own honest accounting, scoped to its first round: it produced **one** new complete pair
+(`habit`) and **three** new G1-native halves (`habit`, `intent`, `conesep`), not the fourteen the
+coverage gap nominally asked for. **The follow-up round F2 below adds a second pair (`tgcir`), so the
+lane's final contribution is 2 pairs and the repo's final count is 5** (`encoder`, `habit`, `hint`,
+`limn`, `tgcir`). Where this file and `FINAL_TABLE.md` could disagree, `FINAL_TABLE.md` supersedes.
 The GPU budget went to making the shared producer able to express a second model family at all, and
 three defects in it were found and fixed along the way (§6). Anything beyond `habit` needs the hook
 shapes listed above, which are design work rather than more probe time.

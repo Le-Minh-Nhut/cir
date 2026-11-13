@@ -328,12 +328,15 @@ Footnotes for §3
 
 Footnotes for §4
 - **21** Source of every G1/G2 cell: `from workbench.backend.parity_gate import evaluate_model`,
-  iterating `_discover_models(evidence_root())`, which now returns
-  `['encoder', 'hint', 'limn']` — three models, discovered from their own filenames, not from a seed
-  list. Reproduced this session; **no pytest was run.** `evaluate_all()` returns
-  `passed_models: []` and a mixed `standard` list (`['parity-absolute-relative/v2',
-  'parity-relative/v1']`), because each pair is judged under the standard it declares; the
-  per-model `applied_standard` is recorded in the `parity_evidence_path` cell.
+  iterating `_discover_models(evidence_root())`, which at handoff returns
+  `['conesep','encoder','habit','hint','intent','limn','tgcir']` — **7 models, discovered from their
+  own filenames, not from a seed list** (re-measured 2026-11-13: 5 carry a verdict — encoder, habit,
+  hint, limn, tgcir — and `conesep`/`intent` sit at `PARITY_EVIDENCE_MISSING`). The figure "three
+  models" recorded here earlier was the state when HINT was the newest producer and HABIT/TG-CIR had
+  no pair yet. `evaluate_all()` returns `passed_models: []` and a mixed `standard` list
+  (`['parity-absolute-relative/v2', 'parity-relative/v1']`), because each pair is judged under the
+  standard it declares; the per-model `applied_standard` is recorded in the `parity_evidence_path`
+  cell.
 - **22** `encoder` **G1 now PASSES** (30 mandatory checks, 0 failing). The three
   `relation.{dress,shirt,toptee}.digest` checks are recorded on both sides with the pinned digest:
   `relation_state = {status: recorded, seed: 20261111, sha256: 20db0c27c979e9a0938c71af5142458dfa2
@@ -425,16 +428,16 @@ Measured effect of the filter on the native catalogue (disk code, `list_native_m
 | airknow | INCOMPLETE | INTERPRETER_BROKEN_SYMLINK | native_rows_measured, parity absent; declared interpreter is a dangling symlink |
 | conesep | INCOMPLETE | NO_PARITY_EVIDENCE | native + 2 CIRCUS runs, no G1/G2 pair |
 | ptha_mtst | INCOMPLETE | TRANSFER_ONLY | CIRR-checkpoint transfer, not a FashionIQ reproduction; no parity |
-| habit | INCOMPLETE | NO_PARITY_EVIDENCE | native + 2 COMPLETED CIRCUS runs; one attempt FAILED on a wrong interpreter |
+| habit | FAIL | PARITY_MANDATORY_SUBCHECK_FAILED | complete 3-category pair since round F1; **2** failures, both `batch_1_vs_n.max_rel` (shirt 0.0050964738236841, toptee 0.006168472315303178); `max_abs` 1.94e-07 / 1.63e-07 inside atol 1e-4. Its three `ranks.evidence_present` checks were **closed** by recording the adapter-vs-argsort comparison (5 → 2). `metrics_parity` **missing** (no stored native per-query-rank control) |
 | intent | INCOMPLETE | NO_PARITY_EVIDENCE | native + 2 CIRCUS runs, no G1/G2 pair |
-| hint | INCOMPLETE | NO_PARITY_EVIDENCE | native + 2 CIRCUS runs, no G1/G2 pair |
+| hint | FAIL | PARITY_MANDATORY_SUBCHECK_FAILED | v2 pair on both sides; **2** failures, both `batch_1_vs_n.max_rel` (shirt 0.005049934976857354, toptee 0.04213516386699195); `metrics_parity` **measured true** (12 checks, 4 per category, all ok) |
 | encoder | FAIL | PARITY_MANDATORY_SUBCHECK_FAILED | gate: G1 PASS, G2 9 relative-term-only failures (3 population + 3 gallery + 3 batch); relation pin now recorded on both sides |
 | pair | BLOCKED | BLOCKED_MISSING_SOURCE_CLASSES | model_vssp / MHTransformer_dis unpublished; numbers exist only under an exploratory alias |
 | clvc_net | INCOMPLETE | NATIVE_MACRO_RESOLVED_BY_BATCH | both historical macros reproduce exactly at fixed batch sizes (32 -> 30.0208, 48 -> 29.9707); batch size is the mechanism; --batch-size is part of the measurement identity |
 | dcnet | INCOMPLETE | NO_PARITY_EVIDENCE | native aggregate present but its only ledger entry is EXECUTION_FAILED |
 | combiner_rn50x4_noft | INCOMPLETE | METRIC_REFERENCE_UNVERIFIED | run 020a70b0 EXECUTION_COMPLETED, benchmark gate not passed |
 | clip4cir_rn50x4_fullft | INCOMPLETE | TWO_NATIVE_MACROS | replay 43.8017 vs roll-up 43.8182; no parity |
-| tgcir | INCOMPLETE | NO_PARITY_EVIDENCE | native + 3 COMPLETED + 2 PARTIAL CIRCUS runs; no G1/G2 pair |
+| tgcir | FAIL | PARITY_MANDATORY_SUBCHECK_FAILED | **INCOMPLETE-class, sample-scope** — 3 failures, all `batch_1_vs_n.max_rel` (dress 0.24029609477008945, shirt 0.07048293904534349, toptee 0.029507544996198128), each denominator-driven (`max_abs` ≤ 2.90e-06 vs atol 1e-4, `min_cosine` ≥ 0.9999999997); `population_scope: sample` → `coverage: chunked` preview over 5 queries / 20 images; `metrics_parity` **missing**. **Do not quote beside encoder's 9 as a same-class complete-population failure.** See `20261113-final-acceptance/raw/parity-coverage/TGCIR_BATCH.md` |
 | sprc | USER_DEFERRED | USER_DEFERRED_NO_VITG | ViT-L measured 51.04/73.33; the paper's ViT-g checkpoint is absent |
 | limn | FAIL | PARITY_MANDATORY_SUBCHECK_FAILED | gate: 3 G2 batch max_rel failures; metrics_parity now measured true |
 | tme | INCOMPLETE | NO_PARITY_EVIDENCE | native + 2 CIRCUS runs, no G1/G2 pair |
@@ -515,16 +518,16 @@ derived from another.
 | registered ids with **no** aggregate artifact | **0** | — |
 | **counts no reader may quote as "evaluated"** | — | `verified: 0` is the only verification count. **23** is counted artifact-backed *rows*, **27** is `duplicate_rows` (repeats of one identity), **18** is `unbacked_rows` (roll-up claims no artifact backs), **17** is *models* with a number, **25** is *model keys* incl. variants, **14** is protocol-eligible configurations. None of them is "evaluated", "verified", or "reproduced" — see the two separate questions below |
 | **valid native FashionIQ evaluations** (protocol-eligible aggregate; parity-independent) | **14** | airknow, clip4cir_rn50x4_fullft\*, clvc_net, conesep, csmcir†, dcnet, encoder, habit, hint, intent, limn, sprc†, tgcir, tme — exclusions and reasons in footnote 37 |
-| **native parity-verified** (G1+G2, zero mandatory failures) | **0** | `passed_models: []`; encoder fails 9 G2 checks, limn 3, hint **2 as served / 8 at the current tree** — every one a relative-or-componentwise term on a vanishing denominator (footnotes 29, 38, 39) |
+| **native parity-verified** (G1+G2, zero mandatory failures) | **0** | `passed_models: []`; the 19 failures are encoder 9, habit 2, hint 2, limn 3, tgcir 3 (re-measured at handoff) — every one a relative-or-componentwise term on a vanishing denominator (footnotes 29, 38, 39) |
 | native executed **but not verified** | **16** | airknow, clip4cir_rn50x4_fullft, clvc_net, combiner_rn50x4_noft, conesep, csmcir, dcnet, encoder, habit, hint, intent, limn, ptha_mtst, sprc, tgcir, tme |
 | …of which `NATIVE_EVAL_MATRIX.csv` records `native_executed=Y` | **12** | csmcir, conesep, ptha_mtst, habit, intent, hint, encoder, dcnet, combiner_rn50x4_noft, clip4cir_rn50x4_fullft, limn, tme |
 | …4 aggregates newer than that matrix snapshot | **4** | airknow, clvc_net, sprc, tgcir (matrix says `native_executed=N`; the aggregate file exists — footnote 35) |
 | native blocked | **1** | pair (`BLOCKED_MISSING_SOURCE_CLASSES`; its 4 counted numbers are `EXPLORATORY_PUBLIC_MAPPING`) |
 | CIRCUS composition runs referenced (distinct `run_id`s with a summary) | **33** all · **30** non-synthetic non-audit · **24** with a 6003-query cohort | 36 `full.json` dirs; 2 `SYNTHETIC_*`; 1 `released_audit_task7_mm_any`; 6 ids are 5-or-8-query smokes |
-| parity measured (≥1 paired `g1_g2` artifact set) | **3** | **encoder** (v1), **limn** (v1), **hint** (v2, footnote 38) |
-| parity PASS per the gate (`evaluate_all()`, not prose) | **0** | `passed_models: []` — the *parity* verdict, held by only 3 models; the **14** above is the native-evaluation count and does not depend on it |
-| parity blocked / missing artifact | **14** | the other 14 registered ids (17 − 3 measured) |
-| G1 PASS models | **3** | encoder (0/30), hint (0/36, v2), limn (0/18) — at HEAD encoder was `FAIL` on 3 relation digests (footnote 36) |
+| parity measured (≥1 paired `g1_g2` artifact set) | **5** | **encoder** (v1), **limn** (v1), **hint** (v2), **habit** (v2), **tgcir** (v2, sample-scope) — `pairs_on_disk.json:complete_pair_count`, re-measured 2026-11-13 |
+| parity PASS per the gate (`evaluate_all()`, not prose) | **0** | `passed_models: []` — the *parity* verdict is held by **5** models, none passing; the **14** above is the native-evaluation count and does not depend on it |
+| parity blocked / missing artifact | **12** | the other 12 registered ids (17 − 5 measured: 2 G1-only `conesep`/`intent`, 1 `NO_ADAPTER` `sprc`, 1 deferred `pair`, 1 scope-decision `ptha_mtst`, 2 specified-not-built `clvc_net`/`tme`, 5 blocked on interpreter/asset) |
+| G1 PASS models (mandatory checks) | **5** | encoder 0/30 failing, habit 0/36, hint 0/36, limn 0/33, tgcir 0/36 — all five pass G1 on mandatory checks; each also carries 3 failing **non-mandatory** `relation.*.digest` checks (recorded as absent where the model has no relation tensor). At HEAD encoder was `FAIL` on 3 relation digests (footnote 36) |
 | G2 PASS models | **0** | encoder 9 failures, hint 2, limn 3; every one is a relative/componentwise-term-only failure |
 | models with a 6003-query CIRCUS run **and** a native aggregate | **9** | encoder, conesep, habit, intent, hint, limn, ptha_mtst, tgcir, tme (+clvc_net = 10 with a 6003 run; its runs are all PARTIAL) |
 
@@ -580,19 +583,21 @@ unmeasured (`missing: []`). Consequence for the vocabulary: `hint` moves from `I
 the gate rejects it, which is exactly the rule footnote 29 states.
 Prose source: `20261112-parity-repair/THIRD_MODEL_PARITY.md` §7 (do not restate its tables).
 
-Footnote 39 — **`hint`'s G2 count is now snapshot-dependent, and the served number is the stale one.**
-
-`GET /api/runs/parity-gate` (re-verified this turn) serves `models.hint.failures` = **2**
+Footnote 39 — **`hint`'s G2 count settled at 2; the "8" recorded here was a transient between two states.**
+Both the served endpoint and the current tree now report **2** mandatory failures
 (`shirt.batch_1_vs_n.max_rel` 0.005049934976857354, `toptee.batch_1_vs_n.max_rel`
 0.04213516386699195) with `status: PARITY_MANDATORY_SUBCHECK_FAILED` and
-`applied_standard: parity-absolute-relative/v2`. The uvicorn process serving :8000 started
-`Thu Nov 12 23:22:41 2026` **without `--reload`**, and `workbench/backend/parity_gate.py` was
-modified at `01:44:17` on 2026-11-13. Evaluating the same model against the current tree gives
-**8** mandatory failures — the two above plus `{dress,shirt,toptee}.metrics.eligible_denominators`
-(measured `{native: None, adapter: None}`) and `{dress,shirt,toptee}.metrics.eligible_query_set_identical`
-(measured `None`). Neither number may be cited as current until the service is restarted; the
-served one is a 23:22 snapshot, the tree one is uncommitted work by the gate lane. The *status* is
-`FAIL` either way and `passed_models` stays `[]`.
+`applied_standard: parity-absolute-relative/v2`.
+
+The "8" this footnote used to record was measured while the gate lane's `_metrics_checks` additions
+existed on disk but the six `{dress,shirt,toptee}.metrics.eligible_{denominators,query_set_identical}`
+checks had no counts behind them — they read `None` and failed. They are now **measured and ok**
+(`native`/`adapter` denominators 2017/2038/1961 on both sides, membership `true`), so they are no
+longer failures at all: the presence checks passed, they did not merely stop being mandatory.
+Re-measured 2026-11-13 at handoff on the tree at `TESTED_SOURCE_SHA`: `evaluate_model('hint')` →
+**2** failures, **12** metrics checks, all mandatory, all `ok: true`. The served number and the tree
+number now agree, because the service was restarted onto this tree at `Fri 2026-11-13 10:10:07 +07`
+(backend pid 2816638). The *status* is `FAIL` either way and `passed_models` stays `[]`.
 
 Footnote 36 — **the committed baseline at HEAD differs, and that is why two verdicts moved.**
 Evaluating the gate against `git show HEAD:…` copies of the same twelve artifacts (written to a
