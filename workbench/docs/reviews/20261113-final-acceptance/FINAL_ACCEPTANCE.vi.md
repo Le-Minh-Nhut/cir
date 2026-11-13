@@ -18,11 +18,11 @@ lượt này (xem §Năm dòng).
 
 | mục | giá trị | nguồn |
 |---|---|---|
-| HEAD | **`git rev-parse HEAD` là thẩm quyền** — không chốt SHA ở đây, vì tài liệu này được chính commit chứa nó đưa vào cây. HEAD **lúc đo** = `a53044f7cf5607a08975e135f7698444986e855e`; hai commit chỉ-tài-liệu sau đó (`6ee1618`, `d2edc02`) không chạm cây production | `git rev-parse HEAD` |
-| `origin/research/cir-failure-workbench` | bằng HEAD tại mọi thời điểm đo; `git rev-list --left-right --count HEAD...origin/research/cir-failure-workbench` = `0	0` **lúc đo** (và lại `0 0` sau khi push hai commit tài liệu) | `git rev-list --left-right --count` |
+| HEAD | **`git rev-parse HEAD` là thẩm quyền.** Bảng này không chốt HEAD, và không liệt kê commit nào "sau" một SHA — mọi danh sách như vậy sẽ lạc hậu ngay khi có commit kế tiếp (đúng lỗi đã sửa ở đây hai lần). Thứ được ghi là **pin** và **bất biến**: xem hai dòng dưới | `git rev-parse HEAD` |
+| `origin/research/cir-failure-workbench` | là một **quan hệ**, không phải một SHA: `git rev-list --left-right --count HEAD...origin/research/cir-failure-workbench` phải in `0	0`. Kiểm lại sau **mỗi** lần push, kể cả push chỉ-tài-liệu | `git rev-list --left-right --count` |
 | nhánh | `research/cir-failure-workbench` | `git branch --show-current` |
 | `TESTED_SOURCE_SHA` | `82b0b3fb72e9181a8835c07a0974a1279f21aeef` (có trong **cả hai** release doc) | `FINAL_PC_RELEASE_VERDICT.md:22`, `PC_PILOT_HANDOFF.md` |
-| cây production tại pin == HEAD | `git diff --quiet 82b0b3fb72e9181a8835c07a0974a1279f21aeef HEAD -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'` → exit **0**. Đây là **bất biến**, không phải một SHA đóng băng: nó đúng ở `c502b98` và ở mọi commit chỉ-sửa-`workbench/docs` tiếp theo | đo lại lượt này, và sau mỗi commit tài liệu |
+| cây production tại pin == HEAD | `git diff --quiet 82b0b3fb72e9181a8835c07a0974a1279f21aeef HEAD -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'` → exit **0**. Đây là **bất biến theo từng commit**, không phải một SHA đóng băng: nó đúng ở mọi commit hậu duệ của pin mà chỉ chạm `workbench/docs`/`workbench/tests`, nên không cần sửa lại dòng này khi có commit tài liệu mới. Chỉ **pin** thay đổi khi có commit production mới | chạy lại sau mỗi commit, và sau mỗi lần nâng pin |
 | bundle đã deploy | `dist/assets/index-8klMGIWd.js` **399 398 B**, sha256 `43b2618c56bf2a355dda893c774d8160ab64fcbb1df88623d84159baea284d87` | `sha256sum`, và `curl :5173/assets/…` cho **cùng** digest |
 | shell | `dist/index.html` **271 B**, sha256 `696c23fcaec29e809f997063e3a758afd3665859d397b9741e9c76fcc6ea0d04`; served == built | đo lại lượt này |
 | `dist` | gitignored (`.gitignore:95`, 0 path tracked) → **deploy mà không commit**, có chủ ý | `SWEEP_82b0b3f.md` §1 |
