@@ -48,7 +48,9 @@ Sources:
 | ...of which `measured_disagreement` | **19** | all 19: encoder 9, habit 2, hint 2, limn 3, tgcir 3. HABIT's three rank checks were closed in round F1 (5 failures → 2) |
 | ...of which `absent_evidence_refusal` | **0** | HABIT's three were closed in F1 |
 | ...of which `derived_invariant` | **0** | — |
-| `metrics_parity` missing | **4 models** | `encoder`, `habit`, `tgcir` (+ `conesep`/`intent` unjudged) |
+| `metrics_parity` **missing** | **3 models** | `encoder`, `habit`, `tgcir` — read from `evaluate_all()`: `encoder missing=['metrics_parity']` (3 checks present, all `ok: false`, `counts: null`), `habit` and `tgcir` `missing=['metrics_parity']` with **0** metrics checks. `conesep`/`intent` are `PARITY_EVIDENCE_MISSING` and record no dimension at all, so they are **unjudged**, not missing |
+| `metrics_parity` **measured** | **2 models** | `hint`, `limn` — 12 checks each (4 per category: `hit_count_equality`, `eligible_denominators`, `eligible_query_set_identical`, `provenance`), every one `ok: true`, dimension `True`. Derivation: `hint` hits `{r1,r10,r50}` equal on both sides per category (dress 432/1034/1525, shirt 663/1272/1656, toptee 628/1289/1638), `limn` dress 375/1032/1498, shirt 517/1141/1561, toptee 511/1181/1609 — gate-recomputed, not read from the flag |
+| *(corrected 2026-11-13)* | | this row previously read "**4 models** … `encoder`, `habit`, `tgcir` (+ `conesep`/`intent` unjudged)" — a count that named three and claimed four, the exact class this campaign removes. Re-derived from `evaluate_all()` at the handoff; the CSV cell and this row now agree |
 | **EXECUTABLE** | **10** | `executability.json:verdicts` |
 | **BLOCKED** (measured, rerunnable) | **6** | 5 × `ENV_VAR_UNSET` + 1 × `ADAPTER_NOT_READY` |
 | **NO_ADAPTER** | **1** | `sprc` |
