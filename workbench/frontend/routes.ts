@@ -168,6 +168,14 @@ export interface Location {
   imported: "exclude" | "include";
   /** Authoritative per-query state filter from the backend contract. */
   queryState: "" | "unscored" | "retrieval_failure" | "hit";
+  /** The model a native view was opened FOR (`?model=pair`), empty when none was named.
+   *
+   *  First-class rather than a direct `window.location.search` read: the landing-scope effect and
+   *  every `goto` rewrite the URL through `toSearch`, so a parameter absent from this model was
+   *  silently deleted on the first `replaceState`. `EvaluationPage` then found no model at all and
+   *  rendered an empty table with no explanation. Not a closed enum: the id is a registry key this
+   *  layer cannot validate, and dropping an unknown one would truncate the page just as silently. */
+  model: string;
 }
 
 export interface UrlProblem { param: string; value: string; message: string }
@@ -204,6 +212,7 @@ export function defaultLocation(): Location {
     preset: "all",
     imported: "exclude",
     queryState: "",
+    model: "",
   };
 }
 
@@ -281,6 +290,15 @@ export function parseLocation(search: string, knownProtocols: string[]): { locat
   }
 
   const rawView = params.get("view");
+  // A view id is unique across areas (`native` is evaluation's, `queue` is experiments'), but the
+  // default area is `overview`, which declares NO views — so `?view=native&model=pair` with no
+  // `area=` used to drop the view entirely, land on the dashboard, and render nothing the link
+  // asked for. When the URL named no area, the view it DID name picks the area. An area the URL
+  // states stays authoritative, and an id that belongs to no area is still a reported problem.
+  if (rawView !== null && rawArea === null && legacyPage === null) {
+    const owner = AREAS.find((candidate) => candidate.views.some((view) => view.id === rawView));
+    if (owner && owner.id !== location.area) location.area = owner.id;
+  }
   const views = areaDef(location.area).views.map((view) => view.id);
   if (rawView !== null && views.length) {
     const view = oneOf(views, rawView);
@@ -389,6 +407,12 @@ export function parseLocation(search: string, knownProtocols: string[]): { locat
     else problems.push({ param: "preset", value: rawPreset, message: "chỉ nhận all, allfail, 80, 50, winner, easy" });
   }
 
+  // Read verbatim, never validated against a list: this id is a registry key, and the registry is
+  // fetched, not compiled in. `NativeMeasurementTable` is the only place that can say whether the id
+  // exists — and it must be able to say so for an id it does not know, which is what it does when the
+  // id is deferred. Dropping an unknown value here would empty the page with no reason on it.
+  location.model = (params.get("model") ?? "").trim();
+
   return { location, problems,
            scope: { protocolNamed: rawProtocol !== null, subsetNamed: rawSubset !== null } };
 }
@@ -416,6 +440,10 @@ export function toSearch(location: Location): string {
   if (location.preset !== "all") params.set("preset", location.preset);
   if (location.imported === "include") params.set("imported", "include");
   if (location.queryState) params.set("query_state", location.queryState);
+  // Last, and only when set: every link that never named a model stays byte-identical, and no
+  // empty `model=` appears. Being part of `toSearch` is what makes the value survive the
+  // landing-scope `replaceState` and every `goto`.
+  if (location.model) params.set("model", location.model);
   return `?${params.toString()}`;
 }
 

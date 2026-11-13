@@ -576,7 +576,10 @@ function NativeMeasurementTable({ data, location, onGoto }: {
   const undeclared = region.data?.undeclared_unit_rows ?? [];
   const protocols = [...new Set(all.filter((row) => row.metrics && row.protocol_id)
     .map((row) => row.protocol_id as string))];
-  const model = new URLSearchParams(window.location.search).get("model");
+  // The id comes from the LOCATION, not from `window.location.search`: a direct read was a parameter
+  // the URL model did not carry, so the first landing-scope `replaceState` deleted it and this page
+  // rendered an empty table with no reason on it. `routes.ts` now owns the field end to end.
+  const model = location.model || null;
   // A deep link that names a model the site defers lands on a table holding none of its rows. The
   // rows are not gone (they are served by id); without this notice the page reads as "no data".
   const deferralNotice = webDeferralNotice(model, region.data?.deferred_models ?? {});
