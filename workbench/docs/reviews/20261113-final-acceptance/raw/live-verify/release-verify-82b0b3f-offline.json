@@ -1,0 +1,192 @@
+{
+  "generated_at": "2026-11-13T12:00:53.365209+00:00",
+  "verifier": "workbench/docker/release_verify.sh",
+  "release_target": {
+    "model_id": "limn",
+    "checkpoint_id": "base_iter0_all_categories",
+    "protocol_id": "fashioniq_val_split",
+    "interpreter": null
+  },
+  "checks": {
+    "J1": {
+      "status": "PENDING",
+      "detail": "boot state UNOBSERVED: no live stack (run compose up, or drop --offline for static checks)"
+    },
+    "J2": {
+      "status": "PENDING",
+      "detail": "offline mode"
+    },
+    "J3": {
+      "status": "PENDING",
+      "detail": "offline mode"
+    },
+    "J4": {
+      "status": "PASS",
+      "detail": "stdin parse verified; bundle preference in run.sh (live API check skipped)"
+    },
+    "J5": {
+      "status": "PASS",
+      "detail": "CUDA-declaring model is not GPU-ready without a probe (tier=UNCONFIGURED) [WARN] capability record(s) that are not verified evidence: 001bafb5448d035275cea0033a7c0ce035b6a27da69f964c9977afbce47f52d9.json: probe_source=override is a synthetic test probe, not a real probe; 004e840c11f5de5a3ee4d41a8ebf4969e66b730e034eb08de0d68a91f6d23869.json: probe_source=override is a synthetic test probe, not a real probe; 00719beefbb2062ed4677dcd6e1afefc626e6e54aba6c6ab928d7344001ce6f0.json: probe_source=override is a synthetic test probe, not a real probe; 01d432846e2a813719ba7aaeca68f1907152b5062fd495a916bdf4b3149e2ed2.json: probe_source=override is a synthetic test probe, not a real probe; 01e5d5e589905b15ea2317c77787ea3dabc222a4c876c306db41fef0bef0bcfe.json: probe_source='forged' is not an interpreter probe; 0208a632ab2f43982be6cba1af8cc26bb86baf9b3619836deed3fc8434c751bb.json: probe_source=override is a synthetic test probe, not a real probe; 0216a3a855423021f269d900d300eb4517743ff4ab84a372f6cb1629263d141e.json: probe_source=override is a synthetic test probe, not a real probe; 02ca495724731725dc39627177dfc413074aaec557c8b2d51e672735a39f36d7.json: probe_source=override is a synthetic test probe, not a real probe; 02e4397a65f0b80ccfdf4ba19140225c3ca2a124c913a81a615c72e79c28be01.json: probe_source=override is a synthetic test probe, not a real probe; 0309e008302e5f0eb1ac8a6acc110e48ceee8af1ac78662156fe85e06b468148.json: probe_source=override is a synthetic test probe, not a real probe; ... and 1116 more"
+    },
+    "J6": {
+      "status": "PASS",
+      "detail": "historical torch===1.12.1 -> adapted torch===2.7.1; unknown targets refused"
+    },
+    "J7": {
+      "status": "PASS",
+      "detail": "mock data refused; incomplete evaluation refused; 3-category bundle enforced; gate stays fail-closed"
+    },
+    "J8": {
+      "status": "PENDING",
+      "detail": "no live stack"
+    },
+    "J9": {
+      "status": "PASS",
+      "detail": "missing->incomplete, nan->invalid-alert, measured deviation still flagged"
+    },
+    "J10": {
+      "status": "PASS",
+      "detail": "two labels exactly; the served bundle is built from this source and carries both"
+    },
+    "J11": {
+      "status": "PENDING",
+      "detail": "offline mode"
+    },
+    "J12": {
+      "status": "PASS",
+      "detail": "missing checkpoint -> blocked with named reason: raw benchmark input missing: /tmp/tmpwxrj0m16/data/captions/..."
+    }
+  },
+  "summary": {
+    "pass": 7,
+    "fail": 0,
+    "pending": 5
+  },
+  "dimensions": {
+    "STATIC_SOURCE": {
+      "checks": [
+        "J4",
+        "J6",
+        "J9",
+        "J10"
+      ],
+      "mandatory": true,
+      "status": "PASS"
+    },
+    "DEPLOYMENT": {
+      "checks": [
+        "J2",
+        "J3",
+        "J11"
+      ],
+      "mandatory": true,
+      "status": "PENDING"
+    },
+    "CONFIGURATION": {
+      "checks": [
+        "J1"
+      ],
+      "mandatory": true,
+      "status": "PENDING"
+    },
+    "MODEL_ENVIRONMENT": {
+      "checks": [
+        "J12"
+      ],
+      "mandatory": true,
+      "status": "PASS"
+    },
+    "OPERATIONS": {
+      "checks": [
+        "J8"
+      ],
+      "mandatory": true,
+      "status": "PENDING"
+    },
+    "GPU_RUNTIME": {
+      "checks": [
+        "J5"
+      ],
+      "mandatory": true,
+      "status": "PENDING"
+    },
+    "MODEL_INFERENCE": {
+      "checks": [],
+      "mandatory": true,
+      "status": "PENDING",
+      "detail": "no model execution evidence observed"
+    },
+    "MODEL_EVALUATION": {
+      "checks": [],
+      "mandatory": true,
+      "status": "PENDING",
+      "detail": "no corroborated research-evidence run: no benchmark runs found"
+    },
+    "SCIENTIFIC_OUTPUT": {
+      "checks": [
+        "J7"
+      ],
+      "mandatory": true,
+      "status": "PENDING",
+      "detail": "no valid, authenticated metrics: no corroborated research-evidence run"
+    },
+    "TARGET_BINDING": {
+      "checks": [],
+      "mandatory": true,
+      "status": "PASS",
+      "detail": "all target-specific dimensions are bound to limn/base_iter0_all_categories/fashioniq_val_split; 19 run(s) for other identities were excluded"
+    }
+  },
+  "gpu_capability_scan": {
+    "status": "UNVERIFIED",
+    "unreadable": [],
+    "wrong_key": [],
+    "unverified": [
+      "001bafb5448d035275cea0033a7c0ce035b6a27da69f964c9977afbce47f52d9.json: probe_source=override is a synthetic test probe, not a real probe",
+      "004e840c11f5de5a3ee4d41a8ebf4969e66b730e034eb08de0d68a91f6d23869.json: probe_source=override is a synthetic test probe, not a real probe",
+      "00719beefbb2062ed4677dcd6e1afefc626e6e54aba6c6ab928d7344001ce6f0.json: probe_source=override is a synthetic test probe, not a real probe",
+      "01d432846e2a813719ba7aaeca68f1907152b5062fd495a916bdf4b3149e2ed2.json: probe_source=override is a synthetic test probe, not a real probe",
+      "01e5d5e589905b15ea2317c77787ea3dabc222a4c876c306db41fef0bef0bcfe.json: probe_source='forged' is not an interpreter probe",
+      "0208a632ab2f43982be6cba1af8cc26bb86baf9b3619836deed3fc8434c751bb.json: probe_source=override is a synthetic test probe, not a real probe",
+      "0216a3a855423021f269d900d300eb4517743ff4ab84a372f6cb1629263d141e.json: probe_source=override is a synthetic test probe, not a real probe",
+      "02ca495724731725dc39627177dfc413074aaec557c8b2d51e672735a39f36d7.json: probe_source=override is a synthetic test probe, not a real probe",
+      "02e4397a65f0b80ccfdf4ba19140225c3ca2a124c913a81a615c72e79c28be01.json: probe_source=override is a synthetic test probe, not a real probe",
+      "0309e008302e5f0eb1ac8a6acc110e48ceee8af1ac78662156fe85e06b468148.json: probe_source=override is a synthetic test probe, not a real probe",
+      "... and 1116 more"
+    ],
+    "unverified_total": 1126,
+    "real_gpu": false
+  },
+  "accepted_evidence_runs": [],
+  "off_target_evidence_runs": [
+    "20261108T064056686927Z_combiner_rn50x4_noft_rn50x4_noft_unresolved_31523f3d (combiner_rn50x4_noft/rn50x4_noft_unresolved/fashioniq_original_split, runtime_adaptation=None)",
+    "20261108T064137301769Z_combiner_rn50x4_noft_rn50x4_noft_unresolved_020a70b0 (combiner_rn50x4_noft/rn50x4_noft_unresolved/fashioniq_original_split, runtime_adaptation=None)",
+    "20261106T192313801249Z_csmcir_fashioniq_a24ea590 (csmcir/fashioniq/fashioniq_original_split, runtime_adaptation=None)",
+    "20261107T053916718195Z_csmcir_fashioniq_c340acd3 (csmcir/fashioniq/fashioniq_original_split, runtime_adaptation=None)",
+    "20261107T054051886663Z_csmcir_fashioniq_2d0369f2 (csmcir/fashioniq/fashioniq_original_split, runtime_adaptation=None)",
+    "20261107T054343058424Z_csmcir_fashioniq_f564570e (csmcir/fashioniq/fashioniq_original_split, runtime_adaptation=None)",
+    "20261107T054933277898Z_csmcir_fashioniq_f03887d2 (csmcir/fashioniq/fashioniq_original_split, runtime_adaptation=None)",
+    "20261108T072226547971Z_dcnet_fashioniq_run_directory_f969aef3 (dcnet/fashioniq_run_directory/fashioniq_full_gallery_ref_excluded, runtime_adaptation=None)",
+    "burn-probe-final (mock/c1/p1, runtime_adaptation=None)",
+    "20261108T034229743368Z_df99b451 (synthetic_model/ckpt_v1/fashioniq_original_split, runtime_adaptation=None)",
+    "20261108T034240727549Z_a4b501de (synthetic_model/ckpt_v1/fashioniq_original_split, runtime_adaptation=None)",
+    "20261108T040753124451Z_42d25474 (synthetic_model/ckpt_v1/fashioniq_original_split, runtime_adaptation=None)",
+    "20261108T040759307423Z_69b956d6 (synthetic_model/ckpt_v1/fashioniq_original_split, runtime_adaptation=None)",
+    "20261108T043003050390Z_c67fbd71 (synthetic_model/ckpt_v1/fashioniq_original_split, runtime_adaptation=None)",
+    "20261108T043009574832Z_943c8131 (synthetic_model/ckpt_v1/fashioniq_original_split, runtime_adaptation=None)",
+    "20261108T044127003710Z_ee62f82a (synthetic_model/ckpt_v1/fashioniq_original_split, runtime_adaptation=None)",
+    "20261108T044134445532Z_5218dab2 (synthetic_model/ckpt_v1/fashioniq_original_split, runtime_adaptation=None)",
+    "20261108T045128403086Z_38afb466 (synthetic_model/ckpt_v1/fashioniq_original_split, runtime_adaptation=None)",
+    "20261108T045135366840Z_0f3155c6 (synthetic_model/ckpt_v1/fashioniq_original_split, runtime_adaptation=None)"
+  ],
+  "pending_dimensions": [
+    "DEPLOYMENT",
+    "CONFIGURATION",
+    "OPERATIONS",
+    "GPU_RUNTIME",
+    "MODEL_INFERENCE",
+    "MODEL_EVALUATION",
+    "SCIENTIFIC_OUTPUT"
+  ],
+  "verdict": "ENGINEERING_INCOMPLETE"
+}

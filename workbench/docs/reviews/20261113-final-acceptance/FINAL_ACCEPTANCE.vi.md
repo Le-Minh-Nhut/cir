@@ -42,7 +42,7 @@ lượt này (xem §Năm dòng).
 | 2 | **gate trustworthy** | `curl -s :8000/api/runs/parity-gate` (và `raw/parity-coverage/gate.json` từ `parity_gate.evaluate_all()` in-process) | `passed_models: []`; `standard` là **chuỗi** `parity-relative/v1` (+ `standards` phân nhóm); 7 model được phán; 19 failure: encoder 9 / habit 2 / hint 2 / limn 3 / tgcir 3 — **giống hệt** `evaluate_all()`; 19/19 lớp `measured_disagreement`, **0** `absent_evidence`, **0** `derived_invariant`; `conesep`/`intent` = `PARITY_EVIDENCE_MISSING` (0 failure, không phải pass) |
 | 3 | **CLVC usable** | `curl -s ':8000/api/composition/diagnostics/clvc-dual-scope?qid=7:3790'` · `curl -s ':8000/api/composition/diagnostics/limn-dual-scope?qid=7:3038'` · probe browser 12 ô | cả hai route **200** `DIAGNOSTIC_COMPLETE`, `complete:true`, `defects:[]`; 12 ô browser vs `INVENTORY.md` = **0 mismatch**, mỗi ô 100 tile, 4/4 ô ablation có banner self-match, 12/12 target "ngoài cửa sổ Top-100" kèm rank tuyệt đối |
 | 4 | **parity/benchmark scope accounted** | `pairs_on_disk.json` · `executability.json` · `unprobed_contracts.json` · `gate.json` | 5 pair (encoder, habit, hint, limn, tgcir); 10 EXECUTABLE / 5 `ENV_VAR_UNSET` / 1 `ADAPTER_NOT_READY` / 1 `NO_ADAPTER`; mỗi model không đo được có **record blocker tái chạy được** (lệnh + lỗi verbatim), 4 model EXECUTABLE không pair có contract trích từ code pin |
-| 5 | **release reproducible** | `pytest workbench/tests/test_handoff_commands.py` · `bash workbench/docker/acceptance.sh` · sweep serial | guard **8 passed** (16.19 s, đo lại lượt này); `ACCEPTANCE PASSED (skipped: G-status-unverified)` rc 0; sweep `82b0b3f` **3283 passed / 8 failed / 47 skipped = 3338**, 3969.99 s, `^ERROR` 0, `Errno 28` 0, **0 new / 0 gone / 8 identical** |
+| 5 | **release reproducible** | `pytest workbench/tests/test_handoff_commands.py` · `bash workbench/docker/acceptance.sh` · `bash workbench/docker/release_verify.sh --offline --report …` · sweep serial | guard **8 passed** (16.19 s); `ACCEPTANCE PASSED (skipped: G-status-unverified)` rc 0; `release_verify --offline` tại pin **exit 0, `verdict: ENGINEERING_INCOMPLETE`, 7 PASS / **0 FAIL** / 5 PENDING** (`generated_at 2026-11-13T12:00:53Z`, report `raw/live-verify/release-verify-82b0b3f-offline.json`, sha256 `64c92fb4…73c3`) — **không phải `RELEASE_READY`**, xem §Giới hạn #10; sweep `82b0b3f` **3283 passed / 8 failed / 47 skipped = 3338**, 3969.99 s, `^ERROR` 0, `Errno 28` 0, **0 new / 0 gone / 8 identical** |
 
 Ghi chú trung thực cho dòng 5: lần chạy acceptance **đầu tiên sau restart** báo sai
 `SKIP A/C/G/I live checks (no server)` vì `/api/models` còn nguội (phân giải
@@ -329,9 +329,16 @@ Những điều **không** được chứng minh, nói thẳng:
 
 1. **Không model nào PASS gate.** `passed_models: []`. Bảy model được phán, 0 đạt. Đây là kết luận từ
    artifact, lớp `measured_disagreement`, không phải lỗi tải hay lỗi parse.
-2. **Bốn trong năm pair hỏng chỉ vì số hạng tương đối.** encoder, habit, hint, limn (và tgcir) fail
-   trên `max_rel`; **mọi** `max_abs` nằm trong atol (`≤ 2.9e-06` vs `1e-4`) và `min_cosine ≥
-   0.9999999`. "Hỏng" ở đây nghĩa là *không đạt ngưỡng tương đối đã khai*, không phải *sai số đo*.
+2. **Cả năm pair đều hỏng, và cả năm chỉ vì số hạng tương đối — 5/5, không phải 4/5.** Đọc
+   `raw/parity-coverage/gate.json`, 19 failure trên 5 model, **mọi tên đều kết thúc bằng `.max_rel`**:
+   encoder 9 (`dress|shirt|toptee` × `population.features_vs_native_val_control`, `population.gallery_vs_native`,
+   `batch_1_vs_n`) · habit 2 · hint 2 · limn 3 · tgcir 3 (bốn model sau — habit, hint, limn, tgcir — chỉ có `batch_1_vs_n.max_rel`; chỉ encoder có thêm hai họ `population.*`).
+   Không model nào fail vì bất cứ thứ gì khác: không có `.max_abs`, không có rank, không có identity.
+   **Mọi** `max_abs` nằm trong atol (**worst 2.898e-06** ở tgcir dress vs atol `1e-4`, tức trong 34×) và
+   `min_cosine ≥ 0.9999999`. "Hỏng" ở đây nghĩa là *không đạt ngưỡng tương đối đã khai*, không phải *sai số đo*.
+   Điều tách biệt đúng là **phạm vi**, không phải lớp failure: **bốn** pair (encoder, habit, hint, limn)
+   so trên toàn quần thể, **một** (tgcir) là sample-scope — xem #3. Câu cũ ghi "bốn trong năm" rồi liệt
+   kê năm tên; đó là lỗi đếm, đã sửa 2026-11-13.
 3. **tgcir: pair là sample-scope, `INCOMPLETE`.** `population_scope: "sample"` → verdict nói về mẫu
    **5 query / 20 ảnh**, không phải quần thể 2017/2038/1961. `metrics_parity` **missing**. `max_rel`
    0.2403 là do **mẫu số**: `max_abs` 2.898e-06 chia cho component cỡ **1.206e-05**; atol `1e-4` được
@@ -363,9 +370,22 @@ Những điều **không** được chứng minh, nói thẳng:
    (~1 phút phân giải checkpoint-availability) ⇒ `SKIP A/C/G/I (no server)`. Phải warm trước khi đọc
    kết quả. Lượt chạy đầy đủ của tôi (sau warm) là **12 PASS / 1 SKIP / 0 FAIL, rc 0, 373.47 s** —
    đúng bằng `raw/live-verify/REPORT.md` §9, và là quan sát trực tiếp chứ không phải trích dẫn.
-10. **`release_verify.sh` lần chạy gần nhất ghi `verdict: RELEASE_BLOCKED`** (report
-    `generated_at 2026-11-11T08:28:55Z`, trước pin hiện tại). Không có report mới trong campaign; đừng
-    trích report cũ như trạng thái hiện tại — chạy lại là việc của lượt sau.
+10. **`release_verify.sh` tại pin `82b0b3f` trả `ENGINEERING_INCOMPLETE`, không phải `RELEASE_READY`.**
+    Đo lúc handoff: `bash workbench/docker/release_verify.sh --offline --report …` → **exit 0**, report
+    `generated_at 2026-11-13T12:00:53.365209+00:00`, `verdict: ENGINEERING_INCOMPLETE`,
+    `summary {pass: 7, fail: 0, pending: 5}` — **0 check FAIL**, 12 check, 5 PENDING: `J1` (`boot state
+    UNOBSERVED: no live stack`), `J2`/`J3`/`J11` (`offline mode`), `J8` (`no live stack`). 3 chiều PASS:
+    `STATIC_SOURCE` (J4/J6/J9/J10), `MODEL_ENVIRONMENT` (J12), `TARGET_BINDING`; 7 chiều PENDING:
+    `DEPLOYMENT`, `CONFIGURATION`, `OPERATIONS`, `GPU_RUNTIME`, và ba chiều không có check nào —
+    `MODEL_INFERENCE` (`no model execution evidence observed`), `MODEL_EVALUATION` (`no corroborated
+    research-evidence run: no benchmark runs found`), `SCIENTIFIC_OUTPUT` (`no valid, authenticated
+    metrics`). Report: `raw/live-verify/release-verify-82b0b3f-offline.json`
+    (sha256 `64c92fb407c7c642e0a2ef0a5109d00403b656715134c080e57456c1bcf873c3`).
+    Nghĩa đúng: **không tiêu chí nào không đạt**; 5 tiêu chí chưa quan sát được vì `--offline` bỏ qua
+    các journey live — nhưng `ENGINEERING_INCOMPLETE` **không** phải một pass, và `RELEASE_READY` chưa
+    đạt. Verifier tự nói: "no unmet criteria; 5 pending".
+    **Lịch sử, khác revision:** report trước đó (`generated_at 2026-11-11T08:28:55Z`, revision cũ hơn
+    pin này hai lần nâng) ghi `RELEASE_BLOCKED`; con số đó **không** được trích làm trạng thái hiện tại.
 11. **Native-eval "9" ≠ đã tái lập.** Đó là "có aggregate JSON"; `verified: 0` trong census
     measurement. `raw/native/encoder.json` và `.../tme.json` không có `replay_type` nên **không** là
     row cũng **không** là backing report — loại trừ có predicate, không phải lỗ hổng.
