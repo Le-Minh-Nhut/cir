@@ -162,3 +162,50 @@ deployed but deliberately not committed.
 
 The post-redeploy re-check of these three URLs, the 12 cells and the endpoint rows is recorded in the
 handoff report, not here, so this file does not claim a measurement taken after the tree froze.
+
+## 9. Re-check on the redeployed stack (`90f7b2c`, bundle `index-8klMGIWd.js`)
+
+Everything in §1-§8 was measured at `937f2ec`, before the repair was deployed. The re-check below ran
+after both services were restarted onto the new pin, so it is the state that ships. Raw readings:
+`live-verify-post-redeploy.json`; the three deep-link shots are
+`screenshots/redeploy-deeplink-{bare,no-area,explicit}.png`.
+
+| criterion | reading | verdict |
+|---|---|---|
+| overview both counts, distinct labels | `16` / `17` | PASS |
+| inventory 16, no PAIR row | 16 rows, no `pair` row | PASS |
+| native tables, no PAIR rows | 0 across all three protocols | PASS |
+| bare deep link shows the notice | **renders** — `?area=evaluation&view=native&model=pair` keeps `model=` through the correction | **PASS** |
+| parity standard as a string | `Chuẩn parity-relative/v1 · tính từ artifact đo, không đọc từ văn bản` | PASS |
+| parity per-model failure counts | encoder 9, habit 2, hint 2, limn 3, tgcir 3 | PASS |
+| CLVC 12 cells vs inventory | **0 mismatches** | PASS |
+| ablation cells: banner + outside window | 4/4, 12/12 | PASS |
+| console / page / genuine request failures | 0 / 0 / 0 (1 superseded duplicate) | PASS |
+
+The probe reports `verdict: PASS` with `failed_criteria: []` on this deployment.
+
+### The three deep-link shapes, on `:5173`
+
+| requested | final URL | notice | console errors | failed requests |
+|---|---|---|---|---|
+| `?area=evaluation&view=native&model=pair` | unchanged | **visible** | 0 | 0 |
+| `?view=native&model=pair` | `?area=evaluation&view=native&protocol=circus_fashioniq_release_v1&subset=full&model=pair` | **visible** | 0 | 0 |
+| `?area=evaluation&view=native&protocol=…&subset=full&model=pair` | unchanged | **visible** | 0 | 0 |
+
+The second row is the case that also needed the view→area resolution: `model=` survives AND the area
+is now resolved from the view instead of collapsing to the dashboard.
+
+### API rows on the redeployed stack
+
+`/api/models` 200, 16, no `pair` · `/api/models/publication` 17/16/1 · `/api/native-measurements` 51
+rows, 0 PAIR · `/api/runs/parity-gate` 200, `passed_models: []`, `standard` the string
+`parity-relative/v1`, failures encoder 9 / habit 2 / hint 2 / limn 3 / tgcir 3 ·
+`/api/composition/runs/7b1fa850…` 200, `still_unscoped: 6003`, no `category_agnostic` · both
+diagnostic routes 200, `DIAGNOSTIC_COMPLETE`, `complete: true`, 0 defects.
+
+`bash workbench/docker/acceptance.sh` → `ACCEPTANCE PASSED (skipped: G-status-unverified)`.
+
+Measured, and worth knowing for a handoff: the first acceptance run after the restart reported
+`SKIP A/C/G/I live checks (no server)` because `/api/models` was still cold (per-checkpoint
+availability resolution, ~1 min). It is a false negative of `live()`'s single probe, not a broken
+stack — after warming the endpoint the same run passed every live group.

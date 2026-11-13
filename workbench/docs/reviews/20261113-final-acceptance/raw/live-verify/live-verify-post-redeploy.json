@@ -1,0 +1,352 @@
+{
+ "base": "http://127.0.0.1:5173",
+ "overview": {
+  "published": "16",
+  "registry": "17",
+  "label_blocks": {
+   "published": "16 CÔNG BỐ TRÊN WEB",
+   "registry": "17 TRONG REGISTRY"
+  },
+  "distinct_labels": true
+ },
+ "inventory": {
+  "count_models": "16",
+  "row_count": 16,
+  "model_ids": [
+   "CLVC-Net\nclvc_net\nCó kết quả ở 1 phạm vi khác — mở đúng phạm vi đó:\nFashionIQ — Val Split (Pair-Union Gallery) · số đo native · 9 số đo (toàn phạm vi)",
+   "ConeSep\nconesep\nCó kết quả ở 3 phạm vi khác — mở đúng phạm vi đó:\nCIRCUS FashionIQ Release v1 · Shortcut-Free (SF) · 13 lượt\nCIRCUS FashionIQ Release v1 · Validated · 13 lượt\nFashionIQ — Full Gallery, Reference Excluded · số đo native · 13 số đo (toàn phạm vi)",
+   "ENCODER\nencoder\nCó kết quả ở 3 phạm vi khác — mở đúng phạm vi đó:\nCIRCUS FashionIQ Release v1 · Shortcut-Free (SF) · 13 lượt\nCIRCUS FashionIQ Release v1 · Validated · 13 lượt\nFashionIQ — Val Split (Pair-Union Gallery) · số đo native · 9 số đo (toàn phạm vi)",
+   "HABIT\nhabit\nCó kết quả ở 3 phạm vi khác — mở đúng phạm vi đó:\nCIRCUS FashionIQ Release v1 · Shortcut-Free (SF) · 13 lượt\nCIRCUS FashionIQ Release v1 · Validated · 13 lượt\nFashionIQ — Full Gallery, Reference Excluded · số đo native · 13 số đo (toàn phạm vi)",
+   "HINT\nhint\nCó kết quả ở 3 phạm vi khác — mở đúng phạm vi đó:\nCIRCUS FashionIQ Release v1 · Shortcut-Free (SF) · 13 lượt\nCIRCUS FashionIQ Release v1 · Validated · 13 lượt\nFashionIQ — Val Split (Pair-Union Gallery) · số đo native · 9 số đo (toàn phạm vi)",
+   "INTENT\nintent\nCó kết quả ở 3 phạm vi khác — mở đúng phạm vi đó:\nCIRCUS FashionIQ Release v1 · Shortcut-Free (SF) · 13 lượt\nCIRCUS FashionIQ Release v1 · Validated · 13 lượt\nFashionIQ — Full Gallery, Reference Excluded · số đo native · 13 số đo (toàn phạm vi)",
+   "LIMN\nlimn\nCó kết quả ở 3 phạm vi khác — mở đúng phạm vi đó:\nCIRCUS FashionIQ Release v1 · Shortcut-Free (SF) · 13 lượt\nCIRCUS FashionIQ Release v1 · Validated · 13 lượt\nFashionIQ — Val Split (Pair-Union Gallery) · số đo native · 9 số đo (toàn phạm vi)",
+   "PTHA + MTST\nptha_mtst\nCó kết quả ở 3 phạm vi khác — mở đúng phạm vi đó:\nCIRCUS FashionIQ Release v1 · Shortcut-Free (SF) · 13 lượt\nCIRCUS FashionIQ Release v1 · Validated · 13 lượt\nFashionIQ — Original Split (Full Gallery) · số đo native · 6 số đo (toàn phạm vi)",
+   "TG-CIR\ntgcir\nCó kết quả ở 1 phạm vi khác — mở đúng phạm vi đó:\nFashionIQ — Val Split (Pair-Union Gallery) · số đo native · 9 số đo (toàn phạm vi)",
+   "TME\ntme\nCó kết quả ở 3 phạm vi khác — mở đúng phạm vi đó:\nCIRCUS FashionIQ Release v1 · Shortcut-Free (SF) · 13 lượt\nCIRCUS FashionIQ Release v1 · Validated · 13 lượt\nFashionIQ — Original Split (Full Gallery) · số đo native · 6 số đo (toàn phạm vi)",
+   "Air-Know\nairknow\nCó kết quả ở 1 phạm vi khác — mở đúng phạm vi đó:\nFashionIQ — Full Gallery, Reference Excluded · số đo native · 13 số đo (toàn phạm vi)",
+   "CLIP4Cir RN50x4 fullft\nclip4cir_rn50x4_fullft\nCó kết quả ở 1 phạm vi khác — mở đúng phạm vi đó:\nFashionIQ — Full Gallery, Reference Excluded · số đo native · 13 số đo (toàn phạm vi)",
+   "Combiner RN50x4 noft\ncombiner_rn50x4_noft\nCó kết quả ở 2 phạm vi khác — mở đúng phạm vi đó:\nFashionIQ — Original Split (Full Gallery) · số đo native · 6 số đo (toàn phạm vi)\nFashionIQ — Original Split (Full Gallery) · 13 số đo (toàn phạm vi)",
+   "DCNet\ndcnet\nCó kết quả ở 1 phạm vi khác — mở đúng phạm vi đó:\nFashionIQ — Full Gallery, Reference Excluded · số đo native · 13 số đo (toàn phạm vi)",
+   "CSMCIR\ncsmcir\nFashionIQ native đã đo (row 6812926dbe6394ce, đã chứng thực) · CIRCUS composition chưa có lượt nào\nMở số đo native · FashionIQ — Original Split (Full Gallery) · 6",
+   "SPRC\nsprc\nĐã đo native bằng ViT-L (row 6811145a4cff98ee, đã chứng thực) · thiếu checkpoint ViT-g của paper (sprc_fiq.pt)\nMở số đo native · FashionIQ — Original Split (Full Gallery) · 6"
+  ],
+  "pair_row_present": false
+ },
+ "native_table": {
+  "fashioniq_val_split": {
+   "rows": 9,
+   "pair_rows": 0
+  },
+  "fashioniq_original_split": {
+   "rows": 6,
+   "pair_rows": 0
+  },
+  "fashioniq_full_gallery_ref_excluded": {
+   "rows": 13,
+   "pair_rows": 0
+  }
+ },
+ "native_table_pair_rows": 0,
+ "pair_deep_link": {
+  "bare_url_requested": "http://127.0.0.1:5173/?area=evaluation&view=native&model=pair",
+  "bare_url_final": "http://127.0.0.1:5173/?area=evaluation&view=native&protocol=circus_fashioniq_release_v1&subset=full&model=pair",
+  "bare_notice": "Tạm gác khỏi web\n\npair đang tạm gác khỏi web: Chưa có mapping checkpoint chính thức: pickle được tạo bởi các class mà repo đã pin không có (BLOCKED_CHECKPOINT_MAPPING_UNVERIFIED), nên chưa thể công bố là tái lập PAIR. Bản ghi không bị xoá — số đo native vẫn đọc được theo `measurement_id` (/api/native-measurements/{id}) và vẫn chạy được bằng CLI offline.",
+  "bare_native_rows": 0,
+  "bare_area_renders": true,
+  "scoped_url_final": "http://127.0.0.1:5173/?area=evaluation&view=native&protocol=circus_fashioniq_release_v1&subset=full&model=pair",
+  "scoped_notice": "Tạm gác khỏi web\n\npair đang tạm gác khỏi web: Chưa có mapping checkpoint chính thức: pickle được tạo bởi các class mà repo đã pin không có (BLOCKED_CHECKPOINT_M",
+  "scoped_notice_renders": true,
+  "notice_param_survives_only_when_scope_is_named": false
+ },
+ "parity_failure_counts_dom": {
+  "conesep": 0,
+  "encoder": 9,
+  "habit": 2,
+  "hint": 2,
+  "intent": 0,
+  "limn": 3,
+  "tgcir": 3
+ },
+ "parity": {
+  "standard_line": "Chuẩn parity-relative/v1 · tính từ artifact đo, không đọc từ văn bản",
+  "standard_is_string": true,
+  "verdict_badge": "KHÔNG mô hình nào PASS (0/7)",
+  "summary": "Không mô hình nào đạt: 7/7 mô hình có subcheck bắt buộc FAIL. Đây là kết luận từ artifact, không phải lỗi tải.",
+  "rows": [
+   {
+    "model": "conesep",
+    "passed": "false",
+    "status": "PARITY_EVIDENCE_MISSING",
+    "failure_count": 0,
+    "failures": "0",
+    "dimensions": ""
+   },
+   {
+    "model": "encoder",
+    "passed": "false",
+    "status": "PARITY_MANDATORY_SUBCHECK_FAILED",
+    "failure_count": 9,
+    "failures": "9 subcheck",
+    "dimensions": "input_parity ✓forward_parity ✗batch_parity ✗scoring_parity ✓metrics_parity ✗observer_parity ✗relation_parity ✓"
+   },
+   {
+    "model": "habit",
+    "passed": "false",
+    "status": "PARITY_MANDATORY_SUBCHECK_FAILED",
+    "failure_count": 2,
+    "failures": "2 subcheck",
+    "dimensions": "input_parity ✓forward_parity ✓batch_parity ✗scoring_parity ✓relation_parity ✗"
+   },
+   {
+    "model": "hint",
+    "passed": "false",
+    "status": "PARITY_MANDATORY_SUBCHECK_FAILED",
+    "failure_count": 2,
+    "failures": "2 subcheck",
+    "dimensions": "input_parity ✓forward_parity ✓batch_parity ✗scoring_parity ✓metrics_parity ✓relation_parity ✗"
+   },
+   {
+    "model": "intent",
+    "passed": "false",
+    "status": "PARITY_EVIDENCE_MISSING",
+    "failure_count": 0,
+    "failures": "0",
+    "dimensions": ""
+   },
+   {
+    "model": "limn",
+    "passed": "false",
+    "status": "PARITY_MANDATORY_SUBCHECK_FAILED",
+    "failure_count": 3,
+    "failures": "3 subcheck",
+    "dimensions": "input_parity ✓forward_parity ✓batch_parity ✗scoring_parity ✓metrics_parity ✓relation_parity ✗"
+   },
+   {
+    "model": "tgcir",
+    "passed": "false",
+    "status": "PARITY_MANDATORY_SUBCHECK_FAILED",
+    "failure_count": 3,
+    "failures": "3 subcheck",
+    "dimensions": "input_parity ✓forward_parity ✓batch_parity ✗scoring_parity ✓relation_parity ✗"
+   }
+  ]
+ },
+ "clvc_diagnostic": {
+  "title": "CLVC-Net — Ambiguous category — diagnostic comparison",
+  "canonical_badge": "Canonical (Full cohort): 6,001/6,003 scored",
+  "cells": [
+   {
+    "query": "7:3038",
+    "scope": "shirt",
+    "condition": "multimodal",
+    "inventory_rank": 848,
+    "rendered_rank": 848,
+    "match": true,
+    "target_statement": "Ảnh đích ở hạng #848 — ngoài cửa sổ Top-100 đang hiện (export lưu 100 dòng). Với K=10 hay K=20 thì ảnh đích không nằm trong cửa sổ; hạng #848 là hạng toàn gallery, không phải vị trí trong danh sách ứn",
+    "target_outside_window": true,
+    "self_match_banner": "",
+    "tiles": 100,
+    "reference_tiles": 1,
+    "screenshot": "screenshots/clvc-7_3038-shirt-multimodal.png"
+   },
+   {
+    "query": "7:3038",
+    "scope": "shirt",
+    "condition": "text_only_black_image",
+    "inventory_rank": 304,
+    "rendered_rank": 304,
+    "match": true,
+    "target_statement": "Ảnh đích ở hạng #304 — ngoài cửa sổ Top-100 đang hiện (export lưu 100 dòng). Với K=10 hay K=20 thì ảnh đích không nằm trong cửa sổ; hạng #304 là hạng toàn gallery, không phải vị trí trong danh sách ứn",
+    "target_outside_window": true,
+    "self_match_banner": "",
+    "tiles": 100,
+    "reference_tiles": 0,
+    "screenshot": "screenshots/clvc-7_3038-shirt-text_only_black_image.png"
+   },
+   {
+    "query": "7:3038",
+    "scope": "shirt",
+    "condition": "clvc_image_encoder_only",
+    "inventory_rank": 8702,
+    "rendered_rank": 8702,
+    "match": true,
+    "target_statement": "Ảnh đích ở hạng #8,702 — ngoài cửa sổ Top-100 đang hiện (export lưu 100 dòng). Với K=10 hay K=20 thì ảnh đích không nằm trong cửa sổ; hạng #8,702 là hạng toàn gallery, không phải vị trí trong danh sác",
+    "target_outside_window": true,
+    "self_match_banner": "Hạng 1 ở điều kiện này là chính ảnh tham chiếu của query.\n\nĐây là self-match (score ≈ 1.000000), không phải một kết quả truy hồi: gallery có chứa ảnh tham chiếu",
+    "tiles": 100,
+    "reference_tiles": 1,
+    "screenshot": "screenshots/clvc-7_3038-shirt-clvc_image_encoder_only.png"
+   },
+   {
+    "query": "7:3038",
+    "scope": "toptee",
+    "condition": "multimodal",
+    "inventory_rank": 1253,
+    "rendered_rank": 1253,
+    "match": true,
+    "target_statement": "Ảnh đích ở hạng #1,253 — ngoài cửa sổ Top-100 đang hiện (export lưu 100 dòng). Với K=10 hay K=20 thì ảnh đích không nằm trong cửa sổ; hạng #1,253 là hạng toàn gallery, không phải vị trí trong danh sác",
+    "target_outside_window": true,
+    "self_match_banner": "",
+    "tiles": 100,
+    "reference_tiles": 1,
+    "screenshot": "screenshots/clvc-7_3038-toptee-multimodal.png"
+   },
+   {
+    "query": "7:3038",
+    "scope": "toptee",
+    "condition": "text_only_black_image",
+    "inventory_rank": 1549,
+    "rendered_rank": 1549,
+    "match": true,
+    "target_statement": "Ảnh đích ở hạng #1,549 — ngoài cửa sổ Top-100 đang hiện (export lưu 100 dòng). Với K=10 hay K=20 thì ảnh đích không nằm trong cửa sổ; hạng #1,549 là hạng toàn gallery, không phải vị trí trong danh sác",
+    "target_outside_window": true,
+    "self_match_banner": "",
+    "tiles": 100,
+    "reference_tiles": 0,
+    "screenshot": "screenshots/clvc-7_3038-toptee-text_only_black_image.png"
+   },
+   {
+    "query": "7:3038",
+    "scope": "toptee",
+    "condition": "clvc_image_encoder_only",
+    "inventory_rank": 1267,
+    "rendered_rank": 1267,
+    "match": true,
+    "target_statement": "Ảnh đích ở hạng #1,267 — ngoài cửa sổ Top-100 đang hiện (export lưu 100 dòng). Với K=10 hay K=20 thì ảnh đích không nằm trong cửa sổ; hạng #1,267 là hạng toàn gallery, không phải vị trí trong danh sác",
+    "target_outside_window": true,
+    "self_match_banner": "Hạng 1 ở điều kiện này là chính ảnh tham chiếu của query.\n\nĐây là self-match (score ≈ 1.000000), không phải một kết quả truy hồi: gallery có chứa ảnh tham chiếu",
+    "tiles": 100,
+    "reference_tiles": 1,
+    "screenshot": "screenshots/clvc-7_3038-toptee-clvc_image_encoder_only.png"
+   },
+   {
+    "query": "7:3790",
+    "scope": "shirt",
+    "condition": "multimodal",
+    "inventory_rank": 412,
+    "rendered_rank": 412,
+    "match": true,
+    "target_statement": "Ảnh đích ở hạng #412 — ngoài cửa sổ Top-100 đang hiện (export lưu 100 dòng). Với K=10 hay K=20 thì ảnh đích không nằm trong cửa sổ; hạng #412 là hạng toàn gallery, không phải vị trí trong danh sách ứn",
+    "target_outside_window": true,
+    "self_match_banner": "",
+    "tiles": 100,
+    "reference_tiles": 0,
+    "screenshot": "screenshots/clvc-7_3790-shirt-multimodal.png"
+   },
+   {
+    "query": "7:3790",
+    "scope": "shirt",
+    "condition": "text_only_black_image",
+    "inventory_rank": 1466,
+    "rendered_rank": 1466,
+    "match": true,
+    "target_statement": "Ảnh đích ở hạng #1,466 — ngoài cửa sổ Top-100 đang hiện (export lưu 100 dòng). Với K=10 hay K=20 thì ảnh đích không nằm trong cửa sổ; hạng #1,466 là hạng toàn gallery, không phải vị trí trong danh sác",
+    "target_outside_window": true,
+    "self_match_banner": "",
+    "tiles": 100,
+    "reference_tiles": 0,
+    "screenshot": "screenshots/clvc-7_3790-shirt-text_only_black_image.png"
+   },
+   {
+    "query": "7:3790",
+    "scope": "shirt",
+    "condition": "clvc_image_encoder_only",
+    "inventory_rank": 5481,
+    "rendered_rank": 5481,
+    "match": true,
+    "target_statement": "Ảnh đích ở hạng #5,481 — ngoài cửa sổ Top-100 đang hiện (export lưu 100 dòng). Với K=10 hay K=20 thì ảnh đích không nằm trong cửa sổ; hạng #5,481 là hạng toàn gallery, không phải vị trí trong danh sác",
+    "target_outside_window": true,
+    "self_match_banner": "Hạng 1 ở điều kiện này là chính ảnh tham chiếu của query.\n\nĐây là self-match (score ≈ 1.000000), không phải một kết quả truy hồi: gallery có chứa ảnh tham chiếu",
+    "tiles": 100,
+    "reference_tiles": 1,
+    "screenshot": "screenshots/clvc-7_3790-shirt-clvc_image_encoder_only.png"
+   },
+   {
+    "query": "7:3790",
+    "scope": "toptee",
+    "condition": "multimodal",
+    "inventory_rank": 259,
+    "rendered_rank": 259,
+    "match": true,
+    "target_statement": "Ảnh đích ở hạng #259 — ngoài cửa sổ Top-100 đang hiện (export lưu 100 dòng). Với K=10 hay K=20 thì ảnh đích không nằm trong cửa sổ; hạng #259 là hạng toàn gallery, không phải vị trí trong danh sách ứn",
+    "target_outside_window": true,
+    "self_match_banner": "",
+    "tiles": 100,
+    "reference_tiles": 0,
+    "screenshot": "screenshots/clvc-7_3790-toptee-multimodal.png"
+   },
+   {
+    "query": "7:3790",
+    "scope": "toptee",
+    "condition": "text_only_black_image",
+    "inventory_rank": 568,
+    "rendered_rank": 568,
+    "match": true,
+    "target_statement": "Ảnh đích ở hạng #568 — ngoài cửa sổ Top-100 đang hiện (export lưu 100 dòng). Với K=10 hay K=20 thì ảnh đích không nằm trong cửa sổ; hạng #568 là hạng toàn gallery, không phải vị trí trong danh sách ứn",
+    "target_outside_window": true,
+    "self_match_banner": "",
+    "tiles": 100,
+    "reference_tiles": 0,
+    "screenshot": "screenshots/clvc-7_3790-toptee-text_only_black_image.png"
+   },
+   {
+    "query": "7:3790",
+    "scope": "toptee",
+    "condition": "clvc_image_encoder_only",
+    "inventory_rank": 4535,
+    "rendered_rank": 4535,
+    "match": true,
+    "target_statement": "Ảnh đích ở hạng #4,535 — ngoài cửa sổ Top-100 đang hiện (export lưu 100 dòng). Với K=10 hay K=20 thì ảnh đích không nằm trong cửa sổ; hạng #4,535 là hạng toàn gallery, không phải vị trí trong danh sác",
+    "target_outside_window": true,
+    "self_match_banner": "Hạng 1 ở điều kiện này là chính ảnh tham chiếu của query.\n\nĐây là self-match (score ≈ 1.000000), không phải một kết quả truy hồi: gallery có chứa ảnh tham chiếu",
+    "tiles": 100,
+    "reference_tiles": 1,
+    "screenshot": "screenshots/clvc-7_3790-toptee-clvc_image_encoder_only.png"
+   }
+  ],
+  "mismatches": [],
+  "cells_outside_window": 12,
+  "ablation_cells_with_self_match": 4,
+  "ablation_cells": 4
+ },
+ "mobile": {
+  "viewport": "390x844",
+  "published": "16",
+  "registry": "17",
+  "horizontal_overflow_px": 0,
+  "console_errors": []
+ },
+ "failed_requests_classification": {
+  "total": 1,
+  "superseded_duplicate": 1,
+  "genuine": 0,
+  "superseded": [
+   "GET http://127.0.0.1:5173/api/composition/diagnostics/clvc-dual-scope/candidates?qid=7%3A3790&scope=toptee&condition=clvc_image_encoder_only&depth=100 :: net::ERR_ABORTED"
+  ]
+ },
+ "console_errors": [],
+ "page_errors": [],
+ "failed_requests": [
+  "GET http://127.0.0.1:5173/api/composition/diagnostics/clvc-dual-scope/candidates?qid=7%3A3790&scope=toptee&condition=clvc_image_encoder_only&depth=100 :: net::ERR_ABORTED"
+ ],
+ "counts": {
+  "console_errors": 0,
+  "page_errors": 0,
+  "failed_requests": 1
+ },
+ "acceptance_criteria": {
+  "overview_prints_both_counts_with_distinct_labels": true,
+  "inventory_shows_16_and_no_pair_row": true,
+  "native_table_has_no_pair_rows": true,
+  "bare_deep_link_view_native_model_pair_shows_notice": true,
+  "parity_card_renders_standard_as_a_string": true,
+  "parity_per_model_failure_counts_match": true,
+  "clvc_12_cells_match_inventory": true,
+  "ablation_cells_show_self_match_and_outside_window": true,
+  "no_console_errors": true,
+  "no_page_errors": true,
+  "no_genuine_failed_requests": true
+ },
+ "failed_criteria": [],
+ "verdict": "PASS"
+}
