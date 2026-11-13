@@ -10,6 +10,12 @@ turn) · `CLOSED-VERIFIED` (fix present now, measured this turn) · `SPEC-ONLY` 
 an earlier record, no code change landed) · `EXTERNAL` (needs a source/metadata artifact, not code) ·
 `UNVERIFIED` (not measured this turn).
 
+**Re-verified 2026-11-13 at handoff.** The seeded rows were written mid-campaign, so twelve of them
+described a state that the campaign's own commits then changed. Each was re-measured against the
+delivered tree and its state cell corrected — see `## §Handoff` for the old → new table. A state cell
+carrying the marker `2026-11-13 (… at handoff)` is the delivered state; a cell without it is the
+observation made during the lane that wrote the row, and is history.
+
 | id | area | defect or feature | owner lane | pre-fix evidence (file:line + reproduced observation) | required acceptance check | state |
 |---|---|---|---|---|---|---|
 | L01 | parity/PAIR | PAIR is `BLOCKED`: released pickles were produced by classes the pinned repo does not contain, so the registry mapping is unverified while the bytes hash-match | registry + models surface | `workbench/registry/models.yaml:825` `reproduction_status: BLOCKED_CHECKPOINT_MAPPING_UNVERIFIED`, `:828` `COMMAND_BLOCKED_SOURCE_ENTRYPOINT`, `:847-875` two `CHECKPOINT_MAPPING_UNVERIFIED` variants; `workbench/artifacts/checkpoint_selection/20261106T002617+0700/measurements/pair_blocker.json` `verdict: BLOCKED_SOURCE_CLASSES_UNPUBLISHED` + 7 unpublished class names; live `/api/models` `pair` checkpoints show `official_sha256_match: true, mapping_verified: false, runnable: false` | `/api/models` must never present a PAIR checkpoint as `runnable`, and the on-screen reason must name the mapping, not just the interpreter | CLOSED-VERIFIED (live) |
@@ -500,7 +506,27 @@ who has not followed the lanes:
   `raw/parity-coverage/{executability,gate,pairs_on_disk}.json`, `raw/native/*.json`,
   `workbench/artifacts/composition/**/full.json` and the live `/api/native-measurements` census.
 
-Rows in this ledger keep their own states; nothing above is superseded. Two rows this ledger left
-`UNVERIFIED` were measured during the handoff and are now settled without an edit to the row text:
-L09 (`relation_state.sha256` = `20db0c27…`, `matches_pinned_digest: true`) and L22 (both diagnostic
-routes answer `200 DIAGNOSTIC_COMPLETE`, `complete: true`, `defects: []`).
+**Twelve rows were corrected to the measured final state at handoff, each dated in its own state
+cell; their pre-fix evidence columns are unchanged history.** Marker `2026-11-13 (… at handoff)`
+means the state cell was re-derived from a measurement taken after the campaign's code landed:
+
+| row | old state cell | new state cell |
+|---|---|---|
+| L08 | `CLOSED-VERIFIED (live)` — "returns 3 ids" | `_discover_models` returns **7** (5 paired + 2 `EVIDENCE_MISSING`) |
+| L09 | `UNVERIFIED — settle with jq …` | **CLOSED** — `relation_state.sha256 20db0c27…`, `matches_pinned_digest: true`, both sides |
+| L10 | `OPEN-VERIFIED (live counts 9/2/3)` — "14 mandatory failures" | **OPEN** — **19** (9/2/2/3/3), 0 absent-evidence, 0 derived-invariant; still the open decision |
+| L11 | `UNVERIFIED — settle with jq …` | **CLOSED** — 5 rows / 2 counted, both macros named; `batch_size` keys the run identity, not the served native row |
+| L18 | `CLOSED-VERIFIED (measured)` at `b4d25c7`/`cf6ba468` | **CLOSED** — pin `90f7b2c…`, guard **8 passed**, invariant exit 0 at `a53044f` |
+| L19 | `OPEN-VERIFIED (live, new this turn)` | **CLOSED** — tracked tree clean; only the operator's file and three untracked `.npz` |
+| L20 | `OPEN-VERIFIED` — `index-CFwf1H51.js` | **CLOSED** — `index-8klMGIWd.js` 399 398 B `43b2618c…`, served == built |
+| L22 | `UNVERIFIED — settle with curl …` | **CLOSED** — both diagnostics 200 `DIAGNOSTIC_COMPLETE`; 12 cells, 0 mismatches |
+| L23 | `CLOSED-VERIFIED (log re-parsed)` — "20 / 3159" | **CLOSED** — sweep at pin 3275/8/47 = 3330; 12 of the 20 closed, 8 remain classified |
+| L25 | `CLOSED-VERIFIED (throwaway instance)` | **CLOSED** — four paths in the shipped `openapi.json`; both routes 200 on `:8000` |
+| L27 | `OPEN-VERIFIED → backend/service lane` | **CLOSED** — restarted 10:10:07, pid 2816638/2816640; gate now matches `evaluate_all()` |
+| L28 | `OPEN-VERIFIED (latent)` | **CLOSED** — `None` / `()` / names distinct; `conditions_declaration` on both routes; 9 tests |
+
+L02 stays `OPEN-VERIFIED` because it genuinely is: `grep -c WORKBENCH_PAIR_PYTHON
+workbench/config/workbench.env` → **0**, and `test -e workbench/envs/pair-adapted/bin/python` → exit
+**1**. L02 and L10 are the two rows whose acceptance check cannot be satisfied by code in this repo
+(the first needs the operator's interpreter, the second is a standard-level decision), and both are
+reported as such in `FINAL_ACCEPTANCE.vi.md` §Blocker rather than marked closed.
