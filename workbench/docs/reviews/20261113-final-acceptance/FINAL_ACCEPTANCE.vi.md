@@ -329,6 +329,40 @@ Những điều **không** được chứng minh, nói thẳng:
 
 1. **Không model nào PASS gate.** `passed_models: []`. Bảy model được phán, 0 đạt. Đây là kết luận từ
    artifact, lớp `measured_disagreement`, không phải lỗi tải hay lỗi parse.
+
+   **Vì sao 0 đạt — ba tầng chặn độc lập.** Câu hỏi tự nhiên là "sửa tolerance thì có PASS không"; câu
+   trả lời là **không**, và nếu chỉ đọc #2 thì sẽ suy sai. Mọi số dưới đây từ
+   `raw/parity-coverage/gate.json` và `pairs_on_disk.json`.
+
+   * **Tầng 1 — `batch_1_vs_n.max_rel` đỏ ở cả 5 pair: 13/19 failure.** encoder
+     `0.003176237364982574` / `0.0027347281757461243` / `0.0015533629650869047`; habit
+     `0.0050964738236841` / `0.006168472315303178`; hint `0.005049934976857354` /
+     `0.04213516386699195`; limn `0.011399774792037631` / `0.002698280178837889` /
+     `0.007509343787328878`; tgcir `0.24029609477008945` / `0.07048293904534349` /
+     `0.029507544996198128` — tất cả so với `batch_max_rel = 1e-3` đã khai. Không pair nào thoát tầng này.
+   * **Tầng 2 — `metrics_parity` chưa từng được đo cho 3 model, nên chúng là `INCOMPLETE` kể cả khi
+     waive tầng 1.** `missing_by_category` = `{"dress":["metrics_parity"],"shirt":["metrics_parity"],
+     "toptee":["metrics_parity"]}` cho **encoder**, **habit**, **tgcir** (đủ ba model, đủ ba category).
+     `metrics_parity` nằm trong `REQUIRED_DIMENSIONS` (`parity_gate.py:107-108`) và `_check_invariants`
+     (`:1153-1169`) đòi **mọi** dimension bắt buộc phải có check mandatory ở **mọi** category — nên ba
+     model đó **không bao giờ** PASS cho tới khi có native per-query-rank control để so hit count. Chỉ
+     **hint** và **limn** thoả tầng 2 (12 check mỗi model, tất cả ok).
+   * **Tầng 3 — chỉ 5/17 cấu hình có pair; 12 không có, nên không thể đạt.** Trong 12 đó **2** vẫn tới
+     được gate nhưng bị từ chối ngay (`conesep`, `intent`: `G1_ONLY`, chỉ có nửa native,
+     `PARITY_EVIDENCE_MISSING`, 0 failure, không dimension nào) và **10** không tới được gate lần nào:
+     hai `specified-not-built` (`clvc_net` cần hook hai-model, `tme` từ chối subset category); một
+     `SCOPE_DECISION` (`ptha_mtst`, `SELECTED_TRANSFER_ONLY`); 6 chặn vì interpreter/asset/adapter
+     (`airknow`, `dcnet`, `combiner_rn50x4_noft`, `clip4cir_rn50x4_fullft` thiếu `WORKBENCH_*_PYTHON`;
+     `sprc` không có `model_sprc.py` + thiếu ViT-g; `csmcir` adapter `score()` là đại lượng khác); một
+     deferred (`pair`). Vậy trong 17 entry registry, **chỉ 5** có thể đạt một verdict; 2 bị từ chối là
+     `EVIDENCE_MISSING`; 10 còn lại `NOT_RUN` nên không có verdict để đạt.
+
+   **Số học, để không ai phải suy:** để có **PASS đầu tiên** cần tầng 1 giải xong **và** tầng 2 thoả
+   **cho cùng model đó** — sửa `max_rel` một mình cho **0** pass mới ở ba model tầng-2-thiếu, và cho
+   **2** ở hint/limn (nhưng tổng campaign vẫn không đổi vì tầng 3). Để **cả 17** được accounted thì cần
+   thêm hook tầng 3 **và** interpreter của operator. Không cái nào một mình là đủ, và **không** cái nào
+   là một chỉnh tolerance.
+
 2. **Cả năm pair đều hỏng, và cả năm chỉ vì số hạng tương đối — 5/5, không phải 4/5.** Đọc
    `raw/parity-coverage/gate.json`, 19 failure trên 5 model, **mọi tên đều kết thúc bằng `.max_rel`**:
    encoder 9 (`dress|shirt|toptee` × `population.features_vs_native_val_control`, `population.gallery_vs_native`,
