@@ -13,7 +13,7 @@
 #   E GPU not bypassed          declared variant still yields PC_GPU_VALIDATION_PENDING unprobed
 #   F missing metric            recorded None relative error never becomes a deviation flag
 #   G job status contract       /api/jobs statuses are lowercase backend enum values
-#   H threshold display-only    UI copy present in source AND built bundle; gate rule stays 5%
+#   H threshold display-only    bundle named by dist/index.html exists and carries both gate labels
 #   I malformed report          /api/runs/gate returns a structured verdict, not a crash
 #
 # Groups A, G and I need a live server; B, C, D, E, F and H are offline source/CLI checks.
@@ -158,8 +158,20 @@ assert isinstance(served, list) and served, "models payload must be a non-empty 
 import yaml
 registry = yaml.safe_load(open(f"{repo}/workbench/registry/models.yaml", encoding="utf-8"))
 declared = {m["model_id"]: m for m in registry["models"]}
+# The registry may DEFER a model from the website (`web_publication.status: DEFERRED`, with the
+# reason recorded there). That is a publication decision, not a deletion: the model keeps its row,
+# its checkpoints and its offline CLI, and `/api/models` withholds it on purpose. So the expected
+# served set is the registry minus the deferred entries — asserting equality with the whole
+# registry made this check fail forever on a registry that defers anything, which is the same
+# closed-gate defect as group H's deleted prose. The deferral itself is still verified: a deferred
+# entry that the API serves is a FAIL, not an exemption.
+deferred = {m["model_id"] for m in registry["models"]
+            if (m.get("web_publication") or {}).get("status") == "DEFERRED"}
+expected = set(declared) - deferred
 served_ids = {m["model_id"] for m in served}
-assert served_ids == set(declared), f"served models differ from registry: {sorted(served_ids ^ set(declared))}"
+assert served_ids == expected, (
+    f"served models differ from registry-minus-deferred: {sorted(served_ids ^ expected)}")
+assert not (served_ids & deferred), f"deferred models are still served: {sorted(served_ids & deferred)}"
 # A registry row may legitimately declare NO runnable protocol (ptha_mtst is a
 # source_blocker row), so the check is equality with the declaration, not presence.
 for m in served:
@@ -169,7 +181,8 @@ for m in served:
     assert (m.get("environment") or {}).get("python_env_var") == \
         (row.get("environment") or {}).get("python_env_var"), \
         f"{m['model_id']}: environment declaration differs from the registry"
-print(f"OK {len(served)} models, ids/protocols/environments match the registry")
+withheld = f"; deferred by the registry: {sorted(deferred)}" if deferred else ""
+print(f"OK {len(served)} models, ids/protocols/environments match the registry{withheld}")
 EOF
 )"
     if echo "${OUT}" | grep -q "^OK"; then
@@ -285,20 +298,39 @@ else
     skip "I live check (no server)"
 fi
 
-say "== H threshold display-only (source AND built bundle) =="
-if grep -rq "phán quyết audit chuẩn" "${REPO}/workbench/frontend/App.tsx"; then
-    say "  PASS display-only copy present in source"
-else
-    say "  FAIL display-only copy missing"; FAILED+=("H-copy")
-fi
-if [[ -d "${REPO}/workbench/frontend/dist" ]]; then
-    if grep -rq "phán quyết audit chuẩn" "${REPO}/workbench/frontend/dist"; then
-        say "  PASS display-only copy present in the built bundle"
-    else
-        say "  FAIL built bundle does not carry the copy (rebuild the frontend)"; FAILED+=("H-bundle")
-    fi
-else
+say "== H threshold display-only (built bundle carries both gate labels) =="
+# 4e61f2f deleted the `phán quyết audit chuẩn` prose on purpose ("let the payload, not the UI,
+# decide status"), so grepping for it could never pass. The copy the UI emits today comes from
+# gate.ts, and this is the same assertion as J10 of release_verify.sh: the bundle the shell names
+# must exist and carry both labels, so one gate is not retired while the other stays stale.
+h_dist="${REPO}/workbench/frontend/dist"
+if [[ ! -d "$h_dist" ]]; then
     skip "H built-bundle check (frontend/dist absent)"
+else
+    h_bundle=""
+    if [[ ! -f "$h_dist/index.html" ]]; then
+        say "  FAIL dist/index.html missing (run vite build)"; FAILED+=("H-bundle")
+    else
+        h_ref="$(grep -o '/assets/[^"]*\.js' "$h_dist/index.html" 2>/dev/null | head -1)"
+        h_ref="${h_ref#/assets/}"
+        if [[ -z "$h_ref" ]]; then
+            say "  FAIL dist/index.html references no built bundle"; FAILED+=("H-bundle")
+        elif [[ ! -f "$h_dist/assets/${h_ref}" ]]; then
+            say "  FAIL dist/index.html references ${h_ref}, which is absent from dist/assets"; FAILED+=("H-bundle")
+        else
+            h_bundle="$h_dist/assets/${h_ref}"
+        fi
+    fi
+    if [[ -n "$h_bundle" ]]; then
+        h_missing=""
+        grep -q "CAPTION THAY THẾ" "$h_bundle" 2>/dev/null || h_missing="CAPTION THAY THẾ"
+        grep -q "LỆCH PAPER" "$h_bundle" 2>/dev/null || h_missing="${h_missing:+$h_missing, }LỆCH PAPER"
+        if [[ -z "$h_missing" ]]; then
+            say "  PASS the served bundle carries both display-only labels (CAPTION THAY THẾ, LỆCH PAPER)"
+        else
+            say "  FAIL built bundle lacks the display-only label(s): ${h_missing} (rebuild the frontend)"; FAILED+=("H-copy")
+        fi
+    fi
 fi
 
 if (( ${#FAILED[@]} )); then

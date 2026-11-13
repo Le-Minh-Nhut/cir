@@ -505,6 +505,92 @@ def _run_scanner(snippet: str, *args: str) -> tuple[int, str]:
                                capture_output=True, text=True, timeout=120)
     return completed.returncode, completed.stdout + completed.stderr
 
+def test_group_h_verifies_what_both_frontend_gates_actually_assert() -> None:
+    """Group H grepped for `phán quyết audit chuẩn`, prose `4e61f2f` DELETED on purpose, so the
+    delivery path ended in `ACCEPTANCE FAILED: H-copy H-bundle` unconditionally — a check that can
+    never pass is not a check. It now mirrors release_verify.sh J10: the bundle named by
+    dist/index.html must exist and carry both labels gate.ts emits. This test guards the
+    agreement between the two gates, which is what let them drift apart unnoticed."""
+    script = (REPOSITORY / "workbench" / "docker" / "acceptance.sh").read_text(encoding="utf-8")
+    verifier = (REPOSITORY / "workbench" / "docker" / "release_verify.sh").read_text(encoding="utf-8")
+    h_start = script.index("== H threshold display-only")
+    h_block = script[h_start:script.index("if (( ${#FAILED[@]} )); then", h_start)]
+    # The prose may appear in the explanatory comment; what must not appear is an ASSERTION on it.
+    assert "grep -rq \"phán quyết audit chuẩn\"" not in script, (
+        "group H again asserts copy commit 4e61f2f deleted on purpose, so it can never pass")
+    add_checks = []
+    for gate in (h_block, verifier):
+        for label in ("CAPTION THAY THẾ", "LỆCH PAPER"):
+            assert label in gate, f"{label} is not asserted in both frontend gates"
+        # The bundle the shell names, not any bundle that happens to exist.
+        assert "dist/index.html" in gate
+        add_checks.append(gate)
+
+def test_group_c_derives_the_served_set_from_the_registry_minus_its_deferrals() -> None:
+    """Group C asserted the served ids EQUAL the whole registry, but `/api/models` withholds a
+    `web_publication.status: DEFERRED` entry by design, so on the current registry (17 entries, PAIR
+    deferred, 16 served) the gate failed forever — the same closed-gate defect as group H. The
+    expected set must be the registry minus its deferrals, and the deferral itself must still be
+    checked: a deferred entry that IS served has to FAIL rather than be excused."""
+    script = (REPOSITORY / "workbench" / "docker" / "acceptance.sh").read_text(encoding="utf-8")
+    start = script.index("== C one configuration")
+    block = script[start:script.index("more precisely", start)] if "more precisely" in script[start:] else script[start:script.index('say "== D checkpoint', start)]
+    assert "set(declared) - deferred" in block, (
+        "group C must compare against the registry minus its deferred entries")
+    assert "served_ids & deferred" in block, (
+        "group C must fail when a deferred model is nonetheless served")
+    assert "assert served_ids == set(declared)" not in block, (
+        "group C compares against the whole registry again, so a deferring registry can never pass")
+
+def test_group_h_can_fail_on_each_of_its_three_conditions(tmp_path) -> None:
+    """Group H must FAIL when the bundle lacks a label, when index.html names an absent bundle,
+    and when dist/assets is empty. A check that cannot fail is not a check, so each condition is
+    exercised against a copy of the real dist."""
+    import re
+    import shutil
+    import subprocess
+
+    script = (REPOSITORY / "workbench" / "docker" / "acceptance.sh").read_text(encoding="utf-8")
+    start = script.index('say "== H threshold display-only')
+    end = script.index("if (( ${#FAILED[@]} )); then", start)
+    harness = tmp_path / "h.sh"
+    harness.write_text(
+        "#!/usr/bin/env bash\nset -uo pipefail\nREPO=\"$1\"\nFAILED=()\nSKIPPED=()\n"
+        'say() { printf \'%s\\n\' "$*"; }\n'
+        'skip() { say "  SKIP $1"; SKIPPED+=("$1"); }\n'
+        + script[start:end]
+        + '\nif (( ${#FAILED[@]} )); then say "FAILED ${FAILED[*]}"; exit 1; fi\nexit 0\n',
+        encoding="utf-8")
+
+    real = REPOSITORY / "workbench" / "frontend" / "dist"
+
+    def repo_copy(name: str) -> Path:
+        dist = tmp_path / name / "workbench" / "frontend" / "dist"
+        shutil.copytree(real, dist)
+        return dist
+
+    def group_h(dist: Path) -> subprocess.CompletedProcess:
+        return subprocess.run(["bash", str(harness), str(dist.parents[2])],
+                              capture_output=True, text=True, timeout=60)
+
+    assert group_h(repo_copy("ok")).returncode == 0, "the unmodified bundle must PASS"
+    bundle = next((repo_copy("nolabel") / "assets").glob("*.js"))
+    bundle.write_text(bundle.read_text(encoding="utf-8").replace("LỆCH PAPER", "LECH-PAPER"),
+                      encoding="utf-8")
+    missing_label = group_h(bundle.parents[1])
+    assert missing_label.returncode != 0 and "H-copy" in missing_label.stdout
+    absent = repo_copy("absent")
+    shell = absent / "index.html"
+    shell.write_text(re.sub(r'/assets/[^"]*\.js', "/assets/index-ABSENT.js",
+                           shell.read_text(encoding="utf-8")), encoding="utf-8")
+    absent_bundle = group_h(absent)
+    assert absent_bundle.returncode != 0 and "H-bundle" in absent_bundle.stdout
+    empty = repo_copy("empty")
+    for asset in (empty / "assets").iterdir():
+        asset.unlink()
+    empty_assets = group_h(empty)
+    assert empty_assets.returncode != 0 and "H-bundle" in empty_assets.stdout
+
 def _stub_readiness(repo: Path, document: dict) -> None:
     """A stand-in pc_readiness.py that prints exactly this document, so the scanner's own
     filtering is what the test exercises."""
