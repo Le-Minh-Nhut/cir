@@ -8,8 +8,8 @@ suy luận thì ghi `[SUY LUẬN]`. Không chạy GPU, không restart service, k
 **COMPLETE.**
 
 Lý do: cả năm dòng nghiệm thu đều có lệnh chứng minh và kết quả đo trong record; `acceptance.sh` trả
-`ACCEPTANCE PASSED (skipped: G-status-unverified)` rc 0; sweep tại pin đúng 3330/3330 thu
-(3275/8/47), 0 lỗi mới so sweep trước; guard release 8 passed sau khi nâng pin; 8 id sweep đỏ và 19
+`ACCEPTANCE PASSED (skipped: G-status-unverified)` rc 0; sweep tại pin đúng 3338/3338 thu
+(3283/8/47), 0 lỗi mới so sweep trước; guard release 8 passed sau khi nâng pin; 8 id sweep đỏ và 19
 failure gate đều đã phân lớp, **0** thuộc lớp `absent_evidence` hay `derived_invariant`. Không có
 check nào "coi như xong" mà thiếu số đo: hai dòng từng `UNVERIFIED` (L09, L22) đã được đo lại trong
 lượt này (xem §Năm dòng).
@@ -21,17 +21,17 @@ lượt này (xem §Năm dòng).
 | HEAD | **`git rev-parse HEAD` là thẩm quyền** — không chốt SHA ở đây, vì tài liệu này được chính commit chứa nó đưa vào cây. HEAD **lúc đo** = `a53044f7cf5607a08975e135f7698444986e855e`; hai commit chỉ-tài-liệu sau đó (`6ee1618`, `d2edc02`) không chạm cây production | `git rev-parse HEAD` |
 | `origin/research/cir-failure-workbench` | bằng HEAD tại mọi thời điểm đo; `git rev-list --left-right --count HEAD...origin/research/cir-failure-workbench` = `0	0` **lúc đo** (và lại `0 0` sau khi push hai commit tài liệu) | `git rev-list --left-right --count` |
 | nhánh | `research/cir-failure-workbench` | `git branch --show-current` |
-| `TESTED_SOURCE_SHA` | `90f7b2c1e1f6b8474570961ae5a2e08ecf2ee36c` (có trong **cả hai** release doc) | `FINAL_PC_RELEASE_VERDICT.md:22`, `PC_PILOT_HANDOFF.md` |
-| cây production tại pin == HEAD | `git diff --quiet 90f7b2c HEAD -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'` → exit **0**. Đây là **bất biến**, không phải một SHA đóng băng: nó đúng ở `a53044f`, ở `6ee1618`, ở `d2edc02`, và sẽ đúng ở mọi commit chỉ-sửa-`workbench/docs` tiếp theo | đo lại lượt này, và sau mỗi commit tài liệu |
+| `TESTED_SOURCE_SHA` | `82b0b3fb72e9181a8835c07a0974a1279f21aeef` (có trong **cả hai** release doc) | `FINAL_PC_RELEASE_VERDICT.md:22`, `PC_PILOT_HANDOFF.md` |
+| cây production tại pin == HEAD | `git diff --quiet 82b0b3fb72e9181a8835c07a0974a1279f21aeef HEAD -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'` → exit **0**. Đây là **bất biến**, không phải một SHA đóng băng: nó đúng ở `c502b98` và ở mọi commit chỉ-sửa-`workbench/docs` tiếp theo | đo lại lượt này, và sau mỗi commit tài liệu |
 | bundle đã deploy | `dist/assets/index-8klMGIWd.js` **399 398 B**, sha256 `43b2618c56bf2a355dda893c774d8160ab64fcbb1df88623d84159baea284d87` | `sha256sum`, và `curl :5173/assets/…` cho **cùng** digest |
 | shell | `dist/index.html` **271 B**, sha256 `696c23fcaec29e809f997063e3a758afd3665859d397b9741e9c76fcc6ea0d04`; served == built | đo lại lượt này |
-| `dist` | gitignored (`.gitignore:95`, 0 path tracked) → **deploy mà không commit**, có chủ ý | `SWEEP_90f7b2c.md` §1 |
-| backend | PID **2816638**, `ActiveEnterTimestamp=Fri 2026-11-13 10:10:07 +07`, `NRestarts=0`, `KillMode=mixed`, `TimeoutStopUSec=30s` | `systemctl --user show` (đo lại) |
-| frontend | PID **2816640**, cùng timestamp, `NRestarts=0`, `KillMode=control-group`, `TimeoutStopUSec=5s` | `systemctl --user show` (đo lại) |
+| `dist` | gitignored (`.gitignore:95`, 0 path tracked) → **deploy mà không commit**, có chủ ý | `SWEEP_82b0b3f.md` §1 |
+| backend | PID **2946713**, `ActiveEnterTimestamp=Fri 2026-11-13 12:14:56 +07`, `NRestarts=0`, `KillMode=mixed`, `TimeoutStopUSec=30s` | `systemctl --user show` (đo lại sau khi redeploy pin `82b0b3f`) |
+| frontend | PID **2946715**, cùng timestamp, `NRestarts=0`, `KillMode=control-group`, `TimeoutStopUSec=5s` | `systemctl --user show` (đo lại sau khi redeploy pin `82b0b3f`) |
 | runtime roots | `CIR_DATA_ROOT=/home/heheboiz/data/cir/data` · `FASHIONIQ_ROOT=…/data/FashionIQ` · `WORKBENCH_ARTIFACTS_ROOT=…/workbench/artifacts` · `WORKBENCH_CHECKPOINT_ROOT=…/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads` · `WORKBENCH_RESULTS_ROOT=…/artifacts/results` · `WORKBENCH_THIRD_PARTY_ROOT=…/workbench/third_party` · `WORKBENCH_CIRCUS_RELEASE_ROOT=…/artifacts/circus_release` | `workbench/config/workbench.env:1-8` |
-| artifact roots | sweep/test log `/tmp/sweep_90f7b2c.txt`; evidence campaign `workbench/docs/reviews/20261113-final-acceptance/raw/**`; artifact native/CIRCUS `workbench/artifacts/**` | record từng lane |
+| artifact roots | sweep/test log `/tmp/sweep_82b0b3f.txt`; evidence campaign `workbench/docs/reviews/20261113-final-acceptance/raw/**`; artifact native/CIRCUS `workbench/artifacts/**` | record từng lane |
 | interpreters | control `workbench/envs/ctl312h/bin/python` = CPython **3.12.11** (`uv` cpython-3.12.11-linux-x86_64-gnu); model envs: `encoder310/limn310-adapted`→cpython-3.10.20, `ilearn39/clvc39-la/tgcir39-la`→3.9.25, `tme-adapted`→3.10, `artifacts/environments/cir-005ef4e1b02999a5`→3.10 | `-VV`; `raw/00-state/06-interpreters.txt`; `executability.json` |
-| đĩa | `/` **545G dùng / 53G trống (92%)** — trên sàn 45 GiB | `df -h /` (đo lại lượt này; sweep ghi 84 GiB free lúc chạy) |
+| đĩa | `/` **84 GiB trống** trước sweep (đã xoá `/tmp/sweep_basetemp_90f7b2c` 31 GiB); sau sweep còn ~53 GiB — trên sàn 45 GiB | `df -h /` (đo lại) |
 | GPU | RTX 5070 Ti, 748 MiB / 16 303 MiB, **0 compute app** — không job nào đang chạy | `nvidia-smi` (đo lại) |
 
 ## Năm dòng nghiệm thu
@@ -42,7 +42,7 @@ lượt này (xem §Năm dòng).
 | 2 | **gate trustworthy** | `curl -s :8000/api/runs/parity-gate` (và `raw/parity-coverage/gate.json` từ `parity_gate.evaluate_all()` in-process) | `passed_models: []`; `standard` là **chuỗi** `parity-relative/v1` (+ `standards` phân nhóm); 7 model được phán; 19 failure: encoder 9 / habit 2 / hint 2 / limn 3 / tgcir 3 — **giống hệt** `evaluate_all()`; 19/19 lớp `measured_disagreement`, **0** `absent_evidence`, **0** `derived_invariant`; `conesep`/`intent` = `PARITY_EVIDENCE_MISSING` (0 failure, không phải pass) |
 | 3 | **CLVC usable** | `curl -s ':8000/api/composition/diagnostics/clvc-dual-scope?qid=7:3790'` · `curl -s ':8000/api/composition/diagnostics/limn-dual-scope?qid=7:3038'` · probe browser 12 ô | cả hai route **200** `DIAGNOSTIC_COMPLETE`, `complete:true`, `defects:[]`; 12 ô browser vs `INVENTORY.md` = **0 mismatch**, mỗi ô 100 tile, 4/4 ô ablation có banner self-match, 12/12 target "ngoài cửa sổ Top-100" kèm rank tuyệt đối |
 | 4 | **parity/benchmark scope accounted** | `pairs_on_disk.json` · `executability.json` · `unprobed_contracts.json` · `gate.json` | 5 pair (encoder, habit, hint, limn, tgcir); 10 EXECUTABLE / 5 `ENV_VAR_UNSET` / 1 `ADAPTER_NOT_READY` / 1 `NO_ADAPTER`; mỗi model không đo được có **record blocker tái chạy được** (lệnh + lỗi verbatim), 4 model EXECUTABLE không pair có contract trích từ code pin |
-| 5 | **release reproducible** | `pytest workbench/tests/test_handoff_commands.py` · `bash workbench/docker/acceptance.sh` · sweep serial | guard **8 passed** (15.22 s, đo lại lượt này); `ACCEPTANCE PASSED (skipped: G-status-unverified)` rc 0; sweep `90f7b2c` **3275 passed / 8 failed / 47 skipped = 3330**, 3808.40 s, `^ERROR` 0, `Errno 28` 0, **0 new / 0 gone / 8 identical** |
+| 5 | **release reproducible** | `pytest workbench/tests/test_handoff_commands.py` · `bash workbench/docker/acceptance.sh` · sweep serial | guard **8 passed** (16.19 s, đo lại lượt này); `ACCEPTANCE PASSED (skipped: G-status-unverified)` rc 0; sweep `82b0b3f` **3283 passed / 8 failed / 47 skipped = 3338**, 3969.99 s, `^ERROR` 0, `Errno 28` 0, **0 new / 0 gone / 8 identical** |
 
 Ghi chú trung thực cho dòng 5: lần chạy acceptance **đầu tiên sau restart** báo sai
 `SKIP A/C/G/I live checks (no server)` vì `/api/models` còn nguội (phân giải
@@ -82,10 +82,10 @@ Không con số nào dưới đây được dùng thay cho con số khác.
 | **specified-not-built** | **2** | `clvc_net`, `tme` (code có, hook thiếu) | `unprobed_contracts.json` |
 | **G1_ONLY** | **2** | `conesep`, `intent` | `pairs_on_disk.json` |
 | CIRCUS run **thật** | **34** | 36 `full.json` − 2 synthetic (`fixture_encoder`, `fixture_habit`); `released_audit` là run thật, được đếm | `workbench/artifacts/composition/**/full.json` |
-| sweep passed / failed / skipped / collected | **3275 / 8 / 47 / 3330** | một lượt serial | `SWEEP_90f7b2c.md` §3 |
-| id sweep đỏ còn lại | **8** | danh sách §Danh sách lỗi còn đỏ | `SWEEP_90f7b2c.md` §4 |
+| sweep passed / failed / skipped / collected | **3283 / 8 / 47 / 3338** | một lượt serial | `SWEEP_82b0b3f.md` §3 |
+| id sweep đỏ còn lại | **8** | danh sách §Danh sách lỗi còn đỏ | `SWEEP_82b0b3f.md` §4 |
 | id baseline đã đóng bởi chiến dịch | **12** | 4 blip + tme_precision + J10 ×7 | `raw/ops-gaps/REPAIRS.md` |
-| test pytest đã collect | **3330** | `--collect-only`, không đổi từ `e833eda` | `SWEEP_90f7b2c.md` §3 |
+| test pytest đã collect | **3338** | `--collect-only`; +8 so `90f7b2c` do 8 test memo/stamp mới | `SWEEP_82b0b3f.md` §3 |
 
 Bốn đại lượng từng bị dùng lẫn trong `MODEL_MATRIX.md` (25 key / 17 model / 23 dòng / 27 trùng —
 `LEDGER.md` L29): **không** đại lượng nào ở bảng trên là "đã đánh giá". "Native-eval 9" là *có
@@ -93,7 +93,7 @@ aggregate*, không phải *đã tái lập*.
 
 ## Danh sách lỗi còn đỏ
 
-### 8 id sweep (đo tại `90f7b2c`, y nguyên tập của `e833eda`)
+### 8 id sweep (đo tại `82b0b3f`, y nguyên tập của `90f7b2c`/`e833eda`)
 
 | id | lớp | lý do |
 |---|---|---|
@@ -143,6 +143,7 @@ Mỗi dòng kèm bằng chứng **trước khi sửa**.
 | 14 | **acceptance.sh group H**: mirror J10 (bundle + 2 nhãn), không grep copy chết | H trên `43bfc9e` không thể PASS; test mới trong `test_final_hardening_regressions.py` (3 thêm, 48 trong file, xanh) |
 | 15 | **acceptance.sh group C**: kỳ vọng = registry − deferral, và **deferred mà vẫn served = FAIL** | C đòi served **bằng** cả 17 entry trong khi `393de24` cố ý giữ 16 → bất khả thi |
 | 16 | **frontend unit KillMode**: `control-group` + `TimeoutStopSec=5`; backend giữ `mixed`/30 s có chủ ý + negative control | `mixed`: npm 22 ms, **node 32 506 ms**, port free 66 266 ms, restart cùng port thất bại; `control-group`: 22 / **24** / **51 ms**, restart ngay. Test `test_frontend_stop_contract.py` (4) mutation-proof: revert → 3 failed |
+| 18 | **parity gate cost**: `_component_scope_check` không còn dựng dict mỗi-component; `evaluate_all` memo hoá trên stamp artifact; verdict **không đổi byte nào** | `/api/runs/parity-gate` 4.37 s CPU và **480.6 MiB** peak RSS — chặn UI vài giây mỗi lần mở trang parity, và cấp phát lại đúng nửa gigabyte cho mỗi request đồng thời. Nay cold **3.07 s** HTTP (2.83–3.06 s in-process), RSS **270.4 MiB**, warm **6.3–7.3 ms** HTTP (1.45–1.53 ms in-process); trang parity hiện bảng sau **0.25 s**, request `parity-gate` **132 ms** (performance timing). Payload md5 `da701905419b8b9833966f637ac521a8` **giống hệt** trước fix, `evaluate_model('encoder')` `2edf794cf460cf14abab02b2ba48fafe`; cache không bị poison, xoá artifact thì payload đổi, restore thì về baseline |
 | 17 | **`model` bị rơi khỏi location model**: `model` là field của `Location`, serialize cuối; URL nêu view mà không nêu area thì lấy area sở hữu view | `?area=evaluation&view=native&model=pair` sau load → `model=` **biến mất**, notice không hiện; `?view=native` trần rơi về dashboard. Nay `node --test tests/model-param.test.cjs` **9 passed**; 3 deep link đều hiện notice |
 
 12 id baseline đóng bởi #11, #12, #13 (×7) và `circus_cli` tự xanh (`TASK2_TRIAGE.md` bảng tổng).
@@ -282,15 +283,15 @@ hoặc (c) log `signum` trong `forward_stop`. Không bịa nghi phạm.
 ```bash
 # 0. cây đã kiểm thử (KHÔNG dùng git reset --hard; PC_PILOT_HANDOFF.md:60)
 git clone git@github.com:Le-Minh-Nhut/cir.git && cd cir
-git checkout 90f7b2c1e1f6b8474570961ae5a2e08ecf2ee36c     # = TESTED_SOURCE_SHA
+git checkout 82b0b3fb72e9181a8835c07a0974a1279f21aeef     # = TESTED_SOURCE_SHA
 git rev-parse HEAD                                        # phải in đúng SHA trên
-git diff --quiet 90f7b2c HEAD -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'; echo $?   # 0
+git diff --quiet 82b0b3f HEAD -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'; echo $?   # 0
 
 # 1. sweep (một tiến trình, ~64 phút; cây phải đứng yên)
-mkdir -p /tmp/sweep_basetemp_90f7b2c
+mkdir -p /tmp/sweep_basetemp_82b0b3f
 setsid nohup workbench/envs/ctl312h/bin/python -m pytest workbench/tests \
-  -q -p no:cacheprovider -rfE --tb=short --basetemp=/tmp/sweep_basetemp_90f7b2c \
-  > /tmp/sweep_90f7b2c.txt 2>&1 < /dev/null &
+  -q -p no:cacheprovider -rfE --tb=short --basetemp=/tmp/sweep_basetemp_82b0b3f \
+  > /tmp/sweep_82b0b3f.txt 2>&1 < /dev/null &
 
 # 2. gate in-process (không HTTP — service :8000 không --reload nên có thể cũ)
 workbench/envs/ctl312h/bin/python \
@@ -311,7 +312,7 @@ workbench/envs/ctl312h/bin/python \
   workbench/docs/reviews/20261113-final-acceptance/raw/live-verify/probe_live_verify.py
 
 # 5. rollback — thủ tục của repo (không có lệnh "rollback" riêng; đây là nó)
-git checkout 90f7b2c1e1f6b8474570961ae5a2e08ecf2ee36c
+git checkout 82b0b3fb72e9181a8835c07a0974a1279f21aeef
 (cd workbench/frontend && npm run build)      # dist gitignored → PHẢI build lại, không checkout được
 workbench/envs/ctl312h/bin/python workbench/systemd/render_units.py --install
 systemctl --user daemon-reload
