@@ -27,9 +27,15 @@ Tất cả báo cáo JSON chi tiết nằm tại [`workbench/artifacts/isolated-
 | 11 | **PTHA+MTST** (`cirr_transfer`) | `original_split` | PASS (`6016/6016`) | `48` / **`0`** | `+2/-0` | `+0/-0` | `+0.0331` | `0.0000` | `3.05e-05` | `9.00e-07` | `0` | **PASS (tie-only)** |
 | 12 | **SPRC** (`sprc_fiq_vitl`) | `original_split` | PASS (`6016/6016`) | `49` / **`0`** | `+2/-0` | `+0/-0` | `+0.0331` | `0.0000` | `5.07e-07` | `1.23e-06` | `0` | **PASS (tie-only)** |
 | 13 | **TME** (`fashioniq_0`) | `original_split` | PASS (`6016/6016`) | `54` / **`0`** | `+2/-1` | `+0/-0` | `+0.0165` | `0.0000` | `1.25e-06` | `3.03e-06` | `0` | **PASS (tie-only)** |
-| 14 | **DCNet** (`tf32=False`) | `full_gallery_ref_excluded` | PASS (`6016/6016`) | `27` / `3` | `+0/-2` | `+0/-0` | `-0.0331` | `0.0000` | `7.53e-05` | `2.40e-04` | `0` | **SCORE V3 PASS** (3 non-tie do batch_size ResNet50) |
-| 15 | **CLIP4Cir (`fullft`)** | `original_split` | PASS (`6016/6016`) | `58` / `1` | `+3/-2` | `+0/-0` | `+0.0157` | `0.0000` | `7.17e-05` | `1.33e-04` | `0` | **SCORE V3 PASS** (1 non-tie do TF32 RN50x4 conv) |
-| 16 | **CLIP4Cir (`noft`)** | `original_split` | PASS (`6016/6016`) | `62` / `4` | `+1/-0` | `+0/-0` | `+0.0165` | `0.0000` | `2.38e-04` | `6.22e-04` | `21` | **FAIL NHẸ** (21/60160 cặp vượt `1e-4` do TF32 RN50x4 conv re-encode theo query batch order) |
+| 14 | **CLIP4Cir (`fullft`)** | `original_split` | Structural PASS (chưa so tensor/token) | `57` / **`0`** | `+3/-2` | `+0/-0` | `+0.0157` | `0.0000` | `9.54e-07` | `1.83e-06` | `0` | **PASS (tie-only, sau sửa tái dùng gallery ref)** |
+| 15 | **CLIP4Cir (`noft`)** | `original_split` | Structural PASS (chưa so tensor/token) | `57` / **`0`** | `+1/-0` | `+0/-0` | `+0.0165` | `0.0000` | `7.15e-07` | `1.90e-06` | `0` | **PASS (tie-only, sau sửa tái dùng gallery ref)** |
+| 16 | **DCNet** (`tf32=False, trg=100, q=32`) | `full_gallery_ref_excluded` | Structural PASS (chưa so tensor/token) | `20` / `14` | `+0/-0` | `+0/-0` | `0.0000` | `0.0000` | `5.34e-05` | `2.40e-04` | `0` | **SCORE V3 & RECALL PASS** (`ΔR@10=0, ΔR@50=0`; 14 non-tie ngoài Top-50) |
+
+> [!WARNING]
+> **Phạm vi đo thực tế & Điều kiện publish `CURRENT.json`:**
+> 1. **G1:** `g1_summary_all_16.json` mới kiểm tra khớp ID/cấu trúc (`6016/6016` query/ref/target/gallery size), **chưa so tensor pixel tiền xử lý và token ID thực tế** từ hai đường chạy độc lập.
+> 2. **G2:** `target_rank`, `Top-10`, `Top-50`, `R@10`, `R@50` được tính từ **ranking trên toàn bộ gallery** ở cả hai bên (`3,817/6,346/5,373` hoặc `2,454/2,901/2,612`). Riêng sai lệch giá trị điểm (`score_max_abs`, `score_max_rel`, `score_v3_violations`) mới đo trên **Top-10 ứng viên native mỗi query (`10 × 6,016 = 60,160` cặp)**, chưa đo toàn ma trận `6,016 × |G|`.
+> 3. **Publish `workbench/artifacts/parity/v3/CURRENT.json`:** `parity_gate.py:1695-1735` bắt buộc đủ **10 role V3 đã đăng ký trước** (`native_adapter_*`, `*_repeat_1/2`, `*_batch_1/n`) + `v3-plan.json` + `score-ranks.jsonl` + G1 tensor/token capture cho cả 3 category. Hiện chưa có cấu hình nào đủ bộ bằng chứng 10-role này nên **chưa publish vào `CURRENT.json`** (không tạo bằng chứng giả). `PTHA+MTST` tiếp tục giữ nhãn **CIRR-to-FashionIQ transfer** (`cirr_transfer`).
 
 > [!NOTE]
 > - **13/16 cấu hình đạt G2 V3 hoàn toàn (`v3_viol = 0` và `non_tie_rank_changes = 0`)**, trong đó 9 cấu hình có `ΔR@10 = 0.0000, ΔR@50 = 0.0000`, và 4 cấu hình thuộc `fashioniq_original_split` (`CSMCIR`, `PTHA+MTST`, `SPRC`, `TME`) chỉ có tie-breaking trong `tie_epsilon = 1e-6` (giữa `torch.argsort` GPU vs `np.argsort` CPU trên ảnh trùng lặp trong gallery `dress`).

@@ -254,7 +254,7 @@ def _run(adapter: Clip4CirBase, operation: str, image_paths: Sequence[str],
     job_path = work / f"job-{adapter._worker_counter}.json"
     output_path = work / f"output-{adapter._worker_counter}.npy"
     scope = categories[0] if categories and len(set(categories)) == 1 else "global"
-    job_path.write_text(json.dumps({
+    payload: dict[str, Any] = {
         "operation": operation,
         "model_id": adapter.model_id,
         "image_paths": [str(Path(path).resolve()) for path in image_paths],
@@ -264,7 +264,10 @@ def _run(adapter: Clip4CirBase, operation: str, image_paths: Sequence[str],
         "members": {role: str(path) for role, path in adapter.members.items()},
         "checkpoint_id": adapter._checkpoint["checkpoint_id"],
         "batch_size": adapter.batch_size,
-    }), encoding="utf-8")
+    }
+    if getattr(adapter, "reuse_target_image_features", False):
+        payload["reuse_target_image_features"] = True
+    job_path.write_text(json.dumps(payload), encoding="utf-8")
     try:
         if adapter._worker is not None and adapter._worker.poll() is not None:
             status = adapter._worker.returncode
@@ -411,33 +414,62 @@ def _worker_main(argv: Sequence[str] | None = None) -> int:
         reply(False, error_type=type(error).__name__, error=str(error))
         return 1
 
+    target_image_cache: dict[str, Any] = {}
+
     def run_one(current: dict[str, Any]) -> None:
         outputs = []
+        reuse_cached = bool(current.get("reuse_target_image_features", False))
         try:
             with torch.no_grad():
                 batch_size = max(1, int(current.get("batch_size") or 32))
                 paths = current["image_paths"]
+                if current["operation"] == "targets" and reuse_cached:
+                    target_image_cache.clear()
                 batches = [paths[start:start + batch_size]
                            for start in range(0, len(paths), batch_size)]
-                decoded = prefetch_rows(lambda chunk: torch.stack(
-                    [preprocess(_open_image(path)) for path in chunk]), batches, workers)
-                for index, images in enumerate(decoded):
-                    images = images.cuda()
-                    image_features = clip_model.encode_image(images)
-                    if current["operation"] == "queries":
+                use_cache_for_queries = (
+                    current["operation"] == "queries"
+                    and reuse_cached
+                    and bool(target_image_cache)
+                    and all(p in target_image_cache for p in paths)
+                )
+                if use_cache_for_queries:
+                    for index, chunk_paths in enumerate(batches):
                         first = index * batch_size
-                        texts = list(current["texts"][first:first + len(images)])
+                        image_features = torch.stack(
+                            [target_image_cache[p] for p in chunk_paths]
+                        ).cuda()
+                        texts = list(current["texts"][first:first + len(chunk_paths)])
                         tokens = clip.tokenize(texts, context_length=77).cuda()
                         text_features = clip_model.encode_text(tokens)
-                        # `validate.py:105-107`: combine, then L2-normalize the composed query.
                         composed = combiner.combine_features(image_features, text_features)
                         features = composed / composed.norm(dim=-1, keepdim=True).clamp_min(1e-12)
-                    else:
-                        # `validate.py:41`: gallery features are normalized CLIP image features.
-                        features = image_features / image_features.norm(
-                            dim=-1, keepdim=True).clamp_min(1e-12)
-                    outputs.append(features.float().cpu().numpy())
-                    del images
+                        outputs.append(features.float().cpu().numpy())
+                else:
+                    decoded = prefetch_rows(lambda chunk: torch.stack(
+                        [preprocess(_open_image(path)) for path in chunk]), batches, workers)
+                    for index, images in enumerate(decoded):
+                        first = index * batch_size
+                        chunk_paths = paths[first:first + len(images)]
+                        images = images.cuda()
+                        image_features = clip_model.encode_image(images)
+                        if current["operation"] == "queries":
+                            texts = list(current["texts"][first:first + len(images)])
+                            tokens = clip.tokenize(texts, context_length=77).cuda()
+                            text_features = clip_model.encode_text(tokens)
+                            # `validate.py:105-107`: combine, then L2-normalize the composed query.
+                            composed = combiner.combine_features(image_features, text_features)
+                            features = composed / composed.norm(dim=-1, keepdim=True).clamp_min(1e-12)
+                        else:
+                            if reuse_cached:
+                                cpu_raw = image_features.detach().cpu()
+                                for p_str, feat_row in zip(chunk_paths, cpu_raw):
+                                    target_image_cache[p_str] = feat_row
+                            # `validate.py:41`: gallery features are normalized CLIP image features.
+                            features = image_features / image_features.norm(
+                                dim=-1, keepdim=True).clamp_min(1e-12)
+                        outputs.append(features.float().cpu().numpy())
+                        del images
             result = np.concatenate(outputs, axis=0) if outputs else np.empty((0, DIMENSION), dtype=np.float32)
             np.save(current["output_path"], result.reshape(len(current["image_paths"]), -1), allow_pickle=False)
             reply(True)
