@@ -773,10 +773,15 @@ def invoke_evaluator(plan: EvaluationPlan, config: WorkbenchConfig, run_id: str,
         # otherwise never agree with the metric it is supposed to reconstruct.
         captured = directory / "captured-features.npz"
         child_env["WORKBENCH_OBSERVATION_OUT"] = str(captured)
+        if plan.model_id == "limn":
+            native_rankings = directory / "limn-native-rankings"
+            native_rankings.mkdir(mode=0o700)
+            child_env["WORKBENCH_LIMN_NATIVE_RANKINGS_OUT"] = str(native_rankings)
+            child_env["WORKBENCH_LIMN_RUN_ID"] = run_id
 
         try:
-            process = subprocess.Popen(plan.command, cwd=plan.cwd, text=True,
-                                       stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=child_env)
+            process = subprocess.Popen(plan.command, cwd=plan.cwd, env=child_env, text=True,
+                                       stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         except OSError as error:
             raise RuntimeError(
                 f"cannot start the official command {plan.command[0]!r}: {error}") from error
@@ -1916,27 +1921,27 @@ def _run_observation(plan: EvaluationPlan, config: WorkbenchConfig, run_id: str,
     os.chmod(observer_temp, 0o700)
     child_env["TMPDIR"] = str(observer_temp)
     replay_cache = directory / "replay-cache"
+    child_env["WORKBENCH_LIMN_RUN_ID"] = run_id
     if replay_cache.is_dir():
         child_env["WORKBENCH_REPLAY_CACHE_ROOT"] = str(replay_cache)
-    captured = directory / "captured-features.npz"
-    if captured.is_file():
-        child_env["WORKBENCH_OBSERVATION_IN"] = str(captured)
-        child_env["WORKBENCH_OBSERVATION_OUT"] = str(captured)
+    rankings_root = directory / "limn-native-rankings"
+    metrics_path = directory / "limn-native-metrics.json"
     observer_module = f"workbench.replay.{plan.model_id}_export"
     publisher_module = f"workbench.replay.{plan.model_id}_publish"
-    argv = [interpreter, "-m", observer_module,
-            # The plan's own recorded member root: resolved once from the DECLARED artifact type,
-            # so it is the same directory whether or not the weights are on disk yet. `plan.
-            # checkpoint.parent` named the whole checkpoint root for LIMN's three-category bundle
-            # and every member lookup came up one level too high, so observation failed while the
-            # aggregate succeeded (P1 -- the exact regression the 1309-test release did not catch).
-            "--checkpoint-root", str(
-                plan.member_root
-                or checkpoint_member_root(plan.checkpoint, artifact_type=plan.artifact_type)),
-            "--dataset-root", str(plan.dataset_root),
-            "--source-root", str(plan.source),
-            "--results-root", str(results_root),
-            "--run-id", run_id]
+    if plan.model_id == "limn":
+        metrics_path.write_text(json.dumps(category_metrics or {}), encoding="utf-8")
+        argv = [interpreter, "-m", observer_module,
+                "--rankings-root", str(rankings_root),
+                "--dataset-root", str(plan.dataset_root),
+                "--results-root", str(results_root), "--native-metrics", str(metrics_path), "--run-id", run_id]
+    else:
+        argv = [interpreter, "-m", observer_module,
+                "--checkpoint-root", str(
+                    plan.member_root
+                    or checkpoint_member_root(plan.checkpoint, artifact_type=plan.artifact_type)),
+                "--dataset-root", str(plan.dataset_root),
+                "--source-root", str(plan.source),
+                "--results-root", str(results_root), "--run-id", run_id]
     if plan.model_id == "encoder":
         argv += ["--checkpoint-id", plan.checkpoint_id]
     # The observer runs a DIFFERENT command than the aggregate, so its own digests would describe
@@ -2300,7 +2305,8 @@ def execute(plan: EvaluationPlan, config: WorkbenchConfig, run_id: str | None = 
             "per_query_state": per_query_state(capability, per_query_artifact, observation_note),
             "per_query_artifact": str(per_query_artifact) if per_query_artifact else None,
             "per_query_artifact_digest": per_query_artifact_digest,
-            "instrumentation_parity": instrumentation_parity,
+            "ranking_provenance": ("native_argsort_same_invocation"
+                                   if plan.model_id == "limn" and per_query_artifact else None),
             "extraction_status": extraction.extraction_status,
             "metric_extraction_available": extraction.observed_metrics is not None,
             "parser_id": extraction.parser_id,
@@ -2672,8 +2678,7 @@ def verify_gpu_only(items: list[tuple[dict, dict]], config: WorkbenchConfig) -> 
     """
     failed = False
     for model, checkpoint in items:
-        gpu = (model.get("environment") or {}).get("cuda")
-        gpu_required = gpu is not None and str(gpu).upper() != "UNKNOWN"
+        gpu_required = runtime._requires_gpu(model)
         print(f"[RUN] {model['model_id']} / {checkpoint['checkpoint_id']}")
         if not gpu_required:
             print(f"[SKIP] {model['model_id']} declares no CUDA requirement")
@@ -2758,8 +2763,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"[RUN] command: {shlex.join(plan.command)}")
         print(f"[RUN] log directory: {planned_logs}")
         print(f"[RUN] provenance: {planned_logs / 'command.json'}")
-        gpu = (model.get("environment") or {}).get("cuda")
-        gpu_required = gpu is not None and str(gpu).upper() != "UNKNOWN"
+        gpu_required = runtime._requires_gpu(model)
         if args.dry_run:
             if model["model_id"] == "csmcir":
                 print("[PLAN] first-use downloads: LAVIS BLIP-2, EVA-ViT-g, bert-base-uncased; dry-run cannot verify acquisition or evaluator success")
@@ -2789,7 +2793,6 @@ def main(argv: list[str] | None = None) -> int:
             suffix = ("; run `--verify-gpu-only` on the GPU host to record a capability"
                       if gpu_required else "")
             print(f"[BLOCKED] evaluation launch refused: {error}{suffix}", file=sys.stderr)
-            failed = True
             if not args.continue_on_error: break
             continue
         # The run id was minted above, before the announcement, so this is the same identity the

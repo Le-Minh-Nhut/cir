@@ -1,0 +1,39 @@
+{
+  "events": [
+    {
+      "event": "oom_guard_verified",
+      "guard": {
+        "cgroup": "/sys/fs/cgroup/user.slice/user-1000.slice/user@1000.service/app.slice/cir-dcnet-canonical-api-20261121-v3.service",
+        "memory.max": "12884901888",
+        "memory.oom.group": "1",
+        "memory.swap.max": "0"
+      }
+    },
+    {
+      "event": "protected_checkpoint_baseline",
+      "hashes": {
+        "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/checkpoints/dcnet/config.json": "fa5fca78790a33063a4e73b379393f4ffbbf1b251b3c27058aed481136984ba0",
+        "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/checkpoints/dcnet/trained_model.pth": "130f031e0f7808ccf5f15630a691bd7af95ad9fadbf94f64acfce64e7d8b850f",
+        "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/checkpoints/dcnet/val/att_result.pt": "6d776ffad3168e3f62105e07edfb954eb7ff320206cbd62a79c061db25160438"
+      }
+    },
+    {
+      "event": "protected_source_baseline",
+      "source_hashes": {
+        "/home/heheboiz/data/cir/workbench/third_party/DCNet/data_loader/CE_dataset.py": "44bb24e8ada8ed912acad24030e07087caf368d6e3a9ef2b6c5464697611b6a3",
+        "/home/heheboiz/data/cir/workbench/third_party/DCNet/data_loader/data_loaders.py": "cc2b42547def6875ed203480ca30ce1621f45a584ec69fb76f6085c865f66f1d",
+        "/home/heheboiz/data/cir/workbench/third_party/DCNet/model/model.py": "3b383265d4221255fbcc8aecfcca8a401e909c05fed585e8b447f236005952f8",
+        "/home/heheboiz/data/cir/workbench/third_party/DCNet/parse_config.py": "2d68353128ad8d09e736a57674defea46f8ccc5a65b1d5d0778262af19d13327",
+        "/home/heheboiz/data/cir/workbench/third_party/DCNet/test.py": "9d66126d6b4c650134120199791c07e716171bfcd2d2ba2f7d3e2bc89968b5c2",
+        "/home/heheboiz/data/cir/workbench/third_party/DCNet/trainer/trainer_joint.py": "708a9f860f75e05228182da4d09ca314208b424c09b8d6cc49397ef1b8e7e458",
+        "/home/heheboiz/data/cir/workbench/third_party/DCNet/utils/util.py": "c804ea8ef332b84a22b48a8a5100206d4491551bcd83dec3a06c328ec8d44f17"
+      }
+    },
+    {
+      "error": "TimeoutError: timed out",
+      "event": "controller_failed"
+    }
+  ],
+  "run_root": "/home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/canonical-api-admission-20261121T040000+0700/controller",
+  "scope": "canonical POST /api/jobs with HTTP cancel; full official evaluator retry"
+}

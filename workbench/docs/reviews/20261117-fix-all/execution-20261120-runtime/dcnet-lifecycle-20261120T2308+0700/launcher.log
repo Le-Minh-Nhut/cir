@@ -1,0 +1,19 @@
+Running as unit: run-u222.service; invocation ID: 48d3083b042b467bb6d66380368b1578
+[gpu_job] lock held, GPU empty, launching: flock -x /tmp/cir-fix-all-20261120-cpu.lock workbench/envs/dcnet310-sm120/bin/python workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/dcnet_lifecycle_helper.py --run-root /home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/dcnet-lifecycle-20261120T2308+0700 --port 18762 --timeout 1200
+GPU-9bc596d9-19e9-6f43-dc2c-a80da924263c, 562 MiB, 16303 MiB
+Traceback (most recent call last):
+  File "/home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/dcnet_lifecycle_helper.py", line 236, in <module>
+    raise SystemExit(main_cli())
+  File "/home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/dcnet_lifecycle_helper.py", line 232, in main_cli
+    return _serve(parser.parse_args())
+  File "/home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/dcnet_lifecycle_helper.py", line 106, in _serve
+    raise FileExistsError(f"run root must be fresh and empty: {run_root}")
+FileExistsError: run root must be fresh and empty: /home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/dcnet-lifecycle-20261120T2308+0700
+Finished with result: exit-code
+Main processes terminated with: code=exited/status=1
+Service runtime: 72ms
+CPU time consumed: 62ms
+Memory peak: 1.4M
+Memory swap peak: 0B
+
+exit=1

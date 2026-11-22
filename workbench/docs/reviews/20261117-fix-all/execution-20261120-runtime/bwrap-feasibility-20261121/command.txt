@@ -1,0 +1,3 @@
+`/usr/bin/bwrap --unshare-all --die-with-parent --ro-bind /usr /usr --ro-bind /bin /bin --ro-bind /lib /lib --ro-bind /lib64 /lib64 --proc /proc --dev /dev --tmpfs /tmp --dir /home --dir /home/heheboiz --dir /home/heheboiz/data --ro-bind /tmp/cir-bwrap-candidate-smoke-20261121 /home/heheboiz/data/cir /usr/bin/python3 -c '<see stdout contract below>'`
+
+Python check: read canonical `marker.txt` and assert contents equal `DISPOSABLE_ONLY\n`; attempt a write in canonical bind and require `OSError`; for ports 8000, 5173, 5432, connect to `127.0.0.1` with 1s timeout and fail if any `connect_ex` returns 0. Exact result is `stdout.log`; exit code in `exit_code.txt`. This is disposable sandbox only, no candidate checkout.

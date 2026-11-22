@@ -215,18 +215,29 @@ def _run(config: Path, release: Path, adapters: Path, artifacts: Path, monkeypat
     })
     monkeypatch.setattr(runner, "_gpu_identity", lambda: None)
     monkeypatch.syspath_prepend(str(adapters))
+    # Each temp fixture writes a same-named module; importlib otherwise reuses another test's
+    # sys.modules entry, making the identity hash point at stale fixture bytes.
+    synthetic_modules = [module_file.stem for module_file in adapters.glob("synthetic_*.py")]
+    previous_modules = {name: sys.modules[name] for name in synthetic_modules if name in sys.modules}
+    for name in synthetic_modules:
+        sys.modules.pop(name, None)
     monkeypatch.setenv("WORKBENCH_REGISTRY_PATH", str(config.parent / "registry.yaml"))
     monkeypatch.setenv("WORKBENCH_CIRCUS_RELEASE_ROOT", str(release))
     monkeypatch.setenv("WORKBENCH_CIRCUS_SYNTHETIC_FIXTURE", "1")
     monkeypatch.setenv("WORKBENCH_TEST_MODEL_PYTHON", sys.executable)
     monkeypatch.setenv("CIRCUS_TEST_LOG", str(config.parent / "encodes.jsonl"))
-    from workbench.scripts import composition_eval
-    rc = composition_eval.main(["--config", str(config), *args])
-    captured = capsys.readouterr()
     try:
-        return rc, json.loads(captured.out), captured.err
-    except json.JSONDecodeError:
-        return rc, None, captured.err + captured.out
+        from workbench.scripts import composition_eval
+        rc = composition_eval.main(["--config", str(config), *args])
+        captured = capsys.readouterr()
+        try:
+            return rc, json.loads(captured.out), captured.err
+        except json.JSONDecodeError:
+            return rc, None, captured.err + captured.out
+    finally:
+        for name in synthetic_modules:
+            sys.modules.pop(name, None)
+        sys.modules.update(previous_modules)
 
 
 def _log(path: Path) -> list[dict]:

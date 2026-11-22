@@ -27,6 +27,10 @@ from workbench.replay.common import (
     sha256_file,
     source_pin_status,
 )
+from contextlib import ExitStack, contextmanager, nullcontext
+import os
+import numpy as np
+from workbench.scripts.third_model_native_observer import atomic_json, atomic_npz, observe_test_numpy, write_native_scores
 
 MODEL = model_by_id("conesep")
 CHECKPOINTS = {variant["checkpoint_id"]: variant for variant in MODEL["checkpoint_variants"]}
@@ -141,6 +145,65 @@ def _load_replay_modules(source_root: Path) -> tuple[Any, Any, Any, Any, Any]:
     return torch, datasets, data_utils, test_module, (txt_processors, boundary)
 
 
+@contextmanager
+def _capture_native_inputs(model: Any, output: Path, selected: set[int]):
+    captured: dict[str, list[Any]] = {"query_pixels": [], "gallery_pixels": [], "tokens": []}
+    query_start = 0
+    gallery_start = 0
+    original_query = model.extract_retrieval_compose
+    original_target = model.extract_retrieval_target
+    original_tokenizer = model.tokenizer
+
+    def query_forward(pixels: Any, texts: list[str]):
+        nonlocal query_start
+        for offset in range(len(texts)):
+            position = query_start + offset
+            if position in selected:
+                captured["query_pixels"].append((position, pixels[offset].detach().cpu().numpy().copy()))
+        query_start += len(texts)
+        return original_query(pixels, texts)
+
+    def target_forward(pixels: Any):
+        nonlocal gallery_start
+        for offset in range(len(pixels)):
+            position = gallery_start + offset
+            if position in selected:
+                captured["gallery_pixels"].append((position, pixels[offset].detach().cpu().numpy().copy()))
+        gallery_start += len(pixels)
+        return original_target(pixels)
+
+    class TokenizerCapture:
+        def __getattr__(self, name: str) -> Any:
+            return getattr(original_tokenizer, name)
+
+        def __call__(self, texts: Any, *args: Any, **kwargs: Any):
+            encoded = original_tokenizer(texts, *args, **kwargs)
+            for offset, text in enumerate(texts):
+                position = query_start - len(texts) + offset
+                if position in selected:
+                    captured["tokens"].append((position, str(text), encoded.input_ids[offset].detach().cpu().numpy().copy(),
+                                               encoded.attention_mask[offset].detach().cpu().numpy().copy()))
+            return encoded
+
+    model.extract_retrieval_compose = query_forward
+    model.extract_retrieval_target = target_forward
+    model.tokenizer = TokenizerCapture()
+    try:
+        yield
+    finally:
+        model.extract_retrieval_compose = original_query
+        model.extract_retrieval_target = original_target
+        model.tokenizer = original_tokenizer
+        atomic_npz(output,
+            query_positions=np.asarray([r[0] for r in captured["query_pixels"]], dtype=np.int32),
+            query_pixels=np.stack([r[1] for r in captured["query_pixels"]]),
+            gallery_positions=np.asarray([r[0] for r in captured["gallery_pixels"]], dtype=np.int32),
+            gallery_pixels=np.stack([r[1] for r in captured["gallery_pixels"]]),
+            token_positions=np.asarray([r[0] for r in captured["tokens"]], dtype=np.int32),
+            token_texts=np.asarray([r[1] for r in captured["tokens"]]),
+            input_ids=np.stack([r[2] for r in captured["tokens"]]),
+            attention_masks=np.stack([r[3] for r in captured["tokens"]]))
+
 def evaluate_categories(
     checkpoint_root: Path,
     dataset_root: Path,
@@ -156,53 +219,160 @@ def evaluate_categories(
     target_device = device or ("cuda" if torch.cuda.is_available() else "cpu")
     model_path = checkpoint_root / variant["filename"]
     expected_sha = variant.get("expected_sha256") or KNOWN_AUTHOR_SHA256.get(variant_id)
-
-    model = load_trusted_whole_model(model_path, expected_sha, torch)
-    model = model.to(target_device)
-    model.eval()
-
+    model: Any | None = load_trusted_whole_model(model_path, expected_sha, torch).to(target_device).eval()
     transform = data_utils.targetpad_transform(1.25, 224)
     params = SimpleNamespace(batch_size=batch_size, dataset=DATASET_LABEL)
-
     results: list[ReplayResult] = []
+    pair_root = os.environ.get("WORKBENCH_CONESEP_ADAPTER_PAIR_OUT")
+    native_root = os.environ.get("WORKBENCH_CONESEP_NATIVE_RANKINGS_OUT")
     with isolated_cache_root(dataset_root) as cache_root:
         root_str = str(cache_root).rstrip("/") + "/"
-        # ConeSep FashionIQ.__init__ accepts (path, transform, noise_ratio) and hardcodes original-split
-        dataset = datasets.FashionIQ(path=root_str, transform=transform, noise_ratio=0)
-
+        if pair_root:
+            from workbench.replay.tensor_spool import disk_backed_images
+            image_counts: dict[str, int] = {"get_test_img": 0, "get_img": 0}
+            for spool_category in CATEGORIES:
+                image_counts["get_test_img"] += 2 * len(json.loads((dataset_root / "captions" / f"cap.{spool_category}.val.json").read_text()))
+                image_counts["get_img"] += len(json.loads((dataset_root / "image_splits" / f"split.{spool_category}.val.json").read_text()))
+            stack = ExitStack()
+            receipts = [stack.enter_context(disk_backed_images(dataset_root, cache_root, datasets,
+                         method_name=method, split="val", expected_count=count)) for method, count in image_counts.items()]
+            try:
+                dataset = datasets.FashionIQ(path=root_str, transform=transform, noise_ratio=0)
+            except Exception:
+                stack.close()
+                raise
+        else:
+            stack, receipts = None, []
+            dataset = datasets.FashionIQ(path=root_str, transform=transform, noise_ratio=0)
         for category in categories:
-            recalls = dict(test_module.test(params, model, dataset, category, txt_processors))
-            results.append(
-                ReplayResult(
-                    model_id="conesep",
-                    checkpoint_id=variant["checkpoint_id"],
-                    category=category,
-                    protocol=PROTOCOL,
-                    r1=recalls.get(f"{category}_r1"),
-                    r10=recalls.get(f"{category}_r10"),
-                    r50=recalls.get(f"{category}_r50"),
-                    complete=True,
-                    provenance={
-                        "native_evaluator": "test.py:test",
-                        "native_output": {k: recalls[k] for k in sorted(recalls)},
-                        "checkpoint_training_noise_pct": variant["checkpoint_training_noise_pct"],
-                        "evaluation_noise_pct": 0,
-                        "checkpoint_sha256": (
-                            sha256_file(model_path) if model_path.is_file() and model_path.stat().st_size else None
-                        ),
-                        "checkpoint_size_bytes": model_path.stat().st_size if model_path.is_file() else None,
-                        "preprocessing": "targetpad transform, target_ratio 1.25, input_dim 224",
-                        "text_processor": {
-                            "config": PROCESSOR_CONFIGS["pretrain"],
-                            "loaded_via": processor_boundary,
-                            "note": "the pinned BlipCaptionProcessor from the model class's own "
-                                    "config; no second BLIP-2 model is constructed and no "
-                                    "/root/bert-base-uncased asset is read",
-                        },
-                    },
-                )
-            )
-
+            queries = getattr(dataset, f"test_queries_{category}")
+            targets = getattr(dataset, f"test_targets_{category}")
+            if pair_root and (len(categories) != 1 or not native_root):
+                raise ValueError("ConeSep pair requires exactly one category and native output path")
+            observer = None
+            original_numpy = getattr(test_module, "np", None)
+            if native_root:
+                Path(native_root).mkdir(parents=True, exist_ok=True)
+                observer = observe_test_numpy(test_module, len(queries), "conesep")
+            if model is None:
+                raise RuntimeError("ConeSep native model unavailable for category evaluation")
+            input_capture = (_capture_native_inputs(model, Path(native_root) / f"{category}.inputs.npz", set(range(min(5, len(queries)))))
+                             if native_root else nullcontext())
+            try:
+                with input_capture:
+                    recalls: dict[str, Any] = dict(test_module.test(params, model, dataset, category, txt_processors))
+            finally:
+                if observer is not None:
+                    test_module.np = original_numpy
+            split = json.loads((dataset_root / "image_splits" / f"split.{category}.val.json").read_text())
+            query_ids = [f"{i}:{split[q['source_img_id']]}:{split[q['target_img_id']]}" for i, q in enumerate(queries)]
+            if observer is not None:
+                if native_root is None:
+                    raise RuntimeError("ConeSep native output root missing")
+                native_path = Path(native_root) / f"{category}.scores.npz"
+                receipt = write_native_scores(observer, native_path, model_id="conesep", category=category,
+                    query_ids=query_ids, gallery_ids=split,
+                    reference_positions=[q["source_img_id"] for q in queries],
+                    target_positions=[q["target_img_id"] for q in queries])
+                atomic_json(Path(native_root) / f"{category}.json", receipt)
+            if os.environ.get("WORKBENCH_CONESEP_NATIVE_STAGE"):
+                if native_root is None:
+                    raise RuntimeError("ConeSep native-stage output root missing")
+                atomic_json(Path(native_root) / f"{category}.queries.json", [
+                    {"source_id": split[q["source_img_id"]], "target_id": split[q["target_img_id"]],
+                     "text": q["mod"]["str"]} for q in queries])
+            if pair_root and not os.environ.get("WORKBENCH_CONESEP_NATIVE_STAGE"):
+                import numpy as np
+                from workbench.backend.operator_config import resolve_config
+                from workbench.composition.model_conesep import Adapter
+                if observer is None:
+                    raise RuntimeError("ConeSep native rank observer required for paired run")
+                del model
+                model = None
+                if target_device.startswith("cuda"):
+                    torch.cuda.empty_cache()
+                pair_path = Path(pair_root)
+                pair_path.mkdir(parents=True, exist_ok=True)
+                def image_path(image_id: str) -> str:
+                    prefix, suffix = f"{category}_{image_id}".split("_", 1)
+                    return str(Path(dataset.image_dir) / prefix / f"{suffix}.jpg")
+                query_paths = [image_path(split[q["source_img_id"]]) for q in queries]
+                gallery_paths = [image_path(image_id) for image_id in split]
+                adapter = Adapter(resolve_config(), variant["checkpoint_id"])
+                adapter.work_root = pair_path / "worker"
+                selected = list(range(min(5, len(queries))))
+                adapter._capture_spec = {"positions": selected, "output_path": str(pair_path / "adapter_query_inputs.npz")}
+                query_texts = [q["mod"]["str"] for q in queries]
+                query_features = adapter.encode_queries(query_paths, query_texts, [None] * len(queries))
+                adapter._capture_spec = None
+                adapter._capture_spec = {"positions": selected, "output_path": str(pair_path / "adapter_gallery_inputs.npz")}
+                target_features = adapter.encode_targets(gallery_paths, [None] * len(gallery_paths))
+                adapter._capture_spec = None
+                query_repeat = adapter.encode_queries(query_paths, query_texts, [None] * len(queries))
+                target_repeat = adapter.encode_targets(gallery_paths, [None] * len(gallery_paths))
+                end_to_end_repeat = bool(np.array_equal(query_features, query_repeat) and np.array_equal(target_features, target_repeat))
+                adapter_batch = adapter.batch_size
+                adapter.batch_size = 1
+                query_b1 = adapter.encode_queries(query_paths[:5], query_texts[:5], [None] * min(5, len(queries)))
+                target_b1 = adapter.encode_targets(gallery_paths[:5], [None] * min(5, len(gallery_paths)))
+                adapter.batch_size = adapter_batch
+                b1_equal = bool(np.array_equal(query_features[:5], query_b1) and np.array_equal(target_features[:5], target_b1))
+                if not end_to_end_repeat or not b1_equal:
+                    raise ValueError("ConeSep Adapter full-forward repeat or B1/BN control differed")
+                adapter._capture_spec = None
+                if native_root is None:
+                    raise RuntimeError("ConeSep native output root missing")
+                scores = adapter.score(query_features, target_features)
+                repeat_scores = adapter.score(query_features, target_features)
+                if not np.array_equal(scores, repeat_scores):
+                    raise ValueError("ConeSep Adapter scorer repeat differed")
+                refs = np.asarray([q["source_img_id"] for q in queries], dtype=np.int32)
+                scores[np.arange(len(queries)), refs] = -10e10
+                orders = np.argsort(-scores, axis=1)
+                native_path = Path(native_root) / f"{category}.scores.npz"
+                with np.load(native_path) as native:
+                    native_scores, native_orders = native["scores"], native["orders"]
+                    if not np.array_equal(native["query_ids"].astype(str), np.asarray(query_ids)) or not np.array_equal(native["gallery_ids"].astype(str), np.asarray(split)):
+                        raise ValueError("ConeSep native/Adapter population identity mismatch")
+                    np.savez(pair_path / "adapter_pair_scores.npz", scores=scores, orders=orders,
+                        query_ids=np.asarray(query_ids), gallery_ids=np.asarray(split), reference_positions=refs,
+                        target_positions=np.asarray([q["target_img_id"] for q in queries], dtype=np.int32),
+                        adapter_forward_repeat_equal=np.asarray([end_to_end_repeat]), adapter_b1_bn_equal=np.asarray([b1_equal]))
+                    np.savez(pair_path / "comparison.npz", native_scores=native_scores, adapter_scores=scores,
+                        native_orders=native_orders, adapter_orders=orders, abs_score_delta=np.abs(native_scores - scores),
+                        rank_equal=np.asarray([np.count_nonzero(native_orders == orders)]),
+                        top10_membership_equal=np.asarray([np.count_nonzero(np.sort(native_orders[:, -10:], axis=1) == np.sort(orders[:, -10:], axis=1))]),
+                        adapter_forward_repeat_equal=np.asarray([end_to_end_repeat]), adapter_b1_bn_equal=np.asarray([b1_equal]))
+                with np.load(Path(native_root) / f"{category}.inputs.npz") as native_inputs, \
+                     np.load(pair_path / "adapter_query_inputs.npz") as adapter_query, \
+                     np.load(pair_path / "adapter_gallery_inputs.npz") as adapter_gallery:
+                    input_checks = {
+                        "query_positions": np.array_equal(native_inputs["query_positions"], adapter_query["positions"]),
+                        "query_pixels": np.array_equal(native_inputs["query_pixels"], adapter_query["pixels"]),
+                        "token_positions": np.array_equal(native_inputs["token_positions"], adapter_query["token_positions"]),
+                        "input_ids": np.array_equal(native_inputs["input_ids"], adapter_query["input_ids"]),
+                        "attention_masks": np.array_equal(native_inputs["attention_masks"], adapter_query["attention_masks"]),
+                        "token_texts": np.array_equal(native_inputs["token_texts"], adapter_query["token_texts"]),
+                        "gallery_positions": np.array_equal(native_inputs["gallery_positions"], adapter_gallery["positions"]),
+                        "gallery_pixels": np.array_equal(native_inputs["gallery_pixels"], adapter_gallery["pixels"]),
+                    }
+                (pair_path / "input_comparison.json").write_text(json.dumps(input_checks, indent=2) + "\n")
+                if not all(input_checks.values()):
+                    raise ValueError(f"ConeSep native/Adapter selected forward input mismatch: {input_checks}")
+                try:
+                    adapter.close()
+                finally:
+                    if stack is not None:
+                        stack.close()
+            results.append(ReplayResult(model_id="conesep", checkpoint_id=variant["checkpoint_id"],
+                category=category, protocol=PROTOCOL, r1=recalls.get(f"{category}_r1"),
+                r10=recalls.get(f"{category}_r10"), r50=recalls.get(f"{category}_r50"), complete=True,
+                provenance={"native_evaluator": "test.py:test", "native_output": {k: recalls[k] for k in sorted(recalls)},
+                    "checkpoint_training_noise_pct": variant["checkpoint_training_noise_pct"], "evaluation_noise_pct": 0,
+                    "checkpoint_sha256": sha256_file(model_path) if model_path.is_file() else None,
+                    "checkpoint_size_bytes": model_path.stat().st_size if model_path.is_file() else None,
+                    "preprocessing": "targetpad transform, target_ratio 1.25, input_dim 224",
+                    "text_processor": {"config": PROCESSOR_CONFIGS["pretrain"], "loaded_via": processor_boundary}}))
     return results, macro_aggregate(results)
 
 

@@ -147,8 +147,11 @@ def test_dcnet_preparation_readiness_does_not_clear_checkpoint_blocker(tmp_path:
     assert not any("generated artifact missing" in blocker for blocker in blockers)
 
 
-def test_dcnet_runtime_asset_blocks_after_preparation_is_present(tmp_path: Path) -> None:
+def test_dcnet_runtime_asset_blocks_after_preparation_is_present(tmp_path: Path, monkeypatch) -> None:
     doctor = load_doctor()
+    monkeypatch.setattr(doctor, "external_asset_blockers", lambda _model: [
+        "external runtime asset file missing: torchvision ResNet-50 ImageNet weights (fixture)"
+    ])
     model = next(model for model in load_registry()["models"] if model["model_id"] == "dcnet")
     settings = config(tmp_path)
     contract = doctor.preparation_contract_for_model(model)
@@ -161,6 +164,9 @@ def test_dcnet_runtime_asset_blocks_after_preparation_is_present(tmp_path: Path)
             else:
                 path.mkdir(parents=True, exist_ok=True)
 
+    monkeypatch.setattr(doctor, "preflight_blockers", lambda *_args, **_kwargs: [
+        "external runtime asset file missing: torchvision ResNet-50 ImageNet weights (fixture)"
+    ])
     checks = {check["name"]: check for check in doctor.model_checks(model, settings)}
     blockers = checks["runtime:dcnet"]["evidence"]["checkpoints"][0]["runtime_blockers"]
 

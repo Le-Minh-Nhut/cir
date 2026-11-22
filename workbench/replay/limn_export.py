@@ -1,60 +1,93 @@
-"""Per-query export for LIMN — the entry point that owns the optional capability.
-
-Deliberately separate from :mod:`workbench.replay.limn`, which is the source-faithful native replay
-AND the entry point the environment planner traces to decide LIMN's interpreter. Anything imported
-from that module becomes a declared requirement of LIMN's environment, so the observer (numpy) and
-the canonical result schema (pydantic) must not live there — not even as function-local imports,
-because the tracer walks the whole file. This module may import them; nothing traces it.
-
-The exporter never becomes the authority. It calls the same verified model and the same native
-dataset that the untouched ``test.py::test`` used, re-derives the ranking, and refuses to publish
-unless the aggregate reconstructed from those rankings reproduces the native hit counts exactly.
-"""
+"""Convert same-invocation native LIMN rankings into a plain JSON observation payload."""
 from __future__ import annotations
 
+import os
+import math
 import json
 import sys
 from argparse import ArgumentParser
-from datetime import datetime, timezone
 from pathlib import Path
-from types import SimpleNamespace
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from workbench.backend.fashioniq_layout import CATEGORIES
-from workbench.replay.limn import (LIMN_CHECKPOINTS, MODEL, native_category, preflight)
-from workbench.replay.limn_observer import ObservedCategory, cross_check_with_native, observe_category
-# Deliberately NOT imported here: `publication` pulls the pydantic-backed canonical schema, and this
-# module runs under the MODEL interpreter, which is provisioned from the model's own requirements and
-# does not contain pydantic. Importing it made the exporter crash with `ModuleNotFoundError: No module
-# named 'pydantic'` on a clean LIMN environment, so the aggregate succeeded while every per-query
-# export failed (P1). This module now emits plain JSON and the PARENT publishes it -- see
-# `limn_observer_io` for the interchange format.
+from workbench.backend.registry import model_by_id
+from workbench.replay.limn_observer import ObservedCategory, ObservedQuery, cross_check_with_native, _image_ids, _raw_captions, assert_alignment
 
 DEFAULT_TOP_K = 200
-# The batch size is the same operator knob the aggregate replay uses; importing the resolver
-# keeps the two forward passes on one setting, so the observer cannot observe a differently
-# batched run than the aggregate it is cross-checked against.
-from workbench.replay.limn import resolved_batch_size as _resolved_batch_size
+MODEL = model_by_id("limn")
+LIMN_CHECKPOINTS = {item["checkpoint_id"].removeprefix("base_iter0_"): item
+                    for item in MODEL["checkpoint_variants"]}
 
 
-def observe_and_verify(category: str, checkpoint_root: Path, dataset_root: Path, source_root: Path,
-                       top_k: int = DEFAULT_TOP_K, batch_size: int | None = None
-                       ) -> tuple[float | None, ObservedCategory, tuple[str, ...]]:
-    """Run the native test AND the observer on the SAME loaded objects, then cross-check.
-
-    Returns ``(native_r1, observed, mismatches)``. ``mismatches`` empty is the only state in which
-    the caller may publish. The native aggregate is never modified to make them agree.
-    """
-    batch_size = _resolved_batch_size() if batch_size is None else batch_size
-    with native_category(category, checkpoint_root, dataset_root, source_root) as loaded:
-        native_test, model, dataset = loaded["native_test"], loaded["model"], loaded["dataset"]
-        metrics = dict(native_test.test(SimpleNamespace(local_rank=0, batch_size=batch_size),
-                                        model, dataset, category))
-        observed = observe_category(category, model, dataset, dataset_root, batch_size=batch_size,
-                                    top_k=top_k)
-    mismatches = tuple(cross_check_with_native(observed, metrics))
-    return metrics.get(f"{category}_r1"), observed, mismatches
+def _load_native_category(category: str, rankings_root: Path, dataset_root: Path,
+                          top_k: int) -> ObservedCategory:
+    receipt = json.loads((rankings_root / f"{category}.json").read_text())
+    if not isinstance(receipt, dict):
+        raise ValueError(f"{category}: native ranking receipt is not a JSON object")
+    if receipt.get("capture_error"):
+        raise ValueError(f"{category}: native ranking capture failed: {receipt['capture_error']}")
+    expected_run_id = os.environ.get("WORKBENCH_LIMN_RUN_ID")
+    if expected_run_id and receipt.get("run_id") != expected_run_id:
+        raise ValueError(f"{category}: native ranking receipt run identity mismatch")
+    if (receipt.get("schema_version") != 1
+            or receipt.get("provenance") != "native_argsort_same_invocation"
+            or receipt.get("category") != category):
+        raise ValueError(f"{category}: invalid native ranking receipt identity")
+    images = _image_ids(dataset_root, category)
+    annotations = _raw_captions(dataset_root, category)
+    rows = receipt["queries"]
+    queries = [{"source_img_id": row["source_position"],
+                "target_img_id": row["target_position"],
+                "mod": {"str": row["model_input_text"]}} for row in rows]
+    assert_alignment(category, queries, images, annotations, dataset_root)
+    gallery_positions = receipt["gallery_positions"]
+    gallery_ids = receipt["gallery_ids"]
+    image_positions = {image: index for index, image in enumerate(images)}
+    expected_gallery_ids = list(dict.fromkeys(
+        image for record in annotations for image in (record["candidate"], record["target"])))
+    expected_gallery = [image_positions[image] for image in expected_gallery_ids]
+    if (gallery_positions != expected_gallery
+            or gallery_ids != [images[position] for position in expected_gallery]
+            or len(rows) != len(annotations)
+            or receipt["gallery_size"] != len(gallery_ids)
+            or receipt["eligible_count"] != len(gallery_ids) - 1
+            or receipt["source_mask_value"] != 10e10):
+        raise ValueError(f"{category}: invalid native gallery metadata")
+    gallery_set = set(gallery_ids)
+    observed = []
+    for index, row in enumerate(rows):
+        if row["annotation_index"] != index or row["reference_id"] != images[row["source_position"]] \
+                or row["target_id"] != images[row["target_position"]] \
+                or row["raw_captions"] != annotations[index]["captions"]:
+            raise ValueError(f"{category}: native ranking query identity mismatch at {index}")
+        top = row["top_results"]
+        rank = row["target_rank"]
+        source_rank = row["source_rank"]
+        if (not isinstance(rank, int) or isinstance(rank, bool) or not 1 <= rank <= len(gallery_ids) - 1
+                or not isinstance(source_rank, int) or isinstance(source_rank, bool)
+                or source_rank != len(gallery_ids)
+                or len(top) != min(top_k, len(gallery_ids) - 1)):
+            raise ValueError(f"{category}: invalid native rank depth at {index}")
+        top_ids = [item["image_id"] for item in top]
+        top_scores = [item["score"] for item in top]
+        top_set = set(top_ids)
+        if (len(top_ids) != len(top_set) or row["reference_id"] in top_set
+                or any(item["rank"] != position or item["image_id"] not in gallery_set
+                       or not isinstance(item["score"], (int, float))
+                       or not math.isfinite(item["score"])
+                       for position, item in enumerate(top, 1))
+                or any(left < right for left, right in zip(top_scores, top_scores[1:]))
+                or (rank <= len(top) and top[rank - 1]["image_id"] != row["target_id"])
+                or (rank > len(top) and row["target_id"] in top_ids)):
+            raise ValueError(f"{category}: invalid native Top-K or target rank at {index}")
+        observed.append(ObservedQuery(
+            annotation_index=index, reference_id=row["reference_id"], target_id=row["target_id"],
+            raw_captions=tuple(row["raw_captions"]), model_input_text=row["model_input_text"],
+            target_rank=row["target_rank"],
+            top_results=tuple((item["rank"], item["image_id"], item["score"]) for item in top),
+            category=category))
+    return ObservedCategory(category, len(gallery_ids), len(gallery_ids) - 1, tuple(observed))
 
 
 def observation_payload(observed: list[ObservedCategory], mismatches: dict[str, tuple[str, ...]],
@@ -94,7 +127,7 @@ def observation_payload(observed: list[ObservedCategory], mismatches: dict[str, 
         "protocol_id": "fashioniq_val_split",
         "run_id": run_id,
         "top_k": top_k,
-        "upstream_commit": MODEL["upstream_commit_sha"],
+        "ranking_provenance": "native_argsort_same_invocation",
         "checkpoint_members": {
             category: {"filename": LIMN_CHECKPOINTS[category]["filename"],
                        "checkpoint_id": LIMN_CHECKPOINTS[category]["checkpoint_id"],
@@ -108,95 +141,68 @@ def observation_payload(observed: list[ObservedCategory], mismatches: dict[str, 
     }
 
 
-def export(checkpoint_root: Path, dataset_root: Path, source_root: Path, results_root: Path,
+def export(rankings_root: Path, dataset_root: Path, results_root: Path, native_metrics: dict,
            top_k: int = DEFAULT_TOP_K, run_id: str | None = None,
            command_digest: str | None = None, environment_digest: str | None = None,
            planned_bundle_manifest_digest: str | None = None,
            runtime_adaptation: str | None = None) -> int:
-    """OBSERVE the per-query rankings and write a plain-JSON payload for the parent to publish.
-
-    This function runs under the MODEL interpreter, so it does only what that environment supports:
-    load the checkpoint through the native loader, re-derive the rankings, cross-check them against
-    the native aggregate, and write the result. It does NOT validate or publish a canonical artifact
-    -- that is the workbench interpreter's job (`workbench.replay.limn_publish`), which is where
-    pydantic lives.
-
-    ``run_id`` is the authoritative execution identity from the orchestrator. Without it the payload
-    is marked as a development run and the publisher will refuse to call it evidence.
-    """
-    problems = preflight(checkpoint_root, dataset_root, source_root, CATEGORIES)
-    if problems:
-        for problem in problems:
-            print(f"[BLOCKED] {problem}", file=sys.stderr)
-        return 1
-
+    """Validate same-pass native receipts and stage a CPU-only observation payload."""
     observed: list[ObservedCategory] = []
     mismatches: dict[str, tuple[str, ...]] = {}
     for category in CATEGORIES:
-        _, observation, category_mismatches = observe_and_verify(
-            category, checkpoint_root, dataset_root, source_root, top_k=top_k)
+        observation = _load_native_category(category, rankings_root, dataset_root, top_k)
+        category_metrics = native_metrics.get(category)
+        if not isinstance(category_metrics, dict):
+            raise ValueError(f"{category}: native aggregate metrics missing")
+        native = {f"{category}_{name}": value for name, value in category_metrics.items()}
+        category_mismatches = tuple(cross_check_with_native(observation, native))
         observed.append(observation)
         if category_mismatches:
             mismatches[category] = category_mismatches
-
-    identity = run_id or f"dev-limn-base_iter0_all_categories-fashioniq_val_split"
+    identity = run_id or "dev-limn-base_iter0_all_categories-fashioniq_val_split"
     payload = observation_payload(observed, mismatches, run_id=identity, top_k=top_k)
+    payload["ranking_provenance"] = "native_argsort_same_invocation"
     payload["command_digest"] = command_digest
     payload["environment_digest"] = environment_digest
-    # The digest the ORCHESTRATOR computed over the members it will evaluate. The publisher compares
-    # it with the members this payload staged, so a per-query artifact cannot record a bundle identity
-    # that disagrees with the aggregate run's. The observer never computes this value; it carries the
-    # parent's, exactly as it carries the command and environment digests.
     payload["planned_bundle_manifest_digest"] = planned_bundle_manifest_digest
     payload["runtime_adaptation"] = runtime_adaptation
-
     results_root.mkdir(parents=True, exist_ok=True)
     staged = results_root / f".observation-{identity}.payload.json"
     staged.write_text(json.dumps(payload), encoding="utf-8")
-
-    # The JSON is the machine-readable contract the orchestrator parses, and it is emitted as ONE
-    # compact line so a caller can identify it even if a compiled dependency writes to fd 1.
-    print(json.dumps({
-        "model_id": "limn", "run_id": identity, "protocol": "fashioniq_val_split", "top_k": top_k,
-        "instrumentation_parity": payload["instrumentation_parity"],
-        "instrumentation_mismatches": payload["instrumentation_mismatches"],
-        "payload": str(staged),
-        "queries": sum(len(category["queries"]) for category in payload["categories"]),
-    }, separators=(",", ":")))
-    print("[PENDING] PC GPU validation: instrumentation parity was checked against this run's own "
-          "native aggregate, not against a real target-GPU inference", file=sys.stderr)
+    print(json.dumps({"model_id": "limn", "run_id": identity,
+                      "protocol": "fashioniq_val_split", "top_k": top_k,
+                      "instrumentation_parity": payload["instrumentation_parity"],
+                      "instrumentation_mismatches": payload["instrumentation_mismatches"],
+                      "payload": str(staged),
+                      "queries": sum(len(item["queries"]) for item in payload["categories"])},
+                     separators=(",", ":")))
     return 0 if not mismatches else 1
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = ArgumentParser(description=__doc__)
-    parser.add_argument("--checkpoint-root", type=Path, required=True)
+    parser.add_argument("--rankings-root", type=Path, required=True)
     parser.add_argument("--dataset-root", type=Path, required=True)
-    parser.add_argument("--source-root", type=Path, required=True)
-    parser.add_argument("--results-root", type=Path, required=True,
-                        help="root the canonical per-query ResultRun is published under")
+    parser.add_argument("--results-root", type=Path, required=True)
+    parser.add_argument("--native-metrics", type=Path, required=True)
     parser.add_argument("--top-k", type=int, default=DEFAULT_TOP_K)
-    parser.add_argument("--run-id", default=None,
-                        help="the authoritative execution identity from the orchestrator; without "
-                             "it the artifact is a development run and is marked as one")
-    parser.add_argument("--command-digest", default=None,
-                        help="the invocation's command digest, as recorded by the orchestrator")
-    parser.add_argument("--environment-digest", default=None,
-                        help="the invocation's environment digest, as recorded by the orchestrator")
-    parser.add_argument("--runtime-adaptation", default=None,
-                        help="the declared runtime adaptation this run executed under")
-    parser.add_argument("--planned-bundle-manifest-digest", default=None,
-                        help="the bundle digest the ORCHESTRATOR computed over the members it will "
-                             "evaluate; the publisher refuses a payload whose staged members do not "
-                             "match it, so a per-query artifact cannot record a different bundle "
-                             "than the aggregate run it belongs to")
+    parser.add_argument("--run-id", default=None)
+    parser.add_argument("--command-digest", default=None)
+    parser.add_argument("--environment-digest", default=None)
+    parser.add_argument("--runtime-adaptation", default=None)
+    parser.add_argument("--planned-bundle-manifest-digest", default=None)
     args = parser.parse_args(argv)
-    return export(args.checkpoint_root, args.dataset_root, args.source_root,
-                  args.results_root, top_k=args.top_k, run_id=args.run_id,
-                  command_digest=args.command_digest,
-                  environment_digest=args.environment_digest,
-                  runtime_adaptation=args.runtime_adaptation,
-                  planned_bundle_manifest_digest=args.planned_bundle_manifest_digest)
+    try:
+        native_metrics = json.loads(args.native_metrics.read_text())
+        return export(args.rankings_root, args.dataset_root, args.results_root, native_metrics,
+                      top_k=args.top_k, run_id=args.run_id,
+                      command_digest=args.command_digest,
+                      environment_digest=args.environment_digest,
+                      runtime_adaptation=args.runtime_adaptation,
+                      planned_bundle_manifest_digest=args.planned_bundle_manifest_digest)
+    except (OSError, ValueError, KeyError, TypeError) as error:
+        print(f"[BLOCKED] {type(error).__name__}: {error}", file=sys.stderr)
+        return 1
 
 
 if __name__ == "__main__":

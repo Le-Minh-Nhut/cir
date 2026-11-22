@@ -76,18 +76,24 @@ code() { curl -s --max-time 5 --connect-timeout 2 -o /dev/null -w '%{http_code}'
 # Liveness probe uses a cheap endpoint: /api/models resolves per-checkpoint availability
 # (~1 min) and cannot serve as a fast probe.
 LIVE=0
-for _ in 1 2 3 4 5 6; do
-    if [[ "$(code "${BASE}/api/jobs")" == "200" ]]; then LIVE=1; break; fi
-    sleep 5
-done
+LIVE_REASON="no readiness probe attempted"
+if (( OFFLINE )); then
+    LIVE_REASON="offline mode: live readiness probe skipped"
+else
+    for _ in 1 2 3 4 5 6; do
+        LIVE_REASON="$(curl -sS --max-time 5 --connect-timeout 2 -o /dev/null -w 'HTTP %{http_code}' "${BASE}/api/jobs" 2>&1)"
+        if [[ "$LIVE_REASON" == "HTTP 200" ]]; then LIVE=1; break; fi
+        sleep 5
+    done
+fi
 live() { return $((1 - LIVE)); }
 
 # ---------------------------------------------------------------- J1 CLEAN DOCKER STARTUP
-say "== J1 clean startup: backend, frontend, all 16 models, no fake results =="
+say "== J1 clean startup: backend, frontend, published registry models, no fake results ==="
 if (( OFFLINE )) || ! live; then
     # No live stack means no boot state could be observed: say that, instead of
     # implying an empty stack was seen.
-    pending J1 "boot state UNOBSERVED: no live stack (run compose up, or drop --offline for static checks)"
+    pending J1 "boot state UNOBSERVED: /api/jobs readiness probe failed (${LIVE_REASON}); start an isolated stack for live verification"
 else
     # 2>&1, so the assertion message survives: capturing stdout alone produced an empty
     # `detail` for every failing journey, leaving the operator with a bare FAIL and no reason.
@@ -95,14 +101,18 @@ else
 import json, sys, urllib.request
 base, repo = sys.argv[1], sys.argv[2]
 import yaml
-expected = {m["model_id"] for m in yaml.safe_load(
-    open(f"{repo}/workbench/registry/models.yaml", encoding="utf-8"))["models"]}
+from workbench.backend.registry import web_deferred_models
+registry = yaml.safe_load(open(f"{repo}/workbench/registry/models.yaml", encoding="utf-8"))
+deferred = web_deferred_models(registry)
+expected = {m["model_id"] for m in registry["models"]} - deferred.keys()
 def get(path):
     return json.load(urllib.request.urlopen(base + path, timeout=120))
 models = get("/api/models")
 assert isinstance(models, list), "models payload must be a list"
-assert {m.get("model_id") for m in models} == expected, (
-    f"served models differ from the registry: {sorted({m.get('model_id') for m in models} ^ expected)}")
+served = {m.get("model_id") for m in models}
+assert served == expected, (
+    f"served models differ from published registry entries: {sorted(served ^ expected)}")
+assert not (served & deferred.keys()), f"deferred models were published: {sorted(served & deferred.keys())}"
 for m in models:
     assert m.get("model_id"), "model entry without model_id"
 # Two boot states are BOTH legitimate and must be told apart. A clean first boot presents no run

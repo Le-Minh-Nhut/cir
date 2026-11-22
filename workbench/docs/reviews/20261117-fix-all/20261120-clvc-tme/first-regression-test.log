@@ -1,0 +1,12 @@
+Final focused regression command: flock -x /tmp/cir-fix-all-20261120-cpu.lock -c 'OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 NUMEXPR_NUM_THREADS=1 workbench/envs/ctl312h/bin/python -m pytest -q -n10 workbench/tests/test_clvc_net_composition_parity.py::test_tme_mmap_cache_preserves_source_indexing_and_category_gallery workbench/tests/test_clvc_net_composition_parity.py::test_native_plan_gallery_preserves_source_order_and_duplicates workbench/tests/test_clvc_net_composition_parity.py::test_clvc_tme_controls_share_full_population_partition'
+Exit: 0
+Stdout:
+bringing up nodes...
+bringing up nodes...
+...                                                                      [100%]
+3 passed in 1.56s
+Stderr: empty
+Latest focused command: flock -x /tmp/cir-fix-all-20261120-cpu.lock -c 'OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 NUMEXPR_NUM_THREADS=1 workbench/envs/ctl312h/bin/python -m py_compile workbench/replay/clvc_net.py workbench/replay/tme.py workbench/replay/prepare_clvc_tme_v3_plans.py workbench/scripts/clvc_tme_v3_parity.py && OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 NUMEXPR_NUM_THREADS=1 workbench/envs/ctl312h/bin/python -m pytest -q -n10 workbench/tests/test_clvc_net_composition_parity.py::test_native_plan_gallery_preserves_source_order_and_duplicates workbench/tests/test_clvc_net_composition_parity.py::test_clvc_tme_controls_share_full_population_partition workbench/tests/test_clvc_net_composition_parity.py::test_tme_mmap_cache_preserves_source_indexing_and_category_gallery workbench/tests/test_clvc_net_composition_parity.py::test_direct_tme_adapter_role_uses_frozen_category_population workbench/tests/test_clvc_net_composition_parity.py::test_native_capture_binding_hashes_frozen_role'
+Exit: 0
+Stdout: ..... [100%], 5 passed in 1.56s
+Stderr: empty

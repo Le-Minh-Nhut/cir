@@ -1,0 +1,10 @@
+Running as unit: cir-dcnet-canonical-api-20261121-v4.service; invocation ID: feecaf744bd14b3aa30a6b4055e29f94
+[gpu_job] lock held, GPU empty, launching: /bin/bash /home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/canonical-api-admission-20261121T040200+0700/service-inner.sh
+GPU-9bc596d9-19e9-6f43-dc2c-a80da924263c, 630 MiB, 16303 MiB
+[gpu_job] child_exit=0
+Finished with result: success
+Main processes terminated with: code=exited/status=0
+Service runtime: 8min 57.850s
+CPU time consumed: 9min 33.133s
+Memory peak: 17.0M
+Memory swap peak: 0B

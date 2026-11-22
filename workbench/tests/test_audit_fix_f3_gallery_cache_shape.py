@@ -58,19 +58,22 @@ def _encode(tmp_path, adapter, image_paths, fingerprint):
 
 
 def test_short_gallery_cache_is_not_reused(tmp_path) -> None:
-    """A 2-row cache must not answer for a 3-image gallery."""
+    """A shorter cache written by the runner must not answer for a larger gallery."""
     fingerprint = "f" * 64
-    image_paths = _paths(tmp_path, 3)
-    path = tmp_path / "features" / "gallery_global.npy"
-    path.parent.mkdir(parents=True, exist_ok=True)
-    _write_cache(path, rows=2, fingerprint=fingerprint)
-
     adapter = CountingAdapter()
-    mapped, _projection = _encode(tmp_path, adapter, image_paths, fingerprint)
+    path = tmp_path / "features" / "gallery_global.npy"
 
-    assert adapter.encoded == 1, "a mis-sized gallery cache must not be reused"
+    first_mapping, projection = _encode(tmp_path, adapter, _paths(tmp_path, 2), fingerprint)
+    assert first_mapping.shape == (2, 4)
+    assert projection["projected_bytes"] > 0
+    assert runner._memmap_metadata_shape(path) == (2, 4)
+    del first_mapping
+
+    mapped, _projection = _encode(tmp_path, adapter, _paths(tmp_path, 3), fingerprint)
+
+    assert adapter.encoded == 2, "a mis-sized gallery cache must not be reused"
     assert mapped.shape == (3, 4)
-    # Rebuilt from the images, not carried over from the stale rows.
+    # Rebuilt from the images in input order, not carried over from the short cache.
     assert [float(row[0]) for row in mapped] == [0.0, 1.0, 2.0]
 
 

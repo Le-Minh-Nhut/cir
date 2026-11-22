@@ -1,10 +1,10 @@
-"""Preflight validation and replay runner for DCNet.
+"""Preflight validation and source-faithful scoring primitives for DCNet.
 
-DCNet evaluation relies on the official CLI `test.py --resume <run_dir>`.
-This module provides preflight verification of all required artifacts and identifies
-the exact missing prerequisites (unpublished Google Drive checkpoint and unseeded
-offline GloVe preprocessed pickles).
+Native FashionIQ replay uses official ``test.py --resume <run_dir>`` and its prepared
+FashionIQ trees. ``score_pairwise`` preserves query-conditioned native correction and
+fusion for callers that already hold source, text, and gallery expert tensors.
 """
+
 from __future__ import annotations
 
 import json
@@ -206,6 +206,30 @@ def preflight(
         + validate_dataset_binding(checkpoint_root, dataset_root, cwd)
         + validate_dataset(dataset_root, categories)
     )
+
+
+def score_pairwise(model, composed_experts, source_experts, text_experts, gallery_experts):
+    """Run DCNet's native composition, query-conditioned correction, and final fusion.
+
+    Returned tensors are query × gallery. Reference masking stays with the protocol caller:
+    native FashionIQ masks its source rows; full-gallery CIRCUS scoring does not.
+    """
+    import torch.nn.functional as F
+
+    composition = model.get_score_matrix(
+        trg_embds=gallery_experts, src_embds=composed_experts,
+        subspaces=model.modalities, l2renorm=False, dist=False, val=True)
+    correction_source = source_experts
+    if model.feat2d:
+        correction_source = {
+            modality: experts.mean((1, 2)) for modality, experts in source_experts.items()
+        }
+    corrected_gallery = model.get_correction(correction_source, gallery_experts)
+    correction = model.get_score_matrix(
+        trg_embds=corrected_gallery, src_embds=text_experts,
+        subspaces=model.modalities, l2renorm=False, dist=False, val=True)
+    fused = F.log_softmax(composition, dim=-1) + F.log_softmax(correction, dim=-1)
+    return composition, correction, fused
 
 
 def main(argv: list[str] | None = None) -> int:

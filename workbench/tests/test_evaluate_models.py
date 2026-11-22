@@ -416,9 +416,13 @@ def test_tgcir_reports_the_archive_mapping_blocker_rather_than_launching(
     assert any("ViT-B/16" in reason for reason in reasons_missing), (
         "a missing CLIP ViT-B/16 asset must be named as a blocker: " + " ".join(reasons_missing))
 
-def test_dcnet_audited_command_reports_non_command_blockers() -> None:
+def test_dcnet_audited_command_reports_non_command_blockers(monkeypatch) -> None:
     module = load_module()
     model = records()["dcnet"]
+    monkeypatch.setattr(module, "runtime_plan_blockers", lambda *_args: [
+        "external runtime asset file missing: torchvision ResNet-50 ImageNet weights (fixture)"
+    ])
+    monkeypatch.setattr(module, "preflight_blockers", lambda *_args, **_kwargs: [])
 
     plan, reasons = module.guarded_plan(model, model["checkpoint_variants"][0], model["native_protocol"], None, 200)
 
@@ -428,17 +432,6 @@ def test_dcnet_audited_command_reports_non_command_blockers() -> None:
     assert any(reason.startswith("external runtime asset file missing: torchvision ResNet-50 ImageNet weights (")
                for reason in reasons)
 
-def test_dcnet_command_uses_configured_model_interpreter(tmp_path: Path, monkeypatch) -> None:
-    import sys
-    from workbench.backend.adapters.base import EvalRequest
-    from workbench.backend.adapters.models import DCNetAdapter
-
-    interpreter = _fake_isolated_interpreter(tmp_path)
-    monkeypatch.setenv("WORKBENCH_DCNET_PYTHON", str(interpreter))
-    monkeypatch.setattr("workbench.backend.runtime.python_executable", lambda model: str(interpreter))
-    command = DCNetAdapter().command(tmp_path / "DCNet", tmp_path / "fashioniq_dcnet", EvalRequest("dcnet", "fashioniq_run_directory", "fashioniq_full_gallery_ref_excluded", tmp_path / "FashionIQ", tmp_path / "result.json"))
-
-    assert command == [str(interpreter), str(tmp_path / "DCNet" / "test.py"), "--resume", str(tmp_path / "fashioniq_dcnet")]
 
 def test_missing_checkpoint_is_blocked(monkeypatch, tmp_path: Path) -> None:
     module = load_module()

@@ -63,7 +63,7 @@ out, and copying the example verbatim then failed after the operator had supplie
 
 `selected_models` accepts `all_registered` or a non-empty list of exact registry IDs. Prefer an explicit list of models whose evidence and prerequisites you reviewed. `all_registered` includes blocked entries; it does not make them runnable. `max_models` must cover the selection. Keep selected IDs unchanged after execution starts so resume can use existing state.
 
-Copy `workbench/config/workbench.env.example` to `workbench/config/workbench.env` for local roots, ports, and registry-declared per-model interpreter and asset-location settings. For these model-specific values, precedence is process environment, then `workbench.env`, then a `RUNTIME_VERIFIED` provisioning assignment under the artifacts root. Empty values mean unset. Every registry-declared name is accepted, including `WORKBENCH_TME_PYTHON` and `WORKBENCH_PTHA_MTST_PYTHON`.
+Copy `workbench/config/workbench.env.example` to `workbench/config/workbench.env` for local roots, ports, and registry-declared per-model interpreter and asset-location settings. The global `WORKBENCH_RUNTIME_ADAPTATION` selector is also accepted there, even though it is not model-specific; it selects only an exact `adapted_runtime.target_compute_capability` declared by each model. For model-specific values, precedence is process environment, then `workbench.env`, then a `RUNTIME_VERIFIED` provisioning assignment under the artifacts root. Empty values mean unset. Every registry-declared name is accepted, including `WORKBENCH_TME_PYTHON` and `WORKBENCH_PTHA_MTST_PYTHON`.
 
 ## 3. Install or point at conda or mamba
 
@@ -232,6 +232,8 @@ After fixing a reported local cause, rerun the same primary command with `--resu
 ```
 
 Resume is bound to installed dependency content (not just the interpreter path and requirements files): the interpreter binary, environment marker files, and package directory modification times are fingerprinted. A rewritten dependency invalidates the affected evaluation while unrelated ones stay reusable. Content-verified stages are reused without redundant computation. Preserve selected IDs, artifact roots, and HMAC key across retries.
+
+Evaluation resume fingerprints omit the generated `--run-id`: it identifies an invocation, not its inputs. The evaluator still receives the run ID; unchanged verified inputs therefore resume instead of rerunning. Regression evidence: `reviews/20261117-fix-all/raw/native-capture/fingerprint-resume-evidence-20261117.txt` and `reviews/20261117-fix-all/raw/native-capture/fingerprint-resume-postfix-20261117.txt` (eight targeted checks passed).
 
 ## 12. Read reports
 

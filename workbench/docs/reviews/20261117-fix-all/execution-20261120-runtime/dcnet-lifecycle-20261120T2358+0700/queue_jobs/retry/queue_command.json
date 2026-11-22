@@ -1,0 +1,19 @@
+{
+  "diagnostic": "DCNet Q1/T2 real forward, queue lifecycle only",
+  "job_id": "8c95da12-e1ad-478d-a006-4c35b67a8fa8",
+  "argv": [
+    "/home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python",
+    "/home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/dcnet_lifecycle_helper.py",
+    "worker",
+    "--phase",
+    "retry",
+    "--run-id",
+    "retry",
+    "--run-root",
+    "/home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/dcnet-lifecycle-20261120T2358+0700"
+  ],
+  "cwd": "/home/heheboiz/data/cir",
+  "started_at": "2026-11-20T16:59:19.195593+00:00",
+  "finished_at": "2026-11-20T16:59:27.957903+00:00",
+  "return_code": 0
+}

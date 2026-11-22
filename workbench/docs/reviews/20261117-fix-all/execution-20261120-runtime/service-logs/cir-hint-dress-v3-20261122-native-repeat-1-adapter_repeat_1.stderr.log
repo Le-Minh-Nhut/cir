@@ -1,0 +1,21 @@
+[gpu_job] lock held, GPU empty, launching: systemd-run --user --wait --pipe --collect --same-dir --service-type=exec --unit=cir-hint-dress-v3-20261122-native-repeat-1-adapter_repeat_1 -p MemoryMax=12G -p MemorySwapMax=0 -p OOMPolicy=kill /home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/run-role-service.sh --inner --unit cir-hint-dress-v3-20261122-native-repeat-1-adapter_repeat_1 --output-dir /home/heheboiz/data/cir/workbench/docs/reviews/20261112-parity-repair/raw/third_model/hint-v3-dress-current-source-20261122T190500Z --min-free-bytes 5368709120 -- env WORKBENCH_COMPOSITION_BATCH_SIZE=32 /home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python /home/heheboiz/data/cir/workbench/docs/reviews/20261112-parity-repair/scripts/third_model_parity.py --model hint --category dress --phase adapter --role adapter_repeat_1 --run-root /home/heheboiz/data/cir/workbench/docs/reviews/20261112-parity-repair/raw/third_model/hint-v3-dress-current-source-20261122T190500Z --controller-interpreter /home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python
+GPU-9bc596d9-19e9-6f43-dc2c-a80da924263c, 936 MiB, 16303 MiB
+Running as unit: cir-hint-dress-v3-20261122-native-repeat-1-adapter_repeat_1.service; invocation ID: 0c3f46da8b1c4e2399d40b6b4c1fa171
+waiting_for_cpu_lock=1
+cpu_lock_acquired=1
+disk_check_after_cpu_lock=1 free_bytes=41571016704 required_bytes=5368709120
+unit=cir-hint-dress-v3-20261122-native-repeat-1-adapter_repeat_1.service
+cgroup=/user.slice/user-1000.slice/user@1000.service/app.slice/cir-hint-dress-v3-20261122-native-repeat-1-adapter_repeat_1.service
+memory.max=12884901888
+memory.swap.max=0
+memory.oom.group=1
+output_dir=/home/heheboiz/data/cir/workbench/docs/reviews/20261112-parity-repair/raw/third_model/hint-v3-dress-current-source-20261122T190500Z
+free_bytes=41571016704
+min_free_bytes=5368709120
+Finished with result: success
+Main processes terminated with: code=exited/status=0
+Service runtime: 1min 39.706s
+CPU time consumed: 1min 48.786s
+Memory peak: 2.3M
+Memory swap peak: 0B
+[gpu_job] child_exit=0

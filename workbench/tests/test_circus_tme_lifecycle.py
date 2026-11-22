@@ -194,8 +194,12 @@ def _limn_adapter(tmp_path: Path):
 
 @pytest.mark.parametrize("kind", ["encoder", "limn"])
 def test_encoder_and_limn_failed_child_latch_and_preserve_log(tmp_path, monkeypatch, kind) -> None:
-    module = __import__(f"workbench.composition.model_{kind}", fromlist=["Adapter"])
     adapter = _encoder_adapter(tmp_path) if kind == "encoder" else _limn_adapter(tmp_path)
+    # Exercise worker failure/latch behavior, not host interpreter configuration. The production
+    # adapter's guard is covered by its own environment-contract tests.
+    monkeypatch.setattr(adapter, "require_verified_interpreter", lambda: sys.executable)
+    monkeypatch.setattr(adapter, "_interpreter_verified", True)
+    module = __import__(f"workbench.composition.model_{kind}", fromlist=["Adapter"])
     marker = f"UNIQUE_TRACEBACK_{uuid.uuid4().hex}"
     real_popen = subprocess.Popen
     spawned: list[list[str]] = []

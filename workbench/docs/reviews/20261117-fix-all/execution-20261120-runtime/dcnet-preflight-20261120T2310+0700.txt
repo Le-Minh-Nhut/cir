@@ -1,0 +1,13 @@
+Running as unit: run-u229.service; invocation ID: 406f5eea6e54481f9996b6196fa84f99
+api_import=ok
+model_interpreter /home/heheboiz/data/cir/workbench/envs/dcnet310-sm120/bin/python
+identity_keys ['batch_size', 'checkpoint_id', 'checkpoint_resources', 'dcnet_packed_context', 'source_provenance', 'text_resource_sha256']
+assets dict_keys(['/home/heheboiz/data/cir/data/FashionIQ/captions/glove_vecs.pkl', '/home/heheboiz/data/cir/data/FashionIQ/captions/cap.dress.glove.train.pkl', '/home/heheboiz/data/cir/data/FashionIQ/captions/cap.dress.glove.val.pkl', '/home/heheboiz/data/cir/data/FashionIQ/captions/cap.dress.glove.test.pkl', '/home/heheboiz/data/cir/data/FashionIQ/captions/cap.shirt.glove.train.pkl', '/home/heheboiz/data/cir/data/FashionIQ/captions/cap.shirt.glove.val.pkl', '/home/heheboiz/data/cir/data/FashionIQ/captions/cap.shirt.glove.test.pkl', '/home/heheboiz/data/cir/data/FashionIQ/captions/cap.toptee.glove.train.pkl', '/home/heheboiz/data/cir/data/FashionIQ/captions/cap.toptee.glove.val.pkl', '/home/heheboiz/data/cir/data/FashionIQ/captions/cap.toptee.glove.test.pkl', '/home/heheboiz/data/cir/workbench/artifacts/assets/nltk_data/tokenizers/punkt/english.pickle'])
+preflight=ok
+Finished with result: success
+Main processes terminated with: code=exited/status=0
+Service runtime: 713ms
+CPU time consumed: 474ms
+Memory peak: 448.0K
+Memory swap peak: 0B
+exit=0

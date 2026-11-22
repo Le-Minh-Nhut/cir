@@ -440,11 +440,12 @@ def test_gpu_only_mode_reports_failure_with_nonzero_status(monkeypatch: pytest.M
 
 def test_gpu_only_mode_skips_a_model_without_a_cuda_requirement(
         monkeypatch: pytest.MonkeyPatch) -> None:
-    """A CPU-only model is not probed at all: there is nothing to verify."""
+    """CPU-only models are not probed when no adapted CUDA contract is selected."""
     from workbench.backend.operator_config import WorkbenchConfig
     from workbench.scripts import evaluate_models as em
 
     probed: list[str] = []
+    monkeypatch.delenv(runtime.ADAPTATION_ENV, raising=False)
     monkeypatch.setattr(runtime, "verify_gpu_runtime",
                         lambda *a, **k: probed.append("called") or {})
     config = WorkbenchConfig(CIR_REPO_ROOT=Path("/tmp"), CIR_DATA_ROOT=Path("/tmp"),

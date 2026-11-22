@@ -34,7 +34,9 @@ def test_manage_environment_create_requires_authorization() -> None:
         env_mod.main(["--model", "csmcir", "--create"])
 
 
-def test_manage_environment_dry_run_authorized(capsys: pytest.CaptureFixture[str]) -> None:
+def test_manage_environment_dry_run_authorized(capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch) -> None:
+    from workbench.backend import environment_planner
+    monkeypatch.setattr(environment_planner, "_solver_command", lambda: None)
     env_mod = load_script("manage_environment")
     rc = env_mod.main(["--model", "csmcir", "--create", "--allow-env-install", "--dry-run"])
     out = capsys.readouterr()
@@ -59,17 +61,20 @@ def test_prepare_model_execute_requires_authorization() -> None:
 
 
 def test_prepare_model_executes_only_declared_recipe_steps(
-        tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+        tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch) -> None:
     """`--execute` runs the steps a contract declares and reports the ones it cannot.
 
     DCNet declares a resize it can perform and a GloVe pickle generation it must not attempt (the
     author's generator samples unseeded vectors, so regenerating produces a different artifact).
 
-    The dataset root is staged HERE rather than taken from the configured default: without an
-    explicit root the command resolves the operator's own FashionIQ tree, which a fresh clone does
-    not have, so the test would fail for a reason that says nothing about the recipe steps.
+    The dataset root is staged HERE rather than taken from the configured default. The operator
+    resolves its default to an installed FashionIQ tree, which a fresh clone may not have, so this
+    test passes an explicit root and stays independent of workstation links.
     """
     prep_mod = load_script("prepare_model")
+    # Suite isolation deliberately clears operator interpreter overrides; this dry-run needs an
+    # explicit deterministic interpreter to inspect the declared recipe.
+    monkeypatch.setenv("WORKBENCH_DCNET_PYTHON", sys.executable)
     # The full DCNet layout the contract declares, so the run reaches the RECIPE question this test
     # is about. A partial root would fail on missing inputs first and the recipe assertions would
     # never execute -- which is the failure mode the previous version had on a clean checkout.
@@ -86,6 +91,9 @@ def test_prepare_model_executes_only_declared_recipe_steps(
         # a raw-input list instead of the recipe lines this test asserts.
         (dataset / "captions" / f"cap.{category}.train.json").write_text("[]", encoding="utf-8")
         (dataset / "captions" / f"cap.{category}.glove.val.pkl").write_bytes(b"author-artifact")
+    # The checkout's fixed dataset symlink targets the real operator dataset. This test covers
+    # recipe planning only, so isolate that staging boundary instead of inspecting host links.
+    monkeypatch.setattr(prep_mod, "_fixed_link", lambda *_args, **_kwargs: True)
     rc = prep_mod.main(["--model", "dcnet", "--execute", "--allow-preparation", "--dry-run",
                         "--dataset-root", str(dataset)])
     captured = capsys.readouterr()

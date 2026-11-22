@@ -1,0 +1,12 @@
+{
+  "job_id": "21e81d5b-0af7-42f3-888b-7c62f62f385a",
+  "model_id": "dcnet",
+  "checkpoint_id": "fashioniq_run_directory",
+  "protocol_id": "diagnostic_q1_t2",
+  "status": "cancelled",
+  "started_at": "2026-11-20T16:31:06.708736+00:00",
+  "completed_at": "2026-11-20T16:36:07.370693+00:00",
+  "return_code": -15,
+  "error": "workbench is shutting down",
+  "gpu_may_be_held": false
+}

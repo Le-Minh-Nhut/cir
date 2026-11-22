@@ -1,0 +1,2 @@
+exit=0
+command=flock -w 180 /tmp/cir-fix-all-20261120-cpu.lock workbench/envs/ctl312h/bin/python -m pytest -q workbench/tests/test_parity_absolute_relative_v2.py workbench/tests/test_composition_provenance_identity.py

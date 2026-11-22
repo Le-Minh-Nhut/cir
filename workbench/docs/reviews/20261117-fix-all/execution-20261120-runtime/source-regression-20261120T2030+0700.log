@@ -1,0 +1,7 @@
+actual command: flock -x /tmp/cir-fix-all-20261120-cpu.lock systemd-run --user --scope -p MemoryMax=12G -p MemorySwapMax=0 --setenv=OMP_NUM_THREADS=1 --setenv=OPENBLAS_NUM_THREADS=1 --setenv=MKL_NUM_THREADS=1 --setenv=NUMEXPR_NUM_THREADS=1 "$PWD/workbench/envs/ctl312h/bin/python" -m pytest -q workbench/tests/test_autopilot_config.py::test_offline_blocked_source_acquisition_survives_into_final_rows
+pytest ran serial (`-q`); no `-n10` requested for this narrow single-test verification.
+Running as unit: run-r4fdc877dbb674a5fbe4b9cf2f7341d67.scope; invocation ID: da9f453a1f2945ef8b2c34b4b11c7b8e
+.                                                                        [100%]
+1 passed in 0.15s
+
+EXIT_CODE=0

@@ -1,0 +1,21 @@
+Running as unit: run-u223.service; invocation ID: 45bd4825b0fe49b0877079929b7d1d4d
+[gpu_job] lock held, GPU empty, launching: flock -x /tmp/cir-fix-all-20261120-cpu.lock workbench/envs/dcnet310-sm120/bin/python workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/dcnet_lifecycle_helper.py --run-root /home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/dcnet-lifecycle-20261120T2312+0700 --port 18762 --timeout 1200
+GPU-9bc596d9-19e9-6f43-dc2c-a80da924263c, 530 MiB, 16303 MiB
+Traceback (most recent call last):
+  File "/home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/dcnet_lifecycle_helper.py", line 236, in <module>
+    raise SystemExit(main_cli())
+  File "/home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/dcnet_lifecycle_helper.py", line 232, in main_cli
+    return _serve(parser.parse_args())
+  File "/home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/dcnet_lifecycle_helper.py", line 117, in _serve
+    from workbench.backend import main
+  File "/home/heheboiz/data/cir/workbench/backend/main.py", line 17, in <module>
+    from fastapi import FastAPI, HTTPException, Request
+ModuleNotFoundError: No module named 'fastapi'
+Finished with result: exit-code
+Main processes terminated with: code=exited/status=1
+Service runtime: 93ms
+CPU time consumed: 82ms
+Memory peak: 1.3M
+Memory swap peak: 0B
+
+exit=1

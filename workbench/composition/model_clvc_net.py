@@ -182,12 +182,12 @@ def cuda_census(source_root: Path) -> dict[str, dict[str, int]]:
     return census
 
 def _cuda_summary(census: dict[str, dict[str, int]]) -> str:
-    lines = sum(item["lines"] for item in census.values())
-    calls = sum(item["calls"] for item in census.values())
     scoring = {name: census[name] for name in SCORING_FILES if name in census}
     scoring_lines = sum(item["lines"] for item in scoring.values())
     scoring_calls = sum(item["calls"] for item in scoring.values())
     detail = ", ".join(f"{name}({item['calls']})" for name, item in census.items())
+    lines = sum(item["lines"] for item in census.values())
+    calls = sum(item["calls"] for item in census.values())
     return (f"unguarded CUDA: {lines} source lines / {calls} .cuda() call expressions [{detail}]; "
             f"{scoring_lines} lines / {scoring_calls} expressions reachable from scoring")
 
@@ -226,6 +226,7 @@ class Adapter(CompositionAdapter):
         self.dataset_root = Path(self.config.FASHIONIQ_ROOT)
         self._caption_scopes: Any = None
         self._scope_decisions: dict[str, dict[str, Any]] = {}
+        self.capture_path: Path | None = None
 
     #: Pin enforced on the caption annotation set, exactly as LIMN declares it. A fixture overrides
     #: this on the instance with ``{}`` ("synthetic bytes; row schema only").
@@ -289,44 +290,36 @@ class Adapter(CompositionAdapter):
     def mode_supported(self, condition: str) -> tuple[bool, str | None]:
         return _mode_support(condition, _structural_refusal(self))
 
-    def encode_queries(self, image_paths: Sequence[str], texts: Sequence[str],
-                       categories: Sequence[str | None]) -> np.ndarray:
+    def encode_queries(self, image_paths: Sequence[str | Path], texts: Sequence[str],
+                       categories: Sequence[str | None], *, capture_ids: Sequence[str] | None = None,
+                       selected_capture_ids: Sequence[str] | None = None) -> np.ndarray:
         if not (len(image_paths) == len(texts) == len(categories)):
             raise ValueError("image_paths, texts, and categories must have equal lengths")
-        return _run(self, "queries", image_paths, texts, categories)
+        return _run(self, "queries", image_paths, texts, categories,
+                    capture_ids=capture_ids, selected_capture_ids=selected_capture_ids)
 
-    def encode_targets(self, image_paths: Sequence[str],
-                       categories: Sequence[str | None]) -> np.ndarray:
+    def encode_targets(self, image_paths: Sequence[str | Path],
+                       categories: Sequence[str | None], *, capture_ids: Sequence[str] | None = None,
+                       selected_capture_ids: Sequence[str] | None = None) -> np.ndarray:
         if len(image_paths) != len(categories):
             raise ValueError("image_paths and categories must have equal lengths")
         scope = next((category for category in categories if category is not None), None)
         if any(category != scope for category in categories):
-            raise ValueError("CLVC-Net encodes one category per gallery; scopes must not be mixed")
+            raise ValueError("CLVC target gallery scopes must not be mixed")
         if scope not in self.category_scopes:
-            raise ValueError(f"CLVC-Net gallery scope {scope!r} is not one of "
-                             f"{self.category_scopes}")
-        return _run(self, "targets", image_paths, (), categories)
+            raise ValueError(f"CLVC target gallery scope is not one of {self.category_scopes}: {scope!r}")
+        return _run(self, "targets", image_paths, (), categories,
+                    capture_ids=capture_ids, selected_capture_ids=selected_capture_ids)
 
-    def encode_image_only_queries(self, image_paths: Sequence[str],
-                                  categories: Sequence[str | None]) -> np.ndarray:
-        """Query rows from the image encoder ALONE — the named ``clvc_image_encoder_only`` path.
-
-        The row is ``test.py:116``'s target expression, applied to the reference image: the same
-        ``extract_img_feature`` halves, the same transform, the same ``(local, global)``
-        concatenation order and the same per-half ``F.normalize`` as the gallery matrix, so a
-        reference image's row here differs from its own gallery row only by batch composition.
-
-        No text argument exists on purpose: the edit caption is not an EMBEDDING input, so it cannot
-        change this row, and ``compose_img_text``/``text_model`` are never reached. It is NOT a claim
-        that the caption is absent from the query altogether: the query's CATEGORY may have been
-        chosen from the caption by the resolver (117 of 6001 — ``IMAGE_ENCODER_ONLY_LEAKS_SCOPE``),
-        which affects which gallery matrix the row is scored against, not the row. This is also NOT
-        ``image_only_empty_text``: that condition drives the text tower with an empty string, which
-        this model cannot encode at all (``EMPTY_TEXT_REASON``), and it stays unsupported.
-        """
+    def encode_image_only_queries(self, image_paths: Sequence[str | Path],
+                                  categories: Sequence[str | None], *,
+                                  capture_ids: Sequence[str] | None = None,
+                                  selected_capture_ids: Sequence[str] | None = None) -> np.ndarray:
+        """Query rows from image encoders alone, with no caption passed to text encoder."""
         if len(image_paths) != len(categories):
             raise ValueError("image_paths and categories must have equal lengths")
-        return _run(self, IMAGE_ENCODER_ONLY_OPERATION, image_paths, (), categories)
+        return _run(self, IMAGE_ENCODER_ONLY_OPERATION, image_paths, (), categories,
+                    capture_ids=capture_ids, selected_capture_ids=selected_capture_ids)
 
     def score(self, queries: Any, targets: Any,
               categories: Sequence[str | None] | None = None) -> np.ndarray:
@@ -498,8 +491,11 @@ def scatter_rows(rows: np.ndarray, categories: Sequence[str | None],
         raise AssertionError("clvc_worker_row_scatter_incomplete")
     return rows
 
-def _run(adapter: Adapter, operation: str, image_paths: Sequence[str], texts: Sequence[str],
-         categories: Sequence[str | None]) -> np.ndarray:
+
+
+def _run(adapter: Adapter, operation: str, image_paths: Sequence[str | Path], texts: Sequence[str],
+         categories: Sequence[str | None], *, capture_ids: Sequence[str] | None = None,
+         selected_capture_ids: Sequence[str] | None = None) -> np.ndarray:
     """Send one job to the resident worker, starting it on first use."""
     if adapter.work_root is None:
         raise AdapterWorkRootError("clvc_net work_root was not set by runner")
@@ -543,6 +539,18 @@ def _run(adapter: Adapter, operation: str, image_paths: Sequence[str], texts: Se
     output_path = work / f"output-{adapter._worker_counter}.npy"
     digests = _declared_digests(adapter._checkpoint)
     scope = ",".join(sorted({str(value) for value in categories}))
+    adapter_capture_path = adapter.capture_path
+    capture_root = None
+    if adapter_capture_path is not None:
+        if capture_ids is None or len(capture_ids) != len(image_paths):
+            raise ValueError("CLVC capture requires one ID per input row")
+        if len(set(capture_ids)) != len(capture_ids):
+            raise ValueError("CLVC capture IDs must be unique")
+        if selected_capture_ids is None or len(selected_capture_ids) > 32:
+            raise ValueError("CLVC capture requires an explicit selector of at most 32 rows")
+        if len(set(selected_capture_ids)) != len(selected_capture_ids) or not set(selected_capture_ids) <= set(capture_ids):
+            raise ValueError("CLVC selected capture IDs must uniquely match input IDs")
+        capture_root = adapter_capture_path.expanduser().resolve()
     job_path.write_text(json.dumps({
         "operation": operation,
         "image_paths": [str(Path(path).resolve()) for path in image_paths],
@@ -556,6 +564,10 @@ def _run(adapter: Adapter, operation: str, image_paths: Sequence[str], texts: Se
                                for member, name in zip(("local", "global"), _members()[category])]
                     for category in CATEGORIES},
         "batch_size": adapter.batch_size,
+        "capture_ids": list(capture_ids or ()),
+        "selected_capture_ids": list(selected_capture_ids or ()),
+        "capture_name": f"{operation}-{adapter._worker_counter}",
+        "capture_path": str(capture_root) if capture_root is not None else None,
     }), encoding="utf-8")
     log_path = work / "worker.stderr.log"
     try:
@@ -740,10 +752,42 @@ def _worker_main(job_path: Path) -> None:
         return loaded[category]
 
     def encode_group(category: str, operation: str, paths: Sequence[str],
-                     texts: Sequence[str], batch_size: int) -> np.ndarray:
+                     texts: Sequence[str], batch_size: int, capture_ids: Sequence[str],
+                     selected_capture_ids: Sequence[str], capture_path: str | None,
+                     capture_name: str) -> np.ndarray:
         local, global_model = pair_for(category)
         batches = [paths[start:start + batch_size] for start in range(0, len(paths), batch_size)]
-
+        selected = set(selected_capture_ids)
+        selected_positions = [index for index, sample_id in enumerate(capture_ids)
+                              if sample_id in selected]
+        capture_limit = 32
+        captured_pixels: list[np.ndarray] = []
+        captured_features: list[np.ndarray] = []
+        captured_positions: list[int] = []
+        current_batch_start = 0
+        hook_records: list[tuple[Any, Any, Any]] = []
+        token_captures: dict[str, list[np.ndarray]] = {"local": [], "global": []}
+        length_captures: dict[str, list[np.ndarray]] = {"local": [], "global": []}
+        if operation == "queries" and capture_path is not None and selected_positions:
+            for tower, network in (("local", local), ("global", global_model)):
+                text_model = network.text_model
+                original_forward = text_model.forward_encoded_texts
+                lengths: list[int] = []
+                def capture_forward(encoded: Any, _original=original_forward,
+                                    _lengths=lengths) -> Any:
+                    _lengths[:] = [len(tokens) for tokens in encoded]
+                    return _original(encoded)
+                text_model.forward_encoded_texts = capture_forward
+                def capture_tokens(_module: Any, args: tuple[Any, ...], _tower=tower,
+                                  _lengths=lengths) -> None:
+                    selected_local = [position - current_batch_start for position in selected_positions
+                                      if current_batch_start <= position < current_batch_start + len(_lengths)]
+                    if selected_local:
+                        token_captures[_tower].append(args[0][:, selected_local].detach().cpu().numpy())
+                        length_captures[_tower].append(np.asarray(
+                            [_lengths[index] for index in selected_local], dtype=np.int64))
+                hook = text_model.embedding_layer.register_forward_pre_hook(capture_tokens)
+                hook_records.append((text_model, original_forward, hook))
         def decode(chunk: Sequence[str]) -> Any:
             images = []
             for path in chunk:
@@ -755,13 +799,63 @@ def _worker_main(job_path: Path) -> None:
         rows: list[np.ndarray] = []
         for index, images in enumerate(prefetch_rows(decode, batches, workers)):
             start = index * batch_size
+            positions = [position - start for position in selected_positions
+                         if start <= position < start + len(images)]
+            current_batch_start = start
+            if capture_path is not None and positions:
+                captured_pixels.append(images[positions].numpy())
+                captured_positions.extend(start + position for position in positions)
             with torch.no_grad():
                 images = images.cuda()
                 composed = composed_rows(operation, local, global_model, images,
                                          texts[start:start + len(images)], torch, F)
+            if capture_path is not None and positions:
+                captured_features.append(composed[positions].detach().float().cpu().numpy())
             rows.append(composed.detach().float().cpu().numpy())
             del images, composed
-        return np.concatenate(rows, axis=0) if rows else np.empty((0, DIMENSION), np.float32)
+        features = np.concatenate(rows, axis=0) if rows else np.empty((0, DIMENSION), np.float32)
+        if capture_path is not None and captured_positions:
+            destination = Path(capture_path)
+            destination.mkdir(parents=True, exist_ok=True)
+            metadata = {"schema": "cir-clvc-worker-capture-v1", "operation": operation,
+                        "category": category,
+                        "sample_ids": [capture_ids[position] for position in captured_positions],
+                        "image_paths": [paths[position] for position in captured_positions],
+                        "texts": [texts[position] for position in captured_positions] if texts else [],
+                        "batch_size": batch_size, "capture_limit": capture_limit,
+                        "input_tensor": "ImageNet-normalized float32 RGB NCHW",
+                        "token_padding": "native zero-padded, unmasked; lengths are exact"}
+            def padded_tokens(chunks: list[np.ndarray]) -> np.ndarray:
+                if not chunks:
+                    return np.empty((0, 0), dtype=np.int64)
+                width = max(chunk.shape[0] for chunk in chunks)
+                rows = []
+                for chunk in chunks:
+                    batch_rows = chunk.T
+                    padded = np.zeros((batch_rows.shape[0], width), dtype=batch_rows.dtype)
+                    padded[:, :batch_rows.shape[1]] = batch_rows
+                    rows.append(padded)
+                return np.concatenate(rows, axis=0)
+            local_lengths = np.concatenate(length_captures["local"]) if length_captures["local"] else np.empty(0, np.int64)
+            global_lengths = np.concatenate(length_captures["global"]) if length_captures["global"] else np.empty(0, np.int64)
+            local_tokens = padded_tokens(token_captures["local"])
+            global_tokens = padded_tokens(token_captures["global"])
+            for text_model, original_forward, hook in hook_records:
+                hook.remove()
+                text_model.forward_encoded_texts = original_forward
+            sample_ids = np.asarray([capture_ids[position] for position in captured_positions])
+            payload = {"query_ids" if operation == "queries" else "gallery_ids": sample_ids,
+                       "image_paths": np.asarray([paths[position] for position in captured_positions]),
+                       "pixels": np.concatenate(captured_pixels),
+                       "features": np.concatenate(captured_features),
+                       "metadata": np.asarray(json.dumps(metadata, sort_keys=True))}
+            if texts:
+                payload["texts"] = np.asarray([texts[position] for position in captured_positions])
+            if operation == "queries":
+                payload.update(local_token_ids=local_tokens, global_token_ids=global_tokens,
+                               local_token_lengths=local_lengths, global_token_lengths=global_lengths)
+            np.savez_compressed(destination / f"{capture_name}-{category}.npz", **payload)
+        return features
 
     def run_one(current: dict[str, Any]) -> None:
         try:
@@ -773,7 +867,11 @@ def _worker_main(job_path: Path) -> None:
                 grouped[category] = encode_group(
                     category, current["operation"],
                     [paths[index] for index in indices],
-                    [texts[index] for index in indices] if texts else [], batch_size)
+                    [texts[index] for index in indices] if texts else [], batch_size,
+                    [current["capture_ids"][index] for index in indices]
+                    if current.get("capture_path") else [],
+                    current.get("selected_capture_ids", []), current.get("capture_path"),
+                    current["capture_name"])
             # Scattered back to INPUT positions: a grouped-order reply would misalign every row.
             output = scatter_rows(np.empty((len(paths), DIMENSION), dtype=np.float32),
                                   categories, grouped)

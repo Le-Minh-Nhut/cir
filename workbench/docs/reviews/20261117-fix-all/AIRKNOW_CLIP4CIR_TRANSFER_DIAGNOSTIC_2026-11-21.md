@@ -1,0 +1,29 @@
+# Air-Know and CLIP4Cir transfer diagnostics (2026-11-21)
+
+Bounded setup evidence only; no GPU inference, native/adapter score pair, parity verdict, or scientific acceptance claim. No GPU lease was available. Current status remains pending.
+
+## Air-Know
+
+Pinned native wrapper preflight succeeded for all three FashionIQ categories, `fiq_n05`, batch size 32. Interpreter `workbench/envs/airknow310-la/bin/python` reports Python 3.10.20, Torch 2.7.1+cu128, CUDA available. Production adapter status is ready with that interpreter. Native command:
+
+```sh
+WORKBENCH_AIRKNOW_PYTHON="$PWD/workbench/envs/airknow310-la/bin/python" OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 NUMEXPR_NUM_THREADS=1 workbench/envs/ctl312h/bin/python -m workbench.replay.airknow --checkpoint-root workbench/artifacts/checkpoint_selection/20261106T002617+0700/checkpoints/airknow --dataset-root data/FashionIQ --source-root workbench/third_party/AirKnow --variant fiq_n05 --batch-size 32 --preflight-only
+```
+
+Observed: `[READY] Air-Know preflight passed (variant=fiq_n05); no inference executed`, exit 0. `evaluate_categories(..., score_capture=...)` owns native argsort interception; new CLI `--score-output` persists compressed per-category native rows (IDs, text, scores, source argsort) when capture enabled. Pinned `test_BLIP2.py:142-154` uses `model.train()`, computes all-query/all-gallery max token dot scores, masks each reference with `-10e10`, then calls `np.argsort(-sims[i, :])` twice (rank-list construction and downstream hit counting). Capture requires and cross-checks both actual observed masked argsort arrays; native `source_order` is source order, not re-derived after masking. Registered Adapter scores max raw dot product over 32 target tokens and intentionally keeps reference eligible (CIRCUS semantics). Native FashionIQ rankings and CIRCUS adapter rankings use different protocols; not direct parity.
+
+## CLIP4Cir RN50x4
+
+Candidate interpreter `workbench/envs/clip4cir310-sm120/bin/python`: Python 3.10.20, Torch 2.7.1+cu128, CUDA available. Existing environment provisioning receipt records source imports and `uv pip check` success (see `raw/asset-caption-audit/environment-provisioning.log`). Production adapter status is ready when `WORKBENCH_CLIP4CIR_PYTHON` points there. This status does not prove an inference run.
+
+Existing checkpoint hash receipt `raw/asset-caption-audit/checkpoint_hash_current.json` verifies NoFT Combiner member SHA256 `b31882fe6f7e3e194cb9cfda048926844ee0ccc9d4ebc5483fb3bacfa5972955` (236,017,921 bytes). FullFT bundle has verified members SHA256 `7c7c0a10fb4c995cb1ded9ad70a58891d50c622263c54131523bfb232b493f8e` (236,017,921 bytes) and `4111ac139cf96ac0cf31b30bf8f55b654247b06f0f5fbee4fe8dcc8c1c7cfd2f` (713,874,695 bytes). Shared OpenAI RN50x4 cache `/home/heheboiz/.cache/clip/RN50x4.pt` exists (421,854,225 bytes). No checkpoint was loaded here. Native source capture helper `workbench/replay/clip4cir_score_capture.py` observes upstream score/order during `validate.py`; source validation reports aggregate R@10/50 only. Adapter scoring uses normalized cosine, category-independent gallery; upstream order is from distance sorting. Full gallery captures must retain exact shared query/gallery scope and IDs.
+
+## Runtime and admission
+
+Candidate interpreters: Air-Know `workbench/envs/airknow310-la/bin/python`; CLIP4Cir `workbench/envs/clip4cir310-sm120/bin/python`. No checkpoint was loaded or model GPU forward run. At latest observed check, filesystem free space was 56,108,466,176 B; campaign CPU lock was busy and GPU showed 15,447 MiB free / 35% utilization, so no job launch is eligible.
+
+Air-Know source constructor count is 27,568 float32 tensors at `(3,224,224)` = 16,599,023,616 B lossless spool. Generic helper admission reserves `2*spool + 1 GiB` = 34,271,789,056 B for spool plus source native cache. Source receiver retains dataset views while native train/dropout scorer runs; the 12 GiB guarded wrapper and source run memory remain unmeasured under spool. TG-CIR has admission priority and needs about 45.6 GB; current free space cannot safely admit both sequential evidence footprints without refreshed budget and explicit staging/native cache accounting. Do not launch Air-Know before TG-CIR/DCNet queued work completes.
+
+Ready Air-Know native invocation after a separate admission/queue decision; `<isolated-role-dir>` remains deliberately unbound, so this is a command template, not launch authorization: controller `workbench/envs/ctl312h/bin/python -m workbench.replay.airknow --checkpoint-root workbench/artifacts/checkpoint_selection/20261106T002617+0700/checkpoints/airknow --dataset-root data/FashionIQ --source-root workbench/third_party/AirKnow --variant fiq_n05 --batch-size 32 --device cuda --output <isolated-role-dir>/airknow-fiq_n05-native-train.json --score-output <isolated-role-dir>/native-scores`; set `WORKBENCH_AIRKNOW_PYTHON=$PWD/workbench/envs/airknow310-la/bin/python`, `WORKBENCH_AIRKNOW_SEED=0`, `WORKBENCH_REPLAY_CACHE_ROOT=<isolated-role-dir>/native-cache`, OMP/OPENBLAS/MKL/NUMEXPR thread counts to 1, and route one process through durable `run-role-service.sh` plus `gpu_job.sh`. CLI now exposes capture; each category NPZ contains query/target/reference IDs, text, scores, and observed source argsort. Adapter is a separate run labeled CIRCUS `reference eligible` vs native FashionIQ `reference excluded`; never call them paired parity. No launch while TG/DCNet has priority or no explicit admission.
+
+CLIP4Cir modes remain separate preflight candidates only: NoFT `combiner_rn50x4_noft` uses verified staged Combiner plus shared base RN50x4; FullFT `clip4cir_rn50x4_fullft` uses separately hash-verified Combiner+CLIP bundle. No native GPU capture, adapter forward, or per-query rank rows in this turn.

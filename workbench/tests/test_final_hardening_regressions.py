@@ -164,18 +164,44 @@ def test_gate_demotes_a_reference_without_a_category_table():
     assert not verdict.passed
 
 
-# --------------------------------------------------------------------------- B-9 (cuda UNKNOWN)
+def test_cuda_adaptation_overrides_unknown_legacy_requirement(monkeypatch, tmp_path, limn_model):
+    """Selected CUDA adaptation must be probed and block launch before capability proof."""
+    from types import SimpleNamespace
+    from workbench.backend import runtime
+    from workbench.scripts import evaluate_models
+    adapted = dict(limn_model)
+    adapted["environment"] = {**adapted["environment"], "cuda": "UNKNOWN",
+                              "adapted_runtime": {**adapted["environment"]["adapted_runtime"],
+                                                  "cuda": "12.8"}}
+    cpu = {"model_id": "cpu", "environment": {"cuda": "UNKNOWN"}}
+    monkeypatch.setenv(runtime.ADAPTATION_ENV, "sm_120")
+    assert runtime._requires_gpu(adapted)
+    assert not runtime._requires_gpu(cpu)
 
-def test_csmcir_declares_a_cuda_requirement():
-    """B-9: CSMCIR's evaluator hard-requires CUDA (torch.cuda.empty_cache in
-    blip_validate.py) but the registry said UNKNOWN, which _requires_gpu treats as "no
-    requirement" — so a CPU-only host passed the launch gate."""
-    from workbench.backend.registry import load_registry
-    from workbench.backend.runtime import _requires_gpu
+    probed = []
+    monkeypatch.setattr(runtime, "verify_gpu_runtime",
+                        lambda model, config, **kwargs: probed.append(model["model_id"]) or {
+                            "capability_verified": True, "capability_key": "test"})
+    from workbench.backend.operator_config import WorkbenchConfig
+    config = WorkbenchConfig(CIR_REPO_ROOT=tmp_path, CIR_DATA_ROOT=tmp_path,
+                             FASHIONIQ_ROOT=tmp_path, WORKBENCH_HOST="127.0.0.1",
+                             WORKBENCH_BACKEND_PORT=8000, WORKBENCH_FRONTEND_PORT=5173,
+                             WORKBENCH_CHECKPOINT_ROOT=tmp_path, WORKBENCH_RESULTS_ROOT=tmp_path,
+                             WORKBENCH_THIRD_PARTY_ROOT=tmp_path,
+                             WORKBENCH_ARTIFACTS_ROOT=tmp_path)
+    monkeypatch.setattr(runtime, "gpu_capability_path", lambda *args, **kwargs: tmp_path / "cap.json")
+    from workbench.scripts import evaluate_models
+    assert evaluate_models.verify_gpu_only(
+        [(adapted, {"checkpoint_id": "adapted"}), (cpu, {"checkpoint_id": "cpu"})], config) == 0
+    assert probed == ["limn"]
 
-    csmcir = next(m for m in load_registry()["models"] if m["model_id"] == "csmcir")
-    assert str(csmcir["environment"]["cuda"]).upper() != "UNKNOWN"
-    assert _requires_gpu(csmcir)
+    monkeypatch.setattr(runtime, "require_verified_model_interpreter",
+                        lambda model, **kwargs: "/usr/bin/python3")
+    monkeypatch.setattr(runtime, "verify_environment", lambda *args, **kwargs: SimpleNamespace(
+        tier=runtime.TIER_GPU_PENDING, status=runtime.TIER_GPU_PENDING, reason="probe required"))
+    with pytest.raises(runtime.GpuVerificationError, match="GPU runtime not verified"):
+        runtime.require_launch_ready(adapted)
+    assert runtime.require_launch_ready(cpu) == "/usr/bin/python3"
 
 
 # --------------------------------------------------------------------------- A-02 / A-05 / D-4 / D-6

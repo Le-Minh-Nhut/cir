@@ -48,11 +48,11 @@ def clean_cache_env(monkeypatch, tmp_path: Path):
     config_path = tmp_path / "workbench.env"
     config_path.write_text("", encoding="utf-8")
     monkeypatch.setattr(operator_config, "_CONFIG_PATH", config_path)
-    model_settings.file_settings.cache_clear()
+    model_settings.clear_file_settings_cache()
     try:
         yield config_path
     finally:
-        model_settings.file_settings.cache_clear()
+        model_settings.clear_file_settings_cache()
 
 
 def _run_probe(tmp_path: Path, monkeypatch, label: str, return_env: bool = False):
@@ -84,7 +84,7 @@ def _run_probe(tmp_path: Path, monkeypatch, label: str, return_env: bool = False
 def test_file_only_hf_home_reaches_child(tmp_path, monkeypatch, clean_cache_env) -> None:
     root = tmp_path / "file-cache"
     clean_cache_env.write_text(f"HF_HOME={root}\n", encoding="utf-8")
-    model_settings.file_settings.cache_clear()
+    model_settings.clear_file_settings_cache()
 
     assert _run_probe(tmp_path, monkeypatch, "file") == str(root)
 
@@ -98,7 +98,7 @@ def test_environment_only_hf_home_reaches_child(tmp_path, monkeypatch, clean_cac
 
 def test_environment_wins_over_file(tmp_path, monkeypatch, clean_cache_env) -> None:
     clean_cache_env.write_text(f"HF_HOME={tmp_path / 'file-cache'}\n", encoding="utf-8")
-    model_settings.file_settings.cache_clear()
+    model_settings.clear_file_settings_cache()
     env_root = tmp_path / "env-cache"
     monkeypatch.setenv("HF_HOME", str(env_root))
 
@@ -117,7 +117,7 @@ def test_nothing_configured_keeps_huggingface_default(tmp_path, monkeypatch, cle
 
 def test_relative_file_setting_resolves_absolute(tmp_path, monkeypatch, clean_cache_env) -> None:
     clean_cache_env.write_text("HF_HOME=relcache\n", encoding="utf-8")
-    model_settings.file_settings.cache_clear()
+    model_settings.clear_file_settings_cache()
     expected = model_settings.resolve_path_setting("HF_HOME")
     assert expected is not None and expected.is_absolute()
 
@@ -128,7 +128,7 @@ def test_relative_file_setting_resolves_absolute(tmp_path, monkeypatch, clean_ca
 
 def test_relative_environment_setting_resolves_absolute(tmp_path, monkeypatch, clean_cache_env) -> None:
     clean_cache_env.write_text(f"HF_HOME={tmp_path / 'ignored-file-cache'}\n", encoding="utf-8")
-    model_settings.file_settings.cache_clear()
+    model_settings.clear_file_settings_cache()
     monkeypatch.setenv("HF_HOME", "relative-export-cache")
     expected = model_settings.resolve_path_setting("HF_HOME")
 
@@ -140,7 +140,7 @@ def test_sibling_env_cache_does_not_suppress_file_hf_home(tmp_path, monkeypatch,
     """(f) An exported sibling cache var must not hide a file-only `HF_HOME`."""
     file_root = tmp_path / "file-cache"
     clean_cache_env.write_text(f"HF_HOME={file_root}\n", encoding="utf-8")
-    model_settings.file_settings.cache_clear()
+    model_settings.clear_file_settings_cache()
     sibling = tmp_path / "hub-cache"
     monkeypatch.setenv("HF_HUB_CACHE", str(sibling))
 

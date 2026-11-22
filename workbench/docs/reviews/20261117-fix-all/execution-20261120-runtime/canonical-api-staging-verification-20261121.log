@@ -1,0 +1,8 @@
+command: flock CPU lock; systemd user service MemoryMax=12GiB MemorySwapMax=0 OOMPolicy=kill; ctl312h py_compile and pytest test_dcnet_api_staging.py
+Running as unit: run-u326.service; invocation ID: 06e07a5da7804c90b0950c9e50ccfb5d
+[Errno 2] No such file or directory: 'workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/canonical_dcnet_admission.py'Finished with result: exit-code
+Main processes terminated with: code=exited/status=1
+Service runtime: 22ms
+CPU time consumed: 21ms
+Memory peak: 1.8M
+Memory swap peak: 0B

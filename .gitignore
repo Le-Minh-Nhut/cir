@@ -297,6 +297,9 @@ workbench/docker/release_verify_report.json
 # (6003 files, 24 MB) and the lock files that guard a concurrent encoder measurement.
 # Both are regenerable locally and carry no claim; the scripts and their JSON output are tracked.
 workbench/docs/reviews/*/.encoder_work/
+workbench/docs/reviews/20261112-parity-repair/raw/third_model/population_habit_dress.npz
+workbench/docs/reviews/20261112-parity-repair/raw/third_model/population_habit_shirt.npz
+workbench/docs/reviews/20261112-parity-repair/raw/third_model/population_habit_toptee.npz
 workbench/docs/reviews/*/.blas_encoder*.lock
 
 # Ad-hoc root-level scratch dumps from troubleshooting (not evidence, not tracked).

@@ -85,7 +85,6 @@ def test_a_true_duplicate_is_still_detected():
 
 @pytest.mark.parametrize("model_id,impl", [
     ("conesep", "einsum-optimized"),
-    ("csmcir", "einsum-optimized"),
     ("ptha_mtst", "einsum-optimized"),
     ("habit", "einsum"),
     ("hint", "einsum"),

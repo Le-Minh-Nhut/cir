@@ -1,0 +1,26 @@
+Transient OOM-group guard probe — 2026-11-20
+
+Attempt 1 (scope rejected by systemd user manager):
+Command:
+systemd-run --user --scope --quiet -p MemoryMax=256M -p MemorySwapMax=0 -p MemoryOOMGroup=yes /usr/bin/env sh -c 'p=$(awk -F: '\''$1 == "0" {print $3}'\'' /proc/self/cgroup); cat /sys/fs/cgroup"$p"/memory.max /sys/fs/cgroup"$p"/memory.swap.max /sys/fs/cgroup"$p"/memory.oom.group'
+stdout/stderr:
+Unknown assignment: MemoryOOMGroup=yes
+Exit: 1
+
+Attempt 2 (transient user service; no stress):
+Command:
+systemd-run --user --wait --pipe --collect --same-dir --service-type=exec -p MemoryMax=256M -p MemorySwapMax=0 -p OOMPolicy=kill /usr/bin/env sh -c 'p=$(awk -F: '\''$1 == "0" {print $3}'\'' /proc/self/cgroup); cat /sys/fs/cgroup"$p"/memory.max /sys/fs/cgroup"$p"/memory.swap.max /sys/fs/cgroup"$p"/memory.oom.group'
+stdout/stderr:
+Running as unit: run-u186.service; invocation ID: 3ea070acd4a84296b758aabff786ea14
+268435456
+0
+1
+Finished with result: success
+Main processes terminated with: code=exited/status=0
+Service runtime: 2ms
+CPU time consumed: 2ms
+Memory peak: 876.0K
+Memory swap peak: 0B
+Exit: 0
+
+Result: User transient service cgroup verified `memory.max=268435456` (256 MiB), `memory.swap.max=0`, `memory.oom.group=1`; systemd `OOMPolicy=kill` accepted. First scope-only property unsupported (`Unknown assignment: MemoryOOMGroup=yes`), so later launch must use transient service wrapper if OOM-group behavior required. Probe only; no load, no GPU. `MemoryMax=256M` is guard proof only; production job needs separately verified configured cap, proposed 12G, under its actual service cgroup. `systemd-run --user --scope` cannot accept `MemoryOOMGroup` property in this manager; do not claim scope-only guard is proven for group kills.

@@ -65,10 +65,10 @@ def _isolate_settings(monkeypatch, tmp_path):
 
     monkeypatch.delenv(runtime.ADAPTATION_ENV, raising=False)
     monkeypatch.setattr(operator_config, "_CONFIG_PATH", tmp_path / "workbench.env")
-    model_settings.file_settings.cache_clear()
+    model_settings.clear_file_settings_cache()
     runtime.forget_environment()
     yield
-    model_settings.file_settings.cache_clear()
+    model_settings.clear_file_settings_cache()
     runtime.forget_environment()
 
 def _python310(root: Path, name: str) -> Path:

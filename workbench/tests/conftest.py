@@ -32,10 +32,9 @@ _OPERATOR_ENV_PREFIXES = ("CIR_", "WORKBENCH_")
 def isolate_operator_state(monkeypatch, tmp_path_factory):
     """Run every test as if the checkout were fresh: no operator file, no exported settings.
 
-    Only setup clears the caches. A teardown clear would run *before* ``monkeypatch`` undoes a
-    test's own patch of ``file_settings``, so it would call ``cache_clear`` on that test's stand-in
-    (``test_a36_assigned_identity`` replaces it with a plain lambda) and error during teardown.
-    Clearing at setup is sufficient: every test starts from the empty cache it should.
+    Only setup clears the internal cache so every test starts from the empty cache. Entries are
+    keyed by operator-env path and stat identity, so test-local file changes are also detected.
+    The explicit reset does not depend on the public reader remaining unpatched.
     """
     from workbench.backend import model_settings, operator_config, runtime
 
@@ -45,5 +44,5 @@ def isolate_operator_state(monkeypatch, tmp_path_factory):
     # clone has. Placing it under the session tmp dir keeps it from accidentally existing.
     monkeypatch.setattr(operator_config, "_CONFIG_PATH",
                         tmp_path_factory.mktemp("operator-config") / "workbench.env")
-    model_settings.file_settings.cache_clear()
+    model_settings.clear_file_settings_cache()
     runtime.forget_environment()

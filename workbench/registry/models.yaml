@@ -114,7 +114,7 @@ models:
         derived_sha256: a057e8f3ad7097adcfabb2b8fd8b4747588ff3461cfb43f00cd3483dfd6d512d
         reason: "the evaluator prints its metric JSON and then unconditionally runs the `vis_fiq` diagnostic dump, which raises AttributeError on the val-relative dataset's target-id field and exits non-zero after the metrics were already computed; the patch makes that dump opt-in, and makes the query batch size and the extractor's own save_memory path env-overridable (WORKBENCH_CSMCIR_QUERY_BS, WORKBENCH_CSMCIR_SAVE_MEMORY) because the author defaults need ~15.6 GiB on a 15.44 GiB card. Author defaults are unchanged when neither variable is set."
     source_blocker: "pinned lavis.models package cannot be imported as published (98 unguarded imports of absent modules sit before the registration); an approved patch is declared in approved_source_patches and removes only that blocker"
-    notes: Official Hugging Face model repository; checkpoint has an author-published size and sha256 (Hugging Face LFS oid).
+    notes: "Official Hugging Face model repository; checkpoint has an author-published size and sha256 (Hugging Face LFS oid). A preregistered native/adapter diagnostic on FashionIQ dress q33/g35 matched query features within 1.79e-7, target features within 9.62e-7, scores within 4.77e-7, and ranks exactly; separate 1x1 consumer check also passed. This limited diagnostic is not full-scope parity or publication acceptance. Native strict=False load reported missing=[] and unexpected=['token_importance']; see manifest SHA-256 3c39ba6ac477c0300c2e048b009d2642d75606c6746c690e96811cf29b022984 and paired receipts workbench/artifacts/logs/csmcir-fiq-dress-q33-g35-native.txt / workbench/artifacts/logs/csmcir-fiq-dress-q33-g35-adapter.txt; reproduction_status remains NOT_RUN."
     checkpoint_variants:
       - checkpoint_id: fashioniq
         filename: fashioniq_tuned_clip_best.pt
@@ -150,6 +150,17 @@ models:
       # actually imports are computed by `environment_planner._evaluator_imports`, which walks the
       # launcher this adapter declares, so this list is not a second copy of that answer.
       packages: [opencv-python-headless==4.5.5.64, fairscale==0.4.13, iopath==0.1.10, peft==0.6.2, diffusers==0.19.3, huggingface-hub==0.19.4, accelerate==0.25.0, numpy, omegaconf==2.3.0, packaging, pandas==2.0.3, Pillow, pyyaml, regex, requests, tqdm, transformers==4.25.0, timm==0.9.16, scikit-learn==1.3.2]
+      # Candidate sm_120 runtime; vendored LAVIS remains on sys.path, not replaced by salesforce-lavis.
+      # Environment import verification and native GPU parity are separate acceptance steps.
+      adapted_runtime:
+        target_compute_capability: sm_120
+        python: '3.10'
+        pytorch: '==2.7.1'
+        torchvision: '==0.22.1'
+        cuda: '12.8'
+        packages: ['numpy==1.26.4', 'decord==0.6.0', 'einops==0.7.0', 'ftfy==6.3.1', 'webdataset==0.2.86']
+        pip_index_url: https://download.pytorch.org/whl/cu128
+
     method_name: Air-Know
     research_generation: recent
     publication_year: 2026
@@ -177,7 +188,7 @@ models:
     reported_mean: 65.73
     reproduction_status: NOT_RUN
     strict_clean_checkpoint_available: false
-    notes: Official Hub lists only FashionIQ 50% and 80% noise-trained weights; clean evaluation remains 0%.
+    notes: "Official Hub lists only FashionIQ 50% and 80% noise-trained weights; clean evaluation remains 0%. The first planned diagnostic explicitly uses author variant fiq_n05 (50% training noise, 0% evaluation noise), never a 20% checkpoint; do not choose by observed score."
     checkpoint_variants:
       - checkpoint_id: fiq_n05
         filename: airknow_fiq_0.5.pt
@@ -1058,6 +1069,27 @@ models:
       torchvision: '0.5.0'
       cuda: UNKNOWN
       packages: [nltk==3.5, spacy==2.3.0]
+      # Candidate sm_120 evaluator runtime. Dedicated interpreter is assigned separately; native
+      # retrieval metrics and parity remain independent acceptance evidence.
+      adapted_runtime:
+        target_compute_capability: sm_120
+        python: '3.10'
+        pytorch: '==2.7.1'
+        torchvision: '==0.22.1'
+        cuda: '12.8'
+        # The source uses nltk.word_tokenize on unmatched CIRCUS captions. The production worker
+        # processed all 6003 query rows with nltk==3.5 and this pinned resource: 6000 cached vectors
+        # matched exactly; three unmatched captions used the saved author vocabulary. This proves
+        # text-vector inputs only, not image features, scores, metrics or accuracy.
+        packages: ['numpy==1.26.4', 'Pillow==12.3.0', 'einops==0.7.0', 'nltk==3.5']
+        runtime_resources:
+          nltk_data:
+            environment_variable: NLTK_DATA
+            path: workbench/artifacts/assets/nltk_data
+            resource: punkt
+            source_commit: 550b6625bcef1f2abff2ff770a5a0d272c9c6b2a
+            sha256: 51c3078994aeaf650bfc8e028be4fb42b4a0d177d41c012b6a983979653660ec
+        pip_index_url: https://download.pytorch.org/whl/cu128
     strict_clean_checkpoint_available: null
     # The pinned evaluator cannot load the author checkpoint under torch >= 2.6 without an opt-out:
     # `base/base_trainer.py:195` calls `torch.load(ckpt_path)` with no `weights_only` argument, and the
@@ -1083,11 +1115,11 @@ models:
         filename: "."
         artifact_type: run_directory
         required_files: [config.json, trained_model.pth]
-        # `base_trainer.py:191` opens `<resume>/trained_model.pth`; the digest below is of the
-        # staged bytes and was measured, not published. The staged `config.json` is NOT the author's
-        # original: three operational values were changed for this host (`data_dir`, `num_workers`,
-        # `trainer.save_dir`). Its sha is recorded so the substitution is pinned rather than silent,
-        # and the author's 1982-byte original is recorded beside it for comparison.
+        # Fresh byte audit (no deserialization) confirms these staged member digests:
+        # `workbench/docs/reviews/20261117-fix-all/raw/asset-caption-audit/checkpoint_hash_current.json`.
+        # `trained_model.pth` matches the author receipt. Staged `config.json` is NOT the author's
+        # original: `data_dir`, `num_workers`, and `trainer.save_dir` were changed for this host.
+        # Its current digest is pinned below; the author's original config was 1982 bytes.
         bundle_members:
           - {filename: trained_model.pth, expected_sha256: 130f031e0f7808ccf5f15630a691bd7af95ad9fadbf94f64acfce64e7d8b850f}
           - {filename: config.json, expected_sha256: fa5fca78790a33063a4e73b379393f4ffbbf1b251b3c27058aed481136984ba0}
@@ -1158,6 +1190,16 @@ models:
       # satisfy both families without two copies of the same distribution, and documented as an
       # adaptation rather than as upstream intent.
       packages: [pandas==1.4.2, comet-ml==3.21.0, clip @ git+https://github.com/openai/CLIP.git@a1d071733d7111c9c014f024669f959182114e33]
+      # Candidate sm_120 runtime preserving README pandas/Comet and explicit OpenAI CLIP revision.
+      # Environment import verification and native GPU parity are separate acceptance steps.
+      adapted_runtime:
+        target_compute_capability: sm_120
+        python: '3.10'
+        pytorch: '==2.7.1'
+        torchvision: '==0.22.1'
+        cuda: '12.8'
+        packages: ['numpy==1.24.4', 'ftfy==6.2.3', 'regex==2024.11.6', 'tqdm==4.70.1']
+        pip_index_url: https://download.pytorch.org/whl/cu128
     strict_clean_checkpoint_available: null
     notes: Native full-gallery reference-eligible evaluator verified. The staged Combiner state loads strictly into the pinned class at the geometry the adapter passes; base OpenAI CLIP RN50x4 remains an evaluation asset.
     checkpoint_variants:
@@ -1245,6 +1287,15 @@ models:
       # satisfy both families without two copies of the same distribution, and documented as an
       # adaptation rather than as upstream intent.
       packages: [pandas==1.4.2, comet-ml==3.21.0, clip @ git+https://github.com/openai/CLIP.git@a1d071733d7111c9c014f024669f959182114e33]
+      # Same candidate runtime as Combiner RN50x4 NoFT; readiness and parity remain separate.
+      adapted_runtime:
+        target_compute_capability: sm_120
+        python: '3.10'
+        pytorch: '==2.7.1'
+        torchvision: '==0.22.1'
+        cuda: '12.8'
+        packages: ['numpy==1.24.4', 'ftfy==6.2.3', 'regex==2024.11.6', 'tqdm==4.70.1']
+        pip_index_url: https://download.pytorch.org/whl/cu128
     strict_clean_checkpoint_available: null
     notes: Native full-gallery reference-eligible evaluator verified. RN50x4 fullft needs separately loaded Combiner and fine-tuned CLIP states; both are staged, hashed, and each loads strictly into the object `validate.py` builds.
     checkpoint_variants:
@@ -1387,6 +1438,7 @@ models:
     # and the extension requirement is checked before any run.
     canonical_dataset_link: fashionIQ_dataset
     fashioniq_image_extensions: [".png"]
+    composition_adapter: workbench.composition.model_sprc
     replay_status: BLOCKED_CHECKPOINT_MAPPING
     category_model_policy: shared
     checkpoint_serialization: state_dict
@@ -1437,8 +1489,18 @@ models:
       # planner install one pair while the runtime verifier demanded the other, so a correctly
       # installed environment could never reach DEPENDENCIES_OK.
       packages: [spacy==3.7.2, clip @ git+https://github.com/openai/CLIP.git@a1d071733d7111c9c014f024669f959182114e33, opencv-python-headless==4.5.5.64, fairscale==0.4.13, iopath==0.1.10, numpy, omegaconf==2.3.0, packaging, pandas==2.2.0, Pillow, pyyaml, regex, requests, tqdm, transformers==4.36.2, timm==0.9.12]
+      # Candidate sm_120 profile for the author-published ViT-L variant; source import pins remain
+      # intact. Environment verification and native GPU parity are separate acceptance steps.
+      adapted_runtime:
+        target_compute_capability: sm_120
+        python: '3.10'
+        pytorch: '==2.7.1'
+        torchvision: '==0.22.1'
+        cuda: '12.8'
+        packages: ['numpy==1.26.4', 'decord==0.6.0', 'webdataset==0.2.86', 'einops==0.7.0', 'scikit-image==0.22.0', 'pycocoevalcap==1.2']
+        pip_index_url: https://download.pytorch.org/whl/cu128
     strict_clean_checkpoint_available: null
-    notes: The evaluator's argparse default `--blip-model-name blip2_cir_rerank_learn` names a class the pinned repo does not register (only an argparse default; no @registry.register_model); the checkpoint class-key mapping remains unverified and loads non-strictly.
+    notes: "The evaluator's argparse default `--blip-model-name blip2_cir_rerank_learn` names an unregistered class; invocation must select `Blip2QformerCirAlignPrompt`. For the resolved author ViT-L file, class key/shape mapping and SHA are verified; native and adapter strictly loaded 628/628 keys, and a preregistered 1-query × 3-gallery smoke matched within tolerance. This limited variant diagnostic is not full-population parity or paper reproduction: the paper ViT-G asset remains unresolved."
     checkpoint_variants:
       # `backbone` is the authors' flag value, declared rather than inferred. The evaluator selects
       # its vision encoder from `--backbone` (`blip_validate.py:145`: `pretrain` is EVA-CLIP ViT-g,
@@ -1452,18 +1514,17 @@ models:
         filename: sprc_fiq.pt
         backbone: pretrain
         download_url: null
-        source_url: https://1drv.ms/u/s!Aj0q22vyiZbabnUya4mnufIBtYI?e=n4ZVKj
-        source_type: author_onedrive
+        source_url: https://pan.baidu.com/s/18196NRV0Cdbn5uPc3LIgwg
+        source_type: author_baidu_mirror
         checkpoint_training_noise_pct: null
         evaluation_noise_pct: 0
-        expected_size_bytes: null
+        expected_size_bytes: 2720449889
         expected_sha256: null
-        status: CHECKPOINT_MAPPING_UNVERIFIED
+        status: URL_VERIFIED
+        # Author README maps FashionIQ weight to sprc_fiq.pt; mirror listing confirms filename/size.
+        # The URL is discoverable; bytes, checksum, and ViT-G architecture remain unverified.
         checkpoint_mapping_status: UNVERIFIED
-        # Declared-missing, and it genuinely is: a filesystem-wide search found no `sprc_fiq.pt` and
-        # no downloaded OneDrive blob for it, so there are no bytes to establish anything from. The
-        # relocation below is still declared because the file belongs in the same tree once it
-        # arrives; it does not make the variant present.
+        # Bytes, checksum, and ViT-G architecture remain unverified.
         checkpoint_base_relative: ../../checkpoints/sprc
       - checkpoint_id: sprc_fiq_vitl
         filename: sprc_fiq_vitl.pt
@@ -1692,6 +1753,10 @@ models:
         patch_sha256: cdf7d98c439a2a372ebb0053783d55c5d2928eb5decfb3652cbf321eadccb85a
         base_sha256: c3da9c9dc8c11b0616640f910435583471fe64f9190f6fb5abd4382bc2c48d27
         derived_sha256: 97bdbc14c4d7ae1aa13222190e0056cb3557225fd73c51b455203898aa7ad963
+        reason: >-
+          the shipped list+torch.cat allocation needs two full copies of the feature tensor and is
+          killed by the OOM reaper at the adapted runtime's float32 size; this approved delta changes
+          storage strategy only and was measured bit-identical on real inputs
       - path: src/precompute_evaluation.py
         patch_file: workbench/patches/tme_eval_batch_override.patch
         patch_sha256: 0594b8896c051d351fdbefd4c4f3f7c31012eb2bab0b9e3462ed4fbd7035700a
@@ -1701,10 +1766,6 @@ models:
           the pinned gallery and query batch sizes hold a 20.94 GiB float32 gallery plus its similarity
           pass on a 15.44 GiB card and raise CUDA OOM; the approved delta exposes them as environment
           overrides while leaving the author defaults 256/32 unchanged
-        reason: >-
-          the shipped list+torch.cat allocation needs two full copies of the feature tensor and is
-          killed by the OOM reaper on this host at the adapted runtime's float32 size; the approved
-          delta changes only the storage strategy and was measured bit-identical on real inputs
     fashioniq_layout: fashioniq_standard
     literature_split_label: original
     # The native evaluator's gallery is `image_splits/split.<category>.val.json` in file order

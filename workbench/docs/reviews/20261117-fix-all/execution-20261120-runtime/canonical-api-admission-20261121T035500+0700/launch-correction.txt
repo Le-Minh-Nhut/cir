@@ -1,0 +1,1 @@
+Using proven MemoryMax/MemorySwapMax/OOMPolicy properties only; service-inner asserts actual memory.oom.group=1 before interpreter.

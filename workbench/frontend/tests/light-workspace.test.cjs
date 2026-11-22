@@ -14,9 +14,8 @@ const root = path.resolve(__dirname, "..");
 const temp = fs.mkdtempSync(path.join(os.tmpdir(), "cir-ui-check-"));
 execFileSync(
   path.join(root, "node_modules/.bin/tsc"),
-  ["routes.ts", "candidateRequest.ts", "requests.ts", "--ignoreConfig",
+  ["routes.ts", "candidateRequest.ts", "requests.ts", "analysis.ts", "evidence.ts", "--ignoreConfig",
    "--module", "commonjs", "--target", "es2022", "--skipLibCheck", "--outDir", temp],
-  { cwd: root, stdio: "pipe" },
 );
 const load = (name) => require(path.join(temp, `${name}.js`));
 process.on("exit", () => fs.rmSync(temp, { recursive: true, force: true }));
@@ -24,8 +23,24 @@ process.on("exit", () => fs.rmSync(temp, { recursive: true, force: true }));
 const { candidateRequestPath, candidateDisplayOptions, selectExactQuery, effectiveCandidateK } = load("candidateRequest");
 const { parseLocation, toSearch, KNOWN_PROTOCOL_IDS, defaultLocation } = load("routes");
 const { RequestRunner } = load("requests");
+const { buildScope, withCutoff, filterRows } = load("analysis");
 
 const CIRCUS = "circus_fashioniq_release_v1";
+
+const { evidenceState, evidenceBanner } = load("evidence");
+
+test("composition banner ignores unrelated mock index and reflects rendered composition rows", () => {
+  const sources = { runs: "ready", benchmarks: "ready", composition: "ready" };
+  const actualComposition = [{ protocol_id: CIRCUS, subset: "full", is_synthetic: false }];
+  const mockIndex = [{ data_kind: "mock" }];
+  const state = evidenceState(mockIndex, [], actualComposition,
+    { protocolId: CIRCUS, subset: "full" }, sources, "samples");
+  assert.equal(evidenceBanner(state), "");
+  assert.match(evidenceBanner(evidenceState([], [], [{ ...actualComposition[0], is_synthetic: true }],
+    { protocolId: CIRCUS, subset: "full" }, sources, "samples")), /MOCK DEVELOPMENT DATA/);
+  assert.match(evidenceBanner(evidenceState(mockIndex, [], actualComposition,
+    { protocolId: CIRCUS, subset: "full" }, sources, "experiments")), /MOCK DEVELOPMENT DATA/);
+});
 
 // --------------------------------------------------------------------- scope round-trip
 
@@ -158,8 +173,25 @@ test("A selected query missing from the current page is never replaced with its 
   assert.equal(selectExactQuery([{ query_id: "7:2179", rank: 4 }], "7:2179").rank, 4);
 });
 
+test("consensus presets exclude partially scored qids but all-cohort keeps them", () => {
+  const query = (query_id, target_rank) => ({
+    query_id, category: "dress", query_txt: "", reference_id: "", positive_ids: [],
+    ranks: { multimodal: target_rank }, target_rank, outcome: "ground_truth_unretrieved",
+  });
+  const scope = withCutoff(buildScope([
+    { runKey: "full", runLabel: "full", items: [query("7:1", 11), query("7:2", 30)] },
+    { runKey: "partial", runLabel: "partial", items: [query("7:1", 15)] },
+  ]), 10);
+  assert.equal(scope.cohort, 1);
+  assert.equal(scope.partial, 1);
+  assert.deepEqual(filterRows(scope, { preset: "allfail", k: 10, category: "", outcome: "", scoring: "" })
+    .map((row) => row.query_id), ["7:1"]);
+  assert.deepEqual(filterRows(scope, { preset: "all", k: 10, category: "", outcome: "", scoring: "" })
+    .map((row) => row.query_id), ["7:1", "7:2"]);
+});
+
 test("An unknown query id in the URL is reported, not silently dropped", () => {
-  const parsed = parseLocation(`?query=7:2179&condition=bogus`, KNOWN_PROTOCOL_IDS);
+  const parsed = parseLocation(`?query=7:2179&condition=BAD!`, KNOWN_PROTOCOL_IDS);
   assert.equal(parsed.location.query, "7:2179");
   assert.equal(parsed.location.condition, "multimodal");
   assert.equal(parsed.problems.length, 1);

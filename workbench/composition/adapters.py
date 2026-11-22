@@ -258,6 +258,11 @@ class CompositionAdapter:
 
     model_id: str
     reference_eligible = True
+    #: Optional feature width for queries when the scorer accepts query/gallery widths that differ.
+    #: None preserves the historical same-width contract.
+    query_dimension: int | None = None
+    #: `reusable` permits feature/rank cache reuse; `nonreusable` reruns stochastic production paths.
+    cache_policy = "reusable"
     category_scopes: tuple[str | None, ...] = (None,)
     #: True only for an adapter whose CONSTRUCTION draws a relation tensor that no checkpoint can
     #: restore (ENCODER's `learnable_relation`). Such an adapter must record the draw in
@@ -445,48 +450,35 @@ class CompositionAdapter:
         """Release model-owned resources."""
 
     def measured_reference_eligibility(self, *, probe_dimension: int | None = None) -> dict[str, Any]:
-        """MEASURE whether this adapter's own scoring keeps the reference eligible.
+        """Measure reference eligibility with the adapter's own scorer and asymmetric dimensions.
 
-        F7 exists because `reference_eligible` was a class-level literal (`= True` in all nine
-        adapters) that the runner copied into the artifact as if it were a result. Nothing ever
-        executed the claim, so an adapter that masked the reference row -- exactly what the
-        per-characteristic protocols do upstream -- would still have written
-        `reference_eligible: true` into a summary.
-
-        This probe runs the adapter's OWN `score`+`rank` on a synthetic gallery of
-        `probe_dimension`-wide vectors where the reference is the single, unambiguous best match.
-        A reference-eligible scorer returns rank 1; a scorer that masks the reference cannot
-        return 1 because the reference row is never the best-scoring row.
-
-        It is used ONLY as a measured cross-check of the declared literal, never as a
-        replacement for the real rank pass, and it never touches model weights. Adapters whose
-        `score` requires a real gallery (a Mapping of scope matrices) or a live worker are
-        reported as `unmeasurable` with the reason -- which is the honest answer, and is what
-        stops a runner from asserting the value.
+        This is a synthetic cross-check only, not a replacement for real ranking. Adapters whose
+        scoring needs a real gallery, live worker, or unsupported layout report unmeasurable.
         """
-        # The scorer decides its own input width (ENCODER 512, the BLIP-2 family 8192 because
-        # their score reads a 32x256 token layout). Ask the adapter, then build the probe to fit;
-        # a wrong width would be reported as an unmeasurable probe rather than a false verdict.
-        dimension = probe_dimension or getattr(self, "score_dimension", None)
-        if dimension is None:
+        score_dimension = probe_dimension or getattr(self, "score_dimension", None)
+        if score_dimension is None:
             return {"measured": False, "reference_eligible": None,
                     "reason": (f"{type(self).__name__} declares no `score_dimension`, so its "
                                "scoring cannot be probed offline; the runner must not assert a "
                                "reference policy for it"),
                     "method": "score+rank probe"}
-        probe = np.zeros((1, dimension), dtype=np.float32)
+        query_dimension = getattr(self, "query_dimension", None) or score_dimension
+        if (type(query_dimension) is not int or query_dimension < 1 or
+                type(score_dimension) is not int or score_dimension < 1 or
+                score_dimension % query_dimension):
+            return {"measured": False, "reference_eligible": None,
+                    "reason": (f"{type(self).__name__} probe requires unsupported query/gallery "
+                               f"dimensions ({query_dimension}, {score_dimension})"),
+                    "method": "score+rank probe"}
+        probe = np.zeros((1, query_dimension), dtype=np.float32)
         probe[0, 0] = 1.0
-        targets = np.stack([
-            probe[0],                       # reference: identical to the query vector
-            np.eye(dimension, dtype=np.float32)[1],
-            np.eye(dimension, dtype=np.float32)[2 % dimension],
-        ])
+        targets = np.zeros((3, score_dimension), dtype=np.float32)
+        targets[0, 0] = 1.0
+        targets[1, 1] = 1.0
+        targets[2, min(2, score_dimension - 1)] = 1.0
         try:
             ranks = self.rank(probe, targets, [[0]])
-        except Exception as error:  # a live-worker or scoped adapter cannot answer offline
-            return {"measured": False, "reference_eligible": None,
-                    "reason": f"{type(error).__name__}: {error}", "method": "score+rank probe"}
-        except NotImplementedError as error:  # pragma: no cover - defensive
+        except Exception as error:
             return {"measured": False, "reference_eligible": None,
                     "reason": f"{type(error).__name__}: {error}", "method": "score+rank probe"}
         eligible = bool(ranks and ranks[0] == 1)

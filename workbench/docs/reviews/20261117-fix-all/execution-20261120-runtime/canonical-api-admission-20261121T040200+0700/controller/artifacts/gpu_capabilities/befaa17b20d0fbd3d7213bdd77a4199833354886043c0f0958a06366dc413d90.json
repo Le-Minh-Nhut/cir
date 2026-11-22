@@ -1,0 +1,52 @@
+{
+  "probe": "gpu_capability",
+  "cuda_available": true,
+  "device_count": 1,
+  "torch_version": "2.7.1+cu128",
+  "torch_cuda_version": "12.8",
+  "device_name": "NVIDIA GeForce RTX 5070 Ti",
+  "compute_capability": "12.0",
+  "torch_arch_list": [
+    "sm_75",
+    "sm_80",
+    "sm_86",
+    "sm_90",
+    "sm_100",
+    "sm_120",
+    "compute_120"
+  ],
+  "allocated_tensor": true,
+  "computed": true,
+  "torch_module_file": "/home/heheboiz/data/cir/workbench/envs/dcnet310-sm120/lib/python3.10/site-packages/torch/__init__.py",
+  "torch_has_compiled_core": true,
+  "torch_core_origin": "/home/heheboiz/data/cir/workbench/envs/dcnet310-sm120/lib/python3.10/site-packages/torch/_C.cpython-310-x86_64-linux-gnu.so",
+  "torch_file_digest": "9801e75447c7f585545f989f8a21940b60e0c4cc888effb2f08e739664b4b904",
+  "error": null,
+  "torch_core_loadable": true,
+  "capability_verified": true,
+  "runtime_adaptation": "sm_120",
+  "interpreter": "/home/heheboiz/data/cir/workbench/envs/dcnet310-sm120/bin/python",
+  "interpreter_fingerprint": "f9ab8229c3d219cd9098c17abba4df76a09e68925e14ee7c03265ada6fa3b3fa",
+  "dependency_fingerprint": "334e28fcda79ee657b13238beac33874caa231b8c64af158080cccad150b7ff7",
+  "probe_source": "interpreter",
+  "probed_at": "2026-11-20T21:03:15.365074+00:00",
+  "host_identity": {
+    "node": "heheboiz-nhut-pc",
+    "machine": "x86_64",
+    "cuda_visible_devices": "<unset>",
+    "nvidia_visible_devices": "<unset>",
+    "nvidia_driver_capabilities": "<unset>",
+    "driver": "NVRM version: NVIDIA UNIX Open Kernel Module for x86_64  580.173.02  Release Build  (dvs-builder@U22-I3-AK02-24-4)  Tue Jun 23 08:17:01 UTC 2026"
+  },
+  "revalidation": "re-probe when the interpreter, dependency set, host, driver or device visibility changes",
+  "expires_on": [
+    "interpreter change",
+    "dependency change",
+    "host change",
+    "driver change",
+    "CUDA_VISIBLE_DEVICES change"
+  ],
+  "model_id": "dcnet",
+  "capability_key": "befaa17b20d0fbd3d7213bdd77a4199833354886043c0f0958a06366dc413d90",
+  "signature": "106a26598d3407dcbbb984ebb1a8013455147a009ab74f3c2f6303e7187ef09b"
+}

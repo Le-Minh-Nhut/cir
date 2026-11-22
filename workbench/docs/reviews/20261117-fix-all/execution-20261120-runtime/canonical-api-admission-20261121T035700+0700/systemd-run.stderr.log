@@ -1,0 +1,20 @@
+Running as unit: cir-dcnet-canonical-api-20261121-v2.service; invocation ID: fe2a1b42560242989935ae66196283de
+[gpu_job] lock held, GPU empty, launching: /bin/bash /home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/canonical-api-admission-20261121T035700+0700/service-inner.sh
+GPU-9bc596d9-19e9-6f43-dc2c-a80da924263c, 597 MiB, 16303 MiB
+Traceback (most recent call last):
+  File "/home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/canonical_dcnet_admission.py", line 400, in <module>
+    raise SystemExit(main())
+                     ^^^^^^
+  File "/home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/canonical_dcnet_admission.py", line 396, in main
+    return _run(args)
+           ^^^^^^^^^^
+  File "/home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/canonical_dcnet_admission.py", line 230, in _run
+    raise RuntimeError(f"canonical POST refused: {status} {response}")
+RuntimeError: canonical POST refused: 409 {'detail': {'error': 'evaluation_blocked', 'message': 'Official evaluation is not ready.', 'details': {'blockers': ['checkpoint missing: /home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/canonical-api-admission-20261121T035700+0700/controller/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/../../checkpoints/dcnet']}}}
+[gpu_job] child_exit=1
+Finished with result: exit-code
+Main processes terminated with: code=exited/status=1
+Service runtime: 22.220s
+CPU time consumed: 18.121s
+Memory peak: 17.4M
+Memory swap peak: 0B

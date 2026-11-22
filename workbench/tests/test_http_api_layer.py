@@ -1058,7 +1058,7 @@ def test_cohort_export_with_none_metrics_renders_na_cells(api, tmp_path, monkeyp
     content_md = json.loads(body_md)["content"]
     assert "N/A" in content_md
     assert "nan" not in content_md.lower()
-    expected_md_row = "| run-empty-1 | 0 | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A |"
+    expected_md_row = "| run-empty-1 | 0 | 0 | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A |"
     assert expected_md_row in content_md
 
     # 2. CSV export
@@ -1069,7 +1069,7 @@ def test_cohort_export_with_none_metrics_renders_na_cells(api, tmp_path, monkeyp
     content_csv = json.loads(body_csv)["content"]
     assert "N/A" in content_csv
     assert "nan" not in content_csv.lower()
-    expected_csv_row = "run-empty-1,0,0,N/A,N/A,N/A,N/A,N/A,N/A,N/A"
+    expected_csv_row = "run-empty-1,0,0,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A"
     assert expected_csv_row in content_csv.replace("\r\n", "\n")
 
     # 3. JSON export
@@ -1096,6 +1096,7 @@ def test_cohort_export_with_none_metrics_renders_na_cells(api, tmp_path, monkeyp
         lambda run_ids, query_ids: [{
             "run_id": r,
             "query_count": 0,
+            "scored_count": 0,
             "r1": None,
             "r5": None,
             "r10": None,
@@ -1110,13 +1111,13 @@ def test_cohort_export_with_none_metrics_renders_na_cells(api, tmp_path, monkeyp
         api.app, "GET", "/api/cohorts/cohort-unmatched-queries/export/markdown"
     )
     assert status_md2 == 200, body_md2
-    assert "| run-empty-2 | 0 | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A |" in json.loads(body_md2)["content"]
+    assert "| run-empty-2 | 0 | 0 | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A |" in json.loads(body_md2)["content"]
 
     status_csv2, _, body_csv2 = asgi_request(
         api.app, "GET", "/api/cohorts/cohort-unmatched-queries/export/csv"
     )
     assert status_csv2 == 200, body_csv2
-    assert "run-empty-2,0,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A" in json.loads(body_csv2)["content"].replace("\r\n", "\n")
+    assert "run-empty-2,0,0,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A" in json.loads(body_csv2)["content"].replace("\r\n", "\n")
 
 
 # ------------------------------------------------------------------------- startup index lifecycle

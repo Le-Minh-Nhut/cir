@@ -1,0 +1,14 @@
+argv=/bin/bash --noprofile --norc workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/helper-fail-expected.sh
+Traceback (most recent call last):
+  File "/home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/dcnet_lifecycle_helper.py", line 332, in <module>
+    raise SystemExit(main_cli())
+                     ^^^^^^^^^^
+  File "/home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/dcnet_lifecycle_helper.py", line 327, in main_cli
+    return _serve(parser.parse_args())
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/dcnet_lifecycle_helper.py", line 145, in _serve
+    raise FileExistsError(f"run root must be fresh and empty: {run_root}")
+FileExistsError: run root must be fresh and empty: /home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/helper-fail-expected
+helper_exit=1
+
+outer_exit=0

@@ -258,8 +258,8 @@ class Adapter(CompositionAdapter):
         return self._job_dir
 
     def _exchange(self, phase: str, image_paths: Sequence[str],
-                  texts: Sequence[str], categories: Sequence[str | None]
-                  ) -> tuple[dict[str, Any], Path]:
+                  texts: Sequence[str], categories: Sequence[str | None],
+                  *, capture_path: Path | None = None) -> tuple[dict[str, Any], Path]:
         """Write one job, hand it to the worker (starting it if needed), and return its reply.
 
         ONE worker per adapter instance: the model is loaded once and reused for every encode call.
@@ -287,6 +287,7 @@ class Adapter(CompositionAdapter):
             "expected_size_bytes": self._checkpoint.get("expected_size_bytes"),
             "source_root": str(self.source_root), "dataset_root": str(self.dataset_root),
             "batch_size": self.batch_size, "transform": TRANSFORM,
+            "capture_path": None if capture_path is None else str(capture_path),
         }), encoding="utf-8")
         if self._worker is not None and self._worker.poll() is not None:
             status = self._worker.returncode
@@ -351,19 +352,21 @@ class Adapter(CompositionAdapter):
                 f"{previous} to {pid}; the model must load once per adapter instance")
         return pid
 
-    def encode_queries(self, image_paths: Sequence[str], texts: Sequence[str],
-                       categories: Sequence[str | None]) -> np.ndarray:
+    def encode_queries(self, image_paths: Sequence[str | Path], texts: Sequence[str],
+                       categories: Sequence[str | None], *, capture_path: Path | None = None) -> np.ndarray:
         if not (len(image_paths) == len(texts) == len(categories)):
             raise ValueError("image_paths, texts, and categories must have equal lengths")
-        return _run(self, "queries", image_paths, texts, categories)
+        return _run(self, "queries", [str(path) for path in image_paths], texts, categories,
+                    capture_path=capture_path)
 
-    def encode_targets(self, image_paths: Sequence[str],
-                       categories: Sequence[str | None]) -> np.ndarray:
+    def encode_targets(self, image_paths: Sequence[str | Path],
+                       categories: Sequence[str | None], *, capture_path: Path | None = None) -> np.ndarray:
         if len(image_paths) != len(categories):
             raise ValueError("image_paths and categories must have equal lengths")
         if any(category is not None for category in categories):
             raise ValueError("TG-CIR gallery is category-agnostic; target categories must all be None")
-        return _run(self, "targets", image_paths, (), categories)
+        return _run(self, "targets", [str(path) for path in image_paths], (), categories,
+                    capture_path=capture_path)
 
     def score(self, queries: Any, targets: Any,
               categories: Sequence[str | None] | None = None) -> np.ndarray:
@@ -517,7 +520,7 @@ def _vram() -> dict[str, float] | None:
                 torch.cuda.get_device_properties(0).total_memory / mib, 1)}
 
 def _run(adapter: Adapter, operation: str, image_paths: Sequence[str], texts: Sequence[str],
-         categories: Sequence[str | None]) -> np.ndarray:
+         categories: Sequence[str | None], *, capture_path: Path | None = None) -> np.ndarray:
     """Launch (or reuse) the worker and return its feature matrix, one row per input, in order."""
     if adapter.work_root is None:
         raise AdapterWorkRootError("tgcir work_root was not set by runner")
@@ -525,7 +528,8 @@ def _run(adapter: Adapter, operation: str, image_paths: Sequence[str], texts: Se
         return np.empty((0, DIMENSION), dtype=np.float32)
     if not adapter.interpreter:
         raise Refused("no interpreter environment resolved for WORKBENCH_TGCIR_PYTHON")
-    response, output_path = adapter._exchange(operation, image_paths, texts, categories)
+    response, output_path = adapter._exchange(operation, image_paths, texts, categories,
+                                              capture_path=capture_path)
     result = np.load(output_path, allow_pickle=False).astype(np.float32, copy=False)
     if result.ndim != 2 or result.shape != (len(image_paths), DIMENSION):
         raise AdapterWorkerError(
@@ -614,6 +618,10 @@ def _worker_main(job_path: Path) -> None:
         corrected: list[str] = []
         if phase == "queries":
             corrected = corrections.correct(current["texts"], current["categories"], paths)
+        capture_path = current.get("capture_path")
+        captured_batches = [] if capture_path else None
+        captured_token_ids = []
+        captured_token_masks = []
         batch_size = max(1, int(current.get("batch_size") or 32))
         batches = [paths[start:start + batch_size] for start in range(0, len(paths), batch_size)]
 
@@ -622,13 +630,20 @@ def _worker_main(job_path: Path) -> None:
             for path in chunk:
                 with Image.open(path) as image:
                     images.append(preprocess(image.copy().convert("RGB")))
-            return torch.stack(images)
+            batch = torch.stack(images)
+            return batch
 
         features = []
         try:
             for position, batch in enumerate(prefetch_rows(decode, batches, workers)):
                 start = position * batch_size
                 stop = start + len(batch)
+                if captured_batches is not None:
+                    captured_batches.append(batch.detach().cpu().numpy())
+                if capture_path and phase == "queries":
+                    tokens = clip.tokenize(corrected[start:stop])
+                    captured_token_ids.append(tokens.detach().cpu().numpy())
+                    captured_token_masks.append((tokens != 0).detach().cpu().numpy())
                 with torch.no_grad():
                     batch = batch.to(device)
                     if phase == "queries":
@@ -639,6 +654,17 @@ def _worker_main(job_path: Path) -> None:
             result = (np.concatenate(features, axis=0) if features
                       else np.empty((0, DIMENSION), dtype=np.float32))
             np.save(current["output_path"], result.astype(np.float32, copy=False), allow_pickle=False)
+            if capture_path:
+                assert captured_batches is not None
+                capture_file = Path(capture_path)
+                capture_file.parent.mkdir(parents=True, exist_ok=True)
+                capture_fields = {"pixels": np.concatenate(captured_batches, axis=0),
+                                  "image_paths": np.asarray(paths), "phase": np.asarray(phase),
+                                  "corrected_texts": np.asarray(corrected)}
+                if captured_token_ids:
+                    capture_fields["token_ids"] = np.concatenate(captured_token_ids, axis=0)
+                    capture_fields["token_mask"] = np.concatenate(captured_token_masks, axis=0)
+                np.savez(capture_file, **capture_fields)
             reply(True, load_state=load_state, loads=1,
                   corrected=len(corrected), batches=len(batches),
                   # The EXACT strings handed to the model, digested: a run can prove which text it

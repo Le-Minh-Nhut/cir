@@ -1,17 +1,69 @@
-import { useMemo } from "react";
-import type { CompositionQuery, CompositionRun } from "./types";
+import { useEffect, useMemo, useState } from "react";
+import { LimnScopeDiagnostic } from "./LimnScopeDiagnostic";
+import type { CompositionQuery, CompositionRun, Query, Run, TopResult } from "./types";
 import type { WorkbenchData } from "./data";
 import { protocolLabel } from "./data";
 import type { Location } from "./routes";
-import { CONDITIONS, ORDERS, OUTCOMES, SUBSET_LABEL, conditionsForRun, resolveCondition } from "./routes";
+import { ORDERS, OUTCOMES, SUBSET_LABEL, conditionsForRun, resolveCondition } from "./routes";
 import { Card, Detail, EmptyState, ErrorState, Field, LoadingState } from "./ui";
 import { fmtInt, fmtRank } from "./format";
-import { QueryInspector } from "./QueryInspector";
+import { QueryInspector, Shot } from "./QueryInspector";
 import { QUERY_STATE_CHIPS, protocolHasSubsets } from "./scope";
-import { LimnScopeDiagnostic } from "./LimnScopeDiagnostic";
 import { fetchJson, useRegion } from "./useRegion";
 import { candidateRequestPath, selectExactQuery } from "./candidateRequest";
 
+const CATEGORIES = ["dress", "shirt", "toptee"] as const;
+const INDEX_TOP_K = [1, 5, 10, 20, 50, 100, 200];
+
+function CanonicalQueryInspector({ run, query, topK, onTopK }: {
+  run: Run;
+  query: Query | null;
+  topK: number;
+  onTopK: (value: number) => void;
+}) {
+  if (!query) return <Card title="Duyệt ảnh truy hồi"><EmptyState kind="no-results" detail="Không tìm thấy query đã chọn." /></Card>;
+  const category = query.category;
+  const shown = query.top_results.slice(0, topK);
+  return (
+    <div className="inspector" data-testid="canonical-query-inspector">
+      <Card title={<span data-testid="query-title">Query {query.query_id}</span>}
+            subtitle={`${run.model_id} · ${run.checkpoint_id} · ${run.protocol_id}`}>
+        <div className="query-brief" data-testid="query-sequence">
+          <div className="shots"><Shot category={category} id={query.reference_id} label="Ảnh tham chiếu" /></div>
+          <div className="query-instruction-caption"><div className="eyebrow">Yêu cầu chỉnh sửa</div>
+            <p className="edit-caption" data-testid="query-caption">{query.model_input_text}</p>
+            {query.raw_captions.map((caption, index) => <p className="hint" key={index}>{caption}</p>)}
+          </div>
+          <div className="shots" data-testid="query-targets">
+            <Shot category={category} id={query.target_id} target label={`Ảnh đích · hạng ${query.target_rank}`} />
+          </div>
+        </div>
+      </Card>
+      <Card title="Ứng viên xếp hạng" subtitle={`Top-${topK} · target rank ${fmtRank(query.target_rank)}`}
+            actions={<label className="candidate-control">Hiển thị
+              <select data-testid="topk" aria-label="Số ứng viên hiển thị" value={topK}
+                      onChange={(event) => onTopK(Number(event.target.value))}>
+                {INDEX_TOP_K.filter((value) => value <= run.top_k_saved).map((value) =>
+                  <option key={value} value={value}>Top {value}</option>)}
+                {!INDEX_TOP_K.includes(run.top_k_saved) && run.top_k_saved > 0 &&
+                  <option value={run.top_k_saved}>Top {run.top_k_saved}</option>}
+              </select>
+            </label>}>
+        <p className="candidate-count">Đang hiển thị <b>{shown.length}</b> ứng viên · export lưu {fmtInt(run.top_k_saved)} dòng</p>
+        <div className="candidates" data-testid="topk-grid">
+          {shown.map((candidate: TopResult) => {
+            const target = candidate.image_id === query.target_id;
+            return <article key={`${candidate.rank}:${candidate.image_id}`} className={`candidate ${target ? "is-target" : ""}`}>
+              <div className="candidate-rank"><b>#{candidate.rank}</b>{target && <span>Ảnh đích</span>}</div>
+              <Shot category={category} id={candidate.image_id} compact target={target} label={`Ứng viên ${candidate.rank}`} />
+              <small><span>Điểm</span><b>{candidate.score.toFixed(4)}</b></small>
+            </article>;
+          })}
+        </div>
+      </Card>
+    </div>
+  );
+}
 /** Khám phá mẫu: browse queries of one run, then inspect one.
  *
  *  The list and the inspector are two regions with two request identities: paging the list must not
@@ -43,6 +95,28 @@ export function SamplesPage({ data, location, onGoto, onAnnotate }: {
   // A URL naming a condition this run does not serve degrades to the run's first one, so a stale
   // link shows a real panel instead of an empty request for a condition with no ranks.
   const condition = resolveCondition(location.condition, conditionOptions);
+  const indexRun = entry?.indexRun ?? null;
+  const [canonicalTopK, setCanonicalTopK] = useState(location.k);
+  const canonicalPagePath = indexRun
+    ? `/api/queries?${new URLSearchParams({ run_id: indexRun.run_id, limit: "20", offset: String(location.offset), order: location.order, top_k: String(location.k), ...(location.category ? { category: location.category } : {}), ...(location.q ? { query_id: location.q } : {}) })}`
+    : "none";
+  const canonicalPage = useRegion<{ items: Query[]; total: number }>("canonical-sample-page", canonicalPagePath,
+    useMemo(() => canonicalPagePath === "none" ? null : (signal) => fetchJson(canonicalPagePath, signal), [canonicalPagePath]));
+  const canonicalQueryPath = indexRun && location.query
+    ? `/api/queries?${new URLSearchParams({ run_id: indexRun.run_id, query_id: location.query, limit: "1", offset: "0", top_k: String(canonicalTopK) })}`
+    : "none";
+  const canonicalQueryRegion = useRegion<{ items: Query[] }>("canonical-selected-query", canonicalQueryPath,
+    useMemo(() => canonicalQueryPath === "none" ? null : (signal) => fetchJson(canonicalQueryPath, signal), [canonicalQueryPath]));
+  const canonicalItems = canonicalPage.region.key === canonicalPagePath ? canonicalPage.region.data?.items ?? [] : [];
+  const canonicalTotal = canonicalPage.region.key === canonicalPagePath ? canonicalPage.region.data?.total ?? 0 : 0;
+  const canonicalSelected = location.query
+    ? selectExactQuery(canonicalQueryRegion.region.key === canonicalQueryPath && canonicalQueryRegion.region.status === "ready"
+        ? canonicalQueryRegion.region.data?.items ?? [] : [], location.query)
+    : canonicalItems[0] ?? null;
+  const canonicalSelectedPending = !!(indexRun && location.query &&
+    (canonicalQueryRegion.region.key !== canonicalQueryPath || canonicalQueryRegion.region.status === "loading" || canonicalQueryRegion.region.status === "idle"));
+  const canonicalShownK = Math.min(canonicalTopK, indexRun?.top_k_saved ?? 0);
+  useEffect(() => { setCanonicalTopK(Math.min(location.k, indexRun?.top_k_saved ?? location.k)); }, [location.k, indexRun?.run_id]);
   const page = data.compositionPage.region;
   const items = page.data?.items ?? [];
   const total = page.data?.total ?? 0;
@@ -72,6 +146,49 @@ export function SamplesPage({ data, location, onGoto, onAnnotate }: {
   // query stay exactly as they are, so the comparison is still about the same cohort and the same
   // sample — a peer choice must never navigate the reader somewhere else.
   const changePeers = (keys: string[]) => onGoto({ runs: keys });
+  if (indexRun) {
+    const pageError = canonicalPage.region.key === canonicalPagePath && canonicalPage.region.status === "error";
+    const pageLoading = canonicalPage.region.key !== canonicalPagePath || canonicalPage.region.status === "loading";
+    return <div className="stack" data-testid="area-samples">
+      <Card title="Bộ lọc mẫu" subtitle={`${indexRun.model_id} / ${indexRun.checkpoint_id} · ${protocolLabel(indexRun.protocol_id)}`}>
+        <div className="toolbar sample-primary-filters">
+          <Field label="Danh mục" htmlFor="filter-category">
+            <select id="filter-category" data-testid="filter-category" value={location.category}
+                    onChange={(event) => onGoto({ category: event.target.value, query: "", offset: 0 })}>
+              <option value="">Tất cả</option>{CATEGORIES.map((category) => <option key={category}>{category}</option>)}
+            </select>
+          </Field>
+          <Field label="Mã query" htmlFor="filter-query-id">
+            <input id="filter-query-id" data-testid="filter-query-id" value={location.q} type="search"
+                   onChange={(event) => onGoto({ q: event.target.value, offset: 0 })} />
+          </Field>
+        </div>
+      </Card>
+      <div className="samples-layout">
+        <Card title="Danh sách query" subtitle={`${fmtInt(canonicalTotal)} query khớp bộ lọc`}>
+          {pageError ? <ErrorState message={canonicalPage.region.error ?? "Không tải được query"} onRetry={canonicalPage.retry} />
+            : pageLoading ? <LoadingState label="Đang tải query…" />
+              : canonicalItems.length ? <div className="stack">
+                <ul className="query-list" data-testid="query-list">{canonicalItems.map((item) =>
+                  <li key={item.query_id}><button className="query-list-item" type="button" aria-current={canonicalSelected?.query_id === item.query_id ? "true" : undefined}
+                    onClick={() => onGoto({ query: item.query_id })}>
+                    <span className="query-list-heading"><b data-testid="query-id">{item.query_id}</b><span>Hạng {fmtRank(item.target_rank)}</span></span>
+                    <span className="query-list-caption">{item.model_input_text}</span><span className="query-list-ranks">{item.category}</span>
+                  </button></li>)}</ul>
+                <div className="pager" data-testid="pager-total"><span>{location.offset + 1}–{Math.min(location.offset + canonicalItems.length, canonicalTotal)} / {fmtInt(canonicalTotal)}</span><span className="spacer" />
+                  <button type="button" disabled={location.offset <= 0} onClick={() => onGoto({ offset: Math.max(0, location.offset - 20) })}>Trước</button>
+                  <button type="button" data-testid="pager-next" disabled={location.offset + 20 >= canonicalTotal} onClick={() => onGoto({ offset: location.offset + 20 })}>Sau</button></div>
+              </div> : <EmptyState kind="no-match" testId="canonical-empty" detail="Không query nào khớp bộ lọc." />}
+        </Card>
+        <div className="stack">{canonicalSelectedPending
+          ? <Card title="Duyệt ảnh truy hồi"><LoadingState label={`Đang tải đúng query ${location.query}…`} /></Card>
+          : canonicalQueryRegion.region.status === "error"
+            ? <Card title="Duyệt ảnh truy hồi"><ErrorState message={canonicalQueryRegion.region.error ?? "Không tải được query"} onRetry={canonicalQueryRegion.retry} /></Card>
+            : <CanonicalQueryInspector run={indexRun} query={canonicalSelected} topK={canonicalShownK} onTopK={(value) => { setCanonicalTopK(value); onGoto({ k: value }); }} />}
+        </div>
+      </div>
+    </div>;
+  }
 
   if (location.view === "compare") {
     return (

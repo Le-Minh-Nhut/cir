@@ -1,0 +1,11 @@
+command: flock CPU lock; systemd user service MemoryMax=12GiB MemorySwapMax=0 OOMPolicy=kill; ctl312h py_compile and pytest test_dcnet_api_staging.py
+Running as unit: run-u330.service; invocation ID: a14b3826a38341f9b5c6764f72704fda
+.                                                                        [100%]
+1 passed in 0.18s
+Finished with result: success
+Main processes terminated with: code=exited/status=0
+Service runtime: 349ms
+CPU time consumed: 349ms
+Memory peak: 2.8M
+Memory swap peak: 0B
+verification_exit=0

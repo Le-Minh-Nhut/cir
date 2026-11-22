@@ -146,7 +146,8 @@ export CIR_ENVS_ROOT="$CIR_PC_ROOT/model-envs"           # SET: root holding the
 #    reads them, so they configured nothing while looking like they did. Only `CIR_REPO_ROOT` and
 #    `CIR_DATA_ROOT` are real `CIR_*` settings. `CIR_PC_ROOT`/`CIR_ENVS_ROOT` remain above only as
 #    shell-local shorthand. `WORKBENCH_REGISTRY_PATH` (the custom-registry override, below) is
-#    PROCESS-ENVIRONMENT ONLY: `workbench.env` rejects it as an unknown setting.
+#    PROCESS-ENVIRONMENT ONLY: `workbench.env` rejects it as an unknown setting. In contrast,
+#    `WORKBENCH_RUNTIME_ADAPTATION` is a supported global workbench.env setting.
 
 # 2b. Mirror ONLY the five roots the standalone commands share into the operator env file, so the
 #     planner/verifier/manager path (which uses `resolve_config()`, never the YAML) agrees with the

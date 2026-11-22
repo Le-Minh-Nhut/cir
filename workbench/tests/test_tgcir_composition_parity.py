@@ -120,7 +120,7 @@ def test_encode_queries_transports_texts_verbatim(monkeypatch, tmp_path):
     adapter.work_root = tmp_path
     seen: list[list[str]] = []
 
-    def fake_run(_adapter, operation, image_paths, texts, categories):
+    def fake_run(_adapter, operation, image_paths, texts, categories, *, capture_path=None):
         seen.append(list(texts))
         return np.zeros((len(image_paths), module.DIMENSION), dtype=np.float32)
 
@@ -133,17 +133,18 @@ def test_encode_queries_transports_texts_verbatim(monkeypatch, tmp_path):
 def test_query_and_target_row_order_is_preserved(monkeypatch, tmp_path):
     adapter = module.Adapter.__new__(module.Adapter)
     adapter.work_root = tmp_path
-    order: list[tuple[str, list[int]]] = []
+    observed: list[tuple[str, list[str], list[str]]] = []
 
-    def fake_run(_adapter, operation, image_paths, texts, categories):
-        order.append((operation, list(range(len(image_paths)))))
+    def fake_run(_adapter, operation, image_paths, texts, categories, *, capture_path=None):
+        observed.append((operation, list(image_paths), list(texts)))
         return np.arange(len(image_paths) * module.DIMENSION,
                          dtype=np.float32).reshape(len(image_paths), module.DIMENSION)
 
     monkeypatch.setattr(module, "_run", fake_run)
     queries = adapter.encode_queries(["q3", "q1", "q2"], ["t3", "t1", "t2"], [None] * 3)
     targets = adapter.encode_targets(["g9", "g8"], [None, None])
-    assert order == [("queries", [0, 1, 2]), ("targets", [0, 1])]
+    assert observed == [("queries", ["q3", "q1", "q2"], ["t3", "t1", "t2"]),
+                        ("targets", ["g9", "g8"], [])]
     # Row i of the reply is input i, not a sorted or hashed rearrangement.
     np.testing.assert_array_equal(queries[1], np.arange(module.DIMENSION) + module.DIMENSION)
     np.testing.assert_array_equal(targets[0], np.arange(module.DIMENSION))
@@ -152,8 +153,9 @@ def test_query_and_target_row_order_is_preserved(monkeypatch, tmp_path):
 def test_none_target_gallery_is_accepted_and_a_category_is_refused(monkeypatch, tmp_path):
     adapter = module.Adapter.__new__(module.Adapter)
     adapter.work_root = tmp_path
-    monkeypatch.setattr(module, "_run", lambda _a, op, paths, texts, categories:
-                        np.zeros((len(paths), module.DIMENSION), dtype=np.float32))
+    def fake_run(_adapter, op, paths, texts, categories, *, capture_path=None):
+        return np.zeros((len(paths), module.DIMENSION), dtype=np.float32)
+    monkeypatch.setattr(module, "_run", fake_run)
     accepted = adapter.encode_targets(["a.jpg", "b.jpg"], [None, None])
     assert accepted.shape == (2, module.DIMENSION)
     with pytest.raises(ValueError, match="category-agnostic"):
@@ -223,7 +225,8 @@ def test_reply_shape_mismatch_raises_the_named_error(tmp_path, monkeypatch):
     adapter.dataset_root = tmp_path
     adapter.checkpoint = {"expected_sha256": "0" * 64}
 
-    def fake_exchange(phase, image_paths, texts, categories):
+    def fake_exchange(phase, image_paths, texts, categories, *, capture_path=None):
+        assert capture_path is None
         output = tmp_path / "out.npy"
         np.save(output, np.zeros((len(image_paths), module.DIMENSION - 1), dtype=np.float32))
         return {"ok": True, "pid": 1234}, output

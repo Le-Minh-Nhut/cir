@@ -19,6 +19,7 @@ from threading import Thread
 
 import pytest
 import yaml
+from workbench.backend.registry import web_deferred_models
 
 from workbench.tests.test_pc_launcher import (
     FIXTURES_BIN,
@@ -498,8 +499,12 @@ def _append_ledger_entry(env: dict[str, str], report_path: Path, run_id: str) ->
 def test_adv12_existing_valid_corroborated_results_no_false_failure(tmp_path: Path):
     """Existing valid corroborated results during release verification -> NO false failure."""
     models_yaml = REPO / "workbench" / "registry" / "models.yaml"
-    models_data = yaml.safe_load(models_yaml.read_text(encoding="utf-8"))["models"]
-    models_payload = [{"model_id": m["model_id"]} for m in models_data]
+
+    registry = yaml.safe_load(models_yaml.read_text(encoding="utf-8"))
+    deferred = web_deferred_models(registry)
+    models_payload = [{"model_id": model["model_id"]}
+                      for model in registry["models"]
+                      if model["model_id"] not in deferred]
 
     # The run's corroboration lives outside the served payload: J1 reads the evidence ledger
     # itself, so the fixture must provide the report bytes and their ledger entry.

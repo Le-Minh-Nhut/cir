@@ -386,7 +386,10 @@ class DCNetAdapter(OfficialScriptAdapter):
     launcher = "script"
 
     def command(self, source, checkpoint, request: EvalRequest) -> list[str]:
-        return [_runtime.python_executable(self.model), str(source / self.script), "--resume", str(checkpoint)]
+        wrapper = REPO_ROOT / "workbench" / "replay" / "dcnet_api.py"
+        return [_runtime.python_executable(self.model), str(wrapper),
+                "--source", str(source), "--checkpoint", str(checkpoint),
+                "--checkpoint-id", request.checkpoint_id]
 
 class CombinerNoftAdapter(OfficialScriptAdapter):
     model_id = "combiner_rn50x4_noft"

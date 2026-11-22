@@ -48,10 +48,10 @@ def _isolate_settings(monkeypatch, tmp_path):
 
     monkeypatch.delenv(runtime.ADAPTATION_ENV, raising=False)
     monkeypatch.setattr(operator_config, "_CONFIG_PATH", tmp_path / "workbench.env")
-    model_settings.file_settings.cache_clear()
+    model_settings.clear_file_settings_cache()
     runtime.forget_environment()
     yield
-    model_settings.file_settings.cache_clear()
+    model_settings.clear_file_settings_cache()
     runtime.forget_environment()
 
 
@@ -231,7 +231,7 @@ def test_a30_02_file_only_selector_takes_the_same_path_as_an_export(tmp_path, mo
             monkeypatch.setenv(var, str(interpreter))
         else:
             monkeypatch.delenv(var, raising=False)
-        model_settings.file_settings.cache_clear()
+        model_settings.clear_file_settings_cache()
         assert _create_dry_run(module, model, var, spec, config) is True
         out, err = capsys.readouterr()
         assert not planned, f"{label}: the planner branch must not be taken — {err}"
@@ -253,7 +253,7 @@ def test_a30_02_conflicting_selector_export_wins_over_the_file(tmp_path, monkeyp
     local_env.write_text(f"{var}={from_file}\n", encoding="utf-8")
     monkeypatch.setattr(operator_config, "_CONFIG_PATH", local_env)
     monkeypatch.setenv(var, str(exported))
-    model_settings.file_settings.cache_clear()
+    model_settings.clear_file_settings_cache()
 
     assert _create_dry_run(module, model_by_id("encoder"), var, spec, config) is True
     out = capsys.readouterr().out

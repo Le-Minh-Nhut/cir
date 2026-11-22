@@ -42,6 +42,9 @@ _KEYS = {
     "WORKBENCH_LIMN_PYTHON",
     "WORKBENCH_TME_PYTHON",
     "WORKBENCH_PTHA_MTST_PYTHON",
+    # Global workbench runtime selector; keep static to avoid importing runtime while resolving
+    # this module's import-time configuration.
+    "WORKBENCH_RUNTIME_ADAPTATION",
 }
 
 def _permitted_keys() -> set[str]:

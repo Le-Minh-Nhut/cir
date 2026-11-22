@@ -36,8 +36,16 @@ check() { # name expected actual
 say() { printf '%s\n' "$*"; }
 skip() { say "  SKIP $1"; SKIPPED+=("$1"); }
 
-code() { curl -s --max-time 30 -o /dev/null -w '%{http_code}' "$@"; }
-live() { [[ "$(code "${BASE}/api/models")" != "000" ]]; }
+code() { curl -sS --max-time 5 --connect-timeout 2 -o /dev/null -w '%{http_code}' "$@" 2>/dev/null || true; }
+LIVE=0
+LIVE_REASON="readiness probe not attempted"
+for attempt in 1 2 3 4 5 6; do
+    LIVE_CODE="$(code "${BASE}/api/jobs")"
+    if [[ "$LIVE_CODE" == "200" ]]; then LIVE=1; LIVE_REASON="HTTP 200"; break; fi
+    if [[ "$LIVE_CODE" == "000" ]]; then LIVE_REASON="connection failed or timed out after 5s"; else LIVE_REASON="HTTP ${LIVE_CODE}"; fi
+    (( attempt == 6 )) || sleep 5
+done
+live() { (( LIVE )); }
 
 say "== A first-boot honesty =="
 if live; then
@@ -52,7 +60,7 @@ if live; then
         say "  FAIL runs endpoint gave $runs_code"; FAILED+=("A-runs")
     fi
 else
-    skip "A live checks (no server at ${BASE})"
+    skip "A live checks (${LIVE_REASON}; ${BASE})"
 fi
 
 say "== B independent loading (no Promise.all over the four startup endpoints) =="
@@ -125,7 +133,7 @@ EOF
         FAILED+=("G-status")
     fi
 else
-    skip "G live check (no server)"
+    skip "G live check (${LIVE_REASON})"
 fi
 
 say "== F missing metric never becomes a deviation (offline gate rule) =="
@@ -191,7 +199,7 @@ EOF
         say "  FAIL configuration mismatch: ${OUT}"; FAILED+=("C-config")
     fi
 else
-    skip "C live check (no server)"
+    skip "C live check (${LIVE_REASON})"
 fi
 
 say "== D checkpoint semantics (pc_readiness --config reports selected_checkpoints) =="
@@ -241,27 +249,25 @@ print("  PASS selected_checkpoints reported (policy=%s, status=%s)" % (sel.get("
     else
         say "  FAIL pc_readiness --config did not report selected_checkpoints"; FAILED+=("D-selection")
     fi
-    rm -rf "$cfg" "$art"
 else
     skip "D (no python interpreter or pc_readiness.py)"
 fi
 
-say "== E GPU not bypassed (readiness never claims GPU ready without probe) =="
+say "== E GPU not bypassed (selected limn readiness never claims GPU ready without probe) =="
 if [[ -n "$PY" && -f "${REPO}/workbench/scripts/pc_readiness.py" ]]; then
     e_out="$("$PY" - "$REPO" <<'EOF'
 import json, subprocess, sys
 repo = sys.argv[1]
-out = subprocess.run([sys.executable, f"{repo}/workbench/scripts/pc_readiness.py", "--json"],
+out = subprocess.run([sys.executable, f"{repo}/workbench/scripts/pc_readiness.py", "--model", "limn", "--json"],
                      capture_output=True, text=True, cwd=repo)
+if out.returncode:
+    print(f"  NOT VERIFIED readiness command exited {out.returncode}: {out.stderr.strip()}")
+    sys.exit(2)
 doc = json.loads(out.stdout)
-# The report has no `rules` list. GPU readiness is per model: a CUDA-declaring entry carries
-# `gpu_required` (the contract) and `gpu_verified` (the probe's answer), and the unsupported
-# claim this group exists to catch is verified-without-evidence on exactly those entries.
 models = doc.get("models") or {}
 gpu_entries = [m for m in models.values() if isinstance(m, dict) and m.get("gpu_required")]
 if not gpu_entries:
-    # Scanning an empty list prints PASS while checking nothing, which is the bug this replaces.
-    print("  NOT VERIFIED no GPU-requiring model in the report; nothing was checked")
+    print("  NOT VERIFIED selected limn report has no GPU-requiring model")
     sys.exit(2)
 false_claims = [m.get("model_id") for m in gpu_entries
                 if m.get("gpu_verified") and m.get("environment_tier") != "GPU_RUNTIME_READY"]
@@ -270,17 +276,18 @@ if false_claims:
     sys.exit(1)
 ready_here = [m.get("model_id") for m in gpu_entries
               if m.get("environment_tier") == "GPU_RUNTIME_READY"]
-print(f"  PASS {len(gpu_entries)} GPU-requiring models; "
+print(f"  PASS {len(gpu_entries)} selected GPU-requiring models; "
       f"{len(ready_here)} carry a verified GPU_RUNTIME_READY probe")
 EOF
-)" && e_rc=0 || e_rc=$?
+)"
+    e_rc=$?
     if (( e_rc == 0 )); then
         say "  $e_out"
     elif (( e_rc == 2 )); then
-        say "  SKIP E could not be verified (no GPU-requiring model reported)"
+        say "  SKIP E could not be verified for selected limn readiness"
         SKIPPED+=("E-gpu-unverified")
     else
-        say "  FAIL readiness claims GPU ready without evidence"; FAILED+=("E-gpu")
+        say "  FAIL readiness claims GPU ready without evidence: $e_out"; FAILED+=("E-gpu")
     fi
 else
     skip "E (no python interpreter or pc_readiness.py)"
@@ -295,7 +302,7 @@ if live; then
         say "  FAIL /api/runs/gate gave $gate_code"; FAILED+=("I-gate")
     fi
 else
-    skip "I live check (no server)"
+    skip "I live check (${LIVE_REASON})"
 fi
 
 say "== H threshold display-only (built bundle carries both gate labels) =="

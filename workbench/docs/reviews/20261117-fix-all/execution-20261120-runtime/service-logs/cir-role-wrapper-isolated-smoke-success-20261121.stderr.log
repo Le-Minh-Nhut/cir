@@ -1,0 +1,14 @@
+[gpu_job smoke] launch
+Running as unit: cir-role-wrapper-isolated-smoke-success-20261121.service; invocation ID: fbd0b756b9224a9bac2578a3a0954a20
+waiting_for_cpu_lock=1
+cpu_lock_acquired=1
+disk_check_after_cpu_lock=1 free_bytes=56106213376 required_bytes=1048576
+unit=cir-role-wrapper-isolated-smoke-success-20261121.service
+cgroup=/user.slice/user-1000.slice/user@1000.service/app.slice/cir-role-wrapper-isolated-smoke-success-20261121.service
+memory.max=12884901888
+memory.swap.max=0
+memory.oom.group=1
+output_dir=/tmp/cir-role-service-smoke.BSsHfP/output
+free_bytes=56106213376
+min_free_bytes=1048576
+CHILD_STDERR_success

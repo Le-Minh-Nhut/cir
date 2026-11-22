@@ -116,7 +116,9 @@ def _top_results(connection, run_id: str, query_ids: list[str], k: int | None = 
     return output
 
 
-def query_page(run_id: str, *, query_id: str | None = None, category: str | None = None, failed_at: int | None = None, min_rank: int | None = None, max_rank: int | None = None, order: str = "worst", limit: int = 50, offset: int = 0, database_path: Path | None = None, passed_at: int | None = None) -> dict[str, Any]:
+def query_page(run_id: str, *, query_id: str | None = None, category: str | None = None, failed_at: int | None = None, min_rank: int | None = None, max_rank: int | None = None, order: str = "worst", limit: int = 50, offset: int = 0, database_path: Path | None = None, passed_at: int | None = None, top_k: int | None = None) -> dict[str, Any]:
+    if top_k is not None and not 1 <= top_k <= 200:
+        raise WorkbenchError("invalid_top_k", "top_k must be between 1 and 200.", {"top_k": top_k})
     if not 1 <= limit <= 200 or offset < 0:
         raise WorkbenchError("invalid_pagination", "limit must be 1..200 and offset must be non-negative.", {"limit": limit, "offset": offset})
     if order not in {"worst", "best"}:
@@ -141,7 +143,7 @@ def query_page(run_id: str, *, query_id: str | None = None, category: str | None
         direction = "DESC" if order == "worst" else "ASC"
         rows = connection.execute(f"SELECT query_id, category, annotation_index, reference_id, target_id, raw_captions, model_input_text, target_rank FROM queries WHERE {where} ORDER BY target_rank {direction}, query_id LIMIT ? OFFSET ?", [*params, limit, offset]).fetchall()
         ids = [row[0] for row in rows]
-        top_results = _top_results(connection, run_id, ids)
+        top_results = _top_results(connection, run_id, ids, top_k)
     finally:
         connection.close()
     items = [{"query_id": item_id, "category": item_category, "annotation_index": annotation_index, "reference_id": reference_id, "target_id": target_id, "raw_captions": json.loads(raw_captions), "model_input_text": model_input_text, "target_rank": target_rank, "top_results": top_results.get(item_id, [])} for item_id, item_category, annotation_index, reference_id, target_id, raw_captions, model_input_text, target_rank in rows]
@@ -252,6 +254,11 @@ def composition_selection(references: list[str]) -> tuple[list[dict[str, Any]], 
                              {"references": references})
     protocol_id = str(getattr(getattr(release, "gallery", None), "protocol_id", ""))
     release_qids = {query.qid for query in release.queries}
+    from workbench.backend.composition import list_composition_summaries
+    from workbench.backend.operator_config import resolve_config
+
+    summaries = {item.get("run_id"): item for item in list_composition_summaries(
+        artifacts_root=resolve_config().WORKBENCH_ARTIFACTS_ROOT, include_imported=True)}
     runs: list[dict[str, Any]] = []
     maps: dict[str, dict[str, dict[str, Any]]] = {}
     provenance_runs: list[dict[str, Any]] = []
@@ -278,11 +285,22 @@ def composition_selection(references: list[str]) -> tuple[list[dict[str, Any]], 
                     entry["target_rank"] = rank
         maps[reference] = run_map
         digest = _sha256_of_file(path)
+        summary = summaries.get(run_id)
+        if summary is None or summary.get("protocol_id") != protocol_id:
+            raise WorkbenchError("run_metadata_mismatch",
+                                 "Composition run metadata does not match the released protocol.",
+                                 {"run_id": run_id, "release_protocol_id": protocol_id,
+                                  "run_protocol_id": summary.get("protocol_id") if summary else None})
+        run_subset = summary.get("subset")
+        run_conditions = {condition: len(values) for condition, values in table.items()
+                          if isinstance(values, Mapping)}
         runs.append({"run_id": run_id, "reference": reference, "protocol_id": protocol_id,
-                     "data_kind": "circus_composition", "subset": "",
+                     "data_kind": "circus_composition", "subset": run_subset,
                      "top_k_saved": 0, "family": "composition"})
         provenance_runs.append({"reference": reference, "run_id": run_id,
-                                "protocol_id": protocol_id,
+                                "protocol_id": protocol_id, "subset": run_subset,
+                                "conditions": dict(sorted(run_conditions.items())),
+                                "condition_status": summary.get("condition_status"),
                                 "rank_artifact": str(path), "rank_artifact_sha256": digest})
     selected_qids = set().union(*maps.values()) if maps else set()
     protocols = {run["protocol_id"] for run in runs}
@@ -350,17 +368,6 @@ def composition_cohort_metrics(references: list[str], query_ids: list[str], *,
         })
     return rows
 
-def composition_unknown_query_ids(references: list[str], query_ids: list[str]) -> list[str]:
-    """qids in `query_ids` that no selected composition run ranks at all.
-
-    A qid that exists in the release but has no rank in the run is NOT a valid member of that run's
-    cohort: the cohort would carry a query the run never scored, and its metrics would silently
-    treat it as absent. Refused by name, with a bounded sample like the DuckDB arm.
-    """
-    _, maps, _ = composition_selection(references)
-    universe = set().union(*(set(mapping) for mapping in maps.values())) if maps else set()
-    return sorted(set(query_ids) - universe)
-
 def cohort_selection(references: list[str], *, k: int | None = None,
                      require_top_k: bool = True, database_path: Path | None = None):
     """`validate_analysis_selection` for a selection that mixes both families.
@@ -385,29 +392,6 @@ def cohort_selection(references: list[str], *, k: int | None = None,
     if k is not None and not 1 <= k <= 200:
         raise WorkbenchError("insufficient_top_k_depth", "K must be between 1 and 200.",
                              {"requested_k": k})
-    baseline_reference, baseline = runs[0]["reference"], maps[runs[0]["reference"]]
-    baseline_ids = set(baseline)
-    for run in runs[1:]:
-        candidate = maps[run["reference"]]
-        missing = sorted(baseline_ids - set(candidate))
-        extra = sorted(set(candidate) - baseline_ids)
-        if missing or extra:
-            raise WorkbenchError(
-                "query_alignment_mismatch",
-                "Selected runs do not have an identical query universe.",
-                {"baseline_run_id": runs[0]["run_id"], "run_id": run["run_id"],
-                 "missing_query_count": len(missing), "missing_query_ids": missing[:20],
-                 "extra_query_count": len(extra), "extra_query_ids": extra[:20]})
-        for query_id, expected in baseline.items():
-            actual = candidate[query_id]
-            if expected["ranks"] != actual["ranks"]:
-                raise WorkbenchError(
-                    "canonical_query_mismatch",
-                    "Canonical query fields differ for the same query_id.",
-                    {"query_id": query_id, "baseline_run_id": runs[0]["run_id"],
-                     "run_id": run["run_id"],
-                     "mismatches": {"ranks": {"expected": expected["ranks"],
-                                              "actual": actual["ranks"]}}})
     return runs, maps, provenance
 
 

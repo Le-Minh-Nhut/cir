@@ -210,6 +210,18 @@ def test_image_resolver_supports_extensions_and_rejects_traversal(tmp_path: Path
     assert resolve_image("dress", "jpg", root).suffix == ".jpg"
     assert resolve_image("dress", "../secret", root) is None
 
+def test_image_resolver_supports_flat_resized_images_and_rejects_invalid_ids(tmp_path: Path) -> None:
+    root = tmp_path / "FashionIQ"
+    resized = root / "resized_images"
+    resized.mkdir(parents=True)
+    image = resized / "B00DP8U3GU.jpg"
+    image.write_bytes(b"image")
+
+    assert resolve_image("circus", "B00DP8U3GU.jpg", root) == image
+    assert resolve_image("dress", "B00DP8U3GU.jpg", root) == image
+    assert resolve_image("circus", "../B00DP8U3GU.jpg", root) is None
+    assert resolve_image("unknown", "B00DP8U3GU.jpg", root) is None
+
 
 def test_downloader_lists_and_skips_unresolved_without_network(tmp_path: Path) -> None:
     listed = subprocess.run([sys.executable, "workbench/scripts/download_checkpoints.py", "--list"], text=True, capture_output=True, check=True)

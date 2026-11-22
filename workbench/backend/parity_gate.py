@@ -73,12 +73,28 @@ import json
 import math
 import struct
 import zlib
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any, Iterable
 
+
+def _fp32(value: float) -> float:
+    return struct.unpack("=f", struct.pack("=f", value))[0]
+
+
+def _score_order_matches(scores: list[float], order: list[int], convention: str) -> bool:
+    if convention == "fp32_descending_score":
+        keys, ascending = scores, False
+    elif convention == "fp32_one_minus_score_ascending":
+        keys, ascending = [_fp32(1.0 - _fp32(score)) for score in scores], True
+    else:
+        return False
+    return all((keys[left] <= keys[right] if ascending else keys[left] >= keys[right])
+               for left, right in zip(order, order[1:]))
+
 #: The directory holding the G1/G2 measurement artifacts. Fixed, never request-derived.
 PARITY_EVIDENCE_RELATIVE = ("workbench", "docs", "reviews", "20261109-native15-composition-limn")
+PARITY_V3_PUBLISHED_RELATIVE = ("workbench", "artifacts", "parity", "v3")
 
 #: Models known to have G1/G2 artifacts. A SEED for discovery, never the set the gate will judge:
 #: `_discover_models` adds every model id whose artifacts are on disk, so a third model is gated on
@@ -109,7 +125,8 @@ REQUIRED_DIMENSIONS = ("input_parity", "forward_parity", "batch_parity", "scorin
 
 STANDARD_RELATIVE_V1 = "parity-relative/v1"
 STANDARD_ABS_REL_V2 = "parity-absolute-relative/v2"
-STANDARDS = (STANDARD_RELATIVE_V1, STANDARD_ABS_REL_V2)
+STANDARD_ABS_REL_V3 = "parity-absolute-relative/v3"
+STANDARDS = (STANDARD_RELATIVE_V1, STANDARD_ABS_REL_V2, STANDARD_ABS_REL_V3)
 
 #: Dimensions. A status is per dimension; there is no cross-dimension average anywhere.
 DIMENSIONS = ("input_parity", "forward_parity", "batch_parity", "scoring_parity",
@@ -136,13 +153,22 @@ class ParityCheck:
     #: check belongs to `missing`, not to `failures`: "no claim was recorded" is `INCOMPLETE`, and it
     #: is only promoted to a failure when the artifact DID make claims for that category.
     absence: bool = False
+    category: str | None = None
+
+    @property
+    def check_type(self) -> str:
+        """Stable classifier field; dimensions already distinguish input from component checks."""
+        return self.dimension
 
     def to_dict(self) -> dict[str, Any]:
         return {"name": self.name, "dimension": self.dimension, "gate": self.gate,
                 "declared": self.declared, "measured": self.measured, "ok": self.ok,
                 "mandatory": self.mandatory, "standard": self.standard, "note": self.note,
+                "reports_absent_evidence": self.absence,
+                "harness_recorded": self.harness_recorded,
                 "harness_recorded_within_tolerance": self.harness_recorded,
-                "reports_absent_evidence": self.absence}
+                "check_type": self.dimension,
+                "category": self.category}
 
 
 @dataclass
@@ -200,6 +226,7 @@ class ParityVerdict:
                                         for key, value in self.missing_by_category.items()},
                 "mandatory_by_category": {key: list(value)
                                           for key, value in self.mandatory_by_category.items()},
+                "categories": list(self.categories),
                 "label_disagreements": list(self.label_disagreements),
                 "failures": [check.to_dict() for check in self.failures],
                 "failure_count": len(self.failures),
@@ -216,6 +243,26 @@ def evidence_root(repo_root: Path | None = None) -> Path:
     return root.joinpath(*PARITY_EVIDENCE_RELATIVE)
 
 
+def v3_published_root(repo_root: Path | None = None) -> Path:
+    """Resolve the trusted atomic V3 publication pointer; never request-derived."""
+    root = Path(repo_root) if repo_root is not None else Path(__file__).resolve().parents[2]
+    publication = root.joinpath(*PARITY_V3_PUBLISHED_RELATIVE)
+    pointer = publication / "CURRENT.json"
+    try:
+        current = json.loads(pointer.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return publication / "generations" / "unpublished"
+    except (OSError, json.JSONDecodeError) as error:
+        raise _Malformed(f"V3 publication pointer is unreadable: {error}") from error
+    generation = current.get("generation") if isinstance(current, dict) else None
+    if not isinstance(generation, str) or not generation or Path(generation).name != generation:
+        raise _Malformed("V3 publication pointer has invalid generation ID")
+    target = (publication / "generations" / generation).resolve()
+    if not target.is_relative_to((publication / "generations").resolve()):
+        raise _Malformed("V3 publication generation escapes trusted root")
+    return target
+
+
 class _Malformed(Exception):
     """Evidence that cannot be judged: wrong shape, non-finite, or two sides that contradict.
 
@@ -226,7 +273,7 @@ class _Malformed(Exception):
 
 
 def _artifact_stamp(base: Path) -> tuple[tuple[str, int, int], ...]:
-    """Every artifact `evaluate_all` can read, as `(name, mtime_ns, size)`. Stats only, no hashing.
+    """Stamp evidence stats plus external V3 proof bytes to invalidate exact-content cache hits.
 
     The gate reads artifacts in exactly three places, and all three resolve names under `base`:
 
@@ -241,18 +288,39 @@ def _artifact_stamp(base: Path) -> tuple[tuple[str, int, int], ...]:
     to the same stamp. A directory that cannot be listed raises, and the caller then declines to cache
     -- an unreadable evidence root must never be cached as "no artifacts".
 
-    What a stamp cannot see is a write that preserves both mtime and size (a tool restoring the
-    timestamp, or a same-length edit followed by `touch -r`). Nothing in this repo writes artifacts
-    that way; `cp -p`/`git checkout` bump mtime. Hashing every artifact would see even that, at 94 MB
-    of reads per request, which is the cost this memo exists to avoid.
+    Plan dependencies remain stat-stamped. Raw scorer proof JSONL is hashed in chunks because its
+    bytes directly determine V3 verdicts; it is small compared with the component evidence cache.
     """
     if not base.is_dir():
         # `glob` yields nothing for a directory that is absent OR unlistable, which would make "the
         # evidence root is not there" indistinguishable from "it holds no artifacts" -- and the empty
         # stamp would then be CACHED. Raise instead, so the caller derives without caching.
         raise FileNotFoundError(f"{base} is not a readable directory")
-    return tuple(sorted((path.name, path.stat().st_mtime_ns, path.stat().st_size)
-                        for path in base.glob("g1_g2.*.json")))
+    artifacts = tuple(base.glob("g1_g2.*.json"))
+    stamps = {path.name: (path.stat().st_mtime_ns, path.stat().st_size) for path in artifacts}
+    # V3 preregistration uses deterministic sibling naming, so cache dependencies can be statted
+    # without parsing artifacts or reading component arrays. Missing plans are stamped as absent.
+    for path in artifacts:
+        if path.name.endswith((".native.json", ".adapter.json")):
+            prefix = path.name.rsplit(".", 2)[0]
+            dependency = base / f"{prefix}.v3-plan.json"
+            try:
+                stat = dependency.stat()
+                stamps[dependency.name] = (stat.st_mtime_ns, stat.st_size)
+            except FileNotFoundError:
+                stamps[dependency.name] = (-1, -1)
+            for side in ("native", "adapter"):
+                proof = base / f"{prefix}.{side}.score-ranks.jsonl"
+                try:
+                    stat = proof.stat()
+                    digest = hashlib.sha256()
+                    with proof.open("rb") as stream:
+                        while chunk := stream.read(1024 * 1024):
+                            digest.update(chunk)
+                    stamps[f"{proof.name}:{digest.hexdigest()}"] = (stat.st_mtime_ns, stat.st_size)
+                except FileNotFoundError:
+                    stamps[proof.name] = (-1, -1)
+    return tuple(sorted((name, mtime, size) for name, (mtime, size) in stamps.items()))
 
 #: The last `evaluate_all` answer, with the stamp it was derived from. ONE entry: a service that has
 #: seen a hundred artifact revisions must not accumulate a hundred verdicts. Keyed on the stamp, the
@@ -405,6 +473,10 @@ COMPONENT_RULE = "abs(adapter - native) <= atol + rtol * abs(native)"
 #: against its OWN output; their v1 aggregate checks judge them exactly as before, and calling their
 #: left-hand array "native" would misdescribe the measurement.
 COMPONENT_TOLERANCES = {"forward_parity": ("forward_max_abs", "forward_max_rel")}
+V3_COMPONENT_TOLERANCES = {
+    "forward_parity": ("forward_max_abs", "forward_max_rel"),
+    "batch_parity": ("batch_max_abs", "batch_max_rel"),
+}
 
 #: How much of a scope the record actually carries. A CLOSED set: any other string is malformed.
 #:
@@ -600,40 +672,34 @@ def _chunk_payload(record: Any, total: int, *, where: str) -> _Chunk:
     return _Chunk(where, indices, reference, actual)
 
 
-def _chunks_tile(scope: dict[str, Any], total: int, *, where: str) -> list[_Chunk]:
-    """The `chunks` form: ordered, non-overlapping, covering `[0, total)` exactly.
-
-    The whole point of the form is that the reader can prove it looked at every component, so the
-    tiling is checked rather than assumed: a missing component, a duplicated one, an out-of-order
-    chunk, or a chunk that overlaps its predecessor all refuse. `indices` is not consulted -- a
-    chunk's coverage IS its index list, and requiring both would let them disagree.
-    """
+def _chunks_tile(scope: dict[str, Any], total: int, *, where: str):
+    """Yield validated chunks while proving exact tiling with bounded memory."""
     records = scope.get("chunks")
     if not isinstance(records, list) or not records:
         raise _Malformed(f"{where}.chunks is {records!r}: the `{COMPONENT_CHUNKS}` form carries its "
                          "components as a non-empty list of chunks")
-    chunks = [_chunk_payload(item, total, where=f"{where}.chunks[{position}]")
-              for position, item in enumerate(records)]
     expected = 0
-    for position, chunk in enumerate(chunks):
-        first = chunk.indices[0]
-        if first != expected:
-            raise _Malformed(f"{where}.chunks[{position}] starts at flat index {first} but the "
-                             f"components before it cover [0, {expected}); the chunks must tile "
+    for position, item in enumerate(records):
+        chunk = _chunk_payload(item, total, where=f"{where}.chunks[{position}]")
+        if chunk.indices[0] != expected:
+            raise _Malformed(f"{where}.chunks[{position}] starts at flat index {chunk.indices[0]} but "
+                             f"the components before it cover [0, {expected}); the chunks must tile "
                              "[0, components_total) in order with no gap and no overlap")
-        expected = first + len(chunk.indices)
+        expected += len(chunk.indices)
         if expected > total:
             raise _Malformed(f"{where}.chunks[{position}] ends at {expected}, past the "
                              f"{total} component(s) the scope declares")
+        yield chunk
     if expected != total:
         raise _Malformed(f"{where}.chunks cover [0, {expected}) but the scope declares {total} "
-                         "component(s): the tail was never emitted, so this record is not complete "
+                         f"component(s): the tail was never emitted, so this record is not complete "
                          "coverage")
-    return chunks
+
 
 
 def _component_scope_check(name: str, record: Any, declared: dict[str, Any],
-                           category: str) -> ParityCheck:
+                           category: str, *, standard: str = STANDARD_ABS_REL_V2,
+                           tolerances: dict[str, tuple[str, str]] = COMPONENT_TOLERANCES) -> ParityCheck:
     """One v2 component scope: judged per component, across EVERY component it covers.
 
     Three coverage forms, and the verdict differs because the EVIDENCE differs:
@@ -656,11 +722,11 @@ def _component_scope_check(name: str, record: Any, declared: dict[str, Any],
     if not isinstance(record, dict):
         raise _Malformed(f"{where} is a {type(record).__name__}, not an object")
     dimension = record.get("dimension")
-    if dimension not in COMPONENT_TOLERANCES:
+    if dimension not in tolerances:
         raise _Malformed(f"{where}.dimension is {dimension!r}: the componentwise rule is recorded "
-                         f"only for {sorted(COMPONENT_TOLERANCES)}, the dimensions the producers "
-                         "compare aligned arrays for")
-    atol_key, rtol_key = COMPONENT_TOLERANCES[dimension]
+                         f"only for {sorted(tolerances)}, the dimensions the producers compare "
+                         "aligned arrays for")
+    atol_key, rtol_key = tolerances[dimension]
     for key in (atol_key, rtol_key):
         if key not in declared:
             raise _Malformed(f"{where} is judged against the declared `{atol_key}`/`{rtol_key}` and "
@@ -703,13 +769,10 @@ def _component_scope_check(name: str, record: Any, declared: dict[str, Any],
                              "component(s) were emitted: `full` describes the whole array and "
                              "nothing else")
         if coverage == COMPONENT_FULL:
-            # Complete coverage: the digest is a binding on the values carried, so recompute it.
             _verify_digests(record, reference, actual, where=where)
         else:
-            # A preview: presence and shape only. There is no complete array to recompute against,
-            # and the digest is explicitly NOT evidence about the components that were not emitted.
             _component_digests(record, where=where)
-        chunks = [_Chunk(where, indices, reference, actual)]
+        chunks = iter((_Chunk(where, indices, reference, actual),))
 
     offenders: list[int] = []
     worst = 0.0
@@ -722,9 +785,15 @@ def _component_scope_check(name: str, record: Any, declared: dict[str, Any],
     #: to fold `derived_max_abs`. Both folds happen here, inside the pass that already computes
     #: `delta`, so each component is visited once.
     shown_values: dict[int, tuple[float, float]] = {}
+    root_digests = {key: hashlib.sha256() for key in COMPONENT_DIGEST_KEYS}
+    chunk_count = 0
     for chunk in chunks:
+        chunk_count += 1
         compared += len(chunk.indices)
         for index, actual_value, reference_value in zip(chunk.indices, chunk.actual, chunk.reference):
+            root_digests["reference"].update(_COMPONENT_PACK.pack(reference_value))
+            root_digests["actual"].update(_COMPONENT_PACK.pack(actual_value))
+            root_digests["delta"].update(_COMPONENT_PACK.pack(abs(actual_value - reference_value)))
             if not evaluate_abs_rel(actual_value, reference_value, atol=atol, rtol=rtol):
                 offenders.append(index)
                 if len(shown_values) < 5:
@@ -738,6 +807,13 @@ def _component_scope_check(name: str, record: Any, declared: dict[str, Any],
                     worst = delta / denominator
             elif delta > 0.0:
                 unbounded = True
+    if coverage == COMPONENT_CHUNKS:
+        recorded = _component_digests(record, where=where)
+        for key, digest in root_digests.items():
+            if digest.hexdigest() != recorded[key]:
+                raise _Malformed(f"{where}.sha256.{key} is {recorded[key]!r} but the complete "
+                                 f"chunk payload hashes to {digest.hexdigest()!r}: root digest does "
+                                 "not bind these components")
 
     complete = coverage != COMPONENT_PREVIEW
     if complete and compared != total:
@@ -810,7 +886,7 @@ def _component_scope_check(name: str, record: Any, declared: dict[str, Any],
             "scope": name, "coverage": coverage,
             "components_compared": compared, "components_total": total,
             "complete_coverage": complete,
-            "chunks": len(chunks) if coverage == COMPONENT_CHUNKS else None,
+            "chunks": chunk_count if coverage == COMPONENT_CHUNKS else None,
             "mismatch_count": len(offenders),
             "worst_normalized": None if unbounded else worst,
             "offending_coordinates": offenders[:64],
@@ -820,7 +896,7 @@ def _component_scope_check(name: str, record: Any, declared: dict[str, Any],
                 for index in offenders[:5]],
         },
         ok=ok, mandatory=complete or bool(offenders), absence=(not complete and not offenders),
-        standard=STANDARD_ABS_REL_V2, note=note)
+        standard=standard, note=note)
 
 
 def _relative_checks(measured: dict[str, Any], declared: dict[str, Any], *,
@@ -1486,6 +1562,8 @@ def _declared_standard(native: dict[str, Any], adapter: dict[str, Any]) -> str:
     declared = left or right or STANDARD_RELATIVE_V1
     if declared == STANDARD_ABS_REL_V2 and not _component_scopes(native, adapter):
         raise _Malformed(_V2_WITHOUT_COMPONENTS)
+    if declared == STANDARD_ABS_REL_V3:
+        _v3_manifest(native, adapter)
     return declared
 
 #: One refusal, used by both places that can spot a bare v2 label, so the reason never drifts.
@@ -1494,6 +1572,676 @@ _V2_WITHOUT_COMPONENTS = (
     "aggregates; that standard is defined per component (abs(a-b) <= atol + rtol*abs(b)) and cannot "
     f"be evaluated from the recorded statistics, so it must never be applied. A v2 artifact carries "
     f"`{COMPONENT_KEY}` (see workbench/docs/reviews/20261112-parity-repair/V2_STANDARD.md)")
+
+V3_CONTROLS = ("native_repeat", "adapter_repeat", "native_adapter",
+               "native_batch_1_vs_n", "adapter_batch_1_vs_n")
+V3_KEY = "parity_v3"
+V3_RULE = "abs(actual - reference) <= atol + rtol * abs(reference)"
+
+
+def _v3_manifest(native: dict[str, Any], adapter: dict[str, Any]) -> tuple[dict[str, Any], Path]:
+    """Validate immutable preregistration plus post-run receipts embedded in final evidence."""
+    blocks = [(side, item.get(V3_KEY)) for side, item in (("native", native), ("adapter", adapter))
+              if item.get(V3_KEY) is not None]
+    if len(blocks) != 1:
+        raise _Malformed(f"v3 requires exactly one `{V3_KEY}` block, found {len(blocks)}")
+    side, block = blocks[0]
+    if not isinstance(block, dict) or block.get("standard") != STANDARD_ABS_REL_V3:
+        raise _Malformed(f"the {side} artifact `{V3_KEY}` block must declare {STANDARD_ABS_REL_V3}")
+    plan_rel, digest = block.get("plan_path"), block.get("plan_sha256")
+    if not isinstance(plan_rel, str) or not plan_rel or Path(plan_rel).is_absolute():
+        raise _Malformed("v3 plan_path must be a non-empty relative path")
+    evidence = Path((native if side == "native" else adapter).get("_artifact_path", "."))
+    plan_path = evidence.parent / plan_rel
+    expected_plan_name = f"{evidence.name.rsplit('.', 2)[0]}.v3-plan.json"
+    if Path(plan_rel).name != expected_plan_name or Path(plan_rel).parent != Path("."):
+        raise _Malformed(f"v3 plan_path must be deterministic sibling {expected_plan_name!r}")
+    if not plan_path.resolve().is_relative_to(evidence.parent.resolve()):
+        raise _Malformed("v3 plan_path escapes the evidence directory")
+    try:
+        raw = plan_path.read_bytes()
+    except OSError as error:
+        raise _Malformed(f"v3 preregistered plan is unavailable: {plan_path}: {error}") from error
+    if not isinstance(digest, str) or hashlib.sha256(raw).hexdigest() != digest:
+        raise _Malformed("v3 plan_sha256 does not match persisted plan bytes")
+    if plan_path.stat().st_mtime_ns >= evidence.stat().st_mtime_ns:
+        raise _Malformed("v3 plan was not persisted before final run evidence")
+    try:
+        plan = json.loads(raw)
+    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise _Malformed(f"v3 plan is not valid JSON: {error}") from error
+    artifact = native if side == "native" else adapter
+    if not isinstance(plan, dict) or plan.get("standard") != STANDARD_ABS_REL_V3:
+        raise _Malformed("v3 plan must declare the exact v3 standard")
+    if plan.get("model_id") != artifact.get("model_id") or plan.get("category") != artifact.get("category"):
+        raise _Malformed("v3 plan model/category do not match artifact identity")
+    identity_fields = ("checkpoint", "configuration", "environment", "protocol", "category",
+                       "cohort_id", "precision", "seed", "query_order_sha256",
+                       "gallery_order_sha256", "reference_exclusions_sha256", "query_count",
+                       "gallery_count")
+    identity = plan.get("identity")
+    if not isinstance(identity, dict) or set(identity) != set(identity_fields):
+        raise _Malformed("v3 plan.identity must contain the exact preregistered identity fields")
+    for field in identity_fields:
+        value = identity[field]
+        if field in ("query_count", "gallery_count"):
+            if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+                raise _Malformed(f"v3 identity.{field} must be a positive integer")
+        elif field == "seed":
+            if isinstance(value, bool) or not isinstance(value, (int, str)):
+                raise _Malformed("v3 identity.seed must be an integer or explicit seed string")
+        elif not isinstance(value, str) or not value:
+            raise _Malformed(f"v3 identity.{field} must be a non-empty string")
+    if len(identity["checkpoint"]) != 64 or any(
+            char not in _COMPONENT_HEX for char in identity["checkpoint"]):
+        raise _Malformed("v3 identity.checkpoint must be a SHA256 digest of verified checkpoint bytes")
+    for field in ("query_order_sha256", "gallery_order_sha256", "reference_exclusions_sha256"):
+        value = identity[field]
+        if len(value) != 64 or any(char not in _COMPONENT_HEX for char in value):
+            raise _Malformed(f"v3 identity.{field} must be a SHA256 hex digest")
+    if identity["category"] != artifact.get("category"):
+        raise _Malformed("v3 plan identity category differs from artifact")
+    for side_artifact in (native, adapter):
+        if side_artifact.get("identity") != identity:
+            raise _Malformed("v3 artifact identity differs from immutable preregistered identity")
+    for field in ("supported_batch_policy", "population_scope"):
+        value = plan.get(field)
+        if value is None or value == "" or value == [] or value == {}:
+            raise _Malformed(f"v3 preregistered plan is missing {field}")
+    batch_policy = plan["supported_batch_policy"]
+    if (not isinstance(batch_policy, dict) or batch_policy.get("supported") is not True
+            or not isinstance(batch_policy.get("batch_sizes"), list)
+            or len(batch_policy["batch_sizes"]) < 2
+            or any(isinstance(size, bool) or not isinstance(size, int) or size <= 0
+                   for size in batch_policy["batch_sizes"])):
+        raise _Malformed("v3 supported_batch_policy must predeclare supported batch sizes")
+    if "batch_invariant" in batch_policy and not isinstance(batch_policy["batch_invariant"], bool):
+        raise _Malformed("v3 supported_batch_policy.batch_invariant must be boolean")
+    population = plan["population_scope"]
+    if (not isinstance(population, dict) or population.get("coverage") not in ("full", "sample")
+            or any(isinstance(population.get(key), bool) or not isinstance(population.get(key), int)
+                   or population[key] <= 0 for key in ("query_count", "gallery_count"))):
+        raise _Malformed("v3 population_scope must declare full/sample coverage and positive query/gallery counts")
+    if any(population[key] != identity[key] for key in ("query_count", "gallery_count")):
+        raise _Malformed("v3 population denominators differ from actual artifact identity")
+    identity_aliases = {"protocol": "protocol",
+                        "query_order_sha256": "query_order_sha256",
+                        "gallery_order_sha256": "gallery_order_sha256"}
+    for side_artifact in (native, adapter):
+        for identity_key, artifact_key in identity_aliases.items():
+            if side_artifact.get(artifact_key) != identity[identity_key]:
+                raise _Malformed(f"v3 artifact {artifact_key} does not bind identity.{identity_key}")
+        if side_artifact.get("checkpoint_sha256") != identity["checkpoint"]:
+            raise _Malformed("v3 artifact checkpoint_sha256 does not bind verified checkpoint bytes")
+    native_body = native.get("native")
+    layer1 = native_body.get("layer1_identity") if isinstance(native_body, dict) else None
+    metrics = native.get("native_metrics_parity_detail")
+    if not isinstance(layer1, dict) or not isinstance(metrics, dict):
+        raise _Malformed("v3 native artifact lacks measured layer1 identity or metrics denominator")
+    if (layer1.get("query_count_native") != identity["query_count"]
+            or layer1.get("query_count_annotations") != identity["query_count"]
+            or layer1.get("gallery_count_native") != identity["gallery_count"]
+            or layer1.get("gallery_count_rebuilt_from_annotations") != identity["gallery_count"]):
+        raise _Malformed("v3 identity population differs from actual native layer1 inputs")
+    for side in ("native", "adapter"):
+        side_metrics = metrics.get(side)
+        if not isinstance(side_metrics, dict) or side_metrics.get("query_count") != identity["query_count"]:
+            raise _Malformed(f"v3 identity query_count differs from actual {side} metric denominator")
+    stable_identity = set(identity_fields) - {"cohort_id", "query_order_sha256", "gallery_order_sha256",
+                                              "reference_exclusions_sha256", "query_count", "gallery_count"}
+    runs = plan.get("runs")
+    if not isinstance(runs, dict):
+        raise _Malformed("v3 plan.runs must map predeclared run roles to run records")
+    required_roles = ("native_repeat_1", "native_repeat_2", "adapter_repeat_1",
+                      "adapter_repeat_2", "native_adapter_native", "native_adapter_adapter",
+                      "native_batch_1", "native_batch_n", "adapter_batch_1", "adapter_batch_n")
+    ids = []
+    for role in required_roles:
+        run = runs.get(role)
+        if not isinstance(run, dict) or not isinstance(run.get("run_id"), str) or not run["run_id"]:
+            raise _Malformed(f"v3 plan is missing predeclared run ID for {role}")
+        execution = run.get("execution")
+        if not isinstance(execution, dict):
+            raise _Malformed(f"v3 plan is missing predeclared execution partition for {role}")
+        for key in ("partition_id", "query_partition_sha256", "gallery_partition_sha256"):
+            if not isinstance(execution.get(key), str) or not execution[key]:
+                raise _Malformed(f"v3 run {role} execution lacks {key}")
+        for key in ("query_batch_size", "gallery_batch_size"):
+            value = execution.get(key)
+            if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+                raise _Malformed(f"v3 run {role} execution has invalid {key}")
+        source_id, run_identity = run.get("source_id"), run.get("identity")
+        if not isinstance(source_id, str) or not source_id or not isinstance(run_identity, dict):
+            raise _Malformed(f"v3 run {role} must bind actual source_id and identity")
+        if set(run_identity) != set(identity_fields):
+            raise _Malformed(f"v3 run {role} identity has incorrect fields")
+        if any(run_identity[key] != identity[key] for key in stable_identity):
+            raise _Malformed(f"v3 run {role} changed model, protocol, or evaluation policy identity")
+        for count_key in ("query_count", "gallery_count"):
+            value = run_identity[count_key]
+            if isinstance(value, bool) or not isinstance(value, int) or not 0 < value <= identity[count_key]:
+                raise _Malformed(f"v3 run {role} has invalid subset {count_key}")
+        if not isinstance(run_identity["cohort_id"], str) or not run_identity["cohort_id"]:
+            raise _Malformed(f"v3 run {role} has empty cohort_id identity")
+        for digest_key in ("query_order_sha256", "gallery_order_sha256", "reference_exclusions_sha256"):
+            digest_value = run_identity[digest_key]
+            if (not isinstance(digest_value, str) or len(digest_value) != 64
+                    or any(char not in _COMPONENT_HEX for char in digest_value)):
+                raise _Malformed(f"v3 run {role} identity {digest_key} must be a SHA256 hex digest")
+        for key in ("query_partition_sha256", "gallery_partition_sha256"):
+            digest_value = execution[key]
+            if len(digest_value) != 64 or any(char not in _COMPONENT_HEX for char in digest_value):
+                raise _Malformed(f"v3 run {role} execution {key} must be a SHA256 hex digest")
+        ids.append(run["run_id"])
+    if len(set(ids)) != len(ids):
+        raise _Malformed("v3 plan run IDs must identify distinct executions")
+    matched_roles = (("native_repeat_1", "native_repeat_2"),
+                    ("adapter_repeat_1", "adapter_repeat_2"),
+                    ("native_adapter_native", "native_adapter_adapter"),
+                    ("native_batch_1", "native_batch_n"),
+                    ("adapter_batch_1", "adapter_batch_n"))
+    for reference_role, actual_role in matched_roles:
+        if (runs[reference_role]["identity"]["reference_exclusions_sha256"]
+                != runs[actual_role]["identity"]["reference_exclusions_sha256"]):
+            raise _Malformed(f"v3 matched run roles {reference_role}/{actual_role} have different actual reference-exclusion masks")
+    batch_sizes = batch_policy["batch_sizes"]
+    if len(set(batch_sizes)) != len(batch_sizes) or 1 not in batch_sizes:
+        raise _Malformed("v3 batch policy must declare distinct supported sizes including B1")
+    non_singleton_sizes = {size for size in batch_sizes if size > 1}
+    if not non_singleton_sizes:
+        raise _Malformed("v3 batch policy must declare a supported BN size greater than one")
+    for role in required_roles:
+        execution = runs[role]["execution"]
+        expected_size = 1 if role.endswith("batch_1") else None
+        if role.endswith("batch_n") and execution["query_batch_size"] not in non_singleton_sizes:
+            raise _Malformed(f"v3 run {role} uses an unsupported BN query batch size")
+        if expected_size is not None and (execution["query_batch_size"] != expected_size
+                                           or execution["gallery_batch_size"] != expected_size):
+            raise _Malformed(f"v3 run {role} must execute with query/gallery batch size 1")
+        if role.endswith("batch_n") and execution["gallery_batch_size"] not in non_singleton_sizes:
+            raise _Malformed(f"v3 run {role} uses an unsupported BN gallery batch size")
+    aligned_roles = (("native_repeat_1", "native_repeat_2"),
+                     ("adapter_repeat_1", "adapter_repeat_2"),
+                     ("native_adapter_native", "native_adapter_adapter"),
+                     ("native_batch_1", "native_batch_n"),
+                     ("adapter_batch_1", "adapter_batch_n"),
+                     ("native_batch_1", "adapter_batch_1"),
+                     ("native_batch_n", "adapter_batch_n"))
+    for left_role, right_role in aligned_roles:
+        left, right = runs[left_role]["execution"], runs[right_role]["execution"]
+        if any(left.get(key) != right.get(key) for key in
+               ("partition_id", "query_partition_sha256", "gallery_partition_sha256")):
+            raise _Malformed(f"v3 matched runs {left_role}/{right_role} do not share ordered query/gallery partition")
+        if left_role == "native_adapter_native" and any(
+                left.get(key) != right.get(key) for key in ("query_batch_size", "gallery_batch_size")):
+            raise _Malformed("v3 native/adapter cross-path runs must use matched query/gallery batch sizes")
+        if left_role in {"native_repeat_1", "adapter_repeat_1"} and any(
+                left.get(key) != right.get(key) for key in ("query_batch_size", "gallery_batch_size")):
+            raise _Malformed(f"v3 repeated runs {left_role}/{right_role} must use matched query/gallery batch sizes")
+    controls = plan.get("controls")
+    receipts = block.get("receipts")
+    scopes_by_control = block.get("scopes")
+    if not isinstance(controls, dict) or not isinstance(receipts, dict) or not isinstance(scopes_by_control, dict):
+        raise _Malformed("v3 plan.controls and final artifact receipts/scopes must be objects")
+    expected = {"native_repeat": ("native_repeat_1", "native_repeat_2", "native"),
+                "adapter_repeat": ("adapter_repeat_1", "adapter_repeat_2", "adapter"),
+                "native_adapter": ("native_adapter_native", "native_adapter_adapter", "native"),
+                "native_batch_1_vs_n": ("native_batch_1", "native_batch_n", "native"),
+                "adapter_batch_1_vs_n": ("adapter_batch_1", "adapter_batch_n", "adapter")}
+    for name, (reference_role, actual_role, reference_side) in expected.items():
+        control, emitted_scopes = controls.get(name), scopes_by_control.get(name)
+        if not isinstance(control, dict) or tuple(control.get(key) for key in ("reference_run_id", "actual_run_id")) != (runs[reference_role]["run_id"], runs[actual_role]["run_id"]):
+            raise _Malformed(f"v3 plan control {name!r} must reference its predeclared runs")
+        scopes = control.get("scopes")
+        if not isinstance(emitted_scopes, dict) or set(emitted_scopes) != {"query", "gallery"}:
+            raise _Malformed(f"v3 artifact scope {name!r} must provide query and gallery evidence")
+        if control.get("reference_side") != reference_side:
+            raise _Malformed(f"v3 plan control {name!r} must use {reference_side} as reference")
+        dimension = "batch_parity" if "batch" in name else "forward_parity"
+        if control.get("dimension") != dimension:
+            raise _Malformed(f"v3 plan control {name!r} has incorrect dimension")
+        if not isinstance(control.get("dtype"), str) or not control["dtype"]:
+            raise _Malformed(f"v3 plan control {name!r} must declare captured dtype")
+        tolerance = control.get("tolerance")
+        if not isinstance(tolerance, dict) or any(not isinstance(tolerance.get(k), (int, float)) or isinstance(tolerance.get(k), bool) or tolerance[k] < 0 for k in ("atol", "rtol")):
+            raise _Malformed(f"v3 plan control {name!r} needs non-negative atol and rtol")
+        if not isinstance(scopes, dict) or set(scopes) != {"query", "gallery"}:
+            raise _Malformed(f"v3 control {name!r} must capture separate query and gallery tensors")
+        for scope_name, scope in scopes.items():
+            if not isinstance(scope, dict) or scope.get("coverage") not in ("full", "sample"):
+                raise _Malformed(f"v3 {name}.{scope_name} must declare full/sample population scope")
+            count_key = "query_count" if scope_name == "query" else "gallery_count"
+            if scope.get("population_count") != population[count_key]:
+                raise _Malformed(f"v3 {name}.{scope_name} population denominator differs from preregistration")
+            sample_count = scope.get("sample_count")
+            if (scope.get("coverage") == "sample"
+                    and (isinstance(sample_count, bool) or not isinstance(sample_count, int)
+                         or not 0 < sample_count < population[count_key])):
+                raise _Malformed(f"v3 {name}.{scope_name} sample_count must be less than declared population")
+            tensor_shape, component_shape = scope.get("tensor_shape"), scope.get("component_shape")
+            expected_count = sample_count if scope.get("coverage") == "sample" else population[count_key]
+            ordered_ids = scope.get("ordered_ids_sha256")
+            if (not isinstance(ordered_ids, str) or len(ordered_ids) != 64
+                    or any(char not in _COMPONENT_HEX for char in ordered_ids)):
+                raise _Malformed(f"v3 {name}.{scope_name} needs an ordered ID digest")
+            if (not isinstance(tensor_shape, list) or len(tensor_shape) < 2
+                    or any(isinstance(part, bool) or not isinstance(part, int) or part <= 0 for part in tensor_shape)
+                    or tensor_shape[0] != expected_count):
+                raise _Malformed(f"v3 {name}.{scope_name} needs tensor_shape bound to declared coverage")
+            if (not isinstance(component_shape, list) or not component_shape
+                    or any(isinstance(part, bool) or not isinstance(part, int) or part <= 0 for part in component_shape)
+                    or __import__("math").prod(tensor_shape) != __import__("math").prod(component_shape)):
+                raise _Malformed(f"v3 {name}.{scope_name} component shape does not match tensor shape")
+            for role in (reference_role, actual_role):
+                run_identity = runs[role]["identity"]
+                order_key = "query_order_sha256" if scope_name == "query" else "gallery_order_sha256"
+                if (run_identity[count_key] != expected_count
+                        or run_identity[order_key] != ordered_ids
+                        or run_identity["cohort_id"] != scope.get("cohort_id")):
+                    raise _Malformed(f"v3 {name}.{scope_name} scope differs from actual run identity {role}")
+            if name == "native_adapter":
+                for role in (reference_role, actual_role):
+                    if runs[role]["identity"] != identity:
+                        raise _Malformed("v3 native_adapter control must match complete primary population identity")
+    role_sides = {role: ("adapter" if role.startswith("adapter_") or role == "native_adapter_adapter" else "native")
+                  for role in required_roles}
+    from datetime import datetime, timezone
+    artifact_mtime = datetime.fromtimestamp(evidence.stat().st_mtime, timezone.utc)
+    plan_mtime = datetime.fromtimestamp(plan_path.stat().st_mtime, timezone.utc)
+    for role in required_roles:
+        receipt = receipts.get(role)
+        if not isinstance(receipt, dict) or receipt.get("run_id") != runs[role]["run_id"]:
+            raise _Malformed(f"v3 final artifact lacks receipt for actual run {role}")
+        if receipt.get("plan_sha256") != digest:
+            raise _Malformed(f"v3 run receipt {role} does not bind the immutable preregistration plan")
+        if receipt.get("source_id") != runs[role]["source_id"]:
+            raise _Malformed(f"v3 run receipt {role} source ID differs from preregistered run")
+        if receipt.get("identity") != runs[role]["identity"]:
+            raise _Malformed(f"v3 run receipt {role} identity differs from preregistered actual run")
+        if receipt.get("side") != role_sides[role]:
+            raise _Malformed(f"v3 run receipt {role} has incorrect native/adapter side")
+        try:
+            started = datetime.fromisoformat(receipt["started_at"].replace("Z", "+00:00"))
+            captured = datetime.fromisoformat(receipt["captured_at"].replace("Z", "+00:00"))
+            if started.tzinfo is None or captured.tzinfo is None:
+                raise ValueError("timestamps must include a timezone")
+            if not plan_mtime < started <= captured <= artifact_mtime:
+                raise ValueError("expected plan persisted < actual start <= capture <= artifact publication")
+        except (TypeError, ValueError, OverflowError, AttributeError, KeyError) as error:
+            raise _Malformed(f"v3 run receipt {role} has invalid actual capture chronology: {error}") from error
+        if receipt.get("execution") != runs[role]["execution"]:
+            raise _Malformed(f"v3 run receipt {role} execution differs from preregistered partition")
+    for name, (reference_role, actual_role, _) in expected.items():
+        emitted_control_scopes = scopes_by_control[name]
+        for tensor in ("query", "gallery"):
+            emitted_scope = emitted_control_scopes[tensor]
+            expected_ids = {reference_role, actual_role}
+            for role in expected_ids:
+                captured = receipts[role].get("arrays", {}).get(f"{name}.{tensor}")
+                if not isinstance(captured, dict):
+                    raise _Malformed(f"v3 run receipt {role} lacks captured {name}.{tensor} array metadata")
+                expected_digest = emitted_scope["sha256"]["reference" if role == reference_role else "actual"]
+                component_digest = captured.get("component_sha256")
+                if (captured.get("dtype") != controls[name]["dtype"]
+                        or captured.get("shape") != controls[name]["scopes"][tensor].get("tensor_shape")
+                        or captured.get("ordered_ids_sha256") != controls[name]["scopes"][tensor].get("ordered_ids_sha256")
+                        or component_digest != expected_digest
+                        or not isinstance(component_digest, str) or len(component_digest) != 64
+                        or any(char not in _COMPONENT_HEX for char in component_digest)):
+                    raise _Malformed(f"v3 run receipt {role} does not bind actual {name}.{tensor} tensor")
+    return plan, plan_path
+
+
+def _inverted_pairs_within_epsilon(native_scores: list[Any], adapter_scores: list[Any],
+                                   native_order: list[int], adapter_order: list[int],
+                                   epsilon: float) -> bool:
+    """Check every inverted pair in O(G log G) time and O(G) memory."""
+    size = len(native_order)
+    base = 1 << (size - 1).bit_length()
+    tree = [[math.inf, -math.inf, math.inf, -math.inf] for _ in range(2 * base)]
+    adapter_position = [0] * size
+    for position, candidate in enumerate(adapter_order):
+        adapter_position[candidate] = position
+
+    def update(position: int, native_score: float, adapter_score: float) -> None:
+        node = base + position
+        tree[node] = [native_score, native_score, adapter_score, adapter_score]
+        node //= 2
+        while node:
+            left, right = tree[2 * node], tree[2 * node + 1]
+            tree[node] = [min(left[0], right[0]), max(left[1], right[1]),
+                          min(left[2], right[2]), max(left[3], right[3])]
+            node //= 2
+
+    def query(start: int, end: int) -> list[float]:
+        result = [math.inf, -math.inf, math.inf, -math.inf]
+        left, right = base + start, base + end
+        while left < right:
+            if left & 1:
+                node = tree[left]
+                result = [min(result[0], node[0]), max(result[1], node[1]),
+                          min(result[2], node[2]), max(result[3], node[3])]
+                left += 1
+            if right & 1:
+                right -= 1
+                node = tree[right]
+                result = [min(result[0], node[0]), max(result[1], node[1]),
+                          min(result[2], node[2]), max(result[3], node[3])]
+            left //= 2
+            right //= 2
+        return result
+
+    for candidate in native_order:
+        position = adapter_position[candidate]
+        if position + 1 < size:
+            lo_native, hi_native, lo_adapter, hi_adapter = query(position + 1, size)
+            if lo_native != math.inf and (
+                    native_scores[candidate] - lo_native > epsilon
+                    or hi_native - native_scores[candidate] > epsilon
+                    or adapter_scores[candidate] - lo_adapter > epsilon
+                    or hi_adapter - adapter_scores[candidate] > epsilon):
+                return False
+        update(position, float(native_scores[candidate]), float(adapter_scores[candidate]))
+    return True
+
+
+def _v3_score_rank_checks(native: dict[str, Any], adapter: dict[str, Any],
+                          declared: dict[str, Any], plan: dict[str, Any],
+                          category: str) -> list[ParityCheck]:
+    """Derive V3 score/rank and integer outcomes from bounded per-query proof rows."""
+    artifact = native if V3_KEY in native else adapter
+    block = artifact[V3_KEY]
+    evidence = Path(artifact.get("_artifact_path", "."))
+    expected_name = f"{evidence.name.rsplit('.', 1)[0]}.score-ranks.jsonl"
+    if plan.get("scoring_proof_path") != expected_name or block.get("scoring_proof_path") != expected_name:
+        raise _Malformed("v3 scoring_proof_path must be preregistered deterministic sibling "
+                         f"{expected_name!r}")
+    proof_path = evidence.parent / expected_name
+    if not proof_path.resolve().is_relative_to(evidence.parent.resolve()):
+        raise _Malformed("v3 scoring proof escapes the evidence directory")
+    try:
+        with proof_path.open("rb") as stream:
+            proof_hash = hashlib.sha256()
+            while chunk := stream.read(1024 * 1024):
+                proof_hash.update(chunk)
+            if block.get("scoring_proof_sha256") != proof_hash.hexdigest():
+                raise _Malformed("v3 scoring_proof_sha256 does not match persisted raw bytes")
+            stream.seek(0)
+            header_line = stream.readline()
+            header = json.loads(header_line)
+            if (not isinstance(header, dict) or header.get("schema") != "cir.score-ranks/v1"
+                    or header.get("identity") != plan["identity"]):
+                raise _Malformed("v3 scoring proof schema/identity differs from preregistration")
+            query_ids, gallery_ids = header.get("query_ids"), header.get("gallery_ids")
+            if (not isinstance(query_ids, list) or len(query_ids) != plan["identity"]["query_count"]
+                    or not all(isinstance(value, str) and value for value in query_ids)
+                    or len(set(query_ids)) != len(query_ids)
+                    or not isinstance(gallery_ids, list)
+                    or len(gallery_ids) != plan["identity"]["gallery_count"]
+                    or not all(isinstance(value, str) and value for value in gallery_ids)
+                    or len(set(gallery_ids)) != len(gallery_ids)):
+                raise _Malformed("v3 scoring proof ordered query/gallery IDs are malformed")
+            id_bytes = lambda values: json.dumps(values, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+            if (hashlib.sha256(id_bytes(query_ids)).hexdigest() != plan["identity"]["query_order_sha256"]
+                    or hashlib.sha256(id_bytes(gallery_ids)).hexdigest() != plan["identity"]["gallery_order_sha256"]):
+                raise _Malformed("v3 scoring proof query/gallery order digests differ from preregistration")
+            run_receipts = block.get("scoring_run_receipts")
+            if not isinstance(run_receipts, dict):
+                raise _Malformed("v3 scoring proof lacks actual native/adapter run receipts")
+            expected_roles = {"native_adapter_native": "native", "native_adapter_adapter": "adapter"}
+            for role, side in expected_roles.items():
+                run, receipt = plan["runs"][role], run_receipts.get(role)
+                if (not isinstance(receipt, dict) or receipt.get("run_id") != run["run_id"]
+                        or receipt.get("source_id") != run["source_id"] or receipt.get("side") != side
+                        or receipt.get("identity") != run["identity"]
+                        or not isinstance(receipt.get("score_order_sha256"), str)):
+                    raise _Malformed(f"v3 scoring proof does not bind actual {role} capture")
+            labels = plan.get("scoring_labels")
+            if (not isinstance(labels, dict) or set(labels) != {"query_targets", "reference_exclusions"}
+                    or labels.get("query_targets") != header.get("query_targets")
+                    or labels.get("reference_exclusions") != header.get("reference_exclusions")):
+                raise _Malformed("v3 score proof labels/exclusions differ from preregistered metadata")
+            label_bytes = json.dumps(labels, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+            if hashlib.sha256(label_bytes).hexdigest() != plan["identity"]["reference_exclusions_sha256"]:
+                raise _Malformed("v3 preregistered labels do not bind reference exclusion digest")
+            targets, exclusions = labels["query_targets"], labels["reference_exclusions"]
+            query_count, gallery_count = plan["identity"]["query_count"], plan["identity"]["gallery_count"]
+            if (not isinstance(targets, list) or len(targets) != query_count
+                    or not isinstance(exclusions, list) or len(exclusions) != query_count):
+                raise _Malformed("v3 score proof target/exclusion labels must cover every query")
+            excluded_by_query = {}
+            for index, (target_entry, exclusion_entry) in enumerate(zip(targets, exclusions)):
+                if (not isinstance(target_entry, list) or len(target_entry) != 2
+                        or target_entry[0] != query_ids[index] or target_entry[1] not in gallery_ids
+                        or not isinstance(exclusion_entry, list) or len(exclusion_entry) != 2
+                        or exclusion_entry[0] != query_ids[index]
+                        or not isinstance(exclusion_entry[1], list)
+                        or any(value not in gallery_ids for value in exclusion_entry[1])
+                        or len(set(exclusion_entry[1])) != len(exclusion_entry[1])
+                        or target_entry[1] in exclusion_entry[1]):
+                    raise _Malformed(f"v3 score proof has invalid target/exclusion labels for query {query_ids[index]}")
+                excluded_by_query[query_ids[index]] = set(exclusion_entry[1])
+            score_max = 0.0
+            score_hashes = {role: hashlib.sha256() for role in expected_roles}
+            query_count, gallery_count = len(query_ids), len(gallery_ids)
+            rows_seen = 0
+            target_rank_differences = sorted_rows_differ = inversion_gap_violations = 0
+            topk_membership_differences = topk_order_differences = 0
+            metric_record, metric_where = _metrics_detail(native, adapter)
+            if metric_record is None:
+                raise _Malformed(f"{category}: V3 raw scorer proof requires per-side integer hit counts")
+            cutoffs = metric_record.get("cutoffs")
+            if (not isinstance(cutoffs, list) or not cutoffs
+                    or any(isinstance(k, bool) or not isinstance(k, int) or k <= 0 for k in cutoffs)
+                    or cutoffs != sorted(set(cutoffs))):
+                raise _Malformed(f"v3 {metric_where}.cutoffs must be sorted unique positive integers")
+            declared_cutoffs = plan.get("metric_cutoffs")
+            if declared_cutoffs is not None and declared_cutoffs != cutoffs:
+                raise _Malformed("v3 plan metric_cutoffs differ from bound metric detail cutoffs")
+            native_hits = {k: 0 for k in cutoffs}
+            adapter_hits = {k: 0 for k in cutoffs}
+            failure_set_differences = {k: 0 for k in cutoffs}
+            failure_overlap_equal = {k: True for k in cutoffs}
+            flipped_queries = 0
+            epsilon = _tolerance_value(declared.get("tie_epsilon"), where=f"{category}.tolerances.tie_epsilon")
+            for encoded in stream:
+                query_index = rows_seen
+                if query_index >= query_count:
+                    raise _Malformed("v3 scoring proof has extra query rows")
+                row = json.loads(encoded)
+                if not isinstance(row, dict) or row.get("query_id") != query_ids[query_index]:
+                    raise _Malformed(f"v3 scoring proof row {query_index} is not bound to its ordered query ID")
+                target_id = row.get("target_id")
+                if target_id != labels["query_targets"][query_index][1]:
+                    raise _Malformed(f"v3 score row {query_index} target differs from preregistered label")
+                try:
+                    target = gallery_ids.index(target_id)
+                except (ValueError, TypeError):
+                    raise _Malformed(f"v3 scoring proof row {query_index} target ID is outside gallery") from None
+                if (row.get("target_position") != target
+                        or row.get("excluded_gallery_ids") != sorted(excluded_by_query[query_ids[query_index]])):
+                    raise _Malformed(f"v3 score row {query_index} target/exclusions differ from preregistration")
+                vectors, orders = [], []
+                for side in ("native", "adapter"):
+                    scores, order = row.get(f"{side}_scores"), row.get(f"{side}_order")
+                    if (not isinstance(scores, list) or len(scores) != gallery_count
+                            or any(isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v)
+                                   for v in scores)):
+                        raise _Malformed(f"v3 scoring proof row {query_index} {side} scores are malformed")
+                    if (not isinstance(order, list) or len(order) != gallery_count
+                            or any(isinstance(v, bool) or not isinstance(v, int) or not 0 <= v < gallery_count
+                                   for v in order) or len(set(order)) != gallery_count):
+                        raise _Malformed(f"v3 scoring proof row {query_index} {side} order is not a gallery permutation")
+                    convention = plan.get("score_order_conventions", {}).get(side, "fp32_descending_score")
+                    if not _score_order_matches(scores, order, convention):
+                        raise _Malformed(f"v3 scoring proof row {query_index} {side} order contradicts {convention}")
+                    score_payload = json.dumps({"query_id": query_ids[query_index],
+                                                "scores": scores, "order": order},
+                                               ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+                    score_hashes[f"native_adapter_{side}"].update(score_payload + b"\n")
+                    vectors.append(scores)
+                    orders.append(order)
+                native_scores, adapter_scores = vectors
+                native_order, adapter_order = orders
+                score_max = max(score_max, max((abs(float(a) - float(b))
+                                                for a, b in zip(native_scores, adapter_scores)), default=0.0))
+                excluded_positions = {gallery_index for gallery_index, gallery_id in enumerate(gallery_ids)
+                                      if gallery_id in excluded_by_query[query_ids[query_index]]}
+                native_eligible = [candidate for candidate in native_order if candidate not in excluded_positions]
+                adapter_eligible = [candidate for candidate in adapter_order if candidate not in excluded_positions]
+                native_rank, adapter_rank = native_eligible.index(target) + 1, adapter_eligible.index(target) + 1
+                rank_changed = native_rank != adapter_rank
+                target_rank_differences += rank_changed
+                if not _inverted_pairs_within_epsilon(
+                        native_scores, adapter_scores, native_order, adapter_order, epsilon):
+                    inversion_gap_violations += 1
+                sorted_rows_differ += native_order != adapter_order
+                for k in native_hits:
+                    native_top, adapter_top = native_eligible[:k], adapter_eligible[:k]
+                    native_hits[k] += target in native_top
+                    adapter_hits[k] += target in adapter_top
+                    topk_membership_differences += set(native_top) != set(adapter_top)
+                    topk_order_differences += native_top != adapter_top
+                    failed_native, failed_adapter = target not in native_top, target not in adapter_top
+                    failure_set_differences[k] += failed_native != failed_adapter
+                    failure_overlap_equal[k] &= failed_native == failed_adapter
+                flipped_queries += any((target in native_eligible[:k]) != (target in adapter_eligible[:k])
+                                       for k in native_hits)
+                rows_seen += 1
+            if rows_seen != query_count:
+                raise _Malformed("v3 scoring proof does not contain every preregistered query row")
+    except _Malformed:
+        raise
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise _Malformed(f"v3 scoring proof is unreadable or invalid: {error}") from error
+    for role in expected_roles:
+        if run_receipts[role].get("score_order_sha256") != score_hashes[role].hexdigest():
+            raise _Malformed(f"v3 scoring proof {role} score/order digest differs from its actual rows")
+    metrics, metrics_where = _metrics_detail(native, adapter)
+    if metrics is None:
+        raise _Malformed(f"{category}: V3 raw scorer proof requires per-side integer hit counts")
+    for side, derived in (("native", native_hits), ("adapter", adapter_hits)):
+        recorded_hits = _hit_counts(metrics, side, where=metrics_where)
+        if any(recorded_hits.get(f"r{k}") != value for k, value in derived.items()):
+            raise _Malformed(f"v3 {side} integer metric summary contradicts raw score/rank proof")
+    score_tol = _tolerance_value(declared.get("score_max_abs"), where=f"{category}.tolerances.score_max_abs")
+    diagnostic = {"queries": len(query_ids), "score_max_abs": score_max,
+                  "target_rank_differences": target_rank_differences,
+                  "all_inverted_pairs_within_epsilon_queries": query_count - inversion_gap_violations,
+                  "inverted_pair_gap_violation_queries": inversion_gap_violations,
+                  "sorted_rows_differ": sorted_rows_differ,
+                  "topk_membership_differences": topk_membership_differences,
+                  "topk_order_differences": topk_order_differences,
+                  "per_query_target_hit_flips": flipped_queries,
+                  "failure_set_differences": {f"r{k}": v for k, v in failure_set_differences.items()},
+                  "failure_overlap_equal": {f"r{k}": v for k, v in failure_overlap_equal.items()},
+                  "native_hits": {f"r{k}": value for k, value in native_hits.items()},
+                  "adapter_hits": {f"r{k}": value for k, value in adapter_hits.items()},
+                  "aggregate_hit_counts_equal": native_hits == adapter_hits,
+                  "failure_overlap_equivalence": failure_overlap_equal}
+
+    return [ParityCheck(f"{category}.scores.raw_rows", "scoring_parity", "G2",
+                        score_tol, score_max, score_max <= score_tol, mandatory=True,
+                        standard=STANDARD_ABS_REL_V3),
+            ParityCheck(f"{category}.ranks.raw_rows", "scoring_parity", "G2",
+                        "all inverted score-pair gaps within preregistered tie_epsilon",
+                        diagnostic, inversion_gap_violations == 0, mandatory=True, standard=STANDARD_ABS_REL_V3)]
+
+
+def _v3_checks(native: dict[str, Any], adapter: dict[str, Any], category: str) -> list[ParityCheck]:
+    block_side = "native" if V3_KEY in native else "adapter"
+    artifact = native if block_side == "native" else adapter
+    block = artifact[V3_KEY]
+    plan, _ = _v3_manifest(native, adapter)
+    declared_controls = plan["controls"]
+    records = block["scopes"]
+    artifact_checks = []
+    for control_name in V3_CONTROLS:
+        control = declared_controls[control_name]
+        for scope_name in ("query", "gallery"):
+            record = records[control_name][scope_name]
+            scope_plan = control["scopes"][scope_name]
+            if record.get("reference_run_id") != control["reference_run_id"] or record.get("actual_run_id") != control["actual_run_id"]:
+                raise _Malformed(f"v3 scope {control_name}.{scope_name} run IDs differ from preregistered plan")
+            if record.get("dtype") != control["dtype"] or record.get("dimension") != control["dimension"]:
+                raise _Malformed(f"v3 scope {control_name}.{scope_name} dtype/dimension differ from plan")
+            if record.get("shape") != scope_plan.get("component_shape"):
+                raise _Malformed(f"v3 scope {control_name}.{scope_name} shape differs from preregistered population")
+            if record.get("coverage") not in COMPONENT_COVERAGE:
+                raise _Malformed(f"v3 scope {control_name}.{scope_name} has unsupported coverage evidence")
+            ref_role = next(role for role, value in plan["runs"].items() if value["run_id"] == control["reference_run_id"])
+            act_role = next(role for role, value in plan["runs"].items() if value["run_id"] == control["actual_run_id"])
+            for role, digest_key in ((ref_role, "reference_digest"), (act_role, "actual_digest")):
+                receipt = block["receipts"][role]
+                arr = receipt.get("arrays", {}).get(f"{control_name}.{scope_name}")
+                if (not isinstance(arr, dict) or arr.get("dtype") != control["dtype"]
+                        or arr.get("shape") != scope_plan.get("tensor_shape")
+                        or arr.get("component_sha256") != record.get("sha256", {}).get(digest_key.removesuffix("_digest"))
+                        or arr.get("ordered_ids_sha256") != scope_plan.get("ordered_ids_sha256")):
+                    raise _Malformed(f"v3 receipt {role} does not bind {control_name}.{scope_name} captured data/order")
+            tol = control["tolerance"]
+            declared = {"forward_max_abs": tol["atol"], "forward_max_rel": tol["rtol"],
+                        "batch_max_abs": tol["atol"], "batch_max_rel": tol["rtol"]}
+            checked = _component_scope_check(f"{control_name}.{scope_name}", record, declared, category,
+                                             standard=STANDARD_ABS_REL_V3,
+                                             tolerances=V3_COMPONENT_TOLERANCES)
+            complete = checked.measured.get("complete_coverage") is True
+            mismatch = bool(checked.measured["mismatch_count"])
+            batch_sensitivity = "batch_1_vs_n" in control_name
+            if not complete and not batch_sensitivity:
+                if mismatch:
+                    checked = replace(checked, mandatory=True, ok=False, absence=False,
+                                      note="Measured preview violation; preregistered scope remains incomplete")
+                else:
+                    checked = replace(checked, mandatory=False, ok=False, absence=True,
+                                      note="PREVIEW ONLY: captured evidence incomplete")
+            reference_execution = next(run["execution"] for run in plan["runs"].values()
+                                       if run["run_id"] == control["reference_run_id"])
+            actual_execution = next(run["execution"] for run in plan["runs"].values()
+                                    if run["run_id"] == control["actual_run_id"])
+            checked = replace(checked, declared={**checked.declared,
+                                "coverage": scope_plan["coverage"],
+                                "population_count": scope_plan["population_count"],
+                                "ordered_ids_sha256": scope_plan["ordered_ids_sha256"]},
+                              measured={**checked.measured,
+                                "coverage_scope": scope_plan["coverage"],
+                                "population_count": scope_plan["population_count"],
+                                "ordered_ids_sha256": scope_plan["ordered_ids_sha256"],
+                                "sample_count": scope_plan.get("sample_count"),
+                                "tensor_shape": scope_plan["tensor_shape"],
+                                "dtype": control["dtype"], "control": control_name,
+                                "batch_policy": ({**plan["supported_batch_policy"],
+                                                  "reference_execution": reference_execution,
+                                                  "actual_execution": actual_execution}
+                                                 if batch_sensitivity else None)})
+            if batch_sensitivity:
+                policy = plan["supported_batch_policy"]
+                if not isinstance(policy, dict) or policy.get("supported") is not True or not policy.get("batch_sizes"):
+                    raise _Malformed("batch sensitivity requires an explicit supported batch policy")
+                invariance_required = policy.get("batch_invariant", False)
+                checked = replace(checked, mandatory=invariance_required,
+                                  ok=checked.ok if invariance_required else False,
+                                  absence=not complete and not mismatch,
+                                  note=(checked.note or "") + (
+                                      "; preregistered contract requires batch invariance"
+                                      if invariance_required else
+                                      "; observed batch sensitivity is diagnostic, not a parity PASS"
+                                      if mismatch else
+                                      "; batch sensitivity is diagnostic, not a parity veto"))
+                artifact_checks.append(ParityCheck(
+                    name=f"{category}.components.{control_name}.{scope_name}.coverage",
+                    dimension="batch_parity", gate="G2",
+                    declared={"coverage": scope_plan["coverage"], "population_count": scope_plan["population_count"]},
+                    measured={"complete_coverage": complete, "coverage_scope": scope_plan["coverage"],
+                              "population_count": scope_plan["population_count"],
+                              "sample_count": scope_plan.get("sample_count"),
+                              "tensor_shape": scope_plan["tensor_shape"], "dtype": control["dtype"],
+                              "control": control_name, "batch_policy": policy},
+                    ok=complete, mandatory=True, absence=not complete,
+                    standard=STANDARD_ABS_REL_V3,
+                    note="batch control coverage is mandatory; sensitivity is diagnostic unless invariance was predeclared"))
+            artifact_checks.append(checked)
+    return artifact_checks + _v3_score_rank_checks(native, adapter, _tolerances(native, adapter), plan, category)
 
 def _component_scopes(native: dict[str, Any], adapter: dict[str, Any]) -> list[tuple[str, Any]]:
     """Every `(scope name, record)` the pair records, adapter first, and a refusal on a contradiction.
@@ -1675,6 +2423,8 @@ def evaluate_model(model_id: str, *, categories: Iterable[str] = ("dress", "shir
         try:
             native = _read(native_path)
             adapter = _read(adapter_path)
+            native["_artifact_path"] = str(native_path)
+            adapter["_artifact_path"] = str(adapter_path)
             verdict.evidence.extend([str(native_path), str(adapter_path)])
             declared = _tolerances(native, adapter)
             applied = _declared_standard(native, adapter)
@@ -1687,6 +2437,8 @@ def evaluate_model(model_id: str, *, categories: Iterable[str] = ("dress", "shir
             # block and earns no v2 check, whatever standard the caller requested).
             if applied == STANDARD_ABS_REL_V2:
                 checks.extend(_component_checks(native, adapter, declared, category))
+            elif applied == STANDARD_ABS_REL_V3:
+                checks.extend(_v3_checks(native, adapter, category))
             checks.extend(_identity_checks(native_body, declared, category))
             # G1 cross-side: both documents' identity fields, compared value to value. The native
             # side alone cannot tell whether the adapter measured the same checkpoint. An adapter
@@ -1714,10 +2466,11 @@ def evaluate_model(model_id: str, *, categories: Iterable[str] = ("dress", "shir
                 if not isinstance(block, dict):
                     raise _Malformed(f"{category}.forward.{side} is a {type(block).__name__}, "
                                      "not an object")
-                checks.extend(_relative_checks(
-                    block, declared, name=f"{category}.forward.{side}",
-                    dimension="forward_parity", gate="G2",
-                    atol_key="forward_max_abs", rtol_key="forward_max_rel"))
+                if applied != STANDARD_ABS_REL_V3:
+                    checks.extend(_relative_checks(
+                        block, declared, name=f"{category}.forward.{side}",
+                        dimension="forward_parity", gate="G2",
+                        atol_key="forward_max_abs", rtol_key="forward_max_rel"))
             population = adapter_body.get("population") or {}
             if not isinstance(population, dict):
                 raise _Malformed(f"{category}: the population block is a "
@@ -1730,20 +2483,23 @@ def evaluate_model(model_id: str, *, categories: Iterable[str] = ("dress", "shir
                     # declared protocol divergence (preprocess_train vs preprocess_val), not parity.
                     # The artifact records it; it is never counted as a mandatory failure here.
                     continue
-                checks.extend(_relative_checks(
-                    block, declared, name=f"{category}.population.{side}",
-                    dimension="forward_parity", gate="G2",
-                    atol_key="forward_max_abs", rtol_key="forward_max_rel"))
+                if applied != STANDARD_ABS_REL_V3:
+                    checks.extend(_relative_checks(
+                        block, declared, name=f"{category}.population.{side}",
+                        dimension="forward_parity", gate="G2",
+                        atol_key="forward_max_abs", rtol_key="forward_max_rel"))
             batch = adapter_body.get("batch_size_1_vs_n")
             if batch is not None:
                 if not isinstance(batch, dict):
                     raise _Malformed(f"{category}.batch_size_1_vs_n is a "
                                      f"{type(batch).__name__}, not an object")
-                checks.extend(_relative_checks(
-                    batch, declared, name=f"{category}.batch_1_vs_n", dimension="batch_parity",
-                    gate="G2", atol_key="batch_max_abs", rtol_key="batch_max_rel"))
-            checks.extend(_rank_checks(adapter_body, declared, category))
-            checks.extend(_score_checks(adapter_body, declared, category))
+                if applied != STANDARD_ABS_REL_V3:
+                    checks.extend(_relative_checks(
+                        batch, declared, name=f"{category}.batch_1_vs_n", dimension="batch_parity",
+                        gate="G2", atol_key="batch_max_abs", rtol_key="batch_max_rel"))
+            if applied != STANDARD_ABS_REL_V3:
+                checks.extend(_rank_checks(adapter_body, declared, category))
+                checks.extend(_score_checks(adapter_body, declared, category))
             # A score comparison without a rank comparison is half of `scoring_parity`. Do not let
             # the score half certify the dimension.
             evidence_gap, score_missing = _scoring_evidence(checks, category)
@@ -1781,6 +2537,7 @@ def evaluate_model(model_id: str, *, categories: Iterable[str] = ("dress", "shir
                     ((adapter_body.get("scoring_ranking") or {})
                      .get("rank_differences_vs_native_val_control") or {}).get("non_tie_count"),
             }
+            checks = [replace(check, category=category) for check in checks]
             verdict.checks.extend(checks)
             # Per-category mandatory coverage. A required dimension measured in `shirt` is not
             # measured in `dress`: an adapter body of `{}` in one category used to be carried by the
@@ -1919,7 +2676,7 @@ def evaluate_model(model_id: str, *, categories: Iterable[str] = ("dress", "shir
                     f"under them; evaluating them under {standard} now would be a post-hoc tolerance "
                     "change and cannot contribute to a pass"),
             "form": ("fail if abs(a-b) > atol + rtol*abs(b) for any component"
-                     if standard == STANDARD_ABS_REL_V2 else None),
+                     if standard in (STANDARD_ABS_REL_V2, STANDARD_ABS_REL_V3) else None),
         }]
 
     if verdict.failures:
@@ -2002,14 +2759,33 @@ def evaluate_all(*, root: Path | None = None,
 
     `evaluate_all_uncached` remains the plain derivation, and the tests compare against it directly.
     """
-    base = root if root is not None else evidence_root()
+    publication_root = None if root is not None else Path(__file__).resolve().parents[2].joinpath(*PARITY_V3_PUBLISHED_RELATIVE)
+    pointer = publication_root / "CURRENT.json" if publication_root is not None else None
+    publication_error = None
+    if root is not None:
+        bases = (Path(root),)
+    else:
+        legacy_base = evidence_root()
+        try:
+            v3_base = v3_published_root()
+        except _Malformed as error:
+            v3_base = Path(__file__).resolve().parents[2].joinpath(*PARITY_V3_PUBLISHED_RELATIVE, "generations", "unpublished")
+            publication_error = str(error)
+        bases = (legacy_base, v3_base)
     try:
-        stamp: tuple | None = (str(base), standard, _artifact_stamp(base))
+        if any(not base.is_dir() for base in bases):
+            return evaluate_all_uncached(root=root, standard=standard)
+        pointer_stamp = ((pointer.stat().st_mtime_ns, pointer.stat().st_size)
+                         if pointer is not None and pointer.is_file() else (-1, -1))
+        stamp: tuple | None = (tuple(str(base) for base in bases), standard, pointer_stamp,
+                               tuple(_artifact_stamp(base) for base in bases))
     except OSError:
         return evaluate_all_uncached(root=root, standard=standard)
     if _EVALUATE_ALL_CACHE and _EVALUATE_ALL_CACHE[0][0] == stamp:
         return copy.deepcopy(_EVALUATE_ALL_CACHE[0][1])
     result = evaluate_all_uncached(root=root, standard=standard)
+    if publication_error:
+        result["publication_error"] = publication_error
     _EVALUATE_ALL_CACHE.clear()
     _EVALUATE_ALL_CACHE.append((stamp, result))
     return copy.deepcopy(result)
@@ -2038,9 +2814,25 @@ def evaluate_all_uncached(*, root: Path | None = None,
     because the slot held `applied[0] if len(applied) == 1 else applied`. The frontend types this
     field as `string` and interpolates it, so that was a live defect, not a cosmetic one.
     """
-    base = root if root is not None else evidence_root()
-    verdicts = {model_id: evaluate_model(model_id, root=base, standard=standard).to_dict()
-                for model_id in _discover_models(base)}
+    publication_error = None
+    if root is None:
+        legacy_base = evidence_root()
+        try:
+            v3_base = v3_published_root()
+        except _Malformed as error:
+            v3_base = Path(__file__).resolve().parents[2].joinpath(*PARITY_V3_PUBLISHED_RELATIVE, "generations", "unpublished")
+            publication_error = str(error)
+        models = set(_discover_models(legacy_base)) | set(_discover_models(v3_base))
+        verdicts = {}
+        for model_id in sorted(models):
+            # Versioned V3 publication overrides only same-model evidence; legacy files remain
+            # immutable and directly reproducible via evaluate_all(root=evidence_root()).
+            base = v3_base if _artifact_paths(v3_base, model_id, "dress") else legacy_base
+            verdicts[model_id] = evaluate_model(model_id, root=base, standard=standard).to_dict()
+    else:
+        base = Path(root)
+        verdicts = {model_id: evaluate_model(model_id, root=base, standard=standard).to_dict()
+                    for model_id in _discover_models(base)}
     models = sorted(verdicts)
     standards: dict[str, list[str]] = {}
     for model_id in models:
@@ -2053,11 +2845,11 @@ def evaluate_all_uncached(*, root: Path | None = None,
     # label unless it sorts before the current first model.
     label = next((verdicts[model_id]["applied_standard"] for model_id in models
                   if verdicts[model_id]["status"] != NOT_RUN), STANDARD_RELATIVE_V1)
-    return {
+    result = {
         "standard": label,
         "standards": {key: standards[key] for key in applied},
         "requested_standard": standard,
-        "advisory_standards": sorted(set(STANDARDS) - set(applied)) if applied else [],
+        "advisory_standards": ([STANDARD_ABS_REL_V2] if STANDARD_ABS_REL_V2 not in applied else []),
         "passed_models": sorted(model_id for model_id, verdict in verdicts.items() if verdict["passed"]),
         "models": verdicts,
         "note": ("`passed` is True only when every mandatory dimension was measured and no mandatory "
@@ -2067,3 +2859,6 @@ def evaluate_all_uncached(*, root: Path | None = None,
                  "sorted order with a verdict -- and `standards` groups every model under the "
                  "standard its own artifacts declared."),
     }
+    if publication_error:
+        result["publication_error"] = publication_error
+    return result

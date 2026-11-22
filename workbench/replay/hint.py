@@ -32,7 +32,76 @@ from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
+from collections.abc import Iterator, Sequence
 from typing import Any
+
+class _LazyRecord(dict):
+    def __init__(self, values: dict[str, Any], load_image: Any):
+        super().__init__(values)
+        self._load_image = load_image
+
+    def __getitem__(self, key: str) -> Any:
+        value = super().__getitem__(key)
+        return self._load_image(value) if key.endswith("_img_data") else value
+
+
+class _LazyRecords(Sequence):
+    def __init__(self, records: list[_LazyRecord]):
+        self._records = records
+
+    def __len__(self) -> int:
+        return len(self._records)
+
+    def __getitem__(self, index: int | slice) -> Any:
+        return self._records[index]
+
+    def __iter__(self) -> Iterator[_LazyRecord]:
+        return iter(self._records)
+
+
+def _lazy_category_dataset(datasets: Any, root: str, transform: Any, category: str) -> Any:
+    """Build pinned FashionIQ records in source order while decoding images only on access."""
+    dataset = object.__new__(datasets.FashionIQ)
+    dataset.path = root
+    dataset.image_dir = root + "resized_image"
+    dataset.split_dir = root + "image_splits"
+    dataset.caption_dir = root + "captions"
+    dataset.transform = transform
+
+    with open(Path(dataset.split_dir) / f"split.{category}.val.json", encoding="utf-8") as stream:
+        images = json.load(stream)
+    with open(Path(dataset.caption_dir) / f"cap.{category}.val.json", encoding="utf-8") as stream:
+        annotations = json.load(stream)
+    with open(Path(dataset.caption_dir) / f"correction_dict_{category}.json", encoding="utf-8") as stream:
+        corrections = json.load(stream)
+
+    queries: list[_LazyRecord] = []
+    target_ids: list[int] = []
+    for annotation in annotations:
+        source_id = images.index(annotation["candidate"])
+        target_id = images.index(annotation["target"])
+        record = _LazyRecord({
+            "source_img_id": source_id,
+            "source_img_data": f"{category}_{annotation['candidate']}",
+            "target_img_id": target_id,
+            "target_img_data": f"{category}_{annotation['target']}",
+            "mod": {"str": dataset.concat_text(annotation["captions"], corrections)},
+            "captions": annotation["captions"],
+        }, dataset.get_test_img)
+        queries.append(record)
+        if source_id not in target_ids:
+            target_ids.append(source_id)
+        if target_id not in target_ids:
+            target_ids.append(target_id)
+
+    targets = [_LazyRecord({
+        "target_img_id": image_id,
+        "target_img_data": f"{category}_{images[image_id]}",
+    }, dataset.get_test_img) for image_id in target_ids]
+    result = SimpleNamespace()
+    setattr(result, f"test_queries_{category}", _LazyRecords(queries))
+    setattr(result, f"test_targets_{category}", _LazyRecords(targets))
+    return result
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
@@ -189,8 +258,8 @@ def evaluate_categories(checkpoint_root: Path, dataset_root: Path, source_root: 
     results: list[ReplayResult] = []
     with isolated_cache_root(dataset_root) as cache_root:
         root = str(cache_root).rstrip("/") + "/"
-        dataset = datasets.FashionIQ(path=root, transform=transform)
         for category in categories:
+            dataset = _lazy_category_dataset(datasets, root, transform, category)
             recalls = dict(test_module.test(params, model, dataset, category, txt_processors))
             results.append(ReplayResult(
                 model_id="hint",
@@ -218,6 +287,7 @@ def evaluate_categories(checkpoint_root: Path, dataset_root: Path, source_root: 
                     },
                 },
             ))
+            del dataset, recalls
     return results, macro_aggregate(results)
 
 

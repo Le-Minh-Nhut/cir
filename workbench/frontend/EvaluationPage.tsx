@@ -12,7 +12,7 @@ import {
 import { fmtDateStamp, fmtDenominator, fmtFractionPercent, fmtGap, fmtInt, fmtNdcg, fmtPercentValue, fmtPp, fmtRecall, shortId } from "./format";
 import type { CompositionRun } from "./types";
 import type { NativeMeasurement } from "./data";
-import type { WarningLabel } from "./gate";
+import type { ParityCheck, WarningLabel } from "./gate";
 import { warningLabels } from "./gate";
 import { derivedLineage, nativeConflictChips, nativeRepeatLabel, nativeVarianceSummary, protocolHasSubsets, webDeferralNotice } from "./scope";
 
@@ -49,6 +49,45 @@ function subsetRows(runs: CompositionRun[], subset: string): CompositionRun[] {
  *  checks that did not — with declared vs measured, because "failed" without the numbers is
  *  unarguable and unfixable.
  */
+
+function parityValue(value: unknown): string {
+  if (typeof value !== "object" || value === null) return String(value);
+  return JSON.stringify(value);
+}
+
+function parityScopeDetails(checks: ParityCheck[]) {
+  return checks.flatMap((check) => {
+    const declared = typeof check.declared === "object" && check.declared !== null
+      ? check.declared as Record<string, unknown> : {};
+    const measured = typeof check.measured === "object" && check.measured !== null
+      ? check.measured as Record<string, unknown> : {};
+    if (!("coverage" in declared || "coverage_scope" in measured ||
+          "batch_policy" in measured)) return [];
+    const declaredScope = declared.coverage === "full" || declared.coverage === "sample"
+      ? String(declared.coverage) : "unknown";
+    const measuredScope = measured.coverage_scope === "full" || measured.coverage_scope === "sample"
+      ? String(measured.coverage_scope) : "unknown";
+    const shape = Array.isArray(measured.tensor_shape) ? measured.tensor_shape.join(" × ") : "not recorded";
+    const dtype = typeof measured.dtype === "string" ? measured.dtype : "not recorded";
+    const digest = typeof measured.ordered_ids_sha256 === "string" ? measured.ordered_ids_sha256 : "";
+    const policy = typeof measured.batch_policy === "object" && measured.batch_policy !== null
+      ? JSON.stringify(measured.batch_policy) : "not recorded";
+    return [{
+      key: `${check.category ?? "unknown"}-${String(measured.control ?? "unknown")}-${check.name}-${check.check_type ?? check.dimension}`,
+      category: check.category ?? "not recorded",
+      control: String(measured.control ?? "not recorded"),
+      name: check.name,
+      checkType: check.check_type ?? check.dimension,
+      declaredScope,
+      declaredPopulation: declared.population_count ?? "not recorded",
+      measuredScope,
+      measuredPopulation: measured.population_count ?? "not recorded",
+      sampleCount: measured.sample_count ?? "not recorded",
+      shape, dtype, digest, policy,
+    }];
+  });
+}
+
 function ParityGateCard({ data }: { data: WorkbenchData }) {
   const region = data.parityGate.region;
   if (region.status === "error") {
@@ -63,14 +102,16 @@ function ParityGateCard({ data }: { data: WorkbenchData }) {
   }
   const gate = region.data;
   const models = Object.values(gate.models ?? {});
-  const failed = models.filter((model) => !model.passed);
+  const failed = models.filter((model) => model.status === "PARITY_MANDATORY_SUBCHECK_FAILED");
+  const missing = models.filter((model) => ["PARITY_NOT_RUN", "PARITY_EVIDENCE_MISSING", "PARITY_INCOMPLETE"].includes(model.status));
+  const malformed = models.filter((model) => model.status === "PARITY_EVIDENCE_MALFORMED");
   return (
     <Card
       title="G1/G2 — cổng chẵn lẻ (từ artifact)"
       testId="parity-gate"
       subtitle={`Chuẩn ${gate.standard} · tính từ artifact đo, không đọc từ văn bản`}
       actions={(
-        <Badge tone={gate.passed_models.length ? "ok" : "bad"} testId="parity-gate-verdict">
+        <Badge tone={gate.passed_models.length ? "ok" : failed.length ? "bad" : "warn"} testId="parity-gate-verdict">
           {gate.passed_models.length
             ? `PASS: ${gate.passed_models.join(", ")}`
             : `KHÔNG mô hình nào PASS (0/${models.length})`}
@@ -78,9 +119,10 @@ function ParityGateCard({ data }: { data: WorkbenchData }) {
       )}
     >
       {/* The empty list is the answer, said out loud, so nobody reads it as "not loaded". */}
-      <p className="pipeline-notice" data-testid="parity-gate-summary">
+      <p className="pipeline-notice" data-testid="parity-gate-summary"
+         data-failed-count={failed.length} data-missing-count={missing.length} data-malformed-count={malformed.length}>
         {gate.passed_models.length === 0
-          ? <>Không mô hình nào đạt: {failed.length}/{models.length} mô hình có subcheck bắt buộc FAIL. Đây là kết luận từ artifact, không phải lỗi tải.</>
+          ? <>{failed.length} mô hình có subcheck bắt buộc FAIL; {missing.length} mô hình thiếu bằng chứng; {malformed.length} mô hình có artifact sai định dạng.</>
           : <>{gate.passed_models.length}/{models.length} mô hình đạt mọi subcheck bắt buộc.</>}
       </p>
       <div className="table-wrap">
@@ -98,14 +140,13 @@ function ParityGateCard({ data }: { data: WorkbenchData }) {
             {models.map((model) => (
               <tr key={model.model_id} data-testid={`parity-row-${model.model_id}`} data-passed={model.passed}>
                 <th scope="row">{model.model_id}</th>
-                <td><Badge tone={model.passed ? "ok" : "bad"}>{model.status}</Badge></td>
+                <td><Badge tone={model.passed ? "ok" : model.status === "PARITY_MANDATORY_SUBCHECK_FAILED" ? "bad" : "warn"}>{model.status}</Badge></td>
                 <td className="num">
                   {model.failure_count === 0 ? "0" : <Detail summary={`${model.failure_count} subcheck`} testId={`parity-failures-${model.model_id}`}>
                     <ul style={{ margin: 0, paddingLeft: 18 }}>
                       {model.failures.map((failure) => (
                         <li key={failure.name}>
-                          <code>{failure.name}</code> ({failure.gate}, {failure.dimension}): khai báo{" "}
-                          <b>{String(failure.declared)}</b>, đo <b>{String(typeof failure.measured === "number" ? failure.measured.toPrecision(6) : failure.measured)}</b>
+                          <code>{failure.name}</code> ({failure.category ?? "category not recorded"}, {failure.check_type ?? failure.dimension}, {failure.gate}): declared <b>{parityValue(failure.declared)}</b>, measured <b>{parityValue(failure.measured)}</b>
                         </li>
                       ))}
                     </ul>
@@ -113,11 +154,26 @@ function ParityGateCard({ data }: { data: WorkbenchData }) {
                 </td>
                 <td>
                   <span className="cell-sub">
-                    {Object.entries(model.dimensions ?? {}).map(([dimension, ok]) => (
-                      <span key={dimension} className={ok ? "hint-ok" : "hint-bad"} style={{ marginRight: 8 }}>
-                        {dimension} {ok ? "✓" : "✗"}
-                      </span>
-                    ))}
+                    {Object.entries(model.dimensions ?? {}).map(([dimension, ok]) => {
+                      const uncertain = model.missing?.includes(dimension) ?? false;
+                      return <span key={dimension} className={uncertain ? "hint" : ok ? "hint-ok" : "hint-bad"} style={{ marginRight: 8 }}
+                                   data-testid={`parity-dimension-${model.model_id}-${dimension}`} data-state={uncertain ? "uncertain" : ok ? "pass" : "fail"}>
+                        {dimension} {uncertain ? "?" : ok ? "✓" : "✗"}
+                      </span>;
+                    })}
+                    {model.applied_standard && <span className="cell-sub" data-testid={`parity-applied-standard-${model.model_id}`}>{model.applied_standard}</span>}
+                    {model.requested_standard && model.requested_standard !== model.applied_standard &&
+                      <span className="cell-sub" data-testid={`parity-requested-standard-${model.model_id}`}>{model.requested_standard}</span>}
+                    {(model.categories ?? []).map((category) => {
+                      const categoryCoverage = model.missing_by_category?.[category];
+                      const missingDimensions = categoryCoverage ?? [];
+                      return <span key={category} className="cell-sub" data-testid={`parity-category-${model.model_id}-${category}`} data-state={categoryCoverage === undefined ? "unknown" : missingDimensions.length ? "missing" : "recorded-no-missing"}>{category}: {categoryCoverage === undefined ? "coverage not recorded" : missingDimensions.length ? `missing ${missingDimensions.join(", ")}` : "no missing dimensions recorded"}</span>;
+                    })}
+                    {parityScopeDetails(model.checks ?? []).map((detail) =>
+                      <span key={detail.key} className="cell-sub" data-testid={`parity-scope-${model.model_id}`} data-category={detail.category} data-control={detail.control} data-check-type={detail.checkType} data-declared-scope={detail.declaredScope} data-measured-scope={detail.measuredScope} data-declared-population={String(detail.declaredPopulation)} data-measured-population={String(detail.measuredPopulation)} data-sample-count={String(detail.sampleCount)}>
+                        <span>{detail.category} · {detail.control} · {detail.checkType}</span>: declared {detail.declaredScope} N={String(detail.declaredPopulation)}; measured {detail.measuredScope}{detail.measuredScope === "sample" ? ` ${String(detail.sampleCount)}/${String(detail.measuredPopulation)}` : ` N=${String(detail.measuredPopulation)}`}; tensor {detail.shape} {detail.dtype}; batch policy {detail.policy}
+                        {detail.digest && <code title={detail.digest} data-testid={`parity-digest-${model.model_id}`}>{detail.digest.slice(0, 12)}…</code>}
+                      </span>)}
                   </span>
                 </td>
               </tr>

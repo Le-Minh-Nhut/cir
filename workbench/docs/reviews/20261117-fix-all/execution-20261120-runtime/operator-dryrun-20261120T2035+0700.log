@@ -1,0 +1,7 @@
+actual command: flock -x /tmp/cir-fix-all-20261120-cpu.lock systemd-run --user --scope -p MemoryMax=12G -p MemorySwapMax=0 --setenv=OMP_NUM_THREADS=1 --setenv=OPENBLAS_NUM_THREADS=1 --setenv=MKL_NUM_THREADS=1 --setenv=NUMEXPR_NUM_THREADS=1 "$PWD/workbench/envs/ctl312h/bin/python" -m pytest -q workbench/tests/test_standalone_operator_commands.py::test_manage_environment_dry_run_authorized
+pytest ran serial (`-q`); no `-n10` requested for this narrow single-test verification.
+Running as unit: run-r827b2d873c2e466a9efc11e69617a224.scope; invocation ID: 06f2e1e0b9ae4332aed920f6c387d77e
+.                                                                        [100%]
+1 passed in 0.39s
+
+EXIT_CODE=0

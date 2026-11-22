@@ -134,13 +134,615 @@ def _adapter(components: dict | None = None) -> dict:
     return document
 
 def _write(root: Path, native: dict, adapter: dict) -> Path:
-    for name, body in ((f"g1_g2.testmodel.{CATEGORY}.native.json", native),
-                       (f"g1_g2.testmodel.{CATEGORY}.adapter.json", adapter)):
+    category = native["category"]
+    model_id = native["model_id"]
+    for name, body in ((f"g1_g2.{model_id}.{category}.native.json", native),
+                       (f"g1_g2.{model_id}.{category}.adapter.json", adapter)):
         (root / name).write_text(json.dumps(body), encoding="utf-8")
     return root
 
 def _evaluate(root: Path, **kwargs) -> gate.ParityVerdict:
     return gate.evaluate_model("testmodel", root=root, categories=(CATEGORY,), **kwargs)
+
+
+
+def _v3_pair(tmp_path: Path, t4, *, delta: float = 1e-8, category: str = CATEGORY,
+             model_id: str = "testmodel", mismatch_mask: bool = False,
+             batch_invariant: bool = False, repeat_execution_mismatch: bool = False,
+             batch_sensitive: bool = False, non_target_inversion: bool = False) -> Path:
+    import hashlib
+    import datetime
+    native, adapter = _native(), _adapter()
+    native["category"] = adapter["category"] = category
+    native["model_id"] = adapter["model_id"] = model_id
+    native["standard"] = adapter["standard"] = gate.STANDARD_ABS_REL_V3
+    checkpoint_sha = hashlib.sha256(b"fixture checkpoint bytes").hexdigest()
+    query_ids, gallery_ids = [f"q{i}" for i in range(10)], [f"g{i}" for i in range(20)]
+    scoring_labels = {"query_targets": [[f"q{i}", f"g{i}"] for i in range(10)],
+                      "reference_exclusions": [[f"q{i}", []] for i in range(10)]}
+    labels_sha = hashlib.sha256(json.dumps(scoring_labels, ensure_ascii=False,
+                                          separators=(",", ":")).encode("utf-8")).hexdigest()
+    identity = {"checkpoint": checkpoint_sha, "configuration": "cfg", "environment": "env",
+                "protocol": "fashioniq_val_split", "category": category,
+                "cohort_id": "fashioniq-val", "precision": "float32", "seed": 1,
+                "query_order_sha256": hashlib.sha256(json.dumps(query_ids, separators=(",", ":")).encode()).hexdigest(),
+                "gallery_order_sha256": hashlib.sha256(json.dumps(gallery_ids, separators=(",", ":")).encode()).hexdigest(),
+                "reference_exclusions_sha256": labels_sha, "query_count": 10, "gallery_count": 20}
+    for artifact in (native, adapter):
+        artifact["checkpoint_sha256"] = checkpoint_sha
+        artifact["protocol"] = identity["protocol"]
+        artifact["query_order_sha256"] = identity["query_order_sha256"]
+        artifact["gallery_order_sha256"] = identity["gallery_order_sha256"]
+        artifact["identity"] = identity
+    roles = ("native_repeat_1", "native_repeat_2", "adapter_repeat_1",
+             "adapter_repeat_2", "native_adapter_native", "native_adapter_adapter",
+             "native_batch_1", "native_batch_n", "adapter_batch_1", "adapter_batch_n")
+    runs = {}
+    for role in roles:
+        full = role.startswith("native_adapter_")
+        run_identity = dict(identity)
+        if not full:
+            cohort = ("native-repeat" if role.startswith("native_repeat") else
+                      "adapter-repeat" if role.startswith("adapter_repeat") else
+                      "native-batch" if role.startswith("native_batch") else "adapter-batch")
+            subset_exclusions = hashlib.sha256(f"subset-exclusions:{cohort}".encode()).hexdigest()
+            if mismatch_mask and role == "native_repeat_2":
+                subset_exclusions = "f" * 64
+            run_identity.update({"cohort_id": cohort, "query_count": 1, "gallery_count": 1,
+                                 "query_order_sha256": "d" * 64, "gallery_order_sha256": "e" * 64,
+                                 "reference_exclusions_sha256": subset_exclusions})
+        runs[role] = {"run_id": f"run-{role}", "source_id": f"capture-{role}",
+                      "identity": run_identity, "execution": {
+                          "partition_id": f"{'full' if full else 'diagnostic'}:{model_id}:{category}",
+                          "query_batch_size": 1 if role.endswith("batch_1") else 8,
+                          "gallery_batch_size": 1 if role.endswith("batch_1") else 8,
+                          "query_partition_sha256": "a" * 64 if full else "d" * 64,
+                          "gallery_partition_sha256": "b" * 64 if full else "e" * 64}}
+        if repeat_execution_mismatch and role == "native_repeat_2":
+            runs[role]["execution"]["query_batch_size"] = 7
+    pairs = {
+        "native_repeat": ("native_repeat_1", "native_repeat_2", "native", "forward_parity"),
+        "adapter_repeat": ("adapter_repeat_1", "adapter_repeat_2", "adapter", "forward_parity"),
+        "native_adapter": ("native_adapter_native", "native_adapter_adapter", "native", "forward_parity"),
+        "native_batch_1_vs_n": ("native_batch_1", "native_batch_n", "native", "batch_parity"),
+        "adapter_batch_1_vs_n": ("adapter_batch_1", "adapter_batch_n", "adapter", "batch_parity"),
+    }
+    controls, scopes = {}, {}
+    reference = np.array([0.0, 0.5, -0.5, 1.0], dtype=np.float32)
+    actual = reference + np.float32(delta)
+    receipts = {role: {"run_id": runs[role]["run_id"], "source_id": runs[role]["source_id"],
+                       "identity": runs[role]["identity"],
+                       "side": "adapter" if role.startswith("adapter_") or role == "native_adapter_adapter" else "native",
+                       "execution": runs[role]["execution"], "arrays": {}} for role in roles}
+    for name, (ref_role, act_role, ref_side, dimension) in pairs.items():
+        atol_key, rtol_key = (("batch_max_abs", "batch_max_rel") if dimension == "batch_parity"
+                              else ("forward_max_abs", "forward_max_rel"))
+        tolerance = {"atol": TOLERANCES[atol_key], "rtol": TOLERANCES[rtol_key]}
+        scope_plans, scope_records = {}, {}
+        for tensor in ("query", "gallery"):
+            population_count = 10 if tensor == "query" else 20
+            full = name == "native_adapter"
+            count = population_count if full else 1
+            ordered_ids = runs[ref_role]["identity"]["query_order_sha256" if tensor == "query" else "gallery_order_sha256"]
+            scope_plans[tensor] = {"coverage": "full" if full else "sample",
+                                   "population_count": population_count,
+                                   "sample_count": None if full else count,
+                                   "tensor_shape": [count, int(reference.size)],
+                                   "component_shape": [count * int(reference.size)],
+                                   "ordered_ids_sha256": ordered_ids,
+                                   "cohort_id": runs[ref_role]["identity"]["cohort_id"]}
+            ref_array = np.tile(reference, count)
+            actual_array = np.tile(actual, count)
+            if batch_sensitive and name == "native_batch_1_vs_n" and tensor == "query":
+                actual_array[0] = 1.0
+            record = t4.component_scope(f"{name}.{tensor}", dimension, actual_array, ref_array,
+                                        atol=tolerance["atol"], rtol=tolerance["rtol"])
+            record.update({"reference_run_id": runs[ref_role]["run_id"],
+                           "actual_run_id": runs[act_role]["run_id"], "dtype": "float32"})
+            scope_records[tensor] = record
+            receipts[ref_role]["arrays"][f"{name}.{tensor}"] = {
+                "dtype": "float32", "shape": [count, int(reference.size)],
+                "component_sha256": record["sha256"]["reference"], "ordered_ids_sha256": ordered_ids}
+            receipts[act_role]["arrays"][f"{name}.{tensor}"] = {
+                "dtype": "float32", "shape": [count, int(actual.size)],
+                "component_sha256": record["sha256"]["actual"], "ordered_ids_sha256": ordered_ids}
+        controls[name] = {"reference_run_id": runs[ref_role]["run_id"],
+                          "actual_run_id": runs[act_role]["run_id"], "reference_side": ref_side,
+                          "dimension": dimension, "dtype": "float32", "tolerance": tolerance,
+                          "scopes": scope_plans}
+        scopes[name] = scope_records
+    native["native_metrics_parity_detail"] = _metrics_detail({"r1": 4, "r10": 7, "r50": 10})
+    adapter["native_metrics_parity_detail"] = _metrics_detail({"r1": 4, "r10": 7, "r50": 10})
+    proof_name = f"g1_g2.{model_id}.{category}.native.score-ranks.jsonl"
+    rows = [{"schema": "cir.score-ranks/v1", "identity": identity,
+             "query_ids": query_ids, "gallery_ids": gallery_ids,
+             "query_targets": scoring_labels["query_targets"],
+             "reference_exclusions": scoring_labels["reference_exclusions"]}]
+    for index, rank in enumerate([1] * 4 + [2] * 3 + [11] * 2 + [20]):
+        target = index
+        order = [candidate for candidate in range(20) if candidate != target]
+        order.insert(rank - 1, target)
+        scores = [0.0] * 20
+        for position, candidate in enumerate(order):
+            scores[candidate] = float(20 - position)
+        native_scores, adapter_scores = list(scores), list(scores)
+        native_order, adapter_order = list(order), list(order)
+        if non_target_inversion and index == 0:
+            native_scores = [1.0, 2e-6, 0.0] + [float(2 - candidate) for candidate in range(3, 20)]
+            adapter_scores = [1.0, 1e-6, 1e-6] + [float(2 - candidate) for candidate in range(3, 20)]
+            native_order = list(range(20))
+            adapter_order = [0, 2, 1, *range(3, 20)]
+        rows.append({"query_id": query_ids[index], "target_id": gallery_ids[target],
+                     "target_position": target, "native_scores": native_scores,
+                     "adapter_scores": adapter_scores, "native_order": native_order,
+                     "adapter_order": adapter_order, "excluded_gallery_ids": []})
+    proof_path = tmp_path / proof_name
+    proof_path.write_text("".join(json.dumps(row, separators=(",", ":")) + "\n" for row in rows), encoding="utf-8")
+    scoring_run_receipts = {}
+    for role, side in (("native_adapter_native", "native"), ("native_adapter_adapter", "adapter")):
+        score_rows = [{"query_id": row["query_id"], "scores": row[f"{side}_scores"],
+                       "order": row[f"{side}_order"]} for row in rows[1:]]
+        score_digest = hashlib.sha256("".join(json.dumps(row, ensure_ascii=False,
+            separators=(",", ":")) + "\n" for row in score_rows).encode("utf-8")).hexdigest()
+        scoring_run_receipts[role] = {"run_id": runs[role]["run_id"], "source_id": runs[role]["source_id"],
+            "side": side, "identity": runs[role]["identity"], "score_order_sha256": score_digest}
+    proof_sha = hashlib.sha256(proof_path.read_bytes()).hexdigest()
+    plan = {"standard": gate.STANDARD_ABS_REL_V3, "model_id": model_id, "category": category,
+            "scoring_proof_path": proof_name, "scoring_labels": scoring_labels, "identity": identity,
+            "supported_batch_policy": {"supported": True, "batch_sizes": [1, 8],
+                                       "batch_invariant": batch_invariant},
+            "population_scope": {"coverage": "full", "query_count": 10, "gallery_count": 20},
+            "runs": runs, "controls": controls}
+    plan_path = tmp_path / f"g1_g2.{model_id}.{category}.v3-plan.json"
+    plan_path.write_text(json.dumps(plan), encoding="utf-8")
+    plan_digest = hashlib.sha256(plan_path.read_bytes()).hexdigest()
+    started_at = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    captured_at = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    for receipt in receipts.values():
+        receipt["plan_sha256"] = plan_digest
+        receipt["started_at"] = started_at
+        receipt["captured_at"] = captured_at
+    block = {"standard": gate.STANDARD_ABS_REL_V3, "scoring_proof_path": proof_name,
+             "scoring_proof_sha256": proof_sha, "plan_path": plan_path.name,
+             "plan_sha256": plan_digest, "scopes": scopes, "receipts": receipts,
+             "scoring_run_receipts": scoring_run_receipts}
+    native["parity_v3"] = block
+    _write(tmp_path, native, adapter)
+    return tmp_path
+
+def test_v3_applies_preregistered_combined_rule_and_preserves_identity_checks(tmp_path: Path, t4) -> None:
+    _v3_pair(tmp_path, t4, delta=1e-8)
+    verdict = _evaluate(tmp_path, standard=gate.STANDARD_ABS_REL_V3)
+    assert verdict.applied_standard == gate.STANDARD_ABS_REL_V3, verdict.detail
+    assert verdict.status == gate.PASS, verdict.detail
+    component_checks = [check for check in verdict.checks if ".components." in check.name]
+    assert all(check.standard == gate.STANDARD_ABS_REL_V3 for check in component_checks)
+    assert all(check.to_dict()["check_type"] == check.dimension for check in component_checks)
+    assert list(verdict.categories) == [CATEGORY]
+def test_v3_raw_rows_derive_tied_order_and_hit_diagnostics(tmp_path: Path, t4) -> None:
+    _v3_pair(tmp_path, t4)
+    verdict = _evaluate(tmp_path, standard=gate.STANDARD_ABS_REL_V3)
+    assert verdict.status == gate.PASS, verdict.detail
+    ranks = next(check for check in verdict.checks if check.name.endswith("ranks.raw_rows"))
+    assert ranks.measured["sorted_rows_differ"] == 0
+    assert ranks.measured["per_query_target_hit_flips"] == 0
+    proof = tmp_path / "g1_g2.testmodel.shirt.native.score-ranks.jsonl"
+    proof.unlink()
+    missing = _evaluate(tmp_path, standard=gate.STANDARD_ABS_REL_V3)
+    assert missing.status == gate.MALFORMED
+    assert "v3 scoring proof is unreadable" in missing.detail
+
+
+
+def test_v3_rejects_non_target_inversion_outside_tie_epsilon(tmp_path: Path, t4) -> None:
+    _v3_pair(tmp_path, t4, non_target_inversion=True)
+    verdict = _evaluate(tmp_path, standard=gate.STANDARD_ABS_REL_V3)
+    assert verdict.status == gate.MANDATORY_FAILED, verdict.detail
+    ranks = next(check for check in verdict.checks if check.name.endswith("ranks.raw_rows"))
+    assert ranks.ok is False
+    assert ranks.measured["score_max_abs"] == pytest.approx(1e-6)
+    assert ranks.measured["target_rank_differences"] == 0
+    assert ranks.measured["inverted_pair_gap_violation_queries"] == 1
+
+def test_v3_scoring_rows_must_match_preregistered_targets(tmp_path: Path, t4) -> None:
+    import hashlib
+    _v3_pair(tmp_path, t4)
+    proof = tmp_path / "g1_g2.testmodel.shirt.native.score-ranks.jsonl"
+    lines = proof.read_text(encoding="utf-8").splitlines()
+    row = json.loads(lines[1])
+    row["target_id"] = "g19"
+    lines[1] = json.dumps(row, separators=(",", ":"))
+    proof.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    artifact_path = tmp_path / "g1_g2.testmodel.shirt.native.json"
+    artifact = json.loads(artifact_path.read_text(encoding="utf-8"))
+    artifact["parity_v3"]["scoring_proof_sha256"] = hashlib.sha256(proof.read_bytes()).hexdigest()
+    artifact_path.write_text(json.dumps(artifact), encoding="utf-8")
+    verdict = _evaluate(tmp_path, standard=gate.STANDARD_ABS_REL_V3)
+    assert verdict.status == gate.MALFORMED
+    assert "target differs from preregistered label" in verdict.detail
+
+def test_v3_scoring_proof_order_must_follow_scores(tmp_path: Path, t4) -> None:
+    import hashlib
+    _v3_pair(tmp_path, t4)
+    proof = tmp_path / "g1_g2.testmodel.shirt.native.score-ranks.jsonl"
+    lines = proof.read_text(encoding="utf-8").splitlines()
+    row = json.loads(lines[1])
+    row["native_order"][0], row["native_order"][1] = row["native_order"][1], row["native_order"][0]
+    lines[1] = json.dumps(row, separators=(",", ":"))
+    proof.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    artifact_path = tmp_path / "g1_g2.testmodel.shirt.native.json"
+    artifact = json.loads(artifact_path.read_text(encoding="utf-8"))
+    artifact["parity_v3"]["scoring_proof_sha256"] = hashlib.sha256(proof.read_bytes()).hexdigest()
+    artifact_path.write_text(json.dumps(artifact), encoding="utf-8")
+    verdict = _evaluate(tmp_path, standard=gate.STANDARD_ABS_REL_V3)
+    assert verdict.status == gate.MALFORMED
+    assert "order contradicts" in verdict.detail
+
+def test_fp32_one_minus_score_order_allows_rounded_key_tie() -> None:
+    scores = [0.10000000149011612, 0.10000000894069672]
+    assert gate._fp32(1.0 - gate._fp32(scores[0])) == gate._fp32(1.0 - gate._fp32(scores[1]))
+    assert gate._score_order_matches(scores, [0, 1], "fp32_one_minus_score_ascending")
+    assert not gate._score_order_matches(scores, [0, 1], "fp32_descending_score")
+def test_v3_equal_hit_totals_report_offsetting_query_flips(tmp_path: Path, t4) -> None:
+    import hashlib
+    proof = tmp_path / "g1_g2.testmodel.shirt.native.score-ranks.jsonl"
+    _v3_pair(tmp_path, t4)
+    lines = proof.read_text(encoding="utf-8").splitlines()
+    for row_index, adapter_rank in ((1, 2), (5, 1)):
+        row = json.loads(lines[row_index])
+        target = row["target_position"]
+        order = [candidate for candidate in range(20) if candidate != target]
+        order.insert(adapter_rank - 1, target)
+        scores = [0.0] * 20
+        for position, candidate in enumerate(order):
+            scores[candidate] = float(20 - position)
+        row["adapter_scores"], row["adapter_order"] = scores, order
+        lines[row_index] = json.dumps(row, separators=(",", ":"))
+    proof.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    artifact_path = tmp_path / "g1_g2.testmodel.shirt.native.json"
+    artifact = json.loads(artifact_path.read_text(encoding="utf-8"))
+    artifact["parity_v3"]["scoring_proof_sha256"] = hashlib.sha256(proof.read_bytes()).hexdigest()
+    score_rows = [{"query_id": json.loads(line)["query_id"],
+                   "scores": json.loads(line)["adapter_scores"],
+                   "order": json.loads(line)["adapter_order"]} for line in lines[1:]]
+    artifact["parity_v3"]["scoring_run_receipts"]["native_adapter_adapter"]["score_order_sha256"] = hashlib.sha256(
+        "".join(json.dumps(row, ensure_ascii=False, separators=(",", ":")) + "\n"
+                for row in score_rows).encode("utf-8")).hexdigest()
+    artifact_path.write_text(json.dumps(artifact), encoding="utf-8")
+    verdict = _evaluate(tmp_path, standard=gate.STANDARD_ABS_REL_V3)
+    assert verdict.status in (gate.PASS, gate.MANDATORY_FAILED), verdict.detail
+    ranks = next(check for check in verdict.checks if check.name.endswith("ranks.raw_rows"))
+    assert ranks.measured["native_hits"] == ranks.measured["adapter_hits"]
+    assert ranks.measured["aggregate_hit_counts_equal"] is True
+    assert ranks.measured["per_query_target_hit_flips"] == 2
+    assert verdict.status == gate.MANDATORY_FAILED, verdict.detail
+
+def test_v3_raw_score_proof_rejects_corrupt_bytes_and_role_digest(tmp_path: Path, t4) -> None:
+    import hashlib
+    _v3_pair(tmp_path, t4)
+    proof = tmp_path / "g1_g2.testmodel.shirt.native.score-ranks.jsonl"
+    proof.write_bytes(proof.read_bytes() + b"\n")
+    verdict = _evaluate(tmp_path, standard=gate.STANDARD_ABS_REL_V3)
+    assert verdict.status == gate.MALFORMED
+    assert "scoring_proof_sha256" in verdict.detail
+
+    _v3_pair(tmp_path, t4)
+    artifact_path = tmp_path / "g1_g2.testmodel.shirt.native.json"
+    artifact = json.loads(artifact_path.read_text(encoding="utf-8"))
+    artifact["parity_v3"]["scoring_run_receipts"]["native_adapter_adapter"]["score_order_sha256"] = "0" * 64
+    artifact_path.write_text(json.dumps(artifact), encoding="utf-8")
+    verdict = _evaluate(tmp_path, standard=gate.STANDARD_ABS_REL_V3)
+    assert verdict.status == gate.MALFORMED
+    assert "score/order digest differs" in verdict.detail
+
+def test_v3_inversion_gap_checks_all_pairs_without_changing_hit_policy() -> None:
+    scores = [5.0, 4.0, 3.0, 2.0]
+    assert gate._inverted_pairs_within_epsilon(scores, scores, [0, 1, 2, 3], [1, 0, 2, 3], 1.0)
+    assert not gate._inverted_pairs_within_epsilon(scores, scores, [0, 1, 2, 3], [1, 0, 2, 3], 0.5)
+    assert not gate._inverted_pairs_within_epsilon(
+        scores, scores, [0, 1, 2, 3], [0, 2, 1, 3], 0.5)
+
+
+def test_parity_api_selector_is_advisory_and_unknown_is_client_error(tmp_path: Path, monkeypatch) -> None:
+    from fastapi.testclient import TestClient
+    from workbench.backend import main
+
+    _write(tmp_path, _native(), _adapter())
+    monkeypatch.setattr(gate, "evidence_root", lambda: tmp_path)
+    monkeypatch.setattr(gate, "evaluate_all", lambda *, standard: {
+        "models": {"testmodel": _evaluate(tmp_path, standard=standard).to_dict()}})
+    client = TestClient(main.app)
+    response = client.get("/api/runs/parity-gate", params={"standard": gate.STANDARD_ABS_REL_V3})
+    assert response.status_code == 200, response.text
+    model = response.json()["models"]["testmodel"]
+    assert model["applied_standard"] == gate.STANDARD_RELATIVE_V1
+    assert model["requested_standard"] == gate.STANDARD_ABS_REL_V3
+    assert model["advisory"][0]["applied_instead"] == gate.STANDARD_RELATIVE_V1
+    rejected = client.get("/api/runs/parity-gate", params={"standard": "bogus"})
+    assert rejected.status_code == 400
+    assert rejected.json()["detail"]["error"] == "unknown_parity_standard"
+
+
+def test_v3_preview_violation_fails_but_clean_preview_stays_incomplete(tmp_path: Path, t4) -> None:
+    _v3_pair(tmp_path, t4)
+    native_path = tmp_path / f"g1_g2.testmodel.{CATEGORY}.native.json"
+    native = json.loads(native_path.read_text())
+    record = native["parity_v3"]["scopes"]["native_adapter"]["query"]
+    record["coverage"] = "chunked"
+    record["components_emitted"] = 1
+    record["indices"] = [0]
+    record["reference"] = [0.0]
+    record["actual"] = [1.0]
+    record["mismatch_count"] = 1
+    record["offenders"] = [{"index": 0, "reference": 0.0, "actual": 1.0}]
+    record["max_abs"] = 1.0
+    record["worst_normalized"] = 100000.0
+    import hashlib
+    native_path.write_text(json.dumps(native), encoding="utf-8")
+    verdict = _evaluate(tmp_path, standard=gate.STANDARD_ABS_REL_V3)
+    assert verdict.status == gate.MANDATORY_FAILED
+    check = next(item for item in verdict.checks if item.name.endswith("native_adapter.query"))
+    assert check.mandatory and not check.ok and not check.absence
+
+    _v3_pair(tmp_path, t4)
+    native = json.loads(native_path.read_text())
+    record = native["parity_v3"]["scopes"]["native_adapter"]["query"]
+    record.update(coverage="chunked", components_emitted=1, indices=[0],
+                  reference=record["reference"][:1], actual=record["actual"][:1],
+                  mismatch_count=0, offenders=[], max_abs=abs(record["actual"][0] - record["reference"][0]),
+                  worst_normalized=0.01)
+    native_path.write_text(json.dumps(native), encoding="utf-8")
+    clean_preview = _evaluate(tmp_path, standard=gate.STANDARD_ABS_REL_V3)
+    assert clean_preview.status == gate.INCOMPLETE
+    clean_check = next(item for item in clean_preview.checks if item.name.endswith("native_adapter.query"))
+    assert clean_check.absence and not clean_check.ok and not clean_check.mandatory
+def test_v3_rejects_receipt_without_real_capture_chronology(tmp_path: Path, t4) -> None:
+    _v3_pair(tmp_path, t4)
+    native_path = tmp_path / f"g1_g2.testmodel.{CATEGORY}.native.json"
+    native = json.loads(native_path.read_text())
+    native["parity_v3"]["receipts"]["native_repeat_1"]["captured_at"] = "2026-11-17T02:00:00"
+    native_path.write_text(json.dumps(native), encoding="utf-8")
+    verdict = _evaluate(tmp_path, standard=gate.STANDARD_ABS_REL_V3)
+    assert verdict.status == gate.MALFORMED
+    assert "timestamps must include a timezone" in verdict.detail
+
+
+def test_v3_batch_preview_never_passes_as_complete(tmp_path: Path, t4) -> None:
+    _v3_pair(tmp_path, t4)
+    native_path = tmp_path / f"g1_g2.testmodel.{CATEGORY}.native.json"
+    native = json.loads(native_path.read_text())
+    record = native["parity_v3"]["scopes"]["native_batch_1_vs_n"]["query"]
+    record.update(coverage="chunked", components_emitted=1, indices=[0],
+                  reference=[0.0], actual=[100.0], mismatch_count=1,
+                  offenders=[{"index": 0, "reference": 0.0, "actual": 100.0}],
+                  max_abs=100.0, worst_normalized=100000000.0)
+    native_path.write_text(json.dumps(native), encoding="utf-8")
+    verdict = _evaluate(tmp_path, standard=gate.STANDARD_ABS_REL_V3)
+    check = next(item for item in verdict.checks
+                 if item.name.endswith("native_batch_1_vs_n.query"))
+    assert check.measured["mismatch_count"] == 1
+    assert not check.absence and not check.ok and not check.mandatory
+    assert check.measured["coverage_scope"] == "sample"
+    coverage = next(item for item in verdict.checks
+                    if item.name.endswith("native_batch_1_vs_n.query.coverage"))
+    assert coverage.absence and not coverage.ok and coverage.mandatory
+
+def test_v3_predeclared_batch_invariance_fails_on_sensitivity(tmp_path: Path, t4) -> None:
+    _v3_pair(tmp_path, t4, batch_invariant=True, batch_sensitive=True)
+    verdict = _evaluate(tmp_path, standard=gate.STANDARD_ABS_REL_V3)
+    check = next(item for item in verdict.checks
+                 if item.dimension == "batch_parity"
+                 and item.name == f"{CATEGORY}.components.native_batch_1_vs_n.query")
+    assert check.mandatory and not check.ok and not check.absence
+def test_v3_repeat_controls_require_matched_execution_batch_sizes(tmp_path: Path, t4) -> None:
+    _v3_pair(tmp_path, t4, repeat_execution_mismatch=True)
+    verdict = _evaluate(tmp_path, standard=gate.STANDARD_ABS_REL_V3)
+    assert not verdict.passed
+    assert "repeated runs native_repeat_1/native_repeat_2 must use matched query/gallery batch sizes" in verdict.detail
+def test_v3_plan_change_invalidates_cached_verdict(tmp_path: Path, t4) -> None:
+    _v3_pair(tmp_path, t4, category="dress")
+    _v3_pair(tmp_path, t4, category="shirt")
+    _v3_pair(tmp_path, t4, category="toptee")
+    gate._EVALUATE_ALL_CACHE.clear()
+    first = gate.evaluate_all(root=tmp_path, standard=gate.STANDARD_ABS_REL_V3)
+    assert first["models"]["testmodel"]["status"] == gate.PASS, first["models"]["testmodel"]["detail"]
+    plan_path = tmp_path / "g1_g2.testmodel.dress.v3-plan.json"
+    plan = json.loads(plan_path.read_text())
+    plan["identity"]["protocol"] = "changed-protocol"
+    plan_path.write_text(json.dumps(plan), encoding="utf-8")
+    second = gate.evaluate_all(root=tmp_path, standard=gate.STANDARD_ABS_REL_V3)
+    assert second["models"]["testmodel"]["status"] == gate.MALFORMED
+    assert "plan_sha256" in second["models"]["testmodel"]["detail"]
+    plan_path.unlink()
+    third = gate.evaluate_all(root=tmp_path, standard=gate.STANDARD_ABS_REL_V3)
+    assert third["models"]["testmodel"]["status"] == gate.MALFORMED
+    assert "preregistered plan is unavailable" in third["models"]["testmodel"]["detail"]
+
+
+def test_v3_published_generations_retain_prior_models_and_api_selects_v3(tmp_path: Path, t4, monkeypatch) -> None:
+    from fastapi.testclient import TestClient
+    from workbench.backend import main
+    import importlib.util
+
+    source = Path(__file__).resolve().parents[1] / "docs" / "reviews" / "20261109-native15-composition-limn" / "scripts" / "t4_parity.py"
+    spec = importlib.util.spec_from_file_location("producer_t4_v3", source)
+    producer = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(producer)
+
+    def bundle(model_id: str, category: str):
+        evidence = tmp_path / model_id
+        evidence.mkdir(parents=True, exist_ok=True)
+        _v3_pair(evidence, t4, category=category, model_id=model_id)
+        plan = evidence / f"g1_g2.{model_id}.{category}.v3-plan.json"
+        plan_name = plan.name
+        payloads = {}
+        for side in ("native", "adapter"):
+            artifact = json.loads((evidence / f"g1_g2.{model_id}.{category}.{side}.json").read_text())
+            payloads[f"g1_g2.{model_id}.{category}.{side}.json"] = artifact
+        return payloads, {plan_name: plan}, {
+            f"g1_g2.{model_id}.{category}.native.score-ranks.jsonl": evidence / f"g1_g2.{model_id}.{category}.native.score-ranks.jsonl"}
+
+    def publish(generation: str, model_id: str):
+        artifacts, plans, proofs = {}, {}, {}
+        for category in ("dress", "shirt", "toptee"):
+            new_artifacts, new_plans, new_proofs = bundle(model_id, category)
+            artifacts.update(new_artifacts)
+            plans.update(new_plans)
+            proofs.update(new_proofs)
+        return producer.publish_v3_generation(tmp_path / "workbench/artifacts/parity/v3",
+                                              generation, artifacts, plan_paths=plans, proof_paths=proofs)
+
+    first = publish("run-001", "firstmodel")
+    first_bytes = {path.name: path.read_bytes() for path in first.glob("g1_g2.firstmodel.*.json")}
+    first_bytes.update({path.name: path.read_bytes() for path in first.glob("*.score-ranks.jsonl")})
+    second = publish("run-002", "secondmodel")
+    assert json.loads((second.parent.parent / "CURRENT.json").read_text())["generation"] == "run-002"
+    first_bytes.update({path.name: path.read_bytes() for path in first.glob("*.score-ranks.jsonl")})
+    assert gate.v3_published_root(tmp_path) == second
+    monkeypatch.setattr(gate, "evidence_root", lambda: tmp_path / "legacy")
+    published_root = gate.v3_published_root(tmp_path)
+    monkeypatch.setattr(gate, "v3_published_root", lambda: published_root)
+    response = TestClient(main.app).get("/api/runs/parity-gate", params={"standard": gate.STANDARD_ABS_REL_V3})
+    assert response.status_code == 200, response.text
+    models = response.json()["models"]
+    assert models["firstmodel"]["applied_standard"] == gate.STANDARD_ABS_REL_V3
+    assert models["secondmodel"]["applied_standard"] == gate.STANDARD_ABS_REL_V3
+    assert models["firstmodel"]["categories"] == ["dress", "shirt", "toptee"]
+
+
+def test_v3_publisher_rejects_partial_category_generation(tmp_path: Path, t4) -> None:
+    import importlib.util
+    source = Path(__file__).resolve().parents[1] / "docs" / "reviews" / "20261109-native15-composition-limn" / "scripts" / "t4_parity.py"
+    spec = importlib.util.spec_from_file_location("producer_t4_v3", source)
+    producer = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(producer)
+    with pytest.raises(ValueError, match="both sides and preregistration"):
+        producer.publish_v3_generation(tmp_path / "publication", "partial", {
+            "g1_g2.testmodel.dress.native.json": {"standard": gate.STANDARD_ABS_REL_V3}},
+            plan_paths={})
+
+
+def test_v3_refuses_missing_preregistration_or_control_evidence(tmp_path: Path, t4) -> None:
+    _v3_pair(tmp_path, t4)
+    path = tmp_path / f"g1_g2.testmodel.{CATEGORY}.native.json"
+    document = json.loads(path.read_text())
+    document["parity_v3"].pop("plan_sha256")
+    path.write_text(json.dumps(document), encoding="utf-8")
+    verdict = _evaluate(tmp_path)
+    assert verdict.status == gate.MALFORMED
+    assert "plan_sha256" in verdict.detail
+
+
+def test_v3_requested_for_legacy_artifact_remains_advisory(tmp_path: Path) -> None:
+    _write(tmp_path, _native(), _adapter())
+    verdict = _evaluate(tmp_path, standard=gate.STANDARD_ABS_REL_V3)
+    assert verdict.applied_standard == gate.STANDARD_RELATIVE_V1
+    assert verdict.advisory[0]["applies"] is False
+
+def test_v3_rejects_identity_population_not_matched_by_native_metrics(tmp_path: Path, t4) -> None:
+    _v3_pair(tmp_path, t4)
+    path = tmp_path / f"g1_g2.testmodel.{CATEGORY}.native.json"
+    document = json.loads(path.read_text())
+    document["native_metrics_parity_detail"]["native"]["query_count"] = 9
+    path.write_text(json.dumps(document), encoding="utf-8")
+    verdict = _evaluate(tmp_path, standard=gate.STANDARD_ABS_REL_V3)
+    assert verdict.status == gate.MALFORMED
+    assert "identity query_count differs from actual native metric denominator" in verdict.detail
+
+
+def test_v3_rejects_receipt_source_not_bound_to_predeclared_run(tmp_path: Path, t4) -> None:
+    _v3_pair(tmp_path, t4)
+    path = tmp_path / f"g1_g2.testmodel.{CATEGORY}.native.json"
+    document = json.loads(path.read_text())
+    document["parity_v3"]["receipts"]["native_adapter_native"]["source_id"] = "another-capture"
+    path.write_text(json.dumps(document), encoding="utf-8")
+    verdict = _evaluate(tmp_path, standard=gate.STANDARD_ABS_REL_V3)
+    assert verdict.status == gate.MALFORMED
+    assert "source ID differs from preregistered run" in verdict.detail
+
+def test_v3_rejects_artifact_identity_not_bound_to_preregistration(tmp_path: Path, t4) -> None:
+    _v3_pair(tmp_path, t4)
+    path = tmp_path / f"g1_g2.testmodel.{CATEGORY}.adapter.json"
+    document = json.loads(path.read_text())
+    document["identity"]["query_order_sha256"] = "f" * 64
+    path.write_text(json.dumps(document), encoding="utf-8")
+    verdict = _evaluate(tmp_path, standard=gate.STANDARD_ABS_REL_V3)
+    assert verdict.status == gate.MALFORMED
+    assert "artifact identity differs from immutable preregistered identity" in verdict.detail
+
+
+def test_v3_rejects_checkpoint_artifact_without_verified_sha256(tmp_path: Path, t4) -> None:
+    _v3_pair(tmp_path, t4)
+    path = tmp_path / f"g1_g2.testmodel.{CATEGORY}.native.json"
+    document = json.loads(path.read_text())
+    document["checkpoint_sha256"] = "human-checkpoint-id"
+    path.write_text(json.dumps(document), encoding="utf-8")
+    verdict = _evaluate(tmp_path, standard=gate.STANDARD_ABS_REL_V3)
+    assert verdict.status == gate.MALFORMED
+    assert "checkpoint_sha256 does not bind verified checkpoint bytes" in verdict.detail
+
+def test_t4_adapter_capture_uses_ordered_native_sample_with_duplicate_refs(tmp_path: Path, t4, monkeypatch) -> None:
+    calls = []
+
+    class Adapter:
+        _worker_observation = {"runtime": "cpu-test"}
+
+        def encode_queries(self, paths, texts, categories):
+            return np.zeros((len(paths), 2), dtype=np.float32)
+
+        def encode_targets(self, paths, categories):
+            return np.zeros((len(paths), 2), dtype=np.float32)
+
+    def selected(adapter, **kwargs):
+        calls.append(kwargs)
+        return np.zeros((len(kwargs["query_paths"]), 2)), np.zeros((len(kwargs["gallery_paths"]), 2))
+
+    monkeypatch.setattr(t4, "adapter_selected_phase", selected)
+    monkeypatch.setattr(t4, "score_and_rank", lambda *args, **kwargs: {})
+    inputs = {"full_query_paths": ["full-0", "full-1"], "full_query_texts": ["full-a", "full-b"],
+              "full_reference_ids": ["ref", "ref"], "gallery_paths": ["g0", "g1"],
+              "gallery_ids": ["target-0", "target-1"], "queries": [["q0", "t0"], ["q1", "t1"]],
+              "query_texts": ["native-a", "native-b"], "reference_ids": ["ref", "ref"],
+              "target_ids": ["target-0", "target-1"], "sample_indices": [0, 1]}
+    capture = tmp_path / "capture"
+    capture.mkdir()
+    t4.adapter_population_phase(Adapter(), artifact_root=tmp_path, category="dress", inputs=inputs,
+                                config=None, capture_root=capture)
+    assert calls[0]["query_paths"] == ["q0", "q1"]
+    assert calls[0]["query_texts"] == ["native-a", "native-b"]
+    assert calls[0]["gallery_paths"] == ["t0", "t1"]
+    with np.load(capture / "g1_features.npz") as evidence:
+        assert evidence["query_ids"].tolist() == ["ref", "ref"]
+        assert evidence["target_ids"].tolist() == ["target-0", "target-1"]
+        assert evidence["query_texts"].tolist() == ["native-a", "native-b"]
+        assert evidence["sample_indices"].tolist() == [0, 1]
+def test_v3_publisher_accepts_implicit_v1_without_rewriting_bytes(tmp_path: Path, t4) -> None:
+    import importlib.util
+    source = Path(__file__).resolve().parents[1] / "docs" / "reviews" / "20261109-native15-composition-limn" / "scripts" / "t4_parity.py"
+    spec = importlib.util.spec_from_file_location("producer_t4_v3", source)
+    assert spec and spec.loader
+    producer = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(producer)
+    legacy = tmp_path / "legacy"
+    legacy.mkdir()
+    raw = b'{"model_id":"historic","category":"dress","phase":"native"}\n'
+    artifact = legacy / "g1_g2.historic.dress.native.json"
+    artifact.write_bytes(raw)
+    producer._validate_v3_generation(legacy, require_v3_complete=False)
+    assert raw == artifact.read_bytes()
+
+def test_v3_allows_subset_exclusions_but_rejects_unmatched_control_masks(tmp_path: Path, t4) -> None:
+    _v3_pair(tmp_path, t4, mismatch_mask=True)
+    plan_path = tmp_path / f"g1_g2.testmodel.{CATEGORY}.v3-plan.json"
+    plan = json.loads(plan_path.read_text())
+    base_mask = plan["identity"]["reference_exclusions_sha256"]
+    subset_mask = plan["runs"]["native_repeat_1"]["identity"]["reference_exclusions_sha256"]
+    assert subset_mask != base_mask
+    verdict = _evaluate(tmp_path, standard=gate.STANDARD_ABS_REL_V3)
+    assert verdict.status == gate.MALFORMED
+    assert "different actual reference-exclusion masks" in verdict.detail
 
 def _reference_actual(t4, *, delta: float = 1e-8, n: int = 8) -> tuple[np.ndarray, np.ndarray]:
     """A reference array with a component near zero, plus an `actual` inside the v2 rule."""
@@ -265,6 +867,56 @@ def test_the_writer_records_aligned_components_with_full_digests(t4) -> None:
     assert scope["max_abs"] == float(np.abs(
         actual.astype(np.float64) - reference.astype(np.float64)).max())
 
+
+@pytest.mark.parametrize("layout", ["float32", "strided", "empty"])
+def test_streamed_writer_preserves_canonical_component_digests(tmp_path: Path, t4, layout: str) -> None:
+    import hashlib
+
+    if layout == "float32":
+        reference = np.arange(20000, dtype=np.float32).reshape(1000, 20) / 19
+        actual = reference + np.float32(1e-6)
+    elif layout == "strided":
+        reference = np.arange(40000, dtype=np.float64).reshape(1000, 40)[:, ::2]
+        actual = reference.copy()
+    else:
+        reference = np.empty((0, 3), dtype=np.float64)
+        actual = reference.copy()
+    record = t4.component_scope("memmap", "forward_parity", actual, reference, atol=1e-5, rtol=1e-4)
+    for key, values in (("reference", reference), ("actual", actual),
+                        ("delta", np.abs(actual.astype(np.float64) - reference.astype(np.float64)))):
+        expected = hashlib.sha256(np.ascontiguousarray(values, dtype="<f8").tobytes()).hexdigest()
+        assert record["sha256"][key] == expected
+
+
+def test_streamed_writer_reads_real_memmaps_in_bounded_chunks(tmp_path: Path, t4, monkeypatch) -> None:
+    count = t4.COMPONENT_CHUNK_SIZE * 3
+    reference = np.memmap(tmp_path / "reference.f64", mode="w+", dtype=np.float64, shape=(count,))
+    actual = np.memmap(tmp_path / "actual.f64", mode="w+", dtype=np.float64, shape=(count,))
+    reference[:] = 0.5
+    actual[:] = 0.5
+    original = np.ascontiguousarray
+
+    def bounded_contiguous(values, *args, **kwargs):
+        assert values.size <= t4.COMPONENT_CHUNK_SIZE
+        return original(values, *args, **kwargs)
+
+    monkeypatch.setattr(t4.np, "ascontiguousarray", bounded_contiguous)
+    record = t4.component_scope("memmap", "forward_parity", actual, reference, atol=1e-5, rtol=1e-4)
+    assert record["coverage"] == "chunks"
+    assert len(record["chunks"]) == 3
+
+
+
+def test_native_pixel_payload_keeps_only_selected_g1_tensors_when_bounded(t4) -> None:
+    queries = np.arange(12, dtype=np.float32).reshape(4, 3)
+    targets = np.arange(6, dtype=np.float32).reshape(2, 3)
+    payload = t4._native_pixel_payload(capture_full_pixels=False, query_pixels=queries,
+                                       gallery_pixels=None, sample_indices=[0, 3],
+                                       sample_gallery_pixels=targets)
+    assert set(payload) == {"sample_query_pixels", "sample_gallery_pixels", "source_tensor"}
+    assert payload["sample_query_pixels"].shape[0] == 4
+    assert payload["sample_gallery_pixels"].shape[0] == 2
+    assert "gallery_pixels" not in payload
 def test_the_writer_emits_every_component_of_a_large_array_as_ordered_chunks(t4) -> None:
     """Above the limit: EVERY component, in chunks that tile the array. No preview, no head budget.
 
@@ -696,6 +1348,16 @@ def test_a_stale_chunk_digest_is_malformed(tmp_path: Path, t4) -> None:
     assert "does not bind these values" in verdict.detail
 
 
+def test_a_tampered_chunk_root_digest_is_malformed(tmp_path: Path, t4) -> None:
+    native, adapter, _ = _chunks_pair(t4)
+    scope = adapter["component_parity"]["scopes"]["sample_forward.query"]
+    scope["sha256"]["reference"] = "0" * 64
+    _write(tmp_path, native, adapter)
+    verdict = _evaluate(tmp_path)
+    assert verdict.status == gate.MALFORMED, verdict.detail
+    assert "root digest does not bind these components" in verdict.detail
+
+
 def test_chunks_in_the_wrong_order_are_malformed(tmp_path: Path, t4) -> None:
     native, adapter, chunks = _chunks_pair(t4)
     chunks[0], chunks[1] = chunks[1], chunks[0]
@@ -1111,6 +1773,18 @@ def test_a_caller_mutating_the_payload_cannot_poison_the_next_request(tmp_path: 
     assert second["models"], "the cached payload must be deep-copied, not handed out"
 
 
+def test_v3_adapter_score_proof_bytes_invalidate_cache(tmp_path: Path, t4) -> None:
+    root = _stamp_fixture(tmp_path, t4)
+    artifact = root / "g1_g2.testmodel.shirt.native.json"
+    document = json.loads(artifact.read_text(encoding="utf-8"))
+    document["parity_v3"] = {"scoring_proof_path": "g1_g2.testmodel.shirt.adapter.score-ranks.jsonl"}
+    artifact.write_text(json.dumps(document), encoding="utf-8")
+    proof = root / "g1_g2.testmodel.shirt.adapter.score-ranks.jsonl"
+    proof.write_text("adapter proof one", encoding="utf-8")
+    before = gate._artifact_stamp(root)
+    proof.write_text("adapter proof two", encoding="utf-8")
+    after = gate._artifact_stamp(root)
+    assert before != after
 def test_the_memoised_payload_is_byte_identical_to_the_derivation(tmp_path: Path, t4,
                                                                   monkeypatch) -> None:
     """A memoised payload that differs from the derivation is worse than a slow one."""
@@ -1151,3 +1825,71 @@ def test_an_unlistable_evidence_root_derives_without_caching(tmp_path: Path) -> 
     assert all(verdict["status"] in (gate.NOT_RUN, gate.EVIDENCE_MISSING)
                for verdict in result["models"].values()), result["models"]
     assert "not-there" not in json.dumps(result.get("evidence", ""))
+
+
+def test_limn_mask_capture_distinguishes_padding_from_actual_causal_mask() -> None:
+    from workbench.composition.model_limn import _capture_mask_payload
+
+    token_ids = np.asarray([[2, 4, 0]], dtype=np.int64)
+    causal_mask = np.asarray([[0.0, -np.inf, -np.inf], [0.0, 0.0, -np.inf],
+                              [0.0, 0.0, 0.0]], dtype=np.float32)
+    payload = _capture_mask_payload(token_ids, causal_mask)
+
+    assert payload["token_ids"].tolist() == [[2, 4, 0]]
+    assert payload["token_padding_mask_derived"].tolist() == [[True, True, False]]
+    assert payload["causal_attn_mask_actual"].tolist() == causal_mask.tolist()
+    assert payload["causal_attn_mask_semantics"] == "actual OpenCLIP additive attention mask passed to transformer"
+
+
+def test_t4_observed_source_rank_and_masked_adapter_consumer(tmp_path: Path, t4) -> None:
+    scores = np.asarray([-10e10, 0.9, 0.8, 0.1], dtype=np.float32)
+    order = np.argsort(-scores)
+    captured, observed_order, rank = t4._observe_source_rank(
+        -scores, order, ["r0", "t0", "g2", "g3"], "r0", "t0", reference_excluded=True)
+    assert rank == 1
+    assert t4._native_query_image_ids(["ref", "unused", "target"],
+                                      {"source_img_id": 0, "target_img_id": 2}) == ("ref", "target")
+    with pytest.raises(RuntimeError, match="positions exceed"):
+        t4._native_query_image_ids(["ref"], {"source_img_id": 0, "target_img_id": 1})
+    np.testing.assert_array_equal(captured, scores)
+    np.testing.assert_array_equal(observed_order, order)
+
+    category = "shirt"
+    queries = np.asarray([[1, 0], [0, 1], [1, 1]], dtype=np.float32)
+    gallery = np.asarray([[1, 0], [0.8, 0.2], [0.2, 0.8], [0, 1]], dtype=np.float32)
+    source_scores = np.asarray([
+        [-10e10, 0.9, 0.95, 0.1],
+        [0.9, -10e10, 0.8, 0.1],
+        [-10e10, 0.9, 0.8, 0.1],
+    ], dtype=np.float32)
+    source_orders = np.argsort(-source_scores, axis=1)
+    native_path = tmp_path / "g2_shirt_native_ranking.npz"
+    np.savez_compressed(native_path, source_target_ranks=np.asarray([2, 2, 2]),
+                        source_score_rows=source_scores, source_orders=source_orders,
+                        reference_positions=np.asarray([0, 1, 0]), target_positions=np.asarray([1, 2, 2]),
+                        query_ids=np.asarray(["r0", "t0", "r0"]),
+                        target_ids=np.asarray(["t0", "g2", "g2"]),
+                        gallery_ids=np.asarray(["r0", "t0", "g2", "g3"]))
+    np.savez(tmp_path / "g2_shirt_population.npz", queries=queries, gallery=gallery)
+
+    class Scorer:
+        def score(self, query_features, gallery_features, categories):
+            assert categories == [category, category, category]
+            return np.asarray([[0.7, 0.95, 0.8, 0.1],
+                               [0.9, 0.4, 0.3, 0.1],
+                               [0.6, 0.7, 0.8, 0.9]], dtype=np.float32)
+
+    inputs = {"gallery_ids": ["r0", "t0", "g2", "g3"],
+              "full_reference_ids": ["r0", "t0", "r0"], "full_target_ids": ["t0", "g2", "g2"]}
+    result = t4.score_and_rank(category, inputs, None, artifact_root=tmp_path,
+                               adapter=Scorer(), native_ranking_path=native_path)
+    assert result["native_source_target_ranks"] == [2, 2, 2]
+    assert result["adapter_source_target_ranks"] == [1, 2, 2]
+    assert result["target_rank_flips"] == [0]
+    assert result["order_flip_query_indices"] == [0, 2]
+    assert result["reference_exclusion_sentinel"] == -10e10
+    assert result["native_source_topk"]["k1"] == [0, 0, 0]
+    assert result["adapter_source_topk"]["k1"] == [1, 0, 0]
+    assert result["topk_membership_flip_query_indices"]["k1"] == [0, 2]
+    assert result["target_topk_hit_flip_query_indices"]["k1"] == [0]
+    assert result["unexplained_rank_differences"] == 1

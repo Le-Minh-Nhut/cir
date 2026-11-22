@@ -1,0 +1,394 @@
+{
+  "artifact_type": "official_aggregate_evaluation_report",
+  "schema_version": 1,
+  "run_id": "20261120T210414507949Z_93e9a3f1",
+  "run_directory": "/home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/canonical-api-admission-20261121T040200+0700/controller/artifacts/logs/dcnet__fashioniq_run_directory__20261120T210414507949Z_93e9a3f1",
+  "model_id": "dcnet",
+  "checkpoint_id": "fashioniq_run_directory",
+  "protocol_id": "fashioniq_full_gallery_ref_excluded",
+  "execution_status": "EXECUTION_COMPLETED",
+  "invocation_status": "INVOCATION_COMPLETED",
+  "reproduction_status": "EXTRACTED_VERIFIED",
+  "per_query_export_available": false,
+  "per_query_export_reason": "CAPABILITY_ABSENT",
+  "per_query_capability": null,
+  "per_query_state": "CAPABILITY_ABSENT",
+  "per_query_artifact": null,
+  "per_query_artifact_digest": null,
+  "ranking_provenance": null,
+  "extraction_status": "EXTRACTED_VERIFIED",
+  "metric_extraction_available": true,
+  "parser_id": "dcnet_native_logger",
+  "parser_version": 1,
+  "observed_metrics": {
+    "r10": 27.9297,
+    "r50": 53.7272,
+    "mean": 40.8285
+  },
+  "category_metrics": {
+    "dress": {
+      "r10": 29.1522,
+      "r50": 54.5364
+    },
+    "shirt": {
+      "r10": 22.8165,
+      "r50": 47.6447
+    },
+    "toptee": {
+      "r10": 31.8205,
+      "r50": 59.0005
+    },
+    "dress__composition": {
+      "r10": 27.9623,
+      "r50": 53.4953
+    },
+    "shirt__composition": {
+      "r10": 21.9823,
+      "r50": 46.2709
+    },
+    "toptee__composition": {
+      "r10": 30.0867,
+      "r50": 58.0316
+    },
+    "dress__correction": {
+      "r10": 28.8547,
+      "r50": 54.9826
+    },
+    "shirt__correction": {
+      "r10": 22.7184,
+      "r50": 47.1541
+    },
+    "toptee__correction": {
+      "r10": 31.4635,
+      "r50": 58.1846
+    }
+  },
+  "paper_sanity_metrics": {
+    "r10": null,
+    "r50": null,
+    "mean": 40.83
+  },
+  "parity_status": "PARITY_NOT_EVALUATED",
+  "benchmark_gate": {
+    "status": "PASS_METRICS_ONLY_MAPPING_UNVERIFIED",
+    "passed": false,
+    "variant": true,
+    "blockers": [],
+    "detail": "every comparable metric is within 5 percent relative error; checkpoint mapping is UNVERIFIED, so this is a metric comparison, not a certified official reproduction; 1 condition(s) the reference does not state were not checked",
+    "reference_evidence": {
+      "reference_id": "dcnet_fashioniq_val_table1",
+      "model_id": "dcnet",
+      "paper_id": "legacy_cir_fashioniq_bundle",
+      "paper_title": "Bundle: CLVC-Net (SIGIR'21), DCNet (AAAI'21), TG-CIR (MM'23), LIMN (TPAMI'24) - FashionIQ reference extraction",
+      "registry_version": "extract-79c32139b606",
+      "registry_file": "/home/heheboiz/data/cir/workbench/registry/paper_benchmarks/papers.yaml",
+      "registry_digest": "8f8576c234f66600eabc149b40fddf43d3f3a658e481acd4374d0a74eeeacd21",
+      "reference_status": "VERIFIED",
+      "checkpoint_mapping_status": "UNVERIFIED",
+      "reported_metrics": {
+        "mean": 40.83,
+        "r10": null,
+        "r50": null
+      },
+      "derived_metrics": [
+        {
+          "derivation_formula": "mean(28.95, 23.95, 30.44)",
+          "key": "r10",
+          "provenance": "WORKBENCH_DERIVED",
+          "rounding_policy": "round-half-up to 2 decimals (raw value 27.78 exactly)",
+          "source_metrics": [
+            "category_metrics.dress.r10",
+            "category_metrics.shirt.r10",
+            "category_metrics.toptee.r10"
+          ],
+          "value": 27.78
+        },
+        {
+          "derivation_formula": "mean(56.07, 47.30, 58.29)",
+          "key": "r50",
+          "provenance": "WORKBENCH_DERIVED",
+          "rounding_policy": "round-half-up to 2 decimals (raw value 53.8867)",
+          "source_metrics": [
+            "category_metrics.dress.r50",
+            "category_metrics.shirt.r50",
+            "category_metrics.toptee.r50"
+          ],
+          "value": 53.89
+        }
+      ],
+      "metric_provenance": {
+        "r10": "WORKBENCH_DERIVED",
+        "r50": "WORKBENCH_DERIVED",
+        "mean": "PAPER_REPORTED"
+      },
+      "category_metrics": {
+        "dress": {
+          "r10": 28.95,
+          "r50": 56.07
+        },
+        "shirt": {
+          "r10": 23.95,
+          "r50": 47.3
+        },
+        "toptee": {
+          "r10": 30.44,
+          "r50": 58.29
+        }
+      },
+      "checkpoint_training_noise_pct": null,
+      "gallery_protocol": "fashioniq_full_gallery_ref_excluded"
+    },
+    "comparisons": [
+      {
+        "metric": "r10",
+        "paper": 27.78,
+        "reproduced": 27.9297,
+        "absolute_error_pp": 0.14969999999999928,
+        "relative_error_pct": 0.5388768898488095,
+        "within_tolerance": true,
+        "paper_provenance": "WORKBENCH_DERIVED",
+        "note": "",
+        "direction": "higher",
+        "signed_delta_pp": 0.14969999999999928
+      },
+      {
+        "metric": "r50",
+        "paper": 53.89,
+        "reproduced": 53.7272,
+        "absolute_error_pp": 0.16279999999999717,
+        "relative_error_pct": 0.30209686398218066,
+        "within_tolerance": true,
+        "paper_provenance": "WORKBENCH_DERIVED",
+        "note": "",
+        "direction": "lower",
+        "signed_delta_pp": -0.16279999999999717
+      },
+      {
+        "metric": "mean",
+        "paper": 40.83,
+        "reproduced": 40.8285,
+        "absolute_error_pp": 0.0015000000000000568,
+        "relative_error_pct": 0.003673769287288898,
+        "within_tolerance": true,
+        "paper_provenance": "PAPER_REPORTED",
+        "note": "",
+        "direction": "lower",
+        "signed_delta_pp": -0.0015000000000000568
+      },
+      {
+        "metric": "dress_r10",
+        "paper": 28.95,
+        "reproduced": 29.1522,
+        "absolute_error_pp": 0.20220000000000127,
+        "relative_error_pct": 0.6984455958549266,
+        "within_tolerance": true,
+        "paper_provenance": "PAPER_REPORTED",
+        "note": "",
+        "direction": "higher",
+        "signed_delta_pp": 0.20220000000000127
+      },
+      {
+        "metric": "dress_r50",
+        "paper": 56.07,
+        "reproduced": 54.5364,
+        "absolute_error_pp": 1.5335999999999999,
+        "relative_error_pct": 2.7351524879614764,
+        "within_tolerance": true,
+        "paper_provenance": "PAPER_REPORTED",
+        "note": "",
+        "direction": "lower",
+        "signed_delta_pp": -1.5335999999999999
+      },
+      {
+        "metric": "shirt_r10",
+        "paper": 23.95,
+        "reproduced": 22.8165,
+        "absolute_error_pp": 1.133499999999998,
+        "relative_error_pct": 4.7327766179540625,
+        "within_tolerance": true,
+        "paper_provenance": "PAPER_REPORTED",
+        "note": "",
+        "direction": "lower",
+        "signed_delta_pp": -1.133499999999998
+      },
+      {
+        "metric": "shirt_r50",
+        "paper": 47.3,
+        "reproduced": 47.6447,
+        "absolute_error_pp": 0.3447000000000031,
+        "relative_error_pct": 0.7287526427061377,
+        "within_tolerance": true,
+        "paper_provenance": "PAPER_REPORTED",
+        "note": "",
+        "direction": "higher",
+        "signed_delta_pp": 0.3447000000000031
+      },
+      {
+        "metric": "toptee_r10",
+        "paper": 30.44,
+        "reproduced": 31.8205,
+        "absolute_error_pp": 1.3804999999999978,
+        "relative_error_pct": 4.535151116951373,
+        "within_tolerance": true,
+        "paper_provenance": "PAPER_REPORTED",
+        "note": "",
+        "direction": "higher",
+        "signed_delta_pp": 1.3804999999999978
+      },
+      {
+        "metric": "toptee_r50",
+        "paper": 58.29,
+        "reproduced": 59.0005,
+        "absolute_error_pp": 0.7105000000000032,
+        "relative_error_pct": 1.2189054726368216,
+        "within_tolerance": true,
+        "paper_provenance": "PAPER_REPORTED",
+        "note": "",
+        "direction": "higher",
+        "signed_delta_pp": 0.7105000000000032
+      }
+    ],
+    "selection_reason": "exact condition match"
+  },
+  "benchmark_reference": {
+    "reference_id": "dcnet_fashioniq_val_table1",
+    "model_id": "dcnet",
+    "paper_id": "legacy_cir_fashioniq_bundle",
+    "paper_title": "Bundle: CLVC-Net (SIGIR'21), DCNet (AAAI'21), TG-CIR (MM'23), LIMN (TPAMI'24) - FashionIQ reference extraction",
+    "registry_version": "extract-79c32139b606",
+    "registry_file": "/home/heheboiz/data/cir/workbench/registry/paper_benchmarks/papers.yaml",
+    "registry_digest": "8f8576c234f66600eabc149b40fddf43d3f3a658e481acd4374d0a74eeeacd21",
+    "reference_status": "VERIFIED",
+    "checkpoint_mapping_status": "UNVERIFIED",
+    "reported_metrics": {
+      "mean": 40.83,
+      "r10": null,
+      "r50": null
+    },
+    "derived_metrics": [
+      {
+        "derivation_formula": "mean(28.95, 23.95, 30.44)",
+        "key": "r10",
+        "provenance": "WORKBENCH_DERIVED",
+        "rounding_policy": "round-half-up to 2 decimals (raw value 27.78 exactly)",
+        "source_metrics": [
+          "category_metrics.dress.r10",
+          "category_metrics.shirt.r10",
+          "category_metrics.toptee.r10"
+        ],
+        "value": 27.78
+      },
+      {
+        "derivation_formula": "mean(56.07, 47.30, 58.29)",
+        "key": "r50",
+        "provenance": "WORKBENCH_DERIVED",
+        "rounding_policy": "round-half-up to 2 decimals (raw value 53.8867)",
+        "source_metrics": [
+          "category_metrics.dress.r50",
+          "category_metrics.shirt.r50",
+          "category_metrics.toptee.r50"
+        ],
+        "value": 53.89
+      }
+    ],
+    "metric_provenance": {
+      "r10": "WORKBENCH_DERIVED",
+      "r50": "WORKBENCH_DERIVED",
+      "mean": "PAPER_REPORTED"
+    },
+    "category_metrics": {
+      "dress": {
+        "r10": 28.95,
+        "r50": 56.07
+      },
+      "shirt": {
+        "r10": 23.95,
+        "r50": 47.3
+      },
+      "toptee": {
+        "r10": 30.44,
+        "r50": 58.29
+      }
+    },
+    "checkpoint_training_noise_pct": null,
+    "gallery_protocol": "fashioniq_full_gallery_ref_excluded"
+  },
+  "variant_provenance": {
+    "caption_aliases": [],
+    "caption_alias_staged": false,
+    "approved_source_patch": {
+      "patch_file": "workbench/patches/dcnet_checkpoint_weights_only_optout.patch",
+      "patch_sha256": "64c0c8dbf187ea40352798eb6a2cb0115bd81ffcb177f556e4d8722a7885c634",
+      "applied": true,
+      "patches": [
+        {
+          "path": "base/base_trainer.py",
+          "patch_file": "workbench/patches/dcnet_checkpoint_weights_only_optout.patch",
+          "patch_sha256": "64c0c8dbf187ea40352798eb6a2cb0115bd81ffcb177f556e4d8722a7885c634",
+          "applied": true,
+          "detail": "base/base_trainer.py matches the recorded post-patch digest"
+        }
+      ]
+    },
+    "adapted_runtime": {
+      "runtime_adaptation": "sm_120",
+      "pytorch": "==2.7.1",
+      "torchvision": "==0.22.1",
+      "cuda": "12.8",
+      "packages": [
+        "numpy==1.26.4",
+        "Pillow==12.3.0",
+        "einops==0.7.0",
+        "nltk==3.5"
+      ],
+      "note": "ADAPTED_RUNTIME: modern package stack for the target GPU; not the authors' historical environment, not an exact reproduction claim"
+    },
+    "checkpoint_training_dataset": null,
+    "warnings": []
+  },
+  "metric_source": "stdout",
+  "is_synthetic": false,
+  "command_json": "command.json",
+  "stdout_log": "stdout.log",
+  "stderr_log": "stderr.log",
+  "command_digest": "5ad2608fcf5dc621d209a9162a34a0a5c554921c83aae3237f884e82da248580",
+  "source_expected_commit": "68c79d38569f01ca39c3b4ea641b3b7eb2ccb5fb",
+  "source_actual_commit": "68c79d38569f01ca39c3b4ea641b3b7eb2ccb5fb",
+  "checkpoint_artifact_type": "run_directory",
+  "checkpoint_sha256": "a7f9ce0eb86fc1ee3c26e73ed5ac75259b588dbe305d33c12cf12f556ecaaaa4",
+  "checkpoint_bundle": null,
+  "bundle_manifest_digest": "5942c25746a34a6d3939e31ab3166b3f9975d9afa14656ba5551809542628ea1",
+  "directory_members": [
+    {
+      "filename": "config.json",
+      "path": "/home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/canonical-api-admission-20261121T040200+0700/controller/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/../../checkpoints/dcnet/config.json",
+      "sha256": "fa5fca78790a33063a4e73b379393f4ffbbf1b251b3c27058aed481136984ba0"
+    },
+    {
+      "filename": "trained_model.pth",
+      "path": "/home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/canonical-api-admission-20261121T040200+0700/controller/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/../../checkpoints/dcnet/trained_model.pth",
+      "sha256": "130f031e0f7808ccf5f15630a691bd7af95ad9fadbf94f64acfce64e7d8b850f"
+    }
+  ],
+  "environment": {
+    "orchestrator_python": "3.12.11 (main, Oct  7 2025, 15:34:39) [Clang 20.1.4 ]",
+    "orchestrator_executable": "/home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python",
+    "platform": "linux",
+    "model_interpreter": "/home/heheboiz/data/cir/workbench/envs/dcnet310-sm120/bin/python",
+    "evaluation_run_id": "20261120T210414507949Z_93e9a3f1",
+    "evaluation_output_root": "/home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/canonical-api-admission-20261121T040200+0700/controller/artifacts",
+    "evaluator_environment_knobs": {
+      "WORKBENCH_CHECKPOINT_ROOT": "/home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/canonical-api-admission-20261121T040200+0700/controller/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads",
+      "WORKBENCH_DCNET_PYTHON": "/home/heheboiz/data/cir/workbench/envs/dcnet310-sm120/bin/python",
+      "WORKBENCH_RESULTS_ROOT": "/home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/canonical-api-admission-20261121T040200+0700/controller/artifacts/results",
+      "WORKBENCH_THIRD_PARTY_ROOT": "/home/heheboiz/data/cir/workbench/third_party"
+    },
+    "TMPDIR": "/tmp/wb-ypp3m6mu",
+    "WORKBENCH_REPLAY_CACHE_ROOT": "/home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/canonical-api-admission-20261121T040200+0700/controller/artifacts/logs/dcnet__fashioniq_run_directory__20261120T210414507949Z_93e9a3f1/replay-cache"
+  },
+  "model_interpreter": "/home/heheboiz/data/cir/workbench/envs/dcnet310-sm120/bin/python",
+  "environment_digest": "fa73486484ad9a262ced652f910b572415a1e78917077ab50af34add7c5159eb",
+  "runtime_adaptation": "sm_120",
+  "evidence_digest": "c5dbec1b2e9597f592592823bb93bdd9a06a114c176c48972576a4e1845649a7",
+  "return_code": 0
+}

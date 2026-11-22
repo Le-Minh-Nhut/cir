@@ -1,0 +1,27 @@
+[gpu_job] lock held, GPU empty, launching: systemd-run --user --wait --pipe --collect --same-dir --service-type=exec --unit=cir-dcnet-g1-causal-r2-20261121 -p MemoryMax=12G -p MemorySwapMax=0 -p OOMPolicy=kill /home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/run-role-service.sh --inner --unit cir-dcnet-g1-causal-r2-20261121 --output-dir /home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/raw/dcnet-native-adapter-full-20261121 --min-free-bytes 8589934592 -- bash workbench/docs/reviews/20261117-fix-all/raw/dcnet-native-adapter-full-20261121/launch-g1-diagnostic.sh
+GPU-9bc596d9-19e9-6f43-dc2c-a80da924263c, 360 MiB, 16303 MiB
+Running as unit: cir-dcnet-g1-causal-r2-20261121.service; invocation ID: 5d4565e6c69444ed92530fe215edc551
+waiting_for_cpu_lock=1
+cpu_lock_acquired=1
+disk_check_after_cpu_lock=1 free_bytes=55840452608 required_bytes=8589934592
+unit=cir-dcnet-g1-causal-r2-20261121.service
+cgroup=/user.slice/user-1000.slice/user@1000.service/app.slice/cir-dcnet-g1-causal-r2-20261121.service
+memory.max=12884901888
+memory.swap.max=0
+memory.oom.group=1
+output_dir=/home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/raw/dcnet-native-adapter-full-20261121
+free_bytes=55840452608
+min_free_bytes=8589934592
+Traceback (most recent call last):
+  File "/home/heheboiz/data/cir/workbench/replay/dcnet_native_g1_capture.py", line 162, in <module>
+    raise SystemExit(main())
+  File "/home/heheboiz/data/cir/workbench/replay/dcnet_native_g1_capture.py", line 41, in main
+    from parse_config import ConfigParser
+ModuleNotFoundError: No module named 'parse_config'
+Finished with result: exit-code
+Main processes terminated with: code=exited/status=1
+Service runtime: 2.509s
+CPU time consumed: 2.255s
+Memory peak: 2.5M
+Memory swap peak: 0B
+[gpu_job] child_exit=1

@@ -1,0 +1,21 @@
+Running as unit: cir-dcnet-lifecycle-2320.service; invocation ID: 41b89ea953e948de86b831bc916b7c3b
+[gpu_job] lock held, GPU empty, launching: flock -x /tmp/cir-fix-all-20261120-cpu.lock workbench/envs/ctl312h/bin/python workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/dcnet_lifecycle_helper.py --run-root /home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/dcnet-lifecycle-20261120T2320+0700 --port 18762 --timeout 300
+GPU-9bc596d9-19e9-6f43-dc2c-a80da924263c, 561 MiB, 16303 MiB
+Traceback (most recent call last):
+  File "/home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/dcnet_lifecycle_helper.py", line 239, in <module>
+    raise SystemExit(main_cli())
+                     ^^^^^^^^^^
+  File "/home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/dcnet_lifecycle_helper.py", line 235, in main_cli
+    return _serve(parser.parse_args())
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/dcnet_lifecycle_helper.py", line 155, in _serve
+    raise RuntimeError(f"{phase} job became {state['status']} before forward marker; error={state.get('error')}; log_directory={phase_root}")
+RuntimeError: cancel job became failed before forward marker; error=None; log_directory=/home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/dcnet-lifecycle-20261120T2320+0700/queue_jobs/cancel
+Finished with result: exit-code
+Main processes terminated with: code=exited/status=1
+Service runtime: 7.910s
+CPU time consumed: 7.135s
+Memory peak: 1.2M
+Memory swap peak: 0B
+
+exit=1

@@ -996,7 +996,9 @@ def _solve(solver: Callable | None, command: str | None, constraints: dict) -> t
                   str(result.get("reason", result.get("message", ""))))
     else:
         result = (bool(result), "" if result else "solver rejected combined requirements")
-    _SOLVE_CACHE[key] = result
+    if result[0]:
+        # A failed dry-run may reflect transient channel or host state; never let it poison later plans.
+        _SOLVE_CACHE[key] = result
     return result[0], result[1], False
 
 

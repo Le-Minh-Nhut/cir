@@ -1,0 +1,9 @@
+Running as unit: run-u237.service; invocation ID: 671b585851694e7da1e2ccafb90b3739
+interpreter /home/heheboiz/data/cir/workbench/envs/dcnet310-sm120/bin/python
+Finished with result: success
+Main processes terminated with: code=exited/status=0
+Service runtime: 3.404s
+CPU time consumed: 2.527s
+Memory peak: 1.7M
+Memory swap peak: 0B
+exit=0

@@ -1,0 +1,4 @@
+cmd=workbench/envs/ctl312h/bin/python workbench/scripts/evaluate_models.py --model dcnet --checkpoint fashioniq_run_directory --verify-gpu-only
+[RUN] dcnet / fashioniq_run_directory
+[SKIP] dcnet declares no CUDA requirement
+exit=0

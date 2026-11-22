@@ -1,0 +1,36 @@
+[gpu_job] lock held, GPU empty, launching: systemd-run --user --wait --pipe --collect --same-dir --service-type=exec --unit=cir-csmcir-dress-v3-r19-20261121 -p MemoryMax=12G -p MemorySwapMax=0 -p OOMPolicy=kill /home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/run-role-service.sh --inner --unit cir-csmcir-dress-v3-r19-20261121 --output-dir /home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/raw/caption-v3-gate-bridge-20261121 --min-free-bytes 8589934592 -- /home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/raw/caption-v3-gate-bridge-20261121/r19-dress-sequence.sh
+GPU-9bc596d9-19e9-6f43-dc2c-a80da924263c, 359 MiB, 16303 MiB
+Running as unit: cir-csmcir-dress-v3-r19-20261121.service; invocation ID: a3a0af2ae2164278aeb50938956c0959
+waiting_for_cpu_lock=1
+cpu_lock_acquired=1
+disk_check_after_cpu_lock=1 free_bytes=55362097152 required_bytes=8589934592
+unit=cir-csmcir-dress-v3-r19-20261121.service
+cgroup=/user.slice/user-1000.slice/user@1000.service/app.slice/cir-csmcir-dress-v3-r19-20261121.service
+memory.max=12884901888
+memory.swap.max=0
+memory.oom.group=1
+output_dir=/home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/raw/caption-v3-gate-bridge-20261121
+free_bytes=55362097152
+min_free_bytes=8589934592
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "/home/heheboiz/data/cir/workbench/replay/aggregate_fashioniq_v3.py", line 526, in <module>
+    raise SystemExit(main())
+                     ^^^^^^
+  File "/home/heheboiz/data/cir/workbench/replay/aggregate_fashioniq_v3.py", line 519, in main
+    result = aggregate(args.plan, args.log)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/heheboiz/data/cir/workbench/replay/aggregate_fashioniq_v3.py", line 440, in aggregate
+    sampled_inputs = _paired_input_capture(receipts, plan, root)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/heheboiz/data/cir/workbench/replay/aggregate_fashioniq_v3.py", line 156, in _paired_input_capture
+    raise ValueError(f"native/Adapter sampled {scope} runtime inputs differ; diagnostic={diagnostic_path}")
+ValueError: native/Adapter sampled gallery runtime inputs differ; diagnostic=/home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/raw/caption-v3-gate-bridge-20261121/fresh-csm-preflight-r19/g1_g2.csmcir.dress.native.score-ranks.gallery.capture-mismatch.json
+Finished with result: exit-code
+Main processes terminated with: code=exited/status=1
+Service runtime: 11min 44.486s
+CPU time consumed: 10min 46.640s
+Memory peak: 12.0G
+Memory swap peak: 0B
+[gpu_job] child_exit=1

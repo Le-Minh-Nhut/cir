@@ -54,13 +54,14 @@ export interface EvidenceBenchmarkRun {
 /** The fields of `/api/composition/runs` rows this module reads. */
 export interface EvidenceCompositionRun {
   run_id?: string | null;
-  /** The scope fields the composition table filters on, so the banner can count the same rows. */
   protocol_id?: string | null;
   subset?: string | null;
-  /** Served capability flags. `candidate_topk` is the one that decides whether this row can show
-   *  retrieved images, and it is the same field the composition table badges read. */
+  is_synthetic?: boolean | null;
   capabilities?: { candidate_topk?: boolean | null } | null;
 }
+
+export type EvidenceLane = "overview" | "experiments" | "evaluation-composition" |
+  "evaluation-benchmark" | "evaluation-native" | "samples" | "failures" | "notebook";
 
 /** Whether a per-query run may be presented as verified research evidence.
  *
@@ -146,40 +147,50 @@ export function evidenceState(runs: EvidenceRun[] | null | undefined,
                               benchmarkRuns: EvidenceBenchmarkRun[] | null | undefined,
                               compositionRuns?: EvidenceCompositionRun[] | null,
                               scope?: CompositionScope | null,
-                              sources?: EvidenceSources | null): EvidenceState {
-  const safeRuns = Array.isArray(runs) ? runs : [];
-  const safeBenchmarks = Array.isArray(benchmarkRuns) ? benchmarkRuns : [];
-  const statuses = sources ?? {};
-  const pendingSources = (["runs", "benchmarks", "composition"] as const)
-    .filter((name) => statuses[name] === "idle" || statuses[name] === "loading");
-  const failedSources = (["runs", "benchmarks", "composition"] as const)
-    .filter((name) => statuses[name] === "error");
-  // An unstated source is treated as settled: existing callers that pass only data keep their
-  // meaning, and the shell — the only caller with region state — always states it.
+                              sources?: EvidenceSources | null,
+                              lane: EvidenceLane = "overview"): EvidenceState {
+  const allRuns = Array.isArray(runs) ? runs : [];
+  const allBenchmarks = Array.isArray(benchmarkRuns) ? benchmarkRuns : [];
+  const allComposition = Array.isArray(compositionRuns) ? compositionRuns : [];
+  const compositionLane = ["evaluation-composition", "samples", "failures", "notebook"].includes(lane);
+  const benchmarkLane = lane === "evaluation-benchmark";
+  const experimentsLane = lane === "experiments";
+  const overviewLane = lane === "overview";
+  const safeRuns = overviewLane || experimentsLane ? allRuns : [];
+  const safeBenchmarks = overviewLane || benchmarkLane ? allBenchmarks : [];
+  const safeComposition = overviewLane || compositionLane ? allComposition : [];
+  const activeSources = overviewLane
+    ? (sources ?? {})
+    : experimentsLane ? { runs: sources?.runs }
+      : benchmarkLane ? { benchmarks: sources?.benchmarks }
+        : compositionLane ? { composition: sources?.composition }
+          : {};
+  const pendingSources = (Object.entries(activeSources) as Array<[keyof EvidenceSources, EvidenceSourceStatus | undefined]>)
+    .filter(([, status]) => status === "idle" || status === "loading")
+    .map(([name]) => name);
+  const failedSources = (Object.entries(activeSources) as Array<[keyof EvidenceSources, EvidenceSourceStatus | undefined]>)
+    .filter(([, status]) => status === "error")
+    .map(([name]) => name);
   const loading = pendingSources.length > 0;
-
   const experimentRuns = safeRuns.filter((run) => run?.data_kind === "experiment").length;
-  // A declared experiment is NOT verified evidence. Counted separately so the banner can say
-  // "declared, unverified" instead of implying a checked result.
   const verifiedQueryRuns = safeRuns.filter(isPerQueryVerified).length;
   const unverifiedExperimentRuns = experimentRuns - verifiedQueryRuns;
-  const mockRuns = safeRuns.filter((run) => run?.data_kind === "mock").length;
+  const indexMockRuns = safeRuns.filter((run) => run?.data_kind === "mock").length;
   const aggregateRuns = safeBenchmarks.length;
   const certifiedAggregates = safeBenchmarks.filter(isCertifiedEvidence).length;
   const syntheticAggregates = safeBenchmarks.filter(isSyntheticAggregate).length;
   const uncertifiedAggregates = aggregateRuns - certifiedAggregates;
-  // "Aggregate-only" is a statement about the per-query export, not about certification: a
-  // refusal is still a real thing that happened, and it must not be reported as absent.
   const aggregateOnly = aggregateRuns > 0 && experimentRuns === 0;
-  const safeComposition = Array.isArray(compositionRuns) ? compositionRuns : [];
-  // The composition table renders only the rows matching the selected protocol and subset
-  // (`EvaluationPage` filters by `run.protocol_id === location.protocol` then by subset). The banner
-  // counts inside the SAME scope, so "N of M" always describes the rows the reader can see.
   const scoped = (scope?.protocolId || scope?.subset)
     ? safeComposition.filter((run) =>
         (!scope?.protocolId || run?.protocol_id === scope.protocolId)
         && (!scope?.subset || run?.subset === scope.subset))
     : safeComposition;
+  const scopedSynthetic = scoped.filter((run) => run?.is_synthetic === true).length;
+  const scopedReal = scoped.length - scopedSynthetic;
+  const mockRuns = indexMockRuns + (compositionLane ? scopedSynthetic : 0);
+  const compositionRealEvidence = compositionLane && scopedReal > 0;
+  const noRealEvidence = aggregateRuns === 0 && experimentRuns === 0 && !compositionRealEvidence;
   const rowsWithCandidateTopk = scoped
     .filter((run) => run?.capabilities?.candidate_topk === true).length;
   return {
@@ -195,7 +206,7 @@ export function evidenceState(runs: EvidenceRun[] | null | undefined,
     uncertifiedAggregates,
     syntheticAggregates,
     aggregateOnly,
-    noRealEvidence: aggregateRuns === 0 && experimentRuns === 0,
+    noRealEvidence,
     hasMockEvidence: mockRuns > 0,
     queryLevelUnavailable: aggregateOnly,
     compositionRows: scoped.length,
@@ -210,9 +221,6 @@ export function evidenceState(runs: EvidenceRun[] | null | undefined,
  *  exists. A synthetic or refused aggregate is never described as a real evaluation (I03/I14/I16).
  */
 export function evidenceBanner(state: EvidenceState): string {
-  // Loading and failure come FIRST, because every branch below is a claim about what the deployment
-  // holds, and neither an unsettled nor a failed source supports one. This is the same defect class
-  // as the scope strip printing "0 lượt" while the rows were still in flight.
   if (state.loading || state.failedSources.length > 0) {
     const parts: string[] = [];
     if (state.loading) parts.push("Đang tải bằng chứng");
@@ -226,18 +234,23 @@ export function evidenceBanner(state: EvidenceState): string {
     }
     return parts.join(" · ");
   }
+  if (state.compositionRows > 0 && state.noRealEvidence) {
+    return "MOCK DEVELOPMENT DATA — only synthetic composition runs are loaded";
+  }
+  if (state.compositionRows > 0 && !state.noRealEvidence
+      && state.experimentRuns === 0 && state.aggregateRuns === 0) return "";
   if (state.noRealEvidence) {
     return state.hasMockEvidence
       ? "MOCK DEVELOPMENT DATA — only labelled development runs are loaded; no real evaluation results"
       : "MOCK DEVELOPMENT DATA — no real evaluation results are loaded";
   }
-  const onlySynthetic = state.syntheticAggregates === state.aggregateRuns && state.experimentRuns === 0;
+  const onlySynthetic = state.syntheticAggregates === state.aggregateRuns
+    && state.experimentRuns === 0 && state.compositionRows === 0;
   if (onlySynthetic) {
     return `MOCK DEVELOPMENT DATA — ${state.syntheticAggregates} synthetic aggregate `
       + `run${state.syntheticAggregates === 1 ? "" : "s"} loaded; no real evaluation results`;
   }
   if (state.aggregateOnly) {
-    // "REAL EVALUATION" is only earned by evidence that is neither synthetic nor refused.
     const head = state.certifiedAggregates > 0
       ? `AGGREGATE-ONLY REAL EVALUATION — ${state.certifiedAggregates} certified research `
         + `result${state.certifiedAggregates === 1 ? "" : "s"}`
@@ -247,15 +260,6 @@ export function evidenceBanner(state: EvidenceState): string {
       ? ` (${state.uncertifiedAggregates} further aggregate `
         + `run${state.uncertifiedAggregates === 1 ? "" : "s"} uncertified)`
       : "";
-    // The Top-K clause is a claim about the rows on screen, so it is decided by the served
-    // `capabilities.candidate_topk` flags -- the same field the composition table badges read -- and
-    // NOT by the aggregate endpoints' per-query-export level. A deployment whose per-query export is
-    // absent can still serve composed rows that carry real candidate lists; saying "Top-K
-    // unavailable" over those rows contradicts the table printed beneath it.
-    //
-    // The count is scoped to the protocol and subset the table is filtered to, so "N of M" always
-    // describes the rows the reader can count. A deployment-wide number here was the same defect one
-    // scope out: a nine-row table under a banner reading "12 of 27".
     const topk = state.rowsWithCandidateTopk > 0
       ? `; per-query candidate Top-K available on ${state.rowsWithCandidateTopk} of `
         + `${state.compositionRows} composed run${state.compositionRows === 1 ? "" : "s"} in view`
@@ -265,16 +269,12 @@ export function evidenceBanner(state: EvidenceState): string {
         ? " (development runs also loaded and excluded from research conclusions)" : "");
   }
   if (state.unverifiedExperimentRuns > 0) {
-    // The strongest true statement available: these runs call themselves experiments and nobody has
-    // corroborated them. Saying nothing (the old behaviour) presented them as checked evidence.
     return `DECLARED EXPERIMENT (UNVERIFIED) — ${state.unverifiedExperimentRuns} per-query `
       + `run${state.unverifiedExperimentRuns === 1 ? "" : "s"} declare themselves experiments but `
       + `carry no verifier corroboration; they are not research evidence`
       + (state.verifiedQueryRuns > 0
         ? ` (${state.verifiedQueryRuns} verified run${state.verifiedQueryRuns === 1 ? "" : "s"} also loaded)`
         : "")
-      // The aggregate counters are a separate truth and must survive this branch: the dashboard
-      // says those runs exist, so the banner may not omit them.
       + (state.uncertifiedAggregates > 0
         ? `; ${state.uncertifiedAggregates} further aggregate `
           + `run${state.uncertifiedAggregates === 1 ? "" : "s"} not certified research evidence`
@@ -283,14 +283,11 @@ export function evidenceBanner(state: EvidenceState): string {
   if (state.hasMockEvidence) {
     return "Mock and real experiment runs are loaded. Mock results are excluded from research conclusions.";
   }
-  // Per-query real results exist, so the mock alarm is not the right one -- but an uncertified
-  // aggregate must still be announced rather than silently suppressed (I17's UI half).
   if (state.uncertifiedAggregates > 0) {
     return `Real evaluation present (${state.experimentRuns} indexed); `
       + `${state.uncertifiedAggregates} aggregate run${state.uncertifiedAggregates === 1 ? "" : "s"} `
       + `not certified research evidence`
-      + (state.syntheticAggregates > 0
-        ? ` (${state.syntheticAggregates} synthetic)` : ".");
+      + (state.syntheticAggregates > 0 ? ` (${state.syntheticAggregates} synthetic)` : ".");
   }
   return "";
 }

@@ -101,6 +101,32 @@ def test_a_newly_present_asset_changes_the_badge_in_the_same_process(probe_regis
     removed = blockers()
     assert any("file missing" in reason for reason in removed), (
         f"the asset was removed but the cached document did not notice: {removed}")
+def test_models_api_refreshes_runtime_selection_and_operator_file(probe_registry, monkeypatch, tmp_path):
+    from fastapi.testclient import TestClient
+
+    from workbench.backend import main, operator_config
+
+    env_file = tmp_path / "workbench.env"
+    env_file.write_text("", encoding="utf-8")
+    monkeypatch.setattr(operator_config, "_CONFIG_PATH", env_file)
+    monkeypatch.setattr(main, "preflight_blockers", lambda model, config: [])
+    client = TestClient(main.app)
+
+    def selected_profile():
+        response = client.get("/api/models")
+        assert response.status_code == 200, response.text
+        return next(model["selected_runtime_adaptation"] for model in response.json()
+                    if model["model_id"] == "dcnet")
+
+    assert selected_profile() is None
+    monkeypatch.setenv("WORKBENCH_RUNTIME_ADAPTATION", "sm_120")
+    assert selected_profile() == "sm_120"
+
+    monkeypatch.delenv("WORKBENCH_RUNTIME_ADAPTATION")
+    env_file.write_text("WORKBENCH_RUNTIME_ADAPTATION=sm_120\n", encoding="utf-8")
+    assert selected_profile() == "sm_120"
+    env_file.write_text("WORKBENCH_RUNTIME_ADAPTATION=\n", encoding="utf-8")
+    assert selected_profile() is None
 
 
 def test_the_launch_gate_still_refuses_a_blocked_model(probe_registry):

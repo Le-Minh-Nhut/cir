@@ -45,4 +45,10 @@ fi
 echo "[gpu_job] lock held, GPU empty, launching: $*" >&2
 nvidia-smi --query-gpu=uuid,memory.used,memory.total --format=csv,noheader >&2
 # fd 9 stays open for the whole child lifetime, which is what holds the lock.
-"$@"
+if "$@"; then
+  status=0
+else
+  status=$?
+fi
+printf '[gpu_job] child_exit=%s\n' "$status" >&2
+exit "$status"

@@ -48,3 +48,76 @@ def test_dcnet_dataset_fails_on_missing_glove_and_resized_images(tmp_path: Path)
     blockers = validate_dataset(ds_dir)
     assert any("resized_images" in b for b in blockers)
     assert any("glove" in b for b in blockers)
+
+def test_pairwise_scorer_uses_query_conditioned_gallery_and_softmax_fusion():
+    import torch
+    import torch.nn.functional as F
+
+    from workbench.replay.dcnet import score_pairwise
+
+    class Model:
+        modalities = ["image"]
+        feat2d = False
+
+        def get_correction(self, source, gallery):
+            assert source["image"].shape == (2, 1)
+            assert gallery["image"].shape == (3, 1)
+            return {"image": gallery["image"].unsqueeze(0).expand(2, -1, -1)}
+
+        def get_score_matrix(self, trg_embds, src_embds, **kwargs):
+            assert kwargs == {"subspaces": ["image"], "l2renorm": False,
+                              "dist": False, "val": True}
+            if trg_embds["image"].ndim == 2:
+                return src_embds["image"] @ trg_embds["image"].T
+            return (src_embds["image"].unsqueeze(1) * trg_embds["image"]).sum(-1)
+
+    model = Model()
+    composed = {"image": torch.tensor([[1.], [2.]])}
+    source = {"image": torch.tensor([[4.], [5.]])}
+    text = {"image": torch.tensor([[3.], [4.]])}
+    gallery = {"image": torch.tensor([[1.], [2.], [3.]])}
+    composition, correction, fused = score_pairwise(model, composed, source, text, gallery)
+    expected_comp = composed["image"] @ gallery["image"].T
+    expected_corr = (text["image"].unsqueeze(1) * gallery["image"].unsqueeze(0)).sum(-1)
+    torch.testing.assert_close(composition, expected_comp)
+    torch.testing.assert_close(correction, expected_corr)
+    torch.testing.assert_close(fused, F.log_softmax(expected_comp, -1) +
+                               F.log_softmax(expected_corr, -1))
+
+
+def test_chunked_global_logsoftmax_matches_full_gallery():
+    import torch
+    import torch.nn.functional as F
+
+    comp = torch.tensor([[0.1, 0.7, -0.2, 1.3], [2.0, -0.5, 0.6, 0.2]])
+    corr = torch.tensor([[1.2, -0.3, 0.4, 0.8], [-1.0, 0.5, 1.5, 0.1]])
+    expected = F.log_softmax(comp, -1) + F.log_softmax(corr, -1)
+    comp_lse = corr_lse = None
+    for start in range(0, comp.shape[1], 2):
+        a = torch.logsumexp(comp[:, start:start + 2], -1)
+        b = torch.logsumexp(corr[:, start:start + 2], -1)
+        comp_lse = a if comp_lse is None else torch.logaddexp(comp_lse, a)
+        corr_lse = b if corr_lse is None else torch.logaddexp(corr_lse, b)
+    assert comp_lse is not None and corr_lse is not None
+    actual = (comp - comp_lse[:, None]) + (corr - corr_lse[:, None])
+    torch.testing.assert_close(actual, expected)
+
+def test_score_chunks_then_apply_native_full_gallery_logsoftmax():
+    import torch
+    import torch.nn.functional as F
+
+    comp_chunks = [torch.tensor([[0.1, 0.7], [-0.5, 1.3]]),
+                   torch.tensor([[-0.2, 1.3], [2.0, 0.2]])]
+    corr_chunks = [torch.tensor([[1.2, -0.3], [0.5, 0.1]]),
+                   torch.tensor([[0.4, 0.8], [-1.0, 1.5]])]
+    comp_rows = torch.empty((2, 4))
+    corr_rows = torch.empty((2, 4))
+    for index, (comp, corr) in enumerate(zip(comp_chunks, corr_chunks)):
+        start = index * 2
+        comp_rows[:, start:start + 2] = comp
+        corr_rows[:, start:start + 2] = corr
+    expected_comp = torch.tensor([[0.1, 0.7, -0.2, 1.3], [-0.5, 1.3, 2.0, 0.2]])
+    expected_corr = torch.tensor([[1.2, -0.3, 0.4, 0.8], [0.5, 0.1, -1.0, 1.5]])
+    actual = F.log_softmax(comp_rows, dim=-1) + F.log_softmax(corr_rows, dim=-1)
+    expected = F.log_softmax(expected_comp, dim=-1) + F.log_softmax(expected_corr, dim=-1)
+    torch.testing.assert_close(actual, expected, rtol=0, atol=0)

@@ -244,7 +244,7 @@ def _checkpoint_pair(category: str = "dress"):
     if not config_file.is_file():
         pytest.skip("no operator workbench.env on this host (external artifact)")
     operator_config._CONFIG_PATH = config_file
-    model_settings.file_settings.cache_clear()
+    model_settings.clear_file_settings_cache()
     runtime.forget_environment()
     config = operator_config.resolve_config()
     model = model_by_id("clvc_net")

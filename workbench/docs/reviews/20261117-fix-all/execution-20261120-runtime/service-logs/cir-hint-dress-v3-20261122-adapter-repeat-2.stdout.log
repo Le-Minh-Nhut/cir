@@ -1,0 +1,24 @@
+[role-service] unit=cir-hint-dress-v3-20261122-adapter-repeat-2 stdout=/home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/service-logs/cir-hint-dress-v3-20261122-adapter-repeat-2.stdout.log stderr=/home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/service-logs/cir-hint-dress-v3-20261122-adapter-repeat-2.stderr.log
+# HINT V3 role adapter_repeat_2 plan=/home/heheboiz/data/cir/workbench/docs/reviews/20261112-parity-repair/raw/third_model/hint-v3-dress-current-source-20261122T190500Z/evidence/g1_g2.hint.dress.v3-plan.json sha256=fbf1471d65f15b1b0ef53afbad9a08636175bf4be9a0b4675e55f005be98585f
+# dress: identity measured in 13.5s
+{
+ "gallery_order_identical": true,
+ "reference_ids_identical": true,
+ "target_ids_identical": true,
+ "model_text_identical": true,
+ "counts": [
+  2017,
+  2017,
+  2628,
+  2628
+ ],
+ "sample_indices": [
+  0,
+  14,
+  18,
+  816,
+  2016
+ ],
+ "gallery_sample": 20
+}
+[role-service] unit=cir-hint-dress-v3-20261122-adapter-repeat-2 wrapper_exit=0

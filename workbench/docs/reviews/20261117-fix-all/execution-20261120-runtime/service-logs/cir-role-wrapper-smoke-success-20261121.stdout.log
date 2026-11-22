@@ -1,0 +1,2 @@
+[role-service] unit=cir-role-wrapper-smoke-success-20261121 stdout=/home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/service-logs/cir-role-wrapper-smoke-success-20261121.stdout.log stderr=/home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/service-logs/cir-role-wrapper-smoke-success-20261121.stderr.log
+CHILD_STDOUT_success

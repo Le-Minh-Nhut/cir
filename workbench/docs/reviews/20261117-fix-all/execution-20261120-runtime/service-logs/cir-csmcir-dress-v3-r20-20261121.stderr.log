@@ -1,0 +1,21 @@
+[gpu_job] lock held, GPU empty, launching: systemd-run --user --wait --pipe --collect --same-dir --service-type=exec --unit=cir-csmcir-dress-v3-r20-20261121 -p MemoryMax=12G -p MemorySwapMax=0 -p OOMPolicy=kill /home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/run-role-service.sh --inner --unit cir-csmcir-dress-v3-r20-20261121 --output-dir /home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/raw/caption-v3-gate-bridge-20261121 --min-free-bytes 8589934592 -- /home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/raw/caption-v3-gate-bridge-20261121/r20-dress-sequence.sh
+GPU-9bc596d9-19e9-6f43-dc2c-a80da924263c, 392 MiB, 16303 MiB
+Running as unit: cir-csmcir-dress-v3-r20-20261121.service; invocation ID: ef5293c0a0974ead93aacc6d816921f1
+waiting_for_cpu_lock=1
+cpu_lock_acquired=1
+disk_check_after_cpu_lock=1 free_bytes=53119434752 required_bytes=8589934592
+unit=cir-csmcir-dress-v3-r20-20261121.service
+cgroup=/user.slice/user-1000.slice/user@1000.service/app.slice/cir-csmcir-dress-v3-r20-20261121.service
+memory.max=12884901888
+memory.swap.max=0
+memory.oom.group=1
+output_dir=/home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/raw/caption-v3-gate-bridge-20261121
+free_bytes=53119434752
+min_free_bytes=8589934592
+Finished with result: exit-code
+Main processes terminated with: code=exited/status=1
+Service runtime: 19.323s
+CPU time consumed: 13.877s
+Memory peak: 2.7M
+Memory swap peak: 0B
+[gpu_job] child_exit=1

@@ -1,0 +1,12 @@
+{
+  "job_id": "8c95da12-e1ad-478d-a006-4c35b67a8fa8",
+  "model_id": "dcnet",
+  "checkpoint_id": "fashioniq_run_directory",
+  "protocol_id": "diagnostic_q1_t2",
+  "status": "completed",
+  "started_at": "2026-11-20T16:59:19.195593+00:00",
+  "completed_at": "2026-11-20T16:59:27.957903+00:00",
+  "return_code": 0,
+  "error": null,
+  "gpu_may_be_held": false
+}

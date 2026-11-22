@@ -37,6 +37,7 @@ def test_black_intervention_precedes_transform() -> None:
     zeroed_after_transform = np.zeros_like(normalized_original)
     assert not np.array_equal(actual, zeroed_after_transform)
 
+
 def test_staged_black_path_and_empty_text_cross_worker_seam(tmp_path: Path) -> None:
     from types import SimpleNamespace
 
@@ -122,12 +123,14 @@ def test_limn_refuses_query_without_resolved_category(tmp_path: Path) -> None:
     assert caught.value.batch_indices == (0,)
     assert caught.value.reasons_by_index == {0: "missing_category"}
 
+
 def test_adapter_requires_explicit_work_root() -> None:
     from workbench.composition.adapters import AdapterWorkRootError
     from workbench.composition.model_limn import Adapter
 
     with pytest.raises(AdapterWorkRootError, match="work_root must be assigned"):
         Adapter(config=None).encode_queries(["unused.png"], ["edit"], ["dress"])
+
 
 def test_default_rank_ties_are_stable() -> None:
     adapters = importlib.import_module("workbench.composition.adapters")
@@ -148,3 +151,52 @@ def test_default_rank_ties_are_stable() -> None:
     first = adapter.rank(queries, targets, target_positions=positions)
     second = adapter.rank(queries, targets, target_positions=positions)
     assert first == second == [2]
+
+
+def test_runner_forwards_only_selected_capture_ids_in_worker_order() -> None:
+    from workbench.composition.runner import _capture_kwargs
+
+    class CapturingAdapter:
+        capture_path = Path("capture.npz")
+
+        def encode_targets(self, paths, categories, *, capture_ids=None, selected_capture_ids=None):
+            pass
+
+    ids = ["g3", "g1", "g2"]
+    assert _capture_kwargs(CapturingAdapter(), CapturingAdapter.encode_targets, ids,
+                           {"g1", "g3"}) == {
+                               "capture_ids": ids, "selected_capture_ids": ["g3", "g1"]}
+
+
+def test_gallery_capture_selection_reaches_real_encode_call_in_order(tmp_path: Path) -> None:
+    from workbench.composition.runner import _encode_gallery
+
+    image_paths = []
+    for identity in ("g2", "g1", "g3"):
+        path = tmp_path / f"{identity}.png"
+        Image.new("RGB", (8, 8), "white").save(path)
+        image_paths.append(path)
+    observed: list[tuple[list[str], list[str], Path]] = []
+
+    class Adapter:
+        batch_size = 2
+        capture_path: Path | None = None
+
+        def encode_targets(self, paths, categories, *, capture_ids: list[str] | None = None,
+                          selected_capture_ids: list[str] | None = None):
+            assert self.capture_path is not None
+            assert capture_ids is not None and selected_capture_ids is not None
+            observed.append((list(capture_ids), list(selected_capture_ids), self.capture_path))
+            np.savez(self.capture_path, ids=np.asarray(selected_capture_ids))
+            return np.ones((len(paths), 2), dtype=np.float32)
+
+    _encode_gallery(Adapter(), image_paths, "dress", tmp_path / "features.npy", "fingerprint",
+                    2, 1, 1, 1, image_ids=("id-2", "id-1", "id-3"),
+                    selected_capture_ids={"id-1", "id-3"})
+
+    assert len(observed) == 1
+    assert observed[0][:2] == (["id-2", "id-1", "id-3"], ["id-1", "id-3"])
+    assert observed[0][2].is_file()
+    with np.load(observed[0][2], allow_pickle=False) as capture:
+        assert capture["ids"].tolist() == ["id-1", "id-3"]
+

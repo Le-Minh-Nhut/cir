@@ -1,0 +1,18 @@
+{
+  "command": "flock -x /tmp/cir-fix-all-20261120-cpu.lock -c 'OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 NUMEXPR_NUM_THREADS=1 workbench/envs/ctl312h/bin/python -c <probe>'",
+  "exit_code": 0,
+  "file": "workbench/third_party/TME/features/FashionIQ/val_images.pt",
+  "file_bytes": 22487180914,
+  "serialization": "PyTorch ZIP archive (validated torch.load mmap=True)",
+  "loader": "torch.load(feature_path, map_location='cpu', weights_only=True, mmap=True)",
+  "tensor_shape": [15536, 257, 1408],
+  "dtype": "torch.float32",
+  "mapping_ids": 15415,
+  "cache_rows": 15536,
+  "duplicate_ids": 121,
+  "source_mapping_behavior": "last duplicate cache row wins, verified via source FashionIQ API",
+  "selected_rows": "bounded duplicate and boundary row indexing succeeded",
+  "peak_rss_kib": 4907404,
+  "copy_or_regeneration": false,
+  "stdout_stderr_log": "local://232.log"
+}

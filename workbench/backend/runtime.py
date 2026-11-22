@@ -1153,16 +1153,9 @@ _BLOCKED_STATUSES = {
 
 
 def _requires_gpu(model: dict[str, Any]) -> bool:
-    """True when a model's contract declares a CUDA requirement.
-
-    ``cuda: UNKNOWN`` means the upstream source did not state one, so it is not a
-    requirement. Any other value is a real requirement that must be verified on a GPU host.
-    """
-    env = model.get("environment") or {}
-    declared = env.get("cuda")
-    if declared is None:
-        return False
-    return str(declared).upper() != "UNKNOWN"
+    """True when the selected runtime contract declares a CUDA requirement."""
+    declared = resolved_runtime_environment(model).get("cuda")
+    return declared is not None and str(declared).upper() != "UNKNOWN"
 
 
 def gpu_capability_directory(config: Any) -> Path:
@@ -1891,19 +1884,23 @@ def _environment_contract_digest(model: dict[str, Any]) -> str:
     return hashlib.sha256(json.dumps(relevant, sort_keys=True).encode("utf-8")).hexdigest()
 
 
+class EnvironmentFingerprintChanged(RuntimeError):
+    """Raised when installed environment content changes during a fingerprint pass."""
+
+
 def _member_digest(path: Path) -> str:
-    """Content digest of an installed file.
-
-    Hashed every time. The memo that used to live here was keyed on (path, size, mtime), which
-    is exactly the triple an in-place rewrite can preserve — os.utime restores mtime — so the
-    memo could hand back a digest for content that had changed and a stale GPU capability would
-    stay valid. Verification runs during environment checks, not per query: a full hash is
-    affordable, and a digest that can be wrong is not evidence.
-    """
+    """Hash an installed member and reject replacement or mutation during the read."""
     from workbench.backend.registry import sha256_file
-    from pathlib import Path as _Path
 
-    return sha256_file(_Path(path))
+    before = path.stat()
+    identity = (before.st_dev, before.st_ino, before.st_size, before.st_mtime_ns,
+                before.st_ctime_ns)
+    digest = sha256_file(path)
+    after = path.stat()
+    if identity != (after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns,
+                    after.st_ctime_ns):
+        raise EnvironmentFingerprintChanged(f"environment member changed while hashing: {path}")
+    return digest
 
 
 def _regular_through_link(path: Path, *, hops: int = 8) -> Path | None:
@@ -1974,6 +1971,29 @@ def _interpreter_fingerprint(interpreter: str, contract_digest: str,
     hasher = hashlib.sha256()
     hasher.update(contract_digest.encode("utf-8"))
     hasher.update(str(path).encode("utf-8"))
+    member_digests: dict[Path, tuple[tuple[int, int, int, int, int], str]] = {}
+    observed_files: dict[Path, tuple[int, int, int, int, int]] = {}
+    observed_entries: dict[Path, tuple[str, ...]] = {}
+    def identity_for(member_path: Path) -> tuple[int, int, int, int, int]:
+        st = member_path.stat()
+        return (st.st_dev, st.st_ino, st.st_size, st.st_mtime_ns, st.st_ctime_ns)
+
+    def observe(member_path: Path) -> tuple[int, int, int, int, int]:
+        identity = identity_for(member_path)
+        previous = observed_files.setdefault(member_path, identity)
+        if previous != identity:
+            raise EnvironmentFingerprintChanged(
+                f"environment member changed during fingerprint: {member_path}")
+        return identity
+
+    def member_digest(member_path: Path) -> str:
+        identity = observe(member_path)
+        previous = member_digests.get(member_path)
+        if previous is not None:
+            return previous[1]
+        digest = _member_digest(member_path)
+        member_digests[member_path] = (identity, digest)
+        return digest
     for candidate in (path, path.resolve()):
         try:
             stat_result = candidate.stat()
@@ -2026,7 +2046,10 @@ def _interpreter_fingerprint(interpreter: str, contract_digest: str,
         #   3. the distribution metadata/RECORD members hashed below, which is what a real install
         #      changes.
         # The directory's own mtime is still deliberately NOT folded (see above).
-        for entry in sorted(site_packages.iterdir()):
+        entries = tuple(entry.name for entry in sorted(site_packages.iterdir())
+                        if entry.name != "__pycache__" and not entry.name.endswith((".pyc", ".pyo")))
+        observed_entries[site_packages] = entries
+        for entry in (site_packages / name for name in entries):
             if entry.name == "__pycache__" or entry.name.endswith((".pyc", ".pyo")):
                 continue
             hasher.update(f"{site_packages.name}/{entry.name}".encode("utf-8"))
@@ -2058,12 +2081,12 @@ def _interpreter_fingerprint(interpreter: str, contract_digest: str,
                         reached, label = linked, entry.name
                     if reached is not None:
                         try:
-                            hasher.update(f"{label}:{_member_digest(reached)}".encode("utf-8"))
+                            hasher.update(f"{label}:{member_digest(reached)}".encode("utf-8"))
                         except (OSError, ValueError):
                             pass
             elif startup_module:
                 try:
-                    hasher.update(f"{entry.name}:{_member_digest(entry)}".encode("utf-8"))
+                    hasher.update(f"{entry.name}:{member_digest(entry)}".encode("utf-8"))
                 except (OSError, ValueError):
                     # Unreadable: the name fold above is all the evidence there was before, so the
                     # entry keeps its prior behaviour rather than aborting the whole fingerprint.
@@ -2078,13 +2101,14 @@ def _interpreter_fingerprint(interpreter: str, contract_digest: str,
                 if reached is not None:
                     try:
                         hasher.update(f"{entry.name}/__init__.py:"
-                                      f"{_member_digest(reached)}".encode("utf-8"))
+                                      f"{member_digest(reached)}".encode("utf-8"))
                     except (OSError, ValueError):
                         pass
         for dist in sorted(list(site_packages.glob("*.dist-info")) + list(site_packages.glob("*.egg-info"))):
             metadata = dist / "METADATA" if dist.name.endswith(".dist-info") else dist / "PKG-INFO"
             try:
                 stat_result = metadata.stat()
+                observe(metadata)
             except OSError:
                 continue
             hasher.update(f"{dist.name}:{stat_result.st_size}:{stat_result.st_mtime_ns}".encode("utf-8"))
@@ -2099,7 +2123,11 @@ def _interpreter_fingerprint(interpreter: str, contract_digest: str,
                                   f"{member_stat.st_mtime_ns}".encode("utf-8"))
                 continue
             try:
+                record_identity = observe(record)
                 record_text = record.read_text(encoding="utf-8", errors="replace")
+                if record_identity != identity_for(record):
+                    raise EnvironmentFingerprintChanged(
+                        f"environment member changed during fingerprint: {record}")
             except OSError:
                 continue
             hasher.update(f"RECORD:{record_text}".encode("utf-8"))
@@ -2108,7 +2136,7 @@ def _interpreter_fingerprint(interpreter: str, contract_digest: str,
                 for member in members:
                     member_path = site_packages / member
                     try:
-                        hasher.update(f"{member}:{_member_digest(member_path)}".encode("utf-8"))
+                        hasher.update(f"{member}:{member_digest(member_path)}".encode("utf-8"))
                         continue
                     except (OSError, ValueError):
                         pass
@@ -2119,6 +2147,18 @@ def _interpreter_fingerprint(interpreter: str, contract_digest: str,
                         continue
                     hasher.update(f"{member}:{stat_result.st_size}:{stat_result.st_mtime_ns}".encode("utf-8"))
 
+    if authoritative:
+        for member_path, identity in observed_files.items():
+            if identity != identity_for(member_path):
+                raise EnvironmentFingerprintChanged(
+                    f"environment member changed during fingerprint: {member_path}")
+        for directory, names in observed_entries.items():
+            current_names = tuple(entry.name for entry in sorted(directory.iterdir())
+                                  if entry.name != "__pycache__"
+                                  and not entry.name.endswith((".pyc", ".pyo")))
+            if names != current_names:
+                raise EnvironmentFingerprintChanged(
+                    f"environment membership changed during fingerprint: {directory}")
     digest = hasher.hexdigest()
     if cache_key is not None:
         _ADVISORY_INTERPRETER_FINGERPRINT_CACHE[cache_key] = digest
@@ -2259,9 +2299,11 @@ def _remember(model: dict[str, Any], require_cuda: bool, report: EnvironmentRepo
         return
     is_authoritative = getattr(report, "content_verified", False)
     if is_authoritative:
-        report.environment_fingerprint = _interpreter_fingerprint(
-            report.interpreter, report.contract_digest, report.prefix,
-            authoritative=True)
+        report.environment_fingerprint = report.validated_environment_fingerprint
+        if report.environment_fingerprint is None:
+            report.environment_fingerprint = _interpreter_fingerprint(
+                report.interpreter, report.contract_digest, report.prefix,
+                authoritative=True)
         report.advisory_fingerprint = report.environment_fingerprint
     else:
         report.advisory_fingerprint = _interpreter_fingerprint(

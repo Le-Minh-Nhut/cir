@@ -1,0 +1,21 @@
+[gpu_job] lock held, GPU empty, launching: systemd-run --user --wait --pipe --collect --same-dir --service-type=exec --unit=cir-hint-dress-v3-20261122-native-adapter-adapter -p MemoryMax=12G -p MemorySwapMax=0 -p OOMPolicy=kill /home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/run-role-service.sh --inner --unit cir-hint-dress-v3-20261122-native-adapter-adapter --output-dir /home/heheboiz/data/cir/workbench/docs/reviews/20261112-parity-repair/raw/third_model/hint-v3-dress-current-source-20261122T190500Z --min-free-bytes 5368709120 -- env WORKBENCH_COMPOSITION_BATCH_SIZE=32 /home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python /home/heheboiz/data/cir/workbench/docs/reviews/20261112-parity-repair/scripts/third_model_parity.py --model hint --category dress --phase adapter --role native_adapter_adapter --run-root /home/heheboiz/data/cir/workbench/docs/reviews/20261112-parity-repair/raw/third_model/hint-v3-dress-current-source-20261122T190500Z --controller-interpreter /home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python
+GPU-9bc596d9-19e9-6f43-dc2c-a80da924263c, 946 MiB, 16303 MiB
+Running as unit: cir-hint-dress-v3-20261122-native-adapter-adapter.service; invocation ID: df34c5198460442d970e3809e8b78e96
+waiting_for_cpu_lock=1
+cpu_lock_acquired=1
+disk_check_after_cpu_lock=1 free_bytes=42241642496 required_bytes=5368709120
+unit=cir-hint-dress-v3-20261122-native-adapter-adapter.service
+cgroup=/user.slice/user-1000.slice/user@1000.service/app.slice/cir-hint-dress-v3-20261122-native-adapter-adapter.service
+memory.max=12884901888
+memory.swap.max=0
+memory.oom.group=1
+output_dir=/home/heheboiz/data/cir/workbench/docs/reviews/20261112-parity-repair/raw/third_model/hint-v3-dress-current-source-20261122T190500Z
+free_bytes=42241642496
+min_free_bytes=5368709120
+Finished with result: success
+Main processes terminated with: code=exited/status=0
+Service runtime: 1min 53.268s
+CPU time consumed: 2min 3.603s
+Memory peak: 5.1G
+Memory swap peak: 0B
+[gpu_job] child_exit=0

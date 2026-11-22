@@ -211,7 +211,8 @@ export function QueryInspector({ run, query, condition = "multimodal", selectedC
                   <div key={item.id}
                        className={`rankcell ${item.rank === null ? "unscored-cell" : item.rank <= FIXED_CUTOFFS.compositionOutcomeK ? "hit" : "miss"}`}
                        data-testid={`rank-${item.id}`}
-                       data-rank-state={item.rank === null ? "missing-rank" : item.rank <= FIXED_CUTOFFS.compositionOutcomeK ? "hit" : "miss"}>
+                       data-rank-state={item.rank === null ? "missing-rank" : item.rank <= FIXED_CUTOFFS.compositionOutcomeK ? "hit" : "miss"}
+                       data-rank={item.rank ?? ""}>
                     <small>{CONDITION_LABELS[item.id] ?? item.short}</small>
                     <b>{item.rank === null ? "Chưa chấm" : fmtRank(item.rank)}</b>
                     <span className="hint">

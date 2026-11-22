@@ -1,0 +1,19 @@
+# CLVC-Net and TME native parity status
+
+Status: **PENDING; no native/adapter model inference or parity measurement performed by this worker.** Campaign acceptance remains open. Adapter artifact sink, native capture-to-V3 consumer, comparison consumer, and CPU checks exist; no measured model-run receipt, native artifact, or real comparison exists.
+
+## Evidence
+
+- `workbench/composition/model_clvc_net.py` worker records selected actual transformed RGB NCHW inputs and corresponding production feature rows (2048-D) per category/op; query captures include both towers' actual padded token IDs and lengths, with no attention mask because native CLVC zero padding is unmasked. Normal output still encodes every input and scatters category groups to input order.
+- `workbench/composition/model_tme.py` worker records selected actual TargetPad RGB inputs, actual query token IDs/masks and processed text, reference embeddings, and output features. Normal output remains full-sized.
+- `workbench/replay/clvc_tme_parity.py` streams runner memmaps into condition-specific adapter NPZ/JSON artifacts, binds exact frozen V3 identity, ordered IDs, source/plan and actual ranks/metrics through the shared V3 receipt/artifact-block helpers. `compare_artifacts` rejects identity/rank-policy/order mismatches and compares complete query/gallery feature arrays in bounded row chunks, plus ranks and metrics. A synthetic CPU fixture proves writer/reader behavior only; it is not model parity.
+- Latest narrow proof: `raw/clvc-tme-native-parity/verification.txt` (`2 passed, 22 deselected in 0.15s`; syntax plus adapter artifact sink and synthetic comparison). No native source artifact was available for a real comparison.
+
+## Scope constraints
+
+CLVC strict image-reference scope is 5,884 rows, using one common query/gallery cohort across conditions. 117 of 6,001 rows require caption-based category routing and must be labeled caption-routed, not strict image-only. IDs `7:3038` (reference `B004TMGDME`) and `7:3790` (reference `B0079K0YBO`) remain unresolved: the original release rows lack category; validation annotations repeat each reference/caption/target pair in both shirt and toptee. Do not infer category from row position or candidate ranking. Full 6,001 is not a new measured cohort. Shared resolver/cohort/cache code is owned elsewhere.
+
+TME native replay now retains original all-three-category `evaluate_features(...)` and has an owned observer path for actual tokenizer IDs/masks, fused/query features, projected gallery features, scores, ranks, and metrics; cache status may be `UNVERIFIED` and must not be called verified. CLVC native replay retains original `test_module.test(...)` and has an owned observer path for both local/global token IDs/lengths, 1024+1024 features, selected pixels, masked native ranks, and metric cross-check. These producer paths are implementation-complete at source level but have no physical model run yet. Adapter captures are active through shared runner and sink callbacks. Frozen identity uses `cohort_id`, never `cohort` alias; exact required fields are `checkpoint`, `configuration`, `environment`, `protocol`, `category`, `cohort_id`, `precision`, `seed`, `query_order_sha256`, `gallery_order_sha256`, `reference_exclusions_sha256`, …
+## Completion blockers
+
+No sampled native/adapter capture pair; no measured native local/global CLVC token IDs/lengths; no measured TME native tokenizer/mask artifact; no native full-pop ranks/metrics/denominators; no measured repeated-run or matched-control receipts; no actual GPU/model run. Therefore CLVC-01, TME-01, G1-01, G2-01, METRIC-01 remain pending. Adapter worker hooks, native observer paths, and runner artifact sink are wired, but real inference and native artifacts are needed before comparison. A concrete preregistered command and explicit GPU lease are required after native LIMN/HINT priority.

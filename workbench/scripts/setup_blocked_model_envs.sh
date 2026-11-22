@@ -13,6 +13,9 @@ REPO=/home/heheboiz/data/cir
 ENVS="$REPO/workbench/envs"
 UV=/home/heheboiz/.local/bin/uv
 TORCH_INDEX=https://download.pytorch.org/whl/cu128
+DECORD_DIR="$REPO/workbench/artifacts/assets/decord/v0.6.0"
+DECORD_SOURCE="$DECORD_DIR/original/decord-0.6.0-py3-none-manylinux2010_x86_64.whl"
+DECORD_WHEEL="$DECORD_DIR/dist/decord-0.6.0-py3-none-manylinux2010_x86_64.whl"
 
 # `uv venv` seeds no pip; every install goes through `uv pip` against that interpreter, so the
 # record of what landed is `uv pip freeze` on the same path.
@@ -24,7 +27,7 @@ common() {
   uip --index-url "$TORCH_INDEX" $torch_req
 }
 
-case "${1:?target name: airknow|clvc|tgcir|pair}" in
+case "${1:?target name: airknow|clvc|tgcir|pair|dcnet}" in
   clvc)
     # Pinned README: Python 3.7.6 / Torch 1.6.0. Adapted: 3.9 + cu128 (sm_120). The evaluator itself
     # imports only torch, torchvision, numpy and PIL; `text_model` uses a pure-python vocab.
@@ -50,7 +53,10 @@ case "${1:?target name: airknow|clvc|tgcir|pair}" in
       "transformers==4.25.0" "timm==0.9.16" "fairscale==0.4.13" "omegaconf==2.3.0" \
       "iopath==0.1.10" "peft==0.6.2" "diffusers==0.19.3" "huggingface-hub==0.19.4" \
       "accelerate==0.25.0" "opencv-python-headless==4.5.5.64" "scikit-learn==1.3.2" \
-      "pandas==2.0.3" "numpy<2" Pillow pyyaml regex requests tqdm
+      "pandas==2.0.3" "numpy==1.26.4" Pillow pyyaml regex requests tqdm \
+      "einops==0.7.0" "ftfy==6.3.1" "webdataset==0.2.86"
+    "$REPO/workbench/envs/ctl312h/bin/python" "$REPO/workbench/scripts/repair_decord_wheel_metadata.py" "$DECORD_SOURCE" "$DECORD_WHEEL"
+    uip --reinstall --no-deps "$DECORD_WHEEL"
     ;;
   pair)
     # PAIR declares Python 3.8.10 / Torch 2.0.0 + open_clip, but that pinned pairing cannot be
@@ -73,6 +79,27 @@ case "${1:?target name: airknow|clvc|tgcir|pair}" in
 import importlib.metadata as md; \
 print("smoke", sys.version.split()[0], torch.__version__, torchvision.__version__, \
 md.version("open_clip_torch"), torch.version.cuda)'
+    ;;
+  dcnet)
+    DIR="$ENVS/dcnet310-sm120"
+    common 3.10 "$DIR" "torch==2.7.1 torchvision==0.22.1"
+    uip "numpy==1.26.4" "Pillow==12.3.0" "einops==0.7.0" "nltk==3.5"
+    NLTK_DATA="$REPO/workbench/artifacts/assets/nltk_data"
+    mkdir -p "$NLTK_DATA/tokenizers"
+    curl -fsSL "https://raw.githubusercontent.com/nltk/nltk_data/550b6625bcef1f2abff2ff770a5a0d272c9c6b2a/packages/tokenizers/punkt.zip" -o "$NLTK_DATA/tokenizers/punkt.zip"
+    "$REPO/workbench/envs/ctl312h/bin/python" - "$NLTK_DATA" <<'PY'
+import hashlib
+import sys
+from pathlib import Path
+from zipfile import ZipFile
+root = Path(sys.argv[1])
+archive_path = root / "tokenizers/punkt.zip"
+digest = hashlib.sha256(archive_path.read_bytes()).hexdigest()
+assert digest == "51c3078994aeaf650bfc8e028be4fb42b4a0d177d41c012b6a983979653660ec", digest
+with ZipFile(archive_path) as archive:
+    archive.extractall(root / "tokenizers")
+PY
+    NLTK_DATA="$NLTK_DATA" "$DIR/bin/python" -c 'import nltk; from nltk.tokenize import word_tokenize; assert word_tokenize("Two red shirts, with stripes!") == ["Two", "red", "shirts", ",", "with", "stripes", "!"]; print(nltk.__version__, nltk.data.find("tokenizers/punkt/english.pickle"))'
     ;;
   *) echo "unknown target: $1" >&2; exit 2 ;;
 esac

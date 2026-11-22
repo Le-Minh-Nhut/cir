@@ -1,0 +1,24 @@
+OOM and systemd pipe probe receipt — 2026-11-21
+
+Boot ID: `8c02995e-a887-4125-aeab-acfabd2bd859`
+
+Historical OOM evidence, retrieved read-only with:
+`journalctl -k --since '2026-11-21 16:18:53' --until '2026-11-21 16:18:54' --no-pager -o short-iso`
+`journalctl --since '2026-11-21 16:18:53' --until '2026-11-21 16:18:54' --no-pager -o short-iso`
+
+```text
+2026-11-21T16:18:53+07:00 kernel: node-V8Worker invoked oom-killer: gfp_mask=0x140cca(GFP_HIGHUSER_MOVABLE|__GFP_COMP), order=0, oom_score_adj=200
+2026-11-21T16:18:53+07:00 kernel: oom-kill:constraint=CONSTRAINT_NONE,...,global_oom,...,task=omp,pid=38464,uid=1000
+2026-11-21T16:18:53+07:00 kernel: Out of memory: Killed process 38464 (omp) total-vm:78394532kB, anon-rss:24123180kB, file-rss:64kB, shmem-rss:0kB, UID:1000 pgtables:58280kB oom_score_adj:200
+2026-11-21T16:18:53+07:00 systemd[1]: user@1000.service: A process of this unit has been killed by the OOM killer.
+2026-11-21T16:18:53+07:00 systemd[1710]: vte-spawn-d158d07e-724b-4695-8b60-91529bb37994.scope: A process of this unit has been killed by the OOM killer.
+```
+
+OOM victim RSS from kernel is `anon-rss:24123180kB` (kilobytes), about 23.0 GiB; field spelling/unit retained exactly above. ConeSep interval from `raw/conesep-native-adapter-pair-20261121T1215Z/terminal-state.json`: epoch usec `1795252632690283`–`1795252770410550`, converted to `2026-11-21T16:17:12.690283+07:00`–`16:19:30.410550+07:00`; interval overlaps OOM at 16:18:53. Kernel OOM records in inspected interval name only PID 38464 as victim; none identify a ConeSep child PID. ConeSep retained `inner_process_result: exit 1 / FAILURE`, but no child-output trace; OOM explains timing/outage correlation, not the child's failure mechanism.
+
+CPU-only output-routing reproducer, run `2026-11-21T16:52:26+07:00`; unit `cir-pipe-output-probe-20261121.service`; no model, GPU, CPU lock, or existing job used:
+`systemd-run --user --wait --pipe --collect --unit=cir-pipe-output-probe-20261121.service -p StandardOutput=append:$PWD/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/systemd-pipe-output-probe-20261121/service.stdout.log -p StandardError=append:$PWD/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/systemd-pipe-output-probe-20261121/service.stderr.log /bin/bash -c 'printf "SERVICE_STDOUT\\n"; printf "SERVICE_STDERR\\n" >&2; exit 23'`
+
+Observed: `service.stdout.log` and `service.stderr.log` absent; `launcher.stdout.log` contains `SERVICE_STDOUT`; `launcher.stderr.log` contains `SERVICE_STDERR` and `Main processes terminated with: code=exited/status=23`. Confirms with this systemd version that `--pipe` routes child streams to caller rather than requested append files; exit status remains observable. Probe log paths are under `systemd-pipe-output-probe-20261121/` beside this receipt.
+
+Current memory snapshot, read `2026-11-21T16:53:38+07:00` (same boot): `MemAvailable: 21962120 kB`; `SwapTotal: 8388604 kB`; `SwapFree: 6765516 kB`. Resolved processes named `omp`: PID 3110 `VmRSS 68788 kB`; PID 77136 `VmRSS 3453084 kB`.

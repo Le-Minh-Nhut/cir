@@ -316,6 +316,108 @@ def _load_replay_modules(source_root: Path) -> tuple[Any, Any, Any, Any, Any]:
     return torch, datasets, data_utils, test_blip2, (txt_processors, boundary)
 
 
+
+def _airknow_image_count(dataset_root: Path) -> int:
+    total = 0
+    try:
+        for category in CATEGORIES:
+            captions = json.loads((dataset_root / "captions" / f"cap.{category}.val.json").read_text())
+            gallery = json.loads((dataset_root / "image_splits" / f"split.{category}.val.json").read_text())
+            total += 2 * len(captions) + len(gallery)
+    except (OSError, json.JSONDecodeError) as error:
+        raise ValueError(f"cannot count Air-Know native FashionIQ image inputs: {error}") from error
+    return total
+
+
+def _construct_airknow_dataset(dataset_root: Path, cache_root: Path, datasets: Any,
+                               transform: Any) -> tuple[Any, dict[str, Any]]:
+    """Build original source dataset with both image getters in shared lossless spool."""
+    from workbench.replay.tensor_spool import disk_backed_images
+
+    expected_test_calls = expected_gallery_calls = 0
+    for category in CATEGORIES:
+        captions = json.loads((dataset_root / "captions" / f"cap.{category}.val.json").read_text())
+        gallery = json.loads((dataset_root / "image_splits" / f"split.{category}.val.json").read_text())
+        expected_test_calls += 2 * len(captions)
+        expected_gallery_calls += len(gallery)
+    with disk_backed_images(dataset_root, cache_root, datasets,
+                            method_name=("get_test_img", "get_img"),
+                            expected_count=expected_test_calls + expected_gallery_calls) as receipt:
+        dataset = datasets.FashionIQ(
+            path=str(cache_root).rstrip("/") + "/", transform=transform, noise_ratio=0)
+        receipt.evict()
+    expected_counts = {"get_test_img": expected_test_calls, "get_img": expected_gallery_calls}
+    if receipt["getter_counts"] != expected_counts:
+        raise RuntimeError(f"Air-Know source getter populations differ: {receipt['getter_counts']} != {expected_counts}")
+    return dataset, dict(receipt)
+import numpy as np
+def _capture_airknow_native_rows(dataset: Any, category: str,
+                                 observations: list[tuple[Any, Any]]) -> list[dict[str, Any]]:
+    import json
+    from pathlib import Path
+
+    queries = getattr(dataset, f"test_queries_{category}")
+    targets = getattr(dataset, f"test_targets_{category}")
+    split_path = Path(dataset.split_dir) / f"split.{category}.val.json"
+    try:
+        gallery = json.loads(split_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise ValueError(f"{category}: cannot read native FashionIQ gallery IDs: {error}") from error
+    if len(targets) != len(gallery) or len(observations) != 2 * len(queries):
+        raise ValueError(f"{category}: native Air-Know score capture dimensions do not match source IDs")
+    rows = []
+    for index, query in enumerate(queries):
+        first_scores, first_order = observations[index]
+        second_scores, second_order = observations[len(queries) + index]
+        if (len(first_scores) != len(gallery) or len(first_order) != len(gallery)
+                or not np.array_equal(first_scores, second_scores)
+                or not np.array_equal(first_order, second_order)):
+            raise ValueError(f"{category}: native Air-Know duplicate source sort rows differ or have wrong gallery size")
+        reference_position = int(query["source_img_id"])
+        target_position = int(query["target_img_id"])
+        scores = -first_scores.copy()
+        scores[reference_position] = -10e10
+        source_order = np.asarray(first_order, dtype=np.int64).copy()
+        if targets[target_position]["target_img_id"] != target_position:
+            raise ValueError(f"{category}: Air-Know native target IDs are not gallery positions")
+        rows.append({
+            "query_id": f"{category}#row{index}:{gallery[reference_position]}:{gallery[target_position]}",
+            "target_id": f"{category}_{gallery[target_position]}",
+            "reference_id": f"{category}_{gallery[reference_position]}",
+            "text": query["mod"]["str"],
+            "scores": scores,
+            "source_order": source_order,
+        })
+    return rows
+
+
+class _ArgsortObserver:
+    def __init__(self, module: Any, observations: list[tuple[Any, Any]]) -> None:
+        self._module = module
+        self._observations = observations
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._module, name)
+
+    def argsort(self, values: Any, *args: Any, **kwargs: Any) -> Any:
+        order = self._module.argsort(values, *args, **kwargs)
+        self._observations.append((self._module.asarray(values).copy(),
+                                   self._module.asarray(order).copy()))
+        return order
+
+
+def _native_test_with_score_capture(test_module: Any, params: Any, model: Any, dataset: Any,
+                                    category: str, txt_processors: Any, capture: Any) -> dict[str, Any]:
+    original_numpy = test_module.np
+    observations: list[tuple[Any, Any]] = []
+    test_module.np = _ArgsortObserver(original_numpy, observations)
+    try:
+        recalls = dict(test_module.test(params, model, dataset, category, txt_processors))
+    finally:
+        test_module.np = original_numpy
+    capture(dataset, category, observations)
+    return recalls
+
 def evaluate_categories(
     checkpoint_root: Path,
     dataset_root: Path,
@@ -325,6 +427,7 @@ def evaluate_categories(
     batch_size: int = 64,
     device: str | None = None,
     eval_mode: bool = False,
+    score_capture: Any | None = None,
 ) -> tuple[list[ReplayResult], dict[str, Any]]:
     torch, datasets, data_utils, test_module, processors = _load_replay_modules(source_root)
     txt_processors, processor_boundary = processors
@@ -332,6 +435,17 @@ def evaluate_categories(
     target_device = device or ("cuda" if torch.cuda.is_available() else "cpu")
     model_path = checkpoint_root / variant["filename"]
     expected_sha = variant.get("expected_sha256") or KNOWN_AUTHOR_SHA256.get(variant_id)
+
+    seed = os.environ.get(SEED_ENV)
+    if seed:
+        # Opt-in only: seed before deserialization and preserve RNG through native gallery/query order.
+        import random as _random
+        import numpy as _np
+        torch.manual_seed(int(seed))
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed_all(int(seed))
+        _random.seed(int(seed))
+        _np.random.seed(int(seed))
 
     model = load_trusted_whole_model(model_path, expected_sha, torch)
     model = model.to(target_device)
@@ -342,16 +456,6 @@ def evaluate_categories(
     else:
         # Native behavior: test_BLIP2.py:10 calls model.train()
         model.train()
-
-    seed = os.environ.get(SEED_ENV)
-    if seed:
-        # Opt-in only: seeding changes the native behaviour, so it is a caller decision recorded in
-        # the artifact rather than a default this wrapper imposes.
-        import random as _random
-        import numpy as _np
-        torch.manual_seed(int(seed))
-        _random.seed(int(seed))
-        _np.random.seed(int(seed))
 
     transform = data_utils.targetpad_transform(TARGETPAD_RATIO, TARGETPAD_DIM)
     params = SimpleNamespace(batch_size=batch_size, dataset=DATASET_LABEL)
@@ -386,11 +490,16 @@ def evaluate_categories(
                             "expected_sha256": expected_sha},
                 state={"seed": seed, "eval_mode": bool(eval_mode), "noise_ratio": 0}),
             record=cache_metadata) as cache_root:
-        root_str = str(cache_root).rstrip("/") + "/"
-        dataset = datasets.FashionIQ(path=root_str, transform=transform, noise_ratio=0)
+        dataset, spool_metadata = _construct_airknow_dataset(dataset_root, cache_root, datasets, transform)
 
         for category in categories:
-            recalls = dict(test_module.test(params, model, dataset, category, txt_processors))
+            if score_capture is None:
+                recalls = dict(test_module.test(params, model, dataset, category, txt_processors))
+            else:
+                recalls = _native_test_with_score_capture(
+                    test_module, params, model, dataset, category, txt_processors,
+                    lambda ds, cat, observations: score_capture(
+                        _capture_airknow_native_rows(ds, cat, observations)))
             results.append(
                 ReplayResult(
                     model_id="airknow",
@@ -433,6 +542,7 @@ def evaluate_categories(
                         # (manifest matched), `rebuilt` (cold), `not_verified_opt_out` (operator
                         # forced it). A warm-path run is therefore visible as such.
                         "cache_manifest": dict(cache_metadata),
+                        "tensor_storage": spool_metadata,
                     },
                 )
             )
@@ -455,7 +565,7 @@ def main(argv: list[str] | None = None) -> int:
         help="Experimental variant: neutralize model.train() at test_BLIP2.py:10 to evaluate in eval mode",
     )
     parser.add_argument("--preflight-only", action="store_true")
-    parser.add_argument("--output", type=Path)
+    parser.add_argument("--score-output", type=Path, help="directory for native per-category score/order captures")
     args = parser.parse_args(argv)
 
     categories = (args.category,) if args.category else CATEGORIES
@@ -468,6 +578,27 @@ def main(argv: list[str] | None = None) -> int:
         print(f"[READY] Air-Know preflight passed (variant={args.variant}); no inference executed")
         return 0
 
+    capture: Any = None
+    if args.score_output:
+        args.score_output.mkdir(parents=True, exist_ok=False)
+
+        def capture_callback(rows: list[dict[str, Any]]) -> None:
+            if not rows:
+                raise ValueError("Air-Know score capture is empty")
+            category = rows[0]["query_id"].split("#", 1)[0]
+            if any(not row["query_id"].startswith(f"{category}#") for row in rows):
+                raise ValueError("Air-Know score capture mixes categories")
+            np.savez_compressed(
+                args.score_output / f"{category}.native-scores.npz",
+                query_ids=np.asarray([row["query_id"] for row in rows]),
+                target_ids=np.asarray([row["target_id"] for row in rows]),
+                reference_ids=np.asarray([row["reference_id"] for row in rows]),
+                texts=np.asarray([row["text"] for row in rows]),
+                scores=np.stack([row["scores"] for row in rows]),
+                source_order=np.stack([row["source_order"] for row in rows]),
+            )
+        capture = capture_callback
+
     results, aggregate = evaluate_categories(
         args.checkpoint_root,
         args.dataset_root,
@@ -477,7 +608,7 @@ def main(argv: list[str] | None = None) -> int:
         batch_size=args.batch_size,
         device=args.device,
         eval_mode=args.eval_mode,
-    )
+        score_capture=capture)
     variant = CHECKPOINTS[args.variant]
     timestamp = datetime.now(timezone.utc).isoformat()
     identity = run_identity(variant_id=args.variant, eval_mode=args.eval_mode, protocol=PROTOCOL,
@@ -515,7 +646,7 @@ def main(argv: list[str] | None = None) -> int:
                     "`variance_group`, computed from the runs it lists. See A-12 in "
                     "docs/reviews/20261111-master-audit/BLOCKED_MODELS_VERIFICATION.vi.md",
         },
-        "category_model_policy": "shared",
+        "native_score_capture": str(args.score_output.resolve()) if args.score_output else None,
         "complete_benchmark": aggregate["complete"],
         "categories": [asdict(r) for r in results],
         "aggregate": aggregate,

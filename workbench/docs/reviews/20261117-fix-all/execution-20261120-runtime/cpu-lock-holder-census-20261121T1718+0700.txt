@@ -1,0 +1,40 @@
+Read-only shared CPU lock census — 2026-11-21
+
+Observation timestamp: 2026-11-21T17:18:01+07:00.
+
+Lock object: `/tmp/cir-fix-all-20261120-cpu.lock`; `stat -Lc '%d:%i'` = `66309:39620593` (device 103:05, inode 39620593).
+
+Exact ownership evidence:
+- `lslocks -n -o PID,TYPE,MODE,PATH` showed PID `77136`, `FLOCK WRITE`, path `/tmp/cir-fix-all-20261120-cpu.lock`; `flock -x` waiter PID `108802`, `FLOCK WRITE*`, same path.
+- `/proc/locks`: `47: FLOCK ADVISORY WRITE 77136 103:05:39620593 0 EOF`; queued waiter also shown: `47: -> FLOCK ADVISORY WRITE 108802 103:05:39620593 0 EOF`.
+- `/proc/77136/fdinfo/253`:
+```
+pos:   0
+flags:   02100001
+mnt_id:   33
+ino:   39620593
+lock:   1: FLOCK  ADVISORY  WRITE 77136 103:05:39620593 0 EOF
+```
+Descriptor target is `/tmp/cir-fix-all-20261120-cpu.lock`.
+- `/proc/77136/fdinfo/250` names same device/inode but carries no lock record. Not treated as holder proof.
+- Waiter ancestry observed: PID 108799 `bash .../execution-20261120-runtime/run-role-service.sh --inner --unit cir-tgcir-dress-v3-20261121T101337Z ...`; child PID 108802 `flock -x 9`, blocked in `locks_lock_inode_wait`, elapsed ~1m32s at census. `systemctl --user show cir-tgcir-dress-v3-20261121T101337Z.service` was queried; no final state captured in this note.
+- PID 77136 command line: `omp`; observed parent PID 5904 (`bash`, PPID 5892). `ps` showed PID 77136 sleeping in `ep_poll`, elapsed ~26–27m, CPU ~16m, RSS approximately 3.0–3.9 GiB across nearby observations. No owned command context safely identified beyond generic `omp` command and parent shell; no broad search performed.
+
+Memory snapshot near 2026-11-21T17:18+07: (observed within seconds of note timestamp): `MemTotal 32,535,136 kB`, `MemFree 2,153,112 kB`, `MemAvailable 20,614,796 kB`, `SwapTotal 8,388,604 kB`, `SwapFree 4,506,264 kB`. `/proc/pressure/memory`: `some avg10=0.00 avg60=0.00 avg300=0.00 total=26313808`; `full avg10=0.00 avg60=0.00 avg300=0.00 total=25714406`.
+
+Commands used (read-only):
+```
+stat -Lc '%d:%i' /tmp/cir-fix-all-20261120-cpu.lock
+lslocks -n -o PID,TYPE,MODE,PATH
+cat /proc/locks
+cat /proc/77136/fdinfo/253
+cat /proc/77136/fdinfo/250
+readlink /proc/77136/fd/253
+ps -p 77136,5904,108799,108802 -o pid,ppid,pgid,sid,stat,etime,time,%cpu,rss,wchan:20,comm,args
+cat /proc/77136/cgroup
+cat /proc/meminfo
+cat /proc/pressure/memory
+systemctl --user show cir-tgcir-dress-v3-20261121T101337Z.service -p ActiveState -p SubState -p ExecMainStatus -p ControlGroup
+```
+
+Conclusion: lock has live exclusive holder PID 77136 and a confirmed queued TG `flock` waiter. Cannot attribute holder to a legitimate live campaign job or establish stale/leaked FD yet; process liveness alone does not prove FD cannot be leaked. No lock/path/process mutation performed. Safe options: leave lock unchanged and wait for holder to release; request OMP/user session owner identify or orderly stop that session. Do not unlink/switch lock, kill OMP/process, or bypass shared flock.

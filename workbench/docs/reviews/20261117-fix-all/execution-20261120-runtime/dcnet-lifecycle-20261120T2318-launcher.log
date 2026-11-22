@@ -1,0 +1,11 @@
+Running as unit: run-u224.service; invocation ID: 91a0d4cfa4cb44c1b90f990da458a0b6
+[gpu_job] lock held, GPU empty, launching: flock -x /tmp/cir-fix-all-20261120-cpu.lock workbench/envs/ctl312h/bin/python workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/dcnet_lifecycle_helper.py --run-root /home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/dcnet-lifecycle-20261120T2318+0700 --port 18762 --timeout 1200
+GPU-9bc596d9-19e9-6f43-dc2c-a80da924263c, 530 MiB, 16303 MiB
+Finished with result: success
+Main processes terminated with: code=killed/status=TERM
+Service runtime: 1min 47.618s
+CPU time consumed: 791ms
+Memory peak: 73.8M
+Memory swap peak: 0B
+
+exit=0

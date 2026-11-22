@@ -1,0 +1,31 @@
+[gpu_job] lock held, GPU empty, launching: systemd-run --user --wait --pipe --collect --same-dir --service-type=exec --unit=cir-csmcir-r22-shirt-native_adapter_native-20261122 -p MemoryMax=12G -p MemorySwapMax=0 -p OOMPolicy=kill /home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/run-role-service.sh --inner --unit cir-csmcir-r22-shirt-native_adapter_native-20261122 --output-dir /home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/raw/caption-v3-gate-bridge-20261121 --min-free-bytes 16203657032 -- /home/heheboiz/data/cir/workbench/artifacts/environments/cir-005ef4e1b02999a5/bin/python -m workbench.replay.run_fashioniq_v3 --plan /home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/raw/caption-v3-gate-bridge-20261121/fresh-csm-shirt-toptee-preflight-r22/g1_g2.csmcir.shirt.v3-plan.json --role native_adapter_native --phase native
+GPU-9bc596d9-19e9-6f43-dc2c-a80da924263c, 903 MiB, 16303 MiB
+Running as unit: cir-csmcir-r22-shirt-native_adapter_native-20261122.service; invocation ID: e591d611944a46c38c5b2877d5c2ca72
+waiting_for_cpu_lock=1
+cpu_lock_acquired=1
+disk_check_after_cpu_lock=1 free_bytes=24735178752 required_bytes=16203657032
+unit=cir-csmcir-r22-shirt-native_adapter_native-20261122.service
+cgroup=/user.slice/user-1000.slice/user@1000.service/app.slice/cir-csmcir-r22-shirt-native_adapter_native-20261122.service
+memory.max=12884901888
+memory.swap.max=0
+memory.oom.group=1
+output_dir=/home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/raw/caption-v3-gate-bridge-20261121
+free_bytes=24735178752
+min_free_bytes=16203657032
+/home/heheboiz/data/cir/workbench/artifacts/environments/cir-005ef4e1b02999a5/lib/python3.10/site-packages/transformers/utils/generic.py:441: FutureWarning: `torch.utils._pytree._register_pytree_node` is deprecated. Please use `torch.utils._pytree.register_pytree_node` instead.
+  _torch_pytree._register_pytree_node(
+/home/heheboiz/data/cir/workbench/artifacts/environments/cir-005ef4e1b02999a5/lib/python3.10/site-packages/transformers/utils/generic.py:309: FutureWarning: `torch.utils._pytree._register_pytree_node` is deprecated. Please use `torch.utils._pytree.register_pytree_node` instead.
+  _torch_pytree._register_pytree_node(
+/home/heheboiz/data/cir/workbench/artifacts/environments/cir-005ef4e1b02999a5/lib/python3.10/site-packages/transformers/utils/generic.py:309: FutureWarning: `torch.utils._pytree._register_pytree_node` is deprecated. Please use `torch.utils._pytree.register_pytree_node` instead.
+  _torch_pytree._register_pytree_node(
+/home/heheboiz/data/cir/workbench/artifacts/environments/cir-005ef4e1b02999a5/lib/python3.10/site-packages/huggingface_hub/file_download.py:942: FutureWarning: `resume_download` is deprecated and will be removed in version 1.0.0. Downloads always resume when possible. If you want to force a new download, use `force_download=True`.
+  warnings.warn(
+/home/heheboiz/data/cir/workbench/third_party/CSMCIR/src/lavis/models/blip2_models/blip2.py:42: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  return torch.cuda.amp.autocast(dtype=dtype)
+Finished with result: success
+Main processes terminated with: code=exited/status=0
+Service runtime: 2min 28.434s
+CPU time consumed: 2min 23.211s
+Memory peak: 2.1M
+Memory swap peak: 0B
+[gpu_job] child_exit=0

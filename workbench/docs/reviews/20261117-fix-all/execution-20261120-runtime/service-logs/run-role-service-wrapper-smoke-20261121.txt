@@ -1,0 +1,13 @@
+Wrapper smoke receipt — 2026-11-21
+
+Target: `workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/run-role-service.sh` outer path, then normal inner service path; no real GPU command launched. Exact call used disposable inert `CIR_GPU_JOB` shim, isolated `CIR_CPU_LOCK` override, and temp output dir:
+
+```text
+CIR_GPU_JOB=/tmp/cir-role-service-smoke.BSsHfP/bin/gpu_job_smoke.sh CIR_CPU_LOCK=/tmp/cir-role-service-smoke.BSsHfP/cpu.lock workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/run-role-service.sh --unit cir-role-wrapper-smoke-success-20261121 --output-dir /tmp/cir-role-service-smoke.BSsHfP/output --min-free-bytes 1048576 -- /bin/bash -c 'printf "CHILD_STDOUT_%s\\n" "$1"; printf "CHILD_STDERR_%s\\n" "$1" >&2; exit "$2"' _ success 0
+```
+
+Expected/actual exit: `0/0`; systemd `Result=success`, `ExecMainCode=0`, `ExecMainStatus=0` at `2026-11-21T17:06:51+07:00`. Smoke waited for actual shared CPU lock; lock acquired, after-lock disk check passed (`56106266624` bytes free, `1048576` required), cgroup checked (`memory.max=12884901888`, `memory.swap.max=0`, `memory.oom.group=1`). `CHILD_STDOUT_success` in `.stdout.log`; `CHILD_STDERR_success` in `.stderr.log`; `wrapper_exit=0` durable.
+
+Logs: `cir-role-wrapper-smoke-success-20261121.stdout.log`, `cir-role-wrapper-smoke-success-20261121.stderr.log` in this directory. Service wrapper logs are outside child output directory, so do not enter child-artifact seals. Smoke did not exercise wrapper nonzero path; direct CPU-only systemd `--pipe` probe in sibling `../systemd-pipe-output-probe-20261121/` recorded streams and preserved rc `23`.
+
+No build/test suite run. `legacy-model-runtimes` notified smoke passed and cleared to continue its DCNet run after HINT lock handoff.

@@ -1,0 +1,5 @@
+canonical_path=disposable_marker_only
+canonical_readonly=PASS OSError
+isolated_loopback_port_8000_connect_ex=111
+isolated_loopback_port_5173_connect_ex=111
+isolated_loopback_port_5432_connect_ex=111

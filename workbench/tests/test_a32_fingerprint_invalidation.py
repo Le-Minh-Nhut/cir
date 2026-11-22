@@ -187,6 +187,34 @@ def test_b_a_real_install_still_moves_the_environment_identity(tmp_path: Path) -
     assert runtime._interpreter_fingerprint(interpreter, "contract", str(prefix),
                                             authoritative=True) != before
 
+def test_authoritative_fingerprint_rejects_member_mutation_during_pass(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    prefix = tmp_path / "cir-mno"
+    site = _fake_environment(prefix)
+    startup = site / "startup.pth"
+    startup.write_text("/safe/path\n", encoding="utf-8")
+    (site / "torch-2.0.1.dist-info" / "RECORD").write_text(
+        "torch.py,sha256=deadbeef,0\nstartup.pth,sha256=deadbeef,0\n", encoding="utf-8")
+
+    original = runtime._member_digest
+    changed = False
+
+    def mutate_after_read(path: Path) -> str:
+        nonlocal changed
+        digest = original(path)
+        if path == startup and not changed:
+            changed = True
+            startup.write_text("/evil/path\n", encoding="utf-8")
+        return digest
+
+    monkeypatch.setattr(runtime, "_member_digest", mutate_after_read)
+    with pytest.raises(runtime.EnvironmentFingerprintChanged):
+        runtime._interpreter_fingerprint(str(prefix / "bin" / "python"), "contract", str(prefix),
+                                        authoritative=True)
+    assert changed
+
+
+
 
 def _startup_env(prefix: Path) -> tuple[Path, str]:
     """A real environment carrying a `sitecustomize.py` that sets a variable at startup."""

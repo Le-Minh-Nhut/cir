@@ -1,0 +1,7 @@
+OOMPolicy=
+ControlGroup=
+MemoryMax=infinity
+MemorySwapMax=infinity
+Id=cir-dcnet-canonical-api-20261121-v4.service
+ActiveState=inactive
+SubState=dead

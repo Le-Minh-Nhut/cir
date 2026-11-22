@@ -47,6 +47,7 @@ class Adapter(CompositionAdapter):
         self._worker_counter = 0
         self._worker_failed: str | None = None
         self._interpreter_verified = False
+        self._capture_spec: dict[str, Any] | None = None
 
     @classmethod
     def status(cls, config: Any | None = None) -> AdapterStatus:
@@ -174,13 +175,16 @@ def _run(adapter: Adapter, operation: str, image_paths: Sequence[str], texts: Se
     job_path, output_path = (work / f"job-{adapter._worker_counter}.json",
                              work / f"output-{adapter._worker_counter}.npy")
     source = Path(adapter.config.WORKBENCH_THIRD_PARTY_ROOT) / adapter._model["source_dir"]
-    job_path.write_text(json.dumps({"operation": operation,
-                                   "image_paths": [str(Path(path).resolve()) for path in image_paths],
-                                   "texts": list(texts), "categories": list(categories),
-                                   "output_path": str(output_path), "source_root": str(source),
-                                   "checkpoint_path": str(checkpoint_path),
-                                   "checkpoint_id": checkpoint["checkpoint_id"],
-                                   "batch_size": adapter.batch_size}), encoding="utf-8")
+    job_payload = {"operation": operation,
+                   "image_paths": [str(Path(path).resolve()) for path in image_paths],
+                   "texts": list(texts), "categories": list(categories),
+                   "output_path": str(output_path), "source_root": str(source),
+                   "checkpoint_path": str(checkpoint_path),
+                   "checkpoint_id": checkpoint["checkpoint_id"],
+                   "batch_size": adapter.batch_size}
+    if adapter._capture_spec is not None:
+        job_payload["capture_spec"] = adapter._capture_spec
+    job_path.write_text(json.dumps(job_payload), encoding="utf-8")
     scope = categories[0] if categories and len(set(categories)) == 1 else "global"
     try:
         if adapter._worker is not None and adapter._worker.poll() is not None:
@@ -303,22 +307,44 @@ def _worker_main(argv: Sequence[str] | None = None) -> int:
 
     def run_one(current: dict[str, Any]) -> None:
         outputs = []
+        capture_spec = current.get("capture_spec")
+        capture_positions = set(capture_spec.get("positions", ())) if capture_spec else set()
+        capture_pixels: list[tuple[int, Any]] = []
+        capture_tokens: list[tuple[int, Any, Any, Any]] = []
+        original_tokenizer = model.tokenizer
+        batch_start = 0
+
+        if capture_spec:
+            def capture_tokenizer(texts: Any, *args: Any, **kwargs: Any) -> Any:
+                result = original_tokenizer(texts, *args, **kwargs)
+                if current["operation"] == "queries":
+                    for offset, text in enumerate(texts):
+                        position = batch_start + offset
+                        if position in capture_positions:
+                            capture_tokens.append((position, text,
+                                result.input_ids[offset].detach().cpu().numpy().copy(),
+                                result.attention_mask[offset].detach().cpu().numpy().copy()))
+                return result
+            model.tokenizer = capture_tokenizer
         try:
             with torch.no_grad():
                 batch_size = max(1, int(current.get("batch_size") or 32))
                 paths = current["image_paths"]
                 batches = [paths[start:start + batch_size]
                            for start in range(0, len(paths), batch_size)]
-                # Same decode pool as HABIT, same transform, same ordering: only the serial
-                # `Image.open` + transform loop the GPU idled behind is parallelised.
                 decoded = prefetch_rows(lambda chunk: torch.stack(
                     [transform(_open_image(path)) for path in chunk]), batches, workers)
                 for index, images in enumerate(decoded):
+                    batch_start = index * batch_size
+                    if capture_spec:
+                        for local in range(len(images)):
+                            position = batch_start + local
+                            if position in capture_positions:
+                                capture_pixels.append((position, images[local].numpy().copy()))
                     images = images.cuda()
                     if current["operation"] == "queries":
-                        first = index * batch_size
                         texts = [txt_processors["eval"](text) for text in
-                                 current["texts"][first:first + len(images)]]
+                                 current["texts"][batch_start:batch_start + len(images)]]
                         features = model.extract_retrieval_compose(images, texts)[:, 0, 0, :].repeat(1, 32)
                     else:
                         features = model.extract_retrieval_target(images).permute(0, 2, 1)
@@ -326,9 +352,21 @@ def _worker_main(argv: Sequence[str] | None = None) -> int:
                     del images
             result = np.concatenate(outputs, axis=0) if outputs else np.empty((0, 8192), dtype=np.float32)
             np.save(current["output_path"], result.reshape(len(current["image_paths"]), -1), allow_pickle=False)
+            if capture_spec:
+                capture_path = Path(capture_spec["output_path"])
+                capture_path.parent.mkdir(parents=True, exist_ok=True)
+                np.savez(capture_path,
+                         positions=np.asarray([row[0] for row in capture_pixels], dtype=np.int32),
+                         pixels=np.stack([row[1] for row in capture_pixels]),
+                         token_positions=np.asarray([row[0] for row in capture_tokens], dtype=np.int32),
+                         token_texts=np.asarray([row[1] for row in capture_tokens]),
+                         input_ids=np.stack([row[2] for row in capture_tokens]) if capture_tokens else np.empty((0, 0), dtype=np.int64),
+                         attention_masks=np.stack([row[3] for row in capture_tokens]) if capture_tokens else np.empty((0, 0), dtype=np.int64))
             reply(True)
         except Exception as error:
             reply(False, error_type=type(error).__name__, error=str(error))
+        finally:
+            model.tokenizer = original_tokenizer
 
     run_one(job)
     for line in sys.stdin:

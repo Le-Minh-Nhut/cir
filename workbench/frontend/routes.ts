@@ -402,9 +402,9 @@ export function parseLocation(search: string, knownProtocols: string[]): { locat
 
   const rawPreset = params.get("preset");
   if (rawPreset !== null && rawPreset !== "") {
-    const preset = oneOf(["all", "allfail", "80", "50", "winner", "easy"], rawPreset);
+    const preset = oneOf(["all", "common", "allfail", "80", "50", "winner", "easy"], rawPreset);
     if (preset) location.preset = preset;
-    else problems.push({ param: "preset", value: rawPreset, message: "chỉ nhận all, allfail, 80, 50, winner, easy" });
+    else problems.push({ param: "preset", value: rawPreset, message: "chỉ nhận all, common, allfail, 80, 50, winner, easy" });
   }
 
   // Read verbatim, never validated against a list: this id is a registry key, and the registry is

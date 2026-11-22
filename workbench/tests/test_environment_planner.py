@@ -755,6 +755,9 @@ def test_real_conda_cold_start_shared_environment_and_reuse(tmp_path, monkeypatc
     # These stand-in models have no adapter, so the evaluator-import trace cannot resolve an entry
     # point; that refusal has its own regression. Here the models stand in for ones whose evaluator
     # imports exactly the distributions they declare, so the constraint set under test is built.
+    # Use explicit non-default channel for this real solve/create/reuse integration; never accept
+    # host defaults ToS as a test prerequisite. Conda still resolves and installs from the network.
+    monkeypatch.setattr(planner, "CONDA_CHANNELS", ("conda-forge",))
     monkeypatch.setattr(planner, "_evaluator_imports", lambda *a, **k: ({"yaml", "packaging"}, set()))
     m1 = {
         "model_id": "real-cold-a",
@@ -779,7 +782,7 @@ def test_real_conda_cold_start_shared_environment_and_reuse(tmp_path, monkeypatc
 
     artifacts_dir = tmp_path / "artifacts"
     plan = planner.plan_environments([m1, m2], artifacts_root=artifacts_dir)
-    assert len(plan["groups"]) == 1
+    assert len(plan["groups"]) == 1, f"real conda plan failed: {plan!r}"
     group = plan["groups"][0]
     assert set(group["members"]) == {"real-cold-a", "real-cold-b"}
     assert group["state"] == "SOLVER_COMPATIBLE"

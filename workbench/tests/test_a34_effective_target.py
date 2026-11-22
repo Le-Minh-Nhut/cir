@@ -73,10 +73,10 @@ def _isolate_settings(monkeypatch, tmp_path):
 
     monkeypatch.delenv(runtime.ADAPTATION_ENV, raising=False)
     monkeypatch.setattr(operator_config, "_CONFIG_PATH", tmp_path / "workbench.env")
-    model_settings.file_settings.cache_clear()
+    model_settings.clear_file_settings_cache()
     runtime.forget_environment()
     yield
-    model_settings.file_settings.cache_clear()
+    model_settings.clear_file_settings_cache()
     runtime.forget_environment()
 
 def _config(tmp_path: Path):
@@ -169,7 +169,7 @@ def _selector(kind: str, monkeypatch, tmp_path: Path, var: str, value: Path) -> 
         (tmp_path / "workbench.env").write_text(f"{var}={value}\n", encoding="utf-8")
     else:
         monkeypatch.setenv(var, str(value))
-    model_settings.file_settings.cache_clear()
+    model_settings.clear_file_settings_cache()
 
 class _InstallSpy:
     """Fakes only pip installs, records their argv, and answers success."""

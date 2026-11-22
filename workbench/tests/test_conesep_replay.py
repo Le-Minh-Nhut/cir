@@ -18,6 +18,33 @@ from workbench.replay.conesep import (
 )
 
 
+import json
+
+import numpy as np
+
+from workbench.scripts.third_model_native_observer import write_forward_control_diagnostics
+
+
+def test_forward_control_diagnostics_persist_repeat_and_batch_deltas(tmp_path: Path):
+    baseline = np.array([[1.0, 2.0], [3.0, 4.0]], dtype=np.float32)
+    repeated = baseline.copy()
+    b1 = baseline[:1].copy()
+    b1[0, 1] = np.nextafter(b1[0, 1], np.float32(np.inf))
+    output = tmp_path / "forward-controls.json"
+    flags = write_forward_control_diagnostics(output,
+        {"query_repeat": baseline, "target_repeat": baseline,
+         "query_b1_bn": baseline[:1], "target_b1_bn": baseline[:1]},
+        {"query_repeat": repeated, "target_repeat": repeated,
+         "query_b1_bn": b1, "target_b1_bn": baseline[:1]})
+    receipt = json.loads(output.read_text())
+    assert flags == {"query_repeat": True, "target_repeat": True,
+                     "query_b1_bn": False, "target_b1_bn": True}
+    assert receipt["passed"] is False
+    row = receipt["checks"]["query_b1_bn"]
+    assert row["exact_equal"] is False
+    assert row["max_abs_delta"] == float(b1[0, 1] - baseline[0, 1])
+    assert row["different_elements"] == 1 and row["compared_elements"] == 2
+
 def test_conesep_protocol_and_model_id():
     assert MODEL["model_id"] == "conesep"
     assert PROTOCOL == "fashioniq_full_gallery_ref_excluded"

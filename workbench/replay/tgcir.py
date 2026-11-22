@@ -32,6 +32,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
+from contextlib import nullcontext
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
@@ -171,7 +172,7 @@ def clip_weight_digest() -> str | None:
     return match.group(1) if match else None
 
 
-def _load_tgcir(source_root: Path, device: str) -> tuple[Any, Any, Any, str, str]:
+def _load_tgcir(source_root: Path, device: str) -> tuple[Any, Any, list[str]]:
     """Import the pinned modules and load the released weight. Returns (torch, client, model, ...)."""
     import torch
 
@@ -199,11 +200,14 @@ def evaluate_categories(
     source_root: Path,
     categories: tuple[str, ...] = CATEGORIES,
     batch_size: int = 16,
+    image_context_factory: Any = None,
+    model_context_factory: Any = None,
     device: str | None = None,
 ) -> tuple[list[ReplayResult], dict[str, Any]]:
     torch, (clip, datasets, tg_test), adaptations = _load_tgcir(source_root, device or "")
     target_device = device or ("cuda" if torch.cuda.is_available() else "cpu")
-    checkpoint_path = checkpoint_root / CHECKPOINT["filename"]
+    from workbench.backend.registry import checkpoint_path as resolve_checkpoint_path
+    checkpoint_path = resolve_checkpoint_path("tgcir", CHECKPOINT, checkpoint_root)
 
     model = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
     unset = [m for m in model.modules()
@@ -220,7 +224,9 @@ def evaluate_categories(
         adaptations.append("torch.Tensor.cuda neutralised for a CPU run; weights/arithmetic unchanged")
 
     model = model.to(target_device).eval()
-    clip_model, preprocess = clip.load("ViT-B/16", device=target_device, jit=False)
+    # Only preprocessing is used; keep the unused CLIP tower off the evaluation GPU and memory.
+    clip_model, preprocess = clip.load("ViT-B/16", device="cpu", jit=False)
+    del clip_model
     params = SimpleNamespace(batch_size=batch_size, local_rank=0)
 
     provenance_common = {
@@ -256,24 +262,31 @@ def evaluate_categories(
                             "expected_sha256": CHECKPOINT.get("expected_sha256")},
                 state={"seed": None, "eval_mode": True, "noise_ratio": 0}),
             record=cache_metadata) as cache_root:
-        root_str = str(cache_root).rstrip("/") + "/"
-        testset = datasets.FashionIQ(path=root_str, transform=preprocess)
-        for category in categories:
-            recalls = dict(tg_test.test(params, model, testset, category))
-            results.append(
-                ReplayResult(
-                    model_id="tgcir",
-                    checkpoint_id=CHECKPOINT["checkpoint_id"],
-                    category=category,
-                    protocol=PROTOCOL,
-                    r1=recalls.get(f"{category}_r1"),
-                    r10=recalls.get(f"{category}_r10"),
-                    r50=recalls.get(f"{category}_r50"),
-                    complete=True,
-                    provenance={**provenance_common, "cache_manifest": dict(cache_metadata)},
+        image_context = (image_context_factory(dataset_root, cache_root, datasets)
+                         if image_context_factory else nullcontext({}))
+        model_context = (model_context_factory(model, categories)
+                         if model_context_factory else nullcontext({}))
+        with image_context as image_receipt, model_context as model_receipt:
+            root_str = str(cache_root).rstrip("/") + "/"
+            testset = datasets.FashionIQ(path=root_str, transform=preprocess)
+            for category in categories:
+                recalls = dict(tg_test.test(params, model, testset, category))
+                results.append(
+                    ReplayResult(
+                        model_id="tgcir",
+                        checkpoint_id=CHECKPOINT["checkpoint_id"],
+                        category=category,
+                        protocol=PROTOCOL,
+                        r1=recalls.get(f"{category}_r1"),
+                        r10=recalls.get(f"{category}_r10"),
+                        r50=recalls.get(f"{category}_r50"),
+                        complete=True,
+                        provenance={**provenance_common, "cache_manifest": dict(cache_metadata)},
+                    )
                 )
-            )
-    del clip_model
+        for result in results:
+            result.provenance["image_spool"] = dict(image_receipt)
+            result.provenance["native_model_observation"] = dict(model_receipt)
     return results, macro_aggregate(results)
 
 

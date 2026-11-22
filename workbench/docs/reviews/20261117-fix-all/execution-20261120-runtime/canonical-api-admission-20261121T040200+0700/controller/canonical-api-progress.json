@@ -1,0 +1,200 @@
+{
+  "events": [
+    {
+      "event": "oom_guard_verified",
+      "guard": {
+        "cgroup": "/sys/fs/cgroup/user.slice/user-1000.slice/user@1000.service/app.slice/cir-dcnet-canonical-api-20261121-v4.service",
+        "memory.max": "12884901888",
+        "memory.oom.group": "1",
+        "memory.swap.max": "0"
+      }
+    },
+    {
+      "event": "protected_checkpoint_baseline",
+      "hashes": {
+        "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/checkpoints/dcnet/config.json": "fa5fca78790a33063a4e73b379393f4ffbbf1b251b3c27058aed481136984ba0",
+        "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/checkpoints/dcnet/trained_model.pth": "130f031e0f7808ccf5f15630a691bd7af95ad9fadbf94f64acfce64e7d8b850f",
+        "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/checkpoints/dcnet/val/att_result.pt": "6d776ffad3168e3f62105e07edfb954eb7ff320206cbd62a79c061db25160438"
+      }
+    },
+    {
+      "event": "protected_source_baseline",
+      "source_hashes": {
+        "/home/heheboiz/data/cir/workbench/third_party/DCNet/data_loader/CE_dataset.py": "44bb24e8ada8ed912acad24030e07087caf368d6e3a9ef2b6c5464697611b6a3",
+        "/home/heheboiz/data/cir/workbench/third_party/DCNet/data_loader/data_loaders.py": "cc2b42547def6875ed203480ca30ce1621f45a584ec69fb76f6085c865f66f1d",
+        "/home/heheboiz/data/cir/workbench/third_party/DCNet/model/model.py": "3b383265d4221255fbcc8aecfcca8a401e909c05fed585e8b447f236005952f8",
+        "/home/heheboiz/data/cir/workbench/third_party/DCNet/parse_config.py": "2d68353128ad8d09e736a57674defea46f8ccc5a65b1d5d0778262af19d13327",
+        "/home/heheboiz/data/cir/workbench/third_party/DCNet/test.py": "9d66126d6b4c650134120199791c07e716171bfcd2d2ba2f7d3e2bc89968b5c2",
+        "/home/heheboiz/data/cir/workbench/third_party/DCNet/trainer/trainer_joint.py": "708a9f860f75e05228182da4d09ca314208b424c09b8d6cc49397ef1b8e7e458",
+        "/home/heheboiz/data/cir/workbench/third_party/DCNet/utils/util.py": "c804ea8ef332b84a22b48a8a5100206d4491551bcd83dec3a06c328ec8d44f17"
+      }
+    },
+    {
+      "api_state": {
+        "checkpoint_id": "fashioniq_run_directory",
+        "command": [
+          "/home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python",
+          "/home/heheboiz/data/cir/workbench/scripts/evaluate_models.py",
+          "--model",
+          "dcnet",
+          "--checkpoint",
+          "fashioniq_run_directory",
+          "--protocol",
+          "fashioniq_full_gallery_ref_excluded",
+          "--dataset-root",
+          "/home/heheboiz/data/cir/data/FashionIQ",
+          "--top-k",
+          "200",
+          "--run-id",
+          "20261120T210334668389Z_131b33f1"
+        ],
+        "completed_at": "2026-11-20T21:03:57.554468+00:00",
+        "created_at": "2026-11-20T21:03:35.396750+00:00",
+        "cwd": "/home/heheboiz/data/cir/workbench",
+        "error": null,
+        "gpu_may_be_held": false,
+        "job_id": "1f16abad-9b2c-4359-b93a-baf5c6220b29",
+        "log_directory": "/home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/canonical-api-admission-20261121T040200+0700/controller/artifacts/queue_jobs/20d719af1ce749e3820df8ed375f8127",
+        "model_id": "dcnet",
+        "protocol_id": "fashioniq_full_gallery_ref_excluded",
+        "provenance": {
+          "actual_source_commit": "68c79d38569f01ca39c3b4ea641b3b7eb2ccb5fb",
+          "checkpoint_id": "fashioniq_run_directory",
+          "checkpoint_local_sha256": "2859caf5b36e3213e1455cfdd2e38a44d530d20425ccfeb5589e55cffe874b6b",
+          "dataset_root": "/home/heheboiz/data/cir/data/FashionIQ",
+          "model_id": "dcnet",
+          "protocol_id": "fashioniq_full_gallery_ref_excluded",
+          "run_directory": "/home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/canonical-api-admission-20261121T040200+0700/controller/artifacts/logs/dcnet__fashioniq_run_directory__20261120T210334668389Z_131b33f1",
+          "run_id": "20261120T210334668389Z_131b33f1",
+          "upstream_expected_pin": "68c79d38569f01ca39c3b4ea641b3b7eb2ccb5fb"
+        },
+        "return_code": -15,
+        "started_at": "2026-11-20T21:03:35.397049+00:00",
+        "status": "cancelled",
+        "stderr_tail": "/home/heheboiz/data/cir/workbench/envs/dcnet310-sm120/lib/python3.10/site-packages/torchvision/models/_utils.py:208: UserWarning: The parameter 'pretrained' is deprecated since 0.13 and may be removed in the future, please use 'weights' instead.\n  warnings.warn(\n/home/heheboiz/data/cir/workbench/envs/dcnet310-sm120/lib/python3.10/site-packages/torchvision/models/_utils.py:223: UserWarning: Arguments other than a weight enum or `None` for 'weights' are deprecated since 0.13 and may be removed in the future. The current behavior is equivalent to passing `weights=ResNet50_Weights.IMAGENET1K_V1`. You can also use `weights=ResNet50_Weights.DEFAULT` to get the most up-to-date weights.\n  warnings.warn(msg)\n",
+        "stdout_tail": "[RUN] dcnet / fashioniq_run_directory\n[OK] protocol: fashioniq_full_gallery_ref_excluded\n[RUN] cwd: /home/heheboiz/data/cir/workbench/third_party/DCNet\n[RUN] command: /home/heheboiz/data/cir/workbench/envs/dcnet310-sm120/bin/python /home/heheboiz/data/cir/workbench/replay/dcnet_api.py --source /home/heheboiz/data/cir/workbench/third_party/DCNet --checkpoint /home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/canonical-api-admission-20261121T040200+0700/controller/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/../../checkpoints/dcnet --checkpoint-id fashioniq_run_directory\n[RUN] log directory: /home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/canonical-api-admission-20261121T040200+0700/controller/artifacts/logs/dcnet__fashioniq_run_directory__20261120T210334668389Z_131b33f1\n[RUN] provenance: /home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/canonical-api-admission-20261121T040200+0700/controller/artifacts/logs/dcnet__fashioniq_run_directory__20261120T210334668389Z_131b33f1/command.json\nRunning test with configuration:\n{'_args': Namespace(resume='/home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/canonical-api-admission-20261121T040200+0700/controller/artifacts/logs/dcnet__fashioniq_run_directory__20261120T210334668389Z_131b33f1/dcnet-native-resume', device='', seeds='0', mode='val'),\n '_config': OrderedDict([('n_gpu', 1),\n                         ('experts',\n                          OrderedDict([('text_feat', 'glove'),\n                                       ('text_dim', 300),\n                                       ('modalities',\n                                        ['im_feat',\n                                         'inter-1',\n                                         'spatial0',\n                                         'spatial1',\n                                         'spatial2',\n                                         'spatial3',\n                                         'spatial4']),\n                                       ('ce_shared_dim', 1024)])),\n                         ('data_loader',\n                          OrderedDict([('type', 'ExpertDataLoader'),\n                                       ('args',\n                                        OrderedDict([('dataset_name', 'CE'),\n                                                     ('data_dir',\n                                                      '/home/heheboiz/data/cir/data/FashionIQ'),\n                                                     ('categories',\n                                                      ['dress',\n                                                       'shirt',\n                                                       'toptee']),\n                                                     ('batch_size', 32),\n                                                     ('num_workers', 8),\n                                                     ('max_text_words', 30),\n                                                     ('max_expert_tokens', 45),\n                                                     ('mode', 'val'),\n                                                     ('use_val', False)]))])),\n                         ('arch',\n                          OrderedDict([('type', 'CENet'),\n                                       ('args',\n                                        OrderedDict([('backbone', 'resnet'),\n                                                     ('backbone_pretrain',\n                                                      'imagenet'),\n                                                     ('composition', 'tirg'),\n                                                     ('correction', 'fd'),\n                                                     ('fusion', 'hadamard'),\n                                                     ('norm_scale', 5.0),\n                                                     ('text_pooling_module',\n                                                      'sharedconv'),\n                                                     ('metric_fn', 'ip')])),\n                                       ('joint_loss', 'cyc3'),\n                                       ('joint_weight', 0.5),\n                                       ('joint_epoch', 0)])),\n                         ('optimizer',\n                          OrderedDict([('type', 'Adam'),\n                                       ('args',\n                                        OrderedDict([('lr', 0.0002),\n                                                     ('weight_decay', 0),\n                                                     ('amsgrad', True)]))])),\n                         ('loss',\n                          OrderedDict([('type', 'AdditiveMarginSoftmax'),\n                                       ('args', OrderedDict())])),\n                         ('lr_scheduler',\n                          OrderedDict([('type', 'StepLR'),\n                                       ('args',\n                                        OrderedDict([('step_size', 1),\n                                                     ('gamma', 0.95)]))])),\n                         ('trainer',\n                          OrderedDict([('epochs', 100),\n                                       ('save_dir',\n                                        '/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/checkpoints/dcnet'),\n                                       ('save_period', 10),\n                                       ('monitor', 'max comb_avg'),\n                                       ('include_optim_in_ckpts', True),\n                                       ('skip_first_n_saves', 0),\n                                       ('num_keep_ckpts', 5),\n                                       ('largest', True),\n                                       ('val_epoch', 10),\n                                       ('early_stop', 15),\n                                       ('train_type', 'joint')]))]),\n '_log_dir': PosixPath('/home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/canonical-api-admission-20261121T040200+0700/controller/artifacts/logs/dcnet__fashioniq_run_directory__20261120T210334668389Z_131b33f1/dcnet-native-resume/val'),\n '_save_dir': PosixPath('/home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/canonical-api-admission-20261121T040200+0700/controller/artifacts/logs/dcnet__fashioniq_run_directory__20261120T210334668389Z_131b33f1/dcnet-native-resume/val'),\n 'cfg_fname': PosixPath('/home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/canonical-api-admission-20261121T040200+0700/controller/artifacts/logs/dcnet__fashioniq_run_directory__20261120T210334668389Z_131b33f1/dcnet-native-resume/config.json'),\n 'log_path': '/home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/canonical-api-admission-20261121T040200+0700/controller/artifacts/logs/dcnet__fashioniq_run_directory__20261120T210334668389Z_131b33f1/dcnet-native-resume/val/info.log',\n 'resume': PosixPath('/home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/canonical-api-admission-20261121T040200+0700/controller/artifacts/logs/dcnet__fashioniq_run_directory__20261120T210334668389Z_131b33f1/dcnet-native-resume')}\nLoading checkpoint: /home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/canonical-api-admission-20261121T040200+0700/controller/artifacts/logs/dcnet__fashioniq_run_directory__20261120T210334668389Z_131b33f1/dcnet-native-resume/trained_model.pth ...\n"
+      },
+      "backing_state": {
+        "checkpoint_id": "fashioniq_run_directory",
+        "completed_at": "2026-11-20T21:03:57.554468+00:00",
+        "error": null,
+        "gpu_may_be_held": false,
+        "job_id": "1f16abad-9b2c-4359-b93a-baf5c6220b29",
+        "model_id": "dcnet",
+        "protocol_id": "fashioniq_full_gallery_ref_excluded",
+        "return_code": -15,
+        "started_at": "2026-11-20T21:03:35.397049+00:00",
+        "status": "cancelled"
+      },
+      "event": "cancel_terminal_verified",
+      "process_group": 825955,
+      "queue_state_path": "/home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/canonical-api-admission-20261121T040200+0700/controller/artifacts/queue_jobs/20d719af1ce749e3820df8ed375f8127/queue_state.json"
+    },
+    {
+      "event": "cancel_cleanup_verified",
+      "full_evaluator_output_observed": false,
+      "staged_config": "/home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/canonical-api-admission-20261121T040200+0700/controller/artifacts/logs/dcnet__fashioniq_run_directory__20261120T210334668389Z_131b33f1/dcnet-native-resume/config.json",
+      "staging_manifest": {
+        "checkpoint_id": "fashioniq_run_directory",
+        "evaluation_run_id": "20261120T210334668389Z_131b33f1",
+        "inputs": {
+          "config.json": {
+            "original": "/home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/canonical-api-admission-20261121T040200+0700/controller/artifacts/checkpoint_selection/20261106T002617+0700/checkpoints/dcnet/config.json",
+            "original_sha256": "fa5fca78790a33063a4e73b379393f4ffbbf1b251b3c27058aed481136984ba0",
+            "staged": "/home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/canonical-api-admission-20261121T040200+0700/controller/artifacts/logs/dcnet__fashioniq_run_directory__20261120T210334668389Z_131b33f1/dcnet-native-resume/config.json",
+            "staged_sha256": "fa5fca78790a33063a4e73b379393f4ffbbf1b251b3c27058aed481136984ba0"
+          },
+          "trained_model.pth": {
+            "original": "/home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/canonical-api-admission-20261121T040200+0700/controller/artifacts/checkpoint_selection/20261106T002617+0700/checkpoints/dcnet/trained_model.pth",
+            "original_sha256": "130f031e0f7808ccf5f15630a691bd7af95ad9fadbf94f64acfce64e7d8b850f",
+            "staged": "/home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/canonical-api-admission-20261121T040200+0700/controller/artifacts/logs/dcnet__fashioniq_run_directory__20261120T210334668389Z_131b33f1/dcnet-native-resume/trained_model.pth",
+            "staged_sha256": "130f031e0f7808ccf5f15630a691bd7af95ad9fadbf94f64acfce64e7d8b850f"
+          }
+        },
+        "model_id": "dcnet",
+        "output_only_override": {
+          "native_eval_output_dir": "/home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/canonical-api-admission-20261121T040200+0700/controller/artifacts/logs/dcnet__fashioniq_run_directory__20261120T210334668389Z_131b33f1/dcnet-native-resume/val",
+          "resume_dir": "/home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/canonical-api-admission-20261121T040200+0700/controller/artifacts/logs/dcnet__fashioniq_run_directory__20261120T210334668389Z_131b33f1/dcnet-native-resume"
+        },
+        "protected_original_att_result": {
+          "path": "/home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/canonical-api-admission-20261121T040200+0700/controller/artifacts/checkpoint_selection/20261106T002617+0700/checkpoints/dcnet/val/att_result.pt",
+          "sha256_before": "6d776ffad3168e3f62105e07edfb954eb7ff320206cbd62a79c061db25160438"
+        }
+      }
+    },
+    {
+      "event": "canonical_retry_admitted",
+      "http_status": 200,
+      "job_id": "5ae9b219-1821-478f-af2a-e443c5a4ef29",
+      "queue_state_path": "/home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/canonical-api-admission-20261121T040200+0700/controller/artifacts/queue_jobs/193f0129505f45b3910340d2c751921e/queue_state.json"
+    },
+    {
+      "api_state": {
+        "checkpoint_id": "fashioniq_run_directory",
+        "command": [
+          "/home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python",
+          "/home/heheboiz/data/cir/workbench/scripts/evaluate_models.py",
+          "--model",
+          "dcnet",
+          "--checkpoint",
+          "fashioniq_run_directory",
+          "--protocol",
+          "fashioniq_full_gallery_ref_excluded",
+          "--dataset-root",
+          "/home/heheboiz/data/cir/data/FashionIQ",
+          "--top-k",
+          "200",
+          "--run-id",
+          "20261120T210414507949Z_93e9a3f1"
+        ],
+        "completed_at": "2026-11-20T21:12:00.005161+00:00",
+        "created_at": "2026-11-20T21:04:15.239394+00:00",
+        "cwd": "/home/heheboiz/data/cir/workbench",
+        "error": null,
+        "gpu_may_be_held": false,
+        "job_id": "5ae9b219-1821-478f-af2a-e443c5a4ef29",
+        "log_directory": "/home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/canonical-api-admission-20261121T040200+0700/controller/artifacts/queue_jobs/193f0129505f45b3910340d2c751921e",
+        "model_id": "dcnet",
+        "protocol_id": "fashioniq_full_gallery_ref_excluded",
+        "provenance": {
+          "actual_source_commit": "68c79d38569f01ca39c3b4ea641b3b7eb2ccb5fb",
+          "checkpoint_id": "fashioniq_run_directory",
+          "checkpoint_local_sha256": "2859caf5b36e3213e1455cfdd2e38a44d530d20425ccfeb5589e55cffe874b6b",
+          "dataset_root": "/home/heheboiz/data/cir/data/FashionIQ",
+          "model_id": "dcnet",
+          "protocol_id": "fashioniq_full_gallery_ref_excluded",
+          "run_directory": "/home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/canonical-api-admission-20261121T040200+0700/controller/artifacts/logs/dcnet__fashioniq_run_directory__20261120T210414507949Z_93e9a3f1",
+          "run_id": "20261120T210414507949Z_93e9a3f1",
+          "upstream_expected_pin": "68c79d38569f01ca39c3b4ea641b3b7eb2ccb5fb"
+        },
+        "return_code": 0,
+        "started_at": "2026-11-20T21:04:15.239698+00:00",
+        "status": "completed",
+        "stderr_tail": "/home/heheboiz/data/cir/workbench/envs/dcnet310-sm120/lib/python3.10/site-packages/torchvision/models/_utils.py:208: UserWarning: The parameter 'pretrained' is deprecated since 0.13 and may be removed in the future, please use 'weights' instead.\n  warnings.warn(\n/home/heheboiz/data/cir/workbench/envs/dcnet310-sm120/lib/python3.10/site-packages/torchvision/models/_utils.py:223: UserWarning: Arguments other than a weight enum or `None` for 'weights' are deprecated since 0.13 and may be removed in the future. The current behavior is equivalent to passing `weights=ResNet50_Weights.IMAGENET1K_V1`. You can also use `weights=ResNet50_Weights.DEFAULT` to get the most up-to-date weights.\n  warnings.warn(msg)\n",
+        "stdout_tail": "[RUN] dcnet / fashioniq_run_directory\n[OK] protocol: fashioniq_full_gallery_ref_excluded\n[RUN] cwd: /home/heheboiz/data/cir/workbench/third_party/DCNet\n[RUN] command: /home/heheboiz/data/cir/workbench/envs/dcnet310-sm120/bin/python /home/heheboiz/data/cir/workbench/replay/dcnet_api.py --source /home/heheboiz/data/cir/workbench/third_party/DCNet --checkpoint /home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/canonical-api-admission-20261121T040200+0700/controller/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/../../checkpoints/dcnet --checkpoint-id fashioniq_run_directory\n[RUN] log directory: /home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/canonical-api-admission-20261121T040200+0700/controller/artifacts/logs/dcnet__fashioniq_run_directory__20261120T210414507949Z_93e9a3f1\n[RUN] provenance: /home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/canonical-api-admission-20261121T040200+0700/controller/artifacts/logs/dcnet__fashioniq_run_directory__20261120T210414507949Z_93e9a3f1/command.json\nRunning test with configuration:\n{'_args': Namespace(resume='/home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/canonical-api-admission-20261121T040200+0700/controller/artifacts/logs/dcnet__fashioniq_run_directory__20261120T210414507949Z_93e9a3f1/dcnet-native-resume', device='', seeds='0', mode='val'),\n '_config': OrderedDict([('n_gpu', 1),\n                         ('experts',\n                          OrderedDict([('text_feat', 'glove'),\n                                       ('text_dim', 300),\n                                       ('modalities',\n                                        ['im_feat',\n                                         'inter-1',\n                                         'spatial0',\n                                         'spatial1',\n                                         'spatial2',\n                                         'spatial3',\n                                         'spatial4']),\n                                       ('ce_shared_dim', 1024)])),\n                         ('data_loader',\n                          OrderedDict([('type', 'ExpertDataLoader'),\n                                       ('args',\n                                        OrderedDict([('dataset_name', 'CE'),\n                                                     ('data_dir',\n                                                      '/home/heheboiz/data/cir/data/FashionIQ'),\n                                                     ('categories',\n                                                      ['dress',\n                                                       'shirt',\n                                                       'toptee']),\n                                                     ('batch_size', 32),\n                                                     ('num_workers', 8),\n                                                     ('max_text_words', 30),\n                                                     ('max_expert_tokens', 45),\n                                                     ('mode', 'val'),\n                                                     ('use_val', False)]))])),\n                         ('arch',\n                          OrderedDict([('type', 'CENet'),\n                                       ('args',\n                                        OrderedDict([('backbone', 'resnet'),\n                                                     ('backbone_pretrain',\n                                                      'imagenet'),\n                                                     ('composition', 'tirg'),\n                                                     ('correction', 'fd'),\n                                                     ('fusion', 'hadamard'),\n                                                     ('norm_scale', 5.0),\n                                                     ('text_pooling_module',\n                                                      'sharedconv'),\n                                                     ('metric_fn', 'ip')])),\n                                       ('joint_loss', 'cyc3'),\n                                       ('joint_weight', 0.5),\n                                       ('joint_epoch', 0)])),\n                         ('optimizer',\n                          OrderedDict([('type', 'Adam'),\n                                       ('args',\n                                        OrderedDict([('lr', 0.0002),\n                                                     ('weight_decay', 0),\n                                                     ('amsgrad', True)]))])),\n                         ('loss',\n                          OrderedDict([('type', 'AdditiveMarginSoftmax'),\n                                       ('args', OrderedDict())])),\n                         ('lr_scheduler',\n                          OrderedDict([('type', 'StepLR'),\n                                       ('args',\n                                        OrderedDict([('step_size', 1),\n                                                     ('gamma', 0.95)]))])),\n                         ('trainer',\n                          OrderedDict([('epochs', 100),\n                                       ('save_dir',\n                                        '/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/checkpoints/dcnet'),\n                                       ('save_period', 10),\n                                       ('monitor', 'max comb_avg'),\n                                       ('include_optim_in_ckpts', True),\n                                       ('skip_first_n_saves', 0),\n                                       ('num_keep_ckpts', 5),\n                                       ('largest', True),\n                                       ('val_epoch', 10),\n                                       ('early_stop', 15),\n                                       ('train_type', 'joint')]))]),\n '_log_dir': PosixPath('/home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/canonical-api-admission-20261121T040200+0700/controller/artifacts/logs/dcnet__fashioniq_run_directory__20261120T210414507949Z_93e9a3f1/dcnet-native-resume/val'),\n '_save_dir': PosixPath('/home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/canonical-api-admission-20261121T040200+0700/controller/artifacts/logs/dcnet__fashioniq_run_directory__20261120T210414507949Z_93e9a3f1/dcnet-native-resume/val'),\n 'cfg_fname': PosixPath('/home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/canonical-api-admission-20261121T040200+0700/controller/artifacts/logs/dcnet__fashioniq_run_directory__20261120T210414507949Z_93e9a3f1/dcnet-native-resume/config.json'),\n 'log_path': '/home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/canonical-api-admission-20261121T040200+0700/controller/artifacts/logs/dcnet__fashioniq_run_directory__20261120T210414507949Z_93e9a3f1/dcnet-native-resume/val/info.log',\n 'resume': PosixPath('/home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/canonical-api-admission-20261121T040200+0700/controller/artifacts/logs/dcnet__fashioniq_run_directory__20261120T210414507949Z_93e9a3f1/dcnet-native-resume')}\nLoading checkpoint: /home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/canonical-api-admission-20261121T040200+0700/controller/artifacts/logs/dcnet__fashioniq_run_directory__20261120T210414507949Z_93e9a3f1/dcnet-native-resume/trained_model.pth ...\nCkpt loaded. Resume training from epoch 83\nRunning test on cuda\nsave att\n[dress] comp corr r@10, r@50: 0.27962320277640057\t0.5349529003470501\t0.2885473475458602\t0.5498264749628161\n[shirt] comp corr r@10, r@50: 0.2198233562315996\t0.46270853778213933\t0.22718351324828262\t0.471540726202159\n[toptee] comp corr r@10, r@50: 0.30086690464048954\t0.5803161652218256\t0.31463539010708824\t0.5818459969403366\ncomb: 0.2915220624690134 0.5453644025780863 0.2281648675171737 0.4764474975466143 0.31820499745028047 0.5900050994390617\n[Avg Recall]     : 0.3963818444999174\n[Avg Recall corr]: 0.40559657483442374\n[comb_avg]       : 0.408284821166705\n"
+      },
+      "backing_state": {
+        "checkpoint_id": "fashioniq_run_directory",
+        "completed_at": "2026-11-20T21:12:00.005161+00:00",
+        "error": null,
+        "gpu_may_be_held": false,
+        "job_id": "5ae9b219-1821-478f-af2a-e443c5a4ef29",
+        "model_id": "dcnet",
+        "protocol_id": "fashioniq_full_gallery_ref_excluded",
+        "return_code": 0,
+        "started_at": "2026-11-20T21:04:15.239698+00:00",
+        "status": "completed"
+      },
+      "event": "canonical_retry_terminal",
+      "process_group": 826381,
+      "process_group_members": [],
+      "queue_state_path": "/home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/canonical-api-admission-20261121T040200+0700/controller/artifacts/queue_jobs/193f0129505f45b3910340d2c751921e/queue_state.json"
+    },
+    {
+      "event": "lifecycle_report_written",
+      "report": "/home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/canonical-api-admission-20261121T040200+0700/controller/canonical-api-lifecycle-report.json"
+    }
+  ],
+  "run_root": "/home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/canonical-api-admission-20261121T040200+0700/controller",
+  "scope": "canonical POST /api/jobs with HTTP cancel; full official evaluator retry"
+}

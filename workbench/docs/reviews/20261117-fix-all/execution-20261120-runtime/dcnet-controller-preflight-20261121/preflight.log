@@ -1,0 +1,1 @@
+{"controller_executable": "/home/heheboiz/data/cir/.venv/bin/python", "controller_prefix": "/home/heheboiz/data/cir/.venv", "worker_interpreter": "/home/heheboiz/data/cir/workbench/envs/dcnet310-sm120/bin/python", "worker_isolation": true, "worker_isolation_reason": "ISOLATION_VERIFIED"}

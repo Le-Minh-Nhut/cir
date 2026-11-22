@@ -1,6 +1,7 @@
 """Source-faithful evaluation runner for LIMN base iteration 0."""
 from __future__ import annotations
 
+import contextlib
 import importlib
 import importlib.metadata
 import os
@@ -30,6 +31,133 @@ MODEL = model_by_id("limn")
 # protocol computes, and 32 remains the default.
 LIMN_BATCH_SIZE_ENV = "WORKBENCH_LIMN_BATCH_SIZE"
 LIMN_BATCH_SIZE_DEFAULT = 32
+LIMN_NATIVE_RANKINGS_ENV = "WORKBENCH_LIMN_NATIVE_RANKINGS_OUT"
+LIMN_OBSERVATION_TOP_K = 200
+
+
+def _write_native_rankings(root: Path, category: str, receipt: dict) -> None:
+    import tempfile
+
+    destination = root / f"{category}.json"
+    destination.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    fd, temporary = tempfile.mkstemp(prefix=f".{category}.", dir=destination.parent)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            json.dump(receipt, handle, separators=(",", ":"))
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, destination)
+    finally:
+        if os.path.exists(temporary):
+            os.unlink(temporary)
+
+
+@contextlib.contextmanager
+def _capture_native_rankings(native_test, dataset, category: str, dataset_root: Path):
+    """Capture bounded rankings from the exact argsort call used for native recall."""
+    import numpy as np
+    from workbench.replay.limn_observer import _image_ids, _raw_captions, assert_alignment
+
+    path = os.environ.get(LIMN_NATIVE_RANKINGS_ENV)
+    run_id = os.environ.get("WORKBENCH_LIMN_RUN_ID")
+    rows: list[dict] = []
+    if not path:
+        yield rows
+        return
+    capture_error: list[str] = []
+    try:
+        images = _image_ids(dataset_root, category)
+        captions = _raw_captions(dataset_root, category)
+        queries, targets = dataset.test_queries, dataset.test_targets
+        assert_alignment(category, queries, images, captions, dataset_root)
+        image_positions = {image: index for index, image in enumerate(images)}
+        gallery_positions = [image_positions[image] for image in dict.fromkeys(
+            image for record in captions for image in (record["candidate"], record["target"]))]
+        gallery_ids = [images[position] for position in gallery_positions]
+        expected_positions = [item["target_img_id"] for item in targets]
+        if gallery_positions != expected_positions:
+            raise ValueError(f"{category}: native gallery order differs from first-seen annotation union")
+        if len(gallery_ids) != len(set(gallery_ids)):
+            raise ValueError(f"{category}: native gallery contains duplicate image IDs")
+        gallery_index = {position: index for index, position in enumerate(gallery_positions)}
+        source_mask_value = 10e10
+    except (OSError, ValueError, KeyError, TypeError, IndexError) as error:
+        try:
+            _write_native_rankings(Path(path), category, {"schema_version": 1,
+                "provenance": "native_argsort_same_invocation", "category": category,
+                "capture_error": f"{type(error).__name__}: {error}"})
+        except OSError as write_error:
+            print(f"[BLOCKED] native ranking receipt write failed: {type(write_error).__name__}: {write_error}", file=sys.stderr)
+        yield rows
+        return
+    native_numpy = native_test.np
+    native_argsort = native_numpy.argsort
+
+    def capture_argsort(values, *args, **kwargs):
+        order = native_argsort(values, *args, **kwargs)
+        if isinstance(values, np.ndarray) and values.ndim == 1 and len(values) == len(gallery_ids):
+            row = len(rows)
+            try:
+                if row >= len(queries):
+                    raise ValueError("native argsort produced excess query rows")
+                entry = queries[row]
+                source = gallery_index[entry["source_img_id"]]
+                target = gallery_index[entry["target_img_id"]]
+                if not np.issubdtype(values.dtype, np.floating) or not np.isfinite(values).all():
+                    raise ValueError("native argsort input must contain finite floating-point values")
+                expected_mask = values.dtype.type(source_mask_value)
+                if values[source] != expected_mask:
+                    raise ValueError("native source image lacks +1e11 argsort-input mask (similarity -1e11)")
+                if order[-1] != source:
+                    raise ValueError("native source image is not last in argsort order")
+                eligible_order = order[:-1]
+                target_positions = np.flatnonzero(eligible_order == target)
+                if not len(target_positions):
+                    raise ValueError("native target image is absent from argsort order")
+                target_rank = int(target_positions[0]) + 1
+                top_order = eligible_order[:LIMN_OBSERVATION_TOP_K]
+                rows.append({
+                    "annotation_index": row,
+                    "source_position": entry["source_img_id"],
+                    "target_position": entry["target_img_id"],
+                    "reference_id": images[entry["source_img_id"]],
+                    "target_id": images[entry["target_img_id"]],
+                    "raw_captions": captions[row]["captions"],
+                    "model_input_text": entry["mod"]["str"],
+                    "target_rank": target_rank,
+                    "source_rank": len(order),
+                    "top_results": [{"rank": rank, "image_id": gallery_ids[int(index)],
+                                     "score": float(-values[index])}
+                                    for rank, index in enumerate(top_order, 1)],
+                })
+            except (IndexError, KeyError, TypeError, ValueError) as error:
+                capture_error.append(f"{type(error).__name__}: {error}")
+        return order
+
+    class NativeNumpyProxy:
+        def __getattr__(self, name):
+            return capture_argsort if name == "argsort" else getattr(native_numpy, name)
+
+    native_test.np = NativeNumpyProxy()
+    try:
+        yield rows
+    finally:
+        native_test.np = native_numpy
+    receipt = {"schema_version": 1, "provenance": "native_argsort_same_invocation",
+               "category": category, "run_id": run_id}
+    if capture_error or len(rows) != len(queries):
+        receipt["capture_error"] = capture_error[0] if capture_error else (
+            f"native argsort rows {len(rows)} != query rows {len(queries)}")
+    else:
+        receipt.update({"gallery_size": len(gallery_ids), "eligible_count": len(gallery_ids) - 1,
+            "gallery_positions": gallery_positions, "gallery_ids": gallery_ids,
+            "source_mask_value": source_mask_value, "queries": rows})
+    try:
+        _write_native_rankings(Path(path), category, receipt)
+    except OSError as error:
+        print(f"[BLOCKED] native ranking receipt write failed: {type(error).__name__}: {error}", file=sys.stderr)
+
+
 LIMN_CHECKPOINTS = {
     category: {
         "checkpoint_id": f"base_iter0_{category}",
@@ -235,9 +363,10 @@ def replay_category(category: str, checkpoint_root: Path, dataset_root: Path,
         checkpoint = loaded["checkpoint"]
         native_test, model, dataset = loaded["native_test"], loaded["model"], loaded["dataset"]
         checkpoint_path = loaded["checkpoint_path"]
-        metrics = dict(native_test.test(SimpleNamespace(local_rank=0,
-                                                        batch_size=resolved_batch_size()),
-                                        model, dataset, category))
+        with _capture_native_rankings(native_test, dataset, category, dataset_root):
+            metrics = dict(native_test.test(SimpleNamespace(local_rank=0,
+                                                            batch_size=resolved_batch_size()),
+                                            model, dataset, category))
     return ReplayResult(
         model_id="limn", checkpoint_id=checkpoint["checkpoint_id"], category=category,
         protocol="fashioniq_val_split", r1=metrics[f"{category}_r1"],

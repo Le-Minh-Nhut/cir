@@ -1,0 +1,9 @@
+[role-service] unit=cir-tgcir-dress-v3-20261121T101337Z stdout=/home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/service-logs/cir-tgcir-dress-v3-20261121T101337Z.stdout.log stderr=/home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/service-logs/cir-tgcir-dress-v3-20261121T101337Z.stderr.log
+TG_CIR_ROLE_BEGIN role=native_repeat_1 utc=2026-11-21T10:25:54Z
+{"receipt": "/home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/raw/tgcir-native-parity-20261120/dress-v3-roles-20261121-g1bound/native_repeat_1/role-receipt.json", "role": "native_repeat_1", "run_id": "tgcir:dress:native_repeat_1:d13a782130c3546a956675741911fe9a"}
+TG_CIR_ROLE_END role=native_repeat_1 utc=2026-11-21T10:27:36Z
+TG_CIR_ROLE_BEGIN role=native_repeat_2 utc=2026-11-21T10:27:36Z
+{"receipt": "/home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/raw/tgcir-native-parity-20261120/dress-v3-roles-20261121-g1bound/native_repeat_2/role-receipt.json", "role": "native_repeat_2", "run_id": "tgcir:dress:native_repeat_2:1d1b5e1c92d0f337ab3d909d8fb22ddf"}
+TG_CIR_ROLE_END role=native_repeat_2 utc=2026-11-21T10:29:19Z
+TG_CIR_ROLE_BEGIN role=adapter_repeat_1 utc=2026-11-21T10:29:19Z
+[role-service] unit=cir-tgcir-dress-v3-20261121T101337Z wrapper_exit=1

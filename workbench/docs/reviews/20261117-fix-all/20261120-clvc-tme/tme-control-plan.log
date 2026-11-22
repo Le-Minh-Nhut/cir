@@ -1,0 +1,45 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+____________ test_clvc_tme_controls_share_full_population_partition ____________
+
+tmp_path = PosixPath('/tmp/pytest-of-heheboiz/pytest-117/test_clvc_tme_controls_share_f0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7598b47e5cd0>
+
+    def test_clvc_tme_controls_share_full_population_partition(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        from workbench.replay import prepare_clvc_tme_v3_plans as plans
+    
+        monkeypatch.setattr(plans, "PLAN_ROOT", tmp_path)
+        query_ids = [f"q{index}" for index in range(40)]
+        monkeypatch.setattr(plans, "_clvc_rows", lambda category: (query_ids, ["a", "b"]))
+        monkeypatch.setattr(plans, "_tme_rows", lambda category: (query_ids, ["a", "b"]))
+        monkeypatch.setattr(plans, "_read_json", lambda *args: [{"candidate": "a", "target": "b"}] * 40)
+        monkeypatch.setattr(plans, "_g1_selection", lambda model, category, queries, gallery: {"queries": [queries[0]], "gallery": [gallery[0]]})
+        monkeypatch.setattr(plans, "_source_identity", lambda model: {"source.py": "a" * 64})
+        monkeypatch.setattr(plans, "_environment_identity", lambda model: {"python": "/python", "python_sha256": "b" * 64})
+        from workbench.backend import runtime
+        from workbench.backend import operator_config
+        from workbench.backend import registry
+        monkeypatch.setattr(operator_config, "resolve_config", lambda: {})
+        monkeypatch.setattr(registry, "model_by_id", lambda model_id: {"id": model_id})
+        monkeypatch.setattr(runtime, "resolve_model_interpreter", lambda model, config: "/usr/bin/python3")
+        for model_id in ("clvc_net", "tme"):
+            hashes = {f"dress_{scope}_model.pt": "x" for scope in ("local", "global")}
+            hashes["fashioniq_0_best_model.pth"] = "x"
+            plan = plans._plan(model_id, "dress", hashes)
+            partitions = {role["execution"]["partition_id"] for role in plan["runs"].values()}
+            assert f"{model_id}:dress:full-population-v3" in partitions
+            if model_id == "clvc_net":
+                assert f"{model_id}:dress:sample32-v1" in partitions
+                continue
+            assert len(partitions) == 9
+            for name, roles in plans.CONTROLS.items():
+>               control = plan["controls"][name]
+                          ^^^^^^^^^^^^^^^^^^^^^^
+E               KeyError: 'matched_native_adapter'
+
+workbench/tests/test_clvc_net_composition_parity.py:369: KeyError
+=========================== short test summary info ============================
+FAILED workbench/tests/test_clvc_net_composition_parity.py::test_clvc_tme_controls_share_full_population_partition - KeyError: 'matched_native_adapter'
+1 failed in 0.16s
+
+exit_code=1

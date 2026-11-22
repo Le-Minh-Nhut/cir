@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import json
 import math
+import hashlib
 import os
 import shutil
 import struct
@@ -56,6 +57,244 @@ MODEL = model_by_id("tme")
 CHECKPOINTS = {variant["checkpoint_id"]: variant for variant in MODEL["checkpoint_variants"]}
 DEFAULT_CHECKPOINT = "fashioniq_0"
 PROTOCOL = "fashioniq_original_split"
+
+
+def _tme_source_id(category: str, triplet: dict[str, Any]) -> str:
+    """Derive stable source identity from native annotation content, not row position."""
+    content = json.dumps({key: triplet[key] for key in ("candidate", "target", "captions")},
+                         sort_keys=True, ensure_ascii=False, separators=(",", ":"))
+    digest = hashlib.sha256(content.encode("utf-8")).hexdigest()
+    return f"tme:{category}:{digest}"
+
+
+def _install_tme_observer(model: Any, dataset: Any, capture_root: Path,
+                          selected_queries: dict[str, set[str]] | set[str],
+                          selected_gallery: dict[str, set[str]] | set[str],
+                          invocation_id: str, started_at: str) -> Any:
+    """Capture native tensors and exact score rows while streaming target ranks."""
+    import hashlib
+    import numpy as np
+    import precompute_evaluation
+    import torch
+
+    original_metric = precompute_evaluation.compute_metric_features
+    original_encode_image = model.encode_image
+    original_inference = model.inference
+    original_encode_fusion = model.encode_fusion
+    projection_hook = None
+    state: dict[str, Any] = {}
+    import torch.nn.functional as functional
+
+    def capture_projected_gallery(module: Any, inputs: Any, output: Any) -> None:
+        if state.get("projected_written"):
+            return
+        names = state["gallery_names"]
+        path = state["feature_root"] / f"{state['category']}.gallery-scoring.npy"
+        projected = np.lib.format.open_memmap(
+            path, mode="w+", dtype=np.float32,
+            shape=(len(names), *tuple(output.shape[1:])))
+        for start in range(0, len(output), 128):
+            stop = min(start + 128, len(output))
+            normalized = functional.normalize(output[start:stop].float(), dim=-1)
+            projected[start:stop] = normalized.detach().cpu().numpy()
+        projected.flush()
+        state["gallery_scoring_features"] = projected
+        state["projected_written"] = True
+
+    projection_hook = model.vision_proj.register_forward_hook(capture_projected_gallery)
+
+    original_argsort = torch.argsort
+    def capture_argsort(input: Any, *args: Any, **kwargs: Any) -> Any:
+        result = original_argsort(input, *args, **kwargs)
+        if (input.ndim == 2 and state.get("native_order") is not None and
+                tuple(input.shape) == tuple(state["native_order"].shape)):
+            state["native_order"][:] = result.detach().cpu().numpy()
+            state["native_argsort_device"] = str(input.device)
+        return result
+
+    torch.argsort = capture_argsort
+    def append_selected(key: str, ids: list[str], value: Any) -> None:
+        rows = value.detach().cpu().numpy()
+        if rows.ndim == 1 and len(ids) == 1:
+            state["arrays"][key].append(rows)
+            return
+        if rows.ndim == 0 or rows.shape[0] != len(ids):
+            raise ValueError(
+                f"TME selected capture {state['category']}/{key} batch mismatch: "
+                f"query_batch={len(ids)} shape={rows.shape} selected_ids={ids}")
+        state["arrays"][key].extend(rows[index] for index in range(len(ids)))
+
+    def metric(current_model: Any, current_dataset: Any, preprocessor: Any, category: str) -> Any:
+        names = list(current_dataset.current_image_names)
+        category_query_ids = {_tme_source_id(category, triplet)
+                              for triplet in current_dataset.current_triplets}
+        query_selection = selected_queries.get(category, set()) if isinstance(selected_queries, dict) else selected_queries
+        gallery_selection = selected_gallery.get(category, set()) if isinstance(selected_gallery, dict) else selected_gallery
+        category_selected_queries = query_selection & category_query_ids
+        category_selected_gallery = gallery_selection & set(names)
+        feature_root = capture_root / ".features"
+        feature_root.mkdir(parents=True, exist_ok=True)
+        state.update(category=category, gallery_names=names, gallery_cursor=0, query_cursor=0,
+                     feature_root=feature_root, query_features=None, gallery_features=None,
+                     gallery_scoring_features=None, projected_written=False,
+                     selected_queries=category_selected_queries,
+                     selected_gallery=category_selected_gallery, active_ids=[], query_rows=[],
+                     arrays={key: [] for key in ("query_ids", "reference_ids", "target_ids",
+                             "gallery_features", "target_ranks", "gallery_ids", "selected_query_ids",
+                             "selected_scores", "selected_reference_features", "selected_fusion_features",
+                             "selected_input_ids", "selected_attention_mask")},
+                     selected_score_batches=[])
+
+        state["native_order"] = np.lib.format.open_memmap(
+            feature_root / f"{category}.native-order.npy", mode="w+", dtype=np.int64,
+            shape=(len(current_dataset.current_triplets), len(names)))
+        state["scores"] = np.lib.format.open_memmap(
+            feature_root / f"{category}.scores.npy", mode="w+", dtype=np.float32,
+            shape=(len(current_dataset.current_triplets), len(names)))
+        result = original_metric(current_model, current_dataset, preprocessor, category)
+        if state["gallery_cursor"] != len(names):
+            raise RuntimeError(f"TME native observer gallery coverage mismatch: {category}")
+        if state["query_cursor"] != len(current_dataset.current_triplets):
+            raise RuntimeError(f"TME native observer query coverage mismatch: {category}")
+        arrays = state["arrays"]
+        category_queries = {query_id for query_id in state["selected_queries"]
+                            if query_id.startswith(f"tme:{category}:")}
+        if not category_queries <= set(arrays["query_ids"]):
+            missing = sorted(category_queries - set(arrays["query_ids"]))
+            raise RuntimeError(f"TME selected query IDs absent from native run: {missing}")
+        if category_queries and not state["selected_gallery"] <= set(arrays["gallery_ids"]):
+            missing = sorted(state["selected_gallery"] - set(arrays["gallery_ids"]))
+            raise RuntimeError(f"TME selected gallery IDs absent from native run: {missing}")
+        target_positions = {name: index for index, name in enumerate(names)}
+        source_ranks = [int(np.flatnonzero(
+            state["native_order"][index] == target_positions[target])[0]) + 1
+            for index, target in enumerate(arrays["target_ids"])]
+        arrays["target_ranks"][:] = source_ranks
+        for row, rank in zip(state["query_rows"], source_ranks, strict=True):
+            row["native_target_rank"] = rank
+        state["native_order"].flush()
+        state["scores"].flush()
+        state["query_features"].flush()
+        state["gallery_features"].flush()
+        state["gallery_scoring_features"].flush()
+        payload: dict[str, Any] = {
+            "query_ids": np.asarray(arrays["query_ids"]),
+            "gallery_ids": np.asarray(names),
+            "query_features": state["query_features"],
+            "gallery_features": state["gallery_scoring_features"],
+            "scores": state["scores"],
+            "native_order": state["native_order"],
+            "rank_qids": np.asarray(arrays["query_ids"]),
+            "ranks": np.asarray(arrays["target_ranks"], dtype=np.int64),
+            "reference_ids": np.asarray(arrays["reference_ids"]),
+            "metadata": np.asarray(json.dumps({"schema": "cir-tme-native-capture-v1",
+                "invocation_id": invocation_id, "started_at": started_at, "category": category,
+                "metrics": result, "query_rows": state["query_rows"],
+                "selected_score_batches": state["selected_score_batches"],
+                "gallery_order_sha256": hashlib.sha256(
+                    json.dumps(names, separators=(",", ":")).encode()).hexdigest()}, sort_keys=True)),
+        }
+        for key in ("selected_query_ids", "selected_scores", "selected_reference_features",
+                    "selected_fusion_features", "selected_input_ids", "selected_attention_mask"):
+            values = arrays[key]
+            if values:
+                if len(values) != len(arrays["selected_query_ids"]):
+                    raise ValueError(
+                        f"TME selected capture {category}/{key} row count {len(values)} differs "
+                        f"from selected query count {len(arrays['selected_query_ids'])}")
+                payload[key] = np.stack(values) if key != "selected_query_ids" else np.asarray(values)
+                if key != "selected_query_ids":
+                    payload[f"{key}_row_ids"] = np.asarray(arrays["selected_query_ids"])
+        from workbench.replay.clvc_tme_parity import _write_streaming_npz
+        _write_streaming_npz(capture_root / f"{category}.npz", payload)
+        return result
+
+    def encode_image(images: Any) -> Any:
+        first = state["gallery_cursor"]
+        output = original_encode_image(images)
+        names = state["gallery_names"][first:first + len(images)]
+        if len(names) != len(images):
+            raise RuntimeError("TME gallery feature batch exceeds native order")
+        if state["gallery_features"] is None:
+            shape = (len(state["gallery_names"]), *tuple(output.shape[1:]))
+            path = state["feature_root"] / f"{state['category']}.gallery.npy"
+            state["gallery_features"] = np.lib.format.open_memmap(
+                path, mode="w+", dtype=np.float32, shape=shape)
+        state["gallery_features"][first:first + len(output)] = output.detach().float().cpu().numpy()
+        keep = [idx for idx, name in enumerate(names) if name in state["selected_gallery"]]
+        if keep:
+            state["arrays"]["gallery_ids"].extend(names[idx] for idx in keep)
+            state["arrays"]["gallery_features"].append(output[keep].detach().cpu().numpy())
+        state["gallery_cursor"] += len(images)
+        return output
+
+    def encode_fusion(reference: Any, tokens: Any) -> Any:
+        ids = state["active_ids"]
+        first = state["query_cursor"]
+        output = original_encode_fusion(reference, tokens)
+        if state["query_features"] is None:
+            path = state["feature_root"] / f"{state['category']}.queries.npy"
+            state["query_features"] = np.lib.format.open_memmap(
+                path, mode="w+", dtype=np.float32,
+                shape=(len(dataset.current_triplets), int(output.shape[-1])))
+        state["query_features"][first:first + len(output)] = output.detach().float().cpu().numpy()
+        keep = [idx for idx, sample_id in enumerate(ids) if sample_id in state["selected_queries"]]
+        if keep:
+            selected_ids = [ids[idx] for idx in keep]
+            append_selected("selected_input_ids", selected_ids, tokens.input_ids[keep])
+            append_selected("selected_attention_mask", selected_ids, tokens.attention_mask[keep])
+            append_selected("selected_fusion_features", selected_ids, output[keep])
+        return output
+    def inference(references: Any, gallery: Any, captions: Any) -> Any:
+        first = state["query_cursor"]
+        triplets = dataset.current_triplets[first:first + len(captions)]
+        category = state["category"]
+        ids = [_tme_source_id(category, triplet) for triplet in triplets]
+        if len(ids) != len(captions) or len(ids) != len(set(ids)):
+            raise ValueError(f"TME native triplet identities are ambiguous: {category}")
+        state["active_ids"] = ids
+        scores = original_inference(references, gallery, captions)
+        state["scores"][first:first + len(ids)] = scores.detach().float().cpu().numpy()
+        for idx, triplet in enumerate(triplets):
+            target, reference = triplet["target"], triplet["candidate"]
+            sample_id = ids[idx]
+            state["arrays"]["query_ids"].append(sample_id)
+            state["arrays"]["reference_ids"].append(reference)
+            state["arrays"]["target_ids"].append(target)
+            state["arrays"]["target_ranks"].append(0)
+            state["query_rows"].append({"sample_id": sample_id, "reference_id": reference,
+                                        "native_processed_text": captions[idx],
+                                        "captions": triplet["captions"]})
+        keep = [idx for idx, sample_id in enumerate(ids) if sample_id in state["selected_queries"]]
+        state["selected_score_batches"].append({"query_ids": ids,
+            "selected_query_ids": [ids[idx] for idx in keep],
+            "input_shape": list(scores.shape), "selected_shape": list(
+                (scores.unsqueeze(0) if scores.ndim == 1 else scores)[keep].shape)})
+        keep = [idx for idx, sample_id in enumerate(ids) if sample_id in state["selected_queries"]]
+        if keep:
+            selected_ids = [ids[idx] for idx in keep]
+            state["arrays"]["selected_query_ids"].extend(selected_ids)
+            score_rows = scores.unsqueeze(0) if scores.ndim == 1 else scores
+            append_selected("selected_scores", selected_ids, score_rows[keep])
+            append_selected("selected_reference_features", selected_ids,
+                            references[keep])
+        state["query_cursor"] += len(triplets)
+        return scores
+
+    precompute_evaluation.compute_metric_features = metric
+    model.encode_image = encode_image
+    model.inference = inference
+    model.encode_fusion = encode_fusion
+
+    def restore() -> None:
+        precompute_evaluation.compute_metric_features = original_metric
+        model.encode_image = original_encode_image
+        model.inference = original_inference
+        model.encode_fusion = original_encode_fusion
+        torch.argsort = original_argsort
+        if projection_hook is not None:
+            projection_hook.remove()
+    return restore
 DATASET_LABEL = "FashionIQ"
 #: The pinned model name and type the author's own `precompute_test.py` selects for evaluation.
 MODEL_NAME = "blip2_cir_image_diff_features"
@@ -339,10 +578,23 @@ def feature_cache_provenance(dataset_root: Path, image_extension: str, parameter
     return provenance, verdict, differences
 
 
+def _load_feature_cache(feature_path: Path, mapping_path: Path):
+    import torch
+
+    features = torch.load(feature_path, map_location="cpu", weights_only=True, mmap=True)
+    mapping = json.loads(mapping_path.read_text(encoding="utf-8"))
+    if not isinstance(mapping, dict):
+        raise RuntimeError("TME feature cache name-to-index mapping is not a JSON object")
+    return features, mapping
+
 def _evaluate_categories(checkout: Path, dataset_root: Path, checkpoint_root: Path,
                          categories: tuple[str, ...], checkpoint_id: str | None,
-                         prior_provenance: dict[str, Any] | None,
-                         runtime_asset_evidence: list[dict[str, Any]]) -> tuple[list[ReplayResult], dict[str, Any]]:
+                         prior_feature_provenance: dict[str, Any],
+                         runtime_asset_evidence: list[dict[str, Any]], capture_root: Path | None,
+                         selected_queries: dict[str, set[str]] | None,
+                         selected_gallery: dict[str, set[str]] | None,
+                         sample_queries: dict[str, set[str]] | None,
+                         invocation_id: str | None) -> tuple[list[ReplayResult], dict[str, Any]]:
     import torch
 
     variant = CHECKPOINTS.get(checkpoint_id or DEFAULT_CHECKPOINT)
@@ -396,16 +648,20 @@ def _evaluate_categories(checkout: Path, dataset_root: Path, checkpoint_root: Pa
                              image_source="images", image_extension=image_extension) as cache_root:
         tme_data.FashioniqPath = str(cache_root).rstrip("/") + "/"
         dataset = tme_data.get_dataset(DATASET_LABEL, preprocess, parameters["split"])
-        if hasattr(dataset, "load_image_features"):
-            dataset.load_image_features()
-        names = dataset.current_image_names
-        expected_index = {name: index for index, name in enumerate(names)}
+        features, mapping = _load_feature_cache(feature_path, mapping_path)
+        dataset.load_image_features_tensor_and_dict(features, mapping)
+        global_names = [
+            name for category in CATEGORIES
+            for name in json.loads((dataset_root / "image_splits" /
+                                    f"split.{category}.val.json").read_text(encoding="utf-8"))
+        ]
+        expected_index = {name: index for index, name in enumerate(global_names)}
         if list(dataset.name_to_idx.items()) != list(expected_index.items()):
             raise RuntimeError(
                 "TME feature cache name-to-index mapping does not exactly match the ordered "
-                "FashionIQ validation gallery")
+                "FashionIQ global feature-cache input")
         features = dataset.images
-        expected_shape = (len(names), parameters["tokens_per_image"], parameters["feature_width"])
+        expected_shape = (len(global_names), parameters["tokens_per_image"], parameters["feature_width"])
         expected_dtype = {"float16": torch.float16, "float32": torch.float32,
                           "float64": torch.float64}[parameters["feature_dtype"]]
         if not isinstance(features, torch.Tensor) or tuple(features.shape) != expected_shape:
@@ -418,17 +674,45 @@ def _evaluate_categories(checkout: Path, dataset_root: Path, checkpoint_root: Pa
 
         provenance, cache_provenance, differences = feature_cache_provenance(
             dataset_root, image_extension, parameters, feature_path, mapping_path,
-            features, prior_provenance)
+            features, prior_feature_provenance)
+        provenance["feature_cache_loading"] = "torch.load_mmap_cpu_weights_only_v1"
         if cache_provenance == "UNVERIFIED":
             print("[WARNING] TME feature cache provenance UNVERIFIED for this run: "
                   + ", ".join(differences), file=sys.stderr)
 
         # This large feature cache is a legitimate reusable artifact. Matching provenance reuses it;
         # differing or unknown inputs warn and never regenerate over existing files.
-        metrics = evaluate_features(blip_model, dataset, txt_processors["eval"])
-        if not isinstance(metrics, dict):
-            raise RuntimeError("TME native evaluator returned a non-dictionary result")
+        if sample_queries is not None:
+            original_set_category = dataset.set_specific_dress_type
 
+            def set_sample_category(category: str) -> None:
+                original_set_category(category)
+                selected_category = (sample_queries.get(category)
+                                     if isinstance(sample_queries, dict) else sample_queries)
+                if selected_category is not None:
+                    source_rows = list(dataset.current_triplets)
+                    selected_rows = [triplet for triplet in source_rows
+                                     if _tme_source_id(category, triplet) in selected_category]
+                    if len(selected_rows) != len(selected_category):
+                        raise ValueError(f"TME sample IDs differ from source queries for {category}")
+                    dataset.current_triplets = selected_rows
+                    if not dataset.current_triplets:
+                        raise ValueError(f"TME sample has no queries for category {category}")
+
+            dataset.set_specific_dress_type = set_sample_category
+        restore_observer = None
+        if capture_root is not None:
+            if selected_queries is None or selected_gallery is None or not invocation_id:
+                raise ValueError("TME capture requires selections and pre-run invocation ID")
+            started_at = datetime.now(timezone.utc).isoformat()
+            restore_observer = _install_tme_observer(
+                blip_model, dataset, capture_root, selected_queries, selected_gallery,
+                invocation_id, started_at)
+        try:
+            metrics = evaluate_features(blip_model, dataset, txt_processors["eval"])
+        finally:
+            if restore_observer is not None:
+                restore_observer()
         results: list[ReplayResult] = []
         for category in CATEGORIES:
             category_metrics = metrics.get(category)
@@ -474,20 +758,23 @@ def evaluate_categories(checkout: Path, dataset_root: Path, checkpoint_root: Pat
                         categories: tuple[str, ...] = CATEGORIES,
                         checkpoint_id: str | None = None,
                         runtime_asset_evidence: list[dict[str, Any]] | None = None,
-                        config=None) -> tuple[list[ReplayResult], dict[str, Any]]:
+                        config=None, capture_root: Path | None = None,
+                        selected_queries: dict[str, set[str]] | None = None,
+                        selected_gallery: dict[str, set[str]] | None = None,
+                        sample_queries: dict[str, set[str]] | None = None,
+                        invocation_id: str | None = None) -> tuple[list[ReplayResult], dict[str, Any]]:
     from workbench.backend.operator_config import resolve_config
 
-    config = config if config is not None else resolve_config()
-    original_cwd = Path.cwd()
-    checkout = Path(checkout).resolve()
-    dataset_root = Path(dataset_root).resolve()
-    checkpoint_root = Path(checkpoint_root).resolve()
+    capture_root = Path(capture_root).resolve() if capture_root is not None else None
+    original_cwd = os.getcwd()
     source = source_root_for(checkout)
     os.chdir(source)
     try:
         return _evaluate_categories(checkout, dataset_root, checkpoint_root, categories,
                                     checkpoint_id, _prior_feature_provenance(config),
-                                    runtime_asset_evidence or [])
+                                    runtime_asset_evidence or [], capture_root,
+                                    selected_queries, selected_gallery, sample_queries,
+                                    invocation_id)
     finally:
         os.chdir(original_cwd)
 def main(argv: list[str] | None = None) -> int:
@@ -496,12 +783,53 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--dataset-root", type=Path, required=True)
     parser.add_argument("--source-root", type=Path, required=True)
     parser.add_argument("--checkpoint-id", type=str, default=None)
-    parser.add_argument("--category", choices=CATEGORIES, action="append", dest="categories")
+    parser.add_argument("--capture-root", type=Path, default=None)
+    parser.add_argument("--capture-selection", type=Path, default=None,
+                        help="JSON category map of selected native query and gallery IDs")
+    parser.add_argument("--invocation-id", type=str, default=None,
+                        help="UUID generated before model execution for capture receipt binding")
     parser.add_argument("--output", type=Path, default=None)
+    parser.add_argument("--sample-queries", type=Path, default=None,
+                        help="JSON array of native TME query IDs to evaluate over each full category gallery")
     parser.add_argument("--preflight-only", action="store_true")
     args = parser.parse_args(argv)
+    capture_selection = None
+    if (args.capture_root is None) != (args.capture_selection is None):
+        parser.error("--capture-root and --capture-selection must be supplied together")
+    if args.capture_root is not None and not args.invocation_id:
+        parser.error("capture requires pre-run --invocation-id")
+    if args.capture_selection is not None:
+        try:
+            capture_selection = json.loads(args.capture_selection.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as error:
+            parser.error(f"invalid capture selection: {error}")
+        if not isinstance(capture_selection, dict) or set(capture_selection) != set(CATEGORIES) or any(
+                not isinstance(value, dict) or set(value) != {"queries", "gallery"}
+                for value in capture_selection.values()):
+            parser.error("capture selection must map every category to queries and gallery arrays")
+        if any(not isinstance(capture_selection[category][key], list) or
+               len(capture_selection[category][key]) > 32 or
+               len(capture_selection[category][key]) != len(set(capture_selection[category][key])) or
+               any(not isinstance(value, str) or not value for value in capture_selection[category][key])
+               for category in CATEGORIES for key in ("queries", "gallery")):
+            parser.error("capture selection arrays must contain at most 32 non-empty unique IDs")
+    sample_queries = None
+    if args.sample_queries is not None:
+        try:
+            sample_queries = json.loads(args.sample_queries.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as error:
+            parser.error(f"invalid sample query selection: {error}")
+        if isinstance(sample_queries, dict):
+            if set(sample_queries) != set(CATEGORIES) or any(
+                    not isinstance(values, list) or not values or
+                    any(not isinstance(value, str) or not value for value in values) or
+                    len(values) != len(set(values)) for values in sample_queries.values()):
+                parser.error("sample query map must contain all categories with non-empty unique IDs")
+            sample_queries = {category: set(values) for category, values in sample_queries.items()}
+        else:
+            parser.error("sample query selection must map all three categories to non-empty unique IDs")
 
-    selected = tuple(args.categories) if args.categories else CATEGORIES
+    selected = CATEGORIES
     runtime_assets = _runtime_asset_check()
     blockers = preflight(args.source_root, args.dataset_root, args.checkpoint_root,
                          args.checkpoint_id, runtime_assets)
@@ -515,12 +843,18 @@ def main(argv: list[str] | None = None) -> int:
     results, aggregate = evaluate_categories(
         args.source_root, args.dataset_root, args.checkpoint_root,
         categories=selected, checkpoint_id=args.checkpoint_id,
-        runtime_asset_evidence=runtime_assets[1])
+        runtime_asset_evidence=runtime_assets[1], capture_root=args.capture_root,
+        selected_queries=({category: set(capture_selection[category]["queries"])
+                           for category in CATEGORIES} if capture_selection is not None else None),
+        selected_gallery=({category: set(capture_selection[category]["gallery"])
+                           for category in CATEGORIES} if capture_selection is not None else None),
+        sample_queries=sample_queries, invocation_id=args.invocation_id)
     payload = {
         "model_id": "tme",
         "protocol": PROTOCOL,
         "results": [asdict(r) for r in results],
         "aggregate": aggregate,
+        "invocation_id": args.invocation_id,
         "recorded_at": datetime.now(timezone.utc).isoformat(),
     }
     rendered = json.dumps(payload, indent=2) + "\n"

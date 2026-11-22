@@ -42,3 +42,9 @@ def test_config_parser_rejects_malformed_or_unknown_lines(tmp_path: Path, line: 
 
     with pytest.raises(ValueError, match=message):
         operator_config._read_env(config_path)
+
+def test_runtime_adaptation_is_a_permitted_operator_setting(tmp_path: Path) -> None:
+    config_path = tmp_path / "workbench.env"
+    config_path.write_text("WORKBENCH_RUNTIME_ADAPTATION=sm_120\n", encoding="utf-8")
+
+    assert operator_config._read_env(config_path) == {"WORKBENCH_RUNTIME_ADAPTATION": "sm_120"}

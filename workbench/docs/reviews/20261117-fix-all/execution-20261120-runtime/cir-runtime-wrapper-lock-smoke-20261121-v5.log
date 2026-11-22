@@ -1,0 +1,19 @@
+Running as unit: cir-runtime-wrapper-lock-smoke-20261121-v5.service; invocation ID: 13576e525bae4e13bb1d134a931aec2f
+waiting_for_cpu_lock=1
+cpu_lock_acquired=1
+disk_check_after_cpu_lock=1 free_bytes=82282487808 required_bytes=1
+unit=cir-runtime-wrapper-lock-smoke-20261121-v5.service
+cgroup=/user.slice/user-1000.slice/user@1000.service/app.slice/cir-runtime-wrapper-lock-smoke-20261121-v5.service
+memory.max=12884901888
+memory.swap.max=0
+memory.oom.group=1
+output_dir=/tmp
+free_bytes=82282487808
+min_free_bytes=1
+argv_verified ['arg with spaces', 'literal;$HOME', '']
+Finished with result: success
+Main processes terminated with: code=exited/status=0
+Service runtime: 1.799s
+CPU time consumed: 14ms
+Memory peak: 1.9M
+Memory swap peak: 0B

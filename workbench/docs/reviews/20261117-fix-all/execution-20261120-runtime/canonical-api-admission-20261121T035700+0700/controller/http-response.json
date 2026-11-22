@@ -1,0 +1,14 @@
+{
+  "body": {
+    "detail": {
+      "details": {
+        "blockers": [
+          "checkpoint missing: /home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/canonical-api-admission-20261121T035700+0700/controller/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/../../checkpoints/dcnet"
+        ]
+      },
+      "error": "evaluation_blocked",
+      "message": "Official evaluation is not ready."
+    }
+  },
+  "status": 409
+}

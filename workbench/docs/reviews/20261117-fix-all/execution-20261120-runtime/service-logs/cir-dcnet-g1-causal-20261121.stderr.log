@@ -1,0 +1,31 @@
+[gpu_job] lock held, GPU empty, launching: systemd-run --user --wait --pipe --collect --same-dir --service-type=exec --unit=cir-dcnet-g1-causal-20261121 -p MemoryMax=12G -p MemorySwapMax=0 -p OOMPolicy=kill /home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/run-role-service.sh --inner --unit cir-dcnet-g1-causal-20261121 --output-dir /home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/raw/dcnet-native-adapter-full-20261121 --min-free-bytes 8589934592 -- bash workbench/docs/reviews/20261117-fix-all/raw/dcnet-native-adapter-full-20261121/launch-g1-diagnostic.sh
+GPU-9bc596d9-19e9-6f43-dc2c-a80da924263c, 360 MiB, 16303 MiB
+Running as unit: cir-dcnet-g1-causal-20261121.service; invocation ID: a792fab72b62439296b58e15445c5a18
+waiting_for_cpu_lock=1
+cpu_lock_acquired=1
+disk_check_after_cpu_lock=1 free_bytes=56103362560 required_bytes=8589934592
+unit=cir-dcnet-g1-causal-20261121.service
+cgroup=/user.slice/user-1000.slice/user@1000.service/app.slice/cir-dcnet-g1-causal-20261121.service
+memory.max=12884901888
+memory.swap.max=0
+memory.oom.group=1
+output_dir=/home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/raw/dcnet-native-adapter-full-20261121
+free_bytes=56103362560
+min_free_bytes=8589934592
+Traceback (most recent call last):
+  File "/home/heheboiz/data/cir/workbench/replay/dcnet_native_g1_capture.py", line 161, in <module>
+    raise SystemExit(main())
+  File "/home/heheboiz/data/cir/workbench/replay/dcnet_native_g1_capture.py", line 46, in main
+    config = ConfigParser(config_parser, "eval")
+  File "/home/heheboiz/data/cir/workbench/third_party/DCNet/parse_config.py", line 61, in __init__
+    self.log_path = setup_logging(self.log_dir)
+  File "/home/heheboiz/data/cir/workbench/third_party/DCNet/logger/logger.py", line 24, in setup_logging
+    return config["handlers"]["info_file_handler"]["filename"]
+UnboundLocalError: local variable 'config' referenced before assignment
+Finished with result: exit-code
+Main processes terminated with: code=exited/status=1
+Service runtime: 2.717s
+CPU time consumed: 2.376s
+Memory peak: 2.2M
+Memory swap peak: 0B
+[gpu_job] child_exit=1

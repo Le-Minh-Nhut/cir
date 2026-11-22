@@ -55,10 +55,10 @@ def _isolate_settings(monkeypatch, tmp_path):
 
     monkeypatch.delenv(runtime.ADAPTATION_ENV, raising=False)
     monkeypatch.setattr(operator_config, "_CONFIG_PATH", tmp_path / "workbench.env")
-    model_settings.file_settings.cache_clear()
+    model_settings.clear_file_settings_cache()
     runtime.forget_environment()
     yield
-    model_settings.file_settings.cache_clear()
+    model_settings.clear_file_settings_cache()
     runtime.forget_environment()
 
 
@@ -231,7 +231,7 @@ def test_a31_01_file_only_selection_beats_a_broken_assignment(tmp_path, monkeypa
     monkeypatch.delenv("WORKBENCH_TME_PYTHON", raising=False)
     (tmp_path / "workbench.env").write_text(f"WORKBENCH_TME_PYTHON={selected}\n", encoding="utf-8")
     from workbench.backend import model_settings
-    model_settings.file_settings.cache_clear()
+    model_settings.clear_file_settings_cache()
     runtime.forget_environment()
 
     status = module.status(model, config)
@@ -255,7 +255,7 @@ def test_a31_01_export_conflicting_with_the_file_wins(tmp_path, monkeypatch):
     (tmp_path / "workbench.env").write_text(f"WORKBENCH_TME_PYTHON={from_file}\n", encoding="utf-8")
     monkeypatch.setenv("WORKBENCH_TME_PYTHON", str(exported))
     from workbench.backend import model_settings
-    model_settings.file_settings.cache_clear()
+    model_settings.clear_file_settings_cache()
     runtime.forget_environment()
 
     status = module.status(model, config)

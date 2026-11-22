@@ -1,0 +1,27 @@
+{
+  "checkpoint_id": "fashioniq_run_directory",
+  "evaluation_run_id": "20261120T210334668389Z_131b33f1",
+  "inputs": {
+    "config.json": {
+      "original": "/home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/canonical-api-admission-20261121T040200+0700/controller/artifacts/checkpoint_selection/20261106T002617+0700/checkpoints/dcnet/config.json",
+      "original_sha256": "fa5fca78790a33063a4e73b379393f4ffbbf1b251b3c27058aed481136984ba0",
+      "staged": "/home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/canonical-api-admission-20261121T040200+0700/controller/artifacts/logs/dcnet__fashioniq_run_directory__20261120T210334668389Z_131b33f1/dcnet-native-resume/config.json",
+      "staged_sha256": "fa5fca78790a33063a4e73b379393f4ffbbf1b251b3c27058aed481136984ba0"
+    },
+    "trained_model.pth": {
+      "original": "/home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/canonical-api-admission-20261121T040200+0700/controller/artifacts/checkpoint_selection/20261106T002617+0700/checkpoints/dcnet/trained_model.pth",
+      "original_sha256": "130f031e0f7808ccf5f15630a691bd7af95ad9fadbf94f64acfce64e7d8b850f",
+      "staged": "/home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/canonical-api-admission-20261121T040200+0700/controller/artifacts/logs/dcnet__fashioniq_run_directory__20261120T210334668389Z_131b33f1/dcnet-native-resume/trained_model.pth",
+      "staged_sha256": "130f031e0f7808ccf5f15630a691bd7af95ad9fadbf94f64acfce64e7d8b850f"
+    }
+  },
+  "model_id": "dcnet",
+  "output_only_override": {
+    "native_eval_output_dir": "/home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/canonical-api-admission-20261121T040200+0700/controller/artifacts/logs/dcnet__fashioniq_run_directory__20261120T210334668389Z_131b33f1/dcnet-native-resume/val",
+    "resume_dir": "/home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/canonical-api-admission-20261121T040200+0700/controller/artifacts/logs/dcnet__fashioniq_run_directory__20261120T210334668389Z_131b33f1/dcnet-native-resume"
+  },
+  "protected_original_att_result": {
+    "path": "/home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/canonical-api-admission-20261121T040200+0700/controller/artifacts/checkpoint_selection/20261106T002617+0700/checkpoints/dcnet/val/att_result.pt",
+    "sha256_before": "6d776ffad3168e3f62105e07edfb954eb7ff320206cbd62a79c061db25160438"
+  }
+}

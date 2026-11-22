@@ -80,6 +80,22 @@ console.log('__R__' + JSON.stringify({{cohort: scope.cohort, partial: scope.part
     assert out["runs"] == 2, out
     assert out["ids"] == ["q1", "q2", "q3", "q9"], out
 
+def test_common_preset_excludes_rows_unscored_by_any_selected_run() -> None:
+    pages = [
+        {"runKey": "a", "runLabel": "A", "items": [_row("q-common", 3), _row("q-a-only", 8)]},
+        {"runKey": "b", "runLabel": "B", "items": [_row("q-common", 5), _row("q-b-only", 9)]},
+    ]
+    out = _run(f"""
+const scope = A.withCutoff(A.buildScope({json.dumps(pages)}), 10);
+const common = A.filterRows(scope, {{preset: "common", k: 10, category: "", outcome: "", scoring: ""}})
+  .map((row) => row.query_id);
+const union = A.filterRows(scope, {{preset: "all", k: 10, category: "", outcome: "", scoring: ""}})
+  .map((row) => row.query_id);
+console.log('__R__' + JSON.stringify({{common, union, cohort: scope.cohort, partial: scope.partial}}));
+""")
+    assert out == {"common": ["q-common"], "union": ["q-common", "q-a-only", "q-b-only"],
+                  "cohort": 1, "partial": 2}, out
+
 
 def test_every_rank_is_kept_per_run_and_per_condition() -> None:
     a = _row("q1", 11, ranks={"multimodal": 11, "text_only_black_image": None,

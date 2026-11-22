@@ -416,10 +416,11 @@ def _serve(runs: list[dict], model_ids: list[str]) -> tuple[str, HTTPServer]:
     return f"http://127.0.0.1:{server.server_address[1]}", server
 
 def _registry_model_ids() -> list[str]:
-    from workbench.backend.registry import load_registry
+    from workbench.backend.registry import load_registry, web_deferred_models
 
-    return [m["model_id"] for m in load_registry()["models"]]
-
+    registry = load_registry()
+    deferred = web_deferred_models(registry)
+    return [m["model_id"] for m in registry["models"] if m["model_id"] not in deferred]
 def _corroborated_run(run_id: str) -> dict:
     """A real evaluation run: its aggregate report is corroborated by the evidence ledger with
     the completion the evaluator records for a successful invocation."""

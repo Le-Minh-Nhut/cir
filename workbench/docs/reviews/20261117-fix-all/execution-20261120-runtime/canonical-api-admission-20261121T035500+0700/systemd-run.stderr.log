@@ -1,0 +1,18 @@
+Running as unit: cir-dcnet-canonical-api-20261121.service; invocation ID: ce8c7179efce4ebe87462d885ff65bc8
+[gpu_job] lock held, GPU empty, launching: /bin/bash /home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/canonical-api-admission-20261121T035500+0700/service-inner.sh
+GPU-9bc596d9-19e9-6f43-dc2c-a80da924263c, 597 MiB, 16303 MiB
+Traceback (most recent call last):
+  File "/home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/canonical_dcnet_admission.py", line 400, in <module>
+    raise SystemExit(main())
+  File "/home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/canonical_dcnet_admission.py", line 396, in main
+    return _run(args)
+  File "/home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/canonical_dcnet_admission.py", line 188, in _run
+    raise RuntimeError(f"authorized GPU capability probe failed: exit={probe.returncode}; see {root}")
+RuntimeError: authorized GPU capability probe failed: exit=1; see /home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/canonical-api-admission-20261121T035500+0700/controller
+[gpu_job] child_exit=1
+Finished with result: exit-code
+Main processes terminated with: code=exited/status=1
+Service runtime: 6.198s
+CPU time consumed: 3.453s
+Memory peak: 17.0M
+Memory swap peak: 0B

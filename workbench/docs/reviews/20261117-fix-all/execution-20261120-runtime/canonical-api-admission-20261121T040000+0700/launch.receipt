@@ -1,0 +1,6 @@
+unit=cir-dcnet-canonical-api-20261121-v3
+service_started_at=2026-11-21T03:59:37+07:00
+controller=workbench/envs/ctl312h/bin/python
+probe_runtime=workbench/envs/dcnet310-sm120/bin/python
+adaptation=sm_120
+checkpoint_parent_created=true

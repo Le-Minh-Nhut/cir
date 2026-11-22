@@ -1,0 +1,9 @@
+Running as unit: run-u334.service; invocation ID: 706d3f9f4e094f838e7ea72872c8ef01
+...                                                                      [100%]
+3 passed in 0.14s
+Finished with result: success
+Main processes terminated with: code=exited/status=0
+Service runtime: 290ms
+CPU time consumed: 289ms
+Memory peak: 2.4M
+Memory swap peak: 0B

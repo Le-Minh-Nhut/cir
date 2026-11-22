@@ -1,0 +1,43 @@
+argv=systemd-run --user --unit=cir-exit7-probe-20261121b.service --wait --pipe --collect --same-dir --service-type=exec -p MemoryMax=256M -p MemorySwapMax=0 -p OOMPolicy=kill /bin/bash --noprofile --norc workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/exit-seven-probe.sh
+Running as unit: cir-exit7-probe-20261121b.service; invocation ID: 9e9d20500d6b4722923f05fabaa86bab
+[gpu_job] lock held; retrying in 30s
+[gpu_job] lock held; retrying in 30s
+[gpu_job] lock held; retrying in 30s
+[gpu_job] lock held; retrying in 30s
+[gpu_job] lock held; retrying in 30s
+[gpu_job] lock held; retrying in 30s
+[gpu_job] lock held; retrying in 30s
+[gpu_job] lock held; retrying in 30s
+[gpu_job] lock held; retrying in 30s
+[gpu_job] lock held; retrying in 30s
+[gpu_job] lock held; retrying in 30s
+[gpu_job] lock held; retrying in 30s
+[gpu_job] lock held; retrying in 30s
+[gpu_job] lock held; retrying in 30s
+[gpu_job] lock held; retrying in 30s
+[gpu_job] lock held; retrying in 30s
+[gpu_job] lock held; retrying in 30s
+[gpu_job] lock held; retrying in 30s
+[gpu_job] lock held; retrying in 30s
+[gpu_job] lock held; retrying in 30s
+[gpu_job] lock held; retrying in 30s
+[gpu_job] lock held; retrying in 30s
+[gpu_job] lock held; retrying in 30s
+[gpu_job] lock held; retrying in 30s
+[gpu_job] lock held; retrying in 30s
+[gpu_job] lock held; retrying in 30s
+[gpu_job] lock held; retrying in 30s
+[gpu_job] lock held; retrying in 30s
+[gpu_job] lock held; retrying in 30s
+[gpu_job] lock held, GPU empty, launching: bash -c exit 7
+GPU-9bc596d9-19e9-6f43-dc2c-a80da924263c, 361 MiB, 16303 MiB
+[gpu_job] child_exit=7
+wrapper_exit=7
+Finished with result: success
+Main processes terminated with: code=exited/status=0
+Service runtime: 14min 30.118s
+CPU time consumed: 101ms
+Memory peak: 1.3M
+Memory swap peak: 0B
+
+outer_exit=0

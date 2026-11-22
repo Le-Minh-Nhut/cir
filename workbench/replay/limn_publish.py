@@ -42,7 +42,8 @@ def load_payload(path: Path) -> dict:
                          payload.get("model_id") if isinstance(payload, dict) else None)
     if not expected_type or payload.get("artifact_type") != expected_type:
         raise PayloadError(f"{path} is not an observation payload")
-    _require_declared_bundle(payload, path)
+    if payload.get("model_id") == "limn" and payload.get("ranking_provenance") != "native_argsort_same_invocation":
+        raise PayloadError("LIMN observation payload lacks same-invocation native ranking provenance")
     return payload
 
 
@@ -120,6 +121,7 @@ def publish_payload(path: Path, results_root: Path) -> Path:
     # aggregate report's. A disagreement is refused rather than recorded, and it is checked FIRST:
     # which bundle ran is a property of the run, not of whether the payload happens to parse.
     payload = load_payload(path)
+    _require_declared_bundle(payload, path)
     members = payload.get("checkpoint_members") or {}
     planned_digest = payload.get("planned_bundle_manifest_digest")
     if planned_digest:

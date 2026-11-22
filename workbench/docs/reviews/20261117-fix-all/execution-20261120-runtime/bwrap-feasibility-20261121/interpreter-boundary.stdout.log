@@ -1,0 +1,4 @@
+sys.executable=/home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python
+sys.base_prefix=/home/heheboiz/.local/share/uv/python/cpython-3.12-linux-x86_64-gnu
+pytest=9.2.0
+git_HEAD=d3f0a923ba6d9f39f7a2f44aaad583c04fa3c93e

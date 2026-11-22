@@ -236,6 +236,16 @@ def test_every_adapter_measures_reference_eligibility() -> None:
             assert result["reason"], f"{row['model_id']} must say why it cannot be measured"
 
 
+def test_reference_probe_uses_declared_query_and_gallery_dimensions() -> None:
+    from workbench.composition.model_csmcir import Adapter as CSMCIR
+    from workbench.composition.model_sprc import Adapter as SPRC
+
+    for adapter_type in (CSMCIR, SPRC):
+        result = adapter_type.__new__(adapter_type).measured_reference_eligibility()
+        assert result["measured"] is True, result
+        assert result["reference_eligible"] is True, result
+        assert result["reference_rank"] == 1
+
 def test_every_probeable_adapter_declares_a_score_dimension() -> None:
     """An adapter that CAN be probed must declare its scorer's input width."""
     from workbench.backend.registry import load_registry

@@ -1,0 +1,32 @@
+{
+  "model_id": "dcnet",
+  "checkpoint_id": "fashioniq_run_directory",
+  "protocol_id": "fashioniq_full_gallery_ref_excluded",
+  "run_id": "20261120T210334668389Z_131b33f1",
+  "run_directory": "/home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/canonical-api-admission-20261121T040200+0700/controller/artifacts/logs/dcnet__fashioniq_run_directory__20261120T210334668389Z_131b33f1",
+  "upstream_expected_pin": "68c79d38569f01ca39c3b4ea641b3b7eb2ccb5fb",
+  "actual_source_commit": "68c79d38569f01ca39c3b4ea641b3b7eb2ccb5fb",
+  "checkpoint_local_sha256": "2859caf5b36e3213e1455cfdd2e38a44d530d20425ccfeb5589e55cffe874b6b",
+  "dataset_root": "/home/heheboiz/data/cir/data/FashionIQ",
+  "job_id": "1f16abad-9b2c-4359-b93a-baf5c6220b29",
+  "argv": [
+    "/home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python",
+    "/home/heheboiz/data/cir/workbench/scripts/evaluate_models.py",
+    "--model",
+    "dcnet",
+    "--checkpoint",
+    "fashioniq_run_directory",
+    "--protocol",
+    "fashioniq_full_gallery_ref_excluded",
+    "--dataset-root",
+    "/home/heheboiz/data/cir/data/FashionIQ",
+    "--top-k",
+    "200",
+    "--run-id",
+    "20261120T210334668389Z_131b33f1"
+  ],
+  "cwd": "/home/heheboiz/data/cir/workbench",
+  "started_at": "2026-11-20T21:03:35.397049+00:00",
+  "finished_at": "2026-11-20T21:03:57.554468+00:00",
+  "return_code": -15
+}

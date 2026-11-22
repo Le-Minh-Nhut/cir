@@ -79,6 +79,7 @@ class Adapter(CompositionAdapter):
         self._worker_counter = 0
         self._worker_failed: str | None = None
         self._interpreter_verified = False
+        self._capture_spec: dict[str, Any] | None = None
     def _checkpoint_path(self) -> Path:
         from workbench.backend.registry import checkpoint_path
 
@@ -154,13 +155,16 @@ class Adapter(CompositionAdapter):
         job_path = work / f"job-{self._worker_counter}.json"
         output_path = work / f"output-{self._worker_counter}.npy"
         scope = tuple(categories) or (None,)
-        job_path.write_text(json.dumps({
+        payload = {
             "operation": operation, "image_paths": [str(Path(path).resolve()) for path in image_paths],
             "texts": list(texts), "categories": list(categories), "output_path": str(output_path),
             "checkpoint_path": str(self.checkpoint_path), "checkpoint": self.checkpoint,
             "source_root": str(self.source_root), "dataset_root": str(self.dataset_root),
             "batch_size": self.batch_size,
-        }), encoding="utf-8")
+        }
+        if self._capture_spec is not None:
+            payload["capture_spec"] = self._capture_spec
+        job_path.write_text(json.dumps(payload), encoding="utf-8")
         try:
             if self._worker is not None and self._worker.poll() is not None:
                 status = self._worker.returncode
@@ -332,6 +336,24 @@ def _worker_main(argv: Sequence[str] | None = None) -> int:
 
     def run_one(current: dict[str, Any]) -> None:
         outputs = []
+        capture_spec = current.get("capture_spec")
+        capture_positions = set(capture_spec.get("positions", ())) if capture_spec else set()
+        capture_pixels: list[tuple[int, Any]] = []
+        capture_tokens: list[tuple[int, Any, Any, Any]] = []
+        original_tokenizer = network.tokenizer
+        batch_start = 0
+        if capture_spec:
+            def capture_tokenizer(texts: Any, *args: Any, **kwargs: Any) -> Any:
+                result = original_tokenizer(texts, *args, **kwargs)
+                if current["operation"] == "queries":
+                    for offset, text in enumerate(texts):
+                        position = batch_start + offset
+                        if position in capture_positions:
+                            capture_tokens.append((position, text,
+                                result.input_ids[offset].detach().cpu().numpy().copy(),
+                                result.attention_mask[offset].detach().cpu().numpy().copy()))
+                return result
+            network.tokenizer = capture_tokenizer
         try:
             with torch.no_grad():
                 batch_size = current["batch_size"]
@@ -345,16 +367,18 @@ def _worker_main(argv: Sequence[str] | None = None) -> int:
                             images.append(transform(image.convert("RGB")))
                     return torch.stack(images)
 
-                # Same decode pool as HABIT and CONESEP: one convention, not a second idiom. Only
-                # the serial `Image.open` + transform loop the GPU idled behind is parallelised;
-                # `map` preserves order, so feature rows stay aligned with the released gallery.
                 pixels_by_batch = prefetch_rows(decode, batches, workers)
                 for index, pixels in enumerate(pixels_by_batch):
+                    batch_start = index * batch_size
+                    if capture_spec:
+                        for local in range(len(pixels)):
+                            position = batch_start + local
+                            if position in capture_positions:
+                                capture_pixels.append((position, pixels[local].numpy().copy()))
                     pixels = pixels.float().to(device, non_blocking=True)
                     if current["operation"] == "queries":
-                        first = index * batch_size
                         texts = [text_processor(text) for text in
-                                 current["texts"][first:first + len(pixels)]]
+                                 current["texts"][batch_start:batch_start + len(pixels)]]
                         features = network.extract_retrieval_compose(pixels, texts)
                         outputs.append(features.detach().cpu().numpy().reshape(len(pixels), -1))
                     else:
@@ -364,9 +388,21 @@ def _worker_main(argv: Sequence[str] | None = None) -> int:
             shape = (0, 256) if current["operation"] == "queries" else (0, 32, 256)
             result = np.concatenate(outputs, axis=0) if outputs else np.empty(shape, dtype=np.float32)
             np.save(current["output_path"], result.astype(np.float32, copy=False), allow_pickle=False)
+            if capture_spec:
+                capture_path = Path(capture_spec["output_path"])
+                capture_path.parent.mkdir(parents=True, exist_ok=True)
+                np.savez(capture_path,
+                         positions=np.asarray([row[0] for row in capture_pixels], dtype=np.int32),
+                         pixels=np.stack([row[1] for row in capture_pixels]),
+                         token_positions=np.asarray([row[0] for row in capture_tokens], dtype=np.int32),
+                         token_texts=np.asarray([row[1] for row in capture_tokens]),
+                         input_ids=np.stack([row[2] for row in capture_tokens]) if capture_tokens else np.empty((0, 0), dtype=np.int64),
+                         attention_masks=np.stack([row[3] for row in capture_tokens]) if capture_tokens else np.empty((0, 0), dtype=np.int64))
             reply(True)
         except Exception as error:
             reply(False, error_type=type(error).__name__, error=str(error))
+        finally:
+            network.tokenizer = original_tokenizer
 
     run_one(job)
     for line in sys.stdin:

@@ -103,6 +103,46 @@ def test_a_composition_cohort_round_trips_save_reopen_export(cohorts_file: Path)
     assert f"| {TGCR_FULL} | 3 |" in markdown, markdown
 
 
+@pytest.mark.parametrize("references", [
+    ["c:9b806c22221e944ff10e514e", "c:1eee4c0adbc93f7708205a5e"],
+    ["c:1eee4c0adbc93f7708205a5e", "c:9b806c22221e944ff10e514e"],
+])
+def test_cross_model_cohort_accepts_different_ranks_and_partial_qids(references, cohorts_file: Path):
+    from fastapi.testclient import TestClient
+
+    api = TestClient(main.app)
+    selected = ["7:1", "7:6"]
+    runs, maps, provenance = storage.cohort_selection(references)
+    assert provenance["protocol_id"] == "circus_fashioniq_release_v1"
+    assert maps[references[0]]["7:1"]["ranks"] != maps[references[1]]["7:1"]["ranks"]
+    universe = set().union(*(set(mapping) for mapping in maps.values()))
+    assert set(selected) <= universe
+    assert "9999:1" not in universe
+
+    saved = api.put("/api/cohorts", json={
+        "cohort_id": "cross-model-partial", "protocol_id": "circus_fashioniq_release_v1",
+        "query_ids": selected, "run_ids": references, "definition": {}, "notes": ""})
+    assert saved.status_code == 200, saved.text
+    exported = api.get("/api/cohorts/cross-model-partial/export/json")
+    assert exported.status_code == 200, exported.text
+    metrics = {row["run_id"]: row for row in exported.json()["metrics"]}
+    encoder_id = "9b806c22221e944ff10e514e"
+    tgcir_id = "1eee4c0adbc93f7708205a5e"
+    assert metrics[encoder_id]["query_count"] == 2 and metrics[encoder_id]["scored_count"] == 2
+    assert metrics[tgcir_id]["query_count"] == 2 and metrics[tgcir_id]["scored_count"] == 1
+    assert metrics[tgcir_id]["r10"] == 0
+    unscored_metrics = storage.composition_cohort_metrics(references, ["7:6", "7:7"])
+    tgcir_unscored = next(row for row in unscored_metrics if row["run_id"] == tgcir_id)
+    assert tgcir_unscored["scored_count"] == 0 and tgcir_unscored["r10"] is None
+    markdown = api.get("/api/cohorts/cross-model-partial/export/markdown").json()["content"]
+    assert f"| {tgcir_id} | 2 | 1 |" in markdown
+    unknown = api.put("/api/cohorts", json={
+        "cohort_id": "cross-model-unknown", "protocol_id": "circus_fashioniq_release_v1",
+        "query_ids": ["9999:1"], "run_ids": references, "definition": {}, "notes": ""})
+    assert unknown.json()["error"] == "query_alignment_mismatch"
+    assert len(runs) == 2
+
+
 @needs_tgcir
 def test_a_changed_artifact_refuses_the_saved_cohort_instead_of_rescoring(cohorts_file: Path):
     """The saved digest is a claim about a table; a table that changed invalidates the claim."""

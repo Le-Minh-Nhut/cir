@@ -102,7 +102,7 @@ export function FailuresPage({ data, location, onGoto, onSaved }: {
           definition: { preset, k: location.k, category: location.category, outcome: location.outcome,
                         subset: location.subset,
                         scoring: "unscored-separate", cohort: scope.cohort, partial: scope.partial },
-          notes: `saved from failure analysis; ${filtered.length} of ${scope.rows.length} rows`,
+          notes: `saved from failure analysis; ${fmtInt(filtered.length)} selected; ${fmtInt(scope.cohort)} common scored; ${fmtInt(scope.rows.length)} displayed union; ${fmtInt(scope.rows.length - scope.cohort)} not commonly scored`,
         }),
       });
       if (!response.ok) {

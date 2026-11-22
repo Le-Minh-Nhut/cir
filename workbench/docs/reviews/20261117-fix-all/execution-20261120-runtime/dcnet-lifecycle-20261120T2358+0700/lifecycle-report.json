@@ -1,0 +1,281 @@
+{
+  "admission": "direct SingleGpuQueue.enqueue; canonical POST /api/jobs not used",
+  "api_jobs": [
+    {
+      "checkpoint_id": "fashioniq_run_directory",
+      "command": [
+        "/home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python",
+        "/home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/dcnet_lifecycle_helper.py",
+        "worker",
+        "--phase",
+        "cancel",
+        "--run-id",
+        "cancel",
+        "--run-root",
+        "/home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/dcnet-lifecycle-20261120T2358+0700"
+      ],
+      "completed_at": "2026-11-20T16:59:18.911752+00:00",
+      "created_at": "2026-11-20T16:59:05.817161+00:00",
+      "cwd": "/home/heheboiz/data/cir",
+      "error": null,
+      "gpu_may_be_held": false,
+      "job_id": "6d072be4-2f04-42dd-8417-f83f02d70677",
+      "log_directory": "/home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/dcnet-lifecycle-20261120T2358+0700/queue_jobs/cancel",
+      "model_id": "dcnet",
+      "protocol_id": "diagnostic_q1_t2",
+      "provenance": {
+        "diagnostic": "DCNet Q1/T2 real forward, queue lifecycle only"
+      },
+      "return_code": -15,
+      "started_at": "2026-11-20T16:59:05.817352+00:00",
+      "status": "cancelled",
+      "stderr_tail": "",
+      "stdout_tail": "{\"forward_complete\": true, \"marker\": \"/home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/dcnet-lifecycle-20261120T2358+0700/cancel.forward.json\", \"worker_pid\": 649967, \"worker_identity\": {\"executable\": \"/home/heheboiz/data/cir/workbench/envs/dcnet310-sm120/bin/python\", \"prefix\": \"/home/heheboiz/data/cir/workbench/envs/dcnet310-sm120\", \"cwd\": \"/home/heheboiz/data/cir\", \"argv\": [\"/home/heheboiz/data/cir/workbench/composition/model_dcnet.py\", \"--worker-job\", \"/home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/dcnet-lifecycle-20261120T2358+0700/workers/cancel/.dcnet-worker-e87b5da2ee88408f971f0dca91b620da/job-2.json\"], \"model_module\": \"/home/heheboiz/data/cir/workbench/third_party/DCNet/model/model.py\", \"torch_module\": \"/home/heheboiz/data/cir/workbench/envs/dcnet310-sm120/lib/python3.10/site-packages/torch/__init__.py\", \"torchvision_module\": \"/home/heheboiz/data/cir/workbench/envs/dcnet310-sm120/lib/python3.10/site-packages/torchvision/__init__.py\", \"torch_version\": \"2.7.1+cu128\", \"torchvision_version\": \"0.22.1+cu128\", \"device\": \"cuda\"}}\n"
+    },
+    {
+      "checkpoint_id": "fashioniq_run_directory",
+      "command": [
+        "/home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python",
+        "/home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/dcnet_lifecycle_helper.py",
+        "worker",
+        "--phase",
+        "retry",
+        "--run-id",
+        "retry",
+        "--run-root",
+        "/home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/dcnet-lifecycle-20261120T2358+0700"
+      ],
+      "completed_at": "2026-11-20T16:59:27.957903+00:00",
+      "created_at": "2026-11-20T16:59:19.195385+00:00",
+      "cwd": "/home/heheboiz/data/cir",
+      "error": null,
+      "gpu_may_be_held": false,
+      "job_id": "8c95da12-e1ad-478d-a006-4c35b67a8fa8",
+      "log_directory": "/home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/dcnet-lifecycle-20261120T2358+0700/queue_jobs/retry",
+      "model_id": "dcnet",
+      "protocol_id": "diagnostic_q1_t2",
+      "provenance": {
+        "diagnostic": "DCNet Q1/T2 real forward, queue lifecycle only"
+      },
+      "return_code": 0,
+      "started_at": "2026-11-20T16:59:19.195593+00:00",
+      "status": "completed",
+      "stderr_tail": "",
+      "stdout_tail": "{\"forward_complete\": true, \"marker\": \"/home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/dcnet-lifecycle-20261120T2358+0700/retry.forward.json\", \"worker_pid\": 650311, \"worker_identity\": {\"executable\": \"/home/heheboiz/data/cir/workbench/envs/dcnet310-sm120/bin/python\", \"prefix\": \"/home/heheboiz/data/cir/workbench/envs/dcnet310-sm120\", \"cwd\": \"/home/heheboiz/data/cir\", \"argv\": [\"/home/heheboiz/data/cir/workbench/composition/model_dcnet.py\", \"--worker-job\", \"/home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/dcnet-lifecycle-20261120T2358+0700/workers/retry/.dcnet-worker-035ceddff6e240c7883d8b0d132bfdf7/job-2.json\"], \"model_module\": \"/home/heheboiz/data/cir/workbench/third_party/DCNet/model/model.py\", \"torch_module\": \"/home/heheboiz/data/cir/workbench/envs/dcnet310-sm120/lib/python3.10/site-packages/torch/__init__.py\", \"torchvision_module\": \"/home/heheboiz/data/cir/workbench/envs/dcnet310-sm120/lib/python3.10/site-packages/torchvision/__init__.py\", \"torch_version\": \"2.7.1+cu128\", \"torchvision_version\": \"0.22.1+cu128\", \"device\": \"cuda\"}}\n{\"receipt\": \"/home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/dcnet-lifecycle-20261120T2358+0700/retry.receipt.json\", \"target1_rank\": 2}\n"
+    }
+  ],
+  "database": "none; queue_state.json filesystem persistence only",
+  "guard": {
+    "cgroup": "/sys/fs/cgroup/user.slice/user-1000.slice/user@1000.service/app.slice/cir-dcnet-lifecycle-2358.service",
+    "memory.max": "12884901888",
+    "memory.oom.group": "1",
+    "memory.swap.max": "0"
+  },
+  "phases": [
+    {
+      "cancel_http": {
+        "body": {
+          "checkpoint_id": "fashioniq_run_directory",
+          "command": [
+            "/home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python",
+            "/home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/dcnet_lifecycle_helper.py",
+            "worker",
+            "--phase",
+            "cancel",
+            "--run-id",
+            "cancel",
+            "--run-root",
+            "/home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/dcnet-lifecycle-20261120T2358+0700"
+          ],
+          "completed_at": "2026-11-20T16:59:18.911752+00:00",
+          "created_at": "2026-11-20T16:59:05.817161+00:00",
+          "cwd": "/home/heheboiz/data/cir",
+          "error": null,
+          "gpu_may_be_held": false,
+          "job_id": "6d072be4-2f04-42dd-8417-f83f02d70677",
+          "log_directory": "/home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/dcnet-lifecycle-20261120T2358+0700/queue_jobs/cancel",
+          "model_id": "dcnet",
+          "protocol_id": "diagnostic_q1_t2",
+          "provenance": {
+            "diagnostic": "DCNet Q1/T2 real forward, queue lifecycle only"
+          },
+          "return_code": -15,
+          "started_at": "2026-11-20T16:59:05.817352+00:00",
+          "status": "cancelled",
+          "stderr_tail": "",
+          "stdout_tail": "{\"forward_complete\": true, \"marker\": \"/home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/dcnet-lifecycle-20261120T2358+0700/cancel.forward.json\", \"worker_pid\": 649967, \"worker_identity\": {\"executable\": \"/home/heheboiz/data/cir/workbench/envs/dcnet310-sm120/bin/python\", \"prefix\": \"/home/heheboiz/data/cir/workbench/envs/dcnet310-sm120\", \"cwd\": \"/home/heheboiz/data/cir\", \"argv\": [\"/home/heheboiz/data/cir/workbench/composition/model_dcnet.py\", \"--worker-job\", \"/home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/dcnet-lifecycle-20261120T2358+0700/workers/cancel/.dcnet-worker-e87b5da2ee88408f971f0dca91b620da/job-2.json\"], \"model_module\": \"/home/heheboiz/data/cir/workbench/third_party/DCNet/model/model.py\", \"torch_module\": \"/home/heheboiz/data/cir/workbench/envs/dcnet310-sm120/lib/python3.10/site-packages/torch/__init__.py\", \"torchvision_module\": \"/home/heheboiz/data/cir/workbench/envs/dcnet310-sm120/lib/python3.10/site-packages/torchvision/__init__.py\", \"torch_version\": \"2.7.1+cu128\", \"torchvision_version\": \"0.22.1+cu128\", \"device\": \"cuda\"}}\n"
+        },
+        "client_pgid": 649755,
+        "client_pid": 649755,
+        "http_status": 200,
+        "job_id": "6d072be4-2f04-42dd-8417-f83f02d70677",
+        "path": "/api/jobs/6d072be4-2f04-42dd-8417-f83f02d70677/cancel"
+      },
+      "cancel_state": {
+        "checkpoint_id": "fashioniq_run_directory",
+        "completed_at": "2026-11-20T16:59:18.911752+00:00",
+        "error": null,
+        "gpu_may_be_held": false,
+        "job_id": "6d072be4-2f04-42dd-8417-f83f02d70677",
+        "model_id": "dcnet",
+        "protocol_id": "diagnostic_q1_t2",
+        "return_code": -15,
+        "started_at": "2026-11-20T16:59:05.817352+00:00",
+        "status": "cancelled"
+      },
+      "command": [
+        "/home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python",
+        "/home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/dcnet_lifecycle_helper.py",
+        "worker",
+        "--phase",
+        "cancel",
+        "--run-id",
+        "cancel",
+        "--run-root",
+        "/home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/dcnet-lifecycle-20261120T2358+0700"
+      ],
+      "job": {
+        "checkpoint_id": "fashioniq_run_directory",
+        "command": [
+          "/home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python",
+          "/home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/dcnet_lifecycle_helper.py",
+          "worker",
+          "--phase",
+          "cancel",
+          "--run-id",
+          "cancel",
+          "--run-root",
+          "/home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/dcnet-lifecycle-20261120T2358+0700"
+        ],
+        "completed_at": null,
+        "created_at": "2026-11-20T16:59:05.817161+00:00",
+        "cwd": "/home/heheboiz/data/cir",
+        "error": null,
+        "gpu_may_be_held": false,
+        "job_id": "6d072be4-2f04-42dd-8417-f83f02d70677",
+        "log_directory": "/home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/dcnet-lifecycle-20261120T2358+0700/queue_jobs/cancel",
+        "model_id": "dcnet",
+        "protocol_id": "diagnostic_q1_t2",
+        "provenance": {
+          "diagnostic": "DCNet Q1/T2 real forward, queue lifecycle only"
+        },
+        "return_code": null,
+        "started_at": null,
+        "status": "queued",
+        "stderr_tail": "",
+        "stdout_tail": ""
+      },
+      "phase": "cancel"
+    },
+    {
+      "command": [
+        "/home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python",
+        "/home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/dcnet_lifecycle_helper.py",
+        "worker",
+        "--phase",
+        "retry",
+        "--run-id",
+        "retry",
+        "--run-root",
+        "/home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/dcnet-lifecycle-20261120T2358+0700"
+      ],
+      "completed_state": {
+        "checkpoint_id": "fashioniq_run_directory",
+        "completed_at": "2026-11-20T16:59:27.957903+00:00",
+        "error": null,
+        "gpu_may_be_held": false,
+        "job_id": "8c95da12-e1ad-478d-a006-4c35b67a8fa8",
+        "model_id": "dcnet",
+        "protocol_id": "diagnostic_q1_t2",
+        "return_code": 0,
+        "started_at": "2026-11-20T16:59:19.195593+00:00",
+        "status": "completed"
+      },
+      "job": {
+        "checkpoint_id": "fashioniq_run_directory",
+        "command": [
+          "/home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python",
+          "/home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/dcnet_lifecycle_helper.py",
+          "worker",
+          "--phase",
+          "retry",
+          "--run-id",
+          "retry",
+          "--run-root",
+          "/home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/dcnet-lifecycle-20261120T2358+0700"
+        ],
+        "completed_at": null,
+        "created_at": "2026-11-20T16:59:19.195385+00:00",
+        "cwd": "/home/heheboiz/data/cir",
+        "error": null,
+        "gpu_may_be_held": false,
+        "job_id": "8c95da12-e1ad-478d-a006-4c35b67a8fa8",
+        "log_directory": "/home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/dcnet-lifecycle-20261120T2358+0700/queue_jobs/retry",
+        "model_id": "dcnet",
+        "protocol_id": "diagnostic_q1_t2",
+        "provenance": {
+          "diagnostic": "DCNet Q1/T2 real forward, queue lifecycle only"
+        },
+        "return_code": null,
+        "started_at": null,
+        "status": "queued",
+        "stderr_tail": "",
+        "stdout_tail": ""
+      },
+      "phase": "retry",
+      "receipt": {
+        "checkpoint_id": "fashioniq_run_directory",
+        "checkpoint_resources": {
+          "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/checkpoints/dcnet/config.json": "fa5fca78790a33063a4e73b379393f4ffbbf1b251b3c27058aed481136984ba0",
+          "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/checkpoints/dcnet/trained_model.pth": "130f031e0f7808ccf5f15630a691bd7af95ad9fadbf94f64acfce64e7d8b850f"
+        },
+        "feature_shapes": {
+          "queries": [
+            1,
+            21504
+          ],
+          "targets": [
+            2,
+            7168
+          ]
+        },
+        "finite": true,
+        "model_id": "dcnet",
+        "query_id": "7:1",
+        "query_image": "/home/heheboiz/data/cir/data/FashionIQ/resized_image/dress/B005X4PL1G.jpg",
+        "query_text": "Is shiny and silver with shorter sleeves and fit and flare.",
+        "run_id": "retry",
+        "scores": [
+          [
+            -0.773844301700592,
+            -2.2946114540100098
+          ]
+        ],
+        "target1_rank": 2,
+        "target_images": [
+          "/home/heheboiz/data/cir/data/FashionIQ/resized_image/dress/B005X4PL1G.jpg",
+          "/home/heheboiz/data/cir/data/FashionIQ/resized_image/dress/B005GMTBPC.jpg"
+        ],
+        "worker_identity": {
+          "argv": [
+            "/home/heheboiz/data/cir/workbench/composition/model_dcnet.py",
+            "--worker-job",
+            "/home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/dcnet-lifecycle-20261120T2358+0700/workers/retry/.dcnet-worker-035ceddff6e240c7883d8b0d132bfdf7/job-2.json"
+          ],
+          "cwd": "/home/heheboiz/data/cir",
+          "device": "cuda",
+          "executable": "/home/heheboiz/data/cir/workbench/envs/dcnet310-sm120/bin/python",
+          "model_module": "/home/heheboiz/data/cir/workbench/third_party/DCNet/model/model.py",
+          "prefix": "/home/heheboiz/data/cir/workbench/envs/dcnet310-sm120",
+          "torch_module": "/home/heheboiz/data/cir/workbench/envs/dcnet310-sm120/lib/python3.10/site-packages/torch/__init__.py",
+          "torch_version": "2.7.1+cu128",
+          "torchvision_module": "/home/heheboiz/data/cir/workbench/envs/dcnet310-sm120/lib/python3.10/site-packages/torchvision/__init__.py",
+          "torchvision_version": "0.22.1+cu128"
+        },
+        "worker_pid": 650311
+      }
+    }
+  ],
+  "queue_worker_alive": true,
+  "scope": "DCNet real Q1/T2 adapter lifecycle; not parity or full-gallery metric"
+}

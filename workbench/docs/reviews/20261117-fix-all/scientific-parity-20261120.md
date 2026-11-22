@@ -1,0 +1,17 @@
+# Scientific parity execution — 2026-11-20
+
+Owned changes: `workbench/backend/parity_gate.py` makes batch-sensitivity veto conditional on preregistered `supported_batch_policy.batch_invariant: true`; absent/false remains diagnostic. Repeated native and adapter controls now require aligned execution partitions and query/gallery batch sizes. `workbench/composition/runner.py` rejects claimed query/gallery batch sizes that differ from actual `batch_size`, and binds execution partition/batch metadata into composition identity without changing canonical V3 identity. `workbench/docs/reviews/20261112-parity-repair/V3_STANDARD.md` records the explicit invariance policy.
+
+Regression coverage: `workbench/tests/test_parity_absolute_relative_v2.py` creates a raw native B1/BN query component mismatch before writer digest/receipt generation and asserts mandatory failure only under predeclared invariance; also rejects unmatched repeat batch execution. `workbench/tests/test_composition_provenance_identity.py` asserts stable ID for repeated same parity execution, distinct ID without parity execution or with changed partition, and fail-closed error when claimed batch sizes disagree with runner execution.
+
+Verification:
+- Focused initial failures corrected; focused pair: `flock -w 180 /tmp/cir-fix-all-20261120-cpu.lock workbench/envs/ctl312h/bin/python -m pytest -q workbench/tests/test_parity_absolute_relative_v2.py::test_v3_predeclared_batch_invariance_fails_on_sensitivity workbench/tests/test_composition_provenance_identity.py::test_parity_sink_receives_actual_ranked_memmaps_and_propagates_failure` — 2 passed, log `/tmp/scientific-parity-failing-tests-final5-20261120.log`.
+- Complete owned suites: `flock -w 180 /tmp/cir-fix-all-20261120-cpu.lock workbench/envs/ctl312h/bin/python -m pytest -q workbench/tests/test_parity_absolute_relative_v2.py workbench/tests/test_composition_provenance_identity.py` — 107 passed, 5 warnings in 5.90s, log `/tmp/scientific-parity-targeted-final5-20261120.log`.
+
+No GPU/model run performed. No LIMN/HINT measurement rerun; retained evidence unchanged. Previous full suite result remains 9 failures / 3349 passed / 51 skipped; not rerun.
+
+## V3 scoring-producer verification — 2026-11-21
+
+Gate plan supports optional per-side sorter conventions: legacy omission means descending FP32 score; verified PTHA native source records ascending FP32 `1-score` key; LIMN and HINT use descending score. Exact transformation is `float32(1 - float32(score))`; ties in transformed keys are valid regardless raw score order. `metric_cutoffs` and preregistered target/reference-exclusion labels define each model’s retrieval denominator. HINT toy producer→gate fixture returned `PARITY_PASS` (exit 0), not model acceptance; no HINT changes.
+
+Final narrow local verification compiled gate, LIMN producer, and HINT producer; five focused tests passed, including sorter order rejection, FP32 transformed-key tie, raw rank diagnostics, inversion gap, and LIMN producer assembly. Exact stdout and exits: `workbench/docs/reviews/20261117-fix-all/raw/scientific-parity-final-verification-20261121-confirm.log`. LIMN primary role capture writes ranking archive SHA-256 into receipt; aggregation checks same digest. Prior shirt R@1 physical mismatch stays historical recorded failure (native 516 vs Adapter 517). No new model acceptance, no LIMN remeasurement; none justified without new source/protocol/checkpoint change or separately evidenced measurement defect.

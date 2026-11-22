@@ -1,0 +1,5 @@
+unit=cir-dcnet-canonical-api-20261121-v3
+cgroup=/sys/fs/cgroup/user.slice/user-1000.slice/user@1000.service/app.slice/cir-dcnet-canonical-api-20261121-v3.service
+memory.max=12884901888
+memory.swap.max=0
+memory.oom.group=1

@@ -444,13 +444,26 @@ def native_phase(category: str, config) -> dict:
         sample_query_val = forward("queries", [torch.from_numpy(t) for t in val_query_tensors], sample_texts)
         sample_target_native = forward("targets", [torch.from_numpy(t) for t in native_target_tensors], None)
 
-        # ---- layer 4/5/7/8 on the full category population, from the features the native metric used
-        params = SimpleNamespace(batch_size=BATCH, local_rank=0)
-        with FeatureRecorder(model) as recorder:
-            native_recalls = dict(test_module.test(params, model, dataset, category))
-        population_native, population_gallery = recorder.features()
         population_val = forward_paths(
             [image_path(dataset_root, category, name) for name in reference_ids], model_texts, BATCH)
+        # Capture tokenizer outputs at the evaluator's own forward call, not by replaying text later.
+        native_token_ids = []
+        native_tokenizer = model.backbone.tokenizer
+        def capture_native_tokenizer(text):
+            tokens = native_tokenizer(text)
+            native_token_ids.append(tokens.detach().cpu().numpy())
+            return tokens
+        model.backbone.tokenizer = capture_native_tokenizer
+        try:
+            params = SimpleNamespace(batch_size=BATCH, local_rank=0)
+            with FeatureRecorder(model) as recorder:
+                native_recalls = dict(test_module.test(params, model, dataset, category))
+            population_native, population_gallery = recorder.features()
+        finally:
+            model.backbone.tokenizer = native_tokenizer
+        native_token_ids_array = np.concatenate(native_token_ids, axis=0)
+        identity["sample_token_ids"] = native_token_ids_array[chosen].tolist()
+        identity["sample_token_lengths"] = [len(tokens) for tokens in identity["sample_token_ids"]]
 
         reference_positions = [entry["source_img_id"] for entry in test_queries]
         target_positions = [entry["target_img_id"] for entry in test_queries]
@@ -467,7 +480,7 @@ def native_phase(category: str, config) -> dict:
                  native_query_tensor=native_query_tensors, val_query_tensor=val_query_tensors,
                  native_target_tensor=native_target_tensors,
                  population_native=population_native, population_val=population_val,
-                 gallery=population_gallery)
+                 gallery=population_gallery, native_token_ids=native_token_ids_array)
         inputs = {
             "category": category,
             "dataset_root": str(dataset_root),
@@ -895,8 +908,11 @@ def adapter_phase(category: str, config) -> dict:
         # Inside `try` because the handshake STARTS the worker, so a failure must still close it.
         relation_state = adapter.prepare_identity()
         aq = adapter.encode_queries(inputs["sample_query_paths"], inputs["sample_texts"],
-                                    [None] * len(inputs["sample_texts"]))
-        at = adapter.encode_targets(inputs["sample_target_paths"], [None] * len(inputs["sample_target_paths"]))
+                                    [None] * len(inputs["sample_texts"]),
+                                    capture_path=RAW / f"adapter.query.capture.{category}.npz")
+        at = adapter.encode_targets(inputs["sample_target_paths"],
+                                    [None] * len(inputs["sample_target_paths"]),
+                                    capture_path=RAW / f"adapter.target.capture.{category}.npz")
         result["layer4_forward_sample"] = {
             # control: identical val-transform pixels on both sides -> isolates the forward pass
             "query_val_pixels": compare(aq, native["sample_query_val"]),
@@ -938,16 +954,19 @@ def adapter_phase(category: str, config) -> dict:
                                                [None] * len(inputs["sample_texts"]))
         result["cache_off_restart"] = compare(after_restart, aq)
 
-        if probe is not None:
-            pixel_check = compare(probe["adapter_query_pixels"], native["val_query_tensor"])
-            result["layer2_pixels"] = {
-                # the adapter's exact decode expression vs the native val-transform decode: same code
-                # path the adapter takes for every query image
-                "adapter_decode_vs_native_val_decode": pixel_check,
-                "adapter_decode_vs_native_train_query_tensors": compare(
-                    probe["adapter_query_pixels"], native["native_query_tensor"]),
-                "adapter_decode_by": "probe phase in the model interpreter: Image.open + preprocess_val",
-            }
+        query_capture = np.load(RAW / f"adapter.query.capture.{category}.npz")
+        target_capture = np.load(RAW / f"adapter.target.capture.{category}.npz")
+        result["layer2_pixels"] = {
+            "adapter_query_vs_native_val_decode": compare(query_capture["pixels"], native["val_query_tensor"]),
+            "adapter_query_vs_native_train_tensors": compare(
+                query_capture["pixels"], native["native_query_tensor"]),
+            "adapter_target_vs_native_target_tensors": compare(
+                target_capture["pixels"], native["native_target_tensor"]),
+            "capture_source": "model_encoder worker actual decode() batch before .cuda()",
+            "query_image_paths": query_capture["image_paths"].tolist(),
+            "target_image_paths": target_capture["image_paths"].tolist(),
+            "token_ids": query_capture["input_ids"].tolist(),
+        }
 
         population_queries = adapter.encode_queries(inputs["full_query_paths"], inputs["full_query_texts"],
                                                     [None] * len(inputs["full_query_texts"]))

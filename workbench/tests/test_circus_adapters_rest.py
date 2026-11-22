@@ -192,8 +192,10 @@ def test_query_adaptation_stages_black_path_and_empty_text(monkeypatch, tmp_path
         adapter = module.Adapter()
         adapter.work_root = tmp_path / model_id / "work"
         jobs = []
-        def fake_run_job(operation, image_paths, texts=(), categories=()):
-            jobs.append((operation, list(image_paths), list(texts), list(categories)))
+        def fake_run_job(operation, image_paths, texts=(), categories=(), *,
+                         capture_path=None, capture_ids=None, selected_capture_ids=None):
+            jobs.append((operation, list(image_paths), list(texts), list(categories),
+                         capture_path, capture_ids, selected_capture_ids))
             return np.zeros((len(image_paths), 2), dtype=np.float32)
 
         monkeypatch.setattr(adapter, "_run_job", fake_run_job)

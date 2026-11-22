@@ -1,0 +1,11 @@
+Running as unit: cir-dcnet-lifecycle-2322.service; invocation ID: 3c6f12dd019e4c17af3ec9125f4eddc0
+[gpu_job] GPU already has compute apps:
+603108, 870 MiB
+Finished with result: exit-code
+Main processes terminated with: code=exited/status=76
+Service runtime: 26ms
+CPU time consumed: 19ms
+Memory peak: 1.2M
+Memory swap peak: 0B
+
+exit=76

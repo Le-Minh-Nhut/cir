@@ -92,6 +92,7 @@ class Adapter(CompositionAdapter):
         self._worker: subprocess.Popen[str] | None = None
         self._worker_log: Any | None = None
         self._worker_failed: str | None = None
+        self.capture_path: Path | None = None
 
     def _checkpoint_path(self) -> Path:
         from workbench.backend.registry import checkpoint_path
@@ -154,8 +155,9 @@ class Adapter(CompositionAdapter):
             self._job_dir.mkdir()
         return self._job_dir
 
-    def _run_job(self, operation: str, image_paths: Sequence[str], texts: Sequence[str] = (),
-                 categories: Sequence[str | None] = ()) -> np.ndarray:
+    def _run_job(self, operation: str, image_paths: Sequence[str | Path], texts: Sequence[str] = (),
+                 categories: Sequence[str | None] = (), capture_ids: Sequence[str] | None = None,
+                 selected_capture_ids: Sequence[str] | None = None) -> np.ndarray:
         if not self.interpreter or not Path(self.interpreter).is_file():
             raise RuntimeError("TME model interpreter is not configured")
         if self._worker_failed is not None:
@@ -164,6 +166,17 @@ class Adapter(CompositionAdapter):
             # Same gate, same code path, as every other adapter: see
             # CompositionAdapter.require_verified_interpreter.
             self.require_verified_interpreter()
+        if self.capture_path is not None:
+            if capture_ids is None or len(capture_ids) != len(image_paths):
+                raise ValueError("TME capture requires one ID per input row")
+            if len(set(capture_ids)) != len(capture_ids):
+                raise ValueError("TME capture IDs must be unique")
+            if selected_capture_ids is None or len(selected_capture_ids) > 32:
+                raise ValueError("TME capture requires an explicit selector of at most 32 rows")
+            if len(set(selected_capture_ids)) != len(selected_capture_ids) or not set(selected_capture_ids) <= set(capture_ids):
+                raise ValueError("TME selected capture IDs must uniquely match input IDs")
+        if self.capture_path is not None and not image_paths:
+            raise ValueError("TME capture requires at least one input row")
         self._counter += 1
         job_path = self._work_dir() / f"job-{self._counter}.json"
         output_path = self._job_dir / f"output-{self._counter}.npy"
@@ -176,6 +189,10 @@ class Adapter(CompositionAdapter):
             "source_root": str(Path(self.source_root).expanduser().resolve()),
             "dataset_root": str(Path(self.dataset_root).expanduser().resolve()),
             "batch_size": self.batch_size,
+            "capture_path": str(self.capture_path.expanduser().resolve()) if self.capture_path else None,
+            "capture_ids": list(capture_ids or ()),
+            "selected_capture_ids": list(selected_capture_ids or ()),
+            "capture_name": f"{operation}-{self._counter}",
         }), encoding="utf-8")
         scope = tuple(categories)
         if self._worker is not None and self._worker.poll() is not None:
@@ -220,22 +237,27 @@ class Adapter(CompositionAdapter):
         output_path.unlink(missing_ok=True)
         return result
 
-    def encode_queries(self, image_paths: Sequence[str], texts: Sequence[str],
-                       categories: Sequence[str | None]) -> np.ndarray:
+    def encode_queries(self, image_paths: Sequence[str | Path], texts: Sequence[str],
+                       categories: Sequence[str | None], *, capture_ids: Sequence[str] | None = None,
+                       selected_capture_ids: Sequence[str] | None = None) -> np.ndarray:
         if self.work_root is None:
             raise AdapterWorkRootError(f"{self.model_id} work_root must be assigned before encoding")
         if len(image_paths) != len(texts) or len(image_paths) != len(categories):
             raise ValueError("TME image paths, texts, and categories must have equal lengths")
-        return self._run_job("queries", image_paths, texts, categories)
-    def encode_targets(self, image_paths: Sequence[str], categories: Sequence[str | None]) -> np.ndarray:
+        return self._run_job("queries", image_paths, texts, categories,
+                             capture_ids=capture_ids, selected_capture_ids=selected_capture_ids)
 
+    def encode_targets(self, image_paths: Sequence[str | Path], categories: Sequence[str | None],
+                       *, capture_ids: Sequence[str] | None = None,
+                       selected_capture_ids: Sequence[str] | None = None) -> np.ndarray:
         if self.work_root is None:
             raise AdapterWorkRootError(f"{self.model_id} work_root must be assigned before encoding")
         if len(image_paths) != len(categories):
             raise ValueError("TME target paths and categories must have equal lengths")
         if any(category is not None for category in categories):
             raise ValueError("TME gallery is category-agnostic; target categories must all be None")
-        return self._run_job("targets", image_paths, categories=categories)
+        return self._run_job("targets", image_paths, categories=categories, capture_ids=capture_ids,
+                             selected_capture_ids=selected_capture_ids)
 
     def score(self, queries: Any, targets: Any,
               categories: Sequence[str | None] | None = None) -> np.ndarray:
@@ -312,7 +334,8 @@ def _prepare_worker_cwd(job: dict[str, Any], base_dir: Path | None = None) -> Pa
     source_root = source_root_for(resolve(job["source_root"]))
     job["source_root"] = str(source_root)
     job["checkpoint_path"] = str(resolve(job["checkpoint_path"]))
-    job["dataset_root"] = str(resolve(job["dataset_root"]))
+    if job.get("dataset_root"):
+        job["dataset_root"] = str(resolve(job["dataset_root"]))
     job["image_paths"] = [str(resolve(path)) for path in job["image_paths"]]
     job["output_path"] = str(resolve(job["output_path"]))
     import os
@@ -348,7 +371,8 @@ def _worker_main(argv: Sequence[str] | None = None) -> int:
         source = source_root / "src"
         if str(source) not in sys.path:
             sys.path.insert(0, str(source))
-        os.environ["MTST_DATA_ROOT"] = str(Path(job["dataset_root"]).parent)
+        if job.get("dataset_root"):
+            os.environ["MTST_DATA_ROOT"] = str(Path(job["dataset_root"]).parent)
         from lavis.models import load_model_and_preprocess
         from utility import targetpad_transform
         from workbench.replay.tme import MODEL_NAME, MODEL_TYPE
@@ -376,6 +400,14 @@ def _worker_main(argv: Sequence[str] | None = None) -> int:
     def run_one(current: dict[str, Any]) -> None:
         _prepare_worker_cwd(current)
         outputs = []
+        capture_limit = 32
+        captured_pixels: list[np.ndarray] = []
+        captured_tokens: list[np.ndarray] = []
+        captured_masks: list[np.ndarray] = []
+        captured_reference: list[np.ndarray] = []
+        captured_outputs: list[np.ndarray] = []
+        captured_positions: list[int] = []
+        processed_texts: list[str] = []
         try:
             with torch.no_grad():
                 batch_size = current["batch_size"]
@@ -393,26 +425,64 @@ def _worker_main(argv: Sequence[str] | None = None) -> int:
                 # transform object, its autocast path and its score() are untouched.
                 decoded = prefetch_rows(decode, batches, workers)
                 for index, pixels in enumerate(decoded):
+                    first = index * batch_size
+                    ids = current["capture_ids"]
+                    selected = set(current.get("selected_capture_ids", []))
+                    positions = [offset for offset, sample_id in enumerate(ids[first:first + len(pixels)])
+                                 if sample_id in selected]
+                    take = len(positions) if current.get("capture_path") else 0
+                    if take:
+                        captured_positions.extend(first + position for position in positions)
+                        captured_pixels.append(pixels[positions].numpy())
                     pixels = pixels.float().to(device, non_blocking=True)
                     with torch.cuda.amp.autocast():
                         vit_features = network.vit_encode(pixels)
                     reference = network.encode_image(vit_features)
                     if current["operation"] == "queries":
-                        first = index * batch_size
                         texts = [text_processor(text) for text in
                                  current["texts"][first:first + len(pixels)]]
-                        tokens = network.tokenizer(
-                            texts, padding="max_length", truncation=True,
-                            max_length=network.max_txt_len, return_tensors="pt",
-                        ).to(reference.device)
+                        tokens = network.tokenizer(texts, padding="max_length", truncation=True,
+                                                   max_length=network.max_txt_len, return_tensors="pt").to(reference.device)
+                    if current["operation"] == "queries":
+                        if take:
+                            captured_tokens.append(tokens.input_ids[positions].detach().cpu().numpy())
+                            captured_masks.append(tokens.attention_mask[positions].detach().cpu().numpy())
+                            captured_reference.append(reference[positions].detach().float().cpu().numpy())
+                            processed_texts.extend(texts[position] for position in positions)
                         query = network.encode_fusion(reference, tokens)
                         outputs.append(query.detach().cpu().numpy())
                     else:
+                        if take:
+                            captured_reference.append(reference[positions].detach().float().cpu().numpy())
                         projected = network.vision_proj(reference)
                         outputs.append(torch.nn.functional.normalize(projected, dim=-1).detach().cpu().numpy())
+                    if take:
+                        captured_outputs.append(outputs[-1][positions])
             shape = (0, 256) if current["operation"] == "queries" else (0, 32, 256)
             result = np.concatenate(outputs, axis=0) if outputs else np.empty(shape, dtype=np.float32)
             np.save(current["output_path"], result.astype(np.float32, copy=False), allow_pickle=False)
+            if current.get("capture_path") and captured_positions:
+                destination = Path(current["capture_path"])
+                destination.mkdir(parents=True, exist_ok=True)
+                archive = destination / f"{current['capture_name']}.npz"
+                sample_ids = [current["capture_ids"][position] for position in captured_positions]
+                metadata = {"schema": "cir-tme-worker-capture-v1", "operation": current["operation"],
+                            "texts": [current["texts"][position] for position in captured_positions]
+                            if current["operation"] == "queries" else [],
+                            "processed_texts": processed_texts,
+                            "categories": [current["categories"][position] for position in captured_positions],
+                            "batch_size": batch_size, "capture_limit": capture_limit,
+                            "precision": "torch.cuda.amp.autocast", "input_tensor": "TargetPad RGB float32 NCHW"}
+                arrays = {"query_ids" if current["operation"] == "queries" else "gallery_ids": np.asarray(sample_ids),
+                          "image_paths": np.asarray([current["image_paths"][position] for position in captured_positions]),
+                          "pixels": np.concatenate(captured_pixels),
+                          "features": np.concatenate(captured_outputs),
+                          "reference": np.concatenate(captured_reference),
+                          "metadata": np.asarray(json.dumps(metadata, sort_keys=True))}
+                if captured_tokens:
+                    arrays["input_ids"] = np.concatenate(captured_tokens)
+                    arrays["attention_mask"] = np.concatenate(captured_masks)
+                np.savez_compressed(archive, **arrays)
             reply(True)
         except Exception as error:
             reply(False, error_type=type(error).__name__, error=str(error))

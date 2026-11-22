@@ -130,15 +130,15 @@ class Clip4CirBase(CompositionAdapter):
             raise ValueError("CLIP4Cir expects query (N,640) and target (M,640) matrices")
         if query_values.shape[1] != target_values.shape[1]:
             raise ValueError("CLIP4Cir query and target embedding dimensions differ")
-        tiny = np.finfo(np.float32).tiny
+        # Match torch.nn.functional.normalize's default eps=1e-12.
         query_values = query_values / np.maximum(
-            np.linalg.norm(query_values, axis=1, keepdims=True), tiny)
+            np.linalg.norm(query_values, axis=1, keepdims=True), 1e-12)
         scores = np.empty((len(query_values), len(target_values)), dtype=np.float32)
         for start in range(0, len(target_values), 8192):
             stop = min(start + 8192, len(target_values))
             gallery = target_values[start:stop]
             gallery = gallery / np.maximum(
-                np.linalg.norm(gallery, axis=1, keepdims=True), tiny)
+                np.linalg.norm(gallery, axis=1, keepdims=True), 1e-12)
             scores[:, start:stop] = query_values @ gallery.T
         return scores
 
@@ -200,6 +200,7 @@ def _resolve(model_id: str, config: Any, checkpoint_id: str | None
         checkpoint_path(model_id, checkpoint, config.WORKBENCH_CHECKPOINT_ROOT)))
     variable = model["environment"]["python_env_var"]
     return model, checkpoint, resolve_model_interpreter(model, config) or setting(variable)
+
 
 def _members(checkpoint: dict[str, Any]) -> dict[str, Path]:
     """Resolve a bundle's member files by DECLARED ROLE, reusing the one existing resolver.
@@ -385,8 +386,9 @@ def _worker_main(argv: Sequence[str] | None = None) -> int:
 
         members = {role: Path(path) for role, path in job["members"].items()}
         # `clip.load` needs the stock RN50x4 architecture; `jit=False` matches validate.py:279.
+        # Upstream validate.py:279,286,124 loads saved["CLIP"] into the fp16 CLIP model first,
+        # then casts to float32 via .float().eval() so weights undergo identical fp16 roundtrip.
         clip_model, _ = clip.load("RN50x4", device="cuda", jit=False)
-        clip_model = clip_model.float().eval()
         feature_dim = clip_model.visual.output_dim
         if feature_dim != DIMENSION:
             raise ValueError(f"CLIP RN50x4 output_dim is {feature_dim}, expected {DIMENSION}")
@@ -395,6 +397,7 @@ def _worker_main(argv: Sequence[str] | None = None) -> int:
         if clip_state_path is not None:
             saved = torch.load(clip_state_path, map_location="cuda")
             clip_model.load_state_dict(saved["CLIP"])
+        clip_model = clip_model.float().eval()
 
         combiner = Combiner(feature_dim, 2560, 5120).cuda()
         state = torch.load(members["combiner"], map_location="cuda")

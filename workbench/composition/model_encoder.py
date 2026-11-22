@@ -72,6 +72,26 @@ RELATION_EXPECTED_DIGEST = "20db0c27c979e9a0938c71af5142458dfa2070468d0ad3fcb6f2
 #: so a phase exists whose whole job is to construct the model and answer, doing no image work.
 HANDSHAKE_PHASE = "handshake"
 
+def _write_g1_shard(capture_root: Path, index: int, phase: str, pixels: Any,
+                    image_paths: Sequence[str], texts: Sequence[str], input_ids: Any | None) -> str:
+    shard_name = f"batch-{index:05d}.npz"
+    payload = {"pixels": pixels, "image_paths": np.asarray(image_paths),
+               "phase": np.asarray(phase), "texts": np.asarray(texts)}
+    if input_ids is not None:
+        payload["input_ids"] = input_ids
+    np.savez(capture_root / shard_name, **payload)
+    return shard_name
+
+
+def _write_g1_manifest(capture_root: Path, phase: str, image_paths: Sequence[str],
+                       texts: Sequence[str], batch_sizes: Sequence[int],
+                       shards: Sequence[str]) -> None:
+    manifest = {"schema": "encoder-adapter-g1-shards-v1", "phase": phase,
+                "image_paths": list(image_paths), "texts": list(texts),
+                "batch_sizes": list(batch_sizes), "shards": list(shards)}
+    (capture_root / "manifest.json").write_text(
+        json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+
 
 class Adapter(CompositionAdapter):
     """Run ENCODER in its registered Python environment; no reference-image score mask."""
@@ -121,6 +141,9 @@ class Adapter(CompositionAdapter):
         self._worker_log: Any | None = None
         self._worker_failed: str | None = None
         self._interpreter_verified = False
+        #: Default keeps CIRCUS preprocess_val for both sides; FashionIQ parity sets "preprocess_train".
+        self.query_transform_mode: str = "preprocess_val"
+        self.query_transform_seed: int | None = None
 
     @classmethod
     def status(cls, config: Any | None = None) -> AdapterStatus:
@@ -283,7 +306,7 @@ class Adapter(CompositionAdapter):
 
     def _exchange(self, phase: str, image_paths: Sequence[str | Path],
                   texts: Sequence[str], categories: Sequence[str | None], *,
-                  write_output: bool) -> tuple[dict[str, Any], Path | None]:
+                  write_output: bool, capture_path: Path | None = None) -> tuple[dict[str, Any], Path | None]:
         """Write one job, hand it to the worker (starting it if needed), and return its reply."""
         self._adopt_scratch_relation()
         if self.work_root is None:
@@ -324,7 +347,16 @@ class Adapter(CompositionAdapter):
             # that a different caller could inherit.
             "relation_seed": RELATION_SEED,
             "relation_expected_digest": RELATION_EXPECTED_DIGEST,
-            "transform_policy": self.transform_policy,
+            "transform_policy": (
+                {
+                    **self.transform_policy,
+                    "query_transform": getattr(self, "query_transform_mode", "preprocess_val"),
+                    "kind": "fashioniq_native_parity" if getattr(self, "query_transform_mode", "preprocess_val") == "preprocess_train" else self.transform_policy["kind"],
+                }
+            ),
+            "query_transform_mode": getattr(self, "query_transform_mode", "preprocess_val"),
+            "query_transform_seed": getattr(self, "query_transform_seed", None),
+            "capture_path": None if capture_path is None else str(capture_path),
         }
         job_path.write_text(json.dumps(payload), encoding="utf-8")
         if self._worker is not None and self._worker.poll() is not None:
@@ -372,10 +404,11 @@ class Adapter(CompositionAdapter):
         return response, output_path
 
     def _run_job(self, phase: str, image_paths: Sequence[str | Path],
-                 texts: Sequence[str] = (), categories: Sequence[str | None] = ()) -> np.ndarray:
+                 texts: Sequence[str] = (), categories: Sequence[str | None] = (), *,
+                 capture_path: Path | None = None) -> np.ndarray:
         self.require_work_root()
         response, output_path = self._exchange(phase, image_paths, texts, categories,
-                                               write_output=True)
+                                               write_output=True, capture_path=capture_path)
         scope = ",".join(sorted({str(value) for value in categories})) or "global"
         # Recorded, not asserted: a future interpreter that draws different bytes is a new
         # measurement, and the flag says so instead of pretending the pin did not move. The value is
@@ -391,20 +424,20 @@ class Adapter(CompositionAdapter):
         return result
 
     def encode_queries(self, image_paths: Sequence[str | Path], texts: Sequence[str],
-                       categories: Sequence[str | None]) -> np.ndarray:
+                       categories: Sequence[str | None], *, capture_path: Path | None = None) -> np.ndarray:
         self.require_work_root()
         if len(image_paths) != len(texts) or len(image_paths) != len(categories):
             raise ValueError("ENCODER query image, text, and category counts must match")
-        return self._run_job("queries", image_paths, texts, categories)
+        return self._run_job("queries", image_paths, texts, categories, capture_path=capture_path)
 
     def encode_targets(self, image_paths: Sequence[str | Path],
-                       categories: Sequence[str | None]) -> np.ndarray:
+                       categories: Sequence[str | None], *, capture_path: Path | None = None) -> np.ndarray:
         self.require_work_root()
         if len(image_paths) != len(categories):
             raise ValueError("ENCODER target image and category counts must match")
         if any(category is not None for category in categories):
             raise ValueError("ENCODER target scope must be None")
-        return self._run_job("targets", image_paths, categories=categories)
+        return self._run_job("targets", image_paths, categories=categories, capture_path=capture_path)
 
     def score(self, queries: Any, targets: Any,
               categories: Sequence[str | None] | None = None) -> np.ndarray:
@@ -551,7 +584,7 @@ def _worker_main(job_path: Path) -> None:
                                  "relation was recoverable",
         }, indent=1) + "\n", encoding="utf-8")
         model = model.cuda().eval()
-        _, _, preprocess_val = open_clip_module.create_model_and_transforms(
+        _, preprocess_train, preprocess_val = open_clip_module.create_model_and_transforms(
             "ViT-B-32", pretrained=str(source_root / "open_clip_pytorch_model.bin"))
         limit_torch_threads()
         workers = resolved_decode_workers()
@@ -574,19 +607,45 @@ def _worker_main(job_path: Path) -> None:
         batches = [paths[start:start + batch_size]
                    for start in range(0, len(paths), batch_size)]
 
+        capture_path = current.get("capture_path")
+        capture_root = Path(capture_path) if capture_path else None
+        captured_token_ids: list[Any] | None = [] if capture_root is not None and current["phase"] == "queries" else None
+        captured_batch_sizes: list[int] | None = [] if capture_root is not None else None
+        capture_shards: list[str] = []
+        if capture_root is not None:
+            capture_root.mkdir(parents=True, exist_ok=False)
+        original_tokenizer = model.backbone.tokenizer if captured_token_ids is not None else None
+        if captured_token_ids is not None:
+            assert original_tokenizer is not None
+            def capture_tokenizer(text: Any) -> Any:
+                tokens = original_tokenizer(text)
+                captured_token_ids.append(tokens.detach().cpu().numpy())
+                return tokens
+            model.backbone.tokenizer = capture_tokenizer
+        use_train_query = (
+            current["phase"] == "queries"
+            and current.get("query_transform_mode") == "preprocess_train"
+        )
+        active_preprocess = preprocess_train if use_train_query else preprocess_val
+        if use_train_query and current.get("query_transform_seed") is not None:
+            torch.manual_seed(int(current["query_transform_seed"]))
         def decode(chunk: Sequence[str]) -> Any:
             images = []
             for path in chunk:
                 with Image.open(path) as image:
-                    images.append(preprocess_val(image.copy()))
-            return torch.stack(images)
-
+                    images.append(active_preprocess(image.copy()))
+            batch = torch.stack(images)
+            return batch
         try:
-            # Same decode pool as the rest of the family. This model's open_clip transform
-            # (`preprocess_val`) is used unchanged, and so is the forward.
-            for index, batch in enumerate(prefetch_rows(decode, batches, workers)):
+            # Same decode pool as the rest of the family; when seeded preprocess_train is active,
+            # decode serially so RNG consumption matches upstream deterministic order.
+            decode_workers = 1 if (use_train_query and current.get("query_transform_seed") is not None) else workers
+            for index, batch in enumerate(prefetch_rows(decode, batches, decode_workers)):
+                if captured_batch_sizes is not None:
+                    captured_batch_sizes.append(len(batch))
                 start = index * batch_size
                 stop = start + len(batch)
+                captured_pixels = batch.detach().cpu().numpy() if capture_root is not None else None
                 with torch.no_grad():
                     batch = batch.cuda()
                     if current["phase"] == "queries":
@@ -594,11 +653,28 @@ def _worker_main(job_path: Path) -> None:
                     else:
                         encoded = model.extract_retrieval_target(batch)
                 features.append(encoded.detach().float().cpu().numpy())
+                if capture_root is not None:
+                    if captured_token_ids is not None:
+                        if len(captured_token_ids) != 1:
+                            raise RuntimeError("ENCODER Adapter G1 token batch alignment failed")
+                        input_ids = captured_token_ids.pop()
+                    else:
+                        input_ids = None
+                    capture_shards.append(_write_g1_shard(
+                        capture_root, index, current["phase"], captured_pixels,
+                        paths[start:stop], texts[start:stop], input_ids))
+            if capture_root is not None:
+                assert captured_batch_sizes is not None
+                _write_g1_manifest(capture_root, current["phase"], paths, texts,
+                                   captured_batch_sizes, capture_shards)
             result = np.concatenate(features, axis=0) if features else np.empty((0, 512), dtype=np.float32)
             np.save(current["output_path"], result.astype(np.float32, copy=False), allow_pickle=False)
             reply(True, relation_digest=relation_digest, relation_seed=relation_seed)
         except Exception as error:
             reply(False, error_type=type(error).__name__, error=str(error))
+        finally:
+            if captured_token_ids is not None:
+                model.backbone.tokenizer = original_tokenizer
 
     run_one(job)
     for line in sys.stdin:

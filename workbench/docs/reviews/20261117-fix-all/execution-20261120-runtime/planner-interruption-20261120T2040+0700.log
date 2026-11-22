@@ -1,0 +1,7 @@
+actual command: flock -x /tmp/cir-fix-all-20261120-cpu.lock systemd-run --user --scope -p MemoryMax=12G -p MemorySwapMax=0 --setenv=OMP_NUM_THREADS=1 --setenv=OPENBLAS_NUM_THREADS=1 --setenv=MKL_NUM_THREADS=1 --setenv=NUMEXPR_NUM_THREADS=1 "$PWD/workbench/envs/ctl312h/bin/python" -m pytest -q workbench/tests/test_release_gate_scenarios.py::test_scenario_b_shared_conda_environment_deduplication workbench/tests/test_release_gate_scenarios.py::test_scenario_j_interruption_recovery_and_artifact_integrity
+pytest ran serial (`-q`); no `-n10` requested for two controlled scenario checks.
+Running as unit: run-rfc1035b9ae8c476c9742bed18b5657e2.scope; invocation ID: 3b8c1150c5b34b469f0de26afb84a464
+..                                                                       [100%]
+2 passed in 0.13s
+
+EXIT_CODE=0

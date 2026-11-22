@@ -158,7 +158,8 @@ def test_stale_interpreter_mapping_replans(tmp_path, monkeypatch):
         [model], plan["environment_plan"])
 
 
-def test_environment_assignment_reason_appears_in_classification(tmp_path):
+def test_environment_assignment_reason_appears_in_classification(tmp_path, monkeypatch):
+    monkeypatch.setattr(environment_planner, "_solver_command", lambda: None)
     model = _model("named-environment-failure", python="3.9")
     config = _config(tmp_path, [model])
     plan = autopilot.resolved_plan(config)

@@ -1,0 +1,14 @@
+[gpu_job] lock held, GPU empty, launching: systemd-run --user --wait --pipe --collect --same-dir --service-type=exec --unit=cir-csmcir-r22-shirt-native_adapter_adapter-20261122 -p MemoryMax=12G -p MemorySwapMax=0 -p OOMPolicy=kill /home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/run-role-service.sh --inner --unit cir-csmcir-r22-shirt-native_adapter_adapter-20261122 --output-dir /home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/raw/caption-v3-gate-bridge-20261121 --min-free-bytes 16203657032 -- /home/heheboiz/data/cir/workbench/envs/ctl312h/bin/python -m workbench.replay.run_fashioniq_v3 --plan /home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/raw/caption-v3-gate-bridge-20261121/fresh-csm-shirt-toptee-preflight-r22/g1_g2.csmcir.shirt.v3-plan.json --role native_adapter_adapter --phase adapter
+GPU-9bc596d9-19e9-6f43-dc2c-a80da924263c, 935 MiB, 16303 MiB
+Running as unit: cir-csmcir-r22-shirt-native_adapter_adapter-20261122.service; invocation ID: ca3724bd46394999b3258923554baad2
+waiting_for_cpu_lock=1
+cpu_lock_acquired=1
+disk_check_after_cpu_lock=1 free_bytes=24462327808 required_bytes=16203657032
+unit=cir-csmcir-r22-shirt-native_adapter_adapter-20261122.service
+cgroup=/user.slice/user-1000.slice/user@1000.service/app.slice/cir-csmcir-r22-shirt-native_adapter_adapter-20261122.service
+memory.max=12884901888
+memory.swap.max=0
+memory.oom.group=1
+output_dir=/home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/raw/caption-v3-gate-bridge-20261121
+free_bytes=24462327808
+min_free_bytes=16203657032

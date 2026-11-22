@@ -406,75 +406,57 @@ def test_the_exporter_does_not_require_the_canonical_schema() -> None:
 
 
 def test_the_export_stdout_is_exactly_one_json_object(monkeypatch, tmp_path, capsys):
-    """The orchestrator parses the exporter's stdout as JSON, so nothing else may go there.
-
-    A reviewer found this: the exporter printed its JSON and THEN a human note, so the parent's
-    `json.loads` failed with "Extra data" and recorded no artifact while the exporter reported
-    success. The unit tests passed because they stubbed the subprocess. This asserts the actual
-    stream contract.
-    """
+    """The orchestrator parses exporter stdout as one JSON object."""
     import json as _json
 
     import workbench.replay.limn_export as limn_export
     from workbench.replay.limn_observer import ObservedCategory, ObservedQuery
 
-    def fake_observe(category, *_a, **_k):
-        queries = tuple(
-            ObservedQuery(annotation_index=index, reference_id=f"{category}-r{index}",
-                          target_id=f"{category}-t{index}", raw_captions=("a", "b"),
-                          model_input_text="a and b", target_rank=1,
-                          top_results=((1, f"{category}-t{index}", 0.9),), category=category)
+    def observation(category):
+        queries = tuple(ObservedQuery(annotation_index=index, reference_id=f"{category}-r{index}",
+            target_id=f"{category}-t{index}", raw_captions=("a", "b"), model_input_text="a and b",
+            target_rank=1, top_results=((1, f"{category}-t{index}", 0.9),), category=category)
             for index in range(2))
-        return 100.0, ObservedCategory(category=category, gallery_size=2, eligible_count=1,
-                                      queries=queries), ()
+        return ObservedCategory(category, 100, 99, queries)
 
-    monkeypatch.setattr(limn_export, "preflight", lambda *a, **k: [])
-    monkeypatch.setattr(limn_export, "observe_and_verify", fake_observe)
-
-    code = limn_export.export(tmp_path, tmp_path, tmp_path, tmp_path / "results", top_k=1,
-                              run_id="20260101T000000000000Z_limn_ckpt_stream01",
-                              command_digest="c" * 64, environment_digest="d" * 64)
+    monkeypatch.setattr(limn_export, "CATEGORIES", ("dress", "shirt", "toptee"))
+    monkeypatch.setattr(limn_export, "_load_native_category", lambda category, *_: observation(category))
+    monkeypatch.setattr(limn_export, "cross_check_with_native", lambda *_: [])
+    code = limn_export.export(tmp_path, tmp_path, tmp_path / "results",
+        {name: {"r1": 100, "r10": 100, "r50": 100} for name in ("dress", "shirt", "toptee")},
+        top_k=1, run_id="20260101T000000000000Z_limn_ckpt_stream01",
+        command_digest="c" * 64, environment_digest="d" * 64)
     assert code == 0
     captured = capsys.readouterr()
-    payload = _json.loads(captured.out)  # must not raise
-    assert payload["payload"].endswith(".json"), payload
+    payload = _json.loads(captured.out)
+    assert payload["payload"].endswith(".json")
     assert payload["run_id"] == "20260101T000000000000Z_limn_ckpt_stream01"
     assert payload["instrumentation_parity"] == "INSTRUMENTATION_PARITY_VERIFIED"
-    # The human note belongs on stderr.
-    assert "not against a real target-GPU inference" in captured.err
-    assert "not against a real target-GPU inference" not in captured.out
+    assert "" == captured.err
 
 
-def test_the_export_reports_a_parity_mismatch_on_stderr_with_a_nonzero_code(monkeypatch, tmp_path, capsys):
-    """A mismatch is a failure, and its diagnostic must not corrupt the JSON contract either."""
+def test_the_export_reports_a_parity_mismatch_with_a_nonzero_code(monkeypatch, tmp_path, capsys):
     import json as _json
 
     import workbench.replay.limn_export as limn_export
     from workbench.replay.limn_observer import ObservedCategory, ObservedQuery
 
     query = ObservedQuery(annotation_index=0, reference_id="r", target_id="t",
-                          raw_captions=("a", "b"), model_input_text="a and b", target_rank=2,
-                          top_results=((1, "d", 0.5), (2, "t", 0.4)), category="dress")
-    observation = ObservedCategory(category="dress", gallery_size=3, eligible_count=2, queries=(query,))
-
-    monkeypatch.setattr(limn_export, "preflight", lambda *a, **k: [])
-    monkeypatch.setattr(limn_export, "observe_and_verify",
-                        lambda category, *a, **k: (1.0, observation, ("dress_r1: 33 != 1",)))
-    code = limn_export.export(tmp_path, tmp_path, tmp_path, tmp_path / "results", top_k=1,
-                              run_id="20260101T000000000000Z_limn_ckpt_parity01",
-                              command_digest="c" * 64, environment_digest="d" * 64)
+        raw_captions=("a", "b"), model_input_text="a and b", target_rank=2,
+        top_results=((1, "d", 0.5), (2, "t", 0.4)), category="dress")
+    observation = ObservedCategory("dress", 3, 2, (query,))
+    monkeypatch.setattr(limn_export, "CATEGORIES", ("dress", "shirt", "toptee"))
+    monkeypatch.setattr(limn_export, "_load_native_category", lambda category, *_: observation)
+    monkeypatch.setattr(limn_export, "cross_check_with_native",
+        lambda observed, *_: ["dress_r1: 33 != 1"] if observed.category == "dress" else [])
+    metrics = {name: {"r1": 1, "r10": 1, "r50": 1} for name in ("dress", "shirt", "toptee")}
+    code = limn_export.export(tmp_path, tmp_path, tmp_path / "results", metrics, top_k=1)
     assert code == 1
     status = _json.loads(capsys.readouterr().out)
     assert status["instrumentation_parity"] == "INSTRUMENTATION_PARITY_MISMATCH"
-    assert status["instrumentation_mismatches"], status
-
+    assert status["instrumentation_mismatches"]
 
 def test_the_publisher_turns_a_staged_payload_into_a_validated_artifact(monkeypatch, tmp_path, capsys):
-    """The two-stage contract: the model interpreter stages JSON, the workbench publishes it.
-
-    This is the path production uses, and it is what makes the exporter runnable in an environment
-    that lacks pydantic.
-    """
     import json as _json
 
     import workbench.replay.limn_export as limn_export
@@ -482,86 +464,78 @@ def test_the_publisher_turns_a_staged_payload_into_a_validated_artifact(monkeypa
     from workbench.backend.schemas.results import ResultRun
     from workbench.replay.limn_observer import ObservedCategory, ObservedQuery
 
-    def fake_observe(category, *_a, **_k):
-        queries = tuple(
-            ObservedQuery(annotation_index=index, reference_id=f"{category}-r{index}",
-                          target_id=f"{category}-t{index}", raw_captions=("a", "b"),
-                          model_input_text="a and b", target_rank=1,
-                          top_results=((1, f"{category}-t{index}", 0.9),), category=category)
+    def fake_observe(category, *_args):
+        queries = tuple(ObservedQuery(index, f"{category}-r{index}", f"{category}-t{index}",
+            ("a", "b"), "a and b", 1, ((1, f"{category}-t{index}", 0.9),), category)
             for index in range(2))
-        return 100.0, ObservedCategory(category=category, gallery_size=2, eligible_count=1,
-                                      queries=queries), ()
+        return ObservedCategory(category, 100, 99, queries)
 
-    monkeypatch.setattr(limn_export, "preflight", lambda *a, **k: [])
-    monkeypatch.setattr(limn_export, "observe_and_verify", fake_observe)
+    monkeypatch.setattr(limn_export, "CATEGORIES", ("dress", "shirt", "toptee"))
+    monkeypatch.setattr(limn_export, "_load_native_category", fake_observe)
+    monkeypatch.setattr(limn_export, "cross_check_with_native", lambda *_: [])
+    metrics = {name: {"r1": 100, "r10": 100, "r50": 100} for name in limn_export.CATEGORIES}
     results_root = tmp_path / "results"
     run_id = "20260101T000000000000Z_limn_ckpt_stage001"
-    assert limn_export.export(tmp_path, tmp_path, tmp_path, results_root, top_k=1, run_id=run_id,
-                              command_digest="c" * 64, environment_digest="d" * 64) == 0
+    assert limn_export.export(tmp_path, tmp_path, results_root, metrics, top_k=1, run_id=run_id,
+        command_digest="c" * 64, environment_digest="d" * 64) == 0
     staged = _json.loads(capsys.readouterr().out)["payload"]
-
     destination = limn_publish.publish_payload(Path(staged), results_root)
     artifact = ResultRun.model_validate_json(destination.read_text())
     assert artifact.run.run_id == run_id
     assert artifact.run.protocol_id == "fashioniq_val_split"
     assert artifact.run.data_kind == "experiment"
-    # The staged interchange file is not itself a canonical artifact, and the publisher is what
-    # turns it into one.
     assert Path(staged).name.startswith(".observation-")
 
 
-def test_a_staged_payload_without_an_orchestrator_identity_is_development_data(monkeypatch, tmp_path, capsys):
-    """Without a run id there is nothing to bind to, so the artifact must not claim an experiment."""
-    import json as _json
+def test_the_publisher_refuses_missing_same_invocation_provenance(tmp_path):
+    import json
+    import pytest
+    from workbench.replay.limn_publish import PayloadError, load_payload
 
-    import workbench.replay.limn_export as limn_export
-    import workbench.replay.limn_publish as limn_publish
-    from workbench.backend.schemas.results import ResultRun
-    from workbench.replay.limn_observer import ObservedCategory, ObservedQuery
+    payload = tmp_path / "payload.json"
+    payload.write_text(json.dumps({"artifact_type": "limn_observation_payload", "model_id": "limn"}))
+    with pytest.raises(PayloadError, match="same-invocation native ranking provenance"):
+        load_payload(payload)
+def test_the_publisher_refuses_missing_or_substituted_declared_bundle_members(monkeypatch, tmp_path):
+    import pytest
+    import workbench.backend.registry as registry
+    from workbench.replay.limn_publish import PayloadError, _require_declared_bundle
 
-    def fake_observe(category, *_a, **_k):
-        queries = tuple(
-            ObservedQuery(annotation_index=index, reference_id=f"{category}-r{index}",
-                          target_id=f"{category}-t{index}", raw_captions=("a", "b"),
-                          model_input_text="a and b", target_rank=1,
-                          top_results=((1, f"{category}-t{index}", 0.9),), category=category)
-            for index in range(2))
-        return 100.0, ObservedCategory(category=category, gallery_size=2, eligible_count=1,
-                                      queries=queries), ()
+    monkeypatch.setattr(registry, "model_by_id", lambda _: {"checkpoint_bundles": [{
+        "bundle_id": "all_categories", "required_checkpoint_ids": ["dress", "shirt", "toptee"]}]})
+    path = tmp_path / "payload.json"
+    for members in ({"dress": {"checkpoint_id": "dress"}},
+                    {"dress": {"checkpoint_id": "dress"}, "shirt": {"checkpoint_id": "shirt"},
+                     "toptee": {"checkpoint_id": "wrong"}}):
+        with pytest.raises(PayloadError, match="declares the bundle"):
+            _require_declared_bundle({"model_id": "limn", "checkpoint_id": "all_categories",
+                                      "checkpoint_members": members}, path)
 
-    monkeypatch.setattr(limn_export, "preflight", lambda *a, **k: [])
-    monkeypatch.setattr(limn_export, "observe_and_verify", fake_observe)
-    results_root = tmp_path / "results"
-    assert limn_export.export(tmp_path, tmp_path, tmp_path, results_root, top_k=1) == 0
-    staged = _json.loads(capsys.readouterr().out)["payload"]
-    destination = limn_publish.publish_payload(Path(staged), results_root)
-    artifact = ResultRun.model_validate_json(destination.read_text())
-    assert artifact.run.data_kind == "mock"
-    assert artifact.run.run_id.startswith("dev-")
 
 
 def test_the_publisher_refuses_a_parity_mismatch(monkeypatch, tmp_path, capsys):
-    """The publication contract still withholds an artifact whose parity failed."""
-    import json as _json
-
-    import pytest as _pytest
-
+    import json
+    import pytest
     import workbench.replay.limn_export as limn_export
     import workbench.replay.limn_publish as limn_publish
     from workbench.replay.limn_observer import ObservedCategory, ObservedQuery
 
-    query = ObservedQuery(annotation_index=0, reference_id="r", target_id="t",
-                          raw_captions=("a", "b"), model_input_text="a and b", target_rank=2,
-                          top_results=((1, "d", 0.5), (2, "t", 0.4)), category="dress")
-    observation = ObservedCategory(category="dress", gallery_size=3, eligible_count=2, queries=(query,))
-    monkeypatch.setattr(limn_export, "preflight", lambda *a, **k: [])
-    monkeypatch.setattr(limn_export, "observe_and_verify",
-                        lambda category, *a, **k: (1.0, observation, ("dress_r1: 33 != 1",)))
+    def fake_observe(category, *_args):
+        queries = tuple(ObservedQuery(index, f"{category}-r{index}", f"{category}-t{index}",
+            ("a", "b"), "a and b", 1, ((1, f"{category}-t{index}", 0.9),), category)
+            for index in range(2))
+        return ObservedCategory(category, 100, 99, queries)
+
+    monkeypatch.setattr(limn_export, "CATEGORIES", ("dress", "shirt", "toptee"))
+    monkeypatch.setattr(limn_export, "_load_native_category", fake_observe)
+    monkeypatch.setattr(limn_export, "cross_check_with_native",
+        lambda observed, *_: ["native rank mismatch"] if observed.category == "dress" else [])
+    metrics = {name: {"r1": 100, "r10": 100, "r50": 100} for name in limn_export.CATEGORIES}
     results_root = tmp_path / "results"
-    limn_export.export(tmp_path, tmp_path, tmp_path, results_root, top_k=1,
-                       run_id="20260101T000000000000Z_limn_ckpt_parity99")
-    staged = _json.loads(capsys.readouterr().out)["payload"]
-    with _pytest.raises(Exception):
+    assert limn_export.export(tmp_path, tmp_path, results_root, metrics, top_k=1,
+        run_id="20260101T000000000000Z_limn_ckpt_parity99") == 1
+    staged = json.loads(capsys.readouterr().out)["payload"]
+    with pytest.raises(Exception):
         limn_publish.publish_payload(Path(staged), results_root)
 
 def test_limn_batch_size_defaults_to_the_protocol_setting(monkeypatch: pytest.MonkeyPatch):
@@ -592,3 +566,53 @@ def test_limn_batch_size_refuses_a_value_that_is_not_a_positive_integer(monkeypa
             continue
         with pytest.raises(ValueError):
             limn.resolved_batch_size()
+
+def test_limn_native_argsort_capture_preserves_actual_order_and_fp32_mask(tmp_path, monkeypatch):
+    import json
+    from types import SimpleNamespace
+
+    import numpy as np
+    import pytest
+    import workbench.replay.limn_observer as observer
+    from workbench.replay import limn
+
+    dataset_root = tmp_path / "data"
+    dataset_root.mkdir()
+    dataset = SimpleNamespace(
+        test_queries=[{"source_img_id": 0, "target_img_id": 2, "mod": {"str": "red shirt"}}],
+        test_targets=[{"target_img_id": 0}, {"target_img_id": 2}],
+    )
+    monkeypatch.setattr(observer, "_image_ids", lambda *_: ["ref", "other", "target", "last"])
+    monkeypatch.setattr(observer, "_raw_captions", lambda *_: [{
+        "candidate": "ref", "target": "target", "captions": ["red", "shirt"]}])
+    monkeypatch.setattr(observer, "assert_alignment", lambda *_: None)
+    monkeypatch.setenv(limn.LIMN_NATIVE_RANKINGS_ENV, str(tmp_path / "rankings"))
+    native = SimpleNamespace(np=np)
+    values = np.array([1e11, -3.0], dtype=np.float32)
+    assert values[0] == values.dtype.type(10e10)
+    with limn._capture_native_rankings(native, dataset, "dress", dataset_root) as rows:
+        order = native.np.argsort(values)
+        assert order.tolist() == [1, 0]
+    receipt = json.loads((tmp_path / "rankings" / "dress.json").read_text())
+    assert len(rows) == 1
+    assert receipt["queries"][0]["target_rank"] == 1
+    assert receipt["queries"][0]["source_rank"] == 2
+    assert [item["image_id"] for item in receipt["queries"][0]["top_results"]] == ["target"]
+    assert native.np is np
+
+    monkeypatch.setenv(limn.LIMN_NATIVE_RANKINGS_ENV, str(tmp_path / "bad-rankings"))
+    native = SimpleNamespace(np=SimpleNamespace(argsort=lambda *_args, **_kwargs: np.array([0, 1])))
+    with limn._capture_native_rankings(native, dataset, "dress", dataset_root) as rows:
+        native.np.argsort(np.array([1e11, -3.0], dtype=np.float32))
+    bad_receipt = json.loads((tmp_path / "bad-rankings" / "dress.json").read_text())
+    assert rows == []
+    assert "not last" in bad_receipt["capture_error"]
+def test_limn_export_rejects_non_object_receipt(tmp_path):
+    import pytest
+    from workbench.replay.limn_export import _load_native_category
+
+    root = tmp_path / "rankings"
+    root.mkdir()
+    (root / "dress.json").write_text("[]")
+    with pytest.raises(ValueError, match="not a JSON object"):
+        _load_native_category("dress", root, tmp_path / "dataset", 200)

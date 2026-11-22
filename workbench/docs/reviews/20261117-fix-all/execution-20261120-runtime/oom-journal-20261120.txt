@@ -1,0 +1,27 @@
+# Captured OOM journal evidence — 2026-11-20 20:22–20:25 +07
+
+Source: already-run read-only command `journalctl --user --since '2026-11-20 20:22:00' --until '2026-11-20 20:25:30' --no-pager -o short-iso` and `journalctl --since '2026-11-20 20:22:00' --until '2026-11-20 20:25:30' --no-pager -o short-iso | rg -i 'oom|killed process|segfault|signal|restart|omp|11717|484815|485063|cgroup|memory' | tail -100`. Shell command proceeded through GPU/lock census; no command failure was reported, but explicit exit codes were not captured. This file transcribes the exact OOM lines from the captured tool output; full shell output remains at `local://109.log` in this session's artifact store.
+
+```text
+2026-11-20T20:23:42+07:00 heheboiz-nhut-pc kernel: Tasks state (memory values in pages):
+2026-11-20T20:23:42+07:00 heheboiz-nhut-pc kernel: [  pid  ]   uid  tgid total_vm      rss rss_anon rss_file rss_shmem pgtables_bytes swapents oom_score_adj name
+2026-11-20T20:23:42+07:00 heheboiz-nhut-pc kernel: [   3083]  1000  3083  3533075    33655    33466      189         0  4902912    87592           200 omp
+2026-11-20T20:23:42+07:00 heheboiz-nhut-pc kernel: [   7783]  1000  7783  2197016     5517     5491       26         0  1089536    16327           200 omp daemon
+2026-11-20T20:23:42+07:00 heheboiz-nhut-pc kernel: [  11717]  1000 11717  7564052   462953   462352      601         0 16015360   466432           200 omp
+2026-11-20T20:23:42+07:00 heheboiz-nhut-pc kernel: [ 475500]  1000 475500  2074608     2204     1856      348         0   749568     3741           200 omp
+2026-11-20T20:23:42+07:00 heheboiz-nhut-pc kernel: oom-kill:constraint=CONSTRAINT_NONE,nodemask=(null),cpuset=/,mems_allowed=0,global_oom,task_memcg=/user.slice/user-1000.slice/user@1000.service/app.slice/app-org.gnome.Terminal.slice/vte-spawn-a070ddad-f732-4f0f-9843-e9b203a4cb6d.scope,task=python,pid=483153,uid=1000
+2026-11-20T20:23:42+07:00 heheboiz-nhut-pc kernel: Out of memory: Killed process 483153 (python) total-vm:40368544kB, anon-rss:20152228kB, file-rss:57428kB, shmem-rss:6804kB, UID:1000 pgtables:44548kB oom_score_adj:200
+2026-11-20T20:23:42+07:00 heheboiz-nhut-pc systemd[1]: user@1000.service: A process of this unit has been killed by the OOM killer.
+2026-11-20T20:23:42+07:00 heheboiz-nhut-pc systemd[1718]: vte-spawn-a070ddad-f732-4f0f-9843-e9b203a4cb6d.scope: A process of this unit has been killed by the OOM killer.
+2026-11-20T20:23:45+07:00 heheboiz-nhut-pc systemd-oomd[1042]: Considered 64 cgroups for killing, top candidates were:
+2026-11-20T20:23:45+07:00 heheboiz-nhut-pc systemd-oomd[1042]:         Path: /user.slice/user-1000.slice/user@1000.service/app.slice/app-org.gnome.Terminal.slice/vte-spawn-a070ddad-f732-4f0f-9843-e9b203a4cb6d.scope
+2026-11-20T20:23:45+07:00 heheboiz-nhut-pc systemd-oomd[1042]:                 Memory Pressure Limit: 0.00%
+2026-11-20T20:23:45+07:00 heheboiz-nhut-pc systemd-oomd[1042]:                 Pressure: Avg10: 26.86 Avg60: 12.76 Avg300: 3.26 Total: 1min 27s
+2026-11-20T20:23:45+07:00 heheboiz-nhut-pc systemd-oomd[1042]:                 Current Memory Usage: 6.8G
+2026-11-20T20:23:45+07:00 heheboiz-nhut-pc systemd-oomd[1042]:                 Memory Min: 0B
+2026-11-20T20:23:45+07:00 heheboiz-nhut-pc systemd-oomd[1042]:                 Memory Low: 0B
+2026-11-20T20:23:45+07:00 heheboiz-nhut-pc systemd-oomd[1042]: Killed /user.slice/user-1000.slice/user@1000.service/app.slice/app-org.gnome.Terminal.slice/vte-spawn-a070ddad-f732-4f0f-9843-e9b203a4cb6d.scope due to memory pressure for /user.slice/user-1000.slice/user@1000.service being 62.35% > 50.00% for > 20s with reclaim activity
+2026-11-20T20:23:45+07:00 heheboiz-nhut-pc systemd[1718]: vte-spawn-a070ddad-f732-4f0f-9843-e9b203a4cb6d.scope: systemd-oomd killed 18 process(es) in this unit.
+```
+
+Interpretation limits: kernel OOM killed PID483153 (`python`, 20152228kB anon RSS), then `systemd-oomd` killed 18 processes in the VTE scope at 20:23:45. PID11717 appears in the kernel task snapshot at 20:23:42, RSS 462953 pages (~1.77 GiB), but journal does not list the 18 killed process IDs; its inclusion in the second kill is strongly suggested by the reported session loss and later PID absence, not individually proven. Journal excerpt does not identify PID483153's command/caller. The OOM timeline supports process/session loss but not why the 20.15 GB Python allocation grew; no causal claim about ENCODER is made here.

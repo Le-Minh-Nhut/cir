@@ -1,0 +1,1 @@
+command: flock -x /tmp/cir-fix-all-20261120-cpu.lock systemd-run --user --wait --pipe --collect --same-dir --service-type=exec -p MemoryMax=12G -p MemorySwapMax=0 -p OOMPolicy=kill env OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 NUMEXPR_NUM_THREADS=1 workbench/envs/ctl312h/bin/python -m pytest -q workbench/tests/test_dcnet_api_staging.py

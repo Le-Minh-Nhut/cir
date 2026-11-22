@@ -1,0 +1,11 @@
+Source-freeze capacity/status receipt — 2026-11-22
+
+Status: NOT SAFE TO FREEZE. Inspection only; no tests, cleanup, pin changes, or source edits.
+
+Latest observed `df -PB1 /home/heheboiz/data/cir /tmp` at 2026-11-22T00:56:05+07:00: both paths on `/dev/nvme0n1p5`, 675847282688 bytes total, 597471522816 used, 43969359872 available (94%). This is a point-in-time observation, not reserved capacity.
+
+Against historical `TESTED_SOURCE_SHA=82b0b3fb72e9181a8835c07a0974a1279f21aeef`, current tree has 59 tracked changed non-doc/test paths, 50 changed test paths, and 42 untracked code/test paths. Exact SHA-256 inventory captured in session output `local://2646.log`; its untracked path roster is lines 284–326. Manifest `source-pin-path-manifest-20261120.md` remains explicitly partial/PENDING. Mixed user/campaign hunks remain in `.gitignore` and `workbench/registry/models.yaml`; ownership decisions needed. Not every owner has confirmed source stability; manifest notes DCNet G1 in flight and Encoder/ConeSep unstable.
+
+Existing `raw/full-suite-20261120.log` has pytest temporary paths but no measured scratch high-water. Historical 117 GB accumulated `/tmp/pytest-of` is not per-suite maximum. No capacity proof for a full suite. Preserve historical failure ground truth: 9 failed, 3349 passed, 51 skipped; this run does not certify current source.
+
+Freeze blockers: finish owner stability/attribution; reconcile exact candidate roster including untracked executable files, changed tests, and mixed user hunks; obtain suite scratch high-water evidence/capacity plan. No suite or cleanup performed.

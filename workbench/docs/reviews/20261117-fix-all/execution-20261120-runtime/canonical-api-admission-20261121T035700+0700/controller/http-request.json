@@ -1,0 +1,6 @@
+{
+  "model_id": "dcnet",
+  "checkpoint_id": "fashioniq_run_directory",
+  "protocol_id": "fashioniq_full_gallery_ref_excluded",
+  "top_k": 200
+}

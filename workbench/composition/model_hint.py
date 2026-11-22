@@ -141,7 +141,17 @@ class Adapter(CompositionAdapter):
         return self._owned_work_dir
 
     def _run_job(self, operation: str, image_paths: Sequence[str], texts: Sequence[str] = (),
-                 categories: Sequence[str | None] = ()) -> np.ndarray:
+                 categories: Sequence[str | None] = (), *, capture_path: Path | None = None,
+                 capture_ids: Sequence[str] | None = None,
+                 selected_capture_ids: Sequence[str] | None = None) -> np.ndarray:
+        if capture_path is not None and (capture_ids is None or selected_capture_ids is None):
+            raise ValueError("HINT input capture requires aligned capture IDs and selected IDs")
+        if capture_ids is not None and len(capture_ids) != len(image_paths):
+            raise ValueError("HINT capture ID count must match input paths")
+        if selected_capture_ids is not None and (
+                len(selected_capture_ids) > 32 or len(set(selected_capture_ids)) != len(selected_capture_ids)
+                or not set(selected_capture_ids).issubset(capture_ids or ())):
+            raise ValueError("HINT selected capture IDs must be unique inputs, at most 32")
         if not self.interpreter:
             raise RuntimeError("HINT model interpreter is not configured")
         if self._worker_failed is not None:
@@ -162,6 +172,9 @@ class Adapter(CompositionAdapter):
             "checkpoint_path": str(self.checkpoint_path), "checkpoint": self.checkpoint,
             "source_root": str(self.source_root), "dataset_root": str(self.dataset_root),
             "batch_size": self.batch_size,
+            **({"capture_path": str(Path(capture_path).resolve()), "capture_ids": list(capture_ids or ()),
+                "selected_capture_ids": list(selected_capture_ids or ())}
+               if capture_path is not None else {}),
         }), encoding="utf-8")
         try:
             if self._worker is not None and self._worker.poll() is not None:
@@ -218,22 +231,34 @@ class Adapter(CompositionAdapter):
             job_path.unlink(missing_ok=True)
             output_path.unlink(missing_ok=True)
 
-    def encode_queries(self, image_paths: Sequence[str], texts: Sequence[str],
-                       categories: Sequence[str | None]) -> np.ndarray:
+    def encode_queries(self, image_paths: Sequence[str | Path], texts: Sequence[str],
+                       categories: Sequence[str | None], *, capture_path: Path | None = None,
+                       capture_ids: Sequence[str] | None = None,
+                       selected_capture_ids: Sequence[str] | None = None) -> np.ndarray:
+        capture_path = getattr(self, "capture_path", capture_path)
+        if capture_path is not None and selected_capture_ids is not None and len(selected_capture_ids) > 32:
+            raise ValueError("HINT G1 capture is limited to 32 selected inputs")
         if self.work_root is None:
             raise AdapterWorkRootError(f"{self.model_id} work_root must be assigned before encoding")
         if len(image_paths) != len(texts) or len(image_paths) != len(categories):
             raise ValueError("HINT image paths, texts, and categories must have equal lengths")
-        return self._run_job("queries", image_paths, texts, categories)
+        return self._run_job("queries", [str(Path(path)) for path in image_paths], texts, categories,
+                             capture_path=capture_path, capture_ids=capture_ids,
+                             selected_capture_ids=selected_capture_ids)
 
-    def encode_targets(self, image_paths: Sequence[str], categories: Sequence[str | None]) -> np.ndarray:
+    def encode_targets(self, image_paths: Sequence[str | Path], categories: Sequence[str | None], *,
+                       capture_path: Path | None = None, capture_ids: Sequence[str] | None = None,
+                       selected_capture_ids: Sequence[str] | None = None) -> np.ndarray:
+        capture_path = getattr(self, "capture_path", capture_path)
         if self.work_root is None:
             raise AdapterWorkRootError(f"{self.model_id} work_root must be assigned before encoding")
         if len(image_paths) != len(categories):
             raise ValueError("HINT target paths and categories must have equal lengths")
         if any(category is not None for category in categories):
             raise ValueError("HINT gallery is category-agnostic; target categories must all be None")
-        return self._run_job("targets", image_paths, categories=categories)
+        return self._run_job("targets", [str(Path(path)) for path in image_paths], categories=categories,
+                             capture_path=capture_path, capture_ids=capture_ids,
+                             selected_capture_ids=selected_capture_ids)
 
     def score(self, queries: Any, targets: Any,
               categories: Sequence[str | None] | None = None) -> np.ndarray:
@@ -336,30 +361,67 @@ def _worker_main(argv: Sequence[str] | None = None) -> int:
 
     def run_one(current: dict[str, Any]) -> None:
         outputs = []
+        captured_pixels = []
+        captured_token_ids = []
+        captured_processed_texts = []
+        captured_token_masks = []
+        captured_paths = []
+        captured_ids = []
         try:
             with torch.no_grad():
                 batch_size = current["batch_size"]
-                batches = [current["image_paths"][start:start + batch_size]
-                           for start in range(0, len(current["image_paths"]), batch_size)]
+                paths = current["image_paths"]
+                batches = [paths[start:start + batch_size] for start in range(0, len(paths), batch_size)]
 
-                def decode(paths: Sequence[str]) -> Any:
+                def decode(path_batch: Sequence[str]) -> Any:
                     images = []
-                    for path in paths:
+                    for path in path_batch:
                         with Image.open(path) as image:
                             images.append(transform(image.convert("RGB")))
                     return torch.stack(images)
 
-                # Same decode pool as HABIT and CONESEP: one convention, not a second idiom. Only
-                # the serial `Image.open` + transform loop the GPU idled behind is parallelised;
-                # `map` preserves order, so feature rows stay aligned with the released gallery.
                 pixels_by_batch = prefetch_rows(decode, batches, workers)
+                capture_path = current.get("capture_path")
+                all_capture_ids = current.get("capture_ids", ())
+                selected_capture_ids = set(current.get("selected_capture_ids", ()))
                 for index, pixels in enumerate(pixels_by_batch):
+                    first = index * batch_size
+                    batch_paths = paths[first:first + len(pixels)]
+                    selected_rows = []
+                    if capture_path:
+                        batch_ids = all_capture_ids[first:first + len(pixels)]
+                        selected_rows = [row for row, capture_id in enumerate(batch_ids)
+                                         if capture_id in selected_capture_ids]
+                        if selected_rows:
+                            selected_tensor = torch.as_tensor(selected_rows, dtype=torch.long)
+                            captured_pixels.append(pixels.index_select(0, selected_tensor).numpy())
+                            captured_paths.extend(batch_paths[row] for row in selected_rows)
+                            captured_ids.extend(batch_ids[row] for row in selected_rows)
                     pixels = pixels.float().to(device, non_blocking=True)
                     if current["operation"] == "queries":
-                        first = index * batch_size
-                        texts = [text_processor(text) for text in
-                                 current["texts"][first:first + len(pixels)]]
-                        features = network.extract_retrieval_compose(pixels, texts)
+                        texts = [text_processor(text) for text in current["texts"][first:first + len(pixels)]]
+                        if capture_path:
+                            actual_texts = []
+                            tokenizer = network.tokenizer
+
+                            def capture_tokenizer(*args: Any, **kwargs: Any) -> Any:
+                                tokens = tokenizer(*args, **kwargs)
+                                if selected_rows:
+                                    selection = torch.as_tensor(selected_rows, dtype=torch.long)
+                                    captured_token_ids.append(tokens.input_ids.index_select(0, selection).cpu().numpy())
+                                    captured_token_masks.append(tokens.attention_mask.index_select(0, selection).cpu().numpy())
+                                    actual_texts.extend(args[0][row] for row in selected_rows)
+                                return tokens
+
+                            network.tokenizer = capture_tokenizer
+                            try:
+                                features = network.extract_retrieval_compose(pixels, texts)
+                            finally:
+                                network.tokenizer = tokenizer
+                        else:
+                            features = network.extract_retrieval_compose(pixels, texts)
+                            actual_texts = []
+                        captured_processed_texts.extend(actual_texts)
                         outputs.append(features.detach().cpu().numpy().reshape(len(pixels), -1))
                     else:
                         features = network.extract_retrieval_target(pixels)
@@ -368,6 +430,18 @@ def _worker_main(argv: Sequence[str] | None = None) -> int:
             shape = (0, 256) if current["operation"] == "queries" else (0, 32, 256)
             result = np.concatenate(outputs, axis=0) if outputs else np.empty(shape, dtype=np.float32)
             np.save(current["output_path"], result.astype(np.float32, copy=False), allow_pickle=False)
+            if capture_path:
+                capture_file = Path(capture_path)
+                capture_file.parent.mkdir(parents=True, exist_ok=True)
+                fields = {"pixels": np.concatenate(captured_pixels, axis=0),
+                          "image_paths": np.asarray(captured_paths),
+                          "capture_ids": np.asarray(captured_ids),
+                          "phase": np.asarray(current["operation"])}
+                if captured_token_ids:
+                    fields["processed_texts"] = np.asarray(captured_processed_texts)
+                    fields["token_ids"] = np.concatenate(captured_token_ids, axis=0)
+                    fields["token_mask"] = np.concatenate(captured_token_masks, axis=0)
+                np.savez(capture_file, **fields)
             reply(True)
         except Exception as error:
             reply(False, error_type=type(error).__name__, error=str(error))

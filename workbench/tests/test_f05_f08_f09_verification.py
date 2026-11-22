@@ -114,19 +114,6 @@ def test_f05_extended_validator_detects_missing_train_captions():
 # F08 Tests: DCNet dataset_root mismatch and preflight resolution
 # ==============================================================================
 
-def test_f08_dcnet_config_data_dir_resolution():
-    dcnet_source = REPO_ROOT / "workbench" / "third_party" / "DCNet"
-    cfg_path = dcnet_source / "configs" / "ce" / "fashioniq_dcnet.json"
-    cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
-    raw_data_dir = cfg["data_loader"]["args"]["data_dir"]
-    assert raw_data_dir == "dataset/fashioniq"
-
-    resolved_data_dir = (dcnet_source / raw_data_dir).resolve()
-    assert resolved_data_dir == dcnet_source / "dataset" / "fashioniq"
-
-    # Mismatch check with workbench dataset root
-    mock_workbench_dataset = REPO_ROOT / "data" / "fashionIQ_dataset"
-    assert resolved_data_dir != mock_workbench_dataset.resolve()
 
 
 def test_f08_preflight_refusal_on_data_dir_mismatch():

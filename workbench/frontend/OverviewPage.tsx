@@ -219,7 +219,7 @@ export function OverviewPage({ data, location, onOpenRun, onGoto }: {
                   <span className="stat-label">trong registry</span>
                 </div>
                 <div className="stat">
-                  <span className="stat-value" style={{ color: blockedModels.length ? "var(--warn)" : undefined }}>{fmtInt(blockedModels.length)}</span>
+                  <span className="stat-value" data-testid="overview-blocked-count" style={{ color: blockedModels.length ? "var(--warn)" : undefined }}>{fmtInt(blockedModels.length)}</span>
                   <span className="stat-label">bị chặn</span>
                 </div>
               </div>

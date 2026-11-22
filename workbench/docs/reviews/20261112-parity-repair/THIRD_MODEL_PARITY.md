@@ -331,3 +331,13 @@ Owned and touched:
 Nothing else was modified: no `parity_gate.py`, no `composition.py`, no `models.yaml`, no
 `workbench.env`, no ENCODER/LIMN artifact, no tolerance changed, no commit, no staging. The GPU was
 used (that was the green light); `gpu_job.sh` was never bypassed and the lock was never deleted.
+
+## 10. November 20 native-only diagnostic addendum
+
+This is a separate, single-category native diagnostic, not matched Native/Adapter V3 acceptance. The retained original attempt is unchanged; no Adapter role or publication ran. See `raw/third_model/hint-dress-native-20261120/diagnostic-receipt.json` and its `logs/` for exact command, exits, health censuses, and failure.
+
+The pinned HINT evaluator completed dress (`Q=2017`, `G=2628`, batch 32): target ranks min 1, max 2503, median 10, mean 82.4561; R@1/10/50 hits `432/1034/1525` (recalls `0.21417947446703026/0.5126425384234011/0.7560733763014378`). Retained score rows are float32 and orders int32. Native query features are `(2017,256)` float32; gallery features `(2628,32,256)` float32. The source forward invoked HINT BLIP2 `torch.cuda.amp.autocast(dtype=dtype)`, so output array dtype does not establish pure-FP32 model compute.
+
+The run exited 1 after source evaluation, while constructing the V3 receipt: `_hint_receipt` raised `KeyError: 'inputs'`. The generated immutable plan contains `identity`/`runs`, not `inputs`. Do not patch or relabel that historical plan. Further structural defects observed in sampled plan entries: `adapter_batch_1/n` commands use unsupported `--role`, historical `/tmp/cir-cpu20-20261117.YmsolE/gpu.lock`, resolved Python 3.9 base as controller, and identical query/gallery partition digests across B1/B32. These invalidate V3 orchestration; they are not missing keys to paper over.
+
+Native artifacts and score/order memmaps remain in `raw/` under the successful identity root `raw/third_model/hint-identity-prereq-20261120-final/`. They do not prove Adapter parity or G1 equality. A future HINT V3 must use a dedicated truthful diagnostic path, compare observed masked native scores/orders against actual Adapter `.score`, report score/rank/Top-K/hit deltas and independent G1 evidence, and validate role transport with nontrivial CPU fixtures first. No GPU retry authorized by this addendum.

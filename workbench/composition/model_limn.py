@@ -51,7 +51,18 @@ from workbench.composition.inputs import CONDITIONS
 from workbench.composition.data import ANNOTATION_PIN, inspect_annotation
 
 BUNDLE_ID = "base_iter0_all_categories"
+CAPTURE_MAX_IMAGES = 32
 
+
+def _capture_mask_payload(token_ids: np.ndarray, causal_mask: np.ndarray) -> dict[str, Any]:
+    """Keep derived padding separate from the causal mask actually passed to OpenCLIP."""
+    return {
+        "token_ids": token_ids,
+        "token_padding_mask_derived": token_ids != 0,
+        "causal_attn_mask_actual": causal_mask,
+        "causal_attn_mask_semantics":
+            "actual OpenCLIP additive attention mask passed to transformer",
+    }
 def normalize_query_text(text: str) -> str:
     """Casefold, strip punctuation, collapse whitespace: the release's own caption join."""
     return " ".join(re.sub(r"[^a-z0-9 ]+", " ", str(text).strip().lower()).split())
@@ -288,6 +299,7 @@ class Adapter(CompositionAdapter):
                          for member in self._bundle.get("bundle_members", ())}
         variable = self._model_record["environment"]["python_env_var"]
         self.interpreter = resolve_model_interpreter(self._model_record, config) or setting(variable)
+        self._interpreter_verified = False
         self.source_root = Path(config.WORKBENCH_THIRD_PARTY_ROOT) / self._model_record["source_dir"]
         self.dataset_root = Path(config.FASHIONIQ_ROOT)
         self._caption_scopes: CaptionScopeIndex | None = None
@@ -299,7 +311,7 @@ class Adapter(CompositionAdapter):
         self._worker: subprocess.Popen[str] | None = None
         self._worker_log: Any | None = None
         self._worker_failed: str | None = None
-        self._interpreter_verified = False
+        self._worker_observation: dict[str, Any] | None = None
 
     def candidate_names(self) -> dict[str, str]:
         """Lazily read the released candidate table: ``candidate id -> image path``."""
@@ -503,7 +515,10 @@ class Adapter(CompositionAdapter):
             per_mode={condition: (True, None) for condition in CONDITIONS}, notes=checks)
 
     def _run_job(self, phase: str, image_paths: Sequence[str | Path],
-                 texts: Sequence[str] = (), categories: Sequence[str | None] = ()) -> np.ndarray:
+                 texts: Sequence[str] = (), categories: Sequence[str | None] = (),
+                 capture_path: str | Path | None = None) -> np.ndarray:
+        if capture_path is not None and len(image_paths) > CAPTURE_MAX_IMAGES:
+            raise ValueError(f"LIMN input capture is limited to {CAPTURE_MAX_IMAGES} images")
         work_root = self.require_work_root()
         if not self.interpreter or not Path(self.interpreter).is_file():
             variable = self._model_record["environment"]["python_env_var"]
@@ -531,9 +546,11 @@ class Adapter(CompositionAdapter):
         payload = {
             "phase": phase, "image_paths": paths, "texts": list(texts),
             "categories": list(categories), "output_path": str(output_path),
+            "capture_path": str(Path(capture_path).resolve()) if capture_path is not None else None,
             "checkpoint_root": str(self.config.WORKBENCH_CHECKPOINT_ROOT),
             "bundle_id": self._bundle_id, "source_root": str(self.source_root),
             "dataset_root": str(self.dataset_root), "batch_size": max(1, int(self.batch_size)),
+            "seed": 0,
         }
         job_path.write_text(json.dumps(payload), encoding="utf-8")
         if self._worker is not None and self._worker.poll() is not None:
@@ -566,6 +583,7 @@ class Adapter(CompositionAdapter):
                 f"adapter_worker_exited: model=limn scope={scope} phase={phase} exit_status={status}")
             raise AdapterWorkerError(self._worker_failed)
         response = json.loads(line[len("CIRCUS_WORKER:"):])
+        self._worker_observation = response.get("observation")
         if not response.get("ok"):
             job_path.unlink(missing_ok=True)
             output_path.unlink(missing_ok=True)
@@ -583,10 +601,10 @@ class Adapter(CompositionAdapter):
         output_path.unlink(missing_ok=True)
         return result
 
-    def encode_queries(self, images: Sequence[str | Path], texts: Sequence[str],
-                       categories: Sequence[str | None]) -> np.ndarray:
-        self.require_work_root()
-        if len(images) != len(texts) or len(images) != len(categories):
+    def encode_queries(self, image_paths: Sequence[str | Path], texts: Sequence[str],
+                       categories: Sequence[str | None], *,
+                       capture_path: str | Path | None = None) -> np.ndarray:
+        if len(image_paths) != len(texts) or len(image_paths) != len(categories):
             raise ValueError("LIMN query image, text, and category counts must match")
         invalid = [(index, category, "missing_category" if category is None else "category_outside_scopes")
                    for index, category in enumerate(categories)
@@ -596,12 +614,12 @@ class Adapter(CompositionAdapter):
             raise CategoryScopeError(
                 "category_scope_invalid", tuple(reasons),
                 f"query categories missing or outside declared scopes: {invalid!r}", reasons)
-        return self._run_job("queries", images, texts, categories)
+        return self._run_job("queries", image_paths, texts, categories, capture_path)
 
-    def encode_targets(self, images: Sequence[str | Path],
-                       categories: Sequence[str | None]) -> np.ndarray:
-        self.require_work_root()
-        if len(images) != len(categories):
+    def encode_targets(self, image_paths: Sequence[str | Path],
+                       categories: Sequence[str | None], *,
+                       capture_path: str | Path | None = None) -> np.ndarray:
+        if len(image_paths) != len(categories):
             raise CategoryScopeError("target_scope_count_mismatch", (),
                                      "LIMN target image and category counts must match")
         scopes = set(categories)
@@ -612,7 +630,7 @@ class Adapter(CompositionAdapter):
         if category not in self.category_scopes:
             reason = "missing_category" if category is None else "category_outside_scopes"
             raise CategoryScopeError(reason, (), f"LIMN target scope {category!r} is not declared")
-        return self._run_job("targets", images, categories=categories)
+        return self._run_job("targets", image_paths, categories=categories, capture_path=capture_path)
 
     def score(self, queries: Any, targets: Any,
               categories: Sequence[str | None] | None = None) -> np.ndarray:
@@ -743,7 +761,15 @@ def _worker_main(job_path: Path) -> None:
         print("CIRCUS_WORKER:" + json.dumps({"ok": ok, **values}), flush=True)
 
     try:
+        import random
+        random.seed(0)
+        np.random.seed(0)
+        torch.manual_seed(0)
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed_all(0)
         job = json.loads(job_path.read_text(encoding="utf-8"))
+        if job.get("seed") != 0:
+            raise ValueError("LIMN parity worker requires preregistered seed 0")
         model_record = model_by_id("limn")
         bundle = checkpoint_by_id(model_record, job["bundle_id"])
         members = {member["checkpoint_id"]: member for member in bundle.get("bundle_members", ())}
@@ -751,7 +777,7 @@ def _worker_main(job_path: Path) -> None:
         if str(source_path) not in sys.path:
             sys.path.insert(0, str(source_path))
         native_model = importlib.import_module("model")
-        if Path(native_model.__file__).resolve() != (source_path / "model.py").resolve():
+        if not native_model.__file__ or Path(native_model.__file__).resolve() != (source_path / "model.py").resolve():
             raise ImportError(f"refusing non-pinned LIMN model module: {native_model.__file__}")
     except Exception as error:
         reply(False, error_type=type(error).__name__, error=str(error))
@@ -760,6 +786,7 @@ def _worker_main(job_path: Path) -> None:
     models: dict[str, Any] = {}
     transforms: dict[str, Any] = {}
     dataset_ids = {"dress": 0, "shirt": 1, "toptee": 2}
+    model_observations: dict[str, dict[str, Any]] = {}
 
     def load_scope(category: str, current: dict[str, Any]) -> None:
         if category in models:
@@ -771,7 +798,20 @@ def _worker_main(job_path: Path) -> None:
         model = load_trusted_whole_model(member_path, checkpoint["expected_sha256"], torch)
         if not isinstance(model, native_model.LIMN):
             raise TypeError(f"LIMN {category} checkpoint does not deserialize to pinned model.LIMN")
+        if model.training or any(parameter.dtype != torch.float32 for parameter in model.parameters()):
+            raise RuntimeError("LIMN adapter worker requires eval-mode float32 model")
+        member_path = Path(member_path)
+        if current.get("seed") != 0:
+            raise ValueError("LIMN parity worker requires preregistered seed 0")
         model.cuda().eval()
+        if model.training or any(parameter.dtype != torch.float32 for parameter in model.parameters()):
+            raise RuntimeError("LIMN adapter worker requires eval-mode float32 model")
+        model_observations[category] = {"checkpoint_id": checkpoint_id,
+                                        "checkpoint_path": str(member_path),
+                                        "checkpoint_bytes": member_path.stat().st_size,
+                                        "checkpoint_sha256": checkpoint["expected_sha256"],
+                                        "training": model.training,
+                                        "parameter_dtype": str(next(model.parameters()).dtype)}
         visual = model.backbone.clip.visual
         models[category] = model
         transforms[category] = open_clip.image_transform(
@@ -784,6 +824,10 @@ def _worker_main(job_path: Path) -> None:
                 load_scope(category, current)
             batch_size = max(1, int(current["batch_size"]))
             outputs: list[np.ndarray | None] = [None] * len(paths)
+            input_batches: list[np.ndarray] = []
+            token_batches: list[np.ndarray] = []
+            text_padding_mask_batches: list[np.ndarray] = []
+            causal_mask: np.ndarray | None = None
             start = 0
             while start < len(paths):
                 category = categories[start]
@@ -807,22 +851,68 @@ def _worker_main(job_path: Path) -> None:
                 # `Image.open` + transform loop is parallelised.
                 for (batch_start, batch_stop), batch in zip(
                         spans, prefetch_rows(decode, [paths[a:b] for a, b in spans], workers)):
-                    batch = batch.float().cuda()
+                    input_capture = current.get("capture_path")
+                    batch = batch.float()
+                    if input_capture:
+                        input_batches.append(batch.cpu().numpy())
+                    batch = batch.cuda()
                     dataset_type = torch.ones(batch_stop - batch_start).cuda() * dataset_ids[category]
-                    with torch.no_grad():
-                        if current["phase"] == "queries":
-                            encoded = model.compose_query(
-                                batch, texts[batch_start:batch_stop], dataset_type)[0]
-                        else:
-                            encoded = model.compose_target(batch, dataset_type)[0]
+                    tokenizer = model.backbone.tokenizer
+                    transformer = model.backbone.clip.transformer
+                    transformer_forward = transformer.forward
+                    if input_capture and current["phase"] == "queries":
+                        def capture_tokenizer(value: Any) -> Any:
+                            token_ids = tokenizer(value)
+                            token_batches.append(token_ids.detach().cpu().numpy())
+                            text_padding_mask_batches.append((token_ids != 0).detach().cpu().numpy())
+                            return token_ids
+
+                        def capture_transformer(*args: Any, **kwargs: Any) -> Any:
+                            nonlocal causal_mask
+                            mask = kwargs.get("attn_mask")
+                            if mask is None:
+                                raise RuntimeError("LIMN text transformer omitted native attn_mask")
+                            observed = mask.detach().cpu().numpy()
+                            if causal_mask is None:
+                                causal_mask = observed.copy()
+                            elif not np.array_equal(causal_mask, observed, equal_nan=True):
+                                raise RuntimeError("LIMN causal attention mask changed within capture")
+                            return transformer_forward(*args, **kwargs)
+
+                        model.backbone.tokenizer = capture_tokenizer
+                        transformer.forward = capture_transformer
+                    try:
+                        with torch.no_grad():
+                            if current["phase"] == "queries":
+                                encoded = model.compose_query(
+                                    batch, texts[batch_start:batch_stop], dataset_type)[0]
+                            else:
+                                encoded = model.compose_target(batch, dataset_type)[0]
+                    finally:
+                        if input_capture and current["phase"] == "queries":
+                            model.backbone.tokenizer = tokenizer
+                            transformer.forward = transformer_forward
                     values = encoded.detach().float().cpu().numpy()
                     for offset, value in enumerate(values):
                         outputs[batch_start + offset] = value
                 start = stop
+            if current.get("capture_path") and input_batches:
+                capture = {"pixels": np.concatenate(input_batches, axis=0),
+                           "paths": np.asarray(paths), "phase": np.asarray(current["phase"]),
+                           "texts": np.asarray(texts)}
+                if token_batches:
+                    token_ids = np.concatenate(token_batches, axis=0)
+                    if causal_mask is None:
+                        raise RuntimeError("LIMN tokenizer captured but causal attention mask was not observed")
+                    capture.update(_capture_mask_payload(token_ids, causal_mask))
+                np.savez_compressed(current["capture_path"], **capture)
             result = (np.stack(outputs).astype(np.float32, copy=False) if outputs
                       else np.empty((0, 768), dtype=np.float32))
             np.save(current["output_path"], result, allow_pickle=False)
-            reply(True)
+            reply(True, observation={"python": sys.version, "platform": sys.platform,
+                                     "batch_size": int(current["batch_size"]), "seed": 0,
+                                     "precision": "float32", "model_mode": "eval",
+                                     "models": model_observations})
         except Exception as error:
             reply(False, error_type=type(error).__name__, error=str(error))
 

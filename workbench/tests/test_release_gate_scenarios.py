@@ -72,7 +72,7 @@ def test_scenario_b_shared_conda_environment_deduplication(tmp_path: Path, monke
     }
 
     # 1. Plan environments
-    plan = planner.plan_environments([m1, m2], artifacts_root=tmp_path)
+    plan = planner.plan_environments([m1, m2], solver=lambda constraints: True, artifacts_root=tmp_path)
     assert len(plan["groups"]) == 1, "compatible models must be grouped into a single environment group"
     group = plan["groups"][0]
     assert set(group["members"]) == {"compat-alpha", "compat-beta"}
@@ -422,7 +422,7 @@ def test_scenario_j_interruption_recovery_and_artifact_integrity(tmp_path: Path)
     sentinel_file.write_bytes(b"do-not-delete-me")
 
     m = {"model_id": "interrupted-model", "environment": {"python": "3.10", "packages": []}}
-    plan = planner.plan_environments([m], artifacts_root=tmp_path)
+    plan = planner.plan_environments([m], solver=lambda constraints: True, artifacts_root=tmp_path)
 
     # The interruption this scenario describes happens while a SOLVER runs, so the test must own
     # which solver that is: `_solver_command()` returns None on a host with no conda/mamba

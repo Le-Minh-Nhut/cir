@@ -1,0 +1,9 @@
+Running as unit: cir-role-stream-smoke-failure-20261121.service; invocation ID: 2b776e4cfc4244d6a17d38b471f8c65f
+CHILD_STDERR_failure
+Finished with result: exit-code
+Main processes terminated with: code=exited/status=23
+Service runtime: 3ms
+CPU time consumed: 3ms
+Memory peak: 1.5M
+Memory swap peak: 0B
+[role-service] unit=cir-role-stream-smoke-failure-20261121 wrapper_exit=23

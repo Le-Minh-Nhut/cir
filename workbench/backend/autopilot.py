@@ -959,9 +959,19 @@ def _classify(plan: dict[str, Any], execution: dict[str, Any], config: Autopilot
                     "environment": "BLOCKED_ENVIRONMENT", "gpu-verification": "BLOCKED_GPU",
                     "evaluation": "FAILED_EVALUATION", "validation-index": "FAILED_OUTPUT_VALIDATION"}
     rows, blockers = [], []
+    source_blockers = {item["model_id"]: f"pinned source not acquired: {item['reason']}"
+                       for item in (plan.get("source_acquisition") or {}).get("blocked", [])}
+    assignment_models = (execution.get("environment_assignment") or {}).get("models") or {}
     for model_id in config.selected_model_ids:
         prior = plan_rows[model_id]
         status, reasons = prior["status"], list(prior.get("blockers", []))
+        if model_id in source_blockers:
+            status = "BLOCKED_SOURCE"
+            if source_blockers[model_id] not in reasons:
+                reasons.append(source_blockers[model_id])
+        assignment_reason = assignment_models.get(model_id, {}).get("reason")
+        if status == "BLOCKED_ENVIRONMENT" and assignment_reason and assignment_reason not in reasons:
+            reasons.append(assignment_reason)
         related = [item for item in records.values() if isinstance(item, dict) and item.get("model_id") == model_id]
         if status == "NOT_RUN" and execution.get("exit_code") is not None:
             failed = [item for item in related if item.get("status") not in {"COMPLETE", "RUNNING"}]
@@ -1235,9 +1245,8 @@ def run(config_path: Path, *, apply: bool, resume: bool, force_models: list[str]
         for row in plan["models"]:
             if row["model_id"] in blocked_ids:
                 reason = f"pinned source not acquired: {blocked_ids[row['model_id']]}"
-                if row["status"] == "NOT_RUN":
-                    row.update(status="BLOCKED_SOURCE", blockers=[reason])
-                elif reason not in row.get("blockers", []):
+                row["status"] = "BLOCKED_SOURCE"
+                if reason not in row.get("blockers", []):
                     row.setdefault("blockers", []).append(reason)
     plan["source_acquisition"] = acquisition
     if mode == "dry-run":

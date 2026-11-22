@@ -1,0 +1,11 @@
+command=flock -x /tmp/cir-fix-all-20261120-cpu.lock -c 'OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 NUMEXPR_NUM_THREADS=1 workbench/envs/ctl312h/bin/python -m py_compile workbench/replay/clvc_tme_parity.py workbench/scripts/clvc_tme_v3_parity.py workbench/tests/test_clvc_net_composition_parity.py && OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 NUMEXPR_NUM_THREADS=1 workbench/envs/ctl312h/bin/python -m pytest -q -n10 workbench/tests/test_clvc_net_composition_parity.py::test_tme_pair_producer_publishes_consumable_v3_proof'
+exit_code=1
+
+=================================== FAILURES ===================================
+_____________ test_tme_pair_producer_publishes_consumable_v3_proof _____________
+>       assert verdict.status == gate.PASS, verdict.detail
+E       AssertionError: malformed parity artifact: v3 artifact protocol does not bind identity.protocol
+E       assert 'PARITY_EVIDENCE_MALFORMED' == 'PARITY_PASS'
+E         - PARITY_PASS
+E         + PARITY_EVIDENCE_MALFORMED
+1 failed in 0.88s

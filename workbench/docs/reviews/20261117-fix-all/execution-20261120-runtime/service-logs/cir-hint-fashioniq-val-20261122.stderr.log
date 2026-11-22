@@ -1,0 +1,31 @@
+[gpu_job] lock held, GPU empty, launching: systemd-run --user --wait --pipe --collect --same-dir --service-type=exec --unit=cir-hint-fashioniq-val-20261122 -p MemoryMax=12G -p MemorySwapMax=0 -p OOMPolicy=kill /home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/run-role-service.sh --inner --unit cir-hint-fashioniq-val-20261122 --output-dir /home/heheboiz/data/cir/workbench/artifacts/isolated-runs/hint-fashioniq-val-20261122 --min-free-bytes 5368709120 -- workbench/envs/ctl312h/bin/python -u -m workbench.replay.hint --checkpoint-root /home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/hint --dataset-root /home/heheboiz/data/cir/data/FashionIQ --source-root /home/heheboiz/data/cir/workbench/third_party/HINT --batch-size 64 --backbone pretrain --device cuda --output /home/heheboiz/data/cir/workbench/artifacts/isolated-runs/hint-fashioniq-val-20261122/result.json
+GPU-9bc596d9-19e9-6f43-dc2c-a80da924263c, 1298 MiB, 16303 MiB
+Running as unit: cir-hint-fashioniq-val-20261122.service; invocation ID: 16ca5156241d407587bca1e658a6aeba
+waiting_for_cpu_lock=1
+cpu_lock_acquired=1
+disk_check_after_cpu_lock=1 free_bytes=24352358400 required_bytes=5368709120
+unit=cir-hint-fashioniq-val-20261122.service
+cgroup=/user.slice/user-1000.slice/user@1000.service/app.slice/cir-hint-fashioniq-val-20261122.service
+memory.max=12884901888
+memory.swap.max=0
+memory.oom.group=1
+output_dir=/home/heheboiz/data/cir/workbench/artifacts/isolated-runs/hint-fashioniq-val-20261122
+free_bytes=24352358400
+min_free_bytes=5368709120
+/home/heheboiz/data/cir/workbench/envs/ctl312h/lib/python3.12/site-packages/transformers/utils/generic.py:441: FutureWarning: `torch.utils._pytree._register_pytree_node` is deprecated. Please use `torch.utils._pytree.register_pytree_node` instead.
+  _torch_pytree._register_pytree_node(
+/home/heheboiz/data/cir/workbench/envs/ctl312h/lib/python3.12/site-packages/transformers/utils/generic.py:309: FutureWarning: `torch.utils._pytree._register_pytree_node` is deprecated. Please use `torch.utils._pytree.register_pytree_node` instead.
+  _torch_pytree._register_pytree_node(
+/home/heheboiz/data/cir/workbench/envs/ctl312h/lib/python3.12/site-packages/torch/jit/_script.py:1491: FutureWarning: `torch.jit.script` is deprecated. Please switch to `torch.compile` or `torch.export`.
+  warnings.warn(
+/home/heheboiz/data/cir/workbench/envs/ctl312h/lib/python3.12/site-packages/torch/jit/_script.py:1643: FutureWarning: `torch.jit.interface` is deprecated. Please use `torch.compile` instead.
+  warnings.warn(
+/home/heheboiz/data/cir/workbench/envs/ctl312h/lib/python3.12/site-packages/transformers/utils/generic.py:309: FutureWarning: `torch.utils._pytree._register_pytree_node` is deprecated. Please use `torch.utils._pytree.register_pytree_node` instead.
+  _torch_pytree._register_pytree_node(
+Finished with result: oom-kill
+Main processes terminated with: code=killed/status=KILL
+Service runtime: 32.803s
+CPU time consumed: 27.179s
+Memory peak: 12.0G
+Memory swap peak: 0B
+[gpu_job] child_exit=1

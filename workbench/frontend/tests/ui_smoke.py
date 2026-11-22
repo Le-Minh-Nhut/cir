@@ -241,21 +241,13 @@ def set_subset(page, subset: str) -> None:
         "value => document.querySelector('#subset-select').value === value",
         arg=subset, timeout=NAV_TIMEOUT_MS)
 
-def registry_stat(page) -> dict:
-    """The overview registry card's own counts: {entry, blocked}, read as numbers.
-
-    The value must be a real digit string, never a placeholder: the card renders `—` while the
-    fetch is in flight, and a placeholder that happens to parse is exactly the lie this waits out.
-    """
-    return page.evaluate("""() => {
-        const out = {};
-        for (const stat of document.querySelectorAll('[data-testid=overview-cards] .stat')) {
-            const label = (stat.querySelector('.stat-label')?.textContent || '').trim();
-            const value = (stat.querySelector('.stat-value')?.textContent || '').trim();
-            out[label] = value;
-        }
-        return out;
-    }""")
+def registry_stat(page) -> dict[str, str]:
+    """Read served count values by stable test ID, independent of translated labels."""
+    return page.evaluate("""() => Object.fromEntries(
+        ['published-count', 'registry-count'].map(name => [
+            name, document.querySelector(`[data-testid=overview-${name}]`)?.textContent?.trim() || ''
+        ])
+    )""")
 
 def shot(page, shots: Path, name: str) -> str:
     shots.mkdir(parents=True, exist_ok=True)
@@ -296,12 +288,7 @@ def open_row_detail(page) -> str:
     return "details summary in cell"
 
 def recover_from_injected_failure(page, base_url: str, recorder: Recorder, shots: Path) -> None:
-    """One bounded injected API failure -> visible error region -> retry -> recovery.
-
-    The registry card is the region re-fetched: it is present on every stack (no composition row
-    needed), it renders `ErrorState` with a retry control when its fetch fails, and the retry
-    re-issues the same request, so a cached answer cannot fake the recovery.
-    """
+    """One bounded injected API failure -> visible error region -> retry -> recovery."""
     pattern = "**/api/models"
 
     def abort_models(route):
@@ -309,7 +296,7 @@ def recover_from_injected_failure(page, base_url: str, recorder: Recorder, shots
         route.abort()
 
     open_page(page, "overview")
-    expected = registry_stat(page)["entry"]
+    expected = api_json(base_url, "/api/models/publication")
     recorder.injecting = True
     page.route(pattern, abort_models)
     page.reload(wait_until="domcontentloaded")
@@ -318,44 +305,49 @@ def recover_from_injected_failure(page, base_url: str, recorder: Recorder, shots
     recorder.injecting = False
     error_text = error.inner_text()
     retry = page.locator("[data-testid=overview-cards] [data-testid=error-retry]").first
-    recorder.note(f"injected failure surfaced as {error_text.splitlines()[0]!r}; "
-                  f"retry control present={retry.count() == 1}")
+    recorder.note(f"injected failure surfaced as {error_text.splitlines()[0]!r}; retry present={retry.count() == 1}")
     assert retry.count() == 1, "the failed region offers no retry control"
     shot(page, shots, "error-state")
-
     page.unroute(pattern, abort_models)
     retry.click()
     page.wait_for_function(
         """() => document.querySelectorAll('[data-testid=overview-cards] [data-testid=empty-state]').length === 0
-              && [...document.querySelectorAll('[data-testid=overview-cards] .stat')]
-                   .some(s => (s.querySelector('.stat-label')?.textContent || '').trim() === 'entry'
-                              && /^[0-9][0-9,]*$/.test((s.querySelector('.stat-value')?.textContent || '').trim()))""",
+              && ['published-count', 'registry-count'].every(name =>
+                /^[0-9][0-9,]*$/.test(document.querySelector(`[data-testid=overview-${name}]`)?.textContent?.trim() || ''))""",
         timeout=NAV_TIMEOUT_MS)
-    recovered = registry_stat(page)["entry"]
-    recorder.note(f"after unroute+retry the error region is gone and the registry re-fetched: "
-                  f"entry {expected!r} -> {recovered!r}")
-    assert recovered == expected, (expected, recovered)
+    recovered = registry_stat(page)
+    assert_registry_counts(recovered, api_json(base_url, "/api/models"), expected)
+    recorder.note(f"after retry published={recovered['published-count']}, registry={recovered['registry-count']}")
+
+
+def assert_registry_counts(stats: dict[str, str], models: list[dict], publication: dict) -> None:
+    model_ids = {model["model_id"] for model in models}
+    published = int(stats["published-count"].replace(",", ""))
+    registry = int(stats["registry-count"].replace(",", ""))
+    assert published == len(models) == publication["published_count"]
+    assert registry == publication["registry_count"]
+    assert model_ids == set(publication["published_model_ids"])
+    assert len(publication["deferred"]) == publication["deferred_count"]
+    assert set(publication["deferred"]).isdisjoint(model_ids)
 
 # --------------------------------------------------------------------------- sessions
 
 def session_cold(page, base_url: str, shots: Path, recorder: Recorder) -> list[str]:
-    """Any stack, read-only: registry count == /api/models, one row each, truthful blockers."""
+    """Any stack: published count, registry count and deferred IDs match served APIs."""
     saved = []
     page.goto(base_url, wait_until="domcontentloaded")
     page.wait_for_selector("[data-testid=area-overview]", timeout=NAV_TIMEOUT_MS)
     models = api_json(base_url, "/api/models")
-    # The registry card is the UI's own count: wait for a DIGIT, not for a placeholder.
+    publication = api_json(base_url, "/api/models/publication")
     page.wait_for_function(
-        """() => [...document.querySelectorAll('[data-testid=overview-cards] .stat')]
-                 .some(s => (s.querySelector('.stat-label')?.textContent || '').trim() === 'entry'
-                            && /^[0-9][0-9,]*$/.test((s.querySelector('.stat-value')?.textContent || '').trim()))""",
+        """() => ['published-count', 'registry-count'].every(name =>
+          /^[0-9][0-9,]*$/.test(document.querySelector(`[data-testid=overview-${name}]`)?.textContent?.trim() || ''))""",
         timeout=NAV_TIMEOUT_MS)
     stats = registry_stat(page)
-    rendered = int(stats["entry"].replace(",", ""))
-    recorded = int((stats.get("bị chặn") or "0").replace(",", ""))
-    recorder.note(f"cold overview: registry card reads entry={stats['entry']!r} "
-                  f"bị chặn={stats.get('bị chặn')!r}; API /api/models returned {len(models)} entries")
-    assert rendered == len(models), f"overview count {rendered} != API {len(models)}"
+    assert_registry_counts(stats, models, publication)
+    recorded = int((page.locator('[data-testid="overview-blocked-count"]').inner_text() or "0").replace(",", ""))
+    recorder.note(f"cold overview: published={stats['published-count']}, registry={stats['registry-count']}, "
+                  f"blocked={recorded}; API published={len(models)}, registry={publication['registry_count']}")
 
     open_page(page, "experiments", "models")
     rows = page.locator("[data-testid^=model-row-]")

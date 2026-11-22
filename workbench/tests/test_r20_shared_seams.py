@@ -174,7 +174,7 @@ def test_config_file_interpreter_settings_reach_real_consumers(monkeypatch, tmp_
         "WORKBENCH_PTHA_MTST_PYTHON=/fixture/ptha/bin/python",
     ]) + "\n", encoding="utf-8")
     monkeypatch.setattr(operator_config, "_CONFIG_PATH", env_file)
-    model_settings.file_settings.cache_clear()
+    model_settings.clear_file_settings_cache()
     try:
         for model_id, expected in (("limn", "/fixture/limn/bin/python"),
                                    ("tme", "/fixture/tme/bin/python"),
@@ -193,7 +193,7 @@ def test_config_file_interpreter_settings_reach_real_consumers(monkeypatch, tmp_
         assert model_settings.setting_source("WORKBENCH_TME_PYTHON") == "workbench_env"
         assert model_settings.setting("WORKBENCH_NOTHING_DECLARES_THIS") is None
     finally:
-        model_settings.file_settings.cache_clear()
+        model_settings.clear_file_settings_cache()
 
     # An unknown name is still refused: the parser is a schema, not a free-form environment reader.
     bad = tmp_path / "bad.env"

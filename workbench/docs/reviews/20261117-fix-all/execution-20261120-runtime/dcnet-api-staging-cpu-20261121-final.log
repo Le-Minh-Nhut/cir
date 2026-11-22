@@ -1,0 +1,11 @@
+command: timeout 60s systemd-run --user --wait --pipe --collect --same-dir --service-type=exec -p MemoryMax=12G -p MemorySwapMax=0 -p OOMPolicy=kill env OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 NUMEXPR_NUM_THREADS=1 workbench/envs/ctl312h/bin/python -m pytest -q workbench/tests/test_dcnet_api_staging.py
+Running as unit: run-u322.service; invocation ID: ae05deea843e49efb20da6acccfea6df
+.                                                                        [100%]
+1 passed in 0.18s
+Finished with result: success
+Main processes terminated with: code=exited/status=0
+Service runtime: 319ms
+CPU time consumed: 318ms
+Memory peak: 2.1M
+Memory swap peak: 0B
+pytest_exit=0

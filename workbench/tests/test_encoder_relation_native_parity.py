@@ -139,3 +139,35 @@ def test_the_constants_are_imported_not_redeclared(name: str) -> None:
                 and any(isinstance(target, ast.Name) and target.id == name
                         for target in node.targets)]
     assert not assigned, f"{name} must be imported from model_encoder, not redeclared"
+
+
+
+def test_native_argsort_capture_compares_masked_adapter_scores(tmp_path: Path) -> None:
+    import numpy as np
+
+    capture = replay_encoder._NativeArgsortCapture(
+        np, tmp_path, [0, 1], [2, 3], ["a", "b", "c", "d"], ["a", "b"], ["c", "d"])
+    capture.query_texts = ["first", "second"]
+    capture.query_paths = ["a.jpg", "b.jpg"]
+    capture.gallery_paths = ["a.jpg", "b.jpg", "c.jpg", "d.jpg"]
+    native = np.asarray([[0.0, 0.7, 0.9, 0.1], [0.8, 0.0, 0.2, 0.9]], dtype=np.float32)
+    native[0, 0] = np.float32(-10e10)
+    native[1, 1] = np.float32(-10e10)
+    for row in native:
+        capture.argsort(-row)
+    recalls = {f"dress_r{k}": 100.0 for k in (1, 10, 50)}
+    record = capture.finish("dress", recalls)
+    result = replay_encoder._compare_adapter_scores(capture, native, tmp_path)
+    assert record["hit_counts"] == {"1": 2, "10": 2, "50": 2}
+    assert result["status"] == "measured"
+    assert result["hit_counts_equal"] is True
+    assert result["target_rank_flip_count"] == 0
+    assert result["candidate_topk_membership_flip_query_indices"]["1"] == []
+    assert np.load(tmp_path / "native_orders.int32.npy").shape == (2, 4)
+    changed = native.copy()
+    changed[0, 1] = 1.0
+    difference = replay_encoder._compare_adapter_scores(capture, changed, tmp_path / "changed")
+    assert difference["diagnostic_aggregate_status"] == "hit_count_difference"
+    assert difference["hit_counts_equal"] is False
+    assert difference["target_topk_hit_flip_query_indices"]["1"] == [0]
+    assert difference["candidate_topk_membership_flip_query_indices"]["1"] == [0]

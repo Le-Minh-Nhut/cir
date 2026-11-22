@@ -1,5 +1,9 @@
 # AGENTS.md — quy ước vận hành repo này
 
+## OMP `/vibe`: hai loại worker, không phải giới hạn
+
+`two worker CLIs` trong prompt `/vibe` chỉ hai loại worker `fast` và `good`, không giới hạn tổng số session chạy song song. Commit upstream [`c101452`](https://github.com/can1357/oh-my-pi/commit/c101452) bỏ cụm `kinds of`; đừng hiểu thành giới hạn hai worker. Chia workstream độc lập để chạy song song và tuân thủ giới hạn CPU/GPU bên dưới.
+
 ## Chạy CPU: nửa máy, máy này đang chạy hai project
 
 Máy này **20 core / 20 thread** (Intel Ultra 7 265KF), nhưng **chỉ dùng 10 thread** (một nửa): một

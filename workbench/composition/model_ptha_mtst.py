@@ -37,8 +37,8 @@ class Adapter(CompositionAdapter):
 
     model_id = "ptha_mtst"
     reference_eligible = True
-    # score() reads a 32x256 token layout as an 8192-wide vector.
-    score_dimension = 8192
+    query_dimension: int | None = 256
+    score_dimension: int = 8192
     category_scopes: tuple[str | None, ...] = (None,)
 
     def __init__(self, config: Any, checkpoint_id: str | None = None) -> None:
@@ -54,6 +54,7 @@ class Adapter(CompositionAdapter):
         self._worker: subprocess.Popen[str] | None = None
         self._worker_log: Any | None = None
         self._worker_counter = 0
+        self._last_batch_receipt: dict[str, Any] | None = None
         self._worker_failed: str | None = None
         self._interpreter_verified = False
 
@@ -67,24 +68,24 @@ class Adapter(CompositionAdapter):
             return False, f"unknown composition condition: {condition!r}"
         return True, None
 
-    def encode_queries(self, image_paths: Sequence[str], texts: Sequence[str],
+    def encode_queries(self, image_paths: Sequence[str | Path], texts: Sequence[str],
                        categories: Sequence[str | None]) -> np.ndarray:
         if not (len(image_paths) == len(texts) == len(categories)):
             raise ValueError("image_paths, texts, and categories must have equal lengths")
         return _run(self, "queries", image_paths, texts, categories)
 
-    def encode_targets(self, image_paths: Sequence[str], categories: Sequence[str | None]) -> np.ndarray:
+    def encode_targets(self, image_paths: Sequence[str | Path], categories: Sequence[str | None]) -> np.ndarray:
         if len(image_paths) != len(categories):
             raise ValueError("image_paths and categories must have equal lengths")
         return _run(self, "targets", image_paths, (), categories)
+
+
     def score(self, queries: Any, targets: Any, categories: Sequence[str | None] | None = None) -> np.ndarray:
         del categories
         query, target = np.asarray(queries, dtype=np.float32), np.asarray(targets, dtype=np.float32)
-        if query.ndim != 2 or query.shape[1] != 32 * 256 or target.ndim != 2 or target.shape[1] != 32 * 256:
-            raise ValueError("expected expanded normalized query and projected target features (N,8192)/(M,8192)")
-        query = query.reshape(len(query), 32, 256)[:, 0, :]
-        target_tokens = target.reshape(len(target), 32, 256)
-        return np.einsum("nd,mkd->nmk", query, target_tokens, optimize=True).max(axis=-1)
+        if query.ndim != 2 or query.shape[1] != self.query_dimension or target.ndim != 2 or target.shape[1] != self.score_dimension:
+            raise ValueError("expected native query width 256 and 32x256 target features (8192)")
+        return np.einsum("nd,mkd->nmk", query, target.reshape(len(target), 32, 256), optimize=True).max(axis=-1)
 
     def rank(self, queries: Any, targets: Any, target_positions: Sequence[Sequence[int] | None] | None = None,
              categories: Sequence[str | None] | None = None) -> list[int | None]:
@@ -152,20 +153,18 @@ def _resolve(config: Any, checkpoint_id: str | None) -> tuple[dict[str, Any], di
     variable = model["environment"]["python_env_var"]
     return model, checkpoint, resolve_model_interpreter(model, config) or setting(variable)
 
-
-def _run(adapter: Adapter, operation: str, image_paths: Sequence[str], texts: Sequence[str],
+def _run(adapter: Any, operation: str, image_paths: Sequence[str | Path], texts: Sequence[str],
          categories: Sequence[str | None]) -> np.ndarray:
     work_root = _check_work_root(adapter)
     if not image_paths:
-        return np.empty((0, 8192), dtype=np.float32)
+        dimension = adapter.query_dimension if operation == "queries" else adapter.score_dimension
+        return np.empty((0, dimension), dtype=np.float32)
     if adapter._worker_failed is not None:
         raise AdapterWorkerError(adapter._worker_failed)
     interpreter = adapter._interpreter
     if not interpreter:
         raise RuntimeError("no interpreter environment resolved for WORKBENCH_PTHA_MTST_PYTHON")
     if not adapter._interpreter_verified:
-        # Same gate, same code path, as every other adapter: see
-        # CompositionAdapter.require_verified_interpreter.
         adapter.require_verified_interpreter()
         adapter._interpreter_verified = True
     checkpoint_path = Path(adapter._checkpoint["resolved_path"])
@@ -181,11 +180,11 @@ def _run(adapter: Adapter, operation: str, image_paths: Sequence[str], texts: Se
     job_path, output_path = (work / f"job-{adapter._worker_counter}.json",
                              work / f"output-{adapter._worker_counter}.npy")
     job_path.write_text(json.dumps({"operation": operation,
-                                   "image_paths": [str(Path(path).resolve()) for path in image_paths],
-                                   "texts": list(texts), "categories": list(categories),
-                                   "output_path": str(output_path), "source_root": str(source),
-                                   "checkpoint_path": str(checkpoint_path),
-                                   "batch_size": adapter.batch_size}), encoding="utf-8")
+                                    "image_paths": [str(Path(path).resolve()) for path in image_paths],
+                                    "texts": list(texts), "categories": list(categories),
+                                    "output_path": str(output_path), "source_root": str(source),
+                                    "checkpoint_path": str(checkpoint_path),
+                                    "batch_size": adapter.batch_size}), encoding="utf-8")
     try:
         if adapter._worker is not None and adapter._worker.poll() is not None:
             status = adapter._worker.returncode
@@ -222,12 +221,14 @@ def _run(adapter: Adapter, operation: str, image_paths: Sequence[str], texts: Se
             _kill_worker(adapter)
             raise AdapterWorkerError(adapter._worker_failed)
         features = np.load(output_path, allow_pickle=False)
-        if features.dtype != np.float32 or features.shape != (len(image_paths), 8192):
+        expected_dimension = adapter.query_dimension if operation == "queries" else adapter.score_dimension
+        if features.dtype != np.float32 or features.shape != (len(image_paths), expected_dimension):
             adapter._worker_failed = (
                 f"adapter_worker_invalid_matrix: model=ptha_mtst scope=None phase={operation} "
-                f"shape={features.shape}/{features.dtype} expected=({len(image_paths)}, 8192)/float32")
+                f"shape={features.shape}/{features.dtype} expected=({len(image_paths)}, {expected_dimension})/float32")
             _kill_worker(adapter)
             raise AdapterWorkerError(adapter._worker_failed)
+        adapter._last_batch_receipt = response.get("batch_receipt")
         return features
     except OSError as error:
         status = adapter._worker.poll() if adapter._worker is not None else None
@@ -355,14 +356,18 @@ def _worker_main(argv: Sequence[str] | None = None) -> int:
                         features = model.inference_reference(visual, text)
                         if model_name == "blip2_cir_cat":
                             features = features / model.temp
-                        features = features.repeat(1, 32)
+                        features = features.float()
                     else:
                         extracted = model.extract_target_features(batch, mode="mean", target_only=True).to("cuda")
                         features = model.inference_target(extracted).flatten(1)
                     outputs.append(features.float().cpu().numpy())
-            result = np.concatenate(outputs, axis=0) if outputs else np.empty((0, 8192), dtype=np.float32)
-            np.save(current["output_path"], result.reshape(len(current["image_paths"]), -1), allow_pickle=False)
-            reply(True)
+            dimension = 256 if current["operation"] == "queries" else 8192
+            result = np.concatenate(outputs, axis=0) if outputs else np.empty((0, dimension), dtype=np.float32)
+            if result.shape != (len(current["image_paths"]), dimension):
+                raise ValueError(f"invalid {current['operation']} features: {result.shape}, expected width {dimension}")
+            np.save(current["output_path"], result, allow_pickle=False)
+            reply(True, batch_receipt={"batch_size": batch_size,
+                                       "batch_lengths": [len(batch) for batch in batches]})
         except Exception as error:
             reply(False, error_type=type(error).__name__, error=str(error))
 

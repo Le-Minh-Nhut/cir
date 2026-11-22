@@ -272,7 +272,14 @@ def _models_state_stamp(registry: dict, config) -> tuple:
         parts.append(("registry", _stat_stamp(Path(path))))
     from workbench.backend import operator_config
 
-    parts.append(("operator_env", _stat_stamp(Path(operator_config._CONFIG_PATH))))
+    operator_env = Path(operator_config._CONFIG_PATH)
+    try:
+        stat = operator_env.stat()
+        operator_stamp = (str(operator_env), stat.st_dev, stat.st_ino, stat.st_size,
+                          stat.st_mtime_ns, stat.st_ctime_ns, True)
+    except OSError:
+        operator_stamp = (str(operator_env), None, None, None, None, None, False)
+    parts.append(("operator_env", operator_stamp))
     variables: set[str] = set()
     from workbench.backend.registry import required_runtime_assets
 
@@ -288,7 +295,7 @@ def _models_state_stamp(registry: dict, config) -> tuple:
             for name in ("location_env_var", "cache_root_env_var"):
                 if asset.get(name):
                     variables.add(str(asset[name]))
-    variables.update({"XDG_CACHE_HOME", "HF_HOME", "TORCH_HOME"})
+    variables.update({"XDG_CACHE_HOME", "HF_HOME", "TORCH_HOME", "WORKBENCH_RUNTIME_ADAPTATION"})
     parts.append(("settings", tuple(sorted((name, setting(name)) for name in variables))))
     for model in registry["models"]:
         for variant in model["checkpoint_variants"]:
@@ -350,6 +357,9 @@ def models():
                              for member in bundle.get("required_checkpoint_ids", []) if member in by_id]}
                 for bundle in bundles
             ]
+        selected_adaptation = runtime.runtime_adaptation(model, undeclared_is_error=False)
+        entry["selected_runtime_adaptation"] = (
+            selected_adaptation.get("target_compute_capability") if selected_adaptation else None)
         out.append(entry)
     _MODELS_CACHE, _MODELS_CACHE_KEY = out, stamp
     return out
@@ -1260,7 +1270,7 @@ def run_gates():
     return {report["run_id"]: _gate_fields(report) for report in _aggregate_reports()}
 
 @app.get("/api/runs/parity-gate")
-def parity_gate():
+def parity_gate(standard: str = "parity-relative/v1"): 
     """The G1/G2 parity verdict, DERIVED from the measurement artifacts.
 
     Prose elsewhere said "PASS" beside artifacts whose mandatory subchecks failed. This endpoint is
@@ -1268,9 +1278,13 @@ def parity_gate():
     model with a failing mandatory check is `PARITY_MANDATORY_SUBCHECK_FAILED`, never `PARITY_PASS`.
     An empty `passed_models` is a correct verdict about the artifacts, not a broken endpoint.
     """
-    from workbench.backend.parity_gate import evaluate_all
+    from workbench.backend.parity_gate import STANDARDS, evaluate_all
 
-    return evaluate_all()
+    if standard not in STANDARDS:
+        raise HTTPException(400, {"error": "unknown_parity_standard",
+                                  "message": "Unknown parity standard.",
+                                  "details": {"standard": standard, "known": sorted(STANDARDS)}})
+    return evaluate_all(standard=standard)
 
 @app.get("/api/composition/runs")
 def composition_runs(subset: str | None = None, include_fixtures: bool = False,
@@ -1421,8 +1435,8 @@ def composition_queries(
 
 
 @app.get("/api/queries")
-def queries(run_id: str, query_id: str | None = None, category: str | None = None, failed_at: int | None = None, min_rank: int | None = None, max_rank: int | None = None, order: str = "worst", limit: int = 50, offset: int = 0, passed_at: int | None = None):
-    return query_page(run_id, query_id=query_id, category=category, failed_at=failed_at, min_rank=min_rank, max_rank=max_rank, order=order, limit=limit, offset=offset, passed_at=passed_at)
+def queries(run_id: str, query_id: str | None = None, category: str | None = None, failed_at: int | None = None, min_rank: int | None = None, max_rank: int | None = None, order: str = "worst", limit: int = 50, offset: int = 0, passed_at: int | None = None, top_k: int | None = None):
+    return query_page(run_id, query_id=query_id, category=category, failed_at=failed_at, min_rank=min_rank, max_rank=max_rank, order=order, limit=limit, offset=offset, passed_at=passed_at, top_k=top_k)
 
 
 @app.get("/api/compare/{query_id}")
@@ -1569,7 +1583,11 @@ def save_cohort(payload: CohortInput):
     protocol = runs[0]["protocol_id"]
     if protocol != payload.protocol_id:
         raise WorkbenchError("cross_protocol", "Cohort protocol does not match selected runs.", {"cohort_protocol": payload.protocol_id, "run_protocol": protocol})
-    unknown = sorted(set(payload.query_ids) - set(maps[payload.run_ids[0]]))
+    if composition_provenance is not None:
+        unknown = sorted(set(payload.query_ids).difference(
+            qid for mapping in maps.values() for qid in mapping))
+    else:
+        unknown = sorted(set(payload.query_ids) - set(maps[payload.run_ids[0]]))
     if unknown:
         raise WorkbenchError("query_alignment_mismatch", "Cohort contains query IDs outside selected run universe.", {"unknown_query_ids": unknown[:20], "unknown_query_count": len(unknown)})
     definition = payload.definition
@@ -1622,9 +1640,9 @@ def export_cohort(cohort_id: str, format: str):
         writer.writerows([{k: _format_metric(v) for k, v in item.items()} for item in metrics])
         return {"content": output.getvalue()}
     if format == "markdown":
-        header = "| Run | N | R@1 | R@5 | R@10 | R@20 | R@50 | R@100 | Mean rank | Median rank |\n|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|\n"
+        header = "| Run | Selected N | Scored N | R@1 | R@5 | R@10 | R@20 | R@50 | R@100 | Mean rank | Median rank |\n|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|\n"
         body = "\n".join(
-            f"| {item['run_id']} | {_format_metric(item.get('query_count'))} | {_format_metric(item.get('r1'))} | {_format_metric(item.get('r5'))} | {_format_metric(item.get('r10'))} | {_format_metric(item.get('r20'))} | {_format_metric(item.get('r50'))} | {_format_metric(item.get('r100'))} | {_format_metric(item.get('mean_target_rank'))} | {_format_metric(item.get('median_target_rank'))} |"
+            f"| {item['run_id']} | {_format_metric(item.get('query_count'))} | {_format_metric(item.get('scored_count'))} | {_format_metric(item.get('r1'))} | {_format_metric(item.get('r5'))} | {_format_metric(item.get('r10'))} | {_format_metric(item.get('r20'))} | {_format_metric(item.get('r50'))} | {_format_metric(item.get('r100'))} | {_format_metric(item.get('mean_target_rank'))} | {_format_metric(item.get('median_target_rank'))} |"
             for item in metrics
         )
         return {"content": f"# {cohort_id}\n\nProtocol: {cohort['protocol_id']}\n\n{header}{body}\n"}
@@ -1838,6 +1856,8 @@ def resolve_image(category: str, image_id: str, root: Path | None = None) -> Pat
         + [root / "images" / f"{stem}{extension}" for extension in (".png", ".jpg", ".jpeg")]
         + [root / "resized_image" / category / f"{image_id}{extension}" for extension in (".png", ".jpg", ".jpeg")]
         + [root / "resized_image" / category / f"{stem}{extension}" for extension in (".png", ".jpg", ".jpeg")]
+        + [root / "resized_images" / f"{image_id}{extension}" for extension in (".png", ".jpg", ".jpeg")]
+        + [root / "resized_images" / f"{stem}{extension}" for extension in (".png", ".jpg", ".jpeg")]
     )
     return next((candidate for candidate in candidates if candidate.is_file()), None)
 

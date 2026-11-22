@@ -1,0 +1,2 @@
+[role-service] unit=cir-conesep-dress-pair-20261121T2122Z stdout=/home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/service-logs/cir-conesep-dress-pair-20261121T2122Z.stdout.log stderr=/home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/service-logs/cir-conesep-dress-pair-20261121T2122Z.stderr.log
+[role-service] unit=cir-conesep-dress-pair-20261121T2122Z wrapper_exit=1

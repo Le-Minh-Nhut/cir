@@ -1,0 +1,22 @@
+Traceback (most recent call last):
+  File "/home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/dcnet_lifecycle_helper.py", line 239, in <module>
+    raise SystemExit(main_cli())
+                     ^^^^^^^^^^
+  File "/home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/dcnet_lifecycle_helper.py", line 230, in main_cli
+    return _worker_cli()
+           ^^^^^^^^^^^^^
+  File "/home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/dcnet_lifecycle_helper.py", line 225, in _worker_cli
+    return _worker(parser.parse_args())
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/dcnet_lifecycle_helper.py", line 36, in _worker
+    queries = adapter.encode_queries([QUERY], [TEXT], [None])
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/heheboiz/data/cir/workbench/composition/model_dcnet.py", line 168, in encode_queries
+    return _run(self, "queries", image_paths, texts, categories)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/heheboiz/data/cir/workbench/composition/model_dcnet.py", line 310, in _run
+    return _request(adapter, job, (len(image_paths), width))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/heheboiz/data/cir/workbench/composition/model_dcnet.py", line 403, in _request
+    raise Refused(f"DCNet worker {response.get('error_type')}: {response.get('error')}")
+workbench.composition.model_dcnet.Refused: DCNet worker RuntimeError: Expected all tensors to be on the same device, but found at least two devices, cuda:0 and cpu!

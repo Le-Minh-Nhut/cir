@@ -147,7 +147,8 @@ export function withCutoff(scope: AnalysisScope, k: number): AnalysisScope {
 }
 
 export const PRESETS = [
-  { id: "all", label: "Tất cả query" },
+  { id: "all", label: "Tất cả query (union, gồm unscored)" },
+  { id: "common", label: "Cùng được chấm ở mọi run" },
   { id: "allfail", label: "Mọi run đều trượt" },
   { id: "80", label: "≥80% run trượt" },
   { id: "50", label: "≥50% run trượt" },
@@ -176,9 +177,10 @@ export function filterRows(scope: AnalysisScope, filter: FilterInput): Consensus
     if (filter.scoring === "scored" && row.unscored) return false;
     if (filter.scoring === "unscored" && !row.unscored) return false;
     if (filter.preset === "all") return true;
-    // Every preset is about the SCORED cohort; an unscored row has no rank to fail with, so it is
-    // not a consensus failure and must not be recruited into one.
-    if (row.unscored) return filter.scoring === "unscored";
+    if (filter.preset === "common") return row.unscoredRuns === 0;
+    // Every preset uses qids fully scored by every selected run; an unscored row has no rank to
+    // fail with, so it is not a consensus failure and must not be recruited into one.
+    if (row.unscoredRuns > 0) return false;
     switch (filter.preset) {
       case "allfail": return row.failFraction === 1;
       case "80": return row.failFraction >= 0.8;

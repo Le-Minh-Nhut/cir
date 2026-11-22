@@ -1,0 +1,4 @@
+[role-service] unit=cir-dcnet-g1-adapter-r4-20261121 stdout=/home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/service-logs/cir-dcnet-g1-adapter-r4-20261121.stdout.log stderr=/home/heheboiz/data/cir/workbench/docs/reviews/20261117-fix-all/execution-20261120-runtime/service-logs/cir-dcnet-g1-adapter-r4-20261121.stderr.log
+native_receipt_sha256=764bd7a60757bbab0e09d59fadb904a45b6b999be07772a4bf245c581b35da68
+adapter_receipt_sha256=300566eb8a24f43e521265c2cb2bc8302c8bcbbed0258c81d17b70ca2a83d4ae
+[role-service] unit=cir-dcnet-g1-adapter-r4-20261121 wrapper_exit=0

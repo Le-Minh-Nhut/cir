@@ -71,16 +71,45 @@ export type ParityGatePayload = {
      *  `standard` and `standards` are derived from. */
     applied_standard?: string;
     dimensions: Record<string, boolean>;
+    categories?: string[];
+    missing?: string[];
+    missing_by_category?: Record<string, string[]>;
+    mandatory_by_category?: Record<string, string[]>;
+    requested_standard?: string;
     coverage?: Record<string, string[]>;
     failure_count: number;
-    failures: Array<{
-      name: string; dimension: string; gate: string;
-      declared: unknown; measured: unknown; ok: boolean; mandatory: boolean;
-      standard: string; note: string;
-    }>;
+    failures: ParityCheck[];
+    checks?: ParityCheck[];
     evidence?: string[];
     detail?: string;
   }>;
+};
+
+export type ParityBatchPolicy = {
+  partition_id?: string;
+  batch_sizes?: number[];
+  runs?: unknown[];
+  [key: string]: unknown;
+};
+
+export type ParityScopeMetadata = {
+  coverage?: "full" | "sample";
+  coverage_scope?: "full" | "sample";
+  population_count?: number;
+  sample_count?: number | null;
+  ordered_ids_sha256?: string;
+  tensor_shape?: number[];
+  dtype?: string;
+  control?: string;
+  batch_policy?: ParityBatchPolicy | null;
+  [key: string]: unknown;
+};
+
+export type ParityCheck = {
+  name: string; dimension: string; gate: string; category?: string | null; check_type?: string;
+  declared: ParityScopeMetadata | number | string | null;
+  measured: ParityScopeMetadata | number | string | null;
+  ok: boolean; mandatory: boolean; standard: string; note: string;
 };
 
 export type GateVerdict = {

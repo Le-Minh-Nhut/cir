@@ -1,0 +1,35 @@
+Purpose: record already-completed safe transient-scope probe; no rerun. Scope proved `MemoryMax`/`MemorySwapMax` applied to child process in user sibling scope; no stress/OOM test.
+
+Exact command:
+```sh
+systemd-run --user --scope --quiet -p MemoryMax=256M -p MemorySwapMax=0 /usr/bin/env sh -c 'printf "pid=%s\n" $$; cat /proc/self/cgroup; p=$(awk -F: '\''$1==0 {print $3}'\'' /proc/self/cgroup); cat /sys/fs/cgroup${p}/memory.max; cat /sys/fs/cgroup${p}/memory.swap.max'
+```
+
+Observed stdout:
+```text
+pid=488855
+0::/user.slice/user-1000.slice/user@1000.service/app.slice/run-r3fdc35fc80bb40bdbbab7fa75b25a9c9.scope
+268435456
+0
+```
+
+Observed exit: 0 (tool completed without error).
+
+A second already-completed composition probe proved CPU lock holder and scope command run together. Exact command:
+```sh
+set -e; flock -x /tmp/cir-fix-all-20261120-cpu.lock systemd-run --user --scope -p MemoryMax=256M -p MemorySwapMax=0 /usr/bin/env sh -c 'p=$(awk -F: '\''$1==0 {print $3}'\'' /proc/self/cgroup); printf "pid=%s cgroup=%s memory.max=" $$ "$p"; cat /sys/fs/cgroup${p}/memory.max; sleep 0.15'
+```
+
+Observed stdout:
+```text
+Scope command line contains environment variable, which is not expanded by default for now, but will be expanded by default in the future. Use --expand-environment=yes/no to explicitly control it as needed.
+Running as unit: run-r1766b926eaf7473e8cd86b38315027e5.scope; invocation ID: 2125bc80a3cb48619015b599572b7325
+pid=492471 cgroup=/user.slice/user-1000.slice/user@1000.service/app.slice/run-r1766b926eaf7473e8cd86b38315027e5.scope memory.max=268435456
+```
+Observed exit: 0 (tool completed without error).
+
+Derived safe command prefix for later campaign use (not run for GPU job):
+```sh
+flock -x /tmp/cir-fix-all-20261120-cpu.lock systemd-run --user --scope -p MemoryMax=12G -p MemorySwapMax=0 --setenv=OMP_NUM_THREADS=1 --setenv=OPENBLAS_NUM_THREADS=1 --setenv=MKL_NUM_THREADS=1 --setenv=NUMEXPR_NUM_THREADS=1 <command>
+```
+GPU jobs must place the whole process tree under equivalent scope while holding `/tmp/cir_gpu.lock`; do not start one before fresh job/GPU census and owner clearance. Scope probe only verifies transient user cgroup property behavior, not GPU application or model runtime.

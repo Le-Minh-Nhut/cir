@@ -86,6 +86,7 @@ class Adapter(CompositionAdapter):
         self._worker_counter = 0
         self._worker_failed: str | None = None
         self._interpreter_verified = False
+        self._capture_spec: dict[str, Any] | None = None
 
     def _checkpoint_path(self) -> Path:
         from workbench.backend.registry import checkpoint_path
@@ -163,13 +164,16 @@ class Adapter(CompositionAdapter):
         job_path = work / f"job-{self._worker_counter}.json"
         output_path = work / f"output-{self._worker_counter}.npy"
         scope = tuple(categories) or (None,)
-        job_path.write_text(json.dumps({
+        job = {
             "operation": operation, "image_paths": [str(Path(path).resolve()) for path in image_paths],
             "texts": list(texts), "categories": list(categories), "output_path": str(output_path),
             "checkpoint_path": str(self.checkpoint_path), "checkpoint": self.checkpoint,
             "source_root": str(self.source_root), "dataset_root": str(self.dataset_root),
             "batch_size": self.batch_size,
-        }), encoding="utf-8")
+        }
+        if getattr(self, "_capture_spec", None) is not None:
+            job["capture_spec"] = self._capture_spec
+        job_path.write_text(json.dumps(job), encoding="utf-8")
         try:
             if self._worker is not None and self._worker.poll() is not None:
                 status = self._worker.returncode
@@ -302,6 +306,9 @@ class Adapter(CompositionAdapter):
     def restart(self) -> None:
         self.close()
 
+def _publish_worker_result(output_path: str | Path, result: np.ndarray, reply: Any) -> None:
+    np.save(output_path, result.astype(np.float32, copy=False), allow_pickle=False)
+    reply(True)
 def _worker_main(argv: Sequence[str] | None = None) -> int:
     import argparse
 
@@ -346,6 +353,29 @@ def _worker_main(argv: Sequence[str] | None = None) -> int:
 
     def run_one(current: dict[str, Any]) -> None:
         outputs = []
+        capture_spec = current.get("capture_spec")
+        capture_positions = set(capture_spec.get("positions", ())) if capture_spec else set()
+        capture_pixels: list[Any] = []
+        capture_tokens: list[Any] = []
+        original_tokenizer = network.tokenizer
+
+        class TokenizerCapture:
+            def __getattr__(self, name: str) -> Any:
+                return getattr(original_tokenizer, name)
+
+            def __call__(self, *args: Any, **kwargs: Any) -> Any:
+                encoded = original_tokenizer(*args, **kwargs)
+                if capture_spec and current["operation"] == "queries":
+                    for local, text in enumerate(args[0]):
+                        position = batch_start + local
+                        if position in capture_positions:
+                            capture_tokens.append((position, text, encoded.input_ids[local].detach().cpu().numpy(),
+                                                   encoded.attention_mask[local].detach().cpu().numpy()))
+                return encoded
+
+        if capture_spec:
+            network.tokenizer = TokenizerCapture()
+        outputs = []
         try:
             # Refuse an impossible batch BEFORE the first forward allocates it: an OOM 90 minutes
             # into a 74k-image gallery costs the whole encode.
@@ -370,11 +400,16 @@ def _worker_main(argv: Sequence[str] | None = None) -> int:
                 # under the unchanged serial decode the GPU sat idle behind.
                 pixels_by_batch = prefetch_rows(decode, batches, workers)
                 for index, pixels in enumerate(pixels_by_batch):
+                    batch_start = index * batch_size
+                    if capture_spec:
+                        for local in range(len(pixels)):
+                            position = batch_start + local
+                            if position in capture_positions:
+                                capture_pixels.append((position, pixels[local].numpy().copy()))
                     pixels = pixels.float().to(device, non_blocking=True)
                     if current["operation"] == "queries":
-                        first = index * batch_size
                         texts = [text_processor(text) for text in
-                                 current["texts"][first:first + len(pixels)]]
+                                 current["texts"][batch_start:batch_start + len(pixels)]]
                         features = network.extract_retrieval_compose(pixels, texts)
                         outputs.append(features.detach().cpu().numpy().reshape(len(pixels), -1))
                     else:
@@ -385,10 +420,21 @@ def _worker_main(argv: Sequence[str] | None = None) -> int:
             result = np.concatenate(outputs, axis=0) if outputs else np.empty((0, width), dtype=np.float32)
             if current["operation"] == "targets" and result.size:
                 result = result.reshape(len(current["image_paths"]), 32, 256)
-            np.save(current["output_path"], result.astype(np.float32, copy=False), allow_pickle=False)
-            reply(True)
+            if capture_spec:
+                capture_path = Path(capture_spec["output_path"])
+                capture_path.parent.mkdir(parents=True, exist_ok=True)
+                np.savez(capture_path,
+                         positions=np.asarray([row[0] for row in capture_pixels], dtype=np.int32),
+                         pixels=np.stack([row[1] for row in capture_pixels]),
+                         token_positions=np.asarray([row[0] for row in capture_tokens], dtype=np.int32),
+                         token_texts=np.asarray([row[1] for row in capture_tokens]),
+                         input_ids=np.stack([row[2] for row in capture_tokens]) if capture_tokens else np.empty((0, 0), dtype=np.int64),
+                         attention_masks=np.stack([row[3] for row in capture_tokens]) if capture_tokens else np.empty((0, 0), dtype=np.int64))
+            _publish_worker_result(current["output_path"], result, reply)
         except Exception as error:
             reply(False, error_type=type(error).__name__, error=str(error))
+        finally:
+            network.tokenizer = original_tokenizer
 
     run_one(job)
     for line in sys.stdin:

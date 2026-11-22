@@ -8,12 +8,14 @@ import platform
 import re
 import subprocess
 import shutil
+import marshal
 import sys
 import inspect
 import threading
 import contextlib
 import uuid
 from dataclasses import asdict, dataclass
+from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 from typing import Any, Callable, Iterator, Mapping, Sequence
 
@@ -25,6 +27,17 @@ from workbench.composition.adapters import AdapterWorkerError, ExactRankUnavaila
 from workbench.composition.inputs import (ABLATION_CONDITIONS, CONDITIONS, DEFAULT_CONDITION_ENCODER,
                                           adapt_query_inputs, encoder_method)
 from workbench.composition.data import PAPER_STATED_GALLERY_IMAGES, RELEASED_GALLERY_IMAGES, sha256_file
+
+
+def _capture_kwargs(adapter: Any, encoder: Callable[..., Any], capture_ids: Sequence[str],
+                    selected_ids: set[str]) -> dict[str, Any]:
+    if getattr(adapter, "capture_path", None) is None:
+        return {}
+    parameters = inspect.signature(encoder).parameters
+    if not {"capture_ids", "selected_capture_ids"}.issubset(parameters):
+        raise TypeError(f"{type(adapter).__name__}.{encoder.__name__} lacks capture ID contract")
+    return {"capture_ids": list(capture_ids),
+            "selected_capture_ids": [identity for identity in capture_ids if identity in selected_ids]}
 
 
 class BackfillRankDisagreement(RuntimeError):
@@ -75,6 +88,39 @@ def _component(value: str) -> str:
 def _digest(value: Any) -> str:
     payload = json.dumps(value, sort_keys=True, separators=(",", ":"), default=str).encode("utf-8")
     return hashlib.sha256(payload).hexdigest()
+def _digest_ids(values: Sequence[str]) -> str:
+    payload = json.dumps(list(values), ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()
+_PARITY_IDENTITY_FIELDS = {"checkpoint", "configuration", "environment", "protocol", "category",
+                           "cohort_id", "precision", "seed", "query_order_sha256",
+                           "gallery_order_sha256", "reference_exclusions_sha256", "query_count",
+                           "gallery_count"}
+
+
+class _ParitySinkError(RuntimeError):
+    pass
+
+
+def _emit_parity_artifact_sink(sink: Callable[..., None], role: Mapping[str, Any], *,
+                               model_id: str, category: str, condition: str,
+                               query_ids: Sequence[str], gallery_ids: Sequence[str],
+                               query_features: np.ndarray, gallery_features: np.ndarray,
+                               ranks: Mapping[str, int | None], started_at: str,
+                               batch_size: int, adapter_batch_size: int | None) -> None:
+    from workbench.composition.metrics import compute_condition_metrics
+
+    execution = dict(role["execution"])
+    execution.update({"started_at": started_at, "captured_at": datetime.now(timezone.utc).isoformat(),
+                      "runner_batch_size": batch_size, "adapter_batch_size": adapter_batch_size or batch_size})
+    try:
+        sink(model_id=model_id, category=category, condition=condition,
+             run_id=role["run_id"], plan_path=role["plan_path"], plan_sha256=role["plan_sha256"],
+             started_at=started_at, source_id=role["source_id"], identity=role["identity"],
+             query_ids=query_ids, gallery_ids=gallery_ids, query_features=query_features,
+             gallery_features=gallery_features, ranks=ranks,
+             metrics=asdict(compute_condition_metrics(condition, ranks)), execution=execution)
+    except Exception as error:
+        raise _ParitySinkError(f"parity artifact sink failed for {model_id}/{category}/{condition}") from error
 
 
 def _rank_payload_is_valid(ranks: Any, conditions: Sequence[str], qids: set[str], gallery_count: int) -> bool:
@@ -599,10 +645,10 @@ def _scope_resolution_record(adapter: Any, queries: Sequence[Any], scopes: Seque
     }
 
 def _disk_projection(path: Path, gallery_count: int, feature_shape: Sequence[int], remaining_scopes: int,
-                     query_count: int, conditions: int) -> dict[str, int]:
+                     query_count: int, conditions: int, query_dimension: int | None = None) -> dict[str, int]:
     feature_width = int(np.prod(feature_shape, dtype=np.int64))
     matrix_bytes = gallery_count * feature_width * np.dtype(np.float32).itemsize
-    query_width = int(feature_shape[-1])
+    query_width = int(query_dimension if query_dimension is not None else feature_shape[-1])
     query_bytes = query_count * query_width * np.dtype(np.float32).itemsize * conditions
     projected = matrix_bytes * remaining_scopes + query_bytes
     margin = max(64 * 1024 * 1024, projected // 10)
@@ -616,15 +662,33 @@ def _disk_projection(path: Path, gallery_count: int, feature_shape: Sequence[int
 
 def _encode_gallery(adapter: Any, image_paths: Sequence[Path], scope: str | None,
                     destination: Path, fingerprint: str, batch_size: int,
-                    remaining_scopes: int, query_count: int, condition_count: int) -> tuple[np.memmap, dict[str, int]]:
+                    remaining_scopes: int, query_count: int, condition_count: int,
+                    image_ids: Sequence[str] | None = None,
+                    selected_capture_ids: set[str] | None = None,
+                    cache_policy: str = "reusable",
+                    query_dimension: int | None = None,
+                    score_dimension: int | None = None) -> tuple[np.memmap, dict[str, int]]:
+    if image_ids is not None and len(image_ids) != len(image_paths):
+        raise ValueError("gallery capture IDs must align with image paths")
+    if selected_capture_ids is None:
+        selected_capture_ids = set()
     # The sidecar records the shape this cache was written with. A `.npy` that is valid but holds
     # the wrong number of rows -- a partially written gallery whose sidecar was also rewritten, or a
     # cache copied from another run -- would otherwise be reused with every row after the shortfall
     # describing a different image. `_encode_queries` already passes its expected shape; the gallery
     # path must too. NumPy refuses a byte-truncated file at `np.load` on its own.
     metadata_shape = _memmap_metadata_shape(destination)
-    expected_shape = (len(image_paths), *metadata_shape[1:]) if metadata_shape else None
-    cached = _load_memmap(destination, fingerprint, expected_shape)
+    cache_shape_valid = (metadata_shape is None or (
+        metadata_shape[0] == len(image_paths)
+        and (score_dimension is None or metadata_shape[-1] == score_dimension)))
+    expected_shape = tuple(metadata_shape) if metadata_shape is not None and cache_shape_valid else None
+    capture_active = bool(selected_capture_ids)
+    if cache_policy not in {"reusable", "nonreusable"}:
+        raise ValueError(f"unknown adapter cache policy: {cache_policy!r}")
+    if capture_active:
+        adapter.capture_path = destination.with_suffix(destination.suffix + ".inputs.npz")
+    cached = (None if capture_active or cache_policy == "nonreusable" or not cache_shape_valid
+              else _load_memmap(destination, fingerprint, expected_shape))
     if cached is not None:
         return cached, {"reused": 1, "projected_bytes": destination.stat().st_size}
     destination.parent.mkdir(parents=True, exist_ok=True)
@@ -639,17 +703,27 @@ def _encode_gallery(adapter: Any, image_paths: Sequence[Path], scope: str | None
     window = max(batch_size, ADAPTER_CALL_WINDOW)
     for start in range(0, len(image_paths), window):
         paths = image_paths[start:start + window]
-        encoded = _as_array(adapter.encode_targets([str(path) for path in paths], [scope] * len(paths)))
+        call_ids = list(image_ids[start:start + len(paths)]) if image_ids is not None else []
+        selected_call_ids = [identity for identity in call_ids if identity in selected_capture_ids]
+        adapter.capture_path = (destination.with_suffix(
+            destination.suffix + f".inputs-{start:08d}.npz") if selected_call_ids else None)
+        capture_kwargs = _capture_kwargs(adapter, adapter.encode_targets, call_ids,
+                                         set(selected_call_ids))
+        encoded = _as_array(adapter.encode_targets(
+            [str(path) for path in paths], [scope] * len(paths), **capture_kwargs))
         if encoded.ndim < 2 or encoded.shape[0] != len(paths):
             raise ValueError(f"encode_targets returned invalid shape {encoded.shape}")
         current_shape = tuple(encoded.shape[1:])
         if trailing_shape is not None and current_shape != trailing_shape:
             raise ValueError(f"encode_targets feature shape changed between batches: {trailing_shape} != {current_shape}")
+        if score_dimension is not None and current_shape != (score_dimension,):
+            raise ValueError(
+                f"encode_targets returned feature width {current_shape}, expected {(score_dimension,)}")
         encoded = encoded.astype(np.float32, copy=False)
         if mapped is None:
             trailing_shape = current_shape
             projection = _disk_projection(destination.parent, len(image_paths), trailing_shape,
-                                          remaining_scopes, query_count, condition_count)
+                                          remaining_scopes, query_count, condition_count, query_dimension)
             mapped = np.lib.format.open_memmap(destination, mode="w+", dtype=np.float32,
                                                shape=(len(image_paths), *trailing_shape))
         mapped[start:start + len(paths)] = encoded
@@ -819,6 +893,9 @@ def _encode_queries(adapter: Any, queries: Sequence[Any], query_paths: Sequence[
                     indices: Sequence[int], condition: str, work_root: Path,
                     destination: Path, fingerprint: str, dimension: int,
                     batch_size: int, scopes: Sequence[str | None] | None = None,
+                    selected_capture_ids: set[str] | None = None,
+                    capture_ids: Sequence[str] | None = None,
+                    cache_policy: str = "reusable",
                     ) -> tuple[np.memmap, dict[str, str], dict[str, str]]:
     # `scopes` is the resolved per-query scope the runner routed with. Without it the adapter would
     # be handed the release loader's `query.category`, which is `None` exactly for the queries an
@@ -828,9 +905,10 @@ def _encode_queries(adapter: Any, queries: Sequence[Any], query_paths: Sequence[
 
     encode, transports_text = _condition_encoder(adapter, condition)
 
-    def encode_batch(paths: list[str], texts: list[str],
-                     categories: list[str | None]) -> Any:
-        return encode(paths, texts, categories) if transports_text else encode(paths, categories)
+    def encode_batch(paths: list[str], texts: list[str], categories: list[str | None],
+                     **capture_kwargs: Any) -> Any:
+        return (encode(paths, texts, categories, **capture_kwargs) if transports_text else
+                encode(paths, categories, **capture_kwargs))
 
     # A cache written under the mixed (per-query fallback) partition is stored under a DERIVED key,
     # so `_load_memmap(..., fingerprint)` below can never return it: that load is only attempted
@@ -841,9 +919,15 @@ def _encode_queries(adapter: Any, queries: Sequence[Any], query_paths: Sequence[
     # re-encodes its queries on `--resume`. Upgrade path: load it under its own recorded `cache_key`
     # once a caller can ask for "the same diagnostic partition" explicitly; until then a cache hit
     # there would risk being served as canonical, which is the whole failure this prevents.
+    if cache_policy not in {"reusable", "nonreusable"}:
+        raise ValueError(f"unknown adapter cache policy: {cache_policy!r}")
     previous = _read_feature_fallback(destination)
     partition_policy = previous.get("partition") or FEATURE_PARTITION_CANONICAL
-    cached = (_load_memmap(destination, fingerprint, (len(queries), dimension))
+    capture_active = bool(selected_capture_ids)
+    if capture_active:
+        adapter.capture_path = destination.with_suffix(destination.suffix + ".inputs.npz")
+    cached = (None if capture_active or cache_policy == "nonreusable" else
+              _load_memmap(destination, fingerprint, (len(queries), dimension))
               if partition_policy == FEATURE_PARTITION_CANONICAL else None)
     errors_path = destination.with_suffix(destination.suffix + ".errors.json")
     category_path = destination.with_suffix(destination.suffix + ".category-errors.json")
@@ -865,6 +949,8 @@ def _encode_queries(adapter: Any, queries: Sequence[Any], query_paths: Sequence[
     features[:] = np.nan
     errors: dict[str, str] = {}
     category_errors: dict[str, str] = {}
+    if capture_ids is not None and len(capture_ids) != len(queries):
+        raise ValueError("capture_ids must align with queries")
     eligible = [index for index in indices if query_paths[index] is not None]
     for index in indices:
         if query_paths[index] is None:
@@ -877,6 +963,7 @@ def _encode_queries(adapter: Any, queries: Sequence[Any], query_paths: Sequence[
     fallback_reason: str | None = None
     adapter_calls = 0
     for batch_start in range(0, len(eligible), window):
+        selected_call_ids: list[str] = []
         batch = eligible[batch_start:batch_start + window]
         paths: list[str] = []
         texts: list[str] = []
@@ -891,16 +978,32 @@ def _encode_queries(adapter: Any, queries: Sequence[Any], query_paths: Sequence[
                 surviving.append(index)
             except Exception as error:
                 errors[queries[index].qid] = f"{type(error).__name__}: {error}"
+        if selected_capture_ids:
+            if capture_ids is None:
+                raise ValueError("capture_ids required when selected_capture_ids is set")
+            selected_batch_ids = {capture_ids[index] for index in batch} & selected_capture_ids
+            staged_ids = {capture_ids[index] for index in surviving}
+            missing = sorted(selected_batch_ids - staged_ids)
+            if missing:
+                raise ValueError(f"selected query capture rows could not be staged: {missing}")
         if not surviving:
             continue
         try:
+            batch_capture_ids = [capture_ids[index] for index in surviving] if capture_ids is not None \
+                else [queries[index].qid for index in surviving]
+            selected_call_ids = [identity for identity in batch_capture_ids
+                                 if identity in (selected_capture_ids or set())]
+            adapter.capture_path = (destination.with_suffix(
+                destination.suffix + f".inputs-{batch_start:08d}.npz") if selected_call_ids else None)
+            capture_kwargs = _capture_kwargs(adapter, encode, batch_capture_ids, set(selected_call_ids))
             adapter_calls += 1
-            encoded = _as_array(encode_batch(paths, texts, categories))
+            encoded = _as_array(encode_batch(paths, texts, categories, **capture_kwargs))
             if encoded.shape != (len(surviving), dimension):
                 raise ValueError(f"encode_queries returned invalid shape {encoded.shape}")
-            features[surviving] = encoded.astype(np.float32, copy=False)
+            for index, row in zip(surviving, encoded):
+                features[index] = row.astype(np.float32, copy=False)
         except Exception as batch_error:
-            if isinstance(batch_error, AdapterWorkerError):
+            if isinstance(batch_error, AdapterWorkerError) or selected_call_ids:
                 raise
             if fallback_reason is None:
                 fallback_reason = f"{type(batch_error).__name__}: {batch_error}"
@@ -1712,12 +1815,42 @@ def _method_source_hash(method: Callable[..., Any]) -> str | None:
 
 
 def _module_source_hash(adapter: Any) -> str:
+    """Hash module bytes on disk for historical artifact compatibility checks."""
     module_name = adapter.__name__ if inspect.ismodule(adapter) else type(adapter).__module__
     module = sys.modules.get(module_name)
-    try:
-        return hashlib.sha256(Path(module.__file__).read_bytes()).hexdigest()
-    except (AttributeError, OSError, TypeError):
+    module_file = getattr(module, "__file__", None)
+    if not isinstance(module_file, str):
         return "unavailable"
+    try:
+        return hashlib.sha256(Path(module_file).read_bytes()).hexdigest()
+    except (OSError, TypeError):
+        return "unavailable"
+
+
+def _loaded_module_source_hash(adapter: Any) -> str:
+    """Hash loaded adapter code only; globals, imports, RNG, and disk source stay separate."""
+    module_name = adapter.__name__ if inspect.ismodule(adapter) else type(adapter).__module__
+    module = sys.modules.get(module_name)
+    if module is None:
+        return "unavailable"
+    owner = adapter if inspect.isclass(adapter) else type(adapter)
+    entries: list[tuple[str, Any]] = []
+    for name, member in inspect.getmembers(owner):
+        code = getattr(member, "__code__", None)
+        if code is not None:
+            entries.append((f"{owner.__qualname__}.{name}", code))
+    if inspect.ismodule(adapter):
+        for name, member in inspect.getmembers(module, inspect.isfunction):
+            if getattr(member, "__module__", None) == module_name:
+                entries.append((name, member.__code__))
+    if not entries:
+        return "unavailable"
+    digest = hashlib.sha256()
+    for name, code in sorted(entries):
+        digest.update(name.encode("utf-8") + b"\0")
+        digest.update(marshal.dumps(code, 0))
+        digest.update(b"\0")
+    return digest.hexdigest()
 
 
 def _image_identity(paths: Sequence[Path | None]) -> dict[str, Any]:
@@ -1808,7 +1941,11 @@ def run_composition(data: Any, model_specs: Sequence[ModelSpec], config: Any, *,
                     image_resolver: Callable[[str, Mapping[str, str]], Path | None] | None = None,
                     synthetic: bool | None = None, seed: int = 0,
                     topk_depth: int | None = None,
-                    keep_features: bool = False) -> dict[str, Any]:
+                    keep_features: bool = False,
+                    capture_selection: Mapping[str, Sequence[str]] | None = None,
+                    capture_id_for_query: Callable[[Any, str, str | None], str] | None = None,
+                    artifact_sink: Callable[..., None] | None = None,
+                    parity_run_for: Callable[[str, str | None, str], Mapping[str, Any]] | None = None) -> dict[str, Any]:
     """Evaluate models sequentially; gallery stays full and all outputs stay in composition/.
 
     ``topk_depth`` opts in to persisting candidate Top-K windows (see ``workbench/composition/topk.py``).
@@ -1823,6 +1960,20 @@ def run_composition(data: Any, model_specs: Sequence[ModelSpec], config: Any, *,
     deleted cache makes candidate windows rebuildable only by re-encoding the full gallery. The
     directory is ~2.4 GB per model and is a deliberate, documented cleanup target, not silent waste.
     """
+    if (artifact_sink is None) != (parity_run_for is None):
+        raise ValueError("artifact_sink and parity_run_for must be supplied together")
+    parity_identity_fields = {"checkpoint", "configuration", "environment", "protocol", "category",
+                              "cohort_id", "precision", "seed", "query_order_sha256",
+                              "gallery_order_sha256", "reference_exclusions_sha256", "query_count",
+                              "gallery_count"}
+    capture_selection = capture_selection or {}
+    if set(capture_selection) - {"queries", "gallery"}:
+        raise ValueError("capture_selection keys must be queries and/or gallery")
+    capture_query_ids = tuple(capture_selection.get("queries", ()))
+    capture_gallery_ids = tuple(capture_selection.get("gallery", ()))
+    if (len(capture_query_ids) > 32 or len(set(capture_query_ids)) != len(capture_query_ids)
+            or len(capture_gallery_ids) > 32 or len(set(capture_gallery_ids)) != len(capture_gallery_ids)):
+        raise ValueError("capture selections must contain at most 32 unique IDs per side")
     if batch_size < 1:
         raise ValueError("batch_size must be positive")
     if smoke is not None and smoke < 1:
@@ -1848,6 +1999,9 @@ def run_composition(data: Any, model_specs: Sequence[ModelSpec], config: Any, *,
     if not queries:
         raise ValueError("release has no queries")
     gallery_ids = tuple(data.gallery.image_ids)
+    gallery_id_set = set(gallery_ids)
+    if not set(capture_gallery_ids).issubset(gallery_id_set):
+        raise ValueError("gallery capture selection contains IDs outside release gallery")
     gallery_hash = _gallery_fingerprint(data)
     query_hash = _query_fingerprint(queries)
     is_synthetic = bool(data.provenance.get("is_synthetic")) if synthetic is None else synthetic
@@ -1880,8 +2034,7 @@ def run_composition(data: Any, model_specs: Sequence[ModelSpec], config: Any, *,
                             "unresolvable_count": len(missing_gallery), "examples": missing_gallery[:20],
                             "summaries": summaries})
             continue
-        if any(path is None for path in gallery_paths):
-            raise AssertionError("gallery path check did not preserve complete released order")
+        gallery_paths = [path for path in gallery_paths if path is not None]
 
         adapter = None
         adapter_source_hash = "unavailable"
@@ -1900,7 +2053,12 @@ def run_composition(data: Any, model_specs: Sequence[ModelSpec], config: Any, *,
             # features were computed with the seeded tensor: the run id, the fingerprint and the
             # summary all described a relation the run did not use. The hook encodes nothing; for
             # ENCODER it starts the worker and asks it for the digest.
-            adapter.prepare_identity()
+            identity_payload = adapter.prepare_identity()
+            if identity_payload is not None:
+                try:
+                    json.dumps(identity_payload, sort_keys=True, allow_nan=False)
+                except (TypeError, ValueError) as error:
+                    raise ValueError("adapter prepare_identity() must return JSON-safe identity") from error
             if getattr(adapter, "relation_bearing", False):
                 # A model that draws a relation cannot be measured without naming it: the draw is an
                 # arithmetic input to both the query and the gallery features, and no checkpoint
@@ -1912,7 +2070,31 @@ def run_composition(data: Any, model_specs: Sequence[ModelSpec], config: Any, *,
                         "relation_state_unrecorded: this adapter's construction draws a relation "
                         "tensor, but prepare_identity() recorded no digest, so the run id would not "
                         "cover the tensor its features are computed with; refusing the run")
+            cache_policy = getattr(adapter, "cache_policy", "reusable")
+            if cache_policy not in {"reusable", "nonreusable"}:
+                raise ValueError(f"unknown adapter cache policy: {cache_policy!r}")
+            query_dimension = getattr(adapter, "query_dimension", None)
+            if query_dimension is not None and (type(query_dimension) is not int or query_dimension <= 0):
+                raise ValueError("adapter query_dimension must be a positive integer or None")
+            declared_score_dimension = getattr(adapter, "score_dimension", None)
+            if declared_score_dimension is not None and (
+                    type(declared_score_dimension) is not int or declared_score_dimension <= 0):
+                raise ValueError("adapter score_dimension must be a positive integer when declared")
+            if cache_policy == "nonreusable":
+                required_execution_identity = {
+                    "native_model_mode", "dropout_seed", "feature_cache_policy", "gallery_before_queries"}
+                if (not isinstance(identity_payload, dict)
+                        or not required_execution_identity.issubset(identity_payload)
+                        or identity_payload["feature_cache_policy"] != cache_policy
+                        or not isinstance(identity_payload["native_model_mode"], str)
+                        or isinstance(identity_payload["dropout_seed"], bool)
+                        or not isinstance(identity_payload["dropout_seed"], int)
+                        or identity_payload["gallery_before_queries"] is not True):
+                    raise ValueError(
+                        "nonreusable adapters must identify native mode, integer dropout seed, "
+                        "cache policy, and gallery-before-query execution order")
             adapter_source_hash = _module_source_hash(adapter)
+            adapter_loaded_source_hash = _loaded_module_source_hash(adapter)
             runtime_identity = model_interpreter_identity(model, config, adapter)
             if not getattr(adapter, "reference_eligible", True):
                 raise ValueError("adapter excludes the reference; CIRCUS requires reference-eligible ranks")
@@ -1930,6 +2112,16 @@ def run_composition(data: Any, model_specs: Sequence[ModelSpec], config: Any, *,
             assignments = [_scope_for_query(adapter, query, data.candidate_names) for query in queries]
             query_scopes = [scope for scope, _reason in assignments]
             scope_errors = {query.qid: reason for query, (_scope, reason) in zip(queries, assignments) if reason}
+            per_query_capture_ids = tuple(
+                capture_id_for_query(query, model_id, query_scopes[index])
+                if capture_id_for_query is not None else query.qid
+                for index, query in enumerate(queries))
+            if any(not isinstance(identity, str) or not identity for identity in per_query_capture_ids):
+                raise ValueError("capture_id_for_query must return nonempty string IDs")
+            if len(set(per_query_capture_ids)) != len(per_query_capture_ids):
+                raise ValueError("capture_id_for_query returned duplicate IDs")
+            if not set(capture_query_ids).issubset(per_query_capture_ids):
+                raise ValueError("query capture selection contains IDs outside model-mapped query cohort")
             supported = {}
             for condition in conditions:
                 try:
@@ -1944,6 +2136,52 @@ def run_composition(data: Any, model_specs: Sequence[ModelSpec], config: Any, *,
                         _condition_encoder(adapter, condition)
                     except AdapterEncoderMissing as error:
                         supported[condition] = (False, str(error))
+            parity_runs: dict[tuple[str | None, str], dict[str, Any]] = {}
+            if artifact_sink is not None and parity_run_for is not None:
+                for condition in conditions:
+                    if not supported[condition][0]:
+                        continue
+                    for scope in scopes:
+                        scoped_ids = [per_query_capture_ids[index] for index, resolved in enumerate(query_scopes)
+                                      if resolved == scope and queries[index].qid not in scope_errors]
+                        if not scoped_ids:
+                            continue
+                        role = dict(parity_run_for(model_id, scope, condition))
+                        required = {"run_id", "source_id", "plan_path", "plan_sha256", "identity", "execution"}
+                        if set(role) != required:
+                            raise ValueError("parity_run_for must return exact run_id/source_id/plan_path/plan_sha256/identity/execution")
+                        role_identity = role["identity"]
+                        execution = role["execution"]
+                        if not isinstance(role_identity, dict) or set(role_identity) != parity_identity_fields:
+                            raise ValueError("parity identity must contain exact frozen V3 identity fields")
+                        if (role_identity["category"] != scope or role_identity["protocol"] != data.gallery.protocol_id
+                                or role_identity["query_count"] != len(scoped_ids)
+                                or role_identity["gallery_count"] != len(gallery_ids)):
+                            raise ValueError("parity identity category/protocol/counts differ from actual inputs")
+                        if (role_identity["query_order_sha256"] != _digest_ids(scoped_ids)
+                                or role_identity["gallery_order_sha256"] != _digest_ids(gallery_ids)):
+                            raise ValueError("parity identity ordered IDs differ from actual runner inputs")
+                        if any(not isinstance(role[key], str) or not role[key] for key in
+                               ("run_id", "source_id", "plan_sha256")):
+                            raise ValueError("parity role run/source/plan digests must be nonempty strings")
+                        plan_path = Path(role["plan_path"])
+                        if not plan_path.is_file() or sha256_file(plan_path) != role["plan_sha256"]:
+                            raise ValueError("parity role must reference exact immutable plan bytes")
+                        execution_fields = {"partition_id", "query_batch_size", "gallery_batch_size",
+                                            "query_partition_sha256", "gallery_partition_sha256"}
+                        if not isinstance(execution, dict) or not execution_fields.issubset(execution):
+                            raise ValueError("parity role execution lacks batch partition metadata")
+                        if (execution["query_partition_sha256"] != _digest_ids(scoped_ids)
+                                or execution["gallery_partition_sha256"] != _digest_ids(gallery_ids)):
+                            raise ValueError("parity execution partitions differ from actual ordered IDs")
+                        if any(isinstance(execution[key], bool) or not isinstance(execution[key], int)
+                               or execution[key] <= 0 for key in ("query_batch_size", "gallery_batch_size")):
+                            raise ValueError("parity run batch sizes must be positive integers")
+                        if (execution["query_batch_size"] != batch_size
+                                or execution["gallery_batch_size"] != batch_size):
+                            raise ValueError("parity execution batch sizes must match runner batch_size")
+                        parity_runs[(scope, condition)] = role
+            parity_started_at: str | None = None
             gpu_identity = _gpu_identity()
             checkpoint_identity = spec.checkpoint_identity or "unknown"
             condition_transform_source_hash = _module_source_hash(sys.modules.get("workbench.composition.inputs"))
@@ -1973,6 +2211,8 @@ def run_composition(data: Any, model_specs: Sequence[ModelSpec], config: Any, *,
                                            for name in ("encode_queries", "encode_targets", "score", "rank",
                                                         "mode_supported")},
                 "adapter_module_source_hash": adapter_source_hash,
+                "adapter_loaded_source_hash": adapter_loaded_source_hash,
+                "adapter_loaded_source_status": "available" if adapter_loaded_source_hash != "unavailable" else "unavailable",
                 "adapter_module_source_status": "available" if adapter_source_hash != "unavailable" else "unavailable",
                 # The shared scoring/decode helpers live in `composition/adapters.py`, which is NOT
                 # the adapter's own module: `adapter_module_source_hash` hashes `model_<id>.py` and
@@ -2015,19 +2255,15 @@ def run_composition(data: Any, model_specs: Sequence[ModelSpec], config: Any, *,
                 "category_scopes": list(scopes),
                 "reference_eligible": reference_eligible,
                 "reference_eligibility": reference_eligibility,
-                # `seed` (`--seed`) is deliberately NOT hashed here: it is recorded for provenance,
-                # and no FORWARD pass draws randomness (every adapter encodes under `.eval()` +
-                # `torch.no_grad()`, every encode-time transform is deterministic).
-                #
-                # Seeding DOES exist in this path, but it is MODEL-SPECIFIC, so it cannot be keyed
-                # on a generic `--seed`: ENCODER's worker pins `torch.manual_seed(RELATION_SEED)`
-                # immediately before `Encoder(...)` (`model_encoder.py:392`), because that
-                # constructor draws `learnable_relation` from the global RNG and the draw is not
-                # restorable from any checkpoint. A model whose construction draws from the global
-                # RNG must pin it the same way and RECORD the result -- the record is
-                # `relation_state`, and `relation_state` is in the identity below, so a different
-                # draw partitions the run id. `metrics.paired_bootstrap_gap` keeps its own explicit
-                # seed argument; it is a function parameter, not a run variable.
+                # Randomness and module mode are adapter-specific execution inputs. Deterministic
+                # adapters may record a seed without hashing it; stochastic/nonreusable adapters
+                # must include mode, seed, and forward order in prepare_identity() before caching
+                # is considered. ENCODER's constructor draws a relation tensor from global RNG,
+                # so its pinned constructor seed and relation digest remain model identity too.
+                # `metrics.paired_bootstrap_gap` has its own explicit function-parameter seed.
+                "query_dimension": query_dimension or declared_score_dimension,
+                "gallery_dimension": declared_score_dimension,
+                "cache_policy": cache_policy,
                 "batch_size": batch_size,
                 # LIMN's own encoder batch (WORKBENCH_LIMN_BATCH_SIZE) changes the forward pass
                 # only, but it is part of the run's configuration and must key the run id.
@@ -2041,6 +2277,20 @@ def run_composition(data: Any, model_specs: Sequence[ModelSpec], config: Any, *,
                 # `_relation_identity` reports absence honestly for a model that draws nothing.
                 "relation_state": _relation_identity(getattr(adapter, "relation_state", None)),
             }
+            if capture_query_ids or capture_gallery_ids:
+                identity["capture_selection"] = {
+                    "queries": sorted(set(capture_query_ids) & set(per_query_capture_ids)),
+                    "gallery": sorted(capture_gallery_ids),
+                }
+            if parity_runs:
+                identity["parity_execution"] = {
+                    f"{scope or '*'}:{condition}": {
+                        field: role["execution"][field] for field in
+                        ("partition_id", "query_batch_size", "gallery_batch_size",
+                         "query_partition_sha256", "gallery_partition_sha256")}
+                    for (scope, condition), role in parity_runs.items()}
+            if identity_payload is not None:
+                identity["adapter_identity_payload"] = identity_payload
             run_id = _digest(identity)[:24]
             fingerprint = _digest(identity)
             run_dir = assert_composition_destination(artifacts, composition / "runs" / run_id)
@@ -2058,7 +2308,9 @@ def run_composition(data: Any, model_specs: Sequence[ModelSpec], config: Any, *,
             reasons_by_condition: dict[str, dict[str, str]] = {}
             reused = False
             retry_conditions: set[str] = set()
-            if resume and adapter_source_hash != "unavailable" and rank_path.is_file():
+            if (cache_policy == "reusable" and resume and artifact_sink is None
+                    and not (capture_query_ids or capture_gallery_ids)
+                    and adapter_source_hash != "unavailable" and rank_path.is_file()):
                 try:
                     saved = json.loads(rank_path.read_text(encoding="utf-8"))
                     if (isinstance(saved, dict) and saved.get("fingerprint") == fingerprint and
@@ -2201,17 +2453,25 @@ def run_composition(data: Any, model_specs: Sequence[ModelSpec], config: Any, *,
                                                   "reason": supported[condition][1]}
                 target_maps: dict[str | None, Any] = {}
                 target_errors: dict[str | None, str] = {}
+                query_features_by_condition: dict[tuple[str | None, str], Any] = {}
                 if active_conditions:
                     for scope_index, scope in enumerate(scopes):
                         scope_name = _scope_name(scope)
                         target_file = work_root / "features" / f"gallery_{scope_name}.npy"
                         target_fp = _digest({"run": fingerprint, "scope": scope, "kind": "full-gallery-features"})
                         try:
+                            if parity_runs and parity_started_at is None:
+                                parity_started_at = datetime.now(timezone.utc).isoformat()
                             target_maps[scope], projection = _encode_gallery(
                                 adapter, gallery_paths, scope, target_file, target_fp, batch_size,
-                                len(scopes) - scope_index, len(queries), len(active_conditions))
-                            projection_totals[scope_name] = projection.get("projected_bytes", 0)
+                                len(scopes) - scope_index, len(queries), len(active_conditions),
+                                image_ids=gallery_ids, selected_capture_ids=set(capture_gallery_ids),
+                                cache_policy=str(cache_policy),
+                                query_dimension=query_dimension or declared_score_dimension,
+                                score_dimension=declared_score_dimension)
                         except Exception as error:
+                            if capture_gallery_ids:
+                                raise
                             target_errors[scope] = f"{type(error).__name__}: {error}"
                 for condition in active_conditions:
                     condition_reasons: dict[str, str] = dict(scope_errors)
@@ -2234,9 +2494,12 @@ def run_composition(data: Any, model_specs: Sequence[ModelSpec], config: Any, *,
                         try:
                             values, errors, category_errors = _encode_queries(
                                 adapter, queries, query_paths, indexes, condition, work_root,
-                                feature_file, feature_fp, target_maps[scope].shape[-1], batch_size,
-                                query_scopes)
+                                feature_file, feature_fp,
+                                int(getattr(adapter, "query_dimension", None) or target_maps[scope].shape[-1]),
+                                batch_size, query_scopes, set(capture_query_ids), per_query_capture_ids,
+                                cache_policy=str(cache_policy))
                             query_features[scope] = values
+                            query_features_by_condition[(scope, condition)] = values
                             feature_errors_all.update(errors)
                             category_errors_all.update(category_errors)
                         except Exception as error:
@@ -2410,10 +2673,45 @@ def run_composition(data: Any, model_specs: Sequence[ModelSpec], config: Any, *,
                                                       # batch-sensitive model (CLVC-Net: 87 §3b).
                                                       "feature_batch_fallback": partition,
                                                       "category_scope_failure_count": len(category_errors_all) + len(scope_errors)}
+                if parity_runs:
+                    for (scope, condition), role in parity_runs.items():
+                        if condition not in active_conditions:
+                            continue
+                        scope_indexes = [index for index, resolved in enumerate(query_scopes)
+                                         if resolved == scope and queries[index].qid not in scope_errors]
+                        scope_query_ids = [per_query_capture_ids[index] for index in scope_indexes]
+                        scoped_ranks = {query_id: ranks[condition].get(queries[index].qid)
+                                        for index, query_id in zip(scope_indexes, scope_query_ids)}
+                        if any(rank is None for rank in scoped_ranks.values()):
+                            missing = {qid: (condition_reasons.get(queries[index].qid)
+                                             or reasons_by_condition.get(condition, {}).get(queries[index].qid)
+                                             or "rank is null")
+                                       for index, qid in zip(scope_indexes, scope_query_ids)
+                                       if scoped_ranks.get(qid) is None}
+                            raise ValueError(f"parity sink refuses incomplete ranks for {model_id}/{scope}/{condition}: {missing}")
+                        feature_map = query_features_by_condition.get((scope, condition))
+                        target_map = target_maps.get(scope)
+                        if feature_map is None or target_map is None:
+                            raise ValueError(f"parity sink lacks full features for {model_id}/{scope}/{condition}")
+                        sink_dir = work_root / "parity-sink"
+                        sink_dir.mkdir(parents=True, exist_ok=True)
+                        scoped_path = sink_dir / f"query_{_scope_name(scope)}_{condition}.npy"
+                        scoped_map = np.lib.format.open_memmap(scoped_path, mode="w+", dtype=np.float32,
+                                                               shape=(len(scope_indexes), *feature_map.shape[1:]))
+                        for output_index, source_index in enumerate(scope_indexes):
+                            scoped_map[output_index] = feature_map[source_index]
+                        scoped_map.flush()
+                        _emit_parity_artifact_sink(artifact_sink, role, model_id=model_id,
+                            category=scope, condition=condition, query_ids=scope_query_ids,
+                            gallery_ids=gallery_ids, query_features=scoped_map, gallery_features=target_map,
+                            ranks=scoped_ranks, started_at=parity_started_at or datetime.now(timezone.utc).isoformat(),
+                            batch_size=batch_size, adapter_batch_size=getattr(adapter, "batch_size", None))
+                        del scoped_map
                 _atomic_json(rank_path, {"fingerprint": fingerprint, "identity": identity,
                                          "attempt": attempt, "ranks": ranks,
                                          "query_failures": reasons_by_condition,
                                          "condition_status": mode_status,
+                                         "worker_identity": getattr(adapter, "worker_identity", None),
                                          # OUTSIDE the hashed `identity`: what the runtime actually
                                          # reported for THIS run's scoring calls. Two fields in
                                          # `identity` describe the request and the interpreter's
@@ -2656,6 +2954,8 @@ def run_composition(data: Any, model_specs: Sequence[ModelSpec], config: Any, *,
                             "runtime": {"model_interpreter": runtime_identity},
                             "summaries": summary_by_subset})
         except Exception as error:
+            if isinstance(error, _ParitySinkError):
+                raise
             reason = f"{type(error).__name__}: {error}"
             # A failed run still states what it knew about its relation. `not_recorded` here is a
             # REFUSAL, not a shrug: it accompanies `execution_status: FAILED` and the reason above,
@@ -2700,7 +3000,7 @@ def run_composition(data: Any, model_specs: Sequence[ModelSpec], config: Any, *,
                 # the point, and `composition runs/<id>/work/<model>/features` is the documented
                 # cleanup target. Upgrade path: prune by run age once a sweep job exists, or store
                 # features as float16/quantized (~half the bytes) if the disk becomes the limit.
-                keep_features = bool(topk_depth) or bool(keep_features)
+                keep_features = bool(topk_depth) or bool(keep_features) or bool(capture_query_ids or capture_gallery_ids)
                 if keep_features:
                     for child in model_work.iterdir():
                         if child.name == "features":

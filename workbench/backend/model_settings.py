@@ -79,18 +79,29 @@ def declared_setting_names() -> frozenset[str]:
     return _declared_names()
 
 
-@lru_cache(maxsize=1)
 def file_settings() -> Mapping[str, str]:
-    """The operator's `workbench.env` values, read once per process.
+    """Operator env values, cached until its path or file identity changes."""
+    from workbench.backend.operator_config import _CONFIG_PATH
 
-    Cached for the same reason `operator_config.resolve_config` reads it once: every consumer asks
-    the same question, and re-reading per lookup would put file I/O on the interpreter-resolution
-    path that the pipeline fingerprints. A process that changes the file mid-run is not a supported
-    state; the API's own writers reload the module.
-    """
+    path = Path(_CONFIG_PATH)
+    try:
+        stat = path.stat()
+        identity = (stat.st_dev, stat.st_ino, stat.st_size, stat.st_mtime_ns, stat.st_ctime_ns)
+    except OSError:
+        identity = (None,)
+    return _cached_file_settings(path, identity)
+
+
+@lru_cache(maxsize=1)
+def _cached_file_settings(path: Path, identity: tuple) -> Mapping[str, str]:
     from workbench.backend.operator_config import read_env_file
 
-    return dict(read_env_file())
+    return dict(read_env_file(path))
+
+
+def clear_file_settings_cache() -> None:
+    """Clear the cached operator env file values."""
+    _cached_file_settings.cache_clear()
 
 
 def setting(name: str, environ: Mapping[str, str] | None = None) -> str | None:

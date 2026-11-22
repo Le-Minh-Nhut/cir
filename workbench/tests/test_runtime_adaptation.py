@@ -167,3 +167,55 @@ def test_adapted_runtime_for_ilearn_family(model_id, monkeypatch):
     monkeypatch.setenv(runtime.ADAPTATION_ENV, "sm_999")
     with pytest.raises(WorkbenchError):
         runtime.runtime_adaptation(m)
+
+@pytest.mark.parametrize("model_id", ["airknow", "combiner_rn50x4_noft", "clip4cir_rn50x4_fullft", "sprc", "dcnet"])
+def test_candidate_runtime_profiles_resolve(model_id, monkeypatch):
+    from workbench.backend.registry import model_by_id
+    from workbench.backend.environment_planner import model_constraints
+
+    model = model_by_id(model_id)
+    monkeypatch.setenv(runtime.ADAPTATION_ENV, "sm_120")
+    adapted = runtime.runtime_adaptation(model)
+    assert adapted is not None
+    assert adapted["python"] == "3.10"
+    assert adapted["pytorch"] == "==2.7.1"
+    assert adapted["torchvision"] == "==0.22.1"
+    assert adapted["cuda"] == "12.8"
+    constraints = model_constraints(model)
+    assert constraints["runtime_adaptation"] == "sm_120"
+    assert constraints["python"] == "3.10"
+    assert constraints["torch"] == "==2.7.1"
+    assert constraints["torchvision"] == "==0.22.1"
+    assert constraints["pip_index_url"] == "https://download.pytorch.org/whl/cu128"
+    if model_id == "airknow":
+        assert constraints["packages"]["numpy"] == "1.26.4"
+        assert constraints["packages"]["decord"] == "0.6.0"
+        assert constraints["packages"]["einops"] == "0.7.0"
+        assert constraints["packages"]["ftfy"] == "6.3.1"
+        assert constraints["packages"]["webdataset"] == "0.2.86"
+    elif model_id == "sprc":
+        assert constraints["packages"]["numpy"] == "1.26.4"
+        for package, version in {
+            "decord": "0.6.0", "webdataset": "0.2.86", "einops": "0.7.0",
+            "scikit-image": "0.22.0", "pycocoevalcap": "1.2",
+        }.items():
+            assert constraints["packages"][package] == version
+        assert adapted["packages"] == [
+            "numpy==1.26.4", "decord==0.6.0", "webdataset==0.2.86",
+            "einops==0.7.0", "scikit-image==0.22.0", "pycocoevalcap==1.2"]
+    elif model_id == "dcnet":
+        assert constraints["packages"]["numpy"] == "1.26.4"
+        assert constraints["packages"]["pillow"] == "12.3.0"
+        assert constraints["packages"]["einops"] == "0.7.0"
+        assert adapted["packages"] == [
+            "numpy==1.26.4", "Pillow==12.3.0", "einops==0.7.0", "nltk==3.5"]
+        assert constraints["packages"]["nltk"] == "3.5"
+        resource = model["environment"]["adapted_runtime"]["runtime_resources"]["nltk_data"]
+        assert resource["environment_variable"] == "NLTK_DATA"
+        assert resource["resource"] == "punkt"
+        assert resource["source_commit"] == "550b6625bcef1f2abff2ff770a5a0d272c9c6b2a"
+        assert resource["sha256"] == "51c3078994aeaf650bfc8e028be4fb42b4a0d177d41c012b6a983979653660ec"
+    elif model_id in {"combiner_rn50x4_noft", "clip4cir_rn50x4_fullft"}:
+        assert constraints["packages"]["numpy"] == "1.24.4"
+        assert adapted["packages"] == [
+            "numpy==1.24.4", "ftfy==6.2.3", "regex==2024.11.6", "tqdm==4.70.1"]

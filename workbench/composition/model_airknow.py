@@ -1,10 +1,10 @@
 """Subprocess client for Air-Know's BLIP-2 composition model.
 
-The model interpreter owns every torch import. Scoring is the native Air-Know operation:
-a query is one normalized 256-d vector, a target is 32 normalized token vectors, and the
-score is the maximum dot product over those tokens (``test_BLIP2.py:142-144``:
-``np.matmul(all_queries, all_imgs).max(-1)``). No reference mask is applied -- the CIRCUS
-full gallery keeps the reference eligible, which is Air-Know's own protocol.
+The model itself L2-normalizes composed queries and each of 32 target tokens in
+``blip2_cir.py:499-526``. FashionIQ evaluation takes their raw max-token dot product
+(``test_BLIP2.py:134-144``; optional second normalization is commented out), equivalent to
+max-token cosine. CIRCUS scoring keeps references eligible; native FashionIQ evaluation separately
+masks each source image at ``test_BLIP2.py:147-151``.
 
 Category is not a scoring axis here: one shared feature space serves all three FashionIQ
 categories, so ``category_scopes`` is ``(None,)`` and target scopes must all be ``None``.
@@ -40,7 +40,7 @@ TOKENS = 32
 DIMENSION = 256
 
 class Adapter(CompositionAdapter):
-    """Preserve Air-Know's max-over-target-tokens dot-product scoring.
+    """Preserve Air-Know's native max-over-target-tokens dot-product scoring.
 
     Runner assigns ``work_root`` before encoding; encode methods refuse with
     ``AdapterWorkRootError`` when it is unset. One resident worker serves every job so the
@@ -49,7 +49,9 @@ class Adapter(CompositionAdapter):
 
     model_id = "airknow"
     reference_eligible = True
-    # score() reduces a query (N,256) against targets (M,32,256); the probe uses one token.
+    cache_policy = "nonreusable"
+    # Native FashionIQ calls model.train(); QFormer attention/dropout remains active.
+    # The runner must recompute gallery before queries and never resume stochastic features.
     score_dimension = DIMENSION
     category_scopes: tuple[str | None, ...] = (None,)
 
@@ -70,7 +72,15 @@ class Adapter(CompositionAdapter):
         self._worker_counter = 0
         self._worker_failed: str | None = None
         self._interpreter_verified = False
+        self.seed: int = 0
+        self._capture_spec: dict[str, Any] | None = None
 
+    def prepare_identity(self) -> dict[str, Any]:
+        # Native FashionIQ evaluation uses train-mode QFormer dropout. Seed and call order are
+        # therefore part of this adapter's execution identity; runner disables all feature caches.
+        self.seed = 0
+        return {"native_model_mode": "train", "dropout_seed": self.seed,
+                "feature_cache_policy": self.cache_policy, "gallery_before_queries": True}
     @classmethod
     def status(cls, config: Any = None) -> AdapterStatus:
         from workbench.backend.operator_config import resolve_config
@@ -98,25 +108,23 @@ class Adapter(CompositionAdapter):
 
     def score(self, queries: Any, targets: Any,
               categories: Sequence[str | None] | None = None) -> np.ndarray:
-        """max over the 32 target tokens of ``query . token``, as ``test_BLIP2.py:142-144``.
-
-        Accepts the probe's flat 2-D targets (one token) as well as the real 8192-wide rows,
-        so the base class can MEASURE reference eligibility offline instead of trusting the
-        class literal.
-        """
+        """Native raw dot product, max over target tokens; preserve query/gallery axes."""
         del categories
         query = np.asarray(queries, dtype=np.float32)
         target = np.asarray(targets, dtype=np.float32)
-        if query.ndim == 3:
+        if query.ndim == 3 and query.shape[1] == 1:
             query = query[:, 0, :]
-        if target.ndim == 2 and target.shape[1] == TARGET_WIDTH:
-            target = target.reshape(len(target), TOKENS, DIMENSION)
-        elif target.ndim == 2:
-            target = target[:, None, :]
-        if query.ndim != 2 or target.ndim != 3:
-            raise ValueError("Air-Know expects query (N,256) and target (M,8192) or (M,32,256)")
-        if query.shape[1] != target.shape[2]:
-            raise ValueError("Air-Know query and target embedding dimensions differ")
+        if target.ndim == 2:
+            if target.shape[1] == TARGET_WIDTH:
+                target = target.reshape(len(target), TOKENS, DIMENSION)
+            elif target.shape[1] == DIMENSION:
+                # One-token shape used by the base class's reference-eligibility probe.
+                target = target[:, None, :]
+        if (query.ndim != 2 or query.shape[1] != DIMENSION or target.ndim != 3
+                or target.shape[1] not in (1, TOKENS) or target.shape[2] != DIMENSION):
+            raise ValueError(
+                "Air-Know expects query (N,256) and target (M,32,256), (M,8192), or "
+                "probe target (M,256)")
         return np.einsum("nd,mgd->nmg", query, target).max(axis=-1)
 
     def close(self) -> None:
@@ -205,6 +213,8 @@ def _run(adapter: Adapter, operation: str, image_paths: Sequence[str], texts: Se
         "checkpoint_path": str(adapter.checkpoint_path),
         "checkpoint_id": checkpoint["checkpoint_id"],
         "batch_size": adapter.batch_size,
+        "seed": getattr(adapter, "seed", 0),
+        "capture_spec": getattr(adapter, "_capture_spec", None),
     }), encoding="utf-8")
     try:
         if adapter._worker is not None and adapter._worker.poll() is not None:
@@ -306,7 +316,12 @@ def _worker_main(argv: Sequence[str] | None = None) -> int:
         _, _, data_utils, _, (txt_processors, _) = _load_replay_modules(source)
         checkpoint = Path(job["checkpoint_path"])
         expected = KNOWN_AUTHOR_SHA256.get(job["checkpoint_id"])
-        model = load_trusted_whole_model(checkpoint, expected, torch).cuda().eval()
+        model = load_trusted_whole_model(checkpoint, expected, torch).cuda()
+        # Native FashionIQ evaluation calls model.train(); frozen visual encoder remains eval.
+        model.train()
+        seed = int(job["seed"])
+        torch.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)
         transform = data_utils.targetpad_transform(1.25, 224)
         limit_torch_threads()
         workers = resolved_decode_workers()
@@ -316,6 +331,27 @@ def _worker_main(argv: Sequence[str] | None = None) -> int:
 
     def run_one(current: dict[str, Any]) -> None:
         outputs = []
+        capture_spec = current.get("capture_spec")
+        capture_positions = set(capture_spec.get("positions", ())) if capture_spec else set()
+        capture_pixels: list[tuple[int, np.ndarray]] = []
+        capture_tokens: list[tuple[int, str, np.ndarray, np.ndarray]] = []
+        original_tokenizer = getattr(model, "tokenizer", None)
+        batch_start = 0
+        if capture_spec and original_tokenizer is not None:
+            def capture_tokenizer(texts: Any, *args: Any, **kwargs: Any) -> Any:
+                result = original_tokenizer(texts, *args, **kwargs)
+                if current["operation"] == "queries":
+                    for offset, text in enumerate(texts):
+                        position = batch_start + offset
+                        if position in capture_positions:
+                            capture_tokens.append((
+                                position,
+                                text,
+                                result.input_ids[offset].detach().cpu().numpy().copy(),
+                                result.attention_mask[offset].detach().cpu().numpy().copy(),
+                            ))
+                return result
+            model.tokenizer = capture_tokenizer
         try:
             with torch.no_grad():
                 batch_size = max(1, int(current.get("batch_size") or 32))
@@ -325,11 +361,16 @@ def _worker_main(argv: Sequence[str] | None = None) -> int:
                 decoded = prefetch_rows(lambda chunk: torch.stack(
                     [transform(_open_image(path)) for path in chunk]), batches, workers)
                 for index, images in enumerate(decoded):
+                    batch_start = index * batch_size
+                    if capture_spec:
+                        for local in range(len(images)):
+                            position = batch_start + local
+                            if position in capture_positions:
+                                capture_pixels.append((position, images[local].numpy().copy()))
                     images = images.cuda()
                     if current["operation"] == "queries":
-                        first = index * batch_size
                         texts = [txt_processors["eval"](text) for text in
-                                 current["texts"][first:first + len(images)]]
+                                 current["texts"][batch_start:batch_start + len(images)]]
                         # `extract_retrieval_compose` returns (B,1,1,256).
                         features = model.extract_retrieval_compose(images, texts).reshape(len(images), DIMENSION)
                     else:
@@ -342,9 +383,24 @@ def _worker_main(argv: Sequence[str] | None = None) -> int:
                     del images
             result = np.concatenate(outputs, axis=0) if outputs else np.empty((0,), dtype=np.float32)
             np.save(current["output_path"], result.reshape(len(current["image_paths"]), -1), allow_pickle=False)
+            if capture_spec:
+                capture_path = Path(capture_spec["output_path"])
+                capture_path.parent.mkdir(parents=True, exist_ok=True)
+                np.savez(
+                    capture_path,
+                    positions=np.asarray([row[0] for row in capture_pixels], dtype=np.int32),
+                    pixels=np.stack([row[1] for row in capture_pixels]) if capture_pixels else np.empty((0,), dtype=np.float32),
+                    token_positions=np.asarray([row[0] for row in capture_tokens], dtype=np.int32),
+                    token_texts=np.asarray([row[1] for row in capture_tokens]),
+                    input_ids=np.stack([row[2] for row in capture_tokens]) if capture_tokens else np.empty((0, 0), dtype=np.int64),
+                    attention_masks=np.stack([row[3] for row in capture_tokens]) if capture_tokens else np.empty((0, 0), dtype=np.int64),
+                )
             reply(True)
         except Exception as error:
             reply(False, error_type=type(error).__name__, error=str(error))
+        finally:
+            if original_tokenizer is not None:
+                model.tokenizer = original_tokenizer
 
     run_one(job)
     for line in sys.stdin:

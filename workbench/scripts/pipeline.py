@@ -314,7 +314,15 @@ def _stage_input_fingerprint_evidence(stage: Stage, config: WorkbenchConfig | No
     if stage.protocol:
         update("PROTO", stage.protocol)
     for cmd in stage.commands:
-        update("COMMAND", shlex.join(cmd))
+        fingerprint_command = list(cmd)
+        if stage.name == "evaluation":
+            try:
+                run_id_index = fingerprint_command.index("--run-id")
+            except ValueError:
+                pass
+            else:
+                del fingerprint_command[run_id_index:run_id_index + 2]
+        update("COMMAND", shlex.join(fingerprint_command))
 
     if stage.name == "environment-plan":
         for cmd in stage.commands:
