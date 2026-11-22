@@ -79,6 +79,7 @@ class Adapter(CompositionAdapter):
         self._worker_counter = 0
         self._job_root: Path | None = None
         self._packed_layout = _packed_layout()
+        self.score_target_chunk_size: int | None = 512
 
     def prepare_identity(self) -> dict[str, Any]:
         import hashlib
@@ -351,6 +352,9 @@ def _score(adapter: Adapter, queries: np.ndarray, targets: np.ndarray,
                "autocast": False, "tf32": False, "cudnn_deterministic": True,
                "cudnn_benchmark": False,
                "capture_components_path": str(capture_components_path) if capture_components_path else None}
+        target_chunk_size = getattr(adapter, "score_target_chunk_size", 512)
+        if target_chunk_size != 512:
+            job["target_chunk_size"] = target_chunk_size
         return _request(adapter, job, (len(queries), len(targets)))
     finally:
         q_path.unlink(missing_ok=True)
@@ -544,32 +548,44 @@ def _worker_main(first_job: dict[str, Any]) -> int:
                 corr_memmap = np.lib.format.open_memmap(component_paths[1], mode="w+",
                                                         dtype=np.float32, shape=(len(q), len(t)))
             query_batch_size = int(job["batch_size"])
+            raw_chunk = job.get("target_chunk_size", 512)
+            use_full_gallery = raw_chunk is None or int(raw_chunk) <= 0 or int(raw_chunk) >= len(t)
+            full_gallery = unpack(t) if use_full_gallery else None
+            target_chunk_size = None if use_full_gallery else int(raw_chunk)
             for query_start in range(0, len(q), query_batch_size):
                 query_stop = min(query_start + query_batch_size, len(q))
                 query = q[query_start:query_stop]
                 source,text,composed=(unpack(query[:,i*width:(i+1)*width]) for i in range(3))
-                comp_scores = torch.empty((len(query), len(t)), dtype=torch.float32, device=device)
-                corr_scores = torch.empty_like(comp_scores)
                 with torch.inference_mode():
-                    for target_start in range(0,len(t),512):
-                        target_stop=min(target_start+512,len(t))
-                        gallery=unpack(t[target_start:target_stop])
-                        comp=model.get_score_matrix(trg_embds=gallery,src_embds=composed,subspaces=modalities,
-                                                    l2renorm=False,dist=False,val=True)
-                        correction=model.get_correction(source,gallery)
-                        corr=model.get_score_matrix(trg_embds=correction,src_embds=text,subspaces=modalities,
-                                                    l2renorm=False,dist=False,val=True)
-                        comp_scores[:,target_start:target_stop]=comp
-                        corr_scores[:,target_start:target_stop]=corr
-                references = job.get("reference_indices")
-                if references is not None:
-                    refs = references[query_start:query_stop]
-                    _mask_reference_scores(comp_scores, corr_scores, refs,
-                                           job["reference_mask_value"])
-                if comp_memmap is not None and corr_memmap is not None:
-                    comp_memmap[query_start:query_stop] = comp_scores.cpu().numpy()
-                    corr_memmap[query_start:query_stop] = corr_scores.cpu().numpy()
-                fused=F.log_softmax(comp_scores,dim=-1)+F.log_softmax(corr_scores,dim=-1)
+                    if full_gallery is not None:
+                        comp_scores = model.get_score_matrix(trg_embds=full_gallery,src_embds=composed,subspaces=modalities,
+                                                             l2renorm=False,dist=False,val=True)
+                        correction = model.get_correction(source,full_gallery)
+                        corr_scores = model.get_score_matrix(trg_embds=correction,src_embds=text,subspaces=modalities,
+                                                             l2renorm=False,dist=False,val=True)
+                    else:
+                        comp_scores = torch.empty((len(query), len(t)), dtype=torch.float32, device=device)
+                        corr_scores = torch.empty_like(comp_scores)
+                        assert target_chunk_size is not None
+                        for target_start in range(0,len(t),target_chunk_size):
+                            target_stop=min(target_start+target_chunk_size,len(t))
+                            gallery=unpack(t[target_start:target_stop])
+                            comp=model.get_score_matrix(trg_embds=gallery,src_embds=composed,subspaces=modalities,
+                                                        l2renorm=False,dist=False,val=True)
+                            correction=model.get_correction(source,gallery)
+                            corr=model.get_score_matrix(trg_embds=correction,src_embds=text,subspaces=modalities,
+                                                        l2renorm=False,dist=False,val=True)
+                            comp_scores[:,target_start:target_stop]=comp
+                            corr_scores[:,target_start:target_stop]=corr
+                    references = job.get("reference_indices")
+                    if references is not None:
+                        refs = references[query_start:query_stop]
+                        _mask_reference_scores(comp_scores, corr_scores, refs,
+                                               job["reference_mask_value"])
+                    if comp_memmap is not None and corr_memmap is not None:
+                        comp_memmap[query_start:query_stop] = comp_scores.cpu().numpy()
+                        corr_memmap[query_start:query_stop] = corr_scores.cpu().numpy()
+                    fused=F.log_softmax(comp_scores,dim=-1)+F.log_softmax(corr_scores,dim=-1)
                 result[query_start:query_stop]=fused.cpu().numpy()
             result.flush()
             if comp_memmap is not None and corr_memmap is not None:

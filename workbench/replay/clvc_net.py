@@ -169,7 +169,7 @@ def _install_clvc_observer(local_model: Any, global_model: Any, testset: Any,
     def observed_argsort(values: Any, *args: Any, **kwargs: Any) -> Any:
         order = original_argsort(values, *args, **kwargs)
         if np.ndim(values) == 1 and np.shape(values) == (len(gallery_ids),):
-            state["native_scores"].append(np.asarray(values).copy())
+            state["native_scores"].append((-np.asarray(values, dtype=np.float32)).copy())
             state["native_order"].append(np.asarray(order).copy())
         return order
 
@@ -195,7 +195,11 @@ def _install_clvc_observer(local_model: Any, global_model: Any, testset: Any,
         handles.append(model.text_model.embedding_layer.register_forward_pre_hook(embedding_input))
 
         def compose(images: Any, texts: Any) -> Any:
-            output = original_compose(images, texts)
+            state["in_compose"] = state.get("in_compose", 0) + 1
+            try:
+                output = original_compose(images, texts)
+            finally:
+                state["in_compose"] -= 1
             first = state["query_cursor"]
             ids = query_ids[first:first + len(texts)]
             if len(ids) != len(texts) or token_data["padded"] is None or token_data["lengths"] is None:
@@ -221,6 +225,8 @@ def _install_clvc_observer(local_model: Any, global_model: Any, testset: Any,
 
         def extract(images: Any) -> Any:
             output = original_extract(images)
+            if state.get("in_compose", 0) > 0:
+                return output
             rows = functional.normalize(output[1], dim=-1).detach().cpu().numpy()
             state["arrays"][f"gallery_{tower}"].append(rows)
             if tower == "local":
@@ -500,6 +506,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--capture-root", type=Path, default=None)
     parser.add_argument("--capture-selection", type=Path, default=None)
     parser.add_argument("--category", choices=CATEGORIES, action="append", dest="categories")
+    parser.add_argument("--batch-size", type=int, default=32)
     parser.add_argument("--invocation-id", type=str, default=None)
     parser.add_argument("--device", type=str, default=None)
     parser.add_argument("--output", type=Path, default=None)

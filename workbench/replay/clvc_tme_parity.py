@@ -136,7 +136,9 @@ class AdapterArtifactSink:
                                else query_ids)}
                     for name, value in arrays.items()}
         payload = {"standard": "parity-absolute-relative/v3", "model_id": model_id,
-                   "category": category, "condition": condition, "source_id": source_id,
+                   "category": category, "condition": condition,
+                   "run_id": run_id, "plan_path": Path(plan_path).name,
+                   "plan_sha256": plan_sha256, "started_at": started_at, "source_id": source_id,
                    "identity": dict(identity), "protocol": identity["protocol"],
                    "query_order_sha256": identity["query_order_sha256"],
                    "gallery_order_sha256": identity["gallery_order_sha256"],

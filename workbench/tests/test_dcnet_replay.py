@@ -121,3 +121,66 @@ def test_score_chunks_then_apply_native_full_gallery_logsoftmax():
     actual = F.log_softmax(comp_rows, dim=-1) + F.log_softmax(corr_rows, dim=-1)
     expected = F.log_softmax(expected_comp, dim=-1) + F.log_softmax(expected_corr, dim=-1)
     torch.testing.assert_close(actual, expected, rtol=0, atol=0)
+
+
+def test_dcnet_adapter_score_target_chunk_size_opt_in(monkeypatch, tmp_path: Path):
+    import numpy as np
+    from workbench.composition import model_dcnet
+
+    captured: list[dict] = []
+
+    def fake_request(adapter, job, expected):
+        captured.append(dict(job))
+        return np.zeros(expected, dtype=np.float32)
+
+    monkeypatch.setattr(model_dcnet, "_request", fake_request)
+
+    adapter = model_dcnet.Adapter.__new__(model_dcnet.Adapter)
+    adapter.work_root = tmp_path
+    adapter._worker_failed = None
+    adapter._interpreter_verified = True
+    adapter._job_root = tmp_path / "jobs"
+    adapter._job_root.mkdir()
+    adapter._worker_counter = 0
+    adapter._packed_layout = model_dcnet._packed_layout()
+    adapter.source_root = tmp_path
+    adapter.checkpoint_path = tmp_path
+    adapter.batch_size = 8
+    adapter.config = type("Cfg", (), {
+        "WORKBENCH_ARTIFACTS_ROOT": str(tmp_path),
+        "CIR_REPO_ROOT": str(tmp_path),
+        "FASHIONIQ_ROOT": str(tmp_path),
+    })()
+
+    q = np.zeros((2, adapter._packed_layout["query_width"]), dtype=np.float32)
+    t = np.zeros((4, adapter._packed_layout["target_width"]), dtype=np.float32)
+
+    # Default (512): omit target_chunk_size from job payload to preserve CIRCUS schema
+    adapter.score_target_chunk_size = 512
+    adapter.score(q, t)
+    assert "target_chunk_size" not in captured[-1]
+
+    # Opt-in full-gallery scoring (None): emits target_chunk_size=None for FashionIQ parity
+    adapter.score_target_chunk_size = None
+    adapter.score(q, t)
+    assert captured[-1]["target_chunk_size"] is None
+
+
+def test_original_split_stable_tie_breaking_matches_topk_policy():
+    """Regression for the 14/14 FashionIQ original_split Top-10 tie swaps (dup-MD5 PNGs).
+
+    When gallery items have exact 0.0 score ties (identical PNG bytes), unstable quicksort
+    scrambles tie order across rank 10/11, whereas stable sort matches upstream CUDA
+    torch.argsort(1 - sim, dim=-1) and workbench.composition.topk.topk_from_scores.
+    """
+    import numpy as np
+    from workbench.composition.topk import topk_from_scores
+
+    # 15 candidates: positions 5..14 share exact tie score 0.5690897 (mirroring dress:311 dup-MD5 group)
+    scores = np.array(
+        [0.9, 0.8, 0.7, 0.65, 0.60] + [0.5690897] * 10 + [0.4, 0.3],
+        dtype=np.float32,
+    )
+    stable_1m = np.argsort(np.float32(1.0) - scores, kind="stable")
+    topk_pos = [pos for pos, _ in topk_from_scores(scores, 10)]
+    assert list(stable_1m[:10]) == topk_pos == list(range(10))
