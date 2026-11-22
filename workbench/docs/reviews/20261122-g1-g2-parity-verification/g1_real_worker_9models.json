@@ -1,0 +1,200 @@
+{
+  "clvc_net": {
+    "category": "dress",
+    "samples": 8,
+    "q_pixels_shape": [
+      8,
+      3,
+      224,
+      224
+    ],
+    "g_pixels_shape": [
+      8,
+      3,
+      224,
+      224
+    ],
+    "q_pixels_max_abs": 0.0,
+    "g_pixels_max_abs": 0.0,
+    "texts_exact_match": "8/8",
+    "token_ids_exact_match": "n/a_not_captured_on_native_cpu",
+    "adapter_token_ids_captured": false,
+    "g1_real_worker_pass": true
+  },
+  "encoder": {
+    "category": "dress",
+    "samples": 8,
+    "q_pixels_shape": [
+      8,
+      3,
+      224,
+      224
+    ],
+    "g_pixels_shape": [
+      8,
+      3,
+      224,
+      224
+    ],
+    "q_pixels_max_abs": 0.0,
+    "g_pixels_max_abs": 0.0,
+    "texts_exact_match": "8/8",
+    "token_ids_exact_match": true,
+    "adapter_token_ids_captured": true,
+    "g1_real_worker_pass": true
+  },
+  "tgcir": {
+    "category": "dress",
+    "samples": 8,
+    "q_pixels_shape": [
+      8,
+      3,
+      224,
+      224
+    ],
+    "g_pixels_shape": [
+      8,
+      3,
+      224,
+      224
+    ],
+    "q_pixels_max_abs": 0.0,
+    "g_pixels_max_abs": 0.0,
+    "texts_exact_match": "8/8",
+    "token_ids_exact_match": true,
+    "adapter_token_ids_captured": true,
+    "g1_real_worker_pass": true
+  },
+  "limn": {
+    "category": "dress",
+    "samples": 8,
+    "q_pixels_shape": [
+      8,
+      3,
+      224,
+      224
+    ],
+    "g_pixels_shape": [
+      8,
+      3,
+      224,
+      224
+    ],
+    "q_pixels_max_abs": 0.0,
+    "g_pixels_max_abs": 0.0,
+    "texts_exact_match": "8/8",
+    "token_ids_exact_match": true,
+    "adapter_token_ids_captured": true,
+    "g1_real_worker_pass": true
+  },
+  "hint": {
+    "category": "dress",
+    "samples": 8,
+    "q_pixels_shape": [
+      8,
+      3,
+      224,
+      224
+    ],
+    "g_pixels_shape": [
+      8,
+      3,
+      224,
+      224
+    ],
+    "q_pixels_max_abs": 0.0,
+    "g_pixels_max_abs": 0.0,
+    "texts_exact_match": "8/8",
+    "token_ids_exact_match": "n/a_not_captured_on_native_cpu",
+    "adapter_token_ids_captured": true,
+    "g1_real_worker_pass": true
+  },
+  "habit": {
+    "category": "dress",
+    "samples": 8,
+    "q_pixels_shape": [
+      8,
+      3,
+      224,
+      224
+    ],
+    "g_pixels_shape": [
+      8,
+      3,
+      224,
+      224
+    ],
+    "q_pixels_max_abs": 0.0,
+    "g_pixels_max_abs": 0.0,
+    "texts_exact_match": "8/8",
+    "token_ids_exact_match": "n/a_not_captured_on_native_cpu",
+    "adapter_token_ids_captured": true,
+    "g1_real_worker_pass": true
+  },
+  "intent": {
+    "category": "dress",
+    "samples": 8,
+    "q_pixels_shape": [
+      8,
+      3,
+      224,
+      224
+    ],
+    "g_pixels_shape": [
+      8,
+      3,
+      224,
+      224
+    ],
+    "q_pixels_max_abs": 0.0,
+    "g_pixels_max_abs": 0.0,
+    "texts_exact_match": "8/8",
+    "token_ids_exact_match": "n/a_not_captured_on_native_cpu",
+    "adapter_token_ids_captured": true,
+    "g1_real_worker_pass": true
+  },
+  "conesep": {
+    "category": "dress",
+    "samples": 8,
+    "q_pixels_shape": [
+      8,
+      3,
+      224,
+      224
+    ],
+    "g_pixels_shape": [
+      8,
+      3,
+      224,
+      224
+    ],
+    "q_pixels_max_abs": 0.0,
+    "g_pixels_max_abs": 0.0,
+    "texts_exact_match": "8/8",
+    "token_ids_exact_match": "n/a_not_captured_on_native_cpu",
+    "adapter_token_ids_captured": true,
+    "g1_real_worker_pass": true
+  },
+  "airknow": {
+    "category": "dress",
+    "samples": 8,
+    "q_pixels_shape": [
+      8,
+      3,
+      224,
+      224
+    ],
+    "g_pixels_shape": [
+      8,
+      3,
+      224,
+      224
+    ],
+    "q_pixels_max_abs": 0.0,
+    "g_pixels_max_abs": 0.0,
+    "texts_exact_match": "8/8",
+    "token_ids_exact_match": "n/a_not_captured_on_native_cpu",
+    "adapter_token_ids_captured": true,
+    "g1_real_worker_pass": true
+  }
+}

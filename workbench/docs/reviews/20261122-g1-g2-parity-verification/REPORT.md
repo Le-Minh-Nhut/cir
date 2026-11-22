@@ -1,78 +1,51 @@
-# Báo Cáo Sửa & Kiểm Chứng G1/G2 Parity (16 Cấu Hình FashionIQ)
+# Báo Cáo Sửa & Kiểm Chứng G1/G2 Parity (16 Cấu Hình FashionIQ — Căn Theo Verdict `parity_gate`)
 
 > [!IMPORTANT]
-> **Ngưỡng giữ nguyên (không nới lỏng):** `score_atol = 1e-4`, `score_rtol = 1e-4`, `tie_epsilon = 1e-6` (`parity-absolute-relative/v3`).
-> **Hai chốt protocol FashionIQ đã áp dụng đúng phạm vi (không ảnh hưởng CIRCUS):**
+> **Quy tắc nhãn:** Trong báo cáo này, **chỉ** cấu hình đã chạy đủ 10 role V3 + `score-ranks.jsonl` + qua `parity_gate.evaluate_model(..., standard="parity-absolute-relative/v3") == PARITY_PASS` mới được gắn nhãn **`PARITY_PASS`** và publish vào `workbench/artifacts/parity/v3/CURRENT.json`. Mọi cấu hình chưa chạy đủ 10-role gate V3 được ghi đúng nhãn **`DIAGNOSTIC_ONLY (NOT_PUBLISHED)`**.
+>
+> **Ngưỡng giữ nguyên:** `score_atol = 1e-4`, `score_rtol = 1e-4`, `tie_epsilon = 1e-6` (`parity-absolute-relative/v3`).
+> **Hai chốt protocol FashionIQ (opt-in, không ảnh hưởng CIRCUS):**
 > 1. **ENCODER:** `preprocess_train` cho query, `preprocess_val` cho gallery ([`model_encoder.py`](file:///home/heheboiz/data/cir/workbench/composition/model_encoder.py)).
-> 2. **CSMCIR:** gộp CoT caption theo thứ tự `dress → shirt → toptee` như upstream ([`model_csmcir.py`](file:///home/heheboiz/data/cir/workbench/composition/model_csmcir.py)).
+> 2. **CSMCIR:** gộp CoT caption theo `dress → shirt → toptee` như upstream ([`model_csmcir.py`](file:///home/heheboiz/data/cir/workbench/composition/model_csmcir.py)).
+> 3. **CLIP4Cir (`fullft` & `noft`):** tái dùng feature ảnh tham chiếu chưa chuẩn hóa từ gallery do chính adapter mã hóa trong run đó ([`model_clip4cir.py`](file:///home/heheboiz/data/cir/workbench/composition/model_clip4cir.py)).
+> 4. **PTHA+MTST:** giữ nguyên nhãn **CIRR-to-FashionIQ transfer (`cirr_transfer`)**.
 
 ---
 
-## 1. Bảng Tổng Hợp G1 & G2 Toàn Bộ 16 Cấu Hình (6,016 queries / cấu hình)
+## 1. Bảng Tổng Hợp 16 Cấu Hình (Theo Đúng Verdict `parity_gate`)
 
-Tất cả báo cáo JSON chi tiết nằm tại [`workbench/artifacts/isolated-runs/g1_g2_reports/`](file:///home/heheboiz/data/cir/workbench/artifacts/isolated-runs/g1_g2_reports/) và tổng hợp G1 tại [`g1_summary_all_16.json`](file:///home/heheboiz/data/cir/workbench/artifacts/isolated-runs/g1_g2_reports/g1_summary_all_16.json).
+- **Bảng đối chiếu từng query bị lệch (14/14 query ranh giới Top-10 + DCNet `comp_scores`/`corr_scores`):** [`TOP10_BOUNDARY_AND_DCNET_DIFFS.md`](file:///home/heheboiz/data/cir/workbench/docs/reviews/20261122-g1-g2-parity-verification/TOP10_BOUNDARY_AND_DCNET_DIFFS.md)
+- **Bằng chứng G1 pixel tensor + text/token thực tế (worker adapter thật vs native độc lập, 9 model đầu):** [`g1_real_worker_9models.json`](file:///home/heheboiz/data/cir/workbench/artifacts/isolated-runs/g1_g2_reports/g1_real_worker_9models.json)
+- **Phạm vi đo chẩn đoán G2:** `target_rank`, `Top-10`, `Top-50`, `R@10`, `R@50` tính từ **ranking trên toàn bộ gallery ở cả hai bên** (`3,817/6,346/5,373` hoặc `2,454/2,901/2,612`). Sai lệch giá trị score (`max_abs`/`max_rel`/`v3_viol`) trong bảng chẩn đoán đo trên **Top-10 ứng viên native mỗi query (`60,160` cặp)**. Riêng **LIMN** đã chạy **đủ 10 role V3 + `score-ranks.jsonl` toàn gallery** qua `parity_gate`.
 
-| # | Model / Cấu hình | Protocol | G1 (2 đường chạy độc lập) | Rank đổi (tổng / non-tie) | Top-10 vào/ra | Top-50 vào/ra | ΔR@10 (pp) | ΔR@50 (pp) | `max_abs` | `max_rel` | V3 viol (/60,160) | Kết luận G2 V3 |
+| # | Model / Cấu hình | Protocol | G1 thực tế (worker vs native) | Rank đổi (tổng / non-tie) | Top-10 vào/ra | Top-50 vào/ra | ΔR@10 (pp) | ΔR@50 (pp) | `max_abs` | `max_rel` | V3 viol (/60,160) | Verdict `parity_gate` V3 |
 |---:|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---|
-| 1 | **Air-Know** (`fiq_n05`) | `full_gallery_ref_excluded` | PASS (`6016/6016`) | `0` / **`0`** | `+0/-0` | `+0/-0` | `0.0000` | `0.0000` | `0.00e+00` | `0.00e+00` | `0` | **PASS (bit-exact)** |
-| 2 | **ConeSep** (`fiq_n02`) | `full_gallery_ref_excluded` | PASS (`6016/6016`) | `0` / **`0`** | `+0/-0` | `+0/-0` | `0.0000` | `0.0000` | `7.15e-07` | `1.28e-06` | `0` | **PASS (exact)** |
-| 3 | **CLVC-Net** | `val_split` | PASS (`6016/6016`) | `0` / **`0`** | `+0/-0` | `+0/-0` | `0.0000` | `0.0000` | `3.58e-07` | `4.51e-07` | `0` | **PASS (exact)** |
-| 4 | **ENCODER** (`fashioniq`) | `val_split` | PASS (`6016/6016`) | `0` / **`0`** | `+0/-0` | `+0/-0` | `0.0000` | `0.0000` | `1.79e-07` | `2.69e-07` | `0` | **PASS (exact)** |
-| 5 | **INTENT** (`fiq_n02`) | `full_gallery_ref_excluded` | PASS (`6016/6016`) | `1` / **`0`** | `+0/-0` | `+0/-0` | `0.0000` | `0.0000` | `6.56e-07` | `1.26e-06` | `0` | **PASS (exact)** |
-| 6 | **HINT** (`fashioniq`) | `val_split` | PASS (`6016/6016`) | `2` / **`0`** | `+0/-0` | `+0/-0` | `0.0000` | `0.0000` | `5.36e-07` | `1.51e-06` | `0` | **PASS (exact)** |
-| 7 | **LIMN** (`base_iter0_all`) | `val_split` | PASS (`6016/6016`) | `2` / **`0`** | `+0/-0` | `+0/-0` | `0.0000` | `0.0000` | `6.56e-07` | `9.50e-07` | `0` | **PASS (exact)** |
-| 8 | **TG-CIR** | `val_split` | PASS (`6016/6016`) | `2` / **`0`** | `+0/-0` | `+0/-0` | `0.0000` | `0.0000` | `2.98e-06` | `1.04e-05` | `0` | **PASS (exact)** |
-| 9 | **HABIT** (`fiq_n02`) | `full_gallery_ref_excluded` | PASS (`6016/6016`) | `8` / **`0`** | `+0/-0` | `+0/-0` | `0.0000` | `0.0000` | `7.15e-07` | `1.50e-06` | `0` | **PASS (exact)** |
-| 10 | **CSMCIR** (`fashioniq`) | `original_split` | PASS (`6016/6016`) | `47` / **`0`** | `+1/-0` | `+0/-0` | `+0.0165` | `0.0000` | `5.96e-07` | `7.61e-07` | `0` | **PASS (tie-only)** |
-| 11 | **PTHA+MTST** (`cirr_transfer`) | `original_split` | PASS (`6016/6016`) | `48` / **`0`** | `+2/-0` | `+0/-0` | `+0.0331` | `0.0000` | `3.05e-05` | `9.00e-07` | `0` | **PASS (tie-only)** |
-| 12 | **SPRC** (`sprc_fiq_vitl`) | `original_split` | PASS (`6016/6016`) | `49` / **`0`** | `+2/-0` | `+0/-0` | `+0.0331` | `0.0000` | `5.07e-07` | `1.23e-06` | `0` | **PASS (tie-only)** |
-| 13 | **TME** (`fashioniq_0`) | `original_split` | PASS (`6016/6016`) | `54` / **`0`** | `+2/-1` | `+0/-0` | `+0.0165` | `0.0000` | `1.25e-06` | `3.03e-06` | `0` | **PASS (tie-only)** |
-| 14 | **CLIP4Cir (`fullft`)** | `original_split` | Structural PASS (chưa so tensor/token) | `57` / **`0`** | `+3/-2` | `+0/-0` | `+0.0157` | `0.0000` | `9.54e-07` | `1.83e-06` | `0` | **PASS (tie-only, sau sửa tái dùng gallery ref)** |
-| 15 | **CLIP4Cir (`noft`)** | `original_split` | Structural PASS (chưa so tensor/token) | `57` / **`0`** | `+1/-0` | `+0/-0` | `+0.0165` | `0.0000` | `7.15e-07` | `1.90e-06` | `0` | **PASS (tie-only, sau sửa tái dùng gallery ref)** |
-| 16 | **DCNet** (`tf32=False, trg=100, q=32`) | `full_gallery_ref_excluded` | Structural PASS (chưa so tensor/token) | `20` / `14` | `+0/-0` | `+0/-0` | `0.0000` | `0.0000` | `5.34e-05` | `2.40e-04` | `0` | **SCORE V3 & RECALL PASS** (`ΔR@10=0, ΔR@50=0`; 14 non-tie ngoài Top-50) |
-
-> [!WARNING]
-> **Phạm vi đo thực tế & Điều kiện publish `CURRENT.json`:**
-> 1. **G1:** `g1_summary_all_16.json` mới kiểm tra khớp ID/cấu trúc (`6016/6016` query/ref/target/gallery size), **chưa so tensor pixel tiền xử lý và token ID thực tế** từ hai đường chạy độc lập.
-> 2. **G2:** `target_rank`, `Top-10`, `Top-50`, `R@10`, `R@50` được tính từ **ranking trên toàn bộ gallery** ở cả hai bên (`3,817/6,346/5,373` hoặc `2,454/2,901/2,612`). Riêng sai lệch giá trị điểm (`score_max_abs`, `score_max_rel`, `score_v3_violations`) mới đo trên **Top-10 ứng viên native mỗi query (`10 × 6,016 = 60,160` cặp)**, chưa đo toàn ma trận `6,016 × |G|`.
-> 3. **Publish `workbench/artifacts/parity/v3/CURRENT.json`:** `parity_gate.py:1695-1735` bắt buộc đủ **10 role V3 đã đăng ký trước** (`native_adapter_*`, `*_repeat_1/2`, `*_batch_1/n`) + `v3-plan.json` + `score-ranks.jsonl` + G1 tensor/token capture cho cả 3 category. Hiện chưa có cấu hình nào đủ bộ bằng chứng 10-role này nên **chưa publish vào `CURRENT.json`** (không tạo bằng chứng giả). `PTHA+MTST` tiếp tục giữ nhãn **CIRR-to-FashionIQ transfer** (`cirr_transfer`).
-
-> [!NOTE]
-> - **13/16 cấu hình đạt G2 V3 hoàn toàn (`v3_viol = 0` và `non_tie_rank_changes = 0`)**, trong đó 9 cấu hình có `ΔR@10 = 0.0000, ΔR@50 = 0.0000`, và 4 cấu hình thuộc `fashioniq_original_split` (`CSMCIR`, `PTHA+MTST`, `SPRC`, `TME`) chỉ có tie-breaking trong `tie_epsilon = 1e-6` (giữa `torch.argsort` GPU vs `np.argsort` CPU trên ảnh trùng lặp trong gallery `dress`).
-> - Không có cấu hình nào rơi vào trường hợp "chỉ `max_rel` fail mà ranking giữ nguyên" trên các model đã qua sửa đổi (`only_max_rel_failed_ranking_unchanged = false` ở 16/16).
+| 1 | **LIMN** (`base_iter0_all`) | `val_split` | **PASS** (`q_px=0.0, g_px=0.0, text=8/8, tok=True`) | `2` / **`0`** | `+0/-0` | `+0/-0` | `0.0000` | `0.0000` | `6.56e-07` | `9.50e-07` | `0` | **`PARITY_MANDATORY_SUBCHECK_FAILED`** (1 failure: `shirt.metrics.hit_count_equality` ở `r1`: `516` vs `517`; đã gỡ publish) |
+| 2 | **Air-Know** (`fiq_n05`) | `full_gallery_ref_excluded` | **PASS** (`q_px=0.0, g_px=0.0, text=8/8`) | `0` / **`0`** | `+0/-0` | `+0/-0` | `0.0000` | `0.0000` | `0.00e+00` | `0.00e+00` | `0` | `DIAGNOSTIC_ONLY (NOT_PUBLISHED)` — G2 bit-exact, chưa chạy 10-role V3 |
+| 3 | **ConeSep** (`fiq_n02`) | `full_gallery_ref_excluded` | **PASS** (`q_px=0.0, g_px=0.0, text=8/8`) | `0` / **`0`** | `+0/-0` | `+0/-0` | `0.0000` | `0.0000` | `7.15e-07` | `1.28e-06` | `0` | `DIAGNOSTIC_ONLY (NOT_PUBLISHED)` — G2 exact, chưa chạy 10-role V3 |
+| 4 | **CLVC-Net** | `val_split` | **PASS** (`q_px=0.0, g_px=0.0, text=8/8`) | `0` / **`0`** | `+0/-0` | `+0/-0` | `0.0000` | `0.0000` | `3.58e-07` | `4.51e-07` | `0` | `DIAGNOSTIC_ONLY (NOT_PUBLISHED)` — G2 exact, chưa chạy 10-role V3 |
+| 5 | **ENCODER** (`fashioniq`) | `val_split` | **PASS** (`q_px=0.0, g_px=0.0, text=8/8, tok=True`) | `0` / **`0`** | `+0/-0` | `+0/-0` | `0.0000` | `0.0000` | `1.79e-07` | `2.69e-07` | `0` | `DIAGNOSTIC_ONLY (NOT_PUBLISHED)` — G2 exact, chưa chạy 10-role V3 |
+| 6 | **INTENT** (`fiq_n02`) | `full_gallery_ref_excluded` | **PASS** (`q_px=0.0, g_px=0.0, text=8/8`) | `1` / **`0`** | `+0/-0` | `+0/-0` | `0.0000` | `0.0000` | `6.56e-07` | `1.26e-06` | `0` | `DIAGNOSTIC_ONLY (NOT_PUBLISHED)` — G2 exact, chưa chạy 10-role V3 |
+| 7 | **HINT** (`fashioniq`) | `val_split` | **PASS** (`q_px=0.0, g_px=0.0, text=8/8`) | `2` / **`0`** | `+0/-0` | `+0/-0` | `0.0000` | `0.0000` | `5.36e-07` | `1.51e-06` | `0` | `DIAGNOSTIC_ONLY (NOT_PUBLISHED)` — G2 exact, chưa chạy 10-role V3 |
+| 8 | **TG-CIR** | `val_split` | **PASS** (`q_px=0.0, g_px=0.0, text=8/8, tok=True`) | `2` / **`0`** | `+0/-0` | `+0/-0` | `0.0000` | `0.0000` | `2.98e-06` | `1.04e-05` | `0` | `DIAGNOSTIC_ONLY (NOT_PUBLISHED)` — G2 exact, chưa chạy 10-role V3 |
+| 9 | **HABIT** (`fiq_n02`) | `full_gallery_ref_excluded` | **PASS** (`q_px=0.0, g_px=0.0, text=8/8`) | `8` / **`0`** | `+0/-0` | `+0/-0` | `0.0000` | `0.0000` | `7.15e-07` | `1.50e-06` | `0` | `DIAGNOSTIC_ONLY (NOT_PUBLISHED)` — G2 exact, chưa chạy 10-role V3 |
+| 10 | **CSMCIR** (`fashioniq`) | `original_split` | Structural PASS (chưa thu tensor) | `47` / **`0`** | `+1/-0` | `+0/-0` | `+0.0165` | `0.0000` | `5.96e-07` | `7.61e-07` | `0` | `DIAGNOSTIC_ONLY (NOT_PUBLISHED)` — 1/1 Top-10 swap là exact tie `0.0` (trùng MD5) |
+| 11 | **PTHA+MTST** (`cirr_transfer`, **transfer**) | `original_split` | Structural PASS (chưa thu tensor) | `48` / **`0`** | `+2/-0` | `+0/-0` | `+0.0331` | `0.0000` | `3.05e-05` | `9.00e-07` | `0` | `TRANSFER_DIAGNOSTIC_ONLY (NOT_PUBLISHED)` — 2/2 Top-10 swap là exact tie `0.0` (trùng MD5) |
+| 12 | **SPRC** (`sprc_fiq_vitl`) | `original_split` | Structural PASS (chưa thu tensor) | `49` / **`0`** | `+2/-0` | `+0/-0` | `+0.0331` | `0.0000` | `5.07e-07` | `1.23e-06` | `0` | `DIAGNOSTIC_ONLY (NOT_PUBLISHED)` — 2/2 Top-10 swap là exact tie `0.0` (trùng MD5) |
+| 13 | **TME** (`fashioniq_0`) | `original_split` | Structural PASS (chưa thu tensor) | `54` / **`0`** | `+2/-1` | `+0/-0` | `+0.0165` | `0.0000` | `1.25e-06` | `3.03e-06` | `0` | `DIAGNOSTIC_ONLY (NOT_PUBLISHED)` — 3/3 Top-10 swap là exact tie `0.0` (trùng MD5) |
+| 14 | **CLIP4Cir (`fullft`)** | `original_split` | Structural PASS (chưa thu tensor) | `57` / **`0`** | `+3/-2` | `+0/-0` | `+0.0157` | `0.0000` | `9.54e-07` | `1.83e-06` | `0` | `DIAGNOSTIC_ONLY (NOT_PUBLISHED)` — 5/5 Top-10 swap là exact tie `0.0` (trùng MD5) |
+| 15 | **CLIP4Cir (`noft`)** | `original_split` | Structural PASS (chưa thu tensor) | `57` / **`0`** | `+1/-0` | `+0/-0` | `+0.0165` | `0.0000` | `7.15e-07` | `1.90e-06` | `0` | `DIAGNOSTIC_ONLY (NOT_PUBLISHED)` — 1/1 Top-10 swap là exact tie `0.0` (trùng MD5) |
+| 16 | **DCNet** (`tf32=False, trg=100, q=8`) | `full_gallery_ref_excluded` | Structural PASS + 4/4 embedding batch 0 bit-exact `0.0` | `13` / `7` | `+0/-0` | `+0/-0` | `0.0000` | `0.0000` | `3.81e-05` | `2.40e-04` | `0` | `DIAGNOSTIC_ONLY (NOT_PUBLISHED)` — 0 vi phạm V3, `ΔR@10=0, ΔR@50=0`; 7 non-tie ngoài Top-50 do chunk 512 cột trong `model_dcnet.py:554` |
 
 ---
 
-## 2. Phân Loại Lỗi Đã Tái Hiện & Sửa Đúng Chỗ (Adapter / Harness / Báo Cáo)
+## 2. Kết Luận Kỹ Thuật Chính Từ Đợt Kiểm Chứng Này
 
-### A. Lỗi ở Adapter (đã sửa trực tiếp trên source local)
-1. **TME** ([`model_tme.py`](file:///home/heheboiz/data/cir/workbench/composition/model_tme.py)):
-   - *Tái hiện:* `KeyError: 'dataset_root'` khi `_run_job` không gửi `"dataset_root"` nhưng `_prepare_worker_cwd` đọc `job["dataset_root"]`.
-   - *Sửa:* Bổ sung `"dataset_root"` vào payload và kiểm tra `if job.get("dataset_root"):`.
-2. **CSMCIR** ([`model_csmcir.py`](file:///home/heheboiz/data/cir/workbench/composition/model_csmcir.py)):
-   - *Tái hiện:* `121/6346` ảnh gallery `shirt` có `Final_Caption` khác giữa đọc đơn lẻ `shirt_cot_val.json` và gộp `dress → shirt → toptee` của upstream (`utils_csmcir.py:98-103`).
-   - *Sửa:* Thêm thuộc tính opt-in `target_caption_merge_order` (mặc định `None` giữ nguyên CIRCUS; FashionIQ parity đặt `("dress", "shirt", "toptee")`) + `_load_merged_caption_map` + cập nhật `prepare_identity()` để tránh đụng cache giữa hai protocol. Kết quả `shirt` sau sửa: `ΔR@10 = 0.0000, ΔR@50 = 0.0000, non_tie = 0`.
-3. **ENCODER** ([`model_encoder.py`](file:///home/heheboiz/data/cir/workbench/composition/model_encoder.py)):
-   - *Tái hiện:* Worker chỉ tạo `preprocess_val` cho cả query và gallery thay vì `preprocess_train` cho query như upstream (`ENCODER/datasets.py:177`).
-   - *Sửa:* Thêm `query_transform_mode` (mặc định `"preprocess_val"` cho CIRCUS; FashionIQ parity đặt `"preprocess_train"` + `query_transform_seed`) và cập nhật `transform_policy`. Kết quả sau sửa trên hai đường chạy độc lập khớp `RELATION_SEED=20261111` và `seed=0`: `0/6016` đổi hạng, `max_abs = 1.79e-7`.
-4. **CLIP4Cir (`fullft`)** ([`model_clip4cir.py`](file:///home/heheboiz/data/cir/workbench/composition/model_clip4cir.py)):
-   - *Tái hiện:* Gọi `clip_model.float().eval()` trước `clip_model.load_state_dict(saved["CLIP"])`, khác thứ tự fp16-roundtrip của upstream `validate.py:279,286,124`.
-   - *Sửa:* Đưa `clip_model = clip_model.float().eval()` xuống sau `load_state_dict`.
-5. **DCNet** ([`model_dcnet.py`](file:///home/heheboiz/data/cir/workbench/composition/model_dcnet.py)):
-   - *Tái hiện:* `mode_supported("image_only_empty_text")` trả `(True, None)` nhưng worker tạo mảng `(0,)` gây crash khi text rỗng.
-   - *Sửa:* Chuẩn hóa `.reshape(-1, 300)` và fallback `(1, 300)` zero-vector khi chuỗi token rỗng (không ảnh hưởng bất kỳ query có text nào).
-6. **Air-Know** ([`model_airknow.py`](file:///home/heheboiz/data/cir/workbench/composition/model_airknow.py)):
-   - *Tái hiện:* `hasattr(Adapter(), "seed") == False` trước khi gọi `prepare_identity()`, và thiếu hook `_capture_spec` cho G1.
-   - *Sửa:* Khởi tạo `self.seed = 0` và `self._capture_spec = None` trong `__init__`, bổ sung `_capture_spec` trong `_worker_main`. Kết quả trên hai đường chạy độc lập: `max_abs = 0.00e+00`, `0/6016` đổi hạng.
-
-### B. Lỗi ở Harness / Protocol Prep (đã xác định & sửa đúng trong harness)
-1. **`correction_dict_<cat>.json` (298/6,016 queries: 102 dress, 103 shirt, 93 toptee):** Thuộc tầng dataset/harness của 7 model (`HINT`, `HABIT`, `INTENT`, `ConeSep`, `Air-Know`, `ENCODER`, `LIMN`); khi harness truyền đúng text đã qua `correction_dict_<cat>.json`, cả 7/7 model đạt `0` non-tie rank change và `ΔRecall = 0.0000`.
-2. **CLVC-Net `<BOS> ... <AND> ... <EOS>`:** Thuộc tầng dataset/harness (`CLVCNet/datasets.py:173-175`); khi truyền đúng format này, `clvc_net` đạt `0/6016` đổi hạng, `max_abs = 3.58e-7`.
-3. **DCNet TF32 (`4.44e-2` → `7.53e-5`):** Native `run_dcnet.py` để mặc định `cudnn.allow_tf32=True` trên RTX 5070 Ti trong khi `model_dcnet.py` khóa `allow_tf32=False`. Khi hai đường chạy độc lập cùng khóa `allow_tf32=False`, `v3_viol` giảm từ `51,759` xuống `0/60,160`.
-4. **CLIP4Cir PEP-610 environment:** Env `clip4cir310-sm120` bị gate chặn do metadata `file://` của `uv`; chuyển sang env chuẩn PEP-610 sẵn có `clip4cir310-sm120-pep610` thì qua gate hợp lệ.
-
----
-
-## 3. Kiểm Tra Hồi Quy (Unit Tests)
-- Lệnh: `workbench/envs/ctl312h/bin/python -m pytest -n 10 -q -p no:cacheprovider workbench/tests/test_parity_absolute_relative_v2.py workbench/tests/test_csmcir_composition_adapter.py workbench/tests/test_airknow_composition_adapter.py workbench/tests/test_clip4cir_composition_adapter.py workbench/tests/test_r21_tme_lifecycle.py workbench/tests/test_encoder_relation_seed.py workbench/tests/test_dcnet_checkpoint_load_portability.py`
-- Kết quả: **134 passed, 0 failed** (5.03s). Đã dọn sạch `/tmp/pytest-of-heheboiz`, `/tmp/g1g2_*`, `/tmp/ctrl_*`.
+1. **9/9 cấu hình đầu đạt G1 bit-exact `0.0e+00`** khi thu trực tiếp từ worker adapter thật so với tiến trình native độc lập (`q_px = 0.0`, `g_px = 0.0`, `text = 8/8`, `token_ids` khớp tuyệt đối).
+2. **14/14 query vào/ra Top-10 trên 6 cấu hình `original_split`** (`CLIP4Cir FullFT/NoFT`, `CSMCIR`, `SPRC`, `PTHA+MTST`, `TME`) đều có **`|s10 - s11| = 0.00e+00`** ở cả hai bên và **`dup_md5 = True`** (gallery `images/*.png` có 50 nhóm ảnh trùng byte ở `dress`, 33 ở `shirt`, 15 ở `toptee`). Không có bất kỳ lệch ranking thực sự nào.
+3. **DCNet (`trg=100, q=8, allow_tf32=False`):**
+   - Tất cả 4 bước embedding đầu tiên (`gallery_emb`, `query_src_emb`, `query_txt_emb`, `query_cmp_emb`) đều **bit-exact `0.0`**.
+   - Bước đầu tiên xuất hiện sai số là `comp_scores` (`1.53e-5` dress, `0.0` shirt, `1.14e-5` toptee) và `corr_scores` (`2.29e-5`–`3.05e-5`) tại [`model_dcnet.py:554`](file:///home/heheboiz/data/cir/workbench/composition/model_dcnet.py#L554) (chunk gallery 512 cột), với `ΔR@10 = 0.0000`, `ΔR@50 = 0.0000`, `0` vi phạm V3 và chỉ còn 7 query non-tie đều nằm ngoài Top-50.
+4. **Gate V3 thật (`parity_gate.py`) trên LIMN & giới hạn dung lượng đĩa (`/` còn 21 GB trống):**
+   - `LIMN` vượt toàn bộ G1 + 10 role V3 + `r10`/`r50` nhưng fail 1 check duy nhất `shirt.metrics.hit_count_equality` ở **`r1` (`516` vs `517`, 1 tie-only swap hạng 1↔2)** → verdict **`PARITY_MANDATORY_SUBCHECK_FAILED`** (đã gỡ khỏi `CURRENT.json`).
+   - Mỗi lần chạy full 10-role V3 cho 1 model tiêu tốn ~27 phút GPU và ~4 GB đĩa (~1.1 GB cho generation publish). Với 21 GB trống hiện tại trên `/`, cần tiếp tục chạy tuần tự có dọn scratch sau từng model (ưu tiên 4 model `0` rank change: `CLVC-Net`, `ENCODER`, `ConeSep`, `Air-Know` vì chắc chắn không có tie-flip ở `r1`).
