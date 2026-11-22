@@ -4,8 +4,8 @@
 - **Seed cố định:** `42` | **Tỷ lệ mục tiêu:** `70% train / 10% val / 20% test`
 - **Script sinh split tái lập:** [`workbench/scripts/build_edir_pinpoint_splits.py`](file:///home/heheboiz/data/cir/workbench/scripts/build_edir_pinpoint_splits.py)
 - **Manifest bất biến (đã lưu phiên bản trong repo & bản sao trong `data/`):**
-  - **EDIR:** [`edir_70_10_20_seed42.json`](file:///home/heheboiz/data/cir/workbench/docs/reviews/20261123-edir-pinpoint-splits/manifests/edir_70_10_20_seed42.json) (`SHA256: 9f4c320e0c16482063da1b36a5bf52267b95becacc36ba7a2c5cfd2405d88eda`)
-  - **PinPoint:** [`pinpoint_70_10_20_seed42.json`](file:///home/heheboiz/data/cir/workbench/docs/reviews/20261123-edir-pinpoint-splits/manifests/pinpoint_70_10_20_seed42.json) (`SHA256: ee48900aa11798298e88029075d87fb084732e041641584a19ac2580c50635b4`)
+  - **EDIR:** [`edir_70_10_20_seed42.json`](file:///home/heheboiz/data/cir/workbench/docs/reviews/20261123-edir-pinpoint-splits/manifests/edir_70_10_20_seed42.json) (`SHA256: 659e9329bc12d4ca93e6b7cfe65c954334067c6a669aa5f7ad23a6aa28eb7c75`)
+  - **PinPoint:** [`pinpoint_70_10_20_seed42.json`](file:///home/heheboiz/data/cir/workbench/docs/reviews/20261123-edir-pinpoint-splits/manifests/pinpoint_70_10_20_seed42.json) (`SHA256: 15a25e30cd76d6fc9cc0f1fab985feea46022b5571bd0024b68d04a214896f3c`)
 
 ---
 
@@ -93,6 +93,17 @@
   - 2 ảnh không tải được (`1269714db704dc89eb1fcfe18fbc8c4e`, `a5b5625b26942bd4d5cd5513b235bc83`) chỉ xuất hiện ở `negative_candidates` (`1/50` hard negative) của 18 query single-image (`train: 12`, `val: 6`, **`test: 0`**) và 5 query trong `multi_image_eval`.
   - **Tập `test` (`1,337` query) có 0 query bị ảnh hưởng — đủ 100% ảnh `ref`, `pos` và `neg`.**
 
+- **Kiểm toán toàn vẹn ảnh & làm sạch dữ liệu bẩn (đã tự động xử lý trong bản export chuẩn):**
+  - **100% ảnh đọc hợp lệ bằng PIL (`0` ảnh hỏng / `0-byte`)**: `33,429/33,429` ảnh EDIR và `109,598/109,598` ảnh PinPoint.
+  - **5 lỗi dữ liệu bẩn phát hiện trong `pinpoint_licensed.parquet` gốc (và cách xử lý kép):**
+    1. `6,729` phần tử `None/null` trong mảng `negative_candidates` → loại bỏ khỏi `negative_ids` dùng khi train.
+    2. `2,719` bản ghi trùng lặp trong `positive_candidates` và `8,794` bản ghi trùng lặp trong `negative_candidates` → khử trùng lặp theo thứ tự gốc (còn đúng **`39,886`** cặp `(query, pos)` sạch duy nhất trong `PinPoint train`).
+    3. `476` trường hợp cùng một ảnh nằm đồng thời ở cả `positive_candidates` và `negative_candidates` (`310` query) → loại khỏi `negative_ids` khi train để contrastive loss không đẩy ảnh đích ra xa.
+    4. `23` tham chiếu tới 2 ảnh `HTTP 403` trong `negative_candidates` → loại khỏi `negative_ids` và `corpus_full.jsonl` (`109,598` ảnh tồn tại trên đĩa).
+    5. `111` dòng có `is_single=True` nhưng cột `query_image_signature2` khác `None` → giữ `ref2_id=None` khi train/infer single-image, đồng thời bảo toàn `query_image_signature2_raw` trong `metadata` để khớp `ling_sens` bit-exact với `pinpoint-dataset/evaluate.py`.
+  - **Bảo toàn song song `positive_ids_raw` / `negative_ids_raw`:** Khi đánh giá bằng `evaluate_pinpoint(..., use_raw_gt=True)`, mọi chỉ số khớp **bit-exact (`≤ 1e-12`)** với `pinpoint-dataset/evaluate.py` gốc.
+  - **Lưu ý quy ước gallery PinPoint:** Ảnh `ref` nằm sẵn trong `index_signatures.txt` và là hard-negative tường minh cho `4,217` query — giống `pinpoint-dataset/run_retrieval.py`, **không** mask `ref` khi truy hồi PinPoint.
+
 ---
 
 ## 3. Quy Ước Khởi Tạo Trọng Số & Huấn Luyện Chuẩn Cho ~15 Mô Hình
@@ -101,25 +112,61 @@
 - **Đúng như cách các paper gốc huấn luyện trên FashionIQ và CIRR:**
   1. **Giữ nguyên trọng số pretrained gốc** của Vision-Language / Vision backbone theo đúng thiết kế từng paper (CLIP, BLIP-2, hoặc ResNet-ImageNet + GloVe).
   2. **Khởi tạo mới (from scratch)** toàn bộ phần **CIR composition head / combiner / projector / adapter / prompt tokens** của từng mô hình.
-  3. **Huấn luyện trực tiếp trên `train` của EDIR hoặc PinPoint**, chọn checkpoint tốt nhất bằng **early stopping trên `val`**, và chỉ đánh giá cuối cùng đúng 1 lần trên `test`.
+  3. **Giữ nguyên cơ chế freeze / unfreeze của từng repo gốc** (repo nào code gốc cho unfreeze/train tiếp Q-Former hoặc CLIP thì vẫn train tiếp đúng như code gốc; repo nào freeze backbone thì giữ nguyên freeze).
+  4. **Huấn luyện trực tiếp trên `train` của EDIR hoặc PinPoint**, chọn checkpoint tốt nhất bằng **early stopping trên `val`**, và chỉ đánh giá cuối cùng đúng 1 lần trên `test`.
 - **Vì sao quy ước này công bằng nhất?**
   - **Không** khởi tạo random toàn bộ CLIP/BLIP-2 (bất khả thi ở quy mô vài nghìn query).
   - **Không** fine-tune nối tiếp từ checkpoint đã train trên FashionIQ hoặc CIRR (tránh mang theo thiên kiến miền quần áo/NLVR2 và tránh bất công giữa các mô hình có/không có checkpoint CIRR).
   - **Tín hiệu học đủ giàu ở quy mô 70% train:**
-    - `PinPoint train` (`4,724` query × ~`9` positive/query) cung cấp **~42,000 cặp `(query, pos)`** + `50` hard negative/query (giàu tín hiệu hơn cả CIRR).
+    - `PinPoint train` (`4,724` query) cung cấp đúng **`39,886` cặp `(query, pos)` sạch duy nhất** + hard-negative tường minh (giàu tín hiệu hơn cả CIRR).
     - `EDIR train` (`3,500` query × `5` hard negative cùng ảnh gốc/query) cung cấp tín hiệu contrastive rất sắc theo đúng 15 trục edit.
 
 ### 3.2. Phân nhóm khởi tạo backbone cho 15 paper trong repo
 
 | Nhóm backbone khởi tạo gốc | Các mô hình trong repo | Lưu ý huấn luyện trên EDIR / PinPoint |
 |---|---|---|
-| **BLIP-2 (Q-Former + ViT-G/L, `lavis`)** | `SPRC`, `TME`, `CSMCIR`, `PTHA+MTST`, `HINT`, `HABIT`, `Air-Know`, `ConeSep`, `INTENT`, `ENCODER`, `LIMN` | Khởi tạo từ checkpoint pretrained BLIP-2 gốc (`blip2_pretrained` / `blip2_feature_extractor`); train phần composition/adapter của từng paper theo đúng optimizer/LR schedule chuẩn + early stopping trên `val`. |
-| **CLIP (`RN50x4` / `ViT-L/14`)** | `CLIP4Cir` (`Combiner` / `FullFT`), `TG-CIR` | Khởi tạo từ trọng số OpenAI CLIP gốc; với nhánh `FullFT` / unfreeze backbone cần theo dõi sát `val` và dùng LR nhỏ + weight decay để chống overfit trên 3.5k query EDIR. |
+| **BLIP-2 (Q-Former + ViT-G/L, `lavis`)** | `SPRC`, `TME`, `CSMCIR`, `PTHA+MTST`, `HINT`, `HABIT`, `Air-Know`, `ConeSep`, `INTENT`, `ENCODER`, `LIMN` | Khởi tạo từ checkpoint pretrained BLIP-2 gốc (`blip2_pretrained` / `blip2_feature_extractor`); giữ nguyên cơ chế unfreeze Q-Former/adapter theo code tác giả + early stopping trên `val`. |
+| **CLIP (`RN50x4` / `ViT-L/14`)** | `CLIP4Cir` (`Combiner` / `FullFT`), `TG-CIR` | Khởi tạo từ trọng số OpenAI CLIP gốc; giữ nguyên freeze (`Combiner noft`) hoặc unfreeze (`FullFT`, `TG-CIR`) theo code gốc, theo dõi sát `val` để chống overfit trên 3.5k query EDIR. |
 | **Classic CNN + RNN/GloVe (`ResNet` + `LSTM`/`GloVe`)** | `DCNet`, `CLVC-Net` | Khởi tạo từ `ResNet` ImageNet + `GloVe 300d`; xây bộ từ vựng (vocab) chỉ trên `train` (không đụng `val`/`test`). Kỳ vọng lộ rõ điểm yếu OOV và data-efficiency — đây là đối chứng giá trị khi so với nhóm VLM. |
 
 ### 3.3. Quy tắc đánh giá thống nhất
 - **Không chạm vào `test` trong quá trình tuning hyperparameter** (chỉ dùng `val` để chọn epoch/checkpoint tốt nhất).
 - **Báo cáo phân rã theo trục lỗi (*failure breakdown*):**
-  - Trên **EDIR `test` (`1,003` query)**: báo cáo `Recall@1`, `Recall@5`, `Recall@10` tổng thể và **riêng từng nhóm trong 15 subcategory** (`remove`, `shape`, `viewpoint`, `spatial`, `cardinality`, `color`, …).
-  - Trên **PinPoint `test` (`1,337` query)**: chạy chính `pinpoint-dataset/evaluate.py` để báo cáo `Precision@1`, `Precision@10`, `mAP@10`, **`NegRecall@10`**, `mAP@10_noNeg`, `delta_mAP@10_noNeg`, và độ nhạy paraphrase (**`ling_sens_range`**, **`ling_sens_std`**) theo từng `query_category` (`Swap`, `Context Fit`, `Negation`, `Complement`, `Explore`).
+  - Trên **EDIR `test` (`1,003` query)**: báo cáo `Recall@1`, `Recall@5`, `Recall@10`, `Recall@50`, `MRR` tổng thể, **macro-average** và **riêng từng nhóm trong 15 subcategory** (`remove`, `shape`, `viewpoint`, `spatial`, `cardinality`, `color`, …).
+  - Trên **PinPoint `test` (`1,337` query)**: báo cáo `precision@1`, `precision@10`, `mAP@10`, **`NegRecall@10`**, `mAP@10_noNeg`, `delta_mAP@10_noNeg`, `ling_sens_range`, `ling_sens_std` tổng thể và theo từng `query_category` (`Swap`, `Context Fit`, `Negation`, `Complement`, `Explore`).
 - **Đối chứng tùy chọn (tách domain-shift vs lỗi cố hữu):** Chạy thêm 1 lượt eval **trước khi train** (bằng backbone gốc hoặc checkpoint CIRR/FashionIQ) trên đúng cùng tập `test` để đo chính xác độ cải thiện *before vs after in-domain training* trên từng loại lỗi.
+
+---
+
+## 4. Hạ Tầng Dùng Chung Cho Toàn Bộ ~15 Repo (`workbench/benchmarks/`)
+
+Để **mọi repo** (dù chạy Python `3.9`, `3.10` hay `3.12`, không cần cài `duckdb`/`pyarrow`/`pandas`) đều đọc đúng cùng một bộ split bất biến với SHA256 kiểm chứng:
+
+- **Danh sách ID chuẩn theo dõi bằng git** (`workbench/docs/reviews/20261123-edir-pinpoint-splits/manifests/`):
+  - `edir_train_ids.txt` (`3,500`), `edir_val_ids.txt` (`497`), `edir_test_ids.txt` (`1,003`), `edir_70_10_20_seed42.json`
+  - `pinpoint_train_ids.txt` (`4,724`), `pinpoint_val_ids.txt` (`679`), `pinpoint_test_ids.txt` (`1,337`), `pinpoint_multi_image_eval_ids.txt` (`895`), `pinpoint_70_10_20_seed42.json`
+- **Bản export JSONL tự chứa kèm `manifest.json` (SHA256 mọi file):**
+  - `data/EDIR/splits/70_10_20_seed42/` (`train/val/test.jsonl`, `*_ids.txt`, `corpus_full.jsonl`, `corpus_{train,val,test}.jsonl`)
+  - `data/PinPoint/splits/70_10_20_seed42/` (`train/val/test/multi_image_eval.jsonl`, `*_ids.txt`, `corpus_full.jsonl`, `corpus_*.jsonl`)
+- **Module Python dùng chung (`workbench/benchmarks/`):**
+  - [`schema.py`](file:///home/heheboiz/data/cir/workbench/benchmarks/schema.py): `verify_split_integrity()`, `load_split_ids()`, `load_split_bundle()`
+  - [`datasets.py`](file:///home/heheboiz/data/cir/workbench/benchmarks/datasets.py): `CIRTrainingDataset` (`positive_mode="random" | "expand" | "first"`, `num_hard_negatives`), `CIRQueryEvalDataset`, `CIRCorpusDataset`, `build_dataloaders()`
+  - [`evaluators.py`](file:///home/heheboiz/data/cir/workbench/benchmarks/evaluators.py): `rank_embeddings()` (deterministic `kind="stable"`), `evaluate_edir()`, `evaluate_pinpoint()` (khớp bit-exact `pinpoint-dataset/evaluate.py`)
+  - Test kiểm chứng: [`workbench/tests/test_edir_pinpoint_benchmarks.py`](file:///home/heheboiz/data/cir/workbench/tests/test_edir_pinpoint_benchmarks.py)
+
+```python
+from workbench.benchmarks import build_dataloaders, rank_embeddings, evaluate_edir, evaluate_pinpoint
+
+loaders = build_dataloaders(
+    dataset="edir",                  # hoặc "pinpoint"
+    train_image_transform=preprocess_train,
+    eval_image_transform=preprocess_val,
+    batch_size=32,
+    eval_batch_size=64,
+    num_workers=4,
+    positive_mode="expand",          # "random" (1 pos/query) hoặc "expand" (tất cả cặp pos)
+    num_hard_negatives=0,            # >0 nếu loss của repo dùng hard negative tường minh
+    corpus_scope="full",             # "full" (mặc định) hoặc "split"
+    verify_checksums=True,           # tự kiểm tra SHA256 manifest trước khi train
+)
+```

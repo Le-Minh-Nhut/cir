@@ -1,6 +1,7 @@
 {
   "dataset": "PinPoint",
   "source": "pinpoint_licensed.parquet",
+  "split_tag": "70_10_20_seed42",
   "seed": 42,
   "ratios": {
     "train": 0.7,
@@ -26,6 +27,18 @@
     "test": 224
   },
   "multi_image_eval_count": 895,
+  "corpus_counts": {
+    "index_signatures_total": 109600,
+    "full_existing": 109598,
+    "missing_403_excluded": [
+      "1269714db704dc89eb1fcfe18fbc8c4e",
+      "a5b5625b26942bd4d5cd5513b235bc83"
+    ],
+    "train": 24913,
+    "val": 4579,
+    "test": 8609,
+    "multi_image_eval": 7799
+  },
   "category_distribution": {
     "train": {
       "Complement": 206,
@@ -49,33 +62,57 @@
       "Swap": 673
     }
   },
+  "cleaning_audit": {
+    "null_neg_removed": 6729,
+    "dup_pos_removed": 2719,
+    "dup_neg_removed": 8794,
+    "pos_neg_conflict_removed": 476,
+    "missing_disk_neg_removed": 23,
+    "single_with_nonnull_q2_count": 111
+  },
   "leakage_audit": {
     "train_vs_val": {
       "ref_overlap": 0,
       "pos_overlap": 157,
       "pos_overlap_pct_of_b": 15.33,
-      "neg_overlap": 1563,
-      "neg_overlap_pct_of_b": 43.66
+      "neg_overlap": 1559,
+      "neg_overlap_pct_of_b": 43.61
     },
     "train_vs_test": {
       "ref_overlap": 0,
       "pos_overlap": 338,
       "pos_overlap_pct_of_b": 15.45,
-      "neg_overlap": 2799,
+      "neg_overlap": 2793,
       "neg_overlap_pct_of_b": 42.29
     },
     "val_vs_test": {
       "ref_overlap": 0,
       "pos_overlap": 29,
       "pos_overlap_pct_of_b": 1.33,
-      "neg_overlap": 503,
-      "neg_overlap_pct_of_b": 7.6
+      "neg_overlap": 499,
+      "neg_overlap_pct_of_b": 7.55
     }
   },
   "missing_403_neg_affected_queries": {
     "train": 12,
     "val": 6,
-    "test": 0
+    "test": 0,
+    "multi_image_eval": 5
+  },
+  "file_sha256": {
+    "corpus_full.jsonl": "a190a5ef243921525242061f25d3cc978b0e5358280e170377c3cc7d3fc088f0",
+    "train.jsonl": "16a8e634913844bbed54d1f8a6028b1dc22cca268d9391cf98b088434d2767a8",
+    "train_ids.txt": "e2404e4571557aa03a5928ffe08d45083ed29b1e7aa149e20759c18bd466ae44",
+    "corpus_train.jsonl": "d710f0b1e645e633b10a842544ea92bec1d0d781bc0a4093299a03dddcb25616",
+    "val.jsonl": "0ef2b7e71e9c287addf1cce672e6461f68d714392a4a5e69a0c0ed703182a5a8",
+    "val_ids.txt": "d3b6faf31171c9f89f3adcf6ae2004197c621784893f8f63d71ae1a2095e2b35",
+    "corpus_val.jsonl": "a3d0daefce7a75cd11341334d4b92e9f0cf35686b441fe0c003afab38eeaf6a9",
+    "test.jsonl": "4d218700ca342cc66f3ff5d32fd4ccc5bf53e3f0c7d08af99b34f2a20ee2a59c",
+    "test_ids.txt": "663a1e70d02546a1ac502442c51914937e8ab553635ce549efde06ceece7ee54",
+    "corpus_test.jsonl": "9e985ccabd45c7f3f0f2a69fc137d0d244d7e4121c3c04aea1811990ba725645",
+    "multi_image_eval.jsonl": "aa2e7ee7dcb862ce6e60621de883a3c32205e15e13a6e9c98fa29bdf6ddbb9bf",
+    "multi_image_eval_ids.txt": "286f041b7ab549a5dbdb4ebe5392606e94e02a626854687e7fa52d36280f9a9e",
+    "corpus_multi_image_eval.jsonl": "55b13777178367c3dc2196f55da883aa02f5e4debf07d656c6e0f348b3fc0d0a"
   },
   "splits": {
     "train": [

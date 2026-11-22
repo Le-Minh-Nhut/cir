@@ -1,6 +1,7 @@
 {
   "dataset": "EDIR",
   "source": "EDIR-BENCH/EDIR",
+  "split_tag": "70_10_20_seed42",
   "seed": 42,
   "ratios": {
     "train": 0.7,
@@ -17,6 +18,12 @@
     "train": 3347,
     "val": 479,
     "test": 958
+  },
+  "corpus_counts": {
+    "full": 28645,
+    "train": 20038,
+    "val": 2869,
+    "test": 5738
   },
   "leakage_audit": {
     "train_vs_val": {
@@ -90,6 +97,18 @@
       "viewpoint": 60,
       "weather": 60
     }
+  },
+  "file_sha256": {
+    "corpus_full.jsonl": "48acfebe044bd1b9e050d54d04158cd17e57e7e7c39d10a5c56a8c445ffa16e5",
+    "train.jsonl": "6f32bea410aca89b80869974d6874f3ca8b85b974fd9f19bf8460dfda8b6d4c0",
+    "train_ids.txt": "2ae52731f19912c83aa624bfe8bc13072a0db5d8fc18d162679208100d26b04a",
+    "corpus_train.jsonl": "c05cdc4595579b80868086d49e5a3333bb7e5bd5d5fbe4f71d9e1aa58511b4b6",
+    "val.jsonl": "d522a95f48b3c60950182f50036f5f832ddc0e64fb0c0dd8b43d53250590aa59",
+    "val_ids.txt": "3a4001fd0a6b14ef5ef23d97939e2619a40a7866cb6decbf6267312c5dd0d034",
+    "corpus_val.jsonl": "14415133acd2fcd85af5715dba9b33f0d3449fc24b21a09692607fa6d0f15286",
+    "test.jsonl": "dc436a97899b79f9d9c1923e870d7785cbc94a54590d014e93030088b27b8de7",
+    "test_ids.txt": "d932f0d1a8025db8cfcf430a2224a21f137a943dc65f648ed74764f00ea488c2",
+    "corpus_test.jsonl": "196223ef6cec6009bb90e6ccbf585dd4232e15c7afb9aa33961a3bb68a5e735e"
   },
   "splits": {
     "train": [
