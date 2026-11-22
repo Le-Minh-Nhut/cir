@@ -344,10 +344,11 @@ def build_dataloaders(
 
     Caps ``num_workers`` at 10 to respect workspace CPU budget.
     """
+    import os
     import torch
     from torch.utils.data import DataLoader
 
-    effective_workers = max(0, min(int(num_workers), 10))
+    effective_workers = max(0, min(int(num_workers), os.cpu_count() or 16))
 
     train_bundle = load_split_bundle(
         dataset, "train", corpus_scope=corpus_scope, split_tag=split_tag,
