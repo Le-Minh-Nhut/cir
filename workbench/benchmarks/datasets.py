@@ -12,6 +12,11 @@ from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
 
 from PIL import Image
 
+try:
+    from torch.utils.data import Dataset as _TorchDataset
+except ImportError:  # pragma: no cover
+    _TorchDataset = object  # type: ignore[misc, assignment]
+
 from workbench.benchmarks.schema import (
     CIRCorpusRecord,
     CIRQueryRecord,
@@ -46,18 +51,20 @@ def seed_worker(worker_id: int) -> None:
         pass
 
 
-class CIRTrainingDataset:
+class CIRTrainingDataset(_TorchDataset):
     """Unified PyTorch-compatible training Dataset for EDIR and PinPoint.
 
     Supports three positive-sampling strategies:
       - ``"random"``: 1 item per query; samples 1 random positive per access (great
         when balancing queries equally across single-positive EDIR and multi-positive
         PinPoint).
-      - ``"expand"``: expands every ``(query, positive_id)`` pair (yields ~3.5k pairs
-        for EDIR train, ~42k pairs for PinPoint train).
+      - ``"expand"``: expands every ``(query, positive_id)`` pair (yields 3,500 pairs
+        for EDIR train, 39,886 clean unique pairs for PinPoint train).
       - ``"first"``: deterministic first positive per query (useful for validation loss).
 
     Optionally samples ``num_hard_negatives`` explicit hard negatives per item.
+    Uses per-worker / per-epoch RNG seeding so multi-worker DataLoaders sample
+    independently across workers and freshly across epochs while staying reproducible.
     """
 
     def __init__(
@@ -81,18 +88,49 @@ class CIRTrainingDataset:
         self.positive_mode = positive_mode
         self.num_hard_negatives = num_hard_negatives
         self.load_images = load_images
-        self._rng = random.Random(seed)
+        self._base_seed = int(seed)
+        self._epoch = 0
+        self._rng = random.Random(self._base_seed)
+        self._worker_rng_key: Optional[Tuple[int, int, int]] = None
+        self._worker_rng: Optional[random.Random] = None
 
-        # Validate every query has at least 1 positive target
+        # Validate every query has at least 1 positive target (and >=1 negative if hard negatives requested)
         self._index: List[Tuple[int, Optional[int]]] = []
         for qi, q in enumerate(bundle.queries):
             if not q.positive_ids:
                 raise ValueError(f"Query {q.query_id} in {bundle.dataset}/{bundle.split_name} has 0 positive_ids")
+            if num_hard_negatives > 0 and not q.negative_ids:
+                raise ValueError(
+                    f"Query {q.query_id} in {bundle.dataset}/{bundle.split_name} has 0 negative_ids "
+                    f"but num_hard_negatives={num_hard_negatives}"
+                )
             if positive_mode == "expand":
                 for pi in range(len(q.positive_ids)):
                     self._index.append((qi, pi))
             else:
                 self._index.append((qi, None))
+
+    def set_epoch(self, epoch: int) -> None:
+        """Advance epoch seed (useful for DistributedSampler or persistent_workers=True)."""
+        self._epoch = int(epoch)
+        self._rng = random.Random(self._base_seed + 1000003 * self._epoch)
+        self._worker_rng_key = None
+        self._worker_rng = None
+
+    def _get_rng(self) -> random.Random:
+        try:
+            from torch.utils.data import get_worker_info
+
+            info = get_worker_info()
+        except ImportError:  # pragma: no cover
+            info = None
+        if info is None:
+            return self._rng
+        key = (info.id, info.seed, self._epoch)
+        if self._worker_rng_key != key or self._worker_rng is None:
+            self._worker_rng_key = key
+            self._worker_rng = random.Random((info.seed + 1000003 * self._epoch) % (2**32))
+        return self._worker_rng
 
     def __len__(self) -> int:
         return len(self._index)
@@ -100,6 +138,7 @@ class CIRTrainingDataset:
     def __getitem__(self, idx: int) -> Dict[str, Any]:
         qi, pi = self._index[idx]
         q: CIRQueryRecord = self.bundle.queries[qi]
+        rng = self._get_rng()
 
         if self.positive_mode == "expand":
             assert pi is not None
@@ -107,7 +146,7 @@ class CIRTrainingDataset:
         elif self.positive_mode == "first":
             pos_id = q.positive_ids[0]
         else:
-            pos_id = self._rng.choice(q.positive_ids)
+            pos_id = rng.choice(q.positive_ids)
 
         ref_path = q.ref_path(self.bundle.data_dir)
         pos_path = self.bundle.resolve_image_path(pos_id)
@@ -138,9 +177,9 @@ class CIRTrainingDataset:
         if self.num_hard_negatives > 0:
             pool = list(q.negative_ids)
             if len(pool) >= self.num_hard_negatives:
-                chosen_negs = self._rng.sample(pool, self.num_hard_negatives)
+                chosen_negs = rng.sample(pool, self.num_hard_negatives)
             elif pool:
-                chosen_negs = [self._rng.choice(pool) for _ in range(self.num_hard_negatives)]
+                chosen_negs = [rng.choice(pool) for _ in range(self.num_hard_negatives)]
             else:
                 chosen_negs = []
             item["hard_neg_ids"] = chosen_negs
@@ -154,7 +193,7 @@ class CIRTrainingDataset:
         return item
 
 
-class CIRQueryEvalDataset:
+class CIRQueryEvalDataset(_TorchDataset):
     """Deterministic evaluation query Dataset for EDIR and PinPoint."""
 
     def __init__(
@@ -198,7 +237,7 @@ class CIRQueryEvalDataset:
         return item
 
 
-class CIRCorpusDataset:
+class CIRCorpusDataset(_TorchDataset):
     """Deterministic gallery/corpus Dataset for EDIR and PinPoint."""
 
     def __init__(

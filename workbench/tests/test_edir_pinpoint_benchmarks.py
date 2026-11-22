@@ -250,3 +250,41 @@ def test_pinpoint_evaluator_matches_official_script_bit_exact():
     ref_stds = [float(np.std(v)) for v in variations.values() if len(v) > 1]
     assert ours["ling_sens_range"] == pytest.approx(float(np.mean(ref_ranges)), abs=1e-12)
     assert ours["ling_sens_std"] == pytest.approx(float(np.mean(ref_stds)), abs=1e-12)
+
+
+def test_torch_dataset_inheritance_multiworker_and_nan_guard():
+    from torch.utils.data import DataLoader, Dataset, Subset
+
+    tf = _tensor_transform()
+    b = load_split_bundle("pinpoint", "train", corpus_scope="split")
+    ds_train = CIRTrainingDataset(b, image_transform=tf, positive_mode="random", num_hard_negatives=2, seed=42)
+    ds_q = CIRQueryEvalDataset(b, image_transform=tf)
+    ds_c = CIRCorpusDataset(b, image_transform=tf)
+
+    assert isinstance(ds_train, Dataset)
+    assert isinstance(ds_q, Dataset)
+    assert isinstance(ds_c, Dataset)
+
+    # Verify multi-worker DataLoader produces fresh samples across epochs (not frozen RNG)
+    sub = Subset(ds_train, list(range(32)))
+    gen = torch.Generator()
+    gen.manual_seed(42)
+    from workbench.benchmarks import collate_train_batch, seed_worker
+
+    dl = DataLoader(
+        sub,
+        batch_size=16,
+        shuffle=False,
+        num_workers=2,
+        worker_init_fn=seed_worker,
+        generator=gen,
+        collate_fn=collate_train_batch,
+    )
+    ep1 = [(q, t, tuple(n)) for batch in dl for q, t, n in zip(batch["query_id"], batch["target_id"], batch["hard_neg_ids"])]
+    ep2 = [(q, t, tuple(n)) for batch in dl for q, t, n in zip(batch["query_id"], batch["target_id"], batch["hard_neg_ids"])]
+    assert len(ep1) == len(ep2) == 32
+    assert ep1 != ep2, "Multi-worker DataLoader sampled identical targets/negatives across epochs!"
+
+    # Verify NaN/Inf guard in rank_embeddings
+    with pytest.raises(ValueError, match="NaN or Inf"):
+        rank_embeddings(np.array([[np.nan, 1.0]], dtype=np.float32), ["q0"], np.ones((2, 2), dtype=np.float32), ["c0", "c1"])

@@ -40,6 +40,10 @@ def rank_embeddings(
         raise ValueError(f"query_embeddings rows ({q_emb.shape[0]}) != len(query_ids) ({len(query_ids)})")
     if c_emb.shape[0] != len(corpus_ids):
         raise ValueError(f"corpus_embeddings rows ({c_emb.shape[0]}) != len(corpus_ids) ({len(corpus_ids)})")
+    if not np.isfinite(q_emb).all():
+        raise ValueError("query_embeddings contains NaN or Inf values")
+    if not np.isfinite(c_emb).all():
+        raise ValueError("corpus_embeddings contains NaN or Inf values")
 
     if l2_normalize:
         q_norm = np.linalg.norm(q_emb, axis=1, keepdims=True)
