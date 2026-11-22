@@ -50,3 +50,25 @@ Khi cần mở lại việc chứng nhận `PARITY_PASS` vào `CURRENT.json`, th
 2. **Nối publisher V3 cho nhóm `0` rank đổi (chắc chắn không bị tie-flip ở `r1`):** `dcnet`, `airknow`, `conesep`, `encoder` (và `ptha_mtst` giữ nhãn `cirr_transfer`).
 3. **Bổ sung thu G1 tensor 2-tiến-trình** cho 7 cấu hình nhóm sau và xử lý chính sách tie ở `r1` (nếu cần) cho nhóm còn tie-swap như `limn`.
 4. **Lưu ý vận hành:** Mỗi model full 10-role V3 tốn ~15–30 phút GPU, ~2.9 GB scratch tạm + ~1.1 GB generation publish; cần chạy tuần tự 1 GPU job và xóa scratch ngay sau mỗi model.
+
+---
+
+## 4. Bộ Dataset Mới Bổ Sung Cho Research (`EDIR` & `PinPoint`)
+
+Đã tải bổ sung 2 benchmark CIR mới vào thư mục `data/` (2026-11-22):
+
+1. **EDIR (`EDIR-BENCH/EDIR`)** — `data/EDIR` (`32 GB`):
+   - Đã tải đủ từ HuggingFace (`EDIR-BENCH/EDIR`), giải nén `imgs_mc/` (**33,429 ảnh**), giữ đầy đủ `corpus.jsonl`, `instances.jsonl`, `queries.jsonl`, `README.md` và đã xóa các file `imgs_mc.tar.part*` + `.cache`.
+
+2. **PinPoint** — `data/PinPoint` (`6.8 GB`, metadata từ `pinpoint-dataset/`):
+   - Đã tải **109,598 / 109,600 ảnh (99.998%)** về `data/PinPoint/images/{2-ký-tự-đầu}/{signature}.jpg` kèm `pinpoint_licensed.parquet` (7,635 query), `index_signatures.txt`, `image_attribution.json`, `README.md`.
+   - **Ghi nhận 2 ảnh lỗi (`HTTP 403` từ Pinterest CDN, lưu tại `data/PinPoint/failed_signatures.txt`):**
+     - `1269714db704dc89eb1fcfe18fbc8c4e`
+     - `a5b5625b26942bd4d5cd5513b235bc83`
+   - **Kiểm tra tác động trên toàn bộ 7,635 query trong `pinpoint_licensed.parquet`:**
+     - `query_image_signature` / `query_image_signature2`: **0 query** bị ảnh hưởng (đủ 100% ảnh query).
+     - `positive_candidates`: **0 query** bị ảnh hưởng (không mất bất kỳ đáp án đúng nào; ground-truth cho `Precision@k`, `Recall@k`, `mAP@k` nguyên vẹn).
+     - `negative_candidates`: chỉ xuất hiện là **1/50 hard negative** ở đúng **23 / 7,635 query (~0.3%, không chồng lấn)**:
+       - `1269714db704dc89eb1fcfe18fbc8c4e` (**11 query**): `query_01569`–`query_01574`, `query_05297`–`query_05301`.
+       - `a5b5625b26942bd4d5cd5513b235bc83` (**12 query**): `query_01694`–`query_01699`, `query_06731`–`query_06736`.
+     - **Lưu ý khi build FAISS index từ thư mục local:** bỏ qua 2 signature không có file ảnh trong `index_signatures.txt`; phần đánh giá `evaluate.py` và các metric chính không bị ảnh hưởng đáng kể.
