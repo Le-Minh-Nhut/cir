@@ -14,10 +14,16 @@ import numpy as np
 from workbench.benchmarks.schema import CIRQueryRecord
 
 
+def _to_numpy_f32(arr: Any) -> np.ndarray:
+    if hasattr(arr, "detach"):
+        arr = arr.detach().cpu().numpy()
+    return np.asarray(arr, dtype=np.float32)
+
+
 def rank_embeddings(
-    query_embeddings: np.ndarray,
+    query_embeddings: Any,
     query_ids: Sequence[str],
-    corpus_embeddings: np.ndarray,
+    corpus_embeddings: Any,
     corpus_ids: Sequence[str],
     top_k: int = 50,
     l2_normalize: bool = True,
@@ -26,20 +32,32 @@ def rank_embeddings(
 ) -> Dict[str, List[str]]:
     """Deterministic top-K cosine/dot-product ranking using stable tie-breaking.
 
+    Accepts either ``np.ndarray`` or ``torch.Tensor`` (CPU/CUDA).
+
     Note:
         - For **EDIR**: reference images are NOT in corpus, so ``exclude_ids_per_query=None``.
         - For **PinPoint**: reference images ARE intentionally inside the corpus (and
           explicitly marked as hard negatives for 4,217 queries), matching
           ``pinpoint-dataset/run_retrieval.py``, so keep ``exclude_ids_per_query=None``.
     """
-    q_emb = np.asarray(query_embeddings, dtype=np.float32)
-    c_emb = np.asarray(corpus_embeddings, dtype=np.float32)
+    q_emb = _to_numpy_f32(query_embeddings)
+    c_emb = _to_numpy_f32(corpus_embeddings)
     if q_emb.ndim != 2 or c_emb.ndim != 2:
         raise ValueError(f"Expected 2D embeddings, got q={q_emb.shape}, c={c_emb.shape}")
+    if q_emb.shape[1] != c_emb.shape[1]:
+        raise ValueError(f"Embedding dim mismatch: query={q_emb.shape[1]} vs corpus={c_emb.shape[1]}")
     if q_emb.shape[0] != len(query_ids):
         raise ValueError(f"query_embeddings rows ({q_emb.shape[0]}) != len(query_ids) ({len(query_ids)})")
     if c_emb.shape[0] != len(corpus_ids):
         raise ValueError(f"corpus_embeddings rows ({c_emb.shape[0]}) != len(corpus_ids) ({len(corpus_ids)})")
+    if len(query_ids) != len(set(query_ids)):
+        raise ValueError("Duplicate query_ids detected in rank_embeddings")
+    if len(corpus_ids) != len(set(corpus_ids)):
+        raise ValueError("Duplicate corpus_ids detected in rank_embeddings")
+    if top_k < 1:
+        raise ValueError(f"top_k must be >= 1, got {top_k}")
+    if len(corpus_ids) == 0:
+        raise ValueError("corpus_ids must not be empty")
     if not np.isfinite(q_emb).all():
         raise ValueError("query_embeddings contains NaN or Inf values")
     if not np.isfinite(c_emb).all():
@@ -89,6 +107,7 @@ def evaluate_edir(
     predictions: Mapping[str, Any],
     records: Sequence[CIRQueryRecord],
     ks: Sequence[int] = (1, 5, 10, 50),
+    strict: bool = False,
 ) -> Dict[str, Any]:
     """Evaluate ranked predictions on EDIR (overall + per-15-subcategory Recall@K & MRR)."""
     overall_hits: Dict[int, List[float]] = {k: [] for k in ks}
@@ -97,9 +116,11 @@ def evaluate_edir(
     by_cat_rr: Dict[str, List[float]] = defaultdict(list)
 
     matched = 0
+    missing_qids: List[str] = []
     for rec in records:
         retrieved = _lookup_pred(predictions, rec)
         if retrieved is None:
+            missing_qids.append(rec.query_id)
             continue
         matched += 1
         pos_set = set(rec.positive_ids)
@@ -117,6 +138,12 @@ def evaluate_edir(
             hit = 1.0 if any(cid in pos_set for cid in retrieved[:k]) else 0.0
             overall_hits[k].append(hit)
             by_cat_hits[rec.category][k].append(hit)
+
+    if strict and missing_qids:
+        raise ValueError(
+            f"evaluate_edir(strict=True): missing {len(missing_qids)}/{len(records)} queries "
+            f"(first 5: {missing_qids[:5]})"
+        )
 
     overall: Dict[str, Any] = {
         "matched_queries": matched,
@@ -210,6 +237,7 @@ def evaluate_pinpoint(
     records: Sequence[CIRQueryRecord],
     ks: Sequence[int] = (1, 5, 10, 50),
     use_raw_gt: bool = True,
+    strict: bool = False,
 ) -> Dict[str, Any]:
     """Evaluate ranked predictions on PinPoint (overall + per-query_category).
 
@@ -229,10 +257,12 @@ def evaluate_pinpoint(
 
     overall_b = new_bucket()
     cat_b: Dict[str, Dict[str, Any]] = defaultdict(new_bucket)
+    missing_qids: List[str] = []
 
     for rec in records:
         retrieved = _lookup_pred(predictions, rec)
         if retrieved is None:
+            missing_qids.append(rec.query_id)
             continue
 
         relevant = list(rec.positive_ids_raw) if (use_raw_gt and rec.positive_ids_raw) else list(rec.positive_ids)
@@ -259,6 +289,12 @@ def evaluate_pinpoint(
                 bucket["ap_no_neg"][k].append(rk_nn["ap"])
             p10 = _pp_metrics_at_k(retrieved, relevant, 10)["precision"]
             bucket["variations"][var_key].append(p10)
+
+    if strict and missing_qids:
+        raise ValueError(
+            f"evaluate_pinpoint(strict=True): missing {len(missing_qids)}/{len(records)} queries "
+            f"(first 5: {missing_qids[:5]})"
+        )
 
     return {
         "overall": _aggregate_pp_bucket(overall_b, ks),

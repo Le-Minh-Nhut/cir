@@ -111,7 +111,7 @@ class CIRTrainingDataset(_TorchDataset):
                 self._index.append((qi, None))
 
     def set_epoch(self, epoch: int) -> None:
-        """Advance epoch seed (useful for DistributedSampler or persistent_workers=True)."""
+        """Advance epoch seed (effective with ``num_workers=0`` or ``persistent_workers=False``)."""
         self._epoch = int(epoch)
         self._rng = random.Random(self._base_seed + 1000003 * self._epoch)
         self._worker_rng_key = None
@@ -179,7 +179,10 @@ class CIRTrainingDataset(_TorchDataset):
             if len(pool) >= self.num_hard_negatives:
                 chosen_negs = rng.sample(pool, self.num_hard_negatives)
             elif pool:
-                chosen_negs = [rng.choice(pool) for _ in range(self.num_hard_negatives)]
+                # Guarantee every unique negative is included before padding with replacement
+                chosen_negs = list(pool)
+                rng.shuffle(chosen_negs)
+                chosen_negs.extend(rng.choice(pool) for _ in range(self.num_hard_negatives - len(pool)))
             else:
                 chosen_negs = []
             item["hard_neg_ids"] = chosen_negs

@@ -285,6 +285,29 @@ def test_torch_dataset_inheritance_multiworker_and_nan_guard():
     assert len(ep1) == len(ep2) == 32
     assert ep1 != ep2, "Multi-worker DataLoader sampled identical targets/negatives across epochs!"
 
-    # Verify NaN/Inf guard in rank_embeddings
+    # Verify NaN/Inf guard, duplicate ID guard, torch.Tensor input, and strict=True guard
     with pytest.raises(ValueError, match="NaN or Inf"):
         rank_embeddings(np.array([[np.nan, 1.0]], dtype=np.float32), ["q0"], np.ones((2, 2), dtype=np.float32), ["c0", "c1"])
+    with pytest.raises(ValueError, match="Duplicate corpus_ids"):
+        rank_embeddings(np.ones((1, 2), dtype=np.float32), ["q0"], np.ones((2, 2), dtype=np.float32), ["c0", "c0"])
+    with pytest.raises(ValueError, match="Duplicate query_ids"):
+        rank_embeddings(np.ones((2, 2), dtype=np.float32), ["q0", "q0"], np.ones((2, 2), dtype=np.float32), ["c0", "c1"])
+
+    # torch.Tensor inputs (CPU) work seamlessly
+    t_preds = rank_embeddings(torch.tensor([[1.0, 0.0]]), ["q0"], torch.tensor([[0.0, 1.0], [1.0, 0.0]]), ["c0", "c1"], top_k=2)
+    assert t_preds["q0"] == ["c1", "c0"]
+
+    # strict=True catches missing queries
+    edir_val = load_split_bundle("edir", "val", corpus_scope="split")
+    with pytest.raises(ValueError, match="strict=True"):
+        evaluate_edir({}, edir_val.queries[:5], strict=True)
+    with pytest.raises(ValueError, match="strict=True"):
+        evaluate_pinpoint({}, b.queries[:5], strict=True)
+
+    # num_hard_negatives > len(pool) covers every unique negative before padding
+    small_neg_idx = next(i for i, q in enumerate(b.queries) if len(q.negative_ids) <= 4)
+    small_q = b.queries[small_neg_idx]
+    ds_many_neg = CIRTrainingDataset(b, image_transform=None, load_images=False, num_hard_negatives=len(small_q.negative_ids) + 2, seed=7)
+    sample = ds_many_neg[small_neg_idx]
+    assert len(sample["hard_neg_ids"]) == len(small_q.negative_ids) + 2
+    assert set(small_q.negative_ids).issubset(set(sample["hard_neg_ids"]))
