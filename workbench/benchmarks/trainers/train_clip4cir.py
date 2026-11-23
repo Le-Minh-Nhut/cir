@@ -343,6 +343,7 @@ def main() -> None:
             "hidden_dim": args.hidden_dim,
             "target_ratio": args.target_ratio,
             "positive_mode": args.positive_mode,
+            "val_corpus_scope": args.val_corpus_scope,
             "seed": args.seed,
             "val_selection_metric": sel_name,
         },
@@ -488,7 +489,8 @@ def main() -> None:
 
     # 6. Stage 2: Train Combiner on frozen best Stage 1 CLIP features (exact upstream combiner_train.py)
     print("[Stage 2] Extracting frozen Stage-1 CLIP features for Combiner training...", flush=True)
-    comb_pos_mode = "expand" if args.dataset == "edir" else args.positive_mode
+    # Always expand all clean (query, pos) pairs for Stage-2 Combiner since CLIP is frozen
+    comb_pos_mode = "expand"
     ref_feats_tr, txt_feats_tr, tgt_feats_tr = extract_train_triplet_features(
         clip_model, train_bundle, preprocess, device, eval_bs=args.eval_bs, num_workers=effective_workers,
         positive_mode=comb_pos_mode,

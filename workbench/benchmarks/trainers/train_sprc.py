@@ -379,6 +379,7 @@ def main() -> None:
             "effective_bs": micro_bs * grad_accum,
             "target_ratio": args.target_ratio,
             "positive_mode": args.positive_mode,
+            "val_corpus_scope": args.val_corpus_scope,
             "seed": args.seed,
             "val_selection_metric": sel_name,
         },
