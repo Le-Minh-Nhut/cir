@@ -225,46 +225,67 @@ def evaluate_dcnet_split(
     n_c = len(corpus_ids)
     k = min(int(top_k), n_c)
 
+    # Pre-extract all query embeddings once (tiny: ~38 MB for 1,337 queries) so gallery chunks
+    # are transferred CPU->GPU ONLY ONCE instead of Q/q_bs times (saves ~500 GB PCIe copy on PinPoint!).
     q_ds = CIRQueryEvalDataset(bundle, image_transform=preprocess)
     q_dl = DataLoader(
         q_ds,
-        batch_size=q_bs,
+        batch_size=eval_bs,
         shuffle=False,
         num_workers=num_workers,
         pin_memory=True,
         prefetch_factor=4 if num_workers > 0 else None,
         collate_fn=collate_eval_queries,
     )
-
-    preds: Dict[str, List[str]] = {}
+    src_acc: Dict[str, List[torch.Tensor]] = {m: [] for m in modalities}
+    txt_acc: Dict[str, List[torch.Tensor]] = {m: [] for m in modalities}
+    trg_acc: Dict[str, List[torch.Tensor]] = {m: [] for m in modalities}
+    query_ids: List[str] = []
     for batch in q_dl:
         ref_imgs = batch["ref_image"].to(device, non_blocking=True)
         txt_t, txt_l = encode_captions_to_glove_batch(batch["raw_text"], vocab)
         txt_t = txt_t.to(device, non_blocking=True)
         txt_l = txt_l.tolist()
-
         src_exp = model.get_image_emb({"im_feat": ref_imgs}, istgt=False)
         txt_exp = model.get_text_emb(txt_t, txt_l)
         mod_trg = model.get_composition(src_exp, txt_exp)
+        for m in modalities:
+            src_acc[m].append(src_exp[m].float().cpu())
+            txt_acc[m].append(txt_exp[m].float().cpu())
+            trg_acc[m].append(mod_trg[m].float().cpu())
+        query_ids.extend(batch["query_id"])
 
-        bs_curr = ref_imgs.size(0)
-        comp_full = torch.empty((bs_curr, n_c), dtype=torch.float32, device=device)
-        corr_full = torch.empty((bs_curr, n_c), dtype=torch.float32, device=device)
+    n_q = len(query_ids)
+    all_src = {m: torch.cat(src_acc[m], dim=0) for m in modalities}
+    all_txt = {m: torch.cat(txt_acc[m], dim=0) for m in modalities}
+    all_trg = {m: torch.cat(trg_acc[m], dim=0) for m in modalities}
 
-        for cs in range(0, n_c, c_chunk):
-            ce = min(cs + c_chunk, n_c)
-            gal_blk = {m: gal_experts[m][cs:ce].to(device, non_blocking=True) for m in modalities}
-            comp_full[:, cs:ce] = model.get_score_matrix(gal_blk, mod_trg, modalities)
-            mod_txt = model.get_correction(src_exp, gal_blk)
-            corr_full[:, cs:ce] = model.get_score_matrix(mod_txt, txt_exp, modalities)
+    comp_full = torch.empty((n_q, n_c), dtype=torch.float32)
+    corr_full = torch.empty((n_q, n_c), dtype=torch.float32)
 
-        # Full-gallery log_softmax fusion (exact match to trainer_joint.py:239!)
-        fused = F.log_softmax(comp_full, dim=-1) + F.log_softmax(corr_full, dim=-1)
-        fused_np = fused.cpu().numpy()
+    # Outer loop over gallery chunks -> each gallery block moves to GPU ONCE!
+    for cs in range(0, n_c, c_chunk):
+        ce = min(cs + c_chunk, n_c)
+        gal_blk = {m: gal_experts[m][cs:ce].to(device, non_blocking=True) for m in modalities}
+        for qs in range(0, n_q, q_bs):
+            qe = min(qs + q_bs, n_q)
+            src_blk = {m: all_src[m][qs:qe].to(device, non_blocking=True) for m in modalities}
+            txt_blk = {m: all_txt[m][qs:qe].to(device, non_blocking=True) for m in modalities}
+            trg_blk = {m: all_trg[m][qs:qe].to(device, non_blocking=True) for m in modalities}
+            comp_full[qs:qe, cs:ce] = model.get_score_matrix(gal_blk, trg_blk, modalities).cpu()
+            mod_txt = model.get_correction(src_blk, gal_blk)
+            corr_full[qs:qe, cs:ce] = model.get_score_matrix(mod_txt, txt_blk, modalities).cpu()
+
+    # Full-gallery log_softmax fusion (exact match to trainer_joint.py:239!)
+    preds: Dict[str, List[str]] = {}
+    for qs in range(0, n_q, 128):
+        qe = min(qs + 128, n_q)
+        fused = F.log_softmax(comp_full[qs:qe], dim=-1) + F.log_softmax(corr_full[qs:qe], dim=-1)
+        fused_np = fused.numpy()
         if not np.isfinite(fused_np).all():
             raise ValueError("Non-finite DCNet fused scores detected")
         order = np.argsort(-fused_np, axis=1, kind="stable")[:, :k]
-        for row_i, qid in enumerate(batch["query_id"]):
+        for row_i, qid in enumerate(query_ids[qs:qe]):
             preds[str(qid)] = [str(corpus_ids[ci]) for ci in order[row_i]]
 
     if dataset == "edir":

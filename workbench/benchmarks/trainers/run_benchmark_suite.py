@@ -217,6 +217,16 @@ def regenerate_leaderboard(dataset: str, split_tag: str = "70_10_20_seed42") -> 
                 f"| **{key}** (`{run_id}`) | {ep} | {ov['precision@1']:.4f} | {ov['precision@10']:.4f} | "
                 f"**{ov['mAP@10']:.4f}** | {ov['NegRecall@10']:.4f} | {ov['mAP@10_noNeg']:.4f} | {ov['ling_sens_range']:.4f} |"
             )
+        if rows and "per_category" in rows[0][3]:
+            cats = sorted(rows[0][3]["per_category"].keys())
+            lines.extend(["", "## 2. Ma Trận `mAP@10` Theo 5 Nhóm Truy Vấn", ""])
+            header = "| Model | " + " | ".join(cats) + " |"
+            sep = "|---|" + "|".join("---:" for _ in cats) + "|"
+            lines.extend([header, sep])
+            for key, _, _, blk in rows:
+                pc = blk.get("per_category", {})
+                vals = [f"{pc[c]['mAP@10']:.4f}" if c in pc else "-" for c in cats]
+                lines.append(f"| **{key}** | " + " | ".join(vals) + " |")
 
     out_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return out_path
