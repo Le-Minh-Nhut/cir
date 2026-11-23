@@ -336,7 +336,9 @@ def run_eval(args: argparse.Namespace) -> None:
         state = torch.load(ckpt_paths[0], map_location=device, weights_only=False)
         sd = state.get("model", state) if isinstance(state, dict) and "model" in state and isinstance(state["model"], dict) else state
         res = model.load_state_dict(sd, strict=False)
-        assert not res.missing_keys, f"TME missing keys: {res.missing_keys}"
+        assert not res.missing_keys and not res.unexpected_keys, (
+            f"TME incomplete load: missing={res.missing_keys}, unexpected={res.unexpected_keys}"
+        )
         model.eval()
         txt_proc = txt_processors["eval"]
         import utility as tme_utility
@@ -346,10 +348,19 @@ def run_eval(args: argparse.Namespace) -> None:
         if args.smoke_only:
             with torch.no_grad():
                 x = torch.randn(4, 3, 224, 224, device=device)
-                e = model.vit_encode(x)
-                tf = model.extract_target_features(e)
-                assert torch.isfinite(tf).all()
-            print(f"[SMOKE PASS] tme ({args.variant}) tf={tuple(tf.shape)} unexp={res.unexpected_keys}", flush=True)
+                vit_e = model.vit_encode(x)
+                f_img = model.encode_image(vit_e)
+                tf = F.normalize(model.vision_proj(f_img), dim=-1)
+                toks = model.tokenizer(
+                    [txt_proc("make it red")] * 4,
+                    padding="max_length",
+                    truncation=True,
+                    max_length=model.max_txt_len,
+                    return_tensors="pt",
+                ).to(device)
+                qf = model.encode_fusion(f_img, toks)
+                assert torch.isfinite(tf).all() and torch.isfinite(qf).all()
+            print(f"[SMOKE PASS] tme ({args.variant}) tf={tuple(tf.shape)} qf={tuple(qf.shape)}", flush=True)
             return
 
         metrics, preds, _ = evaluate_tme_split(
@@ -404,18 +415,26 @@ def run_eval(args: argparse.Namespace) -> None:
         )
 
     # ------------------------------------------------------------------
-    # 8. TG-CIR (CLIP ViT-B/16)
+    # 8. TG-CIR (CLIP ViT-B/16; PyTorch 1.7 pickled nn.Module shims)
     # ------------------------------------------------------------------
     elif model_key == "tgcir":
+        import torch.nn.modules.linear as torch_linear
+        if not hasattr(torch_linear, "_LinearWithBias"):
+            torch_linear._LinearWithBias = torch.nn.Linear
         import clip
         from workbench.benchmarks.trainers.train_tgcir import evaluate_tgcir_split
 
-        obj = torch.load(ckpt_paths[0], map_location=device, weights_only=False)
+        obj = torch.load(ckpt_paths[0], map_location="cpu", weights_only=False)
         if not isinstance(obj, nn.Module):
             raise TypeError(f"Expected whole pickled VCG_CIR model for tgcir, got {type(obj)}")
+        n_mha_patched = 0
+        for m in obj.modules():
+            if isinstance(m, nn.MultiheadAttention) and not hasattr(m, "batch_first"):
+                m.batch_first = False
+                n_mha_patched += 1
         model = obj.to(device).eval()
         _, preprocess = clip.load("ViT-B/16", device="cpu", jit=False)
-        load_report = {"whole_module_class": type(model).__name__}
+        load_report = {"whole_module_class": type(model).__name__, "mha_batch_first_patched": n_mha_patched}
 
         if args.smoke_only:
             with torch.no_grad():
@@ -423,7 +442,7 @@ def run_eval(args: argparse.Namespace) -> None:
                 q = model.extract_retrieval_compose(x, ["word " * 100] * 4)
                 t = model.extract_retrieval_target(x)
                 assert q.shape == (4, 512) and t.shape == (4, 512) and torch.isfinite(q).all()
-            print(f"[SMOKE PASS] tgcir ({args.variant}) q={tuple(q.shape)}", flush=True)
+            print(f"[SMOKE PASS] tgcir ({args.variant}) q={tuple(q.shape)} mha_patched={n_mha_patched}", flush=True)
             return
 
         metrics, preds, _ = evaluate_tgcir_split(
@@ -450,12 +469,13 @@ def run_eval(args: argparse.Namespace) -> None:
         for ckpt_p, dt_id in zip(ckpt_paths, dt_ids):
             model = torch.load(ckpt_p, map_location=device, weights_only=False).to(device).eval()
             vis = model.backbone.clip.visual
+            img_sz = vis.image_size if isinstance(vis.image_size, tuple) else (int(vis.image_size), int(vis.image_size))
             val_preprocess = open_clip.image_transform(
                 vis.image_size, is_train=False, mean=vis.image_mean, std=vis.image_std
             )
             if args.smoke_only:
                 with torch.no_grad():
-                    x = torch.randn(4, 3, 224, 224, device=device)
+                    x = torch.randn(4, 3, img_sz[0], img_sz[1], device=device)
                     dt = torch.full((4,), dt_id, dtype=torch.long, device=device)
                     q = model.compose_query(x, ["change color to blue"] * 4, dt)[0]
                     t = model.compose_target(x, dt)[0]
@@ -465,10 +485,10 @@ def run_eval(args: argparse.Namespace) -> None:
                 continue
 
             c_emb, c_ids = extract_limn_corpus_embeddings(
-                model, test_bundle, val_preprocess, device, dataset_type_id=dt_id, eval_bs=128, num_workers=num_workers
+                model, test_bundle, val_preprocess, dataset_type_id=dt_id, device=device, eval_bs=128, num_workers=num_workers
             )
             q_emb, q_ids = extract_limn_query_embeddings(
-                model, test_bundle, val_preprocess, device, dataset_type_id=dt_id, eval_bs=128, num_workers=num_workers
+                model, test_bundle, val_preprocess, dataset_type_id=dt_id, device=device, eval_bs=128, num_workers=num_workers
             )
             if qids_ref is None:
                 qids_ref, cids_ref = q_ids, c_ids
@@ -556,12 +576,44 @@ def run_eval(args: argparse.Namespace) -> None:
     # 11. DCNet (FashionIQ trained_model.pth + GloVe 300d)
     # ------------------------------------------------------------------
     elif model_key == "dcnet":
+        import json, pickle, subprocess
         from workbench.benchmarks.trainers.train_dcnet import (
+            DCNET_PREPARE_PY,
+            GLOVE_SPACY_DIR,
+            _tokenize_dcnet,
             build_dcnet_model,
-            build_or_load_glove_vocab,
             encode_captions_to_glove_batch,
             evaluate_dcnet_split,
         )
+
+        def _build_glove_hits_only(captions: List[str], cache_path: Path) -> Dict[str, np.ndarray]:
+            """Transfer-safe GloVe 300d lookup: real pretrained GloVe vectors only (zero random OOV noise)."""
+            if cache_path.is_file():
+                with cache_path.open("rb") as f:
+                    return pickle.load(f)
+            words = sorted({tok for cap in captions for tok in _tokenize_dcnet(cap)})
+            tmp_words = cache_path.with_suffix(".words.json")
+            cache_path.parent.mkdir(parents=True, exist_ok=True)
+            tmp_words.write_text(json.dumps(words), encoding="utf-8")
+            script = f"""
+import json, pickle, numpy as np, spacy
+nlp = spacy.load({str(GLOVE_SPACY_DIR)!r})
+words = json.loads(open({str(tmp_words)!r}).read())
+vocab = {{}}
+for w in words:
+    lex = nlp.vocab[w]
+    if lex.has_vector and np.linalg.norm(lex.vector) > 0:
+        vocab[w] = np.asarray(lex.vector, dtype=np.float32)
+with open({str(cache_path)!r}, 'wb') as f:
+    pickle.dump(vocab, f)
+print(f'DCNet transfer GloVe hits: {{len(vocab)}}/{{len(words)}}')
+"""
+            py_exe = str(DCNET_PREPARE_PY) if DCNET_PREPARE_PY.is_file() else sys.executable
+            out = subprocess.check_output([py_exe, "-c", script], text=True)
+            print(f"[DCNet-Transfer] {out.strip()}", flush=True)
+            tmp_words.unlink(missing_ok=True)
+            with cache_path.open("rb") as f:
+                return pickle.load(f)
 
         model, modalities = build_dcnet_model(device)
         ckpt = torch.load(ckpt_paths[0], map_location=device, weights_only=False)
@@ -578,8 +630,8 @@ def run_eval(args: argparse.Namespace) -> None:
         load_report = {"strict": True, "modalities": modalities}
 
         if args.smoke_only:
-            vocab = build_or_load_glove_vocab(
-                ["change the shirt to bright red", "remove the car"], Path("/tmp/dcnet_smoke_vocab.pkl"), seed=42
+            vocab = _build_glove_hits_only(
+                ["change the shirt to bright red", "remove the car"], Path("/tmp/dcnet_smoke_vocab.pkl")
             )
             with torch.no_grad():
                 x = torch.randn(4, 3, 224, 224, device=device)
@@ -595,10 +647,9 @@ def run_eval(args: argparse.Namespace) -> None:
 
         out_dir = Path(args.out_dir)
         out_dir.mkdir(parents=True, exist_ok=True)
-        vocab = build_or_load_glove_vocab(
+        vocab = _build_glove_hits_only(
             [q.text for q in test_bundle.queries],
             out_dir / f"glove_vocab_transfer_{args.dataset}.pkl",
-            seed=42,
         )
         metrics, preds, _ = evaluate_dcnet_split(
             args.dataset, model, modalities, vocab, test_bundle, val_preprocess, device,
