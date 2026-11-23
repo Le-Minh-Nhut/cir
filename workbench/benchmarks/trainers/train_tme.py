@@ -81,7 +81,7 @@ def extract_tme_corpus_features(
         shuffle=False,
         num_workers=num_workers,
         pin_memory=True,
-        prefetch_factor=4 if num_workers > 0 else None,
+        prefetch_factor=2 if num_workers > 0 else None,
         collate_fn=collate_corpus,
     )
     feats_list: List[torch.Tensor] = []
@@ -116,7 +116,7 @@ def extract_tme_query_features(
         shuffle=False,
         num_workers=num_workers,
         pin_memory=True,
-        prefetch_factor=4 if num_workers > 0 else None,
+        prefetch_factor=2 if num_workers > 0 else None,
         collate_fn=collate_eval_queries,
     )
     feats_list: List[torch.Tensor] = []
@@ -218,7 +218,7 @@ def fit_gmm_clean_mask(
         drop_last=False,
         num_workers=num_workers,
         pin_memory=True,
-        prefetch_factor=4 if num_workers > 0 else None,
+        prefetch_factor=2 if num_workers > 0 else None,
         collate_fn=collate_train_batch,
     )
     losses_all: List[float] = []
@@ -422,7 +422,7 @@ def main() -> None:
         drop_last=True,
         num_workers=effective_workers,
         pin_memory=True,
-        prefetch_factor=4 if effective_workers > 0 else None,
+        prefetch_factor=2 if effective_workers > 0 else None,
         collate_fn=collate_train_batch,
         worker_init_fn=seed_worker if effective_workers > 0 else None,
         generator=gen,

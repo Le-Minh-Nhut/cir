@@ -83,7 +83,7 @@ def extract_corpus_embeddings(
         shuffle=False,
         num_workers=num_workers,
         pin_memory=True,
-        prefetch_factor=4 if num_workers > 0 else None,
+        prefetch_factor=2 if num_workers > 0 else None,
         collate_fn=collate_corpus,
     )
     feats_list: List[np.ndarray] = []
@@ -116,7 +116,7 @@ def extract_query_embeddings(
         shuffle=False,
         num_workers=num_workers,
         pin_memory=True,
-        prefetch_factor=4 if num_workers > 0 else None,
+        prefetch_factor=2 if num_workers > 0 else None,
         collate_fn=collate_eval_queries,
     )
     feats_list: List[np.ndarray] = []
@@ -187,10 +187,11 @@ def extract_train_triplet_features(
     )
     dl = DataLoader(
         ds,
-        batch_size=eval_bs,
+        batch_size=min(eval_bs, 64),
         shuffle=False,
         num_workers=num_workers,
         pin_memory=True,
+        prefetch_factor=2 if num_workers > 0 else None,
         collate_fn=collate_train_batch,
     )
     ref_list, txt_list, tgt_list = [], [], []
@@ -368,7 +369,7 @@ def main() -> None:
         drop_last=True,
         num_workers=effective_workers,
         pin_memory=True,
-        prefetch_factor=4 if effective_workers > 0 else None,
+        prefetch_factor=2 if effective_workers > 0 else None,
         collate_fn=collate_train_batch,
         worker_init_fn=seed_worker if effective_workers > 0 else None,
         generator=gen,
@@ -469,6 +470,11 @@ def main() -> None:
         if no_improve >= args.clip_patience:
             print(f"[Stage 1] Early stopping at epoch {epoch} (patience={args.clip_patience})", flush=True)
             break
+
+    # Free Stage-1 training loader & optimizer state before full-corpus test eval & Stage 2
+    del train_loader, train_ds, optimizer, scaler
+    gc.collect()
+    torch.cuda.empty_cache()
 
     # Load best Stage 1 CLIP weights and evaluate Stage 1 on test (for clean ablation!)
     s1_ckpt = torch.load(best_s1_path, map_location=device)

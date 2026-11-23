@@ -135,7 +135,7 @@ def extract_corpus_embeddings(
         shuffle=False,
         num_workers=num_workers,
         pin_memory=True,
-        prefetch_factor=4 if num_workers > 0 else None,
+        prefetch_factor=2 if num_workers > 0 else None,
         collate_fn=collate_corpus,
     )
     feats_list: List[np.ndarray] = []
@@ -166,7 +166,7 @@ def extract_query_embeddings(
         shuffle=False,
         num_workers=num_workers,
         pin_memory=True,
-        prefetch_factor=4 if num_workers > 0 else None,
+        prefetch_factor=2 if num_workers > 0 else None,
         collate_fn=collate_eval_queries,
     )
     feats_list: List[np.ndarray] = []
@@ -353,7 +353,7 @@ def main() -> None:
         drop_last=True,
         num_workers=effective_workers,
         pin_memory=True,
-        prefetch_factor=4 if effective_workers > 0 else None,
+        prefetch_factor=2 if effective_workers > 0 else None,
         collate_fn=collate_train_batch,
         worker_init_fn=seed_worker if effective_workers > 0 else None,
         generator=gen,
