@@ -16,7 +16,7 @@
  *  Pure and dependency-free: the mapping is verified by `workbench/tests/test_frontend_routes.py`.
  */
 
-export const AREA_IDS = ["overview", "benchmarks", "experiments", "evaluation", "samples", "failures", "notebook"] as const;
+export const AREA_IDS = ["overview", "benchmarks", "common_failures", "experiments", "evaluation", "samples", "failures", "notebook"] as const;
 export type AreaId = (typeof AREA_IDS)[number];
 
 export interface ViewDef { id: string; label: string }
@@ -48,6 +48,13 @@ export const AREAS: AreaDef[] = [
       { id: "pinpoint", label: "PinPoint (3 cột + Fashion)" },
       { id: "bm_inspector", label: "Khám phá query & ảnh" },
     ],
+    legacy: [],
+  },
+  {
+    id: "common_failures",
+    label: "Lỗi chung nhanh",
+    question: "Hiện sẵn các query fail chung trên EDIR, PinPoint & FashionIQ theo protocol — lọc tuỳ chọn, không cần chọn model trước",
+    views: [],
     legacy: [],
   },
   {

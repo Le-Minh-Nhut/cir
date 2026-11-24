@@ -108,7 +108,7 @@ export function BenchmarksInspector({
   const [detailLoading, setDetailLoading] = useState<boolean>(false);
   const [detailError, setDetailError] = useState<string | null>(null);
 
-  // Apply external drilldown seed whenever the user clicks a heatmap cell or "Soi lỗi →".
+  // Apply external drilldown seed whenever the user clicks a heatmap cell, "Soi lỗi →", or Common Failures row.
   useEffect(() => {
     if (!seed) return;
     setDataset(seed.dataset);
@@ -119,8 +119,10 @@ export function BenchmarksInspector({
     setOutcome(seed.outcome ?? "all");
     setCompareModel(seed.compareModel ?? "");
     if (seed.compareRegime) setCompareRegime(seed.compareRegime);
+    setSearchInput(seed.queryId ?? "");
+    setSearchQuery(seed.queryId ?? "");
     setOffset(0);
-    setSelectedQueryId("");
+    setSelectedQueryId(seed.queryId ?? "");
   }, [seed]);
 
   // Debounce search text

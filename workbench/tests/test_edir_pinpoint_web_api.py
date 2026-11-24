@@ -141,3 +141,43 @@ def test_csv_exports_and_error_handling() -> None:
     assert client.get("/api/benchmarks/pinpoint/queries", params={"model": "conesep", "regime": "cirr_transfer"}).status_code == 400
     assert client.get("/api/benchmarks/pinpoint/queries", params={"model": "conesep", "slice": "bogus"}).status_code == 400
     assert client.get("/api/benchmarks/edir/queries", params={"model": "not_a_model"}).status_code == 400
+
+
+def test_common_failures_default_across_pinpoint_edir_and_fashioniq() -> None:
+    # 1) Default opens directly on FashionIQ Original Split (>=80% common failures, zero manual selection)
+    r0 = client.get("/api/benchmarks/common-failures")
+    assert r0.status_code == 200, r0.text
+    d0 = r0.json()
+    assert d0["protocol"] == "fashioniq_original_split"
+    assert d0["dataset"] == "fashioniq"
+    assert d0["selected_model_count"] >= 5
+    assert d0["preset"] == "fail80"
+    assert d0["filtered_total"] > 0
+    assert all(it["fail_rate"] >= 0.8 - 1e-9 for it in d0["items"])
+
+    # 2) PinPoint In-Domain returns >=80% common failures across all 15 models
+    r1 = client.get("/api/benchmarks/common-failures", params={"protocol": "pinpoint_indomain"})
+    assert r1.status_code == 200, r1.text
+    d1 = r1.json()
+    assert d1["protocol"] == "pinpoint_indomain"
+    assert d1["selected_model_count"] == 15
+    assert d1["filtered_total"] > 0
+    assert all(it["fail_rate"] >= 0.8 - 1e-9 for it in d1["items"])
+    assert len(d1["category_breakdown"]) == 5
+
+    # 3) EDIR In-Domain @1 shows `remove` at high common-fail rate + model subset filtering works
+    r2 = client.get(
+        "/api/benchmarks/common-failures",
+        params={"protocol": "edir_indomain", "preset": "all_fail", "k": 1, "models": "mtst_ptha,sprc,tme"},
+    )
+    assert r2.status_code == 200, r2.text
+    d2 = r2.json()
+    assert d2["selected_model_count"] == 3
+    assert all(it["fail_count"] == 3 for it in d2["items"])
+
+    # 4) CSV export & invalid protocol/preset guard
+    rcsv = client.get("/api/benchmarks/common-failures/export.csv", params={"protocol": "edir_indomain", "preset": "all_fail", "k": 1})
+    assert rcsv.status_code == 200
+    assert "fail_count@1" in rcsv.text
+    assert client.get("/api/benchmarks/common-failures", params={"protocol": "bogus"}).status_code == 400
+    assert client.get("/api/benchmarks/common-failures", params={"preset": "bogus"}).status_code == 400

@@ -90,9 +90,11 @@ function MetricBarCell({
 export function BenchmarksPage({
   view,
   onChangeView,
+  externalSeed,
 }: {
   view: string;
   onChangeView: (nextView: string) => void;
+  externalSeed?: InspectorSeed | null;
 }) {
   const [overview, setOverview] = useState<BenchmarksOverviewResponse | null>(null);
   const [edir, setEdir] = useState<EdirSummaryResponse | null>(null);
@@ -101,7 +103,11 @@ export function BenchmarksPage({
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<string>("");
   const [autoRefresh, setAutoRefresh] = useState<boolean>(false);
-  const [inspectorSeed, setInspectorSeed] = useState<InspectorSeed | null>(null);
+  const [inspectorSeed, setInspectorSeed] = useState<InspectorSeed | null>(externalSeed ?? null);
+
+  useEffect(() => {
+    if (externalSeed) setInspectorSeed({ ...externalSeed });
+  }, [externalSeed]);
 
   const loadAll = useCallback((silent = false) => {
     const ctrl = new AbortController();

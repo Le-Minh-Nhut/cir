@@ -5,6 +5,8 @@ import { protocolsWithReports, protocolOrDefault } from "./catalog";
 import { chooseInitialScope, chooseSubsetFor, protocolHasSubsets, SUBSET_SEQUENCE } from "./scope";
 import { OverviewPage } from "./OverviewPage";
 import { BenchmarksPage } from "./BenchmarksPage";
+import { CommonFailuresPage } from "./CommonFailuresPage";
+import type { InspectorSeed } from "./benchmarksTypes";
 import { ExperimentsPage } from "./ExperimentsPage";
 import { EvaluationPage } from "./EvaluationPage";
 import { SamplesPage } from "./SamplesPage";
@@ -37,6 +39,7 @@ export default function App() {
   const [namedScope, setNamedScope] = useState(initial.scope);
   const [menuOpen, setMenuOpen] = useState(false);
   const [dismissed, setDismissed] = useState(false);
+  const [benchmarkSeed, setBenchmarkSeed] = useState<InspectorSeed | null>(null);
   // Reading size is a reader preference, not a browser zoom setting: 17px default, 19px on request,
   // remembered across reloads. `data-density` on <html> is what style.css keys off.
   const [density, setDensity] = useState(() => {
@@ -241,7 +244,7 @@ export default function App() {
       benchmarks: data.aggregates.region.status,
       composition: data.compositionRuns.region.status,
     },
-    location.area === "benchmarks" ? "overview"
+    location.area === "benchmarks" || location.area === "common_failures" ? "overview"
       : location.area === "evaluation" && location.view === "benchmark" ? "evaluation-benchmark"
         : location.area === "evaluation" && location.view === "native" ? "evaluation-native"
           : location.area === "evaluation" ? "evaluation-composition"
@@ -312,11 +315,14 @@ export default function App() {
         </header>
 
         <div className="contextbar">
-          {location.area === "benchmarks" ? (
+          {location.area === "benchmarks" || location.area === "common_failures" ? (
             <>
               <div className="ctx"><span>Split chuẩn</span><b className="mono">70_10_20_seed42</b></div>
               <div className="ctx"><span>EDIR</span><b>1,003 / 28,645</b></div>
               <div className="ctx"><span>PinPoint</span><b>1,337 / 109,598</b></div>
+              {location.area === "common_failures" && (
+                <div className="ctx"><span>FashionIQ</span><b>3 protocols (16 runs)</b></div>
+              )}
             </>
           ) : (
             <>
@@ -380,7 +386,7 @@ export default function App() {
           </div>
         )}
 
-        {location.area !== "benchmarks" && (banner || selectionNotice) && !dismissed && (
+        {location.area !== "benchmarks" && location.area !== "common_failures" && (banner || selectionNotice) && !dismissed && (
           <div className="content" style={{ paddingBottom: 0 }}>
             <div className={`empty banner ${banner ? "empty-partial" : "empty-capability"}`}
                  data-testid="error-banner" data-notice-kind={banner ? "evidence" : "selection"}
@@ -402,7 +408,19 @@ export default function App() {
                           onGoto={goto} />
           )}
           {location.area === "benchmarks" && (
-            <BenchmarksPage view={location.view || "bm_overview"} onChangeView={(v) => goto({ view: v })} />
+            <BenchmarksPage
+              view={location.view || "bm_overview"}
+              onChangeView={(v) => goto({ view: v })}
+              externalSeed={benchmarkSeed}
+            />
+          )}
+          {location.area === "common_failures" && (
+            <CommonFailuresPage
+              onInspectBenchmarkQuery={(seed) => {
+                setBenchmarkSeed({ ...seed });
+                goto({ area: "benchmarks", view: "bm_inspector" });
+              }}
+            />
           )}
           {location.area === "experiments" && (
             <ExperimentsPage data={data} location={location} view={location.view}
@@ -431,6 +449,7 @@ export default function App() {
 const GLYPHS: Record<AreaId, string> = {
   overview: "◎",
   benchmarks: "❖",
+  common_failures: "⊘",
   experiments: "▤",
   evaluation: "◑",
   samples: "▦",

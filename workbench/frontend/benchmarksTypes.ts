@@ -282,4 +282,5 @@ export interface InspectorSeed {
   compareModel?: string;
   compareRegime?: BenchmarkRegime;
   outcome?: string;
+  queryId?: string;
 }

@@ -26,6 +26,7 @@ from workbench.benchmarks import evaluate_edir, evaluate_pinpoint, load_split_bu
 from workbench.benchmarks.evaluators import _pp_metrics_at_k, _pp_neg_recall_at_k
 from workbench.benchmarks.schema import CIRQueryRecord, DEFAULT_SPLIT_TAG, SplitBundle
 from workbench.benchmarks.trainers.run_benchmark_suite import MODEL_QUEUE
+from workbench.backend.storage import get_analysis_input, list_runs
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 INDOMAIN_ROOT = REPO_ROOT / "workbench" / "artifacts" / "benchmark_runs"
@@ -616,6 +617,76 @@ def benchmarks_overview() -> Dict[str, Any]:
     }
 
 
+@edir_pinpoint_router.get("/common-failures")
+def benchmarks_common_failures(
+    protocol: str = Query(default="fashioniq_original_split"),
+    models: str = Query(default=""),
+    preset: str = Query(default="fail80"),
+    k: int = Query(default=10, ge=1, le=50),
+    category: str = Query(default=""),
+    slice: str = Query(default="all"),
+    q: str = Query(default=""),
+    sort: str = Query(default="fail_desc"),
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=25, ge=1, le=60),
+) -> Dict[str, Any]:
+    return _build_common_failures_payload(
+        protocol=protocol,
+        models_param=models,
+        preset=preset,
+        k=k,
+        category=category,
+        slice_id=slice,
+        q_text=q,
+        sort=sort,
+        offset=offset,
+        limit=limit,
+    )
+
+
+@edir_pinpoint_router.get("/common-failures/export.csv")
+def benchmarks_common_failures_csv(
+    protocol: str = Query(default="fashioniq_original_split"),
+    models: str = Query(default=""),
+    preset: str = Query(default="fail80"),
+    k: int = Query(default=10, ge=1, le=50),
+    category: str = Query(default=""),
+    slice: str = Query(default="all"),
+    q: str = Query(default=""),
+    sort: str = Query(default="fail_desc"),
+) -> PlainTextResponse:
+    data = _build_common_failures_payload(
+        protocol=protocol,
+        models_param=models,
+        preset=preset,
+        k=k,
+        category=category,
+        slice_id=slice,
+        q_text=q,
+        sort=sort,
+        offset=0,
+        limit=10000,
+    )
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow([
+        "protocol", "query_id", "category", "l1_interest", "text",
+        f"fail_count@{k}", "scored_models", f"fail_rate@{k}", "ref_copy_count", "best_rank", "median_rank",
+    ])
+    for it in data["items"]:
+        writer.writerow([
+            protocol, it["query_id"], it["category"], it.get("l1_interest") or "", it["text"],
+            it["fail_count"], it["scored_models"], f"{it['fail_rate']:.4f}", it["ref_copy_count"],
+            it["best_rank"] if it["best_rank"] is not None else ">50",
+            it["median_rank"] if it["median_rank"] is not None else ">50",
+        ])
+    return PlainTextResponse(
+        content=buf.getvalue(),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="common_failures_{protocol}_{preset}_k{k}.csv"'},
+    )
+
+
 @edir_pinpoint_router.get("/{dataset}/summary")
 def benchmark_summary(dataset: str) -> Dict[str, Any]:
     ds = _validate_dataset(dataset)
@@ -974,3 +1045,402 @@ def benchmark_export_csv(dataset: str, slice: str = Query(default="all")) -> Pla
         media_type="text/csv; charset=utf-8",
         headers={"Content-Disposition": f'attachment; filename="cir_{ds}_{slice}.csv"'},
     )
+
+
+# =============================================================================
+# Unified Common Failures Explorer (EDIR + PinPoint + FashionIQ 3 Protocols)
+# Zero-click default: automatically aggregates ALL ready models of the chosen
+# protocol and returns common failures immediately (optional filtering on top).
+# =============================================================================
+
+COMMON_FAILURE_PROTOCOLS: List[Dict[str, Any]] = [
+    {"id": "pinpoint_indomain", "group": "PinPoint", "label": "PinPoint · In-Domain", "dataset": "pinpoint", "regime": "indomain"},
+    {"id": "pinpoint_fiq_transfer", "group": "PinPoint", "label": "PinPoint · FashionIQ Transfer", "dataset": "pinpoint", "regime": "fiq_transfer"},
+    {"id": "edir_indomain", "group": "EDIR", "label": "EDIR · In-Domain", "dataset": "edir", "regime": "indomain"},
+    {"id": "edir_cirr_transfer", "group": "EDIR", "label": "EDIR · CIRR Transfer", "dataset": "edir", "regime": "cirr_transfer"},
+    {"id": "edir_fiq_transfer", "group": "EDIR", "label": "EDIR · FashionIQ Transfer", "dataset": "edir", "regime": "fiq_transfer"},
+    {"id": "fashioniq_original_split", "group": "FashionIQ", "label": "FashionIQ · Original Split", "dataset": "fashioniq", "regime": "fashioniq_original_split"},
+    {"id": "fashioniq_full_gallery_ref_excluded", "group": "FashionIQ", "label": "FashionIQ · Full Gallery (Ref-Excl)", "dataset": "fashioniq", "regime": "fashioniq_full_gallery_ref_excluded"},
+    {"id": "fashioniq_val_split", "group": "FashionIQ", "label": "FashionIQ · Val Split", "dataset": "fashioniq", "regime": "fashioniq_val_split"},
+    {"id": "fashioniq_all_protocols", "group": "FashionIQ", "label": "FashionIQ · Gộp cả 3 protocol (khác gallery)", "dataset": "fashioniq", "regime": "all"},
+]
+
+_CF_PROTOCOL_BY_ID: Dict[str, Dict[str, Any]] = {p["id"]: p for p in COMMON_FAILURE_PROTOCOLS}
+_FIQ_CACHE: Dict[str, Tuple[Tuple[str, ...], Dict[str, Any]]] = {}
+_CF_BENCH_CACHE: Dict[Tuple[str, str], Tuple[Tuple[Tuple[str, int], ...], Dict[str, Any]]] = {}
+
+
+def _load_bench_protocol_matrix(ds: str, regime: str, protocol: str) -> Dict[str, Any]:
+    """Build & mtime-cache per-query ranks across all ready models for an EDIR/PinPoint protocol."""
+    sig = _signature_for_dataset(ds)
+    ck = (ds, regime)
+    with _CACHE_LOCK:
+        hit = _CF_BENCH_CACHE.get(ck)
+        if hit is not None and hit[0] == sig:
+            return hit[1]
+
+    bundle = _get_bundle(ds)
+    summary = _get_summary(ds)
+    categories = summary["subcategories"] if ds == "edir" else summary["categories"]
+    slices_meta = summary["slices"] if ds == "pinpoint" else []
+    all_models = []
+    preds_by_model: Dict[str, Dict[str, List[str]]] = {}
+    for m in summary["models"]:
+        if not m[regime].get("has_predictions"):
+            continue
+        pr, _ = _load_preds_for(ds, m["key"], regime)
+        if pr is None:
+            continue
+        all_models.append({
+            "key": m["key"],
+            "display": m["display"],
+            "family": m["family"],
+            "protocol_id": protocol,
+        })
+        preds_by_model[m["key"]] = pr
+
+    base_queries = []
+    for rec in bundle.queries:
+        gt_ids = _clean_unique_ids(rec.positive_ids_raw or rec.positive_ids) if ds == "pinpoint" else _clean_unique_ids(rec.positive_ids)
+        gt_set = set(gt_ids)
+        first_gt = gt_ids[0] if gt_ids else ""
+        ranks_map: Dict[str, Optional[int]] = {}
+        ref_copy_map: Dict[str, bool] = {}
+        scores_map: Dict[str, float] = {}
+        for m_item in all_models:
+            mk = m_item["key"]
+            ranked = preds_by_model[mk].get(rec.query_id) or []
+            br = next((i for i, cid in enumerate(ranked, start=1) if cid in gt_set), None)
+            ranks_map[mk] = br
+            ref_copy_map[mk] = bool(ranked and ranked[0] == rec.ref_id)
+            if ds == "pinpoint":
+                pos_raw = list(rec.positive_ids_raw or rec.positive_ids)
+                scores_map[mk] = float(_pp_metrics_at_k(ranked, pos_raw, 10)["ap"])
+            else:
+                scores_map[mk] = (1.0 / br) if br is not None else 0.0
+        base_queries.append({
+            "rec": rec,
+            "query_id": rec.query_id,
+            "text": rec.text,
+            "category": rec.category,
+            "l1_interest": rec.metadata.get("l1_interest"),
+            "ref_image_id": rec.ref_id,
+            "ref_image_url": _image_url(ds, rec.ref_id),
+            "gt_image_id": first_gt,
+            "gt_image_url": _image_url(ds, first_gt) if first_gt else "",
+            "ranks": ranks_map,
+            "ref_copies": ref_copy_map,
+            "scores": scores_map,
+        })
+
+    payload = {
+        "models": all_models,
+        "queries": base_queries,
+        "categories": categories,
+        "slices": slices_meta,
+    }
+    with _CACHE_LOCK:
+        _CF_BENCH_CACHE[ck] = (sig, payload)
+    return payload
+
+
+def _load_fashioniq_protocol_matrix(protocol_filter: str) -> Dict[str, Any]:
+    """Load per-query ranks across all DuckDB FashionIQ runs for a given protocol (cached)."""
+    runs = list_runs()
+    if protocol_filter == "all":
+        chosen = [r for r in runs if str(r.get("protocol_id", "")).startswith("fashioniq_")]
+    else:
+        chosen = [r for r in runs if r.get("protocol_id") == protocol_filter]
+    chosen.sort(key=lambda r: (str(r.get("model_id", "")), str(r.get("run_id", ""))))
+    run_ids = tuple(str(r["run_id"]) for r in chosen)
+    with _CACHE_LOCK:
+        hit = _FIQ_CACHE.get(protocol_filter)
+        if hit is not None and hit[0] == run_ids:
+            return hit[1]
+
+    if not run_ids:
+        payload = {"models": [], "queries": [], "categories": []}
+        with _CACHE_LOCK:
+            _FIQ_CACHE[protocol_filter] = (run_ids, payload)
+        return payload
+
+    _meta, run_maps = get_analysis_input(list(run_ids), k=10)
+    models_meta = []
+    for r in chosen:
+        mid = str(r.get("model_id") or r["run_id"])
+        models_meta.append({
+            "key": str(r["run_id"]),
+            "display": mid,
+            "family": str(r.get("protocol_id", "")).replace("fashioniq_", ""),
+            "protocol_id": str(r.get("protocol_id", "")),
+        })
+
+    # Union of all query IDs across selected runs
+    q_info: Dict[str, Dict[str, Any]] = {}
+    for rid in run_ids:
+        rmap = run_maps.get(rid, {})
+        for qid, row in rmap.items():
+            if qid not in q_info:
+                cat = str(row.get("category") or "all")
+                ref_id = str(row.get("reference_id") or "")
+                tgt_id = str(row.get("target_id") or "")
+                raw_caps = row.get("raw_captions") or []
+                text = " / ".join(str(c) for c in raw_caps if c) if raw_caps else str(row.get("model_input_text") or "")
+                q_info[qid] = {
+                    "query_id": qid,
+                    "text": text,
+                    "category": cat,
+                    "l1_interest": f"FashionIQ · {cat}",
+                    "ref_image_id": ref_id,
+                    "ref_image_url": f"/api/images/{cat}/{urllib.parse.quote(ref_id, safe='')}" if ref_id else "",
+                    "gt_image_id": tgt_id,
+                    "gt_image_url": f"/api/images/{cat}/{urllib.parse.quote(tgt_id, safe='')}" if tgt_id else "",
+                    "ranks": {},
+                    "ref_copies": {},
+                    "scores": {},
+                }
+            tr = row.get("target_rank")
+            q_info[qid]["ranks"][rid] = int(tr) if tr is not None else None
+            q_info[qid]["ref_copies"][rid] = False
+            q_info[qid]["scores"][rid] = (1.0 / int(tr)) if (tr is not None and int(tr) > 0) else 0.0
+
+    cat_counts: Dict[str, int] = {}
+    for q in q_info.values():
+        cat_counts[q["category"]] = cat_counts.get(q["category"], 0) + 1
+    categories = [{"id": c, "count": cat_counts[c]} for c in sorted(cat_counts)]
+    payload = {
+        "models": models_meta,
+        "queries": list(q_info.values()),
+        "categories": categories,
+    }
+    with _CACHE_LOCK:
+        _FIQ_CACHE[protocol_filter] = (run_ids, payload)
+    return payload
+
+
+def _build_common_failures_payload(
+    protocol: str,
+    models_param: str,
+    preset: str,
+    k: int,
+    category: str,
+    slice_id: str,
+    q_text: str,
+    sort: str,
+    offset: int,
+    limit: int,
+) -> Dict[str, Any]:
+    spec = _CF_PROTOCOL_BY_ID.get(protocol)
+    if spec is None:
+        raise HTTPException(
+            status_code=400,
+            detail={"error": "invalid_protocol", "message": f"Protocol không hợp lệ: {protocol!r}"},
+        )
+    if preset not in ("fail80", "all_fail", "fail50", "disagree", "ref_copy50", "all"):
+        raise HTTPException(
+            status_code=400,
+            detail={"error": "invalid_preset", "message": f"Preset không hợp lệ: {preset!r}"},
+        )
+
+    ds = spec["dataset"]
+    regime = spec["regime"]
+
+    # Build protocol summary list with live ready model counts
+    available_protocols = []
+    fiq_runs = list_runs()
+    for pdef in COMMON_FAILURE_PROTOCOLS:
+        if pdef["dataset"] in ("edir", "pinpoint"):
+            sm = _get_summary(pdef["dataset"])
+            n_ready = sum(1 for m in sm["models"] if m[pdef["regime"]].get("has_predictions"))
+        elif pdef["regime"] == "all":
+            n_ready = sum(1 for r in fiq_runs if str(r.get("protocol_id", "")).startswith("fashioniq_"))
+        else:
+            n_ready = sum(1 for r in fiq_runs if r.get("protocol_id") == pdef["regime"])
+        available_protocols.append({**pdef, "ready_models": n_ready})
+
+    # Collect per-query ranks across all ready models in this protocol
+    slices_meta: List[Dict[str, Any]] = []
+    if ds == "fashioniq":
+        fiq_data = _load_fashioniq_protocol_matrix(regime)
+        all_models = fiq_data["models"]
+        categories = fiq_data["categories"]
+        base_queries = fiq_data["queries"]
+    else:
+        bm_data = _load_bench_protocol_matrix(ds, regime, protocol)
+        all_models = bm_data["models"]
+        categories = bm_data["categories"]
+        slices_meta = bm_data["slices"]
+        if ds == "pinpoint" and slice_id != "all":
+            base_queries = [r for r in bm_data["queries"] if _pinpoint_slice_match(r["rec"], slice_id)]
+        else:
+            base_queries = bm_data["queries"]
+
+    all_model_keys = [m["key"] for m in all_models]
+    if models_param.strip():
+        requested = [x.strip() for x in models_param.split(",") if x.strip()]
+        selected_keys = [k_m for k_m in all_model_keys if k_m in set(requested)]
+        if not selected_keys:
+            selected_keys = list(all_model_keys)
+    else:
+        selected_keys = list(all_model_keys)
+
+    selected_models = [m for m in all_models if m["key"] in set(selected_keys)]
+    n_sel = len(selected_keys)
+    q_lower = q_text.strip().lower()
+    cat_filter = category.strip()
+
+    preset_counts = {"all": 0, "all_fail": 0, "fail80": 0, "fail50": 0, "disagree": 0, "ref_copy50": 0}
+    cat_stats: Dict[str, Dict[str, int]] = {}
+    evaluated_rows: List[Dict[str, Any]] = []
+
+    for row in base_queries:
+        if q_lower:
+            hay = f"{row['query_id']} {row['text']} {row['category']} {row.get('l1_interest') or ''}".lower()
+            if q_lower not in hay:
+                continue
+
+        scored_models = 0
+        fail_count = 0
+        hit_count = 0
+        ref_copy_count = 0
+        finite_ranks: List[int] = []
+        per_model = []
+
+        for m_item in selected_models:
+            mk = m_item["key"]
+            if mk not in row["ranks"]:
+                continue
+            scored_models += 1
+            rk = row["ranks"][mk]
+            failed = rk is None or rk > k
+            if failed:
+                fail_count += 1
+            else:
+                hit_count += 1
+            if rk is not None:
+                finite_ranks.append(rk)
+            rc = bool(row["ref_copies"].get(mk, False))
+            if rc:
+                ref_copy_count += 1
+            per_model.append({
+                "key": mk,
+                "display": m_item["display"],
+                "rank": rk,
+                "failed": failed,
+                "ref_copy": rc,
+                "score": row["scores"].get(mk, 0.0),
+            })
+
+        if scored_models == 0:
+            continue
+
+        fail_rate = fail_count / scored_models
+        ref_copy_rate = ref_copy_count / scored_models
+        is_all_fail = fail_count == scored_models
+        is_fail80 = fail_rate >= 0.8 - 1e-9
+        is_fail50 = fail_rate >= 0.5 - 1e-9
+        is_disagree = hit_count >= 1 and fail_count >= 1 and (hit_count <= max(2, int(round(scored_models * 0.25))))
+        is_ref_copy50 = ref_copy_rate >= 0.5 - 1e-9
+
+        # Track category common-failure stats BEFORE category filter so bars stay informative
+        c_id = row["category"]
+        cs = cat_stats.setdefault(c_id, {"total": 0, "all_fail": 0, "fail80": 0})
+        cs["total"] += 1
+        if is_all_fail:
+            cs["all_fail"] += 1
+        if is_fail80:
+            cs["fail80"] += 1
+
+        if cat_filter and c_id != cat_filter:
+            continue
+
+        preset_counts["all"] += 1
+        if is_all_fail:
+            preset_counts["all_fail"] += 1
+        if is_fail80:
+            preset_counts["fail80"] += 1
+        if is_fail50:
+            preset_counts["fail50"] += 1
+        if is_disagree:
+            preset_counts["disagree"] += 1
+        if is_ref_copy50:
+            preset_counts["ref_copy50"] += 1
+
+        keep = (
+            preset == "all"
+            or (preset == "all_fail" and is_all_fail)
+            or (preset == "fail80" and is_fail80)
+            or (preset == "fail50" and is_fail50)
+            or (preset == "disagree" and is_disagree)
+            or (preset == "ref_copy50" and is_ref_copy50)
+        )
+        if not keep:
+            continue
+
+        best_rank = min(finite_ranks) if finite_ranks else None
+        median_rank = sorted(finite_ranks)[len(finite_ranks) // 2] if finite_ranks else None
+        mean_score = sum(pm["score"] for pm in per_model) / len(per_model)
+        evaluated_rows.append({
+            "query_id": row["query_id"],
+            "text": row["text"],
+            "category": c_id,
+            "l1_interest": row.get("l1_interest"),
+            "ref_image_id": row["ref_image_id"],
+            "ref_image_url": row["ref_image_url"],
+            "gt_image_id": row["gt_image_id"],
+            "gt_image_url": row["gt_image_url"],
+            "scored_models": scored_models,
+            "fail_count": fail_count,
+            "hit_count": hit_count,
+            "fail_rate": fail_rate,
+            "ref_copy_count": ref_copy_count,
+            "best_rank": best_rank,
+            "median_rank": median_rank,
+            "mean_score": mean_score,
+            "per_model": per_model,
+        })
+
+    if sort == "fail_desc":
+        evaluated_rows.sort(key=lambda r: (-r["fail_rate"], -r["fail_count"], r["mean_score"], r["query_id"]))
+    elif sort == "ref_copy_desc":
+        evaluated_rows.sort(key=lambda r: (-r["ref_copy_count"], -r["fail_rate"], r["query_id"]))
+    elif sort == "best":
+        evaluated_rows.sort(key=lambda r: (r["fail_rate"], -r["mean_score"], r["query_id"]))
+    else:
+        evaluated_rows.sort(key=lambda r: r["query_id"])
+
+    category_breakdown = sorted(
+        [
+            {
+                "category": c,
+                "total": st["total"],
+                "all_fail": st["all_fail"],
+                "fail80": st["fail80"],
+                "fail80_rate": (st["fail80"] / st["total"]) if st["total"] > 0 else 0.0,
+            }
+            for c, st in cat_stats.items()
+        ],
+        key=lambda x: (-x["fail80_rate"], -x["fail80"], x["category"]),
+    )
+
+    page = evaluated_rows[offset : offset + limit]
+    return {
+        "protocol": protocol,
+        "protocol_label": spec["label"],
+        "dataset": ds,
+        "regime": regime,
+        "k": k,
+        "preset": preset,
+        "available_protocols": available_protocols,
+        "all_models": all_models,
+        "selected_models": selected_keys,
+        "selected_model_count": n_sel,
+        "slices": slices_meta,
+        "categories": categories,
+        "category_breakdown": category_breakdown,
+        "preset_counts": preset_counts,
+        "filtered_total": len(evaluated_rows),
+        "offset": offset,
+        "limit": limit,
+        "items": page,
+    }
