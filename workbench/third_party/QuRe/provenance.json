@@ -1,0 +1,10 @@
+{
+  "model_ids": ["qure"],
+  "requested_url": "https://github.com/jaehyun-kwak/QuRe",
+  "resolved_url": "https://github.com/jaehyun-kwak/QuRe.git",
+  "upstream_commit": "6a50a27c307e151b95533d05ffdfa126fbe5550a",
+  "upstream_commit_date": "2025-11-14T11:33:19+09:00",
+  "destination": "/home/heheboiz/data/cir/workbench/third_party/QuRe",
+  "vendored_at": "2026-11-24T17:33:16Z",
+  "nested_git_removed": [".git"]
+}

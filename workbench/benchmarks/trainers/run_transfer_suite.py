@@ -23,6 +23,7 @@ ENVS = REPO / "workbench" / "envs"
 CIR_ENV_PY = REPO / "workbench" / "artifacts" / "environments" / "cir-005ef4e1b02999a5" / "bin" / "python"
 WORKER = REPO / "workbench" / "benchmarks" / "trainers" / "eval_transfer_worker.py"
 FIQ_ROOT = REPO / "workbench" / "artifacts" / "checkpoint_selection" / "20261106T002617+0700"
+QURE_CKPT_ROOT = REPO / "workbench" / "artifacts" / "qure_checkpoints"
 CIRR_ROOT = REPO / "workbench" / "artifacts" / "cirr_checkpoints"
 OUT_ROOT = REPO / "workbench" / "artifacts" / "transfer_evals"
 
@@ -33,6 +34,7 @@ ENV_SPECS: Dict[str, Dict[str, str]] = {
     "clvcnet": {"python": str(ENVS / "clvc39-la/bin/python"), "pythonpath": f"{REPO}:{REPO}/workbench/third_party/CLVCNet"},
     "dcnet": {"python": str(ENVS / "dcnet310-sm120/bin/python"), "pythonpath": f"{REPO}:{REPO}/workbench/third_party/DCNet"},
     "sprc": {"python": str(ENVS / "sprc310-sm120/bin/python"), "pythonpath": f"{REPO}:{REPO}/workbench/third_party/SPRC/src"},
+    "qure": {"python": str(ENVS / "qure310-sm120/bin/python"), "pythonpath": f"{REPO}:{REPO}/workbench/third_party/QuRe"},
     "mtst_ptha": {"python": str(CIR_ENV_PY), "pythonpath": f"{REPO}:{REPO}/workbench/third_party/MTST_PTHA/MTST_PTHA/src"},
     "hint": {"python": str(ENVS / "ilearn39-adapted/bin/python"), "pythonpath": f"{REPO}:{REPO}/workbench/third_party/HINT"},
     "habit": {"python": str(ENVS / "ilearn39-adapted/bin/python"), "pythonpath": f"{REPO}:{REPO}/workbench/third_party/HABIT"},
@@ -86,6 +88,7 @@ FIQ_CHECKPOINTS: List[Dict[str, Any]] = [
     {"model": "csmcir", "variant": "fiq_clean", "ckpts": [str(FIQ_ROOT / "cohort/downloads/csmcir/fashioniq_tuned_clip_best.pt")]},
     {"model": "tme", "variant": "fiq_clean", "ckpts": [str(FIQ_ROOT / "cohort/ckpt/tme/fashioniq_0_best_model.pth")]},
     {"model": "dcnet", "variant": "fiq_clean", "ckpts": [str(FIQ_ROOT / "checkpoints/dcnet/trained_model.pth")]},
+    {"model": "qure", "variant": "fiq_vitl_repro", "ckpts": [str(QURE_CKPT_ROOT / "fashioniq/best_model.pth")]},
 ]
 
 CIRR_CHECKPOINTS: List[Dict[str, Any]] = [
@@ -106,6 +109,7 @@ CIRR_CHECKPOINTS: List[Dict[str, Any]] = [
     {"model": "habit", "variant": "cirr_n02", "ckpts": [str(CIRR_ROOT / "habit/HABIT-CIRR-N0.2.pt")]},
     {"model": "intent", "variant": "cirr_n02", "ckpts": [str(CIRR_ROOT / "intent/intent_cirr_0.2.pt")]},
     {"model": "csmcir", "variant": "cirr_clean", "ckpts": [str(CIRR_ROOT / "csmcir/cirr_tuned_clip_arithmetic.pt")]},
+    {"model": "qure", "variant": "cirr_vitl_repro", "ckpts": [str(CIRR_ROOT / "qure/qure_cirr_vitl.pth")]},
 ]
 
 

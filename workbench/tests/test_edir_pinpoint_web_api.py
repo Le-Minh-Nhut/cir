@@ -28,13 +28,18 @@ def test_benchmarks_overview_structure_and_counts() -> None:
     assert data["split_tag"] == "70_10_20_seed42"
     assert data["edir"]["corpus_size"] == 28645
     assert data["edir"]["test_query_count"] == 1003
-    assert data["edir"]["completion"]["completed"]["indomain"] == 15
+    assert data["edir"]["completion"]["completed"]["indomain"] == 16
     assert data["pinpoint"]["corpus_size"] == 109598
     assert data["pinpoint"]["test_query_count"] == 1337
-    assert data["pinpoint"]["completion"]["completed"]["indomain"] == 15
-    assert len(data["availability"]) == 15
-    # Verify official unavailable checkpoints are transparently marked
+    assert data["pinpoint"]["completion"]["completed"]["indomain"] == 16
+    assert len(data["availability"]) == 16
+    # Verify official unavailable checkpoints are transparently marked & QuRe is ready across all 5 regimes
     avail_by_key = {row["key"]: row for row in data["availability"]}
+    assert avail_by_key["qure"]["edir_indomain"] == "ready"
+    assert avail_by_key["qure"]["pinpoint_indomain"] == "ready"
+    assert avail_by_key["qure"]["fiq_to_pinpoint"] == "ready"
+    assert avail_by_key["qure"]["cirr_to_edir"] == "ready"
+    assert avail_by_key["qure"]["fiq_to_edir"] == "ready"
     assert avail_by_key["mtst_ptha"]["fiq_to_pinpoint"] == "unavailable"
     assert avail_by_key["tme"]["cirr_to_edir"] == "unavailable"
     assert avail_by_key["airknow"]["cirr_to_edir"] == "unavailable"
@@ -47,12 +52,12 @@ def test_edir_summary_and_subcategories() -> None:
     resp = client.get("/api/benchmarks/edir/summary")
     assert resp.status_code == 200, resp.text
     data = resp.json()
-    assert len(data["models"]) == 15
+    assert len(data["models"]) == 16
     assert len(data["subcategories"]) == 15
     top = data["models"][0]
     assert top["indomain"]["status"] == "ready"
     assert top["indomain"]["overall"]["Recall@1"] > 0.35
-    # All 15 models should be sorted descending by Recall@1
+    # All 16 models should be sorted descending by Recall@1
     r1s = [m["indomain"]["overall"]["Recall@1"] for m in data["models"]]
     assert r1s == sorted(r1s, reverse=True)
 
@@ -61,7 +66,7 @@ def test_pinpoint_summary_all_8_slices_exact() -> None:
     resp = client.get("/api/benchmarks/pinpoint/summary")
     assert resp.status_code == 200, resp.text
     data = resp.json()
-    assert len(data["models"]) == 15
+    assert len(data["models"]) == 16
     slice_counts = {s["id"]: s["count"] for s in data["slices"]}
     assert slice_counts == {
         "all": 1337,
@@ -129,12 +134,12 @@ def test_csv_exports_and_error_handling() -> None:
     c1 = client.get("/api/benchmarks/edir/export.csv")
     assert c1.status_code == 200
     rows1 = list(csv.reader(io.StringIO(c1.text)))
-    assert len(rows1) == 16  # header + 15 models
+    assert len(rows1) == 17  # header + 16 models
 
     c2 = client.get("/api/benchmarks/pinpoint/export.csv", params={"slice": "fashion_no_comp"})
     assert c2.status_code == 200
     rows2 = list(csv.reader(io.StringIO(c2.text)))
-    assert len(rows2) == 16
+    assert len(rows2) == 17
 
     # Invalid inputs cleanly return 400 (never 500)
     assert client.get("/api/benchmarks/unknown/summary").status_code == 400
@@ -162,12 +167,12 @@ def test_common_failures_default_across_pinpoint_edir_and_fashioniq() -> None:
     assert d0b["selected_model_count"] == 16
     assert d0b["filtered_total"] > 0
 
-    # 2) PinPoint In-Domain returns >=80% common failures across all 15 models
+    # 2) PinPoint In-Domain returns >=80% common failures across all 16 models
     r1 = client.get("/api/benchmarks/common-failures", params={"protocol": "pinpoint_indomain"})
     assert r1.status_code == 200, r1.text
     d1 = r1.json()
     assert d1["protocol"] == "pinpoint_indomain"
-    assert d1["selected_model_count"] == 15
+    assert d1["selected_model_count"] == 16
     assert d1["filtered_total"] > 0
     assert all(it["fail_rate"] >= 0.8 - 1e-9 for it in d1["items"])
     assert len(d1["category_breakdown"]) == 5
@@ -193,7 +198,7 @@ def test_common_failures_default_across_pinpoint_edir_and_fashioniq() -> None:
     pd = client.get("/api/benchmarks/common-failures/detail", params={"protocol": "pinpoint_indomain", "query_id": p_qid, "top_k": 10})
     assert pd.status_code == 200, pd.text
     pdb = pd.json()
-    assert len(pdb["models"]) == 15 and len(pdb["models"][0]["candidates"]) == 10
+    assert len(pdb["models"]) == 16 and len(pdb["models"][0]["candidates"]) == 10
 
     # 5) CSV export & invalid protocol/preset guard
     rcsv = client.get("/api/benchmarks/common-failures/export.csv", params={"protocol": "edir_indomain", "preset": "all_fail", "k": 1})

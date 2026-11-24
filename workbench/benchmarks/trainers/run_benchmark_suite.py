@@ -159,6 +159,15 @@ MODEL_QUEUE: List[Dict[str, Any]] = [
         "script": str(TRAINERS / "train_limn.py"),
         "extra_args": ["--num-epochs", "{epochs}", "--patience", "{patience}"],
     },
+    {
+        "key": "qure",
+        "run_id": "qure_vitl",
+        "result_field": "final_qure_test",
+        "python": str(ENVS / "qure310-sm120/bin/python"),
+        "pythonpath": f"{REPO_ROOT}:{REPO_ROOT}/workbench/third_party/QuRe",
+        "script": str(TRAINERS / "train_qure.py"),
+        "extra_args": ["--num-epochs", "{epochs}", "--patience", "{patience}"],
+    },
 ]
 
 

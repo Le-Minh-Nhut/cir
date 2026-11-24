@@ -264,7 +264,11 @@ function OverviewSection({
             ))}
           </div>
           <div className="bm-insight-box bm-insight-warn">
-            <b>Phát hiện cốt lõi trên EDIR:</b> Toàn bộ <b>15/15</b> mô hình suy sụp trên phép chỉnh sửa{" "}
+            <b>Phát hiện cốt lõi trên EDIR:</b> Toàn bộ{" "}
+            <b>
+              {overview.edir.completion.completed.indomain}/{overview.edir.completion.expected.indomain}
+            </b>{" "}
+            mô hình suy sụp trên phép chỉnh sửa{" "}
             <code>remove</code> (R@1 chỉ{" "}
             <b>
               {fmtPct(overview.edir.remove_r1_min, 1)} – {fmtPct(overview.edir.remove_r1_max, 1)}
@@ -332,7 +336,10 @@ function OverviewSection({
           </div>
           <div className="bm-insight-box bm-insight-ok">
             <b>Phát hiện cốt lõi trên PinPoint:</b> Có{" "}
-            <b>{overview.pinpoint.models_beating_gpt5}/15</b> mô hình In-Domain vượt baseline công bố{" "}
+            <b>
+              {overview.pinpoint.models_beating_gpt5}/{overview.pinpoint.completion.expected.indomain}
+            </b>{" "}
+            mô hình In-Domain vượt baseline công bố{" "}
             <b>GPT-5 reranked ({overview.pinpoint.gpt5_reference_map10.toFixed(4)})</b> — dẫn đầu đều là các mô hình
             BLIP-2 chống nhiễu nhãn (<code>ConeSep</code>, <code>CSMCIR</code>, <code>INTENT</code>, <code>AirKnow</code>).{" "}
             <button
@@ -1109,12 +1116,12 @@ function PinPointSection({
       {/* 5-Category PinPoint Heatmap */}
       <Card
         title="Ma trận mAP@10 theo 5 nhóm truy vấn PinPoint (bấm vào bất kỳ ô nào để soi ảnh)"
-        subtitle="Cho thấy rõ Swap & Context Fit mạnh nhất, trong khi Complement & Explore là điểm nghẽn chung của toàn bộ 15 mô hình"
+        subtitle={`Cho thấy rõ Swap & Context Fit mạnh nhất, trong khi Complement & Explore là điểm nghẽn chung của toàn bộ ${data.models.length} mô hình`}
         actions={
           <div className="bm-seg">
             {(
               [
-                ["indomain", "In-Domain (15/15)"],
+                ["indomain", `In-Domain (${data.models.length}/${data.models.length})`],
                 ["fiq_transfer", "FIQ Transfer"],
                 ["delta", "Δ InDom−FIQ"],
               ] as const

@@ -249,8 +249,11 @@ def verify_and_generate_edir() -> Tuple[Path, Dict[str, Any]]:
         lines.append(f"| **{r['key']}** | {s0_s} | {fiq_s} | {cirr_s} | {in_s} | {delta} |")
 
     # Section 2: CIRR Transfer 15-subcategory Recall@1 matrix
+    n_total = len(rows_summary)
+    n_cirr = sum(1 for r in rows_summary if r["cirr"])
+    n_fiq = sum(1 for r in rows_summary if r["fiq"])
     subcats = sorted(rows_summary[0]["indomain"]["per_subcategory"].keys())
-    lines.extend(["", "## 2. Ma Trận `Recall@1` Theo 15 Phép Chỉnh Sửa — **CIRR Transfer (`10/15` model)**", ""])
+    lines.extend(["", f"## 2. Ma Trận `Recall@1` Theo 15 Phép Chỉnh Sửa — **CIRR Transfer (`{n_cirr}/{n_total}` model)**", ""])
     lines.append("| Model | Variant | " + " | ".join(subcats) + " |")
     lines.append("|---|---|" + "|".join("---:" for _ in subcats) + "|")
     for r in rows_summary:
@@ -260,7 +263,7 @@ def verify_and_generate_edir() -> Tuple[Path, Dict[str, Any]]:
         vals = [f"{ps[c]['Recall@1']*100:.1f}%" for c in subcats]
         lines.append(f"| **{r['key']}** | `{r['cirr_variant']}` | " + " | ".join(vals) + " |")
 
-    lines.extend(["", "## 3. Ma Trận `Recall@1` Theo 15 Phép Chỉnh Sửa — **FashionIQ Transfer (`14/15` model)**", ""])
+    lines.extend(["", f"## 3. Ma Trận `Recall@1` Theo 15 Phép Chỉnh Sửa — **FashionIQ Transfer (`{n_fiq}/{n_total}` model)**", ""])
     lines.append("| Model | Variant | " + " | ".join(subcats) + " |")
     lines.append("|---|---|" + "|".join("---:" for _ in subcats) + "|")
     for r in rows_summary:

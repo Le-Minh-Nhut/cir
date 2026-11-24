@@ -199,6 +199,44 @@ def run_eval(args: argparse.Namespace) -> None:
         )
 
     # ------------------------------------------------------------------
+    # 2b. QuRe (Blip2QuRe, ICML 2025, pretrain_vitL)
+    # ------------------------------------------------------------------
+    elif model_key == "qure":
+        from data.utils import targetpad_transform
+        from lavis.models import load_model_and_preprocess
+        from workbench.benchmarks.trainers.train_qure import evaluate_qure_split
+
+        model, _, txt_processors = load_model_and_preprocess(
+            name="blip2_qure", model_type="pretrain_vitL", is_eval=True, device=device
+        )
+        state = torch.load(ckpt_paths[0], map_location=device, weights_only=False)
+        sd = state["state_dict_non_vit"] if isinstance(state, dict) and "state_dict_non_vit" in state else state
+        strict_load = not (isinstance(state, dict) and "state_dict_non_vit" in state)
+        msg = model.load_state_dict(sd, strict=strict_load)
+        if not strict_load:
+            non_vit_missing = [k for k in msg.missing_keys if not k.startswith("visual_encoder.")]
+            assert not non_vit_missing and not msg.unexpected_keys, f"QuRe ckpt mismatch: {msg}"
+        model.to(device)
+        model.eval()
+        txt_proc = txt_processors["eval"]
+        preprocess = targetpad_transform(1.25, 224)
+        load_report = {"strict": strict_load, "model_type": "pretrain_vitL"}
+
+        if args.smoke_only:
+            with torch.no_grad():
+                x = torch.randn(4, 3, 224, 224, device=device)
+                caps = [txt_proc("change to red")] * 4
+                scores = model(x, x, caps, x, True)
+                assert scores.shape == (4, 2) and torch.isfinite(scores).all()
+            print(f"[SMOKE PASS] qure ({args.variant}) scores={tuple(scores.shape)}", flush=True)
+            return
+
+        metrics, preds, _ = evaluate_qure_split(
+            args.dataset, model, test_bundle, preprocess, txt_proc, device,
+            eval_bs=128, num_workers=num_workers,
+        )
+
+    # ------------------------------------------------------------------
     # 3. MTST_PTHA (Blip2QformerCirCat, pretrain)
     # ------------------------------------------------------------------
     elif model_key == "mtst_ptha":

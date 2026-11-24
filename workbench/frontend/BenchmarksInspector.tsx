@@ -291,7 +291,7 @@ export function BenchmarksInspector({
     <div className="stack">
       <Card
         title="Khám phá truy vấn, ảnh gốc & đối chiếu Top-K"
-        subtitle="Mở từng test query thực tế để kiểm tra ảnh gốc, câu lệnh chỉnh sửa, Ground Truth, Hard Negative và lỗi Ref Copy across 15 models"
+        subtitle="Mở từng test query thực tế để kiểm tra ảnh gốc, câu lệnh chỉnh sửa, Ground Truth, Hard Negative và lỗi Ref Copy trên toàn bộ các mô hình"
         actions={
           <div className="bm-seg" role="group" aria-label="Chọn benchmark">
             <button
@@ -732,7 +732,7 @@ export function BenchmarksInspector({
               {/* Cross-Model Consensus on this exact query */}
               <Card
                 title={`Đồng thuận trên truy vấn này (${detailData.all_models.length} lượt đã hoàn tất)`}
-                subtitle="Bấm vào bất kỳ model nào để chuyển làm mô hình chính — nhìn ngay lỗi hệ thống (toàn bộ 15 model cùng trượt) hay lỗi riêng lẻ"
+                subtitle="Bấm vào bất kỳ model nào để chuyển làm mô hình chính — nhìn ngay lỗi hệ thống (toàn bộ các model cùng trượt) hay lỗi riêng lẻ"
               >
                 <div className="bm-consensus-grid">
                   {detailData.all_models.map((m) => {

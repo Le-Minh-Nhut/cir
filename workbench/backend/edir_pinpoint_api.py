@@ -38,6 +38,7 @@ MODEL_METADATA: Dict[str, Dict[str, str]] = {
     "tgcir": {"display": "TG-CIR", "family": "CLIP", "backbone": "CLIP ViT-B/16"},
     "limn": {"display": "LIMN", "family": "CLIP", "backbone": "OpenCLIP ViT-L/14"},
     "sprc": {"display": "SPRC", "family": "BLIP-2", "backbone": "BLIP-2 Q-Former (ViT-g / ViT-L)"},
+    "qure": {"display": "QuRe", "family": "BLIP-2", "backbone": "BLIP-2 ViT-L/14 (Hard-Neg)"},
     "mtst_ptha": {"display": "MTST-PTHA", "family": "BLIP-2", "backbone": "BLIP-2 EVA-ViT-g"},
     "hint": {"display": "HINT", "family": "BLIP-2", "backbone": "BLIP-2 EVA-ViT-g (iLearn)"},
     "intent": {"display": "INTENT", "family": "BLIP-2", "backbone": "BLIP-2 EVA-ViT-g (iLearn)"},
