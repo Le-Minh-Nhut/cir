@@ -1164,7 +1164,15 @@ def _load_fashioniq_protocol_matrix(protocol_filter: str) -> Dict[str, Any]:
             _FIQ_CACHE[protocol_filter] = (run_ids, payload)
         return payload
 
-    _meta, run_maps = get_analysis_input(list(run_ids), k=10)
+    # Call get_analysis_input grouped by protocol_id so storage.py's cross-protocol guard
+    # remains strictly intact for legacy endpoints while the explicitly-warned merged view works.
+    run_maps: Dict[str, Any] = {}
+    by_proto: Dict[str, List[str]] = {}
+    for r in chosen:
+        by_proto.setdefault(str(r.get("protocol_id", "")), []).append(str(r["run_id"]))
+    for proto_rids in by_proto.values():
+        _meta, part_maps = get_analysis_input(proto_rids, k=10)
+        run_maps.update(part_maps)
     models_meta = []
     for r in chosen:
         mid = str(r.get("model_id") or r["run_id"])
