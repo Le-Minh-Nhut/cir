@@ -164,7 +164,8 @@ def test_common_failures_default_across_pinpoint_edir_and_fashioniq() -> None:
     r0b = client.get("/api/benchmarks/common-failures", params={"protocol": "fashioniq_all_protocols"})
     assert r0b.status_code == 200, r0b.text
     d0b = r0b.json()
-    assert d0b["selected_model_count"] == 16
+    assert d0b["selected_model_count"] == 17
+    assert any(m["display"] == "qure" for m in d0b["all_models"])
     assert d0b["filtered_total"] > 0
 
     # 2) PinPoint In-Domain returns >=80% common failures across all 16 models

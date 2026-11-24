@@ -323,7 +323,7 @@ export default function App() {
               <div className="ctx"><span>EDIR</span><b>1,003 / 28,645</b></div>
               <div className="ctx"><span>PinPoint</span><b>1,337 / 109,598</b></div>
               {location.area === "common_failures" && (
-                <div className="ctx"><span>FashionIQ</span><b>3 protocols (16 runs)</b></div>
+                <div className="ctx"><span>FashionIQ</span><b>3 protocols (17 runs)</b></div>
               )}
             </>
           ) : (

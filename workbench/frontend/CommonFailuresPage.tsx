@@ -119,7 +119,7 @@ const DATASET_TABS: Array<{
   {
     id: "fashioniq",
     label: "FashionIQ",
-    subtitle: "3 protocol chính chủ · 16 runs",
+    subtitle: "3 protocol chính chủ · 17 runs",
     defaultProtocol: "fashioniq_original_split",
   },
   {
