@@ -191,4 +191,5 @@ Nếu bạn muốn chọn **1 hướng tập trung nhất** để bắt đầu �
 
 - **Đợt 1** — Tổng quan 6 điểm gãy phổ quát trên 16 model (`86` runs): [CIR_UNIVERSAL_FAILURE_MODES_AND_RESEARCH_DIRECTIONS.md](CIR_UNIVERSAL_FAILURE_MODES_AND_RESEARCH_DIRECTIONS.md)
 - **Đợt 2** — Kiểm định thống kê (`p-values`), động học `history.jsonl`, can thiệp phản thực (`NoRef` / `RRF`) & bản đồ SOTA 2024–2026: [CIR_DEEP_RESEARCH_FORENSICS_AND_ROADMAP.md](CIR_DEEP_RESEARCH_FORENSICS_AND_ROADMAP.md)
+- **Đợt 4** — Bản đồ toàn diện mọi trục thất bại hệ thống vượt ngoài composition (Scaling-Resistance, Calibration/Uncertainty, OCR, Hubness/Rarity, Fairness, Long-Tail/Negative Transfer): [CIR_FRONTIER_SYSTEM_FAILURE_LANDSCAPE.md](CIR_FRONTIER_SYSTEM_FAILURE_LANDSCAPE.md)
 - **Bảng tổng hợp số liệu gốc 16 model (`73/73` runs bit-exact):** [MASTER_BENCHMARK_SUMMARY.md](../20261123-edir-pinpoint-splits/MASTER_BENCHMARK_SUMMARY.md)
