@@ -188,7 +188,7 @@ def run_eval(args: argparse.Namespace) -> None:
             with torch.no_grad():
                 x = torch.randn(4, 3, 224, 224, device=device)
                 tf, re = model.extract_target_features(x, mode="mean")
-                sim = model.inference(re, tf, [txt_proc("change to red")] * 4, None)
+                sim = model.inference(re, tf, [txt_proc("change to red")] * 4)
                 assert sim.shape == (4, 4) and torch.isfinite(sim).all()
             print(f"[SMOKE PASS] sprc ({args.variant}) sim={tuple(sim.shape)}", flush=True)
             return
@@ -346,7 +346,7 @@ def run_eval(args: argparse.Namespace) -> None:
         load_report = {"missing_keys": list(res.missing_keys), "unexpected_keys": list(res.unexpected_keys)}
 
         if args.smoke_only:
-            with torch.no_grad():
+            with torch.no_grad(), torch.cuda.amp.autocast(enabled=device.type == "cuda"):
                 x = torch.randn(4, 3, 224, 224, device=device)
                 vit_e = model.vit_encode(x)
                 f_img = model.encode_image(vit_e)
