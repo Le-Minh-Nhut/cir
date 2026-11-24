@@ -1320,3 +1320,84 @@ thead .bm-sticky-col { background: var(--surface-2); z-index: 4; }
   .bm-stacked-row { grid-template-columns: 1fr; }
   .bm-stacked-cands { grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); }
 }
+
+/* Clean Common Failures toolbar & Dedicated Query Detail Page */
+.bm-cf-ctrl-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.bm-cf-ctrl-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-left: auto;
+}
+.bm-cat-bars-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+  gap: 8px;
+}
+.bm-detail-topbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 10px 14px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+.bm-detail-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 1.25fr);
+  gap: 20px;
+  align-items: start;
+}
+.bm-detail-pair {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.bm-detail-arrow {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--ink-4);
+  padding: 0 2px;
+}
+.bm-detail-shot {
+  flex: 1 1 160px;
+  max-width: 220px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  border-radius: var(--radius);
+  border: 2px solid var(--line-strong);
+  background: var(--surface-2);
+  text-align: left;
+  cursor: zoom-in;
+  min-height: 0;
+}
+.bm-shot-ref { border-color: var(--accent); background: var(--accent-soft); }
+.bm-shot-gt { border-color: var(--ok); background: var(--ok-soft); }
+.bm-detail-shot img {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  object-fit: contain;
+  background: var(--surface);
+  border-radius: 5px;
+}
+.bm-shot-tag { font-size: .74rem; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; }
+.bm-shot-tag-ref { color: var(--accent); }
+.bm-shot-tag-gt { color: var(--ok); }
+.bm-shot-id { font-size: .72rem; color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bm-detail-right { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+@media (max-width: 1020px) {
+  .bm-detail-hero { grid-template-columns: 1fr; }
+  .bm-cat-bars-grid { grid-template-columns: 1fr; }
+}

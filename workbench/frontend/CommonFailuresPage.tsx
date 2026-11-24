@@ -75,15 +75,6 @@ interface CommonFailuresResponse {
   items: CommonFailureRow[];
 }
 
-const PRESET_TABS: Array<{ id: string; label: string; desc: string }> = [
-  { id: "fail80", label: "Fail chung ≥80%", desc: "Mặc định: ít nhất 80% mô hình cùng trượt" },
-  { id: "all_fail", label: "100% cùng trượt", desc: "Toàn bộ mô hình đều không tìm ra đáp án" },
-  { id: "fail50", label: "≥50% cùng trượt", desc: "Hơn một nửa số mô hình bị trượt" },
-  { id: "disagree", label: "Bất đồng mạnh", desc: "Phần lớn trượt nhưng 1–2 mô hình vẫn trúng" },
-  { id: "ref_copy50", label: "Ref Copy ≥50%", desc: "≥50% mô hình trả lại chính ảnh gốc ở Top-1" },
-  { id: "all", label: "Tất cả query", desc: "Toàn bộ truy vấn (xếp từ dễ hỏng nhất)" },
-];
-
 interface RankedCandidate {
   rank: number;
   image_id: string;
@@ -119,22 +110,90 @@ interface CommonFailureDetailResponse {
   models: ModelRankingBlock[];
 }
 
+const DATASET_TABS: Array<{
+  id: "fashioniq" | "pinpoint" | "edir";
+  label: string;
+  subtitle: string;
+  defaultProtocol: string;
+}> = [
+  {
+    id: "fashioniq",
+    label: "FashionIQ",
+    subtitle: "3 protocol chính chủ · 16 runs",
+    defaultProtocol: "fashioniq_original_split",
+  },
+  {
+    id: "pinpoint",
+    label: "PinPoint",
+    subtitle: "1,337 queries · 8 lát cắt Fashion",
+    defaultProtocol: "pinpoint_indomain",
+  },
+  {
+    id: "edir",
+    label: "EDIR",
+    subtitle: "1,003 queries · 15 phép chỉnh sửa",
+    defaultProtocol: "edir_indomain",
+  },
+];
+
+const PRESET_TABS: Array<{ id: string; label: string; desc: string }> = [
+  { id: "fail80", label: "Fail chung ≥80%", desc: "Mặc định: ít nhất 80% mô hình cùng trượt" },
+  { id: "all_fail", label: "100% cùng trượt", desc: "Toàn bộ mô hình đều trượt" },
+  { id: "fail50", label: "≥50% cùng trượt", desc: "Ít nhất một nửa mô hình trượt" },
+  { id: "disagree", label: "Bất đồng mạnh", desc: "Đa số trượt nhưng 1–2 mô hình vẫn trúng" },
+  { id: "ref_copy50", label: "Ref Copy ≥50%", desc: "≥50% mô hình copy lại ảnh gốc ở Top-1" },
+  { id: "all", label: "Tất cả", desc: "Toàn bộ query" },
+];
+
 function fmtRank(r: number | null): string {
   return r === null ? ">50" : `#${r}`;
 }
 
-function InlineQueryRankings({
+function datasetForProtocol(proto: string): "fashioniq" | "pinpoint" | "edir" {
+  if (proto.startsWith("pinpoint")) return "pinpoint";
+  if (proto.startsWith("edir")) return "edir";
+  return "fashioniq";
+}
+
+function buildDetailHref(protocol: string, queryId: string, k: number, modelsParam: string): string {
+  const params = new URLSearchParams();
+  params.set("area", "common_failures");
+  params.set("cf_protocol", protocol);
+  params.set("cf_query", queryId);
+  params.set("cf_k", String(k));
+  if (modelsParam) params.set("cf_models", modelsParam);
+  return `${window.location.pathname}?${params.toString()}`;
+}
+
+function readDetailFromUrl(): { protocol: string; queryId: string; k: number; models: string } | null {
+  const params = new URLSearchParams(window.location.search);
+  const qid = (params.get("cf_query") ?? "").trim();
+  if (!qid) return null;
+  const proto = (params.get("cf_protocol") ?? "fashioniq_original_split").trim();
+  const kRaw = Number(params.get("cf_k") ?? "10");
+  const k = Number.isInteger(kRaw) && kRaw >= 1 && kRaw <= 50 ? kRaw : 10;
+  const models = (params.get("cf_models") ?? "").trim();
+  return { protocol: proto, queryId: qid, k, models };
+}
+
+/* ========================================================================= */
+/* STANDALONE QUERY DETAIL VIEW (in-app or opened in a dedicated browser tab) */
+/* ========================================================================= */
+
+function QueryDetailPage({
   protocol,
   queryId,
-  modelsParam,
   k,
-  onZoom,
+  modelsParam,
+  onBack,
+  onInspectBenchmarkQuery,
 }: {
   protocol: string;
   queryId: string;
-  modelsParam: string;
   k: number;
-  onZoom: (src: string, caption: string) => void;
+  modelsParam: string;
+  onBack: () => void;
+  onInspectBenchmarkQuery: (seed: InspectorSeed) => void;
 }) {
   const [detail, setDetail] = useState<CommonFailureDetailResponse | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
@@ -143,6 +202,16 @@ function InlineQueryRankings({
   const [activeModel, setActiveModel] = useState<string>("");
   const [compareModel, setCompareModel] = useState<string>("");
   const [topK, setTopK] = useState<number>(10);
+  const [lightbox, setLightbox] = useState<{ src: string; caption: string } | null>(null);
+
+  useEffect(() => {
+    if (!lightbox) return;
+    const onKey = (ev: KeyboardEvent) => {
+      if (ev.key === "Escape") setLightbox(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [lightbox]);
 
   useEffect(() => {
     const ctrl = new AbortController();
@@ -172,12 +241,25 @@ function InlineQueryRankings({
     return () => ctrl.abort();
   }, [protocol, queryId, modelsParam, topK]);
 
-  if (loading && !detail) return <LoadingState label="Đang tải Top-K ảnh từng mô hình…" />;
-  if (err) return <ErrorState message={err} />;
+  const standaloneHref = buildDetailHref(protocol, queryId, k, modelsParam);
+
+  if (loading && !detail) return <LoadingState label="Đang tải chi tiết query & lưới ảnh Top-K của các mô hình…" />;
+  if (err) {
+    return (
+      <div className="stack">
+        <div>
+          <button type="button" className="secondary" onClick={onBack}>← Quay lại danh sách lỗi chung</button>
+        </div>
+        <ErrorState message={err} />
+      </div>
+    );
+  }
   if (!detail) return null;
 
   const primaryBlock = detail.models.find((m) => m.key === activeModel) ?? detail.models[0] ?? null;
   const compareBlock = compareModel ? detail.models.find((m) => m.key === compareModel) ?? null : null;
+  const failCount = detail.models.filter((m) => m.best_gt_rank === null || m.best_gt_rank > k).length;
+  const refCopyCount = detail.models.filter((m) => m.top1_is_ref).length;
 
   const renderCandidate = (c: RankedCandidate, compact = false) => {
     const cls = c.is_gt
@@ -192,7 +274,7 @@ function InlineQueryRankings({
         key={`${c.rank}:${c.image_id}`}
         type="button"
         className={compact ? `${cls} bm-cand-compact` : cls}
-        onClick={() => onZoom(c.image_url, `Rank #${c.rank} · ${c.image_id}`)}
+        onClick={() => setLightbox({ src: c.image_url, caption: `Rank #${c.rank} · ${c.image_id}` })}
         title={`Rank #${c.rank} · ${c.image_id}${c.score !== null ? ` (score ${c.score.toFixed(3)})` : ""}`}
       >
         <div className="bm-cand-img-wrap">
@@ -210,168 +292,224 @@ function InlineQueryRankings({
   };
 
   return (
-    <div className="bm-cf-detail-rich">
-      {/* Reference + Ground Truths + Hard Negatives row */}
-      <div className="bm-cf-refgt-strip">
-        <div className="bm-cf-strip-group">
-          <span className="field-label">Ảnh gốc (Reference)</span>
-          <div className="bm-mini-strip">
+    <div className="stack" data-testid="cf-detail-page">
+      {/* Clean Top Navigation Header */}
+      <div className="bm-detail-topbar">
+        <button type="button" className="secondary" style={{ minHeight: 36, padding: "5px 12px" }} onClick={onBack}>
+          ← Quay lại danh sách
+        </button>
+        <div className="row" style={{ gap: 6 }}>
+          <Badge tone="info">{detail.dataset.toUpperCase()}</Badge>
+          <span className="mono cell-strong">{detail.query.query_id}</span>
+          <Badge tone="neutral">{detail.query.category}</Badge>
+          {detail.query.l1_interest && <Badge tone="neutral">{detail.query.l1_interest}</Badge>}
+          <Badge tone={failCount === detail.models.length ? "bad" : "warn"}>
+            {failCount}/{detail.models.length} trượt @{k}
+          </Badge>
+          {refCopyCount > 0 && <Badge tone="warn">Ref Copy #1: {refCopyCount}</Badge>}
+        </div>
+        <div className="row" style={{ marginLeft: "auto" }}>
+          {detail.dataset !== "fashioniq" && (
             <button
               type="button"
-              className="bm-mini-card"
-              style={{ width: 124, borderColor: "var(--accent)" }}
-              onClick={() => onZoom(detail.query.ref_image_url, `Ảnh gốc · ${detail.query.ref_image_id}`)}
+              className="secondary"
+              style={{ minHeight: 36, padding: "5px 12px" }}
+              onClick={() =>
+                onInspectBenchmarkQuery({
+                  dataset: detail.dataset === "edir" ? "edir" : "pinpoint",
+                  regime: (protocol.replace(/^(edir|pinpoint)_/, "") || "indomain") as BenchmarkRegime,
+                  queryId: detail.query.query_id,
+                })
+              }
             >
-              <img src={detail.query.ref_image_url} alt="Reference" />
-              <span className="hint mono" style={{ fontSize: ".68rem", overflow: "hidden", textOverflow: "ellipsis" }}>
-                {detail.query.ref_image_id}
-              </span>
+              Mở Benchmark Inspector
             </button>
-          </div>
+          )}
+          <a
+            className="bm-btn-link"
+            href={standaloneHref}
+            target="_blank"
+            rel="noopener noreferrer"
+            data-testid="cf-open-new-tab"
+          >
+            Mở tab mới ↗
+          </a>
         </div>
+      </div>
 
-        <div className="bm-cf-strip-group">
-          <span className="field-label">Đáp án đúng (Ground Truth · {detail.ground_truths.length})</span>
-          <div className="bm-mini-strip">
-            {detail.ground_truths.slice(0, 6).map((gt) => (
+      {/* Hero Brief Card: Reference -> Ground Truth + Caption + Per-Model Rank Summary */}
+      <Card>
+        <div className="bm-detail-hero">
+          <div className="bm-detail-pair">
+            <button
+              type="button"
+              className="bm-detail-shot bm-shot-ref"
+              onClick={() => setLightbox({ src: detail.query.ref_image_url, caption: `Ảnh gốc · ${detail.query.ref_image_id}` })}
+            >
+              <span className="bm-shot-tag bm-shot-tag-ref">Ảnh gốc (Reference)</span>
+              <img src={detail.query.ref_image_url} alt="Reference" />
+              <span className="mono bm-shot-id">{detail.query.ref_image_id}</span>
+            </button>
+
+            <div className="bm-detail-arrow" aria-hidden="true">→</div>
+
+            {detail.ground_truths.slice(0, 3).map((gt, idx) => (
               <button
                 key={gt.image_id}
                 type="button"
-                className="bm-mini-card bm-cand-gt"
-                style={{ width: 124 }}
-                onClick={() => onZoom(gt.image_url, `Ground Truth · ${gt.image_id}`)}
+                className="bm-detail-shot bm-shot-gt"
+                onClick={() => setLightbox({ src: gt.image_url, caption: `Đáp án đúng #${idx + 1} · ${gt.image_id}` })}
               >
-                <img src={gt.image_url} alt={gt.image_id} />
-                <span className="hint-ok mono" style={{ fontSize: ".68rem", overflow: "hidden", textOverflow: "ellipsis" }}>
-                  {gt.image_id}
+                <span className="bm-shot-tag bm-shot-tag-gt">
+                  Đáp án đúng {detail.ground_truths.length > 1 ? `#${idx + 1}/${detail.ground_truths.length}` : "(GT)"}
                 </span>
+                <img src={gt.image_url} alt={gt.image_id} />
+                <span className="mono bm-shot-id">{gt.image_id}</span>
               </button>
             ))}
           </div>
-        </div>
 
-        {detail.hard_negatives.length > 0 && (
-          <div className="bm-cf-strip-group">
-            <span className="field-label">Bẫy khó (Hard Neg · {detail.hard_negatives.length})</span>
-            <div className="bm-mini-strip">
-              {detail.hard_negatives.slice(0, 4).map((hn) => (
-                <button
-                  key={hn.image_id}
-                  type="button"
-                  className="bm-mini-card bm-cand-hneg"
-                  style={{ width: 96 }}
-                  onClick={() => onZoom(hn.image_url, `Hard Negative · ${hn.image_id}`)}
-                >
-                  <img src={hn.image_url} alt={hn.image_id} />
-                  <span className="hint mono" style={{ fontSize: ".66rem" }}>{hn.is_ref ? "Ref" : "HNeg"}</span>
-                </button>
-              ))}
+          <div className="bm-detail-right">
+            <div className="bm-caption-box">
+              <span className="field-label">Câu lệnh chỉnh sửa (Modification Text)</span>
+              <p className="bm-caption-text">“{detail.query.text}”</p>
             </div>
-          </div>
-        )}
-      </div>
 
-      {/* Ranking viewer toolbar */}
-      <div className="bm-cf-rank-bar">
-        <div className="bm-seg" role="group" aria-label="Chế độ xem Top-K">
-          <button
-            type="button"
-            className={viewMode === "single" ? "bm-seg-btn active" : "bm-seg-btn"}
-            onClick={() => setViewMode("single")}
-          >
-            Chi tiết Top-{topK} theo model
-          </button>
-          <button
-            type="button"
-            className={viewMode === "stacked" ? "bm-seg-btn active" : "bm-seg-btn"}
-            onClick={() => setViewMode("stacked")}
-          >
-            Xếp tầng Top-5 tất cả ({detail.models.length} model)
-          </button>
-        </div>
+            <div>
+              <span className="field-label" style={{ display: "block", marginBottom: 8 }}>
+                Thứ hạng Ground Truth theo từng mô hình (bấm để xem Top-K ảnh bên dưới)
+              </span>
+              <div className="bm-consensus-grid">
+                {detail.models.map((m) => {
+                  const isAct = viewMode === "single" && m.key === primaryBlock?.key;
+                  const failed = m.best_gt_rank === null || m.best_gt_rank > k;
+                  return (
+                    <button
+                      key={m.key}
+                      type="button"
+                      className={isAct ? "bm-cons-chip active" : "bm-cons-chip"}
+                      onClick={() => {
+                        setActiveModel(m.key);
+                        setViewMode("single");
+                      }}
+                    >
+                      <b>{m.display}</b>
+                      <Badge tone={failed ? "bad" : "ok"}>{fmtRank(m.best_gt_rank)}</Badge>
+                      {m.top1_is_ref && <span className="bm-tag bm-tag-warn">Ref#1</span>}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
 
-        {viewMode === "single" && (
-          <div className="row" style={{ marginLeft: "auto" }}>
-            <label className="hint" htmlFor={`cmp-${queryId}`}>So sánh thêm:</label>
-            <select
-              id={`cmp-${queryId}`}
-              value={compareModel}
-              onChange={(ev) => setCompareModel(ev.target.value)}
-              style={{ minHeight: 34, padding: "4px 8px", fontSize: ".82rem" }}
-            >
-              <option value="">— 1 model —</option>
-              {detail.models
-                .filter((m) => m.key !== primaryBlock?.key)
-                .map((m) => (
-                  <option key={m.key} value={m.key}>
-                    {m.display} ({fmtRank(m.best_gt_rank)})
-                  </option>
-                ))}
-            </select>
-            {detail.dataset !== "fashioniq" && (
-              <select
-                aria-label="Số lượng Top-K"
-                value={topK}
-                onChange={(ev) => setTopK(Number(ev.target.value))}
-                style={{ minHeight: 34, padding: "4px 8px", fontSize: ".82rem" }}
-              >
-                <option value={10}>Top-10</option>
-                <option value={15}>Top-15</option>
-                <option value={20}>Top-20</option>
-              </select>
+            {detail.hard_negatives.length > 0 && (
+              <div>
+                <span className="field-label" style={{ display: "block", marginBottom: 6 }}>
+                  Bẫy khó (Hard Negatives · {detail.hard_negatives.length})
+                </span>
+                <div className="bm-mini-strip">
+                  {detail.hard_negatives.slice(0, 6).map((hn) => (
+                    <button
+                      key={hn.image_id}
+                      type="button"
+                      className="bm-mini-card bm-cand-hneg"
+                      style={{ width: 82 }}
+                      onClick={() => setLightbox({ src: hn.image_url, caption: `Hard Negative · ${hn.image_id}` })}
+                    >
+                      <img src={hn.image_url} alt={hn.image_id} />
+                    </button>
+                  ))}
+                </div>
+              </div>
             )}
           </div>
-        )}
-      </div>
+        </div>
+      </Card>
 
-      {/* Mode 1: Single / Side-by-side Model Top-K Image Grid */}
-      {viewMode === "single" && primaryBlock && (
-        <div className="stack">
-          <div className="bm-consensus-grid">
-            {detail.models.map((m) => {
-              const isAct = m.key === primaryBlock.key;
-              const failed = m.best_gt_rank === null || m.best_gt_rank > k;
-              return (
-                <button
-                  key={m.key}
-                  type="button"
-                  className={isAct ? "bm-cons-chip active" : "bm-cons-chip"}
-                  onClick={() => setActiveModel(m.key)}
+      {/* Top-K Ranked Images Card */}
+      <Card
+        title={
+          viewMode === "single" && primaryBlock
+            ? `Ảnh xếp hạng Top-${primaryBlock.candidates.length} · ${primaryBlock.display}`
+            : `So sánh xếp tầng Top-5 của toàn bộ ${detail.models.length} mô hình`
+        }
+        subtitle="Bấm ảnh bất kỳ để phóng to · Khung xanh = Đáp án đúng (GT) · Khung vàng = Copy ảnh gốc (Ref) · Khung đỏ = Hard Negative"
+        actions={
+          <div className="row">
+            <div className="bm-seg" role="group" aria-label="Chế độ xem Top-K">
+              <button
+                type="button"
+                className={viewMode === "single" ? "bm-seg-btn active" : "bm-seg-btn"}
+                onClick={() => setViewMode("single")}
+              >
+                Chi tiết Top-{topK}
+              </button>
+              <button
+                type="button"
+                className={viewMode === "stacked" ? "bm-seg-btn active" : "bm-seg-btn"}
+                onClick={() => setViewMode("stacked")}
+              >
+                Xếp tầng Top-5 ({detail.models.length})
+              </button>
+            </div>
+
+            {viewMode === "single" && (
+              <>
+                <select
+                  aria-label="So sánh thêm mô hình thứ 2"
+                  value={compareModel}
+                  onChange={(ev) => setCompareModel(ev.target.value)}
+                  style={{ minHeight: 36, padding: "4px 10px", fontSize: ".84rem" }}
                 >
-                  <b>{m.display}</b>
-                  <Badge tone={failed ? "bad" : "ok"}>{fmtRank(m.best_gt_rank)}</Badge>
-                  {m.top1_is_ref && <span className="bm-tag bm-tag-warn">Ref#1</span>}
-                </button>
-              );
-            })}
+                  <option value="">So sánh thêm: Không</option>
+                  {detail.models
+                    .filter((m) => m.key !== primaryBlock?.key)
+                    .map((m) => (
+                      <option key={m.key} value={m.key}>
+                        vs {m.display} ({fmtRank(m.best_gt_rank)})
+                      </option>
+                    ))}
+                </select>
+                {detail.dataset !== "fashioniq" && (
+                  <select
+                    aria-label="Số lượng Top-K"
+                    value={topK}
+                    onChange={(ev) => setTopK(Number(ev.target.value))}
+                    style={{ minHeight: 36, padding: "4px 10px", fontSize: ".84rem" }}
+                  >
+                    <option value={10}>Top-10</option>
+                    <option value={15}>Top-15</option>
+                    <option value={20}>Top-20</option>
+                    <option value={50}>Top-50</option>
+                  </select>
+                )}
+              </>
+            )}
           </div>
-
+        }
+      >
+        {viewMode === "single" && primaryBlock && (
           <div className={compareBlock ? "bm-compare-grids" : "stack"}>
-            <div className="bm-cf-grid-box">
-              <div className="row" style={{ marginBottom: 8 }}>
-                <b>Top-{primaryBlock.candidates.length} · {primaryBlock.display}</b>
-                <Badge tone={primaryBlock.best_gt_rank !== null && primaryBlock.best_gt_rank <= k ? "ok" : "bad"}>
-                  GT Rank: {fmtRank(primaryBlock.best_gt_rank)}
-                </Badge>
-                <span className="hint" style={{ marginLeft: "auto" }}>
-                  Khung xanh = GT · Vàng = Ref Copy · Đỏ = Hard Neg
-                </span>
-              </div>
-              {primaryBlock.candidates.length > 0 ? (
-                <div className="bm-cand-grid">
-                  {primaryBlock.candidates.map((c) => renderCandidate(c, false))}
+            <div>
+              {compareBlock && (
+                <div className="row" style={{ marginBottom: 10 }}>
+                  <b>{primaryBlock.display}</b>
+                  <Badge tone={primaryBlock.best_gt_rank !== null && primaryBlock.best_gt_rank <= k ? "ok" : "bad"}>
+                    GT {fmtRank(primaryBlock.best_gt_rank)}
+                  </Badge>
                 </div>
-              ) : (
-                <EmptyState kind="no-results" detail="Lượt chạy này không lưu danh sách Top-K ảnh ứng viên." />
               )}
+              <div className="bm-cand-grid">
+                {primaryBlock.candidates.map((c) => renderCandidate(c, false))}
+              </div>
             </div>
 
             {compareBlock && (
-              <div className="bm-cf-grid-box">
-                <div className="row" style={{ marginBottom: 8 }}>
-                  <b>Top-{compareBlock.candidates.length} · {compareBlock.display}</b>
+              <div>
+                <div className="row" style={{ marginBottom: 10 }}>
+                  <b>{compareBlock.display}</b>
                   <Badge tone={compareBlock.best_gt_rank !== null && compareBlock.best_gt_rank <= k ? "ok" : "bad"}>
-                    GT Rank: {fmtRank(compareBlock.best_gt_rank)}
+                    GT {fmtRank(compareBlock.best_gt_rank)}
                   </Badge>
                 </div>
                 <div className="bm-cand-grid">
@@ -380,73 +518,69 @@ function InlineQueryRankings({
               </div>
             )}
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Mode 2: Stacked Top-5 across ALL models simultaneously */}
-      {viewMode === "stacked" && (
-        <div className="bm-stacked-models">
-          {detail.models.map((m) => {
-            const failed = m.best_gt_rank === null || m.best_gt_rank > k;
-            return (
-              <div key={m.key} className="bm-stacked-row">
-                <div className="bm-stacked-meta">
-                  <b>{m.display}</b>
-                  <span className="bm-sub">{m.family}</span>
-                  <div className="row" style={{ marginTop: 4 }}>
-                    <Badge tone={failed ? "bad" : "ok"}>{fmtRank(m.best_gt_rank)}</Badge>
-                    {m.top1_is_ref && <Badge tone="warn">Ref#1</Badge>}
+        {viewMode === "stacked" && (
+          <div className="bm-stacked-models">
+            {detail.models.map((m) => {
+              const failed = m.best_gt_rank === null || m.best_gt_rank > k;
+              return (
+                <div key={m.key} className="bm-stacked-row">
+                  <div className="bm-stacked-meta">
+                    <b>{m.display}</b>
+                    <span className="bm-sub">{m.family}</span>
+                    <div className="row" style={{ marginTop: 6 }}>
+                      <Badge tone={failed ? "bad" : "ok"}>{fmtRank(m.best_gt_rank)}</Badge>
+                      {m.top1_is_ref && <Badge tone="warn">Ref#1</Badge>}
+                    </div>
+                  </div>
+                  <div className="bm-stacked-cands">
+                    {m.candidates.slice(0, 5).map((c) => renderCandidate(c, true))}
                   </div>
                 </div>
-                <div className="bm-stacked-cands">
-                  {m.candidates.slice(0, 5).map((c) => renderCandidate(c, true))}
-                </div>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
+        )}
+      </Card>
+
+      {lightbox && (
+        <div className="bm-lightbox" role="dialog" aria-modal="true" aria-label={lightbox.caption} onClick={() => setLightbox(null)}>
+          <div className="bm-lightbox-inner" onClick={(ev) => ev.stopPropagation()}>
+            <img src={lightbox.src} alt={lightbox.caption} />
+            <div className="bm-lightbox-bar">
+              <span className="mono">{lightbox.caption}</span>
+              <button type="button" className="secondary" onClick={() => setLightbox(null)}>Đóng (Esc)</button>
+            </div>
+          </div>
         </div>
       )}
     </div>
   );
 }
 
-const DATASET_TABS: Array<{
-  id: "fashioniq" | "pinpoint" | "edir";
-  label: string;
-  subtitle: string;
-  defaultProtocol: string;
-}> = [
-  {
-    id: "fashioniq",
-    label: "FashionIQ",
-    subtitle: "3 protocol chính chủ (Original / Full Gallery / Val Split)",
-    defaultProtocol: "fashioniq_original_split",
-  },
-  {
-    id: "pinpoint",
-    label: "PinPoint",
-    subtitle: "1,337 test queries · 8 lát cắt Fashion & Non-Fashion",
-    defaultProtocol: "pinpoint_indomain",
-  },
-  {
-    id: "edir",
-    label: "EDIR",
-    subtitle: "1,003 test queries · 15 phép chỉnh sửa độc lập",
-    defaultProtocol: "edir_indomain",
-  },
-];
+/* ========================================================================= */
+/* MAIN COMMON FAILURES PAGE (List + Quick GT Preview + Dedicated Detail Tab) */
+/* ========================================================================= */
 
 export function CommonFailuresPage({
   onInspectBenchmarkQuery,
 }: {
   onInspectBenchmarkQuery: (seed: InspectorSeed) => void;
 }) {
-  const [activeDataset, setActiveDataset] = useState<"fashioniq" | "pinpoint" | "edir">("fashioniq");
-  const [protocol, setProtocol] = useState<string>("fashioniq_original_split");
-  const [selectedModels, setSelectedModels] = useState<string[]>([]); // empty = ALL ready models by default!
-  const [showModelPicker, setShowModelPicker] = useState<boolean>(false);
+  const initialDetail = useMemo(() => readDetailFromUrl(), []);
+  const [detailRoute, setDetailRoute] = useState<{ protocol: string; queryId: string; k: number; models: string } | null>(
+    initialDetail,
+  );
+
+  const [activeDataset, setActiveDataset] = useState<"fashioniq" | "pinpoint" | "edir">(
+    initialDetail ? datasetForProtocol(initialDetail.protocol) : "fashioniq",
+  );
+  const [protocol, setProtocol] = useState<string>(initialDetail?.protocol ?? "fashioniq_original_split");
+  const [selectedModels, setSelectedModels] = useState<string[]>([]);
+  const [showAdvanced, setShowAdvanced] = useState<boolean>(false);
   const [preset, setPreset] = useState<string>("fail80");
-  const [k, setK] = useState<number>(10);
+  const [k, setK] = useState<number>(initialDetail?.k ?? 10);
   const [slice, setSlice] = useState<string>("all");
   const [category, setCategory] = useState<string>("");
   const [sort, setSort] = useState<string>("fail_desc");
@@ -459,6 +593,13 @@ export function CommonFailuresPage({
   const [data, setData] = useState<CommonFailuresResponse | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Sync browser Back/Forward with detail view
+  useEffect(() => {
+    const onPop = () => setDetailRoute(readDetailFromUrl());
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
 
   useEffect(() => {
     const t = window.setTimeout(() => {
@@ -480,6 +621,7 @@ export function CommonFailuresPage({
   const modelsParam = selectedModels.join(",");
 
   useEffect(() => {
+    if (detailRoute) return;
     const ctrl = new AbortController();
     const params = new URLSearchParams({
       protocol,
@@ -509,7 +651,34 @@ export function CommonFailuresPage({
         setLoading(false);
       });
     return () => ctrl.abort();
-  }, [protocol, modelsParam, preset, k, slice, category, sort, searchQuery, offset]);
+  }, [detailRoute, protocol, modelsParam, preset, k, slice, category, sort, searchQuery, offset]);
+
+  const openDetailInApp = (qid: string) => {
+    const next = { protocol, queryId: qid, k, models: modelsParam };
+    const url = buildDetailHref(protocol, qid, k, modelsParam);
+    window.history.pushState({ at: Date.now() }, "", url);
+    setDetailRoute(next);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const closeDetailToList = () => {
+    const url = `${window.location.pathname}?area=common_failures`;
+    window.history.pushState({ at: Date.now() }, "", url);
+    setDetailRoute(null);
+  };
+
+  if (detailRoute) {
+    return (
+      <QueryDetailPage
+        protocol={detailRoute.protocol}
+        queryId={detailRoute.queryId}
+        k={detailRoute.k}
+        modelsParam={detailRoute.models}
+        onBack={closeDetailToList}
+        onInspectBenchmarkQuery={onInspectBenchmarkQuery}
+      />
+    );
+  }
 
   const switchDataset = (nextDs: "fashioniq" | "pinpoint" | "edir") => {
     const tab = DATASET_TABS.find((t) => t.id === nextDs)!;
@@ -519,25 +688,19 @@ export function CommonFailuresPage({
 
   const switchProtocol = (nextProto: string) => {
     setProtocol(nextProto);
-    setSelectedModels([]); // Reset to ALL models of the new protocol automatically
+    setSelectedModels([]);
     setSlice("all");
     setCategory("");
     setOffset(0);
     setExpandedId(null);
-    if (nextProto.startsWith("fashioniq") && preset === "ref_copy50") {
-      setPreset("fail80");
-    }
-    if (nextProto.startsWith("fashioniq") && sort === "ref_copy_desc") {
-      setSort("fail_desc");
-    }
+    if (nextProto.startsWith("fashioniq") && preset === "ref_copy50") setPreset("fail80");
+    if (nextProto.startsWith("fashioniq") && sort === "ref_copy_desc") setSort("fail_desc");
   };
 
   const toggleModel = (key: string) => {
     if (!data) return;
     const active = selectedModels.length ? selectedModels : data.all_models.map((m) => m.key);
-    const has = active.includes(key);
-    const next = has ? active.filter((x) => x !== key) : [...active, key];
-    // Never allow 0 models selected; if user clicks all back on, normalize to [] (= all)
+    const next = active.includes(key) ? active.filter((x) => x !== key) : [...active, key];
     if (next.length === 0) return;
     setSelectedModels(next.length === data.all_models.length ? [] : next);
     setOffset(0);
@@ -545,40 +708,35 @@ export function CommonFailuresPage({
 
   const applyFamilyPreset = (family: string) => {
     if (!data) return;
-    if (family === "all") {
-      setSelectedModels([]);
-    } else if (family === "top5") {
-      setSelectedModels(data.all_models.slice(0, 5).map((m) => m.key));
-    } else {
+    if (family === "all") setSelectedModels([]);
+    else if (family === "top5") setSelectedModels(data.all_models.slice(0, 5).map((m) => m.key));
+    else {
       const matched = data.all_models.filter((m) => m.family === family).map((m) => m.key);
       if (matched.length) setSelectedModels(matched);
     }
     setOffset(0);
   };
 
-  const datasetProtocols = useMemo(
-    () => (data?.available_protocols ?? []).filter((p) => p.dataset === activeDataset),
-    [data?.available_protocols, activeDataset],
+  const datasetProtocols = (data?.available_protocols ?? []).filter((p) => p.dataset === activeDataset);
+  const activeModelSet = new Set(
+    selectedModels.length ? selectedModels : (data?.all_models ?? []).map((m) => m.key),
   );
+  const activeExtraFilterCount =
+    (selectedModels.length > 0 ? 1 : 0) + (category ? 1 : 0) + (slice !== "all" ? 1 : 0) + (sort !== "fail_desc" ? 1 : 0);
 
-  const exportUrl = useMemo(() => {
+  const exportUrl = (() => {
     const params = new URLSearchParams({ protocol, preset, k: String(k), sort });
     if (modelsParam) params.set("models", modelsParam);
     if (slice && slice !== "all") params.set("slice", slice);
     if (category) params.set("category", category);
     if (searchQuery) params.set("q", searchQuery);
     return `/api/benchmarks/common-failures/export.csv?${params.toString()}`;
-  }, [protocol, modelsParam, preset, k, slice, category, sort, searchQuery]);
-
-  const activeModelSet = useMemo(() => {
-    if (!data) return new Set<string>();
-    return new Set(selectedModels.length ? selectedModels : data.all_models.map((m) => m.key));
-  }, [data, selectedModels]);
+  })();
 
   return (
     <div className="stack">
-      {/* Dataset switcher bar: strictly separates FashionIQ (default), PinPoint, and EDIR */}
-      <div className="bm-ds-tabs" role="tablist" aria-label="Chọn bộ dữ liệu (Dataset)">
+      {/* 1. Dataset Tabs (FashionIQ default · PinPoint · EDIR) */}
+      <div className="bm-ds-tabs" role="tablist" aria-label="Chọn bộ dữ liệu">
         {DATASET_TABS.map((tab) => {
           const isAct = activeDataset === tab.id;
           return (
@@ -598,27 +756,11 @@ export function CommonFailuresPage({
         })}
       </div>
 
-      {/* Top control bar: zero-click default, optional protocol / model / category filters */}
-      <Card
-        title={
-          <span className="row">
-            <Badge tone="info">{activeDataset === "fashioniq" ? "FashionIQ" : activeDataset === "pinpoint" ? "PinPoint" : "EDIR"}</Badge>
-            <span>Lỗi chung giữa các mô hình (hiện sẵn mặc định — lọc tuỳ chọn)</span>
-          </span>
-        }
-        subtitle="Tự động gộp toàn bộ mô hình đã hoàn tất của protocol thuộc bộ dữ liệu đang chọn và hiển thị ngay các query fail chung (≥80% cùng trượt)."
-        actions={
-          <div className="row">
-            {loading && <Badge tone="info">Đang cập nhật…</Badge>}
-            <a className="bm-btn-link" href={exportUrl} download>
-              Tải CSV
-            </a>
-          </div>
-        }
-      >
-        {/* Protocol / Regime pills strictly scoped to the selected dataset */}
-        {datasetProtocols.length > 0 && (
-          <div className="bm-slice-grid" role="group" aria-label="Chọn protocol / chế độ" style={{ marginBottom: 12 }}>
+      {/* 2. Clean Compact Control Panel */}
+      <Card>
+        <div className="bm-cf-ctrl-top">
+          {/* Protocol pills */}
+          <div className="bm-slice-grid" role="group" aria-label="Chọn protocol">
             {datasetProtocols.map((opt) => {
               const shortLabel = opt.label.replace(/^(FashionIQ|PinPoint|EDIR)\s*·\s*/i, "");
               return (
@@ -631,103 +773,51 @@ export function CommonFailuresPage({
                   onClick={() => switchProtocol(opt.id)}
                 >
                   <span>{shortLabel}</span>
-                  <span className="bm-slice-cnt">{opt.ready_models} model</span>
+                  <span className="bm-slice-cnt">{opt.ready_models}</span>
                 </button>
               );
             })}
           </div>
-        )}
 
-        <div className="toolbar">
-          <div className="field">
-            <label className="field-label" htmlFor="cf-cutoff">Ngưỡng trượt (Top-K)</label>
+          <div className="bm-cf-ctrl-right">
+            {loading && <Badge tone="info">Đang cập nhật…</Badge>}
             <select
               id="cf-cutoff"
+              aria-label="Ngưỡng trượt Top-K"
               value={k}
               onChange={(ev) => {
                 setK(Number(ev.target.value));
                 setOffset(0);
               }}
+              style={{ minHeight: 36, padding: "4px 10px", fontSize: ".85rem" }}
             >
-              <option value={1}>Trượt Top-1 (R@1)</option>
-              <option value={10}>Trượt Top-10 (R@10)</option>
-              <option value={50}>Trượt Top-50 (R@50)</option>
+              <option value={1}>Trượt @1</option>
+              <option value={10}>Trượt @10</option>
+              <option value={50}>Trượt @50</option>
             </select>
-          </div>
-
-          {data && data.slices.length > 0 && (
-            <div className="field">
-              <label className="field-label" htmlFor="cf-slice">Lát cắt PinPoint</label>
-              <select
-                id="cf-slice"
-                value={slice}
-                onChange={(ev) => {
-                  setSlice(ev.target.value);
-                  setOffset(0);
-                }}
-              >
-                {data.slices.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.label} ({s.count})
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-
-          {data && data.categories.length > 0 && (
-            <div className="field">
-              <label className="field-label" htmlFor="cf-cat">
-                {data.dataset === "edir" ? "Phép chỉnh sửa" : "Nhóm / Category"}
-              </label>
-              <select
-                id="cf-cat"
-                value={category}
-                onChange={(ev) => {
-                  setCategory(ev.target.value);
-                  setOffset(0);
-                }}
-              >
-                <option value="">Tất cả ({data.categories.length})</option>
-                {data.categories.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.id} ({c.count})
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-
-          <div className="field">
-            <label className="field-label" htmlFor="cf-sort">Sắp xếp</label>
-            <select
-              id="cf-sort"
-              value={sort}
-              onChange={(ev) => {
-                setSort(ev.target.value);
-                setOffset(0);
-              }}
-            >
-              <option value="fail_desc">Nhiều model trượt nhất</option>
-              {data?.dataset !== "fashioniq" && <option value="ref_copy_desc">Nhiều Ref Copy nhất</option>}
-              <option value="best">Ít model trượt nhất</option>
-              <option value="id">Theo Query ID</option>
-            </select>
-          </div>
-
-          <div className="field grow">
-            <label className="field-label" htmlFor="cf-search">Tìm caption / ID</label>
             <input
               id="cf-search"
               type="search"
-              placeholder="Lọc nhanh theo chữ trong câu lệnh hoặc query ID…"
+              placeholder="Tìm caption / ID…"
               value={searchInput}
               onChange={(ev) => setSearchInput(ev.target.value)}
+              style={{ minHeight: 36, padding: "4px 10px", width: 210, fontSize: ".85rem" }}
             />
+            <button
+              type="button"
+              className={showAdvanced || activeExtraFilterCount > 0 ? "primary" : "secondary"}
+              style={{ minHeight: 36, padding: "4px 12px", fontSize: ".84rem", whiteSpace: "nowrap" }}
+              onClick={() => setShowAdvanced((v) => !v)}
+            >
+              Lọc thêm{activeExtraFilterCount > 0 ? ` (${activeExtraFilterCount})` : ""} {showAdvanced ? "▴" : "▾"}
+            </button>
+            <a className="bm-btn-link" href={exportUrl} download>
+              CSV
+            </a>
           </div>
         </div>
 
-        {/* Preset pills with live counts */}
+        {/* Preset pills */}
         <div className="bm-outcome-pills" role="group" aria-label="Mức độ fail chung">
           {PRESET_TABS.filter((p) => p.id !== "ref_copy50" || data?.dataset !== "fashioniq").map((p) => {
             const cnt = data?.preset_counts?.[p.id];
@@ -747,71 +837,92 @@ export function CommonFailuresPage({
               </button>
             );
           })}
+          {data && (
+            <span className="hint" style={{ marginLeft: "auto", alignSelf: "center" }}>
+              Gộp {data.selected_model_count}/{data.all_models.length} model
+            </span>
+          )}
         </div>
 
-        {/* Optional Model Filter Drawer (already auto-selected to ALL ready models!) */}
-        {data && data.all_models.length > 0 && (
-          <div className="bm-model-filter-bar">
-            <div className="row">
-              <Badge tone={selectedModels.length === 0 ? "ok" : "info"}>
-                {selectedModels.length === 0
-                  ? `Đang gộp tất cả ${data.all_models.length}/${data.all_models.length} mô hình (mặc định)`
-                  : `Đang lọc ${data.selected_model_count}/${data.all_models.length} mô hình`}
-              </Badge>
-              <button
-                type="button"
-                className="secondary"
-                style={{ minHeight: 32, padding: "4px 10px", fontSize: ".82rem" }}
-                onClick={() => setShowModelPicker((v) => !v)}
-              >
-                {showModelPicker ? "Ẩn bộ lọc model ▴" : "Lọc chọn model cụ thể ▾"}
-              </button>
-              {selectedModels.length > 0 && (
+        {protocol === "fashioniq_all_protocols" && (
+          <div className="bm-insight-box bm-insight-warn" style={{ marginTop: 10, marginBottom: 0, padding: "8px 12px" }}>
+            <b>Lưu ý:</b> Đang gộp 16 model từ 3 protocol FashionIQ khác nhau (khác kích thước gallery). Chọn riêng từng protocol ở trên nếu cần so sánh công bằng tuyệt đối.
+          </div>
+        )}
+
+        {/* Collapsible Optional Filters (Category / Slice / Sort / Model Picker) */}
+        {showAdvanced && data && (
+          <div className="bm-model-picker-body">
+            <div className="toolbar" style={{ marginBottom: 10 }}>
+              {data.slices.length > 0 && (
+                <div className="field">
+                  <label className="field-label" htmlFor="cf-slice">Lát cắt PinPoint</label>
+                  <select id="cf-slice" value={slice} onChange={(ev) => { setSlice(ev.target.value); setOffset(0); }} style={{ minHeight: 36 }}>
+                    {data.slices.map((s) => (
+                      <option key={s.id} value={s.id}>{s.label} ({s.count})</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              {data.categories.length > 0 && (
+                <div className="field">
+                  <label className="field-label" htmlFor="cf-cat">
+                    {data.dataset === "edir" ? "Phép chỉnh sửa" : "Nhóm / Category"}
+                  </label>
+                  <select id="cf-cat" value={category} onChange={(ev) => { setCategory(ev.target.value); setOffset(0); }} style={{ minHeight: 36 }}>
+                    <option value="">Tất cả ({data.categories.length})</option>
+                    {data.categories.map((c) => (
+                      <option key={c.id} value={c.id}>{c.id} ({c.count})</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              <div className="field">
+                <label className="field-label" htmlFor="cf-sort">Sắp xếp</label>
+                <select id="cf-sort" value={sort} onChange={(ev) => { setSort(ev.target.value); setOffset(0); }} style={{ minHeight: 36 }}>
+                  <option value="fail_desc">Nhiều model trượt nhất</option>
+                  {data.dataset !== "fashioniq" && <option value="ref_copy_desc">Nhiều Ref Copy nhất</option>}
+                  <option value="best">Ít model trượt nhất</option>
+                  <option value="id">Theo Query ID</option>
+                </select>
+              </div>
+              {activeExtraFilterCount > 0 && (
                 <button
                   type="button"
                   className="ghost"
-                  style={{ minHeight: 32, padding: "4px 8px", fontSize: ".82rem" }}
-                  onClick={() => applyFamilyPreset("all")}
+                  style={{ minHeight: 36 }}
+                  onClick={() => {
+                    setSelectedModels([]);
+                    setCategory("");
+                    setSlice("all");
+                    setSort("fail_desc");
+                    setOffset(0);
+                  }}
                 >
-                  Đặt lại tất cả
+                  Đặt lại bộ lọc
                 </button>
-              )}
-              {protocol === "fashioniq_all_protocols" && (
-                <Badge tone="warn">Lưu ý: gộp 3 protocol FashionIQ có gallery khác nhau — xem chi tiết từng protocol nếu cần so công bằng 100%</Badge>
               )}
             </div>
 
-            {showModelPicker && (
-              <div className="bm-model-picker-body">
-                <div className="row" style={{ marginBottom: 8 }}>
-                  <span className="hint">Chọn nhanh:</span>
-                  <button type="button" className="bm-pill" onClick={() => applyFamilyPreset("all")}>Tất cả ({data.all_models.length})</button>
-                  <button type="button" className="bm-pill" onClick={() => applyFamilyPreset("top5")}>Top-5</button>
-                  {Array.from(new Set(data.all_models.map((m) => m.family))).map((fam) => (
-                    <button key={fam} type="button" className="bm-pill" onClick={() => applyFamilyPreset(fam)}>
-                      Nhóm {fam}
-                    </button>
-                  ))}
-                </div>
-                <div className="bm-consensus-grid">
-                  {data.all_models.map((m) => {
-                    const checked = activeModelSet.has(m.key);
-                    return (
-                      <button
-                        key={m.key}
-                        type="button"
-                        className={checked ? "bm-cons-chip active" : "bm-cons-chip"}
-                        onClick={() => toggleModel(m.key)}
-                      >
-                        <span>{checked ? "✓" : "○"}</span>
-                        <b>{m.display}</b>
-                        <small className="hint">{m.family}</small>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
+            <div className="row" style={{ marginBottom: 8 }}>
+              <span className="field-label">Chọn nhanh model:</span>
+              <button type="button" className="bm-pill" onClick={() => applyFamilyPreset("all")}>Tất cả ({data.all_models.length})</button>
+              <button type="button" className="bm-pill" onClick={() => applyFamilyPreset("top5")}>Top-5</button>
+              {Array.from(new Set(data.all_models.map((m) => m.family))).map((fam) => (
+                <button key={fam} type="button" className="bm-pill" onClick={() => applyFamilyPreset(fam)}>Nhóm {fam}</button>
+              ))}
+            </div>
+            <div className="bm-consensus-grid">
+              {data.all_models.map((m) => {
+                const checked = activeModelSet.has(m.key);
+                return (
+                  <button key={m.key} type="button" className={checked ? "bm-cons-chip active" : "bm-cons-chip"} onClick={() => toggleModel(m.key)}>
+                    <span>{checked ? "✓" : "○"}</span>
+                    <b>{m.display}</b>
+                  </button>
+                );
+              })}
+            </div>
           </div>
         )}
       </Card>
@@ -819,13 +930,13 @@ export function CommonFailuresPage({
       {error && <ErrorState message={error} />}
       {loading && !data && <LoadingState label="Đang tổng hợp các lỗi chung giữa các mô hình…" />}
 
-      {/* Category Failure Concentration Bar */}
+      {/* 3. Compact Category Failure Distribution */}
       {data && data.category_breakdown.length > 0 && (
         <Card
-          title={`Phân bố Fail chung (≥80% trượt Top-${data.k}) theo nhóm — bấm thanh bất kỳ để lọc`}
-          subtitle="Cho thấy ngay nhóm câu lệnh / phép chỉnh sửa nào khiến số đông mô hình cùng gãy nhiều nhất"
+          title={`Phân bố Fail chung (≥80% trượt @${data.k}) theo nhóm`}
+          subtitle="Bấm vào thanh bất kỳ để lọc nhanh theo nhóm đó"
         >
-          <div className="bm-cat-bars">
+          <div className="bm-cat-bars-grid">
             {data.category_breakdown.map((cb) => {
               const active = category === cb.category;
               return (
@@ -844,7 +955,7 @@ export function CommonFailuresPage({
                   </div>
                   <span className="bm-cat-stat num">
                     <b>{(cb.fail80_rate * 100).toFixed(1)}%</b>{" "}
-                    <span className="hint">({cb.fail80}/{cb.total} · all-fail {cb.all_fail})</span>
+                    <span className="hint">({cb.fail80}/{cb.total})</span>
                   </span>
                 </button>
               );
@@ -853,23 +964,22 @@ export function CommonFailuresPage({
         </Card>
       )}
 
-      {/* Main Common Failure List */}
+      {/* 4. Clean Query List with Quick GT Preview + Dedicated Detail Page / New Tab */}
       {data && (
         <Card
-          title={`Danh sách lỗi chung · ${data.protocol_label} (${data.filtered_total.toLocaleString()} query)`}
-          subtitle={`Hiển thị ${data.filtered_total === 0 ? 0 : data.offset + 1}–${Math.min(data.offset + data.limit, data.filtered_total)} · Bấm trực tiếp vào bất kỳ query nào để xem ảnh gốc, ảnh GT và lưới Top-K ảnh từng mô hình xếp hạng`}
+          title={`${data.protocol_label} · ${data.filtered_total.toLocaleString()} query`}
+          subtitle={`Trang ${Math.floor(offset / 25) + 1} / ${Math.max(1, Math.ceil(data.filtered_total / 25))} · Bấm vào câu lệnh để mở trang chi tiết Top-K ảnh, hoặc bấm "Mở tab mới ↗"`}
         >
           {data.items.length === 0 ? (
-            <EmptyState
-              kind="no-match"
-              detail="Không có query nào khớp ngưỡng lọc hiện tại. Hãy thử đổi mức độ fail chung (vd ≥50%) hoặc xoá bộ lọc."
-            />
+            <EmptyState kind="no-match" detail="Không có query nào khớp bộ lọc hiện tại." />
           ) : (
             <>
               <div className="bm-cf-list">
                 {data.items.map((row) => {
                   const isOpen = expandedId === row.query_id;
                   const tone = row.fail_count === row.scored_models ? "bad" : row.fail_rate >= 0.8 ? "warn" : "info";
+                  const detailHref = buildDetailHref(data.protocol, row.query_id, data.k, modelsParam);
+
                   return (
                     <div key={row.query_id} className={isOpen ? "bm-cf-item open" : "bm-cf-item"}>
                       <div className="bm-cf-head">
@@ -888,34 +998,32 @@ export function CommonFailuresPage({
                           className="bm-cf-main bm-cf-clickable"
                           role="button"
                           tabIndex={0}
-                          onClick={() => setExpandedId(isOpen ? null : row.query_id)}
+                          onClick={() => openDetailInApp(row.query_id)}
                           onKeyDown={(ev) => {
                             if (ev.key === "Enter" || ev.key === " ") {
                               ev.preventDefault();
-                              setExpandedId(isOpen ? null : row.query_id);
+                              openDetailInApp(row.query_id);
                             }
                           }}
+                          title="Mở trang chi tiết Top-K ảnh của query này"
                         >
                           <div className="row" style={{ gap: 6 }}>
-                            <span className="mono cell-strong" style={{ fontSize: ".84rem" }}>{row.query_id}</span>
+                            <span className="mono cell-strong" style={{ fontSize: ".83rem" }}>{row.query_id}</span>
                             <Badge tone="info">{row.category}</Badge>
-                            {row.l1_interest && <Badge tone="neutral">{row.l1_interest}</Badge>}
+                            {row.l1_interest && data.dataset === "pinpoint" && <Badge tone="neutral">{row.l1_interest}</Badge>}
                             <Badge tone={tone}>
                               {row.fail_count}/{row.scored_models} trượt @{data.k} ({(row.fail_rate * 100).toFixed(0)}%)
                             </Badge>
-                            {row.ref_copy_count > 0 && (
-                              <Badge tone="warn">Ref Copy #1: {row.ref_copy_count}</Badge>
-                            )}
-                            <span className="hint tabular">Best: {fmtRank(row.best_rank)} · Med: {fmtRank(row.median_rank)}</span>
+                            {row.ref_copy_count > 0 && <Badge tone="warn">Ref#1: {row.ref_copy_count}</Badge>}
+                            <span className="hint tabular">Best {fmtRank(row.best_rank)} · Med {fmtRank(row.median_rank)}</span>
                           </div>
                           <p className="bm-cf-caption">“{row.text}”</p>
-                          {/* Compact visual hit/miss dot bar across all models */}
-                          <div className="bm-dot-strip" aria-label="Trạng thái từng mô hình">
+                          <div className="bm-dot-strip">
                             {row.per_model.map((pm) => (
                               <span
                                 key={pm.key}
                                 className={pm.failed ? (pm.ref_copy ? "bm-dot bm-dot-ref" : "bm-dot bm-dot-fail") : "bm-dot bm-dot-hit"}
-                                title={`${pm.display}: ${fmtRank(pm.rank)}${pm.ref_copy ? " (Ref Copy #1)" : ""}`}
+                                title={`${pm.display}: ${fmtRank(pm.rank)}`}
                               >
                                 {pm.display} <b>{fmtRank(pm.rank)}</b>
                               </span>
@@ -924,41 +1032,91 @@ export function CommonFailuresPage({
                         </div>
 
                         <div className="bm-cf-actions">
-                          <button
-                            type="button"
-                            className={isOpen ? "primary" : "secondary"}
-                            style={{ minHeight: 34, padding: "4px 10px", fontSize: ".82rem", whiteSpace: "nowrap" }}
-                            onClick={() => setExpandedId(isOpen ? null : row.query_id)}
-                          >
-                            {isOpen ? "Thu gọn ▴" : "Xem Top-K ảnh ▾"}
-                          </button>
-                          {data.dataset !== "fashioniq" && (
+                          <div className="row" style={{ gap: 6, flexWrap: "nowrap" }}>
                             <button
                               type="button"
-                              className="rowbtn"
-                              style={{ color: "var(--accent)", fontWeight: 600, whiteSpace: "nowrap" }}
-                              onClick={() =>
-                                onInspectBenchmarkQuery({
-                                  dataset: data.dataset === "edir" ? "edir" : "pinpoint",
-                                  regime: data.regime as BenchmarkRegime,
-                                  queryId: row.query_id,
-                                })
-                              }
+                              className="primary"
+                              style={{ minHeight: 34, padding: "4px 11px", fontSize: ".82rem", whiteSpace: "nowrap" }}
+                              onClick={() => openDetailInApp(row.query_id)}
                             >
-                              Mở Inspector →
+                              Chi tiết Top-K
                             </button>
-                          )}
+                            <a
+                              className="bm-btn-link"
+                              style={{ minHeight: 34, padding: "4px 10px", fontSize: ".82rem", whiteSpace: "nowrap" }}
+                              href={detailHref}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              title="Mở trang chi tiết trong tab trình duyệt mới"
+                            >
+                              Tab mới ↗
+                            </a>
+                          </div>
+                          <button
+                            type="button"
+                            className="rowbtn"
+                            style={{ fontSize: ".8rem", color: "var(--ink-3)" }}
+                            onClick={() => setExpandedId(isOpen ? null : row.query_id)}
+                          >
+                            {isOpen ? "Ẩn ảnh GT ▴" : "Xem nhanh GT ▾"}
+                          </button>
                         </div>
                       </div>
 
+                      {/* Lightweight inline Ref + GT + Rank table preview (reverted clean version) */}
                       {isOpen && (
-                        <InlineQueryRankings
-                          protocol={data.protocol}
-                          queryId={row.query_id}
-                          modelsParam={modelsParam}
-                          k={data.k}
-                          onZoom={(src, caption) => setLightbox({ src, caption })}
-                        />
+                        <div className="bm-cf-detail">
+                          <div className="bm-cf-imgs">
+                            {row.ref_image_url && (
+                              <button
+                                type="button"
+                                className="bm-mini-card"
+                                style={{ width: 128 }}
+                                onClick={() => setLightbox({ src: row.ref_image_url, caption: `Ảnh gốc · ${row.ref_image_id}` })}
+                              >
+                                <img src={row.ref_image_url} alt="Reference" />
+                                <span className="hint">Ảnh gốc (Ref)</span>
+                              </button>
+                            )}
+                            {row.gt_image_url && (
+                              <button
+                                type="button"
+                                className="bm-mini-card bm-cand-gt"
+                                style={{ width: 128 }}
+                                onClick={() => setLightbox({ src: row.gt_image_url, caption: `Đáp án đúng (GT) · ${row.gt_image_id}` })}
+                              >
+                                <img src={row.gt_image_url} alt="Ground Truth" />
+                                <span className="hint-ok">Đáp án đúng (GT)</span>
+                              </button>
+                            )}
+                          </div>
+                          <div className="table-wrap" style={{ flex: 1 }}>
+                            <table className="bm-compact-table">
+                              <thead>
+                                <tr>
+                                  <th>Mô hình</th>
+                                  <th className="num">Best GT Rank</th>
+                                  <th>Kết quả @{data.k}</th>
+                                  <th>Ref Copy #1</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {row.per_model.map((pm) => (
+                                  <tr key={pm.key}>
+                                    <td><span className="cell-strong">{pm.display}</span></td>
+                                    <td className="num mono">{fmtRank(pm.rank)}</td>
+                                    <td>
+                                      <Badge tone={pm.failed ? "bad" : "ok"}>
+                                        {pm.failed ? `Trượt @${data.k}` : `Trúng @${data.k}`}
+                                      </Badge>
+                                    </td>
+                                    <td>{pm.ref_copy ? <Badge tone="warn">Ref Copy #1</Badge> : <span className="hint">—</span>}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
                       )}
                     </div>
                   );
@@ -966,23 +1124,13 @@ export function CommonFailuresPage({
               </div>
 
               <div className="bm-pager" style={{ justifyContent: "flex-end", gap: 12 }}>
-                <button
-                  type="button"
-                  className="secondary"
-                  disabled={offset <= 0}
-                  onClick={() => setOffset(Math.max(0, offset - 25))}
-                >
+                <button type="button" className="secondary" disabled={offset <= 0} onClick={() => setOffset(Math.max(0, offset - 25))}>
                   ← Trước
                 </button>
                 <span className="hint tabular">
                   Trang {Math.floor(offset / 25) + 1} / {Math.max(1, Math.ceil(data.filtered_total / 25))}
                 </span>
-                <button
-                  type="button"
-                  className="secondary"
-                  disabled={offset + 25 >= data.filtered_total}
-                  onClick={() => setOffset(offset + 25)}
-                >
+                <button type="button" className="secondary" disabled={offset + 25 >= data.filtered_total} onClick={() => setOffset(offset + 25)}>
                   Sau →
                 </button>
               </div>
@@ -992,20 +1140,12 @@ export function CommonFailuresPage({
       )}
 
       {lightbox && (
-        <div
-          className="bm-lightbox"
-          role="dialog"
-          aria-modal="true"
-          aria-label={lightbox.caption}
-          onClick={() => setLightbox(null)}
-        >
+        <div className="bm-lightbox" role="dialog" aria-modal="true" aria-label={lightbox.caption} onClick={() => setLightbox(null)}>
           <div className="bm-lightbox-inner" onClick={(ev) => ev.stopPropagation()}>
             <img src={lightbox.src} alt={lightbox.caption} />
             <div className="bm-lightbox-bar">
               <span className="mono">{lightbox.caption}</span>
-              <button type="button" className="secondary" onClick={() => setLightbox(null)}>
-                Đóng (Esc)
-              </button>
+              <button type="button" className="secondary" onClick={() => setLightbox(null)}>Đóng (Esc)</button>
             </div>
           </div>
         </div>

@@ -149,6 +149,7 @@ export default function App() {
   // page is about to count. `replaceState`, because a background correction must not become a history
   // entry the operator has to walk back, and never when the reader stated the value.
   useEffect(() => {
+    if (location.area === "benchmarks" || location.area === "common_failures") return;
     if (data.compositionRuns.region.status !== "ready") return;
     const rows = data.compositionRuns.region.data ?? [];
     if (!rows.length) return;
@@ -190,6 +191,7 @@ export default function App() {
   // composition summaries are READY, so an in-flight or failed load cannot look like "no runs
   // exist" and wipe the operator's choice.
   useEffect(() => {
+    if (location.area === "benchmarks" || location.area === "common_failures") return;
     if (data.compositionRuns.region.status !== "ready") return;
     if (!location.runs.length) return;
     const served = new Set(data.catalog.map((entry) => entry.key));
