@@ -1423,9 +1423,12 @@ thead .bm-sticky-col { background: var(--surface-2); z-index: 4; }
 }
 .bm-cf-row {
   display: grid;
-  grid-template-columns: 58px minmax(0, 1fr);
+  grid-template-columns: 54px minmax(0, 1fr);
   gap: 10px;
   align-items: start;
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
   padding: 9px 10px;
   border-radius: var(--radius-sm);
   border: 1.5px solid var(--line);
@@ -1440,16 +1443,17 @@ thead .bm-sticky-col { background: var(--surface-2); z-index: 4; }
   box-shadow: inset 3px 0 0 var(--accent);
 }
 .bm-cf-row-thumb {
-  width: 58px;
-  height: 58px;
+  width: 54px;
+  height: 54px;
   object-fit: cover;
   border-radius: 5px;
   background: var(--surface-3);
   border: 1px solid var(--line);
 }
-.bm-cf-row-body { min-width: 0; display: grid; gap: 4px; }
-.bm-cf-row-top { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
-.bm-cf-row-id { font-size: .74rem; color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bm-cf-row-body { min-width: 0; width: 100%; overflow: hidden; display: grid; gap: 4px; }
+.bm-cf-row-top { display: flex; align-items: center; justify-content: space-between; gap: 6px; min-width: 0; }
+.bm-cf-row-id { flex: 1 1 0; min-width: 0; font-size: .73rem; color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bm-cf-row-top .badge { flex: 0 0 auto; font-size: .72rem; padding: 1px 6px; min-height: 20px; }
 .bm-cf-row-cap {
   font-size: .85rem;
   font-weight: 600;
