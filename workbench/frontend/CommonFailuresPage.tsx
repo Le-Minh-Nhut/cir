@@ -84,8 +84,330 @@ const PRESET_TABS: Array<{ id: string; label: string; desc: string }> = [
   { id: "all", label: "Tất cả query", desc: "Toàn bộ truy vấn (xếp từ dễ hỏng nhất)" },
 ];
 
+interface RankedCandidate {
+  rank: number;
+  image_id: string;
+  image_url: string;
+  score: number | null;
+  is_gt: boolean;
+  is_ref: boolean;
+  is_hard_neg: boolean;
+}
+
+interface ModelRankingBlock {
+  key: string;
+  display: string;
+  family: string;
+  best_gt_rank: number | null;
+  top1_is_ref: boolean;
+  candidates: RankedCandidate[];
+}
+
+interface CommonFailureDetailResponse {
+  protocol: string;
+  dataset: "edir" | "pinpoint" | "fashioniq";
+  query: {
+    query_id: string;
+    text: string;
+    category: string;
+    l1_interest?: string | null;
+    ref_image_id: string;
+    ref_image_url: string;
+  };
+  ground_truths: Array<{ image_id: string; image_url: string }>;
+  hard_negatives: Array<{ image_id: string; image_url: string; is_ref?: boolean }>;
+  models: ModelRankingBlock[];
+}
+
 function fmtRank(r: number | null): string {
   return r === null ? ">50" : `#${r}`;
+}
+
+function InlineQueryRankings({
+  protocol,
+  queryId,
+  modelsParam,
+  k,
+  onZoom,
+}: {
+  protocol: string;
+  queryId: string;
+  modelsParam: string;
+  k: number;
+  onZoom: (src: string, caption: string) => void;
+}) {
+  const [detail, setDetail] = useState<CommonFailureDetailResponse | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [err, setErr] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<"single" | "stacked">("single");
+  const [activeModel, setActiveModel] = useState<string>("");
+  const [compareModel, setCompareModel] = useState<string>("");
+  const [topK, setTopK] = useState<number>(10);
+
+  useEffect(() => {
+    const ctrl = new AbortController();
+    const params = new URLSearchParams({
+      protocol,
+      query_id: queryId,
+      top_k: String(topK),
+    });
+    if (modelsParam) params.set("models", modelsParam);
+    setLoading(true);
+    setErr(null);
+    api<CommonFailureDetailResponse>(`/api/benchmarks/common-failures/detail?${params.toString()}`, {
+      signal: ctrl.signal,
+    })
+      .then((res) => {
+        setDetail(res);
+        setLoading(false);
+        setActiveModel((prev) =>
+          prev && res.models.some((m) => m.key === prev) ? prev : (res.models[0]?.key ?? ""),
+        );
+      })
+      .catch((e: unknown) => {
+        if ((e as { name?: string })?.name === "AbortError") return;
+        setErr(e instanceof Error ? e.message : String(e));
+        setLoading(false);
+      });
+    return () => ctrl.abort();
+  }, [protocol, queryId, modelsParam, topK]);
+
+  if (loading && !detail) return <LoadingState label="Đang tải Top-K ảnh từng mô hình…" />;
+  if (err) return <ErrorState message={err} />;
+  if (!detail) return null;
+
+  const primaryBlock = detail.models.find((m) => m.key === activeModel) ?? detail.models[0] ?? null;
+  const compareBlock = compareModel ? detail.models.find((m) => m.key === compareModel) ?? null : null;
+
+  const renderCandidate = (c: RankedCandidate, compact = false) => {
+    const cls = c.is_gt
+      ? "bm-cand bm-cand-gt"
+      : c.is_hard_neg
+        ? "bm-cand bm-cand-hneg"
+        : c.is_ref
+          ? "bm-cand bm-cand-ref"
+          : "bm-cand";
+    return (
+      <button
+        key={`${c.rank}:${c.image_id}`}
+        type="button"
+        className={compact ? `${cls} bm-cand-compact` : cls}
+        onClick={() => onZoom(c.image_url, `Rank #${c.rank} · ${c.image_id}`)}
+        title={`Rank #${c.rank} · ${c.image_id}${c.score !== null ? ` (score ${c.score.toFixed(3)})` : ""}`}
+      >
+        <div className="bm-cand-img-wrap">
+          <img src={c.image_url} alt={c.image_id} />
+          <span className="bm-cand-rank">#{c.rank}</span>
+          {c.is_gt && <span className="bm-cand-flag bm-flag-gt">GT</span>}
+          {!c.is_gt && c.is_hard_neg && <span className="bm-cand-flag bm-flag-hneg">HNeg</span>}
+          {!c.is_gt && !c.is_hard_neg && c.is_ref && <span className="bm-cand-flag bm-flag-ref">Ref</span>}
+        </div>
+        <span className="bm-cand-id mono">
+          {c.score !== null ? `${c.score.toFixed(3)} · ${c.image_id}` : c.image_id}
+        </span>
+      </button>
+    );
+  };
+
+  return (
+    <div className="bm-cf-detail-rich">
+      {/* Reference + Ground Truths + Hard Negatives row */}
+      <div className="bm-cf-refgt-strip">
+        <div className="bm-cf-strip-group">
+          <span className="field-label">Ảnh gốc (Reference)</span>
+          <div className="bm-mini-strip">
+            <button
+              type="button"
+              className="bm-mini-card"
+              style={{ width: 124, borderColor: "var(--accent)" }}
+              onClick={() => onZoom(detail.query.ref_image_url, `Ảnh gốc · ${detail.query.ref_image_id}`)}
+            >
+              <img src={detail.query.ref_image_url} alt="Reference" />
+              <span className="hint mono" style={{ fontSize: ".68rem", overflow: "hidden", textOverflow: "ellipsis" }}>
+                {detail.query.ref_image_id}
+              </span>
+            </button>
+          </div>
+        </div>
+
+        <div className="bm-cf-strip-group">
+          <span className="field-label">Đáp án đúng (Ground Truth · {detail.ground_truths.length})</span>
+          <div className="bm-mini-strip">
+            {detail.ground_truths.slice(0, 6).map((gt) => (
+              <button
+                key={gt.image_id}
+                type="button"
+                className="bm-mini-card bm-cand-gt"
+                style={{ width: 124 }}
+                onClick={() => onZoom(gt.image_url, `Ground Truth · ${gt.image_id}`)}
+              >
+                <img src={gt.image_url} alt={gt.image_id} />
+                <span className="hint-ok mono" style={{ fontSize: ".68rem", overflow: "hidden", textOverflow: "ellipsis" }}>
+                  {gt.image_id}
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {detail.hard_negatives.length > 0 && (
+          <div className="bm-cf-strip-group">
+            <span className="field-label">Bẫy khó (Hard Neg · {detail.hard_negatives.length})</span>
+            <div className="bm-mini-strip">
+              {detail.hard_negatives.slice(0, 4).map((hn) => (
+                <button
+                  key={hn.image_id}
+                  type="button"
+                  className="bm-mini-card bm-cand-hneg"
+                  style={{ width: 96 }}
+                  onClick={() => onZoom(hn.image_url, `Hard Negative · ${hn.image_id}`)}
+                >
+                  <img src={hn.image_url} alt={hn.image_id} />
+                  <span className="hint mono" style={{ fontSize: ".66rem" }}>{hn.is_ref ? "Ref" : "HNeg"}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Ranking viewer toolbar */}
+      <div className="bm-cf-rank-bar">
+        <div className="bm-seg" role="group" aria-label="Chế độ xem Top-K">
+          <button
+            type="button"
+            className={viewMode === "single" ? "bm-seg-btn active" : "bm-seg-btn"}
+            onClick={() => setViewMode("single")}
+          >
+            Chi tiết Top-{topK} theo model
+          </button>
+          <button
+            type="button"
+            className={viewMode === "stacked" ? "bm-seg-btn active" : "bm-seg-btn"}
+            onClick={() => setViewMode("stacked")}
+          >
+            Xếp tầng Top-5 tất cả ({detail.models.length} model)
+          </button>
+        </div>
+
+        {viewMode === "single" && (
+          <div className="row" style={{ marginLeft: "auto" }}>
+            <label className="hint" htmlFor={`cmp-${queryId}`}>So sánh thêm:</label>
+            <select
+              id={`cmp-${queryId}`}
+              value={compareModel}
+              onChange={(ev) => setCompareModel(ev.target.value)}
+              style={{ minHeight: 34, padding: "4px 8px", fontSize: ".82rem" }}
+            >
+              <option value="">— 1 model —</option>
+              {detail.models
+                .filter((m) => m.key !== primaryBlock?.key)
+                .map((m) => (
+                  <option key={m.key} value={m.key}>
+                    {m.display} ({fmtRank(m.best_gt_rank)})
+                  </option>
+                ))}
+            </select>
+            {detail.dataset !== "fashioniq" && (
+              <select
+                aria-label="Số lượng Top-K"
+                value={topK}
+                onChange={(ev) => setTopK(Number(ev.target.value))}
+                style={{ minHeight: 34, padding: "4px 8px", fontSize: ".82rem" }}
+              >
+                <option value={10}>Top-10</option>
+                <option value={15}>Top-15</option>
+                <option value={20}>Top-20</option>
+              </select>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Mode 1: Single / Side-by-side Model Top-K Image Grid */}
+      {viewMode === "single" && primaryBlock && (
+        <div className="stack">
+          <div className="bm-consensus-grid">
+            {detail.models.map((m) => {
+              const isAct = m.key === primaryBlock.key;
+              const failed = m.best_gt_rank === null || m.best_gt_rank > k;
+              return (
+                <button
+                  key={m.key}
+                  type="button"
+                  className={isAct ? "bm-cons-chip active" : "bm-cons-chip"}
+                  onClick={() => setActiveModel(m.key)}
+                >
+                  <b>{m.display}</b>
+                  <Badge tone={failed ? "bad" : "ok"}>{fmtRank(m.best_gt_rank)}</Badge>
+                  {m.top1_is_ref && <span className="bm-tag bm-tag-warn">Ref#1</span>}
+                </button>
+              );
+            })}
+          </div>
+
+          <div className={compareBlock ? "bm-compare-grids" : "stack"}>
+            <div className="bm-cf-grid-box">
+              <div className="row" style={{ marginBottom: 8 }}>
+                <b>Top-{primaryBlock.candidates.length} · {primaryBlock.display}</b>
+                <Badge tone={primaryBlock.best_gt_rank !== null && primaryBlock.best_gt_rank <= k ? "ok" : "bad"}>
+                  GT Rank: {fmtRank(primaryBlock.best_gt_rank)}
+                </Badge>
+                <span className="hint" style={{ marginLeft: "auto" }}>
+                  Khung xanh = GT · Vàng = Ref Copy · Đỏ = Hard Neg
+                </span>
+              </div>
+              {primaryBlock.candidates.length > 0 ? (
+                <div className="bm-cand-grid">
+                  {primaryBlock.candidates.map((c) => renderCandidate(c, false))}
+                </div>
+              ) : (
+                <EmptyState kind="no-results" detail="Lượt chạy này không lưu danh sách Top-K ảnh ứng viên." />
+              )}
+            </div>
+
+            {compareBlock && (
+              <div className="bm-cf-grid-box">
+                <div className="row" style={{ marginBottom: 8 }}>
+                  <b>Top-{compareBlock.candidates.length} · {compareBlock.display}</b>
+                  <Badge tone={compareBlock.best_gt_rank !== null && compareBlock.best_gt_rank <= k ? "ok" : "bad"}>
+                    GT Rank: {fmtRank(compareBlock.best_gt_rank)}
+                  </Badge>
+                </div>
+                <div className="bm-cand-grid">
+                  {compareBlock.candidates.map((c) => renderCandidate(c, false))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Mode 2: Stacked Top-5 across ALL models simultaneously */}
+      {viewMode === "stacked" && (
+        <div className="bm-stacked-models">
+          {detail.models.map((m) => {
+            const failed = m.best_gt_rank === null || m.best_gt_rank > k;
+            return (
+              <div key={m.key} className="bm-stacked-row">
+                <div className="bm-stacked-meta">
+                  <b>{m.display}</b>
+                  <span className="bm-sub">{m.family}</span>
+                  <div className="row" style={{ marginTop: 4 }}>
+                    <Badge tone={failed ? "bad" : "ok"}>{fmtRank(m.best_gt_rank)}</Badge>
+                    {m.top1_is_ref && <Badge tone="warn">Ref#1</Badge>}
+                  </div>
+                </div>
+                <div className="bm-stacked-cands">
+                  {m.candidates.slice(0, 5).map((c) => renderCandidate(c, true))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
 }
 
 const DATASET_TABS: Array<{
@@ -535,7 +857,7 @@ export function CommonFailuresPage({
       {data && (
         <Card
           title={`Danh sách lỗi chung · ${data.protocol_label} (${data.filtered_total.toLocaleString()} query)`}
-          subtitle={`Hiển thị ${data.filtered_total === 0 ? 0 : data.offset + 1}–${Math.min(data.offset + data.limit, data.filtered_total)} · Bấm vào dòng để xem ảnh gốc, ảnh đáp án đúng & thứ hạng chi tiết từng mô hình`}
+          subtitle={`Hiển thị ${data.filtered_total === 0 ? 0 : data.offset + 1}–${Math.min(data.offset + data.limit, data.filtered_total)} · Bấm trực tiếp vào bất kỳ query nào để xem ảnh gốc, ảnh GT và lưới Top-K ảnh từng mô hình xếp hạng`}
         >
           {data.items.length === 0 ? (
             <EmptyState
@@ -562,7 +884,18 @@ export function CommonFailuresPage({
                           </button>
                         )}
 
-                        <div className="bm-cf-main">
+                        <div
+                          className="bm-cf-main bm-cf-clickable"
+                          role="button"
+                          tabIndex={0}
+                          onClick={() => setExpandedId(isOpen ? null : row.query_id)}
+                          onKeyDown={(ev) => {
+                            if (ev.key === "Enter" || ev.key === " ") {
+                              ev.preventDefault();
+                              setExpandedId(isOpen ? null : row.query_id);
+                            }
+                          }}
+                        >
                           <div className="row" style={{ gap: 6 }}>
                             <span className="mono cell-strong" style={{ fontSize: ".84rem" }}>{row.query_id}</span>
                             <Badge tone="info">{row.category}</Badge>
@@ -593,11 +926,11 @@ export function CommonFailuresPage({
                         <div className="bm-cf-actions">
                           <button
                             type="button"
-                            className="secondary"
+                            className={isOpen ? "primary" : "secondary"}
                             style={{ minHeight: 34, padding: "4px 10px", fontSize: ".82rem", whiteSpace: "nowrap" }}
                             onClick={() => setExpandedId(isOpen ? null : row.query_id)}
                           >
-                            {isOpen ? "Thu gọn ▴" : "Xem ảnh GT ▾"}
+                            {isOpen ? "Thu gọn ▴" : "Xem Top-K ảnh ▾"}
                           </button>
                           {data.dataset !== "fashioniq" && (
                             <button
@@ -619,58 +952,13 @@ export function CommonFailuresPage({
                       </div>
 
                       {isOpen && (
-                        <div className="bm-cf-detail">
-                          <div className="bm-cf-imgs">
-                            {row.ref_image_url && (
-                              <button
-                                type="button"
-                                className="bm-mini-card"
-                                style={{ width: 140 }}
-                                onClick={() => setLightbox({ src: row.ref_image_url, caption: `Ảnh gốc · ${row.ref_image_id}` })}
-                              >
-                                <img src={row.ref_image_url} alt="Reference" />
-                                <span className="hint">Ảnh gốc (Ref)</span>
-                              </button>
-                            )}
-                            {row.gt_image_url && (
-                              <button
-                                type="button"
-                                className="bm-mini-card bm-cand-gt"
-                                style={{ width: 140 }}
-                                onClick={() => setLightbox({ src: row.gt_image_url, caption: `Đáp án đúng (GT) · ${row.gt_image_id}` })}
-                              >
-                                <img src={row.gt_image_url} alt="Ground Truth" />
-                                <span className="hint-ok">Đáp án đúng (GT)</span>
-                              </button>
-                            )}
-                          </div>
-                          <div className="table-wrap" style={{ flex: 1 }}>
-                            <table className="bm-compact-table">
-                              <thead>
-                                <tr>
-                                  <th>Mô hình</th>
-                                  <th className="num">Best GT Rank</th>
-                                  <th>Kết quả @{data.k}</th>
-                                  <th>Ref Copy #1</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {row.per_model.map((pm) => (
-                                  <tr key={pm.key}>
-                                    <td><span className="cell-strong">{pm.display}</span></td>
-                                    <td className="num mono">{fmtRank(pm.rank)}</td>
-                                    <td>
-                                      <Badge tone={pm.failed ? "bad" : "ok"}>
-                                        {pm.failed ? `Trượt @${data.k}` : `Trúng @${data.k}`}
-                                      </Badge>
-                                    </td>
-                                    <td>{pm.ref_copy ? <Badge tone="warn">Ref Copy #1</Badge> : <span className="hint">—</span>}</td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          </div>
-                        </div>
+                        <InlineQueryRankings
+                          protocol={data.protocol}
+                          queryId={row.query_id}
+                          modelsParam={modelsParam}
+                          k={data.k}
+                          onZoom={(src, caption) => setLightbox({ src, caption })}
+                        />
                       )}
                     </div>
                   );

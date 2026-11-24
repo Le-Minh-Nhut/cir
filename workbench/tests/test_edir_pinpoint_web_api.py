@@ -182,7 +182,20 @@ def test_common_failures_default_across_pinpoint_edir_and_fashioniq() -> None:
     assert d2["selected_model_count"] == 3
     assert all(it["fail_count"] == 3 for it in d2["items"])
 
-    # 4) CSV export & invalid protocol/preset guard
+    # 4) Inline Top-K ranked candidate images detail across FashionIQ, PinPoint, and EDIR
+    f_qid = d0["items"][0]["query_id"]
+    fd = client.get("/api/benchmarks/common-failures/detail", params={"protocol": "fashioniq_original_split", "query_id": f_qid, "top_k": 10})
+    assert fd.status_code == 200, fd.text
+    fdb = fd.json()
+    assert len(fdb["models"]) >= 5 and len(fdb["models"][0]["candidates"]) == 10
+
+    p_qid = d1["items"][0]["query_id"]
+    pd = client.get("/api/benchmarks/common-failures/detail", params={"protocol": "pinpoint_indomain", "query_id": p_qid, "top_k": 10})
+    assert pd.status_code == 200, pd.text
+    pdb = pd.json()
+    assert len(pdb["models"]) == 15 and len(pdb["models"][0]["candidates"]) == 10
+
+    # 5) CSV export & invalid protocol/preset guard
     rcsv = client.get("/api/benchmarks/common-failures/export.csv", params={"protocol": "edir_indomain", "preset": "all_fail", "k": 1})
     assert rcsv.status_code == 200
     assert "fail_count@1" in rcsv.text

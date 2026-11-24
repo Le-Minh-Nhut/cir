@@ -687,6 +687,172 @@ def benchmarks_common_failures_csv(
     )
 
 
+@edir_pinpoint_router.get("/common-failures/detail")
+def benchmarks_common_failures_detail(
+    protocol: str = Query(default="fashioniq_original_split"),
+    query_id: str = Query(...),
+    models: str = Query(default=""),
+    top_k: int = Query(default=10, ge=1, le=50),
+) -> Dict[str, Any]:
+    """Return full Top-K ranked candidate images per model for a single query across FashionIQ, PinPoint, or EDIR."""
+    spec = _CF_PROTOCOL_BY_ID.get(protocol)
+    if spec is None:
+        raise HTTPException(
+            status_code=400,
+            detail={"error": "invalid_protocol", "message": f"Protocol không hợp lệ: {protocol!r}"},
+        )
+    ds = spec["dataset"]
+    regime = spec["regime"]
+    req_models = {x.strip() for x in models.split(",") if x.strip()}
+
+    if ds == "fashioniq":
+        runs = list_runs()
+        if regime == "all":
+            chosen = [r for r in runs if str(r.get("protocol_id", "")).startswith("fashioniq_")]
+        else:
+            chosen = [r for r in runs if r.get("protocol_id") == regime]
+        chosen.sort(key=lambda r: (str(r.get("model_id", "")), str(r.get("run_id", ""))))
+        if req_models:
+            filtered = [r for r in chosen if str(r["run_id"]) in req_models]
+            if filtered:
+                chosen = filtered
+        run_maps: Dict[str, Any] = {}
+        by_proto: Dict[str, List[str]] = {}
+        for r in chosen:
+            by_proto.setdefault(str(r.get("protocol_id", "")), []).append(str(r["run_id"]))
+        for proto_rids in by_proto.values():
+            _meta, part_maps = get_analysis_input(proto_rids, k=min(top_k, 50))
+            run_maps.update(part_maps)
+
+        base_row: Optional[Dict[str, Any]] = None
+        model_rankings: List[Dict[str, Any]] = []
+        for r in chosen:
+            rid = str(r["run_id"])
+            row = (run_maps.get(rid) or {}).get(query_id)
+            if row is None:
+                continue
+            if base_row is None:
+                base_row = row
+            cat = str(row.get("category") or "all")
+            ref_id = str(row.get("reference_id") or "")
+            tgt_id = str(row.get("target_id") or "")
+            tr = row.get("target_rank")
+            cands = []
+            for item in (row.get("top_results") or [])[:top_k]:
+                cid = str(item.get("image_id") or "")
+                cands.append({
+                    "rank": int(item.get("rank") or (len(cands) + 1)),
+                    "image_id": cid,
+                    "image_url": f"/api/images/{cat}/{urllib.parse.quote(cid, safe='')}" if cid else "",
+                    "score": float(item["score"]) if item.get("score") is not None else None,
+                    "is_gt": cid == tgt_id,
+                    "is_ref": cid == ref_id,
+                    "is_hard_neg": False,
+                })
+            model_rankings.append({
+                "key": rid,
+                "display": str(r.get("model_id") or rid),
+                "family": str(r.get("protocol_id", "")).replace("fashioniq_", ""),
+                "best_gt_rank": int(tr) if tr is not None else None,
+                "top1_is_ref": bool(cands and cands[0]["is_ref"]),
+                "candidates": cands,
+            })
+
+        if base_row is None:
+            raise HTTPException(
+                status_code=404,
+                detail={"error": "query_not_found", "message": f"Không tìm thấy query {query_id!r} trong {protocol}."},
+            )
+        cat = str(base_row.get("category") or "all")
+        ref_id = str(base_row.get("reference_id") or "")
+        tgt_id = str(base_row.get("target_id") or "")
+        raw_caps = base_row.get("raw_captions") or []
+        text = " / ".join(str(c) for c in raw_caps if c) if raw_caps else str(base_row.get("model_input_text") or "")
+        return {
+            "protocol": protocol,
+            "dataset": "fashioniq",
+            "query": {
+                "query_id": query_id,
+                "text": text,
+                "category": cat,
+                "l1_interest": f"FashionIQ · {cat}",
+                "ref_image_id": ref_id,
+                "ref_image_url": f"/api/images/{cat}/{urllib.parse.quote(ref_id, safe='')}" if ref_id else "",
+            },
+            "ground_truths": [
+                {
+                    "image_id": tgt_id,
+                    "image_url": f"/api/images/{cat}/{urllib.parse.quote(tgt_id, safe='')}" if tgt_id else "",
+                }
+            ] if tgt_id else [],
+            "hard_negatives": [],
+            "models": model_rankings,
+        }
+
+    # EDIR or PinPoint
+    bundle = _get_bundle(ds)
+    summary = _get_summary(ds)
+    rec = next((q for q in bundle.queries if q.query_id == query_id), None)
+    if rec is None:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": "query_not_found", "message": f"Không tìm thấy query {query_id!r} trong {ds}."},
+        )
+    gt_ids = _clean_unique_ids(rec.positive_ids_raw or rec.positive_ids) if ds == "pinpoint" else _clean_unique_ids(rec.positive_ids)
+    hn_ids = _clean_unique_ids(rec.negative_ids_raw or rec.negative_ids) if ds == "pinpoint" else []
+    gt_set = set(gt_ids)
+    hn_set = set(hn_ids)
+
+    model_rankings = []
+    for m in summary["models"]:
+        mk = m["key"]
+        if req_models and mk not in req_models:
+            continue
+        if not m[regime].get("has_predictions"):
+            continue
+        pr, _ = _load_preds_for(ds, mk, regime)
+        if pr is None or query_id not in pr:
+            continue
+        ranked = pr[query_id]
+        br = next((i for i, cid in enumerate(ranked, start=1) if cid in gt_set), None)
+        cands = [
+            {
+                "rank": idx,
+                "image_id": cid,
+                "image_url": _image_url(ds, cid),
+                "score": None,
+                "is_gt": cid in gt_set,
+                "is_ref": cid == rec.ref_id,
+                "is_hard_neg": cid in hn_set,
+            }
+            for idx, cid in enumerate(ranked[:top_k], start=1)
+        ]
+        model_rankings.append({
+            "key": mk,
+            "display": m["display"],
+            "family": m["family"],
+            "best_gt_rank": br,
+            "top1_is_ref": bool(cands and cands[0]["is_ref"]),
+            "candidates": cands,
+        })
+
+    return {
+        "protocol": protocol,
+        "dataset": ds,
+        "query": {
+            "query_id": rec.query_id,
+            "text": rec.text,
+            "category": rec.category,
+            "l1_interest": rec.metadata.get("l1_interest"),
+            "ref_image_id": rec.ref_id,
+            "ref_image_url": _image_url(ds, rec.ref_id),
+        },
+        "ground_truths": [{"image_id": gid, "image_url": _image_url(ds, gid)} for gid in gt_ids],
+        "hard_negatives": [{"image_id": nid, "image_url": _image_url(ds, nid), "is_ref": nid == rec.ref_id} for nid in hn_ids[:8]],
+        "models": model_rankings,
+    }
+
+
 @edir_pinpoint_router.get("/{dataset}/summary")
 def benchmark_summary(dataset: str) -> Dict[str, Any]:
     ds = _validate_dataset(dataset)

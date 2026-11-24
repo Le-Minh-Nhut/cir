@@ -1272,3 +1272,51 @@ thead .bm-sticky-col { background: var(--surface-2); z-index: 4; }
 .bm-ds-tab.active .bm-ds-tab-title { color: var(--accent); }
 .bm-ds-tab-sub { font-size: .78rem; color: var(--ink-3); line-height: 1.3; }
 @media (max-width: 860px) { .bm-ds-tabs { grid-template-columns: 1fr; } }
+
+/* Inline Top-K ranking viewer inside Common Failures */
+.bm-cf-clickable { cursor: pointer; border-radius: 6px; padding: 2px 4px; margin: -2px -4px; }
+.bm-cf-clickable:hover { background: var(--surface-2); }
+.bm-cf-detail-rich {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.bm-cf-refgt-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  align-items: flex-start;
+  padding: 12px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+}
+.bm-cf-strip-group { display: flex; flex-direction: column; gap: 6px; }
+.bm-cf-rank-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.bm-cf-grid-box {
+  padding: 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+}
+.bm-stacked-models { display: grid; gap: 10px; }
+.bm-stacked-row {
+  display: grid;
+  grid-template-columns: 165px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+  padding: 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+}
+.bm-stacked-meta { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.bm-stacked-cands { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
+.bm-cand-compact { padding: 4px; }
+@media (max-width: 960px) {
+  .bm-stacked-row { grid-template-columns: 1fr; }
+  .bm-stacked-cands { grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); }
+}
