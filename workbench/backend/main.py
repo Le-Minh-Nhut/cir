@@ -32,6 +32,7 @@ from workbench.backend.errors import WorkbenchError
 from workbench.backend.index import database_path, rebuild_index
 from workbench.backend.jobs import DuplicateJobError, QueueShutdownError, SingleGpuQueue
 from workbench.backend.limn_diagnostic import diagnostic_router
+from workbench.backend.edir_pinpoint_api import edir_pinpoint_router
 from workbench.backend.native_measurements import list_native_measurements
 from workbench.backend.operator_config import resolve_config
 from workbench.backend.preflight import preflight_blockers
@@ -66,6 +67,7 @@ app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:5173", "http
 # declared in this module below). Registration order is NOT load-bearing here because every path is
 # literal: that is why the router declares no parameterised `/{model_id}-dual-scope` route.
 app.include_router(diagnostic_router)
+app.include_router(edir_pinpoint_router)
 JOBS = SingleGpuQueue()
 
 def _recover_interrupted_jobs() -> None:

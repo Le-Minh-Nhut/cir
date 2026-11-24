@@ -16,7 +16,7 @@
  *  Pure and dependency-free: the mapping is verified by `workbench/tests/test_frontend_routes.py`.
  */
 
-export const AREA_IDS = ["overview", "experiments", "evaluation", "samples", "failures", "notebook"] as const;
+export const AREA_IDS = ["overview", "benchmarks", "experiments", "evaluation", "samples", "failures", "notebook"] as const;
 export type AreaId = (typeof AREA_IDS)[number];
 
 export interface ViewDef { id: string; label: string }
@@ -37,6 +37,18 @@ export const AREAS: AreaDef[] = [
     question: "Kết quả thật đang có gì, thiếu gì, và đi tiếp từ đâu",
     views: [],
     legacy: ["Dashboard", "Overview"],
+  },
+  {
+    id: "benchmarks",
+    label: "EDIR & PinPoint",
+    question: "Đối chiếu 15 mô hình In-Domain & Cross-Benchmark Transfer (FIQ / CIRR), lát cắt Fashion và soi ảnh Top-K",
+    views: [
+      { id: "bm_overview", label: "Tổng quan 2 benchmark" },
+      { id: "edir", label: "EDIR (4 cột + Heatmap)" },
+      { id: "pinpoint", label: "PinPoint (3 cột + Fashion)" },
+      { id: "bm_inspector", label: "Khám phá query & ảnh" },
+    ],
+    legacy: [],
   },
   {
     id: "experiments",

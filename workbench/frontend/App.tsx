@@ -4,6 +4,7 @@ import { useWorkbenchData, protocolLabel, type RunCatalogEntry } from "./data";
 import { protocolsWithReports, protocolOrDefault } from "./catalog";
 import { chooseInitialScope, chooseSubsetFor, protocolHasSubsets, SUBSET_SEQUENCE } from "./scope";
 import { OverviewPage } from "./OverviewPage";
+import { BenchmarksPage } from "./BenchmarksPage";
 import { ExperimentsPage } from "./ExperimentsPage";
 import { EvaluationPage } from "./EvaluationPage";
 import { SamplesPage } from "./SamplesPage";
@@ -240,10 +241,11 @@ export default function App() {
       benchmarks: data.aggregates.region.status,
       composition: data.compositionRuns.region.status,
     },
-    location.area === "evaluation" && location.view === "benchmark" ? "evaluation-benchmark"
-      : location.area === "evaluation" && location.view === "native" ? "evaluation-native"
-        : location.area === "evaluation" ? "evaluation-composition"
-          : location.area);
+    location.area === "benchmarks" ? "overview"
+      : location.area === "evaluation" && location.view === "benchmark" ? "evaluation-benchmark"
+        : location.area === "evaluation" && location.view === "native" ? "evaluation-native"
+          : location.area === "evaluation" ? "evaluation-composition"
+            : location.area);
   const banner = evidenceBanner(evidence);
 
   // The selection-scoped claim that replaces the old app-wide banner: it is about the runs on
@@ -310,35 +312,45 @@ export default function App() {
         </header>
 
         <div className="contextbar">
-          <div className="ctx">
-            <label htmlFor="protocol-select">Protocol</label>
-            <select id="protocol-select" value={location.protocol}
-                    onChange={(event) => goto({ protocol: event.target.value, runs: [], run: "", query: "", offset: 0 })}>
-              {(knownProtocols.length ? knownProtocols : [location.protocol]).map((id) => (
-                <option key={id} value={id}>{protocolLabel(id)}</option>
-              ))}
-            </select>
-          </div>
-          {/* The subset control exists only over a protocol whose circuit HAS subsets. Over
-              FashionIQ Original it used to print "Shortcut-Free (SF)" while every row beneath was
-              that protocol's single cohort — a label for a cohort that does not exist. */}
-          {protocolHasSubsets(location.protocol) && (
-            <div className="ctx">
-              <label htmlFor="subset-select">Subset</label>
-              <select id="subset-select" value={location.subset}
-                      data-testid="subset-select"
-                      onChange={(event) => changeSubset(event.target.value as Location["subset"])}>
-                {SUBSET_SEQUENCE.map((subset) => (
-                  <option key={subset} value={subset}>{SUBSET_LABEL[subset]}</option>
-                ))}
-              </select>
-            </div>
-          )}
-          <div className="ctx">
-            <span>Lượt chọn</span><b data-testid="selected-run-count">{location.runs.length}</b>
-          </div>
-          {location.query && (
-            <div className="ctx"><span>Query</span><b className="mono">{location.query}</b></div>
+          {location.area === "benchmarks" ? (
+            <>
+              <div className="ctx"><span>Split chuẩn</span><b className="mono">70_10_20_seed42</b></div>
+              <div className="ctx"><span>EDIR</span><b>1,003 / 28,645</b></div>
+              <div className="ctx"><span>PinPoint</span><b>1,337 / 109,598</b></div>
+            </>
+          ) : (
+            <>
+              <div className="ctx">
+                <label htmlFor="protocol-select">Protocol</label>
+                <select id="protocol-select" value={location.protocol}
+                        onChange={(event) => goto({ protocol: event.target.value, runs: [], run: "", query: "", offset: 0 })}>
+                  {(knownProtocols.length ? knownProtocols : [location.protocol]).map((id) => (
+                    <option key={id} value={id}>{protocolLabel(id)}</option>
+                  ))}
+                </select>
+              </div>
+              {/* The subset control exists only over a protocol whose circuit HAS subsets. Over
+                  FashionIQ Original it used to print "Shortcut-Free (SF)" while every row beneath was
+                  that protocol's single cohort — a label for a cohort that does not exist. */}
+              {protocolHasSubsets(location.protocol) && (
+                <div className="ctx">
+                  <label htmlFor="subset-select">Subset</label>
+                  <select id="subset-select" value={location.subset}
+                          data-testid="subset-select"
+                          onChange={(event) => changeSubset(event.target.value as Location["subset"])}>
+                    {SUBSET_SEQUENCE.map((subset) => (
+                      <option key={subset} value={subset}>{SUBSET_LABEL[subset]}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              <div className="ctx">
+                <span>Lượt chọn</span><b data-testid="selected-run-count">{location.runs.length}</b>
+              </div>
+              {location.query && (
+                <div className="ctx"><span>Query</span><b className="mono">{location.query}</b></div>
+              )}
+            </>
           )}
           <span className="spacer" />
           {area.views.length > 0 && (
@@ -368,7 +380,7 @@ export default function App() {
           </div>
         )}
 
-        {(banner || selectionNotice) && !dismissed && (
+        {location.area !== "benchmarks" && (banner || selectionNotice) && !dismissed && (
           <div className="content" style={{ paddingBottom: 0 }}>
             <div className={`empty banner ${banner ? "empty-partial" : "empty-capability"}`}
                  data-testid="error-banner" data-notice-kind={banner ? "evidence" : "selection"}
@@ -388,6 +400,9 @@ export default function App() {
             <OverviewPage data={data} location={location}
                           onOpenRun={(entry) => selectRun(entry)}
                           onGoto={goto} />
+          )}
+          {location.area === "benchmarks" && (
+            <BenchmarksPage view={location.view || "bm_overview"} onChangeView={(v) => goto({ view: v })} />
           )}
           {location.area === "experiments" && (
             <ExperimentsPage data={data} location={location} view={location.view}
@@ -415,6 +430,7 @@ export default function App() {
 
 const GLYPHS: Record<AreaId, string> = {
   overview: "◎",
+  benchmarks: "❖",
   experiments: "▤",
   evaluation: "◑",
   samples: "▦",
