@@ -200,7 +200,8 @@ function QueryDetailPanel({
   const [detail, setDetail] = useState<CommonFailureDetailResponse | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [err, setErr] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<"single" | "stacked">("single");
+  // Standalone page opens straight into ALL-MODELS synchronized matrix; right drawer defaults to 1-model detail
+  const [viewMode, setViewMode] = useState<"single" | "matrix">(standalone ? "matrix" : "single");
   const [activeModel, setActiveModel] = useState<string>("");
   const [compareModel, setCompareModel] = useState<string>("");
   const [topK, setTopK] = useState<number>(10);
@@ -288,7 +289,7 @@ function QueryDetailPanel({
         title={`Rank #${c.rank} · ${c.image_id}${c.score !== null ? ` (score ${c.score.toFixed(3)})` : ""}`}
       >
         <div className="bm-cand-img-wrap">
-          <img src={c.image_url} alt={c.image_id} />
+          <img src={c.image_url} alt={c.image_id} loading={c.rank > 10 ? "lazy" : undefined} />
           <span className="bm-cand-rank">#{c.rank}</span>
           {c.is_gt && <span className="bm-cand-flag bm-flag-gt">GT</span>}
           {!c.is_gt && c.is_hard_neg && <span className="bm-cand-flag bm-flag-hneg">HNeg</span>}
@@ -456,7 +457,7 @@ function QueryDetailPanel({
         title={
           viewMode === "single" && primaryBlock
             ? `Top-${primaryBlock.candidates.length} · ${primaryBlock.display}`
-            : `Xếp tầng Top-5 (${detail.models.length} mô hình)`
+            : `Tất cả ${detail.models.length} mô hình song song · Top-${topK} (cuộn ngang →)`
         }
         subtitle="Xanh = GT · Vàng = Copy ảnh gốc (Ref) · Đỏ = Hard Negative · Bấm ảnh để phóng to"
         actions={
@@ -464,52 +465,49 @@ function QueryDetailPanel({
             <div className="bm-seg" role="group" aria-label="Chế độ xem Top-K">
               <button
                 type="button"
-                className={viewMode === "single" ? "bm-seg-btn active" : "bm-seg-btn"}
-                onClick={() => setViewMode("single")}
+                className={viewMode === "matrix" ? "bm-seg-btn active" : "bm-seg-btn"}
+                onClick={() => setViewMode("matrix")}
               >
-                Top-{topK}
+                Tất cả model ({detail.models.length})
               </button>
               <button
                 type="button"
-                className={viewMode === "stacked" ? "bm-seg-btn active" : "bm-seg-btn"}
-                onClick={() => setViewMode("stacked")}
+                className={viewMode === "single" ? "bm-seg-btn active" : "bm-seg-btn"}
+                onClick={() => setViewMode("single")}
               >
-                Xếp tầng ({detail.models.length})
+                Chi tiết 1 model
               </button>
             </div>
 
             {viewMode === "single" && (
-              <>
-                <select
-                  aria-label="So sánh thêm mô hình thứ 2"
-                  value={compareModel}
-                  onChange={(ev) => setCompareModel(ev.target.value)}
-                  style={{ minHeight: 34, padding: "4px 8px", fontSize: ".82rem" }}
-                >
-                  <option value="">So sánh: 1 model</option>
-                  {detail.models
-                    .filter((m) => m.key !== primaryBlock?.key)
-                    .map((m) => (
-                      <option key={m.key} value={m.key}>
-                        vs {m.display} ({fmtRank(m.best_gt_rank)})
-                      </option>
-                    ))}
-                </select>
-                {detail.dataset !== "fashioniq" && (
-                  <select
-                    aria-label="Số lượng Top-K"
-                    value={topK}
-                    onChange={(ev) => setTopK(Number(ev.target.value))}
-                    style={{ minHeight: 34, padding: "4px 8px", fontSize: ".82rem" }}
-                  >
-                    <option value={10}>Top-10</option>
-                    <option value={15}>Top-15</option>
-                    <option value={20}>Top-20</option>
-                    <option value={50}>Top-50</option>
-                  </select>
-                )}
-              </>
+              <select
+                aria-label="So sánh thêm mô hình thứ 2"
+                value={compareModel}
+                onChange={(ev) => setCompareModel(ev.target.value)}
+                style={{ minHeight: 34, padding: "4px 8px", fontSize: ".82rem" }}
+              >
+                <option value="">So sánh: 1 model</option>
+                {detail.models
+                  .filter((m) => m.key !== primaryBlock?.key)
+                  .map((m) => (
+                    <option key={m.key} value={m.key}>
+                      vs {m.display} ({fmtRank(m.best_gt_rank)})
+                    </option>
+                  ))}
+              </select>
             )}
+
+            <select
+              aria-label="Số lượng Top-K"
+              data-testid="cf-topk-select"
+              value={topK}
+              onChange={(ev) => setTopK(Number(ev.target.value))}
+              style={{ minHeight: 34, padding: "4px 10px", fontSize: ".84rem", fontWeight: 600 }}
+            >
+              <option value={10}>Top-10</option>
+              <option value={20}>Top-20</option>
+              <option value={50}>Top-50</option>
+            </select>
           </div>
         }
       >
@@ -545,26 +543,42 @@ function QueryDetailPanel({
           </div>
         )}
 
-        {viewMode === "stacked" && (
-          <div className="bm-stacked-models">
-            {detail.models.map((m) => {
-              const failed = m.best_gt_rank === null || m.best_gt_rank > k;
-              return (
-                <div key={m.key} className="bm-stacked-row">
-                  <div className="bm-stacked-meta">
-                    <b>{m.display}</b>
-                    <span className="bm-sub">{m.family}</span>
-                    <div className="row" style={{ marginTop: 4 }}>
-                      <Badge tone={failed ? "bad" : "ok"}>{fmtRank(m.best_gt_rank)}</Badge>
-                      {m.top1_is_ref && <Badge tone="warn">Ref#1</Badge>}
-                    </div>
-                  </div>
-                  <div className="bm-stacked-cands">
-                    {m.candidates.slice(0, 5).map((c) => renderCandidate(c, true))}
-                  </div>
-                </div>
-              );
-            })}
+        {viewMode === "matrix" && (
+          <div className="bm-matrix-wrap" data-testid="cf-all-models-matrix">
+            <table className="bm-matrix-table">
+              <thead>
+                <tr>
+                  <th className="bm-matrix-sticky">Mô hình ({detail.models.length})</th>
+                  {Array.from({ length: Math.max(1, ...detail.models.map((m) => m.candidates.length)) }, (_, i) => (
+                    <th key={i + 1} className="bm-matrix-rank-th">Rank #{i + 1}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {detail.models.map((m) => {
+                  const failed = m.best_gt_rank === null || m.best_gt_rank > k;
+                  return (
+                    <tr key={m.key}>
+                      <td className="bm-matrix-sticky">
+                        <div className="bm-stacked-meta">
+                          <b>{m.display}</b>
+                          <span className="bm-sub">{m.family}</span>
+                          <div className="row" style={{ marginTop: 6, gap: 4 }}>
+                            <Badge tone={failed ? "bad" : "ok"}>{fmtRank(m.best_gt_rank)}</Badge>
+                            {m.top1_is_ref && <Badge tone="warn">Ref#1</Badge>}
+                          </div>
+                        </div>
+                      </td>
+                      {m.candidates.map((c) => (
+                        <td key={c.rank} className="bm-matrix-cell">
+                          {renderCandidate(c, true)}
+                        </td>
+                      ))}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         )}
       </Card>
