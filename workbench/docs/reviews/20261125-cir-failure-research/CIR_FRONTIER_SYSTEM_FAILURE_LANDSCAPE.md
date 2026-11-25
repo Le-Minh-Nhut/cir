@@ -199,3 +199,5 @@ Nếu nhìn lại toàn bộ 4 đợt kiểm định từ dữ liệu thô, hìn
 2. **Đợt 2 (Kiểm định thống kê, động học `history.jsonl`, phản thực `NoRef`/`RRF` & SOTA 2024–2026):** [CIR_DEEP_RESEARCH_FORENSICS_AND_ROADMAP.md](CIR_DEEP_RESEARCH_FORENSICS_AND_ROADMAP.md)
 3. **Đợt 3 (Kiểm toán hình ảnh trực tiếp 66 truy vấn & Bản đồ 8 lỗi composition):** [CIR_VISUAL_FORENSICS_AND_COMPOSITION_FAILURE_ATLAS.md](CIR_VISUAL_FORENSICS_AND_COMPOSITION_FAILURE_ATLAS.md)
 4. **Đợt 4 (Tài liệu này — Bản đồ toàn diện mọi trục thất bại hệ thống vượt ngoài composition):** [CIR_FRONTIER_SYSTEM_FAILURE_LANDSCAPE.md](CIR_FRONTIER_SYSTEM_FAILURE_LANDSCAPE.md)
+5. **Đợt 5 (Phân rã 4 góc phần tư `(ΔV, ΔT)`, Vực thẳm khoảng cách chỉnh sửa, Điểm mù Q-Former & Hệ thống phân loại 12 lỗi chung tối hậu):** [CIR_EXHAUSTIVE_QUERY_FORENSICS_AND_UNIVERSAL_TAXONOMY.md](CIR_EXHAUSTIVE_QUERY_FORENSICS_AND_UNIVERSAL_TAXONOMY.md)
+6. **Bản Tổng Hợp Kiểm Chứng Tối Hậu (Master Verified Synthesis — Zero-Error Audit toàn bộ 5 đợt):** [CIR_MASTER_VERIFIED_FAILURE_SYNTHESIS.md](CIR_MASTER_VERIFIED_FAILURE_SYNTHESIS.md)
