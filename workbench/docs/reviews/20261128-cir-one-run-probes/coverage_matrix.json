@@ -1,0 +1,556 @@
+{
+  "cohort_counts": {
+    "total_evaluated_models": 16,
+    "original_15_bench_models": 15,
+    "fiq_15_indomain_models": 15,
+    "failures_total": 29,
+    "suites_total": 18
+  },
+  "completed_model_counts": {
+    "edir": 16,
+    "pinpoint": 16,
+    "fashioniq": 16
+  },
+  "suite_coverage": {
+    "E01": {
+      "status": "measured",
+      "edir_models": 16,
+      "pinpoint_models": 16,
+      "fashioniq_models": 16,
+      "note": "Native single-vec / active MaxSim token spherical tangent geometry + CLIP edit-distance control."
+    },
+    "E02": {
+      "status": "measured",
+      "trained_models": [
+        "clip4cir",
+        "conesep",
+        "sprc"
+      ],
+      "n_models": 3,
+      "note": "7 EDIR arms (0/10/25/50/100% same-scene + CLIP-matched other-scene hard + ref-neg) & 4 PinPoint arms across representative CLIP + BLIP-2 families."
+    },
+    "E03": {
+      "status": "measured",
+      "edir_models": 16,
+      "pinpoint_models": 16,
+      "fashioniq_models": 16,
+      "note": "Per-query nested galleries (1k..full, 3 seeds <full, full once) with frozen CLIP ViT-L/14 distractors + empirical null curve."
+    },
+    "E04": {
+      "status": "measured",
+      "edir_models": 16,
+      "fashioniq_gallery_models": 14,
+      "pinpoint_f28_models": 16,
+      "note": "Train/dev/test group-split L2/Ridge probes (query + gallery branches + prior + shuffled + PCA-256 + BH-FDR) + causal activation/ROI/token interventions w/ shams."
+    },
+    "E05": {
+      "status": "measured",
+      "edir_models": 16,
+      "pinpoint_models": 16,
+      "fashioniq_models": 16,
+      "note": "Multimodal + CIRCUS unimodal + TRUE native unimodal towers + shuffled controls + score-add + embed-add + (+,+,-) pure fusion rate + block causal interventions."
+    },
+    "E06": {
+      "status": "measured",
+      "fashioniq_models": 16,
+      "note": "Counterfactual darker/lighter swaps (CIE Lab pixel-verified), F20 open-ended difference, F03 modality-required ref swaps."
+    },
+    "E07": {
+      "status": "measured",
+      "edir_models": 16,
+      "fashioniq_models": 16,
+      "note": "Bidirectional with/without & add/remove minimal pairs on fixed ref + candidate pairs."
+    },
+    "E08": {
+      "status": "measured",
+      "edir_models": 16,
+      "fashioniq_models": 16,
+      "note": "FashionIQ 4-state 00/01/10/11 interference + EDIR complex clause decomposition + F06 verified commutative C1/C2 swaps."
+    },
+    "E09": {
+      "status": "measured",
+      "fashioniq_models": 16,
+      "pinpoint_models": 16,
+      "note": "Swapped color-part attribute binding pairs (FashionIQ) + F26 metadata-only preserve-vs-edit (PinPoint Women's/Men's Fashion)."
+    },
+    "E10": {
+      "status": "measured",
+      "fashioniq_models": 16,
+      "edir_models": 16,
+      "note": "F21 photo-presentation bg-mask vs matched-area sham, F22 secondary vs primary garment vs matched-area sham, F24 limb-pose diff-ROI vs sham."
+    },
+    "E11": {
+      "status": "measured",
+      "edir_models": 16,
+      "note": "Native res vs 336x336 ViT bicubic pos-embed interp (fixed-grid models clip4cir/dcnet explicitly flagged unsupported) + detail ROI crop vs matched-area sham crop."
+    },
+    "E12": {
+      "status": "measured",
+      "pinpoint_models": 16,
+      "fashioniq_models": 16,
+      "edir_models": 16,
+      "note": "Controlled syntax/abstractness edits, F13 implicit vs explicit target category, F25 homophone/typo/synonym quadruples with exact token IDs."
+    },
+    "E13": {
+      "status": "measured",
+      "pinpoint_models": 16,
+      "fashioniq_models": 16,
+      "note": "Retrieved category distribution vs multi-category oracle-category pool."
+    },
+    "E14": {
+      "status": "measured",
+      "edir_models": 16,
+      "pinpoint_models": 16,
+      "fashioniq_models": 16,
+      "note": "Full-gallery k-occurrence/Gini/effective-rank/anisotropy + val/cal-fitted CSLS, centering & regularized ZCA whitening on test."
+    },
+    "E15": {
+      "status": "measured",
+      "edir_models": 16,
+      "pinpoint_models": 16,
+      "fashioniq_models": 16,
+      "cross_model_disagreement_datasets": [
+        "edir",
+        "pinpoint",
+        "fashioniq"
+      ],
+      "note": "Exact full-gallery dev-tuned temp-scaled entropy, top1, margin, std, perturb var, cross-model disagreement, and verified no-target episodes."
+    },
+    "E16": {
+      "status": "measured",
+      "trained_models": [
+        "clip4cir",
+        "conesep",
+        "sprc"
+      ],
+      "fairness_models": 16,
+      "note": "Pairwise 7x7 inter-domain gradient cosine (init & best) + 8-arm matched-step transfer matrix incl. causal PCGrad + 16-model multivariate fairness OLS."
+    },
+    "E17": {
+      "status": "measured",
+      "history_models": 16,
+      "checkpoint_traj_models": [
+        "clip4cir",
+        "conesep",
+        "sprc"
+      ],
+      "note": "All 16 models' history.jsonl epoch curves PLUS real multi-stage (init/ep1/ep2/final) diagnostic probe trajectories on clip4cir, conesep, sprc."
+    },
+    "E18": {
+      "status": "partial_blind_pack_ready_awaiting_human_annotators",
+      "sampled_items": 220,
+      "strata": 11,
+      "note": "Stratified blind contact-sheet pack (hits + misses, 220 items, 11 strata, cryptographic model anonymization, sealed key, Krippendorff-alpha/Fleiss-kappa scorer) complete; independent human scoring intentionally NOT fabricated."
+    }
+  },
+  "failure_coverage_29": [
+    {
+      "id": "F01",
+      "num": 1,
+      "name": "Negation Inversion",
+      "suites": [
+        "E07",
+        "E04",
+        "E05"
+      ],
+      "status": "measured",
+      "suite_statuses": {
+        "E07": "measured",
+        "E04": "measured",
+        "E05": "measured"
+      }
+    },
+    {
+      "id": "F02",
+      "num": 2,
+      "name": "Reference-Copy",
+      "suites": [
+        "E02",
+        "E17",
+        "E01"
+      ],
+      "status": "measured",
+      "suite_statuses": {
+        "E02": "measured",
+        "E17": "measured",
+        "E01": "measured"
+      }
+    },
+    {
+      "id": "F03",
+      "num": 3,
+      "name": "Modality Imbalance",
+      "suites": [
+        "E05",
+        "E06"
+      ],
+      "status": "measured",
+      "suite_statuses": {
+        "E05": "measured",
+        "E06": "measured"
+      }
+    },
+    {
+      "id": "F04",
+      "num": 4,
+      "name": "Multi-Constraint Interference",
+      "suites": [
+        "E08",
+        "E04",
+        "E05"
+      ],
+      "status": "measured",
+      "suite_statuses": {
+        "E08": "measured",
+        "E04": "measured",
+        "E05": "measured"
+      }
+    },
+    {
+      "id": "F05",
+      "num": 5,
+      "name": "Attribute Misbinding",
+      "suites": [
+        "E09",
+        "E04"
+      ],
+      "status": "measured",
+      "suite_statuses": {
+        "E09": "measured",
+        "E04": "measured"
+      }
+    },
+    {
+      "id": "F06",
+      "num": 6,
+      "name": "Caption Primacy Bias",
+      "suites": [
+        "E08",
+        "E12"
+      ],
+      "status": "measured",
+      "suite_statuses": {
+        "E08": "measured",
+        "E12": "measured"
+      }
+    },
+    {
+      "id": "F07",
+      "num": 7,
+      "name": "Pseudo-Relative Reasoning",
+      "suites": [
+        "E06",
+        "E01"
+      ],
+      "status": "measured",
+      "suite_statuses": {
+        "E06": "measured",
+        "E01": "measured"
+      }
+    },
+    {
+      "id": "F08",
+      "num": 8,
+      "name": "Geometric Blindness",
+      "suites": [
+        "E04",
+        "E11"
+      ],
+      "status": "measured",
+      "suite_statuses": {
+        "E04": "measured",
+        "E11": "measured"
+      }
+    },
+    {
+      "id": "F09",
+      "num": 9,
+      "name": "Cardinality Blindness",
+      "suites": [
+        "E04",
+        "E11"
+      ],
+      "status": "measured",
+      "suite_statuses": {
+        "E04": "measured",
+        "E11": "measured"
+      }
+    },
+    {
+      "id": "F10",
+      "num": 10,
+      "name": "Fine-Grained Blindness",
+      "suites": [
+        "E11",
+        "E04"
+      ],
+      "status": "measured",
+      "suite_statuses": {
+        "E11": "measured",
+        "E04": "measured"
+      }
+    },
+    {
+      "id": "F11",
+      "num": 11,
+      "name": "Paraphrase Brittleness",
+      "suites": [
+        "E12",
+        "E04"
+      ],
+      "status": "measured",
+      "suite_statuses": {
+        "E12": "measured",
+        "E04": "measured"
+      }
+    },
+    {
+      "id": "F12",
+      "num": 12,
+      "name": "Cross-Category Lock",
+      "suites": [
+        "E13",
+        "E01"
+      ],
+      "status": "measured",
+      "suite_statuses": {
+        "E13": "measured",
+        "E01": "measured"
+      }
+    },
+    {
+      "id": "F13",
+      "num": 13,
+      "name": "Pragmatic Intent Blindness",
+      "suites": [
+        "E13",
+        "E12"
+      ],
+      "status": "measured",
+      "suite_statuses": {
+        "E13": "measured",
+        "E12": "measured"
+      }
+    },
+    {
+      "id": "F14",
+      "num": 14,
+      "name": "Same-Scene Lock",
+      "suites": [
+        "E02",
+        "E17"
+      ],
+      "status": "measured",
+      "suite_statuses": {
+        "E02": "measured",
+        "E17": "measured"
+      }
+    },
+    {
+      "id": "F15",
+      "num": 15,
+      "name": "Large-Scale Retrieval Degradation",
+      "suites": [
+        "E03",
+        "E14"
+      ],
+      "status": "measured",
+      "suite_statuses": {
+        "E03": "measured",
+        "E14": "measured"
+      }
+    },
+    {
+      "id": "F16",
+      "num": 16,
+      "name": "Embedding Hubness",
+      "suites": [
+        "E14",
+        "E03"
+      ],
+      "status": "measured",
+      "suite_statuses": {
+        "E14": "measured",
+        "E03": "measured"
+      }
+    },
+    {
+      "id": "F17",
+      "num": 17,
+      "name": "Uncertainty Blindness",
+      "suites": [
+        "E15"
+      ],
+      "status": "measured",
+      "suite_statuses": {
+        "E15": "measured"
+      }
+    },
+    {
+      "id": "F18",
+      "num": 18,
+      "name": "Negative Transfer & Domain Disparity",
+      "suites": [
+        "E16",
+        "E17"
+      ],
+      "status": "measured",
+      "suite_statuses": {
+        "E16": "measured",
+        "E17": "measured"
+      }
+    },
+    {
+      "id": "F19",
+      "num": 19,
+      "name": "Annotation Noise & False Negative",
+      "suites": [
+        "E18"
+      ],
+      "status": "partial",
+      "suite_statuses": {
+        "E18": "partial_blind_pack_ready_awaiting_human_annotators"
+      }
+    },
+    {
+      "id": "F20",
+      "num": 20,
+      "name": "Open-Ended Difference",
+      "suites": [
+        "E06",
+        "E07"
+      ],
+      "status": "measured",
+      "suite_statuses": {
+        "E06": "measured",
+        "E07": "measured"
+      }
+    },
+    {
+      "id": "F21",
+      "num": 21,
+      "name": "Photo-Presentation Gravity",
+      "suites": [
+        "E10"
+      ],
+      "status": "measured",
+      "suite_statuses": {
+        "E10": "measured"
+      }
+    },
+    {
+      "id": "F22",
+      "num": 22,
+      "name": "Co-Occurring Object Leakage",
+      "suites": [
+        "E10",
+        "E05"
+      ],
+      "status": "measured",
+      "suite_statuses": {
+        "E10": "measured",
+        "E05": "measured"
+      }
+    },
+    {
+      "id": "F23",
+      "num": 23,
+      "name": "Gaze Direction Blindness",
+      "suites": [
+        "E04",
+        "E11"
+      ],
+      "status": "measured",
+      "suite_statuses": {
+        "E04": "measured",
+        "E11": "measured"
+      }
+    },
+    {
+      "id": "F24",
+      "num": 24,
+      "name": "Limb Pose Blindness",
+      "suites": [
+        "E04",
+        "E10"
+      ],
+      "status": "measured",
+      "suite_statuses": {
+        "E04": "measured",
+        "E10": "measured"
+      }
+    },
+    {
+      "id": "F25",
+      "num": 25,
+      "name": "Homophone Hijack",
+      "suites": [
+        "E12",
+        "E04"
+      ],
+      "status": "measured",
+      "suite_statuses": {
+        "E12": "measured",
+        "E04": "measured"
+      }
+    },
+    {
+      "id": "F26",
+      "num": 26,
+      "name": "Gender-Identity Drop",
+      "suites": [
+        "E09",
+        "E08"
+      ],
+      "status": "measured",
+      "suite_statuses": {
+        "E09": "measured",
+        "E08": "measured"
+      }
+    },
+    {
+      "id": "F27",
+      "num": 27,
+      "name": "Visual Edit-Distance Cliff",
+      "suites": [
+        "E01",
+        "E03"
+      ],
+      "status": "measured",
+      "suite_statuses": {
+        "E01": "measured",
+        "E03": "measured"
+      }
+    },
+    {
+      "id": "F28",
+      "num": 28,
+      "name": "BLIP-2 Blind Spot",
+      "suites": [
+        "E04",
+        "E11",
+        "E05"
+      ],
+      "status": "measured",
+      "suite_statuses": {
+        "E04": "measured",
+        "E11": "measured",
+        "E05": "measured"
+      }
+    },
+    {
+      "id": "F29",
+      "num": 29,
+      "name": "Pure Fusion Failure",
+      "suites": [
+        "E05",
+        "E04"
+      ],
+      "status": "measured",
+      "suite_statuses": {
+        "E05": "measured",
+        "E04": "measured"
+      }
+    }
+  ]
+}

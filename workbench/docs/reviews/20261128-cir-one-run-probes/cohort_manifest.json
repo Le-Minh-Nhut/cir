@@ -1,0 +1,1248 @@
+{
+  "schema_version": "1.0.0",
+  "split_tag": "70_10_20_seed42",
+  "cohort_resolution_note": "The repo has two overlapping 15-model definitions plus a 16th model (qure, added Nov 24): (A) run_benchmark_suite.py original 15 EDIR/PinPoint models (all except qure); (B) run_transfer_suite.py FIQ_CHECKPOINTS 15 FashionIQ in-domain author checkpoints (all except mtst_ptha, which only has a CIRR transfer checkpoint). To ensure 100% coverage under every interpretation of the '15 model cohort', this probe run evaluates ALL 16 models on EDIR and PinPoint and ALL 15 in-domain (+1 mtst_ptha CIRR-transfer explicitly tagged) on FashionIQ.",
+  "ambiguous_or_excluded_registry_entries": [
+    {
+      "id": "pair",
+      "status": "excluded_untrained_unresolved",
+      "reason": "Staged checkpoints pair-B1.pt / pair-B2.pt exist, but PAIR has no completed native FashionIQ run in DuckDB, no EDIR/PinPoint in-domain training run, and failed native completeness gate in 20261109-native15-composition-limn/GATES.csv."
+    },
+    {
+      "id": "combiner_rn50x4_noft",
+      "status": "excluded_ablation_subset",
+      "reason": "Frozen-CLIP ablation of clip4cir_rn50x4_fullft on FashionIQ only; not an independent architecture in EDIR/PinPoint benchmark suite."
+    }
+  ],
+  "counts": {
+    "total_evaluated_models": 16,
+    "original_15_bench_models": 15,
+    "fiq_15_indomain_models": 15,
+    "failures_total": 29,
+    "suites_total": 18
+  },
+  "models": [
+    {
+      "key": "clip4cir",
+      "run_id": "clip4cir_rn50x4",
+      "family": "clip",
+      "scorer_type": "single_vec_cosine",
+      "embed_dim": 640,
+      "env_group": "clip4cir",
+      "python": "/home/heheboiz/data/cir/workbench/envs/clip4cir310-sm120-pep610/bin/python",
+      "pythonpath": "/home/heheboiz/data/cir:/home/heheboiz/data/cir/workbench/third_party/CLIP4Cir/src",
+      "in_original_15_bench": true,
+      "in_fiq_15_indomain": true,
+      "result_field": "final_clip4cir_test",
+      "supports_res_interp": false,
+      "native_resolution": 288,
+      "notes": "CLIP RN50x4 + Combiner MLP; native resolution 288x288.",
+      "python_exists": true,
+      "checkpoints": {
+        "edir": {
+          "model_key": "clip4cir",
+          "dataset": "edir",
+          "protocol": "in_domain",
+          "variant": "edir_id_best",
+          "ckpts": [
+            "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/edir/70_10_20_seed42/clip4cir_rn50x4/best_stage1_clip.pt",
+            "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/edir/70_10_20_seed42/clip4cir_rn50x4/best_stage2_combiner.pt"
+          ],
+          "all_exist": true,
+          "run_dir": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/edir/70_10_20_seed42/clip4cir_rn50x4",
+          "test_results_json": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/edir/70_10_20_seed42/clip4cir_rn50x4/test_results.json",
+          "test_preds_json": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/edir/70_10_20_seed42/clip4cir_rn50x4/test_predictions_top50.json",
+          "history_jsonl": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/edir/70_10_20_seed42/clip4cir_rn50x4/history.jsonl"
+        },
+        "pinpoint": {
+          "model_key": "clip4cir",
+          "dataset": "pinpoint",
+          "protocol": "in_domain",
+          "variant": "pinpoint_id_best",
+          "ckpts": [
+            "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/pinpoint/70_10_20_seed42/clip4cir_rn50x4/best_stage1_clip.pt",
+            "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/pinpoint/70_10_20_seed42/clip4cir_rn50x4/best_stage2_combiner.pt"
+          ],
+          "all_exist": true,
+          "run_dir": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/pinpoint/70_10_20_seed42/clip4cir_rn50x4",
+          "test_results_json": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/pinpoint/70_10_20_seed42/clip4cir_rn50x4/test_results.json",
+          "test_preds_json": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/pinpoint/70_10_20_seed42/clip4cir_rn50x4/test_predictions_top50.json",
+          "history_jsonl": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/pinpoint/70_10_20_seed42/clip4cir_rn50x4/history.jsonl"
+        },
+        "fashioniq": {
+          "variant": "fiq_clean",
+          "protocol": "in_domain",
+          "ckpts": [
+            "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/checkpoints/clip4cir/FashionIQ/RN50x4_fullft/fiq_clip_RN50x4_fullft.pt",
+            "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/checkpoints/clip4cir/FashionIQ/RN50x4_fullft/fiq_comb_RN50x4_fullft.pt"
+          ],
+          "model_key": "clip4cir",
+          "dataset": "fashioniq",
+          "all_exist": true
+        }
+      }
+    },
+    {
+      "key": "encoder",
+      "run_id": "encoder_vitb32",
+      "family": "clip",
+      "scorer_type": "single_vec_cosine",
+      "embed_dim": 512,
+      "env_group": "encoder",
+      "python": "/home/heheboiz/data/cir/workbench/envs/encoder310-adapted/bin/python",
+      "pythonpath": "/home/heheboiz/data/cir:/home/heheboiz/data/cir/workbench/third_party/ENCODER",
+      "in_original_15_bench": true,
+      "in_fiq_15_indomain": true,
+      "result_field": "final_encoder_test",
+      "supports_res_interp": true,
+      "native_resolution": 224,
+      "notes": "OpenCLIP ViT-B/32 + Entity/Action BindingDecoder.",
+      "python_exists": true,
+      "checkpoints": {
+        "edir": {
+          "model_key": "encoder",
+          "dataset": "edir",
+          "protocol": "in_domain",
+          "variant": "edir_id_best",
+          "ckpts": [
+            "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/edir/70_10_20_seed42/encoder_vitb32/best_encoder.pt"
+          ],
+          "all_exist": true,
+          "run_dir": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/edir/70_10_20_seed42/encoder_vitb32",
+          "test_results_json": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/edir/70_10_20_seed42/encoder_vitb32/test_results.json",
+          "test_preds_json": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/edir/70_10_20_seed42/encoder_vitb32/test_predictions_top50.json",
+          "history_jsonl": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/edir/70_10_20_seed42/encoder_vitb32/history.jsonl"
+        },
+        "pinpoint": {
+          "model_key": "encoder",
+          "dataset": "pinpoint",
+          "protocol": "in_domain",
+          "variant": "pinpoint_id_best",
+          "ckpts": [
+            "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/pinpoint/70_10_20_seed42/encoder_vitb32/best_encoder.pt"
+          ],
+          "all_exist": true,
+          "run_dir": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/pinpoint/70_10_20_seed42/encoder_vitb32",
+          "test_results_json": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/pinpoint/70_10_20_seed42/encoder_vitb32/test_results.json",
+          "test_preds_json": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/pinpoint/70_10_20_seed42/encoder_vitb32/test_predictions_top50.json",
+          "history_jsonl": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/pinpoint/70_10_20_seed42/encoder_vitb32/history.jsonl"
+        },
+        "fashioniq": {
+          "variant": "fiq_clean",
+          "protocol": "in_domain",
+          "ckpts": [
+            "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/encoder/fashioniq.pt"
+          ],
+          "model_key": "encoder",
+          "dataset": "fashioniq",
+          "all_exist": true
+        }
+      }
+    },
+    {
+      "key": "tgcir",
+      "run_id": "tgcir_vitb16",
+      "family": "clip",
+      "scorer_type": "single_vec_cosine",
+      "embed_dim": 512,
+      "env_group": "tgcir",
+      "python": "/home/heheboiz/data/cir/workbench/envs/tgcir39-la/bin/python",
+      "pythonpath": "/home/heheboiz/data/cir:/home/heheboiz/data/cir/workbench/third_party/TGCIR",
+      "in_original_15_bench": true,
+      "in_fiq_15_indomain": true,
+      "result_field": "final_tgcir_test",
+      "supports_res_interp": true,
+      "native_resolution": 224,
+      "notes": "CLIP ViT-B/16 + Target-Guided composition.",
+      "python_exists": true,
+      "checkpoints": {
+        "edir": {
+          "model_key": "tgcir",
+          "dataset": "edir",
+          "protocol": "in_domain",
+          "variant": "edir_id_best",
+          "ckpts": [
+            "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/edir/70_10_20_seed42/tgcir_vitb16/best_tgcir.pt"
+          ],
+          "all_exist": true,
+          "run_dir": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/edir/70_10_20_seed42/tgcir_vitb16",
+          "test_results_json": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/edir/70_10_20_seed42/tgcir_vitb16/test_results.json",
+          "test_preds_json": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/edir/70_10_20_seed42/tgcir_vitb16/test_predictions_top50.json",
+          "history_jsonl": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/edir/70_10_20_seed42/tgcir_vitb16/history.jsonl"
+        },
+        "pinpoint": {
+          "model_key": "tgcir",
+          "dataset": "pinpoint",
+          "protocol": "in_domain",
+          "variant": "pinpoint_id_best",
+          "ckpts": [
+            "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/pinpoint/70_10_20_seed42/tgcir_vitb16/best_tgcir.pt"
+          ],
+          "all_exist": true,
+          "run_dir": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/pinpoint/70_10_20_seed42/tgcir_vitb16",
+          "test_results_json": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/pinpoint/70_10_20_seed42/tgcir_vitb16/test_results.json",
+          "test_preds_json": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/pinpoint/70_10_20_seed42/tgcir_vitb16/test_predictions_top50.json",
+          "history_jsonl": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/pinpoint/70_10_20_seed42/tgcir_vitb16/history.jsonl"
+        },
+        "fashioniq": {
+          "variant": "fiq_clean",
+          "protocol": "in_domain",
+          "ckpts": [
+            "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/downloads/tgcir/x/checkpoints/Fashioniq.pt"
+          ],
+          "model_key": "tgcir",
+          "dataset": "fashioniq",
+          "all_exist": true
+        }
+      }
+    },
+    {
+      "key": "limn",
+      "run_id": "limn_vitl14",
+      "family": "clip",
+      "scorer_type": "single_vec_cosine",
+      "embed_dim": 768,
+      "env_group": "limn",
+      "python": "/home/heheboiz/data/cir/workbench/envs/limn310-adapted/bin/python",
+      "pythonpath": "/home/heheboiz/data/cir:/home/heheboiz/data/cir/workbench/third_party/LIMN/LIMN",
+      "in_original_15_bench": true,
+      "in_fiq_15_indomain": true,
+      "result_field": "final_limn_test",
+      "supports_res_interp": true,
+      "native_resolution": 224,
+      "notes": "OpenCLIP ViT-L/14 DataComp-XL + LIMN prefix tokens (3 category heads on FIQ).",
+      "python_exists": true,
+      "checkpoints": {
+        "edir": {
+          "model_key": "limn",
+          "dataset": "edir",
+          "protocol": "in_domain",
+          "variant": "edir_id_best",
+          "ckpts": [
+            "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/edir/70_10_20_seed42/limn_vitl14/best_limn.pt"
+          ],
+          "all_exist": true,
+          "run_dir": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/edir/70_10_20_seed42/limn_vitl14",
+          "test_results_json": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/edir/70_10_20_seed42/limn_vitl14/test_results.json",
+          "test_preds_json": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/edir/70_10_20_seed42/limn_vitl14/test_predictions_top50.json",
+          "history_jsonl": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/edir/70_10_20_seed42/limn_vitl14/history.jsonl"
+        },
+        "pinpoint": {
+          "model_key": "limn",
+          "dataset": "pinpoint",
+          "protocol": "in_domain",
+          "variant": "pinpoint_id_best",
+          "ckpts": [
+            "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/pinpoint/70_10_20_seed42/limn_vitl14/best_limn.pt"
+          ],
+          "all_exist": true,
+          "run_dir": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/pinpoint/70_10_20_seed42/limn_vitl14",
+          "test_results_json": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/pinpoint/70_10_20_seed42/limn_vitl14/test_results.json",
+          "test_preds_json": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/pinpoint/70_10_20_seed42/limn_vitl14/test_predictions_top50.json",
+          "history_jsonl": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/pinpoint/70_10_20_seed42/limn_vitl14/history.jsonl"
+        },
+        "fashioniq": {
+          "variant": "fiq_3head_per_cat",
+          "protocol": "in_domain",
+          "per_category": {
+            "dress": {
+              "dt_id": 0,
+              "ckpt": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/limn/0_dress_best_model.pt"
+            },
+            "shirt": {
+              "dt_id": 1,
+              "ckpt": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/limn/0_shirt_best_model.pt"
+            },
+            "toptee": {
+              "dt_id": 2,
+              "ckpt": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/limn/0_toptee_best_model.pt"
+            }
+          },
+          "ckpts": [
+            "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/limn/0_dress_best_model.pt",
+            "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/limn/0_shirt_best_model.pt",
+            "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/limn/0_toptee_best_model.pt"
+          ],
+          "model_key": "limn",
+          "dataset": "fashioniq",
+          "all_exist": true
+        }
+      }
+    },
+    {
+      "key": "clvcnet",
+      "run_id": "clvcnet_resnet50",
+      "family": "classic",
+      "scorer_type": "single_vec_cosine",
+      "embed_dim": 1024,
+      "env_group": "clvcnet",
+      "python": "/home/heheboiz/data/cir/workbench/envs/clvc39-la/bin/python",
+      "pythonpath": "/home/heheboiz/data/cir:/home/heheboiz/data/cir/workbench/third_party/CLVCNet",
+      "in_original_15_bench": true,
+      "in_fiq_15_indomain": true,
+      "result_field": "final_clvcnet_test",
+      "supports_res_interp": true,
+      "native_resolution": 224,
+      "notes": "Dual ResNet50 + LSTM local/global mutual learning (concat 512+512=1024).",
+      "python_exists": true,
+      "checkpoints": {
+        "edir": {
+          "model_key": "clvcnet",
+          "dataset": "edir",
+          "protocol": "in_domain",
+          "variant": "edir_id_best",
+          "ckpts": [
+            "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/edir/70_10_20_seed42/clvcnet_resnet50/best_clvcnet.pt"
+          ],
+          "all_exist": true,
+          "run_dir": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/edir/70_10_20_seed42/clvcnet_resnet50",
+          "test_results_json": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/edir/70_10_20_seed42/clvcnet_resnet50/test_results.json",
+          "test_preds_json": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/edir/70_10_20_seed42/clvcnet_resnet50/test_predictions_top50.json",
+          "history_jsonl": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/edir/70_10_20_seed42/clvcnet_resnet50/history.jsonl"
+        },
+        "pinpoint": {
+          "model_key": "clvcnet",
+          "dataset": "pinpoint",
+          "protocol": "in_domain",
+          "variant": "pinpoint_id_best",
+          "ckpts": [
+            "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/pinpoint/70_10_20_seed42/clvcnet_resnet50/best_clvcnet.pt"
+          ],
+          "all_exist": true,
+          "run_dir": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/pinpoint/70_10_20_seed42/clvcnet_resnet50",
+          "test_results_json": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/pinpoint/70_10_20_seed42/clvcnet_resnet50/test_results.json",
+          "test_preds_json": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/pinpoint/70_10_20_seed42/clvcnet_resnet50/test_predictions_top50.json",
+          "history_jsonl": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/pinpoint/70_10_20_seed42/clvcnet_resnet50/history.jsonl"
+        },
+        "fashioniq": {
+          "variant": "fiq_3head_per_cat",
+          "protocol": "in_domain",
+          "per_category": {
+            "dress": {
+              "local": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/checkpoints/clvc/dress_local_model.pt",
+              "global": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/checkpoints/clvc/dress_global_model.pt"
+            },
+            "shirt": {
+              "local": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/checkpoints/clvc/shirt_local_model.pt",
+              "global": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/checkpoints/clvc/shirt_global_model.pt"
+            },
+            "toptee": {
+              "local": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/checkpoints/clvc/toptee_local_model.pt",
+              "global": "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/checkpoints/clvc/toptee_global_model.pt"
+            }
+          },
+          "ckpts": [
+            "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/checkpoints/clvc/dress_local_model.pt",
+            "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/checkpoints/clvc/dress_global_model.pt",
+            "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/checkpoints/clvc/shirt_local_model.pt",
+            "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/checkpoints/clvc/shirt_global_model.pt",
+            "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/checkpoints/clvc/toptee_local_model.pt",
+            "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/checkpoints/clvc/toptee_global_model.pt"
+          ],
+          "model_key": "clvcnet",
+          "dataset": "fashioniq",
+          "all_exist": true
+        }
+      }
+    },
+    {
+      "key": "dcnet",
+      "run_id": "dcnet_resnet50",
+      "family": "classic",
+      "scorer_type": "dcnet_7expert_logsoftmax",
+      "embed_dim": 1024,
+      "env_group": "dcnet",
+      "python": "/home/heheboiz/data/cir/workbench/envs/dcnet310-sm120/bin/python",
+      "pythonpath": "/home/heheboiz/data/cir:/home/heheboiz/data/cir/workbench/third_party/DCNet",
+      "in_original_15_bench": true,
+      "in_fiq_15_indomain": true,
+      "result_field": "final_dcnet_test",
+      "supports_res_interp": false,
+      "native_resolution": 224,
+      "notes": "ResNet50 + GloVe 300d + 7-expert TIRG/FusDiff full-gallery log_softmax scorer.",
+      "python_exists": true,
+      "checkpoints": {
+        "edir": {
+          "model_key": "dcnet",
+          "dataset": "edir",
+          "protocol": "in_domain",
+          "variant": "edir_id_best",
+          "ckpts": [
+            "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/edir/70_10_20_seed42/dcnet_resnet50/best_dcnet.pt"
+          ],
+          "all_exist": true,
+          "run_dir": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/edir/70_10_20_seed42/dcnet_resnet50",
+          "test_results_json": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/edir/70_10_20_seed42/dcnet_resnet50/test_results.json",
+          "test_preds_json": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/edir/70_10_20_seed42/dcnet_resnet50/test_predictions_top50.json",
+          "history_jsonl": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/edir/70_10_20_seed42/dcnet_resnet50/history.jsonl",
+          "glove_vocab": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/edir/70_10_20_seed42/dcnet_resnet50/glove_vocab_edir_70_10_20_seed42.pkl"
+        },
+        "pinpoint": {
+          "model_key": "dcnet",
+          "dataset": "pinpoint",
+          "protocol": "in_domain",
+          "variant": "pinpoint_id_best",
+          "ckpts": [
+            "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/pinpoint/70_10_20_seed42/dcnet_resnet50/best_dcnet.pt"
+          ],
+          "all_exist": true,
+          "run_dir": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/pinpoint/70_10_20_seed42/dcnet_resnet50",
+          "test_results_json": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/pinpoint/70_10_20_seed42/dcnet_resnet50/test_results.json",
+          "test_preds_json": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/pinpoint/70_10_20_seed42/dcnet_resnet50/test_predictions_top50.json",
+          "history_jsonl": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/pinpoint/70_10_20_seed42/dcnet_resnet50/history.jsonl",
+          "glove_vocab": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/pinpoint/70_10_20_seed42/dcnet_resnet50/glove_vocab_pinpoint_70_10_20_seed42.pkl"
+        },
+        "fashioniq": {
+          "variant": "fiq_clean",
+          "protocol": "in_domain",
+          "ckpts": [
+            "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/checkpoints/dcnet/trained_model.pth"
+          ],
+          "model_key": "dcnet",
+          "dataset": "fashioniq",
+          "all_exist": true
+        }
+      }
+    },
+    {
+      "key": "qure",
+      "run_id": "qure_vitl",
+      "family": "blip2_vitl",
+      "scorer_type": "multivec_maxsim_32x256",
+      "embed_dim": 256,
+      "env_group": "qure",
+      "python": "/home/heheboiz/data/cir/workbench/envs/qure310-sm120/bin/python",
+      "pythonpath": "/home/heheboiz/data/cir:/home/heheboiz/data/cir/workbench/third_party/QuRe",
+      "in_original_15_bench": false,
+      "in_fiq_15_indomain": true,
+      "result_field": "final_qure_test",
+      "supports_res_interp": true,
+      "native_resolution": 224,
+      "notes": "BLIP-2 ViT-L + Q-Former pairwise KL reward + hard-negative mining (ICML 2025).",
+      "python_exists": true,
+      "checkpoints": {
+        "edir": {
+          "model_key": "qure",
+          "dataset": "edir",
+          "protocol": "in_domain",
+          "variant": "edir_id_best",
+          "ckpts": [
+            "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/edir/70_10_20_seed42/qure_vitl/best_qure.pt"
+          ],
+          "all_exist": true,
+          "run_dir": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/edir/70_10_20_seed42/qure_vitl",
+          "test_results_json": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/edir/70_10_20_seed42/qure_vitl/test_results.json",
+          "test_preds_json": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/edir/70_10_20_seed42/qure_vitl/test_predictions_top50.json",
+          "history_jsonl": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/edir/70_10_20_seed42/qure_vitl/history.jsonl",
+          "backbone": "pretrain_vitL"
+        },
+        "pinpoint": {
+          "model_key": "qure",
+          "dataset": "pinpoint",
+          "protocol": "in_domain",
+          "variant": "pinpoint_id_best",
+          "ckpts": [
+            "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/pinpoint/70_10_20_seed42/qure_vitl/best_qure.pt"
+          ],
+          "all_exist": true,
+          "run_dir": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/pinpoint/70_10_20_seed42/qure_vitl",
+          "test_results_json": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/pinpoint/70_10_20_seed42/qure_vitl/test_results.json",
+          "test_preds_json": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/pinpoint/70_10_20_seed42/qure_vitl/test_predictions_top50.json",
+          "history_jsonl": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/pinpoint/70_10_20_seed42/qure_vitl/history.jsonl",
+          "backbone": "pretrain_vitL"
+        },
+        "fashioniq": {
+          "variant": "fiq_vitl_repro",
+          "protocol": "in_domain",
+          "backbone": "pretrain_vitL",
+          "ckpts": [
+            "/home/heheboiz/data/cir/workbench/artifacts/qure_checkpoints/fashioniq/best_model.pth"
+          ],
+          "model_key": "qure",
+          "dataset": "fashioniq",
+          "all_exist": true
+        }
+      }
+    },
+    {
+      "key": "sprc",
+      "run_id": "sprc_pretrain",
+      "family": "blip2_evag",
+      "scorer_type": "multivec_maxsim_32x256",
+      "embed_dim": 256,
+      "env_group": "sprc",
+      "python": "/home/heheboiz/data/cir/workbench/envs/sprc310-sm120/bin/python",
+      "pythonpath": "/home/heheboiz/data/cir:/home/heheboiz/data/cir/workbench/third_party/SPRC/src",
+      "in_original_15_bench": true,
+      "in_fiq_15_indomain": true,
+      "result_field": "final_sprc_test",
+      "supports_res_interp": true,
+      "native_resolution": 224,
+      "notes": "BLIP-2 two-pass Q-Former alignment prompt (EVA-ViT-g on EDIR/PP; ViT-L on FIQ author ckpt).",
+      "python_exists": true,
+      "checkpoints": {
+        "edir": {
+          "model_key": "sprc",
+          "dataset": "edir",
+          "protocol": "in_domain",
+          "variant": "edir_id_best",
+          "ckpts": [
+            "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/edir/70_10_20_seed42/sprc_pretrain/best_sprc.pt"
+          ],
+          "all_exist": true,
+          "run_dir": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/edir/70_10_20_seed42/sprc_pretrain",
+          "test_results_json": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/edir/70_10_20_seed42/sprc_pretrain/test_results.json",
+          "test_preds_json": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/edir/70_10_20_seed42/sprc_pretrain/test_predictions_top50.json",
+          "history_jsonl": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/edir/70_10_20_seed42/sprc_pretrain/history.jsonl",
+          "backbone": "pretrain"
+        },
+        "pinpoint": {
+          "model_key": "sprc",
+          "dataset": "pinpoint",
+          "protocol": "in_domain",
+          "variant": "pinpoint_id_best",
+          "ckpts": [
+            "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/pinpoint/70_10_20_seed42/sprc_pretrain/best_sprc.pt"
+          ],
+          "all_exist": true,
+          "run_dir": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/pinpoint/70_10_20_seed42/sprc_pretrain",
+          "test_results_json": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/pinpoint/70_10_20_seed42/sprc_pretrain/test_results.json",
+          "test_preds_json": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/pinpoint/70_10_20_seed42/sprc_pretrain/test_predictions_top50.json",
+          "history_jsonl": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/pinpoint/70_10_20_seed42/sprc_pretrain/history.jsonl",
+          "backbone": "pretrain"
+        },
+        "fashioniq": {
+          "variant": "fiq_vitl_clean",
+          "protocol": "in_domain",
+          "backbone": "pretrain_vitL",
+          "ckpts": [
+            "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/checkpoints/sprc/sprc_fiq_vitl.pt"
+          ],
+          "model_key": "sprc",
+          "dataset": "fashioniq",
+          "all_exist": true
+        }
+      }
+    },
+    {
+      "key": "mtst_ptha",
+      "run_id": "mtst_ptha_blip2",
+      "family": "blip2_evag",
+      "scorer_type": "multivec_maxsim_32x256",
+      "embed_dim": 256,
+      "env_group": "cir_evag",
+      "python": "/home/heheboiz/data/cir/workbench/artifacts/environments/cir-005ef4e1b02999a5/bin/python",
+      "pythonpath": "/home/heheboiz/data/cir:/home/heheboiz/data/cir/workbench/third_party/MTST_PTHA/MTST_PTHA/src",
+      "in_original_15_bench": true,
+      "in_fiq_15_indomain": false,
+      "result_field": "final_mtst_ptha_test",
+      "supports_res_interp": true,
+      "native_resolution": 224,
+      "notes": "BLIP-2 EVA-ViT-g two-pass Q-Former cat mean-33; CIRR-transfer only on FIQ.",
+      "python_exists": true,
+      "checkpoints": {
+        "edir": {
+          "model_key": "mtst_ptha",
+          "dataset": "edir",
+          "protocol": "in_domain",
+          "variant": "edir_id_best",
+          "ckpts": [
+            "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/edir/70_10_20_seed42/mtst_ptha_blip2/best_mtst_ptha.pt"
+          ],
+          "all_exist": true,
+          "run_dir": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/edir/70_10_20_seed42/mtst_ptha_blip2",
+          "test_results_json": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/edir/70_10_20_seed42/mtst_ptha_blip2/test_results.json",
+          "test_preds_json": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/edir/70_10_20_seed42/mtst_ptha_blip2/test_predictions_top50.json",
+          "history_jsonl": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/edir/70_10_20_seed42/mtst_ptha_blip2/history.jsonl"
+        },
+        "pinpoint": {
+          "model_key": "mtst_ptha",
+          "dataset": "pinpoint",
+          "protocol": "in_domain",
+          "variant": "pinpoint_id_best",
+          "ckpts": [
+            "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/pinpoint/70_10_20_seed42/mtst_ptha_blip2/best_mtst_ptha.pt"
+          ],
+          "all_exist": true,
+          "run_dir": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/pinpoint/70_10_20_seed42/mtst_ptha_blip2",
+          "test_results_json": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/pinpoint/70_10_20_seed42/mtst_ptha_blip2/test_results.json",
+          "test_preds_json": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/pinpoint/70_10_20_seed42/mtst_ptha_blip2/test_predictions_top50.json",
+          "history_jsonl": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/pinpoint/70_10_20_seed42/mtst_ptha_blip2/history.jsonl"
+        },
+        "fashioniq": {
+          "variant": "cirr_transfer",
+          "protocol": "cirr_to_fiq_transfer_only",
+          "ckpts": [
+            "/home/heheboiz/data/cir/workbench/artifacts/cirr_checkpoints/mtst_ptha/tuned_mtst_cirr.pt"
+          ],
+          "model_key": "mtst_ptha",
+          "dataset": "fashioniq",
+          "all_exist": true
+        }
+      }
+    },
+    {
+      "key": "csmcir",
+      "run_id": "csmcir_blip2",
+      "family": "blip2_evag",
+      "scorer_type": "multivec_maxsim_32x256",
+      "embed_dim": 256,
+      "env_group": "cir_evag",
+      "python": "/home/heheboiz/data/cir/workbench/artifacts/environments/cir-005ef4e1b02999a5/bin/python",
+      "pythonpath": "/home/heheboiz/data/cir:/home/heheboiz/data/cir/workbench/third_party/CSMCIR/src",
+      "in_original_15_bench": true,
+      "in_fiq_15_indomain": true,
+      "result_field": "final_csmcir_test",
+      "supports_res_interp": true,
+      "native_resolution": 224,
+      "notes": "BLIP-2 EVA-ViT-g single-pass Q-Former + memory bank.",
+      "python_exists": true,
+      "checkpoints": {
+        "edir": {
+          "model_key": "csmcir",
+          "dataset": "edir",
+          "protocol": "in_domain",
+          "variant": "edir_id_best",
+          "ckpts": [
+            "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/edir/70_10_20_seed42/csmcir_blip2/best_csmcir.pt"
+          ],
+          "all_exist": true,
+          "run_dir": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/edir/70_10_20_seed42/csmcir_blip2",
+          "test_results_json": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/edir/70_10_20_seed42/csmcir_blip2/test_results.json",
+          "test_preds_json": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/edir/70_10_20_seed42/csmcir_blip2/test_predictions_top50.json",
+          "history_jsonl": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/edir/70_10_20_seed42/csmcir_blip2/history.jsonl"
+        },
+        "pinpoint": {
+          "model_key": "csmcir",
+          "dataset": "pinpoint",
+          "protocol": "in_domain",
+          "variant": "pinpoint_id_best",
+          "ckpts": [
+            "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/pinpoint/70_10_20_seed42/csmcir_blip2/best_csmcir.pt"
+          ],
+          "all_exist": true,
+          "run_dir": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/pinpoint/70_10_20_seed42/csmcir_blip2",
+          "test_results_json": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/pinpoint/70_10_20_seed42/csmcir_blip2/test_results.json",
+          "test_preds_json": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/pinpoint/70_10_20_seed42/csmcir_blip2/test_predictions_top50.json",
+          "history_jsonl": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/pinpoint/70_10_20_seed42/csmcir_blip2/history.jsonl"
+        },
+        "fashioniq": {
+          "variant": "fiq_clean",
+          "protocol": "in_domain",
+          "ckpts": [
+            "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/csmcir/fashioniq_tuned_clip_best.pt"
+          ],
+          "model_key": "csmcir",
+          "dataset": "fashioniq",
+          "all_exist": true
+        }
+      }
+    },
+    {
+      "key": "hint",
+      "run_id": "hint_blip2",
+      "family": "blip2_evag",
+      "scorer_type": "multivec_maxsim_32x256",
+      "embed_dim": 256,
+      "env_group": "ilearn_evag",
+      "python": "/home/heheboiz/data/cir/workbench/envs/ilearn39-adapted/bin/python",
+      "pythonpath": "/home/heheboiz/data/cir:/home/heheboiz/data/cir/workbench/third_party/HINT",
+      "in_original_15_bench": true,
+      "in_fiq_15_indomain": true,
+      "result_field": "final_hint_test",
+      "supports_res_interp": true,
+      "native_resolution": 224,
+      "notes": "iLearn BLIP-2 EVA-ViT-g HINT.",
+      "python_exists": true,
+      "checkpoints": {
+        "edir": {
+          "model_key": "hint",
+          "dataset": "edir",
+          "protocol": "in_domain",
+          "variant": "edir_id_best",
+          "ckpts": [
+            "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/edir/70_10_20_seed42/hint_blip2/best_hint.pt"
+          ],
+          "all_exist": true,
+          "run_dir": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/edir/70_10_20_seed42/hint_blip2",
+          "test_results_json": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/edir/70_10_20_seed42/hint_blip2/test_results.json",
+          "test_preds_json": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/edir/70_10_20_seed42/hint_blip2/test_predictions_top50.json",
+          "history_jsonl": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/edir/70_10_20_seed42/hint_blip2/history.jsonl"
+        },
+        "pinpoint": {
+          "model_key": "hint",
+          "dataset": "pinpoint",
+          "protocol": "in_domain",
+          "variant": "pinpoint_id_best",
+          "ckpts": [
+            "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/pinpoint/70_10_20_seed42/hint_blip2/best_hint.pt"
+          ],
+          "all_exist": true,
+          "run_dir": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/pinpoint/70_10_20_seed42/hint_blip2",
+          "test_results_json": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/pinpoint/70_10_20_seed42/hint_blip2/test_results.json",
+          "test_preds_json": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/pinpoint/70_10_20_seed42/hint_blip2/test_predictions_top50.json",
+          "history_jsonl": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/pinpoint/70_10_20_seed42/hint_blip2/history.jsonl"
+        },
+        "fashioniq": {
+          "variant": "fiq_clean",
+          "protocol": "in_domain",
+          "ckpts": [
+            "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/hint/fashioniq.pt"
+          ],
+          "model_key": "hint",
+          "dataset": "fashioniq",
+          "all_exist": true
+        }
+      }
+    },
+    {
+      "key": "habit",
+      "run_id": "habit_blip2",
+      "family": "blip2_evag",
+      "scorer_type": "multivec_maxsim_32x256",
+      "embed_dim": 256,
+      "env_group": "ilearn_evag",
+      "python": "/home/heheboiz/data/cir/workbench/envs/ilearn39-adapted/bin/python",
+      "pythonpath": "/home/heheboiz/data/cir:/home/heheboiz/data/cir/workbench/third_party/HABIT",
+      "in_original_15_bench": true,
+      "in_fiq_15_indomain": true,
+      "result_field": "final_habit_test",
+      "supports_res_interp": true,
+      "native_resolution": 224,
+      "notes": "iLearn BLIP-2 EVA-ViT-g HABIT (FIQ author ckpt trained with 20% synthetic noise).",
+      "python_exists": true,
+      "checkpoints": {
+        "edir": {
+          "model_key": "habit",
+          "dataset": "edir",
+          "protocol": "in_domain",
+          "variant": "edir_id_best",
+          "ckpts": [
+            "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/edir/70_10_20_seed42/habit_blip2/best_habit.pt"
+          ],
+          "all_exist": true,
+          "run_dir": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/edir/70_10_20_seed42/habit_blip2",
+          "test_results_json": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/edir/70_10_20_seed42/habit_blip2/test_results.json",
+          "test_preds_json": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/edir/70_10_20_seed42/habit_blip2/test_predictions_top50.json",
+          "history_jsonl": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/edir/70_10_20_seed42/habit_blip2/history.jsonl"
+        },
+        "pinpoint": {
+          "model_key": "habit",
+          "dataset": "pinpoint",
+          "protocol": "in_domain",
+          "variant": "pinpoint_id_best",
+          "ckpts": [
+            "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/pinpoint/70_10_20_seed42/habit_blip2/best_habit.pt"
+          ],
+          "all_exist": true,
+          "run_dir": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/pinpoint/70_10_20_seed42/habit_blip2",
+          "test_results_json": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/pinpoint/70_10_20_seed42/habit_blip2/test_results.json",
+          "test_preds_json": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/pinpoint/70_10_20_seed42/habit_blip2/test_predictions_top50.json",
+          "history_jsonl": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/pinpoint/70_10_20_seed42/habit_blip2/history.jsonl"
+        },
+        "fashioniq": {
+          "variant": "fiq_n02",
+          "protocol": "in_domain_noisy_20pct",
+          "ckpts": [
+            "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/habit/HABIT-FIQ_N0.2.pt"
+          ],
+          "model_key": "habit",
+          "dataset": "fashioniq",
+          "all_exist": true
+        }
+      }
+    },
+    {
+      "key": "intent",
+      "run_id": "intent_blip2",
+      "family": "blip2_evag",
+      "scorer_type": "multivec_maxsim_32x256",
+      "embed_dim": 256,
+      "env_group": "ilearn_evag",
+      "python": "/home/heheboiz/data/cir/workbench/envs/ilearn39-adapted/bin/python",
+      "pythonpath": "/home/heheboiz/data/cir:/home/heheboiz/data/cir/workbench/third_party/INTENT",
+      "in_original_15_bench": true,
+      "in_fiq_15_indomain": true,
+      "result_field": "final_intent_test",
+      "supports_res_interp": true,
+      "native_resolution": 224,
+      "notes": "iLearn BLIP-2 EVA-ViT-g INTENT (FIQ author ckpt trained with 20% synthetic noise).",
+      "python_exists": true,
+      "checkpoints": {
+        "edir": {
+          "model_key": "intent",
+          "dataset": "edir",
+          "protocol": "in_domain",
+          "variant": "edir_id_best",
+          "ckpts": [
+            "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/edir/70_10_20_seed42/intent_blip2/best_intent.pt"
+          ],
+          "all_exist": true,
+          "run_dir": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/edir/70_10_20_seed42/intent_blip2",
+          "test_results_json": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/edir/70_10_20_seed42/intent_blip2/test_results.json",
+          "test_preds_json": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/edir/70_10_20_seed42/intent_blip2/test_predictions_top50.json",
+          "history_jsonl": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/edir/70_10_20_seed42/intent_blip2/history.jsonl"
+        },
+        "pinpoint": {
+          "model_key": "intent",
+          "dataset": "pinpoint",
+          "protocol": "in_domain",
+          "variant": "pinpoint_id_best",
+          "ckpts": [
+            "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/pinpoint/70_10_20_seed42/intent_blip2/best_intent.pt"
+          ],
+          "all_exist": true,
+          "run_dir": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/pinpoint/70_10_20_seed42/intent_blip2",
+          "test_results_json": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/pinpoint/70_10_20_seed42/intent_blip2/test_results.json",
+          "test_preds_json": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/pinpoint/70_10_20_seed42/intent_blip2/test_predictions_top50.json",
+          "history_jsonl": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/pinpoint/70_10_20_seed42/intent_blip2/history.jsonl"
+        },
+        "fashioniq": {
+          "variant": "fiq_n02",
+          "protocol": "in_domain_noisy_20pct",
+          "ckpts": [
+            "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/intent/intent_fiq_0.2.pt"
+          ],
+          "model_key": "intent",
+          "dataset": "fashioniq",
+          "all_exist": true
+        }
+      }
+    },
+    {
+      "key": "conesep",
+      "run_id": "conesep_blip2",
+      "family": "blip2_evag",
+      "scorer_type": "multivec_maxsim_32x256",
+      "embed_dim": 256,
+      "env_group": "ilearn_evag",
+      "python": "/home/heheboiz/data/cir/workbench/envs/ilearn39-adapted/bin/python",
+      "pythonpath": "/home/heheboiz/data/cir:/home/heheboiz/data/cir/workbench/third_party/ConeSep",
+      "in_original_15_bench": true,
+      "in_fiq_15_indomain": true,
+      "result_field": "final_conesep_test",
+      "supports_res_interp": true,
+      "native_resolution": 224,
+      "notes": "iLearn BLIP-2 EVA-ViT-g ConeSep (FIQ author ckpt trained with 20% synthetic noise).",
+      "python_exists": true,
+      "checkpoints": {
+        "edir": {
+          "model_key": "conesep",
+          "dataset": "edir",
+          "protocol": "in_domain",
+          "variant": "edir_id_best",
+          "ckpts": [
+            "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/edir/70_10_20_seed42/conesep_blip2/best_conesep.pt"
+          ],
+          "all_exist": true,
+          "run_dir": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/edir/70_10_20_seed42/conesep_blip2",
+          "test_results_json": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/edir/70_10_20_seed42/conesep_blip2/test_results.json",
+          "test_preds_json": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/edir/70_10_20_seed42/conesep_blip2/test_predictions_top50.json",
+          "history_jsonl": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/edir/70_10_20_seed42/conesep_blip2/history.jsonl"
+        },
+        "pinpoint": {
+          "model_key": "conesep",
+          "dataset": "pinpoint",
+          "protocol": "in_domain",
+          "variant": "pinpoint_id_best",
+          "ckpts": [
+            "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/pinpoint/70_10_20_seed42/conesep_blip2/best_conesep.pt"
+          ],
+          "all_exist": true,
+          "run_dir": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/pinpoint/70_10_20_seed42/conesep_blip2",
+          "test_results_json": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/pinpoint/70_10_20_seed42/conesep_blip2/test_results.json",
+          "test_preds_json": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/pinpoint/70_10_20_seed42/conesep_blip2/test_predictions_top50.json",
+          "history_jsonl": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/pinpoint/70_10_20_seed42/conesep_blip2/history.jsonl"
+        },
+        "fashioniq": {
+          "variant": "fiq_n02",
+          "protocol": "in_domain_noisy_20pct",
+          "ckpts": [
+            "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/downloads/conesep/ConeSep-FIQ-N0.2.pt"
+          ],
+          "model_key": "conesep",
+          "dataset": "fashioniq",
+          "all_exist": true
+        }
+      }
+    },
+    {
+      "key": "airknow",
+      "run_id": "airknow_blip2",
+      "family": "blip2_evag",
+      "scorer_type": "multivec_maxsim_32x256",
+      "embed_dim": 256,
+      "env_group": "airknow",
+      "python": "/home/heheboiz/data/cir/workbench/envs/airknow310-la/bin/python",
+      "pythonpath": "/home/heheboiz/data/cir:/home/heheboiz/data/cir/workbench/third_party/AirKnow",
+      "in_original_15_bench": true,
+      "in_fiq_15_indomain": true,
+      "result_field": "final_airknow_test",
+      "supports_res_interp": true,
+      "native_resolution": 224,
+      "notes": "iLearn BLIP-2 EVA-ViT-g AirKnow (FIQ author ckpt trained with 50% synthetic noise).",
+      "python_exists": true,
+      "checkpoints": {
+        "edir": {
+          "model_key": "airknow",
+          "dataset": "edir",
+          "protocol": "in_domain",
+          "variant": "edir_id_best",
+          "ckpts": [
+            "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/edir/70_10_20_seed42/airknow_blip2/best_airknow.pt"
+          ],
+          "all_exist": true,
+          "run_dir": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/edir/70_10_20_seed42/airknow_blip2",
+          "test_results_json": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/edir/70_10_20_seed42/airknow_blip2/test_results.json",
+          "test_preds_json": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/edir/70_10_20_seed42/airknow_blip2/test_predictions_top50.json",
+          "history_jsonl": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/edir/70_10_20_seed42/airknow_blip2/history.jsonl"
+        },
+        "pinpoint": {
+          "model_key": "airknow",
+          "dataset": "pinpoint",
+          "protocol": "in_domain",
+          "variant": "pinpoint_id_best",
+          "ckpts": [
+            "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/pinpoint/70_10_20_seed42/airknow_blip2/best_airknow.pt"
+          ],
+          "all_exist": true,
+          "run_dir": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/pinpoint/70_10_20_seed42/airknow_blip2",
+          "test_results_json": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/pinpoint/70_10_20_seed42/airknow_blip2/test_results.json",
+          "test_preds_json": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/pinpoint/70_10_20_seed42/airknow_blip2/test_predictions_top50.json",
+          "history_jsonl": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/pinpoint/70_10_20_seed42/airknow_blip2/history.jsonl"
+        },
+        "fashioniq": {
+          "variant": "fiq_n05",
+          "protocol": "in_domain_noisy_50pct",
+          "ckpts": [
+            "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/checkpoints/airknow/airknow_fiq_0.5.pt"
+          ],
+          "model_key": "airknow",
+          "dataset": "fashioniq",
+          "all_exist": true
+        }
+      }
+    },
+    {
+      "key": "tme",
+      "run_id": "tme_blip2",
+      "family": "blip2_evag",
+      "scorer_type": "multivec_maxsim_32x256",
+      "embed_dim": 256,
+      "env_group": "tme",
+      "python": "/home/heheboiz/data/cir/workbench/envs/tme-adapted/bin/python",
+      "pythonpath": "/home/heheboiz/data/cir:/home/heheboiz/data/cir/workbench/third_party/TME/src",
+      "in_original_15_bench": true,
+      "in_fiq_15_indomain": true,
+      "result_field": "final_tme_test",
+      "supports_res_interp": true,
+      "native_resolution": 224,
+      "notes": "BLIP-2 EVA-ViT-g TME (image diff features + 3-stage GMM warmup).",
+      "python_exists": true,
+      "checkpoints": {
+        "edir": {
+          "model_key": "tme",
+          "dataset": "edir",
+          "protocol": "in_domain",
+          "variant": "edir_id_best",
+          "ckpts": [
+            "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/edir/70_10_20_seed42/tme_blip2/best_tme.pt"
+          ],
+          "all_exist": true,
+          "run_dir": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/edir/70_10_20_seed42/tme_blip2",
+          "test_results_json": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/edir/70_10_20_seed42/tme_blip2/test_results.json",
+          "test_preds_json": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/edir/70_10_20_seed42/tme_blip2/test_predictions_top50.json",
+          "history_jsonl": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/edir/70_10_20_seed42/tme_blip2/history.jsonl"
+        },
+        "pinpoint": {
+          "model_key": "tme",
+          "dataset": "pinpoint",
+          "protocol": "in_domain",
+          "variant": "pinpoint_id_best",
+          "ckpts": [
+            "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/pinpoint/70_10_20_seed42/tme_blip2/best_tme.pt"
+          ],
+          "all_exist": true,
+          "run_dir": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/pinpoint/70_10_20_seed42/tme_blip2",
+          "test_results_json": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/pinpoint/70_10_20_seed42/tme_blip2/test_results.json",
+          "test_preds_json": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/pinpoint/70_10_20_seed42/tme_blip2/test_predictions_top50.json",
+          "history_jsonl": "/home/heheboiz/data/cir/workbench/artifacts/benchmark_runs/pinpoint/70_10_20_seed42/tme_blip2/history.jsonl"
+        },
+        "fashioniq": {
+          "variant": "fiq_clean",
+          "protocol": "in_domain",
+          "ckpts": [
+            "/home/heheboiz/data/cir/workbench/artifacts/checkpoint_selection/20261106T002617+0700/cohort/ckpt/tme/fashioniq_0_best_model.pth"
+          ],
+          "model_key": "tme",
+          "dataset": "fashioniq",
+          "all_exist": true
+        }
+      }
+    }
+  ],
+  "failures": [
+    {
+      "id": "F01",
+      "num": 1,
+      "name": "Negation Inversion",
+      "suites": [
+        "E07",
+        "E04",
+        "E05"
+      ]
+    },
+    {
+      "id": "F02",
+      "num": 2,
+      "name": "Reference-Copy",
+      "suites": [
+        "E02",
+        "E17",
+        "E01"
+      ]
+    },
+    {
+      "id": "F03",
+      "num": 3,
+      "name": "Modality Imbalance",
+      "suites": [
+        "E05",
+        "E06"
+      ]
+    },
+    {
+      "id": "F04",
+      "num": 4,
+      "name": "Multi-Constraint Interference",
+      "suites": [
+        "E08",
+        "E04",
+        "E05"
+      ]
+    },
+    {
+      "id": "F05",
+      "num": 5,
+      "name": "Attribute Misbinding",
+      "suites": [
+        "E09",
+        "E04"
+      ]
+    },
+    {
+      "id": "F06",
+      "num": 6,
+      "name": "Caption Primacy Bias",
+      "suites": [
+        "E08",
+        "E12"
+      ]
+    },
+    {
+      "id": "F07",
+      "num": 7,
+      "name": "Pseudo-Relative Reasoning",
+      "suites": [
+        "E06",
+        "E01"
+      ]
+    },
+    {
+      "id": "F08",
+      "num": 8,
+      "name": "Geometric Blindness",
+      "suites": [
+        "E04",
+        "E11"
+      ]
+    },
+    {
+      "id": "F09",
+      "num": 9,
+      "name": "Cardinality Blindness",
+      "suites": [
+        "E04",
+        "E11"
+      ]
+    },
+    {
+      "id": "F10",
+      "num": 10,
+      "name": "Fine-Grained Blindness",
+      "suites": [
+        "E11",
+        "E04"
+      ]
+    },
+    {
+      "id": "F11",
+      "num": 11,
+      "name": "Paraphrase Brittleness",
+      "suites": [
+        "E12",
+        "E04"
+      ]
+    },
+    {
+      "id": "F12",
+      "num": 12,
+      "name": "Cross-Category Lock",
+      "suites": [
+        "E13",
+        "E01"
+      ]
+    },
+    {
+      "id": "F13",
+      "num": 13,
+      "name": "Pragmatic Intent Blindness",
+      "suites": [
+        "E13",
+        "E12"
+      ]
+    },
+    {
+      "id": "F14",
+      "num": 14,
+      "name": "Same-Scene Lock",
+      "suites": [
+        "E02",
+        "E17"
+      ]
+    },
+    {
+      "id": "F15",
+      "num": 15,
+      "name": "Large-Scale Retrieval Degradation",
+      "suites": [
+        "E03",
+        "E14"
+      ]
+    },
+    {
+      "id": "F16",
+      "num": 16,
+      "name": "Embedding Hubness",
+      "suites": [
+        "E14",
+        "E03"
+      ]
+    },
+    {
+      "id": "F17",
+      "num": 17,
+      "name": "Uncertainty Blindness",
+      "suites": [
+        "E15"
+      ]
+    },
+    {
+      "id": "F18",
+      "num": 18,
+      "name": "Negative Transfer & Domain Disparity",
+      "suites": [
+        "E16",
+        "E17"
+      ]
+    },
+    {
+      "id": "F19",
+      "num": 19,
+      "name": "Annotation Noise & False Negative",
+      "suites": [
+        "E18"
+      ]
+    },
+    {
+      "id": "F20",
+      "num": 20,
+      "name": "Open-Ended Difference",
+      "suites": [
+        "E06",
+        "E07"
+      ]
+    },
+    {
+      "id": "F21",
+      "num": 21,
+      "name": "Photo-Presentation Gravity",
+      "suites": [
+        "E10"
+      ]
+    },
+    {
+      "id": "F22",
+      "num": 22,
+      "name": "Co-Occurring Object Leakage",
+      "suites": [
+        "E10",
+        "E05"
+      ]
+    },
+    {
+      "id": "F23",
+      "num": 23,
+      "name": "Gaze Direction Blindness",
+      "suites": [
+        "E04",
+        "E11"
+      ]
+    },
+    {
+      "id": "F24",
+      "num": 24,
+      "name": "Limb Pose Blindness",
+      "suites": [
+        "E04",
+        "E10"
+      ]
+    },
+    {
+      "id": "F25",
+      "num": 25,
+      "name": "Homophone Hijack",
+      "suites": [
+        "E12",
+        "E04"
+      ]
+    },
+    {
+      "id": "F26",
+      "num": 26,
+      "name": "Gender-Identity Drop",
+      "suites": [
+        "E09",
+        "E08"
+      ]
+    },
+    {
+      "id": "F27",
+      "num": 27,
+      "name": "Visual Edit-Distance Cliff",
+      "suites": [
+        "E01",
+        "E03"
+      ]
+    },
+    {
+      "id": "F28",
+      "num": 28,
+      "name": "BLIP-2 Blind Spot",
+      "suites": [
+        "E04",
+        "E11",
+        "E05"
+      ]
+    },
+    {
+      "id": "F29",
+      "num": 29,
+      "name": "Pure Fusion Failure",
+      "suites": [
+        "E05",
+        "E04"
+      ]
+    }
+  ]
+}
